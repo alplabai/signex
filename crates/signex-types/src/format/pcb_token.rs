@@ -53,8 +53,16 @@ pub const SNXPCB_FORMAT_V1_9: &str = "snxpcb/1.9";
 /// byte for byte.
 pub const SNXPCB_FORMAT_V1_10: &str = "snxpcb/1.10";
 
+/// Written when the board has a pour cutout (`[[pour_cutouts]]`, #2871) or a
+/// dimension with a non-default look ([`super::board_uses_dimension_style`],
+/// #2868), DECISIONS 2026-11-24: a build that knows only 1.10 would drop the
+/// look keys on save and has never seen a cutout, so it opens 1.11
+/// read-only. A board with neither keeps its token, byte for byte.
+pub const SNXPCB_FORMAT_V1_11: &str = "snxpcb/1.11";
+
 /// The token a save of `board` writes, from its content, highest need
-/// first: stack materials need [`SNXPCB_FORMAT_V1_10`], a shelved pour
+/// first: a pour cutout or a dimension look need [`SNXPCB_FORMAT_V1_11`],
+/// stack materials [`SNXPCB_FORMAT_V1_10`], a shelved pour
 /// [`SNXPCB_FORMAT_V1_9`], a stackup name, a
 /// patterned baked target or a numbering sweep [`SNXPCB_FORMAT_V1_8`], the
 /// board sketch targets [`SNXPCB_FORMAT_BOARD_SKETCH_TARGETS`], rooms
@@ -69,7 +77,10 @@ pub fn snxpcb_token(board: &PcbBoard) -> &'static str {
         .stackup
         .as_ref()
         .is_some_and(|s| s.has_materials_data());
-    if materials {
+    let cutout = board.zones.iter().any(|zone| zone.is_pour_cutout());
+    if cutout || super::board_uses_dimension_style(board) {
+        SNXPCB_FORMAT_V1_11
+    } else if materials {
         SNXPCB_FORMAT_V1_10
     } else if board.zones.iter().any(|zone| zone.is_shelved_pour()) {
         SNXPCB_FORMAT_V1_9
@@ -89,7 +100,7 @@ pub fn snxpcb_token(board: &PcbBoard) -> &'static str {
 /// `.snxpcb` version policy: a newer minor opens read-only. A save writes
 /// the lowest token its content needs ([`snxpcb_token`]).
 pub const SNXPCB_VERSION: FormatVersion = FormatVersion {
-    current: SNXPCB_FORMAT_V1_10,
+    current: SNXPCB_FORMAT_V1_11,
     readable: &[
         "snxpcb/1",
         "snxpcb/1.1",
@@ -102,6 +113,7 @@ pub const SNXPCB_VERSION: FormatVersion = FormatVersion {
         SNXPCB_FORMAT_V1_8,
         SNXPCB_FORMAT_V1_9,
         SNXPCB_FORMAT_V1_10,
+        SNXPCB_FORMAT_V1_11,
     ],
     newer_minor: NewerMinor::ReadOnly,
     missing: MissingToken::Refused,

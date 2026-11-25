@@ -845,7 +845,8 @@ lengths in integer nm. A dimension of that look writes none of them, so an
 older board reads and re-saves byte-identical; an older reader skips the
 keys (and drops them if it saves).
 `signex_types::format::board_uses_dimension_style` says whether a save
-writes any of them; the format token is bumped only for such a board.
+writes any of them; only such a board (or one with a pour cutout) writes
+`snxpcb/1.11` (`docs/FORMAT_VERSIONS.md`).
 
 ## Selection Filter
 

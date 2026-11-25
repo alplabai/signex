@@ -5,6 +5,7 @@ use uuid::Uuid;
 
 use super::tests::empty_board;
 use super::*;
+use crate::format_version::FormatVersion;
 use crate::pcb::Point;
 use crate::pcb_dimension::LinearDimension;
 use crate::pcb_dimension_style::{
@@ -160,4 +161,94 @@ fn a_board_uses_a_dimension_style_only_when_a_look_key_is_written() {
     assert!(board_uses_dimension_style(&board));
     let text = SnxPcb::new(board).write_string().expect("writes");
     assert!(text.contains("arrow_style"), "{text}");
+}
+
+fn token_of(text: &str) -> &str {
+    let first = text.lines().next().unwrap_or_default();
+    first
+        .strip_prefix("format = \"")
+        .and_then(|rest| rest.strip_suffix('"'))
+        .unwrap_or_default()
+}
+
+/// A dimension whose arrows are filled: a look key is written.
+fn styled() -> LinearDimension {
+    let mut d = plain(21);
+    d.style.arrow_style = ArrowStyle::Filled;
+    d
+}
+
+/// A dimension with the look of its own text height: no look key.
+fn plain(n: u128) -> LinearDimension {
+    let mut d = dimension();
+    d.uuid = Uuid::from_u128(n);
+    d.text_height = 2.0;
+    d.style = DimensionStyle::for_text_height(2.0, d.line_width);
+    d
+}
+
+/// DECISIONS 2026-11-24: a non-default dimension look writes `snxpcb/1.11`,
+/// which this build opens for editing and re-saves byte-identical.
+#[test]
+fn a_dimension_look_writes_snxpcb_1_11_and_round_trips() {
+    let d = styled();
+    let text = saved(d.clone());
+    assert_eq!(token_of(&text), SNXPCB_FORMAT_V1_11, "{text}");
+    let file = SnxPcb::parse(&text).expect("reads");
+    assert!(!file.is_from_newer_minor(), "this build reads 1.11");
+    assert_eq!(file.board.free.dimensions, vec![d]);
+    let again = file.write_string().expect("writes again");
+    assert_eq!(again, text, "a re-save is byte-identical");
+}
+
+/// A plain board, and a board whose dimensions all have the default look
+/// and no pour cutout, keep the token they had before the look settings.
+#[test]
+fn a_board_with_only_default_look_dimensions_keeps_its_token() {
+    assert_eq!(
+        token_of(&SnxPcb::new(empty_board()).write_string().unwrap()),
+        SNXPCB_FORMAT_V1
+    );
+    let mut board = empty_board();
+    board.free.dimensions = vec![plain(21), plain(22)];
+    assert!(!board_uses_dimension_style(&board));
+    let before = SnxPcb::new(board.clone()).write_string().unwrap();
+    assert_eq!(token_of(&before), SNXPCB_FORMAT_V1);
+    board.free.dimensions[1].style.arrow_style = ArrowStyle::Filled;
+    let raised = SnxPcb::new(board.clone()).write_string().unwrap();
+    assert_eq!(token_of(&raised), SNXPCB_FORMAT_V1_11);
+    board.free.dimensions[1] = plain(22);
+    let back = SnxPcb::new(board).write_string().unwrap();
+    assert_eq!(back, before, "the file is what it was");
+}
+
+/// A build whose policy stops at `snxpcb/1.10` sees a board with a dimension
+/// look as newer: it opens it read-only and refuses its saves, instead of
+/// dropping the look keys.
+#[test]
+fn a_dimension_look_opens_read_only_in_a_build_that_knows_only_1_10() {
+    let one_ten = FormatVersion {
+        current: SNXPCB_FORMAT_V1_10,
+        readable: &[
+            "snxpcb/1",
+            "snxpcb/1.1",
+            "snxpcb/1.2",
+            "snxpcb/1.3",
+            SNXPCB_FORMAT_V1,
+            SNXPCB_FORMAT_LAYER_COLORS,
+            SNXPCB_FORMAT_ROOMS,
+            SNXPCB_FORMAT_BOARD_SKETCH_TARGETS,
+            SNXPCB_FORMAT_V1_8,
+            SNXPCB_FORMAT_V1_9,
+            SNXPCB_FORMAT_V1_10,
+        ],
+        ..SNXPCB_VERSION
+    };
+    let text = saved(styled());
+    let token = token_of(&text);
+    assert_eq!(token, SNXPCB_FORMAT_V1_11);
+    assert!(one_ten.is_newer_minor(token), "{token}");
+    assert!(one_ten.refuse_save(token).is_err(), "{token}");
+    assert!(!SNXPCB_VERSION.is_newer_minor(token), "this build reads it");
+    assert!(SNXPCB_VERSION.refuse_save(token).is_ok());
 }
