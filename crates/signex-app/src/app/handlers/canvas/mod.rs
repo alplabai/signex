@@ -553,6 +553,24 @@ impl Signex {
             .then_some((self.ui_state.cursor_x, self.ui_state.cursor_y))
     }
 
+    /// Whether `world` lies on an object of the sheet in view, with that
+    /// sheet's net-class and special-string widths. Run when a canvas menu
+    /// opens, inside an undocked window's swap for its menu (#2629).
+    pub(crate) fn sheet_object_at(&self, world: Option<(f64, f64)>) -> bool {
+        let Some((x, y)) = world else {
+            return false;
+        };
+        self.interaction_state
+            .active_canvas()
+            .hit_item_at(
+                x,
+                y,
+                self.active_wire_widths(),
+                self.active_class_revision(),
+            )
+            .is_some()
+    }
+
     /// Redraw the active schematic or PCB canvas after its camera moved.
     fn clear_active_camera_caches(&mut self) {
         if self.has_active_schematic() {

@@ -117,6 +117,9 @@ pub struct ContextMenuState {
     /// Where on the sheet the menu was opened, in world mm; `None` when the
     /// cursor position was not known to belong to this document.
     pub world: Option<(f64, f64)>,
+    /// `world` lay on an object of the menu's sheet, worked out when the
+    /// menu opened on that sheet (#2629); the view reads it as it is.
+    pub hit_object: bool,
     /// The undocked window the menu was opened in; `None` for the main
     /// window. Only that window paints it and its actions act on that
     /// window's sheet (#1910).
