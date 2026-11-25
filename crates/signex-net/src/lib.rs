@@ -85,6 +85,11 @@ pub use compiled::{
     SheetTitle, compile_design,
 };
 
+mod miniature;
+#[cfg(test)]
+mod miniature_tests;
+pub use miniature::{MiniatureText, SheetMiniature, sheet_miniature};
+
 mod harness;
 #[cfg(test)]
 mod harness_fixture;
