@@ -52,6 +52,8 @@ pub struct PcbLayerView {
     multi_layer_visible: bool,
     /// The board origin marker (#2351).
     origin_marker_visible: bool,
+    /// The orientation tile over the canvas (mockup row 194).
+    orientation_tile_visible: bool,
     /// Single-layer mode: only the active layer is drawn and hit, with the
     /// board outline and the vias and through-hole pads that reach it.
     single_layer: bool,
@@ -81,6 +83,7 @@ impl Default for PcbLayerView {
             ratsnest_visible: true,
             multi_layer_visible: true,
             origin_marker_visible: true,
+            orientation_tile_visible: true,
             single_layer: false,
             layer_set: None,
             highlighted: None,
@@ -397,6 +400,16 @@ impl PcbLayerView {
 
     pub fn toggle_origin_marker(&mut self) {
         self.origin_marker_visible = !self.origin_marker_visible;
+    }
+
+    /// Whether the orientation tile shows over the board canvas (mockup
+    /// row 194); its eye is in View Options.
+    pub fn orientation_tile_visible(&self) -> bool {
+        self.orientation_tile_visible
+    }
+
+    pub fn toggle_orientation_tile(&mut self) {
+        self.orientation_tile_visible = !self.orientation_tile_visible;
     }
 
     /// Whether an item on `names` is drawn and hit. A name this build does

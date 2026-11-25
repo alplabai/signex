@@ -57,6 +57,7 @@ define_ids! {
     PCB_VIEW_ON = "pcb-view-on";
     PCB_VIEW_MONO = "pcb-view-mono";
     PCB_VIEW_SHOW_GRID = "pcb-view-show-grid";
+    PCB_VIEW_ORIENTATION_TILE = "pcb-view-orientation-tile";
     PCB_VIEW_OBJECT = "pcb-view-object";
     PCB_VIEW_OBJECT_COLUMN = "pcb-view-object-column";
     PCB_VIEW_DRAFT = "pcb-view-draft";

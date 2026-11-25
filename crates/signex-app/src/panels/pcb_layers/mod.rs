@@ -97,6 +97,8 @@ pub struct PcbLayersPanel {
     pub flipped: bool,
     pub ratsnest_visible: bool,
     pub origin_marker_visible: bool,
+    /// The orientation tile over the canvas (mockup row 194).
+    pub orientation_tile_visible: bool,
     /// The layers the board has objects on, while Used On is on.
     pub used: Option<HashSet<PcbLayer>>,
     /// The board's layer colours and the view's transparencies.
@@ -134,6 +136,7 @@ impl Default for PcbLayersPanel {
             flipped: false,
             ratsnest_visible: true,
             origin_marker_visible: true,
+            orientation_tile_visible: true,
             used: None,
             paint: BoardPaint::default(),
             hidden_objects: Vec::new(),
@@ -176,6 +179,7 @@ impl PcbLayersPanel {
             flipped: view.flipped(),
             ratsnest_visible: view.ratsnest_visible(),
             origin_marker_visible: view.origin_marker_visible(),
+            orientation_tile_visible: view.orientation_tile_visible(),
             used: view.used_only().then(|| used_layers(board)),
             paint: view.paint_of(board),
             hidden_objects: BoardObject::ALL

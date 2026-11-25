@@ -283,6 +283,9 @@ pub enum PcbViewMsg {
     RatsnestVisibilityToggled,
     /// The user asked to show or hide the board origin marker (#2351).
     OriginMarkerVisibilityToggled,
+    /// The user showed or hid the orientation tile over the canvas (its eye
+    /// in View Options, mockup row 194).
+    OrientationTileVisibilityToggled,
     /// The user stepped the active layer to the next or previous one of the
     /// board's layers (`+`, `-`, View ▸ Next / Previous Layer).
     ActiveLayerStepped { forward: bool },
