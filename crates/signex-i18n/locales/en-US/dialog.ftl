@@ -230,6 +230,9 @@ dialog-autosave-recovery-restore = Restore
 dialog-autosave-recovery-later = Decide later
 # Closing a project or quitting with unsaved documents.
 dialog-unsaved-discard-all = Discard All
+# The discard of a project written by a newer version, which drops only that
+# project's unsaved settings (#2904). $projects lists the names, quoted.
+dialog-unsaved-discard-read-only = Discard { $projects }
 # Create Sheet: the file already exists; point the sheet symbol at it and open
 # it instead of creating one.
 dialog-create-child-sheet-open-existing = Use existing file

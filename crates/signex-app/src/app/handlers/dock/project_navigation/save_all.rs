@@ -553,9 +553,18 @@ impl Signex {
         if unchanged {
             return self.execute_close_project(project_id, &sheet_refs, kept_paths);
         }
-        crate::diagnostics::log_warning(
-            "Close Project: documents changed while Save All ran; review the list and confirm again",
-        );
+        // Save All left a read-only project's settings unsaved (#2904).
+        let read_only_left = self
+            .document_state
+            .project_by_id(project_id)
+            .is_some_and(|p| {
+                p.data.is_from_newer_minor() && self.document_state.is_document_dirty(&p.path)
+            });
+        crate::diagnostics::log_warning(if read_only_left {
+            "Close Project: the read-only project's settings are still unsaved; review the list and confirm again"
+        } else {
+            "Close Project: documents changed while Save All ran; review the list and confirm again"
+        });
         // The gate re-reads stale references, prompts for unsaved work, and
         // closes only when nothing of the project is left unsaved.
         self.handle_close_refs_resolved(project_id, Ok(Box::new(sheet_refs)))

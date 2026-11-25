@@ -139,4 +139,6 @@ define_ids! {
     NOTICE_PROJECT_READ_ONLY_SAVE = "notice-project-read-only-save";
     NOTICE_PROJECT_READ_ONLY_RENAME = "notice-project-read-only-rename";
     NOTICE_PROJECT_READ_ONLY_ADD = "notice-project-read-only-add";
+    NOTICE_PROJECT_READ_ONLY_ADD_EXISTING = "notice-project-read-only-add-existing";
+    NOTICE_PROJECT_READ_ONLY_REMOVE = "notice-project-read-only-remove";
 }

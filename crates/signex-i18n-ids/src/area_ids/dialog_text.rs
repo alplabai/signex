@@ -51,6 +51,7 @@ define_ids! {
     DIALOG_QUIT_GROUP_LIBRARIES = "dialog-quit-group-libraries";
     DIALOG_QUIT_LIST_CHANGED = "dialog-quit-list-changed";
     DIALOG_UNSAVED_READ_ONLY_PROJECTS = "dialog-unsaved-read-only-projects";
+    DIALOG_UNSAVED_READ_ONLY_PROJECTS_ONLY = "dialog-unsaved-read-only-projects-only";
     DIALOG_RECOVERY_FOUND = "dialog-recovery-found";
     DIALOG_RECOVERY_OLDER = "dialog-recovery-older";
     DIALOG_RECOVERY_RESTORE_HINT = "dialog-recovery-restore-hint";

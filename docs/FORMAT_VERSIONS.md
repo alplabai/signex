@@ -41,7 +41,9 @@ format declares only its own table row below.
   document remembers the token and every save, Save As included, is refused,
   so content this build cannot represent is never dropped (#977, #1402). A
   read-only project shows a banner on its Project tab, gets no recovery copy,
-  and Close Project and Exit offer Discard All, not Save All, for it (#2904).
+  and changes to its file list are refused before any file moves. Close
+  Project and Exit still save every other file with Save All, skipping it,
+  and offer a discard that drops only its unsaved settings (#2904).
 - **An older or foreign token** that is not in the list, or a garbled one
   (`snxsch/01`, `snxsch/1.`, a number in a `.snxprj`), is refused naming it.
 - **No token** is refused, except in `.snxprj`, where a file with no token

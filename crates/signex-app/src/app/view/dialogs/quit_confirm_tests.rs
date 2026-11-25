@@ -397,28 +397,85 @@ fn each_button_keeps_its_outcome() {
     assert_eq!(choice("Save All"), ProjectCloseChoice::SaveAll);
 }
 
-/// A read-only project's unsaved settings (#2904): Save All is left out and
-/// a warn note under the list says why; Discard All and Cancel stay.
-#[test]
-fn a_read_only_project_withholds_save_all_and_says_why() {
-    let mut app = dirty_app(&["/x/p.snxprj", "/y/loose.snxsch"], Vec::new());
+/// An Exit prompt listing `paths` with the project `Newer` at `/x` read from
+/// a newer minor (#2904).
+fn read_only_quitting(paths: &[&str]) -> Signex {
+    let mut app = dirty_app(paths, Vec::new());
     project(&mut app, "/x", "Newer", &[]);
     app.document_state.projects[0]
         .data
         .unknown
         .newer_minor_source = Some("snxprj/1.2".into());
+    app
+}
+
+/// The discard button of the read-only `Newer`, as drawn.
+fn discard_newer() -> String {
+    let projects = ["Newer".to_string()];
+    crate::app::read_only_project::discard_read_only_label(
+        signex_i18n::I18n::en_us_ref(),
+        &projects,
+    )
+    .into_string()
+}
+
+/// A read-only project's unsaved settings beside another unsaved file
+/// (#2904, Caner 2026-11-25): Save All stays for the file, the discard names
+/// the project alone, Discard All is gone, and a warn note under the list
+/// says what each does.
+#[test]
+fn a_read_only_project_keeps_save_all_for_the_rest_and_discards_only_its_settings() {
+    use crate::app::ProjectCloseChoice;
+    use crate::app::contracts::{Message, ProjectMsg};
+    let app = read_only_quitting(&["/x/p.snxprj", "/y/loose.snxsch"]);
+    let texts = lay_out_texts(
+        app.view_app_quit_confirm_body(),
+        iced::Size::new(500.0, 900.0),
+    );
+    find(&texts, "Save All");
+    find(&texts, "Cancel");
+    find(&texts, &discard_newer());
+    assert!(texts.iter().all(|t| t.text != "Discard All"), "{texts:#?}");
+    let note = texts
+        .iter()
+        .find(|t| t.text.contains("Save All saves every other file"))
+        .expect("the note");
+    assert!(!note.text.contains("Discard All"), "{note:?}");
+    let row = find(&texts, "loose.snxsch").bounds;
+    assert!(row.y < note.bounds.y, "the note sits under the list");
+    let messages = crate::layout_probe::messages_on_click(
+        app.view_app_quit_confirm_body(),
+        iced::Size::new(500.0, 900.0),
+        &discard_newer(),
+    );
+    assert!(
+        matches!(
+            messages.as_slice(),
+            [Message::Project(ProjectMsg::AppQuitConfirm(
+                ProjectCloseChoice::DiscardReadOnly
+            ))]
+        ),
+        "{messages:?}"
+    );
+}
+
+/// Only the read-only project's settings unsaved: nothing else saves, so
+/// Save All is left out and the note says why; its discard and Cancel stay.
+#[test]
+fn a_read_only_project_alone_withholds_save_all_and_says_why() {
+    let app = read_only_quitting(&["/x/p.snxprj"]);
     let texts = lay_out_texts(
         app.view_app_quit_confirm_body(),
         iced::Size::new(500.0, 900.0),
     );
     assert!(texts.iter().all(|t| t.text != "Save All"), "{texts:#?}");
-    find(&texts, "Discard All");
+    assert!(texts.iter().all(|t| t.text != "Discard All"), "{texts:#?}");
+    find(&texts, &discard_newer());
     find(&texts, "Cancel");
-    let note = texts
-        .iter()
-        .find(|t| t.text.contains("Save All is not offered"))
-        .expect("the note")
-        .bounds;
-    let row = find(&texts, "loose.snxsch").bounds;
-    assert!(row.y < note.y, "the note sits under the list");
+    assert!(
+        texts
+            .iter()
+            .any(|t| t.text.contains("Save All is not offered")),
+        "{texts:#?}"
+    );
 }

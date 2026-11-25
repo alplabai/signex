@@ -892,9 +892,10 @@ impl Signex {
     ) -> Option<Message> {
         use crate::app::state::ModalId;
         match modal {
-            // Not while Save All is withheld for a read-only project (#2904).
+            // Not while Save All is withheld: only a read-only project's
+            // settings are unsaved (#2904).
             ModalId::ProjectCloseConfirm => (self.ui_state.project_close_confirm.as_ref())
-                .filter(|c| self.read_only_dirty_projects(&c.dirty_paths).is_empty())
+                .filter(|c| self.save_all_offered(&c.dirty_paths, c.dirty_rows.len()))
                 .map(|_| {
                     Message::Project(ProjectMsg::CloseConfirm(
                         crate::app::ProjectCloseChoice::SaveAll,

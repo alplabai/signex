@@ -15,10 +15,9 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::text;
 
 use super::graphite_list::{LIST_ROW_H, group_header, kind_cap, kind_code, list_box, list_row};
+use crate::app::read_only_project;
 use crate::app::state::ModalId;
-use crate::library::modal_chrome::{
-    UnsavedActions, UnsavedBody, unsaved_body, unsaved_footer_parts,
-};
+use crate::library::modal_chrome::{UnsavedBody, unsaved_body, unsaved_footer_parts};
 use crate::library::state::EditorAddress;
 use crate::styles::{DialogIcon, chrome_px, dialog_footer_split};
 
@@ -376,10 +375,10 @@ impl Signex {
                     + crate::app::handlers::modal_sizing::LIST_BOX_CHROME,
             ))
             .boxed();
-        // A read-only project's settings cannot be saved: no Save All (#2904).
-        let read_only = self.read_only_dirty_projects(&st.dirty_paths);
-        let withheld = crate::app::read_only_project::save_all_withheld_line(i18n, &read_only);
-        let save_allowed = withheld.is_none();
+        // A read-only project's settings are never written: Save All saves
+        // the rest, and the discard drops only that project's (#2904).
+        let read_only = self.read_only_offer(&st.dirty_paths, st.dirty_rows.len());
+        let note = (read_only.as_ref()).map(|offer| read_only_project::read_only_note(i18n, offer));
         let body = unsaved_body(
             UnsavedBody {
                 title: t!(
@@ -390,7 +389,7 @@ impl Signex {
                 detail: summary.line(i18n).into_string(),
                 above,
                 list,
-                below: withheld
+                below: note
                     .map(|line| super::graphite::callout(DialogIcon::Warn, line, tokens))
                     .into_iter()
                     .collect(),
@@ -398,15 +397,11 @@ impl Signex {
             tokens,
         );
 
-        // Mockup row 136: Discard All at the left; Cancel, then Save All,
-        // at the right.
+        // Mockup row 136: the discard at the left; Cancel, then Save All, at
+        // the right.
         let (left, right) = unsaved_footer_parts(
             i18n,
-            UnsavedActions {
-                discard_all: Some(choose(ProjectCloseChoice::DiscardAll)),
-                cancel: choose(ProjectCloseChoice::Cancel),
-                save_all: save_allowed.then(|| choose(ProjectCloseChoice::SaveAll)),
-            },
+            read_only_project::unsaved_actions(i18n, read_only.as_ref(), true, choose),
             tokens,
         );
         let footer = dialog_footer_split(left, right);

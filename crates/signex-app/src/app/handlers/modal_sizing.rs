@@ -265,17 +265,17 @@ impl Signex {
         if let Some(reason) = c.sheet_refs.discard_blocked_reason() {
             height += CALLOUT_HEIGHT + body_growth(column, &reason);
         }
-        height + self.withheld_note_height(&c.dirty_paths, column)
+        height + self.read_only_note_height(&c.dirty_paths, c.dirty_rows.len(), column)
     }
 
-    /// Height of the note that Save All is withheld for a read-only project
-    /// (#2904); 0 when Save All is offered.
-    fn withheld_note_height(&self, dirty: &[std::path::PathBuf], column: f32) -> f32 {
-        let names = self.read_only_dirty_projects(dirty);
-        crate::app::read_only_project::save_all_withheld_line(self.ui_state.i18n.as_ref(), &names)
-            .map_or(0.0, |line| {
-                CALLOUT_HEIGHT + body_growth(column, &line.to_string())
-            })
+    /// Height of the note on a read-only project's unsaved settings (#2904);
+    /// 0 when the prompt lists none.
+    fn read_only_note_height(&self, dirty: &[std::path::PathBuf], rows: usize, column: f32) -> f32 {
+        self.read_only_offer(dirty, rows).map_or(0.0, |offer| {
+            let line =
+                crate::app::read_only_project::read_only_note(self.ui_state.i18n.as_ref(), &offer);
+            CALLOUT_HEIGHT + body_growth(column, &line.to_string())
+        })
     }
 
     /// Height the first stage of the Remove modal needs beyond its base
@@ -332,8 +332,9 @@ impl Signex {
                     } else {
                         0.0
                     }
-                    + self.withheld_note_height(
+                    + self.read_only_note_height(
                         &c.dirty_paths,
+                        c.dirty_rows.len(),
                         fixed.width - 2.0 * Spacing::DEFAULT.l - CALLOUT_INSET,
                     )
             }),
