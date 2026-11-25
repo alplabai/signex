@@ -61,6 +61,7 @@ bom-column-currency = Currency
 bom-column-stock = Stock
 bom-column-distributor = Distributor
 bom-column-price-age = Price Age
+bom-column-alternates = Alternates
 bom-no-issues-found = No issues found.
 # Issue list heading; $count is how many errors (a whole number).
 bom-issues-errors = Errors ({ $count })

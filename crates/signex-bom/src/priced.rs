@@ -175,13 +175,7 @@ fn priced_line(
     let price = book
         .quote_for(row)
         .and_then(|quote| price_of(quote, build_quantity));
-    let listed = key.as_deref().map_or(&[][..], |key| {
-        alternates
-            .iter()
-            .find(|entry| entry.line == key)
-            .map_or(&[][..], |entry| entry.rows.as_slice())
-    });
-    let priced_alternates: Vec<PricedAlternate> = listed
+    let priced_alternates: Vec<PricedAlternate> = listed(key.as_deref(), alternates)
         .iter()
         .map(|alt| PricedAlternate {
             row: alt.clone(),
@@ -226,17 +220,18 @@ fn priced_line(
     }
 }
 
-/// What the BOM export's Alternates column shows for `row`: its line's
-/// alternates, comma separated, most preferred first.
-pub fn alternates_text(row: &BomRow, alternates: &[BomLineAlternates]) -> String {
-    let Some(key) = line_key(row) else {
-        return String::new();
-    };
-    alternates
-        .iter()
-        .find(|entry| entry.line == key)
-        .map(|entry| entry.rows.join(", "))
-        .unwrap_or_default()
+/// The alternates `alternates` lists for the line keyed `key`.
+fn listed<'a>(key: Option<&str>, alternates: &'a [BomLineAlternates]) -> &'a [String] {
+    key.and_then(|key| alternates.iter().find(|entry| entry.line == key))
+        .map_or(&[][..], |entry| entry.rows.as_slice())
+}
+
+/// Give each row of `table` its line's alternates, for the BOM export's
+/// Alternates column.
+pub fn apply_alternates(table: &mut BomTable, alternates: &[BomLineAlternates]) {
+    for row in &mut table.rows {
+        row.alternates = listed(line_key(row).as_deref(), alternates).to_vec();
+    }
 }
 
 #[cfg(test)]

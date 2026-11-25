@@ -28,6 +28,7 @@ pub fn cell_text(row: &BomRow, column: &BomColumn) -> String {
             .unwrap_or_default(),
         BomColumn::Distributor => price.map(|p| p.distributor.clone()).unwrap_or_default(),
         BomColumn::PriceAge => price.map(|p| p.age.clone()).unwrap_or_default(),
+        BomColumn::Alternates => row.alternates.join(", "),
     }
 }
 

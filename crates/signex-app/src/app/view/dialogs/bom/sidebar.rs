@@ -29,7 +29,7 @@ const FORM_KEY_W: f32 = 56.0;
 const SECTION_GAP: f32 = SP.xl + SP.s;
 
 /// The standard columns the Columns tab offers, in its order.
-static COLUMN_OPTIONS: [(BomColumn, MessageId); 14] = [
+static COLUMN_OPTIONS: [(BomColumn, MessageId); 15] = [
     (BomColumn::Name, ids::BOM_COLUMN_NAME),
     (BomColumn::Description, ids::BOM_COLUMN_DESCRIPTION),
     (BomColumn::Designator, ids::BOM_COLUMN_DESIGNATOR),
@@ -45,6 +45,8 @@ static COLUMN_OPTIONS: [(BomColumn, MessageId); 14] = [
     (BomColumn::Stock, ids::BOM_COLUMN_STOCK),
     (BomColumn::Distributor, ids::BOM_COLUMN_DISTRIBUTOR),
     (BomColumn::PriceAge, ids::BOM_COLUMN_PRICE_AGE),
+    // The project's alternates per line (#2938).
+    (BomColumn::Alternates, ids::BOM_COLUMN_ALTERNATES),
 ];
 
 /// Segmented-control colours of the sidebar.

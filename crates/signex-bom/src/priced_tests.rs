@@ -131,8 +131,10 @@ fn a_complete_bom_has_a_total_and_a_unit_cost_per_currency() {
 }
 
 #[test]
-fn the_export_column_lists_a_lines_alternates() {
-    let (table, _, alternates) = fixture();
-    assert_eq!(alternates_text(&table.rows[2], &alternates), ALT);
-    assert_eq!(alternates_text(&table.rows[0], &alternates), "");
+fn each_row_gets_its_lines_alternates_for_the_export() {
+    let (mut table, _, alternates) = fixture();
+    apply_alternates(&mut table, &alternates);
+    assert_eq!(table.rows[2].alternates, [ALT]);
+    assert!(table.rows[0].alternates.is_empty());
+    assert!(table.rows[3].alternates.is_empty(), "an MPN line with none");
 }
