@@ -127,9 +127,11 @@ All of it is derived once, in `signex-net` (`directives.rs`,
   order). Restricted to one sheet this is the sheet's order above. The
   first is the class the project netlist writes, and ERC's project run
   reports every later one naming another class, on the overridden
-  directive's sheet, in place of that sheet's own answer. A net with no
-  pin is not in the project netlist, so its directives keep the sheet's
-  answer; so does a sheet the project roots never reach.
+  directive's sheet, in place of that sheet's own answer on each net the
+  project netlist carries. The sheet keeps its own answer on a net the
+  project netlist does not carry, as does a sheet the project roots never
+  reach. Each net is its own finding: two nets the same directives class
+  give two (#2961).
 
 ## Differential pairs {#differential-pairs}
 
