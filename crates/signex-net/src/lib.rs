@@ -95,3 +95,6 @@ pub use harness::{
 
 mod names_in_use;
 pub use names_in_use::sheet_net_names;
+
+mod net_tie;
+pub use net_tie::{NetTie, NetTiePin, NetTieStatus, net_ties};
