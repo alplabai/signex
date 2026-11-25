@@ -35,6 +35,10 @@ const PACKAGE_FILES: [(&str, &str); 2] = [
     ("lib.typ", include_str!("../typst/notebook/lib.typ")),
 ];
 
+/// The package file that holds the Python cell results of one compile,
+/// written by `cell::PageCells::to_json`.
+const CELLS_FILE: &str = "cells.json";
+
 /// The extensions read as Typst source.
 const SOURCE_EXTENSIONS: [&str; 2] = [crate::NOTEBOOK_EXTENSION, "typ"];
 
@@ -70,8 +74,14 @@ pub(crate) struct NotebookWorld {
 impl NotebookWorld {
     /// The world of `notebook`; `today` answers Typst's
     /// `datetime.today()` (none: it is an error, so no page depends on the
-    /// clock). `None` when the notebook's path cannot name a Typst file.
-    pub(crate) fn new(notebook: &NotebookSources, today: Option<IsoDate>) -> Option<Self> {
+    /// clock). `cells` is the package's `cells.json`, the Python cell
+    /// results the page prints. `None` when the notebook's path cannot name
+    /// a Typst file.
+    pub(crate) fn new(
+        notebook: &NotebookSources,
+        today: Option<IsoDate>,
+        cells: Vec<u8>,
+    ) -> Option<Self> {
         let mut world = Self {
             main: project_id(notebook.main())?,
             sources: HashMap::new(),
@@ -88,6 +98,9 @@ impl NotebookWorld {
             if let Some(id) = package_id(path) {
                 world.add(id, path, text.as_bytes().to_vec());
             }
+        }
+        if let Some(id) = package_id(CELLS_FILE) {
+            world.add(id, CELLS_FILE, cells);
         }
         Some(world)
     }

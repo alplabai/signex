@@ -21,9 +21,14 @@
 //! [`CompiledNotebook`] draws a page for the preview and writes a PDF that
 //! is the same file every time.
 //!
+//! Python cells, `#python(label: "...")[```python ... ```]`, compute from
+//! schematic values ([`cell`], mockup row 200); their results reach the
+//! page through [`CompileOptions::cells`].
+//!
 //! UI-free and IO-free: the caller reads the files.
 
 mod annotation;
+pub mod cell;
 mod compile;
 mod date;
 mod file;
@@ -63,6 +68,10 @@ pub const DEFAULT_NOTEBOOK_FILE: &str = "design.snxnbk";
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_cells;
+#[cfg(test)]
+mod tests_cells_run;
 #[cfg(test)]
 mod tests_compile;
 #[cfg(test)]

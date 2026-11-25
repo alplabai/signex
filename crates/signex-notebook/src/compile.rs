@@ -8,6 +8,7 @@ use typst::utils::Scalar;
 use typst::{World, WorldExt};
 use typst_layout::PagedDocument;
 
+use crate::cell::PageCells;
 use crate::date::IsoDate;
 use crate::sources::NotebookSources;
 use crate::world::NotebookWorld;
@@ -23,6 +24,11 @@ pub struct CompileOptions {
     /// an error, so no page depends on the clock unless the caller says so
     /// (the export passes the title block's revision date).
     pub today: Option<IsoDate>,
+    /// What the Python cells print: their last results and whether their
+    /// source prints. Empty: every cell shows as not run yet. Compiling
+    /// never runs a cell (`cell::run_cells` does, on Run, Run all and
+    /// export).
+    pub cells: PageCells,
 }
 
 /// How bad a diagnostic is.
@@ -105,7 +111,7 @@ impl Compilation {
 /// Compile `sources` to pages. Pure: the result depends only on the
 /// sources, the options and the bundled package and fonts.
 pub fn compile(sources: &NotebookSources, options: &CompileOptions) -> Compilation {
-    let Some(world) = NotebookWorld::new(sources, options.today) else {
+    let Some(world) = NotebookWorld::new(sources, options.today, options.cells.to_json()) else {
         return Compilation {
             notebook: None,
             diagnostics: vec![Diagnostic {
