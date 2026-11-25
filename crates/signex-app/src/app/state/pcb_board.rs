@@ -142,8 +142,11 @@ impl DocumentState {
     }
 
     /// Move the open board at `from` to `to`, where its tab now points.
-    /// A board already open at `to` is never replaced: the moved board
-    /// stays at `from` and the clash is logged.
+    /// A board already open at `to` is not overwritten: the moved board stays
+    /// at `from` and the clash is logged. That only bounds the store; the
+    /// callers have already re-pointed the tab, so a clash still needs a
+    /// pre-check there (#2971). No path reaches it: a rename refuses a
+    /// destination that exists.
     pub(crate) fn rekey_open_pcb_board(&mut self, from: &Path, to: &Path) {
         if self.boards.contains_key(to) {
             log::warn!(
@@ -213,8 +216,9 @@ impl DocumentState {
         engine: BoardEngine,
     ) {
         // One PCB tab per path: every open dedupes on the path first. If one
-        // ever slips through, keep the open board (its unsaved edits and
-        // history) rather than replace it, and log the clash.
+        // ever slips through, the stored board is not overwritten and the
+        // clash is logged; the incoming engine is dropped and the new tab
+        // shares the stored board, so callers must keep deduping (#2971).
         match self.boards.entry(path.clone()) {
             std::collections::hash_map::Entry::Vacant(slot) => {
                 slot.insert(engine);

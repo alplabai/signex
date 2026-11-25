@@ -143,9 +143,9 @@ fn a_rename_moves_an_open_board_to_its_new_path() {
     assert!(!docs.holds_pcb(&path));
 }
 
-/// The store never drops an open board to make room for another at its path:
-/// a second open keeps the first board, and a rename onto an open board
-/// leaves both where they were.
+/// The store never overwrites a board stored at a path: a second push keeps
+/// the stored board, and a rekey onto a stored board leaves both keys as they
+/// were. This pins the store only; the callers' pre-check is #2971.
 #[test]
 fn an_open_board_is_never_replaced_at_its_path() {
     let dir = tempfile::tempdir().unwrap();
