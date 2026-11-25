@@ -936,7 +936,11 @@ tools…" row whose tooltip names them.
 Part Actions holds Open Datasheet, Edit Symbol and Change Component, then
 Autoplace Fields and Copy Attributes (#1667), live with one placed part
 selected. Copy Attributes copies the object at the point the menu was opened
-over, else the selected part. Sheet Actions holds Open Child Sheet, Create Sheet
+over, else the selected part. Swap Pins and Swap Gates (#1261) follow: Swap
+Pins is live when the clicked pin of the selected part has one other pin in
+its swap group, Swap Gates with two units of one part selected, or one unit
+whose gate swap group has one other gate placed on the sheet (see
+`docs/PCB_TOOLS.md`, "Pin and gate swap"). Sheet Actions holds Open Child Sheet, Create Sheet
 From Sheet Symbol, Sync Sheet Pins and Synchronize Sheet Entries and Ports...,
 live with a sheet symbol selected, then Create Sheet Symbol From Sheet... and
 Number Schematic Sheets (#1276). When the symbol's file is missing, Open Child
