@@ -29,11 +29,12 @@ impl Messages {
     /// The prefix every message id of the owner starts with:
     /// `ext-<name>-`.
     pub fn prefix(&self) -> String {
-        format!(
-            "{}{}-",
-            signex_i18n::EXTENSION_MESSAGE_PREFIX,
-            self.owner.name()
-        )
+        Self::prefix_of(&self.owner)
+    }
+
+    /// The message-id prefix of `owner`: `ext-<name>-`.
+    pub(super) fn prefix_of(owner: &ExtensionId) -> String {
+        format!("{}{}-", signex_i18n::EXTENSION_MESSAGE_PREFIX, owner.name())
     }
 
     /// Add the `.ftl` file `source` for the locale `locale` (`en-US`, the

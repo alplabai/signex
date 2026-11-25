@@ -9,16 +9,35 @@
 
 use std::collections::BTreeMap;
 
+use signex_i18n::MessageId;
+
 use super::{RegisterError, claim};
 use crate::extension::ExtensionId;
 
-/// The preferences one extension adds: each key with its default value.
+/// The preferences one extension adds: each key with its label, its help
+/// and its default value.
 #[derive(Debug)]
 #[non_exhaustive]
 pub struct Preferences {
     owner: ExtensionId,
-    entries: Vec<(&'static str, serde_json::Value)>,
+    entries: Vec<PreferenceEntry>,
     pub(super) errors: Vec<RegisterError>,
+}
+
+/// One preference as the extension added it.
+#[derive(Debug, Clone, PartialEq)]
+struct PreferenceEntry {
+    key: &'static str,
+    texts: PreferenceTexts,
+    default: serde_json::Value,
+}
+
+/// What a preference's row on the extension's Preferences page says: its
+/// label and its help, both messages of the extension's own `.ftl` files.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PreferenceTexts {
+    pub label: MessageId,
+    pub help: Option<MessageId>,
 }
 
 /// One extension's preference values: the stored value of each key it
@@ -76,18 +95,44 @@ impl Preferences {
     }
 
     /// Add the preference `key` (`ext.<name>.<local>`), read as `default`
-    /// until a value is saved. Refused, and recorded so install refuses the
-    /// set, when the key is not under the owner's prefix or was added
-    /// already.
+    /// until a value is saved. Its row on the extension's Preferences page
+    /// reads `label`, with `help` under it; both are the owner's own
+    /// messages (`ext-<name>-…`, see `Messages`). Refused, and recorded so
+    /// install refuses the set, when the key is not under the owner's
+    /// prefix or was added already, or when `label` or `help` is not one of
+    /// the owner's message ids (`RegisterError::ForeignMessage`).
     pub fn add(
         &mut self,
         key: &'static str,
+        label: MessageId,
+        help: Option<MessageId>,
         default: serde_json::Value,
     ) -> Result<(), RegisterError> {
         let taken = self.keys().any(|taken| taken == key);
         claim(&self.owner, key, taken, &mut self.errors)?;
-        self.entries.push((key, default));
+        let prefix = super::Messages::prefix_of(&self.owner);
+        if let Some(foreign) = std::iter::once(label)
+            .chain(help)
+            .find(|id| !id.as_str().starts_with(&prefix))
+        {
+            let error = RegisterError::ForeignMessage(foreign.as_str().to_owned());
+            self.errors.push(error.clone());
+            return Err(error);
+        }
+        self.entries.push(PreferenceEntry {
+            key,
+            texts: PreferenceTexts { label, help },
+            default,
+        });
         Ok(())
+    }
+
+    /// The label and help of the added key `key`.
+    pub fn texts(&self, key: &str) -> Option<PreferenceTexts> {
+        self.entries
+            .iter()
+            .find(|entry| entry.key == key)
+            .map(|entry| entry.texts)
     }
 
     /// Were no preferences added?
@@ -97,7 +142,7 @@ impl Preferences {
 
     /// The keys, in the order they were added.
     pub fn keys(&self) -> impl Iterator<Item = &'static str> + '_ {
-        self.entries.iter().map(|(key, _)| *key)
+        self.entries.iter().map(|entry| entry.key)
     }
 
     /// The value of each key from `stored` (the `extensions` object of
@@ -112,7 +157,10 @@ impl Preferences {
             values: self
                 .entries
                 .iter()
-                .map(|(key, default)| (*key, stored.get(*key).unwrap_or(default).clone()))
+                .map(|entry| {
+                    let value = stored.get(entry.key).unwrap_or(&entry.default);
+                    (entry.key, value.clone())
+                })
                 .collect(),
         }
     }

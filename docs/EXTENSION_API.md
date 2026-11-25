@@ -224,8 +224,17 @@ the page.
 ### Preferences
 
 ```rust
-points.preferences.add("ext.sample.greeting", serde_json::json!("hi"))?;
+let label = points.messages.id("ext-sample-greeting").expect("an own id");
+let help = points.messages.id("ext-sample-greeting-help");
+points.preferences.add("ext.sample.greeting", label, help, serde_json::json!("hi"))?;
 ```
+
+A preference has a label and, optionally, a help text: both are messages of
+the extension's own `.ftl` files (see "Messages an extension ships"), so both
+ids start with `ext-<name>-`. Install refuses any other id, a built-in one or
+another extension's, with `RegisterError::ForeignMessage`
+(`docs/DECISIONS.md`, 2026-11-25). `Preferences::texts(key)` gives a
+preference's label and help.
 
 The values live in `prefs.json`, in its `extensions` object, under their full
 keys (`{"extensions": {"ext.sample.greeting": "hello"}}`). At launch, after
@@ -243,8 +252,11 @@ Each installed extension that added preferences gets a Preferences page of
 its own, named after it, under an Extensions group after the built-in pages
 (`docs/DECISIONS.md`, 2026-11-25). The page is built from the same building
 blocks as the built-in pages: a heading, a section and one setting row per
-preference, with the preference's key, a pill naming the kind of value it
-holds (text, number, on or off, list, group or empty) and its value. It shows
+preference, with the preference's label, its help under it, a pill naming the
+kind of value it holds (text, number, on or off, list, group or empty) and
+its value. The row shows the raw key only when the label does not resolve
+(the extension's files lack that message); a help that does not resolve is
+left out. It shows
 the value loaded at launch, or the last one a save landed for; it holds no
 draft, so its footer offers Close. The values stay in the one `extensions`
 object of `prefs.json`.
@@ -448,19 +460,24 @@ button whose press is `ExtensionMsg::for_view(owner, NOTES, NotesPressed)`,
 and `update` counts the presses. The object is the panel's state.
 
 **4. Its own messages.** `tests/example_extension/en-US.ftl` holds the
-panel's title, the button's text and the command's label, each under
-`ext-example-`. The ids are `const` (`MessageId::extension`), so the
-command's `static` row names its label directly.
+panel's title, the button's text, the command's label and the label and
+help of its one preference, each under `ext-example-`. The ids are `const`
+(`MessageId::extension`), so the command's `static` row names its label
+directly.
 
-**5. Registering.** `Extension::register` adds the message file, then all
-three:
+**5. Registering.** `Extension::register` adds the message file, then the
+panel, the command, the menu row and the preference:
 
 ```rust
 points.messages.add("en-US", MESSAGES)?;
 points.panels.add(NOTES, TITLE, PanelPosition::Right, notes)?;
 points.commands.add(&SAY_HELLO_ROW, |_args| Ok(HelloSaid))?;
 points.menu_rows.add_menu_row(MenuRoot::Tools, LABEL, SAY_HELLO)?;
+points.preferences.add(GREETING, GREETING_LABEL, Some(GREETING_HELP), json!("hello"))?;
 ```
+
+Its Preferences page names the preference "Greeting", with "The word the
+example says hello with." under it.
 
 A test installs the extension with `ExtensionHost::install` and hands the
 host to `Signex::new()` through `with_extensions`; a binary passes the same
@@ -517,7 +534,10 @@ const _: () = assert!(signex_app::extension::API_VERSION == 1);
 - `ExtensionPoints` with six points: catalog commands, dock panels,
   menu rows, Start-screen sections, preferences and message files.
 - An extension's own `.ftl` files: `Messages::{add, id, prefix, files}`,
-  `MessageId::extension`, `ExtensionMessages`, `RegisterError::InvalidMessages`
+  `MessageId::extension`, `ExtensionMessages`, `RegisterError::InvalidMessages`,
+  `I18n::has_message`; `Preferences::add` takes a label and an optional help
+  message (`PreferenceTexts`, `Preferences::texts`,
+  `RegisterError::ForeignMessage`)
   (`signex_i18n::{ExtensionMessages, ftl_entry_ids}`,
   `I18n::with_extension_messages`).
 - Extension panels in the panel list and under View ▸ Extensions
@@ -583,8 +603,11 @@ rule.
   the dock, so the keys the old arrangement kept are not carried over; a
   layout saved while keys were kept keeps them.
 - **Preference pages are read-only.** An extension's page shows its values;
-  the extension changes them with `PreferenceValues::save`. Its preferences
-  carry no label message, so a row shows the preference's key.
+  the extension changes them with `PreferenceValues::save`.
+- **A preference's label is checked by namespace, not by file.** Install
+  refuses a label or help outside `ext-<name>-`; an id in the namespace that
+  the extension's files lack is accepted and shows as the key (a help: not
+  at all).
 - **`if_revision` in `signex-cli`.** Only the agent socket takes
   `if_revision`; the `signex-cli` request line does not.
 - **One revision.** `if_revision` checks the one document named by

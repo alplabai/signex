@@ -300,6 +300,14 @@ fn an_extension_with_preferences_has_a_page_with_its_values() {
     };
     assert_eq!((page.index, page.name), (0, "sample"));
     assert_eq!(page.values.get(GREETING), Some(&serde_json::json!("hi")));
+    // Its row reads the sample's own label and help, not the key.
+    let (label, help) =
+        crate::preferences::extension_row_texts(&app.ui_state.i18n, page.preferences, GREETING);
+    assert_eq!(label.into_string(), "Greeting");
+    assert_eq!(
+        help.map(signex_i18n::Localized::into_string).as_deref(),
+        Some("What the sample says first.")
+    );
     assert_eq!(
         crate::preferences::extension_value_kind(&serde_json::json!("hi")),
         signex_i18n::ids::PREFERENCES_EXTENSION_TYPE_TEXT
@@ -323,4 +331,100 @@ fn an_extension_with_preferences_has_a_page_with_its_values() {
     // The Community binary has no extension page.
     let (community, _boot) = Signex::new();
     assert!(community.extensions().preference_pages().next().is_none());
+}
+
+/// An extension named `told` that ships `OWN_PREFS_FTL` and adds the
+/// preference `ext.told.color` with the label and help it is given.
+struct ToldPrefs {
+    label: &'static str,
+    help: Option<&'static str>,
+}
+
+const OWN_PREFS_FTL: &str =
+    "ext-told-color = Accent colour\next-told-color-help = The colour the panel draws in.\n";
+
+impl Extension for ToldPrefs {
+    fn name(&self) -> &str {
+        "told"
+    }
+
+    fn register(&mut self, points: &mut ExtensionPoints) {
+        let _ = points.messages.add("en-US", OWN_PREFS_FTL);
+        let id = |text| MessageId::extension(text).expect("an extension message id");
+        let _ = points.preferences.add(
+            "ext.told.color",
+            id(self.label),
+            self.help.map(id),
+            serde_json::json!("blue"),
+        );
+    }
+}
+
+/// The label and help the `told` page's row shows.
+fn told_row(label: &'static str, help: Option<&'static str>) -> (String, Option<String>) {
+    let host = ExtensionHost::install(vec![Box::new(ToldPrefs { label, help })]).expect("installs");
+    let (app, _boot) = Signex::new();
+    let app = app.with_extensions(host);
+    let page = app.extensions().preference_page(0).expect("the page");
+    let (label, help) = crate::preferences::extension_row_texts(
+        &app.ui_state.i18n,
+        page.preferences,
+        "ext.told.color",
+    );
+    (
+        label.into_string(),
+        help.map(signex_i18n::Localized::into_string),
+    )
+}
+
+#[test]
+fn a_preference_row_shows_its_label_and_help() {
+    assert_eq!(
+        told_row("ext-told-color", Some("ext-told-color-help")),
+        (
+            "Accent colour".to_owned(),
+            Some("The colour the panel draws in.".to_owned())
+        )
+    );
+}
+
+/// No help: none is shown. A label the extension's files lack: the key.
+#[test]
+fn a_preference_row_falls_back_to_its_key_when_its_label_does_not_resolve() {
+    assert_eq!(
+        told_row("ext-told-color", None),
+        ("Accent colour".to_owned(), None)
+    );
+    let (label, help) = told_row("ext-told-missing", Some("ext-told-also-missing"));
+    assert!(label.contains("ext.told.color"), "{label}");
+    assert_eq!(help, None);
+}
+
+#[test]
+fn a_preference_label_or_help_from_another_namespace_is_refused() {
+    let refused =
+        |label, help| match ExtensionHost::install(vec![Box::new(ToldPrefs { label, help })]) {
+            Err(InstallError::Refused { error, .. }) => error,
+            Err(other) => panic!("refused for another reason: {other}"),
+            Ok(_) => panic!("{label:?} / {help:?} was accepted"),
+        };
+    assert_eq!(
+        refused("ext-other-color", None),
+        RegisterError::ForeignMessage("ext-other-color".to_owned())
+    );
+    assert_eq!(
+        refused("ext-told-color", Some("ext-other-help")),
+        RegisterError::ForeignMessage("ext-other-help".to_owned())
+    );
+    // A built-in id is not one of the extension's messages either.
+    let mut points = ExtensionPoints::new(ExtensionId::new("told").expect("a name"));
+    assert_eq!(
+        points.preferences.add(
+            "ext.told.color",
+            signex_i18n::ids::PANELS_KIND_WIKI,
+            None,
+            serde_json::json!(1)
+        ),
+        Err(RegisterError::ForeignMessage("panels-kind-wiki".to_owned()))
+    );
 }

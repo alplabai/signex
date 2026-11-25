@@ -8,7 +8,9 @@ use std::collections::BTreeMap;
 use iced::widget::Space;
 use iced::{Element, Widget as _};
 
-use super::points::{ActiveBarRow, ExtensionPanelKind, MenuRow, PcbBarGroup, StartScreenSlot};
+use super::points::{
+    ActiveBarRow, ExtensionPanelKind, MenuRow, PcbBarGroup, Preferences, StartScreenSlot,
+};
 use super::{ExtensionHost, ExtensionMsg, PreferenceValues, ViewContext};
 use crate::keymap::{AppCommandId, ExtensionCommandName, ExtensionCommandNames};
 use signex_i18n::MessageId;
@@ -156,12 +158,13 @@ impl ExtensionHost {
             index,
             name: entry.id.name(),
             values,
+            preferences: &entry.points.preferences,
         })
     }
 }
 
 /// One installed extension's Preferences page (#2495).
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct PreferencePage<'a> {
     /// The extension's install index (`PrefNav::Extension`).
     pub index: usize,
@@ -169,4 +172,6 @@ pub struct PreferencePage<'a> {
     pub name: &'a str,
     /// Its preferences and their values.
     pub values: PreferenceValues,
+    /// What it added: each preference's label and help.
+    pub preferences: &'a Preferences,
 }

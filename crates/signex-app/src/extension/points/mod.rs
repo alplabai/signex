@@ -22,7 +22,7 @@ pub use error::RegisterError;
 pub use menu_rows::{ActiveBarRow, MenuRoot, MenuRow, MenuRows, PcbBarGroup};
 pub use messages::Messages;
 pub use panels::{ExtensionPanelKind, Panels};
-pub use preferences::{PreferenceValues, Preferences};
+pub use preferences::{PreferenceTexts, PreferenceValues, Preferences};
 pub use start_screen::{StartScreenSections, StartScreenSlot};
 
 use super::{ExtensionId, ExtensionView};

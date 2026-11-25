@@ -22,7 +22,9 @@ mod distributors;
 mod editing;
 mod extension_page;
 #[cfg(test)]
-pub(crate) use extension_page::value_kind as extension_value_kind;
+pub(crate) use extension_page::{
+    row_texts as extension_row_texts, value_kind as extension_value_kind,
+};
 mod fast_grids;
 mod graphite_fields;
 #[cfg(test)]

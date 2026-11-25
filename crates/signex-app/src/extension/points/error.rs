@@ -35,6 +35,9 @@ pub enum RegisterError {
     MutatesDocument(String),
     /// A message file does not parse; the reason.
     InvalidMessages(String),
+    /// A preference's label or help is not one of the owner's own messages
+    /// (`ext-<name>-…`); the message id.
+    ForeignMessage(String),
 }
 
 impl fmt::Display for RegisterError {
@@ -59,6 +62,9 @@ impl fmt::Display for RegisterError {
                 write!(f, "{id:?} mutates a document; an extension command cannot")
             }
             Self::InvalidMessages(why) => f.write_str(why),
+            Self::ForeignMessage(id) => {
+                write!(f, "{id:?} is not one of the extension's own messages")
+            }
         }
     }
 }

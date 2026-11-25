@@ -133,6 +133,13 @@ impl I18n {
         self.locale
     }
 
+    /// Whether `id` renders from this catalog, in the active locale or its
+    /// en-US fallback, rather than as its bare id. For a message an
+    /// extension names, which its own files may lack.
+    pub fn has_message(&self, id: MessageId) -> bool {
+        self.primary.has_message(id.as_str()) || self.fallback.has_message(id.as_str())
+    }
+
     /// The active locale's bundle, to add an extension's messages to.
     pub(crate) fn primary_mut(&mut self) -> &mut Bundle {
         &mut self.primary

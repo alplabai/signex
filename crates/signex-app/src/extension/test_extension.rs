@@ -38,6 +38,20 @@ static SAY_HELLO_ROW: super::CommandMetadata = super::CommandMetadata {
 struct HelloSaid;
 /// Its one preference.
 pub(crate) const GREETING: &str = "ext.sample.greeting";
+/// The sample's own messages: its preference's label and help.
+const SAMPLE_FTL: &str =
+    "ext-sample-greeting = Greeting\next-sample-greeting-help = What the sample says first.\n";
+/// The label and help of [`GREETING`].
+pub(crate) const GREETING_LABEL: signex_i18n::MessageId =
+    match signex_i18n::MessageId::extension("ext-sample-greeting") {
+        Some(id) => id,
+        None => panic!("an extension message id"),
+    };
+pub(crate) const GREETING_HELP: signex_i18n::MessageId =
+    match signex_i18n::MessageId::extension("ext-sample-greeting-help") {
+        Some(id) => id,
+        None => panic!("an extension message id"),
+    };
 /// The catalog message every sample label uses ("Wiki").
 pub(crate) const LABEL: signex_i18n::MessageId = ids::PANELS_KIND_WIKI;
 /// The catalog message of the button each sample surface draws.
@@ -132,8 +146,17 @@ impl Extension for Sample {
             .add_active_bar_row(PcbBarGroup::Route, LABEL, SAY_HELLO)
             .expect("the Active Bar row");
         points
+            .messages
+            .add("en-US", SAMPLE_FTL)
+            .expect("the messages");
+        points
             .preferences
-            .add(GREETING, serde_json::json!("hi"))
+            .add(
+                GREETING,
+                GREETING_LABEL,
+                Some(GREETING_HELP),
+                serde_json::json!("hi"),
+            )
             .expect("the preference");
     }
 

@@ -63,6 +63,11 @@ const fn own(id: &'static str) -> MessageId {
 const TITLE: MessageId = own("ext-example-notes-title");
 const BODY: MessageId = own("ext-example-notes-body");
 const LABEL: MessageId = own("ext-example-say-hello");
+/// The extension's one preference, and its label and help on the
+/// extension's Preferences page.
+const GREETING: &str = "ext.example.greeting";
+const GREETING_LABEL: MessageId = own("ext-example-greeting");
+const GREETING_HELP: MessageId = own("ext-example-greeting-help");
 
 /// The command's catalog row. It takes no operands, changes no document and
 /// runs headless as well as from a window.
@@ -143,6 +148,15 @@ impl Extension for Example {
             .menu_rows
             .add_menu_row(MenuRoot::Tools, LABEL, SAY_HELLO)
             .expect("the menu row registers");
+        points
+            .preferences
+            .add(
+                GREETING,
+                GREETING_LABEL,
+                Some(GREETING_HELP),
+                serde_json::json!("hello"),
+            )
+            .expect("the preference registers");
     }
 
     fn update(&mut self, message: ExtensionMsg) -> Task<Message> {
@@ -239,6 +253,24 @@ fn the_menu_row_ends_tools_and_picking_it_runs_the_command() {
 
     let _task = app.update(Message::Menu(picked));
     assert_eq!(seen.lock().expect("seen").hellos, 1);
+}
+
+#[test]
+fn the_preference_page_names_the_setting_by_its_own_label_and_help() {
+    let (app, _seen) = app_with_example();
+    let page = app
+        .extensions()
+        .preference_pages()
+        .find(|page| page.name == NAME)
+        .expect("the example's Preferences page");
+    assert_eq!(page.values.get(GREETING), Some(&serde_json::json!("hello")));
+    let texts = page.preferences.texts(GREETING).expect("the preference");
+    let shown = |id: MessageId| app.ui_state.i18n.message(id, &[]).into_string();
+    assert_eq!(shown(texts.label), "Greeting");
+    assert_eq!(
+        texts.help.map(shown).as_deref(),
+        Some("The word the example says hello with.")
+    );
 }
 
 #[test]

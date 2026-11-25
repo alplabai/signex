@@ -11,7 +11,8 @@ use std::sync::{Arc, Mutex};
 
 use super::points::{MenuRoot, RegisterError, StartScreenSlot};
 use super::test_extension::{
-    BODY, GREETING, LABEL, NOTES, Pinged, SAY_HELLO, Seen, WELCOME, sample_host, sample_id,
+    BODY, GREETING, GREETING_LABEL, LABEL, NOTES, Pinged, SAY_HELLO, Seen, WELCOME, sample_host,
+    sample_id,
 };
 use super::*;
 use crate::app::{Message, Signex};
@@ -276,7 +277,9 @@ fn install_refuses_an_addition_outside_the_namespace_or_added_twice() {
     );
     assert_eq!(
         refusal(|p| {
-            let _ = p.preferences.add("theme", serde_json::json!(1));
+            let _ = p
+                .preferences
+                .add("theme", GREETING_LABEL, None, serde_json::json!(1));
         }),
         Some(RegisterError::NotOwned("theme".to_owned()))
     );
