@@ -9,10 +9,12 @@
 use std::cmp::Ordering;
 
 mod counters;
+mod numbering;
 mod prefix;
 mod standard;
 
 pub use counters::{merge_counters, next_reference, seed_counters, take_next};
+pub use numbering::{BlockIssue, BlockProblem, NumberBlock, NumberBlocks, NumberingScheme};
 pub use prefix::{alphabetic_prefix, normalize_prefix_override, placement_prefix, split_reference};
 pub use standard::{
     DesignatorStandard, class_letters_ever_issued, class_prefix, display_reference, resolve_prefix,
