@@ -239,6 +239,9 @@ pub struct MenuContext<'a> {
     /// What View ▸ Window ▸ Layouts lists: the active layout, your layouts
     /// and the Reset row (mockup row 166).
     pub(crate) layouts: crate::workspace_layouts::LayoutsMenu,
+    /// The rows the installed extensions add, each at the end of its root
+    /// menu (#2495). Empty in the Community binary.
+    pub(crate) extension_rows: Vec<crate::extension::points::MenuRow>,
 }
 
 impl Default for MenuContext<'_> {
@@ -253,6 +256,7 @@ impl Default for MenuContext<'_> {
             cross_select: true,
             pcb_sync: None,
             layouts: Default::default(),
+            extension_rows: Vec::new(),
         }
     }
 }

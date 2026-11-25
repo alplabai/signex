@@ -102,6 +102,27 @@ pub(super) fn entries(
     entries
 }
 
+/// The rows extensions add to a group's dropdown (#2495), below a separator
+/// after the group's own rows: each runs its command like a built-in row,
+/// greyed by the same gate. None when no extension added one.
+pub(super) fn extension_entries(
+    rows: &[crate::extension::points::ActiveBarRow],
+    i18n: &I18n,
+    ctx: &CommandContext,
+) -> Vec<DropdownEntry<Message>> {
+    if rows.is_empty() {
+        return Vec::new();
+    }
+    let items = rows.iter().map(|row| {
+        let label = t!(i18n, row.label).into_string();
+        let pick = bar_message(PcbBarMsg::CommandPicked(row.command.clone()));
+        DropdownEntry::Item(DropdownItem::new(label, pick).disabled(!is_enabled(&row.command, ctx)))
+    });
+    std::iter::once(DropdownEntry::Separator)
+        .chain(items)
+        .collect()
+}
+
 /// The dropdown row of `row`, gated by `ctx`; greyed for an id that is not
 /// in the catalog.
 fn row_item(row: PcbBarRow, i18n: &I18n, ctx: &CommandContext) -> DropdownItem<Message> {

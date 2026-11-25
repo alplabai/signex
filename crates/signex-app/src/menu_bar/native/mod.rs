@@ -63,6 +63,7 @@ pub(crate) fn build_for(inputs: &MenuInputs) -> iced_menu::Menu<Message> {
         cross_select: inputs.cross_select(),
         pcb_sync: inputs.pcb_sync(),
         layouts: inputs.layouts().clone(),
+        extension_rows: inputs.extension_rows().to_vec(),
         ..super::MenuContext::default()
     };
     build(

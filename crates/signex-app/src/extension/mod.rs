@@ -12,11 +12,16 @@ mod host;
 mod id;
 mod message;
 pub mod points;
+mod prefs;
+mod surfaces;
+mod view;
 
 pub use host::{ExtensionHost, InstallError};
-pub use id::{ExtensionId, InvalidExtensionName};
+pub use id::{ExtensionId, InvalidExtensionName, is_extension_id};
 pub use message::ExtensionMsg;
-pub use points::ExtensionPoints;
+pub use points::{ExtensionPoints, PreferenceValues};
+pub use prefs::{PreferenceSaved, save_preference};
+pub use view::{ExtensionView, ViewContext};
 
 use iced::Task;
 
@@ -52,7 +57,19 @@ pub trait Extension: Send + 'static {
         let _ = message;
         Task::none()
     }
+
+    /// Called once at launch, after install and before the first window,
+    /// with the value of each preference the extension added (the stored
+    /// one, else its default). Not called for an extension that added no
+    /// preference. Does nothing by default.
+    fn preferences_loaded(&mut self, values: &PreferenceValues) {
+        let _ = values;
+    }
 }
 
+#[cfg(test)]
+mod surface_tests;
+#[cfg(test)]
+pub(crate) mod test_extension;
 #[cfg(test)]
 mod tests;

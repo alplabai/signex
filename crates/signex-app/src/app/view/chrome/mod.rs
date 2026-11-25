@@ -335,6 +335,7 @@ impl Signex {
                 pos,
                 self.panel_ctx_for(window_id),
                 &self.library,
+                &self.extensions,
                 self.sheet_grid(),
             )
             .map(move |msg| self.scope_dock_message(window_id, Message::Dock(msg)));
@@ -369,6 +370,7 @@ impl Signex {
                 pos,
                 self.panel_ctx_for(window_id),
                 &self.library,
+                &self.extensions,
                 self.sheet_grid(),
             )
             .map(move |msg| self.scope_dock_message(window_id, Message::Dock(msg)));

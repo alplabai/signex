@@ -36,6 +36,8 @@ pub(crate) struct MenuInputs {
     pcb_sync: Option<crate::app::update_pcb::PcbSyncLabel>,
     /// What View ▸ Window ▸ Layouts lists (mockup row 166).
     layouts: crate::workspace_layouts::LayoutsMenu,
+    /// The rows the installed extensions add (#2495).
+    extension_rows: Vec<crate::extension::points::MenuRow>,
 }
 
 impl PartialEq for MenuInputs {
@@ -47,6 +49,7 @@ impl PartialEq for MenuInputs {
             && self.cross_select == other.cross_select
             && self.pcb_sync == other.pcb_sync
             && self.layouts == other.layouts
+            && self.extension_rows == other.extension_rows
             && match (&self.keymap, &other.keymap) {
                 (Some(a), Some(b)) => Arc::ptr_eq(a, b),
                 (None, None) => true,
@@ -76,12 +79,25 @@ impl MenuInputs {
             cross_select: true,
             pcb_sync: None,
             layouts: Default::default(),
+            extension_rows: Vec::new(),
         }
     }
 
     pub(crate) fn with_layouts(mut self, layouts: crate::workspace_layouts::LayoutsMenu) -> Self {
         self.layouts = layouts;
         self
+    }
+
+    pub(crate) fn with_extension_rows(
+        mut self,
+        rows: Vec<crate::extension::points::MenuRow>,
+    ) -> Self {
+        self.extension_rows = rows;
+        self
+    }
+
+    pub(super) fn extension_rows(&self) -> &[crate::extension::points::MenuRow] {
+        &self.extension_rows
     }
 
     pub(super) fn layouts(&self) -> &crate::workspace_layouts::LayoutsMenu {

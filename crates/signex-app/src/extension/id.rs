@@ -63,6 +63,15 @@ impl ExtensionId {
     }
 }
 
+/// Is `id` in some extension's namespace: `ext.`, a valid extension name,
+/// `.` and at least one more character? True whether or not that extension
+/// is installed.
+pub fn is_extension_id(id: &str) -> bool {
+    id.strip_prefix("ext.")
+        .and_then(|rest| rest.split_once('.'))
+        .is_some_and(|(name, local)| ExtensionId::new(name).is_ok() && !local.is_empty())
+}
+
 impl fmt::Display for ExtensionId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0)

@@ -30,6 +30,7 @@ impl Signex {
         .with_cross_select(self.interaction_state.cross_select.enabled)
         .with_pcb_sync(self.pcb_sync_label(self.native_menu_window()))
         .with_layouts(self.layouts_menu())
+        .with_extension_rows(self.extensions.menu_rows())
     }
 
     /// The menu bar as the Model stands now. The iced runtime calls it after

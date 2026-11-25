@@ -38,7 +38,14 @@ pub fn run(extensions: Vec<Box<dyn Extension>>) -> iced::Result {
     // Installed before any window, so a bad set refuses the launch the way
     // a bad argument does. Taken by the boot closure, which iced calls once.
     let extensions = match ExtensionHost::install(extensions) {
-        Ok(host) => Cell::new(Some(host)),
+        Ok(mut host) => {
+            // Read once, before any window, like the UI font below. The
+            // Community binary installs none and reads nothing.
+            if !host.is_empty() {
+                host.load_preferences(&fonts::read_extension_prefs());
+            }
+            Cell::new(Some(host))
+        }
         Err(error) => {
             eprintln!("[signex] {error}");
             std::process::exit(2);

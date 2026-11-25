@@ -131,8 +131,10 @@ pub fn root_titles(i18n: &signex_i18n::I18n) -> Vec<String> {
 }
 
 /// Build the menu bar for `ctx`. Pure: the same context gives the same model.
+/// The rows extensions add come after every built-in row of their root
+/// menu, below one separator (#2495); with none, the bar is the built-in one.
 pub fn menu_bar_model(ctx: &MenuContext) -> MenuBarModel {
-    let entries = [
+    let mut entries = [
         menus::file(ctx),
         menus::edit(ctx),
         menus::view(ctx),
@@ -142,6 +144,17 @@ pub fn menu_bar_model(ctx: &MenuContext) -> MenuBarModel {
         menus::tools(ctx),
         menus::help(ctx),
     ];
+    for (index, root) in entries.iter_mut().enumerate() {
+        let mut rows = ctx
+            .extension_rows
+            .iter()
+            .filter(|row| row.root.index() == index)
+            .peekable();
+        if rows.peek().is_some() {
+            root.push(MenuEntry::Separator);
+            root.extend(rows.map(|row| items::extension_item(ctx, row)));
+        }
+    }
     MenuBarModel {
         menus: root_titles(&ctx.i18n)
             .into_iter()

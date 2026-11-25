@@ -50,6 +50,8 @@ impl PanelGroup {
 pub fn panel_group(kind: PanelKind) -> Option<PanelGroup> {
     let group = match kind {
         PanelKind::LayerStack | PanelKind::Todo => return None,
+        // The built-in panel list only; an extension opens its own panel.
+        PanelKind::Extension(_) => return None,
         PanelKind::Projects
         | PanelKind::Components
         | PanelKind::Library

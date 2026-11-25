@@ -16,6 +16,9 @@ use super::ExtensionId;
 #[derive(Debug, Clone)]
 pub struct ExtensionMsg {
     extension: ExtensionId,
+    /// The key of the extension's panel or Start-screen section the
+    /// message is for; `None` for the extension itself.
+    view: Option<&'static str>,
     payload: Arc<dyn Payload>,
 }
 
@@ -30,13 +33,33 @@ impl ExtensionMsg {
     pub fn new<T: Any + Debug + Send + Sync>(extension: ExtensionId, payload: T) -> Self {
         Self {
             extension,
+            view: None,
             payload: Arc::new(payload),
+        }
+    }
+
+    /// A message for the panel or Start-screen section `view` of
+    /// `extension`: that surface's `ExtensionView::update` receives it. A
+    /// key the extension did not register sends it to the extension itself.
+    pub fn for_view<T: Any + Debug + Send + Sync>(
+        extension: ExtensionId,
+        view: &'static str,
+        payload: T,
+    ) -> Self {
+        Self {
+            view: Some(view),
+            ..Self::new(extension, payload)
         }
     }
 
     /// The extension this message is routed to.
     pub fn extension(&self) -> &ExtensionId {
         &self.extension
+    }
+
+    /// The key of the panel or section this message is for, if any.
+    pub fn view(&self) -> Option<&'static str> {
+        self.view
     }
 
     /// The payload, if it is a `T`.
