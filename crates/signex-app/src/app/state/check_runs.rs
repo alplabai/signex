@@ -27,16 +27,10 @@ pub struct CheckRuns {
     /// The id of the newest run; run ids start at 1.
     last: u64,
     runs: VecDeque<KeptRun>,
-    /// The newest whole report of each check and scope, for a design
-    /// report built from the last results (#2945, mockup row 201).
-    reports: Vec<KeptReport>,
-}
-
-/// The newest report of one check over one scope.
-#[derive(Debug)]
-struct KeptReport {
-    scope: PathBuf,
-    report: CheckReport,
+    /// The newest whole report of each check (`CheckReport::check`) over
+    /// each scope, for a design report built from the last results (#2945,
+    /// mockup row 201).
+    reports: Vec<(PathBuf, CheckReport)>,
 }
 
 impl CheckRuns {
@@ -59,19 +53,16 @@ impl CheckRuns {
     /// the one kept before.
     pub(crate) fn keep_report(&mut self, scope: &Path, report: CheckReport) {
         self.reports
-            .retain(|kept| !(kept.report.check == report.check && kept.scope == scope));
-        self.reports.push(KeptReport {
-            scope: scope.to_path_buf(),
-            report,
-        });
+            .retain(|(kept, old)| !(old.check == report.check && kept == scope));
+        self.reports.push((scope.to_path_buf(), report));
     }
 
     /// The newest report of `check` over `scope`, when one is kept.
     pub(crate) fn last_report(&self, check: &str, scope: &Path) -> Option<&CheckReport> {
         self.reports
             .iter()
-            .find(|kept| kept.report.check == check && kept.scope == scope)
-            .map(|kept| &kept.report)
+            .find(|(kept, report)| report.check == check && kept == scope)
+            .map(|(_, report)| report)
     }
 
     /// The finding keys of run `run`, when it is kept and was a run of the

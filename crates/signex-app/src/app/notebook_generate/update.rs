@@ -2,7 +2,7 @@
 //! run (shared by the dialog and the command's operands) and its answer.
 
 use iced::Task;
-use signex_i18n::{ids, t};
+use signex_i18n::{Translatable, ids, t};
 use signex_notebook::generate::{
     GenerateOptions, generated_path, revision_of, variant_of, variants_of,
 };
@@ -26,7 +26,7 @@ type Ran = (CommandOutcome, Task<Message>);
 /// agent, a script): answered with the summary once the run lands
 /// ([`CommandOutcome::Deferred`]), or refused at once with the reason.
 pub(crate) fn generate_design_notebook(app: &mut Signex, args: &CommandArgs) -> Ran {
-    let refused = |reason: String| (CommandOutcome::disabled(reason), Task::none());
+    let refused = |reason: String| (refusal(reason), Task::none());
     let command = match AppCommandId::new(ID) {
         Ok(command) => command,
         Err(reason) => return refused(reason),
@@ -48,11 +48,16 @@ pub(super) fn answer(outcome: Result<GenerateOutcome, String>) -> CommandOutcome
     match outcome {
         Ok(done) => match serde_json::to_value(&done.notebook.summary) {
             Ok(value) => CommandOutcome::Answered(value),
-            Err(error) => {
-                CommandOutcome::disabled(format!("the summary could not be written: {error}"))
-            }
+            Err(error) => refusal(format!("the summary could not be written: {error}")),
         },
-        Err(why) => CommandOutcome::disabled(why),
+        Err(why) => refusal(why),
+    }
+}
+
+/// The command refused: "The design report was not generated: <why>".
+pub(super) fn refusal(why: String) -> CommandOutcome {
+    CommandOutcome::Disabled {
+        reason: Translatable::new(ids::DIALOG_NB_GENERATE_FAILED).arg("why", why),
     }
 }
 
