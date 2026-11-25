@@ -106,10 +106,13 @@ pub(crate) fn draw(drawing: &Drawing, pen: &Pen) -> Result<Drawn, GeomError> {
             polygon(&corners, drawing.filled, width, pen.function)
         }
         "circle" => {
-            let Some(center) = at(drawing.center)? else {
+            let Some(model_center) = drawing.center else {
                 return Ok(Drawn::Skipped);
             };
-            let radius = mm_to_nm(drawing.radius, "graphic.radius")?.abs();
+            let center = (pen.to_fab)(model_center)?;
+            // The radius the design rule check's copper has (`pcb_geom`).
+            let radius =
+                pcb_geom::circle_radius(model_center, drawing.radius, drawing.start, drawing.end)?;
             if drawing.filled {
                 vec![Mark::Flash {
                     shape: ApertureShape::Circle {
