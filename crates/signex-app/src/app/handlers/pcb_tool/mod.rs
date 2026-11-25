@@ -51,6 +51,8 @@ pub use router::RouterState;
 #[cfg(test)]
 mod area_form_tests;
 #[cfg(test)]
+mod area_operand_tests;
+#[cfg(test)]
 mod area_tests;
 #[cfg(test)]
 mod dimension_defaults_tests;

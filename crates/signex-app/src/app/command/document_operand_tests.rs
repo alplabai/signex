@@ -531,6 +531,12 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "rules_preset_apply",
                     "add_board_graphic",
                     "set_board_graphic",
+                    // #2470: the area tools on the named board.
+                    "place_board_fill",
+                    "place_board_region",
+                    "place_board_polygon_pour",
+                    "place_board_keepout",
+                    "place_board_pour_cutout",
                     "set_footprint_text",
                     "panelize_board",
                     "remove_board_panel",

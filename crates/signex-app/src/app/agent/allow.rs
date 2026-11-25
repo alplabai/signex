@@ -132,6 +132,12 @@ mod tests {
                 "lock_board_items",
                 "measure_board",
                 "panelize_board",
+                // #2470: the area tools, on the named board.
+                "place_board_fill",
+                "place_board_keepout",
+                "place_board_polygon_pour",
+                "place_board_pour_cutout",
+                "place_board_region",
                 // #2410: pin and gate swap and design reuse, on the named board.
                 "place_board_reuse_block",
                 // #2339: the Requirements section's edits and run.

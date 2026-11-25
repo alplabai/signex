@@ -314,17 +314,22 @@ fn pad_geometry(args: &CommandArgs) -> Result<PadEdit, String> {
     };
     let custom_outline = match text(args, "corners") {
         None => Vec::new(),
-        Some(raw) => raw
-            .split(';')
-            .map(mm_point)
-            .collect::<Option<Vec<_>>>()
-            .ok_or_else(|| format!("`corners` must be <x>,<y>;<x>,<y>;.. in mm, not `{raw}`"))?,
+        Some(raw) => mm_corners(raw)?,
     };
     Ok(PadEdit::Geometry {
         shape,
         trapezoid_delta,
         custom_outline,
     })
+}
+
+/// The `corners` operand, `<x>,<y>;<x>,<y>;..` in mm: a custom pad's outline
+/// (#2242), an area's (#2470).
+pub(super) fn mm_corners(raw: &str) -> Result<Vec<Point>, String> {
+    raw.split(';')
+        .map(mm_point)
+        .collect::<Option<Vec<_>>>()
+        .ok_or_else(|| format!("`corners` must be <x>,<y>;<x>,<y>;.. in mm, not `{raw}`"))
 }
 
 /// A point typed as `<x>,<y>` in mm.

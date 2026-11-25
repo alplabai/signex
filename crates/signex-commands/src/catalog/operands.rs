@@ -498,6 +498,35 @@ pub const BOARD_STEP: &[Operand] = &[
     required("path", OperandKind::Path),
     optional("schema", OperandKind::Text),
 ];
+/// `place_board_fill` from its operands (#2470): the rectangle between
+/// `start` and `end` (mm from the board origin, Y up) on the copper `layer`
+/// (`TopCopper`) of the board `document` names. `net` names a board net, or
+/// is empty for no net; left out, the net of the copper under its corners.
+pub const BOARD_FILL: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("layer", OperandKind::Text),
+    required("start", OperandKind::Point),
+    required("end", OperandKind::Point),
+    optional("net", OperandKind::Text),
+];
+/// `place_board_region` and `place_board_polygon_pour` from their operands
+/// (#2470): the `corners` `<x>,<y>;<x>,<y>;..` (mm from the board origin, Y
+/// up) on the copper `layer` of the board `document` names; `net` as for
+/// [`BOARD_FILL`].
+pub const BOARD_COPPER_AREA: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("layer", OperandKind::Text),
+    required("corners", OperandKind::Text),
+    optional("net", OperandKind::Text),
+];
+/// `place_board_keepout` (a copper or keep-out `layer`) and
+/// `place_board_pour_cutout` (a copper `layer`) from their operands (#2470):
+/// `corners` as for [`BOARD_COPPER_AREA`]. Neither has a net.
+pub const BOARD_NETLESS_AREA: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("layer", OperandKind::Text),
+    required("corners", OperandKind::Text),
+];
 /// `add_board_graphic` (#2424): a drawing of `kind` (`line`, `arc`,
 /// `circle`, `rectangle`, `text_frame`) on the board `document` names. A
 /// line, rectangle or text frame takes `start` and `end`; an arc its centre

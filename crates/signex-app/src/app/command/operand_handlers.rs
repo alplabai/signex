@@ -12,6 +12,7 @@
 use iced::Task;
 
 use super::agent_edits as agent;
+use super::board_area_operands as area;
 use super::board_edit_operands as board_edit;
 use super::board_graphic_operands as graphic;
 use super::board_operands as board;
@@ -152,6 +153,12 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("export_board_step", output::export_board_step),
     ("add_board_graphic", graphic::add_board_graphic),
     ("set_board_graphic", graphic::set_board_graphic),
+    // #2470: the area tools on the board `document` names.
+    ("place_board_fill", area::place_fill),
+    ("place_board_region", area::place_region),
+    ("place_board_polygon_pour", area::place_polygon_pour),
+    ("place_board_keepout", area::place_keepout),
+    ("place_board_pour_cutout", area::place_pour_cutout),
     ("set_footprint_text", fp_text::set_footprint_text),
     ("set_selection_filters", filter::set_selection_filters),
     (

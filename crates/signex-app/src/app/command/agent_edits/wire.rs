@@ -225,6 +225,12 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
     ("arrange_in_box", BOARD_EDIT),
     // #2506: it refills the board's unfilled pours as one board step.
     ("repour_all", BOARD_EDIT),
+    // #2470: each area tool adds one zone as a board step of its own.
+    ("place_board_fill", BOARD_EDIT),
+    ("place_board_region", BOARD_EDIT),
+    ("place_board_polygon_pour", BOARD_EDIT),
+    ("place_board_keepout", BOARD_EDIT),
+    ("place_board_pour_cutout", BOARD_EDIT),
     (
         "rules_matrix_set",
         "it writes the project's rule set, which no sheet's undo step covers",
