@@ -215,3 +215,73 @@ fn the_flag_drawing_follows_show_parameters_on_the_flag() {
         "the flag lists the rules"
     );
 }
+
+/// Mockup row 153 lays out a selected Net Blanket: the sheet and size
+/// under the header, then Outline, Directive and the nets under it; the
+/// Suppressed rules section it shares with a No-ERC directive (mockup row
+/// 49) comes last.
+#[test]
+fn a_blanket_panel_runs_outline_directive_nets_then_suppressed_rules() {
+    use signex_i18n::ids;
+    let mut s = sheet();
+    s.directives.push(SchDirective::Blanket {
+        uuid: Uuid::from_u128(90),
+        start: Point::new(-5.0, 5.0),
+        end: Point::new(25.0, 55.0),
+        net_class: None,
+        erc_exclusions: Vec::new(),
+        track_width: None,
+        pour: BlanketPour::Normal,
+        include_edge_nets: false,
+    });
+    let (app, _boot) = crate::app::Signex::new();
+    let mut ctx = app.document_state.panel_ctx.clone();
+    ctx.selected_kind = Some(signex_types::schematic::SelectedKind::Directive);
+    ctx.selected_uuid = Some(Uuid::from_u128(90));
+    ctx.directive_panel = Some(Box::new(panel(&s)));
+    let view = super::view_selected_element_properties(
+        &ctx,
+        iced::Color::WHITE,
+        iced::Color::WHITE,
+        iced::Color::BLACK,
+    );
+    let texts = crate::layout_probe::lay_out_texts(view, iced::Size::new(400.0, 4000.0));
+    let top_of = |id: signex_i18n::MessageId| {
+        let title = ctx.i18n.upper_for_display(&ctx.i18n.message_plain(id, &[]));
+        crate::layout_probe::find(&texts, &title).bounds.y
+    };
+    let caption = texts
+        .iter()
+        .find(|t| t.text.contains("power_in.snxsch"))
+        .unwrap_or_else(|| panic!("no sheet and size caption: {texts:#?}"))
+        .bounds
+        .y;
+    let outline = top_of(ids::PANELS_BLANKET_OUTLINE);
+    let directive = top_of(ids::PANELS_BLANKET_DIRECTIVE);
+    let nets = texts
+        .iter()
+        .find(|t| t.text.contains(&nets_title(&ctx.i18n)))
+        .unwrap_or_else(|| panic!("no nets section: {texts:#?}"))
+        .bounds
+        .y;
+    let rules = top_of(ids::PROPERTIES_SUPPRESSED_RULES);
+    assert!(
+        caption < outline && outline < directive && directive < nets && nets < rules,
+        "caption {caption}, outline {outline}, directive {directive}, nets {nets}, rules {rules}"
+    );
+}
+
+/// The start of the nets section title, as displayed, without its count.
+fn nets_title(i18n: &signex_i18n::I18n) -> String {
+    let title = i18n.message_plain(
+        signex_i18n::ids::PANELS_BLANKET_NETS,
+        &[("count", signex_i18n::Arg::from(0u32))],
+    );
+    let shown = i18n.upper_for_display(&title);
+    shown
+        .split('0')
+        .next()
+        .unwrap_or_default()
+        .trim()
+        .to_string()
+}

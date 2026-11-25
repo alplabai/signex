@@ -511,4 +511,7 @@ define_ids! {
     PROPERTIES_TEXT_STYLE_NOT_STORED = "properties-text-style-not-stored";
     PROPERTIES_POWER_ILLUSTRATION_STYLE = "properties-power-illustration-style";
     PROPERTIES_POWER_ILLUSTRATION_FONT_SIZE = "properties-power-illustration-font-size";
+    // m7/erc-blanket-directives
+    PROPERTIES_ALL_RULES_NAME = "properties-all-rules-name";
+    PROPERTIES_RULE_TOTAL = "properties-rule-total";
 }

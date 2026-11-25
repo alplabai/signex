@@ -786,3 +786,11 @@ properties-text-style-not-stored = Bold, italic, underline and strikethrough are
 properties-power-illustration-style = Style · { $style }
 # Font Size callout of the power-port illustration. $size is the size in points.
 properties-power-illustration-font-size = Font Size { $size }
+# m7/erc-blanket-directives
+# Suppressed rules (mockup row 49): the All rules enable row, with the
+# number of built-in rules right-aligned on the same row.
+properties-all-rules-name = All rules
+properties-rule-total = { $count ->
+    [one] 1 rule
+   *[other] { $count } rules
+}

@@ -327,8 +327,9 @@ pub(super) fn rule_rows(
         .collect()
 }
 
-/// Suppressed rules (mockup row 49): the All rules enable row first, a
-/// hairline, then the filter and one row per rule, box first. While All
+/// Suppressed rules (mockup row 49): the All rules enable row first, its
+/// rule total at the row's end, a hairline, then the filter (search glyph
+/// first) and one row per rule, box first. While All
 /// rules is on, the filter and the rows are disabled, every box shows
 /// ticked, and a caption under the list says why. The header counts the
 /// rules that are off.
@@ -362,28 +363,19 @@ fn rules_body<'a>(
 ) -> Column<Element<'a, PanelMsg>> {
     let i18n = &ctx.i18n;
     let all_toggled = list.all_toggled.clone();
-    let header = EnableSection::new(
-        t!(i18n, ids::PROPERTIES_ALL_RULES, "count" => total),
-        list.all_on,
-    )
-    .on_toggle(move |_| all_toggled.clone())
-    .view(
-        crate::panels::enable_section::enable_section_style(&ctx.tokens),
-        Space::new().boxed(),
-    );
+    let muted = st.muted;
+    let header = EnableSection::new(t!(i18n, ids::PROPERTIES_ALL_RULES_NAME), list.all_on)
+        .on_toggle(move |_| all_toggled.clone())
+        .wrap_header(move |header| rule_total_row(header, total, i18n, muted))
+        .view(
+            crate::panels::enable_section::enable_section_style(&ctx.tokens),
+            Space::new().boxed(),
+        );
     let query = ctx.selection_form.rule_query.clone();
-    let filter = signex_widgets::text_input(t!(i18n, ids::PROPERTIES_RULE_FILTER), query.clone())
-        .on_input(|s| PanelMsg::SelectionForm(SelectionFormMsg::RuleQueryChanged(s)))
-        .size(TS.body)
-        .padding(SP.s)
+    let mut rules = Column::new()
+        .spacing(0)
         .width(Length::Fill)
-        .style(crate::panels::form_look::text_input_style);
-    let mut rules = Column::new().spacing(0).width(Length::Fill).push(
-        container(filter)
-            .padding([SP.xs, PAD_X])
-            .width(Length::Fill)
-            .boxed(),
-    );
+        .push(rule_filter(ctx, query.clone()));
     let rows = rule_rows(i18n, &list, &query);
     if rows.is_empty() {
         rules = rules.push(inset_caption(
@@ -412,6 +404,72 @@ fn rules_body<'a>(
         ));
     }
     body
+}
+
+/// The All rules `header` with the number of built-in rules right-aligned
+/// at the row's end (mockup row 49), padded as the header is so both sit
+/// on one line.
+fn rule_total_row<'a>(
+    header: Element<'a, PanelMsg>,
+    total: usize,
+    i18n: &signex_i18n::I18n,
+    muted: Color,
+) -> Element<'a, PanelMsg> {
+    let count = t!(i18n, ids::PROPERTIES_RULE_TOTAL, "count" => total)
+        .to_string()
+        .replace(['\u{2068}', '\u{2069}'], "");
+    let count = text(count)
+        .size(TS.caption)
+        .color(muted)
+        .wrapping(iced::widget::text::Wrapping::None);
+    let count = container(count).padding(iced::Padding {
+        top: SP.m,
+        right: SP.l,
+        bottom: SP.xs,
+        left: 0.0,
+    });
+    iced::widget::row![header, count]
+        .align_y(iced::Alignment::Center)
+        .width(Length::Fill)
+        .boxed()
+}
+
+/// The rule filter: a search glyph and a borderless input in a field frame
+/// (mockup row 49).
+fn rule_filter<'a>(ctx: &PanelContext, query: String) -> Element<'a, PanelMsg> {
+    let r = crate::styles::tokens::resolve(&ctx.tokens);
+    let (ink, ink4) = (crate::styles::ti(ctx.tokens.text), r.ink4);
+    let glyph = iced::widget::svg(crate::icons::icon_chrome_search(ctx.theme_id))
+        .width(TS.body)
+        .height(TS.body)
+        .style(move |_: &Theme, _| iced::widget::svg::Style {
+            color: Some(ink4),
+            ..Default::default()
+        });
+    let input = signex_widgets::text_input(t!(ctx.i18n, ids::PROPERTIES_RULE_FILTER), query)
+        .on_input(|s| PanelMsg::SelectionForm(SelectionFormMsg::RuleQueryChanged(s)))
+        .size(TS.body)
+        .padding(iced::Padding::ZERO)
+        .width(Length::Fill)
+        .style(move |_: &Theme, _| iced::widget::text_input::Style {
+            background: Background::Color(Color::TRANSPARENT),
+            border: iced::Border::default(),
+            placeholder: ink4,
+            value: ink,
+            selection: Color { a: 0.4, ..ink },
+        });
+    let field = container(
+        iced::widget::row![glyph.boxed(), input.boxed()]
+            .spacing(SP.s)
+            .align_y(iced::Alignment::Center),
+    )
+    .padding(SP.s)
+    .width(Length::Fill)
+    .style(crate::styles::field(&ctx.tokens, false));
+    container(field)
+        .padding([SP.xs, PAD_X])
+        .width(Length::Fill)
+        .boxed()
 }
 
 /// A rule's row: its box first, then its name on one line across the
