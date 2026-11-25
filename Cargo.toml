@@ -212,21 +212,21 @@ unused_must_use = "deny"
 # level, which scripts/check_lint_lockstep.sh now fails CI over (#570).
 
 # Signex fork of iced (upstream master + cherry-picked PRs, see FORK.md in alplabai/iced).
-# Tag iced-signex-v0.15.0-alpha.9 = fork commit cc3924c4c (the signex release branch). Pinned by rev, not tag: a tag can be moved. It includes MonitorData::size() dividing by the scale factor (alplabai/iced#49), which the window placement code relies on, the canvas glyph mesh cache (alplabai/iced#79) for rotated text (#2128), and the native menu API (`iced::menu`, quit requests, `system::menu_failures`; failure report alplabai/iced#93).
+# Tag iced-signex-v0.15.0-alpha.10 = fork commit e65cf980a (the signex release branch). Pinned by rev, not tag: a tag can be moved. It includes MonitorData::size() dividing by the scale factor (alplabai/iced#49), which the window placement code relies on, the canvas glyph mesh cache (alplabai/iced#79) for rotated text (#2128), and the native menu API (`iced::menu`, quit requests, `system::menu_failures`; failure report alplabai/iced#93).
 [patch.crates-io]
 iced_fonts = { path = "vendor/iced_fonts" }
-iced = { git = "https://github.com/alplabai/iced", rev = "cc3924c4c0c210e14380915510d7aa9b3ddc0e53" }
-iced_core = { git = "https://github.com/alplabai/iced", rev = "cc3924c4c0c210e14380915510d7aa9b3ddc0e53" }
-iced_futures = { git = "https://github.com/alplabai/iced", rev = "cc3924c4c0c210e14380915510d7aa9b3ddc0e53" }
-iced_graphics = { git = "https://github.com/alplabai/iced", rev = "cc3924c4c0c210e14380915510d7aa9b3ddc0e53" }
-iced_program = { git = "https://github.com/alplabai/iced", rev = "cc3924c4c0c210e14380915510d7aa9b3ddc0e53" }
-iced_renderer = { git = "https://github.com/alplabai/iced", rev = "cc3924c4c0c210e14380915510d7aa9b3ddc0e53" }
-iced_runtime = { git = "https://github.com/alplabai/iced", rev = "cc3924c4c0c210e14380915510d7aa9b3ddc0e53" }
-iced_vello_cpu = { git = "https://github.com/alplabai/iced", rev = "cc3924c4c0c210e14380915510d7aa9b3ddc0e53" }
-iced_wgpu = { git = "https://github.com/alplabai/iced", rev = "cc3924c4c0c210e14380915510d7aa9b3ddc0e53" }
-iced_widget = { git = "https://github.com/alplabai/iced", rev = "cc3924c4c0c210e14380915510d7aa9b3ddc0e53" }
-iced_winit = { git = "https://github.com/alplabai/iced", rev = "cc3924c4c0c210e14380915510d7aa9b3ddc0e53" }
-iced_debug = { git = "https://github.com/alplabai/iced", rev = "cc3924c4c0c210e14380915510d7aa9b3ddc0e53" }
+iced = { git = "https://github.com/alplabai/iced", rev = "e65cf980a8e39011238190f114bec69028df3e8c" }
+iced_core = { git = "https://github.com/alplabai/iced", rev = "e65cf980a8e39011238190f114bec69028df3e8c" }
+iced_futures = { git = "https://github.com/alplabai/iced", rev = "e65cf980a8e39011238190f114bec69028df3e8c" }
+iced_graphics = { git = "https://github.com/alplabai/iced", rev = "e65cf980a8e39011238190f114bec69028df3e8c" }
+iced_program = { git = "https://github.com/alplabai/iced", rev = "e65cf980a8e39011238190f114bec69028df3e8c" }
+iced_renderer = { git = "https://github.com/alplabai/iced", rev = "e65cf980a8e39011238190f114bec69028df3e8c" }
+iced_runtime = { git = "https://github.com/alplabai/iced", rev = "e65cf980a8e39011238190f114bec69028df3e8c" }
+iced_vello_cpu = { git = "https://github.com/alplabai/iced", rev = "e65cf980a8e39011238190f114bec69028df3e8c" }
+iced_wgpu = { git = "https://github.com/alplabai/iced", rev = "e65cf980a8e39011238190f114bec69028df3e8c" }
+iced_widget = { git = "https://github.com/alplabai/iced", rev = "e65cf980a8e39011238190f114bec69028df3e8c" }
+iced_winit = { git = "https://github.com/alplabai/iced", rev = "e65cf980a8e39011238190f114bec69028df3e8c" }
+iced_debug = { git = "https://github.com/alplabai/iced", rev = "e65cf980a8e39011238190f114bec69028df3e8c" }
 # Same alplabai/wgpu rev as alplabai/iced's root Cargo.toml (alplabai/iced#133, #2848): wgpu 30.0.1 plus DX12 window
 # swapchains with DXGI_SCALING_NONE, so a resize shows no stretched frame. The whole family comes from one
 # rev so there is one copy of each crate. A stale patch only warns: after every iced re-pin or wgpu bump,
