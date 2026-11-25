@@ -352,7 +352,7 @@ impl ProjectData {
         let part = &mut parts[index];
         part.designator = designator.to_string();
         if let Some(link) = placed.link {
-            part.part = Some(link.clone());
+            part.part = Some(widened_link(part.part.as_ref(), link));
         }
         edit(part);
         if parts[index].is_empty() {
@@ -377,6 +377,20 @@ impl ProjectData {
             return Err(VariantProblem::SettingsUnreadable);
         }
         Ok(())
+    }
+}
+
+/// The link an edit leaves on an entry that had `own`: `link`, with the
+/// units `own` already names on the same sheet kept, so an edit that knows
+/// one unit of a part never narrows an entry the matrix linked to all of
+/// them. A link on another sheet is replaced.
+fn widened_link(own: Option<&SymbolLink>, link: &SymbolLink) -> SymbolLink {
+    match own {
+        Some(own) if own.sheet == link.sheet => SymbolLink::new(
+            link.sheet.clone(),
+            own.units.iter().chain(&link.units).copied(),
+        ),
+        _ => link.clone(),
     }
 }
 

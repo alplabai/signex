@@ -136,14 +136,20 @@ impl<M> canvas::Program<M> for Miniature {
             label(&mut frame, &fit, t, color, Vertical::Bottom);
         }
         for t in &self.data.designators {
-            let color = if self.left_out.contains(&t.text) {
-                self.ink.left_out
-            } else {
-                self.ink.designator
-            };
+            let color = designator_ink(&self.ink, &self.left_out, &t.text);
             label(&mut frame, &fit, t, color, Vertical::Center);
         }
         vec![frame.into_geometry()]
+    }
+}
+
+/// The ink of the designator `text` on the drawing: greyed when its part is
+/// one the variant leaves out (`left_out`, from `fit::left_out`).
+fn designator_ink(ink: &Ink, left_out: &HashSet<String>, text: &str) -> Color {
+    if left_out.contains(text) {
+        ink.left_out
+    } else {
+        ink.designator
     }
 }
 
@@ -215,6 +221,46 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// #2662: a part the variant leaves out in this channel draws its
+    /// designator greyed on the card; a fitted one keeps the designator ink.
+    #[test]
+    fn a_left_out_part_draws_its_designator_greyed() {
+        use crate::panels::compiled_design::{ChannelPartFit, ChannelTabView};
+        use signex_types::project::PartRef;
+        use signex_types::schematic::ChannelOccurrence;
+        let fit = |designator: &str, is_fitted: bool| ChannelPartFit {
+            part: PartRef::new(designator.to_string(), None),
+            is_fitted,
+        };
+        let tab = ChannelTabView {
+            channel: ChannelOccurrence {
+                name: "CH2".into(),
+                index: 2,
+                number: 2,
+                of: 2,
+            },
+            parts: Some(2),
+            nets: Some(1),
+            designators: vec!["CH2_C6".into(), "CH2_R5".into()],
+            miniature: None,
+            fits: vec![fit("CH2_C6", false), fit("CH2_R5", true)],
+        };
+        let grey = Color::from_rgb(0.5, 0.5, 0.5);
+        let ink = Ink {
+            paper: Color::WHITE,
+            wire: Color::BLACK,
+            bus: Color::BLACK,
+            body: Color::BLACK,
+            designator: Color::BLACK,
+            net: Color::BLACK,
+            power: Color::BLACK,
+            left_out: grey,
+        };
+        let left_out = super::super::fit::left_out(&tab);
+        assert_eq!(designator_ink(&ink, &left_out, "CH2_C6"), grey);
+        assert_eq!(designator_ink(&ink, &left_out, "CH2_R5"), Color::BLACK);
     }
 
     /// The sheet keeps its shape and sits in the middle.

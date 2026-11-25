@@ -7,11 +7,13 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use crate::app::handlers::menu::export::tests::{app_workspace, open_with};
+use crate::app::sheet_hierarchy::{SheetHierarchy, SheetNode, SheetNodeKind};
 use crate::app::{Message, PreferencesMsg, Signex, TabInfo, TabKind};
 use crate::canvas::CanvasSlot;
 use crate::preferences::PrefMsg;
+use signex_types::pcb::SymbolLink;
 use signex_types::project::{VariantPart, VariantSettings};
-use signex_types::schematic::{SchematicSheet, Symbol};
+use signex_types::schematic::{InstancePath, SchematicSheet, Symbol};
 use uuid::Uuid;
 
 const U1: Uuid = Uuid::from_u128(1);
@@ -216,5 +218,116 @@ fn a_pane_is_not_recomputed_while_nothing_its_parts_depend_on_moved() {
         pane_not_fitted(&app, &pane),
         HashSet::from([U4]),
         "new settings recompute"
+    );
+}
+
+const SHEET_SYMBOL: Uuid = Uuid::from_u128(0x51);
+const R5: Uuid = Uuid::from_u128(5);
+
+fn node(name: &str, placed_as: Option<Uuid>, path: PathBuf, children: Vec<SheetNode>) -> SheetNode {
+    SheetNode {
+        name: name.to_string(),
+        filename: path
+            .file_name()
+            .map_or_else(String::new, |n| n.to_string_lossy().into_owned()),
+        placed_as,
+        path,
+        kind: SheetNodeKind::Present,
+        detail: None,
+        children,
+    }
+}
+
+/// A project defining Lite, active, whose root `top.snxsch` places
+/// `child.snxsch` through a sheet symbol named `symbol_name`; the child is
+/// open in the active tab holding `child`. The walk is the Navigator's.
+fn app_with_child(symbol_name: &str, child: Vec<Symbol>) -> (Signex, tempfile::TempDir) {
+    let dir = tempfile::tempdir().expect("a folder");
+    let listed = ["top.snxsch", "child.snxsch"];
+    let mut app = app_workspace(&dir.path().to_string_lossy(), &listed);
+    let top = dir.path().join("top.snxsch");
+    let path = dir.path().join("child.snxsch");
+    let sheet = SchematicSheet {
+        symbols: child,
+        ..Default::default()
+    };
+    open_with(&mut app.document_state, &path, sheet);
+    let placed = node(symbol_name, Some(SHEET_SYMBOL), path.clone(), Vec::new());
+    app.document_state.panel_ctx.navigator.hierarchy = Some(SheetHierarchy {
+        root: Some(node("top", None, top, vec![placed])),
+        ..Default::default()
+    });
+    let id = app.document_state.projects[0].id;
+    app.document_state.tabs.push(TabInfo {
+        title: "child".to_string(),
+        path: path.clone(),
+        cached_document: None,
+        project_id: Some(id),
+        kind: TabKind::Schematic,
+    });
+    app.document_state.active_tab = app.document_state.tabs.len() - 1;
+    app.document_state.active_path = Some(path);
+    app.document_state.projects[0].data.variant_definitions = vec!["Lite".to_string()];
+    set_active(&mut app, Some("Lite"));
+    (app, dir)
+}
+
+/// R5 left out of Lite in channel `number` of the repeat, keyed by the
+/// channel's part link as a card or the Variant Manager writes it.
+fn left_out_in_channel(number: u32) -> VariantPart {
+    let channel = signex_net::channel_uuid(SHEET_SYMBOL, number);
+    VariantPart {
+        variant: "Lite".into(),
+        designator: format!("CH{number}_R5"),
+        part: Some(SymbolLink::new(
+            InstancePath::from_chain(vec![channel]),
+            vec![R5],
+        )),
+        fitted: Some(false),
+        ..VariantPart::default()
+    }
+}
+
+fn set_settings(app: &mut Signex, parts: Vec<VariantPart>) {
+    app.document_state.projects[0].data.variant_settings = VariantSettings {
+        parts,
+        ..VariantSettings::default()
+    };
+}
+
+#[test]
+fn a_repeated_sheet_crosses_a_part_out_only_when_every_channel_leaves_it_out() {
+    let (mut app, _dir) = app_with_child("Repeat(CH, 1, 2)", vec![part(R5, "R5")]);
+    assert!(crossed_out(&mut app).is_empty(), "fitted in every channel");
+    set_settings(&mut app, vec![left_out_in_channel(1)]);
+    assert!(
+        crossed_out(&mut app).is_empty(),
+        "CH2 still fits R5, so the shared sheet draws it fitted"
+    );
+    set_settings(
+        &mut app,
+        vec![left_out_in_channel(1), left_out_in_channel(2)],
+    );
+    assert_eq!(crossed_out(&mut app), HashSet::from([R5]));
+}
+
+#[test]
+fn a_part_whose_dnp_unit_is_on_the_parent_sheet_is_crossed_out_on_the_child() {
+    let mut unit_b = part(R5, "U9");
+    unit_b.unit = 2;
+    let (mut app, dir) = app_with_child("Amp", vec![unit_b]);
+    assert!(crossed_out(&mut app).is_empty(), "unit A is not open yet");
+    let mut unit_a = part(U1, "U9");
+    unit_a.unit = 1;
+    unit_a.dnp = true;
+    let top = SchematicSheet {
+        symbols: vec![unit_a],
+        ..Default::default()
+    };
+    open_with(&mut app.document_state, &dir.path().join("top.snxsch"), top);
+    assert_eq!(
+        crossed_out(&mut app),
+        HashSet::from([R5]),
+        "the BOM drops U9, so its unit on the child is crossed out too"
     );
 }

@@ -63,7 +63,7 @@ pub use substitution::{SubstitutionContext, resolve, resolve_text};
 pub use svg::board::{AssemblySvgOptions, assembly_svg};
 pub use template::{Template, TemplateError, TemplateId, TitleBlockField};
 pub use variant_fit::{
-    ChannelFit, MatrixChannels, RowChannel, VariantMatrix, VariantRow, is_fitted,
+    ChannelFit, MatrixChannels, PlacedFits, RowChannel, VariantMatrix, VariantRow, is_fitted,
     not_fitted_symbols, part_is_fitted, placed_part_fitted, project_fit, variant_matrix,
     variant_matrix_in_channels,
 };

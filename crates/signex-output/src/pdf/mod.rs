@@ -343,7 +343,8 @@ impl Exporter for PdfExporter {
 
         let sheet_indices =
             resolve_page_range(&opts.page_range, &ctx.sheets, ctx.current_sheet_index())?;
-        let expr_tables = build_expression_tables(&ctx.sheets, ctx.netlist.as_ref());
+        let expr_tables = build_expression_tables(&ctx.sheets, ctx.netlist.as_ref())
+            .with_placed_fits(ctx, opts.variant.as_deref(), opts.draw_not_fitted);
         let (page_w_mm, page_h_mm) = opts.page_size.dimensions_mm(opts.orientation);
         let page_w_pt = (page_w_mm * MM_TO_PT) as f32;
         let page_h_pt = (page_h_mm * MM_TO_PT) as f32;

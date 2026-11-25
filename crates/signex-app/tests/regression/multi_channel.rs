@@ -756,3 +756,80 @@ fn esc_closes_the_naming_menu_without_a_change() {
     let selected = &f.app.interaction_state.active_canvas().selected;
     assert_eq!(selected.len(), 1, "Esc goes no further than the menu");
 }
+
+/// The designators of the BOM preview's lines, Lite active.
+fn bom_designators(app: &mut Signex) -> Vec<String> {
+    let _ = app.update(Message::Menu(signex_app::menu_bar::MenuMessage::ExportBom));
+    let preview = app.document_state.bom_preview.as_ref().expect("preview");
+    preview
+        .table
+        .rows
+        .iter()
+        .flat_map(|row| row.references.iter().cloned())
+        .collect()
+}
+
+/// The Variant Manager's read of the project's parts, with the settings
+/// applied as the matrix shows them: `designator` to its fit in Lite.
+fn variant_manager_lite(app: &mut Signex) -> Vec<(String, bool)> {
+    let project_id = app.document_state.projects[0].id;
+    app.document_state
+        .project_tabs
+        .entry(project_id)
+        .or_default();
+    crate::settle_support::settle(
+        app,
+        Message::Project(signex_app::app::ProjectMsg::Tab(
+            signex_app::app::ProjectTabMsg::VariantPartsReadRequested { project_id },
+        )),
+    );
+    let tab = &app.document_state.project_tabs[&project_id];
+    let read = tab.variant_parts.as_deref().expect("a read landed");
+    let matrix = read.as_ref().expect("the parts were read");
+    let settings = &app.document_state.projects[0].data.variant_settings;
+    let mut rows: Vec<(String, bool)> = matrix
+        .with_settings(settings)
+        .rows
+        .iter()
+        .map(|row| (row.designator.clone(), row.fitted[1]))
+        .collect();
+    rows.sort();
+    rows
+}
+
+/// #2662, mockup row 151: a card's fit click, from the parts the compiled
+/// strip lists, is the fit the BOM and the Variant Manager read too: the
+/// channel's copy is left out of the Lite BOM and shows Not fitted in the
+/// matrix, the other channel's copy stays fitted.
+#[test]
+fn a_channel_card_fit_reaches_the_bom_and_the_variant_manager() {
+    let mut f = fixture("Repeat(CH, 1, 2)", true);
+    let data = &mut f.app.document_state.projects[0].data;
+    data.variant_definitions = vec!["Lite".to_string()];
+    data.active_variant = Some("Lite".to_string());
+    send(&mut f.app, CompiledDesignMsg::CompileRequested);
+    let ch1 = strip(&f.app).tabs[0].clone();
+    assert_eq!(ch1.channel.name, "CH1");
+    assert!(!ch1.fits.is_empty(), "the compile lists CH1's parts");
+    assert!(!ch1.is_not_fitted());
+    let mut before = bom_designators(&mut f.app);
+    before.sort();
+    assert_eq!(before, ["CH1_R5", "CH2_R5"]);
+
+    send(
+        &mut f.app,
+        CompiledDesignMsg::ChannelFitPicked {
+            parts: ch1.fits.iter().map(|fit| fit.part.clone()).collect(),
+            fitted: Some(false),
+        },
+    );
+
+    assert!(strip(&f.app).tabs[0].is_not_fitted(), "the card reads it");
+    assert!(!strip(&f.app).tabs[1].is_not_fitted());
+    assert_eq!(bom_designators(&mut f.app), ["CH2_R5"], "the Lite BOM");
+    assert_eq!(
+        variant_manager_lite(&mut f.app),
+        [("CH1_R5".to_string(), false), ("CH2_R5".to_string(), true)],
+        "the Variant Manager's channel rows"
+    );
+}

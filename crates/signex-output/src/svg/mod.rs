@@ -110,6 +110,10 @@ pub struct SvgEvaluatorInputs<'a> {
     /// The project's variant settings, which decide over the sheets which
     /// parts draw as not fitted (#1294). `None` reads the sheets alone.
     pub variant_settings: Option<&'a signex_types::project::VariantSettings>,
+    /// The fit of every part of the export, decided across its sheets as
+    /// the BOM decides it (`ExpressionTables::placed_fits`). `None` decides
+    /// each page on its own.
+    pub placed_fits: Option<&'a crate::PlacedFits>,
 }
 
 fn fill_to_rgb(

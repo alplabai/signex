@@ -1,7 +1,7 @@
 use signex_net::{SheetPinContacts, pt_key};
 use signex_types::schematic::{
-    ChildSheet, GRID_MM, LabelType, Point, SchematicSheet, SheetPin, entry_port_name,
-    normalize_port_name,
+    ChildSheet, GRID_MM, LabelType, Point, SchematicSheet, SheetPin, normalize_port_name,
+    sheet_entry_port,
 };
 
 use crate::command::SheetPort;
@@ -81,8 +81,11 @@ pub fn ports_for_pin_sync(
             .child_sheets
             .iter()
             .filter(|symbol| symbol.filename == child_filename)
-            .flat_map(|symbol| symbol.pins.iter())
-            .find(|pin| entry_port_name(&pin.name) == Some(port.name.as_str()));
+            .flat_map(|symbol| symbol.pins.iter().map(move |pin| (symbol, pin)))
+            .find(|(symbol, pin)| {
+                sheet_entry_port(&symbol.name, &pin.name) == Some(port.name.as_str())
+            })
+            .map(|(_, pin)| pin);
         if let Some(pin) = existing {
             port.direction = pin.direction.clone();
         }
@@ -205,8 +208,8 @@ fn same_sheet_pin(lhs: &SheetPin, rhs: &SheetPin) -> bool {
 
 /// Reconcile `child`'s pins with `ports` without ever moving an existing pin.
 ///
-/// A pin that matches a port (by `entry_port_name`, so `Repeat(<net>)`
-/// matches the port `<net>`) keeps its
+/// A pin that matches a port (by `sheet_entry_port`, so on a repeated symbol
+/// `Repeat(<net>)` matches the port `<net>`) keeps its
 /// position, rotation, direction, uuid and `auto_generated` flag, so wires
 /// attached to it keep their nets and a hand-added pin stays hand-added. Only
 /// a port with no pin gets a new one, in the first edge slot that no surviving
@@ -227,7 +230,7 @@ pub(crate) fn reconcile_child_sheet_pins(
     for port in ports {
         match existing
             .iter()
-            .position(|pin| entry_port_name(&pin.name) == Some(port.name.as_str()))
+            .position(|pin| sheet_entry_port(&child.name, &pin.name) == Some(port.name.as_str()))
         {
             Some(idx) => matched.push(existing.remove(idx)),
             None => unmatched_ports.push(port),
@@ -312,10 +315,9 @@ pub fn unplaced_sheet_ports(
             let missing: Vec<String> = ports
                 .iter()
                 .filter(|port| {
-                    !symbol
-                        .pins
-                        .iter()
-                        .any(|pin| entry_port_name(&pin.name) == Some(port.name.as_str()))
+                    !symbol.pins.iter().any(|pin| {
+                        sheet_entry_port(&symbol.name, &pin.name) == Some(port.name.as_str())
+                    })
                 })
                 .map(|port| port.name.clone())
                 .collect();

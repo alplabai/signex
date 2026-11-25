@@ -44,7 +44,7 @@ pub fn placed_part_fitted<'p>(
     placed: impl Into<PlacedPart<'p>>,
     units: &[&signex_types::schematic::Symbol],
 ) -> bool {
-    project_fit(settings, variant, placed).unwrap_or_else(|| super::part_is_fitted(units, variant))
+    super::part_fit_over(units, variant, project_fit(settings, variant, placed))
 }
 
 /// The value, footprint and fields of one part with `variant`'s parameter

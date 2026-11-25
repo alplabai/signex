@@ -116,9 +116,35 @@ pub fn repeated_entry_name(name: &str) -> Option<&str> {
 
 /// The child-sheet port a sheet entry named `name` meets: `<net>` for a
 /// `Repeat(<net>)` entry, else the trimmed name; `None` for a blank name.
-/// Sheet entry sync and `bad_hier_sheet_pin` match entries to ports by it.
+/// `bad_hier_sheet_pin` matches entries to ports by it; sheet entry sync by
+/// [`sheet_entry_port`].
 pub fn entry_port_name(name: &str) -> Option<&str> {
     super::normalize_port_name(name).map(|name| repeated_entry_name(name).unwrap_or(name))
+}
+
+/// The child-sheet port the entry `entry` of the sheet symbol designated
+/// `symbol` meets: [`entry_port_name`] on a repeated symbol, where the
+/// netlist joins a `Repeat(<net>)` entry to `<net>` inside each channel, else
+/// the trimmed name, as the netlist joins a plain placement (#2659). Sheet
+/// entry sync matches entries to ports by it.
+pub fn sheet_entry_port<'a>(symbol: &str, entry: &'a str) -> Option<&'a str> {
+    if ChannelRepeat::parse(symbol).is_some() {
+        entry_port_name(entry)
+    } else {
+        super::normalize_port_name(entry)
+    }
+}
+
+/// The name of the entry `entry` of the sheet symbol designated `symbol`
+/// once its port is renamed to `port`: [`renamed_entry`] on a repeated
+/// symbol, `port` on a plain one, so a plain symbol's stray `Repeat(<net>)`
+/// entry is repaired to the port it is renamed to.
+pub fn sheet_entry_renamed(symbol: &str, entry: &str, port: &str) -> String {
+    if ChannelRepeat::parse(symbol).is_some() {
+        renamed_entry(entry, port)
+    } else {
+        port.to_string()
+    }
 }
 
 /// The name of entry `entry` once its port is renamed to `port`: a

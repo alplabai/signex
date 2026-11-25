@@ -411,6 +411,7 @@ mod special_string_tests {
             net_name_by_symbol_pin: &nets,
             cell: "",
             variant_settings: None,
+            placed_fits: None,
         };
         let page = SvgRenderContext::from_sheet(&sheet, &opts, 297.0, 210.0, 1.0, Some(&inputs));
         assert!(
