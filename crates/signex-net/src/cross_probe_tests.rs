@@ -203,6 +203,69 @@ fn net_zero_and_blank_names_match_nothing() {
     assert!(net_names(&board, &BTreeSet::from([0])).is_empty());
 }
 
+/// A zone on net `net` with `fill_type` `fill`, a square on the top copper.
+fn zone(n: u128, net: u32, fill: &str) -> signex_types::pcb::Zone {
+    signex_types::pcb::Zone {
+        uuid: Uuid::from_u128(n),
+        net,
+        net_name: String::new(),
+        layer: "TopCopper".into(),
+        outline: vec![
+            Point::new(0.0, 0.0),
+            Point::new(5.0, 0.0),
+            Point::new(5.0, 5.0),
+            Point::new(0.0, 5.0),
+        ],
+        holes: Vec::new(),
+        priority: 0,
+        fill_type: fill.into(),
+        thermal_relief: false,
+        thermal_gap: 0.0,
+        thermal_width: 0.0,
+        clearance: 0.0,
+        min_thickness: 0.0,
+        min_island_area: 0.0,
+        remove_dead_islands: false,
+        shelved: false,
+        unknown: Default::default(),
+    }
+}
+
+/// #2907: a pour, fill or solid region on a net is one of its members and
+/// stands for it; a keepout, a pour cutout or a zone on no net does not.
+#[test]
+fn a_copper_zone_carries_its_net_and_a_rule_area_does_not() {
+    let mut board = board();
+    board.zones = vec![
+        zone(0x400, 1, signex_types::pcb::SOLID_FILL),
+        zone(0x401, 1, "pour"),
+        zone(0x402, 1, "keepout"),
+        zone(0x403, 1, "pour_cutout"),
+        zone(0x404, 0, signex_types::pcb::SOLID_FILL),
+        zone(0x405, 2, signex_types::pcb::SOLID_FILL),
+    ];
+    let members = board_net_members(&board, &BTreeSet::from([1]));
+    assert_eq!(
+        members.zones,
+        vec![Uuid::from_u128(0x400), Uuid::from_u128(0x401)]
+    );
+    assert_eq!(zone_net(&board, Uuid::from_u128(0x400)), Some(1));
+    assert_eq!(zone_net(&board, Uuid::from_u128(0x401)), Some(1));
+    assert_eq!(zone_net(&board, Uuid::from_u128(0x402)), None);
+    assert_eq!(zone_net(&board, Uuid::from_u128(0x403)), None);
+    assert_eq!(zone_net(&board, Uuid::from_u128(0x404)), None);
+    assert_eq!(zone_net(&board, Uuid::from_u128(0x405)), Some(2));
+    assert_eq!(zone_net(&board, Uuid::from_u128(0x499)), None);
+}
+
+/// A net held only by a zone still has board members.
+#[test]
+fn a_net_with_only_a_zone_is_not_empty() {
+    let mut board = board();
+    board.zones = vec![zone(0x400, 3, signex_types::pcb::SOLID_FILL)];
+    assert!(!board_net_members(&board, &BTreeSet::from([3])).is_empty());
+}
+
 #[test]
 fn a_pad_names_its_net() {
     let board = board();

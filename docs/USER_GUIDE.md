@@ -1629,6 +1629,11 @@ board is greyed with the reason "not available on boards yet".
 - **Find a part:** select it on the schematic. With **Tools ▸ Cross Select
   Mode** on (the default) it is selected on the board too. **Tools ▸ Cross
   Probe** brings the other side forward and frames it.
+- **Find a net:** select a wire, net label or sheet entry on the schematic;
+  the net's pads, tracks, vias and copper areas (pours, fills, solid
+  regions) are selected on the board. Selecting any of those on the board
+  selects the net's wires, labels and sheet entries on the schematic. A
+  keepout or pour cutout has no net and selects nothing.
 - **Move a designator:** drag the text; the part stays where it is.
 
 **Tools ▸ Re-Annotate Board…** renumbers designators by position on the
