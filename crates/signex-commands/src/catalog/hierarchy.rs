@@ -117,6 +117,31 @@ pub(super) const HIERARCHY: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
+    // A block diagram from the sheet hierarchy, and that diagram brought in
+    // line with it again (#2968, mockup row 171); gated like the compile.
+    // Each writes a `.snxblk`, not an open document.
+    CommandMetadata {
+        id: "generate_block_diagram",
+        category: "design",
+        label: command_ids::CMD_GENERATE_BLOCK_DIAGRAM,
+        menu_label: Some(command_ids::CMD_MENU_GENERATE_BLOCK_DIAGRAM),
+        group: CommandGroup::Schematic,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::GENERATE_BLOCK_DIAGRAM,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "regenerate_block_diagram",
+        category: "design",
+        label: command_ids::CMD_REGENERATE_BLOCK_DIAGRAM,
+        menu_label: Some(command_ids::CMD_MENU_REGENERATE_BLOCK_DIAGRAM),
+        group: CommandGroup::Schematic,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::REGENERATE_BLOCK_DIAGRAM,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "open_child_sheet",
         category: "navigation",

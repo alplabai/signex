@@ -733,6 +733,13 @@ cmd-menu-compile-project = Compile Project
 cmd-open-compiled-design = Open Compiled Design panel
 cmd-menu-open-compiled-design = Compiled Design
 
+## Block diagram from the sheet hierarchy (#2968).
+
+cmd-generate-block-diagram = Generate a block diagram from the sheet hierarchy
+cmd-menu-generate-block-diagram = Generate Block Diagram
+cmd-regenerate-block-diagram = Regenerate the block diagram from the sheet hierarchy
+cmd-menu-regenerate-block-diagram = Regenerate Block Diagram
+
 ## Signal harnesses (#1280).
 
 cmd-open-harness-definitions = Open the harness definitions

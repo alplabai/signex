@@ -304,4 +304,10 @@ define_ids! {
     // dialog-polish
     PROJECT_PARAMETER_UNRESOLVED = "project-parameter-unresolved";
     PROJECT_READ_ONLY_BANNER = "project-read-only-banner";
+    // Block diagram from the sheet hierarchy (#2968).
+    PROJECT_BLOCK_DIAGRAM_GENERATED = "project-block-diagram-generated";
+    PROJECT_BLOCK_DIAGRAM_CHANGES = "project-block-diagram-changes";
+    PROJECT_BLOCK_DIAGRAM_APPLIED = "project-block-diagram-applied";
+    PROJECT_BLOCK_DIAGRAM_IN_SYNC = "project-block-diagram-in-sync";
+    PROJECT_BLOCK_DIAGRAM_REFUSED = "project-block-diagram-refused";
 }

@@ -446,6 +446,8 @@ const GLOBAL_COMMANDS: &[&str] = &[
     "open_erc_dialog",
     "number_schematic_sheets",
     "compile_project",
+    "generate_block_diagram",
+    "regenerate_block_diagram",
     "update_pcb_from_schematic",
     "compare_board_with_schematic",
     "back_annotate_schematics",
