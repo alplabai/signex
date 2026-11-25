@@ -6,7 +6,7 @@
 
 use iced::widget::text::Wrapping;
 use iced::widget::{Column, Row, Space, container, row};
-use iced::{Alignment, Background, Border, Color, Element, Length, Shadow, Theme, Vector, Widget};
+use iced::{Alignment, Background, Border, Color, Element, Length, Theme, Widget};
 use signex_i18n::{I18n, Localized, MessageId, ids, t};
 use signex_types::coord::Unit;
 use signex_types::schematic::{HAlign, VAlign, WireWidthPreset};
@@ -19,23 +19,16 @@ use super::position::{
     anchor_name, rotation_step,
 };
 use crate::styles::tokens::{ResolvedTokens, resolve};
-use crate::styles::{Radii, Spacing, TypeScale, ti};
+use crate::styles::{Spacing, TypeScale, ti};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
-
-/// A justification cell and its dot, as ratios of the body text size
-/// (22 px, 6 px and 8 px at a 12 px body).
-const ANCHOR_CELL_EM: f32 = 22.0 / 12.0;
-const ANCHOR_DOT_EM: f32 = 6.0 / 12.0;
-const ANCHOR_DOT_ON_EM: f32 = 8.0 / 12.0;
 
 /// The tokens a row needs, resolved once per view.
 #[derive(Clone, Copy)]
 pub(super) struct Look {
     pub r: ResolvedTokens,
     pub ink: Color,
-    pub accent: Color,
     pub error: Color,
 }
 
@@ -44,7 +37,6 @@ impl Look {
         Self {
             r: resolve(tokens),
             ink: ti(tokens.text),
-            accent: ti(tokens.accent),
             error: ti(tokens.error),
         }
     }
@@ -340,68 +332,17 @@ pub(super) fn justification<'a>(
     i18n: &I18n,
     (h, v): (HAlign, VAlign),
 ) -> Element<'a, PanelMsg> {
-    let cell_size = TS.body * ANCHOR_CELL_EM;
-    let radius = Radii::GRAPHITE.small;
-    let mut grid: Column<Element<'a, PanelMsg>> = Column::new().spacing(SP.xs / 2.0);
-    for row_v in ANCHOR_ROWS {
-        let mut line: Row<Element<'a, PanelMsg>> = Row::new().spacing(SP.xs / 2.0);
-        for col_h in ANCHOR_COLUMNS {
-            let on = (col_h, row_v) == (h, v);
-            let dot_size = TS.body * if on { ANCHOR_DOT_ON_EM } else { ANCHOR_DOT_EM };
-            let dot_colour = if on { look.accent } else { look.r.line_strong };
-            let dot = container(Space::new())
-                .width(dot_size)
-                .height(dot_size)
-                .style(move |_: &Theme| container::Style {
-                    background: Some(Background::Color(dot_colour)),
-                    border: Border {
-                        radius: (dot_size / 2.0).into(),
-                        ..Border::default()
-                    },
-                    ..container::Style::default()
-                });
-            let (raised, shadow) = (look.r.raised, look.r.shadow);
-            let cell = button(container(dot).center(Length::Fill))
-                .width(cell_size)
-                .height(cell_size)
-                .padding(0)
-                .on_press(PanelMsg::PrePlacementPosition(
-                    PrePlacementPositionMsg::AnchorPicked(col_h, row_v),
-                ))
-                .style(move |_: &Theme, _| button::Style {
-                    background: on.then_some(Background::Color(raised)),
-                    border: Border {
-                        radius: radius.into(),
-                        ..Border::default()
-                    },
-                    shadow: if on {
-                        Shadow {
-                            color: shadow,
-                            offset: Vector::new(0.0, 1.0),
-                            blur_radius: 2.0,
-                        }
-                    } else {
-                        Shadow::default()
-                    },
-                    ..button::Style::default()
-                });
-            line = line.push(cell.boxed());
-        }
-        grid = grid.push(line.boxed());
-    }
-    let sunken = look.r.sunken;
-    let frame = container(grid)
-        .padding(SP.xs / 2.0)
-        .style(move |_: &Theme| container::Style {
-            background: Some(Background::Color(sunken)),
-            border: Border {
-                radius: Radii::GRAPHITE.control.into(),
-                ..Border::default()
-            },
-            ..container::Style::default()
-        });
+    let cells = ANCHOR_ROWS.map(|row_v| {
+        ANCHOR_COLUMNS.map(|col_h| {
+            let picked = PrePlacementPositionMsg::AnchorPicked(col_h, row_v);
+            (
+                (col_h, row_v) == (h, v),
+                PanelMsg::PrePlacementPosition(picked),
+            )
+        })
+    });
     row![
-        frame,
+        form_look::anchor_grid(cells),
         text(t!(i18n, anchor_name(h, v)))
             .size(TS.caption)
             .color(look.r.ink3),
