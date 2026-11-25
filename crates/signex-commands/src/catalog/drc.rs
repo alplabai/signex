@@ -1,8 +1,27 @@
 //! Design rule check commands: run the DRC on the board in view and check
 //! it headless; and check the project's requirements headless.
 
-use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, operands};
+use super::operands::{optional, required};
+use super::{
+    CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, Operand, OperandKind,
+    operands,
+};
 use signex_i18n_ids::command_ids;
+
+/// `fix_drc_violation` (#2940): one finding of the named board, by its
+/// waiver key; `dry_run` answers with the planned fix and changes nothing.
+const FIX_DRC_VIOLATION: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("violation", OperandKind::Text),
+    optional("dry_run", OperandKind::Bool),
+];
+/// `fix_drc` (#2940): every finding of one rule kind (`clearance`,
+/// `track_width`, ...), or of every kind with a fix when left out.
+const FIX_DRC: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("rule", OperandKind::Text),
+    optional("dry_run", OperandKind::Bool),
+];
 
 pub(super) const DRC: &[CommandMetadata] = &[
     // Read-only: the report goes to the Messages panel, the board is not touched.
@@ -82,6 +101,30 @@ pub(super) const DRC: &[CommandMetadata] = &[
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::MUTATES,
         operands: operands::DRC_VIOLATION,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2940: fix findings by rule kind, never waiving one and never
+    // changing a locked item; each run is one board undo step.
+    CommandMetadata {
+        id: "fix_drc_violation",
+        category: "pcb",
+        label: command_ids::CMD_FIX_DRC_VIOLATION,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: FIX_DRC_VIOLATION,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "fix_drc",
+        category: "pcb",
+        label: command_ids::CMD_FIX_DRC,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: FIX_DRC,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

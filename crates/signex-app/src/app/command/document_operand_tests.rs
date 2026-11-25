@@ -577,6 +577,9 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "filter_drc_results",
                     "waive_drc_violation",
                     "unwaive_drc_violation",
+                    // #2940: the DRC fixes.
+                    "fix_drc_violation",
+                    "fix_drc",
                     "add_net_class",
                     "rename_net_class",
                     "delete_net_class",

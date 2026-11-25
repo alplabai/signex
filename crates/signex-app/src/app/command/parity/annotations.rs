@@ -218,6 +218,10 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     // category listed in scripts/uifree-state.txt, so it is no implicit input.
     (&["show_drc_violation"], Operand, &[ActiveDocument, Window]),
     (&["filter_drc_results"], Operand, &[ActiveDocument]),
+    // The DRC fixes check the named board with Run DRC's rules: a project
+    // without rules is checked with the machine rules (`fix_drc` ->
+    // `board_design_rules` -> `drc_inputs`), configuration.
+    (&["fix_drc", "fix_drc_violation"], Operand, &[Settings]),
     // A waiver is refused on a stale last run (`set_drc_waiver`): the core
     // session state above, so nothing implicit.
     (

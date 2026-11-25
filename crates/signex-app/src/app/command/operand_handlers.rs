@@ -165,6 +165,8 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("show_drc_violation", board::show_drc_violation),
     ("waive_drc_violation", board::waive_drc_violation),
     ("unwaive_drc_violation", board::unwaive_drc_violation),
+    ("fix_drc_violation", board::fix_drc_violation),
+    ("fix_drc", board::fix_drc),
     ("filter_drc_results", board::filter_drc_results),
     ("add_net_class", board::add_net_class),
     ("rename_net_class", board::rename_net_class),
@@ -476,6 +478,15 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "show_drc_violation" | "waive_drc_violation" | "unwaive_drc_violation" => Some(
             "this command needs the operands `document` and `id` — \
              use the rows of the DRC panel",
+        ),
+        // #2940: the fixes have no window form yet; they run from operands.
+        "fix_drc_violation" => Some(
+            "`fix_drc_violation` needs the operands `document` and `violation` — \
+             the key is a finding's `evidence.waiver_key` in `check_drc`",
+        ),
+        "fix_drc" => Some(
+            "`fix_drc` needs the operand `document`, and `rule` for one kind — \
+             run it from the command line with its operands",
         ),
         "filter_drc_results" => Some(
             "`filter_drc_results` needs the operand `document` — \

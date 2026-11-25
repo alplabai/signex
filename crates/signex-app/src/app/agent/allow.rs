@@ -122,6 +122,9 @@ mod tests {
                 "filter_drc_results",
                 "find_items",
                 "find_similar_items",
+                // #2940: the DRC fixes, on the named board.
+                "fix_drc",
+                "fix_drc_violation",
                 "gloss_selected_routes",
                 // #2394: the board view's layers, on the named board.
                 "hide_layer",

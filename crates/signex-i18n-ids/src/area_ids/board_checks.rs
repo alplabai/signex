@@ -23,6 +23,7 @@ define_ids! {
     DRC_PANEL_RULE_LINK = "drc-panel-rule-link";
     DRC_PANEL_WAIVE_UNDO = "drc-panel-waive-undo";
     DRC_PANEL_UNWAIVE_UNDO = "drc-panel-unwaive-undo";
+    DRC_FIX_UNDO = "drc-fix-undo";
     DRC_PANEL_REFUSED = "drc-panel-refused";
     DRC_PANEL_SHOW_REFUSED = "drc-panel-show-refused";
     BOARD_NET_CLASSES_NO_BOARD = "board-net-classes-no-board";

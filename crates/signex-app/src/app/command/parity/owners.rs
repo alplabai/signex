@@ -577,6 +577,8 @@ const OPERAND_DOCUMENT: &[&str] = &[
     "export_board_pdf",
     "export_board_report",
     "export_board_step",
+    "fix_drc",
+    "fix_drc_violation",
     "gloss_selected_routes",
     "import_dxf",
     "import_dxf_outline",
