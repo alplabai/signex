@@ -72,6 +72,8 @@ menu-design-rooms = Rooms
 ## Project menu (#2057)
 # Rows of the Project menu that are not commands.
 menu-project-close = Close Project
+# The Design Notebook submenu (mockup rows 195 and 201).
+menu-project-design-notebook = Design Notebook
 
 ## Tools ▸ Reports (#2057)
 # Output rows of the Tools ▸ Reports submenu: the bill of materials, the netlist and the ERC report.

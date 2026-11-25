@@ -448,6 +448,11 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("toggle_cross_select_mode", "ToggleCrossSelectMode"),
     ("open_parameter_manager", "OpenParameterManager"),
     ("open_rules", "OpenRules"),
+    // The Design Notebook (mockup rows 195, 197, 201, 202): fixture names only.
+    ("open_design_notebook", "OpenDesignNotebook"),
+    ("generate_design_notebook", "GenerateDesignNotebook"),
+    ("export_notebook_pdf", "ExportNotebookPdf"),
+    ("toggle_notebook_badges", "ToggleNotebookBadges"),
     // #2248 / #1269: fixture names only.
     ("assign_footprints", "AssignFootprints"),
     ("repair_pin_junctions", "RepairPinJunctions"),

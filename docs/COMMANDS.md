@@ -112,6 +112,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `edit_selected_symbol_in_symbol_editor` | Edit selected symbol in Symbol Editor | library | — | `Mod+E` |
 | `edit_text_in_place` | In-place edit selected text | edit | `F2` | — |
 | `edit_value` | Edit value | edit | — | `V` |
+| `export_notebook_pdf` | Export the Design Notebook as PDF | file | — | — |
 | `fast_grid_1` | Fast grid 1 | view | — | `Alt+1` |
 | `fast_grid_2` | Fast grid 2 | view | — | `Alt+2` |
 | `find` | Find | search | `Mod+F` | `Mod+F` |
@@ -121,6 +122,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `find_previous` | Find previous | search | `Shift+F3` | `Shift+F3` |
 | `find_similar_objects` | Find Similar Objects | select | `Shift+F` | `Shift+F` |
 | `find_text` | Find text | search | — | — |
+| `generate_design_notebook` | Generate a design notebook from the project | design | — | — |
 | `home_view` | Reset the view rotation and Flip, then fit the board or sheet | view | — | — |
 | `import_graphics` | Import graphics | place | — | `Mod+Shift+F` |
 | `list_documents` | List documents | file | — | — |
@@ -137,6 +139,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `open_command_palette` | Open command palette | commands | `Mod+Shift+P` | `Ctrl+K`, `Mod+Shift+P` |
 | `open_compiled_design` | Open Compiled Design panel | panels | — | — |
 | `open_datasheet` | Open datasheet | edit | — | `D` |
+| `open_design_notebook` | Open the Design Notebook of the project (Wiki) | design | — | — |
 | `open_diff_pair_classes` | Open the project's differential pair classes | design | — | — |
 | `open_document` | Open document | file | `Mod+O` | `Mod+O` |
 | `open_grid_picker` | Open grid picker | view | — | — |
@@ -351,6 +354,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `sheet_navigation_forward` | Sheet navigation forward | navigation | — | `Alt+Right` |
 | `sync_sheet_entries` | Synchronize the selected sheet symbol's entries and its sheet's ports, with a preview | design | — | — |
 | `sync_sheet_pins` | Sync the selected sheet symbol's pins with its child sheet | design | — | — |
+| `toggle_notebook_badges` | Show or hide the Notebook badges on the schematic | view | — | — |
 | `tool_select` | Tool select | select | — | — |
 | `update_pcb_from_schematic` | Update PCB from schematic | pcb_sync | — | — |
 

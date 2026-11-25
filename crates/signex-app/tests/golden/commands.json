@@ -575,6 +575,11 @@
     "category": "reports"
   },
   {
+    "id": "export_notebook_pdf",
+    "group": "General",
+    "category": "file"
+  },
+  {
     "id": "fabrication_outputs",
     "group": "Pcb",
     "category": "file"
@@ -682,6 +687,11 @@
   {
     "id": "force_annotate_all_schematics",
     "group": "Schematic",
+    "category": "design"
+  },
+  {
+    "id": "generate_design_notebook",
+    "group": "General",
     "category": "design"
   },
   {
@@ -898,6 +908,11 @@
     "id": "open_datasheet",
     "group": "General",
     "category": "edit"
+  },
+  {
+    "id": "open_design_notebook",
+    "group": "General",
+    "category": "design"
   },
   {
     "id": "open_diff_pair_classes",
@@ -1987,6 +2002,11 @@
   {
     "id": "toggle_layers_panel",
     "group": "Pcb",
+    "category": "view"
+  },
+  {
+    "id": "toggle_notebook_badges",
+    "group": "Schematic",
     "category": "view"
   },
   {

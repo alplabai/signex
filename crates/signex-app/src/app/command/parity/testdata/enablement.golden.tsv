@@ -114,6 +114,7 @@ export_assembly_svg	Pcb	119d310e454dd5e4
 export_board_pdf	Pcb	119d310e454dd5e4
 export_board_report	Pcb	119d310e454dd5e4
 export_board_step	Pcb	119d310e454dd5e4
+export_notebook_pdf	OpenProject	ee0317ecaf5bfb5b
 fabrication_outputs	Pcb	119d310e454dd5e4
 fast_grid_1	-	f2929686b07ef725
 fast_grid_2	-	f2929686b07ef725
@@ -136,6 +137,7 @@ footprint_mode_sketch	-	f2929686b07ef725
 footprint_mode_view_3d	-	f2929686b07ef725
 footprint_recompute_courtyard_outline	-	f2929686b07ef725
 force_annotate_all_schematics	ActiveSheet	cff87b9cc03394bf
+generate_design_notebook	OpenProject	ee0317ecaf5bfb5b
 gloss_selected_routes	PcbSelection	b2eee5a7d6ad7c41
 go_to_net_partner	-	f2929686b07ef725
 hide_layer	Pcb	119d310e454dd5e4
@@ -179,6 +181,7 @@ open_command_palette	-	f2929686b07ef725
 open_compiled_design	-	f2929686b07ef725
 open_components_panel	Schematic	f8bd7a5cb84e915b
 open_datasheet	-	f2929686b07ef725
+open_design_notebook	OpenProject	ee0317ecaf5bfb5b
 open_diff_pair_classes	OpenProject	ee0317ecaf5bfb5b
 open_document	-	f2929686b07ef725
 open_drc_panel	Pcb	119d310e454dd5e4
@@ -397,6 +400,7 @@ toggle_floating_panels	-	f2929686b07ef725
 toggle_layer_numbers	Pcb	119d310e454dd5e4
 toggle_layer_visibility	Pcb	119d310e454dd5e4
 toggle_layers_panel	-	f2929686b07ef725
+toggle_notebook_badges	Schematic	f8bd7a5cb84e915b
 toggle_origin_marker	Pcb	119d310e454dd5e4
 toggle_properties_panel	-	f2929686b07ef725
 toggle_ratsnest	Pcb	119d310e454dd5e4

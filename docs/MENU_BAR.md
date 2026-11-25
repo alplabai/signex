@@ -93,6 +93,8 @@ greyed.
   Check. See `SCHEMATIC_TABLES.md`.
 - Compare Board with Schematic… (`compare_board_with_schematic`, see
   [below](#project-compare-board))
+- Design Notebook ▸ Open Design Notebook, Generate from Project… (see
+  [below](#project-design-notebook))
 - Project Options... (greyed with no project, like Close Project)
 - Close Project
 
@@ -148,8 +150,9 @@ Outline... (`import_dxf_outline`), greyed without a board in view; each asks
 for the file and imports it as one undo step (#2410, see
 [BOARD_IMPORT_AND_REUSE.md](BOARD_IMPORT_AND_REUSE.md)). **File ▸
 Export** has PDF…, Export BOM… (the BOM export dialog, named by its result,
-greyed without a schematic; mockup row 112, Caner 2026-11-20) and STEP 3D
-Model….
+greyed without a schematic; mockup row 112, Caner 2026-11-20), STEP 3D
+Model… and Design Notebook PDF… (see
+[Project ▸ Design Notebook](#project-design-notebook)).
 Project tree actions with no menu message or command id (add or remove a
 document, Enable Version Control, History, Validate Project) stay in the tree's
 context menu; the menu gets no stub for them.
@@ -337,6 +340,29 @@ Footprint mismatches start skipped. Apply asks first when a chosen
 row deletes from the board, then runs the PCB side as one board undo step
 and the schematic side as one undo group. Rows, defaults and Apply:
 [UPDATE_PCB.md](UPDATE_PCB.md#compare-board-with-schematic).
+
+## Project ▸ Design Notebook {#project-design-notebook}
+
+A project has one Design Notebook, `notebook/design.snxnbk` (mockup row 195).
+These rows and commands reach it; all are in the palette and none has a
+default key, so no shipped profile binds one:
+
+| Row | Command | Greyed |
+|---|---|---|
+| Project ▸ Design Notebook ▸ Open Design Notebook | `open_design_notebook` | with no project open |
+| Project ▸ Design Notebook ▸ Generate from Project… | `generate_design_notebook` | with no project open |
+| File ▸ Export ▸ Design Notebook PDF… | `export_notebook_pdf` | with no project open |
+| View ▸ Notebook Badges, after AutoFocus | `toggle_notebook_badges` | with no sheet in view |
+
+Each acts on the project of the active document, else the active project,
+by the same rule as Design ▸ Rules. The Projects tree reaches the same
+notebook for the project it is on: Add New ▸ Design Notebook (live since
+the notebook landed; before, a planned row) and a double-click on the
+notebook's row. The row shows under a Notebook group, after PCB, once the
+project probe finds the file; a notebook that was never saved has no row.
+A palette search for "notebook" or "wiki" finds `open_design_notebook`:
+"Wiki" is the old dock panel's name (mockup row 60b). Each command is
+window-only, so a headless run is refused it with a reason.
 
 ## Board Properties: designator and value {#board-properties}
 

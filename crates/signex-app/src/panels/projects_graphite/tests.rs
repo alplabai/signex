@@ -563,3 +563,26 @@ fn a_recent_row_opens_through_open_recent() {
         "the panel still lists the dropped project"
     );
 }
+
+/// Mockup row 19: the Design Notebook file has a Notebook group of its own,
+/// after PCB; a project without one shows no such group.
+#[test]
+fn the_notebook_file_has_its_own_group() {
+    let mut ctx = context("en-US");
+    assert!(!texts(&ctx).iter().any(|t| t == "NOTEBOOK"));
+    ctx.project_tree[0].children[0].children.push(
+        TreeNode::leaf(signex_notebook::DEFAULT_NOTEBOOK_FILE, TreeIcon::File)
+            .with_key(crate::panels::NOTEBOOK_ROW_KEY),
+    );
+    let shown = texts(&ctx);
+    let at = shown
+        .iter()
+        .position(|t| t == "design.snxnbk")
+        .expect("the notebook row");
+    assert_eq!(shown[at - 3], "NOTEBOOK", "{shown:#?}");
+    let pcb = shown
+        .iter()
+        .position(|t| t == "PCB")
+        .expect("the PCB group");
+    assert!(pcb < at - 3, "Notebook follows PCB: {shown:#?}");
+}

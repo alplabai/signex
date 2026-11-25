@@ -28,6 +28,7 @@ File/Export	submenu	Export	-	-	-	-	-
 File/Export/PDF…	item	PDF…	-	-	ExportPdf	01100000	cmd:print
 File/Export/Export BOM…	item	Export BOM…	-	-	ExportBom	01000000	sch
 File/Export/STEP 3D Model…	item	STEP 3D Model…	-	-	ExportBoardStep	01100000	cmd:export_board_step
+File/Export/Design Notebook PDF…	item	Design Notebook PDF…	-	-	ExportNotebookPdf	01001001	cmd:export_notebook_pdf
 File/Fabrication Outputs…	item	Fabrication Outputs…	-	-	FabricationOutputs	01100000	cmd:fabrication_outputs
 File/Print...	item	Print...	print	Mod+P	Print	01100000	cmd:print
 File/---	separator	-	-	-	-	-	-
@@ -75,6 +76,7 @@ View/---	separator	-	-	-	-	-	-
 View/Toggle Grid	item	Toggle Grid	toggle_visible_grid	Shift+Ctrl+G	ToggleGrid	11111111	cmd:toggle_visible_grid
 View/Cycle Grid Size	item	Cycle Grid Size	-	-	CycleGrid	11111111	cmd:next_grid
 View/AutoFocus (dim unselected)	item	AutoFocus (dim unselected)	toggle_auto_focus	F9	ToggleAutoFocus	11111111	cmd:toggle_auto_focus
+View/Notebook Badges	item	Notebook Badges	-	-	ToggleNotebookBadges	01000000	cmd:toggle_notebook_badges
 View/---	separator	-	-	-	-	-	-
 View/Toggle Ratsnest	item	Toggle Ratsnest	-	-	ToggleRatsnest	01100000	cmd:toggle_ratsnest
 View/Toggle Origin Marker	item	Toggle Origin Marker	-	-	ToggleOriginMarker	01100000	cmd:toggle_origin_marker
@@ -125,6 +127,10 @@ Project	menu	Project	-	-	-	-	-
 Project/Electrical Rules Check	item	Electrical Rules Check	-	-	OpenErcDialog	01001000	cmd:open_erc_dialog
 Project/Add Table of Contents Sheet	item	Add Table of Contents Sheet	-	-	AddTableOfContents	01001000	cmd:add_table_of_contents
 Project/Compare Board with Schematic…	item	Compare Board with Schematic…	-	-	CompareBoardWithSchematic	01000000	cmd:compare_board_with_schematic
+Project/---	separator	-	-	-	-	-	-
+Project/Design Notebook	submenu	Design Notebook	-	-	-	-	-
+Project/Design Notebook/Open Design Notebook	item	Open Design Notebook	-	-	OpenDesignNotebook	01001001	cmd:open_design_notebook
+Project/Design Notebook/Generate from Project…	item	Generate from Project…	-	-	GenerateDesignNotebook	01001001	cmd:generate_design_notebook
 Project/---	separator	-	-	-	-	-	-
 Project/Project Options...	item	Project Options...	-	-	OpenProjectOptions	01001001	project
 Project/---	separator	-	-	-	-	-	-

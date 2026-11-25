@@ -419,6 +419,10 @@ export_board_step	operand_handler	run_operands: named document	core	origin	handl
 export_board_step	in_window_rewrite	document_window	gui	window	routing
 export_board_step	refusal_needs	Pcb	gui	active document	routing
 export_board_step	headless_missing_operand	needs `document`	core	none	routing
+export_notebook_pdf	bridge	Project(Notebook(ExportPdfRequested { project: None }))	gui	active document	gate
+export_notebook_pdf	in_window_rewrite	document_window	gui	window	routing
+export_notebook_pdf	refusal_needs	OpenProject	gui	active document	routing
+export_notebook_pdf	headless_refusal	headless_refusal	gui	none	routing
 fabrication_outputs	bridge	Pcb(FabOutputs(Requested))	gui	active document	gate
 fabrication_outputs	in_window_rewrite	document_window	gui	window	routing
 fabrication_outputs	refusal_needs	Pcb	gui	active document	routing
@@ -495,6 +499,10 @@ force_annotate_all_schematics	bridge	Annotate(Run(ResetAndRenumber))	core	active
 force_annotate_all_schematics	in_window_rewrite	document_window	gui	window	routing
 force_annotate_all_schematics	refusal_needs	ActiveSheet	core	active document	routing
 force_annotate_all_schematics	disabled_still_runs	explains_when_unavailable	core	active document,dialog answer	handler
+generate_design_notebook	bridge	Project(Notebook(GenerateRequested { project: None }))	gui	active document	gate
+generate_design_notebook	in_window_rewrite	document_window	gui	window	routing
+generate_design_notebook	refusal_needs	OpenProject	gui	active document	routing
+generate_design_notebook	headless_refusal	headless_refusal	gui	none	routing
 gloss_selected_routes	translator	Pcb(Tools(GlossRequested))	gui	active document,selection	handler
 gloss_selected_routes	operand_handler	run_operands: named document	core	origin,settings	handler
 gloss_selected_routes	in_window_rewrite	document_window	gui	window	routing
@@ -660,6 +668,10 @@ open_components_panel	headless_refusal	headless_refusal	gui	none	routing
 open_datasheet	bridge	Library(PlacedPart(ActionRequested(OpenDatasheet)))	gui	selection	handler
 open_datasheet	in_window_rewrite	document_window	gui	window	routing
 open_datasheet	headless_refusal	headless_refusal	gui	none	routing
+open_design_notebook	bridge	Project(Notebook(OpenRequested { project: None }))	gui	active document	gate
+open_design_notebook	in_window_rewrite	document_window	gui	window	routing
+open_design_notebook	refusal_needs	OpenProject	gui	active document	routing
+open_design_notebook	headless_refusal	headless_refusal	gui	none	routing
 open_diff_pair_classes	bridge	DiffPairClasses(Requested)	gui	active document	gate
 open_diff_pair_classes	in_window_rewrite	document_window	gui	window	routing
 open_diff_pair_classes	refusal_needs	OpenProject	gui	active document	routing
@@ -1495,6 +1507,10 @@ toggle_layer_visibility	headless_refusal	headless_refusal	gui	none	routing
 toggle_layers_panel	bridge	Overlay(PanelToggled(Layers))	gui	window	handler
 toggle_layers_panel	in_window_rewrite	document_window	gui	window	routing
 toggle_layers_panel	headless_refusal	headless_refusal	gui	none	routing
+toggle_notebook_badges	bridge	Project(Notebook(BadgesToggled))	gui	active document	gate
+toggle_notebook_badges	in_window_rewrite	document_window	gui	window	routing
+toggle_notebook_badges	refusal_needs	Schematic	gui	active document	routing
+toggle_notebook_badges	headless_refusal	headless_refusal	gui	none	routing
 toggle_origin_marker	bridge	Pcb(View(OriginMarkerVisibilityToggled))	gui	active document	gate
 toggle_origin_marker	in_window_rewrite	board_view_in_window|document_window	gui	window	routing
 toggle_origin_marker	refusal_needs	Pcb	gui	active document	routing

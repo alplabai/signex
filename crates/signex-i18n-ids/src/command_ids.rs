@@ -720,5 +720,14 @@ define_ids! {
         CMD_FLIP_BOARD_3D = "cmd-flip-board-3d";
         CMD_CYCLE_BOARD_3D_LIGHTING = "cmd-cycle-board-3d-lighting";
         CMD_COPY_BOARD_3D_SCREENSHOT = "cmd-copy-board-3d-screenshot";
+        // design-notebook
+        CMD_OPEN_DESIGN_NOTEBOOK = "cmd-open-design-notebook";
+        CMD_MENU_OPEN_DESIGN_NOTEBOOK = "cmd-menu-open-design-notebook";
+        CMD_GENERATE_DESIGN_NOTEBOOK = "cmd-generate-design-notebook";
+        CMD_MENU_GENERATE_DESIGN_NOTEBOOK = "cmd-menu-generate-design-notebook";
+        CMD_EXPORT_NOTEBOOK_PDF = "cmd-export-notebook-pdf";
+        CMD_MENU_EXPORT_NOTEBOOK_PDF = "cmd-menu-export-notebook-pdf";
+        CMD_TOGGLE_NOTEBOOK_BADGES = "cmd-toggle-notebook-badges";
+        CMD_MENU_TOGGLE_NOTEBOOK_BADGES = "cmd-menu-toggle-notebook-badges";
     }
 }
