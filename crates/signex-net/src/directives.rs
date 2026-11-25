@@ -367,8 +367,13 @@ pub struct NetClassConflict {
 
 /// Every net of `netlist` (built from `sheet`) whose directives disagree on
 /// its class, in net id order. Two directives naming the same class agree.
+/// The sheet is read with its Compile Masks applied, as [`build_netlist`]
+/// reads it, so a conflict is judged on the wires the netlist classed.
+///
+/// [`build_netlist`]: crate::build_netlist
 pub fn net_class_conflicts(sheet: &SchematicSheet, netlist: &Netlist) -> Vec<NetClassConflict> {
-    class_assignments(sheet, netlist)
+    let compiled = compile_masked(sheet);
+    class_assignments(&compiled, netlist)
         .into_iter()
         .filter_map(|(net, mut list)| {
             let winner = list.remove(0);

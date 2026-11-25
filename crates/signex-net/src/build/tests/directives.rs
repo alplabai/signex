@@ -518,6 +518,29 @@ fn directives_naming_the_same_class_do_not_conflict() {
     assert_eq!(all[0].1.len(), 2, "both assignments are listed");
 }
 
+/// A Compile Mask hides a stub wire whose end sits under the Net Parameters
+/// flag. The netlist classes the net through the wire left under the flag,
+/// so the conflict check reads the masked sheet too and reports it.
+#[test]
+fn a_conflict_is_judged_on_the_masked_sheet_the_netlist_reads() {
+    let mut sheet = two_nets("A", "B");
+    sheet
+        .wires
+        .insert(0, wire_id(pt(5.0, 0.0), pt(6.0, 0.0), id(3)));
+    sheet.directives.extend([
+        mask(pt(4.0, -1.0), pt(7.0, 1.0)),
+        blanket(pt(-1.0, -1.0), pt(11.0, 1.0), Some("SW_NODE")),
+        net_parameters(pt(5.0, 0.0), Some("POWER_IN"), NetRules::default()),
+    ]);
+    let netlist = build_netlist(&sheet);
+    let a = netlist.nets.iter().find(|n| n.name == "A").expect("net A");
+    assert_eq!(a.class, class("POWER_IN"));
+    let conflicts = crate::net_class_conflicts(&sheet, &netlist);
+    assert_eq!(conflicts.len(), 1, "{conflicts:?}");
+    assert_eq!(conflicts[0].winner.class, "POWER_IN");
+    assert_eq!(conflicts[0].overridden[0].class, "SW_NODE");
+}
+
 /// The netlist's classes are the first assignment of each net, so the
 /// conflict list and `Net::class` can never disagree.
 #[test]
