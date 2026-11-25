@@ -244,6 +244,8 @@ define_ids! {
         CMD_MENU_REPAIR_PIN_JUNCTIONS = "cmd-menu-repair-pin-junctions";
         CMD_OPEN_PARAMETER_MANAGER = "cmd-open-parameter-manager";
         CMD_MENU_OPEN_PARAMETER_MANAGER = "cmd-menu-open-parameter-manager";
+        CMD_EXPORT_PARAMETERS = "cmd-export-parameters";
+        CMD_IMPORT_PARAMETERS = "cmd-import-parameters";
         CMD_OPEN_RULES = "cmd-open-rules";
         CMD_MENU_OPEN_RULES = "cmd-menu-open-rules";
         CMD_RULES_LIST = "cmd-rules-list";

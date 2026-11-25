@@ -65,6 +65,8 @@ autoplace_fields	edit	Autoplace fields	Autoplace Fields	General	-	-	RequiresSele
 open_datasheet	edit	Open datasheet	Open Datasheet	General	-	-	RequiresSelection	gui_only	-
 change_component	edit	Change the selected part's component	Change Component…	Schematic	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-
 open_parameter_manager	design	Open Parameter Manager	Parameter Manager...	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
+export_parameters	design	Export the active sheet's parameters to a CSV file	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
+import_parameters	design	Import parameters from a CSV file, with a preview to apply	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 set_symbol_parameter	edit	Set a parameter of a placed part	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,name:text,value:text?,document:document?
 set_sheet_variable	edit	Set a sheet variable	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	name:text,value:text?,remove:bool?,document:document?
 lock_board_items	modify	Lock the selected tracks and vias	Lock	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:targets

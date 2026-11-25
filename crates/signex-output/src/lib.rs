@@ -19,6 +19,7 @@ pub mod fab;
 pub mod field_value;
 mod markup_escape;
 pub mod netlist;
+pub mod parameter_csv;
 pub mod pdf;
 pub mod preview;
 mod reference_display;

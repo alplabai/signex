@@ -108,6 +108,9 @@ pub enum ParameterManagerMsg {
         x: f32,
         y: f32,
     },
+    /// The table's CSV export and import (#1295), routed to
+    /// `app::parameter_io`.
+    Io(crate::app::parameter_io::ParameterIoMsg),
 }
 
 /// Which sheets the Parameter Manager lists (Caner 2026-11-25).

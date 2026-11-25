@@ -55,6 +55,7 @@ mod load_gateway;
 mod mutation_gateway;
 pub(crate) mod new_project;
 pub(crate) mod page_tab;
+pub(crate) mod parameter_io;
 pub mod parent_reference_disk;
 mod parked_sheets;
 pub mod path_op_jobs;
