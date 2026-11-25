@@ -59,6 +59,7 @@ fn printed_texts(schematic: SchematicSheet) -> Vec<String> {
         global_refdes: &refdes,
         net_name_by_symbol_pin: &nets,
         cell: "",
+        drawn_values: None,
     };
     let ctx = SvgRenderContext::from_sheet(&sheet, &opts, 297.0, 210.0, 1.0, Some(&inputs));
     ctx.elements

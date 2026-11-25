@@ -105,6 +105,9 @@ pub struct SvgEvaluatorInputs<'a> {
     /// Resolves `${TOKEN}` special strings in text notes, the same context
     /// the title block resolves with. `None` leaves the text as stored.
     pub special_strings: Option<&'a crate::SubstitutionContext<'a>>,
+    /// The values the printed variant gives parts in place of their own
+    /// (#2948), found at the page's placement. `None` draws the sheets'.
+    pub drawn_values: Option<&'a crate::DrawnValues>,
 }
 
 fn fill_to_rgb(

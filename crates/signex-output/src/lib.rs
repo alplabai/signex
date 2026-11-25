@@ -62,7 +62,8 @@ pub use substitution::{SubstitutionContext, resolve, resolve_text};
 pub use svg::board::{AssemblySvgOptions, assembly_svg};
 pub use template::{Template, TemplateError, TemplateId, TitleBlockField};
 pub use variant_fit::{
-    VariantMatrix, VariantRow, is_fitted, part_is_fitted, project_fit, variant_matrix,
+    DrawnValueMap, DrawnValues, VariantMatrix, VariantRow, drawn_symbol, is_fitted, part_is_fitted,
+    project_fit, variant_matrix, variant_value,
 };
 
 /// The universal exporter trait — one impl per output format.

@@ -11,6 +11,9 @@
 //! Above all of these, the project's own variant settings (`.snxprj`
 //! `variant_settings`, mockup row 32) decide, applied in [`settings`].
 
+mod drawn_values;
+#[cfg(test)]
+mod drawn_values_tests;
 mod fields;
 mod matrix;
 mod settings;
@@ -22,6 +25,7 @@ mod tests;
 use signex_types::project::is_base_variant;
 use signex_types::schematic::Symbol;
 
+pub use drawn_values::{DrawnValueMap, DrawnValues, drawn_symbol, variant_value};
 #[cfg(test)]
 pub(crate) use fields::field_value_ci;
 pub(crate) use fields::{

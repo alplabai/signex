@@ -9,6 +9,21 @@ use crate::SheetSnapshot;
 pub struct ExpressionTables {
     pub global_refdes: HashMap<String, String>,
     pub net_name_by_symbol_pin: HashMap<String, HashMap<String, String>>,
+    /// The values the printed variant gives parts in place of their own,
+    /// decided once per export across every sheet (#2948); `None` draws the
+    /// sheets' values. [`build_expression_tables`] leaves it `None`; see
+    /// [`ExpressionTables::with_drawn_values`].
+    pub drawn_values: Option<crate::DrawnValues>,
+}
+
+impl ExpressionTables {
+    /// These tables with the values `variant` (the printed one) gives the
+    /// parts of `ctx`'s sheets.
+    pub fn with_drawn_values(mut self, ctx: &crate::ExportContext, variant: Option<&str>) -> Self {
+        let values = crate::DrawnValues::of_context(ctx, variant);
+        self.drawn_values = (!values.is_empty()).then_some(values);
+        self
+    }
 }
 
 /// Builds the PDF/preview expression tables. Net names come from the
@@ -23,6 +38,7 @@ pub fn build_expression_tables(
     ExpressionTables {
         global_refdes: build_global_refdes_lookup(sheets),
         net_name_by_symbol_pin: build_pin_net_lookup(netlist),
+        drawn_values: None,
     }
 }
 
