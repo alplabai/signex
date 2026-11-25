@@ -448,3 +448,31 @@ fn every_channel_copy_is_set_and_cleared_in_one_edit() {
     data.set_variant_parts_fit("Lite", &copies, None).unwrap();
     assert!(data.variant_settings.parts.is_empty());
 }
+
+/// An edit that knows one unit of a two-unit part (a channel card) keeps the
+/// units the matrix linked, so the entry still names the part when that unit
+/// is placed again.
+#[test]
+fn an_edit_through_one_unit_keeps_the_entrys_other_units() {
+    let mut data = project();
+    let (a, b) = (Uuid::now_v7(), Uuid::now_v7());
+    let both = crate::pcb::SymbolLink::new(crate::schematic::InstancePath::root(), [a, b]);
+    data.set_variant_part_parameter(
+        "Lite",
+        PlacedPart::new("U3", Some(&both)),
+        VALUE_PARAMETER,
+        Some("TL072"),
+    )
+    .unwrap();
+    let only_a = link(a);
+    data.set_variant_part_fit("Lite", PlacedPart::new("U3", Some(&only_a)), Some(false))
+        .unwrap();
+    let parts = &data.variant_settings.parts;
+    assert_eq!(parts.len(), 1);
+    assert_eq!(parts[0].part.as_ref(), Some(&both), "not narrowed to [A]");
+    let only_b = link(b);
+    let found = data
+        .variant_settings
+        .part(Some("Lite"), PlacedPart::new("U3", Some(&only_b)));
+    assert_eq!(found.and_then(|part| part.fitted), Some(false));
+}

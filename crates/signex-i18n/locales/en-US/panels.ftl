@@ -1341,6 +1341,8 @@ panels-harness-msg-entry-off-connector = Harness entry not placed: click on a ha
 panels-compiled-design-msg-no-project = Compile project: open a sheet of a project first; a sheet outside a project has no compiled design.
 # $why says why the project refused the edit.
 panels-compiled-design-naming-refused = Channel naming not changed: { $why }
+# A channel card's variant fit click was refused; $why says why.
+panels-compiled-design-fit-refused = Channel fit not changed: { $why }
 
 # sch-panels-tidy
 # The Canvas Font field (mockup row 40): $family is the font, $size its size in points.
