@@ -185,6 +185,15 @@ define_ids! {
     PREFERENCES_KEYMAP_NO_SHORTCUT = "preferences-keymap-no-shortcut";
     PREFERENCES_KEYMAP_NO_ROWS_IN_FILTER = "preferences-keymap-no-rows-in-filter";
     PREFERENCES_KEYMAP_RECORDING_LIVE = "preferences-keymap-recording-live";
+    // keymap_assign / keymap_clear refusals (#2495)
+    PREFERENCES_KEYMAP_CMD_NEEDS = "preferences-keymap-cmd-needs";
+    PREFERENCES_KEYMAP_CMD_UNKNOWN_COMMAND = "preferences-keymap-cmd-unknown-command";
+    PREFERENCES_KEYMAP_CMD_BAD_KEYS = "preferences-keymap-cmd-bad-keys";
+    PREFERENCES_KEYMAP_CMD_BAD_CONTEXT = "preferences-keymap-cmd-bad-context";
+    PREFERENCES_KEYMAP_CMD_NO_PROFILE = "preferences-keymap-cmd-no-profile";
+    PREFERENCES_KEYMAP_CMD_BUILT_IN = "preferences-keymap-cmd-built-in";
+    PREFERENCES_KEYMAP_CMD_FILE_NOT_LOADED = "preferences-keymap-cmd-file-not-loaded";
+    PREFERENCES_KEYMAP_CMD_NOT_SAVED = "preferences-keymap-cmd-not-saved";
     // Component Classes page.
     PREFERENCES_CLASSES_FILTER = "preferences-classes-filter";
     PREFERENCES_CLASSES_COUNT = "preferences-classes-count";

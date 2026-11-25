@@ -424,6 +424,29 @@ impl KeymapEditorModel {
         &mut self,
         command: &AppCommandId,
     ) -> Result<usize, ProfileLoadError> {
+        self.clear_command_keys_where(command, |_| true)
+    }
+
+    /// Take the key `keys` from `command` in the active custom profile on
+    /// this OS, compared as the strokes it presses here (`Mod+K` is
+    /// `Ctrl+K` off macOS). Returns how many keys went (0 when it had none).
+    pub fn clear_active_command_key(
+        &mut self,
+        command: &AppCommandId,
+        keys: &ShortcutTrigger,
+    ) -> Result<usize, ProfileLoadError> {
+        let platform = self.platform;
+        let wanted = resolved_strokes(keys, platform);
+        self.clear_command_keys_where(command, |trigger| {
+            resolved_strokes(trigger, platform) == wanted
+        })
+    }
+
+    fn clear_command_keys_where(
+        &mut self,
+        command: &AppCommandId,
+        hit: impl Fn(&ShortcutTrigger) -> bool,
+    ) -> Result<usize, ProfileLoadError> {
         self.refuse_built_in()?;
         let platform = self.platform;
         let mut removed = 0;
@@ -437,9 +460,9 @@ impl KeymapEditorModel {
                     return true;
                 }
                 let before = binding.triggers.len();
-                binding
-                    .triggers
-                    .retain(|trigger| !matches!(trigger, ShortcutTrigger::KeySequence(_)));
+                binding.triggers.retain(|trigger| {
+                    !(matches!(trigger, ShortcutTrigger::KeySequence(_)) && hit(trigger))
+                });
                 removed += before - binding.triggers.len();
                 !binding.triggers.is_empty()
             });
@@ -624,9 +647,25 @@ impl From<ShortcutProfile> for KeymapEditorModel {
     }
 }
 
+/// The strokes a key sequence presses on `platform`; `None` for a gesture.
+fn resolved_strokes(
+    trigger: &ShortcutTrigger,
+    platform: Platform,
+) -> Option<Vec<crate::keymap::KeyStroke>> {
+    match trigger {
+        ShortcutTrigger::KeySequence(strokes) => Some(
+            strokes
+                .iter()
+                .map(|stroke| stroke.resolved_for(platform))
+                .collect(),
+        ),
+        ShortcutTrigger::PointerGesture(_) => None,
+    }
+}
+
 /// Where a new key for `command` applies: the one editor it acts in, else
 /// everywhere.
-fn default_context(command: &AppCommandId) -> ShortcutContext {
+pub fn default_context(command: &AppCommandId) -> ShortcutContext {
     match signex_commands::catalog::required_contexts(command) {
         Some([only]) => *only,
         _ => ShortcutContext::Global,

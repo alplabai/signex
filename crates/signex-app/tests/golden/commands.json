@@ -750,6 +750,16 @@
     "category": "design"
   },
   {
+    "id": "keymap_assign",
+    "group": "General",
+    "category": "preferences"
+  },
+  {
+    "id": "keymap_clear",
+    "group": "General",
+    "category": "preferences"
+  },
+  {
     "id": "lasso_select",
     "group": "Schematic",
     "category": "select"

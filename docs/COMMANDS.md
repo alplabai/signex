@@ -123,6 +123,8 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `find_text` | Find text | search | — | — |
 | `home_view` | Reset the view rotation and Flip, then fit the board or sheet | view | — | — |
 | `import_graphics` | Import graphics | place | — | `Mod+Shift+F` |
+| `keymap_assign` | Give a command a key in a custom keyboard profile | preferences | — | — |
+| `keymap_clear` | Take a command's keys away in a custom keyboard profile | preferences | — | — |
 | `list_documents` | List documents | file | — | — |
 | `manage_workspace_layouts` | Manage workspace layouts | window | — | — |
 | `measure_distance` | Measure distance | view | `Ctrl+M` | `Ctrl+M` |

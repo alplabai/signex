@@ -158,6 +158,9 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
         "apply_selection_filter_preset",
         filter::apply_selection_filter_preset,
     ),
+    // #2495: a key binding in a custom keyboard profile.
+    ("keymap_assign", super::keymap_operands::keymap_assign),
+    ("keymap_clear", super::keymap_operands::keymap_clear),
     ("rules_add", crate::app::rules_tab::rules_add),
     ("rules_set", crate::app::rules_tab::rules_set),
     ("rules_remove", crate::app::rules_tab::rules_remove),
@@ -432,6 +435,11 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "apply_selection_filter_preset" => Some(
             "`apply_selection_filter_preset` needs the operand `name` — \
              click the preset in the Filter panel",
+        ),
+        // #2495: a person records the key in Preferences.
+        "keymap_assign" | "keymap_clear" => Some(
+            "this command needs the operands `command` and `profile` — \
+             use Preferences ▸ Keyboard shortcuts",
         ),
         "set_object_position" => Some(
             "`set_object_position` needs the operands `id` and `at` — \

@@ -151,6 +151,8 @@ import_dxf
 import_dxf_outline
 import_graphics
 keepout_from_selection
+keymap_assign
+keymap_clear
 lasso_select
 leave_sheet
 list_documents

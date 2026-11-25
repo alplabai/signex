@@ -668,6 +668,24 @@ pub const SELECTION_FILTER_KINDS: &[Operand] = &[required("kinds", OperandKind::
 /// `apply_selection_filter_preset` (#2417): a saved preset, by its name.
 pub const SELECTION_FILTER_PRESET: &[Operand] = &[required("name", OperandKind::Text)];
 
+/// `keymap_assign` (#2495): give the command `command` (a catalog or an
+/// installed extension id) the key sequence `keys` in the custom keyboard
+/// profile `profile`; `context` is where it applies, by default the one
+/// editor the command acts in, else `global`.
+pub const KEYMAP_ASSIGN: &[Operand] = &[
+    required("command", OperandKind::Text),
+    required("keys", OperandKind::Text),
+    required("profile", OperandKind::Text),
+    optional("context", OperandKind::Text),
+];
+/// `keymap_clear` (#2495): take the key sequence `keys`, or every key, from
+/// `command` in the custom keyboard profile `profile`.
+pub const KEYMAP_CLEAR: &[Operand] = &[
+    required("command", OperandKind::Text),
+    required("profile", OperandKind::Text),
+    optional("keys", OperandKind::Text),
+];
+
 /// One finding of the named board's last DRC run, by its waiver key `id`
 /// (#2399).
 pub const DRC_VIOLATION: &[Operand] = &[
