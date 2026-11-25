@@ -720,5 +720,20 @@ define_ids! {
         CMD_FLIP_BOARD_3D = "cmd-flip-board-3d";
         CMD_CYCLE_BOARD_3D_LIGHTING = "cmd-cycle-board-3d-lighting";
         CMD_COPY_BOARD_3D_SCREENSHOT = "cmd-copy-board-3d-screenshot";
+        // block-diagram
+        CMD_NEW_BLOCK_DIAGRAM = "cmd-new-block-diagram";
+        CMD_MENU_NEW_BLOCK_DIAGRAM = "cmd-menu-new-block-diagram";
+        CMD_BLOCK_ADD = "cmd-block-add";
+        CMD_BLOCK_SET = "cmd-block-set";
+        CMD_BLOCK_REMOVE = "cmd-block-remove";
+        CMD_BLOCK_PORT_ADD = "cmd-block-port-add";
+        CMD_BLOCK_PORT_REMOVE = "cmd-block-port-remove";
+        CMD_BLOCK_LINK = "cmd-block-link";
+        CMD_BLOCK_LINK_SET = "cmd-block-link-set";
+        CMD_BLOCK_UNLINK = "cmd-block-unlink";
+        CMD_BLOCK_GROUP = "cmd-block-group";
+        CMD_BLOCK_GROUP_SET = "cmd-block-group-set";
+        CMD_BLOCK_UNGROUP = "cmd-block-ungroup";
+        CMD_QUERY_BLOCK_DIAGRAM = "cmd-query-block-diagram";
     }
 }

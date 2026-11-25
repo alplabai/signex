@@ -760,3 +760,20 @@ cmd-menu-polygon-manager = Polygon Manager...
 cmd-flip-board-3d = Turn the board over in the 3D view
 cmd-cycle-board-3d-lighting = Next lighting preset in the 3D view
 cmd-copy-board-3d-screenshot = Copy a screenshot of the 3D view
+# block-diagram
+# The block diagram document (mockup row 171, #2796): File ▸ New ▸ Block
+# Diagram and the edits its tab and the command line make.
+cmd-new-block-diagram = New block diagram in the project
+cmd-menu-new-block-diagram = Block Diagram
+cmd-block-add = Add a block to a block diagram
+cmd-block-set = Change a block of a block diagram
+cmd-block-remove = Remove a block from a block diagram
+cmd-block-port-add = Add a port to a block
+cmd-block-port-remove = Remove a port from a block
+cmd-block-link = Connect two blocks
+cmd-block-link-set = Change a block connection
+cmd-block-unlink = Remove a block connection
+cmd-block-group = Group blocks
+cmd-block-group-set = Change a block group
+cmd-block-ungroup = Remove a block group
+cmd-query-block-diagram = Query a block diagram
