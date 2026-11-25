@@ -93,8 +93,12 @@ impl BoardEngine {
             return Ok(Vec::new());
         }
         self.check_lease(&commands)?;
-        let (inverses, patches) =
-            apply_all(&mut self.board, commands).inspect_err(|error| self.note_failure(error))?;
+        // #2507: a radial dimension follows its arc or circle in this step.
+        let (inverses, patches) = apply_all(&mut self.board, commands)
+            .and_then(|(inverses, patches)| {
+                super::dimension_refit::refit_after(&mut self.board, inverses, patches)
+            })
+            .inspect_err(|error| self.note_failure(error))?;
         // A new edit cuts the redo branch, labels and all.
         let applied = self.history.position();
         self.labels.retain(|at, _| *at <= applied);

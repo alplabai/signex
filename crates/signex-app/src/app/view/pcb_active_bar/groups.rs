@@ -199,7 +199,7 @@ fn menu_icon(row: PcbBarRow, tid: ThemeId) -> svg::Handle {
             ic::icon_pcb_copper_area(tid)
         }
         T::TextString => ic::icon_dd_text_string(tid),
-        T::Dimension => ic::icon_pcb_dimension(tid),
+        T::Dimension(_) => ic::icon_pcb_dimension(tid),
         T::Keepout => ic::icon_pcb_keepout(tid),
         T::Room => ic::icon_dd_rect(tid),
         T::Line => ic::icon_dd_line(tid),

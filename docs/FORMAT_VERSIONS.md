@@ -26,7 +26,8 @@ format declares only its own table row below.
   (mockup row 126), `snxpcb/1.9` when a pour is shelved (#2738),
   `snxpcb/1.10` when its stackup carries a finish or a layer's loss tangent
   (mockup rows 176 and 177) and `snxpcb/1.11` when it has a pour cutout
-  (#2871), a dimension with a non-default look (#2868), a drawing or
+  (#2871), a dimension with a non-default look (#2868) or of a kind other
+  than aligned (#2507), a drawing or
   string on a copper layer (#2883) or an unfilled pour (#2506). A project stays `snxprj/1`, byte for
   byte, and writes `snxprj/1.1` when it has variant settings. A build that
   reads only the lower token opens such a sheet or board read-only. A project
@@ -59,7 +60,7 @@ format declares only its own table row below.
 | `.snxpcb`, stackup name, patterned targets, numbering sweep | `snxpcb/1.8` while `[stackup]` carries `stack_name` (mockup row 105, #2833), an array or mirror repeats a baked target (a source on or connected to one; #2517), or an array's numbering sweep is not row by row (mockup row 126), whatever else the board holds; else the tokens above, byte for byte | adds `snxpcb/1.8` | opens read-only | refused |
 | `.snxpcb`, shelved pour | `snxpcb/1.9` while any pour is shelved (#2738, DECISIONS 2026-11-23), whatever else the board holds; else the tokens above, byte for byte | adds `snxpcb/1.9` | opens read-only | refused |
 | `.snxpcb`, stack materials | `snxpcb/1.10` while `[stackup]` carries a `finish` table (solder mask, silkscreen, surface finish; mockup row 176) or a stack row carries `loss_tangent` copied from the material library (mockup row 177), whatever else the board holds; else the tokens above, byte for byte. A 1.9 build would drop the row's Df on save | adds `snxpcb/1.10` | opens read-only | refused |
-| `.snxpcb`, pour cutouts, dimension look | `snxpcb/1.11` while the board has a pour cutout (`[[pour_cutouts]]`, #2871) or a `[[free.dimensions]]` row writes a look key (`format::board_uses_dimension_style`, #2868; DECISIONS 2026-11-24), whatever else the board holds; else the tokens above, byte for byte. A 1.10 build would drop the look keys on save | adds `snxpcb/1.11` | opens read-only | refused |
+| `.snxpcb`, pour cutouts, dimension look | `snxpcb/1.11` while the board has a pour cutout (`[[pour_cutouts]]`, #2871) or a `[[free.dimensions]]` row writes a look key or a `kind` key (`format::board_uses_dimension_style`, #2868, #2507; DECISIONS 2026-11-24), whatever else the board holds; else the tokens above, byte for byte. A 1.10 build would drop the look and kind keys on save | adds `snxpcb/1.11` | opens read-only | refused |
 | `.snxpcb`, drawn copper | `snxpcb/1.11` while a board drawing (`graphics`) or board string (`texts`) sits on a copper layer (`format::board_has_drawn_copper`, #2883; DECISIONS 2026-11-25), whatever else the board holds; else the tokens above, byte for byte. A 1.10 build would not count it as copper | `snxpcb/1.11`, as above | opens read-only | refused |
 | `.snxpcb`, unfilled pour | `snxpcb/1.11` while a pour that is not shelved carries `unfilled = true` (`Zone::is_unfilled_pour`, #2506; DECISIONS 2026-11-25), whatever else the board holds; else the tokens above, byte for byte, and the key is written only when on. A 1.10 build would flood the pour and export copper the author cleared | `snxpcb/1.11`, as above | opens read-only | refused |
 | `.snxmat`, user material library | `snxmat/1` (`materials.snxmat` in the config folder: the person's own cores, prepregs, copper foils and masks, mockup row 177) | `snxmat/1` | refused | refused |

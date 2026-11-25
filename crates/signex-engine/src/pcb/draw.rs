@@ -304,8 +304,9 @@ pub fn place_item(item: BoardItem) -> BoardCommand {
 }
 
 pub use super::draw_free::{
-    ArcMode, FREE_PAD_HOLE_MM, FREE_PAD_SIZE_MM, arc_points, arc_points_about, new_arc,
-    new_dimension, new_free_pad, new_free_pad_on,
+    ArcMode, FREE_PAD_HOLE_MM, FREE_PAD_SIZE_MM, RADIAL_PICK_REACH_MM, arc_points,
+    arc_points_about, new_arc, new_dimension, new_free_pad, new_free_pad_on, new_kind_dimension,
+    new_radial_dimension,
 };
 
 /// Whether the polygon encloses any area, in integer nm (exact): false for

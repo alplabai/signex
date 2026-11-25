@@ -256,7 +256,8 @@ ctx-fp-silk-unknown = Silk graphic { $index }
 ctx-fp-silk-string = String
 ctx-fp-silk-region = Region
 
-# Place > Graphics > Dimension, and the Drawing Tools group header of the same name.
+# Place > Graphics > Dimension, and the Drawing Tools group header of the same name;
+# on a board, Place > Dimension and its heading in the Place flyout (#2507).
 menu-place-dimension = Dimension
 
 ## Active Bar Power menu and the Place flyout's power rows (Graphite

@@ -181,7 +181,11 @@ pcb-tool-fill = Fill
 pcb-tool-region = Solid Region
 pcb-tool-polygon-pour = Polygon Pour
 pcb-tool-string = String
-pcb-tool-dimension = Dimension
+pcb-tool-dimension = Aligned Dimension
+# #2507: the other dimension kinds.
+pcb-tool-dimension-horizontal = Linear Horizontal Dimension
+pcb-tool-dimension-vertical = Linear Vertical Dimension
+pcb-tool-dimension-radial = Radial Dimension
 pcb-tool-keepout = Keepout
 # Tooltips of the PCB Active Bar's live placement tools (#2373).
 pcb-bar-via-tooltip = Place Via
@@ -193,7 +197,10 @@ pcb-bar-pour-tooltip = Place Polygon Pour (right-click to close)
 pcb-bar-pad-tooltip = Place Pad
 pcb-bar-arc-tooltip = Place Arc (by centre, by edge or any angle: Cycle Arc Mode in the palette)
 pcb-bar-string-tooltip = Place String
-pcb-bar-dimension-tooltip = Place Dimension
+pcb-bar-dimension-tooltip = Place Aligned Dimension
+pcb-bar-dimension-horizontal-tooltip = Place Linear Horizontal Dimension
+pcb-bar-dimension-vertical-tooltip = Place Linear Vertical Dimension
+pcb-bar-dimension-radial-tooltip = Place Radial Dimension (click an arc or circle)
 # What the Messages panel says when a board placement tool is armed (#2373).
 pcb-tool-hint-via = Via: click to place a via on the net under it; Esc or a right-click ends the tool
 pcb-tool-hint-track = Track: click to start a run on the active copper layer (a pad not on it starts with a via), then click each corner; change the layer to add a via. Click the run's end, Esc or a right-click to end the run
@@ -217,9 +224,13 @@ pcb-tool-string-needs-text-layer = String: make a copper, silkscreen, mechanical
 pcb-tool-hint-pad = Pad: click to place a through-hole pad on the net under it; Tab edits its shape, size and hole. Esc or a right-click ends the tool
 pcb-tool-hint-arc = Arc: { $mode }. Esc drops the arc being drawn, then ends the tool
 pcb-tool-hint-string = String: click to place a string on the active silkscreen, mechanical or documentation layer; Tab edits its text and height. Esc or a right-click ends the tool
-pcb-tool-hint-dimension = Dimension: click the two points to measure, then where the dimension line goes. Esc drops the dimension being drawn, then ends the tool
+pcb-tool-hint-dimension = Aligned Dimension: click the two points to measure, then where the dimension line goes. Esc drops the dimension being drawn, then ends the tool
+pcb-tool-hint-dimension-horizontal = Linear Horizontal Dimension: click the two points to measure across, then where the dimension line goes. Esc drops the dimension being drawn, then ends the tool
+pcb-tool-hint-dimension-vertical = Linear Vertical Dimension: click the two points to measure up or down, then where the dimension line goes. Esc drops the dimension being drawn, then ends the tool
+pcb-tool-hint-dimension-radial = Radial Dimension: click on an arc or circle to measure its radius; the leader runs from its centre toward the click. Esc or a right-click ends the tool
 pcb-tool-no-arc = Arc: those points make no arc, so nothing was added
-pcb-tool-no-dimension = Dimension: its two points are the same, so nothing was added
+pcb-tool-no-dimension = Dimension: its two points measure nothing, so nothing was added
+pcb-tool-no-radial-dimension = Radial Dimension: no arc or circle under the click, so nothing was added
 # How the Arc tool's clicks make an arc; `cycle_arc_mode` steps through them.
 pcb-arc-mode-centre = click the centre, the start, then where the arc ends (it runs counter-clockwise)
 pcb-arc-mode-edge = click the two ends of a quarter circle

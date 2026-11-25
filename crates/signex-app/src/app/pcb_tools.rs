@@ -4,6 +4,7 @@
 //! tool the board editor cannot run yet.
 
 use signex_i18n::{MessageId, ids};
+use signex_types::pcb_dimension_kind::DimensionKind;
 use signex_types::pcb_graphic::BoardGraphicKind;
 
 /// A board placement tool, in the Place menu's order, then the Graphics
@@ -28,7 +29,8 @@ pub enum BoardPlaceTool {
     PourCutout,
     SlicePour,
     TextString,
-    Dimension,
+    /// A dimension of each kind (#2507), in Place ▸ Dimension.
+    Dimension(DimensionKind),
     Keepout,
     /// A room by two corners (#2457).
     Room,
@@ -54,8 +56,9 @@ pub(crate) enum ToolState {
 }
 
 impl BoardPlaceTool {
-    /// Place on a board, top to bottom.
-    pub(crate) const PLACE_MENU: [Self; 18] = [
+    /// The rows of Place on a board, top to bottom; Place ▸ Dimension
+    /// ([`Self::DIMENSION_MENU`]) follows String.
+    pub(crate) const PLACE_MENU: [Self; 17] = [
         Self::Component,
         Self::Pad,
         Self::Via,
@@ -71,9 +74,16 @@ impl BoardPlaceTool {
         Self::PourCutout,
         Self::SlicePour,
         Self::TextString,
-        Self::Dimension,
         Self::Keepout,
         Self::Room,
+    ];
+
+    /// Place ▸ Dimension on a board, top to bottom (#2507).
+    pub(crate) const DIMENSION_MENU: [Self; 4] = [
+        Self::Dimension(DimensionKind::Aligned),
+        Self::Dimension(DimensionKind::Horizontal),
+        Self::Dimension(DimensionKind::Vertical),
+        Self::Dimension(DimensionKind::Radial),
     ];
 
     /// Place ▸ Graphics on a board, top to bottom (#2424).
@@ -104,7 +114,10 @@ impl BoardPlaceTool {
             Self::Pad => Live("place_board_pad"),
             Self::Arc => Live("place_board_arc"),
             Self::TextString => Live("place_board_string"),
-            Self::Dimension => Live("place_board_dimension"),
+            Self::Dimension(DimensionKind::Aligned) => Live("place_board_dimension"),
+            Self::Dimension(DimensionKind::Horizontal) => Live("place_board_dimension_horizontal"),
+            Self::Dimension(DimensionKind::Vertical) => Live("place_board_dimension_vertical"),
+            Self::Dimension(DimensionKind::Radial) => Live("place_board_dimension_radial"),
             Self::Line => Live("place_board_line"),
             Self::GraphicArc => Live("place_board_graphic_arc"),
             Self::FullCircle => Live("place_board_circle"),
@@ -141,7 +154,10 @@ impl BoardPlaceTool {
             Self::PourCutout => ids::PCB_TOOL_POUR_CUTOUT,
             Self::SlicePour => ids::PCB_TOOL_SLICE_POUR,
             Self::TextString => ids::PCB_TOOL_STRING,
-            Self::Dimension => ids::PCB_TOOL_DIMENSION,
+            Self::Dimension(DimensionKind::Aligned) => ids::PCB_TOOL_DIMENSION,
+            Self::Dimension(DimensionKind::Horizontal) => ids::PCB_TOOL_DIMENSION_HORIZONTAL,
+            Self::Dimension(DimensionKind::Vertical) => ids::PCB_TOOL_DIMENSION_VERTICAL,
+            Self::Dimension(DimensionKind::Radial) => ids::PCB_TOOL_DIMENSION_RADIAL,
             Self::Keepout => ids::PCB_TOOL_KEEPOUT,
             Self::Room => ids::ROOMS_TOOL,
             Self::Line => ids::PCB_TOOL_LINE,
@@ -185,7 +201,21 @@ impl BoardPlaceTool {
             // The Arc hint names the mode: `Signex::board_tool_hint`.
             Self::Arc => (ids::PCB_BAR_ARC_TOOLTIP, ids::PCB_TOOL_HINT_ARC),
             Self::TextString => (ids::PCB_BAR_STRING_TOOLTIP, ids::PCB_TOOL_HINT_STRING),
-            Self::Dimension => (ids::PCB_BAR_DIMENSION_TOOLTIP, ids::PCB_TOOL_HINT_DIMENSION),
+            Self::Dimension(DimensionKind::Aligned) => {
+                (ids::PCB_BAR_DIMENSION_TOOLTIP, ids::PCB_TOOL_HINT_DIMENSION)
+            }
+            Self::Dimension(DimensionKind::Horizontal) => (
+                ids::PCB_BAR_DIMENSION_HORIZONTAL_TOOLTIP,
+                ids::PCB_TOOL_HINT_DIMENSION_HORIZONTAL,
+            ),
+            Self::Dimension(DimensionKind::Vertical) => (
+                ids::PCB_BAR_DIMENSION_VERTICAL_TOOLTIP,
+                ids::PCB_TOOL_HINT_DIMENSION_VERTICAL,
+            ),
+            Self::Dimension(DimensionKind::Radial) => (
+                ids::PCB_BAR_DIMENSION_RADIAL_TOOLTIP,
+                ids::PCB_TOOL_HINT_DIMENSION_RADIAL,
+            ),
             Self::Component => (Self::Component.name(), Self::Component.name()),
             Self::Line => (ids::PCB_BAR_LINE_TOOLTIP, ids::PCB_TOOL_HINT_LINE),
             Self::GraphicArc => (
@@ -223,5 +253,14 @@ impl BoardPlaceTool {
             Self::TextFrame => BoardGraphicKind::TextFrame,
             _ => return None,
         })
+    }
+
+    /// The kind of dimension a Dimension tool places; `None` for another
+    /// tool.
+    pub(crate) fn dimension_kind(self) -> Option<DimensionKind> {
+        match self {
+            Self::Dimension(kind) => Some(kind),
+            _ => None,
+        }
     }
 }

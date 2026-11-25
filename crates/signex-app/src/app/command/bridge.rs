@@ -9,6 +9,7 @@
 use crate::app::contracts::BoardOriginMsg;
 use crate::app::pcb_tools::BoardPlaceTool;
 use crate::keymap::{AppCommandId, CatalogTextExt};
+use signex_types::pcb_dimension_kind::DimensionKind;
 
 use super::CommandArgs;
 #[cfg(test)]
@@ -447,7 +448,17 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "place_board_pad" => board_tool(BoardPlaceTool::Pad),
         "place_board_arc" => board_tool(BoardPlaceTool::Arc),
         "place_board_string" => board_tool(BoardPlaceTool::TextString),
-        "place_board_dimension" => board_tool(BoardPlaceTool::Dimension),
+        // #2507: one tool per dimension kind.
+        "place_board_dimension" => board_tool(BoardPlaceTool::Dimension(DimensionKind::Aligned)),
+        "place_board_dimension_horizontal" => {
+            board_tool(BoardPlaceTool::Dimension(DimensionKind::Horizontal))
+        }
+        "place_board_dimension_vertical" => {
+            board_tool(BoardPlaceTool::Dimension(DimensionKind::Vertical))
+        }
+        "place_board_dimension_radial" => {
+            board_tool(BoardPlaceTool::Dimension(DimensionKind::Radial))
+        }
         "cycle_arc_mode" => Message::Pcb(PcbMsg::ArcModeStepped),
         "change_footprint" => Message::Pcb(PcbMsg::FootprintSwap(
             crate::app::FootprintSwapMsg::Requested,

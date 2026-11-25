@@ -8,6 +8,10 @@
 //! dimension of that look writes no new key, an older file reads with that
 //! look, and an older reader skips the keys it does not know. Lengths are
 //! integer nm.
+//!
+//! The kind keys (#2507) follow the same rule: `kind` is written only for a
+//! kind other than aligned, the kind every dimension had before, with
+//! `measures`, the arc or circle a radial dimension measures.
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -15,6 +19,7 @@ use uuid::Uuid;
 use super::units::{NonFiniteField, mm_to_nm, nm_to_mm};
 use crate::pcb::Point;
 use crate::pcb_dimension::LinearDimension;
+use crate::pcb_dimension_kind::DimensionKind;
 use crate::pcb_dimension_style::{
     ArrowStyle, BoardFont, DimensionStyle, DimensionTextPosition, DimensionUnits,
 };
@@ -31,6 +36,11 @@ pub(in crate::format) struct DimensionRaw {
     line_width: i64,
     text_height: i64,
     precision: u8,
+    /// Absent for an aligned dimension.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    kind: Option<DimensionKind>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    measures: Option<Uuid>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     arrow_style: Option<ArrowStyle>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -105,8 +115,10 @@ pub(in crate::format) fn read(d: DimensionRaw) -> LinearDimension {
     let manual = Point::new(mm(d.text_along, 0.0), mm(d.text_across, 0.0));
     let mut dimension = LinearDimension {
         uuid: d.uuid,
+        kind: d.kind.unwrap_or_default(),
         start: point(d.start_x, d.start_y),
         end: point(d.end_x, d.end_y),
+        measures: d.measures,
         offset: nm_to_mm(d.offset),
         layer: d.layer,
         line_width: nm_to_mm(d.line_width),
@@ -121,15 +133,19 @@ pub(in crate::format) fn read(d: DimensionRaw) -> LinearDimension {
     dimension
 }
 
-/// Whether saving `d` writes any look key: its look differs, to the nm,
-/// from the look of its own text height and line width, or it is Manual
-/// (its point is written only then). A dimension the file cannot hold
-/// (a number that is not finite) is refused on save and answers `false`.
+/// Whether saving `d` writes any key a reader from before the look
+/// settings would drop: its look differs, to the nm, from the look of its
+/// own text height and line width, it is Manual (its point is written only
+/// then), or it is not aligned (#2507: `kind`, `measures`). A dimension the
+/// file cannot hold (a number that is not finite) is refused on save and
+/// answers `false`.
 pub fn dimension_uses_style(d: &LinearDimension) -> bool {
     let Ok(row) = write(d) else {
         return false;
     };
     let plain = LinearDimension {
+        kind: DimensionKind::Aligned,
+        measures: None,
         style: DimensionStyle::for_text_height(nm_to_mm(row.text_height), nm_to_mm(row.line_width)),
         text_at: Point::new(0.0, 0.0),
         ..d.clone()
@@ -137,9 +153,10 @@ pub fn dimension_uses_style(d: &LinearDimension) -> bool {
     write(&plain).ok().as_ref() != Some(&row)
 }
 
-/// Whether saving `board` writes a look key on any dimension (#2868): the
-/// board uses a dimension look a reader from before the settings would
-/// drop. A board where this is `false` saves exactly as it did before.
+/// Whether saving `board` writes a look or kind key on any dimension
+/// (#2868, #2507): the board uses a dimension look or kind a reader from
+/// before the settings would drop. A board where this is `false` saves
+/// exactly as it did before.
 pub fn board_uses_dimension_style(board: &crate::pcb::PcbBoard) -> bool {
     board.free.dimensions.iter().any(dimension_uses_style)
 }
@@ -187,6 +204,8 @@ pub(in crate::format) fn write(d: &LinearDimension) -> Result<DimensionRaw, NonF
         line_width,
         text_height,
         precision: d.precision,
+        kind: changed(&d.kind, &DimensionKind::Aligned),
+        measures: d.measures,
         arrow_style: changed(&s.arrow_style, &legacy.arrow_style),
         arrow_length: length(s.arrow_length, legacy.arrow_length, "arrow_length")?,
         arrow_width: length(s.arrow_width, legacy.arrow_width, "arrow_width")?,

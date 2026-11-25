@@ -586,6 +586,12 @@ define_ids! {
         CMD_MENU_PLACE_BOARD_STRING = "cmd-menu-place-board-string";
         CMD_PLACE_BOARD_DIMENSION = "cmd-place-board-dimension";
         CMD_MENU_PLACE_BOARD_DIMENSION = "cmd-menu-place-board-dimension";
+        CMD_PLACE_BOARD_DIMENSION_HORIZONTAL = "cmd-place-board-dimension-horizontal";
+        CMD_MENU_PLACE_BOARD_DIMENSION_HORIZONTAL = "cmd-menu-place-board-dimension-horizontal";
+        CMD_PLACE_BOARD_DIMENSION_VERTICAL = "cmd-place-board-dimension-vertical";
+        CMD_MENU_PLACE_BOARD_DIMENSION_VERTICAL = "cmd-menu-place-board-dimension-vertical";
+        CMD_PLACE_BOARD_DIMENSION_RADIAL = "cmd-place-board-dimension-radial";
+        CMD_MENU_PLACE_BOARD_DIMENSION_RADIAL = "cmd-menu-place-board-dimension-radial";
         CMD_CYCLE_ARC_MODE = "cmd-cycle-arc-mode";
         CMD_PLACE_BOARD_LINE = "cmd-place-board-line";
         CMD_MENU_PLACE_BOARD_LINE = "cmd-menu-place-board-line";

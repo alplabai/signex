@@ -335,15 +335,23 @@ pub(super) fn place(ctx: &MenuContext) -> Vec<MenuEntry> {
 
 /// Place on a board: the board placement tools, each running the command its
 /// PCB Active Bar button runs, or greyed with the reason the bar gives while
-/// the board editor cannot run it (one table, #2352, #2373), the Graphics
-/// submenu of drawings on non-copper layers (#2424), then Board Sketch,
-/// which draws the outline, cutouts and keepouts.
+/// the board editor cannot run it (one table, #2352, #2373), with the
+/// Dimension submenu of the dimension kinds after String (#2507), the
+/// Graphics submenu of drawings on non-copper layers (#2424), then Board
+/// Sketch, which draws the outline, cutouts and keepouts.
 fn board_place(ctx: &MenuContext) -> Vec<MenuEntry> {
     let row = |tool: BoardPlaceTool| match tool.state() {
         ToolState::Live(id) => cmd_item_gated(ctx, cmd(id, "")),
         ToolState::Unavailable(reason) => placeholder(ctx, tool.name(), reason),
     };
-    let mut rows: Vec<MenuEntry> = BoardPlaceTool::PLACE_MENU.into_iter().map(row).collect();
+    let mut rows: Vec<MenuEntry> = Vec::new();
+    for tool in BoardPlaceTool::PLACE_MENU {
+        rows.push(row(tool));
+        if tool == BoardPlaceTool::TextString {
+            let kinds = BoardPlaceTool::DIMENSION_MENU.into_iter().map(row).collect();
+            rows.push(submenu(ctx, menu_ids::MENU_PLACE_DIMENSION, kinds));
+        }
+    }
     let graphics = BoardPlaceTool::GRAPHICS_MENU.into_iter().map(row).collect();
     rows.extend([
         submenu(ctx, menu_ids::MENU_PLACE_GRAPHICS, graphics),

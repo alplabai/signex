@@ -763,10 +763,22 @@ place_board_diff_pair	bridge	Pcb(PlaceToolPicked(DiffPairRouting))	gui	active do
 place_board_diff_pair	in_window_rewrite	document_window	gui	window	routing
 place_board_diff_pair	refusal_needs	EditablePcb	gui	active document	routing
 place_board_diff_pair	headless_refusal	headless_refusal	gui	none	routing
-place_board_dimension	bridge	Pcb(PlaceToolPicked(Dimension))	gui	active document	gate
+place_board_dimension	bridge	Pcb(PlaceToolPicked(Dimension(Aligned)))	gui	active document	gate
 place_board_dimension	in_window_rewrite	document_window	gui	window	routing
 place_board_dimension	refusal_needs	EditablePcb	gui	active document	routing
 place_board_dimension	headless_refusal	headless_refusal	gui	none	routing
+place_board_dimension_horizontal	bridge	Pcb(PlaceToolPicked(Dimension(Horizontal)))	gui	active document	gate
+place_board_dimension_horizontal	in_window_rewrite	document_window	gui	window	routing
+place_board_dimension_horizontal	refusal_needs	EditablePcb	gui	active document	routing
+place_board_dimension_horizontal	headless_refusal	headless_refusal	gui	none	routing
+place_board_dimension_radial	bridge	Pcb(PlaceToolPicked(Dimension(Radial)))	gui	active document	gate
+place_board_dimension_radial	in_window_rewrite	document_window	gui	window	routing
+place_board_dimension_radial	refusal_needs	EditablePcb	gui	active document	routing
+place_board_dimension_radial	headless_refusal	headless_refusal	gui	none	routing
+place_board_dimension_vertical	bridge	Pcb(PlaceToolPicked(Dimension(Vertical)))	gui	active document	gate
+place_board_dimension_vertical	in_window_rewrite	document_window	gui	window	routing
+place_board_dimension_vertical	refusal_needs	EditablePcb	gui	active document	routing
+place_board_dimension_vertical	headless_refusal	headless_refusal	gui	none	routing
 place_board_fill	bridge	Pcb(PlaceToolPicked(Fill))	gui	active document	gate
 place_board_fill	in_window_rewrite	document_window	gui	window	routing
 place_board_fill	refusal_needs	EditablePcb	gui	active document	routing

@@ -557,6 +557,10 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "place_board_arc"
         | "place_board_string"
         | "place_board_dimension"
+        // #2507: the other dimension kinds.
+        | "place_board_dimension_horizontal"
+        | "place_board_dimension_vertical"
+        | "place_board_dimension_radial"
         // #2424: the Graphics tools.
         | "place_board_line"
         | "place_board_graphic_arc"

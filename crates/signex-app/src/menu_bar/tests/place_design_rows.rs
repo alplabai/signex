@@ -493,7 +493,7 @@ fn place_on_a_board_lists_the_boards_tools() {
             "Pour Cutout",
             "Slice Pour",
             "String",
-            "Dimension",
+            // #2507: Dimension is a submenu of the kinds after String.
             "Keepout",
             // #2457
             "Room",
@@ -549,6 +549,25 @@ fn place_graphics_on_a_board_arms_each_graphics_tool() {
         let _ = click(&mut app, row);
         let armed = app.interaction_state.pcb_tool.as_ref().map(|s| s.tool);
         assert_eq!(armed, Some(tool), "{row}");
+    }
+}
+
+/// #2507: each row of Place ▸ Dimension on a board arms the Dimension tool
+/// of its kind.
+#[test]
+fn place_dimension_on_a_board_arms_each_kind() {
+    use crate::app::pcb_tools::BoardPlaceTool as T;
+    use signex_types::pcb_dimension_kind::DimensionKind as K;
+    for (row, kind) in [
+        ("Place/Dimension/Aligned", K::Aligned),
+        ("Place/Dimension/Linear Horizontal", K::Horizontal),
+        ("Place/Dimension/Linear Vertical", K::Vertical),
+        ("Place/Dimension/Radial", K::Radial),
+    ] {
+        let mut app = loaded_board_app();
+        let _ = click(&mut app, row);
+        let armed = app.interaction_state.pcb_tool.as_ref().map(|s| s.tool);
+        assert_eq!(armed, Some(T::Dimension(kind)), "{row}");
     }
 }
 

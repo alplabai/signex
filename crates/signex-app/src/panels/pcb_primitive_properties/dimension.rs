@@ -12,6 +12,7 @@ use signex_i18n::{MessageId, UserText, ids, t};
 use signex_types::coord::Unit;
 use signex_types::measure::mm_per;
 use signex_types::pcb_dimension::LinearDimension;
+use signex_types::pcb_dimension_kind::DimensionKind;
 use signex_types::schematic::Point;
 use uuid::Uuid;
 
@@ -64,18 +65,24 @@ fn length_unit(look: Look<'_>) -> (Unit, MessageId) {
 }
 
 /// The Value the card shows: as drawn (in mm) while the board shows mm; in
-/// mils the measured length to the same decimals. A selection whose points
-/// or decimals differ keeps the drawn text. `None` before it is placed.
+/// mils the length its kind measures to the same decimals, a radius after
+/// `R` (#2507). A selection whose points, kinds or decimals differ keeps
+/// the drawn text. `None` before it is placed.
 fn headline(look: Look<'_>, f: &DimensionFacts) -> Option<String> {
     let drawn = f.value.clone()?;
     let in_mils = || {
         let ((Some(x0), Some(y0)), (Some(x1), Some(y1))) = (f.start, f.end) else {
             return None;
         };
-        let measured =
+        let mut measured =
             LinearDimension::new(Uuid::nil(), Point::new(x0, y0), Point::new(x1, y1), 0.0);
+        measured.kind = f.kind?;
         let mils = measured.value_mm() / mm_per(Unit::Mil);
         let number = format!("{:.*}", usize::from(f.precision?), mils);
+        let number = match measured.kind {
+            DimensionKind::Radial => format!("R{number}"),
+            _ => number,
+        };
         let line = t!(look.ctx.i18n, ids::PCB_PRIM_DIM_VALUE_MIL, "value" => number);
         Some(line.into_string())
     };
@@ -303,6 +310,7 @@ mod tests {
         let ctx = app.document_state.panel_ctx.clone();
         let f = DimensionFacts {
             common: fixture::common(vec![ItemRef::Via(Uuid::from_u128(1))]),
+            kind: Some(DimensionKind::Aligned),
             start: (Some(0.0), Some(0.0)),
             end: (Some(62.0), Some(0.0)),
             offset: Some(-4.0),
@@ -324,6 +332,7 @@ mod tests {
     fn sample() -> DimensionFacts {
         DimensionFacts {
             common: fixture::common(vec![ItemRef::Dimension(Uuid::from_u128(1))]),
+            kind: Some(DimensionKind::Aligned),
             start: (Some(0.0), Some(0.0)),
             end: (Some(62.0), Some(0.0)),
             offset: Some(-4.0),
@@ -422,6 +431,36 @@ mod tests {
             (f.start, f.end),
             "points stay in mm"
         );
+    }
+
+    /// #2507: in mils the Value card reads a radius after `R`, measures a
+    /// horizontal dimension across, and keeps the drawn text for kinds that
+    /// differ.
+    #[test]
+    fn in_mils_the_value_follows_the_kind() {
+        let ctx = ctx_in(Unit::Mil);
+        let value = |number: &str| {
+            t!(ctx.i18n, ids::PCB_PRIM_DIM_VALUE_MIL, "value" => number.to_string()).into_string()
+        };
+        let radial = DimensionFacts {
+            kind: Some(DimensionKind::Radial),
+            end: (Some(0.0), Some(25.4)),
+            value: Some("R25.40mm".into()),
+            ..sample()
+        };
+        assert!(headline_texts(&ctx, &radial).contains(&value("R1000.00")));
+        let across = DimensionFacts {
+            kind: Some(DimensionKind::Horizontal),
+            end: (Some(25.4), Some(40.0)),
+            value: Some("25.40mm".into()),
+            ..sample()
+        };
+        assert!(headline_texts(&ctx, &across).contains(&value("1000.00")));
+        let mixed = DimensionFacts {
+            kind: None,
+            ..sample()
+        };
+        assert!(headline_texts(&ctx, &mixed).contains(&"62.00mm".to_string()));
     }
 
     /// Mockup row 101: Style is a subhead over Line Width, Text Height,
