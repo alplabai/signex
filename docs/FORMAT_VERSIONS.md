@@ -77,6 +77,7 @@ format declares only its own table row below.
 | `.snxprj`, variant settings | `snxprj/1.1` while `variant_settings` is not empty (a default variant or a part entry, `project::snxprj_token`; DECISIONS 2026-11-25); else `snxprj/1`, byte for byte. A `snxprj/1` build would keep the section but not follow a variant rename or removal. Builds released before this policy (v26.11.0 and earlier) refuse any newer minor on load, so they refuse a 1.1 project rather than open it read-only | adds `snxprj/1.1` | opens read-only | read as `snxprj/1` |
 | `.snxlib` | `snxlib/2` | `snxlib/2` | refused | refused |
 | `.snxfpt` | `snxfpt/1.1`, `1.2` with sketch links (reference dimensions, pattern sources and mirrors, per-instance pad overrides), or `1.3` with generated features (silkscreen outline, pad clearance, pin 1 marker, assembly outline; mockup row 124, #2834) or a pattern numbering sweep other than row by row (mockup row 126), whatever else it holds | `snxfpt/1`, `1.1`, `1.2`, `1.3` | refused | refused |
+| `.snxblk`, block diagram | `snxblk/1` (mockup row 171, #2796; `docs/architecture/snxblk-format.md`) | `snxblk/1` | opens read-only | refused |
 | `.snxsym` | `snxsym/v1`, `v2` or `v3` by content; `v4` while any graphic is a Bezier, Pie Chart, Elliptical Arc or Round Rectangle (#2838), whatever else it holds | `snxsym/v1`, `v2`, `v3`, `v4` | refused | refused |
 | `.snxsim` | `snxsim/v1` | `snxsim/v1` | refused | refused |
 
