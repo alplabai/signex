@@ -310,7 +310,9 @@ the active copper layer as one route (#2389).
   (`RouteWorld::with_kin`). Every member then follows the centre line at
   its offset (`pcb_geom::route::parallel_paths`, corners mitred), the
   member whose start lies leftmost of the first leg on the left, joined
-  straight from its start. The member tracks are checked one by one against
+  straight from its start. A member lays only the stretches a track of its
+  net on its layer does not already cover, as a single route's leg does
+  (#2492). The member tracks are checked one by one against
   the board, their gaps to each other included (`draft_fits`); a leg that
   breaks a clearance, or a corner too sharp to follow side by side, adds
   nothing and Messages says why.

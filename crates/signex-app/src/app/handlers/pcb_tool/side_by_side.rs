@@ -88,7 +88,7 @@ impl Signex {
         let leg = route_bus_leg(board, &bus.members, anchor, at, &bus.style, &route)?;
         let mut centre = session.points.clone();
         centre.extend(leg);
-        let tracks = bus_tracks(&bus.members, &centre, &bus.style, Uuid::now_v7)?;
+        let tracks = bus_tracks(board, &bus.members, &centre, &bus.style, Uuid::now_v7)?;
         let draft = RouteDraft {
             tracks,
             vias: bus.start_vias.clone(),
@@ -250,7 +250,10 @@ impl Signex {
         let mut centre = session.points.clone();
         let next = session.cursor.filter(|c| centre.last() != Some(c));
         centre.extend(next);
-        if let Ok(tracks) = bus_tracks(&bus.members, &centre, &bus.style, Uuid::nil) {
+        // Trimmed against the board, as the click lays them (#2492).
+        if let Some(board) = self.document_state.pcb_board(&session.path)
+            && let Ok(tracks) = bus_tracks(board, &bus.members, &centre, &bus.style, Uuid::nil)
+        {
             preview.segments.extend(tracks);
         }
         preview.vias.extend(bus.start_vias.iter().cloned());
