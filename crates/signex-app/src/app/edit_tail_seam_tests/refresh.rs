@@ -21,13 +21,13 @@ fn colour_wire_a() -> Command {
     Command::SetNetColors { colors }
 }
 
-fn content_clears(app: &Signex) -> u32 {
+pub(super) fn content_clears(app: &Signex) -> u32 {
     app.interaction_state.canvas.content_cache_clears
 }
 
 /// Start an agent's edit list on the sheet at `path`, as `run_as_one_step`
 /// and `apply_edits` do.
-fn begin_agent_run(app: &mut Signex, path: &Path) {
+pub(super) fn begin_agent_run(app: &mut Signex, path: &Path) {
     let edits = &mut app.document_state.agent_edits;
     edits.target = Some(path.to_path_buf());
     edits.owed = DocumentPatch::NONE;
