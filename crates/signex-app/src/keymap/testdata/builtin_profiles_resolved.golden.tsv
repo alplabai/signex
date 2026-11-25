@@ -28,8 +28,6 @@ signex_standard	bind	Global	M M	command:move_object
 signex_standard	bind	Global	P B	command:place_bus
 signex_standard	bind	Global	P N	command:place_net_label
 signex_standard	bind	Global	P P	command:open_components_panel
-signex_standard	bind	Global	P V K	command:place_compile_mask
-signex_standard	bind	Global	P V N	command:place_no_erc
 signex_standard	bind	Global	P W	command:place_wire
 signex_standard	bind	Global	R I	command:report_manager_bom
 signex_standard	bind	Global	Alt+Shift+A	command:force_annotate_all_schematics
@@ -87,6 +85,8 @@ signex_standard	bind	Schematic	P C	command:place_off_sheet_connector
 signex_standard	bind	Schematic	P R	command:place_port
 signex_standard	bind	Schematic	P S	command:place_sheet_symbol
 signex_standard	bind	Schematic	P U	command:place_bus_entry
+signex_standard	bind	Schematic	P V K	command:place_compile_mask
+signex_standard	bind	Schematic	P V N	command:place_no_erc
 signex_standard	bind	Schematic	P X	command:place_no_connect
 signex_standard	bind	Pcb	*	command:next_signal_layer
 signex_standard	bind	Pcb	+	command:next_layer
