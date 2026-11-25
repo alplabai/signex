@@ -127,7 +127,8 @@ impl Signex {
                         "changed" => plan.changed_count()
                     ))
                     .size(TS.caption)
-                    .color(r.ink3),
+                    .color(r.ink3)
+                    .boxed(),
                 )
                 .push(
                     text(t!(i18n, ids::PARAMETER_IO_PREVIEW_UNDO))
