@@ -122,16 +122,21 @@ fn the_note_names_the_projects_and_offers_only_their_discard() {
 fn save_all_stays_offered_while_anything_else_saves() {
     let (app, _, path) = read_only_workspace();
     let sheet = PathBuf::from("/ro/a.snxsch");
-    assert!(app.read_only_offer(&[sheet.clone()], 0).is_none());
-    let alone = app.read_only_offer(&[path.clone()], 0).expect("offer");
+    assert!(
+        app.read_only_offer(std::slice::from_ref(&sheet), 0)
+            .is_none()
+    );
+    let alone = app
+        .read_only_offer(std::slice::from_ref(&path), 0)
+        .expect("offer");
     assert_eq!(alone.projects, ["ProjectA"]);
     assert!(!alone.saveable);
-    assert!(!app.save_all_offered(&[path.clone()], 0));
+    assert!(!app.save_all_offered(std::slice::from_ref(&path), 0));
     let both = [path.clone(), sheet.clone()];
     assert!(app.read_only_offer(&both, 0).expect("offer").saveable);
     assert!(app.save_all_offered(&both, 0));
     assert!(
-        app.read_only_offer(&[path.clone()], 1)
+        app.read_only_offer(std::slice::from_ref(&path), 1)
             .expect("offer")
             .saveable
     );
