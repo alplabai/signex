@@ -1974,8 +1974,11 @@ never in a project file. Each distributor has a card with its state:
   **Cancel** stops a sign-in that is still waiting. **Disconnect** removes the
   stored token and forgets the account; if the keyring refuses, the card says
   why and the message is also in the Messages panel. A release build carries
-  its own DigiKey client id; `SIGNEX_DIGIKEY_CLIENT_ID` (with
-  `SIGNEX_DIGIKEY_CLIENT_SECRET`) overrides it. Only a build without one,
+  its own DigiKey client id but no client secret; Signex then signs in
+  without one. To use your own DigiKey app, set `SIGNEX_DIGIKEY_CLIENT_ID`
+  (and `SIGNEX_DIGIKEY_CLIENT_SECRET` if the app has a secret); it overrides
+  the built-in id. If a sign-in without a secret is refused, the failure
+  names `SIGNEX_DIGIKEY_CLIENT_SECRET`. Only a build without a built-in id,
   started without that variable, shows *Not configured* with Connect off.
 - **Mouser** takes an API key. **Test** checks it with one lookup and, if it
   works, saves it in the keyring; the card then shows *Key verified*. Editing
