@@ -24,7 +24,6 @@ use signex_types::check::CheckReport;
 
 use crate::app::agent::WaitingCommand;
 
-pub(crate) use request::request_from_args;
 pub(crate) use update::generate_design_notebook;
 
 /// The command line that does what the dialog does, as its footer names it.

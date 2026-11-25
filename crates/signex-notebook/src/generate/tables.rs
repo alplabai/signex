@@ -1,13 +1,13 @@
 //! Typst writing helpers for the report. Every piece of project text goes in
-//! as a quoted string in code (`#par("...")`, a table cell `"..."`), never as
+//! as a quoted string in code (`#("...")`, a table cell `"..."`), never as
 //! markup, so a name with `*`, `#` or `]` prints as written and cannot break
 //! the file.
 
 use crate::reference::quote;
 
-/// A paragraph of plain text, on its own line.
+/// A paragraph of plain text: the string on its own line, then a blank line.
 pub(super) fn paragraph(text: &str) -> String {
-    format!("#par({})\n", quote(text))
+    format!("#({})\n\n", quote(text))
 }
 
 /// A bulleted list of plain text items; nothing when there are none.
