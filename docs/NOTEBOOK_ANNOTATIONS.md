@@ -68,7 +68,9 @@ The body names the design with three Typst calls:
   `#component("R3").param("Vref")` read its parameters and still name R1 and
   R3.
 - `#net("VBUS")`: a net, by name.
-- `#pin("U1", "3")`: a pin of a part, read as `U1.3`.
+- `#pin("U1", "3")`: a pin of a part, read as `U1.3`. One dotted name,
+  `#pin("U1.3")`, names the same pin (cut at its first dot); the editor
+  writes the two-argument form.
 
 Each reference is listed once per block, first mention first. A reference
 whose arguments are not the quoted names it takes is reported and left out.

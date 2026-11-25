@@ -9,7 +9,7 @@ format declares only its own table row below.
 ## The rules
 
 - **Save** writes the format's current token. The exceptions are `.snxsym`,
-  `.snxfpt`, `.snxsch`, `.snxpcb` and `.snxprj`: each writes the lowest token the content needs. A
+  `.snxfpt`, `.snxsch`, `.snxpcb`, `.snxprj` and `.snxnbk`: each writes the lowest token the content needs. A
   symbol file without polygons, De Morgan bodies or the `v4` shapes (table below) stays `snxsym/v1`; a
   schematic stays `snxsch/1.1`, byte for byte, unless a No-ERC directive
   names the rules it silences, which writes `snxsch/1.2` (#1699), or it holds
@@ -79,6 +79,7 @@ format declares only its own table row below.
 | `.snxfpt` | `snxfpt/1.1`, `1.2` with sketch links (reference dimensions, pattern sources and mirrors, per-instance pad overrides), or `1.3` with generated features (silkscreen outline, pad clearance, pin 1 marker, assembly outline; mockup row 124, #2834) or a pattern numbering sweep other than row by row (mockup row 126), whatever else it holds | `snxfpt/1`, `1.1`, `1.2`, `1.3` | refused | refused |
 | `.snxsym` | `snxsym/v1`, `v2` or `v3` by content; `v4` while any graphic is a Bezier, Pie Chart, Elliptical Arc or Round Rectangle (#2838), whatever else it holds | `snxsym/v1`, `v2`, `v3`, `v4` | refused | refused |
 | `.snxsim` | `snxsim/v1` | `snxsim/v1` | refused | refused |
+| `.snxnbk`, Design Notebook | `snxnbk/1`, the lowest its content needs: the `format` key of the TOML header between the file's two `+++` lines (`signex_notebook::NOTEBOOK_FORMAT`; mockup rows 195-202, #2795). The header also stores each reference's id; there is no sidecar file. A file saved with no change is written back byte for byte, header text included; a file with no header keeps none until it stores a reference id. Chapter files a notebook `#include`s are `.snxnbk` files with their own header | `snxnbk/1` | opens read-only | read as `snxnbk/1` |
 
 `.snxrules` profiles carry a numeric `schema` key instead of a token
 (`docs/architecture/snxrules-format.md`); a newer schema is refused there too.
