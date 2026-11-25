@@ -39,6 +39,7 @@ pub mod graphic;
 mod graphics;
 pub mod item_move;
 mod items;
+pub mod length_match;
 pub mod lock;
 mod options;
 pub mod pad_swap;
