@@ -523,6 +523,44 @@ flags it. A `fab_*` rule more specific than the written rule (one for inner
 layers against a board-wide rule) is left out of that comparison: it wins
 on its own scope, so the broad rule loosens nothing there.
 
+## Fixing findings
+
+Six rule kinds have a fix (#2940), run with `fix_drc` and
+`fix_drc_violation` (`docs/CLI.md`, "Fixing DRC findings"). Each fix
+changes the least it can to clear its finding:
+
+| Rule | Fix |
+|---|---|
+| Clearance | Move the track or via of the two, a track first, the least distance that takes it the rule's clearance from the other item, away from it. The tracks joined to a moved track's ends, and those on a moved via, follow it. |
+| Track width | Set the track or copper arc to the limit it breaks: the rule's minimum, or its maximum. |
+| Annular ring | Grow the via's diameter, or the pad's sides, to its hole plus the rule's ring on each side. The hole stays. |
+| Hole to hole | Move the via of the two the least distance that takes its hole the rule's gap from the other hole; the tracks on it follow. Two pad holes are left: a pad's hole moves with its part. |
+| Silkscreen to pad | Move the board string or drawing the least distance that takes it the rule's gap from the pad. A part's own silkscreen is its footprint's and is left. |
+| Solder mask sliver | Shrink the opening of a via, or of a track with a mask expansion of its own, by what the strip lacks; between two openings of one net, merge them by growing one until they meet. A pad's opening comes from its footprint and is left. |
+
+Every fix is tried on a copy of the board and checked with the same rules
+as Run DRC. It is kept only when its finding is gone and no new finding
+appeared (a finding that names no item counts by its rule alone); otherwise
+the next way is tried, and when none is left the finding stays. A length is
+rounded up to a whole micrometre and one more, so the fix still holds once
+the board stores it in nanometres. A move is at most 10 mm.
+
+A fix never waives a finding: a waived finding is left as it is, and a fix
+whose change would lapse a waiver counts as a new finding. A fix never
+changes a locked track or via, a track joined to the end of a moved track
+when that one is locked, or a pad of a part that is locked in place or
+whose pads are locked. A via or pad with sizes by layer, and a pad drawn
+from its own corners, are left to a person. Every edit also passes the
+board's lease check (`docs/architecture/pcb-board-engine.md`, "Collab
+leases"); today it allows every edit.
+
+Each finding left carries a reason: `no_fix` (its rule has no fix),
+`waived`, `locked` (with the locked items), `leased`, `cannot_change` (no
+item the fix may change, and why), `new_violation` (every way tried makes a
+new finding, with their keys), `not_cleared` and `refused` (the board
+refused the edit). Rerouting a track that cannot move, and clipping a
+part's own silkscreen, are not in this version.
+
 ## Not in this version
 
 Region-scoped rules, clearance between copper and holes, differential pairs

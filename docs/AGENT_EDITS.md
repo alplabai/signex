@@ -43,7 +43,8 @@ Two commands, both with capability `edit` in `signex-cli`:
   are the board net-class edits (`add_net_class`, `rename_net_class`,
   `delete_net_class`, `set_net_class_rules`, `assign_board_net_class`), the
   DRC waivers (`waive_drc_violation`, `unwaive_drc_violation`), #2399 and
-  #2400, and the length tuning commands `tune_net_length` and
+  #2400, the DRC fixes (`fix_drc`, `fix_drc_violation`, #2940), and the
+  length tuning commands `tune_net_length` and
   `tune_diff_pair` (#2389): each is one step on the named board. A command
   that takes a file path (`place_design_block`, `import_graphics`, #1667)
   is refused: an edit list does not read a file it names. The drawing order

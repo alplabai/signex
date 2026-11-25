@@ -906,6 +906,82 @@ Known limits:
   `sub/../`) can change the keys between an open and a closed check, and a
   baseline made in the other state is then refused.
 
+### Fixing DRC findings
+
+```text
+fix_drc_violation document=<board> violation=<evidence.waiver_key> [dry_run=true]
+fix_drc document=<board> [rule=<kind>] [dry_run=true]
+```
+
+`fix_drc_violation` fixes one finding of the named board, by the
+`evidence.waiver_key` `check_drc` answers for it; `fix_drc` fixes every
+finding of one rule kind, or of every kind when `rule` is left out (or
+`all`). The kinds with a fix are `clearance`, `track_width`,
+`annular_ring`, `hole_to_hole`, `silk_to_pad` and `mask_sliver`, written
+bare or as `builtin::<kind>`; any other `rule` is refused with that list.
+What each fix changes: `docs/DRC_RULES.md`, "Fixing findings" (#2940).
+
+The board must be open (`open_document` first in a headless run). The
+check uses Run DRC's rules for the board, as `check_drc` does. A fix never
+waives a finding and never changes a locked item; one it cannot make, or
+whose change would make a new finding, is left with the reason. Every fix
+of one run is one undo step on the board, labelled "Fix DRC Violations";
+nothing is written to disk until the board is saved. With
+`dry_run=true` (or `--dry-run`) the answer is the same and the board is not
+changed. Both need the `edit` capability. A key no open finding has is
+refused; run `check_drc` for the current keys (a fixed finding's key is
+gone, not moved).
+
+```bash
+signex-cli run demo.snxprj --save <<'EOF'
+{"id": "open_document", "args": {"path": "demo.snxpcb"}}
+{"id": "fix_drc", "args": {"document": "demo.snxpcb", "rule": "clearance"}}
+{"id": "save_document", "args": {"document": "demo.snxpcb"}}
+EOF
+```
+
+The answer:
+
+```json
+{"board": "/abs/demo.snxpcb", "dry_run": false, "changed": true,
+ "fixed": [{"id": "<32 hex>", "rule": "builtin::clearance",
+   "kind": "builtin::clearance",
+   "message": "clearance 0.1 mm, needs 0.15 mm",
+   "items": ["<track uuid>", "<track uuid>"], "at_mm": [5.0, 0.175],
+   "changed": ["<track uuid>"], "cleared_by": null}],
+ "left": [{"id": "<32 hex>", "rule": "builtin::clearance",
+   "kind": "builtin::clearance", "message": "...", "items": ["..."],
+   "at_mm": [1.0, 2.0], "reason": "locked",
+   "why": "the fix would change track <uuid>, locked"}],
+ "remaining": {"count": 1, "waived": 0, "findings": [{"id": "...",
+   "rule": "...", "kind": "...", "message": "...", "items": ["..."],
+   "at_mm": [1.0, 2.0]}]}}
+```
+
+- `changed`: whether the board changed (an undo step was made); `false`
+  for a dry run and for a run that fixed nothing.
+- `fixed`: each finding fixed (for a dry run, each it would fix), in report
+  order. `id` is its waiver key, `rule` its rule id (`user::<name>` for a
+  written rule), `kind` the built-in kind, `items` what the finding names
+  (a pad as `<footprint uuid>/<pad uuid>`), `changed` the items the fix
+  changed. A finding an earlier fix of the same run cleared has an empty
+  `changed` and that fix's key in `cleared_by`.
+- `left`: each finding left as it is, with `reason` (`no_fix`, `waived`,
+  `locked`, `leased`, `cannot_change`, `new_violation`, `not_cleared` or
+  `refused`) and `why` in words. `fix_drc` with no `rule` lists the
+  findings of the kinds with no fix here too, as `no_fix`.
+- `remaining`: a check of the board after the fixes (for a dry run, of the
+  board the fixes would leave): the open findings in the same shape, their
+  `count`, and how many are `waived`. A rule switched `off` is not listed.
+
+Known limits:
+
+- A clearance fix moves a track or via; it does not reroute a track that
+  cannot move. A part's own silkscreen and a pad's mask opening are the
+  footprint's and are left.
+- The check runs in the app's update, as Interactive Routing's does: a
+  large board with many findings answers after one check per fix tried.
+
 ## Requirement checks
 
 ```text
