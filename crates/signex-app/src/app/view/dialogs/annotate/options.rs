@@ -114,12 +114,13 @@ impl Signex {
         let r = crate::styles::tokens::resolve(tokens);
         let ink = crate::styles::ti(tokens.text);
         let open = self.ui_state.annotate_session.fixed_options_open;
+        // An uppercase section label like the blocks above, its read-only
+        // pill at the right of the column.
         let toggle = button(
             row![
                 signex_widgets::chevron::chevron(open, TS.body, r.ink3),
-                text(t!(i18n, ids::DIALOG_ANNOTATE_FIXED_OPTIONS))
-                    .size(TS.body)
-                    .color(ink),
+                section_heading(i18n, ids::DIALOG_ANNOTATE_FIXED_OPTIONS, tokens),
+                Space::new().width(Length::Fill),
                 pill(
                     t!(i18n, ids::DIALOG_ANNOTATE_FIXED_READ_ONLY),
                     PillTone::Neutral,
@@ -130,6 +131,7 @@ impl Signex {
             .align_y(Alignment::Center),
         )
         .padding(0.0)
+        .width(Length::Fill)
         .style(ga::bare_button_style)
         .on_press(Message::Annotate(AnnotateMsg::FixedOptionsToggled));
         let mut block: Column<Element<'_, Message>> = column![toggle.boxed()].spacing(SP.s);

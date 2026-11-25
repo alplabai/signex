@@ -16,6 +16,8 @@ use crate::styles::{DialogButtonKind, dialog_button, dialog_footer_split};
 
 mod change_list;
 mod controls;
+#[cfg(test)]
+mod layout_tests;
 mod options;
 mod reprefix_confirm;
 mod reset_confirm;
