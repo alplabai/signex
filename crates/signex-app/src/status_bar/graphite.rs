@@ -159,12 +159,12 @@ pub fn layer_pill(
     }
 }
 
-/// The active-layer pill as a plain label: the pill's fill, no hover.
+/// The active layer as a plain label (Strip layer switcher, mockup row 6):
+/// no fill, no hover, the text ink.
 pub fn layer_label(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style + 'static {
-    let r = resolve(tokens);
-    let (fill, ink) = (r.accent_soft, r.accent_soft_ink);
+    let ink = ti(tokens.text);
     move |_| container::Style {
-        background: Some(Background::Color(fill)),
+        background: None,
         text_color: Some(ink),
         border: Border {
             radius: BAR_CONTROL_RADIUS.into(),
