@@ -12,6 +12,7 @@ use signex_library::{
 };
 use signex_types::schematic::{
     LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Point, RowStamp, SchematicSheet, Symbol,
+    Wire, pin_tips,
 };
 use uuid::Uuid;
 
@@ -583,4 +584,131 @@ fn apply_to_stays_on_this_part_with_another_part_of_the_same_row_on_the_sheet() 
     let change = preview_of(&app);
     assert_eq!(change.scope, ChangeScope::ThisPart);
     assert_eq!(change.part_count(), 1, "R6 is not reached");
+}
+
+// Pin mapping (#2954): `PlacedPartMsg::ChangePinRemapped` through `update`
+// (`pin_mapping.rs`), and Change following the edited mapping.
+
+/// R5 moved clear of R6 and R7 (placed on its pins at the origin), with a
+/// wire 10.16 mm to the right of each pin in `wired` (ids 0x500 on); R5's
+/// pin tips by number.
+fn r5_wired(app: &mut Signex, wired: &[&str]) -> HashMap<String, Point> {
+    let engine = app
+        .document_state
+        .engines
+        .get_mut(&PathBuf::from(SHEET))
+        .unwrap();
+    let mut doc = engine.document().clone();
+    doc.symbols[0].position = Point::new(50.8, 50.8);
+    let tips: HashMap<String, Point> = {
+        let sym = &doc.symbols[0];
+        let lib = doc.resolve_lib_symbol(sym).expect("R5's drawing");
+        pin_tips(&lib, sym)
+            .map(|(lp, tip)| (lp.pin.number.clone(), tip))
+            .collect()
+    };
+    for (n, pin) in wired.iter().enumerate() {
+        let tip = tips[*pin];
+        doc.wires.push(Wire {
+            uuid: Uuid::from_u128(0x500 + n as u128),
+            start: tip,
+            end: Point::new(tip.x + 10.16, tip.y),
+            ..Default::default()
+        });
+    }
+    engine.set_document(doc);
+    tips
+}
+
+fn mapped(change: &crate::library::state::ChangePreview) -> Vec<(&str, Option<&str>)> {
+    change
+        .pins
+        .iter()
+        .map(|r| (r.old.as_str(), r.new.as_ref().map(|(key, _)| key.as_str())))
+        .collect()
+}
+
+fn remap(app: &mut Signex, old: &str, new: Option<&str>) {
+    send(
+        app,
+        PlacedPartMsg::ChangePinRemapped {
+            old: old.into(),
+            new: new.map(str::to_string),
+        },
+    );
+}
+
+#[test]
+fn a_remapped_pin_shows_in_the_pin_table_and_change_carries_its_wire() {
+    let (mut app, target) = app_changing_r5();
+    let tips = r5_wired(&mut app, &["2"]);
+    read_new_part(&mut app, &target);
+    let change = preview_of(&app);
+    assert!(change.pin_map.is_none(), "mapped by number until an edit");
+    assert_eq!(mapped(change), [("1", Some("1")), ("2", Some("2"))]);
+    assert_eq!(change.pins[0].net, None, "nothing is on pin 1");
+    assert_eq!(change.pins[1].net, Some(String::new()), "an unnamed net");
+    assert_eq!(change.pin_choices.len(), 2);
+
+    remap(&mut app, "2", Some("1"));
+    remap(&mut app, "1", Some("2"));
+    let change = preview_of(&app);
+    assert!(change.pin_map.is_some());
+    assert_eq!(mapped(change), [("1", Some("2")), ("2", Some("1"))]);
+    assert_eq!(change.preview.carried, vec!["2".to_string()]);
+    assert!(change.preview.refused.is_none());
+
+    send(&mut app, PlacedPartMsg::ChangeConfirmed);
+    assert!(app.library.picker.is_none(), "the dialog closes");
+    let doc = app.document_state.engines[&PathBuf::from(SHEET)].document();
+    assert_eq!(doc.symbols[0].row_id, Some(NEW_ROW));
+    let wire = |doc: &SchematicSheet| {
+        let wire = doc.wires.iter().find(|w| w.uuid == Uuid::from_u128(0x500));
+        signex_net::pt_key(&wire.expect("the wire").start)
+    };
+    assert_eq!(
+        wire(doc),
+        signex_net::pt_key(&tips["1"]),
+        "the wire of old pin 2 reaches new pin 1"
+    );
+
+    let _ = app.update(Message::Edit(EditMsg::Undo));
+    let doc = app.document_state.engines[&PathBuf::from(SHEET)].document();
+    assert_eq!(doc.symbols[0].row_id, Some(OLD_ROW), "one undo step");
+    assert_eq!(wire(doc), signex_net::pt_key(&tips["2"]));
+}
+
+#[test]
+fn a_mapping_the_sheet_cannot_follow_is_refused_and_the_dialog_stays() {
+    let (mut app, target) = app_changing_r5();
+    r5_wired(&mut app, &["1", "2"]);
+    read_new_part(&mut app, &target);
+    // Old pin 2 to new pin 1 leaves old pin 1 unmatched, and its wire stays
+    // on the tip old pin 2's wire would be carried to.
+    remap(&mut app, "2", Some("1"));
+    let change = preview_of(&app);
+    assert!(change.preview.refused.is_some(), "{:?}", change.preview);
+    assert_eq!(change.preview.unmatched_connected, vec!["1".to_string()]);
+
+    let needle = "Change the pin mapping of R5";
+    let before = crate::diagnostics::logged_count(needle);
+    send(&mut app, PlacedPartMsg::ChangeConfirmed);
+    assert_eq!(crate::diagnostics::logged_count(needle), before + 1);
+    assert!(matches!(
+        app.library.picker.as_ref().map(|p| &p.mode),
+        Some(PickerMode::ChangePreview(_))
+    ));
+    let doc = app.document_state.engines[&PathBuf::from(SHEET)].document();
+    assert_eq!(doc.symbols[0].row_id, Some(OLD_ROW), "nothing changed");
+}
+
+#[test]
+fn a_remap_of_a_pin_or_to_a_pin_the_part_lacks_changes_nothing() {
+    let (mut app, target) = app_changing_r5();
+    read_new_part(&mut app, &target);
+    remap(&mut app, "9", Some("1"));
+    remap(&mut app, "1", Some("7"));
+    let change = preview_of(&app);
+    assert!(change.pin_map.is_none());
+    assert_eq!(mapped(change), [("1", Some("1")), ("2", Some("2"))]);
 }
