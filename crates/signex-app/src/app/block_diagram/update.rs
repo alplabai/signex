@@ -93,8 +93,12 @@ impl Signex {
                 self.set_selected_connection(&path, Some(Interface::from_token(token)), None)
             }
             TabEvent::ColorPicked(color) => self.color_selection(&path, color),
-            other => {
-                self.session_event(&path, other);
+            session @ (TabEvent::ToolPicked(_)
+            | TabEvent::ItemPicked { .. }
+            | TabEvent::ViewChanged(_)
+            | TabEvent::FitPressed
+            | TabEvent::FieldEdited(..)) => {
+                self.session_event(&path, session);
                 Ok(())
             }
         };
