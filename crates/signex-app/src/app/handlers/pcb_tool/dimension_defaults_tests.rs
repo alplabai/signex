@@ -2,6 +2,8 @@
 //! Dimension tool's form overrides them for the session.
 
 use signex_engine::pcb::primitive_edit::DimensionStyleEdit;
+use signex_types::format::{SNXPCB_FORMAT_V1_11, SnxPcb, board_uses_dimension_style, snxpcb_token};
+use signex_types::pcb::Point;
 use signex_types::pcb_dimension_style::{
     ArrowStyle, DimensionDefaults, DimensionStyle, DimensionTextPosition, DimensionUnits,
 };
@@ -114,4 +116,58 @@ fn the_tools_form_overrides_the_defaults_for_the_next_dimension() {
         "the rest are the defaults'"
     );
     assert_eq!(app.ui_state.pcb_dimension_defaults, custom());
+}
+
+/// The token a save of `board` writes on its first line, and the file.
+fn saved_token(board: &signex_types::pcb::PcbBoard) -> (String, String) {
+    let text = SnxPcb::new(board.clone()).write_string().expect("writes");
+    let token = text
+        .lines()
+        .next()
+        .and_then(|l| l.strip_prefix("format = \""))
+        .and_then(|rest| rest.strip_suffix('"'))
+        .unwrap_or_default()
+        .to_string();
+    (token, text)
+}
+
+/// #2868: a dimension the Dimension tool places with the default look puts
+/// its value Above, its point off the line; the board still saves with the
+/// token it had and re-saves byte-identical.
+#[test]
+fn a_placed_default_dimension_keeps_the_boards_token() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    let before = snxpcb_token(board_of(&app, &path));
+    place(&mut app);
+    let board = board_of(&app, &path).clone();
+    assert_eq!(board.free.dimensions.len(), 1);
+    assert!(!board_uses_dimension_style(&board));
+    assert_eq!(snxpcb_token(&board), before);
+    assert_ne!(snxpcb_token(&board), SNXPCB_FORMAT_V1_11);
+    let (token, text) = saved_token(&board);
+    assert_eq!(token, before);
+    let back = SnxPcb::parse(&text).expect("reads").board;
+    assert_eq!(back.free.dimensions, board.free.dimensions);
+    assert_eq!(saved_token(&back).1, text, "a re-save is byte-identical");
+}
+
+/// A placed dimension made Manual with its text moved writes `snxpcb/1.11`
+/// and reads its point back.
+#[test]
+fn a_moved_manual_dimension_raises_the_token_and_keeps_its_point() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    place(&mut app);
+    let mut board = board_of(&app, &path).clone();
+    let d = &mut board.free.dimensions[0];
+    d.style.text_position = DimensionTextPosition::Manual;
+    d.text_at = Point::new(1.5, -0.75);
+    assert!(board_uses_dimension_style(&board));
+    assert_eq!(snxpcb_token(&board), SNXPCB_FORMAT_V1_11);
+    let (token, text) = saved_token(&board);
+    assert_eq!(token, SNXPCB_FORMAT_V1_11);
+    let back = SnxPcb::parse(&text).expect("reads").board;
+    assert_eq!(back.free.dimensions[0].text_at, Point::new(1.5, -0.75));
+    assert_eq!(back.free.dimensions, board.free.dimensions);
 }

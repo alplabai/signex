@@ -838,7 +838,9 @@ A `[[free.dimensions]]` row writes its look keys (#2868,
 look of its own text height and line width (`DimensionStyle::for_text_height`):
 `arrow_style` (`filled`, `open`, `none`), `arrow_length`, `arrow_width`,
 `font` (`mono`, `sans`), `bold`, `italic`, `text_width`, `text_position`
-(`above`, `inline`, `manual`), `text_gap`, `text_along`, `text_across`,
+(`above`, `inline`, `manual`), `text_gap`, `text_along`, `text_across`
+(the Text Point, written only for a Manual value; any other value reads
+its point where Above puts it, as the Dimension tool places it),
 `extension_offset`, `extension_overshoot`, `extension_width`, `unit`
 (`mm`, `mil`, `in`), `show_unit`, `prefix`, `suffix`, `trailing_zeros`;
 lengths in integer nm. A dimension of that look writes none of them, so an
