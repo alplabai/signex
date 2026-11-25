@@ -177,7 +177,7 @@ fn click(app: &mut Signex, window: Option<iced::window::Id>, y: f64, mode: Click
 
 fn board_dump(app: &Signex) -> String {
     let docs = &app.document_state;
-    format!("{:?}", docs.tabs[docs.active_tab].cached_document)
+    format!("{:?}", docs.tab_board_engine(docs.active_tab))
 }
 
 fn delete_key() -> Message {

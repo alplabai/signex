@@ -72,7 +72,7 @@ fn open(board: PcbBoard) -> (Signex, tempfile::TempDir, std::path::PathBuf) {
 /// The open board as the tab holds it, for a before/after comparison.
 fn board_dump(app: &Signex) -> String {
     let docs = &app.document_state;
-    format!("{:?}", docs.tabs[docs.active_tab].cached_document)
+    format!("{:?}", docs.tab_board_engine(docs.active_tab))
 }
 
 static DRC_RUN_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());

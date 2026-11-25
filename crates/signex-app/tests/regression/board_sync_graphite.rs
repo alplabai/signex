@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 
 use signex_app::app::{
-    FileMsg, LoadedProject, Message, RowFilter, Signex, TabDocument, UpdatePcbMsg, UpdatePcbState,
+    FileMsg, LoadedProject, Message, RowFilter, Signex, UpdatePcbMsg, UpdatePcbState,
 };
 use signex_engine::pcb::eco::{EcoBlock, EcoKey};
 use signex_library::adapter::LibraryAdapter;
@@ -260,11 +260,7 @@ fn board_references(rig: &Rig) -> Vec<String> {
     let mut refs: Vec<String> = rig
         .app
         .document_state
-        .tabs
-        .iter()
-        .find(|t| t.path == rig.board)
-        .and_then(|t| t.cached_document.as_ref())
-        .and_then(TabDocument::as_pcb_engine)
+        .first_tab_board_engine(&rig.board)
         .expect("the board is open")
         .board()
         .footprints

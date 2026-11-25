@@ -4,7 +4,7 @@
 
 use signex_app::app::{
     BoardSketchMsg, CommandPaletteMsg, ContextAction, ContextMenuMsg, EditMsg, FileMsg, InputMsg,
-    Message, PcbMsg, Signex, TabContextAction, TabDocument, UiMsg,
+    Message, PcbMsg, Signex, TabContextAction, UiMsg,
 };
 use signex_app::dock::DockMessage;
 use signex_app::keymap::{
@@ -109,10 +109,8 @@ pub(crate) fn in_sketch(f: &Fixture) -> bool {
 
 pub(crate) fn live(f: &Fixture) -> PcbBoard {
     let docs = &f.app.document_state;
-    docs.tabs[docs.active_tab]
-        .cached_document
-        .as_ref()
-        .and_then(TabDocument::as_pcb)
+    docs.tab_board_engine(docs.active_tab)
+        .map(|engine| engine.board())
         .expect("a board is open")
         .clone()
 }

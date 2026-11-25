@@ -10,7 +10,7 @@ use signex_types::project::{
 };
 
 use crate::app::command::{CommandArgs, CommandOutcome};
-use crate::app::{Message, Signex, TabDocument};
+use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
 
 struct Fixture {
@@ -92,14 +92,7 @@ fn run(app: &mut Signex, command: &str, operands: &[&str]) -> CommandOutcome {
 }
 
 fn board_copper(app: &Signex, path: &Path) -> Option<(usize, f64)> {
-    let board = app
-        .document_state
-        .tabs
-        .iter()
-        .find(|t| t.path == path)
-        .and_then(|t| t.cached_document.as_ref())
-        .and_then(TabDocument::as_pcb_engine)?
-        .board();
+    let board = app.document_state.first_tab_board_engine(path)?.board();
     let copper = board
         .layers
         .iter()

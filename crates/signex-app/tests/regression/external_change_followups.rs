@@ -11,7 +11,6 @@ use std::path::{Path, PathBuf};
 
 use signex_app::app::{
     CaseProbeOutcome, ContextMenuMsg, FileMsg, Message, OverlayMsg, Signex, TabContextAction,
-    TabDocument,
 };
 use signex_app::diagnostics;
 use signex_engine::pcb::BoardEngine;
@@ -90,13 +89,8 @@ fn edit(app: &mut Signex, path: &Path, paper: &str) {
 }
 
 fn edit_board(app: &mut Signex, path: &Path, thickness: f64) {
-    let tab = app
-        .document_state
-        .tabs
-        .iter_mut()
-        .find(|tab| tab.path == path)
-        .expect("pcb tab");
-    tab.cached_document = Some(TabDocument::Pcb(BoardEngine::new(board(thickness), 1)));
+    *app.document_state.board_engine_mut(path).expect("pcb tab") =
+        BoardEngine::new(board(thickness), 1);
     app.document_state.mark_document_dirty(path);
 }
 
@@ -224,11 +218,8 @@ fn reloading_a_changed_board_loads_the_file_and_drops_the_edits() {
 
     let shown = app
         .document_state
-        .tabs
-        .iter()
-        .find(|tab| tab.path == path)
-        .and_then(|tab| tab.cached_document.as_ref())
-        .and_then(TabDocument::as_pcb)
+        .first_tab_board_engine(&path)
+        .map(|engine| engine.board())
         .map(|b| b.thickness);
     assert_eq!(shown, Some(3.2));
     assert!(!app.document_state.is_document_dirty(&path));

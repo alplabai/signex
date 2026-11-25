@@ -9,8 +9,8 @@ use std::path::{Path, PathBuf};
 
 use pcb_geom::ClickMode;
 use signex_app::app::{
-    ContextMenuMsg, FileMsg, Message, PcbMsg, PcbViewMsg, Signex, StatusBarRequest, TabDocument,
-    UiMsg, WindowMsg,
+    ContextMenuMsg, FileMsg, Message, PcbMsg, PcbViewMsg, Signex, StatusBarRequest, UiMsg,
+    WindowMsg,
 };
 use signex_app::diagnostics;
 use signex_app::keymap::AppCommandId;
@@ -215,9 +215,8 @@ fn unfocus(app: &mut Signex, window: iced::window::Id) {
 }
 
 fn board_text(app: &Signex, path: &Path) -> String {
-    let tab = &app.document_state.tabs[tab_index(app, path)];
-    let board = tab.cached_document.as_ref().and_then(TabDocument::as_pcb);
-    serde_json::to_string(board.expect("a board")).unwrap()
+    let engine = app.document_state.tab_board_engine(tab_index(app, path));
+    serde_json::to_string(engine.expect("a board").board()).unwrap()
 }
 
 fn carry_kind(app: &Signex) -> Option<CarryKind> {

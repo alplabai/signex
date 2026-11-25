@@ -8,7 +8,7 @@
 use iced::widget::canvas::Program;
 use iced::{Event, Point as ScreenPoint, Rectangle, mouse};
 use pcb_geom::ItemRef;
-use signex_app::app::{EditMsg, FileMsg, InputMsg, Message, Signex, TabDocument};
+use signex_app::app::{EditMsg, FileMsg, InputMsg, Message, Signex};
 use signex_app::diagnostics;
 use signex_app::pcb_canvas::PcbCanvasState;
 use signex_types::format::SnxPcb;
@@ -179,10 +179,8 @@ impl Fixture {
 
     fn live(&self) -> PcbBoard {
         let docs = &self.app.document_state;
-        docs.tabs[docs.active_tab]
-            .cached_document
-            .as_ref()
-            .and_then(TabDocument::as_pcb)
+        docs.tab_board_engine(docs.active_tab)
+            .map(|engine| engine.board())
             .expect("a board is open")
             .clone()
     }
@@ -203,10 +201,7 @@ impl Fixture {
 
     fn can_undo(&self) -> bool {
         let docs = &self.app.document_state;
-        docs.tabs[docs.active_tab]
-            .cached_document
-            .as_ref()
-            .and_then(TabDocument::as_pcb_engine)
+        docs.tab_board_engine(docs.active_tab)
             .expect("a board engine")
             .can_undo()
     }

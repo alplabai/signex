@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use signex_app::app::{
     CommandPaletteMsg, ContextMenuMsg, FileMsg, LoadedProject, Message, ProjectTreeAction, Signex,
-    TabDocument, UiMsg, UpdatePcbMsg, UpdatePcbState, WindowMsg,
+    UiMsg, UpdatePcbMsg, UpdatePcbState, WindowMsg,
 };
 use signex_app::keymap::{
     AppCommandId, ShortcutBinding, ShortcutBindingAction, ShortcutContext, ShortcutTrigger,
@@ -319,11 +319,7 @@ fn add_row(f: &Fixture, part: Uuid) -> &EcoRow {
 fn engine(f: &Fixture) -> &BoardEngine {
     f.app
         .document_state
-        .tabs
-        .iter()
-        .find(|t| t.path == f.board)
-        .and_then(|t| t.cached_document.as_ref())
-        .and_then(TabDocument::as_pcb_engine)
+        .first_tab_board_engine(&f.board)
         .expect("the board is open")
 }
 

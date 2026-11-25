@@ -5,9 +5,7 @@
 
 use pcb_geom::{ClickMode, ItemRef, PointNm, Shape, pad_shape};
 use signex_app::active_bar::{ActiveBarAction, ActiveBarMsg};
-use signex_app::app::{
-    ContextAction, ContextMenuMsg, EditMsg, FileMsg, Message, Signex, TabDocument, UiMsg,
-};
+use signex_app::app::{ContextAction, ContextMenuMsg, EditMsg, FileMsg, Message, Signex, UiMsg};
 use signex_app::diagnostics;
 use signex_app::keymap::{AppCommandId, KeyStroke, KeyToken, Modifiers};
 use signex_app::menu_bar::MenuMessage;
@@ -181,10 +179,8 @@ fn send(app: &mut Signex, message: Message) {
 
 fn live(app: &Signex) -> PcbBoard {
     let docs = &app.document_state;
-    docs.tabs[docs.active_tab]
-        .cached_document
-        .as_ref()
-        .and_then(TabDocument::as_pcb)
+    docs.tab_board_engine(docs.active_tab)
+        .map(|engine| engine.board())
         .expect("a board is open")
         .clone()
 }
@@ -527,10 +523,7 @@ fn a_locked_footprint_refuses_every_edit_with_a_notice() {
 
 fn can_undo(app: &Signex) -> bool {
     let docs = &app.document_state;
-    docs.tabs[docs.active_tab]
-        .cached_document
-        .as_ref()
-        .and_then(TabDocument::as_pcb_engine)
+    docs.tab_board_engine(docs.active_tab)
         .expect("a board engine")
         .can_undo()
 }

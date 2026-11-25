@@ -5,7 +5,7 @@
 //! drawn for one component, and its hover link lives in the panel state.
 
 use pcb_geom::{ClickMode, ItemRef};
-use signex_app::app::{EditMsg, FileMsg, Message, Signex, TabDocument};
+use signex_app::app::{EditMsg, FileMsg, Message, Signex};
 use signex_app::diagnostics;
 use signex_app::dock::DockMessage;
 use signex_app::panels::pcb_component::DESIGNATOR_FIELD;
@@ -137,10 +137,8 @@ fn send(app: &mut Signex, message: Message) {
 
 fn live(app: &Signex) -> PcbBoard {
     let docs = &app.document_state;
-    docs.tabs[docs.active_tab]
-        .cached_document
-        .as_ref()
-        .and_then(TabDocument::as_pcb)
+    docs.tab_board_engine(docs.active_tab)
+        .map(|engine| engine.board())
         .expect("a board is open")
         .clone()
 }

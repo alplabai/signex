@@ -10,7 +10,7 @@ use iced::{Event, Point as ScreenPoint, Rectangle, mouse, window};
 use pcb_geom::ItemRef;
 use signex_app::app::{
     Board3dGesture, Board3dMsg, CommandPaletteMsg, ContextMenuMsg, FileMsg, Message, PcbMsg,
-    RenameDialogState, RenameMsg, Signex, TabContextAction, TabDocument,
+    RenameDialogState, RenameMsg, Signex, TabContextAction,
 };
 use signex_app::board_3d_shader::{Board3dPointer, Board3dProgram};
 use signex_app::canvas::CanvasEvent;
@@ -229,20 +229,15 @@ impl Fixture {
 
     pub(crate) fn live(&self) -> PcbBoard {
         let docs = &self.app.document_state;
-        docs.tabs[docs.active_tab]
-            .cached_document
-            .as_ref()
-            .and_then(TabDocument::as_pcb)
+        docs.tab_board_engine(docs.active_tab)
+            .map(|engine| engine.board())
             .expect("a board is open")
             .clone()
     }
 
     pub(crate) fn can_undo(&self) -> bool {
         let docs = &self.app.document_state;
-        docs.tabs[docs.active_tab]
-            .cached_document
-            .as_ref()
-            .and_then(TabDocument::as_pcb_engine)
+        docs.tab_board_engine(docs.active_tab)
             .expect("a board engine")
             .can_undo()
     }
