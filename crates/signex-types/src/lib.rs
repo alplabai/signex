@@ -56,4 +56,5 @@ pub mod zone_cutout;
 pub mod zone_holes;
 pub mod zone_keepout;
 pub mod zone_pour;
+pub mod zone_pour_shape;
 pub mod zone_teardrop;

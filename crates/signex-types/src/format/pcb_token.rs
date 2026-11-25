@@ -65,9 +65,17 @@ pub const SNXPCB_FORMAT_V1_10: &str = "snxpcb/1.10";
 /// none keeps its token, byte for byte.
 pub const SNXPCB_FORMAT_V1_11: &str = "snxpcb/1.11";
 
+/// Written when a pour has corners other than Sharp (#2578) or a hatched
+/// fill (#2579) (`Zone::has_pour_shape`): a build that knows only 1.11
+/// keeps the keys but would fill the pour solid with sharp corners and
+/// export copper the author did not ask for, so it opens 1.12 read-only. A
+/// board with neither keeps its token, byte for byte.
+pub const SNXPCB_FORMAT_V1_12: &str = "snxpcb/1.12";
+
 /// The token a save of `board` writes, from its content, highest need
-/// first: a pour cutout, a dimension look, drawn copper or an unfilled pour
-/// need [`SNXPCB_FORMAT_V1_11`],
+/// first: a shaped pour (corners or hatch) needs [`SNXPCB_FORMAT_V1_12`], a
+/// pour cutout, a dimension look, drawn copper or an unfilled pour
+/// [`SNXPCB_FORMAT_V1_11`],
 /// stack materials [`SNXPCB_FORMAT_V1_10`], a shelved pour
 /// [`SNXPCB_FORMAT_V1_9`], a stackup name, a
 /// patterned baked target or a numbering sweep [`SNXPCB_FORMAT_V1_8`], the
@@ -86,7 +94,9 @@ pub fn snxpcb_token(board: &PcbBoard) -> &'static str {
     let cutout = board.zones.iter().any(|zone| zone.is_pour_cutout());
     let unfilled = board.zones.iter().any(|zone| zone.is_unfilled_pour());
     let look = super::board_uses_dimension_style(board);
-    if cutout || look || unfilled || super::board_has_drawn_copper(board) {
+    if board.zones.iter().any(|zone| zone.has_pour_shape()) {
+        SNXPCB_FORMAT_V1_12
+    } else if cutout || look || unfilled || super::board_has_drawn_copper(board) {
         SNXPCB_FORMAT_V1_11
     } else if materials {
         SNXPCB_FORMAT_V1_10
@@ -108,7 +118,7 @@ pub fn snxpcb_token(board: &PcbBoard) -> &'static str {
 /// `.snxpcb` version policy: a newer minor opens read-only. A save writes
 /// the lowest token its content needs ([`snxpcb_token`]).
 pub const SNXPCB_VERSION: FormatVersion = FormatVersion {
-    current: SNXPCB_FORMAT_V1_11,
+    current: SNXPCB_FORMAT_V1_12,
     readable: &[
         "snxpcb/1",
         "snxpcb/1.1",
@@ -122,6 +132,7 @@ pub const SNXPCB_VERSION: FormatVersion = FormatVersion {
         SNXPCB_FORMAT_V1_9,
         SNXPCB_FORMAT_V1_10,
         SNXPCB_FORMAT_V1_11,
+        SNXPCB_FORMAT_V1_12,
     ],
     newer_minor: NewerMinor::ReadOnly,
     missing: MissingToken::Refused,

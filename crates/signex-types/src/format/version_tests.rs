@@ -60,23 +60,35 @@ fn snxpcb_1_10_is_readable_and_opens_for_editing() {
     assert!(SNXPCB_VERSION.readable.contains(&SNXPCB_FORMAT_V1_9));
     let file = SnxPcb::parse(&format!("format = \"{SNXPCB_FORMAT_V1_10}\"\n{PCB_ID}")).unwrap();
     assert!(!file.is_from_newer_minor());
-    assert!(snxpcb_opens_read_only("snxpcb/1.12"));
+    assert!(snxpcb_opens_read_only("snxpcb/1.13"));
     assert!(!snxpcb_opens_read_only(SNXPCB_FORMAT_V1_9));
 }
 
 /// #2871 / #2868 (DECISIONS 2026-11-24): `snxpcb/1.11` (pour cutouts, a
-/// dimension look) is this build's own token: it opens for editing, and it
-/// ranks above 1.10.
+/// dimension look) is one of this build's own tokens: it opens for editing,
+/// and it ranks above 1.10.
 #[test]
-fn snxpcb_1_11_is_current_and_opens_for_editing() {
-    assert_eq!(SNXPCB_VERSION.current, SNXPCB_FORMAT_V1_11);
+fn snxpcb_1_11_is_readable_and_opens_for_editing() {
     assert!(SNXPCB_VERSION.readable.contains(&SNXPCB_FORMAT_V1_11));
     let file = SnxPcb::parse(&format!("format = \"{SNXPCB_FORMAT_V1_11}\"\n{PCB_ID}")).unwrap();
     assert!(!file.is_from_newer_minor());
     assert!(file.write_string().is_ok(), "this build saves 1.11");
     assert!(!snxpcb_opens_read_only(SNXPCB_FORMAT_V1_11));
     assert!(!snxpcb_opens_read_only(SNXPCB_FORMAT_V1_10));
-    assert!(snxpcb_opens_read_only("snxpcb/1.12"));
+}
+
+/// #2578 / #2579: `snxpcb/1.12` (pour corners, hatched fill) is this
+/// build's own token: it opens for editing, and it ranks above 1.11.
+#[test]
+fn snxpcb_1_12_is_current_and_opens_for_editing() {
+    assert_eq!(SNXPCB_VERSION.current, SNXPCB_FORMAT_V1_12);
+    assert!(SNXPCB_VERSION.readable.contains(&SNXPCB_FORMAT_V1_12));
+    let file = SnxPcb::parse(&format!("format = \"{SNXPCB_FORMAT_V1_12}\"\n{PCB_ID}")).unwrap();
+    assert!(!file.is_from_newer_minor());
+    assert!(file.write_string().is_ok(), "this build saves 1.12");
+    assert!(!snxpcb_opens_read_only(SNXPCB_FORMAT_V1_12));
+    assert!(!snxpcb_opens_read_only(SNXPCB_FORMAT_V1_11));
+    assert!(snxpcb_opens_read_only("snxpcb/1.13"));
 }
 
 fn pad(uuid: &str, number: &str) -> Pad {

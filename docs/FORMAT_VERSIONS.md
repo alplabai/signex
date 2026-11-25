@@ -28,7 +28,9 @@ format declares only its own table row below.
   (mockup rows 176 and 177) and `snxpcb/1.11` when it has a pour cutout
   (#2871), a dimension with a non-default look (#2868) or of a kind other
   than aligned (#2507), a drawing or
-  string on a copper layer (#2883) or an unfilled pour (#2506). A project stays `snxprj/1`, byte for
+  string on a copper layer (#2883) or an unfilled pour (#2506), and
+  `snxpcb/1.12` when a pour has corners other than Sharp (#2578) or a
+  hatched fill (#2579). A project stays `snxprj/1`, byte for
   byte, and writes `snxprj/1.1` when it has variant settings. A build that
   reads only the lower token opens such a sheet or board read-only. A project
   is different: a released build refuses a `snxprj/1.1` project on load; see
@@ -72,6 +74,7 @@ format declares only its own table row below.
 | `.snxpcb`, pour cutouts, dimension look | `snxpcb/1.11` while the board has a pour cutout (`[[pour_cutouts]]`, #2871) or a `[[free.dimensions]]` row writes a look key or a `kind` key (`format::board_uses_dimension_style`, #2868, #2507; DECISIONS 2026-11-24), whatever else the board holds; else the tokens above, byte for byte. A 1.10 build would drop the look and kind keys on save | adds `snxpcb/1.11` | opens read-only | refused |
 | `.snxpcb`, drawn copper | `snxpcb/1.11` while a board drawing (`graphics`) or board string (`texts`) sits on a copper layer (`format::board_has_drawn_copper`, #2883; DECISIONS 2026-11-25), whatever else the board holds; else the tokens above, byte for byte. A 1.10 build would not count it as copper | `snxpcb/1.11`, as above | opens read-only | refused |
 | `.snxpcb`, unfilled pour | `snxpcb/1.11` while a pour that is not shelved carries `unfilled = true` (`Zone::is_unfilled_pour`, #2506; DECISIONS 2026-11-25), whatever else the board holds; else the tokens above, byte for byte, and the key is written only when on. A 1.10 build would flood the pour and export copper the author cleared | `snxpcb/1.11`, as above | opens read-only | refused |
+| `.snxpcb`, pour corners, hatched fill | `snxpcb/1.12` while a polygon pour carries `corners` other than `sharp` (#2578) or `fill_mode = "hatched"` (#2579) (`Zone::has_pour_shape`), whatever else the board holds; else the tokens above, byte for byte. `corner_size`, `hatch_width` and `hatch_gap` are written only when not 0 and raise nothing on their own. A 1.11 build keeps the keys but would fill the pour solid with sharp corners and export copper the author did not ask for. An unknown corner or fill token is a load error | adds `snxpcb/1.12` | opens read-only | refused |
 | `.snxmat`, user material library | `snxmat/1` (`materials.snxmat` in the config folder: the person's own cores, prepregs, copper foils and masks, mockup row 177) | `snxmat/1` | refused | refused |
 | `.snxprj` | `snxprj/1` | `snxprj/1` | opens read-only | read as `snxprj/1` |
 | `.snxprj`, variant settings | `snxprj/1.1` while `variant_settings` is not empty (a default variant or a part entry, `project::snxprj_token`; DECISIONS 2026-11-25); else `snxprj/1`, byte for byte. A `snxprj/1` build would keep the section but not follow a variant rename or removal. Builds released before this policy (v26.11.0 and earlier) refuse any newer minor on load, so they refuse a 1.1 project rather than open it read-only | adds `snxprj/1.1` | opens read-only | read as `snxprj/1` |
