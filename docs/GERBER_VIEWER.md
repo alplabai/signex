@@ -270,8 +270,10 @@ package and keeps the recent list.
   had (a permission, a lock, a folder entry the listing cannot give, a zip
   entry that does not decompress) or that is over 256 MiB (a zip entry is
   read at most one byte past that, whatever its header says) is a Not read
-  row with its problem, and the rest of the package opens. Only a path
-  given at the top that is not there, or a zip that is not one, fails the
+  row with its problem, and the rest of the package opens. The entries of
+  one zip may together decompress to at most 1 GiB, counted from the bytes
+  actually read rather than the headers. Only a path given at the top that
+  is not there, a zip that is not one, or a zip past that total, fails the
   read, as one Messages error. A read a later open superseded is dropped.
   Read problems go to Messages as above.
 - **Layer list.** One row per file in drawing order, the top of the list

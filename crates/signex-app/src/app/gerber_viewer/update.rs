@@ -8,7 +8,7 @@ use std::sync::Arc;
 use iced::Task;
 use signex_i18n::{I18n, ids, t};
 
-use super::read::{PackageRead, read_paths};
+use super::read::{PackageRead, ReadFailure, read_paths};
 use super::recent::package_exists;
 use super::state::OpenPackage;
 use super::{GerberViewerMsg, OpenKind};
@@ -78,7 +78,10 @@ impl Signex {
             move |result| {
                 Message::from(GerberViewerMsg::PackageRead {
                     job,
-                    result: result.and_then(|read| read).map(Arc::new),
+                    result: result
+                        .map_err(ReadFailure::from)
+                        .and_then(|read| read)
+                        .map(Arc::new),
                 })
             },
         );
@@ -126,7 +129,7 @@ impl Signex {
     fn gerber_package_read(
         &mut self,
         job: u64,
-        result: Result<Arc<PackageRead>, String>,
+        result: Result<Arc<PackageRead>, ReadFailure>,
     ) -> Task<Message> {
         let viewer = &mut self.document_state.gerber_viewer;
         if viewer.reading != Some(job) {
@@ -250,7 +253,17 @@ impl PickedPaths {
 }
 
 /// One Messages row for a package that could not be read at all.
-fn log_read_failure(i18n: &I18n, why: &str) {
-    let text = t!(i18n, ids::GERBER_VIEWER_READ_FAILED, "why" => why);
+fn log_read_failure(i18n: &I18n, failure: &ReadFailure) {
+    let text = match failure {
+        ReadFailure::Unreadable(why) => {
+            t!(i18n, ids::GERBER_VIEWER_READ_FAILED, "why" => why.as_str())
+        }
+        ReadFailure::ZipTooLarge { file, limit_mib } => t!(
+            i18n,
+            ids::GERBER_VIEWER_READ_ZIP_TOO_LARGE,
+            "file" => file.as_str(),
+            "limit" => *limit_mib
+        ),
+    };
     log::error!(target: crate::app::gerber_read::TARGET, "{}", text.into_string());
 }

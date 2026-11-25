@@ -59,6 +59,7 @@ gerber-viewer-drop-files = { $count ->
 }
 gerber-viewer-reading = Reading…
 gerber-viewer-read-failed = Gerber Viewer: the package could not be read ({ $why }).
+gerber-viewer-read-zip-too-large = Gerber Viewer: { $file }: the files in the zip come to more than { $limit } MiB together; the package is not opened.
 gerber-viewer-open = Open
 gerber-viewer-open-tip = Open a folder, a zip package or files ({ $key })
 gerber-viewer-flip = Flip
