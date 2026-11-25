@@ -5,7 +5,6 @@
 use iced::widget::{Space, column, container, row};
 use iced::{Border, Element, Length, Widget};
 use signex_i18n::{I18n, MessageId, UserText, ids, t};
-use signex_sketch::solver::dof::DofColor;
 use signex_types::sketch::SketchHost;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
@@ -21,14 +20,14 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 /// The last solve's DOF state, which the chip, the Sketch DOF section and
 /// its card all read (mockup row 179): its conflicts, a rejected edit, then
-/// the free motions' count. `None` with no sketch or no solve yet.
+/// the free motions' count. These are the row-reduction reading of the
+/// solve; the QR entity colours stay with the canvas (#2855). `None` with
+/// no sketch or no solve yet.
 pub(crate) fn sketch_dof(editor: &FootprintDocument) -> Option<SketchDof> {
     editor.primitive().sketch.as_ref()?;
     let solve = editor.state.last_solve.as_ref()?;
-    let over_colour = solve.colours.values().any(|c| *c == DofColor::Over);
-    let over = solve.over_constraints.len().max(usize::from(over_colour));
     Some(SketchDof::of(
-        over,
+        solve.over_constraints.len(),
         !editor.state.conflict.is_empty(),
         solve.free_motions.dof,
     ))
