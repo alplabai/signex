@@ -614,6 +614,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "save_project_as" => Needs::OpenProject,
         // #2457: the dialog reads the sheets of the board's project.
         "create_rooms_from_sheets" => Needs::PcbInProject,
+        // #2457, #2941: they move parts of the board in view.
+        "arrange_in_room" | "auto_place" => Needs::EditablePcb,
         "annotate_schematic_quietly" | "force_annotate_all_schematics" => Needs::ActiveSheet,
         // Home View acts on the main window's sheet or board (mockup row 194).
         "zoom_in_at_cursor" | "zoom_out_at_cursor" | "home_view" => Needs::Canvas,

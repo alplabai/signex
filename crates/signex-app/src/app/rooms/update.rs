@@ -12,7 +12,6 @@ use signex_engine::pcb::rooms::{SheetMembers, pull_moves};
 use signex_i18n::{MessageId, ids, t};
 use signex_types::coord::Unit;
 use signex_types::measure::parse_length_field_mm;
-use signex_types::object_id::UuidV7Ids;
 use signex_types::pcb::room::{next_room_name, palette_colour};
 use signex_types::pcb::{PcbBoard, Point, Room, RoomOutline, RoomSource};
 use uuid::Uuid;
@@ -22,6 +21,7 @@ use signex_types::object_id::short_id;
 use signex_types::schematic::InstancePath;
 
 use super::{CreateRoomsDialog, CreateRoomsMsg, RoomField, RoomMsg};
+use crate::app::command::{CommandOutcome, OperandValue, translator};
 use crate::app::pcb_tools::BoardPlaceTool;
 use crate::app::project_sheets::{
     ProjectSheetPlan, plan_project_sheets_for, project_root_sheet_path,
@@ -48,24 +48,39 @@ impl Signex {
         commands: Vec<BoardCommand>,
         label: MessageId,
     ) -> bool {
-        let Some(engine) = self.document_state.board_engine(path) else {
+        if self.document_state.board_engine(path).is_none() {
             return false;
+        }
+        match self.run_room_step(path, commands, label) {
+            Ok(changed) => changed,
+            Err(why) => {
+                self.say_room_refused(why);
+                false
+            }
+        }
+    }
+
+    /// [`Self::run_room_commands`] for a caller that answers the refusal
+    /// itself: whether the board changed, or why it did not.
+    pub(crate) fn run_room_step(
+        &mut self,
+        path: &Path,
+        commands: Vec<BoardCommand>,
+        label: MessageId,
+    ) -> Result<bool, String> {
+        let Some(engine) = self.document_state.board_engine(path) else {
+            return Err("the board is not open".to_string());
         };
         let label = t!(self.ui_state.i18n, label).into_string();
         let step = CheckedStep {
             label: &label,
             expected_revision: engine.revision(),
         };
-        match self.execute_board_commands(path, commands, Some(step)) {
-            Ok(patches) => {
-                self.refresh_pcb_highlight();
-                !patches.is_empty()
-            }
-            Err(error) => {
-                self.say_room_refused(error.to_string());
-                false
-            }
-        }
+        let patches = self
+            .execute_board_commands(path, commands, Some(step))
+            .map_err(|error| error.to_string())?;
+        self.refresh_pcb_highlight();
+        Ok(!patches.is_empty())
     }
 
     fn say_room_refused(&self, why: String) {
@@ -198,27 +213,34 @@ impl Signex {
     }
 
     /// Place ▸ Room's second corner: the room from `a` to `b` as one step,
-    /// then selected so Properties shows it. Whether it was placed; two
-    /// corners on one line place nothing.
+    /// placed by the operand handler the CLI runs (`start`, `end`), then
+    /// selected so Properties shows it. Whether it was placed; two corners
+    /// on one line place nothing.
     pub(crate) fn place_drawn_room(&mut self, a: Point, b: Point) -> bool {
         let Some(path) = self.active_tab_path().filter(|_| self.has_active_pcb()) else {
             return false;
         };
-        let outline = RoomOutline::rect_between(a, b);
-        if !outline.has_area() {
+        if !RoomOutline::rect_between(a, b).has_area() {
             return false;
         }
-        let Some(board) = self.document_state.pcb_board(&path) else {
+        let corners = vec![
+            ("start", OperandValue::Point(a.x, a.y)),
+            ("end", OperandValue::Point(b.x, b.y)),
+        ];
+        let (outcome, _) = translator::run(self, "place_board_room", &path, corners);
+        let placed = match outcome {
+            CommandOutcome::Answered(answer) => answer["room"]["id"]
+                .as_str()
+                .and_then(|id| Uuid::parse_str(id).ok()),
+            CommandOutcome::Disabled { reason } => {
+                crate::diagnostics::log_warning(reason.render(&self.ui_state.i18n));
+                None
+            }
+            _ => None,
+        };
+        let Some(id) = placed else {
             return false;
         };
-        let room = self.new_drawn_room(board, Uuid::now_v7(), outline);
-        let id = room.uuid;
-        let add = BoardCommand::AddRoom {
-            room: Box::new(room),
-        };
-        if !self.run_room_commands(&path, vec![add], ids::ROOMS_UNDO_PLACE) {
-            return false;
-        }
         self.select_pcb_items(&[ItemRef::Room(id)]);
         true
     }
@@ -250,6 +272,15 @@ impl Signex {
         if let CreateRoomsMsg::SheetsRead { job, result } = msg {
             self.open_create_rooms(job, result);
             return Task::none();
+        }
+        if let CreateRoomsMsg::SheetsReadFor {
+            waiting,
+            board,
+            request,
+            result,
+        } = msg
+        {
+            return self.finish_rooms_from_sheets(waiting, board, request, result);
         }
         if matches!(msg, CreateRoomsMsg::Confirmed) {
             self.create_rooms();
@@ -284,6 +315,7 @@ impl Signex {
             CreateRoomsMsg::ReplaceToggled(on) => options.replace_same_name = on,
             CreateRoomsMsg::Requested
             | CreateRoomsMsg::SheetsRead { .. }
+            | CreateRoomsMsg::SheetsReadFor { .. }
             | CreateRoomsMsg::Cancelled
             | CreateRoomsMsg::Confirmed => {}
         }
@@ -296,23 +328,11 @@ impl Signex {
         let Some(path) = self.active_tab_path().filter(|_| self.has_active_pcb()) else {
             return Task::none();
         };
-        let docs = &self.document_state;
-        let project = docs
-            .board_project(&path, None)
-            .or_else(|| docs.document_project(&path));
-        let Some((project, root)) = project.and_then(|p| Some((p, project_root_sheet_path(p)?)))
-        else {
+        let Some((plan, project_dir, project_file)) = self.room_sheet_source(&path) else {
             let line = t!(self.ui_state.i18n, ids::ROOMS_NO_PROJECT);
             crate::diagnostics::log_warning(line.into_string());
             return Task::none();
         };
-        let project_dir = project.dir().to_path_buf();
-        let project_file = project
-            .path
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        let plan = plan_project_sheets_for(&self.document_state, &root);
         let rooms = &mut self.ui_state.rooms;
         rooms.reads += 1;
         rooms.pending = Some((path, project_file));
@@ -356,25 +376,55 @@ impl Signex {
     }
 
     /// Create: the ticked rooms and their part moves as one step on the
-    /// board the dialog was opened on. Rooms of a name already on the board
-    /// that are kept are said in Messages.
+    /// board the dialog was opened on, made by the operand handler the CLI
+    /// runs, on the sheets the dialog read. Rooms of a name already on the
+    /// board that are kept are said in Messages.
     fn create_rooms(&mut self) {
-        let Some(dialog) = self.ui_state.rooms.create.take() else {
+        let Some(dialog) = self.ui_state.rooms.create.as_deref() else {
             return;
         };
-        let Some(board) = self.document_state.pcb_board(&dialog.board) else {
-            return;
-        };
-        let plan = dialog.plan_with(board, &mut UuidV7Ids);
-        for name in &plan.kept {
-            let line = t!(self.ui_state.i18n, ids::ROOMS_KEPT, "room" => name.clone());
-            crate::diagnostics::log_info(line.into_string());
+        let path = dialog.board.clone();
+        let operands = self
+            .document_state
+            .pcb_board(&path)
+            .and_then(|board| dialog.operands(board));
+        let ran = operands
+            .map(|operands| translator::run(self, "create_rooms_from_sheets", &path, operands).0);
+        self.ui_state.rooms.create = None;
+        match ran {
+            Some(CommandOutcome::Answered(answer)) => {
+                let kept = answer["kept"].as_array().cloned().unwrap_or_default();
+                for name in kept.iter().filter_map(|n| n.as_str()) {
+                    let line = t!(self.ui_state.i18n, ids::ROOMS_KEPT, "room" => name.to_string());
+                    crate::diagnostics::log_info(line.into_string());
+                }
+            }
+            Some(CommandOutcome::Disabled { reason }) => {
+                crate::diagnostics::log_warning(reason.render(&self.ui_state.i18n));
+            }
+            _ => {}
         }
-        let commands = plan.commands();
-        if commands.is_empty() {
-            return;
-        }
-        self.run_room_commands(&dialog.board, commands, ids::ROOMS_UNDO_CREATE);
+    }
+
+    /// What reading the sheets of `board`'s project needs: the sheets to
+    /// read, the project folder and the project file's name. `None` for a
+    /// board in no open project with a root sheet.
+    pub(super) fn room_sheet_source(
+        &self,
+        board: &Path,
+    ) -> Option<(ProjectSheetPlan, PathBuf, String)> {
+        let docs = &self.document_state;
+        let project = docs
+            .board_project(board, None)
+            .or_else(|| docs.document_project(board))?;
+        let root = project_root_sheet_path(project)?;
+        let project_file = project
+            .path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let plan = plan_project_sheets_for(docs, &root);
+        Some((plan, project.dir().to_path_buf(), project_file))
     }
 }
 
@@ -470,7 +520,10 @@ fn sheet_choices(board: &PcbBoard, room: &Room, i18n: &signex_i18n::I18n) -> Vec
 /// The sheets placed directly under the project's root, each with every
 /// placement in design order; a sheet placed twice is one entry with two
 /// placements.
-fn sheet_members(plan: ProjectSheetPlan, project_dir: &Path) -> Result<Vec<SheetMembers>, String> {
+pub(super) fn sheet_members(
+    plan: ProjectSheetPlan,
+    project_dir: &Path,
+) -> Result<Vec<SheetMembers>, String> {
     let set = plan.assemble();
     let design = crate::app::design_read::DesignGraph::read(&set, project_dir)?;
     let mut sheets: Vec<SheetMembers> = Vec::new();
