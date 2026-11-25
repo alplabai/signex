@@ -20,8 +20,9 @@ pub mod cross_probe;
 
 mod directives;
 pub use directives::{
-    BlanketCatch, BlanketNet, NetParametersOn, blanket_nets, directive_net_classes,
-    fill_pattern_classes, net_parameters,
+    BlanketCatch, BlanketNet, ClassAssignment, NetClassConflict, NetParametersOn, blanket_nets,
+    class_assignments, directive_net_classes, fill_pattern_classes, net_class_conflicts,
+    net_parameters,
 };
 pub use directives::{DiffPair, blanket_net_classes, compile_masked, diff_pairs};
 mod diff_pair_classes;
