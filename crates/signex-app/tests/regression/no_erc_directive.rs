@@ -6,7 +6,7 @@ use signex_app::active_bar::{ActiveBarAction, ActiveBarMsg};
 use signex_app::app::{EditMsg, Message, Signex, TabInfo, TabKind, Tool};
 use signex_app::canvas::CanvasEvent;
 use signex_app::dock::DockMessage;
-use signex_app::panels::{NoErcRuleEdit, PanelMsg};
+use signex_app::panels::{NoErcRuleEdit, PanelMsg, SelectionFormMsg};
 use signex_types::schematic::{SchematicSheet, SelectedKind};
 use std::path::PathBuf;
 
@@ -134,4 +134,47 @@ fn properties_rule_checkboxes_edit_the_list_one_undo_step_each() {
     edit_rules(&mut app, id, NoErcRuleEdit::AllRules);
     assert!(doc(&app).no_erc_directives[0].rules.is_empty());
     assert!(doc(&app).no_erc_directives[0].suppresses("builtin::orphan_label"));
+}
+
+/// Mockup row 49: with All rules on every rule is silenced; unticking All
+/// opens the list without touching the document, and ticking one rule then
+/// narrows the directive to that rule alone.
+#[test]
+fn unticking_all_rules_then_ticking_one_silences_only_that_rule() {
+    let mut app = app_with_empty_sheet();
+    arm_no_erc(&mut app);
+    click(&mut app, 10.0, 20.0);
+    let id = doc(&app).no_erc_directives[0].uuid;
+    let builtin =
+        |kind: signex_erc::RuleKind| signex_erc::RuleId::builtin(kind).as_str().to_string();
+    for kind in signex_erc::RuleKind::ALL {
+        assert!(doc(&app).no_erc_directives[0].suppresses(&builtin(kind)));
+    }
+
+    let untick = PanelMsg::SelectionForm(SelectionFormMsg::AllRulesUnticked(id));
+    let _ = app.update(Message::Dock(DockMessage::Panel(untick)));
+    assert_eq!(
+        app.document_state.panel_ctx.selection_form.picking_rules_of,
+        Some(id)
+    );
+    assert!(doc(&app).no_erc_directives[0].rules.is_empty());
+
+    let picked = builtin(signex_erc::RuleKind::UnusedPin);
+    edit_rules(
+        &mut app,
+        id,
+        NoErcRuleEdit::Rule {
+            rule_id: picked.clone(),
+            silenced: true,
+        },
+    );
+    assert_eq!(doc(&app).no_erc_directives[0].rules, vec![picked.clone()]);
+    for kind in signex_erc::RuleKind::ALL {
+        let rule = builtin(kind);
+        assert_eq!(
+            doc(&app).no_erc_directives[0].suppresses(&rule),
+            rule == picked,
+            "{rule}"
+        );
+    }
 }

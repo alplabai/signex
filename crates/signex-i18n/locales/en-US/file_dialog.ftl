@@ -63,3 +63,8 @@ file-filter-json-ext = JSON (.json)
 file-filter-csv-ext = CSV (.csv)
 file-filter-step-ext = STEP (.step, .stp)
 file-filter-text-ext = Text (.txt)
+file-filter-xlsx-ext = Excel (.xlsx)
+# Signex's own plain-text netlist dump.
+file-filter-netlist-listing = { -brand-name } Netlist Listing
+# The `.NET` text netlist format (component blocks and net blocks).
+file-filter-netlist-net-text = Netlist (.NET)

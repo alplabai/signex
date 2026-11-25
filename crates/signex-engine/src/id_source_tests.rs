@@ -38,6 +38,7 @@ fn payload() -> PlacementPayload {
         uuid: source(3),
         start: Point::new(0.0, 30.0),
         end: Point::new(20.0, 30.0),
+        ..Default::default()
     });
     f.bus_entries.push(BusEntry {
         uuid: source(4),

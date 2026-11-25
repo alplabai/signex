@@ -70,7 +70,8 @@ fn all_on_inner(board: &PcbBoard, net: u32) -> bool {
 }
 
 const NEEDS_COPPER: &str = "make a copper layer active";
-const NEEDS_TEXT_LAYER: &str = "make a silkscreen, mechanical or documentation layer active";
+const NEEDS_TEXT_LAYER: &str =
+    "make a copper, silkscreen, mechanical or documentation layer active";
 const OTHER_NET: &str = "P5.1 is on net B, the route is on net A";
 const JOINED: &str = "P5.1 joined net A";
 const POUR_NO_NET: &str = "Polygon Pour has no net; set it in Properties";
@@ -171,15 +172,29 @@ fn a_polygon_pour_lands_on_the_active_inner_layer_closed_near_its_first_corner()
     assert_eq!(zones[0].layer, INNER);
 }
 
+/// Was `a_string_on_a_copper_layer_says_why_in_the_status_bar`. Since
+/// Caner's 2026-11-24 decision (#2883) a string on copper is copper text of
+/// no net: the click places it on the inner layer, one undo step. A layer
+/// that takes no text (a solder mask) still says why in the status bar.
 #[test]
-fn a_string_on_a_copper_layer_says_why_in_the_status_bar() {
+fn a_string_lands_on_copper_and_a_solder_mask_says_why_in_the_status_bar() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_with(dir.path(), Vec::new());
     let before = live(&app, &path);
     make_active(&mut app, inner());
     run(&mut app, "place_board_string");
     click(&mut app, 4.0, 4.0);
-    assert_eq!(live(&app, &path), before);
+    let texts = &board_of(&app, &path).texts;
+    assert_eq!(texts.len(), 1, "one string");
+    assert_eq!(texts[0].layer, INNER);
+    assert!(!status(&app).contains(NEEDS_TEXT_LAYER), "no refusal");
+    undo(&mut app);
+    assert_eq!(live(&app, &path), before, "one undo step");
+
+    let mask = PcbLayer::Technical(signex_types::pcb_layer::TechnicalLayer::SolderMaskTop);
+    make_active(&mut app, mask);
+    click(&mut app, 4.0, 4.0);
+    assert_eq!(live(&app, &path), before, "nothing on a solder mask");
     let why = status(&app);
     assert!(why.contains(NEEDS_TEXT_LAYER), "{why}");
 }
@@ -338,6 +353,47 @@ fn a_track_run_on_an_inner_layer_ends_on_a_top_pad_with_a_via() {
     let board = board_of(&app, &path);
     assert_eq!(board.vias.len(), 2, "one at each pad");
     assert!(all_on_inner(board, 1), "{:?}", board.segments);
+}
+
+/// A click on a pad of another net off the run's layer adds no via that
+/// would short to it, and says why.
+#[test]
+fn a_track_run_is_refused_on_a_pad_of_another_net_off_its_layer() {
+    let dir = tempfile::tempdir().unwrap();
+    let pads = vec![
+        pad(1, 0.0, 0.0, Some((1, "A"))),
+        pad(5, 10.0, 0.0, Some((2, "B"))),
+    ];
+    let (mut app, path) = app_with(dir.path(), pads);
+    let before = live(&app, &path);
+    make_active(&mut app, inner());
+    run(&mut app, "place_board_track");
+    click(&mut app, 0.0, 0.0);
+    click(&mut app, 10.0, 0.0);
+    assert_eq!(live(&app, &path), before, "nothing lands");
+    let why = status(&app);
+    assert!(why.contains(OTHER_NET), "{why}");
+    assert!(why.starts_with("Track:"), "{why}");
+}
+
+/// Mid-run, a layer change at an anchor over another net's Bottom pad would
+/// put a through via on it: the leg is refused.
+#[test]
+fn a_mid_run_layer_change_via_is_refused_on_a_pad_of_another_net() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut foreign = pad(5, 0.0, 0.0, Some((2, "B")));
+    foreign["layer"] = json!("BottomCopper");
+    foreign["pads"][0]["layers"] = json!(["BottomCopper"]);
+    let pads = vec![pad(1, 0.0, 0.0, Some((1, "A"))), foreign];
+    let (mut app, path) = app_with(dir.path(), pads);
+    let before = live(&app, &path);
+    run(&mut app, "place_board_track");
+    click(&mut app, 0.0, 0.0);
+    make_active(&mut app, inner());
+    click(&mut app, 5.0, 3.0);
+    assert_eq!(live(&app, &path), before, "no via, no track");
+    let why = status(&app);
+    assert!(why.contains(OTHER_NET), "{why}");
 }
 
 /// Arming a board tool brings Properties to the front on what the next

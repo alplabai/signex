@@ -30,6 +30,8 @@ pub enum BoardPlaceTool {
     TextString,
     Dimension,
     Keepout,
+    /// A room by two corners (#2457).
+    Room,
     /// A line on a non-copper layer (#2424).
     Line,
     /// An arc on a non-copper layer by its centre, start and end; `Arc` is
@@ -52,7 +54,7 @@ pub(crate) enum ToolState {
 
 impl BoardPlaceTool {
     /// Place on a board, top to bottom.
-    pub(crate) const PLACE_MENU: [Self; 17] = [
+    pub(crate) const PLACE_MENU: [Self; 18] = [
         Self::Component,
         Self::Pad,
         Self::Via,
@@ -70,6 +72,7 @@ impl BoardPlaceTool {
         Self::TextString,
         Self::Dimension,
         Self::Keepout,
+        Self::Room,
     ];
 
     /// Place ▸ Graphics on a board, top to bottom (#2424).
@@ -96,6 +99,7 @@ impl BoardPlaceTool {
             Self::PourCutout => Live("place_board_pour_cutout"),
             Self::SlicePour => Live("place_board_slice_pour"),
             Self::Keepout => Live("place_board_keepout"),
+            Self::Room => Live("place_board_room"),
             Self::Pad => Live("place_board_pad"),
             Self::Arc => Live("place_board_arc"),
             Self::TextString => Live("place_board_string"),
@@ -138,6 +142,7 @@ impl BoardPlaceTool {
             Self::TextString => ids::PCB_TOOL_STRING,
             Self::Dimension => ids::PCB_TOOL_DIMENSION,
             Self::Keepout => ids::PCB_TOOL_KEEPOUT,
+            Self::Room => ids::ROOMS_TOOL,
             Self::Line => ids::PCB_TOOL_LINE,
             Self::GraphicArc => ids::PCB_TOOL_GRAPHIC_ARC,
             Self::FullCircle => ids::PCB_TOOL_FULL_CIRCLE,
@@ -174,6 +179,7 @@ impl BoardPlaceTool {
                 ids::PCB_TOOL_HINT_SLICE_POUR,
             ),
             Self::Keepout => (ids::PCB_BAR_KEEPOUT_TOOLTIP, ids::PCB_TOOL_HINT_KEEPOUT),
+            Self::Room => (ids::ROOMS_BAR_TOOLTIP, ids::ROOMS_TOOL_HINT),
             Self::Pad => (ids::PCB_BAR_PAD_TOOLTIP, ids::PCB_TOOL_HINT_PAD),
             // The Arc hint names the mode: `Signex::board_tool_hint`.
             Self::Arc => (ids::PCB_BAR_ARC_TOOLTIP, ids::PCB_TOOL_HINT_ARC),

@@ -29,6 +29,7 @@ fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
@@ -77,6 +78,13 @@ fn a_drc_waiver_keeps_its_reason_and_author_through_save_and_reload() {
         .map(|row| row.key.clone())
         .expect("the close pair is a finding");
 
+    // The author is the git identity (mockup row 88), known here.
+    send(
+        &mut app,
+        Message::Dock(DockMessage::Panel(PanelMsg::WaiverIdentityResolved(Some(
+            "A. Designer".into(),
+        )))),
+    );
     panel(&mut app, DrcPanelMsg::WaiveStarted(key.clone()));
     panel(
         &mut app,
@@ -84,7 +92,6 @@ fn a_drc_waiver_keeps_its_reason_and_author_through_save_and_reload() {
             iced::widget::text_editor::Edit::Paste(std::sync::Arc::new(REASON.to_string())),
         )),
     );
-    panel(&mut app, DrcPanelMsg::AuthorEdited("A. Designer".into()));
     panel(&mut app, DrcPanelMsg::WaiveConfirmed);
     send(&mut app, Message::File(FileMsg::Save));
 

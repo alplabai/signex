@@ -3,6 +3,8 @@
 
 use std::path::Path;
 
+use signex_i18n::RenderTranslatable;
+
 use signex_types::format::SnxSchematic;
 use signex_types::schematic::{
     ChildSheet, FillType, Label, LabelType, Point, SchematicSheet, SheetPin, Symbol, Wire,
@@ -108,7 +110,7 @@ fn run(app: &mut Signex, id: &str, operands: &[&str]) -> CommandOutcome {
 
 fn refusal(outcome: CommandOutcome) -> String {
     match outcome {
-        CommandOutcome::Disabled { reason } => reason,
+        CommandOutcome::Disabled { reason } => reason.render_en_us(),
         other => panic!("not refused: {other:?}"),
     }
 }
@@ -730,6 +732,7 @@ fn bus(a: (f64, f64), b: (f64, f64)) -> signex_types::schematic::Bus {
         uuid: Uuid::now_v7(),
         start: Point::new(a.0, a.1),
         end: Point::new(b.0, b.1),
+        ..Default::default()
     }
 }
 

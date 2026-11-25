@@ -116,6 +116,7 @@ pub(crate) fn rig() -> Rig {
             .collect(),
         variant_definitions: Vec::new(),
         active_variant: None,
+        variant_settings: Default::default(),
         libraries: Vec::new(),
         enable_git: false,
         rules: Default::default(),
@@ -125,7 +126,9 @@ pub(crate) fn rig() -> Rig {
         project_defaults: Default::default(),
         parameters: Default::default(),
         agent_journal: Default::default(),
+        schematic_design: Default::default(),
         fab_outputs: None,
+        router_tool_diameter: None,
         requirements: Default::default(),
         unknown: Default::default(),
     };
@@ -264,6 +267,48 @@ fn the_menu_row_sets_ticked_parts_on_two_sheets_as_one_undo_step_in_memory() {
         rig.alt.1,
         "one redo brings both back"
     );
+}
+
+/// What the tile pane on `path` draws as the first part's footprint.
+fn drawn_footprint(app: &Signex, path: &Path) -> String {
+    let slot = &app.interaction_state.tile_panes.schematic[path];
+    slot.active_snapshot().expect("a render cache").symbols[0]
+        .footprint
+        .clone()
+}
+
+/// Epic #2326 M3: a tile pane on `b`, open but not active, draws the
+/// assigned footprint after Apply and the old one after the grouped undo.
+#[test]
+fn apply_and_its_undo_repaint_a_tile_pane_on_another_open_sheet() {
+    let mut rig = rig();
+    let before = footprint_on(&rig.app, &rig.b);
+    let engine = &rig.app.document_state.engines[&rig.b];
+    let mut pane = signex_app::canvas::CanvasSlot::default();
+    pane.set_render_cache(Some(
+        signex_app::schematic_runtime::SchematicRenderCache::from_sheet_at(
+            engine.document(),
+            engine.revision(),
+        ),
+    ));
+    rig.app
+        .interaction_state
+        .tile_panes
+        .schematic
+        .insert(rig.b.clone(), pane);
+    settle(&mut rig.app, crate::menu_support::menu_row(COMMAND));
+    send(&mut rig.app, AssignFootprintsMsg::AllToggled(true));
+    send(
+        &mut rig.app,
+        AssignFootprintsMsg::TickedPicked(binding_key(&rig.alt.0)),
+    );
+    send(&mut rig.app, AssignFootprintsMsg::ApplyRequested);
+    assert_eq!(footprint_on(&rig.app, &rig.b), rig.alt.1);
+    assert_eq!(drawn_footprint(&rig.app, &rig.b), rig.alt.1, "after Apply");
+
+    let _ = rig.app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(footprint_on(&rig.app, &rig.b), before);
+    assert_eq!(drawn_footprint(&rig.app, &rig.b), before, "after the undo");
 }
 
 #[test]

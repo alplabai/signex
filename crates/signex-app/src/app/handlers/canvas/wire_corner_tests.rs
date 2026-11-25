@@ -189,7 +189,11 @@ fn committed_wires_follow_the_chosen_corner_and_the_flip_persists() {
         wire_ends(&app)
     );
 
-    // The next segment keeps the flip.
+    // The second click ended that wire (docs/DECISIONS.md, 2026-11-24, Caner:
+    // the wire tool no longer continues a wire), so the next wire starts with
+    // its own first click and keeps the flip.
+    assert!(!app.interaction_state.wire_drawing);
+    click(&mut app, at(grid(10.0, 6.0)));
     click(&mut app, at(grid(14.0, 10.0)));
     assert!(
         has_wire(&app, grid(10.0, 6.0), grid(10.0, 10.0))
@@ -297,4 +301,40 @@ fn a_45_degree_commit_matches_its_preview() {
     assert_eq!(buses.len(), 2, "{buses:?}");
     assert!(near(buses[0].0, grid(0.0, 0.0)) && near(buses[0].1, corner));
     assert!(near(buses[1].0, corner) && near(buses[1].1, grid(10.0, 4.0)));
+}
+
+/// The routing preview of a bus and of a wire strokes each leg as a placed
+/// segment does: round ends, so the bend closes, at the placed width.
+#[test]
+fn the_routing_preview_joins_its_corners_like_a_placed_segment() {
+    for tool in [Tool::Bus, Tool::Wire] {
+        let mut app = app_with_tool(tool);
+        click(&mut app, at(grid(0.0, 0.0)));
+        let window = iced::window::Id::unique();
+        let canvas = crate::canvas::SchematicCanvas::new(
+            app.interaction_state.active_canvas(),
+            app.canvas_view_prefs(window),
+        );
+        let bounds = Rectangle::new(P::ORIGIN, Size::new(2000.0, 2000.0));
+        let colour = iced::Color::BLACK;
+        let preview = canvas
+            .wire_preview_strokes(bounds, P::ORIGIN, Some(grid(10.0, 6.0)))
+            .expect("a route is in progress");
+        let widths: Vec<f32> = preview.rubber.iter().map(|l| l.2).collect();
+        let strokes = preview.styled(colour);
+        assert_eq!(strokes.len(), 2, "{tool:?}: one leg each side of the bend");
+        for ((_, _, stroke), width) in strokes.iter().zip(widths) {
+            let placed = crate::renderer_scene_canvas::solid_line_stroke(width, colour);
+            assert_eq!(stroke.width, placed.width, "{tool:?}");
+            assert_eq!(
+                format!("{:?} {:?}", stroke.line_cap, stroke.line_join),
+                format!("{:?} {:?}", placed.line_cap, placed.line_join),
+                "{tool:?}"
+            );
+            assert!(matches!(
+                stroke.line_cap,
+                iced::widget::canvas::LineCap::Round
+            ));
+        }
+    }
 }

@@ -94,19 +94,30 @@ impl SymbolCanvas<'_> {
                 state.pin_cursor = Some((wx, wy));
                 Some(canvas::Action::capture())
             }
-            SymbolTool::PlaceRectangle => {
+            SymbolTool::PlaceEllipticalArc => Some(match state.ellipse.click(wx, wy) {
+                Some(action) => canvas::Action::publish(action).and_capture(),
+                None => canvas::Action::capture(),
+            }),
+            SymbolTool::PlaceRectangle | SymbolTool::PlaceRoundRectangle => {
                 if let Some((from_x, from_y)) = state.rect_from.take() {
                     // Second click — commit the rectangle.
                     state.rect_cursor = None;
-                    Some(
-                        canvas::Action::publish(CanvasAction::AddRectangle {
+                    let placed = if self.tool == SymbolTool::PlaceRoundRectangle {
+                        CanvasAction::AddRoundRectangle {
                             from_x,
                             from_y,
                             to_x: wx,
                             to_y: wy,
-                        })
-                        .and_capture(),
-                    )
+                        }
+                    } else {
+                        CanvasAction::AddRectangle {
+                            from_x,
+                            from_y,
+                            to_x: wx,
+                            to_y: wy,
+                        }
+                    };
+                    Some(canvas::Action::publish(placed).and_capture())
                 } else {
                     // First click — set the first corner and wait.
                     state.rect_from = Some((wx, wy));
@@ -156,7 +167,7 @@ impl SymbolCanvas<'_> {
                     Some(canvas::Action::capture())
                 }
             }
-            SymbolTool::PlaceArc => {
+            SymbolTool::PlaceArc | SymbolTool::PlacePie => {
                 if let Some((radius, start_deg)) = state.arc_radius_start {
                     // Third click — peek (don't take yet) so a
                     // rejected commit (see below) leaves the gesture
@@ -188,16 +199,24 @@ impl SymbolCanvas<'_> {
                     state.arc_center = None;
                     state.arc_cursor = None;
                     state.arc_end_deg_unwrapped = None;
-                    Some(
-                        canvas::Action::publish(CanvasAction::AddArc {
+                    let placed = if self.tool == SymbolTool::PlacePie {
+                        CanvasAction::AddPie {
                             cx,
                             cy,
                             radius,
                             start_deg,
                             end_deg,
-                        })
-                        .and_capture(),
-                    )
+                        }
+                    } else {
+                        CanvasAction::AddArc {
+                            cx,
+                            cy,
+                            radius,
+                            start_deg,
+                            end_deg,
+                        }
+                    };
+                    Some(canvas::Action::publish(placed).and_capture())
                 } else if let Some((cx, cy)) = state.arc_center {
                     // Second click — define radius + start angle.
                     let dx = wx - cx;
@@ -220,6 +239,14 @@ impl SymbolCanvas<'_> {
                 Some(canvas::Action::publish(CanvasAction::AddText { x: wx, y: wy }).and_capture())
             }
             SymbolTool::PlacePolygon => self.on_polygon_click(state, wx, wy, ux, uy),
+            SymbolTool::PlaceBezier => {
+                // The fourth click places the curve and empties the stash.
+                state.polygon_cursor = (self.polygon_vertices.len() < 3).then_some((wx, wy));
+                Some(
+                    canvas::Action::publish(CanvasAction::BezierClick { x: wx, y: wy })
+                        .and_capture(),
+                )
+            }
         }
     }
 
@@ -317,7 +344,7 @@ impl SymbolCanvas<'_> {
 /// normalization — a zero-sweep point-arc that's invisible,
 /// unselectable, and un-deletable via the canvas, yet still saves to
 /// disk and still occupies its bounding box.
-fn arc_sweep_exceeds_full_turn(start_deg: f64, end_deg: f64) -> bool {
+pub(super) fn arc_sweep_exceeds_full_turn(start_deg: f64, end_deg: f64) -> bool {
     (end_deg - start_deg).abs() >= 360.0
 }
 

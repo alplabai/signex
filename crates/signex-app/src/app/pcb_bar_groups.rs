@@ -22,16 +22,16 @@ pub enum PcbBarGroup {
     ViaPad,
     /// Copper areas: polygon pour and its cutout, slice and repour (#2216),
     /// solid region, fill, and the keepouts
-    /// that hold copper out of an area.
+    /// that hold copper out of an area; then rooms, the areas a sheet's
+    /// parts are placed in (#2457).
     CopperAreas,
-    /// Track and arc drawn on copper.
-    CopperDrawing,
     /// Dimensions on the board.
     Dimensions,
     /// Board text.
     Text,
-    /// Lines, arcs, circles, rectangles and text frames on non-copper
-    /// layers (#2424).
+    /// Lines, arcs, circles, rectangles and text frames (#2424); a line or
+    /// arc on copper is a track (#2869), so the bar has no copper drawing
+    /// group: Track and the copper Arc stay in Place.
     Graphics,
 }
 
@@ -56,13 +56,12 @@ impl PcbBarRow {
 
 impl PcbBarGroup {
     /// The groups in the bar's order.
-    pub(crate) const ALL: [Self; 9] = [
+    pub(crate) const ALL: [Self; 8] = [
         Self::Components,
         Self::Route,
         Self::Tune,
         Self::ViaPad,
         Self::CopperAreas,
-        Self::CopperDrawing,
         Self::Dimensions,
         Self::Text,
         Self::Graphics,
@@ -90,10 +89,10 @@ impl PcbBarGroup {
                 Tool(T::SolidRegion),
                 Tool(T::Fill),
                 Tool(T::Keepout),
+                Tool(T::Room),
                 Command("repour_selected"),
                 Command("repour_all"),
             ],
-            Self::CopperDrawing => &[Tool(T::Track), Tool(T::Arc)],
             Self::Dimensions => &[Tool(T::Dimension)],
             Self::Text => &[Tool(T::TextString)],
             Self::Graphics => &[
@@ -114,7 +113,6 @@ impl PcbBarGroup {
             Self::Tune => "tune",
             Self::ViaPad => "via_pad",
             Self::CopperAreas => "copper_areas",
-            Self::CopperDrawing => "copper_drawing",
             Self::Dimensions => "dimensions",
             Self::Text => "text",
             Self::Graphics => "graphics",
@@ -204,7 +202,8 @@ mod tests {
     use crate::app::pcb_tools::ToolState;
 
     /// Every board placement tool is a row of exactly one group, so the bar
-    /// offers each Place row once.
+    /// offers each Place row once; Track and the copper Arc are in Place
+    /// only, as the Graphics Line and Arc draw them on copper (#2869).
     #[test]
     fn every_place_tool_is_in_one_group() {
         let tools = BoardPlaceTool::PLACE_MENU
@@ -215,8 +214,14 @@ mod tests {
                 .into_iter()
                 .filter(|group| group.rows().contains(&PcbBarRow::Tool(tool)))
                 .count();
-            assert_eq!(groups, 1, "{tool:?}");
+            let expected = match tool {
+                BoardPlaceTool::Track | BoardPlaceTool::Arc => 0,
+                _ => 1,
+            };
+            assert_eq!(groups, expected, "{tool:?}");
         }
+        assert_eq!(PcbBarGroup::of_tool(BoardPlaceTool::Track), None);
+        assert_eq!(PcbBarGroup::from_key("copper_drawing"), None, "#2869");
     }
 
     /// A group starts on its first live row, follows the row used last, and
@@ -241,12 +246,12 @@ mod tests {
             PcbBarRow::Command("change_footprint"),
             "a greyed row is never shown while a live one exists"
         );
-        // #2373: Arc and Dimension are live rows now.
+        // #2424: the Graphics group follows its last live row.
         let mut drawing = PcbBarLastTools::default();
-        assert!(drawing.remember(PcbBarGroup::CopperDrawing, "place_board_arc"));
+        assert!(drawing.remember(PcbBarGroup::Graphics, "place_board_graphic_arc"));
         assert_eq!(
-            drawing.current(PcbBarGroup::CopperDrawing),
-            PcbBarRow::Tool(BoardPlaceTool::Arc)
+            drawing.current(PcbBarGroup::Graphics),
+            PcbBarRow::Tool(BoardPlaceTool::GraphicArc)
         );
         assert!(last.remember(areas, "place_board_fill"));
         assert!(!last.remember(areas, "place_board_fill"), "unchanged");
@@ -263,7 +268,7 @@ mod tests {
     #[test]
     fn last_tools_round_trip_through_json() {
         let mut last = PcbBarLastTools::default();
-        last.remember(PcbBarGroup::CopperDrawing, "place_board_track");
+        last.remember(PcbBarGroup::Graphics, "place_board_line");
         last.remember(PcbBarGroup::CopperAreas, "place_board_keepout");
         let json = last.to_json();
         assert_eq!(PcbBarLastTools::from_json(Some(&json)), last);

@@ -130,6 +130,62 @@ fn a_malformed_layer_sizes_cell_is_a_load_error() {
     assert!(SnxPcb::parse(&broken).is_err());
 }
 
+/// Decision 2026-11-22 (mockup row 105): the name is saved under its token.
+#[test]
+fn a_named_stackup_round_trips_under_its_token() {
+    let mut named = board();
+    named.stackup.as_mut().unwrap().name = Some("sensor-node 4L".into());
+    let (text, back) = round_trip(&named);
+    assert!(
+        text.starts_with(&format!("format = \"{SNXPCB_FORMAT_V1_8}\"")),
+        "{text}"
+    );
+    assert!(text.contains("stack_name = \"sensor-node 4L\""), "{text}");
+    assert_eq!(back.stackup, named.stackup);
+    assert!(back.unknown.stackup.is_empty(), "the key is not foreign");
+    let parsed = SnxPcb::parse(&text).unwrap();
+    assert!(!parsed.is_from_newer_minor(), "it opens for editing");
+    assert_eq!(parsed.write_string().unwrap(), text, "stable on a resave");
+}
+
+/// Decision 2026-11-22: no name, no key and no higher token; a name taken
+/// away gives the same bytes back.
+#[test]
+fn a_board_without_a_stackup_name_keeps_its_token_and_bytes() {
+    let plain = board();
+    let (text, back) = round_trip(&plain);
+    assert!(
+        text.starts_with(&format!("format = \"{SNXPCB_FORMAT_V1}\"")),
+        "{text}"
+    );
+    assert!(!text.contains("stack_name"), "{text}");
+    assert_eq!(SnxPcb::new(back).write_string().unwrap(), text);
+
+    let mut renamed = plain;
+    renamed.stackup.as_mut().unwrap().name = Some("4L".into());
+    renamed.stackup.as_mut().unwrap().name = None;
+    assert_eq!(SnxPcb::new(renamed).write_string().unwrap(), text);
+}
+
+/// A name on a file without rows is kept, on the stack the board derives; a
+/// blank one is no name.
+#[test]
+fn a_name_without_rows_names_the_derived_stack() {
+    let base = SnxPcb::new(empty_board()).write_string().unwrap();
+    let text = format!("{base}\n[stackup]\nstack_name = \"Named\"\n");
+    let read = SnxPcb::parse(&text).unwrap().board;
+    let stack = read.stackup.as_ref().expect("the name is kept");
+    assert_eq!(stack.name.as_deref(), Some("Named"));
+    assert_eq!(
+        stack.layers,
+        LayerStack::derived(&read.layers, read.thickness).layers
+    );
+    assert!(read.unknown.stackup.is_empty());
+
+    let blank = format!("{base}\n[stackup]\nstack_name = \"  \"\n");
+    assert!(SnxPcb::parse(&blank).unwrap().board.stackup.is_none());
+}
+
 #[test]
 fn a_size_that_does_not_save_is_refused_before_writing() {
     let mut board = board();
@@ -139,4 +195,106 @@ fn a_size_that_does_not_save_is_refused_before_writing() {
         bottom: 0.6,
     });
     assert!(SnxPcb::new(board).write_string().is_err());
+}
+
+fn finished_board() -> PcbBoard {
+    use crate::pcb_stack::{BoardFinish, FinishColor, FinishSides, MaskGloss, SurfaceFinish};
+    let mut board = board();
+    let stack = board.stackup.as_mut().unwrap();
+    let mut finish = BoardFinish {
+        surface: SurfaceFinish::ImmersionTin,
+        ..BoardFinish::default()
+    };
+    finish.mask.color = FinishColor::Black;
+    finish.mask.gloss = MaskGloss::Matte;
+    finish.mask.over_laminate_mm = 0.03;
+    finish.silkscreen.sides = FinishSides::Top;
+    stack.finish = Some(finish);
+    board
+}
+
+/// Mockup row 176: the finish is saved with the board under `snxpcb/1.10`
+/// and reads back unchanged, stable on a resave.
+#[test]
+fn the_board_finish_round_trips_under_its_token() {
+    let board = finished_board();
+    let (text, back) = round_trip(&board);
+    assert!(
+        text.starts_with(&format!("format = \"{SNXPCB_FORMAT_V1_10}\"")),
+        "{text}"
+    );
+    assert!(text.contains("[stackup.finish]"), "{text}");
+    assert!(text.contains("surface = \"immersion_tin\""), "{text}");
+    assert_eq!(back.stackup, board.stackup);
+    assert!(back.unknown.stackup.is_empty(), "the finish is not foreign");
+    let parsed = SnxPcb::parse(&text).unwrap();
+    assert!(!parsed.is_from_newer_minor(), "it opens for editing");
+    assert_eq!(parsed.write_string().unwrap(), text, "stable on a resave");
+}
+
+/// Mockup row 177: a row's Df copied from the library is saved under
+/// `snxpcb/1.10`; without a finish or a Df the board keeps its token and
+/// bytes.
+#[test]
+fn a_row_loss_tangent_round_trips_under_the_materials_token() {
+    let plain = board();
+    let (plain_text, _) = round_trip(&plain);
+    assert!(!plain_text.contains("loss_tangent") && !plain_text.contains("[stackup.finish]"));
+    assert!(plain_text.starts_with(&format!("format = \"{SNXPCB_FORMAT_V1}\"")));
+
+    let mut with_df = plain;
+    with_df.stackup.as_mut().unwrap().layers[4].loss_tangent = 0.0037;
+    let (text, back) = round_trip(&with_df);
+    assert!(
+        text.starts_with(&format!("format = \"{SNXPCB_FORMAT_V1_10}\"")),
+        "{text}"
+    );
+    assert!(text.contains("loss_tangent = 0.0037"), "{text}");
+    assert_eq!(back.stackup, with_df.stackup);
+
+    with_df.stackup.as_mut().unwrap().layers[4].loss_tangent = 0.0;
+    assert_eq!(SnxPcb::new(with_df).write_string().unwrap(), plain_text);
+}
+
+/// A finish on a file without rows finishes the derived stack.
+#[test]
+fn a_finish_without_rows_finishes_the_derived_stack() {
+    let base = SnxPcb::new(empty_board()).write_string().unwrap();
+    let text = format!("{base}\n[stackup.finish]\nsurface = \"osp\"\n");
+    let read = SnxPcb::parse(&text).unwrap().board;
+    let stack = read.stackup.as_ref().expect("the finish is kept");
+    let finish = stack.finish.as_ref().expect("finish");
+    assert_eq!(finish.surface, crate::pcb_stack::SurfaceFinish::Osp);
+    assert_eq!(finish.mask, crate::pcb_stack::MaskFinish::default());
+    assert_eq!(
+        stack.layers,
+        LayerStack::derived(&read.layers, read.thickness).layers
+    );
+}
+
+/// A mask or silkscreen table that leaves fields out still opens the board;
+/// each missing field takes its default.
+#[test]
+fn a_partial_mask_or_silkscreen_table_takes_the_defaults() {
+    use crate::pcb_stack::{FinishColor, FinishSides, MaskGloss, SilkscreenFinish};
+    let base = SnxPcb::new(empty_board()).write_string().unwrap();
+    let text = format!(
+        "{base}\n[stackup.finish.mask]\ngloss = \"matte\"\n\
+         [stackup.finish.silkscreen]\nsides = \"top\"\n"
+    );
+    let read = SnxPcb::parse(&text).unwrap().board;
+    let finish = read.stackup.unwrap().finish.expect("finish");
+    let mask = crate::pcb_stack::MaskFinish {
+        gloss: MaskGloss::Matte,
+        ..Default::default()
+    };
+    assert_eq!(finish.mask, mask);
+    assert_eq!(finish.mask.color, FinishColor::Green);
+    assert_eq!(
+        finish.silkscreen,
+        SilkscreenFinish {
+            sides: FinishSides::Top,
+            ..Default::default()
+        }
+    );
 }

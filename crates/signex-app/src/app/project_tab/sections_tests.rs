@@ -75,20 +75,30 @@ fn a_sheet_moves_one_page_as_one_undo_step() {
 #[test]
 fn variants_are_added_renamed_picked_and_removed_through_the_tab() {
     let (mut app, id) = app();
+    // `+` adds "Variant 1" with its name open; typing " Lite " and Enter
+    // names it.
     send(
         &mut app,
-        ProjectTabMsg::NewVariantNameEdited {
+        ProjectTabMsg::NewVariantRequested { project_id: id },
+    );
+    send(
+        &mut app,
+        ProjectTabMsg::VariantRenameEdited {
             project_id: id,
+            from: "Variant 1".into(),
             text: " Lite ".into(),
         },
     );
-    send(&mut app, ProjectTabMsg::VariantAdded { project_id: id });
+    send(
+        &mut app,
+        ProjectTabMsg::VariantRenameSubmitted { project_id: id },
+    );
     let data = &app.document_state.projects[0].data;
     assert_eq!(data.variant_definitions, ["Lite"]);
     assert!(
         app.document_state.project_tabs[&id]
-            .new_variant_name
-            .is_empty()
+            .variant_rename
+            .is_none()
     );
 
     send(
@@ -125,8 +135,9 @@ fn variants_are_added_renamed_picked_and_removed_through_the_tab() {
     assert!(data.variant_definitions.is_empty());
     assert_eq!(data.active_variant, None, "Base is active again");
 
-    // Four steps back: the removal, the rename, the pick, the add.
-    for _ in 0..4 {
+    // Five steps back: the removal, the rename, the pick, the naming, the
+    // add.
+    for _ in 0..5 {
         assert!(undo(&mut app, id));
     }
     let data = &app.document_state.projects[0].data;
@@ -137,23 +148,37 @@ fn variants_are_added_renamed_picked_and_removed_through_the_tab() {
 #[test]
 fn a_refused_variant_name_shows_its_reason_and_changes_nothing() {
     let (mut app, id) = app();
+    // `+` adds "Variant 1" (one undo step); naming it "base" is refused.
     send(
         &mut app,
-        ProjectTabMsg::NewVariantNameEdited {
+        ProjectTabMsg::NewVariantRequested { project_id: id },
+    );
+    send(
+        &mut app,
+        ProjectTabMsg::VariantRenameEdited {
             project_id: id,
+            from: "Variant 1".into(),
             text: "base".into(),
         },
     );
-    send(&mut app, ProjectTabMsg::VariantAdded { project_id: id });
+    send(
+        &mut app,
+        ProjectTabMsg::VariantRenameSubmitted { project_id: id },
+    );
     let tab = &app.document_state.project_tabs[&id];
     assert_eq!(tab.variant_problem, Some(VariantProblem::Reserved));
-    assert_eq!(tab.new_variant_name, "base", "the typed name stays");
-    assert!(
-        app.document_state.projects[0]
-            .data
-            .variant_definitions
-            .is_empty()
+    assert_eq!(
+        tab.variant_rename.as_ref().map(|draft| draft.text.as_str()),
+        Some("base"),
+        "the typed name stays"
     );
+    assert_eq!(
+        app.document_state.projects[0].data.variant_definitions,
+        ["Variant 1"],
+        "the refused name changed nothing"
+    );
+    // The add is the only step: one undo returns to the file's content.
+    assert!(undo(&mut app, id));
     assert!(!dirty(&app));
     assert!(!undo(&mut app, id));
 }
@@ -234,7 +259,7 @@ fn storing_erc_rules_from_the_tab_is_a_rule_history_step() {
         ProjectTabMsg::ErcRulesStoreRequested { project_id: id },
     );
     assert!(app.document_state.projects[0].data.rules.is_some());
-    assert!(app.document_state.project_tabs[&id].rules_step_newest);
+    assert!(app.project_step_is_rules(id, true));
     assert!(dirty(&app));
     // A second request stores nothing more.
     assert_eq!(app.store_erc_rules_of(id), Ok(false));

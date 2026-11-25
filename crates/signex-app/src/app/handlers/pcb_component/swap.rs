@@ -33,13 +33,24 @@ impl Signex {
                 board,
                 footprints,
                 footprint,
-            } => self.read_swap_footprint(board, footprints, footprint),
+            } => {
+                self.ui_state.command_replay.note_swap_in_transit(true);
+                self.read_swap_footprint(board, footprints, footprint)
+            }
             FootprintSwapMsg::Resolved {
                 board,
                 footprints,
                 result,
             } => {
+                self.ui_state.command_replay.note_swap_in_transit(false);
+                if let Ok(template) = &result {
+                    self.ui_state
+                        .command_replay
+                        .note_footprint_swap(footprints.clone(), template.clone());
+                }
+                let before = self.board_revision(&board);
                 self.swap_footprints(&board, &footprints, result);
+                self.finish_footprint_swap_record(&board, before);
                 Task::none()
             }
         }
@@ -55,6 +66,8 @@ impl Signex {
         if footprints.is_empty() {
             return Task::none();
         }
+        // The picker opens on the next message; its row waits for it.
+        self.ui_state.command_replay.note_swap_in_transit(true);
         self.open_footprint_swap_picker(&board, &footprints)
     }
 
@@ -143,7 +156,7 @@ impl Signex {
     /// their linked schematic parts the same footprint, as one undo step.
     /// The old pads that went with no match, and the parts whose sheet could
     /// not take the footprint, are listed in Messages.
-    fn swap_footprints(
+    pub(crate) fn swap_footprints(
         &mut self,
         board: &Path,
         footprints: &[Uuid],

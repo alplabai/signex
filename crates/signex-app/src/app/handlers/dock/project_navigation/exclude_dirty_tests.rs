@@ -38,6 +38,7 @@ fn folding_project_with_dirty_lowercase_sheet() -> (Signex, tempfile::TempDir, P
         is_outside_project: false,
         unsaved_prompt: false,
         is_directory_package: false,
+        choice: None,
     });
     (app, tmp, held)
 }
@@ -157,6 +158,7 @@ fn two_folding_projects_sharing_one_sheet() -> (Signex, tempfile::TempDir, PathB
         is_outside_project: false,
         unsaved_prompt: false,
         is_directory_package: false,
+        choice: None,
     });
     (app, tmp, a_sheet, b_sheet)
 }
@@ -216,6 +218,7 @@ fn prompt_follows_its_project_when_an_earlier_project_closes() {
         is_outside_project: false,
         unsaved_prompt: true,
         is_directory_package: false,
+        choice: None,
     };
 
     app.document_state.projects.remove(0);
@@ -324,6 +327,7 @@ fn an_exclude_save_in_an_undecided_folder_names_the_kept_spelling() {
         is_outside_project: false,
         unsaved_prompt: false,
         is_directory_package: false,
+        choice: None,
     });
 
     exclude_then(&mut app, ExcludeDirtyChoice::Save);
@@ -448,6 +452,7 @@ fn save_all_ignores_a_project_with_an_empty_dir() {
             sheets: Vec::new(),
             variant_definitions: Vec::new(),
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: Vec::new(),
             enable_git: false,
             net_classes: Vec::new(),
@@ -456,7 +461,9 @@ fn save_all_ignores_a_project_with_an_empty_dir() {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
             fab_outputs: None,
+            router_tool_diameter: None,
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),

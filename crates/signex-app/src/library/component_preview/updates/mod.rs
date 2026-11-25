@@ -164,6 +164,7 @@ fn route_inline_edit(state: &mut ComponentPreviewState, msg: EditorMsg) {
         | EditorMsg::StepAttachDialog
         | EditorMsg::StepAttachResult(_)
         | EditorMsg::StepAttachRemove
-        | EditorMsg::SaveSim(_, _) => {}
+        | EditorMsg::SaveSim(_, _)
+        | EditorMsg::UnparsedFieldsPillPressed => {}
     }
 }

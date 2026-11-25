@@ -31,7 +31,10 @@ pub(in crate::app) fn is_window_layout(command: &AppCommandId) -> bool {
 pub(super) fn refusal(command: &AppCommandId) -> Option<String> {
     let id = command.as_str();
     let Some(meta) = metadata_for(command) else {
-        return Some(format!("unknown command `{id}`"));
+        return Some(format!(
+            "unknown command `{id}`{}",
+            crate::keymap::did_you_mean(id)
+        ));
     };
     if PERSON_ONLY.contains(&id) {
         return Some(format!(
@@ -103,6 +106,10 @@ mod tests {
                 "board_report_net_length",
                 "board_report_netlist",
                 "board_shape_from_selection",
+                // #2326 slice 6.P2b: the drawing order and Delete, on the
+                // items `ids` names on the named sheet (or board, Delete).
+                "bring_drawings_forward",
+                "bring_drawings_to_front",
                 "check_drc",
                 "check_erc",
                 "check_requirements",
@@ -110,6 +117,7 @@ mod tests {
                 "close_active_document",
                 "color_net",
                 "delete_net_class",
+                "delete_selection",
                 "document_info",
                 "filter_drc_results",
                 "find_items",
@@ -173,6 +181,8 @@ mod tests {
                 "save_board_reuse_block",
                 "save_document",
                 "save_layer_set",
+                "send_drawings_backward",
+                "send_drawings_to_back",
                 // #2363: the Layers panel's board view configuration.
                 "set_active_layer",
                 "set_board_graphic",

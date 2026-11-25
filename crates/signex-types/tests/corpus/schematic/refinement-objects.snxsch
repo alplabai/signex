@@ -1,0 +1,288 @@
+format = "snxsch/1.3"
+schematic_id = "00000000-0000-0000-0000-000000000000"
+version = 1
+generator = "signex-test"
+generator_version = "0.9"
+paper_size = "A4"
+root_sheet_page = "1"
+
+
+[sheets.components]
+content = """
+uuid  ref  library  pos_x  pos_y  rotation  value  mpn
+"""
+
+[sheets.wires]
+content = """
+uuid  start_x  start_y  end_x  end_y  stroke_width
+"""
+
+[sheets.junctions]
+content = """
+uuid  pos_x  pos_y  diameter
+"""
+
+[sheets.labels]
+content = """
+uuid  text  pos_x  pos_y  rotation  kind  shape  font_size  justify  justify_v
+"""
+
+[extras.sheet]
+no_connects = []
+text_notes = []
+buses = []
+bus_entries = []
+no_erc_directives = []
+locked_objects = ["0192a8c0-0000-7013-8000-000000000021"]
+
+[[extras.sheet.child_sheets]]
+uuid = "0192a8c0-0000-7013-8000-000000000001"
+name = "SPI Flash"
+filename = "spi-flash.snxsch"
+size = [
+    25.4,
+    15.24,
+]
+stroke_width = 0.0
+fill = "none"
+fields_autoplaced = true
+instances = []
+
+[extras.sheet.child_sheets.position]
+x = 101.6
+y = 50.8
+
+[[extras.sheet.child_sheets.pins]]
+uuid = "0192a8c0-0000-7013-8000-000000000002"
+name = "SPI"
+direction = "bidirectional"
+rotation = 0.0
+auto_generated = false
+user_moved = false
+
+[extras.sheet.child_sheets.pins.position]
+x = 101.6
+y = 55.88
+
+[[extras.sheet.drawings]]
+type = "bezier"
+uuid = "0192a8c0-0000-7013-8000-000000000021"
+width = 0.25
+line_style = "dashed"
+ends = "end"
+
+[extras.sheet.drawings.start]
+x = 10.16
+y = 10.16
+
+[extras.sheet.drawings.c1]
+x = 15.24
+y = 2.54
+
+[extras.sheet.drawings.c2]
+x = 25.4
+y = 20.32
+
+[extras.sheet.drawings.end]
+x = 30.48
+y = 10.16
+
+[extras.sheet.drawings.stroke_color]
+r = 0
+g = 96
+b = 192
+a = 255
+
+[[extras.sheet.drawings]]
+type = "dimension"
+uuid = "0192a8c0-0000-7013-8000-000000000022"
+offset = -5.08
+direction = "horizontal"
+units = "mil"
+precision = 1
+arrows = "filled_outside"
+override_text = "1000 mil"
+width = 0.15
+
+[extras.sheet.drawings.from]
+x = 10.16
+y = 40.64
+
+[extras.sheet.drawings.to]
+x = 35.56
+y = 40.64
+
+[[extras.sheet.drawings]]
+type = "table"
+uuid = "0192a8c0-0000-7013-8000-000000000023"
+title = "U1 pins"
+rows = [
+    [
+    "1",
+    "VIN",
+    "VIN_12V",
+],
+    [
+    "2",
+    "EN",
+    "EN",
+],
+]
+refresh = "on_compile"
+
+[extras.sheet.drawings.position]
+x = 127.0
+y = 12.7
+
+[extras.sheet.drawings.source]
+kind = "component_pins"
+designator = "U1"
+sort = "number"
+
+[[extras.sheet.drawings.columns]]
+key = "number"
+title = "Pin"
+
+[[extras.sheet.drawings.columns]]
+key = "name"
+title = "Name"
+
+[[extras.sheet.drawings.columns]]
+key = "net"
+title = "Net"
+shown = false
+
+[extras.sheet.drawings.style]
+text_size = 1.8
+cell_padding = 0.6
+borders = "outer"
+header_fill = true
+
+[[extras.sheet.directives]]
+type = "net_parameters"
+uuid = "0192a8c0-0000-7013-8000-000000000031"
+net_class = "POWER_IN"
+show_on_flag = true
+
+[extras.sheet.directives.position]
+x = 60.96
+y = 76.2
+
+[extras.sheet.directives.rules]
+width_mm = 0.8
+clearance_mm = 0.3
+via_diameter_mm = 0.6
+via_hole_mm = 0.3
+current_a = 2.0
+
+[[extras.sheet.directives]]
+type = "blanket"
+uuid = "0192a8c0-0000-7013-8000-000000000032"
+net_class = "SW_NODE"
+track_width = 0.5
+pour = "keep_short"
+include_edge_nets = true
+
+[extras.sheet.directives.start]
+x = 20.32
+y = 20.32
+
+[extras.sheet.directives.end]
+x = 71.12
+y = 50.8
+
+[[extras.sheet.directives]]
+type = "diff_pair"
+uuid = "0192a8c0-0000-7013-8000-000000000033"
+class = "USB"
+
+[extras.sheet.directives.position]
+x = 40.64
+y = 63.5
+
+[extras.sheet.title_block]
+
+[extras.sheet.lib_symbols]
+
+[[extras.sheet.harness_connectors]]
+uuid = "0192a8c0-0000-7013-8000-000000000011"
+harness_type = "SPI_BUS"
+width = 10.16
+entry_pitch = 2.54
+rotation = 0.0
+
+[extras.sheet.harness_connectors.position]
+x = 50.8
+y = 25.4
+
+[[extras.sheet.harness_connectors.entries]]
+uuid = "0192a8c0-0000-7013-8000-000000000012"
+name = "SCK"
+
+[[extras.sheet.harness_connectors.entries]]
+uuid = "0192a8c0-0000-7013-8000-000000000013"
+name = "MOSI"
+
+[[extras.sheet.harness_connectors.entries]]
+uuid = "0192a8c0-0000-7013-8000-000000000014"
+name = "MISO"
+
+[[extras.sheet.harness_connectors.entries]]
+uuid = "0192a8c0-0000-7013-8000-000000000015"
+name = "CS"
+
+[[extras.sheet.harness_connectors]]
+uuid = "0192a8c0-0000-7013-8000-000000000016"
+harness_type = "UART"
+width = 7.62
+entry_pitch = 5.08
+rotation = 180.0
+locked = true
+
+[extras.sheet.harness_connectors.position]
+x = 152.4
+y = 101.6
+
+[[extras.sheet.harness_connectors.entries]]
+uuid = "0192a8c0-0000-7013-8000-000000000017"
+name = "TX"
+
+[[extras.sheet.harness_connectors.entries]]
+uuid = "0192a8c0-0000-7013-8000-000000000018"
+name = "RX"
+
+[[extras.sheet.harness_wires]]
+uuid = "0192a8c0-0000-7013-8000-000000000019"
+
+[extras.sheet.harness_wires.start]
+x = 63.5
+y = 31.75
+
+[extras.sheet.harness_wires.end]
+x = 101.6
+y = 31.75
+
+[extras.sheet.harness_entry_types]
+0192a8c0-0000-7013-8000-000000000002 = "SPI_BUS"
+
+[[extras.sheet.unions]]
+uuid = "0192a8c0-0000-7013-8000-000000000051"
+name = "Flash interface"
+tags = [
+    "spi",
+    "storage",
+]
+members = [
+    "0192a8c0-0000-7013-8000-000000000001",
+    "0192a8c0-0000-7013-8000-000000000011",
+    "0192a8c0-0000-7013-8000-000000000019",
+]
+locked = true
+
+[[extras.sheet.unions]]
+uuid = "0192a8c0-0000-7013-8000-000000000052"
+name = "Annotations"
+members = [
+    "0192a8c0-0000-7013-8000-000000000022",
+    "0192a8c0-0000-7013-8000-000000000023",
+]

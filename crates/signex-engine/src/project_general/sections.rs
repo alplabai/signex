@@ -5,8 +5,10 @@
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
+use signex_types::pcb::SymbolLink;
 use signex_types::project::{
-    AnnotateUndo, ListMove, ProjectData, RequirementEntry, VariantProblem,
+    AnnotateUndo, ChannelNaming, ListMove, PlacedPart, ProjectData, RequirementEntry, SheetFit,
+    VariantProblem, VariantSettings,
 };
 
 /// One edit of a Project tab section. Plain data, so a script can emit it.
@@ -17,6 +19,12 @@ pub enum ProjectSectionCommand {
     MoveSheet {
         filename: String,
         step: ListMove,
+    },
+    /// Drop a sheet at page index `to` (mockup row 31): one step, however
+    /// far it moved.
+    PlaceSheet {
+        filename: String,
+        to: usize,
     },
     /// Add a variant after the others (#1690).
     AddVariant {
@@ -33,10 +41,47 @@ pub enum ProjectSectionCommand {
     SetActiveVariant {
         name: Option<String>,
     },
+    /// Add `name` as a copy of `from` (mockup row 32). `sheet_fits` is each
+    /// part's fit in `from` as its sheets say, where it differs from Base.
+    DuplicateVariant {
+        from: String,
+        name: String,
+        #[serde(default)]
+        sheet_fits: Vec<SheetFit>,
+    },
+    /// `None` makes Base the default variant (mockup row 32).
+    SetDefaultVariant {
+        name: Option<String>,
+    },
+    /// A part's fit in a variant; `None` follows the sheets (mockup row 32).
+    /// `part` is the placed part, which keeps the setting on it through a
+    /// re-annotation.
+    SetVariantPartFit {
+        variant: String,
+        designator: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        part: Option<SymbolLink>,
+        fitted: Option<bool>,
+    },
+    /// A part's parameter value in a variant; `None` is its own value again
+    /// (mockup row 32).
+    SetVariantPartParameter {
+        variant: String,
+        designator: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        part: Option<SymbolLink>,
+        parameter: String,
+        value: Option<String>,
+    },
     /// Move a library one step up or down the list (#1691).
     MoveLibrary {
         path: PathBuf,
         step: ListMove,
+    },
+    /// Drop a library at list index `to` (mockup row 33).
+    PlaceLibrary {
+        path: PathBuf,
+        to: usize,
     },
     /// The project's annotate undo choice; `None` follows Preferences
     /// (#1692). Clearing it over an unreadable section changes nothing.
@@ -46,6 +91,16 @@ pub enum ProjectSectionCommand {
     /// Commit every save to the project's repository (#1693).
     SetVersionControl {
         on: bool,
+    },
+    /// How channels of a repeated sheet name designators and local nets
+    /// (#1279).
+    SetChannelNaming {
+        naming: ChannelNaming,
+    },
+    /// Replace the project's signal harness definitions (#1280), as the
+    /// harness definitions view edits them.
+    SetHarnessDefinitions {
+        definitions: Vec<signex_types::schematic::HarnessDefinition>,
     },
 }
 
@@ -57,12 +112,46 @@ impl ProjectSectionCommand {
             Self::MoveSheet { filename, step } => {
                 data.move_sheet(filename, *step);
             }
+            Self::PlaceSheet { filename, to } => {
+                data.place_sheet(filename, *to);
+            }
             Self::AddVariant { name } => data.add_variant(name)?,
             Self::RenameVariant { from, to } => data.rename_variant(from, to)?,
             Self::RemoveVariant { name } => data.remove_variant(name)?,
             Self::SetActiveVariant { name } => data.set_active_variant(name.as_deref())?,
+            Self::DuplicateVariant {
+                from,
+                name,
+                sheet_fits,
+            } => data.duplicate_variant(from, name, sheet_fits)?,
+            Self::SetDefaultVariant { name } => data.set_default_variant(name.as_deref())?,
+            Self::SetVariantPartFit {
+                variant,
+                designator,
+                part,
+                fitted,
+            } => data.set_variant_part_fit(
+                variant,
+                PlacedPart::new(designator, part.as_ref()),
+                *fitted,
+            )?,
+            Self::SetVariantPartParameter {
+                variant,
+                designator,
+                part,
+                parameter,
+                value,
+            } => data.set_variant_part_parameter(
+                variant,
+                PlacedPart::new(designator, part.as_ref()),
+                parameter,
+                value.as_deref(),
+            )?,
             Self::MoveLibrary { path, step } => {
                 data.move_library(path, *step);
+            }
+            Self::PlaceLibrary { path, to } => {
+                data.place_library(path, *to);
             }
             Self::SetAnnotateUndo { choice } => {
                 if !(choice.is_none() && data.has_unreadable_annotation()) {
@@ -70,6 +159,19 @@ impl ProjectSectionCommand {
                 }
             }
             Self::SetVersionControl { on } => data.enable_git = *on,
+            // An unreadable section is never replaced (DECISIONS 2026-11-23).
+            Self::SetChannelNaming { naming } => {
+                if !data.has_unreadable_schematic_design() {
+                    data.schematic_design.channel_naming = naming.clone();
+                }
+            }
+            Self::SetHarnessDefinitions { definitions } => {
+                if !data.has_unreadable_schematic_design() {
+                    data.schematic_design
+                        .harness_definitions
+                        .clone_from(definitions);
+                }
+            }
         }
         Ok(())
     }
@@ -84,9 +186,14 @@ pub(super) struct SectionsSnapshot {
     library_order: Vec<PathBuf>,
     variants: Vec<String>,
     active_variant: Option<String>,
+    /// The default variant and what each variant changes on its parts.
+    variant_settings: VariantSettings,
     enable_git: bool,
     /// The Requirements section (#2339): the whole list; only it writes it.
     requirements: Vec<RequirementEntry>,
+    channel_naming: ChannelNaming,
+    /// The harness definitions (#1280); only the definitions view writes them.
+    harness_definitions: Vec<signex_types::schematic::HarnessDefinition>,
 }
 
 impl SectionsSnapshot {
@@ -96,8 +203,11 @@ impl SectionsSnapshot {
             library_order: data.library_order(),
             variants: data.variant_definitions.clone(),
             active_variant: data.active_variant.clone(),
+            variant_settings: data.variant_settings.clone(),
             enable_git: data.enable_git,
             requirements: data.requirements.clone(),
+            channel_naming: data.schematic_design.channel_naming.clone(),
+            harness_definitions: data.schematic_design.harness_definitions.clone(),
         }
     }
 
@@ -106,7 +216,10 @@ impl SectionsSnapshot {
         data.restore_library_order(&self.library_order);
         data.variant_definitions = self.variants;
         data.active_variant = self.active_variant;
+        data.variant_settings = self.variant_settings;
         data.enable_git = self.enable_git;
         data.requirements = self.requirements;
+        data.schematic_design.channel_naming = self.channel_naming;
+        data.schematic_design.harness_definitions = self.harness_definitions;
     }
 }

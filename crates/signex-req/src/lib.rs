@@ -12,7 +12,7 @@ mod bom;
 mod parts;
 mod runs;
 
-pub use parts::LIFECYCLE_STATES;
+pub use parts::{LIFECYCLE_STATES, PartMiss, PartProblem, PartsShortfall, parts_shortfall};
 
 use std::collections::{HashMap, HashSet};
 
@@ -167,7 +167,7 @@ pub fn check_report(facts: &Facts) -> CheckReport {
     }
     for (index, entry) in facts.requirements.iter().enumerate() {
         let label = entry_label(entry, index);
-        let rule = format!("req::{label}");
+        let rule = entry_rule(entry, index);
         let severity = entry
             .requirement()
             .map_or(Severity::Error, |requirement| requirement.severity);
@@ -241,6 +241,16 @@ pub fn check_report(facts: &Facts) -> CheckReport {
     .with_rule_set(rule_set(facts))
 }
 
+/// The width and height in mm of the board outline's bounding box, as
+/// `board_size` measures it; `None` without a board read or an outline to
+/// measure.
+pub fn board_extent_mm(board: &Board) -> Option<(f64, f64)> {
+    match board {
+        Board::Read { board, .. } => board::outline_extent(board),
+        Board::NotListed | Board::Unreadable { .. } => None,
+    }
+}
+
 /// What `requirement` finds unmet.
 fn evaluate(requirement: &Requirement, facts: &Facts) -> Vec<Miss> {
     match &requirement.kind {
@@ -286,6 +296,13 @@ fn evaluate(requirement: &Requirement, facts: &Facts) -> Vec<Miss> {
             },
         ),
     }
+}
+
+/// The rule a report files entry `index` under: `req::<id>`, or
+/// `req::#<place>` for an entry with no id. Readers of a report look an
+/// entry's verdict up by this name.
+pub fn entry_rule(entry: &RequirementEntry, index: usize) -> String {
+    format!("req::{}", entry_label(entry, index))
 }
 
 /// How a finding names an entry: its id, else its place in the list (`#3`).

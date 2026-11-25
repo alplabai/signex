@@ -26,7 +26,7 @@ pub use format::{DateLength, ListKind};
 pub use i18n::{I18n, LanguageOption};
 /// The locale type [`I18n::format_locale`] returns, for callers that keep one.
 pub use icu_locale_core::Locale;
-pub use locale::LanguagePref;
+pub use locale::{LanguagePref, resolved_locale};
 pub use localized::Localized;
 pub use render::RenderTranslatable;
 pub use signex_i18n_ids::{
@@ -69,6 +69,8 @@ macro_rules! t {
 
 #[cfg(test)]
 mod consistency_tests;
+#[cfg(test)]
+mod en_us_copy_tests;
 #[cfg(test)]
 mod format_tests;
 #[cfg(test)]

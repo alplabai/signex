@@ -35,6 +35,7 @@ pub fn view_symbol<'a>(
     display: LibraryDisplaySettings,
     path: &'a std::path::Path,
     device_px_per_logical_px: f32,
+    edge_pan: Option<&'a crate::canvas::EdgePanLink>,
 ) -> Element<'a, LibraryMessage> {
     let tokens = &panel_ctx.tokens;
     // Active bar moved to the app-view layer (view_main_for) so it
@@ -42,7 +43,13 @@ pub fn view_symbol<'a>(
     // symbol::active_bar::{bar_items, dropdown_overlay}. The body here
     // renders just toolbar + canvas; the bar is layered on top there,
     // which is also where the theme id for its icons is resolved.
-    let canvas_widget = view_symbol_canvas(editor, panel_ctx, display, device_px_per_logical_px);
+    let canvas_widget = view_symbol_canvas(
+        editor,
+        panel_ctx,
+        display,
+        device_px_per_logical_px,
+        edge_pan,
+    );
 
     // No header strip and no footer: the global status bar carries X / Y,
     // zoom, grid and the editor's part / pins / hint segment
@@ -312,9 +319,11 @@ pub(crate) fn symbol_canvas<'a>(
     .with_graphite(tokens)
     .with_selection_filter(editor.selection_filter)
     .with_view_pending(editor.pending_view.is_some())
+    .with_tool_epoch(editor.tool_epoch)
     .with_measured_size(editor.viewport)
     .with_trackpad_pan(editor.trackpad_pan)
     .with_wheel_mode(editor.wheel_mode)
+    .with_zoom_step(editor.zoom_step)
     .with_device_px_per_logical_px(device_px_per_logical_px)
 }
 
@@ -323,8 +332,12 @@ fn view_symbol_canvas<'a>(
     panel_ctx: &'a PanelContext,
     display: LibraryDisplaySettings,
     device_px_per_logical_px: f32,
+    edge_pan: Option<&'a crate::canvas::EdgePanLink>,
 ) -> Element<'a, LibraryMessage> {
-    let program = symbol_canvas(editor, panel_ctx, display, device_px_per_logical_px);
+    let mut program = symbol_canvas(editor, panel_ctx, display, device_px_per_logical_px);
+    if let Some(link) = edge_pan {
+        program = program.with_edge_pan(link);
+    }
     let path = editor.path.clone();
     iced::widget::Canvas::<_, sym_canvas::CanvasAction>::new(program)
         .width(Length::Fill)
@@ -377,6 +390,46 @@ pub(crate) fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -
             end_deg,
         },
         CanvasAction::ArcSweepRejected => SymbolEditorMsg::ArcSweepRejected,
+        CanvasAction::AddPie {
+            cx,
+            cy,
+            radius,
+            start_deg,
+            end_deg,
+        } => SymbolEditorMsg::AddPie {
+            cx,
+            cy,
+            radius,
+            start_deg,
+            end_deg,
+        },
+        CanvasAction::AddEllipticalArc {
+            cx,
+            cy,
+            radius_x,
+            radius_y,
+            start_deg,
+            end_deg,
+        } => SymbolEditorMsg::AddEllipticalArc {
+            cx,
+            cy,
+            radius_x,
+            radius_y,
+            start_deg,
+            end_deg,
+        },
+        CanvasAction::AddRoundRectangle {
+            from_x,
+            from_y,
+            to_x,
+            to_y,
+        } => SymbolEditorMsg::AddRoundRectangle {
+            from_x,
+            from_y,
+            to_x,
+            to_y,
+        },
+        CanvasAction::BezierClick { x, y } => SymbolEditorMsg::BezierClick { x, y },
         CanvasAction::AddText { x, y } => SymbolEditorMsg::AddText { x, y },
         CanvasAction::PolygonClick { x, y } => SymbolEditorMsg::PolygonClick { x, y },
         CanvasAction::PolygonCommit => SymbolEditorMsg::PolygonCommit,
@@ -454,6 +507,8 @@ fn graphic_handle_to_msg(handle: sym_state::GraphicHandle) -> GraphicHandleMsg {
         GraphicHandle::ArcEnd => GraphicHandleMsg::ArcEnd,
         GraphicHandle::TextAnchor => GraphicHandleMsg::TextAnchor,
         GraphicHandle::PolygonVertex(i) => GraphicHandleMsg::PolygonVertex(i),
+        GraphicHandle::BezierPoint(i) => GraphicHandleMsg::BezierPoint(i),
+        GraphicHandle::EllipseRadius(i) => GraphicHandleMsg::EllipseRadius(i),
     }
 }
 

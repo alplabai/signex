@@ -456,6 +456,13 @@ fn row_view<'a>(
 
 /// The caption of a flagged rename: where its new designator already is.
 fn duplicate_text(state: &BackAnnotateState, flag: &DuplicateRename, i18n: &I18n) -> Localized {
+    if flag.contested {
+        return t!(
+            i18n,
+            ids::BACK_ANNOTATE_DUPLICATE_CONTESTED,
+            "designator" => flag.designator.as_str()
+        );
+    }
     match state.part_sheet_name(&flag.holder) {
         Some(sheet) => t!(
             i18n,
@@ -506,7 +513,8 @@ fn change_text(i18n: &I18n, change: &BackChange) -> Localized {
     }
 }
 
-fn block_text(i18n: &I18n, why: &BackBlock) -> Localized {
+/// Why a row cannot be ticked. Compare Board with Schematic says it too.
+pub(super) fn block_text(i18n: &I18n, why: &BackBlock) -> Localized {
     match why {
         BackBlock::NeedsAnnotation => t!(i18n, ids::BACK_ANNOTATE_BLOCK_NEEDS_ANNOTATION),
         BackBlock::DuplicateDesignator(designator) => t!(
@@ -516,11 +524,13 @@ fn block_text(i18n: &I18n, why: &BackBlock) -> Localized {
         ),
         BackBlock::BoardNotAnnotated => t!(i18n, ids::BACK_ANNOTATE_BLOCK_BOARD_NOT_ANNOTATED),
         BackBlock::SharedSheet => t!(i18n, ids::BACK_ANNOTATE_BLOCK_SHARED_SHEET),
+        BackBlock::ChannelDesignator => t!(i18n, ids::BACK_ANNOTATE_BLOCK_CHANNEL),
         BackBlock::FootprintFromBoard => t!(i18n, ids::BACK_ANNOTATE_BLOCK_FOOTPRINT),
     }
 }
 
-fn note_text(i18n: &I18n, note: &BackNote) -> Localized {
+/// One note under the rows. Compare Board with Schematic shows it too.
+pub(super) fn note_text(i18n: &I18n, note: &BackNote) -> Localized {
     match note {
         BackNote::UnreadableSheet(_) => t!(i18n, ids::BACK_ANNOTATE_NOTE_UNREADABLE),
         BackNote::Unlinked { reference } => t!(

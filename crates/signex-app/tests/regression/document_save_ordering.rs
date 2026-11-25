@@ -75,6 +75,7 @@ fn app_with_gated_sheet(dir: &Path, path: &Path) -> (Signex, mpsc::Receiver<()>,
             sheets: Vec::new(),
             variant_definitions: Vec::new(),
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: Vec::new(),
             enable_git: false,
             net_classes: Vec::new(),
@@ -83,7 +84,9 @@ fn app_with_gated_sheet(dir: &Path, path: &Path) -> (Signex, mpsc::Receiver<()>,
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
             fab_outputs: None,
+            router_tool_diameter: None,
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
@@ -155,14 +158,16 @@ fn renaming_a_sheet_waits_for_its_in_flight_save_and_does_not_resurrect_the_old_
     let (mut app, entered, proceed) = app_with_gated_sheet(tmp.path(), &old);
 
     let driver = start_save_released_later(&mut app, &entered, proceed);
-    app.ui_state.rename_dialog = Some(RenameDialogState {
+    app.ui_state.rename_dialog = Some(Box::new(RenameDialogState {
         project_id: None,
         target_path: old.clone(),
         tree_path: vec![0],
         buffer: "PSU.snxsch".to_string(),
         error: None,
         is_project_rename: false,
-    });
+        placing_symbols: Vec::new(),
+        name_clash: None,
+    }));
     crate::settle_support::settle(&mut app, Message::Rename(RenameMsg::Submit));
     for message in driver.join().unwrap() {
         let _ = app.update(message);
@@ -244,6 +249,7 @@ fn deleting_a_file_waits_for_its_in_flight_save_and_it_stays_deleted() {
         is_outside_project: false,
         unsaved_prompt: false,
         is_directory_package: false,
+        choice: None,
     });
     crate::settle_support::settle(
         &mut app,

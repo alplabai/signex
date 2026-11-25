@@ -11,10 +11,15 @@
 //! - HUD / previews (cursor, wire and placement previews): uncached, redrawn
 //!   every frame.
 
+mod bezier_grip;
+#[cfg(test)]
+mod bezier_grip_tests;
 mod camera;
+pub(crate) mod cursor;
 mod drag_layers;
 pub(crate) mod drag_preview;
 mod draw;
+pub(crate) mod edge_pan;
 mod erc_marker;
 mod fitted_view;
 mod ghost_split;
@@ -26,6 +31,7 @@ pub mod grid;
 mod halo_cache;
 mod hit_cache;
 mod input;
+pub(crate) mod middle_zoom;
 mod move_pick;
 mod net_highlight;
 pub(crate) mod pan_reuse;
@@ -53,6 +59,8 @@ use iced::widget::canvas;
 use iced::{Color, Rectangle, Renderer, Theme};
 
 pub use camera::{Camera, ScrollIntent};
+pub(crate) use draw::{AnnotationDraft, AnnotationDraftKind, HintInk};
+pub use edge_pan::{EdgePanLink, EdgePointer};
 pub use erc_marker::{ErcMarker, ErcMarkerSeverity};
 pub use fitted_view::{FittedView, ResizeFollow, resize_follow};
 pub use graphite::{GraphiteCanvasInk, HALO_FILL_ALPHA};
@@ -74,12 +82,14 @@ use crate::toolbar::ToolMessage;
 
 #[derive(Debug, Default)]
 pub struct CanvasState {
-    /// Is the user currently panning (right-click or middle-click drag)?
+    /// Is the user currently panning (right-button drag)?
     panning: bool,
     /// Whether actual pan movement occurred (to distinguish click from drag).
     pan_moved: bool,
     /// Last cursor position during a pan (in screen pixels).
     last_pan_pos: Option<iced::Point>,
+    /// The middle-button drag zooming the view, while it is held.
+    middle_zoom: Option<middle_zoom::MiddleZoom>,
     /// Whether Ctrl is currently held (for multi-select toggle).
     pub ctrl_held: bool,
     /// Ctrl or Cmd held: a scroll zooms even with "Two-finger scroll pans" on.
@@ -109,6 +119,8 @@ pub struct CanvasState {
     ghost: drag_preview::GhostState,
     /// Set while the drag holds one end of a selected wire by its grip.
     wire_grip: Option<wire_grip::WireGrip>,
+    /// Set while a drag holds one handle of a selected Bezier.
+    bezier_drag: Option<bezier_grip::BezierDrag>,
     // ─── Double-click detection ───
     /// Timestamp of last left-click (for double-click detection).
     last_click_time: Option<std::time::Instant>,
@@ -275,6 +287,8 @@ pub struct CanvasSlot {
     /// In-flight polyline vertices while Tool::Polyline is active.
     /// Mirrors `interaction_state.polyline_points`.
     pub polyline_points: Vec<signex_types::schematic::Point>,
+    /// The Bezier or dimension being placed (#1267), for the preview draw.
+    pub annotation_draft: Option<draw::AnnotationDraft>,
     /// When the BringToFrontOf / SendToBackOf picker is armed, show
     /// the gray-X placement cursor so the user knows the next click
     /// is a reference pick, not a selection. Synced from
@@ -295,6 +309,8 @@ pub struct CanvasSlot {
     /// Whether the move drag in flight keeps wires, written by the canvas
     /// after each event for the status bar; `None` outside a drag.
     pub move_behaviour: std::cell::Cell<Option<bool>>,
+    /// The pointer as the edge pan reads it, written on every event (#2872).
+    pub edge_pan: EdgePanLink,
     /// Test-only: draw the content as trunk did, in a frame of the canvas
     /// size through `content_cache`, as the reference of the pixel tests.
     #[cfg(test)]
@@ -373,6 +389,7 @@ impl CanvasSlot {
             lasso_polygon: None,
             arc_points: Vec::new(),
             polyline_points: Vec::new(),
+            annotation_draft: None,
             reorder_picker_armed: false,
             move_pick: None,
             move_epoch: 0,
@@ -380,6 +397,7 @@ impl CanvasSlot {
             measure: None,
             keep_connections_next: false,
             move_behaviour: std::cell::Cell::new(None),
+            edge_pan: EdgePanLink::default(),
             #[cfg(test)]
             trunk_content: std::cell::Cell::new(false),
             #[cfg(test)]
@@ -621,6 +639,9 @@ pub struct CanvasViewPrefs<'a> {
     /// Full window width. The Active Bar is centred on the window, not on
     /// this canvas, so docked side panels do not move it.
     pub window_width: f32,
+    /// The Active Bar took the last right press, so its release is not a
+    /// canvas right-click.
+    pub swallow_right_release: bool,
     pub wire_color_overrides: &'a std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
     /// Resolved net-class style per wire and junction, read from app state
     /// so the canvas never reaches into the project. See
@@ -642,6 +663,10 @@ pub struct CanvasViewPrefs<'a> {
     /// treat the Component tool as a placing tool then, not only the one
     /// whose canvas holds the cursor ghost (#1776).
     pub power_port_pending: bool,
+    /// The unions hidden on the sheet in view and their inks (mockup row 158).
+    pub unions: crate::schematic_runtime::unions::UnionView<'a>,
+    /// The annotation flags of the sheet's design and their inks (mockup row 165).
+    pub annotation_flags: crate::schematic_runtime::annotation_flags::AnnotationFlagView<'a>,
     /// Device pixels per logical pixel in the window this canvas draws in
     /// (`UiState::device_px_per_logical_px`): the stroke floor and the
     /// hairline snap work on that grid (#1887).
@@ -698,6 +723,14 @@ pub struct SchematicCanvas<'a> {
 }
 
 impl<'a> SchematicCanvas<'a> {
+    /// A placement, drawing or Measure tool is armed, or a part or power
+    /// port waits on the cursor: the canvas shows the crosshair.
+    pub(crate) fn has_armed_tool(&self) -> bool {
+        self.prefs.current_tool != crate::app::Tool::Select
+            || self.prefs.power_port_pending
+            || self.prefs.placement.is_some()
+    }
+
     /// What the content scene draws instead of the stored values.
     fn scene_overrides(&self) -> crate::schematic_runtime::SceneOverrides<'_> {
         crate::schematic_runtime::SceneOverrides {
@@ -877,6 +910,10 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<Message>> {
+        // An edge pan moved the view: the redraw replays the pointer (#2872).
+        let replayed = self.edge_pan.replayed(event, cursor);
+        let event = replayed.as_ref().unwrap_or(event);
+        self.edge_pan.observe_event(event, cursor, bounds);
         let action = self.dispatch_event(state, event, bounds, cursor);
         if self.mode == ContentMode::GpuOverlay {
             return self.publish_drag(state, action);
@@ -899,19 +936,19 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
     fn mouse_interaction(
         &self,
         state: &CanvasState,
-        _bounds: Rectangle,
-        _cursor: mouse::Cursor,
+        bounds: Rectangle,
+        cursor: mouse::Cursor,
     ) -> mouse::Interaction {
-        // Single cursor shape across every canvas mode: default arrow
-        // for idle, native pan / move cursors while dragging. No
-        // mode-specific shape swaps (the OS Crosshair is white + tiny
-        // on Windows so invisible on yellow paper anyway). Visual
-        // feedback for armed modes comes from overlay glyphs — the
-        // net-colour pencil and the lasso polygon preview.
+        // Pan and move cursors while dragging; otherwise the arrow, or the
+        // crosshair while a tool is armed (`cursor::tool_cursor`).
         if state.panning {
             mouse::Interaction::Grabbing
+        } else if state.middle_zoom.is_some() {
+            mouse::Interaction::ResizingVertically
         } else if state.move_dragging {
             mouse::Interaction::Move
+        } else if cursor.is_over(bounds) {
+            cursor::tool_cursor(self.has_armed_tool())
         } else {
             mouse::Interaction::default()
         }
@@ -941,6 +978,8 @@ pub enum CanvasEvent {
     CenterAtCursor,
     /// Redraw was asked for (`refresh_view`): drop the active canvas's caches.
     RedrawRequested,
+    /// The edge pan timer ticked (#2872): pan toward the edge the pointer is at.
+    EdgePanTicked,
     /// Left-click at world coordinates — triggers hit-testing or tool action.
     Clicked {
         world_x: f64,
@@ -989,6 +1028,11 @@ pub enum CanvasEvent {
         /// How this gesture treats wires (#1266).
         connections: MoveConnections,
     },
+    /// A handle drag dropped a Bezier with these four points (world coords).
+    BezierPointsDragged {
+        drawing: uuid::Uuid,
+        points: [signex_types::schematic::Point; 4],
+    },
 }
 
 mod gesture;
@@ -999,6 +1043,8 @@ mod active_bar_hit;
 mod app_loop_bench_tests;
 #[cfg(test)]
 mod background_reuse_tests;
+#[cfg(test)]
+mod drag_invalidation_tests;
 #[cfg(test)]
 mod draw_order_tests;
 #[cfg(test)]
@@ -1017,6 +1063,8 @@ pub(crate) mod grid_order_tests;
 mod halo_cache_tests;
 #[cfg(test)]
 mod hit_cache_tests;
+#[cfg(test)]
+mod middle_zoom_tests;
 #[cfg(test)]
 pub(crate) mod overlay_camera_tests;
 #[cfg(test)]
@@ -1088,6 +1136,7 @@ mod tests {
             drag_wiring: Default::default(),
             current_tool: crate::app::Tool::Select,
             window_width: 1400.0,
+            swallow_right_release: false,
             wire_color_overrides: overrides,
             wire_class_styles: class_styles,
             wire_class_revision: 0,
@@ -1096,6 +1145,13 @@ mod tests {
             selection_filters: filters,
             placement: None,
             power_port_pending: false,
+            unions: crate::schematic_runtime::unions::UnionView {
+                hidden: &[],
+                ink: crate::schematic_runtime::unions::UnionInk::from_tokens(
+                    &signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight),
+                ),
+            },
+            annotation_flags: Default::default(),
             device_px_per_logical_px: 1.0,
         }
     }

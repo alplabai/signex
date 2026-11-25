@@ -11,7 +11,8 @@ use iced::{Color, Point, Radians, Rectangle, Renderer, Size, Theme, Vector, alig
 use signex_gfx::primitive::text::{
     LINE_HEIGHT_EM, TextRaster, TextSizePolicy, text_px, text_raster,
 };
-use signex_renderer::pcb::{BoardPaint, FootprintTextInput};
+use signex_renderer::pcb::{BoardPaint, DIMMED_ALPHA, FootprintTextInput, TextFace};
+use signex_types::pcb_dimension_style::BoardFont;
 use signex_types::pcb_layer::PcbLayer;
 use signex_types::schematic::HAlign;
 
@@ -129,7 +130,7 @@ pub(super) fn paint_texts(
             color,
             size: iced::Pixels(placed.size_px),
             line_height: iced::widget::text::LineHeight::Relative(LINE_HEIGHT_EM),
-            font: crate::render_config::IOSEVKA,
+            font: font_of(text.face),
             align_x: align_of(text.justify),
             align_y: alignment::Vertical::Center,
             ..canvas::Text::default()
@@ -145,8 +146,9 @@ pub(super) fn paint_texts(
             if angle != 0.0 {
                 inner.rotate(Radians(angle.to_radians()));
             }
-            if mirrored {
-                inner.scale_nonuniform(Vector::new(-1.0, 1.0));
+            if mirrored || text.face.stretch != 1.0 {
+                let flip = if mirrored { -1.0 } else { 1.0 };
+                inner.scale_nonuniform(Vector::new(flip * text.face.stretch, 1.0));
             }
             inner.fill_text(glyphs);
         });
@@ -183,6 +185,28 @@ pub(super) fn place(
         .then_some(ScreenText { anchor, size_px })
 }
 
+/// The canvas font of `face` (#2868): Iosevka or the interface face, bold
+/// and italic as set.
+pub(super) fn font_of(face: TextFace) -> iced::Font {
+    let base = match face.font {
+        BoardFont::Mono => crate::render_config::IOSEVKA,
+        BoardFont::Sans => crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT),
+    };
+    iced::Font {
+        weight: if face.bold {
+            iced::font::Weight::Bold
+        } else {
+            base.weight
+        },
+        style: if face.italic {
+            iced::font::Style::Italic
+        } else {
+            base.style
+        },
+        ..base
+    }
+}
+
 /// The anchor end of a text's line: applied before the mirror, so a
 /// mirrored text runs the other way from its anchor, as its strokes do.
 pub(super) fn align_of(justify: HAlign) -> advanced_text::Alignment {
@@ -197,9 +221,22 @@ fn colour_of(colours: &mut Vec<(PcbLayer, Color)>, paint: &BoardPaint, layer: Pc
     if let Some(&(_, colour)) = colours.iter().find(|(l, _)| *l == layer) {
         return colour;
     }
-    let colour = painted_layer_colour(paint, layer);
+    let colour = text_colour(paint, layer);
     colours.push((layer, colour));
     colour
+}
+
+/// A text's colour on `layer`, faint under Show only unrouted (#2821).
+fn text_colour(paint: &BoardPaint, layer: PcbLayer) -> Color {
+    let colour = painted_layer_colour(paint, layer);
+    if paint.is_board_dimmed() {
+        Color {
+            a: colour.a * DIMMED_ALPHA,
+            ..colour
+        }
+    } else {
+        colour
+    }
 }
 
 #[cfg(test)]

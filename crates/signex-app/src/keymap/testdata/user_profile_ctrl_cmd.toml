@@ -8,7 +8,7 @@ schema_version = 1
 profile_id = "mine"
 profile_name = "Mine"
 profile_kind = "custom"
-base_profile = "altium"
+base_profile = "signex_standard"
 
 [[keyboard_shortcuts.sections]]
 context = "global"

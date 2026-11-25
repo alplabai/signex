@@ -22,6 +22,7 @@ pub mod draw;
 mod draw_free;
 #[cfg(test)]
 mod draw_free_tests;
+pub mod drill_pairs;
 pub mod dxf;
 pub mod eco;
 mod engine;
@@ -33,6 +34,7 @@ pub mod footprint_swap;
 pub mod footprint_text_edit;
 pub mod graphic;
 mod graphics;
+pub mod item_move;
 mod items;
 pub mod lock;
 mod options;
@@ -43,13 +45,17 @@ pub mod placement;
 pub mod pour_edit;
 pub mod primitive_edit;
 mod replace;
+mod replay_guard;
 pub mod reuse_block;
+pub mod rooms;
 pub mod route;
 pub mod similar;
 pub mod snap;
+mod snap_curves;
 mod snap_points;
 mod stack;
 pub mod stack_edit;
+pub mod via_types;
 
 #[cfg(test)]
 mod board_sketch_tests;
@@ -64,6 +70,8 @@ mod pad_shape_tests;
 #[cfg(test)]
 mod replace_tests;
 #[cfg(test)]
+mod replay_guard_tests;
+#[cfg(test)]
 mod tests;
 
 pub use batch::BatchRefusal;
@@ -75,4 +83,5 @@ pub use footprint::FootprintFace;
 pub use footprint_content::FootprintText;
 pub use items::{BoardItem, BoardItemId, RemovedItem};
 pub use replace::FootprintPad;
-pub use stack::{ItemLayerSizes, StackSnapshot};
+pub use replay_guard::BoardReplayGuard;
+pub use stack::{ItemLayerSizes, StackSnapshot, items_on_layer};

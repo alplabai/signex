@@ -5,16 +5,36 @@ use crate::dock::DockMessage;
 use super::super::*;
 
 mod child_sheet_identity;
+mod color_hex;
+#[cfg(test)]
+mod color_hex_tests;
+mod doc_grid;
+#[cfg(test)]
+mod doc_grid_tests;
+mod drawing_field_edit;
+#[cfg(test)]
+mod drawing_field_edit_tests;
 mod floating_layout;
+mod harness_panel;
+#[cfg(test)]
+pub(crate) use harness_panel::HARNESS_FACT_BUILDS;
 mod layout_persist;
 mod library_browser;
 mod multi_edit;
 mod navigator;
 mod net_classes;
+#[cfg(test)]
+mod note_draft_persist_tests;
+#[cfg(test)]
+mod note_draft_window_close_tests;
 mod panel_controls;
 mod panel_open;
+mod part_actions;
 mod part_field_issues;
 mod placed_edit;
+#[cfg(test)]
+mod port_name_tests;
+mod pre_placement_position;
 pub(crate) mod project_navigation;
 mod property_editor;
 mod sch_library;
@@ -68,10 +88,48 @@ impl Signex {
                 let task = self.handle_net_inspector_message(inspector_msg.clone());
                 return Task::batch([task, self.finish_update()]);
             }
+            if let crate::panels::PanelMsg::CompiledDesign(msg) = panel_msg {
+                return self.dispatch_compiled_design_message(msg.clone());
+            }
+            if let crate::panels::PanelMsg::Unions(unions_msg) = panel_msg {
+                let task = self.handle_unions_message(unions_msg.clone());
+                return Task::batch([task, self.finish_update()]);
+            }
+            if let crate::panels::PanelMsg::ObjectList(list_msg) = panel_msg {
+                let task = self.handle_object_list_message(list_msg.clone());
+                return Task::batch([task, self.finish_update()]);
+            }
+            if let crate::panels::PanelMsg::Part(part_msg) = panel_msg {
+                let task = self.handle_dock_part_message(part_msg);
+                return Task::batch([task, self.finish_update()]);
+            }
+            if let Some(task) = self.handle_dock_selection_form_message(panel_msg) {
+                return Task::batch([task, self.finish_update()]);
+            }
+            if let crate::panels::PanelMsg::CommandLog(log_msg) = panel_msg {
+                let task = self.handle_command_log_message(log_msg.clone());
+                return Task::batch([task, self.finish_update()]);
+            }
+            if let crate::panels::PanelMsg::Annotations(annotations_msg) = panel_msg {
+                let task = self.handle_annotations_message(annotations_msg.clone());
+                return Task::batch([task, self.finish_update()]);
+            }
+            if let crate::panels::PanelMsg::History(history_msg) = panel_msg {
+                let task = self.handle_history_panel(history_msg.clone());
+                return Task::batch([task, self.finish_update()]);
+            }
+            if let crate::panels::PanelMsg::ColorHex(hex_msg) = panel_msg {
+                // Finishes the update itself, once, also for an applied pick.
+                return self.handle_color_hex(hex_msg.clone());
+            }
             if let Some(task) = self.handle_dock_panel_control_message(panel_msg) {
                 return Task::batch([task, self.finish_update()]);
             }
             if let Some(task) = self.handle_dock_project_navigation_panel_message(panel_msg) {
+                return Task::batch([task, self.finish_update()]);
+            }
+            if let crate::panels::PanelMsg::NavigatorPanel(navigator_msg) = panel_msg {
+                let task = self.handle_navigator_message(navigator_msg.clone());
                 return Task::batch([task, self.finish_update()]);
             }
             if let Some(task) = self.handle_dock_navigator_panel_message(panel_msg) {
@@ -81,8 +139,16 @@ impl Signex {
                 self.handle_pcb_footprint_text(msg);
                 return self.finish_update();
             }
+            if let crate::panels::PanelMsg::PcbPanel(msg) = panel_msg {
+                let task = self.handle_pcb_panel(msg.clone());
+                return Task::batch([task, self.finish_update()]);
+            }
             if let crate::panels::PanelMsg::PcbBoard(msg) = panel_msg {
                 let task = self.handle_pcb_board_panel(msg);
+                return Task::batch([task, self.finish_update()]);
+            }
+            if let crate::panels::PanelMsg::DocGrid(msg) = panel_msg {
+                let task = self.handle_doc_grid(msg);
                 return Task::batch([task, self.finish_update()]);
             }
             if let crate::panels::PanelMsg::Drc(msg) = panel_msg {
@@ -101,9 +167,17 @@ impl Signex {
                 self.handle_pcb_primitive(msg);
                 return self.finish_update();
             }
+            // #2457: Room Properties.
+            if let crate::panels::PanelMsg::Room(msg) = panel_msg {
+                let task = self.handle_room(msg.clone());
+                return Task::batch([task, self.finish_update()]);
+            }
             if let crate::panels::PanelMsg::LayerStack(msg) = panel_msg {
-                self.handle_layer_stack(msg);
-                return self.finish_update();
+                let task = self.handle_layer_stack(msg);
+                return Task::batch([task, self.finish_update()]);
+            }
+            if let Some(task) = self.handle_dock_harness_message(panel_msg) {
+                return Task::batch([task, self.finish_update()]);
             }
             if self.handle_dock_library_browser_message(panel_msg)
                 || self.handle_dock_multi_edit_message(panel_msg)
@@ -112,7 +186,10 @@ impl Signex {
             {
                 return self.finish_update();
             }
-            if let Some(task) = self.handle_dock_sch_library_message(panel_msg) {
+            let replay_probe = self.probe_panel_edit(panel_msg);
+            let handled = self.handle_dock_sch_library_message(panel_msg);
+            self.finish_panel_edit(replay_probe);
+            if let Some(task) = handled {
                 return Task::batch([task, self.finish_update()]);
             }
         }

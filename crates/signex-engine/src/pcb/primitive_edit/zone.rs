@@ -1,6 +1,6 @@
 //! Area fields (#2393): the layer and net of a fill, solid region, polygon
-//! pour or keepout, and a pour's clearance, minimum width, priority and
-//! island rules (#2216).
+//! pour, keepout or pour cutout, and a pour's clearance, minimum width, priority and
+//! island rules (#2216), and whether it is shelved (#2523).
 
 use signex_types::format::{parse_pcb_layer, pcb_layer_token};
 use signex_types::pcb::{PcbBoard, Zone};
@@ -14,10 +14,11 @@ use crate::pcb::{BoardCommand, BoardItem};
 /// One field of the selected areas, set to an absolute value.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ZoneEdit {
-    /// A copper area takes a copper layer; a keepout a copper or keep-out
-    /// layer.
+    /// A copper area or a pour cutout takes a copper layer; a keepout a
+    /// copper or keep-out layer.
     Layer(PcbLayer),
-    /// 0 is no net. A keepout has no net and is left as it is.
+    /// 0 is no net. A keepout or a pour cutout (#2871) has no net and is
+    /// left as it is.
     Net(u32),
     /// A pour's clearance in mm; 0 follows the board's. Other areas are
     /// left as they are.
@@ -34,6 +35,9 @@ pub enum ZoneEdit {
     /// Whether a pour drops islands touching no copper of its net. Other
     /// areas are left as they are.
     RemoveDeadIslands(bool),
+    /// Whether a pour is shelved (#2523): it keeps its outline and settings
+    /// but holds no copper. Other areas are left as they are.
+    Shelved(bool),
 }
 
 /// Whether `layer` can hold `zone`: copper for a copper area, a layer that
@@ -78,7 +82,7 @@ pub fn apply_zone_edit(
     zone: &mut Zone,
     edit: ZoneEdit,
 ) -> Result<(), PrimitiveEditRefusal> {
-    let is_keepout = zone.fill_type == KEEPOUT_FILL;
+    let has_no_net = zone.fill_type == KEEPOUT_FILL || zone.is_pour_cutout();
     if let ZoneEdit::Clearance(v)
     | ZoneEdit::MinThickness(v)
     | ZoneEdit::MinIslandArea(v)
@@ -101,7 +105,7 @@ pub fn apply_zone_edit(
                 zone.layer = pcb_layer_token(layer);
             }
         }
-        ZoneEdit::Net(_) if is_keepout => {}
+        ZoneEdit::Net(_) if has_no_net => {}
         ZoneEdit::Net(net) => {
             zone.net = net;
             zone.net_name = board
@@ -116,6 +120,7 @@ pub fn apply_zone_edit(
         | ZoneEdit::Priority(_)
         | ZoneEdit::MinIslandArea(_)
         | ZoneEdit::RemoveDeadIslands(_)
+        | ZoneEdit::Shelved(_)
             if !zone.is_pour() => {}
         ZoneEdit::Clearance(v) => zone.clearance = v,
         ZoneEdit::MinThickness(v) => zone.min_thickness = v,
@@ -123,6 +128,7 @@ pub fn apply_zone_edit(
         ZoneEdit::Priority(v) => zone.priority = v as u32,
         ZoneEdit::MinIslandArea(v) => zone.min_island_area = v,
         ZoneEdit::RemoveDeadIslands(on) => zone.remove_dead_islands = on,
+        ZoneEdit::Shelved(on) => zone.shelved = on,
     }
     Ok(())
 }

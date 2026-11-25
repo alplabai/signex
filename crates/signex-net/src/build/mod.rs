@@ -260,6 +260,16 @@ pub fn name_carrying_ports(sheet: &SchematicSheet) -> Vec<(Uuid, &str)> {
         .collect()
 }
 
+/// The power-port pin tips that name a net, as `(tip, value)`:
+/// [`joinable_power_ports`] by tip, so a contact-only pin of a multi-pin port
+/// is left out, as [`build_netlist`] leaves it out.
+pub fn name_carrying_tips(sheet: &SchematicSheet) -> Vec<(Point, &str)> {
+    joinable_power_ports(sheet)
+        .into_iter()
+        .map(|(tip, value, _)| (tip, value))
+        .collect()
+}
+
 /// For each power-port symbol (`is_power && !value.is_empty()`) on the sheet,
 /// the net root each connected pin lands on, tagged with the port's `value`
 /// (its global net name). Power ports are implicit global name carriers — ERC
@@ -543,6 +553,8 @@ fn merged_connectivity(sheet: &SchematicSheet) -> SheetConnectivity {
         &segments,
         &junctions,
     );
+    // Same-named harness entries of one bundle are one net (#1280).
+    crate::harness::join_entry_nets(sheet, &mut conn.parent);
     conn
 }
 
@@ -580,6 +592,15 @@ pub(crate) fn collect_terminals(
         .collect()
 }
 
+/// How a terminal names its pin: the pin number when present, else its name.
+pub(crate) fn terminal_pin_id(lp: &signex_types::schematic::LibPin) -> String {
+    if lp.pin.number.is_empty() {
+        lp.pin.name.clone()
+    } else {
+        lp.pin.number.clone()
+    }
+}
+
 /// [`collect_terminals`] with the world position of each pin's tip beside it.
 pub(crate) fn collect_terminals_at(
     sheet: &SchematicSheet,
@@ -596,12 +617,7 @@ pub(crate) fn collect_terminals_at(
             if !gate.contains(&world_pos) {
                 continue;
             }
-            // Pin id: prefer the pin number when present, else fall back to its name.
-            let pin = if !lp.pin.number.is_empty() {
-                lp.pin.number.clone()
-            } else {
-                lp.pin.name.clone()
-            };
+            let pin = terminal_pin_id(lp);
             let root = uf_find(parent, pt_key(&world_pos));
             let terminal = Terminal {
                 symbol: sym.uuid,
@@ -718,6 +734,7 @@ pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
     }
     let mut membership = collect_membership(sheet, &mut parent);
     let mut net_terms = collect_terminals(sheet, &InstancePath::root(), &mut parent);
+    let harness_names = crate::harness::sample(sheet, &mut parent).names;
 
     // A net exists wherever at least one terminal lands. A label with no pins
     // is a dangling label — it carries no connectivity, so it forms no net.
@@ -743,8 +760,11 @@ pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
                 .map(|v| v.iter().map(String::as_str).collect())
                 .unwrap_or_default();
             let selected = best_net_name(labels, &power_vals);
+            // A label names a harness net; `<Type>.<Entry>` only stands in
+            // for the auto name (#1280).
             let name = selected
                 .map(|(_, t)| t)
+                .or_else(|| harness_names.get(&root).cloned())
                 .unwrap_or_else(|| format!("N${}", id.0));
 
             let (wires, junctions) = membership.remove(&root).unwrap_or_default();
@@ -771,7 +791,7 @@ pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
     dedup_net_names(&mut nets);
 
     let mut netlist = Netlist { nets };
-    crate::directives::apply_blanket_classes(sheet, &mut netlist);
+    crate::directives::apply_directive_classes(sheet, &mut netlist);
     netlist
 }
 

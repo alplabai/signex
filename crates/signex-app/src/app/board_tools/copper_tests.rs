@@ -11,6 +11,8 @@ use signex_drc::{DrcRules, ViolationKind};
 use signex_types::pcb::PcbBoard;
 use uuid::Uuid;
 
+use signex_i18n::RenderTranslatable;
+
 use crate::app::command::{CommandArgs, CommandOutcome};
 use crate::app::handlers::menu::export::tests::app_workspace;
 use crate::app::{EditMsg, Message, Signex};
@@ -173,7 +175,7 @@ fn via_stitching_from_operands_answers_with_the_vias_it_added() {
 
     let refused = run_operands(&mut app, &path, "stitch_vias", &["start=-4,-4", "end=4,4"]);
     assert!(
-        matches!(&refused, CommandOutcome::Disabled { reason } if reason.contains("no net")),
+        matches!(&refused, CommandOutcome::Disabled { reason } if reason.render_en_us().contains("no net")),
         "{refused:?}"
     );
 }
@@ -211,7 +213,7 @@ fn teardrops_are_added_once_removed_and_undone_in_steps() {
 
     let outcome = run_operands(&mut app, &path, "add_teardrops", &["net=SIG"]);
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("no track")),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.render_en_us().contains("no track")),
         "{outcome:?}"
     );
     let outcome = run_operands(&mut app, &path, "add_teardrops", &["net=GND"]);
@@ -296,7 +298,7 @@ fn copper_tools_refuse_a_clearance_rule_they_cannot_read() {
 
     let outcome = run_operands(&mut app, &path, "add_teardrops", &["net=GND"]);
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("clearance rule")),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.render_en_us().contains("clearance rule")),
         "{outcome:?}"
     );
 }

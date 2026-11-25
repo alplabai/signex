@@ -5,13 +5,15 @@ use crate::{AppCommandId, Modifiers, ShortcutContext};
 use signex_i18n_ids::{MessageId, command_ids};
 
 pub use categories::{category_title_id, title_words};
-pub use operands::{Operand, OperandKind};
+pub use closest::closest_command_ids;
+pub use operands::{MAX_TARGETS, Operand, OperandKind};
 
 mod annotate;
 mod arrange;
 mod board;
 mod categories;
 mod clipboard;
+mod closest;
 mod documents;
 mod drawing;
 mod drc;
@@ -399,12 +401,20 @@ const GLOBAL_COMMANDS: &[&str] = &[
     "open_document",
     "save_document",
     "save_document_as",
+    "save_all",
     "print",
     "close_active_document",
     "close_all_documents",
     "tile_windows_horizontally",
     "tile_windows_vertically",
     "untile_documents",
+    "apply_layout_schematic",
+    "apply_layout_board",
+    "apply_layout_review",
+    "apply_layout_notebook",
+    "save_workspace_layout",
+    "manage_workspace_layouts",
+    "reset_workspace_layout",
     "next_document_tab",
     "previous_document_tab",
     "undo",
@@ -414,6 +424,7 @@ const GLOBAL_COMMANDS: &[&str] = &[
     "open_schematic_preferences",
     "open_library_browser",
     "open_net_inspector",
+    "open_compiled_design",
     "show_current_command_hotkeys",
     "show_current_command_shortcuts",
     "toggle_floating_panels",
@@ -433,7 +444,9 @@ const GLOBAL_COMMANDS: &[&str] = &[
     "run_erc",
     "open_erc_dialog",
     "number_schematic_sheets",
+    "compile_project",
     "update_pcb_from_schematic",
+    "compare_board_with_schematic",
     "back_annotate_schematics",
     "new_pcb_document",
     "new_schematic_sheet",

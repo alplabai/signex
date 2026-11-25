@@ -10,11 +10,13 @@
 //! - [`release`] — left-release commit arms (split from `tools` for
 //!   the file-size cap).
 //! - [`keys`] — modifier tracking + keyboard handling.
+//! - [`middle_zoom`] — the middle-button drag zoom.
 
 mod camera;
 #[cfg(test)]
 pub(super) use camera::chrome_insets;
 mod keys;
+mod middle_zoom;
 mod pointer;
 mod release;
 mod tools;

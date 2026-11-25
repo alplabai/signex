@@ -154,18 +154,11 @@ impl Signex {
                     true,
                 );
             }
-            crate::panels::PanelMsg::EditTextNoteText(uuid, new_text) => {
-                self.apply_engine_command(
-                    signex_engine::Command::UpdateText {
-                        target: signex_engine::TextTarget::TextNote(*uuid),
-                        value: new_text.to_string(),
-                    },
-                    true,
-                    true,
-                );
-            }
             crate::panels::PanelMsg::EditBlanket(uuid, edit) => {
-                self.edit_blanket_field(*uuid, edit);
+                self.blanket_panel_edited(*uuid, edit);
+            }
+            crate::panels::PanelMsg::Directive(event) => {
+                self.directive_panel_event(event);
             }
             crate::panels::PanelMsg::EditNoErcRules(uuid, edit) => {
                 self.edit_no_erc_rules(*uuid, edit);
@@ -301,18 +294,19 @@ impl Signex {
             }
             crate::panels::PanelMsg::ChildSheetStrokeWidthTyping(_uuid, value) => {
                 self.document_state.panel_ctx.child_sheet_stroke_width_buf = Some(value.clone());
+                self.document_state.line_width_draft_selection =
+                    self.document_state.panel_ctx.selected_uuid;
             }
             crate::panels::PanelMsg::CommitChildSheetStrokeWidth(uuid) => {
-                let parsed = self
+                // Refused text stays in the box to be fixed (#2767).
+                let typed = self
                     .document_state
                     .panel_ctx
                     .child_sheet_stroke_width_buf
-                    .as_ref()
-                    .and_then(|s| crate::numeric_field::parse_field_f64(s));
-                self.document_state.panel_ctx.child_sheet_stroke_width_buf = None;
-                if let Some(width) = parsed
-                    && width >= 0.0
-                {
+                    .as_deref()
+                    .and_then(crate::numeric_field::typed_line_width);
+                if let Some(width) = typed {
+                    self.document_state.panel_ctx.child_sheet_stroke_width_buf = None;
                     self.apply_engine_command(
                         signex_engine::Command::UpdateChildSheetStyle {
                             sheet_id: *uuid,
@@ -360,6 +354,19 @@ impl Signex {
         }
 
         true
+    }
+
+    /// Refused Line Width text belongs to the selection it was typed under:
+    /// a panel whose selection changed drops it. Run after every message.
+    pub(crate) fn drop_line_width_text_of_another_symbol(&mut self) {
+        let docs = &mut self.document_state;
+        let typed_under = docs.line_width_draft_selection;
+        let panels = std::iter::once(&mut docs.panel_ctx).chain(docs.window_panel_ctx.values_mut());
+        for ctx in panels {
+            if ctx.child_sheet_stroke_width_buf.is_some() && ctx.selected_uuid != typed_under {
+                ctx.child_sheet_stroke_width_buf = None;
+            }
+        }
     }
 }
 

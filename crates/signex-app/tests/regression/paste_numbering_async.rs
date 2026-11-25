@@ -204,7 +204,7 @@ fn array_with_choice(global: PasteDesignators, chosen: PasteDesignators) -> Vec<
     )));
     settle(&mut app, task, true);
     for msg in [
-        PasteArrayMsg::CountChanged("2".to_owned()),
+        PasteArrayMsg::CountChanged("3".to_owned()),
         PasteArrayMsg::ApplyPressed,
     ] {
         let _ = app.update(Message::Edit(EditMsg::PasteArray(msg)));
@@ -254,7 +254,7 @@ fn a_fifty_copy_array_places_every_copy_and_label() {
     send_and_settle(&mut app, EditMsg::PasteArrayRequested, PasteIntent::Array);
     answer(&mut app, PasteIntent::Array, None);
     for msg in [
-        PasteArrayMsg::CountChanged("50".to_owned()),
+        PasteArrayMsg::CountChanged("51".to_owned()),
         PasteArrayMsg::ApplyPressed,
     ] {
         let _ = app.update(Message::Edit(EditMsg::PasteArray(msg)));
@@ -305,7 +305,7 @@ fn a_paste_array_of_a_foreign_fragment_brings_its_library_body() {
     send_and_settle(&mut app, EditMsg::PasteArrayRequested, PasteIntent::Array);
     answer(&mut app, PasteIntent::Array, Some(&text));
     for msg in [
-        PasteArrayMsg::CountChanged("3".to_owned()),
+        PasteArrayMsg::CountChanged("4".to_owned()),
         PasteArrayMsg::ApplyPressed,
     ] {
         let _ = app.update(Message::Edit(EditMsg::PasteArray(msg)));

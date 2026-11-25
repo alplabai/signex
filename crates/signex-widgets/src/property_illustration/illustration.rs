@@ -17,8 +17,7 @@ pub struct Part {
     pub primitive: Primitive,
     pub style: Style,
     /// The fields this part shows. The first one is the field the part holds
-    /// the value of; hovering the part reports it. Hovering any of them
-    /// highlights the part.
+    /// the value of. Hovering the row of any of them highlights the part.
     pub fields: Vec<FieldId>,
     /// The feature switch this part needs; the part is dropped while the
     /// feature is off.
@@ -75,7 +74,7 @@ impl Part {
         self
     }
 
-    /// The field hovering this part reports.
+    /// The field the part holds the value of.
     pub fn primary_field(&self) -> Option<&FieldId> {
         self.fields.first()
     }
@@ -111,7 +110,7 @@ impl Illustration {
         self
     }
 
-    /// Appends a part; later parts draw on top and win the hover.
+    /// Appends a part; later parts draw on top.
     pub fn part(mut self, part: Part) -> Self {
         self.parts.push(part);
         self

@@ -32,100 +32,77 @@ impl Signex {
         self.active_pcb().is_some()
     }
 
-    pub(crate) fn active_render_snapshot(
-        &self,
-    ) -> Option<&crate::schematic_runtime::SchematicRenderSnapshot> {
-        self.interaction_state.active_canvas().active_snapshot()
-    }
-
     pub(crate) fn active_pcb_snapshot(&self) -> Option<&PcbBoard> {
         self.active_pcb()
     }
 
-    pub(crate) fn with_active_schematic_session_mut<R>(
+    /// Move the active schematic to `to` once a Save As wrote it there.
+    /// `finish` settles the engine where it is and returns whether the
+    /// document is still dirty; only then is the engine moved, with no other
+    /// code between its removal and its reinsertion, so a panic in `finish`
+    /// leaves it at its old path. `false`, with nothing changed, when there
+    /// is no active schematic tab.
+    pub(crate) fn rekey_active_schematic(
         &mut self,
-        update: impl FnOnce(&mut SchematicTabSession) -> R,
-    ) -> Option<R> {
-        use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
-
-        // Temporarily remove the active engine from the HashMap so we
-        // can hand the caller a `SchematicTabSession` (legacy API that
-        // owns its engine). save/save_as mutate `session.path` — when
-        // that happens, we reinsert at the new key so the HashMap
-        // follows the tab's on-disk location.
-        let old_path = self.document_state.active_path.clone()?;
-        let engine = self.document_state.engines.remove(&old_path)?;
-
-        let Some(title) = self
+        to: PathBuf,
+        finish: impl FnOnce(&mut signex_engine::Engine) -> bool,
+    ) -> bool {
+        let Some(old_path) = self.document_state.active_path.clone() else {
+            return false;
+        };
+        if self
             .document_state
             .tabs
             .get(self.document_state.active_tab)
-            .map(|tab| tab.title.clone())
-        else {
-            self.document_state.engines.insert(old_path, engine);
-            return None;
-        };
-
+            .is_none()
+        {
+            return false;
+        }
         let was_dirty = self.document_state.is_document_dirty(&old_path);
-        // Panic guard: the engine moves into `session`, so a panicking
-        // closure drops it. We cannot get it back; catch the unwind only
-        // to clear `active_path` (no dangling key) before re-raising.
-        let session = SchematicTabSession::new(engine, title, old_path.clone(), was_dirty);
-        let update_result = catch_unwind(AssertUnwindSafe(move || {
-            let mut session = session;
-            let r = update(&mut session);
-            (r, session.into_parts())
-        }));
+        let Some(engine) = self.document_state.engines.get_mut(&old_path) else {
+            return false;
+        };
+        let dirty = finish(engine);
+        let Some(mut engine) = self.document_state.engines.remove(&old_path) else {
+            return false;
+        };
+        engine.set_path(Some(to.clone()));
+        self.document_state.insert_engine(to.clone(), engine);
 
-        match update_result {
-            Ok((result, (engine, title, new_path, dirty))) => {
-                if let Some(tab) = self
-                    .document_state
-                    .tabs
-                    .get_mut(self.document_state.active_tab)
-                {
-                    tab.title = title;
-                    tab.path = new_path.clone();
-                }
-
-                // The session carried the dirty flag in and out; write it
-                // back so the mark survives tab close.
-                if new_path != old_path {
-                    // Save As re-keyed the document; the old key no longer
-                    // has an engine, so a lingering dirty marker would make
-                    // every later Save All fail on it.
-                    self.document_state.clear_document_dirty(&old_path);
-                    self.rekey_page_setup(&old_path, &new_path);
-                    // The new file is not what any sheet symbol places.
-                    self.document_state.tab_placements.forget(&old_path);
-                    self.rekey_undocked_windows(&old_path, &new_path);
-                }
-                self.document_state.insert_engine(new_path.clone(), engine);
-
-                // Write back only a change the closure made: a dirty mark
-                // re-written here would count as one from outside the
-                // history and keep undo from ever clearing it.
-                if new_path != old_path || dirty != was_dirty {
-                    if dirty {
-                        self.document_state.mark_document_dirty(&new_path);
-                    } else {
-                        self.document_state.mark_document_clean(&new_path);
-                    }
-                }
-                self.document_state.active_path = Some(new_path);
-                Some(result)
-            }
-            Err(payload) => {
-                // Engine was consumed by the panicking session; the
-                // HashMap is now missing its entry and cannot be restored.
-                tracing::error!(
-                    path = %old_path.display(),
-                    "schematic session panicked; its engine was dropped"
-                );
-                self.document_state.active_path = None;
-                resume_unwind(payload);
+        if let Some(tab) = self
+            .document_state
+            .tabs
+            .get_mut(self.document_state.active_tab)
+        {
+            tab.title = to
+                .file_stem()
+                .map(|stem| stem.to_string_lossy().to_string())
+                .unwrap_or_else(|| "Schematic".to_string());
+            tab.path = to.clone();
+        }
+        if to != old_path {
+            // The old key no longer has an engine, so a lingering dirty
+            // marker would make every later Save All fail on it.
+            self.document_state.clear_document_dirty(&old_path);
+            self.document_state.rekey_undo_sheets(&old_path, &to);
+            self.document_state.forget_parked_mark(&to);
+            self.rekey_page_setup(&old_path, &to);
+            // The new file is not what any sheet symbol places.
+            self.document_state.tab_placements.forget(&old_path);
+            self.rekey_undocked_windows(&old_path, &to);
+        }
+        // Write back only a change `finish` made: a dirty mark re-written
+        // here would count as one from outside the history and keep undo
+        // from ever clearing it.
+        if to != old_path || dirty != was_dirty {
+            if dirty {
+                self.document_state.mark_document_dirty(&to);
+            } else {
+                self.document_state.mark_document_clean(&to);
             }
         }
+        self.document_state.active_path = Some(to);
+        true
     }
 
     pub(crate) fn park_active_schematic_session(&mut self) {
@@ -133,22 +110,6 @@ impl Signex {
         // tab's engine lives keyed by its on-disk path regardless of
         // which tab is active. Kept as an API seam so callers about to
         // swap `active_tab` don't need to know the storage changed.
-    }
-
-    fn activate_active_schematic_session(&mut self) -> bool {
-        // Point `active_path` at the active tab's schematic engine if
-        // one exists. Returns true iff the active engine is now live
-        // and ready for `active_engine()` lookups.
-        let path = self.active_tab_path();
-        if let Some(p) = path.as_ref()
-            && self.document_state.engines.contains_key(p)
-        {
-            self.document_state.active_path = path;
-            true
-        } else {
-            self.document_state.active_path = None;
-            false
-        }
     }
 
     pub(crate) fn active_tab_path(&self) -> Option<PathBuf> {
@@ -162,219 +123,52 @@ impl Signex {
     /// at `path`, leaving the canvas and the user's tool alone. A sheet the
     /// engine rejects drops the stale engine, so a save cannot undo it.
     /// Returns whether the new engine was installed.
+    #[cfg(test)]
     pub(crate) fn install_schematic_at(
         &mut self,
         path: &std::path::Path,
         sheet: SchematicSheet,
     ) -> bool {
-        // Inline text typed into a window on this sheet targets an object of
-        // the engine being replaced.
+        // The non-active arm of `install_reloaded_schematic`, without its
+        // repair reports and settle steps, as on trunk: the pre-step, the core
+        // call and the projection repeat the wrapper's three lines.
+        let result = self.engine_for_sheet_behind_tab(path, sheet);
+        let install = self.document_state.replace_engine_at(path, result);
+        self.project_replaced_engine(path, install)
+    }
+
+    /// The GUI pre-step of an install behind a tab not in view, and the engine
+    /// to install. Inline text typed into a window on this sheet targets an
+    /// object of the engine being replaced: it ends before the install.
+    pub(crate) fn engine_for_sheet_behind_tab(
+        &mut self,
+        path: &std::path::Path,
+        sheet: SchematicSheet,
+    ) -> Result<signex_engine::Engine, signex_engine::EngineError> {
         if self.text_edit_targets_sheet_at(path) {
             self.interaction_state.editing_text = None;
         }
-        match signex_engine::Engine::new_with_path(sheet, Some(path.to_path_buf())) {
-            Ok(engine) => {
-                self.document_state
-                    .engines
-                    .insert(path.to_path_buf(), engine);
-                // An undocked window on this sheet must not keep drawing the
-                // replaced engine, nor select its objects.
-                self.refresh_slots_from_engine(
-                    path,
-                    false,
-                    crate::schematic_runtime::RenderInvalidation::FULL,
-                    true,
-                );
-                true
-            }
-            Err(error) => {
-                self.document_state.engines.remove(path);
-                crate::diagnostics::log_warning(format!(
-                    "[git] restore: {} was restored but its engine could not start: {error}",
-                    path.display()
-                ));
-                false
-            }
-        }
+        signex_engine::Engine::new_with_path(sheet, Some(path.to_path_buf()))
     }
 
-    /// Make `result` the engine of the active tab at `p`. A failed engine is
-    /// reported to the Messages panel and the engine already open there is
-    /// kept: it may hold unsaved edits that dropping it would lose silently.
-    /// Returns whether the new engine was installed.
+    /// Make `result` the engine of the active tab at `p`; a failure reaches
+    /// the Messages panel. The core half, then the step
+    /// `apply_loaded_schematic` ships. Returns whether it was installed.
+    #[cfg(test)]
     fn install_active_engine(
         &mut self,
         p: PathBuf,
         result: Result<signex_engine::Engine, signex_engine::EngineError>,
     ) -> bool {
-        match result {
-            Ok(engine) => {
-                self.document_state.insert_engine(p.clone(), engine);
-                self.document_state.active_path = Some(p);
-                true
-            }
-            Err(error) => {
-                crate::diagnostics::log_warning(format!(
-                    "{} could not be loaded into the editor ({error}); the sheet already open was kept",
-                    p.display()
-                ));
-                false
-            }
-        }
-    }
-
-    /// Returns whether a new engine was installed from `schematic`.
-    fn sync_engine_from_schematic(&mut self, schematic: Option<SchematicSheet>) -> bool {
-        let path = self.active_tab_path();
-        match (path, schematic) {
-            (Some(p), Some(sheet)) => {
-                let result = signex_engine::Engine::new_with_path(sheet, Some(p.clone()));
-                self.install_active_engine(p, result)
-            }
-            _ => {
-                self.document_state.clear_active_engine();
-                false
-            }
-        }
+        logged_active_install(self.document_state.install_active(p, result))
     }
 
     /// The engine at `path` holds what was just read from disk: its history
     /// position is the clean point. Only when `installed`: a failed install
     /// leaves the older engine at `path`, which is not known to equal the file.
     pub(crate) fn mark_installed_engine_saved(&mut self, path: &std::path::Path, installed: bool) {
-        if installed && let Some(engine) = self.document_state.engines.get_mut(path) {
-            engine.mark_saved();
-        }
-    }
-
-    pub(crate) fn sync_canvas_from_visible_schematic(
-        &mut self,
-        invalidation: crate::schematic_runtime::RenderInvalidation,
-    ) {
-        // Active engine drives the render cache — if it's gone the
-        // cache is cleared. There is no parked-schematic fallback with
-        // HashMap storage: an open schematic tab always has its engine
-        // resident in `document_state.engines`.
-        if let Some(path) = self
-            .document_state
-            .active_path
-            .clone()
-            .filter(|p| self.document_state.engines.contains_key(p))
-        {
-            self.refresh_slots_from_engine(&path, true, invalidation, false);
-            return;
-        }
-
-        self.interaction_state
-            .active_canvas_mut()
-            .set_render_cache(None);
-    }
-
-    /// Redraw every canvas slot showing the engine at `path` from it: the
-    /// undocked windows on that sheet (#171) and, with `include_main`, the
-    /// main window's slot. `clear_selection` also drops each slot's
-    /// selection, for an engine that was replaced wholesale: its UUIDs may
-    /// not exist in the new document (#102).
-    pub(crate) fn refresh_slots_from_engine(
-        &mut self,
-        path: &std::path::Path,
-        include_main: bool,
-        invalidation: crate::schematic_runtime::RenderInvalidation,
-        clear_selection: bool,
-    ) {
-        let Some(engine) = self.document_state.engines.get(path) else {
-            return;
-        };
-        let sheet = engine.document();
-        let (base, revision) = (engine.base_revision(), engine.revision());
-        let windows = &self.ui_state.windows;
-        let main = include_main.then_some(&mut self.interaction_state.canvas);
-        // An unfocused tile pane on that sheet draws it too (#2249).
-        let pane = self.interaction_state.tile_panes.schematic.get_mut(path);
-        let slots = self
-            .interaction_state
-            .canvases
-            .iter_mut()
-            .filter(|(id, _)| {
-                matches!(
-                    windows.get(id),
-                    Some(super::state::WindowKind::UndockedTab { path: shown, .. })
-                        if shown == path
-                )
-            })
-            .map(|(_, slot)| slot)
-            .chain(main)
-            .chain(pane);
-        for slot in slots {
-            if let Some(cache) = slot.render_cache.as_mut() {
-                cache.update_from_sheet(sheet, invalidation, base, revision);
-            } else {
-                slot.set_render_cache(Some(
-                    crate::schematic_runtime::SchematicRenderCache::from_sheet_at(sheet, revision),
-                ));
-            }
-            if clear_selection {
-                slot.selected.clear();
-            }
-            // The retained layers rebuild on a clear, a zoom, a non-whole-pixel
-            // pan or a new scene; a whole-pixel pan only moves them.
-            slot.clear_content_cache();
-        }
-    }
-
-    /// Whether the open inline text edit targets an object of the engine at
-    /// `path`.
-    pub(crate) fn text_edit_targets_sheet_at(&self, path: &std::path::Path) -> bool {
-        use signex_types::schematic::SelectedKind;
-        let (Some(edit), Some(engine)) = (
-            self.interaction_state.editing_text.as_ref(),
-            self.document_state.engines.get(path),
-        ) else {
-            return false;
-        };
-        let sheet = engine.document();
-        match edit.kind {
-            SelectedKind::Label => sheet.labels.iter().any(|l| l.uuid == edit.uuid),
-            SelectedKind::TextNote => sheet.text_notes.iter().any(|t| t.uuid == edit.uuid),
-            SelectedKind::SymbolRefField | SelectedKind::SymbolValField | SelectedKind::Symbol => {
-                sheet.symbols.iter().any(|s| s.uuid == edit.uuid)
-            }
-            _ => false,
-        }
-    }
-
-    /// A restore is about to replace (or drop) the engine behind the visible
-    /// schematic. Inline text, a pending move and the selection point into
-    /// the old document, so they must not outlive it.
-    pub(crate) fn discard_state_of_replaced_engine(&mut self) {
-        self.interaction_state.editing_text = None;
-        self.cancel_move_pick();
-        self.interaction_state.active_canvas_mut().selected.clear();
-        self.update_selection_info();
-    }
-
-    /// Refresh only the main window's canvas from the engine at `path` after
-    /// an edit made through an undocked window's swapped-in slot. The other
-    /// undocked slots were already refreshed by that edit's own sync.
-    pub(crate) fn refresh_main_canvas_from_engine(&mut self, path: &std::path::Path) {
-        let Some(engine) = self.document_state.engines.get(path) else {
-            return;
-        };
-        let slot = &mut self.interaction_state.canvas;
-        let sheet = engine.document();
-        let revision = engine.revision();
-        match slot.render_cache.as_mut() {
-            Some(cache) => cache.update_from_sheet(
-                sheet,
-                crate::schematic_runtime::RenderInvalidation::FULL,
-                engine.base_revision(),
-                revision,
-            ),
-            None => slot.set_render_cache(Some(
-                crate::schematic_runtime::SchematicRenderCache::from_sheet_at(sheet, revision),
-            )),
-        }
-        slot.clear_content_cache();
+        self.document_state
+            .mark_installed_engine_saved(path, installed);
     }
 
     /// The board shown in `window_id`: the active tab's in the main window,
@@ -427,77 +221,6 @@ impl Signex {
         Some(canvas)
     }
 
-    /// The active tab's path and board revision: what the ratsnest cache
-    /// is keyed by.
-    fn active_pcb_ratsnest_key(&self) -> Option<super::state::RatsnestKey> {
-        let path = &self
-            .document_state
-            .tabs
-            .get(self.document_state.active_tab)?
-            .path;
-        let revision = *self.document_state.pcb_revisions.get(path)?;
-        Some((path.clone(), revision))
-    }
-
-    pub(crate) fn sync_pcb_canvas_from_visible_board(&mut self) {
-        // The ratsnest is recomputed only when the board's revision moved.
-        let ratsnest_key = self.active_pcb_ratsnest_key();
-        let board_path = self.active_tab_path().unwrap_or_default();
-        let mut ratsnest = std::mem::take(&mut self.interaction_state.pcb_ratsnest);
-        let ratsnest_visible = self.pcb_layer_view(&board_path).ratsnest_visible();
-        let renderer_snapshot = self.active_pcb().map(|board| {
-            ratsnest.refresh(ratsnest_key, board);
-            let snapshot = self
-                .pcb_snapshot_for(&board_path, board)
-                .with_zone_fills(ratsnest.zone_fills());
-            if ratsnest_visible {
-                ratsnest.apply(&board_path, snapshot)
-            } else {
-                snapshot
-            }
-        });
-        self.interaction_state.pcb_ratsnest = ratsnest;
-        let board_grid = self
-            .active_pcb()
-            .map(signex_engine::pcb::placement::grid_step_mm);
-        let view = self.pcb_layer_view(&board_path);
-        let (origin_marker, flipped) = (view.origin_marker_visible(), view.flipped());
-        let marks = self
-            .active_pcb()
-            .map(crate::pcb_canvas::BoardMarks::of)
-            .unwrap_or_default();
-
-        // An undocked window showing the same tab draws the same board
-        // (#494). Its camera stays its own.
-        let active_path = self
-            .document_state
-            .tabs
-            .get(self.document_state.active_tab)
-            .map(|tab| tab.path.as_path());
-        for (id, canvas) in &mut self.interaction_state.pcb_canvases {
-            let shows_active = matches!(
-                self.ui_state.windows.get(id),
-                Some(super::state::WindowKind::UndockedTab { path, .. })
-                    if Some(path.as_path()) == active_path
-            );
-            if shows_active {
-                canvas.set_renderer_snapshot(renderer_snapshot.clone());
-                canvas.set_board_grid(board_grid);
-                canvas.set_board_marks(marks.clone());
-                canvas.set_origin_marker_visible(origin_marker);
-                canvas.set_view_flipped(flipped);
-                canvas.clear_content_cache();
-            }
-        }
-        let main = &mut self.interaction_state.pcb_canvas;
-        main.set_renderer_snapshot(renderer_snapshot);
-        main.set_board_grid(board_grid);
-        main.set_board_marks(marks);
-        main.set_origin_marker_visible(origin_marker);
-        main.set_view_flipped(flipped);
-        self.note_pcb_board_changed();
-    }
-
     pub(crate) fn open_schematic_tab(
         &mut self,
         path: PathBuf,
@@ -512,40 +235,21 @@ impl Signex {
         let repaired = super::sheet_repairs::log_sheet_repairs(&path, &sheet.take_load_repairs())
             && !sheet.is_read_only();
         self.park_active_schematic_session();
-        let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
         let scan_path = path.clone();
-        self.document_state.tabs.push(TabInfo {
-            title,
-            path,
-            cached_document: None,
-            project_id,
-            kind: super::TabKind::Schematic,
-        });
-        self.document_state.active_tab = self.document_state.tabs.len() - 1;
+        self.document_state.register_schematic_tab(path, title);
 
         let installed = self.apply_loaded_schematic(Some(sheet), true, true, true);
         // Read from disk: the opened document is the saved state, so undoing
         // every edit made since returns to a clean sheet. (A recovery copy
-        // is installed by a different path and stays dirty-safe.)
-        self.mark_installed_engine_saved(&scan_path, installed);
-        if repaired && installed {
-            // The file on disk still holds what was repaired (#1830).
-            self.document_state.mark_document_dirty(&scan_path);
-        }
+        // is installed by a different path and stays dirty-safe.) Every
+        // schematic open funnels through here: File > Open, the project
+        // tree, a child sheet and ERC navigation (#1208), so here autosave
+        // is held for an earlier run's recovery copy and the per-placement
+        // designator note is queued.
+        self.document_state
+            .settle_opened_sheet(&scan_path, installed, repaired);
         self.note_sheet_focused();
         crate::oversize_text::rearm_warning();
-        // Every schematic open funnels through here; `finish_update` starts
-        // the (once per project) per-placement designator note off-thread.
-        self.document_state.instance_note_due = true;
-
-        // An earlier run's recovery copy of this file may exist. Hold
-        // autosave back from now on, and let `update` start the check:
-        // File > Open, the project tree, a child sheet and ERC navigation
-        // all open through here (#1208).
-        self.document_state.autosave.begin_check(&scan_path);
-        self.document_state
-            .recovery_check_due
-            .push(scan_path.clone());
 
         // A document naming a font this machine lacks is told to the user
         // once per open (#510); until the scan lands this is a no-op and
@@ -578,20 +282,10 @@ impl Signex {
     /// canvas reflects the parked sheet's current state.
     pub(crate) fn attach_parked_schematic_tab(&mut self, path: PathBuf, title: String) {
         self.park_active_schematic_session();
-        let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
-        self.document_state.tabs.push(TabInfo {
-            title,
-            path: path.clone(),
-            cached_document: None,
-            project_id,
-            kind: super::TabKind::Schematic,
-        });
-        self.document_state.active_tab = self.document_state.tabs.len() - 1;
-        // Point active_path at the parked entry. `apply_loaded_schematic`
-        // with `schematic = None` skips the `engines.insert` overwrite
-        // path and just refreshes the canvas / panel against the
-        // existing engine.
-        self.document_state.active_path = Some(path);
+        self.document_state.reattach_parked_sheet(path, title);
+        // `apply_loaded_schematic` with `schematic = None` skips the
+        // `engines.insert` overwrite path and just refreshes the canvas /
+        // panel against the existing engine.
         self.apply_loaded_schematic(None, true, true, true);
         self.note_sheet_focused();
     }
@@ -647,14 +341,14 @@ impl Signex {
             // carrying them to another schematic tab leaves ghost
             // selections that delete/move would target (#102).
             let previous_path = self.document_state.active_path.clone();
-            if self.activate_active_schematic_session() {
+            if self.document_state.activate_tab_engine() {
                 if previous_path != self.document_state.active_path {
                     self.interaction_state.active_canvas_mut().selected.clear();
                     self.interaction_state
                         .active_canvas_mut()
                         .clear_overlay_cache();
                     // In-flight drawing buffers belong to the document too.
-                    self.clear_drawing_buffers();
+                    self.clear_drawing_buffers_of_main();
                     // So does a part on the cursor: it was armed for the
                     // sheet that is no longer showing.
                     self.cancel_placement_session();
@@ -672,16 +366,13 @@ impl Signex {
     }
 
     fn clear_schematic_ui_state(&mut self) {
-        // Detach from the currently-visible schematic engine, but
-        // leave its entry in `document_state.engines` untouched — the
-        // engine should outlive a tab switch so switching back to a
-        // parked schematic (e.g. Schematic → PCB → Schematic from the
-        // project tree) finds its engine still resident. The only
-        // authoritative removal point is `close_tab_at_index` in
-        // `handlers/document_tabs.rs`, which explicitly prunes the
-        // closing tab's entry. GitHub issue #51.
-        self.document_state.active_path = None;
+        // The engine stays resident; only closing its tab removes it
+        // (`close_tab_at_index` in `handlers/document_tabs.rs`, #51).
+        self.document_state.detach_active_schematic();
         self.cancel_placement_session();
+        // The tool goes back to Select here, so no wire can go on, in any window.
+        self.clear_drawing_buffers();
+        self.end_every_sheet_pause();
         self.interaction_state
             .active_canvas_mut()
             .set_render_cache(None);
@@ -700,12 +391,40 @@ impl Signex {
         self.interaction_state.current_tool = Tool::Select;
     }
 
+    /// The sheet tool ended for every window, so no canvas stays frozen.
+    fn end_every_sheet_pause(&mut self) {
+        let state = &mut self.interaction_state;
+        if matches!(
+            state.placement_pause,
+            Some(super::state::SheetPlacementPause::Sheet { .. })
+        ) {
+            state.placement_pause = None;
+            let unfreeze = |canvas: &mut crate::canvas::CanvasSlot| {
+                canvas.placement_paused = false;
+                canvas.tool_preview = None;
+                canvas.ghost_label = None;
+                canvas.ghost_symbol = None;
+                canvas.ghost_text = None;
+                canvas.ghost_bus_entry = None;
+                canvas.clear_overlay_cache();
+            };
+            unfreeze(&mut state.canvas);
+            state.canvases.values_mut().for_each(unfreeze);
+        }
+    }
+
     pub(crate) fn apply_loaded_pcb_document(
         &mut self,
         fit_to_board: bool,
         refresh_panel_ctx: bool,
     ) {
         self.clear_schematic_ui_state();
+        self.show_loaded_board(fit_to_board, refresh_panel_ctx);
+    }
+
+    /// Draw the active board. A reload of the board main already shows comes
+    /// here directly: main did not move, so a window's placement goes on.
+    pub(crate) fn show_loaded_board(&mut self, fit_to_board: bool, refresh_panel_ctx: bool) {
         self.sync_pcb_canvas_from_visible_board();
         if fit_to_board {
             // A board opened into the tab starts upright (#2316).
@@ -726,6 +445,12 @@ impl Signex {
 
     pub(crate) fn apply_loaded_empty_document(&mut self, refresh_panel_ctx: bool) {
         self.clear_schematic_ui_state();
+        self.show_empty_document(refresh_panel_ctx);
+    }
+
+    /// Draw no document. A board whose reload failed comes here directly:
+    /// main stays on its tab, so a window's placement goes on.
+    pub(crate) fn show_empty_document(&mut self, refresh_panel_ctx: bool) {
         self.interaction_state
             .pcb_canvas
             .set_renderer_snapshot(None);
@@ -749,8 +474,8 @@ impl Signex {
     /// refactor, schematic tabs keep their document in
     /// `document_state.engines` (keyed by path) and carry
     /// `cached_document: None`. `TabDocument` has no `Schematic` variant to
-    /// write back to, and dirty tracking runs through
-    /// `with_active_schematic_session_mut` in the mutation gateway.
+    /// write back to, and the mutation gateway derives the dirty mark from
+    /// the engine history (`mark_active_document_dirty`).
     /// Returns whether `schematic` was installed as a new active engine.
     pub(crate) fn apply_loaded_schematic(
         &mut self,
@@ -760,7 +485,10 @@ impl Signex {
         refresh_panel_ctx: bool,
     ) -> bool {
         let installed = match schematic {
-            Some(schematic) => self.sync_engine_from_schematic(Some(schematic)),
+            Some(schematic) => logged_active_install(
+                self.document_state
+                    .sync_engine_from_schematic(Some(schematic)),
+            ),
             None => false,
         };
         if !self.document_state.has_active_engine() {
@@ -793,63 +521,6 @@ impl Signex {
             self.sync_panel_ctx_from_visible_document();
         }
         installed
-    }
-
-    pub(crate) fn sync_panel_ctx_from_visible_document(&mut self) {
-        self.document_state.panel_ctx.has_schematic = self.has_active_schematic();
-        self.document_state.panel_ctx.has_pcb = self.has_active_pcb();
-
-        // Counts and paper label for whichever document is visible; the
-        // per-row symbol lists come from the same builder `refresh_panel_ctx`
-        // uses, so the two paths cannot disagree about what a row holds.
-        let (counts, paper_size) = if let Some(snapshot) = self.active_render_snapshot() {
-            (
-                (
-                    snapshot.symbols.len(),
-                    snapshot.wires.len(),
-                    snapshot.labels.len(),
-                    snapshot.junctions.len(),
-                    snapshot.lib_symbols.len(),
-                ),
-                // Older documents may carry an empty paper_size (serde
-                // default); normalize so the Page Options selector and the
-                // drawn sheet agree on the effective A4 fallback.
-                effective_paper_size(&snapshot.paper_size),
-            )
-        } else if let Some(snapshot) = self.active_pcb_snapshot() {
-            (
-                (
-                    snapshot.footprints.len(),
-                    snapshot.segments.len(),
-                    snapshot.texts.len(),
-                    snapshot.vias.len(),
-                    0,
-                ),
-                format!("PCB • {} layers", snapshot.layers.len()),
-            )
-        } else {
-            ((0, 0, 0, 0, 0), "A4".to_string())
-        };
-
-        {
-            let ctx = &mut self.document_state.panel_ctx;
-            ctx.sym_count = counts.0;
-            ctx.wire_count = counts.1;
-            ctx.label_count = counts.2;
-            ctx.junction_count = counts.3;
-            ctx.lib_symbol_count = counts.4;
-            ctx.paper_size = paper_size;
-        }
-        self.fill_symbol_lists(None);
-        // Written outside `fill_symbol_lists`; the next refresh must rebuild.
-        self.document_state.panel_ctx.symbol_lists_key = None;
-
-        // Drive the drawn sheet from the (re)loaded document's paper size —
-        // without this the canvas keeps the previous tab's dimensions and the
-        // sheet rectangle stops matching the stored A-series format.
-        if self.has_active_schematic() {
-            self.apply_page_dimensions_to_canvas();
-        }
     }
 }
 
@@ -892,16 +563,6 @@ pub(crate) fn report_unusable_zone_holes(path: &std::path::Path, board: &PcbBoar
     }
 }
 
-/// Paper token for the panel context: older documents carry an empty
-/// `paper_size` (serde default), which every reader treats as A4.
-pub(crate) fn effective_paper_size(paper_size: &str) -> String {
-    if paper_size.is_empty() {
-        "A4".to_string()
-    } else {
-        paper_size.to_string()
-    }
-}
-
 /// Tell the user, once per sheet load, that the sheet's `paper_size` names no
 /// size this build knows. The token is kept as written, so a save does not
 /// rewrite it, but the page is drawn and printed as A4 landscape meanwhile.
@@ -926,6 +587,17 @@ fn warn_if_read_only(path: &std::path::Path, newer_minor_source: Option<&str>) {
         ));
     }
 }
+
+/// An install at the active tab with its notices sent to Messages; returns
+/// whether it went in. The test seam `install_active_engine` shares it.
+fn logged_active_install(install: super::state::SheetInstall) -> bool {
+    super::projector::log_notices(&install.notices);
+    install.installed
+}
+
+#[cfg(test)]
+#[path = "load_seam_tests.rs"]
+mod load_seam_tests;
 
 #[cfg(test)]
 mod sheet_size_report_tests {
@@ -972,17 +644,6 @@ mod sheet_size_report_tests {
             let name = format!("known_size_{}", token.replace(' ', "_"));
             assert_eq!(open(token, &name), 0, "{token}");
         }
-    }
-}
-
-#[cfg(test)]
-mod effective_paper_size_tests {
-    use super::effective_paper_size;
-
-    #[test]
-    fn an_empty_paper_size_reads_as_a4_everywhere() {
-        assert_eq!(effective_paper_size(""), "A4");
-        assert_eq!(effective_paper_size("A3"), "A3");
     }
 }
 

@@ -178,7 +178,7 @@ fn print_and_export_pdf_open_the_print_preview() {
 fn export_netlist_asks_where_to_save() {
     let mut app = one_symbol_selected();
     let before = probe(&app);
-    let task = click(&mut app, "Reports/Netlist (Protel .NET)...");
+    let task = click(&mut app, "Tools/Reports/Netlist (.NET)...");
     assert!(has_work(&task), "no dialog");
     assert_eq!(probe(&app), before);
 }
@@ -187,7 +187,7 @@ fn export_netlist_asks_where_to_save() {
 fn export_bom_opens_the_bom_preview() {
     let mut app = one_symbol_selected();
     let before = probe(&app);
-    let _ = click(&mut app, "Reports/Bill of Materials…");
+    let _ = click(&mut app, "Tools/Reports/Bill of Materials…");
     assert_eq!(
         probe(&app),
         Probe {
@@ -204,7 +204,7 @@ fn export_erc_report_before_a_run_says_to_run_erc_first() {
     let mut app = one_symbol_selected();
     let before = probe(&app);
     let logged_before = crate::diagnostics::logged_count(needle);
-    let task = click(&mut app, "Reports/ERC Report…");
+    let task = click(&mut app, "Tools/Reports/ERC Report…");
     assert!(!has_work(&task));
     assert_eq!(
         probe(&app),
@@ -312,9 +312,9 @@ fn rows_without_a_document_are_greyed() {
         "File/Save All",
         "File/Library/Place Component...",
         "File/Export/PDF…",
-        "Reports/Netlist (Protel .NET)...",
-        "Reports/Bill of Materials…",
-        "Reports/ERC Report…",
+        "Tools/Reports/Netlist (.NET)...",
+        "Tools/Reports/Bill of Materials…",
+        "Tools/Reports/ERC Report…",
         "File/Print...",
     ] {
         assert!(!row_is_live(&app, path), "{path} is live with no document");

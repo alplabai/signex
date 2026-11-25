@@ -123,6 +123,55 @@ fn a_right_click_on_the_canvas_closes_the_card() {
     assert!(!app.ui_state.first_run_tour_open);
 }
 
+/// The main window of `app`, as the view knows it.
+fn main_window(app: &mut Signex) -> iced::window::Id {
+    let main = iced::window::Id::unique();
+    app.ui_state.main_window_id = Some(main);
+    app.ui_state.main_window_opened = true;
+    main
+}
+
+/// The messages a click on the card's text `label` in the main window sends.
+fn click_on_card(app: &mut Signex, label: &str) -> Vec<Message> {
+    let main = main_window(app);
+    crate::layout_probe::messages_on_click(app.view(main), iced::Size::new(1400.0, 900.0), label)
+}
+
+#[test]
+fn got_it_closes_the_card_and_saves_like_the_close_button() {
+    let mut app = app_with_tour();
+    let sent = click_on_card(&mut app, "Got it");
+    assert!(
+        sent.iter()
+            .any(|m| matches!(m, Message::Overlay(OverlayMsg::DismissFirstRunTour))),
+        "Got it sends the close button's message"
+    );
+    let mut saved = false;
+    for message in sent {
+        saved |= has_work(&app.update(message));
+    }
+    assert!(!app.ui_state.first_run_tour_open, "Got it left it open");
+    assert!(saved, "Got it saved nothing");
+}
+
+#[test]
+fn the_change_link_opens_preferences_on_appearance_and_keeps_the_card() {
+    let mut app = app_with_tour();
+    // Another page first, so landing on Appearance is the link's doing.
+    app.ui_state.preferences_nav = crate::preferences::PrefNav::Keyboard;
+    let sent = click_on_card(&mut app, "change");
+    assert!(!sent.is_empty(), "the link sends a message");
+    for message in sent {
+        let _ = app.update(message);
+    }
+    assert!(app.ui_state.preferences_open);
+    assert_eq!(
+        app.ui_state.preferences_nav,
+        crate::preferences::PrefNav::Appearance
+    );
+    assert!(app.ui_state.first_run_tour_open, "the card stays open");
+}
+
 #[test]
 fn the_close_button_and_escape_still_close_it_and_save() {
     let mut app = app_with_tour();
@@ -156,6 +205,30 @@ fn building_the_app_takes_no_preference_write_slot() {
     let (_app, _task) = Signex::new();
     let (_open, _task) = crate::app::bootstrap::first_run_tour_boot(None);
     assert_eq!(crate::fonts::pref_slots_taken_on_this_thread(), before);
+}
+
+/// Mockup row 14: Help ▸ Show Welcome Tips opens the same single card again,
+/// with no work of its own, and its close button closes and saves as on
+/// first launch.
+#[test]
+fn help_show_welcome_tips_reopens_the_one_card() {
+    let (mut app, _task) = Signex::new();
+    app.ui_state.first_run_tour_open = false;
+    let task = app.update(Message::Menu(crate::menu_bar::MenuMessage::OpenWelcomeTips));
+    assert!(app.ui_state.first_run_tour_open, "the row left it closed");
+    assert!(!has_work(&task), "opening the card is no IO");
+
+    let main = main_window(&mut app);
+    let shown = crate::layout_probe::lay_out_texts(app.view(main), iced::Size::new(1400.0, 900.0));
+    let cards = shown
+        .iter()
+        .filter(|t| t.text.replace(['\u{2068}', '\u{2069}'], "") == "Welcome to Signex")
+        .count();
+    assert_eq!(cards, 1, "one card, the first-run one");
+
+    let task = app.update(Message::Overlay(OverlayMsg::DismissFirstRunTour));
+    assert!(!app.ui_state.first_run_tour_open);
+    assert!(has_work(&task), "the close button saved nothing");
 }
 
 #[test]

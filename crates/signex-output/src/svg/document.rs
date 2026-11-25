@@ -23,6 +23,7 @@ use super::*;
 use crate::SheetSnapshot;
 use crate::markup_escape::escape_markup;
 use crate::pdf::layout::PageTransform;
+use crate::pdf::optional_content::{LayerSpans, PdfLayer};
 use crate::pdf::palette::SchematicPalette;
 use crate::pdf::{ColourMode, PdfOptions};
 use signex_types::markup::ExpressionEvalContext;
@@ -42,6 +43,20 @@ impl SvgRenderContext {
         units_per_mm: f64,
         eval_inputs: Option<&SvgEvaluatorInputs<'_>>,
     ) -> Self {
+        Self::from_sheet_layered(sheet, opts, page_w_mm, page_h_mm, units_per_mm, eval_inputs).0
+    }
+
+    /// [`Self::from_sheet`] plus the PDF layer each run of elements belongs
+    /// to. Elements outside every span are in no layer.
+    pub(crate) fn from_sheet_layered(
+        sheet: &SheetSnapshot,
+        opts: &PdfOptions,
+        page_w_mm: f64,
+        page_h_mm: f64,
+        units_per_mm: f64,
+        eval_inputs: Option<&SvgEvaluatorInputs<'_>>,
+    ) -> (Self, LayerSpans) {
+        let mut layers = LayerSpans::default();
         let width = (page_w_mm * units_per_mm) as f32;
         let height = (page_h_mm * units_per_mm) as f32;
 
@@ -82,6 +97,10 @@ impl SvgRenderContext {
         // Always render the physical sheet boundary on top of the
         // page-fill so both preview and PDF clearly reference the
         // document page area.
+        layers.mark(
+            PdfLayer::TitleBlockAndBorder,
+            elements.len()..elements.len() + 1,
+        );
         elements.push(rect_path(
             0.5,
             0.5,
@@ -103,9 +122,13 @@ impl SvgRenderContext {
             palette,
             &opts.schematic_defaults,
         );
+        // Body fills sit under the wires but belong to their parts.
+        let fills_start = elements.len();
         push_symbol_body_fills(&mut elements, &sheet.schematic, &xform, palette);
+        layers.mark(PdfLayer::Parts, fills_start..elements.len());
 
         // Base primitives
+        let wires_start = elements.len();
         for wire in &sheet.schematic.wires {
             let class = opts.net_class_styles.get(&wire.uuid);
             let stroke_mm = wire_style::wire_width_mm(wire, class, &opts.schematic_defaults);
@@ -157,10 +180,11 @@ impl SvgRenderContext {
                     SvgPathCommand::LineTo(pt(xform.x(bus.end.x), xform.px_y(bus.end.y))),
                 ],
                 style: SvgStyle {
-                    stroke_alpha: 1.0,
-                    stroke_rgb: Some(palette.bus),
+                    stroke_alpha: bus.color.map_or(1.0, |c| f32::from(c.a) / 255.0),
+                    stroke_rgb: Some(bus.color.map_or(palette.bus, wire_style::rgb)),
                     fill_rgb: None,
-                    stroke_width: (opts.schematic_defaults.bus_mm() * xform.mm_to_unit) as f32,
+                    stroke_width: (opts.schematic_defaults.bus_line_mm(bus.stroke_width)
+                        * xform.mm_to_unit) as f32,
                 },
             });
         }
@@ -186,6 +210,7 @@ impl SvgRenderContext {
                 },
             });
         }
+        super::harness::push_harness(&mut elements, &sheet.schematic, &xform, palette, opts);
 
         let from_wires = signex_types::schematic::junction_wire_colors(&sheet.schematic, |wire| {
             wire_style::wire_color(wire, &sheet.schematic.net_colors, &opts.net_class_styles)
@@ -215,6 +240,7 @@ impl SvgRenderContext {
                 },
             ));
         }
+        layers.mark(PdfLayer::WiresAndBuses, wires_start..elements.len());
 
         if opts.include_no_connect_markers {
             for nc in &sheet.schematic.no_connects {
@@ -249,6 +275,12 @@ impl SvgRenderContext {
                 LabelType::Power => (0.0, 0.0),
             };
             let (align, v_align, rot) = spin_text_style(spin);
+            let label_layer = if label.label_type == LabelType::Power {
+                PdfLayer::PowerPorts
+            } else {
+                PdfLayer::NetLabelsAndPorts
+            };
+            layers.mark(label_layer, elements.len()..elements.len() + 1);
             elements.push(SvgElement::Text {
                 x: xform.x(label.position.x + off_x),
                 y: xform.px_y(label.position.y + off_y),
@@ -294,6 +326,10 @@ impl SvgRenderContext {
             let y = xform.px_y(child.position.y);
             let w = (child.size.0 * xform.mm_to_unit) as f32;
             let h = (child.size.1 * xform.mm_to_unit) as f32;
+            let outline = (opts.schematic_defaults.shape_stroke_mm(child.stroke_width)
+                * xform.mm_to_unit) as f32;
+            // A repeated sheet prints as a stack with a ×N pill (#1279).
+            super::repeat_stack::push_repeat_stack(&mut elements, child, &xform, palette, outline);
             elements.push(rect_path(
                 x,
                 y,
@@ -303,8 +339,7 @@ impl SvgRenderContext {
                     stroke_alpha: 1.0,
                     stroke_rgb: Some(palette.child_sheet_stroke),
                     fill_rgb: None,
-                    stroke_width: (opts.schematic_defaults.shape_stroke_mm(child.stroke_width)
-                        * xform.mm_to_unit) as f32,
+                    stroke_width: outline,
                 },
             ));
             if !child.name.is_empty() {
@@ -347,6 +382,7 @@ impl SvgRenderContext {
             cell: eval_inputs.map(|e| e.cell),
         };
         for sym in &sheet.schematic.symbols {
+            let symbol_start = elements.len();
             let symbol_vars = crate::field_value::symbol_eval_variables(sym);
             let part_table = TextTable(&symbol_vars);
             let mut refdes_vars = HashMap::new();
@@ -470,6 +506,12 @@ impl SvgRenderContext {
                     text: crate::shown_value(&value_scope, sym).text,
                 });
             }
+            let symbol_layer = if sym.is_power {
+                PdfLayer::PowerPorts
+            } else {
+                PdfLayer::Parts
+            };
+            layers.mark(symbol_layer, symbol_start..elements.len());
         }
 
         push_placed_drawings(
@@ -481,12 +523,15 @@ impl SvgRenderContext {
             &opts.schematic_defaults,
         );
 
-        Self {
-            width,
-            height,
-            elements,
-            paper: palette.paper,
-        }
+        (
+            Self {
+                width,
+                height,
+                elements,
+                paper: palette.paper,
+            },
+            layers,
+        )
     }
 
     /// Serialize the elements to an SVG document string. Computed on

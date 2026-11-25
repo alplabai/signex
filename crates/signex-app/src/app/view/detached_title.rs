@@ -22,15 +22,15 @@ impl Signex {
             ModalId::LibraryPicker => library
                 .picker
                 .as_ref()
-                .map(|p| crate::library::picker::title(&p.mode).to_owned()),
+                .map(|p| crate::library::picker::title(&p.mode, &self.ui_state.i18n)),
             ModalId::LibraryPrimitivePicker => library
                 .primitive_picker
                 .as_ref()
-                .map(|p| crate::library::primitive_picker::title(p.kind).to_owned()),
+                .map(|p| crate::library::primitive_picker::title(p.kind, &self.ui_state.i18n)),
             ModalId::LibraryRecovery => library
                 .recovery
                 .as_ref()
-                .map(crate::library::recovery::title),
+                .map(|dialog| crate::library::recovery::title(dialog, &self.ui_state.i18n)),
             // The reset confirm is titled after the reset asked for (#76).
             ModalId::AnnotateResetConfirm => Some(
                 self.ui_state

@@ -28,6 +28,7 @@ use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
 
 use crate::layer_label::layer_id;
+use crate::open_ends::warn_open_profiles;
 use crate::profile::TraceError;
 use crate::traced_loops::TracedLoops;
 
@@ -37,6 +38,7 @@ pub fn bake_keepouts(
     out: &mut Vec<FpKeepout>,
     warnings: &mut Vec<String>,
 ) -> Result<(), SketchError> {
+    let mut open = false;
     let mut loops = TracedLoops::default();
     for entity in &sketch.entities {
         if entity.bake_skipped() {
@@ -67,10 +69,7 @@ pub fn bake_keepouts(
                 layer: layer_id(attr.layer),
                 forbids: map_kinds(attr.kinds),
             }),
-            Err(TraceError::OpenChain) => warnings.push(format!(
-                "entity {}: KeepoutAttr profile is not closed (open chain); skipping",
-                entity.id
-            )),
+            Err(TraceError::OpenChain) => open = true,
             Err(TraceError::Branching) => warnings.push(format!(
                 "entity {}: KeepoutAttr profile branches at a vertex; skipping",
                 entity.id
@@ -80,6 +79,9 @@ pub fn bake_keepouts(
                 entity.id
             )),
         }
+    }
+    if open {
+        warn_open_profiles(sketch, solve, "Keepout", |e| e.keepout.is_some(), warnings);
     }
     Ok(())
 }

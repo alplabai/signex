@@ -96,13 +96,14 @@ fn a_debug_headless_boot_settles_on_a_512_kb_stack() {
     run_probe("small_stack");
 }
 
-/// Boot and settle on a 512 KB thread. On macOS arm64 debug the unboxed boot
-/// needed about 552 KB and the boxed one fits in 400 KB, so the margin is
-/// about 100 KB. Another target's frames may differ: if this fails on one
-/// target only, measure there before raising the limit. It catches a boot
-/// that returns the app by value, not one extra copy inside
-/// `boot_headless_inner` (that still fits), so a review checks that
-/// `new_boxed` stays the only place the app is boxed.
+/// Boot and settle on a 512 KB thread. On macOS arm64 debug the boot needs
+/// 352-384 KB (2026-11-22, after `new_boxed` began building the app in its
+/// box). Boxing a by-value `Signex::new` instead needed 496-512 KB there and
+/// overflowed on Windows, so going back to it may fail on Windows only.
+/// Another target's frames may differ: if this fails on one target only,
+/// measure there before raising the limit. One extra copy of the app in the
+/// boot may still fit, so a review checks that `new_boxed` stays the only
+/// place the app is built.
 fn small_stack() {
     const STACK_BYTES: usize = 512 * 1024;
     let isolated = tempfile::tempdir().expect("override root");
@@ -252,7 +253,7 @@ fn net_colors() {
         .clone();
     let (outcome, _task) = app.dispatch_command_headless(&id("color_net"), CommandArgs::none());
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("needs the operand")),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if signex_i18n::RenderTranslatable::render_en_us(reason).contains("needs the operand")),
         "{outcome:?}"
     );
     assert_eq!(
@@ -282,7 +283,7 @@ fn net_colors() {
     let path_operand = format!("path={}", missing.display());
     let refused = run(&mut app, "open_document", &[&path_operand]);
     assert!(
-        matches!(&refused, CommandOutcome::Disabled { reason } if reason.contains("made no document")),
+        matches!(&refused, CommandOutcome::Disabled { reason } if signex_i18n::RenderTranslatable::render_en_us(reason).contains("made no document")),
         "{refused:?}"
     );
 }
@@ -371,9 +372,7 @@ fn run() {
         app.dispatch_command_headless(&id("toggle_visible_grid"), CommandArgs::none());
     assert_eq!(
         outcome,
-        CommandOutcome::Disabled {
-            reason: "`toggle_visible_grid` only works in a window".into()
-        }
+        CommandOutcome::disabled("`toggle_visible_grid` only works in a window")
     );
     assert_eq!(app.ui_state.grid_visible, grid_before, "nothing ran");
     let (outcome, task) = app.dispatch_command_headless(&id("unselect_all"), CommandArgs::none());
@@ -388,7 +387,7 @@ fn run() {
         .replace_all([("path".to_string(), missing.display().to_string())]);
     let (outcome, task) = app.dispatch_command_headless(&id("open_document"), CommandArgs::none());
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("made no document")),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if signex_i18n::RenderTranslatable::render_en_us(reason).contains("made no document")),
         "{outcome:?}"
     );
     driver.settle(&mut app, task).expect("open settled");
@@ -724,6 +723,7 @@ fn net_class_assign() {
         }],
         variant_definitions: Vec::new(),
         active_variant: None,
+        variant_settings: Default::default(),
         libraries: Vec::new(),
         enable_git: false,
         net_classes: vec![NetClass::named("Power")],
@@ -732,7 +732,9 @@ fn net_class_assign() {
         schematic_defaults: Default::default(),
         project_defaults: Default::default(),
         agent_journal: Default::default(),
+        schematic_design: Default::default(),
         fab_outputs: None,
+        router_tool_diameter: None,
         requirements: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
@@ -771,6 +773,7 @@ fn net_class_assign() {
     // never falls back to the active sheet; nothing changes.
     match run(&mut app, "assign_net_class", &[]) {
         CommandOutcome::Disabled { reason } => {
+            let reason = signex_i18n::RenderTranslatable::render_en_us(&reason);
             assert!(reason.contains("needs the operand `document`"), "{reason}")
         }
         other => panic!("expected a refusal, got {other:?}"),

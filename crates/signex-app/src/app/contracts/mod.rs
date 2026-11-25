@@ -162,6 +162,12 @@ pub enum Message {
     /// The pan/zoom frame bench (#2472), a dev/QA mode. Routed to
     /// `dispatch_pan_zoom_bench_message`.
     PanZoomBench(crate::pan_zoom_bench::BenchMsg),
+    /// Design ▸ Differential Pair Classes… (#1282). Routed to
+    /// `dispatch_diff_pair_classes_message`.
+    DiffPairClasses(crate::app::DiffPairClassesMsg),
+    /// The Gerber Viewer tab and window file drops (mockup rows 193 and
+    /// 193f). Routed to `dispatch_gerber_viewer_message`.
+    GerberViewer(crate::app::GerberViewerMsg),
 }
 
 impl Message {
@@ -174,10 +180,12 @@ impl Message {
 
 mod cross_probe;
 mod dialogs;
+pub(crate) mod grid_properties;
 mod layer_strip;
 mod messages;
 mod net_nav;
 mod pcb;
+mod pdf_option;
 mod placement_extras;
 mod project;
 mod state;
@@ -190,11 +198,13 @@ pub use layer_strip::{
 };
 pub use messages::*;
 pub use net_nav::NetNavMsg;
+pub use pcb::Board3dShot;
 pub use pcb::{
     Board3dGesture, Board3dModelsRead, Board3dMsg, BoardNetMsg, BoardOriginMsg, BoardSketchMsg,
     BoardToolsMsg, DrcRunResult, DxfImportMsg, FootprintSwapMsg, PartSwapMsg, PcbBarMenu,
     PcbBarMsg, PcbMsg, PcbViewMsg, TuneMsg, ViewAngleEntry, ViewRotationMsg,
 };
+pub use pdf_option::PdfOptionMsg;
 pub use placement_extras::PlacementExtrasMsg;
 pub use project::*;
 pub use state::*;

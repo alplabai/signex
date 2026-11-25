@@ -7,7 +7,7 @@ ids to application messages. The shortcut profile files do not serialize Rust
 ## Files
 
 - Built-in profiles live in
-  `crates/signex-app/assets/keyboard-shortcuts/altium.toml` and
+  `crates/signex-app/assets/keyboard-shortcuts/signex_standard.toml` and
   `crates/signex-app/assets/keyboard-shortcuts/classic.toml`.
 - User profiles persist to the OS config directory at
   `<config_dir>/signex/keyboard_shortcuts.toml`.
@@ -34,7 +34,7 @@ schema_version = 1
 profile_id = "my-profile"
 profile_name = "My Profile"
 profile_kind = "custom"
-base_profile = "altium"
+base_profile = "signex_standard"
 
 [[keyboard_shortcuts.sections]]
 context = "global"
@@ -60,8 +60,8 @@ domain area, such as `documents.rs`, `wiring.rs` or `view.rs`), as message ids; 
 4. Modal and text-entry guards run first. For example, Escape closes open
    dialogs before normal shortcuts are considered.
 5. Normal keys are converted to `KeyStroke` values and looked up against the
-   active contexts, such as `global`, `schematic`, `pcb`, `library`, and
-   `footprint`.
+   active contexts, such as `global`, `schematic`, `pcb`, `board_3d`,
+   `library`, and `footprint`.
 6. A resolved `AppCommandId` goes through `Signex::dispatch_command`, which maps
    it to a `Message` with `core_to_message` (`app/command/bridge.rs`).
 
@@ -98,6 +98,11 @@ portable; other OSes record exactly what was pressed. On macOS the conflict
 check also flags a binding on ⌘Q, ⌘H, ⌘M, ⌘Space, ⌘Tab, ⌘` or ⌘, (unless it is
 Preferences) as reserved by the system.
 
+Save All is `Mod+Alt+S` in both built-in profiles: Ctrl+Alt+S on Windows and
+Linux, Cmd+Alt+S on macOS. Save As keeps `Mod+Shift+S`. Windows reports AltGr
+as Ctrl+Alt, so on a layout where AltGr+S types a character the key types it,
+and Save All is reached from the File menu.
+
 Layouts: a key press is matched by the logical key first, exactly as before
 (AZERTY `z` stays `z`; a binding on `Ctrl+ö` still fires). Only when that
 matches nothing, and Ctrl, Cmd or Alt is held, is the physical key's
@@ -123,16 +128,18 @@ below.
 ## Built-in profiles
 
 Both built-in profiles spell the platform-standard set with `Mod`: `N O S P Z
-X C V A F ,` plus `D R E L 4` and `Shift+S/Z/P/V/G/X/E/F/A`. Windows and Linux
+X C V A F ,` plus `D R E L 4` and `Shift+S/Z/P/V/G/X/E/F/A`. Plain `G` is in
+the set only in the default profile, where `Mod+G` is Create Union (⌘G on
+macOS); Classic keeps `Ctrl+G` physical. Windows and Linux
 resolve every row exactly as before (`Mod` is Ctrl there), so the resolved
 golden `builtin_profiles_resolved.golden.tsv` does not change. Chords whose ⌘
 twin is a macOS system shortcut stay on the physical Control key (⌃ on macOS):
-`Ctrl+Q`, `Ctrl+W` (Altium Place Wire), `Ctrl+H`, `Ctrl+M`, `Ctrl+Space`,
+`Ctrl+Q`, `Ctrl+W` (Signex Standard Place Wire), `Ctrl+H`, `Ctrl+M`, `Ctrl+Space`,
 `Ctrl+Tab`, `Ctrl+G` (Classic), `Ctrl+F5`, `Ctrl+Y` (redo), `Ctrl+F4`,
 `Ctrl+PageDown` and `Ctrl+Home`. Redo keeps its plain `Ctrl+Shift+Z` (the
 profile has exactly one raw owner of that chord, and Windows and Linux are
 unchanged) and gains the Mac chord from a `platform = "macos"` section:
-`Mod+Shift+Z` (⇧⌘Z), so ⌃⇧Z also still redoes on macOS. The Altium profile's
+`Mod+Shift+Z` (⇧⌘Z), so ⌃⇧Z also still redoes on macOS. The Signex Standard profile's
 macOS section also has `Mod+Alt+F` (Replace, ⌥⌘F), `Mod+W` (Close Document,
 ⌘W) and `Alt+I` (⌥I, add vertex while drawing, else Copy Attributes): a Mac
 keyboard has no Insert key, so ⌥I is that command's menu hint on macOS. It
@@ -159,7 +166,15 @@ in the chord profile and `Shift+O` in Classic, whose `E` alone is taken
 Classic's `L` and `Q` keep their sheet meaning on a sheet. `Q` sits in a
 `pcb` section of its own before the global sections, so `cycle_unit` keeps
 `Ctrl+Q` as its menu hint. A test checks that every `pcb` binding of both
-profiles names a command enabled on a board.
+profiles names a command enabled on a board; `H` and `Mod+Shift+C` (the 3D
+view's lighting and screenshot copy) are the exception, greyed on a flat
+board because they need the 3D view.
+
+The `board_3d` context (mockup row 175) is live, after `pcb`, only while the
+main window shows the board in 3D, so its bindings outrank the board's: both
+profiles bind `F` there to Flip (`flip_board_3d`), and `F` stays Change
+Footprint on a flat board. Its rows show under the PCB chip in Preferences
+and the PCB scope of the shortcuts sheet.
 
 ### One-time macOS prompt for a custom profile
 
@@ -211,6 +226,45 @@ Built-in profiles are immutable. Editing starts by creating a custom profile
 copied from the currently active profile. Custom profiles can then be selected,
 edited, deleted, imported, and exported from Preferences > Keyboard Shortcuts.
 
+### The Keyboard shortcuts page (mockup row 145)
+
+The page (`preferences/keymap/`) reads top to bottom:
+
+- **Profile row**, on one line: the Profile picker, whose entries read
+  `<name> · <n> bindings` for a built-in and `<name> (custom) · <n> bindings`
+  for a custom profile; **Create** (a custom copy of the active profile);
+  **Delete** (inert on a built-in profile); then **Import…** and **Export…**,
+  which open the file dialogs.
+- **Conflict banner**, a warning shown only when the active profile has a
+  conflict. It counts the conflicts and names the first one: the keys as
+  keycaps and the two commands bound to them (or, for a chord macOS keeps,
+  the one command). **Show** turns on the Conflicts chip.
+- The shortcuts-file banner (#595), the backup row with Restore and Delete
+  (#603), and the status line of the last action stay above the table.
+- **Filter row**: the search field (label, command id or keys) and the
+  context chips **All**, **Global**, **Schematic**, **PCB**, **Footprint**,
+  **Library** and **Conflicts** (with the conflict count). One chip is on at
+  a time. A row shows under the chip of its context (a board 3D view row
+  under PCB); rows of dialogs, text
+  fields, the palette and placement show under All only. Conflicts lists
+  the rows that take part in a conflict of the active profile. The chip is
+  page view state (`KeymapViewState`): it never marks Preferences dirty and
+  starts on All each time Preferences opens.
+- **Table**: Command, Category, Context, Shortcut and State, sorted by
+  command name. Keys show as keycaps, with "then" between the strokes of a
+  sequence; a pointer gesture shows as text; a command with no key shows a
+  dash. State tones: Conflict and Invalid as error pills, Unbound in muted
+  italics, Gesture and Reserved by macOS as neutral pills, Editable and
+  Create custom as a quiet caption. A row whose keys a fixed app key takes
+  first (F1, Esc) names that key in its tooltip ("Overridden by …").
+- **Edit** shows while the pointer is over a keyboard row of a custom
+  profile. It opens the **recorder popover**, anchored under that row over
+  the table: the command, a recording box with the captured keycaps, the
+  current keys, a help line, a warning when a fixed app key would swallow
+  the recorded keys, and Clear, Stop (Record once stopped), Cancel and OK.
+  OK puts the new keys in the working copy; like every Preferences change
+  they are saved by the dialog's Apply or OK.
+
 The editor is backed by `KeymapEditorModel`, which exposes rows with:
 
 - command label and category from command metadata
@@ -236,20 +290,20 @@ While a wire or bus is drawn, `switch_segment_posture` flips the corner
 (horizontal first or vertical first; in a 45° mode, diagonal first or last) and
 `cycle_wire_bus_graphic_mode` steps the corner mode: 90°, 45° start, 45° end,
 any angle (#2372). The choice holds for later segments, and the status bar names
-it. The Classic profile binds them to `/` and `Shift+Space`. In the Altium
+it. The Classic profile binds them to `/` and `Shift+Space`. In the Signex Standard
 profile `Space` and `Shift+Space` stay bound to `rotate_counterclockwise` and
 `rotate_clockwise`; while a wire or bus run is open (its first point placed),
 the rotate handler bends the run instead: `rotate_counterclockwise` flips the
 corner and `rotate_clockwise` steps the corner mode. Outside a run they rotate
 as usual. Neither adds an undo step; only a committed segment does.
 
-`copy_attributes_or_add_vertex` (Altium profile: `Insert`) fixes a vertex at the
+`copy_attributes_or_add_vertex` (Signex Standard profile: `Insert`) fixes a vertex at the
 cursor while a wire, bus, line or polyline is drawn, as a click there would, and
 the run goes on; mid rectangle, circle or arc it says so in Messages and does
 nothing. With any other tool it copies attributes, also while Measure, a sheet
 symbol or a directive region has its first point placed (#1669).
 
-`cycle_wiring_mode` (Altium profile: `Ctrl+Space`) steps how the wires that
+`cycle_wiring_mode` (Signex Standard profile: `Ctrl+Space`) steps how the wires that
 follow a moved part bend in a drag and in click-click move: Auto (the corner
 the rubber band picks), horizontal first, vertical first, and straight (no
 corner, any slope). Press it during the move and the ghost changes at once; the
@@ -270,7 +324,7 @@ repeat while the key is held (`docs/DECISIONS.md`, "Held keys", 2026-11-19).
 The footprint editor canvas handles its own `X` (flip the pad's layer) outside
 the keymap; that one still repeats (#2545).
 
-`Alt+Click` is reserved in `altium.toml` for `highlight_related_net_objects`. The
+`Alt+Click` is reserved in `signex_standard.toml` for `highlight_related_net_objects`. The
 command is wired (it highlights the selected net and selects its members), but the
 Alt+Click gesture itself is not dispatched yet; when it is, an Alt-press that turns
 into a drag and an Alt+Click will need telling apart. Some Linux window managers take Alt+drag to

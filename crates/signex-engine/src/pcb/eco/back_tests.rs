@@ -134,6 +134,22 @@ fn an_unannotated_board_designator_is_not_carried_back() {
     assert_eq!(list.rows[0].blocked, Some(BackBlock::BoardNotAnnotated));
 }
 
+/// #2740: a channel's designator is derived, so nothing is written for it.
+#[test]
+fn a_channel_parts_designator_row_is_blocked() {
+    let parts = parts();
+    let mut board = in_step();
+    fp_mut(&mut board, 0xa2).reference = "CH1_R9".into();
+    let mut list = diff(&board, &parts);
+
+    list.block_channel_designators(|_| true);
+
+    let row = list.row(&BackKey::Designator(u(0xa2))).unwrap();
+    assert_eq!(row.blocked, Some(BackBlock::ChannelDesignator));
+    assert!(!row.applies());
+    assert!(list.sheet_edits().is_empty());
+}
+
 #[test]
 fn a_value_on_a_sheet_placed_twice_is_read_only() {
     let mut parts = parts();

@@ -22,8 +22,9 @@ use crate::app::document_ids::DocumentKind;
 use crate::app::{Message, Signex};
 
 /// What each pour of `board` (each in `only`, when given) holds under
-/// `fills`, in board order: its identity, net, layer and priority, the
-/// pieces and area of its copper, and the islands its rules dropped.
+/// `fills`, in board order: its identity, net, layer and priority, whether
+/// it is shelved (#2523, then not filled), the pieces and area of its
+/// copper, and the islands its rules dropped.
 pub(crate) fn pour_report(
     board: &PcbBoard,
     fills: &ZoneFills,
@@ -43,6 +44,7 @@ pub(crate) fn pour_report(
                 "net_name": zone.net_name,
                 "layer": zone.layer,
                 "priority": zone.priority,
+                "shelved": zone.shelved,
                 "filled": fill.is_some(),
                 "pieces": fill.map_or(0, |f| f.pieces.len()),
                 "area_mm2": fill.map_or(0.0, |f| f.area_mm2()),
@@ -64,28 +66,53 @@ impl Signex {
         let Some(path) = self.active_tab_path().filter(|_| self.has_active_pcb()) else {
             return;
         };
+        self.repour_board(&path, selected);
+    }
+
+    /// Repour the board at `path` (the board in view is drawn again) and
+    /// say in Messages what its pours, or the selected ones, came to.
+    pub(crate) fn repour_board(&mut self, path: &Path, selected: bool) {
+        self.refill_pours();
+        let only = selected.then(|| self.selected_pours(path));
+        self.report_pours(path, only.as_ref());
+    }
+
+    /// Repour the board at `path` and say in Messages what the pours in
+    /// `only` came to. Repour on a pour's Copper card names its pours, so
+    /// it holds for a board the canvas selection is not on.
+    pub(crate) fn repour_pours(&mut self, path: &Path, only: &BTreeSet<Uuid>) {
+        self.refill_pours();
+        self.report_pours(path, Some(only));
+    }
+
+    /// Drop the computed fills; the board in view is filled and drawn again.
+    fn refill_pours(&mut self) {
         self.interaction_state.pcb_ratsnest.invalidate();
         self.sync_pcb_canvas_from_visible_board();
-        let only = selected.then(|| self.selected_pours(&path));
+    }
+
+    /// Say in Messages what the pours of the board at `path` (those in
+    /// `only`, when given) came to.
+    fn report_pours(&self, path: &Path, only: Option<&BTreeSet<Uuid>>) {
         let i18n = &self.ui_state.i18n;
-        if only.as_ref().is_some_and(BTreeSet::is_empty) {
+        if only.is_some_and(BTreeSet::is_empty) {
             let line = t!(i18n, ids::PCB_POUR_NONE_SELECTED).into_string();
             crate::diagnostics::log_warning(line);
             return;
         }
-        let Some(board) = self.document_state.pcb_board(&path) else {
+        let Some(board) = self.document_state.pcb_board(path) else {
             return;
         };
         // A board with no revision is not cached: fill it here.
         let computed;
-        let fills = match self.current_pour_fills(&path) {
+        let fills = match self.current_pour_fills(path) {
             Some(fills) => fills,
             None => {
                 computed = pcb_geom::zone_fills(board);
                 &computed
             }
         };
-        let report = pour_report(board, fills, only.as_ref());
+        let report = pour_report(board, fills, only);
         if report.is_empty() {
             crate::diagnostics::log_info(t!(i18n, ids::PCB_POUR_NONE).into_string());
             return;
@@ -110,7 +137,7 @@ impl Signex {
     }
 
     /// The pours selected on the board at `path`.
-    fn selected_pours(&self, path: &Path) -> BTreeSet<Uuid> {
+    pub(crate) fn selected_pours(&self, path: &Path) -> BTreeSet<Uuid> {
         let selection = &self.interaction_state.pcb_selection;
         if selection.document() != Some(path) {
             return BTreeSet::new();
@@ -134,7 +161,7 @@ impl Signex {
 /// again, answered as JSON (`document`, `pours`). The board in view is
 /// refreshed too when it is that board.
 pub(crate) fn repour_all(app: &mut Signex, args: &CommandArgs) -> (CommandOutcome, Task<Message>) {
-    let refused = |reason: String| (CommandOutcome::Disabled { reason }, Task::none());
+    let refused = |reason: String| (CommandOutcome::disabled(reason), Task::none());
     let Some(OperandValue::Document(named)) = args.operand("document") else {
         return refused("`repour_all` needs the operand `document`".to_string());
     };

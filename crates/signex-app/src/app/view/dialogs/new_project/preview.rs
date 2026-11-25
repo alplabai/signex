@@ -1,13 +1,13 @@
-//! The preview pane: the stack-up on the board ground, the board and sheet
-//! lines and the note.
+//! The preview pane: the board rules drawing, the board line, the stack-up
+//! on the board ground, the sheet and the note.
 
 use iced::widget::{Space, column, container, row, scrollable};
 use iced::{Alignment, Color, Element, Length, Theme, Widget as _};
 use signex_i18n::{I18n, Localized, ids, t};
-use signex_types::theme::{ThemeId, ThemeTokens, theme_tokens};
+use signex_types::theme::{CanvasColors, ThemeId, ThemeTokens, theme_tokens};
 use signex_widgets::text;
 
-use super::{PREVIEW_W, SP, TS};
+use super::{PREVIEW_W, SP, TS, board_rules};
 use crate::app::new_project::{NewProjectMsg, NewProjectState};
 use crate::styles::{Radii, ti, tokens};
 
@@ -27,10 +27,11 @@ pub(in crate::app::view) enum Layer {
     Prepreg,
     Core,
     MaskBottom,
+    SilkBottom,
 }
 
 /// The rows of the stack-up for `copper` copper layers, top to bottom: silk,
-/// mask, the copper layers with a dielectric between each pair, mask.
+/// mask, the copper layers with a dielectric between each pair, mask, silk.
 pub(in crate::app::view) fn stack_rows(copper: u8) -> Vec<Layer> {
     let copper = copper.max(1);
     let mut rows = vec![Layer::Silk, Layer::Mask];
@@ -47,6 +48,7 @@ pub(in crate::app::view) fn stack_rows(copper: u8) -> Vec<Layer> {
         }
     }
     rows.push(Layer::MaskBottom);
+    rows.push(Layer::SilkBottom);
     rows
 }
 
@@ -135,6 +137,11 @@ fn layer_row<'a>(layer: Layer, copper: u8, i18n: &I18n, ink: Color) -> Element<'
             4.0,
             t!(i18n, ids::DIALOG_NEW_PROJECT_STACK_MASK_BOTTOM),
         ),
+        Layer::SilkBottom => (
+            MATERIALS.silk,
+            3.0,
+            t!(i18n, ids::PCB_LAYER_SILKSCREEN_BOTTOM),
+        ),
     };
     row![
         bar(color, height),
@@ -148,15 +155,9 @@ fn layer_row<'a>(layer: Layer, copper: u8, i18n: &I18n, ink: Color) -> Element<'
     .boxed()
 }
 
-/// The preview column.
-pub(crate) fn pane<'a>(
-    state: &NewProjectState,
-    note: signex_i18n::MessageId,
-    i18n: &I18n,
-    tokens: &ThemeTokens,
-) -> Element<'a, NewProjectMsg> {
-    let ground = crate::styles::board_canvas_colors().background;
-    let ground = ti(ground);
+/// The stack-up on the board ground; a tall one scrolls.
+pub(super) fn stack_card<'a>(state: &NewProjectState, i18n: &I18n) -> Element<'a, NewProjectMsg> {
+    let ground = ti(crate::styles::board_canvas_colors().background);
     let ink = tokens::resolve(&theme_tokens(ThemeId::GraphiteDark)).ink3;
     let copper = state.setup.pcb.copper_layers;
     let rows = stack_rows(copper);
@@ -171,7 +172,7 @@ pub(crate) fn pane<'a>(
     for layer in rows {
         stack = stack.push(layer_row(layer, copper, i18n, ink));
     }
-    let board = container(scrollable(stack).width(Length::Fill).height(stack_h))
+    container(scrollable(stack).width(Length::Fill).height(stack_h))
         .padding([SP.xl, SP.l])
         .width(Length::Fill)
         .style(move |_: &Theme| container::Style {
@@ -181,8 +182,20 @@ pub(crate) fn pane<'a>(
                 ..iced::Border::default()
             },
             ..container::Style::default()
-        });
-    let paper = state.setup.sheet_line();
+        })
+        .boxed()
+}
+
+/// The preview column: the board rules drawing, the board line, the
+/// stack-up, the sheet when the dialog makes one, and the note.
+pub(crate) fn pane<'a>(
+    state: &'a NewProjectState,
+    note: signex_i18n::MessageId,
+    sheet: Option<&CanvasColors>,
+    i18n: &'a I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, NewProjectMsg> {
+    let copper = state.setup.pcb.copper_layers;
     let thickness = format!("{} mm", state.setup.pcb.thickness_mm);
     let bold = iced::Font {
         weight: iced::font::Weight::Semibold,
@@ -198,42 +211,45 @@ pub(crate) fn pane<'a>(
             .color(ti(tokens.text)),
     ]
     .spacing(SP.s);
-    let sheet_line = text(t!(
-        i18n,
-        ids::DIALOG_NEW_PROJECT_PREVIEW_SHEET,
-        "paper" => paper
-    ))
-    .size(TS.label)
-    .color(ti(tokens.text));
     let fill = tokens::resolve(tokens).sunken;
     let line = ti(tokens.border);
+    let mut parts = column![
+        text(t!(i18n, ids::DIALOG_NEW_PROJECT_PREVIEW_HEADING))
+            .size(TS.section)
+            .color(tokens::resolve(tokens).ink4),
+        board_rules::section(state, i18n, tokens),
+        board_line,
+        stack_card(state, i18n),
+    ]
+    .spacing(SP.l)
+    .width(Length::Fill);
+    if let Some(canvas_colors) = sheet {
+        parts = parts.push(board_rules::sheet_section(
+            state,
+            canvas_colors,
+            i18n,
+            tokens,
+        ));
+    }
+    let parts = parts.push(Space::new().height(SP.xl).boxed()).push(
+        text(t!(i18n, note))
+            .size(TS.body)
+            .color(tokens::muted_text(tokens))
+            .boxed(),
+    );
     // The pane scrolls on a short window, so nothing in it is `Fill`.
-    container(scrollable(
-        column![
-            text(t!(i18n, ids::DIALOG_NEW_PROJECT_PREVIEW_HEADING))
-                .size(TS.section)
-                .color(tokens::resolve(tokens).ink4),
-            board,
-            column![board_line, sheet_line].spacing(SP.s),
-            Space::new().height(SP.xl),
-            text(t!(i18n, note))
-                .size(TS.body)
-                .color(tokens::muted_text(tokens)),
-        ]
-        .spacing(SP.l)
-        .width(Length::Fill),
-    ))
-    .padding([SP.xl + SP.s, SP.xl])
-    .width(Length::Fixed(PREVIEW_W))
-    .height(Length::Fill)
-    .style(move |_: &Theme| container::Style {
-        background: Some(fill.into()),
-        border: iced::Border {
-            width: 1.0,
-            color: line,
-            ..iced::Border::default()
-        },
-        ..container::Style::default()
-    })
-    .boxed()
+    container(scrollable(parts))
+        .padding([SP.xl + SP.s, SP.xl])
+        .width(Length::Fixed(PREVIEW_W))
+        .height(Length::Fill)
+        .style(move |_: &Theme| container::Style {
+            background: Some(fill.into()),
+            border: iced::Border {
+                width: 1.0,
+                color: line,
+                ..iced::Border::default()
+            },
+            ..container::Style::default()
+        })
+        .boxed()
 }

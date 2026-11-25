@@ -84,6 +84,7 @@ fn board(footprints: Vec<Footprint>, segments: Vec<Segment>, vias: Vec<Via>) -> 
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
@@ -382,6 +383,7 @@ fn area(uuid: Uuid, fill: &str, outline: &[(f64, f64)]) -> Zone {
         min_thickness: 0.0,
         min_island_area: 0.0,
         remove_dead_islands: false,
+        shelved: false,
         unknown: Default::default(),
     }
 }
@@ -586,4 +588,94 @@ fn a_box_never_takes_a_footprint_text_and_a_point_does() {
         assert!(lassoed.contains(&ItemRef::Footprint(id(1))), "{lassoed:?}");
         assert!(!lassoed.contains(&text), "{lassoed:?}");
     }
+}
+
+/// #2457: a room is picked on its edges and its name, and inside it only
+/// when nothing else is there; the copper index never holds it.
+#[test]
+fn a_room_is_picked_on_its_edges_and_under_everything_inside() {
+    use signex_types::pcb::{Room, RoomOutline};
+    let mut b = sample();
+    b.rooms.push(Room::drawn(
+        id(900),
+        "dcdc".into(),
+        "#A058C8",
+        RoomOutline::Rect {
+            x_mm: -5.0,
+            y_mm: -5.0,
+            w_mm: 50.0,
+            h_mm: 30.0,
+        },
+    ));
+    let room = ItemRef::Room(id(900));
+    let index = BoardIndex::build_selectable(&b);
+    let at = |x: f64, y: f64| PointNm::new((x * MM as f64) as i64, (y * MM as f64) as i64);
+    // On its left edge.
+    let edge = crate::selection::pick(&index, at(-5.0, 10.0), MM / 10).map(|i| i.item);
+    assert_eq!(edge, Some(room));
+    // On the box of its name.
+    let (lo, hi) = room_label_box(&b.rooms[0]).expect("a label box");
+    let label = at((lo.x + hi.x) / 2.0, (lo.y + hi.y) / 2.0);
+    assert_eq!(
+        crate::selection::pick(&index, label, 0).map(|i| i.item),
+        Some(room)
+    );
+    // Inside, clear of everything else.
+    assert_eq!(
+        crate::selection::pick(&index, at(35.0, 15.0), 0).map(|i| i.item),
+        Some(room)
+    );
+    // Inside, on the track: the track wins.
+    let on_track = crate::selection::pick(&index, at(5.0, 0.0), 0).map(|i| i.item);
+    assert!(matches!(on_track, Some(ItemRef::Track(_))), "{on_track:?}");
+    assert!(
+        !BoardIndex::build(&b).items().any(|i| i.item == room),
+        "connectivity holds no rooms"
+    );
+}
+
+/// DECISIONS 2026-11-25: a click on a keepout, a Fill, a Solid Region or a
+/// pour cutout drawn over a polygon pour picks the area, not the pour. The
+/// pour has the lowest uuid, so the tie-break alone would pick it.
+#[test]
+fn an_area_over_a_pour_is_picked_before_the_pour() {
+    let mut b = board(Vec::new(), Vec::new(), Vec::new());
+    let tri = |x: f64| [(x, 1.0), (x + 3.0, 1.0), (x, 4.0)];
+    b.zones = vec![
+        area(
+            id(10),
+            "pour",
+            &[(0.0, 0.0), (20.0, 0.0), (20.0, 10.0), (0.0, 10.0)],
+        ),
+        area(id(11), "keepout", &tri(1.0)),
+        area(
+            id(12),
+            "solid",
+            &[(6.0, 1.0), (9.0, 1.0), (9.0, 4.0), (6.0, 4.0)],
+        ),
+        area(id(13), "solid", &tri(11.0)),
+        area(id(14), "pour_cutout", &tri(16.0)),
+    ];
+    let index = BoardIndex::build_selectable(&b);
+    let at = |x: f64, y: f64| PointNm::new((x * MM as f64) as i64, (y * MM as f64) as i64);
+    let zone = |n: u128, kind: PickKind| ItemRef::Zone { zone: id(n), kind };
+    let pour = zone(10, PickKind::Polygons);
+    for (point, expected) in [
+        (at(1.5, 1.5), zone(11, PickKind::Keepouts)),
+        (at(7.5, 2.5), zone(12, PickKind::Fills)),
+        (at(11.5, 1.5), zone(13, PickKind::Regions)),
+        (at(16.5, 1.5), zone(14, PickKind::Regions)),
+    ] {
+        let hits = index.hit_point(point, 0);
+        assert!(hits.contains(&pour) && hits.contains(&expected), "{hits:?}");
+        assert_eq!(
+            crate::selection::pick(&index, point, 0).map(|i| i.item),
+            Some(expected)
+        );
+    }
+    assert_eq!(
+        crate::selection::pick(&index, at(10.0, 8.0), 0).map(|i| i.item),
+        Some(pour),
+        "the pour alone"
+    );
 }

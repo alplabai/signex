@@ -70,7 +70,7 @@ fn angle(app: &Signex) -> f32 {
 }
 
 /// #2234 and #2316: the PCB Active Bar's buttons run `board_sketch` and
-/// `view_rotate`.
+/// `view_rotate`; mockup row 108: View is drawn with the clockwise arrow it turns by.
 #[test]
 fn the_pcb_bar_buttons_run_board_sketch_and_view_rotate() {
     let tid = ThemeId::GraphiteDark;
@@ -83,7 +83,41 @@ fn the_pcb_bar_buttons_run_board_sketch_and_view_rotate() {
     let ActiveBarIcon::Svg(handle) = &rotate.icon else {
         panic!("an SVG icon");
     };
-    assert_eq!(handle, &ic::icon_view_rotate(tid));
+    assert_eq!(handle, &ic::icon_dd_rotate_cw(tid));
+}
+
+/// mockup row 108: the board tools are drawn with the board tool glyphs (via, pad,
+/// dimension, keepout), as their dropdown rows are; no button on the bar is
+/// a text glyph.
+#[test]
+fn the_board_tool_buttons_are_drawn_with_svg_glyphs() {
+    let tid = ThemeId::GraphiteLight;
+    let i18n = I18n::en_us();
+    let first = pcb_bar_items(tid, &i18n, None, &PcbBarLastTools::default(), None);
+    let mut last = PcbBarLastTools::default();
+    assert!(last.remember(PcbBarGroup::ViaPad, "place_board_pad"));
+    assert!(last.remember(PcbBarGroup::CopperAreas, "place_board_keepout"));
+    let used = pcb_bar_items(tid, &i18n, None, &last, None);
+    let cases = [
+        (&first, "place_board_via", ic::icon_pcb_via(tid)),
+        (&first, "place_board_dimension", ic::icon_pcb_dimension(tid)),
+        (&used, "place_board_pad", ic::icon_pcb_pad(tid)),
+        (&used, "place_board_keepout", ic::icon_pcb_keepout(tid)),
+    ];
+    for (items, command, glyph) in cases {
+        let ActiveBarIcon::Svg(handle) = &button_for(items, command).icon else {
+            panic!("{command}: an SVG icon");
+        };
+        assert_eq!(handle, &glyph, "{command}");
+    }
+    for items in [&first, &used] {
+        assert!(
+            buttons(items)
+                .iter()
+                .all(|button| matches!(button.icon, ActiveBarIcon::Svg(_))),
+            "every button is an SVG glyph"
+        );
+    }
 }
 
 /// Round 9 of #2262: the button says what it is, in its tooltip and its
@@ -105,11 +139,12 @@ fn the_pcb_bar_button_is_named_and_drawn_as_board_sketch() {
     assert_ne!(handle, &ic::icon_dd_rect(tid));
 }
 
-/// #2352, #2373, #2388, #2389, #2392, #2424: Selection Filter, Move, Align |
-/// Components | Route, Tune | Via/Pad, Copper Areas, Copper Drawing |
-/// Dimensions, Text, Graphics | Board Sketch, Fabrication Outputs | View. A
-/// group with a live row runs it; a group with none is greyed with a tooltip
-/// that says it is not on boards yet.
+/// #2352, #2373, #2388, #2389, #2392, #2424, mockup row 108: Selection Filter, Move,
+/// Align | Components | Route, Tune, Via/Pad, Copper Areas | Dimensions,
+/// Text, Graphics | Board Sketch | View; no Copper Drawing group, as the
+/// Graphics Line and Arc draw tracks on copper (#2869). Fabrication Outputs
+/// is not on the bar (Caner, 2026-11-21). A group with a live row runs it; a
+/// group with none is greyed with a tooltip that says it is not on boards yet.
 #[test]
 fn the_pcb_bar_has_the_group_layout_and_greys_what_boards_cannot_do() {
     let items = pcb_bar_items(
@@ -120,15 +155,43 @@ fn the_pcb_bar_has_the_group_layout_and_greys_what_boards_cannot_do() {
         None,
     );
     let all = buttons(&items);
-    assert_eq!(all.len(), 15);
+    assert_eq!(all.len(), 13);
+    assert!(
+        !all.iter()
+            .any(|b| runs(b, "place_board_track") || runs(b, "place_board_arc")),
+        "#2869: no Copper Drawing flyout"
+    );
+    assert!(
+        !all.iter().any(|b| runs(b, "fabrication_outputs")),
+        "Fabrication Outputs stays in its menu"
+    );
     let separators = items
         .iter()
         .filter(|item| matches!(item, ActiveBarItem::Separator))
         .count();
-    assert_eq!(separators, 6);
+    assert_eq!(
+        separators, 5,
+        "mockup row 108: none between Tune and Via/Pad"
+    );
+    let separator_after = |index: usize| {
+        let slot = items
+            .iter()
+            .position(|item| match item {
+                ActiveBarItem::Button(button) => std::ptr::eq(button, all[index]),
+                _ => false,
+            })
+            .expect("a slot");
+        matches!(items.get(slot + 1), Some(ActiveBarItem::Separator))
+    };
+    let after: Vec<usize> = (0..all.len()).filter(|&i| separator_after(i)).collect();
+    assert_eq!(
+        after,
+        [2, 3, 7, 10, 11],
+        "Align | Components | Copper Areas | Graphics | Board Sketch |"
+    );
     let live = all.iter().filter(|button| button.enabled).count();
     assert_eq!(
-        live, 15,
+        live, 13,
         "#2373, #2389, #2424: every button, Tune, Dimensions, Text and Graphics included, is live"
     );
     assert!(runs(all[1], "move_object"), "Move follows the filter");
@@ -143,16 +206,14 @@ fn the_pcb_bar_has_the_group_layout_and_greys_what_boards_cannot_do() {
         runs(all[7], "place_board_polygon_pour"),
         "#2216: Polygon Pour heads its group"
     );
-    assert!(runs(all[8], "place_board_track"));
-    assert!(runs(all[9], "place_board_dimension"), "#2373");
-    assert!(runs(all[10], "place_board_string"), "#2373");
+    assert!(runs(all[8], "place_board_dimension"), "#2373");
+    assert!(runs(all[9], "place_board_string"), "#2373");
     assert!(
-        runs(all[11], "place_board_line"),
+        runs(all[10], "place_board_line"),
         "#2424: Line heads Graphics"
     );
-    assert!(runs(all[12], "board_sketch"));
-    assert!(runs(all[13], "fabrication_outputs"));
-    assert!(runs(all[14], "view_rotate"), "View closes the bar");
+    assert!(runs(all[11], "board_sketch"));
+    assert!(runs(all[12], "view_rotate"), "View closes the bar");
     for button in all.iter().filter(|button| !button.enabled) {
         assert!(button.on_press.is_none() && button.on_right_press.is_none());
         assert!(
@@ -164,8 +225,8 @@ fn the_pcb_bar_has_the_group_layout_and_greys_what_boards_cannot_do() {
     assert!(all[0].tooltip.starts_with("Selection Filter"));
     assert!(all[4].tooltip.starts_with("Interactive Routing"));
     assert_eq!(all[5].tooltip, "Length Tuning");
-    assert!(all[9].tooltip.starts_with("Place Dimension"));
-    assert!(all[10].tooltip.starts_with("Place String"));
+    assert!(all[8].tooltip.starts_with("Place Dimension"));
+    assert!(all[9].tooltip.starts_with("Place String"));
 }
 
 /// #2352 / #2360 / #2392: every tool the Place menu greys on a board is
@@ -224,12 +285,12 @@ fn the_board_sketch_button_enters_sketch_mode() {
     assert!(app.board_sketch_in_view().is_some());
 }
 
-/// #2388: Fabrication Outputs opens its dialog on the board in view and
-/// writes nothing.
+/// #2388: the Fabrication Outputs command, which its menu row runs, opens
+/// the dialog on the board in view and writes nothing.
 #[test]
-fn the_fabrication_outputs_button_opens_its_dialog() {
+fn the_fabrication_outputs_command_opens_its_dialog() {
     let mut app = board_app();
-    click(&mut app, "fabrication_outputs");
+    let _ = app.update(run("fabrication_outputs").expect("a catalog command"));
     let state = app
         .ui_state
         .fab_outputs
@@ -272,22 +333,34 @@ fn a_right_click_opens_and_closes_the_dropdown() {
     assert_eq!(app.interaction_state.pcb_bar_menu, None);
 }
 
-pub(super) fn rows(app: &Signex, menu: PcbBarMenu) -> Vec<DropdownItem<Message>> {
+/// The entries of `menu` as the bar builds them for `app`.
+pub(super) fn entries(app: &Signex, menu: PcbBarMenu) -> Vec<DropdownEntry<Message>> {
+    let ctx = app.command_context(None);
+    let sources = MenuSources {
+        ctx: &ctx,
+        filter: &app.ui_state.pcb_pick_filter,
+        presets: &app.ui_state.pcb_filter_presets,
+        editing: app.ui_state.pcb_filter_preset_editing,
+        last: &app.ui_state.pcb_bar_last_tools,
+    };
     pcb_bar_menu_entries(
         menu,
         &app.ui_state.i18n,
         &app.document_state.panel_ctx.tokens,
         app.ui_state.effective_theme_id(),
-        &app.command_context(None),
-        &app.ui_state.pcb_pick_filter,
-        &app.ui_state.pcb_filter_presets,
+        &sources,
     )
-    .into_iter()
-    .filter_map(|entry| match entry {
-        DropdownEntry::Item(item) => Some(item),
-        _ => None,
-    })
-    .collect()
+}
+
+/// The item rows of `menu`, headers and separators left out.
+pub(super) fn rows(app: &Signex, menu: PcbBarMenu) -> Vec<DropdownItem<Message>> {
+    entries(app, menu)
+        .into_iter()
+        .filter_map(|entry| match entry {
+            DropdownEntry::Item(item) => Some(item),
+            _ => None,
+        })
+        .collect()
 }
 
 /// Picks the row of `menu` that runs `command`, from an open dropdown.
@@ -358,19 +431,31 @@ fn the_view_dropdown_greys_reset_at_zero() {
     assert!(reset.disabled && reset.on_press.is_none());
 }
 
+/// mockup row 108: each View row's arrow turns the way the row says; the half turn
+/// uses the clockwise arrow and Reset has no icon, so the two no longer
+/// share one.
+#[test]
+fn the_view_dropdown_icons_follow_the_turn() {
+    let app = board_app();
+    let tid = app.ui_state.effective_theme_id();
+    let icon_of = |command: &str| {
+        rows(&app, PcbBarMenu::View)
+            .into_iter()
+            .find(|row| row.command_id == Some(command))
+            .unwrap_or_else(|| panic!("a {command} row"))
+            .icon
+    };
+    assert_eq!(icon_of("view_rotate"), Some(ic::icon_dd_rotate_cw(tid)));
+    assert_eq!(icon_of("view_rotate_ccw"), Some(ic::icon_dd_rotate(tid)));
+    assert_eq!(icon_of("view_rotate_180"), Some(ic::icon_dd_rotate_cw(tid)));
+    assert_eq!(icon_of("view_rotate_reset"), None);
+}
+
 /// The board Selection Filter dropdown, laid out: its single chip grid.
 fn filter_grid(app: &Signex) -> iced::Element<'static, Message> {
-    let mut entries = pcb_bar_menu_entries(
-        PcbBarMenu::Filter,
-        &app.ui_state.i18n,
-        &app.document_state.panel_ctx.tokens,
-        app.ui_state.effective_theme_id(),
-        &app.command_context(None),
-        &app.ui_state.pcb_pick_filter,
-        &app.ui_state.pcb_filter_presets,
-    );
-    assert_eq!(entries.len(), 1, "one chip grid, as on the schematic");
-    match entries.remove(0) {
+    let mut grid = entries(app, PcbBarMenu::Filter);
+    assert_eq!(grid.len(), 1, "one chip grid, as on the schematic");
+    match grid.remove(0) {
         DropdownEntry::Custom(grid) => grid,
         _ => panic!("the filter dropdown is the schematic's chip grid"),
     }
@@ -408,6 +493,7 @@ fn the_selection_filter_is_the_schematic_dropdown_with_the_board_kinds() {
         crate::active_bar::FilterMenu {
             chips: Vec::new(),
             presets: Vec::new(),
+            editing: None,
             on: 0,
             all: (),
             none: (),
@@ -427,9 +513,12 @@ fn the_selection_filter_is_the_schematic_dropdown_with_the_board_kinds() {
     assert!(!app.ui_state.pcb_pick_filter.is_on(PickKind::Tracks));
     assert_eq!(app.interaction_state.pcb_bar_menu, Some(PcbBarMenu::Filter));
 
-    // Rooms cannot be picked yet: its chip sends nothing.
+    // 3D bodies cannot be picked yet: its chip sends nothing.
+    let bodies = crate::layout_probe::messages_on_click(filter_grid(&app), WINDOW, "3D Bodies");
+    assert!(bodies.is_empty(), "{bodies:?}");
+    // Rooms are picked since #2457: its chip toggles the kind.
     let rooms = crate::layout_probe::messages_on_click(filter_grid(&app), WINDOW, "Rooms");
-    assert!(rooms.is_empty(), "{rooms:?}");
+    assert_eq!(rooms.len(), 1, "{rooms:?}");
 
     let none = crate::layout_probe::messages_on_click(filter_grid(&app), WINDOW, "None");
     let _ = app.update(none[0].clone());
@@ -457,10 +546,68 @@ fn a_saved_preset_is_a_chip_of_the_filter_dropdown() {
     let _ = app.update(bar_message(PcbBarMsg::MenuToggled(PcbBarMenu::Filter)));
     let texts = grid_texts(filter_grid(&app));
     assert_eq!(texts[2], "Filter 1", "presets follow All / None: {texts:?}");
+    assert!(!texts.iter().any(|t| t.starts_with("Editing")), "{texts:?}");
     let applied = crate::layout_probe::messages_on_click(filter_grid(&app), WINDOW, "Filter 1");
     let _ = app.update(applied[0].clone());
     let on: Vec<PickKind> = app.ui_state.pcb_pick_filter.on_kinds().collect();
     assert_eq!(on, vec![PickKind::Vias]);
+    // #2873: the click selects the preset for editing, and the dropdown
+    // says so; a second click on it ends editing.
+    let texts = grid_texts(filter_grid(&app));
+    assert!(texts.iter().any(|t| t == "Editing Filter 1"), "{texts:?}");
+    let again = crate::layout_probe::messages_on_click(filter_grid(&app), WINDOW, "Filter 1");
+    let _ = app.update(again[0].clone());
+    assert_eq!(app.ui_state.pcb_filter_preset_editing, None);
+    let texts = grid_texts(filter_grid(&app));
+    assert!(!texts.iter().any(|t| t.starts_with("Editing")), "{texts:?}");
+}
+
+/// mockup row 108: the Selection Filter button carries a badge with the number of
+/// pickable kinds that are off, at its top-right corner; there is none while
+/// every kind is on, and a kind boards cannot pick yet does not count.
+#[test]
+fn the_filter_badge_counts_the_kinds_that_are_off() {
+    use pcb_geom::{PickFilter, PickKind};
+
+    let mut app = board_app();
+    app.ui_state.pcb_pick_filter = PickFilter::default();
+    let bar_texts = |app: &Signex| {
+        crate::layout_probe::lay_out_texts(app.pcb_active_bar(true), WINDOW)
+            .into_iter()
+            .map(|t| (t.text.replace(['\u{2068}', '\u{2069}'], ""), t.bounds))
+            .collect::<Vec<_>>()
+    };
+    assert!(
+        bar_texts(&app).is_empty(),
+        "no badge while every kind is on"
+    );
+
+    app.ui_state.pcb_pick_filter.toggle(PickKind::Tracks);
+    app.ui_state.pcb_pick_filter.toggle(PickKind::Vias);
+    let texts = bar_texts(&app);
+    let labels: Vec<&str> = texts.iter().map(|(text, _)| text.as_str()).collect();
+    assert_eq!(labels, ["2"]);
+
+    // The badge sits in the right half of the filter button, near its top.
+    let m = signex_widgets::active_bar::Metrics::GRAPHITE;
+    let items = bar_of(&app);
+    let (offsets, bar_width) = signex_widgets::active_bar::slot_offsets(&items, &m);
+    let slot_left = (WINDOW.width - bar_width) / 2.0 + offsets[0];
+    let top = crate::active_bar::bar_top_margin() + m.padding;
+    let badge = texts[0].1;
+    assert!(badge.x >= slot_left + m.btn / 2.0, "{badge:?}");
+    assert!(badge.x + badge.width <= slot_left + m.btn, "{badge:?}");
+    assert!(badge.y >= top && badge.y < top + m.btn / 2.0, "{badge:?}");
+
+    // Rooms are pickable (#2457), so turning them off counts.
+    app.ui_state.pcb_pick_filter.toggle(PickKind::Rooms);
+    let labels: Vec<String> = bar_texts(&app).into_iter().map(|(text, _)| text).collect();
+    assert_eq!(labels, ["3"], "Rooms can be picked");
+
+    // 3D bodies cannot be picked yet: turning them off changes nothing.
+    app.ui_state.pcb_pick_filter.toggle(PickKind::Bodies3d);
+    let labels: Vec<String> = bar_texts(&app).into_iter().map(|(text, _)| text).collect();
+    assert_eq!(labels, ["3"], "3D bodies cannot be picked yet");
 }
 
 /// #2389: the Interactive Routing button arms the router on the board.

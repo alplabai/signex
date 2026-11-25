@@ -2,12 +2,14 @@
 //! and the rules that decide whether Create is available. Pure data; the
 //! disk check of the target lives in `target.rs`.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use signex_types::project::{
     PcbField, PcbValueError, ProfileNameProblem, ProjectSetup, SetupProfile, UserProfile,
 };
 use signex_types::schematic::SheetSize;
+
+pub(crate) use crate::app::handlers::document_files::new_project::project_file_in;
 
 use super::target::{TargetProblem, TargetStatus};
 use super::{NewProjectMsg, ProfileTarget};
@@ -155,6 +157,8 @@ pub struct NewProjectState {
     pub(crate) editing: Option<ProfileTarget>,
     /// The saved profile being renamed, with the name as typed.
     pub(crate) renaming: Option<Renaming>,
+    /// The previews' open value, held handle and larger view.
+    pub(crate) preview: super::SetupPreview,
 }
 
 /// A Rename in progress: the saved profile and the name as typed, with
@@ -190,6 +194,7 @@ impl NewProjectState {
             profile_menu: None,
             editing: None,
             renaming: None,
+            preview: super::SetupPreview::default(),
         }
     }
 
@@ -204,8 +209,8 @@ impl NewProjectState {
     }
 
     /// The `.snxprj` Create would write: with the folder,
-    /// `<loc>/<name>/<name>.snxprj`, without it `<loc>/<name>.snxprj`.
-    #[cfg(test)]
+    /// `<loc>/<name>/<name>.snxprj`, without it `<loc>/<name>.snxprj`. `None`
+    /// while the name is unusable or the location is empty.
     pub(crate) fn project_file(&self) -> Option<PathBuf> {
         let name = check_name(&self.name).ok()?;
         let location = self.location_path()?;
@@ -444,10 +449,10 @@ impl NewProjectState {
         data: &signex_types::project::ProjectData,
         users: &[UserProfile],
     ) -> Self {
-        let mut state = Self::of_setup(
-            ProjectSetup::for_project(&data.project_defaults, data.designator_standard(), users)
-                .setup,
-        );
+        // What a new sheet really starts from (mockup row 31), so the card
+        // and New Schematic never show two sizes.
+        let setup = crate::app::document_setup::new_document_setup(data, users).setup;
+        let mut state = Self::of_setup(setup);
         state.customize_open = true;
         state
     }
@@ -458,16 +463,6 @@ impl NewProjectState {
         state.setup = setup;
         state.refresh_drafts();
         state
-    }
-}
-
-/// `<loc>/<name>/<name>.snxprj` or `<loc>/<name>.snxprj`.
-pub(crate) fn project_file_in(location: &Path, name: &str, make_folder: bool) -> PathBuf {
-    let file = format!("{name}.snxprj");
-    if make_folder {
-        location.join(name).join(file)
-    } else {
-        location.join(file)
     }
 }
 

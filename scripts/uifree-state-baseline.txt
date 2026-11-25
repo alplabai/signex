@@ -1,6 +1,6 @@
 # UI-free state baseline (scripts/check_uifree_state.sh, ADR-0006). The count may only go down.
 # Regenerate with: bash scripts/check_uifree_state.sh --generate
-count=164
+count=165
 field=crate::app::agent::journal::queue::Gate.lines
 field=crate::app::agent::journal::queue::JournalMark.gate
 field=crate::app::agent::journal::queue::JournalQueue.gate
@@ -82,6 +82,7 @@ field=crate::app::state::DocumentState.document_saves
 field=crate::app::state::DocumentState.drafts
 field=crate::app::state::DocumentState.error_notice
 field=crate::app::state::DocumentState.footprint_editors
+field=crate::app::state::DocumentState.gerber_viewer
 field=crate::app::state::DocumentState.history
 field=crate::app::state::DocumentState.missing_fonts
 field=crate::app::state::DocumentState.moved_project_dirs
@@ -143,7 +144,7 @@ field=crate::app::state::ui::UiState.io
 field=crate::app::state::ui::UiState.profile_writes
 field=crate::app::symbol_history::SymbolHistorySnapshot.point
 field=crate::app::undo_groups::UndoGroupSheets.boards
-field=crate::app::undo_groups::UndoGroupSheets.disk_only
+field=crate::app::undo_groups::UndoGroupSheets.clean_before
 field=crate::app::undo_groups::UndoGroupSheets.dropped
 field=crate::app::undo_groups::UndoGroupSheets.kind
 field=crate::app::undo_groups::UndoGroupSheets.live

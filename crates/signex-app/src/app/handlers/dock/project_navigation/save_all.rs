@@ -367,6 +367,9 @@ impl Signex {
                 // The UI stayed live during the writes, so anything edited
                 // meanwhile is dirty now; the quit gate prompts for it.
                 SaveAllNext::Quit => Task::batch([sweep, self.handle_app_quit_requested()]),
+                SaveAllNext::SwitchBranch(request) => {
+                    Task::batch([sweep, self.resume_branch_switch(*request)])
+                }
                 SaveAllNext::Nothing => {
                     crate::diagnostics::log_info(format!("Save All: saved {} item(s)", items));
                     sweep
@@ -390,7 +393,9 @@ impl Signex {
         let id = match next {
             SaveAllNext::CloseProject { .. } => signex_i18n::ids::NOTICE_SAVE_ALL_PROJECT_KEPT,
             SaveAllNext::CloseLibrary { .. } => signex_i18n::ids::NOTICE_SAVE_ALL_LIBRARY_KEPT,
-            SaveAllNext::Nothing => signex_i18n::ids::NOTICE_SAVE_ALL_FAILED,
+            SaveAllNext::Nothing | SaveAllNext::SwitchBranch(_) => {
+                signex_i18n::ids::NOTICE_SAVE_ALL_FAILED
+            }
             SaveAllNext::Quit => signex_i18n::ids::NOTICE_SAVE_ALL_QUIT_HELD,
         };
         let message = signex_i18n::Translatable::new(id)
@@ -518,6 +523,7 @@ impl Signex {
                 .collect();
             for pinned in unchanged {
                 self.document_state.mark_document_clean(&pinned.path);
+                self.release_saved_sheet(&pinned.path);
             }
         }
     }

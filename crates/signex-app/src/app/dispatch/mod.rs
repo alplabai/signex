@@ -2,6 +2,7 @@ use iced::Task;
 
 use super::*;
 
+mod board_status;
 pub(crate) mod chord;
 mod command_palette;
 mod document;
@@ -14,6 +15,7 @@ pub(crate) mod input;
 mod keyboard;
 mod keymap;
 pub(crate) mod library;
+mod main_canvas_work;
 #[cfg(test)]
 mod net_color_tests;
 mod overlay;
@@ -130,6 +132,8 @@ impl Signex {
             Message::CrossProbe(msg) => self.dispatch_cross_probe_message(msg),
             Message::UpdatePcb(msg) => self.dispatch_update_pcb_message(msg),
             Message::PanZoomBench(msg) => self.dispatch_pan_zoom_bench_message(msg),
+            Message::DiffPairClasses(msg) => self.dispatch_diff_pair_classes_message(msg),
+            Message::GerberViewer(msg) => self.dispatch_gerber_viewer_message(msg),
         }
     }
 
@@ -272,7 +276,7 @@ impl Signex {
                             ModalId::ParameterManager => {
                                 self.end_parameter_edit_runs();
                                 self.ui_state.parameter_manager_open = false;
-                                self.ui_state.parameter_table = Default::default();
+                                *self.ui_state.parameter_table = Default::default();
                             }
                             ModalId::RenameDialog => self.ui_state.rename_dialog = None,
                             ModalId::RemoveDialog => self.ui_state.remove_dialog = None,
@@ -374,11 +378,14 @@ impl Signex {
                         // document_state.tabs. Drop the per-window
                         // canvas so we don't leak caches for a window
                         // that's gone.
-                        WindowKind::UndockedTab { .. } => {
+                        WindowKind::UndockedTab { path, .. } => {
+                            self.end_wire_of_window(id);
+                            self.end_pause_of_window(id);
                             self.interaction_state.canvases.remove(&id);
                             self.interaction_state.pcb_canvases.remove(&id);
                             self.interaction_state.pcb_selections.remove(&id);
                             self.forget_pcb_carry_of_window(id);
+                            self.show_redocked_tab(&path);
                             self.settle_document_tiling();
                         }
                         // Closing a detached panel reattaches it to the
@@ -444,6 +451,7 @@ impl Signex {
                 Task::batch([
                     self.focus_new_project_name_once_open(modal),
                     self.focus_move_selection_dx_once_open(modal),
+                    self.focus_rename_field_once_open(modal),
                     crate::chrome::apply_rounded_corners::<Message>(id),
                     iced::window::gain_focus(id),
                     window_scale_task(id),
@@ -476,10 +484,17 @@ impl Signex {
                 // renders the correct schematic from its first frame.
                 // Pan/zoom/selection start at CanvasSlot::new
                 // defaults — independent of the main canvas.
-                // The tab was the active one, so the main canvas holds its
-                // paper size.
+                // The tab need not be main's active one: its sheet names its
+                // paper. A tab with no sheet keeps the main canvas's.
                 let main = &self.interaction_state.canvas;
-                let paper = (main.paper_width_mm, main.paper_height_mm);
+                let paper = self.document_state.engines.get(&path).map_or(
+                    (main.paper_width_mm, main.paper_height_mm),
+                    |engine| {
+                        let size =
+                            super::projector::effective_paper_size(&engine.document().paper_size);
+                        crate::panels::paper_dimensions(&size)
+                    },
+                );
                 let per_window = self.seeded_canvas_slot(&path, paper);
                 self.interaction_state.canvases.insert(id, per_window);
                 // A PCB tab gets its own PCB canvas too, so panning one
@@ -489,6 +504,9 @@ impl Signex {
                         .pcb_canvases
                         .insert(id, per_window_pcb);
                 }
+                // The main window no longer shows it: main's commands must
+                // not keep editing the document that moved away.
+                self.leave_undocked_active_tab(&path);
                 self.refresh_window_panel_ctxs(None);
                 // One pane fewer in the main window (#2249).
                 self.settle_document_tiling();
@@ -506,11 +524,16 @@ impl Signex {
                 // canvas cache + selection leak.
                 self.close_overlays_owned_by(id);
                 self.ui_state.forget_undocked_window_size(id);
-                self.ui_state.windows.remove(&id);
+                let reattached = self.ui_state.windows.remove(&id);
+                self.end_wire_of_window(id);
+                self.end_pause_of_window(id);
                 self.interaction_state.canvases.remove(&id);
                 self.interaction_state.pcb_canvases.remove(&id);
                 self.interaction_state.pcb_selections.remove(&id);
                 self.forget_pcb_carry_of_window(id);
+                if let Some(super::state::WindowKind::UndockedTab { path, .. }) = reattached {
+                    self.show_redocked_tab(&path);
+                }
                 // The tab is back in the main window, as a pane when tiled.
                 self.settle_document_tiling();
                 iced::window::close(id)
@@ -529,6 +552,18 @@ impl Signex {
                 // Raise + focus the detached panel window — same
                 // `Level::Normal` open-behind issue as the modal/tab.
                 Task::batch([iced::window::gain_focus(id), window_scale_task(id)])
+            }
+            // Dock back closes the panel's window; `SecondaryWindowClosed`
+            // then re-docks the panel in its home region, as the close does.
+            WindowMsg::DetachedPanelDockBackPressed(id) => {
+                if matches!(
+                    self.ui_state.windows.get(&id),
+                    Some(super::state::WindowKind::DetachedPanel(_))
+                ) {
+                    iced::window::close(id)
+                } else {
+                    Task::none()
+                }
             }
             WindowMsg::StartMainWindowDrag => {
                 // Title-bar drag diagnosis: the press reached a drag zone.
@@ -571,6 +606,8 @@ impl Signex {
                 if self.ui_state.focused_window == Some(id) {
                     self.ui_state.focused_window = None;
                 }
+                // No edge pan behind Alt+Tab (#2872).
+                self.forget_edge_pan_pointers();
                 self.end_pcb_drag_on_focus_loss(id)
             }
             WindowMsg::NativeMenuRowChosen(action) => self.handle_native_menu_row_chosen(action),
@@ -622,4 +659,79 @@ impl Signex {
 fn window_scale_task(id: iced::window::Id) -> Task<Message> {
     iced::window::scale_factor(id)
         .map(move |s| Message::Window(WindowMsg::WindowScaleChanged(id, s)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::dock::{DockMessage, PanelPosition, PanelSite};
+    use crate::panels::PanelKind;
+
+    /// A detached Projects panel that was last docked in the bottom region,
+    /// not its home (left).
+    fn detached_from_bottom(app: &mut Signex) -> iced::window::Id {
+        let kind = PanelKind::Projects;
+        let dock = &mut app.document_state.dock;
+        dock.close_panel(kind);
+        dock.add_panel(PanelPosition::Bottom, kind);
+        let Some(PanelSite::Docked(pos, idx)) = dock.locate(kind) else {
+            panic!("Projects is docked at the bottom");
+        };
+        dock.update(DockMessage::UndockPanel(pos, idx));
+        let Some(PanelSite::Floating(idx)) = dock.locate(kind) else {
+            panic!("Projects floats");
+        };
+        let _ = app.update(Message::Window(WindowMsg::DetachFloatingPanel(idx)));
+        let detached = app.ui_state.windows.iter().find_map(|(id, window)| {
+            matches!(
+                window,
+                super::super::state::WindowKind::DetachedPanel(PanelKind::Projects)
+            )
+            .then_some(*id)
+        });
+        let Some(id) = detached else {
+            panic!("Projects has a detached window");
+        };
+        assert!(app.document_state.dock.locate(kind).is_none());
+        id
+    }
+
+    fn home_region_holds_projects(app: &Signex) -> bool {
+        matches!(
+            app.document_state.dock.locate(PanelKind::Projects),
+            Some(PanelSite::Docked(PanelPosition::Left, _))
+        )
+    }
+
+    /// DECISIONS 2026-11-20 (h): Dock back re-docks a detached panel in its
+    /// home region, not the last region it was in (mockup row 8).
+    #[test]
+    fn dock_back_re_docks_a_detached_panel_in_its_home_region() {
+        let (mut app, _boot) = Signex::new();
+        let id = detached_from_bottom(&mut app);
+
+        let close = app.update(Message::Window(WindowMsg::DetachedPanelDockBackPressed(id)));
+        assert_ne!(close.units(), 0, "Dock back closes the window");
+        let _ = app.update(Message::Window(WindowMsg::SecondaryWindowClosed(id)));
+
+        assert!(home_region_holds_projects(&app));
+        assert!(
+            !app.document_state
+                .dock
+                .panel_kinds(PanelPosition::Bottom)
+                .contains(&PanelKind::Projects)
+        );
+    }
+
+    /// The window's close re-docks the same way as Dock back.
+    #[test]
+    fn closing_a_detached_panel_window_re_docks_it_in_its_home_region() {
+        let (mut app, _boot) = Signex::new();
+        let id = detached_from_bottom(&mut app);
+
+        let _ = app.update(Message::Window(WindowMsg::SecondaryWindowClosed(id)));
+
+        assert!(!app.ui_state.windows.contains_key(&id));
+        assert!(home_region_holds_projects(&app));
+    }
 }

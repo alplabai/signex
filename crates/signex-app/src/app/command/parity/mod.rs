@@ -14,13 +14,21 @@
 //! no handler of its own to read) or `gate` (only the gate and the routing
 //! were read, not the handler); no core row may be `gate`.
 //!
+//! The owner comes from what the route writes, by the D / S / C / X rule
+//! of #2326 ([`owners`], #2551), never from who can call it today.
+//!
 //! The table follows the synchronous route only: the follow-up messages of
 //! a returned `Task` (a save's completion, `ErcFinished` / `DrcFinished`, a
 //! requirements run's result) run later against live state and are not rows.
 
 mod annotations;
+#[cfg(test)]
+mod enablement_tests;
 mod forms;
 mod inputs;
+#[cfg(test)]
+mod needs_owner_tests;
+mod owners;
 #[cfg(test)]
 mod probe_tests;
 #[cfg(test)]
@@ -43,6 +51,9 @@ enum Basis {
     Routing,
     /// Only the gate and the routing were read, not the handler behind them.
     Gate,
+    /// No handler exists yet: the inputs of a split router's core command,
+    /// declared from the #2326 decisions (`split_core_command` rows only).
+    Declared,
 }
 
 impl Basis {
@@ -51,6 +62,7 @@ impl Basis {
             Self::Handler => "handler",
             Self::Routing => "routing",
             Self::Gate => "gate",
+            Self::Declared => "declared",
         }
     }
 }
@@ -61,6 +73,8 @@ struct Row {
     form: Form,
     route: String,
     owner: Owner,
+    /// How the owner was found; `None` fails `every_row_has_an_owner_basis`.
+    owner_basis: Option<owners::OwnerBasis>,
     inputs: BTreeSet<Input>,
     basis: Basis,
 }
@@ -107,8 +121,19 @@ fn rows() -> Vec<Row> {
         });
         let arms = bridge::resolve(&command, &CommandArgs::none())
             .is_some_and(|message| forms::arms_a_tool(&message));
-        for (form, route) in forms::routes_of(&command) {
-            rows.push(row(&command, form, route, gate_inputs.as_ref(), arms));
+        let mut routes = forms::routes_of(&command);
+        let forms: Vec<Form> = routes.iter().map(|(form, _)| *form).collect();
+        let id = metadata_for(&command).expect("catalog id has metadata").id;
+        if forms
+            .iter()
+            .any(|form| owners::annotated(id, *form) == Some(owners::Writes::Split))
+        {
+            routes.push((Form::SplitCore, "the core command after the router".into()));
+        }
+        let forms: Vec<Form> = routes.iter().map(|(form, _)| *form).collect();
+        for (form, route) in routes {
+            let owned = owners::owner(id, form, &forms, arms);
+            rows.push(row(&command, form, route, gate_inputs.as_ref(), owned));
         }
     }
     rows.sort_by(|a, b| (a.id, a.form).cmp(&(b.id, b.form)));
@@ -154,7 +179,7 @@ fn row(
     form: Form,
     route: String,
     gate_inputs: Option<&BTreeSet<Input>>,
-    arms: bool,
+    owned: Option<(Owner, owners::OwnerBasis)>,
 ) -> Row {
     let id = metadata_for(command).expect("catalog id has metadata").id;
     let mut inputs: BTreeSet<Input> = form.implied().iter().copied().collect();
@@ -189,13 +214,20 @@ fn row(
     };
     if let Some(annotated) = annotations::of(id, form) {
         inputs.extend(annotated.iter().copied());
-        basis = Basis::Handler;
+        // The core command behind a split router has no handler yet: its
+        // inputs are declared from the #2326 decisions, not read.
+        basis = if form == Form::SplitCore {
+            Basis::Declared
+        } else {
+            Basis::Handler
+        };
     }
     Row {
         id,
         form,
         route,
-        owner: forms::owner(command, form, arms),
+        owner: owned.map_or(Owner::Undecided, |(owner, _)| owner),
+        owner_basis: owned.map(|(_, basis)| basis),
         inputs,
         basis,
     }

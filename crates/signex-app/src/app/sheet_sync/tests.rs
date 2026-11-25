@@ -141,6 +141,18 @@ fn send(app: &mut Signex, msg: SheetSyncMsg) {
     settle(app, task);
 }
 
+/// The file dialog picked `file` for the sheet in view.
+fn picked(app: &Signex, file: PathBuf) -> SheetSyncMsg {
+    SheetSyncMsg::CreateSymbolPicked {
+        target: app
+            .document_state
+            .active_path
+            .clone()
+            .expect("a sheet in view"),
+        file: Some(file),
+    }
+}
+
 fn parent_pins(app: &Signex) -> Vec<String> {
     let engine = app.document_state.active_engine().expect("parent");
     let mut names: Vec<String> = engine.document().child_sheets[0]
@@ -148,6 +160,19 @@ fn parent_pins(app: &Signex) -> Vec<String> {
         .iter()
         .map(|p| p.name.clone())
         .collect();
+    names.sort_unstable();
+    names
+}
+
+/// The entries of the sheet symbol the Properties panel shows as selected.
+fn properties_pins(app: &Signex) -> Vec<String> {
+    let symbol = app
+        .document_state
+        .panel_ctx
+        .selected_child_sheet
+        .as_ref()
+        .expect("Properties shows the selected sheet symbol");
+    let mut names: Vec<String> = symbol.pins.iter().map(|p| p.name.clone()).collect();
     names.sort_unstable();
     names
 }
@@ -190,6 +215,8 @@ fn sheet_to_symbol_previews_then_applies_as_one_undo_step() {
         vec![pin("GONE", "passive", 2.54, true)],
         vec![hierarchical("SDA", "input", 10.0)],
     );
+    rig.app.update_selection_info();
+    assert_eq!(properties_pins(&rig.app), ["GONE"]);
     send(&mut rig.app, SheetSyncMsg::Requested);
     let state = rig.app.ui_state.sheet_sync.as_ref().expect("dialog open");
     let preview = state.preview().expect("the child was read");
@@ -204,6 +231,11 @@ fn sheet_to_symbol_previews_then_applies_as_one_undo_step() {
         "Apply closes the dialog"
     );
     assert_eq!(parent_pins(&rig.app), ["SDA"]);
+    assert_eq!(
+        properties_pins(&rig.app),
+        ["SDA"],
+        "Properties shows the selected sheet symbol's new entries"
+    );
     rig.app
         .document_state
         .active_engine_mut()
@@ -223,6 +255,74 @@ fn cancel_closes_the_dialog_without_a_change() {
     send(&mut rig.app, SheetSyncMsg::CancelRequested);
     assert!(rig.app.ui_state.sheet_sync.is_none());
     assert_eq!(parent_pins(&rig.app), ["GONE"]);
+}
+
+/// Mockup row 79: choosing a direction and using the drawing change no
+/// sheet and open no undo step; the drawing follows the direction.
+#[test]
+fn the_preview_controls_change_nothing_until_apply() {
+    let mut rig = rig(
+        vec![pin("GONE", "passive", 2.54, true)],
+        vec![hierarchical("SDA", "input", 10.0)],
+    );
+    send(&mut rig.app, SheetSyncMsg::Requested);
+    let names = |app: &Signex| -> Vec<String> {
+        let state = app.ui_state.sheet_sync.as_ref().expect("dialog open");
+        state
+            .entries()
+            .expect("entries known")
+            .iter()
+            .map(|entry| entry.name.clone())
+            .collect()
+    };
+    assert_eq!(names(&rig.app), ["GONE", "SDA"]);
+    for msg in [
+        SheetSyncMsg::PreviewModePicked(super::SheetSyncPreviewMode::Before),
+        SheetSyncMsg::PreviewExpandToggled,
+        SheetSyncMsg::DirectionPicked(SheetSyncDirection::SymbolToSheet),
+    ] {
+        send(&mut rig.app, msg);
+    }
+    let state = rig.app.ui_state.sheet_sync.as_ref().expect("dialog open");
+    assert_eq!(state.preview_mode, super::SheetSyncPreviewMode::Before);
+    assert!(state.preview_expanded);
+    assert_eq!(
+        names(&rig.app),
+        ["SDA", "GONE"],
+        "the ports, then the new one"
+    );
+    assert_eq!(parent_pins(&rig.app), ["GONE"]);
+    assert!(!rig.app.document_state.has_dirty_documents());
+    assert_eq!(
+        std::fs::read_to_string(&rig.child).expect("child file"),
+        rig.child_text
+    );
+}
+
+/// When the sheets changed before the file re-check came back, the dialog
+/// takes the current changes, as its message says, so Apply can go on.
+#[test]
+fn a_changed_sheet_at_the_disk_check_refreshes_the_preview() {
+    let mut rig = rig(
+        vec![pin("NEW", "output", 2.54, false)],
+        vec![hierarchical("OLD", "output", 10.0)],
+    );
+    send(&mut rig.app, SheetSyncMsg::Requested);
+    let state = rig.app.ui_state.sheet_sync.as_mut().expect("dialog open");
+    let current = state.previews.clone();
+    state.previews = Some(super::SheetSyncPreviews::default());
+    state.checking = true;
+    let generation = state.generation;
+    send(
+        &mut rig.app,
+        SheetSyncMsg::DiskChecked {
+            generation,
+            result: Ok(Vec::new()),
+        },
+    );
+    let state = rig.app.ui_state.sheet_sync.as_ref().expect("dialog stays");
+    assert_eq!(state.problem, Some(super::SheetSyncProblem::Changed));
+    assert_eq!(state.previews, current);
 }
 
 #[test]
@@ -271,6 +371,145 @@ fn symbol_to_sheet_changes_the_closed_child_in_memory_only() {
     );
 }
 
+/// A dialog on Symbol to Sheet that would remove the ports GONE1 and GONE2.
+fn removal_rig() -> Rig {
+    let mut rig = rig(
+        vec![pin("KEEP", "input", 2.54, false)],
+        vec![
+            hierarchical("KEEP", "input", 10.0),
+            hierarchical("GONE1", "output", 20.0),
+            hierarchical("GONE2", "output", 30.0),
+        ],
+    );
+    send(&mut rig.app, SheetSyncMsg::Requested);
+    send(
+        &mut rig.app,
+        SheetSyncMsg::DirectionPicked(SheetSyncDirection::SymbolToSheet),
+    );
+    rig
+}
+
+fn tick(app: &mut Signex, port: &str, ticked: bool) {
+    send(
+        app,
+        SheetSyncMsg::RemovalTicked {
+            port: port.to_string(),
+            ticked,
+        },
+    );
+}
+
+fn child_ports(rig: &Rig) -> Vec<String> {
+    let child = rig
+        .app
+        .document_state
+        .engines
+        .get(&rig.child)
+        .expect("the child is held in memory");
+    let mut ports: Vec<String> = signex_engine::exposed_sheet_ports(child.document())
+        .into_iter()
+        .map(|p| p.name)
+        .collect();
+    ports.sort_unstable();
+    ports
+}
+
+/// #2831, mockup row 79: a removal left out keeps its port, the others go,
+/// and Apply is one undo step, written to no file.
+#[test]
+fn a_removal_left_out_keeps_its_port_and_apply_is_one_undo_step() {
+    let mut rig = removal_rig();
+    let state = rig.app.ui_state.sheet_sync.as_ref().expect("dialog open");
+    assert_eq!(
+        state.ports_to_remove(),
+        ["GONE1", "GONE2"],
+        "ticked at first"
+    );
+    tick(&mut rig.app, "GONE1", false);
+    let state = rig.app.ui_state.sheet_sync.as_ref().expect("dialog open");
+    assert_eq!(state.ports_to_remove(), ["GONE2"]);
+
+    send(&mut rig.app, SheetSyncMsg::ApplyRequested);
+    assert!(rig.app.ui_state.sheet_sync.is_none(), "Apply closes it");
+    assert_eq!(child_ports(&rig), ["GONE1", "KEEP"]);
+    let on_disk = std::fs::read_to_string(&rig.child).expect("child file");
+    assert_eq!(on_disk, rig.child_text, "nothing is written until Save");
+
+    rig.app
+        .document_state
+        .engines
+        .get_mut(&rig.child)
+        .expect("child")
+        .undo()
+        .expect("undo");
+    assert_eq!(
+        child_ports(&rig),
+        ["GONE1", "GONE2", "KEEP"],
+        "one undo step"
+    );
+}
+
+/// #2831: a tick changes no sheet, and a tick set back restores the removal.
+#[test]
+fn removal_ticks_change_nothing_until_apply() {
+    let mut rig = removal_rig();
+    tick(&mut rig.app, "GONE1", false);
+    tick(&mut rig.app, "GONE2", false);
+    assert!(!rig.app.document_state.engines.contains_key(&rig.child));
+    assert!(!rig.app.document_state.has_dirty_documents());
+    let state = rig.app.ui_state.sheet_sync.as_ref().expect("dialog open");
+    assert!(!state.can_apply(), "every change is left out");
+    assert!(state.ports_to_remove().is_empty());
+
+    send(&mut rig.app, SheetSyncMsg::ApplyRequested);
+    assert!(rig.app.ui_state.sheet_sync.is_some(), "nothing to apply");
+    assert!(!rig.app.document_state.engines.contains_key(&rig.child));
+
+    tick(&mut rig.app, "GONE2", true);
+    let state = rig.app.ui_state.sheet_sync.as_ref().expect("dialog open");
+    assert!(state.can_apply());
+    assert_eq!(state.ports_to_remove(), ["GONE2"]);
+}
+
+/// #2831: what was confirmed is what is written; a tick cannot land while
+/// Apply waits on the file check, and a name that is no removal is ignored.
+#[test]
+fn a_tick_is_ignored_during_the_file_check_or_for_another_name() {
+    let mut rig = removal_rig();
+    tick(&mut rig.app, "KEEP", false);
+    let state = rig.app.ui_state.sheet_sync.as_mut().expect("dialog open");
+    assert!(state.kept_ports.is_empty(), "KEEP is no removal");
+    state.checking = true;
+    tick(&mut rig.app, "GONE1", false);
+    let state = rig.app.ui_state.sheet_sync.as_ref().expect("dialog open");
+    assert!(state.kept_ports.is_empty(), "Apply is waiting");
+}
+
+/// #2831: when the sheets changed, a port left out stays left out while it
+/// is still a removal, and a name that no longer is one is dropped.
+#[test]
+fn a_refreshed_preview_keeps_only_the_removals_still_left_out() {
+    let mut rig = removal_rig();
+    let state = rig.app.ui_state.sheet_sync.as_mut().expect("dialog open");
+    state.kept_ports.insert("GONE1".to_string());
+    state.kept_ports.insert("NO_LONGER".to_string());
+    state.previews = Some(super::SheetSyncPreviews::default());
+    state.checking = true;
+    let generation = state.generation;
+    send(
+        &mut rig.app,
+        SheetSyncMsg::DiskChecked {
+            generation,
+            result: Ok(Vec::new()),
+        },
+    );
+    let state = rig.app.ui_state.sheet_sync.as_ref().expect("dialog stays");
+    assert_eq!(state.problem, Some(super::SheetSyncProblem::Changed));
+    let kept: Vec<&str> = state.kept_ports.iter().map(String::as_str).collect();
+    assert_eq!(kept, ["GONE1"]);
+    assert_eq!(state.ports_to_remove(), ["GONE2"]);
+}
+
 #[test]
 fn a_symbol_from_a_sheet_lands_with_every_port_as_one_step() {
     let mut rig = rig(Vec::new(), Vec::new());
@@ -285,7 +524,8 @@ fn a_symbol_from_a_sheet_lands_with_every_port_as_one_step() {
             ..SchematicSheet::default()
         },
     );
-    send(&mut rig.app, SheetSyncMsg::CreateSymbolPicked(Some(other)));
+    let msg = picked(&rig.app, other);
+    send(&mut rig.app, msg);
     let symbols = |app: &Signex| {
         app.document_state
             .active_engine()
@@ -317,7 +557,8 @@ fn a_symbol_from_a_sheet_lands_with_every_port_as_one_step() {
 fn a_file_already_placed_on_the_sheet_is_refused() {
     let mut rig = rig(Vec::new(), vec![hierarchical("A", "input", 10.0)]);
     let child = rig.child.clone();
-    send(&mut rig.app, SheetSyncMsg::CreateSymbolPicked(Some(child)));
+    let msg = picked(&rig.app, child);
+    send(&mut rig.app, msg);
     let engine = rig.app.document_state.active_engine().expect("parent");
     assert_eq!(engine.document().child_sheets.len(), 1);
 }
@@ -357,7 +598,8 @@ fn a_grandparent_sheet_is_refused_as_a_loop() {
         root: Some(node(&dir, "top.snxsch", vec![mid])),
         ..Default::default()
     });
-    send(&mut rig.app, SheetSyncMsg::CreateSymbolPicked(Some(top)));
+    let msg = picked(&rig.app, top);
+    send(&mut rig.app, msg);
     let engine = rig.app.document_state.active_engine().expect("parent");
     assert_eq!(engine.document().child_sheets.len(), 1, "nothing placed");
 }
@@ -398,7 +640,8 @@ fn a_loop_through_two_closed_sheets_is_refused() {
     );
     let _ = crate::diagnostics::init_logging();
     let mark = crate::diagnostics::newest_entry_id();
-    send(&mut rig.app, SheetSyncMsg::CreateSymbolPicked(Some(b)));
+    let msg = picked(&rig.app, b);
+    send(&mut rig.app, msg);
     let engine = rig.app.document_state.active_engine().expect("parent");
     assert_eq!(engine.document().child_sheets.len(), 1, "nothing placed");
     let said: Vec<String> = crate::diagnostics::entries_since(mark)
@@ -414,4 +657,48 @@ fn a_loop_through_two_closed_sheets_is_refused() {
         !said.is_empty(),
         "refused as a loop, not for another reason"
     );
+}
+
+/// #2618: a parent sheet closed while the dialog is open is refused by name
+/// in the Messages panel, and the dialog stays with the reason shown.
+#[test]
+fn apply_after_the_parent_sheet_closed_is_refused_with_a_messages_line() {
+    let mut rig = rig(
+        vec![pin("GONE", "passive", 2.54, true)],
+        vec![hierarchical("SDA", "input", 10.0)],
+    );
+    send(&mut rig.app, SheetSyncMsg::Requested);
+    let parent = rig
+        .app
+        .ui_state
+        .sheet_sync
+        .as_ref()
+        .expect("dialog open")
+        .parent
+        .clone();
+    // The close path moves the documents epoch too: the closed parent is
+    // named before the epoch makes the dialog stale.
+    let epoch = rig.app.document_state.documents_epoch;
+    rig.app
+        .document_state
+        .remove_engine(&parent)
+        .expect("the parent was open");
+    assert_ne!(rig.app.document_state.documents_epoch, epoch);
+    let _ = crate::diagnostics::init_logging();
+    let mark = crate::diagnostics::newest_entry_id();
+
+    send(&mut rig.app, SheetSyncMsg::ApplyRequested);
+
+    let state = rig.app.ui_state.sheet_sync.as_ref().expect("dialog stays");
+    assert_eq!(state.problem, Some(super::SheetSyncProblem::Stale));
+    let closed = format!("{} is no longer open", parent.display());
+    let said = crate::diagnostics::entries_since(mark)
+        .entries
+        .into_iter()
+        .any(|e| {
+            e.message
+                .starts_with("Synchronize Sheet Entries and Ports:")
+                && e.message.contains(&closed)
+        });
+    assert!(said, "the Messages panel names the closed parent sheet");
 }

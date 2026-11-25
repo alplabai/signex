@@ -28,6 +28,24 @@ pub(super) fn footprint_pad_shape_label(
     }
 }
 
+/// The DOF card's free-motion rows (mockup row 179): each motion, with the
+/// first entity it moves as Show's target.
+pub(super) fn build_free_motion_summaries(
+    motions: &signex_sketch::solver::free_motion::FreeMotions,
+) -> Vec<crate::panels::FreeMotionSummary> {
+    motions
+        .motions
+        .iter()
+        .filter_map(|motion| {
+            Some(crate::panels::FreeMotionSummary {
+                focus_entity_id: *motion.entities.first()?,
+                entity_count: motion.entities.len(),
+                kind: motion.kind,
+            })
+        })
+        .collect()
+}
+
 /// v0.22 Phase E3+E4 — Build the per-over-constraint summary list
 /// from the solver's `over_constraints` IDs. Resolves each
 /// constraint's actual kind (label + first touched entity) so the
@@ -161,7 +179,7 @@ pub(super) fn build_sketch_entity_summary(
     let sketch = editor.primitive().sketch.as_ref()?;
     let entity = sketch.entities.iter().find(|e| e.id == id)?;
     let (kind_label, position_mm) = match entity.kind {
-        EntityKind::Point { x, y } => ("Point", Some([x, y])),
+        EntityKind::Point { x, y } => ("Point", Some(editor.state.shown_mm([x, y]))),
         EntityKind::Line { .. } => ("Line", None),
         EntityKind::Arc { .. } => ("Arc", None),
         EntityKind::Circle { .. } => ("Circle", None),
@@ -267,6 +285,7 @@ mod tests {
             warnings: Vec::new(),
             redundancy_pending: false,
             jacobian: Vec::new(),
+            free_motions: Default::default(),
             params,
         };
 

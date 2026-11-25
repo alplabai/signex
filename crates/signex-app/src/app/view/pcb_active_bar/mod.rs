@@ -1,6 +1,6 @@
-//! The PCB Active Bar (#2352): selection filter, move, align | components |
-//! route | via and pad, copper areas, copper drawing | dimensions, text,
-//! graphics | board sketch, fabrication outputs | view.
+//! The PCB Active Bar (#2352, mockup row 108): selection filter, move, align |
+//! components | route, tune, via and pad, copper areas, copper drawing |
+//! dimensions, text, graphics | board sketch | view.
 //!
 //! Every live button runs its command through the menu bar's own message, so
 //! a click is the menu row. The tool groups (#2392, `groups.rs`) show the row
@@ -9,10 +9,11 @@
 //! board greys by (`app/pcb_tools.rs`). Move and View open a dropdown on
 //! right-click; dropdown rows are greyed by the same gate as their menu rows.
 //! The Selection Filter opens its dropdown of object kinds on a click
-//! (`filter.rs`).
+//! (`filter.rs`) and carries a badge with the number of kinds that are off
+//! (`badge.rs`).
 
 use iced::alignment::Horizontal;
-use iced::widget::{Space, column, container, mouse_area, row, stack, svg};
+use iced::widget::{Space, column, container, row, stack, svg};
 use iced::{Element, Length, Widget as _};
 use signex_i18n::{I18n, ids, t};
 use signex_types::theme::{ThemeId, ThemeTokens};
@@ -28,6 +29,7 @@ use crate::icons as ic;
 use crate::keymap::AppCommandId;
 use crate::menu_bar::MenuMessage;
 
+mod badge;
 mod filter;
 mod groups;
 
@@ -60,7 +62,28 @@ impl Signex {
             let slot = items.iter().position(|item| opens(item, menu))?;
             Some((menu, offsets[slot]))
         });
-        let bar = signex_widgets::active_bar::view(items, tokens);
+        let filter_x = items
+            .iter()
+            .position(|item| opens(item, PcbBarMenu::Filter))
+            .map(|slot| offsets[slot]);
+        let bar = badge::with_filter_badge(
+            signex_widgets::active_bar::view(holding_right_release(items), tokens),
+            filter_x,
+            badge::off_count(&self.ui_state.pcb_pick_filter),
+            tokens,
+            &self.ui_state.i18n,
+            &self.document_state.panel_ctx.ui_font_name,
+        );
+        // Buttons take their own right press first. The rest of the bar
+        // holds the release; with a dropdown open it counts as outside it.
+        let bar_right_press = if open.is_some() {
+            PcbBarMsg::FlyoutRightPressed
+        } else {
+            PcbBarMsg::RightPressTaken
+        };
+        let bar = iced::widget::mouse_area(bar)
+            .on_right_press(bar_message(bar_right_press))
+            .boxed();
         let top = Space::new().height(crate::active_bar::bar_top_margin());
         let Some((menu, trigger_x)) = anchor else {
             return column![
@@ -71,15 +94,15 @@ impl Signex {
             ]
             .boxed();
         };
-        let entries = pcb_bar_menu_entries(
-            menu,
-            &self.ui_state.i18n,
-            tokens,
-            tid,
-            &self.command_context(None),
-            &self.ui_state.pcb_pick_filter,
-            &self.ui_state.pcb_filter_presets,
-        );
+        let ctx = self.command_context(None);
+        let sources = MenuSources {
+            ctx: &ctx,
+            filter: &self.ui_state.pcb_pick_filter,
+            presets: &self.ui_state.pcb_filter_presets,
+            editing: self.ui_state.pcb_filter_preset_editing,
+            last: &self.ui_state.pcb_bar_last_tools,
+        };
+        let entries = pcb_bar_menu_entries(menu, &self.ui_state.i18n, tokens, tid, &sources);
         // The Selection Filter's chip grid sizes itself, as on the schematic.
         let panel_width = (menu != PcbBarMenu::Filter).then(|| {
             MenuMetrics::GRAPHITE.fitted_width(
@@ -88,7 +111,12 @@ impl Signex {
                 &self.document_state.panel_ctx.ui_font_name,
             )
         });
-        let panel = signex_widgets::active_bar_dropdown::view(entries, tokens, panel_width);
+        let panel = iced::widget::mouse_area(signex_widgets::active_bar_dropdown::view(
+            entries,
+            tokens,
+            panel_width,
+        ))
+        .on_right_press(bar_message(PcbBarMsg::RightPressTaken));
         // The panel stays inside the bar's width, so the centred bar does not
         // move while its dropdown is open.
         let panel_x = trigger_x
@@ -100,12 +128,11 @@ impl Signex {
             row![Space::new().width(panel_x), panel],
         ]
         .width(bar_width);
-        let dismiss = mouse_area(
-            container(Space::new())
-                .width(Length::Fill)
-                .height(Length::Fill),
-        )
-        .on_press(bar_message(PcbBarMsg::MenuDismissed));
+        let dismiss = Self::flyout_dismiss_layer(
+            bar_message(PcbBarMsg::MenuDismissed),
+            bar_message(PcbBarMsg::FlyoutRightPressed),
+            crate::app::view::menu_scrim(),
+        );
         stack![
             dismiss,
             column![
@@ -152,6 +179,20 @@ fn opens(item: &ActiveBarItem<Message>, menu: PcbBarMenu) -> bool {
     )
 }
 
+/// `items` as drawn: a right press on a dropdown button also holds its
+/// release off the canvas.
+fn holding_right_release(mut items: Vec<ActiveBarItem<Message>>) -> Vec<ActiveBarItem<Message>> {
+    for item in &mut items {
+        if let ActiveBarItem::Button(button) = item
+            && let Some(Message::Pcb(PcbMsg::Bar(PcbBarMsg::MenuToggled(menu)))) =
+                button.on_right_press
+        {
+            button.on_right_press = Some(bar_message(PcbBarMsg::MenuRightPressed(menu)));
+        }
+    }
+    items
+}
+
 /// A button that runs `command`.
 fn command_button(command: &str, icon: ActiveBarIcon, tooltip: String) -> ActiveBarItem<Message> {
     let on_press = run(command);
@@ -165,7 +206,7 @@ fn command_button(command: &str, icon: ActiveBarIcon, tooltip: String) -> Active
 }
 
 /// A button that runs `command` on a click and opens `menu` on a
-/// right-click, chevron and all.
+/// right-click or a click on its chevron (mockup row 108).
 fn menu_button(
     command: &str,
     menu: PcbBarMenu,
@@ -175,14 +216,16 @@ fn menu_button(
     tid: ThemeId,
 ) -> ActiveBarItem<Message> {
     let on_press = run(command);
+    let toggle = bar_message(PcbBarMsg::MenuToggled(menu));
     ActiveBarItem::Button(ActiveBarButton {
         icon,
         tooltip,
         enabled: on_press.is_some(),
         selected: open == Some(menu),
         on_press,
-        on_right_press: Some(bar_message(PcbBarMsg::MenuToggled(menu))),
+        on_right_press: Some(toggle.clone()),
         dropdown_indicator: Some(ActiveBarIcon::Svg(ic::icon_chevron_45(tid))),
+        on_chevron_press: Some(toggle),
     })
 }
 
@@ -203,6 +246,7 @@ fn dropdown_button(
         on_press: Some(toggle.clone()),
         on_right_press: Some(toggle),
         dropdown_indicator: Some(ActiveBarIcon::Svg(ic::icon_chevron_45(tid))),
+        on_chevron_press: None,
     })
 }
 
@@ -253,17 +297,12 @@ pub(in crate::app::view) fn pcb_bar_items(
             svg(ic::icon_board_sketch(tid)),
             t!(i18n, ids::BOARD_SKETCH_TOOLTIP).into_string(),
         ),
-        command_button(
-            "fabrication_outputs",
-            svg(ic::icon_fab_outputs(tid)),
-            t!(i18n, ids::FAB_OUTPUTS_TOOLTIP).into_string(),
-        ),
         ActiveBarItem::Separator,
         menu_button(
             "view_rotate",
             PcbBarMenu::View,
             open,
-            svg(ic::icon_view_rotate(tid)),
+            svg(ic::icon_dd_rotate_cw(tid)),
             t!(i18n, ids::PCB_VIEW_ROTATE_TOOLTIP).into_string(),
             tid,
         ),
@@ -272,15 +311,16 @@ pub(in crate::app::view) fn pcb_bar_items(
 }
 
 /// The tool groups between the Align button and Board Sketch, a separator
-/// between each run: what goes on the board, routing and tuning, the
-/// copper itself, then what annotates it.
-const BAR_GROUPS: [&[PcbBarGroup]; 4] = [
+/// between each run: what goes on the board, the copper (routing, tuning,
+/// vias and pads, areas), then what annotates it (mockup row 108). Copper
+/// lines and arcs are drawn with the Graphics tools (#2869).
+const BAR_GROUPS: [&[PcbBarGroup]; 3] = [
     &[PcbBarGroup::Components],
-    &[PcbBarGroup::Route, PcbBarGroup::Tune],
     &[
+        PcbBarGroup::Route,
+        PcbBarGroup::Tune,
         PcbBarGroup::ViaPad,
         PcbBarGroup::CopperAreas,
-        PcbBarGroup::CopperDrawing,
     ],
     &[
         PcbBarGroup::Dimensions,
@@ -289,29 +329,29 @@ const BAR_GROUPS: [&[PcbBarGroup]; 4] = [
     ],
 ];
 
-/// The bar icon of `tool`: the footprint editor's where one fits, its
-/// glyphs for pad and via.
+/// The bar icon of `tool`: the footprint editor's where one fits, the board
+/// tool glyphs for pad, via, dimension and keepout, the hatched area for the
+/// copper-area tools (mockup row 108).
 fn tool_icon(tool: BoardPlaceTool, tid: ThemeId) -> ActiveBarIcon {
     use BoardPlaceTool as T;
     let svg = ActiveBarIcon::Svg;
     match tool {
         T::Component => svg(ic::icon_component(tid)),
-        T::Pad => ActiveBarIcon::Glyph("\u{25CF}"),
-        T::Via => ActiveBarIcon::Glyph("\u{25CE}"),
+        T::Pad => svg(ic::icon_pcb_pad(tid)),
+        T::Via => svg(ic::icon_pcb_via(tid)),
         T::InteractiveRouting => svg(ic::icon_wire(tid)),
         T::DiffPairRouting => svg(ic::icon_pcb_diff_pair_route(tid)),
         T::QuickRoute => svg(ic::icon_pcb_quick_route(tid)),
         T::MultiRoute => svg(ic::icon_pcb_multi_route(tid)),
         T::Track => svg(ic::icon_shape_line(tid)),
         T::Arc => svg(ic::icon_shape_arc(tid)),
-        T::Fill => svg(ic::icon_shape_rect(tid)),
-        T::SolidRegion => svg(ic::icon_shape_polygon(tid)),
-        T::PolygonPour => svg(ic::icon_dd_polygon(tid)),
-        T::PourCutout => svg(ic::icon_dd_cut(tid)),
-        T::SlicePour => svg(ic::icon_dd_line(tid)),
+        T::Fill | T::SolidRegion | T::PolygonPour | T::PourCutout | T::SlicePour => {
+            svg(ic::icon_pcb_copper_area(tid))
+        }
         T::TextString => svg(ic::icon_text(tid)),
-        T::Dimension => ActiveBarIcon::Glyph("\u{2194}"),
-        T::Keepout => ActiveBarIcon::Glyph("\u{2298}"),
+        T::Dimension => svg(ic::icon_pcb_dimension(tid)),
+        T::Keepout => svg(ic::icon_pcb_keepout(tid)),
+        T::Room => ActiveBarIcon::Glyph("\u{2B1A}"),
         T::Line => svg(ic::icon_shape_line(tid)),
         T::GraphicArc => svg(ic::icon_shape_arc(tid)),
         T::FullCircle => svg(ic::icon_shape_circle(tid)),
@@ -320,37 +360,39 @@ fn tool_icon(tool: BoardPlaceTool, tid: ThemeId) -> ActiveBarIcon {
     }
 }
 
-/// A dropdown row: the command it runs and its icon.
-type MenuRow = (&'static str, fn(ThemeId) -> svg::Handle);
+/// A dropdown row: the command it runs and its icon, if it has one.
+type MenuRow = (&'static str, Option<fn(ThemeId) -> svg::Handle>);
 
 /// The Move dropdown: the board placement commands of Edit ▸ Move.
 const MOVE_ROWS: &[MenuRow] = &[
-    ("move_object", ic::icon_dd_move),
-    ("move_selection", ic::icon_dd_move_sel),
-    ("rotate_counterclockwise", ic::icon_dd_rotate),
-    ("rotate_clockwise", ic::icon_dd_rotate_cw),
-    ("flip_selection", ic::icon_dd_flip_x),
+    ("move_object", Some(ic::icon_dd_move)),
+    ("move_selection", Some(ic::icon_dd_move_sel)),
+    ("rotate_counterclockwise", Some(ic::icon_dd_rotate)),
+    ("rotate_clockwise", Some(ic::icon_dd_rotate_cw)),
+    ("flip_selection", Some(ic::icon_dd_flip_x)),
 ];
 
 /// The Align dropdown: the Align rows, which line footprints up on a board.
 const ALIGN_ROWS: &[MenuRow] = &[
-    ("align_left", ic::icon_dd_align_left),
-    ("align_right", ic::icon_dd_align_right),
-    ("align_horizontal_centers", ic::icon_dd_align_hcenter),
-    ("distribute_horizontally", ic::icon_dd_dist_horiz),
-    ("align_top", ic::icon_dd_align_top),
-    ("align_bottom", ic::icon_dd_align_bottom),
-    ("align_vertical_centers", ic::icon_dd_align_vcenter),
-    ("distribute_vertically", ic::icon_dd_dist_vert),
-    ("align_to_grid", ic::icon_dd_align_grid),
+    ("align_left", Some(ic::icon_dd_align_left)),
+    ("align_right", Some(ic::icon_dd_align_right)),
+    ("align_horizontal_centers", Some(ic::icon_dd_align_hcenter)),
+    ("distribute_horizontally", Some(ic::icon_dd_dist_horiz)),
+    ("align_top", Some(ic::icon_dd_align_top)),
+    ("align_bottom", Some(ic::icon_dd_align_bottom)),
+    ("align_vertical_centers", Some(ic::icon_dd_align_vcenter)),
+    ("distribute_vertically", Some(ic::icon_dd_dist_vert)),
+    ("align_to_grid", Some(ic::icon_dd_align_grid)),
 ];
 
-/// The View dropdown: the board view turns of the View menu.
+/// The View dropdown: the board view turns of the View menu. Each turn's
+/// arrow points the way the row turns (mockup row 108); a half turn is drawn
+/// clockwise, and Reset has no icon.
 const VIEW_ROWS: &[MenuRow] = &[
-    ("view_rotate", ic::icon_dd_rotate_cw),
-    ("view_rotate_ccw", ic::icon_dd_rotate),
-    ("view_rotate_180", ic::icon_view_rotate),
-    ("view_rotate_reset", ic::icon_view_rotate),
+    ("view_rotate", Some(ic::icon_dd_rotate_cw)),
+    ("view_rotate_ccw", Some(ic::icon_dd_rotate)),
+    ("view_rotate_180", Some(ic::icon_dd_rotate_cw)),
+    ("view_rotate_reset", None),
 ];
 
 fn menu_commands(menu: PcbBarMenu) -> &'static [MenuRow] {
@@ -362,34 +404,50 @@ fn menu_commands(menu: PcbBarMenu) -> &'static [MenuRow] {
     }
 }
 
+/// What the bar's dropdowns are built from, besides the theme.
+pub(in crate::app::view) struct MenuSources<'a> {
+    /// The menu bar's gate, which greys a command row.
+    pub ctx: &'a CommandContext,
+    /// The Selection Filter the filter dropdown edits.
+    pub filter: &'a pcb_geom::PickFilter,
+    /// The saved filter presets.
+    pub presets: &'a [CustomFilterPreset<pcb_geom::PickKind>],
+    /// The preset selected for editing (#2873).
+    pub editing: Option<usize>,
+    /// The row each tool group used last, drawn current in its dropdown.
+    pub last: &'a PcbBarLastTools,
+}
+
 /// The rows of `menu`: each runs its command, labelled and greyed as its
-/// menu row is in `ctx`. The Selection Filter's rows toggle the kinds of
-/// `filter` instead, and a tool group's rows come from its table.
+/// menu row is in `src.ctx`. The Selection Filter's rows toggle the kinds of
+/// `src.filter` instead, and a tool group's rows come from its table.
 pub(in crate::app::view) fn pcb_bar_menu_entries(
     menu: PcbBarMenu,
     i18n: &I18n,
     tokens: &ThemeTokens,
     tid: ThemeId,
-    ctx: &CommandContext,
-    filter: &pcb_geom::PickFilter,
-    presets: &[CustomFilterPreset<pcb_geom::PickKind>],
+    src: &MenuSources<'_>,
 ) -> Vec<DropdownEntry<Message>> {
     match menu {
-        PcbBarMenu::Filter => return filter::entries(i18n, tokens, filter, presets),
-        PcbBarMenu::Group(group) => return groups::entries(group, i18n, tid, ctx),
+        PcbBarMenu::Filter => {
+            return filter::entries(i18n, tokens, src.filter, src.presets, src.editing);
+        }
+        PcbBarMenu::Group(group) => return groups::entries(group, i18n, tid, src.ctx, src.last),
         PcbBarMenu::Align | PcbBarMenu::Move | PcbBarMenu::View => {}
     }
     menu_commands(menu)
         .iter()
         .filter_map(|&(id, icon)| {
             let command = AppCommandId::new(id).ok()?;
-            let enabled = is_enabled(&command, ctx);
+            let enabled = is_enabled(&command, src.ctx);
             let label = crate::menu_bar::cmd_label(i18n, id, id);
             let pick = bar_message(PcbBarMsg::CommandPicked(command));
-            let row = DropdownItem::new(label, pick)
-                .icon(icon(tid))
+            let mut row = DropdownItem::new(label, pick)
                 .command(id)
                 .disabled(!enabled);
+            if let Some(icon) = icon {
+                row = row.icon(icon(tid));
+            }
             Some(DropdownEntry::Item(row))
         })
         .collect()

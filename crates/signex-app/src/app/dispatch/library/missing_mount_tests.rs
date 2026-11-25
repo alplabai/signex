@@ -26,6 +26,7 @@ fn add_project(app: &mut Signex, libs: &[&std::path::Path]) -> crate::app::Proje
                 sheets: Vec::new(),
                 variant_definitions: Vec::new(),
                 active_variant: None,
+                variant_settings: Default::default(),
                 libraries: libs
                     .iter()
                     .map(|p| LibraryEntry {
@@ -42,7 +43,9 @@ fn add_project(app: &mut Signex, libs: &[&std::path::Path]) -> crate::app::Proje
                 schematic_defaults: Default::default(),
                 project_defaults: Default::default(),
                 agent_journal: Default::default(),
+                schematic_design: Default::default(),
                 fab_outputs: None,
+                router_tool_diameter: None,
                 requirements: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),
@@ -224,6 +227,32 @@ fn open_path(app: &Signex) -> Option<std::path::PathBuf> {
     }
 }
 
+/// Mockup row 138: a skipped library holds the chip while its project lists
+/// it, the chip reopens the dialog, and leaving the project clears it.
+#[test]
+fn a_skipped_library_holds_the_chip_until_it_leaves_the_project() {
+    use crate::library::recovery::LibraryMissingChoice::Cancel;
+    let skip = |app: &mut Signex| {
+        let _ = app.update(Message::Library(LibraryMessage::RecoveryLibraryMissing(
+            Cancel,
+        )));
+    };
+    let (mut app, _task) = Signex::new();
+    let (a, b, _, _dir) = two_missing(&mut app);
+    skip(&mut app);
+    skip(&mut app);
+    assert!(app.library.recovery.is_none());
+    assert_eq!(app.skipped_missing_libraries(), [a.clone(), b]);
+
+    app.reopen_skipped_library();
+    assert_eq!(open_path(&app), Some(a));
+    skip(&mut app);
+    assert_eq!(app.skipped_missing_libraries().len(), 2, "no duplicate");
+
+    app.document_state.projects[0].data.libraries.clear();
+    assert!(app.skipped_missing_libraries().is_empty());
+}
+
 #[test]
 fn two_missing_libraries_raise_two_dialogs_in_turn() {
     let (mut app, _task) = Signex::new();
@@ -310,6 +339,28 @@ fn locate_rewrites_the_projects_entry_and_marks_it_dirty() {
     let project_path = project.path.clone();
     assert!(app.document_state.is_document_dirty(&project_path));
     assert_eq!(open_path(&app), Some(b));
+}
+
+/// Mockup row 33: Locate… on a Project tab row repoints the entry, closes the
+/// dialog that asked about it and leaves the project unsaved.
+#[test]
+fn locate_from_the_project_tab_repoints_and_closes_the_dialog() {
+    let (mut app, _task) = Signex::new();
+    let (a, b, _, _dir) = two_missing(&mut app);
+    assert_eq!(open_path(&app), Some(a.clone()));
+    let moved = a.with_file_name("moved.snxlib");
+    crate::library::commands::create_library_file(&moved, &Default::default()).unwrap();
+    let _ = app.repoint_missing_library(&a, moved.clone());
+    let project = &app.document_state.projects[0];
+    assert_eq!(
+        project
+            .data
+            .resolve_library_path(&project.data.libraries[0]),
+        moved
+    );
+    let project_path = project.path.clone();
+    assert!(app.document_state.is_document_dirty(&project_path));
+    assert_eq!(open_path(&app), Some(b), "the next queued dialog opened");
 }
 
 /// The picked library replaces the missing one in the project, so it ranks

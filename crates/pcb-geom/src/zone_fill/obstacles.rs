@@ -1,6 +1,7 @@
 //! What a pour's fill keeps clear of (#2216): other nets' copper on its
-//! layer grown by the clearance, keepouts, and the fills of other nets'
-//! pours filled before it.
+//! layer grown by the clearance (drawings and strings on copper, of no net,
+//! included: #2883), keepouts and pour cutouts (#2871), and the fills of
+//! other nets' pours filled before it.
 
 use signex_types::pcb::{PcbBoard, Zone};
 use signex_types::pcb_free::free_pad_frame;
@@ -8,6 +9,7 @@ use signex_types::pcb_layer::PcbLayer;
 
 use super::{ZoneFill, ring_nm, zone_area};
 use crate::copper::{layer_mask, pad_pieces, pieces_on, via_pieces};
+use crate::drawn_copper::drawn_copper;
 use crate::free::arc_shapes;
 use crate::index::track_shape;
 use crate::rect::RectNm;
@@ -93,6 +95,12 @@ impl Obstacles<'_> {
                 out.extend(shapes.into_iter().filter_map(|s| self.grown(s)));
             }
         }
+        // Drawings and strings on copper (#2883): copper of no net.
+        for drawn in drawn_copper(self.board) {
+            if drawn.layers & self.layers != 0 && self.clears(drawn.net) {
+                out.extend(self.grown(drawn.shape));
+            }
+        }
         for via in &self.board.vias {
             if self.clears(via.net) {
                 let pieces = via_pieces(via).unwrap_or_default();
@@ -105,12 +113,19 @@ impl Obstacles<'_> {
         out
     }
 
-    /// Keepout zones on the pour's layer, and solid copper zones of other
-    /// nets grown by the clearance. Other pours are cleared through their
-    /// fills ([`Self::earlier_fills`]).
+    /// Keepout zones and pour cutouts (#2871) on the pour's layer, as they
+    /// are, and solid copper zones of other nets grown by the clearance.
+    /// Other pours are cleared through their fills ([`Self::earlier_fills`]).
     fn zones(&self, out: &mut Vec<Polygon>) {
         for other in &self.board.zones {
             if other.is_pour() {
+                continue;
+            }
+            if other.is_pour_cutout() {
+                let on_layer = layer_mask(std::iter::once(other.layer.as_str())) & self.layers != 0;
+                if on_layer && let Some(area) = ring_nm(&other.outline).filter(|r| r.len() >= 3) {
+                    out.push(Polygon::new(area, Vec::new()));
+                }
                 continue;
             }
             if let Some(keepout) = other.as_keepout() {

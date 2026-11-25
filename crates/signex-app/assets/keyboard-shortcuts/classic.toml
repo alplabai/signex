@@ -70,6 +70,7 @@ context = "global"
 
 [keyboard_shortcuts.sections.bindings]
 "Ctrl+Q" = "cycle_unit"
+"Mod+Alt+S" = "save_all"
 "Mod+S" = "save_document"
 "Mod+Shift+A" = "unselect_all"
 "Mod+Shift+E" = "edit_library_symbol"
@@ -166,7 +167,7 @@ context = "global"
 "Shift+F" = "find_similar_objects"
 "Shift+I" = "open_net_inspector"
 
-# #2249: Window > Tile Horizontally, Tile Vertically and Untile.
+# #2249: View > Window > Tile Horizontally, Tile Vertically and Untile.
 [[keyboard_shortcuts.sections]]
 context = "global"
 
@@ -185,6 +186,10 @@ context = "global"
 # footprint, `K` draws a keepout, `F7` runs the design rule check and
 # `Ctrl+M` measures. `Shift+O` sets the board origin (Edit ▸ Origin ▸ Set,
 # 2026-11-18; `E` alone is taken, so `E O S` cannot be a sequence here).
+# Mockup row 175: in the 3D view `H` steps to the next lighting preset and
+# `Mod+Shift+C` copies a screenshot of the view; both are greyed on a flat
+# board. On a board `H` is no longer the sheet's off-sheet connector key,
+# which needs a sheet. `Shift+E` steps the board's Snapping (#2879).
 [[keyboard_shortcuts.sections]]
 context = "pcb"
 
@@ -200,10 +205,22 @@ context = "pcb"
 "Ctrl+M" = "measure_distance"
 "F" = "change_footprint"
 "F7" = "run_drc"
+"H" = "cycle_board_3d_lighting"
 "K" = "place_board_keepout"
 "L" = "flip_selection"
+"Mod+Shift+C" = "copy_board_3d_screenshot"
+"Shift+E" = "cycle_board_snapping"
 "Shift+O" = "set_board_origin"
 "Shift+S" = "toggle_single_layer_mode"
+
+# The board 3D view (mockup row 175): live only while the board is shown in
+# 3D, where it outranks the board's own keys, so `F` turns the board over
+# there and stays Change Footprint on a flat board.
+[[keyboard_shortcuts.sections]]
+context = "board_3d"
+
+[keyboard_shortcuts.sections.bindings]
+"F" = "flip_board_3d"
 
 [[keyboard_shortcuts.sections]]
 context = "footprint"

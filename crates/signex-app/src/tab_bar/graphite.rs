@@ -1,6 +1,7 @@
-//! Graphite look of the document tab strip: square tabs with a mono kind
-//! glyph, an accent dirty dot, an 18 px close button and the project name on
-//! the right. Legacy themes never reach these helpers.
+//! Graphite look of the document tab strip (mockup row 5): square tabs with a mono
+//! kind code, an accent dirty dot, a read-only pill, an 18 px close button
+//! and the project name on the right. Legacy themes never reach these
+//! helpers.
 
 use iced::widget::{Widget, container, row, space, stack, svg};
 use iced::{Background, Border, Color, Element, Length};
@@ -17,18 +18,22 @@ const TS: TypeScale = TypeScale::DEFAULT;
 
 /// Side of the close button (18 px at the default base).
 pub const CLOSE_SIZE: f32 = chrome_px(18.0 * 11.0 / 12.0);
-/// Side of the cross drawn inside the close button.
-const CLOSE_CROSS: f32 = CLOSE_SIZE * 0.5;
+/// Side of the cross drawn inside the close button (12 of 18 px, mockup row 5).
+const CLOSE_CROSS: f32 = CLOSE_SIZE * 2.0 / 3.0;
 /// Dirty dot diameter.
-const DIRTY_DOT: f32 = TS.body * 0.6;
+pub(super) const DIRTY_DOT: f32 = TS.body * 0.6;
 /// Space between the parts of a tab.
-const TAB_GAP: f32 = TS.body * 0.5;
-/// Horizontal padding inside a tab.
-const TAB_PAD_X: f32 = 12.0;
+pub(super) const TAB_GAP: f32 = TS.body * 0.5;
+/// Padding before the kind code and after the close button (mockup row 5: 12 and 6).
+pub(super) const TAB_PAD_LEFT: f32 = 12.0;
+pub(super) const TAB_PAD_RIGHT: f32 = 6.0;
 /// Space around the project name at the strip's right end.
-const NAME_PAD_X: f32 = 12.0;
+pub(super) const NAME_PAD_X: f32 = 12.0;
+/// Side padding and height of the read-only pill.
+pub(super) const PILL_PAD_X: f32 = 6.0;
+const PILL_H: f32 = 16.0;
 
-const CLOSE_CROSS_SVG: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="#000" stroke-width="1.6" stroke-linecap="round"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/></svg>"##;
+const CLOSE_CROSS_SVG: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="#000" stroke-width="1.4" stroke-linecap="round"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg>"##;
 
 /// Height of the strip.
 pub fn strip_height() -> f32 {
@@ -41,16 +46,22 @@ pub fn kind_glyph(kind: &TabKind) -> signex_i18n::MessageId {
     match kind {
         TabKind::Schematic => ids::PANELS_TAB_KIND_SCHEMATIC,
         TabKind::Pcb => ids::PANELS_TAB_KIND_PCB,
+        TabKind::PolygonManager => ids::POLYGON_MANAGER_TAB_KIND,
         TabKind::SymbolEditor(_) => ids::PANELS_TAB_KIND_SYMBOL,
         TabKind::FootprintEditor(_) => ids::PANELS_TAB_KIND_FOOTPRINT,
+        TabKind::GerberViewer => ids::GERBER_VIEWER_TAB_KIND,
         TabKind::LibraryBrowser(_) => ids::PANELS_TAB_KIND_LIBRARY,
         TabKind::ComponentEditor(_) => ids::PANELS_TAB_KIND_COMPONENT,
         TabKind::Project(_) => ids::PANELS_TAB_KIND_PROJECT,
         TabKind::Rules(_) => ids::RULES_TAB_KIND,
+        TabKind::LayerStack => ids::PCB_STACK_TAB_KIND,
+        TabKind::PinTable => ids::EDITORS_PIN_TABLE_TAB_KIND,
+        TabKind::VariantManager(_) => ids::VARIANT_MANAGER_TAB_KIND,
     }
 }
 
-fn mono() -> iced::Font {
+/// The mono family of the kind code.
+pub(super) fn mono() -> iced::Font {
     crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT)
 }
 
@@ -134,6 +145,33 @@ fn dirty_dot(tokens: &ThemeTokens) -> Element<'static, TabMessage> {
         .boxed()
 }
 
+/// The "read-only" pill (`panels-tab-read-only`): caption text in `ink3` on
+/// the `sunken` fill, fully rounded.
+fn read_only_pill(tokens: &ThemeTokens, i18n: &signex_i18n::I18n) -> Element<'static, TabMessage> {
+    let r = resolve(tokens);
+    let fill = r.sunken;
+    container(
+        text(signex_i18n::t!(
+            i18n,
+            signex_i18n::ids::PANELS_TAB_READ_ONLY
+        ))
+        .size(TS.caption)
+        .color(r.ink3),
+    )
+    .padding([0.0, PILL_PAD_X])
+    .height(PILL_H)
+    .align_y(iced::alignment::Vertical::Center)
+    .style(move |_: &iced::Theme| container::Style {
+        background: Some(Background::Color(fill)),
+        border: Border {
+            radius: Radii::GRAPHITE.pill.into(),
+            ..Border::default()
+        },
+        ..container::Style::default()
+    })
+    .boxed()
+}
+
 /// What a tab shows besides its title.
 pub struct TabFace<'t> {
     pub index: usize,
@@ -144,28 +182,29 @@ pub struct TabFace<'t> {
     pub read_only: bool,
 }
 
-/// The inside of one tab: kind glyph, title, accent dirty dot, a read-only
-/// note, close button.
+/// The inks of a tab (mockup row 5): the title in `ink2`, `ink` when active; the kind
+/// code and the close cross in `ink4`.
+pub(super) fn tab_inks(tokens: &ThemeTokens, is_active: bool) -> (Color, Color) {
+    let title = if is_active {
+        ti(tokens.text)
+    } else {
+        ti(tokens.text_secondary)
+    };
+    (title, resolve(tokens).ink4)
+}
+
+/// The inside of one tab: kind code, title, accent dirty dot, the read-only
+/// pill, close button.
 pub fn tab_inner(
     face: TabFace<'_>,
     tokens: &ThemeTokens,
     i18n: &signex_i18n::I18n,
 ) -> Element<'static, TabMessage> {
-    let r = resolve(tokens);
-    let title_ink = if face.is_active {
-        ti(tokens.text)
-    } else {
-        r.ink3
-    };
-    let glyph_ink = if face.is_active {
-        r.accent_text
-    } else {
-        r.ink4
-    };
+    let (title_ink, quiet_ink) = tab_inks(tokens, face.is_active);
     let mut content = row![
         text(signex_i18n::t!(i18n, kind_glyph(face.kind)))
             .size(TS.caption)
-            .color(glyph_ink)
+            .color(quiet_ink)
             .font(mono())
             .boxed(),
         text(signex_i18n::UserText::new(face.title))
@@ -179,19 +218,15 @@ pub fn tab_inner(
         content = content.push(dirty_dot(tokens));
     }
     if face.read_only {
-        content = content.push(
-            text(signex_i18n::t!(
-                i18n,
-                signex_i18n::ids::PANELS_TAB_READ_ONLY
-            ))
-            .size(TS.caption)
-            .color(r.ink3)
-            .boxed(),
-        );
+        content = content.push(read_only_pill(tokens, i18n));
     }
-    content = content.push(close_button(tokens, face.index, r.ink3));
+    content = content.push(close_button(tokens, face.index, quiet_ink));
     container(content)
-        .padding([0.0, TAB_PAD_X])
+        .padding(iced::Padding {
+            left: TAB_PAD_LEFT,
+            right: TAB_PAD_RIGHT,
+            ..iced::Padding::ZERO
+        })
         .height(strip_height())
         .align_y(iced::alignment::Vertical::Center)
         .boxed()
@@ -199,9 +234,11 @@ pub fn tab_inner(
 
 /// Wrap the tab row `tabs` into the strip: the `bg` band with a 1 px
 /// baseline under the tabs (the active tab's fill covers it, so it joins the
-/// panel below) and the project name at the right.
+/// panel below), then `overflow` (the "+N" button, when tabs are hidden) and
+/// the project name in caption `ink4` at the right.
 pub fn strip<'a>(
     tabs: Element<'a, TabMessage>,
+    overflow: Option<Element<'a, TabMessage>>,
     project_name: Option<&str>,
     tokens: &ThemeTokens,
 ) -> Element<'a, TabMessage> {
@@ -220,12 +257,15 @@ pub fn strip<'a>(
 
     let mut top =
         row![container(tabs).width(Length::Fill).boxed()].align_y(iced::Alignment::Center);
+    if let Some(more) = overflow {
+        top = top.push(more);
+    }
     if let Some(name) = project_name {
         top = top.push(
             container(
                 text(signex_i18n::UserText::new(name.to_owned()))
-                    .size(TS.body)
-                    .color(resolve(tokens).ink3),
+                    .size(TS.caption)
+                    .color(resolve(tokens).ink4),
             )
             .padding([0.0, NAME_PAD_X])
             .boxed(),
@@ -274,11 +314,30 @@ mod tests {
         assert_eq!(strip_height(), 34.0);
     }
 
+    /// Mockup row 5: an idle title in `ink2`, the active one in `ink`; the kind code
+    /// stays `ink4` on both, in Graphite Light and Dark.
+    #[test]
+    fn tab_inks_follow_the_mock() {
+        for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+            let t = theme_tokens(id);
+            assert_eq!(tab_inks(&t, true), (ti(t.text), resolve(&t).ink4));
+            assert_eq!(
+                tab_inks(&t, false),
+                (ti(t.text_secondary), resolve(&t).ink4)
+            );
+        }
+    }
+
     #[test]
     fn the_strip_is_exactly_the_strip_height() {
         use iced::advanced::Widget as _;
         let t = theme_tokens(ThemeId::GraphiteDark);
-        let el = strip(space::horizontal().boxed(), Some("Sensor node rev B"), &t);
+        let el = strip(
+            space::horizontal().boxed(),
+            None,
+            Some("Sensor node rev B"),
+            &t,
+        );
         assert_eq!(el.size().height, Length::Fixed(34.0));
     }
 
@@ -313,6 +372,7 @@ mod tests {
         const {
             assert!(DIRTY_DOT > 0.0 && DIRTY_DOT < TS.body);
             assert!(CLOSE_CROSS <= CLOSE_SIZE);
+            assert!(PILL_H <= CLOSE_SIZE);
         }
         assert!(CLOSE_SIZE <= strip_height());
         assert!(TS.body * 1.3 <= strip_height());

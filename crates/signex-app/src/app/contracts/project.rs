@@ -135,6 +135,15 @@ pub enum FileMsg {
         from_path: PathBuf,
         to_path: PathBuf,
     },
+    /// The Save As dialog opened from the File Changed on Disk card returned
+    /// `picked` (a `SaveAs` or `SavePrimitiveAs`); a pick onto `conflicted`
+    /// itself is refused (mockup row 11). `same_on_disk`: the two resolve to one file
+    /// once links are followed, read in the dialog Task.
+    DiskConflictSaveAsPicked {
+        conflicted: PathBuf,
+        picked: Box<FileMsg>,
+        same_on_disk: bool,
+    },
     /// The off-thread patch of the saved `.snxprj` after a sheet Save As
     /// finished (#1824).
     SaveAsProjectPatched(Box<SaveAsProjectPatched>),
@@ -175,6 +184,10 @@ pub enum ProjectMsg {
     /// Start screen project rows: pin, unpin, open a pinned project, the
     /// row menu (#2305); routed to `dispatch_start_screen_message`.
     StartScreen(crate::start_screen::StartScreenMsg),
+    /// Start screen project thumbnails: the start-up cache read and the
+    /// cache writes after a save (mockup row 1); routed to
+    /// `dispatch_project_thumbnail_message`.
+    Thumbnail(crate::project_thumbnail::ProjectThumbnailMsg),
     /// The Number Schematic Sheets dialog (#2247); routed to
     /// `dispatch_sheet_numbering_message`.
     SheetNumbering(crate::app::SheetNumberingMsg),
@@ -185,6 +198,9 @@ pub enum ProjectMsg {
     /// The Tools ▸ Assign Footprints dialog (#2248); routed to
     /// `dispatch_assign_footprints_message`.
     AssignFootprints(crate::app::AssignFootprintsMsg),
+    /// Multi-channel sheets and the Compiled Design panel (#1279, #1308);
+    /// routed to `dispatch_compiled_design_message`.
+    CompiledDesign(crate::app::CompiledDesignMsg),
     /// The off-thread child-sheet resolution that Close Project starts
     /// finished (#741). Carries the project by id, not index, because the
     /// project list can shift while the worker reads; `Err` is a worker that
@@ -257,6 +273,9 @@ pub enum ProjectMsg {
     Tab(crate::app::ProjectTabMsg),
     /// A Rules tab message (#2398), routed to the `rules_tab` slice.
     Rules(crate::app::RulesTabMsg),
+    /// The project's repository, branch switcher and author (mockup rows 35
+    /// and 39), routed to the `project_git` slice.
+    Git(crate::app::ProjectGitMsg),
     /// The off-thread `.snxprj` write a Project tab Ctrl+S started finished.
     FileSaved(Box<crate::persist::ProjectSaveDone>),
     /// Result of the `Add Existing to Project…` file picker. Carries
@@ -307,7 +326,8 @@ pub enum ProjectMsg {
     /// The Create Sheet dialog was answered: Create, or Later (`create:
     /// false`, which also closes the window).
     CreateChildSheetAnswered { create: bool },
-    /// "Open it" in the Create Sheet dialog, for a path that already exists.
+    /// "Use existing file" in the Create Sheet dialog, for a path that
+    /// already exists.
     CreateChildSheetOpenExisting,
     /// The off-thread write of a child sheet created from a symbol finished.
     /// `project_id` is the project owning the parent sheet, if any.

@@ -39,8 +39,9 @@ fn rebase_picker_target(target: &mut PrimitivePickerTarget, old: &Path, new: &Pa
         | PrimitivePickerTarget::EditRowModal(address)
         | PrimitivePickerTarget::BrowserRow(address)
         | PrimitivePickerTarget::PreviewAlternate(address) => rebase_address(address, old, new),
-        PrimitivePickerTarget::DesignPart { .. } | PrimitivePickerTarget::BoardFootprint { .. } => {
-        }
+        PrimitivePickerTarget::DesignPart { .. }
+        | PrimitivePickerTarget::BoardFootprint { .. }
+        | PrimitivePickerTarget::SketchParameters { .. } => {}
     }
 }
 
@@ -107,6 +108,8 @@ impl LibraryState {
             .into_iter()
             .map(|p| rebased_or_same(&p, old, new))
             .collect::<HashSet<_>>();
+        self.skipped_versions
+            .rebase(|p| rebased_or_same(p, old, new));
 
         if let Some((path, _)) = self.picker.as_mut().and_then(|p| p.selected.as_mut()) {
             *path = rebased_or_same(path, old, new);

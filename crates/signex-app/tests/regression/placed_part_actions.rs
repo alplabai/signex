@@ -481,6 +481,47 @@ fn change_component_opens_the_part_picker_for_the_selected_part() {
     assert!(matches!(picker.mode, PickerMode::ChangeComponent(_)));
 }
 
+/// A filter that hides the selected row drops the selection, and Enter
+/// (Change Component's commit) then changes nothing: no pin preview, the
+/// part keeps its symbol. A selection the list does not show is never
+/// committed either.
+#[test]
+fn enter_after_the_filter_hid_the_selected_row_changes_nothing() {
+    use signex_app::library::messages::PickerMsg;
+
+    let (mut app, new) = change_setup("ZC9", renumbered(), &[]);
+    let before = symbol_lib_id(&app);
+    request(&mut app, PlacedPartAction::ChangeComponent);
+    select_row(&mut app, &new);
+
+    settle(
+        &mut app,
+        Message::Library(LibraryMessage::Picker(PickerMsg::FilterChanged(
+            "zzzz-no-such-part".into(),
+        ))),
+    );
+    let picker = app.library.picker.as_ref().expect("the picker stays open");
+    assert!(picker.selected.is_none(), "the hidden row is not selected");
+    send(&mut app, PlacedPartMsg::ChangePartPicked);
+    let picker = app.library.picker.as_ref().expect("the picker stays open");
+    assert!(
+        matches!(picker.mode, PickerMode::ChangeComponent(_)),
+        "no pin preview, got {:?}",
+        picker.mode
+    );
+
+    // The same row held as selected while the filter hides it.
+    select_row(&mut app, &new);
+    send(&mut app, PlacedPartMsg::ChangePartPicked);
+    let picker = app.library.picker.as_ref().expect("the picker stays open");
+    assert!(
+        matches!(picker.mode, PickerMode::ChangeComponent(_)),
+        "a hidden row is not committed, got {:?}",
+        picker.mode
+    );
+    assert_eq!(symbol_lib_id(&app), before, "the part keeps its symbol");
+}
+
 #[test]
 fn a_locked_part_is_not_offered_a_new_component() {
     let (mut app, _new) = change_setup("ZC2", renumbered(), &[]);
@@ -901,6 +942,7 @@ fn join_project_with_a_second_sheet(app: &mut Signex) -> PathBuf {
             sheets: vec![sheet_entry(SHEET), sheet_entry("sheet-two.snxsch")],
             variant_definitions: Vec::new(),
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: Vec::new(),
             enable_git: false,
             net_classes: Vec::new(),
@@ -909,7 +951,9 @@ fn join_project_with_a_second_sheet(app: &mut Signex) -> PathBuf {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
             fab_outputs: None,
+            router_tool_diameter: None,
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
@@ -1136,6 +1180,9 @@ fn edit_symbol_on_a_stock_part_edits_a_copy_in_the_picked_library() {
     use signex_library::library_file::{FORMAT_TOKEN, LibrarySection, SnxlibManifest};
     use signex_library::manifest::{LibraryMode, UsersConfig, WorkflowConfig};
 
+    // The copy remembers its library in the shared prefs.json, which the
+    // stock-copy tests read back across a restart (#2381).
+    let _serial = crate::shared_locks::global_list_file();
     let f = fixture();
     let stock_file = symbol_file(&f);
     let stock_before = std::fs::read(&stock_file).unwrap();

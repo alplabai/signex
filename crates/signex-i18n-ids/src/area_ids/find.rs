@@ -62,12 +62,28 @@ define_ids! {
     PASTE_ARRAY_AXIS_Y = "paste-array-axis-y";
     PASTE_ARRAY_COUNT_UP = "paste-array-count-up";
     PASTE_ARRAY_PREVIEW_CAPTION = "paste-array-preview-caption";
+    PASTE_ARRAY_PREVIEW_EXPAND = "paste-array-preview-expand";
+    PASTE_ARRAY_PREVIEW_COLLAPSE = "paste-array-preview-collapse";
     PASTE_ARRAY_PREVIEW_MORE = "paste-array-preview-more";
     PASTE_ARRAY_PREVIEW_X = "paste-array-preview-x";
     PASTE_ARRAY_PREVIEW_Y = "paste-array-preview-y";
+    PASTE_ARRAY_PREVIEW_COPIES = "paste-array-preview-copies";
+    PASTE_ARRAY_PREVIEW_STEP = "paste-array-preview-step";
     PASTE_ARRAY_HINT_EXAMPLE = "paste-array-hint-example";
     PASTE_ARRAY_HINT_SAME = "paste-array-hint-same";
     PASTE_ARRAY_ITEMS = "paste-array-items";
     PASTE_ARRAY_PASTE = "paste-array-paste";
     PASTE_ARRAY_PASTE_NONE = "paste-array-paste-none";
+    FIND_KIND_NET_LABEL = "find-kind-net-label";
+    FIND_KIND_TEXT_NOTE = "find-kind-text-note";
+    FIND_SIMILAR_PROP_KIND = "find-similar-prop-kind";
+    FIND_SIMILAR_PROP_LIBRARY_PART = "find-similar-prop-library-part";
+    FIND_SIMILAR_PROP_DESIGNATOR_PREFIX = "find-similar-prop-designator-prefix";
+    FIND_SIMILAR_PROP_NET_NAME = "find-similar-prop-net-name";
+    FIND_SIMILAR_PROP_LABEL_TYPE = "find-similar-prop-label-type";
+    // find-messages
+    FIND_PREVIOUS = "find-previous";
+    FIND_NEXT = "find-next";
+    FIND_SIMILAR_LISTED = "find-similar-listed";
+    FIND_SIMILAR_NOT_LISTED = "find-similar-not-listed";
 }

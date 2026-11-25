@@ -9,28 +9,37 @@ use uuid::Uuid;
 
 use crate::agent_journal::AgentJournalSettings;
 use crate::document_id::DocumentId;
-use crate::format_version::{FormatVersion, FormatVersionError, MissingToken, NewerMinor};
+use crate::format_version::FormatVersionError;
 
 mod annotate_undo;
 mod annotation;
 mod erc_waiver;
 mod fab_outputs;
 mod fab_tier;
+mod min_slot;
 mod order;
 mod profile_override;
 mod requirements;
+mod router_tool;
 mod rule_file;
 mod rule_profile;
 mod rules;
 mod schematic_defaults;
+mod schematic_design;
 mod setup;
 mod setup_profile;
 #[cfg(test)]
 mod setup_tests;
+mod token;
+#[cfg(test)]
+mod token_tests;
 mod unknown;
 mod user_profile;
 #[cfg(test)]
 mod user_profile_tests;
+mod variant_settings;
+#[cfg(test)]
+mod variant_settings_tests;
 mod variants;
 #[cfg(test)]
 mod variants_tests;
@@ -51,15 +60,20 @@ pub use requirements::{
 };
 pub use rule_file::{MAX_RULE_FILE_BYTES, RuleFileError, RuleTemplate};
 pub use rule_profile::{
-    FabProfileInfo, RULE_PROFILE_EXTENSION, RULE_PROFILE_SCHEMA_V1, RuleProfile, RuleProfileError,
+    FabProfileInfo, RULE_PROFILE_EXTENSION, RULE_PROFILE_SCHEMA_V1, RULE_PROFILE_SCHEMA_V2,
+    RULE_PROFILE_SCHEMA_V3, RuleProfile, RuleProfileError,
 };
 pub use rules::{
-    DrcRuleSet, ErcRules, NamedRuleSet, ProjectRules, RULES_SCHEMA_V1, RuleProfileRef, RuleSetUse,
-    rule_set_sha256,
+    DrcRuleSet, ErcRules, NamedRuleSet, ProjectRules, RULES_SCHEMA_V1, RULES_SCHEMA_V2,
+    RuleProfileRef, RuleSetUse, rule_set_sha256,
 };
 pub use schematic_defaults::{
     MAX_BUS_WIDTH_MM, MAX_DEFAULT_WIDTH_MM, MIN_TEXT_SIZE_PT, SchematicDefaultField,
     SchematicDefaultOverrides,
+};
+pub use schematic_design::{
+    ChannelNaming, DEFAULT_CHANNEL_DESIGNATOR_FORMAT, DEFAULT_CHANNEL_NET_FORMAT,
+    SchematicDesignSettings,
 };
 pub use setup::{
     COPPER_LAYERS, DEFAULT_DESIGNATORS, NEW_BOARD_GRID_MM, PcbDefaults, PcbField, PcbValueError,
@@ -69,11 +83,17 @@ pub use setup_profile::{
     FabTemplate, LAYER_STEP, MIN_STEPPED_LAYERS, ProjectSetup, ResolvedSetup, SetupProfile,
     designator_token, stepped_layers,
 };
+pub use token::{
+    SNXPRJ_FORMAT_V1, SNXPRJ_FORMAT_V1_1, SNXPRJ_VERSION, snxprj_opens_read_only, snxprj_token,
+};
 pub use unknown::UnknownJson;
 pub use user_profile::{
     MAX_PROFILE_NAME_CHARS, PROJECT_PROFILE_TOKEN, ProfileNameProblem, ProfileRef,
     USER_PROFILE_ID_PREFIX, UserProfile, add_user_profile, check_profile_name, find_user_profile,
     new_profile_id, resolve_profile, save_user_profile, user_profiles_from_value,
+};
+pub use variant_settings::{
+    FOOTPRINT_PARAMETER, PlacedPart, SheetFit, VALUE_PARAMETER, VariantPart, VariantSettings,
 };
 pub use variants::{BASE_VARIANT, MAX_VARIANT_NAME_CHARS, VariantProblem, is_base_variant};
 
@@ -89,18 +109,6 @@ where
         .and_then(Value::as_str)
         .and_then(|text| text.parse().ok()))
 }
-
-/// Format token written into every saved `.snxprj` (`"format"` key).
-pub const SNXPRJ_FORMAT_V1: &str = "snxprj/1";
-
-/// `.snxprj` version policy. A file without the token predates it and is
-/// read as version 1; a newer token is refused on load.
-pub const SNXPRJ_VERSION: FormatVersion = FormatVersion {
-    current: SNXPRJ_FORMAT_V1,
-    readable: &[SNXPRJ_FORMAT_V1],
-    newer_minor: NewerMinor::Refused,
-    missing: MissingToken::ReadAs(SNXPRJ_FORMAT_V1),
-};
 
 const FORMAT_KEY: &str = "format";
 
@@ -239,6 +247,11 @@ pub struct ProjectData {
     /// Currently selected variant if known from project context.
     #[serde(default)]
     pub active_variant: Option<String>,
+    /// The default variant and what each variant changes on its parts
+    /// (mockup row 32). Skipped on save when nothing is set; when set, the
+    /// file is `snxprj/1.1` ([`snxprj_token`]).
+    #[serde(default, skip_serializing_if = "VariantSettings::is_empty")]
+    pub variant_settings: VariantSettings,
     /// Component libraries referenced by this project. Project-open
     /// auto-mounts every entry; the project tree renders each as a
     /// `Libraries ▸ <name>.snxlib` node. `#[serde(default)]` so old
@@ -299,6 +312,12 @@ pub struct ProjectData {
     /// build keeps the key in `unknown`. No format token changes.
     #[serde(default, skip_serializing_if = "AgentJournalSettings::is_default")]
     pub agent_journal: AgentJournalSettings,
+    /// Channel naming, harness definitions and differential pair classes
+    /// (Schematic Refinement). Skipped on save at the defaults, so an old
+    /// file re-saves byte-identical, and an old build keeps the key in
+    /// `unknown`. No format token changes.
+    #[serde(default, skip_serializing_if = "SchematicDesignSettings::is_default")]
+    pub schematic_design: SchematicDesignSettings,
     /// The kinds of file Fabrication Outputs writes (#2489). `None` is the
     /// defaults and is skipped on save, so a project whose ticks were never
     /// changed re-saves byte-identical. An unreadable value reads as `None`.
@@ -313,6 +332,17 @@ pub struct ProjectData {
     /// profile. Skipped on save when empty.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub requirements: Vec<RequirementEntry>,
+    /// The router tool diameter of the project's fab tier or profile, in mm
+    /// (mockup row 179d). `None` when none was applied, skipped on save. A
+    /// value that is not a positive number reads as `None`. Read and set it
+    /// through [`ProjectData::router_tool_diameter`] and
+    /// [`ProjectData::set_router_tool_diameter`].
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "router_tool::lenient_router_tool_diameter"
+    )]
+    pub router_tool_diameter: Option<f64>,
     /// Keys written by a newer build that this one does not know; kept so a
     /// save does not drop them (#788).
     #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
@@ -337,6 +367,19 @@ impl ProjectData {
     /// verbatim for re-save, not applied (#1180).
     pub fn has_unreadable_rules(&self) -> bool {
         self.rules.is_none() && self.unknown.get(RULES_KEY).is_some()
+    }
+
+    /// The router tool diameter in mm, absent when none was applied or the
+    /// stored value is not a positive number.
+    pub fn router_tool_diameter(&self) -> Option<f64> {
+        self.router_tool_diameter
+            .filter(|mm| router_tool::is_usable_diameter(*mm))
+    }
+
+    /// Store the router tool diameter; `None`, or a value that is not a
+    /// positive number, clears it.
+    pub fn set_router_tool_diameter(&mut self, mm: Option<f64>) {
+        self.router_tool_diameter = mm.filter(|mm| router_tool::is_usable_diameter(*mm));
     }
 
     /// Resolve a [`LibraryEntry`]'s `path` to an absolute path. Project-
@@ -365,6 +408,8 @@ mod parameters_tests;
 mod requirements_tests;
 #[cfg(test)]
 mod schematic_defaults_tests;
+#[cfg(test)]
+mod schematic_design_tests;
 #[cfg(test)]
 mod unknown_tests;
 
@@ -548,6 +593,7 @@ mod tests {
             sheets: vec![],
             variant_definitions: vec![],
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: vec![],
             enable_git: false,
             net_classes: Vec::new(),
@@ -556,7 +602,9 @@ mod tests {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
             fab_outputs: None,
+            router_tool_diameter: None,
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
@@ -585,6 +633,7 @@ mod tests {
             sheets: vec![],
             variant_definitions: vec![],
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: vec![],
             enable_git: false,
             net_classes: Vec::new(),
@@ -593,7 +642,9 @@ mod tests {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
             fab_outputs: None,
+            router_tool_diameter: None,
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
@@ -643,11 +694,18 @@ pub enum ProjectError {
         #[source]
         source: FormatVersionError,
     },
+    /// A save of a project read from a newer minor, which opens read-only.
+    #[error("project file {path}: {source}")]
+    ReadOnly {
+        path: String,
+        #[source]
+        source: FormatVersionError,
+    },
 }
 
-/// Check the token through [`SNXPRJ_VERSION`]; a token that is not a string
-/// is refused as garbled.
-fn check_format_token(path: &Path, token: Option<&Value>) -> Result<(), ProjectError> {
+/// Check the token through [`SNXPRJ_VERSION`] and return the token the file
+/// reads as; a token that is not a string is refused as garbled.
+fn check_format_token(path: &Path, token: Option<&Value>) -> Result<String, ProjectError> {
     let found = match token {
         None => None,
         Some(Value::String(s)) => Some(s.clone()),
@@ -655,7 +713,6 @@ fn check_format_token(path: &Path, token: Option<&Value>) -> Result<(), ProjectE
     };
     SNXPRJ_VERSION
         .read(found.as_deref())
-        .map(drop)
         .map_err(|source| ProjectError::UnsupportedFormat {
             path: path.display().to_string(),
             source,
@@ -738,7 +795,7 @@ pub fn parse_project_bytes(path: &Path, bytes: &[u8]) -> Result<ProjectData, Pro
         };
         let mut value = serde_json::from_str::<Value>(trimmed).map_err(corrupt)?;
         let token = value.as_object_mut().and_then(|map| map.remove(FORMAT_KEY));
-        check_format_token(path, token.as_ref())?;
+        let format = check_format_token(path, token.as_ref())?;
         let rules = value.as_object_mut().and_then(|map| map.remove(RULES_KEY));
         let annotation = value
             .as_object_mut()
@@ -755,9 +812,21 @@ pub fn parse_project_bytes(path: &Path, bytes: &[u8]) -> Result<ProjectData, Pro
         let requirements = value
             .as_object_mut()
             .and_then(|map| map.remove(requirements::REQUIREMENTS_KEY));
+        let design = value
+            .as_object_mut()
+            .and_then(|map| map.remove(schematic_design::SCHEMATIC_DESIGN_KEY));
+        let variants = value
+            .as_object_mut()
+            .and_then(|map| map.remove(variant_settings::VARIANT_SETTINGS_KEY));
         let mut data = serde_json::from_value::<ProjectData>(value).map_err(corrupt)?;
         if let Some(raw) = requirements {
             requirements::take_requirements(&mut data, raw);
+        }
+        if let Some(raw) = variants {
+            variant_settings::take_variant_settings(&mut data, raw);
+        }
+        if let Some(raw) = design {
+            schematic_design::take_schematic_design(&mut data, raw);
         }
         if let Some(raw) = journal {
             crate::agent_journal::take_agent_journal(&mut data, raw);
@@ -774,6 +843,8 @@ pub fn parse_project_bytes(path: &Path, bytes: &[u8]) -> Result<ProjectData, Pro
         if let Some(raw) = annotation {
             annotation::take_annotation(&mut data, raw);
         }
+        // A newer minor opens read-only: every save of it is refused.
+        data.unknown.newer_minor_source = snxprj_opens_read_only(&format).then_some(format);
         data.dir = dir.to_string_lossy().to_string();
         // Project name in the file is informational; the on-disk
         // filename is authoritative so renaming the .snxprj outside
@@ -820,6 +891,7 @@ pub fn parse_project_bytes(path: &Path, bytes: &[u8]) -> Result<ProjectData, Pro
         sheets,
         variant_definitions: Vec::new(),
         active_variant: None,
+        variant_settings: Default::default(),
         libraries: Vec::new(),
         enable_git: false,
         net_classes: Vec::new(),
@@ -828,7 +900,9 @@ pub fn parse_project_bytes(path: &Path, bytes: &[u8]) -> Result<ProjectData, Pro
         schematic_defaults: Default::default(),
         project_defaults: Default::default(),
         agent_journal: Default::default(),
+        schematic_design: Default::default(),
         fab_outputs: None,
+        router_tool_diameter: None,
         requirements: Vec::new(),
         parameters: Default::default(),
         unknown: UnknownJson::default(),
@@ -844,6 +918,11 @@ pub fn parse_project_bytes(path: &Path, bytes: &[u8]) -> Result<ProjectData, Pro
 /// mid-write must never truncate it to a partial file — that would
 /// silently drop the project's contents on the next open.
 pub fn write_project(path: &Path, data: &ProjectData) -> Result<(), ProjectError> {
+    data.refuse_save()
+        .map_err(|source| ProjectError::ReadOnly {
+            path: path.display().to_string(),
+            source,
+        })?;
     let json = encode_project(data).map_err(|err| ProjectError::Io {
         path: path.display().to_string(),
         source: std::io::Error::other(err.to_string()),
@@ -858,17 +937,21 @@ pub fn write_project(path: &Path, data: &ProjectData) -> Result<(), ProjectError
 /// caller can encode on one thread and write on another, and compare what
 /// it wrote against the document it holds now.
 pub fn encode_project(data: &ProjectData) -> Result<Vec<u8>, serde_json::Error> {
+    // A project read from a newer minor is read-only: no bytes to write.
+    data.refuse_save()
+        .map_err(<serde_json::Error as serde::ser::Error>::custom)?;
     // Add the format token. serde_json's map is sorted (no `preserve_order`),
     // so keys come out alphabetically; the first save of an older file reorders it once.
     let mut stamped = serde_json::Map::new();
-    stamped.insert(FORMAT_KEY.into(), Value::String(SNXPRJ_FORMAT_V1.into()));
+    stamped.insert(FORMAT_KEY.into(), Value::String(snxprj_token(data).into()));
     if let Value::Object(fields) = serde_json::to_value(data)? {
         stamped.extend(fields);
     }
     // A rule set stored in this session replaces a section kept from a
-    // newer build; serde would otherwise let the kept copy win.
+    // newer build; serde would otherwise let the kept copy win. Its schema
+    // follows its content (`ProjectRules::written_schema`).
     if let Some(rules) = &data.rules {
-        stamped.insert(RULES_KEY.into(), serde_json::to_value(rules)?);
+        stamped.insert(RULES_KEY.into(), rules.to_written_value()?);
     }
     // Same for the annotation settings: an explicit choice replaces an
     // unreadable section kept from a newer build.
@@ -899,6 +982,20 @@ pub fn encode_project(data: &ProjectData) -> Result<Vec<u8>, serde_json::Error> 
             crate::agent_journal::AGENT_JOURNAL_KEY.into(),
             crate::agent_journal::merged_value(data)?,
         );
+    }
+    // An unreadable section stays as it was (DECISIONS 2026-11-23, #2750).
+    if !data.schematic_design.is_default() && !data.has_unreadable_schematic_design() {
+        stamped.insert(
+            schematic_design::SCHEMATIC_DESIGN_KEY.into(),
+            serde_json::to_value(&data.schematic_design)?,
+        );
+    }
+    // An unreadable variant settings section stays as it was too.
+    if data.has_unreadable_variant_settings() {
+        stamped.remove(variant_settings::VARIANT_SETTINGS_KEY);
+        if let Some(kept) = data.unknown.get(variant_settings::VARIANT_SETTINGS_KEY) {
+            stamped.insert(variant_settings::VARIANT_SETTINGS_KEY.into(), kept.clone());
+        }
     }
     serde_json::to_vec_pretty(&Value::Object(stamped))
 }

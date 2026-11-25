@@ -4,7 +4,7 @@
 use std::collections::BTreeSet;
 
 use crate::index::{BoardIndex, IndexedItem, ItemRef, RectSelect};
-use crate::pick_filter::PickFilter;
+use crate::pick_filter::{PickFilter, PickKind};
 use crate::rect::RectNm;
 use crate::units::PointNm;
 
@@ -103,7 +103,9 @@ impl Selection {
                 | ItemRef::Dimension(_)
                 | ItemRef::Graphic { .. }
                 // A text moves on its own (#2368).
-                | ItemRef::FootprintText { .. } => None,
+                | ItemRef::FootprintText { .. }
+                // A room moves its parts by its own command (#2457).
+                | ItemRef::Room(_) => None,
             })
             .collect()
     }
@@ -170,8 +172,16 @@ fn rank(item: ItemRef) -> u8 {
         | ItemRef::FootprintText { .. } => 3,
         // The body is under its own pads: a click on copper takes the copper.
         ItemRef::Footprint(_) => 4,
-        // A drawn area is under everything on it (#2383).
+        // A drawn area is under everything on it (#2383), and a polygon
+        // pour under the areas drawn on it, so a click inside a pour cutout
+        // (#2871) picks the cutout.
+        ItemRef::Zone {
+            kind: PickKind::Polygons,
+            ..
+        } => 6,
         ItemRef::Zone { .. } => 5,
+        // A room is under everything, drawn areas included (#2457).
+        ItemRef::Room(_) => 7,
     }
 }
 

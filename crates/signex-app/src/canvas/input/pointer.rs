@@ -42,7 +42,15 @@ impl SchematicCanvas<'_> {
             | Tool::BreakWire
             | Tool::Blanket
             | Tool::CompileMask
-            | Tool::DiffPair => true,
+            | Tool::DiffPair
+            | Tool::Bezier
+            | Tool::LinearDimension
+            | Tool::AlignedDimension
+            | Tool::Table
+            | Tool::HarnessWire
+            | Tool::HarnessConnector
+            | Tool::HarnessEntry
+            | Tool::NetParameters => true,
         }
     }
 
@@ -105,6 +113,24 @@ impl SchematicCanvas<'_> {
             }
             state.last_click_time = Some(now);
             state.last_click_screen = Some((cursor_pos.x, cursor_pos.y));
+
+            // A press on a selected Bezier's handle holds that point; Shift
+            // is free here because it mirrors the handles (see `bezier_grip`).
+            state.bezier_drag = None;
+            if !self.drawing_mode
+                && !self.tool_places_on_click()
+                && !state.ctrl_held
+                && let Some(drag) = self.bezier_handle_at(cursor_pos, bounds, (wx, wy))
+            {
+                state.bezier_drag = Some(drag);
+                state.wire_grip = None;
+                state.click_on_selected = false;
+                state.move_origin = None;
+                state.move_dragging = false;
+                state.move_current = None;
+                state.select_drag_start = None;
+                return Some(canvas::Action::capture());
+            }
 
             // A press on a selected wire's end grip arms a drag of that end
             // alone (see `wire_grip`).
@@ -220,6 +246,9 @@ impl SchematicCanvas<'_> {
         &self,
         state: &mut CanvasState,
     ) -> Option<canvas::Action<Message>> {
+        if let Some(drag) = state.bezier_drag.take() {
+            return Some(drag.dropped());
+        }
         self.drop_stale_float(state);
         // A click-click move keeps floating through the picking press's
         // release; only the next press drops it.
@@ -320,6 +349,10 @@ impl SchematicCanvas<'_> {
         // Abort a floating move or in-progress drag — matches Altium / Esc.
         // `pan_moved` makes the matching right-release read as a drag, so the
         // press that cancelled does not also open the context menu.
+        if state.bezier_drag.take().is_some() {
+            state.pan_moved = true;
+            return Some(canvas::Action::capture());
+        }
         if state.is_floating() {
             state.clear_move();
             state.pan_moved = true;
@@ -351,6 +384,8 @@ impl SchematicCanvas<'_> {
                     && rel_x < bar_width
                     && let Some(menu) = crate::active_bar::menu_at(tool, rel_x, &metrics)
                 {
+                    // Read as a drag, so this press's release leaves the tool.
+                    state.pan_moved = true;
                     return Some(canvas::Action::publish(Message::ActiveBar(
                         crate::active_bar::ActiveBarMsg::ToggleMenu(menu),
                     )));
@@ -365,19 +400,18 @@ impl SchematicCanvas<'_> {
         Some(canvas::Action::capture())
     }
 
-    /// Middle-press: start pan.
-    pub(in crate::canvas) fn update_middle_pressed(
-        &self,
-        state: &mut CanvasState,
-        bounds: Rectangle,
-        cursor: mouse::Cursor,
+    /// `action` for a right press on the canvas while a release is held back:
+    /// that release was lost, so this press ends the hold.
+    pub(in crate::canvas) fn ending_release_hold(
+        action: Option<canvas::Action<Message>>,
     ) -> Option<canvas::Action<Message>> {
-        if let Some(pos) = cursor.position_in(bounds) {
-            state.panning = true;
-            state.pan_moved = false;
-            state.last_pan_pos = Some(pos);
-        }
-        Some(canvas::Action::capture())
+        let message = action.and_then(|action| action.into_inner().0);
+        Some(
+            canvas::Action::publish(message.unwrap_or(Message::ActiveBar(
+                crate::active_bar::ActiveBarMsg::RightReleaseSwallowed,
+            )))
+            .and_capture(),
+        )
     }
 
     /// Right-release: stop pan, context menu, or cancel drawing.
@@ -391,6 +425,14 @@ impl SchematicCanvas<'_> {
         state.panning = false;
         state.pan_moved = false;
         state.last_pan_pos = None;
+        if self.prefs.swallow_right_release {
+            return Some(
+                canvas::Action::publish(Message::ActiveBar(
+                    crate::active_bar::ActiveBarMsg::RightReleaseSwallowed,
+                ))
+                .and_capture(),
+            );
+        }
         if !did_pan {
             if self.drawing_mode {
                 // Right-click cancels wire drawing (Altium behavior)
@@ -410,16 +452,6 @@ impl SchematicCanvas<'_> {
         Some(canvas::Action::capture())
     }
 
-    /// Middle-release: stop pan.
-    pub(in crate::canvas) fn update_middle_released(
-        &self,
-        state: &mut CanvasState,
-    ) -> Option<canvas::Action<Message>> {
-        state.panning = false;
-        state.last_pan_pos = None;
-        Some(canvas::Action::capture())
-    }
-
     /// Cursor motion: pan, track drag-move / box-select, hover reporting.
     pub(in crate::canvas) fn update_cursor_moved(
         &self,
@@ -427,6 +459,9 @@ impl SchematicCanvas<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<Message>> {
+        if let Some(action) = self.update_bezier_drag(state, bounds, cursor) {
+            return Some(action);
+        }
         self.drop_stale_float(state);
         let inside = cursor.position_in(bounds).is_some();
         let was_inside = std::mem::replace(&mut state.pointer_inside, inside);
@@ -436,7 +471,7 @@ impl SchematicCanvas<'_> {
             )));
         }
         if let Some(cursor_pos) = cursor.position_in(bounds) {
-            // Pan if right/middle button held
+            // Pan if the right button is held
             if state.panning {
                 let mut pan_just_started = false;
                 if let Some(last) = state.last_pan_pos {

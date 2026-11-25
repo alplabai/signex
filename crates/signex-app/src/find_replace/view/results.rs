@@ -7,8 +7,9 @@ use std::ops::Range;
 
 use iced::widget::{Row, Space, column, container, row, scrollable};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget};
+use signex_engine::pcb::find::BoardFindKind;
 use signex_engine::{FindKind, FindQuery};
-use signex_i18n::{I18n, UserText, ids, t};
+use signex_i18n::{I18n, MessageId, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, checkbox, raw, text};
 
@@ -41,9 +42,31 @@ pub(super) struct ResultRow {
 /// The results of one kind, in list order.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct ResultGroup {
-    /// The kind's name, as signex-engine words it (#2060).
+    /// The kind as signex-engine words it: the group's key.
     pub kind: &'static str,
+    /// The kind's catalog name, shown in the group header (#2060).
+    pub name: MessageId,
     pub rows: Vec<ResultRow>,
+}
+
+/// The catalog name of a sheet hit's kind.
+pub(super) fn find_kind_label(kind: FindKind) -> MessageId {
+    match kind {
+        FindKind::NetLabel => ids::FIND_KIND_NET_LABEL,
+        FindKind::TextNote => ids::FIND_KIND_TEXT_NOTE,
+        FindKind::Designator => ids::PROPERTIES_DESIGNATOR,
+        FindKind::Value => ids::PROPERTIES_VALUE,
+    }
+}
+
+/// The catalog name of a board hit's kind.
+pub(super) fn board_find_kind_label(kind: BoardFindKind) -> MessageId {
+    match kind {
+        BoardFindKind::Designator => ids::PROPERTIES_DESIGNATOR,
+        BoardFindKind::Value => ids::PROPERTIES_VALUE,
+        BoardFindKind::Footprint => ids::PROPERTIES_FOOTPRINT,
+        BoardFindKind::Net => ids::PROPERTIES_NET,
+    }
 }
 
 fn file_stem(path: Option<&std::path::Path>) -> String {
@@ -52,11 +75,12 @@ fn file_stem(path: Option<&std::path::Path>) -> String {
 }
 
 /// Push `row` into the group of `kind`, opening one on its first result.
-fn push(groups: &mut Vec<ResultGroup>, kind: &'static str, row: ResultRow) {
+fn push(groups: &mut Vec<ResultGroup>, kind: &'static str, name: MessageId, row: ResultRow) {
     match groups.iter_mut().find(|g| g.kind == kind) {
         Some(group) => group.rows.push(row),
         None => groups.push(ResultGroup {
             kind,
+            name,
             rows: vec![row],
         }),
     }
@@ -76,7 +100,12 @@ pub(super) fn groups(state: &FindReplaceState) -> Vec<ResultGroup> {
                 sheet: sheet.clone(),
                 mono: true,
             };
-            push(&mut groups, hit.kind.label(), row);
+            push(
+                &mut groups,
+                hit.kind.label(),
+                board_find_kind_label(hit.kind),
+                row,
+            );
         }
         return groups;
     }
@@ -88,7 +117,12 @@ pub(super) fn groups(state: &FindReplaceState) -> Vec<ResultGroup> {
             sheet: file_stem(found.sheet.as_deref()),
             mono: found.hit.kind != FindKind::TextNote,
         };
-        push(&mut groups, found.hit.kind.label(), row);
+        push(
+            &mut groups,
+            found.hit.kind.label(),
+            find_kind_label(found.hit.kind),
+            row,
+        );
     }
     groups
 }
@@ -110,12 +144,19 @@ pub(super) fn segments<'t>(text: &'t str, ranges: &[Range<usize>]) -> Vec<(&'t s
     out
 }
 
-/// The list box: the groups, or the empty state.
+/// The list box: the groups, or the empty state. With `max_height` it fits
+/// its rows up to that height, then scrolls (mockup row 67); without, it
+/// fills its parent.
 pub(super) fn results<'a>(
     state: &'a FindReplaceState,
     theme_tokens: &ThemeTokens,
     i18n: &I18n,
+    max_height: Option<f32>,
 ) -> Element<'a, FindReplaceMsg> {
+    let (scroll_h, box_h) = match max_height {
+        Some(max) => (Length::Shrink, Length::Fit.max(max)),
+        None => (Length::Fill, Length::Fill),
+    };
     let groups = groups(state);
     let muted = tokens::muted_text(theme_tokens);
     let content: Element<'a, FindReplaceMsg> = if groups.is_empty() {
@@ -141,12 +182,12 @@ pub(super) fn results<'a>(
         scrollable(list)
             .direction(crate::styles::thin_vertical())
             .style(crate::styles::scrollbar_style(theme_tokens))
-            .height(Length::Fill)
+            .height(scroll_h)
             .boxed()
     };
     container(content)
         .width(Length::Fill)
-        .height(Length::Fill)
+        .height(box_h)
         .clip(true)
         .style(crate::styles::card(theme_tokens))
         .boxed()
@@ -175,8 +216,7 @@ fn group_header<'a>(
     let fill = r.sunken;
     container(
         row![
-            // raw: the kind is named by signex-engine (#2060).
-            text(raw(group.kind)).size(TS.caption).color(r.ink3),
+            text(t!(i18n, group.name)).size(TS.caption).color(r.ink3),
             text(t!(i18n, ids::FIND_GROUP_COUNT, "count" => group.rows.len()))
                 .size(TS.caption)
                 .color(r.ink3)
@@ -218,7 +258,7 @@ fn result_row<'a>(
     let font = if row_data.mono {
         mono()
     } else {
-        iced::Font::DEFAULT
+        signex_widgets::ui_font::regular()
     };
     let ink = if included || !boxes {
         ti(theme_tokens.text)

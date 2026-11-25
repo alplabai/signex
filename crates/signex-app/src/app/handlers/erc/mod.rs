@@ -10,9 +10,15 @@ mod annotate_job;
 mod annotate_job_tests;
 #[cfg(test)]
 mod annotate_mixed_versions_tests;
+#[cfg(test)]
+mod annotate_parked_tests;
 mod annotate_pass;
 mod annotate_placements;
 mod annotate_preview;
+#[cfg(test)]
+mod annotate_reset_tests;
+#[cfg(test)]
+mod annotate_session_tests;
 #[cfg(test)]
 mod annotate_tests;
 mod erc_check;
@@ -29,7 +35,7 @@ mod stale_findings;
 #[cfg(test)]
 mod stale_findings_tests;
 
-pub(crate) use annotate_job::{AnnotateRuns, SheetWrite, SheetsRead};
+pub(crate) use annotate_job::{AnnotateRuns, SheetsRead};
 pub(crate) use annotate_preview::rows::{
     AnnotateListView, AnnotateSession, PlacementLabel, SheetTickRow, TickState, change_count,
     changing_sheets, is_changing, listed_rows, tick_state,

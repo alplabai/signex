@@ -60,7 +60,7 @@ find-similar-same = Same
 find-similar-any = Any
 find-similar-scope-sheet = Current sheet
 find-similar-scope-project = Whole project
-find-similar-footer = Selects every match. Matches on other sheets are only counted.
+find-similar-footer = Selects every match. Matches on other sheets are listed in Messages.
 # $seed names the object the search starts from, such as "Part R1", in
 # English.
 find-similar-seed = Seed: { $seed }
@@ -102,13 +102,23 @@ paste-array-axis-x = X
 # Prefix inside the Y spacing field.
 paste-array-axis-y = Y
 paste-array-count-up = Count up label numbers
-paste-array-preview-caption = Preview · copy 1 is the original
-# Beside the last drawn copy; $count is how many copies are not drawn.
+paste-array-preview-caption = Preview · copy 1 is the original · drag copy 2 or click a value
+# Tooltips of the preview's expand button.
+paste-array-preview-expand = Expand preview
+paste-array-preview-collapse = Collapse preview
+# Beside the last drawn copy; $count is how many positions are not drawn.
 paste-array-preview-more = +{ $count } more
 # Spacing callout on the preview; $value is the length with its unit.
 paste-array-preview-x = X { $value }
 # Spacing callout on the preview; $value is the length with its unit.
 paste-array-preview-y = Y { $value }
+# The Copies value drawn on the preview; $count counts the original.
+paste-array-preview-copies = { $count ->
+    [one] 1 copy
+   *[other] { $count } copies
+}
+# The step drawn under copy 2; $step is signed, such as "+1".
+paste-array-preview-step = { $step } per copy
 # Worked example; $from is a copied label and $to its texts in the first
 # copies, such as "D1, D2, D3".
 paste-array-hint-example = Copy k sits k spacings from the original; label numbers count up by k steps ({ $from } → { $to }).
@@ -118,10 +128,38 @@ paste-array-items = { $count ->
     [one] 1 item will be placed
    *[other] { $count } items will be placed
 }
-# The primary button; $count is how many copies it places.
+# The primary button; $count is how many new copies it places, one less
+# than the Copies field, which counts the original.
 paste-array-paste = { $count ->
     [one] Paste 1 copy
    *[other] Paste { $count } copies
 }
 # The primary button while the Copies field does not parse.
 paste-array-paste-none = Paste
+
+## Names the engine gives
+# Kind of a match in the results list: a net label on the sheet (a noun,
+# not the Place command).
+find-kind-net-label = Net Label
+# Kind of a match in the results list: a text note on the sheet.
+find-kind-text-note = Text Note
+# Property names in the Find Similar table.
+find-similar-prop-kind = Kind
+find-similar-prop-library-part = Library part
+# The letters a designator starts with, such as "R" for "R12".
+find-similar-prop-designator-prefix = Designator prefix
+find-similar-prop-net-name = Net name
+# Net, global, hierarchical or power label.
+find-similar-prop-label-type = Label type
+
+# find-messages
+# Find mode footer buttons: step to the result before / after the current one
+# (Shift+Enter / Enter).
+find-previous = Previous
+find-next = Next
+# A Messages row for one match on another sheet; $what names the object as
+# the engine describes it (such as "Symbol R3"), $sheet is the sheet's file.
+find-similar-listed = Find Similar: { $what } on { $sheet }
+# After the listed matches, when there were more than Messages lists; $count
+# is how many were left out.
+find-similar-not-listed = Find Similar: { $count } more on other sheets, not listed

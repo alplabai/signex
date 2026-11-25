@@ -82,6 +82,19 @@ pub(in crate::panels) fn value_box(theme: &Theme) -> (Color, Color, f32) {
     (l.field, l.line, PROPERTY_FIELD_RADIUS)
 }
 
+/// A value the panel only reports: the sunken fill with no border, so it
+/// cannot be taken for a field (mockup rows 42, 43, 45 and 50).
+pub(in crate::panels) fn read_only_value(theme: &Theme) -> container::Style {
+    container::Style {
+        background: Some(Background::Color(FormLook::of(theme).sunken)),
+        border: Border {
+            radius: PROPERTY_FIELD_RADIUS.into(),
+            ..Border::default()
+        },
+        ..container::Style::default()
+    }
+}
+
 /// The tooltip that shows a field's whole value: a raised card with the
 /// field's ink and hairline.
 pub(in crate::panels) fn value_tip(theme: &Theme) -> container::Style {
@@ -119,6 +132,49 @@ pub(crate) fn text_input_style(theme: &Theme, status: text_input::Status) -> tex
         value: l.ink,
         selection: Color { a: 0.4, ..l.accent },
     }
+}
+
+/// [`text_input_style`] for a value that reads inline in a list: no fill or
+/// outline until the box is hovered or focused.
+pub(crate) fn inline_value_input_style(
+    theme: &Theme,
+    status: text_input::Status,
+) -> text_input::Style {
+    let mut style = text_input_style(theme, status);
+    if !matches!(
+        status,
+        text_input::Status::Hovered | text_input::Status::Focused { .. }
+    ) {
+        style.background = Background::Color(Color::TRANSPARENT);
+        style.border.color = Color::TRANSPARENT;
+    }
+    style
+}
+
+/// [`text_input_style`] with the outline in `error` while the box holds text
+/// it refuses (#2767).
+pub(crate) fn refusable_input_style(
+    error: Option<Color>,
+) -> impl Fn(&Theme, text_input::Status) -> text_input::Style {
+    move |theme, status| {
+        let mut style = text_input_style(theme, status);
+        if let Some(error) = error {
+            style.border.color = error;
+        }
+        style
+    }
+}
+
+/// [`text_input_style`] that greys while the field takes no input: the sunken
+/// fill with faint ink (mockup row 111).
+pub(crate) fn greyable_input_style(theme: &Theme, status: text_input::Status) -> text_input::Style {
+    let mut style = text_input_style(theme, status);
+    if matches!(status, text_input::Status::Disabled) {
+        let l = FormLook::of(theme);
+        style.background = Background::Color(l.sunken);
+        style.value = l.ink4;
+    }
+    style
 }
 
 /// `checkbox` style for a form toggle.
@@ -259,20 +315,6 @@ pub(crate) fn value_field_button(theme: &Theme, status: button::Status) -> butto
     }
 }
 
-/// Active tab chip of the Properties tab strip: accent-soft fill, radius 7.
-pub(in crate::panels) fn tab_chip(theme: &Theme, active: bool, hovered: bool) -> button::Style {
-    let l = FormLook::of(theme);
-    button::Style {
-        background: (active || hovered).then_some(Background::Color(l.accent_soft)),
-        text_color: if active { l.ink } else { l.ink3 },
-        border: Border {
-            radius: PROPERTY_FIELD_RADIUS.into(),
-            ..Border::default()
-        },
-        ..button::Style::default()
-    }
-}
-
 /// Section label of a Graphite form: uppercase, muted, 12 px side padding.
 pub(in crate::panels) fn section_label<'a, 'b, M: 'a>(
     title: impl Into<signex_widgets::Label<'b>>,
@@ -306,6 +348,32 @@ fn graphite_section_header<'a>(
     tokens: &ThemeTokens,
     i18n: &signex_i18n::I18n,
 ) -> Column<Element<'a, PanelMsg>> {
+    Column::new()
+        .spacing(0)
+        .width(Length::Fill)
+        .push(graphite_section_toggle(
+            key,
+            title,
+            is_collapsed,
+            tokens,
+            i18n,
+        ))
+}
+
+/// Insets of a Graphite section header's label: more air above than below.
+const SECTION_TOP: f32 = 12.0;
+const SECTION_BOTTOM: f32 = 6.0;
+pub(in crate::panels) const SECTION_SIDE: f32 = 12.0;
+
+/// The clickable part of a Graphite section header: chevron and label,
+/// toggling the section.
+fn graphite_section_toggle<'a>(
+    key: &str,
+    title: &signex_i18n::Translatable,
+    is_collapsed: bool,
+    tokens: &ThemeTokens,
+    i18n: &signex_i18n::I18n,
+) -> Element<'a, PanelMsg> {
     let ink = resolve(tokens).ink4;
     let label = row![
         signex_widgets::chevron::chevron(!is_collapsed, TS.section, ink),
@@ -319,10 +387,10 @@ fn graphite_section_header<'a>(
     let header = button(
         container(label)
             .padding(iced::Padding {
-                top: 12.0,
-                right: 12.0,
-                bottom: 6.0,
-                left: 12.0,
+                top: SECTION_TOP,
+                right: SECTION_SIDE,
+                bottom: SECTION_BOTTOM,
+                left: SECTION_SIDE,
             })
             .width(Length::Fill),
     )
@@ -330,10 +398,7 @@ fn graphite_section_header<'a>(
     .width(Length::Fill)
     .on_press(PanelMsg::ToggleSection(key.to_string()))
     .style(|_: &Theme, _| button::Style::default());
-    Column::new()
-        .spacing(0)
-        .width(Length::Fill)
-        .push(header.boxed())
+    header.boxed()
 }
 
 impl PanelContext {
@@ -349,6 +414,41 @@ impl PanelContext {
         let is_collapsed = collapsed.contains(key);
         let title = title.into();
         let mut col = graphite_section_header(key, &title, is_collapsed, &self.tokens, &self.i18n);
+        if !is_collapsed {
+            col = col.push(content().boxed());
+        }
+        col
+    }
+
+    /// [`Self::collapsible`] with `action`, a small header button, at the
+    /// right end of the header, level with the label.
+    pub(in crate::panels) fn collapsible_with_action<'a>(
+        &self,
+        key: &str,
+        title: impl Into<signex_i18n::Translatable>,
+        collapsed: &CollapsedSections,
+        action: Element<'a, PanelMsg>,
+        content: impl FnOnce() -> Column<Element<'a, PanelMsg>>,
+    ) -> Column<Element<'a, PanelMsg>> {
+        let is_collapsed = collapsed.contains(key);
+        let title = title.into();
+        let toggle = graphite_section_toggle(key, &title, is_collapsed, &self.tokens, &self.i18n);
+        // Centred on the label, which sits lower than the header's middle.
+        let action = container(action)
+            .padding(iced::Padding {
+                top: SECTION_TOP - SECTION_BOTTOM,
+                right: SECTION_SIDE,
+                bottom: 0.0,
+                left: 0.0,
+            })
+            .boxed();
+        let header = row![toggle, action]
+            .width(Length::Fill)
+            .align_y(iced::Alignment::Center);
+        let mut col = Column::new()
+            .spacing(0)
+            .width(Length::Fill)
+            .push(header.boxed());
         if !is_collapsed {
             col = col.push(content().boxed());
         }

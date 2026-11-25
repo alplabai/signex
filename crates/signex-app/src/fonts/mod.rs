@@ -27,7 +27,7 @@ use signex_types::coord::Unit;
 use signex_types::theme::ThemeId;
 
 /// Default UI font family name. Used when no preference file is found.
-pub const DEFAULT_UI_FONT: &str = "Inter";
+pub const DEFAULT_UI_FONT: &str = signex_widgets::ui_font::DEFAULT_FAMILY;
 
 /// Bundled monospace family for chrome-only mono text (shortcuts, values).
 /// Not a canvas font: `signex_types::font::BUNDLED_DEFAULT_FAMILY` stays Iosevka.

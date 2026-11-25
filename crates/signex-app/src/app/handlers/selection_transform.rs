@@ -15,13 +15,14 @@ use crate::app::{Signex, Tool};
 impl Signex {
     /// Whether a rotate key from `window` (`None`: the main window) bends a
     /// run instead of turning anything: a track run on the board that window
-    /// shows, or a wire or bus run. These are the two checks
-    /// [`Self::handle_selection_rotate_requested`] makes once that window's
-    /// board is swapped in (`bend_board_route`, `is_drawing_wire_run`); the
-    /// board one resolves the window itself, as a key is judged before the
-    /// swap.
+    /// shows, or a wire or bus run when that window shows no board. These are
+    /// the checks [`Self::handle_selection_rotate_requested`] makes once that
+    /// window's board is swapped in (`bend_board_route`, the board path that
+    /// takes every board key, then `is_drawing_wire_run`); they resolve the
+    /// window themselves, as a key is judged before the swap.
     pub(crate) fn has_open_run_in(&self, window: Option<iced::window::Id>) -> bool {
-        self.is_routing_board_track_in(window) || self.is_drawing_wire_run()
+        self.is_routing_board_track_in(window)
+            || (!self.window_shows_pcb(window) && self.is_drawing_wire_run())
     }
 
     /// Rotate the selection 90 degrees on screen. The engine's
@@ -55,6 +56,10 @@ impl Signex {
         }
         // A part on the cursor turns instead of the selection.
         if self.rotate_placement(clockwise) {
+            return;
+        }
+        // Space flips the side of a dimension under way (mockup row 157).
+        if !clockwise && self.flip_dimension_side() {
             return;
         }
         if self.interaction_state.current_tool == Tool::BusEntry {

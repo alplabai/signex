@@ -52,10 +52,11 @@ impl Signex {
                 self.library.settings.digikey_status = Some("Waiting for browser…".to_string());
                 let cancel_flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
                 self.library.settings.digikey_cancel = Some(cancel_flag.clone());
-                let (client_id, client_secret) = digikey_oauth::read_env_credentials();
+                let (client_id, client_secret) = digikey_oauth::client_credentials();
                 let auth_url = DIGIKEY_AUTH_URL.to_string();
                 let token_url = DIGIKEY_TOKEN_URL.to_string();
                 let opener = self.ui_state.io.opener;
+                let i18n = std::sync::Arc::clone(&self.ui_state.i18n);
                 return Task::perform(
                     async move {
                         let cancel = digikey_oauth::CancelHandle::from_flag(cancel_flag);
@@ -70,8 +71,10 @@ impl Signex {
                             )
                         })
                         .await
-                        .unwrap_or(digikey_oauth::Outcome::Failed {
-                            reason: "worker thread panicked".into(),
+                        .unwrap_or_else(|e| {
+                            digikey_oauth::Outcome::Failed {
+                                reason: worker_panicked(&i18n, &e),
+                            }
                         })
                     },
                     move |outcome| {
@@ -129,11 +132,12 @@ impl Signex {
                     } else {
                         // Stays busy until `DigiKeyStaleTokenRemoved`.
                         let remove = self.library.settings.digikey_token_remover;
+                        let i18n = std::sync::Arc::clone(&self.ui_state.i18n);
                         return Task::perform(
                             async move {
                                 tokio::task::spawn_blocking(remove)
                                     .await
-                                    .unwrap_or_else(|e| Err(format!("worker thread panicked: {e}")))
+                                    .unwrap_or_else(|e| Err(worker_panicked(&i18n, &e)))
                             },
                             |result| {
                                 Message::Library(LibraryMessage::Settings(
@@ -181,8 +185,16 @@ impl Signex {
                     }
                 }
             }
+            SettingsMsg::DigiKeyDisconnectRequested => return self.request_digikey_disconnect(),
+            SettingsMsg::DigiKeyDisconnected(result) => self.finish_digikey_disconnect(result),
             SettingsMsg::MouserApiKeyChanged(s) => {
                 self.library.settings.mouser_api_key_buf = s;
+                // An edited key is untested again; a test still running
+                // keeps its "Testing…" line until its result arrives.
+                if !self.library.settings.mouser_in_flight {
+                    self.library.settings.mouser_key_verified = None;
+                    self.library.settings.mouser_status = None;
+                }
             }
             SettingsMsg::MouserTest => {
                 if self.library.settings.mouser_in_flight {
@@ -197,6 +209,7 @@ impl Signex {
                 self.library.settings.mouser_in_flight = true;
                 self.library.settings.mouser_status = Some("Testing…".to_string());
                 let key_for_writeback = key.clone();
+                let i18n = std::sync::Arc::clone(&self.ui_state.i18n);
                 return Task::perform(
                     async move {
                         let key_for_test = key.clone();
@@ -213,7 +226,7 @@ impl Signex {
                                 .map_err(|e| e.to_string())
                         })
                         .await
-                        .unwrap_or_else(|e| Err(format!("worker thread panicked: {e}")))
+                        .unwrap_or_else(|e| Err(worker_panicked(&i18n, &e)))
                     },
                     move |result| {
                         let result = match result {
@@ -244,6 +257,7 @@ impl Signex {
             }
             SettingsMsg::MouserTestResult(result) => {
                 self.library.settings.mouser_in_flight = false;
+                self.library.settings.mouser_key_verified = Some(result.is_ok());
                 self.library.settings.mouser_status = Some(match result {
                     Ok(()) => "\u{2713} Connected & key saved to keyring.".to_string(),
                     Err(e) => {
@@ -254,8 +268,107 @@ impl Signex {
             }
             SettingsMsg::PreferenceUp(src) => self.swap_preferred_order(src, true),
             SettingsMsg::PreferenceDown(src) => self.swap_preferred_order(src, false),
+            SettingsMsg::PreferenceDragStarted(src) => {
+                self.library.settings.preferred_order_drag = Some(src);
+                self.library.settings.preferred_order_drop_target = None;
+            }
+            SettingsMsg::PreferenceDragHovered(src) => {
+                if self.library.settings.preferred_order_drag.is_some() {
+                    self.library.settings.preferred_order_drop_target = Some(src);
+                }
+            }
+            SettingsMsg::PreferenceDropped(target) => {
+                self.library.settings.preferred_order_drop_target = None;
+                if let Some(src) = self.library.settings.preferred_order_drag.take() {
+                    self.move_preferred_order(src, target);
+                }
+            }
+            SettingsMsg::PreferenceDragEnded => {
+                self.library.settings.preferred_order_drag = None;
+                self.library.settings.preferred_order_drop_target = None;
+            }
         }
         Task::none()
+    }
+
+    /// Disconnect: delete the stored DigiKey token off the `update` thread
+    /// (keyring IO can block on an unlock prompt). Ignored while a Connect or
+    /// another keyring delete is outstanding: the keyring has one slot, and
+    /// `digikey_worker_busy` keeps a single writer (see `DigiKeyConnect`).
+    fn request_digikey_disconnect(&mut self) -> Task<Message> {
+        let settings = &mut self.library.settings;
+        if settings.digikey_in_flight
+            || settings.digikey_worker_busy
+            || settings.digikey_account_email.is_none()
+        {
+            return Task::none();
+        }
+        settings.digikey_worker_busy = true;
+        settings.digikey_disconnect_error = None;
+        let remove = settings.digikey_token_remover;
+        let i18n = std::sync::Arc::clone(&self.ui_state.i18n);
+        Task::perform(
+            async move {
+                tokio::task::spawn_blocking(remove)
+                    .await
+                    .unwrap_or_else(|e| Err(worker_panicked(&i18n, &e)))
+            },
+            |result| {
+                Message::Library(LibraryMessage::Settings(SettingsMsg::DigiKeyDisconnected(
+                    result,
+                )))
+            },
+        )
+    }
+
+    /// The Disconnect delete finished: on success the account is gone; on
+    /// failure the token is still stored, so the card keeps "Connected" and
+    /// shows why, and the reason reaches the Messages panel.
+    fn finish_digikey_disconnect(&mut self, result: Result<(), String>) {
+        let settings = &mut self.library.settings;
+        settings.digikey_worker_busy = false;
+        match result {
+            Ok(()) => {
+                settings.digikey_account_email = None;
+                settings.digikey_status = None;
+                tracing::info!(
+                    target: "signex::distributor",
+                    distributor = "digikey",
+                    "the DigiKey account was disconnected and its token removed"
+                );
+            }
+            Err(reason) => {
+                let line = signex_i18n::t!(
+                    self.ui_state.i18n,
+                    signex_i18n::ids::LIBRARY_DIGIKEY_DISCONNECT_FAILED_LOG,
+                    "why" => reason.as_str()
+                );
+                crate::diagnostics::log_warning(line.into_string());
+                settings.digikey_disconnect_error = Some(reason);
+            }
+        }
+    }
+
+    /// Drop the dragged `src` on `target`'s row: `src` takes that place and
+    /// the rows between shift by one. Saved exactly like Up / Down.
+    fn move_preferred_order(
+        &mut self,
+        src: signex_library::DistributorSource,
+        target: signex_library::DistributorSource,
+    ) {
+        let order = &mut self.library.settings.preferred_order;
+        let (Some(from), Some(to)) = (
+            order.iter().position(|s| *s == src),
+            order.iter().position(|s| *s == target),
+        ) else {
+            return;
+        };
+        if from == to {
+            return;
+        }
+        let moved = order.remove(from);
+        order.insert(to, moved);
+        self.save_preferred_order();
     }
 
     /// Move `src` one slot up (or down) the preferred-order list and
@@ -279,7 +392,17 @@ impl Signex {
             i + 1
         };
         order.swap(i, target);
-        let saved = crate::library::settings::persistence::save_preferred_order(order);
+        self.save_preferred_order();
+    }
+
+    /// Persist the preferred order; a failure is kept for the inline error.
+    /// Up / Down and a dropped grip all save here, still as a synchronous
+    /// `atomic_write` of the small `distributors.toml` inside `update`;
+    /// moving it to a Task is #2626.
+    fn save_preferred_order(&mut self) {
+        let saved = crate::library::settings::persistence::save_preferred_order(
+            &self.library.settings.preferred_order,
+        );
         self.library.settings.preferred_order_error = saved.err();
     }
 }
@@ -293,6 +416,17 @@ fn persist_mouser_key(
     key: &str,
 ) -> Result<(), String> {
     save(key).map_err(|e| format!("API key valid, but it could not be saved: {e}"))
+}
+
+/// The reason a distributor settings worker gives when its thread panicked,
+/// from the catalog; `error` is the runtime's own text, in English.
+fn worker_panicked(i18n: &signex_i18n::I18n, error: impl std::fmt::Display) -> String {
+    signex_i18n::t!(
+        i18n,
+        signex_i18n::ids::LIBRARY_WORKER_PANICKED,
+        "error" => error.to_string()
+    )
+    .into_string()
 }
 
 #[cfg(test)]
@@ -350,5 +484,15 @@ mod failure_message_tests {
         assert!(d.starts_with("DigiKey:") && d.ends_with("redirect timed out"));
         let m = mouser_failure_message("HTTP 401");
         assert!(m.starts_with("Mouser:") && m.ends_with("HTTP 401"));
+    }
+
+    #[test]
+    fn a_panicked_worker_reads_its_reason_from_the_catalog() {
+        let (app, _task) = crate::app::Signex::new();
+
+        let reason = worker_panicked(&app.ui_state.i18n, "task 7 panicked")
+            .replace(['\u{2068}', '\u{2069}'], "");
+
+        assert_eq!(reason, "worker thread panicked: task 7 panicked");
     }
 }

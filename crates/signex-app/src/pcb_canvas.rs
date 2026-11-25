@@ -3,6 +3,7 @@ use std::sync::Arc;
 mod board_text;
 mod camera;
 mod carry;
+mod carry_items;
 mod content;
 #[cfg(test)]
 mod content_pixel_tests;
@@ -19,9 +20,13 @@ mod grid;
 mod highlight;
 pub mod layer_style;
 mod marks;
+mod middle_zoom;
+#[cfg(test)]
+mod middle_zoom_tests;
 mod msg;
 mod panel_preview;
 mod part_ghost;
+mod rooms;
 mod select;
 mod snap_options;
 mod tessellate;
@@ -30,15 +35,19 @@ mod viewport_resize;
 pub use board_text::BoardTextLayer;
 pub use camera::BoardCamera;
 pub use carry::{
-    CarryKind, PasteLoad, PcbCarry, board_after_move, board_without, carried_board, carry_delta,
-    snap_point,
+    CarryKind, PasteLoad, PcbCarry, board_after_move, board_without, board_without_text,
+    carried_board, carried_text_board, carry_delta, followed_arcs, item_carry_delta, snap_point,
+    snap_point_on, via_carry_delta, with_arcs_replaced,
 };
+pub use carry_items::{carried_item_ids, item_points};
 pub use content::BoardContentLayer;
+pub(crate) use grid::stroke_origin_marker;
 pub use highlight::{Highlight, HighlightLayer};
 pub use marks::BoardMarks;
-pub use msg::PcbCanvasMsg;
-pub use select::PcbSelectionState;
-pub use snap_options::{PcbSnapOptions, SnapDistance, SnapScope};
+pub use msg::{LEAVE_TRACKS_KEY, PcbCanvasMsg};
+pub use rooms::{RoomMark, RoomsOverlay};
+pub use select::{DraggedItems, DraggedSelection, PcbSelectionState};
+pub use snap_options::{PcbSnapOptions, SnapScope, SnapView};
 
 use crate::scene_generation::next_scene_generation;
 use iced::event::Event;
@@ -58,9 +67,11 @@ use cull::SceneBounds;
 #[derive(Debug, Default)]
 pub struct PcbCanvasState {
     panning: bool,
-    /// The right or middle press moved the view, so its release opens no menu.
+    /// The right press moved the view, so its release opens no menu.
     pan_moved: bool,
     last_pan_pos: Option<iced::Point>,
+    /// The middle-button drag zooming the view, while it is held.
+    middle_zoom: Option<crate::canvas::middle_zoom::MiddleZoom>,
     /// Ctrl/Cmd held, tracked from `ModifiersChanged` (mouse events carry no
     /// modifiers); keeps a modified scroll zooming under "Two-finger scroll pans".
     zoom_modifier: bool,
@@ -139,6 +150,9 @@ pub struct PcbCanvas {
     origin_marker_visible: bool,
     /// Guides, extra grids and the sheet of the shown board (#2374).
     marks: BoardMarks,
+    /// The rooms selected on the shown board and the one being drawn
+    /// (#2457), drawn standing out.
+    rooms_overlay: RoomsOverlay,
     /// Selection and hover copper to paint, set by the app from
     /// [`PcbSelectionState`] (#2191).
     highlight: Highlight,
@@ -146,12 +160,15 @@ pub struct PcbCanvas {
     marquee: std::cell::Cell<Option<(signex_types::pcb::Point, signex_types::pcb::Point)>>,
     /// The body and pads of every footprint, set by the app: a press on one
     /// drags it instead of starting a box (#2240, #2358).
-    grab: Vec<pcb_geom::Shape>,
+    grab: Arc<[pcb_geom::Shape]>,
     /// A footprint drag is live; Esc clears it and the gesture quits.
     carry: std::cell::Cell<bool>,
     /// A tool, Move, paste or part on the cursor waits for clicks: every
     /// press is a click, never a drag or a box (#2396).
     clicks_only: bool,
+    /// The Active Bar took the last right press, so its release is not a
+    /// board right-click. Set by `Signex::set_swallow_right_release`.
+    swallow_right_release: bool,
     /// The board without the carried footprints, and them at their offset.
     drag_preview: Option<drag_preview::DragPreview>,
     /// What the next click adds, set by the app (#2364), and the share of
@@ -163,6 +180,16 @@ pub struct PcbCanvas {
     text_key: std::cell::Cell<Option<board_text::TextKey>>,
     /// Whether this canvas reports clicks and hovers.
     pub selectable: bool,
+    /// The pointer as the edge pan reads it, written on every event (#2872).
+    pub edge_pan: crate::canvas::EdgePanLink,
+}
+
+/// Ends the hold on a right release the Active Bar's press owned.
+fn right_release_swallowed() -> canvas::Action<Message> {
+    canvas::Action::publish(Message::ActiveBar(
+        crate::active_bar::ActiveBarMsg::RightReleaseSwallowed,
+    ))
+    .and_capture()
 }
 
 impl Default for PcbCanvas {
@@ -195,16 +222,19 @@ impl PcbCanvas {
             board_grid_mm: None,
             origin_marker_visible: true,
             marks: BoardMarks::default(),
+            rooms_overlay: RoomsOverlay::default(),
             highlight: Highlight::default(),
             marquee: std::cell::Cell::new(None),
-            grab: Vec::new(),
+            grab: Vec::new().into(),
             carry: std::cell::Cell::new(false),
             clicks_only: false,
+            swallow_right_release: false,
             drag_preview: None,
             part_ghost: None,
             text_cache: canvas::Cache::default(),
             text_key: std::cell::Cell::new(None),
             selectable: true,
+            edge_pan: crate::canvas::EdgePanLink::default(),
         }
     }
 
@@ -216,9 +246,10 @@ impl PcbCanvas {
         &self.highlight
     }
 
-    /// What a press grabs to drag a footprint.
-    pub fn set_grab(&mut self, grab: Vec<pcb_geom::Shape>) {
-        self.grab = grab;
+    /// What a press grabs to drag an object; shared with the selection's
+    /// cache, so setting it on every paint copies no shape.
+    pub fn set_grab(&mut self, grab: impl Into<Arc<[pcb_geom::Shape]>>) {
+        self.grab = grab.into();
     }
 
     /// Make every press a click (a tool or a carry waits for clicks), or
@@ -230,6 +261,17 @@ impl PcbCanvas {
     /// Whether every press is a click.
     pub fn is_clicks_only(&self) -> bool {
         self.clicks_only
+    }
+
+    /// Hold back the next right release, or stop holding it back.
+    pub fn set_swallow_right_release(&mut self, swallow: bool) {
+        self.swallow_right_release = swallow;
+    }
+
+    /// Whether the next right release is held back.
+    #[cfg(test)]
+    pub fn swallows_right_release(&self) -> bool {
+        self.swallow_right_release
     }
 
     /// Whether a press at `at` (board mm) lands on a grabbed footprint.
@@ -259,7 +301,7 @@ impl PcbCanvas {
         HighlightLayer(self)
     }
 
-    fn camera_ref(&self) -> std::cell::Ref<'_, BoardCamera> {
+    pub(crate) fn camera_ref(&self) -> std::cell::Ref<'_, BoardCamera> {
         self.camera.borrow()
     }
 
@@ -313,6 +355,15 @@ impl PcbCanvas {
     pub fn set_board_marks(&mut self, marks: BoardMarks) {
         if self.marks != marks {
             self.marks = marks;
+            self.bg_cache.clear();
+        }
+    }
+
+    /// The rooms selected on the shown board and the one being drawn
+    /// (#2457); the backdrop repaints when they change.
+    pub fn set_rooms_overlay(&mut self, overlay: RoomsOverlay) {
+        if self.rooms_overlay != overlay {
+            self.rooms_overlay = overlay;
             self.bg_cache.clear();
         }
     }
@@ -610,6 +661,13 @@ impl canvas::Program<Message> for PcbCanvas {
     ) -> Option<canvas::Action<Message>> {
         // Remember the bounds so menu zoom (no cursor) can find the view centre.
         self.viewport.set(bounds);
+        // An edge pan moved the view: the redraw replays the pointer (#2872).
+        let replayed = self.edge_pan.replayed(event, cursor);
+        let event = replayed.as_ref().unwrap_or(event);
+        self.edge_pan.observe_event(event, cursor, bounds);
+        if let Some(action) = self.middle_zoom_event(state, event, bounds, cursor) {
+            return Some(action);
+        }
         if self.resolve_pending_fit(bounds) {
             return Some(canvas::Action::publish(Message::CanvasEvent(
                 CanvasEvent::CursorMoved,
@@ -675,23 +733,29 @@ impl canvas::Program<Message> for PcbCanvas {
             Event::Mouse(mouse::Event::ButtonPressed(button)) => {
                 // A press outside the board belongs to the widget under it:
                 // the layer tabs under the canvas open their menu (#2379).
-                if matches!(button, mouse::Button::Right | mouse::Button::Middle)
+                if *button == mouse::Button::Right
                     && let Some(pos) = cursor.position_in(bounds)
                 {
                     state.panning = true;
                     state.pan_moved = false;
                     state.last_pan_pos = Some(pos);
+                    // A held-back release was lost: this press ends the hold.
+                    if self.swallow_right_release {
+                        return Some(right_release_swallowed());
+                    }
                     return Some(canvas::Action::capture());
                 }
             }
             Event::Mouse(mouse::Event::ButtonReleased(button)) => {
-                if matches!(button, mouse::Button::Right | mouse::Button::Middle) {
+                if *button == mouse::Button::Right {
                     let moved = std::mem::take(&mut state.pan_moved);
                     state.panning = false;
                     state.last_pan_pos = None;
+                    if self.swallow_right_release {
+                        return Some(right_release_swallowed());
+                    }
                     // A right click that did not pan opens the board's menu (#2240).
-                    if *button == mouse::Button::Right
-                        && !moved
+                    if !moved
                         && self.selectable
                         && let Some(pos) = cursor.position_in(bounds)
                     {
@@ -718,22 +782,9 @@ impl canvas::Program<Message> for PcbCanvas {
                         );
                     }
 
-                    if self.selectable {
-                        return Some(canvas::Action::publish(Message::PcbCanvas(
-                            gesture::pointer_moved(self, cursor_pos, bounds),
-                        )));
-                    }
-                    let (world, zoom_pct) = {
-                        let camera = self.camera.borrow();
-                        (camera.screen_to_world(cursor_pos), camera.zoom_percent())
-                    };
-                    return Some(canvas::Action::publish(Message::CanvasEvent(
-                        CanvasEvent::CursorAt {
-                            x: world.x,
-                            y: world.y,
-                            zoom_pct,
-                        },
-                    )));
+                    return Some(canvas::Action::publish(
+                        self.pointer_report(cursor_pos, bounds),
+                    ));
                 }
             }
             _ => {}
@@ -777,6 +828,14 @@ impl canvas::Program<Message> for PcbCanvas {
             if let Some(panel) = &self.marks.panel {
                 panel_preview::draw_panel(frame, &camera, panel, &self.canvas_colors);
             }
+            // #2457: under the copper, which is a layer above this canvas.
+            rooms::draw_rooms(
+                frame,
+                &camera,
+                &self.marks.rooms,
+                &self.rooms_overlay,
+                &self.canvas_colors,
+            );
             marks::draw_guides(frame, &camera, size, &self.marks.guides);
             if self.origin_marker_visible {
                 let origin = crate::render_config::to_iced(&self.canvas_colors.cursor);
@@ -801,8 +860,15 @@ impl canvas::Program<Message> for PcbCanvas {
         if state.panning {
             return mouse::Interaction::Grabbing;
         }
+        if state.middle_zoom.is_some() {
+            return mouse::Interaction::ResizingVertically;
+        }
+        if self.carry.get() {
+            return mouse::Interaction::Move;
+        }
+        // A tool, Measure, or a Move, paste or part waiting for clicks.
         if cursor.is_over(bounds) {
-            mouse::Interaction::Crosshair
+            crate::canvas::cursor::tool_cursor(self.clicks_only)
         } else {
             mouse::Interaction::default()
         }

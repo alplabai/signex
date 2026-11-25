@@ -21,6 +21,19 @@ pub(super) fn finite_or_refuse(value: f64, what: &str) -> bool {
     false
 }
 
+/// [`finite_or_refuse`], then the field's own rule (#2792): a value it cannot
+/// store is reported and the edit dropped, never pulled to a bound.
+fn storable_or_refuse(key: crate::panels::NumericFieldKey, value: f64, what: &str) -> bool {
+    if !finite_or_refuse(value, what) {
+        return false;
+    }
+    let accepted = key.accepts(value);
+    if !accepted {
+        crate::diagnostics::log_warning(format!("{what} edit refused: {value} is out of range"));
+    }
+    accepted
+}
+
 impl Signex {
     /// Resolve the active `.snxsym` tab → its containing `.snxlib`,
     /// run `mutator` on the library's display settings, then clear
@@ -58,7 +71,7 @@ impl Signex {
     /// run the standard dirty / refresh cycle. `edit` returns whether it
     /// changed anything. Silently no-ops when no Symbol editor is active,
     /// so callers need no match of their own.
-    fn sym_editor_record_edit(
+    pub(super) fn sym_editor_record_edit(
         &mut self,
         key: Option<crate::app::documents::FieldEditKey>,
         edit: impl FnOnce(&mut crate::app::SymbolDocument) -> bool,
@@ -380,15 +393,11 @@ impl Signex {
     }
 
     pub(super) fn sym_editor_set_pin_length(&mut self, pin_idx: usize, value: f64) -> bool {
-        if !finite_or_refuse(value, "Pin length") {
+        let key = crate::panels::NumericFieldKey::PinLength(pin_idx);
+        if !storable_or_refuse(key, value, "Pin length") {
             return true;
         }
-        // Clamp to a sane minimum so a user dragging through 0
-        // doesn't produce a degenerate stub. 0.1 mm matches the
-        // smallest grid step Altium allows for pins.
-        self.sym_editor_mutate_pin(pin_idx, Some("pin_length"), |pin| {
-            pin.length = value.max(0.1)
-        })
+        self.sym_editor_mutate_pin(pin_idx, Some("pin_length"), |pin| pin.length = value)
     }
 
     pub(super) fn sym_editor_set_graphic_field(
@@ -397,10 +406,18 @@ impl Signex {
         field: crate::panels::GraphicFieldId,
         value: f64,
     ) -> bool {
-        if !finite_or_refuse(value, "Graphic field") {
+        let key = crate::panels::NumericFieldKey::Graphic { idx, field };
+        if !storable_or_refuse(key, value, "Graphic field") {
             return true;
         }
-        self.sym_editor_mutate_graphic(idx, Some(("graphic_field", field as u128)), |g| {
+        // Typed edits of one field coalesce into one undo step.
+        let coalesce = {
+            use std::hash::{Hash, Hasher};
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            field.hash(&mut hasher);
+            u128::from(hasher.finish())
+        };
+        self.sym_editor_mutate_graphic(idx, Some(("graphic_field", coalesce)), |g| {
             super::apply_graphic_field(g, field, value)
         })
     }
@@ -410,14 +427,12 @@ impl Signex {
     }
 
     fn mark_active_symbol_tab_dirty(&mut self) {
+        // A Pin table tab marks its symbol.
         let Some(path) = self
             .document_state
             .tabs
             .get(self.document_state.active_tab)
-            .and_then(|t| match &t.kind {
-                crate::app::TabKind::SymbolEditor(p) => Some(p.clone()),
-                _ => None,
-            })
+            .and_then(|t| t.symbol_document().cloned())
         else {
             return;
         };
@@ -492,17 +507,14 @@ impl Signex {
     }
 
     /// Borrow-mut the active tab's `SymbolDocument`, if the
-    /// active tab is a Symbol editor. Returns `None` for any other
-    /// tab kind so the SCH Library handlers can exit fast.
+    /// active tab is a Symbol editor or its Pin table tab. Returns `None`
+    /// for any other tab kind so the SCH Library handlers can exit fast.
     pub(super) fn active_symbol_editor_mut(&mut self) -> Option<&mut crate::app::SymbolDocument> {
         let path = self
             .document_state
             .tabs
             .get(self.document_state.active_tab)
-            .and_then(|t| match &t.kind {
-                crate::app::TabKind::SymbolEditor(p) => Some(p.clone()),
-                _ => None,
-            })?;
+            .and_then(|t| t.symbol_document().cloned())?;
         // Refused while the editor's library is being deleted.
         if !self.editor_edit_allowed(&path) {
             return None;

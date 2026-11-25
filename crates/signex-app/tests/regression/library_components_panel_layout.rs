@@ -76,3 +76,45 @@ fn the_add_menu_opens_and_closes_when_an_item_is_picked() {
         "a second press closes it"
     );
 }
+
+/// The "Previews" switch flips the row style (#2535), and the saved
+/// preference gives a fresh start the same style; a missing key is Compact.
+#[test]
+fn the_previews_switch_flips_the_rows_and_survives_a_restart() {
+    use signex_app::library::state::ComponentsRowStyle;
+
+    let (mut app, _t) = Signex::new();
+    app.library.components_panel.row_style = ComponentsRowStyle::Compact;
+    send(
+        &mut app,
+        LibraryMessage::ComponentsPanelRowStylePicked(ComponentsRowStyle::Previews),
+    );
+    assert_eq!(
+        app.library.components_panel.row_style,
+        ComponentsRowStyle::Previews
+    );
+
+    // What the switch writes, read back the way a fresh start reads it.
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("prefs.json");
+    let boot = |path: &std::path::Path| {
+        let json = std::fs::read(path)
+            .ok()
+            .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok());
+        signex_app::fonts::read_components_row_style_pref_from(json.as_ref())
+    };
+    assert_eq!(boot(&path), ComponentsRowStyle::Compact, "no file: Compact");
+    signex_app::fonts::write_components_row_style_pref_at(&path, ComponentsRowStyle::Previews);
+    assert_eq!(boot(&path), ComponentsRowStyle::Previews);
+
+    send(
+        &mut app,
+        LibraryMessage::ComponentsPanelRowStylePicked(ComponentsRowStyle::Compact),
+    );
+    assert_eq!(
+        app.library.components_panel.row_style,
+        ComponentsRowStyle::Compact
+    );
+    signex_app::fonts::write_components_row_style_pref_at(&path, ComponentsRowStyle::Compact);
+    assert_eq!(boot(&path), ComponentsRowStyle::Compact);
+}

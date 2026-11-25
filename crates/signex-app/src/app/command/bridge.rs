@@ -74,6 +74,7 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
     let board_tools = |event| Message::Pcb(PcbMsg::Tools(event));
     let part_swap = |kind| Message::Pcb(PcbMsg::PartSwap(crate::app::PartSwapMsg::Requested(kind)));
     let extras = |msg| Message::Edit(EditMsg::Extras(msg));
+    let unions = |msg| Message::Edit(EditMsg::Unions(msg));
     let message = match command.as_str() {
         "annotate_schematic" => Message::Annotate(AnnotateMsg::OpenDialog),
         "annotate_schematic_quietly" => {
@@ -113,12 +114,13 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "toggle_properties_panel" => Message::Overlay(OverlayMsg::PanelToggled(
             crate::panels::PanelKind::Properties,
         )),
-        "toggle_schematic_filter_panel" => Message::Overlay(OverlayMsg::PanelToggled(
-            crate::panels::PanelKind::SchFilter,
-        )),
-        "toggle_schematic_list_panel" => {
-            Message::Overlay(OverlayMsg::PanelToggled(crate::panels::PanelKind::SchList))
+        // SCH Filter is retired into Filter (mockup rows 40 and 55).
+        "toggle_schematic_filter_panel" => {
+            Message::Overlay(OverlayMsg::PanelToggled(crate::panels::PanelKind::Filter))
         }
+        "toggle_schematic_list_panel" => Message::Overlay(OverlayMsg::PanelToggled(
+            crate::panels::PanelKind::ObjectList,
+        )),
         "next_document_tab" => Message::Menu(MenuMessage::NextDocumentTab),
         "previous_document_tab" => Message::Menu(MenuMessage::PreviousDocumentTab),
         "find_next" => Message::FindReplaceMsg(crate::find_replace::FindReplaceMsg::NextRequested),
@@ -183,6 +185,11 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         }
         "sync_sheet_entries" => Message::from(crate::app::SheetSyncMsg::Requested),
         "change_component" => placed_part(PlacedPartAction::ChangeComponent),
+        // Mockup row 158: named unions of the sheet in view.
+        "create_union" => unions(crate::app::unions::UnionsMsg::CreateRequested),
+        "add_to_union" => unions(crate::app::unions::UnionsMsg::AddSelectionRequested),
+        "remove_from_union" => unions(crate::app::unions::UnionsMsg::RemoveSelectionRequested),
+        "break_union" => unions(crate::app::unions::UnionsMsg::BreakRequested),
         // Opens the options tab of the project the call names (`args.project`,
         // a project-tree row), else of the active document's project.
         "open_project_options" => match &args.context.project {
@@ -278,8 +285,8 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         )),
         // Tools ▸ Library Editor (#2247).
         "open_library_browser" => Message::Library(LibraryMessage::LibraryEditorRequested),
-        // Tools ▸ Annotation ▸ Number Schematic Sheets and Window ▸ Tile
-        // (#2247).
+        // Tools ▸ Annotation ▸ Number Schematic Sheets and View ▸ Window ▸
+        // Tile (#2247).
         "number_schematic_sheets" => Message::from(crate::app::SheetNumberingMsg::Requested),
         "tile_windows_horizontally" => {
             Message::Window(WindowMsg::TileRequested(crate::app::TileLayout::Stacked))
@@ -287,8 +294,24 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "tile_windows_vertically" => {
             Message::Window(WindowMsg::TileRequested(crate::app::TileLayout::SideBySide))
         }
-        // Window ▸ Untile (#2249).
+        // View ▸ Window ▸ Untile (#2249).
         "untile_documents" => Message::Window(WindowMsg::UntileRequested),
+        // View ▸ Window ▸ Layouts (mockup row 166).
+        "apply_layout_schematic"
+        | "apply_layout_board"
+        | "apply_layout_review"
+        | "apply_layout_notebook" => {
+            use crate::workspace_layouts::{BuiltinLayout, LayoutId, WorkspaceLayoutMsg};
+            let builtin = BuiltinLayout::ALL
+                .into_iter()
+                .find(|b| b.command_id() == command.as_str())?;
+            WorkspaceLayoutMsg::ApplyRequested(LayoutId::Builtin(builtin)).into()
+        }
+        "save_workspace_layout" => crate::workspace_layouts::SaveLayoutMsg::Requested.into(),
+        "manage_workspace_layouts" => crate::workspace_layouts::ManageLayoutsMsg::Requested.into(),
+        "reset_workspace_layout" => {
+            crate::workspace_layouts::WorkspaceLayoutMsg::ResetActiveRequested.into()
+        }
         "open_parameter_manager" => Message::ParameterManager(ParameterManagerMsg::Open),
         "print" => Message::PrintPreview(PrintPreviewMsg::Requested),
         "redo" => Message::Edit(EditMsg::Redo),
@@ -296,6 +319,11 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "assign_footprints" => Message::from(crate::app::AssignFootprintsMsg::Requested),
         "open_net_inspector" => Message::Overlay(OverlayMsg::OpenPanel(
             crate::panels::PanelKind::NetInspector,
+        )),
+        // Design ▸ Compile Project and View ▸ Compiled Design (#1279, #1308).
+        "compile_project" => Message::from(crate::app::CompiledDesignMsg::CompileRequested),
+        "open_compiled_design" => Message::Overlay(OverlayMsg::OpenPanel(
+            crate::panels::PanelKind::CompiledDesign,
         )),
         // #2416: View ▸ Selection Filter opens the Active Bar's filter.
         "open_selection_filter" => Message::ActiveBar(crate::active_bar::ActiveBarMsg::ToggleMenu(
@@ -306,14 +334,20 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "open_net_classes" | "open_net_classes_panel" => {
             Message::Overlay(OverlayMsg::OpenPanel(crate::panels::PanelKind::NetClasses))
         }
+        // #1280: the harness definitions view, in Properties.
+        "open_harness_definitions" => Message::Dock(crate::dock::DockMessage::Panel(
+            crate::panels::PanelMsg::Harness(crate::panels::HarnessPanelMsg::DefinitionsOpened),
+        )),
         // `ExportBom` reaches `handle_bom_preview_open`, the BOM dialog;
-        // Reports > Bill of Materials opens the same one.
+        // Tools ▸ Reports ▸ Bill of Materials opens the same one.
         "report_manager_bom" => Message::Menu(MenuMessage::ExportBom),
         "reset_schematic_designators" => Message::Annotate(AnnotateMsg::OpenResetConfirm),
         "rotate_clockwise" => Message::Edit(EditMsg::RotateSelectedClockwise),
         "rotate_counterclockwise" => Message::Edit(EditMsg::RotateSelectedCounterclockwise),
         "open_erc_dialog" => Message::Erc(ErcMsg::OpenDialog),
         "repair_pin_junctions" => Message::Erc(ErcMsg::PinJunctionRepairRequested),
+        // #1300: the contents sheet of the active document's project.
+        "add_table_of_contents" => Message::from(crate::app::TablesMsg::TableOfContentsRequested),
         "run_drc" => Message::Pcb(PcbMsg::DrcRequested),
         // Design ▸ Rules (#2398): the active document's project.
         "open_rules" => {
@@ -325,6 +359,8 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "open_drc_panel" => Message::Overlay(OverlayMsg::OpenPanel(crate::panels::PanelKind::Drc)),
         "reannotate_board" => Message::from(crate::app::BoardReannotateMsg::Requested),
         "fabrication_outputs" => Message::from(crate::app::FabOutputsMsg::Requested),
+        // #1282: Design ▸ Differential Pair Classes….
+        "open_diff_pair_classes" => Message::from(crate::app::DiffPairClassesMsg::Requested),
         // #2404, #2402, #2488: Board Reports on a table, its CSV, Board Print /
         // PDF, the STEP model.
         "board_report_bom" => board_report(signex_output::BoardReportKind::Bom),
@@ -348,6 +384,7 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "run_erc" => Message::Erc(ErcMsg::Run),
         "save_document" => Message::File(FileMsg::Save),
         "save_document_as" => Message::Menu(MenuMessage::SaveAs),
+        "save_all" => Message::Menu(MenuMessage::SaveAll),
         "select_all" => Message::Selection(selection_request::SelectionRequest::SelectAll),
         // An alias of `select_connection`, the Active Bar's Select > Connection (#1668).
         "select_expand_connection" => {
@@ -364,6 +401,15 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "toggle_origin_marker" => pcb_view(PcbViewMsg::OriginMarkerVisibilityToggled),
         "board_sketch" => Message::Pcb(PcbMsg::Sketch(crate::app::BoardSketchMsg::ModeToggled)),
         "view_board_3d" => Message::Pcb(PcbMsg::Board3d(crate::app::Board3dMsg::Toggled)),
+        // Mockup row 175: the 3D view toolbar's Flip, lighting and screenshot
+        // buttons; each does nothing while the board is flat.
+        "flip_board_3d" => Message::Pcb(PcbMsg::Board3d(crate::app::Board3dMsg::FlipRequested)),
+        "cycle_board_3d_lighting" => {
+            Message::Pcb(PcbMsg::Board3d(crate::app::Board3dMsg::LightingCycled))
+        }
+        "copy_board_3d_screenshot" => Message::Pcb(PcbMsg::Board3d(
+            crate::app::Board3dMsg::ScreenshotCopyRequested,
+        )),
         "place_board_via" => board_tool(BoardPlaceTool::Via),
         "place_board_track" => board_tool(BoardPlaceTool::Track),
         "place_board_fill" => board_tool(BoardPlaceTool::Fill),
@@ -376,6 +422,11 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "repour_selected" => Message::Pcb(PcbMsg::RepourRequested { selected: true }),
         "repour_all" => Message::Pcb(PcbMsg::RepourRequested { selected: false }),
         "place_board_keepout" => board_tool(BoardPlaceTool::Keepout),
+        // #2457: Place ▸ Room and Design ▸ Rooms ▸ Create Rooms from Sheets.
+        "place_board_room" => board_tool(BoardPlaceTool::Room),
+        "create_rooms_from_sheets" => Message::Pcb(PcbMsg::CreateRooms(
+            crate::app::rooms::CreateRoomsMsg::Requested,
+        )),
         "place_board_route" => board_tool(BoardPlaceTool::InteractiveRouting),
         // #2424: the Graphics tools.
         "place_board_line" => board_tool(BoardPlaceTool::Line),
@@ -403,6 +454,13 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "board_layer_stack" => {
             Message::Overlay(OverlayMsg::OpenPanel(crate::panels::PanelKind::LayerStack))
         }
+        // Mockup row 178: the Polygon Manager tab, the message its PCB
+        // panel link sends too.
+        "polygon_manager" => Message::Dock(crate::dock::DockMessage::Panel(
+            crate::panels::PanelMsg::PcbPanel(crate::panels::PcbPanelMsg::Polygons(
+                crate::panels::PolygonMsg::ManagerOpened,
+            )),
+        )),
         "lock_board_items" => Message::Pcb(PcbMsg::LockRequested { locked: true }),
         "unlock_board_items" => Message::Pcb(PcbMsg::LockRequested { locked: false }),
         // #2403: the net `net` names, else that of the board selection or
@@ -461,11 +519,17 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         }
         "toggle_auto_focus" => Message::Overlay(OverlayMsg::ToggleAutoFocus),
         "toggle_electrical_grid" => Message::Ui(UiMsg::ToggleSnapHotspots),
+        // #2879: Shift+E on a board steps the Snap Options' Snapping.
+        "cycle_board_snapping" => Message::Dock(crate::dock::DockMessage::Panel(
+            crate::panels::PanelMsg::PcbBoard(crate::panels::PcbBoardMsg::SnappingCycled),
+        )),
         "cross_probe" => Message::CrossProbe(CrossProbeMsg::ProbeRequested),
         "toggle_cross_select_mode" => Message::CrossProbe(CrossProbeMsg::CrossSelectModeToggled),
         // #1312: the Update PCB dialog for the document in view. Its headless
         // `apply=true` form runs through `run_operands`, not here.
         "update_pcb_from_schematic" => Message::UpdatePcb(UpdatePcbMsg::Requested { apply: false }),
+        // #2462: the Compare Board with Schematic report of the project in view.
+        "compare_board_with_schematic" => Message::from(crate::app::CompareBoardMsg::Requested),
         "back_annotate_schematics" => Message::from(crate::app::BackAnnotateMsg::Requested),
         "new_pcb_document" => Message::UpdatePcb(UpdatePcbMsg::NewPcbRequested(None)),
         // #2232: the setup dialogs; a headless run with `profile` makes the
@@ -555,7 +619,8 @@ fn log_unmapped(command: &AppCommandId) {
     } else {
         crate::diagnostics::log_warning(format!(
             "command '{id}' is not in the command catalog — check the id in \
-             your keyboard-shortcuts profile"
+             your keyboard-shortcuts profile{}",
+            crate::keymap::did_you_mean(id)
         ));
     }
 }
@@ -686,7 +751,7 @@ mod tests {
 
     /// Catalog ids that `core_to_message` has no arm for, as measured on
     /// `trunk` @ `f211e7d1` (2026-07-25). Every one of them is bound to a
-    /// trigger in the shipped `assets/keyboard-shortcuts/{altium,classic}.toml`
+    /// trigger in the shipped `assets/keyboard-shortcuts/{signex_standard,classic}.toml`
     /// (a key sequence or a pointer gesture), so the user presses
     /// the key, `take_keymap_match` consumes the stroke, and nothing happens.
     ///
@@ -946,7 +1011,7 @@ mod tests {
         ));
     }
 
-    /// #271 — `move_object` (Altium's `M M`) resolves to the interactive
+    /// #271 — `move_object` (the `M M` chord) resolves to the interactive
     /// Move, not to Move Selection or an unmapped no-op.
     #[test]
     fn move_object_resolves_to_the_interactive_move_action() {
@@ -970,6 +1035,77 @@ mod tests {
             core_to_message(&command, &CommandArgs::none()),
             Some(Message::Input(InputMsg::FootprintCourtyardOutlineRequested))
         ));
+    }
+
+    /// Mockup row 175: the 3D view toolbar's Flip, lighting and screenshot
+    /// buttons as commands reach the 3D view's own requests.
+    #[test]
+    fn the_board_3d_commands_reach_the_3d_view() {
+        use crate::app::Board3dMsg;
+
+        for (id, want) in [
+            ("flip_board_3d", Board3dMsg::FlipRequested),
+            ("cycle_board_3d_lighting", Board3dMsg::LightingCycled),
+            (
+                "copy_board_3d_screenshot",
+                Board3dMsg::ScreenshotCopyRequested,
+            ),
+        ] {
+            let command = AppCommandId::new(id).expect("a catalog id is valid");
+            assert!(is_dispatchable(&command), "{id}");
+            match core_to_message(&command, &CommandArgs::none()) {
+                Some(Message::Pcb(PcbMsg::Board3d(got))) => assert_eq!(got, want, "{id}"),
+                other => panic!("{id} resolved to {other:?}"),
+            }
+        }
+    }
+
+    /// Mockup row 175: on a board, `H` steps the 3D view's lighting and
+    /// Ctrl+Shift+C (Cmd+Shift+C on macOS) copies its screenshot, in both
+    /// built-in profiles; `F` stays Change Footprint on a flat board and
+    /// turns the board over while its 3D view is shown (the `board_3d`
+    /// context, Caner 2026-11-24).
+    #[test]
+    fn the_board_3d_keys_run_their_commands_on_a_board() {
+        use std::str::FromStr;
+
+        use crate::keymap::{
+            CompiledKeymap, KeyStroke, Platform, ShortcutContext, ShortcutProfileSet,
+        };
+
+        let on_a_board = [ShortcutContext::Global, ShortcutContext::Pcb];
+        let in_3d = [
+            ShortcutContext::Global,
+            ShortcutContext::Pcb,
+            ShortcutContext::Board3d,
+        ];
+        let set = ShortcutProfileSet::built_ins().expect("built-in profiles");
+        for profile in set.profiles() {
+            for (platform, copy) in [
+                (Platform::Windows, "Ctrl+Shift+C"),
+                (Platform::Linux, "Ctrl+Shift+C"),
+                (Platform::MacOs, "Cmd+Shift+C"),
+            ] {
+                let keymap = CompiledKeymap::compile_for(profile, platform);
+                for (contexts, key, want) in [
+                    (&on_a_board[..], "H", "cycle_board_3d_lighting"),
+                    (&on_a_board[..], copy, "copy_board_3d_screenshot"),
+                    (&on_a_board[..], "F", "change_footprint"),
+                    (&in_3d[..], "H", "cycle_board_3d_lighting"),
+                    (&in_3d[..], copy, "copy_board_3d_screenshot"),
+                    (&in_3d[..], "F", "flip_board_3d"),
+                ] {
+                    let stroke = KeyStroke::from_str(key).expect("a key");
+                    let got = keymap.lookup(&[stroke], contexts).command;
+                    assert_eq!(
+                        got.as_ref().map(AppCommandId::as_str),
+                        Some(want),
+                        "{} on {platform:?}: {key} in {contexts:?}",
+                        profile.id
+                    );
+                }
+            }
+        }
     }
 
     /// The pinned ids must still exist in the catalog, so the list cannot
@@ -1339,6 +1475,26 @@ mod tests {
                     .message
                     .contains("Reset local coordinates is not available yet")
         }));
+    }
+
+    /// ADR-0006 slice 7: a keymap-profile typo is warned about with the
+    /// catalog ids close to it.
+    #[test]
+    fn an_unknown_id_warns_with_the_close_catalog_ids() {
+        let _guard = serial();
+        let _ = crate::diagnostics::init_logging();
+        let command = AppCommandId::new("plce_wire").unwrap();
+
+        assert!(core_to_message(&command, &CommandArgs::none()).is_none());
+
+        let want = "command 'plce_wire' is not in the command catalog — check the id in \
+                    your keyboard-shortcuts profile; did you mean `place_wire`";
+        assert!(
+            crate::diagnostics::recent_entries()
+                .iter()
+                .any(|entry| entry.message.starts_with(want)),
+            "no warning starting {want:?}"
+        );
     }
 
     /// The other half: dispatching an unmapped command still reports, so

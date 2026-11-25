@@ -1,6 +1,6 @@
 //! The PCB Active Bar's tool groups (#2392), driven through `Signex::update`.
 
-use super::tests::{bar_of, board_app, button_for, buttons, rows, runs};
+use super::tests::{bar_of, board_app, button_for, buttons, entries, rows, runs};
 use super::*;
 use crate::app::pcb_bar_groups::PcbBarRow;
 
@@ -82,8 +82,8 @@ fn each_group_opens_its_dropdown_and_a_row_arms_its_tool() {
         (PcbBarGroup::ViaPad, BoardPlaceTool::Via),
         (PcbBarGroup::CopperAreas, BoardPlaceTool::Fill),
         (PcbBarGroup::CopperAreas, BoardPlaceTool::Keepout),
-        (PcbBarGroup::CopperDrawing, BoardPlaceTool::Track),
         // #2424: the Graphics group.
+        (PcbBarGroup::Graphics, BoardPlaceTool::Line),
         (PcbBarGroup::Graphics, BoardPlaceTool::GraphicArc),
         (PcbBarGroup::Graphics, BoardPlaceTool::TextFrame),
     ];
@@ -225,7 +225,7 @@ fn a_tool_run_from_place_becomes_its_groups_button() {
 #[test]
 fn a_group_remembers_its_last_tool_after_a_restart() {
     let mut app = board_app();
-    let task = pick_from_group(&mut app, PcbBarGroup::CopperDrawing, "place_board_track");
+    let task = pick_from_group(&mut app, PcbBarGroup::Graphics, "place_board_line");
     run_task(task);
     let task = pick_from_group(&mut app, PcbBarGroup::ViaPad, "place_board_via");
     run_task(task);
@@ -268,6 +268,7 @@ fn the_copper_areas_group_lists_the_pour_rows() {
             Some("place_board_region"),
             Some("place_board_fill"),
             Some("place_board_keepout"),
+            Some("place_board_room"),
             Some("repour_selected"),
             Some("repour_all"),
         ]
@@ -277,7 +278,7 @@ fn the_copper_areas_group_lists_the_pour_rows() {
         .filter(|row| !row.disabled)
         .map(|row| row.label)
         .collect();
-    assert_eq!(labels.len(), 8, "every row is live: {labels:?}");
+    assert_eq!(labels.len(), 9, "every row is live: {labels:?}");
     assert!(labels.iter().any(|l| l == "Pour Cutout"), "{labels:?}");
     assert!(labels.iter().any(|l| l == "Repour All"), "{labels:?}");
     let _ = pick_from_group(
@@ -286,6 +287,105 @@ fn the_copper_areas_group_lists_the_pour_rows() {
         "place_board_pour_cutout",
     );
     assert_eq!(armed(&app), Some(BoardPlaceTool::PourCutout));
+}
+
+/// The shape of a dropdown entry: `H` heading, `-` separator, `*` the
+/// current row, `.` another row.
+fn shape(entries: &[DropdownEntry<Message>]) -> String {
+    entries
+        .iter()
+        .map(|entry| match entry {
+            DropdownEntry::Header(_) => 'H',
+            DropdownEntry::Separator => '-',
+            DropdownEntry::Item(item) if item.selected => '*',
+            DropdownEntry::Item(_) => '.',
+            DropdownEntry::Custom(_) => '?',
+        })
+        .collect()
+}
+
+/// mockup row 108: a group's dropdown opens with its name as a heading, in capitals,
+/// then its rows; every group with a dropdown has one.
+#[test]
+fn a_group_dropdown_is_headed_by_the_group_name() {
+    let app = board_app();
+    let cases = [
+        (PcbBarGroup::Components, "COMPONENTS"),
+        (PcbBarGroup::Route, "ROUTE"),
+        (PcbBarGroup::Tune, "TUNE"),
+        (PcbBarGroup::ViaPad, "VIA / PAD"),
+        (PcbBarGroup::CopperAreas, "COPPER AREAS"),
+        (PcbBarGroup::Graphics, "GRAPHICS"),
+    ];
+    for (group, heading) in cases {
+        let menu = entries(&app, PcbBarMenu::Group(group));
+        let Some(DropdownEntry::Header(text)) = menu.first() else {
+            panic!("{group:?} opens with a heading");
+        };
+        assert_eq!(text.replace(['\u{2068}', '\u{2069}'], ""), heading);
+        let headers = menu
+            .iter()
+            .filter(|entry| matches!(entry, DropdownEntry::Header(_)))
+            .count();
+        assert_eq!(headers, 1, "{group:?}");
+    }
+}
+
+/// mockup row 108: the commands of a group (Repour, Change Footprint) sit below a
+/// separator after its tools; a group of tools only, or of commands only,
+/// has none.
+#[test]
+fn a_group_dropdown_puts_its_commands_below_a_separator() {
+    let app = board_app();
+    let areas = entries(&app, PcbBarMenu::Group(PcbBarGroup::CopperAreas));
+    // The Room tool joins the pour rows (#2457, Caner 2026-11-20).
+    assert_eq!(shape(&areas), "H*......-..", "Polygon Pour is current");
+    let DropdownEntry::Item(first_command) = &areas[9] else {
+        panic!("a row after the separator");
+    };
+    assert_eq!(first_command.command_id, Some("repour_selected"));
+    let parts = entries(&app, PcbBarMenu::Group(PcbBarGroup::Components));
+    assert_eq!(
+        shape(&parts),
+        "H.-*",
+        "Change Footprint is what the button shows while Component cannot run"
+    );
+    for group in [PcbBarGroup::Route, PcbBarGroup::Tune, PcbBarGroup::Graphics] {
+        let menu = entries(&app, PcbBarMenu::Group(group));
+        assert!(!shape(&menu).contains('-'), "{group:?}: {}", shape(&menu));
+    }
+}
+
+/// mockup row 108: the row the group's button shows is drawn current in its dropdown,
+/// and follows the last tool used.
+#[test]
+fn the_last_used_row_is_current_in_its_dropdown() {
+    let mut app = board_app();
+    let current = |app: &Signex, group: PcbBarGroup| -> Vec<Option<&'static str>> {
+        rows(app, PcbBarMenu::Group(group))
+            .into_iter()
+            .filter(|row| row.selected)
+            .map(|row| row.command_id)
+            .collect()
+    };
+    assert_eq!(
+        current(&app, PcbBarGroup::Graphics),
+        [Some("place_board_line")]
+    );
+    let _ = pick_from_group(&mut app, PcbBarGroup::Graphics, "place_board_graphic_arc");
+    assert_eq!(
+        current(&app, PcbBarGroup::Graphics),
+        [Some("place_board_graphic_arc")]
+    );
+    let _ = pick_from_group(&mut app, PcbBarGroup::CopperAreas, "place_board_keepout");
+    assert_eq!(
+        current(&app, PcbBarGroup::CopperAreas),
+        [Some("place_board_keepout")]
+    );
+    assert!(runs(
+        &group_button_of(&app, PcbBarGroup::CopperAreas),
+        "place_board_keepout"
+    ));
 }
 
 /// A click on the canvas of the board in view at (`x`, `y`) mm.
@@ -356,4 +456,156 @@ fn the_route_row_routes_from_a_pad_as_one_undo_step() {
     let _ = app.update(Message::Edit(crate::app::EditMsg::Undo));
     let board = app.document_state.pcb_board(&path).expect("board");
     assert!(board.segments.is_empty(), "one undo removes the route");
+}
+
+/// The messages a left click at `at` on `group`'s button publishes, the
+/// button drawn alone on a bar.
+fn clicked_on_group(app: &Signex, group: PcbBarGroup, at: iced::Point) -> Vec<Message> {
+    let tokens = signex_types::theme::theme_tokens(app.ui_state.effective_theme_id());
+    let item = ActiveBarItem::Button(group_button_of(app, group));
+    let bar = signex_widgets::active_bar::view(vec![item], &tokens);
+    crate::layout_probe::messages_on_click_at(bar, iced::Size::new(200.0, 100.0), None, at)
+}
+
+/// Mockup row 108 (Caner, 2026-11-24): a click on a group button's corner
+/// chevron opens its dropdown, a plain click still runs the row the group
+/// used last, and the right-click still opens the dropdown.
+#[test]
+fn a_click_on_the_chevron_opens_the_group_dropdown() {
+    let mut app = board_app();
+    let group = PcbBarGroup::CopperAreas;
+    let m = Metrics::GRAPHITE;
+    let corner = m.padding + m.btn - m.chevron / 2.0;
+    let centre = m.padding + m.btn / 2.0;
+    let button = group_button_of(&app, group);
+    let toggle = format!("{:?}", button.on_right_press.expect("a dropdown"));
+    let run = format!("{:?}", button.on_press.expect("a live row"));
+
+    let sent = clicked_on_group(&app, group, iced::Point::new(corner, corner));
+    let sent: Vec<String> = sent.iter().map(|m| format!("{m:?}")).collect();
+    assert_eq!(
+        sent,
+        std::slice::from_ref(&toggle),
+        "the chevron toggles, it does not run"
+    );
+    let sent = clicked_on_group(&app, group, iced::Point::new(centre, centre));
+    let sent: Vec<String> = sent.iter().map(|m| format!("{m:?}")).collect();
+    assert_eq!(sent, [run], "a plain click runs the last-used row");
+
+    let open = clicked_on_group(&app, group, iced::Point::new(corner, corner));
+    for message in open {
+        let _ = app.update(message);
+    }
+    assert_eq!(
+        app.interaction_state.pcb_bar_menu,
+        Some(PcbBarMenu::Group(group))
+    );
+    assert!(group_button_of(&app, group).selected, "drawn open");
+    let still = format!("{:?}", group_button_of(&app, group).on_right_press);
+    assert_eq!(still, format!("Some({toggle})"), "right-click unchanged");
+}
+
+/// A single-row group has no dropdown, so no chevron to click.
+#[test]
+fn a_group_without_a_dropdown_has_no_chevron_message() {
+    let app = board_app();
+    for group in PcbBarGroup::ALL {
+        let item = groups::group_button(
+            group,
+            &groups::GroupState {
+                open: None,
+                last: &app.ui_state.pcb_bar_last_tools,
+                armed: None,
+            },
+            app.ui_state.effective_theme_id(),
+            &app.ui_state.i18n,
+        );
+        let ActiveBarItem::Button(button) = item else {
+            panic!("{group:?} is a button");
+        };
+        assert_eq!(
+            button.on_chevron_press.is_some(),
+            button.dropdown_indicator.is_some(),
+            "{group:?}"
+        );
+    }
+}
+
+/// Mockup row 108: Move and View run their command on a click as well,
+/// and their corner chevron opens the dropdown like a group's does.
+#[test]
+fn a_click_on_the_move_or_view_chevron_opens_its_dropdown() {
+    let m = Metrics::GRAPHITE;
+    let corner = m.padding + m.btn - m.chevron / 2.0;
+    let corner = iced::Point::new(corner, corner);
+    let centre = m.padding + m.btn / 2.0;
+    let centre = iced::Point::new(centre, centre);
+    for menu in [PcbBarMenu::Move, PcbBarMenu::View] {
+        let mut app = board_app();
+        let tokens = signex_types::theme::theme_tokens(app.ui_state.effective_theme_id());
+        let clicked = |at: iced::Point| {
+            let item = bar_of(&app)
+                .into_iter()
+                .find(|item| opens(item, menu))
+                .unwrap_or_else(|| panic!("a {menu:?} button"));
+            let ActiveBarItem::Button(button) = &item else {
+                unreachable!("opens matches only a button");
+            };
+            let run = format!("{:?}", button.on_press);
+            let bar = signex_widgets::active_bar::view(vec![item], &tokens);
+            let size = iced::Size::new(200.0, 100.0);
+            let sent = crate::layout_probe::messages_on_click_at(bar, size, None, at);
+            (run, sent)
+        };
+        let toggle = format!("{:?}", bar_message(PcbBarMsg::MenuToggled(menu)));
+        let (run, sent) = clicked(centre);
+        let sent: Vec<String> = sent.iter().map(|m| format!("{:?}", Some(m))).collect();
+        assert_eq!(sent, [run], "{menu:?}: a plain click runs the command");
+        let (_, sent) = clicked(corner);
+        let shown: Vec<String> = sent.iter().map(|m| format!("{m:?}")).collect();
+        assert_eq!(shown, [toggle], "{menu:?}: the chevron toggles");
+        for message in sent {
+            let _ = app.update(message);
+        }
+        assert_eq!(app.interaction_state.pcb_bar_menu, Some(menu));
+    }
+}
+
+/// Mockup row 108: the copper-area tool rows share one hatched-area glyph,
+/// and the group button showing one of them draws it too. Keepout keeps its
+/// board tool glyph (decision of 2026-11-19, mockup row 108) and Room its
+/// rectangle.
+#[test]
+fn the_copper_area_rows_share_the_hatched_area_glyph() {
+    let mut app = board_app();
+    let tid = app.ui_state.effective_theme_id();
+    let area = ic::icon_pcb_copper_area(tid);
+    let icon_of = |app: &Signex, command: &str| {
+        rows(app, PcbBarMenu::Group(PcbBarGroup::CopperAreas))
+            .into_iter()
+            .find(|row| row.command_id == Some(command))
+            .unwrap_or_else(|| panic!("a {command} row"))
+            .icon
+    };
+    let tools = [
+        "place_board_polygon_pour",
+        "place_board_pour_cutout",
+        "place_board_slice_pour",
+        "place_board_region",
+        "place_board_fill",
+    ];
+    for command in tools {
+        assert_eq!(icon_of(&app, command), Some(area.clone()), "{command}");
+    }
+    let keepout = icon_of(&app, "place_board_keepout");
+    assert_eq!(keepout, Some(ic::icon_pcb_keepout(tid)));
+    assert_ne!(icon_of(&app, "place_board_room"), Some(area.clone()));
+    for command in tools {
+        let _ = pick_from_group(&mut app, PcbBarGroup::CopperAreas, command);
+        let button = group_button_of(&app, PcbBarGroup::CopperAreas);
+        let ActiveBarIcon::Svg(handle) = &button.icon else {
+            panic!("{command}: an SVG icon");
+        };
+        assert_eq!(handle, &area, "{command}: the button");
+    }
 }

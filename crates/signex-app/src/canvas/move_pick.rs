@@ -253,6 +253,8 @@ pub(in crate::canvas) mod tests {
             drawings: Vec::new(),
             no_erc_directives: Vec::new(),
             directives: Vec::new(),
+            harness: Default::default(),
+            unions: Vec::new(),
             title_block: Default::default(),
             text_widths: Default::default(),
             text_extents: Default::default(),

@@ -48,6 +48,7 @@ fn board(with_outline: bool) -> PcbBoard {
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
@@ -266,6 +267,7 @@ fn top_pour(net: u32, net_name: &str, outline: &[(f64, f64)]) -> Zone {
         min_thickness: 0.0,
         min_island_area: 0.0,
         remove_dead_islands: false,
+        shelved: false,
         unknown: Default::default(),
     }
 }

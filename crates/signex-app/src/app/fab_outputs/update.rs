@@ -18,7 +18,18 @@ impl Signex {
         match msg {
             M::Requested => self.open_fab_outputs(),
             M::OutputToggled(kind) => self.edit_fab_kinds(|k| kind.toggle(k)),
-            M::OdbFolderToggled => self.edit_fab_kinds(|k| k.odb_folder = !k.odb_folder),
+            // The folder form is greyed and deaf while ODB++ is unticked;
+            // this guard is the backstop.
+            M::OdbFolderToggled => {
+                let odb = self
+                    .ui_state
+                    .fab_outputs
+                    .as_deref()
+                    .is_some_and(|s| self.fab_output_kinds(s).odb);
+                if odb {
+                    self.edit_fab_kinds(|k| k.odb_folder = !k.odb_folder);
+                }
+            }
             M::WholePanelToggled => self.with_fab_outputs(|s| {
                 s.whole_panel = s.panel.is_some() && !s.whole_panel;
             }),
@@ -31,6 +42,17 @@ impl Signex {
             M::BrowseRequested => return self.browse_fab_outputs_folder(),
             M::GenerateRequested => return self.generate_fab_outputs(),
             M::Written { generation, result } => self.fab_outputs_written(generation, result),
+            M::FolderOpenRequested => return self.open_fab_outputs_folder(),
+            M::FolderOpenFailed { folder, why } => {
+                let folder = folder.display().to_string();
+                let line = t!(
+                    self.ui_state.i18n,
+                    ids::FAB_OUTPUTS_FOLDER_NOT_OPENED,
+                    "folder" => folder.as_str(),
+                    "why" => why.as_str()
+                );
+                crate::diagnostics::log_warning(line.into_string());
+            }
             M::CancelRequested => self.ui_state.fab_outputs = None,
         }
         Task::none()
@@ -44,6 +66,7 @@ impl Signex {
         {
             edit(state);
             state.outcome = None;
+            state.generated_at = None;
         }
     }
 
@@ -90,7 +113,6 @@ impl Signex {
         let tab = document.project_tabs.entry(project_id).or_default();
         let command = ProjectGeneralCommand::SetFabOutputs(kinds.stored());
         if tab.general_history.apply(&mut project.data, command) {
-            tab.rules_step_newest = false;
             // Not a rule or a sheet: ERC results stay current.
             document.sync_project_history_dirty(project_id, false);
             self.refresh_panel_ctx();
@@ -209,6 +231,7 @@ impl Signex {
         };
         state.writing = Some(generation);
         state.outcome = None;
+        state.generated_at = None;
         Task::perform(
             crate::app::path_op_jobs::run_blocking(move || run_generate(job)),
             move |result| {
@@ -247,6 +270,29 @@ impl Signex {
         {
             state.writing = None;
             state.outcome = Some(result);
+            // The clock is read here, when the outcome arrives, never in view.
+            state.generated_at = Some(chrono::Local::now().time());
         }
+    }
+
+    /// Open folder in the success banner: show the folder the last Generate
+    /// wrote in the file manager, off the update thread. A failed launch is
+    /// a Messages warning.
+    fn open_fab_outputs_folder(&mut self) -> Task<Message> {
+        let Some(Some(Ok(written))) = self.ui_state.fab_outputs.as_ref().map(|s| &s.outcome) else {
+            return Task::none();
+        };
+        let folder = written.folder.clone();
+        let opener = self.ui_state.io.opener;
+        let target = folder.clone();
+        Task::perform(
+            crate::app::path_op_jobs::run_blocking(move || {
+                opener.view(&target).map_err(|err| err.to_string())
+            }),
+            move |result| match result.and_then(|opened| opened) {
+                Ok(()) => Message::noop(),
+                Err(why) => Message::from(FabOutputsMsg::FolderOpenFailed { folder, why }),
+            },
+        )
     }
 }

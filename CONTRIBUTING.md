@@ -126,6 +126,9 @@ bash scripts/check_discarded_tasks.sh   # no `let _ =` on an iced::Task
 bash scripts/check_lint_lockstep.sh     # workspace lints present in every member
 bash scripts/check_layer_ratchet.sh   # layer-crossing counts vs scripts/layer-ratchet-baseline.txt
 bash scripts/check_engine_ids.sh      # engine id minting only at scripts/engine-ids-allowlist.txt
+bash scripts/check_app_catch_unwind.sh # app catch_unwind count may only fall (needs ast-grep, jq)
+bash scripts/check_projector_writes.sh # app/projector writes no core state and calls no wrapper (needs ast-grep, jq)
+bash scripts/check_document_load_seam.sh # only the load wrappers call app/state/document_load (needs ast-grep, jq)
 bash scripts/changelog_assemble.sh --check   # changelog.d fragments
 ```
 
@@ -454,7 +457,10 @@ them, so the rest is on the author.
   decided-behaviour golden: review the diff, then regenerate it with
   `UPDATE_GOLDEN=1 cargo test -p signex-app golden_parity_table`. Hand
   annotations of implicit inputs live in `parity/annotations.rs`, which a
-  regenerate keeps.
+  regenerate keeps. The owner comes from what the route writes (#2551):
+  document state is `core`, session state or machine settings `gui`, a
+  router over what is in hand `split` with a `split_core_command` row; the
+  hand annotations of those writes live in `parity/owners.rs`.
 - **Deferred work**
   ([ADR-0003](docs/architecture/adr-0003-deferred-work-and-consistent-history.md)):
   owed work is explicit model state. Every boundary (save, undo, redo,

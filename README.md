@@ -167,7 +167,7 @@ prompts. Pro is planned separately; this repository holds Community only.
 **Interface**
 
 - Graphite Light (the default) and Graphite Dark, with Inter as the UI font,
-  switchable from Preferences ▸ Theme or the title-bar light/dark toggle
+  switchable from Preferences ▸ Appearance or the title-bar light/dark toggle
 - Dockable panels; undock any document tab into its own window, or tile
   documents in the main window
 - Project tab for sheets, variants, libraries, ERC and annotation settings, and

@@ -11,6 +11,8 @@ mod board_3d;
 mod board_net_classes;
 mod board_project;
 mod board_sketch;
+mod board_sketch_dxf;
+mod bom_preview;
 #[cfg(test)]
 mod case_fold_tests;
 pub(crate) mod check_runs;
@@ -20,6 +22,7 @@ mod dirty;
 #[cfg(test)]
 mod dirty_tests;
 mod document;
+mod document_load;
 #[cfg(test)]
 mod draft_ownership_tests;
 mod error_notice;
@@ -33,6 +36,7 @@ mod link_policy;
 pub(crate) mod navigator_job;
 pub(crate) mod net_class_styles;
 pub(crate) mod net_nav;
+mod omitted_page;
 pub(crate) mod ownership_index;
 mod parameter_table;
 mod path_key;
@@ -42,6 +46,7 @@ pub(crate) mod pcb_edit;
 pub(crate) mod pcb_query;
 mod pcb_ratsnest;
 mod pcb_revision;
+mod pdf_dialog;
 mod pdf_page_setup;
 mod pdf_preview_raster;
 mod placement;
@@ -54,6 +59,7 @@ mod reference_policy;
 pub(crate) mod rule_profile_ui;
 pub(crate) mod rules_history;
 pub(crate) mod scope;
+pub(crate) mod sheet_change;
 mod sheet_read;
 pub(crate) mod sheet_refs;
 mod tab_placements;
@@ -67,15 +73,25 @@ mod window_tab;
 pub use crate::app::core::case_fold::CaseFold;
 pub use crate::app::core::document_times::DocumentTimes;
 pub use agent_edits::AgentEdits;
-pub use board_3d::{Board3dSession, BuiltScene};
+pub use board_3d::{Board3dSession, BuiltScene, CaptureResult, MatteBackdrop};
 pub use board_net_classes::BoardNetClassPanelState;
 pub use board_sketch::BoardSketchSession;
-pub use error_notice::{ErrorNotice, NoticeAction, untranslated, verbatim};
+pub use board_sketch_dxf::{
+    DXF_LAYER_TARGETS, DxfImportMode, DxfLayerTarget, SketchDxfDialog, SketchDxfMsg,
+    SketchDxfProblem, SketchDxfResult, SketchDxfStep,
+};
+pub use bom_preview::{BomIssueLine, BomPreviewState, BomSidebarTab, ColumnResizeState};
+pub(crate) use document_load::SheetInstall;
+pub use error_notice::{
+    ErrorNotice, NoticeAction, NoticeSeverity, disk_changed_choices, untranslated, verbatim,
+};
 pub use interaction::{ClickedPin, InteractionState};
 pub use keymap_recorder::KeymapRecorderState;
+pub use omitted_page::{OmittedPage, OmittedReason};
 pub use parameter_table::{ParameterCell, ParameterTableState};
 pub(crate) use pcb_drc::DrcInput;
-pub(crate) use pcb_ratsnest::{PcbRatsnest, RatsnestKey};
+pub(crate) use pcb_ratsnest::{PcbRatsnest, RatsnestKey, RouteRatsKey};
+pub use pdf_dialog::{ANGLE_PRESETS, PdfDialogState, PdfSection, WatermarkPreset};
 pub use pdf_page_setup::PageSetupInputs;
 pub use pdf_preview_raster::{
     PageSetupMemory, RasterOutcome, RasterQueue, RasterSource, RememberedPageSetup,
@@ -84,10 +100,10 @@ pub use pdf_preview_raster::{
 pub use placement::{
     LastPlacement, PasteCounters, PlacementKind, PlacementSession, SheetPlacementPause,
 };
-pub use preview::{
-    BomPreviewState, BomSidebarTab, ColumnResizeState, PdfPreviewTab, PdfQuality, PreviewState,
-};
+pub use preview::{PdfQuality, PreviewState};
 pub use profile_update::PendingProfileUpdate;
+pub(crate) use sheet_read::SheetUnreadable;
+pub use sheet_read::UnreadableCause;
 pub use tab_placements::{TabPlacements, default_placement};
 pub use ui::{DEFAULT_BOTTOM_PANEL_HEIGHT, UiState};
 
@@ -154,6 +170,8 @@ pub enum ReorderPicker {
 pub struct NetColorCustomState {
     pub show: bool,
     pub draft: iced::Color,
+    /// The draft when the picker opened: Cancel puts it back (#2770).
+    pub draft_at_open: iced::Color,
     /// The net the picker colours when it was opened from a palette row;
     /// `None` arms the net-colour pen, as the Active Bar entry does.
     pub net: Option<String>,
@@ -170,6 +188,7 @@ impl Default for NetColorCustomState {
         Self {
             show: false,
             draft: iced::Color::from_rgb(0.40, 0.40, 0.93),
+            draft_at_open: iced::Color::from_rgb(0.40, 0.40, 0.93),
             net: None,
             sheet: None,
             hex: None,
@@ -184,6 +203,32 @@ pub struct NetColorPaletteState {
     pub filter: String,
     /// The net label text whose chooser is open beside its row.
     pub chooser: Option<String>,
+    /// The toast after a Clear, while it shows (mockup row 71).
+    pub toast: Option<NetColorToast>,
+}
+
+/// The net colour palette's toast after a Clear, with its Undo.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NetColorToast {
+    pub cleared: NetColorsCleared,
+    /// The sheet the clear was made on.
+    pub sheet: std::path::PathBuf,
+    /// The sheet's engine revision right after the clear. Unique per edit,
+    /// so it also tells this toast's timeout from an older one's.
+    pub revision: u64,
+}
+
+/// What a palette toast says was cleared.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NetColorsCleared {
+    /// Clear all colours took the colour off this many listed nets (named by
+    /// a label or a power port).
+    Nets(usize),
+    /// Clear all colours took colours off nets that no label or power port
+    /// names.
+    Unlabelled,
+    /// A row chooser's Clear took the colour off this net.
+    Net(String),
 }
 
 /// Transient state for the Move Selection dialog.
@@ -198,6 +243,8 @@ pub struct MoveSelectionState {
     /// selection, not whichever sheet the main window shows (#1910).
     pub sheet: Option<std::path::PathBuf>,
 }
+
+pub(crate) use crate::app::core::drawing_field::LiveDrawingEdit;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ModalId {
@@ -292,7 +339,7 @@ pub struct LoadedProject {
     pub path: PathBuf,
     pub data: ProjectData,
     /// Libraries the user has authored via the New Library flow but not
-    /// yet committed to disk. The Library Options modal's Create button
+    /// yet committed to disk. The New Library dialog's Create button
     /// only registers an entry here + flips the project dirty bit;
     /// `commands::create_pending_library` runs at project-save time
     /// to actually write the `.snxlib`. Closes
@@ -334,11 +381,11 @@ impl LoadedProject {
 
 /// #431 — pending "Export anyway (incomplete)?" prompt for netlist export.
 ///
-/// Raised (instead of a dead-end error) when `Reports ▸ Netlist` derives a
+/// Raised (instead of a dead-end error) when `Tools ▸ Reports ▸ Netlist` derives a
 /// netlist that does not cover the whole project. Holds the picked `save_path`
 /// and the omitted-page `messages` so the two prompt actions can act without
 /// re-deriving: "Export anyway" writes the partial `.net` (a clean file —
-/// Protel has no comment syntax) and logs these messages as a warning;
+/// `.NET` has no comment syntax) and logs these messages as a warning;
 /// "Cancel" writes nothing. The
 /// refusal stays the default — nothing reaches disk until the user acts.
 #[derive(Debug, Clone)]
@@ -346,8 +393,8 @@ pub struct NetlistIncompletePrompt {
     /// Where the file dialog said to write the `.net`.
     pub save_path: PathBuf,
     /// One user-facing line per omitted / uncovered page — the same
-    /// `ExportIssues::messages()` shown in the prompt and logged as a
-    /// warning when the user exports anyway.
+    /// `ExportIssues::messages()` logged as a warning when the user exports
+    /// anyway.
     pub messages: Vec<String>,
     /// The export scope snapshotted when the prompt was raised. "Export anyway"
     /// writes from THIS, never a fresh re-derivation — so the bytes on disk and
@@ -355,6 +402,9 @@ pub struct NetlistIncompletePrompt {
     /// describe the same project state, even if the document changes while the
     /// modal is up (#431 review).
     pub ctx: signex_output::ExportContext,
+    /// The prompt's list: one row per page left out of the netlist, from the
+    /// same derivation as `messages` (`ExportIssues::omitted_pages`).
+    pub omitted: Vec<OmittedPage>,
 }
 
 /// One printed page copy in the export file picker: the sheet file plus the
@@ -531,6 +581,8 @@ pub struct DocumentState {
     /// grouped entry consults this to find the sheets that must move with it.
     pub undo_groups:
         std::collections::HashMap<signex_engine::UndoGroupId, crate::app::UndoGroupSheets>,
+    /// Power rail renames waiting on their project's sheets (mockup row 45).
+    pub(crate) rail_rename: crate::app::core::rail_rename::RailRenames,
     /// An agent's edit list in progress, and the labels of its undo steps (#2178).
     pub agent_edits: AgentEdits,
     /// The last runs of `check_erc`, for a later run's baseline (#2199).
@@ -540,6 +592,10 @@ pub struct DocumentState {
     /// The one store of half-typed title-block and paper-edge text (#2027);
     /// every panel context holds a handle to it.
     pub drafts: crate::panels::PanelDrafts,
+    /// The drawing field being typed, if any (#2768).
+    pub(crate) live_drawing_edit: Option<LiveDrawingEdit>,
+    /// The selection the Line Width box's text was typed under (#2767).
+    pub(crate) line_width_draft_selection: Option<uuid::Uuid>,
     pub panel_ctx: crate::panels::PanelContext,
     /// The panel context of each undocked document window, so its dock
     /// panels show and edit that window's sheet (#1966).
@@ -560,6 +616,7 @@ pub struct DocumentState {
     /// Sheet history, net highlight, hover insight and the project net index
     /// they read (#1270, #1271, #1272).
     pub net_nav: net_nav::NetNavState,
+    pub compiled_design: crate::app::core::compiled_design::CompiledDesigns,
     /// Generation counter and in-flight job of the preview renderer.
     pub raster_queue: RasterQueue,
     /// The app's one user-visible error card. `Some` while it is shown;
@@ -634,6 +691,9 @@ pub struct DocumentState {
     /// path. A second restore click for the same document is ignored until
     /// the first completes; closing the project or all documents cancels it.
     pub pending_restores: crate::app::document_read::InFlightReads,
+    /// The repository a History branch switch is checking out. Saves and
+    /// restores of its files are refused until the switch reports back.
+    pub branch_switch: Option<PathBuf>,
     /// #859 — renames and deletes whose disk work runs on a worker. Saves,
     /// opens, restores and second moves of an overlapping path are refused
     /// until the completion message drops the entry.
@@ -662,6 +722,9 @@ pub struct DocumentState {
     /// Commits asked for while their project folder moved, run once the move
     /// has finished.
     pub deferred_git_commits: Vec<DeferredGitCommit>,
+    /// The Gerber Viewer tab (mockup rows 193 and 193f): the package shown
+    /// and the app-wide recent packages. Its slice owns it.
+    pub gerber_viewer: crate::app::gerber_viewer::GerberViewerState,
 }
 
 /// A project folder a rename moved from `old` to `new`.

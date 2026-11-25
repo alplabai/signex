@@ -181,12 +181,30 @@ impl Signex {
         &mut self,
         v: &str,
     ) -> bool {
+        use crate::library::editor::footprint::FOOTPRINT_HEIGHT_BUFFER;
+        // Empty clears the height; text that is no number is refused and
+        // stays in the field (mockup row 124).
+        let edit = super::pad_input::optional_mm_edit(v);
         if let Some(editor) = self.active_footprint_editor_mut() {
-            editor.record_edit(Some(("height", 0)), |editor| {
-                editor.primitive_mut().height_mm = fp_parse_optional_mm(v);
-                editor.mark_dirty();
-                true
-            });
+            match edit {
+                Some(height) => {
+                    editor.state.numeric_buffers.remove(FOOTPRINT_HEIGHT_BUFFER);
+                    editor.record_edit(Some(("height", 0)), |editor| {
+                        if editor.primitive().height_mm == height {
+                            return false;
+                        }
+                        editor.primitive_mut().height_mm = height;
+                        editor.mark_dirty();
+                        true
+                    });
+                }
+                None => {
+                    editor
+                        .state
+                        .numeric_buffers
+                        .insert(FOOTPRINT_HEIGHT_BUFFER.to_owned(), v.to_owned());
+                }
+            }
         }
         self.refresh_panel_ctx();
         true
@@ -218,5 +236,67 @@ impl Signex {
         }
         self.refresh_panel_ctx();
         true
+    }
+}
+
+#[cfg(test)]
+mod height_tests {
+    use std::path::{Path, PathBuf};
+
+    use signex_library::{Footprint, FootprintFile};
+
+    use crate::app::{FootprintDocument, Signex, TabInfo, TabKind};
+    use crate::library::editor::footprint::FOOTPRINT_HEIGHT_BUFFER;
+
+    fn app_on_a_footprint(path: &Path) -> Signex {
+        let path: PathBuf = path.to_path_buf();
+        let file = FootprintFile::from_footprint(Footprint::empty("height"));
+        let (mut app, _task) = Signex::new();
+        app.document_state
+            .footprint_editors
+            .insert(path.clone(), FootprintDocument::new(path.clone(), file));
+        app.document_state.tabs.push(TabInfo {
+            title: "height".into(),
+            path: path.clone(),
+            cached_document: None,
+            project_id: None,
+            kind: TabKind::FootprintEditor(path),
+        });
+        app.document_state.active_tab = app.document_state.tabs.len() - 1;
+        app
+    }
+
+    #[test]
+    fn text_that_is_no_number_keeps_the_height_and_empty_clears_it() {
+        let path = PathBuf::from("height.snxfpt");
+        let mut app = app_on_a_footprint(&path);
+        app.handle_fp_editor_set_footprint_height("0.9");
+        let steps = app.document_state.footprint_editors[&path]
+            .history
+            .undo_len();
+
+        app.handle_fp_editor_set_footprint_height("abc");
+        let editor = &app.document_state.footprint_editors[&path];
+        assert_eq!(editor.primitive().height_mm, Some(0.9));
+        assert_eq!(editor.history.undo_len(), steps, "a refusal is no step");
+        assert_eq!(
+            editor
+                .state
+                .numeric_buffers
+                .get(FOOTPRINT_HEIGHT_BUFFER)
+                .map(String::as_str),
+            Some("abc"),
+            "the field keeps the text"
+        );
+
+        app.handle_fp_editor_set_footprint_height("");
+        let editor = &app.document_state.footprint_editors[&path];
+        assert_eq!(editor.primitive().height_mm, None);
+        assert!(
+            !editor
+                .state
+                .numeric_buffers
+                .contains_key(FOOTPRINT_HEIGHT_BUFFER)
+        );
     }
 }

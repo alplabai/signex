@@ -299,6 +299,23 @@ jobs:
           echo "No derivation-attribution markers."
 
 
+      - name: No retired vendor name for the netlist format
+        if: ${{ !cancelled() }}
+        run: |
+          set -e
+          # #2588: the `.NET` text netlist is named by what it is. The
+          # bracket keeps this pattern from matching its own line. CHANGELOG.md
+          # is left out: released history changes only in a release PR.
+          PATTERN='pr[o]tel'
+          if git grep -niE "$PATTERN" -- ':!CHANGELOG.md' || git ls-files | grep -iE "$PATTERN"; then
+            echo ""
+            echo "::error::A retired vendor name for the netlist format is back (#2588)."
+            echo "::error::Call the format the .NET text netlist."
+            exit 1
+          fi
+          echo "No retired vendor name."
+
+
       - name: Port-smell heuristic (advisory — never fails)
         if: ${{ !cancelled() }}
         run: |

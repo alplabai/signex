@@ -24,6 +24,7 @@ fn project(id: u32, dir: &str, locals: &[&str]) -> LoadedProject {
             sheets: Vec::new(),
             variant_definitions: Vec::new(),
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: locals
                 .iter()
                 .map(|path| LibraryEntry {
@@ -40,7 +41,9 @@ fn project(id: u32, dir: &str, locals: &[&str]) -> LoadedProject {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
             fab_outputs: None,
+            router_tool_diameter: None,
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),

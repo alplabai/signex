@@ -13,8 +13,9 @@ pub struct FindMatch {
     /// The sheet file the hit is on.
     pub sheet: Option<PathBuf>,
     pub hit: FindHit,
-    /// Which placement of a sheet placed more than once a designator hit was
-    /// read at ("placement 2 of 3"); `None` otherwise.
+    /// What else names the hit in its row: the placement a designator hit
+    /// was read at on a sheet placed more than once ("placement 2 of 3"), or
+    /// the part a Value hit belongs to ("R5"); `None` otherwise.
     pub placement_label: Option<String>,
 }
 

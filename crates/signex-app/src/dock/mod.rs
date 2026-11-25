@@ -7,7 +7,7 @@
 mod first_run;
 mod graphite;
 mod layout_sync;
-mod measure;
+pub(crate) mod measure;
 mod placement;
 mod side_width;
 mod state;
@@ -29,3 +29,4 @@ pub use types::{
     DockArea, DockMessage, DockTabAction, DockTabMenu, EditorContext, FloatingPanel, PanelPosition,
     PanelSite,
 };
+pub(crate) use view::title_actions;

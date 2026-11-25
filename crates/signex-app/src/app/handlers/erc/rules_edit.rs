@@ -6,10 +6,10 @@
 use iced::Task;
 use signex_types::project::{ErcRules, ProjectRules};
 
-use super::super::super::state::rules_history::RulesHistory;
+use super::super::super::state::rules_history::{RuleState, RulesHistory};
 use super::super::super::*;
 
-type HistoryStep = fn(&mut RulesHistory, Option<ProjectRules>) -> Option<Option<ProjectRules>>;
+type HistoryStep = fn(&mut RulesHistory, RuleState) -> Option<RuleState>;
 
 impl Signex {
     /// Whether the project the ERC dialog edits stores its own rule set.
@@ -29,7 +29,7 @@ impl Signex {
 
     /// How many rules the ERC dialog shows at each severity, in the order
     /// Error, Warning, Info, Off: the project's stored rules, else the
-    /// machine's. The dialog's severity tiles (#2413).
+    /// machine's. The dialog's severity chips (#2413).
     pub fn erc_dialog_severity_counts(&self) -> [(signex_erc::Severity, usize); 4] {
         let stored = self
             .document_state
@@ -121,11 +121,7 @@ impl Signex {
         } else {
             RulesHistory::redo
         };
-        let Some(current) = self
-            .document_state
-            .project_by_id(id)
-            .map(|p| p.data.rules.clone())
-        else {
+        let Some(current) = self.rule_state_of(id) else {
             return false;
         };
         let Some(restored) = self
@@ -136,8 +132,17 @@ impl Signex {
         else {
             return false;
         };
-        self.replace_rules_of(id, restored, false);
+        self.replace_rule_state_of(id, restored, false);
         true
+    }
+
+    /// What a rule-history step of `id` keeps: its rules and router tool.
+    fn rule_state_of(&self, id: ProjectId) -> Option<RuleState> {
+        let data = &self.document_state.project_by_id(id)?.data;
+        Some(RuleState {
+            rules: data.rules.clone(),
+            router_tool_diameter: data.router_tool_diameter(),
+        })
     }
 
     /// [`Self::replace_rules_of`] the active document's project.
@@ -156,22 +161,55 @@ impl Signex {
         rules: Option<ProjectRules>,
         record: bool,
     ) {
+        let Some(router_tool_diameter) = self
+            .document_state
+            .project_by_id(id)
+            .map(|p| p.data.router_tool_diameter())
+        else {
+            return;
+        };
+        let state = RuleState {
+            rules,
+            router_tool_diameter,
+        };
+        self.replace_rule_state_of(id, state, record);
+    }
+
+    /// [`Self::replace_rules_of`] with the router tool diameter too: a
+    /// fab preset's rules and router tool are one step, and an undo or
+    /// redo restores both.
+    pub(crate) fn replace_rule_state_of(&mut self, id: ProjectId, state: RuleState, record: bool) {
         // Any change to the rules (edit, undo, redo, store) outdates a diff
         // computed against the old ones.
         self.invalidate_pending_profile_update();
-        let ds = &mut self.document_state;
-        let Some(before) = ds.project_by_id(id).map(|p| p.data.rules.clone()) else {
+        let Some(before) = self.rule_state_of(id) else {
             return;
         };
+        let min_slot_of = |state: &RuleState| state.rules.as_ref().and_then(|r| r.min_slot());
+        let fab_moved = before.router_tool_diameter != state.router_tool_diameter
+            || min_slot_of(&before) != min_slot_of(&state);
+        let ds = &mut self.document_state;
         if record {
             ds.note_project_clean_state(id);
-            ds.rules_history.entry(id).or_default().record(before);
-            ds.project_tabs.entry(id).or_default().rules_step_newest = true;
+            let general = &mut ds.project_tabs.entry(id).or_default().general_history;
+            // Typing after this step is a step after it, not an older run.
+            general.close_run();
+            let position = general.position();
+            ds.rules_history
+                .entry(id)
+                .or_default()
+                .record_at(before, position);
         }
         if let Some(loaded) = ds.project_by_id_mut(id) {
-            loaded.data.rules = rules;
+            loaded.data.rules = state.rules;
+            loaded
+                .data
+                .set_router_tool_diameter(state.router_tool_diameter);
         }
         ds.sync_project_history_dirty(id, true);
+        if fab_moved {
+            self.sync_board_sketch_fab();
+        }
         self.refresh_panel_ctx();
     }
 }

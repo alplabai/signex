@@ -2,6 +2,7 @@
 //! and the geometry rules, the escapes, the dry run, and the click it equals.
 
 use serde_json::{Value, json};
+use signex_i18n::RenderTranslatable;
 use signex_types::corner::CornerMode;
 use signex_types::schematic::{
     Bus, BusEntry, LabelType, LibGraphic, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle,
@@ -104,7 +105,7 @@ fn answered(outcome: CommandOutcome) -> Value {
 
 fn refusal(outcome: CommandOutcome) -> String {
     match outcome {
-        CommandOutcome::Disabled { reason } => reason,
+        CommandOutcome::Disabled { reason } => reason.render_en_us(),
         other => panic!("not refused: {other:?}"),
     }
 }
@@ -638,6 +639,7 @@ fn two_named_buses(second_named: bool) -> SchematicSheet {
             uuid: Uuid::now_v7(),
             start: Point::new(a, 38.1),
             end: Point::new(b, 38.1),
+            ..Default::default()
         });
     }
     sheet.labels.push(label("D[0..7]", Point::new(12.7, 38.1)));
@@ -680,6 +682,7 @@ fn a_bus_that_touches_another_run_an_entry_or_a_bend_target_is_refused() {
         uuid: Uuid::now_v7(),
         start: Point::new(38.1, 38.1),
         end: Point::new(38.1, 44.45),
+        ..Default::default()
     });
     let mut app = app_with(sheet);
     refused_with(
@@ -709,11 +712,13 @@ fn a_bus_that_touches_another_run_an_entry_or_a_bend_target_is_refused() {
         uuid: Uuid::now_v7(),
         start: Point::new(44.45, 50.8),
         end: Point::new(57.15, 50.8),
+        ..Default::default()
     });
     sheet.buses.push(Bus {
         uuid: Uuid::now_v7(),
         start: Point::new(38.1, 44.45),
         end: Point::new(38.1, 50.8),
+        ..Default::default()
     });
     let mut app = app_with(sheet);
     let outcome = run(
@@ -1141,6 +1146,7 @@ fn with_bus() -> SchematicSheet {
         uuid: Uuid::now_v7(),
         start: Point::new(12.7, 25.4),
         end: Point::new(25.4, 25.4),
+        ..Default::default()
     });
     sheet.bus_entries.push(BusEntry {
         uuid: Uuid::now_v7(),
@@ -1189,6 +1195,7 @@ fn a_bus_run_ending_on_a_sheet_entry_is_not_open() {
         uuid: Uuid::now_v7(),
         start: Point::new(12.7, 50.8),
         end: Point::new(25.4, 50.8),
+        ..Default::default()
     });
     sheet
         .child_sheets
@@ -1231,6 +1238,7 @@ fn a_hierarchical_bus_label_on_a_named_run_is_an_alias_not_a_rename() {
         uuid: Uuid::now_v7(),
         start: Point::new(12.7, 50.8),
         end: Point::new(25.4, 50.8),
+        ..Default::default()
     });
     sheet
         .labels
@@ -1266,6 +1274,7 @@ fn a_bus_run_joins_runs_by_the_name_rule() {
                 uuid: Uuid::now_v7(),
                 start: Point::new(a, 50.8),
                 end: Point::new(b, 50.8),
+                ..Default::default()
             });
         }
         let named = signex_types::schematic::Label::new(left, Point::new(0.0, 50.8), ty);

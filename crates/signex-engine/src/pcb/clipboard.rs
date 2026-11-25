@@ -115,6 +115,28 @@ impl BoardClipboard {
         self.origin
     }
 
+    /// Whether pasting at `at` would land an item exactly on one of its kind
+    /// already on `board`: a footprint or via at the same point, a track on
+    /// the same two ends.
+    pub fn lands_on_a_copy(&self, board: &PcbBoard, at: Point) -> bool {
+        let key = |p: &Point| signex_net::pt_key(p);
+        let shifted = |p: &Point| key(&Point::new(p.x + at.x, p.y + at.y));
+        let ends = |a: (i64, i64), b: (i64, i64)| (a.min(b), a.max(b));
+        let footprint = (self.footprints.iter()).any(|fp| {
+            let wanted = shifted(&fp.position);
+            (board.footprints.iter()).any(|other| key(&other.position) == wanted)
+        });
+        let via = self.vias.iter().any(|via| {
+            let wanted = shifted(&via.position);
+            (board.vias.iter()).any(|other| key(&other.position) == wanted)
+        });
+        let track = self.segments.iter().any(|segment| {
+            let wanted = ends(shifted(&segment.start), shifted(&segment.end));
+            (board.segments.iter()).any(|other| ends(key(&other.start), key(&other.end)) == wanted)
+        });
+        footprint || via || track
+    }
+
     /// How many items the copy holds (a footprint counts once).
     pub fn len(&self) -> usize {
         self.footprints.len() + self.segments.len() + self.vias.len()
@@ -156,6 +178,7 @@ impl BoardClipboard {
             free: Default::default(),
             sketch: None,
             stackup: None,
+            rooms: Vec::new(),
             options: Default::default(),
             unknown: Default::default(),
         }

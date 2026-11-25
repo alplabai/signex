@@ -127,7 +127,7 @@ pub(super) const SELECTION: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
-    // #2417: the schematic Selection Filter (SCH Filter panel, Active Bar
+    // #2417: the schematic Selection Filter (Filter panel, Active Bar
     // dropdown) from its operands; window state, so no document.
     CommandMetadata {
         id: "set_selection_filters",

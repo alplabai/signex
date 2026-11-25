@@ -5,6 +5,8 @@
 
 use std::path::{Path, PathBuf};
 
+use signex_i18n::RenderTranslatable;
+
 use serde_json::Value;
 use signex_types::format::SnxPcb;
 use signex_types::pcb::{NetDef, PcbBoard, Point, Segment};
@@ -100,7 +102,7 @@ pub(super) fn report(app: &mut Signex, document: &Path, extra: &[&str]) -> Value
 
 fn refusal(outcome: CommandOutcome) -> String {
     match outcome {
-        CommandOutcome::Disabled { reason } => reason,
+        CommandOutcome::Disabled { reason } => reason.render_en_us(),
         other => panic!("not refused: {other:?}"),
     }
 }
@@ -182,7 +184,8 @@ pub(super) fn run_drc_rules_and_items(
                     | pcb_geom::ItemRef::Arc(id)
                     | pcb_geom::ItemRef::FreePad(id)
                     | pcb_geom::ItemRef::Dimension(id)
-                    | pcb_geom::ItemRef::Graphic { graphic: id, .. } => id.to_string(),
+                    | pcb_geom::ItemRef::Graphic { graphic: id, .. }
+                    | pcb_geom::ItemRef::Room(id) => id.to_string(),
                     pcb_geom::ItemRef::FootprintText { footprint, field } => {
                         format!("{footprint}/{}", field.id())
                     }

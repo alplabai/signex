@@ -11,6 +11,10 @@ use crate::app::project_entry_disk::{EntryPatch, remove_entries};
 use crate::app::state::scope::{CaseFold, path_is_under, path_key_with};
 use signex_i18n::RenderTranslatable;
 
+#[cfg(test)]
+#[path = "remove_choice_tests.rs"]
+mod choice_tests;
+
 impl Signex {
     pub(super) fn open_remove_dialog(&mut self, tree_path: Vec<usize>) {
         if self.refuse_on_missing_child(&tree_path, "Remove", true) {
@@ -38,7 +42,9 @@ impl Signex {
             is_outside_project,
             unsaved_prompt: false,
             is_directory_package,
+            choice: None,
         });
+        self.preselect_lone_delete();
     }
 
     /// Open the Remove dialog for the library `row` names (#742).
@@ -63,7 +69,9 @@ impl Signex {
             is_outside_project,
             unsaved_prompt: false,
             is_directory_package,
+            choice: None,
         });
+        self.preselect_lone_delete();
     }
 
     /// Refuse a Remove the sheet hierarchy makes unsafe (#1618): excluding a
@@ -77,6 +85,20 @@ impl Signex {
     ) -> bool {
         use crate::app::RemoveChoice;
         use crate::app::state::ErrorNotice;
+        // No writes into a library open read-only for want of its Git
+        // history (mockup row 138): deleting its files is one.
+        if matches!(choice, RemoveChoice::DeleteFile)
+            && let Some(library) = self
+                .library
+                .history_missing_library_under(&state.target_path)
+        {
+            crate::diagnostics::log_warning(format!(
+                "[remove] refused: {library} is open read-only without its Git history"
+            ));
+            self.document_state.error_notice = Some(ErrorNotice::history_missing(&library));
+            self.refresh_panel_ctx();
+            return true;
+        }
         let blockers = self.remove_blockers(state);
         use signex_i18n::{Translatable, ids};
         let (notice, why): (fn(Translatable) -> ErrorNotice, Translatable) = match choice {

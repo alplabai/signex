@@ -1,7 +1,7 @@
 //! Grid commands: the fast and snap grids, the grid picker and properties,
-//! and the electrical and visible grids.
+//! the electrical and visible grids, and the board's Snapping.
 
-use super::{CommandFlags, CommandGroup, CommandMetadata, Enablement};
+use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement};
 use signex_i18n_ids::command_ids;
 
 pub(super) const GRID: &[CommandMetadata] = &[
@@ -103,6 +103,17 @@ pub(super) const GRID: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2879: Shift+E on a board, the Snap Options' Snapping scope.
+    CommandMetadata {
+        id: "cycle_board_snapping",
+        category: "view",
+        label: command_ids::CMD_CYCLE_BOARD_SNAPPING,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },

@@ -38,6 +38,39 @@ pub(crate) fn profile_preset(name: &str) -> String {
     format!("profile:{name}")
 }
 
+/// The minimums a tier card shows, in mm, read from the canonical tier
+/// table (`FabTemplate::capabilities`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct TierSpec {
+    pub clearance: f64,
+    pub width: f64,
+    /// The smallest hole drilled, pad or via.
+    pub drill: f64,
+    pub annular: f64,
+}
+
+pub(crate) fn tier_spec(tier: FabTemplate) -> TierSpec {
+    let limits = tier.capabilities();
+    TierSpec {
+        clearance: limits.clearance,
+        width: limits.track_width,
+        drill: limits.hole,
+        annular: limits.annular_ring,
+    }
+}
+
+/// The limits a rule of a preview had and has, as written (`0.15mm`), one
+/// side `None` for an added or removed rule.
+pub(crate) fn change_values(change: &RowChange) -> (Option<String>, Option<String>) {
+    let limits = |text: &Option<String>| {
+        let rows = signex_drc_dsl::table::table(text.as_deref()?);
+        let row = rows.rows.first()?;
+        let values: Vec<&str> = row.limits.iter().map(|l| l.value.as_str()).collect();
+        (!values.is_empty()).then(|| values.join(", "))
+    };
+    (limits(&change.from), limits(&change.to))
+}
+
 impl Signex {
     /// The rule profiles that hold DRC rules, as read last; `None` while
     /// the library was never read.
@@ -152,12 +185,15 @@ impl Signex {
     }
 
     /// A tier picked for a new board of `id`: its `fab_*` rules merged into
-    /// the project's as one rule-history step, nothing written until Save.
-    /// A refusal is said in Messages; the board is made either way.
+    /// the project's, and its router tool and min slot set, as one
+    /// rule-history step, nothing written until Save. A refusal is said in
+    /// Messages; the board is made either way.
     pub(crate) fn seed_tier_rules(&mut self, id: ProjectId, tier: FabTemplate) {
-        let seeded = self
-            .rules_with_tier(id, tier)
-            .and_then(|rules| self.commit_drc_section(id, |drc| *drc = rules.drc));
+        let limits = tier.capabilities();
+        let (router, min_slot) = (Some(limits.router_tool_diameter), Some(limits.min_slot));
+        let seeded = self.rules_with_tier(id, tier).and_then(|rules| {
+            self.commit_fab_section(id, |drc| *drc = rules.drc, router, min_slot)
+        });
         if let Err(why) = seeded {
             crate::diagnostics::log_warning(format!(
                 "New PCB: the {} fab tier rules were not added: {why}",
@@ -167,7 +203,10 @@ impl Signex {
     }
 
     /// Apply `preview` as one undo step, unless the rules moved since it
-    /// was computed.
+    /// was computed. A tier, or a fab profile naming a router tool or a min
+    /// slot, also sets the project's router tool diameter or min slot in
+    /// the same step (mockup row 179d), so an undo restores them; a profile
+    /// naming none leaves each as it is.
     pub(crate) fn apply_preset(
         &mut self,
         id: ProjectId,
@@ -180,7 +219,10 @@ impl Signex {
             return Err("the rules changed since the preview; pick the preset again".into());
         }
         let result: DrcRuleSet = preview.result.clone();
-        self.commit_drc_section(id, |drc| *drc = result)
+        let fab = preview.fab.as_ref();
+        let router = fab.and_then(|fab| fab.router_tool_diameter);
+        let min_slot = fab.and_then(|fab| fab.min_slot);
+        self.commit_fab_section(id, |drc| *drc = result, router, min_slot)
     }
 
     /// `rules_preset_diff`: what applying `preset` changes. A profile

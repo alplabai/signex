@@ -12,6 +12,9 @@ fn blanket() -> SchDirective {
         end: Point::new(50.0, 40.0),
         net_class: None,
         erc_exclusions: Vec::new(),
+        track_width: None,
+        pour: signex_types::schematic::BlanketPour::Normal,
+        include_edge_nets: false,
     }
 }
 
@@ -19,6 +22,7 @@ fn diff_pair() -> SchDirective {
     SchDirective::DiffPair {
         uuid: uuid::Uuid::from_u128(2),
         position: Point::new(70.0, 70.0),
+        class: None,
     }
 }
 
@@ -103,4 +107,85 @@ fn every_directive_is_drawn_in_the_directive_colour_with_its_dash() {
             .count(),
         4
     );
+}
+
+fn net_parameters(show: bool) -> SchDirective {
+    SchDirective::NetParameters {
+        uuid: uuid::Uuid::from_u128(3),
+        position: Point::new(100.0, 100.0),
+        net_class: Some("POWER_IN".to_string()),
+        diff_pair_class: None,
+        rules: signex_types::schematic::NetRules {
+            width_mm: Some(0.8),
+            clearance_mm: Some(0.3),
+            ..Default::default()
+        },
+        show_on_flag: show,
+    }
+}
+
+/// #1489: the flag stands above its wire on a stem, holds its text and
+/// lists the rules only when told to.
+#[test]
+fn a_net_parameters_flag_sits_above_its_wire_and_holds_its_text() {
+    use super::directives::{flag, flag_lines};
+    assert_eq!(flag_lines(&net_parameters(false)), ["Net Class = POWER_IN"]);
+    assert_eq!(
+        flag_lines(&net_parameters(true)),
+        ["Net Class = POWER_IN", "Width 0.8 mm · Clr 0.3 mm"]
+    );
+    let f = flag(&net_parameters(true)).expect("a flag");
+    assert!(f.rect.max_y < 100.0, "above the wire: {f:?}");
+    assert_eq!(f.stem.map(|(a, _)| a), Some(Point::new(100.0, 100.0)));
+    // Every character fits: at least 0.6 of the text height each.
+    let longest = f.lines.iter().map(|l| l.chars().count()).max().unwrap();
+    assert!(f.rect.width() >= longest as f64 * 1.27 * 0.6, "{f:?}");
+}
+
+#[test]
+fn a_blanket_class_flag_sits_below_the_outline_clear_of_its_edge() {
+    use super::directives::flag;
+    let SchDirective::Blanket {
+        uuid,
+        start,
+        end,
+        erc_exclusions,
+        track_width,
+        pour,
+        include_edge_nets,
+        ..
+    } = blanket()
+    else {
+        unreachable!()
+    };
+    let classed = SchDirective::Blanket {
+        uuid,
+        start,
+        end,
+        net_class: Some("SW_NODE".to_string()),
+        erc_exclusions,
+        track_width,
+        pour,
+        include_edge_nets,
+    };
+    let f = flag(&classed).expect("a class flag");
+    assert!(f.rect.min_y > 40.0, "below the outline: {f:?}");
+    assert!(f.stem.is_none());
+    assert!(flag(&blanket()).is_none(), "no class, no flag");
+    // The outline's four edges, then the flag box.
+    assert_eq!(strokes(&classed, 3.0).len(), 8);
+}
+
+#[test]
+fn a_net_parameters_directive_is_picked_on_its_flag() {
+    let snap = SchematicSheet {
+        directives: vec![net_parameters(false)],
+        ..Default::default()
+    };
+    let id = net_parameters(false).uuid();
+    let f = super::directives::flag(&net_parameters(false)).unwrap();
+    let inside = Point::new(f.rect.min_x + 0.5, (f.rect.min_y + f.rect.max_y) / 2.0);
+    assert!(hit(&snap, id, inside));
+    assert!(hit(&snap, id, Point::new(100.2, 100.2)));
+    assert!(!hit(&snap, id, Point::new(130.0, 130.0)));
 }

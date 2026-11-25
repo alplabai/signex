@@ -2,14 +2,25 @@ use iced::Task;
 
 mod body_fill;
 mod committed_writes;
+mod component_classes;
+mod drafts;
 mod keymap;
 #[cfg(test)]
 mod keymap_tests;
 pub(crate) mod language;
+mod pages_view;
+mod pcb_defaults;
+#[cfg(test)]
+mod pcb_defaults_tests;
+mod prefs_file;
+mod profile_page;
 mod profiles;
 #[cfg(test)]
 mod profiles_tests;
+mod save;
 mod save_guard;
+#[cfg(test)]
+mod selected_segment_tests;
 #[cfg(test)]
 mod theme_repaint_tests;
 
@@ -66,6 +77,10 @@ impl Signex {
         self.seed_preferences_drafts_from_live();
         self.ui_state.preferences_keymap_search.clear();
         self.ui_state.preferences_nav_search.clear();
+        // The pages' view state (search, open sections, ...) is per session.
+        self.ui_state.preferences_pages.pages_view = Default::default();
+        self.ui_state.preferences_pages.keymap_view = Default::default();
+        self.ui_state.preferences_pages.classes_view = Default::default();
         self.ui_state.panel_list_open = false;
         self.interaction_state.context_menu = None;
         // Open Preferences as a separate OS window so the user can move
@@ -113,11 +128,16 @@ impl Signex {
         self.ui_state.preferences_draft_annotate_undo = self.ui_state.annotate_undo;
         self.ui_state.preferences_draft_move_keeps_wires = self.ui_state.move_keeps_wires;
         self.ui_state.preferences_draft_net_hover_enabled = self.ui_state.net_hover_enabled;
+        self.ui_state.preferences_draft_edge_pan = self.ui_state.edge_pan;
         self.ui_state.preferences_draft_symbol_body_fill = self.ui_state.symbol_body_fill;
         self.ui_state.preferences_body_fill_palette_open = false;
         self.ui_state.preferences_body_fill_picker_open = false;
+        *self.ui_state.preferences_pcb_defaults =
+            crate::pcb_defaults_prefs::PcbDefaultsDraft::of(&self.ui_state.pcb_dimension_defaults);
         self.ui_state.preferences_draft_trackpad_pan = self.ui_state.trackpad_pan;
         self.ui_state.preferences_draft_wheel_mode = self.ui_state.wheel_mode;
+        self.ui_state.preferences_draft_layer_switcher = self.ui_state.layer_switcher;
+        self.ui_state.preferences_draft_selected_segment = self.ui_state.selected_segment;
         self.ui_state.preferences_draft_remember_window_geometry =
             self.ui_state.remember_window_geometry;
         self.ui_state.preferences_draft_drag_direction_select = self.ui_state.drag_direction_select;
@@ -138,6 +158,8 @@ impl Signex {
         self.ui_state.preferences_draft_zoom_step_percent = self.ui_state.zoom_step_percent;
         self.ui_state.preferences_draft_ui_scale_percent =
             crate::ui_scale::scale_to_percent(self.ui_state.ui_scale);
+        // Mockup row 144a — the language in force, its preview and the system name.
+        self.seed_language_draft();
         // Fresh working copy of the live profile set for the Keyboard
         // Shortcuts pane; drop any stale recorder / status with it.
         self.ui_state.preferences_keymap_editor =
@@ -163,6 +185,7 @@ impl Signex {
         // can appear or be removed between two openings of this dialog.
         self.refresh_keymap_backup();
         self.ui_state.preferences_dirty = false;
+        self.ui_state.preferences_pages.dirty_pages.clear();
     }
 
     /// Re-check whether `keyboard_shortcuts.toml.bak` is on disk (#603).
@@ -216,21 +239,11 @@ impl Signex {
     /// *while* the dialog is open: `handle_preferences_open_requested`
     /// early-returns when the dialog is already up, so without a probe on
     /// the Save path a user who hand-edits the file beside the running app
-    /// — the very workflow the banner's "repair it by hand" advice invites
-    /// — gets every write refused with the dialog still reporting success.
+    /// gets every write refused with the dialog still reporting success.
     fn refresh_prefs_load_error(&mut self) {
         self.ui_state.prefs_load_error = crate::fonts::check_prefs_file()
             .err()
             .map(|error| error.to_string());
-    }
-
-    /// Recompute the cached dirty flag from the full unsaved-state
-    /// predicate. Every Preferences draft mutation routes through this —
-    /// never assign `preferences_dirty` from an ad-hoc comparison; that
-    /// drift class is exactly what let imperative edits be clobbered back
-    /// to "clean" (review #308 finding 1).
-    pub(crate) fn recompute_preferences_dirty(&mut self) {
-        self.ui_state.preferences_dirty = self.ui_state.preferences_has_unsaved_changes();
     }
 
     pub(crate) fn handle_preferences_navigation_requested(
@@ -305,426 +318,63 @@ impl Signex {
             }
             PrefMsg::SaveAndClose => {
                 // Save as the Save button does; a refused save leaves the
-                // dialog dirty, so the close guard keeps it open.
-                let saved = self.handle_preferences_message(PrefMsg::Save);
+                // dialog dirty, so the close guard keeps it open. A refused
+                // pitch label is not a dirty draft: it keeps it open itself.
+                let held = self.snap_label_holds_refused_text();
+                let saved = self.handle_preferences_save();
+                if held {
+                    return saved;
+                }
                 return Task::batch([saved, self.handle_preferences_close_requested()]);
             }
-            PrefMsg::Save => {
-                // A draft that cannot be committed stops Save before
-                // anything is committed; the dialog stays dirty and open.
-                if self.refuse_invalid_save_drafts() {
-                    return Task::none();
-                }
-                self.ui_state.theme_id = self.ui_state.preferences_draft_theme;
-                self.ui_state.ui_font_name = self.ui_state.preferences_draft_font.clone();
-                self.ui_state.grid_style = self.ui_state.preferences_draft_grid_style;
-                self.ui_state.pcb_gpu_render = self.ui_state.preferences_draft_pcb_gpu_render;
-                self.ui_state.antialiasing = self.ui_state.preferences_draft_antialiasing;
-                self.ui_state.annotate_undo = self.ui_state.preferences_draft_annotate_undo;
-                self.ui_state.move_keeps_wires = self.ui_state.preferences_draft_move_keeps_wires;
-                self.ui_state.net_hover_enabled = self.ui_state.preferences_draft_net_hover_enabled;
-                // Repainted by `sync_theme` below: the canvas colours carry it.
-                self.ui_state.symbol_body_fill = self.ui_state.preferences_draft_symbol_body_fill;
-                self.ui_state.trackpad_pan = self.ui_state.preferences_draft_trackpad_pan;
-                self.ui_state.wheel_mode = self.ui_state.preferences_draft_wheel_mode;
-                self.ui_state.remember_window_geometry =
-                    self.ui_state.preferences_draft_remember_window_geometry;
-                self.ui_state.drag_direction_select =
-                    self.ui_state.preferences_draft_drag_direction_select;
-                self.ui_state.increment_step = self.ui_state.preferences_draft_increment_step;
-                self.ui_state.paste_designators = self.ui_state.preferences_draft_paste_designators;
-                self.refresh_paste_ghost();
-                self.ui_state.window_controls_placement =
-                    self.ui_state.preferences_draft_window_controls_placement;
-                self.ui_state.autosave_enabled = self.ui_state.preferences_draft_autosave_enabled;
-                self.commit_agent_connections_pref();
-                // #629 — the three Symbol Editor settings commit here like
-                // every other appearance draft, instead of writing
-                // themselves to disk the moment the picker moved.
-                self.ui_state.symbol_grid_size_mm =
-                    self.ui_state.preferences_draft_symbol_grid_size_mm;
-                self.ui_state.commit_fast_grid_drafts();
-                self.ui_state.symbol_grid_style = self.ui_state.preferences_draft_symbol_grid_style;
-                self.ui_state.symbol_pin_selection =
-                    self.ui_state.preferences_draft_symbol_pin_selection;
-                self.ui_state.zoom_step_percent = self.ui_state.preferences_draft_zoom_step_percent;
-                // Takes effect on every open window at once: the daemon's
-                // `scale_factor` hook reads this field (#1228).
-                let previous_ui_scale = self.ui_state.ui_scale;
-                self.ui_state.ui_scale = crate::ui_scale::committed_scale(
-                    self.ui_state.ui_scale,
-                    self.ui_state.preferences_draft_ui_scale_percent,
-                );
-                let ui_scale_changed = self.ui_state.ui_scale != previous_ui_scale;
-                // The live-preview already pushed the draft into the widget;
-                // re-assert it so the saved and effective flags can't diverge.
-                self.set_pcb_gpu_render(self.ui_state.pcb_gpu_render);
-                self.sync_theme();
-                self.document_state.panel_ctx.ui_font_name = self.ui_state.ui_font_name.clone();
-                // The live preview already pushed the draft onto the
-                // canvases; re-assert from the committed value so the
-                // saved and rendered styles can't diverge (same rule as
-                // the PCB GPU flag above).
-                //
-                // #1351 — every write is a background task, collected in
-                // `writes` and never run inline in `update`. Each keeps its
-                // per-key ticket, so a later toggle of the same key still
-                // wins over this Save.
-                let mut writes: Vec<Task<Message>> = Vec::new();
-                // #629 — moved here from the three `PrefMsg::DraftSymbol*`
-                // arms, which wrote on every picker move. Re-asserting the
-                // render input from the committed value keeps the saved
-                // and effective styles from diverging, the same way the
-                // PCB GPU flag is re-asserted above.
-                self.document_state.panel_ctx.symbol_grid_style = self.ui_state.symbol_grid_style;
-                // Component classes — keep entries with non-empty keys
-                // and labels, dedupe by key (last write wins) so the
-                // dropdown never shows blanks or duplicates.
-                let mut sanitised: Vec<crate::fonts::ComponentClassEntry> = Vec::new();
-                for entry in &self.ui_state.preferences_draft_component_classes {
-                    let key = entry.key.trim();
-                    let label = entry.label.trim();
-                    if key.is_empty() || label.is_empty() {
-                        continue;
-                    }
-                    if let Some(existing) = sanitised.iter_mut().find(|e| e.key == key) {
-                        existing.label = label.to_string();
-                    } else {
-                        sanitised.push(crate::fonts::ComponentClassEntry {
-                            key: key.to_string(),
-                            label: label.to_string(),
-                        });
-                    }
-                }
-                self.ui_state.component_classes = sanitised;
-                self.ui_state.preferences_draft_component_classes =
-                    self.ui_state.component_classes.clone();
-                self.document_state.panel_ctx.component_classes =
-                    self.ui_state.component_classes.clone();
-                // Everything committed above is in `ui_state` now: queue its
-                // writes, and hand new libraries the same values so none of
-                // them reads `prefs.json` while those writes are in flight.
-                writes.extend(self.committed_pref_writes());
-                self.library.new_library_defaults = crate::library::NewLibraryDefaults {
-                    grid_size_mm: self.ui_state.symbol_grid_size_mm,
-                    pin_selection: self.ui_state.symbol_pin_selection,
-                    component_classes: self.ui_state.component_classes.clone(),
-                };
-                // Commit the keymap working copy: persist to disk first,
-                // then swap it into the live set and recompile so the
-                // running dispatch bridge (`ui_state.active_keymap`)
-                // picks up the rebinds immediately. A save failure is
-                // surfaced in the status line and leaves the dialog
-                // dirty so nothing is silently lost.
-                let keymap_profiles = self
-                    .ui_state
-                    .preferences_keymap_editor
-                    .clone()
-                    .into_profiles();
-                // The running set is the built-in fallback whenever the
-                // saved file could not be honoured at boot, and only
-                // custom profiles are serialised — so saving now would
-                // land a custom-profile-free document over profiles the
-                // user still has on disk. Copy the file aside first, and
-                // refuse to save at all if that copy cannot be made:
-                // overwriting after a failed backup is the bug (#595).
-                let mut backup_note = String::new();
-                if self.ui_state.keymap_load_error.is_some() {
-                    match crate::keymap::back_up_profile_file() {
-                        Ok(Some(bak)) => {
-                            self.ui_state.keymap_backup = Some(bak.display().to_string());
-                            backup_note =
-                                format!(" The previous file was kept as {}.", bak.display());
-                        }
-                        Ok(None) => {}
-                        Err(error) => {
-                            // Reason first, and short: Messages cuts at 157 bytes.
-                            tracing::error!(
-                                target: "signex::keymap",
-                                "keymap backup failed, file left untouched: {error}"
-                            );
-                            self.ui_state.preferences_keymap_status = format!(
-                                "Could not save keyboard shortcuts: the existing file could \
-                                 not be backed up first, so it was left untouched rather than \
-                                 overwritten ({error})."
-                            );
-                            // The prefs writes above are already started, so this
-                            // early return is still a path that has to
-                            // report a file that broke since the dialog
-                            // opened (#602).
-                            self.recompute_preferences_dirty();
-                            return self.save_follow_up(writes, ui_scale_changed);
-                        }
-                    }
-                }
-                match crate::keymap::save_profile_set(&keymap_profiles) {
-                    Ok(()) => {
-                        self.ui_state.set_keymap_profiles(keymap_profiles);
-                        self.ui_state.active_keymap = std::sync::Arc::new(
-                            self.ui_state
-                                .keymap_profiles
-                                .compile_active_in(&self.ui_state.i18n),
-                        );
-                        self.ui_state.preferences_keymap_recorder = None;
-                        self.ui_state.preferences_keymap_status =
-                            format!("Keyboard shortcuts saved.{backup_note}");
-                        // The file on disk is now valid and written by this
-                        // process, so the boot-time failure no longer holds:
-                        // drop the banner and let the next Apply be an
-                        // ordinary save.
-                        self.ui_state.keymap_load_error = None;
-                    }
-                    Err(error) => {
-                        self.ui_state.preferences_keymap_status =
-                            format!("Could not save keyboard shortcuts: {error}");
-                        // Same reason as the backup-failure return above:
-                        // the prefs writes are already started (#602).
-                        self.recompute_preferences_dirty();
-                        return self.save_follow_up(writes, ui_scale_changed);
-                    }
-                }
-                // Every prefs write in this arm has been started, and
-                // `save_follow_up` asks the file whether they landed once
-                // they all finish (#602, #1351). This is the
-                // only probe on the path a user takes when they break
-                // `prefs.json` beside the running app with Preferences
-                // already open — the open handler early-returns in that
-                // case, so nothing else would ever raise the banner and
-                // the dialog would keep reporting a save that was refused.
-                // One extra file read per Save.
-                //
-                // Limit: the dialog reports "Saved" from the committed model,
-                // before the background writes finish. A write that fails
-                // (full disk) is logged and shown in the Messages panel when
-                // it completes, and a file broken beyond use raises the
-                // banner through the probe; the dialog does not turn the
-                // "Saved" line into an error after the fact.
-                self.ui_state.preferences_dirty = false;
-                return self.save_follow_up(writes, ui_scale_changed);
+            PrefMsg::Save => return self.handle_preferences_save(),
+            // The drafts and the component-class edits live in `drafts`.
+            // Listed one by one rather than caught by a `_ =>`, so this
+            // match stays exhaustive over `PrefMsg`: a new variant is a
+            // compile error here, not a message routed to the wrong owner.
+            msg @ (PrefMsg::DraftTheme(..)
+            | PrefMsg::DraftFont(..)
+            | PrefMsg::DraftGridStyle(..)
+            | PrefMsg::DraftPcbGpuRender(..)
+            | PrefMsg::DraftAntialiasing(..)
+            | PrefMsg::DraftAnnotateUndo(..)
+            | PrefMsg::DraftMoveKeepsWires(..)
+            | PrefMsg::DraftDragDirectionSelect(..)
+            | PrefMsg::DraftNetHoverEnabled(..)
+            | PrefMsg::DraftEdgePanEnabled(..)
+            | PrefMsg::DraftEdgePanSpeed(..)
+            | PrefMsg::SymbolBodyFill(..)
+            | PrefMsg::DraftTrackpadPan(..)
+            | PrefMsg::DraftWheelMode(..)
+            | PrefMsg::DraftLayerSwitcher(..)
+            | PrefMsg::DraftSelectedSegment(..)
+            | PrefMsg::DraftRememberWindowGeometry(..)
+            | PrefMsg::DraftIncrementStep(..)
+            | PrefMsg::DraftPasteDesignators(..)
+            | PrefMsg::DraftWindowControlsPlacement(..)
+            | PrefMsg::DraftAutosaveEnabled(..)
+            | PrefMsg::DraftAgentConnectionsEnabled(..)
+            | PrefMsg::DraftSymbolGridSize(..)
+            | PrefMsg::DraftFastGrid(..)
+            | PrefMsg::DraftSymbolGridStyle(..)
+            | PrefMsg::DraftZoomStepPercent(..)
+            | PrefMsg::DraftUiScalePercent(..)
+            | PrefMsg::DraftSymbolPinSelection(..)
+            | PrefMsg::DraftLanguage(..)
+            | PrefMsg::ComponentClassEditKey { .. }
+            | PrefMsg::ComponentClassEditLabel { .. }
+            | PrefMsg::ComponentClassAdd
+            | PrefMsg::ComponentClassRemove { .. }
+            | PrefMsg::ComponentClassResetDefaults) => {
+                return self.handle_preferences_draft(msg);
             }
-            PrefMsg::DraftTheme(id) => {
-                self.ui_state.preferences_draft_theme = id;
-                // Schematic canvas colours are derived from
-                // `preferences_draft_theme` every frame (#631), but the PCB
-                // canvases hold pushed colours and every canvas caches its
-                // paper, grid and content. `sync_theme` recolours
-                // the PCB canvases and drops the caches on every open
-                // canvas, docked or undocked (#1749).
-                self.sync_theme();
-                self.recompute_preferences_dirty();
-            }
-            PrefMsg::DraftFont(name) => {
-                self.ui_state.preferences_draft_font = name;
-                self.recompute_preferences_dirty();
-            }
-            PrefMsg::DraftGridStyle(style) => {
-                self.ui_state.preferences_draft_grid_style = style;
-                // Live preview: the grid sits in the camera-keyed bg layer,
-                // so drop that cache on every schematic canvas.
-                for canvas in self.interaction_state.all_schematic_canvases_mut() {
-                    canvas.clear_bg_cache();
-                }
-                self.recompute_preferences_dirty();
-            }
-            PrefMsg::DraftAnnotateUndo(scope) => {
-                self.ui_state.preferences_draft_annotate_undo = scope;
-                self.recompute_preferences_dirty();
-            }
-            PrefMsg::DraftAutosaveEnabled(enabled) => {
-                self.ui_state.preferences_draft_autosave_enabled = enabled;
-                self.recompute_preferences_dirty();
-            }
-            PrefMsg::DraftAgentConnectionsEnabled(enabled) => {
-                self.ui_state.preferences_draft_agent_connections_enabled = enabled;
-                self.recompute_preferences_dirty();
-            }
-            PrefMsg::DraftDragDirectionSelect(enabled) => {
-                self.ui_state.preferences_draft_drag_direction_select = enabled;
-                self.recompute_preferences_dirty();
-            }
-            PrefMsg::DraftNetHoverEnabled(enabled) => {
-                self.ui_state.preferences_draft_net_hover_enabled = enabled;
-                self.recompute_preferences_dirty();
-            }
-            PrefMsg::SymbolBodyFill(msg) => {
-                self.ui_state.apply_body_fill_message(msg);
-                self.recompute_preferences_dirty();
-            }
-            PrefMsg::DraftTrackpadPan(enabled) => {
-                self.ui_state.preferences_draft_trackpad_pan = enabled;
-                self.recompute_preferences_dirty();
-            }
-            PrefMsg::DraftWheelMode(mode) => {
-                self.ui_state.preferences_draft_wheel_mode = mode;
-                self.recompute_preferences_dirty();
-            }
-            PrefMsg::DraftRememberWindowGeometry(enabled) => {
-                self.ui_state.preferences_draft_remember_window_geometry = enabled;
-                self.recompute_preferences_dirty();
-            }
-            PrefMsg::DraftIncrementStep(step) => {
-                // Zero would stamp one text forever: it keeps the direction
-                // the slider came from instead of landing on it.
-                let previous = self.ui_state.preferences_draft_increment_step;
-                self.ui_state.preferences_draft_increment_step = match step {
-                    0 if previous < 0 => -1,
-                    step => signex_types::text_increment::clamp_step(i64::from(step)),
-                };
-                self.recompute_preferences_dirty();
-            }
-            PrefMsg::DraftPasteDesignators(mode) => {
-                self.ui_state.preferences_draft_paste_designators = mode;
-                self.recompute_preferences_dirty();
-            }
-            PrefMsg::DraftMoveKeepsWires(enabled) => {
-                self.ui_state.preferences_draft_move_keeps_wires = enabled;
-                self.recompute_preferences_dirty();
-            }
-            PrefMsg::DraftWindowControlsPlacement(placement) => {
-                self.ui_state.preferences_draft_window_controls_placement = placement;
-                self.recompute_preferences_dirty();
-            }
-            PrefMsg::DraftAntialiasing(enabled) => {
-                // No live preview: iced fixes it at start. Saved on Save,
-                // read at the next launch.
-                self.ui_state.preferences_draft_antialiasing = enabled;
-                self.recompute_preferences_dirty();
-            }
-            PrefMsg::DraftPcbGpuRender(enabled) => {
-                self.ui_state.preferences_draft_pcb_gpu_render = enabled;
-                // Live preview: push the draft into the widget's effective flag
-                // and repaint the PCB canvas so the toggle shows immediately.
-                // Persisted only on Save; reverted on Discard.
-                for canvas in self.interaction_state.all_pcb_canvases_mut() {
-                    canvas.gpu_render = enabled;
-                    canvas.clear_content_cache();
-                    canvas.clear_bg_cache();
-                }
-                self.recompute_preferences_dirty();
-            }
-            // #629 — these three used to call `write_*_pref` right here,
-            // making the change permanent before the user reached the
-            // footer. They now behave like every other draft in this pane:
-            // update the draft, preview it, and let Save persist it.
-            PrefMsg::DraftSymbolGridSize(size) => {
-                self.ui_state.preferences_draft_symbol_grid_size_mm = size;
-                self.recompute_preferences_dirty();
-            }
-            PrefMsg::DraftFastGrid(index, text) => {
-                if let Some(field) = self.ui_state.preferences_draft_fast_grids.get_mut(index) {
-                    *field = text;
-                }
-                self.recompute_preferences_dirty();
-            }
-            PrefMsg::DraftSymbolGridStyle(style) => {
-                self.ui_state.preferences_draft_symbol_grid_style = style;
-                // Live preview only — `revert_preferences_drafts` pushes
-                // the committed style back if the user discards.
-                self.document_state.panel_ctx.symbol_grid_style = style;
-                self.recompute_preferences_dirty();
-            }
-            PrefMsg::DraftZoomStepPercent(percent) => {
-                // Out-of-range input is clamped, never stored raw.
-                self.ui_state.preferences_draft_zoom_step_percent =
-                    crate::canvas::Camera::clamp_zoom_step_percent(percent as i64);
-                self.recompute_preferences_dirty();
-            }
-            PrefMsg::DraftUiScalePercent(percent) => {
-                // Snapped to the 10 % steps and clamped, never stored raw.
-                self.ui_state.preferences_draft_ui_scale_percent =
-                    crate::ui_scale::snap_percent(percent);
-                self.recompute_preferences_dirty();
-            }
-            PrefMsg::DraftSymbolPinSelection(mode) => {
-                self.ui_state.preferences_draft_symbol_pin_selection = mode;
-                self.recompute_preferences_dirty();
-            }
+            PrefMsg::PcbDefaults(msg) => self.handle_pcb_defaults_message(msg),
             PrefMsg::Profiles(msg) => return self.handle_profiles_message(msg),
-            PrefMsg::ResetPrefsFile => {
-                // Never move a healthy file aside. The user may have
-                // repaired it by hand between this banner being painted
-                // and the click, and renaming a good prefs.json away
-                // would be #594 again, by hand.
-                // Every outcome below is reported to the Messages panel as
-                // well as to the dialog. The status string dies with the
-                // dialog and is invisible to anyone reading a bug report;
-                // a recovery action that touches the user's config files
-                // has to leave a trace that outlives the window.
-                match crate::fonts::check_prefs_file() {
-                    Ok(()) => {
-                        self.ui_state.prefs_load_error = None;
-                        tracing::info!(
-                            target: "signex::prefs",
-                            path = %crate::fonts::prefs_file_path().display(),
-                            "preferences reset was requested but the file now loads cleanly, \
-                             so nothing was moved"
-                        );
-                        self.ui_state.preferences_prefs_status =
-                            "Your preferences file is readable again — nothing was moved."
-                                .to_string();
-                    }
-                    Err(_) => match crate::fonts::move_prefs_file_aside() {
-                        Ok(Some(aside)) => {
-                            self.ui_state.prefs_load_error = None;
-                            tracing::info!(
-                                target: "signex::prefs",
-                                path = %crate::fonts::prefs_file_path().display(),
-                                kept_as = %aside.display(),
-                                "the unreadable preferences file was moved aside on the user's \
-                                 request and a fresh empty one put in its place; preferences \
-                                 save again from now on"
-                            );
-                            // This arm deliberately writes no drafts, so
-                            // the fresh file is empty and anything the
-                            // user "saved" while writes were being refused
-                            // is still only in memory. Saying "Preferences
-                            // reset." alone would let them quit believing
-                            // it persisted. Re-persisting live state from
-                            // here is a different feature and a different
-                            // decision; telling the truth is not.
-                            self.ui_state.preferences_prefs_status = format!(
-                                "Preferences reset. The unreadable file was kept as {}. \
-                                 Change and save a setting to write a new one.",
-                                aside.display()
-                            );
-                        }
-                        Ok(None) => {
-                            self.ui_state.prefs_load_error = None;
-                            // `warn!`, not `info!`: the probe a moment ago
-                            // said this file was unloadable and the rename
-                            // then found nothing there, so something
-                            // outside this process removed it mid-action.
-                            tracing::warn!(
-                                target: "signex::prefs",
-                                path = %crate::fonts::prefs_file_path().display(),
-                                "the unreadable preferences file was gone before it could be \
-                                 moved aside; something outside this process removed it"
-                            );
-                            self.ui_state.preferences_prefs_status =
-                                "There was no preferences file to move aside.".to_string();
-                        }
-                        Err(error) => {
-                            // The flag deliberately stays set: nothing
-                            // changed on disk, so the banner must stay up
-                            // and keep offering the action.
-                            tracing::error!(
-                                target: "signex::prefs",
-                                path = %crate::fonts::prefs_file_path().display(),
-                                error = %error,
-                                "the unreadable preferences file could not be moved aside, so \
-                                 it was left exactly as it is and preferences still cannot be \
-                                 saved"
-                            );
-                            self.ui_state.preferences_prefs_status = format!(
-                                "Could not start a fresh preferences file: the unreadable one \
-                                 could not be moved aside, so it was left untouched ({error})."
-                            );
-                        }
-                    },
-                }
-                // No draft was touched, so the dirty flag is not
-                // recomputed.
-            }
+            PrefMsg::ResetPrefsFile => self.handle_prefs_file_reset(),
+            PrefMsg::PrefsFolderOpenRequested => return self.open_prefs_folder(),
+            PrefMsg::PagesView(msg) => return self.handle_preferences_pages_view(msg),
+            PrefMsg::KeymapView(msg) => return self.handle_preferences_keymap_view(msg),
+            PrefMsg::ClassesView(msg) => return self.handle_preferences_classes_view(msg),
             PrefMsg::LibrarySettings(settings_msg) => {
                 // Route the Distributor APIs panel's SettingsMsg back
                 // through the library dispatcher so the canonical
@@ -736,53 +386,9 @@ impl Signex {
                     crate::library::messages::LibraryMessage::Settings(settings_msg),
                 );
             }
-            PrefMsg::ComponentClassEditKey { index, key } => {
-                if let Some(entry) = self
-                    .ui_state
-                    .preferences_draft_component_classes
-                    .get_mut(index)
-                {
-                    entry.key = key;
-                    self.recompute_preferences_dirty();
-                }
-            }
-            PrefMsg::ComponentClassEditLabel { index, label } => {
-                if let Some(entry) = self
-                    .ui_state
-                    .preferences_draft_component_classes
-                    .get_mut(index)
-                {
-                    entry.label = label;
-                    self.recompute_preferences_dirty();
-                }
-            }
-            PrefMsg::ComponentClassAdd => {
-                self.ui_state.preferences_draft_component_classes.push(
-                    crate::fonts::ComponentClassEntry {
-                        key: String::new(),
-                        label: String::new(),
-                    },
-                );
-                self.recompute_preferences_dirty();
-            }
-            PrefMsg::ComponentClassRemove { index } => {
-                if index < self.ui_state.preferences_draft_component_classes.len() {
-                    self.ui_state
-                        .preferences_draft_component_classes
-                        .remove(index);
-                    self.recompute_preferences_dirty();
-                }
-            }
-            PrefMsg::ComponentClassResetDefaults => {
-                self.ui_state.preferences_draft_component_classes =
-                    crate::fonts::default_component_classes();
-                self.recompute_preferences_dirty();
-            }
             // Keyboard Shortcuts pane — the arms live in the sibling
-            // `keymap` module. Listed one by one rather than caught by a
-            // `_ =>` so this match stays exhaustive over `PrefMsg`: a new
-            // non-keymap variant is a compile error here, not a message
-            // silently routed to a handler that does not own it.
+            // `keymap` module, listed one by one for the same reason as
+            // the drafts above.
             msg @ (PrefMsg::KeymapSearchChanged(..)
             | PrefMsg::KeymapProfileSelected(..)
             | PrefMsg::KeymapCreateCustomProfile

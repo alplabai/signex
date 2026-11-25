@@ -156,6 +156,8 @@ fn select_pad(editor: &mut crate::app::FootprintDocument, sel: Option<usize>) {
     // the stack at the last-clicked location.
     if sel.is_some() {
         editor.state.last_click_world_mm = editor.state.cursor_mm;
+    } else {
+        crate::library::editor::footprint::sketch_mode::exit::end_outcome(editor);
     }
     // v0.18.18 — pad and silk selection are mutually
     // exclusive in the Properties panel; clear the silk
@@ -181,6 +183,7 @@ fn select_pads(editor: &mut crate::app::FootprintDocument, mut pads: Vec<usize>)
     if pads.is_empty() {
         editor.state.selected_pad = None;
         editor.state.selected_pads_extra.clear();
+        crate::library::editor::footprint::sketch_mode::exit::end_outcome(editor);
     } else {
         editor.state.selected_pad = Some(pads[0]);
         editor.state.selected_pads_extra = pads[1..].to_vec();

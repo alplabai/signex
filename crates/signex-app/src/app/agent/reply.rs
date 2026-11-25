@@ -8,6 +8,7 @@ use std::path::PathBuf;
 
 use serde::Serialize;
 use serde_json::Value;
+use signex_i18n::RenderTranslatable;
 
 use crate::app::Signex;
 use crate::app::command::CommandOutcome;
@@ -52,7 +53,10 @@ pub fn outcome_verdict(
         },
         CommandOutcome::UnknownId => (
             Status::Refused,
-            Some(format!("unknown command `{id}`")),
+            Some(format!(
+                "unknown command `{id}`{}",
+                crate::keymap::did_you_mean(id)
+            )),
             None,
         ),
         CommandOutcome::NoBridgeArm => (
@@ -66,7 +70,8 @@ pub fn outcome_verdict(
         // notice (an open of a missing file) failed; it was not refused.
         CommandOutcome::Disabled { reason } => match notice {
             Some(why) => (Status::Failed, Some(why), None),
-            None => (Status::Refused, Some(reason), None),
+            // en-US, so the reply stays locale-invariant.
+            None => (Status::Refused, Some(reason.render_en_us()), None),
         },
         // A query ran: what it found is the result, never a bare `ran`.
         CommandOutcome::Answered(value) => (Status::Answered, None, Some(value)),
@@ -167,13 +172,7 @@ mod tests {
         assert_eq!(unknown.0, Status::Refused);
         let arm = outcome_verdict("x", CommandOutcome::NoBridgeArm, None);
         assert!(arm.1.unwrap().contains("no dispatch arm"));
-        let disabled = outcome_verdict(
-            "x",
-            CommandOutcome::Disabled {
-                reason: "why".into(),
-            },
-            None,
-        );
+        let disabled = outcome_verdict("x", CommandOutcome::disabled("why"), None);
         assert_eq!(
             (disabled.0, disabled.1.as_deref()),
             (Status::Refused, Some("why"))
@@ -182,9 +181,7 @@ mod tests {
         // that is not there) is a failure with that notice.
         let noticed = outcome_verdict(
             "x",
-            CommandOutcome::Disabled {
-                reason: "made no document".into(),
-            },
+            CommandOutcome::disabled("made no document"),
             Some("Open failed: no file".into()),
         );
         assert_eq!(
@@ -197,5 +194,20 @@ mod tests {
         assert_eq!(answered, (Status::Answered, None, Some(answer)));
         let not_headless = outcome_verdict("x", CommandOutcome::NotHeadless, None);
         assert_eq!(not_headless.0, Status::Failed);
+    }
+
+    /// ADR-0006 slice 7: an unknown id is answered with the close catalog
+    /// ids; one with none close keeps the old text.
+    #[test]
+    fn an_unknown_command_says_which_ids_are_close() {
+        let (status, why, _) = outcome_verdict("plce_wire", CommandOutcome::UnknownId, None);
+        assert_eq!(status, Status::Refused);
+        let why = why.expect("a reason");
+        assert!(
+            why.starts_with("unknown command `plce_wire`; did you mean `place_wire`"),
+            "{why}"
+        );
+        let far = outcome_verdict("zzzzzzzzzzzzzzzz", CommandOutcome::UnknownId, None);
+        assert_eq!(far.1.as_deref(), Some("unknown command `zzzzzzzzzzzzzzzz`"));
     }
 }

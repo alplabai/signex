@@ -32,15 +32,15 @@ pub fn document_id_in_header(extension: &str, bytes: &[u8]) -> Option<DocumentId
     }
     let key = toml_key(extension)?;
     let head_len = text
-        .lines()
+        .split_inclusive('\n')
         .scan(0usize, |at, line| {
             let start = *at;
-            *at += line.len() + 1;
+            *at += line.len();
             Some((start, line))
         })
         .find(|(_, line)| line.trim_start().starts_with('['))
         .map_or(text.len(), |(start, _)| start);
-    let head: toml::Table = toml::from_str(&text[..head_len.min(text.len())]).ok()?;
+    let head: toml::Table = toml::from_str(&text[..head_len]).ok()?;
     let uuid = Uuid::parse_str(head.get(key)?.as_str()?).ok()?;
     DocumentId::from_uuid(uuid)
 }
@@ -66,6 +66,20 @@ mod tests {
                 "{extension}"
             );
         }
+    }
+
+    /// A checkout under `core.autocrlf` writes CRLF. The head ends exactly at
+    /// the first table, even after a key whose value ends in a multi-byte
+    /// character.
+    #[test]
+    fn a_crlf_file_reads_its_id_and_never_cuts_inside_a_character() {
+        let file = format!(
+            "format = \"snxsch/1\"\r\nschematic_id = \"{ID}\"\r\n\r\nnote = \"5 €\"\r\n[wires]\r\n"
+        );
+        assert_eq!(
+            document_id_in_header("snxsch", file.as_bytes()),
+            Some(ID.parse().unwrap())
+        );
     }
 
     #[test]

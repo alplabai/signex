@@ -87,14 +87,130 @@ build reads a file with markers (it ignores the key) and drops them when it
 saves. The format token stays `snxfpt/1` and `FOOTPRINT_SCHEMA_VERSION`
 is unchanged.
 
+### Generated features {#generated-features}
+
+Silkscreen outline, Pad clearance, Pin 1 marker and Assembly outline (mockup
+row 124, #2834) are switches and values on the footprint, edited in the
+Courtyard & Silkscreen section as one undo step each. All off at the
+defaults (line width 0.12 mm, clearance 0.20 mm, marker on), which is not
+written, so such a file keeps its lower token; anything else writes
+`snxfpt/1.3`.
+
+The courtyard's Line width (mockup row 124, #2850, default 0.05 mm) is stored
+with these values as `generated.courtyard_line_width_mm` and follows the same
+token rule. Placing the footprint strokes the board courtyard at that width,
+whichever way the courtyard was drawn. The field sits under the generated
+courtyard switch and is greyed while that switch is off.
+
+The pin 1 dot sits on pad 1's outer side, or on the first other side clear of
+every pad by the clearance; with no clear side there is no dot. While the
+silkscreen outline and the marker are on and no dot is placed, for that reason
+or because no pad is numbered 1, the section shows a note saying so.
+
+`signex_bake::bake_generated` rebuilds the strokes after a setting edit, a
+pad write-back (saves included), a 3D body mint and a sketch bake. They are
+stored in `generated.silk` and `generated.assembly`, apart from `silk_f` and
+`fab_f`: a re-bake never touches hand-drawn entries or their selection, and a
+stroke cannot be selected or edited by hand. Placing the footprint copies them
+to the board's top silkscreen and fab layers.
+
+- **Body:** the 3D body outline's extent, else the extent of the hand-drawn
+  front fab graphics. With neither, no outline is generated and the section
+  says what is missing.
+- **Silkscreen outline:** the body rectangle, with the part of each edge
+  within the clearance plus half the line width of a pad's turned extent
+  removed.
+- **Pin 1 marker:** a solid dot on the outer side of the pad numbered 1, the
+  clearance away from its copper. No such pad, no dot.
+- **Assembly outline:** the body rectangle on the front fab layer, at the
+  stock parts' 0.1 mm line.
+
 ## Redundant constraints
 
 `FullSolveOutput.redundant_constraints` names consistent constraints whose
 every Jacobian row is implied by the EARLIER constraints (and the arc
 closures), so the verdict depends on constraint order and names the later
-duplicate. They are listed under "Redundant" in the footprint editor's
-DOF / Last solve section. Conflicts are reported separately as
-over-constrained.
+duplicate. They are listed under "Redundant" in the Sketch solve section
+of the footprint editor's Properties panel. Conflicts are reported
+separately as over-constrained.
+
+## The sketch in the Properties panel
+
+With nothing selected, the footprint Properties panel shows the Footprint,
+Snap & Grid and sketch sections in one scroll, in any mode. The sketch
+sections hold the solve state and the sketch parameters:
+
+- **Sketch solve**: a pill in the header names the state (DOF 0 in green when
+  fully constrained, Under-constrained in blue, Over-constrained in red, or
+  No sketch / Sketch not solved), then the entity and constraint counts and
+  the last solve's iterations, residual, time and over-constrained count,
+  the redundant constraints and the conflicting ones. A conflict or redundant
+  row selects its entity.
+- **Parameters**: one editable expression per sketch parameter.
+- **Solve warnings**: the notes of the last solve.
+
+In Sketch mode the same sections also follow a selected sketch entity, under
+its Entity section (kind, Role, position, construction, attached constraints
+and a banner with the entity's constraint state) and Snap Options.
+
+## Role sub-forms
+
+When the selected sketch entity carries a role, Properties shows the
+sub-form of each role it carries, one under the other: Pour, Keepout,
+Cutout, Sketch pad, then Pattern (a pattern's source is also a sketch pad,
+so both show). Each starts with a header (the object and a caption line),
+then a line-art illustration, then its sections. The forms live in
+`panels/footprint_editor_properties/subforms/`; the edits without a flat
+`FpEditor*` message are `FpSubformMsg`, handled in
+`app/handlers/dock/sch_library/footprint/role.rs`. Every edit is one undo
+step, re-solves and re-bakes the sketch, and dirties the tab.
+
+- **Keepout.** The **Layer** dropdown writes `KeepoutAttr::layer`. It offers
+  Top Layer and Bottom Layer, plus the stored layer when a file names
+  another one. A keepout on all layers or on the inner layers only cannot
+  be stored yet (`KeepoutAttr::layer` holds one board layer).
+- **Cutout.** **Limit depth (pocket)** is the inverse of
+  `BoardCutoutAttr::through`: ticked writes `through = false`. A cutout has
+  no stored depth, so the switch shows no Depth field.
+- **Sketch pad.** The copper size comes from the sketch profile and is
+  shown, not edited. Top Paste and Top Solder mask are enable sections: the
+  mask switch is ticked while the mask opens (`mask_top_tented = false`).
+  Each expansion is Rule (`paste_*_expr` / `mask_*_expr` empty) or Manual;
+  a plain number is stored as `<n>mm`, an expression as written, and text
+  that does not parse yet is kept in the editor's field buffers without
+  touching the pad. A paste expression clears the paste percentage of that
+  side. A pad without a drill shows the paste and mask of its own side
+  (`PadAttr::side`; both sides for a pad on every side), which are the
+  layers the bake gives it; a drilled pad shows both sides and the hole
+  details.
+- **Pattern.** The kind segment shows the pattern's kind; a pattern keeps
+  the kind it was made with. Start row / col and the letter skip apply to
+  BGA numbering and grey otherwise.
+
+The pattern illustration draws `signex_bake::array::preview_array`: the
+same walk the bake runs (`signex-bake/src/array/walk.rs`) gives each
+instance its offset, number and dropped flag, so the drawing shows what the
+bake produces. Dropped instances are drawn dashed. When a count, spacing or
+mask does not evaluate, or the pattern has more than 256 instances, the
+drawing shows the source pad only, with a note.
+
+## Switching modes {#switching-modes}
+
+The footprint editor bar floats at the canvas's top right, just under the
+Active Bar (Graphite mockup row 187). At its left a two-state segment reads
+**Footprint | Sketch**: Footprint is the pads view, Sketch opens the
+sketcher. Beside it the **3D** toggle shows the body in 3D; it is lit while
+3D is on, and a second click goes back to the mode 3D was entered from
+(Footprint or Sketch). In 3D the segment of that mode stays lit, and a
+click on a segment leaves 3D for that mode. Leaving Sketch this way does
+what leaving it always does: the pad link, the canvas value edits and the
+bake preview close. In sketch mode the bar goes on with the sketch info
+caption and **Parameters** (see [Parameters](#parameters)). The keys `1`
+(Sketch), `2` (Footprint) and `3` (3D) switch the same way. A board sketch
+has no Footprint / Sketch switch.
+
+The switch replaces the Sketch · Pads · 3D segment; "Pads" now reads
+"Footprint". Decided by Caner on 2026-11-20 (`docs/DECISIONS.md`).
 
 ## Leaving sketch mode {#leaving-sketch-mode}
 
@@ -103,10 +219,19 @@ The footprint editor shares the board sketch's tools and its way out
 [PCB_SKETCH.md](PCB_SKETCH.md#hosts)). In sketch mode the Active Bar is the
 sketch bar alone, Select | Create ▾ | Modify ▾ | constraints | dimension
 input | Linetype | Snap ▾, and the mode bar at the canvas's bottom left
-reads **Bake preview · Discard changes · Bake**:
+reads **Bake preview · Discard changes · Bake**. The constraint strip always
+shows all 19 buttons; one the selection cannot take is greyed and does nothing.
+The bar fits and centres on the canvas between the docks. When the canvas is
+too narrow for it, the strip alone scrolls sideways, by a thin scrollbar under
+its buttons or Shift+wheel. A bar still wider than the canvas (a narrow tile)
+stays whole and passes over the docks, kept inside the window, so every other
+control stays in reach:
 
 - **Bake** keeps the edits and goes back to the pads view. The footprint
-  bakes on every solve, so nothing more is written.
+  bakes on every solve, so nothing more is written. An open profile stops
+  it: the editor stays in sketch mode, selects the open ends and opens the
+  bake preview. The check reads the sketch's topology, so it needs no solve.
+  A sketch that cannot be solved stops Bake too, and the preview says why.
 - **Discard changes** goes back to the pads view without the edits. Sketch
   mode keeps the footprint as it found it (`sketch_mode::exit`); when the
   footprint differs from that, Discard changes asks first, then restores
@@ -114,7 +239,506 @@ reads **Bake preview · Discard changes · Bake**:
   leaves at once. It never writes to disk.
 - **Bake preview** shows a count per footprint target (pads, silk,
   courtyard, mask, paste, pours, keepouts, cutouts, V-scores); "Back to
-  sketch" closes it.
+  sketch" closes it. While it is open the canvas draws the result (Graphite mockup row 190):
+  a veil in the ground colour, then the baked pads, silk and courtyard as
+  Pads mode draws them and the mask openings, paste apertures, pours,
+  keepouts and cutouts in their layer colours (the board palette's
+  `board_layer_colour`), with the sketch faint on top. The pads, silk and
+  courtyard are the editor's own (the footprint bakes on every solve); the
+  other fields are baked from the same solve when the canvas redraws
+  (`canvas/draw/sketch/bake_overlay.rs`). The card also lists the last
+  bake's warnings, the features it left out; they name no entity, so a
+  click on them does nothing. One gap is one line, naming the object and
+  its place, and the canvas rings it.
+
+After **Bake**, Properties shows the outcome: `Baked · N pads`, what was
+written, a **Pads ↔ Sketch** row and Edit in Sketch (mockup row 190). Clicking
+one pad keeps the panel and fills the row with that pad and its sketch source.
+A non-pad object, a multi-selection, an edit or an empty click ends the panel,
+and it does not come back on Undo or Redo.
 
 The Linetype control is a three-way segment, Normal / Construction /
 Centerline; it replaces the click-to-cycle pill.
+
+## Roles {#roles}
+
+With nothing selected, Properties in a footprint sketch has a **Roles**
+section: one row per closed profile with its role, then Solder mask (from the
+pad rule, no entity), the centerlines (they never bake), and Bake preview and
+Bake (mockup row 190). A role picked on a row applies to the whole profile as
+one undo step.
+
+A closed profile of lines and arcs can take the **Pad** role: a centre Point
+carries the pad, and its custom shape is traced from the loop. Picking Pad on
+any edge of the loop does the same, and an edge of that loop reads Pad. Another
+role on the loop removes the pad. A Point stays a simple pad.
+
+## Parameters {#parameters}
+
+A sketch's parameters are named values its expressions read: dimensions,
+pattern counts and spacings, pad sizes and the other bake attributes
+(mockup row 189). They are kept per footprint (or per board sketch); there are no
+family tables shared between footprints.
+
+**The sketch info bar** sits at the canvas's top right in sketch mode, on
+the editor bar after the 3D toggle ([Switching modes](#switching-modes)),
+clear of the DOF chips; a board floats it alone: "Footprint sketch ·
+plane Top · grid 0.05 mm" (a board reads "Board shape · …"), and the
+**Parameters** button, which opens or closes the table.
+
+Under the table's rows, a live bake preview (Caner, 2026-11-24) draws the
+edges that bake, a footprint's baked pads and the driving dimensions, from
+the current solve without solving again; it redraws on each keystroke.
+While an expression does not read, it keeps the last good bake, marked,
+and hides the pads, since their angles cannot be read, saying so. Live
+checks sits beside it, parameter errors first.
+
+**The table** is a card over the canvas with one row per parameter:
+
+- **Name**, **Expression**, **Value**, **Unit** (mm, deg or count, the unit
+  family the expression resolves to) and **Used by** (the parameters,
+  dimensions, patterns, pads and other attributes whose expressions read
+  it).
+- **Add parameter** adds `param_1`, `param_2`, … (the first free name)
+  holding `1mm`, as one undo step.
+- Typing in Expression edits the parameter the same way the Properties
+  list does: each keystroke re-solves and is one undo step. While the
+  expression does not resolve (it does not parse, names an unknown
+  parameter, or forms a cycle), the drawing keeps its last solve, the row
+  is marked with the message, and Value shows the last good value. A row
+  whose expression is fine but reads a broken parameter says which one.
+- Typing a letter offers the parameter names that start with it, with
+  their values; picking one completes the name. Nothing is offered after a
+  number or a unit suffix (`0.5mm`).
+- The row's **⋯** menu has **Rename…** and **Delete** (Caner 2026-11-20).
+  Rename changes the name and every reference to it, whole names only
+  (`pitch` never touches `pitch2`), as one undo step; a name that is taken,
+  reserved (`pi`, the array indices `i` and `j`) or not a plain identifier
+  is refused with the reason. Delete of an unused parameter is immediate.
+  Delete of a used one asks first, naming its uses: **Replace with value**
+  puts the parameter's value (for example `0.65mm`) in place of each
+  reference and deletes it, as one undo step; **Cancel** keeps it.
+- **Esc** closes the open prompt, rename or row menu, then the table.
+
+**Make parameter** on a dimension (the constraint menu, mockup row 188) creates
+`dim_N` (`angle_N` for an angle) holding the dimension's current value
+with its unit, points the dimension at it, and opens the table on that
+row, as one undo step. A dimension that already reads exactly one
+parameter keeps it, and the table opens on that row.
+
+The rules live in the domain: `signex_expr::rename` edits a source token
+by token, and `signex_sketch::parameter_refs` walks every expression a
+sketch holds (its patterns name every field, so a new field does not
+compile until it is placed) for Used by, rename, delete and Make
+parameter.
+
+Not built yet: a Comment column (the parameter table stores no comment),
+Import from another footprint, and the live-checks pane beside the
+table. The compact Parameters list in Properties is unchanged.
+
+## Values on the drawing {#values-on-the-drawing}
+
+Every dimension constraint (Distance, Distance to line, Distance to circle,
+Angle) draws its value where its letter glyph used to be, in a small label:
+`name · value` when its target is exactly one parameter (`pitch · 0.65 mm`),
+else the evaluated value with its unit (`0.70 mm`, `90°`); a reference
+shows the value it measures ([Reference dimensions](#reference-dimensions)).
+Constraints that are not dimensions draw their marks
+([Canvas look](#canvas-look)). One layout
+(`canvas/glyph_layout.rs`) places every glyph, value and pattern glyph; the
+draw pass and the hit test both read it, so a click lands on what is
+drawn.
+
+With the Select tool, a click on a value opens it for editing on the
+drawing, starting from its expression or number (degrees for an angle).
+Enter writes it through the same path as every sketch edit: one undo step,
+then a solve; a value that over-constrains the sketch is reverted and its
+conflict named, leaving no undo step. A plain number is stored as a
+number, anything else as an expression, kept only when it evaluates; text
+that does not read keeps the field open with a red outline. Esc, or a click
+elsewhere on the canvas, cancels. The dimension input in the Active Bar
+stays.
+
+The words the canvas draws (units, pattern letters, the conflict badge,
+the snap badges) come from the app's language: the app renders them into
+the editor state (`state/canvas_text.rs`) when the editor opens and after
+a language change, because a canvas cannot read the catalog.
+
+## Constraint menu {#constraint-menu}
+
+A right-click on a constraint's glyph or value (Select tool) opens one
+menu at the click: Edit value, Make parameter and Convert to reference
+(dimensions only; a reference shows Make driving instead, see
+[Reference dimensions](#reference-dimensions)), Suppress, Select
+constrained entities, Show conflicts (only when the constraint is in a
+conflict; it selects every entity of the conflict) and Delete. Make
+parameter hands the dimension to the sketch parameters table, and is
+greyed when the value already is a parameter. Suppress is greyed with a
+tooltip that says why: the sketch file cannot store a suppressed
+constraint yet (see `DECISIONS.md`). Esc closes the menu first. A right-click anywhere
+else keeps its behaviour: it cancels a tool, pans, or opens the footprint
+context menu.
+
+## Patterns on the drawing {#patterns-on-the-drawing}
+
+Each pattern draws a glyph by its source, like a constraint: `L×4`
+(linear), `G×3×4` (rectangular, columns by rows), `P×8` (circular). A
+click on it selects the pattern (a second click, or Esc, drops it); a
+right-click opens its menu: one Edit row per value (count, or columns and
+rows; X and Y spacing; the sweep of a circular pattern) and Delete pattern,
+which keeps the source.
+
+A selected pattern shows its values under its glyph (`count = rows · 4`,
+`spacing X · 0.65 mm`); they edit on the drawing like a dimension and
+write the pattern's expression as typed.
+
+While a rectangular or circular pattern is selected, each of its instance
+slots draws a ring; a click suppresses that instance (one undo step) and a
+second click brings it back. The suppression list is the one the
+Properties pattern form ticks, kept by one helper on the array type
+(`ArrayKind::set_instance_suppressed`). A linear pattern has no
+suppression list, so its instances do not toggle. The pattern form's
+Numbering Mask (mockup row 126, #2845) edits the same list by pad number
+(`4,5`, `A2,B4`; commas or spaces): it shows the numbers of the suppressed
+instances, and a typed list replaces the list in one undo step
+(`signex_bake::array::instances_numbered`, `ArrayKind::set_suppressed_instances`).
+A number the pattern does not have is refused and the text stays in the field;
+on a linear pattern the field is greyed. The source's own slot is
+not offered: it is the source pad. The canvas draws no ring on it, and the
+Mask refuses the source pad's number the same way.
+
+## Conflicts {#conflicts}
+
+An over-constrained sketch draws no card over the drawing (Caner,
+2026-11-20): a compact red badge next to the conflicting dimension, or the
+first conflicting glyph, counts the conflicts and points to Properties
+(`1 conflict · see Properties`). In Properties, each conflict row has a
+Remove button that deletes that constraint in one undo step, then solves.
+
+## Snap badges {#snap-badges}
+
+While a drawing tool is armed, the cyan glyph at the cursor shows what the
+next click lands, and a pill beside it names it (Graphite mockup row 188, "the
+badge names the target"; `canvas/draw/sketch/snap.rs`):
+
+| Snap | Glyph | Badge |
+|---|---|---|
+| A sketch point | ● | Coincident · pad 1 (the point is a pad's centre or one of its own points), else Coincident · point |
+| Horizontal / Vertical inference | ─ / │ | Horizontal / Vertical |
+| Angle | ◇ | Angle 45° (the slope as seen on screen, 0° to 179°) |
+| Intersection | + | Intersection |
+| A Line's midpoint | ◐ | Midpoint · line (or · pad 1 for a pad's Line) |
+| A Circle's or Arc's centre | ⊙ | Centre · circle / arc (or · pad 1) |
+| Guide | none (the guide is drawn) | Guide |
+| A board feature (board sketch only) | ◻ | Pad · J1-1, Courtyard · J1, Board outline, … |
+| Grid, or no snap | none | none |
+
+The words come from the message catalog through the editor's canvas text,
+so they follow the app language. The pill takes the Graphite Dark chrome
+tokens (raised fill, strong line, text), since the board ground is Graphite
+Dark in both themes; the glyph keeps its cyan. The Midpoint, Centre and
+Intersection snaps land a constraint on the click (Caner, 2026-11-20,
+decision 6); see [Snap inference](#snap-inference).
+
+## Create tools {#create-tools}
+
+Sketch ▸ Create lists, on both hosts: Line, Rectangle, Rounded Rectangle,
+Circle, Arc, Tangent Arc, Edge Arc, Point, **Slot**, **Polygon** (Caner,
+2026-11-20, item 1; mockup row 187). Each shape is placed by its last click as
+one edit, so one undo step, and the tool goes back to its first click; Esc
+drops a half-made shape. The geometry is `signex_sketch::geom::shapes`, the
+same helpers the canvas ghost draws from.
+
+- **Slot** — click one end's centre, then the other's, then a third click
+  sets the half width (its distance from the line through the centres). A
+  positive length in the dimension input is the centre distance: the second
+  centre lands that far from the first, towards the cursor; an unreadable
+  one is refused and nothing changes. The slot is two semicircular Arcs on
+  the centres and two Lines joining their ends, plus a construction diameter
+  across each end. Constraints: each centre is the Midpoint of its diameter,
+  each diameter is Perpendicular to a side, the Arcs have Equal radius, and
+  two dimensions: the centre distance (centre to centre) and the width
+  (across the first end's diameter). The slot is then fully defined but for
+  where it sits and which way it points.
+  The ends are held tangent by the diameters, not by Tangent constraints: a
+  Tangent constraint at a point the Line and the Arc share has a residual
+  with its maximum there (the distance from a centre to a line through a
+  point of the circle never exceeds the radius), so its Jacobian row is zero
+  and it pins nothing; the slot would read as under-defined and the
+  redundancy check could flag it.
+- **Polygon** — click the centre, then the first vertex. The dimension input
+  is the side count: empty is 6, a whole number from 3 to 64 is taken, and
+  anything else is refused with a warning, nothing changes and the tool
+  waits for the vertex click again. The polygon is its sides as Lines
+  closing a loop, each vertex held on a construction Circle on the centre
+  (zero distance to the Circle), and each side as long as the next.
+
+Both bake as any closed profile does. The side count and centre distance
+are read from the dimension input (as Chamfer and Linear Pattern read it);
+the cursor's typed-value overlay has no field for them yet.
+
+## Snap inference {#snap-inference}
+
+While a drawing tool is armed (the Create rows above), three snaps land a
+constraint on the click's Point, in the click's undo step (Caner,
+2026-11-20, item 6; mockup row 188):
+
+| Snap | Constraint |
+|---|---|
+| Midpoint of a Line | Midpoint (the Point is the Line's midpoint) |
+| Centre of a Circle or Arc | Coincident with the centre Point (the click places its own Point) |
+| Intersection of two curves | Point on Line for a Line, Point on Arc for an Arc, zero distance to a Circle, on each of the two |
+
+Priority: a sketch Point first (a Point that is a Circle's or Arc's centre
+reads as Centre), then the board, then Midpoint and Centre within the Point
+snap's 8 px, then guides, intersections, H / V, angle and grid. Snap ▾ in
+sketch mode has a **Sketch snaps** group (Line midpoints, Circle and arc
+centres, on by default, not saved, no undo step); intersections keep their
+Objects for snapping row. A Line within ±5° of an axis still gets its
+Horizontal or Vertical (one threshold, `snap::AXIS_THRESHOLD_DEG`).
+
+**Ctrl while drawing** (Cmd on macOS) turns inference off for that click:
+the cursor skips the Midpoint, Centre, Intersection, H / V and angle snaps
+(point reuse, the board, guides and grid stay), and the click lands no
+inferred constraint, the Line's auto H / V included. The code is
+`snap::snap_cursor_with` and `snap::click_inference`; the canvas sends
+`SketchToolClickInferred` / `SketchPlacePointInferred` only when one applies.
+
+## Modify tools
+
+Sketch ▸ Modify lists, on both hosts: **Fillet, Chamfer, Trim, Extend**,
+then under "Needs a selection" **Mirror, Offset, Linear Pattern,
+Rectangular Pattern, Circular Pattern**, then **Make Pad from Profile**
+(greyed on a board). The rows under "Needs a selection" grey out while
+nothing is selected.
+
+- **Chamfer** — click the first Line, then the second; they must share an
+  endpoint. Both are cut back from the corner by the chamfer distance and a
+  new Line joins the cut ends, which it shares with the two Lines. The
+  distance is the dimension input, else 0.5 mm; a value that is not a
+  positive length is refused and nothing changes, as for Fillet. A distance
+  that reaches the far end of a Line, or two Lines that run in one
+  direction, are refused with a warning. The new Line and points take the
+  first Line's linetype. The corner Point is left in place, as Fillet leaves
+  it.
+- **Extend** — click near one end of a Line. That end moves to the nearest
+  Line, Circle or Arc ahead of it and a constraint keeps it there (Point on
+  Line, Point on Arc, or zero distance to a Circle). With nothing ahead the
+  Line is left as it is and a warning says so. Only a free end extends: an
+  end that another entity shares, or that a constraint, a pattern or a pad
+  names, is refused rather than torn off.
+- **Mirror** — opens an options card (mockup row 191; Caner, 2026-11-24).
+  The selection becomes its Objects and a selected centerline its Mirror
+  line. Clicks pick: a centerline under the cursor fills an empty line
+  first; with Mirror line focused, a click takes any Line; other clicks add
+  or remove objects. Keep linked (on each time the card opens) keeps every
+  copy symmetric to its source; off makes free copies. A selected pattern is
+  always mirrored live. OK writes one undo step and returns to Select;
+  Cancel writes nothing. The ghost draws the line, the picks and the copies
+  OK will write. Mirror is under "Needs a selection", so it is armed with
+  something selected.
+- **Linear Pattern** — click the source. The pattern repeats it 4 times
+  along X, at the dimension input as the pitch, else 5 mm; count and pitch
+  are edited in the Pattern section. Rectangular Pattern (2 × 2 at 5 mm) and
+  Circular Pattern (4 around a new centre) work as before.
+
+Chamfer, Extend and Mirror's centerline pick take an existing Line by its
+stroke (0.30 mm), so their clicks place no Point. Each tool shows a ghost
+while armed: the Line a click would take, where an extended end would stop,
+the Mirror card's copies, or where the pattern's instances would land.
+
+On a board the same rows are offered, and a board bake writes every instance
+([PCB_SKETCH.md](PCB_SKETCH.md#patterned-board-items)).
+
+The geometry of Chamfer and Extend is `signex_sketch::geom::line_edit`.
+
+## Pads and the sketch
+
+A pad made in the sketch keeps the id of the entity that drives it
+(`EditorPad::sketch_entity_id`).
+
+- **Edit in Sketch** on a pad switches to sketch mode with that entity
+  selected and focused (`FootprintEditorState::pad_link`). The canvas draws
+  the driving profile in the selection colour: the entity, the Lines of the
+  pad outline, and the closed loop it lies in. A floating link at the
+  canvas's bottom centre reads **◂ Back to pad N** and returns to the pads
+  view with that pad selected.
+- With a pad's driving entity selected in sketch mode and no focus, the
+  link reads **Jump to pad ▸** and does the same.
+- The focus ends when the mode changes or the selection moves to another
+  entity. The link changes the mode and the selection only, so it records
+  no undo step and does not mark the document changed. A board sketch has no pads
+  and shows no link.
+
+- A pad with sketch geometry behind it shows a read-only **Driven by sketch**
+  section in Properties (mockup row 192, item D5): its source (a pad point or
+  a profile of N edges), its pattern instance, found from its position by
+  `signex_bake::instance_at`, and its size.
+
+- Edit in Sketch on a pattern instance focuses the pattern's source, found
+  by `signex_bake::instance_at`, and outlines that instance dashed (mockup
+  row 192). Back to pad returns to the instance.
+
+Not done yet: locking the pad's Size fields to "from sketch".
+
+## Pattern links {#pattern-links}
+
+Decision 10 (Caner, 2026-11-20, mockup row 191). A pattern may repeat
+another pattern, and a mirror of a pattern stays a pattern.
+
+- **A pattern of a pattern.** With a pattern selected (its glyph clicked),
+  Linear, Rectangular or Circular Pattern makes the new array repeat every
+  instance of the selected one: a linear pattern of a 4-way circular pattern
+  bakes count × 4 pads. The link is `SketchData::pattern_sources`
+  (`PatternSource { array, source }`); the array's own source entity is set
+  to the innermost source, so entity references and the delete cascade
+  work as for any array. Instance numbers run on in the outer pattern's
+  scheme, the inner pattern's instances first: the outer slot `s`, inner
+  instance `k` is number `s · inner slots + k` of the scheme (a grid counts
+  its rows that many times wider). The inner pattern still bakes its own
+  pads; the outer one bakes its other slots.
+- **A live mirror.** With a pattern among the Mirror card's objects, OK
+  adds a `PatternMirror { id, pattern, line }` to
+  `SketchData::pattern_mirrors` instead of copying geometry, as one undo
+  step. Every instance of the pattern is reflected about the solved Line on
+  each bake, so the mirror follows the pattern: change the count and the
+  mirror changes with it. Mirrored pads keep the pattern's numbering scheme
+  and continue it (a row numbered 1 to 4 mirrors as 5 to 8); a pad's
+  rotation is reflected too. Pad offsets and the shape itself are not
+  reflected (a trapezoid keeps its side). Other objects are copied as
+  geometry.
+- **Chains and loops.** A mirror can be the source of another pattern or
+  mirror. A link that would make a pattern repeat itself, directly or
+  through other patterns and mirrors, is refused with a warning and leaves
+  no undo step (`SketchData::set_pattern_source`, `add_pattern_mirror`); a
+  loop in a damaged file is reported by the bake and that pattern bakes
+  nothing. The instance limit (10 000 per pattern) counts every instance a
+  chain expands to.
+- **Delete.** Deleting the entity a chain starts from removes every
+  pattern on it. Deleting a mirror's Line removes the mirror, and links
+  onto a removed pattern are dropped; the array that named it stays and
+  repeats its own source again.
+
+The bake expands links in `signex_bake::array::links`; a plain array with
+no link and no override still bakes through `bake_one_array`. The canvas's
+instance rings of a selected grid or polar pattern come from the same walk
+(`signex_bake::pattern_slots`): each ring sits where the bake puts the pad,
+with the per-instance spacing and the sweep's written unit; a slot the
+suppression list holds back draws as suppressed, and a slot the mask drops
+has no ring. One walk for the plain bake as well is a follow-up (#2689).
+
+## Per-pad overrides {#per-pad-overrides}
+
+Decision 9 (Caner, 2026-11-20, mockup row 192, item D1). Editing a Pads-mode
+attribute of a pad that is an instance of a pattern (not the pattern's
+source pad) asks, each time, **This pad / All pads / Cancel**; no answer is
+remembered. The edit shows in the Properties panel while the card waits; a
+change of size or position, which an override does not hold, does not ask.
+The held value lives only in the card (`PadScopePrompt`), never in the
+editor's pad list, so a Save, Save All or autosave while the card waits
+writes the pad as it was, and the card stays open. The canvas draws the pad
+as it was until the answer.
+
+- **This pad** stores only the attributes the edit changed, as an override
+  of that instance: `SketchData::pad_overrides`, keyed by `(pattern, i, j)`
+  (`InstanceOverride`, `PadAttrOverride`: number, net, locked, electrical
+  type, template, library, features, testpoint, hole tolerances and
+  rotation, copper offsets, rotation, drill, mask and paste margins, shape,
+  pad stack). The bake applies it to that instance's pad only. A second
+  edit of the same pad merges into its override.
+- **All pads** writes the changed attributes onto the pattern's source pad,
+  so every instance changes.
+- **Cancel**, or Esc, drops the edit.
+
+Each answer that changes the sketch is one undo step and re-bakes. The key
+of an instance (`signex_bake::instance_at`) is `(array, i, j)` for a plain
+array, `(array, outer slot, inner instance)` for a pattern of a pattern and
+`(mirror, mirrored instance, 0)` for a mirror. An override of a pattern
+that is deleted goes with it.
+
+## Reference dimensions in the file
+
+Decision 5 (storage). `SketchData::driven_dimensions` lists the
+constraints that are reference dimensions: they measure and never drive.
+The list is pruned with its constraints. What they draw and how they
+measure is in the sketch canvas look.
+
+The four lists above (`driven_dimensions`, `pattern_sources`,
+`pattern_mirrors`, `pad_overrides`) are absent from a file when empty;
+any of them makes a save write `snxfpt/1.2`, which a 1.1 build refuses by
+name instead of dropping them ([FORMAT_VERSIONS.md](FORMAT_VERSIONS.md)).
+
+## Reference dimensions {#reference-dimensions}
+
+A dimension (Distance, Distance to line, Distance to circle, Angle) can be
+a reference: it measures the geometry and never drives it (decision 5,
+Caner 2026-11-20, mockup row 187 and mockup row 188). The constraint menu offers
+**Convert to reference** on a driving dimension and **Make driving** on a
+reference; a Properties conflict row of a dimension has a Convert to
+reference button beside Remove. Each is one undo step, then a solve.
+Converting the conflicting dimension clears the conflict. Make driving that
+would over-constrain the sketch is reverted with its conflict named and
+leaves no undo step, as a value written on the drawing is.
+
+The sketch stores the references as a list of constraint ids
+(`SketchData::driven_dimensions`, `signex-types/src/sketch/driven.rs`), not
+as a flag on the constraint. Only a dimension can be a reference; an id in
+the list that names anything else is ignored. The solver reads one list,
+`SketchData::driving_constraints`, in every walk over the constraints: a
+reference has no residual, no Jacobian row and no degree of freedom, and
+is never named in a conflict or as redundant. A point only a reference
+reads stays out of the solve and does not move.
+
+On the drawing a reference shows the value it measures
+(`signex_sketch::solver::measure::measured_value`: the dimension's own
+residual with its target set to zero, so each kind keeps one formula),
+never its stored target. Its label and its dimension line draw dashed in
+the reference purple. Edit value and Make parameter are greyed on it ("A
+reference dimension measures; make it driving to edit it"), and a click
+on its value does not open an edit.
+
+## Canvas look {#canvas-look}
+
+Sketch mode paints the dark board ground on every theme (only the
+Graphite themes ship; the white sketch canvas is gone), and the sketch
+follows the mockups on it (decision 7, Caner 2026-11-20), from one palette
+(`canvas/draw/sketch/sketch_ink.rs`, `SketchInk::BOARD`): fully
+constrained geometry green `#7FD1A0`, under-constrained blue `#A9C2FF`,
+over-constrained red `#F2A093`, construction lines and an unsolved sketch
+grey `#8B8D93`, centerlines gold `#C9A13B`, selection `#E0865C`. Values sit
+in pills (`#1D1F23`, border `#34363C`, text `#CFD1D6`) on dimension lines
+in `#7C7F86` with an arrowhead at each end; a reference draws in
+`#C9A0FF`. A conflict keeps the theme's danger colour.
+
+Relations draw the mockup marks in small upright pills: H, V, ∥ parallel,
+⊥ perpendicular, = equal length or radius, ◡ tangent, ⇔ symmetric, ⌖
+fixed, ┃· point on line or arc, M midpoint; coincident is a dot. A
+conflicting mark fills in the danger colour.
+
+The cursor marks sketch mode draws in place of the OS cursor are light on
+that ground.
+
+A closed loop with a role shows the role's name at its top-left corner in
+the role's colour; a pad's loop shows none. Courtyard fills in the
+Courtyard Top colour; the other fills are unchanged (Caner, 2026-11-24).
+Jump to pad and Back to pad sit just above the mode bar, left-aligned, or
+just above the Bake preview card while it is open.
+
+A mirrored pattern draws a glyph by its mirror line, `⇔` and the mirrored
+pattern's glyph (`⇔ L×4`). A pattern glyph click with Select selects the
+pattern and its source and opens the pattern form. A mirror glyph click
+selects it, and its menu has only
+Delete mirror (one undo step; the pattern and the line stay). A pattern
+whose source is another pattern names it: `P×4 of L×4`.
+
+## Close gap {#close-gap}
+
+A footprint bakes past an open profile (a courtyard, mask, paste, pour,
+keepout or cutout loop that does not close) and leaves that shape out. When
+the two nearest open ends are at most **0.05 mm** apart (the one heal
+tolerance, `signex_sketch::heal::HEAL_TOLERANCE_MM`, shared with the board
+sketch and the DXF import), the bake preview card's "Why it does not bake"
+names the gap and the tolerance and offers **Close gap**; a wider gap says
+it is wider than the tolerance and offers no button. Close gap joins the two
+end points into one, re-solves and bakes, as one undo step. Same rule on a
+board sketch: `PCB_SKETCH.md`, "Close gap".

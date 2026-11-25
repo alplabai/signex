@@ -72,6 +72,7 @@ fn a_held_shift_space_bends_an_undocked_track_run_once() {
         path: rig.a.clone(),
         window: Some(window),
         points: vec![signex_types::pcb::Point::new(12.0, 10.0)],
+        points_on_copper: true,
         cursor: None,
         route: None,
         router: None,
@@ -164,4 +165,79 @@ fn a_held_shift_space_beside_a_main_wire_run_bends_it_once() {
     let (mut app, window, symbol) = wire_run_beside_an_undocked_selection();
     assert_held_shift_space_bends_once(&mut app, window);
     assert_eq!(rotation(&app, "b.snxsch", symbol), 0.0, "not turned");
+}
+
+/// Hold Shift+Space in `window`: U1 on the board at `board` turns on the
+/// first press and again on every repeat.
+fn assert_held_shift_space_keeps_turning_u1(
+    app: &mut Signex,
+    window: iced::window::Id,
+    board: &std::path::Path,
+) {
+    let u1 = uuid::Uuid::from_u128(0x10);
+    let turn = |app: &Signex| {
+        (app.document_state
+            .pcb_board(board)
+            .expect("board")
+            .footprints
+            .iter())
+        .find(|f| f.uuid == u1)
+        .expect("U1")
+        .rotation
+    };
+    send(app, window, shift_space(false));
+    let mut last = turn(app);
+    assert_ne!(last, 0.0, "the first press turns U1");
+    for _ in 0..REPEATS {
+        send(app, window, shift_space(true));
+        let now = turn(app);
+        assert_ne!(now, last, "held: U1 turns on every repeat");
+        last = now;
+    }
+}
+
+/// (d) The #2553 case: the main window shows a schematic with a wire run
+/// started by a click, and U1 is selected in an undocked board window. The
+/// rotate handler takes the board path there and never reaches the wire
+/// run, so a held Shift+Space turns U1 on every repeat.
+#[test]
+fn a_held_shift_space_in_a_board_window_beside_a_main_wire_run_keeps_turning() {
+    let mut rig = rig();
+    let window = rig.window;
+    super::pcb_placement_window_tests::in_window(&mut rig.app, window, click(10.0, 10.0));
+    let sheet = std::path::PathBuf::from("w.snxsch");
+    let engine = signex_engine::Engine::new(SchematicSheet::default()).expect("engine");
+    rig.app.document_state.engines.insert(sheet.clone(), engine);
+    rig.app.document_state.tabs.push(tab(&sheet));
+    rig.app.document_state.active_tab = rig.app.document_state.tabs.len() - 1;
+    rig.app.document_state.active_path = Some(sheet);
+    rig.app.interaction_state.current_tool = Tool::Wire;
+    let _ = rig
+        .app
+        .update(Message::CanvasEvent(crate::canvas::CanvasEvent::Clicked {
+            world_x: 25.4,
+            world_y: 25.4,
+        }));
+    assert!(
+        rig.app.is_drawing_wire_run(),
+        "the main window's run is open"
+    );
+    assert!(!rig.app.window_shows_pcb(None), "the main shows the sheet");
+    assert_held_shift_space_keeps_turning_u1(&mut rig.app, window, &rig.a.clone());
+}
+
+/// (e) The reverse: the main window shows a board with U1 selected while a
+/// wire run is open elsewhere (set as the Wire tool leaves it; the run
+/// state is app-wide). A held Shift+Space in the main window turns U1 on
+/// every repeat.
+#[test]
+fn a_held_shift_space_on_a_main_window_board_beside_a_wire_run_keeps_turning() {
+    let mut rig = rig();
+    let main = rig.app.ui_state.main_window_id.expect("main window");
+    in_main(&mut rig.app, click(10.0, 10.0));
+    rig.app.interaction_state.current_tool = Tool::Wire;
+    rig.app.interaction_state.wire_drawing = true;
+    assert!(rig.app.is_drawing_wire_run(), "a wire run is open");
+    assert!(rig.app.window_shows_pcb(None), "the main shows a board");
+    assert_held_shift_space_keeps_turning_u1(&mut rig.app, main, &rig.b.clone());
 }

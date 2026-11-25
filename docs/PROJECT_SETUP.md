@@ -10,8 +10,9 @@ through the `new_project_with_profile` command.
 - **Project name** and **Location**, with **Browse...**. The checkbox
   `Create "<name>" folder` sits under Location, is on by default and its label
   follows the name as it is typed; while the name is empty it reads
-  `Create a folder named after the project`. There is no path preview line
-  (maintainer, 2026-11-09: keep it simple).
+  `Create a folder named after the project`. Beside it, a line shows the
+  project file Create will write. With an empty name it asks for a project
+  name, and Create stays disabled (maintainer, 2026-11-23).
   - On: `<Location>/<name>/<name>.snxprj`, the folder created by Create.
   - Off: `<Location>/<name>.snxprj`, for a folder the user already made.
   - Create is off, with the reason shown inline, when the target `.snxprj`
@@ -42,8 +43,13 @@ through the `new_project_with_profile` command.
   defaults (sheet size, title block, designator standard). The Fab tier field
   mirrors the picked card. The layer stepper moves the picked card's count and
   keeps its tier.
-- **Preview**: the stack-up on the board ground, the board line and the sheet
-  line.
+- **Preview**: the board rules drawing (two tracks at their width and
+  clearance, a via at its size and drill; click a value to edit it, Enter
+  commits, Tab goes to the next, Esc cancels, handles drag it, and each edit
+  is the rule field's own), the board line, the stack-up on the board ground,
+  and the sheet drawing. Each drawing has an expand button; the larger board
+  view adds the layer count and thickness. New PCB shows the same column
+  without the sheet.
 
 The dialog opens as its own native window ("New Project"), like the other
 dialogs (`docs/DETACHED_MODALS.md`), and locks the main window while it is
@@ -109,6 +115,11 @@ profile copy is added after, as for every new project):
   such as `standard`, or a saved profile's `user-...` id). Only the id is
   stored, never the saved profile itself.
 - `annotation.designator_standard`, the existing Project Options setting.
+- `project_defaults.dimension` (#2868): what a new board dimension starts
+  from (line width, text height, precision, arrows, text, extension lines,
+  number format). Every new project gets a copy of Preferences ▸ PCB ▸ PCB
+  Defaults with the rule profile, dialog or not; a setup profile pick does
+  not change it. Out-of-range values make the section unusable, as below.
 
 A PCB or sheet added to the project starts from these through its setup
 dialog (below): `project_defaults.pcb` (layers,
@@ -128,7 +139,9 @@ not stored per sheet, so a project value would do nothing.
 Project Options has a **Project setup** section with the dialog's own profile
 cards, PCB rules and schematic defaults, filled in from the
 project. An edit is a project edit like the other sections: it marks the
-`.snxprj` dirty, is written by Save, and Ctrl+Z undoes it.
+`.snxprj` dirty, is written by Save, and Ctrl+Z undoes it. The section's page
+header holds **Save as profile...**, Your profiles is one line under the
+cards, and the PCB rules and Schematic fields sit in two titled cards.
 
 - Only the part an edit changes is stored: a board pick stores
   `project_defaults.pcb`, a sheet pick `project_defaults.sheet`, a designator

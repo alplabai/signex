@@ -32,7 +32,7 @@ pub enum SemanticPatch {
 
 /// What an edit changed in a document. `Default` is [`Self::NONE`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct DocumentPatch(u16);
+pub struct DocumentPatch(u32);
 
 impl DocumentPatch {
     pub const NONE: Self = Self(0);
@@ -58,10 +58,18 @@ impl DocumentPatch {
     /// Compile Mask takes what it covers out of the netlist, so it is
     /// electrical.
     pub const DIRECTIVES: Self = Self(1 << 15);
-    pub const FULL: Self = Self(u16::MAX);
+    /// Signal harness connectors, entries, wires and harness-typed sheet
+    /// entries (#1280). Entries join nets by name, so it is electrical.
+    pub const HARNESS: Self = Self(1 << 16);
+    /// The sheet's named unions.
+    pub const UNIONS: Self = Self(1 << 17);
+    /// Every named bit and no other, so the OR of all of them is FULL.
+    /// UNIONS is the top bit; a new bit moves this.
+    pub const FULL: Self = Self((Self::UNIONS.0 << 1) - 1);
     /// Every collection a net is derived from: pins (symbols and the library
-    /// parts they instantiate), wires, labels, junctions, no-connects, buses
-    /// and sheet entries. An edit outside this set cannot change connectivity.
+    /// parts they instantiate), wires, labels, junctions, no-connects, buses,
+    /// sheet entries and harnesses. An edit outside this set cannot change
+    /// connectivity.
     pub const ELECTRICAL: Self = Self(
         Self::SYMBOLS.0
             | Self::WIRES.0
@@ -72,7 +80,8 @@ impl DocumentPatch {
             | Self::NO_CONNECTS.0
             | Self::CHILD_SHEETS.0
             | Self::LIB_SYMBOLS.0
-            | Self::DIRECTIVES.0,
+            | Self::DIRECTIVES.0
+            | Self::HARNESS.0,
     );
 
     pub fn contains(self, other: Self) -> bool {
@@ -106,6 +115,9 @@ impl DocumentPatch {
             SelectedKind::ChildSheet => Self::CHILD_SHEETS,
             SelectedKind::Drawing => Self::DRAWINGS,
             SelectedKind::Directive => Self::DIRECTIVES,
+            SelectedKind::HarnessConnector
+            | SelectedKind::HarnessEntry
+            | SelectedKind::HarnessWire => Self::HARNESS,
         }
     }
 
@@ -172,7 +184,7 @@ mod tests {
     #[test]
     fn only_a_net_colour_change_alone_is_display_only() {
         assert!(P::NET_COLORS.is_display_only());
-        for shift in 0..16 {
+        for shift in 0..32 {
             let bit = P(1 << shift);
             assert_eq!(bit.is_display_only(), bit == P::NET_COLORS, "{bit:?}");
             if bit != P::NET_COLORS {
@@ -186,5 +198,19 @@ mod tests {
     #[test]
     fn the_default_patch_is_none() {
         assert_eq!(P::default(), P::NONE);
+    }
+
+    /// #1280: widening to 32 bits kept every older bit where it was, and a
+    /// harness edit is electrical.
+    #[test]
+    fn harness_bits_follow_the_old_ones_and_harness_is_electrical() {
+        assert_eq!(P::DIRECTIVES, P(1 << 15));
+        assert_eq!(P::HARNESS, P(1 << 16));
+        assert_eq!(P::UNIONS, P(1 << 17));
+        assert!(P::ELECTRICAL.contains(P::HARNESS));
+        use signex_types::schematic::SelectedKind as K;
+        for kind in [K::HarnessConnector, K::HarnessEntry, K::HarnessWire] {
+            assert_eq!(P::from_selected_kind(kind), P::HARNESS, "{kind:?}");
+        }
     }
 }

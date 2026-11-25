@@ -277,3 +277,60 @@ fn a_user_negation_in_gitignore_still_wins_over_the_managed_block() {
     assert!(!repo.is_path_ignored("keep/a.tmp").unwrap());
     assert!(repo.is_path_ignored("other/a.tmp").unwrap());
 }
+
+/// The subject of the first commit.
+fn first_commit_message(dir: &tempfile::TempDir) -> String {
+    let repo = git2::Repository::open(dir.path()).unwrap();
+    let head = repo.head().unwrap().peel_to_commit().unwrap();
+    assert_eq!(head.parent_count(), 0, "the first commit");
+    head.message().unwrap().to_string()
+}
+
+/// The dialog's "First commit message" is the first commit's subject.
+#[test]
+fn the_first_commit_carries_the_given_message() {
+    with_identity();
+    let dir = project();
+    signex_library::enable_project_version_control_with_message(
+        dir.path(),
+        false,
+        true,
+        None,
+        true,
+        "Initial version of dcdc-buck",
+    )
+    .unwrap();
+    assert_eq!(first_commit_message(&dir), "Initial version of dcdc-buck");
+}
+
+/// The callers that name no message keep the default subject, and a blank
+/// message falls back to it.
+#[test]
+fn without_a_message_the_first_commit_keeps_the_default_subject() {
+    with_identity();
+    let dir = project();
+    enable_project_version_control(dir.path(), false, true, None).unwrap();
+    assert_eq!(
+        first_commit_message(&dir),
+        signex_library::DEFAULT_FIRST_COMMIT_MESSAGE
+    );
+    assert_eq!(
+        signex_library::DEFAULT_FIRST_COMMIT_MESSAGE,
+        "chore: enable version control"
+    );
+
+    let blank = project();
+    signex_library::enable_project_version_control_with_message(
+        blank.path(),
+        false,
+        true,
+        None,
+        true,
+        "   ",
+    )
+    .unwrap();
+    assert_eq!(
+        first_commit_message(&blank),
+        signex_library::DEFAULT_FIRST_COMMIT_MESSAGE
+    );
+}

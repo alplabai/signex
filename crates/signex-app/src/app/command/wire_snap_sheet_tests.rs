@@ -2,6 +2,7 @@
 //! hotspots, never against the active tab's. Sheet `a` is active and `b` is
 //! named; each holds an off-grid wire end the other does not.
 
+use signex_i18n::RenderTranslatable;
 use signex_types::schematic::{Point, Wire};
 
 use super::queries::tests::{path, sheet};
@@ -76,7 +77,7 @@ fn run_on(
 
 fn refusal(outcome: CommandOutcome) -> String {
     match outcome {
-        CommandOutcome::Disabled { reason } => reason,
+        CommandOutcome::Disabled { reason } => reason.render_en_us(),
         other => panic!("not refused: {other:?}"),
     }
 }

@@ -70,7 +70,10 @@ fn set_mode(
     editor: &mut crate::app::FootprintDocument,
     mode: crate::library::editor::footprint::state::EditorMode,
 ) {
+    use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
+    use crate::library::editor::footprint::sketch_mode::{SketchEdit, exit};
     use crate::library::editor::footprint::state::EditorMode;
+    let before = editor.begin_edit();
     // v0.14.2 — bidirectional sketch ↔ pads foundation.
     // When the user enters Sketch mode for the first time on
     // a footprint that has literal pads but no sketch
@@ -79,12 +82,47 @@ fn set_mode(
     // immediately re-emits identical pads, so the round-trip
     // is identity-preserving.
     let entering_sketch = editor.state.mode != EditorMode::Sketch && mode == EditorMode::Sketch;
+    // Nothing to re-solve on the way out of an unedited sketch: a solve
+    // could only move the footprint away from what sketch mode found.
+    let leaving_unedited = editor.state.mode == EditorMode::Sketch
+        && mode != EditorMode::Sketch
+        && exit::is_unedited(editor);
     if entering_sketch {
         use crate::library::editor::footprint::pad_to_sketch;
         let _ = editor.with_parts(|state, primitive| {
             pad_to_sketch::auto_mint_for_literal_pads(&mut state.pads, primitive)
         });
     }
+    reset_mode_ui(editor);
+    // The 3D toggle returns to the mode 3D was entered from (mockup row 187).
+    if mode == EditorMode::View3d && editor.state.mode != EditorMode::View3d {
+        editor.state.mode_before_3d = editor.state.mode;
+    }
+    editor.state.mode = mode;
+    // Run the dispatcher so the sketch is initialised + solved
+    // on first switch into Sketch mode (or no-op otherwise).
+    if !leaving_unedited {
+        editor.with_parts(|state, primitive| {
+            apply_sketch_edit_with_warnings(state, primitive, SketchEdit::SetMode(mode));
+        });
+    }
+    // The exit set's Discard changes restores the footprint as sketch
+    // mode found it, after the first solve (#2518).
+    if entering_sketch {
+        exit::begin(editor);
+    } else if mode != EditorMode::Sketch {
+        editor.state.sketch_exit = Default::default();
+    }
+    editor.canvas_cache.clear();
+    // A mode change is an edit only when it changed the footprint (a first
+    // entry mints and bakes); mockup row 187.
+    if !editor.is_unchanged_since(&before) {
+        editor.mark_dirty();
+    }
+}
+
+/// Close what belongs to the mode being left.
+fn reset_mode_ui(editor: &mut crate::app::FootprintDocument) {
     // v0.15 — reset tool state on every mode change so a
     // stale Place Pad / Place Point selection from a prior
     // session in this tab doesn't carry over and cause
@@ -100,24 +138,11 @@ fn set_mode(
     // a menu open — the dropdown's backstop eats the click —
     // but a keyboard shortcut can.)
     editor.state.active_bar_menu = None;
-    editor.state.mode = mode;
-    // Run the dispatcher so the sketch is initialised + solved
-    // on first switch into Sketch mode (or no-op otherwise).
-    use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
-    use crate::library::editor::footprint::sketch_mode::SketchEdit;
-    editor.with_parts(|state, primitive| {
-        apply_sketch_edit_with_warnings(state, primitive, SketchEdit::SetMode(mode));
-    });
-    // The exit set's Discard changes restores the footprint as sketch
-    // mode found it, after the first solve (#2518).
-    use crate::library::editor::footprint::sketch_mode::exit;
-    if entering_sketch {
-        exit::begin(editor);
-    } else if mode != EditorMode::Sketch {
-        editor.state.sketch_exit = Default::default();
-    }
-    editor.canvas_cache.clear();
-    editor.mark_dirty();
+    // mockup row 192 — a mode change ends the Edit in Sketch focus.
+    editor.state.pad_link = None;
+    // and closes the sketch canvas overlays, so a hidden value edit
+    // cannot keep the keyboard in another mode.
+    editor.state.sketch_overlay = Default::default();
 }
 
 fn toggle_placement_pause(editor: &mut crate::app::FootprintDocument) {
@@ -215,6 +240,22 @@ fn tool_escape(editor: &mut crate::app::FootprintDocument) {
     if editor.state.context_menu.is_some() {
         editor.state.context_menu = None;
         editor.canvas_cache.clear();
+        return;
+    }
+    // The sketch canvas's constraint menu, value edit, then selected
+    // pattern close next, one per Esc (mockup row 188).
+    if editor.state.sketch_overlay.close_innermost() {
+        editor.canvas_cache.clear();
+        return;
+    }
+    // The parameters table (mockup row 189): its prompt, rename or row menu first,
+    // then the table itself; the tool and selection stay. It shows in
+    // Sketch mode only.
+    if editor.state.mode == crate::library::editor::footprint::state::EditorMode::Sketch
+        && crate::library::editor::footprint::parameters_table::update::escape(
+            &mut editor.state.parameters_table,
+        )
+    {
         return;
     }
     // v0.15 — global Esc tool cancel. Resets both Pads and

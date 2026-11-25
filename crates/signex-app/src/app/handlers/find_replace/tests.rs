@@ -788,41 +788,8 @@ fn open_edit_save_close_mid_flight_refuses_the_replace_and_keeps_the_saved_edit(
     );
 }
 
-#[test]
-fn an_unopened_annotate_write_mid_flight_refuses_the_replace() {
-    let dir = tempfile::tempdir().unwrap();
-    let (mut app, _root, child) = placed_twice_on_disk(&dir);
-    // A child with an unannotated symbol, so Annotate rewrites its file.
-    let mut sheet =
-        crate::app::handlers::menu::export::tests::sheet_with_net("R?", "CHILD_NET", &[]);
-    sheet.labels[0].label_type = signex_types::schematic::LabelType::Net;
-    let text = signex_types::format::SnxSchematic::new(sheet)
-        .write_string()
-        .unwrap();
-    std::fs::write(&child, &text).unwrap();
-    let (generation, prep) = prepared_child_replace(&mut app);
-
-    let task = app.handle_annotate(signex_engine::AnnotateMode::Incremental);
-    crate::app::path_ops::settle_task(&mut app, task);
-    let annotated = std::fs::read(&child).unwrap();
-    assert_ne!(
-        annotated,
-        text.as_bytes(),
-        "Annotate wrote the unopened child"
-    );
-    deliver(&mut app, generation, prep);
-
-    assert!(logged("Replace cancelled: a document changed"));
-    assert!(!app.document_state.engines.contains_key(&child));
-    assert_eq!(
-        std::fs::read(&child).unwrap(),
-        annotated,
-        "the annotated bytes stay"
-    );
-}
-
-/// The child with an unannotated symbol, so Annotate rewrites its file.
-fn child_annotate_will_rewrite(child: &Path) -> String {
+/// The child with an unannotated symbol, so Annotate parks it numbered.
+fn child_annotate_will_number(child: &Path) -> String {
     let mut sheet =
         crate::app::handlers::menu::export::tests::sheet_with_net("R?", "CHILD_NET", &[]);
     sheet.labels[0].label_type = signex_types::schematic::LabelType::Net;
@@ -833,59 +800,64 @@ fn child_annotate_will_rewrite(child: &Path) -> String {
     text
 }
 
-/// Annotate with its sheets read and numbered, its write handed out and not
-/// yet run: the window between `PassSheetsRead` and `PassSheetsWritten`.
-fn annotate_write_in_flight(app: &mut Signex) -> iced::Task<crate::app::Message> {
-    let read = app.handle_annotate(signex_engine::AnnotateMode::Incremental);
-    let message = crate::persist::run_task::outputs(read).remove(0);
-    app.update(message)
+fn child_reference(app: &Signex, child: &Path) -> String {
+    app.document_state.engines[child].document().symbols[0]
+        .reference
+        .clone()
 }
 
 #[test]
-fn an_annotate_write_in_flight_refuses_a_replace_prepared_before_it() {
+fn an_annotate_that_parks_the_sheet_refuses_a_replace_prepared_before_it() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _root, child) = placed_twice_on_disk(&dir);
-    let text = child_annotate_will_rewrite(&child);
+    let text = child_annotate_will_number(&child);
     let (generation, prep) = prepared_child_replace(&mut app);
-    let write = annotate_write_in_flight(&mut app);
 
+    let task = app.handle_annotate(signex_engine::AnnotateMode::Incremental);
+    crate::app::path_ops::settle_task(&mut app, task);
+    let numbered = child_reference(&app, &child);
     deliver(&mut app, generation, prep);
 
     assert!(logged("Replace cancelled: a document changed"));
-    assert!(!app.document_state.engines.contains_key(&child));
-    crate::app::path_ops::settle_task(&mut app, write);
-    let annotated = std::fs::read(&child).unwrap();
-    assert_ne!(annotated, text.as_bytes(), "Annotate wrote the child");
-    assert!(
-        !app.document_state.engines.contains_key(&child),
-        "no stale engine can save over the annotated bytes"
+    assert!(!numbered.ends_with('?'), "{numbered}");
+    assert_eq!(
+        child_reference(&app, &child),
+        numbered,
+        "the parked numbering stays"
+    );
+    assert_eq!(
+        std::fs::read(&child).unwrap(),
+        text.as_bytes(),
+        "Annotate leaves the file for the user's save"
     );
 }
 
 #[test]
-fn handing_out_an_annotate_write_moves_the_epoch() {
+fn parking_an_annotated_sheet_moves_the_epoch() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _root, child) = placed_twice_on_disk(&dir);
-    child_annotate_will_rewrite(&child);
+    child_annotate_will_number(&child);
     let read = app.handle_annotate(signex_engine::AnnotateMode::Incremental);
     let message = crate::persist::run_task::outputs(read).remove(0);
     let before = app.document_state.documents_epoch;
 
-    let _write = app.update(message);
+    let _refresh = app.update(message);
 
     assert_ne!(
         app.document_state.documents_epoch, before,
-        "a read in flight must be out of date once the write is handed out"
+        "a read in flight must be out of date once the sheet is parked"
     );
 }
 
 #[test]
-fn a_replace_never_installs_an_engine_for_a_sheet_annotate_is_writing() {
+fn a_replace_never_overwrites_a_sheet_annotate_parked() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _root, child) = placed_twice_on_disk(&dir);
-    child_annotate_will_rewrite(&child);
+    child_annotate_will_number(&child);
     let (generation, prep) = prepared_child_replace(&mut app);
-    let write = annotate_write_in_flight(&mut app);
+    let task = app.handle_annotate(signex_engine::AnnotateMode::Incremental);
+    crate::app::path_ops::settle_task(&mut app, task);
+    let numbered = child_reference(&app, &child);
     // Leave only the sheet-held check standing: the epoch alone would cancel.
     let epoch = app.document_state.documents_epoch;
     app.ui_state
@@ -897,11 +869,11 @@ fn a_replace_never_installs_an_engine_for_a_sheet_annotate_is_writing() {
 
     deliver(&mut app, generation, prep);
 
-    assert!(
-        !app.document_state.engines.contains_key(&child),
-        "an engine from pre-Annotate bytes would save over the numbering"
+    assert_eq!(
+        child_reference(&app, &child),
+        numbered,
+        "an engine from pre-Annotate bytes would replace the numbering"
     );
-    crate::app::path_ops::settle_task(&mut app, write);
 }
 
 #[test]
@@ -935,14 +907,16 @@ fn renaming_a_closed_sheet_mid_flight_refuses_the_replace() {
     let (mut app, _root, child) = placed_twice_on_disk(&dir);
     let (generation, prep) = prepared_child_replace(&mut app);
 
-    app.ui_state.rename_dialog = Some(crate::app::RenameDialogState {
+    app.ui_state.rename_dialog = Some(Box::new(crate::app::RenameDialogState {
         project_id: None,
         target_path: child.clone(),
         tree_path: vec![0, 0],
         buffer: "power.snxsch".into(),
         error: None,
         is_project_rename: false,
-    });
+        placing_symbols: Vec::new(),
+        name_clash: None,
+    }));
     let before = app.document_state.documents_epoch;
     let rename = app.update(crate::app::Message::Rename(crate::app::RenameMsg::Submit));
     assert_ne!(
@@ -1528,4 +1502,85 @@ fn the_mode_switch_changes_the_mode_in_place() {
     assert_eq!(app.ui_state.find_replace.matches.len(), 1, "results kept");
     send(&mut app, FindReplaceMsg::ModeChanged(false));
     assert!(!app.ui_state.find_replace.replace_mode);
+}
+
+fn enter(modifiers: iced::keyboard::Modifiers) -> iced::keyboard::Event {
+    let key = iced::keyboard::Key::Named(iced::keyboard::key::Named::Enter);
+    iced::keyboard::Event::KeyPressed {
+        key: key.clone(),
+        modified_key: key,
+        physical_key: iced::keyboard::key::Physical::Unidentified(
+            iced::keyboard::key::NativeCode::Unidentified,
+        ),
+        location: iced::keyboard::Location::Standard,
+        modifiers,
+        text: None,
+        repeat: false,
+    }
+}
+
+/// Mockup row 67: in Find mode Enter is Next and Shift+Enter is Previous,
+/// the footer's two buttons; in Replace mode, or with the dialog closed,
+/// Enter steps nothing.
+#[test]
+fn enter_and_shift_enter_step_the_find_results() {
+    use iced::keyboard::Modifiers;
+    let (mut app, _boot) = Signex::new();
+    app.ui_state.first_run_tour_open = false;
+    let main = app.ui_state.main_window_id.expect("the main window");
+    let step = |app: &Signex, modifiers| match app.route_key_for_test(main, &enter(modifiers)) {
+        Some(crate::app::Message::FindReplaceMsg(FindReplaceMsg::NextRequested)) => Some(true),
+        Some(crate::app::Message::FindReplaceMsg(FindReplaceMsg::PreviousRequested)) => Some(false),
+        _ => None,
+    };
+    assert_eq!(step(&app, Modifiers::empty()), None, "closed: no step");
+    app.ui_state.find_replace.open = true;
+    assert_eq!(step(&app, Modifiers::empty()), Some(true), "Enter: Next");
+    assert_eq!(
+        step(&app, Modifiers::SHIFT),
+        Some(false),
+        "Shift+Enter: Previous"
+    );
+    assert_eq!(step(&app, Modifiers::CTRL), None);
+    app.ui_state.find_replace.replace_mode = true;
+    assert_eq!(
+        step(&app, Modifiers::empty()),
+        None,
+        "Replace mode keeps Enter"
+    );
+}
+
+/// Mockup row 67: Enter steps Find only in the window that paints the
+/// dialog, and not while another dialog is painted above it there.
+#[test]
+fn enter_steps_find_only_where_the_dialog_is_in_front() {
+    use iced::keyboard::Modifiers;
+    let (mut app, _boot) = Signex::new();
+    app.ui_state.first_run_tour_open = false;
+    let main = app.ui_state.main_window_id.expect("the main window");
+    let tab = iced::window::Id::unique();
+    app.ui_state.windows.insert(
+        tab,
+        crate::app::state::WindowKind::UndockedTab {
+            path: PathBuf::from("/tmp/sheet.snxsch"),
+            title: "sheet".to_string(),
+        },
+    );
+    let steps = |app: &Signex, window| {
+        matches!(
+            app.route_key_for_test(window, &enter(Modifiers::empty())),
+            Some(crate::app::Message::FindReplaceMsg(
+                FindReplaceMsg::NextRequested
+            ))
+        )
+    };
+    app.ui_state.find_replace.open = true;
+    assert!(steps(&app, main), "opened in the main window: steps there");
+    assert!(!steps(&app, tab), "a tab window that shows no Find");
+    app.ui_state.find_replace.window = Some(tab);
+    assert!(steps(&app, tab), "opened in the tab window: steps there");
+    assert!(!steps(&app, main), "the main window shows no Find now");
+    app.ui_state.find_replace.window = None;
+    app.ui_state.passive_calculator_open = true;
+    assert!(!steps(&app, main), "a dialog above Find keeps Enter");
 }

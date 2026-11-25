@@ -7,7 +7,7 @@ use iced::{Element, Length, Widget as _};
 use signex_i18n::{I18n, ids, t};
 use signex_widgets::text;
 
-use super::{SP, TS, cards, customize, preview, s, summary, user_cards};
+use super::{SP, TS, board_rules, cards, customize, preview, s, summary, user_cards};
 use crate::app::new_project::NewProjectMsg;
 use crate::app::{DocumentSetupMsg, DocumentSetupState, Message, SetupKind, Signex};
 use crate::styles::{DialogButtonKind, dialog_button, dialog_footer_split, ti, tokens};
@@ -20,25 +20,34 @@ fn edit(msg: NewProjectMsg) -> Message {
     ds(DocumentSetupMsg::Setup(msg))
 }
 
-/// Design size, in body-text units, so the card scales with the font.
-fn design_size(kind: SetupKind) -> (f32, f32) {
+/// Design size, in body-text units, so the card scales with the font. A
+/// board's is wide enough for the cards beside the preview and tall enough
+/// for the rule fields and the preview column (mockup row 22).
+pub(super) fn design_size(kind: SetupKind) -> (f32, f32) {
     match kind {
-        SetupKind::Pcb => (TS.body * 66.0, TS.body * 54.0),
+        SetupKind::Pcb => (TS.body * 83.0, TS.body * 60.0),
         SetupKind::Sheet => (TS.body * 52.0, TS.body * 44.0),
     }
 }
 
-/// The intro line: which project the document goes into, and that every
-/// value stays editable.
+/// The intro's words: a board of a project with no saved setup is asked for
+/// a profile instead of being told it starts from one (mockup row 22).
+pub(super) fn intro_id(kind: SetupKind, has_saved_setup: bool) -> signex_i18n::MessageId {
+    match (kind, has_saved_setup) {
+        (SetupKind::Pcb, true) => ids::SETUP_PCB_INTRO,
+        (SetupKind::Pcb, false) => ids::SETUP_PCB_INTRO_NO_SETUP,
+        (SetupKind::Sheet, _) => ids::SETUP_SHEET_INTRO,
+    }
+}
+
+/// The intro line: which project the document goes into, and what it starts
+/// from.
 fn intro<'a>(
     state: &DocumentSetupState,
     i18n: &I18n,
     tokens: &signex_types::theme::ThemeTokens,
 ) -> Element<'a, Message> {
-    let id = match state.kind {
-        SetupKind::Pcb => ids::SETUP_PCB_INTRO,
-        SetupKind::Sheet => ids::SETUP_SHEET_INTRO,
-    };
+    let id = intro_id(state.kind, state.shows_project_summary());
     text(t!(i18n, id, "project" => state.project_name.as_str()))
         .size(TS.body)
         .color(ti(tokens.text_secondary))
@@ -114,12 +123,21 @@ impl Signex {
         let left =
             scrollable(container(col).padding([SP.xl + SP.s, SP.xl + SP.m])).width(Length::Fill);
         let body: Element<'a, Message> = match state.kind {
-            SetupKind::Pcb => row![
-                left,
-                preview::pane(draft, ids::SETUP_PCB_PREVIEW_NOTE, i18n, tokens).map(edit)
-            ]
-            .height(Length::Fill)
-            .boxed(),
+            SetupKind::Pcb => super::with_larger_preview(
+                row![
+                    left,
+                    preview::pane(draft, ids::SETUP_PCB_PREVIEW_NOTE, None, i18n, tokens).map(edit)
+                ]
+                .height(Length::Fill)
+                .boxed(),
+                board_rules::expanded_layer(
+                    draft,
+                    &self.document_state.panel_ctx.canvas_colors,
+                    i18n,
+                    tokens,
+                )
+                .map(|layer| iced::Widget::boxed(layer.map(edit))),
+            ),
             SetupKind::Sheet => container(left).height(Length::Fill).boxed(),
         };
         let hint = text(t!(i18n, ids::DIALOG_NEW_PROJECT_FOOTER_HINT))

@@ -141,7 +141,7 @@ fn app_with(bindings: &[(&str, &str)]) -> Signex {
     app_with_sheet(bindings, empty_sheet())
 }
 
-/// The booted keymap (Altium on every platform) binds ⌃Space to
+/// The booted keymap (Signex Standard on every platform) binds ⌃Space to
 /// `cycle_wiring_mode`; holding it steps the drag wiring mode once.
 #[test]
 fn a_held_ctrl_space_steps_the_wiring_mode_once() {
@@ -405,31 +405,36 @@ fn a_held_insert_mid_wire_adds_one_vertex() {
     });
 }
 
-/// The Altium profile on macOS, which has no Insert key, also binds ⌥I to
+/// The Signex Standard profile on macOS, which has no Insert key, also binds ⌥I to
 /// add vertex; held, it adds one vertex like Insert.
 #[test]
 fn a_held_option_i_on_macos_adds_one_vertex() {
     let mut app = app_with_tool(Tool::Wire);
-    app.ui_state.active_keymap = altium_on_macos();
+    app.ui_state.active_keymap = signex_standard_on_macos();
     assert_held_key_adds_one_vertex(app, |repeat| {
         press(Key::Character("i".into()), Code::KeyI, Held::ALT, repeat)
     });
 }
 
-/// The built-in Altium profile as macOS compiles it.
-fn altium_on_macos() -> std::sync::Arc<CompiledKeymap> {
+/// The built-in Signex Standard profile as macOS compiles it.
+fn signex_standard_on_macos() -> std::sync::Arc<CompiledKeymap> {
     let set = crate::keymap::ShortcutProfileSet::built_ins().expect("built-in profiles");
-    let altium = set.profile("altium").expect("the Altium profile");
-    std::sync::Arc::new(CompiledKeymap::compile_for(altium, Platform::MacOs))
+    let signex_standard = set
+        .profile("signex_standard")
+        .expect("the Signex Standard profile");
+    std::sync::Arc::new(CompiledKeymap::compile_for(
+        signex_standard,
+        Platform::MacOs,
+    ))
 }
 
-/// The Altium profile on macOS also cycles the drag wiring mode on ⇧Tab
+/// The Signex Standard profile on macOS also cycles the drag wiring mode on ⇧Tab
 /// (macOS may take ⌃Space); held, it steps the mode once.
 #[test]
 fn a_held_shift_tab_on_macos_steps_the_wiring_mode_once() {
     let (mut app, _boot) = Signex::new();
     app.ui_state.first_run_tour_open = false;
-    app.ui_state.active_keymap = altium_on_macos();
+    app.ui_state.active_keymap = signex_standard_on_macos();
     let shift_tab = |repeat| press(Key::Named(Named::Tab), Code::Tab, Held::SHIFT, repeat);
     send(&mut app, shift_tab(false));
     assert_eq!(

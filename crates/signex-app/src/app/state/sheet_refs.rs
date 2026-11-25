@@ -375,7 +375,7 @@ impl SheetRefInputs {
             let saved = read_child_refs(&path, limits.max_sheet_bytes).unwrap_or_else(|reason| {
                 unreadable.push(UnreadableSheet {
                     path: path.clone(),
-                    reason,
+                    reason: reason.to_string(),
                     whole_path: false,
                 });
                 Vec::new()
@@ -773,6 +773,8 @@ mod tests {
             drawings: Vec::new(),
             no_erc_directives: Vec::new(),
             directives: Vec::new(),
+            harness: Default::default(),
+            unions: Vec::new(),
             title_block: HashMap::new(),
             text_widths: Default::default(),
             text_extents: Default::default(),
@@ -1010,6 +1012,7 @@ mod tests {
                 }],
                 variant_definitions: Vec::new(),
                 active_variant: None,
+                variant_settings: Default::default(),
                 libraries: Vec::new(),
                 enable_git: false,
                 net_classes: Vec::new(),
@@ -1018,7 +1021,9 @@ mod tests {
                 schematic_defaults: Default::default(),
                 project_defaults: Default::default(),
                 agent_journal: Default::default(),
+                schematic_design: Default::default(),
                 fab_outputs: None,
+                router_tool_diameter: None,
                 requirements: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),

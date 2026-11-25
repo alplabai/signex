@@ -478,25 +478,40 @@ fn a_read_only_board_greys_its_editing_commands() {
 
 /// #2406: every binding a shipped profile gives the board context names a
 /// command that is enabled on a board with an unlocked footprint selected.
+/// Mockup row 175 (Caner, 2026-11-24): the 3D view's lighting and copy keys
+/// are greyed on a flat board, as they need the 3D view; every board and
+/// 3D view binding is enabled while the board is shown in 3D.
 #[test]
 fn every_board_context_binding_resolves_to_a_command_enabled_on_a_board() {
     let dir = tempfile::tempdir().unwrap();
-    let (mut app, _path) = app_with(dir.path(), board());
+    let (mut app, path) = app_with(dir.path(), board());
     app.select_pcb_items(&[ItemRef::Footprint(R1)]);
     let ctx = app.command_context(None);
+    app.interaction_state.board_3d = Some(crate::app::state::Board3dSession::open(&path));
+    let in_3d = app.command_context(None);
     let set = crate::keymap::ShortcutProfileSet::built_ins().expect("built-ins");
     let mut checked = 0;
     for profile in set.profiles() {
         for binding in &profile.bindings {
-            if binding.context != ShortcutContext::Pcb {
+            if !matches!(
+                binding.context,
+                ShortcutContext::Pcb | ShortcutContext::Board3d
+            ) {
                 continue;
             }
             let ShortcutBindingAction::Command(id) = &binding.action else {
                 continue;
             };
+            let needs_the_3d_view = crate::app::command::enablement::disabled_reason(id, &ctx)
+                == Some(signex_i18n::ids::COMMAND_NEEDS_BOARD_3D_VIEW);
             assert!(
-                is_enabled(id, &ctx),
+                is_enabled(id, &ctx) || needs_the_3d_view,
                 "{} binds {id} on a board, where it is greyed",
+                profile.id
+            );
+            assert!(
+                is_enabled(id, &in_3d),
+                "{} binds {id} on a board, greyed in its 3D view",
                 profile.id
             );
             checked += 1;
@@ -588,9 +603,7 @@ fn select_and_highlight_net_take_a_net_by_name() {
     );
     assert_eq!(
         outcome,
-        CommandOutcome::Disabled {
-            reason: "the board has no net named `NOPE`".into()
-        }
+        CommandOutcome::disabled("the board has no net named `NOPE`")
     );
     assert_eq!(selected(&app).len(), 2, "the selection is kept");
 }
@@ -625,4 +638,19 @@ fn find_results_of_a_board_out_of_view_are_searched_again() {
     let _ = app.update(find(FindReplaceMsg::ReplaceAll));
     assert_eq!(footprint(&app, &second, R1).value, "4k7");
     assert_eq!(footprint(&app, &first, R1).value, "10k");
+}
+
+/// #2326: `ids` is a targets list, so an item named twice is one item, and
+/// edge to edge needs two.
+#[test]
+fn measuring_one_item_named_twice_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with(dir.path(), board());
+    let ids = format!("ids={V1},{V1}");
+    let reason = crate::app::command::queries::tests::refusal(
+        &mut app,
+        "measure_board",
+        &[document(&path).as_str(), ids.as_str()],
+    );
+    assert_eq!(reason, "`ids` names two items, comma separated");
 }

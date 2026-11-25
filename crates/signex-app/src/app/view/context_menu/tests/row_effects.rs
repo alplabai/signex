@@ -38,7 +38,7 @@ fn line(n: u128) -> SchDrawing {
     }
 }
 
-/// An app showing `sheet` as its only tab, on the Altium keymap.
+/// An app showing `sheet` as its only tab, on the Signex Standard keymap.
 pub(super) fn app_with(sheet: SchematicSheet) -> Signex {
     let path = std::path::PathBuf::from("/w/row-effects.snxsch");
     let (mut app, _task) = Signex::new();
@@ -46,8 +46,8 @@ pub(super) fn app_with(sheet: SchematicSheet) -> Signex {
     app.ui_state.grid_size_mm = 1.0;
     app.ui_state
         .keymap_profiles
-        .set_active_profile("altium")
-        .expect("altium profile");
+        .set_active_profile("signex_standard")
+        .expect("signex_standard profile");
     app.ui_state.active_keymap = app.ui_state.keymap_profiles.compile_active().into();
     app.document_state.engines.insert(
         path.clone(),
@@ -256,6 +256,8 @@ fn app_that_copied() -> (Signex, String) {
 #[test]
 fn paste_row_puts_the_copy_on_the_cursor() {
     let (mut app, text) = app_that_copied();
+    // Paste is a row of the empty-spot menu (Graphite mockup #62).
+    select(&mut app, Vec::new());
     let task = press(&mut app, "paste");
     assert_menu_closed(&app, "paste");
     settle_answering_clipboard(&mut app, task, &text);
@@ -267,13 +269,44 @@ fn paste_row_puts_the_copy_on_the_cursor() {
     assert_eq!(doc(&app).symbols.len(), 1, "a paste is placed by a click");
 }
 
+/// Mockup row 155: the row opens the Smart Paste dialog (it used to place the copy at
+/// once); its Paste puts the copy on the cursor and a click places it as one
+/// undo step.
 #[test]
-fn smart_paste_row_places_the_copy_at_once() {
+fn smart_paste_row_opens_the_smart_paste_dialog() {
     let (mut app, text) = app_that_copied();
+    select(&mut app, Vec::new());
     let task = press(&mut app, "smart_paste");
     assert_menu_closed(&app, "smart paste");
     settle_answering_clipboard(&mut app, task, &text);
-    assert_eq!(doc(&app).symbols.len(), 2, "the copy was not placed");
+    assert!(
+        app.ui_state.smart_paste.is_some(),
+        "the dialog did not open"
+    );
+    assert_eq!(doc(&app).symbols.len(), 1, "nothing lands before Paste");
+
+    let _ = app.update(Message::Edit(EditMsg::SmartPasteDialog(
+        crate::smart_paste::SmartPasteMsg::PasteConfirmed,
+    )));
+    assert!(
+        app.ui_state.smart_paste.is_none(),
+        "Paste closes the dialog"
+    );
+    assert!(
+        app.interaction_state
+            .placement
+            .as_ref()
+            .is_some_and(|s| s.kind.is_paste()),
+        "the copy is on the cursor"
+    );
+    let steps = app.document_state.active_engine().unwrap().undo_position();
+    let _ = app.handle_placement_click(40.64, 40.64);
+    assert_eq!(doc(&app).symbols.len(), 2, "the click placed the copy");
+    assert_eq!(
+        app.document_state.active_engine().unwrap().undo_position(),
+        steps + 1,
+        "one undo step"
+    );
     assert!(app.interaction_state.placement.is_none());
 }
 
@@ -510,6 +543,10 @@ fn place_rows_arm_the_expected_tools() {
         ("place_compile_mask", Tool::CompileMask),
         ("place_diff_pair", Tool::DiffPair),
         ("place_text_string", Tool::Text),
+        // #1280: the harness rows are live.
+        ("place_signal_harness", Tool::HarnessWire),
+        ("place_harness_connector", Tool::HarnessConnector),
+        ("place_harness_entry", Tool::HarnessEntry),
     ] {
         let mut app = one_symbol();
         open_menu(&mut app);
@@ -536,19 +573,24 @@ fn net_label_row_arms_the_net_ghost_and_ends_a_pending_port() {
 
 #[test]
 fn power_port_rows_arm_what_the_active_bar_arms() {
+    // A power row shows the short port name, the full name as its tooltip (Graphite mockup #62).
     let cases = [
-        ("GND Power Port", A::PlacePowerGND),
-        ("VCC Power Port", A::PlacePowerVCC),
-        ("+5 Power Port", A::PlacePowerPlus5),
-        ("+12 Power Port", A::PlacePowerPlus12),
+        ("GND", "GND Power Port", A::PlacePowerGND),
+        ("VCC", "VCC Power Port", A::PlacePowerVCC),
+        ("+5", "+5 Power Port", A::PlacePowerPlus5),
+        ("+12", "+12 Power Port", A::PlacePowerPlus12),
     ];
-    for (label, action) in cases {
+    for (short, label, action) in cases {
         let mut app = one_symbol();
         open_menu(&mut app);
         let message = place_rows(&app)
             .iter()
             .find_map(|entry| match entry {
-                DropdownEntry::Item(item) if item.label == label => item.on_press.clone(),
+                DropdownEntry::Item(item)
+                    if item.label == short && item.tooltip.as_deref() == Some(label) =>
+                {
+                    item.on_press.clone()
+                }
                 _ => None,
             })
             .unwrap_or_else(|| panic!("no live row {label}"));
@@ -631,6 +673,7 @@ fn loaded_project(app: &mut Signex, file: &str, owns_sheet: bool) -> usize {
             sheets,
             variant_definitions: Vec::new(),
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: Vec::new(),
             enable_git: false,
             net_classes: Vec::new(),
@@ -639,7 +682,9 @@ fn loaded_project(app: &mut Signex, file: &str, owns_sheet: bool) -> usize {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
             fab_outputs: None,
+            router_tool_diameter: None,
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
@@ -659,6 +704,8 @@ fn canvas_project_options_row_opens_the_active_projects_tab() {
     let id = app.document_state.projects[idx].id;
     app.document_state.active_project = Some(id);
     app.document_state.tabs[0].project_id = Some(id);
+    // Project Options is a row of the empty-spot menu (Graphite mockup #62).
+    select(&mut app, Vec::new());
     let _ = press(&mut app, "open_project_options");
     assert!(
         app.document_state
@@ -696,6 +743,7 @@ fn tree_root_rows(
         x: 0.0,
         y: 0.0,
         key: Some(vec![id]),
+        add_new_only: false,
         window: None,
     };
     app.project_tree_entries(&ctx)
@@ -723,6 +771,7 @@ fn tree_save_row_writes_the_active_schematic() {
             x: 0.0,
             y: 0.0,
             key: None,
+            add_new_only: false,
             window: None,
         });
     settle(&mut app, live_row(&rows, "save_document"));
@@ -870,9 +919,76 @@ fn open_and_create_child_sheet_rows_start_the_descent_through_the_symbol() {
     }
 }
 
+/// #2847: Open Sheet on a file found missing logs the reason and opens
+/// nothing, with no Create Sheet dialog; the Create row still offers it.
+#[test]
+fn open_row_on_a_missing_file_says_why_and_only_create_offers_the_dialog() {
+    let _ = crate::diagnostics::init_logging();
+    let (mut app, _tmp, child_path) = app_with_sheet_symbol(None);
+    let tabs = app.document_state.tabs.len();
+    let task = press(&mut app, "open_child_sheet");
+    crate::app::path_ops::settle_task(&mut app, task);
+    assert_eq!(app.document_state.tabs.len(), tabs, "no tab opened");
+    assert!(app.ui_state.create_child_sheet_confirm.is_none());
+    let reason = signex_i18n::I18n::en_us_ref()
+        .message_plain(signex_i18n::ids::PROPERTIES_SHEET_OPEN_MISSING, &[]);
+    let logged = format!("{reason} ({})", child_path.display());
+    assert!(
+        crate::diagnostics::recent_entries()
+            .iter()
+            .any(|entry| entry.message == logged),
+        "{logged}"
+    );
+
+    let task = press(&mut app, "create_sheet_from_sheet_symbol");
+    crate::app::path_ops::settle_task(&mut app, task);
+    assert!(app.ui_state.create_child_sheet_confirm.is_some());
+}
+
+fn harness_go_to(far: &str) -> Message {
+    Message::Dock(crate::dock::DockMessage::Panel(
+        crate::panels::PanelMsg::Harness(crate::panels::HarnessPanelMsg::GoToSheetClicked {
+            far: far.to_string(),
+        }),
+    ))
+}
+
+/// #2847: the harness panel's Go to refuses a missing file like Open Sheet:
+/// the same reason, no tab and no Create Sheet dialog.
+#[test]
+fn harness_go_to_a_missing_file_says_why_and_opens_nothing() {
+    let _ = crate::diagnostics::init_logging();
+    let (mut app, _tmp, child_path) = app_with_sheet_symbol(None);
+    let tabs = app.document_state.tabs.len();
+    let task = app.update(harness_go_to("Child"));
+    crate::app::path_ops::settle_task(&mut app, task);
+    assert_eq!(app.document_state.tabs.len(), tabs, "no tab opened");
+    assert!(app.ui_state.pending_sheet_opens.is_empty());
+    assert!(app.ui_state.create_child_sheet_confirm.is_none());
+    let reason = signex_i18n::I18n::en_us_ref()
+        .message_plain(signex_i18n::ids::PROPERTIES_SHEET_OPEN_MISSING, &[]);
+    let logged = format!("{reason} ({})", child_path.display());
+    assert!(
+        crate::diagnostics::recent_entries()
+            .iter()
+            .any(|entry| entry.message == logged),
+        "{logged}"
+    );
+}
+
+/// The refusal is only for a missing file: Go to still opens one on disk.
+#[test]
+fn harness_go_to_an_existing_file_starts_the_open() {
+    let (mut app, _tmp, child_path) = app_with_sheet_symbol(Some(sheet_of(Vec::new())));
+    let _ = app.update(harness_go_to("Child"));
+    assert!(app.ui_state.pending_sheet_opens.contains_key(&child_path));
+}
+
 #[test]
 fn find_row_opens_the_find_dialog() {
     let mut app = one_symbol();
+    // Find and Preferences are rows of the empty-spot menu (Graphite mockup #62).
+    select(&mut app, Vec::new());
     let _ = press(&mut app, "find");
     assert!(app.ui_state.find_replace.open);
     assert_menu_closed(&app, "find");
@@ -881,6 +997,7 @@ fn find_row_opens_the_find_dialog() {
 #[test]
 fn preferences_row_opens_preferences() {
     let mut app = one_symbol();
+    select(&mut app, Vec::new());
     let _ = press(&mut app, "open_preferences");
     assert!(app.ui_state.preferences_open);
     assert_menu_closed(&app, "preferences");
@@ -933,6 +1050,7 @@ fn the_tree_root_menu_opened_near_the_bottom_edge_stays_inside_the_window() {
                 x: 20.0,
                 y: anchor_y,
                 key: Some(vec![id.clone()]),
+                add_new_only: false,
                 window: None,
             });
         let texts = super::super::placement::tests::lay_out_layers(

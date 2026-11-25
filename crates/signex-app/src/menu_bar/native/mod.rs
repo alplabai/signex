@@ -62,6 +62,7 @@ pub(crate) fn build_for(inputs: &MenuInputs) -> iced_menu::Menu<Message> {
         i18n: inputs.i18n(),
         cross_select: inputs.cross_select(),
         pcb_sync: inputs.pcb_sync(),
+        layouts: inputs.layouts().clone(),
         ..super::MenuContext::default()
     };
     build(
@@ -128,7 +129,8 @@ fn model_menu(menu: &Menu, is_root: bool, locked: bool) -> Item<Message> {
 
 fn model_item(item: &MenuItem, locked: bool) -> Item<Message> {
     let message = match &item.state {
-        ItemState::Placeholder { .. } | ItemState::Unavailable => None,
+        // An OS menu has no caption row: a header shows as inert text.
+        ItemState::Placeholder { .. } | ItemState::Unavailable | ItemState::Header => None,
         ItemState::Live { action, is_enabled } => {
             (*is_enabled && !locked).then(|| model_row(action.clone()))
         }

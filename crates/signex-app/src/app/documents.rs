@@ -33,6 +33,11 @@ pub struct ComponentEditorTab {
 pub enum TabKind {
     Schematic,
     Pcb,
+    /// The Gerber Viewer (mockup rows 193 and 193f), one tab at a time, on
+    /// the main window only. State lives in
+    /// [`crate::app::DocumentState::gerber_viewer`]; `TabInfo.path` is the
+    /// package's first path, read only, never saved.
+    GerberViewer,
     ComponentEditor(ComponentEditorTab),
     /// `.snxsym` opened as a main-window document tab. Editor state
     /// lives in [`crate::app::DocumentState::symbol_editors`] keyed by
@@ -57,9 +62,30 @@ pub enum TabKind {
     /// in the project's [`crate::app::ProjectTabState::rules`];
     /// `TabInfo.path` is the `.snxprj` path, which Save writes.
     Rules(super::state::ProjectId),
+    /// A board's Polygon Manager as a page tab (mockup row 178), kept like
+    /// the Layer Stack tab: the board's path, after the board's tab.
+    PolygonManager,
+    /// A board's Layer Stack as a page tab (mockup row 105). `TabInfo.path`
+    /// is the board's path, which Save writes; the board stays in its own
+    /// PCB tab, and this tab always sits after it (`app/layer_stack_tab`).
+    LayerStack,
+    /// The project's Variant Manager as a page tab (mockup row 32). Tab
+    /// state lives in the project's [`crate::app::ProjectTabState`];
+    /// `TabInfo.path` is the `.snxprj` path, which Save writes.
+    VariantManager(super::state::ProjectId),
+    /// A symbol's Pin table as a page tab (mockup row 122b). `TabInfo.path`
+    /// is the `.snxsym` path, which Save writes; it sits after the symbol's
+    /// own tab (`app/pin_table_tab`).
+    PinTable,
 }
 
 impl TabKind {
+    /// The Gerber Viewer tab: no document, never undocked, nothing to
+    /// save or restore from History.
+    pub fn is_gerber_viewer(&self) -> bool {
+        matches!(self, TabKind::GerberViewer)
+    }
+
     pub fn is_component_editor(&self) -> bool {
         matches!(self, TabKind::ComponentEditor(_))
     }
@@ -112,59 +138,59 @@ impl TabKind {
         }
     }
 
-    /// A tab that shows a project's own settings, not a drawing: the
-    /// Project and Rules tabs. Neither is undocked or restored from History.
+    /// A board's Polygon Manager tab.
+    pub fn is_polygon_manager(&self) -> bool {
+        matches!(self, TabKind::PolygonManager)
+    }
+
+    /// A page of a board, which shares the board's path and holds no
+    /// document: the Layer Stack and Polygon Manager tabs.
+    pub fn is_board_page(&self) -> bool {
+        matches!(self, TabKind::LayerStack | TabKind::PolygonManager)
+    }
+
+    /// A board's Layer Stack tab.
+    pub fn is_layer_stack(&self) -> bool {
+        matches!(self, TabKind::LayerStack)
+    }
+
+    /// `Some(id)` if this tab is a project's Variant Manager tab.
+    pub fn as_variant_manager(&self) -> Option<super::state::ProjectId> {
+        match self {
+            TabKind::VariantManager(id) => Some(*id),
+            _ => None,
+        }
+    }
+
+    /// A symbol's Pin table tab.
+    pub fn is_pin_table(&self) -> bool {
+        matches!(self, TabKind::PinTable)
+    }
+
+    /// A page of an open document that holds no document of its own and
+    /// shares its owner's path: the board pages (Layer Stack, Polygon
+    /// Manager) and the Pin table tab. It sits after its owner's tab and
+    /// stays on the main strip.
+    pub fn is_document_page(&self) -> bool {
+        self.is_board_page() || self.is_pin_table()
+    }
+
+    /// A page tab, not a drawing: the Project, Rules, Layer Stack, Pin
+    /// table and Variant Manager tabs. None is undocked or restored from
+    /// History.
     pub fn is_project_page(&self) -> bool {
-        matches!(self, TabKind::Project(_) | TabKind::Rules(_))
-    }
-}
-
-#[derive(Debug)]
-pub struct SchematicTabSession {
-    title: String,
-    path: PathBuf,
-    dirty: bool,
-    engine: signex_engine::Engine,
-}
-
-impl SchematicTabSession {
-    pub fn new(engine: signex_engine::Engine, title: String, path: PathBuf, dirty: bool) -> Self {
-        Self {
-            title,
-            path,
-            dirty,
-            engine,
+        // Mockup row 178: the Polygon Manager is a page of its board.
+        if self.is_polygon_manager() {
+            return true;
         }
-    }
-
-    pub fn set_dirty(&mut self, dirty: bool) {
-        self.dirty = dirty;
-    }
-
-    /// A Save As write to `path` succeeded: re-key the session onto it. The
-    /// document counts as saved only if it has not changed since the
-    /// snapshot taken at `saved_revision`.
-    pub fn finish_save_as(&mut self, path: PathBuf, saved_revision: u64) {
-        self.engine.set_path(Some(path.clone()));
-        self.title = path
-            .file_stem()
-            .map(|stem| stem.to_string_lossy().to_string())
-            .unwrap_or_else(|| "Schematic".to_string());
-        self.path = path;
-        if self.engine.revision() == saved_revision {
-            self.dirty = false;
-            self.engine.mark_saved();
-        } else {
-            // The new file holds a snapshot the document has moved past (an
-            // undo back to an older state counts), so no undo or redo step
-            // reproduces it and the document is not saved.
-            self.engine.forget_save_point();
-            self.dirty = true;
-        }
-    }
-
-    pub fn into_parts(self) -> (signex_engine::Engine, String, PathBuf, bool) {
-        (self.engine, self.title, self.path, self.dirty)
+        matches!(
+            self,
+            TabKind::Project(_)
+                | TabKind::Rules(_)
+                | TabKind::LayerStack
+                | TabKind::PinTable
+                | TabKind::VariantManager(_)
+        )
     }
 }
 
@@ -214,6 +240,18 @@ pub struct TabInfo {
     /// ComponentEditor tabs carry the `(library_path, table, row_id)`
     /// triple that resolves into `LibraryState.editors`.
     pub kind: TabKind,
+}
+
+impl TabInfo {
+    /// The `.snxsym` this tab edits: a symbol editor's own, or the one a
+    /// Pin table tab shows.
+    pub fn symbol_document(&self) -> Option<&PathBuf> {
+        match &self.kind {
+            TabKind::SymbolEditor(path) => Some(path),
+            TabKind::PinTable => Some(&self.path),
+            _ => None,
+        }
+    }
 }
 
 /// Per-tab state for an open `.snxsym` document. Symbol editing
@@ -338,6 +376,9 @@ pub struct SymbolDocument {
     pub active_bar_menu: Option<crate::library::editor::symbol::state::SymActiveBarMenu>,
     /// v0.13 — Pause flag for placement (TAB during Place Pin / etc.).
     pub placement_paused: bool,
+    /// The pin type picked in the Place Pin dropdown, stamped on every
+    /// following placed pin; `None` places unclassified pins (mockup row 141).
+    pub pin_type: Option<signex_types::schematic::PinDirection>,
     /// Undo / redo snapshots (each the whole `.snxsym` container, symbols
     /// shared structurally between steps) and the depth at which this draft
     /// last equalled its file, so Undo back to it reads clean (#1854).
@@ -358,6 +399,10 @@ pub struct SymbolDocument {
     /// on the undo stack). Cleared by `SymbolDragCommit` (emitted on
     /// `ButtonReleased`).
     pub mid_drag: bool,
+    /// `(graphic, radius at drag start, radius last written)` while a grip
+    /// drags a Round Rectangle, so its clamp depends only on the current
+    /// size. A stored radius other than the last written one is a new start.
+    pub drag_corner_radius: Option<(usize, f64, f64)>,
     /// Which placed graphic's fill colour-picker is open, plus whether
     /// it has been expanded to the HSV / RGB overlay. `None` = closed.
     /// Transient UI-only state: never serialized, never snapshotted for
@@ -379,6 +424,10 @@ pub struct SymbolDocument {
     /// `PolygonCancel`, plus the synchronous flush in the `SetTool`
     /// handler when the user switches away from `PlacePolygon`.
     pub polygon_vertices: Vec<(f64, f64)>,
+    /// Counts tool changes. The canvas drops its half-placed gesture when
+    /// this moves, even if the tool changed and came back between two
+    /// canvas events.
+    pub tool_epoch: u64,
     /// Transient, user-visible status line rendered in the symbol
     /// editor's status footer (see `standalone::symbol::view_symbol_
     /// status`). `None` most of the time; set to `Some(reason)` when
@@ -458,13 +507,16 @@ impl SymbolDocument {
             selection_filter: Default::default(),
             active_bar_menu: None,
             placement_paused: false,
+            pin_type: None,
             history: crate::app::History::at_start(Self::HISTORY_DEPTH),
             history_generation: 0,
             last_edit_key: None,
             mid_drag: false,
+            drag_corner_radius: None,
             graphic_fill_picker: None,
             local_color_picker: None,
             polygon_vertices: Vec::new(),
+            tool_epoch: 0,
             status_message: None,
             context_menu: None,
         };
@@ -881,6 +933,7 @@ impl FootprintDocument {
         self.history.finish_step(current, true);
         self.restore(snap);
         self.sync_dirty_to_history();
+        crate::library::editor::footprint::sketch_mode::exit::settle_outcome(self);
         true
     }
 
@@ -897,6 +950,7 @@ impl FootprintDocument {
         self.history.finish_step(current, false);
         self.restore(snap);
         self.sync_dirty_to_history();
+        crate::library::editor::footprint::sketch_mode::exit::settle_outcome(self);
         true
     }
 
@@ -915,10 +969,10 @@ impl FootprintDocument {
         }
     }
 
-    /// v0.24 Phase 1 — write a snapshot back into the live editor
-    /// state. Resets the canvas cache so the next render reflects
-    /// the rolled-back geometry.
+    /// Writes a snapshot back into the live editor state and redraws.
     fn restore(&mut self, snap: FootprintHistorySnapshot) {
+        // Refused field text belongs to the state that is gone.
+        self.state.numeric_buffers.clear();
         // The file's id is the live one, not the snapshot's (#2172).
         let live_id = self.file.file_uuid;
         self.file = snap.file;
@@ -1049,6 +1103,23 @@ pub enum Tool {
     CompileMask,
     /// One click on a `_P` or `_N` net marks the differential pair (#2420).
     DiffPair,
+    /// Four clicks draw a cubic Bezier: start, C1, C2, end (#1267).
+    Bezier,
+    /// Two points, then the line: a horizontal or vertical dimension, by
+    /// the drag direction (#1267).
+    LinearDimension,
+    /// Two points, then the line: a dimension along the two points (#1267).
+    AlignedDimension,
+    /// One click places a typed table (#1300).
+    Table,
+    /// Click by click draws harness wire segments, like the wire tool (#1280).
+    HarnessWire,
+    /// Two clicks place a harness connector body (#1280).
+    HarnessConnector,
+    /// One click on a connector's flat side adds an entry there (#1280).
+    HarnessEntry,
+    /// One click on a wire places a Net Parameters flag there (#1489).
+    NetParameters,
 }
 
 impl std::fmt::Display for Tool {
@@ -1073,9 +1144,17 @@ impl std::fmt::Display for Tool {
             Tool::SheetEntry => write!(f, "Place Sheet Entry"),
             Tool::Measure => write!(f, "Measure Distance"),
             Tool::BreakWire => write!(f, "Break Wire"),
-            Tool::Blanket => write!(f, "Place Blanket"),
+            Tool::Blanket => write!(f, "Place Net Blanket"),
             Tool::CompileMask => write!(f, "Place Compile Mask"),
             Tool::DiffPair => write!(f, "Place Differential Pair"),
+            Tool::Bezier => write!(f, "Draw Bezier"),
+            Tool::LinearDimension => write!(f, "Place Linear Dimension"),
+            Tool::AlignedDimension => write!(f, "Place Aligned Dimension"),
+            Tool::Table => write!(f, "Place Table"),
+            Tool::HarnessWire => write!(f, "Draw Signal Harness"),
+            Tool::HarnessConnector => write!(f, "Place Harness Connector"),
+            Tool::HarnessEntry => write!(f, "Place Harness Entry"),
+            Tool::NetParameters => write!(f, "Place Net Parameters"),
         }
     }
 }

@@ -1,12 +1,13 @@
 //! The tool group buttons of the PCB Active Bar (#2392), from the group
 //! table in `app/pcb_bar_groups.rs`. A button shows and runs the row its
 //! group used last, drawn selected while one of its tools is armed or its
-//! dropdown is open; a right-click opens the group's rows, greyed by the menu
-//! bar's gate, or with why for a tool the board editor cannot run yet. A
-//! group whose rows are all greyed is one greyed button that says why.
+//! dropdown is open; a right-click opens the group's rows under its name,
+//! greyed by the menu bar's gate, or with why for a tool the board editor
+//! cannot run yet. A group whose rows are all greyed is one greyed button
+//! that says why.
 
 use iced::widget::svg;
-use signex_i18n::{I18n, t};
+use signex_i18n::{I18n, ids, t};
 use signex_types::theme::ThemeId;
 use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
@@ -61,48 +62,66 @@ pub(super) fn group_button(
     };
     let menu = PcbBarMenu::Group(group);
     let has_menu = group.rows().len() > 1;
+    let toggle = || bar_message(PcbBarMsg::MenuToggled(menu));
     ActiveBarItem::Button(ActiveBarButton {
         icon,
         tooltip,
         enabled: true,
         selected: state.is_selected(group),
         on_press: Some(on_press),
-        on_right_press: has_menu.then(|| bar_message(PcbBarMsg::MenuToggled(menu))),
+        on_right_press: has_menu.then(toggle),
         dropdown_indicator: has_menu.then(|| ActiveBarIcon::Svg(ic::icon_chevron_45(tid))),
+        // Mockup row 108: a click on the corner chevron opens the dropdown
+        // too, so it is found without a right-click.
+        on_chevron_press: has_menu.then(toggle),
     })
 }
 
-/// The rows of `group`'s dropdown. A live row runs its command, greyed as
-/// its menu row is in `ctx`; a tool the board editor cannot run yet is
-/// greyed and its tooltip says why.
+/// The dropdown of `group` (mockup row 108): a heading with the group's name, then
+/// its rows, the commands (Repour, Change Footprint) below a separator
+/// after the tools. The row the button shows (`last`) is drawn current. A
+/// live row runs its command, greyed as its menu row is in `ctx`; a tool the
+/// board editor cannot run yet is greyed and its tooltip says why.
 pub(super) fn entries(
     group: PcbBarGroup,
     i18n: &I18n,
     tid: ThemeId,
     ctx: &CommandContext,
+    last: &PcbBarLastTools,
 ) -> Vec<DropdownEntry<Message>> {
-    group
-        .rows()
-        .iter()
-        .map(|&row| {
-            let label = row_label(row, i18n);
-            let live = row
-                .command()
-                .and_then(|id| Some((id, AppCommandId::new(id).ok()?)));
-            let item = match live {
-                Some((id, command)) => {
-                    let enabled = is_enabled(&command, ctx);
-                    DropdownItem::new(label, bar_message(PcbBarMsg::CommandPicked(command)))
-                        .command(id)
-                        .disabled(!enabled)
-                }
-                None => DropdownItem::passive(label)
-                    .disabled(true)
-                    .tooltip(row_tooltip(row, i18n)),
-            };
-            DropdownEntry::Item(item.icon(menu_icon(row, tid)))
-        })
-        .collect()
+    let name = t!(i18n, ids::PCB_BAR_GROUP, "group" => group.key()).into_string();
+    let mut entries = vec![DropdownEntry::Header(i18n.upper_for_display(&name))];
+    let current = last.current(group);
+    let mut after_tool = false;
+    for &row in group.rows() {
+        let is_tool = matches!(row, PcbBarRow::Tool(_));
+        if after_tool && !is_tool {
+            entries.push(DropdownEntry::Separator);
+        }
+        after_tool = is_tool;
+        let item = row_item(row, i18n, ctx).selected(row == current);
+        entries.push(DropdownEntry::Item(item.icon(menu_icon(row, tid))));
+    }
+    entries
+}
+
+/// The dropdown row of `row`: live and gated by `ctx`, or greyed with why.
+fn row_item(row: PcbBarRow, i18n: &I18n, ctx: &CommandContext) -> DropdownItem<Message> {
+    let label = row_label(row, i18n);
+    let live = row
+        .command()
+        .and_then(|id| Some((id, AppCommandId::new(id).ok()?)));
+    match live {
+        Some((id, command)) => {
+            let enabled = is_enabled(&command, ctx);
+            DropdownItem::new(label, bar_message(PcbBarMsg::CommandPicked(command)))
+                .command(id)
+                .disabled(!enabled)
+        }
+        None => DropdownItem::passive(label)
+            .disabled(true)
+            .tooltip(row_tooltip(row, i18n)),
+    }
 }
 
 /// The row's name, as its Place (or Edit) row reads.
@@ -173,14 +192,14 @@ fn menu_icon(row: PcbBarRow, tid: ThemeId) -> svg::Handle {
         T::MultiRoute => ic::icon_pcb_multi_route(tid),
         T::Track => ic::icon_dd_line(tid),
         T::Arc => ic::icon_dd_arc(tid),
-        T::Fill => ic::icon_dd_rect(tid),
-        T::SolidRegion => ic::icon_shape_polygon(tid),
-        T::PolygonPour => ic::icon_dd_polygon(tid),
-        T::PourCutout => ic::icon_dd_cut(tid),
-        T::SlicePour => ic::icon_dd_line(tid),
+        // Mockup row 108: the copper-area rows share the hatched area.
+        T::Fill | T::SolidRegion | T::PolygonPour | T::PourCutout | T::SlicePour => {
+            ic::icon_pcb_copper_area(tid)
+        }
         T::TextString => ic::icon_dd_text_string(tid),
         T::Dimension => ic::icon_pcb_dimension(tid),
         T::Keepout => ic::icon_pcb_keepout(tid),
+        T::Room => ic::icon_dd_rect(tid),
         T::Line => ic::icon_dd_line(tid),
         T::GraphicArc => ic::icon_dd_arc(tid),
         T::FullCircle => ic::icon_dd_circle(tid),

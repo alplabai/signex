@@ -1,4 +1,6 @@
 use super::super::*;
+use crate::app::command::{CommandOutcome, OperandValue, translator};
+use signex_types::schematic::{SelectedItem, SelectedKind};
 
 impl Signex {
     /// Delete the selection. `true` when something was deleted.
@@ -19,6 +21,34 @@ impl Signex {
         false
     }
 
+    /// Delete on a sheet: the objects of the selection run
+    /// `delete_selection`'s operand handler on the sheet in view
+    /// (`command::translator`), and the selection clears when something
+    /// went. A selection holding nothing the sheet has does nothing.
+    pub(crate) fn delete_sheet_selection(&mut self) -> Task<Message> {
+        let selected = &self.interaction_state.active_canvas().selected;
+        let (Some(path), Some(engine)) = (
+            self.document_state.active_path.clone(),
+            self.document_state.active_engine(),
+        ) else {
+            return Task::none();
+        };
+        if !engine.has_selected_items(selected) {
+            return Task::none();
+        }
+        let ids = (selected.iter())
+            .filter_map(|item| delete_target(engine, item))
+            .collect();
+        let operands = vec![("ids", OperandValue::Targets(ids))];
+        let (outcome, task) = translator::run(self, "delete_selection", &path, operands);
+        if let CommandOutcome::Answered(answer) = &outcome
+            && answer["changed"].as_bool() == Some(true)
+        {
+            self.interaction_state.active_canvas_mut().selected.clear();
+        }
+        task
+    }
+
     /// Undo in the main window: whatever its tab shows (see
     /// [`Signex::undo_target`]).
     pub(crate) fn handle_undo_requested(&mut self) {
@@ -37,6 +67,11 @@ impl Signex {
     /// One undo of the active sheet: its newest net-class pick or engine edit
     /// (net colours are engine edits), whichever came last. Whether a step ran.
     pub(crate) fn undo_active_sheet(&mut self) -> bool {
+        // A value still being typed is the newest step; a typo that put the
+        // sheet back has already been this undo.
+        if self.commit_live_drawing_edit() {
+            return true;
+        }
         if self.step_net_class_pick(true) {
             return true;
         }
@@ -47,13 +82,14 @@ impl Signex {
             // A multi-click buffer anchors at the end of the segment the
             // undo just removed; drawing on from it would leave an orphan
             // (#1831). The tool stays armed, the next click starts afresh.
-            self.clear_drawing_buffers();
+            self.clear_drawing_buffers_after_undo();
         }
         undone
     }
 
     /// One redo of the active sheet, see [`Self::undo_active_sheet`].
     pub(crate) fn redo_active_sheet(&mut self) -> bool {
+        self.commit_live_drawing_edit();
         if self.step_net_class_pick(false) {
             return true;
         }
@@ -81,20 +117,7 @@ impl Signex {
             );
             return iced::Task::none();
         }
-        let Some(engine) = self.document_state.active_engine() else {
-            return iced::Task::none();
-        };
-        let doc = engine.document();
-        let Some(current) = doc
-            .drawings
-            .iter()
-            .find(|d| d.uuid() == target_uuid)
-            .cloned()
-        else {
-            return iced::Task::none();
-        };
-        let next = apply_drawing_edit(current, edit);
-        if let Some(next) = next {
+        if let Some(next) = self.drawing_with_edit(target_uuid, edit) {
             self.apply_engine_command(
                 signex_engine::Command::UpdateSchDrawing { drawing: next },
                 true,
@@ -102,6 +125,19 @@ impl Signex {
             );
         }
         iced::Task::none()
+    }
+
+    /// The active sheet's drawing `target` with `edit` applied. `None` when
+    /// it is not there, or the edit does not fit it or is refused (#2767).
+    pub(crate) fn drawing_with_edit(
+        &self,
+        target: uuid::Uuid,
+        edit: crate::app::contracts::DrawingFieldEdit,
+    ) -> Option<signex_types::schematic::SchDrawing> {
+        let engine = self.document_state.active_engine()?;
+        let drawings = &engine.document().drawings;
+        let current = drawings.iter().find(|d| d.uuid() == target).cloned()?;
+        apply_drawing_edit(current, edit)
     }
 }
 
@@ -118,6 +154,9 @@ fn apply_drawing_edit(
 ) -> Option<signex_types::schematic::SchDrawing> {
     use crate::app::contracts::DrawingFieldEdit as E;
     use signex_types::schematic::{Point, SchDrawing, circumcircle};
+    if !edit.is_valid() {
+        return None;
+    }
     let mut next = current;
     match (&mut next, edit) {
         // Stroke width applies to every variant.
@@ -129,7 +168,7 @@ fn apply_drawing_edit(
             | SchDrawing::Polyline { width, .. },
             E::Width(w),
         ) => {
-            *width = w.max(0.0);
+            *width = w;
         }
         // Fill applies to filled variants only.
         (
@@ -176,19 +215,19 @@ fn apply_drawing_edit(
             let y0 = start.y.min(end.y);
             let y1 = start.y.max(end.y);
             *start = Point::new(x0, y0);
-            *end = Point::new(x0 + v.max(0.01), y1);
+            *end = Point::new(x0 + v, y1);
         }
         (SchDrawing::Rect { start, end, .. }, E::RectHeightMm(v)) => {
             let x0 = start.x.min(end.x);
             let x1 = start.x.max(end.x);
             let y0 = start.y.min(end.y);
             *start = Point::new(x0, y0);
-            *end = Point::new(x1, y0 + v.max(0.01));
+            *end = Point::new(x1, y0 + v);
         }
         // Circle
         (SchDrawing::Circle { center, .. }, E::CircleCenterX(v)) => center.x = v,
         (SchDrawing::Circle { center, .. }, E::CircleCenterY(v)) => center.y = v,
-        (SchDrawing::Circle { radius, .. }, E::CircleRadius(v)) => *radius = v.max(0.01),
+        (SchDrawing::Circle { radius, .. }, E::CircleRadius(v)) => *radius = v,
         // Arc — needs full (start,mid,end) reconstruction so it's
         // handled separately (original values live inside `next`).
         (
@@ -213,7 +252,7 @@ fn apply_drawing_edit(
                 match edit {
                     E::ArcCenterX(v) => ncx = v,
                     E::ArcCenterY(v) => ncy = v,
-                    E::ArcRadius(v) => nr = v.max(0.01),
+                    E::ArcRadius(v) => nr = v,
                     E::ArcStartAngle(deg) => nsa = deg.to_radians(),
                     E::ArcEndAngle(deg) => nea = deg.to_radians(),
                     _ => {}
@@ -250,6 +289,19 @@ fn normalize_rad(a: f64) -> f64 {
         t += TAU;
     }
     t
+}
+
+/// The uuid Delete names `item` by on its sheet, or none when it deletes
+/// nothing. A designator or value field is no object: it is passed, as its
+/// part, only when that part is locked, so the lock is named as before;
+/// an object the sheet does not hold is left out, as the engine skipped it.
+fn delete_target(engine: &signex_engine::Engine, item: &SelectedItem) -> Option<uuid::Uuid> {
+    let one = std::slice::from_ref(item);
+    let kept = match item.kind {
+        SelectedKind::SymbolRefField | SelectedKind::SymbolValField => engine.all_locked(one),
+        _ => engine.has_selected_items(one),
+    };
+    kept.then_some(item.uuid)
 }
 
 fn norm_ccw(a: f64, b: f64) -> f64 {

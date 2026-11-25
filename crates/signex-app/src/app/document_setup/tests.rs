@@ -41,6 +41,7 @@ fn fixture(defaults: ProjectDefaults) -> Fixture {
         }],
         variant_definitions: Vec::new(),
         active_variant: None,
+        variant_settings: Default::default(),
         libraries: Vec::new(),
         enable_git: false,
         net_classes: Vec::new(),
@@ -49,7 +50,9 @@ fn fixture(defaults: ProjectDefaults) -> Fixture {
         schematic_defaults: Default::default(),
         project_defaults: defaults,
         agent_journal: Default::default(),
+        schematic_design: Default::default(),
         fab_outputs: None,
+        router_tool_diameter: None,
         requirements: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
@@ -149,7 +152,7 @@ fn headless_new_pcb_with_an_unknown_profile_is_refused() {
     let mut f = fixture(ProjectDefaults::default());
     let outcome = run(&mut f.app, "new_pcb_document", &["profile=nope"]);
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("nope")),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if signex_i18n::RenderTranslatable::render_en_us(reason).contains("nope")),
         "{outcome:?}"
     );
     assert!(f.app.document_state.tabs.is_empty());

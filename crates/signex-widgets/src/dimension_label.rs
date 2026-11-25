@@ -150,6 +150,13 @@ pub struct DimensionLabel<'a> {
     pub anchor: LabelAnchor,
     pub handle: Option<DragHandle>,
     pub limits: ValueLimits,
+    /// Outline of the open field while its text is not a length in
+    /// `format` (see [`DimensionLabels::draft_refused`]); `None` keeps the
+    /// ink outline.
+    pub refused_ink: Option<Color>,
+    /// The drawing writes this label itself: the closed label is only a
+    /// press target the size of its caption.
+    pub is_bare: bool,
 }
 
 impl<'a> DimensionLabel<'a> {
@@ -165,7 +172,21 @@ impl<'a> DimensionLabel<'a> {
             anchor: LabelAnchor::Middle,
             handle: None,
             limits: ValueLimits::default(),
+            refused_ink: None,
+            is_bare: false,
         }
+    }
+
+    pub fn refused_ink(mut self, color: Color) -> Self {
+        self.refused_ink = Some(color);
+        self
+    }
+
+    /// The closed label draws nothing: the caller's drawing shows its words
+    /// (the caption) and this is the press target over them.
+    pub fn bare(mut self) -> Self {
+        self.is_bare = true;
+        self
     }
 
     pub fn caption(mut self, caption: impl Into<Label<'a>>) -> Self {
@@ -206,7 +227,11 @@ impl<'a> DimensionLabel<'a> {
             .caption
             .as_ref()
             .map_or(0, |c| c.as_str().chars().count());
-        let value_chars = self.value_text().chars().count();
+        let value_chars = if self.is_bare {
+            0
+        } else {
+            self.value_text().chars().count()
+        };
         label_box(caption_chars, value_chars, text_size, self.at, self.anchor)
     }
 }
@@ -276,6 +301,13 @@ struct Editing {
     opened: String,
 }
 
+impl Editing {
+    /// The draft was changed into text `label` does not read as a length.
+    fn refused_by(&self, label: &DimensionLabel<'_>) -> bool {
+        self.draft.trim() != self.opened.trim() && label.format.parse(&self.draft).is_none()
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Drag {
     index: usize,
@@ -312,6 +344,55 @@ impl DimensionLabels {
     /// The text in the open field.
     pub fn draft(&self) -> Option<&str> {
         self.editing.as_ref().map(|e| e.draft.as_str())
+    }
+
+    /// Whether the open field holds text its label does not read as a
+    /// length. The text the field opened with is never refused.
+    pub fn draft_refused(&self, labels: &[DimensionLabel<'_>]) -> bool {
+        self.editing.as_ref().is_some_and(|editing| {
+            labels
+                .get(editing.index)
+                .is_some_and(|label| editing.refused_by(label))
+        })
+    }
+
+    /// Whether `event` must not reach [`Self::update`] because it would
+    /// close the open field on refused text. Enter, Tab, a blur and a press
+    /// on another label wait; Esc still closes the field.
+    pub fn event_refused(
+        &self,
+        event: &DimensionLabelMessage,
+        labels: &[DimensionLabel<'_>],
+    ) -> bool {
+        self.event_held(event, self.draft_refused(labels))
+    }
+
+    /// [`Self::event_refused`] for a caller with a stricter rule: `refused`
+    /// says whether the open field's text is refused.
+    pub fn event_held(&self, event: &DimensionLabelMessage, refused: bool) -> bool {
+        use DimensionLabelMessage as M;
+        let open = self.editing_index();
+        refused
+            && match *event {
+                M::DraftSubmitted | M::TabPressed { .. } => true,
+                M::LabelPressed(i) | M::HandlePressed(i) => open.is_some_and(|o| o != i),
+                M::DraftBlurred(i) => open == Some(i),
+                _ => false,
+            }
+    }
+
+    /// What the open field would commit: `None` while it holds the text it
+    /// opened with, or text that is not a length.
+    pub fn pending_value(&self, labels: &[DimensionLabel<'_>]) -> Option<DimensionCommitted> {
+        let editing = self.editing.as_ref()?;
+        if editing.draft.trim() == editing.opened.trim() {
+            return None;
+        }
+        let value = labels.get(editing.index)?.format.parse(&editing.draft)?;
+        Some(DimensionCommitted {
+            index: editing.index,
+            value,
+        })
     }
 
     /// Index of the label whose handle is held.
@@ -485,10 +566,11 @@ impl DimensionLabels {
         })
     }
 
-    /// The overlay for `labels`; stack it above the drawing.
+    /// The overlay for `labels`; stack it above the drawing. The overlay
+    /// copies what it shows, so `labels` may be built in the caller's view.
     pub fn view<'a>(
         &'a self,
-        labels: &'a [DimensionLabel<'a>],
+        labels: &[DimensionLabel<'a>],
         style: DimensionLabelStyle,
     ) -> Element<'a, DimensionLabelMessage> {
         let mut layers: Vec<Element<'a, DimensionLabelMessage>> = Vec::new();
@@ -499,9 +581,7 @@ impl DimensionLabels {
         }
         for (index, label) in labels.iter().enumerate() {
             let body = match &self.editing {
-                Some(editing) if editing.index == index => {
-                    self.field_view(index, label, &editing.draft, style)
-                }
+                Some(editing) if editing.index == index => self.field_view(editing, label, style),
                 _ => tag_view(index, label, style),
             };
             layers.push(body);
@@ -520,11 +600,15 @@ impl DimensionLabels {
 
     fn field_view<'a>(
         &'a self,
-        index: usize,
+        editing: &'a Editing,
         label: &DimensionLabel<'a>,
-        draft: &'a str,
         style: DimensionLabelStyle,
     ) -> Element<'a, DimensionLabelMessage> {
+        let index = editing.index;
+        let outline = label
+            .refused_ink
+            .filter(|_| editing.refused_by(label))
+            .unwrap_or(style.ink);
         let size = style.text_size;
         let tag = label.bounds(size);
         let width = tag.width.max(FIELD_MIN_EM * size);
@@ -534,7 +618,7 @@ impl DimensionLabels {
             LabelAnchor::End => tag.x + tag.width - width,
         };
         let s = style;
-        let field = text_input(UserText::new(String::new()), draft)
+        let field = text_input(UserText::new(String::new()), &editing.draft)
             .id(self.input_id.clone())
             .on_input(DimensionLabelMessage::DraftEdited)
             .on_submit(DimensionLabelMessage::DraftSubmitted)
@@ -546,7 +630,7 @@ impl DimensionLabels {
             .style(move |_: &Theme, _| text_input::Style {
                 background: Background::Color(s.field),
                 border: Border {
-                    color: s.ink,
+                    color: outline,
                     width: 1.0,
                     radius: (RADIUS_EM * s.text_size).into(),
                     ..Border::default()
@@ -566,6 +650,13 @@ fn tag_view<'a>(
 ) -> Element<'a, DimensionLabelMessage> {
     let size = style.text_size;
     let bounds = label.bounds(size);
+    if label.is_bare {
+        let target = button(Space::new().width(bounds.width).height(bounds.height))
+            .padding(0.0)
+            .style(|_: &Theme, _| button::Style::default())
+            .on_press(DimensionLabelMessage::LabelPressed(index));
+        return Translate::new(target.boxed(), (bounds.x, bounds.y)).into();
+    }
     let mut content: Row<Element<'a, DimensionLabelMessage>> = Row::new().spacing(GAP_EM * size);
     if let Some(caption) = &label.caption {
         content = content.push(
@@ -753,6 +844,53 @@ mod tests {
         assert_eq!(typed(1, "abc"), None);
         assert_eq!(typed(1, "inf"), None);
         assert_eq!(typed(1, ""), None);
+    }
+
+    /// Text that is not a length is refused while the field is open; the
+    /// text it opened with and a number are not.
+    #[test]
+    fn a_draft_that_is_not_a_length_is_refused() {
+        let items = labels();
+        let mut s = DimensionLabels::default();
+        assert!(!s.draft_refused(&items), "no field open");
+        s.update(DimensionLabelMessage::LabelPressed(1), &items);
+        assert!(!s.draft_refused(&items), "the opening text");
+        for junk in ["abc", "", "inf"] {
+            s.update(DimensionLabelMessage::DraftEdited(junk.into()), &items);
+            assert!(s.draft_refused(&items), "{junk:?}");
+        }
+        s.update(DimensionLabelMessage::DraftEdited("0.25".into()), &items);
+        assert!(!s.draft_refused(&items));
+    }
+
+    /// Everything that would close the field waits on refused text, except
+    /// Esc; a number lets them all through.
+    #[test]
+    fn refused_text_holds_every_event_that_would_close_the_field() {
+        use DimensionLabelMessage as M;
+        let items = labels();
+        let mut s = DimensionLabels::default();
+        s.update(M::LabelPressed(1), &items);
+        s.update(M::DraftEdited("abc".into()), &items);
+        let closing = [
+            M::DraftSubmitted,
+            M::TabPressed { backward: false },
+            M::DraftBlurred(1),
+            M::LabelPressed(0),
+            M::HandlePressed(0),
+        ];
+        for event in &closing {
+            assert!(s.event_refused(event, &items), "{event:?}");
+        }
+        assert!(!s.event_refused(&M::EscapePressed, &items));
+        assert!(
+            !s.event_refused(&M::DraftBlurred(0), &items),
+            "another label"
+        );
+        s.update(M::DraftEdited("0.25".into()), &items);
+        for event in &closing {
+            assert!(!s.event_refused(event, &items), "{event:?}");
+        }
     }
 
     #[test]
@@ -974,5 +1112,16 @@ mod tests {
         let _ = s.view(&items, style);
         s.update(DimensionLabelMessage::HandlePressed(0), &items);
         let _ = s.view(&items, style);
+    }
+
+    /// A bare label is a press target the size of its caption: the drawing
+    /// under it writes the value.
+    #[test]
+    fn a_bare_label_measures_its_caption_alone() {
+        let plain = DimensionLabel::new(1.5, mm(), Point::ORIGIN)
+            .caption(UserText::new("wire 1.5".to_string()));
+        let bare = plain.clone().bare();
+        assert!(bare.bounds(11.0).width < plain.bounds(11.0).width);
+        assert_eq!(bare.bounds(11.0).height, plain.bounds(11.0).height);
     }
 }

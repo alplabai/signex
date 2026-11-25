@@ -7,14 +7,18 @@
 //! acts on: the footprint rows (Change Footprint, Swap Pins, Swap Gates,
 //! Arrange in Box) for a footprint, the route rows (Lock, Unlock, Gloss
 //! Selected Routes, Add Teardrops) for a track or via, Select Net and
-//! Highlight Net for an object with a net. Each row runs its catalog command
+//! Highlight Net for an object with a net, then Cross Probe, Properties,
+//! Polygon Manager on a polygon pour (mockup row 178) and Compare with
+//! Schematic. Each row runs its catalog command
 //! and is live exactly when that command is enabled in the menu's window:
 //! on a read-only board every editing row is greyed.
 
 use super::*;
 
 use super::board_part_rows::{place_rows, save_row, swap_rows};
-use super::items::{dd_cmd_disabled, dd_command, submenu_launcher, text};
+use super::items::{
+    dd_cmd_disabled, dd_command, dd_disabled, dd_msg, submenu_launcher, tag_command, text,
+};
 use super::menus::CanvasShortcuts;
 use crate::app::command::CommandContext;
 use crate::icons as ic;
@@ -25,7 +29,8 @@ use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 
 /// The board canvas menu for the facts of the menu's window `ctx` and the
-/// project's reuse `blocks`.
+/// project's reuse `blocks`, off a polygon pour.
+#[cfg(test)]
 pub(in crate::app::view::context_menu) fn pcb_canvas_menu_with_blocks(
     i18n: &I18n,
     tid: ThemeId,
@@ -33,6 +38,20 @@ pub(in crate::app::view::context_menu) fn pcb_canvas_menu_with_blocks(
     active_submenu: Option<ContextSubmenu>,
     sc: &CanvasShortcuts,
     blocks: &[String],
+) -> Vec<DropdownEntry<Message>> {
+    board_canvas_menu(i18n, tid, ctx, active_submenu, sc, blocks, false)
+}
+
+/// The board canvas menu; `on_pour` when the right-click is on a polygon
+/// pour, which adds Polygon Manager.
+pub(in crate::app::view::context_menu) fn board_canvas_menu(
+    i18n: &I18n,
+    tid: ThemeId,
+    ctx: &CommandContext,
+    active_submenu: Option<ContextSubmenu>,
+    sc: &CanvasShortcuts,
+    blocks: &[String],
+    on_pour: bool,
 ) -> Vec<DropdownEntry<Message>> {
     let board = ctx.pcb;
     let row = |icon: Option<Handle>, command_id: &'static str| {
@@ -137,6 +156,12 @@ pub(in crate::app::view::context_menu) fn pcb_canvas_menu_with_blocks(
             Some(ic::icon_dd_properties(tid)),
             "edit_selected_object_properties",
         ));
+        // Mockup row 178: a pour opens the Polygon Manager with it ticked.
+        if on_pour {
+            v.push(row(None, "polygon_manager"));
+        }
+        // Compare with Schematic (#2462); the empty-area menu stays short.
+        v.push(compare_with_schematic_row(i18n, ctx));
     }
     v.extend([
         DropdownEntry::Separator,
@@ -144,6 +169,28 @@ pub(in crate::app::view::context_menu) fn pcb_canvas_menu_with_blocks(
         row(None, "toggle_ratsnest"),
     ]);
     v
+}
+
+/// The board menu's Compare with Schematic row (#2462): runs
+/// `compare_board_with_schematic` under a shorter name than its menu text,
+/// live exactly when the command is.
+fn compare_with_schematic_row(i18n: &I18n, ctx: &CommandContext) -> DropdownEntry<Message> {
+    const ID: &str = "compare_board_with_schematic";
+    let label = text(i18n, menu_ids::CTX_COMPARE_WITH_SCHEMATIC);
+    let live = AppCommandId::new(ID).ok().filter(|id| is_enabled(id, ctx));
+    let entry = match live {
+        Some(id) => dd_msg(
+            None,
+            &label,
+            "",
+            Message::ContextMenu(ContextMenuMsg::Action(ContextAction::Command {
+                id,
+                project: None,
+            })),
+        ),
+        None => dd_disabled(None, &label, None),
+    };
+    tag_command(entry, ID)
 }
 
 /// The rows that edit the selection: move, turn, flip and mirror; the

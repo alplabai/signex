@@ -20,7 +20,7 @@ fn wire(a: (f64, f64), b: (f64, f64)) -> Wire {
     }
 }
 
-/// An app on the Altium keymap holding `wires`, 1 mm grid, nothing selected.
+/// An app on the Signex Standard keymap holding `wires`, 1 mm grid, nothing selected.
 fn app_with(wires: Vec<Wire>) -> Signex {
     let sheet = SchematicSheet {
         uuid: uuid::Uuid::now_v7(),
@@ -34,8 +34,8 @@ fn app_with(wires: Vec<Wire>) -> Signex {
     app.ui_state.grid_size_mm = 1.0;
     app.ui_state
         .keymap_profiles
-        .set_active_profile("altium")
-        .expect("altium profile");
+        .set_active_profile("signex_standard")
+        .expect("signex_standard profile");
     app.ui_state.active_keymap = app.ui_state.keymap_profiles.compile_active().into();
     app.document_state.engines.insert(
         path.clone(),

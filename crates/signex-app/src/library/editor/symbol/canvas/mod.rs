@@ -9,7 +9,7 @@
 //! World-space convention mirrors the schematic editor: Standard y-axis
 //! (positive going up; on screen y goes down so we flip). The
 //! camera ([`crate::canvas::Camera`]) handles pan/zoom; the user
-//! pans with right- or middle-button drag and zooms with the wheel.
+//! pans with right-button drag and zooms with the wheel or a middle-button drag.
 //! Press Home (or click the Fit button) to fit the symbol bbox to
 //! the viewport — also the implicit state on tab open.
 //!
@@ -41,6 +41,7 @@ use std::collections::HashMap;
 
 use super::state::{self, SymbolSelection};
 
+mod bounds;
 mod draw;
 mod fields;
 mod geometry;
@@ -142,6 +143,13 @@ pub struct SymbolCanvas<'a> {
     pub trackpad_pan: bool,
     /// Preferences "Mouse wheel", synced with `trackpad_pan`.
     pub wheel_mode: crate::canvas::WheelMode,
+    /// Preferences "Zoom speed" as a per-notch factor, for the middle-button
+    /// drag. Set with [`Self::with_zoom_step`].
+    pub zoom_step: f32,
+    /// `SymbolDocument::tool_epoch`. Set with [`Self::with_tool_epoch`].
+    pub tool_epoch: u64,
+    /// The editor's edge pan link (#2872). Set with [`Self::with_edge_pan`].
+    pub edge_pan: Option<&'a crate::canvas::EdgePanLink>,
 }
 
 impl<'a> SymbolCanvas<'a> {
@@ -192,6 +200,7 @@ impl<'a> SymbolCanvas<'a> {
             selection_filter: state::SymbolSelectionFilter::default(),
             view_pending: false,
             measured_size: None,
+            tool_epoch: 0,
             bg_color: sheet_color,
             grid_color: palette.grid,
             body_color: palette.body,
@@ -202,7 +211,17 @@ impl<'a> SymbolCanvas<'a> {
             device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
             trackpad_pan: false,
             wheel_mode: Default::default(),
+            zoom_step: crate::canvas::Camera::zoom_step_factor(
+                crate::canvas::Camera::ZOOM_STEP_PERCENT_DEFAULT,
+            ),
+            edge_pan: None,
         }
+    }
+
+    /// Report the pointer to `link` and replay it after an edge pan.
+    pub fn with_edge_pan(mut self, link: &'a crate::canvas::EdgePanLink) -> Self {
+        self.edge_pan = Some(link);
+        self
     }
 
     /// The scene replay options at `scale` px/mm in this canvas's window.
@@ -228,6 +247,12 @@ impl<'a> SymbolCanvas<'a> {
         self
     }
 
+    /// Set the "Zoom speed" factor the middle-button drag zooms by.
+    pub fn with_zoom_step(mut self, zoom_step: f32) -> Self {
+        self.zoom_step = zoom_step;
+        self
+    }
+
     /// Apply the editor's selection filter pills to this canvas.
     pub fn with_selection_filter(mut self, filter: state::SymbolSelectionFilter) -> Self {
         self.selection_filter = filter;
@@ -238,6 +263,12 @@ impl<'a> SymbolCanvas<'a> {
     /// its real bounds on the next event.
     pub fn with_view_pending(mut self, pending: bool) -> Self {
         self.view_pending = pending;
+        self
+    }
+
+    /// The document's tool-change count, which ends a half-placed gesture.
+    pub fn with_tool_epoch(mut self, epoch: u64) -> Self {
+        self.tool_epoch = epoch;
         self
     }
 
@@ -286,97 +317,6 @@ impl<'a> SymbolCanvas<'a> {
         }
         None
     }
-
-    /// Body rectangle, when present, derived from the first
-    /// `SymbolGraphicKind::Rectangle` in `symbol.graphics`.
-    fn body_rect(&self) -> Option<(f64, f64, f64, f64)> {
-        for g in &self.symbol.graphics {
-            if let SymbolGraphicKind::Rectangle { from, to } = &g.kind {
-                return Some((from[0], from[1], to[0], to[1]));
-            }
-        }
-        None
-    }
-
-    /// Bounding box around every visible symbol entity.
-    ///
-    /// If the symbol has no pins and no graphics, return a tiny box
-    /// around world origin so Fit keeps the origin marker centered.
-    pub(crate) fn bbox(&self) -> (f64, f64, f64, f64) {
-        let mut bounds: Option<(f64, f64, f64, f64)> = None;
-        let include_rect =
-            |bounds: &mut Option<(f64, f64, f64, f64)>, x0: f64, y0: f64, x1: f64, y1: f64| {
-                let rx0 = x0.min(x1);
-                let ry0 = y0.min(y1);
-                let rx1 = x0.max(x1);
-                let ry1 = y0.max(y1);
-                if let Some((min_x, min_y, max_x, max_y)) = bounds.as_mut() {
-                    *min_x = (*min_x).min(rx0);
-                    *min_y = (*min_y).min(ry0);
-                    *max_x = (*max_x).max(rx1);
-                    *max_y = (*max_y).max(ry1);
-                } else {
-                    *bounds = Some((rx0, ry0, rx1, ry1));
-                }
-            };
-
-        if let Some((bx0, by0, bx1, by1)) = self.body_rect() {
-            include_rect(
-                &mut bounds,
-                bx0.min(bx1) - 5.08,
-                by0.min(by1) - 5.08,
-                bx0.max(bx1) + 5.08,
-                by0.max(by1) + 5.08,
-            );
-        }
-
-        for pin in &self.symbol.pins {
-            include_rect(
-                &mut bounds,
-                pin.position[0] - 1.27,
-                pin.position[1] - 1.27,
-                pin.position[0] + pin.length + 1.27,
-                pin.position[1] + 1.27,
-            );
-        }
-
-        // Include every graphic's extent so Fit doesn't leave shapes
-        // off-screen.
-        for g in &self.symbol.graphics {
-            match &g.kind {
-                SymbolGraphicKind::Rectangle { from, to }
-                | SymbolGraphicKind::Line { from, to } => {
-                    include_rect(&mut bounds, from[0], from[1], to[0], to[1]);
-                }
-                SymbolGraphicKind::Circle { center, radius }
-                | SymbolGraphicKind::Arc { center, radius, .. } => {
-                    include_rect(
-                        &mut bounds,
-                        center[0] - radius,
-                        center[1] - radius,
-                        center[0] + radius,
-                        center[1] + radius,
-                    );
-                }
-                SymbolGraphicKind::Text { position, size, .. } => {
-                    include_rect(
-                        &mut bounds,
-                        position[0] - size,
-                        position[1] - size,
-                        position[0] + size,
-                        position[1] + size,
-                    );
-                }
-                SymbolGraphicKind::Polygon { vertices } => {
-                    for v in vertices {
-                        include_rect(&mut bounds, v[0], v[1], v[0], v[1]);
-                    }
-                }
-            }
-        }
-
-        bounds.unwrap_or((-1.27, -1.27, 1.27, 1.27))
-    }
 }
 
 /// World-space mm grid the symbol canvas snaps cursor positions
@@ -402,6 +342,9 @@ const SYMBOL_TEXT_SIZE: signex_gfx::primitive::text::TextSizePolicy =
 const SYMBOL_AXIS_LINE_PX: f32 = 1.0;
 const SYMBOL_HANDLE_LINE_PX: f32 = 1.0;
 const SYMBOL_PIN_HALO_LINE_PX: f32 = 1.0;
+/// Wire ids of a Bezier's flattened segments, clear of the pins' `100_000 + i`.
+const BEZIER_WIRE_ID_BASE: u64 = 1 << 32;
+const BEZIER_WIRE_ID_STEP: u64 = 1 << 8;
 /// A selected stroke draws this much wider (the old 5 px : 3 px pin ratio).
 const SELECTED_STROKE_FACTOR: f32 = 5.0 / 3.0;
 
@@ -449,16 +392,34 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
         // `impl SymbolCanvas` method in `input::{tools, pointer,
         // camera, keys}`. Arm order + patterns are identical to the
         // pre-split god-function; behaviour is byte-identical.
+        // An edge pan moved the view: the redraw replays the pointer (#2872).
+        let replayed = self.edge_pan.and_then(|link| link.replayed(event, cursor));
+        let event = replayed.as_ref().unwrap_or(event);
+        if let Some(link) = self.edge_pan {
+            link.observe_event(event, cursor, bounds);
+        }
+        state.sync_tool_epoch(self.tool_epoch);
+        let followed = self.follow_middle_zoom(state, event, bounds, cursor);
         let routed = match event {
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                 self.on_left_press(state, bounds, cursor)
             }
-            Event::Mouse(mouse::Event::ButtonPressed(
-                button @ (mouse::Button::Right | mouse::Button::Middle),
-            )) => self.on_secondary_press(state, button, bounds, cursor),
-            Event::Mouse(mouse::Event::ButtonReleased(
-                button @ (mouse::Button::Right | mouse::Button::Middle),
-            )) => self.on_secondary_release(state, button, bounds, cursor),
+            Event::Mouse(mouse::Event::ButtonPressed(button @ mouse::Button::Right)) => {
+                self.on_secondary_press(state, button, bounds, cursor)
+            }
+            Event::Mouse(mouse::Event::ButtonReleased(button @ mouse::Button::Right)) => {
+                self.on_secondary_release(state, button, bounds, cursor)
+            }
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Middle)) => {
+                self.on_middle_press(state, bounds, cursor)
+            }
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Middle)) => {
+                self.on_middle_release(state)
+            }
+            Event::Window(iced::window::Event::Unfocused) => {
+                state.middle_zoom = None;
+                None
+            }
             Event::Mouse(mouse::Event::CursorMoved { .. }) => {
                 self.on_cursor_moved(state, bounds, cursor)
             }
@@ -484,7 +445,8 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                 ..
             }) => self.on_key_pressed(state, key, *physical_key, modifiers),
             _ => None,
-        };
+        }
+        .or(followed);
         // A queued Fit / centre-origin request needs the real canvas
         // size, which only the widget knows. Report it, and carry the
         // event's own action along so the dispatcher applies the view
@@ -520,8 +482,11 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
         if state.panning {
             return mouse::Interaction::Grabbing;
         }
+        if state.middle_zoom.is_some() {
+            return mouse::Interaction::ResizingVertically;
+        }
         // While actively dragging a resize handle, keep the cursor that
-        // matches the handle so it doesn't flicker back to Crosshair.
+        // matches the handle so it doesn't flicker back to the arrow.
         if let Some((_, handle)) = state.dragging_handle {
             return state::handle_interaction(handle);
         }
@@ -540,7 +505,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
             }
         }
         if cursor.is_over(bounds) {
-            mouse::Interaction::Crosshair
+            crate::canvas::cursor::tool_cursor(self.tool != SymbolTool::Select)
         } else {
             mouse::Interaction::default()
         }
@@ -566,12 +531,20 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
         self.draw_symbol_with_renderer(&mut frame, &self.selected, self.camera.scale);
         self.draw_resize_handles(&mut frame);
         self.draw_box_select_overlay(&mut frame, state);
-        self.draw_pin_preview(&mut frame, state);
-        self.draw_rect_preview(&mut frame, state);
-        self.draw_line_preview(&mut frame, state);
-        self.draw_circle_preview(&mut frame, state);
-        self.draw_arc_preview(&mut frame, state);
+        // A gesture from before a tool change is dropped on the next event;
+        // until then it must not draw.
+        let gesture_is_current = state.gesture_epoch == self.tool_epoch;
+        if gesture_is_current {
+            self.draw_pin_preview(&mut frame, state);
+            self.draw_rect_preview(&mut frame, state);
+            self.draw_line_preview(&mut frame, state);
+            self.draw_circle_preview(&mut frame, state);
+            self.draw_arc_preview(&mut frame, state);
+        }
         self.draw_polygon_preview(&mut frame, state);
+        if gesture_is_current {
+            self.draw_curve_preview(&mut frame, state);
+        }
 
         vec![frame.into_geometry()]
     }
@@ -759,6 +732,32 @@ impl<'a> SymbolCanvas<'a> {
                         stroke_width_mm: stroke_mm,
                     });
                 }
+                SymbolGraphicKind::Bezier { .. } | SymbolGraphicKind::EllipticalArc { .. } => {
+                    let outline = g.kind.flattened_outline();
+                    wires.extend(outline.windows(2).enumerate().map(|(s, w)| WireInput {
+                        id: BEZIER_WIRE_ID_BASE + (i as u64) * BEZIER_WIRE_ID_STEP + s as u64,
+                        p0: [w[0][0] as f32, w[0][1] as f32],
+                        p1: [w[1][0] as f32, w[1][1] as f32],
+                        width_mm: stroke_mm,
+                        explicit_color: Some(to_rgba(stroke_color)),
+                    }));
+                }
+                SymbolGraphicKind::Pie { .. } | SymbolGraphicKind::RoundRectangle { .. } => {
+                    let fill = g.fill.map_or([0.0, 0.0, 0.0, 0.0], |[fr, fg, fb, fa]| {
+                        to_rgba(Color::from_rgba8(fr, fg, fb, fa as f32 / 255.0))
+                    });
+                    polygons.push(PolygonInput {
+                        vertices: g
+                            .kind
+                            .flattened_outline()
+                            .iter()
+                            .map(|v| [v[0] as f32, v[1] as f32])
+                            .collect(),
+                        fill_color: fill,
+                        stroke_color: Some(to_rgba(stroke_color)),
+                        stroke_width_mm: stroke_mm,
+                    });
+                }
             }
         }
 
@@ -895,6 +894,8 @@ fn symbol_draw_options(
 
 #[cfg(test)]
 mod layout_keys_tests;
+#[cfg(test)]
+mod middle_zoom_tests;
 #[cfg(test)]
 mod rotate_keys_tests;
 #[cfg(test)]

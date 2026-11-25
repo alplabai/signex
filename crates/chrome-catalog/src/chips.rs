@@ -122,10 +122,10 @@ pub(crate) fn view<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
     );
     let seg_style = SegmentedStyle::new(
         ext(x.sunken, tokens.selection),
-        ext(x.raised, tokens.panel_bg),
-        ext(x.shadow, tokens.border),
+        ext(x.selected_segment.or(x.raised), tokens.panel_bg),
+        ext(x.selected_segment_shadow.or(x.shadow), tokens.border),
         ext(x.ink3, tokens.text_secondary),
-        theme::color(tokens.text),
+        ext(x.selected_segment_ink, tokens.text),
         BODY,
     );
     let modes = segmented(

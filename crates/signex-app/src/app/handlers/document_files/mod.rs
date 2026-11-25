@@ -10,6 +10,8 @@ mod commit_bytes_tests;
 mod dir_case;
 mod disk_poll;
 mod external_change;
+#[cfg(test)]
+mod external_change_tests;
 pub(crate) use dir_case::FoldAnswer;
 pub(crate) use disk_poll::{DiskPoll, DiskRead};
 pub(crate) use external_change::ReloadedFile;
@@ -28,14 +30,19 @@ mod open_read;
 #[cfg(test)]
 mod open_read_tests;
 mod pinned;
+#[cfg(test)]
+mod project_open_tests;
 mod project_save;
 #[cfg(test)]
 mod project_save_tests;
 mod recent;
+mod reload_pause;
 #[cfg(test)]
 mod restore_cancel_tests;
 #[cfg(test)]
 pub(crate) mod restore_commit_tests;
+#[cfg(test)]
+mod restore_epoch_tests;
 mod restore_fingerprint;
 #[cfg(test)]
 mod restore_library_tests;
@@ -52,6 +59,8 @@ pub(crate) use save::log_foreign_column_offenders;
 mod save_as_project;
 #[cfg(test)]
 mod save_as_project_tests;
+#[cfg(test)]
+mod save_as_rekey_tests;
 mod save_async;
 pub(crate) use save_async::is_pcb_path;
 #[cfg(test)]
@@ -179,6 +188,8 @@ fn blank_schematic_sheet() -> signex_types::schematic::SchematicSheet {
         drawings: Vec::new(),
         no_erc_directives: Vec::new(),
         directives: Vec::new(),
+        harness: Default::default(),
+        unions: Vec::new(),
         title_block: Default::default(),
         variables: Default::default(),
         lib_symbols: Default::default(),

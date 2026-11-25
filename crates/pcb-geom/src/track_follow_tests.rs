@@ -71,6 +71,7 @@ fn board(segments: Vec<Segment>) -> PcbBoard {
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
@@ -133,6 +134,147 @@ fn only_the_end_on_a_same_net_pad_of_a_shared_layer_follows() {
 fn a_footprint_not_moved_takes_nothing_along() {
     let board = board(vec![track(1, (0.0, 0.0), (9.0, 0.0), 1, "TopCopper")]);
     assert!(tracks_on_pads(&board, &[id(999)].into()).is_empty());
+}
+
+fn through_via(n: u128, x: f64, net: u32) -> signex_types::pcb::Via {
+    signex_types::pcb::Via {
+        attributes: Default::default(),
+        uuid: id(n),
+        position: Point::new(x, 0.0),
+        diameter: 0.8,
+        drill: 0.4,
+        layers: vec!["TopCopper".into(), "BottomCopper".into()],
+        net,
+        locked: false,
+        layer_sizes: None,
+        via_type: signex_types::pcb::ViaType::Through,
+        unknown_columns: Default::default(),
+    }
+}
+
+/// A stub from the via centre to a same-net pad 0.3 mm away has both ends on
+/// the via's copper; only the end at its centre follows.
+#[test]
+fn a_stub_to_a_near_pad_keeps_its_pad_end_when_the_via_moves() {
+    let mut board = board(vec![track(1, (8.7, 0.0), (9.0, 0.0), 1, "TopCopper")]);
+    board.vias.push(through_via(300, 8.7, 1));
+    let ends = tracks_on_vias(&board, &[id(300)].into());
+    assert_eq!(
+        ends,
+        [TrackEnds {
+            track: id(201),
+            index: 0,
+            start: true,
+            end: false,
+        }]
+    );
+    let moved = ends[0].follow(&board.segments[0], Point::new(-2.0, 1.0));
+    assert_eq!(moved.end, Point::new(9.0, 0.0), "the pad end stays");
+}
+
+fn arc(n: u128, start: (f64, f64), end: (f64, f64), net: u32, layer: &str) -> TrackArc {
+    let (cx, cy) = ((start.0 + end.0) / 2.0, (start.1 + end.1) / 2.0);
+    let half = (end.0 - start.0) / 2.0;
+    TrackArc {
+        uuid: id(400 + n),
+        start: Point::new(start.0, start.1),
+        mid: Point::new(cx, cy + half),
+        end: Point::new(end.0, end.1),
+        width: 0.25,
+        layer: layer.into(),
+        net,
+    }
+}
+
+#[test]
+fn only_a_copper_arc_end_at_the_via_on_its_net_and_layer_follows() {
+    let mut board = board(Vec::new());
+    board.vias.push(through_via(300, 2.0, 1));
+    board.free.arcs = vec![
+        arc(1, (2.0, 0.0), (6.0, 0.0), 1, "TopCopper"),
+        arc(2, (2.0, 0.0), (6.0, 0.0), 2, "TopCopper"),
+        arc(3, (2.0, 0.0), (6.0, 0.0), 1, "TopSilkscreen"),
+        arc(4, (2.1, 0.0), (6.0, 0.0), 1, "TopCopper"),
+    ];
+    assert_eq!(
+        arcs_on_vias(&board, &[id(300)].into()),
+        [ArcEnds {
+            arc: id(401),
+            index: 0,
+            start: true,
+            end: false,
+        }]
+    );
+}
+
+#[test]
+fn an_arc_following_one_end_keeps_its_other_end_and_its_sweep() {
+    let before = arc(1, (2.0, 0.0), (6.0, 0.0), 1, "TopCopper");
+    let ends = ArcEnds {
+        arc: before.uuid,
+        index: 0,
+        start: true,
+        end: false,
+    };
+    let after = ends.follow(&before, Point::new(-1.0, 3.0));
+    assert_eq!(after.start, Point::new(1.0, 3.0));
+    assert_eq!(after.end, before.end);
+    let (old, new) = (
+        before.sweep().unwrap(),
+        after.sweep().expect("still an arc"),
+    );
+    assert!((old.sweep - new.sweep).abs() < 1e-9, "{old:?} {new:?}");
+
+    let both = ArcEnds { end: true, ..ends };
+    let shifted = both.follow(&before, Point::new(-1.0, 3.0));
+    assert_eq!(shifted.mid, Point::new(3.0, 5.0));
+    assert_eq!(shifted.end, Point::new(5.0, 3.0));
+}
+
+fn start_follows(arc: &TrackArc) -> ArcEnds {
+    ArcEnds {
+        arc: arc.uuid,
+        index: 0,
+        start: true,
+        end: false,
+    }
+}
+
+#[test]
+fn an_arc_refuses_a_moved_end_on_its_fixed_end_or_a_chord_that_rounds_away() {
+    let before = arc(1, (2.0, 0.0), (6.0, 0.0), 1, "TopCopper");
+    let ends = start_follows(&before);
+    assert_eq!(
+        ends.checked_follow(&before, Point::new(4.0, 0.0)),
+        Err(ArcFollowFault::Collapses)
+    );
+    // 0.8 nm of chord: the ends differ in nanometres, the middle rounds
+    // onto the fixed end.
+    assert_eq!(
+        ends.checked_follow(&before, Point::new(4.0 - 0.8e-6, 0.0)),
+        Err(ArcFollowFault::Collapses)
+    );
+}
+
+#[test]
+fn an_arc_may_grow_up_to_three_times_its_radius() {
+    let before = arc(1, (2.0, 0.0), (6.0, 0.0), 1, "TopCopper");
+    let ends = start_follows(&before);
+    // A chord of 4 mm from the fixed end at x = 6.
+    assert_eq!(
+        ends.checked_follow(&before, Point::new(-8.4, 0.0)),
+        Err(ArcFollowFault::GrowsTooMuch),
+        "3.1 times"
+    );
+    assert!(
+        ends.checked_follow(&before, Point::new(-7.6, 0.0)).is_ok(),
+        "2.9 times"
+    );
+    let both = ArcEnds { end: true, ..ends };
+    assert!(
+        both.checked_follow(&before, Point::new(-80.0, 0.0)).is_ok(),
+        "shifted whole, it does not grow"
+    );
 }
 
 #[test]

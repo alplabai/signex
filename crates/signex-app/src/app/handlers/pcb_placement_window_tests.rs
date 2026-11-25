@@ -64,8 +64,8 @@ pub(super) fn rig() -> Rig {
     );
     app.ui_state
         .keymap_profiles
-        .set_active_profile("altium")
-        .expect("altium profile");
+        .set_active_profile("signex_standard")
+        .expect("signex_standard profile");
     app.ui_state.active_keymap = app.ui_state.keymap_profiles.compile_active().into();
     let a = dir.path().join("a.snxpcb");
     let b = dir.path().join("b.snxpcb");
@@ -117,6 +117,7 @@ fn dragged(from: Point, to: Point) -> PcbCanvasMsg {
         from,
         to,
         tolerance_mm: 0.05,
+        leaves_tracks: false,
     }
 }
 

@@ -99,6 +99,37 @@ fn by_centre(centre: Point, start: Point, toward: Point) -> Option<(Point, Point
     )
 }
 
+/// The start, middle and end of the arc about `centre` from `start` (its
+/// distance is the radius) to the angle of `toward`, the way of increasing
+/// angle in the model's axes (clockwise on screen): the board Graphics Arc
+/// drawn on copper, as a track arc (#2869). `None` for a point on the
+/// centre, or a full turn, which no track arc is.
+pub fn arc_points_about(
+    centre: Point,
+    start: Point,
+    toward: Point,
+) -> Option<(Point, Point, Point)> {
+    let radius = (start.x - centre.x).hypot(start.y - centre.y);
+    if !(radius.is_finite() && radius > 0.0) || toward == centre {
+        return None;
+    }
+    let start_angle = (start.y - centre.y).atan2(start.x - centre.x);
+    let end_angle = (toward.y - centre.y).atan2(toward.x - centre.x);
+    let turn = (end_angle - start_angle).rem_euclid(TAU);
+    if turn == 0.0 {
+        return None;
+    }
+    Some(
+        ArcSweep {
+            center: centre,
+            radius,
+            start_angle,
+            sweep: turn,
+        }
+        .three_points(),
+    )
+}
+
 fn by_edge(start: Point, end: Point) -> Option<(Point, Point, Point)> {
     let half = Point::new((end.x - start.x) / 2.0, (end.y - start.y) / 2.0);
     if half.x == 0.0 && half.y == 0.0 {
@@ -144,15 +175,7 @@ pub fn new_arc(
 /// `number`, on the net of the copper it lands on.
 pub fn new_free_pad(board: &PcbBoard, id: Uuid, at: Point, number: String) -> Pad {
     let net = net_under(board, at, u32::MAX);
-    let net = (net != 0).then(|| PadNet {
-        number: net,
-        name: board
-            .nets
-            .iter()
-            .find(|n| n.number == net)
-            .map(|n| n.name.clone())
-            .unwrap_or_default(),
-    });
+    let net = (net != 0).then(|| pad_net(board, net));
     Pad {
         uuid: id,
         number,
@@ -180,10 +203,64 @@ pub fn new_free_pad(board: &PcbBoard, id: Uuid, at: Point, number: String) -> Pa
     }
 }
 
+/// The free pad the Pad tool places at `at` with `layer` active: on the top
+/// or bottom copper a round surface pad of that side (its copper, solder
+/// mask and paste, no hole) on the net of that copper under it; on any
+/// other layer the through-hole pad of [`new_free_pad`]. An inner layer
+/// keeps the through-hole pad: a surface pad there has no mask or paste.
+pub fn new_free_pad_on(
+    board: &PcbBoard,
+    id: Uuid,
+    at: Point,
+    number: String,
+    layer: PcbLayer,
+) -> Pad {
+    let (copper, mask, paste) = match layer {
+        PcbLayer::Copper(CopperLayer::Top) => (
+            CopperLayer::Top,
+            TechnicalLayer::SolderMaskTop,
+            TechnicalLayer::PasteTop,
+        ),
+        PcbLayer::Copper(CopperLayer::Bottom) => (
+            CopperLayer::Bottom,
+            TechnicalLayer::SolderMaskBottom,
+            TechnicalLayer::PasteBottom,
+        ),
+        _ => return new_free_pad(board, id, at, number),
+    };
+    let mut pad = new_free_pad(board, id, at, number);
+    let net = net_under(board, at, 1 << layer_bit(copper));
+    pad.net = (net != 0).then(|| pad_net(board, net));
+    pad.pad_type = PadType::Smd;
+    pad.drill = None;
+    pad.layers = [
+        PcbLayer::Copper(copper),
+        PcbLayer::Technical(mask),
+        PcbLayer::Technical(paste),
+    ]
+    .into_iter()
+    .map(pcb_layer_token)
+    .collect();
+    pad
+}
+
+/// Net `number` of `board` as a pad holds it.
+fn pad_net(board: &PcbBoard, number: u32) -> PadNet {
+    PadNet {
+        number,
+        name: board
+            .nets
+            .iter()
+            .find(|n| n.number == number)
+            .map(|n| n.name.clone())
+            .unwrap_or_default(),
+    }
+}
+
 /// A linear dimension from `start` to `end`, its line through `through`
 /// (the offset is how far `through` stands off the measured line), on
-/// `layer` when it takes text, else on the Dimensions layer. `None` when
-/// `start` and `end` are the same point.
+/// `layer`, whichever layer it is, copper included (Caner, 2026-11-21).
+/// `None` when `start` and `end` are the same point.
 pub fn new_dimension(
     id: Uuid,
     start: Point,
@@ -200,11 +277,6 @@ pub fn new_dimension(
     // `LinearDimension::offset` reads it.
     let offset = ((through.x - start.x) * -dy + (through.y - start.y) * dx) / length;
     let mut dimension = LinearDimension::new(id, start, end, offset);
-    let layer = if layer.takes_text() {
-        layer
-    } else {
-        PcbLayer::Technical(TechnicalLayer::Dimensions)
-    };
     dimension.layer = pcb_layer_token(layer);
     Some(dimension)
 }

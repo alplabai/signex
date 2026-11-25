@@ -5,6 +5,8 @@ use super::*;
 /// Collapse key of the Pins section of a placed symbol's Properties.
 pub const PINS_SECTION_KEY: &str = "sel_pins";
 
+/// The large views only one tab kind or selection fills are boxed, so the
+/// app fits a debug boot's stack (#2325).
 #[derive(Clone)]
 pub struct PanelContext {
     /// Multi-project workspace — one entry per `LoadedProject`. Every
@@ -74,8 +76,14 @@ pub struct PanelContext {
     /// Whether the canvas font picker popup is open.
     pub canvas_font_popup_open: bool,
     pub properties_tab: usize, // 0=General, 1=Parameters
+    /// Document Options view state: Parameters filter, zone drafts and the
+    /// illustration hover (#2531); kept across context rebuilds.
+    pub document_options: super::DocumentOptionsUi,
     /// Projects panel filter text and collapsed groups; view-only.
     pub projects_view: super::ProjectsView,
+    /// The recent projects the empty Projects panel lists, newest first,
+    /// capped as on the Start screen; mirrored from `UiState::recent_projects`.
+    pub recent_projects: Vec<std::path::PathBuf>,
     /// Net Classes section of the General tab (#1042).
     pub net_classes: NetClassPanel,
     /// Layers panel of the active board (#2223).
@@ -107,13 +115,33 @@ pub struct PanelContext {
     pub component_sheet: Option<super::ComponentSheet>,
     /// Nets of the active PCB tab, for the PCB panel.
     pub pcb_nets: Option<super::PcbNetsSummary>,
+    /// The PCB panel's mode, filter, chip and selected net; kept across
+    /// context rebuilds (mockup row 106).
+    pub pcb_panel: super::PcbPanelUi,
     /// The active project's nets, for the Net Inspector panel; filled only
     /// while that panel is open.
     pub net_inspector: super::NetInspectorView,
+    /// The Compiled Design panel, and the multi-channel rows of a sheet
+    /// symbol and a channel tab in Properties (#1279, #1308).
+    pub compiled_design: Box<super::compiled_design::CompiledDesignView>,
+    /// The Unions panel's rows and foot; filled only while it is open (mockup row 158).
+    pub unions: Box<crate::app::unions::UnionsPanelView>,
+    /// The Object List's rows and picks; filled only while that panel is open
+    /// (#1259).
+    pub object_list: super::ObjectListView,
+    /// The Command Log as `UiState::command_log` held it at its last change
+    /// (#2458); shared, so a context rebuild copies a pointer.
+    pub command_log: std::sync::Arc<super::CommandLogState>,
+    /// The Annotations panel's rows (mockup row 165); built in `update` whenever its
+    /// scan or filters change.
+    pub annotations: std::sync::Arc<super::AnnotationsView>,
     /// The active PCB tab's board facts, for the Properties panel.
-    pub pcb_board: Option<super::PcbBoardSummary>,
+    pub pcb_board: Option<Box<super::PcbBoardSummary>>,
     /// The active PCB tab's layer stack, for the Layer Stack manager (#2401).
     pub layer_stack: Option<super::LayerStackFacts>,
+    /// The pours of the board in view, for the Polygon Manager tab and the
+    /// PCB panel's Polygons mode (mockup row 178).
+    pub polygons: Option<super::PolygonFacts>,
     // Selection info for Properties panel
     /// How many items are currently selected.
     pub selection_count: usize,
@@ -131,6 +159,13 @@ pub struct PanelContext {
     pub multi_groups: signex_engine::SelectionGroups,
     /// The multi-selection text box being typed in, with its text.
     pub multi_draft: Option<(super::MultiField, String)>,
+    /// The footprints every selected part's library row offers (mockup row
+    /// 51); empty when they share none.
+    pub multi_footprint_choices: Vec<FootprintChoiceItem>,
+    /// Text typed in Document Options' Visible Grid, until Enter or a pick.
+    pub visible_grid_draft: Option<String>,
+    /// Text typed in Document Options' Snap Grid, until Enter or a pick.
+    pub snap_grid_draft: Option<String>,
     /// The drawings the selected placed symbol's library row offers, when
     /// it has alternates; empty otherwise (#1230).
     pub symbol_choices: Vec<SymbolChoiceItem>,
@@ -158,15 +193,25 @@ pub struct PanelContext {
     pub selected_drawing: Option<signex_types::schematic::SchDrawing>,
     /// Where that drawing sits against the circuit (#1583).
     pub selected_drawing_placement: signex_types::schematic::DrawingPlacement,
+    /// The Properties state of a selected Bezier, dimension or table.
+    pub annotation: super::AnnotationPanelState,
     /// The live ChildSheet matching `selected_uuid` when a single
     /// hierarchical sheet is selected. Powers the editable
     /// border/fill colour pickers and stroke-width input.
     pub selected_child_sheet: Option<signex_types::schematic::ChildSheet>,
+    /// The file that sheet symbol resolves to from the sheet showing it.
+    pub selected_child_sheet_file: Option<std::path::PathBuf>,
+    /// The selected Net Parameters directive or Net Blanket, as its
+    /// Properties read it (#1281, #1489).
+    pub directive_panel: Option<Box<super::DirectivePanel>>,
     /// Whether the border-colour picker overlay is open for the
     /// currently-selected child sheet.
     pub child_sheet_border_picker_open: bool,
     /// State of the wire colour picker (Tab form or selected wire).
     pub wire_color_picker: super::WireColorPicker,
+    /// What the harness Properties and the harness definitions view show
+    /// (#1280).
+    pub harness: Box<super::HarnessPanel>,
     /// Width preset and colour of the single selected wire, if one is.
     pub selected_wire_style: Option<(
         signex_types::schematic::WireWidthPreset,
@@ -206,10 +251,15 @@ pub struct PanelContext {
     pub drafts: super::PanelDrafts,
     /// Raw text of the plain numeric box being typed in.
     pub numeric_draft: Option<super::NumericDraft>,
+    /// Text typed in a colour row's hex field, until Enter, leaving the
+    /// field or Esc (mockup row 46).
+    pub color_hex_draft: Option<super::ColorHexDraft>,
     /// The sheet `title_block` and the shown drafts belong to.
     pub title_block_sheet: Option<std::path::PathBuf>,
     /// Which sections are collapsed (by section name key).
     pub collapsed_sections: CollapsedSections,
+    /// The placed part's open ⋯ menu and illustration hover (mockup row 42).
+    pub part_panel: super::PartPanelState,
     /// Pre-placement configuration (shown when Tab pressed during placement tool).
     pub pre_placement: Option<PrePlacementData>,
     /// Flattened ERC diagnostics from the most recent Run-ERC pass.
@@ -241,10 +291,10 @@ pub struct PanelContext {
     pub selection_filters: std::collections::HashSet<crate::active_bar::SelectionFilter>,
     /// User-defined custom filter presets (capped at
     /// `crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT`). Edited from
-    /// the Properties panel; surfaced as shortcut buttons in the Active
+    /// the Filter panel; surfaced as shortcut buttons in the Active
     /// Bar's filter dropdown.
     pub custom_filter_presets: Vec<crate::active_bar::CustomFilterPreset>,
-    /// Index of the active preset tab in the Properties-panel editor
+    /// Index of the preset the Filter panel's Presets section edits
     /// (mirrored from `InteractionState`). Clamped on every sync.
     pub active_custom_filter_tab: usize,
     /// User-defined footprint-editor filter presets, mirrored from
@@ -271,12 +321,19 @@ pub struct PanelContext {
     /// selection so the panel can switch its body between pad
     /// properties, sketch entity properties, or footprint defaults.
     /// `None` for any other tab kind.
-    pub footprint_editor: Option<FootprintEditorPanelContext>,
+    pub footprint_editor: Option<Box<FootprintEditorPanelContext>>,
     /// Per-file Git history snapshot for the right-dock History
     /// panel. Mirrored from [`crate::app::DocumentState::history`]
     /// each refresh; the panel reads it directly without holding a
     /// borrow into the document state.
     pub history: history::HistoryPanelState,
+    /// The editor the Filter panel follows, its per-kind counts and SCH
+    /// Filter's preset rename (Graphite mockup #55, Graphite mockup #56).
+    pub selection_filter: super::SelectionFilterFacts,
+    /// The field / callout hover of the Properties illustration (#2523).
+    pub illustration_hover: super::PanelIllustrationHover,
+    /// View state of the selection forms: kind chips, rule filter, hover (#1699).
+    pub selection_form: super::SelectionForm,
 }
 
 /// One drawing a placed symbol can show: its row's default or an alternate.

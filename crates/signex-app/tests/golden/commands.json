@@ -10,9 +10,19 @@
     "category": "design"
   },
   {
+    "id": "add_table_of_contents",
+    "group": "Schematic",
+    "category": "design"
+  },
+  {
     "id": "add_teardrops",
     "group": "Pcb",
     "category": "pcb"
+  },
+  {
+    "id": "add_to_union",
+    "group": "Schematic",
+    "category": "edit"
   },
   {
     "id": "align_bottom",
@@ -63,6 +73,26 @@
     "id": "apply_edits",
     "group": "General",
     "category": "edit"
+  },
+  {
+    "id": "apply_layout_board",
+    "group": "General",
+    "category": "window"
+  },
+  {
+    "id": "apply_layout_notebook",
+    "group": "General",
+    "category": "window"
+  },
+  {
+    "id": "apply_layout_review",
+    "group": "General",
+    "category": "window"
+  },
+  {
+    "id": "apply_layout_schematic",
+    "group": "General",
+    "category": "window"
   },
   {
     "id": "apply_selection_filter_preset",
@@ -143,6 +173,11 @@
     "id": "board_sketch",
     "group": "Pcb",
     "category": "design"
+  },
+  {
+    "id": "break_union",
+    "group": "Schematic",
+    "category": "edit"
   },
   {
     "id": "break_wire",
@@ -240,6 +275,16 @@
     "category": "view"
   },
   {
+    "id": "compare_board_with_schematic",
+    "group": "Schematic",
+    "category": "pcb_sync"
+  },
+  {
+    "id": "compile_project",
+    "group": "Schematic",
+    "category": "design"
+  },
+  {
     "id": "copy",
     "group": "General",
     "category": "edit"
@@ -250,6 +295,16 @@
     "category": "interactive"
   },
   {
+    "id": "copy_board_3d_screenshot",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
+    "id": "create_rooms_from_sheets",
+    "group": "Pcb",
+    "category": "design"
+  },
+  {
     "id": "create_sheet_from_sheet_symbol",
     "group": "Schematic",
     "category": "design"
@@ -258,6 +313,11 @@
     "id": "create_sheet_symbol_from_sheet",
     "group": "Schematic",
     "category": "design"
+  },
+  {
+    "id": "create_union",
+    "group": "Schematic",
+    "category": "edit"
   },
   {
     "id": "cross_probe",
@@ -273,6 +333,16 @@
     "id": "cycle_arc_mode",
     "group": "Pcb",
     "category": "pcb"
+  },
+  {
+    "id": "cycle_board_3d_lighting",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
+    "id": "cycle_board_snapping",
+    "group": "Pcb",
+    "category": "view"
   },
   {
     "id": "cycle_fast_grid",
@@ -565,6 +635,11 @@
     "category": "search"
   },
   {
+    "id": "flip_board_3d",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
     "id": "flip_board_view",
     "group": "Pcb",
     "category": "view"
@@ -690,6 +765,11 @@
     "category": "modify"
   },
   {
+    "id": "manage_workspace_layouts",
+    "group": "General",
+    "category": "window"
+  },
+  {
     "id": "measure_board",
     "group": "Pcb",
     "category": "search"
@@ -800,6 +880,11 @@
     "category": "commands"
   },
   {
+    "id": "open_compiled_design",
+    "group": "General",
+    "category": "panels"
+  },
+  {
     "id": "open_components_panel",
     "group": "Schematic",
     "category": "panels"
@@ -808,6 +893,11 @@
     "id": "open_datasheet",
     "group": "General",
     "category": "edit"
+  },
+  {
+    "id": "open_diff_pair_classes",
+    "group": "General",
+    "category": "design"
   },
   {
     "id": "open_document",
@@ -833,6 +923,11 @@
     "id": "open_grid_properties",
     "group": "General",
     "category": "view"
+  },
+  {
+    "id": "open_harness_definitions",
+    "group": "Schematic",
+    "category": "design"
   },
   {
     "id": "open_library_browser",
@@ -908,6 +1003,11 @@
     "id": "paste_special",
     "group": "General",
     "category": "edit"
+  },
+  {
+    "id": "place_aligned_dimension",
+    "group": "Schematic",
+    "category": "place"
   },
   {
     "id": "place_blanket",
@@ -993,6 +1093,11 @@
     "id": "place_board_reuse_block",
     "group": "Pcb",
     "category": "design"
+  },
+  {
+    "id": "place_board_room",
+    "group": "Pcb",
+    "category": "place"
   },
   {
     "id": "place_board_route",
@@ -1090,6 +1195,11 @@
     "category": "place"
   },
   {
+    "id": "place_linear_dimension",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
     "id": "place_local_net_label",
     "group": "Schematic",
     "category": "place"
@@ -1160,6 +1270,11 @@
     "category": "place"
   },
   {
+    "id": "place_table",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
     "id": "place_text",
     "group": "Schematic",
     "category": "place"
@@ -1193,6 +1308,11 @@
     "id": "placement_properties",
     "group": "General",
     "category": "interactive"
+  },
+  {
+    "id": "polygon_manager",
+    "group": "Pcb",
+    "category": "pcb"
   },
   {
     "id": "prev_layer",
@@ -1330,6 +1450,11 @@
     "category": "pcb"
   },
   {
+    "id": "remove_from_union",
+    "group": "Schematic",
+    "category": "edit"
+  },
+  {
     "id": "remove_last_vertex",
     "group": "General",
     "category": "interactive"
@@ -1388,6 +1513,11 @@
     "id": "reset_schematic_designators",
     "group": "Schematic",
     "category": "design"
+  },
+  {
+    "id": "reset_workspace_layout",
+    "group": "General",
+    "category": "window"
   },
   {
     "id": "resolve",
@@ -1515,6 +1645,11 @@
     "category": "validation"
   },
   {
+    "id": "save_all",
+    "group": "General",
+    "category": "file"
+  },
+  {
     "id": "save_board_reuse_block",
     "group": "Pcb",
     "category": "design"
@@ -1533,6 +1668,11 @@
     "id": "save_layer_set",
     "group": "Pcb",
     "category": "view"
+  },
+  {
+    "id": "save_workspace_layout",
+    "group": "General",
+    "category": "window"
   },
   {
     "id": "select_all",

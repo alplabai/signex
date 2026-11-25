@@ -83,6 +83,7 @@ pub(super) const CLIPBOARD: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
         flags: CommandFlags::MUTATES,
+        operands: super::operands::DOCUMENT_ITEMS,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

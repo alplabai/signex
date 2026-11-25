@@ -105,6 +105,7 @@ fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
@@ -153,16 +154,20 @@ struct Fixture {
 }
 
 fn open_board() -> Fixture {
+    open_board_with(board())
+}
+
+fn open_board_with(board: PcbBoard) -> Fixture {
     let _ = diagnostics::init_logging();
     let tmp = tempfile::tempdir().unwrap();
     let path = tmp.path().join("board.snxpcb");
-    std::fs::write(&path, SnxPcb::new(board()).write_string().unwrap()).unwrap();
+    std::fs::write(&path, SnxPcb::new(board).write_string().unwrap()).unwrap();
     let (mut app, _boot) = Signex::new();
     app.ui_state.first_run_tour_open = false;
     app.ui_state
         .keymap_profiles
-        .set_active_profile("altium")
-        .expect("altium profile");
+        .set_active_profile("signex_standard")
+        .expect("signex_standard profile");
     app.ui_state.active_keymap = app.ui_state.keymap_profiles.compile_active().into();
     let task = app.update(Message::File(FileMsg::Opened(Some(path))));
     crate::drive::drive(&mut app, task);
@@ -290,7 +295,7 @@ fn round_rect_centre_and_turn(shape: Shape) -> (PointNm, f64) {
 fn the_rotate_key_turns_the_footprint_and_its_pads_clockwise() {
     let mut f = open_board();
     select_u1(&mut f.app);
-    // Altium: Shift+Space turns clockwise; the board's y axis points down.
+    // Signex Standard: Shift+Space turns clockwise; the board's y axis points down.
     let edited = one_step(&mut f, key(KeyToken::Space, true));
     let u1 = fp(&edited, U1);
     assert_eq!(u1.rotation, 90.0);
@@ -368,6 +373,73 @@ fn the_x_key_and_the_active_bar_flip_agree_and_y_flips_top_to_bottom() {
 }
 
 #[test]
+fn a_ctrl_drag_leaves_the_tracks_and_a_plain_drag_takes_them_along() {
+    // A track from (0, 10) onto U1's oval pad at (8, 10).
+    let on_pad = Uuid::from_u128(0x40);
+    let mut with_track = board();
+    let base = with_track.segments[0].clone();
+    with_track.segments.push(Segment {
+        uuid: on_pad,
+        start: Point::new(0.0, 10.0),
+        end: Point::new(8.0, 10.0),
+        net: 0,
+        ..base
+    });
+    let track = |b: &PcbBoard| {
+        let s = b.segments.iter().find(|s| s.uuid == on_pad).expect("track");
+        (s.start, s.end)
+    };
+    let (from, to) = (Point::new(10.0, 10.0), Point::new(13.1, 10.2));
+    let drag = |leaves_tracks| {
+        Message::PcbCanvas(PcbCanvasMsg::FootprintDragged {
+            from,
+            to,
+            tolerance_mm: REACH,
+            leaves_tracks,
+        })
+    };
+    let dropped = || Message::PcbCanvas(PcbCanvasMsg::FootprintDropped { from, to });
+    // The origin lands on the 1.27 mm grid at (12.7, 10.16).
+    let moved_to = |b: &PcbBoard| {
+        let at = fp(b, U1).position;
+        (at.x - 12.7).abs() < 1e-9 && (at.y - 10.16).abs() < 1e-9
+    };
+
+    // Ctrl held: U1 moves, the track keeps both ends; one undo restores.
+    let mut f = open_board_with(with_track.clone());
+    send(&mut f.app, drag(true));
+    let edited = one_step(&mut f, dropped());
+    assert!(moved_to(&edited), "{:?}", fp(&edited, U1).position);
+    assert_eq!(
+        track(&edited),
+        (Point::new(0.0, 10.0), Point::new(8.0, 10.0))
+    );
+
+    // No Ctrl: the end on the pad follows, as before.
+    let mut f = open_board_with(with_track.clone());
+    send(&mut f.app, drag(false));
+    let edited = one_step(&mut f, dropped());
+    assert!(moved_to(&edited));
+    let (start, end) = track(&edited);
+    assert_eq!(start, Point::new(0.0, 10.0));
+    assert!(
+        (end.x - 10.7).abs() < 1e-9 && (end.y - 10.16).abs() < 1e-9,
+        "{end:?}"
+    );
+
+    // Ctrl pressed mid-drag latches: a later step without it changes nothing.
+    let mut f = open_board_with(with_track);
+    send(&mut f.app, drag(false));
+    send(&mut f.app, drag(true));
+    send(&mut f.app, drag(false));
+    let edited = one_step(&mut f, dropped());
+    assert_eq!(
+        track(&edited),
+        (Point::new(0.0, 10.0), Point::new(8.0, 10.0))
+    );
+}
+
+#[test]
 fn a_drag_previews_then_drops_the_footprint_on_the_grid() {
     let mut f = open_board();
     select_u1(&mut f.app);
@@ -379,11 +451,16 @@ fn a_drag_previews_then_drops_the_footprint_on_the_grid() {
             from,
             to,
             tolerance_mm: REACH,
+            leaves_tracks: false,
         }),
     );
     assert_eq!(snapshot(&f.app), before, "a drag in progress edits nothing");
-    let ghost = &f.app.interaction_state.pcb_canvas.highlight().ghost;
-    assert_eq!(ghost.len(), 3, "the body and both pads are previewed");
+    let canvas = &f.app.interaction_state.pcb_canvas;
+    assert!(canvas.highlight().ghost.is_empty(), "a move has no ghost");
+    assert!(
+        canvas.drag_preview_scene().is_some(),
+        "the part moves itself"
+    );
     let dropped = Message::PcbCanvas(PcbCanvasMsg::FootprintDropped { from, to });
     let edited = one_step(&mut f, dropped);
     // The origin snaps to the 1.27 mm PCB default grid: (12.7, 10.16).
@@ -392,14 +469,7 @@ fn a_drag_previews_then_drops_the_footprint_on_the_grid() {
         (at.x - 12.7).abs() < 1e-9 && (at.y - 10.16).abs() < 1e-9,
         "{at:?}"
     );
-    assert!(
-        f.app
-            .interaction_state
-            .pcb_canvas
-            .highlight()
-            .ghost
-            .is_empty()
-    );
+    assert!(!f.app.interaction_state.pcb_canvas.previews_drag());
 }
 
 #[test]

@@ -81,7 +81,7 @@ pub(super) fn arc_facts(
     common: PrimitiveCommon,
     arcs: &[&TrackArc],
     i18n: &I18n,
-    mode: Option<String>,
+    mode: Option<signex_engine::pcb::draw::ArcMode>,
 ) -> ArcFacts {
     let origin = board.options.origin;
     let spans: Vec<Option<ArcSpan>> = arcs.iter().map(|a| ArcSpan::of(a)).collect();
@@ -148,7 +148,9 @@ pub(super) fn dimension_facts(
         precision: shared(dimensions.iter().map(|d| d.precision)),
         value: shared(dimensions.iter().map(|d| d.value_text())),
         layer: layer_choice(shared(dimensions.iter().map(|d| d.layer.as_str())), i18n),
-        layers: layer_choices(board, i18n, PcbLayer::takes_text),
+        // Any layer, copper included (Caner, 2026-11-21).
+        layers: layer_choices(board, i18n, |_| true),
+        style: super::dimension_style::style_facts(dimensions),
         common,
     }
 }
@@ -319,7 +321,12 @@ fn text_edit(edit: &PrimitiveEdit) -> Option<TextEdit> {
 
 /// A typed precision that is not a whole number of decimals the dimension
 /// can show is refused as out of range.
-fn dimension_edit(edit: &PrimitiveEdit) -> Option<Result<DimensionEdit, PrimitiveEditRefusal>> {
+pub(crate) fn dimension_edit(
+    edit: &PrimitiveEdit,
+) -> Option<Result<DimensionEdit, PrimitiveEditRefusal>> {
+    if let Some(style) = super::dimension_style_edit(edit) {
+        return Some(Ok(DimensionEdit::Style(style)));
+    }
     Some(Ok(match *edit {
         PrimitiveEdit::Number(F::StartX, v) => DimensionEdit::StartX(v),
         PrimitiveEdit::Number(F::StartY, v) => DimensionEdit::StartY(v),

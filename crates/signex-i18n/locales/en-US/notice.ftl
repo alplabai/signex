@@ -38,11 +38,17 @@ notice-disk-folder-missing-title = Folder Missing on Disk
 
 # $library is the library's name.
 notice-library-read-only-detail = The library "{ $library }" ships with { -brand-name } and is not editable.
+# A library opened read-only after Skip for now on Git Repository Missing.
+# $library is the library's name.
+notice-library-history-missing-detail = The library "{ $library }" is open read-only because its Git history is missing. Close it and open it again to re-init its history, or restore its .git folder.
 # A save found its file changed outside the app. $name is the file name.
-notice-disk-changed =
-    { $name } changed on disk since it was opened or last saved. Saving now would discard that change.
-
-    Overwrite replaces the file with this document. Reload from disk loads the file and discards the unsaved edits in this document.
+notice-disk-changed = { $name } changed on disk since it was opened or last saved. Saving now would discard that change.
+# What each choice of that card does, shown beside the choice's button label
+# ("Save As…", "Overwrite", "Reload from disk"). Lower case: each one
+# continues the label.
+notice-disk-changed-save-as = writes this document to a new file and leaves the changed file as it is.
+notice-disk-changed-overwrite = replaces the file with this document.
+notice-disk-changed-reload = loads the file and discards the unsaved edits in this document.
 # $name is the file name; $path is the full path the save writes to.
 notice-disk-missing = { $name } is missing on disk (deleted or moved). Re-create writes this document to { $path }.
 # $name is the file name; $folder is the folder that is gone.
@@ -78,7 +84,7 @@ notice-stock-copy-failed =
 
 ## Autosave recovery: a Restore that did not happen. $name is the file name.
 
-notice-recovery-needs-open = Restore needs the document open: reopen { $name } to restore. The copy is kept and autosave stays paused for it.
+notice-recovery-needs-open = Restore needs the document open in a tab. { $name } has unsaved changes but no tab: open it from the project tree, which keeps those changes, then choose Restore. The copy is kept and autosave stays paused for it.
 notice-recovery-still-moving = The recovery copy of { $name } is still being moved to the file's new name. It was kept; choose Restore again in a moment.
 notice-recovery-renamed-while-reading = { $name } was renamed while its recovery copy was being read. The copy was kept and is offered again.
 # $reason is why the copy could not be read, in English.
@@ -89,7 +95,7 @@ notice-recovery-copy-gone =
 notice-recovery-copy-unreadable =
     { $reason }
     The copy was kept and is offered again. Autosave stays paused for this document until you answer.
-notice-recovery-edited-during-prompt = { $name } was edited while the prompt was open, so its recovery copy was not loaded over those edits. The copy was kept and is offered again. Autosave stays paused for this document until you answer, so neither version is overwritten.
+notice-recovery-edited-during-prompt = { $name } was edited while the prompt was open, so its recovery copy was not loaded over those edits. If it has no tab, a project-wide run such as Annotate made them: open it from the project tree to see them. To restore the copy instead, undo or save those edits first. The copy was kept and is offered again. Autosave stays paused for this document until you answer, so neither version is overwritten.
 notice-recovery-tab-not-activated = The tab of { $name } could not be activated, so its recovery copy was not restored. The copy was kept and is offered again. Autosave stays paused for this document until you answer.
 notice-recovery-target-closed = { $name } was closed, so its recovery copy was not restored. The copy was kept and is offered again the next time the file is opened.
 
@@ -207,9 +213,6 @@ notice-recent-gone = { $path } no longer exists. It has been removed from File >
 
 # $reason is why, in English.
 notice-run-refused = { $label } was not run: { $reason }
-# $count is a whole number; $sheets lists the files. The English keeps
-# "sheet(s)" for every count.
-notice-run-write-failed = { $label } could not write { $count } unopened sheet(s) and left them as they were on disk: { $sheets }. The open sheets were still renumbered, so run it again once the cause is fixed.
 # $sheets lists the sheets and why each is skipped.
 notice-run-would-skip = { $label } was not run: it would skip { $sheets }, and renumbering around a sheet can repeat its designators. Nothing was changed; try again once the sheet is free.
 # $summary lists the skipped sheets.
@@ -238,7 +241,7 @@ notice-bom-issues = Wrote { $path } with { $summary }.{ $issues }
 notice-bom-issues-more =
     Wrote { $path } with { $summary }.{ $issues }
     { "..." } and { $more } more
-notice-export-page-invalid = Specific page must be a positive page number (1, 2, 3, ...).
+notice-export-page-invalid = Pages must be page numbers or ranges from 1 up, such as 1-2, 4.
 notice-export-no-files = Select at least one file in the Settings tab before exporting.
 notice-bom-no-sheet = Cannot build BOM: no active schematic.
 # $path is the source document.
@@ -274,3 +277,39 @@ notice-link-not-opened = Could not open { $url } in a browser: { $error }
 # The browser was started but the launch did not finish. $url is the web
 # address; $error is the system's reason, in English.
 notice-link-launch-incomplete = The browser launch for { $url } did not complete: { $error }
+
+## Messages lines of a schematic edit and of a sheet load (#2644). Counts
+## come as text, written as the code always wrote them. $error is the
+## engine's reason, in English.
+
+# An edit passed over locked objects. $count is how many; $names lists them
+# ("R1, R2").
+notice-edit-locked-skipped = Skipped { $count } locked object(s): { $names }; unlock in Properties to change them
+# An edit refused on a sheet a newer Signex wrote. $name is the file name, or
+# notice-edit-this-sheet; $format is the newer format ("snxsch/1.7").
+notice-edit-read-only = Not changed: { $name } is read-only, written by a newer Signex ({ $format }). Edit it in that version.
+notice-edit-this-sheet = This sheet
+# An edit refused because what it changes is locked. $action is what the edit
+# would do, in English ("moved"); $names lists the objects ("R1, R2").
+notice-edit-item-locked-one = { $name } is locked and cannot be { $action }; unlock it in Properties first
+notice-edit-item-locked-many = { $names } are locked and cannot be { $action }; unlock them in Properties first
+notice-edit-command-execution-failed = Engine command execution failed: { $error }
+notice-edit-command-failed = Engine command failed: { $error }
+notice-edit-undo-failed = Engine undo failed: { $error }
+notice-edit-redo-failed = Engine redo failed: { $error }
+notice-edit-group-step-failed = Engine group step failed: { $error }
+# A project-wide undo or redo refused. $run names the step ("project-wide
+# annotate"), $noun the run alone ("annotate") and $command its command
+# ("Annotate"), all in English; $files lists sheet file names.
+notice-edit-group-redo-dropped = Cannot redo the { $run }: { $files } went back to its saved state. Run { $command } again.
+notice-edit-group-undo-blocked = Cannot undo the { $run }: { $files } has a later step (an edit or a net-class pick). Undo the newer edit on { $files } first.
+notice-edit-group-redo-blocked = Cannot redo the { $run }: { $files } was edited after the undo, so the { $noun } can't be redone across sheets.
+notice-edit-group-undo-out-of-reach = Cannot undo the { $run }: { $files } was saved and closed, or no longer holds this step, so no sheet was changed.
+notice-edit-group-redo-out-of-reach = Cannot redo the { $run }: { $files } was saved and closed, or no longer holds this step, so no sheet was changed.
+# A sheet read from disk whose engine could not start. $file is its path.
+notice-load-not-installed = { $file } could not be loaded into the editor ({ $error }); the sheet already open was kept
+# The same for a sheet a git restore wrote behind a tab not in view.
+notice-load-restore-engine-failed = [git] restore: { $file } was restored but its engine could not start: { $error }
+# chrome-copy-help
+# After the detail of a Save Failed card (mockup row 11): nothing was lost.
+notice-save-failed-edits-kept = Your edits are still open and unsaved.

@@ -20,6 +20,7 @@ mod limits;
 mod mask;
 mod near;
 mod profile;
+pub mod rooms;
 mod rule_notes;
 mod rules;
 mod severity;
@@ -95,6 +96,10 @@ pub enum ViolationKind {
     /// The courtyards of two parts on one side overlapping or closer than
     /// a rule's minimum.
     CourtyardOverlap,
+    /// A member part of a room with Keep parts inside whose body is
+    /// outside the room's outline shrunk by its margin (#2457):
+    /// `measured_nm` is how far, `required_nm` the margin.
+    PartOutsideRoom,
 }
 
 /// One finding, sorted by `(kind, items, ..)` in a report.
@@ -172,6 +177,8 @@ impl DrcReport {
 mod base_rules_tests;
 #[cfg(test)]
 mod class_pair_tests;
+#[cfg(test)]
+mod drawn_copper_tests;
 #[cfg(test)]
 mod explain_tests;
 #[cfg(test)]

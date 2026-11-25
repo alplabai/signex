@@ -2,15 +2,12 @@
 //! at a path, the open-library picker, adding standalone symbol /
 //! footprint files, and registering a standalone library onto the
 //! active project.
-//!
-//! Extracted verbatim from the library dispatcher (`dispatch/library`);
-//! pure code motion, zero behaviour change.
 
 use super::*;
 
 impl Signex {
     /// Resolution of the "New Component Library" save-as dialog — pops
-    /// the "Library Options" modal (Git / LFS opt-in) rather than
+    /// the New Library dialog (Git / LFS opt-in) rather than
     /// creating immediately.
     pub(super) fn handle_prompt_library_create_options(
         &mut self,
@@ -18,8 +15,8 @@ impl Signex {
         lib_path: std::path::PathBuf,
     ) -> Task<Message> {
         // Stage 11 of `v0.9-snxlib-as-file-plan.md`: pop the
-        // "Library Options" modal here instead of creating
-        // immediately. The modal lets the user opt into Git
+        // New Library dialog here instead of creating
+        // immediately. The dialog lets the user opt into Git
         // LFS for binary 3D models before any disk +
         // `git init` runs. Confirming dispatches
         // `LibraryCreateOptionsConfirm` which calls into
@@ -30,11 +27,13 @@ impl Signex {
             enable_git: false,
             use_lfs: false,
             refusal: None,
+            existing_library: false,
+            path_refused: false,
         });
         Task::none()
     }
 
-    /// "Library Options" modal — toggle the "Use Git LFS" checkbox.
+    /// New Library dialog — toggle the "Use Git LFS" switch.
     pub(super) fn handle_library_create_options_toggle_lfs(&mut self) -> Task<Message> {
         if let Some(state) = self.library.create_options.as_mut() {
             state.use_lfs = !state.use_lfs;
@@ -42,12 +41,15 @@ impl Signex {
         Task::none()
     }
 
-    /// "Library Options" modal — toggle the "Enable version control"
-    /// checkbox.
+    /// New Library dialog — toggle the "Enable version control" switch.
+    /// Clears a version-control refusal, which only applies with it on; a
+    /// refusal of the path itself stays either way.
     pub(super) fn handle_library_create_options_toggle_git(&mut self) -> Task<Message> {
         if let Some(state) = self.library.create_options.as_mut() {
             state.enable_git = !state.enable_git;
-            state.refusal = None;
+            if !state.existing_library && !state.path_refused {
+                state.refusal = None;
+            }
             // LFS is meaningless without git — keep the two
             // toggles consistent so the user doesn't end up
             // with LFS-on-no-git which the adapter would
@@ -59,10 +61,13 @@ impl Signex {
         Task::none()
     }
 
-    /// "Library Options" modal — Create Library button.
+    /// New Library dialog — Create Library button.
     pub(super) fn handle_library_create_options_confirm(&mut self) -> Task<Message> {
         // Refuse before anything is registered or written, and keep the modal
         // open with the reason so the user can pick another place.
+        if self.refuse_existing_library() || self.refuse_unusable_library_path() {
+            return Task::none();
+        }
         if let Some(state) = self.library.create_options.as_mut()
             && state.enable_git
             && let Some(reason) =
@@ -80,6 +85,102 @@ impl Signex {
             )
         } else {
             Task::none()
+        }
+    }
+
+    /// Mark the open New Library dialog refused when its path is already
+    /// taken (mockup row 133). Returns `true` when it was.
+    fn refuse_existing_library(&mut self) -> bool {
+        let i18n = &self.ui_state.i18n;
+        let Some(state) = self.library.create_options.as_mut() else {
+            return false;
+        };
+        if !state.lib_path.exists() {
+            return false;
+        }
+        state.refusal = Some(i18n.message_plain(
+            signex_i18n::ids::LIBRARY_CREATE_OPTIONS_EXISTS,
+            &[(
+                "file",
+                signex_i18n::Arg::from(shown_file_name(&state.lib_path)),
+            )],
+        ));
+        state.existing_library = true;
+        true
+    }
+
+    /// Mark the open New Library dialog refused when its path can never be
+    /// registered: a file name that is not portable, or a library the
+    /// project already waits to create. Returns `true` when it was.
+    fn refuse_unusable_library_path(&mut self) -> bool {
+        let Some(state) = self.library.create_options.as_ref() else {
+            return false;
+        };
+        let id = if crate::library::commands::validate_new_library_name(&state.lib_path).is_err() {
+            signex_i18n::ids::LIBRARY_CREATE_OPTIONS_BAD_NAME
+        } else if self.library_waits_to_be_created(&state.project_path, &state.lib_path) {
+            signex_i18n::ids::LIBRARY_CREATE_OPTIONS_PENDING
+        } else {
+            return false;
+        };
+        let i18n = &self.ui_state.i18n;
+        let Some(state) = self.library.create_options.as_mut() else {
+            return false;
+        };
+        state.refusal = Some(i18n.message_plain(
+            id,
+            &[(
+                "file",
+                signex_i18n::Arg::from(shown_file_name(&state.lib_path)),
+            )],
+        ));
+        state.path_refused = true;
+        true
+    }
+
+    /// Whether the project at `project_path` already holds a pending library
+    /// at `lib_path`. Compared the way the project's volume does (probed on
+    /// load, #694), so `Parts.snxlib` and `parts.snxlib` are one library
+    /// where it ignores case; two entries would share a tree key (#855).
+    fn library_waits_to_be_created(
+        &self,
+        project_path: &std::path::Path,
+        lib_path: &std::path::Path,
+    ) -> bool {
+        use crate::app::state::scope::path_key_with;
+        let Some(loaded) = self
+            .document_state
+            .projects
+            .iter()
+            .find(|p| p.path == project_path)
+        else {
+            return false;
+        };
+        let fold = loaded.case_fold;
+        let key = path_key_with(lib_path, fold);
+        loaded
+            .pending_libraries
+            .values()
+            .any(|spec| path_key_with(&spec.lib_path, fold) == key)
+    }
+
+    /// New Library dialog — "Open existing library" on the refusal banner:
+    /// close the dialog and open the library at the path. Nothing is written.
+    pub(super) fn handle_library_create_options_open_existing(&mut self) -> Task<Message> {
+        match self.library.create_options.take() {
+            Some(state) => self.handle_open_library_at(state.lib_path),
+            None => Task::none(),
+        }
+    }
+
+    /// New Library dialog — "Choose another location…" on the refusal
+    /// banner: close the dialog and reopen the save-as picker for the same
+    /// project. Nothing is written; the reopened dialog starts with its
+    /// options off again.
+    pub(super) fn handle_library_create_options_relocate(&mut self) -> Task<Message> {
+        match self.library.create_options.take() {
+            Some(state) => self.handle_create_library_for_project(state.project_path),
+            None => Task::none(),
         }
     }
 
@@ -175,7 +276,7 @@ impl Signex {
         )
     }
 
-    /// Resolution of the "Library Options" modal (Stage 11 of
+    /// Resolution of the New Library dialog (Stage 11 of
     /// `v0.9-snxlib-as-file-plan.md`). Re-resolves the project (in
     /// case it was unloaded between modal spawn + confirm), then
     /// **registers** a pending library — no disk writes here. The
@@ -184,8 +285,8 @@ impl Signex {
     /// `commands::create_pending_library`, called from
     /// `begin_project_save`. Closes
     /// `feedback_no_disk_writes_without_user_save.md`'s "wait for
-    /// explicit user save" invariant. `use_lfs` carries the modal's
-    /// checkbox state — when on, the eventual adapter writes
+    /// explicit user save" invariant. `use_lfs` carries the dialog's
+    /// switch state — when on, the eventual adapter writes
     /// `.gitattributes` for `*.step` / `*.stp` / `*.wrl` / `*.iges`
     /// and stages it into the initial commit.
     pub(super) fn handle_create_library_at_path(
@@ -195,6 +296,15 @@ impl Signex {
         enable_git: bool,
         use_lfs: bool,
     ) -> Task<Message> {
+        // The dialog refuses this first; kept for a project state that moved
+        // since its Create press.
+        if self.library_waits_to_be_created(&project_path, &lib_path) {
+            crate::diagnostics::log_warning(format!(
+                "Library {} is already waiting to be created; save the project to create it.",
+                lib_path.display()
+            ));
+            return Task::none();
+        }
         let Some(loaded) = self
             .document_state
             .projects
@@ -208,26 +318,6 @@ impl Signex {
             );
             return Task::none();
         };
-
-        // Two pending entries for one path would share a tree key, so the
-        // tree could expand or select the wrong row (#855).
-        // Compared the way the project's volume does (probed on load, #694),
-        // so `Parts.snxlib` and `parts.snxlib` are one library where it
-        // ignores case.
-        use crate::app::state::scope::path_key_with;
-        let fold = loaded.case_fold;
-        let key = path_key_with(&lib_path, fold);
-        if loaded
-            .pending_libraries
-            .values()
-            .any(|spec| path_key_with(&spec.lib_path, fold) == key)
-        {
-            crate::diagnostics::log_warning(format!(
-                "Library {} is already waiting to be created; save the project to create it.",
-                lib_path.display()
-            ));
-            return Task::none();
-        }
 
         match crate::library::commands::register_pending_library(
             lib_path.clone(),
@@ -300,6 +390,19 @@ impl Signex {
             PickerMsg::PanelComponentClicked(key) => {
                 return self.handle_panel_component_clicked(key);
             }
+            PickerMsg::PanelKindPicked(kind) => {
+                self.pick_library_panel_kind(kind);
+                return Task::none();
+            }
+            PickerMsg::PanelRowStylePicked(style) => {
+                if self.library.library_panel.row_style != style {
+                    self.library.library_panel.row_style = style;
+                    // The editor contexts carry the symbol and footprint
+                    // drawings only while thumbnail rows are on.
+                    self.refresh_panel_ctx();
+                }
+                return Task::none();
+            }
             _ => {}
         }
         let Some(picker) = self.library.picker.as_mut() else {
@@ -308,14 +411,24 @@ impl Signex {
         match msg {
             PickerMsg::PanelSearchChanged(_)
             | PickerMsg::PanelLibraryToggled(_)
-            | PickerMsg::PanelComponentClicked(_) => {}
+            | PickerMsg::PanelComponentClicked(_)
+            | PickerMsg::PanelKindPicked(_)
+            | PickerMsg::PanelRowStylePicked(_) => {}
+            // A filter that hides the selected row drops the selection, so
+            // Enter and Place never act on a row the list does not show.
             PickerMsg::FilterChanged(s) => {
                 picker.filter = s;
                 self.library.sync_view_caches_in(&self.ui_state.i18n);
+                if let Some(picker) = self.library.picker.as_mut() {
+                    picker.drop_hidden_selection();
+                }
             }
             PickerMsg::RangeFilter(msg) => {
                 picker.range_filters.apply(msg);
                 self.library.sync_view_caches_in(&self.ui_state.i18n);
+                if let Some(picker) = self.library.picker.as_mut() {
+                    picker.drop_hidden_selection();
+                }
             }
             PickerMsg::SelectComponent(row_id) => {
                 // `ComponentSummary` carries `row_id` directly in the
@@ -326,12 +439,28 @@ impl Signex {
                         .find(|c| c.row_id == row_id)
                         .map(|summary| (lib.root.clone(), summary.clone()))
                 });
+                return self.start_picker_preview_load();
+            }
+            PickerMsg::SelectionStepped(step) => return self.step_picker_selection(step),
+            PickerMsg::PreviewLoaded {
+                key,
+                generation,
+                result,
+            } => {
+                // A stale read (older generation or another row) is dropped
+                // unlogged.
+                let why = result.as_ref().err().cloned();
+                if picker.preview.finish(&key, generation, result)
+                    && let Some(why) = why
+                {
+                    crate::diagnostics::log_warning(format!("Picker preview not read: {why}"));
+                }
             }
             // The Place button exists in the Place stage only.
             PickerMsg::PlaceSelected
                 if !matches!(picker.mode, crate::library::state::PickerMode::Place) => {}
             PickerMsg::PlaceSelected => {
-                let Some((path, summary)) = picker.selected.clone() else {
+                let Some((path, summary)) = picker.shown_selection().cloned() else {
                     return Task::none();
                 };
                 let Some(table) = self.library.table_of_row(&path, summary.row_id) else {
@@ -350,6 +479,97 @@ impl Signex {
             }
         }
         Task::none()
+    }
+
+    /// ↑ or ↓ over the picker's list (mockup row 129): select the listed row
+    /// `step` rows on, read its preview and scroll it into view. Only the
+    /// stages that show the list move.
+    fn step_picker_selection(&mut self, step: isize) -> Task<Message> {
+        use crate::library::state::PickerMode;
+        let Some(picker) = self.library.picker.as_mut() else {
+            return Task::none();
+        };
+        if !matches!(
+            picker.mode,
+            PickerMode::Place | PickerMode::ChangeComponent(_)
+        ) {
+            return Task::none();
+        }
+        let from = picker
+            .shown_selection()
+            .map(|(path, summary)| (path.as_path(), summary.row_id));
+        let Some((index, entry)) = picker.rows.stepped(from, step) else {
+            return Task::none();
+        };
+        let selected = (entry.path.to_path_buf(), entry.summary.clone());
+        let count = picker.rows.visible().len();
+        picker.selected = Some(selected);
+        let reveal = iced::widget::operation::scrollable::snap_to(
+            crate::library::picker::LIST_ID,
+            crate::library::picker::list_offset_showing(index, count),
+            iced::widget::operation::Animation::Instant,
+        );
+        Task::batch([self.start_picker_preview_load(), reveal])
+    }
+
+    /// Read the picker's selected row's symbol and footprint on a worker
+    /// for the preview column (mockup row 129); the result lands as
+    /// `PickerMsg::PreviewLoaded`. A read that is still current is kept.
+    fn start_picker_preview_load(&mut self) -> Task<Message> {
+        let Some(key) = self.picker_preview_key() else {
+            return Task::none();
+        };
+        let stamp = self.components_row_stamp(&key);
+        let libraries = self.library.shared_adapters();
+        let own = self.library.shared_adapter_at(&key.library_path);
+        let Some(picker) = self.library.picker.as_mut() else {
+            return Task::none();
+        };
+        if picker.preview.is_fresh(&key, stamp) {
+            return Task::none();
+        }
+        let generation = picker.preview.begin(key.clone(), stamp);
+        // A read that cannot start is recorded as failed, so the tiles do
+        // not wait on it.
+        let Some(own) = own.filter(|_| !key.table.is_empty()) else {
+            let why = if key.table.is_empty() {
+                "the part is no longer listed in its library".to_string()
+            } else {
+                format!("its library {} is not open", key.library_path.display())
+            };
+            crate::diagnostics::log_warning(format!("Picker preview not read: {why}"));
+            picker.preview.finish(&key, generation, Err(why));
+            return Task::none();
+        };
+        super::components_panel::details_read_task(
+            key,
+            own,
+            libraries,
+            "preview worker",
+            move |key, result| {
+                Message::Library(LibraryMessage::Picker(PickerMsg::PreviewLoaded {
+                    key,
+                    generation,
+                    result,
+                }))
+            },
+        )
+    }
+
+    /// The preview key of the picker's selected row. A row whose table is
+    /// no longer known keeps an empty table, so its read still lands (as
+    /// failed) on the row the tiles show.
+    fn picker_preview_key(&self) -> Option<crate::library::state::ComponentsPanelRowKey> {
+        let (path, summary) = self.library.picker.as_ref()?.selected.clone()?;
+        let table = self
+            .library
+            .table_of_row(&path, summary.row_id)
+            .unwrap_or_default();
+        Some(crate::library::state::ComponentsPanelRowKey {
+            library_path: path,
+            table,
+            row_id: signex_library::RowId::from_uuid(summary.row_id),
+        })
     }
 
     /// F34 — Save-As dialog confirmed for a new symbol library file
@@ -505,6 +725,14 @@ impl Signex {
         self.document_state.mark_document_dirty(&project_path);
         self.refresh_panel_ctx();
     }
+}
+
+/// `path`'s file name as a refusal shows it.
+fn shown_file_name(path: &std::path::Path) -> String {
+    path.file_name().map_or_else(
+        || path.display().to_string(),
+        |name| name.to_string_lossy().into_owned(),
+    )
 }
 
 /// Create `path`'s parent directory and write `text` atomically, refusing an existing `path`. Runs on a

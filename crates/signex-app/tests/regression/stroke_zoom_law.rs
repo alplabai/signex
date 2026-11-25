@@ -80,6 +80,7 @@ fn sheet() -> SchematicSheet {
         uuid: uuid::Uuid::now_v7(),
         start: Point::new(150.0, 20.0),
         end: Point::new(150.0, 60.0),
+        ..Default::default()
     });
     sheet.bus_entries.push(BusEntry {
         uuid: uuid::Uuid::now_v7(),

@@ -76,7 +76,7 @@ fn modals_keep_their_design_size_in_a_roomy_window() {
 }
 
 fn blank_preview() -> crate::app::state::PreviewState {
-    use crate::app::state::{PageSetupInputs, PdfPreviewTab, PdfQuality, PreviewState};
+    use crate::app::state::{PageSetupInputs, PdfQuality, PreviewState};
     PreviewState {
         source: std::path::PathBuf::new(),
         pages: Vec::new(),
@@ -87,7 +87,7 @@ fn blank_preview() -> crate::app::state::PreviewState {
         specific_page_input: "1".to_string(),
         range_note: None,
         zoom: 1.0,
-        active_tab: PdfPreviewTab::Preview,
+        dialog: Default::default(),
         pan: (0.0, 0.0),
         panning: None,
         sheet_files: Vec::new(),
@@ -108,7 +108,11 @@ fn detached_export_footer_stays_inside_a_small_window() {
     app.document_state.preview = Some(blank_preview());
     assert_labels_inside_window(
         app.view_print_preview_body(),
-        &["Export PDF", "No files selected for export"],
+        &[
+            "Cancel",
+            "Export PDF\u{2026}",
+            "No files selected for export",
+        ],
     );
 }
 
@@ -156,6 +160,7 @@ fn the_remove_card_fits_a_window_just_wider_than_its_design() {
         is_outside_project: false,
         unsaved_prompt: false,
         is_directory_package: false,
+        choice: None,
     });
     assert_card_inside(
         &mut app,
@@ -187,6 +192,8 @@ fn the_autosave_recovery_card_fits_a_window_just_wider_than_its_design() {
         path: "a.snxsch".into(),
         age_secs: 30,
         older_than_file: false,
+        saved_age_secs: Some(600),
+        checked_at: std::time::SystemTime::UNIX_EPOCH,
     };
     assert_card_inside(
         &mut app,
@@ -207,6 +214,7 @@ fn the_remove_unsaved_edits_card_fits_a_window_just_wider_than_its_design() {
         is_outside_project: false,
         unsaved_prompt: true,
         is_directory_package: false,
+        choice: None,
     });
     assert_card_inside(
         &mut app,
@@ -228,6 +236,7 @@ fn the_create_sheet_card_fits_a_window_just_wider_than_its_design() {
             path_text: "power.snxsch".to_string(),
             error: None,
             exists: false,
+            reuse_warning: None,
         });
     assert_card_inside(
         &mut app,

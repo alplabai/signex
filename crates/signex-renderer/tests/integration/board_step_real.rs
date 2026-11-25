@@ -61,10 +61,10 @@ fn union(a: Option<Bounds>, b: Option<Bounds>) -> Option<Bounds> {
 fn view_bounds(board: &PcbBoard) -> Bounds {
     let colors = Board3dColors {
         mask: [0.5; 4],
-        edge: [0.5; 4],
-        top_copper: [0.5; 4],
-        bottom_copper: [0.5; 4],
-        multi_layer: [0.5; 4],
+        substrate: [0.5; 4],
+        copper: [0.5; 4],
+        finish: [0.5; 4],
+        silk: [0.5; 4],
         body: [0.5; 4],
     };
     let models = HashMap::new();

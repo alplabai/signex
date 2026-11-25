@@ -52,19 +52,25 @@ fn icon_button(
     icon_button_of(svg_icon(handle), tokens)
 }
 
-/// The icon actions the active panel puts in its title bar (ERC Clear,
-/// Messages Copy and Clear), each with its tooltip.
-fn title_actions<'a>(kind: PanelKind, ctx: &panels::PanelContext) -> Vec<Element<'a, DockMessage>> {
+/// The icon actions the active panel puts in its title bar, each with its
+/// tooltip; one with no message is drawn disabled. A detached panel window
+/// draws the same ones.
+pub(crate) fn title_actions<'a>(
+    kind: PanelKind,
+    ctx: &panels::PanelContext,
+) -> Vec<Element<'a, DockMessage>> {
     panels::title_actions(kind, ctx)
         .into_iter()
         .map(|action| {
-            let tip = container(text(action.tip).size(TS.caption)).padding([SP.xs, SP.s]);
+            let tip = container(text(action.tip).size(TS.caption))
+                .padding([SP.xs, SP.s])
+                .style(styles::context_menu(&ctx.tokens));
             signex_widgets::tooltip(
-                icon_button(action.icon, &ctx.tokens).on_press(DockMessage::Panel(action.on_press)),
+                icon_button(action.icon, &ctx.tokens)
+                    .on_press_maybe(action.on_press.map(DockMessage::Panel)),
                 tip,
                 iced::widget::tooltip::Position::Bottom,
             )
-            .style(styles::context_menu(&ctx.tokens))
             .boxed()
         })
         .collect()
@@ -96,7 +102,7 @@ impl DockArea {
             return self.view_rail(position, region, ctx);
         }
 
-        // ── Altium-style flat tabs with accent underline ──
+        // ── Flat tabs with an accent underline ──
         // Every tab is shown: when the natural widths do not fit the strip,
         // the wider tabs shrink and their labels end in an ellipsis
         // (`tab_fit::fit_widths`), so no tab is cut at the strip edge.
@@ -223,10 +229,10 @@ impl DockArea {
                 // name shows in a tooltip (#2468).
                 if squeezed.is_some() {
                     let tip = container(text(t!(ctx.i18n, panel.message())).size(tab_size))
-                        .padding([SP.xs, SP.s]);
+                        .padding([SP.xs, SP.s])
+                        .style(styles::context_menu(&ctx.tokens));
                     tab_row = tab_row.push(
                         signex_widgets::tooltip(tab, tip, iced::widget::tooltip::Position::Bottom)
-                            .style(styles::context_menu(&ctx.tokens))
                             .boxed(),
                     );
                 } else {
@@ -267,6 +273,9 @@ impl DockArea {
             Space::new().width(Length::Fill),
         ];
         if let Some(panel) = region.panels.get(region.active) {
+            if let Some(open) = open_library_button(*panel, ctx) {
+                title_bar = title_bar.push(open);
+            }
             for action in title_actions(*panel, ctx) {
                 title_bar = title_bar.push(action);
             }
@@ -286,14 +295,10 @@ impl DockArea {
         let content: Element<'_, DockMessage> =
             if let Some(panel) = region.panels.get(region.active) {
                 match *panel {
-                    PanelKind::Library => {
-                        // v0.9 Library panel — content lives in the
-                        // library subsystem, not in `panels::view_panel`.
-                        // Wrap the LibraryMessage in DockMessage::Library
-                        // so the dispatcher can route it back out.
-                        crate::library::panel::view(library, &ctx.tokens, &ctx.i18n)
-                            .map(DockMessage::Library)
-                            .boxed()
+                    // The Library panel, and its alias rows should one ever
+                    // be docked, are drawn by the library subsystem.
+                    PanelKind::Library | PanelKind::SchLibrary | PanelKind::FootprintLibrary => {
+                        crate::library::panel::view(library, ctx)
                     }
                     PanelKind::Components => {
                         // v0.9 Stage 9 Components Panel — three mount
@@ -364,7 +369,7 @@ impl DockArea {
         region: &'a DockRegion,
         ctx: &'a panels::PanelContext,
     ) -> Element<'a, DockMessage> {
-        // Altium-style collapsed panel: vertical tabs with full panel names
+        // Collapsed panel: vertical tabs with full panel names
         // Each tab is a button with the panel name, stacked vertically
         let is_vertical = matches!(position, PanelPosition::Left | PanelPosition::Right);
 
@@ -470,9 +475,9 @@ impl DockArea {
         let label = t!(ctx.i18n, kind.message());
 
         let content: Element<'a, DockMessage> = match kind {
-            PanelKind::Library => crate::library::panel::view(library, &ctx.tokens, &ctx.i18n)
-                .map(DockMessage::Library)
-                .boxed(),
+            PanelKind::Library | PanelKind::SchLibrary | PanelKind::FootprintLibrary => {
+                crate::library::panel::view(library, ctx)
+            }
             PanelKind::Components => {
                 panels::components_panel::view(library, ctx, &ctx.tokens, grid)
                     .map(DockMessage::Library)
@@ -494,6 +499,9 @@ impl DockArea {
             .padding([0, 10])
             .width(Length::Fill),
         ];
+        if let Some(open) = open_library_button(kind, ctx) {
+            bar_row = bar_row.push(open);
+        }
         for action in title_actions(kind, ctx) {
             bar_row = bar_row.push(action);
         }
@@ -525,6 +533,33 @@ impl DockArea {
         .style(graphite::floating_card(&ctx.tokens));
         Some(card.boxed())
     }
+}
+
+/// The Library panel's folder button in its title bar: Open Library…
+/// (mockup row 119). `None` for every other panel.
+fn open_library_button<'a>(
+    panel: PanelKind,
+    ctx: &panels::PanelContext,
+) -> Option<Element<'a, DockMessage>> {
+    if !matches!(
+        panel,
+        PanelKind::Library | PanelKind::SchLibrary | PanelKind::FootprintLibrary
+    ) {
+        return None;
+    }
+    let open = icon_button_of(
+        crate::library::panel::open_library_glyph(&ctx.tokens),
+        &ctx.tokens,
+    )
+    .on_press(DockMessage::Library(
+        crate::library::messages::LibraryMessage::OpenLibraryDialog,
+    ));
+    Some(panels::graphite::hint_tooltip(
+        open.boxed(),
+        t!(ctx.i18n, ids::LIBRARY_PANEL_OPEN_LIBRARY_ACTION),
+        &ctx.tokens,
+        iced::widget::tooltip::Position::Bottom,
+    ))
 }
 
 /// The name of a collapsed panel on the side rail, in `i18n`'s language.
@@ -589,6 +624,7 @@ impl canvas::Program<DockMessage> for RotatedLabel {
             position: iced::Point::ORIGIN,
             color: self.color,
             size: iced::Pixels(RAIL_FONT_SIZE),
+            font: signex_widgets::ui_font::regular(),
             align_x: iced::alignment::Horizontal::Center.into(),
             align_y: iced::alignment::Vertical::Center,
             ..canvas::Text::default()

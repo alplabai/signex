@@ -1,0 +1,403 @@
+//! Which panel messages act on the document of the window they came from.
+//! A panel in an undocked window shows that window's document, so its
+//! messages run there, except the few that are the whole app's or that open
+//! another document. There is no wildcard: a new variant must be put on one
+//! side to compile.
+
+use signex_widgets::tree_view::TreeMsg;
+
+use super::PanelMsg;
+
+impl PanelMsg {
+    /// Whether this runs in the document of the undocked window it came
+    /// from. `false`: it runs on the main window.
+    pub fn runs_in_window(&self) -> bool {
+        match self {
+            // A row click opens a document; expanding a row or opening the
+            // Projects menu is the window's own.
+            Self::Tree(tree) => matches!(
+                tree,
+                TreeMsg::Toggle(_) | TreeMsg::ContextMenu(_) | TreeMsg::BackgroundContextMenu
+            ),
+            Self::Navigator(tree) => matches!(tree, TreeMsg::Toggle(_)),
+            // The filter and snap settings are the session's, the edits the
+            // window's board's.
+            Self::PcbBoard(board) => board.acts_on_board(),
+            // The list and its highlight belong to the board the window shows.
+            Self::PcbPanel(_) => true,
+
+            // Project-wide views, and what opens or steps to a document.
+            Self::NavigatorPanel { .. }
+            | Self::Projects { .. }
+            | Self::OpenRules { .. }
+            | Self::NetClass { .. }
+            | Self::NetInspector { .. }
+            | Self::CompiledDesign { .. }
+            | Self::Annotations { .. }
+            | Self::CommandLog { .. }
+            | Self::MessagesView { .. }
+            | Self::MessageLinkPressed { .. }
+            | Self::FpLibraryOpenSibling { .. }
+            | Self::RunErc { .. }
+            | Self::ClearErc { .. }
+            | Self::FocusErcViolation { .. }
+            | Self::ErcQuickFix { .. }
+            | Self::ErcNetWaiverSet { .. }
+            | Self::ErcWaiver { .. }
+            | Self::ErcView { .. }
+            | Self::WaiverIdentityResolved { .. }
+            // App-wide preferences and session settings.
+            | Self::SetUnit { .. }
+            | Self::ToggleGrid { .. }
+            | Self::ToggleSnap { .. }
+            | Self::SetGridSize { .. }
+            | Self::SetVisibleGridSize { .. }
+            | Self::DocGrid { .. }
+            | Self::ToggleSnapHotspots { .. }
+            | Self::SetUiFont { .. }
+            | Self::SetCanvasFont { .. }
+            | Self::SetCanvasFontSize { .. }
+            | Self::SetCanvasFontBold { .. }
+            | Self::SetCanvasFontItalic { .. }
+            | Self::OpenCanvasFontPopup { .. }
+            | Self::CloseCanvasFontPopup { .. }
+            | Self::ToggleSelectionFilter { .. }
+            | Self::ToggleAllSelectionFilters { .. }
+            | Self::AddCustomFilterPreset { .. }
+            | Self::RemoveCustomFilterPreset { .. }
+            | Self::RenameCustomFilterPreset { .. }
+            | Self::ToggleCustomFilterPresetMember { .. }
+            | Self::CaptureCustomFilterPreset { .. }
+            | Self::SelectCustomFilterTab { .. }
+            | Self::SchFilter { .. }
+            | Self::Noop { .. } => false,
+
+            // Everything else reads or edits the document in view.
+            Self::CommandButtonPressed { .. }
+            | Self::FpEditorToggleAutoFitCourtyard { .. }
+            | Self::BoardSketch { .. }
+            | Self::FpEditorLayerEyeClicked { .. }
+            | Self::FpEditorLayersShowAllClicked { .. }
+            | Self::FpEditorLayersTopSideOnlyClicked { .. }
+            | Self::FpEditorSetRole { .. }
+            | Self::FpEditorEditParameter { .. }
+            | Self::FpEditorSetNextPadDesignator { .. }
+            | Self::FpEditorSetNextPadSizeX { .. }
+            | Self::FpEditorSetNextPadSizeY { .. }
+            | Self::FpEditorSetNextPadSide { .. }
+            | Self::FpEditorSetNextPadRotation { .. }
+            | Self::FpEditorSetSelectedPadRotation { .. }
+            | Self::FpEditorSetNextPadShape { .. }
+            | Self::FpEditorSetNextPadKind { .. }
+            | Self::FpEditorSetNextPadDrillDiameter { .. }
+            | Self::FpEditorSetNextPadDrillSlotLength { .. }
+            | Self::FpEditorSetNextPadCornerRadiusPct { .. }
+            | Self::FpEditorSetNextPadTrapezoidDeltaX { .. }
+            | Self::FpEditorSetNextPadTrapezoidDeltaY { .. }
+            | Self::FpEditorSetNextPadTemplate { .. }
+            | Self::FpEditorSetNextPadTemplateLibrary { .. }
+            | Self::FpEditorSetNextPadPasteMarginTop { .. }
+            | Self::FpEditorSetNextPadPasteMarginBottom { .. }
+            | Self::FpEditorToggleNextPadPasteEnabledTop { .. }
+            | Self::FpEditorToggleNextPadPasteEnabledBottom { .. }
+            | Self::FpEditorSetNextPadMaskMarginTop { .. }
+            | Self::FpEditorSetNextPadMaskMarginBottom { .. }
+            | Self::FpEditorToggleNextPadMaskTentedTop { .. }
+            | Self::FpEditorToggleNextPadMaskTentedBottom { .. }
+            | Self::FpEditorToggleNextPadThermalRelief { .. }
+            | Self::FpEditorSetNextPadFeatureTop { .. }
+            | Self::FpEditorSetNextPadFeatureBottom { .. }
+            | Self::FpEditorToggleNextPadTestpointTopAssembly { .. }
+            | Self::FpEditorToggleNextPadTestpointTopFab { .. }
+            | Self::FpEditorToggleNextPadTestpointBottomAssembly { .. }
+            | Self::FpEditorToggleNextPadTestpointBottomFab { .. }
+            | Self::FpEditorSetSelectedPadDesignator { .. }
+            | Self::FpEditorSetSelectedPadSide { .. }
+            | Self::FpEditorSetSelectedPadShape { .. }
+            | Self::FpEditorSetSelectedPadKind { .. }
+            | Self::FpEditorSetSelectedPadSizeX { .. }
+            | Self::FpEditorSetSelectedPadSizeY { .. }
+            | Self::FpEditorSetSelectedPadDrillDiameter { .. }
+            | Self::FpEditorSetSelectedPadDrillSlotLength { .. }
+            | Self::FpEditorSetSelectedPadCornerRadiusPct { .. }
+            | Self::FpEditorSetSelectedPadTrapezoidDeltaX { .. }
+            | Self::FpEditorSetSelectedPadTrapezoidDeltaY { .. }
+            | Self::FpEditorSetSelectedPadTemplate { .. }
+            | Self::FpEditorSetSelectedPadTemplateLibrary { .. }
+            | Self::FpEditorSetSelectedPadPasteMarginTop { .. }
+            | Self::FpEditorSetSelectedPadPasteMarginBottom { .. }
+            | Self::FpEditorToggleSelectedPadPasteEnabledTop { .. }
+            | Self::FpEditorToggleSelectedPadPasteEnabledBottom { .. }
+            | Self::FpEditorSetSelectedPadMaskMarginTop { .. }
+            | Self::FpEditorSetSelectedPadMaskMarginBottom { .. }
+            | Self::FpEditorToggleSelectedPadMaskTentedTop { .. }
+            | Self::FpEditorToggleSelectedPadMaskTentedBottom { .. }
+            | Self::FpEditorToggleSelectedPadThermalRelief { .. }
+            | Self::FpEditorSetSelectedPadFeatureTop { .. }
+            | Self::FpEditorSetSelectedPadFeatureBottom { .. }
+            | Self::FpEditorToggleSelectedPadTestpointTopAssembly { .. }
+            | Self::FpEditorToggleSelectedPadTestpointTopFab { .. }
+            | Self::FpEditorToggleSelectedPadTestpointBottomAssembly { .. }
+            | Self::FpEditorToggleSelectedPadTestpointBottomFab { .. }
+            | Self::FpEditorSetPadStackTab { .. }
+            | Self::FpEditorSetNextPadElectricalType { .. }
+            | Self::FpEditorSetNextPadNet { .. }
+            | Self::FpEditorToggleNextPadLocked { .. }
+            | Self::FpEditorSetSelectedPadElectricalType { .. }
+            | Self::FpEditorSetSelectedPadNet { .. }
+            | Self::FpEditorToggleSelectedPadLocked { .. }
+            | Self::FpEditorSetFootprintDescription { .. }
+            | Self::FpEditorSetFootprintDefaultDesignator { .. }
+            | Self::FpEditorSetFootprintComponentType { .. }
+            | Self::FpEditorSetFootprintHeight { .. }
+            | Self::FpEditorGeneratedFeature { .. }
+            | Self::FpEditorSetSilkLineFromX { .. }
+            | Self::FpEditorSetSilkLineFromY { .. }
+            | Self::FpEditorSetSilkLineToX { .. }
+            | Self::FpEditorSetSilkLineToY { .. }
+            | Self::FpEditorSetSilkTextPositionX { .. }
+            | Self::FpEditorSetSilkTextPositionY { .. }
+            | Self::FpEditorSetSilkTextSize { .. }
+            | Self::FpEditorSetSilkStrokeWidth { .. }
+            | Self::FpEditorToggleSilkFilled { .. }
+            | Self::FpEditorSetNextPadHoleTolerancePlus { .. }
+            | Self::FpEditorSetNextPadHoleToleranceMinus { .. }
+            | Self::FpEditorSetNextPadHoleRotation { .. }
+            | Self::FpEditorSetNextPadCopperOffsetX { .. }
+            | Self::FpEditorSetNextPadCopperOffsetY { .. }
+            | Self::FpEditorToggleNextPadPlated { .. }
+            | Self::FpEditorSetSelectedPadHoleTolerancePlus { .. }
+            | Self::FpEditorSetSelectedPadHoleToleranceMinus { .. }
+            | Self::FpEditorSetSelectedPadHoleRotation { .. }
+            | Self::FpEditorSetSelectedPadCopperOffsetX { .. }
+            | Self::FpEditorSetSelectedPadCopperOffsetY { .. }
+            | Self::FpEditorToggleSelectedPadPlated { .. }
+            | Self::FpEditorSetSketchPadElectricalType { .. }
+            | Self::FpEditorSetSketchPadNet { .. }
+            | Self::FpEditorToggleSketchPadLocked { .. }
+            | Self::FpEditorSetSketchPadTemplate { .. }
+            | Self::FpEditorSetSketchPadTemplateLibrary { .. }
+            | Self::FpEditorSetSketchPadFeatureTop { .. }
+            | Self::FpEditorSetSketchPadFeatureBottom { .. }
+            | Self::FpEditorToggleSketchPadTestpointTopAssembly { .. }
+            | Self::FpEditorToggleSketchPadTestpointTopFab { .. }
+            | Self::FpEditorToggleSketchPadTestpointBottomAssembly { .. }
+            | Self::FpEditorToggleSketchPadTestpointBottomFab { .. }
+            | Self::FpEditorToggleSketchPadThermalRelief { .. }
+            | Self::FpEditorToggleSketchPadMaskTentedTop { .. }
+            | Self::FpEditorToggleSketchPadMaskTentedBottom { .. }
+            | Self::FpEditorToggleSketchPadPasteEnabledTop { .. }
+            | Self::FpEditorToggleSketchPadPasteEnabledBottom { .. }
+            | Self::FpEditorSetSketchPadHoleTolerancePlus { .. }
+            | Self::FpEditorSetSketchPadHoleToleranceMinus { .. }
+            | Self::FpEditorSetSketchPadHoleRotation { .. }
+            | Self::FpEditorSetSketchPadCopperOffsetX { .. }
+            | Self::FpEditorSetSketchPadCopperOffsetY { .. }
+            | Self::FpEditorSetSketchPadCornerRadiusPct { .. }
+            | Self::FpEditorEditPadInSketch { .. }
+            | Self::FpEditorEditPadShapeParam { .. }
+            | Self::FpEditorUnlinkCornerRadius { .. }
+            | Self::FpEditorEditSketchPadInPads { .. }
+            | Self::FpEditorSelectSketchEntity { .. }
+            | Self::HistoryRestoreClicked { .. }
+            | Self::HistoryRestoreCancelled { .. }
+            | Self::History(..)
+            | Self::FpEditorRestorePadStackDefaults { .. }
+            | Self::FpEditorDismissPadStackOffer { .. }
+            | Self::FpEditorHoverOverConstraint { .. }
+            | Self::FpEditorSetPourNet { .. }
+            | Self::FpEditorSetPourFillType { .. }
+            | Self::FpEditorSetPourPriority { .. }
+            | Self::FpEditorSetKeepoutKind { .. }
+            | Self::FpEditorSetCutoutEdgeRadius { .. }
+            | Self::FpEditorSetCutoutThrough { .. }
+            | Self::FpEditorEditArrayParam { .. }
+            | Self::FpEditorSetArrayNumberingScheme { .. }
+            | Self::FpEditorSetArraySweep { .. }
+            | Self::FpEditorPickNextPadTemplate { .. }
+            | Self::FpEditorPickSelectedPadTemplate { .. }
+            | Self::FpEditorSetBgaSkipLetters { .. }
+            | Self::FpEditorSetBgaStartRow { .. }
+            | Self::FpEditorSetBgaStartCol { .. }
+            | Self::FpEditorDeleteArray { .. }
+            | Self::FpEditorBeginRepickPolarCenter { .. }
+            | Self::FpEditorToggleArrayInstance { .. }
+            | Self::FpEditorToggleSnapOption { .. }
+            | Self::FpEditorSetSnapGridStep { .. }
+            | Self::FpEditorSetSnapDistance { .. }
+            | Self::FpEditorSetAxisSnapRange { .. }
+            | Self::FpEditorSetFootprintName { .. }
+            | Self::FpEditorToggleSelectionFilter { .. }
+            | Self::FpEditorOpenSelectionFilterCustom { .. }
+            | Self::FpEditorSetSnapSubTab { .. }
+            | Self::FpEditorSetSnappingMode { .. }
+            | Self::FpEditorGridManagerAdd { .. }
+            | Self::FpEditorGridManagerProperties { .. }
+            | Self::FpEditorGridManagerDelete { .. }
+            | Self::FpEditorGridSetActive { .. }
+            | Self::FpEditorSetSilkText { .. }
+            | Self::FpEditorDeleteSelectedSilk { .. }
+            | Self::FpEditorGuideManagerAdd { .. }
+            | Self::FpEditorGuideAddVertical { .. }
+            | Self::FpEditorGuideAddHorizontal { .. }
+            | Self::FpEditorGuideDelete { .. }
+            | Self::FpEditorGuideToggle { .. }
+            | Self::FpEditorGuideSetPosition { .. }
+            | Self::FpLibrarySelectInternal { .. }
+            | Self::FpLibraryAddInternal { .. }
+            | Self::FpLibraryDeleteInternal { .. }
+            | Self::FpLibraryEditInternal { .. }
+            | Self::FpLibraryPlaceInternal { .. }
+            | Self::RunDrc { .. }
+            | Self::DrcViolationPicked { .. }
+            | Self::PropertiesTab { .. }
+            | Self::PcbLayers { .. }
+            | Self::LayersPanel { .. }
+            | Self::PcbFootprintText { .. }
+            | Self::Drc { .. }
+            | Self::BoardNetClass { .. }
+            | Self::PcbComponent { .. }
+            | Self::PcbPrimitive { .. }
+            | Self::Room { .. }
+            | Self::LayerStack { .. }
+            | Self::LibraryRowPickSymbol { .. }
+            | Self::LibraryRowPickFootprint { .. }
+            | Self::ToggleSection { .. }
+            | Self::EditSymbolDesignator { .. }
+            | Self::EditSymbolValue { .. }
+            | Self::EditSymbolFootprint { .. }
+            | Self::UpdateSymbolFromLibrary { .. }
+            | Self::UpdateSymbolFromLibraryOnly { .. }
+            | Self::PlacedPartAction { .. }
+            | Self::SwitchSymbolChoice { .. }
+            | Self::SwitchFootprintChoice { .. }
+            | Self::Unions { .. }
+            | Self::ObjectList { .. }
+            | Self::ToggleSymbolMirrorX { .. }
+            | Self::ToggleSymbolMirrorY { .. }
+            | Self::ToggleSymbolLocked { .. }
+            | Self::ToggleItemLocked { .. }
+            | Self::ToggleSymbolDnp { .. }
+            | Self::SymbolBodyStylePicked { .. }
+            | Self::EditSymbolValueFontSizePt { .. }
+            | Self::EditPowerPortStyle { .. }
+            | Self::EditLabelText { .. }
+            | Self::EditLabelJustifyH { .. }
+            | Self::EditLabelDirection { .. }
+            | Self::EditLabelFontSizePt { .. }
+            | Self::EditBlanket { .. }
+            | Self::Directive { .. }
+            | Self::EditNoErcRules { .. }
+            | Self::EditTextFontFamily { .. }
+            | Self::SetDocumentFontFamily { .. }
+            | Self::SetPrePlacementText { .. }
+            | Self::SetPrePlacementDesignator { .. }
+            | Self::SetPrePlacementRotation { .. }
+            | Self::SetPrePlacementFont { .. }
+            | Self::SetPrePlacementFontSize { .. }
+            | Self::TogglePrePlacementBold { .. }
+            | Self::TogglePrePlacementItalic { .. }
+            | Self::TogglePrePlacementUnderline { .. }
+            | Self::SetPrePlacementShapeWidth { .. }
+            | Self::SetPrePlacementWireWidth { .. }
+            | Self::SetPrePlacementWireColor { .. }
+            | Self::EditWireWidth { .. }
+            | Self::EditWireColor { .. }
+            | Self::EditBusWidth { .. }
+            | Self::EditBusColor { .. }
+            | Self::ToggleWireColorPicker { .. }
+            | Self::OpenWireColorAdvancedPicker { .. }
+            | Self::CancelWireColorPicker { .. }
+            | Self::NumericFieldTyped { .. }
+            | Self::NumericFieldSubmitted { .. }
+            | Self::SetPrePlacementShapeFill { .. }
+            | Self::SymEditorSetPinNumber { .. }
+            | Self::SymEditorSetPinName { .. }
+            | Self::SymEditorSetPinLength { .. }
+            | Self::SymEditorSetPinElectrical { .. }
+            | Self::SymEditorSetPinOrientation { .. }
+            | Self::SymEditorSetPinX { .. }
+            | Self::SymEditorSetPinY { .. }
+            | Self::SymEditorSelectPin { .. }
+            | Self::SymEditorSetPinDescription { .. }
+            | Self::SymEditorSetPinFunctionCsv { .. }
+            | Self::SymEditorTogglePinDesignatorVisible { .. }
+            | Self::SymEditorTogglePinNameVisible { .. }
+            | Self::SymEditorTogglePinHidden { .. }
+            | Self::SymEditorTogglePinLocked { .. }
+            | Self::SymEditorSetPinSymbol { .. }
+            | Self::SymEditorSetPinPartNumber { .. }
+            | Self::SymEditorSelectGraphic { .. }
+            | Self::SymEditorSelectPart { .. }
+            | Self::SymEditorSetGraphicField { .. }
+            | Self::SymEditorSetGraphicText { .. }
+            | Self::SymEditorToggleGraphicFillPicker { .. }
+            | Self::SymEditorOpenGraphicFillAdvanced { .. }
+            | Self::SymEditorCancelGraphicFillPicker { .. }
+            | Self::SymEditorSetGraphicFill { .. }
+            | Self::SymEditorClearGraphicFill { .. }
+            | Self::SymEditorSetSymbolName { .. }
+            | Self::SymEditorSetSymbolDesignator { .. }
+            | Self::SymEditorSetSymbolComment { .. }
+            | Self::SymEditorSetSymbolDescription { .. }
+            | Self::SymEditorSetSymbolType { .. }
+            | Self::SymEditorToggleSymbolMirrored { .. }
+            | Self::SymEditorToggleLocalColorPicker { .. }
+            | Self::SymEditorOpenLocalColorAdvanced { .. }
+            | Self::SymEditorCancelLocalColorPicker { .. }
+            | Self::SymEditorSetLocalColor { .. }
+            | Self::SymEditorClearLocalColor { .. }
+            | Self::SymEditorSetDisplaySheetColor { .. }
+            | Self::SymEditorToggleDisplayGrid { .. }
+            | Self::SymEditorCycleDisplayGridSize { .. }
+            | Self::SymEditorCycleDisplayUnit { .. }
+            | Self::SchLibrarySelectSymbol { .. }
+            | Self::SchLibraryAddSymbol { .. }
+            | Self::SchLibraryDeleteSymbol { .. }
+            | Self::SchLibraryDeleteConfirmed { .. }
+            | Self::SchLibraryDeleteCancelled { .. }
+            | Self::UpdateDrawingEdit { .. }
+            | Self::DrawingFieldTyping { .. }
+            | Self::DrawingFieldLeft { .. }
+            | Self::Annotation { .. }
+            | Self::ToggleChildSheetBorderPicker { .. }
+            | Self::ToggleChildSheetFillPicker { .. }
+            | Self::OpenChildSheetAdvancedPicker { .. }
+            | Self::CancelChildSheetColorPicker { .. }
+            | Self::EditChildSheetBorderColor { .. }
+            | Self::EditChildSheetFillColor { .. }
+            | Self::ChildSheetStrokeWidthTyping { .. }
+            | Self::CommitChildSheetStrokeWidth { .. }
+            | Self::ChildSheetNameTyping { .. }
+            | Self::ChildSheetFileTyping { .. }
+            | Self::CommitChildSheetName { .. }
+            | Self::CommitChildSheetFile { .. }
+            | Self::ResetChildSheetStyle { .. }
+            | Self::ConfirmPrePlacement { .. }
+            | Self::PrePlacementPosition { .. }
+            | Self::EditSheetFrame { .. }
+            | Self::SetPageFormatMode { .. }
+            | Self::SetPaperSize { .. }
+            | Self::SetSheetOrientation { .. }
+            | Self::SetPageOrigin { .. }
+            | Self::CustomPaperEdgeTyping { .. }
+            | Self::CommitCustomPaperEdge { .. }
+            | Self::SetSheetColor { .. }
+            | Self::TitleBlockTyping { .. }
+            | Self::CommitTitleBlockField { .. }
+            | Self::SheetVariables { .. }
+            | Self::MultiEdit { .. }
+            | Self::SelectionForm { .. }
+            | Self::PlacedEdit { .. }
+            | Self::ColorHex { .. }
+            | Self::Harness { .. }
+            | Self::Illustration { .. }
+            | Self::DocumentOptions { .. }
+            | Self::Part { .. }
+            | Self::SymbolProps { .. }
+            | Self::FpProperties { .. }
+            | Self::FpSubform { .. }
+            | Self::SketchFix { .. } => true,
+        }
+    }
+}

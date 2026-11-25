@@ -121,6 +121,223 @@ fn the_open_launcher_top_counts_the_rows_and_separators_above_it() {
     );
 }
 
+/// Mockup row 104: a launcher drawn as the selected row anchors its flyout
+/// as an active one does.
+#[test]
+fn a_selected_launcher_anchors_the_flyout() {
+    let m = MenuMetrics::GRAPHITE;
+    let entries = vec![
+        DropdownEntry::Item(DropdownItem::new("Alpha", ())),
+        DropdownEntry::Item(
+            DropdownItem::new("Hide layers", ())
+                .submenu()
+                .selected(true),
+        ),
+    ];
+    assert_eq!(
+        m.active_submenu_top(&entries),
+        Some(m.panel_pad + m.item_height(false))
+    );
+}
+
+/// A swatch row reserves the icon column, so a net-colour row's label lines
+/// up with the icon rows below it.
+#[test]
+fn a_swatch_row_reserves_the_icon_column() {
+    let swatch = vec![DropdownEntry::Item(
+        DropdownItem::new("Blue", ()).swatch(Color::from_rgb(0.2, 0.4, 0.9)),
+    )];
+    assert!(metrics::has_icons(&swatch));
+    assert!(!metrics::has_icons(&labelled("Blue")));
+}
+
+/// A caption is measured like a shortcut: the card widens for it.
+#[test]
+fn a_caption_widens_the_fitted_card() {
+    let long = "W".repeat(18);
+    let bare = fit(&labelled(&long), f32::MAX, "");
+    let captioned = fit(
+        &[DropdownEntry::Item(
+            DropdownItem::new(long.as_str(), ()).caption("0.0254 mm"),
+        )],
+        f32::MAX,
+        "",
+    );
+    assert!(captioned > bare, "{captioned} {bare}");
+}
+
+/// The current choice reads in the accent-soft tokens of both themes.
+#[test]
+fn the_selected_row_uses_the_accent_soft_tokens() {
+    for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+        let tokens = theme_tokens(id);
+        let look = Look::of(&tokens);
+        let soft = tokens
+            .extended
+            .accent_soft
+            .as_ref()
+            .expect("graphite token");
+        let ink = tokens
+            .extended
+            .accent_soft_ink
+            .as_ref()
+            .expect("graphite token");
+        assert_eq!(look.selected_fill, theme_ext::to_color(soft), "{id:?}");
+        assert_eq!(look.selected_ink, theme_ext::to_color(ink), "{id:?}");
+    }
+}
+
+/// The builders set what the renderer reads.
+#[test]
+fn the_new_builders_set_their_fields() {
+    let red = Color::from_rgb(0.75, 0.22, 0.17);
+    let item = DropdownItem::new("GND", ())
+        .icon_tint(red)
+        .caption("1.27 mm")
+        .selected(true)
+        .strong();
+    assert_eq!(item.icon_tint, Some(red));
+    assert_eq!(item.caption.as_deref(), Some("1.27 mm"));
+    assert!(item.selected && item.strong);
+}
+
+/// A new row is plain: not strong, not danger, no badge, so every menu that
+/// does not ask for them draws as before.
+#[test]
+fn a_new_row_is_neither_strong_nor_danger_and_has_no_badge() {
+    let item = DropdownItem::new("Open", ());
+    assert!(!item.strong && !item.danger && item.badge.is_none());
+    let item = DropdownItem::<()>::passive("Share...");
+    assert!(!item.strong && !item.danger && item.badge.is_none());
+}
+
+#[test]
+fn the_builders_set_strong_danger_and_badge() {
+    let item = DropdownItem::new("Remove from Project...", ())
+        .danger()
+        .strong()
+        .badge(pill());
+    assert!(item.strong);
+    assert!(item.danger);
+    assert_eq!(item.badge.as_ref().map(Label::as_str), Some("planned"));
+}
+
+/// Badge text as a caller passes it: never a `raw` literal.
+fn pill() -> signex_i18n::UserText {
+    signex_i18n::UserText::new("planned")
+}
+
+/// A danger row draws its label and icon in the theme's error ink in both
+/// Graphite themes; greyed, it reads muted like any disabled row.
+#[test]
+fn a_danger_row_uses_the_error_ink_unless_it_is_disabled() {
+    for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+        let tokens = theme_tokens(id);
+        let look = Look::of(&tokens);
+        let error = theme_ext::error_color(&tokens);
+        assert_eq!(look.label_ink(false, true), error);
+        assert_eq!(look.row_icon_ink(true), error);
+        assert_eq!(look.label_ink(true, true), look.muted);
+        assert_eq!(look.label_ink(false, false), look.primary);
+        assert_eq!(look.row_icon_ink(false), look.icon_ink);
+        assert_ne!(error, look.primary, "{id:?}: danger must read apart");
+    }
+}
+
+/// The danger ink changes the text, not the hover wash.
+#[test]
+fn a_danger_row_hovers_like_any_other_row() {
+    let tokens = theme_tokens(ThemeId::GraphiteLight);
+    assert_eq!(Look::of(&tokens).hover, RowPaint::of(&tokens).hover);
+}
+
+/// The strong row is set in the semibold weight; a plain row keeps the
+/// card's default face.
+#[test]
+fn a_strong_row_uses_the_semibold_weight() {
+    assert_eq!(
+        label_font(true).map(|f| f.weight),
+        Some(iced::font::Weight::Semibold)
+    );
+    assert_eq!(label_font(false), None);
+}
+
+/// A badge pill widens the fitted card by at least its text and padding.
+#[test]
+fn a_badge_is_part_of_the_fitted_width() {
+    let m = MenuMetrics::GRAPHITE;
+    let label = "Project Releaser...";
+    let plain = m.fitted_width(&labelled(label), f32::MAX, "");
+    let badged = m.fitted_width(
+        &[DropdownEntry::Item(
+            DropdownItem::new(label, ()).badge(pill()),
+        )],
+        f32::MAX,
+        "",
+    );
+    assert!(badged >= plain + 2.0 * m.badge_pad_x, "{badged} {plain}");
+}
+
+/// The view builds with every new flag set, in both Graphite themes.
+#[test]
+fn a_card_with_strong_danger_and_badge_rows_builds() {
+    for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+        let tokens = theme_tokens(id);
+        let entries = vec![
+            DropdownEntry::Item(DropdownItem::new("Open", ()).strong()),
+            DropdownEntry::Item(DropdownItem::new("Remove", ()).danger()),
+            DropdownEntry::Item(
+                DropdownItem::passive("Share...")
+                    .disabled(true)
+                    .badge(pill()),
+            ),
+        ];
+        let panel = view(entries, &tokens, Some(240.0));
+        use iced::advanced::Widget as _;
+        assert_eq!(panel.size().width, Length::Fixed(240.0));
+    }
+}
+
+/// A row built without the new builders is an ordinary row: not selected,
+/// no leading check, no caption, and no icon column.
+#[test]
+fn a_default_row_is_not_selected_and_has_no_lead_check_or_caption() {
+    let item = DropdownItem::new("Place", ());
+    assert!(!item.selected && item.lead_check.is_none() && item.caption.is_none());
+    assert!(!metrics::has_icons(&labelled("Place")));
+}
+
+/// A leading check reserves the icon column (on or off) and replaces the
+/// trailing check, so it does not widen the card.
+#[test]
+fn a_lead_check_row_takes_the_icon_column_not_the_trailing_check() {
+    let m = MenuMetrics::GRAPHITE;
+    let off = vec![DropdownEntry::Item(
+        DropdownItem::new("Signal Layers", ()).lead_check(false),
+    )];
+    assert!(
+        metrics::has_icons(&off),
+        "an empty column is still a column"
+    );
+    // Wide enough to clear the 200 px floor, narrow enough for 320 px, so
+    // the widths compare unclamped.
+    const WIDE: &str = "Assembly Drawings as SVG Files";
+    let on = DropdownItem::new(WIDE, ()).lead_check(true);
+    assert_eq!(on.lead_check, Some(true));
+    let plain = m.fitted_width(&[DropdownEntry::Item(on)], f32::MAX, "");
+    let checked = m.fitted_width(
+        &[DropdownEntry::Item(
+            DropdownItem::new(WIDE, ()).lead_check(true).checked(true),
+        )],
+        f32::MAX,
+        "",
+    );
+    assert_eq!(plain, checked, "no trailing check beside a leading one");
+    let iconless = m.fitted_width(&labelled(WIDE), f32::MAX, "");
+    assert!(iconless > m.min_width, "{iconless} clears the floor");
+    assert!(plain > iconless, "{plain} {iconless}");
+}
+
 /// A swatch row reserves the icon column like an icon row, so a card mixing
 /// the two starts every label at one x, and the swatch fits inside it.
 #[test]

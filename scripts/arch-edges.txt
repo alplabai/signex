@@ -15,11 +15,14 @@ signex-app -> signex-engine
 signex-app -> signex-erc
 signex-app -> signex-erc-dsl
 signex-app -> signex-expr
+signex-app -> signex-gerber
 signex-app -> signex-gfx
 signex-app -> signex-history
 signex-app -> signex-i18n
+signex-app -> signex-i18n-ids
 signex-app -> signex-library
 signex-app -> signex-net
+signex-app -> signex-notebook
 signex-app -> signex-output
 signex-app -> signex-renderer
 signex-app -> signex-req
@@ -40,6 +43,7 @@ signex-drc -> pcb-geom
 signex-drc -> signex-types
 signex-drc-dsl -> pcb-geom
 signex-drc-dsl -> signex-drc
+signex-drc-dsl -> signex-net
 signex-drc-dsl -> signex-types
 signex-engine -> pcb-geom
 signex-engine -> signex-history
@@ -49,6 +53,9 @@ signex-erc -> signex-net
 signex-erc -> signex-types
 signex-erc-dsl -> signex-erc
 signex-erc-dsl -> signex-types
+signex-gerber -> pcb-geom
+signex-gerber -> signex-output
+signex-gerber -> signex-types
 signex-gfx -> signex-sketch  # known debt (#664): rendering should not depend on the sketch solver
 signex-gfx -> signex-types  # per-font cap-height table (signex_types::font, #1229)
 signex-i18n -> signex-i18n-ids

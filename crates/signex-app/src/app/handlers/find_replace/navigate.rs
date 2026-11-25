@@ -67,6 +67,37 @@ impl Signex {
         self.handle_focus_at(position.x, position.y, Some(found.hit.item))
     }
 
+    /// Enter steps to the next result and Shift+Enter to the previous one
+    /// while the dialog is open in Find mode, for a key in the window it
+    /// paints in (`in_dialog`): the footer's Next and Previous (mockup row
+    /// 67). `None` for every other key.
+    pub(crate) fn find_step_key(
+        &self,
+        in_dialog: bool,
+        event: &iced::keyboard::Event,
+    ) -> Option<Message> {
+        use crate::find_replace::FindReplaceMsg;
+        use iced::keyboard::{Event, Key, Modifiers, key::Named};
+        let find = &self.ui_state.find_replace;
+        if !in_dialog || !find.open || find.replace_mode {
+            return None;
+        }
+        let Event::KeyPressed { key, modifiers, .. } = event else {
+            return None;
+        };
+        if !matches!(key.as_ref(), Key::Named(Named::Enter)) {
+            return None;
+        }
+        let step = if modifiers.is_empty() {
+            FindReplaceMsg::NextRequested
+        } else if *modifiers == Modifiers::SHIFT {
+            FindReplaceMsg::PreviousRequested
+        } else {
+            return None;
+        };
+        Some(Message::FindReplaceMsg(step))
+    }
+
     /// Find next / previous: step through the results, wrapping at the ends.
     /// Sheet scope re-reads the sheet first, so the list is never behind it.
     pub(super) fn step_find_result(&mut self, forward: bool) -> Task<Message> {

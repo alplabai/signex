@@ -1,10 +1,13 @@
 //! Create Sheet Symbol From Sheet: pick a sheet file, read what its checks
 //! need off the UI thread (the file, the project's closed sheets, a link out
-//! of the project folder), and place a sheet symbol for it on the active sheet
-//! with an entry for every port, as one undo step. The checks and the
-//! placement are the operand form's (`place_symbol_from_sheet_file`), so one
-//! command id has one behaviour. The symbol goes to the cursor's last point on
-//! this sheet, else under the sheet's content.
+//! of the project folder), and place a sheet symbol for it with an entry for
+//! every port, as one undo step, on the sheet the command was asked on: the
+//! active sheet, or an undocked window's sheet. That sheet travels with the
+//! messages, so the dialog answering on the main window still lands on it.
+//! The checks and the placement are the operand form's
+//! (`place_symbol_from_sheet_file`), so one command id has one behaviour. The
+//! symbol goes to the cursor's last point on this sheet, else under the
+//! sheet's content.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -83,9 +86,9 @@ impl Signex {
 
     /// Ask for the sheet file to make a sheet symbol for.
     pub(super) fn create_symbol_dialog(&mut self) -> Task<Message> {
-        if self.create_symbol_target().is_none() {
+        let Some(target) = self.create_symbol_target() else {
             return Task::none();
-        }
+        };
         let i18n = &self.ui_state.i18n;
         let dialog = self
             .ui_state
@@ -95,21 +98,43 @@ impl Signex {
             .title_in(i18n, ids::SHEET_SYNC_PICK_TITLE)
             .filter_in(i18n, ids::FILE_FILTER_SCHEMATIC, &["snxsch"])
             .filter_in(i18n, ids::FILE_FILTER_ALL_FILES, &["*"]);
-        Task::perform(dialog.pick_file(), |path| {
-            Message::from(SheetSyncMsg::CreateSymbolPicked(path))
+        Task::perform(dialog.pick_file(), move |file| {
+            Message::from(SheetSyncMsg::CreateSymbolPicked {
+                target: target.clone(),
+                file,
+            })
         })
     }
 
-    /// Read what placing the picked file on the active sheet needs, off the
-    /// UI thread.
-    pub(super) fn read_symbol_sheet(&mut self, path: Option<PathBuf>) -> Task<Message> {
+    /// Whether `target`, the sheet the command was asked on, is still open;
+    /// says so in the Messages panel when it is not.
+    fn symbol_target_open(&self, target: &Path) -> bool {
+        let open = self.document_state.engines.contains_key(target);
+        if !open {
+            crate::diagnostics::log_warning(format!(
+                "{LABEL}: {} is no longer open; nothing was placed.",
+                target.display()
+            ));
+        }
+        open
+    }
+
+    /// Read what placing the picked file on `target` needs, off the UI
+    /// thread. The plan is made with `target` as the edit target, so a
+    /// relative file and the project are resolved from that sheet.
+    pub(super) fn read_symbol_sheet(
+        &mut self,
+        target: PathBuf,
+        path: Option<PathBuf>,
+    ) -> Task<Message> {
         let Some(path) = path else {
             return Task::none();
         };
-        let Some(target) = self.create_symbol_target() else {
+        if !self.symbol_target_open(&target) {
             return Task::none();
-        };
-        let (revisions, read) = self.symbol_sheet_reads(&target, &path);
+        }
+        let (revisions, read) =
+            self.on_edit_target(&target, |app| app.symbol_sheet_reads(&target, &path));
         Task::perform(read, move |reads| {
             Message::from(SheetSyncMsg::CreateSymbolRead(SymbolSheetReads {
                 path: path.clone(),
@@ -120,8 +145,9 @@ impl Signex {
         })
     }
 
-    /// The reads landed: place the sheet symbol, unless the user moved to
-    /// another sheet meanwhile. The outcome goes to the Messages panel.
+    /// The reads landed: place the sheet symbol on `target`, whichever tab
+    /// is active now, unless that sheet was closed or changed meanwhile. The
+    /// outcome goes to the Messages panel.
     pub(super) fn symbol_sheet_read(&mut self, read: SymbolSheetReads) {
         let SymbolSheetReads {
             path,
@@ -129,19 +155,19 @@ impl Signex {
             revisions,
             reads,
         } = read;
-        if self.document_state.active_path.as_deref() != Some(target.as_path()) {
-            crate::diagnostics::log_info(format!(
-                "{LABEL} cancelled: the sheet changed before the file was read."
-            ));
+        if !self.symbol_target_open(&target) {
             return;
         }
         let at = self.symbol_from_sheet_spot(&target);
         let file = path.to_string_lossy().into_owned();
-        let placed = self.with_gui_reads(&target, &revisions, reads, |app| {
-            app.place_symbol_from_sheet_file(&file, at, false)
+        let placed = self.on_edit_target(&target, |app| {
+            app.with_gui_reads(&target, &revisions, reads, |app| {
+                app.place_symbol_from_sheet_file(&file, at, false)
+            })
         });
         match placed {
             Ok(placed) => {
+                self.refresh_selection_on(&target);
                 let entries = placed.entries.len();
                 crate::diagnostics::log_info(format!(
                     "{LABEL}: placed sheet symbol '{}' for {} with {entries} sheet entr{}",

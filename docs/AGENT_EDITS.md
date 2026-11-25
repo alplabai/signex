@@ -46,8 +46,11 @@ Two commands, both with capability `edit` in `signex-cli`:
   #2400, and the length tuning commands `tune_net_length` and
   `tune_diff_pair` (#2389): each is one step on the named board. A command
   that takes a file path (`place_design_block`, `import_graphics`, #1667)
-  is refused: an edit list does not read a file it names. A test pins the
-  set.
+  is refused: an edit list does not read a file it names. The drawing order
+  (`bring_drawings_forward`, `bring_drawings_to_front`,
+  `send_drawings_backward`, `send_drawings_to_back`) and `delete_selection`
+  run by uuid as their own command (#2326 slice 6.P2b) but a list does not
+  carry them yet: whether it may is #2877. A test pins the set.
 - An edit acts on the call's `document`, or on the sheet its own `document`
   names (an id or a path). Where a command takes a `document` operand
   (`color_net`, the placements), the call's is filled in when the edit names
@@ -129,10 +132,10 @@ Two commands, both with capability `edit` in `signex-cli`:
 - A step that spans sheets is recorded as an `UndoGroupKind::AgentEdit` group
   (`DocumentState::undo_groups`): Ctrl+Z or Ctrl+Y on any of its sheets moves
   every open sheet of the group, by the rule a project-wide annotate follows
-  (`apply_grouped_step`). If a sheet has a later step on top of the group, the
+  (`DocumentState::step_undo_group`). If a sheet has a later step on top of the group, the
   whole undo is refused with a Messages line naming it, and nothing moves: the
   person undoes the newer edit first. A sheet closed since, or whose history no
-  longer holds the group, is skipped with a warning.
+  longer holds the group, refuses the whole step the same way (#2760).
 - The agent has no `undo` or `redo` inside `apply_edits`. `revert group=N`
   takes back step N only while it is the newest entry of that document
   (`Engine::discard_undo_group_top`); for a step that spans sheets, the call

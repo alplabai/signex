@@ -87,6 +87,22 @@ impl Signex {
         Task::none()
     }
 
+    /// What the Properties sheet of the active Library Browser tab is about:
+    /// `(library, table, selected row)`. `None` on any other tab.
+    pub(in crate::app::dispatch::library) fn shown_browser_row(
+        &self,
+    ) -> Option<(std::path::PathBuf, Option<String>, Option<RowId>)> {
+        let tab = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)?;
+        let crate::app::TabKind::LibraryBrowser(path) = &tab.kind else {
+            return None;
+        };
+        let state = self.library.library_browsers.get(path)?;
+        Some((path.clone(), state.active_table.clone(), state.selected_row))
+    }
+
     /// The grid's scrollable reported a new offset.
     pub(in crate::app::dispatch::library) fn handle_browser_grid_scrolled(
         &mut self,
@@ -124,10 +140,12 @@ impl Signex {
         let Some(index) = self.library.browser_row_position_of_selection(library_path) else {
             return Task::none();
         };
+        let row_h = crate::library::browser::row_height(self.library.library_panel.row_style);
         let Some(state) = self.library.library_browsers.get_mut(library_path) else {
             return Task::none();
         };
-        let Some(offset_y) = crate::library::browser::reveal_row_offset(index, state.grid_scroll)
+        let Some(offset_y) =
+            crate::library::browser::reveal_row_offset_at(index, state.grid_scroll, row_h)
         else {
             return Task::none();
         };

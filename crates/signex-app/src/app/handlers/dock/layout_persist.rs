@@ -41,6 +41,7 @@ impl Signex {
                 }
             }
             DockLayoutMsg::Saved(Ok(())) => Task::none(),
+            DockLayoutMsg::Workspace(msg) => self.dispatch_workspace_layout_message(msg),
             msg @ (DockLayoutMsg::Saved(Err(_)) | DockLayoutMsg::SaveFailedLogged) => {
                 self.document_state.dock_layout_sync.write_failed();
                 if let DockLayoutMsg::Saved(Err(reason)) = msg {

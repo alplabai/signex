@@ -52,6 +52,7 @@ mod tests {
             uuid: Uuid::nil(),
             start: a,
             end: b,
+            ..Default::default()
         }
     }
 

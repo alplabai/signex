@@ -7,7 +7,6 @@
 pub mod active_bar;
 pub mod canvas;
 pub mod context_menu;
-pub mod pins_panel;
 #[cfg(test)]
 mod resize_tests;
 pub mod state;
@@ -17,3 +16,16 @@ pub(crate) mod updates;
 /// Fit the symbol editor camera to a viewport; the document layer calls it
 /// when it opens a symbol.
 pub(crate) use updates::fit_to_viewport;
+
+/// The Properties panel's state and messages for a symbol editor (mockup
+/// rows 122 and 123), and the rectangle Width / Height rule its form and the graphic
+/// edit share: the slice's surface for the panel and the dock handler.
+pub use state::{
+    BodyScope, BodyScopeRow, PartChip, PartStep, SymActiveBarMenu, SymbolPropsMsg, SymbolPropsTab,
+    SymbolPropsUi, SymbolSelection, rect_end_for_extent, rect_extent,
+};
+/// The Pin table document tab's state, messages and edits (mockup row 122b).
+pub use state::{
+    PasteDraft, PasteField, PasteMode, PinTableMsg, PinTableUi, add_table_pin, apply_bulk,
+    apply_paste, parse_mm, paste_preview, remove_pins,
+};

@@ -48,7 +48,7 @@ pub(crate) fn view<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
 /// primary colour when ticked. It approximates the app's
 /// `form_look::checkbox_style` and the `ink4` fallback of its token
 /// resolution, which this crate cannot reach, so it may drift from them.
-fn style(tokens: &ThemeTokens) -> EnableSectionStyle<'static> {
+pub(crate) fn style(tokens: &ThemeTokens) -> EnableSectionStyle<'static> {
     let fill = theme::color(tokens.extended.primary.unwrap_or(tokens.accent));
     let field = theme::color(tokens.extended.field.unwrap_or(tokens.panel_bg));
     let line = theme::color(tokens.extended.line_strong.unwrap_or(tokens.border));

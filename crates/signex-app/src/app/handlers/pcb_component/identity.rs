@@ -9,6 +9,7 @@ use signex_types::schematic::Symbol;
 
 use crate::app::Signex;
 use crate::app::project_sheets::project_root_sheet_path;
+use crate::app::state::LoadedProject;
 use crate::panels::PartIdentity;
 
 impl Signex {
@@ -37,8 +38,45 @@ impl Signex {
         let design_item_id = row
             .map(|row| row.internal_pn.0.clone())
             .or_else(|| (!lib_id.is_empty()).then(|| lib_id.to_string()));
+        // A part in a channel reads as its channel designator, the name
+        // Update PCB gave the footprint. Its sheet symbol comes from an open
+        // sheet or the hierarchy already in memory; with neither the name is
+        // unknown, which is not a mismatch.
+        let project = self.board_project(board);
+        let naming = project
+            .map(|project| project.data.schematic_design.channel_naming.clone())
+            .unwrap_or_default();
+        let mut placed: Vec<(uuid::Uuid, &str)> = self
+            .document_state
+            .engines
+            .values()
+            .flat_map(|engine| engine.document().child_sheets.iter())
+            .map(|cs| (cs.uuid, cs.name.as_str()))
+            .collect();
+        if let Some((hierarchy, _)) = project
+            .and_then(project_root_sheet_path)
+            .and_then(|root| self.hierarchy_describing(&root))
+        {
+            placed.extend(hierarchy.sheet_symbols());
+        }
+        let symbols = placed.iter().copied();
+        if signex_net::ChannelDesignators::has_unknown_channel(&link.sheet, symbols.clone()) {
+            return PartIdentity::NotRead;
+        }
+        let channels = signex_net::ChannelDesignators::of_placements(&link.sheet, symbols, &naming);
+        let naming_is_unknown = project.is_some_and(|project| {
+            crate::app::saved_channel_naming::SavedChannelNaming::of(&project.data)
+                .readable()
+                .is_none()
+        });
+        if naming_is_unknown && channels.is_channel(&link.sheet) {
+            return PartIdentity::NotRead;
+        }
         PartIdentity::Read {
-            designator: symbol.designator_in(&link.sheet).trim().to_string(),
+            designator: channels
+                .designator_of(symbol, &link.sheet)
+                .trim()
+                .to_string(),
             design_item_id,
             source: library.map(|l| l.display_name.clone()),
         }
@@ -50,13 +88,7 @@ impl Signex {
     /// project, in path order.
     fn linked_symbol(&self, board: &Path, link: &SymbolLink) -> Option<&Symbol> {
         let docs = &self.document_state;
-        let project = docs
-            .tabs
-            .iter()
-            .find(|tab| tab.path == board)
-            .and_then(|tab| tab.project_id)
-            .and_then(|id| docs.projects.iter().find(|p| p.id == id))
-            .or_else(|| docs.document_project(board))?;
+        let project = self.board_project(board)?;
         let unit_on = |path: &Path| {
             docs.engines.get(path).and_then(|engine| {
                 engine
@@ -87,4 +119,19 @@ impl Signex {
         owned.sort();
         owned.into_iter().find_map(|path| unit_on(path))
     }
+
+    /// The project of the board at `board`: its tab's, else its owner.
+    fn board_project(&self, board: &Path) -> Option<&LoadedProject> {
+        let docs = &self.document_state;
+        docs.tabs
+            .iter()
+            .find(|tab| tab.path == board)
+            .and_then(|tab| tab.project_id)
+            .and_then(|id| docs.projects.iter().find(|p| p.id == id))
+            .or_else(|| docs.document_project(board))
+    }
 }
+
+#[cfg(test)]
+#[path = "identity_tests.rs"]
+mod tests;

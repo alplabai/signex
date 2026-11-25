@@ -2,7 +2,7 @@
 //! preview opens, any other when the user navigates to it, each once per set
 //! of options.
 
-use super::protel_hierarchy::placed_app;
+use super::net_text_hierarchy::placed_app;
 use crate::app::Signex;
 use crate::app::handlers::menu::export::settle;
 

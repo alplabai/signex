@@ -338,6 +338,19 @@ fn silk_fab_and_courtyard_land_on_their_board_layers() {
     assert_eq!(board.graphics[4].points.len(), 3);
 }
 
+/// Mockup row 124: the courtyard is stroked at the footprint's courtyard
+/// line width, its default when the footprint names none.
+#[test]
+fn the_courtyard_takes_the_footprint_courtyard_line_width() {
+    use crate::primitive::footprint::DEFAULT_COURTYARD_LINE_WIDTH_MM;
+    let mut fp = library(Vec::new());
+    fp.courtyard = Polygon::new(vec![[-2.0, -2.0], [2.0, -2.0], [2.0, 2.0]]);
+    let width = |fp: &Footprint| board_footprint(fp).unwrap().graphics[0].width;
+    assert_eq!(width(&fp), DEFAULT_COURTYARD_LINE_WIDTH_MM);
+    fp.generated.courtyard_line_width_mm = 0.1524;
+    assert_eq!(width(&fp), 0.1524);
+}
+
 #[test]
 fn an_arc_keeps_its_sweep_through_the_middle_point() {
     let mut fp = library(Vec::new());
@@ -593,4 +606,27 @@ fn a_negative_library_height_is_left_unset() {
     let mut fp = library(vec![pad("1", PadKind::Smd, PadShape::Rect, &["F.Cu"])]);
     fp.height_mm = Some(-2.0);
     assert_eq!(board_footprint(&fp).unwrap().component.height_mm, 0.0);
+}
+
+/// Mockup row 124: the generated strokes reach the board's top layers.
+#[test]
+fn generated_strokes_are_placed_on_the_top_silk_and_fab() {
+    let stroke = |width| {
+        let kind = FpGraphicKind::Line {
+            from: [0.0, 0.0],
+            to: [1.0, 0.0],
+        };
+        FpGraphic::drawn(kind, width, false)
+    };
+    let mut fp = library(vec![pad("1", PadKind::Smd, PadShape::Rect, &["F.Cu"])]);
+    fp.generated.silk = vec![stroke(0.12)];
+    fp.generated.assembly = vec![stroke(0.1)];
+    let board = board_footprint(&fp).unwrap();
+    let layer_of = |width: f64| {
+        let graphic = board.graphics.iter().find(|g| g.width == width).unwrap();
+        graphic.layer.clone()
+    };
+    let token = |layer| pcb_layer_token(PcbLayer::Technical(layer));
+    assert_eq!(layer_of(0.12), token(TechnicalLayer::SilkscreenTop));
+    assert_eq!(layer_of(0.1), token(TechnicalLayer::FabTop));
 }

@@ -21,16 +21,25 @@ use signex_types::schematic::{
 use signex_types::theme::{CanvasColors, Color as ThemeColor};
 use std::collections::{HashMap, HashSet};
 
+pub mod annotation_flags;
+mod bezier;
+mod cache_copy;
+mod dimension;
 mod directives;
 mod drawings;
+pub(crate) use drawings::annotation_aabb;
 mod drawn_value;
+mod harness;
 pub mod hit_index;
 pub mod hit_test;
 mod invalidation;
+pub(crate) use cache_copy::copy_invalidated;
+mod sch_table;
 pub use invalidation::RenderInvalidation;
 pub mod label;
 pub mod lock_indicator;
 pub mod overlay;
+mod repeat_stack;
 mod scene_cache;
 pub mod selection;
 mod snapshot;
@@ -39,6 +48,7 @@ pub(crate) mod text_width;
 pub(crate) use symbol::{symbol_bounds, symbols_without_geometry};
 use text_width::{WidthSlot, WidthSources};
 pub mod text;
+pub mod unions;
 mod wire_style;
 
 pub use scene_cache::ContentSceneCache;
@@ -175,73 +185,6 @@ impl SchematicRenderCache {
 
     pub fn prepared_preview(&self) -> Option<&SchematicSheet> {
         self.preview.as_ref()
-    }
-}
-
-/// Copy the sheet collections selected by `invalidation` from `src` into `dst`.
-/// `unknown`, `version`, `generator` and `generator_version` are skipped: they are not drawn.
-fn copy_invalidated(
-    dst: &mut SchematicSheet,
-    src: &SchematicSheet,
-    invalidation: RenderInvalidation,
-) {
-    use RenderInvalidation as R;
-    // The sheet default font is a scalar, not one of the collections below.
-    // A font-family change invalidates the four text collections, so refresh
-    // it with them; otherwise the cache keeps drawing the old family (#2444).
-    if invalidation.intersects(R::SYMBOLS | R::LABELS | R::TEXT_NOTES | R::CHILD_SHEETS) {
-        dst.font_family.clone_from(&src.font_family);
-    }
-    if invalidation.intersects(R::SYMBOLS) {
-        dst.symbols.clone_from(&src.symbols);
-    }
-    if invalidation.intersects(R::WIRES) {
-        dst.wires.clone_from(&src.wires);
-    }
-    if invalidation.intersects(R::LABELS) {
-        dst.labels.clone_from(&src.labels);
-    }
-    if invalidation.intersects(R::TEXT_NOTES) {
-        dst.text_notes.clone_from(&src.text_notes);
-    }
-    if invalidation.intersects(R::BUSES) {
-        dst.buses.clone_from(&src.buses);
-    }
-    if invalidation.intersects(R::BUS_ENTRIES) {
-        dst.bus_entries.clone_from(&src.bus_entries);
-    }
-    if invalidation.intersects(R::JUNCTIONS) {
-        dst.junctions.clone_from(&src.junctions);
-    }
-    if invalidation.intersects(R::NO_CONNECTS) {
-        dst.no_connects.clone_from(&src.no_connects);
-    }
-    if invalidation.intersects(R::NO_ERC_DIRECTIVES) {
-        dst.no_erc_directives.clone_from(&src.no_erc_directives);
-    }
-    if invalidation.intersects(R::DIRECTIVES) {
-        dst.directives.clone_from(&src.directives);
-    }
-    if invalidation.intersects(R::CHILD_SHEETS) {
-        dst.child_sheets.clone_from(&src.child_sheets);
-    }
-    if invalidation.intersects(R::DRAWINGS) {
-        dst.drawings.clone_from(&src.drawings);
-        // Placements are edited under the same patch (#1583).
-        dst.drawing_placements.clone_from(&src.drawing_placements);
-    }
-    if invalidation.intersects(R::LIB_SYMBOLS) {
-        dst.lib_symbols.clone_from(&src.lib_symbols);
-    }
-    if invalidation.intersects(R::NET_COLORS) {
-        dst.net_colors.clone_from(&src.net_colors);
-    }
-    if invalidation.intersects(R::PAPER) {
-        dst.paper_size.clone_from(&src.paper_size);
-        dst.title_block.clone_from(&src.title_block);
-        dst.root_sheet_page.clone_from(&src.root_sheet_page);
-        dst.frame = src.frame;
-        dst.page = src.page;
     }
 }
 
@@ -682,7 +625,8 @@ fn collect_item_bounds_with(
     for bus in &snapshot.buses {
         out.push(ItemBound {
             item: SelectedItem::new(bus.uuid, SelectedKind::Bus),
-            bbox: Aabb::new(bus.start.x, bus.start.y, bus.end.x, bus.end.y).expand(widths.bus_mm()),
+            bbox: Aabb::new(bus.start.x, bus.start.y, bus.end.x, bus.end.y)
+                .expand(widths.bus_mm(bus)),
             anchor: Point::new(
                 (bus.start.x + bus.end.x) * 0.5,
                 (bus.start.y + bus.end.y) * 0.5,
@@ -802,6 +746,7 @@ fn collect_item_bounds_with(
         });
     }
     directives::push_item_bounds(snapshot, &mut out);
+    harness::push_item_bounds(snapshot, &mut out);
     out
 }
 
@@ -1056,6 +1001,9 @@ fn drawing_aabb(drawing: &SchDrawing) -> Aabb {
             } else {
                 Aabb::new(0.0, 0.0, 0.0, 0.0)
             }
+        }
+        SchDrawing::Bezier(_) | SchDrawing::Dimension(_) | SchDrawing::Table(_) => {
+            annotation_aabb(drawing)
         }
     }
 }

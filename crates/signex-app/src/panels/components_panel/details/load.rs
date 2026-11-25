@@ -27,6 +27,25 @@ fn owner_of<'a>(
         .ok_or_else(|| format!("its library {} is not open", reference.library_id))
 }
 
+/// The row itself could not be read: which row, and the adapter's reason.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RowReadError {
+    pub table: String,
+    pub row_id: RowId,
+    /// The library adapter's own error text.
+    pub reason: String,
+}
+
+impl std::fmt::Display for RowReadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Could not read row {} of table {}: {}",
+            self.row_id, self.table, self.reason
+        )
+    }
+}
+
 /// Read what the details section shows for `key` through the mounted
 /// adapters (no re-open per click). The row must read; a symbol or
 /// footprint that cannot is reported in `notes` and left out.
@@ -34,11 +53,13 @@ pub fn load_details(
     key: &ComponentsPanelRowKey,
     own: &dyn LibraryAdapter,
     libraries: &MountedAdapters,
-) -> Result<ComponentDetails, String> {
+) -> Result<ComponentDetails, RowReadError> {
     let row_id: RowId = key.row_id;
-    let row = own
-        .read_row(&key.table, row_id)
-        .map_err(|e| format!("Could not read row {row_id} of table {}: {e}", key.table))?;
+    let row = own.read_row(&key.table, row_id).map_err(|e| RowReadError {
+        table: key.table.clone(),
+        row_id,
+        reason: e.to_string(),
+    })?;
 
     let mut notes = Vec::new();
     let reference = row.symbol_ref;
@@ -98,6 +119,8 @@ pub fn load_details(
         mpn: row.primary_mpn.mpn.clone(),
         description: row.description.clone(),
         has_footprint_ref: row.footprint_ref.is_some(),
+        symbol_unbound: row.is_symbol_unbound(),
+        footprint_unbound: row.is_footprint_unbound(),
         symbol,
         footprint,
         default_footprint: row.footprint_ref,

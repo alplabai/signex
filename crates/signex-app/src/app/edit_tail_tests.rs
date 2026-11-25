@@ -19,7 +19,7 @@ fn project(patch: P) -> R {
 }
 
 /// Every single-bit patch and the render bits it projects to.
-const TABLE: [(P, R); 16] = [
+const TABLE: [(P, R); 18] = [
     (P::SYMBOLS, R::SYMBOLS),
     (P::WIRES, R::WIRES),
     (P::LABELS, R::LABELS),
@@ -36,6 +36,8 @@ const TABLE: [(P, R); 16] = [
     (P::FONT_FAMILY, R::NONE), // four bits, checked on its own below
     (P::NET_COLORS, R::NET_COLORS),
     (P::DIRECTIVES, R::DIRECTIVES),
+    (P::HARNESS, R::HARNESS),
+    (P::UNIONS, R::UNIONS),
 ];
 
 #[test]
@@ -357,11 +359,10 @@ fn an_agents_revert_sets_the_library_drift_check() {
     assert!(drift_pending(&app));
 }
 
-/// Pins today's behaviour, not a wish: a grouped step (here an agent's step,
-/// undone by the person) does not set the drift check. Tracked in #2476; a
-/// fix flips this assertion rather than deleting the test.
+/// #2476: a grouped step (here an agent's step, undone by the person) can
+/// bring back an older embedded library symbol, like a single undo.
 #[test]
-fn a_grouped_undo_does_not_set_the_library_drift_check_today() {
+fn a_grouped_undo_sets_the_library_drift_check() {
     let mut app = app_with(&[("a.snxsch", 100)]);
     apply_edits(
         &mut app,
@@ -376,5 +377,51 @@ fn a_grouped_undo_does_not_set_the_library_drift_check_today() {
         before - 1,
         "the agent's step was undone"
     );
-    assert!(!drift_pending(&app));
+    assert!(drift_pending(&app));
+}
+
+#[test]
+fn a_grouped_redo_sets_the_library_drift_check() {
+    let mut app = app_with(&[("a.snxsch", 100)]);
+    apply_edits(
+        &mut app,
+        "a.snxsch",
+        json!([{"id": "place_junction", "args": {"at": [50.8, 50.8]}}]),
+    );
+    app.handle_undo_requested();
+    app.library.drift.check_pending = false;
+    let before = app.document_state.engines[&path("a.snxsch")].undo_position();
+    app.handle_redo_requested();
+    assert_eq!(
+        app.document_state.engines[&path("a.snxsch")].undo_position(),
+        before + 1,
+        "the agent's step was redone"
+    );
+    assert!(drift_pending(&app));
+}
+
+/// A group holding a board step as well (#2410): its undo from the board
+/// steps the linked sheet too, so the drift check follows.
+#[test]
+fn a_board_groups_undo_sets_the_library_drift_check() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, board, sheet) =
+        crate::app::handlers::pcb_component::part_swap_tests::app_with_part(dir.path());
+    let command = AppCommandId::new("swap_gates").unwrap();
+    let document = format!("document={}", board.display());
+    let args =
+        CommandArgs::parse_operands(&command, &[document.as_str(), "designator=U1", "units=1,2"])
+            .unwrap();
+    let ran = app.run_headless_command_in_test(&command, args).0;
+    assert!(matches!(ran, CommandOutcome::Answered(_)), "{ran:?}");
+    let swapped = app.document_state.engines[&sheet].undo_position();
+    app.library.drift.check_pending = false;
+    // Not through `update`, which hands the pending check to its worker.
+    assert!(app.step_board_history(&board, true));
+    assert_eq!(
+        app.document_state.engines[&sheet].undo_position(),
+        swapped - 1,
+        "the linked sheet was stepped with the board"
+    );
+    assert!(drift_pending(&app));
 }

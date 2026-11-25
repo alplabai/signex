@@ -98,15 +98,6 @@ impl Signex {
         Self::boot_headless_inner(paths, rules, Some(undo_depth))
     }
 
-    /// [`Self::new`] moved to the heap in a frame of its own: only `new` and
-    /// this function hold the app by value, never the headless boot or its
-    /// caller (#2325: the copies overflowed the 1 MB Windows main stack).
-    #[inline(never)]
-    fn new_boxed() -> (Box<Self>, Task<Message>) {
-        let (app, boot) = Self::new();
-        (Box::new(app), boot)
-    }
-
     fn boot_headless_inner(
         paths: Vec<PathBuf>,
         rules: &RuleProfile,
@@ -249,8 +240,9 @@ impl Signex {
         self.run_headless_command(command, args)
     }
 
-    /// A test's way past the headless check, for an app made by `Signex::new`.
-    #[cfg(test)]
+    /// A test's way past the headless check, for an app made by `Signex::new`
+    /// (and the test adapter's agent calls, `crate::test_adapter`).
+    #[cfg(any(test, feature = "test-prefs-redirect"))]
     pub(crate) fn run_headless_command_in_test(
         &mut self,
         command: &AppCommandId,
@@ -271,7 +263,7 @@ impl Signex {
         if let Some(reason) =
             crate::keymap::metadata_for(command).and_then(|meta| meta.headless_refusal())
         {
-            return (CommandOutcome::Disabled { reason }, Task::none());
+            return (CommandOutcome::disabled(reason), Task::none());
         }
         // Operands run only through the command's own operand handler; one
         // without a handler is refused, never run as if it had none (#2155).
@@ -287,15 +279,16 @@ impl Signex {
                 answered
             } else if let Some(name) = missing {
                 (
-                    CommandOutcome::Disabled {
-                        reason: format!("`{}` needs the operand `{name}`", command.as_str()),
-                    },
+                    CommandOutcome::disabled(format!(
+                        "`{}` needs the operand `{name}`",
+                        command.as_str()
+                    )),
                     Task::none(),
                 )
             } else if args.has_operands()
                 || crate::app::command::runs_headless_without_operands(command)
             {
-                app.journaled(command, &args, |app| app.run_operands(command, &args))
+                app.run_headless_operands(command, &args)
             } else {
                 let by_id = args.clone();
                 app.journaled(command, &by_id, |app| {

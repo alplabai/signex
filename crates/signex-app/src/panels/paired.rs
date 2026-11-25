@@ -13,15 +13,17 @@
 //!
 //! This module holds the compact panel's header row: the panel title, a
 //! spacer and the link that opens the tab view. The caller passes the ids
-//! and the message, so each pair keeps its own wording.
+//! and the message, so each pair keeps its own wording. It also holds the
+//! compact Length Matching dock panel (mockup rows 7 and 107).
 
 use iced::widget::text::Wrapping;
 use iced::widget::{Space, column, container, row};
 use iced::{Alignment, Background, Element, Font, Length, Padding, Theme, Widget as _, font};
-use signex_i18n::{I18n, MessageId, t};
+use signex_i18n::{I18n, MessageId, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, text};
 
+use crate::panels::{PanelContext, PanelMsg, empty_state_card};
 use crate::styles::tokens::resolve;
 use crate::styles::{HAIRLINE, Spacing, TypeScale, ti};
 
@@ -57,7 +59,7 @@ impl<M: Clone> PairedHeader<M> {
             .size(TS.body)
             .font(Font {
                 weight: font::Weight::Semibold,
-                ..Font::DEFAULT
+                ..signex_widgets::ui_font::regular()
             })
             .color(ti(tokens.text))
             .wrapping(Wrapping::None);
@@ -94,6 +96,19 @@ impl<M: Clone> PairedHeader<M> {
     }
 }
 
+/// The compact Length Matching panel (mockup row 107). The board model has
+/// no length-matching groups yet (#2797), so the panel shows its empty
+/// state; the group rows and the "Open as tab" action arrive with the tab.
+pub fn length_matching_view(ctx: &PanelContext) -> Element<'_, PanelMsg> {
+    let card = empty_state_card(
+        &ctx.tokens,
+        t!(ctx.i18n, ids::PANELS_LENGTH_MATCHING_EMPTY_TITLE),
+        t!(ctx.i18n, ids::PANELS_LENGTH_MATCHING_EMPTY_BODY),
+        None,
+    );
+    container(card).padding(SP.m).width(Length::Fill).boxed()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -123,6 +138,50 @@ mod tests {
         let i18n = I18n::en_us_ref();
         assert_eq!(t!(i18n, header().title).into_string(), "Length Matching");
         assert_eq!(t!(i18n, header().open_tab).into_string(), "Open as tab");
+    }
+
+    /// Mockup row 107: a board with no length-matching groups shows the
+    /// panel's empty state, its text from the catalog.
+    #[test]
+    fn the_length_matching_panel_shows_its_empty_state() {
+        let (app, _boot) = crate::app::Signex::new();
+        let ctx = app.document_state.panel_ctx.clone();
+        let texts: Vec<String> = crate::layout_probe::lay_out_texts(
+            length_matching_view(&ctx),
+            iced::Size::new(300.0, 600.0),
+        )
+        .into_iter()
+        .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+        .collect();
+        assert_eq!(
+            texts,
+            [
+                "No length-matching groups",
+                "This board has no length-matching groups yet. Their members show here, \
+                 with their lengths, as you route.",
+            ]
+        );
+    }
+
+    /// The dock draws the Length Matching kind with this panel, titled
+    /// Length Matching.
+    #[test]
+    fn the_dock_draws_the_length_matching_kind() {
+        let i18n = I18n::en_us();
+        let kind = crate::panels::PanelKind::LengthMatching;
+        assert_eq!(t!(i18n, kind.message()).into_string(), "Length Matching");
+        let (app, _boot) = crate::app::Signex::new();
+        let ctx = app.document_state.panel_ctx.clone();
+        let texts = crate::layout_probe::lay_out_texts(
+            crate::panels::view_panel(kind, &ctx),
+            iced::Size::new(300.0, 600.0),
+        );
+        assert!(
+            texts
+                .iter()
+                .any(|t| t.text.contains("No length-matching groups")),
+            "{texts:?}"
+        );
     }
 
     #[test]

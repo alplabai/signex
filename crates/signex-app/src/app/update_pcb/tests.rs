@@ -62,6 +62,7 @@ fn project(app: &mut Signex, dir: &std::path::Path) {
             sheets: Vec::new(),
             variant_definitions: Vec::new(),
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: Vec::new(),
             enable_git: false,
             net_classes: Vec::new(),
@@ -70,7 +71,9 @@ fn project(app: &mut Signex, dir: &std::path::Path) {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
             fab_outputs: None,
+            router_tool_diameter: None,
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
@@ -127,7 +130,7 @@ fn the_headless_form_refuses_apply_false() {
     let mut app = headless_project(tmp.path());
     let outcome = run(&mut app, "apply=false");
     assert!(
-        matches!(&outcome, crate::app::command::CommandOutcome::Disabled { reason } if reason.contains("apply=true")),
+        matches!(&outcome, crate::app::command::CommandOutcome::Disabled { reason } if signex_i18n::RenderTranslatable::render_en_us(reason).contains("apply=true")),
         "{outcome:?}"
     );
     assert!(app.ui_state.update_pcb.is_none());

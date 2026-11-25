@@ -9,20 +9,36 @@ use super::keyed::keyed;
 use super::layout::{self, Slot};
 use super::look;
 use super::size_sensor::sense_height;
-use super::window::{BROWSER_ROW_HEIGHT, grid_scroll_id, library_key, visible_rows};
+use super::window::{
+    BROWSER_ROW_HEIGHT, BROWSER_THUMB_ROW_HEIGHT, grid_scroll_id, library_key, visible_rows_at,
+};
 use super::*;
 use crate::library::dangling::DanglingSweep;
+use crate::panels::components_panel::thumbs::{SymbolThumbs, ThumbLook};
 use iced::widget::column;
 use signex_library::RefSlot;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
+/// Width of the tile column of thumbnail rows.
+const TILE_SLOT_W: f32 = crate::library::panel::THUMB_TILE_W + 2.0 * layout::CELL_PAD_X;
+
 /// The read-only caches the grid cells draw from.
 pub(super) struct GridCaches<'a> {
     pub(super) dangling: &'a DanglingSweep,
     pub(super) prices: &'a super::price::PriceView<'a>,
     pub(super) names: super::names::PrimitiveNames<'a>,
+    /// Thumbnail rows (mockup rows 118 and 119); `None` draws compact rows.
+    pub(super) thumbs: Option<RowThumbs<'a>>,
+}
+
+/// What the tiles of thumbnail rows draw: each row's symbol, from the
+/// shared read-off-thread cache, in the schematic canvas look.
+#[derive(Clone, Copy)]
+pub(super) struct RowThumbs<'a> {
+    pub(super) symbols: &'a SymbolThumbs,
+    pub(super) look: ThumbLook,
 }
 
 #[allow(
@@ -44,16 +60,22 @@ pub(super) fn view_grid<'a>(
         dangling,
         prices,
         names,
+        thumbs,
     } = caches;
+    let row_h = if thumbs.is_some() {
+        BROWSER_THUMB_ROW_HEIGHT
+    } else {
+        BROWSER_ROW_HEIGHT
+    };
     let muted = theme_ext::text_secondary(tokens);
     let _text_c = theme_ext::text_primary(tokens);
     let border = theme_ext::border_color(tokens);
     let selected = browser.selected_row;
-    // Hoisted owned path — see comment in `view_table_sidebar`.
+    // Hoisted owned path — see the comment in `sidebar::view_table_list`.
     let lib_pb: std::path::PathBuf = library_path.to_path_buf();
 
     // One slot list drives header and rows, so widths and order agree.
-    let compact = layout::graphite_columns(columns);
+    let compact = layout::graphite_columns(columns, |kind| browser.column_shown(&kind.sort_key()));
     let columns = compact.as_slice();
     let slots = layout::slots(columns, true);
     let fit = |s: String, w: f32| layout::ellipsize(s, w, BROWSER_TEXT_SIZE);
@@ -62,6 +84,9 @@ pub(super) fn view_grid<'a>(
     let header_row = {
         let mut r: iced::widget::Row<Element<'a, LibraryMessage>> =
             iced::widget::Row::new().spacing(0);
+        if thumbs.is_some() {
+            r = r.push(Space::new().width(Length::Fixed(TILE_SLOT_W)).boxed());
+        }
         let active_sort = browser.sort_by.as_ref();
         for slot in &slots {
             let c = match slot {
@@ -87,12 +112,7 @@ pub(super) fn view_grid<'a>(
             // appended to the label. Other columns render plain so the
             // user can spot the sort target at a glance.
             let column_key = c.kind.sort_key();
-            let caption = match &c.kind {
-                ColumnKind::Parameter(_) => {
-                    crate::library::range_filter::parameter_caption(i18n, &c.label)
-                }
-                _ => c.label.clone(),
-            };
+            let caption = c.caption(i18n);
             let label_text = match active_sort {
                 Some(s) if s.key == column_key => {
                     let arrow = if s.descending { "▼" } else { "▲" };
@@ -125,14 +145,20 @@ pub(super) fn view_grid<'a>(
                 },
                 ..iced::widget::button::Style::default()
             });
-            r = r.push(
-                container(header_btn)
-                    .width(Length::Fixed(slot.width()))
-                    .clip(true)
-                    .boxed(),
-            );
+            let cell = container(header_btn)
+                .width(Length::Fixed(slot.width()))
+                .clip(true);
+            // The narrow status columns name what they mark in a tooltip.
+            let tip = match &c.kind {
+                ColumnKind::Symbol => Some(ids::LIBRARY_BROWSER_COLUMN_SYM_TIP),
+                ColumnKind::Footprint => Some(ids::LIBRARY_BROWSER_COLUMN_FPT_TIP),
+                _ => None,
+            };
+            r = r.push(match tip {
+                Some(tip) => with_tooltip(cell.boxed(), t!(i18n, tip), tokens),
+                None => cell.boxed(),
+            });
         }
-        r = r.push(Space::new().width(Length::Fixed(ROW_DELETE_GUTTER)).boxed());
         container(r)
             .padding([SP.xs, SP.s])
             .height(Length::Fixed(look::header_height()))
@@ -166,11 +192,11 @@ pub(super) fn view_grid<'a>(
         // Window: only the rows near the viewport get widgets; spacers of
         // the exact skipped height stand in for the rest (#1355).
         let scroll = browser.grid_scroll;
-        let window = visible_rows(scroll, rows.len());
+        let window = visible_rows_at(scroll, rows.len(), row_h);
         if window.start > 0 {
             col = col.push(
                 Space::new()
-                    .height(Length::Fixed(window.start as f32 * BROWSER_ROW_HEIGHT))
+                    .height(Length::Fixed(window.start as f32 * row_h))
                     .boxed(),
             );
         }
@@ -194,6 +220,26 @@ pub(super) fn view_grid<'a>(
             // The Lifecycle pill carries the state; no leading dot repeats it.
             let mut data_row: iced::widget::Row<Element<'a, LibraryMessage>> =
                 iced::widget::Row::new().spacing(0);
+            // A thumbnail row starts with the part's symbol; its cells sit
+            // on the row's middle.
+            if let Some(thumbs) = thumbs {
+                let drawing = crate::library::panel::RowDrawing::Part(
+                    thumbs.symbols.get(&r.symbol_ref).cloned(),
+                );
+                data_row = data_row
+                    .height(Length::Fill)
+                    .align_y(iced::Alignment::Center)
+                    .push(
+                        container(crate::library::panel::row_tile(
+                            drawing,
+                            thumbs.look,
+                            tokens,
+                        ))
+                        .width(Length::Fixed(TILE_SLOT_W))
+                        .center_x(Length::Fixed(TILE_SLOT_W))
+                        .boxed(),
+                    );
+            }
             for slot in &slots {
                 let c = match slot {
                     Slot::Column(c) => *c,
@@ -221,18 +267,24 @@ pub(super) fn view_grid<'a>(
                 // path is the bump dialog (Team mode) or auto-bump
                 // on save (Personal mode), not inline grid editing.
                 if matches!(c.kind, ColumnKind::Description | ColumnKind::Updated) {
-                    data_row = data_row.push(
-                        container(
-                            text(UserText::new(fit(row_value, c.width)))
-                                .size(BROWSER_TEXT_SIZE)
-                                .wrapping(iced::widget::text::Wrapping::None)
-                                .color(theme_ext::text_secondary(tokens)),
-                        )
-                        .padding([SP.s, 6.0])
-                        .width(Length::Fixed(c.width))
-                        .clip(true)
-                        .boxed(),
-                    );
+                    let shown = fit(row_value.clone(), c.width);
+                    let cut = shown != row_value;
+                    let cell = container(
+                        text(UserText::new(shown))
+                            .size(BROWSER_TEXT_SIZE)
+                            .wrapping(iced::widget::text::Wrapping::None)
+                            .color(theme_ext::text_secondary(tokens)),
+                    )
+                    .padding([SP.s, 6.0])
+                    .width(Length::Fixed(c.width))
+                    .clip(true)
+                    .boxed();
+                    // A Description cut short shows whole in its tooltip.
+                    data_row = data_row.push(if cut {
+                        with_tooltip(cell, UserText::new(row_value), tokens)
+                    } else {
+                        cell
+                    });
                     continue;
                 }
 
@@ -296,67 +348,41 @@ pub(super) fn view_grid<'a>(
                     continue;
                 }
 
-                // Symbol + Footprint cells are read-only status
-                // markers (`• <uuid8>` bound). An unbound cell reads
-                // "No symbol bound" / "No footprint bound" in the
-                // warning colour and is itself the Pick Symbol /
-                // Pick Footprint button.
+                // Sym and Fpt are narrow status columns (mockup row 118): an amber
+                // dot for an unbound side (it still opens the primitive
+                // picker for the row), a red one for a binding that
+                // resolves to nothing (#968), nothing when bound.
                 if matches!(c.kind, ColumnKind::Symbol | ColumnKind::Footprint) {
                     let is_symbol = matches!(c.kind, ColumnKind::Symbol);
-                    let unbound = if is_symbol {
-                        r.is_symbol_unbound()
+                    let slot = if is_symbol {
+                        RefSlot::Symbol
                     } else {
-                        r.is_footprint_unbound()
+                        RefSlot::Footprint
                     };
-                    if unbound {
-                        let (kind, label) = if is_symbol {
-                            (
-                                signex_library::PrimitiveKind::Symbol,
-                                t!(i18n, ids::LIBRARY_BROWSER_NO_SYMBOL_BOUND),
-                            )
-                        } else {
-                            (
-                                signex_library::PrimitiveKind::Footprint,
-                                t!(i18n, ids::LIBRARY_BROWSER_NO_FOOTPRINT_BOUND),
-                            )
-                        };
-                        let address = crate::library::state::EditorAddress::new(
-                            lib_pb.clone(),
-                            table.to_string(),
-                            row_id,
-                        );
-                        data_row = data_row.push(
-                            container(unbound_pick_button(label, kind, address, tokens))
-                                .padding([SP.xs, SP.xs])
-                                .width(Length::Fixed(c.width))
-                                .clip(true)
-                                .boxed(),
-                        );
-                        continue;
-                    }
-                    // A binding that resolves to nothing (#968) shows in
-                    // the error colour with a warning glyph, so the row
-                    // reads as broken before anyone opens it.
-                    let slot = match c.kind {
-                        ColumnKind::Symbol => RefSlot::Symbol,
-                        _ => RefSlot::Footprint,
-                    };
-                    let (row_value, color) = if dangling.marks_row(r.row_id, slot) {
-                        (format!("⚠ {row_value}"), theme_ext::error_color(tokens))
-                    } else {
-                        (row_value, theme_ext::text_secondary(tokens))
-                    };
+                    let status = binding_status(r, slot, dangling.marks_row(r.row_id, slot));
+                    let pick = (status == BindingStatus::Unbound && !read_only).then(|| {
+                        LibraryMessage::OpenPrimitivePicker {
+                            kind: if is_symbol {
+                                signex_library::PrimitiveKind::Symbol
+                            } else {
+                                signex_library::PrimitiveKind::Footprint
+                            },
+                            target: crate::library::state::PrimitivePickerTarget::BrowserRow(
+                                crate::library::state::EditorAddress::new(
+                                    lib_pb.clone(),
+                                    table.to_string(),
+                                    row_id,
+                                ),
+                            ),
+                        }
+                    });
                     data_row = data_row.push(
-                        container(
-                            text(UserText::new(fit(row_value, c.width)))
-                                .size(BROWSER_TEXT_SIZE)
-                                .wrapping(iced::widget::text::Wrapping::None)
-                                .color(color),
-                        )
-                        .padding([SP.s, 6.0])
-                        .width(Length::Fixed(c.width))
-                        .clip(true)
-                        .boxed(),
+                        container(status_dot(status, is_symbol, pick, tokens, i18n))
+                            .width(Length::Fixed(c.width))
+                            .height(Length::Fill)
+                            .center_x(Length::Fixed(c.width))
+                            .center_y(Length::Fill)
+                            .boxed(),
                     );
                     continue;
                 }
@@ -455,26 +481,25 @@ pub(super) fn view_grid<'a>(
                 );
             }
 
-            data_row = data_row.push(row_delete_cell(&lib_pb, table, row_id, tokens, read_only));
-
+            // No per-row delete: Delete Selected is in the preview's ⋯
+            // menu (mockup row 118).
             let library_for_msg = lib_pb.clone();
             let table_for_msg = table.to_string();
             let row_border = look::row_border(tokens);
             let row_container = container(data_row)
                 .padding([0.0, SP.s])
                 .width(Length::Fill)
-                .height(Length::Fixed(BROWSER_ROW_HEIGHT))
+                .height(Length::Fixed(row_h))
                 .style(move |_: &Theme| iced::widget::container::Style {
                     background: bg_color,
                     border: row_border,
                     ..Default::default()
                 });
 
-            // Click selects the row; the Properties panel surfaces its
-            // detail and the action row's "Edit Details" button opens
-            // the full Edit Component Details modal for it. The
-            // text_inputs above capture clicks for focus, so this only
-            // fires on the gaps between cells.
+            // Click selects the row; the preview pane shows it and its
+            // "Edit Details" button opens the full Edit Component Details
+            // modal for it. The text_inputs above capture clicks for
+            // focus, so this only fires on the gaps between cells.
             let row_widget = mouse_area(row_container).on_press(LibraryMessage::BrowserSelectRow {
                 library_path: library_for_msg,
                 table: table_for_msg,
@@ -486,9 +511,7 @@ pub(super) fn view_grid<'a>(
         if window.end < rows.len() {
             col = col.push(
                 Space::new()
-                    .height(Length::Fixed(
-                        (rows.len() - window.end) as f32 * BROWSER_ROW_HEIGHT,
-                    ))
+                    .height(Length::Fixed((rows.len() - window.end) as f32 * row_h))
                     .boxed(),
             );
         }
@@ -528,82 +551,141 @@ pub(super) fn view_grid<'a>(
         .boxed()
 }
 
-/// Trailing per-row delete button; asks the "Delete Selected" confirm for this row.
-fn row_delete_cell<'a>(
-    library_path: &std::path::Path,
-    table: &str,
-    row_id: RowId,
-    tokens: &'a ThemeTokens,
-    read_only: bool,
-) -> Element<'a, LibraryMessage> {
-    let cell = |content: Element<'a, LibraryMessage>| {
-        container(content)
-            .width(Length::Fixed(ROW_DELETE_GUTTER))
-            .height(Length::Fill)
-            .center_x(Length::Fixed(ROW_DELETE_GUTTER))
-            .center_y(Length::Fill)
-            .boxed()
-    };
-    if read_only {
-        return cell(Space::new().boxed());
-    }
-    let muted = theme_ext::text_secondary(tokens);
-    let danger = theme_ext::error_color(tokens);
-    let btn = button(text(raw("×")).size(BROWSER_TEXT_SIZE))
-        .padding([0.0, SP.s])
-        .on_press(LibraryMessage::BrowserDeleteRowRequest {
-            library_path: library_path.to_path_buf(),
-            table: table.to_string(),
-            row_id,
-        })
-        .style(move |_: &Theme, status| iced::widget::button::Style {
-            background: None,
-            text_color: if matches!(status, iced::widget::button::Status::Hovered) {
-                danger
-            } else {
-                muted
-            },
-            ..iced::widget::button::Style::default()
-        });
-    cell(btn.boxed())
-}
-
-/// Warning-coloured cell button for an unbound symbol / footprint that
-/// opens the existing primitive picker against this row.
-fn unbound_pick_button<'a>(
-    label: signex_i18n::Localized,
-    kind: signex_library::PrimitiveKind,
-    address: crate::library::state::EditorAddress,
+/// `content` with `tip` shown under it on hover, in the context-menu card.
+pub(super) fn with_tooltip<'a>(
+    content: Element<'a, LibraryMessage>,
+    tip: impl Into<signex_widgets::Label<'a>>,
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
-    let warning = theme_ext::warning_color(tokens);
-    signex_widgets::button(
-        text(label)
-            .size(BROWSER_TEXT_SIZE)
-            .wrapping(iced::widget::text::Wrapping::None)
-            .color(warning),
+    signex_widgets::tooltip(
+        content,
+        container(text(tip).size(BROWSER_HEADER_SIZE))
+            .padding([SP.xs, SP.s])
+            .style(crate::styles::context_menu(tokens)),
+        iced::widget::tooltip::Position::Bottom,
     )
-    .padding([SP.xs, SP.s])
-    .on_press(LibraryMessage::OpenPrimitivePicker {
-        kind,
-        target: crate::library::state::PrimitivePickerTarget::BrowserRow(address),
-    })
-    .style(move |_: &Theme, _| iced::widget::button::Style {
-        background: None,
-        text_color: warning,
-        border: Border {
-            width: 1.0,
-            radius: 3.0.into(),
-            color: warning,
-            ..Default::default()
-        },
-        ..iced::widget::button::Style::default()
-    })
     .boxed()
+}
+
+/// What a Sym or Fpt status cell marks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum BindingStatus {
+    /// Bound and found: the cell is empty.
+    Bound,
+    /// Nothing bound: an amber dot.
+    Unbound,
+    /// Bound to something the library cannot find (#968): a red dot.
+    Missing,
+}
+
+/// The status of `row`'s symbol or footprint binding.
+pub(super) fn binding_status(row: &ComponentRow, slot: RefSlot, dangling: bool) -> BindingStatus {
+    let unbound = match slot {
+        RefSlot::Symbol => row.is_symbol_unbound(),
+        _ => row.is_footprint_unbound(),
+    };
+    if unbound {
+        BindingStatus::Unbound
+    } else if dangling {
+        BindingStatus::Missing
+    } else {
+        BindingStatus::Bound
+    }
+}
+
+/// The dot of a status cell with its tooltip; `pick` makes it a button
+/// (the primitive picker for an unbound side).
+fn status_dot<'a>(
+    status: BindingStatus,
+    is_symbol: bool,
+    pick: Option<LibraryMessage>,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, LibraryMessage> {
+    let (color, tip) = match (status, is_symbol) {
+        (BindingStatus::Bound, _) => return Space::new().boxed(),
+        (BindingStatus::Unbound, true) => (
+            theme_ext::warning_color(tokens),
+            ids::LIBRARY_BROWSER_NO_SYMBOL_BOUND,
+        ),
+        (BindingStatus::Unbound, false) => (
+            theme_ext::warning_color(tokens),
+            ids::LIBRARY_BROWSER_NO_FOOTPRINT_BOUND,
+        ),
+        (BindingStatus::Missing, true) => (
+            theme_ext::error_color(tokens),
+            ids::LIBRARY_BROWSER_SYMBOL_MISSING,
+        ),
+        (BindingStatus::Missing, false) => (
+            theme_ext::error_color(tokens),
+            ids::LIBRARY_BROWSER_FOOTPRINT_MISSING,
+        ),
+    };
+    let diameter = SP.m;
+    let dot = container(Space::new())
+        .width(Length::Fixed(diameter))
+        .height(Length::Fixed(diameter))
+        .style(move |_: &Theme| iced::widget::container::Style {
+            background: Some(iced::Background::Color(color)),
+            border: Border {
+                radius: crate::styles::Radii::GRAPHITE.pill.into(),
+                ..Border::default()
+            },
+            ..iced::widget::container::Style::default()
+        });
+    let mark: Element<'a, LibraryMessage> = match pick {
+        Some(pick) => button(dot)
+            .padding(SP.xs)
+            .on_press(pick)
+            .style(|_: &Theme, _| iced::widget::button::Style::default())
+            .boxed(),
+        None => dot.boxed(),
+    };
+    with_tooltip(mark, t!(i18n, tip), tokens)
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    /// Mockup row 118: a status cell is empty when bound, amber when nothing is
+    /// bound, red when the binding resolves to nothing.
+    #[test]
+    fn the_status_columns_mark_unbound_and_missing_bindings() {
+        let mut row = crate::library::component_preview::test_row();
+        assert_eq!(
+            binding_status(&row, RefSlot::Symbol, false),
+            BindingStatus::Bound
+        );
+        assert_eq!(
+            binding_status(&row, RefSlot::Symbol, true),
+            BindingStatus::Missing
+        );
+        assert_eq!(
+            binding_status(&row, RefSlot::Footprint, false),
+            BindingStatus::Unbound,
+            "test_row binds no footprint"
+        );
+        row.symbol_ref = signex_library::PrimitiveRef::new(uuid::Uuid::nil(), uuid::Uuid::nil());
+        assert!(row.is_symbol_unbound());
+        assert_eq!(
+            binding_status(&row, RefSlot::Symbol, true),
+            BindingStatus::Unbound
+        );
+    }
+
+    /// Mockup row 118: the grid has no per-row delete any more; Delete Selected is
+    /// in the preview pane's ⋯ menu.
+    #[test]
+    fn the_grid_has_no_per_row_delete() {
+        let source = include_str!("grid.rs");
+        let code = source
+            .rsplit_once("mod tests {")
+            .map_or(source, |(code, _)| code);
+        let request = ["BrowserDeleteRow", "Request"].concat();
+        assert!(!code.contains(&request), "grid.rs still deletes rows");
+    }
+
     /// Measurement cells are routed through `ColumnKind::measurement_press`
     /// (a button that opens the modal), not through the inline text input.
     /// The behaviour of `measurement_press` is tested in `columns.rs`; this

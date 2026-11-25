@@ -12,7 +12,7 @@ File/Close Document	item	Close Document	close_active_document	Ctrl+F4	CloseDocum
 File/---	separator	-	-	-	-	-	-
 File/Save	item	Save	save_document	Mod+S	Save	01010011	cmd:save_document
 File/Save As...	item	Save As...	save_document_as	Mod+Shift+S	SaveAs	01010010	cmd:save_document_as
-File/Save All	item	Save All	-	-	SaveAll	01000001	dirty
+File/Save All	item	Save All	save_all	Mod+Alt+S	SaveAll	01000001	cmd:save_all
 File/---	separator	-	-	-	-	-	-
 File/Library	submenu	Library	-	-	-	-	-
 File/Library/Open Library...	item	Open Library...	-	-	LibraryOpenLibrary	11111111	always
@@ -25,6 +25,7 @@ File/Import/DXF to Current Layer...	item	DXF to Current Layer...	-	-	ImportDxf	0
 File/Import/DXF as Board Outline...	item	DXF as Board Outline...	-	-	ImportDxfOutline	01100000	cmd:import_dxf_outline
 File/Export	submenu	Export	-	-	-	-	-
 File/Export/PDF…	item	PDF…	-	-	ExportPdf	01100000	cmd:print
+File/Export/Export BOM…	item	Export BOM…	-	-	ExportBom	01000000	sch
 File/Export/STEP 3D Model…	item	STEP 3D Model…	-	-	ExportBoardStep	01100000	cmd:export_board_step
 File/Fabrication Outputs…	item	Fabrication Outputs…	-	-	FabricationOutputs	01100000	cmd:fabrication_outputs
 File/Print...	item	Print...	print	Mod+P	Print	01100000	cmd:print
@@ -92,14 +93,36 @@ View/---	separator	-	-	-	-	-	-
 View/Projects	item	Projects	-	-	OpenProjectsPanel	11111111	always
 View/Components	item	Components	-	-	OpenComponentsPanel	11111111	always
 View/Navigator	item	Navigator	-	-	OpenNavigatorPanel	11111111	always
+View/Annotations	item	Annotations	-	-	OpenAnnotationsPanel	11111111	always
 View/Properties	item	Properties	-	-	OpenPropertiesPanel	11111111	always
 View/ERC	item	ERC	-	-	OpenErcPanel	11111111	always
 View/Messages	item	Messages	-	-	OpenMessagesPanel	11111111	always
+View/Command Log	item	Command Log	-	-	OpenCommandLogPanel	11111111	always
 View/Layers	item	Layers	-	-	OpenLayersPanel	11111111	always
+View/Unions	item	Unions	-	-	OpenUnionsPanel	11111111	always
 View/Net Inspector	item	Net Inspector	-	-	OpenNetInspector	11111111	cmd:open_net_inspector
+View/Compiled Design	item	Compiled Design	-	-	OpenCompiledDesign	11111111	cmd:open_compiled_design
 View/Selection Filter	item	Selection Filter	-	-	OpenSelectionFilter	01000000	cmd:open_selection_filter
+View/---	separator	-	-	-	-	-	-
+View/Window	submenu	Window	-	-	-	-	-
+View/Window/Tile Horizontally	item	Tile Horizontally	-	-	TileHorizontally	00000100	cmd:tile_windows_horizontally
+View/Window/Tile Vertically	item	Tile Vertically	-	-	TileVertically	00000100	cmd:tile_windows_vertically
+View/Window/Untile	item	Untile	-	-	UntileDocuments	00000100	cmd:untile_documents
+View/Window/---	separator	-	-	-	-	-	-
+View/Window/Layouts	submenu	Layouts	-	-	-	-	-
+View/Window/Layouts/BUILT-IN	header	BUILT-IN	-	-	-	00000000	never
+View/Window/Layouts/Schematic	item	Schematic	-	-	ApplyLayoutSchematic	11111111	always
+View/Window/Layouts/Layout	item	Layout	-	-	ApplyLayoutBoard	11111111	always
+View/Window/Layouts/Review	item	Review	-	-	ApplyLayoutReview	11111111	always
+View/Window/Layouts/Notebook	item	Notebook	-	-	ApplyLayoutNotebook	11111111	always
+View/Window/Layouts/---	separator	-	-	-	-	-	-
+View/Window/Layouts/Save Layout…	item	Save Layout…	-	-	SaveWorkspaceLayout	11111111	always
+View/Window/Layouts/Manage Layouts…	item	Manage Layouts…	-	-	ManageWorkspaceLayouts	11111111	always
+View/Window/Close All Documents	item	Close All Documents	-	-	CloseAllDocuments	01110010	cmd:close_all_documents
 Project	menu	Project	-	-	-	-	-
 Project/Electrical Rules Check	item	Electrical Rules Check	-	-	OpenErcDialog	01001000	cmd:open_erc_dialog
+Project/Add Table of Contents Sheet	item	Add Table of Contents Sheet	-	-	AddTableOfContents	01001000	cmd:add_table_of_contents
+Project/Compare Board with Schematic…	item	Compare Board with Schematic…	-	-	CompareBoardWithSchematic	01000000	cmd:compare_board_with_schematic
 Project/---	separator	-	-	-	-	-	-
 Project/Project Options...	item	Project Options...	-	-	OpenProjectOptions	01001001	project
 Project/---	separator	-	-	-	-	-	-
@@ -131,14 +154,14 @@ Place/Ports & Connectors/Sheet Symbol	item	Sheet Symbol	-	-	PlaceSheetSymbol	01-
 Place/Ports & Connectors/Device Sheet Symbol	stub	Device Sheet Symbol	-	-	-	00-00000	never
 Place/Ports & Connectors/Reuse Block...	stub	Reuse Block...	-	-	-	00-00000	never
 Place/Ports & Connectors/---	separator	-	-	-	-	-	-
-Place/Ports & Connectors/Signal Harness	stub	Signal Harness	-	-	-	00-00000	never
-Place/Ports & Connectors/Harness Connector	stub	Harness Connector	-	-	-	00-00000	never
-Place/Ports & Connectors/Harness Entry	stub	Harness Entry	-	-	-	00-00000	never
+Place/Ports & Connectors/Signal Harness	item	Signal Harness	-	-	PlaceSignalHarness	01-00000	cmd:place_signal_harness
+Place/Ports & Connectors/Harness Connector	item	Harness Connector	-	-	PlaceHarnessConnector	01-00000	cmd:place_harness_connector
+Place/Ports & Connectors/Harness Entry	item	Harness Entry	-	-	PlaceHarnessEntry	01-00000	cmd:place_harness_entry
 Place/Directives	submenu	Directives	-	-	-	-	-
-Place/Directives/Parameter Set	stub	Parameter Set	-	-	-	00-00000	never
+Place/Directives/Net Parameters	item	Net Parameters	-	-	PlaceParameterSet	01-00000	cmd:place_parameter_set
 Place/Directives/Generic No ERC	item	Generic No ERC	-	-	PlaceNoErc	01-00000	cmd:place_no_erc
 Place/Directives/Differential Pair	item	Differential Pair	-	-	PlaceDiffPair	01-00000	cmd:place_diff_pair
-Place/Directives/Blanket	item	Blanket	-	-	PlaceBlanket	01-00000	cmd:place_blanket
+Place/Directives/Net Blanket	item	Net Blanket	-	-	PlaceBlanket	01-00000	cmd:place_blanket
 Place/Directives/Compile Mask	item	Compile Mask	-	-	PlaceCompileMask	01-00000	cmd:place_compile_mask
 Place/Graphics	submenu	Graphics	-	-	-	-	-
 Place/Graphics/Arc	item	Arc	-	-	DrawArc	01-00000	cmd:draw_arc
@@ -150,7 +173,11 @@ Place/Graphics/Line	item	Line	-	-	DrawLine	01-00000	cmd:draw_line
 Place/Graphics/Rectangle	item	Rectangle	-	-	DrawRectangle	01-00000	cmd:draw_rectangle
 Place/Graphics/Round Rectangle	stub	Round Rectangle	-	-	-	00-00000	never
 Place/Graphics/Polygon	item	Polygon	-	-	DrawPolygon	01-00000	cmd:draw_polygon
-Place/Graphics/Bezier	stub	Bezier	-	-	-	00-00000	never
+Place/Graphics/Bezier	item	Bezier	-	-	DrawBezier	01-00000	cmd:draw_bezier
+Place/Graphics/Table	item	Table	-	-	PlaceTable	01-00000	cmd:place_table
+Place/Graphics/Dimension	submenu	Dimension	-	-	-	-	-
+Place/Graphics/Dimension/Linear	item	Linear	-	-	PlaceLinearDimension	01-00000	cmd:place_linear_dimension
+Place/Graphics/Dimension/Aligned	item	Aligned	-	-	PlaceAlignedDimension	01-00000	cmd:place_aligned_dimension
 Place/Graphics/---	separator	-	-	-	-	-	-
 Place/Graphics/Graphic...	stub	Graphic...	-	-	-	00-00000	never
 Design	menu	Design	-	-	-	-	-
@@ -158,9 +185,12 @@ Design/Update PCB Document	item	Update PCB Document	-	-	UpdatePcb	01000000	cmd:u
 Design/Update Schematics	item	Update Schematics	-	-	BackAnnotate	01000000	cmd:back_annotate_schematics
 Design/Board Sketch	item	Board Sketch	-	-	BoardSketch	01100000	cmd:board_sketch
 Design/Layer Stack Manager...	item	Layer Stack Manager...	-	-	BoardLayerStack	01100000	cmd:board_layer_stack
+Design/Rooms	submenu	Rooms	-	-	-	-	-
+Design/Rooms/Create Rooms from Sheets...	item	Create Rooms from Sheets...	-	-	CreateRoomsFromSheets	01000000	cmd:create_rooms_from_sheets
 Design/---	separator	-	-	-	-	-	-
 Design/Parameter Manager...	item	Parameter Manager...	-	-	OpenParameterManager	01000000	cmd:open_parameter_manager
 Design/Net Classes	item	Net Classes	-	-	OpenNetClasses	01100000	cmd:open_net_classes
+Design/Differential Pair Classes…	item	Differential Pair Classes…	-	-	OpenDiffPairClasses	01001001	cmd:open_diff_pair_classes
 Design/Rules...	item	Rules...	-	-	OpenRules	01001001	cmd:open_rules
 Design/---	separator	-	-	-	-	-	-
 Design/Create Sheet Symbol From Sheet...	item	Create Sheet Symbol From Sheet...	-	-	CreateSheetSymbolFromSheet	01000000	cmd:create_sheet_symbol_from_sheet
@@ -176,17 +206,29 @@ Tools/Annotation/Force Annotate All Schematics	item	Force Annotate All Schematic
 Tools/Annotation/---	separator	-	-	-	-	-	-
 Tools/Annotation/Back Annotate Schematics...	item	Back Annotate Schematics...	-	-	BackAnnotate	01000000	cmd:back_annotate_schematics
 Tools/Annotation/Number Schematic Sheets...	item	Number Schematic Sheets...	-	-	NumberSchematicSheets	01001000	cmd:number_schematic_sheets
+Tools/Reports	submenu	Reports	-	-	-	-	-
+Tools/Reports/Bill of Materials…	item	Bill of Materials…	-	-	ExportBom	01000000	sch
+Tools/Reports/Netlist (.NET)...	item	Netlist (.NET)...	-	-	ExportNetlist	01000000	sch
+Tools/Reports/ERC Report…	item	ERC Report…	-	-	ExportErcReport	01000000	sch
+Tools/Reports/---	separator	-	-	-	-	-	-
+Tools/Reports/Board Bill of Materials…	item	Board Bill of Materials…	-	-	BoardReportBom	01100000	cmd:board_report_bom
+Tools/Reports/Board Netlist…	item	Board Netlist…	-	-	BoardReportNetlist	01100000	cmd:board_report_netlist
+Tools/Reports/Net Lengths…	item	Net Lengths…	-	-	BoardReportNetLength	01100000	cmd:board_report_net_length
+Tools/Reports/Component Report…	item	Component Report…	-	-	BoardReportComponents	01100000	cmd:board_report_components
+Tools/Reports/Export Report as CSV…	item	Export Report as CSV…	-	-	ExportBoardReport	01100000	cmd:export_board_report
+Tools/Reports/Assembly Drawings as SVG…	item	Assembly Drawings as SVG…	-	-	ExportAssemblySvg	01100000	cmd:export_assembly_svg
 Tools/---	separator	-	-	-	-	-	-
 Tools/Assign Footprints	item	Assign Footprints	-	-	AssignFootprints	01000000	cmd:assign_footprints
 Tools/Repair Pin Junctions	item	Repair Pin Junctions	-	-	RepairPinJunctions	01000000	cmd:repair_pin_junctions
 Tools/Library Editor	item	Library Editor	-	-	OpenLibraryEditor	01000000	cmd:open_library_browser
 Tools/---	separator	-	-	-	-	-	-
 Tools/Design Rule Check	item	Design Rule Check	-	-	RunDrc	01100000	cmd:run_drc
-Tools/DRC Results	item	DRC Results	-	-	OpenDrcPanel	01100000	cmd:open_drc_panel
+Tools/DRC	item	DRC	-	-	OpenDrcPanel	01100000	cmd:open_drc_panel
 Tools/Net Classes	item	Net Classes	-	-	OpenNetClassesPanel	01100000	cmd:open_net_classes_panel
 Tools/Re-Annotate Board...	item	Re-Annotate Board...	-	-	ReannotateBoard	01100000	cmd:reannotate_board
 Tools/Repour Selected	item	Repour Selected	-	-	RepourSelected	01100000	cmd:repour_selected
 Tools/Repour All	item	Repour All	-	-	RepourAll	01100000	cmd:repour_all
+Tools/Polygon Manager...	item	Polygon Manager...	-	-	PolygonManager	01100000	cmd:polygon_manager
 Tools/---	separator	-	-	-	-	-	-
 Tools/Via Stitching	item	Via Stitching	-	-	StitchVias	01100000	cmd:stitch_vias
 Tools/Add Teardrops	item	Add Teardrops	-	-	AddTeardrops	01100000	cmd:add_teardrops
@@ -211,23 +253,6 @@ Tools/---	separator	-	-	-	-	-	-
 Tools/Passive Network Calculator...	item	Passive Network Calculator...	-	-	OpenPassiveCalculator	11111111	always
 Tools/---	separator	-	-	-	-	-	-
 Tools/Preferences...	item	Preferences...	open_preferences	Mod+,	OpenPreferences	11111111	always
-Reports	menu	Reports	-	-	-	-	-
-Reports/Bill of Materials…	item	Bill of Materials…	-	-	ExportBom	01000000	sch
-Reports/Netlist (Protel .NET)...	item	Netlist (Protel .NET)...	-	-	ExportNetlist	01000000	sch
-Reports/ERC Report…	item	ERC Report…	-	-	ExportErcReport	01000000	sch
-Reports/---	separator	-	-	-	-	-	-
-Reports/Board Bill of Materials…	item	Board Bill of Materials…	-	-	BoardReportBom	01100000	cmd:board_report_bom
-Reports/Board Netlist…	item	Board Netlist…	-	-	BoardReportNetlist	01100000	cmd:board_report_netlist
-Reports/Net Lengths…	item	Net Lengths…	-	-	BoardReportNetLength	01100000	cmd:board_report_net_length
-Reports/Component Report…	item	Component Report…	-	-	BoardReportComponents	01100000	cmd:board_report_components
-Reports/Export Report as CSV…	item	Export Report as CSV…	-	-	ExportBoardReport	01100000	cmd:export_board_report
-Reports/Assembly Drawings as SVG…	item	Assembly Drawings as SVG…	-	-	ExportAssemblySvg	01100000	cmd:export_assembly_svg
-Window	menu	Window	-	-	-	-	-
-Window/Tile Horizontally	item	Tile Horizontally	-	-	TileHorizontally	00000100	cmd:tile_windows_horizontally
-Window/Tile Vertically	item	Tile Vertically	-	-	TileVertically	00000100	cmd:tile_windows_vertically
-Window/Untile	item	Untile	-	-	UntileDocuments	00000100	cmd:untile_documents
-Window/---	separator	-	-	-	-	-	-
-Window/Close All Documents	item	Close All Documents	-	-	CloseAllDocuments	01110010	cmd:close_all_documents
 Help	menu	Help	-	-	-	-	-
 Help/About Signex	item	About Signex	-	-	OpenAbout	11111111	always
 Help/Documentation	item	Documentation	-	-	OpenDocumentation	11111111	always
@@ -235,3 +260,4 @@ Help/Report an Issue	item	Report an Issue	-	-	ReportIssue	11111111	always
 Help/Open Sample Project	item	Open Sample Project	-	-	OpenSampleProject	11111111	always
 Help/---	separator	-	-	-	-	-	-
 Help/Keyboard Shortcuts	item	Keyboard Shortcuts	show_current_command_hotkeys	F1	OpenKeyboardShortcuts	11111111	always
+Help/Show Welcome Tips	item	Show Welcome Tips	-	-	OpenWelcomeTips	11111111	always

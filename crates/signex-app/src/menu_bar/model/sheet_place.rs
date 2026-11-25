@@ -62,6 +62,16 @@ fn graphics(ctx: &MenuContext) -> Vec<MenuEntry> {
         tool_item(ctx, cmd("draw_round_rectangle", "")),
         tool_item(ctx, cmd("draw_polygon", "")),
         tool_item(ctx, cmd("draw_bezier", "")),
+        // #1300, #1267: the table, then the bar's Dimension group.
+        tool_item(ctx, cmd("place_table", "")),
+        submenu(
+            ctx,
+            menu_ids::MENU_PLACE_DIMENSION,
+            vec![
+                tool_item(ctx, cmd("place_linear_dimension", "")),
+                tool_item(ctx, cmd("place_aligned_dimension", "")),
+            ],
+        ),
         SEP,
         tool_item(ctx, cmd("place_graphic", "")),
     ]

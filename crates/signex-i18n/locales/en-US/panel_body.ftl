@@ -39,6 +39,43 @@ panels-history-file-deleted = D
 panels-history-show-differences = Show differences…
 panels-history-show-on-board = Show on board / sheet
 panels-history-more = More: new branch here, tag, copy SHA
+panels-history-new-branch-here = New branch here…
+panels-history-tag = Tag…
+panels-history-copy-sha = Copy SHA
+panels-history-branch-name = Branch name
+panels-history-tag-name = Tag name
+panels-history-create = Create
+# Panel header: how many commits are listed and how many branches hold work
+# the current branch lacks. $count is a whole number.
+panels-history-commits-one = { $count } commit
+panels-history-commits-many = { $count } commits
+panels-history-branches-ahead-one = { $count } branch ahead
+panels-history-branches-ahead-many = { $count } branches ahead
+# $commits and $branches are the two texts above.
+panels-history-counts = { $commits } · { $branches }
+panels-history-refresh = Refresh history
+# Filter chips and search.
+panels-history-all-branches = All branches
+panels-history-this-file = This file only
+panels-history-search = Search commits
+panels-history-search-placeholder = Subject, author or SHA
+panels-history-no-matches = No commits match these filters.
+# The branch chip when HEAD is on a commit and not on a branch.
+panels-history-detached = detached
+# Branch switcher.
+panels-history-branch-switch = Switch branch
+panels-history-branch-find = Find or create a branch
+panels-history-branch-local = Local branches
+panels-history-branch-remote = Remote
+panels-history-branch-current = current
+panels-history-branch-up-to-date = up to date
+panels-history-branch-ahead = { $count } ahead
+panels-history-branch-behind = { $count } behind
+panels-history-branch-ahead-behind = { $ahead } ahead · { $behind } behind
+# Error card when a switch was refused; nothing on disk changed.
+panels-history-switch-failed = Branch not switched
+# Error card when a new branch or tag could not be created.
+panels-history-ref-failed = Branch or tag not created
 
 ## ERC panel: per-finding waivers
 panels-erc-waive = Waive
@@ -49,38 +86,23 @@ panels-erc-waiver-status-one = waived
 panels-erc-waiver-status-many = waives { $count } findings
 panels-erc-waiver-status-lapsed = LAPSED: an involved object changed
 panels-erc-waiver-status-unmatched = matches no finding
-panels-erc-waiver-status-incomplete = ignored: no reason or author
+panels-erc-waiver-status-incomplete = ignored: no reason
 
 ## Properties of a multi-selection
 panels-multi-title = Multi-Selection
 # $count is a whole number. The English keeps "objects" for every count.
 panels-multi-objects-selected = { $count } objects selected
-# Group headings; $count is how many objects of the kind are selected.
-panels-multi-symbols = Symbols ({ $count })
-panels-multi-labels = Labels ({ $count })
-panels-multi-wires = Wires ({ $count })
 panels-multi-value = Value
 panels-multi-footprint = Footprint
 # Do not place: the part is left off the board.
 panels-multi-dnp = DNP
 panels-multi-in-bom = In BOM
 panels-multi-on-board = On board
-# Label text size, in points.
-panels-multi-size-pt = Size (pt)
-panels-multi-width-mm = Width (mm)
-# The state of a flag every selected object shares.
-panels-multi-on = On
-panels-multi-off = Off
 panels-multi-justify = Justify
-# The selected labels are justified differently.
-panels-multi-justify-mixed = Justify <mixed>
 panels-multi-justify-left = Left
 panels-multi-justify-center = Center
 panels-multi-justify-right = Right
 panels-multi-rotation = Rotation
-# The selected labels are turned differently.
-panels-multi-rotation-mixed = Rotation <mixed>
-panels-multi-nothing-shared = Nothing in this selection has fields shared for editing
 
 ## Projects and Navigator panels
 panels-projects-none-open = No project open
@@ -90,13 +112,9 @@ panels-projects-open-hint = File > Open to begin
 panels-projects-group-schematics = Schematics
 panels-projects-group-pcb = PCB
 panels-projects-group-bom = Bill of Materials
-panels-projects-group-outputs = Output Jobs
+panels-projects-group-outputs = Export Jobs
 panels-projects-group-libraries = Libraries
 panels-projects-group-settings = Settings
-# A tree row whose file is gone from disk. $name is the file name.
-panels-projects-file-missing = { $name }  (missing)
-# A tree row whose sheet could not be read. $name is the file name.
-panels-projects-file-unreadable = { $name }  (unreadable)
 panels-navigator-sheets = Sheets
 panels-navigator-no-project = No project
 # Navigator rows of a sheet that is not a plain page. $name is the sheet's name.
@@ -108,6 +126,22 @@ panels-navigator-rejected = { $name } (rejected)
 panels-navigator-cycle = { $name } (cycle)
 # The hierarchy is too deep to show this sheet's children.
 panels-navigator-not-expanded = { $name } (not expanded)
+# Navigator panel (Graphite mockup #54): the filter box, the no-project card and the hint.
+panels-navigator-filter = Filter sheets
+panels-navigator-no-project-body = Open a project to see its sheet hierarchy.
+panels-navigator-open-project = Open Project…
+panels-navigator-hint = Click highlights · double-click opens the sheet.
+# Shown when no sheet name or file name contains the filter text.
+panels-navigator-no-match = No sheet matches the filter.
+# $filter is the filter text, $total a whole number.
+panels-navigator-no-match-body = Nothing named { $filter } in { $total ->
+        [one] { $total } sheet
+       *[other] { $total } sheets
+    }.
+panels-navigator-clear-filter = Clear filter
+# The sheet count beside the Sheets heading, and a row's sheet number. Whole numbers.
+panels-navigator-sheet-count = { $count }
+panels-navigator-sheet-number = { $number }
 
 ## Components panel: the details of the selected row
 panels-components-details-select = Select a component to see its details.
@@ -124,10 +158,27 @@ panels-components-details-no-parameters = No parameters.
 ## Planned panels: what each will do, under its name and the planned note
 panels-stub-variants = Design variant management
 panels-stub-output-jobs = Manufacturing output config
-panels-stub-sch-list = Schematic object list inspector
 panels-stub-bom-studio = Bill of Materials management
-panels-stub-favorites = Favorite components and snippets
+panels-stub-favorites = Favorite components
 panels-stub-snippets = Reusable schematic snippets
 panels-stub-todo = Task and issue tracking
 panels-stub-wiki = Project documentation wiki
 panels-stub-library = Open a library from the Projects panel to browse it.
+
+# history-show-differences
+## History panel: the lines a commit changed in one file (mockup row 39)
+panels-history-diff-close = Close
+panels-history-diff-loading = Reading the differences…
+# $reason is why reading failed, as the version-control tool words it.
+panels-history-diff-failed = Differences could not be read: { $reason }
+# Lines added and removed; each count is a whole number.
+panels-history-diff-counts = +{ $added } −{ $removed }
+panels-history-diff-binary = Not a text file, so there are no lines to compare.
+panels-history-diff-no-lines = This commit changed no lines of this file.
+# $count is how many lines of the differences are listed.
+panels-history-diff-truncated = Only the first { $count } lines are shown.
+# Where a run of changes starts, in the file before and after the commit.
+panels-history-diff-hunk = Line { $old } before, line { $new } after
+# Marks in front of an added and a removed line.
+panels-history-diff-added-sign = +
+panels-history-diff-removed-sign = −

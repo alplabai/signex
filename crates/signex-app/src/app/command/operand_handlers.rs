@@ -28,6 +28,7 @@ use super::placement_extras_operands as extras;
 use super::placement_operands as place;
 use super::repair_reset_operands as repair_reset;
 use super::selection_filter_operands as filter;
+use super::selection_operands as selection;
 use super::sheet_sync_operands as sheet_sync;
 use super::{CommandArgs, CommandOutcome, enablement};
 use crate::app::board_output as output;
@@ -99,6 +100,7 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("edit_no_erc_rules", directive::edit_no_erc_rules),
     ("place_compile_mask", directive::compile_mask),
     ("place_diff_pair", directive::diff_pair),
+    ("place_parameter_set", directive::net_parameters),
     ("autoplace_fields", extras::autoplace_fields),
     ("place_design_block", extras::place_design_block),
     ("import_graphics", extras::import_graphics),
@@ -215,6 +217,15 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("swap_gates", swap::swap_gates),
     ("save_board_reuse_block", reuse::save_board_reuse_block),
     ("place_board_reuse_block", reuse::place_board_reuse_block),
+    // #2326: the drawing order and Delete on the `document` named.
+    ("bring_drawings_forward", selection::bring_drawings_forward),
+    (
+        "bring_drawings_to_front",
+        selection::bring_drawings_to_front,
+    ),
+    ("send_drawings_backward", selection::send_drawings_backward),
+    ("send_drawings_to_back", selection::send_drawings_to_back),
+    ("delete_selection", selection::delete_selection),
     // #1689-#1693: the Project tab's section edits.
     (
         "project_move_sheet",
@@ -416,11 +427,11 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         ),
         "set_selection_filters" => Some(
             "`set_selection_filters` needs the operand `kinds` — \
-             use the SCH Filter panel or the Active Bar's filter",
+             use the Filter panel or the Active Bar's filter",
         ),
         "apply_selection_filter_preset" => Some(
             "`apply_selection_filter_preset` needs the operand `name` — \
-             click the preset in the SCH Filter panel",
+             click the preset in the Filter panel",
         ),
         "set_object_position" => Some(
             "`set_object_position` needs the operands `id` and `at` — \
@@ -464,11 +475,11 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         ),
         "show_drc_violation" | "waive_drc_violation" | "unwaive_drc_violation" => Some(
             "this command needs the operands `document` and `id` — \
-             use the rows of the DRC Results panel",
+             use the rows of the DRC panel",
         ),
         "filter_drc_results" => Some(
             "`filter_drc_results` needs the operand `document` — \
-             use the filters of the DRC Results panel",
+             use the filters of the DRC panel",
         ),
         "add_net_class"
         | "rename_net_class"
@@ -505,7 +516,7 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         ),
         // #2410: a person picks the block on a component's board menu.
         "place_board_reuse_block" => Some(
-            "`place_board_reuse_block` needs the operands `document`, `name` and `designator` — \
+            "`place_board_reuse_block` needs the operands `document`, `name` and `ids` or `designator` — \
              right-click a component on the board and pick the block",
         ),
         "project_move_sheet"
@@ -559,7 +570,10 @@ impl Signex {
         } else if let Some(reason) =
             enablement::disabled_reason(command, &self.command_context(None))
         {
-            return refused(reason);
+            let outcome = CommandOutcome::Disabled {
+                reason: reason.into(),
+            };
+            return (outcome, Task::none());
         }
         // What its checks read from disk is read off the UI thread first, and
         // the command runs when that lands (#2199).
@@ -586,6 +600,6 @@ impl Signex {
     }
 }
 
-fn refused(reason: impl Into<String>) -> Ran {
+pub(super) fn refused(reason: impl Into<String>) -> Ran {
     (CommandOutcome::disabled(reason), Task::none())
 }

@@ -8,6 +8,7 @@ use std::path::Path;
 
 use iced::Task;
 use serde_json::{Value, json};
+use signex_drc_dsl::table::catalog::Domain;
 use signex_engine::pcb::BoardCommand;
 use signex_i18n::{ids, t};
 use signex_types::format::pcb_layer_token;
@@ -16,7 +17,7 @@ use signex_types::pcb_options::{BoardOptions, DrcWaiver};
 
 use crate::app::state::pcb_edit::CheckedStep;
 use crate::app::{Message, Signex};
-use crate::panels::{DrcFilter, DrcFilterChoice, DrcPanelMsg, DrcRow, DrcWaiveDraft};
+use crate::panels::{DrcFilter, DrcFilterChoice, DrcPanelMsg, DrcRow, DrcWaiveDraft, UserIdentity};
 
 /// What a DRC waiver says: why it is accepted, and who accepted it.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -87,13 +88,6 @@ impl Signex {
                 }
                 None
             }
-            DrcPanelMsg::AuthorEdited(author) => {
-                if let Some(draft) = self.interaction_state.pcb_drc.waive_draft.as_mut() {
-                    draft.author = author;
-                    draft.blank = false;
-                }
-                None
-            }
             DrcPanelMsg::WaiveConfirmed => self.confirm_drc_waiver(&path),
             DrcPanelMsg::WaiveCancelled => {
                 self.interaction_state.pcb_drc.waive_draft = None;
@@ -118,30 +112,34 @@ impl Signex {
         follow
     }
 
-    /// Open the waiver form for `key`: the Author is the last one typed,
-    /// else the cached user identity (asked for once, AV-13).
+    /// Open the Reason form for `key`, its row selected; the author is the
+    /// cached git identity (asked for once). Waive on the row whose form is
+    /// already open keeps what was typed.
     fn start_drc_waiver(&mut self, key: String) -> Task<Message> {
-        let author = self
-            .interaction_state
-            .pcb_drc
-            .waive_draft
-            .as_ref()
-            .map(|d| d.author.clone())
-            .filter(|a| !a.trim().is_empty())
-            .unwrap_or_else(|| self.ui_state.validation_panels.identity.author());
+        self.ui_state.validation_panels.drc.selected = Some(key.clone());
+        let drafts = &self.interaction_state.pcb_drc.waive_draft;
+        if drafts.as_ref().is_some_and(|d| d.key == key) {
+            return Task::none();
+        }
+        let ask = self.ask_user_identity();
+        let identity = &self.ui_state.validation_panels.identity;
         self.interaction_state.pcb_drc.waive_draft = Some(DrcWaiveDraft {
             key,
-            author,
+            author: identity.author(),
+            awaits_identity: matches!(identity, UserIdentity::Asking),
             ..DrcWaiveDraft::default()
         });
-        self.ask_user_identity()
+        ask
     }
 
-    /// Store the form's waiver; a reason and an author are both required
-    /// (AV-13). The form stays open until the waiver is stored.
+    /// Store the form's waiver; the reason is required (mockup row 88).
+    /// The form stays open until the waiver is stored.
     fn confirm_drc_waiver(&mut self, path: &Path) -> Option<String> {
         let draft = self.interaction_state.pcb_drc.waive_draft.clone()?;
-        if draft.reason.is_empty() || draft.author.trim().is_empty() {
+        if draft.awaits_identity {
+            return None;
+        }
+        if draft.reason.is_empty() {
             if let Some(open) = self.interaction_state.pcb_drc.waive_draft.as_mut() {
                 open.blank = true;
             }
@@ -160,32 +158,45 @@ impl Signex {
 
     /// Open the Rules tab of the board's project on `domain`, with `rule`
     /// (a written rule's name) selected.
-    fn open_rules_at(
-        &mut self,
-        domain: crate::app::RulesDomain,
-        rule: Option<String>,
-    ) -> Task<Message> {
+    fn open_rules_at(&mut self, domain: Domain, rule: Option<String>) -> Task<Message> {
         let Some(project_id) = self.rules_project_for(None) else {
             crate::diagnostics::log_info("Rules: no project is open");
             return Task::none();
         };
-        self.open_rules_tab(project_id);
-        let mut tasks =
-            vec![
-                self.dispatch_rules_tab_message(crate::app::RulesTabMsg::DomainPicked {
-                    project_id,
-                    domain,
-                }),
-            ];
-        if let Some(rule) = rule {
-            tasks.push(
-                self.dispatch_rules_tab_message(crate::app::RulesTabMsg::RowSelected {
-                    project_id,
-                    rule,
-                }),
-            );
+        // A window cannot open a tab inside its swap: its board named the
+        // project, and the tab opens on the main window.
+        if self.interaction_state.acting_window.is_some() {
+            let open = crate::app::RulesTabMsg::OpenedAt {
+                project_id,
+                domain,
+                rule,
+            };
+            return Task::done(Message::Project(crate::app::ProjectMsg::Rules(open)));
         }
-        Task::batch(tasks)
+        self.open_rules_on(project_id, domain, rule)
+    }
+
+    /// [`Self::open_rules_at`] for a known project. One closed meanwhile
+    /// opens nothing.
+    pub(crate) fn open_rules_on(
+        &mut self,
+        project_id: crate::app::state::ProjectId,
+        domain: Domain,
+        rule: Option<String>,
+    ) -> Task<Message> {
+        if self.document_state.project_by_id(project_id).is_none() {
+            crate::diagnostics::log_info("Rules: that project is no longer open");
+            return Task::none();
+        }
+        self.open_rules_tab(project_id);
+        let task = self.dispatch_rules_tab_message(crate::app::RulesTabMsg::DomainPicked {
+            project_id,
+            domain,
+        });
+        match rule {
+            Some(rule) => Task::batch([task, self.select_rules_rule(project_id, rule)]),
+            None => task,
+        }
     }
 
     /// A group's Rule link: the domain of what its rows break, and the rule
@@ -195,7 +206,7 @@ impl Signex {
             .pcb_drc_panel()
             .and_then(|panel| panel.rows.into_iter().find(|row| row.rule == rule))
             .map(|row| row.kind);
-        let domain = kind.map_or(crate::app::RulesDomain::Clearance, rules_domain_of);
+        let domain = kind.map_or(Domain::Clearance, rules_domain_of);
         let name = rule
             .strip_prefix(signex_drc_dsl::table::RULE_ID_PREFIX)
             .map(str::to_string);
@@ -203,12 +214,16 @@ impl Signex {
     }
 
     /// Before the first run: which base rules the project's rule text
-    /// writes, and the default clearance the run will use (#87).
+    /// writes, and the clearance the run will use (#87): the board's own,
+    /// read as a run reads it, else the default.
     pub(crate) fn fill_drc_idle(
         &self,
         panel: &mut crate::panels::DrcPanel,
         pcb: &signex_types::pcb::PcbBoard,
     ) {
+        panel.checked_clearance_mm = signex_drc::DrcRules::for_board(pcb, &[])
+            .ok()
+            .map(|rules| signex_drc::findings::mm(rules.clearance).to_string());
         if let Some((text, _)) = self
             .rules_project_for(None)
             .and_then(|id| self.rules_text_of(id))
@@ -487,24 +502,22 @@ fn apply_drc_view(view: &mut crate::panels::DrcView, msg: DrcPanelMsg) {
         | DrcPanelMsg::MessagesShown
         | DrcPanelMsg::WaiveStarted(_)
         | DrcPanelMsg::ReasonActed(_)
-        | DrcPanelMsg::AuthorEdited(_)
         | DrcPanelMsg::WaiveConfirmed
         | DrcPanelMsg::WaiveCancelled
         | DrcPanelMsg::Unwaived(_) => {}
     }
 }
 
-/// The Rules tab domain that holds the rule a violation kind breaks.
-fn rules_domain_of(kind: signex_drc::ViolationKind) -> crate::app::RulesDomain {
-    use crate::app::RulesDomain as D;
-    use signex_drc::ViolationKind as K;
-    match kind {
-        K::Clearance | K::Short | K::Unconnected | K::Keepout | K::EdgeClearance => D::Clearance,
-        K::TrackWidth | K::ViaDiameter | K::ViaDrill | K::ViaInPad => D::Routing,
-        K::HoleSize | K::AnnularRing | K::HoleToHole => D::Holes,
-        K::MaskSliver | K::MaskExpansion | K::PasteExpansion => D::Mask,
-        K::SilkToPad | K::SilkToSilk | K::CourtyardOverlap => D::Assembly,
+/// The Rules tab domain that holds the rule a violation kind breaks: the
+/// catalog domain holding most of the limits it checks (ties to the
+/// first's); Clearance for a kind no written limit sets (an unconnected
+/// link, a keepout). A part outside its room opens Placement: its rule is
+/// set on the room, not in the Rules tab (#2457; Caner, 2026-11-21).
+pub(crate) fn rules_domain_of(kind: signex_drc::ViolationKind) -> Domain {
+    if matches!(kind, signex_drc::ViolationKind::PartOutsideRoom) {
+        return Domain::Placement;
     }
+    signex_drc_dsl::table::catalog::domain_of_limits(kind.limits()).unwrap_or(Domain::Clearance)
 }
 
 /// One shown row: its key, rule, severity, nets, place, layers and waiver.
@@ -526,4 +539,29 @@ fn row_json(row: &DrcRow) -> Value {
         "objects": row.objects,
         "waiver": row.waiver,
     })
+}
+
+#[cfg(test)]
+mod domain_tests {
+    use super::rules_domain_of;
+    use signex_drc::ViolationKind;
+    use signex_drc_dsl::table::catalog::Domain;
+
+    /// Keep parts inside is set on the room, not in the Rules tab, so its
+    /// finding opens the Rules tab at Placement, where courtyard overlap is,
+    /// and not the Clearance fallback (Caner, 2026-11-21).
+    #[test]
+    fn a_part_outside_its_room_opens_the_rules_at_placement() {
+        assert_eq!(
+            rules_domain_of(ViolationKind::PartOutsideRoom),
+            Domain::Placement
+        );
+        assert_ne!(
+            signex_drc_dsl::table::catalog::domain_of_limits(
+                ViolationKind::PartOutsideRoom.limits()
+            ),
+            Some(Domain::Placement),
+            "the special case is needed: no Rules-tab limit leads there"
+        );
+    }
 }

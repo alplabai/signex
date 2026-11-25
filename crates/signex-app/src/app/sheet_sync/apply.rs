@@ -1,9 +1,11 @@
-//! Apply: exactly the changes the preview shows, as one undo step.
+//! Apply: the changes the preview shows, without the removals whose tick is
+//! off, as one undo step.
 //!
 //! The previews are worked out again from the live sheets first; when they
 //! differ from what the dialog shows, nothing is changed and the dialog
-//! shows the new ones. Sheet to Symbol edits the active sheet through the
-//! mutation gateway. Symbol to Sheet edits the child sheet through
+//! shows the new ones. Sheet to Symbol edits the dialog's parent sheet (the
+//! active one, or an undocked window's) through the mutation gateway, with
+//! that sheet as the edit target. Symbol to Sheet edits the child sheet through
 //! `write_sheets_as_group` (`app/sheet_write.rs`): a child no engine holds
 //! is loaded into a tabless engine from the copy read for the preview,
 //! after its file is stated again off the UI thread, and left unsaved.
@@ -15,8 +17,8 @@ use iced::Task;
 use signex_engine::{SheetSyncDirection, SheetSyncPreview};
 use signex_types::schematic::{ChildSheet, SchematicSheet};
 
-use super::open::{LABEL, previews_of};
-use super::{SheetSyncMsg, SheetSyncProblem};
+use super::open::{LABEL, entries_of, previews_of};
+use super::{SheetSyncMsg, SheetSyncPreviews, SheetSyncProblem};
 use crate::app::mutation_gateway::MutationOutcome;
 use crate::app::sheet_write::{SheetWrite, SheetWriteRefusal, disk_changed};
 use crate::app::{Message, Signex, UndoGroupKind};
@@ -30,7 +32,14 @@ impl Signex {
         if !state.can_apply() {
             return Task::none();
         }
+        if !self.sync_parent_open() {
+            return Task::none();
+        }
+        let Some(state) = self.ui_state.sheet_sync.as_ref() else {
+            return Task::none();
+        };
         let shown = state.previews.clone();
+        let kept = state.kept_ports.clone();
         let direction = state.direction;
         let generation = state.generation;
         let child_path = state.child_path.clone();
@@ -41,9 +50,7 @@ impl Signex {
         };
         let now = previews_of(&symbol, &child);
         if shown.as_ref() != Some(&now) {
-            if let Some(state) = self.ui_state.sheet_sync.as_mut() {
-                state.previews = Some(now);
-            }
+            self.show_current_preview(&symbol, &child, now);
             return self.refuse_sheet_sync(SheetSyncProblem::Changed);
         }
         match direction {
@@ -54,7 +61,7 @@ impl Signex {
             SheetSyncDirection::SymbolToSheet
                 if self.document_state.engines.contains_key(&child_path) =>
             {
-                self.write_sync_to_sheet(&symbol, &now.to_sheet);
+                self.write_sync_to_sheet(&symbol, &now.to_sheet.leaving_out(&kept));
                 Task::none()
             }
             SheetSyncDirection::SymbolToSheet => {
@@ -92,46 +99,105 @@ impl Signex {
         if let Some(path) = changed.into_iter().next() {
             return self.refuse_sheet_sync(SheetSyncProblem::DiskChanged(path));
         }
+        if !self.sync_parent_open() {
+            return Task::none();
+        }
         let Some(state) = self.ui_state.sheet_sync.as_ref() else {
             return Task::none();
         };
         let shown = state.previews.clone();
+        let kept = state.kept_ports.clone();
         let (symbol, child) = match self.sheet_sync_sides(state) {
             Ok(sides) => sides,
             Err(problem) => return self.refuse_sheet_sync(problem),
         };
         let now = previews_of(&symbol, &child);
         if shown.as_ref() != Some(&now) {
+            self.show_current_preview(&symbol, &child, now);
             return self.refuse_sheet_sync(SheetSyncProblem::Changed);
         }
-        self.write_sync_to_sheet(&symbol, &now.to_sheet);
+        self.write_sync_to_sheet(&symbol, &now.to_sheet.leaving_out(&kept));
         Task::none()
     }
 
+    /// The dialog now shows `now`, the changes the live sheets call for, so
+    /// the next Apply can match it. A port left out stays left out while it
+    /// is still a removal.
+    fn show_current_preview(
+        &mut self,
+        symbol: &ChildSheet,
+        child: &SchematicSheet,
+        now: SheetSyncPreviews,
+    ) {
+        let entries = entries_of(symbol, child, &now);
+        if let Some(state) = self.ui_state.sheet_sync.as_mut() {
+            state
+                .kept_ports
+                .retain(|port| now.to_sheet.removed.contains(port));
+            state.previews = Some(now);
+            state.entries = Some(entries);
+        }
+    }
+
+    /// Whether the dialog's parent sheet is still open. When it was closed,
+    /// the Messages panel says so and the dialog shows it stale.
+    fn sync_parent_open(&mut self) -> bool {
+        let Some(state) = self.ui_state.sheet_sync.as_ref() else {
+            return false;
+        };
+        if self.document_state.engines.contains_key(&state.parent) {
+            return true;
+        }
+        crate::diagnostics::log_warning(format!(
+            "{LABEL}: {} is no longer open; nothing was changed.",
+            state.parent.display()
+        ));
+        self.show_sheet_sync_problem(SheetSyncProblem::Stale);
+        false
+    }
+
     /// Sheet to Symbol: one `ReconcileChildSheetPins` for every sheet symbol
-    /// of the file on the active sheet, with the preview's renames on
-    /// `symbol` only.
+    /// of the file on the dialog's parent sheet, with the preview's renames
+    /// on `symbol` only. The parent is the edit target, so the change lands
+    /// on it whichever sheet the main window shows.
     fn write_sync_to_symbol(
         &mut self,
         symbol: &ChildSheet,
         child: &SchematicSheet,
         preview: &SheetSyncPreview,
     ) {
-        let Some(parent) = self.document_state.active_engine().map(|e| e.document()) else {
+        let Some(parent_path) = self
+            .ui_state
+            .sheet_sync
+            .as_ref()
+            .map(|state| state.parent.clone())
+        else {
+            return;
+        };
+        let Some(parent) = self
+            .document_state
+            .engines
+            .get(&parent_path)
+            .map(|e| e.document())
+        else {
             self.note_sheet_sync_problem(SheetSyncProblem::Stale);
             return;
         };
         let ports = signex_engine::ports_for_pin_sync(child, parent, &symbol.filename);
         let command = signex_engine::sync_from_sheet_command(symbol, ports, preview);
-        let (outcome, reason) = self.apply_engine_commands_reporting(vec![command], true, true);
+        let (outcome, reason) = self.on_edit_target(&parent_path, |app| {
+            app.apply_engine_commands_reporting(vec![command], true, true)
+        });
         if outcome == MutationOutcome::Failed {
             if let Some(reason) = reason {
                 crate::diagnostics::log_warning(format!("{LABEL}: {reason}"));
             }
-            let parent = self.document_state.active_path.clone().unwrap_or_default();
-            self.note_sheet_sync_problem(SheetSyncProblem::NotChanged(parent));
+            self.note_sheet_sync_problem(SheetSyncProblem::NotChanged(parent_path));
             return;
         }
+        // The edit target owed the repaint, so the selection refresh the
+        // gateway skips is done here.
+        self.refresh_selection_on(&parent_path);
         crate::diagnostics::log_info(format!(
             "{LABEL}: updated the entries of sheet symbol '{}'{}",
             symbol.name,
@@ -202,6 +268,12 @@ impl Signex {
             "{LABEL}: nothing was changed: {}",
             english(&problem)
         ));
+        self.show_sheet_sync_problem(problem);
+    }
+
+    /// The dialog stops waiting and shows `problem`; the caller has said why
+    /// in the Messages panel.
+    fn show_sheet_sync_problem(&mut self, problem: SheetSyncProblem) {
         if let Some(state) = self.ui_state.sheet_sync.as_mut() {
             state.checking = false;
             state.problem = Some(problem);

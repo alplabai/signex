@@ -10,10 +10,11 @@ mod child_sheet_path;
 #[cfg(test)]
 mod cursor_moved_tests;
 pub(crate) use child_sheet_path::{
-    escapes_through_symlink, reference_from, relative_within, resolve_new_sheet_path,
+    escapes_through_symlink, link_from, reference_from, relative_within, resolve_new_sheet_path,
 };
 mod break_wire_tool;
 mod clicked;
+pub(in crate::app::handlers) use clicked::WirePoint;
 mod descend;
 pub(crate) mod net_color_click;
 mod sheet_open;
@@ -21,27 +22,56 @@ mod sheet_open;
 pub(crate) mod sheet_open_tests;
 pub use sheet_open::{AfterOpen, PendingSheetOpen, SheetOpen};
 mod double_clicked;
+#[cfg(test)]
+mod drag_every_kind_tests;
 mod field_edit;
-pub(crate) use field_edit::editor_placeholder;
+#[cfg(test)]
+mod field_edit_click_away_tests;
+pub(crate) use field_edit::{editor_placeholder, next_part_field};
 pub(crate) mod fit_view;
 mod layout_drag;
 mod measure_tool;
 mod move_pick;
 mod place_directive;
+mod place_harness;
 pub(crate) use place_directive::{blanket_directive, compile_mask_directive, diff_pair_directive};
+mod annotation_pause;
+#[cfg(test)]
+mod annotation_pause_tests;
+mod dimension_tool;
+mod pause_end;
+#[cfg(test)]
+mod pause_end_tests;
+pub(crate) use dimension_tool::ends_held_resume_esc;
+mod place_bezier;
+mod place_dimension;
+pub(crate) use place_directive::{net_parameters_directive, parse_value};
+mod directive_panel;
 mod place_drawing;
+pub(crate) use place_dimension::AnnotationTool;
 mod place_label;
+mod place_table;
 pub(crate) use place_label::{GLOBAL_PORT_SHAPE, label_command};
 mod place_point;
 pub(crate) use place_point::{junction_command, no_connect_command, power_commands};
 mod place_text;
 mod place_wire;
-pub(crate) use place_wire::{bus_commands, wire_commands};
+pub(crate) use place_wire::{DEFAULT_WIRE_STYLE, bus_commands, wire_commands};
 mod shape_tool;
 #[cfg(test)]
 mod shape_tool_tests;
 mod sheet_tool;
 pub use sheet_tool::SheetPlaceJobs;
+#[cfg(test)]
+mod dimension_tool_holder_tests;
+#[cfg(test)]
+mod dimension_tool_keys_tests;
+#[cfg(test)]
+mod dimension_tool_pause_tests;
+#[cfg(test)]
+mod dimension_tool_tests;
+#[cfg(test)]
+mod dimension_tool_window_tests;
 mod library_status;
 #[cfg(test)]
 pub(crate) mod placement_tests;
@@ -65,6 +95,8 @@ mod wire_corner_tests;
 #[cfg(test)]
 mod wire_merge_tests;
 #[cfg(test)]
+mod wire_second_click_tests;
+#[cfg(test)]
 mod wire_undo_tests;
 
 /// Read the shape width + fill defaults out of the current
@@ -73,10 +105,7 @@ mod wire_undo_tests;
 pub(crate) fn pre_placement_shape(
     doc: &super::super::state::DocumentState,
 ) -> (f64, signex_types::schematic::FillType) {
-    // An unset width is written as the project's shape default (#2026), so
-    // the placed shape shows the width it draws at.
-    let defaults = doc.active_schematic_defaults();
-    let default_mm = defaults.shape_stroke_mm(0.0);
+    let (default_mm, default_fill) = default_shape(doc);
     doc.panel_ctx
         .pre_placement
         .as_ref()
@@ -88,7 +117,18 @@ pub(crate) fn pre_placement_shape(
             };
             (w, pp.shape_fill)
         })
-        .unwrap_or((default_mm, defaults.shape_fill))
+        .unwrap_or((default_mm, default_fill))
+}
+
+/// The project's shape width and fill on the sheet the edit targets: what a
+/// shape placed without the form takes (an agent or CLI run, #2326). An unset
+/// width is written as the project's shape default (#2026), so the placed
+/// shape shows the width it draws at.
+pub(crate) fn default_shape(
+    doc: &super::super::state::DocumentState,
+) -> (f64, signex_types::schematic::FillType) {
+    let defaults = doc.active_schematic_defaults();
+    (defaults.shape_stroke_mm(0.0), defaults.shape_fill)
 }
 
 impl Signex {
@@ -97,6 +137,8 @@ impl Signex {
             CanvasEvent::CursorAt { x, y, zoom_pct } => {
                 self.ui_state.cursor_x = x as f64;
                 self.ui_state.cursor_y = y as f64;
+                self.pre_placement_cursor_moved(x as f64, y as f64);
+                self.dimension_tool_cursor_moved();
                 if self.ui_state.cursor_document.as_deref() != self.cursor_document_now() {
                     self.ui_state.cursor_document =
                         self.cursor_document_now().map(std::path::Path::to_path_buf);
@@ -160,7 +202,7 @@ impl Signex {
                 }
             }
             CanvasEvent::Clicked { world_x, world_y } => {
-                return self.handle_canvas_clicked(world_x, world_y);
+                return self.handle_canvas_clicked(world_x, world_y, WirePoint::EndsWire);
             }
             CanvasEvent::MoveSelected {
                 dx,
@@ -230,6 +272,12 @@ impl Signex {
                     },
                     true,
                     true,
+                );
+            }
+            CanvasEvent::BezierPointsDragged { drawing, points } => {
+                self.apply_annotation_edit_to(
+                    drawing,
+                    &crate::app::sch_tables::AnnotationEdit::BezierPoints(points),
                 );
             }
             CanvasEvent::DoubleClicked {
@@ -306,6 +354,7 @@ impl Signex {
                 self.clear_active_camera_caches();
             }
             CanvasEvent::FitSelection => self.fit_selection(),
+            CanvasEvent::EdgePanTicked => return self.edge_pan_ticked(),
             CanvasEvent::RedrawRequested => {
                 self.clear_active_camera_caches();
                 if self.has_active_schematic() {
@@ -475,10 +524,10 @@ impl Signex {
         filenames
     }
 
-    /// Descend through the selected sheet symbol; `None` when none is selected.
+    /// Open Sheet on the selected sheet symbol; `None` when none is selected.
     pub(crate) fn open_selected_child_sheet(&mut self) -> Option<Task<Message>> {
         let (sheet_symbol, filename) = self.selected_child_sheet()?;
-        Some(self.descend_through_sheet_symbol(sheet_symbol, filename.as_str()))
+        Some(self.open_sheet_through_symbol(sheet_symbol, filename.as_str()))
     }
 
     /// The document a reported cursor point belongs to: the active schematic,

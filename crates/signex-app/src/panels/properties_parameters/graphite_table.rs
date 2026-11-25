@@ -40,6 +40,68 @@ pub(super) fn read_only_value<'a>(tokens: &ThemeTokens, value: String) -> Elemen
     .boxed()
 }
 
+/// An editable value cell that reads inline (mockup row 40): no box until
+/// hover or focus, and while it is empty it shows `placeholder`, in muted
+/// italic when `is_unset` says no value stands behind it ("Not set").
+pub(super) fn inline_value_input<'a>(
+    placeholder: Label<'a>,
+    value: String,
+    is_unset: bool,
+) -> iced::widget::TextInput<'a, PanelMsg> {
+    let reads_not_set = is_unset && value.is_empty();
+    let input = signex_widgets::text_input(placeholder, value)
+        .size(TS.body)
+        .padding(SP.xs)
+        .style(crate::panels::form_look::inline_value_input_style)
+        .width(Length::Fill);
+    if !reads_not_set {
+        return input;
+    }
+    input.font(iced::Font {
+        style: iced::font::Style::Italic,
+        ..crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT)
+    })
+}
+
+/// The header of a Parameters group: chevron, name, row count and an
+/// optional note at the right ("read-only"); a press folds the group.
+pub(super) fn group_header<'a>(
+    ctx: &PanelContext,
+    key: &'static str,
+    title: signex_i18n::Localized,
+    count: usize,
+    note: Option<signex_i18n::Localized>,
+) -> Element<'a, PanelMsg> {
+    let r = resolve(&ctx.tokens);
+    let is_open = !ctx.collapsed_sections.contains(key);
+    let count = u32::try_from(count).unwrap_or(u32::MAX);
+    let count = signex_widgets::chips::count_text(&ctx.i18n, count);
+    let mut line = row![
+        signex_widgets::chevron::chevron(is_open, TS.caption, r.ink4),
+        text(title)
+            .size(TS.body)
+            .color(ti(ctx.tokens.text_secondary)),
+        text(signex_i18n::UserText::new(count))
+            .size(TS.caption)
+            .color(r.ink4)
+            .font(crate::fonts::iced_font_for_family(
+                crate::fonts::CHROME_MONO_FONT
+            )),
+        Space::new().width(Length::Fill),
+    ]
+    .spacing(SP.s)
+    .align_y(iced::Alignment::Center);
+    if let Some(note) = note {
+        line = line.push(text(note).size(TS.caption).color(r.ink4).boxed());
+    }
+    signex_widgets::button(container(line).padding([SP.s, SP.m]).width(Length::Fill))
+        .padding(0)
+        .width(Length::Fill)
+        .on_press(PanelMsg::ToggleSection(key.to_string()))
+        .style(|_: &Theme, _| iced::widget::button::Style::default())
+        .boxed()
+}
+
 /// The name / value rows in a rounded hairline card.
 pub(super) fn parameter_table<'a>(
     tokens: &ThemeTokens,

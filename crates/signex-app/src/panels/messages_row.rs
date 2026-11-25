@@ -1,6 +1,8 @@
 //! What a Messages row shows in its Source and Time cells: a short source
 //! name for the log target a diagnostic came from, and the wall-clock time
-//! it was logged.
+//! it was logged; and the sheet a row names in its Document cell.
+
+use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, TimeZone, Utc};
 use signex_i18n::{MessageId, command_ids, ids};
@@ -109,6 +111,23 @@ pub(crate) fn row_action(entry: &DiagnosticEntry) -> Option<(MessageLink, Messag
     Some((link, label))
 }
 
+/// What a row's Document cell shows: the file name of the sheet it names.
+pub(crate) fn document_name(document: &Path) -> String {
+    document.file_name().map_or_else(
+        || document.display().to_string(),
+        |name| name.to_string_lossy().into_owned(),
+    )
+}
+
+/// The documents `rows` name, each once, by shown name: the Document
+/// dropdown's entries.
+pub(crate) fn named_documents(rows: &[&DiagnosticEntry]) -> Vec<PathBuf> {
+    let mut documents: Vec<PathBuf> = rows.iter().filter_map(|e| e.document.clone()).collect();
+    documents.sort_by_cached_key(|d| (document_name(d), d.clone()));
+    documents.dedup();
+    documents
+}
+
 /// `at` on the operating system's local clock as `HH:MM:SS`. Display only.
 pub(crate) fn clock_time(at: DateTime<Utc>) -> String {
     clock_time_in(at, &chrono::Local)
@@ -182,6 +201,8 @@ mod tests {
             message: "a.snxsch: 1 pin touches a wire without a junction".to_string(),
             at: Utc::now(),
             link,
+            document: None,
+            object: None,
         };
         let linked = entry(Some(MessageLink::RepairPinJunctions(path.clone())));
         let (link, label) = row_action(&linked).expect("a link");

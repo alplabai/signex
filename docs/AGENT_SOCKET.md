@@ -13,8 +13,8 @@ which `signex-cli` uses through `signex_app::headless::agent_client`.
 
 ## Off by default
 
-Preferences > Editing > "Allow agent connections" (`agent_connections_enabled`
-in `prefs.json`, default `false`). While it is off no socket and no token
+Preferences > System › General > "Allow agent connections"
+(`agent_connections_enabled` in `prefs.json`, default `false`). While it is off no socket and no token
 exist and nothing listens or accepts a connection. The app still lists each
 open project in the registry (below) and holds its lock, so that a headless
 `signex-cli` run does not edit a file open in a window; those entries name no
@@ -157,8 +157,15 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   `save_board_reuse_block` and `place_board_reuse_block` (#2410; a swap is
   one undo step across the board and its sheet, a save writes the block's
   file in the project's `reuse-blocks` folder, and a place may wait for the
-  project's blocks to be read like an edit waiting for its reads), and the
-  Project tab edits `project_move_sheet`, `project_add_variant`,
+  project's blocks to be read like an edit waiting for its reads; a swap or
+  a place names its component by `ids`, its uuid, or by `designator`,
+  exactly one), and the drawing order `bring_drawings_forward`,
+  `bring_drawings_to_front`, `send_drawings_backward` and
+  `send_drawings_to_back` and `delete_selection` (#2326; one undo step on
+  the items `ids` names by uuid on the named sheet, or for a delete the named
+  board, answered with `document`, `ids` and `changed`; a uuid that names
+  nothing there refuses the whole command; [CLI.md](CLI.md), "Drawing order
+  and Delete by uuid"), and the Project tab edits `project_move_sheet`, `project_add_variant`,
   `project_rename_variant`, `project_remove_variant`,
   `project_set_active_variant`, `project_move_library`,
   `project_set_annotate_undo` and `project_set_version_control`
@@ -171,7 +178,7 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   The window-layout commands `tile_windows_horizontally`,
   `tile_windows_vertically` and `untile_documents` (#2249) name no document:
   they are open to agents by the maintainer's rule that everything is
-  AI-controllable, run the Window menu row's handler (refused with its reason
+  AI-controllable, run the View ▸ Window menu row's handler (refused with its reason
   when the row is greyed) and answer with the layout they left:
   `{"tiled", "layout": "stacked" | "side_by_side" | null, "panes"}`, each
   pane `{"focused", "document", "name"}` in pane order (`document` and
@@ -206,7 +213,12 @@ The last three are open to agents by the maintainer's decision (#1924):
   caller.
 - `assign_net_class` runs by document as in the headless run: the project's
   class table changes, and the pick is one step on that sheet's undo timeline
-  (#2171), after the person's own steps.
+  (#2171), after the person's own steps. It takes any net of the project
+  netlist stitched from the documents, a net named only by a label and every
+  name of a shared wire included, never the canvas's style cache; a project
+  with closed sheets is read off the UI thread first, as for an edit that
+  reads the disk (#2549), and a person's edit to an open sheet of the project while that read
+  runs refuses the pick with nothing applied, to be retried.
 
 The board net-class commands (`add_net_class`, `rename_net_class`,
 `delete_net_class`, `set_net_class_rules`, `assign_board_net_class`) are
@@ -214,6 +226,18 @@ flagged `mutates_doc,undoable` like `assign_net_class`, but their step is one
 of the project's net-class history, not the board's: Edit ▸ Undo and `revert`
 do not take it back, the board Net Classes panel's Undo and Redo do. An agent
 puts a class back with the inverse command.
+
+A schematic placement an agent makes (through `apply_edits`, as a CLI run with
+operands does) takes what its operands name and the project's schematic
+defaults for the rest: unrotated, the default text size and font, left and
+bottom justified, the default shape width and fill, a wire of the default
+width and the theme's colour. It never reads the person's pre-placement (Tab)
+form, so what the person has set there does not change what an agent places
+(#2326, [DECISIONS.md](DECISIONS.md) 2026-11-24). The person's own clicks
+still place what their form holds. Two inputs still come from the person, as
+declared exceptions: the off-grid check uses their grid size and snap setting
+(the refusal names the grid), and `add_board_graphic` takes their PCB tool
+form for what its operands leave out.
 
 Refused with a reason: `undo` and `redo` (`PERSON_ONLY`, the one hand-kept
 constant, checked against the catalog by a test; the agent takes back its own

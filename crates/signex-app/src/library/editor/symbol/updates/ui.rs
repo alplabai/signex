@@ -16,7 +16,17 @@ pub(super) fn apply_symbol_ui(editor: &mut SymEditor, msg: SymbolEditorMsg) {
                 SymbolToolMsg::PlaceArc => SymbolTool::PlaceArc,
                 SymbolToolMsg::PlaceText => SymbolTool::PlaceText,
                 SymbolToolMsg::PlacePolygon => SymbolTool::PlacePolygon,
+                SymbolToolMsg::PlaceBezier => SymbolTool::PlaceBezier,
+                SymbolToolMsg::PlacePie => SymbolTool::PlacePie,
+                SymbolToolMsg::PlaceEllipticalArc => SymbolTool::PlaceEllipticalArc,
+                SymbolToolMsg::PlaceRoundRectangle => SymbolTool::PlaceRoundRectangle,
             };
+            // A Bezier needs all four clicks: leaving the tool drops the
+            // partial curve rather than placing one.
+            if editor.tool == SymbolTool::PlaceBezier && new_tool != SymbolTool::PlaceBezier {
+                editor.polygon_vertices.clear();
+                editor.canvas_cache.clear();
+            }
             // Footprint parity ("leaving Place Polygon commits (>= 3
             // vertices) / discards it (< 3)"): flush the in-flight
             // stash HERE, synchronously, in the same handler that
@@ -32,6 +42,11 @@ pub(super) fn apply_symbol_ui(editor: &mut SymEditor, msg: SymbolEditorMsg) {
             {
                 commit_or_discard_polygon(editor);
             }
+            // Any real change ends the half-placed gesture on the canvas.
+            if editor.tool != new_tool {
+                editor.tool_epoch = editor.tool_epoch.wrapping_add(1);
+                editor.canvas_cache.clear();
+            }
             editor.tool = new_tool;
             editor.active_bar_menu = None;
         }
@@ -45,17 +60,31 @@ pub(super) fn apply_symbol_ui(editor: &mut SymEditor, msg: SymbolEditorMsg) {
             editor.active_bar_menu = None;
         }
         SymbolEditorMsg::ActiveBarStub(label) => {
-            crate::diagnostics::log_info(format!(
-                "Symbol active bar: {label} — coming soon (SchLib Altium parity)"
-            ));
+            crate::diagnostics::log_info(unbuilt_row_note(label));
             editor.active_bar_menu = None;
         }
         SymbolEditorMsg::ToggleSelectionFilter(kind) => {
             editor.selection_filter.toggle(kind);
             editor.canvas_cache.clear();
         }
+        SymbolEditorMsg::PinTypePicked(pin_type) => {
+            // Sticky (mockup row 141): the type stays for every following
+            // pin; picking the checked type again goes back to unclassified.
+            if editor.pin_type == Some(pin_type) {
+                editor.pin_type = None;
+                editor.active_bar_menu = None;
+            } else {
+                editor.pin_type = Some(pin_type);
+                apply_symbol_ui(editor, SymbolEditorMsg::SetTool(SymbolToolMsg::AddPin));
+            }
+        }
         _ => {}
     }
+}
+
+/// The Messages line of an active bar row with no tool yet.
+fn unbuilt_row_note(label: &str) -> String {
+    format!("Symbol active bar: {label} — coming soon")
 }
 
 #[cfg(test)]
@@ -71,6 +100,14 @@ mod tests {
             PathBuf::from(format!("{name}.snxsym")),
             SymbolFile::from_symbol(Symbol::empty(name)),
         )
+    }
+
+    #[test]
+    fn an_unbuilt_row_says_only_that_it_is_coming() {
+        assert_eq!(
+            unbuilt_row_note("Bezier"),
+            "Symbol active bar: Bezier — coming soon"
+        );
     }
 
     /// Footprint parity: switching the tool away from `PlacePolygon`
@@ -167,5 +204,63 @@ mod tests {
         );
         assert_eq!(editor_a.primitive().graphics.len(), 1);
         assert_eq!(editor_a.history.undo_len(), 1);
+    }
+
+    /// Mockup row 141 (accepted 2026-11-24): a type picked in the Place Pin
+    /// dropdown arms Place Pin and stays for every following pin.
+    #[test]
+    fn a_picked_pin_type_stays_for_every_following_pin() {
+        use signex_types::schematic::PinDirection;
+        let mut editor = new_editor("A");
+        editor.active_bar_menu = Some(crate::library::editor::symbol::state::SymActiveBarMenu::Pin);
+
+        apply_symbol_primitive_edit(
+            &mut editor,
+            SymbolEditorMsg::PinTypePicked(PinDirection::Output),
+        );
+        assert_eq!(editor.pin_type, Some(PinDirection::Output));
+        assert_eq!(editor.tool, SymbolTool::AddPin, "Place Pin is armed");
+        assert_eq!(editor.active_bar_menu, None, "the menu closes");
+
+        apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::AddPin { x: 0.0, y: 0.0 });
+        apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::AddPin { x: 0.0, y: 5.0 });
+        let types: Vec<PinDirection> = editor
+            .primitive()
+            .pins
+            .iter()
+            .map(|p| p.electrical)
+            .collect();
+        assert_eq!(types, [PinDirection::Output, PinDirection::Output]);
+    }
+
+    /// With no type picked, a placed pin is unclassified; picking the
+    /// checked type again goes back to that.
+    #[test]
+    fn picking_the_checked_type_again_places_unclassified_pins() {
+        use signex_types::schematic::PinDirection;
+        let mut editor = new_editor("A");
+        apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::AddPin { x: 0.0, y: 0.0 });
+
+        apply_symbol_primitive_edit(
+            &mut editor,
+            SymbolEditorMsg::PinTypePicked(PinDirection::Passive),
+        );
+        apply_symbol_primitive_edit(
+            &mut editor,
+            SymbolEditorMsg::PinTypePicked(PinDirection::Passive),
+        );
+        assert_eq!(editor.pin_type, None);
+        apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::AddPin { x: 0.0, y: 5.0 });
+
+        let types: Vec<PinDirection> = editor
+            .primitive()
+            .pins
+            .iter()
+            .map(|p| p.electrical)
+            .collect();
+        assert_eq!(
+            types,
+            [PinDirection::Unclassified, PinDirection::Unclassified]
+        );
     }
 }

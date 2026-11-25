@@ -11,7 +11,9 @@
 //! 1. Compute the QR factorisation of the Jacobian J (m × n).
 //! 2. The numerical rank `r = rank(J, tol)` tells us how many of the
 //!    `n` state variables are pinned by the constraint set. Effective
-//!    free DoF = `n − r`.
+//!    free DoF = `n − r`. The row reduction in
+//!    [`crate::solver::free_motion`] only lists the free motions for the
+//!    Properties DOF card; it never sets a colour.
 //! 3. For per-entity colouring, apply a coarse global rule: if the
 //!    rank equals `n`, every non-fixed Point is fully constrained
 //!    (black); otherwise every non-fixed Point has free DoF (blue).
@@ -100,7 +102,7 @@ pub fn entity_colours(
     let mut over_points = std::collections::HashSet::new();
     if !over_ids.is_empty() {
         let over_set: std::collections::HashSet<ConstraintId> = over_ids.into_iter().collect();
-        for c in &sketch.constraints {
+        for c in sketch.driving_constraints() {
             if !over_set.contains(&c.id) {
                 continue;
             }
@@ -182,7 +184,8 @@ pub fn over_constraint_ids(
     // constraint.
     let mut unevaluable: Vec<ConstraintId> = Vec::new();
     let mut first_error: Option<String> = None;
-    for c in &sketch.constraints {
+    // A driven (reference) dimension measures; it is never in conflict.
+    for c in sketch.driving_constraints() {
         let r = match residual(c, &solve_result.state, &solve_result.index, sketch, params) {
             Ok(r) => r,
             Err(e) => {

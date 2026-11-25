@@ -1,5 +1,6 @@
-//! The Components Panel's searchable row list, built once per change
-//! instead of once per frame (#1353).
+//! The searchable row lists of the Components panel and the Library
+//! panel's Parts kind, built once per change instead of once per frame
+//! (#1353; the Library panel: mockup row 119).
 //!
 //! `view` must stay cheap and pure, so it only reads this cache. `update`
 //! keeps it current through [`LibraryState::sync_view_caches_in`]: the
@@ -8,24 +9,15 @@
 //! a library name changes.
 
 use super::*;
+use crate::panels::components_panel::query::{MatchLine, PanelQuery, SearchKeys, match_summary};
 
-/// One cached row: where it lives, plus the lowercase keys the panel's
-/// substring filter matches against.
+/// One cached row: where it lives, plus the keys the panel's value-aware
+/// search matches against (mockup row 52).
 #[derive(Debug, Clone)]
 struct RowKey {
     table: Arc<str>,
     index: usize,
-    mpn: String,
-    manufacturer: String,
-    internal_pn: String,
-}
-
-impl RowKey {
-    fn matches(&self, needle: &str) -> bool {
-        self.mpn.contains(needle)
-            || self.manufacturer.contains(needle)
-            || self.internal_pn.contains(needle)
-    }
+    search: SearchKeys,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -48,9 +40,7 @@ impl LibraryRows {
             keys.extend(rows.iter().enumerate().map(|(index, r)| RowKey {
                 table: Arc::clone(&table),
                 index,
-                mpn: i18n.fold_for_search(&r.primary_mpn.mpn),
-                manufacturer: i18n.fold_for_search(&r.primary_mpn.manufacturer),
-                internal_pn: i18n.fold_for_search(r.internal_pn.as_str()),
+                search: SearchKeys::of(i18n, r),
             }));
         }
         Self {
@@ -60,10 +50,15 @@ impl LibraryRows {
         }
     }
 
-    fn filter(&mut self, name_lc: String, needle: &str) {
-        let all = needle.is_empty() || name_lc.contains(needle);
+    /// Every word must match the row or the library name.
+    fn filter(&mut self, name_lc: String, query: &PanelQuery) {
+        let words: Vec<_> = query
+            .words()
+            .iter()
+            .filter(|w| !name_lc.contains(&w.folded))
+            .collect();
         self.visible = (0..self.keys.len())
-            .filter(|&i| all || self.keys[i].matches(needle))
+            .filter(|&i| words.iter().all(|w| self.keys[i].search.matches(w)))
             .collect();
         self.name_lc = name_lc;
         #[cfg(test)]
@@ -79,9 +74,12 @@ pub struct PanelRows {
     built_at: Option<u64>,
     /// The message locale the keys were folded in.
     built_in: Option<&'static str>,
-    /// The normalised query `visible` lists were filtered for.
+    /// The trimmed query `visible` lists were filtered for, as typed:
+    /// prefixes are case-sensitive, so `100m` and `100M` differ.
     needle: Option<String>,
     libs: HashMap<PathBuf, LibraryRows>,
+    /// What each bare number of the query matched, over every library.
+    summary: Vec<MatchLine>,
 }
 
 impl PanelRows {
@@ -105,6 +103,12 @@ impl PanelRows {
         })
     }
 
+    /// The match summary line of each bare number in the query (`100`
+    /// finds 100 pF, 100 nF and 100 µF), empty without one.
+    pub(crate) fn match_summary(&self) -> &[MatchLine] {
+        &self.summary
+    }
+
     pub(super) fn sync(
         &mut self,
         i18n: &signex_i18n::I18n,
@@ -112,7 +116,7 @@ impl PanelRows {
         data_version: u64,
         filter: &str,
     ) {
-        let needle = i18n.fold_for_search(filter.trim());
+        let needle = filter.trim().to_owned();
         let keys_stale =
             self.built_at != Some(data_version) || self.built_in != Some(i18n.locale());
         if keys_stale {
@@ -126,14 +130,24 @@ impl PanelRows {
             counters::KEY_BUILDS.with(|c| c.set(c.get() + 1));
         }
         let needle_changed = self.needle.as_deref() != Some(needle.as_str());
+        let query = PanelQuery::parse(i18n, &needle);
+        let mut refiltered = false;
         for lib in libraries {
             let name_lc = i18n.fold_for_search(&lib.display_name);
             let Some(rows) = self.libs.get_mut(&lib.root) else {
                 continue;
             };
             if keys_stale || needle_changed || rows.name_lc != name_lc {
-                rows.filter(name_lc, &needle);
+                rows.filter(name_lc, &query);
+                refiltered = true;
             }
+        }
+        if refiltered || keys_stale {
+            let matched = self
+                .libs
+                .values()
+                .flat_map(|l| l.visible.iter().map(|&i| &l.keys[i].search));
+            self.summary = match_summary(&query, matched);
         }
         self.needle = Some(needle);
     }
@@ -148,6 +162,11 @@ impl LibraryState {
             version,
             &self.components_panel.filter,
         );
+        // The Library panel's Parts filter matches rows the same way
+        // (mockup row 119).
+        self.library_panel
+            .rows
+            .sync(i18n, &self.open_libraries, version, &self.panel_search);
     }
 }
 

@@ -19,6 +19,27 @@ define_ids! {
     REQUIREMENTS_PASSED = "requirements-passed";
     REQUIREMENTS_FAILED = "requirements-failed";
     REQUIREMENTS_NOT_CHECKED = "requirements-not-checked";
+    REQUIREMENTS_OFF = "requirements-off";
+    REQUIREMENTS_PASSED_COUNT = "requirements-passed-count";
+    REQUIREMENTS_FAILED_COUNT = "requirements-failed-count";
+    REQUIREMENTS_NOT_CHECKED_COUNT = "requirements-not-checked-count";
+    REQUIREMENTS_PARTS_UNMET = "requirements-parts-unmet";
+    REQUIREMENTS_PART_UNPLACED = "requirements-part-unplaced";
+    REQUIREMENTS_PART_NO_LIBRARY = "requirements-part-no-library";
+    REQUIREMENTS_PART_STATE = "requirements-part-state";
+    REQUIREMENTS_FINDINGS = "requirements-findings";
+    REQUIREMENTS_FINDINGS_NEXT = "requirements-findings-next";
+    REQUIREMENTS_EXPAND = "requirements-expand";
+    REQUIREMENTS_COLLAPSE = "requirements-collapse";
+    REQUIREMENTS_SUMMARY_CLEAN = "requirements-summary-clean";
+    REQUIREMENTS_SUMMARY_CLEAN_WARNINGS_ALLOWED = "requirements-summary-clean-warnings-allowed";
+    REQUIREMENTS_SUMMARY_BOARD_SIZE = "requirements-summary-board-size";
+    REQUIREMENTS_SUMMARY_PARTS_STATE = "requirements-summary-parts-state";
+    REQUIREMENTS_SUMMARY_NET_CLASS = "requirements-summary-net-class";
+    REQUIREMENTS_SUMMARY_CLASS = "requirements-summary-class";
+    REQUIREMENTS_SUMMARY_MIN_TRACE = "requirements-summary-min-trace";
+    REQUIREMENTS_SUMMARY_MIN_CLEARANCE = "requirements-summary-min-clearance";
+    REQUIREMENTS_SUMMARY_BOM_COST = "requirements-summary-bom-cost";
     REQUIREMENTS_UNREADABLE = "requirements-unreadable";
     REQUIREMENTS_NOT_SET = "requirements-not-set";
     REQUIREMENTS_KIND_ERC_CLEAN = "requirements-kind-erc-clean";
@@ -58,4 +79,19 @@ define_ids! {
     REQUIREMENTS_PROBLEM_EMPTY = "requirements-problem-empty";
     REQUIREMENTS_PROBLEM_UNKNOWN_STATE = "requirements-problem-unknown-state";
     REQUIREMENTS_PROBLEM_NET_CLASS_ASKS_NOTHING = "requirements-problem-net-class-asks-nothing";
+    // requirements-board-size
+    REQUIREMENTS_SUMMARY_MEASURED = "requirements-summary-measured";
+    REQUIREMENTS_FIELD_MEASURED_FROM = "requirements-field-measured-from";
+    REQUIREMENTS_MEASURED_FROM_OUTLINE = "requirements-measured-from-outline";
+    REQUIREMENTS_BOARD_PREVIEW = "requirements-board-preview";
+    REQUIREMENTS_BOARD_PREVIEW_HINT = "requirements-board-preview-hint";
+    REQUIREMENTS_BOARD_NOT_MEASURED = "requirements-board-not-measured";
+    REQUIREMENTS_BOARD_MEASURED = "requirements-board-measured";
+    REQUIREMENTS_BOARD_MAX_WIDTH = "requirements-board-max-width";
+    REQUIREMENTS_BOARD_MAX_HEIGHT = "requirements-board-max-height";
+    REQUIREMENTS_BOARD_LEGEND_LIMIT = "requirements-board-legend-limit";
+    REQUIREMENTS_BOARD_LEGEND_OUTLINE = "requirements-board-legend-outline";
+    REQUIREMENTS_BOARD_MARGIN = "requirements-board-margin";
+    REQUIREMENTS_BOARD_FITS = "requirements-board-fits";
+    REQUIREMENTS_BOARD_DOES_NOT_FIT = "requirements-board-does-not-fit";
 }

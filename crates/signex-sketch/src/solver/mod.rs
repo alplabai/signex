@@ -1,10 +1,12 @@
 pub mod derivatives;
 pub mod dim_cache;
 pub mod dof;
+pub mod free_motion;
 pub mod jacobian;
 pub mod linalg;
 pub mod lm;
 pub mod math;
+pub mod measure;
 pub mod redundancy;
 pub mod residual;
 pub mod residuals;
@@ -13,6 +15,8 @@ pub mod work;
 
 #[cfg(test)]
 mod derivatives_tests;
+#[cfg(test)]
+mod driven_tests;
 #[cfg(test)]
 mod shrink_tests;
 
@@ -104,6 +108,9 @@ pub struct FullSolveOutput {
     /// is empty until [`Solver::redundancy_report`] fills it in.
     pub redundancy_pending: bool,
     pub jacobian: Vec<Vec<f64>>,
+    /// The free degrees of freedom at the solved state and the motions
+    /// they are, for the Properties DOF card (mockup row 179).
+    pub free_motions: free_motion::FreeMotions,
     /// GH #599 — the resolved parameters this solve ran with.
     /// Consumers that re-evaluate residuals against the output (the
     /// over-constraint diagnostics panel) need the same map: an
@@ -325,9 +332,12 @@ impl Solver {
             .map_err(|e| lm::residual_failure("post-solve jacobian", e))?;
         meter.record_analysis(result.state.len(), jacobian.len());
 
+        // The colours read the QR rank; the row reduction only lists the
+        // free motions for the DOF card (docs/DECISIONS.md, 2026-11-24).
         // HI-14: thread the solved params through both analyses so
         // parametric constraints are evaluated rather than dropped.
         let colours = entity_colours(sketch, &result, &jacobian, &result.index, params);
+        let free_motions = free_motion::free_motions(&result, &jacobian);
         let over_constraints = over_constraint_ids(sketch, &result, params);
 
         let (redundant_constraints, warnings) = if with_redundancy {
@@ -351,6 +361,7 @@ impl Solver {
             warnings,
             redundancy_pending: !with_redundancy,
             jacobian,
+            free_motions,
             params: params.clone(),
         })
     }

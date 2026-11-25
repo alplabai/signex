@@ -94,15 +94,23 @@ fn fn_body<'a>(source: &'a str, name: &str) -> &'a str {
     &source[start..end]
 }
 
-/// The facts `ctx.<field>` names in `body`, with those of every helper
-/// `name(ctx)` it calls whose body is in `source`.
+/// The facts `ctx.<field>` (or `core.<field>`, the core half a Ui need
+/// reads) names in `body`, with those of every helper `name(ctx)` it calls
+/// whose body is in `source`.
 fn facts_named(body: &str, source: &str) -> BTreeSet<String> {
     let mut named = BTreeSet::new();
     for line in body.lines().filter(|line| !line.trim().starts_with("//")) {
-        for (at, _) in line.match_indices("ctx.") {
-            let path: String = line[at + 4..]
+        let reads = ["ctx.", "core."].into_iter().flat_map(|prefix| {
+            line.match_indices(prefix)
+                .map(move |(at, _)| at + prefix.len())
+        });
+        for at in reads {
+            let path: String = line[at..]
                 .chars()
-                .take_while(|c| c.is_ascii_lowercase() || *c == '_' || *c == '.')
+                // Digits too: a fact name such as `board_3d_shown` has them.
+                .take_while(|c| {
+                    c.is_ascii_lowercase() || c.is_ascii_digit() || *c == '_' || *c == '.'
+                })
                 .collect();
             let mut parts = path.split('.');
             let first = parts.next().unwrap_or_default();
@@ -184,6 +192,9 @@ fn the_probe_finds_every_fact_a_gate_reads() {
     ] {
         assert!(turn.contains(fact), "Turn names {fact}: {turn:?}");
     }
+    // A fact name with digits is read whole.
+    let board_3d = needs_facts("Board3dView");
+    assert!(board_3d.contains("board_3d_shown"), "{board_3d:?}");
     for ((name, gate), named) in every_gate() {
         let missed = missed_by_the_probe(&gate, &named);
         assert!(

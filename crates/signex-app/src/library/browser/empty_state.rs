@@ -18,7 +18,7 @@ pub(super) fn view_empty_state<'a>(
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
     let border = theme_ext::border_color(tokens);
-    // Hoisted owned path — see comment in `view_table_sidebar`.
+    // Hoisted owned path — see the comment in `sidebar::view_table_list`.
     let lib_pb: std::path::PathBuf = library_path.to_path_buf();
 
     let library_for_add = lib_pb.clone();

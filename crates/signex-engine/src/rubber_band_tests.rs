@@ -523,11 +523,14 @@ fn when_every_route_collides_the_pin_moves_alone_and_a_warning_names_it() {
     );
     let warnings = engine.take_warnings();
     assert_eq!(warnings.len(), 1, "{warnings:?}");
-    assert!(warnings[0].contains("R1 pin 1"), "{warnings:?}");
+    assert!(
+        warnings[0].pins_not_kept().iter().any(|p| p == "R1 pin 1"),
+        "{warnings:?}"
+    );
 }
 
 /// A move that raises a notice, run inside a transaction (#2178).
-fn warning_move_in_a_transaction() -> (Engine, Vec<String>) {
+fn warning_move_in_a_transaction() -> (Engine, Vec<crate::EngineNotice>) {
     let mut sheet = test_sheet();
     let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0));
     add_wire(&mut sheet, (30.0, 50.0), (45.0, 50.0));
@@ -1700,13 +1703,14 @@ pub(crate) fn property_case(seed: u64, index: usize, case: Case, counts: &mut Ru
     };
     share.cases += 1;
     // A fallback is a notice that something could not be kept: a pin left as
-    // a plain move (an English warning) or a dragged wire's contact parted (a
-    // typed notice). A held pin kept off the wire it landed in is told, but
+    // a plain move or a dragged wire's contact parted. A held pin kept off the wire it landed in is told, but
     // kept; a refused pin dot is the plain move's own.
     let dragged_parted = notices
         .iter()
         .any(|n| matches!(n, crate::EngineNotice::DraggedWireLeft { .. }));
-    let pin_plain = warnings.iter().any(|w| w.starts_with("could not keep"));
+    let pin_plain = warnings
+        .iter()
+        .any(|w| matches!(w, crate::EngineNotice::PinsNotKept { .. }));
     let fell_back = pin_plain || dragged_parted;
     share.warned += usize::from(fell_back);
     if fell_back {
@@ -2293,6 +2297,7 @@ fn a_bus_and_bus_entry_on_the_new_path_are_harmless() {
         uuid: Uuid::now_v7(),
         start: Point::new(45.0, 52.0),
         end: Point::new(45.0, 58.0),
+        ..Default::default()
     });
     sheet.bus_entries.push(signex_types::schematic::BusEntry {
         uuid: Uuid::now_v7(),
@@ -2423,10 +2428,9 @@ fn many_pins_that_cannot_be_kept_make_one_notice() {
     );
     let notices = e.take_warnings();
     assert_eq!(notices.len(), 1, "{notices:?}");
-    assert!(
-        notices[0].contains("could not keep 5 pins") && notices[0].contains("and 2 more"),
-        "{notices:?}"
-    );
+    // Worded as "could not keep 5 pins ...: <3 names> and 2 more" by the app
+    // (`engine_notices::notice_line`).
+    assert_eq!(notices[0].pins_not_kept().len(), 5, "{notices:?}");
     assert_eq!(e.take_unkept_pins().len(), 5);
 }
 

@@ -8,13 +8,13 @@ use super::super::args::InvocationContext;
 use super::super::routing::{self, InWindowRoute, WindowFacts};
 use super::super::{
     CommandArgs, active_bar, bridge, enablement, needs, opened, operand_handlers, operands,
-    queries, window_document,
+    queries, translator, window_document,
 };
 use super::inputs::Input;
 use crate::app::document::{DocumentKey, UndoTarget};
 use crate::app::state::ProjectId;
 use crate::app::{Message, PcbMsg};
-use crate::keymap::{AppCommandId, CatalogTextExt, HeadlessUse, metadata_for};
+use crate::keymap::{AppCommandId, CatalogTextExt, metadata_for};
 use crate::toolbar::ToolMessage;
 
 /// A distinct route by which an id reaches its handler or its implicit
@@ -23,6 +23,10 @@ use crate::toolbar::ToolMessage;
 pub(super) enum Form {
     /// A `bridge::resolve` arm, as a key, menu row or the palette sends it.
     Bridge,
+    /// A bridge arm whose handler is a GUI translator (`translator.rs`): it
+    /// fills `document` and `ids` from the selection and runs the id's
+    /// operand handler, the `operand_handler` row.
+    Translator,
     /// The same arm from a context menu, which carries the click point or
     /// the project, where that changes the message.
     BridgeContextMenu,
@@ -61,12 +65,16 @@ pub(super) enum Form {
     /// Tile and Untile on the agent channel (`run_agent_window_layout`,
     /// #2249), outside `run_operands`.
     AgentWindowLayout,
+    /// The one core command a split router makes (#2551): the GUI router
+    /// resolves what is in hand, then makes at most one `execute`.
+    SplitCore,
 }
 
 impl Form {
     pub(super) fn name(self) -> &'static str {
         match self {
             Self::Bridge => "bridge",
+            Self::Translator => "translator",
             Self::BridgeContextMenu => "bridge_context_menu",
             Self::ActiveBar => "active_bar",
             Self::Operand => "operand_handler",
@@ -87,6 +95,7 @@ impl Form {
             Self::HeadlessWithoutOperands => "headless_without_operands",
             Self::HeadlessNewDocument => "headless_new_document",
             Self::AgentWindowLayout => "agent_window_layout",
+            Self::SplitCore => "split_core_command",
         }
     }
 
@@ -109,6 +118,7 @@ impl Form {
         matches!(
             self,
             Self::Bridge
+                | Self::Translator
                 | Self::BridgeContextMenu
                 | Self::ActiveBar
                 | Self::Needs
@@ -135,18 +145,8 @@ impl Form {
         )
     }
 
-    fn is_headless(self) -> bool {
-        matches!(
-            self,
-            Self::HeadlessRefusal
-                | Self::HeadlessMissingOperand
-                | Self::HeadlessWithoutOperands
-                | Self::HeadlessNewDocument
-        )
-    }
-
     /// Reached only with a window id, which a headless caller never has.
-    fn needs_a_window(self) -> bool {
+    pub(super) fn needs_a_window(self) -> bool {
         matches!(
             self,
             Self::UndoSheetWindow
@@ -160,13 +160,17 @@ impl Form {
     }
 }
 
-/// Who runs a form once the core is split off (ADR-0006).
+/// Who runs a form once the core is split off (ADR-0006), from what the
+/// route writes (`owners`, #2551).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Owner {
     Core,
+    /// The adapter, GUI or CLI: session state and machine settings.
     Gui,
-    /// The catalog has not decided how a headless caller uses the id
-    /// (`headless_use()` is `None`).
+    /// A GUI router over what is in hand, with one core command behind it
+    /// (the id's `split_core_command` row).
+    Split,
+    /// A maintainer decision is pending.
     Undecided,
 }
 
@@ -175,6 +179,7 @@ impl Owner {
         match self {
             Self::Core => "core",
             Self::Gui => "gui",
+            Self::Split => "split",
             Self::Undecided => "undecided",
         }
     }
@@ -232,6 +237,7 @@ fn bridge_route(id: &str, message: &Message) -> (Form, String) {
         {
             (Form::ActiveBar, format!("{action:?}"))
         }
+        _ if translator::is_translated(id) => (Form::Translator, debug),
         _ => (Form::Bridge, debug),
     }
 }
@@ -370,48 +376,6 @@ fn headless_routes(command: &AppCommandId) -> Vec<(Form, String)> {
         ));
     }
     routes
-}
-
-/// The owner of `form` for `command`; `arms_a_tool` is what its bridge arm
-/// does.
-pub(super) fn owner(command: &AppCommandId, form: Form, arms_a_tool: bool) -> Owner {
-    // A headless run with no operands is refused the bridge's form, or skips it.
-    let headless_skips_the_bridge = arms_a_tool
-        || operands::missing_headless_operand(command).is_some()
-        || operand_handlers::runs_headless_without_operands(command);
-    owner_of(
-        metadata_for(command).and_then(|meta| meta.headless_use()),
-        form,
-        headless_skips_the_bridge,
-    )
-}
-
-/// [`owner`] from the catalog's headless use of the id.
-pub(super) fn owner_of(
-    headless: Option<HeadlessUse>,
-    form: Form,
-    headless_skips_the_bridge: bool,
-) -> Owner {
-    match headless {
-        None => Owner::Undecided,
-        Some(_) if form.is_headless() => Owner::Core,
-        Some(HeadlessUse::WindowOnly) => Owner::Gui,
-        Some(HeadlessUse::Runs) if form.needs_a_window() => Owner::Gui,
-        // A disabled command that still runs runs the bridge's handler.
-        Some(HeadlessUse::Runs)
-            if matches!(
-                form,
-                Form::Bridge
-                    | Form::BridgeContextMenu
-                    | Form::ActiveBar
-                    | Form::StillRunsUnavailable
-                    | Form::StillRunsRefusal
-            ) && headless_skips_the_bridge =>
-        {
-            Owner::Gui
-        }
-        Some(HeadlessUse::Runs) => Owner::Core,
-    }
 }
 
 /// The message only arms a placement tool.

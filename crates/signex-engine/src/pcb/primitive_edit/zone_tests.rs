@@ -110,3 +110,32 @@ fn a_pour_takes_a_priority_and_island_rules() {
         Ok(false)
     );
 }
+
+/// #2523: Shelve is one replace and its exact inverse undoes it; a fill,
+/// region or keepout has nothing to shelve.
+#[test]
+fn a_pour_is_shelved_in_one_step_and_undone_exactly() {
+    let b = with_fill(POUR_FILL);
+    let command = zone_edit_command(&b, &[id(ZONE_1)], ZoneEdit::Shelved(true))
+        .expect("allowed")
+        .expect("a change");
+    let mut engine = crate::pcb::BoardEngine::new(b.clone(), 1);
+    engine.execute(command).expect("applies");
+    assert!(engine.board().zones[0].is_shelved_pour());
+    assert_eq!(
+        zone_edit_command(engine.board(), &[id(ZONE_1)], ZoneEdit::Shelved(true)),
+        Ok(None),
+        "shelving a shelved pour changes nothing"
+    );
+    engine.undo().expect("undo").expect("a step");
+    assert_eq!(
+        engine.board().zones,
+        b.zones,
+        "the inverse restores the board"
+    );
+
+    let mut solid = with_fill("solid");
+    assert_eq!(edit(&mut solid, ZoneEdit::Shelved(true)), Ok(false));
+    let mut keepout = with_fill(KEEPOUT_FILL);
+    assert_eq!(edit(&mut keepout, ZoneEdit::Shelved(true)), Ok(false));
+}

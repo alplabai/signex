@@ -96,6 +96,7 @@ mod tests {
             uuid: Uuid::now_v7(),
             start: Point::new(sx, sy),
             end: Point::new(ex, ey),
+            ..Default::default()
         }
     }
 

@@ -90,6 +90,87 @@ impl ArrayKind {
             Self::Polar { source, center, .. } => vec![*source, *center],
         }
     }
+
+    /// Whether single instances of this array can be suppressed. A grid
+    /// and a polar array keep a suppression list; a linear array has none.
+    pub fn has_suppression_model(&self) -> bool {
+        !matches!(self, Self::Linear { .. })
+    }
+
+    /// Whether instance `(i, j)` is on the suppression list (`j` is 0 for
+    /// a polar array). The mask expression is not evaluated here.
+    pub fn is_instance_suppressed(&self, i: u32, j: u32) -> bool {
+        self.depopulation()
+            .is_some_and(|d| d.suppressed_instances.contains(&(i, j)))
+    }
+
+    /// Put instance `(i, j)` on the suppression list or take it off.
+    /// The list gains a depopulation with an empty mask when it first
+    /// needs one, and drops it again when the list empties and the mask is
+    /// blank. Returns whether the array changed; a linear array never does.
+    pub fn set_instance_suppressed(&mut self, i: u32, j: u32, suppressed: bool) -> bool {
+        let slot = match self {
+            Self::Grid { depopulation, .. } | Self::Polar { depopulation, .. } => depopulation,
+            Self::Linear { .. } => return false,
+        };
+        if suppressed {
+            let d = slot.get_or_insert_with(|| GridDepopulation {
+                mask_expr: String::new(),
+                suppressed_instances: Vec::new(),
+            });
+            if d.suppressed_instances.contains(&(i, j)) {
+                return false;
+            }
+            d.suppressed_instances.push((i, j));
+            return true;
+        }
+        let Some(d) = slot.as_mut() else {
+            return false;
+        };
+        let before = d.suppressed_instances.len();
+        d.suppressed_instances.retain(|&entry| entry != (i, j));
+        let changed = d.suppressed_instances.len() != before;
+        if d.mask_expr.trim().is_empty() && d.suppressed_instances.is_empty() {
+            *slot = None;
+        }
+        changed
+    }
+
+    /// Replace the suppression list with `cells` (the Numbering Mask, mockup
+    /// row 126), keeping the mask expression. The depopulation goes when
+    /// both end up empty. Returns whether the array changed; a linear array
+    /// never does.
+    pub fn set_suppressed_instances(&mut self, cells: Vec<(u32, u32)>) -> bool {
+        let slot = match self {
+            Self::Grid { depopulation, .. } | Self::Polar { depopulation, .. } => depopulation,
+            Self::Linear { .. } => return false,
+        };
+        let before = slot.clone();
+        let mask_expr = slot.take().map(|d| d.mask_expr).unwrap_or_default();
+        if !(mask_expr.trim().is_empty() && cells.is_empty()) {
+            *slot = Some(GridDepopulation {
+                mask_expr,
+                suppressed_instances: cells,
+            });
+        }
+        *slot != before
+    }
+
+    /// Flip the suppression of instance `(i, j)`. Returns whether the
+    /// array changed.
+    pub fn toggle_instance_suppressed(&mut self, i: u32, j: u32) -> bool {
+        let suppressed = self.is_instance_suppressed(i, j);
+        self.set_instance_suppressed(i, j, !suppressed)
+    }
+
+    fn depopulation(&self) -> Option<&GridDepopulation> {
+        match self {
+            Self::Grid { depopulation, .. } | Self::Polar { depopulation, .. } => {
+                depopulation.as_ref()
+            }
+            Self::Linear { .. } => None,
+        }
+    }
 }
 
 /// Predicate evaluated per `(i, j)` index in a Grid array.
@@ -118,6 +199,10 @@ pub enum NumberingScheme {
     LinearIncrement {
         start_expr: String,
         step_expr: String,
+        /// The order a grid's cells take their numbers (mockup row 126).
+        /// A one-dimensional pattern has no second axis and ignores it.
+        #[serde(default, skip_serializing_if = "GridSweep::is_row_by_row")]
+        sweep: GridSweep,
     },
 
     /// BGA convention — row letter + col number (`A1`, `H17`). IPC-7351
@@ -140,6 +225,42 @@ impl Default for NumberingScheme {
         Self::LinearIncrement {
             start_expr: "1".into(),
             step_expr: "1".into(),
+            sweep: GridSweep::default(),
+        }
+    }
+}
+
+/// The order a grid pattern numbers its cells (mockup row 126).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GridSweep {
+    /// Along each row, then the next row.
+    #[default]
+    RowByRow,
+    /// Along each column, then the next column.
+    ColumnByColumn,
+    /// Down the first column, up the next: the DIP order.
+    DownThenUp,
+}
+
+impl GridSweep {
+    pub const ALL: [Self; 3] = [Self::RowByRow, Self::ColumnByColumn, Self::DownThenUp];
+
+    pub fn is_row_by_row(&self) -> bool {
+        *self == Self::RowByRow
+    }
+
+    /// The 0-based place of cell `(i, j)` in the numbering of an `nx` × `ny`
+    /// grid. A `j` past the last row (a mirrored instance) keeps its
+    /// row-major place, so it continues after the grid's own numbers.
+    pub fn sequence(self, i: usize, j: usize, nx: usize, ny: usize) -> usize {
+        if j >= ny {
+            return j * nx + i;
+        }
+        match self {
+            Self::RowByRow => j * nx + i,
+            Self::ColumnByColumn => i * ny + j,
+            Self::DownThenUp if i % 2 == 1 => i * ny + (ny - 1 - j),
+            Self::DownThenUp => i * ny + j,
         }
     }
 }
@@ -195,4 +316,65 @@ pub fn bga_row_letter(row_index: u32, skip_letters: bool, start_row: char) -> St
         out.push(*c);
     }
     out
+}
+
+#[cfg(test)]
+mod suppression_tests {
+    use super::*;
+
+    fn grid(depopulation: Option<GridDepopulation>) -> ArrayKind {
+        ArrayKind::Grid {
+            source: SketchEntityId::new(),
+            nx_expr: "2".into(),
+            ny_expr: "4".into(),
+            dx_expr: "1".into(),
+            dy_expr: "1".into(),
+            depopulation,
+        }
+    }
+
+    /// Mockup row 126: the Numbering Mask replaces the list, keeps the mask
+    /// expression, and an empty list with a blank mask drops the depopulation.
+    #[test]
+    fn the_suppressed_list_is_replaced_and_keeps_the_mask_expression() {
+        let mut kind = grid(Some(GridDepopulation {
+            mask_expr: "i != 0".into(),
+            suppressed_instances: vec![(0, 0)],
+        }));
+        assert!(kind.set_suppressed_instances(vec![(1, 2), (0, 3)]));
+        assert!(kind.is_instance_suppressed(1, 2));
+        assert!(kind.is_instance_suppressed(0, 3));
+        assert!(!kind.is_instance_suppressed(0, 0));
+        assert!(!kind.set_suppressed_instances(vec![(1, 2), (0, 3)]));
+        assert!(kind.set_suppressed_instances(Vec::new()));
+        let ArrayKind::Grid { depopulation, .. } = &kind else {
+            unreachable!()
+        };
+        assert_eq!(
+            depopulation.as_ref().map(|d| d.mask_expr.as_str()),
+            Some("i != 0")
+        );
+
+        let mut bare = grid(None);
+        assert!(bare.set_suppressed_instances(vec![(0, 1)]));
+        assert!(bare.set_suppressed_instances(Vec::new()));
+        assert!(matches!(
+            bare,
+            ArrayKind::Grid {
+                depopulation: None,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn a_linear_pattern_has_no_suppressed_list() {
+        let mut kind = ArrayKind::Linear {
+            source: SketchEntityId::new(),
+            count_expr: "4".into(),
+            dx_expr: "1".into(),
+            dy_expr: "0".into(),
+        };
+        assert!(!kind.set_suppressed_instances(vec![(0, 0)]));
+    }
 }

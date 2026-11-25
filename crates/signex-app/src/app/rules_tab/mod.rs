@@ -1,13 +1,15 @@
-//! The Rules document tab (#2398): the project's written DRC rules as a
-//! table, one row per rule of the rule text, and the same rules as text.
-//! The text stays the format: editing a cell rewrites only that rule's
-//! text (`signex_drc_dsl::table`), as one undo step on the project's rule
-//! history. Resolution, flags and the per-rule results come from
-//! `signex-drc`; this module only shows them. Behaviour:
-//! `docs/DRC_RULES.md`, "Rules manager".
+//! The Rules document tab (#2398, #2530): the project's written DRC rules
+//! as a constraint grid (domain tabs, the object hierarchy as rows, one
+//! column per limit) and as text. The text stays the format: editing a
+//! cell rewrites or adds one rule (`signex_drc_dsl::table::grid`), as one
+//! undo step on the project's rule history. Resolution, flags and the
+//! per-rule results come from `signex-drc`; this module only shows them.
+//! Behaviour: `docs/DRC_RULES.md`, "Rules manager".
 
 mod analysis;
 mod commands;
+mod drawing;
+mod grid;
 mod json;
 mod matrix;
 mod open;
@@ -16,120 +18,55 @@ mod search;
 mod sets;
 mod source;
 mod update;
+mod update_grid;
 mod update_matrix;
 mod view;
 
 #[cfg(test)]
+mod domain_bar_tests;
+#[cfg(test)]
+mod matrix_preview_tests;
+#[cfg(test)]
 mod matrix_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod text_bar_tests;
 
 pub(crate) use analysis::RulesAnalysis;
 pub(crate) use commands::{rules_add, rules_enable, rules_remove, rules_set};
+pub(crate) use grid::RulesGrid;
 pub(crate) use matrix::rules_matrix_set;
 pub(crate) use presets::rules_preset_apply;
 pub(crate) use sets::{rules_set_apply, rules_set_create, rules_set_edit};
 pub(crate) use source::{RulesOrigin, TEXT_UNAPPLIED};
 
 use iced::widget::text_editor;
+use signex_drc_dsl::table::catalog::Domain;
 use signex_drc_dsl::table::matrix::CellKey;
 use signex_drc_dsl::table::presets::RowChange;
 use signex_drc_dsl::table::{RuleField, RuleKind, RuleTable};
 use signex_types::project::DrcRuleSet;
+use signex_widgets::constraint_grid::GridMessage;
 
 use crate::app::state::ProjectId;
+use drawing::{PreviewMsg, PreviewTarget, RulePreview};
 
-/// A sub-tab: the rule kinds it lists.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum RulesDomain {
-    #[default]
-    Clearance,
-    Routing,
-    /// Hole size, annular ring and hole spacing (#2435).
-    Holes,
-    /// Solder mask and paste.
-    Mask,
-    /// Silkscreen and courtyards.
-    Assembly,
-}
-
-impl RulesDomain {
-    pub const ALL: [RulesDomain; 5] = [
-        RulesDomain::Clearance,
-        RulesDomain::Routing,
-        RulesDomain::Holes,
-        RulesDomain::Mask,
-        RulesDomain::Assembly,
-    ];
-
-    pub fn of(kind: RuleKind) -> Self {
-        match kind {
-            RuleKind::Clearance | RuleKind::Edge => RulesDomain::Clearance,
-            RuleKind::Track | RuleKind::Via => RulesDomain::Routing,
-            RuleKind::Hole => RulesDomain::Holes,
-            RuleKind::Mask | RuleKind::Paste => RulesDomain::Mask,
-            RuleKind::Silk | RuleKind::Courtyard => RulesDomain::Assembly,
-        }
-    }
-
-    pub const fn kinds(self) -> &'static [RuleKind] {
-        match self {
-            RulesDomain::Clearance => &[RuleKind::Clearance, RuleKind::Edge],
-            RulesDomain::Routing => &[RuleKind::Track, RuleKind::Via],
-            RulesDomain::Holes => &[RuleKind::Hole],
-            RulesDomain::Mask => &[RuleKind::Mask, RuleKind::Paste],
-            RulesDomain::Assembly => &[RuleKind::Silk, RuleKind::Courtyard],
-        }
-    }
-
-    /// Stable name in answers.
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            RulesDomain::Clearance => "clearance",
-            RulesDomain::Routing => "routing",
-            RulesDomain::Holes => "holes",
-            RulesDomain::Mask => "mask",
-            RulesDomain::Assembly => "assembly",
-        }
-    }
-}
-
-/// Which rows the table shows besides the search.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum RulesFilter {
-    #[default]
-    All,
-    /// Rules with a finding in the last run.
-    Violations,
-    /// Rules with a flag (shadowed, conflict, lowers a class, no nets) or
-    /// a compile problem.
-    Flagged,
-    /// Rules switched off.
-    Disabled,
-}
-
-impl RulesFilter {
-    pub const ALL: [RulesFilter; 4] = [
-        RulesFilter::All,
-        RulesFilter::Violations,
-        RulesFilter::Flagged,
-        RulesFilter::Disabled,
-    ];
-}
-
-/// How the Clearance sub-tab shows its rules (#2398).
+/// How the Clearance domain shows its rules (#2398): the grid, or the
+/// class-to-class matrix.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ClearanceView {
+    /// The constraint grid.
     #[default]
     List,
     /// The class-to-class matrix.
     Matrix,
 }
 
-/// A panel the tab shows beside its rules.
+/// A panel the tab shows with its rules.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RulesPanel {
-    /// Named rule sets.
+    /// Constraint sets: cards under the toolbar, with the set form.
     Sets,
     /// Generic tiers and rule profiles, applied after a diff.
     Presets,
@@ -142,7 +79,7 @@ pub struct MatrixEdit {
     pub text: String,
 }
 
-/// A field of the rule-set form.
+/// A field of the constraint-set form.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SetFormField {
     Name,
@@ -151,7 +88,7 @@ pub enum SetFormField {
     Scope,
 }
 
-/// What is typed in the rule-set form.
+/// What is typed in the constraint-set form.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SetForm {
     pub name: String,
@@ -245,10 +182,24 @@ impl std::fmt::Debug for RulesText {
 /// long as the project is loaded.
 #[derive(Debug, Clone, Default)]
 pub struct RulesTabState {
-    pub domain: RulesDomain,
-    pub filter: RulesFilter,
-    pub search: String,
-    /// The rule whose detail is shown, by name.
+    /// The domain tab shown and its grid: rows, columns and the grid's
+    /// view state (collapsed, selected, typed in). Rebuilt in `update` when
+    /// its rows change.
+    pub grid: RulesGrid,
+    /// Inherited values are shown muted; off, only values set on a row or
+    /// by a constraint set show.
+    pub hide_inherited: bool,
+    /// Only rows with a value of their own in the domain are listed.
+    pub overridden_only: bool,
+    /// The find-a-constraint box.
+    pub find: grid::FindState,
+    /// The drawing of the selected cell: its label being typed, a drag.
+    pub(crate) drawing: RulePreview,
+    /// What the drawing shows: the selected cell's rule kind with its row's
+    /// values, or the hovered or pinned matrix pair. Refreshed in `update`.
+    pub(crate) drawing_target: Option<PreviewTarget>,
+    /// The rule whose detail is shown, by name: the rule that governs the
+    /// selected cell, or a scoped rule's row.
     pub selected: Option<String>,
     pub edit: Option<CellEdit>,
     /// Why the last edit was refused, until the next edit.
@@ -265,6 +216,21 @@ pub struct RulesTabState {
     pub matrix_open: Option<(String, String)>,
     pub set_form: SetForm,
     pub preview: Option<PresetPreview>,
+    /// The class matrix widget's view state: the classes in order, the
+    /// pinned cell and the cell being typed in.
+    pub matrix: signex_widgets::constraint_grid::ClassMatrix,
+    /// The matrix cell or object pair under the pointer, for the preview.
+    pub matrix_hover: Option<CellKey>,
+    /// The matrix cell or object pair the preview stays on; a value typed
+    /// on the drawing writes it.
+    pub matrix_pin: Option<CellKey>,
+}
+
+impl RulesTabState {
+    /// The Clearance domain shows its class matrix, not the grid.
+    pub fn is_matrix_shown(&self) -> bool {
+        self.grid.domain() == Domain::Clearance && self.clearance_view == ClearanceView::Matrix
+    }
 }
 
 /// Messages of a Rules tab, under `ProjectMsg::Rules`. Each names its
@@ -276,21 +242,40 @@ pub enum RulesTabMsg {
     OpenRequested {
         project: Option<ProjectId>,
     },
+    /// A DRC link: open the tab of `project_id` on `domain`, with `rule`
+    /// selected. Runs on the main window, whichever window sent it.
+    OpenedAt {
+        project_id: ProjectId,
+        domain: Domain,
+        rule: Option<String>,
+    },
     DomainPicked {
         project_id: ProjectId,
-        domain: RulesDomain,
+        domain: Domain,
     },
-    FilterPicked {
+    /// Something happened in the constraint grid: a row or group toggled,
+    /// a cell pressed, typed in, submitted or reset, the find box typed in.
+    GridActed {
         project_id: ProjectId,
-        filter: RulesFilter,
+        msg: GridMessage,
     },
-    SearchEdited {
+    /// Something happened on the selected cell's drawing: a label typed
+    /// in or committed, a handle dragged.
+    PreviewActed {
         project_id: ProjectId,
-        text: String,
+        msg: PreviewMsg,
     },
-    RowSelected {
+    /// The Constraint sets button: the set cards shown or hidden.
+    SetsToggled {
         project_id: ProjectId,
-        rule: String,
+    },
+    /// The Show inherited values chip.
+    InheritedToggled {
+        project_id: ProjectId,
+    },
+    /// The Overridden rows only chip.
+    OverriddenOnlyToggled {
+        project_id: ProjectId,
     },
     CellOpened {
         project_id: ProjectId,
@@ -344,24 +329,13 @@ pub enum RulesTabMsg {
     DrcRequested {
         project_id: ProjectId,
     },
-    /// The Clearance sub-tab switched between its list and the matrix.
+    /// The Clearance domain switched between its grid and the matrix.
     ClearanceViewPicked {
         project_id: ProjectId,
         view: ClearanceView,
     },
-    /// A matrix cell was clicked: type in it and show its object sub-grid.
-    MatrixCellOpened {
-        project_id: ProjectId,
-        key: CellKey,
-    },
-    MatrixCellEdited {
-        project_id: ProjectId,
-        text: String,
-    },
+    /// Enter in the object-pair row being typed in.
     MatrixCellCommitted {
-        project_id: ProjectId,
-    },
-    MatrixCellCancelled {
         project_id: ProjectId,
     },
     /// Clear a cell back to what its two classes ask without it.
@@ -412,5 +386,28 @@ pub enum RulesTabMsg {
     },
     PresetDismissed {
         project_id: ProjectId,
+    },
+    /// The class matrix widget spoke: a cell pressed, typed in, submitted,
+    /// cancelled or cleared.
+    MatrixActed {
+        project_id: ProjectId,
+        msg: signex_widgets::constraint_grid::MatrixMessage,
+    },
+    /// The pointer moved onto a matrix cell or an object-pair row; `None`
+    /// once it left them.
+    MatrixHovered {
+        project_id: ProjectId,
+        key: Option<CellKey>,
+    },
+    /// An object-pair row was clicked: the preview stays on it.
+    MatrixPairPinned {
+        project_id: ProjectId,
+        key: CellKey,
+    },
+    /// Text was typed in an object-pair row of the open cell.
+    MatrixPairTyped {
+        project_id: ProjectId,
+        key: CellKey,
+        text: String,
     },
 }

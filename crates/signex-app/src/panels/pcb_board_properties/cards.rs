@@ -18,10 +18,16 @@ use crate::styles::TypeScale;
 
 const TS: TypeScale = TypeScale::DEFAULT;
 
-/// A card's name: one line, cut with an ellipsis when long.
+/// A card's name in the medium weight: one line, cut with an ellipsis when
+/// long.
 pub(super) fn name<'a>(form: &Form<'a>, label: impl Into<Label<'a>>) -> Element<'a, PanelMsg> {
+    let medium = iced::Font {
+        weight: iced::font::Weight::Medium,
+        ..crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT)
+    };
     text(label)
         .size(TS.body)
+        .font(medium)
         .color(form.ink())
         .wrapping(Wrapping::None)
         .ellipsis(Ellipsis::End)

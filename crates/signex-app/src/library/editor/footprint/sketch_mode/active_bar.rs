@@ -2,9 +2,9 @@
 //! bar over a footprint in sketch mode and over a board sketch.
 //!
 //! The geometry tools collapse into two dropdown triggers (**Create ▾**
-//! and **Modify ▾**) while the constraints stay a flat, selection-driven
-//! strip: a constraint is applied to a selection already made, so it
-//! should not cost a menu click.
+//! and **Modify ▾**) while the constraints stay a flat strip: a constraint
+//! is applied to a selection already made, so it should not cost a menu
+//! click.
 //!
 //! Layout (left → right):
 //!
@@ -12,8 +12,9 @@
 //! 2. **Create ▾** — the drawing tools; the trigger borrows the armed
 //!    tool's icon so the collapsed bar still shows what's in hand.
 //! 3. **Modify ▾** — the edit tools and Make Pad from Profile.
-//! 4. **Constrain** — the constraint buttons the current selection
-//!    permits; empty until something is selected.
+//! 4. **Constrain** — all 19 constraint buttons, always; one the
+//!    selection cannot take is greyed and inert. On a narrow canvas this
+//!    strip alone scrolls ([`CONSTRAINT_SLOTS`]).
 //! 5. **Dimension input** — `Custom` slot with a `text_input` for
 //!    the `DistancePtPt` numeric value.
 //! 6. **Linetype** — Normal / Construction / Centerline segments.
@@ -27,7 +28,7 @@ use signex_i18n::{I18n, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
 use signex_widgets::theme_ext;
-use signex_widgets::{SegmentedStyle, raw, segmented, text, text_input};
+use signex_widgets::{raw, segmented, text, text_input};
 
 use super::SketchLinetype;
 use crate::app::FootprintDocument;
@@ -40,6 +41,10 @@ use crate::library::messages::{
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
+/// Where the constraint strip sits in [`items`]: after Select, its
+/// separator, Create ▾, Modify ▾ and their separator.
+pub(crate) const CONSTRAINT_SLOTS: std::ops::Range<usize> = 5..24;
 
 /// Build the sketch Active Bar items for the given editor state, the same
 /// on both hosts.
@@ -71,33 +76,26 @@ pub fn items<'a>(
     // Compute which constraint tags apply to the current selection.
     let enabled = constraint_enable_matrix(editor);
 
-    // v0.22 — `mk_constraint` now returns `Option<...>`: only emits a
-    // button when the tag's slot is enabled by the current selection.
-    // Inert constraint buttons used to occupy real width even when
-    // they did nothing; the bar reads as a dynamic context-sensitive
-    // strip now. Combined with the modify-section gating below, this
-    // removes ~10 buttons from the no-selection state.
+    // A button the selection cannot take stays in place, greyed, with no
+    // message to publish (DECISIONS 2026-11-23, #2843).
     let mk_constraint = |tag: SketchConstraintTag,
                          tooltip: &str,
                          icon: iced::widget::svg::Handle|
-     -> Option<ActiveBarItem<LibraryMessage>> {
-        if !enabled[tag_index(tag)] {
-            return None;
-        }
-        let p = path.clone();
-        Some(ActiveBarItem::Button(ActiveBarButton {
+     -> ActiveBarItem<LibraryMessage> {
+        let applies = enabled[tag_index(tag)];
+        ActiveBarItem::Button(ActiveBarButton {
             icon: ActiveBarIcon::Svg(icon),
             tooltip: tooltip.to_string(),
-            enabled: true,
+            enabled: applies,
             selected: false,
-            on_press: Some(LibraryMessage::PrimitiveEditorEvent {
-                path: p,
+            on_press: applies.then(|| LibraryMessage::PrimitiveEditorEvent {
+                path: path.clone(),
                 msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchAddConstraintForSelection(
                     tag,
                 )),
             }),
             ..ActiveBarButton::default()
-        }))
+        })
     };
 
     // Create ▾ / Modify ▾ group triggers. Both clicks open the menu —
@@ -132,6 +130,7 @@ pub fn items<'a>(
             on_press: Some(toggle.clone()),
             on_right_press: Some(toggle),
             dropdown_indicator: Some(ActiveBarIcon::Svg(icons::icon_chevron_45(theme_id))),
+            on_chevron_press: None,
         })
     };
 
@@ -139,8 +138,8 @@ pub fn items<'a>(
     // ~6 digits + "mm" hint inside the bar's vertical rhythm.
     let dim_input = build_dimension_input(editor, tokens);
 
-    // Bar shape: Select | Create ▾ Modify ▾ | <constraints the current
-    // selection permits> | DimInput | Linetype | Snap ▾. The dropdown
+    // Bar shape: Select | Create ▾ Modify ▾ | <all 19 constraints> |
+    // DimInput | Linetype | Snap ▾. The dropdown
     // panels find their trigger by its message
     // (`unified_active_bar::menu_trigger_geometry`), not by position.
     let mut items: Vec<ActiveBarItem<LibraryMessage>> = vec![
@@ -162,11 +161,10 @@ pub fn items<'a>(
         ),
     ];
 
-    // Section 4: Constrain — only the buttons whose precondition is
-    // met by the current selection are rendered (mk_constraint
-    // returns Option). Section disappears entirely when no
-    // selection is active.
-    let constraint_buttons: Vec<ActiveBarItem<LibraryMessage>> = [
+    // Section 4: Constrain — every button, greyed where the selection
+    // does not apply.
+    items.push(ActiveBarItem::Separator);
+    items.extend([
         mk_constraint(
             SketchConstraintTag::Fixed,
             "Fix point in place (needs 1 Point)",
@@ -266,14 +264,7 @@ pub fn items<'a>(
             "Symmetric about point (needs 3 Points: 2 + a centre)",
             icons::icon_sk_c_symmetric_point(theme_id),
         ),
-    ]
-    .into_iter()
-    .flatten()
-    .collect();
-    if !constraint_buttons.is_empty() {
-        items.push(ActiveBarItem::Separator);
-        items.extend(constraint_buttons);
-    }
+    ]);
 
     // Sections 5-7: Dimension input, Linetype and Snap ▾ — always visible.
     items.push(ActiveBarItem::Separator);
@@ -303,15 +294,7 @@ fn linetype_segments(
 ) -> Element<'static, LibraryMessage> {
     let path = editor.path.clone();
     let r = crate::styles::tokens::resolve(tokens);
-    let style = SegmentedStyle::new(
-        r.sunken,
-        r.raised,
-        r.shadow,
-        r.ink3,
-        theme_ext::text_primary(tokens),
-        TS.body,
-    )
-    .fill_width(true);
+    let style = r.segmented(TS.body).fill_width(true);
     let glyph = |linetype| match linetype {
         SketchLinetype::Normal => ids::EDITORS_SKETCH_LINETYPE_NORMAL,
         SketchLinetype::Construction => ids::EDITORS_SKETCH_LINETYPE_CONSTRUCTION,
@@ -371,6 +354,7 @@ fn snap_trigger(
         on_press: Some(toggle.clone()),
         on_right_press: Some(toggle),
         dropdown_indicator: Some(ActiveBarIcon::Svg(icons::icon_chevron_45(theme_id))),
+        on_chevron_press: None,
     })
 }
 
@@ -395,6 +379,11 @@ fn sketch_tool_icon(
         SketchTool::Offset => icons::icon_sk_offset(theme_id),
         SketchTool::RectPattern => icons::icon_sk_rect_pattern(theme_id),
         SketchTool::CircularPattern => icons::icon_sk_circular_pattern(theme_id),
+        SketchTool::Chamfer => icons::icon_sk_chamfer(theme_id),
+        SketchTool::Extend => icons::icon_sk_extend(theme_id),
+        SketchTool::LinearPattern => icons::icon_sk_linear_pattern(theme_id),
+        SketchTool::Slot => icons::icon_sk_slot(theme_id),
+        SketchTool::Polygon => icons::icon_sk_polygon(theme_id),
         // BreakTrack (#372) / DragTrackEnd (#361) land on this file via the
         // trunk merge; they are armed from the main bar's "Modify Tracks"
         // dropdown, not a sketch group trigger, so this icon is only a
@@ -587,3 +576,7 @@ fn build_dimension_input<'a>(
     })
     .boxed()
 }
+
+#[cfg(test)]
+#[path = "active_bar_tests.rs"]
+mod tests;

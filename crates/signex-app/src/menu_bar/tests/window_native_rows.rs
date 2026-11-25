@@ -310,3 +310,34 @@ fn net_label_from_a_windows_bar_ghosts_on_the_windows_canvas() {
     );
     assert!(app.interaction_state.canvas.ghost_label.is_none());
 }
+
+/// Mockup row 166: the system menu bar carries View ▸ Window ▸ Layouts, a third level,
+/// with the built-ins and your layouts, and its rows apply them.
+#[test]
+fn the_native_bar_applies_built_in_and_user_layouts() {
+    use crate::workspace_layouts::{BuiltinLayout, LayoutId, SaveLayoutMsg};
+    struct NoWrites;
+    impl crate::workspace_layouts::WorkspaceLayoutsStore for NoWrites {
+        fn write(&self, _: &serde_json::Value) -> Result<(), String> {
+            Ok(())
+        }
+    }
+    let mut app = rich();
+    app.ui_state.workspace_layouts.layouts = Default::default();
+    app.ui_state.workspace_layouts.store = std::sync::Arc::new(NoWrites);
+    let _ = app.update(SaveLayoutMsg::Requested.into());
+    let _ = app.update(SaveLayoutMsg::NameEdited("Bench".into()).into());
+    let _ = app.update(SaveLayoutMsg::Confirmed.into());
+
+    let _ = native_click(&mut app, "View/Window/Layouts/Layout");
+    assert_eq!(
+        app.ui_state.workspace_layouts.layouts.active(),
+        Some(&LayoutId::Builtin(BuiltinLayout::Layout))
+    );
+    let _ = native_click(&mut app, "View/Window/Layouts/Bench");
+    let bench = app.ui_state.workspace_layouts.layouts.user()[0].id.clone();
+    assert_eq!(
+        app.ui_state.workspace_layouts.layouts.active(),
+        Some(&bench)
+    );
+}

@@ -34,9 +34,63 @@ use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
 
 mod grid;
+mod instance_at;
 mod linear;
+mod links;
+#[cfg(test)]
+mod links_tests;
 mod numbering;
+mod overrides;
+mod placements;
 mod polar;
+#[cfg(test)]
+mod polar_tests;
+mod preview;
+mod slots;
+mod walk;
+
+pub use instance_at::instance_at;
+pub use numbering::{
+    NumberMaskRefusal, instances_numbered, number_mask_entries, suppressed_numbers,
+};
+pub(crate) use placements::{
+    InstanceBudget, PlacesRefused, SourcePlace, is_patterned, source_places,
+};
+pub use preview::{ArrayPreview, InstancePreview, preview_array};
+pub use slots::{PatternSlot, pattern_slots};
+
+/// Bake one kept instance of an array: the source pad moved by the
+/// instance offset and given its number.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "one instance needs the source pad, its context and the bake outputs"
+)]
+fn bake_instance(
+    source: signex_sketch::id::SketchEntityId,
+    pad_attr: &signex_sketch::attr::PadAttr,
+    instance: walk::Instance,
+    ctx: &signex_sketch::expr::eval::EvalContext,
+    sketch: &SketchData,
+    solve: &FullSolveOutput,
+    out: &mut Vec<LibPad>,
+    warnings: &mut Vec<String>,
+) -> Result<(), SketchError> {
+    // A kept instance always has an offset; only a dropped one may not.
+    let [dx, dy] = instance.offset_mm.unwrap_or_default();
+    let pad = crate::pad::bake_one_pad(
+        source,
+        pad_attr,
+        ctx,
+        dx,
+        dy,
+        Some(instance.number),
+        sketch,
+        solve,
+        warnings,
+    )?;
+    out.push(pad);
+    Ok(())
+}
 
 /// Most pad instances one array may expand to. Array counts come from
 /// user / file expressions and the bake runs on the editor's update
@@ -111,8 +165,14 @@ pub fn bake_arrays(
     let params_ast = crate::params::params_ast(sketch, params_canonical);
 
     for array in &sketch.arrays {
+        // A pattern link or an override bakes through the instance walk.
+        if links::bakes_through_links(sketch, array.id) {
+            links::bake_pattern(array.id, sketch, solve, &params_ast, out, warnings)?;
+            continue;
+        }
         bake_one_array(array, &params_ast, sketch, solve, out, warnings)?;
     }
+    links::bake_mirrors(sketch, solve, &params_ast, out, warnings)?;
 
     Ok(())
 }

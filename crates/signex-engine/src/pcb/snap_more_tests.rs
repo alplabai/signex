@@ -3,6 +3,7 @@
 use std::collections::BTreeSet;
 
 use signex_types::pcb::{PcbBoard, Point};
+use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
 use signex_types::pcb_options::{BoardGuide, GuideKind};
 use uuid::Uuid;
 
@@ -41,9 +42,11 @@ fn board() -> PcbBoard {
 fn query<'a>(objects: &'a BTreeSet<SnapObject>, skip: &'a BTreeSet<Uuid>) -> SnapQuery<'a> {
     SnapQuery {
         objects,
-        layers: u32::MAX,
+        layers: SnapLayers::All,
         skip,
         radius_mm: 0.6,
+        shown: ShownLayers::ALL,
+        net: None,
     }
 }
 
@@ -80,20 +83,28 @@ fn two_tracks_cross_at_an_intersection() {
     assert!(close(hit, Point::new(30.0, 10.0)), "{hit:?}");
 }
 
+/// Caner, 2026-11-24 (#2879): Current Layer keeps a drawing on the current
+/// layer and leaves one on another out (it used to leave every drawing out).
 #[test]
-fn an_arc_centre_pulls_on_every_layer_only() {
+fn an_arc_centre_pulls_on_its_own_layer_only() {
     let hit = snap(SnapObject::ArcCenters, Point::new(60.2, 10.1));
     assert!(close(hit, Point::new(60.0, 10.0)), "{hit:?}");
     let objects: BTreeSet<SnapObject> = [SnapObject::ArcCenters].into();
     let skip = BTreeSet::new();
     let top_only = SnapQuery {
-        layers: 1,
+        layers: SnapLayers::Current(PcbLayer::Copper(CopperLayer::Top)),
         ..query(&objects, &skip)
     };
     assert_eq!(
         object_snap_point(&board(), Point::new(60.2, 10.1), &top_only),
         None
     );
+    let silk = SnapQuery {
+        layers: SnapLayers::Current(PcbLayer::Technical(TechnicalLayer::SilkscreenTop)),
+        ..query(&objects, &skip)
+    };
+    let hit = object_snap_point(&board(), Point::new(60.2, 10.1), &silk);
+    assert!(close(hit, Point::new(60.0, 10.0)), "{hit:?}");
 }
 
 #[test]

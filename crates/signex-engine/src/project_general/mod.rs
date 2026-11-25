@@ -53,6 +53,11 @@ pub enum ProjectGeneralCommand {
     SetParameter { name: String, value: String },
     /// Delete a parameter.
     RemoveParameter(String),
+    /// Rename a parameter, keeping its value. Always a step of its own.
+    /// Changes nothing when `from` is missing, `to` is empty or already
+    /// used, or the two are equal; the Project tab refuses those names
+    /// before they get here.
+    RenameParameter { from: String, to: String },
     /// Pick the designator standard (#1421); `None` is "Library designator".
     /// Always its own undo step, and it closes the description typing run.
     /// An unreadable section from a newer Signex is replaced only by a real
@@ -97,6 +102,9 @@ pub enum ProjectGeneralCommand {
     /// The kinds of file Fabrication Outputs writes (#2489); `None` is the
     /// defaults. Always a step of its own.
     SetFabOutputs(Option<FabOutputKinds>),
+    /// The project's differential pair classes as the Differential Pair
+    /// Classes dialog's OK leaves them (#1282). Always a step of its own.
+    SetDiffPairClasses(Vec<signex_types::diff_pair_class::DiffPairClass>),
 }
 
 /// The `title_block` keys a project parameter shares with a sheet: empty
@@ -126,6 +134,7 @@ struct GeneralSnapshot {
     project_defaults: ProjectDefaults,
     agent_journal: AgentJournalSettings,
     fab_outputs: Option<FabOutputKinds>,
+    diff_pair_classes: Vec<signex_types::diff_pair_class::DiffPairClass>,
     sections: SectionsSnapshot,
     /// The project's rules, held only by the two sides of a
     /// [`ProjectGeneralCommand::SetFabTier`] step.
@@ -142,6 +151,7 @@ impl GeneralSnapshot {
             project_defaults: data.project_defaults.clone(),
             agent_journal: data.agent_journal,
             fab_outputs: data.fab_outputs,
+            diff_pair_classes: data.schematic_design.diff_pair_classes.clone(),
             sections: SectionsSnapshot::of(data),
             rules: None,
         }
@@ -168,6 +178,7 @@ impl GeneralSnapshot {
         data.project_defaults = self.project_defaults;
         data.agent_journal = self.agent_journal;
         data.fab_outputs = self.fab_outputs;
+        data.schematic_design.diff_pair_classes = self.diff_pair_classes;
         self.sections.restore(data);
     }
 }
@@ -246,12 +257,14 @@ impl ProjectGeneralHistory {
         let is_pick = matches!(
             command,
             ProjectGeneralCommand::SetDesignatorStandard(_)
+                | ProjectGeneralCommand::RenameParameter { .. }
                 | ProjectGeneralCommand::SetSchematicDefaultLineStyle(_)
                 | ProjectGeneralCommand::SetSchematicDefaultShapeFill(_)
                 | ProjectGeneralCommand::SetProjectDefaults { typing: None, .. }
                 | ProjectGeneralCommand::SetAgentJournal { typing: false, .. }
                 | ProjectGeneralCommand::SetFabTier { .. }
                 | ProjectGeneralCommand::SetFabOutputs(_)
+                | ProjectGeneralCommand::SetDiffPairClasses(_)
         );
         let field = RunField::of(&command);
         if is_pick || self.run_field != Some(field) {
@@ -273,6 +286,15 @@ impl ProjectGeneralHistory {
             }
             ProjectGeneralCommand::RemoveParameter(name) => {
                 data.parameters.remove(&name);
+            }
+            ProjectGeneralCommand::RenameParameter { from, to } => {
+                if !to.is_empty()
+                    && from != to
+                    && !data.parameters.contains_key(&to)
+                    && let Some(value) = data.parameters.remove(&from)
+                {
+                    data.parameters.insert(to, value);
+                }
             }
             ProjectGeneralCommand::SetDesignatorStandard(standard) => {
                 if !(standard.is_none() && data.has_unreadable_annotation()) {
@@ -309,6 +331,12 @@ impl ProjectGeneralHistory {
                 data.rules = Some(*rules);
             }
             ProjectGeneralCommand::SetFabOutputs(kinds) => data.fab_outputs = kinds,
+            ProjectGeneralCommand::SetDiffPairClasses(classes) => {
+                // An unreadable section is never replaced (DECISIONS 2026-11-23).
+                if !data.has_unreadable_schematic_design() {
+                    data.schematic_design.diff_pair_classes = classes;
+                }
+            }
         }
         if GeneralSnapshot::of_step(data, owns_rules) == before {
             return false;
@@ -398,9 +426,17 @@ impl ProjectGeneralHistory {
     pub fn can_redo(&self) -> bool {
         self.history.can_redo()
     }
+
+    /// Position in the edit timeline, counting steps the depth cap dropped:
+    /// an edit or a redo raises it, an undo lowers it.
+    pub fn position(&self) -> usize {
+        self.history.position()
+    }
 }
 
 #[cfg(test)]
 mod section_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod variant_tests;

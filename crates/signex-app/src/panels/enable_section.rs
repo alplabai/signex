@@ -21,7 +21,7 @@ pub(crate) fn enable_section_style(tokens: &ThemeTokens) -> EnableSectionStyle<'
         header_ink: ti(tokens.text_secondary),
         disabled_ink: resolve(tokens).ink4,
         panel: ti(tokens.panel_bg),
-        font: crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT),
+        font: signex_widgets::ui_font::regular(),
         checkbox: Box::new(form_look::checkbox_style),
         tip: Box::new(crate::styles::context_menu(tokens)),
     }

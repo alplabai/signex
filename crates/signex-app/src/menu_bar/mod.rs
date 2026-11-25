@@ -107,13 +107,19 @@ pub enum MenuMessage {
     OpenProjectsPanel,
     OpenComponentsPanel,
     OpenNavigatorPanel,
+    /// View ▸ Annotations: show the Annotations panel (mockup row 165).
+    OpenAnnotationsPanel,
     OpenPropertiesPanel,
     /// Open the active project's options tab.
     OpenProjectOptions,
     OpenErcPanel,
     OpenMessagesPanel,
+    /// View ▸ Command Log: show the Command Log panel (#2458).
+    OpenCommandLogPanel,
     /// View ▸ Layers: show the Layers panel (#2223).
     OpenLayersPanel,
+    /// View ▸ Unions: show the Unions panel (mockup row 158).
+    OpenUnionsPanel,
     /// Place ▸ Text — the text-note tool.
     PlaceText,
     // Project ▸ Annotation
@@ -131,6 +137,10 @@ pub enum MenuMessage {
     /// listing every binding from the active keymap profile, callable from
     /// Help ▸ Keyboard Shortcuts and from F1.
     OpenKeyboardShortcuts,
+    /// Help ▸ Show Welcome Tips (mockup row 14): opens the first-run card
+    /// again. The card is the same one, and its close persists as on first
+    /// launch.
+    OpenWelcomeTips,
     /// Tools ▸ New Part — bumps the active `.snxsym` symbol's max
     /// `part_number` by one and switches the editor's active_part to
     /// the new value. No-op when no Symbol editor is the active tab.
@@ -153,6 +163,9 @@ pub enum MenuMessage {
     NextDocumentTab,
     PreviousDocumentTab,
     PreviousSheet,
+    /// View ▸ Window ▸ Layouts ▸ `<your layout>` (mockup row 166): apply the user
+    /// layout with this stored id.
+    WorkspaceLayoutChosen(String),
 }
 
 impl MenuMessage {
@@ -183,10 +196,13 @@ impl MenuMessage {
             Self::OpenProjectsPanel
                 | Self::OpenComponentsPanel
                 | Self::OpenNavigatorPanel
+                | Self::OpenAnnotationsPanel
                 | Self::OpenPropertiesPanel
                 | Self::OpenErcPanel
                 | Self::OpenMessagesPanel
+                | Self::OpenCommandLogPanel
                 | Self::OpenLayersPanel
+                | Self::OpenUnionsPanel
         )
     }
 }
@@ -220,6 +236,9 @@ pub struct MenuContext<'a> {
     /// What Design ▸ Update PCB Document names: the board a schematic in
     /// view updates, or the project a board imports from (#1312).
     pub(crate) pcb_sync: Option<crate::app::update_pcb::PcbSyncLabel>,
+    /// What View ▸ Window ▸ Layouts lists: the active layout, your layouts
+    /// and the Reset row (mockup row 166).
+    pub(crate) layouts: crate::workspace_layouts::LayoutsMenu,
 }
 
 impl Default for MenuContext<'_> {
@@ -233,6 +252,7 @@ impl Default for MenuContext<'_> {
             i18n: signex_i18n::I18n::en_us(),
             cross_select: true,
             pcb_sync: None,
+            layouts: Default::default(),
         }
     }
 }

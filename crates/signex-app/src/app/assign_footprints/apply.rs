@@ -187,29 +187,30 @@ impl Signex {
             kind: crate::app::UndoGroupKind::Footprints,
             ..Default::default()
         };
-        let mut active_patch = None;
+        let (mut active_patch, mut members) = (None, Vec::new());
         for done in &changed {
             recorded.live.push(done.path.clone());
             if active.as_deref() == Some(done.path.as_path()) {
                 active_patch = done.patch;
             } else {
-                self.document_state.mark_history_edit_dirty(&done.path);
+                let patch = done.patch.unwrap_or(signex_engine::DocumentPatch::FULL);
+                members.push((done.path.clone(), patch));
             }
         }
         let sheets = changed.len();
-        self.set_undo_group_sheets(group, recorded);
+        // The active sheet's change notes the sheet edit for ERC itself.
+        let run = crate::app::state::sheet_change::SheetRun {
+            group,
+            recorded,
+            members,
+            notes_edit: sheets > 0,
+        };
+        self.finish_schematic_mutation(active_patch, Some(run), true, true);
         if sheets == 0 {
             crate::diagnostics::log_info(
                 "Assign Footprints: nothing changed; every part already had its footprint.",
             );
             return;
-        }
-        match active_patch {
-            // Notes the sheet edit for ERC itself.
-            Some(patch) => {
-                self.finish_schematic_mutation(patch, true, true);
-            }
-            None => self.document_state.note_sheet_edit(),
         }
         self.refresh_panel_ctx();
         crate::diagnostics::log_info(format!(

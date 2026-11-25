@@ -174,6 +174,12 @@ fn item_geometry(board: &PcbBoard, item: &ItemRef) -> Value {
                 let text = fp.properties.iter().find(|p| p.key == field.key())?;
                 Some(json!({"placement": placement(fp), "field": field.id(), "text": text}))
             }),
+        // Where a room is and what it holds (#2457), not its name or colour.
+        ItemRef::Room(id) => {
+            board.rooms.iter().find(|r| r.uuid == id).map(
+                |r| json!({"outline": r.outline, "margin_mm": r.margin_mm, "source": r.source}),
+            )
+        }
     };
     found.unwrap_or_else(|| json!(format!("missing:{}", item_id(item))))
 }

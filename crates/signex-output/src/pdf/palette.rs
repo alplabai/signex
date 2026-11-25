@@ -51,6 +51,10 @@ pub struct SchematicPalette {
     /// no more-specific palette entry applies. Matches what the
     /// canvas paints in pin-name and ref-text colours.
     pub field_text: (f32, f32, f32),
+    /// Signal harness wires, outlines and names (#1280).
+    pub harness: (f32, f32, f32),
+    /// Harness connector and entry fill.
+    pub harness_soft: (f32, f32, f32),
 }
 
 impl SchematicPalette {
@@ -81,6 +85,8 @@ impl SchematicPalette {
             child_sheet_stroke: (0.25, 0.25, 0.25),
             child_sheet_text: (0.18, 0.18, 0.18),
             field_text: (0.1, 0.1, 0.1),
+            harness: (0.42, 0.31, 0.63),
+            harness_soft: (0.94, 0.92, 0.97),
         }
     }
 }
@@ -125,6 +131,8 @@ impl From<&CanvasColors> for SchematicPalette {
             child_sheet_stroke: rgb(c.body),
             child_sheet_text: rgb(c.reference),
             field_text: rgb(c.reference),
+            harness: rgb(c.harness_color()),
+            harness_soft: rgb(c.harness_soft_color()),
         }
     }
 }

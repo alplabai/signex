@@ -120,6 +120,39 @@ fn file_line<'a, M: 'a>(s: &HistoryGraphStyle, i18n: &I18n, file: &ChangedFile) 
     .boxed()
 }
 
+/// A file row a press picks; the picked row is filled and its path takes
+/// the accent.
+fn picked_file_line<'a, M: Clone + 'a>(
+    s: &HistoryGraphStyle,
+    i18n: &I18n,
+    file: &ChangedFile,
+    is_picked: bool,
+    on_pick: M,
+) -> Element<'a, M> {
+    let s = *s;
+    let mut look = s;
+    if is_picked {
+        look.ink = s.accent;
+    }
+    button(file_line(&look, i18n, file))
+        .width(Length::Fill)
+        .padding(Padding::ZERO)
+        .on_press(on_pick)
+        .style(move |_: &Theme, status: button::Status| {
+            let hot = matches!(status, button::Status::Hovered | button::Status::Pressed);
+            button::Style {
+                background: (is_picked || hot).then_some(Background::Color(s.hover)),
+                text_color: s.ink,
+                border: Border {
+                    radius: s.radii.small.into(),
+                    ..Border::default()
+                },
+                ..button::Style::default()
+            }
+        })
+        .boxed()
+}
+
 /// The detail strip of `commit`. `actions` are the caller's buttons, laid
 /// out in a wrapping row.
 pub fn commit_detail<'a, M: 'a>(
@@ -127,6 +160,38 @@ pub fn commit_detail<'a, M: 'a>(
     i18n: &I18n,
     commit: &GraphCommit,
     files: &[ChangedFile],
+    actions: Vec<Element<'a, M>>,
+) -> Element<'a, M> {
+    let file_list: Column<Element<'a, M>> =
+        Column::with_children(files.iter().map(|f| file_line(style, i18n, f)))
+            .spacing(style.em(DETAIL_FILE_GAP_EM));
+    strip(style, commit, file_list.boxed(), actions)
+}
+
+/// [`commit_detail`] with file rows a press picks: `on_pick` gets the
+/// pressed row's path, and the row whose path is `picked` is marked.
+pub fn commit_detail_picking<'a, M: Clone + 'a>(
+    style: &HistoryGraphStyle,
+    i18n: &I18n,
+    commit: &GraphCommit,
+    files: &[ChangedFile],
+    picked: Option<&str>,
+    on_pick: impl Fn(String) -> M,
+    actions: Vec<Element<'a, M>>,
+) -> Element<'a, M> {
+    let rows = files.iter().map(|f| {
+        let is_picked = picked == Some(f.path.as_str());
+        picked_file_line(style, i18n, f, is_picked, on_pick(f.path.clone()))
+    });
+    let file_list: Column<Element<'a, M>> =
+        Column::with_children(rows).spacing(style.em(DETAIL_FILE_GAP_EM));
+    strip(style, commit, file_list.boxed(), actions)
+}
+
+fn strip<'a, M: 'a>(
+    style: &HistoryGraphStyle,
+    commit: &GraphCommit,
+    file_list: Element<'a, M>,
     actions: Vec<Element<'a, M>>,
 ) -> Element<'a, M> {
     let s = *style;
@@ -138,7 +203,10 @@ pub fn commit_detail<'a, M: 'a>(
             .wrapping(Wrapping::None),
         text(UserText::new(commit.subject.clone()))
             .size(s.text_size)
-            .font(weighted(iced::font::Weight::Medium, Font::DEFAULT))
+            .font(weighted(
+                iced::font::Weight::Medium,
+                crate::ui_font::regular()
+            ))
             .color(s.ink)
             .wrapping(Wrapping::None)
             .ellipsis(Ellipsis::End)
@@ -146,10 +214,6 @@ pub fn commit_detail<'a, M: 'a>(
     ]
     .spacing(s.em(DETAIL_HEAD_GAP_EM))
     .align_y(Alignment::Center);
-
-    let file_list: Column<Element<'a, M>> =
-        Column::with_children(files.iter().map(|f| file_line(&s, i18n, f)))
-            .spacing(s.em(DETAIL_FILE_GAP_EM));
 
     let action_row = Row::with_children(actions)
         .spacing(s.em(DETAIL_GAP_EM))

@@ -49,6 +49,7 @@ impl Signex {
             copy_confirm: None,
             copying: false,
             opening_library: None,
+            selection: Default::default(),
         });
     }
 }

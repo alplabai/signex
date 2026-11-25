@@ -58,6 +58,7 @@ fn fixture(dirty: bool) -> Fixture {
             sheets: vec![sheet_entry("Power.snxsch")],
             variant_definitions: Vec::new(),
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: Vec::new(),
             enable_git: false,
             rules: Default::default(),
@@ -66,7 +67,9 @@ fn fixture(dirty: bool) -> Fixture {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
             fab_outputs: None,
+            router_tool_diameter: None,
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
@@ -132,14 +135,16 @@ fn complete(app: &mut Signex, task: iced::Task<Message>) {
 }
 
 fn open_rename_dialog(app: &mut Signex, target: &Path, buffer: &str) {
-    app.ui_state.rename_dialog = Some(RenameDialogState {
+    app.ui_state.rename_dialog = Some(Box::new(RenameDialogState {
         project_id: None,
         target_path: target.to_path_buf(),
         tree_path: vec![0],
         buffer: buffer.to_string(),
         error: None,
         is_project_rename: false,
-    });
+        placing_symbols: Vec::new(),
+        name_clash: None,
+    }));
 }
 
 /// Submit the rename and return the not-yet-run worker task.
@@ -157,6 +162,7 @@ fn start_delete(app: &mut Signex, target: &Path) -> iced::Task<Message> {
         is_outside_project: false,
         unsaved_prompt: false,
         is_directory_package: false,
+        choice: None,
     });
     app.update(Message::Remove(RemoveMsg::Confirm(
         RemoveChoice::DeleteFile,
@@ -566,10 +572,17 @@ fn a_failed_completion_message_for_a_closed_dialog_raises_the_card() {
     let task = start_rename(&mut f.app, &f.old.clone(), "PSU.snxsch");
     let mut messages = run(task);
     f.app.ui_state.rename_dialog = None;
-    if let Some(Message::Rename(RenameMsg::FileRenamed(done))) = messages.first_mut() {
-        let FileRenameDone { result, .. } = done.as_mut();
-        *result = Err(RenameIoError::Os("denied".to_string()));
-    }
+    // The task's messages need not come in a fixed order, so find the
+    // completion wherever it is rather than assuming it is first (#2880).
+    let done = messages
+        .iter_mut()
+        .find_map(|message| match message {
+            Message::Rename(RenameMsg::FileRenamed(done)) => Some(done),
+            _ => None,
+        })
+        .expect("the rename worker reports its completion");
+    let FileRenameDone { result, .. } = done.as_mut();
+    *result = Err(RenameIoError::Os("denied".to_string()));
     for message in messages {
         let _follow_up = f.app.update(message);
     }
@@ -589,6 +602,7 @@ fn the_exclude_prompt_save_is_refused_while_a_rename_holds_the_file() {
         is_outside_project: false,
         unsaved_prompt: false,
         is_directory_package: false,
+        choice: None,
     });
     let _prompt = f.app.update(Message::Remove(RemoveMsg::Confirm(
         RemoveChoice::ExcludeFromProject,

@@ -6,10 +6,10 @@ use iced::{Border, Color, Element, Length, Widget as _};
 use signex_i18n::{I18n, Localized, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::text;
-use signex_widgets::tree_view::{BadgeTone, TreeIcon, TreeNode, TreeStyle};
+use signex_widgets::tree_view::{BadgeTone, GroupRows, TreeIcon, TreeNode, TreeStyle};
 
 use super::{ErcSeverityLite, PanelContext, PanelMsg};
-use crate::styles::tokens::{relative_luminance, resolve};
+use crate::styles::tokens::resolve;
 use crate::styles::{PillTone, Radii, Spacing, TypeScale, pill_colors, ti};
 
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -19,30 +19,27 @@ const SP: Spacing = Spacing::DEFAULT;
 pub const PROPERTY_FIELD_RADIUS: f32 = 7.0;
 
 /// Row look of the Projects tree: the neutral selection, 24 px rows, kind
-/// tags ahead of the file names and no folder icons (#2262).
+/// tags ahead of the file names and no folder icons (#2262); uppercase
+/// group headers with a plain count, an accent edge on the open document
+/// and missing files in the error tone (mockup row 19).
 pub fn tree_style(tokens: &ThemeTokens) -> TreeStyle {
     let tone = |t: PillTone| pill_colors(tokens, t);
-    // The mock's violet has no token: a fixed pair per light / dark panel.
-    let violet = if relative_luminance(ti(tokens.panel_bg)) < 0.5 {
-        (
-            Color::from_rgb8(0x2A, 0x21, 0x38),
-            Color::from_rgb8(0xC9, 0xB3, 0xEE),
-        )
-    } else {
-        (
-            Color::from_rgb8(0xF1, 0xEA, 0xF8),
-            Color::from_rgb8(0x6B, 0x3F, 0xA0),
-        )
-    };
+    let r = resolve(tokens);
     TreeStyle::new(selection_fill(tokens), ti(tokens.text))
         .kind_tags()
         .badge_tones([
             tone(PillTone::Neutral),
             tone(PillTone::Info),
             tone(PillTone::Ok),
-            violet,
+            crate::styles::violet_pair(tokens),
             tone(PillTone::Warn),
         ])
+        .err_tone(tone(PillTone::Err))
+        .group_rows(GroupRows {
+            ink: r.ink3,
+            muted: r.ink4,
+        })
+        .active_edge(ti(tokens.accent))
 }
 
 /// Short kind badge of a document row, with its tint: SCH info, PCB ok,
@@ -58,20 +55,31 @@ fn kind_badge(node: &TreeNode) -> Option<(&'static str, BadgeTone)> {
     if ext(".snxout") {
         return Some(("OUT", BadgeTone::Neutral));
     }
-    match node.icon {
-        TreeIcon::SnxSchematic | TreeIcon::Schematic | TreeIcon::Sheet => {
-            Some(("SCH", BadgeTone::Info))
-        }
-        TreeIcon::SnxPcb | TreeIcon::Pcb => Some(("PCB", BadgeTone::Ok)),
+    let tag = match node.icon {
+        TreeIcon::SnxSchematic | TreeIcon::Schematic | TreeIcon::Sheet => "SCH",
+        TreeIcon::SnxPcb | TreeIcon::Pcb => "PCB",
+        TreeIcon::SnxLibrary | TreeIcon::SnxSymbol | TreeIcon::SnxFootprint => "LIB",
+        _ => return None,
+    };
+    Some((tag, kind_tone(node.icon)?))
+}
+
+/// Tag tone of a document kind: schematic info, board ok, library violet.
+/// The Add New flyouts tint their glyphs from this too (mockup row 20).
+pub(crate) fn kind_tone(icon: TreeIcon) -> Option<BadgeTone> {
+    match icon {
+        TreeIcon::SnxSchematic | TreeIcon::Schematic | TreeIcon::Sheet => Some(BadgeTone::Info),
+        TreeIcon::SnxPcb | TreeIcon::Pcb => Some(BadgeTone::Ok),
         TreeIcon::SnxLibrary | TreeIcon::SnxSymbol | TreeIcon::SnxFootprint => {
-            Some(("LIB", BadgeTone::Violet))
+            Some(BadgeTone::Violet)
         }
         _ => None,
     }
 }
 
 /// Copy of the project tree with Graphite badges: a count on each group
-/// header (depth 1), a kind tag on each document row.
+/// header (depth 1), a kind tag on each document row. A row the panel
+/// already marked as a problem ([`BadgeTone::Err`], "missing") keeps it.
 pub fn decorate_tree(roots: &[TreeNode]) -> Vec<TreeNode> {
     fn walk(node: &TreeNode, depth: usize) -> TreeNode {
         let mut out = node.clone();
@@ -80,6 +88,7 @@ pub fn decorate_tree(roots: &[TreeNode]) -> Vec<TreeNode> {
             out.badge = Some(count_documents(node).to_string());
         } else if node.children.is_empty()
             && !node.is_folder
+            && node.badge_tone != BadgeTone::Err
             && let Some((tag, tone)) = kind_badge(node)
         {
             out.badge = Some(tag.to_string());
@@ -102,11 +111,6 @@ pub fn decorate_tree(roots: &[TreeNode]) -> Vec<TreeNode> {
     roots.iter().map(|n| walk(n, 0)).collect()
 }
 
-/// Fill of the active row of the PCB Layers list: the soft accent.
-pub fn active_fill(tokens: &ThemeTokens) -> Color {
-    resolve(tokens).accent_soft
-}
-
 /// Fill of the selected row in a tree or library list (Projects, SCH
 /// Library, Footprint Library): the theme's neutral selection, as in the
 /// Library Browser, not an accent tint.
@@ -119,11 +123,6 @@ pub fn selection_fill(tokens: &ThemeTokens) -> Color {
 pub fn wash_fn(tokens: &ThemeTokens) -> impl Fn(f32) -> Color + Copy + 'static {
     let base = ti(tokens.text);
     move |alpha| Color { a: alpha, ..base }
-}
-
-/// Corner radius of a small panel button.
-pub fn button_radius(_tokens: &ThemeTokens) -> f32 {
-    PROPERTY_FIELD_RADIUS
 }
 
 /// "2 h ago" style age of a commit.
@@ -152,7 +151,7 @@ fn summary_cell<'a>(
             .color(color)
             .font(iced::Font {
                 weight: iced::font::Weight::Semibold,
-                ..iced::Font::DEFAULT
+                ..signex_widgets::ui_font::regular()
             })
             .boxed(),
     ]
@@ -337,6 +336,70 @@ mod selection_tests {
             tag.x + tag.width <= name.x,
             "tag {tag:?} is not ahead of {name:?}"
         );
+    }
+
+    /// Mockup row 19: a missing file's row keeps the problem badge the panel gave it:
+    /// no kind tag ahead of the name, the "missing" pill after it.
+    #[test]
+    fn a_problem_row_trails_its_pill_and_has_no_kind_tag() {
+        let t = theme_tokens(ThemeId::GraphiteLight);
+        let row = TreeNode::leaf("gone.snxsch", TreeIcon::SnxSchematic)
+            .with_key("g")
+            .with_badge("missing")
+            .with_badge_tone(BadgeTone::Err);
+        let decorated = decorate_tree(&[row]);
+        assert_eq!(decorated[0].badge.as_deref(), Some("missing"));
+        let tree = TreeView::new(&decorated, &t).style(tree_style(&t)).view();
+        let texts = crate::layout_probe::lay_out_texts(tree, iced::Size::new(240.0, 40.0));
+        assert!(texts.iter().all(|x| x.text != "SCH"), "{texts:#?}");
+        let name = crate::layout_probe::find(&texts, "gone.snxsch").bounds;
+        let pill = crate::layout_probe::find(&texts, "missing").bounds;
+        assert!(
+            name.x + name.width <= pill.x,
+            "pill {pill:?} is not after {name:?}"
+        );
+    }
+
+    /// Mockup row 19: the open document's row takes the full selection fill and a 2 px
+    /// accent edge left of the fill; another row has no edge.
+    #[test]
+    fn the_active_row_has_the_accent_edge_and_the_selection_fill() {
+        for id in THEMES {
+            let t = theme_tokens(id);
+            let (w, h) = (200usize, 24usize);
+            let draw = |active: bool| {
+                let roots = [TreeNode::leaf("a.snxsch", TreeIcon::SnxSchematic)
+                    .with_key("a")
+                    .with_active(active)];
+                let tree = TreeView::new(&roots, &t).style(tree_style(&t)).view();
+                crate::layout_probe::draw_pixels(tree, iced::Size::new(w as f32, h as f32))
+            };
+            let at = |pixels: &[u8], x: usize, y: usize| {
+                let i = (y * w + x) * 4;
+                [pixels[i], pixels[i + 1], pixels[i + 2]]
+            };
+            let near = |got: [u8; 3], want: Color| {
+                let want = [want.r, want.g, want.b].map(|v| (v * 255.0).round() as u8);
+                got.iter().zip(want).all(|(g, e)| g.abs_diff(e) <= 2)
+            };
+            let active = draw(true);
+            // The edge: 2 px wide at the tree's left, clear of its rounded ends.
+            assert!(
+                near(at(&active, 3, h / 2), ti(t.accent)),
+                "{id:?}: edge {:?}",
+                at(&active, 3, h / 2)
+            );
+            assert!(
+                near(at(&active, w * 3 / 4, h / 2), ti(t.selection)),
+                "{id:?}: fill {:?}",
+                at(&active, w * 3 / 4, h / 2)
+            );
+            let idle = draw(false);
+            assert!(
+                !near(at(&idle, 3, h / 2), ti(t.accent)),
+                "{id:?}: idle edge"
+            );
+        }
     }
 
     /// The selected Projects row is drawn in that grey.

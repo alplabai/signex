@@ -256,16 +256,28 @@ fn cell<'a>(
     field: BoardNetClassField,
     width: f32,
 ) -> Element<'a, PanelMsg> {
-    let i18n = &*ctx.i18n;
+    let hint = match field {
+        BoardNetClassField::Name => ids::BOARD_NET_CLASSES_COL_NAME,
+        BoardNetClassField::Color => ids::BOARD_NET_CLASSES_COLOR_HINT,
+        _ => ids::BOARD_NET_CLASSES_MM_HINT,
+    };
+    hinted_cell(ctx, view, class, field, width, hint)
+}
+
+/// [`cell`] with `hint` in the empty field.
+fn hinted_cell<'a>(
+    ctx: &'a PanelContext,
+    view: &BoardNetClassView,
+    class: &NetClass,
+    field: BoardNetClassField,
+    width: f32,
+    hint: MessageId,
+) -> Element<'a, PanelMsg> {
     let value = match &view.draft {
         Some(draft) if draft.class == class.name && draft.field == field => draft.text.clone(),
         _ => field.shown(class),
     };
-    let hint = match field {
-        BoardNetClassField::Name => t!(i18n, ids::BOARD_NET_CLASSES_COL_NAME),
-        BoardNetClassField::Color => t!(i18n, ids::BOARD_NET_CLASSES_COLOR_HINT),
-        _ => t!(i18n, ids::BOARD_NET_CLASSES_MM_HINT),
-    };
+    let hint = t!(&*ctx.i18n, hint);
     let name = class.name.clone();
     text_input(hint, value)
         .on_input(move |text| {
@@ -321,31 +333,44 @@ fn members<'a>(
                 .color(theme_ext::text_secondary(&ctx.tokens)),
         );
     }
+    let mut cell = Column::new().spacing(SP.xs).width(Length::Fixed(NETS_W));
+    cell = cell.push(Element::from(chips));
+    if let Some(picker) = add_net(ctx, view, class) {
+        cell = cell.push(picker);
+    }
+    cell.boxed()
+}
+
+/// Add net: a picker of the board nets not in the class; none when every
+/// board net is in it.
+fn add_net<'a>(
+    ctx: &'a PanelContext,
+    view: &BoardNetClassView,
+    class: &NetClass,
+) -> Option<Element<'a, PanelMsg>> {
     let free: Vec<String> = view
         .nets
         .iter()
         .filter(|net| !class.nets.contains(net))
         .cloned()
         .collect();
-    let mut cell = Column::new().spacing(SP.xs).width(Length::Fixed(NETS_W));
-    cell = cell.push(Element::from(chips));
-    if !free.is_empty() {
-        let name = class.name.clone();
-        cell = cell.push(
-            pick_list(None::<String>, free, |net: &String| net.clone())
-                .graphite()
-                .on_select(move |net: String| {
-                    msg(BoardNetClassMsg::NetPicked {
-                        class: name.clone(),
-                        net,
-                    })
-                })
-                .placeholder_label(t!(i18n, ids::BOARD_NET_CLASSES_ADD_NET))
-                .width(Length::Fill)
-                .boxed(),
-        );
+    if free.is_empty() {
+        return None;
     }
-    cell.boxed()
+    let name = class.name.clone();
+    Some(
+        pick_list(None::<String>, free, |net: &String| net.clone())
+            .graphite()
+            .on_select(move |net: String| {
+                msg(BoardNetClassMsg::NetPicked {
+                    class: name.clone(),
+                    net,
+                })
+            })
+            .placeholder_label(t!(&*ctx.i18n, ids::BOARD_NET_CLASSES_ADD_NET))
+            .width(Length::Fill)
+            .boxed(),
+    )
 }
 
 /// One class: its cells, its members and Delete.
@@ -371,14 +396,20 @@ fn class_row<'a>(
     .boxed()
 }
 
-/// The panel for the board in view.
-pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
-    let Some(view) = ctx.net_classes.board.as_ref() else {
-        return note(ctx, ids::BOARD_NET_CLASSES_NO_BOARD);
-    };
-    if !view.in_project {
-        return note(ctx, ids::BOARD_NET_CLASSES_NO_PROJECT);
+/// The board's class table to show, or why there is none: no board in
+/// view, or a board in no open project.
+pub fn table_in_view<'a>(
+    ctx: &'a PanelContext,
+) -> Result<&'a BoardNetClassView, Element<'a, PanelMsg>> {
+    match ctx.net_classes.board.as_ref() {
+        None => Err(note(ctx, ids::BOARD_NET_CLASSES_NO_BOARD)),
+        Some(view) if !view.in_project => Err(note(ctx, ids::BOARD_NET_CLASSES_NO_PROJECT)),
+        Some(view) => Ok(view),
     }
+}
+
+/// Add Class, Undo, Redo and why the last edit was refused.
+fn head<'a>(ctx: &'a PanelContext, view: &BoardNetClassView) -> Column<Element<'a, PanelMsg>> {
     let mut col: Column<Element<'a, PanelMsg>> = Column::new()
         .spacing(SP.s)
         .padding([SP.s, SP.m])
@@ -392,6 +423,16 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 .boxed(),
         );
     }
+    col
+}
+
+/// The panel for the board in view.
+pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
+    let view = match table_in_view(ctx) {
+        Ok(view) => view,
+        Err(why) => return why,
+    };
+    let col = head(ctx, view);
     if view.classes.is_empty() {
         return col.push(note(ctx, ids::BOARD_NET_CLASSES_EMPTY)).boxed();
     }
@@ -406,6 +447,376 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             .boxed(),
     )
     .boxed()
+}
+
+// The PCB panel's Net Classes mode (mockup row 106): the classes as a list
+// over the selected class's rules and members.
+
+/// Width of the label column of the class detail.
+const LABEL_W: f32 = TS.body * 7.0;
+
+/// The class list's head: Add Class, Undo, Redo, why the last edit was
+/// refused, and the precedence rule.
+pub fn list_head<'a>(ctx: &'a PanelContext, view: &BoardNetClassView) -> Element<'a, PanelMsg> {
+    head(ctx, view)
+        .push(
+            text(t!(&*ctx.i18n, ids::PANELS_PCB_CLASSES_FIRST_WINS))
+                .size(TS.caption)
+                .color(theme_ext::text_secondary(&ctx.tokens))
+                .boxed(),
+        )
+        .boxed()
+}
+
+/// A class's rules in one line, `0.500 / 0.250 · via 0.800/0.400`: an
+/// unset rule reads `—`, and the via part shows once a via rule is set.
+/// Engineering values: `.` in every locale.
+pub fn rule_summary(i18n: &I18n, class: &NetClass) -> signex_i18n::Localized {
+    let rules = class.board_rules();
+    let mm = |value: f64| {
+        if value > 0.0 {
+            format!("{value:.3}")
+        } else {
+            t!(i18n, ids::PANELS_PCB_CLASSES_UNSET).into_string()
+        }
+    };
+    let line = t!(
+        i18n,
+        ids::PANELS_PCB_CLASSES_RULE_SUMMARY,
+        "width" => mm(rules.trace_width),
+        "clearance" => mm(rules.clearance)
+    );
+    if rules.via_diameter > 0.0 || rules.via_drill > 0.0 {
+        t!(
+            i18n,
+            ids::PANELS_PCB_CLASSES_VIA_SUMMARY,
+            "rules" => line.into_string(),
+            "diameter" => mm(rules.via_diameter),
+            "drill" => mm(rules.via_drill)
+        )
+    } else {
+        line
+    }
+}
+
+/// How many nets a class names, and how many patterns once it has any.
+pub fn member_count(i18n: &I18n, class: &NetClass) -> signex_i18n::Localized {
+    if class.patterns.is_empty() {
+        t!(i18n, ids::PANELS_PCB_CLASSES_NETS, "count" => class.nets.len())
+    } else {
+        t!(
+            i18n,
+            ids::PANELS_PCB_CLASSES_NETS_PATTERNS,
+            "nets" => class.nets.len(),
+            "patterns" => class.patterns.len()
+        )
+    }
+}
+
+/// The class's colour as a dot; a ring when it has none.
+fn swatch<'a>(ctx: &PanelContext, class: &NetClass) -> Element<'a, PanelMsg> {
+    let fill = class.style.color.map(crate::styles::ti);
+    let edge = theme_ext::text_secondary(&ctx.tokens);
+    container(Space::new())
+        .width(TS.caption)
+        .height(TS.caption)
+        .style(move |_: &iced::Theme| container::Style {
+            background: fill.map(iced::Background::Color),
+            border: iced::Border {
+                color: edge,
+                width: if fill.is_some() {
+                    0.0
+                } else {
+                    crate::styles::HAIRLINE
+                },
+                radius: (TS.caption / 2.0).into(),
+                ..iced::Border::default()
+            },
+            ..container::Style::default()
+        })
+        .boxed()
+}
+
+/// One class of the list: dot, name, rule summary and member count; a
+/// click selects it.
+fn class_item<'a>(
+    ctx: &'a PanelContext,
+    class: &NetClass,
+    is_selected: bool,
+) -> Element<'a, PanelMsg> {
+    let i18n = &*ctx.i18n;
+    let muted = theme_ext::text_secondary(&ctx.tokens);
+    let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
+    let name = Column::new()
+        .spacing(SP.xs)
+        .width(Length::Fill)
+        .push(
+            text(UserText::new(class.name.clone()))
+                .size(TS.body)
+                .color(crate::styles::ti(ctx.tokens.text))
+                .boxed(),
+        )
+        .push(
+            text(rule_summary(i18n, class))
+                .size(TS.caption)
+                .font(mono)
+                .color(muted)
+                .boxed(),
+        );
+    let line = row![
+        swatch(ctx, class),
+        name.boxed(),
+        text(member_count(i18n, class))
+            .size(TS.caption)
+            .color(muted)
+            .boxed(),
+    ]
+    .spacing(SP.s)
+    .align_y(iced::Alignment::Center);
+    button(line)
+        .width(Length::Fill)
+        .padding([SP.s, SP.m])
+        .on_press(PanelMsg::PcbPanel(super::PcbPanelMsg::ClassClicked(
+            class.name.clone(),
+        )))
+        .style(crate::styles::hover_row(&ctx.tokens, is_selected))
+        .boxed()
+}
+
+/// The classes in table order, or why there are none.
+pub fn class_list<'a>(
+    ctx: &'a PanelContext,
+    view: &'a BoardNetClassView,
+) -> Column<Element<'a, PanelMsg>> {
+    let mut list: Column<Element<'a, PanelMsg>> = Column::new().width(Length::Fill);
+    if view.classes.is_empty() {
+        list = list.push(note(ctx, ids::BOARD_NET_CLASSES_EMPTY));
+    }
+    let selected = ctx.pcb_panel.class.as_deref();
+    for class in &view.classes {
+        list = list.push(class_item(
+            ctx,
+            class,
+            selected == Some(class.name.as_str()),
+        ));
+    }
+    list
+}
+
+/// A detail row: its label, then `value`.
+fn detail_row<'a>(
+    ctx: &PanelContext,
+    label: MessageId,
+    value: Element<'a, PanelMsg>,
+) -> Element<'a, PanelMsg> {
+    row![
+        container(
+            text(t!(&*ctx.i18n, label))
+                .size(TS.body)
+                .color(theme_ext::text_secondary(&ctx.tokens))
+        )
+        .width(Length::Fixed(LABEL_W))
+        .boxed(),
+        value,
+    ]
+    .spacing(SP.s)
+    .align_y(iced::Alignment::Center)
+    .boxed()
+}
+
+/// Two rule fields of a row and their unit; an empty field reads `board`.
+/// The pair detail edits its class's Gap / Width through it too.
+pub fn rule_pair<'a>(
+    ctx: &'a PanelContext,
+    view: &BoardNetClassView,
+    class: &NetClass,
+    fields: [BoardNetClassField; 2],
+) -> Element<'a, PanelMsg> {
+    let board = ids::PANELS_PCB_BOARD_VALUE;
+    row![
+        hinted_cell(ctx, view, class, fields[0], RULE_W, board),
+        hinted_cell(ctx, view, class, fields[1], RULE_W, board),
+        text(t!(&*ctx.i18n, ids::BOARD_NET_CLASSES_MM_HINT))
+            .size(TS.caption)
+            .color(theme_ext::text_secondary(&ctx.tokens))
+            .boxed(),
+    ]
+    .spacing(SP.xs)
+    .align_y(iced::Alignment::Center)
+    .boxed()
+}
+
+/// One exact member: its name, nodes and routed length on this board, and
+/// the button that takes it out of the class.
+fn member_row<'a>(
+    ctx: &'a PanelContext,
+    class: &NetClass,
+    net: &str,
+    facts: Option<&super::pcb_nets::PcbNetRow>,
+) -> Element<'a, PanelMsg> {
+    let i18n = &*ctx.i18n;
+    let muted = theme_ext::text_secondary(&ctx.tokens);
+    let unset = || t!(i18n, ids::PANELS_PCB_CLASSES_UNSET);
+    let nodes = facts.map_or_else(
+        unset,
+        |n| t!(i18n, ids::PANELS_PCB_CLASSES_NODES, "count" => n.nodes),
+    );
+    let length = match facts.map(|n| n.length_mm) {
+        Some(mm) if mm > 0.0 => {
+            t!(i18n, ids::PANELS_PCB_NETS_DETAIL_MM, "length" => format!("{mm:.2}"))
+        }
+        _ => t!(i18n, ids::PANELS_PCB_NETS_NO_LENGTH),
+    };
+    let glyph = svg(icons::icon_close(ctx.theme_id))
+        .width(TS.caption)
+        .height(TS.caption);
+    let remove = button(glyph)
+        .padding(SP.xs)
+        .on_press(msg(BoardNetClassMsg::NetRemoved {
+            class: class.name.clone(),
+            net: net.to_owned(),
+        }))
+        .style(crate::styles::hover_row(&ctx.tokens, false));
+    let remove = super::graphite::hint_tooltip(
+        remove.boxed(),
+        t!(i18n, ids::BOARD_NET_CLASSES_REMOVE_NET, "net" => net.to_owned()),
+        &ctx.tokens,
+        iced::widget::tooltip::Position::Bottom,
+    );
+    row![
+        text(UserText::new(net.to_owned()))
+            .size(TS.body)
+            .font(crate::fonts::iced_font_for_family(
+                crate::fonts::CHROME_MONO_FONT
+            ))
+            .color(crate::styles::ti(ctx.tokens.text))
+            .width(Length::Fill)
+            .boxed(),
+        text(nodes).size(TS.caption).color(muted).boxed(),
+        text(length).size(TS.caption).color(muted).boxed(),
+        remove,
+    ]
+    .spacing(SP.s)
+    .align_y(iced::Alignment::Center)
+    .boxed()
+}
+
+/// One glob pattern of the class and how many board nets it matches.
+fn pattern_row<'a>(ctx: &PanelContext, pattern: &str, matches: usize) -> Element<'a, PanelMsg> {
+    let muted = theme_ext::text_secondary(&ctx.tokens);
+    row![
+        text(UserText::new(pattern.to_owned()))
+            .size(TS.body)
+            .color(muted)
+            .width(Length::Fill)
+            .boxed(),
+        text(t!(&*ctx.i18n, ids::PANELS_PCB_CLASSES_MATCHES, "count" => matches))
+            .size(TS.caption)
+            .color(muted)
+            .boxed(),
+    ]
+    .spacing(SP.s)
+    .align_y(iced::Alignment::Center)
+    .boxed()
+}
+
+/// The selected class: its name and colour, its rules (Width / Clear., Via,
+/// Diff pair, Impedance), Delete, its member nets and patterns with what
+/// they hold on the board, and Add net. Every edit goes through the class
+/// table's own messages; this detail is the board's only class editor.
+pub fn class_detail<'a>(
+    ctx: &'a PanelContext,
+    view: &BoardNetClassView,
+    class: &NetClass,
+    nets: &[super::pcb_nets::PcbNetRow],
+) -> Element<'a, PanelMsg> {
+    use BoardNetClassField as F;
+    let i18n = &*ctx.i18n;
+    let muted = theme_ext::text_secondary(&ctx.tokens);
+    let caption = |label: signex_i18n::Localized| text(label).size(TS.section).color(muted);
+    let title = row![
+        caption(t!(i18n, ids::PANELS_PCB_CLASSES_RULES, "class" => class.name.clone()))
+            .width(Length::Fill)
+            .boxed(),
+        dialog_button(
+            t!(i18n, ids::BOARD_NET_CLASSES_DELETE),
+            DialogButtonKind::Danger,
+            Some(msg(BoardNetClassMsg::DeleteRequested(class.name.clone()))),
+            &ctx.tokens,
+        ),
+    ]
+    .spacing(SP.s)
+    .align_y(iced::Alignment::Center);
+    let impedance = super::graphite::hint_tooltip(
+        text(t!(i18n, ids::PANELS_PCB_CLASSES_UNSET))
+            .size(TS.body)
+            .color(muted)
+            .boxed(),
+        t!(i18n, ids::PANELS_PCB_CLASSES_IMPEDANCE_TIP),
+        &ctx.tokens,
+        iced::widget::tooltip::Position::Bottom,
+    );
+    let mut col: Column<Element<'a, PanelMsg>> = Column::new()
+        .spacing(SP.s)
+        .padding([SP.m, SP.l])
+        .width(Length::Fill)
+        .push(title.boxed())
+        .push(detail_row(
+            ctx,
+            ids::BOARD_NET_CLASSES_COL_NAME,
+            cell(ctx, view, class, F::Name, NAME_W),
+        ))
+        .push(detail_row(
+            ctx,
+            ids::BOARD_NET_CLASSES_COL_COLOR,
+            row![
+                swatch(ctx, class),
+                cell(ctx, view, class, F::Color, COLOR_W)
+            ]
+            .spacing(SP.xs)
+            .align_y(iced::Alignment::Center)
+            .boxed(),
+        ))
+        .push(detail_row(
+            ctx,
+            ids::PANELS_PCB_CLASSES_WIDTH_CLEARANCE,
+            rule_pair(ctx, view, class, [F::Width, F::Clearance]),
+        ))
+        .push(detail_row(
+            ctx,
+            ids::PANELS_PCB_CLASSES_VIA,
+            rule_pair(ctx, view, class, [F::ViaDiameter, F::ViaDrill]),
+        ))
+        .push(detail_row(
+            ctx,
+            ids::PANELS_PCB_CLASSES_DIFF_PAIR,
+            rule_pair(ctx, view, class, [F::DiffPairGap, F::DiffPairWidth]),
+        ))
+        .push(detail_row(
+            ctx,
+            ids::PANELS_PCB_CLASSES_IMPEDANCE,
+            impedance,
+        ))
+        .push(caption(t!(i18n, ids::PANELS_PCB_CLASSES_MEMBERS)).boxed());
+    for net in &class.nets {
+        let facts = nets.iter().find(|n| &n.name == net);
+        col = col.push(member_row(ctx, class, net, facts));
+    }
+    for pattern in &class.patterns {
+        let matches = nets
+            .iter()
+            .filter(|n| signex_types::net_class::glob_matches(pattern, &n.name))
+            .count();
+        col = col.push(pattern_row(ctx, pattern, matches));
+    }
+    if let Some(picker) = add_net(ctx, view, class) {
+        col = col.push(picker);
+    }
+    scrollable(col)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(super::form_look::scrollbar_style)
+        .boxed()
 }
 
 #[cfg(test)]

@@ -13,6 +13,53 @@ changed only through `BoardCommand::SetBoardOptions`, one undo step per edit.
 | Pour Names | How a polygon pour is named: `NET NAME_LXX_PXXX` (default), `LXX_NET NAME_PXXX`, `Board Layer_NET NAME_PXXX` or `NET NAME_Board Layer_PXXX`. `PolygonNaming::name` builds the name; pours are named by the pour tool (#2373). |
 | Designators | Physical or Logical. Stored for multi-channel designs; boards have one designator per part today, so both show the same text. |
 
+## Panel layout (#2523)
+
+The panel reads top to bottom in the order every PCB Properties panel uses:
+
+1. The header row: 'Board', the file name, and the Selection Filter button
+   (kinds on of all; it opens the Active Bar's Selection Filter dropdown).
+2. The tabs: General, Parameters (disabled: boards hold no parameters yet)
+   and Health Check, whose badge counts the design and electrical rule
+   findings.
+3. Search. A typed search keeps the rows whose label holds it and opens
+   every section that keeps one.
+4. The illustration: line art of the board outline from the board shape
+   (its bounding box when the shape is not a rectangle), the origin, each
+   extra grid's origin in its colour, the snap grid with its step, and the
+   grid lines while Visible Grid is on. Hovering a callout lights its tile
+   or card, and hovering a tile or card lights its callout. Nothing on the
+   drawing edits.
+5. The size row: 'Size W × H' ('Bounding box W × H' for a shape that is not a
+   rectangle), '· from board shape', and Edit board shape…, which runs
+   `board_sketch` as Design ▸ Board Sketch does. The size is read-only here;
+   it follows the board shape.
+6. The sections: Selection Filter, Snap Options, Board Information, Grid
+   Manager, Guide Manager, Panel and Other.
+
+Selection Filter, Snap Options, Guide Manager and Panel start closed, with a
+summary in their header (the kinds on, the Snapping scope, the guide count,
+'none' without a panel). A section closed by default keeps the key
+`<section>.open` in the panel's collapsed-section set while it is open.
+
+Board Information is a grid of stat tiles, three to a row (two in a narrow
+dock): Width and Height (from the board shape), Thickness, Area, Parts Area,
+Density, Components, Top and Bottom (a click selects those components), Nets,
+Unrouted nets and DRC Violations (both tinted as a warning above zero; the
+DRC count opens the results). Layers, Signal, the hidden nets and the
+primitive counts sit in a fold under the tiles, closed by default. Reports
+sits in the section header.
+
+The Grid Manager starts with the Visible Grid switch, then one card per grid.
+Other ends with 'Board materials & finish → Open Layer Stack': solder mask,
+silkscreen, surface finish, copper weights and materials live in the Layer
+Stack, so Board Options holds none of them.
+
+The Health Check tab has one card per check. Design rules: the finding
+count (a link to the results), Run DRC and Show results. Electrical rules: the
+project's schematic check. Each reads 'Not run' until its check has run.
+Signex does not record when a check last ran, so the cards do not say.
+
 ## Origin
 
 The board origin (#2384), `BoardOptions::origin` (`signex_types::pcb_origin::BoardOrigin`), is the point a board shows as (0, 0). Shown coordinates run with X to the right and Y up the screen; the model's y grows down the screen, so `BoardOrigin::to_user` and `from_user` mirror Y about the origin. The status bar, the Component view's X and Y, the track, via and pad X/Y fields, and the Guide Manager, Grid Manager and Sheet coordinates read and type through it; the sheet's X and Y are its bottom-left corner.
@@ -36,31 +83,44 @@ grid that applies to components governs every component carry on the board.
 
 `pcb_canvas::carry_delta`, in order:
 
-1. An object point within the snap distance (Distance × the board step)
-   takes the grab point exactly onto it. Snapping Off skips this step and
-   step 4.
+1. An object point within the snap distance takes the grab point exactly
+   onto it. The snap distance is Snap Distance, a length in the board's unit
+   (default 1 mm, #2879), or 8 screen pixels when that is more; it does not
+   depend on the grid. Snapping Off skips this step and step 4.
 2. Otherwise the nearest footprint origin lands on the components grid (with
    Grids on).
 3. With Guides on, a crossing of two enabled guides within the snap distance
    takes the grab point onto it; a vertical guide fixes x, a horizontal one
    fixes y, a diagonal one takes the grab point onto its nearest point.
-4. With Axes on, an axis no guide fixed lines up with the nearest object point
-   that is within Axis Range of the pointer and within the snap distance
-   on that axis.
+4. With Axes on, an axis no guide fixed lines up with the nearest fixed object
+   point (a vertex, centre, origin, crossing or text, not the nearest point of
+   a line or edge) that is within Axis Range of the pointer and within the
+   snap distance on that axis.
 
-The object kinds are the Objects for snapping list. Track/Arc Lines snap to the
-nearest point of a track, a board line or a board circle; Intersections to
-where two tracks or board lines near the pointer cross; Arc Centers to the
-centres of board and footprint arcs and circles (All Layers only, as they sit
-on no copper layer); Pad Vertices to the corners of rectangular pads; Pad Edges
-to the nearest point of a pad's outline. 3D Body Snap Points stays disabled:
-a board holds no 3D bodies.
+The object kinds are the Objects for snapping list; every supported kind starts
+on (#2879). Track/Arc Lines snap to the nearest point of a track, a free arc, a
+board drawing or a footprint drawing (lines, arcs, circles and the sides of
+rectangles and polygons); Intersections to where two of those, a region edge or
+the board edge cross near the pointer (line-line, line-arc and arc-arc); Arc
+Centers to the centres of free, board and footprint arcs and circles; Pad
+Vertices to the corners of rectangular and polygon pads; Pad Edges to the
+nearest point of a pad's outline; Regions/Polygons/Fills and Board Shape to
+their vertices and the nearest point of their edges. 3D Body Snap Points stays
+disabled: a board holds no 3D bodies.
+
+Snapping All Layers takes objects on every shown layer. Current Layer takes
+objects of any kind on the active layer only, copper or not (texts, drawings,
+regions); a through pad or via counts on every copper layer. Shift+E
+(`cycle_board_snapping`, in every built-in profile) steps All Layers, Current
+Layer and Off; elsewhere Shift+E stays `toggle_electrical_grid`.
 
 ## Settings kept for the session
 
-Grids / Guides / Axes, Snapping, the object list, Distance and Axis Range
-(default 10 mm) are editor settings in `UiState::pcb_snap`, as #2353
-decided for the snap options. They are not written to the board.
+Grids / Guides / Axes, Snapping, the object list, Snap Distance (default 1 mm)
+and Axis Range (default 2 mm) are editor settings in `UiState::pcb_snap`, as
+#2353 decided for the snap options. They are not written to the board or to
+the preferences, so there is no stored value of the old grid-multiple Distance
+to carry over: a new session starts on the defaults.
 
 ## File format
 

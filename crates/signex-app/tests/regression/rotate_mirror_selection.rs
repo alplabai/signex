@@ -1,6 +1,6 @@
 //! #1039 — rotate (Space / Shift+Space) and mirror (X / Y) work on any
 //! schematic selection, not only a lone symbol. Driven through the real
-//! keymap path (`UiMsg::KeymapStroke`, Altium profile) against a real
+//! keymap path (`UiMsg::KeymapStroke`, Signex Standard profile) against a real
 //! engine; geometry is asserted on screen, independent of the engine's own
 //! maths.
 //!
@@ -143,8 +143,8 @@ fn app_with(sheet: SchematicSheet, selected: Vec<SelectedItem>) -> Signex {
     app.ui_state.grid_size_mm = 1.0;
     app.ui_state
         .keymap_profiles
-        .set_active_profile("altium")
-        .expect("altium profile");
+        .set_active_profile("signex_standard")
+        .expect("signex_standard profile");
     app.ui_state.active_keymap = app.ui_state.keymap_profiles.compile_active().into();
     app.document_state.engines.insert(path.clone(), engine);
     app.document_state.tabs.push(TabInfo {

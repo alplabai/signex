@@ -15,9 +15,13 @@ impl Signex {
         let classes = ui.component_classes.clone();
         let drag_direction = ui.drag_direction_select;
         let net_hover = ui.net_hover_enabled;
+        let edge_pan = ui.edge_pan;
         let body_fill = ui.symbol_body_fill;
+        let pcb_defaults = ui.pcb_dimension_defaults.clone();
         let (trackpad_pan, remember_geometry) = (ui.trackpad_pan, ui.remember_window_geometry);
         let wheel_mode = ui.wheel_mode;
+        let layer_switcher = ui.layer_switcher;
+        let selected_segment = ui.selected_segment;
         let (increment_step, paste_designators) = (ui.increment_step, ui.paste_designators);
         let antialiasing = ui.antialiasing;
         let fast_grids = ui.fast_grids_mm;
@@ -55,14 +59,26 @@ impl Signex {
             write("net_hover_enabled", move || {
                 crate::fonts::write_net_hover_pref(net_hover)
             }),
+            write("edge_pan_enabled", move || {
+                crate::fonts::write_edge_pan_pref(edge_pan)
+            }),
             write(crate::symbol_fill_prefs::ENABLED_KEY, move || {
                 crate::fonts::write_symbol_body_fill_pref(body_fill)
+            }),
+            write(crate::pcb_defaults_prefs::KEY, move || {
+                crate::fonts::write_pcb_dimension_defaults_pref(&pcb_defaults)
             }),
             write("trackpad_pan", move || {
                 crate::fonts::write_trackpad_pan_pref(trackpad_pan)
             }),
             write("mouse_wheel", move || {
                 crate::fonts::write_wheel_mode_pref(wheel_mode)
+            }),
+            write("pcb_layer_switcher", move || {
+                crate::fonts::write_layer_switcher_pref(layer_switcher)
+            }),
+            write("selected_segment", move || {
+                crate::fonts::write_selected_segment_pref(selected_segment)
             }),
             write("remember_window_geometry", move || {
                 crate::fonts::write_remember_window_geometry_pref(remember_geometry)

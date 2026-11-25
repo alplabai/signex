@@ -283,6 +283,7 @@ fn a_press_on_a_grabbed_footprint_drags_it_instead_of_a_box() {
         from,
         to,
         tolerance_mm,
+        leaves_tracks: false,
     };
     assert_eq!(msg, Some(dragged));
     assert!(rig.canvas.marquee.get().is_none(), "no box is drawn");
@@ -378,6 +379,73 @@ fn a_click_on_a_grabbed_footprint_or_a_modified_press_still_selects() {
     rig.press(100.0, 80.0);
     rig.move_to(160.0, 140.0);
     assert!(rig.canvas.marquee.get().is_some(), "Shift starts a box");
+}
+
+/// Caner, 2026-11-21: Ctrl on a footprint still drags it, leaving its
+/// tracks until the drop, even once Ctrl is let go; the next drag starts
+/// unlatched, and a Ctrl click without a drag still toggles.
+#[test]
+fn a_ctrl_drag_on_a_footprint_leaves_the_tracks_until_the_drop() {
+    let mut rig = rig();
+    grabbing(&mut rig);
+    rig.mods(Modifiers::CTRL);
+    rig.press(100.0, 80.0);
+    let msg = rig.move_to(160.0, 140.0);
+    assert!(
+        matches!(
+            msg,
+            Some(PcbCanvasMsg::FootprintDragged {
+                leaves_tracks: true,
+                ..
+            })
+        ),
+        "{msg:?}"
+    );
+    assert!(rig.canvas.marquee.get().is_none(), "no box is drawn");
+
+    let released = Event::Keyboard(KeyEvent::ModifiersChanged(Modifiers::empty()));
+    let msg = rig.send(released, at(160.0, 140.0));
+    let to = rig.world(160.0, 140.0);
+    assert!(
+        matches!(
+            msg,
+            Some(PcbCanvasMsg::FootprintDragged {
+                leaves_tracks: true,
+                to: t,
+                ..
+            }) if t == to
+        ),
+        "{msg:?}"
+    );
+    rig.release(160.0, 140.0);
+
+    rig.press(100.0, 80.0);
+    let msg = rig.move_to(160.0, 140.0);
+    assert!(
+        matches!(
+            msg,
+            Some(PcbCanvasMsg::FootprintDragged {
+                leaves_tracks: false,
+                ..
+            })
+        ),
+        "the next drag is unlatched: {msg:?}"
+    );
+    rig.release(160.0, 140.0);
+
+    rig.mods(Modifiers::CTRL);
+    rig.press(100.0, 80.0);
+    let msg = rig.release(101.0, 80.0).expect("a click");
+    assert!(
+        matches!(
+            msg,
+            PcbCanvasMsg::Clicked {
+                mode: ClickMode::Toggle,
+                ..
+            }
+        ),
+        "{msg:?}"
+    );
 }
 
 #[test]
@@ -504,4 +572,88 @@ fn a_second_quick_click_nearby_is_a_double_click() {
         matches!(third, PcbCanvasMsg::Clicked { .. }),
         "a third click starts afresh: {third:?}"
     );
+}
+
+/// The view moved under a still pointer, as an edge pan does (#2872): the
+/// next redraw replays the pointer.
+fn edge_panned(rig: &mut Rig, dx: f32, x: f32, y: f32) -> Option<PcbCanvasMsg> {
+    rig.canvas.pan_by(dx, 0.0);
+    rig.canvas.edge_pan.mark_view_moved();
+    let redraw = Event::Window(iced::window::Event::RedrawRequested(
+        iced::time::Instant::now(),
+    ));
+    rig.send(redraw, at(x, y))
+}
+
+/// #2872: a press keeps the board point it landed on, so a plain click
+/// whose view moved before the release lands there, not where the press
+/// pixel is now.
+#[test]
+fn a_click_lands_on_the_board_point_pressed_when_the_view_moved_before_the_release() {
+    let mut rig = rig();
+    let pressed = rig.world(100.0, 80.0);
+    rig.press(100.0, 80.0);
+    rig.canvas.pan_by(-30.0, 0.0);
+    assert_ne!(
+        rig.world(100.0, 80.0),
+        pressed,
+        "precondition: the view moved"
+    );
+
+    let msg = rig.release(100.0, 80.0).expect("a click");
+
+    let PcbCanvasMsg::Clicked { at, .. } = msg else {
+        panic!("not a click: {msg:?}");
+    };
+    assert_eq!(at, pressed);
+}
+
+/// #2872: a footprint drag held in the band keeps the point it was pressed
+/// on while the edge pan moves the view; the drag and the drop follow the
+/// board point under the pointer.
+#[test]
+fn a_footprint_drag_keeps_its_press_point_while_an_edge_pan_moves_the_view() {
+    let mut rig = rig();
+    grabbing(&mut rig);
+    let from = rig.world(100.0, 80.0);
+    rig.press(100.0, 80.0);
+    rig.move_to(390.0, 140.0);
+    assert!(rig.canvas.is_carrying(), "precondition: the drag is live");
+
+    let msg = edge_panned(&mut rig, -25.0, 390.0, 140.0);
+
+    let to = rig.world(390.0, 140.0);
+    assert!(
+        matches!(
+            msg,
+            Some(PcbCanvasMsg::FootprintDragged { from: f, to: t, .. }) if f == from && t == to
+        ),
+        "{msg:?}"
+    );
+    let dropped = rig.release(390.0, 140.0);
+    assert_eq!(dropped, Some(PcbCanvasMsg::FootprintDropped { from, to }));
+}
+
+/// #2872: with a tool armed, a press held while the view moves is a click
+/// where the tool's ghost is, under the pointer, not at the pre-pan point.
+#[test]
+fn a_tool_click_held_while_the_view_moves_lands_where_its_ghost_is() {
+    let mut rig = rig();
+    rig.canvas.set_clicks_only(true);
+    rig.press(390.0, 140.0);
+    let pressed = rig.world(390.0, 140.0);
+    let moved = edge_panned(&mut rig, -25.0, 390.0, 140.0);
+    let ghost = rig.world(390.0, 140.0);
+    assert!(
+        matches!(moved, Some(PcbCanvasMsg::PointerMoved { at, .. }) if at == ghost),
+        "the ghost follows the pointer: {moved:?}"
+    );
+    assert_ne!(ghost, pressed, "precondition: the view moved");
+
+    let msg = rig.release(390.0, 140.0).expect("a click");
+
+    let PcbCanvasMsg::Clicked { at, .. } = msg else {
+        panic!("not a click: {msg:?}");
+    };
+    assert_eq!(at, ghost);
 }

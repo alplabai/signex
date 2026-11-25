@@ -6,15 +6,23 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use signex_bake::BoardBakeError;
+use signex_bake::board::BoardPreviewBake;
 use signex_library::{Footprint, FootprintFile};
 use signex_sketch::SketchData;
-use signex_types::pcb::{NetDef, PcbBoard};
+use signex_types::pcb::{PcbBoard, Point};
+use signex_types::pcb_layer::{CopperLayer, MechanicalLayer, PcbLayer};
+use signex_types::pcb_origin::BoardOrigin;
 use signex_types::sketch::SketchHost;
 
 use crate::app::FootprintDocument;
 use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
-use crate::library::editor::footprint::sketch_mode::{BakePreview, SketchEdit};
+use crate::library::editor::footprint::sketch_mode::SketchEdit;
 use crate::library::editor::footprint::{BoardBackdrop, EditorMode};
+use crate::panels::{
+    BakedHole, BakedOutline, BoardBakePreview, BoardBakeRefusal, BoardBakeRows, BoardTargetProps,
+    ComponentChoice, LayerChoice,
+};
 
 /// One board in sketch mode. The sketch is edited by the footprint
 /// editor's sketch tool, hosted on a footprint that exists only here: its
@@ -28,8 +36,15 @@ pub struct BoardSketchSession {
     /// Why the last commit was refused, shown in the mode's bar until the
     /// next commit; rendered in the language of the moment it is shown.
     pub refusal: Option<signex_i18n::Translatable>,
-    /// What a bake of the copy writes, while the bake preview is open.
-    pub preview: Option<BakePreview>,
+    /// What a bake of the copy writes, while the bake preview is open: the
+    /// Properties Bake panel shows it (mockup row 179).
+    pub preview: Option<BoardBakePreview>,
+    /// Why the open preview's bake refuses, with the entity it names: the
+    /// Bake panel selects it on a click (mockup row 190).
+    pub preview_error: Option<BoardBakeError>,
+    /// The open Import DXF dialog (mockup row 179c); the sketch is unchanged
+    /// until its Import.
+    pub dxf_dialog: Option<Box<super::SketchDxfDialog>>,
     /// The sketch as the board last took it (or had it at entry).
     start: SketchData,
 }
@@ -67,8 +82,24 @@ impl BoardSketchSession {
             editor: Box::new(editor),
             refusal: None,
             preview: None,
+            preview_error: None,
+            dxf_dialog: None,
             start,
         }
+    }
+
+    /// Follow the board's origin and whether its view hides the marker.
+    pub fn follow_board_origin(&mut self, origin: BoardOrigin, hidden: bool) {
+        let Some(backdrop) = self.editor.state.board_backdrop.as_mut() else {
+            return;
+        };
+        if backdrop.origin == origin && backdrop.hides_origin_marker == hidden {
+            return;
+        }
+        let backdrop = Arc::make_mut(backdrop);
+        backdrop.origin = origin;
+        backdrop.hides_origin_marker = hidden;
+        self.editor.canvas_cache.clear();
     }
 
     /// The sketch as the user has it now.
@@ -82,15 +113,100 @@ impl BoardSketchSession {
         self.editor.primitive().sketch.as_ref() != Some(&self.start)
     }
 
-    /// Bake the copy for the preview against the board's `nets`, when the
-    /// preview is open; close it otherwise. Pure: the board is not touched.
-    pub fn refresh_preview(&mut self, nets: &[NetDef]) {
-        self.preview = self
-            .editor
+    /// Bake the copy for the preview against `board` (its nets and placed
+    /// components), when the preview is open; close it otherwise. Pure: the
+    /// board is not touched. It bakes at the editor's current solve and
+    /// never solves again; an unsolved sketch does not bake. The bake also
+    /// goes to the canvas, which draws it (mockup row 190).
+    pub fn refresh_preview(&mut self, board: Option<&PcbBoard>) {
+        let open = self.editor.state.sketch_exit.preview;
+        let drawn = self.editor.state.sketch_exit.board_result.is_some();
+        let editor = &self.editor;
+        let sketch = editor.primitive().sketch.as_ref();
+        // Outer `None`: closed; inner `None`: open but not solved.
+        let bake = open.then(|| {
+            let solve = editor.state.last_solve.as_ref()?;
+            Some(signex_bake::board::bake_board_preview(
+                sketch?, solve, board,
+            ))
+        });
+        self.preview = bake.as_ref().map(|bake| match bake {
+            Some(Ok(bake)) => BoardBakePreview::Writes(bake_rows(bake)),
+            Some(Err(error)) => BoardBakePreview::Refused(BoardBakeRefusal {
+                reason: Some(error.to_string()),
+                place: error.place(),
+                gap: matches!(error, BoardBakeError::OpenProfile { .. })
+                    .then(|| editor.state.gap_offer(sketch))
+                    .flatten(),
+            }),
+            None => BoardBakePreview::Refused(BoardBakeRefusal {
+                reason: None,
+                place: None,
+                gap: None,
+            }),
+        });
+        self.preview_error = bake
+            .as_ref()
+            .and_then(|bake| bake.as_ref()?.as_ref().err().cloned());
+        let (baked, items) = match bake.flatten() {
+            Some(Ok(bake)) => (Some(Arc::new(bake.baked)), Some(Arc::new(bake.items))),
+            _ => (None, None),
+        };
+        self.editor.state.sketch_exit.board_result = baked;
+        self.editor.state.sketch_exit.board_items = items;
+        if open || drawn {
+            self.editor.canvas_cache.clear();
+        }
+    }
+
+    /// The board target rows of the selected entity (decision 2), with the
+    /// choices `board` offers: its copper and mechanical layers and its
+    /// placed components.
+    pub fn target_props(&self, board: &PcbBoard) -> BoardTargetProps {
+        let editor = &self.editor;
+        let sketch = editor.primitive().sketch.as_ref();
+        let entity = editor
             .state
-            .sketch_exit
-            .preview
-            .then(|| board_preview(&self.working_sketch(), nets));
+            .selected_sketch
+            .and_then(|id| sketch?.entities.iter().find(|e| e.id == id));
+        let (Some(sketch), Some(entity)) = (sketch, entity) else {
+            return BoardTargetProps::None;
+        };
+        if entity.board_slot.is_some() {
+            let size = editor.state.last_solve.as_ref().and_then(|solve| {
+                signex_bake::board::slot_size(sketch, solve, entity.id)
+                    .map(|slot| (slot.length, slot.width))
+            });
+            return BoardTargetProps::Slot { size };
+        }
+        if let Some(pour) = entity.pour.as_ref() {
+            return BoardTargetProps::Pour {
+                layer: pour.layer,
+                layers: copper_choices(board),
+            };
+        }
+        if let Some(drawing) = entity.mechanical {
+            return BoardTargetProps::Mechanical {
+                layer: drawing.layer,
+                layers: mechanical_choices(board),
+            };
+        }
+        if let Some(anchor) = entity.component_anchor {
+            let mut components: Vec<ComponentChoice> = board
+                .footprints
+                .iter()
+                .map(|fp| ComponentChoice {
+                    footprint: fp.uuid,
+                    reference: fp.reference.clone(),
+                })
+                .collect();
+            components.sort_by(|a, b| a.reference.cmp(&b.reference));
+            return BoardTargetProps::Anchor {
+                picked: anchor.footprint,
+                components,
+            };
+        }
+        BoardTargetProps::None
     }
 
     /// The board took the copy and stored it as `stored`, which also records
@@ -98,7 +214,16 @@ impl BoardSketchSession {
     /// `board` is the board after the commit: the backdrop and the outline
     /// facts in Properties follow its new outline.
     pub fn mark_committed(&mut self, stored: SketchData, board: &PcbBoard) {
-        self.editor.state.board_backdrop = Some(Arc::new(BoardBackdrop::from_board(board)));
+        let hidden = self
+            .editor
+            .state
+            .board_backdrop
+            .as_ref()
+            .is_some_and(|backdrop| backdrop.hides_origin_marker);
+        self.editor.state.board_backdrop = Some(Arc::new(BoardBackdrop {
+            hides_origin_marker: hidden,
+            ..BoardBackdrop::from_board(board)
+        }));
         self.editor.primitive_mut().sketch = Some(stored.clone());
         self.editor.mark_saved();
         self.editor.canvas_cache.clear();
@@ -107,19 +232,107 @@ impl BoardSketchSession {
     }
 }
 
-/// What a board bake of `sketch` writes: a count per board target, or why
-/// the bake refuses.
-fn board_preview(sketch: &SketchData, nets: &[NetDef]) -> BakePreview {
-    match signex_bake::bake_board(sketch, nets) {
-        Ok(baked) => BakePreview::Counts(
-            SketchHost::Board
-                .bake_targets()
-                .iter()
-                .filter_map(|&kind| {
-                    signex_bake::board::baked_count(&baked, kind).map(|n| (kind, n))
-                })
-                .collect(),
-        ),
-        Err(error) => BakePreview::Refused(error.to_string()),
+/// The values a board bake writes (mockup row 179). A slot is one of the
+/// cutouts; it is listed as a slot and not counted as a cutout too.
+fn bake_rows(bake: &BoardPreviewBake) -> BoardBakeRows {
+    let BoardPreviewBake {
+        baked,
+        items,
+        slots,
+    } = bake;
+    let is_slot = |uuid| slots.iter().any(|(slot, _)| *slot == uuid);
+    BoardBakeRows {
+        outline: baked.outline.as_deref().map(outline_extent),
+        holes: baked
+            .holes
+            .iter()
+            .map(|hole| BakedHole {
+                drill_mm: hole.drill,
+                plated: hole.plated,
+            })
+            .collect(),
+        keepouts: baked
+            .keepouts
+            .iter()
+            .map(|k| crate::panels::BakedKeepout {
+                layers: k.layers.clone(),
+                forbids: k.forbids,
+            })
+            .collect(),
+        cutouts: baked.cutouts.iter().filter(|c| !is_slot(c.uuid)).count(),
+        slots: slots
+            .iter()
+            .map(|(_, slot)| (slot.length, slot.width))
+            .collect(),
+        v_scores: baked.v_scores.len(),
+        pours: items.zones.len(),
+        mechanical: items.graphics.len(),
+        anchors: items.anchors.iter().map(|a| a.reference.clone()).collect(),
     }
+}
+
+/// The extent of a baked outline; an empty one removes the board's.
+fn outline_extent(points: &[Point]) -> BakedOutline {
+    let Some((first, rest)) = points.split_first() else {
+        return BakedOutline::Removed;
+    };
+    let (lo, hi) = rest
+        .iter()
+        .fold(((first.x, first.y), (first.x, first.y)), |(lo, hi), p| {
+            (
+                (lo.0.min(p.x), lo.1.min(p.y)),
+                (hi.0.max(p.x), hi.1.max(p.y)),
+            )
+        });
+    BakedOutline::Size(hi.0 - lo.0, hi.1 - lo.1)
+}
+
+/// The copper layers a board pour may take: the board's own, by its names,
+/// or top and bottom for a board without a layer list.
+fn copper_choices(board: &PcbBoard) -> Vec<LayerChoice> {
+    let listed: Vec<LayerChoice> = board
+        .layers
+        .iter()
+        .filter_map(|def| {
+            let layer = def.pcb_layer().filter(|layer| layer.is_copper())?;
+            Some(LayerChoice {
+                layer,
+                name: def.display_label().to_string(),
+            })
+        })
+        .collect();
+    if !listed.is_empty() {
+        return listed;
+    }
+    [CopperLayer::Top, CopperLayer::Bottom]
+        .into_iter()
+        .map(|copper| {
+            let layer = PcbLayer::Copper(copper);
+            LayerChoice {
+                layer,
+                name: signex_types::format::pcb_layer_token(layer),
+            }
+        })
+        .collect()
+}
+
+/// The mechanical layers a drawing may take: those the board's layer list
+/// names, else every one, 1 to [`MechanicalLayer::MAX`].
+fn mechanical_choices(board: &PcbBoard) -> Vec<MechanicalLayer> {
+    let mut listed: Vec<MechanicalLayer> = board
+        .layers
+        .iter()
+        .filter_map(|def| match def.pcb_layer() {
+            Some(PcbLayer::Mechanical(layer)) => Some(layer),
+            _ => None,
+        })
+        .collect();
+    if listed.is_empty() {
+        listed = (1..=MechanicalLayer::MAX)
+            .filter_map(MechanicalLayer::new)
+            .collect();
+    }
+    listed.sort();
+    listed.dedup();
+    listed
 }

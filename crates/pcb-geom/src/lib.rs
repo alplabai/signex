@@ -15,7 +15,9 @@ mod area_touch;
 mod arrange;
 mod body;
 mod closed_path;
+mod connections;
 mod copper;
+mod drawn_copper;
 mod flip;
 mod free;
 #[cfg(test)]
@@ -36,6 +38,7 @@ mod ratsnest;
 mod rect;
 mod region;
 pub mod route;
+mod route_rats;
 mod selection;
 mod shape;
 mod shape_gap;
@@ -57,13 +60,15 @@ mod union_find;
 mod units;
 mod zone_fill;
 
-pub use arrange::{arrange_in_box, placed_extent};
-pub use body::{footprint_body, is_courtyard};
+pub use arrange::{arrange_in_box, pack_in_box, placed_extent};
+pub use body::{checked_body, courtyard_outline, footprint_body, is_courtyard};
 pub use closed_path::{PathRefusal, closed_path};
+pub use connections::{ConnectionCounts, NetUnrouted, PadName, connection_counts};
 pub use copper::{
     CopperItem, collect_copper, copper_layers, layer_bit, layer_mask, net_at, pad_layers,
     pad_pieces, pieces_on, via_layers, via_pieces,
 };
+pub use drawn_copper::{DrawnCopperFault, board_graphic_copper, board_text_copper, drawn_copper};
 pub use flip::flip_footprint;
 pub use free::{
     ARC_CHORD_ERROR_MM, arc_is_copper, arc_shapes, dimension_shapes, free_copper_on,
@@ -71,12 +76,13 @@ pub use free::{
 };
 pub use gloss::{Glossed, gloss};
 pub use graphic::{
-    GraphicShape, PlacedGraphic, board_graphic_placement, board_text_placement,
-    footprint_graphic_placement,
+    GraphicShape, PlacedGraphic, board_graphic_placement, board_text_placement, circle_radius,
+    footprint_graphic_placement, is_polygon_token,
 };
 pub use graphic_index::graphic_strokes;
 pub use index::{
-    BoardIndex, IndexedItem, ItemRef, RectSelect, Rejected, item_by_uuid, track_shape, via_shape,
+    BoardIndex, IndexedItem, ItemRef, ROOM_LABEL_HEIGHT_MM, ROOM_LABEL_INSET_MM, RectSelect,
+    Rejected, item_by_uuid, room_label_box, track_shape, via_shape,
 };
 pub use measure::{Span, edge_gap};
 pub use mst::{Edge, euclidean_mst, spanning_forest};
@@ -93,6 +99,7 @@ pub use region::{
     OFFSET_ARC_POINTS, Polygon, chord_sag, difference, intersection, offset, twice_signed_area,
     union,
 };
+pub use route_rats::{RouteRats, route_rats};
 pub use selection::{
     ClickMode, Selection, marquee_mode, marquee_select, pick, pick_filtered, pick_under_texts,
 };
@@ -116,9 +123,12 @@ pub use text_frame::{
     FrameLine, TEXT_FRAME_ADVANCE_EM, TEXT_FRAME_LINE_PITCH_EM, TEXT_FRAME_MARGIN_EM,
     text_frame_lines, text_frame_size_mm, wrap as wrap_text_frame,
 };
-pub use track_follow::{TrackEnds, tracks_on_pads};
+pub use track_follow::{
+    ARC_FOLLOW_MAX_GROWTH, ArcEnds, ArcFollowFault, TrackEnds, arcs_on_vias, tracks_on_pads,
+    tracks_on_vias,
+};
 pub use transform::{Placement, Side, pad_shape, pad_world_center, pad_world_rotation_deg};
 pub use turned_marquee::{turned_marquee_corners, turned_marquee_mode, turned_marquee_select};
 pub use union_find::UnionFind;
 pub use units::{GeomError, MAX_ABS_NM, NM_PER_MM, PointNm, mm_to_nm, nm_to_mm};
-pub use zone_fill::{Unfilled, ZoneFill, ZoneFills, zone_area, zone_fills};
+pub use zone_fill::{Unfilled, ZoneFill, ZoneFills, pour_fill_order, zone_area, zone_fills};

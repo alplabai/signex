@@ -52,9 +52,10 @@ pub enum CopperObject {
 }
 
 impl CopperObject {
-    /// The kind of `item`; `None` for a footprint, a drawn area, a string or
-    /// a dimension, which the copper rules do not measure. A copper arc is
-    /// measured as a track and a free pad as a pad (#2373).
+    /// The kind of `item`; `None` for a footprint, a drawn area, a string,
+    /// a drawing or a dimension, which no object rule names. A copper arc is
+    /// measured as a track and a free pad as a pad (#2373); a string or
+    /// drawing on copper (#2883) by the rules that name no object kind.
     pub fn of(item: &ItemRef) -> Option<CopperObject> {
         match item {
             ItemRef::Track(_) | ItemRef::Arc(_) => Some(CopperObject::Track),
@@ -65,7 +66,8 @@ impl CopperObject {
             | ItemRef::Text(_)
             | ItemRef::Dimension(_)
             | ItemRef::Graphic { .. }
-            | ItemRef::FootprintText { .. } => None,
+            | ItemRef::FootprintText { .. }
+            | ItemRef::Room(_) => None,
         }
     }
 }
@@ -118,6 +120,16 @@ impl UserRule {
             + u8::from(self.pair.is_some())
             + u8::from(matches!(self.nets, NetScope::ClassPair(..)));
         (scope, narrowing)
+    }
+
+    /// Whether its `value` of `kind` takes over from a value `held` at
+    /// `(rank, value)` by another rule covering the same object: more
+    /// specific wins, the stricter between equals, the first written
+    /// between identical ones. The one precedence order: the check and
+    /// the rules grid (`signex-drc-dsl`, `table::grid`) both read it.
+    pub fn wins_over(&self, kind: LimitKind, value: i64, held: Option<((u8, u8), i64)>) -> bool {
+        let rank = self.rank();
+        held.is_none_or(|(r, v)| rank > r || (rank == r && kind.stricter(value, v)))
     }
 }
 
@@ -276,9 +288,10 @@ pub(crate) fn pick_between(
             if k != kind {
                 continue;
             }
-            let better =
-                best.is_none_or(|(r, v, _)| rank > r || (rank == r && kind.stricter(value, v)));
-            if better {
+            if scoped
+                .rule
+                .wins_over(kind, value, best.map(|(r, v, _)| (r, v)))
+            {
                 best = Some((rank, value, scoped));
             }
         }

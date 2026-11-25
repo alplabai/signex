@@ -97,9 +97,10 @@ fn run_edits(app: &mut Signex, sheets: &[PathBuf], edits: &[Prepared]) -> Execut
             }
             (CommandOutcome::Disabled { reason }, _) => {
                 ran.failure = Some(format!(
-                    "edit {} (`{}`): {reason}",
+                    "edit {} (`{}`): {}",
                     index + 1,
-                    edit.id.as_str()
+                    edit.id.as_str(),
+                    signex_i18n::RenderTranslatable::render_en_us(&reason)
                 ));
                 break;
             }
@@ -167,6 +168,7 @@ fn undo_landed(app: &mut Signex, landed: &[(PathBuf, bool)], group: UndoGroupId)
             );
         }
         // The revision moved with the take-back: dirtiness and the screen follow.
+        // No library drift check: a take-back of the same call is not a Step.
         app.after_sheet_change(path, DocumentPatch::FULL);
     }
 }

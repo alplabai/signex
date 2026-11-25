@@ -1,13 +1,13 @@
 //! The canvas program and the view function of the widget.
 
-use iced::widget::canvas::{self, Canvas, Event};
+use iced::widget::canvas::{self, Canvas};
 use iced::{Element, Length, Rectangle, Renderer, Theme, Widget, mouse};
 use signex_types::theme::ThemeTokens;
 
+use super::callout_layout::label_shifts;
 use super::draw::Painter;
 use super::geometry::Fit;
-use super::hit::hit_test;
-use super::hover::{IllustrationHover, IllustrationMsg, hover_transition};
+use super::hover::{IllustrationHover, IllustrationMsg};
 use super::illustration::Illustration;
 use super::metrics::Metrics;
 use super::palette::Palette;
@@ -28,26 +28,9 @@ impl IllustrationProgram {
 }
 
 impl canvas::Program<IllustrationMsg> for IllustrationProgram {
+    /// The drawing does not follow the pointer: only a hovered field row
+    /// lights its parts.
     type State = ();
-
-    fn update(
-        &self,
-        _state: &mut (),
-        event: &Event,
-        bounds: Rectangle,
-        cursor: mouse::Cursor,
-    ) -> Option<canvas::Action<IllustrationMsg>> {
-        if !matches!(
-            event,
-            Event::Mouse(mouse::Event::CursorMoved { .. } | mouse::Event::CursorLeft)
-        ) {
-            return None;
-        }
-        let under_pointer = cursor
-            .position_in(bounds)
-            .and_then(|p| hit_test(&self.illustration, &self.fit(bounds), &self.metrics, p));
-        hover_transition(self.hover.hovered_callout(), under_pointer).map(canvas::Action::publish)
-    }
 
     fn draw(
         &self,
@@ -63,8 +46,19 @@ impl canvas::Program<IllustrationMsg> for IllustrationProgram {
             metrics: self.metrics,
             palette: &self.palette,
         };
-        for part in self.illustration.visible_parts() {
-            painter.part(&mut frame, part, self.hover.is_part_highlighted(part));
+        let shifts = label_shifts(
+            self.illustration.visible_parts(),
+            &painter.fit,
+            &self.metrics,
+            bounds.size(),
+        );
+        for (part, shift) in self.illustration.visible_parts().zip(shifts) {
+            painter.part(
+                &mut frame,
+                part,
+                self.hover.is_part_highlighted(part),
+                shift,
+            );
         }
         vec![frame.into_geometry()]
     }
@@ -97,4 +91,52 @@ pub fn property_illustration<'a>(
         .width(Length::Fill)
         .height(Length::Fixed(height))
         .boxed()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::property_illustration::{Part, Primitive, Style};
+    use iced::widget::canvas::Program;
+    use iced::{Point, Radians};
+    use signex_types::theme::{ThemeId, theme_tokens};
+
+    /// A drawing whose one part, an arc, is under (50, 70) of a 100 px box.
+    fn program(field: &'static str, hover: &IllustrationHover) -> IllustrationProgram {
+        let illustration = Illustration::new(100.0, 100.0).part(
+            Part::new(
+                Primitive::Arc {
+                    center: Point::new(50.0, 50.0),
+                    radius: 20.0,
+                    start: Radians(0.0),
+                    end: Radians(std::f32::consts::FRAC_PI_2),
+                },
+                Style::edge(),
+            )
+            .linked(field),
+        );
+        IllustrationProgram {
+            illustration,
+            hover: hover.clone(),
+            palette: Palette::from_tokens(&theme_tokens(ThemeId::DEFAULT)),
+            metrics: Metrics::new(10.0),
+        }
+    }
+
+    /// Moving over a drawn part publishes nothing, so no field row lights.
+    #[test]
+    fn the_pointer_over_a_drawing_publishes_nothing() {
+        let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(100.0, 100.0));
+        let hover = IllustrationHover::default();
+        for x in [50.0, 50.5, 51.0, 50.5, 50.0] {
+            let position = Point::new(x, 70.0);
+            let event = canvas::Event::Mouse(mouse::Event::CursorMoved { position });
+            let cursor = mouse::Cursor::Available(position);
+            assert!(
+                program("grid", &hover)
+                    .update(&mut (), &event, bounds, cursor)
+                    .is_none()
+            );
+        }
+    }
 }

@@ -11,6 +11,7 @@ use signex_types::pcb::{
     PcbSetup, Point, Segment, Via, ViaType, Zone,
 };
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
+use signex_types::zone_cutout::POUR_CUTOUT_FILL;
 use signex_types::zone_keepout::{KEEPOUT_FILL, keepout_copper};
 use signex_types::zone_pour::POUR_FILL;
 use uuid::Uuid;
@@ -198,6 +199,7 @@ pub fn new_copper_area(
         min_thickness: 0.0,
         min_island_area: 0.0,
         remove_dead_islands: false,
+        shelved: false,
         unknown: Default::default(),
     })
 }
@@ -245,7 +247,18 @@ pub fn new_keepout(id: Uuid, outline: Vec<Point>, layer: PcbLayer) -> Option<Zon
         min_thickness: 0.0,
         min_island_area: 0.0,
         remove_dead_islands: false,
+        shelved: false,
         unknown: Default::default(),
+    })
+}
+
+/// A pour cutout over `outline` on `layer` (#2871): a zone with the cutout
+/// fill and no net, which every pour on `layer` leaves empty. `None` for an
+/// outline with no area.
+pub fn new_pour_cutout(id: Uuid, outline: Vec<Point>, layer: CopperLayer) -> Option<Zone> {
+    new_keepout(id, outline, PcbLayer::Copper(layer)).map(|zone| Zone {
+        fill_type: POUR_CUTOUT_FILL.into(),
+        ..zone
     })
 }
 
@@ -258,8 +271,7 @@ pub fn place_zone(zone: Zone) -> BoardCommand {
 
 /// A board string (#2373) reading `text` at `at` on `layer`, at the PCB
 /// default size and unturned. `None` on a layer that takes no text
-/// (`PcbLayer::takes_text`): copper text would be copper the copper list,
-/// DRC and ratsnest never read.
+/// (`PcbLayer::takes_text`); on copper it is copper of no net (#2883).
 pub fn new_text(
     id: Uuid,
     at: Point,
@@ -290,7 +302,8 @@ pub fn place_item(item: BoardItem) -> BoardCommand {
 }
 
 pub use super::draw_free::{
-    ArcMode, FREE_PAD_HOLE_MM, FREE_PAD_SIZE_MM, arc_points, new_arc, new_dimension, new_free_pad,
+    ArcMode, FREE_PAD_HOLE_MM, FREE_PAD_SIZE_MM, arc_points, arc_points_about, new_arc,
+    new_dimension, new_free_pad, new_free_pad_on,
 };
 
 /// Whether the polygon encloses any area, in integer nm (exact): false for

@@ -54,6 +54,40 @@ pub enum SymbolEditorMsg {
     /// graphic is pushed and no undo snapshot is recorded.
     ArcSweepRejected,
 
+    /// Place a pie wedge with the Arc's fields; emitted on the third click
+    /// of the Place Pie gesture.
+    AddPie {
+        cx: f64,
+        cy: f64,
+        radius: f64,
+        start_deg: f64,
+        end_deg: f64,
+    },
+
+    /// Place an elliptical arc (fifth click). Angles are geometric.
+    AddEllipticalArc {
+        cx: f64,
+        cy: f64,
+        radius_x: f64,
+        radius_y: f64,
+        start_deg: f64,
+        end_deg: f64,
+    },
+
+    /// Place a round rectangle on two opposite corners, with the default
+    /// corner radius clamped to half its short side.
+    AddRoundRectangle {
+        from_x: f64,
+        from_y: f64,
+        to_x: f64,
+        to_y: f64,
+    },
+
+    /// One click of the four-click Bezier gesture (start, C1, C2, end),
+    /// collected in `SymbolDocument::polygon_vertices`. The fourth pushes
+    /// the curve as one undo step; `PolygonCancel` drops the clicks.
+    BezierClick { x: f64, y: f64 },
+
     /// Stamp a default "Text" label anchored at `(x, y)`. Edit the
     /// content via the Properties panel after placement.
     AddText { x: f64, y: f64 },
@@ -132,7 +166,7 @@ pub enum SymbolEditorMsg {
     SetPinName { idx: usize, name: String },
 
     // ── View / camera (Altium-style pan/zoom/grid) ─────────
-    /// Right- or middle-button pan delta in screen pixels.
+    /// Right-button pan delta in screen pixels.
     /// Updates `editor.camera.offset`.
     Pan { dx: f32, dy: f32 },
 
@@ -242,6 +276,11 @@ pub enum SymbolEditorMsg {
 
     /// Toggle a kind on the symbol-editor selection filter.
     ToggleSelectionFilter(crate::library::editor::symbol::state::SymbolFilterKind),
+
+    /// A pin type was picked in the Place Pin dropdown (mockup row 141): it
+    /// stays for every following placed pin and arms Place Pin. Picking the
+    /// checked type again goes back to unclassified pins.
+    PinTypePicked(signex_types::schematic::PinDirection),
 
     // ── Right-click context menu ─────────────────────────────
     /// Right-release-without-pan opens the context menu at

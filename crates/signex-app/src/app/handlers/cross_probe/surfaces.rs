@@ -248,7 +248,8 @@ fn cross_selection_of_board_items(board: &PcbBoard, items: &[ItemRef]) -> CrossS
             ItemRef::Zone { .. }
             | ItemRef::Text(_)
             | ItemRef::Dimension(_)
-            | ItemRef::Graphic { .. } => {}
+            | ItemRef::Graphic { .. }
+            | ItemRef::Room(_) => {}
         }
     }
     CrossSelection {

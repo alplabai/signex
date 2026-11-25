@@ -19,6 +19,9 @@ pub(super) const BORDER_WIDTH: f32 = 1.0;
 /// Fill alpha of the danger tint at rest, hover and pressed.
 const DANGER_TINT: [f32; 3] = [0.08, 0.14, 0.24];
 
+/// Black laid over a solid fill (primary, solid danger) on hover and pressed.
+const SOLID_STEP: [f32; 2] = [0.08, 0.16];
+
 /// Rest, hover and pressed fill, border colour and label colour of a role.
 struct Look {
     fills: [Color; 3],
@@ -26,11 +29,28 @@ struct Look {
     text: Color,
 }
 
+/// A solid `fill` with `text` on it, darker on hover and darker still when
+/// pressed; the border is the fill, so none shows.
+fn solid(fill: Color, text: Color) -> Look {
+    let step = |a: f32| tokens::composite_over(Color::from_rgba(0.0, 0.0, 0.0, a), fill);
+    Look {
+        fills: [fill, step(SOLID_STEP[0]), step(SOLID_STEP[1])],
+        border: fill,
+        text,
+    }
+}
+
 fn look(kind: DialogButtonKind, tokens: &ThemeTokens) -> Look {
     let overlays =
         || [Overlay::Faint, Overlay::Hover, Overlay::Pressed].map(|o| tokens::overlay(tokens, o));
     match kind.resolved() {
-        DialogButtonKind::Primary | DialogButtonKind::Accent => {
+        // The theme's primary: the ink on Graphite (mockup row 16, Save
+        // All), the accent fill on a theme that sets none.
+        DialogButtonKind::Primary => {
+            let r = tokens::resolve(tokens);
+            solid(r.primary, r.primary_ink)
+        }
+        DialogButtonKind::Accent => {
             let fill = tokens::accent_fill(tokens);
             Look {
                 fills: [
@@ -51,10 +71,24 @@ fn look(kind: DialogButtonKind, tokens: &ThemeTokens) -> Look {
                 text: danger,
             }
         }
+        DialogButtonKind::DangerSolid => {
+            let danger = tokens::danger(tokens);
+            // White on the light theme's deep red, the dark ink on the dark
+            // theme's pale red.
+            let text = tokens::keep_readable_on(tokens::resolve(tokens).primary_ink, danger);
+            solid(danger, text)
+        }
         DialogButtonKind::Ghost => Look {
             fills: [Color::TRANSPARENT, overlays()[1], overlays()[2]],
             border: Color::TRANSPARENT,
-            text: ti(tokens.text),
+            // The accent text, as every mockup draws `.btn.ghost` (mockup
+            // row 150, Reset to Defaults…).
+            text: tokens::resolve(tokens).accent_text,
+        },
+        DialogButtonKind::Link => Look {
+            fills: [Color::TRANSPARENT, overlays()[1], overlays()[2]],
+            border: Color::TRANSPARENT,
+            text: tokens::resolve(tokens).accent_text,
         },
         DialogButtonKind::Secondary | DialogButtonKind::Cancel => Look {
             fills: overlays(),
@@ -109,14 +143,44 @@ mod tests {
     use super::*;
     use signex_types::theme::ThemeId;
 
-    const KINDS: [DialogButtonKind; 6] = [
+    const KINDS: [DialogButtonKind; 8] = [
         DialogButtonKind::Primary,
         DialogButtonKind::Secondary,
         DialogButtonKind::Danger,
+        DialogButtonKind::DangerSolid,
         DialogButtonKind::Accent,
         DialogButtonKind::Ghost,
+        DialogButtonKind::Link,
         DialogButtonKind::Cancel,
     ];
+
+    /// Mockup row 71: a Link is accent text with no fill and no visible
+    /// border at rest; hover gives it the Ghost's fill.
+    #[test]
+    fn a_link_is_accent_text_without_a_frame() {
+        for &id in ThemeId::BUILTINS {
+            let tokens = signex_types::theme::theme_tokens(id);
+            let rest = style(DialogButtonKind::Link, id, button::Status::Active);
+            assert_eq!(fill(&rest), None, "{id:?}");
+            assert_eq!(rest.border.color, Color::TRANSPARENT, "{id:?}");
+            assert_eq!(
+                rest.text_color,
+                tokens::resolve(&tokens).accent_text,
+                "{id:?}"
+            );
+            assert_eq!(
+                dialog_label_color(DialogButtonKind::Link, &tokens),
+                tokens::resolve(&tokens).accent_text,
+                "{id:?}"
+            );
+            let hover = |kind| fill(&style(kind, id, button::Status::Hovered));
+            assert_eq!(
+                hover(DialogButtonKind::Link),
+                hover(DialogButtonKind::Ghost),
+                "{id:?}"
+            );
+        }
+    }
 
     fn style(kind: DialogButtonKind, id: ThemeId, status: button::Status) -> button::Style {
         let tokens = signex_types::theme::theme_tokens(id);
@@ -174,7 +238,8 @@ mod tests {
 
     /// Cancel is a Secondary: a subtle fill and the standard border. Danger
     /// is a subtle red fill with a red border and red label. Primary is the
-    /// accent fill.
+    /// theme's primary fill (mockup row 16), the accent fill on a theme that
+    /// sets none.
     #[test]
     fn the_roles_differ_only_in_fill_and_colour() {
         for &id in ThemeId::BUILTINS {
@@ -195,8 +260,109 @@ mod tests {
             assert!(tint.a > 0.0 && tint.a < 0.5, "{id:?}: a subtle tint");
 
             let primary = rest(DialogButtonKind::Primary);
-            assert_eq!(fill(&primary), Some(tokens::accent_fill(&tokens)), "{id:?}");
-            assert_eq!(primary.border.color, tokens::accent_fill(&tokens), "{id:?}");
+            let r = tokens::resolve(&tokens);
+            assert_eq!(fill(&primary), Some(r.primary), "{id:?}");
+            assert_eq!(primary.border.color, r.primary, "{id:?}");
+            assert_eq!(primary.text_color, r.primary_ink, "{id:?}");
         }
+    }
+
+    /// Mockup row 16: on Graphite the primary action (Save All) is the ink
+    /// fill with the paper label, not the accent; the Accent role keeps the
+    /// accent fill beside it.
+    #[test]
+    fn the_graphite_primary_is_the_ink_not_the_accent() {
+        for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+            let tokens = signex_types::theme::theme_tokens(id);
+            let r = tokens::resolve(&tokens);
+            let primary = style(DialogButtonKind::Primary, id, button::Status::Active);
+            let accent = style(DialogButtonKind::Accent, id, button::Status::Active);
+            assert_eq!(fill(&primary), Some(r.primary), "{id:?}");
+            assert_eq!(primary.text_color, r.primary_ink, "{id:?}");
+            assert_ne!(fill(&primary), fill(&accent), "{id:?}");
+            assert_eq!(fill(&accent), Some(tokens::accent_fill(&tokens)), "{id:?}");
+        }
+        let light = signex_types::theme::theme_tokens(ThemeId::GraphiteLight);
+        let ink = style(
+            DialogButtonKind::Primary,
+            ThemeId::GraphiteLight,
+            button::Status::Active,
+        );
+        let ink_fill = fill(&ink).expect("a fill");
+        assert!(
+            tokens::relative_luminance(ink_fill)
+                < tokens::relative_luminance(tokens::accent_fill(&light)),
+            "the light primary is darker than the accent: {ink_fill:?}"
+        );
+    }
+
+    /// The solid danger role is the full `error` fill, darker on hover and
+    /// darker still when pressed, with a label that reads on the fill: white
+    /// on Graphite Light, the dark ink on Graphite Dark. The soft Danger role
+    /// is unchanged beside it.
+    #[test]
+    fn solid_danger_is_the_error_fill_with_a_readable_label() {
+        for &id in ThemeId::BUILTINS {
+            let tokens = signex_types::theme::theme_tokens(id);
+            let red = tokens::danger(&tokens);
+            let [rest, hover, pressed] = [
+                button::Status::Active,
+                button::Status::Hovered,
+                button::Status::Pressed,
+            ]
+            .map(|s| style(DialogButtonKind::DangerSolid, id, s));
+            assert_eq!(fill(&rest), Some(red), "{id:?}");
+            assert_eq!(rest.border.color, red, "{id:?}");
+            let lum = |s: &button::Style| tokens::relative_luminance(fill(s).expect("a fill"));
+            assert!(lum(&hover) < lum(&rest), "{id:?}: hover is darker");
+            assert!(
+                lum(&pressed) < lum(&hover),
+                "{id:?}: pressed is darker still"
+            );
+            assert!(
+                tokens::contrast_ratio(rest.text_color, red) >= tokens::UNREADABLE_CONTRAST,
+                "{id:?}: the label reads on the fill"
+            );
+            assert_ne!(
+                style(DialogButtonKind::Danger, id, button::Status::Active),
+                rest,
+                "{id:?}: soft and solid danger differ"
+            );
+        }
+        let light = signex_types::theme::theme_tokens(ThemeId::GraphiteLight);
+        let dark = signex_types::theme::theme_tokens(ThemeId::GraphiteDark);
+        assert_eq!(
+            dialog_label_color(DialogButtonKind::DangerSolid, &light),
+            Color::WHITE
+        );
+        assert_eq!(
+            dialog_label_color(DialogButtonKind::DangerSolid, &dark),
+            tokens::resolve(&dark).primary_ink
+        );
+    }
+
+    /// Mockup row 150: a ghost button (Reset to Defaults…) draws its label
+    /// in the accent text with no fill or border at rest, in every theme.
+    #[test]
+    fn a_ghost_button_draws_the_accent_text() {
+        for &id in ThemeId::BUILTINS {
+            let tokens = signex_types::theme::theme_tokens(id);
+            let accent = tokens::resolve(&tokens).accent_text;
+            let rest = style(DialogButtonKind::Ghost, id, button::Status::Active);
+            assert_eq!(rest.text_color, accent, "{id:?}");
+            assert_eq!(fill(&rest), None, "{id:?}");
+            assert_eq!(rest.border.color, Color::TRANSPARENT, "{id:?}");
+            assert_eq!(
+                dialog_label_color(DialogButtonKind::Ghost, &tokens),
+                accent,
+                "{id:?}"
+            );
+        }
+        let light = signex_types::theme::theme_tokens(ThemeId::GraphiteLight);
+        assert_ne!(
+            dialog_label_color(DialogButtonKind::Ghost, &light),
+            ti(light.text),
+            "the ghost label is not the body text"
+        );
     }
 }

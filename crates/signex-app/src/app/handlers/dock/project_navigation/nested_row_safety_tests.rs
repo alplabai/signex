@@ -149,7 +149,8 @@ fn a_rename_that_would_strand_another_projects_parent_is_refused() {
     let key = key(&app, &["top.snxsch", "leaf.snxsch"]);
 
     let opened = app.handle_project_tree_action(ProjectTreeAction::OpenRenameDialog(key));
-    assert_eq!(opened.units(), 0);
+    // Opening queues only the name field's focus and select-all.
+    assert_eq!(opened.units(), super::rename::rename_field_focus().units());
     app.ui_state.rename_dialog.as_mut().expect("opens").buffer = "renamed.snxsch".to_string();
     let submitted = app.handle_rename_submit();
     assert_eq!(submitted.units(), 0);

@@ -1,6 +1,5 @@
-//! Graphite paint of the Active Bar's irregular dropdowns: the Selection
-//! Filter's toggle chips and All / None segmented control. Legacy themes
-//! never reach this module.
+//! Graphite paint of the Selection Filter dropdown: its toggle chips and
+//! All / None segmented control. Legacy themes never reach this module.
 
 use iced::widget::{container, row};
 use iced::{Background, Border, Color, Element, Theme, Widget};
@@ -227,31 +226,37 @@ mod tests {
         assert_eq!(hex(on.ink), [0xF0, 0xB0, 0x8E]);
     }
 
-    /// Both Graphite filter and net-colour menus keep their entry shape
-    /// (one chip grid; seven swatch rows, then the Custom / Clear rows).
+    /// Both Graphite filter and net-colour menus keep their entry shape:
+    /// one chip grid; seven swatch rows in the icon column, then the Custom
+    /// / Clear rows, every one an ordinary item row (Graphite mockup #61).
     #[test]
     fn graphite_menus_keep_their_entries() {
         use signex_widgets::active_bar_dropdown::DropdownEntry;
+        let i18n = signex_i18n::I18n::en_us_ref();
         for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
             let t = theme_tokens(id);
             let filters: std::collections::HashSet<_> = crate::active_bar::SelectionFilter::ALL
                 .iter()
                 .copied()
                 .collect();
-            let entry = super::super::custom::filter_entry(&t, &filters, &[]);
+            let state = super::super::SchematicFilterState {
+                filters: &filters,
+                presets: &[],
+                editing: None,
+            };
+            let entry = super::super::custom::filter_entry(i18n, &t, &state);
             assert!(matches!(entry, DropdownEntry::Custom(_)));
-            let rows = super::super::custom::net_color_entries(
-                signex_i18n::I18n::en_us_ref(),
-                id,
-                false,
-                true,
-            );
+            let rows = super::super::custom::net_color_entries(i18n, id, false, true);
             let swatches = rows
                 .iter()
                 .filter(|e| matches!(e, DropdownEntry::Item(item) if item.swatch.is_some()))
                 .count();
             assert_eq!(swatches, 7);
             assert_eq!(rows.len(), 12);
+            assert!(
+                !rows.iter().any(|e| matches!(e, DropdownEntry::Custom(_))),
+                "no row draws its own label size"
+            );
         }
     }
 

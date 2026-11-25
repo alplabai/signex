@@ -5,7 +5,7 @@
 //! builds a laid-out widget tree, so no test could see a size or a position:
 //! a button squeezed to a sliver with its label wrapped onto five lines
 //! (#604) passed every gate. This lays an [`Element`] out against a window
-//! size with a headless tiny-skia renderer, so text is measured with real
+//! size with a headless vello_cpu renderer, so text is measured with real
 //! fonts, and reports the bounds of every text widget in it.
 //!
 //! The fonts are whatever the system and iced's defaults provide, not the
@@ -128,6 +128,53 @@ pub(crate) fn messages_on_click_at<M>(
         ]
         .map(iced::Event::Mouse),
     )
+}
+
+/// The messages left clicks on the centres of `labels` publish, in order,
+/// over one laid-out `element`, so a widget's state carries from one click
+/// to the next (a control a click left open takes the following press).
+pub(crate) fn messages_on_clicks<M>(
+    mut element: Element<'_, M, Theme, iced::Renderer>,
+    window: Size,
+    labels: &[&str],
+) -> Vec<M> {
+    use iced::advanced::mouse;
+    let renderer = headless_renderer();
+    let mut tree = Tree::new(&element);
+    tree.diff(&mut element);
+    element.layout(
+        &mut tree,
+        &renderer,
+        &layout::Limits::new(Size::ZERO, window),
+    );
+    let size = tree.size;
+    let mut collect = CollectTexts(Vec::new());
+    element.operate(
+        &mut tree,
+        Layout::new(size),
+        &Rectangle::with_size(size),
+        &renderer,
+        &mut collect,
+    );
+    let mut published = Vec::new();
+    for label in labels {
+        let at = find(&collect.0, label).bounds.center();
+        let click = [
+            mouse::Event::CursorMoved { position: at },
+            mouse::Event::ButtonPressed(mouse::Button::Left),
+            mouse::Event::ButtonReleased(mouse::Button::Left),
+        ]
+        .map(iced::Event::Mouse);
+        published.extend(deliver(
+            &mut element,
+            &mut tree,
+            &renderer,
+            window,
+            at,
+            &click,
+        ));
+    }
+    published
 }
 
 /// The messages one wheel `delta` at `point` publishes from the laid-out
@@ -257,6 +304,28 @@ pub(crate) fn draw_pixels<M>(
         &layout::Limits::new(Size::ZERO, window),
     );
     let size = tree.size;
+    // As the runtime does before every frame: a redraw sets each widget's
+    // status (a button that never saw one draws as disabled).
+    {
+        use iced::advanced::shell::{Bus, Waker};
+        let mut bus = Bus::new();
+        let mut shell =
+            iced::advanced::Shell::new(&iced::window::Headless, Waker::noop(), &mut bus);
+        let redraw = iced::Event::Window(iced::window::Event::RedrawRequested(
+            std::time::Instant::now(),
+        ));
+        element.update(
+            &mut tree,
+            &redraw,
+            Layout::new(size),
+            iced::advanced::mouse::Cursor::Unavailable,
+            &renderer,
+            &mut shell,
+            &Rectangle::with_size(window),
+        );
+    }
+    // As the compositor does before every frame.
+    iced::advanced::Renderer::reset(&mut renderer, Rectangle::with_size(window));
     element.draw(
         &tree,
         &mut renderer,
@@ -295,7 +364,7 @@ pub(crate) fn natural<M>(element: Element<'_, M, Theme, iced::Renderer>, label: 
 }
 
 pub(crate) fn headless_renderer() -> iced::Renderer {
-    iced::Renderer::Secondary(iced_tiny_skia::Renderer::new(renderer::Settings {
+    iced::Renderer::Secondary(iced_vello_cpu::Renderer::new(renderer::Settings {
         font: Font::DEFAULT,
         text_size: Pixels(16.0),
         ..renderer::Settings::default()

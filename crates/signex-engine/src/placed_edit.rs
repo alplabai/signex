@@ -71,11 +71,15 @@ pub fn placed_geometry(sheet: &SchematicSheet, item: &SelectedItem) -> Option<Pl
         | SelectedKind::NoErcDirective
         | SelectedKind::TextNote
         | SelectedKind::SheetPin => sheet.item_anchor(item).map(at),
-        // A directive (#2420) is moved on the sheet, not from Properties.
+        SelectedKind::HarnessConnector => sheet.harness.connector(id).map(|c| at(c.position)),
+        SelectedKind::HarnessWire => sheet.harness.wire(id).map(|w| at(w.start)),
+        // A directive (#2420) is moved on the sheet, not from Properties; a
+        // harness entry sits in its connector's slot.
         SelectedKind::SymbolRefField
         | SelectedKind::SymbolValField
         | SelectedKind::Drawing
-        | SelectedKind::Directive => None,
+        | SelectedKind::Directive
+        | SelectedKind::HarnessEntry => None,
     }
 }
 
@@ -96,11 +100,48 @@ pub fn placed_item(sheet: &SchematicSheet, id: uuid::Uuid) -> Option<SelectedIte
         SelectedKind::NoErcDirective,
         SelectedKind::TextNote,
         SelectedKind::SheetPin,
+        SelectedKind::HarnessConnector,
+        SelectedKind::HarnessWire,
     ];
     kinds
         .into_iter()
         .map(|kind| SelectedItem::new(id, kind))
         .find(|item| placed_geometry(sheet, item).is_some())
+}
+
+/// Every kind an object of a sheet is selected as, the two symbol fields
+/// left out: a field carries its symbol's uuid, so a uuid alone names the
+/// symbol.
+const OBJECT_KINDS: [SelectedKind; 16] = [
+    SelectedKind::Symbol,
+    SelectedKind::Wire,
+    SelectedKind::Bus,
+    SelectedKind::BusEntry,
+    SelectedKind::Junction,
+    SelectedKind::NoConnect,
+    SelectedKind::NoErcDirective,
+    SelectedKind::Label,
+    SelectedKind::SheetPin,
+    SelectedKind::TextNote,
+    SelectedKind::ChildSheet,
+    SelectedKind::Drawing,
+    SelectedKind::Directive,
+    SelectedKind::HarnessConnector,
+    SelectedKind::HarnessEntry,
+    SelectedKind::HarnessWire,
+];
+
+impl crate::Engine {
+    /// The object of the sheet `id` names, of any kind a selection holds:
+    /// what a command naming its items by uuid acts on (#2326). A symbol's
+    /// uuid names the symbol, never one of its fields.
+    #[must_use]
+    pub fn item_by_uuid(&self, id: uuid::Uuid) -> Option<SelectedItem> {
+        OBJECT_KINDS
+            .into_iter()
+            .map(|kind| SelectedItem::new(id, kind))
+            .find(|item| self.contains_selected_item(item))
+    }
 }
 
 /// The move that puts `item`'s position at `to`: one `MoveSelection` by the
@@ -173,11 +214,178 @@ pub fn rotate_to_command(
     }
 }
 
+/// The start and end of the wire or bus `item` on `sheet`; `None` for any
+/// other kind or an id the sheet does not have.
+#[must_use]
+pub fn run_ends(sheet: &SchematicSheet, item: &SelectedItem) -> Option<(Point, Point)> {
+    match item.kind {
+        SelectedKind::Wire => (sheet.wires.iter())
+            .find(|w| w.uuid == item.uuid)
+            .map(|w| (w.start, w.end)),
+        SelectedKind::Bus => (sheet.buses.iter())
+            .find(|b| b.uuid == item.uuid)
+            .map(|b| (b.start, b.end)),
+        _ => None,
+    }
+}
+
+/// The edit that puts one end of the wire or bus `item` (its start when
+/// `start`) at `to`, the other end kept: a typed Start or End. `None` for
+/// any other kind or an id the sheet does not have.
+#[must_use]
+pub fn run_end_command(
+    sheet: &SchematicSheet,
+    item: &SelectedItem,
+    start: bool,
+    to: Point,
+) -> Option<Command> {
+    run_ends(sheet, item)?;
+    Some(Command::SetRunEnd {
+        run: *item,
+        start,
+        to,
+    })
+}
+
+/// The edit that sets `props` on the text note `item`; `None` for any other
+/// kind or an id the sheet does not have.
+#[must_use]
+pub fn text_note_props_command(
+    sheet: &SchematicSheet,
+    item: &SelectedItem,
+    props: crate::TextNoteProps,
+) -> Option<Command> {
+    let is_note =
+        item.kind == SelectedKind::TextNote && sheet.text_notes.iter().any(|n| n.uuid == item.uuid);
+    is_note.then_some(Command::UpdateTextNoteProps {
+        note_id: item.uuid,
+        props,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::Engine;
-    use signex_types::schematic::{Label, LabelType, Symbol};
+    use signex_types::schematic::{Label, LabelType, Symbol, Wire};
+
+    fn wire(start: Point, end: Point) -> Wire {
+        Wire {
+            uuid: uuid::Uuid::now_v7(),
+            start,
+            end,
+            ..Default::default()
+        }
+    }
+
+    fn run_item(w: &Wire) -> SelectedItem {
+        SelectedItem::new(w.uuid, SelectedKind::Wire)
+    }
+
+    /// A typed start moves only the start, a straight wire may turn, and
+    /// the edit is one undo step.
+    #[test]
+    fn a_typed_start_stretches_only_the_start() {
+        let w = wire(Point::new(0.0, 0.0), Point::new(10.0, 0.0));
+        let item = run_item(&w);
+        let mut engine = Engine::new(SchematicSheet {
+            wires: vec![w],
+            ..Default::default()
+        })
+        .expect("engine");
+        let cmd = run_end_command(engine.document(), &item, true, Point::new(2.54, 5.08))
+            .expect("a wire");
+        assert!(engine.execute(cmd).expect("ran").changed);
+        let ends = run_ends(engine.document(), &item).expect("still there");
+        assert_eq!(ends, (Point::new(2.54, 5.08), Point::new(10.0, 0.0)));
+        engine.undo().expect("undo");
+        let ends = run_ends(engine.document(), &item).expect("back");
+        assert_eq!(ends, (Point::new(0.0, 0.0), Point::new(10.0, 0.0)));
+        assert!(!engine.can_undo(), "one undo step");
+    }
+
+    /// A typed end stretches only the end; the wire ending on it stays.
+    #[test]
+    fn a_typed_end_leaves_what_is_attached() {
+        let w = wire(Point::new(0.0, 0.0), Point::new(10.0, 0.0));
+        let other = wire(Point::new(10.0, 0.0), Point::new(10.0, 10.0));
+        let item = run_item(&w);
+        let mut engine = Engine::new(SchematicSheet {
+            wires: vec![w, other.clone()],
+            ..Default::default()
+        })
+        .expect("engine");
+        let cmd = run_end_command(engine.document(), &item, false, Point::new(20.0, 5.0))
+            .expect("a wire");
+        engine.execute(cmd).expect("ran");
+        let ends = run_ends(engine.document(), &item).expect("still there");
+        assert_eq!(ends, (Point::new(0.0, 0.0), Point::new(20.0, 5.0)));
+        let kept = run_ends(engine.document(), &run_item(&other)).expect("kept");
+        assert_eq!(kept, (other.start, other.end));
+    }
+
+    /// An end typed onto the middle of another wire makes the T a placed
+    /// wire would: a junction dot there.
+    #[test]
+    fn a_typed_end_on_a_wire_gets_the_junction_placement_gets() {
+        let trunk = wire(Point::new(0.0, 10.0), Point::new(20.0, 10.0));
+        let w = wire(Point::new(10.0, 0.0), Point::new(10.0, 5.0));
+        let item = run_item(&w);
+        let mut engine = Engine::new(SchematicSheet {
+            wires: vec![trunk, w],
+            ..Default::default()
+        })
+        .expect("engine");
+        let t = Point::new(10.0, 10.0);
+        let cmd = run_end_command(engine.document(), &item, false, t).expect("a wire");
+        engine.execute(cmd).expect("ran");
+        let key = signex_net::pt_key(&t);
+        assert!(
+            (engine.document().junctions.iter()).any(|j| signex_net::pt_key(&j.position) == key),
+            "a junction at the T"
+        );
+    }
+
+    #[test]
+    fn a_bus_end_is_set_and_an_end_on_the_other_changes_nothing() {
+        let bus = signex_types::schematic::Bus {
+            uuid: uuid::Uuid::now_v7(),
+            start: Point::new(0.0, 0.0),
+            end: Point::new(10.0, 0.0),
+            ..Default::default()
+        };
+        let item = SelectedItem::new(bus.uuid, SelectedKind::Bus);
+        let mut engine = Engine::new(SchematicSheet {
+            buses: vec![bus],
+            ..Default::default()
+        })
+        .expect("engine");
+        let onto_start =
+            run_end_command(engine.document(), &item, false, Point::new(0.0, 0.0)).expect("a bus");
+        assert!(!engine.execute(onto_start).expect("ran").changed);
+        let cmd =
+            run_end_command(engine.document(), &item, false, Point::new(10.0, 7.5)).expect("a bus");
+        assert!(engine.execute(cmd).expect("ran").changed);
+        let ends = run_ends(engine.document(), &item).expect("bus");
+        assert_eq!(ends.1, Point::new(10.0, 7.5));
+        let junction = SelectedItem::new(item.uuid, SelectedKind::Junction);
+        assert!(run_end_command(engine.document(), &junction, true, ends.0).is_none());
+    }
+
+    #[test]
+    fn a_locked_wire_refuses_a_typed_end() {
+        let mut w = wire(Point::new(0.0, 0.0), Point::new(10.0, 0.0));
+        w.locked = true;
+        let item = run_item(&w);
+        let engine = Engine::new(SchematicSheet {
+            wires: vec![w],
+            ..Default::default()
+        })
+        .expect("engine");
+        let cmd =
+            run_end_command(engine.document(), &item, true, Point::new(1.0, 1.0)).expect("a wire");
+        assert!(engine.lock_refusal(&cmd).is_some());
+    }
 
     fn part(rotation: f64, mirror_x: bool) -> Symbol {
         Symbol {
@@ -189,6 +397,26 @@ mod tests {
             mirror_x,
             ..Default::default()
         }
+    }
+
+    /// A uuid names its object whatever the kind; a part's uuid is the part,
+    /// never its designator or value field; an unknown uuid names nothing.
+    #[test]
+    fn a_uuid_names_its_object_and_a_part_uuid_never_a_field() {
+        let s = part(0.0, false);
+        let w = wire(Point::new(0.0, 0.0), Point::new(10.0, 0.0));
+        let (part_id, wire_id) = (s.uuid, w.uuid);
+        let engine = Engine::new(SchematicSheet {
+            symbols: vec![s],
+            wires: vec![w],
+            ..Default::default()
+        })
+        .expect("engine");
+        let found = engine.item_by_uuid(part_id).expect("the part");
+        assert_eq!(found.kind, SelectedKind::Symbol);
+        let found = engine.item_by_uuid(wire_id).expect("the wire");
+        assert_eq!(found, SelectedItem::new(wire_id, SelectedKind::Wire));
+        assert_eq!(engine.item_by_uuid(uuid::Uuid::now_v7()), None);
     }
 
     #[test]

@@ -103,6 +103,13 @@ fn filtered(snap: &SchematicSheet, keep: &dyn Fn(Uuid) -> bool) -> SchematicShee
             signex_types::schematic::SchDirective::uuid,
             keep,
         ),
+        // #1280: connectors (with their entries) and harness wires by id;
+        // the typed sheet entries follow their sheet symbols.
+        harness: signex_types::schematic::SheetHarness {
+            connectors: keep_where(&snap.harness.connectors, |c| c.uuid, keep),
+            wires: keep_where(&snap.harness.wires, |w| w.uuid, keep),
+            entry_types: snap.harness.entry_types.clone(),
+        },
         ..SchematicSheet::default()
     }
 }
@@ -188,6 +195,27 @@ pub(super) fn split_ghost(
         no_erc_directives,
         |d: &signex_types::schematic::NoErcDirective| d.uuid
     );
+    // #1280: harness connectors and wires move like any item.
+    diff_kind(
+        &base.harness.connectors,
+        &ghost.harness.connectors,
+        |c: &signex_types::schematic::HarnessConnector| c.uuid,
+        selected,
+        &mut skip,
+        &mut moving.harness.connectors,
+    );
+    diff_kind(
+        &base.harness.wires,
+        &ghost.harness.wires,
+        |w: &signex_types::schematic::HarnessWire| w.uuid,
+        selected,
+        &mut skip,
+        &mut moving.harness.wires,
+    );
+    moving
+        .harness
+        .entry_types
+        .clone_from(&ghost.harness.entry_types);
     DragFrame {
         moving: Rc::new(moving),
         skip: Rc::new(skip),
@@ -387,6 +415,12 @@ impl DragLayers {
     #[cfg(test)]
     pub fn builds(&self) -> u32 {
         self.builds
+    }
+
+    /// How many times the GPU static layer's scene was built.
+    #[cfg(test)]
+    pub fn static_scene_builds(&self) -> u32 {
+        self.static_scene.builds()
     }
 }
 

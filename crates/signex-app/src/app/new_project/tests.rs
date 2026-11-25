@@ -289,6 +289,65 @@ fn with_the_folder_off_the_project_goes_straight_into_the_location() {
     assert!(!tmp.path().join("Flat").exists());
 }
 
+/// The path the dialog shows is the file Create writes, with the folder on
+/// and off.
+#[test]
+fn the_path_shown_is_the_file_create_writes() {
+    for make_folder in [true, false] {
+        let tmp = tempfile::tempdir().unwrap();
+        let (mut app, _t) = Signex::new();
+        settle(&mut app, Message::Menu(MenuMessage::NewProject));
+        dialog(
+            &mut app,
+            NewProjectMsg::LocationEdited(tmp.path().display().to_string()),
+        );
+        dialog(&mut app, NewProjectMsg::NameEdited(" Rev.A ".into()));
+        dialog(&mut app, NewProjectMsg::MakeFolderToggled(make_folder));
+        let shown = app
+            .ui_state
+            .new_project
+            .as_ref()
+            .unwrap()
+            .project_file()
+            .expect("a path");
+        let expected = if make_folder {
+            tmp.path().join("Rev.A").join("Rev.A.snxprj")
+        } else {
+            tmp.path().join("Rev.A.snxprj")
+        };
+        assert_eq!(shown, expected);
+        assert!(!shown.exists(), "showing it writes nothing");
+        dialog(&mut app, NewProjectMsg::SubmitRequested);
+        assert!(app.ui_state.new_project.is_none(), "created");
+        assert!(shown.is_file(), "{}", shown.display());
+    }
+}
+
+/// A new project left on its default sheet is A3: stored in the project and
+/// on its first sheet. The A4 in mockup row 21 is a sample value.
+#[test]
+fn a_new_project_defaults_to_an_a3_sheet() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (mut app, _t) = Signex::new();
+    settle(&mut app, Message::Menu(MenuMessage::NewProject));
+    let state = app.ui_state.new_project.as_ref().unwrap();
+    assert_eq!(state.setup.sheet.paper_size, "A3");
+    dialog(
+        &mut app,
+        NewProjectMsg::LocationEdited(tmp.path().display().to_string()),
+    );
+    dialog(&mut app, NewProjectMsg::NameEdited("Sheet".into()));
+    dialog(&mut app, NewProjectMsg::SubmitRequested);
+    let project = tmp.path().join("Sheet").join("Sheet.snxprj");
+    let data = signex_types::project::parse_project(&project).expect("project written");
+    assert_eq!(
+        data.project_defaults.sheet.as_ref().unwrap().paper_size,
+        "A3"
+    );
+    let sheet_text = std::fs::read_to_string(project.with_extension("snxsch")).unwrap();
+    assert!(sheet_text.contains("A3"), "{sheet_text}");
+}
+
 #[test]
 fn create_does_nothing_while_the_target_is_taken() {
     let tmp = tempfile::tempdir().unwrap();

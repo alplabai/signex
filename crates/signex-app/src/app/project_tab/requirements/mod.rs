@@ -1,7 +1,8 @@
 //! Requirements section of the Project tab (#2339): the project's
 //! requirements list with each entry's kind, fields and on/off switch; add
 //! (kind picker), edit a field in place (Enter commits; a refused value stays
-//! in its box with the reason), remove, and Run checks, which runs the same
+//! in its box with the reason; the id shows read-only and only the catalog
+//! command changes it), remove, and Run checks, which runs the same
 //! job as `check_requirements` off the UI thread and shows pass or fail per
 //! requirement with its evidence. Every edit is one step of the project's
 //! General history and marks the `.snxprj` dirty; nothing is written until
@@ -15,7 +16,7 @@ mod words;
 #[cfg(test)]
 mod tests;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
@@ -41,11 +42,15 @@ use crate::ignore::IgnoreResult;
 #[derive(Debug, Clone)]
 pub struct RequirementsRun {
     pub report: Result<CheckReport, String>,
+    /// The board outline's width and height in mm as the run measured them,
+    /// for the Board size cards; `None` when no board was read or it has no
+    /// outline.
+    pub board_mm: Option<(f64, f64)>,
     pub finished_at: DateTime<Utc>,
 }
 
 /// The Requirements section's own state: what is typed and not committed,
-/// the last refusal, and the last run.
+/// the last refusal, the cards opened or closed by hand, and the last run.
 #[derive(Debug, Clone, Default)]
 pub struct RequirementsTabState {
     /// Fields as typed, by entry and field, until Enter commits them, the
@@ -55,8 +60,28 @@ pub struct RequirementsTabState {
     /// Why the last edit was refused, and the entry it was for (`None`: an
     /// add); cleared by the next edit.
     pub problem: Option<(Option<EntryKey>, RequirementProblem)>,
+    /// The field the refused value was typed in, when the refusal was a
+    /// field commit; cleared with `problem`.
+    pub problem_field: Option<RequirementField>,
+    /// Cards whose open or closed state the user flipped, by entry: a flip
+    /// follows its entry like the drafts, so it never lands on another.
+    pub toggled: HashSet<EntryKey>,
     pub running: bool,
     pub last_run: Option<Arc<RequirementsRun>>,
+}
+
+/// How many of `entries` failed the last run that finished (none before a
+/// run, or when the run itself could not finish).
+pub(super) fn failed_count(
+    entries: &[signex_types::project::RequirementEntry],
+    state: Option<&RequirementsTabState>,
+) -> usize {
+    state
+        .and_then(|state| state.last_run.as_deref())
+        .and_then(|run| run.report.as_ref().ok())
+        .map_or(0, |report| {
+            view::outcome_counts(Some(report), entries).failed
+        })
 }
 
 impl RequirementsTabState {
@@ -64,6 +89,8 @@ impl RequirementsTabState {
     pub(super) fn clear_drafts(&mut self) {
         self.drafts.clear();
         self.problem = None;
+        self.problem_field = None;
+        self.toggled.clear();
     }
 }
 
@@ -96,6 +123,10 @@ pub enum RequirementsMsg {
         on: bool,
     },
     Removed {
+        index: usize,
+    },
+    /// The card's expand or collapse button: flip its open state.
+    ExpandToggled {
         index: usize,
     },
     RunRequested,
@@ -139,6 +170,7 @@ impl Signex {
                 let tab = self.requirements_tab(project_id);
                 tab.drafts.insert((requirement, field), text);
                 tab.problem = None;
+                tab.problem_field = None;
             }
             RequirementsMsg::FieldSubmitted { index, field } => {
                 // The draft of the entry at `index` now: never another's.
@@ -169,6 +201,15 @@ impl Signex {
                 let command = ProjectRequirementCommand::Remove { index };
                 self.edit_requirements_from_tab(project_id, Some(index), &command)
                     .ignore("the refusal is kept in the tab and shown at its entry");
+            }
+            RequirementsMsg::ExpandToggled { index } => {
+                let Some(requirement) = self.requirement_key_at(project_id, index) else {
+                    return Task::none();
+                };
+                let toggled = &mut self.requirements_tab(project_id).toggled;
+                if !toggled.remove(&requirement) {
+                    toggled.insert(requirement);
+                }
             }
             RequirementsMsg::RunRequested => return self.run_requirements_in_tab(project_id),
             RequirementsMsg::RunFinished(run) => {
@@ -203,16 +244,18 @@ impl Signex {
         text: String,
     ) {
         let command = ProjectRequirementCommand::SetField { index, field, text };
-        if self
+        let committed = self
             .edit_requirements_from_tab(project_id, Some(index), &command)
-            .is_ok()
-        {
+            .is_ok();
+        if committed {
             // Read after the commit: a committed id moved the entry's drafts.
             if let Some(requirement) = self.requirement_key_at(project_id, index) {
                 self.requirements_tab(project_id)
                     .drafts
                     .remove(&(requirement, field));
             }
+        } else {
+            self.requirements_tab(project_id).problem_field = Some(field);
         }
     }
 
@@ -232,14 +275,16 @@ impl Signex {
             .as_ref()
             .err()
             .map(|problem| (entry, problem.clone()));
+        tab.problem_field = None;
         outcome
     }
 
     /// Apply one Requirements edit to the project's data as one step of its
     /// General history and mark the `.snxprj` dirty: the tab's and the
     /// catalog commands' one commit path. `Ok(false)` when nothing changed
-    /// or the project is no longer loaded. Drafts are keyed by requirement
-    /// id: an edit from the tab or a command keeps every other entry's.
+    /// or the project is no longer loaded. Drafts and opened or closed
+    /// cards are keyed by requirement id: an edit from the tab or a command
+    /// keeps every other entry's.
     pub(crate) fn apply_project_requirement(
         &mut self,
         project_id: ProjectId,
@@ -261,7 +306,6 @@ impl Signex {
         {
             return Ok(false);
         }
-        tab.rules_step_newest = false;
         let removed = match command {
             ProjectRequirementCommand::Remove { index } => Some(*index),
             _ => None,
@@ -288,16 +332,17 @@ impl Signex {
         {
             return Task::none();
         }
-        let job = self.requirements_check_job(project);
+        let job = self.requirements_measured_check_job(project);
         self.requirements_tab(project_id).running = true;
         Task::perform(
             async move {
-                let report = tokio::task::spawn_blocking(job)
+                let ran = tokio::task::spawn_blocking(job)
                     .await
-                    .map_err(|error| format!("the check did not finish: {error}"))
-                    .and_then(|report| report);
+                    .map_err(|error| format!("the check did not finish: {error}"));
+                let board_mm = ran.as_ref().ok().and_then(|(_, measured)| *measured);
                 RequirementsRun {
-                    report,
+                    report: ran.map(|(report, _)| report),
+                    board_mm,
                     finished_at: Utc::now(),
                 }
             },

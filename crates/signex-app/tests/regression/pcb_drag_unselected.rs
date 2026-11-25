@@ -75,6 +75,7 @@ fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
@@ -357,7 +358,7 @@ fn during_a_drag_the_footprint_is_drawn_only_where_it_is_going() {
     // The selection outline goes with it, not left behind.
     let highlight = canvas.highlight();
     assert!(highlight.selected.is_empty() && highlight.bodies.is_empty());
-    assert!(!highlight.ghost.is_empty());
+    assert!(highlight.ghost.is_empty(), "the part itself moves");
 
     f.pointer(mouse::Event::ButtonReleased(mouse::Button::Left), to);
     assert!(

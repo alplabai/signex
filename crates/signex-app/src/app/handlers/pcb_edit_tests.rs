@@ -211,7 +211,7 @@ fn a_read_only_board_cannot_be_edited() {
     let mut app = app_workspace(&dir.path().to_string_lossy(), &[]);
     let path = dir.path().join("newer.snxpcb");
     let mut newer = board();
-    newer.unknown.newer_minor_source = Some("snxpcb/1.9".into());
+    newer.unknown.newer_minor_source = Some("snxpcb/1.12".into());
     app.open_pcb_tab(path.clone(), "newer".into(), newer);
     let refused = app.execute_board_commands(&path, vec![move_to(FP_A, 1.0)], None);
     assert_eq!(refused, Err(BoardEditError::ReadOnly(path.clone())));
@@ -516,6 +516,7 @@ fn a_parked_board_cannot_be_stepped_so_a_save_in_flight_loses_nothing() {
     let CommandOutcome::Disabled { reason } = undo_by_document(&mut app, "undo", &document) else {
         panic!("undo of a parked board must be refused");
     };
+    let reason = signex_i18n::RenderTranslatable::render_en_us(&reason);
     assert!(reason.contains("reopen"), "{reason}");
     assert!(!app.step_board_history(&path, true));
     assert_eq!(

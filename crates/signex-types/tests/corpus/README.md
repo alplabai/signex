@@ -47,6 +47,7 @@ byte-identically. Filenames name the feature:
 | Sheet metadata | `title-block`, `lib-symbols-cache` (every `Graphic` variant, several pin shapes) |
 | Text hostility | `text-adversarial-label`, `text-adversarial-fields`, `hostile_label_text` (backslash, quote, bare `-`, tab, newline) |
 | Numeric | `coordinates-nanometre-rounding`, `regulator_stage` (sorted map keys) |
+| Schematic Refinement (`snxsch/1.3`) | `refinement-objects` (two harness connectors with entries, one locked; a harness wire; a harness-typed sheet entry on a sheet symbol; two unions; a locked Bezier with line style, end arrow and colour; a dimension; a table bound to a part's pins with a hidden column; a Net Parameters directive with every rule; a Blanket with track width, keep-short pour and edge nets; a Differential Pair with a class). Written by hand to the writer's layout, see `docs/architecture/snxsch-refinement-objects.md` |
 
 Hierarchy: `hierarchy-root-two-children` (two child-sheet symbols with
 pins), `hierarchy-nested-middle` (a child that is itself a parent) and
@@ -78,7 +79,10 @@ placeholder before comparing. Coverage: `minimal-empty`,
 `two-flat-sheets`, `hierarchical-three-sheets` (the sheet list for the
 hierarchy fixtures: root -> middle -> leaf all resolve in the corpus),
 `full-with-libraries-and-variants`, `unknown-keys-preserved` (unknown keys
-at top level, per sheet and per library, plus the `format` token).
+at top level, per sheet and per library, plus the `format` token),
+`schematic-design` (the `schematic_design` key: changed channel naming,
+harness definitions `SPI_BUS`, `UART` and `DEBUG` with a nested `UART`,
+diff-pair classes `USB` and `LVDS_100R`).
 `MIN_PROJECT_FIXTURES` guards the count. These are not blessable: edit by
 hand and keep keys alphabetical (the writer sorts them).
 

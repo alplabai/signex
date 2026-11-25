@@ -47,6 +47,14 @@ pub enum SketchRole {
     MountingHole,
     /// A line that is a V-score path.
     VScore,
+    /// A board cutout whose profile is a slot (decision 2, 2026-11-20).
+    Slot,
+    /// A closed profile that is a copper pour of the board.
+    BoardPour,
+    /// An edge drawn on a mechanical layer.
+    MechanicalLayer,
+    /// A point where a placed component's origin goes.
+    ComponentAnchor,
 }
 
 /// An action of the sketch editor that only some hosts offer.
@@ -105,14 +113,19 @@ const FOOTPRINT_ROLES: &[SketchRole] = &[
     SketchRole::PasteApertureBottom,
 ];
 
-/// The board picker's order follows the board sketch design: outline,
-/// cutout, keepout, V-score, mounting hole.
+/// The board picker's order follows the board sketch design (mockup row 179,
+/// decision 2): outline, cutout, slot, keepout, pour, V-score, mechanical
+/// layer, component anchor, mounting hole. Room waits for rooms.
 const BOARD_ROLES: &[SketchRole] = &[
     SketchRole::Unassigned,
     SketchRole::BoardOutline,
     SketchRole::Cutout,
+    SketchRole::Slot,
     SketchRole::Keepout,
+    SketchRole::BoardPour,
     SketchRole::VScore,
+    SketchRole::MechanicalLayer,
+    SketchRole::ComponentAnchor,
     SketchRole::MountingHole,
 ];
 
@@ -134,7 +147,10 @@ const BOARD_TARGETS: &[BakedKind] = &[
     BakedKind::BoardOutline,
     BakedKind::Cutouts,
     BakedKind::Keepouts,
+    BakedKind::BoardPours,
     BakedKind::VScores,
+    BakedKind::Mechanical,
+    BakedKind::ComponentAnchors,
     BakedKind::MountingHoles,
 ];
 
@@ -156,23 +172,70 @@ impl SketchRole {
             Self::BoardOutline => BakedKind::BoardOutline,
             Self::MountingHole => BakedKind::MountingHoles,
             Self::VScore => BakedKind::VScores,
+            Self::Slot => BakedKind::Cutouts,
+            Self::BoardPour => BakedKind::BoardPours,
+            Self::MechanicalLayer => BakedKind::Mechanical,
+            Self::ComponentAnchor => BakedKind::ComponentAnchors,
         })
     }
 
     /// Whether an entity of `kind` can take this role. The board roles
-    /// need their shape (an outline an edge, a hole a circle, a V-score a
-    /// line); a footprint role takes any entity, as the picker always did
-    /// (Pad on a line is the make-a-pad shorthand).
+    /// need their shape (an outline, slot, pour or mechanical drawing an
+    /// edge, a hole a circle, a V-score a line, an anchor a point); a
+    /// footprint role takes any entity, as the picker always did (Pad on a
+    /// line is the make-a-pad shorthand).
     pub fn fits(self, kind: &EntityKind) -> bool {
+        let is_point = matches!(kind, EntityKind::Point { .. });
         match self {
-            Self::BoardOutline => !matches!(kind, EntityKind::Point { .. }),
+            Self::BoardOutline | Self::Slot | Self::BoardPour | Self::MechanicalLayer => !is_point,
             Self::MountingHole => matches!(kind, EntityKind::Circle { .. }),
             Self::VScore => matches!(kind, EntityKind::Line { .. }),
+            Self::ComponentAnchor => is_point,
             _ => true,
         }
     }
+
+    /// The shape a misfit lacks, for the picker's greyed entry (mockup
+    /// 179): `None` when an entity of `kind` can take the role.
+    pub fn misfit(self, kind: &EntityKind) -> Option<RoleShape> {
+        if self.fits(kind) {
+            return None;
+        }
+        Some(match self {
+            Self::MountingHole => RoleShape::Circles,
+            Self::VScore => RoleShape::Lines,
+            Self::ComponentAnchor => RoleShape::Points,
+            _ => RoleShape::Edges,
+        })
+    }
+
+    /// The role as the picker on `host` shows it: a pour read off an entity
+    /// is a footprint's Pour Top or Bottom, and on a board the one Pour.
+    pub fn on_host(self, host: SketchHost) -> Self {
+        match (self, host) {
+            (Self::PourTop | Self::PourBottom, SketchHost::Board) => Self::BoardPour,
+            (role, _) => role,
+        }
+    }
+}
+
+/// The shapes a board role takes, as the picker names a misfit.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RoleShape {
+    /// Lines only (V-score).
+    Lines,
+    /// Points only (Component anchor).
+    Points,
+    /// Circles only (Mounting hole).
+    Circles,
+    /// Lines, arcs and circles (outline, slot, pour, mechanical layer).
+    Edges,
 }
 
 #[cfg(test)]
 #[path = "host_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "host_targets_tests.rs"]
+mod targets_tests;

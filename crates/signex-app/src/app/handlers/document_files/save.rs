@@ -236,10 +236,12 @@ impl Signex {
         // The first failure of a save sequence is the one that explains it;
         // a follow-up write (e.g. the project file) must not replace it.
         if self.document_state.error_notice.is_none() {
-            // `context` is the caller's English log label (#2061).
-            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::save(
-                crate::app::state::untranslated(format!("{context}: {error:#}")),
-            ));
+            // `context` is the caller's English log label (#2061); the error
+            // chain (path line, OS error line) is the card's system block.
+            self.document_state.error_notice = Some(
+                crate::app::state::ErrorNotice::save(crate::app::state::untranslated(context))
+                    .with_error_chain(error),
+            );
         }
     }
 
@@ -363,9 +365,12 @@ impl Signex {
             );
         }
         // Onto its own file it is a plain save: no new document, so the id
-        // stays (#2172).
+        // stays (#2172). It is compared with disk like Ctrl+S, so a file
+        // another program changed raises the card instead of being replaced;
+        // a file deleted or moved away is written, as before; a gone folder
+        // raises Folder Missing on Disk.
         if path == from_path {
-            return self.begin_schematic_save_unchecked(path);
+            return self.begin_schematic_save_onto_own_file(path);
         }
         // The tab keeps its old path and title until the write succeeds.
         self.begin_schematic_save(path, Some(from_path.to_path_buf()))

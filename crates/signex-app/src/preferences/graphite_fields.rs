@@ -1,23 +1,25 @@
 //! Graphite controls of the Preferences dialog: the nav search field, the
-//! mock's page names and the font pick-list.
+//! mock's page names and the pane scroller style.
 //! Legacy themes never reach these helpers.
 
 use super::{PrefMsg, PrefNav, SP, TS};
 use crate::styles::{self, ti, tokens};
-use iced::widget::{container, pick_list, scrollable};
+use iced::widget::{container, scrollable};
 use iced::{Background, Border, Color, Element, Length, Padding, Theme, Widget as _};
 use signex_i18n::{I18n, MessageId, ids, t};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::text_input;
 
 /// The page name on Graphite: the mock's wording for the pages it names.
 pub(super) fn graphite_label(item: PrefNav) -> MessageId {
     match item {
         PrefNav::Appearance => ids::PREFERENCES_PAGE_THEME,
+        PrefNav::Language => ids::PREFERENCES_PAGE_LANGUAGE,
         PrefNav::Keyboard => ids::PREFERENCES_PAGE_KEYBOARD,
+        PrefNav::General => ids::PREFERENCES_PAGE_GENERAL,
         PrefNav::Editing => ids::PREFERENCES_PAGE_EDITING,
         PrefNav::SchematicDisplay => ids::PREFERENCES_PAGE_SCHEMATIC_DISPLAY,
+        PrefNav::PcbDefaults => ids::PREFERENCES_PAGE_PCB_DEFAULTS,
         PrefNav::Annotation => ids::PREFERENCES_PAGE_ANNOTATION,
         PrefNav::RuleProfiles => ids::PREFERENCES_PAGE_RULE_PROFILES,
         PrefNav::LibraryDistributors => ids::PREFERENCES_PAGE_DISTRIBUTORS,
@@ -32,6 +34,10 @@ pub(super) fn group_messages(item: PrefNav) -> (MessageId, MessageId) {
         "Schematic" => (
             ids::PREFERENCES_GROUP_SCHEMATIC,
             ids::PREFERENCES_GROUP_SCHEMATIC_HEADING,
+        ),
+        "PCB" => (
+            ids::PREFERENCES_GROUP_PCB,
+            ids::PREFERENCES_GROUP_PCB_HEADING,
         ),
         "Validation" => (
             ids::PREFERENCES_GROUP_VALIDATION,
@@ -48,17 +54,116 @@ pub(super) fn group_messages(item: PrefNav) -> (MessageId, MessageId) {
     }
 }
 
+/// The English names a page went by before the mockup row 143 regroup, so a search
+/// for them still finds it.
+fn former_names(item: PrefNav) -> &'static [&'static str] {
+    match item {
+        PrefNav::Appearance => &["Theme"],
+        PrefNav::Editing => &["Graphical editing"],
+        PrefNav::ComponentClasses => &["Default Component Classes"],
+        PrefNav::Language
+        | PrefNav::Keyboard
+        | PrefNav::General
+        | PrefNav::Annotation
+        | PrefNav::SchematicDisplay
+        | PrefNav::PcbDefaults
+        | PrefNav::RuleProfiles
+        | PrefNav::LibraryDistributors => &[],
+    }
+}
+
+/// The labels of the setting rows a page draws, so a search for a setting
+/// finds its page (mockup row 143). A row added to a page goes here too;
+/// a layout test in `app::view::chrome` checks each page draws its list.
+/// The table pages (shortcuts, profiles, distributors, classes) have none.
+pub(crate) fn setting_labels(item: PrefNav) -> &'static [MessageId] {
+    match item {
+        PrefNav::Appearance => &[
+            ids::PREFERENCES_APPEARANCE_UI_FONT,
+            ids::PREFERENCES_APPEARANCE_UI_SCALE,
+            ids::PREFERENCES_SELECTED_SEGMENT_LABEL,
+            ids::PREFERENCES_APPEARANCE_GRID_STYLE_LABEL,
+            ids::PREFERENCES_APPEARANCE_SYMBOL_GRID_LABEL,
+            ids::PREFERENCES_APPEARANCE_PIN_SELECTION_LABEL,
+            ids::PREFERENCES_APPEARANCE_GPU_RENDER_LABEL,
+            ids::PREFERENCES_APPEARANCE_ANTIALIASING,
+            ids::PREFERENCES_WHEEL_MODE_LABEL,
+            ids::PREFERENCES_APPEARANCE_ZOOM_SPEED,
+            ids::PREFERENCES_APPEARANCE_TRACKPAD_PAN,
+            ids::PREFERENCES_LAYER_SWITCHER_LABEL,
+            ids::PREFERENCES_APPEARANCE_WINDOW_BUTTONS,
+            ids::PREFERENCES_APPEARANCE_REMEMBER_GEOMETRY,
+        ],
+        PrefNav::Language => &[ids::PREFERENCES_LANGUAGE_INTERFACE],
+        PrefNav::General => &[
+            ids::PREFERENCES_AUTOSAVE,
+            ids::PREFERENCES_AGENT_CONNECTIONS_LABEL,
+        ],
+        PrefNav::Annotation => &[ids::PREFERENCES_ANNOTATE_UNDO],
+        PrefNav::Editing => &[
+            ids::PREFERENCES_MOVE_KEEPS_WIRES,
+            ids::PREFERENCES_DRAG_DIRECTION,
+            ids::PREFERENCES_NET_HOVER,
+            ids::PREFERENCES_APPEARANCE_FAST_GRID_1,
+            ids::PREFERENCES_APPEARANCE_FAST_GRID_2,
+            ids::PREFERENCES_INCREMENT_STEP,
+            ids::PREFERENCES_PASTE_DESIGNATORS,
+        ],
+        PrefNav::SchematicDisplay => &[
+            ids::PREFERENCES_SYMBOL_BODY_FILL,
+            ids::PREFERENCES_SYMBOL_BODY_FILL_COLOUR,
+        ],
+        PrefNav::PcbDefaults => &[
+            ids::PCB_PRIM_LINE_WIDTH,
+            ids::PCB_PRIM_TEXT_HEIGHT,
+            ids::PCB_PRIM_PRECISION,
+            ids::PCB_PRIM_DIM_ARROW_STYLE,
+            ids::PCB_PRIM_DIM_ARROW_LENGTH,
+            ids::PCB_PRIM_DIM_ARROW_WIDTH,
+            ids::PCB_PRIM_DIM_FONT,
+            ids::PCB_PRIM_DIM_BOLD,
+            ids::PCB_PRIM_DIM_ITALIC,
+            ids::PCB_PRIM_DIM_TEXT_WIDTH,
+            ids::PCB_PRIM_DIM_TEXT_POSITION,
+            ids::PCB_PRIM_DIM_TEXT_GAP,
+            ids::PCB_PRIM_DIM_EXT_OFFSET,
+            ids::PCB_PRIM_DIM_EXT_OVERSHOOT,
+            ids::PCB_PRIM_DIM_EXT_WIDTH,
+            ids::PCB_PRIM_DIM_UNIT,
+            ids::PCB_PRIM_DIM_SHOW_UNIT,
+            ids::PCB_PRIM_DIM_PREFIX,
+            ids::PCB_PRIM_DIM_SUFFIX,
+            ids::PCB_PRIM_DIM_TRAILING_ZEROS,
+        ],
+        PrefNav::Keyboard
+        | PrefNav::RuleProfiles
+        | PrefNav::LibraryDistributors
+        | PrefNav::ComponentClasses => &[],
+    }
+}
+
 /// Whether a nav row stays visible for the search `query`: the casemap fold
-/// of the UI language over the shown page name and group, and the English
-/// page and group names. An empty query shows every row.
+/// of the UI language over the shown page name and group, the English page
+/// and group names, the page's former English names and its setting labels
+/// in the UI language and in English, as the page names are. An empty query
+/// shows every row.
 pub(super) fn nav_matches(i18n: &I18n, item: PrefNav, query: &str) -> bool {
     let q = i18n.fold_for_search(query.trim());
+    if q.is_empty() {
+        return true;
+    }
     let page = t!(i18n, graphite_label(item)).into_string();
     let group = t!(i18n, group_messages(item).0).into_string();
-    q.is_empty()
-        || [page.as_str(), group.as_str(), item.label(), item.group()]
-            .into_iter()
-            .any(|name| i18n.fold_for_search(name).contains(&q))
+    let en = I18n::en_us();
+    let settings: Vec<String> = setting_labels(item)
+        .iter()
+        .flat_map(|&id| [t!(i18n, id).into_string(), t!(en, id).into_string()])
+        .collect();
+    [page.as_str(), group.as_str(), item.label(), item.group()]
+        .into_iter()
+        .chain(former_names(item).iter().copied())
+        .chain(settings.iter().map(String::as_str))
+        .any(|name| i18n.fold_for_search(name).contains(&q))
 }
 
 /// The "Search preferences" field above the nav: a bordered frame around a
@@ -82,21 +187,6 @@ pub(super) fn nav_search<'a>(query: &'a str, t: &ThemeTokens, i18n: &I18n) -> El
         .padding([SP.s, SP.m])
         .width(Length::Fill)
         .style(styles::field(t, false))
-        .boxed()
-}
-
-/// The UI-font pick-list drawn as a Graphite field (field fill, hairline,
-/// control radius; the menu is a raised card).
-pub(super) fn font_pick_list<'a>(
-    current: String,
-    families: &'a [String],
-    _t: &ThemeTokens,
-) -> Element<'a, PrefMsg> {
-    pick_list(Some(current), families, |s: &String| s.clone())
-        .graphite()
-        .on_select(PrefMsg::DraftFont)
-        .padding([SP.s, SP.m])
-        .width(200)
         .boxed()
 }
 
@@ -139,6 +229,21 @@ mod tests {
         assert!(nav_matches(&en, PrefNav::Appearance, "appear"));
         assert!(nav_matches(&en, PrefNav::Annotation, "schem"));
         assert!(!nav_matches(&en, PrefNav::Annotation, "theme"));
+    }
+
+    /// Mockup row 143: the regrouped pages keep answering to their former names, and
+    /// the mock's "an" search finds the new Language page.
+    #[test]
+    fn search_finds_the_former_page_names_and_language() {
+        let en = I18n::en_us();
+        assert!(nav_matches(&en, PrefNav::Editing, "graphical"));
+        assert!(nav_matches(
+            &en,
+            PrefNav::ComponentClasses,
+            "default component"
+        ));
+        assert!(nav_matches(&en, PrefNav::Language, "an"));
+        assert!(!nav_matches(&en, PrefNav::Editing, "theme"));
     }
 
     #[test]

@@ -55,6 +55,18 @@ pub(super) fn push_drawing(
     out: &mut Vec<OrderedItem>,
 ) {
     let (uuid, width, fill, stroke_color) = match drawing {
+        SchDrawing::Bezier(b) => {
+            let base = focus_color(to_iced(&colors.body), focus_set, b.uuid);
+            return super::bezier::push_bezier(b, base, defaults, out);
+        }
+        SchDrawing::Dimension(d) => {
+            let base = focus_color(to_iced(&colors.body), focus_set, d.uuid);
+            return super::dimension::push_dimension(d, base, defaults, out);
+        }
+        SchDrawing::Table(t) => {
+            let base = focus_color(to_iced(&colors.body), focus_set, t.uuid);
+            return super::sch_table::push_table(t, base, colors, defaults, out);
+        }
         SchDrawing::Line {
             uuid,
             width,
@@ -116,7 +128,106 @@ pub(super) fn push_drawing(
             start, mid, end, ..
         } => push_arc_items([*start, *mid, *end], &look, scale, out),
         SchDrawing::Polyline { points, .. } => push_polyline(points, &look, fill, out),
+        // Returned early above.
+        SchDrawing::Bezier(_) | SchDrawing::Dimension(_) | SchDrawing::Table(_) => {}
     }
+}
+
+/// The texts a drawing writes on the sheet (a dimension's value, a
+/// table's cells); none for the classic shapes. `power_nets` colours a
+/// table's power-net cells.
+pub(super) fn push_drawing_texts(
+    drawing: &SchDrawing,
+    colors: &CanvasColors,
+    focus_set: Option<&HashSet<uuid::Uuid>>,
+    power_nets: &std::collections::BTreeSet<String>,
+    out: &mut Vec<TextInput>,
+) {
+    match drawing {
+        SchDrawing::Dimension(d) => {
+            let base = focus_color(to_iced(&colors.body), focus_set, d.uuid);
+            out.push(super::dimension::label_text(d, base));
+        }
+        SchDrawing::Table(t) => {
+            let ink = focus_color(to_iced(&colors.value), focus_set, t.uuid);
+            let power = focus_color(to_iced(&colors.power), focus_set, t.uuid);
+            super::sch_table::push_cell_texts(t, ink, power, power_nets, out);
+        }
+        SchDrawing::Line { .. }
+        | SchDrawing::Rect { .. }
+        | SchDrawing::Circle { .. }
+        | SchDrawing::Arc { .. }
+        | SchDrawing::Polyline { .. }
+        | SchDrawing::Bezier(_) => {}
+    }
+}
+
+/// The power-net names a sheet's tables colour, read only when the sheet
+/// has a table.
+pub(super) fn power_nets_if_tables(sheet: &SchematicSheet) -> std::collections::BTreeSet<String> {
+    if sheet
+        .drawings
+        .iter()
+        .any(|d| matches!(d, SchDrawing::Table(_)))
+    {
+        signex_types::schematic::power_net_names(sheet)
+    } else {
+        Default::default()
+    }
+}
+
+/// The box of a Bezier, dimension or table; empty at the origin for the
+/// classic shapes (their box is `drawing_aabb`'s own arms).
+pub(crate) fn annotation_aabb(drawing: &SchDrawing) -> Aabb {
+    let points = match drawing {
+        SchDrawing::Bezier(b) => b.flatten(),
+        SchDrawing::Dimension(d) => d.outline_points(),
+        SchDrawing::Table(t) => {
+            let (lo, hi) = t.bounds();
+            vec![lo, hi]
+        }
+        SchDrawing::Line { .. }
+        | SchDrawing::Rect { .. }
+        | SchDrawing::Circle { .. }
+        | SchDrawing::Arc { .. }
+        | SchDrawing::Polyline { .. } => Vec::new(),
+    };
+    let mut iter = points.into_iter();
+    let Some(first) = iter.next() else {
+        return Aabb::new(0.0, 0.0, 0.0, 0.0);
+    };
+    iter.fold(Aabb::new(first.x, first.y, first.x, first.y), |b, p| {
+        b.union(&Aabb::new(p.x, p.y, p.x, p.y))
+    })
+}
+
+/// A solid or patterned segment in `color`.
+pub(super) fn styled_line(
+    p0: Point,
+    p1: Point,
+    width_mm: f32,
+    color: [f32; 4],
+    style: u32,
+) -> OrderedItem {
+    OrderedItem::Line(LineSegment {
+        p0: [p0.x as f32, p0.y as f32],
+        p1: [p1.x as f32, p1.y as f32],
+        width: width_mm,
+        color,
+        style,
+        _pad: 0,
+    })
+}
+
+/// A filled triangle (an arrowhead) in `color`.
+pub(super) fn filled_triangle(points: &[Point; 3], color: [f32; 4]) -> OrderedItem {
+    OrderedItem::Polygon(GpuPolygon {
+        holes: Vec::new(),
+        vertices: points.iter().map(|p| [p.x as f32, p.y as f32]).collect(),
+        fill_color: color,
+        stroke_color: None,
+        stroke_width: 0.0,
+    })
 }
 
 fn push_circle(

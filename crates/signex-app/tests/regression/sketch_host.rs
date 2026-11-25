@@ -26,7 +26,7 @@ fn entity(f: &Fixture, id: signex_sketch::id::SketchEntityId) -> signex_sketch::
 }
 
 #[test]
-fn the_board_host_offers_its_five_targets_and_v_score_bakes_as_one_step() {
+fn the_board_host_offers_its_targets_and_v_score_bakes_as_one_step() {
     let mut f = open_board();
     let before = snapshot(&f);
     send(&mut f, menu_row("board_sketch"));
@@ -40,12 +40,17 @@ fn the_board_host_offers_its_five_targets_and_v_score_bakes_as_one_step() {
     assert_eq!(ctx.sketch_host, SketchHost::Board);
     assert_eq!(
         ctx.sketch_host.roles(),
+        // Decision 2 (Caner, 2026-11-20): the mockup row 179 order, Room out.
         &[
             RoleTag::Unassigned,
             RoleTag::BoardOutline,
             RoleTag::Cutout,
+            RoleTag::Slot,
             RoleTag::Keepout,
+            RoleTag::BoardPour,
             RoleTag::VScore,
+            RoleTag::MechanicalLayer,
+            RoleTag::ComponentAnchor,
             RoleTag::MountingHole,
         ]
     );
@@ -140,16 +145,16 @@ fn bake_preview_counts_the_board_targets_without_touching_the_board() {
     );
     sketch(&mut f, BoardSketchMsg::BakePreviewToggled);
     let session = f.app.interaction_state.board_sketch.as_ref().unwrap();
-    use signex_app::library::editor::footprint::sketch_mode::BakePreview;
-    use signex_types::sketch::baked_kinds::BakedKind;
-    let Some(BakePreview::Counts(counts)) = session.preview.as_ref() else {
+    // Mockup row 179: the preview lists the values Bake writes, here the
+    // outline's size, not a count per target.
+    use signex_app::panels::{BakedOutline, BoardBakePreview};
+    let Some(BoardBakePreview::Writes(rows)) = session.preview.as_ref() else {
         panic!("the preview bakes: {:?}", session.preview);
     };
-    assert_eq!(
-        counts.iter().map(|(kind, _)| *kind).collect::<Vec<_>>(),
-        SketchHost::Board.bake_targets()
-    );
-    assert!(counts.contains(&(BakedKind::BoardOutline, 1)));
+    let Some(BakedOutline::Size(width, height)) = rows.outline else {
+        panic!("the outline bakes: {rows:?}");
+    };
+    assert!((width - 40.0).abs() < 1e-6 && (height - 30.0).abs() < 1e-6);
     assert_eq!(snapshot(&f), before, "a preview writes nothing");
 
     sketch(&mut f, BoardSketchMsg::BakePreviewToggled);

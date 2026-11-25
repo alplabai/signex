@@ -80,8 +80,7 @@ impl Signex {
     }
 
     /// The active copper layer of the board in view; the top layer without
-    /// one, or while a non-copper layer is active. Object snapping on the
-    /// current layer reads it (#2353).
+    /// one, or while a non-copper layer is active.
     pub(crate) fn pcb_active_layer(&self) -> CopperLayer {
         self.active_tab_path()
             .and_then(|path| self.pcb_layer_view(&path).active().copper())
@@ -96,12 +95,40 @@ impl Signex {
             .with_designator_standard(self.document_state.designator_standard_for(path))
     }
 
+    /// [`Self::pcb_snapshot_for`] for what is on the cursor: a ghost is never
+    /// faded by Show only unrouted, or the tool in hand could not be seen.
+    pub(crate) fn pcb_ghost_snapshot_for(&self, path: &Path, board: &PcbBoard) -> PcbSnapshot {
+        let mut snapshot = self.pcb_snapshot_for(path, board);
+        snapshot.paint = snapshot.paint.with_board_dimmed(false);
+        snapshot
+    }
+
+    /// Show only unrouted ends with its board (#2821).
+    pub(crate) fn end_only_unrouted_of(&mut self, path: &Path) {
+        if let Some(view) = self.ui_state.pcb_layer_views.get_mut(path) {
+            view.set_only_unrouted(false);
+        }
+    }
+
+    /// A renamed board keeps Show only unrouted, and its old path does not.
+    pub(crate) fn rekey_only_unrouted(&mut self, old_path: &Path, new_path: &Path) {
+        let views = &mut self.ui_state.pcb_layer_views;
+        let Some(view) = views.get_mut(old_path).filter(|v| v.only_unrouted()) else {
+            return;
+        };
+        view.set_only_unrouted(false);
+        views
+            .entry(new_path.to_path_buf())
+            .or_default()
+            .set_only_unrouted(true);
+    }
+
     /// The snapshot an undocked window draws of the board at `path`: its
-    /// view, with the ratsnest unless that view hides it.
+    /// view, with the ratsnest whenever that view draws it.
     pub(crate) fn undocked_pcb_snapshot(&self, path: &Path, board: &PcbBoard) -> PcbSnapshot {
         let fills = pcb_geom::zone_fills(board);
         let snapshot = self.pcb_snapshot_for(path, board).with_zone_fills(&fills);
-        if !self.pcb_layer_view(path).ratsnest_visible() {
+        if !self.pcb_layer_view(path).ratsnest_drawn() {
             return snapshot;
         }
         self.interaction_state
@@ -296,6 +323,7 @@ fn apply_event(view: &mut PcbLayerView, layers: &[LayerDef], event: PcbViewMsg) 
         // Board data: `set_board_layer_colours` runs them before a view edit.
         PcbViewMsg::LayerColourSet { .. } | PcbViewMsg::LayerColoursReset => {}
         PcbViewMsg::UsedLayersOnlySet(on) => view.set_used_only(on),
+        PcbViewMsg::OnlyUnroutedToggled => view.set_only_unrouted(!view.only_unrouted()),
         PcbViewMsg::ObjectVisibilitySet { kind, visible } => {
             let kinds = match kind {
                 Some(kind) => vec![kind],

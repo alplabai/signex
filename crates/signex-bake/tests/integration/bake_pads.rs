@@ -535,6 +535,7 @@ fn bake_linear_array_3_pads_along_x() {
         numbering: NumberingScheme::LinearIncrement {
             start_expr: "1".into(),
             step_expr: "1".into(),
+            sweep: Default::default(),
         },
     });
 
@@ -574,6 +575,7 @@ fn a_numbered_grid_pad_size_follows_its_own_row_and_column() {
         numbering: NumberingScheme::LinearIncrement {
             start_expr: "1".into(),
             step_expr: "1".into(),
+            sweep: Default::default(),
         },
     });
 

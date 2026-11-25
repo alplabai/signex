@@ -13,9 +13,10 @@ use signex_types::project::DrcRuleSet;
 
 use super::RulesText;
 use crate::app::command::{CommandArgs, OperandValue};
-use crate::app::document::UndoTarget;
+use crate::app::document::{DocumentKey, UndoTarget};
 use crate::app::document_ids::DocumentKind;
 use crate::app::state::ProjectId;
+use crate::app::state::rules_history::RuleState;
 use crate::app::{Message, Signex, TabKind};
 
 /// Why an undo, redo or a switch to the table waits: the text view holds
@@ -192,6 +193,49 @@ impl Signex {
         id: ProjectId,
         edit: impl FnOnce(&mut DrcRuleSet),
     ) -> Result<(), String> {
+        self.commit_fab_section(id, edit, None, None)
+    }
+
+    /// [`Self::commit_drc_section`] that also sets the project's router
+    /// tool to `router` mm and its min slot to `min_slot` mm when each is
+    /// `Some`, in the same undo step: a fab tier or profile preset (mockup
+    /// row 179d). Unchanged rules, router and min slot record no step.
+    pub(crate) fn commit_fab_section(
+        &mut self,
+        id: ProjectId,
+        edit: impl FnOnce(&mut DrcRuleSet),
+        router: Option<f64>,
+        min_slot: Option<f64>,
+    ) -> Result<(), String> {
+        let project = self.rules_writable(id)?;
+        let before = project.data.rules.clone();
+        let router_before = project.data.router_tool_diameter();
+        let router_after = router.or(router_before);
+        let mut after = before
+            .clone()
+            .unwrap_or_else(|| self.seeded_project_rules());
+        edit(&mut after.drc);
+        if min_slot.is_some() {
+            after.set_min_slot(min_slot);
+        }
+        if before.as_ref() == Some(&after) && router_after == router_before {
+            return Ok(());
+        }
+        let state = RuleState {
+            rules: Some(after),
+            router_tool_diameter: router_after,
+        };
+        self.replace_rule_state_of(id, state, true);
+        Ok(())
+    }
+
+    /// `id` when its stored rules can take a write, else why not. A caller
+    /// with a second step to land asks first, so it can refuse with nothing
+    /// applied.
+    pub(crate) fn rules_writable(
+        &self,
+        id: ProjectId,
+    ) -> Result<&crate::app::state::LoadedProject, String> {
         let project = self
             .document_state
             .project_by_id(id)
@@ -203,16 +247,7 @@ impl Signex {
                     .to_string(),
             );
         }
-        let before = project.data.rules.clone();
-        let mut after = before
-            .clone()
-            .unwrap_or_else(|| self.seeded_project_rules());
-        edit(&mut after.drc);
-        if before.as_ref() == Some(&after) {
-            return Ok(());
-        }
-        self.replace_rules_of(id, Some(after), true);
-        Ok(())
+        Ok(project)
     }
 
     /// Whether `id`'s text view holds typed text not applied yet.
@@ -255,11 +290,23 @@ impl Signex {
         self.rerun_erc_after_rules_edit(moved)
     }
 
-    /// Edit ▸ Undo / Redo in the main window: a Rules tab steps its rule
-    /// history as [`Self::step_rules_tab`]; any other tab as before.
+    /// Edit ▸ Undo / Redo in the main window: a Rules tab, or a Project tab
+    /// whose next step is a rule step, steps the rule history as
+    /// [`Self::step_rules_tab`]; any other tab as before.
     pub(crate) fn step_main_window_history(&mut self, undo: bool) -> Task<Message> {
-        if let UndoTarget::RulesTab(id) = self.undo_target(None) {
-            return self.step_rules_tab(id, undo);
+        match self.undo_target(None) {
+            UndoTarget::RulesTab(id) => return self.step_rules_tab(id, undo),
+            UndoTarget::Document(DocumentKey::Project(id))
+                if self.project_step_is_rules(id, undo) =>
+            {
+                self.close_text_edit(if undo {
+                    "the document was undone"
+                } else {
+                    "the document was redone"
+                });
+                return self.step_rules_tab(id, undo);
+            }
+            _ => {}
         }
         if undo {
             self.handle_undo_requested();
@@ -267,15 +314,6 @@ impl Signex {
             self.handle_redo_requested();
         }
         Task::none()
-    }
-
-    /// Whether `id`'s newest step is on its rule history (a Rules tab,
-    /// `rules_*` or ERC dialog edit) rather than its Project tab's.
-    pub(crate) fn rules_step_is_newest(&self, id: ProjectId) -> bool {
-        self.document_state
-            .project_tabs
-            .get(&id)
-            .is_some_and(|tab| tab.rules_step_newest)
     }
 
     /// The project a `rules_*` command names with `document`: the project

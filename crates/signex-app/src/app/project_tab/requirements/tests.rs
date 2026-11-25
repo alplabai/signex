@@ -2,11 +2,19 @@
 //! catalog. Each edit dirties the `.snxprj`, writes nothing until Save, and
 //! is one undo step; a refused one changes nothing and says why; Run checks
 //! lands its report in the tab; a save writes the list and reads back the
-//! same.
+//! same. The card look (mockup row 38): outcome counts, which cards
+//! open, the value summaries and where a refusal shows.
+
+use std::sync::Arc;
 
 use serde_json::{Value, json};
-use signex_types::project::{RequirementField, RequirementProblem, parse_project, write_project};
+use signex_i18n::RenderTranslatable;
+use signex_types::check::{CheckReport, Finding, Severity};
+use signex_types::project::{
+    RequirementEntry, RequirementField, RequirementProblem, parse_project, write_project,
+};
 
+use super::view::{OutcomeCounts, Verdict, is_open, outcome_counts, summary_words};
 use super::{EntryKey, RequirementsMsg};
 use crate::app::command::{CommandArgs, CommandOutcome};
 use crate::app::handlers::menu::export::tests::app_workspace;
@@ -102,7 +110,7 @@ fn answer(app: &mut Signex, id: &str, operands: &[&str]) -> Value {
 
 fn refusal(app: &mut Signex, id: &str, operands: &[&str]) -> String {
     match run(app, id, operands) {
-        CommandOutcome::Disabled { reason } => reason,
+        CommandOutcome::Disabled { reason } => reason.render_en_us(),
         other => panic!("{id} was not refused: {other:?}"),
     }
 }
@@ -327,6 +335,12 @@ fn the_section_renders_every_kind_an_unreadable_entry_drafts_and_a_run() {
         .data
         .requirements
         .push(serde_json::from_value(json!({"id": "rails", "kind": "rail_budget"})).unwrap());
+    // A turned-off entry: its card is dimmed and inert and reads Off.
+    let off = RequirementsMsg::EnabledToggled {
+        index: 2,
+        on: false,
+    };
+    let _ = send(&mut app, id, off);
     let _ = app.update(Message::Project(ProjectMsg::Tab(
         ProjectTabMsg::SectionSelected {
             project_id: id,
@@ -340,6 +354,302 @@ fn the_section_renders_every_kind_an_unreadable_entry_drafts_and_a_run() {
     type_and_submit(&mut app, id, RequirementField::Id, "");
     assert!(tab(&app, id).problem.is_some(), "an empty id is refused");
     let _ = app.view_project_tab(id);
+
+    // A passed entry with nothing typed renders closed to its header.
+    let state = &mut app
+        .document_state
+        .project_tabs
+        .get_mut(&id)
+        .expect("the tab")
+        .requirements;
+    let mut run = state.last_run.as_deref().expect("a run").clone();
+    let report = run.report.as_mut().expect("a report");
+    report.findings.retain(|f| f.rule != "req::drc_clean");
+    report.passed.push("req::drc_clean".into());
+    state.last_run = Some(Arc::new(run));
+    let report = state.last_run.as_ref().unwrap().report.as_ref().unwrap();
+    let entries = &app.document_state.projects[0].data.requirements;
+    let verdict = super::view::verdict(Some(report), &entries[1], 1);
+    assert_eq!(verdict, Verdict::Passed);
+    assert!(!is_open(verdict, false, false), "a passed card is closed");
+    let counts = outcome_counts(Some(report), entries);
+    assert_eq!(counts.off, 1, "the turned-off entry counts as Off");
+    assert!(counts.passed >= 1);
+    let total = counts.passed + counts.failed + counts.not_checked + counts.off;
+    assert_eq!(total, entries.len(), "every entry is counted once");
+    let _ = app.view_project_tab(id);
+}
+
+fn finding(rule: &str) -> Finding {
+    Finding {
+        rule: rule.into(),
+        severity: Severity::Error,
+        message: format!("{rule} is not met"),
+        evidence: json!({}),
+        items: Vec::new(),
+        sheet: String::new(),
+        key: rule.into(),
+    }
+}
+
+/// The section list's failed badge counts the last finished run only.
+#[test]
+fn the_failed_count_reads_the_last_finished_run() {
+    use super::{RequirementsRun, RequirementsTabState};
+    let entries: Vec<RequirementEntry> = [
+        json!({"id": "a", "kind": "erc_clean"}),
+        json!({"id": "b", "kind": "erc_clean"}),
+    ]
+    .into_iter()
+    .map(RequirementEntry::read)
+    .collect();
+    let with_run = |report| RequirementsTabState {
+        last_run: Some(Arc::new(RequirementsRun {
+            report,
+            board_mm: None,
+            finished_at: chrono::Utc::now(),
+        })),
+        ..RequirementsTabState::default()
+    };
+    assert_eq!(super::failed_count(&entries, None), 0);
+    assert_eq!(
+        super::failed_count(&entries, Some(&RequirementsTabState::default())),
+        0
+    );
+    let failed = with_run(Ok(report(&["req::a"], &["req::b"])));
+    assert_eq!(super::failed_count(&entries, Some(&failed)), 1);
+    let unfinished = with_run(Err("no run".to_string()));
+    assert_eq!(super::failed_count(&entries, Some(&unfinished)), 0);
+}
+
+fn report(failed: &[&str], passed: &[&str]) -> CheckReport {
+    let findings = failed.iter().map(|rule| finding(rule)).collect();
+    let mut report = CheckReport::new("requirements", findings, Vec::new(), Vec::new(), Vec::new());
+    report.passed = passed.iter().map(|rule| rule.to_string()).collect();
+    report
+}
+
+#[test]
+fn the_counts_put_a_turned_off_entry_under_off_not_under_not_checked() {
+    let entries: Vec<RequirementEntry> = [
+        json!({"id": "a", "kind": "erc_clean"}),
+        json!({"id": "b", "kind": "erc_clean"}),
+        json!({"id": "c", "kind": "erc_clean", "enabled": false}),
+        json!({"id": "d", "kind": "erc_clean"}),
+        json!({"id": "e", "kind": "erc_clean", "enabled": false}),
+    ]
+    .into_iter()
+    .map(RequirementEntry::read)
+    .collect();
+    // `e` is off even though the report names it: the switch wins.
+    let report = report(&["req::a", "req::e"], &["req::b", "req::c"]);
+    assert_eq!(
+        outcome_counts(Some(&report), &entries),
+        OutcomeCounts {
+            passed: 1,
+            failed: 1,
+            not_checked: 1,
+            off: 2,
+        }
+    );
+    assert_eq!(
+        super::view::verdict(None, &entries[2], 2),
+        Verdict::Off,
+        "a turned-off entry reads Off before any run"
+    );
+    assert_eq!(
+        super::view::verdict(None, &entries[0], 0),
+        Verdict::NotChecked,
+        "an entry switched on reads Not checked before any run"
+    );
+    assert_eq!(
+        outcome_counts(None, &entries),
+        OutcomeCounts {
+            passed: 0,
+            failed: 0,
+            not_checked: 3,
+            off: 2,
+        },
+        "before any run the entries switched on count as not checked"
+    );
+}
+
+/// An entry with no id is filed under its place in the list, `req::#1`
+/// for the first, as the check engine names it; a blank id counts as none.
+#[test]
+fn an_entry_with_no_id_reads_its_verdict_by_its_place() {
+    let entries: Vec<RequirementEntry> = [
+        json!({"kind": "erc_clean"}),
+        json!({"id": "  ", "kind": "erc_clean"}),
+        json!({"id": "c", "kind": "erc_clean"}),
+    ]
+    .into_iter()
+    .map(RequirementEntry::read)
+    .collect();
+    let report = report(&["req::#1"], &["req::#2", "req::c"]);
+    let verdict = |index: usize| super::view::verdict(Some(&report), &entries[index], index);
+    assert_eq!(verdict(0), Verdict::Failed);
+    assert_eq!(verdict(1), Verdict::Passed);
+    assert_eq!(verdict(2), Verdict::Passed);
+    assert_eq!(
+        outcome_counts(Some(&report), &entries),
+        OutcomeCounts {
+            passed: 2,
+            failed: 1,
+            not_checked: 0,
+            off: 0,
+        }
+    );
+}
+
+#[test]
+fn a_passed_card_is_closed_every_other_open_and_a_flip_inverts_it() {
+    assert!(!is_open(Verdict::Passed, false, false));
+    for open in [Verdict::Failed, Verdict::NotChecked, Verdict::Off] {
+        assert!(is_open(open, false, false), "{open:?} opens");
+        assert!(!is_open(open, false, true), "{open:?} closes when flipped");
+    }
+    assert!(is_open(Verdict::Passed, false, true), "flipped open");
+    assert!(
+        is_open(Verdict::Passed, true, false),
+        "a draft or a refusal opens a passed card"
+    );
+    assert!(
+        is_open(Verdict::Failed, true, true),
+        "a draft or a refusal keeps a flipped card open"
+    );
+}
+
+/// #2547: a flipped card follows its entry like the drafts; a removed
+/// entry's flip goes with it and never lands on another card.
+#[test]
+fn a_flipped_card_follows_its_entry_and_goes_with_it() {
+    let (mut app, id, _dir) = app();
+    add(&mut app, id, "board_size");
+    add(&mut app, id, "erc_clean");
+    let flip = |index| RequirementsMsg::ExpandToggled { index };
+    let flipped = |app: &Signex, name: &str| tab(app, id).toggled.contains(&EntryKey::first(name));
+    let _ = send(&mut app, id, flip(1));
+    assert!(flipped(&app, "erc_clean"));
+    let _ = send(&mut app, id, flip(1));
+    assert!(tab(&app, id).toggled.is_empty(), "a second flip undoes it");
+
+    let _ = send(&mut app, id, flip(1));
+    add(&mut app, id, "drc_clean");
+    assert!(flipped(&app, "erc_clean"), "an add keeps it on its entry");
+    assert_eq!(tab(&app, id).toggled.len(), 1, "and flips no other card");
+
+    let _ = send(&mut app, id, flip(0));
+    let _ = send(&mut app, id, RequirementsMsg::Removed { index: 1 });
+    assert!(
+        !flipped(&app, "erc_clean"),
+        "the remove took the removed entry's flip"
+    );
+    assert!(flipped(&app, "board_size"), "and kept the other entry's");
+    assert_eq!(tab(&app, id).toggled.len(), 1, "drc_clean was not flipped");
+
+    answer(
+        &mut app,
+        "project_remove_requirement",
+        &["requirement=board_size"],
+    );
+    assert!(
+        tab(&app, id).toggled.is_empty(),
+        "a catalog remove took its entry's flip"
+    );
+}
+
+#[test]
+fn each_kind_summarises_its_values_on_one_line() {
+    let i18n = signex_i18n::I18n::en_us();
+    let words = |value: Value| {
+        let entry = RequirementEntry::read(value);
+        let RequirementEntry::Known { requirement, raw } = &entry else {
+            panic!("{entry:?} reads");
+        };
+        summary_words(requirement, raw, &i18n)
+            .map(|words| words.to_string().replace(['\u{2068}', '\u{2069}'], ""))
+    };
+    assert_eq!(
+        words(json!({"id": "erc", "kind": "erc_clean"})).as_deref(),
+        Some("0 errors or warnings")
+    );
+    assert_eq!(
+        words(json!({"id": "drc", "kind": "drc_clean", "allow_warnings": true})).as_deref(),
+        Some("0 errors · warnings allowed")
+    );
+    assert_eq!(
+        words(json!({"id": "size", "kind": "board_size",
+                     "max_width_mm": 50, "max_height_mm": 40.5}))
+        .as_deref(),
+        Some("≤ 50 × 40.5 mm")
+    );
+    assert_eq!(
+        words(json!({"id": "cost", "kind": "bom_cost",
+                     "quantity": 1000, "currency": "EUR", "max_unit_cost": 5.5}))
+        .as_deref(),
+        Some("≤ 5.5 EUR per board at 1000 boards")
+    );
+    assert_eq!(
+        words(json!({"id": "parts", "kind": "parts_state",
+                     "states": ["released", "in_review"]}))
+        .as_deref(),
+        Some("Only released or in_review parts")
+    );
+    assert_eq!(
+        words(json!({"id": "power", "kind": "net_class", "nets": "VIN_*",
+                     "class": "Power", "min_trace_width_mm": 0.8}))
+        .as_deref(),
+        Some("VIN_*: class Power and track ≥ 0.8 mm")
+    );
+    assert_eq!(
+        words(json!({"id": "gap", "kind": "net_class", "nets": "*",
+                     "min_clearance_mm": 0.2}))
+        .as_deref(),
+        Some("*: clearance ≥ 0.2 mm")
+    );
+    assert_eq!(
+        words(json!({"id": "none", "kind": "net_class", "nets": "*"})),
+        None,
+        "a net_class that asks nothing has no summary"
+    );
+}
+
+/// A refused field commit names its field, so the card shows the reason
+/// under that box; the next edit clears both, and a refusal that is not a
+/// field commit names none.
+#[test]
+fn a_refused_field_names_its_field_until_the_next_edit() {
+    let (mut app, id, _dir) = app();
+    add(&mut app, id, "board_size");
+    type_and_submit(&mut app, id, RequirementField::MaxWidthMm, "-2");
+    let state = tab(&app, id);
+    assert!(state.problem.is_some());
+    assert_eq!(state.problem_field, Some(RequirementField::MaxWidthMm));
+
+    let edited = RequirementsMsg::FieldEdited {
+        index: 0,
+        field: RequirementField::MaxHeightMm,
+        text: "50".into(),
+    };
+    let _ = send(&mut app, id, edited);
+    let state = tab(&app, id);
+    assert!(state.problem.is_none());
+    assert_eq!(state.problem_field, None);
+
+    type_and_submit(&mut app, id, RequirementField::MaxHeightMm, "0");
+    assert_eq!(
+        tab(&app, id).problem_field,
+        Some(RequirementField::MaxHeightMm)
+    );
+    let _ = send(&mut app, id, RequirementsMsg::Removed { index: 5 });
+    let state = tab(&app, id);
+    assert_eq!(
+        state.problem,
+        Some((None, RequirementProblem::NoEntry(5))),
+        "a remove of no entry is refused, at no entry"
+    );
+    assert_eq!(state.problem_field, None, "and names no field");
 }
 
 /// The texts typed and not committed, in no order.

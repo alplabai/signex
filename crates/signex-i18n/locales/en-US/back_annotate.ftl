@@ -32,7 +32,8 @@ back-annotate-block-needs-annotation = The schematic part is not annotated; anno
 back-annotate-block-duplicate = Another schematic part is also { $designator }.
 back-annotate-block-board-not-annotated = The board designator is not annotated.
 back-annotate-block-shared-sheet = This sheet is placed more than once, so a value would change every placement; it is not carried back.
-back-annotate-block-footprint = Changing a part's footprint from the board is not supported yet (#2248).
+back-annotate-block-channel = This part is in a channel of a repeated sheet; its designator comes from the sheet and the channel naming, so it is not carried back.
+back-annotate-block-footprint =Changing a part's footprint from the board is not supported yet (#2248).
 back-annotate-notes-heading = Notes
 back-annotate-note-unreadable = A sheet could not be read; the parts on it are left alone.
 back-annotate-note-unlinked = { $reference } is not linked to a schematic part.
@@ -88,3 +89,5 @@ back-annotate-show-row = Show
 # The caption of a flagged rename. $sheet is the sheet file of the part that has the designator.
 back-annotate-duplicate-on-sheet = { $designator } already exists on { $sheet }
 back-annotate-duplicate-exists = { $designator } already exists on another part
+# The caption of an unticked rename when another unticked rename wants the same designator.
+back-annotate-duplicate-contested = Another rename also changes a part to { $designator }; tick one of them

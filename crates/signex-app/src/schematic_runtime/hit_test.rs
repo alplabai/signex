@@ -144,6 +144,10 @@ fn hit_test_items(
                 hit_bus(&snapshot.buses[bus_index], point, widths)
             }
             SelectedKind::Directive => super::directives::hit(snapshot, item.item.uuid, point),
+            SelectedKind::HarnessWire => super::harness::wire_segment(snapshot, item.item.uuid)
+                .is_some_and(|(a, b, tolerance)| {
+                    point_to_segment_distance(point, a, b) <= tolerance
+                }),
             _ => item.bbox.expand(0.25).contains(point.x, point.y),
         };
         if hit {
@@ -163,7 +167,7 @@ fn hit_wire(wire: &signex_types::schematic::Wire, point: Point, widths: WireWidt
 
 fn hit_bus(bus: &signex_types::schematic::Bus, point: Point, widths: WireWidths<'_>) -> bool {
     let tolerance = widths
-        .bus_mm()
+        .bus_mm(bus)
         .max(signex_types::schematic::SCHEMATIC_HIT_BUS_TOLERANCE_MM);
     point_to_segment_distance(point, bus.start, bus.end) <= tolerance
 }

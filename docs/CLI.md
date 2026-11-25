@@ -54,6 +54,18 @@ Blank lines are skipped.
 {"id": "save_document", "args": {"document": "main.snxsch"}}
 ```
 
+The project-wide numbering commands (`annotate_schematic_quietly`,
+`force_annotate_all_schematics`) write no file: each sheet they change, opened
+or not, stays unsaved in memory. To keep the result, run with `--save` and send
+one `save_document` naming each changed sheet (`list_documents` lists them). A
+run that ends with changes unsaved names those sheets, and they are lost with
+the run. A save never overwrites a file that changed since it was read.
+`undo document=<sheet>` never steps such a run, saved or not: it moves other
+sheets too, so the command is refused with `the next step belongs to a
+project-wide run (annotate, replace or re-prefix) and moves other sheets too;
+undo it from the sheet it was run on`. Undo the run in the app window, where
+Ctrl+Z restores every sheet until you save.
+
 An argument is a string, a number, a boolean, or `[x, y]` for a point (mm).
 The names, kinds and units of a command's arguments are in
 `signex-cli commands --json`; the same checks as `CommandArgs::parse_operands`
@@ -112,7 +124,10 @@ The placements (`place_net_label` and the other labels, `place_power_symbol`,
 `place_junction`, `place_no_connect`, `place_no_erc`, `place_wire`, `draw_wire`,
 `place_bus`, `draw_bus`, `place_text`, `place_text_string`, `draw_line`,
 `draw_graphic_line`, `draw_rectangle`, and the directives `place_blanket`,
-`place_compile_mask`, `place_diff_pair` and `edit_blanket` (#2420), and
+`place_compile_mask`, `place_diff_pair` and `edit_blanket` (#2420) and
+`place_parameter_set` (#1489: `at` on a wire, refused off one; optional
+`class`, `diff_pair_class`, `width`, `clearance`, `via_diameter` and
+`via_hole` in mm, and `current` in A, information only), and
 `edit_no_erc_rules` (#1699, see
 [SCHEMATIC_DIRECTIVES.md](SCHEMATIC_DIRECTIVES.md))) take an optional
 `document`, an id or a path as for `apply_edits`. Given, the command runs on that sheet and never on
@@ -604,6 +619,34 @@ layer back to the palette colour. A read-only board is refused.
 A locked object is refused with the lock's reason before anything is sent.
 Without operands (the palette, a key) each says which Properties row to use.
 
+### Drawing order and Delete by uuid
+
+The Arrange rows and Delete act on the selection in a window; with operands
+they act on the items `ids` names, by uuid, on the document named (#2326).
+Each is one undo step; the answer is `{"document", "ids", "changed"}`.
+
+```text
+bring_drawings_forward document=<sheet> ids=<drawing uuids>
+bring_drawings_to_front document=<sheet> ids=<drawing uuids>
+send_drawings_backward document=<sheet> ids=<drawing uuids>
+send_drawings_to_back document=<sheet> ids=<drawing uuids>
+delete_selection document=<sheet or board> ids=<uuids>
+```
+
+- The drawing order moves only drawings: a uuid that is no drawing of the
+  sheet refuses the whole command (`sheet-target-unknown`).
+- `delete_selection` deletes objects of an open sheet (a part's uuid is the
+  part, never only its designator or value field) or items of an open board
+  (a footprint, track, via, area, text, arc, free pad, dimension or drawing;
+  a pad's uuid is no board item). A uuid that names nothing there refuses
+  the whole command (`sheet-target-unknown`, `board-target-unknown`); any
+  other document is refused (`delete-document-not-open`). Locked objects on
+  a sheet are skipped and named in Messages, as a key press does; a locked
+  footprint refuses a board delete with the placement's reason.
+- A headless run without operands acts on the session's own selection, as
+  the window's key does. Delete in a footprint editor stays the editor's own
+  route until slice S-L and takes no operands.
+
 ## Placement extras
 
 The operand forms of three placement extras (#1667). Each is one undo step
@@ -922,8 +965,9 @@ The report:
 - A finding's `rule` is `req::<id>`, its `severity` the requirement's.
   `evidence` holds the `kind` and what was measured: the board's
   `width_mm`/`height_mm` and the limits; a part's `designator`, `library_row`
-  and `state`; a net's `net` and `class`, or a class's set and minimum
-  values; the cost's `unit_cost`, `total_cost`, `quantity` and `currency`;
+  and `state`, with `count`, how many parts its BOM line holds, and `parts`,
+  how many parts were checked in all; a net's `net` and `class`, or a
+  class's set and minimum values; the cost's `unit_cost`, `total_cost`, `quantity` and `currency`;
   for `erc_clean`/`drc_clean` one finding with the counts (`errors`,
   `warnings`, `info`, `waived`, `run_warnings`) and the run's `rule_set`, not
   a copy of every ERC or DRC finding.
@@ -1011,8 +1055,8 @@ Find by text on a board is `find_items` (designator and value).
 
 ## Working through a running Signex
 
-When a person has the project open in Signex with Preferences > Editing >
-"Allow agent connections" on, `run` sends each command to that process
+When a person has the project open in Signex with Preferences > System ›
+General > "Allow agent connections" on, `run` sends each command to that process
 instead of booting its own (#1924; the app's side, the registry and the
 security rules are in [AGENT_SOCKET.md](AGENT_SOCKET.md)). The command runs
 inside the app's update loop like a click, so the person sees the change at

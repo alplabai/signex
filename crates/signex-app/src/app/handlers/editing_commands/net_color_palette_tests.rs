@@ -1,11 +1,12 @@
 //! #2528 — the F5 palette's rows (coloured first, filtered) and the custom
 //! picker's Hex field.
 
-use super::net_color_driver::{activate, add_sheet_with, color, colour_of};
-use super::net_color_palette::{hex_of, net_label_names, palette_rows, parse_hex};
+use super::net_color_driver::{activate, add_sheet_with, color, colour_of, paint};
+use super::net_color_palette::{hex_of, palette_net_names, palette_rows, parse_hex};
+use crate::app::state::{ModalId, NetColorsCleared};
 use crate::app::{Message, NetColorMsg, Signex};
-use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, Wire};
-use std::path::PathBuf;
+use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, Symbol, Wire};
+use std::path::{Path, PathBuf};
 
 /// A wire per net, each with its label at the wire's left end, and one
 /// label on no wire.
@@ -79,7 +80,7 @@ fn a_name_on_several_labels_is_listed_once() {
     sheet
         .labels
         .push(Label::new("A", Point::new(10.0, 0.0), LabelType::Net));
-    assert_eq!(net_label_names(&sheet), ["A", "FLOATING"]);
+    assert_eq!(palette_net_names(&sheet), ["A", "FLOATING"]);
 }
 
 #[test]
@@ -107,6 +108,23 @@ fn invalid_hex_is_rejected_without_a_panic() {
     ] {
         assert_eq!(parse_hex(bad), None, "{bad:?}");
     }
+}
+
+/// #2770: Cancel discards the pick, so the next open does not start from it.
+#[test]
+fn cancel_puts_the_draft_back_as_it_was_before_the_open() {
+    let (mut app, _path) = app_with_nets(&["A", "B"]);
+    let before = hex_of(app.ui_state.net_color_custom.draft);
+    let send = |app: &mut Signex, msg: NetColorMsg| {
+        let _ = app.update(Message::NetColor(msg));
+    };
+    send(&mut app, NetColorMsg::CustomOpenedFor("A".into()));
+    send(&mut app, NetColorMsg::CustomHexChanged("#112233".into()));
+    send(&mut app, NetColorMsg::CustomShow(false));
+    assert_eq!(hex_of(app.ui_state.net_color_custom.draft), before);
+
+    send(&mut app, NetColorMsg::CustomOpenedFor("B".into()));
+    assert_eq!(hex_of(app.ui_state.net_color_custom.draft), before);
 }
 
 /// Typing in Hex moves the draft only when the code parses, and the RGB
@@ -250,4 +268,277 @@ fn an_applied_palette_colour_is_recorded() {
         color: Some(color(120)),
     }));
     assert_eq!(app.ui_state.net_colors.get("A"), Some(&color(120)));
+}
+
+// Mockup row 71: Clear all colours and a chooser's Clear show a toast with
+// what was cleared and Undo.
+
+fn wires_of(app: &Signex, path: &Path) -> Vec<uuid::Uuid> {
+    let sheet = app.document_state.engines[path].document();
+    sheet.wires.iter().map(|w| w.uuid).collect()
+}
+
+fn send(app: &mut Signex, msg: NetColorMsg) {
+    let _ = app.update(Message::NetColor(msg));
+}
+
+fn cleared(app: &Signex) -> Option<NetColorsCleared> {
+    let toast = app.ui_state.net_color_palette.toast.as_ref();
+    toast.map(|t| t.cleared.clone())
+}
+
+fn clear_net(app: &mut Signex, net: &str) {
+    send(
+        app,
+        NetColorMsg::Set {
+            net: net.into(),
+            color: None,
+        },
+    );
+}
+
+#[test]
+fn clear_all_counts_the_nets_and_its_undo_brings_them_back() {
+    let (mut app, path) = app_with_nets(&["A", "B", "C"]);
+    let wires = wires_of(&app, &path);
+    paint(&mut app, &[wires[0]], color(10));
+    paint(&mut app, &[wires[1]], color(20));
+
+    send(&mut app, NetColorMsg::ClearedAll);
+    assert_eq!(cleared(&app), Some(NetColorsCleared::Nets(2)));
+    let toast = app.ui_state.net_color_palette.toast.clone();
+    assert_eq!(toast.map(|t| t.sheet), Some(path));
+    assert!(app.net_color_toast_can_undo());
+    assert_eq!(colour_of(&app, wires[0]), None);
+
+    send(&mut app, NetColorMsg::ToastUndone);
+    assert_eq!(colour_of(&app, wires[0]), Some(color(10)));
+    assert_eq!(colour_of(&app, wires[1]), Some(color(20)));
+    assert_eq!(cleared(&app), None, "the toast goes with its Undo");
+}
+
+#[test]
+fn a_chooser_clear_names_the_net_and_its_undo_brings_it_back() {
+    let (mut app, path) = app_with_nets(&["A", "B"]);
+    let wires = wires_of(&app, &path);
+    paint(&mut app, &[wires[0]], color(10));
+
+    clear_net(&mut app, "A");
+    assert_eq!(colour_of(&app, wires[0]), None);
+    assert_eq!(cleared(&app), Some(NetColorsCleared::Net("A".into())));
+
+    send(&mut app, NetColorMsg::ToastUndone);
+    assert_eq!(colour_of(&app, wires[0]), Some(color(10)));
+}
+
+#[test]
+fn clear_all_of_unlabelled_nets_says_the_sheet_was_cleared() {
+    let (mut app, _task) = Signex::new();
+    let path = PathBuf::from("unlabelled.snxsch");
+    let mut sheet = sheet_with_nets(&["A"]);
+    let unlabelled = uuid::Uuid::now_v7();
+    sheet.wires.push(Wire {
+        uuid: unlabelled,
+        start: Point::new(0.0, 30.0),
+        end: Point::new(10.0, 30.0),
+        ..Default::default()
+    });
+    add_sheet_with(&mut app, &path, sheet);
+    paint(&mut app, &[unlabelled], color(30));
+
+    send(&mut app, NetColorMsg::ClearedAll);
+    assert_eq!(colour_of(&app, unlabelled), None);
+    assert_eq!(cleared(&app), Some(NetColorsCleared::Unlabelled));
+}
+
+#[test]
+fn nothing_cleared_shows_no_toast() {
+    let (mut app, _path) = app_with_nets(&["A"]);
+    send(&mut app, NetColorMsg::ClearedAll);
+    assert_eq!(cleared(&app), None, "a clean sheet");
+    clear_net(&mut app, "A");
+    assert_eq!(cleared(&app), None, "a net with no colour");
+    send(
+        &mut app,
+        NetColorMsg::Set {
+            net: "A".into(),
+            color: Some(color(40)),
+        },
+    );
+    assert_eq!(cleared(&app), None, "a colour pick is no clear");
+}
+
+/// The toast's Undo takes back its clear only: after a newer edit it is
+/// greyed, and a press undoes nothing.
+#[test]
+fn the_toast_undo_leaves_a_newer_edit_alone() {
+    let (mut app, path) = app_with_nets(&["A", "B"]);
+    let wires = wires_of(&app, &path);
+    paint(&mut app, &[wires[0]], color(10));
+    send(&mut app, NetColorMsg::ClearedAll);
+    paint(&mut app, &[wires[1]], color(50));
+    assert!(!app.net_color_toast_can_undo());
+
+    send(&mut app, NetColorMsg::ToastUndone);
+    assert_eq!(colour_of(&app, wires[1]), Some(color(50)));
+    assert_eq!(colour_of(&app, wires[0]), None);
+    assert_eq!(cleared(&app), None);
+}
+
+/// An older toast's timeout leaves the newer toast up.
+#[test]
+fn only_the_shown_toasts_timeout_hides_it() {
+    let (mut app, path) = app_with_nets(&["A", "B"]);
+    let wires = wires_of(&app, &path);
+    let revision = |app: &Signex| {
+        let toast = app.ui_state.net_color_palette.toast.as_ref();
+        toast.expect("a toast").revision
+    };
+    paint(&mut app, &[wires[0]], color(10));
+    clear_net(&mut app, "A");
+    let first = revision(&app);
+    paint(&mut app, &[wires[1]], color(20));
+    clear_net(&mut app, "B");
+    let second = revision(&app);
+    assert_ne!(first, second);
+
+    send(&mut app, NetColorMsg::ToastExpired(first));
+    assert_eq!(cleared(&app), Some(NetColorsCleared::Net("B".into())));
+    send(&mut app, NetColorMsg::ToastExpired(second));
+    assert_eq!(cleared(&app), None);
+}
+
+// Mockup row 71, decision of 2026-11-24: a net named only by a power port is
+// listed and coloured like a labelled one; a power flag names no net.
+
+/// [`sheet_with_nets`] plus a wire whose left end holds a power port of
+/// `net` and whose right end holds a power flag.
+fn sheet_with_power_net(nets: &[&str], net: &str) -> SchematicSheet {
+    let mut sheet = sheet_with_nets(nets);
+    let y = 10.0 * nets.len() as f64;
+    sheet.wires.push(Wire {
+        uuid: uuid::Uuid::now_v7(),
+        start: Point::new(0.0, y),
+        end: Point::new(10.0, y),
+        ..Default::default()
+    });
+    let port = |lib_id: &str, value: &str, x: f64| Symbol {
+        uuid: uuid::Uuid::now_v7(),
+        lib_id: lib_id.into(),
+        value: value.into(),
+        position: Point::new(x, y),
+        is_power: true,
+        ..Symbol::default()
+    };
+    sheet.symbols.push(port(&format!("power:{net}"), net, 0.0));
+    sheet.symbols.push(port("power:PWR_FLAG", "PWR_FLAG", 10.0));
+    sheet
+}
+
+#[test]
+fn a_net_named_only_by_a_power_port_is_listed() {
+    let sheet = sheet_with_power_net(&["A"], "+3V3");
+    assert_eq!(palette_net_names(&sheet), ["+3V3", "A", "FLOATING"]);
+    let rows = palette_rows(&sheet, "3v3");
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].net, "+3V3");
+    assert_eq!(rows[0].color, None);
+}
+
+#[test]
+fn a_power_net_row_colours_and_clears_its_wires() {
+    let (mut app, _task) = Signex::new();
+    let path = PathBuf::from("power.snxsch");
+    add_sheet_with(&mut app, &path, sheet_with_power_net(&["A"], "GND"));
+    let power_wire = wires_of(&app, &path)[1];
+    send(
+        &mut app,
+        NetColorMsg::Set {
+            net: "GND".into(),
+            color: Some(color(70)),
+        },
+    );
+    assert_eq!(colour_of(&app, power_wire), Some(color(70)));
+    assert_eq!(app.palette_rows()[0].net, "GND", "coloured first");
+    assert_eq!(app.palette_rows()[0].color, Some(color(70)));
+
+    send(&mut app, NetColorMsg::ClearedAll);
+    assert_eq!(colour_of(&app, power_wire), None);
+    assert_eq!(
+        cleared(&app),
+        Some(NetColorsCleared::Nets(1)),
+        "the power net is counted as a listed net"
+    );
+}
+
+// Mockup row 71, decision of 2026-11-24: the palette stays a centred modal,
+// not a popover at the pointer.
+
+#[test]
+fn the_palette_opens_centred_not_at_the_pointer() {
+    let (app, _task) = Signex::new();
+    let (settings, _) = app.dialog_window_settings(ModalId::NetColorPalette);
+    assert!(
+        matches!(settings.position, iced::window::Position::Centered),
+        "{:?}",
+        settings.position
+    );
+}
+
+/// The monitor and position a window opens at, when it names them.
+fn opens_at(position: iced::window::Position) -> Option<(Option<usize>, f32, f32)> {
+    match position {
+        iced::window::Position::Specific(p) => {
+            Some((p.monitor_index.map(|m| m.0), p.position.x, p.position.y))
+        }
+        _ => None,
+    }
+}
+
+#[test]
+fn with_the_main_window_known_the_palette_opens_at_its_monitor_centre() {
+    use crate::app::handlers::window_placement::{Anchor, position_for};
+    let (mut app, _task) = Signex::new();
+    let main = iced::window::Id::unique();
+    app.ui_state.main_window_id = Some(main);
+    let monitor = crate::app::window_geometry::MonitorInfo {
+        name: None,
+        size: (1920.0, 1080.0),
+        primary: true,
+    };
+    // The main window sits off the monitor's centre, so its centre and the
+    // monitor's differ.
+    let _ = app.window_geometry_read(crate::app::GeometryReadout {
+        id: main,
+        reading: Some(crate::app::window_geometry::WindowReading {
+            monitor_index: Some(0),
+            position: (0.0, 0.0),
+            size: (1000.0, 700.0),
+            maximized: false,
+        }),
+        monitors: vec![monitor.clone()],
+    });
+
+    let (settings, borderless) = app.dialog_window_settings(ModalId::NetColorPalette);
+    let size = app.dialog_window_size_of(ModalId::NetColorPalette, None, borderless);
+    let source = app.ui_state.window_geometry.source(main);
+    let monitors = [monitor];
+    let place = |anchor| {
+        opens_at(position_for(
+            source.as_ref(),
+            (size.width, size.height),
+            &monitors,
+            anchor,
+            iced::window::Position::Centered,
+        ))
+    };
+
+    let opened = opens_at(settings.position);
+    assert!(opened.is_some(), "{:?}", settings.position);
+    assert_eq!(opened, place(Anchor::MonitorCenter));
+    assert_ne!(
+        opened,
+        place(Anchor::SourceCenter),
+        "not at the main window"
+    );
 }

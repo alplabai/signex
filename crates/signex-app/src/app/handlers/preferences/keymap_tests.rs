@@ -17,7 +17,7 @@ fn app_recording_a_custom_profile_row() -> Signex {
         .rows()
         .into_iter()
         .find(|row| row.trigger == "Ctrl+W")
-        .expect("altium binds Ctrl+W");
+        .expect("signex_standard binds Ctrl+W");
     app.ui_state.preferences_keymap_editor = editor;
     app.ui_state.preferences_keymap_recorder = Some(crate::app::KeymapRecorderState::new(
         row.slot,
@@ -36,7 +36,10 @@ fn send(app: &mut Signex, msg: PrefMsg) {
 #[test]
 fn switching_profile_closes_the_recorder() {
     let mut app = app_recording_a_custom_profile_row();
-    send(&mut app, PrefMsg::KeymapProfileSelected("altium".into()));
+    send(
+        &mut app,
+        PrefMsg::KeymapProfileSelected("signex_standard".into()),
+    );
     assert!(app.ui_state.preferences_keymap_recorder.is_none());
 }
 
@@ -96,6 +99,47 @@ fn a_stale_slot_is_refused_not_applied_to_another_binding() {
             .preferences_keymap_status
             .contains("no longer exists")
     );
+}
+
+// Mockup row 145 — the page's chips and the banner's Show are view state only.
+mod view_state {
+    use super::*;
+    use crate::preferences::{KeymapViewMsg, KeymapViewState};
+
+    #[test]
+    fn show_turns_on_the_conflicts_chip_without_dirtying_the_dialog() {
+        let (mut app, _boot) = Signex::new();
+        let _ = app.update(Message::Preferences(PreferencesMsg::Open));
+        assert!(!app.ui_state.preferences_dirty);
+
+        let _ = app.handle_preferences_keymap_view(KeymapViewMsg::ConflictsShown);
+
+        assert!(app.ui_state.preferences_pages.keymap_view.shows_conflicts());
+        assert!(!app.ui_state.preferences_dirty);
+        assert!(app.ui_state.preferences_keymap_status.is_empty());
+    }
+
+    #[test]
+    fn picking_a_chip_leaves_the_working_copy_and_the_recorder_alone() {
+        let mut app = app_recording_a_custom_profile_row();
+        let before = app.ui_state.preferences_keymap_editor.clone();
+        let recorder = app.ui_state.preferences_keymap_recorder.clone();
+
+        let _ = app.handle_preferences_keymap_view(KeymapViewMsg::ConflictsShown);
+        let mut expected = KeymapViewState::default();
+        expected.apply(KeymapViewMsg::ConflictsShown);
+        assert_eq!(app.ui_state.preferences_pages.keymap_view, expected);
+
+        let _ = app.handle_preferences_keymap_view(KeymapViewMsg::ContextFilterPicked(
+            KeymapViewState::default().context_filter,
+        ));
+        assert_eq!(
+            app.ui_state.preferences_pages.keymap_view,
+            KeymapViewState::default()
+        );
+        assert_eq!(app.ui_state.preferences_keymap_editor, before);
+        assert_eq!(app.ui_state.preferences_keymap_recorder, recorder);
+    }
 }
 
 // Restore and Discard act on the backup the Preferences row shows, never on

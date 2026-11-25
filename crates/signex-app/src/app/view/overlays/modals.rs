@@ -19,62 +19,13 @@ impl Signex {
     /// `handle_preferences_open_requested`, so this in-window path is
     /// the fallback when the detach failed.
     pub(in crate::app::view) fn preferences_overlay(&self) -> Option<Element<'_, Message>> {
-        let ui = &self.ui_state;
-        let document = &self.document_state;
         let prefs_detached = self.modal_detached(crate::app::state::ModalId::Preferences);
-        if !(ui.preferences_open && !prefs_detached) {
+        if !(self.ui_state.preferences_open && !prefs_detached) {
             return None;
         }
-        let pref_view = crate::preferences::view(crate::preferences::PrefsView {
-            nav: ui.preferences_nav,
-            draft_theme: ui.preferences_draft_theme,
-            saved_theme: ui.theme_id,
-            draft_font: &ui.preferences_draft_font,
-            draft_grid_style: ui.preferences_draft_grid_style,
-            draft_pcb_gpu_render: ui.preferences_draft_pcb_gpu_render,
-            draft_antialiasing: ui.preferences_draft_antialiasing,
-            draft_annotate_undo: ui.preferences_draft_annotate_undo,
-            draft_move_keeps_wires: ui.preferences_draft_move_keeps_wires,
-            draft_net_hover_enabled: ui.preferences_draft_net_hover_enabled,
-            draft_symbol_body_fill: ui.preferences_draft_symbol_body_fill,
-            body_fill_palette_open: ui.preferences_body_fill_palette_open,
-            body_fill_picker_open: ui.preferences_body_fill_picker_open,
-            draft_trackpad_pan: ui.preferences_draft_trackpad_pan,
-            draft_wheel_mode: ui.preferences_draft_wheel_mode,
-            draft_remember_window_geometry: ui.preferences_draft_remember_window_geometry,
-            draft_drag_direction_select: ui.preferences_draft_drag_direction_select,
-            draft_increment_step: ui.preferences_draft_increment_step,
-            draft_paste_designators: ui.preferences_draft_paste_designators,
-            draft_window_controls_placement: ui.preferences_draft_window_controls_placement,
-            window_controls_restart_note: self.window_controls_needs_restart(),
-            draft_autosave_enabled: ui.preferences_draft_autosave_enabled,
-            draft_agent_connections_enabled: ui.preferences_draft_agent_connections_enabled,
-            i18n: &ui.i18n,
-            draft_symbol_grid_size_mm: ui.preferences_draft_symbol_grid_size_mm,
-            draft_fast_grids: &ui.preferences_draft_fast_grids,
-            fast_grid_status: &ui.preferences_fast_grid_status,
-            draft_symbol_grid_style: ui.preferences_draft_symbol_grid_style,
-            draft_symbol_pin_selection: ui.preferences_draft_symbol_pin_selection,
-            draft_zoom_step_percent: ui.preferences_draft_zoom_step_percent,
-            draft_ui_scale_percent: ui.preferences_draft_ui_scale_percent,
-            dirty: ui.preferences_dirty,
-            profiles: &ui.profile_manager,
-            default_profile: ui.default_rule_profile.as_deref(),
-            distributor_settings: &self.library.settings,
-            panel_tokens: &document.panel_ctx.tokens,
-            draft_component_classes: &ui.preferences_draft_component_classes,
-            keymap_editor: &ui.preferences_keymap_editor,
-            keymap_status: &ui.preferences_keymap_status,
-            keymap_load_error: ui.keymap_load_error.as_deref(),
-            keymap_backup: ui.keymap_backup.as_deref(),
-            prefs_load_error: ui.prefs_load_error.as_deref(),
-            prefs_status: &ui.preferences_prefs_status,
-            keymap_search: &ui.preferences_keymap_search,
-            nav_search: &ui.preferences_nav_search,
-            keymap_recorder: ui.preferences_keymap_recorder.as_ref(),
-        })
-        .map(|m| Message::Preferences(PreferencesMsg::Inner(m)))
-        .boxed();
+        let pref_view = crate::preferences::view(self.preferences_view_inputs())
+            .map(|m| Message::Preferences(PreferencesMsg::Inner(m)))
+            .boxed();
         Some(pref_view)
     }
 
@@ -135,16 +86,56 @@ impl Signex {
         )
     }
 
+    /// The Create Union popover (mockup row 158), laid at the point it opened: a
+    /// click-outside layer that cancels it, then the card.
+    pub(in crate::app::view) fn union_popover_overlay(&self) -> Vec<Element<'_, Message>> {
+        let Some(popover) = self.ui_state.unions.popover.as_ref() else {
+            return Vec::new();
+        };
+        let wrap = |msg| {
+            Message::Edit(crate::app::EditMsg::Unions(
+                crate::app::unions::UnionsMsg::Popover(msg),
+            ))
+        };
+        let card = crate::app::unions::popover_view(
+            popover,
+            &self.ui_state.i18n,
+            &self.document_state.panel_ctx.tokens,
+        )
+        .map(wrap)
+        .boxed();
+        Self::anchored_layers(
+            wrap(crate::app::unions::UnionPopoverMsg::Cancelled),
+            crate::app::view::context_menu::AnchoredMenu::new(card, popover.anchor),
+        )
+    }
+
+    /// The Smart Paste dialog (mockup row 155). In-window only.
+    pub(in crate::app::view) fn smart_paste_overlay(&self) -> Option<Element<'_, Message>> {
+        let state = self.ui_state.smart_paste.as_deref()?;
+        let size = crate::app::view::dialogs::fit_modal_size(
+            self.ui_state.window_size,
+            crate::smart_paste::DIALOG_SIZE,
+        );
+        let card = crate::smart_paste::view(
+            state,
+            size,
+            &self.document_state.panel_ctx.tokens,
+            &self.ui_state.i18n,
+        )
+        .map(|msg| Message::Edit(crate::app::EditMsg::SmartPasteDialog(msg)))
+        .boxed();
+        Some(self.wrap_centred_dialog(card, crate::smart_paste::DIALOG_SIZE))
+    }
+
     /// Keyboard-shortcuts reference modal.
-    pub(in crate::app::view) fn keyboard_shortcuts_overlay(&self) -> Option<Element<'_, Message>> {
+    pub(in crate::app::view) fn keyboard_shortcuts_overlay(&self) -> Vec<Element<'_, Message>> {
         let ui = &self.ui_state;
         if !ui.keyboard_shortcuts_open
             || self.modal_detached(crate::app::state::ModalId::KeyboardShortcuts)
         {
-            return None;
+            return Vec::new();
         }
-        // `opaque` captures mouse presses inside the layer so they cannot
-        // pass through to the layers below it in the `Stack` (#618).
         let built;
         let sections = match &ui.shortcut_sections {
             Some(cached) => cached.as_slice(),
@@ -154,13 +145,20 @@ impl Signex {
                 built.as_slice()
             }
         };
-        Some(
-            iced::widget::opaque(crate::keyboard_shortcuts_modal::view(
+        let facts = crate::keyboard_shortcuts_modal::SheetFacts::read(
+            &ui.keymap_profiles,
+            &ui.active_keymap,
+            &ui.i18n,
+        );
+        Self::dismiss_and_centre(
+            Message::Overlay(OverlayMsg::CloseKeyboardShortcuts),
+            crate::keyboard_shortcuts_modal::view(
                 &ui.i18n,
                 &self.document_state.panel_ctx.tokens,
                 sections,
-            ))
-            .boxed(),
+                &ui.shortcut_sheet,
+                &facts,
+            ),
         )
     }
 
@@ -176,24 +174,29 @@ impl Signex {
                 built.as_slice()
             }
         };
+        let facts = crate::keyboard_shortcuts_modal::SheetFacts::read(
+            &ui.keymap_profiles,
+            &ui.active_keymap,
+            &ui.i18n,
+        );
         crate::keyboard_shortcuts_modal::window_view(
             &ui.i18n,
             &self.document_state.panel_ctx.tokens,
             sections,
+            &ui.shortcut_sheet,
+            &facts,
         )
     }
 
     /// Help ▸ About Signex dialog.
-    pub(in crate::app::view) fn about_overlay(&self) -> Option<Element<'_, Message>> {
+    pub(in crate::app::view) fn about_overlay(&self) -> Vec<Element<'_, Message>> {
         let ui = &self.ui_state;
         if !ui.about_open || self.modal_detached(crate::app::state::ModalId::About) {
-            return None;
+            return Vec::new();
         }
-        Some(
-            iced::widget::opaque(crate::about_modal::view(
-                &self.document_state.panel_ctx.tokens,
-            ))
-            .boxed(),
+        Self::dismiss_and_centre(
+            Message::Overlay(OverlayMsg::CloseAbout),
+            crate::about_modal::view(&ui.i18n, &self.document_state.panel_ctx.tokens),
         )
     }
 
@@ -206,6 +209,7 @@ impl Signex {
             return None;
         }
         Some(crate::passive_calculator_modal::view(
+            &ui.i18n,
             &self.document_state.panel_ctx.tokens,
             &ui.passive_calculator,
         ))
@@ -218,8 +222,13 @@ impl Signex {
         {
             return None;
         }
+        let ui = &self.ui_state;
+        let facts =
+            crate::first_run_tour::TourFacts::read(ui.wheel_mode, &ui.active_keymap, &ui.i18n);
         Some(crate::first_run_tour::view(
+            &ui.i18n,
             &self.document_state.panel_ctx.tokens,
+            &facts,
         ))
     }
 
@@ -348,6 +357,23 @@ impl Signex {
             .then(|| self.view_board_reannotate_dialog())
     }
 
+    /// Design ▸ Differential Pair Classes… (#1282), while open.
+    pub(in crate::app::view) fn diff_pair_classes_overlay(&self) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .diff_pair_classes
+            .is_some()
+            .then(|| self.view_diff_pair_classes_dialog())
+    }
+
+    /// Design ▸ Rooms ▸ Create Rooms from Sheets (#2457).
+    pub(in crate::app::view) fn create_rooms_overlay(&self) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .rooms
+            .create
+            .is_some()
+            .then(|| self.view_create_rooms_dialog())
+    }
+
     pub(in crate::app::view) fn fab_outputs_overlay(&self) -> Option<Element<'_, Message>> {
         self.ui_state
             .fab_outputs
@@ -368,6 +394,25 @@ impl Signex {
             .back_annotate
             .is_some()
             .then(|| self.view_back_annotate_dialog())
+    }
+
+    /// Compare Board with Schematic (#2462).
+    pub(in crate::app::view) fn compare_board_overlay(&self) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .compare_board
+            .is_some()
+            .then(|| self.view_compare_board_dialog())
+    }
+
+    /// The confirmation before its Apply deletes from the board.
+    pub(in crate::app::view) fn compare_board_confirm_overlay(
+        &self,
+    ) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .compare_board
+            .as_ref()
+            .is_some_and(|state| state.confirming)
+            .then(|| self.view_compare_board_confirm())
     }
 
     /// Update PCB from Schematic (#1312); a headless `apply=true` run has no
@@ -458,6 +503,14 @@ impl Signex {
                 tokens,
                 &self.ui_state.i18n,
                 windowed,
+                crate::library::browser::PreviewLook {
+                    canvas_colors: self.document_state.panel_ctx.canvas_colors,
+                    grid: self.sheet_grid(),
+                    device_px_per_logical_px: self
+                        .document_state
+                        .panel_ctx
+                        .device_px_per_logical_px,
+                },
             )
             .map(Message::Library)
             .boxed(),
@@ -467,6 +520,14 @@ impl Signex {
                 tokens,
                 &self.ui_state.i18n,
                 windowed,
+                crate::library::browser::PreviewLook {
+                    canvas_colors: self.document_state.panel_ctx.canvas_colors,
+                    grid: self.sheet_grid(),
+                    device_px_per_logical_px: self
+                        .document_state
+                        .panel_ctx
+                        .device_px_per_logical_px,
+                },
             )
             .map(Message::Library)
             .boxed(),
@@ -506,6 +567,7 @@ impl Signex {
             .boxed(),
             ModalId::LibraryRecovery => crate::library::recovery::view(
                 lib.recovery.as_ref()?,
+                self.recovery_project_file(),
                 tokens,
                 &self.ui_state.i18n,
                 windowed,
@@ -522,16 +584,19 @@ impl Signex {
             .boxed(),
             ModalId::LibraryEditRow => {
                 let (path, edit) = self.browser_modal(owner, |b| b.edit_modal.as_ref())?;
-                let classes = self.row_classes_for(path);
-                let template = lib.row_template(path, edit.draft.class.as_str());
+                let context = crate::library::edit_row_modal::EditRowContext::resolve(
+                    lib,
+                    path,
+                    edit,
+                    self.row_classes_for(path),
+                );
                 crate::library::edit_row_modal::view(
                     path,
                     edit,
                     tokens,
                     &self.ui_state.i18n,
                     windowed,
-                    classes,
-                    template,
+                    context,
                 )
                 .map(Message::Library)
                 .boxed()
@@ -670,9 +735,22 @@ impl Signex {
         self.library_overlay(crate::app::state::ModalId::LibraryRecovery)
     }
 
+    /// "Delete Symbol?" (mockup row 137): shown while the active symbol
+    /// editor holds a current in-use warning, the same one the Esc ladder reads.
+    pub(in crate::app::view) fn symbol_delete_confirm_overlay(
+        &self,
+    ) -> Option<Element<'_, Message>> {
+        let ctx = &self.document_state.panel_ctx;
+        let warning = ctx.symbol_editor.as_ref()?.delete_warning.as_ref()?;
+        let card = crate::library::symbol_delete::view(warning, &ctx.tokens, &self.ui_state.i18n)
+            .map(|msg| Message::Dock(crate::dock::DockMessage::Panel(msg)))
+            .boxed();
+        Some(self.library_scrim(card))
+    }
+
     /// Command palette dropdown (Ctrl+Shift+P). Painted last so it sits
-    /// above every other modal layer; click-outside dismisses via the
-    /// standard dismiss_layer pattern. Pushes the dismiss layer then the
+    /// above every other modal layer; click-outside dismisses through the
+    /// backdrop (`command_palette_backdrop`). Pushes the backdrop then the
     /// dropdown.
     pub(in crate::app::view) fn command_palette_overlay(
         &self,
@@ -684,10 +762,11 @@ impl Signex {
         {
             return Vec::new();
         }
-        // The palette dims the app with the theme's modal scrim, like a dialog.
+        // The palette dims the app with the theme's modal scrim, like a dialog,
+        // except over the title-bar field it is typed into.
         let scrim = crate::app::view::dialogs::dialog_scrim(&self.document_state.panel_ctx.tokens);
         vec![
-            Self::dismiss_layer_tinted(Message::CommandPalette(CommandPaletteMsg::Close), scrim),
+            self.command_palette_backdrop(scrim),
             self.view_command_palette_dropdown(),
         ]
     }

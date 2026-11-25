@@ -478,3 +478,41 @@ fn the_board_menu_offers_the_selection_tools() {
         );
     }
 }
+
+/// #2462: Compare with Schematic sits after Properties, above the View
+/// group, and runs `compare_board_with_schematic` when the board is part
+/// of an open project; it is greyed otherwise, like Update PCB. It is an
+/// object-menu row: the empty-area menu stays short (2026-11-18).
+#[test]
+fn the_board_menu_compares_with_the_schematic_in_a_project() {
+    let board = PcbTargets {
+        shown: true,
+        hovered: true,
+        ..PcbTargets::default()
+    };
+    let loose = rows(board);
+    assert!(row_message(&loose, "Compare with Schematic").is_none());
+    let mut ctx = board_ctx(board);
+    ctx.has_open_project = true;
+    let in_project = pcb_canvas_menu_entries(
+        signex_i18n::I18n::en_us_ref(),
+        TID,
+        &ctx,
+        None,
+        &shortcuts(),
+    );
+    assert!(runs(
+        row_message(&in_project, "Compare with Schematic"),
+        "compare_board_with_schematic"
+    ));
+    let at = |label: &str| {
+        in_project
+            .iter()
+            .position(|row| matches!(row, DropdownEntry::Item(it) if it.label == label))
+            .unwrap_or_else(|| panic!("missing row {label:?}"))
+    };
+    let compare = at("Compare with Schematic");
+    assert_eq!(compare, at("Properties...") + 1);
+    assert!(matches!(in_project[compare + 1], DropdownEntry::Separator));
+    assert_eq!(compare + 2, at("Toggle Ratsnest"));
+}

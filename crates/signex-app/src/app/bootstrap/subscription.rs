@@ -29,6 +29,10 @@ struct OpenOverlays {
     find_replace_open: bool,
     find_similar_open: bool,
     paste_array_open: bool,
+    /// The Create Union popover (mockup row 158).
+    union_popover_open: bool,
+    /// The Smart Paste dialog (mockup row 155).
+    smart_paste_open: bool,
     kbd_shortcuts_open: bool,
     about_open: bool,
     first_run_tour_open: bool,
@@ -62,14 +66,26 @@ struct OpenOverlays {
     sheet_numbering_open: bool,
     sheet_sync_open: bool,
     board_reannotate_open: bool,
+    /// Create Rooms from Sheets (#2457).
+    create_rooms_open: bool,
     fab_outputs_open: bool,
+    diff_pair_classes_open: bool,
     board_output_open: bool,
     back_annotate_open: bool,
+    compare_board_open: bool,
+    compare_board_confirm_open: bool,
+    /// Workspace layouts (mockup row 166): Save Layout, Manage Layouts, and Manage's
+    /// inline Rename field, which Esc closes before the dialog.
+    save_layout_open: bool,
+    manage_layouts_open: bool,
+    manage_layouts_renaming: bool,
     library_picker_open: bool,
     library_document_options_open: bool,
     library_updates_open: bool,
     library_primitive_picker_open: bool,
     close_library_confirm_open: bool,
+    /// "Delete Symbol?" (mockup row 137): the active symbol editor's warning.
+    symbol_delete_open: bool,
     /// `None` while no library-recovery dialog is open. `RecoveryDialog`
     /// (`crate::library::recovery`) itself carries a `PathBuf` (and, for
     /// the broken-binding case, a `String`/`Uuid`), so it can't be
@@ -104,6 +120,12 @@ struct OpenOverlays {
     tab_context_menu_open: bool,
     project_tree_context_menu_open: bool,
     grid_picker_open: bool,
+    /// The zoom pill's preset menu is painted (Graphite mockup #64).
+    zoom_presets_open: bool,
+    /// The status bar's Grid & Snap popover: Esc closes it, not the tool.
+    grid_snap_popover_open: bool,
+    /// A board counter's popover (#2460): Esc closes it, not the tool.
+    board_status_popover_open: bool,
 }
 
 // `KeyContext` used to live here — the slice of modal state the
@@ -192,6 +214,7 @@ impl OpenOverlays {
             || self.remove_open
             || self.annotate_reset_confirm_open
             || self.close_library_confirm_open
+            || self.symbol_delete_open
             || self.delete_confirm.is_some()
             || self.recovery_kind.is_some()
             || self.autosave_recovery_open
@@ -251,6 +274,17 @@ impl OpenOverlays {
             OverlayId::GridPicker => self
                 .grid_picker_open
                 .then_some(Message::Ui(UiMsg::GridPickerClose)),
+            OverlayId::ZoomPresets => self
+                .zoom_presets_open
+                .then_some(Message::Ui(UiMsg::ZoomPresetsDismissed)),
+            OverlayId::GridSnapPopover => self
+                .grid_snap_popover_open
+                .then_some(Message::Overlay(OverlayMsg::GridSnapPopoverDismissed)),
+            OverlayId::BoardStatusPopover => self.board_status_popover_open.then(|| {
+                Message::Ui(UiMsg::StatusBar(StatusBarRequest::BoardPopover(
+                    crate::status_bar::BoardPopoverEvent::Dismissed,
+                )))
+            }),
 
             // ── Editor chrome, menus, pickers, panels: no rung ───────
             // None of these is a modal. The symbol editor's menu closes from
@@ -280,7 +314,8 @@ impl OpenOverlays {
             | OverlayId::PanelList
             | OverlayId::DockDragZone
             | OverlayId::ComponentsRowDragLabel
-            | OverlayId::FloatingPanels => None,
+            | OverlayId::FloatingPanels
+            | OverlayId::DockDropTargetLabel => None,
 
             // ── Dialogs ─────────────────────────────────────────────
             OverlayId::Preferences => self
@@ -298,7 +333,19 @@ impl OpenOverlays {
             }),
             OverlayId::PasteArray => self.paste_array_open.then(|| {
                 Message::Edit(crate::app::EditMsg::PasteArray(
-                    crate::paste_array::PasteArrayMsg::Closed,
+                    crate::paste_array::PasteArrayMsg::EscapePressed,
+                ))
+            }),
+            OverlayId::UnionPopover => self.union_popover_open.then(|| {
+                Message::Edit(crate::app::EditMsg::Unions(
+                    crate::app::unions::UnionsMsg::Popover(
+                        crate::app::unions::UnionPopoverMsg::Cancelled,
+                    ),
+                ))
+            }),
+            OverlayId::SmartPaste => self.smart_paste_open.then(|| {
+                Message::Edit(crate::app::EditMsg::SmartPasteDialog(
+                    crate::smart_paste::SmartPasteMsg::Cancelled,
                 ))
             }),
             OverlayId::KeyboardShortcuts => self
@@ -354,15 +401,29 @@ impl OpenOverlays {
             OverlayId::BoardReannotate => self
                 .board_reannotate_open
                 .then(|| Message::from(crate::app::BoardReannotateMsg::CancelRequested)),
+            OverlayId::CreateRooms => self
+                .create_rooms_open
+                .then(|| Message::from(crate::app::rooms::CreateRoomsMsg::Cancelled)),
             OverlayId::FabOutputs => self
                 .fab_outputs_open
                 .then(|| Message::from(crate::app::FabOutputsMsg::CancelRequested)),
+            OverlayId::DiffPairClasses => self
+                .diff_pair_classes_open
+                .then(|| Message::from(crate::app::DiffPairClassesMsg::CancelRequested)),
             OverlayId::BoardOutput => self
                 .board_output_open
                 .then(|| Message::from(crate::app::BoardOutputMsg::Closed)),
             OverlayId::BackAnnotate => self
                 .back_annotate_open
                 .then(|| Message::from(crate::app::BackAnnotateMsg::CloseRequested)),
+            OverlayId::CompareBoard => self
+                .compare_board_open
+                .then(|| Message::from(crate::app::CompareBoardMsg::CloseRequested)),
+            // The child confirmation outranks its dialog: Esc cancels it
+            // and leaves the report open.
+            OverlayId::CompareBoardConfirm => self
+                .compare_board_confirm_open
+                .then(|| Message::from(crate::app::CompareBoardMsg::ApplyCancelled)),
             OverlayId::AnnotateDialog => self
                 .annotate_open
                 .then(|| Message::Annotate(AnnotateMsg::CloseDialog)),
@@ -395,6 +456,18 @@ impl OpenOverlays {
             OverlayId::DocumentSetup => self
                 .document_setup_open
                 .then(|| Message::from(crate::app::DocumentSetupMsg::CancelRequested)),
+            // An open Rename field closes first and keeps the dialog.
+            OverlayId::ManageLayouts => self.manage_layouts_open.then(|| {
+                use crate::workspace_layouts::ManageLayoutsMsg;
+                if self.manage_layouts_renaming {
+                    Message::from(ManageLayoutsMsg::RenameCancelled)
+                } else {
+                    Message::from(ManageLayoutsMsg::Closed)
+                }
+            }),
+            OverlayId::SaveLayout => self
+                .save_layout_open
+                .then(|| Message::from(crate::workspace_layouts::SaveLayoutMsg::Cancelled)),
 
             // ── Library modals ──────────────────────────────────────
             OverlayId::LibraryPicker => self
@@ -454,6 +527,11 @@ impl OpenOverlays {
                         crate::library::recovery::BrokenBindingChoice::Cancel,
                     ),
                 ),
+            }),
+            OverlayId::SymbolDeleteConfirm => self.symbol_delete_open.then(|| {
+                Message::Dock(crate::dock::DockMessage::Panel(
+                    crate::panels::PanelMsg::SchLibraryDeleteCancelled,
+                ))
             }),
 
             // ── Painted last ────────────────────────────────────────
@@ -618,18 +696,50 @@ impl Signex {
         //
         // Unless the Esc came from that very window, which is the one
         // case where the user IS looking at the card (#547).
-        let modal_detached = |modal: crate::app::state::ModalId| -> bool {
+        self.open_overlays_where(|modal: crate::app::state::ModalId| -> bool {
             esc_from_detached != Some(modal)
                 && self.ui_state.windows.values().any(|kind| {
                     matches!(kind, crate::app::state::WindowKind::DetachedModal(m) if *m == modal)
                 })
-        };
+        })
+    }
 
+    /// How many dialogs that cover the Grid & Snap popover are open, in the
+    /// main window or a window of their own (the Parameter Manager, which
+    /// only opens in its own, included): the ones painted above it, the
+    /// blocking cards that hide it (error card, print and BOM preview,
+    /// netlist prompt, net colour picker) and the command palette. The
+    /// popover closes when this grows, so every dialog closes it, trunk's
+    /// new ones too, with no per-dialog line (`handlers/grid_snap_popover.rs`).
+    pub(crate) fn dialogs_open_above_grid_snap_popover(&self) -> usize {
+        use crate::app::view::overlay_id::{PAINT_ORDER, visible};
+        let open = self.open_overlays_where(|_| false);
+        let above = PAINT_ORDER
+            .iter()
+            .skip_while(|id| **id != OverlayId::GridSnapPopover)
+            .skip(1);
+        let blocking = visible(true).iter();
+        blocking
+            .chain(above)
+            .filter(|id| open.rung(**id).is_some())
+            .count()
+            + usize::from(self.ui_state.parameter_manager_open)
+            + usize::from(self.ui_state.command_palette.open)
+    }
+
+    /// The snapshot, with `modal_detached` saying which modals show in a
+    /// window of their own (their in-window flag then reads closed).
+    fn open_overlays_where(
+        &self,
+        modal_detached: impl Fn(crate::app::state::ModalId) -> bool,
+    ) -> OpenOverlays {
         OpenOverlays {
             find_replace_open: self.ui_state.find_replace.open
                 && !modal_detached(crate::app::state::ModalId::FindReplace),
             find_similar_open: self.ui_state.find_similar.is_some(),
             paste_array_open: self.ui_state.paste_array.is_some(),
+            union_popover_open: self.ui_state.unions.popover.is_some(),
+            smart_paste_open: self.ui_state.smart_paste.is_some(),
             kbd_shortcuts_open: self.ui_state.keyboard_shortcuts_open
                 && !modal_detached(crate::app::state::ModalId::KeyboardShortcuts),
             about_open: self.ui_state.about_open
@@ -671,9 +781,25 @@ impl Signex {
             sheet_numbering_open: self.ui_state.sheet_numbering.is_some(),
             sheet_sync_open: self.ui_state.sheet_sync.is_some(),
             board_reannotate_open: self.ui_state.board_reannotate.is_some(),
+            create_rooms_open: self.ui_state.rooms.create.is_some(),
             fab_outputs_open: self.ui_state.fab_outputs.is_some(),
+            diff_pair_classes_open: self.ui_state.diff_pair_classes.is_some(),
             board_output_open: self.ui_state.board_output.dialog.is_some(),
             back_annotate_open: self.ui_state.back_annotate.is_some(),
+            compare_board_open: self.ui_state.compare_board.is_some(),
+            compare_board_confirm_open: self
+                .ui_state
+                .compare_board
+                .as_ref()
+                .is_some_and(|s| s.confirming),
+            save_layout_open: self.ui_state.workspace_layouts.save.is_some(),
+            manage_layouts_open: self.ui_state.workspace_layouts.manage.is_some(),
+            manage_layouts_renaming: self
+                .ui_state
+                .workspace_layouts
+                .manage
+                .as_ref()
+                .is_some_and(|dialog| dialog.rename.is_some()),
             library_picker_open: self.library.picker.is_some()
                 && !modal_detached(crate::app::state::ModalId::LibraryPicker),
             library_document_options_open: self.library.document_options.is_some()
@@ -685,6 +811,13 @@ impl Signex {
             library_primitive_picker_open: self.library.primitive_picker.is_some()
                 && !modal_detached(crate::app::state::ModalId::LibraryPrimitivePicker),
             close_library_confirm_open: self.library.close_library_confirm.is_some(),
+            // The same read `symbol_delete_confirm_overlay` paints from.
+            symbol_delete_open: self
+                .document_state
+                .panel_ctx
+                .symbol_editor
+                .as_ref()
+                .is_some_and(|ctx| ctx.delete_warning.is_some()),
             recovery_kind: self
                 .library
                 .recovery
@@ -738,12 +871,25 @@ impl Signex {
                 .find(|(_, browser)| browser.edit_modal.is_some())
                 .map(|(path, _)| path.clone()),
             canvas_context_menu_open: self.interaction_state.context_menu.is_some(),
-            tab_context_menu_open: self.interaction_state.tab_context_menu.is_some(),
+            // The tab strip's "+N" menu paints in the same slot (mockup row 5).
+            tab_context_menu_open: self.interaction_state.tab_context_menu.is_some()
+                || self.ui_state.tab_overflow_menu_open,
             project_tree_context_menu_open: self
                 .interaction_state
                 .project_tree_context_menu
                 .is_some(),
             grid_picker_open: self.interaction_state.grid_picker.is_some(),
+            zoom_presets_open: self.zoom_presets_shown(),
+            // Open is not enough: it must paint, or Esc is swallowed for it.
+            grid_snap_popover_open: self.grid_snap_popover_shown(),
+            // Painted only while its window shows a board: no rung for a
+            // popover left behind by a tab switch.
+            board_status_popover_open: self
+                .ui_state
+                .board_status
+                .popover
+                .as_ref()
+                .is_some_and(|p| self.status_board_target(p.window).is_some()),
         }
     }
 
@@ -992,8 +1138,20 @@ impl Signex {
             window_subscriptions::window_focus(),
             window_subscriptions::native_menu_failures(),
             window_subscriptions::quit_requests(),
+            window_subscriptions::file_drops(),
+            window_subscriptions::net_color_chooser_presses(
+                self.ui_state.net_color_palette.chooser.is_some(),
+            ),
+            window_subscriptions::held_escape_end(
+                self.interaction_state.annotation_tool.is_resume_esc_held,
+            ),
             chord_cancel,
             chord_timeout,
+            // The Start screen's minute clock; none while it is off screen.
+            crate::start_screen::clock_subscription(self.start_screen_shown()),
+            // The board DRC counter's age (#2460); none unless a board with a
+            // finished run is shown.
+            self.board_clock_subscription(),
             kbd,
             mouse_sub,
             window_close,
@@ -1005,6 +1163,9 @@ impl Signex {
             net_hover_tick,
             library_poll,
             autosave_tick,
+            self.edge_pan_subscription(),
+            // Frames only while the 3D view's flip turns or a screenshot waits.
+            self.board_3d_subscription(),
             // None unless started with SIGNEX_BENCH_PAN_ZOOM (#2472).
             self.pan_zoom_bench_subscription(),
         ])
@@ -1190,7 +1351,21 @@ mod tests {
         assert!(matches!(
             only(|o| o.paste_array_open = true),
             Some(Message::Edit(crate::app::EditMsg::PasteArray(
-                crate::paste_array::PasteArrayMsg::Closed
+                crate::paste_array::PasteArrayMsg::EscapePressed
+            )))
+        ));
+        assert!(matches!(
+            only(|o| o.union_popover_open = true),
+            Some(Message::Edit(crate::app::EditMsg::Unions(
+                crate::app::unions::UnionsMsg::Popover(
+                    crate::app::unions::UnionPopoverMsg::Cancelled
+                )
+            )))
+        ));
+        assert!(matches!(
+            only(|o| o.smart_paste_open = true),
+            Some(Message::Edit(crate::app::EditMsg::SmartPasteDialog(
+                crate::smart_paste::SmartPasteMsg::Cancelled
             )))
         ));
         assert!(matches!(
@@ -1311,6 +1486,12 @@ mod tests {
             ))
         ));
         assert!(matches!(
+            only(|o| o.symbol_delete_open = true),
+            Some(Message::Dock(crate::dock::DockMessage::Panel(
+                crate::panels::PanelMsg::SchLibraryDeleteCancelled
+            )))
+        ));
+        assert!(matches!(
             only(|o| o.library_picker_open = true),
             Some(Message::Library(
                 crate::library::messages::LibraryMessage::ClosePicker
@@ -1359,6 +1540,31 @@ mod tests {
         assert!(matches!(
             only(|o| o.net_color_custom_open = true),
             Some(Message::NetColor(NetColorMsg::CustomShow(false)))
+        ));
+        // Mockup row 166: Save Layout cancels; Manage Layouts closes its Rename field
+        // first, then itself.
+        use crate::dock::DockLayoutMsg;
+        use crate::workspace_layouts::{ManageLayoutsMsg, SaveLayoutMsg, WorkspaceLayoutMsg};
+        assert!(matches!(
+            only(|o| o.save_layout_open = true),
+            Some(Message::DockLayout(DockLayoutMsg::Workspace(
+                WorkspaceLayoutMsg::Save(SaveLayoutMsg::Cancelled)
+            )))
+        ));
+        assert!(matches!(
+            only(|o| o.manage_layouts_open = true),
+            Some(Message::DockLayout(DockLayoutMsg::Workspace(
+                WorkspaceLayoutMsg::Manage(ManageLayoutsMsg::Closed)
+            )))
+        ));
+        assert!(matches!(
+            only(|o| {
+                o.manage_layouts_open = true;
+                o.manage_layouts_renaming = true;
+            }),
+            Some(Message::DockLayout(DockLayoutMsg::Workspace(
+                WorkspaceLayoutMsg::Manage(ManageLayoutsMsg::RenameCancelled)
+            )))
         ));
     }
 
@@ -1760,6 +1966,8 @@ mod tests {
             find_replace_open,
             find_similar_open,
             paste_array_open,
+            union_popover_open,
+            smart_paste_open,
             kbd_shortcuts_open,
             about_open,
             first_run_tour_open,
@@ -1788,14 +1996,22 @@ mod tests {
             sheet_numbering_open,
             sheet_sync_open,
             board_reannotate_open,
+            create_rooms_open,
             fab_outputs_open,
+            diff_pair_classes_open,
             board_output_open,
             back_annotate_open,
+            compare_board_open,
+            compare_board_confirm_open,
+            save_layout_open,
+            manage_layouts_open,
+            manage_layouts_renaming,
             library_picker_open,
             library_document_options_open,
             library_updates_open,
             library_primitive_picker_open,
             close_library_confirm_open,
+            symbol_delete_open,
             recovery_kind,
             error_notice_open,
             error_notice_detached,
@@ -1810,6 +2026,9 @@ mod tests {
             tab_context_menu_open,
             project_tree_context_menu_open,
             grid_picker_open,
+            zoom_presets_open,
+            grid_snap_popover_open,
+            board_status_popover_open,
         ];
 
         type EscapeSetter = fn(&mut OpenOverlays);
@@ -1821,6 +2040,8 @@ mod tests {
             ("find_replace_open", |o| o.find_replace_open = true),
             ("find_similar_open", |o| o.find_similar_open = true),
             ("paste_array_open", |o| o.paste_array_open = true),
+            ("union_popover_open", |o| o.union_popover_open = true),
+            ("smart_paste_open", |o| o.smart_paste_open = true),
             ("kbd_shortcuts_open", |o| o.kbd_shortcuts_open = true),
             ("about_open", |o| o.about_open = true),
             ("first_run_tour_open", |o| o.first_run_tour_open = true),
@@ -1864,9 +2085,23 @@ mod tests {
             ("sheet_numbering_open", |o| o.sheet_numbering_open = true),
             ("sheet_sync_open", |o| o.sheet_sync_open = true),
             ("board_reannotate_open", |o| o.board_reannotate_open = true),
+            ("create_rooms_open", |o| o.create_rooms_open = true),
             ("fab_outputs_open", |o| o.fab_outputs_open = true),
+            ("diff_pair_classes_open", |o| {
+                o.diff_pair_classes_open = true
+            }),
             ("board_output_open", |o| o.board_output_open = true),
             ("back_annotate_open", |o| o.back_annotate_open = true),
+            ("compare_board_open", |o| o.compare_board_open = true),
+            ("compare_board_confirm_open", |o| {
+                o.compare_board_confirm_open = true
+            }),
+            ("save_layout_open", |o| o.save_layout_open = true),
+            ("manage_layouts_open", |o| o.manage_layouts_open = true),
+            ("manage_layouts_renaming", |o| {
+                o.manage_layouts_open = true;
+                o.manage_layouts_renaming = true
+            }),
             ("selection_filter_custom_open", |o| {
                 o.selection_filter_custom_open = true
             }),
@@ -1883,6 +2118,7 @@ mod tests {
             ("close_library_confirm_open", |o| {
                 o.close_library_confirm_open = true
             }),
+            ("symbol_delete_open", |o| o.symbol_delete_open = true),
             ("library_picker_open", |o| o.library_picker_open = true),
             ("recovery_kind", |o| {
                 o.recovery_kind = Some(RecoveryKind::LibraryMissing)
@@ -1918,6 +2154,13 @@ mod tests {
                 o.project_tree_context_menu_open = true
             }),
             ("grid_picker_open", |o| o.grid_picker_open = true),
+            ("zoom_presets_open", |o| o.zoom_presets_open = true),
+            ("grid_snap_popover_open", |o| {
+                o.grid_snap_popover_open = true
+            }),
+            ("board_status_popover_open", |o| {
+                o.board_status_popover_open = true
+            }),
         ];
 
         // Where a notice lives, not a modal of its own: no rung.

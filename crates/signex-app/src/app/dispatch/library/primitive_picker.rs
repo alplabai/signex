@@ -37,6 +37,7 @@ impl Signex {
             copy_confirm: None,
             copying: false,
             opening_library: None,
+            selection: Default::default(),
         });
         self.list_loose_symbols_task(kind)
     }
@@ -101,6 +102,12 @@ impl Signex {
             }
             PrimitivePickerMsg::LooseListed { read, from_browse } => {
                 self.handle_loose_listed(&read, from_browse)
+            }
+            PrimitivePickerMsg::RowHighlighted(choice) => {
+                self.handle_picker_row_highlighted(choice)
+            }
+            PrimitivePickerMsg::PreviewLoaded { generation, result } => {
+                self.handle_picker_preview_loaded(generation, result)
             }
             PrimitivePickerMsg::PickLoose(symbol) => self.handle_loose_chosen(symbol),
             PrimitivePickerMsg::CopyConfirmed => self.handle_copy_confirmed(),
@@ -175,8 +182,56 @@ impl Signex {
                     },
                 )));
             }
+            PrimitivePickerTarget::SketchParameters { editor } => {
+                return self.offer_parameters_of(editor, primitive_ref);
+            }
         }
         Task::none()
+    }
+
+    /// Import from another footprint (mockup row 189): hand the picked
+    /// footprint's parameters to the sketch table at `editor`. Copies
+    /// nothing yet; the table's list asks which to take.
+    fn offer_parameters_of(
+        &mut self,
+        editor: std::path::PathBuf,
+        primitive_ref: PrimitiveRef,
+    ) -> Task<Message> {
+        use crate::library::editor::footprint::parameters_table::SketchParametersMsg;
+        let Some(footprint) = report_read_failure(
+            self.library.set.resolve_footprint(&primitive_ref),
+            ResolvedKind::Footprint,
+            &primitive_ref,
+            "sketch parameters import",
+        ) else {
+            crate::diagnostics::log_warning(
+                "No parameters were imported: the footprint could not be read.",
+            );
+            self.sync_diagnostics_panel_ctx();
+            return Task::none();
+        };
+        let parameters: Vec<(String, String)> = footprint
+            .sketch
+            .as_ref()
+            .map(|sketch| {
+                sketch
+                    .parameters
+                    .iter()
+                    .map(|(name, expr)| (name.clone(), expr.clone()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        Task::done(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+            path: editor,
+            msg: crate::library::messages::PrimitiveEdit::Footprint(
+                crate::library::messages::FootprintEditorMsg::SketchParameters(
+                    SketchParametersMsg::ImportSourcePicked {
+                        source: footprint.name,
+                        parameters,
+                    },
+                ),
+            ),
+        }))
     }
 
     /// F15 — Library Browser row binding. Same shape as

@@ -85,7 +85,9 @@ impl SymbolCanvas<'_> {
         let w2s = |x: f64, y: f64| -> iced::Point {
             iced::Point::new(ox + (x as f32) * scale, oy - (y as f32) * scale)
         };
-        if let (Some((fx, fy)), Some((cx, cy))) = (state.rect_from, state.rect_cursor) {
+        if self.tool != SymbolTool::PlaceRoundRectangle
+            && let (Some((fx, fy)), Some((cx, cy))) = (state.rect_from, state.rect_cursor)
+        {
             let p0 = w2s(fx, fy);
             let p1 = w2s(cx, cy);
             // Screen-space top-left + size (y is flipped, so min/max in
@@ -316,6 +318,23 @@ impl SymbolCanvas<'_> {
                             .with_color(preview_color)
                             .with_width(self.preview_stroke_px(0.0, scale)),
                     );
+                    if self.tool == SymbolTool::PlacePie {
+                        let at = |deg: f64| {
+                            let rad = deg.to_radians();
+                            w2s(cx + radius * rad.cos(), cy + radius * rad.sin())
+                        };
+                        let spokes = canvas::Path::new(|builder| {
+                            builder.move_to(at(start_deg));
+                            builder.line_to(center_p);
+                            builder.line_to(at(end_deg));
+                        });
+                        frame.stroke(
+                            &spokes,
+                            canvas::Stroke::default()
+                                .with_color(preview_color)
+                                .with_width(self.preview_stroke_px(0.0, scale)),
+                        );
+                    }
                 }
             } else if let Some((cur_x, cur_y)) = state.arc_cursor {
                 // Phase 1: just show the radius line to the cursor.
@@ -377,13 +396,29 @@ impl SymbolCanvas<'_> {
         // (>= 3 vertices), ring the first vertex so it reads as
         // clickable, distinct from the plain dots on every other
         // collected vertex.
-        if self.polygon_vertices.len() >= 3 {
+        if self.tool == SymbolTool::PlacePolygon && self.polygon_vertices.len() >= 3 {
             let first = w2s(self.polygon_vertices[0].0, self.polygon_vertices[0].1);
             frame.stroke(
                 &canvas::Path::circle(first, 6.0),
                 canvas::Stroke::default()
                     .with_color(preview_color)
                     .with_width(1.5),
+            );
+        }
+        // The Bezier gesture shares this stash: the lines above are its
+        // control polygon, and the last click's curve follows the cursor.
+        if self.tool == SymbolTool::PlaceBezier
+            && let (&[a, b, c], Some(end)) = (self.polygon_vertices, state.polygon_cursor)
+        {
+            let curve = canvas::Path::new(|builder| {
+                builder.move_to(w2s(a.0, a.1));
+                builder.bezier_curve_to(w2s(b.0, b.1), w2s(c.0, c.1), w2s(end.0, end.1));
+            });
+            frame.stroke(
+                &curve,
+                canvas::Stroke::default()
+                    .with_color(preview_color)
+                    .with_width(self.preview_stroke_px(0.0, scale)),
             );
         }
     }

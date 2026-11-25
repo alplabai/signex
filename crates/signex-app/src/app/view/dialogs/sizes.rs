@@ -4,22 +4,26 @@
 
 pub(super) const ANNOTATE_RESET_CONFIRM: (f32, f32) = (420.0, 250.0);
 pub(super) const REPREFIX_CONFIRM: (f32, f32) = (560.0, 520.0);
-pub(super) const AUTOSAVE_RECOVERY: (f32, f32) = (520.0, 250.0);
-pub(super) const REMOVE: (f32, f32) = (560.0, 260.0);
+pub(super) const AUTOSAVE_RECOVERY: (f32, f32) = (540.0, 380.0);
+pub(super) const REMOVE: (f32, f32) = (540.0, 320.0);
 pub(super) const PROJECT_CLOSE_CONFIRM: (f32, f32) = (520.0, 360.0);
-pub(super) const APP_QUIT_CONFIRM: (f32, f32) = (520.0, 360.0);
-pub(super) const CREATE_CHILD_SHEET: (f32, f32) = (560.0, 260.0);
-pub(super) const RENAME: (f32, f32) = (420.0, 200.0);
-pub(super) const ENABLE_VERSION_CONTROL: (f32, f32) = (520.0, 320.0);
-pub(super) const GRID_PROPERTIES: (f32, f32) = (480.0, 280.0);
+pub(super) const APP_QUIT_CONFIRM: (f32, f32) = (500.0, 360.0);
+pub(super) const CREATE_CHILD_SHEET: (f32, f32) = (520.0, 260.0);
+pub(super) const RENAME: (f32, f32) = (460.0, 240.0);
+pub(super) const ENABLE_VERSION_CONTROL: (f32, f32) = (580.0, 540.0);
+pub(super) const GRID_PROPERTIES: (f32, f32) = (480.0, 500.0);
 pub(super) const SELECTION_FILTER_CUSTOM: (f32, f32) = (440.0, 380.0);
-pub(super) const NEW_PROJECT: (f32, f32) = (860.0, 700.0);
+/// Mockup row 21: wide enough for the 2 x 2 cards beside the preview column,
+/// tall enough for the whole column. The detached window opens at it too
+/// (`modal_size`).
+pub(crate) const NEW_PROJECT: (f32, f32) = (1040.0, 920.0);
 pub(super) const ASSIGN_FOOTPRINTS: (f32, f32) = (1180.0, 620.0);
 pub(super) const UPDATE_PCB: (f32, f32) = (900.0, 640.0);
 pub(super) const SHEET_NUMBERING: (f32, f32) = (680.0, 560.0);
-pub(super) const SHEET_SYNC: (f32, f32) = (600.0, 520.0);
+pub(super) const SHEET_SYNC: (f32, f32) = (600.0, 700.0);
 pub(super) const BOARD_REANNOTATE: (f32, f32) = (600.0, 600.0);
 pub(super) const BOARD_REPORTS: (f32, f32) = (900.0, 620.0);
-pub(super) const BOARD_PRINT: (f32, f32) = (560.0, 600.0);
+pub(super) const BOARD_PRINT: (f32, f32) = (780.0, 600.0);
 pub(super) const BACK_ANNOTATE: (f32, f32) = (720.0, 600.0);
-pub(super) const FAB_OUTPUTS: (f32, f32) = (640.0, 600.0);
+pub(super) const FAB_OUTPUTS: (f32, f32) = (720.0, 640.0);
+pub(super) const NETLIST_INCOMPLETE: (f32, f32) = (580.0, 360.0);

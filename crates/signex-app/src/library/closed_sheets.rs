@@ -52,21 +52,13 @@ pub struct ClosedSheetScan {
     pub stamps: Vec<(PathBuf, Option<FileStamp>)>,
 }
 
-/// A file's modified time and length: cheap to compare, enough to see a write.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct FileStamp {
-    modified: Option<std::time::SystemTime>,
-    len: u64,
-}
+pub use crate::app::core::file_stamp::FileStamp;
 
 impl FileStamp {
     /// Stat `path` now; `None` when it cannot be stated. Blocking.
     pub(crate) fn of(path: &Path) -> Option<Self> {
         let meta = std::fs::metadata(path).ok()?;
-        Some(Self {
-            modified: meta.modified().ok(),
-            len: meta.len(),
-        })
+        Some(Self::new(meta.modified().ok(), meta.len()))
     }
 }
 

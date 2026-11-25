@@ -67,6 +67,30 @@ pub fn hover_color(tokens: &ThemeTokens) -> Color {
     to_color(&tokens.hover)
 }
 
+/// Alpha of a soft status or accent tint derived from its base colour.
+pub const SOFT_TINT_ALPHA: f32 = 0.15;
+
+/// Fill of a current or "on" item: the theme's `accent_soft`, else the
+/// accent at [`SOFT_TINT_ALPHA`].
+pub fn accent_soft(tokens: &ThemeTokens) -> Color {
+    tokens.extended.accent_soft.map_or_else(
+        || Color {
+            a: SOFT_TINT_ALPHA,
+            ..accent(tokens)
+        },
+        |c| to_color(&c),
+    )
+}
+
+/// Text and icon colour on [`accent_soft`]: the theme's `accent_soft_ink`,
+/// else the text colour.
+pub fn accent_soft_ink(tokens: &ThemeTokens) -> Color {
+    tokens
+        .extended
+        .accent_soft_ink
+        .map_or_else(|| text_primary(tokens), |c| to_color(&c))
+}
+
 // ---------------------------------------------------------------------------
 // Container style factories
 // ---------------------------------------------------------------------------
@@ -181,6 +205,8 @@ pub const HAIRLINE: f32 = 1.0;
 /// Text sizes, smallest to largest.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TypeScale {
+    /// The count on a 12 px badge pinned to a bar button's corner.
+    pub badge: f32,
     /// Hints, secondary status lines, small badges.
     pub caption: f32,
     /// Uppercase section labels.
@@ -212,6 +238,7 @@ impl TypeScale {
     /// Derive every step from `base` (the `body` size).
     pub const fn from_base(base: f32) -> Self {
         Self {
+            badge: base * 8.5 / 12.0,
             caption: base * 10.0 / 11.0,
             section: base * 11.0 / 12.0,
             body: base,
@@ -273,6 +300,8 @@ impl Default for Spacing {
 /// Corner radii of the Graphite design, in px, smallest to largest.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Radii {
+    /// Keyboard key caps.
+    pub key: f32,
     /// Rows, menu roots and chips inside a control.
     pub small: f32,
     /// Fields, icon buttons and the Active Bar buttons.
@@ -290,6 +319,7 @@ pub struct Radii {
 
 impl Radii {
     pub const GRAPHITE: Self = Self {
+        key: 4.0,
         small: 6.0,
         control: 7.0,
         button: 8.0,
@@ -477,6 +507,58 @@ pub fn power_port(canvas: &CanvasColors) -> Color {
     to_color(&canvas.power)
 }
 
+/// The five kinds of a Design Notebook annotation (mockup row 165), named here for
+/// their colours: this crate does not depend on `signex-notebook`, whose
+/// `AnnotationKind` the app maps onto these one to one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AnnotationTone {
+    Note,
+    Calculation,
+    Measurement,
+    Issue,
+    Decision,
+}
+
+/// The Decision colour in a light theme (the mock-up's `--k-dec`).
+const DECISION_LIGHT: Color = Color::from_rgb8(0x7A, 0x3E, 0xA8);
+/// The Decision colour in a dark theme.
+const DECISION_DARK: Color = Color::from_rgb8(0xD2, 0xA8, 0xF0);
+
+/// Whether `tokens` are a light theme: a light panel fill.
+fn is_light(tokens: &ThemeTokens) -> bool {
+    let panel = to_color(&tokens.panel_bg);
+    0.2126 * panel.r + 0.7152 * panel.g + 0.0722 * panel.b > 0.5
+}
+
+/// Colour of an annotation kind: its icon box, its chip dot and its
+/// canvas flag. Note is the secondary ink, Calculation the info blue,
+/// Measurement the success green, Issue the error red and Decision a purple
+/// (Light `#7A3EA8`, Dark `#D2A8F0`).
+pub fn annotation_kind_colour(kind: AnnotationTone, tokens: &ThemeTokens) -> Color {
+    match kind {
+        AnnotationTone::Note => text_secondary(tokens),
+        AnnotationTone::Calculation => tokens
+            .extended
+            .info
+            .as_ref()
+            .map_or_else(|| accent(tokens), to_color),
+        AnnotationTone::Measurement => success_color(tokens),
+        AnnotationTone::Issue => error_color(tokens),
+        AnnotationTone::Decision if is_light(tokens) => DECISION_LIGHT,
+        AnnotationTone::Decision => DECISION_DARK,
+    }
+}
+
+/// Colour of the glyph on an annotation kind's icon box: white in a light
+/// theme, the app background in a dark one (`#111214` in Graphite Dark).
+pub fn annotation_glyph_colour(tokens: &ThemeTokens) -> Color {
+    if is_light(tokens) {
+        Color::WHITE
+    } else {
+        to_color(&tokens.bg)
+    }
+}
+
 #[cfg(test)]
 mod scale_tests {
     use super::*;
@@ -612,6 +694,37 @@ mod scale_tests {
         assert_eq!(d.background, Some(Background::Color(dimmed(Color::WHITE))));
     }
 
+    /// The bar badge's count is 8.5 px at the default base and follows it.
+    #[test]
+    fn the_badge_step_is_8_5_px_at_the_default_base() {
+        let ts = TypeScale::DEFAULT;
+        assert!(close(ts.badge, 8.5));
+        assert!(close(TypeScale::from_base(24.0).badge, 17.0));
+        assert!(ts.badge < ts.caption, "{} !< {}", ts.badge, ts.caption);
+    }
+
+    /// Accent-soft colours: the theme's tokens when set, else the accent at
+    /// the soft alpha and the text colour.
+    #[test]
+    fn accent_soft_falls_back_to_the_tinted_accent_and_the_text() {
+        let graphite = signex_types::theme::theme_tokens(ThemeId::GraphiteLight);
+        let set = graphite.extended.accent_soft.expect("Graphite sets it");
+        assert_eq!(accent_soft(&graphite), to_color(&set));
+        let mut bare = graphite;
+        bare.extended.accent_soft = None;
+        bare.extended.accent_soft_ink = None;
+        let soft = accent_soft(&bare);
+        assert_eq!(soft.a, SOFT_TINT_ALPHA);
+        assert_eq!(
+            Color { a: 1.0, ..soft },
+            Color {
+                a: 1.0,
+                ..accent(&bare)
+            }
+        );
+        assert_eq!(accent_soft_ink(&bare), text_primary(&bare));
+    }
+
     /// Power ports are red on both themes: `#C0392B` light, `#E06C5C` dark.
     #[test]
     fn power_ports_use_the_power_red() {
@@ -619,5 +732,45 @@ mod scale_tests {
         let dark = power_port(&canvas_colors(ThemeId::GraphiteDark));
         assert_eq!(light, Color::from_rgb8(0xC0, 0x39, 0x2B));
         assert_eq!(dark, Color::from_rgb8(0xE0, 0x6C, 0x5C));
+    }
+
+    /// Mockup row 165: the annotation kinds take the status tokens, Decision its own
+    /// purple, and the icon-box glyph is white in Light and the app
+    /// background in Dark.
+    #[test]
+    fn annotation_kinds_use_the_mockup_colours() {
+        use signex_types::theme::theme_tokens;
+        let light = theme_tokens(ThemeId::GraphiteLight);
+        let dark = theme_tokens(ThemeId::GraphiteDark);
+        let colour = annotation_kind_colour;
+        assert_eq!(
+            colour(AnnotationTone::Calculation, &light),
+            Color::from_rgb8(0x1F, 0x45, 0xAE)
+        );
+        assert_eq!(
+            colour(AnnotationTone::Calculation, &dark),
+            Color::from_rgb8(0xA9, 0xC2, 0xFF)
+        );
+        for tokens in [&light, &dark] {
+            assert_eq!(colour(AnnotationTone::Note, tokens), text_secondary(tokens));
+            assert_eq!(
+                colour(AnnotationTone::Measurement, tokens),
+                success_color(tokens)
+            );
+            assert_eq!(colour(AnnotationTone::Issue, tokens), error_color(tokens));
+        }
+        assert_eq!(
+            colour(AnnotationTone::Decision, &light),
+            Color::from_rgb8(0x7A, 0x3E, 0xA8)
+        );
+        assert_eq!(
+            colour(AnnotationTone::Decision, &dark),
+            Color::from_rgb8(0xD2, 0xA8, 0xF0)
+        );
+        assert_eq!(annotation_glyph_colour(&light), Color::WHITE);
+        assert_eq!(
+            annotation_glyph_colour(&dark),
+            Color::from_rgb8(0x11, 0x12, 0x14)
+        );
     }
 }

@@ -1,6 +1,8 @@
 //! #1739 - a version-controlled library cannot be created in the root of
-//! another repository that has history. The Library Options modal refuses it
-//! with the reason, stays open, and nothing is registered or written.
+//! another repository that has history. The New Library dialog refuses it
+//! with the reason, stays open, and nothing is registered or written. Its
+//! ways out: turn version control off, or choose another location (the
+//! save-as picker again).
 
 use signex_app::app::{LoadedProject, Message, Signex};
 use signex_app::library::messages::LibraryMessage;
@@ -35,6 +37,7 @@ fn git_project() -> (Signex, TempDir, std::path::PathBuf) {
         sheets: Vec::new(),
         variant_definitions: Vec::new(),
         active_variant: None,
+        variant_settings: Default::default(),
         libraries: Vec::new(),
         enable_git: true,
         net_classes: Vec::new(),
@@ -43,7 +46,9 @@ fn git_project() -> (Signex, TempDir, std::path::PathBuf) {
         schematic_defaults: Default::default(),
         project_defaults: Default::default(),
         agent_journal: Default::default(),
+        schematic_design: Default::default(),
         fab_outputs: None,
+        router_tool_diameter: None,
         requirements: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
@@ -114,5 +119,75 @@ fn the_project_folder_without_version_control_is_still_fine() {
     let (mut app, tmp, prj) = git_project();
     create(&mut app, &prj, &tmp.path().join("p-lib.snxlib"), false);
     assert!(app.library.create_options.is_none());
+    assert_eq!(app.document_state.projects[0].pending_libraries.len(), 1);
+}
+
+fn send(app: &mut Signex, msg: LibraryMessage) {
+    drop(app.update(Message::Library(msg)));
+}
+
+fn refusal(app: &Signex) -> Option<String> {
+    app.library
+        .create_options
+        .as_ref()
+        .and_then(|modal| modal.refusal.clone())
+}
+
+#[test]
+fn create_again_while_refused_stays_refused_and_writes_nothing() {
+    let (mut app, tmp, prj) = git_project();
+    let lib = tmp.path().join("p-lib.snxlib");
+    create(&mut app, &prj, &lib, true);
+    assert!(refusal(&app).is_some());
+
+    send(&mut app, LibraryMessage::LibraryCreateOptionsConfirm);
+
+    assert!(
+        refusal(&app).is_some_and(|r| r.contains("own history")),
+        "still open and still refused"
+    );
+    assert!(app.document_state.projects[0].pending_libraries.is_empty());
+    assert!(!lib.exists());
+}
+
+#[test]
+fn choose_another_location_closes_the_dialog_and_writes_nothing() {
+    let (mut app, tmp, prj) = git_project();
+    let lib = tmp.path().join("p-lib.snxlib");
+    create(&mut app, &prj, &lib, true);
+    assert!(refusal(&app).is_some());
+
+    send(
+        &mut app,
+        LibraryMessage::LibraryCreateOptionsRelocateRequested,
+    );
+
+    assert!(
+        app.library.create_options.is_none(),
+        "the dialog closes; the save-as picker opens instead"
+    );
+    assert!(app.document_state.projects[0].pending_libraries.is_empty());
+    assert!(!lib.exists());
+}
+
+#[test]
+fn turning_version_control_off_clears_the_refusal() {
+    let (mut app, tmp, prj) = git_project();
+    let lib = tmp.path().join("p-lib.snxlib");
+    create(&mut app, &prj, &lib, true);
+    assert!(refusal(&app).is_some());
+
+    send(&mut app, LibraryMessage::LibraryCreateOptionsToggleGit);
+
+    let modal = app
+        .library
+        .create_options
+        .as_ref()
+        .expect("the dialog stays open");
+    assert!(!modal.enable_git);
+    assert!(modal.refusal.is_none(), "Create is enabled again");
+
+    send(&mut app, LibraryMessage::LibraryCreateOptionsConfirm);
+    assert!(app.library.create_options.is_none(), "created without Git");
     assert_eq!(app.document_state.projects[0].pending_libraries.len(), 1);
 }

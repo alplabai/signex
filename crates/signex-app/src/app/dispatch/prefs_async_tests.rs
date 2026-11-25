@@ -50,8 +50,19 @@ fn is_save_writes_finished(message: &Message) -> bool {
     )
 }
 
+/// Puts mm back in the process-wide prefs file when dropped, so the mil
+/// this test writes does not stay for every later `Signex::new`.
+struct UnitPrefReset;
+
+impl Drop for UnitPrefReset {
+    fn drop(&mut self) {
+        crate::fonts::write_unit_pref(Unit::Mm);
+    }
+}
+
 #[test]
 fn cycling_the_unit_leaves_prefs_json_to_the_returned_task() {
+    let _reset = UnitPrefReset;
     let (mut app, _task) = Signex::new();
     crate::fonts::write_unit_pref(Unit::Mm);
     app.ui_state.unit = Unit::Mm;
@@ -129,7 +140,7 @@ fn saving_preferences_leaves_prefs_json_to_the_returned_tasks() {
 fn clearing_recent_projects_leaves_prefs_json_to_the_returned_task() {
     let (mut app, _task) = Signex::new();
     let seeded = vec![std::path::PathBuf::from("/signex-1351/a.snxprj")];
-    crate::fonts::write_recent_projects(&seeded);
+    crate::fonts::write_recent_projects_and_times(&seeded, &Default::default());
     app.ui_state.recent_projects =
         crate::recent_projects::RecentProjects::from_paths(seeded.clone());
 
@@ -279,6 +290,7 @@ fn blank_project() -> signex_types::project::ProjectData {
         sheets: Vec::new(),
         variant_definitions: Vec::new(),
         active_variant: None,
+        variant_settings: Default::default(),
         libraries: Vec::new(),
         enable_git: false,
         net_classes: Vec::new(),
@@ -287,7 +299,9 @@ fn blank_project() -> signex_types::project::ProjectData {
         schematic_defaults: Default::default(),
         project_defaults: Default::default(),
         agent_journal: Default::default(),
+        schematic_design: Default::default(),
         fab_outputs: None,
+        router_tool_diameter: None,
         requirements: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),

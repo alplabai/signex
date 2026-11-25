@@ -7,7 +7,7 @@ use signex_types::theme::ThemeTokens;
 
 use super::radii::Radii;
 use super::ti;
-use super::tokens::resolve;
+use super::tokens::{ResolvedTokens, resolve};
 
 /// Shadow of a floating surface: offset (0, 6), blur 20, the theme's
 /// shadow token.
@@ -59,7 +59,11 @@ pub fn pill(tokens: &ThemeTokens, tone: PillTone) -> impl Fn(&Theme) -> containe
 
 /// Keyboard key cap ("Ctrl K"): sunken fill, hairline border, small radius.
 pub fn key_cap(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style + 'static {
-    let r = resolve(tokens);
+    key_cap_of(resolve(tokens))
+}
+
+/// [`key_cap`] from tokens already resolved.
+pub fn key_cap_of(r: ResolvedTokens) -> impl Fn(&Theme) -> container::Style + 'static {
     let (bg, ink, line) = (r.sunken, r.ink3, r.line_soft);
     move |_| container::Style {
         background: Some(Background::Color(bg)),
@@ -67,7 +71,7 @@ pub fn key_cap(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style + 's
         border: Border {
             width: 1.0,
             color: line,
-            radius: 4.0.into(),
+            radius: Radii::GRAPHITE.key.into(),
             ..Border::default()
         },
         ..container::Style::default()

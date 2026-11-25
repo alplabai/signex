@@ -63,6 +63,18 @@ impl Signex {
         self.document_state.erc_fallback_noted.insert(id)
     }
 
+    /// Run ERC pressed in the dialog: close it and bring the ERC panel to
+    /// the front, so the run and then its results are in view (mockup row
+    /// 84). Nothing when the run came from elsewhere with the dialog shut.
+    pub(crate) fn close_erc_dialog_for_run(&mut self) -> Task<Message> {
+        if !self.ui_state.erc_dialog_open {
+            return Task::none();
+        }
+        let closed = self.handle_close_erc_dialog();
+        let shown = self.show_panel(crate::panels::PanelKind::Erc);
+        Task::batch([closed, shown])
+    }
+
     /// Start an ERC run. The disk reads and the rule pass run in
     /// `spawn_blocking`; [`Self::handle_erc_run_finished`] applies the result
     /// if no newer run superseded it (#111).
@@ -124,7 +136,12 @@ impl Signex {
             project_dir: ds.active_document_project().map(|p| p.dir().to_path_buf()),
             overrides,
             rule_set,
-            config: signex_erc::ErcConfig::with_pin_matrix_overrides(&pin_matrix_overrides),
+            config: signex_erc::ErcConfig::with_pin_matrix_overrides(&pin_matrix_overrides)
+                .with_harness_definitions(
+                    ds.active_document_project()
+                        .map(|p| p.data.schematic_design.harness_definitions.as_slice())
+                        .unwrap_or_default(),
+                ),
             net_waivers: ds
                 .active_document_project()
                 .and_then(|p| p.data.rules.as_ref())
@@ -134,6 +151,10 @@ impl Signex {
                 .active_document_project()
                 .and_then(|p| p.data.rules.as_ref())
                 .map(|r| r.erc_waivers.clone())
+                .unwrap_or_default(),
+            channel_naming: ds
+                .active_document_project()
+                .map(|p| crate::app::saved_channel_naming::SavedChannelNaming::of(&p.data))
                 .unwrap_or_default(),
             fold: crate::app::state::project_case::fold_of(ds.active_document_project()),
         };

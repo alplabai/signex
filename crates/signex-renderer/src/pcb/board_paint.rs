@@ -111,9 +111,23 @@ pub struct BoardPaint {
     colours: Vec<(PcbLayer, [u8; 3])>,
     /// Per [`BoardObject`], in percent: 0 opaque, 100 invisible.
     transparency: [u8; BoardObject::ALL.len()],
+    /// Show only unrouted is on (mockup row 164): the board is drawn faint
+    /// under its ratsnest. Set on a snapshot's paint only.
+    board_dimmed: bool,
 }
 
 impl BoardPaint {
+    /// This paint with the board drawn faint under its ratsnest, or not.
+    pub fn with_board_dimmed(mut self, dimmed: bool) -> Self {
+        self.board_dimmed = dimmed;
+        self
+    }
+
+    /// Whether the board is drawn faint under its ratsnest.
+    pub fn is_board_dimmed(&self) -> bool {
+        self.board_dimmed
+    }
+
     /// Whether the board view draws everything on `layer` in the colour
     /// given to it. Not yet for the keep-out layers: the board's keepout
     /// regions keep the palette colour.

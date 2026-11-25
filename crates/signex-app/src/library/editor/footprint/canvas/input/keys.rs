@@ -30,22 +30,72 @@ impl FootprintCanvas<'_> {
     /// v0.24 Track D — key handling: clipboard shortcuts, rotate / flip,
     /// then the Sketch-mode numeric placement input. `typed_char` is
     /// the first codepoint of the event's platform text (or None).
+    /// `repeat`: an OS auto-repeat of a held key.
     pub(in crate::library::editor::footprint::canvas) fn on_key_pressed(
         &self,
         key: &keyboard::Key,
         physical: keyboard::key::Physical,
         modifiers: &keyboard::Modifiers,
         typed_char: Option<char>,
+        repeat: bool,
     ) -> Option<canvas::Action<LibraryMessage>> {
+        if let Some(a) = self.key_canvas_overlay(key, modifiers, typed_char) {
+            return Some(a);
+        }
         // Letters match on any layout (#2095): Cyrillic `с` is `c`.
         let letter = crate::keymap::shortcut_char(key, physical);
         if let Some(a) = self.key_clipboard(letter, modifiers) {
             return Some(a);
         }
-        if let Some(a) = self.key_rotate_flip(key, letter, modifiers) {
+        if let Some(a) = self.key_rotate_flip(key, letter, modifiers, repeat) {
             return Some(a);
         }
         self.key_sketch_input(key, modifiers, typed_char)
+    }
+
+    /// The sketch canvas's overlays take the keyboard first (mockup row 187, mockup row 188):
+    /// a value edited on the drawing takes Enter (apply), Esc (cancel),
+    /// Backspace and typed characters, and swallows other plain keys so a
+    /// Delete or a tool letter does not act on the sketch underneath. An
+    /// open menu, else a selected pattern, closes on Esc. Keys with Ctrl,
+    /// Alt or the logo key, and every key outside Sketch mode, pass through.
+    fn key_canvas_overlay(
+        &self,
+        key: &keyboard::Key,
+        modifiers: &keyboard::Modifiers,
+        typed_char: Option<char>,
+    ) -> Option<canvas::Action<LibraryMessage>> {
+        use crate::library::editor::footprint::sketch_mode::SketchCanvasMsg;
+        use crate::library::editor::footprint::state::EditorMode;
+        use keyboard::key::Named;
+        let overlay = &self.state.sketch_overlay;
+        if self.state.mode != EditorMode::Sketch
+            || modifiers.command()
+            || modifiers.alt()
+            || modifiers.logo()
+        {
+            return None;
+        }
+        let escape = matches!(key, keyboard::Key::Named(Named::Escape));
+        let msg = if overlay.value_edit.is_some() {
+            match key {
+                keyboard::Key::Named(Named::Enter) => SketchCanvasMsg::ValueCommitted,
+                keyboard::Key::Named(Named::Escape) => SketchCanvasMsg::ValueEditCancelled,
+                keyboard::Key::Named(Named::Backspace) => SketchCanvasMsg::ValueErased,
+                _ => match typed_char.filter(|c| !c.is_control()) {
+                    Some(ch) => SketchCanvasMsg::ValueTyped(ch),
+                    None => return Some(canvas::Action::capture()),
+                },
+            }
+        } else if escape && overlay.menu.is_some() {
+            SketchCanvasMsg::MenuClosed
+        } else if escape && overlay.selected_pattern.is_some() {
+            SketchCanvasMsg::PatternSelected(None)
+        } else {
+            return None;
+        };
+        self.cache.clear();
+        Some(canvas::Action::publish(self.sketch_canvas_event(msg)).and_capture())
     }
 
     /// v0.26-F — Ctrl+X / Ctrl+C / Ctrl+V clipboard shortcuts.
@@ -84,12 +134,14 @@ impl FootprintCanvas<'_> {
 
     /// v0.26-G — Space (rotate 90°) / X (flip layer) on the selected
     /// pad. Altium parity; only fires when there's a pad to act on so
-    /// the canvas doesn't swallow Space / X from sketch tools.
+    /// the canvas doesn't swallow Space / X from sketch tools. A held X
+    /// flips once (docs/DECISIONS.md, "Held keys"); Space keeps repeating.
     fn key_rotate_flip(
         &self,
         key: &keyboard::Key,
         letter: Option<char>,
         modifiers: &keyboard::Modifiers,
+        repeat: bool,
     ) -> Option<canvas::Action<LibraryMessage>> {
         if !modifiers.command() && !modifiers.alt() {
             if matches!(key, keyboard::Key::Named(keyboard::key::Named::Space))
@@ -106,6 +158,9 @@ impl FootprintCanvas<'_> {
                 );
             }
             if letter == Some('x') && self.state.selected_pad.is_some() {
+                if repeat {
+                    return Some(canvas::Action::capture());
+                }
                 return Some(
                     canvas::Action::publish(LibraryMessage::EditorEvent {
                         library_path: self.address.library_path.clone(),

@@ -1,8 +1,8 @@
-//! Preferences dialog — Altium-style modal with left navigation + right content.
+//! Preferences dialog: the page list on the left, the open page on the
+//! right, the Apply / OK footer under both (mockup row 143).
 //!
-//! Opened via Tools > Preferences (or keyboard shortcut).
-//! Left side: tree of settings categories.
-//! Right side: settings panel for the selected category.
+//! Opened via Tools > Preferences (or keyboard shortcut). Every page draws
+//! on the `setting_row` grid.
 
 use crate::render_config::{GridStyle, PinSelectionMode};
 use iced::widget::{Space, Widget, column, container, row, scrollable};
@@ -22,22 +22,40 @@ mod distributors;
 mod editing;
 mod fast_grids;
 mod graphite_fields;
+#[cfg(test)]
+pub(crate) use graphite_fields::setting_labels;
 mod keycaps;
 mod keymap;
+mod language;
+mod pages_state;
+mod pages_view;
+pub(crate) use pages_view::controls::{GLYPH_EXPAND, GLYPH_SHRINK};
+mod pcb_defaults;
 mod profiles;
 mod schematic_display;
+mod setting_row;
 mod shell;
+mod system_general;
 mod theme_cards;
 mod widgets;
 
+pub use crate::app::core::rule_profile_page::{ProfileEditorTab, ProfileNameAction};
 use annotation::content_annotation;
 use appearance::content_appearance;
 use component_classes::content_component_classes;
+pub(crate) use component_classes::saved_classes;
+pub use component_classes::{ClassesViewMsg, ClassesViewState};
 use distributors::content_library_distributors;
 use editing::content_editing;
 use keymap::content_keyboard_shortcuts;
+pub use keymap::{KeymapViewMsg, KeymapViewState};
+use language::content_language;
+pub use pages_state::PreferencesPagesState;
+pub use pages_view::{PagesViewMsg, PagesViewState};
+pub use pcb_defaults::PcbDefaultsMsg;
+use pcb_defaults::content_pcb_defaults;
 use profiles::content_profiles;
-pub use profiles::{ProfileAction, ProfilesMsg};
+pub use profiles::{ProfileAction, ProfilePageMsg, ProfilesMsg};
 pub use schematic_display::BodyFillMsg;
 use schematic_display::{DisplayPage, content_schematic_display};
 
@@ -45,21 +63,28 @@ use schematic_display::{DisplayPage, content_schematic_display};
 // at their original module-local visibility so the shell here and every
 // section submodule keep resolving them through `use super::*`.
 pub(in crate::preferences) use widgets::{
-    danger_button_style, h_sep, muted_color, primary_button_style, secondary_button_style,
-    section_title, text_muted, text_primary, text_warning,
+    danger_button_style, text_muted, text_primary, text_warning,
 };
 
 // ─── Navigation Items ─────────────────────────────────────────
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PrefNav {
+    /// Theme, fonts, grids, rendering, scale, navigation and window.
     Appearance,
+    /// The interface language (mockup row 144a).
+    Language,
+    /// Settings that cover every editor: autosave of recovery copies and
+    /// agent connections (mockup row 147).
+    General,
     /// Schematic annotation settings (the undo scope of an annotate run).
     Annotation,
     /// Schematic editing behaviour (rubber-banding wires on move).
     Editing,
     /// How the schematic is drawn (symbol body fill).
     SchematicDisplay,
+    /// What a new board dimension starts from (#2868).
+    PcbDefaults,
     /// Keyboard-shortcut profile editor — pick / create / delete /
     /// import / export a profile and rebind individual commands via the
     /// chord recorder. Backed by `UiState::preferences_keymap_editor`.
@@ -69,51 +94,57 @@ pub enum PrefNav {
     RuleProfiles,
     /// v0.9 Library settings — Distributor APIs, lifecycle defaults.
     LibraryDistributors,
-    /// User-editable component-class registry — surfaces in the New
-    /// Component / Edit Component class dropdowns. Backed by
-    /// `prefs.json::component_classes`; defaults seed from
+    /// The component classes every new library is seeded with (the class
+    /// registry itself is per library, in each `.snxlib` manifest). Backed
+    /// by `prefs.json::component_classes`; defaults seed from
     /// `fonts::default_component_classes` on a fresh install.
     ComponentClasses,
-    // Future: Editor, ...
 }
 
 impl PrefNav {
+    /// The pages in nav order (mockup row 143): System, Schematic, PCB
+    /// (#2868), Validation, Library.
     pub const ALL: &'static [PrefNav] = &[
         PrefNav::Appearance,
+        PrefNav::Language,
         PrefNav::Keyboard,
+        PrefNav::General,
         PrefNav::Annotation,
         PrefNav::Editing,
         PrefNav::SchematicDisplay,
+        PrefNav::PcbDefaults,
         PrefNav::RuleProfiles,
         PrefNav::LibraryDistributors,
         PrefNav::ComponentClasses,
     ];
 
+    /// The English page name, which nav search also matches.
     pub fn label(self) -> &'static str {
         match self {
             PrefNav::Appearance => "Appearance",
+            PrefNav::Language => "Language",
             PrefNav::Annotation => "Annotation",
             PrefNav::Editing => "Editing",
             PrefNav::SchematicDisplay => "Display",
+            PrefNav::PcbDefaults => "PCB Defaults",
             PrefNav::Keyboard => "Keyboard Shortcuts",
+            PrefNav::General => "General",
             PrefNav::RuleProfiles => "Rule Profiles",
             PrefNav::LibraryDistributors => "Distributor APIs",
-            // Now a *seed* pane — the actual class registry is
-            // per-library inside each `.snxlib`'s manifest. This
-            // list is what every newly-created library gets seeded
-            // with, so users can establish a personal taxonomy
-            // baseline once and have new libraries inherit it.
-            PrefNav::ComponentClasses => "Default Component Classes",
+            PrefNav::ComponentClasses => "Component Classes",
         }
     }
 
     pub fn group(self) -> &'static str {
         match self {
             PrefNav::Appearance => "System",
+            PrefNav::Language => "System",
             PrefNav::Annotation => "Schematic",
             PrefNav::Editing => "Schematic",
             PrefNav::SchematicDisplay => "Schematic",
+            PrefNav::PcbDefaults => "PCB",
             PrefNav::Keyboard => "System",
+            PrefNav::General => "System",
             PrefNav::RuleProfiles => "Validation",
             PrefNav::LibraryDistributors => "Library",
             PrefNav::ComponentClasses => "Library",
@@ -162,12 +193,22 @@ pub enum PrefMsg {
     DraftDragDirectionSelect(bool),
     /// Toggle "Show net info on hover". Persisted on Save.
     DraftNetHoverEnabled(bool),
+    /// Toggle "Pan at the canvas edge" (#2872). Persisted on Save.
+    DraftEdgePanEnabled(bool),
+    /// Choose the edge pan speed. Persisted on Save.
+    DraftEdgePanSpeed(crate::app::edge_pan::EdgePanSpeed),
     /// The "Fill symbol bodies" rows changed. Persisted on Save.
     SymbolBodyFill(BodyFillMsg),
+    /// A PCB Defaults row changed (#2868). Persisted on Save.
+    PcbDefaults(PcbDefaultsMsg),
     /// Toggle "Two-finger scroll pans". Persisted on Save.
     DraftTrackpadPan(bool),
     /// Choose "Mouse wheel": zoom or scroll the view. Persisted on Save.
     DraftWheelMode(crate::canvas::WheelMode),
+    /// Choose "Layer switcher": the strip or a dropdown. Persisted on Save.
+    DraftLayerSwitcher(crate::layer_strip_prefs::LayerSwitcher),
+    /// Choose "Selected option": Neutral or Accent. Persisted on Save.
+    DraftSelectedSegment(signex_types::theme::SelectedSegmentLook),
     /// Toggle "Remember window size and position". Persisted on Save.
     DraftRememberWindowGeometry(bool),
     /// Move the "Increment step" (-100..=100, never 0). Persisted on Save.
@@ -197,6 +238,9 @@ pub enum PrefMsg {
     DraftUiScalePercent(u16),
     /// Update the symbol-editor pin-selection mode (persisted on change).
     DraftSymbolPinSelection(PinSelectionMode),
+    /// Choose the interface language (mockup row 144a). A draft: Save switches every
+    /// window to it, with no restart; Discard drops it.
+    DraftLanguage(signex_i18n::LanguagePref),
     /// Rule Profiles pane (#1608). Its edits are written to the profile
     /// files at once, so they are not drafts and never mark the dialog dirty.
     Profiles(ProfilesMsg),
@@ -205,6 +249,15 @@ pub enum PrefMsg {
     /// only from the banner, and the handler re-checks the file before
     /// acting: a healthy file is never moved.
     ResetPrefsFile,
+    /// The broken-file banner's Open folder: show the folder that holds
+    /// `prefs.json` in the file manager (mockup row 143).
+    PrefsFolderOpenRequested,
+    /// The Appearance and Editing pages' view state.
+    PagesView(PagesViewMsg),
+    /// The Keyboard shortcuts page's view state.
+    KeymapView(KeymapViewMsg),
+    /// The Component Classes page's view state.
+    ClassesView(ClassesViewMsg),
     /// Library → Distributor APIs pane forwarded a settings message.
     /// Folded into `PrefMsg` so the Preferences modal can mount the
     /// live panel as a first-class pane without breaking the
@@ -290,7 +343,6 @@ pub enum PrefMsg {
     /// Apply the recorded chord to the binding under edit.
     KeymapRecorderApply,
 }
-// ─── Public view ──────────────────────────────────────────────
 
 // ─── Render inputs ────────────────────────────────────────────
 
@@ -318,12 +370,17 @@ pub struct PrefsView<'a> {
     pub draft_annotate_undo: crate::annotate_undo::AnnotateUndo,
     pub draft_move_keeps_wires: bool,
     pub draft_net_hover_enabled: bool,
+    pub draft_edge_pan: crate::app::edge_pan::EdgePanPrefs,
     pub draft_symbol_body_fill: crate::symbol_fill_prefs::SymbolBodyFill,
     /// The fill colour field's preset palette and custom picker are open.
     pub body_fill_palette_open: bool,
     pub body_fill_picker_open: bool,
+    /// The PCB Defaults draft (#2868).
+    pub draft_pcb_defaults: &'a crate::pcb_defaults_prefs::PcbDefaultsDraft,
     pub draft_trackpad_pan: bool,
     pub draft_wheel_mode: crate::canvas::WheelMode,
+    pub draft_layer_switcher: crate::layer_strip_prefs::LayerSwitcher,
+    pub draft_selected_segment: signex_types::theme::SelectedSegmentLook,
     pub draft_remember_window_geometry: bool,
     pub draft_drag_direction_select: bool,
     pub draft_increment_step: i32,
@@ -335,6 +392,22 @@ pub struct PrefsView<'a> {
     pub draft_agent_connections_enabled: bool,
     /// The language the labels read in.
     pub i18n: &'a signex_i18n::I18n,
+    /// The drafted interface language (mockup row 144a).
+    pub draft_language: &'a signex_i18n::LanguagePref,
+    /// The drafted language's catalog, built in `update`, for the Language
+    /// page's preview.
+    pub language_preview: &'a signex_i18n::I18n,
+    /// Name of the language "Follow the system" resolves to, read in
+    /// `update` when the dialog opens.
+    pub system_language_name: &'a str,
+    /// The pages with unsaved changes, for the nav's dots.
+    pub dirty_pages: &'a [PrefNav],
+    /// View state of the Appearance and Editing pages.
+    pub pages_view: &'a PagesViewState,
+    /// View state of the Keyboard shortcuts page.
+    pub keymap_view: &'a KeymapViewState,
+    /// View state of the Component Classes page.
+    pub classes_view: &'a ClassesViewState,
     pub draft_symbol_grid_size_mm: f32,
     /// Text of the Fast grid 1 and Fast grid 2 fields (#1672).
     pub draft_fast_grids: &'a [String; 2],
@@ -346,6 +419,10 @@ pub struct PrefsView<'a> {
     pub draft_ui_scale_percent: u16,
     pub dirty: bool,
     pub profiles: &'a crate::app::rule_profile_ui::ProfileManager,
+    /// A profile edit is still on its way to its file.
+    pub profiles_saving: bool,
+    /// Why edits of `User Default` are not reaching its file, if they are not.
+    pub machine_rules_issue: Option<crate::app::rule_profile_ui::MachineRulesIssue<'a>>,
     /// The profile new projects start from; `None` is automatic.
     pub default_profile: Option<&'a str>,
     pub distributor_settings: &'a crate::library::state::DistributorSettings,
@@ -384,11 +461,6 @@ pub struct PrefsView<'a> {
 // ─── Dialog entry points ──────────────────────────────────────
 
 /// Build the full-screen backdrop + centred dialog.
-///
-/// * `draft_theme`      — theme currently selected in the dialog (not yet saved)
-/// * `saved_theme`      — the committed theme (used to detect unsaved changes)
-/// * `draft_font`       — UI font name pending save
-/// * `dirty`            — whether there are unsaved changes
 pub fn view<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     let panel_tokens = v.panel_tokens;
     let dialog = build_dialog(v, true);
@@ -434,47 +506,27 @@ fn build_dialog<'a>(v: PrefsView<'a>, with_header: bool) -> Element<'a, PrefMsg>
 
 // ─── Right content ────────────────────────────────────────────
 
+/// The open page in a scroller over the page background. Each page draws
+/// its own heading, intro and sections on the `setting_row` grid.
 fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     let PrefsView {
         nav,
-        draft_annotate_undo,
-        draft_move_keeps_wires,
-        draft_net_hover_enabled,
-        draft_drag_direction_select,
-        draft_increment_step,
-        draft_paste_designators,
-        draft_autosave_enabled,
-        draft_agent_connections_enabled,
         i18n,
         profiles,
+        profiles_saving,
+        machine_rules_issue,
         default_profile,
-        distributor_settings,
         panel_tokens,
-        draft_component_classes,
-        keymap_editor,
-        keymap_status,
-        keymap_load_error,
-        keymap_backup,
-        keymap_search,
-        keymap_recorder,
         ..
     } = v;
 
     let inner = match nav {
         PrefNav::Appearance => content_appearance(v),
-        PrefNav::Annotation => content_annotation(draft_annotate_undo, i18n),
-        PrefNav::Editing => content_editing(
-            draft_move_keeps_wires,
-            draft_net_hover_enabled,
-            draft_drag_direction_select,
-            draft_increment_step,
-            draft_paste_designators,
-            draft_autosave_enabled,
-            editing::AgentConnectionsRow {
-                draft_enabled: draft_agent_connections_enabled,
-                i18n,
-            },
-        ),
+        PrefNav::Language => content_language(v),
+        PrefNav::Keyboard => content_keyboard_shortcuts(v),
+        PrefNav::General => system_general::content_general(v),
+        PrefNav::Annotation => content_annotation(v),
+        PrefNav::Editing => content_editing(v),
         PrefNav::SchematicDisplay => content_schematic_display(DisplayPage {
             draft: v.draft_symbol_body_fill,
             // The tint of the theme the dialog is showing.
@@ -484,32 +536,22 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             tokens: panel_tokens,
             i18n,
         }),
-        PrefNav::RuleProfiles => content_profiles(profiles, default_profile, panel_tokens, i18n),
-        // Library → Distributor APIs — the library subsystem owns
-        // the actual form
-        // (`crate::library::settings::distributor_apis::view`); we
-        // re-emit its `LibraryMessage::Settings(_)` wrapper as
-        // `PrefMsg::LibrarySettings(_)` so the Preferences modal's
-        // single message bus stays cohesive. The handler in
-        // `app/handlers/preferences.rs` re-dispatches via
-        // `Message::Library` to keep the canonical settings state on
-        // `LibraryState.settings`.
-        PrefNav::LibraryDistributors => {
-            content_library_distributors(distributor_settings, panel_tokens, i18n)
-        }
-        PrefNav::Keyboard => content_keyboard_shortcuts(
-            i18n,
-            keymap_editor,
-            keymap::KeymapFeedback {
-                status: keymap_status,
-                load_error: keymap_load_error,
-                backup: keymap_backup,
-            },
-            keymap_search,
-            keymap_recorder,
+        PrefNav::PcbDefaults => content_pcb_defaults(v.draft_pcb_defaults, panel_tokens, i18n),
+        PrefNav::RuleProfiles => content_profiles(
+            profiles,
+            profiles_saving,
+            machine_rules_issue,
+            default_profile,
             panel_tokens,
+            i18n,
         ),
-        PrefNav::ComponentClasses => content_component_classes(draft_component_classes, i18n),
+        // The library subsystem owns the Distributor APIs form; the page
+        // re-emits its `LibraryMessage::Settings(_)` as
+        // `PrefMsg::LibrarySettings(_)`, and the handler re-dispatches it
+        // through `Message::Library` so the settings stay on
+        // `LibraryState.settings`.
+        PrefNav::LibraryDistributors => content_library_distributors(v),
+        PrefNav::ComponentClasses => content_component_classes(v),
     };
 
     container(
@@ -527,116 +569,138 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     .boxed()
 }
 
-/// Dialog-wide alert strip for a `prefs.json` that could not be loaded,
-/// carrying the result of the recovery action once it has run (#602).
+/// The broken-file banner (#602, mockup row 143): full width under the header, in the
+/// error tone. It names the file and the loader's reason, says what is
+/// showing defaults, and offers Start a fresh preferences file and Open
+/// folder. After the recovery action it carries that action's result.
 ///
-/// `None` — and therefore a dialog byte-for-byte what it is today — is
-/// the healthy case: nothing to report and nothing to offer. That is the
-/// acceptance criterion "with a healthy `prefs.json`, nothing about the
-/// current behaviour changes".
-///
-/// Same alert-strip shape as [`build_footer`]: a `background.weak` fill
-/// with a `background.strong` hairline, every colour resolved from the
-/// theme rather than hardcoded, so it reads on light and dark palettes.
-/// The button is [`secondary_button_style`] and not `danger_button_style`
-/// on purpose — the action is neutral. Nothing is deleted; the file the
-/// user may still want is renamed, not removed.
+/// `None` — a dialog without the banner — is the healthy case: nothing to
+/// report and nothing to offer.
 fn build_prefs_file_banner<'a>(
     load_error: Option<&'a str>,
     status: &'a str,
     i18n: &signex_i18n::I18n,
+    t: &signex_types::theme::ThemeTokens,
 ) -> Option<Element<'a, PrefMsg>> {
+    use crate::styles::{PillTone, Radii, chrome_px, pill_colors, ti, tokens};
+    use setting_row::{StatusGlyph, semibold, small_button_style, status_glyph};
     use signex_i18n::{ids, t};
     if load_error.is_none() && status.is_empty() {
         return None;
     }
+    let r = tokens::resolve(t);
+    let ink = ti(t.text);
+    let (glyph, tone) = if load_error.is_some() {
+        (StatusGlyph::Warn, PillTone::Err)
+    } else {
+        (StatusGlyph::Info, PillTone::Info)
+    };
+    let (fill, tone_ink) = pill_colors(t, tone);
 
-    // `Length::Fill`, and no `Space` spacer beside it. `iced`'s flex pass
-    // lays non-`Fill` children out in source order, subtracting each
-    // measured width from what is left, and only serves `Fill` children
-    // from the remainder afterwards. A `Shrink` text column therefore
-    // measures against the dialog's whole inner width first and leaves
-    // the button a ~37px sliver on the 900px detached Preferences window,
-    // with its label wrapped to five lines and the spacer given 0px.
-    // Making the text the fluid child inverts that: the button is the
-    // only `Shrink` child in the first pass, takes its natural width, and
-    // the text wraps into what remains.
-    let mut lines = column![].spacing(SP.s).width(Length::Fill);
+    let mut lines = column![].spacing(SP.xs).width(Length::Fill);
     if let Some(error) = load_error {
         // Name the real file, resolved through the same accessor the
-        // probe and the recovery use, so the path the user is told to
-        // repair is the path the app actually reads and writes.
+        // probe and the recovery use, so the path the user is told about
+        // is the path the app actually reads and writes.
         let path = crate::fonts::prefs_file_path().display().to_string();
+        lines = lines.push(
+            text(t!(i18n, ids::PREFERENCES_FILE_BROKEN))
+                .size(TS.body)
+                .font(semibold())
+                .color(ink)
+                .boxed(),
+        );
         // $error is the loader's English reason (#2061).
         lines = lines.push(
-            text(t!(
-                i18n,
-                ids::PREFERENCES_FILE_BROKEN,
-                "path" => path,
-                "error" => error
-            ))
-            .size(TS.body)
-            .style(text_warning),
+            text(t!(i18n, ids::PREFERENCES_FILE_WHERE, "path" => path, "error" => error))
+                .size(chrome_px(11.5 * 11.0 / 12.0))
+                .font(crate::fonts::iced_font_for_family(
+                    crate::fonts::CHROME_MONO_FONT,
+                ))
+                .color(ink)
+                .boxed(),
         );
-        // Scoped to what `prefs.json` actually backs. The banner spans
-        // the whole dialog, and two of the panes it covers persist
-        // elsewhere: Keyboard Shortcuts through `keyboard_shortcuts.toml`
-        // and Library Distributors through `distributors.toml`. Claiming
-        // "nothing you change is being saved" there is false, and on the
-        // Distributors pane it invites a user to re-enter API keys that
-        // did save.
+        // Scoped to what `prefs.json` actually backs: Keyboard Shortcuts
+        // (`keyboard_shortcuts.toml`) and Distributor APIs
+        // (`distributors.toml`) still save.
         lines = lines.push(
             text(t!(i18n, ids::PREFERENCES_FILE_DEFAULTS))
                 .size(TS.caption)
-                .style(text_muted),
+                .color(r.ink4)
+                .boxed(),
         );
     }
     if !status.is_empty() {
         // raw: the recovery result is set by its handler (#2061: handler-worded state text).
-        lines = lines.push(text(raw(status)).size(TS.caption).style(text_muted));
+        lines = lines.push(text(raw(status)).size(TS.caption).color(ink).boxed());
     }
-
-    let mut strip = row![lines].spacing(SP.xl).align_y(iced::Alignment::Center);
     // Offered only while the file is actually broken: once it loads, the
-    // banner is a result line and there is nothing left to reset.
+    // banner is a result line and there is nothing left to act on.
     if load_error.is_some() {
-        strip = strip.push(
-            button(text(t!(i18n, ids::PREFERENCES_FILE_START_FRESH)).size(TS.body))
-                .padding([7, 14])
-                .on_press(PrefMsg::ResetPrefsFile)
-                // NOT `secondary_button_style` — that fills with
-                // `background.weak`, which is exactly this strip's own
-                // fill, so the button was the same colour as the surface
-                // under it and read as a bare outline. Its hover tone,
-                // `background.strong`, is this strip's border colour, so
-                // hovering merged it with its own frame. `primary` is the
-                // one tone that contrasts on `background.weak` — and this
-                // is the single action the whole strip exists to offer.
-                .style(primary_button_style)
-                .boxed(),
+        let small = |label: signex_i18n::Localized, msg: PrefMsg| {
+            button(
+                container(text(label).size(TS.caption).color(ink))
+                    .height(Length::Fill)
+                    .align_y(iced::alignment::Vertical::Center),
+            )
+            .padding([0.0, SP.m])
+            .height(Length::Fixed(chrome_px(22.0 * 11.0 / 12.0)))
+            .on_press(msg)
+            .style(small_button_style(t))
+            .boxed()
+        };
+        lines = lines.push(
+            container(
+                row![
+                    small(
+                        t!(i18n, ids::PREFERENCES_FILE_START_FRESH),
+                        PrefMsg::ResetPrefsFile
+                    ),
+                    small(
+                        t!(i18n, ids::PREFERENCES_FILE_OPEN_FOLDER),
+                        PrefMsg::PrefsFolderOpenRequested
+                    ),
+                ]
+                .spacing(SP.s + SP.xs),
+            )
+            .padding(iced::Padding {
+                top: SP.s + SP.xs,
+                ..iced::Padding::ZERO
+            })
+            .boxed(),
         );
     }
 
+    let strip = container(
+        row![
+            container(status_glyph(glyph, tone_ink)).padding(iced::Padding {
+                top: 1.0,
+                ..iced::Padding::ZERO
+            }),
+            lines,
+        ]
+        .spacing(SP.m)
+        .align_y(iced::Alignment::Start),
+    )
+    .padding([SP.m, chrome_px(10.0 * 11.0 / 12.0)])
+    .width(Length::Fill)
+    .style(move |_: &Theme| container::Style {
+        background: Some(Background::Color(fill)),
+        border: Border {
+            radius: Radii::GRAPHITE.button.into(),
+            ..Border::default()
+        },
+        ..container::Style::default()
+    });
     Some(
         container(strip)
-            .width(Length::Fill)
-            // Vertical padding, unlike `build_footer`'s `[0, 16]`: that
-            // strip is one line inside a fixed `FOOTER_H`, this one grows
-            // to two or three wrapped lines and would otherwise sit flush
-            // against the divider above and the nav column below.
-            .padding([SP.l, SP.xl])
-            .style(move |theme: &Theme| {
-                let palette = theme.palette();
-                container::Style {
-                    background: Some(Background::Color(palette.background.weak.color)),
-                    border: Border {
-                        width: 1.0,
-                        color: palette.background.strong.color,
-                        ..Border::default()
-                    },
-                    ..container::Style::default()
-                }
+            .padding(iced::Padding {
+                top: SP.m,
+                right: SP.l,
+                bottom: 0.0,
+                left: SP.l,
             })
+            .width(Length::Fill)
             .boxed(),
     )
 }

@@ -12,15 +12,7 @@ impl Signex {
                 self.finish_update()
             }
             TextEditMsg::Submit => {
-                // An editor opened from an undocked window commits on that
-                // window's sheet; the untagged Submit would find main's.
-                let window = self
-                    .interaction_state
-                    .editing_text
-                    .as_ref()
-                    .and_then(|state| state.sheet.as_deref())
-                    .and_then(|sheet| self.undocked_window_of_other_sheet(sheet));
-                if let Some(window) = window {
+                if let Some(window) = self.text_edit_undocked_window() {
                     return self.run_in_window_document(window, |app| {
                         app.dispatch_text_edit_message(TextEditMsg::Submit)
                     });
@@ -34,6 +26,25 @@ impl Signex {
                 let focus = self.request_text_edit(target);
                 Task::batch([focus, self.finish_update()])
             }
+            TextEditMsg::NextFieldRequested => {
+                if let Some(window) = self.text_edit_undocked_window() {
+                    return self.run_in_window_document(window, |app| {
+                        app.dispatch_text_edit_message(TextEditMsg::NextFieldRequested)
+                    });
+                }
+                let focus = self.advance_text_edit();
+                Task::batch([focus, self.finish_update()])
+            }
         }
+    }
+
+    /// The undocked window an open editor belongs to: its commit runs on
+    /// that window's sheet, as an untagged message would find main's.
+    fn text_edit_undocked_window(&self) -> Option<iced::window::Id> {
+        self.interaction_state
+            .editing_text
+            .as_ref()
+            .and_then(|state| state.sheet.as_deref())
+            .and_then(|sheet| self.undocked_window_of_other_sheet(sheet))
     }
 }

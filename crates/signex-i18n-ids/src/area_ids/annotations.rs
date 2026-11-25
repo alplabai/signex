@@ -1,0 +1,62 @@
+//! Ids of `locales/en-US/annotations.ftl`: the Annotations panel (mockup row 165).
+
+define_ids! {
+    ANNOTATIONS;
+    PANELS_KIND_ANNOTATIONS = "panels-kind-annotations";
+    ANNOTATIONS_SEARCH = "annotations-search";
+    ANNOTATIONS_REFRESH = "annotations-refresh";
+    ANNOTATIONS_KIND_NOTE = "annotations-kind-note";
+    ANNOTATIONS_KIND_CALCULATION = "annotations-kind-calculation";
+    ANNOTATIONS_KIND_MEASUREMENT = "annotations-kind-measurement";
+    ANNOTATIONS_KIND_ISSUE = "annotations-kind-issue";
+    ANNOTATIONS_KIND_DECISION = "annotations-kind-decision";
+    ANNOTATIONS_PART_ANY = "annotations-part-any";
+    ANNOTATIONS_STATUS_ANY = "annotations-status-any";
+    ANNOTATIONS_DATE_ANY = "annotations-date-any";
+    ANNOTATIONS_DATE_LAST_7 = "annotations-date-last-7";
+    ANNOTATIONS_DATE_LAST_30 = "annotations-date-last-30";
+    ANNOTATIONS_CLEAR_FILTER = "annotations-clear-filter";
+    ANNOTATIONS_STATUS_OPEN = "annotations-status-open";
+    ANNOTATIONS_STATUS_RESOLVED = "annotations-status-resolved";
+    ANNOTATIONS_STATUS_PROPOSED = "annotations-status-proposed";
+    ANNOTATIONS_STATUS_ACCEPTED = "annotations-status-accepted";
+    ANNOTATIONS_STATUS_SUPERSEDED = "annotations-status-superseded";
+    ANNOTATIONS_STATUS_PLANNED = "annotations-status-planned";
+    ANNOTATIONS_STATUS_DONE = "annotations-status-done";
+    ANNOTATIONS_STATUS_CURRENT = "annotations-status-current";
+    ANNOTATIONS_STATUS_STALE = "annotations-status-stale";
+    ANNOTATIONS_FILE_COUNT = "annotations-file-count";
+    ANNOTATIONS_JUMP_TO_SCHEMATIC = "annotations-jump-to-schematic";
+    ANNOTATIONS_JUMP_TO = "annotations-jump-to";
+    ANNOTATIONS_PART_DELETED = "annotations-part-deleted";
+    ANNOTATIONS_SOURCE_AT = "annotations-source-at";
+    ANNOTATIONS_FOOTER_SHOWN = "annotations-footer-shown";
+    ANNOTATIONS_FOOTER_FILES = "annotations-footer-files";
+    ANNOTATIONS_EMPTY_TITLE = "annotations-empty-title";
+    ANNOTATIONS_EMPTY_BODY = "annotations-empty-body";
+    ANNOTATIONS_NO_MATCH = "annotations-no-match";
+    ANNOTATIONS_NONE_YET = "annotations-none-yet";
+    ANNOTATIONS_NO_PROJECT = "annotations-no-project";
+    ANNOTATIONS_READING = "annotations-reading";
+    ANNOTATIONS_UNAVAILABLE = "annotations-unavailable";
+    ANNOTATIONS_READ_FAILED = "annotations-read-failed";
+    ANNOTATIONS_NOT_UTF8 = "annotations-not-utf8";
+    ANNOTATIONS_PROBLEM_UNCLOSED_FRONT_MATTER = "annotations-problem-unclosed-front-matter";
+    ANNOTATIONS_PROBLEM_MISSING_KIND = "annotations-problem-missing-kind";
+    ANNOTATIONS_PROBLEM_UNKNOWN_KIND = "annotations-problem-unknown-kind";
+    ANNOTATIONS_PROBLEM_UNKNOWN_STATUS = "annotations-problem-unknown-status";
+    ANNOTATIONS_PROBLEM_BAD_DATE = "annotations-problem-bad-date";
+    ANNOTATIONS_PROBLEM_UNKNOWN_ARGUMENT = "annotations-problem-unknown-argument";
+    ANNOTATIONS_PROBLEM_NOT_TEXT = "annotations-problem-not-text";
+    ANNOTATIONS_PROBLEM_MISSING_BODY = "annotations-problem-missing-body";
+    ANNOTATIONS_PROBLEM_UNBALANCED_BLOCK = "annotations-problem-unbalanced-block";
+    ANNOTATIONS_PROBLEM_UNCLOSED = "annotations-problem-unclosed";
+    ANNOTATIONS_PROBLEM_BAD_REFERENCE = "annotations-problem-bad-reference";
+    ANNOTATIONS_JUMP_GONE = "annotations-jump-gone";
+    ANNOTATIONS_JUMP_DESIGN_UNREAD = "annotations-jump-design-unread";
+    ANNOTATIONS_JUMP_NET_READING = "annotations-jump-net-reading";
+    ANNOTATIONS_JUMP_NET_UNKNOWN = "annotations-jump-net-unknown";
+    ANNOTATIONS_JUMP_NET_OPEN_SHEET = "annotations-jump-net-open-sheet";
+    // annotations-panel
+    ANNOTATIONS_NEW_NEEDS_NOTEBOOK = "annotations-new-needs-notebook";
+}

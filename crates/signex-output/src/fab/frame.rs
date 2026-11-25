@@ -10,9 +10,11 @@ const MILLION: i64 = 1_000_000;
 /// The fabrication frame of one board: x to the right and y up, in nm from
 /// the board origin (#2384), the coordinates the board shows. The board
 /// model's y grows down the screen, so the frame mirrors it about the
-/// origin; this is the one place that rule lives.
+/// origin; this is the one place that rule lives. Public so a reader of
+/// the files (the Gerber viewer's Compare with board) places the board in
+/// the same frame instead of deciding it again.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct FabFrame {
+pub struct FabFrame {
     pub(crate) origin: PointNm,
 }
 
@@ -20,19 +22,19 @@ impl FabFrame {
     /// The frame of `board`. An origin the geometry cannot hold (not
     /// finite, or beyond 1 km) counts from the model's zero, as a board
     /// saved without one does.
-    pub(crate) fn of(board: &PcbBoard) -> Self {
+    pub fn of(board: &PcbBoard) -> Self {
         let origin =
             PointNm::from_mm(board.options.origin.at, "board.origin").unwrap_or(PointNm::new(0, 0));
         FabFrame { origin }
     }
 
     /// A model point in the frame.
-    pub(crate) fn point(self, model: PointNm) -> PointNm {
+    pub fn point(self, model: PointNm) -> PointNm {
         PointNm::new(model.x - self.origin.x, self.origin.y - model.y)
     }
 
     /// A model point in mm, in the frame.
-    pub(crate) fn of_mm(self, model: Point, what: &'static str) -> Result<PointNm, GeomError> {
+    pub fn of_mm(self, model: Point, what: &'static str) -> Result<PointNm, GeomError> {
         Ok(self.point(PointNm::from_mm(model, what)?))
     }
 }

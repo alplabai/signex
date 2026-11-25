@@ -99,8 +99,8 @@ fn align_and_shapes_have_expected_shape() {
     assert_eq!(items(&a).len(), 9);
     assert_eq!(seps(&a), 2);
     let s = render(signex_i18n::I18n::en_us_ref(), SHAPES, TID, true, true);
-    assert_eq!(items(&s).len(), 10);
-    assert_eq!(seps(&s), 2);
+    assert_eq!(items(&s).len(), 13);
+    assert_eq!(seps(&s), 3);
 }
 
 #[test]
@@ -128,8 +128,152 @@ fn net_color_swatches_and_gated_clear_rows() {
 fn filter_menu_is_a_single_custom_entry() {
     let tokens = signex_types::theme::theme_tokens(TID);
     let filters = std::collections::HashSet::new();
-    let entry = filter_entry(&tokens, &filters, &[]);
+    let entry = filter_entry(
+        signex_i18n::I18n::en_us_ref(),
+        &tokens,
+        &no_presets(&filters),
+    );
     assert!(matches!(entry, DropdownEntry::Custom(_)));
+}
+
+/// The schematic filter `filters` with no saved preset.
+fn no_presets(filters: &std::collections::HashSet<SelectionFilter>) -> SchematicFilterState<'_> {
+    SchematicFilterState {
+        filters,
+        presets: &[],
+        editing: None,
+    }
+}
+
+/// Mockup row 61: the Selection Filter is a compact card with All / None,
+/// every chip and Save current inside it, in both themes.
+#[test]
+fn the_filter_menu_is_a_compact_card_holding_its_controls() {
+    let width = dropdown_min_width(ActiveBarMenu::Filter).expect("a pinned width");
+    for tid in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+        let tokens = signex_types::theme::theme_tokens(tid);
+        let filters = std::collections::HashSet::new();
+        let entry = filter_entry(
+            signex_i18n::I18n::en_us_ref(),
+            &tokens,
+            &no_presets(&filters),
+        );
+        let card = signex_widgets::active_bar_dropdown::view(vec![entry], &tokens, Some(width));
+        let texts = crate::layout_probe::lay_out_texts(card, iced::Size::new(1440.0, 900.0));
+        for label in ["All", "None", "Sheet Symbols", "Other", "Save current"] {
+            let bounds = crate::layout_probe::find(&texts, label).bounds;
+            assert!(bounds.x + bounds.width <= width, "{label}: {bounds:?}");
+        }
+    }
+}
+
+/// Graphite mockup #61: the Power menu groups its ports under three subheads, labels each
+/// with the short name and keeps the full "Place … power port" text as the
+/// row's tooltip; every port glyph is drawn in the power colour.
+#[test]
+fn power_menu_has_subheads_short_labels_and_full_tooltips() {
+    let i18n = signex_i18n::I18n::en_us_ref();
+    for tid in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+        let e = render(i18n, POWER, tid, false, false);
+        let heads: Vec<&str> = e
+            .iter()
+            .filter_map(|e| match e {
+                DropdownEntry::Header(h) => Some(h.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(heads, ["Common", "Styles", "Grounds"]);
+        assert_eq!(seps(&e), 0);
+        let ink = signex_widgets::theme_ext::power_port(&signex_types::theme::canvas_colors(tid));
+        for entry in &e {
+            let DropdownEntry::Item(it) = entry else {
+                continue;
+            };
+            assert!(!it.label.starts_with("Place"), "{}", it.label);
+            let tip = it.tooltip.as_deref().unwrap_or_default();
+            assert!(
+                tip.starts_with("Place") && tip.contains(&it.label) && tip.ends_with("power port"),
+                "{} -> {tip}",
+                it.label
+            );
+            assert_eq!(it.icon_tint, Some(ink), "{}", it.label);
+        }
+    }
+}
+
+/// No group holds only planned tools, so every group opens its menu: the
+/// Harness group's tools are live (#1280). The bar and its slot table have
+/// no greyed, menu-less group, so a group of only planned tools fails here.
+#[test]
+fn no_group_is_planned() {
+    use ActiveBarMenu as M;
+    for menu in [
+        M::Filter,
+        M::SelectMode,
+        M::Select,
+        M::Align,
+        M::Wiring,
+        M::Power,
+        M::Harness,
+        M::SheetSymbol,
+        M::Port,
+        M::Directives,
+        M::TextTools,
+        M::Shapes,
+        M::NetColor,
+    ] {
+        assert!(!is_planned_menu(menu), "{menu:?}");
+    }
+}
+
+/// The table rows carry the active profile's key for their command.
+#[test]
+fn wiring_rows_show_the_profiles_keys() {
+    let wire_id = crate::app::command::active_bar::id_for_action(&ActiveBarAction::DrawWire)
+        .expect("wire has a command");
+    let hint = |id: &str| {
+        if id == wire_id {
+            "W".to_string()
+        } else {
+            String::new()
+        }
+    };
+    let e = render_with_hints(
+        signex_i18n::I18n::en_us_ref(),
+        WIRING,
+        TID,
+        false,
+        false,
+        &hint,
+    );
+    let DropdownEntry::Item(wire) = &e[0] else {
+        panic!("wire row");
+    };
+    assert_eq!(wire.shortcut.as_deref(), Some("W"));
+    let DropdownEntry::Item(bus) = &e[1] else {
+        panic!("bus row");
+    };
+    assert_eq!(bus.shortcut, None, "an unbound command shows no key");
+}
+
+/// "Save current" saves the active set while there is room for a preset,
+/// and is inert at the limit.
+#[test]
+fn save_current_is_offered_until_the_preset_limit() {
+    let message = |n: usize| {
+        let presets: Vec<CustomFilterPreset> = (0..n)
+            .map(|i| CustomFilterPreset {
+                name: format!("P{i}"),
+                filters: vec![],
+            })
+            .collect();
+        custom::save_current_message(&presets)
+    };
+    assert!(matches!(
+        message(0),
+        Some(ActiveBarMsg::FilterPresetSavePicked)
+    ));
+    assert!(message(crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT).is_none());
 }
 
 /// Stable serializer for `DropdownEntry` rows, used by the
@@ -452,20 +596,21 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
         false,
         false,
         &[
-            "ITEM:Place GND power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place VCC power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place +12 power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place +5 power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place -5 power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "SEP",
-            "ITEM:Place Arrow style power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Wave style power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Bar style power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Circle style power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "SEP",
-            "ITEM:Place Signal Ground power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Earth power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Chassis power port|disabled=false|icon=true|checked=false|shortcut=None",
+            "HEADER:Common",
+            "ITEM:GND|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:VCC|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:+12|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:+5|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:-5|disabled=false|icon=true|checked=false|shortcut=None",
+            "HEADER:Styles",
+            "ITEM:Arrow|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Wave|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Bar|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Circle|disabled=false|icon=true|checked=false|shortcut=None",
+            "HEADER:Grounds",
+            "ITEM:Signal Ground|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Earth|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Chassis|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
     (
@@ -473,20 +618,21 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
         false,
         true,
         &[
-            "ITEM:Place GND power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place VCC power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place +12 power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place +5 power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place -5 power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "SEP",
-            "ITEM:Place Arrow style power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Wave style power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Bar style power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Circle style power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "SEP",
-            "ITEM:Place Signal Ground power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Earth power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Chassis power port|disabled=false|icon=true|checked=false|shortcut=None",
+            "HEADER:Common",
+            "ITEM:GND|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:VCC|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:+12|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:+5|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:-5|disabled=false|icon=true|checked=false|shortcut=None",
+            "HEADER:Styles",
+            "ITEM:Arrow|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Wave|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Bar|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Circle|disabled=false|icon=true|checked=false|shortcut=None",
+            "HEADER:Grounds",
+            "ITEM:Signal Ground|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Earth|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Chassis|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
     (
@@ -494,20 +640,21 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
         true,
         false,
         &[
-            "ITEM:Place GND power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place VCC power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place +12 power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place +5 power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place -5 power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "SEP",
-            "ITEM:Place Arrow style power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Wave style power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Bar style power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Circle style power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "SEP",
-            "ITEM:Place Signal Ground power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Earth power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Chassis power port|disabled=false|icon=true|checked=false|shortcut=None",
+            "HEADER:Common",
+            "ITEM:GND|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:VCC|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:+12|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:+5|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:-5|disabled=false|icon=true|checked=false|shortcut=None",
+            "HEADER:Styles",
+            "ITEM:Arrow|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Wave|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Bar|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Circle|disabled=false|icon=true|checked=false|shortcut=None",
+            "HEADER:Grounds",
+            "ITEM:Signal Ground|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Earth|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Chassis|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
     (
@@ -515,20 +662,21 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
         true,
         true,
         &[
-            "ITEM:Place GND power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place VCC power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place +12 power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place +5 power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place -5 power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "SEP",
-            "ITEM:Place Arrow style power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Wave style power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Bar style power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Circle style power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "SEP",
-            "ITEM:Place Signal Ground power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Earth power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Chassis power port|disabled=false|icon=true|checked=false|shortcut=None",
+            "HEADER:Common",
+            "ITEM:GND|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:VCC|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:+12|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:+5|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:-5|disabled=false|icon=true|checked=false|shortcut=None",
+            "HEADER:Styles",
+            "ITEM:Arrow|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Wave|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Bar|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Circle|disabled=false|icon=true|checked=false|shortcut=None",
+            "HEADER:Grounds",
+            "ITEM:Signal Ground|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Earth|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Chassis|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
     (
@@ -536,9 +684,9 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
         false,
         false,
         &[
-            "ITEM:Signal Harness|disabled=true|icon=true|checked=false|shortcut=None",
-            "ITEM:Harness Connector|disabled=true|icon=true|checked=false|shortcut=None",
-            "ITEM:Harness Entry|disabled=true|icon=true|checked=false|shortcut=None",
+            "ITEM:Signal Harness|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Harness Connector|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Harness Entry|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
     (
@@ -546,9 +694,9 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
         false,
         true,
         &[
-            "ITEM:Signal Harness|disabled=true|icon=true|checked=false|shortcut=None",
-            "ITEM:Harness Connector|disabled=true|icon=true|checked=false|shortcut=None",
-            "ITEM:Harness Entry|disabled=true|icon=true|checked=false|shortcut=None",
+            "ITEM:Signal Harness|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Harness Connector|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Harness Entry|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
     (
@@ -556,9 +704,9 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
         true,
         false,
         &[
-            "ITEM:Signal Harness|disabled=true|icon=true|checked=false|shortcut=None",
-            "ITEM:Harness Connector|disabled=true|icon=true|checked=false|shortcut=None",
-            "ITEM:Harness Entry|disabled=true|icon=true|checked=false|shortcut=None",
+            "ITEM:Signal Harness|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Harness Connector|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Harness Entry|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
     (
@@ -566,9 +714,9 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
         true,
         true,
         &[
-            "ITEM:Signal Harness|disabled=true|icon=true|checked=false|shortcut=None",
-            "ITEM:Harness Connector|disabled=true|icon=true|checked=false|shortcut=None",
-            "ITEM:Harness Entry|disabled=true|icon=true|checked=false|shortcut=None",
+            "ITEM:Signal Harness|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Harness Connector|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Harness Entry|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
     (
@@ -656,10 +804,10 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
         false,
         false,
         &[
-            "ITEM:Parameter Set|disabled=true|icon=true|checked=false|shortcut=None",
+            "ITEM:Net Parameters|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Generic No ERC|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Differential Pair|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Blanket|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Net Blanket|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Compile Mask|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
@@ -668,10 +816,10 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
         false,
         true,
         &[
-            "ITEM:Parameter Set|disabled=true|icon=true|checked=false|shortcut=None",
+            "ITEM:Net Parameters|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Generic No ERC|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Differential Pair|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Blanket|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Net Blanket|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Compile Mask|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
@@ -680,10 +828,10 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
         true,
         false,
         &[
-            "ITEM:Parameter Set|disabled=true|icon=true|checked=false|shortcut=None",
+            "ITEM:Net Parameters|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Generic No ERC|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Differential Pair|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Blanket|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Net Blanket|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Compile Mask|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
@@ -692,10 +840,10 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
         true,
         true,
         &[
-            "ITEM:Parameter Set|disabled=true|icon=true|checked=false|shortcut=None",
+            "ITEM:Net Parameters|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Generic No ERC|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Differential Pair|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Blanket|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Net Blanket|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Compile Mask|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
@@ -753,7 +901,12 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
             "ITEM:Rectangle|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Round Rectangle|disabled=true|icon=true|checked=false|shortcut=None",
             "ITEM:Polygon|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Bezier|disabled=true|icon=true|checked=false|shortcut=None",
+            "ITEM:Bezier|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Table|disabled=false|icon=true|checked=false|shortcut=None",
+            "SEP",
+            "HEADER:Dimension",
+            "ITEM:Linear|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Aligned|disabled=false|icon=true|checked=false|shortcut=None",
             "SEP",
             "ITEM:Graphic...|disabled=true|icon=true|checked=false|shortcut=None",
         ],
@@ -772,7 +925,12 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
             "ITEM:Rectangle|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Round Rectangle|disabled=true|icon=true|checked=false|shortcut=None",
             "ITEM:Polygon|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Bezier|disabled=true|icon=true|checked=false|shortcut=None",
+            "ITEM:Bezier|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Table|disabled=false|icon=true|checked=false|shortcut=None",
+            "SEP",
+            "HEADER:Dimension",
+            "ITEM:Linear|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Aligned|disabled=false|icon=true|checked=false|shortcut=None",
             "SEP",
             "ITEM:Graphic...|disabled=true|icon=true|checked=false|shortcut=None",
         ],
@@ -791,7 +949,12 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
             "ITEM:Rectangle|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Round Rectangle|disabled=true|icon=true|checked=false|shortcut=None",
             "ITEM:Polygon|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Bezier|disabled=true|icon=true|checked=false|shortcut=None",
+            "ITEM:Bezier|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Table|disabled=false|icon=true|checked=false|shortcut=None",
+            "SEP",
+            "HEADER:Dimension",
+            "ITEM:Linear|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Aligned|disabled=false|icon=true|checked=false|shortcut=None",
             "SEP",
             "ITEM:Graphic...|disabled=true|icon=true|checked=false|shortcut=None",
         ],
@@ -810,7 +973,12 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
             "ITEM:Rectangle|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Round Rectangle|disabled=true|icon=true|checked=false|shortcut=None",
             "ITEM:Polygon|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Bezier|disabled=true|icon=true|checked=false|shortcut=None",
+            "ITEM:Bezier|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Table|disabled=false|icon=true|checked=false|shortcut=None",
+            "SEP",
+            "HEADER:Dimension",
+            "ITEM:Linear|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Aligned|disabled=false|icon=true|checked=false|shortcut=None",
             "SEP",
             "ITEM:Graphic...|disabled=true|icon=true|checked=false|shortcut=None",
         ],

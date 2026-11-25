@@ -201,9 +201,10 @@ fn dump(program: &SymbolSheetPreview, state: &PreviewState) -> String {
 /// (the renderer lists its channels as blue, green, red).
 fn marker(r: u8, g: u8, b: u8) -> (signex_types::theme::Color, String) {
     let color = signex_types::theme::Color { r, g, b, a: 255 };
-    let channel = |v: u8| format!("FiniteF32({:?})", f32::from(v) / 255.0);
+    let channel = |v: u8| format!("{:?}", f32::from(v) / 255.0);
+    // Alpha is left out: only the colour identifies the paint call.
     let text = format!(
-        "r: NormalizedF32({}), g: NormalizedF32({}), b: NormalizedF32({})",
+        "components: [{}, {}, {},",
         channel(b),
         channel(g),
         channel(r)

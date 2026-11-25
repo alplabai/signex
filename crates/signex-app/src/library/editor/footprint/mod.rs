@@ -18,10 +18,12 @@ pub mod layers;
 pub mod layers_panel;
 pub(crate) mod legacy_silk;
 pub mod move_by_modal;
+pub(crate) mod pad_scope_prompt;
 pub(crate) mod pad_shape_warnings;
 pub mod pad_stack_check;
 pub mod pad_to_sketch;
 pub mod pads_active_bar;
+pub mod parameters_table;
 pub mod preview3d;
 #[cfg(test)]
 mod silk_ownership_tests;
@@ -35,6 +37,7 @@ mod sketch_conflict_tests;
 pub mod sketch_dispatch;
 #[cfg(test)]
 mod sketch_dispatch_tests;
+mod sketch_import;
 pub mod sketch_mode;
 pub mod sketch_redundancy_task;
 #[cfg(test)]
@@ -43,6 +46,11 @@ pub mod sketch_solve_task;
 #[cfg(test)]
 mod sketch_solve_task_tests;
 pub mod snap;
+pub mod snap_board;
+#[cfg(test)]
+mod snap_board_tests;
+pub mod snap_menu;
+pub mod snap_objects;
 pub mod state;
 pub(crate) mod status;
 pub mod step_attach;
@@ -56,16 +64,38 @@ pub(crate) mod updates;
 // the Properties footprint card), named here so callers outside the slice do
 // not reach into `canvas`.
 pub use canvas::PreviewFootprint;
-pub(crate) use canvas::graphite_look_for;
+pub(crate) use canvas::{SketchInk, graphite_look_for};
 
 // What board sketch mode (#2234) hosts the sketch tool with: the tool and
 // mode its messages name, the board backdrop, and the edit router.
-pub use state::{BoardBackdrop, EditorMode, SketchTool, ToolPending};
+pub use state::{BoardBackdrop, EditorMode, FpActiveBarMenu, SketchTool, ToolPending};
 
 // What the app's Esc handling, placement pause and Custom Selection Filter
 // dialog name: the pad tool, the next-pad defaults and the filter kinds.
 pub use state::{NextPadDefaults, PadsTool, SelectionFilterKind};
 pub(crate) use updates::apply_footprint_primitive_edit;
+
+// What the footprint Properties panel, the Grid Properties dialog, the pad
+// edit handlers, the board sketch host and the regression tests read, named
+// here so they do not reach into `state` or `updates` (layer ratchet,
+// docs/architecture/layer-ratchet.md).
+pub use sketch_import::land_sketch_import;
+pub(crate) use state::COURTYARD_SLACK_MM;
+pub use state::board_checks::GapOffer;
+pub(crate) use state::board_checks::mm as format_check_mm;
+pub use state::canvas_text::ConflictSources;
+pub use state::mode::ModeSwitch;
+pub use state::pad_link::driving_profile;
+pub use state::pad_scope::PadScope;
+pub use state::sketch_overlay::{CanvasMenu, MenuTarget, PatternField, ValueEdit, ValueTarget};
+pub use state::{
+    COURTYARD_LINE_WIDTH_BUFFER, CheckLine, CheckStatus, EditorPad, FOOTPRINT_HEIGHT_BUFFER,
+    FootprintEditorState, GridDef, GridDisplay, PAD_CLEARANCE_BUFFER, PadInstance, PadLinkMsg,
+    PadLinkOffer, PadPatternKind, PadSide, PadSketchSource, PadStackTab, SILK_LINE_WIDTH_BUFFER,
+    SketchCanvasText, SketchOverlay, SnapOptions, SnappingMode, check_lines, pad_field,
+    pad_field_buffer_key, sketch_pad_field_buffer_key,
+};
+pub(crate) use updates::hold_patterned_pad_edit;
 
 #[cfg(test)]
 mod tests;

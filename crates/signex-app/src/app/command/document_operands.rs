@@ -35,7 +35,7 @@ fn ran(task: Task<Message>) -> Ran {
 }
 
 /// The document `args` names, or the refusal.
-fn named(app: &Signex, args: &CommandArgs) -> Result<DocumentEntry, String> {
+pub(super) fn named(app: &Signex, args: &CommandArgs) -> Result<DocumentEntry, String> {
     match args.operand("document") {
         Some(OperandValue::Document(target)) => app.resolve_document_target(target),
         _ => Err("the operand `document` is needed".to_string()),
@@ -206,29 +206,20 @@ fn step(app: &mut Signex, args: &CommandArgs, undo: bool) -> Ran {
 }
 
 /// A project's step: its rule history (the Rules tab, `rules_*`, the ERC
-/// dialog) or its Project tab's, whichever holds its newest edit; the
+/// dialog) or its Project tab's, whichever holds the nearer edit; the
 /// other when that one has nothing to step.
 fn step_project(app: &mut Signex, id: ProjectId, undo: bool) -> Ran {
-    let can = |app: &Signex, target: &UndoTarget| {
-        let (can_undo, can_redo) = app.undo_availability(target);
-        if undo { can_undo } else { can_redo }
-    };
-    let rules = UndoTarget::RulesTab(id);
-    let general = UndoTarget::Document(DocumentKey::Project(id));
-    let order = if app.rules_step_is_newest(id) {
-        [rules, general]
-    } else {
-        [general, rules]
-    };
-    let Some(target) = order.into_iter().find(|target| can(app, target)) else {
+    let target = UndoTarget::Document(DocumentKey::Project(id));
+    let (can_undo, can_redo) = app.undo_availability(&target);
+    if !(if undo { can_undo } else { can_redo }) {
         return refused(if undo {
             "Nothing to undo"
         } else {
             "Nothing to redo"
         });
-    };
-    if target != UndoTarget::RulesTab(id) {
-        app.step_undo_target(&target, undo);
+    }
+    if !app.project_step_is_rules(id, undo) {
+        app.step_project_tab_history(id, undo);
         return ran(Task::none());
     }
     // The step would replace what the person typed in the text view.

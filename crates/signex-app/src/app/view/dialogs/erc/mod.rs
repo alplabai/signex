@@ -1,5 +1,5 @@
 //! Electrical Rules Check (ERC) modal (#2413): the source strip (where the
-//! rules come from, plus severity count tiles), the shared rule editor body
+//! rules come from, plus severity count chips), the shared rule editor body
 //! (per-rule severities and the pin-connection matrix), the profile forms and
 //! the footer (Profile menu, Undo / Redo, Close, Run ERC).
 
@@ -8,7 +8,7 @@ use iced::widget::{Stack, column, container};
 use iced::{Element, Length, Widget};
 use signex_i18n::ids;
 
-use super::rule_editor::{RuleEditor, rule_editor};
+use super::rule_editor::{RuleEditor, rule_editor, shipped_rules};
 use super::widgets::{draggable_header, fit_modal_size, os_title_bar_slot};
 
 mod footer;
@@ -76,9 +76,17 @@ impl Signex {
             tokens,
             severity: severity_map,
             pin_matrix: pin_map,
+            shipped: shipped_rules(),
             editable: true,
+            changed_only: self.ui_state.erc_rule_list.changed_only,
+            filter: &self.ui_state.erc_rule_list.query,
             on_severity: |rule, severity| Message::Erc(ErcMsg::SeverityChanged(rule, severity)),
             on_pin_cell: |row, col| Message::Erc(ErcMsg::PinMatrixCellCycled { row, col }),
+            on_changed_only: |on| Message::Erc(ErcMsg::RulesChangedOnlyToggled(on)),
+            on_filter: |query| Message::Erc(ErcMsg::RuleFilterChanged(query)),
+            on_open_rule: None,
+            // The matrix is beside the list here.
+            on_open_matrix: None,
         });
 
         // In-window: sized to the window-capped modal. Detached: the OS

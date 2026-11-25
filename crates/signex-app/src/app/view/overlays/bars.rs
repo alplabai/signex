@@ -1,7 +1,8 @@
 //! Editor-surface overlay builders — the blocking-modal gate, the
 //! export/preview/net-colour top-of-stack overlays, the schematic /
-//! footprint / symbol active bars and
-//! the status-bar panel list.
+//! footprint / symbol active bars. The in-canvas text-edit input lives in
+//! `text_edit.rs`, the Placement Paused card in `placement_paused.rs` and
+//! the status-bar panel list in `panel_list.rs`.
 //!
 //! Extracted from the former 1223-line `collect_overlays` god-function
 //! in `view/mod.rs` (behaviour-preserving decomposition). Each builder
@@ -11,10 +12,6 @@
 
 use super::*;
 use iced::widget::{column, container};
-
-/// Default type / spacing scales; equal to the old literals at the default size.
-const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
-const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 impl Signex {
     /// True when a modal that must own the entire overlay stack is up —
@@ -224,17 +221,23 @@ impl Signex {
             tokens,
             &self.ui_state.i18n,
         );
-        let bar = signex_widgets::active_bar::view(bar_items, tokens)
-            .map(Message::Library)
-            .boxed();
+        use crate::library::editor::footprint::unified_active_bar as footprint_bar;
+        let span = self.footprint_bar_span(window_id);
+        let run = footprint_bar::scrolling_slots(editor);
+        let left = footprint_bar::bar_left_in(&bar_items, run.clone(), span);
+        let bar = signex_widgets::active_bar::view_within(
+            bar_items,
+            run,
+            footprint_bar::bar_max_width(span.width),
+            tokens,
+        )
+        .map(Message::Library)
+        .boxed();
+        // Translated, not padded: padding would limit a bar wider than the
+        // canvas and squeeze its last slots to nothing.
         out.push(
-            column![
-                iced::widget::Space::new().height(y_offset + bar_margin),
-                container(super::scroll_guard(bar))
-                    .width(Length::Fill)
-                    .align_x(iced::alignment::Horizontal::Center),
-            ]
-            .boxed(),
+            signex_widgets::Translate::new(super::scroll_guard(bar), (left, y_offset + bar_margin))
+                .boxed(),
         );
         // Position the dropdown panel directly below the bar's bottom
         // edge (see the schematic mount for the 42 px derivation).
@@ -246,13 +249,29 @@ impl Signex {
                 tokens,
                 footprint_presets,
                 dropdown_top,
-                self.ui_state.window_size.0,
+                span,
                 &self.ui_state.i18n,
             )
         {
             out.push(super::scroll_guard(overlay.map(Message::Library).boxed()));
         }
         out
+    }
+
+    /// The canvas between the docks of `window_id`, where the footprint
+    /// Active Bar fits and centres: the window's own layout when undocked,
+    /// the focused pane when the main window is tiled.
+    pub(in crate::app::view) fn footprint_bar_span(
+        &self,
+        window_id: iced::window::Id,
+    ) -> crate::library::editor::footprint::unified_active_bar::BarSpan {
+        let undocked = (self.ui_state.main_window_id != Some(window_id)).then_some(window_id);
+        let canvas = self.canvas_bounds_in(undocked);
+        crate::library::editor::footprint::unified_active_bar::BarSpan {
+            x: canvas.x,
+            width: canvas.width,
+            window_width: self.ui_state.size_of_window(window_id).0,
+        }
     }
 
     /// v0.26 — right-click context menu overlay for the footprint
@@ -376,7 +395,9 @@ impl Signex {
             + crate::active_bar::symbol_editor_bar_drop(&document.panel_ctx.tokens);
         let theme_id = self.ui_state.effective_theme_id();
         let tokens = &document.panel_ctx.tokens;
-        let bar_items = crate::library::editor::symbol::active_bar::bar_items(editor, theme_id);
+        let i18n = &self.ui_state.i18n;
+        let bar_items =
+            crate::library::editor::symbol::active_bar::bar_items(editor, theme_id, i18n);
         let bar = signex_widgets::active_bar::view(bar_items, tokens)
             .map(Message::Library)
             .boxed();
@@ -395,6 +416,7 @@ impl Signex {
             theme_id,
             tokens,
             dropdown_top,
+            i18n,
         ) {
             out.push(super::scroll_guard(overlay.map(Message::Library).boxed()));
         }
@@ -420,6 +442,7 @@ impl Signex {
             editor,
             tokens,
             path,
+            &self.ui_state.active_keymap,
             &self.ui_state.i18n,
         ) else {
             return Vec::new();
@@ -436,86 +459,6 @@ impl Signex {
         // An expanded Place ▸ grows the card in place (accordion, not a
         // flyout); the placement measures the card it really lays out.
         Self::menu_overlay(close_msg, card_msg, (menu_state.x, menu_state.y))
-    }
-
-    /// v0.18.10 status-bar panel list popup. Anchored above the "Panels"
-    /// button in the bottom-right of the status bar; each row shows a ✓
-    /// when the panel is open somewhere (docked, floating, or detached).
-    /// Pushes the dismiss layer then the popup.
-    pub(in crate::app::view) fn panel_list_overlay(&self) -> Vec<Element<'_, Message>> {
-        let ui = &self.ui_state;
-        let document = &self.document_state;
-        if !ui.panel_list_open {
-            return Vec::new();
-        }
-        let tokens = &document.panel_ctx.tokens;
-        let text_c = crate::styles::ti(tokens.text);
-        let has_sch = document.panel_ctx.has_schematic;
-        let has_pcb = document.panel_ctx.has_pcb;
-        // A panel counts as "open" if it lives in any dock region,
-        // floats on top, or owns a detached OS window.
-        let is_open = |k: crate::panels::PanelKind| self.is_panel_open(k);
-        let panel_items: Vec<Element<'_, Message>> = crate::panels::ALL_PANELS
-            .iter()
-            .filter(|&&kind| (!kind.needs_schematic() || has_sch) && (!kind.needs_pcb() || has_pcb))
-            .map(|&kind| {
-                // Altium parity: a leading ✓ column marks open panels
-                // so the user can see at a glance which ones are
-                // already somewhere on screen. Clicking an open panel
-                // still fires OpenPanel — the dock brings it forward.
-                let check = if is_open(kind) { "\u{2713}" } else { "" };
-                let check_c = crate::status_bar::check_ink(tokens);
-                let row_btn = signex_widgets::button(
-                    iced::widget::row![
-                        iced::widget::container(
-                            signex_widgets::text(signex_widgets::raw(check.to_string()))
-                                .size(TS.body)
-                                .color(check_c),
-                        )
-                        .width(Length::Fixed(16.0)),
-                        signex_widgets::text(signex_i18n::t!(ui.i18n, kind.message()))
-                            .size(TS.body)
-                            .color(text_c),
-                    ]
-                    .align_y(iced::Alignment::Center),
-                )
-                .width(Length::Fill)
-                .on_press(Message::Overlay(OverlayMsg::OpenPanel(kind)));
-                row_btn
-                    .padding([0.0, SP.m])
-                    .height(crate::status_bar::popup_row_height())
-                    .style(crate::status_bar::popup_row(tokens))
-                    .boxed()
-            })
-            .collect();
-
-        // Drop the scrollable wrapper — the list fits the window at
-        // full height (15-ish panels × 21 px each = ~315 px) and a
-        // menu-style popup reads cleaner without a scrollbar.
-        let (ww, wh) = ui.window_size;
-        let visible_rows = crate::panels::ALL_PANELS
-            .iter()
-            .filter(|&&k| (!k.needs_schematic() || has_sch) && (!k.needs_pcb() || has_pcb))
-            .count();
-        // Anchor the popup directly above the "Panels" button in the
-        // bottom-right of the status bar, its bottom edge just above the bar.
-        let popup = container(
-            column(panel_items)
-                .spacing(0)
-                .width(crate::status_bar::POPUP_WIDTH - 2.0 * crate::status_bar::POPUP_PADDING),
-        )
-        .padding(crate::status_bar::POPUP_PADDING)
-        .style(crate::status_bar::popup(tokens));
-        let popup_w = crate::status_bar::POPUP_WIDTH;
-        let popup_h = crate::status_bar::popup_height(visible_rows);
-        let status_h = crate::status_bar::status_bar_height(tokens);
-        let left = (ww - popup_w - crate::status_bar::POPUP_RIGHT_MARGIN).max(0.0);
-        let top = (wh - popup_h - status_h - crate::status_bar::POPUP_GAP).max(0.0);
-        Self::dismiss_and_place(
-            Message::Overlay(OverlayMsg::TogglePanelList),
-            popup.boxed(),
-            (left, top),
-        )
     }
 }
 
@@ -539,7 +482,7 @@ mod tests {
             specific_page_input: "1".to_string(),
             range_note: None,
             zoom: 1.0,
-            active_tab: crate::app::state::PdfPreviewTab::Preview,
+            dialog: Default::default(),
             pan: (0.0, 0.0),
             panning: None,
             sheet_files: Vec::new(),

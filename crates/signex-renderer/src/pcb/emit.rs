@@ -49,6 +49,7 @@ pub(super) fn via_from_board_via(
         net: via.net,
         dimmed: false,
         ink: CopperInk::Unknown,
+        shown_on: None,
     }
 }
 
@@ -88,6 +89,7 @@ pub(super) fn pad_from_footprint(
         drill_mm: pad_drill_mm(pad),
         dimmed: false,
         ink: CopperInk::Unknown,
+        shown_on: None,
     })
 }
 
@@ -133,6 +135,7 @@ pub(super) fn zone_from_board_zone(
         dimmed: false,
         ink: CopperInk::Unknown,
         fill: zone.is_pour().then(Vec::new),
+        shelved: zone.is_shelved_pour(),
         object: super::layer_view::zone_object(zone),
     })
 }
@@ -279,7 +282,7 @@ pub(super) fn emit_vias(snapshot: &PcbSnapshot, theme: &ResolvedTheme, scene: &m
         let color = faded(
             theme,
             BoardObject::Vias,
-            copper_color(theme, via.ink, ColorSlot::Junction),
+            copper_color(theme, via.ink.painted(via.shown_on), ColorSlot::Junction),
         );
 
         // A drill as wide as the via leaves no copper: all of it is hole.
@@ -367,7 +370,7 @@ pub(super) fn emit_static_polygons(
         let copper = faded(
             theme,
             BoardObject::Pads,
-            copper_color(theme, pad.ink, ColorSlot::Pin),
+            copper_color(theme, pad.ink.painted(pad.shown_on), ColorSlot::Pin),
         );
         let fill_color = dim_if(
             with_alpha_mul(copper, pad_alpha_mul(pad.pad_type)),
@@ -402,14 +405,22 @@ pub(super) fn emit_static_polygons(
             ),
             zone.dimmed,
         );
-        let stroke = Some(dim_if(
+        let edge = dim_if(
             faded(
                 theme,
                 zone.object,
                 copper_color(theme, zone.ink, ColorSlot::Bus),
             ),
             zone.dimmed,
-        ));
+        );
+        // A shelved pour (#2523): its outline dashed, nothing filled.
+        if zone.shelved {
+            scene
+                .polygons
+                .extend(dashed_outline(&zone.vertices, ZONE_EDGE_MM, edge));
+            continue;
+        }
+        let stroke = Some(edge);
         // A pour: its fill pieces as copper, then its outline stroked only.
         for piece in zone.fill.iter().flatten() {
             scene.polygons.push(GpuPolygon {
@@ -429,7 +440,7 @@ pub(super) fn emit_static_polygons(
             holes,
             fill_color,
             stroke_color: stroke,
-            stroke_width: 0.06,
+            stroke_width: ZONE_EDGE_MM,
         });
     }
 
@@ -442,6 +453,65 @@ pub(super) fn emit_static_polygons(
             stroke_width: 0.08,
         });
     }
+}
+
+/// Width of a zone's outline stroke, in board mm.
+const ZONE_EDGE_MM: f32 = 0.06;
+/// Dash and gap of a shelved pour's outline, in board mm.
+const SHELVED_DASH_MM: f32 = 0.6;
+const SHELVED_GAP_MM: f32 = 0.4;
+/// The most dashes one outline draws; a longer outline spaces them wider.
+const SHELVED_MAX_DASHES: f32 = 2000.0;
+
+/// The closed ring `vertices` as dashes `width` wide in `color`: one thin
+/// quad per dash, so both render paths draw it from `polygons` like any
+/// fill. Each edge starts with a dash, so every corner shows.
+pub(super) fn dashed_outline(
+    vertices: &[[f32; 2]],
+    width: f32,
+    color: [f32; 4],
+) -> Vec<GpuPolygon> {
+    let n = vertices.len();
+    if n < 2 {
+        return Vec::new();
+    }
+    let edges = || (0..n).map(|i| (vertices[i], vertices[(i + 1) % n]));
+    let perimeter: f32 = edges().map(|(a, b)| (b[0] - a[0]).hypot(b[1] - a[1])).sum();
+    if !perimeter.is_finite() {
+        return Vec::new();
+    }
+    let pitch = (SHELVED_DASH_MM + SHELVED_GAP_MM).max(perimeter / SHELVED_MAX_DASHES);
+    let dash = pitch * SHELVED_DASH_MM / (SHELVED_DASH_MM + SHELVED_GAP_MM);
+    let half = width * 0.5;
+    let mut dashes = Vec::new();
+    for (a, b) in edges() {
+        let len = (b[0] - a[0]).hypot(b[1] - a[1]);
+        if len <= 0.0 {
+            continue;
+        }
+        let (ux, uy) = ((b[0] - a[0]) / len, (b[1] - a[1]) / len);
+        let (nx, ny) = (-uy * half, ux * half);
+        let mut from = 0.0;
+        while from < len {
+            let to = (from + dash).min(len);
+            let p = [a[0] + ux * from, a[1] + uy * from];
+            let q = [a[0] + ux * to, a[1] + uy * to];
+            dashes.push(GpuPolygon {
+                vertices: vec![
+                    [p[0] + nx, p[1] + ny],
+                    [q[0] + nx, q[1] + ny],
+                    [q[0] - nx, q[1] - ny],
+                    [p[0] - nx, p[1] - ny],
+                ],
+                holes: Vec::new(),
+                fill_color: color,
+                stroke_color: None,
+                stroke_width: 0.0,
+            });
+            from += pitch;
+        }
+    }
+    dashes
 }
 
 pub(super) fn drc_slot(severity: Severity) -> ColorSlot {
