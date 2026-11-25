@@ -67,7 +67,8 @@ fn a_sheet_points_y_by_its_page_origin() {
 #[test]
 fn the_caption_names_the_turn_and_the_bottom_view() {
     let i18n = i18n();
-    let caption = |degrees, flipped| board_caption(&i18n, degrees, flipped).map(|c| plain(&c));
+    let caption =
+        |degrees, flipped| board_caption(&i18n, degrees, flipped).map(|c| plain(&c.into_string()));
     assert_eq!(caption(0.0, false), None, "no caption at home");
     assert_eq!(caption(90.0, false).as_deref(), Some("90°"));
     assert_eq!(caption(0.0, true).as_deref(), Some("Bottom"));

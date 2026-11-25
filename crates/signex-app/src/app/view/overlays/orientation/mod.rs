@@ -51,6 +51,12 @@ impl ViewOrientation {
 
     /// The tile's caption row: a board's turn and flip; a sheet has none.
     pub fn caption(self, i18n: &signex_i18n::I18n) -> Option<String> {
+        self.caption_text(i18n)
+            .map(signex_i18n::Localized::into_string)
+    }
+
+    /// [`Self::caption`] as the catalog text the tile paints.
+    fn caption_text(self, i18n: &signex_i18n::I18n) -> Option<signex_i18n::Localized> {
         match self {
             Self::Board { rotation, .. } => {
                 board_caption(i18n, rotation.degrees(), rotation.is_mirrored())
@@ -161,7 +167,7 @@ impl Signex {
     ) -> Element<'_, Message> {
         let tokens = &self.document_state.panel_ctx.tokens;
         let i18n = &self.ui_state.i18n;
-        let caption = orientation.caption(i18n);
+        let caption = orientation.caption_text(i18n);
         let away = orientation.away_from_home(i18n);
         let on_board = matches!(orientation, ViewOrientation::Board { .. });
         let hint = if on_board {

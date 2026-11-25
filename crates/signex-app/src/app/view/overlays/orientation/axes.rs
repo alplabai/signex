@@ -2,7 +2,7 @@
 //! arrows (mockup row 194). Screen y grows down.
 
 use signex_gfx::view_rotation::ViewRotation;
-use signex_i18n::{I18n, menu_ids, t};
+use signex_i18n::{I18n, Localized, menu_ids, t};
 use signex_types::schematic::PageOrigin;
 
 use crate::app::handlers::pcb_view_rotation::view_angle_text;
@@ -43,7 +43,7 @@ pub(in crate::app::view) fn board_caption(
     i18n: &I18n,
     degrees: f32,
     flipped: bool,
-) -> Option<String> {
+) -> Option<Localized> {
     let angle = view_angle_text(degrees);
     let turned = angle != "0";
     let caption = match (flipped, turned) {
@@ -52,5 +52,5 @@ pub(in crate::app::view) fn board_caption(
         (true, false) => t!(i18n, menu_ids::ORIENTATION_TILE_BOTTOM),
         (true, true) => t!(i18n, menu_ids::ORIENTATION_TILE_BOTTOM_ANGLE, "angle" => angle),
     };
-    Some(caption.into_string())
+    Some(caption)
 }
