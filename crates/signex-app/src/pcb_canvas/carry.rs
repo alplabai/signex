@@ -15,6 +15,7 @@ use signex_engine::pcb::snap::{
     GuideHit, ShownLayers, SnapQuery, axis_snap, guide_snap, object_snap_point,
 };
 use signex_engine::pcb::{BoardClipboard, BoardCommand};
+use signex_types::corner::CornerRule;
 use signex_types::pcb::{PcbBoard, Point, Segment};
 use signex_types::pcb_arc::TrackArc;
 use signex_types::pcb_options::{GridUse, GuideKind};
@@ -84,6 +85,10 @@ pub struct PcbCarry {
     /// alone and their tracks stay. One-way until the carry ends, so
     /// releasing Ctrl never reattaches them (Caner, 2026-11-21).
     pub leaves_tracks: bool,
+    /// The corner a track following the carry by one end bends at
+    /// (`pcb_geom::stretch_rule`), read off the router's rule when the carry
+    /// starts (#2513). The Command Log keeps it with a board drop.
+    pub stretch_corner: CornerRule,
 }
 
 impl PcbCarry {
@@ -116,6 +121,7 @@ impl PcbCarry {
             rooms: BTreeSet::new(),
             via_tracks: false,
             leaves_tracks: false,
+            stretch_corner: pcb_geom::stretch_rule(CornerRule::default()),
         }
     }
 
@@ -148,8 +154,8 @@ impl PcbCarry {
         ids
     }
 
-    /// The track ends on what is carried, which move with it; none with
-    /// Ctrl held.
+    /// The track ends on what is carried (pads, vias and the ends of carried
+    /// tracks), which move with it; none with Ctrl held.
     /// A track carried whole (#2870) is not one that follows by an end.
     pub fn following(&self, board: &PcbBoard) -> Vec<TrackEnds> {
         if self.leaves_tracks {
@@ -174,6 +180,10 @@ impl PcbCarry {
         }
         if !self.vias.is_empty() {
             add(pcb_geom::tracks_on_vias(board, &self.vias));
+        }
+        if !self.items.is_empty() {
+            // A dragged track stretches the tracks joined to its ends (#2513).
+            add(pcb_geom::tracks_on_tracks(board, &self.items));
         }
         ends.retain(|e| !self.items.contains(&e.track));
         ends
@@ -577,6 +587,54 @@ fn followed(board: &PcbBoard, ends: &TrackEnds, delta: Point) -> Option<Segment>
         .get(ends.index)
         .filter(|segment| segment.uuid == ends.track)?;
     Some(ends.follow(segment, delta))
+}
+
+/// The `following` tracks of `carry` on `board` as a move by `delta` leaves
+/// them (#2513): each follows its ends and bends at the carry's corner
+/// (`TrackEnds::stretch`, as `placement::stretch_commands` bends it on the
+/// drop), the leg to its moved end a new track with an id from `new_id`.
+/// The followed tracks, then the new legs. A track `board` no longer holds
+/// where `following` found it is left out.
+pub fn followed_tracks(
+    board: &PcbBoard,
+    carry: &PcbCarry,
+    following: &[TrackEnds],
+    delta: Point,
+    mut new_id: impl FnMut() -> Uuid,
+) -> (Vec<Segment>, Vec<Segment>) {
+    let (mut tracks, mut legs) = (Vec::new(), Vec::new());
+    for ends in following {
+        let Some(segment) = (board.segments.get(ends.index)).filter(|s| s.uuid == ends.track)
+        else {
+            continue;
+        };
+        let (kept, leg) = ends.stretch(segment, delta, carry.stretch_corner, new_id());
+        tracks.push(kept);
+        legs.extend(leg);
+    }
+    (tracks, legs)
+}
+
+/// `preview`, a board drawn or read as the drop of `carry` leaves it, with
+/// the `following` tracks bent at their corner as the drop bends them
+/// ([`followed_tracks`]); the new legs take fresh ids.
+pub fn with_stretched_tracks(
+    mut preview: PcbBoard,
+    board: &PcbBoard,
+    carry: &PcbCarry,
+    following: &[TrackEnds],
+) -> PcbBoard {
+    if following.is_empty() {
+        return preview;
+    }
+    let (tracks, legs) = followed_tracks(board, carry, following, carry.delta, Uuid::now_v7);
+    for track in tracks {
+        if let Some(slot) = preview.segments.iter_mut().find(|s| s.uuid == track.uuid) {
+            *slot = track;
+        }
+    }
+    preview.segments.extend(legs);
+    preview
 }
 
 /// `board` as a move of the `carried` footprints and vias by `delta` leaves

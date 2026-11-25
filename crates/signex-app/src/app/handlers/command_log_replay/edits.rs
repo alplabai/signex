@@ -6,9 +6,9 @@ use std::path::Path;
 use iced::Task;
 use pcb_geom::ItemRef;
 use signex_engine::Command;
-use signex_engine::pcb::{BoardCommand, BoardReplayGuard, placement};
+use signex_engine::pcb::placement::PlacementRefusal;
+use signex_engine::pcb::{BoardCommand, BoardReplayGuard};
 use signex_i18n::{Translatable, ids};
-use signex_types::pcb::Point;
 
 use super::book::ReplayInput;
 use super::rebase;
@@ -18,6 +18,7 @@ use super::run::{
 };
 use super::selection::Shown;
 use crate::app::command::CommandOutcome;
+use crate::app::handlers::pcb_item_move::{carry_of_drop, drag_commands};
 use crate::app::core::command_log::RecordedTargets;
 use crate::app::core::mutation_outcome::MutationOutcome;
 use crate::app::{Message, Signex};
@@ -45,25 +46,36 @@ fn board_outcome<E: std::fmt::Display>(
     }
 }
 
+/// The commands a recorded board move builds on `board` as it is now: what
+/// it carried by its offset, the tracks that follow bent at its recorded
+/// corner (#2513), or left in place after a Ctrl drag, built as the drop
+/// built them (`pcb_item_move::drag_commands`). `None` for another input.
+fn rebuilt_board_move(
+    board: &signex_types::pcb::PcbBoard,
+    input: &ReplayInput,
+) -> Option<Result<Vec<BoardCommand>, PlacementRefusal>> {
+    let ReplayInput::BoardMove { drop, .. } = input else {
+        return None;
+    };
+    let carry = carry_of_drop(drop);
+    Some(drag_commands(board, &carry, drop.delta))
+}
+
 /// Whether a recorded board move no longer fits: a target left where the move
 /// found or left it, or the offset would now also carry a track it never
-/// wrote. A move the board refuses goes on to say why.
+/// wrote. A move the board refuses goes on to say why. The corner legs it
+/// adds are new tracks and write over nothing.
 fn board_move_is_stale(
     board: &signex_types::pcb::PcbBoard,
-    footprints: &std::collections::BTreeSet<uuid::Uuid>,
-    delta: Point,
-    leaves_tracks: bool,
+    input: &ReplayInput,
     guard: Option<&BoardReplayGuard>,
 ) -> bool {
     let Some(guard) = guard.filter(|guard| guard.holds(board)) else {
         return true;
     };
-    let built = if leaves_tracks {
-        placement::move_footprints_only(board, footprints, delta)
-    } else {
-        placement::move_commands(board, footprints, delta)
-    };
-    built.is_ok_and(|commands| !guard.writes_only_its_targets(board, &commands))
+    rebuilt_board_move(board, input).is_some_and(|built| {
+        built.is_ok_and(|commands| !guard.move_writes_only_its_targets(board, &commands))
+    })
 }
 
 impl Signex {
@@ -130,14 +142,8 @@ impl Signex {
             ReplayInput::Board { guard, .. } => {
                 (self.document_state.pcb_board(document)).is_none_or(|board| !guard.holds(board))
             }
-            ReplayInput::BoardMove {
-                footprints,
-                delta,
-                leaves_tracks,
-                guard,
-            } => (self.document_state.pcb_board(document)).is_none_or(|board| {
-                board_move_is_stale(board, footprints, *delta, *leaves_tracks, guard.as_ref())
-            }),
+            ReplayInput::BoardMove { guard, .. } => (self.document_state.pcb_board(document))
+                .is_none_or(|board| board_move_is_stale(board, input, guard.as_ref())),
             _ => false,
         };
         if is_stale {
@@ -203,12 +209,7 @@ impl Signex {
                 }
             }
             ReplayInput::Board { commands, .. } => self.run_board_commands(document, commands),
-            ReplayInput::BoardMove {
-                footprints,
-                delta,
-                leaves_tracks,
-                ..
-            } => self.run_board_move(document, footprints, *delta, *leaves_tracks),
+            ReplayInput::BoardMove { .. } => self.run_board_move(document, input),
             ReplayInput::ReuseBlock {
                 name,
                 anchor,
@@ -304,25 +305,16 @@ impl Signex {
         outcome
     }
 
-    /// The recorded offset on the footprints as they are now.
-    fn run_board_move(
-        &mut self,
-        document: &Path,
-        footprints: &std::collections::BTreeSet<uuid::Uuid>,
-        delta: Point,
-        leaves_tracks: bool,
-    ) -> CommandOutcome {
+    /// The recorded offset on the footprints or vias as they are now, the
+    /// tracks on them bent at the recorded corner.
+    fn run_board_move(&mut self, document: &Path, input: &ReplayInput) -> CommandOutcome {
         let Some(board) = self.document_state.pcb_board(document) else {
             return refused(document_closed(document));
         };
-        let built = if leaves_tracks {
-            placement::move_footprints_only(board, footprints, delta)
-        } else {
-            placement::move_commands(board, footprints, delta)
-        };
-        match built {
-            Ok(commands) => self.run_board_commands(document, &commands),
-            Err(refusal) => refused_with(refusal.to_string()),
+        match rebuilt_board_move(board, input) {
+            Some(Ok(commands)) => self.run_board_commands(document, &commands),
+            Some(Err(refusal)) => refused_with(refusal.to_string()),
+            None => refused(no_change()),
         }
     }
 
@@ -338,10 +330,10 @@ fn input_targets(input: &ReplayInput) -> RecordedTargets {
     match input {
         ReplayInput::Sheet { targets, .. } => RecordedTargets::Sheet(targets.clone()),
         ReplayInput::Board { targets, .. } => RecordedTargets::Board(targets.clone()),
-        ReplayInput::BoardMove { footprints, .. } => RecordedTargets::Board(
-            footprints
-                .iter()
-                .map(|id| ItemRef::Footprint(*id))
+        // A carried object or room that is gone fails its guard instead.
+        ReplayInput::BoardMove { drop, .. } => RecordedTargets::Board(
+            (drop.footprints.iter().map(|id| ItemRef::Footprint(*id)))
+                .chain(drop.vias.iter().map(|id| ItemRef::Via(*id)))
                 .collect(),
         ),
         ReplayInput::ReuseBlock { anchor, .. } => {

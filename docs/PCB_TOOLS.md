@@ -1014,7 +1014,8 @@ along (#2379). A track end follows when it lies on a moved pad's copper, on a
 copper layer the pad reaches, and the track is on the pad's net: the contact
 the ratsnest counts as connected (`pcb_geom::tracks_on_pads`). Only that end
 moves; the other end stays, so the track stays joined to whatever it meets
-there. The drop runs the footprint moves and the track edits as one batch
+there, and the track bends at one 45° corner when it has to (#2513, "Dragging
+a track or via" below). The drop runs the footprint moves and the track edits as one batch
 (`signex_engine::pcb::placement::move_commands`), one undo step. During the
 drag the preview draws the carried footprints with those tracks at the
 offset, and the ratsnest is read off the board as the drop would leave it,
@@ -1027,6 +1028,52 @@ Align To Grid, the X and Y fields in Properties, and Turn and Mirror still
 move the footprint alone and leave its tracks where they were. Turn and Mirror
 need the track ends turned about the footprint, not shifted, so they need more
 than the shift a move applies.
+
+## Dragging a track or via
+
+With no tool armed, a press on a track or via and a drag move it in one
+gesture, selected or not (#2513); there is no click to select it first. A
+press on a selected one carries the whole selection (#2870).
+
+The tracks joined to a dragged track stretch: a track whose end lies exactly
+on an end of the dragged track, to the nanometre, on its layer and net, moves
+that end by the offset (`pcb_geom::tracks_on_tracks`). Its other end stays,
+on a pad, a via or wherever it is, so it stays joined there. A dragged via
+takes the track and copper arc ends on it along the same way
+(`pcb_geom::tracks_on_vias`, `arcs_on_vias`). A track carried whole, because
+it is in the dragged selection, moves whole and is not stretched by an end. A
+locked track is not stretched and stays where it is. With Ctrl held the
+dragged track or via moves alone and nothing stretches.
+
+The preview draws the dragged track with the stretched tracks where the drop
+puts them, and the drop moves them all as one undo step
+(`handlers::pcb_item_move`). A locked track or via does not move: the press
+carries nothing and Messages says it is locked
+(`Move: track <id> is locked; nothing changed`).
+
+A stretched track stays at 0°, 45° or 90°, as a routed one does (Caner,
+2026-11-25). When its moved end is still on one of those lines from its
+fixed end, it stays one track. Otherwise it bends at one 45° corner: the
+track keeps the leg at its fixed end and a new track, with its width, layer
+and net, runs from the corner to the moved end (`TrackEnds::stretch`). The
+corner follows the router's corner rule when that bends at 45° (45° start or
+45° end, with its flip). With the 90° or any-angle rule, the track leaves its
+fixed end straight and turns 45° into the moved end
+(`pcb_geom::stretch_rule`). The rule is read when the drag or Edit ▸ Move
+starts. The dragged track's own ends move with it, so an end of it on a pad
+or via leaves that pad or via.
+
+The same corner applies to every track a move takes along by one end: the
+tracks on a dragged or moved part's pads and on a dragged via bend as a
+track stretched by a dragged track does (Caner, 2026-11-25). The drop builds
+them with `signex_engine::pcb::placement::stretch_commands`
+(`move_commands`, `move_vias`): a `ReplaceItems` of the tracks and an
+`AddItems` of the new legs, one undo step. A track with both ends on what
+moves moves whole, with no corner. The Command Log keeps the offset and the
+corner rule of every drop (part, via, track, object or mixed selection), so
+a Replay rebuilds it with the drop's own builder
+(`handlers::pcb_item_move::drag_commands`) and bends the tracks as the drop
+did, whatever the router's rule is by then (`docs/COMMAND_LOG.md`).
 
 ## Moving a designator or comment on its own
 

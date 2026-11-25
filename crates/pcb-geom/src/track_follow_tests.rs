@@ -297,3 +297,141 @@ fn follow_shifts_only_the_named_ends() {
     assert_eq!(moved.start, Point::new(2.0, -1.0));
     assert_eq!(moved.end, Point::new(11.0, -1.0));
 }
+
+/// #2513: a dragged track takes along only the ends joined to its own ends,
+/// on its layer and net, of tracks it does not carry, and none locked.
+#[test]
+fn only_an_end_on_an_end_of_a_dragged_track_follows() {
+    let mut locked = track(7, (4.0, 0.0), (4.0, -5.0), 1, "TopCopper");
+    locked.locked = true;
+    let board = board(vec![
+        // The dragged track, from (0, 0) to (4, 0).
+        track(1, (0.0, 0.0), (4.0, 0.0), 1, "TopCopper"),
+        // Joined at (4, 0), runs on to a pad end at (9, 0).
+        track(2, (4.0, 0.0), (9.0, 0.0), 1, "TopCopper"),
+        // Joined at (0, 0) by its end.
+        track(3, (0.0, 5.0), (0.0, 0.0), 1, "TopCopper"),
+        // At (4, 0) but another net.
+        track(4, (4.0, 0.0), (4.0, 5.0), 2, "TopCopper"),
+        // At (4, 0) but on the bottom copper.
+        track(5, (4.0, 0.0), (8.0, 5.0), 1, "BottomCopper"),
+        // Touching the middle of the dragged track, not an end.
+        track(6, (2.0, 0.0), (2.0, 5.0), 1, "TopCopper"),
+        locked,
+    ]);
+    let ends = tracks_on_tracks(&board, &[id(201)].into());
+    assert_eq!(
+        ends,
+        [
+            TrackEnds {
+                track: id(202),
+                index: 1,
+                start: true,
+                end: false,
+            },
+            TrackEnds {
+                track: id(203),
+                index: 2,
+                start: false,
+                end: true,
+            },
+        ]
+    );
+    let both = tracks_on_tracks(&board, &[id(201), id(202)].into());
+    assert!(
+        both.iter().all(|e| e.track != id(202)),
+        "a track carried too is not one that follows: {both:?}"
+    );
+    assert!(tracks_on_tracks(&board, &BTreeSet::new()).is_empty());
+}
+
+fn ends_of(segment: &Segment, start: bool) -> TrackEnds {
+    TrackEnds {
+        track: segment.uuid,
+        index: 0,
+        start,
+        end: !start,
+    }
+}
+
+/// Whether a track runs at 0°, 45° or 90°.
+fn at_a_legal_angle(t: &Segment) -> bool {
+    let (dx, dy) = ((t.end.x - t.start.x).abs(), (t.end.y - t.start.y).abs());
+    dx < 1e-9 || dy < 1e-9 || (dx - dy).abs() < 1e-9
+}
+
+/// #2513, Caner (2026-11-25): a stretch off the 0°/45°/90° lines bends at
+/// one 45° corner by the router's leg rule. The track keeps its fixed end
+/// and the leg there; the leg to the moved end is a new track.
+#[test]
+fn a_stretch_off_the_legal_angles_bends_at_one_45_degree_corner() {
+    let rule = stretch_rule(CornerRule::default());
+    let segment = track(1, (0.0, 0.0), (5.0, 0.0), 1, "TopCopper");
+    // The end moves to (5, 3): straight out of (0, 0), then 45° up.
+    let up = Point::new(0.0, 3.0);
+    let (kept, leg) = ends_of(&segment, false).stretch(&segment, up, rule, id(9));
+    let leg = leg.expect("a corner");
+    let p = Point::new;
+    assert_eq!(kept.uuid, segment.uuid, "the track keeps its id");
+    assert_eq!((kept.start, kept.end), (p(0.0, 0.0), p(2.0, 0.0)));
+    assert_eq!(leg.uuid, id(9), "the new leg");
+    assert_eq!((leg.start, leg.end), (p(2.0, 0.0), p(5.0, 3.0)));
+    assert!(at_a_legal_angle(&kept) && at_a_legal_angle(&leg));
+    assert_eq!(
+        (leg.width, leg.net, leg.layer.as_str()),
+        (0.25, 1, "TopCopper")
+    );
+    // The start moving instead: the end stays, the corner is on its side.
+    let (kept, leg) = ends_of(&segment, true).stretch(&segment, up, rule, id(9));
+    let leg = leg.expect("a corner");
+    assert_eq!((kept.start, kept.end), (p(3.0, 0.0), p(5.0, 0.0)));
+    assert_eq!((leg.start, leg.end), (p(0.0, 3.0), p(3.0, 0.0)));
+    assert!(at_a_legal_angle(&kept) && at_a_legal_angle(&leg));
+}
+
+/// A stretch that stays on an axis or on an exact 45° line stays one track.
+#[test]
+fn a_stretch_on_a_legal_angle_stays_one_track() {
+    let rule = stretch_rule(CornerRule::default());
+    let segment = track(1, (0.0, 0.0), (5.0, 0.0), 1, "TopCopper");
+    let ends = ends_of(&segment, false);
+    let cases = [
+        // Along the axis, onto an exact 45° line, onto the vertical.
+        ((2.0, 0.0), (7.0, 0.0)),
+        ((0.0, 5.0), (5.0, 5.0)),
+        ((-5.0, 4.0), (0.0, 4.0)),
+    ];
+    for (delta, to) in cases {
+        let by = Point::new(delta.0, delta.1);
+        let (kept, leg) = ends.stretch(&segment, by, rule, id(9));
+        assert!(leg.is_none(), "{delta:?}: no corner");
+        assert_eq!(kept.start, Point::new(0.0, 0.0), "{delta:?}");
+        assert_eq!(kept.end, Point::new(to.0, to.1), "{delta:?}");
+    }
+}
+
+/// The router's rule is kept when it bends at 45°; a 90° or any-angle
+/// router rule still gives a 45° corner.
+#[test]
+fn the_stretch_takes_the_routers_45_degree_rule() {
+    use signex_types::corner::CornerMode;
+    let diagonal_first = CornerRule {
+        mode: CornerMode::Angle45Start,
+        is_flipped: false,
+    };
+    assert_eq!(stretch_rule(diagonal_first), diagonal_first);
+    for mode in [CornerMode::Ortho90, CornerMode::FreeAngle] {
+        let live = CornerRule {
+            mode,
+            is_flipped: true,
+        };
+        assert_eq!(stretch_rule(live).mode, CornerMode::Angle45End, "{mode:?}");
+    }
+    let segment = track(1, (0.0, 0.0), (5.0, 0.0), 1, "TopCopper");
+    let up = Point::new(0.0, 3.0);
+    let (kept, leg) = ends_of(&segment, false).stretch(&segment, up, diagonal_first, id(9));
+    // 45° out of (0, 0) first, then straight on to (5, 3).
+    assert_eq!(kept.end, Point::new(3.0, 3.0));
+    let leg = leg.map(|l| (l.start, l.end));
+    assert_eq!(leg, Some((Point::new(3.0, 3.0), Point::new(5.0, 3.0))));
+}
