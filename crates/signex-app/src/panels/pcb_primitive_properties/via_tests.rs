@@ -454,7 +454,13 @@ fn the_via_type_field_shows_the_name_and_sizes_not_the_list_entry() {
     assert!(line.contains(&TYPE_NAME), "{line:?}");
     assert!(line.contains(&"0.6/0.3"), "{line:?}");
     let entry = f.via_type.as_ref().expect("a type").label.clone();
-    assert!(!texts.iter().any(|t| t.text == entry), "{texts:?}");
+    // The pinned iced pick list always reports its selected entry's label
+    // to a widget operation, though it draws it transparent. So the entry
+    // may appear once, as the pick list's own label, and never as other
+    // text; the_list_under_the_type_face_draws_no_label pins that it is not
+    // drawn (DECISIONS 2026-11-25, mockup row 96).
+    let shown = texts.iter().filter(|t| t.text == entry).count();
+    assert_eq!(shown, 1, "only the pick list's own label: {texts:?}");
 }
 
 /// Mockup row 96: the list under the face draws no label of its own, so the
