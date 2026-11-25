@@ -43,7 +43,32 @@ impl<'a> From<&'a str> for PlacedPart<'a> {
     }
 }
 
-/// What one variant changes on one part.
+/// An owned [`PlacedPart`], for an edit that names several parts (every
+/// channel's copy of a repeated part, or every part of one channel).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PartRef {
+    pub designator: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub part: Option<SymbolLink>,
+}
+
+impl PartRef {
+    pub fn new(designator: impl Into<String>, part: Option<SymbolLink>) -> Self {
+        Self {
+            designator: designator.into(),
+            part,
+        }
+    }
+
+    pub fn placed(&self) -> PlacedPart<'_> {
+        PlacedPart::new(&self.designator, self.part.as_ref())
+    }
+}
+
+/// What one variant changes on one part. A channel's copy of a part in a
+/// repeated sheet is a part of its own: its [`Self::part`] is placed at the
+/// channel's placement, so an entry is per channel (`docs/MULTI_CHANNEL.md`,
+/// "Per-channel variant state").
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VariantPart {
     pub variant: String,
@@ -167,6 +192,27 @@ impl ProjectData {
         fitted: Option<bool>,
     ) -> Result<(), VariantProblem> {
         self.edit_variant_part(variant, placed.into(), |part| part.fitted = fitted)
+    }
+
+    /// [`Self::set_variant_part_fit`] for each of `parts`, as one edit: every
+    /// channel's copy of a repeated part, or every part of one channel. A
+    /// refusal (Base, an unknown variant, unreadable settings) comes before
+    /// any part changes.
+    pub fn set_variant_parts_fit(
+        &mut self,
+        variant: &str,
+        parts: &[PartRef],
+        fitted: Option<bool>,
+    ) -> Result<(), VariantProblem> {
+        self.check_settings_readable()?;
+        if is_base_variant(variant) {
+            return Err(VariantProblem::Reserved);
+        }
+        self.defined_variant(variant)?;
+        for part in parts {
+            self.set_variant_part_fit(variant, part.placed(), fitted)?;
+        }
+        Ok(())
     }
 
     /// Give the part `placed` names the value `value` for `parameter` in

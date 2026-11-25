@@ -7,8 +7,8 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use signex_types::pcb::SymbolLink;
 use signex_types::project::{
-    AnnotateUndo, ChannelNaming, ListMove, PlacedPart, ProjectData, RequirementEntry, SheetFit,
-    VariantProblem, VariantSettings,
+    AnnotateUndo, ChannelNaming, ListMove, PartRef, PlacedPart, ProjectData, RequirementEntry,
+    SheetFit, VariantProblem, VariantSettings,
 };
 
 /// One edit of a Project tab section. Plain data, so a script can emit it.
@@ -61,6 +61,13 @@ pub enum ProjectSectionCommand {
         designator: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         part: Option<SymbolLink>,
+        fitted: Option<bool>,
+    },
+    /// The fit of several parts in a variant as one step: every channel's
+    /// copy of a repeated part, or every part of one channel (#2662).
+    SetVariantPartsFit {
+        variant: String,
+        parts: Vec<PartRef>,
         fitted: Option<bool>,
     },
     /// A part's parameter value in a variant; `None` is its own value again
@@ -135,6 +142,11 @@ impl ProjectSectionCommand {
                 PlacedPart::new(designator, part.as_ref()),
                 *fitted,
             )?,
+            Self::SetVariantPartsFit {
+                variant,
+                parts,
+                fitted,
+            } => data.set_variant_parts_fit(variant, parts, *fitted)?,
             Self::SetVariantPartParameter {
                 variant,
                 designator,
