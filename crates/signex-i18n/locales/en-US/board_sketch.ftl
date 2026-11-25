@@ -273,7 +273,6 @@ sketch-dof-section-over =
 # The Fab profile group's profile row (mockup row 179d); $name is the rule
 # profile the project's rules were seeded from.
 board-sketch-fab-profile = Profile { $name }
-board-sketch-fab-profile-none = Profile: the project's rules name none
 # The pattern form of a board sketch (mockup row 179e), titled by its kind.
 board-pattern-title-rectangular = Rectangular pattern
 board-pattern-title-linear = Linear pattern
