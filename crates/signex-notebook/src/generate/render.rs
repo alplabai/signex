@@ -202,12 +202,13 @@ fn architecture(facts: &ProjectFacts) -> String {
             )
         })
         .collect();
-    let nets = if facts.power_nets.is_empty() {
-        "no power nets".to_string()
-    } else {
-        format!("power nets {}", facts.power_nets.join(", "))
-    };
-    let caption = format!("Sheet hierarchy of {} and its {nets}", facts.name);
+    let mut caption = format!("Sheet hierarchy of {}", facts.name);
+    if !facts.power_nets.is_empty() {
+        caption.push_str(&format!(
+            " and its power nets {}",
+            facts.power_nets.join(", ")
+        ));
+    }
     format!(
         "#figure(\n  stack(\n    dir: ttb,\n    spacing: 4pt,\n{}  ),\n  caption: {},\n)\n",
         boxes.concat(),

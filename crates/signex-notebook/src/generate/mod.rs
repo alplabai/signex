@@ -13,6 +13,7 @@
 
 mod blocks;
 mod facts;
+mod project;
 mod render;
 mod requirements;
 mod sections;
@@ -23,6 +24,7 @@ pub use blocks::{BlockFields, block_fields, cites};
 pub use facts::{
     BomCost, BomFacts, ChangeEntry, Fact, OutputFile, ProjectFacts, SheetFact, SimulationRun,
 };
+pub use project::{notebook_blocks, revision_of, sheets_of, variant_of, variants_of};
 pub use requirements::{RequirementResult, RequirementRow, requirement_rows, statement};
 pub use sections::{ChecksSource, GenerateOptions, Section, Template, parse_sections};
 pub use summary::{

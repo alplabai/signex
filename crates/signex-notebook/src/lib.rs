@@ -74,6 +74,8 @@ mod tests_file;
 #[cfg(test)]
 mod tests_generate;
 #[cfg(test)]
+mod tests_generate_project;
+#[cfg(test)]
 mod tests_generate_report;
 #[cfg(test)]
 mod tests_model;
