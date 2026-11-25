@@ -55,6 +55,11 @@ pub fn tab_view(ctx: &PanelContext) -> Element<'_, PanelMsg> {
     if facts.groups.is_empty() {
         body = body.push(empty(ctx));
     } else {
+        let ui = &ctx.length_matching_ui;
+        let picked = ui.is_for(&facts.board) && ui.current.is_some();
+        if !picked && !facts.read_only {
+            body = body.push(note(ctx, ids::LENGTH_MATCHING_PICK_GROUP));
+        }
         body = body.push(groups(ctx, facts, true));
     }
     let shell_style = DocTabShellStyle::from_tokens(&ctx.tokens, TS.body);
