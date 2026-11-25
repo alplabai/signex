@@ -3,11 +3,9 @@
 use std::collections::BTreeMap;
 
 use signex_net::uf::Key;
-use signex_types::corner::DragWiringMode;
 use signex_types::schematic::{Point, SelectedItem, SelectedKind, Wire};
-use uuid::Uuid;
 
-use super::{Env, key, same_delta, zero_length};
+use super::{Env, key, same_delta};
 use crate::transform::rubber_band::{Follow, Move, WireJoin};
 
 impl Env {
@@ -121,7 +119,11 @@ impl Env {
             || locked
             || !single_target
             || self.holds_the_tip(at, &probe, !attached.is_empty());
-        if !anchored && single_target && self.try_follow(at, &attached, new, out) {
+        // A pin on a junction of two or more wires leaves them where they are
+        // and grows a stub to its new tip (#2540); only when no stub fits do
+        // the wires follow it.
+        let on_junction = wire.is_none() && attached.len() >= 2;
+        if !anchored && !on_junction && self.try_follow(at, &attached, new, out) {
             self.carry_dots(&probe.junctions, new, out);
             return;
         }
@@ -131,7 +133,8 @@ impl Env {
         if wire.is_some() && probe.interior && probe.junctions.is_empty() {
             return;
         }
-        self.add_paths(group, &attached, &skip, out);
+        let follow_back = (on_junction && !anchored).then(|| probe.junctions.clone());
+        self.add_paths(at, group, &attached, &skip, follow_back, out);
     }
 
     /// Whether a point a dragged wire carries from `at` must be left as the
@@ -222,7 +225,7 @@ impl Env {
     }
 
     /// Dots on a followed tip move with it.
-    fn carry_dots(&mut self, dots: &[usize], new: Point, out: &mut Follow) {
+    pub(super) fn carry_dots(&mut self, dots: &[usize], new: Point, out: &mut Follow) {
         for &index in dots {
             self.junctions[index].1 = new;
             self.moved_junctions.push(index);
@@ -232,104 +235,5 @@ impl Env {
                 SelectedKind::Junction,
             ));
         }
-    }
-
-    /// New paths from the old tip to each distinct new tip. A tip with no
-    /// collision-free route stays as it is; the guard sees the broken net and
-    /// takes it down the ladder.
-    fn add_paths(
-        &mut self,
-        group: &[&Move],
-        attached: &[(usize, bool)],
-        skip: &[usize],
-        out: &mut Follow,
-    ) {
-        // New wires copy the attached wire's stroke and unknown columns, like
-        // the segments a bend adds; with none attached, the dragged wire's.
-        let attached_wire = attached
-            .first()
-            .map(|(index, _)| self.wires[*index].clone());
-        let orientation = attached_wire
-            .as_ref()
-            .map(|w| key(&w.start).1 == key(&w.end).1);
-        let template = attached_wire.or_else(|| self.carrier(group));
-        let mut targets: Vec<Point> = Vec::new();
-        for mv in group {
-            if !targets.iter().any(|p| key(p) == key(&mv.new)) {
-                targets.push(mv.new);
-            }
-        }
-        for target in targets {
-            self.add_path(
-                group[0].old,
-                target,
-                orientation,
-                template.as_ref(),
-                skip,
-                out,
-            );
-        }
-    }
-
-    /// The selected wire whose drag carries the points of `group`, if any.
-    fn carrier(&self, group: &[&Move]) -> Option<Wire> {
-        let id = group.iter().find_map(|m| m.wire)?.wire();
-        self.wires.iter().find(|w| w.uuid == id).cloned()
-    }
-
-    /// Add `old -> corner -> new` as fresh wires; the old tip stays wired.
-    pub(super) fn add_path(
-        &mut self,
-        old: Point,
-        new: Point,
-        horizontal_first: Option<bool>,
-        template: Option<&Wire>,
-        group: &[usize],
-        out: &mut Follow,
-    ) -> bool {
-        let across = Point::new(new.x, old.y);
-        let down = Point::new(old.x, new.y);
-        let corners = match self.policy.wiring {
-            // A corner on the new tip leaves one straight leg.
-            DragWiringMode::Straight => vec![new],
-            DragWiringMode::HorizontalFirst => vec![across, down],
-            DragWiringMode::VerticalFirst => vec![down, across],
-            DragWiringMode::Auto if horizontal_first == Some(false) => vec![down, across],
-            DragWiringMode::Auto => vec![across, down],
-        };
-        let allowed = [key(&old), key(&new)];
-        for corner in corners {
-            let mut segs = vec![(old, corner), (corner, new)];
-            segs.retain(|(a, b)| !zero_length(a, b));
-            if segs.is_empty() || segs.iter().any(|seg| self.collides(*seg, &allowed, group)) {
-                continue;
-            }
-            for (a, b) in segs {
-                let mut wire = template.cloned().unwrap_or_else(|| Wire {
-                    color: None,
-                    uuid: Uuid::nil(),
-                    start: a,
-                    end: b,
-                    stroke_width: 0.0,
-                    unknown_columns: Default::default(),
-                    locked: false,
-                });
-                wire.uuid = Uuid::now_v7();
-                // A new leg is a fresh wire; a lock stays on the wire it was set on.
-                wire.locked = false;
-                wire.start = a;
-                wire.end = b;
-                out.touched
-                    .push(SelectedItem::new(wire.uuid, SelectedKind::Wire));
-                self.wires.push(wire);
-                let index = self.wires.len() - 1;
-                self.refile_wire(index);
-                self.placed.insert((index, true));
-                self.placed.insert((index, false));
-                self.edited.insert(index);
-            }
-            return true;
-        }
-        false
     }
 }

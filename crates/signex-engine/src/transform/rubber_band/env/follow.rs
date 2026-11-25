@@ -157,22 +157,20 @@ impl Env {
     }
 
     /// The routes a chosen drag wiring mode gives from `fixed` to `new`, in
-    /// place of the slide and the wire-direction rule; `None` for Auto. A
-    /// zero-length leg of an aligned L is dropped by the caller.
+    /// place of the slide and the wire-direction rule; `None` for Auto. The
+    /// legs are the drawing rule's (`CornerRule::legs`): the mode's own rule
+    /// first, its flip as the fallback.
     fn mode_plans(
         &self,
         fixed: Point,
         new: Point,
         plan: impl Fn(Vec<(Point, Point)>) -> Plan,
     ) -> Option<Vec<Plan>> {
-        let (across, down) = (Point::new(new.x, fixed.y), Point::new(fixed.x, new.y));
-        let corners = match self.policy.wiring {
-            DragWiringMode::Auto => return None,
-            DragWiringMode::Straight => return Some(vec![plan(vec![(fixed, new)])]),
-            DragWiringMode::HorizontalFirst => [across, down],
-            DragWiringMode::VerticalFirst => [down, across],
-        };
-        Some(corners.map(|c| plan(vec![(fixed, c), (c, new)])).into())
+        if self.policy.wiring == DragWiringMode::Auto {
+            return None;
+        }
+        let rules = self.policy.wiring.rules().into_iter();
+        Some(rules.map(|rule| plan(rule.legs(fixed, new))).collect())
     }
 
     /// A wire that shrank to nothing goes when something else still holds its

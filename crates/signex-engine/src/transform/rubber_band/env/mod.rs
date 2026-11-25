@@ -16,8 +16,11 @@ use super::{Move, Policy};
 
 mod follow;
 mod grid;
+mod new_path;
 mod overlap;
 mod route;
+
+use new_path::NewPath;
 
 #[cfg(test)]
 pub(crate) use overlap::wires_overlap;
@@ -55,6 +58,9 @@ pub(super) struct Env {
     moved_no_connects: Vec<usize>,
     /// While a follow may still be undone: each wire end it moved, as it was.
     undo: Option<Vec<(usize, Point, Point)>>,
+    /// Old tips not rerouted yet, and the new paths waiting for them.
+    pending: HashSet<Key>,
+    deferred: Vec<NewPath>,
 }
 
 /// Everything on an old tip other than the wires attached to it.
@@ -145,6 +151,8 @@ impl Env {
             moved_junctions: Vec::new(),
             moved_no_connects: Vec::new(),
             undo: None,
+            pending: HashSet::new(),
+            deferred: Vec::new(),
         };
         env.build_grid();
         env

@@ -391,16 +391,7 @@ fn carry(
         }
         by_tip.entry(pt_key(&mv.old)).or_default().push(mv);
     }
-    let translated = env.translate_whole_wires(&by_tip, &mut out);
-    out.edited_tips.extend(translated);
-    for (key, group) in &by_tip {
-        let before = out.touched.len();
-        env.reroute_tip(*key, group, &mut out);
-        if out.touched.len() > before {
-            out.edited_tips.push(*key);
-        }
-    }
-    env.merge_overlaps(&mut out);
+    env.reroute_all(&by_tip, &mut out);
     env.write_back(document);
     out
 }
