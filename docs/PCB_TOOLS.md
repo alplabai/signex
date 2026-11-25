@@ -488,7 +488,8 @@ when above 0, else `PcbSetup::clearance`, else 0.2 mm).
 A pour's outline only bounds its copper. The copper, its fill, is computed by
 `pcb_geom::zone_fills`, in integer nm:
 
-- the outline less the pour's own holes;
+- the outline less the pour's own holes, its convex corners shaped by its
+  Corners (#2578, below);
 - less every pad (free pads #2373 included), track, free copper arc and via
   on the pour's layer whose net is not the pour's, at its size on that layer
   (#2401), grown by the clearance (copper of no net counts as another net,
@@ -503,6 +504,7 @@ A pour's outline only bounds its copper. The copper, its fill, is computed by
   outline;
 - with every part narrower than the zone's `min_thickness` removed, when it
   is set;
+- hatched, when its Fill Mode is Hatched (#2579, below);
 - with every island (separate piece) smaller than `min_island_area` (mm²)
   removed, when it is above 0, and, with `remove_dead_islands`, every island
   that touches no pad, free pad, track, free copper arc, via or solid copper
@@ -517,7 +519,54 @@ of different nets, the higher priority keeps the overlap.
 Copper of the pour's own net is filled over: a pad joins the pour solidly, with
 no thermal relief spokes (`thermal_relief`, `thermal_gap` and `thermal_width`
 are kept but not read yet). Not modelled yet: copper text and footprint copper
-graphics are not cleared, hatched fill, and rounded or chamfered corners.
+graphics are not cleared.
+
+#### Corners and hatched fill
+
+**Corners** (#2578, `Zone::corners`, `Zone::corner_size`): Sharp, Rounded
+or Chamfer, with a Corner Size in mm. A Rounded corner is an arc of that
+radius tangent to both edges, drawn with the offset's 64 points per turn,
+each on the true circle; a Chamfer cuts the corner back by the size along
+each edge. A corner takes at most half of each of its edges, so two corners
+never cross; a Rounded corner that would need more gets the radius that
+fits. Only the convex corners of the outline are shaped: a concave corner,
+the pour's own holes and every cut-out around other copper keep the shape
+the outline and the clearance give them, so the fill never reaches past the
+drawn outline nor nearer other copper than the clearance (open question
+for the maintainer; this is the conservative default). Sharp, or a size of
+0, fills the outline as drawn.
+
+**Fill Mode** (#2579, `Zone::fill_mode`): Solid or Hatched; there is no
+None, since the outline-only state is Shelve. A hatched fill is the solid
+fill (after the minimum width) cut to a square grid of lines `hatch_width`
+wide with `hatch_gap` between them, aligned to the board origin so moved
+pours keep the grid, joined by a border of the same width inside every edge
+of the fill, around the clearance cut-outs too. A width or gap of 0 uses
+the default, 0.25 mm and 0.5 mm. Islands are dropped after the hatch, so a
+hatch fragment that touches nothing of the pour's net is dead copper like
+any other. A hatch of more than 2000 lines across, or a width or gap the
+geometry cannot hold, is not drawn: the pour is listed as not filled
+(`Unfilled::Hatch`) and Properties says why.
+
+Every reader of the fill (the canvas, Gerber and the fabrication outputs,
+the PDF, the 3D view, the ratsnest, via stitching and the Copper card) takes
+the copper from `pcb_geom::zone_fills`, so each shows the same corners and
+hatch. The design rule check reads no pour copper either way.
+
+The keys (`corners`, `corner_size`, `fill_mode`, `hatch_width`,
+`hatch_gap`) are written only when they differ from Sharp, 0, Solid, 0 and
+0. A board with a pour whose corners are not Sharp or whose fill is Hatched
+writes `snxpcb/1.12`, so a build that knows only 1.11 opens it read-only
+instead of filling the pour solid with sharp corners. An unknown corner or
+fill token is a load error, as an unknown pad shape is.
+
+`set_pour_corners document=.. ids=.. corners=sharp|rounded|chamfer
+[corner_size=<mm>]` and `set_pour_fill document=.. ids=.. fill=solid|hatched
+[width=<mm>] [gap=<mm>]` set them for an agent or the CLI on the board
+`document` names: one undo step each, refused for an id that is no pour of
+the board, an unknown token or a negative length. Each answers with the
+pours as `repour_all` reports them (`zone`, `filled`, `pieces`, `area_mm2`,
+...) plus `corners`, `corner_size`, `fill`, `hatch_width` and `hatch_gap`.
 
 A shelved pour (`Zone::shelved`, #2523) keeps its outline and every setting
 but holds no copper: `pcb_geom::zone_fills` gives it no fill, so it clears no
@@ -553,14 +602,18 @@ when on; a board with one writes `snxpcb/1.11`, so a build that knows only
 A placed pour is picked inside its outline (`PickKind::Polygons`, the
 Polygons chip of the selection filter) and opens the area panel (#2523): its
 illustration, Net Information, then Net, Layer and the Pour section: Fill
-Mode (Solid; Hatched is greyed, not supported yet), Clearance, Minimum
-Width, Thermal Relief (the stored switch with Spoke / Gap, read only and
-greyed, since the fill draws no spokes), Corners and Corner Size (Sharp,
-size 0; greyed, not stored yet), Priority (a whole number from 0), Remove
-Islands (below an area in mm²), Remove Dead Copper, and the Copper card.
-Each edit is one undo step. `min_island_area` and `remove_dead_islands` are
-written to the file only when set. Fill Mode has no None: the outline-only
-state is Shelve.
+Mode (Solid or Hatched, #2579; with Hatch Width and Hatch Gap in mm while
+the pours are hatched, showing the default for a stored 0), Clearance,
+Minimum Width, Thermal Relief (the stored switch with Spoke / Gap, read only
+and greyed, since the fill draws no spokes), Corners (Sharp, Rounded or
+Chamfer, #2578) and Corner Size in mm (greyed at 0 while Sharp), Priority (a
+whole number from 0), Remove Islands (below an area in mm²), Remove Dead
+Copper, and the Copper card. Each edit is one undo step; on a board that
+cannot be edited the Fill Mode and Corners segments send nothing. The same
+rows set the values the Polygon Pour tool places with while it is armed.
+`min_island_area` and `remove_dead_islands` are written to the file only
+when set. Fill Mode has no None: the outline-only state is Shelve. The
+illustration still draws a sharp, solid corner.
 
 The Copper card shows the copper the fill holds (area and pieces, read from
 the fills the app holds), or "shelved · no copper". Its buttons:
