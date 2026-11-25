@@ -104,6 +104,11 @@ const SAVES: &[&str] = &[
     "save_layer_set",
     // Writes the named workspace layout into the user's preferences (mockup row 166).
     "save_workspace_layout",
+    // Writes the part values into the notebook file (mockup row 199).
+    "mark_notebook_attachment_valid",
+    // Copies a file into notebook/attachments/ and writes the notebook file
+    // (mockup row 199).
+    "attach_notebook_file",
 ];
 
 /// The one capability `command` needs, from its catalog flags.
@@ -192,12 +197,15 @@ mod tests {
             (Capability::Save, "save_board_reuse_block"),
             (Capability::Save, "save_layer_set"),
             (Capability::Save, "save_workspace_layout"),
+            (Capability::Save, "mark_notebook_attachment_valid"),
+            (Capability::Save, "attach_notebook_file"),
             (Capability::Export, "print"),
             (Capability::Export, "report_manager_bom"),
             (Capability::Export, "export_board_report"),
             (Capability::Export, "export_board_pdf"),
             (Capability::Export, "export_assembly_svg"),
             (Capability::Export, "export_board_step"),
+            (Capability::Export, "export_notebook_timeline"),
         ]);
         assert_eq!(non_default, pinned);
     }

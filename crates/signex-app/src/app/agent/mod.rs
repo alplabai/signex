@@ -80,6 +80,9 @@ pub enum AgentMsg {
     /// The notebook files a `list_annotations` request waited for were read
     /// (mockup row 198): answer its caller.
     AnnotationsListed(Box<crate::app::command::queries::AnnotationsListed>),
+    /// The notebook read a measurement command waited for landed (mockup
+    /// row 199): answer its caller (the socket, or a headless run).
+    NotebookRead(Box<crate::app::notebook_measurements::NotebookRead>),
     /// A client connected and passed the peer check (#2253).
     ConnectionOpened { pid: Option<u32> },
     /// A connection ended: the client left, idled out or was dropped.

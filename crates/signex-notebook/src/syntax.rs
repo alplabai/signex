@@ -112,7 +112,7 @@ pub fn distinct_references(source: &str) -> Vec<Reference> {
     distinct
 }
 
-fn reference_of(call: ast::FuncCall<'_>) -> Option<Reference> {
+pub(crate) fn reference_of(call: ast::FuncCall<'_>) -> Option<Reference> {
     let ast::Expr::Ident(name) = call.callee() else {
         return None;
     };

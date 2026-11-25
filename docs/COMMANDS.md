@@ -56,6 +56,12 @@ problems by name (`bad_id`, `duplicate_id`, `bad_field`, ...); then every
 citation (`links`) and the failing Measurements that open no Issue yet
 (`unopened_failures`). Fields in
 [NOTEBOOK_ANNOTATIONS.md](NOTEBOOK_ANNOTATIONS.md), "Review records".
+`notebook_measurements`, `notebook_timeline` and `notebook_attachments`
+read the named project's Design Notebook once its files are read: every
+reading with its result, one net's, part's or pin's timeline, every
+attachment with its stale mark; `export_notebook_timeline`,
+`mark_notebook_attachment_valid` and `attach_notebook_file` write a file.
+Rules in [NOTEBOOK_MEASUREMENTS.md](NOTEBOOK_MEASUREMENTS.md).
 `measure_board`, `query_board_nets` and `find_similar_items` are board
 queries: a distance on one board, point to point or edge to edge between
 two items; each net's routed length, members and routed state; and the
@@ -89,6 +95,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `apply_layout_notebook` | Workspace layout: Notebook | window | — | — |
 | `apply_layout_review` | Workspace layout: Review | window | — | — |
 | `apply_layout_schematic` | Workspace layout: Schematic | window | — | — |
+| `attach_notebook_file` | Copy a file into the notebook as an attachment | design | — | — |
 | `autoplace_fields` | Autoplace fields | edit | — | `O` |
 | `break_wire` | Break wire | modify | `E W` | — |
 | `bring_drawings_forward` | Bring drawings forward | edit | — | — |
@@ -125,6 +132,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `edit_text_in_place` | In-place edit selected text | edit | `F2` | — |
 | `edit_value` | Edit value | edit | — | `V` |
 | `export_notebook_pdf` | Export the Design Notebook as PDF | file | — | — |
+| `export_notebook_timeline` | Export a measurement timeline as a CSV file | reports | — | — |
 | `fast_grid_1` | Fast grid 1 | view | — | `Alt+1` |
 | `fast_grid_2` | Fast grid 2 | view | — | `Alt+2` |
 | `find` | Find | search | `Mod+F` | `Mod+F` |
@@ -140,6 +148,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `list_annotations` | List the annotation blocks of the project's Design Notebook | design | — | — |
 | `list_documents` | List documents | file | — | — |
 | `manage_workspace_layouts` | Manage workspace layouts | window | — | — |
+| `mark_notebook_attachment_valid` | Mark a stale attachment or reading as still valid | design | — | — |
 | `measure_distance` | Measure distance | view | `Ctrl+M` | `Ctrl+M` |
 | `mirror_x` | Mirror along X-axis | modify | `X` | `X` |
 | `mirror_y` | Mirror along Y-axis | modify | `Y` | `Y` |
@@ -149,8 +158,16 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `new_project_with_profile` | New project from a profile | file | — | — |
 | `next_document_tab` | Next open document tab | window | `Ctrl+Tab` | — |
 | `next_grid` | Next grid | view | — | `N` |
+| `notebook_attachments` | List the notebook's attachments and their stale marks | design | — | — |
+| `notebook_badges` | List the Notebook badges and their blocks | design | — | — |
 | `notebook_compile` | Compile the project's Design Notebook and report its pages and problems | reports | — | — |
+| `notebook_fix_reference` | Fix a stale notebook reference | design | — | — |
 | `notebook_insert` | Insert a reference or a block into the open Design Notebook | edit | — | — |
+| `notebook_measurements` | List the notebook's measurements with their results | design | — | — |
+| `notebook_reference_card` | Read the hover card of a notebook reference | design | — | — |
+| `notebook_reference_picker` | List what the @ reference picker offers | design | — | — |
+| `notebook_references` | List the notebook's references and the stale ones | design | — | — |
+| `notebook_timeline` | Show the measurement timeline of a net, part or pin | design | — | — |
 | `notebook_view` | Set the view, the side panel or the next problem of the Design Notebook tab | view | — | — |
 | `open_command_palette` | Open command palette | commands | `Mod+Shift+P` | `Ctrl+K`, `Mod+Shift+P` |
 | `open_compiled_design` | Open Compiled Design panel | panels | — | — |

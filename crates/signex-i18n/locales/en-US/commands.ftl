@@ -784,3 +784,11 @@ cmd-notebook-reference-card = Read the hover card of a notebook reference
 cmd-notebook-reference-picker = List what the @ reference picker offers
 cmd-notebook-badges = List the Notebook badges and their blocks
 cmd-notebook-fix-reference = Fix a stale notebook reference
+# notebook-measurements
+# Mockup row 199: the Design Notebook's readings, timelines and attachments.
+cmd-notebook-measurements = List the notebook's measurements with their results
+cmd-notebook-timeline = Show the measurement timeline of a net, part or pin
+cmd-notebook-attachments = List the notebook's attachments and their stale marks
+cmd-export-notebook-timeline = Export a measurement timeline as a CSV file
+cmd-mark-notebook-attachment-valid = Mark a stale attachment or reading as still valid
+cmd-attach-notebook-file = Copy a file into the notebook as an attachment

@@ -141,6 +141,17 @@ impl CompiledNotebook {
         self.document.pages().len()
     }
 
+    /// The text the pages print, each run of text followed by a space and
+    /// each page by a line break: what a test or a search reads.
+    pub fn text(&self) -> String {
+        let mut out = String::new();
+        for page in self.document.pages() {
+            frame_text(&page.frame, &mut out);
+            out.push('\n');
+        }
+        out
+    }
+
     /// The number and size of every page.
     pub fn pages(&self) -> Vec<PageInfo> {
         self.document
@@ -215,6 +226,19 @@ fn diagnostic(world: &NotebookWorld, source: &SourceDiagnostic) -> Diagnostic {
         column,
         message: source.message.to_string(),
         hints: source.hints.iter().map(|h| h.v.to_string()).collect(),
+    }
+}
+
+fn frame_text(frame: &typst::layout::Frame, out: &mut String) {
+    for (_, item) in frame.items() {
+        match item {
+            typst::layout::FrameItem::Group(group) => frame_text(&group.frame, out),
+            typst::layout::FrameItem::Text(run) => {
+                out.push_str(&run.text);
+                out.push(' ');
+            }
+            _ => {}
+        }
     }
 }
 

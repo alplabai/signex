@@ -740,5 +740,12 @@ define_ids! {
         CMD_NOTEBOOK_REFERENCE_PICKER = "cmd-notebook-reference-picker";
         CMD_NOTEBOOK_BADGES = "cmd-notebook-badges";
         CMD_NOTEBOOK_FIX_REFERENCE = "cmd-notebook-fix-reference";
+        // notebook-measurements
+        CMD_NOTEBOOK_MEASUREMENTS = "cmd-notebook-measurements";
+        CMD_NOTEBOOK_TIMELINE = "cmd-notebook-timeline";
+        CMD_NOTEBOOK_ATTACHMENTS = "cmd-notebook-attachments";
+        CMD_EXPORT_NOTEBOOK_TIMELINE = "cmd-export-notebook-timeline";
+        CMD_MARK_NOTEBOOK_ATTACHMENT_VALID = "cmd-mark-notebook-attachment-valid";
+        CMD_ATTACH_NOTEBOOK_FILE = "cmd-attach-notebook-file";
     }
 }

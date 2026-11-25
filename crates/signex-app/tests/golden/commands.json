@@ -120,6 +120,11 @@
     "category": "design"
   },
   {
+    "id": "attach_notebook_file",
+    "group": "General",
+    "category": "design"
+  },
+  {
     "id": "autoplace_fields",
     "group": "General",
     "category": "edit"
@@ -580,6 +585,11 @@
     "category": "file"
   },
   {
+    "id": "export_notebook_timeline",
+    "group": "General",
+    "category": "reports"
+  },
+  {
     "id": "fabrication_outputs",
     "group": "Pcb",
     "category": "file"
@@ -790,6 +800,11 @@
     "category": "window"
   },
   {
+    "id": "mark_notebook_attachment_valid",
+    "group": "General",
+    "category": "design"
+  },
+  {
     "id": "measure_board",
     "group": "Pcb",
     "category": "search"
@@ -885,14 +900,54 @@
     "category": "view"
   },
   {
+    "id": "notebook_attachments",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "notebook_badges",
+    "group": "General",
+    "category": "design"
+  },
+  {
     "id": "notebook_compile",
     "group": "General",
     "category": "reports"
   },
   {
+    "id": "notebook_fix_reference",
+    "group": "General",
+    "category": "design"
+  },
+  {
     "id": "notebook_insert",
     "group": "General",
     "category": "edit"
+  },
+  {
+    "id": "notebook_measurements",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "notebook_reference_card",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "notebook_reference_picker",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "notebook_references",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "notebook_timeline",
+    "group": "General",
+    "category": "design"
   },
   {
     "id": "notebook_view",

@@ -622,6 +622,42 @@ pub const LIST_ANNOTATIONS: &[Operand] = &[
     optional("kind", OperandKind::Text),
     optional("part", OperandKind::Text),
 ];
+/// `notebook_timeline` (mockup row 199): the readings of one net, part or
+/// pin (`U3.3`) of the named project's notebook, of one quantity or all.
+pub const NOTEBOOK_TIMELINE: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("net", OperandKind::Text),
+    optional("part", OperandKind::Text),
+    optional("pin", OperandKind::Text),
+    optional("quantity", OperandKind::Text),
+];
+/// `export_notebook_timeline`: that timeline's list written as CSV.
+pub const NOTEBOOK_TIMELINE_EXPORT: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("net", OperandKind::Text),
+    optional("part", OperandKind::Text),
+    optional("pin", OperandKind::Text),
+    optional("quantity", OperandKind::Text),
+    required("path", OperandKind::Path),
+];
+/// `mark_notebook_attachment_valid`: the attachment (`file`, inside
+/// `notebook/attachments/`) or the reading (`id`, `MEAS-..`) to mark.
+pub const NOTEBOOK_MARK_VALID: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("file", OperandKind::Text),
+    optional("id", OperandKind::Text),
+];
+/// `attach_notebook_file`: the file, the attachments folder it goes to
+/// (`kind`), its caption (`text`) and what it shows.
+pub const NOTEBOOK_ATTACH: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("path", OperandKind::Path),
+    optional("kind", OperandKind::Text),
+    optional("text", OperandKind::Text),
+    optional("net", OperandKind::Text),
+    optional("part", OperandKind::Text),
+    optional("pin", OperandKind::Text),
+];
 /// `check_erc` (#2199): ERC on the project of the named sheet, answered as a
 /// check report; `baseline` is an earlier answer's `run`.
 pub const CHECK_ERC: &[Operand] = &[

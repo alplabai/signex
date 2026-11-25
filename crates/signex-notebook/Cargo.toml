@@ -11,6 +11,8 @@ license.workspace = true
 # tests read and compile the same way (docs/NOTEBOOK_ANNOTATIONS.md).
 [dependencies]
 serde = { workspace = true }
+# The attachment manifest the bundled package reads (src/derived.rs).
+serde_json = { workspace = true }
 signex-types = { workspace = true }
 thiserror = { workspace = true }
 toml = { workspace = true }
@@ -20,9 +22,6 @@ typst-layout = { workspace = true }
 typst-pdf = { workspace = true }
 typst-render = { workspace = true }
 uuid = { workspace = true }
-
-[dev-dependencies]
-serde_json = { workspace = true }
 
 [lints]
 workspace = true

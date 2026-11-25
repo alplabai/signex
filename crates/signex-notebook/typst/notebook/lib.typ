@@ -29,7 +29,19 @@
 // One function per kind, each with a typed id (NOTE-, CALC-, MEAS-, ISS-,
 // DEC-), printed as a review record; the earlier #annotation(kind: ...)
 // form; the verdict rule; the page block. See blocks.typ.
-#import "blocks.typ": note, calculation, measurement, issue, decision, annotation, verdict, page-info
+#import "blocks.typ": note, calculation, issue, decision, annotation, verdict, page-info
+#import "blocks.typ": measurement as _record-measurement
+// Bench readings and attachments (mockup row 199): measure.typ.
+#import "measure.typ": attachment, measurement as _bench-measurement
+
+// One #measurement for both forms: a block of bench readings (a body of
+// #measurement calls) or a reading with a `quantity` prints as measure.typ
+// draws it; the review record of mockup row 198 (`rows:`, or one
+// `target:`/`value:`/`limit:` row) as blocks.typ draws it.
+#let measurement(..args) = {
+  let bench = args.pos().len() > 0 or "quantity" in args.named()
+  if bench { _bench-measurement(..args) } else { _record-measurement(..args) }
+}
 
 // The report layout: #show: report.with(doc: "DN-0042", rev: "B").
 // No creation date is written, so two exports give the same file.

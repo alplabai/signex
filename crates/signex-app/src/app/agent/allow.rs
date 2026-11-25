@@ -132,16 +132,22 @@ mod tests {
                 "list_annotations",
                 "list_documents",
                 "lock_board_items",
+                // Mockup row 199: the notebook's measurements, timelines and
+                // attachments, and Mark still valid, on the named project.
+                "mark_notebook_attachment_valid",
                 "measure_board",
-                // #2795, mockup rows 195-197: the Design Notebook tab, its
-                // references and badges, on the named project.
+                // #2795, mockup rows 195-199: the Design Notebook tab, its
+                // references, badges and measurements, on the named project.
+                "notebook_attachments",
                 "notebook_badges",
                 "notebook_compile",
                 "notebook_fix_reference",
                 "notebook_insert",
+                "notebook_measurements",
                 "notebook_reference_card",
                 "notebook_reference_picker",
                 "notebook_references",
+                "notebook_timeline",
                 "notebook_view",
                 "panelize_board",
                 // #2410: pin and gate swap and design reuse, on the named board.

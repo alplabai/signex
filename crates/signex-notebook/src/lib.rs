@@ -39,7 +39,28 @@
 //! [`picker_entries`] the `@` picker and [`badges`] the schematic's
 //! Notebook badges (mockup rows 196 and 197).
 //!
+//! Bench work (mockup row 199): [`measurement`] reads the `#measurement`
+//! readings with their verdict and builds the timeline of a net, part or
+//! pin; [`attachment`] reads the `#attachment` figures, their stale marks
+//! and the copy into `notebook/attachments/`; [`scope`] draws a scope CSV
+//! as a vector plot. [`bench`] gathers them over a notebook's files and
+//! [`report`] gives the command answers (`docs/NOTEBOOK_MEASUREMENTS.md`).
+//!
 //! UI-free and IO-free: the caller reads the files.
+
+pub mod attachment;
+pub mod bench;
+pub mod edit;
+pub mod measurement;
+pub mod report;
+pub mod scope;
+pub mod si;
+
+mod derived;
+mod literal;
+mod timestamp;
+
+pub use timestamp::Timestamp;
 
 mod annotation;
 mod badge;
@@ -134,6 +155,8 @@ pub const DEFAULT_NOTEBOOK_FILE: &str = "design.snxnbk";
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod tests_attachment;
+#[cfg(test)]
 mod tests_badges;
 #[cfg(test)]
 mod tests_compile;
@@ -142,8 +165,14 @@ mod tests_design;
 #[cfg(test)]
 mod tests_file;
 #[cfg(test)]
+mod tests_measure_print;
+#[cfg(test)]
+mod tests_measurement;
+#[cfg(test)]
 mod tests_model;
 #[cfg(test)]
 mod tests_records;
 #[cfg(test)]
 mod tests_references;
+#[cfg(test)]
+mod tests_scope;

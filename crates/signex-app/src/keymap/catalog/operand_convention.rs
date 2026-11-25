@@ -121,11 +121,13 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("view", OperandKind::Text),
     ("panel", OperandKind::Text),
     ("next_problem", OperandKind::Bool),
-    // Mockup row 196: the fix of a stale notebook reference, the name it is
-    // updated to and the pin it is pointed at.
+    // Mockup rows 196 and 199: the fix of a stale notebook reference, the
+    // name it is updated to and the pin (`U3.3`) it or a timeline names.
     ("fix", OperandKind::Text),
     ("to", OperandKind::Text),
     ("pin", OperandKind::Text),
+    // Mockup row 199: a notebook timeline's quantity.
+    ("quantity", OperandKind::Text),
 ];
 
 /// The commands whose `ids` is still text, not targets (#2326): a design

@@ -23,6 +23,7 @@ arrange_in_box	SwapFootprints	839120ff5cdc4bd4
 assign_board_net_class	-	f2929686b07ef725
 assign_footprints	Schematic	f8bd7a5cb84e915b
 assign_net_class	-	f2929686b07ef725
+attach_notebook_file	-	f2929686b07ef725
 autoplace_fields	-	f2929686b07ef725
 back_annotate_schematics	PcbSync	a85dffe6af2a0327
 board_assembly_drawing	Pcb	119d310e454dd5e4
@@ -115,6 +116,7 @@ export_board_pdf	Pcb	119d310e454dd5e4
 export_board_report	Pcb	119d310e454dd5e4
 export_board_step	Pcb	119d310e454dd5e4
 export_notebook_pdf	OpenProject	ee0317ecaf5bfb5b
+export_notebook_timeline	-	f2929686b07ef725
 fabrication_outputs	Pcb	119d310e454dd5e4
 fast_grid_1	-	f2929686b07ef725
 fast_grid_2	-	f2929686b07ef725
@@ -157,6 +159,7 @@ list_annotations	-	f2929686b07ef725
 list_documents	-	f2929686b07ef725
 lock_board_items	Pcb	119d310e454dd5e4
 manage_workspace_layouts	-	f2929686b07ef725
+mark_notebook_attachment_valid	-	f2929686b07ef725
 measure_board	-	f2929686b07ef725
 measure_distance	MeasureTarget	ac2868db6f01027f
 mirror_x	Turn	50ba39b5e679cbc7
@@ -176,8 +179,16 @@ next_highlighted_net_item	-	f2929686b07ef725
 next_layer	Pcb	119d310e454dd5e4
 next_sheet	-	f2929686b07ef725
 next_signal_layer	Pcb	119d310e454dd5e4
+notebook_attachments	-	f2929686b07ef725
+notebook_badges	-	f2929686b07ef725
 notebook_compile	-	f2929686b07ef725
+notebook_fix_reference	-	f2929686b07ef725
 notebook_insert	-	f2929686b07ef725
+notebook_measurements	-	f2929686b07ef725
+notebook_reference_card	-	f2929686b07ef725
+notebook_reference_picker	-	f2929686b07ef725
+notebook_references	-	f2929686b07ef725
+notebook_timeline	-	f2929686b07ef725
 notebook_view	-	f2929686b07ef725
 number_schematic_sheets	ProjectSheet	b9cf07c7e6ca1a9f
 open_child_sheet	-	f2929686b07ef725
