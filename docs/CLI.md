@@ -1053,6 +1053,80 @@ find_similar_items document=<board> id=<uuid> [fields=kind,value,...]
 
 Find by text on a board is `find_items` (designator and value).
 
+### Part heights
+
+```text
+query_part_heights document=<board>
+```
+
+`query_part_heights` (#2939) answers each part of one open board, in board
+order, with the height the component height and 3D body clearance rules
+measure (see [`DRC_RULES.md`](DRC_RULES.md), "Component height and 3D body
+clearance"). The library models of the footprints the parts came from are
+read off the UI thread, as a DRC run reads them, and the answer comes when
+they land. It changes nothing and is on the agent channel. A board that is
+not open is refused ("open the board first"), and so is a document that is
+not a board.
+
+```json
+{
+  "document": "/work/demo/demo.snxpcb",
+  "parts": [
+    { "id": "<uuid>", "designator": "U1", "side": "top", "height_mm": 3.0,
+      "bottom_mm": 0.0, "source": "stored", "problem": null }
+  ],
+  "unread": []
+}
+```
+
+- `side` is `top` or `bottom`; `height_mm` is the tallest point of the body
+  above that face, `bottom_mm` where the body starts (above 0 for a body
+  raised off the board).
+- `source` is where the height came from: `model` (the model file attached
+  to the library footprint, measured as the box of its points), `body` (the
+  library footprint's 3D Body), `stored` (the Height stored on the part, over
+  its courtyard or pads) or `none` (no model and no Height: `height_mm` is
+  `null` and the rules do not check it).
+- `problem` says why a part's body could not be measured (a coordinate that
+  is no length); `null` otherwise.
+- `unread` lists the models that could not be read; those parts fall back
+  to their stored Height.
+
+## Library rows
+
+```text
+query_library library=<id or path> [part=<row id or part number>] [text=<text>]
+```
+
+`query_library` (#2944) answers the rows of one open library as the app
+holds them: no file is read and no library server is reached. `library`
+names it as `place_component` does (its id, or the path of its `.snxlib`).
+Without `part` or `text` every row is listed, table by table in name order;
+`part` narrows the answer to the row with that id or the one row with that
+part number (internal or manufacturer), and `text` to the rows whose part
+numbers, manufacturer, class or description hold it (case folded). A
+library that is not open, or a part it does not have, is refused with the
+reason. It is a query on the agent channel and needs only `read`.
+
+```json
+{
+  "library": { "id": "<uuid>", "name": "parts", "path": "/work/demo/parts.snxlib" },
+  "count": 1,
+  "rows": [
+    { "id": "<uuid>", "table": "R", "internal_pn": "R-1", "class": "resistor",
+      "description": "", "state": "draft", "version": "0.0.1", "released": false,
+      "manufacturer": "", "mpn": "RC0603-10K", "alternates": [],
+      "symbol": { "library": "<uuid>", "id": "<uuid>", "version": "0.0.1" },
+      "footprint": null, "parameters": {}, "revision": 42 }
+  ]
+}
+```
+
+`state` is one of `draft`, `in_review`, `released`, `deprecated`,
+`obsolete`; `revision` is the base revision a later write of the row is
+checked against (`null` for a row not read from a store). The library row
+and part write commands of #2944 are not in this build.
+
 ## Working through a running Signex
 
 When a person has the project open in Signex with Preferences > System ›
@@ -1272,7 +1346,8 @@ is enforced before the app sees a command.
 - **No code execution, no network.** The run uses a throwaway config root,
   never the user's. Launching a browser, viewer or file manager is refused by
   the app's headless ports, and no command that reaches a library server is
-  runnable headless (every `library` command is `gui_only`).
+  runnable headless (every `library` command is `gui_only`; `query_library`
+  reads only the rows the app already holds).
 - **Same enablement as the GUI.** `dispatch_command`'s enablement gate
   applies; a command the GUI would grey out is `refused` with its reason.
 - **`gui_only` commands** (their whole effect is window UI, or they need a
