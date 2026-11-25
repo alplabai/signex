@@ -8,8 +8,9 @@
 //! rule profile library, read off the update loop first), and the board
 //! queries `measure_board`, `query_board_nets` and `find_similar_items`
 //! (#2403), `board_panel` (#2410, `app::board_panel`), and the Project tab's
-//! `project_settings` (#1689-#1693, `app::project_tab`). Each
-//! answers with data through [`CommandOutcome::Answered`], never a bare
+//! `project_settings` (#1689-#1693, `app::project_tab`), and the BOM and
+//! part search queries `query_bom` (#2938) and `search_parts` (#1297,
+//! `bom`). Each answers with data through [`CommandOutcome::Answered`], never a bare
 //! `Ran`, and reads only the documents (engines, boards, editors, projects,
 //! the library): no active tab, window, selection or panel is looked at, and
 //! none is changed. What it cannot answer yet it refuses with the reason; it
@@ -19,6 +20,9 @@
 //! `docs/DOCUMENT_IDS.md`; the answer shapes are in `docs/COMMANDS.md`.
 
 mod board;
+mod bom;
+#[cfg(test)]
+mod bom_tests;
 mod check_drc;
 mod check_erc;
 mod check_requirements;
@@ -64,6 +68,8 @@ const QUERY_IDS: &[&str] = &[
     "rules_preset_diff",
     "board_panel",
     "project_settings",
+    "query_bom",
+    "search_parts",
 ];
 
 /// The queries that run a check (`check_run`): each says nothing in
@@ -153,6 +159,8 @@ impl Signex {
             }
             // A profile preset may need the profile library read first.
             "rules_preset_diff" => return Some(self.rules_preset_diff(args)),
+            // #2938: answered once the BOM, built off the UI thread, lands.
+            "query_bom" => return Some(self.query_bom(command, args)),
             _ => {}
         }
         let answer = match id {
@@ -165,6 +173,7 @@ impl Signex {
             "query_board_nets" => self.query_board_nets(args),
             "find_similar_items" => self.find_similar_items(args),
             "board_panel" => self.board_panel_query(args),
+            "search_parts" => self.search_parts_query(args),
             _ => self.read_document(args),
         };
         // The heads of referenced files that were never read are read now,

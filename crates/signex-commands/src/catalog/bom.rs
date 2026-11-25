@@ -33,10 +33,11 @@ pub const QUERY_BOM: &[Operand] = &[
     optional("currency", OperandKind::Text),
     optional("variant", OperandKind::Text),
 ];
-/// `search_parts`: the Components panel's query over the open libraries,
-/// narrowed by parameters, stock, and priced at `quantity`.
+/// `search_parts`: the Components panel's query over the open libraries
+/// (none matches every part), narrowed by parameters and stock, priced at
+/// `quantity`.
 pub const SEARCH_PARTS: &[Operand] = &[
-    required("query", OperandKind::Text),
+    optional("query", OperandKind::Text),
     optional("value", OperandKind::Text),
     optional("package", OperandKind::Text),
     optional("tolerance", OperandKind::Text),
