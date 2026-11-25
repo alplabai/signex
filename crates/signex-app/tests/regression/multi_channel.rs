@@ -681,6 +681,7 @@ fn a_compile_draws_each_channel_card_with_its_designators() {
             .collect();
         assert_eq!(names, [format!("{}_R5", tab.channel.name)]);
     }
+}
 
 fn designator_format(f: &Fixture) -> String {
     f.app.document_state.projects[0]
