@@ -363,4 +363,205 @@ mod tests {
             "Enter apply · Esc cancel"
         );
     }
+
+    /// Mockup row 65: a 1 px accent border with a 2 px radius, inside a
+    /// 3 px accent-soft focus ring.
+    #[test]
+    fn the_editor_has_an_accent_border_inside_a_soft_focus_ring() {
+        let (app, _boot) = crate::app::Signex::new();
+        let tokens = &app.document_state.panel_ctx.tokens;
+        let soft = crate::styles::tokens::resolve(tokens).accent_soft;
+        let theme = iced::Theme::Dark;
+        let input = editor_style(tokens)(&theme, iced::widget::text_input::Status::Active);
+        assert_eq!(input.border.color, crate::styles::ti(tokens.accent));
+        assert_eq!(input.border.width, 1.0);
+        assert_eq!(
+            input.border.radius,
+            iced::border::Radius::from(EDITOR_RADIUS)
+        );
+        let ring = focus_ring_style(tokens)(&theme);
+        assert_eq!(ring.background, Some(iced::Background::Color(soft)));
+        assert_eq!(
+            ring.border.radius,
+            iced::border::Radius::from(EDITOR_RADIUS + FOCUS_RING)
+        );
+        const { assert!(FOCUS_RING == 3.0) };
+    }
+
+    /// Mockup row 65: the text selected on open shows on the soft accent,
+    /// apart from the paper.
+    #[test]
+    fn the_whole_text_selection_reads_on_the_paper() {
+        let (app, _boot) = crate::app::Signex::new();
+        let tokens = &app.document_state.panel_ctx.tokens;
+        let soft = crate::styles::tokens::resolve(tokens).accent_soft;
+        let input =
+            editor_style(tokens)(&iced::Theme::Dark, iced::widget::text_input::Status::Active);
+        assert_eq!(input.selection, soft);
+        assert_ne!(
+            input.background,
+            iced::Background::Color(input.selection),
+            "the selection would vanish into the paper"
+        );
+    }
+
+    /// Mockup row 65: the anchor is marked by a cross through its centre.
+    #[test]
+    fn the_anchor_cross_is_drawn_through_its_centre() {
+        let side = 2.0 * SP.s + crate::styles::HAIRLINE;
+        let window = iced::Size::new(3.0 * side, 3.0 * side);
+        let pixels = crate::layout_probe::draw_pixels(anchor_cross(iced::Color::WHITE), window);
+        let width = window.width as usize;
+        let inked = |x: usize, y: usize| pixels[4 * (y * width + x)..][..3].iter().any(|c| *c > 64);
+        let centre = (side / 2.0) as usize;
+        assert!(inked(centre, centre), "the crossing");
+        assert!(inked(centre, 0), "the vertical arm");
+        assert!(inked(0, centre), "the horizontal arm");
+        assert!(!inked(0, 0), "a cross, not a filled square");
+    }
+
+    /// A one-note sheet, the note selected, active in the main window.
+    fn app_with_selected_note() -> crate::app::Signex {
+        let path = std::path::PathBuf::from("text-edit.snxsch");
+        let note = signex_types::schematic::TextNote {
+            uuid: uuid::Uuid::now_v7(),
+            text: "note".to_string(),
+            position: signex_types::schematic::Point::new(20.0, 20.0),
+            rotation: 0.0,
+            font_size: 0.0,
+            font_family: None,
+            justify_h: HAlign::Left,
+            justify_v: Default::default(),
+            locked: false,
+        };
+        let selected =
+            signex_types::schematic::SelectedItem::new(note.uuid, SelectedKind::TextNote);
+        let sheet = signex_types::schematic::SchematicSheet {
+            text_notes: vec![note],
+            ..Default::default()
+        };
+        let (mut app, _boot) = crate::app::Signex::new();
+        app.ui_state.first_run_tour_open = false;
+        let engine = signex_engine::Engine::new(sheet).expect("engine");
+        app.document_state.engines.insert(path.clone(), engine);
+        app.document_state.tabs.push(crate::app::TabInfo {
+            title: "text-edit".to_string(),
+            path: path.clone(),
+            cached_document: None,
+            project_id: None,
+            kind: crate::app::TabKind::Schematic,
+        });
+        app.document_state.active_tab = 0;
+        app.document_state.active_path = Some(path);
+        app.interaction_state.active_canvas_mut().selected = vec![selected];
+        app
+    }
+
+    /// What the opening task's widget operations do to the editor's input.
+    #[derive(Default)]
+    struct InputProbe {
+        focused: bool,
+        selected_all: bool,
+    }
+
+    impl iced::advanced::widget::operation::Focusable for InputProbe {
+        fn is_focused(&self) -> bool {
+            self.focused
+        }
+        fn focus(&mut self) {
+            self.focused = true;
+        }
+        fn unfocus(&mut self) {
+            self.focused = false;
+        }
+    }
+
+    impl iced::advanced::widget::operation::TextInput for InputProbe {
+        fn text(&self) -> iced::advanced::text::Fragment<'_> {
+            "note".into()
+        }
+        fn move_cursor_to_front(&mut self) {}
+        fn move_cursor_to_end(&mut self) {}
+        fn move_cursor_to(&mut self, _: iced::advanced::text::Position) {}
+        fn select_all(&mut self) {
+            self.selected_all = true;
+        }
+        fn select_range(
+            &mut self,
+            _: iced::advanced::text::Position,
+            _: iced::advanced::text::Position,
+        ) {
+        }
+    }
+
+    /// Mockup row 65: opening the editor focuses it with the whole text
+    /// selected, so typing replaces it. A headless capture drops these
+    /// operations, so a capture shows no selection.
+    #[test]
+    fn opening_the_editor_focuses_it_with_the_whole_text_selected() {
+        use futures::StreamExt as _;
+        use iced::advanced::widget::Operation as _;
+        let mut app = app_with_selected_note();
+        let task = app.request_text_edit(crate::app::TextEditTarget::Text);
+        assert!(
+            app.interaction_state.editing_text.is_some(),
+            "the editor opened"
+        );
+        let stream = iced_runtime::task::into_stream(task).expect("the opening task");
+        let actions: Vec<_> = futures::executor::block_on(stream.collect());
+        let id = crate::app::contracts::TEXT_EDIT_INPUT_ID.clone();
+        let bounds = iced::Rectangle::with_size(iced::Size::new(1.0, 1.0));
+        let mut probe = InputProbe::default();
+        for action in actions {
+            if let iced_runtime::Action::Widget(mut operation) = action {
+                operation.focusable(Some(&id), bounds, &mut probe);
+                operation.text_input(Some(&id), bounds, &mut probe);
+            }
+        }
+        assert!(probe.focused, "the editor takes the keyboard");
+        assert!(probe.selected_all, "the whole text is selected");
+    }
+
+    /// Mockup row 65: the open editor is drawn, showing the note's text.
+    #[test]
+    fn the_open_editor_shows_its_text() {
+        let mut app = app_with_selected_note();
+        let task = app.request_text_edit(crate::app::TextEditTarget::Text);
+        assert!(
+            iced_runtime::task::into_stream(task).is_some(),
+            "opening focuses the editor"
+        );
+        let main = app.ui_state.main_window_id.expect("the main window");
+        let overlay = app.text_edit_overlay(main).expect("the editor overlay");
+        let inputs = crate::layout_probe::lay_out_inputs(overlay, iced::Size::new(1200.0, 800.0));
+        assert!(inputs.iter().any(|i| i.text == "note"), "{inputs:?}");
+    }
+
+    /// Mockup row 65, decided 2026-11-24: a click outside the editor applies
+    /// the typed text, as the panel fields do, as one undo step.
+    #[test]
+    fn a_click_outside_the_editor_applies_the_edit() {
+        let mut app = app_with_selected_note();
+        let path = app.document_state.active_path.clone().expect("the sheet");
+        let opened = app.request_text_edit(crate::app::TextEditTarget::Text);
+        assert!(iced_runtime::task::into_stream(opened).is_some());
+        let _ = app.update(Message::TextEdit(crate::app::TextEditMsg::Changed(
+            "typed".into(),
+        )));
+        let _ = app.update(Message::CanvasEvent(crate::canvas::CanvasEvent::Clicked {
+            world_x: 200.0,
+            world_y: 200.0,
+        }));
+        assert!(app.interaction_state.editing_text.is_none(), "it closed");
+        let note_text = |app: &crate::app::Signex| {
+            app.document_state.engines[&path].document().text_notes[0]
+                .text
+                .clone()
+        };
+        assert_eq!(note_text(&app), "typed");
+        let engine = app.document_state.engines.get_mut(&path).expect("engine");
+        engine.undo().expect("undo").expect("one step");
+        assert!(!engine.has_document_step(true), "the edit was one step");
+        assert_eq!(note_text(&app), "note");
+    }
 }
