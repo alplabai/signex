@@ -68,6 +68,8 @@ mod reannotate_tests;
 #[cfg(test)]
 mod relink_tests;
 #[cfg(test)]
+mod swap_tests;
+#[cfg(test)]
 mod sync_guard_tests;
 #[cfg(test)]
 mod tests;
