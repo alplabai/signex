@@ -191,7 +191,131 @@ fn an_edited_list_saves_and_reads_back_the_same() {
     assert_eq!(
         again.requirements[1].requirement().unwrap().kind,
         RequirementKind::PartsState {
-            states: vec!["released".into(), "in_review".into()]
+            states: vec!["released".into(), "in_review".into()],
+            variant: None,
+            fitted_only: true,
         }
     );
+}
+
+/// #2686: Variant names Base or one of the project's variants, stored in
+/// its own spelling; empty clears it (the active variant); a name the
+/// project does not have is refused and changes nothing.
+#[test]
+fn the_variant_field_names_base_or_a_project_variant() {
+    let mut data = project(json!([{"id": "parts", "kind": "parts_state"}]));
+    data.variant_definitions = vec!["Proto".into()];
+    let field = RequirementField::Variant;
+    data.set_requirement_field(0, field, " proto ").unwrap();
+    assert_eq!(raw(&data, 0)["variant"], json!("Proto"));
+    data.set_requirement_field(0, field, "base").unwrap();
+    assert_eq!(raw(&data, 0)["variant"], json!("Base"));
+    assert_eq!(
+        data.set_requirement_field(0, field, "Lite"),
+        Err(RequirementProblem::UnknownVariant("Lite".into()))
+    );
+    assert_eq!(raw(&data, 0)["variant"], json!("Base"), "unchanged");
+    data.set_requirement_field(0, field, "").unwrap();
+    assert_eq!(
+        raw(&data, 0),
+        &json!({"id": "parts", "kind": "parts_state"})
+    );
+    let mut other = project(json!([{"id": "erc", "kind": "erc_clean"}]));
+    assert!(matches!(
+        other.set_requirement_field(0, field, "Base"),
+        Err(RequirementProblem::NotAField { .. })
+    ));
+}
+
+/// #2686: Fitted parts only is a yes/no field, on by default (the parts the
+/// BOM buys, as before); only off is written.
+#[test]
+fn fitted_parts_only_is_on_by_default_and_stored_only_while_off() {
+    let mut data = project(json!([{"id": "parts", "kind": "parts_state"}]));
+    let fitted_only = |data: &ProjectData| match &data.requirements[0].requirement().unwrap().kind {
+        RequirementKind::PartsState { fitted_only, .. } => *fitted_only,
+        _ => panic!("a parts_state"),
+    };
+    assert!(fitted_only(&data), "on when the file leaves it out");
+    let field = RequirementField::FittedOnly;
+    data.set_requirement_field(0, field, "false").unwrap();
+    assert_eq!(raw(&data, 0)["fitted_only"], json!(false));
+    assert!(!fitted_only(&data));
+    assert_eq!(
+        data.set_requirement_field(0, field, "maybe"),
+        Err(RequirementProblem::NotYesNo("maybe".into()))
+    );
+    data.set_requirement_field(0, field, "true").unwrap();
+    assert_eq!(
+        raw(&data, 0),
+        &json!({"id": "parts", "kind": "parts_state"})
+    );
+    data.set_requirement_field(0, field, "false").unwrap();
+    data.set_requirement_field(0, field, "").unwrap();
+    assert_eq!(
+        raw(&data, 0),
+        &json!({"id": "parts", "kind": "parts_state"}),
+        "empty is the default"
+    );
+    assert_eq!(
+        RequirementField::of_kind("parts_state"),
+        &[
+            RequirementField::States,
+            RequirementField::Variant,
+            RequirementField::FittedOnly
+        ]
+    );
+    assert_eq!(RequirementField::parse("fitted_only"), Some(field));
+    assert_eq!(
+        RequirementField::parse("variant"),
+        Some(RequirementField::Variant)
+    );
+}
+
+/// #2686: both fields save and read back; a Part lifecycle requirement
+/// without them writes neither key.
+#[test]
+fn variant_and_fitted_only_round_trip() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("P.snxprj");
+    let mut data = project(json!([
+        {"id": "plain", "kind": "parts_state"},
+        {"id": "lite", "kind": "parts_state"},
+    ]));
+    data.variant_definitions = vec!["Lite".into()];
+    data.set_requirement_field(1, RequirementField::Variant, "lite")
+        .unwrap();
+    data.set_requirement_field(1, RequirementField::FittedOnly, "false")
+        .unwrap();
+    write_project(&path, &data).unwrap();
+    let again = parse_project(&path).unwrap();
+    assert_eq!(again.requirements, data.requirements);
+    assert_eq!(
+        again.requirements[1].requirement().unwrap().kind,
+        RequirementKind::PartsState {
+            states: vec!["released".into()],
+            variant: Some("Lite".into()),
+            fitted_only: false,
+        }
+    );
+    assert_eq!(
+        again.requirements[0].raw(),
+        &json!({"id": "plain", "kind": "parts_state"})
+    );
+}
+
+/// #2686: renaming a variant carries the Part lifecycle requirements that
+/// check it to the new name; one checking another variant is untouched.
+#[test]
+fn a_variant_rename_follows_into_part_lifecycle_requirements() {
+    let mut data = project(json!([
+        {"id": "a", "kind": "parts_state", "variant": "proto"},
+        {"id": "b", "kind": "parts_state", "variant": "Base"},
+        {"id": "c", "kind": "erc_clean"},
+    ]));
+    data.variant_definitions = vec!["Proto".into()];
+    data.rename_variant("Proto", "Pilot").unwrap();
+    assert_eq!(raw(&data, 0)["variant"], json!("Pilot"));
+    assert_eq!(raw(&data, 1)["variant"], json!("Base"));
+    assert_eq!(raw(&data, 2), &json!({"id": "c", "kind": "erc_clean"}));
 }

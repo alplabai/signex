@@ -22,6 +22,10 @@ pub enum RequirementField {
     MaxWidthMm,
     MaxHeightMm,
     States,
+    /// The variant a `parts_state` checks; cleared: the active variant.
+    Variant,
+    /// A `parts_state` checks only the parts its variant fits.
+    FittedOnly,
     Nets,
     Class,
     MinTraceWidthMm,
@@ -32,13 +36,15 @@ pub enum RequirementField {
 }
 
 impl RequirementField {
-    const ALL: [Self; 13] = [
+    const ALL: [Self; 15] = [
         Self::Id,
         Self::Severity,
         Self::AllowWarnings,
         Self::MaxWidthMm,
         Self::MaxHeightMm,
         Self::States,
+        Self::Variant,
+        Self::FittedOnly,
         Self::Nets,
         Self::Class,
         Self::MinTraceWidthMm,
@@ -57,6 +63,8 @@ impl RequirementField {
             Self::MaxWidthMm => "max_width_mm",
             Self::MaxHeightMm => "max_height_mm",
             Self::States => "states",
+            Self::Variant => "variant",
+            Self::FittedOnly => "fitted_only",
             Self::Nets => "nets",
             Self::Class => "class",
             Self::MinTraceWidthMm => "min_trace_width_mm",
@@ -78,7 +86,7 @@ impl RequirementField {
         match kind {
             "erc_clean" | "drc_clean" => &[Self::AllowWarnings],
             "board_size" => &[Self::MaxWidthMm, Self::MaxHeightMm],
-            "parts_state" => &[Self::States],
+            "parts_state" => &[Self::States, Self::Variant, Self::FittedOnly],
             "net_class" => &[
                 Self::Nets,
                 Self::Class,
@@ -94,7 +102,7 @@ impl RequirementField {
     pub const fn is_optional(self) -> bool {
         matches!(
             self,
-            Self::Class | Self::MinTraceWidthMm | Self::MinClearanceMm
+            Self::Class | Self::MinTraceWidthMm | Self::MinClearanceMm | Self::Variant
         )
     }
 }
@@ -134,6 +142,8 @@ pub enum RequirementProblem {
     /// The field must have a value.
     Empty(&'static str),
     UnknownState(String),
+    /// A `parts_state` names a variant the project does not have.
+    UnknownVariant(String),
     /// A `net_class` requirement sets neither a class nor a minimum.
     NetClassAsksNothing,
 }
@@ -176,6 +186,10 @@ impl std::fmt::Display for RequirementProblem {
                 f,
                 "`{state}` is no lifecycle state; one of {}",
                 LIFECYCLE_STATES.join(", ")
+            ),
+            Self::UnknownVariant(name) => write!(
+                f,
+                "the project has no variant `{name}`; Base or one of its variants"
             ),
             Self::NetClassAsksNothing => f.write_str(
                 "a net_class requirement needs a class, a minimum track width or a minimum clearance",
@@ -260,6 +274,7 @@ impl ProjectData {
             RequirementField::Id => {
                 Some(Value::String(self.check_requirement_id(text, Some(index))?))
             }
+            RequirementField::Variant => self.requirement_variant(text)?,
             _ => field_value(field, text)?,
         };
         match value {
@@ -359,6 +374,47 @@ impl ProjectData {
         Ok(id.to_string())
     }
 
+    /// The stored `variant` that `text` names: Base, or a variant's own
+    /// spelling (names compare without ASCII case, as the BOM does). Empty
+    /// clears it: the active variant.
+    fn requirement_variant(&self, text: &str) -> Result<Option<Value>, RequirementProblem> {
+        let name = text.trim();
+        if name.is_empty() {
+            return Ok(None);
+        }
+        if super::super::is_base_variant(name) {
+            return Ok(Some(Value::String(super::super::BASE_VARIANT.to_string())));
+        }
+        self.variant_definitions
+            .iter()
+            .find(|defined| defined.eq_ignore_ascii_case(name))
+            .map(|defined| Some(Value::String(defined.clone())))
+            .ok_or_else(|| RequirementProblem::UnknownVariant(name.to_string()))
+    }
+
+    /// A variant renamed from `old` to `new`: every `parts_state` that
+    /// checks it follows the new name, so the check keeps its target.
+    pub(crate) fn rename_requirement_variant(&mut self, old: &str, new: &str) {
+        for entry in &mut self.requirements {
+            let names_old = matches!(
+                entry.requirement().map(|r| &r.kind),
+                Some(super::RequirementKind::PartsState { variant: Some(v), .. })
+                    if v.trim().eq_ignore_ascii_case(old)
+            );
+            let Value::Object(raw) = entry.raw() else {
+                continue;
+            };
+            if !names_old {
+                continue;
+            }
+            let mut raw = raw.clone();
+            raw.insert("variant".into(), Value::String(new.to_string()));
+            if let Ok(renamed) = read_known(Value::Object(raw)) {
+                *entry = renamed;
+            }
+        }
+    }
+
     /// `kind`, or `kind_2`, `kind_3`, ...: the first no entry has.
     fn unused_requirement_id(&self, kind: &str) -> String {
         let taken = |id: &str| {
@@ -390,7 +446,11 @@ fn read_known(raw: Value) -> Result<RequirementEntry, RequirementProblem> {
 fn field_value(field: RequirementField, text: &str) -> Result<Option<Value>, RequirementProblem> {
     let typed = text.trim();
     if typed.is_empty() {
-        let clears = field.is_optional() || field == RequirementField::AllowWarnings;
+        let clears = field.is_optional()
+            || matches!(
+                field,
+                RequirementField::AllowWarnings | RequirementField::FittedOnly
+            );
         return if clears {
             Ok(None)
         } else {
@@ -408,6 +468,12 @@ fn field_value(field: RequirementField, text: &str) -> Result<Option<Value>, Req
             "false" => return Ok(None),
             _ => return Err(RequirementProblem::NotYesNo(typed.to_string())),
         },
+        // On by default, so only off is written.
+        RequirementField::FittedOnly => match typed.to_ascii_lowercase().as_str() {
+            "true" => return Ok(None),
+            "false" => Value::Bool(false),
+            _ => return Err(RequirementProblem::NotYesNo(typed.to_string())),
+        },
         RequirementField::MaxWidthMm
         | RequirementField::MaxHeightMm
         | RequirementField::MinTraceWidthMm
@@ -418,9 +484,10 @@ fn field_value(field: RequirementField, text: &str) -> Result<Option<Value>, Req
             _ => return Err(RequirementProblem::NotACount(typed.to_string())),
         },
         RequirementField::States => states(typed)?,
-        RequirementField::Nets | RequirementField::Class | RequirementField::Currency => {
-            Value::String(typed.to_string())
-        }
+        RequirementField::Nets
+        | RequirementField::Class
+        | RequirementField::Currency
+        | RequirementField::Variant => Value::String(typed.to_string()),
     };
     Ok(Some(value))
 }

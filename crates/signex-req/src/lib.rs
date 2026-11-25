@@ -66,6 +66,32 @@ impl Needs {
     }
 }
 
+/// How [`Facts::variant_parts`] keys a variant: trimmed, ASCII lower case,
+/// as variant names compare.
+pub fn variant_key(name: &str) -> String {
+    name.trim().to_ascii_lowercase()
+}
+
+/// The variants the switched-on `parts_state` requirements of `entries`
+/// name, each once (first spelling kept), in list order. The app builds one
+/// BOM per name for [`Facts::variant_parts`].
+pub fn part_variants(entries: &[RequirementEntry]) -> Vec<String> {
+    let mut seen = HashSet::new();
+    entries
+        .iter()
+        .filter_map(RequirementEntry::requirement)
+        .filter(|requirement| requirement.enabled)
+        .filter_map(|requirement| match &requirement.kind {
+            RequirementKind::PartsState {
+                variant: Some(name),
+                ..
+            } => Some(name.trim().to_string()),
+            _ => None,
+        })
+        .filter(|name| !name.is_empty() && seen.insert(variant_key(name)))
+        .collect()
+}
+
 /// The project's board, as the app found it.
 #[derive(Debug, Clone)]
 pub enum Board {
@@ -96,8 +122,12 @@ pub struct Facts {
     pub drc: Option<Result<CheckReport, String>>,
     pub board: Board,
     pub classes: Vec<NetClass>,
-    /// The parts the BOM buys, one row per part (an ungrouped BOM).
+    /// The parts the BOM buys, one row per part (an ungrouped BOM), in the
+    /// project's active variant.
     pub parts: Option<Result<BomTable, String>>,
+    /// The same, for each variant a `parts_state` names (#2686), by
+    /// [`variant_key`]; an `Err` says why that variant's BOM was not built.
+    pub variant_parts: HashMap<String, Result<BomTable, String>>,
     /// Lifecycle state name (`released`) by library row key
     /// (`signex_bom::library_row_key`), for the rows of the open libraries.
     pub row_states: HashMap<String, String>,
@@ -264,8 +294,21 @@ fn evaluate(requirement: &Requirement, facts: &Facts) -> Vec<Miss> {
             max_width_mm,
             max_height_mm,
         } => board::board_size(&facts.board, *max_width_mm, *max_height_mm),
-        RequirementKind::PartsState { states } => {
-            parts::parts_state(facts.parts.as_ref(), &facts.row_states, states)
+        RequirementKind::PartsState {
+            states,
+            variant,
+            fitted_only,
+        } => {
+            let variant = variant.as_deref().map(str::trim).filter(|v| !v.is_empty());
+            let parts = match variant {
+                None => facts.parts.as_ref(),
+                Some(name) => facts.variant_parts.get(&variant_key(name)),
+            };
+            let scope = parts::PartsScope {
+                variant,
+                fitted_only: *fitted_only,
+            };
+            parts::parts_state(parts, &facts.row_states, states, scope)
         }
         RequirementKind::NetClass {
             nets,
