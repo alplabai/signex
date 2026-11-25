@@ -1023,6 +1023,58 @@ Known limits:
 - The ERC and DRC runs a requirement uses are not numbered or kept; run
   `check_erc` or `check_drc` for their findings.
 
+## BOM lines
+
+```text
+bom_lines document=<sheet> [template=<template text>] [variant=<name>]
+          [grouping=grouped|ungrouped|flat]
+```
+
+`bom_lines` (#1988) answers with the bill of materials of the named sheet's
+project, rolled up as File ▸ Export ▸ Export BOM… rolls it up: the open
+sheets as they are in memory, the library's current part names, the cached
+prices, the parts the open board leaves out of the BOM. `template` is the text
+of a BOM template (`snxbomt/1`, [BOM_COLUMNS.md](BOM_COLUMNS.md)); without one
+the columns are the export dialog's defaults. `variant` is one of the
+project's variants or `Base`; without one, the project's active variant.
+`grouping` defaults to `grouped`. It is a query: it changes nothing, writes no
+file, writes nothing to Messages and is on the agent channel.
+
+```bash
+signex-cli run demo.snxprj bom_lines --arg document=main.snxsch \
+  --arg template="$(cat power.snxbomt)"
+```
+
+```json
+{"document": "/abs/main.snxsch", "variant": "Base", "grouping": "grouped",
+ "columns": [{"header": "Designator", "kind": "standard", "key": "designator"},
+   {"header": "MPN", "kind": "field", "field": "MPN"},
+   {"header": "Power", "kind": "computed", "expression": "= VCC^2 / Value"}],
+ "lines": [{"line": 1, "references": ["R1", "R2"], "qty": 2, "fitted_qty": 2,
+   "cells": ["R1, R2", "RC0603-10K", "2.5mW"],
+   "computed": {"Power": {"state": "value", "text": "2.5mW"}}}],
+ "issues": [{"line": 3, "references": ["C1"], "column": "Power",
+   "error": "unknown parameter 'VCC'"}],
+ "warnings": [],
+ "template": "format = \"snxbomt/1\"\n\n[[columns]]\ncolumn = \"designator\"\n..."}
+```
+
+- `cells` are the texts an exported CSV holds, one per column. A computed
+  cell's `computed` entry is `{"state": "value", "text": ...}`,
+  `{"state": "differs"}` (a grouped line whose parts give different results;
+  its cell reads `(members differ)`) or `{"state": "error", "error": ...}`
+  with `member`, the part it failed for, on a line of several parts (its
+  cell is empty).
+- `issues` lists every failed computed cell, by line in export order, then
+  column; the export dialog writes the same lines to Messages.
+- `warnings` are what the export would report about the project's hierarchy.
+- `template` is the template of the columns used, as Signex writes it: saved
+  to a file and passed back, it gives the same columns and the same text.
+- A template that has no or a newer token, a standard key Signex does not
+  know, a computed column without a name or whose expression does not start
+  with `=` or does not parse, an unknown grouping and a variant the project
+  does not define are refused with the reason.
+
 ## Board queries
 
 Three queries read one open board (#2403), through the same domain code as
