@@ -1,6 +1,7 @@
 //! The router's quality bar, measured (#2482, #2483): a seeded soak of
 //! random routing and editing actions with board invariants checked after
-//! each, and per-board shove convergence, latency and DRC-delta numbers.
+//! each, and per-board shove convergence, latency and DRC-delta numbers;
+//! the soak's stress report (#2967) is a summary table and a JSON file.
 //! Short runs go with every test run; the long soak and the latency
 //! thresholds are `#[ignore]`d for the scheduled job, run in release:
 //!
@@ -17,10 +18,14 @@
 mod bench;
 mod corpus_check;
 mod fixtures;
+mod invariants;
 mod report;
 mod rng;
 mod session;
 mod soak;
+mod stats;
+mod stress_report;
+mod stress_tests;
 mod workers;
 
 use std::time::Instant;
@@ -28,6 +33,7 @@ use std::time::Instant;
 use bench::{BoardBench, MEDIAN_LIMIT, P95_LIMIT, ROUNDS_LIMIT, ROUNDS_SHARE};
 use fixtures::Corpus;
 use soak::Checks;
+use stress_report::SoakRun;
 
 const DEFAULT_SEED: u64 = 0x2482;
 
@@ -57,29 +63,30 @@ fn boards(corpus: Corpus) -> Vec<fixtures::Fixture> {
     boards
 }
 
-/// Soak every board on `jobs` threads, one report line each, then fail
-/// with every board's failure at once.
+/// Soak every board on `jobs` threads, one report line each and the stress
+/// report (#2967), then fail with every board's failure at once.
 fn soak_all(seed: u64, actions: usize, corpus: Corpus, checks: Checks, jobs: usize) {
     let fixtures = boards(corpus);
     let runs = workers::map_in_order(&fixtures, jobs, |fixture| {
         let started = Instant::now();
-        let outcome = soak::run(fixture, seed, actions, checks).map(|(tally, _)| tally);
-        (outcome, started.elapsed())
+        let outcome = soak::run_measured(fixture, seed, actions, checks);
+        SoakRun::of(&fixture.name, outcome, started.elapsed())
     });
     let mut failures = Vec::new();
-    for (fixture, (outcome, took)) in fixtures.iter().zip(&runs) {
+    for run in &runs {
         report::emit(&report::soak_line(
-            &fixture.name,
+            &run.name,
             seed,
             actions,
-            outcome,
-            *took,
+            &run.line_outcome(),
+            run.took,
         ));
-        if let Err(failure) = outcome {
+        if let Some(failure) = &run.failure {
             report::emit(&failure.to_string());
             failures.push(failure.to_string());
         }
     }
+    stress_report::publish(seed, actions, &runs);
     assert!(
         failures.is_empty(),
         "{} of {} boards failed the soak:\n{}",
