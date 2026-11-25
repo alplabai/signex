@@ -352,6 +352,9 @@ pub struct ErcContext {
     pub key: Option<signex_net::SheetKey>,
     /// The sheet's signal harnesses (#1280).
     pub harness: ErcHarness,
+    /// Differential pair halves whose partner net is not on the sheet
+    /// (#2951), from `signex_net::lone_pair_members`.
+    pub lone_pairs: Vec<signex_net::LonePairMember>,
 }
 
 impl ErcContext {
@@ -547,6 +550,7 @@ impl ErcContext {
             children,
             key: None,
             harness: ErcHarness::from_sheet(snapshot),
+            lone_pairs: signex_net::lone_pair_members(snapshot),
         }
     }
 }

@@ -33,6 +33,7 @@ pub(crate) fn empty() -> ErcContext {
         children: HashMap::new(),
         key: None,
         harness: Default::default(),
+        lone_pairs: Vec::new(),
     }
 }
 
@@ -304,8 +305,21 @@ pub(crate) fn context_for(kind: RuleKind) -> ErcContext {
         RuleKind::HarnessEntryMismatch | RuleKind::HarnessTypeConflict => {
             return harness_context(kind);
         }
+        RuleKind::DiffPairPartnerMissing => c.lone_pairs.push(lone_pair()),
     }
     c
+}
+
+/// `USB_D_P`, found by name, named by the label with uuid 70 at (0, 0),
+/// with no `USB_D_N` on the sheet (#2951).
+pub(crate) fn lone_pair() -> signex_net::LonePairMember {
+    signex_net::LonePairMember {
+        net: "USB_D_P".into(),
+        partner: "USB_D_N".into(),
+        pair: "USB_D".into(),
+        directive: None,
+        label: Some((Uuid::from_u128(70), pt(0.0, 0.0))),
+    }
 }
 
 /// A harness connector of type `ty` at `at` with entries `names` (#1280).

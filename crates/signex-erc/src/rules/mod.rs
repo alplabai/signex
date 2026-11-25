@@ -46,6 +46,8 @@ mod repeat_entry;
 pub(crate) use repeat_entry::repeat_entry_needs_bus;
 mod harness;
 pub(crate) use harness::{harness_entry_mismatch, harness_type_conflict};
+mod diff_pair_partner;
+pub(crate) use diff_pair_partner::diff_pair_partner_missing;
 
 use std::collections::{HashMap, HashSet};
 
