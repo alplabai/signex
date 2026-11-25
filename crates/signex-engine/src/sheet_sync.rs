@@ -12,7 +12,7 @@ use signex_net::{SheetPinContacts, pt_key};
 use signex_types::object_id::IdSource;
 use signex_types::schematic::{
     ChildSheet, FillType, GRID_MM, HAlign, Label, LabelType, Point, SchematicSheet, SelectedItem,
-    SelectedKind, SheetPin, VAlign, entry_port_name, normalize_port_name, renamed_entry,
+    SelectedKind, SheetPin, VAlign, normalize_port_name, sheet_entry_port, sheet_entry_renamed,
 };
 
 use crate::command::{Command, SheetEntryRename, SheetPort, SymbolEntryRenames, TextTarget};
@@ -113,8 +113,9 @@ fn pair_renames(gone: Vec<Unmatched>, new: Vec<Unmatched>) -> SheetSyncPreview {
 /// sheet exposes: the ports with no entry are added, the auto-generated
 /// entries with no port are removed (a hand-placed entry stays, as Sync
 /// Sheet Pins keeps it), and a lone pair of one direction is a rename. An
-/// entry meets its port by `entry_port_name` (`Repeat(VOUT)` meets `VOUT`,
-/// #2659); removals and renames name the entry as written.
+/// entry meets its port by `sheet_entry_port`: on a repeated symbol
+/// `Repeat(VOUT)` meets `VOUT` (#2659), on a plain one only a port named
+/// `Repeat(VOUT)` does. Removals and renames name the entry as written.
 pub fn entry_changes_from_sheet(symbol: &ChildSheet, ports: &[SheetPort]) -> SheetSyncPreview {
     let has_port = |name: &str| ports.iter().any(|port| port.name == name);
     let gone = symbol
@@ -123,7 +124,7 @@ pub fn entry_changes_from_sheet(symbol: &ChildSheet, ports: &[SheetPort]) -> She
         .filter(|pin| pin.auto_generated)
         .filter_map(|pin| {
             let name = normalize_port_name(&pin.name)?;
-            let port = entry_port_name(name)?;
+            let port = sheet_entry_port(&symbol.name, name)?;
             (!has_port(port)).then(|| Unmatched {
                 name: name.to_string(),
                 direction: normalize_sheet_pin_direction(&pin.direction),
@@ -136,7 +137,7 @@ pub fn entry_changes_from_sheet(symbol: &ChildSheet, ports: &[SheetPort]) -> She
             !symbol
                 .pins
                 .iter()
-                .any(|pin| entry_port_name(&pin.name) == Some(port.name.as_str()))
+                .any(|pin| sheet_entry_port(&symbol.name, &pin.name) == Some(port.name.as_str()))
         })
         .map(|port| Unmatched {
             name: port.name.clone(),
@@ -169,8 +170,8 @@ pub fn sync_from_sheet_command(
 /// Rename the auto-generated entries of `symbol` in place, keeping position,
 /// direction and id, when `renames` names this symbol. A hand-placed entry
 /// keeps its name, a rename whose new port already has an entry on the
-/// symbol is skipped, and a `Repeat(<net>)` entry stays a repeat of the new
-/// port.
+/// symbol is skipped, and on a repeated symbol a `Repeat(<net>)` entry stays
+/// a repeat of the new port; on a plain one it takes the port's name.
 pub(crate) fn rename_sheet_entries(symbol: &mut ChildSheet, renames: &SymbolEntryRenames) -> bool {
     if symbol.uuid != renames.symbol {
         return false;
@@ -183,17 +184,18 @@ pub(crate) fn rename_sheet_entries(symbol: &mut ChildSheet, renames: &SymbolEntr
         if symbol
             .pins
             .iter()
-            .any(|pin| entry_port_name(&pin.name) == Some(to))
+            .any(|pin| sheet_entry_port(&symbol.name, &pin.name) == Some(to))
         {
             continue;
         }
         let from = rename.from.trim();
+        let symbol_name = symbol.name.as_str();
         if let Some(pin) = symbol
             .pins
             .iter_mut()
             .find(|pin| pin.auto_generated && normalize_port_name(&pin.name) == Some(from))
         {
-            pin.name = renamed_entry(&pin.name, to);
+            pin.name = sheet_entry_renamed(symbol_name, &pin.name, to);
             changed = true;
         }
     }
@@ -214,13 +216,14 @@ fn hierarchical_labels<'a>(
 /// for: an entry with no port adds a Hierarchical port, a port carried by a
 /// Hierarchical label with no entry is removed (a Global label is a net of
 /// its own and is never touched), and a lone pair of one direction is a
-/// rename. Each entry stands for the port `entry_port_name` gives it, so a
-/// `Repeat(VOUT)` entry keeps or adds the port `VOUT` (#2659).
+/// rename. Each entry stands for the port `sheet_entry_port` gives it, so on
+/// a repeated symbol a `Repeat(VOUT)` entry keeps or adds the port `VOUT`
+/// (#2659).
 pub fn port_changes_from_symbol(symbol: &ChildSheet, child: &SchematicSheet) -> SheetSyncPreview {
     let ports = exposed_sheet_ports(child);
     let mut entries: Vec<(&str, &'static str)> = Vec::new();
     for pin in &symbol.pins {
-        if let Some(name) = entry_port_name(&pin.name)
+        if let Some(name) = sheet_entry_port(&symbol.name, &pin.name)
             && !entries.iter().any(|(seen, _)| *seen == name)
         {
             entries.push((name, normalize_sheet_pin_direction(&pin.direction)));
@@ -283,7 +286,7 @@ pub fn port_sync_commands(
         let direction = symbol
             .pins
             .iter()
-            .find(|pin| entry_port_name(&pin.name) == Some(name.as_str()))
+            .find(|pin| sheet_entry_port(&symbol.name, &pin.name) == Some(name.as_str()))
             .map_or("bidirectional", |pin| {
                 normalize_sheet_pin_direction(&pin.direction)
             });

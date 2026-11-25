@@ -187,3 +187,61 @@ fn symbol_to_sheet_adds_the_plain_port_of_a_new_repeat_entry() {
     assert_eq!(isense.direction, "output");
     assert!(port_changes_from_symbol(&symbol, engine.document()).is_empty());
 }
+
+/// A plain sheet symbol (Repeat turned off, the entry names left as they
+/// were) whose generated entry still reads `Repeat(VOUT_3V3)`.
+fn plain_with_stray_repeat_entry() -> ChildSheet {
+    let mut symbol = repeated_symbol(vec![
+        pin("VIN_12V", "input", 52.54, true),
+        pin("Repeat(VOUT_3V3)", "output", 55.08, true),
+    ]);
+    symbol.name = "Buck".to_string();
+    symbol
+}
+
+/// The netlist joins `Repeat(<net>)` to `<net>` only inside a channel, so on
+/// a plain symbol the entry meets no port and Sheet to Symbol repairs it.
+#[test]
+fn a_plain_symbol_keeps_the_plain_match_and_renames_a_stray_repeat_entry() {
+    let symbol = plain_with_stray_repeat_entry();
+    let child = child(&[("VIN_12V", "input"), ("VOUT_3V3", "output")]);
+    let preview = entry_changes_from_sheet(&symbol, &exposed_sheet_ports(&child));
+    assert_eq!(
+        preview.renamed,
+        vec![SheetEntryRename {
+            from: "Repeat(VOUT_3V3)".to_string(),
+            to: "VOUT_3V3".to_string(),
+        }]
+    );
+    assert!(preview.added.is_empty() && preview.removed.is_empty());
+    let listed = symbol_entries_after_sync(&symbol, &child, &preview);
+    assert!(
+        listed
+            .iter()
+            .any(|e| e.name == "VOUT_3V3" && matches!(e.change, SheetEntryChange::Renamed { .. })),
+        "the dialog lists the plain name: {listed:?}"
+    );
+    assert!(
+        !port_changes_from_symbol(&symbol, &child).is_empty(),
+        "Symbol to Sheet does not take the entry for VOUT_3V3 either"
+    );
+
+    let id = symbol.pins[1].uuid;
+    let parent = SchematicSheet {
+        child_sheets: vec![symbol.clone()],
+        ..SchematicSheet::default()
+    };
+    let ports = ports_for_pin_sync(&child, &parent, FILE);
+    let mut engine = Engine::new(parent).expect("engine");
+    engine
+        .execute(sync_from_sheet_command(&symbol, ports.clone(), &preview))
+        .expect("sync");
+
+    let pins = &engine.document().child_sheets[0].pins;
+    let entry = pins.iter().find(|p| p.uuid == id).expect("kept");
+    assert_eq!(entry.name, "VOUT_3V3");
+    assert_eq!(pins.len(), 2, "renamed in place, no second VOUT_3V3 entry");
+    assert!(unplaced_sheet_ports(engine.document(), FILE, &ports).is_empty());
+    let synced = &engine.document().child_sheets[0];
+    assert!(entry_changes_from_sheet(synced, &exposed_sheet_ports(&child)).is_empty());
+}

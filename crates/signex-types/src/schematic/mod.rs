@@ -938,6 +938,7 @@ mod repeat_tests;
 pub use repeat::{
     ChannelFormatError, ChannelOccurrence, ChannelRepeat, MAX_CHANNELS, RepeatStack, StackLayer,
     channel_alpha, check_format, entry_port_name, renamed_entry, repeated_entry_name,
+    sheet_entry_port, sheet_entry_renamed,
 };
 mod harness_ops;
 pub use harness_ops::*;
