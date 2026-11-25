@@ -14,7 +14,10 @@ use std::sync::{Arc, OnceLock, Weak};
 use signex_types::net::Netlist;
 use signex_types::project::ChannelNaming;
 
-use super::project_sheets::{OpenSheets, ProjectSheetSet, stitch_issue_message};
+use super::project_sheets::{
+    AssembledGraph, OpenSheets, ProjectSheetSet, project_graph_quiet, project_graph_with,
+    stitch_issue_message,
+};
 use super::state::ProjectId;
 use super::state::net_class_styles::ProjectKey;
 use super::state::scope::CaseFold;
@@ -72,7 +75,7 @@ pub(crate) fn stitched_index_from(
     naming: &ChannelNaming,
 ) -> Stitched {
     let set = super::project_sheets::assemble_project_sheets_from(open, pages, root, fold);
-    stitch_set(&set, project_dir, true, naming)
+    stitch_set(&set, project_dir, true, naming, project_graph_with)
 }
 
 /// One project's stitch, computed by whichever of the net-class style job and
@@ -128,8 +131,26 @@ pub(crate) fn netlist_of_set(
     project_dir: Option<PathBuf>,
     naming: &ChannelNaming,
 ) -> Stitched {
-    stitch_set(set, project_dir, false, naming)
+    stitch_set(set, project_dir, false, naming, project_graph_with)
 }
+
+/// [`netlist_of_set`] for a check that only asks (#2549): a refused child
+/// reference raises no Messages line, the style job already reports it.
+pub(crate) fn netlist_of_set_quiet(
+    set: &ProjectSheetSet,
+    project_dir: Option<PathBuf>,
+    naming: &ChannelNaming,
+) -> Stitched {
+    stitch_set(set, project_dir, false, naming, project_graph_quiet)
+}
+
+/// How the sheet graph is assembled: logging refused child references or not.
+type AssembleGraph = fn(
+    &HashMap<PathBuf, signex_types::schematic::SchematicSheet>,
+    Option<&Path>,
+    Option<&Path>,
+    CaseFold,
+) -> AssembledGraph;
 
 #[cfg(test)]
 thread_local! {
@@ -142,6 +163,7 @@ fn stitch_set(
     project_dir: Option<PathBuf>,
     want_index: bool,
     naming: &ChannelNaming,
+    assemble: AssembleGraph,
 ) -> Stitched {
     #[cfg(test)]
     STITCH_RUNS.with(|runs| runs.set(runs.get() + 1));
@@ -155,12 +177,7 @@ fn stitch_set(
     };
     let base_dir: Option<PathBuf> = project_dir.or_else(|| root_path.parent().map(PathBuf::from));
     let fold = set.fold;
-    let graph = super::project_sheets::project_graph_with(
-        &set.sheets,
-        base_dir.as_deref(),
-        Some(&root_path),
-        fold,
-    );
+    let graph = assemble(&set.sheets, base_dir.as_deref(), Some(&root_path), fold);
     let root_key = super::project_sheets::sheet_key_with(&root_path, base_dir.as_deref(), fold);
     if !graph.sheets.contains_key(&root_key) {
         warnings.extend(graph.issues.iter().map(stitch_issue_message));
