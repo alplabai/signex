@@ -129,10 +129,7 @@ fn saving_a_newer_minor_project_writes_nothing_and_creates_no_library() {
     let tmp = TempDir::new().expect("tempdir");
     let (file, before) = write_newer_minor_project(tmp.path());
     let (mut app, _boot) = Signex::new();
-    crate::settle_support::settle(
-        &mut app,
-        Message::File(FileMsg::Opened(Some(file.clone()))),
-    );
+    crate::settle_support::settle(&mut app, Message::File(FileMsg::Opened(Some(file.clone()))));
     let prj = app
         .document_state
         .projects
