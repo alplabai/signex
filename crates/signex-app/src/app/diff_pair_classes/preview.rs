@@ -346,13 +346,12 @@ impl DiffPairClassesState {
             super::update::edit_field(self, field, format!("{}", done.value));
         }
         let held = self.preview.held;
-        self.preview.held = match self.preview.labels.dragging_index() {
-            Some(_) => Some(held.unwrap_or(HeldGap {
+        self.preview.held = self.preview.labels.dragging_index().map(|_| {
+            held.unwrap_or(HeldGap {
                 scale,
                 original: gap_before,
-            })),
-            None => None,
-        };
+            })
+        });
         if was_held
             && is_escape
             && let Some(held) = held
