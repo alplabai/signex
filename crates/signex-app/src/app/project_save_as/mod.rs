@@ -1,10 +1,12 @@
 //! File ▸ Save Project As… (#2908): a copy of an open project in a new
 //! folder, in this build's format, which then opens beside it. The copy is
-//! planned in `update` (`plan`), written on the blocking pool (`write`) and
-//! the original folder is never written. Rules: docs/PROJECT_SETUP.md,
+//! planned in `update` (`plan`, with the unsaved edits encoded from memory in
+//! `unsaved`), written on the blocking pool (`write`) and the original folder
+//! is never written. Rules: docs/PROJECT_SETUP.md,
 //! "Save Project As".
 
 mod plan;
+mod unsaved;
 mod update;
 mod write;
 
@@ -30,8 +32,8 @@ pub struct SaveProjectAsState {
     pub(crate) location: String,
     /// The token the project was read as, when it is read-only here (#2904).
     pub(crate) read_only_format: Option<String>,
-    /// Listed documents with unsaved edits when the dialog opened: the copy
-    /// takes them as last saved.
+    /// Documents of the copy with unsaved edits when the dialog opened: the
+    /// copy includes those edits.
     pub(crate) unsaved: usize,
     pub(crate) target: TargetStatus,
     /// Bumped by every edit of the name or location; a check result for an

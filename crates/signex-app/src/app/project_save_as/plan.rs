@@ -34,6 +34,9 @@ pub(crate) struct CopyPlan {
     pub location: PathBuf,
     /// The new `.snxprj`, encoded in this build's format.
     pub project_bytes: Vec<u8>,
+    /// The listed documents with unsaved edits, encoded from memory: the copy
+    /// writes these bytes in place of the file on disk.
+    pub unsaved: Vec<super::unsaved::UnsavedCopy>,
 }
 
 /// `text` as a path inside the project folder, or `None` when it would land
@@ -101,12 +104,13 @@ pub(crate) fn copy_bytes(data: &ProjectData, name: &str, folder: &Path) -> Resul
 }
 
 /// Plan the copy of the project in `source_dir` holding `data` as `name`
-/// under `location`.
+/// under `location`, with the `unsaved` documents encoded from memory.
 pub(crate) fn plan_copy(
     data: &ProjectData,
     source_dir: &Path,
     name: &str,
     location: &Path,
+    unsaved: Vec<super::unsaved::UnsavedCopy>,
 ) -> Result<CopyPlan, String> {
     let folder = location.join(name);
     Ok(CopyPlan {
@@ -115,5 +119,6 @@ pub(crate) fn plan_copy(
         name: name.to_string(),
         location: location.to_path_buf(),
         project_bytes: copy_bytes(data, name, &folder)?,
+        unsaved,
     })
 }

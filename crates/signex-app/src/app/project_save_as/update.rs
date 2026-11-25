@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use iced::Task;
 use iced::widget::operation;
 
-use super::plan::{Listed, listed, plan_copy};
+use super::plan::plan_copy;
 use super::write::write_copy;
 use super::{SaveProjectAsMsg, SaveProjectAsState};
 use crate::app::handlers::dock::project_navigation::add_io::on_blocking_pool;
@@ -116,16 +116,7 @@ impl Signex {
             return Task::none();
         };
         let dir = loaded.dir().to_path_buf();
-        let unsaved = listed(&loaded.data).map_or(0, |items| {
-            items
-                .iter()
-                .filter(|item| matches!(item, Listed::File(_)))
-                .filter(|item| {
-                    self.document_state
-                        .is_document_dirty(&dir.join(item.path()))
-                })
-                .count()
-        });
+        let unsaved = self.unsaved_in_copy(&loaded.data, &dir).len();
         let name = self.ui_state.i18n.message_plain(
             signex_i18n::ids::DIALOG_SAVE_PROJECT_AS_DEFAULT_NAME,
             &[("name", loaded.data.name.as_str().into())],
@@ -201,7 +192,8 @@ impl Signex {
         )
     }
 
-    /// Save: plan the copy from the open project and write it off-thread.
+    /// Save: plan the copy from the open project, its unsaved edits encoded
+    /// from memory now, and write it off-thread. The originals stay unsaved.
     /// The dialog stays, its Save off, until the writes land. Ignored while
     /// Save is unavailable.
     fn save_project_copy(&mut self) -> Task<Message> {
@@ -216,7 +208,12 @@ impl Signex {
         };
         let name = name.to_string();
         let planned = match self.document_state.project_by_id(state.project) {
-            Some(project) => plan_copy(&project.data, project.dir(), &name, &location),
+            Some(project) => {
+                self.unsaved_copies(&project.data, project.dir())
+                    .and_then(|unsaved| {
+                        plan_copy(&project.data, project.dir(), &name, &location, unsaved)
+                    })
+            }
             None => Err(format!("'{}' is no longer open", state.project_name)),
         };
         let plan = match planned {

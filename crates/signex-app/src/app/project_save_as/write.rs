@@ -1,6 +1,7 @@
 //! The Save Project As writes, on the blocking pool (never in `update`). The
 //! target is checked again, every listed file is read from the original
-//! folder and written into the new one with the atomic writer, and the
+//! folder (or taken from its unsaved edits, encoded in `update`) and written
+//! into the new one with the atomic writer, and the
 //! `.snxprj` goes last. A failure takes back what this call wrote. Nothing in
 //! the original folder is ever written.
 
@@ -28,16 +29,10 @@ pub(crate) fn write_copy(plan: &CopyPlan) -> Result<PathBuf, String> {
             folder.display()
         ));
     }
-    let files = expand(&plan.source_dir, &plan.listed)?;
+    let files = expand(&plan.source_dir, &plan.listed, &plan.unsaved)?;
     let folder_existed = folder.exists();
     let mut written: Vec<PathBuf> = Vec::new();
-    let result = write_all(
-        &files,
-        &folder,
-        &target.project_path,
-        &plan.project_bytes,
-        &mut written,
-    );
+    let result = write_all(plan, &files, &folder, &target.project_path, &mut written);
     if let Err(why) = result {
         roll_back(&written, &folder, folder_existed);
         return Err(why);
@@ -45,21 +40,35 @@ pub(crate) fn write_copy(plan: &CopyPlan) -> Result<PathBuf, String> {
     Ok(target.project_path)
 }
 
+/// Write every file of the copy, then its `.snxprj`. A document with unsaved
+/// edits takes its bytes from memory (`plan.unsaved`), every other one is
+/// read from the original folder.
 fn write_all(
+    plan: &CopyPlan,
     files: &[CopyFile],
     folder: &Path,
     project_path: &Path,
-    project_bytes: &[u8],
     written: &mut Vec<PathBuf>,
 ) -> Result<(), String> {
     for (from, rel) in files {
-        let bytes =
-            std::fs::read(from).map_err(|e| format!("could not read {}: {e}", from.display()))?;
         let to = folder.join(rel);
-        atomic_write(&to, &bytes).map_err(|e| format!("could not write {}: {e}", to.display()))?;
+        let edited = plan
+            .unsaved
+            .iter()
+            .find(|(unsaved, _)| unsaved == rel)
+            .map(|(_, bytes)| bytes);
+        let write = match edited {
+            Some(bytes) => atomic_write(&to, bytes),
+            None => {
+                let bytes = std::fs::read(from)
+                    .map_err(|e| format!("could not read {}: {e}", from.display()))?;
+                atomic_write(&to, &bytes)
+            }
+        };
+        write.map_err(|e| format!("could not write {}: {e}", to.display()))?;
         written.push(to);
     }
-    atomic_write(project_path, project_bytes)
+    atomic_write(project_path, &plan.project_bytes)
         .map_err(|e| format!("could not write {}: {e}", project_path.display()))?;
     written.push(project_path.to_path_buf());
     Ok(())
@@ -68,8 +77,13 @@ fn write_all(
 /// Every file `listed` stands for, each once: a sheet or board as it is, a
 /// library as its manifest plus every file under its library folders (or the
 /// whole folder of a library kept as one). Refused when a listed file is not
-/// on disk, so the copy never lists a file it does not hold.
-fn expand(source: &Path, listed: &[Listed]) -> Result<Vec<CopyFile>, String> {
+/// on disk and has no unsaved bytes in `unsaved`, so the copy never lists a
+/// file it does not hold.
+fn expand(
+    source: &Path,
+    listed: &[Listed],
+    unsaved: &[super::unsaved::UnsavedCopy],
+) -> Result<Vec<CopyFile>, String> {
     let mut files: Vec<CopyFile> = Vec::new();
     for item in listed {
         let rel = item.path();
@@ -80,7 +94,8 @@ fn expand(source: &Path, listed: &[Listed]) -> Result<Vec<CopyFile>, String> {
             walk(&from, rel, &mut files)?;
             continue;
         }
-        if !from.is_file() {
+        let in_memory = unsaved.iter().any(|(path, _)| path == rel);
+        if !from.is_file() && !in_memory {
             return Err(format!(
                 "{} is listed by the project but is not on disk; nothing was copied",
                 from.display()
@@ -97,6 +112,10 @@ fn expand(source: &Path, listed: &[Listed]) -> Result<Vec<CopyFile>, String> {
                 }
             }
         }
+    }
+    // An edited library document not yet on disk is part of the copy too.
+    for (rel, _) in unsaved {
+        push(&mut files, source.join(rel), rel.clone());
     }
     Ok(files)
 }

@@ -179,8 +179,9 @@ fn fields<'a>(
         col = col.push(line(note.into(), warn));
     }
     if state.unsaved > 0 {
+        // A note, not a warning: the copy includes the edits (Caner, 2026-11-25).
         let note = t!(i18n, ids::DIALOG_SAVE_PROJECT_AS_UNSAVED, "count" => state.unsaved);
-        col = col.push(line(note.into(), warn));
+        col = col.push(line(note.into(), muted));
     }
     let danger = tokens::danger(tokens);
     if let Some(why) = &state.error {

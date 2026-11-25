@@ -234,18 +234,19 @@ dialog-save-project-as-save = Save copy
 dialog-save-project-as-saving = Saving…
 
 # What the copy takes.
-dialog-save-project-as-note = The copy takes the project's settings as they are now, and every sheet, board and project library as last saved. The open project is not changed, and the copy opens beside it.
+dialog-save-project-as-note = The copy takes the project's settings and every sheet, board and project library as they are now. The open project is not changed, and the copy opens beside it.
 
 # The open project was written by a newer version and is read-only here.
 # $project is its name; $format is the file version it was written as.
 dialog-save-project-as-read-only = '{ $project }' was written by a newer { -brand-name } ({ $format }). The copy is written in this version's format and can be edited here.
 
-# Documents of the project with unsaved edits when the dialog opened; $count
-# is how many (a whole number).
+# Documents of the project with unsaved edits when the dialog opened, which
+# the copy includes while the originals stay unsaved; $count is how many (a
+# whole number).
 dialog-save-project-as-unsaved =
     { $count ->
-        [one] One document of the project has unsaved edits; the copy takes it as last saved.
-       *[other] { $count } documents of the project have unsaved edits; the copy takes them as last saved.
+        [one] The copy includes the unsaved edits of one document.
+       *[other] The copy includes the unsaved edits of { $count } documents.
     }
 
 # The copy could not be written; $why is the reason the writer gave. Nothing

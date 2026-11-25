@@ -111,7 +111,7 @@ fn the_copy_holds_every_listed_document_byte_for_byte_and_the_project_in_the_cur
     let out = tmp.path().join("out");
     fs::create_dir(&out).expect("out");
 
-    let plan = plan_copy(&data, &dir, "Copy", &out).expect("plan");
+    let plan = plan_copy(&data, &dir, "Copy", &out, Vec::new()).expect("plan");
     let written = write_copy(&plan).expect("the copy");
 
     let copy = out.join("Copy");
@@ -165,7 +165,7 @@ fn a_target_folder_that_exists_and_is_not_empty_is_refused_and_nothing_is_writte
         matches!(&status, TargetStatus::Problem(TargetProblem::FolderNotEmpty(path)) if *path == taken),
         "the dialog refuses it before Save: {status:?}"
     );
-    let plan = plan_copy(&data, &dir, "Copy", &out).expect("plan");
+    let plan = plan_copy(&data, &dir, "Copy", &out, Vec::new()).expect("plan");
     let why = write_copy(&plan).expect_err("refused");
     assert!(why.contains("not empty"), "{why}");
     assert_eq!(snapshot(&taken).len(), 1, "nothing was added");
@@ -179,7 +179,7 @@ fn the_copy_is_never_written_inside_the_original_folder() {
     let (dir, _) = newer_project(tmp.path());
     let before = snapshot(&dir);
     let data = parse_project(&dir.join("P.snxprj")).expect("parse");
-    let plan = plan_copy(&data, &dir, "Copy", &dir).expect("plan");
+    let plan = plan_copy(&data, &dir, "Copy", &dir, Vec::new()).expect("plan");
     let why = write_copy(&plan).expect_err("refused");
     assert!(why.contains("inside"), "{why}");
     assert_eq!(snapshot(&dir), before);
@@ -193,7 +193,7 @@ fn a_listed_file_missing_on_disk_refuses_the_copy_before_anything_is_written() {
     let data = parse_project(&dir.join("P.snxprj")).expect("parse");
     let out = tmp.path().join("out");
     fs::create_dir(&out).expect("out");
-    let plan = plan_copy(&data, &dir, "Copy", &out).expect("plan");
+    let plan = plan_copy(&data, &dir, "Copy", &out, Vec::new()).expect("plan");
     let why = write_copy(&plan).expect_err("refused");
     assert!(
         why.contains("P.snxpcb") && why.contains("not on disk"),
@@ -371,4 +371,80 @@ fn save_copy_writes_the_copy_and_opens_it_beside_the_project() {
     );
     assert_eq!(app.document_state.projects.len(), 2, "beside the project");
     assert_eq!(snapshot(&dir).len(), 1, "the original folder is untouched");
+}
+
+/// Caner (2026-11-25): an edited sheet goes into the copy with its unsaved
+/// change, encoded as its save encodes it; the original file on disk is
+/// unchanged and the sheet stays dirty. An unedited sheet is copied byte for
+/// byte.
+#[test]
+fn an_edited_sheets_unsaved_change_is_in_the_copy_and_the_original_stays_unsaved() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let dir = tmp.path().join("ProjectA");
+    let (edited, plain) = (dir.join("a.snxsch"), dir.join("b.snxsch"));
+    put(&edited, b"sheet a as last saved");
+    put(&plain, b"sheet b as last saved");
+    let out = tmp.path().join("out");
+    fs::create_dir(&out).expect("out");
+    let mut app = app_workspace(&dir.to_string_lossy(), &["a.snxsch", "b.snxsch"]);
+    let sheet = signex_types::schematic::SchematicSheet {
+        wires: vec![signex_types::schematic::Wire {
+            uuid: uuid::Uuid::from_u128(7),
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    let mut engine = signex_engine::Engine::new(sheet).expect("engine");
+    engine.set_path(Some(edited.clone()));
+    let measure = crate::schematic_runtime::text_width::live_extent_measure();
+    let in_memory = engine
+        .serialize_with_extents(measure)
+        .expect("encode")
+        .into_bytes();
+    app.document_state.engines.insert(edited.clone(), engine);
+    app.document_state.mark_document_dirty(&edited);
+    let id = app.document_state.projects[0].id;
+
+    let _ = app.update(Message::from(SaveProjectAsMsg::Requested {
+        project: Some(id),
+    }));
+    let dialog = app.ui_state.save_project_as.as_deref().expect("dialog");
+    assert_eq!(dialog.unsaved, 1, "the note counts the edited sheet");
+    let _ = app.update(Message::from(SaveProjectAsMsg::LocationEdited(
+        out.display().to_string(),
+    )));
+    let generation = app
+        .ui_state
+        .save_project_as
+        .as_deref()
+        .expect("dialog")
+        .generation;
+    let _ = app.update(Message::from(SaveProjectAsMsg::TargetChecked {
+        generation,
+        status: TargetStatus::Clear,
+    }));
+    let task = app.update(Message::from(SaveProjectAsMsg::SubmitRequested));
+    for message in outputs(task) {
+        let _ = app.update(message);
+    }
+
+    let copy = out.join("ProjectA copy");
+    assert_eq!(
+        fs::read(copy.join("a.snxsch")).expect("edited sheet"),
+        in_memory,
+        "the unsaved change is in the copy"
+    );
+    assert_eq!(
+        fs::read(copy.join("b.snxsch")).expect("plain sheet"),
+        b"sheet b as last saved"
+    );
+    assert_eq!(
+        fs::read(&edited).expect("original"),
+        b"sheet a as last saved",
+        "the original file is unchanged"
+    );
+    assert!(
+        app.document_state.is_document_dirty(&edited),
+        "the original stays unsaved"
+    );
 }
