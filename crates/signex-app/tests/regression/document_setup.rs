@@ -6,9 +6,10 @@ use std::path::{Path, PathBuf};
 
 use signex_app::app::{
     ContextMenuMsg, DocumentSetupMsg, LoadedProject, Message, NewProjectMsg, ProjectTreeAction,
-    SetupKind, Signex, TabDocument,
+    SetupKind, Signex,
 };
 use signex_app::io_ports::{HeadlessAnswers, IoPorts};
+use signex_app::test_adapter::BoardEngines;
 use signex_types::designator::DesignatorStandard;
 use signex_types::format::SnxSchematic;
 use signex_types::pcb::PcbBoard;
@@ -118,11 +119,7 @@ fn fixture(defaults: ProjectDefaults) -> Fixture {
 
 pub(crate) fn board_at<'a>(app: &'a Signex, path: &Path) -> Option<&'a PcbBoard> {
     app.document_state
-        .tabs
-        .iter()
-        .find(|t| t.path == path)
-        .and_then(|t| t.cached_document.as_ref())
-        .and_then(TabDocument::as_pcb_engine)
+        .first_tab_board_engine(path)
         .map(|engine| engine.board())
 }
 

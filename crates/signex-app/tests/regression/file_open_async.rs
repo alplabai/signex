@@ -10,6 +10,7 @@
 //!   opens the tab, failure logs and opens nothing).
 
 use signex_app::app::{CaseProbeOutcome, FileMsg, Message, Signex};
+use signex_app::test_adapter::BoardEngines;
 
 use std::fs;
 use std::path::PathBuf;
@@ -294,8 +295,6 @@ fn opening_the_same_pcb_twice_before_it_completes_spawns_only_one_task() {
 
 #[test]
 fn pcb_open_finished_ok_opens_the_tab_like_the_old_sync_path_did() {
-    use signex_app::app::TabDocument;
-
     let path = PathBuf::from("/tmp/does-not-matter/board.snxpcb");
     let board = empty_pcb_board();
     let board_uuid = board.uuid;
@@ -316,10 +315,9 @@ fn pcb_open_finished_ok_opens_the_tab_like_the_old_sync_path_did() {
         .expect("PcbOpenFinished(Ok) must open a tab for the completed path");
     assert_eq!(tab.title, "board");
     assert_eq!(
-        tab.cached_document
-            .as_ref()
-            .and_then(TabDocument::as_pcb)
-            .map(|b| b.uuid),
+        app.document_state
+            .first_tab_board_engine(&path)
+            .map(|engine| engine.board().uuid),
         Some(board_uuid),
         "the tab's cached document must hold the board carried by the completion message"
     );
