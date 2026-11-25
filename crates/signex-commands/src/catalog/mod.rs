@@ -29,6 +29,7 @@ mod pcb_sync;
 mod placement;
 mod properties;
 mod query;
+mod route_operands;
 mod search;
 mod selection;
 mod tool;

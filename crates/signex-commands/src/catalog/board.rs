@@ -6,7 +6,9 @@ use signex_i18n_ids::command_ids;
 
 pub(super) const BOARD: &[CommandMetadata] = &[
     // #2373: the board placement tools. Each arms its tool on the board in
-    // view; every click (or finished shape) is one undo step.
+    // view; every click (or finished shape) is one undo step. Via and Track
+    // also run from their operands on the board `document` names, the whole
+    // via or run one undo step (#2470).
     CommandMetadata {
         id: "place_board_via",
         category: "place",
@@ -14,7 +16,8 @@ pub(super) const BOARD: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_VIA),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: super::route_operands::BOARD_VIA,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -24,7 +27,8 @@ pub(super) const BOARD: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_TRACK),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: super::route_operands::BOARD_TRACK,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
