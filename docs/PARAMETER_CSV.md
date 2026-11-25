@@ -88,3 +88,22 @@ the window is open; a listed sheet closed since takes no line.
   another sheet is active, Messages says to switch back and the window stays
   open. A sheet that opens read-only, or that shows a channel tab, refuses
   the whole import.
+- A closed sheet listed with All sheets is exported and planned against like
+  an open one, from the copy read when All sheets was picked. Apply never
+  writes to a closed sheet: when the import would change one, nothing
+  changes, Messages names the closed sheets to open first, and the window
+  stays open (decided by Caner, 2026-11-25; see "Closed sheets" below).
+
+## Closed sheets
+
+With All sheets, the Parameter Manager also lists the sheets of the active
+sheet's project that are not open, after the open ones, by path (decided by
+Caner, 2026-11-25). They are read from disk on a worker when All sheets is
+picked; until the read lands, the scope bar says it is reading, and a sheet
+that could not be read stays counted as not listed. Their rows are
+read-only: a press on one of their cells opens the sheet, and once it is
+open its cells are edited as on any open sheet. An edit across sheets (a
+column added or removed, Apply of an import) that would change a closed
+sheet changes nothing and names the closed sheets to open. Nothing is ever
+written to a closed sheet's file. The copy is not read again while the
+window stays on All sheets; picking All sheets again reads it again.

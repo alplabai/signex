@@ -173,8 +173,9 @@ fn the_subtitle_names_the_sheet_or_counts_the_sheets() {
     );
 }
 
-/// All sheets lists the open sheets only; a sheet of the project that is
-/// not open is counted beside the switch instead of being left out quietly.
+/// Until the closed sheets are read, All sheets lists the open sheets only; a
+/// sheet of the project that is not open is counted beside the switch
+/// instead of being left out quietly.
 #[test]
 fn all_sheets_counts_the_project_sheets_it_cannot_list() {
     let mut app = app();
@@ -555,4 +556,145 @@ fn a_sheet_shown_as_a_channel_refuses_edits_from_the_table() {
         "nothing changed on a either"
     );
     assert_eq!(field(&app, B, 3, "MPN"), None);
+}
+
+/// Sheet b closed, All sheets picked, and the closed sheets' read landing
+/// with b (R3, Tolerance 10%) under the generation the pick started.
+fn with_closed_b_read() -> Signex {
+    let mut app = app();
+    app.document_state.engines.remove(Path::new(B));
+    app.document_state
+        .tabs
+        .retain(|tab| tab.path != Path::new(B));
+    all_sheets(&mut app);
+    assert!(
+        app.ui_state.parameter_table.closed.reading,
+        "b is being read"
+    );
+    let b = SchematicSheet {
+        uuid: Uuid::now_v7(),
+        paper_size: "A4".to_string(),
+        symbols: vec![part(3, "R3", "10%")],
+        ..Default::default()
+    };
+    let generation = app.ui_state.parameter_table.closed.generation;
+    let _ = app.update(Message::ParameterManager(Pm::ClosedSheetsRead {
+        generation,
+        sheets: std::sync::Arc::new(vec![(PathBuf::from(B), b)]),
+    }));
+    app
+}
+
+/// Item 1 of the Advanced Schematic follow-up (Caner 2026-11-25): All sheets
+/// lists the closed sheets too, read from disk in a task, after the open
+/// ones; their rows are read-only and the scope bar says so.
+#[test]
+fn all_sheets_lists_a_closed_sheet_read_only_once_it_is_read() {
+    let mut app = app();
+    app.document_state.engines.remove(Path::new(B));
+    app.document_state
+        .tabs
+        .retain(|tab| tab.path != Path::new(B));
+    all_sheets(&mut app);
+    let reading = app.parameter_scope_notes();
+    assert_eq!(reading.len(), 1, "only the reading note while it reads");
+
+    let app = with_closed_b_read();
+    assert_eq!(app.parameter_sheets(), paths(&[A, B]));
+    assert_eq!(app.closed_parameter_sheets(), 0, "b is listed now");
+    let sheets = app.parameter_documents();
+    assert_eq!(
+        sheets.iter().map(|s| s.is_closed).collect::<Vec<_>>(),
+        [false, true]
+    );
+    let TableBody::Rows(rows) = table_body(&app.ui_state.i18n, "", &sheets) else {
+        panic!("no filter lists every part");
+    };
+    let r3 = rows.iter().find(|row| row.reference == "R3").expect("R3");
+    assert!(r3.is_closed);
+    assert_eq!(r3.sheet, Path::new(B));
+    let notes: Vec<String> = (app.parameter_scope_notes().into_iter())
+        .map(|n| n.into_string())
+        .collect();
+    assert_eq!(
+        notes,
+        ["1 closed sheet is listed read-only; click one of its cells to open it."]
+    );
+    // The CSV export covers it too, with its Sheet cell.
+    let csv = app.listed_parameter_csv().expect("a sheet").expect("csv");
+    let csv = String::from_utf8(csv).expect("utf-8");
+    assert!(csv.contains("R3") && csv.contains("b.snxsch"), "{csv}");
+}
+
+/// A read that lands after a newer one started, or after Active sheet was
+/// picked, is dropped.
+#[test]
+fn a_stale_read_of_the_closed_sheets_is_dropped() {
+    let mut app = app();
+    app.document_state.engines.remove(Path::new(B));
+    app.document_state
+        .tabs
+        .retain(|tab| tab.path != Path::new(B));
+    all_sheets(&mut app);
+    let first = app.ui_state.parameter_table.closed.generation;
+    all_sheets(&mut app);
+    let _ = app.update(Message::ParameterManager(Pm::ClosedSheetsRead {
+        generation: first,
+        sheets: std::sync::Arc::new(vec![(PathBuf::from(B), SchematicSheet::default())]),
+    }));
+    assert_eq!(app.parameter_sheets(), paths(&[A]), "an older read");
+}
+
+/// Editing a closed sheet opens it and writes nothing (Caner 2026-11-25:
+/// the conservative choice): a typed cell, or a press on one, asks for the
+/// sheet to be opened; the copy read for the table keeps its value.
+#[test]
+fn an_edit_of_a_closed_sheet_opens_it_and_writes_nothing() {
+    let mut app = with_closed_b_read();
+    typed(&mut app, B, 3, "12%");
+    assert!(!app.document_state.engines.contains_key(Path::new(B)));
+    assert!(
+        app.document_state.pending_opens.contains(Path::new(B)),
+        "b is being opened"
+    );
+    let copy = app.listed_closed_sheets()[0].1;
+    assert_eq!(copy.symbols[0].fields["Tolerance"], "10%");
+    assert!(app.parameter_session_changes().is_empty());
+}
+
+/// An edit across sheets that would change a closed sheet changes nothing,
+/// on the open sheets either, and names the sheet to open.
+#[test]
+fn an_edit_across_sheets_that_reaches_a_closed_sheet_changes_nothing() {
+    let _ = crate::diagnostics::init_logging();
+    let mut app = with_closed_b_read();
+    let before = crate::diagnostics::newest_entry_id();
+    add_mpn_column(&mut app);
+    assert_eq!(
+        field(&app, A, 1, "MPN"),
+        None,
+        "a is open but nothing changed"
+    );
+    let said = said_since(before);
+    assert!(
+        said.iter().any(|line| line.contains("open b.snxsch first")),
+        "{said:?}"
+    );
+}
+
+/// Approved deviation from mockup row 70 (Caner 2026-11-25): the switch
+/// reads "Active sheet / All sheets", not "This sheet / Whole project".
+#[test]
+fn the_scope_switch_reads_active_sheet_and_all_sheets() {
+    use signex_i18n::{ids, t};
+    let app = app();
+    let i18n = &app.ui_state.i18n;
+    assert_eq!(
+        t!(i18n, ids::DIALOG_PARAMETER_MANAGER_SCOPE_ACTIVE).into_string(),
+        "Active sheet"
+    );
+    assert_eq!(
+        t!(i18n, ids::DIALOG_PARAMETER_MANAGER_SCOPE_ALL).into_string(),
+        "All sheets"
+    );
 }

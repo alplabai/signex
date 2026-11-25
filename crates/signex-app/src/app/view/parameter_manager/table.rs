@@ -409,6 +409,30 @@ fn param_cell<'a>(
         .boxed()
 }
 
+/// A parameter cell of a closed sheet: its value, read-only and muted; a
+/// press opens the sheet, so its cells can be edited (Caner 2026-11-25).
+fn closed_param_cell<'a>(
+    app: &'a Signex,
+    sheet: &Path,
+    sym: &'a Symbol,
+    key: &str,
+    width: f32,
+    style: GridStyle,
+) -> Element<'a, Message> {
+    let shown: &str = sym.fields.get(key).map_or("", String::as_str);
+    let [_, value_ink, _] = fixed_cell_inks(style);
+    let font = param_cell_font(shown, &app.document_state.panel_ctx.ui_font_name);
+    let cell = read_only_cell(shown, width, value_ink, font, style.metrics());
+    mouse_area(cell)
+        .on_press(Message::ParameterManager(
+            ParameterManagerMsg::ClosedSheetPressed {
+                sheet: sheet.to_path_buf(),
+            },
+        ))
+        .interaction(iced::mouse::Interaction::Pointer)
+        .boxed()
+}
+
 /// The 2 px accent mark left of a changed cell; clear on an unchanged one.
 fn changed_mark<'a>(is_changed: bool, style: GridStyle) -> Element<'a, Message> {
     let color = if is_changed {
@@ -561,7 +585,12 @@ pub(super) fn view<'a>(
             m,
         ));
         for (key, w) in keys.iter().zip(&widths.params) {
-            cells.push(param_cell(app, part.sheet, part.symbol, key, *w, style));
+            let cell = if part.is_closed {
+                closed_param_cell(app, part.sheet, part.symbol, key, *w, style)
+            } else {
+                param_cell(app, part.sheet, part.symbol, key, *w, style)
+            };
+            cells.push(cell);
         }
         body_rows.push(filled(row(cells).align_y(Alignment::Center).boxed(), fill));
         body_rows.push(rule(style.line, Length::Fixed(body_width), true));

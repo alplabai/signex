@@ -422,11 +422,23 @@ dialog-parameter-manager-no-match-title = No part matches the filter
 # $sheet is the sheet's file name, $query the typed filter.
 dialog-parameter-manager-no-match-body = No reference, value or footprint on { $sheet } contains { $query }.
 # The no-match card with All sheets. $query is the typed filter.
-dialog-parameter-manager-no-match-body-all = No reference, value or footprint on the open sheets contains { $query }.
-# Beside the scope switch with All sheets: project sheets the table does not list because they are not open.
+dialog-parameter-manager-no-match-body-all = No reference, value or footprint on the listed sheets contains { $query }.
+# Beside the scope switch with All sheets: closed project sheets the table does not list because they were not read (yet, or at all).
 dialog-parameter-manager-closed-sheets = { $count ->
     [one] 1 sheet of the project is closed and not listed; open it to edit its parameters.
    *[other] { $count } sheets of the project are closed and not listed; open them to edit their parameters.
+}
+# Scope bar note, All sheets: closed sheets read from disk are listed read-only.
+dialog-parameter-manager-closed-listed = { $count ->
+    [one] 1 closed sheet is listed read-only; click one of its cells to open it.
+   *[other] { $count } closed sheets are listed read-only; click one of their cells to open it.
+}
+# Scope bar note, All sheets: the closed sheets are being read.
+dialog-parameter-manager-closed-reading = Reading the closed sheets…
+# Messages line: an edit across sheets would change closed sheets, so nothing changed. $sheets lists their file names.
+dialog-parameter-manager-refused-closed = { $count ->
+    [one] Parameter Manager: nothing changed; open { $sheets } first, it is closed.
+   *[other] Parameter Manager: nothing changed; open { $sheets } first, they are closed.
 }
 # Messages lines: an edit across several sheets changed no sheet. $sheet is the file name.
 dialog-parameter-manager-refused-busy = Parameter Manager: nothing changed, { $sheet } is being saved or moved.
