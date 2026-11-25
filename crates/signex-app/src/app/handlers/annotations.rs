@@ -22,7 +22,7 @@ use crate::dock::DockMessage;
 use crate::panels::annotations::{
     Annotation, AnnotationKind, AnnotationRow, AnnotationsState, AnnotationsView, FileGroup,
     FileReadError, IsoDate, KindChip, ListStatus, NotebookFile, NotebookScan, PartIndex, PartPlace,
-    RefChip, Reference, RowKey, ScanProblem, part_flags,
+    RefChip, Reference, RowKey, ScanProblem, part_flags, record_fields,
 };
 use crate::panels::{AnnotationsMsg, NetInspectorMsg, PanelKind, PanelMsg};
 
@@ -347,7 +347,19 @@ pub(crate) fn today() -> IsoDate {
 /// Read every notebook file of the project and find the design's parts.
 /// Blocking: runs on a worker.
 fn scan_notebooks(inputs: &ScanInputs) -> Result<NotebookScan, String> {
-    let folder = inputs.project_dir.join(NOTEBOOK_DIR);
+    let scan = read_notebook_files(&inputs.project_dir)?;
+    Ok(NotebookScan {
+        parts: inputs.design.as_ref().and_then(part_index),
+        ..scan
+    })
+}
+
+/// Read every `.snxnbk` file under the project's `notebook/` folder, its
+/// chapter subfolders included (mockup row 195: one notebook that includes
+/// chapter files), sorted by path. No parts are looked up. Blocking: runs
+/// on a worker, for the panel and for `list_annotations`.
+pub(crate) fn read_notebook_files(project_dir: &Path) -> Result<NotebookScan, String> {
+    let folder = project_dir.join(NOTEBOOK_DIR);
     let entries = match std::fs::read_dir(&folder) {
         Ok(entries) => entries,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -357,36 +369,55 @@ fn scan_notebooks(inputs: &ScanInputs) -> Result<NotebookScan, String> {
     };
     // An entry that cannot be listed is said in Messages, never dropped.
     let (mut paths, mut unlisted) = (Vec::new(), Vec::new());
-    for entry in entries {
-        match entry {
-            Ok(entry) => {
-                let path = entry.path();
-                let notebook = path
-                    .extension()
-                    .is_some_and(|ext| ext.eq_ignore_ascii_case(NOTEBOOK_EXTENSION));
-                if notebook && path.is_file() {
-                    paths.push(path);
+    let mut pending = vec![entries];
+    while let Some(entries) = pending.pop() {
+        for entry in entries {
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(e) => {
+                    unlisted.push(e.to_string());
+                    continue;
                 }
+            };
+            let path = entry.path();
+            // The entry's own type: a link to a folder is not followed.
+            let is_dir = entry.file_type().is_ok_and(|kind| kind.is_dir());
+            if is_dir {
+                match std::fs::read_dir(&path) {
+                    Ok(inner) => pending.push(inner),
+                    Err(e) => unlisted.push(format!("{}: {e}", path.display())),
+                }
+                continue;
             }
-            Err(e) => unlisted.push(e.to_string()),
+            let notebook = path
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case(NOTEBOOK_EXTENSION));
+            if notebook && path.is_file() {
+                paths.push(path);
+            }
         }
     }
     paths.sort();
-    let files = paths.into_iter().map(read_notebook).collect();
+    let files = paths
+        .into_iter()
+        .map(|path| read_notebook(&folder, path))
+        .collect();
     Ok(NotebookScan {
         folder_found: true,
         files,
         unlisted,
-        parts: inputs.design.as_ref().and_then(part_index),
+        parts: None,
     })
 }
 
-fn read_notebook(path: PathBuf) -> NotebookFile {
-    let name = path
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    let label = format!("{NOTEBOOK_DIR}/{name}");
+fn read_notebook(folder: &Path, path: PathBuf) -> NotebookFile {
+    let inside: Vec<String> = path
+        .strip_prefix(folder)
+        .unwrap_or(&path)
+        .components()
+        .map(|part| part.as_os_str().to_string_lossy().into_owned())
+        .collect();
+    let label = format!("{NOTEBOOK_DIR}/{}", inside.join("/"));
     let text = std::fs::read(&path)
         .map_err(|e| FileReadError::Io(e.to_string()))
         .and_then(|bytes| String::from_utf8(bytes).map_err(|_| FileReadError::NotUtf8));
@@ -586,6 +617,14 @@ pub(crate) fn build_view(state: &AnnotationsState, today: IsoDate) -> Annotation
             on: !filter.hidden_kinds.contains(&kind),
         })
         .collect();
+    // Blocks cite each other across files: a chapter's Issue `from:` a
+    // Measurement of another.
+    let everything: Vec<Annotation> = scan
+        .files
+        .iter()
+        .flat_map(|f| f.annotations.iter().cloned())
+        .collect();
+    let links = signex_notebook::links(&everything);
     for file in &scan.files {
         let mut shown: Vec<&Annotation> = file
             .annotations
@@ -598,7 +637,15 @@ pub(crate) fn build_view(state: &AnnotationsState, today: IsoDate) -> Annotation
         shown.sort_by(|a, b| newest_first(a, b));
         let rows: Vec<AnnotationRow> = shown
             .into_iter()
-            .map(|a| row_of(file, a, scan.parts.as_ref(), state.expanded.as_ref()))
+            .map(|a| {
+                let place = RowPlace {
+                    file,
+                    parts: scan.parts.as_ref(),
+                    expanded: state.expanded.as_ref(),
+                    links: &links,
+                };
+                row_of(&place, a)
+            })
             .collect();
         view.shown += rows.len();
         view.groups.push(FileGroup {
@@ -616,12 +663,25 @@ fn kind_index(kind: AnnotationKind) -> usize {
         .unwrap_or_default()
 }
 
-fn row_of(
-    file: &NotebookFile,
-    annotation: &Annotation,
-    parts: Option<&PartIndex>,
-    expanded: Option<&RowKey>,
-) -> AnnotationRow {
+/// What a row is built against: its file, the design's parts, the expanded
+/// row and every citation of the scan.
+struct RowPlace<'a> {
+    file: &'a NotebookFile,
+    parts: Option<&'a PartIndex>,
+    expanded: Option<&'a RowKey>,
+    links: &'a [signex_notebook::Link],
+}
+
+fn row_of(place: &RowPlace<'_>, annotation: &Annotation) -> AnnotationRow {
+    let (file, parts, expanded) = (place.file, place.parts, place.expanded);
+    let cited: Vec<_> = annotation.id.as_ref().map_or_else(Vec::new, |id| {
+        place
+            .links
+            .iter()
+            .filter(|link| &link.to == id)
+            .map(|link| (link.citation, link.by.clone()))
+            .collect()
+    });
     let key = RowKey {
         file: file.path.clone(),
         line: annotation.line,
@@ -648,10 +708,13 @@ fn row_of(
         expanded: expanded == Some(&key),
         key,
         kind: annotation.kind,
+        id: annotation.id.as_ref().map(ToString::to_string),
         title: annotation.title.clone(),
         snippet: annotation.snippet.clone(),
         chips,
         status: annotation.status,
+        verdict: annotation.record.verdict(),
+        fields: record_fields(annotation, &cited),
         date: annotation.date,
         source: annotation.source.clone(),
         file_name: file
@@ -962,5 +1025,43 @@ mod tests {
         app.ui_state.annotations.closing = None;
         let _ = app.sync_annotations_panel();
         assert_eq!(app.ui_state.annotations.generation, before + 1);
+    }
+
+    /// Mockup row 195: one notebook includes chapter files, so a chapter in
+    /// a subfolder of `notebook/` is read too, labelled by its path there;
+    /// other files are not.
+    #[test]
+    fn the_chapters_in_subfolders_of_the_notebook_are_read() {
+        let dir = tempfile::tempdir().unwrap();
+        let folder = dir.path().join(NOTEBOOK_DIR);
+        std::fs::create_dir_all(folder.join("chapters/deep")).unwrap();
+        std::fs::write(folder.join("design.snxnbk"), "#note(id: \"NOTE-001\")[A]\n").unwrap();
+        let chapter = "#issue(id: \"ISS-001\")[B]\n";
+        std::fs::write(folder.join("chapters/power.snxnbk"), chapter).unwrap();
+        std::fs::write(folder.join("chapters/deep/x.snxnbk"), "Plain.\n").unwrap();
+        std::fs::write(folder.join("chapters/scope.csv"), "t,v\n").unwrap();
+        let scan = read_notebook_files(dir.path()).expect("read");
+        assert!(scan.folder_found);
+        let labels: Vec<&str> = scan.files.iter().map(|f| f.label.as_str()).collect();
+        assert_eq!(
+            labels,
+            [
+                "notebook/chapters/deep/x.snxnbk",
+                "notebook/chapters/power.snxnbk",
+                "notebook/design.snxnbk",
+            ]
+        );
+        let id = scan.files[1].annotations[0].id.as_ref();
+        assert_eq!(id.map(ToString::to_string).as_deref(), Some("ISS-001"));
+        assert!(scan.unlisted.is_empty());
+        assert!(scan.parts.is_none(), "no parts are looked up");
+    }
+
+    #[test]
+    fn a_project_without_a_notebook_folder_reads_as_none() {
+        let dir = tempfile::tempdir().unwrap();
+        let scan = read_notebook_files(dir.path()).expect("read");
+        assert!(!scan.folder_found);
+        assert!(scan.files.is_empty());
     }
 }
