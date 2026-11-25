@@ -632,6 +632,22 @@ pub const CHECK_REQUIREMENTS: &[Operand] = &[
     required("document", OperandKind::Document),
     optional("baseline", OperandKind::Text),
 ];
+/// `check_board_against_schematic` (#2462): the board of the project the
+/// named document is (or belongs to) against its schematic.
+pub const CHECK_BOARD_AGAINST_SCHEMATIC: &[Operand] =
+    &[required("document", OperandKind::Document)];
+/// `apply_board_schematic_differences` (#2462): the difference ids (as the
+/// check answered them, comma separated) to take to the board and to the
+/// schematic; every other difference is skipped. `expect_revision` is the
+/// board revision the check answered.
+pub const APPLY_BOARD_SCHEMATIC_DIFFERENCES: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("to_board", OperandKind::Text),
+    optional("to_schematic", OperandKind::Text),
+    optional("expect_revision", OperandKind::Text),
+];
+/// `board_status` (#2460): the named board's status counters.
+pub const BOARD_STATUS: &[Operand] = &[required("document", OperandKind::Document)];
 /// Select Net and Highlight Net on a board (#2403): the net by name; without
 /// it, the net of the selection or of what is under the cursor.
 pub const BOARD_NET: &[Operand] = &[optional("net", OperandKind::Text)];

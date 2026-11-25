@@ -302,6 +302,9 @@ define_ids! {
         CMD_UPDATE_PCB_FROM_SCHEMATIC = "cmd-update-pcb-from-schematic";
         CMD_COMPARE_BOARD_WITH_SCHEMATIC = "cmd-compare-board-with-schematic";
         CMD_MENU_COMPARE_BOARD_WITH_SCHEMATIC = "cmd-menu-compare-board-with-schematic";
+        CMD_CHECK_BOARD_AGAINST_SCHEMATIC = "cmd-check-board-against-schematic";
+        CMD_APPLY_BOARD_SCHEMATIC_DIFFERENCES = "cmd-apply-board-schematic-differences";
+        CMD_BOARD_STATUS = "cmd-board-status";
         CMD_BACK_ANNOTATE_SCHEMATICS = "cmd-back-annotate-schematics";
         CMD_MENU_BACK_ANNOTATE_SCHEMATICS = "cmd-menu-back-annotate-schematics";
         CMD_OPEN_SELECTION_FILTER = "cmd-open-selection-filter";
