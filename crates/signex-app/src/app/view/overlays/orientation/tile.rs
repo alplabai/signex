@@ -5,6 +5,7 @@
 use iced::widget::canvas::{self, Frame, Geometry, Path, Stroke, Text};
 use iced::widget::{Column, container};
 use iced::{Border, Color, Element, Length, Point, Rectangle, Renderer, Theme, Widget as _, mouse};
+use signex_i18n::Localized;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::text;
 
@@ -47,7 +48,7 @@ pub(super) fn view<'a, M: 'a>(
     tokens: &ThemeTokens,
     axes: ScreenAxes,
     labels: [String; 2],
-    caption: Option<signex_i18n::Localized>,
+    caption: Option<Localized>,
 ) -> Element<'a, M> {
     let (w, h) = tile_size(caption.is_some());
     let side = w - 2.0 * SHELL_INSET;
@@ -79,7 +80,7 @@ pub(super) fn view<'a, M: 'a>(
 }
 
 /// "90°", "Bottom" or "Bottom · 90°" under a hairline.
-fn caption_row<'a, M: 'a>(tokens: &ThemeTokens, caption: signex_i18n::Localized) -> Element<'a, M> {
+fn caption_row<'a, M: 'a>(tokens: &ThemeTokens, caption: Localized) -> Element<'a, M> {
     let ink = ti(tokens.text_secondary);
     let line = resolve(tokens).line_soft;
     let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);

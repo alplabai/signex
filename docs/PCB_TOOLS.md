@@ -874,6 +874,9 @@ draws a board drawing (`PcbBoard::graphics`, kinds in
   the pour has no net, as for any other net. The interactive router keeps
   clear of all of it, and a push never moves a track of no net (the route
   walks round it); via stitching, teardrops and gloss keep clear of it too.
+  The one exception is a pad of no net a leg ends on or starts from: it
+  joins the route's net (Caner, 2026-11-18), so the router routes onto it
+  as that net's copper (`route::ends::with_joined_ends`).
   The Gerber writes drawings and strings on the copper image as `Conductor`
   with no net (was `NonConductor`). Copper of no net joins no net: the
   ratsnest, the unrouted check and a new track's net (`net_at`) do not read
@@ -1387,9 +1390,9 @@ view can draw them.
 Apart from the layer colours, all of this is the board view's state; nothing
 else touches the board file. The view is kept per board, by its path, in the
 user's `prefs.json` (`pcb_board_views`, #2480): the hidden layers, the active
-layer, the Connection Lines, Multi-Layer and Origin Marker eyes, Single
-Layer, View From Bottom Side, Used On, the layer set the strip lists, the
-hidden kinds of object and their transparencies. A change is written after a
+layer, the Connection Lines, Multi-Layer, Origin Marker and Orientation Tile
+eyes (#2508), Single Layer, View From Bottom Side, Used On, the layer set the
+strip lists, the hidden kinds of object and their transparencies. A change is written after a
 short quiet period and at quit; a board that opens again takes its kept
 view. The layer highlight and Show only unrouted end with the board and are
 not kept. Every greyed control, in the panel and in the more menu, says why

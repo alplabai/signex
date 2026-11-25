@@ -22,6 +22,9 @@ fn dimension(kind: DimensionKind) -> LinearDimension {
     if kind == DimensionKind::Radial {
         d.offset = 0.0;
         d.measures = Some(Uuid::from_u128(32));
+        // As `LinearDimension::radial` builds it: an offset of 0 puts Above
+        // on the other side, and the file derives a non-Manual point.
+        d.text_at = d.above_text_at();
     }
     d
 }

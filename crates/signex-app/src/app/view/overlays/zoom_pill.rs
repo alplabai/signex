@@ -2,7 +2,8 @@
 //! `-`, `+` and Fit send the messages View > Zoom In, Zoom Out and Fit All
 //! send; each control names its action and shortcut on hover, and the
 //! percentage opens the zoom presets (`zoom_presets.rs`). The widget is
-//! `crate::canvas::zoom_pill`.
+//! `crate::canvas::zoom_pill`. The board's pill is the same one, drawn by
+//! the orientation layer (`orientation/mod.rs`) without the presets.
 
 use iced::Element;
 use iced::widget::Widget;
@@ -21,6 +22,14 @@ const EDGE_GAP: f32 = TS.body;
 const ZOOM_OUT_COMMAND: &str = "zoom_out_at_cursor";
 const ZOOM_IN_COMMAND: &str = "zoom_in_at_cursor";
 const FIT_ALL_COMMAND: &str = "zoom_to_fit";
+
+/// The canvas a zoom pill sits on: the sheet's layer draws its own, the
+/// orientation layer draws the board's (#2508).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::app::view) enum ZoomPillCanvas {
+    Sheet,
+    Board,
+}
 
 /// Top-left of the pill for a canvas at `canvas`.
 pub(in crate::app::view) fn pill_origin(canvas: iced::Rectangle) -> (f32, f32) {
@@ -59,21 +68,32 @@ impl Signex {
         Some(layer.boxed())
     }
 
-    /// The pill itself, for the canvas of `window_id`.
+    /// The sheet's pill, for the canvas of `window_id`.
     fn zoom_pill(&self, window_id: iced::window::Id) -> Element<'_, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
         let zoom = self
             .interaction_state
             .canvas_for_window(window_id)
             .zoom_percent();
+        self.zoom_pill_at(zoom, ZoomPillCanvas::Sheet)
+    }
+
+    /// The pill reading `zoom` percent on `canvas`. A board's has a plain
+    /// read-out: the zoom presets act on a sheet (#2508).
+    pub(in crate::app::view) fn zoom_pill_at(
+        &self,
+        zoom: f64,
+        canvas: ZoomPillCanvas,
+    ) -> Element<'_, Message> {
+        let tokens = &self.document_state.panel_ctx.tokens;
         let i18n = &self.ui_state.i18n;
+        let on_sheet = canvas == ZoomPillCanvas::Sheet;
         pill(
             tokens,
             PillMessages {
                 zoom_out: Message::Menu(MenuMessage::ZoomOut),
                 zoom_in: Message::Menu(MenuMessage::ZoomIn),
                 fit_all: Message::CanvasEvent(crate::canvas::CanvasEvent::FitAll),
-                presets: Some(Message::Ui(UiMsg::ZoomPresetsToggled)),
+                presets: on_sheet.then_some(Message::Ui(UiMsg::ZoomPresetsToggled)),
             },
             PillText {
                 readout: t!(i18n, menu_ids::ZOOM_PILL_PERCENT, "percent" => format!("{zoom:.0}"))
@@ -82,11 +102,11 @@ impl Signex {
                 hints: [
                     self.zoom_pill_hint(ZOOM_OUT_COMMAND),
                     self.zoom_pill_hint(ZOOM_IN_COMMAND),
-                    Some(t!(i18n, menu_ids::ZOOM_PILL_PRESETS).into()),
+                    on_sheet.then(|| t!(i18n, menu_ids::ZOOM_PILL_PRESETS).into()),
                     self.zoom_pill_hint(FIT_ALL_COMMAND),
                 ],
             },
-            self.interaction_state.zoom_presets_open,
+            on_sheet && self.interaction_state.zoom_presets_open,
         )
     }
 
