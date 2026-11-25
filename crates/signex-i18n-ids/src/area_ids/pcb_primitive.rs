@@ -293,6 +293,8 @@ define_ids! {
     PCB_PRIM_POUR_FILL_SOLID = "pcb-prim-pour-fill-solid";
     PCB_PRIM_POUR_FILL_HATCHED = "pcb-prim-pour-fill-hatched";
     PCB_PRIM_POUR_HATCHED_TIP = "pcb-prim-pour-hatched-tip";
+    PCB_PRIM_POUR_HATCH_WIDTH = "pcb-prim-pour-hatch-width";
+    PCB_PRIM_POUR_HATCH_GAP = "pcb-prim-pour-hatch-gap";
     PCB_PRIM_POUR_THERMAL = "pcb-prim-pour-thermal";
     PCB_PRIM_POUR_THERMAL_TIP = "pcb-prim-pour-thermal-tip";
     PCB_PRIM_POUR_SPOKE_GAP = "pcb-prim-pour-spoke-gap";
