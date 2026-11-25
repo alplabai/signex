@@ -522,7 +522,7 @@ impl Signex {
 
 /// Focus the Rename name field and select its text. The field holds only
 /// the stem (the extension is a fixed suffix), so the stem is selected.
-fn rename_field_focus() -> iced::Task<Message> {
+pub(super) fn rename_field_focus() -> iced::Task<Message> {
     use iced::widget::operation;
     let id: &iced::widget::Id = &crate::app::contracts::RENAME_INPUT_ID;
     iced::Task::batch([

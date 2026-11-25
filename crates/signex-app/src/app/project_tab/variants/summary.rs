@@ -268,8 +268,9 @@ mod tests {
                     let texts = laid_out(tid, active, width);
                     let case = format!("{tid:?}, active {active:?}, {width} wide");
                     // Base, Lite, the long name and Pro, each with its
-                    // three captions and values, and one active pill.
-                    assert_eq!(texts.len(), 4 * 7 + 1, "{case}: {texts:#?}");
+                    // three captions and values, one active pill, and the
+                    // default pill (Base here; Set as default, mockup row 32).
+                    assert_eq!(texts.len(), 4 * 7 + 2, "{case}: {texts:#?}");
                     let lefts = card_lefts(width);
                     for t in &texts {
                         let b = t.bounds;

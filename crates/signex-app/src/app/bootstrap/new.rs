@@ -403,8 +403,8 @@ impl Signex {
                 preferences_draft_edge_pan: edge_pan,
                 symbol_body_fill,
                 preferences_draft_symbol_body_fill: symbol_body_fill,
-                preferences_pcb_defaults: crate::pcb_defaults_prefs::PcbDefaultsDraft::of(
-                    &pcb_dimension_defaults,
+                preferences_pcb_defaults: Box::new(
+                    crate::pcb_defaults_prefs::PcbDefaultsDraft::of(&pcb_dimension_defaults),
                 ),
                 pcb_dimension_defaults,
                 preferences_body_fill_palette_open: false,

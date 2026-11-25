@@ -304,6 +304,26 @@ pub(crate) fn draw_pixels<M>(
         &layout::Limits::new(Size::ZERO, window),
     );
     let size = tree.size;
+    // As the runtime does before every frame: a redraw sets each widget's
+    // status (a button that never saw one draws as disabled).
+    {
+        use iced::advanced::shell::{Bus, Waker};
+        let mut bus = Bus::new();
+        let mut shell =
+            iced::advanced::Shell::new(&iced::window::Headless, Waker::noop(), &mut bus);
+        let redraw = iced::Event::Window(iced::window::Event::RedrawRequested(
+            std::time::Instant::now(),
+        ));
+        element.update(
+            &mut tree,
+            &redraw,
+            Layout::new(size),
+            iced::advanced::mouse::Cursor::Unavailable,
+            &renderer,
+            &mut shell,
+            &Rectangle::with_size(window),
+        );
+    }
     // As the compositor does before every frame.
     iced::advanced::Renderer::reset(&mut renderer, Rectangle::with_size(window));
     element.draw(

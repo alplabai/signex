@@ -432,6 +432,8 @@ fn a_dimension_length_typed_in_mils_is_saved_in_mm() {
     };
     let edited = assert_one_step(&mut f, |f| typed(f, PrimitiveField::LineWidth, "10"));
     assert!((edited.free.dimensions[0].line_width - 0.254).abs() < 1e-9);
+    // `assert_one_step` ends undone; type it again for the save.
+    typed(&mut f, PrimitiveField::LineWidth, "10");
     typed(&mut f, PrimitiveField::TextHeight, "2mm");
     assert!((live(&f).free.dimensions[0].text_height - 2.0).abs() < 1e-9);
 

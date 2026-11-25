@@ -496,7 +496,8 @@ fn panel_inputs(ctx: &PanelContext) -> Vec<String> {
 }
 
 /// The board's only class editor keeps every field the class table had:
-/// Name, Colour and the diff-pair Gap / Width beside the mockup's rules.
+/// Name, Color (en-US, mockup row 72) and the diff-pair Gap / Width beside
+/// the mockup's rules.
 #[test]
 fn the_class_detail_edits_name_colour_and_the_pair_rules() {
     let mut ctx = panel_ctx(PcbPanelMode::NetClasses);
@@ -505,7 +506,7 @@ fn the_class_detail_edits_name_colour_and_the_pair_rules() {
     ctx.net_classes.board = Some(table);
     ctx.pcb_panel.class = Some("Power".to_owned());
     let texts = panel_texts(&ctx);
-    for want in ["Name", "Colour", "Diff pair"] {
+    for want in ["Name", "Color", "Diff pair"] {
         assert!(shows(&texts, want), "{want}: {texts:?}");
     }
     let inputs = panel_inputs(&ctx);
