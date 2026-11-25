@@ -207,7 +207,7 @@ struct Blank;
 
 impl ExtensionView for Blank {
     fn view<'a>(&'a self, _cx: ViewContext<'a>) -> iced::Element<'a, ExtensionMsg> {
-        iced::widget::Space::new().into()
+        iced::Widget::boxed(iced::widget::Space::new())
     }
 }
 

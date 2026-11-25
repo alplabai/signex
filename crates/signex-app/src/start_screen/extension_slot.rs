@@ -2,7 +2,7 @@
 //! project lists, each section an installed extension added, under its
 //! heading. With no section added the slot draws nothing at all.
 
-use iced::Element;
+use iced::{Element, Widget as _};
 use signex_i18n::{I18n, t};
 use signex_types::theme::ThemeTokens;
 
@@ -26,7 +26,7 @@ pub(super) fn home_end<'a>(
         .flat_map(|section| {
             [
                 section_header(tokens, t!(i18n, section.title)),
-                section.body.map(Message::Extension),
+                section.body.map(Message::Extension).boxed(),
             ]
         })
         .collect()

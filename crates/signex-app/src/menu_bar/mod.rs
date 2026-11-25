@@ -261,6 +261,16 @@ impl Default for MenuContext<'_> {
     }
 }
 
+impl MenuContext<'_> {
+    /// This context with the extension rows `rows`, as the window builds it
+    /// from [`crate::extension::ExtensionHost::menu_rows`].
+    #[must_use]
+    pub fn with_extension_rows(mut self, rows: Vec<crate::extension::points::MenuRow>) -> Self {
+        self.extension_rows = rows;
+        self
+    }
+}
+
 // ─── Constants ────────────────────────────────────────────────
 
 /// Height of the title and menu bar.

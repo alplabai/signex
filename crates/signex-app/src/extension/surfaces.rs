@@ -5,8 +5,8 @@
 
 use std::collections::BTreeMap;
 
-use iced::Element;
 use iced::widget::Space;
+use iced::{Element, Widget as _};
 
 use super::points::{ActiveBarRow, ExtensionPanelKind, MenuRow, PcbBarGroup, StartScreenSlot};
 use super::{ExtensionHost, ExtensionMsg, ViewContext};
@@ -34,7 +34,7 @@ impl ExtensionHost {
     ) -> Element<'a, ExtensionMsg> {
         self.points()
             .find_map(|points| points.panels.view(kind.key()))
-            .map_or_else(|| Space::new().into(), |view| view.view(cx))
+            .map_or_else(|| Space::new().boxed(), |view| view.view(cx))
     }
 
     /// Every menu bar row the extensions added.

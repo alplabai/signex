@@ -96,7 +96,7 @@ mod tests {
                 &'a self,
                 _cx: crate::extension::ViewContext<'a>,
             ) -> iced::Element<'a, crate::extension::ExtensionMsg> {
-                iced::widget::Space::new().into()
+                iced::Widget::boxed(iced::widget::Space::new())
             }
         }
         let owner = crate::extension::ExtensionId::new("sample").expect("valid name");

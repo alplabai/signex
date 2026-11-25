@@ -335,6 +335,61 @@ impl Extension for Sample {
   output, and `signex-cli` installs no extension, so it refuses an `ext.` id
   as an unknown command. See "Open questions".
 
+## Walkthrough: an example extension
+
+`crates/signex-app/tests/example_extension.rs` is a whole extension written
+against the public API only, as a binary built on `signex-app` would write
+it, and runs under `cargo test --workspace`. It adds one dock panel, one
+Tools menu row and one catalog command, and its tests drive each one.
+
+**1. Name and ids.** The extension is named `example`, so each id it adds
+is `ext.example.` and one snake_case segment: the panel key
+`ext.example.notes` and the command `ext.example.say_hello`.
+
+**2. The command's row and message.** The command is a `static`
+`CommandMetadata` with no operands, no document access and
+`CommandFlags::RUNS_HEADLESS`, so it runs from a window and headless alike.
+Its handler returns the past-tense payload `HelloSaid`.
+
+**3. The panel.** `Notes` implements `ExtensionView`: `view` draws one
+button whose press is `ExtensionMsg::for_view(owner, NOTES, NotesPressed)`,
+and `update` counts the presses. The object is the panel's state.
+
+**4. Registering.** `Extension::register` adds all three:
+
+```rust
+points.panels.add(NOTES, LABEL, PanelPosition::Right, notes)?;
+points.commands.add(&SAY_HELLO_ROW, |_args| Ok(HelloSaid))?;
+points.menu_rows.add_menu_row(MenuRoot::Tools, LABEL, SAY_HELLO)?;
+```
+
+A test installs the extension with `ExtensionHost::install` and hands the
+host to `Signex::new()` through `with_extensions`; a binary passes the same
+`Vec<Box<dyn Extension>>` to `launch::run`.
+
+**5. Driving it.**
+
+- *Open the panel.* `app.extensions().panel(NOTES)` gives its
+  `ExtensionPanelKind`; `app.update(kind.open_message())` docks it in its
+  home region, the right dock. A `Message::Extension` addressed to the
+  panel's key reaches `Notes::update`, not the extension's own `update`.
+- *Pick the menu row.* `menu_bar_model` built with
+  `MenuContext::default().with_extension_rows(app.extensions().menu_rows())`,
+  the model the window draws, ends Tools with a separator and the row. The
+  row's `MenuMessage::Command` is what a click sends; `app.update` runs the
+  command through `dispatch_command`, and the extension receives `HelloSaid`.
+- *Run the command through the request path.*
+  `run_command_request(RequestSurface::Gui { window: None }, request)`
+  answers `RequestOutcome::Ran`. An id in the extension's namespace that it
+  did not add is refused with `RefusalCause::NoSuchCommand`.
+- *Run it headless.* In a child process with its own config root override
+  (the override is process-wide), `Signex::boot_headless`, then
+  `with_extensions`, then both `dispatch_command_headless` and
+  `run_command_request(RequestSurface::Headless, request)` answer `Ran`.
+
+The labels reuse built-in catalog messages because an extension cannot ship
+`.ftl` messages yet (see "Open questions").
+
 ## Versioning
 
 `signex_app::extension::API_VERSION` is the version of this API. It goes up by
@@ -378,6 +433,9 @@ const _: () = assert!(signex_app::extension::API_VERSION == 1);
   active_bar_rows, load_preferences}`.
 - One refusal type for every point, `RegisterError`, and
   `InstallError::Refused`.
+- `MenuContext::with_extension_rows`, so code outside the crate builds the
+  menu model a window draws; and the example extension
+  (`crates/signex-app/tests/example_extension.rs`).
 - One request path: `Signex::run_command_request`, `CommandRequest`,
   `RequestSurface`, `RequestOutcome` and `RefusalCause`, with `if_revision`.
 
