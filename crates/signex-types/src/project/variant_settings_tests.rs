@@ -2,7 +2,7 @@
 //! per variant and the default variant are set and cleared, follow a rename
 //! and go with a removal, a duplicate copies them, and the optional
 //! `variant_settings` key round-trips (absent when empty, kept verbatim when
-//! unreadable, kept by an older build). No format token changes.
+//! unreadable, kept by an older build). Set, it writes `snxprj/1.1`.
 
 use super::*;
 use serde_json::{Value, json};
@@ -189,7 +189,11 @@ fn the_settings_round_trip_through_the_file() {
     assert_eq!(std::fs::read(&path).unwrap(), first, "byte-identical");
 
     let saved = saved_json(&path);
-    assert_eq!(saved["format"], json!(SNXPRJ_FORMAT_V1), "no token change");
+    assert_eq!(
+        saved["format"],
+        json!(SNXPRJ_FORMAT_V1_1),
+        "variant settings need 1.1"
+    );
     assert_eq!(
         saved["variant_settings"],
         json!({
