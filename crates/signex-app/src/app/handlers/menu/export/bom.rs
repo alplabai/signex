@@ -7,6 +7,11 @@ use signex_output::{BomColumn, BomExporter, BomFormat, BomGrouping, BomOptions, 
 
 use super::super::super::super::*;
 
+#[cfg(test)]
+#[path = "bom_computed_tests.rs"]
+mod computed_tests;
+#[path = "bom_lines.rs"]
+mod lines;
 #[path = "bom_rows.rs"]
 mod rows;
 #[cfg(test)]
@@ -195,15 +200,33 @@ impl Signex {
     /// preserving the original slot would require a separate
     /// "available columns" Vec).
     pub(crate) fn handle_bom_preview_toggle_column(&mut self, col: BomColumn) {
+        let is_computed = matches!(col, BomColumn::Computed(_));
+        let mut added = false;
         if let Some(preview) = self.document_state.bom_preview.as_mut() {
             if let Some(idx) = preview.options.columns.iter().position(|c| c == &col) {
                 preview.options.columns.remove(idx);
             } else {
                 preview.options.columns.push(col);
+                added = true;
             }
         }
-        // Column toggles don't change the rolled-up table, only the
-        // displayed columns + the export columns. No rerollup needed.
+        // A column toggle changes only the shown and exported columns, except
+        // that a computed column's cells are evaluated in the rollup (#1988).
+        if added && is_computed {
+            self.rerollup_bom_preview();
+            self.report_computed_bom_issues();
+        }
+    }
+
+    /// One Messages line per computed cell of the preview that failed
+    /// (#1988), naming its line and the error.
+    pub(crate) fn report_computed_bom_issues(&self) {
+        let Some(preview) = self.document_state.bom_preview.as_ref() else {
+            return;
+        };
+        for issue in signex_output::bom::computed_issues(&preview.table, &preview.options.columns) {
+            crate::diagnostics::log_warning(issue.to_string());
+        }
     }
 
     /// Switch the active variant in the BOM preview. `None` is the
@@ -515,6 +538,10 @@ impl Signex {
                 // Advisory, not a gate: the file is written; tell the
                 // user what validation found instead of dropping it.
                 let advisory = bom_validation_notice(&output.validation_report, &save_path);
+                // A computed cell that failed is written empty (#1988).
+                for issue in &output.computed_issues {
+                    crate::diagnostics::log_warning(issue.to_string());
+                }
                 let write = self.write_export(
                     save_path,
                     output.bytes,

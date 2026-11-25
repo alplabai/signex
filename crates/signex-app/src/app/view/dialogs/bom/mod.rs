@@ -9,6 +9,8 @@ use signex_i18n::{ids, t};
 
 use super::widgets::{draggable_header, os_title_bar_slot};
 
+#[cfg(test)]
+mod computed_tests;
 mod footer;
 #[cfg(test)]
 mod names_tests;
