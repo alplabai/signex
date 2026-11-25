@@ -794,3 +794,15 @@ properties-rule-total = { $count ->
     [one] 1 rule
    *[other] { $count } rules
 }
+# m7/sch-props-text-shape
+# Border callout of the rectangle drawing (mockup row 48). $width is the
+# Border field's value in mm; $fill is the Fill segment's name.
+properties-drawing-illustration-border = Border { $width } mm · Fill { $fill }
+# Caption under the rectangle drawing.
+properties-drawing-sample-wire = The sample wire shows Behind / Above
+# Under the Text Size callout of the text note drawing (mockup row 47).
+# $size is the field's value, $unit its unit symbol.
+properties-text-note-illustration-size = { $size } { $unit }
+# Under the Position callout of the text note drawing. $h and $v are the
+# Justify H and Justify V segment names.
+properties-text-note-illustration-justify = Justify { $h } / { $v }

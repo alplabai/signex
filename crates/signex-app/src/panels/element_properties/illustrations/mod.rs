@@ -24,7 +24,7 @@ pub(super) use harness_connector::harness_connector;
 pub(super) use net_label::net_label;
 pub(super) use port::port;
 pub(super) use power_port::{power_port, style_glyph};
-pub(super) use text_note::text_note;
+pub(super) use text_note::{NoteValues, text_note};
 pub(super) use wire::{RunShape, run};
 
 pub(super) use power_port::PowerPortCallouts;
@@ -248,7 +248,7 @@ mod tests {
     fn a_text_note_marks_the_anchor_its_justification_names() {
         let en = I18n::en_us();
         let dot = |h, v| {
-            let drawing = text_note("Place C14 near U3", h, v, &en);
+            let drawing = text_note("Place C14 near U3", h, v, &NoteValues::default(), &en);
             assert!(has_no_arc(&drawing));
             drawing
                 .visible_parts()
@@ -261,7 +261,8 @@ mod tests {
         let top_left = dot(HAlign::Left, VAlign::Top);
         let bottom_right = dot(HAlign::Right, VAlign::Bottom);
         assert!(top_left.x < bottom_right.x && top_left.y < bottom_right.y);
-        let drawing = text_note("x", HAlign::Center, VAlign::Top, &en);
+        let none = NoteValues::default();
+        let drawing = text_note("x", HAlign::Center, VAlign::Top, &none, &en);
         let leader = drawing.visible_parts().find_map(|p| match &p.primitive {
             Primitive::Leader(leader) => Some(leader.at),
             _ => None,

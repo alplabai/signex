@@ -514,4 +514,9 @@ define_ids! {
     // m7/erc-blanket-directives
     PROPERTIES_ALL_RULES_NAME = "properties-all-rules-name";
     PROPERTIES_RULE_TOTAL = "properties-rule-total";
+    // m7/sch-props-text-shape
+    PROPERTIES_DRAWING_ILLUSTRATION_BORDER = "properties-drawing-illustration-border";
+    PROPERTIES_DRAWING_SAMPLE_WIRE = "properties-drawing-sample-wire";
+    PROPERTIES_TEXT_NOTE_ILLUSTRATION_SIZE = "properties-text-note-illustration-size";
+    PROPERTIES_TEXT_NOTE_ILLUSTRATION_JUSTIFY = "properties-text-note-illustration-justify";
 }
