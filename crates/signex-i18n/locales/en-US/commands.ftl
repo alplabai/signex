@@ -760,3 +760,14 @@ cmd-menu-polygon-manager = Polygon Manager...
 cmd-flip-board-3d = Turn the board over in the 3D view
 cmd-cycle-board-3d-lighting = Next lighting preset in the 3D view
 cmd-copy-board-3d-screenshot = Copy a screenshot of the 3D view
+# design-notebook
+# The project's Design Notebook (mockup rows 195, 197, 201 and 202). "Wiki"
+# stays a search word of the notebook (mockup row 60b).
+cmd-open-design-notebook = Open the Design Notebook of the project (Wiki)
+cmd-menu-open-design-notebook = Open Design Notebook
+cmd-generate-design-notebook = Generate a design notebook from the project
+cmd-menu-generate-design-notebook = Generate from Project…
+cmd-export-notebook-pdf = Export the Design Notebook as PDF
+cmd-menu-export-notebook-pdf = Design Notebook PDF…
+cmd-toggle-notebook-badges = Show or hide the Notebook badges on the schematic
+cmd-menu-toggle-notebook-badges = Notebook Badges

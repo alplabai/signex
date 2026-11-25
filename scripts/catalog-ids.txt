@@ -116,6 +116,7 @@ export_assembly_svg
 export_board_pdf
 export_board_report
 export_board_step
+export_notebook_pdf
 fabrication_outputs
 fast_grid_1
 fast_grid_2
@@ -138,6 +139,7 @@ footprint_mode_sketch
 footprint_mode_view_3d
 footprint_recompute_courtyard_outline
 force_annotate_all_schematics
+generate_design_notebook
 gloss_selected_routes
 go_to_net_partner
 hide_layer
@@ -181,6 +183,7 @@ open_command_palette
 open_compiled_design
 open_components_panel
 open_datasheet
+open_design_notebook
 open_diff_pair_classes
 open_document
 open_drc_panel
@@ -399,6 +402,7 @@ toggle_floating_panels
 toggle_layer_numbers
 toggle_layer_visibility
 toggle_layers_panel
+toggle_notebook_badges
 toggle_origin_marker
 toggle_properties_panel
 toggle_ratsnest

@@ -166,6 +166,7 @@ impl Signex {
     /// Every path and directory the project tree reads from the disk. Pure:
     /// the paths come from project data, so building it does no IO.
     fn project_fs_request(&self) -> crate::app::state::project_fs::ProjectFsRequest {
+        use crate::app::notebook_project::notebook_file;
         use crate::app::state::project_fs::git_marker;
         let mut request = crate::app::state::project_fs::ProjectFsRequest::default();
         for p in &self.document_state.projects {
@@ -177,6 +178,7 @@ impl Signex {
                 .chain(p.data.pcb_file.iter())
                 .chain(p.data.sheets.iter().map(|s| &s.filename));
             request.exists.extend(files.map(|f| dir.join(f)));
+            request.exists.push(notebook_file(p));
             if let Some(project_dir) = p.path.parent() {
                 request.exists.push(git_marker(project_dir));
             }
@@ -514,6 +516,7 @@ impl Signex {
                     pcb_file_dirty,
                     pcb_file_active,
                     pcb_file_missing,
+                    has_notebook: crate::app::notebook_project::has_notebook(p, fs_facts),
                     sheets: super::sheet_tree::project_sheet_rows(p, fs_facts, &marks),
                     libraries,
                     is_active: Some(p.id) == active_id,
