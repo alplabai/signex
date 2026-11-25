@@ -245,19 +245,22 @@ pub(crate) fn unsaved_body<'a, M: 'a>(
     dialog_body(body)
 }
 
-/// What the three buttons of an unsaved-changes prompt publish. A `None`
-/// discard or Save All is withheld (the button is left out).
+/// What the buttons of an unsaved-changes prompt publish. A `None` discard,
+/// Save Project As or Save All is withheld (the button is left out).
 pub(crate) struct UnsavedActions<M> {
     pub discard: Option<M>,
     /// The discard's label; `None` is Discard All.
     pub discard_label: Option<Localized>,
+    /// Save Project As… for a read-only project in the prompt (#2908).
+    pub save_as: Option<M>,
     pub cancel: M,
     pub save_all: Option<M>,
 }
 
 /// The footer buttons of an unsaved-changes prompt as `(left, right)`: the
-/// red discard alone at the left, away from Save All; Cancel, then the
-/// primary Save All, at the right. The caller lays them on its footer.
+/// red discard alone at the left, away from Save All; Save Project As…,
+/// Cancel, then the primary Save All, at the right. Save Project As… is the
+/// primary while Save All is withheld. The caller lays them on its footer.
 pub(crate) fn unsaved_footer_parts<'a, M: Clone + 'a>(
     i18n: &I18n,
     actions: UnsavedActions<M>,
@@ -266,6 +269,7 @@ pub(crate) fn unsaved_footer_parts<'a, M: Clone + 'a>(
     let UnsavedActions {
         discard,
         discard_label,
+        save_as,
         cancel,
         save_all,
     } = actions;
@@ -280,12 +284,26 @@ pub(crate) fn unsaved_footer_parts<'a, M: Clone + 'a>(
         })
         .into_iter()
         .collect();
-    let mut right = vec![dialog_button(
+    let mut right = Vec::new();
+    if let Some(message) = save_as {
+        let kind = if save_all.is_some() {
+            DialogButtonKind::Secondary
+        } else {
+            DialogButtonKind::Primary
+        };
+        right.push(dialog_button(
+            t!(i18n, signex_i18n::command_ids::CMD_MENU_SAVE_PROJECT_AS),
+            kind,
+            Some(message),
+            tokens,
+        ));
+    }
+    right.push(dialog_button(
         t!(i18n, ids::DIALOG_BUTTON_CANCEL),
         DialogButtonKind::Cancel,
         Some(cancel),
         tokens,
-    )];
+    ));
     if let Some(message) = save_all {
         right.push(dialog_button(
             t!(i18n, ids::DIALOG_BUTTON_SAVE_ALL),
@@ -419,6 +437,7 @@ mod tests {
         let actions = UnsavedActions {
             discard: discard.then_some(LibraryMessage::ClosePicker),
             discard_label: None,
+            save_as: None,
             cancel: LibraryMessage::ClosePicker,
             save_all: Some(LibraryMessage::ClosePicker),
         };

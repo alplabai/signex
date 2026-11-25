@@ -210,6 +210,11 @@ define_ids! {
     PREFERENCES_GROUP_PCB_HEADING = "preferences-group-pcb-heading";
     PREFERENCES_SECTION_PCB_DIMENSIONS = "preferences-section-pcb-dimensions";
     PREFERENCES_PCB_DIMENSIONS_HELP = "preferences-pcb-dimensions-help";
+    PREFERENCES_PAGE_PCB_DISPLAY = "preferences-page-pcb-display";
+    PREFERENCES_SECTION_PCB_DISPLAY = "preferences-section-pcb-display";
+    PREFERENCES_PCB_DIM_OTHERS = "preferences-pcb-dim-others";
+    PREFERENCES_PCB_DIM_OTHERS_HELP = "preferences-pcb-dim-others-help";
+    PREFERENCES_PCB_DIM_OTHERS_VALUE = "preferences-pcb-dim-others-value";
     // prefs-shell-pages
     PREFERENCES_PAGE_GENERAL = "preferences-page-general";
     PREFERENCES_GENERAL_HEADING = "preferences-general-heading";

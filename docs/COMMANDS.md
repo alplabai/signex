@@ -121,6 +121,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `find_previous` | Find previous | search | `Shift+F3` | `Shift+F3` |
 | `find_similar_objects` | Find Similar Objects | select | `Shift+F` | `Shift+F` |
 | `find_text` | Find text | search | — | — |
+| `home_view` | Reset the view rotation and Flip, then fit the board or sheet | view | — | — |
 | `import_graphics` | Import graphics | place | — | `Mod+Shift+F` |
 | `list_documents` | List documents | file | — | — |
 | `manage_workspace_layouts` | Manage workspace layouts | window | — | — |
@@ -185,6 +186,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `save_all` | Save all unsaved documents | file | `Mod+Alt+S` | `Mod+Alt+S` |
 | `save_document` | Save document | file | `Mod+S` | `Mod+S` |
 | `save_document_as` | Save as | file | `Mod+Shift+S` | `Mod+Shift+S` |
+| `save_project_as` | Save the project to a new folder | file | — | — |
 | `save_workspace_layout` | Save the panel arrangement as a workspace layout | window | — | — |
 | `select_all` | Select all | select | `Mod+A` | `Mod+A` |
 | `send_drawings_backward` | Send drawings backward | edit | — | — |
@@ -408,27 +410,31 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `panelize_board` | Array the board into a manufacturing panel | pcb | — | — |
 | `place_board_arc` | Draw an arc on the active layer | place | — | — |
 | `place_board_circle` | Draw a full circle by its centre and a point on it on the active layer | place | — | — |
+| `place_board_component` | Pick a library part and place its footprint on the board | place | — | — |
 | `place_board_diff_pair` | Route a differential pair side by side at its coupled width and gap, around other nets | place | — | — |
-| `place_board_dimension` | Place a linear dimension on the board | place | — | — |
-| `place_board_fill` | Place a rectangle of solid copper on the active copper layer | place | `P F` | — |
+| `place_board_dimension` | Place an aligned dimension on the board, measured along its two points | place | — | — |
+| `place_board_dimension_horizontal` | Place a linear dimension on the board, measured across | place | — | — |
+| `place_board_dimension_radial` | Place a radial dimension on an arc or circle of the board | place | — | — |
+| `place_board_dimension_vertical` | Place a linear dimension on the board, measured up or down | place | — | — |
+| `place_board_fill` | Place a rectangle of solid copper on the active copper layer | place | `P F` | `Shift+Alt+F` |
 | `place_board_graphic_arc` | Draw an arc by its centre, start and end on the active layer, as a track arc on copper | place | — | — |
 | `place_board_keepout` | Draw a keepout that keeps copper off a layer | place | `P K` | `K` |
 | `place_board_line` | Draw lines on the active layer, as tracks on copper | place | — | — |
 | `place_board_multi_route` | Route the selected nets side by side as a bus, around other nets | place | — | — |
 | `place_board_pad` | Place a free pad on the board | place | — | — |
-| `place_board_polygon_pour` | Place a polygon pour on the active copper layer, filled clear of other nets | place | `P G` | — |
+| `place_board_polygon_pour` | Place a polygon pour on the active copper layer, filled clear of other nets | place | `P G` | `Shift+G` |
 | `place_board_pour_cutout` | Place a cutout region the polygon pours on the active copper layer leave empty | place | — | — |
 | `place_board_quick_route` | Route straight to the clicked point at the rule width, without avoiding other nets | place | — | — |
 | `place_board_rectangle` | Draw a rectangle by two corners on the active layer | place | — | — |
-| `place_board_region` | Place a polygon of solid copper on the active copper layer | place | `P R` | — |
+| `place_board_region` | Place a polygon of solid copper on the active copper layer | place | `P R` | `Shift+Alt+R` |
 | `place_board_reuse_block` | Place a reuse block on the channel of the selected component | design | — | — |
 | `place_board_room` | Draw a room by two corners: an area for the parts of one sheet | place | — | — |
 | `place_board_route` | Route on the active copper layer around other nets, keeping the rule clearance | place | — | — |
 | `place_board_slice_pour` | Slice the polygon pours on the active copper layer along a line | place | — | — |
 | `place_board_string` | Place a string on the active copper, silkscreen, mechanical or documentation layer | place | — | — |
 | `place_board_text_frame` | Place text wrapped in a box on the active layer | place | — | — |
-| `place_board_track` | Route a track on the active copper layer | place | `P T` | — |
-| `place_board_via` | Place a via on the board | place | `P V` | — |
+| `place_board_track` | Route a track on the active copper layer | place | `P T` | `Shift+T` |
+| `place_board_via` | Place a via on the board | place | `P V` | `Shift+V` |
 | `polygon_manager` | Open the Polygon Manager of the board | pcb | — | — |
 | `prev_layer` | Make the previous layer of the board active | view | `-` | `-` |
 | `query_board_nets` | Query board nets | search | — | — |
@@ -492,6 +498,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `toggle_single_layer_mode` | Draw only the active layer, or every layer again | view | `Shift+S` | `Shift+S` |
 | `tune_diff_pair` | Lengthen the shorter net of a differential pair with meanders to match the longer one | pcb | — | — |
 | `tune_net_length` | Lengthen the selected tracks' nets with meanders to a target length, or to the longest of them | pcb | — | — |
+| `unfill_selected` | Clear the copper of the selected polygon pours until the next repour | pcb | — | — |
 | `unlock_board_items` | Unlock the selected tracks and vias | modify | — | — |
 | `unwaive_drc_violation` | Take back the waiver of a DRC violation | pcb | — | — |
 | `view_board_3d` | Show the board in 3D, or flat again | view | `3` | `3` |

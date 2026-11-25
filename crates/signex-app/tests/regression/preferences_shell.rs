@@ -13,7 +13,8 @@ fn inner(msg: PrefMsg) -> Message {
 
 /// The nav lists System (Appearance, Language, Keyboard shortcuts, General
 /// from mockup row 147), then Schematic, PCB (PCB Defaults, DECISIONS
-/// 2026-11-24, #2868), Validation and Library, as the mock does.
+/// 2026-11-24, #2868; Display, #2514), Validation and Library, as the mock
+/// does.
 #[test]
 fn the_nav_lists_the_pages_in_the_mock_order() {
     assert_eq!(
@@ -27,6 +28,7 @@ fn the_nav_lists_the_pages_in_the_mock_order() {
             PrefNav::Editing,
             PrefNav::SchematicDisplay,
             PrefNav::PcbDefaults,
+            PrefNav::PcbDisplay,
             PrefNav::RuleProfiles,
             PrefNav::LibraryDistributors,
             PrefNav::ComponentClasses,

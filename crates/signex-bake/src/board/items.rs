@@ -114,8 +114,10 @@ fn pours(ctx: &Context<'_>, nets: &[NetDef]) -> Result<Vec<Zone>, BoardBakeError
             min_thickness: length(&attr.min_thickness_expr, "pour minimum width")?,
             min_island_area: 0.0,
             remove_dead_islands: false,
-            // A sketch pour bakes live copper; shelving is a board edit.
+            // A sketch pour bakes live copper; shelving and unfilling are
+            // board edits.
             shelved: false,
+            unfilled: false,
             unknown: UnknownFields::default(),
         };
         let kind = BakedKind::BoardPours;

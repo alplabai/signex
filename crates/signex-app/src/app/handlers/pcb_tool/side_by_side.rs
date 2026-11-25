@@ -12,7 +12,7 @@ use pcb_geom::{CopperItem, ItemRef, PointNm, Shape, layer_bit, nm_to_mm};
 use signex_drc::DrcRules;
 use signex_engine::pcb::draw::TrackStyle;
 use signex_engine::pcb::route::{
-    BusMember, BusStyle, RouteDraft, RouteRefusal, bus_start, bus_tracks, copper_under,
+    BusMember, BusStyle, RouteDraft, RouteRefusal, bus_draft, bus_start, bus_tracks, copper_under,
     diff_pair_of, draft_fits, nearest_net_point, pair_width_gap, route_bus_leg,
 };
 use signex_i18n::{ids, t};
@@ -88,11 +88,9 @@ impl Signex {
         let leg = route_bus_leg(board, &bus.members, anchor, at, &bus.style, &route)?;
         let mut centre = session.points.clone();
         centre.extend(leg);
-        let tracks = bus_tracks(&bus.members, &centre, &bus.style, Uuid::now_v7)?;
         let draft = RouteDraft {
-            tracks,
             vias: bus.start_vias.clone(),
-            ..RouteDraft::default()
+            ..bus_draft(board, &bus.members, &centre, &bus.style, Uuid::now_v7)?
         };
         draft_fits(board, &draft, &clearance, rules.widest_clearance())?;
         Ok((centre, draft))
@@ -250,7 +248,10 @@ impl Signex {
         let mut centre = session.points.clone();
         let next = session.cursor.filter(|c| centre.last() != Some(c));
         centre.extend(next);
-        if let Ok(tracks) = bus_tracks(&bus.members, &centre, &bus.style, Uuid::nil) {
+        // Trimmed against the board, as the click lays them (#2492).
+        if let Some(board) = self.document_state.pcb_board(&session.path)
+            && let Ok(tracks) = bus_tracks(board, &bus.members, &centre, &bus.style, Uuid::nil)
+        {
             preview.segments.extend(tracks);
         }
         preview.vias.extend(bus.start_vias.iter().cloned());

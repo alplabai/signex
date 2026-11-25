@@ -44,9 +44,27 @@ pub fn boards(corpus: Corpus) -> Vec<Fixture> {
             .filter_map(|path| load(path)),
     );
     if corpus == Corpus::All {
-        out.extend(corpus_paths().iter().filter_map(|path| load(path)));
+        let paths = corpus_paths();
+        let loaded: Vec<Fixture> = paths.iter().filter_map(|path| load(path)).collect();
+        assert!(
+            !corpus_required() || (!paths.is_empty() && loaded.len() == paths.len()),
+            "{REQUIRE_CORPUS}=1 but {} of the {} routing corpus boards loaded \
+             (the others are Git LFS pointers; run `git lfs pull`)",
+            loaded.len(),
+            paths.len()
+        );
+        out.extend(loaded);
     }
     out
+}
+
+/// Set to `1` where the corpus's Git LFS objects were fetched (CI does when
+/// the corpus or its readers change, and the scheduled soak always): an
+/// unfetched board or an empty corpus then fails instead of being skipped.
+pub const REQUIRE_CORPUS: &str = "SIGNEX_REQUIRE_ROUTING_CORPUS";
+
+pub fn corpus_required() -> bool {
+    std::env::var(REQUIRE_CORPUS).is_ok_and(|v| v == "1")
 }
 
 /// The routing corpus's `.snxpcb` files, by file name.

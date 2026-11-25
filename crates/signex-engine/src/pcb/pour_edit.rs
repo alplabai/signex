@@ -4,7 +4,8 @@
 //! is a new pour with the same settings. The commands run as one batch, so
 //! the edit is one undo step. Pour Cutout edits no pour: it places a cutout
 //! region (`draw::new_pour_cutout`, #2871) the fill leaves empty. Shelve
-//! all and Unshelve all (#2523) set every pour's `shelved` in one replace.
+//! all and Unshelve all (#2523) set every pour's `shelved` in one replace;
+//! Repour clears `unfilled` (#2506) in one replace.
 
 use pcb_geom::{AreaShape, slice_area};
 use signex_types::format::parse_pcb_layer;
@@ -24,6 +25,26 @@ pub fn shelve_all_pours(board: &PcbBoard, shelved: bool) -> Option<BoardCommand>
         .map(|zone| {
             BoardItem::Zone(Zone {
                 shelved,
+                ..zone.clone()
+            })
+        })
+        .collect();
+    (!items.is_empty()).then_some(BoardCommand::ReplaceItems { items })
+}
+
+/// The command Repour runs first (#2506): it clears `unfilled` on every
+/// unfilled pour among `zones` (every pour of `board` for `None`) as one
+/// step; `None` when none of them is unfilled, so a Repour of filled pours
+/// stays a refresh with no undo step.
+pub fn refill_pours(board: &PcbBoard, zones: Option<&[Uuid]>) -> Option<BoardCommand> {
+    let items: Vec<BoardItem> = board
+        .zones
+        .iter()
+        .filter(|zone| zone.is_unfilled_pour())
+        .filter(|zone| zones.is_none_or(|ids| ids.contains(&zone.uuid)))
+        .map(|zone| {
+            BoardItem::Zone(Zone {
+                unfilled: false,
                 ..zone.clone()
             })
         })

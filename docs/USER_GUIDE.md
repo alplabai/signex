@@ -1607,8 +1607,11 @@ still need a connection.
 
 <!-- screenshot: a board after Update PCB, footprints beside the outline with the ratsnest -->
 
-Parts come from the schematic through Update PCB. **Place ▸ Component** on a
-board is greyed with the reason "not available on boards yet".
+Parts come from the schematic through Update PCB. To put a part on the board
+without one, choose **Place ▸ Component…** on the board and pick it: its
+footprint follows the cursor, `Space` turns it, `L` flips it to the other
+side, and each click places a copy. Such a footprint is not linked to a
+schematic part; Update PCB lists it as unlinked and keeps it.
 
 - **Move:** drag a footprint, or select it and choose **Edit ▸ Move ▸
   Move**. Tracks joined to its pads come along. Hold `Ctrl` (`Cmd` on macOS)
@@ -1629,6 +1632,11 @@ board is greyed with the reason "not available on boards yet".
 - **Find a part:** select it on the schematic. With **Tools ▸ Cross Select
   Mode** on (the default) it is selected on the board too. **Tools ▸ Cross
   Probe** brings the other side forward and frames it.
+- **Find a net:** select a wire, net label or sheet entry on the schematic;
+  the net's pads, tracks, vias and copper areas (pours, fills, solid
+  regions) are selected on the board. Selecting any of those on the board
+  selects the net's wires, labels and sheet entries on the schematic. A
+  keepout or pour cutout has no net and selects nothing.
 - **Move a designator:** drag the text; the part stays where it is.
 
 **Tools ▸ Re-Annotate Board…** renumbers designators by position on the

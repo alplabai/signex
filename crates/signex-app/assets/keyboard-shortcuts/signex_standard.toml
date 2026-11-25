@@ -79,8 +79,6 @@ context = "global"
 "P B" = "place_bus"
 "P N" = "place_net_label"
 "P P" = "open_components_panel"
-"P V K" = "place_compile_mask"
-"P V N" = "place_no_erc"
 "P W" = "place_wire"
 "R I" = "report_manager_bom"
 "Shift+Alt+A" = "force_annotate_all_schematics"
@@ -198,6 +196,8 @@ context = "global"
 # Mockup row 158: `Mod+G` makes a union of the selection; a sheet-only reuse of the
 # key, so the footprint editor's own use of it stays free (DECISIONS
 # 2026-11-19).
+# #2509: `P V K` and `P V N` live here, not in a global section, so the
+# board's `P V` places a via at once instead of waiting for a third key.
 [[keyboard_shortcuts.sections]]
 context = "schematic"
 
@@ -207,6 +207,8 @@ context = "schematic"
 "P R" = "place_port"
 "P S" = "place_sheet_symbol"
 "P U" = "place_bus_entry"
+"P V K" = "place_compile_mask"
+"P V N" = "place_no_erc"
 "P X" = "place_no_connect"
 
 # The board view (PCB tabs only): `+` steps to the next layer of the board,

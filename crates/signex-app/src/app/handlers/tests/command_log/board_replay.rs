@@ -302,14 +302,17 @@ const PART: u128 = 1;
 fn drop_part(app: &mut Signex, path: &Path, dx: f64) {
     let moved = std::collections::BTreeSet::from([uuid::Uuid::from_u128(PART)]);
     let delta = Point::new(dx, 0.0);
+    let corner = pcb_geom::stretch_rule(Default::default());
     let built = signex_engine::pcb::placement::move_commands(
         app.document_state.pcb_board(path).expect("the board"),
         &moved,
         delta,
+        corner,
+        &mut signex_types::object_id::UuidV7Ids,
     );
     app.ui_state
         .command_replay
-        .note_board_drop(moved, delta, false);
+        .note_board_drop(moved, delta, false, corner);
     assert!(app.run_placement("Move", built));
 }
 
@@ -711,4 +714,78 @@ fn a_row_with_one_changed_target_changes_nothing() {
     assert_eq!(track(&app, &path, FIRST).width, 0.25, "the free one too");
     assert_eq!(track(&app, &path, SECOND), moved);
     assert!(failure(&newest(&app)).contains("changed after"));
+}
+
+/// Every track of the board as `[start x, start y, end x, end y]`, sorted.
+fn track_lines(app: &Signex, path: &Path) -> Vec<[f64; 4]> {
+    let board = app.document_state.pcb_board(path).expect("the board");
+    let mut lines: Vec<[f64; 4]> = (board.segments.iter())
+        .map(|s| [s.start.x, s.start.y, s.end.x, s.end.y])
+        .collect();
+    lines.sort_by(|a, b| {
+        (a.iter().zip(b))
+            .map(|(x, y)| x.total_cmp(y))
+            .find(|order| order.is_ne())
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    lines
+}
+
+/// #2513, Caner (2026-11-25): a part's drop bends the track on its pad at
+/// one 45° corner by the corner rule it was dragged with; the row keeps
+/// that rule, so its Replay bends the track the same way even though the
+/// router's rule has changed since.
+#[test]
+fn a_board_move_replay_bends_the_tracks_on_its_pads_as_the_drop_did() {
+    use signex_types::corner::{CornerMode, CornerRule};
+    let dir = tempfile::tempdir().expect("a folder");
+    let mut app = crate::app::handlers::menu::export::tests::app_workspace(
+        &dir.path().to_string_lossy(),
+        &[],
+    );
+    let path = dir.path().join("board.snxpcb");
+    let mut board = board_with_two_parts();
+    // From U1's pad at (10, 10) to (15, 10), on no net as the pad.
+    let mut on_pad = new_track(FIRST, 10.0);
+    (on_pad.start, on_pad.end) = (Point::new(10.0, 10.0), Point::new(15.0, 10.0));
+    board.segments = vec![on_pad];
+    app.open_pcb_tab(path.clone(), "board".into(), board);
+    // 45° first out of the track's fixed end: not the default rule.
+    let corner = CornerRule {
+        mode: CornerMode::Angle45Start,
+        is_flipped: false,
+    };
+    let moved = std::collections::BTreeSet::from([uuid::Uuid::from_u128(PART)]);
+    let delta = Point::new(0.0, 3.0);
+    let built = signex_engine::pcb::placement::move_commands(
+        app.document_state.pcb_board(&path).expect("the board"),
+        &moved,
+        delta,
+        corner,
+        &mut signex_types::object_id::UuidV7Ids,
+    );
+    app.ui_state
+        .command_replay
+        .note_board_drop(moved, delta, false, corner);
+    assert!(app.run_placement("Move", built));
+    let row = newest(&app);
+    assert_eq!(row.command, "move_selection");
+    // From (15, 10) 45° to (12, 13), then straight to the pad at (10, 13).
+    let bent = vec![[10.0, 13.0, 12.0, 13.0], [12.0, 13.0, 15.0, 10.0]];
+    assert_eq!(track_lines(&app, &path), bent, "the drop bends the track");
+    assert!(app.step_board_history(&path, true), "one undo step");
+    assert_eq!(track_lines(&app, &path), [[10.0, 10.0, 15.0, 10.0]]);
+    app.interaction_state.corner_rule = CornerRule::default();
+
+    replay(&mut app, row.seq);
+
+    let ran = newest(&app);
+    assert!(!ran.outcome.is_failed(), "{:?}", ran.outcome);
+    assert_eq!(track_lines(&app, &path), bent, "the replay bends it alike");
+    let u1 = app.document_state.pcb_board(&path).expect("the board");
+    let u1 = u1
+        .footprints
+        .iter()
+        .find(|fp| fp.uuid == uuid::Uuid::from_u128(PART));
+    assert_eq!(u1.expect("U1").position, Point::new(10.0, 13.0));
 }

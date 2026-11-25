@@ -138,6 +138,7 @@ fn area(n: u128, fill: &str, net: u32) -> signex_types::pcb::Zone {
         min_island_area: 0.0,
         remove_dead_islands: false,
         shelved: false,
+        unfilled: false,
         unknown: Default::default(),
     }
 }
@@ -182,4 +183,22 @@ fn net_copper_is_the_copper_of_the_net() {
     assert_eq!(net_copper(&b, 4).len(), 2);
     assert_eq!(net_copper(&b, 5).len(), 1);
     assert!(net_copper(&b, 0).is_empty());
+}
+
+/// #2514: the nets of the picked copper, once each and ascending; net 0
+/// and what is not picked are left out.
+#[test]
+fn nets_of_names_the_nets_of_the_picked_copper() {
+    let mut b = board(vec![
+        track(1, (0.0, 0.0), (1.0, 0.0), 7),
+        track(2, (0.0, 0.0), (1.0, 0.0), 3),
+        track(3, (0.0, 0.0), (1.0, 0.0), 0),
+        track(4, (0.0, 0.0), (1.0, 0.0), 9),
+    ]);
+    b.vias.push(via(ViaType::Through, &[]));
+    b.vias[0].net = 7;
+    b.zones = vec![area(5, "solid", 2)];
+    let picked = [1u128, 2, 3, 5, 0x99].map(Uuid::from_u128);
+    assert_eq!(nets_of(&b, |id| picked.contains(&id)), vec![2, 3, 7]);
+    assert!(nets_of(&b, |_| false).is_empty());
 }

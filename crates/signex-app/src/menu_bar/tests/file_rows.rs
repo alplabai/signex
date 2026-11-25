@@ -350,3 +350,22 @@ fn fabrication_outputs_opens_its_dialog_on_a_board() {
         .expect("the dialog is open");
     assert!(state.writing.is_none() && state.outcome.is_none());
 }
+
+/// #2908: File ▸ Save Project As… is greyed with no project and opens its
+/// dialog on the open project, writing nothing.
+#[test]
+fn save_project_as_opens_its_dialog_on_the_project() {
+    let row = "File/Save Project As…";
+    assert!(!row_is_live(&bare_app(), row), "greyed with no project");
+    let mut app = bare_app();
+    open_project(&mut app, "P.snxprj");
+    assert!(row_is_live(&app, row));
+    let _ = click(&mut app, row);
+    let state = app
+        .ui_state
+        .save_project_as
+        .as_deref()
+        .expect("the dialog is open");
+    assert_eq!(state.project, app.document_state.projects[0].id);
+    assert!(state.saving.is_none());
+}

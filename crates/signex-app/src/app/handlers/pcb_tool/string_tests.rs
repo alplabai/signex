@@ -38,10 +38,7 @@ fn pick_layer(app: &mut Signex, layer: PcbLayer) {
 fn place_board_string_arms_the_string_tool_and_a_mechanical_layer_takes_it() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_with_board(dir.path());
-    assert_eq!(
-        BoardPlaceTool::TextString.command(),
-        Some("place_board_string")
-    );
+    assert_eq!(BoardPlaceTool::TextString.command(), "place_board_string");
     run(&mut app, "place_board_string");
     let armed = app.interaction_state.pcb_tool.as_ref().map(|s| s.tool);
     assert_eq!(armed, Some(BoardPlaceTool::TextString));

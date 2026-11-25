@@ -43,6 +43,7 @@ impl Signex {
                     app.apply_view_rotation(Some(window), event)
                 })
             }
+            PcbMsg::ViewSave(msg) => self.dispatch_board_view_save_message(msg),
             PcbMsg::Board3d(event) => self.handle_board_3d(event),
             PcbMsg::Sketch(event) => self.handle_board_sketch(event),
             PcbMsg::Reannotate(msg) => self.dispatch_board_reannotate_message(msg),
@@ -52,6 +53,11 @@ impl Signex {
             PcbMsg::CompareBoard(msg) => self.dispatch_compare_board_message(msg),
             PcbMsg::Output(msg) => self.dispatch_board_output_message(msg),
             PcbMsg::Bar(event) => self.handle_pcb_bar(event),
+            // #2505: Component arms nothing; it opens the part picker, and
+            // the pick goes on the cursor as its footprint.
+            PcbMsg::PlaceToolPicked(crate::app::pcb_tools::BoardPlaceTool::Component) => {
+                self.update(Message::Library(crate::library::LibraryMessage::OpenPicker))
+            }
             PcbMsg::PlaceToolPicked(tool) => {
                 self.arm_board_tool(tool);
                 // Properties shows what the next click places.
@@ -59,9 +65,9 @@ impl Signex {
                 // From the bar, Place, a key or the palette alike, the
                 // tool's bar group shows it next (#2392).
                 let group = crate::app::pcb_bar_groups::PcbBarGroup::of_tool(tool);
-                let remembered = match (group, tool.command()) {
-                    (Some(group), Some(command)) => self.remember_pcb_bar_row(group, command),
-                    _ => Task::none(),
+                let remembered = match group {
+                    Some(group) => self.remember_pcb_bar_row(group, tool.command()),
+                    None => Task::none(),
                 };
                 Task::batch([form, remembered])
             }
@@ -75,6 +81,10 @@ impl Signex {
             }
             PcbMsg::RepourRequested { selected } => {
                 self.repour_board_in_view(selected);
+                Task::none()
+            }
+            PcbMsg::UnfillRequested => {
+                self.unfill_selected_in_view();
                 Task::none()
             }
             PcbMsg::FootprintSwap(event) => self.handle_footprint_swap(event),

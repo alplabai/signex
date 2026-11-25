@@ -5,6 +5,7 @@
 
 use std::collections::BTreeSet;
 
+use signex_engine::pcb::dimension_refit::refit_on;
 use signex_engine::pcb::item_move::moved_item;
 use signex_engine::pcb::{BoardItem, BoardItemId};
 use signex_types::pcb::{PcbBoard, Point};
@@ -108,6 +109,26 @@ fn put(board: &mut PcbBoard, item: BoardItem, replace: bool) {
     }
 }
 
+/// The radial dimensions of `board` a drag does not carry whose arc or
+/// circle it does (#2507), each on that arc or circle as `into` holds it
+/// moved: the drop puts them there (the engine's refit), so the drag
+/// shows them following.
+fn following_dimensions(
+    board: &PcbBoard,
+    carried: &BTreeSet<Uuid>,
+    into: &PcbBoard,
+) -> Vec<BoardItem> {
+    board
+        .free
+        .dimensions
+        .iter()
+        .filter(|d| !carried.contains(&d.uuid))
+        .filter(|d| d.measures.is_some_and(|m| carried.contains(&m)))
+        .filter_map(|d| refit_on(d, into))
+        .map(BoardItem::Dimension)
+        .collect()
+}
+
 /// `into` (a copy of `board`) with the carried items moved by `delta`.
 pub(super) fn move_carried_items(
     board: &PcbBoard,
@@ -116,6 +137,9 @@ pub(super) fn move_carried_items(
     into: &mut PcbBoard,
 ) {
     for item in moved(board, carried, delta) {
+        put(into, item, true);
+    }
+    for item in following_dimensions(board, carried, into) {
         put(into, item, true);
     }
 }
@@ -129,6 +153,9 @@ pub(super) fn add_carried_items(
     into: &mut PcbBoard,
 ) {
     for item in moved(board, carried, delta) {
+        put(into, item, false);
+    }
+    for item in following_dimensions(board, carried, into) {
         put(into, item, false);
     }
 }

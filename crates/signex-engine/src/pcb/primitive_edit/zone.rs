@@ -1,6 +1,7 @@
 //! Area fields (#2393): the layer and net of a fill, solid region, polygon
 //! pour, keepout or pour cutout, and a pour's clearance, minimum width, priority and
-//! island rules (#2216), and whether it is shelved (#2523).
+//! island rules (#2216), and whether it is shelved (#2523) or unfilled
+//! (#2506).
 
 use signex_types::format::{parse_pcb_layer, pcb_layer_token};
 use signex_types::pcb::{PcbBoard, Zone};
@@ -38,6 +39,10 @@ pub enum ZoneEdit {
     /// Whether a pour is shelved (#2523): it keeps its outline and settings
     /// but holds no copper. Other areas are left as they are.
     Shelved(bool),
+    /// Whether a pour is unfilled (#2506): it keeps its outline and settings
+    /// but holds no copper until the next Repour. Other areas are left as
+    /// they are.
+    Unfilled(bool),
 }
 
 /// Whether `layer` can hold `zone`: copper for a copper area, a layer that
@@ -121,6 +126,7 @@ pub fn apply_zone_edit(
         | ZoneEdit::MinIslandArea(_)
         | ZoneEdit::RemoveDeadIslands(_)
         | ZoneEdit::Shelved(_)
+        | ZoneEdit::Unfilled(_)
             if !zone.is_pour() => {}
         ZoneEdit::Clearance(v) => zone.clearance = v,
         ZoneEdit::MinThickness(v) => zone.min_thickness = v,
@@ -129,6 +135,10 @@ pub fn apply_zone_edit(
         ZoneEdit::MinIslandArea(v) => zone.min_island_area = v,
         ZoneEdit::RemoveDeadIslands(on) => zone.remove_dead_islands = on,
         ZoneEdit::Shelved(on) => zone.shelved = on,
+        // A shelved pour holds no copper already; Unshelve brings it back
+        // as it was.
+        ZoneEdit::Unfilled(_) if zone.shelved => {}
+        ZoneEdit::Unfilled(on) => zone.unfilled = on,
     }
     Ok(())
 }

@@ -77,6 +77,9 @@ pub enum NoticeAction {
         path: std::path::PathBuf,
         drift: crate::persist::DiskDrift,
     },
+    /// A save of a project read from a newer minor was refused (#2904): the
+    /// card offers Save Project As… for it (#2908).
+    SaveProjectAs { project: super::ProjectId },
 }
 
 impl ErrorNotice {

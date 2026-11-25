@@ -1,4 +1,5 @@
 //! #2216: a pour is drawn as its computed copper, its outline only stroked.
+//! An unfilled pour (#2506) keeps that stroked outline with no copper.
 
 use super::super::{PcbRenderer, PcbSnapshot};
 use crate::schematic::ViewRenderer;
@@ -89,6 +90,21 @@ fn a_pour_without_its_fill_draws_only_its_outline_and_solid_copper_is_unchanged(
         .find(|p| p.vertices.len() == 4 && p.fill_color[3] > 0.0)
         .expect("the solid zone");
     assert!((fill_area(zone) - 100.0).abs() < 1e-3);
+}
+
+/// #2506: an unfilled pour fills nothing but keeps its solid outline, not
+/// the dashes of a shelved pour.
+#[test]
+fn an_unfilled_pour_draws_only_its_solid_outline() {
+    let mut board = board("pour");
+    board.zones[0].unfilled = true;
+    let snapshot = PcbSnapshot::from_board(&board).with_zone_fills(&pcb_geom::zone_fills(&board));
+    let scene = scene_of(&snapshot);
+    assert_eq!(scene.polygons.len(), 1, "the outline alone");
+    let outline = &scene.polygons[0];
+    assert_eq!(outline.fill_color[3], 0.0, "no copper");
+    assert!(outline.stroke_color.is_some(), "stroked, not dashed");
+    assert_eq!(outline.vertices.len(), 4);
 }
 
 /// #2523: a shelved pour draws its outline dashed and fills nothing.

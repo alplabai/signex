@@ -8,7 +8,9 @@
 //! then board order), and each clears the fills of other nets' pours filled
 //! before it. Islands below the pour's minimum area, and with
 //! `remove_dead_islands` those touching no copper of its net, are dropped.
-//! A shelved pour (`Zone::is_shelved_pour`) has no fill and clears nothing.
+//! A shelved pour (`Zone::is_shelved_pour`) has no fill and clears nothing;
+//! an unfilled one (`Zone::is_unfilled_pour`, #2506) neither, and is listed
+//! as [`Unfilled::UntilRepour`].
 //! Rules and what is not modelled: `docs/PCB_TOOLS.md`, "Polygon Pour".
 
 mod islands;
@@ -56,6 +58,9 @@ pub enum Unfilled {
     Outline,
     /// Its clearance is not a length the geometry can hold.
     Clearance,
+    /// It was unfilled (`Zone::unfilled`, #2506) and holds no copper until
+    /// the next Repour.
+    UntilRepour,
 }
 
 /// The fills of a board's pours, in board order, and why the pours with
@@ -100,10 +105,11 @@ impl ZoneFills {
     }
 }
 
-/// The fill of every pour of `board`. A shelved pour, a pour on no copper
-/// layer, or one with an outline or clearance the geometry cannot hold, has
-/// no fill; [`ZoneFills::unfilled`] says which of the last three it is (a
-/// shelved pour is left out on purpose and is not listed).
+/// The fill of every pour of `board`. A shelved or unfilled pour, a pour on
+/// no copper layer, or one with an outline or clearance the geometry cannot
+/// hold, has no fill and clears nothing; [`ZoneFills::unfilled`] says which
+/// of the last four it is (a shelved pour is left out on purpose and is not
+/// listed).
 pub fn zone_fills(board: &PcbBoard) -> ZoneFills {
     let inside = board_area(board);
     let order = pour_fill_order(board);
@@ -111,6 +117,10 @@ pub fn zone_fills(board: &PcbBoard) -> ZoneFills {
     let mut unfilled = Vec::new();
     for index in order {
         let zone = &board.zones[index];
+        if zone.is_unfilled_pour() {
+            unfilled.push((index, zone.uuid, Unfilled::UntilRepour));
+            continue;
+        }
         match fill_pour(board, index, zone, &fills, inside.as_deref()) {
             Ok(fill) => fills.push(fill),
             Err(why) => unfilled.push((index, zone.uuid, why)),
@@ -123,7 +133,8 @@ pub fn zone_fills(board: &PcbBoard) -> ZoneFills {
 
 /// The pours of `board` in the order they fill, as indices of
 /// `PcbBoard::zones`: a higher `Zone::priority` first, then board order. A
-/// shelved pour does not fill and is left out. The Polygon Manager's Order
+/// shelved pour does not fill and is left out; an unfilled pour keeps its
+/// place but [`zone_fills`] does not fill it. The Polygon Manager's Order
 /// column reads it (mockup row 178).
 pub fn pour_fill_order(board: &PcbBoard) -> Vec<usize> {
     let mut order: Vec<(usize, &Zone)> = board

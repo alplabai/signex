@@ -249,6 +249,63 @@ pub(crate) fn messages_for_moves<M>(
         .collect()
 }
 
+/// What the cursor finds at one point: the texts of the overlays a hover
+/// there opens (its tooltips) and the messages a left click there publishes.
+pub(crate) struct PointProbe<M> {
+    pub tips: Vec<String>,
+    pub clicked: Vec<M>,
+}
+
+/// Hover, then click, at each of `points` in turn over one laid-out
+/// `element`. Moving on closes the tooltip the last hover opened, as the
+/// cursor does in the app.
+pub(crate) fn probe_points<M>(
+    mut element: Element<'_, M, Theme, iced::Renderer>,
+    window: Size,
+    points: &[iced::Point],
+) -> Vec<PointProbe<M>> {
+    use iced::advanced::mouse;
+    let renderer = headless_renderer();
+    let mut tree = Tree::new(&element);
+    tree.diff(&mut element);
+    element.layout(
+        &mut tree,
+        &renderer,
+        &layout::Limits::new(Size::ZERO, window),
+    );
+    let viewport = Rectangle::with_size(window);
+    let mut probes = Vec::with_capacity(points.len());
+    for &at in points {
+        let moved = iced::Event::Mouse(mouse::Event::CursorMoved { position: at });
+        // A hover publishes nothing the probe asks about.
+        let _ = deliver(&mut element, &mut tree, &renderer, window, at, &[moved]);
+        let mut tips = CollectTexts(Vec::new());
+        let layout = Layout::new(tree.size);
+        let overlays = element.overlay(
+            &mut tree,
+            layout,
+            &renderer,
+            &viewport,
+            iced::Vector::ZERO,
+            window,
+        );
+        for mut overlay in overlays {
+            overlay.as_overlay_mut().operate(&renderer, &mut tips);
+        }
+        let click = [
+            mouse::Event::ButtonPressed(mouse::Button::Left),
+            mouse::Event::ButtonReleased(mouse::Button::Left),
+        ]
+        .map(iced::Event::Mouse);
+        let clicked = deliver(&mut element, &mut tree, &renderer, window, at, &click);
+        probes.push(PointProbe {
+            tips: tips.0.into_iter().map(|text| text.text).collect(),
+            clicked,
+        });
+    }
+    probes
+}
+
 /// Deliver `events` with the cursor at `at` to a laid-out `element` and
 /// collect what it publishes.
 fn deliver<M>(

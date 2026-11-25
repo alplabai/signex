@@ -172,6 +172,9 @@ pub enum ProjectMsg {
     /// The New PCB or New Schematic setup dialog (#2232); routed to
     /// `dispatch_document_setup_message`.
     DocumentSetup(crate::app::DocumentSetupMsg),
+    /// File ▸ Save Project As… (#2908); routed to
+    /// `dispatch_save_project_as_message`.
+    SaveAs(crate::app::SaveProjectAsMsg),
     /// A Save as profile or Remove was merged into `prefs.json` (or not):
     /// `note` is said in Messages on success (#2232).
     SetupProfilesWritten {

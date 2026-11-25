@@ -31,6 +31,7 @@ mod pages_state;
 mod pages_view;
 pub(crate) use pages_view::controls::{GLYPH_EXPAND, GLYPH_SHRINK};
 mod pcb_defaults;
+mod pcb_display;
 mod profiles;
 mod schematic_display;
 mod setting_row;
@@ -85,6 +86,9 @@ pub enum PrefNav {
     SchematicDisplay,
     /// What a new board dimension starts from (#2868).
     PcbDefaults,
+    /// How the board is drawn (how much other copper dims while a net is
+    /// highlighted, #2514).
+    PcbDisplay,
     /// Keyboard-shortcut profile editor — pick / create / delete /
     /// import / export a profile and rebind individual commands via the
     /// chord recorder. Backed by `UiState::preferences_keymap_editor`.
@@ -113,6 +117,7 @@ impl PrefNav {
         PrefNav::Editing,
         PrefNav::SchematicDisplay,
         PrefNav::PcbDefaults,
+        PrefNav::PcbDisplay,
         PrefNav::RuleProfiles,
         PrefNav::LibraryDistributors,
         PrefNav::ComponentClasses,
@@ -127,6 +132,7 @@ impl PrefNav {
             PrefNav::Editing => "Editing",
             PrefNav::SchematicDisplay => "Display",
             PrefNav::PcbDefaults => "PCB Defaults",
+            PrefNav::PcbDisplay => "PCB Display",
             PrefNav::Keyboard => "Keyboard Shortcuts",
             PrefNav::General => "General",
             PrefNav::RuleProfiles => "Rule Profiles",
@@ -143,6 +149,7 @@ impl PrefNav {
             PrefNav::Editing => "Schematic",
             PrefNav::SchematicDisplay => "Schematic",
             PrefNav::PcbDefaults => "PCB",
+            PrefNav::PcbDisplay => "PCB",
             PrefNav::Keyboard => "System",
             PrefNav::General => "System",
             PrefNav::RuleProfiles => "Validation",
@@ -233,6 +240,9 @@ pub enum PrefMsg {
     /// Update the wheel-zoom speed (percent per notch, 5..=50) shared by
     /// every canvas. Persisted on Save.
     DraftZoomStepPercent(u8),
+    /// Update how much copper off a highlighted board net dims (percent,
+    /// 0..=100). Persisted on Save (#2514).
+    DraftPcbDimOthersPercent(u8),
     /// Update the interface scale (percent, 80..=200 in 10 % steps).
     /// Applied to every window on Save.
     DraftUiScalePercent(u16),
@@ -377,6 +387,8 @@ pub struct PrefsView<'a> {
     pub body_fill_picker_open: bool,
     /// The PCB Defaults draft (#2868).
     pub draft_pcb_defaults: &'a crate::pcb_defaults_prefs::PcbDefaultsDraft,
+    /// How much other copper dims while a board net is highlighted (#2514).
+    pub draft_pcb_dim_others_percent: u8,
     pub draft_trackpad_pan: bool,
     pub draft_wheel_mode: crate::canvas::WheelMode,
     pub draft_layer_switcher: crate::layer_strip_prefs::LayerSwitcher,
@@ -537,6 +549,9 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             i18n,
         }),
         PrefNav::PcbDefaults => content_pcb_defaults(v.draft_pcb_defaults, panel_tokens, i18n),
+        PrefNav::PcbDisplay => {
+            pcb_display::content_pcb_display(v.draft_pcb_dim_others_percent, panel_tokens, i18n)
+        }
         PrefNav::RuleProfiles => content_profiles(
             profiles,
             profiles_saving,

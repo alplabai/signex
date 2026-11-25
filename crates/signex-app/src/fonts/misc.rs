@@ -228,6 +228,42 @@ pub fn write_zoom_step_percent_pref_at(path: &Path, percent: u8) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// PCB ▸ Display: how much other copper dims while a net is highlighted
+// ──────────────────────────────────────────────────────────────────────────
+
+/// The `prefs.json` key of the dim amount, percent.
+pub const PCB_DIM_OTHERS_KEY: &str = "pcb_dim_others_percent";
+/// The dim amount of a fresh install: other copper at half brightness.
+pub const PCB_DIM_OTHERS_DEFAULT_PERCENT: u8 = 50;
+
+/// Read how much copper off a highlighted net dims, percent (0..=100).
+/// Defaults to 50 when the key is missing or not a number; a number
+/// outside 0..=100 is clamped into range.
+pub fn read_pcb_dim_others_pref_at(path: &Path) -> u8 {
+    read_pcb_dim_others_pref_from(read_prefs_json(path).as_ref())
+}
+
+pub fn read_pcb_dim_others_pref_from(json: Option<&serde_json::Value>) -> u8 {
+    json.and_then(|json| json[PCB_DIM_OTHERS_KEY].as_f64())
+        .filter(|v| v.is_finite())
+        .map(|v| v.round().clamp(0.0, 100.0) as u8)
+        .unwrap_or(PCB_DIM_OTHERS_DEFAULT_PERCENT)
+}
+
+pub fn write_pcb_dim_others_pref(percent: u8) {
+    write_pcb_dim_others_pref_at(&prefs_path(), percent)
+}
+
+pub fn write_pcb_dim_others_pref_at(path: &Path, percent: u8) {
+    update_prefs_json(path, PCB_DIM_OTHERS_KEY, |prefs| {
+        prefs.insert(
+            PCB_DIM_OTHERS_KEY.to_string(),
+            serde_json::json!(percent.min(100)),
+        );
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // Annotate undo scope
 // ──────────────────────────────────────────────────────────────────────────
 

@@ -239,6 +239,8 @@ canonical_icon!(icon_chrome_palette, "chrome/palette.svg");
 canonical_icon!(icon_chrome_git, "chrome/git.svg");
 canonical_icon!(icon_chrome_library, "chrome/library.svg");
 canonical_icon!(icon_chrome_refresh, "chrome/refresh.svg");
+// The canvas Home View button (mockup row 194); tinted with an ink token.
+canonical_icon!(icon_chrome_home, "chrome/home.svg");
 
 // ─── Dropdown (active-bar group menus) ─────────────────────────────
 

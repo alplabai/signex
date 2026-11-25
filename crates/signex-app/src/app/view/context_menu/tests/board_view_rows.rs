@@ -424,17 +424,20 @@ fn the_board_place_flyout_runs_the_tools_and_greys_them_when_read_only() {
     assert!(runs(row_message(&place, "Via"), "place_board_via"));
     assert!(runs(row_message(&place, "Keepout"), "place_board_keepout"));
     assert!(runs(row_message(&place, "Board Sketch"), "board_sketch"));
-    // A tool the board editor cannot run yet is greyed, with its reason.
-    // Pad is live since #2373; Component is still greyed.
+    // Pad is live since #2373; Component, greyed "not available on boards
+    // yet" before, opens the part picker since #2505.
     assert!(runs(row_message(&place, "Pad"), "place_board_pad"));
-    assert!(row_message(&place, "Component").is_none());
+    assert!(runs(
+        row_message(&place, "Component..."),
+        "place_board_component"
+    ));
     let read_only = board_ctx(PcbTargets {
         shown: true,
         read_only: true,
         ..PcbTargets::default()
     });
     let place = board_place_entries(i18n, &read_only, &hint);
-    for label in ["Via", "Track", "Keepout", "Board Sketch"] {
+    for label in ["Component...", "Via", "Track", "Keepout", "Board Sketch"] {
         assert!(disabled_of(&place, label), "{label}");
     }
 }
@@ -515,4 +518,31 @@ fn the_board_menu_compares_with_the_schematic_in_a_project() {
     assert_eq!(compare, at("Properties...") + 1);
     assert!(matches!(in_project[compare + 1], DropdownEntry::Separator));
     assert_eq!(compare + 2, at("Toggle Ratsnest"));
+}
+
+/// #2506: a right-click on a polygon pour offers Unfill Selected, which
+/// runs `unfill_selected`, right before Polygon Manager; off a pour the row
+/// is not there.
+#[test]
+fn the_pour_menu_has_a_live_unfill_row_before_polygon_manager() {
+    let picked = PcbTargets {
+        shown: true,
+        any: true,
+        ..PcbTargets::default()
+    };
+    let on_pour = crate::app::view::context_menu::board_menu::pcb_pour_menu(
+        signex_i18n::I18n::en_us_ref(),
+        TID,
+        &board_ctx(picked),
+        &shortcuts(),
+    );
+    assert!(runs(
+        row_message(&on_pour, "Unfill Selected"),
+        "unfill_selected"
+    ));
+    let names = labels(&on_pour);
+    let unfill = names.iter().position(|l| l == "Unfill Selected");
+    let manager = names.iter().position(|l| l == "Polygon Manager...");
+    assert_eq!(unfill.map(|at| at + 1), manager, "{names:?}");
+    assert!(absent(&rows(picked), "Unfill Selected"));
 }

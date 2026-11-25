@@ -3,11 +3,11 @@
 
 use super::items::{
     cmd, cmd_item, cmd_item_gated, cmd_item_gated_as, cmd_toggle, header, item, item_if,
-    item_if_command, item_named, panel_item, placeholder, submenu, unavailable, with_icon,
+    item_if_command, item_named, panel_item, submenu, unavailable, with_icon,
 };
 use super::{MenuEntry, MenuIcon, MenuMessage};
 use crate::app::command::enablement::{new_part_menu_enabled, remove_part_menu_enabled};
-use crate::app::pcb_tools::{BoardPlaceTool, ToolState};
+use crate::app::pcb_tools::BoardPlaceTool;
 use crate::app::update_pcb::PcbSyncLabel;
 use crate::menu_bar::{MenuContext, enabled};
 use crate::panels::PanelKind;
@@ -38,6 +38,8 @@ pub(super) fn file(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("save_document_as", "Mod+Shift+S")),
         // Greyed when nothing is unsaved; runs the shared Save All flow.
         cmd_item_gated(ctx, cmd("save_all", "Mod+Alt+S")),
+        // #2908: a copy of the project in a new folder; greyed with no project.
+        cmd_item_gated(ctx, cmd("save_project_as", "")),
         SEP,
         // No New Component row here: docs/MENU_BAR.md#file-library
         submenu(ctx, menu_ids::MENU_FILE_LIBRARY, library(ctx)),
@@ -218,6 +220,8 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("zoom_in_at_cursor", "Ctrl+=")),
         cmd_item_gated(ctx, cmd("zoom_out_at_cursor", "Ctrl+-")),
         cmd_item_gated(ctx, cmd("zoom_to_fit", "Home")),
+        // Rotation 0°, Flip off, Fit (mockup row 194); no default key.
+        cmd_item_gated(ctx, cmd("home_view", "")),
         SEP,
         // Trunk spelling kept (not `Mod+`): the fallback is never shown while a keymap is active.
         cmd_item_gated(ctx, cmd("toggle_visible_grid", "Shift+Ctrl+G")),
@@ -334,16 +338,23 @@ pub(super) fn place(ctx: &MenuContext) -> Vec<MenuEntry> {
 }
 
 /// Place on a board: the board placement tools, each running the command its
-/// PCB Active Bar button runs, or greyed with the reason the bar gives while
-/// the board editor cannot run it (one table, #2352, #2373), the Graphics
-/// submenu of drawings on non-copper layers (#2424), then Board Sketch,
-/// which draws the outline, cutouts and keepouts.
+/// PCB Active Bar button runs (one table, #2352, #2373, #2505), with the
+/// Dimension submenu of the dimension kinds after String (#2507), the
+/// Graphics submenu of drawings on non-copper layers (#2424), then Board
+/// Sketch, which draws the outline, cutouts and keepouts.
 fn board_place(ctx: &MenuContext) -> Vec<MenuEntry> {
-    let row = |tool: BoardPlaceTool| match tool.state() {
-        ToolState::Live(id) => cmd_item_gated(ctx, cmd(id, "")),
-        ToolState::Unavailable(reason) => placeholder(ctx, tool.name(), reason),
-    };
-    let mut rows: Vec<MenuEntry> = BoardPlaceTool::PLACE_MENU.into_iter().map(row).collect();
+    let row = |tool: BoardPlaceTool| cmd_item_gated(ctx, cmd(tool.command(), ""));
+    let mut rows: Vec<MenuEntry> = Vec::new();
+    for tool in BoardPlaceTool::PLACE_MENU {
+        rows.push(row(tool));
+        if tool == BoardPlaceTool::TextString {
+            let kinds = BoardPlaceTool::DIMENSION_MENU
+                .into_iter()
+                .map(row)
+                .collect();
+            rows.push(submenu(ctx, menu_ids::MENU_PLACE_DIMENSION, kinds));
+        }
+    }
     let graphics = BoardPlaceTool::GRAPHICS_MENU.into_iter().map(row).collect();
     rows.extend([
         submenu(ctx, menu_ids::MENU_PLACE_GRAPHICS, graphics),
@@ -588,6 +599,8 @@ pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
         // #2216: docs/MENU_BAR.md#tools-repour
         cmd_item_gated(ctx, cmd("repour_selected", "")),
         cmd_item_gated(ctx, cmd("repour_all", "")),
+        // #2506: docs/MENU_BAR.md#tools-repour
+        cmd_item_gated(ctx, cmd("unfill_selected", "")),
         // Mockup row 178: docs/MENU_BAR.md#tools-repour
         cmd_item_gated(ctx, cmd("polygon_manager", "")),
         SEP,

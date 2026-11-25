@@ -42,6 +42,7 @@ mod quit_confirm;
 pub(crate) mod remove;
 mod rename;
 mod rule_editor;
+mod save_project_as;
 mod sheet_numbering;
 mod sheet_sync;
 mod sizes;

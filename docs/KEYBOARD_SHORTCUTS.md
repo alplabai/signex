@@ -162,7 +162,12 @@ Ratsnest, `P K` Keepout and `T D` Run DRC, Classic `C` Toggle Ratsnest, `K`
 Keepout, `F7` Run DRC and `Ctrl+M` Measure Distance (the chord profile's
 global `Ctrl+M` already measures on a board). Edit ▸ Origin ▸ Set is `E O S`
 in the chord profile and `Shift+O` in Classic, whose `E` alone is taken
-(2026-11-18). A board binding outranks a global one with the same keys, so
+(2026-11-18). The board Place tools (#2509) are `P T` Track, `P V` Via,
+`P G` Polygon Pour, `P F` Fill and `P R` Solid Region in the chord profile;
+Classic, whose `P` alone is taken, gives them the same letter with `Shift`
+(`Shift+T`, `Shift+V`, `Shift+G`) and with `Shift+Alt` where `Shift` alone
+is a global key (`Shift+Alt+F`, `Shift+Alt+R`), so none of them equals or
+prefixes another Classic binding on a board. A board binding outranks a global one with the same keys, so
 Classic's `L` and `Q` keep their sheet meaning on a sheet. `Q` sits in a
 `pcb` section of its own before the global sections, so `cycle_unit` keeps
 `Ctrl+Q` as its menu hint. A test checks that every `pcb` binding of both

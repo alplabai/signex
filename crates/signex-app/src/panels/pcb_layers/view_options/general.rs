@@ -1,5 +1,5 @@
 //! The Configuration row above the sections, and General Settings: 3D,
-//! Single Layer and Show Grid.
+//! Single Layer, Show Grid and the Orientation eye (the orientation tile).
 
 use iced::widget::tooltip::Position;
 use iced::widget::{container, mouse_area, row};
@@ -8,7 +8,7 @@ use signex_i18n::{Localized, MessageId, ids, t};
 use signex_widgets::chevron::chevron;
 use signex_widgets::{ToggleSwitchStyle, button, text, toggle_switch};
 
-use super::super::rows::not_yet;
+use super::super::rows::{eye, not_yet};
 use super::super::{LayersPanelMsg, PcbLayersPanel, SP, TS};
 use super::LINE_H;
 use crate::app::PcbViewMsg;
@@ -77,7 +77,7 @@ pub(super) fn configuration<'a>(
     .boxed()
 }
 
-/// General Settings: 3D, Single Layer and Show Grid.
+/// General Settings: 3D, Single Layer, Show Grid and the Orientation eye.
 pub(super) fn rows<'a>(panel: &PcbLayersPanel, ctx: &PanelContext) -> Vec<Element<'a, PanelMsg>> {
     let i18n = &panel.i18n;
     let toggle_3d = Some(PanelMsg::LayersPanel(LayersPanelMsg::Board3dToggled));
@@ -136,10 +136,21 @@ pub(super) fn rows<'a>(panel: &PcbLayersPanel, ctx: &PanelContext) -> Vec<Elemen
         .on_press(PanelMsg::ToggleGrid)
         .interaction(mouse::Interaction::Pointer)
         .boxed();
+    // Mockup row 194: the orientation tile over the canvas, shown until
+    // its eye hides it.
+    let tile = eye(
+        panel,
+        !panel.orientation_tile_visible,
+        Some(PanelMsg::PcbLayers(
+            PcbViewMsg::OrientationTileVisibilityToggled,
+        )),
+        ctx,
+    );
     vec![
         line(caption(ctx, t!(i18n, ids::PCB_VIEW_3D)), three_d),
         line(single_caption, single),
         line(grid_caption, grid),
+        line(caption(ctx, t!(i18n, ids::PCB_VIEW_ORIENTATION_TILE)), tile),
     ]
 }
 
