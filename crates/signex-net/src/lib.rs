@@ -28,6 +28,10 @@ mod diff_pair_classes;
 pub use diff_pair_classes::{
     ClassMember, class_members, diff_pairs_with_classes, pair_count, pairs_by_every_suffix,
 };
+mod diff_pair_partners;
+pub use diff_pair_partners::{
+    ListedPair, LonePairMember, PairFoundBy, listed_pairs, lone_pair_members,
+};
 
 mod net_class;
 pub use net_class::{
