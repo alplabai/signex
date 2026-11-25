@@ -331,7 +331,30 @@ pub const APPLY: &[Operand] = &[required("apply", OperandKind::Bool)];
 
 /// New PCB without the dialog (#2232): `profile` is `project` (the default,
 /// the project's own setup), a built-in token or a saved user profile.
-pub const NEW_PCB: &[Operand] = &[optional("profile", OperandKind::Text)];
+/// `document` is the project (or a document of it) the board joins, else the
+/// project in view; `name` is the board's file in the project folder (#2470).
+pub const NEW_PCB: &[Operand] = &[
+    optional("profile", OperandKind::Text),
+    optional("document", OperandKind::Document),
+    optional("name", OperandKind::Text),
+];
+
+/// Positional Re-Annotate of a board (#2470): `order` is `x_then_y` (the
+/// default) or `y_then_x`, `bottom` is `after_top` (the default) or
+/// `with_top`; `dry_run` lists the renames without making them.
+pub const REANNOTATE_BOARD: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("order", OperandKind::Text),
+    optional("bottom", OperandKind::Text),
+    optional("dry_run", OperandKind::Bool),
+];
+
+/// Back Annotate of the project `document` belongs to (a project, its board
+/// or a sheet), with the rows ticked by default (#2470); `dry_run` lists them.
+pub const BACK_ANNOTATE: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("dry_run", OperandKind::Bool),
+];
 
 /// New Schematic without the dialog (#2232): `profile` as for `NEW_PCB`;
 /// `name` is the file stem in the project folder (default `Sheet<n>`).

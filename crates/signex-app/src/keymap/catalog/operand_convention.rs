@@ -115,6 +115,9 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("diff_pair_class", OperandKind::Text),
     ("via_hole", OperandKind::Text),
     ("current", OperandKind::Text),
+    // #2470: Re-Annotate Board's numbering order and bottom side.
+    ("order", OperandKind::Text),
+    ("bottom", OperandKind::Text),
 ];
 
 /// The commands whose `ids` is still text, not targets (#2326): a design
