@@ -594,6 +594,12 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "board_assembly_drawing",
                     // #2488: the board STEP model.
                     "export_board_step",
+                    // Mockup rows 196 and 197: the named project's notebook.
+                    "notebook_references",
+                    "notebook_reference_card",
+                    "notebook_reference_picker",
+                    "notebook_badges",
+                    "notebook_fix_reference",
                     // #2410: DXF import onto a board.
                     "import_dxf",
                     "import_dxf_outline",

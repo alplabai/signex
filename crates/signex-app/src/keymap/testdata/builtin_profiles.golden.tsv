@@ -85,6 +85,7 @@ signex_standard	bind	Global	V N	command:open_net_inspector
 signex_standard	bind	Global	W H	command:tile_windows_horizontally
 signex_standard	bind	Global	W U	command:untile_documents
 signex_standard	bind	Global	W V	command:tile_windows_vertically
+signex_standard	bind	Schematic	B	command:toggle_notebook_badges
 signex_standard	bind	Schematic	Mod+G	command:create_union
 signex_standard	bind	Schematic	P C	command:place_off_sheet_connector
 signex_standard	bind	Schematic	P R	command:place_port
@@ -551,7 +552,12 @@ signex_standard	hint	-	-	reset_workspace_layout
 signex_standard	hint	-	-	open_design_notebook
 signex_standard	hint	-	-	generate_design_notebook
 signex_standard	hint	-	-	export_notebook_pdf
-signex_standard	hint	-	-	toggle_notebook_badges
+signex_standard	hint	-	-	notebook_references
+signex_standard	hint	-	-	notebook_reference_card
+signex_standard	hint	-	-	notebook_reference_picker
+signex_standard	hint	-	-	notebook_badges
+signex_standard	hint	-	-	notebook_fix_reference
+signex_standard	hint	-	B	toggle_notebook_badges
 signex_standard	hint	-	-	notebook_compile
 signex_standard	hint	-	-	notebook_insert
 signex_standard	hint	-	-	notebook_view
@@ -1111,6 +1117,11 @@ classic	hint	-	-	reset_workspace_layout
 classic	hint	-	-	open_design_notebook
 classic	hint	-	-	generate_design_notebook
 classic	hint	-	-	export_notebook_pdf
+classic	hint	-	-	notebook_references
+classic	hint	-	-	notebook_reference_card
+classic	hint	-	-	notebook_reference_picker
+classic	hint	-	-	notebook_badges
+classic	hint	-	-	notebook_fix_reference
 classic	hint	-	-	toggle_notebook_badges
 classic	hint	-	-	notebook_compile
 classic	hint	-	-	notebook_insert

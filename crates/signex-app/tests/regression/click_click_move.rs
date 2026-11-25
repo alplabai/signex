@@ -454,7 +454,7 @@ fn deliver(
                     &signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight),
                 ),
             },
-            annotation_flags: Default::default(),
+            notebook_badges: Default::default(),
             device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
         };
         let view = SchematicCanvas::new(app.interaction_state.active_canvas(), prefs);

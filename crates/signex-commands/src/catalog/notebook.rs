@@ -1,12 +1,63 @@
 //! Design Notebook commands (#2795, mockup rows 195-202): open the
 //! project's notebook, generate one from the project, export it as PDF,
-//! show or hide the Notebook badges on the schematic, and the notebook
-//! tab's own commands (compile and report, insert what the toolbar inserts,
-//! pick the view and side panel). The tab's commands name the project with
-//! `document`, so a CLI or an agent reaches the tab the person sees.
+//! the references of the notebook and where each stands, a reference's
+//! hover card, the `@` picker, the schematic's Notebook badges and the fix
+//! of a stale reference, View ▸ Notebook Badges (B), and the notebook tab's
+//! own commands (compile and report, insert what the toolbar inserts, pick
+//! the view and side panel). The commands that name the project with
+//! `document` reach the tab the person sees from a CLI or an agent.
 
-use super::{CommandFlags, CommandGroup, CommandMetadata, Enablement, operands};
+use super::{CommandFlags, CommandGroup, CommandMetadata, Enablement, Operand, OperandKind};
 use signex_i18n_ids::command_ids;
+
+/// The project (or one of its documents) every reference command names.
+const DOCUMENT: Operand = Operand {
+    name: "document",
+    kind: OperandKind::Document,
+    required: true,
+};
+
+const fn text(name: &'static str, required: bool) -> Operand {
+    Operand {
+        name,
+        kind: OperandKind::Text,
+        required,
+    }
+}
+
+/// The operands of the reference commands (mockup rows 196 and 197).
+mod reference_operands {
+    use super::{DOCUMENT, Operand, text};
+
+    /// `notebook_references`: one notebook file only, by its path inside
+    /// `notebook/`.
+    pub(super) const NOTEBOOK_REFERENCES: &[Operand] = &[DOCUMENT, text("file", false)];
+    /// `notebook_reference_card`: the reference by `kind` (`component`,
+    /// `pin`, `net`) and `name` (`R7`, `U3.3`, `+3V3`).
+    pub(super) const NOTEBOOK_REFERENCE_CARD: &[Operand] = &[
+        DOCUMENT,
+        text("kind", true),
+        text("name", true),
+        text("file", false),
+    ];
+    /// `notebook_reference_picker`: what is typed after the `@`.
+    pub(super) const NOTEBOOK_REFERENCE_PICKER: &[Operand] =
+        &[DOCUMENT, text("text", false), text("limit", false)];
+    /// `notebook_badges`: the one badge of a part or a net.
+    pub(super) const NOTEBOOK_BADGES: &[Operand] =
+        &[DOCUMENT, text("part", false), text("net", false)];
+    /// `notebook_fix_reference`: `fix` is `update`, `remove`, `keep_text`,
+    /// `pick_pin` or `update_all`.
+    pub(super) const NOTEBOOK_FIX_REFERENCE: &[Operand] = &[
+        DOCUMENT,
+        text("fix", true),
+        text("kind", false),
+        text("name", false),
+        text("to", false),
+        text("pin", false),
+        text("file", false),
+    ];
+}
 
 pub(super) const NOTEBOOK: &[CommandMetadata] = &[
     // Project ▸ Design Notebook, Add New ▸ Design Notebook and a palette
@@ -43,7 +94,66 @@ pub(super) const NOTEBOOK: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
-    // View ▸ Notebook Badges (mockup row 197).
+    // References (mockup rows 196 and 197). Read-only: the notebook and the
+    // design are read off the UI thread first, then answered from that read.
+    CommandMetadata {
+        id: "notebook_references",
+        category: "design",
+        label: command_ids::CMD_NOTEBOOK_REFERENCES,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: reference_operands::NOTEBOOK_REFERENCES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "notebook_reference_card",
+        category: "design",
+        label: command_ids::CMD_NOTEBOOK_REFERENCE_CARD,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: reference_operands::NOTEBOOK_REFERENCE_CARD,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "notebook_reference_picker",
+        category: "design",
+        label: command_ids::CMD_NOTEBOOK_REFERENCE_PICKER,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: reference_operands::NOTEBOOK_REFERENCE_PICKER,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "notebook_badges",
+        category: "design",
+        label: command_ids::CMD_NOTEBOOK_BADGES,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: reference_operands::NOTEBOOK_BADGES,
+        ..CommandMetadata::DEFAULT
+    },
+    // Edits the notebook tab's text, written on Save like any notebook edit.
+    CommandMetadata {
+        id: "notebook_fix_reference",
+        category: "design",
+        label: command_ids::CMD_NOTEBOOK_FIX_REFERENCE,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: reference_operands::NOTEBOOK_FIX_REFERENCE,
+        ..CommandMetadata::DEFAULT
+    },
+    // View ▸ Notebook Badges (mockup row 197). The badges are on by default
+    // (Caner, 2026-11-25); B shows or hides them on every sheet.
     CommandMetadata {
         id: "toggle_notebook_badges",
         category: "view",
@@ -63,7 +173,7 @@ pub(super) const NOTEBOOK: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::NONE,
-        operands: operands::DOCUMENT,
+        operands: super::operands::DOCUMENT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -74,7 +184,7 @@ pub(super) const NOTEBOOK: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::MUTATES,
-        operands: operands::NOTEBOOK_INSERT,
+        operands: super::operands::NOTEBOOK_INSERT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -85,7 +195,7 @@ pub(super) const NOTEBOOK: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::NONE,
-        operands: operands::NOTEBOOK_VIEW,
+        operands: super::operands::NOTEBOOK_VIEW,
         ..CommandMetadata::DEFAULT
     },
 ];

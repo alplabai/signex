@@ -2,8 +2,8 @@
 //! menu contract pinned by `testdata/menu_bar.golden.tsv`.
 
 use super::items::{
-    cmd, cmd_item, cmd_item_gated, cmd_item_gated_as, cmd_toggle, header, item, item_if,
-    item_if_command, item_named, panel_item, submenu, unavailable, with_icon,
+    cmd, cmd_item, cmd_item_gated, cmd_item_gated_as, cmd_toggle, cmd_toggle_gated, header,
+    item, item_if, item_if_command, item_named, panel_item, submenu, unavailable, with_icon,
 };
 use super::{MenuEntry, MenuIcon, MenuMessage};
 use crate::app::command::enablement::{new_part_menu_enabled, remove_part_menu_enabled};
@@ -229,8 +229,9 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("toggle_visible_grid", "Shift+Ctrl+G")),
         cmd_item_gated(ctx, cmd("next_grid", "")),
         cmd_item_gated(ctx, cmd("toggle_auto_focus", "F9")),
-        // The notebook's badges on the sheet (mockup row 197).
-        cmd_item_gated(ctx, cmd("toggle_notebook_badges", "")),
+        // Mockup row 197: the sheet's Notebook badges, on by default; greyed
+        // with no sheet in view.
+        cmd_toggle_gated(ctx, cmd("toggle_notebook_badges", "B"), ctx.notebook_badges),
         SEP,
         // The board view: greyed unless a PCB is open.
         cmd_item_gated(ctx, cmd("toggle_ratsnest", "")),

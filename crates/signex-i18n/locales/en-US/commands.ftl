@@ -776,3 +776,10 @@ cmd-menu-toggle-notebook-badges = Notebook Badges
 cmd-notebook-compile = Compile the project's Design Notebook and report its pages and problems
 cmd-notebook-insert = Insert a reference or a block into the open Design Notebook
 cmd-notebook-view = Set the view, the side panel or the next problem of the Design Notebook tab
+# notebook-references
+# Design Notebook references and the Notebook badges (mockup rows 196 and 197).
+cmd-notebook-references = List the notebook's references and the stale ones
+cmd-notebook-reference-card = Read the hover card of a notebook reference
+cmd-notebook-reference-picker = List what the @ reference picker offers
+cmd-notebook-badges = List the Notebook badges and their blocks
+cmd-notebook-fix-reference = Fix a stale notebook reference

@@ -407,12 +407,12 @@ impl SchematicCanvas<'_> {
         // ERC markers live on this layer too, so it must draw whenever there
         // is a marker, not only while something is selected (#1333).
         // Locked objects carry a padlock, so they need the layer too (#1250, #1573),
-        // and so do the annotation flags (mockup row 165).
+        // and so do the Notebook badges (mockup row 197).
         if let Some(snapshot) = effective_snapshot
             && (self.selection_layer_needed()
                 || crate::schematic_runtime::lock_indicator::has_locked_item(snapshot)
                 || crate::schematic_runtime::unions::has_unions(snapshot)
-                || self.prefs.annotation_flags.has_flags())
+                || self.prefs.notebook_badges.has_badges())
         {
             // During a drag we can't rely on overlay_cache — it must redraw
             // with the shifted positions every frame.
@@ -513,10 +513,10 @@ impl SchematicCanvas<'_> {
             &self.designators,
             self.wire_widths(),
         );
-        crate::schematic_runtime::annotation_flags::draw_annotation_flags(
+        crate::schematic_runtime::notebook_badges::draw_notebook_badges(
             frame,
             snapshot,
-            &self.prefs.annotation_flags,
+            &self.prefs.notebook_badges,
             transform,
             &self.prefs.canvas_colors,
             &self.designators,

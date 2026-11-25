@@ -32,7 +32,9 @@ impl Signex {
     /// Show or hide the Notebook badges on the schematic.
     pub(crate) fn toggle_notebook_badges(&mut self) -> Task<Message> {
         crate::diagnostics::log_info("Design Notebook: Notebook badges toggled");
-        Task::none()
+        self.handle_notebook_reference_message(
+            crate::app::notebook_references::NotebookReferenceMsg::BadgesToggled,
+        )
     }
 }
 

@@ -36,6 +36,7 @@ use crate::app::board_reuse as reuse;
 use crate::app::board_tools as tools;
 use crate::app::handlers::pcb_component::part_swap_operands as swap;
 use crate::app::handlers::pcb_tune as tune;
+use crate::app::notebook_references::commands as notebook;
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
 
@@ -287,6 +288,15 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ),
     ("notebook_insert", crate::app::notebook_tab::notebook_insert),
     ("notebook_view", crate::app::notebook_tab::notebook_view),
+    // Mockup rows 196 and 197: the notebook's references and badges.
+    ("notebook_references", notebook::notebook_references),
+    ("notebook_reference_card", notebook::notebook_reference_card),
+    (
+        "notebook_reference_picker",
+        notebook::notebook_reference_picker,
+    ),
+    ("notebook_badges", notebook::notebook_badges),
+    ("notebook_fix_reference", notebook::notebook_fix_reference),
 ];
 
 /// The turn `view_rotate` asks for: its `degrees`, else a quarter turn
@@ -611,6 +621,6 @@ impl Signex {
     }
 }
 
-pub(super) fn refused(reason: impl Into<String>) -> Ran {
+pub(crate) fn refused(reason: impl Into<String>) -> Ran {
     (CommandOutcome::disabled(reason), Task::none())
 }

@@ -131,9 +131,15 @@ mod tests {
                 "list_documents",
                 "lock_board_items",
                 "measure_board",
-                // #2795: the Design Notebook tab, on the named project.
+                // #2795, mockup rows 195-197: the Design Notebook tab, its
+                // references and badges, on the named project.
+                "notebook_badges",
                 "notebook_compile",
+                "notebook_fix_reference",
                 "notebook_insert",
+                "notebook_reference_card",
+                "notebook_reference_picker",
+                "notebook_references",
                 "notebook_view",
                 "panelize_board",
                 // #2410: pin and gate swap and design reuse, on the named board.

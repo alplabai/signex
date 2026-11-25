@@ -68,6 +68,37 @@ pub(super) fn move_to_line(text: &mut NotebookText, line: usize) {
 }
 
 impl Signex {
+    /// The notebook file text of `id`'s tab as typed, header and body;
+    /// `None` while the tab holds no text.
+    pub(crate) fn notebook_tab_file_text(&self, id: ProjectId) -> Option<String> {
+        let tab = self.document_state.notebooks.get(&id)?;
+        super::save::written_text(tab)?.ok()
+    }
+
+    /// Put the file text `text` in `id`'s tab, as a reference fix does
+    /// (mockup row 196): its header becomes the tab's, its body goes in the
+    /// editor, and the tab compiles. Written on Save, like any edit.
+    pub(crate) fn replace_notebook_tab_file_text(
+        &mut self,
+        id: ProjectId,
+        text: &str,
+    ) -> Result<Task<Message>, String> {
+        let Some(tab) = self.document_state.notebooks.get_mut(&id) else {
+            return Err("the Design Notebook of the project is not open".into());
+        };
+        if tab.is_read_only() {
+            return Err("the Design Notebook was written by a newer Signex and is read-only".into());
+        }
+        let file = signex_notebook::NotebookFile::parse(text).map_err(|why| why.to_string())?;
+        let Some(editor) = &mut tab.text else {
+            return Err("the Design Notebook of the project holds no text yet".into());
+        };
+        editor.content = iced::widget::text_editor::Content::with_text(&file.body);
+        tab.header_lines = signex_notebook::header_line_count(text);
+        tab.file = Some(file);
+        Ok(self.notebook_edited(id))
+    }
+
     /// An editor action landed.
     pub(super) fn notebook_text_acted(&mut self, id: ProjectId, action: Action) -> Task<Message> {
         let Some(tab) = self.document_state.notebooks.get_mut(&id) else {

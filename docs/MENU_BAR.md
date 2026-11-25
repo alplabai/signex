@@ -722,6 +722,14 @@ says so. It has no command id and no default key. The panel lists the
 annotation blocks of the project's `notebook/*.snxnbk` files; see
 [NOTEBOOK_ANNOTATIONS.md](NOTEBOOK_ANNOTATIONS.md).
 
+## View ▸ Notebook Badges {#view-notebook-badges}
+
+A toggle row (`toggle_notebook_badges`, mockup row 197) after AutoFocus: it
+shows or hides the Notebook badges on every sheet and is checked while they
+show, which they do by default. Always available. B in the Signex Standard
+profile, on a schematic; Classic keeps B for Place Bus. See
+[NOTEBOOK_ANNOTATIONS.md](NOTEBOOK_ANNOTATIONS.md), "Notebook badges".
+
 ## Tools ▸ Repair Pin Junctions {#tools-repair-pin-junctions}
 
 Right after Assign Footprints, Tools ▸ Repair Pin Junctions runs

@@ -27,6 +27,7 @@ mod fp_props;
 mod gerber_viewer;
 mod library;
 mod new_project;
+mod notebook_references;
 mod notebook_tab;
 mod notice;
 mod overlay;
@@ -81,6 +82,7 @@ pub use fp_props::*;
 pub use gerber_viewer::*;
 pub use library::*;
 pub use new_project::*;
+pub use notebook_references::*;
 pub use notebook_tab::*;
 pub use notice::*;
 pub use overlay::*;
@@ -138,6 +140,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         fp_props::FP_PROPS,
         library::LIBRARY,
         new_project::NEW_PROJECT,
+        notebook_references::NOTEBOOK_REFERENCES,
         notebook_tab::NOTEBOOK_TAB,
         notice::NOTICE,
         overlay::OVERLAY,

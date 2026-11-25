@@ -76,7 +76,7 @@ View/---	separator	-	-	-	-	-	-
 View/Toggle Grid	item	Toggle Grid	toggle_visible_grid	Shift+Ctrl+G	ToggleGrid	11111111	cmd:toggle_visible_grid
 View/Cycle Grid Size	item	Cycle Grid Size	-	-	CycleGrid	11111111	cmd:next_grid
 View/AutoFocus (dim unselected)	item	AutoFocus (dim unselected)	toggle_auto_focus	F9	ToggleAutoFocus	11111111	cmd:toggle_auto_focus
-View/Notebook Badges	item	Notebook Badges	-	-	ToggleNotebookBadges	01000000	cmd:toggle_notebook_badges
+View/Notebook Badges	item	Notebook Badges	toggle_notebook_badges	B	ToggleNotebookBadges	01000000	cmd:toggle_notebook_badges
 View/---	separator	-	-	-	-	-	-
 View/Toggle Ratsnest	item	Toggle Ratsnest	-	-	ToggleRatsnest	01100000	cmd:toggle_ratsnest
 View/Toggle Origin Marker	item	Toggle Origin Marker	-	-	ToggleOriginMarker	01100000	cmd:toggle_origin_marker

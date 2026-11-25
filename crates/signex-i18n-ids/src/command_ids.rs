@@ -733,5 +733,11 @@ define_ids! {
         CMD_NOTEBOOK_COMPILE = "cmd-notebook-compile";
         CMD_NOTEBOOK_INSERT = "cmd-notebook-insert";
         CMD_NOTEBOOK_VIEW = "cmd-notebook-view";
+        // notebook-references
+        CMD_NOTEBOOK_REFERENCES = "cmd-notebook-references";
+        CMD_NOTEBOOK_REFERENCE_CARD = "cmd-notebook-reference-card";
+        CMD_NOTEBOOK_REFERENCE_PICKER = "cmd-notebook-reference-picker";
+        CMD_NOTEBOOK_BADGES = "cmd-notebook-badges";
+        CMD_NOTEBOOK_FIX_REFERENCE = "cmd-notebook-fix-reference";
     }
 }

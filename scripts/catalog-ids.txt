@@ -177,8 +177,13 @@ next_highlighted_net_item
 next_layer
 next_sheet
 next_signal_layer
+notebook_badges
 notebook_compile
+notebook_fix_reference
 notebook_insert
+notebook_reference_card
+notebook_reference_picker
+notebook_references
 notebook_view
 number_schematic_sheets
 open_child_sheet

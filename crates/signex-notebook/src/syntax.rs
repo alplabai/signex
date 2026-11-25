@@ -74,6 +74,33 @@ pub fn references(source: &str) -> Vec<ReferenceAt> {
     found
 }
 
+/// A reference call in Typst text and the bytes it covers: from the
+/// function name to the closing `)`, without a markup `#`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ReferenceSpan {
+    pub reference: Reference,
+    pub range: std::ops::Range<usize>,
+    pub line: u32,
+}
+
+/// Every reference call of `text`, plain Typst with no header, in source
+/// order: what a fix rewrites.
+pub(crate) fn reference_spans(text: &str) -> Vec<ReferenceSpan> {
+    let mut found = Vec::new();
+    walk(&typst::syntax::parse(text), 0, &mut |node, offset| {
+        if let Some(call) = node.cast::<ast::FuncCall>()
+            && let Some(reference) = reference_of(call)
+        {
+            found.push(ReferenceSpan {
+                reference,
+                range: offset..offset + node.len(),
+                line: line_of(text, offset),
+            });
+        }
+    });
+    found
+}
+
 /// The distinct references of `source`, first mention first.
 pub fn distinct_references(source: &str) -> Vec<Reference> {
     let mut distinct: Vec<Reference> = Vec::new();

@@ -161,34 +161,102 @@ Kind colours: Note the secondary ink, Calculation the info blue,
 Measurement the success green, Issue the error red, Decision purple (Light
 `#7A3EA8`, Dark `#D2A8F0`); `signex_widgets::theme_ext::annotation_kind_colour`.
 
-## Annotation flags
+## Notebook badges
 
-A part that annotations name carries flags on the schematic canvas (drawn
-on by default, the mock-up's choice):
+A part or net the notebook writes about carries a Notebook badge on the
+schematic canvas (mockup row 197; the annotation flags of mockup row 165,
+renamed). The badges are on by default; View ▸ Notebook Badges (B in the
+Signex Standard profile) hides or shows them on every sheet.
 
-- One flag per kind, at the part's top-right corner, side by side in kind
-  order (Note, Calculation, Measurement, Issue, Decision). A flag is a pole
-  with a notched pennant in the kind's colour; the pennant holds how many
-  blocks of that kind name the part. A block naming the part twice
-  (`#component("U1")` and `#pin("U1", "3")`) counts once. Nets and power
-  ports carry no flag.
+- One badge per part, at its top-right corner, and one on each label of a
+  net. A badge is a pole with a notched pennant that holds how many blocks
+  name the part (or one of its pins) or the net. A block naming the part
+  twice (`#component("U1")` and `#pin("U1", "3")`) counts once. Power
+  ports carry none.
+- The colour is the worst status of those blocks: red for a failing
+  measurement, else amber for an open issue, else green when there are
+  measurements and every one passes, else blue (notes and calculations
+  only; a planned measurement keeps it blue). The blocks are read without a
+  measurement result today, so no badge is red yet.
+- Hovering a badge shows its card: the part or net with the block count,
+  what the colour says, and one line per block (kind, title, status,
+  date). Clicking a badge with the Select tool opens the notebook at its
+  first block.
 - A part is matched by the designator the canvas draws for it, so a sheet
-  reused under several placements flags each placement's own parts.
-- The flags come from the last read, which runs whether or not the
+  reused under several placements badges each placement's own parts.
+- The badges come from the last read, which runs whether or not the
   Annotations panel is open, and show only on the sheets of the project that
   read was of. A notebook file edited outside Signex shows once the project
-  is read again (the panel shown, a project switch, or Refresh). While a read of another project runs, and
-  with no project in view, there are none.
+  is read again (the panel shown, a project switch, or Refresh). While a
+  read of another project runs, and with no project in view, there are
+  none.
 - They are sized from the caption text and keep their size on screen at any
   zoom. They are drawn in the selection layer, so they are editor-only and
   never reach a print or an export.
 
+**Properties ▸ Design notes** lists the blocks of the selected part's badge,
+each with its kind, title, status and date, and Open in notebook; a row
+opens the notebook at its block.
+
+## References
+
+The same read resolves every reference of every notebook file against the
+project (`signex_notebook::resolve_references`), once every sheet of the
+design reads; with a sheet missing no reference is checked.
+
+- A part reference is found by the id the file's header stored for it, then
+  by its name. A pin needs its part and the pin (by number, then by name).
+  A net is found by name; it has no stored id.
+- A reference that no longer reads as the design does is **stale**, for one
+  of three reasons, each with its fixes: **renamed** (the stored id finds
+  the part under another designator: Update to the new name), **not in the
+  design** (Remove reference, Keep as plain text), **no such pin on the
+  part** (Pick another pin). Update all lists every stale reference and
+  updates the renamed ones; the others wait for a choice. A rename made
+  outside Annotate leaves the text stale until it is updated (decided as
+  drawn, mockup row 196).
+- A fix rewrites every use in the file and keeps the stored id under the
+  new name. Remove reference refuses a use inside code (a block's
+  `target:`), where Keep as plain text writes the name as a string; both
+  refuse a use read as a value (`#component("R7").value`). A fix edits the
+  notebook tab's text and is written on Save, like any notebook edit.
+- A reference's **hover card** lists, for a part, its value, footprint,
+  sheet, nets, variants and the blocks that use it; for a pin, its name,
+  net, connected pins and last measurement; for a net, its parts, sheets and
+  last measurement; for a stale reference, why and its fixes. Its buttons:
+  Cross-probe, Open sheet, Timeline for a part; Cross-probe, Timeline, Copy
+  reference for a pin; Cross-probe, Highlight net, Timeline for a net.
+- Typing `@` in the editor opens the **reference picker**: the parts, then
+  the nets, whose name starts with what follows the `@`, then those that
+  contain it; `U3.` lists the pins of U3. Picking one inserts the Typst
+  call; the `@` is never written.
+
+## Commands
+
+Each names the project with `document` (the project or one of its
+documents), reads the project's notebook and design off the update thread,
+then answers from that read as JSON.
+
+| Command | Operands | Answers |
+|---|---|---|
+| `notebook_references` | `file?` | Each file's references: kind, name, state (`resolved`, `renamed` with `now`, `deleted`, `missing_pin` with `pins`), stored id, lines, uses and fixes; the totals and what Update all would change. |
+| `notebook_reference_card` | `kind` (`component`, `pin`, `net`), `name` (`R7`, `U3.3`, `+3V3`), `file?` | The hover card: facts by kind, the blocks that use it, the last measurement, the actions. |
+| `notebook_reference_picker` | `text?`, `limit?` | What `@` and `text` list, each with the call it inserts. |
+| `notebook_badges` | `part?` or `net?` | Every badge with its tone and blocks, or the one badge of a part (Properties ▸ Design notes) or net; whether the badges are shown. |
+| `notebook_fix_reference` | `fix` (`update`, `remove`, `keep_text`, `pick_pin`, `update_all`), `kind?`, `name?`, `to?`, `pin?`, `file?` | The file and how many uses changed; refused while the notebook tab does not hold the file. |
+
+`toggle_notebook_badges` is View ▸ Notebook Badges; it works in a window
+only.
+
 ## Not built yet
 
 These parts of the mock-up wait for the notebook tab and are tracked as
-their own issues: Open in notebook, New Notebook and Import .typ… in the
-empty state, the New annotation action itself (the button is there, greyed),
-calculation results computed from part parameters, and the flag hover card
-("U3 · 3 annotations"). The View ▸ Annotation Flags switch of the mock-up is a
-proposal and is not built. The header More button is left out until its
-items are decided (decision 2026-11-24).
+their own issues: Open in notebook (the Properties button and a badge click
+say in Messages where they would open), New Notebook and Import .typ… in
+the empty state, the New annotation action itself (the button is there,
+greyed), calculation results computed from part parameters, the reference
+style, the margin-lane placement of the card and the `@` picker in the
+editor (their content and views are built), Back to notebook and the
+notebook's own cross-probe strip. A badge does not yet move to a free
+corner when it would cover a pin or a label. The header More button is left
+out until its items are decided (decision 2026-11-24).

@@ -167,6 +167,7 @@ impl Signex {
         self.interaction_state.hover_symbol_uuid = None;
         self.interaction_state.hover_started_at = None;
         self.interaction_state.hover_screen_pos = None;
+        self.ui_state.annotations.hovered_badge = None;
     }
 
     /// The part the selection is, when it is one part (its body, its

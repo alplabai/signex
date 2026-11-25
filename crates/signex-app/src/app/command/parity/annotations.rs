@@ -250,6 +250,19 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     // insert lands at the tab's cursor unless `line` names one.
     (&["notebook_compile", "notebook_view"], Operand, &[]),
     (&["notebook_insert"], Operand, &[Cursor]),
+    // Mockup rows 196 and 197: each reads the project it names first and
+    // answers from that read; a fix edits the notebook tab's text.
+    (
+        &[
+            "notebook_references",
+            "notebook_reference_card",
+            "notebook_reference_picker",
+            "notebook_badges",
+            "notebook_fix_reference",
+        ],
+        Operand,
+        &[],
+    ),
     // The board update targets the window acting, else the active document.
     (
         &["update_pcb_from_schematic"],
@@ -745,6 +758,7 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "show_current_command_shortcuts",
             "new_project_with_profile",
             "toggle_cross_select_mode",
+            "toggle_notebook_badges",
             "place_wire_to_bus_entry",
         ],
         Bridge,

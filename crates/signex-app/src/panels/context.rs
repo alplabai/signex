@@ -135,6 +135,9 @@ pub struct PanelContext {
     /// The Annotations panel's rows (mockup row 165); built in `update` whenever its
     /// scan or filters change.
     pub annotations: std::sync::Arc<super::AnnotationsView>,
+    /// The Notebook badges of the project in view, for Properties ▸ Design
+    /// notes (mockup row 197); shared with the last notebook read.
+    pub notebook_badges: std::sync::Arc<Vec<signex_notebook::Badge>>,
     /// The active PCB tab's board facts, for the Properties panel.
     pub pcb_board: Option<Box<super::PcbBoardSummary>>,
     /// The active PCB tab's layer stack, for the Layer Stack manager (#2401).

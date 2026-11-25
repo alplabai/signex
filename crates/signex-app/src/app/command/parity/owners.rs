@@ -237,6 +237,18 @@ pub(super) const WRITES: &[(&[&str], Surface, Writes)] = &[
         Operand,
         Session,
     ),
+    // Mockup rows 196 and 197: the notebook reads answer from a notebook
+    // read of their own, which is the Annotations panel's scan state.
+    (
+        &[
+            "notebook_references",
+            "notebook_reference_card",
+            "notebook_reference_picker",
+            "notebook_badges",
+        ],
+        Operand,
+        Session,
+    ),
     // Saved layer sets and the tab-name style: machine settings.
     (
         &["save_layer_set", "delete_layer_set", "set_layer_tab_names"],
@@ -594,6 +606,8 @@ const OPERAND_DOCUMENT: &[&str] = &[
     "new_project_with_profile",
     "new_schematic_sheet",
     "notebook_compile",
+    // Mockup row 196: the notebook tab's text, written on Save.
+    "notebook_fix_reference",
     "notebook_insert",
     "open_document",
     "panelize_board",
