@@ -310,3 +310,42 @@ fn a_copper_polygon_missing_or_with_bad_points_is_left_out_and_named() {
         );
     }
 }
+
+/// A copper circle whose rim and saved radius disagree has one radius: the
+/// rim's, in the design rule check's copper and in the Gerber alike.
+#[test]
+fn a_circles_rim_sets_its_radius_in_the_drc_copper_and_the_gerber() {
+    let mut circle = drawing(91, "circle", "TopCopper");
+    circle.end = Some(p(4.0, 5.0));
+    circle.radius = 2.0;
+    let rim_nm = 5_000_000;
+
+    let shapes = pcb_geom::board_graphic_copper(&circle).expect("converts");
+    let Some(pcb_geom::Shape::Capsule { a, .. }) = shapes.first() else {
+        panic!("{shapes:?}");
+    };
+    assert_eq!(a.x - 1_000_000, rim_nm, "the first chord starts at angle 0");
+
+    let (before, _) = top_copper(&fixture_board());
+    let mut board = fixture_board();
+    board.graphics.push(circle);
+    let (marks, tally) = top_copper(&board);
+    assert!(tally.drawn_copper_skipped.is_empty());
+    let added: Vec<_> = marks.iter().filter(|m| !before.contains(m)).collect();
+    let [
+        Mark::Stroke {
+            start,
+            steps,
+            function: Function::Conductor,
+            ..
+        },
+    ] = added.as_slice()
+    else {
+        panic!("{added:?}");
+    };
+    let [Step::Arc { to, center, .. }] = steps.as_slice() else {
+        panic!("{steps:?}");
+    };
+    assert_eq!(to, start, "a full circle");
+    assert_eq!(start.x - center.x, rim_nm);
+}
