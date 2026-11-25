@@ -5,7 +5,7 @@
 use iced::widget::{Space, column, container, row};
 use iced::{Alignment, Background, Border, Color, Element, Length, Theme, Widget as _};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{button, raw, text};
+use signex_widgets::{Label, button, raw, text};
 
 use crate::styles::{self, Radii, Spacing, TypeScale, chrome_px, ti, tokens};
 
@@ -97,9 +97,8 @@ pub(crate) fn graphite_header_closing<'a, M: Clone + 'a>(
     theme_tokens: &ThemeTokens,
 ) -> Element<'a, M> {
     let r = tokens::resolve(theme_tokens);
-    // raw: the caller passes a title and subtitle it already rendered.
     let mut heading = row![
-        text(raw(title.into()))
+        text(rendered(title.into()))
             .size(TS.heading)
             .color(ti(theme_tokens.text))
             .boxed()
@@ -107,7 +106,7 @@ pub(crate) fn graphite_header_closing<'a, M: Clone + 'a>(
     .spacing(SP.l)
     .align_y(Alignment::Center);
     if let Some(sub) = subtitle {
-        heading = heading.push(text(raw(sub)).size(TS.label).color(r.ink3).boxed());
+        heading = heading.push(text(rendered(sub)).size(TS.label).color(r.ink3).boxed());
     }
     header_bar(heading.boxed(), trailing, on_close, height, theme_tokens)
 }
@@ -122,15 +121,23 @@ pub(crate) fn graphite_header_stacked<'a, M: Clone + 'a>(
     theme_tokens: &ThemeTokens,
 ) -> Element<'a, M> {
     let r = tokens::resolve(theme_tokens);
-    // raw: the caller passes a title and subtitle it already rendered.
     let heading = column![
-        text(raw(title.into()))
+        text(rendered(title.into()))
             .size(TS.heading)
             .color(ti(theme_tokens.text))
             .boxed(),
-        text(raw(subtitle)).size(TS.caption).color(r.ink4).boxed(),
+        text(rendered(subtitle))
+            .size(TS.caption)
+            .color(r.ink4)
+            .boxed(),
     ];
     header_bar(heading.boxed(), None, on_close, height, theme_tokens)
+}
+
+/// A title or subtitle the caller already rendered (a `t!` result or
+/// user text), passed through as it is.
+fn rendered<'a>(already_rendered: String) -> Label<'a> {
+    raw(already_rendered)
 }
 
 /// The header band: `heading`, free space, `trailing`, the close button.
