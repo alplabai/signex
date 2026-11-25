@@ -17,8 +17,10 @@
 //! The Sheets, Variants, Libraries, ERC and annotation and Version control
 //! sections (#1689-#1693) edit through the same history; their commands are
 //! in `sections` and each is a step of its own. So do the Requirements
-//! section's edits (#2339, `requirements`).
+//! section's edits (#2339, `requirements`), and a BOM line's alternates
+//! (#2938, `bom_alternates`).
 
+mod bom_alternates;
 mod requirements;
 mod sections;
 
@@ -33,6 +35,7 @@ use signex_types::project::{
     SchematicDefaultField, SchematicDefaultOverrides,
 };
 
+pub use bom_alternates::ProjectBomCommand;
 pub use requirements::ProjectRequirementCommand;
 pub use sections::ProjectSectionCommand;
 use sections::SectionsSnapshot;
@@ -372,6 +375,16 @@ impl ProjectGeneralHistory {
         self.apply_step(data, |data| command.apply(data))
     }
 
+    /// Apply one BOM alternates edit (#2938) as an undo step of its own,
+    /// like [`Self::apply_section`].
+    pub fn apply_bom_alternate(
+        &mut self,
+        data: &mut ProjectData,
+        command: &ProjectBomCommand,
+    ) -> Result<bool, signex_types::project::BomAlternateProblem> {
+        self.apply_step(data, |data| command.apply(data))
+    }
+
     /// Run `edit` as a step of its own: recorded when a field changed,
     /// nothing recorded when it changed nothing or was refused.
     fn apply_step<E>(
@@ -434,6 +447,8 @@ impl ProjectGeneralHistory {
     }
 }
 
+#[cfg(test)]
+mod bom_alternate_tests;
 #[cfg(test)]
 mod section_tests;
 #[cfg(test)]

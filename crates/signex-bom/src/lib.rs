@@ -3,9 +3,14 @@ use std::collections::{BTreeMap, HashMap};
 use serde::{Deserialize, Serialize};
 use signex_types::designator::compare_references;
 
+mod priced;
 mod pricing;
+pub use priced::{
+    BuildOrder, PricedAlternate, PricedBom, PricedLine, ServedBy, Shortfall, alternates_text,
+    line_key, priced_bom,
+};
 pub use pricing::{
-    BomPrice, MPN_FIELDS, PriceBook, PriceQuote, apply_prices, library_row_key, mpn_key,
+    BomPrice, MPN_FIELDS, PriceBook, PriceQuote, apply_prices, library_row_key, mpn_key, price_of,
     price_totals, round_cents,
 };
 
