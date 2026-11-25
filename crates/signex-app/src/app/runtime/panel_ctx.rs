@@ -864,6 +864,8 @@ impl Signex {
         // Sheet N of M and the project's title block can change with it.
         self.refresh_canvas_sheet_frame();
         self.refresh_canvas_designators();
+        // The active variant, its values or a shown sheet may have changed.
+        self.refresh_all_variant_values();
     }
 }
 

@@ -172,8 +172,10 @@ impl Signex {
         navigator.replace_hierarchy(assembly.hierarchy, active.as_deref(), &open);
         navigator.numbers = assembly.numbers;
         navigator.fingerprint = assembly.fingerprint;
-        // The canvas designators are a function of the hierarchy's placements.
+        // The canvas designators are a function of the hierarchy's placements,
+        // and so are the variant values (the part a value is set on).
         self.refresh_canvas_designators();
+        self.refresh_all_variant_values();
         Task::none()
     }
 
