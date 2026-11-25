@@ -1,16 +1,18 @@
-//! What importing a parameter table file changes on a sheet.
+//! What importing a parameter table file changes on the listed sheets.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
-use signex_types::schematic::Symbol;
 use uuid::Uuid;
 
-use super::{CsvPart, ParameterCsv};
+use super::{CsvPart, ListedPart, ListedSheet, ParameterCsv};
 
 /// One parameter an import writes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParameterChange {
+    /// The sheet the part is on: its index in the listed sheets.
+    pub sheet: usize,
     pub symbol: Uuid,
+    /// The designator the table names the part by.
     pub reference: String,
     pub key: String,
     /// The value now; `None` when the part has no such parameter.
@@ -40,7 +42,8 @@ pub struct ImportPlan {
 impl ImportPlan {
     /// How many parts the changes touch.
     pub fn part_count(&self) -> usize {
-        let mut parts: Vec<Uuid> = self.changes.iter().map(|c| c.symbol).collect();
+        let mut parts: Vec<(usize, Uuid)> =
+            self.changes.iter().map(|c| (c.sheet, c.symbol)).collect();
         parts.sort_unstable();
         parts.dedup();
         parts.len()
@@ -57,48 +60,82 @@ impl ImportPlan {
     }
 }
 
-/// What `csv` changes on `parts` (the listed parts, in sheet order).
+/// Every listed part, with the index of its sheet, sheet by sheet.
+struct Listed<'p, 'a> {
+    sheets: &'p [ListedSheet<'a>],
+    parts: Vec<(usize, &'p ListedPart<'a>)>,
+}
+
+impl<'p, 'a> Listed<'p, 'a> {
+    fn new(sheets: &'p [ListedSheet<'a>]) -> Self {
+        let parts = (sheets.iter().enumerate())
+            .flat_map(|(i, sheet)| sheet.parts.iter().map(move |part| (i, part)))
+            .collect();
+        Self { sheets, parts }
+    }
+
+    /// Whether `row` may go to a part of the sheet at `index`: a line with a
+    /// Sheet cell only to that sheet's parts, any other to every sheet's.
+    fn on_sheet(&self, row: &CsvPart, index: usize) -> bool {
+        row.sheet.is_empty() || self.sheets[index].name == row.sheet
+    }
+
+    /// The one part `row`'s unique id names among the parts it may go to.
+    /// An id two such parts carry (a sheet file copied, read with no Sheet
+    /// cell) names none, so no line is written to a guessed sheet.
+    fn named_by_id(&self, row: &CsvPart) -> Option<usize> {
+        let id = Uuid::parse_str(&row.unique_id).ok()?;
+        let mut hits = (self.parts.iter().enumerate())
+            .filter(|(_, (sheet, part))| part.symbol.uuid == id && self.on_sheet(row, *sheet))
+            .map(|(at, _)| at);
+        let first = hits.next()?;
+        hits.next().is_none().then_some(first)
+    }
+}
+
+/// What `csv` changes on the parts of `sheets` (the listed sheets, each with
+/// its listed parts in sheet order).
 ///
-/// A line goes to a part by its Unique Id. A line with no unique id goes by
-/// its reference to a part no unique id named: the n-th such line naming a
-/// reference to the n-th such part with it, so the units of one part each
-/// take their own line. A unique id that names no listed part, or names one
-/// an earlier line took, leaves its line unmatched. A cell changes a
+/// A line with a Sheet cell goes only to a part of the listed sheet of that
+/// name; a line without one to a part of any listed sheet. Within that, a
+/// line goes to a part by its Unique Id. A line with no unique id goes by
+/// its reference to a part no unique id named: the first such line naming a
+/// reference to the first such part with it, the next to the next, so the
+/// units of one part each take their own line. A unique id that names no
+/// listed part, names one an earlier line took, or names one part on each of
+/// two sheets the line may go to leaves its line unmatched. A cell changes a
 /// parameter whose value differs; an empty cell empties a parameter the part
 /// has and adds none; a missing cell, a line with no key and a parameter the
 /// file has no column for are left alone. Nothing is ever removed.
-pub fn plan_import(parts: &[&Symbol], csv: &ParameterCsv) -> ImportPlan {
-    let by_id: HashMap<Uuid, &Symbol> = parts.iter().map(|p| (p.uuid, *p)).collect();
-    let named: HashSet<Uuid> = csv
-        .rows
-        .iter()
-        .filter_map(|row| Uuid::parse_str(&row.unique_id).ok())
-        .filter(|id| by_id.contains_key(id))
+pub fn plan_import(sheets: &[ListedSheet<'_>], csv: &ParameterCsv) -> ImportPlan {
+    let listed = Listed::new(sheets);
+    let named: HashSet<usize> = (csv.rows.iter())
+        .filter(|row| !row.unique_id.is_empty())
+        .filter_map(|row| listed.named_by_id(row))
         .collect();
     let mut plan = ImportPlan::default();
-    let mut taken_ids: HashSet<Uuid> = HashSet::new();
-    let mut taken_references: HashMap<&str, usize> = HashMap::new();
+    let mut taken: HashSet<usize> = HashSet::new();
     for row in &csv.rows {
-        let part = if row.unique_id.is_empty() {
+        let at = if row.unique_id.is_empty() {
             if row.reference.is_empty() {
                 continue;
             }
-            let nth = taken_references.entry(row.reference.as_str()).or_insert(0);
-            let part = parts
-                .iter()
-                .filter(|p| p.reference == row.reference && !named.contains(&p.uuid))
-                .nth(*nth)
-                .copied();
-            *nth += 1;
-            part
+            (listed.parts.iter().enumerate())
+                .find(|(at, (sheet, part))| {
+                    part.reference == row.reference
+                        && listed.on_sheet(row, *sheet)
+                        && !named.contains(at)
+                        && !taken.contains(at)
+                })
+                .map(|(at, _)| at)
         } else {
-            Uuid::parse_str(&row.unique_id)
-                .ok()
-                .filter(|id| taken_ids.insert(*id))
-                .and_then(|id| by_id.get(&id).copied())
+            listed.named_by_id(row)
         };
-        match part {
-            Some(part) => plan_line(&mut plan, part, csv, row),
+        match at.filter(|at| taken.insert(*at)) {
+            Some(at) => {
+                let (sheet, part) = listed.parts[at];
+                plan_line(&mut plan, sheet, part, csv, row);
+            }
             None => plan.note_unmatched(row),
         }
     }
@@ -119,18 +156,26 @@ impl ImportPlan {
     }
 }
 
-/// The changes `row` makes on `part`.
-fn plan_line(plan: &mut ImportPlan, part: &Symbol, csv: &ParameterCsv, row: &CsvPart) {
+/// The changes `row` makes on `part`, on the sheet at index `sheet`.
+fn plan_line(
+    plan: &mut ImportPlan,
+    sheet: usize,
+    part: &ListedPart<'_>,
+    csv: &ParameterCsv,
+    row: &CsvPart,
+) {
+    let symbol = part.symbol;
     for (key, value) in csv.keys.iter().zip(&row.values) {
         let Some(after) = value else {
             continue;
         };
-        let before = part.fields.get(key);
+        let before = symbol.fields.get(key);
         let is_same = before.map_or(after.is_empty(), |before| before == after);
         if !is_same {
             plan.changes.push(ParameterChange {
-                symbol: part.uuid,
-                reference: part.reference.clone(),
+                sheet,
+                symbol: symbol.uuid,
+                reference: part.reference.to_string(),
                 key: key.clone(),
                 before: before.cloned(),
                 after: after.clone(),

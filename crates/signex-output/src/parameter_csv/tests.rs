@@ -24,13 +24,36 @@ fn sheet(symbols: Vec<Symbol>) -> SchematicSheet {
     }
 }
 
+/// `doc` as the one listed sheet `name`, each part named by its reference.
+fn listed<'a>(name: &str, doc: &'a SchematicSheet) -> ListedSheet<'a> {
+    ListedSheet {
+        name: name.to_string(),
+        parts: listed_parts(doc)
+            .into_iter()
+            .map(ListedPart::stored)
+            .collect(),
+    }
+}
+
 fn exported(sheet: &SchematicSheet) -> Vec<u8> {
-    export(&listed_parts(sheet)).expect("export")
+    export(&[listed("power.snxsch", sheet)], false).expect("export")
 }
 
 fn plan_of(sheet: &SchematicSheet, text: &str) -> ImportPlan {
     let csv = parse(text.as_bytes()).expect("parse");
-    plan_import(&listed_parts(sheet), &csv)
+    plan_import(&[listed("power.snxsch", sheet)], &csv)
+}
+
+fn plan_across(sheets: &[ListedSheet<'_>], text: &str) -> ImportPlan {
+    let csv = parse(text.as_bytes()).expect("parse");
+    plan_import(sheets, &csv)
+}
+
+/// Where each change goes: its sheet's index, its part and the new value.
+fn targets(plan: &ImportPlan) -> Vec<(usize, Uuid, &str)> {
+    (plan.changes.iter())
+        .map(|c| (c.sheet, c.symbol, c.after.as_str()))
+        .collect()
 }
 
 #[test]
@@ -68,6 +91,7 @@ fn a_line_goes_to_the_part_its_unique_id_names() {
     assert_eq!(
         plan.changes,
         vec![ParameterChange {
+            sheet: 0,
             symbol: Uuid::from_u128(2),
             reference: "R2".to_string(),
             key: "Tolerance".to_string(),
@@ -167,7 +191,7 @@ fn an_export_reads_back_to_no_change() {
         assert_eq!(row.values, vec![Some(value.to_string())], "{value:?}");
     }
     assert_eq!(
-        plan_import(&listed_parts(&doc), &csv),
+        plan_import(&[listed("power.snxsch", &doc)], &csv),
         ImportPlan::default()
     );
 }
@@ -198,6 +222,7 @@ fn a_changed_cell_is_one_change_and_value_and_footprint_are_never_imported() {
     assert_eq!(
         plan.changes,
         vec![ParameterChange {
+            sheet: 0,
             symbol: Uuid::from_u128(1),
             reference: "R1".to_string(),
             key: "Tolerance".to_string(),
@@ -293,6 +318,111 @@ fn a_file_keyed_by_unique_id_alone_is_read() {
     );
     assert_eq!(plan.changes.len(), 1);
     assert_eq!(plan.changes[0].reference, "R1");
+}
+
+/// #1784: an All sheets export has a Sheet column after Reference and every
+/// listed sheet's parts, sheet by sheet; a part's Reference is the
+/// designator the table names it by, not its stored reference.
+#[test]
+fn an_all_sheets_export_names_each_parts_sheet() {
+    let a = sheet(vec![part(1, "R1", &[("Tolerance", "1%")])]);
+    let b = sheet(vec![part(2, "R1", &[("MPN", "RC0603")])]);
+    let mut on_b = listed("ch/b.snxsch", &b);
+    on_b.parts[0].reference = "R101".into();
+    let text = String::from_utf8(export(&[listed("a.snxsch", &a), on_b], true).expect("export"))
+        .expect("utf-8");
+    assert_eq!(
+        text,
+        "\u{feff}Unique Id,Reference,Sheet,Value,Footprint,MPN,Tolerance\r\n\
+         00000000-0000-0000-0000-000000000001,R1,a.snxsch,10k,R_0603,,1%\r\n\
+         00000000-0000-0000-0000-000000000002,R101,ch/b.snxsch,10k,R_0603,RC0603,\r\n"
+    );
+}
+
+#[test]
+fn an_all_sheets_export_reads_back_to_no_change() {
+    let a = sheet(vec![part(1, "R1", &[("Tolerance", "1%")])]);
+    let b = sheet(vec![part(1, "R1", &[("Tolerance", "5%")])]);
+    let sheets = [listed("a.snxsch", &a), listed("b.snxsch", &b)];
+    let csv = parse(&export(&sheets, true).expect("export")).expect("parse");
+    assert_eq!(csv.rows[1].sheet, "b.snxsch");
+    assert_eq!(plan_import(&sheets, &csv), ImportPlan::default());
+}
+
+/// A sheet file copied keeps its parts' uuids: the Sheet cell says which
+/// copy a line is for.
+#[test]
+fn a_sheet_cell_sends_its_line_to_that_sheet() {
+    let a = sheet(vec![part(1, "R1", &[("Tolerance", "1%")])]);
+    let b = sheet(vec![part(1, "R1", &[("Tolerance", "1%")])]);
+    let sheets = [listed("a.snxsch", &a), listed("b.snxsch", &b)];
+    let plan = plan_across(
+        &sheets,
+        "Unique Id,Reference,sheet ,Tolerance\n\
+         00000000-0000-0000-0000-000000000001,R1,b.snxsch,2%\n\
+         ,R1,a.snxsch,3%\n",
+    );
+    assert_eq!(
+        targets(&plan),
+        vec![(1, Uuid::from_u128(1), "2%"), (0, Uuid::from_u128(1), "3%")]
+    );
+    assert_eq!(plan.part_count(), 2, "one part on each sheet");
+}
+
+/// Without a Sheet cell an id two listed sheets carry names neither, so no
+/// line is written to a guessed sheet; an id one sheet carries still goes
+/// there, as a file exported from one sheet does.
+#[test]
+fn an_id_on_two_listed_sheets_needs_a_sheet_cell() {
+    let a = sheet(vec![
+        part(1, "R1", &[("Tolerance", "1%")]),
+        part(2, "R2", &[]),
+    ]);
+    let b = sheet(vec![part(1, "R1", &[("Tolerance", "1%")])]);
+    let sheets = [listed("a.snxsch", &a), listed("b.snxsch", &b)];
+    let plan = plan_across(
+        &sheets,
+        "Unique Id,Reference,Tolerance\n\
+         00000000-0000-0000-0000-000000000001,R1,2%\n\
+         00000000-0000-0000-0000-000000000002,R2,5%\n",
+    );
+    assert_eq!(targets(&plan), vec![(0, Uuid::from_u128(2), "5%")]);
+    assert_eq!(plan.unmatched, vec!["R1".to_string()]);
+}
+
+#[test]
+fn a_line_without_a_sheet_cell_goes_to_any_listed_sheet() {
+    let a = sheet(vec![part(1, "R1", &[])]);
+    let b = sheet(vec![part(2, "R2", &[])]);
+    let sheets = [listed("a.snxsch", &a), listed("b.snxsch", &b)];
+    let plan = plan_across(&sheets, "Reference,Sheet,MPN\nR2,,X\nR1,c.snxsch,Y\n");
+    assert_eq!(targets(&plan), vec![(1, Uuid::from_u128(2), "X")]);
+    assert_eq!(
+        plan.unmatched,
+        vec!["R1".to_string()],
+        "no listed sheet is named c.snxsch"
+    );
+}
+
+/// A line keyed by reference matches the designator the table shows (the
+/// placement's, #1151), as the exported Reference cell reads.
+#[test]
+fn a_reference_line_matches_the_shown_designator() {
+    let doc = sheet(vec![part(1, "R1", &[])]);
+    let mut shown = listed("child.snxsch", &doc);
+    shown.parts[0].reference = "R101".into();
+    let plan = plan_across(&[shown], "Reference,MPN\nR101,X\nR1,Y\n");
+    assert_eq!(targets(&plan), vec![(0, Uuid::from_u128(1), "X")]);
+    assert_eq!(plan.changes[0].reference, "R101");
+    assert_eq!(plan.unmatched, vec!["R1".to_string()]);
+}
+
+#[test]
+fn two_sheet_columns_are_refused() {
+    assert_eq!(
+        parse(b"Reference,Sheet,SHEET\n"),
+        Err(ParameterCsvError::DuplicateColumn("SHEET".to_string()))
+    );
 }
 
 #[test]
