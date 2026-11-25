@@ -37,7 +37,6 @@ pub(crate) fn app_with_faulty_bom() -> Signex {
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "bom-validation".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });

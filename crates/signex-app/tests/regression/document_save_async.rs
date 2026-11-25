@@ -69,7 +69,6 @@ fn app_with_dirty_sheet(sink: Arc<dyn DocumentSink>) -> (Signex, PathBuf) {
     app.document_state.tabs.push(TabInfo {
         title: "document-save-async".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -337,7 +336,6 @@ fn save_as_does_not_rekey_when_the_tab_was_switched_mid_write() {
     app.document_state.tabs.push(TabInfo {
         title: "other".to_string(),
         path: PathBuf::from("other.snxsch"),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

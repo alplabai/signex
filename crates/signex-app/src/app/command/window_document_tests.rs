@@ -16,13 +16,8 @@ fn command(id: &str) -> AppCommandId {
 }
 
 fn tab(path: &Path) -> TabInfo {
-    TabInfo {
-        title: path.file_stem().unwrap().to_string_lossy().into_owned(),
-        path: path.to_path_buf(),
-        cached_document: None,
-        project_id: None,
-        kind: TabKind::Schematic,
-    }
+    let title = path.file_stem().unwrap().to_string_lossy().into_owned();
+    crate::test_adapter::boardless_tab(title, path, TabKind::Schematic)
 }
 
 /// A dirty engine for `path`, whose file already holds [`OLD`].
@@ -441,7 +436,6 @@ fn component_preview(app: &mut Signex) -> iced::window::Id {
     app.document_state.tabs.push(TabInfo {
         title: "R1".to_string(),
         path: PathBuf::from("parts.snxlib/Resistors.tsv#1"),
-        cached_document: None,
         project_id: None,
         kind: TabKind::ComponentEditor(crate::app::ComponentEditorTab {
             library_path: library_path.clone(),

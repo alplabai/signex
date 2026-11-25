@@ -723,7 +723,6 @@ pub(super) mod tests {
         app.document_state.tabs.push(crate::app::TabInfo {
             title: "props".into(),
             path: std::path::PathBuf::from("props.snxsch"),
-            cached_document: None,
             project_id: None,
             kind: crate::app::TabKind::Schematic,
         });

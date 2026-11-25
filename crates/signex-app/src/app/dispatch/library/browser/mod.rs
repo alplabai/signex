@@ -184,7 +184,6 @@ impl Signex {
         self.document_state.tabs.push(crate::app::TabInfo {
             title,
             path: path.clone(),
-            cached_document: None,
             project_id,
             kind: crate::app::TabKind::LibraryBrowser(path),
         });
@@ -689,7 +688,6 @@ impl Signex {
         self.document_state.tabs.push(crate::app::TabInfo {
             title,
             path: synthetic_path,
-            cached_document: None,
             project_id,
             kind: crate::app::TabKind::ComponentEditor(crate::app::ComponentEditorTab {
                 library_path: address.library_path.clone(),

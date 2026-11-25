@@ -657,6 +657,7 @@ impl Signex {
                 designator_cache: Default::default(),
                 next_pcb_revision: 0,
                 pcb_revisions: std::collections::HashMap::new(),
+                boards: std::collections::HashMap::new(),
                 parked_pcb_boards: std::collections::HashMap::new(),
                 undo_groups: std::collections::HashMap::new(),
                 rail_rename: Default::default(),

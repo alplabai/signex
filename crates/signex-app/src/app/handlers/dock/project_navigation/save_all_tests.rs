@@ -39,7 +39,6 @@ pub(super) fn app_with_two_dirty_documents(dir: &Path) -> (Signex, PathBuf, Path
     app.document_state.tabs.push(TabInfo {
         title: "Sheet".into(),
         path: sheet_path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

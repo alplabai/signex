@@ -18,7 +18,6 @@ fn open_tab(app: &mut Signex, path: &Path, kind: TabKind) {
     app.document_state.tabs.push(TabInfo {
         title: "lib".into(),
         path: path.to_path_buf(),
-        cached_document: None,
         project_id: None,
         kind,
     });

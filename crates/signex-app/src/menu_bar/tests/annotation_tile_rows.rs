@@ -93,7 +93,6 @@ fn two_docked_documents_tile_into_panes_and_untile() {
     app.document_state.tabs.push(TabInfo {
         title: "second".to_string(),
         path: std::path::PathBuf::from("/w/second.snxsch"),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

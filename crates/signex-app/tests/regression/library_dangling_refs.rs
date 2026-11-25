@@ -209,7 +209,6 @@ fn saving_a_symbol_refreshes_a_preview_that_already_resolved_it() {
     f.app.document_state.tabs.push(TabInfo {
         title: "part".into(),
         path: symbol_path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::SymbolEditor(symbol_path),
     });
@@ -293,7 +292,6 @@ fn saving_a_symbol_refreshes_a_preview_bound_across_libraries() {
     f.app.document_state.tabs.push(TabInfo {
         title: "far".into(),
         path: symbol_path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::SymbolEditor(symbol_path),
     });

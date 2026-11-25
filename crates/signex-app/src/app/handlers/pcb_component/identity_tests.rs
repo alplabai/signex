@@ -31,7 +31,6 @@ fn closed_parent(dir: &str) -> (Signex, PathBuf, Footprint) {
     app.document_state.tabs.push(TabInfo {
         title: "board".to_string(),
         path: board.clone(),
-        cached_document: None,
         project_id: Some(project),
         kind: TabKind::Schematic,
     });

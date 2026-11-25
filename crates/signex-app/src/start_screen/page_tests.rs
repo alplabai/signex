@@ -363,7 +363,6 @@ fn the_start_screen_clock_lives_in_the_model() {
     app.document_state.tabs.push(crate::app::TabInfo {
         title: "a.snxsch".to_string(),
         path: PathBuf::from("a.snxsch"),
-        cached_document: None,
         project_id: None,
         kind: crate::app::TabKind::Schematic,
     });
@@ -389,7 +388,6 @@ fn closing_the_last_tab_from_the_tab_menu_stamps_the_clock() {
     app.document_state.tabs.push(crate::app::TabInfo {
         title: "a.snxfpt".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: crate::app::TabKind::FootprintEditor(path.clone()),
     });

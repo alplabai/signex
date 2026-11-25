@@ -74,7 +74,6 @@ fn an_erc_run_reports_a_net_named_differently_on_two_sheets() {
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "root".to_string(),
         path: root_path.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });

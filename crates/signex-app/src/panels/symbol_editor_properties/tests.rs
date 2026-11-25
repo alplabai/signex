@@ -404,7 +404,6 @@ fn a_toggled_section_opens_without_a_context_rebuild() {
     app.document_state.tabs.push(TabInfo {
         title: "TOGGLE".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::SymbolEditor(path),
     });

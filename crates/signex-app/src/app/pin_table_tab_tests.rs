@@ -37,7 +37,6 @@ fn app_with(sym: Symbol) -> (Signex, PathBuf) {
     app.document_state.tabs.push(TabInfo {
         title: "opamps".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::SymbolEditor(path.clone()),
     });
@@ -303,7 +302,6 @@ fn tab(kind: TabKind, path: &str) -> TabInfo {
     TabInfo {
         title: String::new(),
         path: PathBuf::from(path),
-        cached_document: None,
         project_id: None,
         kind,
     }

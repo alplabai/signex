@@ -406,7 +406,6 @@ mod tests {
         app.document_state.tabs.push(crate::app::TabInfo {
             title: "top".to_string(),
             path: top.clone(),
-            cached_document: None,
             project_id: None,
             kind: crate::app::TabKind::Schematic,
         });
@@ -442,7 +441,6 @@ mod tests {
         app.document_state.tabs.push(crate::app::TabInfo {
             title: "top".to_string(),
             path: top.clone(),
-            cached_document: None,
             project_id: None,
             kind: crate::app::TabKind::Schematic,
         });

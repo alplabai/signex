@@ -539,7 +539,6 @@ fn a_repeated_file_uuid_of_a_symbol_or_footprint_file_is_repaired() {
         app.document_state.tabs.push(crate::app::TabInfo {
             title: name.into(),
             path: path.clone(),
-            cached_document: None,
             project_id: None,
             kind: crate::app::TabKind::SymbolEditor(path),
         });
@@ -553,7 +552,6 @@ fn a_repeated_file_uuid_of_a_symbol_or_footprint_file_is_repaired() {
         app.document_state.tabs.push(crate::app::TabInfo {
             title: name.into(),
             path: path.clone(),
-            cached_document: None,
             project_id: None,
             kind: crate::app::TabKind::FootprintEditor(path),
         });

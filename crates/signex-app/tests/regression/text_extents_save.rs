@@ -52,7 +52,6 @@ fn app_with_label_sheet(path: &Path) -> Signex {
     app.document_state.tabs.push(TabInfo {
         title: "label".into(),
         path: path.to_path_buf(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -100,7 +99,6 @@ fn save_all_writes_the_width_of_an_installed_face() {
     app.document_state.tabs.push(TabInfo {
         title: "one".into(),
         path: sheet_path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

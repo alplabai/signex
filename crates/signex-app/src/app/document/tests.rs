@@ -75,13 +75,7 @@ fn project_at(app: &mut Signex, dir: &Path) {
 }
 
 fn tab(path: &Path, kind: TabKind) -> TabInfo {
-    TabInfo {
-        title: "t".into(),
-        path: path.to_path_buf(),
-        cached_document: None,
-        project_id: None,
-        kind,
-    }
+    crate::test_adapter::boardless_tab("t", path, kind)
 }
 
 /// An app with one open project at `dir` and one document of `kind`, dirty

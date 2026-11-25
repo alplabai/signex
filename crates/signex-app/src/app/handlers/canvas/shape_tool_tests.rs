@@ -20,7 +20,6 @@ fn app_with_tool(tool: Tool) -> Signex {
     app.document_state.tabs.push(TabInfo {
         title: "shape-tool".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

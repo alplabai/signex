@@ -6,8 +6,9 @@ editing UI does not have to decide it.
 
 ## Shape
 
-- A PCB tab holds a `signex_engine::pcb::BoardEngine` (`TabDocument::Pcb`),
-  not a bare `PcbBoard`. A dirty tab that closes parks the engine, history
+- An open PCB has a `signex_engine::pcb::BoardEngine`, not a bare
+  `PcbBoard`, in `DocumentState::boards` keyed by its path (#2449); only its
+  `TabKind::Pcb` tab holds it. A dirty tab that closes parks the engine, history
   included (`state/pcb_board.rs`, #2149, #2196); reopening takes it back.
   A parked engine is read-only: no edit, undo or redo reaches it
   (`BoardEditError::Parked`, `undo document=` refuses), because Save All

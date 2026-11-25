@@ -38,7 +38,6 @@ fn open_symbol(app: &mut Signex, name: &str) -> PathBuf {
     app.document_state.tabs.push(TabInfo {
         title: name.into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::SymbolEditor(path.clone()),
     });

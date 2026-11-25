@@ -66,7 +66,6 @@ fn app_with_locked_objects(y: f64) -> (Signex, Vec<SelectedItem>) {
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "object-locked".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });

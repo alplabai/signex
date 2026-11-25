@@ -91,7 +91,6 @@ fn project_with_child(mode: AnnotateUndo, child_name: &str) -> Project {
         app.document_state.tabs.push(signex_app::app::TabInfo {
             title: path.file_stem().unwrap().to_string_lossy().into_owned(),
             path: path.clone(),
-            cached_document: None,
             project_id: None,
             kind: signex_app::app::TabKind::Schematic,
         });
