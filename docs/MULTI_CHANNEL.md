@@ -16,6 +16,15 @@ The Compiled Design panel shows the project as it compiles (#1308).
   parser is `signex_types::schematic::ChannelRepeat`.
 - A sheet entry named `Repeat(<net>)` gives one net per channel; the child
   sheet has a port named `<net>`. A plain entry is shared by every channel.
+  Every place that matches entries to ports asks
+  `signex_types::schematic::entry_port_name` (`Repeat(VOUT)` meets `VOUT`):
+  `bad_hier_sheet_pin`, Sync Sheet Pins and both directions of Synchronize
+  Sheet Entries and Ports (#2659). A `Repeat(<net>)` entry and its port
+  `<net>` agree, so a sync keeps the entry and adds no plain `<net>` entry
+  beside it. When the port is renamed, the entry stays a repeat of the new
+  name (`Repeat(VOUT_5V)`); when the port is gone, the generated entry is
+  removed under its written name. Symbol to sheet adds the port `<net>` for
+  a new `Repeat(<net>)` entry.
 - Nothing new is stored: the repeat is the designator text and the entry
   names, so a sheet that only uses multi-channel keeps its format version and
   an older build reads a plain sheet symbol with plain entries.
@@ -205,5 +214,3 @@ list opens it, docked on the left as a tab beside Projects.
   drawn yet (#2658).
 - Ctrl+click on a panel row (open in a new tab): a sheet has one tab, so a
   row click focuses it (#2658).
-- Sheet entry sync does not yet treat `Repeat(<net>)` as matching the port
-  `<net>`; it offers to add `<net>` as a new entry (#2659).

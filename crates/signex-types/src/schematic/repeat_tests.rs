@@ -1,6 +1,6 @@
 use super::{
     ChannelFormatError, ChannelOccurrence, ChannelRepeat, MAX_CHANNELS, RepeatStack, channel_alpha,
-    check_format, repeated_entry_name,
+    check_format, entry_port_name, renamed_entry, repeated_entry_name,
 };
 use crate::project::ChannelNaming;
 
@@ -98,6 +98,25 @@ fn repeated_entry_names() {
     assert_eq!(repeated_entry_name("Repeat()"), None);
     assert_eq!(repeated_entry_name("Repeat(A B)"), None);
     assert_eq!(repeated_entry_name("Repeat(CH, 1, 4)"), None);
+}
+
+/// #2659: a `Repeat(<net>)` entry meets the port `<net>`.
+#[test]
+fn an_entry_meets_its_port() {
+    assert_eq!(entry_port_name(" Repeat( VOUT_3V3 ) "), Some("VOUT_3V3"));
+    assert_eq!(entry_port_name(" EN "), Some("EN"));
+    assert_eq!(entry_port_name("Repeat(A B)"), Some("Repeat(A B)"));
+    assert_eq!(entry_port_name("  "), None);
+}
+
+/// #2659: a renamed port keeps a repeat entry a repeat.
+#[test]
+fn a_renamed_repeat_entry_stays_a_repeat() {
+    assert_eq!(
+        renamed_entry("Repeat(VOUT)", "VOUT_3V3"),
+        "Repeat(VOUT_3V3)"
+    );
+    assert_eq!(renamed_entry("VIN", "VIN_12V"), "VIN_12V");
 }
 
 #[test]
