@@ -38,6 +38,8 @@ pub(super) fn file(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("save_document_as", "Mod+Shift+S")),
         // Greyed when nothing is unsaved; runs the shared Save All flow.
         cmd_item_gated(ctx, cmd("save_all", "Mod+Alt+S")),
+        // #2908: a copy of the project in a new folder; greyed with no project.
+        cmd_item_gated(ctx, cmd("save_project_as", "")),
         SEP,
         // No New Component row here: docs/MENU_BAR.md#file-library
         submenu(ctx, menu_ids::MENU_FILE_LIBRARY, library(ctx)),

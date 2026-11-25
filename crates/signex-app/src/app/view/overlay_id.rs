@@ -110,6 +110,8 @@ pub(crate) enum OverlayId {
     SelectionFilterCustom,
     /// File > New Project (#2232): the setup dialog.
     NewProject,
+    /// File ▸ Save Project As… (#2908).
+    SaveProjectAs,
     /// Tools ▸ Assign Footprints (#2248).
     AssignFootprints,
     /// Tools ▸ Annotation ▸ Number Schematic Sheets (#2247).
@@ -179,7 +181,7 @@ const PRE_BLOCKING: usize = 5;
 /// behaviour change to both the paint stack and the Esc precedence, and
 /// `paint_order_is_exhaustive_and_unique` keeps it honest about covering
 /// every [`OverlayId`] exactly once.
-pub(crate) const PAINT_ORDER: [OverlayId; 83] = [
+pub(crate) const PAINT_ORDER: [OverlayId; 84] = [
     OverlayId::ErrorNotice,
     OverlayId::NetlistIncompletePrompt,
     OverlayId::PrintPreview,
@@ -228,6 +230,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 83] = [
     OverlayId::RemoveDialog,
     // Below the close and quit confirms: they must outrank it for Esc and the lock.
     OverlayId::NewProject,
+    OverlayId::SaveProjectAs,
     OverlayId::ProjectCloseConfirm,
     OverlayId::CreateChildSheetConfirm,
     OverlayId::AppQuitConfirm,
@@ -377,6 +380,7 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::GridProperties
         | OverlayId::SelectionFilterCustom
         | OverlayId::NewProject
+        | OverlayId::SaveProjectAs
         | OverlayId::AssignFootprints
         | OverlayId::SheetNumbering
         | OverlayId::SheetSync
@@ -616,6 +620,7 @@ impl Signex {
                 layers.extend(self.selection_filter_custom_overlay())
             }
             OverlayId::NewProject => layers.extend(self.new_project_overlay()),
+            OverlayId::SaveProjectAs => layers.extend(self.save_project_as_overlay()),
             OverlayId::AssignFootprints => layers.extend(self.assign_footprints_overlay()),
             OverlayId::SheetNumbering => layers.extend(self.sheet_numbering_overlay()),
             OverlayId::SheetSync => layers.extend(self.sheet_sync_overlay()),

@@ -490,6 +490,7 @@ const MENU_SESSION: &[&str] = &[
     "reset_schematic_designators",
     "rubber_stamp_copy",
     "save_document_as",
+    "save_project_as",
     "save_workspace_layout",
     "select_all",
     "select_board_net",

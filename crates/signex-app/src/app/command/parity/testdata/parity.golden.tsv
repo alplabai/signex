@@ -1274,6 +1274,10 @@ save_layer_set	operand_handler	run_operands: named document	gui	origin,settings	
 save_layer_set	refusal_needs	Pcb	gui	active document	routing
 save_layer_set	refusal_needs_operands	needs_operands_reason	gui	none	routing
 save_layer_set	headless_missing_operand	needs `name`	gui	none	routing
+save_project_as	bridge	Project(SaveAs(Requested { project: None }))	gui	active document	gate
+save_project_as	in_window_rewrite	document_window	gui	window	routing
+save_project_as	refusal_needs	OpenProject	gui	active document	routing
+save_project_as	headless_refusal	headless_refusal	gui	none	routing
 save_workspace_layout	bridge	DockLayout(Workspace(Save(Requested)))	gui	settings	handler
 save_workspace_layout	in_window_rewrite	document_window	gui	window	routing
 save_workspace_layout	headless_refusal	headless_refusal	gui	none	routing

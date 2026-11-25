@@ -348,6 +348,8 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("save_document", "Save"),
     ("save_document_as", "SaveAs"),
     ("save_all", "SaveAll"),
+    // #2908: File ▸ Save Project As…, fixture name only.
+    ("save_project_as", "SaveProjectAs"),
     ("print", "Print"),
     ("undo", "Undo"),
     ("redo", "Redo"),

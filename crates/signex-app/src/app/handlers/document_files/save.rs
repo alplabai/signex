@@ -238,10 +238,14 @@ impl Signex {
         if self.document_state.error_notice.is_none() {
             // `context` is the caller's English log label (#2061); the error
             // chain (path line, OS error line) is the card's system block. A
-            // read-only project's refusal says so in its own sentence (#2904).
-            let detail = crate::app::read_only_project::save_failure_detail(context, error);
-            self.document_state.error_notice =
-                Some(crate::app::state::ErrorNotice::save(detail).with_error_chain(error));
+            // read-only project's refusal says so in its own sentence (#2904)
+            // and offers Save Project As… (#2908).
+            let notice = crate::app::read_only_project::save_failure_notice(
+                &self.document_state.projects,
+                context,
+                error,
+            );
+            self.document_state.error_notice = Some(notice);
         }
     }
 

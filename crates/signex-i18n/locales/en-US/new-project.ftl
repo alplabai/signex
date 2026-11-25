@@ -218,3 +218,36 @@ dialog-new-project-setup-unreadable = The project's setup defaults are not reada
 # Placeholders of the name and location fields, shown while they are empty.
 dialog-new-project-name-placeholder = Project name
 dialog-new-project-location-placeholder = Folder the project goes in
+
+# File ▸ Save Project As… (#2908), a copy of an open project in a new
+# folder: the dialog title.
+dialog-save-project-as-title = Save Project As
+
+# Under the title; $project is the open project's name.
+dialog-save-project-as-subtitle = A copy of '{ $project }' in a new folder
+
+# The name the dialog suggests; $name is the open project's name.
+dialog-save-project-as-default-name = { $name } copy
+
+# The dialog's primary button, and its label while the copy is written.
+dialog-save-project-as-save = Save copy
+dialog-save-project-as-saving = Saving…
+
+# What the copy takes.
+dialog-save-project-as-note = The copy takes the project's settings as they are now, and every sheet, board and project library as last saved. The open project is not changed, and the copy opens beside it.
+
+# The open project was written by a newer version and is read-only here.
+# $project is its name; $format is the file version it was written as.
+dialog-save-project-as-read-only = '{ $project }' was written by a newer { -brand-name } ({ $format }). The copy is written in this version's format and can be edited here.
+
+# Documents of the project with unsaved edits when the dialog opened; $count
+# is how many (a whole number).
+dialog-save-project-as-unsaved =
+    { $count ->
+        [one] One document of the project has unsaved edits; the copy takes it as last saved.
+       *[other] { $count } documents of the project have unsaved edits; the copy takes them as last saved.
+    }
+
+# The copy could not be written; $why is the reason the writer gave. Nothing
+# of the copy is left behind and the open project is unchanged.
+dialog-save-project-as-failed = The copy was not saved: { $why }

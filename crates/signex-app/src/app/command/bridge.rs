@@ -387,6 +387,10 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "save_document" => Message::File(FileMsg::Save),
         "save_document_as" => Message::Menu(MenuMessage::SaveAs),
         "save_all" => Message::Menu(MenuMessage::SaveAll),
+        // #2908: the dialog on the active document's project.
+        "save_project_as" => {
+            Message::from(crate::app::SaveProjectAsMsg::Requested { project: None })
+        }
         "select_all" => Message::Selection(selection_request::SelectionRequest::SelectAll),
         // An alias of `select_connection`, the Active Bar's Select > Connection (#1668).
         "select_expand_connection" => {

@@ -519,6 +519,9 @@ pub struct UiState {
     /// The New Project setup dialog, while open (#2232). Nothing is on disk
     /// until its Create. Boxed so a closed dialog costs one pointer (#2412).
     pub new_project: Option<Box<crate::app::NewProjectState>>,
+    /// File ▸ Save Project As…, while open (#2908). Nothing is on disk until
+    /// its Save. Boxed like `new_project`.
+    pub save_project_as: Option<Box<crate::app::SaveProjectAsState>>,
     /// The New PCB or New Schematic setup dialog, while open (#2232).
     /// Nothing is made until its Create. Boxed like `new_project`.
     pub document_setup: Option<Box<crate::app::DocumentSetupState>>,
@@ -895,6 +898,7 @@ mod tests {
         let sizes = [
             ("document_setup", field_size(|ui| &ui.document_setup)),
             ("new_project", field_size(|ui| &ui.new_project)),
+            ("save_project_as", field_size(|ui| &ui.save_project_as)),
             (
                 "project_close_confirm",
                 field_size(|ui| &ui.project_close_confirm),

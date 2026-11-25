@@ -495,6 +495,7 @@ impl Signex {
                 enable_version_control: None,
                 grid_properties: None,
                 new_project: None,
+                save_project_as: None,
                 document_setup: None,
                 setup_profiles: crate::fonts::read_setup_profiles_from(prefs),
                 removed_profile_names: Default::default(),

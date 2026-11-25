@@ -100,6 +100,18 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
+    // #2908: File > Save Project As…, a copy of the project in a new folder
+    // through its dialog.
+    CommandMetadata {
+        id: "save_project_as",
+        category: "file",
+        label: command_ids::CMD_SAVE_PROJECT_AS,
+        menu_label: Some(command_ids::CMD_MENU_SAVE_PROJECT_AS),
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "revert",
         category: "edit",

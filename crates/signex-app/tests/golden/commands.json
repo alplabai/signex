@@ -1690,6 +1690,11 @@
     "category": "view"
   },
   {
+    "id": "save_project_as",
+    "group": "General",
+    "category": "file"
+  },
+  {
     "id": "save_workspace_layout",
     "group": "General",
     "category": "window"

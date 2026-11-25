@@ -337,6 +337,7 @@ save_board_reuse_block	ReuseSource	e6894e598b35f83d
 save_document	SaveTarget	2a52f0b0dbe3f4f7
 save_document_as	SaveAsTarget	b6cfd6e46a78555f
 save_layer_set	Pcb	119d310e454dd5e4
+save_project_as	OpenProject	ee0317ecaf5bfb5b
 save_workspace_layout	-	f2929686b07ef725
 select_all	SelectAllTarget	ac2868db6f01027f
 select_board_net	Pcb	119d310e454dd5e4

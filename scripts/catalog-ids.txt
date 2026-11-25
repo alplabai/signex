@@ -339,6 +339,7 @@ save_board_reuse_block
 save_document
 save_document_as
 save_layer_set
+save_project_as
 save_workspace_layout
 select_all
 select_board_net

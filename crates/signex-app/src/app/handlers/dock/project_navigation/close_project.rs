@@ -617,7 +617,12 @@ impl Signex {
         let Some(state) = self.ui_state.project_close_confirm.take() else {
             return Task::none();
         };
-        if choice == ProjectCloseChoice::Cancel {
+        // Save Project As is answered by `handle_project_close_choice`; here
+        // it closes the prompt like Cancel.
+        if matches!(
+            choice,
+            ProjectCloseChoice::Cancel | ProjectCloseChoice::SaveProjectAs
+        ) {
             return Task::none();
         }
         // Look the project up again by id: the list may have shifted while
@@ -691,7 +696,7 @@ impl Signex {
             return Task::none();
         }
         match choice {
-            ProjectCloseChoice::Cancel => Task::none(),
+            ProjectCloseChoice::Cancel | ProjectCloseChoice::SaveProjectAs => Task::none(),
             ProjectCloseChoice::SaveAll => {
                 // Start every dirty file's write off the UI thread; the
                 // project closes once all of them completed, or stays open
@@ -908,14 +913,20 @@ impl Signex {
         use crate::app::ProjectCloseChoice;
         // A move may have started behind a prompt that was already open; the
         // prompt stays up so the choice can be made again.
-        if !matches!(choice, ProjectCloseChoice::Cancel) && self.hold_quit_while_path_op() {
+        let declines = matches!(
+            choice,
+            ProjectCloseChoice::Cancel | ProjectCloseChoice::SaveProjectAs
+        );
+        if !declines && self.hold_quit_while_path_op() {
             return Task::none();
         }
         let Some(state) = self.ui_state.app_quit_confirm.take() else {
             return Task::none();
         };
         match choice {
-            ProjectCloseChoice::Cancel => Self::decline_quit(),
+            // Save Project As is answered by `handle_app_quit_choice`; here it
+            // declines the quit like Cancel.
+            ProjectCloseChoice::Cancel | ProjectCloseChoice::SaveProjectAs => Self::decline_quit(),
             ProjectCloseChoice::DiscardAll => {
                 // Discard only what the user was shown. An edit made since
                 // (a window that was not locked, a route nobody thought of)

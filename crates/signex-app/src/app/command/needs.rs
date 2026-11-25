@@ -610,6 +610,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "new_pcb_document" | "new_schematic_sheet" | "open_rules" => Needs::OpenProject,
         // #1282: the class dialog edits the project.
         "open_diff_pair_classes" => Needs::OpenProject,
+        // #2908: a copy of the project in a new folder.
+        "save_project_as" => Needs::OpenProject,
         // #2457: the dialog reads the sheets of the board's project.
         "create_rooms_from_sheets" => Needs::PcbInProject,
         "annotate_schematic_quietly" | "force_annotate_all_schematics" => Needs::ActiveSheet,

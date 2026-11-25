@@ -60,6 +60,8 @@ struct OpenOverlays {
     grid_properties_open: bool,
     selection_filter_custom_open: bool,
     new_project_open: bool,
+    /// File ▸ Save Project As… (#2908).
+    save_project_as_open: bool,
     assign_footprints_open: bool,
     update_pcb_open: bool,
     document_setup_open: bool,
@@ -209,6 +211,7 @@ impl OpenOverlays {
             || self.project_close_confirm_open
             || self.create_child_sheet_confirm_open
             || self.new_project_open
+            || self.save_project_as_open
             || self.document_setup_open
             || self.rename_open
             || self.remove_open
@@ -389,6 +392,10 @@ impl OpenOverlays {
             OverlayId::NewProject => self
                 .new_project_open
                 .then(|| Message::from(crate::app::NewProjectMsg::CancelRequested)),
+            // Waits, like Cancel, while the copy is written.
+            OverlayId::SaveProjectAs => self
+                .save_project_as_open
+                .then(|| Message::from(crate::app::SaveProjectAsMsg::CancelRequested)),
             OverlayId::AssignFootprints => self
                 .assign_footprints_open
                 .then(|| Message::from(crate::app::AssignFootprintsMsg::CancelRequested)),
@@ -774,6 +781,7 @@ impl Signex {
             selection_filter_custom_open: self.ui_state.selection_filter_custom.is_some()
                 && !modal_detached(crate::app::state::ModalId::SelectionFilterCustom),
             new_project_open: self.ui_state.new_project.is_some(),
+            save_project_as_open: self.ui_state.save_project_as.is_some(),
             assign_footprints_open: self.ui_state.assign_footprints.is_some(),
             // A headless apply run has no dialog to close.
             update_pcb_open: self.ui_state.update_pcb.as_ref().is_some_and(|s| !s.apply),
@@ -1332,6 +1340,12 @@ mod tests {
             only(|o| o.document_setup_open = true),
             Some(Message::Project(crate::app::ProjectMsg::DocumentSetup(
                 crate::app::DocumentSetupMsg::CancelRequested
+            )))
+        ));
+        assert!(matches!(
+            only(|o| o.save_project_as_open = true),
+            Some(Message::Project(crate::app::ProjectMsg::SaveAs(
+                crate::app::SaveProjectAsMsg::CancelRequested
             )))
         ));
         assert!(matches!(
@@ -1990,6 +2004,7 @@ mod tests {
             grid_properties_open,
             selection_filter_custom_open,
             new_project_open,
+            save_project_as_open,
             assign_footprints_open,
             update_pcb_open,
             document_setup_open,
@@ -2077,6 +2092,7 @@ mod tests {
             }),
             ("grid_properties_open", |o| o.grid_properties_open = true),
             ("new_project_open", |o| o.new_project_open = true),
+            ("save_project_as_open", |o| o.save_project_as_open = true),
             ("assign_footprints_open", |o| {
                 o.assign_footprints_open = true
             }),
