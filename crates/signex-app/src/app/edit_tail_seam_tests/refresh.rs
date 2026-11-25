@@ -148,6 +148,7 @@ fn stale_marker(app: &mut Signex) {
         net_level: false,
         caption: None,
         harness_entry: None,
+        sheet_entry: None,
     }];
 }
 

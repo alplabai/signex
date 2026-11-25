@@ -193,6 +193,18 @@ impl Signex {
         far_side_mismatch(v).map(|(entry, _, _)| entry)
     }
 
+    /// The sheet entry the canvas badges for a harness mismatch with the far
+    /// side: the finding's peer, the entry the harness leaves through
+    /// (decision of 2026-11-25). `None` for any other finding.
+    pub(crate) fn erc_marker_sheet_entry(v: &signex_erc::Violation) -> Option<uuid::Uuid> {
+        if v.rule_id.as_str() != MISMATCH_RULE {
+            return None;
+        }
+        v.peer
+            .filter(|p| p.kind == SelectedKind::SheetPin)
+            .map(|p| p.uuid)
+    }
+
     /// Handle an edit or click of the harness panels; `None` for any other
     /// panel message. Go to answers with the task that opens the sheet.
     pub(super) fn handle_dock_harness_message(
@@ -558,5 +570,37 @@ mod marker_caption_tests {
             .map(|m| m.harness_entry)
             .collect();
         assert_eq!(tinted, [Some(uuid::Uuid::from_u128(11)), None, None]);
+    }
+
+    /// The sheet entry a far-side mismatch names as its peer is the one the
+    /// canvas badges (Caner, 2026-11-25); another rule's peer, or a mismatch
+    /// with no sheet entry, badges nothing.
+    #[test]
+    fn a_far_side_mismatch_marker_carries_its_sheet_entry() {
+        let (mut app, _boot) = Signex::new();
+        let path = std::path::PathBuf::from("mcu.snxsch");
+        let entry = SelectedItem::new(uuid::Uuid::from_u128(21), SelectedKind::SheetPin);
+        let through = |mut v: Violation| {
+            v.peer = Some(entry);
+            v
+        };
+        let findings = vec![
+            through(finding(RuleKind::HarnessEntryMismatch, "far:sensor:CS_ADC")),
+            through(finding(RuleKind::HarnessEntryMismatch, "extra:sensor:CS2")),
+            finding(RuleKind::HarnessEntryMismatch, "definition:CS_ADC"),
+            through(finding(RuleKind::HarnessTypeConflict, "far:sensor:CS_ADC")),
+        ];
+        app.ui_state
+            .erc_violations_by_path
+            .insert(path.clone(), findings);
+        app.refresh_active_erc_from_cache(Some(&path));
+        let badged: Vec<Option<uuid::Uuid>> = app
+            .interaction_state
+            .active_canvas()
+            .erc_markers
+            .iter()
+            .map(|m| m.sheet_entry)
+            .collect();
+        assert_eq!(badged, [Some(entry.uuid), Some(entry.uuid), None, None]);
     }
 }

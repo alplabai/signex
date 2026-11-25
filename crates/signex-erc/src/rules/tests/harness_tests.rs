@@ -150,6 +150,35 @@ fn an_entry_only_the_child_has_is_named() {
     );
 }
 
+/// Every far-side finding names the sheet entry the harness leaves through as
+/// its peer, so the canvas can badge that entry (Caner, 2026-11-25); a
+/// definition finding has no sheet entry and no peer.
+#[test]
+fn a_far_side_finding_names_the_sheet_entry_as_its_peer() {
+    // A paired rename (CS for CS_ADC) and an unpaired extra (CS2).
+    let ctx = with_child(&parent(&["SCK", "CS", "CS2"]), &child(&["SCK", "CS_ADC"]));
+    let entry = ctx.child_sheets[0].pins[0].uuid;
+    let hits = found(&ctx, RuleKind::HarnessEntryMismatch);
+    let tags: Vec<_> = hits.iter().filter_map(|h| h.tag.as_deref()).collect();
+    assert!(tags.iter().any(|t| t.starts_with("far:")), "{tags:?}");
+    assert!(tags.iter().any(|t| t.starts_with("extra:")), "{tags:?}");
+    for hit in &hits {
+        let peer = hit.peer.expect("the sheet entry");
+        assert_eq!(peer.uuid, entry, "{}", hit.message);
+        assert_eq!(peer.kind, SelectedKind::SheetPin);
+    }
+
+    let definitions = [harness_definition("SPI_BUS", &["SCK", "CS_ADC"])];
+    let config = ErcConfig::default().with_harness_definitions(&definitions);
+    let alone = ErcContext::from_snapshot(&child(&["SCK", "CS"]));
+    let definition_hits: Vec<_> = engine::run_all_with_config(&alone, &config)
+        .into_iter()
+        .filter(|d| d.rule_kind == RuleKind::HarnessEntryMismatch)
+        .collect();
+    assert!(!definition_hits.is_empty());
+    assert!(definition_hits.iter().all(|d| d.peer.is_none()));
+}
+
 /// `sensor` passing the harness on (#2657): a port `SPI_BUS` on a harness
 /// wire to the typed entry `SPI_BUS` of the sheet symbol `inner`, no
 /// connector.

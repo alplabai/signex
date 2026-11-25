@@ -69,12 +69,15 @@ fn entries_of(c: &HarnessConnector) -> Vec<(Uuid, String)> {
 }
 
 /// One finding per mismatch, worded `<who> expects entry X; this harness
-/// has Y` (or `lacks it` when nothing stands in its place).
+/// has Y` (or `lacks it` when nothing stands in its place). A far-side
+/// finding names the sheet entry the harness leaves through as its peer, so
+/// the canvas can badge that entry (decision of 2026-11-25).
 fn push_mismatches(
     c: &HarnessConnector,
     who: &str,
     found: Vec<HarnessMismatch>,
     tag: &str,
+    sheet_entry: Option<Uuid>,
     out: &mut Vec<Diagnostic>,
 ) {
     for m in found {
@@ -88,11 +91,19 @@ fn push_mismatches(
             Some(id) => sel(id, SelectedKind::HarnessEntry),
             None => sel(c.uuid, SelectedKind::HarnessConnector),
         };
-        out.push(
-            Diagnostic::new(RuleKind::HarnessEntryMismatch, message, at)
-                .with_primary(primary)
-                .tagged(format!("{tag}:{}", m.expects)),
-        );
+        let finding = Diagnostic::new(RuleKind::HarnessEntryMismatch, message, at)
+            .with_primary(primary)
+            .tagged(format!("{tag}:{}", m.expects));
+        out.push(through_sheet_entry(finding, sheet_entry));
+    }
+}
+
+/// `finding` with the sheet entry it reaches the far side through as its
+/// peer, when it has one.
+fn through_sheet_entry(finding: Diagnostic, sheet_entry: Option<Uuid>) -> Diagnostic {
+    match sheet_entry {
+        Some(pin) => finding.with_peer(sel(pin, SelectedKind::SheetPin)),
+        None => finding,
     }
 }
 
@@ -109,7 +120,7 @@ fn definition_mismatches(
     let entries = entries_of(c);
     let found = harness_mismatches(c.uuid, &entries, &names);
     let paired: Vec<Uuid> = found.iter().filter_map(|m| m.entry).collect();
-    push_mismatches(c, &c.harness_type, found, "definition", out);
+    push_mismatches(c, &c.harness_type, found, "definition", None, out);
     // An entry the definition does not list, with nothing missing to pair.
     for (i, e) in c.entries.iter().enumerate() {
         if names.contains(&e.name) || paired.contains(&e.uuid) {
@@ -157,7 +168,7 @@ fn far_side_mismatches(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
                     .iter()
                     .filter(|l| l.connector == c.uuid)
                     .collect();
-                compare_with_far(c, &near, &far, &symbol.name, out);
+                compare_with_far(c, &near, &far, (&symbol.name, entry.pin), out);
             }
         }
     }
@@ -195,14 +206,16 @@ fn far_leaves(child: &ErcContext, name: &str, depth: usize) -> Option<Vec<Harnes
 /// The leaf paths of `c` against the child's, both ways. A plain entry missing
 /// on one side pairs with a plain extra on the other, as a rename the panel
 /// can offer; a nested path never does, since renaming its entry would move
-/// every leaf under it. What stays unpaired is named on its own.
+/// every leaf under it. What stays unpaired is named on its own. `through`
+/// is the far sheet symbol's name and the sheet entry the harness leaves by.
 fn compare_with_far(
     c: &HarnessConnector,
     near: &[&HarnessLeaf],
     far: &[HarnessLeaf],
-    sheet: &str,
+    through: (&str, Uuid),
     out: &mut Vec<Diagnostic>,
 ) {
+    let (sheet, sheet_entry) = through;
     let near_paths: HashSet<String> = near.iter().map(|l| l.dotted()).collect();
     let far_paths: HashSet<String> = far.iter().map(HarnessLeaf::dotted).collect();
     let mut listed = HashSet::new();
@@ -230,7 +243,8 @@ fn compare_with_far(
     }));
     // The app reads the far side back from the tag
     // (`far:<sheet symbol>:<expected entry>`).
-    push_mismatches(c, sheet, found, &format!("far:{sheet}"), out);
+    let tag = format!("far:{sheet}");
+    push_mismatches(c, sheet, found, &tag, Some(sheet_entry), out);
     for leaf in extra
         .iter()
         .filter(|l| !(l.is_plain() && paired.contains(&l.entry)))
@@ -239,15 +253,14 @@ fn compare_with_far(
         let at = c
             .entry_index(leaf.entry)
             .map_or_else(|| c.tip_point(), |i| c.entry_point(i));
-        out.push(
-            Diagnostic::new(
-                RuleKind::HarnessEntryMismatch,
-                format!("{sheet} has no entry {name}"),
-                at,
-            )
-            .with_primary(sel(leaf.entry, SelectedKind::HarnessEntry))
-            .tagged(format!("extra:{sheet}:{name}")),
-        );
+        let finding = Diagnostic::new(
+            RuleKind::HarnessEntryMismatch,
+            format!("{sheet} has no entry {name}"),
+            at,
+        )
+        .with_primary(sel(leaf.entry, SelectedKind::HarnessEntry))
+        .tagged(format!("extra:{sheet}:{name}"));
+        out.push(through_sheet_entry(finding, Some(sheet_entry)));
     }
 }
 

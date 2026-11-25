@@ -14,6 +14,9 @@ pub struct ErcMarker {
     /// The harness entry a far-side mismatch names, redrawn in the marker's
     /// ink so the entry the caption speaks of stands out (mockup row 152).
     pub harness_entry: Option<uuid::Uuid>,
+    /// The sheet entry a far-side harness mismatch leaves through, badged
+    /// with a "!" in the marker's ink (decision of 2026-11-25).
+    pub sheet_entry: Option<uuid::Uuid>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
