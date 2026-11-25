@@ -30,7 +30,7 @@ pub(crate) use step::{StepContext, make_step_of};
 pub(crate) use assembly::{board_assembly_drawing, export_assembly_svg, side_operand};
 pub(crate) use operands::{
     board_report_bom, board_report_components, board_report_net_length, board_report_netlist,
-    export_board_pdf, export_board_report, export_board_step,
+    export_board_pdf, export_board_report, export_board_step, output_board,
 };
 
 impl From<BoardOutputMsg> for crate::app::Message {

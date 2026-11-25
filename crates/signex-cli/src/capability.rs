@@ -106,11 +106,18 @@ const SAVES: &[&str] = &[
     "save_workspace_layout",
 ];
 
+/// Commands outside the `reports` category that write an export file.
+const EXPORTS: &[&str] = &[
+    "print",
+    // Writes the board's fabrication files into a folder (#2470).
+    "fabrication_outputs",
+];
+
 /// The one capability `command` needs, from its catalog flags.
 pub fn capability_of(command: &CommandMetadata) -> Capability {
     if SAVES.contains(&command.id) {
         Capability::Save
-    } else if command.category == "reports" || command.id == "print" {
+    } else if command.category == "reports" || EXPORTS.contains(&command.id) {
         Capability::Export
     } else if command.category == "library" && command.flags.mutates_doc {
         Capability::LibraryWrite
@@ -198,6 +205,7 @@ mod tests {
             (Capability::Export, "export_board_pdf"),
             (Capability::Export, "export_assembly_svg"),
             (Capability::Export, "export_board_step"),
+            (Capability::Export, "fabrication_outputs"),
         ]);
         assert_eq!(non_default, pinned);
     }

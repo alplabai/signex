@@ -70,6 +70,13 @@ impl Signex {
     }
 }
 
+/// [`Signex::named_output_board`], refused with the same reasons as every
+/// board output command: `fabrication_outputs` (#2470) reads its board so.
+pub(crate) fn output_board(app: &Signex, args: &CommandArgs) -> Result<PathBuf, CommandOutcome> {
+    app.named_output_board(args)
+        .map_err(|reason| refused(reason).0)
+}
+
 /// `board_report_<kind> document=<board>`: the table as JSON.
 fn report_answer(app: &mut Signex, args: &CommandArgs, kind: BoardReportKind) -> Ran {
     let board = match app.named_output_board(args) {

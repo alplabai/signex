@@ -498,6 +498,16 @@ pub const BOARD_STEP: &[Operand] = &[
     required("path", OperandKind::Path),
     optional("schema", OperandKind::Text),
 ];
+/// The Fabrication Outputs dialog's Generate (#2470): which board and the
+/// folder; `kinds` lists the files (the project's ticks when left out),
+/// `name` the file-name stem, `whole_panel` whether a panel is written.
+pub const FABRICATION_OUTPUTS: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("path", OperandKind::Path),
+    optional("kinds", OperandKind::Text),
+    optional("name", OperandKind::Text),
+    optional("whole_panel", OperandKind::Bool),
+];
 /// `add_board_graphic` (#2424): a drawing of `kind` (`line`, `arc`,
 /// `circle`, `rectangle`, `text_frame`) on the board `document` names. A
 /// line, rectangle or text frame takes `start` and `end`; an arc its centre
