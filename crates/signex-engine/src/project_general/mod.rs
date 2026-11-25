@@ -438,3 +438,5 @@ impl ProjectGeneralHistory {
 mod section_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod variant_tests;

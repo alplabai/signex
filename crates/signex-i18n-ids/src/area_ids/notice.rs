@@ -134,4 +134,6 @@ define_ids! {
     NOTICE_EDIT_GROUP_REDO_OUT_OF_REACH = "notice-edit-group-redo-out-of-reach";
     NOTICE_LOAD_NOT_INSTALLED = "notice-load-not-installed";
     NOTICE_LOAD_RESTORE_ENGINE_FAILED = "notice-load-restore-engine-failed";
+    // chrome-copy-help
+    NOTICE_SAVE_FAILED_EDITS_KEPT = "notice-save-failed-edits-kept";
 }

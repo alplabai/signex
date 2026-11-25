@@ -7,8 +7,9 @@
 //! acts on: the footprint rows (Change Footprint, Swap Pins, Swap Gates,
 //! Arrange in Box) for a footprint, the route rows (Lock, Unlock, Gloss
 //! Selected Routes, Add Teardrops) for a track or via, Select Net and
-//! Highlight Net for an object with a net, then Cross Probe, Properties and
-//! Compare with Schematic. Each row runs its catalog command
+//! Highlight Net for an object with a net, then Cross Probe, Properties,
+//! Polygon Manager on a polygon pour (mockup row 178) and Compare with
+//! Schematic. Each row runs its catalog command
 //! and is live exactly when that command is enabled in the menu's window:
 //! on a read-only board every editing row is greyed.
 
@@ -28,7 +29,8 @@ use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 
 /// The board canvas menu for the facts of the menu's window `ctx` and the
-/// project's reuse `blocks`.
+/// project's reuse `blocks`, off a polygon pour.
+#[cfg(test)]
 pub(in crate::app::view::context_menu) fn pcb_canvas_menu_with_blocks(
     i18n: &I18n,
     tid: ThemeId,
@@ -36,6 +38,20 @@ pub(in crate::app::view::context_menu) fn pcb_canvas_menu_with_blocks(
     active_submenu: Option<ContextSubmenu>,
     sc: &CanvasShortcuts,
     blocks: &[String],
+) -> Vec<DropdownEntry<Message>> {
+    board_canvas_menu(i18n, tid, ctx, active_submenu, sc, blocks, false)
+}
+
+/// The board canvas menu; `on_pour` when the right-click is on a polygon
+/// pour, which adds Polygon Manager.
+pub(in crate::app::view::context_menu) fn board_canvas_menu(
+    i18n: &I18n,
+    tid: ThemeId,
+    ctx: &CommandContext,
+    active_submenu: Option<ContextSubmenu>,
+    sc: &CanvasShortcuts,
+    blocks: &[String],
+    on_pour: bool,
 ) -> Vec<DropdownEntry<Message>> {
     let board = ctx.pcb;
     let row = |icon: Option<Handle>, command_id: &'static str| {
@@ -140,6 +156,10 @@ pub(in crate::app::view::context_menu) fn pcb_canvas_menu_with_blocks(
             Some(ic::icon_dd_properties(tid)),
             "edit_selected_object_properties",
         ));
+        // Mockup row 178: a pour opens the Polygon Manager with it ticked.
+        if on_pour {
+            v.push(row(None, "polygon_manager"));
+        }
         // Compare with Schematic (#2462); the empty-area menu stays short.
         v.push(compare_with_schematic_row(i18n, ctx));
     }

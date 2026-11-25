@@ -11,11 +11,11 @@ use std::sync::LazyLock;
 
 use iced::widget::{Space, column, container, svg};
 use iced::{Element, Length, Theme, Widget};
-use signex_i18n::{I18n, UserText, ids, t};
-use signex_widgets::{Label, raw, text};
+use signex_i18n::{I18n, Localized, UserText, ids, t};
+use signex_widgets::text;
 
 use super::*;
-use crate::app::state::{ModalId, OmittedPage, OmittedReason};
+use crate::app::state::{ModalId, OmittedPage, OmittedReason, UnreadableCause};
 use crate::styles::{
     DialogButtonKind, DialogIcon, dialog_body, dialog_button, dialog_footer_split, dialog_head_row,
     dialog_intro_with, dialog_row, dialog_rows,
@@ -157,9 +157,9 @@ fn omitted_row<'a>(
 ) -> Element<'a, Message> {
     let glyph_ink = match page.reason {
         OmittedReason::FileMissing { .. } => crate::styles::ti(tokens.error),
-        OmittedReason::Unreadable(_) | OmittedReason::Stitch(_) => {
-            crate::styles::ti(tokens.warning)
-        }
+        OmittedReason::Unreadable { .. }
+        | OmittedReason::SheetCycle { .. }
+        | OmittedReason::KeyCollision { .. } => crate::styles::ti(tokens.warning),
     };
     let glyph = svg(GLYPH_WARN.clone())
         .width(Length::Fixed(ROW_GLYPH))
@@ -185,8 +185,9 @@ fn omitted_row<'a>(
     ])
 }
 
-/// Why a page is left out, as the list says it.
-fn reason_label(reason: &OmittedReason, i18n: &I18n) -> Label<'static> {
+/// Why a page is left out, as the list says it: every reason from the
+/// catalog (mockup row 28).
+fn reason_label(reason: &OmittedReason, i18n: &I18n) -> Localized {
     match reason {
         OmittedReason::FileMissing {
             placed_by: Some(symbol),
@@ -194,13 +195,136 @@ fn reason_label(reason: &OmittedReason, i18n: &I18n) -> Label<'static> {
             i18n,
             ids::DIALOG_NETLIST_OMITTED_PLACED_BY,
             "symbol" => symbol.as_str()
-        )
-        .into(),
+        ),
         OmittedReason::FileMissing { placed_by: None } => {
-            t!(i18n, ids::DIALOG_NETLIST_OMITTED_FILE_MISSING).into()
+            t!(i18n, ids::DIALOG_NETLIST_OMITTED_FILE_MISSING)
         }
-        // raw: worded in English by the sheet reader or the netlist check
-        // (#2061).
-        OmittedReason::Unreadable(why) | OmittedReason::Stitch(why) => raw(why.clone()),
+        OmittedReason::Unreadable { cause } => t!(i18n, unreadable_label(*cause)),
+        OmittedReason::SheetCycle { parent } => t!(
+            i18n,
+            ids::DIALOG_NETLIST_OMITTED_SHEET_CYCLE,
+            "parent" => parent.as_str()
+        ),
+        OmittedReason::KeyCollision { kept } => t!(
+            i18n,
+            ids::DIALOG_NETLIST_OMITTED_KEY_COLLISION,
+            "kept" => kept.as_str()
+        ),
+    }
+}
+
+/// The catalog line for an unreadable page, by the sheet reader's cause.
+fn unreadable_label(cause: Option<UnreadableCause>) -> signex_i18n::MessageId {
+    match cause {
+        None => ids::DIALOG_NETLIST_OMITTED_UNREADABLE,
+        Some(UnreadableCause::NotARegularFile) => ids::DIALOG_NETLIST_OMITTED_NOT_A_FILE,
+        Some(UnreadableCause::TooLarge) => ids::DIALOG_NETLIST_OMITTED_TOO_LARGE,
+        Some(UnreadableCause::ReadFailed) => ids::DIALOG_NETLIST_OMITTED_READ_FAILED,
+        Some(UnreadableCause::NewerFormat) => ids::DIALOG_NETLIST_OMITTED_NEWER_FORMAT,
+        Some(UnreadableCause::NotASheet) => ids::DIALOG_NETLIST_OMITTED_NOT_A_SHEET,
+        Some(UnreadableCause::Refused) => ids::DIALOG_NETLIST_OMITTED_REFUSED,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn said(reason: OmittedReason) -> String {
+        let i18n = I18n::en_us_ref();
+        reason_label(&reason, i18n)
+            .into_string()
+            .replace(['\u{2068}', '\u{2069}'], "")
+    }
+
+    /// Mockup row 28: the Why column reads every reason from the catalog.
+    #[test]
+    fn every_reason_is_worded_from_the_catalog() {
+        let cause = |c| OmittedReason::Unreadable { cause: Some(c) };
+        assert_eq!(
+            said(cause(UnreadableCause::NewerFormat)),
+            "unreadable (newer format)"
+        );
+        assert_eq!(
+            said(OmittedReason::Unreadable { cause: None }),
+            "unreadable"
+        );
+        assert_eq!(
+            said(OmittedReason::SheetCycle {
+                parent: "U_power/U_loop".into()
+            }),
+            "sheet cycle · re-entered from U_power/U_loop"
+        );
+        assert_eq!(
+            said(OmittedReason::KeyCollision {
+                kept: "/p/x.snxsch".into()
+            }),
+            "same path as /p/x.snxsch on this file system"
+        );
+        let causes = [
+            UnreadableCause::NotARegularFile,
+            UnreadableCause::TooLarge,
+            UnreadableCause::ReadFailed,
+            UnreadableCause::NewerFormat,
+            UnreadableCause::NotASheet,
+            UnreadableCause::Refused,
+        ];
+        for (i, a) in causes.iter().enumerate() {
+            for b in &causes[i + 1..] {
+                assert_ne!(said(cause(*a)), said(cause(*b)), "{a:?} / {b:?}");
+            }
+        }
+    }
+
+    /// Mockup row 28: the laid-out prompt words the Why column from the
+    /// catalog and keeps its two buttons ("Leave two buttons").
+    #[test]
+    fn the_prompt_shows_the_catalog_reasons_and_two_buttons() {
+        let (mut app, _) = Signex::new();
+        let row = |file: &str, reason| OmittedPage {
+            file: file.to_owned(),
+            reason,
+        };
+        app.document_state.netlist_incomplete_prompt =
+            Some(crate::app::state::NetlistIncompletePrompt {
+                save_path: "out.net".into(),
+                messages: Vec::new(),
+                ctx: signex_output::ExportContext {
+                    sheets: Vec::new(),
+                    metadata: signex_output::ProjectMetadata::default(),
+                    netlist: None,
+                    netlist_sheets: Vec::new(),
+                    current_sheet: None,
+                    netlist_placements: Vec::new(),
+                },
+                omitted: vec![
+                    row(
+                        "sensors.snxsch",
+                        OmittedReason::Unreadable {
+                            cause: Some(UnreadableCause::NewerFormat),
+                        },
+                    ),
+                    row(
+                        "loop.snxsch",
+                        OmittedReason::SheetCycle {
+                            parent: "top.snxsch".into(),
+                        },
+                    ),
+                ],
+            });
+        let card = app.netlist_incomplete_prompt_card().expect("the card");
+        let shown: Vec<String> =
+            crate::layout_probe::lay_out_texts(card, iced::Size::new(1200.0, 900.0))
+                .into_iter()
+                .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+                .collect();
+        for want in [
+            "unreadable (newer format)",
+            "sheet cycle · re-entered from top.snxsch",
+            "Export anyway (incomplete)",
+            "Cancel",
+        ] {
+            assert!(shown.iter().any(|s| s == want), "{want:?} in {shown:?}");
+        }
     }
 }

@@ -106,16 +106,11 @@ impl ZoneFills {
 /// shelved pour is left out on purpose and is not listed).
 pub fn zone_fills(board: &PcbBoard) -> ZoneFills {
     let inside = board_area(board);
-    let mut order: Vec<(usize, &Zone)> = board
-        .zones
-        .iter()
-        .enumerate()
-        .filter(|(_, zone)| zone.is_pour() && !zone.is_shelved_pour())
-        .collect();
-    order.sort_by_key(|(index, zone)| (Reverse(zone.priority), *index));
+    let order = pour_fill_order(board);
     let mut fills: Vec<ZoneFill> = Vec::with_capacity(order.len());
     let mut unfilled = Vec::new();
-    for (index, zone) in order {
+    for index in order {
+        let zone = &board.zones[index];
         match fill_pour(board, index, zone, &fills, inside.as_deref()) {
             Ok(fill) => fills.push(fill),
             Err(why) => unfilled.push((index, zone.uuid, why)),
@@ -124,6 +119,21 @@ pub fn zone_fills(board: &PcbBoard) -> ZoneFills {
     fills.sort_by_key(|fill| fill.index);
     unfilled.sort_by_key(|(index, _, _)| *index);
     ZoneFills { fills, unfilled }
+}
+
+/// The pours of `board` in the order they fill, as indices of
+/// `PcbBoard::zones`: a higher `Zone::priority` first, then board order. A
+/// shelved pour does not fill and is left out. The Polygon Manager's Order
+/// column reads it (mockup row 178).
+pub fn pour_fill_order(board: &PcbBoard) -> Vec<usize> {
+    let mut order: Vec<(usize, &Zone)> = board
+        .zones
+        .iter()
+        .enumerate()
+        .filter(|(_, zone)| zone.is_pour() && !zone.is_shelved_pour())
+        .collect();
+    order.sort_by_key(|(index, zone)| (Reverse(zone.priority), *index));
+    order.into_iter().map(|(index, _)| index).collect()
 }
 
 /// The copper area a zone's outline and usable holes enclose; `None` for an

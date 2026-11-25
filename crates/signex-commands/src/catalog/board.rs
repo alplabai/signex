@@ -127,6 +127,19 @@ pub(super) const BOARD: &[CommandMetadata] = &[
         operands: super::operands::DOCUMENT,
         ..CommandMetadata::DEFAULT
     },
+    // Mockup row 178: open the board's Polygon Manager tab, or focus it
+    // (Tools, a pour's right-click, the PCB panel's Polygons mode). No
+    // default key.
+    CommandMetadata {
+        id: "polygon_manager",
+        category: "pcb",
+        label: command_ids::CMD_POLYGON_MANAGER,
+        menu_label: Some(command_ids::CMD_MENU_POLYGON_MANAGER),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "board_shape_from_selection",
         category: "design",

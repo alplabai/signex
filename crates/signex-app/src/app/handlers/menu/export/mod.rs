@@ -7,6 +7,7 @@ use signex_types::schematic::InstancePath;
 
 use crate::app::Signex;
 use crate::app::saved_channel_naming::SavedChannelNaming;
+use crate::app::state::UnreadableCause;
 
 mod bom;
 mod class_styles;
@@ -105,6 +106,8 @@ pub(crate) struct ExportIssues {
     pub(crate) missing_pages: Vec<PathBuf>,
     /// Sheets that exist but could not be read: `(path, why)`.
     pub(crate) unreadable: Vec<(PathBuf, String)>,
+    /// The reader's cause for each `unreadable` path (mockup row 28).
+    pub(crate) unreadable_causes: std::collections::HashMap<PathBuf, UnreadableCause>,
     /// The project's sheet numbering (#1081), not an issue list: its own
     /// problems never stop an export and are not in [`Self::messages`]; the
     /// PDF and print-preview paths log them. `None` for a loose document.
@@ -364,6 +367,7 @@ pub(crate) fn export_metadata_with(
     if let Some(project) = owning_project {
         base.custom_fields
             .insert("project_name".to_string(), project.data.name.clone());
+        base.variant_settings = project.data.variant_settings.clone();
     }
     base.for_sheet(title_block)
 }
@@ -523,6 +527,7 @@ fn build_scope(
             }
         }
         issues.unreadable = set.unreadable.clone();
+        issues.unreadable_causes = set.unreadable_causes.clone();
         let project_dir = owning_project.map(|p| p.dir().to_path_buf());
         let base_dir = project_dir
             .clone()

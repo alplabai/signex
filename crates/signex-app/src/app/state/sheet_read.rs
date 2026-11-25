@@ -36,6 +36,43 @@ impl Default for WalkLimits {
     }
 }
 
+// The cause is plain data, kept in the UI-free core (ADR-0006).
+pub use crate::app::core::unreadable_cause::UnreadableCause;
+
+/// A sheet the reader could not use: the cause, and the reader's English
+/// detail for the Messages panel (its `Display`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SheetUnreadable {
+    pub(crate) cause: UnreadableCause,
+    pub(crate) detail: String,
+}
+
+impl SheetUnreadable {
+    pub(crate) fn new(cause: UnreadableCause, detail: impl Into<String>) -> Self {
+        Self {
+            cause,
+            detail: detail.into(),
+        }
+    }
+
+    /// A parse failure: a newer format token is told from any other error.
+    pub(crate) fn parse_failed(error: &signex_types::format::FormatError, detail: String) -> Self {
+        use signex_types::format::FormatError;
+        use signex_types::format_version::FormatVersionError;
+        let cause = match error {
+            FormatError::Version(FormatVersionError::Newer { .. }) => UnreadableCause::NewerFormat,
+            _ => UnreadableCause::NotASheet,
+        };
+        Self::new(cause, detail)
+    }
+}
+
+impl std::fmt::Display for SheetUnreadable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.detail)
+    }
+}
+
 /// Open `path` for reading; on Unix with `O_NONBLOCK`, so a FIFO or device
 /// swapped in after the metadata check cannot hang the open.
 fn open_nonblocking(path: &Path) -> std::io::Result<std::fs::File> {
@@ -52,30 +89,37 @@ fn open_nonblocking(path: &Path) -> std::io::Result<std::fs::File> {
 /// `child_sheets` filenames of the sheet at `path`. A missing file has none;
 /// a file that is not a regular file, is larger than `max_bytes`, or cannot be
 /// read or parsed returns why.
-pub(crate) fn read_child_refs(path: &Path, max_bytes: u64) -> Result<Vec<String>, String> {
+pub(crate) fn read_child_refs(path: &Path, max_bytes: u64) -> Result<Vec<String>, SheetUnreadable> {
+    use UnreadableCause::{NotARegularFile, ReadFailed, TooLarge};
+    let not_a_file = || SheetUnreadable::new(NotARegularFile, "is not a regular file");
+    let read_failed =
+        |e: std::io::Error| SheetUnreadable::new(ReadFailed, format!("could not be read: {e}"));
     match std::fs::metadata(path) {
         Ok(meta) if meta.is_file() => {}
-        Ok(_) => return Err("is not a regular file".to_string()),
+        Ok(_) => return Err(not_a_file()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(e) => return Err(format!("could not be read: {e}")),
+        Err(e) => return Err(read_failed(e)),
     }
     // The path may have been swapped for a FIFO since the check above, and
     // opening a FIFO that has no writer blocks forever: open without
     // blocking, then decide on the handle that was actually opened.
-    let file = open_nonblocking(path).map_err(|e| format!("could not be read: {e}"))?;
+    let file = open_nonblocking(path).map_err(read_failed)?;
     match file.metadata() {
         Ok(meta) if meta.is_file() => {}
-        Ok(_) => return Err("is not a regular file".to_string()),
-        Err(e) => return Err(format!("could not be read: {e}")),
+        Ok(_) => return Err(not_a_file()),
+        Err(e) => return Err(read_failed(e)),
     }
     // One byte past the limit tells an oversized file from one that fits
     // exactly; the metadata length alone could be stale or a lie.
     let mut text = String::new();
     file.take(max_bytes.saturating_add(1))
         .read_to_string(&mut text)
-        .map_err(|e| format!("could not be read: {e}"))?;
+        .map_err(read_failed)?;
     if text.len() as u64 > max_bytes {
-        return Err(format!("is larger than {max_bytes} bytes"));
+        return Err(SheetUnreadable::new(
+            TooLarge,
+            format!("is larger than {max_bytes} bytes"),
+        ));
     }
     signex_types::format::SnxSchematic::parse(&text)
         .map(|parsed| {
@@ -86,7 +130,7 @@ pub(crate) fn read_child_refs(path: &Path, max_bytes: u64) -> Result<Vec<String>
                 .map(|c| c.filename)
                 .collect()
         })
-        .map_err(|e| format!("could not be parsed: {e}"))
+        .map_err(|e| SheetUnreadable::parse_failed(&e, format!("could not be parsed: {e}")))
 }
 
 #[cfg(test)]
@@ -103,8 +147,26 @@ mod tests {
         // Exactly at the limit is not oversized; it then fails to PARSE.
         let at = read_child_refs(&path, 200).expect_err("not a sheet");
 
-        assert!(over.contains("larger than 199"), "{over}");
-        assert!(at.contains("could not be parsed"), "{at}");
+        assert!(over.detail.contains("larger than 199"), "{over}");
+        assert_eq!(over.cause, UnreadableCause::TooLarge);
+        assert!(at.detail.contains("could not be parsed"), "{at}");
+        assert_eq!(at.cause, UnreadableCause::NotASheet);
+    }
+
+    /// Mockup row 28: a sheet a newer Signex wrote is told from a broken one.
+    #[test]
+    fn a_newer_format_token_is_its_own_cause() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let path = tmp.path().join("new.snxsch");
+        // The input signex-types' `rejects_wrong_format_version` pins as Newer.
+        let text =
+            "format = \"snxsch/99\"\nschematic_id = \"00000000-0000-0000-0000-000000000000\"\n";
+        std::fs::write(&path, text).expect("write");
+
+        let err = read_child_refs(&path, MAX_SHEET_BYTES).expect_err("newer");
+
+        assert_eq!(err.cause, UnreadableCause::NewerFormat, "{err}");
+        assert!(err.detail.starts_with("could not be parsed"), "{err}");
     }
 
     #[test]
@@ -113,7 +175,8 @@ mod tests {
 
         let err = read_child_refs(tmp.path(), MAX_SHEET_BYTES).expect_err("directory");
 
-        assert!(err.contains("not a regular file"), "{err}");
+        assert!(err.detail.contains("not a regular file"), "{err}");
+        assert_eq!(err.cause, UnreadableCause::NotARegularFile);
     }
 
     #[test]
@@ -130,7 +193,8 @@ mod tests {
     fn a_device_is_never_read() {
         let err = read_child_refs(Path::new("/dev/zero"), MAX_SHEET_BYTES).expect_err("device");
 
-        assert!(err.contains("not a regular file"), "{err}");
+        assert!(err.detail.contains("not a regular file"), "{err}");
+        assert_eq!(err.cause, UnreadableCause::NotARegularFile);
     }
 
     #[allow(
@@ -173,6 +237,7 @@ mod tests {
         // come first.
         let err = read_child_refs(&fifo, MAX_SHEET_BYTES).expect_err("fifo");
 
-        assert!(err.contains("not a regular file"), "{err}");
+        assert!(err.detail.contains("not a regular file"), "{err}");
+        assert_eq!(err.cause, UnreadableCause::NotARegularFile);
     }
 }

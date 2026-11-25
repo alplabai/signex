@@ -21,10 +21,11 @@ impl ExportIssues {
     /// twice) are listed once.
     pub(crate) fn omitted_pages(&self) -> Vec<OmittedPage> {
         let mut rows: Vec<OmittedPage> = Vec::new();
-        for (path, why) in &self.unreadable {
+        for (path, _) in &self.unreadable {
+            let cause = self.unreadable_causes.get(path).copied();
             rows.push(OmittedPage {
                 file: file_name(path),
-                reason: OmittedReason::Unreadable(why.clone()),
+                reason: OmittedReason::Unreadable { cause },
             });
         }
         for path in &self.missing_pages {
@@ -33,39 +34,55 @@ impl ExportIssues {
                 reason: OmittedReason::FileMissing { placed_by: None },
             });
         }
-        for issue in &self.stitch {
-            let row = match issue {
-                signex_net::StitchIssue::MissingChild {
-                    sheet_name,
-                    filename,
-                    ..
-                } => {
-                    if self.is_unreadable(filename) {
-                        continue;
-                    }
-                    let placed_by = Some(sheet_name.trim())
-                        .filter(|name| !name.is_empty())
-                        .map(str::to_owned);
-                    OmittedPage {
-                        file: filename.clone(),
-                        reason: OmittedReason::FileMissing { placed_by },
-                    }
-                }
-                signex_net::StitchIssue::SheetCycle { filename, .. } => OmittedPage {
-                    file: filename.clone(),
-                    reason: stitch_reason(issue),
-                },
-                signex_net::StitchIssue::SheetKeyCollision { dropped, .. } => OmittedPage {
-                    file: file_name(Path::new(dropped)),
-                    reason: stitch_reason(issue),
-                },
-                _ => continue,
-            };
-            rows.push(row);
-        }
+        rows.extend(
+            self.stitch
+                .iter()
+                .filter_map(|issue| self.stitch_row(issue)),
+        );
         let mut seen = std::collections::HashSet::new();
         rows.retain(|row| seen.insert(row.clone()));
         rows
+    }
+
+    /// The row a stitch issue adds, `None` for one that leaves the netlist
+    /// whole or a missing child already listed as unreadable.
+    fn stitch_row(&self, issue: &signex_net::StitchIssue) -> Option<OmittedPage> {
+        use signex_net::StitchIssue as I;
+        match issue {
+            I::MissingChild {
+                sheet_name,
+                filename,
+                ..
+            } => {
+                if self.is_unreadable(filename) {
+                    return None;
+                }
+                let placed_by = Some(sheet_name.trim())
+                    .filter(|name| !name.is_empty())
+                    .map(str::to_owned);
+                Some(OmittedPage {
+                    file: filename.clone(),
+                    reason: OmittedReason::FileMissing { placed_by },
+                })
+            }
+            I::SheetCycle {
+                parent_path,
+                filename,
+            } => Some(OmittedPage {
+                file: filename.clone(),
+                reason: OmittedReason::SheetCycle {
+                    parent: parent_path.clone(),
+                },
+            }),
+            // `kept` stays whole: two collisions with the same file names in
+            // different folders are two rows, and a `..`-spelled pair still
+            // reads as two paths.
+            I::SheetKeyCollision { kept, dropped, .. } => Some(OmittedPage {
+                file: file_name(Path::new(dropped)),
+                reason: OmittedReason::KeyCollision { kept: kept.clone() },
+            }),
+            _ => None,
+        }
     }
 
     /// Whether the child reference `filename` names a sheet that exists but
@@ -78,14 +95,6 @@ impl ExportIssues {
                 .iter()
                 .any(|(path, _)| path.ends_with(reference))
     }
-}
-
-/// The stitcher's English line for `issue`, without the "Netlist: " lead the
-/// Messages panel needs and the list does not.
-fn stitch_reason(issue: &signex_net::StitchIssue) -> OmittedReason {
-    let line = crate::app::project_sheets::stitch_issue_message(issue);
-    let reason = line.strip_prefix("Netlist: ").unwrap_or(&line).to_owned();
-    OmittedReason::Stitch(reason)
 }
 
 /// The file name of `path`, or the whole path when it has none.

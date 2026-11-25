@@ -1,6 +1,7 @@
 //! The PCB panel's controls (mockup row 106): mode, filter and chip are panel
 //! state; a net row's click also highlights the net on the board through the
-//! Highlight Net path. Nothing here edits the board.
+//! Highlight Net path. Nothing here edits the board, but the Polygons mode,
+//! whose events the Polygon Manager handles (`handlers/polygon_manager`).
 
 use iced::Task;
 
@@ -10,6 +11,9 @@ use crate::panels::pcb_nets::highlight_toggle;
 
 impl Signex {
     pub(crate) fn handle_pcb_panel(&mut self, msg: PcbPanelMsg) -> Task<Message> {
+        if let PcbPanelMsg::Polygons(event) = msg {
+            return self.handle_polygons(event);
+        }
         let ui = &mut self.document_state.panel_ctx.pcb_panel;
         let previous = ui.selected.clone();
         let is_click = matches!(msg, PcbPanelMsg::NetClicked(_));

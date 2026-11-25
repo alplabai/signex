@@ -673,6 +673,7 @@ fn loaded_project(app: &mut Signex, file: &str, owns_sheet: bool) -> usize {
             sheets,
             variant_definitions: Vec::new(),
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: Vec::new(),
             enable_git: false,
             net_classes: Vec::new(),

@@ -1,5 +1,5 @@
 //! #2424 — the Graphics tools through `Signex::update`: armed by their
-//! command, drawn on the active non-copper layer, each drawing one undo
+//! command, drawn on the active layer (not a keep-out), each drawing one undo
 //! step, previewed on the cursor, their values set in Properties with Tab.
 
 use std::path::Path;
@@ -103,28 +103,31 @@ fn each_graphics_tool_draws_one_undo_step_per_drawing() {
     assert_eq!(live(&app, &path), before, "one undo per drawing");
 }
 
-/// On a copper layer the tools say so and draw nothing; the tool stays
-/// armed and draws once an overlay is active.
+/// Was `a_graphics_tool_draws_nothing_on_copper`. Since Caner's 2026-11-24
+/// decision (#2883) a rectangle on copper is a drawing of copper with no
+/// net; only a keep-out layer draws nothing, the tool staying armed, and
+/// it draws once an overlay is active.
 #[test]
-fn a_graphics_tool_draws_nothing_on_copper() {
+fn a_graphics_tool_draws_on_copper_and_nothing_on_a_keep_out() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_with_board(dir.path());
-    let before = live(&app, &path);
     pick_layer(&mut app, PcbLayer::Copper(CopperLayer::Top));
     run(&mut app, "place_board_rectangle");
     click(&mut app, 3.0, 3.0);
     click(&mut app, 6.0, 6.0);
-    assert_eq!(live(&app, &path), before);
-    let session = app.interaction_state.pcb_tool.as_ref().expect("armed");
-    assert!(session.points.is_empty(), "no corner was taken");
+    assert_eq!(kinds(&app, &path), ["rect"]);
+    assert_eq!(board_of(&app, &path).graphics[0].layer, "TopCopper");
+    let before = live(&app, &path);
     pick_layer(&mut app, PcbLayer::Technical(TechnicalLayer::KeepoutTop));
     click(&mut app, 3.0, 3.0);
     click(&mut app, 6.0, 6.0);
-    assert_eq!(live(&app, &path), before, "nor on a keep-out layer");
+    assert_eq!(live(&app, &path), before, "nothing on a keep-out layer");
+    let session = app.interaction_state.pcb_tool.as_ref().expect("armed");
+    assert!(session.points.is_empty(), "no corner was taken");
     pick_layer(&mut app, OVERLAY);
     click(&mut app, 3.0, 3.0);
     click(&mut app, 6.0, 6.0);
-    assert_eq!(kinds(&app, &path), ["rect"]);
+    assert_eq!(kinds(&app, &path), ["rect", "rect"]);
 }
 
 /// What the next click adds follows the pointer; Esc drops it, then ends
@@ -235,17 +238,19 @@ fn a_placed_drawing_is_edited_in_properties_and_deleted() {
         },
     );
     assert_eq!(board_of(&app, &path).graphics[0].layer, "BottomFab");
+    // A drawing never went on copper here; since #2883 it does, and only a
+    // keep-out is refused.
     panel(
         &mut app,
         PcbPrimitiveMsg::AreaLayerPicked {
             target,
-            layer: PcbLayer::Copper(CopperLayer::Top),
+            layer: PcbLayer::Technical(TechnicalLayer::KeepoutTop),
         },
     );
     assert_eq!(
         board_of(&app, &path).graphics[0].layer,
         "BottomFab",
-        "a drawing never goes on copper"
+        "a drawing never goes on a keep-out"
     );
 
     let _ = app.update(Message::Edit(EditMsg::DeleteSelected));
@@ -257,9 +262,11 @@ fn a_placed_drawing_is_edited_in_properties_and_deleted() {
     assert_eq!(board_of(&app, &path).graphics.len(), 1);
 }
 
-/// A layer picked in the form is the active layer; copper is refused.
+/// A layer picked in the form is the active layer; a keep-out is refused.
+/// Was `the_form_layer_is_the_active_layer_and_copper_is_refused`: copper
+/// takes a drawing since Caner's 2026-11-24 decision (#2883).
 #[test]
-fn the_form_layer_is_the_active_layer_and_copper_is_refused() {
+fn the_form_layer_is_the_active_layer_and_a_keep_out_is_refused() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_with_board(dir.path());
     run(&mut app, "place_board_line");
@@ -270,8 +277,15 @@ fn the_form_layer_is_the_active_layer_and_copper_is_refused() {
     };
     panel(&mut app, pick(fab));
     assert_eq!(app.pcb_layer_view(&path).active(), fab);
-    panel(&mut app, pick(PcbLayer::Copper(CopperLayer::Top)));
-    assert_eq!(app.pcb_layer_view(&path).active(), fab, "copper is refused");
+    panel(
+        &mut app,
+        pick(PcbLayer::Technical(TechnicalLayer::KeepoutTop)),
+    );
+    assert_eq!(
+        app.pcb_layer_view(&path).active(),
+        fab,
+        "a keep-out is refused"
+    );
     click(&mut app, 1.0, 3.0);
     click(&mut app, 4.0, 3.0);
     assert_eq!(board_of(&app, &path).graphics[0].layer, "TopFab");

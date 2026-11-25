@@ -223,6 +223,7 @@ fn a_file_another_sheet_of_the_project_references_is_refused() {
                 .collect(),
             variant_definitions: Vec::new(),
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: Vec::new(),
             enable_git: false,
             net_classes: Vec::new(),

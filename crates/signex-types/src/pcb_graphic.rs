@@ -82,14 +82,14 @@ pub fn text_from_field(field: &str) -> String {
     field.replace("\\n", "\n")
 }
 
-/// Whether a board drawing may go on `layer`: any non-copper layer but the
-/// keep-out layers, whose areas the design rule check reads as rules.
+/// Whether a board drawing may go on `layer`: any layer but the keep-out
+/// layers, whose areas the design rule check reads as rules. On copper a
+/// drawing is copper of no net along its stroke (Caner, 2026-11-24, #2883).
 pub fn takes_board_graphics(layer: PcbLayer) -> bool {
-    !layer.is_copper()
-        && !matches!(
-            layer,
-            PcbLayer::Technical(TechnicalLayer::KeepoutTop | TechnicalLayer::KeepoutBottom)
-        )
+    !matches!(
+        layer,
+        PcbLayer::Technical(TechnicalLayer::KeepoutTop | TechnicalLayer::KeepoutBottom)
+    )
 }
 
 #[cfg(test)]
@@ -117,15 +117,17 @@ mod tests {
         assert_eq!(text_from_field(&text_to_field("a\nb\nc")), "a\nb\nc");
     }
 
+    /// Was `drawings_go_on_non_copper_layers_but_keep_outs`; copper takes a
+    /// drawing since Caner's 2026-11-24 decision (#2883).
     #[test]
-    fn drawings_go_on_non_copper_layers_but_keep_outs() {
+    fn drawings_go_on_every_layer_but_keep_outs() {
         assert!(takes_board_graphics(PcbLayer::Technical(
             TechnicalLayer::SilkscreenTop
         )));
         assert!(takes_board_graphics(PcbLayer::Technical(
             TechnicalLayer::CourtyardBottom
         )));
-        assert!(!takes_board_graphics(PcbLayer::Copper(CopperLayer::Top)));
+        assert!(takes_board_graphics(PcbLayer::Copper(CopperLayer::Top)));
         assert!(!takes_board_graphics(PcbLayer::Technical(
             TechnicalLayer::KeepoutTop
         )));

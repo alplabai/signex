@@ -1,5 +1,5 @@
 //! The schematic Selection Filter from operands (#2417). `set_selection_filters`
-//! and `apply_selection_filter_preset` run the handlers of the SCH Filter
+//! and `apply_selection_filter_preset` run the handlers of the Filter
 //! panel and the Active Bar's filter dropdown, so a CLI or an agent sets the
 //! one filter a click sets. The filter is window state: no document, no undo.
 

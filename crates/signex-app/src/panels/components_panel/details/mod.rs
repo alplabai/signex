@@ -45,6 +45,10 @@ pub struct ComponentDetails {
     pub description: String,
     /// The row binds a footprint (it may still have failed to read).
     pub has_footprint_ref: bool,
+    /// `ComponentRow::is_symbol_unbound` / `is_footprint_unbound` (a nil
+    /// reference counts as none), for the shared preview tiles.
+    pub symbol_unbound: bool,
+    pub footprint_unbound: bool,
     pub symbol: Option<LibSymbol>,
     /// The editor's model of the row's default footprint, built once at load.
     pub footprint: Option<PreviewFootprint>,
@@ -482,6 +486,8 @@ mod tests {
             mpn: String::new(),
             description: String::new(),
             has_footprint_ref: true,
+            symbol_unbound: false,
+            footprint_unbound: false,
             symbol: None,
             footprint: None,
             default_footprint: Some(reference),

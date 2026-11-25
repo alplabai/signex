@@ -1,6 +1,6 @@
-//! The Filter (Graphite mockup #55) and SCH Filter (Graphite mockup #56)
-//! panels: the kind toggles with their counts, the readout, the editor the
-//! Filter panel follows and the SCH Filter presets.
+//! The Filter panel (Graphite mockup #55; mockup rows 40 and 55 retire SCH
+//! Filter into it): the kind toggles with their counts, the readout, the
+//! editor it follows and, on a schematic tab, the presets.
 
 use std::path::PathBuf;
 
@@ -8,7 +8,7 @@ use pcb_geom::PickKind;
 use signex_types::pcb::{PcbBoard, Via, ViaType};
 use signex_types::schematic::{Point, SchematicSheet, Wire};
 
-use super::kinds::bulk_pick;
+use super::kinds::{bulk_pick, toggle_edge, toggle_row};
 use super::{FilterEditor, KindCounts, SchFilterMsg, board_counts};
 use crate::active_bar::{CUSTOM_FILTER_PRESET_LIMIT, CustomFilterPreset, SelectionFilter};
 use crate::app::{Message, Signex, TabInfo, TabKind};
@@ -97,21 +97,19 @@ fn the_sheet_counts_each_kind_by_the_pick_rule() {
 }
 
 #[test]
-fn both_panels_list_the_twelve_kinds_with_their_counts() {
+fn the_filter_panel_lists_the_twelve_kinds_with_their_counts() {
     let app = app_on_sheet();
     let ctx = &app.document_state.panel_ctx;
-    for panel in [PanelKind::Filter, PanelKind::SchFilter] {
-        let shown = texts(panel, ctx);
-        for kind in SelectionFilter::ALL {
-            let label = t_label(ctx, *kind);
-            assert!(shown.contains(&label), "{panel:?}: {label} in {shown:?}");
-        }
-        assert!(shown.iter().any(|t| t == "3"), "{panel:?}: {shown:?}");
-        assert!(
-            shown.iter().filter(|t| *t == "0").count() >= SelectionFilter::ALL.len() - 1,
-            "{panel:?}: {shown:?}"
-        );
+    let shown = texts(PanelKind::Filter, ctx);
+    for kind in SelectionFilter::ALL {
+        let label = t_label(ctx, *kind);
+        assert!(shown.contains(&label), "{label} in {shown:?}");
     }
+    assert!(shown.iter().any(|t| t == "3"), "{shown:?}");
+    assert!(
+        shown.iter().filter(|t| *t == "0").count() >= SelectionFilter::ALL.len() - 1,
+        "{shown:?}"
+    );
 }
 
 fn t_label(ctx: &PanelContext, kind: SelectionFilter) -> String {
@@ -129,14 +127,8 @@ fn the_readout_counts_the_kinds_that_are_on() {
         &mut app,
         SchFilterMsg::KindToggled(SelectionFilter::DrawingObjects),
     );
-    let ctx = &app.document_state.panel_ctx;
-    for panel in [PanelKind::Filter, PanelKind::SchFilter] {
-        let shown = texts(panel, ctx);
-        assert!(
-            shown.iter().any(|t| t == "10 of 12 kinds"),
-            "{panel:?}: {shown:?}"
-        );
-    }
+    let shown = texts(PanelKind::Filter, &app.document_state.panel_ctx);
+    assert!(shown.iter().any(|t| t == "10 of 12 kinds"), "{shown:?}");
 }
 
 #[test]
@@ -346,10 +338,10 @@ fn the_presets_section_names_the_edited_preset_and_its_kinds() {
     // #2873 (Caner, 2026-11-24): the name row belongs to the preset selected
     // for editing, so the preset is clicked first; it used to show for the
     // Properties tab's preset without a click.
-    let idle = texts(PanelKind::SchFilter, &app.document_state.panel_ctx);
+    let idle = texts(PanelKind::Filter, &app.document_state.panel_ctx);
     assert!(!idle.iter().any(|t| t == "Delete"), "{idle:?}");
     send(&mut app, SchFilterMsg::PresetApplied(0));
-    let shown = texts(PanelKind::SchFilter, &app.document_state.panel_ctx);
+    let shown = texts(PanelKind::Filter, &app.document_state.panel_ctx);
     // The section title is upper-cased like every collapsible section.
     for label in [
         "PRESETS",
@@ -366,7 +358,7 @@ fn the_presets_section_names_the_edited_preset_and_its_kinds() {
         "{shown:?}"
     );
     let saved = click(
-        PanelKind::SchFilter,
+        PanelKind::Filter,
         &app.document_state.panel_ctx,
         "Save current",
     );
@@ -374,6 +366,42 @@ fn the_presets_section_names_the_edited_preset_and_its_kinds() {
         saved.as_slice(),
         [PanelMsg::SchFilter(SchFilterMsg::PresetSaved)]
     ));
+}
+
+/// Mockup row 40: Document Options no longer carries a Custom Selection
+/// Filters section; its General section stays.
+#[test]
+fn document_options_has_no_custom_selection_filters_section() {
+    let app = app_with_presets(&["Wiring"]);
+    let shown = texts(PanelKind::Properties, &app.document_state.panel_ctx);
+    assert!(shown.iter().any(|t| t == "GENERAL"), "{shown:?}");
+    for label in [
+        "CUSTOM SELECTION FILTERS",
+        "+ Add Filter",
+        "Preset name",
+        "Wiring",
+    ] {
+        assert!(!shown.iter().any(|t| t == label), "{label} in {shown:?}");
+    }
+}
+
+/// Mockup rows 40 and 55: the presets live in Filter on a schematic tab only;
+/// a board tab and no document show none of them.
+#[test]
+fn the_presets_show_on_a_schematic_tab_only() {
+    let app = app_with_presets(&["Wiring"]);
+    let sheet = texts(PanelKind::Filter, &app.document_state.panel_ctx);
+    assert!(sheet.iter().any(|t| t == "PRESETS"), "{sheet:?}");
+    assert!(sheet.iter().any(|t| t == "Wiring"), "{sheet:?}");
+
+    let board = texts(PanelKind::Filter, &board_ctx(&app));
+    for label in ["PRESETS", "Save current", "Wiring"] {
+        assert!(!board.iter().any(|t| t == label), "{label} in {board:?}");
+    }
+
+    let (empty, _task) = Signex::new();
+    let none = texts(PanelKind::Filter, &empty.document_state.panel_ctx);
+    assert!(!none.iter().any(|t| t == "PRESETS"), "{none:?}");
 }
 
 /// The rename draft lives in the Model: a full panel context rebuild keeps
@@ -395,6 +423,85 @@ fn the_rename_draft_survives_a_panel_context_rebuild() {
     app.interaction_state.custom_filter_presets.truncate(1);
     app.refresh_panel_ctx();
     assert_eq!(app.document_state.panel_ctx.selection_filter.rename, None);
+}
+
+/// Mockup row 55: the first kind reads "Components", not "Parts".
+#[test]
+fn the_first_kind_reads_components() {
+    let app = app_on_sheet();
+    let shown = texts(PanelKind::Filter, &app.document_state.panel_ctx);
+    assert!(shown.iter().any(|t| t == "Components"), "{shown:?}");
+    assert!(!shown.iter().any(|t| t == "Parts"), "{shown:?}");
+}
+
+/// Mockup row 55: an on kind keeps the solid hairline; an off kind has no
+/// solid border and a dashed outline in the faded hairline colour, its
+/// dash sized from the body text.
+#[test]
+fn an_off_kind_trades_its_hairline_for_a_dashed_outline() {
+    use crate::styles::{TypeScale, dimmed, ti};
+    use signex_types::theme::{ThemeId, theme_tokens};
+    for &id in ThemeId::BUILTINS {
+        let tokens = theme_tokens(id);
+        let line = ti(tokens.border);
+        assert_eq!(toggle_edge(&tokens, true), (line, None), "{id:?}");
+        let (solid, dashed) = toggle_edge(&tokens, false);
+        assert_eq!(solid, iced::Color::TRANSPARENT, "{id:?}");
+        let dashed = dashed.unwrap_or_else(|| panic!("{id:?}: an off kind is not dashed"));
+        assert_eq!(dashed.color, dimmed(line), "{id:?}");
+        let body = TypeScale::DEFAULT.body;
+        assert!(dashed.dash.iter().all(|d| *d > 0.0 && *d < body), "{id:?}");
+    }
+}
+
+/// How often the colour changes along the top pixel row of a drawn toggle,
+/// over its middle half (clear of the rounded corners).
+fn top_edge_changes(app: &Signex, on: bool) -> usize {
+    let ctx = &app.document_state.panel_ctx;
+    let msg = PanelMsg::SchFilter(SchFilterMsg::KindToggled(SelectionFilter::Wires));
+    let row = toggle_row(ctx, SelectionFilter::Wires, on, Some(3), msg);
+    let width = 240usize;
+    let window = iced::Size::new(width as f32, 40.0);
+    let pixels = crate::layout_probe::draw_pixels(row, window);
+    let rgb = |x: usize| &pixels[x * 4..x * 4 + 3];
+    (width / 4..width * 3 / 4)
+        .filter(|&x| {
+            let step: u32 = rgb(x)
+                .iter()
+                .zip(rgb(x + 1))
+                .map(|(a, b)| u32::from(a.abs_diff(*b)))
+                .sum();
+            step > 8
+        })
+        .count()
+}
+
+/// Mockup row 55, as drawn: the on toggle's top edge is one solid line, the
+/// off toggle's breaks into dashes.
+#[test]
+fn an_off_kind_is_drawn_with_a_dashed_edge() {
+    let app = app_on_sheet();
+    assert_eq!(top_edge_changes(&app, true), 0, "solid edge");
+    let dashes = top_edge_changes(&app, false);
+    assert!(dashes >= 6, "{dashes} colour changes along the dashed edge");
+}
+
+/// The dashed outline over an off kind takes no input: its toggle still
+/// turns it back on.
+#[test]
+fn an_off_kind_still_toggles_through_its_dashed_outline() {
+    let mut app = app_on_sheet();
+    send(&mut app, SchFilterMsg::NonePicked);
+    let wires = click(PanelKind::Filter, &app.document_state.panel_ctx, "Wires");
+    assert!(
+        matches!(
+            wires.as_slice(),
+            [PanelMsg::SchFilter(SchFilterMsg::KindToggled(
+                SelectionFilter::Wires
+            ))]
+        ),
+        "{wires:?}"
+    );
 }
 
 // ---- #2873: presets are edited in place ----
@@ -439,7 +546,7 @@ fn preset_kinds(app: &Signex, idx: usize) -> Vec<SelectionFilter> {
         .clone()
 }
 
-/// Every way a preset chip is clicked: SCH Filter and the Active Bar
+/// Every way a preset chip is clicked: the Filter panel and the Active Bar
 /// dropdown.
 fn preset_clicks(idx: usize) -> [Message; 2] {
     use crate::active_bar::ActiveBarMsg;
@@ -462,7 +569,7 @@ fn a_preset_click_applies_it_and_selects_it_for_editing() {
         );
         let ctx = &app.document_state.panel_ctx;
         assert_eq!(ctx.selection_filter.editing, Some(1));
-        let shown = texts(PanelKind::SchFilter, ctx);
+        let shown = texts(PanelKind::Filter, ctx);
         assert!(shown.iter().any(|t| t == "Editing Logic"), "{shown:?}");
         let filter = texts(PanelKind::Filter, ctx);
         assert!(filter.iter().any(|t| t == "Editing Logic"), "{filter:?}");
@@ -546,7 +653,7 @@ fn all_none_or_a_second_click_leave_editing() {
         if second_click {
             assert_eq!(app.interaction_state.selection_filters, before, "{label}");
         }
-        let shown = texts(PanelKind::SchFilter, &app.document_state.panel_ctx);
+        let shown = texts(PanelKind::Filter, &app.document_state.panel_ctx);
         assert!(!shown.iter().any(|t| t.starts_with("Editing")), "{label}");
         let had = app
             .interaction_state
@@ -588,11 +695,7 @@ fn the_name_field_renames_and_delete_removes_the_selected_preset() {
         Some(0)
     );
     assert_eq!(app.interaction_state.custom_filter_presets[0].name, "Power");
-    let deleted = click(
-        PanelKind::SchFilter,
-        &app.document_state.panel_ctx,
-        "Delete",
-    );
+    let deleted = click(PanelKind::Filter, &app.document_state.panel_ctx, "Delete");
     assert!(
         matches!(
             deleted.as_slice(),

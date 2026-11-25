@@ -52,18 +52,33 @@ impl Signex {
         let label = self
             .library
             .stock_primitive_label(&path, kind, self.identity_fold_for(&path));
+        // The preselect is fixed now, so a copy finishing while the dialog
+        // is open cannot move the radio (mockup row 134).
+        let selected = self
+            .library
+            .stock_copy_choice(None)
+            .map(|(root, _)| root.to_path_buf());
         self.library.stock_copy = Some(StockCopyState {
             source: path,
             kind,
             label,
             previous_unavailable: self.library.stock_copy_target.clone(),
             error: None,
+            selected,
         });
         Task::none()
     }
 
     pub(super) fn handle_stock_copy(&mut self, msg: StockCopyMsg) -> Task<Message> {
         match msg {
+            // Selecting only moves the radio; the copy waits for the
+            // footer's Copy to <library> (mockup row 134).
+            StockCopyMsg::TargetSelected(root) => {
+                if let Some(state) = self.library.stock_copy.as_mut() {
+                    state.selected = Some(root);
+                }
+                Task::none()
+            }
             StockCopyMsg::TargetPicked(root) => self.handle_stock_copy_target_picked(root),
             StockCopyMsg::NewLibraryRequested => {
                 new_library_dialog(self.ui_state.io.picker.clone(), &self.ui_state.i18n)

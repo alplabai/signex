@@ -1,12 +1,15 @@
 //! The range-filter bar both surfaces draw. Pure: it reads the model and
 //! turns interaction into [`RangeFilterMsg`], mapped by the caller.
 
-use signex_widgets::dropdown_style::GraphiteDropdown as _;
+use signex_widgets::chevron::chevron;
+use signex_widgets::dropdown_style::{
+    DropdownLook, FIELD_RADIUS, FIELD_TEXT_SIZE, GraphiteDropdown as _,
+};
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use iced::widget::{Row, Widget, column, container, pick_list, row};
-use iced::{Element, Length};
+use iced::{Background, Border, Element, Length};
 use signex_i18n::{I18n, UserText, ids, t};
 use signex_library::RangeOp;
 use signex_types::quantity::{SiPrefix, Unit};
@@ -131,6 +134,40 @@ pub(crate) fn range_filter_bar<'a, M: Clone + 'a>(
         bar = bar.push(editor);
     }
     Some(bar.boxed())
+}
+
+/// "Add range filter…" when no listed part has a measurement column, so the
+/// search row keeps its shape (mockup row 129). A drawn look-alike of the
+/// Graphite field with its text and chevron in the disabled ink, and no
+/// event handling: an inert `pick_list` would still open on a click and
+/// swallow the next press anywhere to close.
+pub(crate) fn range_filter_add_unavailable<'a, M: 'a>(
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, M> {
+    let look = DropdownLook::of(tokens);
+    let ink = crate::styles::tokens::disabled_text(tokens);
+    let face = row![
+        text(t!(i18n, ids::LIBRARY_RANGE_FILTER_ADD))
+            .size(FIELD_TEXT_SIZE)
+            .color(ink),
+        chevron(true, FIELD_TEXT_SIZE, ink),
+    ]
+    .spacing(SP.s)
+    .align_y(iced::Alignment::Center);
+    container(face)
+        .padding(SP.s)
+        .style(move |_: &iced::Theme| container::Style {
+            background: Some(Background::Color(look.field)),
+            border: Border {
+                width: 1.0,
+                radius: FIELD_RADIUS.into(),
+                color: look.line,
+                ..Border::default()
+            },
+            ..container::Style::default()
+        })
+        .boxed()
 }
 
 /// The text of an applied filter's chip: "Value ≥ 1k Ω", "Resistance

@@ -223,11 +223,12 @@ Tools/Repair Pin Junctions	item	Repair Pin Junctions	-	-	RepairPinJunctions	0100
 Tools/Library Editor	item	Library Editor	-	-	OpenLibraryEditor	01000000	cmd:open_library_browser
 Tools/---	separator	-	-	-	-	-	-
 Tools/Design Rule Check	item	Design Rule Check	-	-	RunDrc	01100000	cmd:run_drc
-Tools/DRC Results	item	DRC Results	-	-	OpenDrcPanel	01100000	cmd:open_drc_panel
+Tools/DRC	item	DRC	-	-	OpenDrcPanel	01100000	cmd:open_drc_panel
 Tools/Net Classes	item	Net Classes	-	-	OpenNetClassesPanel	01100000	cmd:open_net_classes_panel
 Tools/Re-Annotate Board...	item	Re-Annotate Board...	-	-	ReannotateBoard	01100000	cmd:reannotate_board
 Tools/Repour Selected	item	Repour Selected	-	-	RepourSelected	01100000	cmd:repour_selected
 Tools/Repour All	item	Repour All	-	-	RepourAll	01100000	cmd:repour_all
+Tools/Polygon Manager...	item	Polygon Manager...	-	-	PolygonManager	01100000	cmd:polygon_manager
 Tools/---	separator	-	-	-	-	-	-
 Tools/Via Stitching	item	Via Stitching	-	-	StitchVias	01100000	cmd:stitch_vias
 Tools/Add Teardrops	item	Add Teardrops	-	-	AddTeardrops	01100000	cmd:add_teardrops
@@ -259,3 +260,4 @@ Help/Report an Issue	item	Report an Issue	-	-	ReportIssue	11111111	always
 Help/Open Sample Project	item	Open Sample Project	-	-	OpenSampleProject	11111111	always
 Help/---	separator	-	-	-	-	-	-
 Help/Keyboard Shortcuts	item	Keyboard Shortcuts	show_current_command_hotkeys	F1	OpenKeyboardShortcuts	11111111	always
+Help/Show Welcome Tips	item	Show Welcome Tips	-	-	OpenWelcomeTips	11111111	always

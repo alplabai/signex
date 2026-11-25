@@ -508,6 +508,7 @@ fn project_with(classes: Vec<NetClass>) -> LoadedProject {
             sheets: Vec::new(),
             variant_definitions: Vec::new(),
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: Vec::new(),
             enable_git: false,
             net_classes: classes,

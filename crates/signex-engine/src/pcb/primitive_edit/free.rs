@@ -11,6 +11,7 @@ use signex_types::pcb_free::free_pad_frame;
 use signex_types::pcb_layer::PcbLayer;
 use uuid::Uuid;
 
+use super::dimension_style::{DimensionStyleEdit, apply_style};
 use super::pad::{PadEdit, apply as apply_pad};
 use super::{PrimitiveEditRefusal, finite};
 use crate::pcb::{BoardCommand, BoardItem};
@@ -181,7 +182,7 @@ pub fn apply_text(text: &mut BoardText, edit: &TextEdit) -> Result<(), Primitive
 }
 
 /// One field of the selected dimensions, set to an absolute value.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum DimensionEdit {
     StartX(f64),
     StartY(f64),
@@ -192,10 +193,11 @@ pub enum DimensionEdit {
     TextHeight(f64),
     Precision(u8),
     Layer(PcbLayer),
+    /// A field of its look (#2868).
+    Style(DimensionStyleEdit),
 }
 
-/// The most decimals a dimension shows.
-pub const DIMENSION_MAX_PRECISION: u8 = 6;
+pub use signex_types::pcb_dimension::DIMENSION_MAX_PRECISION;
 
 /// The command setting `edit` on every dimension in `dimensions`.
 pub fn dimension_edit_command(
@@ -204,7 +206,9 @@ pub fn dimension_edit_command(
     edit: DimensionEdit,
 ) -> Result<Option<BoardCommand>, PrimitiveEditRefusal> {
     let found = find_all(&board.free.dimensions, dimensions, |d| d.uuid)?;
-    replace_each(found, BoardItem::Dimension, |d| apply_dimension(d, edit))
+    replace_each(found, BoardItem::Dimension, |d| {
+        apply_dimension(d, edit.clone())
+    })
 }
 
 /// `edit` applied to `dimension`.
@@ -224,6 +228,7 @@ pub fn apply_dimension(
         DimensionEdit::Precision(_) => return Err(PrimitiveEditRefusal::OutOfRange),
         // Any layer, copper included (Caner, 2026-11-21).
         DimensionEdit::Layer(layer) => dimension.layer = pcb_layer_token(layer),
+        DimensionEdit::Style(edit) => apply_style(dimension, &edit)?,
     }
     if dimension.start == dimension.end {
         return Err(PrimitiveEditRefusal::NoLength);

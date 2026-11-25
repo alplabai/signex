@@ -39,8 +39,10 @@ impl DocumentKey {
     pub(crate) fn of(tab: &TabInfo) -> Option<Self> {
         match &tab.kind {
             TabKind::Schematic => Some(Self::Schematic(tab.path.clone())),
-            // A Layer Stack tab edits, saves and undoes its board.
-            TabKind::Pcb | TabKind::LayerStack => Some(Self::Pcb(tab.path.clone())),
+            // A board page tab edits, saves and undoes its board.
+            TabKind::Pcb | TabKind::LayerStack | TabKind::PolygonManager => {
+                Some(Self::Pcb(tab.path.clone()))
+            }
             TabKind::SymbolEditor(path) => Some(Self::Symbol(path.clone())),
             // A Pin table tab edits, saves and undoes its symbol.
             TabKind::PinTable => Some(Self::Symbol(tab.path.clone())),
@@ -50,8 +52,12 @@ impl DocumentKey {
                 ce.table.clone(),
                 ce.row_id,
             ))),
-            TabKind::Project(id) | TabKind::Rules(id) => Some(Self::Project(*id)),
+            TabKind::Project(id) | TabKind::Rules(id) | TabKind::VariantManager(id) => {
+                Some(Self::Project(*id))
+            }
             TabKind::LibraryBrowser(_) => None,
+            // Read-only fabrication files: nothing to save or undo.
+            TabKind::GerberViewer => None,
         }
     }
 }

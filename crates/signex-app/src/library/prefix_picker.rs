@@ -1,7 +1,8 @@
 //! The SI-prefix picker of a typed measurement editor.
 //!
-//! A measurement slot is a number-only field, this picker and the unit.
-//! Users never type a prefix: the picker offers the unit's own prefixes
+//! A measurement slot is a number field, this picker and the unit. Only a
+//! `k`, `M` or `u` typed at the end of the number also picks a prefix
+//! (mockup row 139); otherwise the picker offers the unit's own prefixes
 //! ([`SiPrefix::all_for`]) and is hidden for units that take none
 //! (`%`, `ppm/C`, `V/us`, `AWG`).
 

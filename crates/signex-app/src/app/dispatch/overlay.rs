@@ -680,11 +680,7 @@ impl Signex {
     pub(crate) fn dispatch_erc_message(&mut self, msg: ErcMsg) -> Task<Message> {
         match msg {
             ErcMsg::Run => {
-                let close_task = if self.ui_state.erc_dialog_open {
-                    self.handle_close_erc_dialog()
-                } else {
-                    Task::none()
-                };
+                let close_task = self.close_erc_dialog_for_run();
                 let task = self.handle_run_erc();
                 let finish = self.finish_update();
                 Task::batch([close_task, finish, task])
@@ -794,8 +790,17 @@ impl Signex {
             | EnableVersionControlMsg::ToggleItem(_)
             | EnableVersionControlMsg::AllTicked
             | EnableVersionControlMsg::CommitMessageChanged(_)
-            | EnableVersionControlMsg::CommitEverySaveToggled) => {
+            | EnableVersionControlMsg::CommitEverySaveToggled
+            | EnableVersionControlMsg::AuthorNameChanged(_)
+            | EnableVersionControlMsg::AuthorEmailChanged(_)) => {
                 self.edit_enable_version_control(edit);
+                Task::none()
+            }
+            EnableVersionControlMsg::AuthorProbed {
+                project_dir,
+                has_identity,
+            } => {
+                self.handle_enable_version_control_author_probed(&project_dir, has_identity);
                 Task::none()
             }
             EnableVersionControlMsg::Confirm => self.handle_enable_version_control_confirm(),

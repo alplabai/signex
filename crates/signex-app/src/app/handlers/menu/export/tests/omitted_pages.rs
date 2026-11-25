@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use super::{app_with_missing_child, open_with, sheet_with_net, workspace};
 use crate::app::handlers::menu::export::ExportIssues;
-use crate::app::state::{OmittedPage, OmittedReason};
+use crate::app::state::{OmittedPage, OmittedReason, UnreadableCause};
 
 fn missing(file: &str, placed_by: Option<&str>) -> OmittedPage {
     OmittedPage {
@@ -34,8 +34,9 @@ fn every_hole_is_one_row_and_a_complete_netlist_problem_is_none() {
                 sheet_name: "U_usb".into(),
                 filename: "usb.snxsch".into(),
             },
+            // A non-root parent: the stitcher names it by its symbol chain.
             signex_net::StitchIssue::SheetCycle {
-                parent_path: "a.snxsch".into(),
+                parent_path: "U_power/U_loop".into(),
                 filename: "loop.snxsch".into(),
             },
             signex_net::StitchIssue::SheetKeyCollision {
@@ -51,6 +52,11 @@ fn every_hole_is_one_row_and_a_complete_netlist_problem_is_none() {
             PathBuf::from("/p/sensors.snxsch"),
             "could not be read (newer format)".to_owned(),
         )],
+        unreadable_causes: [(
+            PathBuf::from("/p/sensors.snxsch"),
+            UnreadableCause::NewerFormat,
+        )]
+        .into(),
         ..ExportIssues::default()
     };
 
@@ -67,25 +73,68 @@ fn every_hole_is_one_row_and_a_complete_netlist_problem_is_none() {
         ],
         "{rows:#?}"
     );
+    // Mockup row 28: every reason is structured, so the prompt words it.
     assert_eq!(
         rows[0].reason,
-        OmittedReason::Unreadable("could not be read (newer format)".to_owned())
+        OmittedReason::Unreadable {
+            cause: Some(UnreadableCause::NewerFormat)
+        }
     );
     assert_eq!(rows[1], missing("notes.snxsch", None));
     assert_eq!(rows[2], missing("usb.snxsch", Some("U_usb")));
-    match (&rows[3].reason, &rows[4].reason) {
-        (OmittedReason::Stitch(cycle), OmittedReason::Stitch(collision)) => {
-            assert!(
-                cycle.starts_with("sheet cycle") && cycle.contains("loop.snxsch"),
-                "the stitch line, without its Messages lead: {cycle}"
-            );
-            assert!(
-                collision.contains("/p/X.snxsch") && !collision.starts_with("Netlist:"),
-                "{collision}"
-            );
+    assert_eq!(
+        rows[3].reason,
+        OmittedReason::SheetCycle {
+            parent: "U_power/U_loop".into()
+        },
+        "the whole chain, not its last name"
+    );
+    assert_eq!(
+        rows[4].reason,
+        OmittedReason::KeyCollision {
+            kept: "/p/x.snxsch".into()
         }
-        other => panic!("cycle and collision are stitch reasons: {other:?}"),
-    }
+    );
+}
+
+/// Two collisions with the same file names in different folders are two
+/// rows: the kept sheet's whole path tells them apart.
+#[test]
+fn collisions_in_two_folders_are_two_rows() {
+    let collision = |dir: &str| signex_net::StitchIssue::SheetKeyCollision {
+        key: format!("{dir}/x.snxsch"),
+        kept: format!("/p/{dir}/x.snxsch"),
+        dropped: format!("/p/{dir}/X.snxsch"),
+    };
+    let issues = ExportIssues {
+        stitch: vec![collision("a"), collision("b")],
+        ..ExportIssues::default()
+    };
+
+    let rows = issues.omitted_pages();
+
+    assert_eq!(rows.len(), 2, "{rows:#?}");
+    assert_eq!(
+        rows[1].reason,
+        OmittedReason::KeyCollision {
+            kept: "/p/b/x.snxsch".into()
+        }
+    );
+}
+
+#[test]
+fn an_unreadable_sheet_without_a_cause_is_still_one_row() {
+    let issues = ExportIssues {
+        unreadable: vec![(PathBuf::from("/p/odd.snxsch"), "garbled".to_owned())],
+        ..ExportIssues::default()
+    };
+    assert_eq!(
+        issues.omitted_pages(),
+        [OmittedPage {
+            file: "odd.snxsch".into(),
+            reason: OmittedReason::Unreadable { cause: None },
+        }]
+    );
 }
 
 #[test]
@@ -151,8 +200,20 @@ fn a_child_that_will_not_parse_is_one_unreadable_row_not_also_missing() {
 
     assert_eq!(rows.len(), 1, "{rows:#?}");
     assert_eq!(rows[0].file, "child.snxsch");
-    assert!(
-        matches!(&rows[0].reason, OmittedReason::Unreadable(why) if why.contains("could not be parsed")),
+    // The sheet reader's cause reaches the row.
+    assert_eq!(
+        rows[0].reason,
+        OmittedReason::Unreadable {
+            cause: Some(UnreadableCause::NotASheet)
+        },
         "{rows:#?}"
+    );
+    assert!(
+        issues
+            .unreadable
+            .iter()
+            .any(|(_, why)| why.contains("could not be parsed")),
+        "the Messages text keeps the reader's detail: {:?}",
+        issues.unreadable
     );
 }

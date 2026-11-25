@@ -113,7 +113,9 @@ fn rename_is_refused_when_other_projects_cannot_be_ruled_out() {
     app.refresh_panel_ctx();
     let key = key(&app, &["victim.snxsch"]);
     let opened = app.handle_project_tree_action(ProjectTreeAction::OpenRenameDialog(key));
-    assert_eq!(opened.units(), 0);
+    // Only the field's focus and select-all (mockup row 23), no other work.
+    let focus = app.focus_rename_field_once_open(crate::app::state::ModalId::RenameDialog);
+    assert_eq!(opened.units(), focus.units());
     app.ui_state.rename_dialog.as_mut().expect("opens").buffer = "moved.snxsch".to_string();
 
     let submitted = app.handle_rename_submit();

@@ -196,3 +196,105 @@ fn a_size_that_does_not_save_is_refused_before_writing() {
     });
     assert!(SnxPcb::new(board).write_string().is_err());
 }
+
+fn finished_board() -> PcbBoard {
+    use crate::pcb_stack::{BoardFinish, FinishColor, FinishSides, MaskGloss, SurfaceFinish};
+    let mut board = board();
+    let stack = board.stackup.as_mut().unwrap();
+    let mut finish = BoardFinish {
+        surface: SurfaceFinish::ImmersionTin,
+        ..BoardFinish::default()
+    };
+    finish.mask.color = FinishColor::Black;
+    finish.mask.gloss = MaskGloss::Matte;
+    finish.mask.over_laminate_mm = 0.03;
+    finish.silkscreen.sides = FinishSides::Top;
+    stack.finish = Some(finish);
+    board
+}
+
+/// Mockup row 176: the finish is saved with the board under `snxpcb/1.10`
+/// and reads back unchanged, stable on a resave.
+#[test]
+fn the_board_finish_round_trips_under_its_token() {
+    let board = finished_board();
+    let (text, back) = round_trip(&board);
+    assert!(
+        text.starts_with(&format!("format = \"{SNXPCB_FORMAT_V1_10}\"")),
+        "{text}"
+    );
+    assert!(text.contains("[stackup.finish]"), "{text}");
+    assert!(text.contains("surface = \"immersion_tin\""), "{text}");
+    assert_eq!(back.stackup, board.stackup);
+    assert!(back.unknown.stackup.is_empty(), "the finish is not foreign");
+    let parsed = SnxPcb::parse(&text).unwrap();
+    assert!(!parsed.is_from_newer_minor(), "it opens for editing");
+    assert_eq!(parsed.write_string().unwrap(), text, "stable on a resave");
+}
+
+/// Mockup row 177: a row's Df copied from the library is saved under
+/// `snxpcb/1.10`; without a finish or a Df the board keeps its token and
+/// bytes.
+#[test]
+fn a_row_loss_tangent_round_trips_under_the_materials_token() {
+    let plain = board();
+    let (plain_text, _) = round_trip(&plain);
+    assert!(!plain_text.contains("loss_tangent") && !plain_text.contains("[stackup.finish]"));
+    assert!(plain_text.starts_with(&format!("format = \"{SNXPCB_FORMAT_V1}\"")));
+
+    let mut with_df = plain;
+    with_df.stackup.as_mut().unwrap().layers[4].loss_tangent = 0.0037;
+    let (text, back) = round_trip(&with_df);
+    assert!(
+        text.starts_with(&format!("format = \"{SNXPCB_FORMAT_V1_10}\"")),
+        "{text}"
+    );
+    assert!(text.contains("loss_tangent = 0.0037"), "{text}");
+    assert_eq!(back.stackup, with_df.stackup);
+
+    with_df.stackup.as_mut().unwrap().layers[4].loss_tangent = 0.0;
+    assert_eq!(SnxPcb::new(with_df).write_string().unwrap(), plain_text);
+}
+
+/// A finish on a file without rows finishes the derived stack.
+#[test]
+fn a_finish_without_rows_finishes_the_derived_stack() {
+    let base = SnxPcb::new(empty_board()).write_string().unwrap();
+    let text = format!("{base}\n[stackup.finish]\nsurface = \"osp\"\n");
+    let read = SnxPcb::parse(&text).unwrap().board;
+    let stack = read.stackup.as_ref().expect("the finish is kept");
+    let finish = stack.finish.as_ref().expect("finish");
+    assert_eq!(finish.surface, crate::pcb_stack::SurfaceFinish::Osp);
+    assert_eq!(finish.mask, crate::pcb_stack::MaskFinish::default());
+    assert_eq!(
+        stack.layers,
+        LayerStack::derived(&read.layers, read.thickness).layers
+    );
+}
+
+/// A mask or silkscreen table that leaves fields out still opens the board;
+/// each missing field takes its default.
+#[test]
+fn a_partial_mask_or_silkscreen_table_takes_the_defaults() {
+    use crate::pcb_stack::{FinishColor, FinishSides, MaskGloss, SilkscreenFinish};
+    let base = SnxPcb::new(empty_board()).write_string().unwrap();
+    let text = format!(
+        "{base}\n[stackup.finish.mask]\ngloss = \"matte\"\n\
+         [stackup.finish.silkscreen]\nsides = \"top\"\n"
+    );
+    let read = SnxPcb::parse(&text).unwrap().board;
+    let finish = read.stackup.unwrap().finish.expect("finish");
+    let mask = crate::pcb_stack::MaskFinish {
+        gloss: MaskGloss::Matte,
+        ..Default::default()
+    };
+    assert_eq!(finish.mask, mask);
+    assert_eq!(finish.mask.color, FinishColor::Green);
+    assert_eq!(
+        finish.silkscreen,
+        SilkscreenFinish {
+            sides: FinishSides::Top,
+            ..Default::default()
+        }
+    );
+}

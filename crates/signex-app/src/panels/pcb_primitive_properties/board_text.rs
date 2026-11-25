@@ -11,7 +11,8 @@ use super::linked::{
     Segment, illustration, linked, linked_row, prefixed, segments, two_fields, unit, with_unit,
 };
 use super::rows::{
-    Look, PAD_X, Section, any_layer_row, field, input, labelled, labelled_text, stack, with_tip,
+    Look, PAD_X, Section, any_layer_row, field, input, labelled, labelled_text, stack,
+    sunken_value, with_tip,
 };
 use super::{PcbPrimitiveMsg, PrimitiveField as F, SP, TS, TextFacts, format_number};
 use crate::panels::{PanelContext, PanelMsg, form_look};
@@ -60,6 +61,18 @@ fn properties<'a>(look: Look<'a>, f: &'a TextFacts) -> Option<Element<'a, PanelM
             any_layer_row(look, common, &f.layers, f.layer.as_ref()),
         ),
     );
+    // A fact, not a field: the layer's side decides it (mockup row 100).
+    if f.is_mirrored() {
+        s.push(
+            common,
+            ids::PCB_PRIM_STRING_MIRRORED,
+            labelled_text(
+                look,
+                UserText::new(String::new()),
+                sunken_value(look, look.t(ids::PCB_PRIM_STRING_MIRRORED)),
+            ),
+        );
+    }
     // Where a string not placed yet goes is the pointer's.
     if !common.target.is_placement() {
         s.push(
@@ -154,4 +167,64 @@ fn quick_turns<'a>(look: Look<'a>, f: &'a TextFacts) -> Element<'a, PanelMsg> {
         })
         .collect();
     segments(cells)
+}
+
+#[cfg(test)]
+mod tests {
+    use pcb_geom::ItemRef;
+    use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
+    use uuid::Uuid;
+
+    use super::*;
+    use crate::layout_probe::lay_out_texts;
+    use crate::panels::pcb_primitive_properties::AreaLayerChoice;
+    use crate::panels::pcb_primitive_properties::drawing::fixture;
+
+    fn on(layer: Option<PcbLayer>) -> TextFacts {
+        TextFacts {
+            common: fixture::common(vec![ItemRef::Text(Uuid::from_u128(1))]),
+            text: Some("SENSOR-NODE rev B".into()),
+            x: Some(4.0),
+            y: Some(38.2),
+            height: Some(1.0),
+            rotation: Some(0.0),
+            layer: layer.map(|layer| AreaLayerChoice {
+                layer,
+                label: format!("{layer:?}"),
+            }),
+            layers: Vec::new(),
+        }
+    }
+
+    /// Mockup row 100 (Caner, 2026-11-24): a string reads mirrored when its
+    /// layer is on the bottom side; a top, board-wide or mixed layer is not.
+    #[test]
+    fn a_string_on_a_bottom_layer_is_mirrored() {
+        let bottom_silk = PcbLayer::Technical(TechnicalLayer::SilkscreenBottom);
+        assert!(on(Some(bottom_silk)).is_mirrored());
+        assert!(on(Some(PcbLayer::Copper(CopperLayer::Bottom))).is_mirrored());
+        let top_silk = PcbLayer::Technical(TechnicalLayer::SilkscreenTop);
+        assert!(!on(Some(top_silk)).is_mirrored());
+        let mechanical = signex_types::pcb_layer::MechanicalLayer::new(1).unwrap();
+        assert!(!on(Some(PcbLayer::Mechanical(mechanical))).is_mirrored());
+        assert!(!on(None).is_mirrored(), "the strings' layers differ");
+    }
+
+    /// The panel says "Mirrored (bottom side)" for a bottom string only.
+    #[test]
+    fn the_panel_shows_the_mirrored_fact_for_a_bottom_string() {
+        let (app, _boot) = crate::app::Signex::new();
+        let ctx = app.document_state.panel_ctx.clone();
+        let fact = t!(ctx.i18n, ids::PCB_PRIM_STRING_MIRRORED).into_string();
+        let shows = |f: &TextFacts| {
+            let section = properties(Look::of(&ctx), f).expect("the section");
+            lay_out_texts(section, iced::Size::new(300.0, 1200.0))
+                .iter()
+                .any(|t| t.text == fact)
+        };
+        let bottom = on(Some(PcbLayer::Technical(TechnicalLayer::SilkscreenBottom)));
+        assert!(shows(&bottom), "a bottom string is mirrored");
+        let top = on(Some(PcbLayer::Technical(TechnicalLayer::SilkscreenTop)));
+        assert!(!shows(&top), "a top string is not");
+    }
 }

@@ -24,6 +24,9 @@ pub(super) fn problem_words(problem: &VariantProblem, i18n: &I18n) -> Localized 
         VariantProblem::Unknown(name) => {
             t!(i18n, ids::PROJECT_VARIANT_UNKNOWN, "name" => name.as_str())
         }
+        VariantProblem::SettingsUnreadable => {
+            t!(i18n, ids::VARIANT_MANAGER_SETTINGS_UNREADABLE)
+        }
     }
 }
 

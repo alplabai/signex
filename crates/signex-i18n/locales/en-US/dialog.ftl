@@ -503,3 +503,23 @@ dialog-erc-source-project = Rules: this project
 dialog-erc-source-user-default = User Default
 # Footer menu button holding Store / Save as profile / Update from profile.
 dialog-erc-profile-menu = Profile
+
+# project-shell
+## Rename Project (mockup row 23): shown while the folder keeps its name.
+dialog-rename-project-folder-kept = The project folder is not renamed.
+## Enable Version Control (mockup row 26): asked only when git has no author.
+dialog-version-control-author-note = Git has no author name and email on this computer. Commits are signed with these, stored in this repository's settings.
+dialog-version-control-author-name = Your name
+dialog-version-control-author-email = Your email
+## Netlist incomplete (mockup row 28): why an existing page is left out.
+dialog-netlist-omitted-unreadable = unreadable
+dialog-netlist-omitted-not-a-file = unreadable (not a file)
+dialog-netlist-omitted-too-large = unreadable (too large)
+dialog-netlist-omitted-read-failed = unreadable (could not be read)
+dialog-netlist-omitted-newer-format = unreadable (newer format)
+dialog-netlist-omitted-not-a-sheet = unreadable (not a sheet file)
+dialog-netlist-omitted-refused = not read (refused)
+# $parent is the sheet that places this one again: its chain of sheet-symbol names from the root (U_power/U_loop), or the root sheet's path.
+dialog-netlist-omitted-sheet-cycle = sheet cycle · re-entered from { $parent }
+# $kept is the whole path of the file this one cannot be told from; only it is in the netlist.
+dialog-netlist-omitted-key-collision = same path as { $kept } on this file system

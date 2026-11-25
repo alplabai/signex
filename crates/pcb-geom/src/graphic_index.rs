@@ -6,6 +6,7 @@
 use signex_types::pcb::BoardGraphic;
 use signex_types::pcb_graphic::BoardGraphicKind;
 
+use crate::free::ARC_CHORD_ERROR_MM;
 use crate::graphic::{GraphicShape, PlacedGraphic, board_graphic_placement};
 use crate::index::{Area, IndexedItem, ItemRef, Rejected};
 use crate::pick_filter::PickKind;
@@ -16,6 +17,9 @@ use crate::units::{GeomError, PointNm};
 
 /// The largest turn one indexed chord of an arc or circle spans, degrees.
 const CHORD_DEG: f64 = 10.0;
+/// The smallest turn a chord of a copper curve spans, degrees: 3600 chords
+/// a turn at most, however large the curve.
+const MIN_COPPER_CHORD_DEG: f64 = 0.1;
 
 /// The outline a drawing is picked on: its points, and whether the last
 /// joins the first.
@@ -100,7 +104,7 @@ fn outline(graphic: &BoardGraphic) -> Result<Option<(Outline, i64)>, GeomError> 
     let Some(placed) = board_graphic_placement(graphic)? else {
         return Ok(None);
     };
-    Ok(placed_outline(&placed).map(|outline| (outline, placed.width / 2)))
+    Ok(placed_outline(&placed, |_| CHORD_DEG).map(|outline| (outline, placed.width / 2)))
 }
 
 /// The stroke of a placed drawing as capsules, one per piece of its
@@ -108,7 +112,18 @@ fn outline(graphic: &BoardGraphic) -> Result<Option<(Outline, i64)>, GeomError> 
 /// measures a silkscreen drawing by. A filled drawing is measured by its
 /// outline too. Empty for a text, which has no outline here.
 pub fn graphic_strokes(placed: &PlacedGraphic) -> Vec<Shape> {
-    let Some(outline) = placed_outline(placed) else {
+    strokes(placed, |_| CHORD_DEG)
+}
+
+/// [`graphic_strokes`] of a drawing on copper (#2883), an arc or circle in
+/// chords within [`ARC_CHORD_ERROR_MM`] of the curve, as a copper arc is
+/// read.
+pub fn copper_graphic_strokes(placed: &PlacedGraphic) -> Vec<Shape> {
+    strokes(placed, copper_chord_deg)
+}
+
+fn strokes(placed: &PlacedGraphic, chord_deg: impl Fn(i64) -> f64) -> Vec<Shape> {
+    let Some(outline) = placed_outline(placed, chord_deg) else {
         return Vec::new();
     };
     let radius = placed.width / 2;
@@ -118,7 +133,21 @@ pub fn graphic_strokes(placed: &PlacedGraphic) -> Vec<Shape> {
         .collect()
 }
 
-fn placed_outline(placed: &PlacedGraphic) -> Option<Outline> {
+/// The widest turn a chord of a copper curve of `radius` nm spans so it
+/// strays at most [`ARC_CHORD_ERROR_MM`] from the curve; never above
+/// [`CHORD_DEG`].
+fn copper_chord_deg(radius: i64) -> f64 {
+    let error = ARC_CHORD_ERROR_MM * 1e6;
+    let r = radius.abs() as f64;
+    if r <= error {
+        return CHORD_DEG;
+    }
+    (2.0 * (1.0 - error / r).acos())
+        .to_degrees()
+        .clamp(MIN_COPPER_CHORD_DEG, CHORD_DEG)
+}
+
+fn placed_outline(placed: &PlacedGraphic, chord_deg: impl Fn(i64) -> f64) -> Option<Outline> {
     let outline = match placed.shape.clone() {
         GraphicShape::Line { a, b } => Outline {
             points: vec![a, b],
@@ -130,11 +159,11 @@ fn placed_outline(placed: &PlacedGraphic) -> Option<Outline> {
             start_deg,
             sweep_deg,
         } => Outline {
-            points: arc_points(center, r, start_deg, sweep_deg),
+            points: arc_points(center, r, start_deg, sweep_deg, chord_deg(r)),
             closed: false,
         },
         GraphicShape::Circle { center, radius: r } => {
-            let mut points = arc_points(center, r, 0.0, 360.0);
+            let mut points = arc_points(center, r, 0.0, 360.0, chord_deg(r));
             points.pop();
             Outline {
                 points,
@@ -150,9 +179,16 @@ fn placed_outline(placed: &PlacedGraphic) -> Option<Outline> {
     Some(outline)
 }
 
-/// Points along an arc, at most [`CHORD_DEG`] apart, both ends included.
-fn arc_points(center: PointNm, radius: i64, start_deg: f64, sweep_deg: f64) -> Vec<PointNm> {
-    let chords = ((sweep_deg.abs() / CHORD_DEG).ceil() as usize).clamp(1, 72);
+/// Points along an arc, at most `chord_deg` apart, both ends included.
+fn arc_points(
+    center: PointNm,
+    radius: i64,
+    start_deg: f64,
+    sweep_deg: f64,
+    chord_deg: f64,
+) -> Vec<PointNm> {
+    let most = (360.0 / MIN_COPPER_CHORD_DEG) as usize;
+    let chords = ((sweep_deg.abs() / chord_deg).ceil() as usize).clamp(1, most);
     (0..=chords)
         .map(|i| {
             let t = (start_deg + sweep_deg * i as f64 / chords as f64).to_radians();

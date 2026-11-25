@@ -90,6 +90,12 @@ impl Signex {
             .document_state
             .project_by_id(project_id)
             .with_context(|| format!("project {project_id:?} vanished before write"))?;
+        // A project read from a newer minor is read-only: refuse before any
+        // pending library is created, so a refused save writes nothing.
+        project
+            .data
+            .refuse_save()
+            .map_err(|error| anyhow::anyhow!("{} is read-only: {error}", project.path.display()))?;
         for spec in project.pending_libraries.values() {
             self.refuse_while_path_op(&spec.lib_path, "created")?;
         }

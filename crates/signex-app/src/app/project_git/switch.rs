@@ -197,7 +197,10 @@ impl Signex {
             .filter(|tab| {
                 !matches!(
                     tab.kind,
-                    TabKind::Schematic | TabKind::Pcb | TabKind::LayerStack
+                    TabKind::Schematic
+                        | TabKind::Pcb
+                        | TabKind::LayerStack
+                        | TabKind::PolygonManager
                 )
             })
             .map(|tab| tab.path.as_path());

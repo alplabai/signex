@@ -156,7 +156,7 @@ project-variants-col-value = Value · Footprint
 project-variants-footprint = · { $footprint }
 project-variants-fitted = Fitted
 project-variants-not-fitted = Not fitted
-project-variants-legend = Cells that match Base stay quiet; only differences are coloured.
+project-variants-legend = Cells that match Base stay quiet; only differences are colored.
 project-variants-hidden-rows =
     { $hidden ->
         [one] { $differ } of { $total } parts differ in at least one variant. 1 row is hidden by Only rows that differ.
@@ -330,8 +330,8 @@ project-defaults-line-solid = Solid
 project-defaults-line-dashed = Dashed
 project-defaults-line-dotted = Dotted
 project-defaults-fill-none = No fill
-project-defaults-fill-outline = Outline colour
-project-defaults-fill-background = Background colour
+project-defaults-fill-outline = Outline color
+project-defaults-fill-background = Background color
 project-defaults-reset = Reset to built-in ({ $value })
 # A typed value the field refuses: the stored default stays. $min and $max are
 # millimetres.
@@ -352,6 +352,46 @@ project-preview-expand = Expand preview
 project-preview-close = Close
 project-preview-hint-values = Click a value on the drawing to edit it · Tab moves to the next · Esc closes
 project-preview-hint-sheet = Esc closes
+# variant-manager
+# The Variant Manager document tab (mockup row 32): its page name in
+# "<project> — Variants" and its short kind code in the tab strip.
+variant-manager-tab-title = Variants
+variant-manager-tab-kind = VAR
+variant-manager-settings = Settings...
+variant-manager-compare = Compare variants...
+variant-manager-open-bom = Open in BOM Studio
+# Tooltip of a top bar button whose surface is not built yet.
+variant-manager-not-built = Not built yet
+variant-manager-duplicate = Duplicate
+variant-manager-set-default = Set as default
+# Pill on the default variant's row and card.
+variant-manager-default = default
+# Tooltip of the star that marks the default variant.
+variant-manager-default-star = The default variant
+# The name Duplicate gives the copy; $n counts from 2 when the first is taken.
+variant-manager-copy-name = { $name } copy
+variant-manager-copy-name-n = { $name } copy { $n }
+# Right pane heading: the selected cell's part in its variant, "R5 in Lite".
+variant-manager-detail-in = { $designator } in { $variant }
+variant-manager-detail-empty = Click a cell in the matrix to see that part in that variant.
+variant-manager-fitting = Fitting in { $variant }
+variant-manager-alternate = Alternate...
+# Back to the fit the sheets give the part in this variant.
+variant-manager-as-on-sheets = As on the sheets
+variant-manager-base-fitting = Base fits what the sheets say: change it on the sheets.
+variant-manager-overrides = Parameter overrides
+variant-manager-col-parameter = Parameter
+variant-manager-same-as-base = same as Base
+variant-manager-reset = Back to the Base value
+variant-manager-overrides-off = A part that is not fitted has no values to override.
+variant-manager-other-variants = { $designator } in other variants
+# A matrix cell with a value of its own: the kind of value it replaces.
+variant-manager-override-value = value
+variant-manager-override-footprint = footprint
+variant-manager-override-field = override
+variant-manager-parameter-value = Value
+variant-manager-parameter-footprint = Footprint
+variant-manager-settings-unreadable = The project's variant settings could not be read. They are kept as they are and cannot be changed.
 # dialog-polish
 # The result pill of a project variable's `=` expression that does not
 # evaluate (mockup row 30); the reason is in the Error line under the row.

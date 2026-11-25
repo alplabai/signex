@@ -1,20 +1,31 @@
-//! Variants section of the Project tab in the Variant Manager layout (#1690,
-//! #1293): a top bar (active variant, parts filter, Only rows that differ),
-//! the variant list with the selected variant's actions, a summary card per
-//! variant and the parts by variants matrix, read off the UI thread from the
-//! project's sheets. Every variant edit is one step of the General history; a
-//! refused one shows its reason and changes nothing. The matrix is read-only
-//! here. See `docs/PROJECT_TAB.md`, "Variants".
+//! The Variant Manager (#1690, #1293, mockup row 32), a document tab of its
+//! project (`tab`): a top bar (active variant, parts filter, Only rows that
+//! differ, the actions not built yet), the variant list with the selected
+//! variant's actions, a summary card per variant, the parts by variants
+//! matrix, read off the UI thread from the project's sheets, and the
+//! selected cell's part on the right. The project's variant settings are
+//! laid over the read as it is shown, so an edit shows at once. Every edit
+//! is one step of the General history; a refused one shows its reason and
+//! changes nothing. See `docs/PROJECT_TAB.md`, "Variants".
 
 mod bar;
+mod cells;
+mod detail;
 mod edits;
 mod empty;
 mod list;
+mod manager;
+#[cfg(test)]
+mod manager_tests;
 mod matrix;
 mod read;
 mod summary;
+mod tab;
 #[cfg(test)]
 mod tests;
+
+use manager::VariantCell;
+pub use manager::VariantManagerMsg;
 
 use crate::app::core::parts_read_error::PartsReadError;
 
@@ -22,9 +33,10 @@ use iced::font::Weight;
 use iced::widget::{Column, column, container, row, svg};
 use iced::{Background, Border, Color, Element, Font, Length, Theme, Widget as _};
 use signex_i18n::{I18n, Localized, ids, t};
-use signex_output::VariantMatrix;
-use signex_types::project::is_base_variant;
+use signex_output::{VariantMatrix, VariantRow};
+use signex_types::project::{PlacedPart, VariantPart, VariantSettings, is_base_variant};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::doc_tab_shell::{DocTabShell, DocTabShellStyle};
 use signex_widgets::text;
 
 use super::ProjectTabState;
@@ -68,8 +80,18 @@ struct Manager<'v> {
     active: Option<&'v str>,
     /// The variant selected in the list; `None` is Base.
     selected: Option<&'v str>,
+    /// The default variant's definition; `None` is Base.
+    default: Option<&'v str>,
     tab: Option<&'v ProjectTabState>,
     parts: Parts<'v>,
+    /// The parts read with the project's variant settings laid over it.
+    shown: Option<VariantMatrix>,
+    /// The selected cell, while its variant and part are still there.
+    cell: Option<&'v VariantCell>,
+    /// The project's variant settings, live.
+    settings: &'v VariantSettings,
+    /// The settings section could not be read: nothing in it can change.
+    settings_locked: bool,
     /// The parts were read before the latest sheet edit, or for other
     /// variant names than the project has now.
     stale: bool,
@@ -112,24 +134,54 @@ impl<'v> Manager<'v> {
             (Parts::Read(matrix), Some(tab)) => !read_holds(tab, matrix, project, sheet_epoch),
             _ => false,
         };
+        let settings = &project.data.variant_settings;
+        let shown = match parts {
+            Parts::Read(matrix) => Some(matrix.with_settings(settings)),
+            _ => None,
+        };
+        let cell = tab
+            .and_then(|tab| tab.variant_manager.cell.as_ref())
+            .filter(|cell| {
+                shown
+                    .as_ref()
+                    .is_some_and(|matrix| cell_is_read(matrix, cell))
+            });
         Self {
             project_id: project.id,
             definitions,
             active,
             selected,
+            default: project.data.default_variant(),
             tab,
             parts,
+            shown,
+            cell,
+            settings,
+            settings_locked: project.data.has_unreadable_variant_settings(),
             stale,
             i18n,
             tokens,
         }
     }
 
-    fn matrix(&self) -> Option<&'v VariantMatrix> {
-        match self.parts {
-            Parts::Read(matrix) => Some(matrix),
-            _ => None,
-        }
+    /// The parts read with the variant settings applied, as every view
+    /// shows them.
+    fn matrix(&self) -> Option<&VariantMatrix> {
+        self.shown.as_ref()
+    }
+
+    fn is_default(&self, variant: Option<&str>) -> bool {
+        variant == self.default
+    }
+
+    /// The selected cell, while its variant and part are still there.
+    fn cell(&self) -> Option<&'v VariantCell> {
+        self.cell
+    }
+
+    /// What `variant` changes on `part` in the project's settings.
+    fn own(&self, variant: Option<&str>, part: &VariantRow) -> Option<&'v VariantPart> {
+        self.settings.part(variant, placed(part))
     }
 
     /// The matrix column of `variant` (`None` is Base), when it was read.
@@ -156,6 +208,20 @@ impl<'v> Manager<'v> {
     }
 }
 
+/// Whether `matrix` has a column for `cell`'s variant and a row for its part.
+fn cell_is_read(matrix: &VariantMatrix, cell: &VariantCell) -> bool {
+    matrix.column(cell.variant.as_deref()).is_some()
+        && matrix
+            .rows
+            .iter()
+            .any(|row| row.designator == cell.designator)
+}
+
+/// `row`'s part as the variant settings find it.
+fn placed(row: &VariantRow) -> PlacedPart<'_> {
+    PlacedPart::new(&row.designator, row.link.as_ref())
+}
+
 /// Whether `matrix`, the read `tab` keeps, still holds: read at the sheet
 /// edit count `sheet_epoch`, for the variant names and with the parameters
 /// `project` has now.
@@ -180,8 +246,10 @@ fn read_for(matrix: &VariantMatrix, definitions: &[String]) -> bool {
             .all(|(read, defined)| read.eq_ignore_ascii_case(defined))
 }
 
-/// The section: its title and help, then the Variant Manager filling the
-/// rest of the tab.
+/// The Variants section of the Project tab: its title and help over the
+/// Variant Manager. The section list opens the Variant Manager tab instead
+/// of showing it, so this draws only for a section state set elsewhere; it
+/// stays so that state never draws an empty page.
 pub(super) fn view<'a>(
     project: &LoadedProject,
     tab: Option<&ProjectTabState>,
@@ -189,16 +257,55 @@ pub(super) fn view<'a>(
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
+    column![
+        text(t!(i18n, ids::PROJECT_SECTION_VARIANTS))
+            .size(TS.heading)
+            .color(ti(tokens.text)),
+        note(t!(i18n, ids::PROJECT_VARIANTS_HELP), tokens),
+        frame(project, tab, sheet_epoch, i18n, tokens),
+    ]
+    .spacing(SP.l)
+    .padding(SP.xl)
+    .height(Length::Fill)
+    .boxed()
+}
+
+/// The Variant Manager in the shared document-tab shell (DECISIONS
+/// 2026-11-18): the top bar as its toolbar; the list, the centre and the
+/// selected cell's pane as its body; the status line as its footer.
+fn shell<'a>(
+    project: &LoadedProject,
+    tab: Option<&ProjectTabState>,
+    sheet_epoch: u64,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
     let manager = Manager::new(project, tab, sheet_epoch, i18n, tokens);
-    let centre = if manager.definitions.is_empty() {
-        empty::view(&manager)
+    let body = if manager.definitions.is_empty() {
+        row![list::view(&manager), empty::view(&manager)]
     } else {
-        main(&manager)
+        row![list::view(&manager), main(&manager), detail::view(&manager)]
     };
-    let body = row![list::view(&manager), centre].height(Length::Fill);
+    DocTabShell::new(
+        body.height(Length::Fill).boxed(),
+        DocTabShellStyle::from_tokens(tokens, TS.body),
+    )
+    .toolbar(bar::toolbar(&manager))
+    .footer(bar::footer(&manager))
+    .view()
+}
+
+/// The shell in one framed panel, as the Project tab's section shows it.
+fn frame<'a>(
+    project: &LoadedProject,
+    tab: Option<&ProjectTabState>,
+    sheet_epoch: u64,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
     let line = ti(tokens.border);
     let panel = ti(tokens.panel_bg);
-    let frame = container(column![bar::top(&manager), body, bar::status(&manager)])
+    container(shell(project, tab, sheet_epoch, i18n, tokens))
         .width(Length::Fill)
         .height(Length::Fill)
         .clip(true)
@@ -211,18 +318,8 @@ pub(super) fn view<'a>(
                 ..Border::default()
             },
             ..container::Style::default()
-        });
-    column![
-        text(t!(i18n, ids::PROJECT_SECTION_VARIANTS))
-            .size(TS.heading)
-            .color(ti(tokens.text)),
-        note(t!(i18n, ids::PROJECT_VARIANTS_HELP), tokens),
-        frame,
-    ]
-    .spacing(SP.l)
-    .padding(SP.xl)
-    .height(Length::Fill)
-    .boxed()
+        })
+        .boxed()
 }
 
 /// The centre: the summary cards over the matrix, or where the read stands.
@@ -232,10 +329,10 @@ fn main<'a>(m: &Manager<'_>) -> Element<'a, Message> {
         .padding(SP.l)
         .width(Length::Fill)
         .height(Length::Fill);
-    col = col.push(match m.parts {
-        Parts::Reading => note(t!(m.i18n, ids::PROJECT_VARIANTS_READING), m.tokens),
-        Parts::Failed(why) => problem(read_failed(m.i18n, why), m.tokens),
-        Parts::Read(matrix) => matrix::view(m, matrix),
+    col = col.push(match (m.parts, m.matrix()) {
+        (Parts::Failed(why), _) => problem(read_failed(m.i18n, why), m.tokens),
+        (_, Some(matrix)) => matrix::view(m, matrix),
+        (_, None) => note(t!(m.i18n, ids::PROJECT_VARIANTS_READING), m.tokens),
     });
     col.boxed()
 }
@@ -263,6 +360,7 @@ fn glyph<'a>(bytes: &'static [u8], size: f32, color: Color) -> Element<'a, Messa
         .boxed()
 }
 
+const GLYPH_STAR: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M8 2.2l1.75 3.6 3.95.55-2.85 2.75.7 3.9L8 11.15 4.45 13l.7-3.9L2.3 6.35l3.95-.55z" fill="currentColor"/></svg>"#;
 const GLYPH_PLUS: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M8 3.5v9M3.5 8h9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>"#;
 const GLYPH_CHECK: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M4 8.4l2.6 2.6L12 5.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>"#;
 const GLYPH_CROSS: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M5.2 5.2l5.6 5.6M10.8 5.2l-5.6 5.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>"#;

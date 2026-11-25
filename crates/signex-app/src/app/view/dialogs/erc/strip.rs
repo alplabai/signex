@@ -1,14 +1,14 @@
 //! The ERC dialog's source strip under the title (#2413): a pill naming where
 //! the rules come from, the scope note (and the machine-rules notice), and
-//! the severity count tiles.
+//! the severity count chips.
 
 use iced::widget::{Column, Row, Space, column, container};
 use iced::{Alignment, Background, Element, Length, Theme, Widget};
 use signex_erc::Severity;
-use signex_i18n::{I18n, MessageId, ids, t};
+use signex_i18n::{I18n, MessageId, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::stat_tiles::{Density, StatTile, Tone, stat_tiles};
-use signex_widgets::text;
+use signex_widgets::chips::{ChipMetrics, ChipStyle, ChipTone, tag_count};
+use signex_widgets::{Label, text, theme_ext};
 
 use crate::app::{Message, Signex};
 use crate::styles::{HAIRLINE, PillTone, pill, pill_colors, tokens};
@@ -37,37 +37,74 @@ pub(super) fn scope_note(has_project: bool, stores_rules: bool, unreadable: bool
     }
 }
 
-/// Caption and number tone of a severity tile. Off counts are neutral.
-pub(super) fn tile_look(severity: Severity) -> (MessageId, Tone) {
+/// Caption, tag letter and tag tone of a severity count chip. Off is
+/// neutral, and its tag is a dash (`None`).
+pub(super) fn chip_look(severity: Severity) -> (MessageId, Option<MessageId>, PillTone) {
     match severity {
-        Severity::Error => (ids::DIALOG_ERC_CHIP_ERRORS, Tone::Err),
-        Severity::Warning => (ids::DIALOG_ERC_CHIP_WARNINGS, Tone::Warn),
-        Severity::Info => (ids::DIALOG_ERC_CHIP_INFO, Tone::Info),
-        Severity::Off => (ids::DIALOG_ERC_CHIP_OFF, Tone::Neutral),
+        Severity::Error => (
+            ids::DIALOG_ERC_CHIP_ERRORS,
+            Some(ids::DIALOG_RULES_ERROR_SHORT),
+            PillTone::Err,
+        ),
+        Severity::Warning => (
+            ids::DIALOG_ERC_CHIP_WARNINGS,
+            Some(ids::DIALOG_RULES_WARNING_SHORT),
+            PillTone::Warn,
+        ),
+        Severity::Info => (
+            ids::DIALOG_ERC_CHIP_INFO,
+            Some(ids::DIALOG_RULES_INFO_SHORT),
+            PillTone::Info,
+        ),
+        Severity::Off => (ids::DIALOG_ERC_CHIP_OFF, None, PillTone::Neutral),
     }
 }
 
-/// The four severity tiles over `counts`. Read-only: the rule list filters
-/// by name and Changed only, not by severity, so a tile does not filter it.
-fn severity_tiles<'a>(
+/// The four severity counts as compact chips, each led by its severity tag
+/// (mockup row 84). Read-only: the rule list filters by name and Changed
+/// only, not by severity, so a chip does not filter it.
+pub(super) fn severity_chips<'a>(
     counts: [(Severity, usize); 4],
     tokens: &ThemeTokens,
     i18n: &I18n,
 ) -> Element<'a, Message> {
-    let tiles: Vec<StatTile<'a, Message>> = counts
-        .iter()
-        .map(|(severity, count)| {
-            let (caption, tone) = tile_look(*severity);
-            let count = u32::try_from(*count).unwrap_or(u32::MAX);
-            StatTile::count(count, t!(i18n, caption)).tone(tone)
-        })
-        .collect();
-    stat_tiles(tiles, Density::Compact, tokens, TS.body, i18n)
+    let r = tokens::resolve(tokens);
+    let style = ChipStyle {
+        fill: r.field,
+        edge: theme_ext::border_color(tokens),
+        hover: r.field,
+        ink: r.ink3,
+        on_fill: r.accent_soft,
+        on_ink: r.accent_soft_ink,
+    };
+    let metrics = ChipMetrics::from_text_size(TS.body);
+    let mut chips: Row<Element<'a, Message>> = Row::new()
+        .spacing(metrics.row_gap)
+        .align_y(Alignment::Center);
+    for (severity, count) in counts {
+        let (caption, tag, tone) = chip_look(severity);
+        let tag: Label<'a> = match tag {
+            Some(letter) => t!(i18n, letter).into(),
+            // A dash for Off, the same in every language.
+            None => UserText::new("\u{2013}".to_owned()).into(),
+        };
+        let (fill, ink) = pill_colors(tokens, tone);
+        chips = chips.push(tag_count(
+            tag,
+            ChipTone { fill, ink },
+            t!(i18n, caption),
+            u32::try_from(count).unwrap_or(u32::MAX),
+            style,
+            metrics,
+            i18n,
+        ));
+    }
+    chips.boxed()
 }
 
 impl Signex {
     /// The strip under the title: source pill, scope note (with the
-    /// machine-rules notice when it applies) and the severity tiles, over a
+    /// machine-rules notice when it applies) and the severity chips, over a
     /// hairline.
     pub(super) fn view_erc_source_strip<'a>(
         &'a self,
@@ -107,17 +144,12 @@ impl Signex {
             );
         }
 
-        let tiles = container(severity_tiles(
-            self.erc_dialog_severity_counts(),
-            theme_tokens,
-            i18n,
-        ))
-        .width(Length::FillPortion(1));
+        let chips = severity_chips(self.erc_dialog_severity_counts(), theme_tokens, i18n);
 
         let line: Row<Element<'a, Message>> = Row::new()
             .push(source.boxed())
             .push(note.boxed())
-            .push(tiles.boxed())
+            .push(chips)
             .spacing(SP.m)
             .align_y(Alignment::Center);
         let rule_color = tokens::resolve(theme_tokens).line_soft;
@@ -165,11 +197,56 @@ mod tests {
     }
 
     #[test]
-    fn tiles_tone_only_the_reporting_severities() {
-        assert_eq!(tile_look(Severity::Error).1, Tone::Err);
-        assert_eq!(tile_look(Severity::Warning).1, Tone::Warn);
-        assert_eq!(tile_look(Severity::Info).1, Tone::Info);
-        assert_eq!(tile_look(Severity::Off).1, Tone::Neutral);
-        assert_eq!(tile_look(Severity::Off).0, ids::DIALOG_ERC_CHIP_OFF);
+    fn chips_tone_only_the_reporting_severities() {
+        assert_eq!(chip_look(Severity::Error).2, PillTone::Err);
+        assert_eq!(chip_look(Severity::Warning).2, PillTone::Warn);
+        assert_eq!(chip_look(Severity::Info).2, PillTone::Info);
+        assert_eq!(chip_look(Severity::Off).2, PillTone::Neutral);
+        assert_eq!(chip_look(Severity::Off).0, ids::DIALOG_ERC_CHIP_OFF);
+        assert_eq!(
+            chip_look(Severity::Error).1,
+            Some(ids::DIALOG_RULES_ERROR_SHORT)
+        );
+        assert_eq!(chip_look(Severity::Off).1, None);
+    }
+
+    /// Mockup row 84: the counts are compact one-line chips, "E Errors 15",
+    /// the tag drawn smaller than its caption.
+    #[test]
+    fn the_counts_draw_as_one_line_tagged_chips() {
+        let (app, _boot) = crate::app::Signex::new();
+        let tokens = app.document_state.panel_ctx.tokens;
+        let i18n = I18n::en_us();
+        let counts = [
+            (Severity::Error, 15),
+            (Severity::Warning, 12),
+            (Severity::Info, 3),
+            (Severity::Off, 3),
+        ];
+        let texts = crate::layout_probe::lay_out_texts(
+            severity_chips(counts, &tokens, &i18n),
+            iced::Size::new(1000.0, 200.0),
+        );
+        let words: Vec<String> = texts
+            .iter()
+            .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+            .collect();
+        assert_eq!(
+            words,
+            [
+                "E", "Errors", "15", "W", "Warnings", "12", "I", "Info", "3", "\u{2013}", "Off",
+                "3"
+            ],
+            "{texts:#?}"
+        );
+        let centre = |b: &iced::Rectangle| b.y + b.height / 2.0;
+        let line = centre(&texts[0].bounds);
+        for t in &texts {
+            assert!((centre(&t.bounds) - line).abs() < 2.0, "{texts:#?}");
+        }
+        assert!(
+            texts[0].bounds.height < texts[1].bounds.height,
+            "{texts:#?}"
+        );
     }
 }

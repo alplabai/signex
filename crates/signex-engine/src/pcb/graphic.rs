@@ -1,6 +1,7 @@
 //! Board drawings placed with the Graphics tools (#2424): a line, an arc
-//! about its centre, a full circle, a rectangle and a text frame, on a
-//! non-copper layer. Pure: each function builds what one
+//! about its centre, a full circle, a rectangle and a text frame, on any
+//! layer but a keep-out (on copper, copper of no net: #2883). Pure: each
+//! function builds what one
 //! `BoardCommand::AddItems` adds as one undo step.
 
 use signex_types::format::pcb_layer_token;

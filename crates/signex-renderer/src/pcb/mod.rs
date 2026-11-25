@@ -211,7 +211,7 @@ mod zone_fill;
 pub use board_features::{BoardFeaturesInput, HoleInput};
 pub use board_paint::{BoardObject, BoardPaint};
 use emit::*;
-pub use footprint_text::FootprintTextInput;
+pub use footprint_text::{FootprintTextInput, TextFace};
 pub(crate) use graphics::arc_points;
 pub use graphics::{GraphicInput, GraphicShapeInput};
 pub use layer_pairs::{LayerPair, SINGLE_TECHNICAL_LAYERS, panel_order_layers};

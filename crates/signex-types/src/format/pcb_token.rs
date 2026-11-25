@@ -46,8 +46,28 @@ pub const SNXPCB_FORMAT_V1_8: &str = "snxpcb/1.8";
 /// byte for byte.
 pub const SNXPCB_FORMAT_V1_9: &str = "snxpcb/1.9";
 
+/// Written when the stackup carries a finish (`[stackup.finish]`) or a row
+/// carries a loss tangent from the material library (mockup rows 176 and
+/// 177, 2026-11-24): a build that knows only 1.9 would drop the row's Df on
+/// save, so it opens 1.10 read-only. A board with neither keeps its token,
+/// byte for byte.
+pub const SNXPCB_FORMAT_V1_10: &str = "snxpcb/1.10";
+
+/// Written when the board has a pour cutout (`[[pour_cutouts]]`, #2871), a
+/// dimension with a non-default look ([`super::board_uses_dimension_style`],
+/// #2868), DECISIONS 2026-11-24, or drawn copper: a board drawing or string
+/// on a copper layer ([`super::board_has_drawn_copper`], #2883), DECISIONS
+/// 2026-11-25. A build that knows only 1.10 would drop the look keys on
+/// save, has never seen a cutout and does not count drawn copper as copper,
+/// so it opens 1.11 read-only. A board with none keeps its token, byte for
+/// byte.
+pub const SNXPCB_FORMAT_V1_11: &str = "snxpcb/1.11";
+
 /// The token a save of `board` writes, from its content, highest need
-/// first: a shelved pour needs [`SNXPCB_FORMAT_V1_9`], a stackup name, a
+/// first: a pour cutout, a dimension look or drawn copper need
+/// [`SNXPCB_FORMAT_V1_11`],
+/// stack materials [`SNXPCB_FORMAT_V1_10`], a shelved pour
+/// [`SNXPCB_FORMAT_V1_9`], a stackup name, a
 /// patterned baked target or a numbering sweep [`SNXPCB_FORMAT_V1_8`], the
 /// board sketch targets [`SNXPCB_FORMAT_BOARD_SKETCH_TARGETS`], rooms
 /// [`SNXPCB_FORMAT_ROOMS`], layer colours [`SNXPCB_FORMAT_LAYER_COLORS`],
@@ -57,7 +77,17 @@ pub fn snxpcb_token(board: &PcbBoard) -> &'static str {
     let sketch = board.sketch.as_ref().map(|stored| &stored.sketch);
     let patterned = sketch.is_some_and(|s| s.repeats_baked_target() || s.has_numbering_sweep());
     let targets = sketch.is_some_and(|s| s.carries_board_targets() || s.needs_format_1_2());
-    if board.zones.iter().any(|zone| zone.is_shelved_pour()) {
+    let materials = board
+        .stackup
+        .as_ref()
+        .is_some_and(|s| s.has_materials_data());
+    let cutout = board.zones.iter().any(|zone| zone.is_pour_cutout());
+    let look = super::board_uses_dimension_style(board);
+    if cutout || look || super::board_has_drawn_copper(board) {
+        SNXPCB_FORMAT_V1_11
+    } else if materials {
+        SNXPCB_FORMAT_V1_10
+    } else if board.zones.iter().any(|zone| zone.is_shelved_pour()) {
         SNXPCB_FORMAT_V1_9
     } else if patterned || board.stackup.as_ref().is_some_and(|s| s.name.is_some()) {
         SNXPCB_FORMAT_V1_8
@@ -75,7 +105,7 @@ pub fn snxpcb_token(board: &PcbBoard) -> &'static str {
 /// `.snxpcb` version policy: a newer minor opens read-only. A save writes
 /// the lowest token its content needs ([`snxpcb_token`]).
 pub const SNXPCB_VERSION: FormatVersion = FormatVersion {
-    current: SNXPCB_FORMAT_V1_9,
+    current: SNXPCB_FORMAT_V1_11,
     readable: &[
         "snxpcb/1",
         "snxpcb/1.1",
@@ -87,6 +117,8 @@ pub const SNXPCB_VERSION: FormatVersion = FormatVersion {
         SNXPCB_FORMAT_BOARD_SKETCH_TARGETS,
         SNXPCB_FORMAT_V1_8,
         SNXPCB_FORMAT_V1_9,
+        SNXPCB_FORMAT_V1_10,
+        SNXPCB_FORMAT_V1_11,
     ],
     newer_minor: NewerMinor::ReadOnly,
     missing: MissingToken::Refused,

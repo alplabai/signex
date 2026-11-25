@@ -330,6 +330,8 @@ impl Signex {
         // retarget them at that sheet's project.
         let main_level = self.interaction_state.acting_window.is_none();
         if main_level {
+            // Before `polygon_facts` reads the fills (mockup row 178).
+            self.fill_polygon_manager_board();
             let context = match self
                 .document_state
                 .tabs
@@ -772,6 +774,7 @@ impl Signex {
             annotations: std::sync::Arc::clone(&self.document_state.panel_ctx.annotations),
             pcb_board: self.pcb_board_summary().map(Box::new),
             layer_stack: self.layer_stack_facts(),
+            polygons: self.polygon_facts(),
             selection_count,
             selected_uuid,
             selected_kind,

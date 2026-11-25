@@ -375,7 +375,7 @@ impl SheetRefInputs {
             let saved = read_child_refs(&path, limits.max_sheet_bytes).unwrap_or_else(|reason| {
                 unreadable.push(UnreadableSheet {
                     path: path.clone(),
-                    reason,
+                    reason: reason.to_string(),
                     whole_path: false,
                 });
                 Vec::new()
@@ -1012,6 +1012,7 @@ mod tests {
                 }],
                 variant_definitions: Vec::new(),
                 active_variant: None,
+                variant_settings: Default::default(),
                 libraries: Vec::new(),
                 enable_git: false,
                 net_classes: Vec::new(),

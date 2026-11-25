@@ -18,7 +18,7 @@ preferences-wheel-mode-help = Zoom: the mouse wheel zooms the canvas. Scroll: th
 preferences-theme-heading = Theme
 
 # Line under the heading.
-preferences-theme-intro = Colours, density and canvas text. Changes preview live; Apply keeps them.
+preferences-theme-intro = Colors, density and canvas text. Changes preview live; Apply keeps them.
 
 # Section label over the theme cards, shown in capitals.
 preferences-theme-application = APPLICATION THEME
@@ -206,7 +206,7 @@ preferences-drag-direction-help = When on, dragging a selection box from left to
 preferences-increment-step = Increment step
 preferences-increment-step-help = How far the trailing number of a text moves each time it is repeated: placing the label D0 again and again gives D1, D2, ... with a step of 1, and Paste Array offers the same step. A negative step counts down; a number at the start or middle of a text is left alone.
 preferences-paste-designators = Designators on paste
-preferences-paste-designators-help = What pasted parts are called. Keep leaves the designators of the copy as they were (duplicates stay until Annotate runs). Reset turns them into R?, U?, ... for Annotate to number. Next free number gives each part the next unused number of its prefix in the project. Applies to Paste, Smart Paste, Duplicate, rubber-stamp copy and Paste Array; the units of one part always stay one part.
+preferences-paste-designators-help = What pasted parts are called. Keep unless taken, the default, keeps each designator the project does not use yet and gives a taken one the next unused number of its prefix; R? stays R?. Keep leaves the designators of the copy as they were (duplicates stay until Annotate runs). Reset turns them into R?, U?, ... for Annotate to number. Next free number gives each part the next unused number of its prefix in the project. Applies to Paste, Smart Paste, Duplicate, rubber-stamp copy and Paste Array; the units of one part always stay one part.
 preferences-autosave = Autosave recovery copies
 preferences-autosave-help = When on, { -brand-name } keeps a recovery copy of each schematic, symbol and footprint with unsaved changes about once a minute. The copy is a separate file in the { -brand-name } config folder (recovery); your own file is never touched by it. The copy is removed when you save the document, close it without keeping the changes, or quit with Discard All, even if you turn this off first. Off by default.
 
@@ -225,12 +225,24 @@ preferences-section-schematic-display = Schematic — Display
 preferences-symbol-body-fill = Fill symbol bodies
 preferences-symbol-body-fill-help = When on, the closed rectangles, polygons and circles that form a symbol's body are drawn filled: on the canvas, in the symbol previews, and in PDF, SVG and print. Pins, text and open lines are never filled, and power ports are not filled. A body shape the symbol fills itself keeps its own fill.
 # Label of the swatch: the colour symbol bodies are filled with.
-preferences-symbol-body-fill-colour = Fill colour
-preferences-symbol-body-fill-colour-help = A soft tint of the theme unless you pick a colour. Reset to Default goes back to the theme's tint.
+preferences-symbol-body-fill-colour = Fill color
+preferences-symbol-body-fill-colour-help = A soft tint of the theme unless you pick a color. Reset to Default goes back to the theme's tint.
+
+# prefs-rules-library
+# Beside the On / Off control of the rule whose severity the pin connection
+# matrix sets; in Rule Profiles it opens the matrix tab.
+preferences-rules-matrix-link = Severity set in the matrix
+## PCB ▸ PCB Defaults (#2868)
+# The page of what a new board dimension starts from.
+preferences-page-pcb-defaults = PCB Defaults
+preferences-group-pcb = PCB
+preferences-group-pcb-heading = PCB
+preferences-section-pcb-dimensions = PCB — New Dimensions
+preferences-pcb-dimensions-help = Each new project starts with these as its dimension defaults, and the dimensions you place in it start from them. Projects already made keep their own; a dimension's Properties change it afterwards.
 
 ## Default Component Classes
 preferences-classes-title = Default Component Classes
-preferences-classes-help = The classes a new library starts with. They appear in the class picker of New Component and Edit Component. A library's own list is edited in that library.
+preferences-classes-help = The classes a new library starts with. They appear in the class picker of New Component and Edit Component. This is a seed list for new libraries: removing a class here does not change existing libraries. A library's own list is edited in that library.
 preferences-classes-key = Key
 preferences-classes-label = Label
 preferences-classes-remove = Remove
@@ -541,3 +553,12 @@ preferences-classes-reset-confirm-yes = Reset
 # board-3d-keys-screenshot
 # Where a shortcut applies: the board 3D view (mockup row 175).
 pref-keymap-context-board-3d = PCB 3D View
+# prefs-shell-pages
+## System ▸ General page (mockup row 147)
+preferences-page-general = General
+preferences-general-heading = General
+preferences-general-intro = Settings that cover every editor: recovery copies of unsaved documents and connections from agents.
+## Editing page (mockup row 147): the shortened net hover help; More… shows the whole text.
+preferences-net-hover-help-summary = Resting the pointer on a wire, pin or label shows a card with the net's name, net class and pins.
+## Rule Profiles page (mockup row 148): the action that asks before it deletes.
+preferences-profiles-delete-action = Delete…

@@ -64,6 +64,18 @@ pub(crate) struct RuleEditor<'a, M> {
     /// The Rule Profiles page (mockup row 148): a rule's name opens it alone,
     /// and a Rule / Severity table head replaces the section heading.
     pub on_open_rule: Option<fn(RuleKind) -> M>,
+    /// The matrix link of an on/off-only rule opens the matrix half (mockup
+    /// row 148). `None` where the matrix is already beside the list: the
+    /// link then reads as a plain caption.
+    pub on_open_matrix: Option<M>,
+}
+
+/// The link an on/off-only rule shows beside its On / Off control, because
+/// the matrix sets that rule's severity (mockup row 148). `None` for every
+/// other rule.
+pub(crate) fn matrix_link(rule: RuleKind) -> Option<MessageId> {
+    rule.is_on_off_only()
+        .then_some(ids::PREFERENCES_RULES_MATRIX_LINK)
 }
 
 /// The two-column editor body: the rule list, then the matrix pane.

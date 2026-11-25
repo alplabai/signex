@@ -26,3 +26,5 @@ pub(crate) mod row_drag;
 pub(crate) mod rule_list_filter;
 pub(crate) mod rule_profile_page;
 pub(crate) mod rule_state;
+pub(crate) mod unreadable_cause;
+pub(crate) mod variant_cell;

@@ -1,7 +1,7 @@
 //! Opt-in autosave of dirty schematics, PCBs, symbols and footprints to a
 //! recovery sidecar (#104, #1185).
 //!
-//! Off by default (Preferences > Editing). When on, a timer subscription
+//! Off by default (Preferences > System › General). When on, a timer subscription
 //! asks every [`AUTOSAVE_INTERVAL`] for a recovery copy of each dirty
 //! schematic, symbol editor and footprint editor. The copy goes to a [`sidecar`] file; the user's real file is
 //! never touched. Writing needs the preference; removing a sidecar does

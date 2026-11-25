@@ -230,6 +230,10 @@ mod board_track_arc_graphic_panel;
 // precision.
 #[path = "regression/board_pour_text_dimension_panel.rs"]
 mod board_pour_text_dimension_panel;
+// #2868: a dimension's arrows, text, extension lines and number format in
+// Properties, each one undo step and saved with the board.
+#[path = "regression/board_dimension_settings.rs"]
+mod board_dimension_settings;
 // #1312 PR 2: Back Annotate.
 #[path = "regression/back_annotate.rs"]
 mod back_annotate;

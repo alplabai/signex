@@ -21,24 +21,30 @@ use crate::app::{LoadedProject, Signex, TabKind};
 /// library tab. A new page kind adds its arm here.
 pub(crate) fn page_name(kind: &TabKind) -> Option<MessageId> {
     match kind {
+        TabKind::PolygonManager => Some(ids::POLYGON_MANAGER_PAGE),
         TabKind::Project(_) => Some(ids::CHROME_PAGE_TAB_PROJECT),
         TabKind::Rules(_) => Some(ids::RULES_TAB_TITLE),
         TabKind::LayerStack => Some(ids::PCB_STACK_TITLE),
         TabKind::PinTable => Some(ids::EDITORS_PIN_TABLE_PAGE),
+        TabKind::VariantManager(_) => Some(ids::VARIANT_MANAGER_TAB_TITLE),
         TabKind::Schematic
         | TabKind::Pcb
         | TabKind::ComponentEditor(_)
         | TabKind::SymbolEditor(_)
         | TabKind::FootprintEditor(_)
         | TabKind::LibraryBrowser(_) => None,
+        // Titled by its package, not a project (`app/gerber_viewer/tab`).
+        TabKind::GerberViewer => None,
     }
 }
 
 /// The project a page tab shows a page of. A Layer Stack tab shows a page of
-/// its board, which may have no project: `Signex::layer_stack_title` names it.
+/// its board, which may have no project: `Signex::board_page_title` names it.
 pub(crate) fn page_project(kind: &TabKind) -> Option<ProjectId> {
     page_name(kind)?;
-    kind.as_project().or_else(|| kind.as_rules())
+    kind.as_project()
+        .or_else(|| kind.as_rules())
+        .or_else(|| kind.as_variant_manager())
 }
 
 /// `<project> — <page>` in the language of `i18n`, without bidi marks so
@@ -94,9 +100,8 @@ impl Signex {
             .filter_map(|(i, tab)| {
                 self.page_tab_title(&tab.kind)
                     .or_else(|| {
-                        tab.kind
-                            .is_layer_stack()
-                            .then(|| self.layer_stack_title(&tab.path, tab.project_id))
+                        let page = page_name(&tab.kind).filter(|_| tab.kind.is_board_page())?;
+                        Some(self.board_page_title(&tab.path, tab.project_id, page))
                     })
                     .or_else(|| {
                         tab.kind

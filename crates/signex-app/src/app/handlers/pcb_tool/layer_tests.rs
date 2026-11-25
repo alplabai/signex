@@ -70,7 +70,8 @@ fn all_on_inner(board: &PcbBoard, net: u32) -> bool {
 }
 
 const NEEDS_COPPER: &str = "make a copper layer active";
-const NEEDS_TEXT_LAYER: &str = "make a silkscreen, mechanical or documentation layer active";
+const NEEDS_TEXT_LAYER: &str =
+    "make a copper, silkscreen, mechanical or documentation layer active";
 const OTHER_NET: &str = "P5.1 is on net B, the route is on net A";
 const JOINED: &str = "P5.1 joined net A";
 const POUR_NO_NET: &str = "Polygon Pour has no net; set it in Properties";
@@ -171,15 +172,29 @@ fn a_polygon_pour_lands_on_the_active_inner_layer_closed_near_its_first_corner()
     assert_eq!(zones[0].layer, INNER);
 }
 
+/// Was `a_string_on_a_copper_layer_says_why_in_the_status_bar`. Since
+/// Caner's 2026-11-24 decision (#2883) a string on copper is copper text of
+/// no net: the click places it on the inner layer, one undo step. A layer
+/// that takes no text (a solder mask) still says why in the status bar.
 #[test]
-fn a_string_on_a_copper_layer_says_why_in_the_status_bar() {
+fn a_string_lands_on_copper_and_a_solder_mask_says_why_in_the_status_bar() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_with(dir.path(), Vec::new());
     let before = live(&app, &path);
     make_active(&mut app, inner());
     run(&mut app, "place_board_string");
     click(&mut app, 4.0, 4.0);
-    assert_eq!(live(&app, &path), before);
+    let texts = &board_of(&app, &path).texts;
+    assert_eq!(texts.len(), 1, "one string");
+    assert_eq!(texts[0].layer, INNER);
+    assert!(!status(&app).contains(NEEDS_TEXT_LAYER), "no refusal");
+    undo(&mut app);
+    assert_eq!(live(&app, &path), before, "one undo step");
+
+    let mask = PcbLayer::Technical(signex_types::pcb_layer::TechnicalLayer::SolderMaskTop);
+    make_active(&mut app, mask);
+    click(&mut app, 4.0, 4.0);
+    assert_eq!(live(&app, &path), before, "nothing on a solder mask");
     let why = status(&app);
     assert!(why.contains(NEEDS_TEXT_LAYER), "{why}");
 }

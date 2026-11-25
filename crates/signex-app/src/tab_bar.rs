@@ -124,8 +124,9 @@ pub struct TabMarks<'p> {
 }
 
 /// The tabs `tabs` shows in a window whose `visible_paths` they are in, in
-/// strip order. A Layer Stack or Pin table tab shares its owner's path but
-/// lives on the main strip only, wherever its owner is.
+/// strip order. A document page tab (Layer Stack, Polygon Manager, Pin
+/// table) shares its owner's path but lives on the main strip only,
+/// wherever its owner is.
 pub(crate) fn visible_tab_indices(
     tabs: &[TabInfo],
     visible_paths: &std::collections::HashSet<std::path::PathBuf>,

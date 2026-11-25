@@ -102,6 +102,8 @@ pub use placement::{
 };
 pub use preview::{PdfQuality, PreviewState};
 pub use profile_update::PendingProfileUpdate;
+pub(crate) use sheet_read::SheetUnreadable;
+pub use sheet_read::UnreadableCause;
 pub use tab_placements::{TabPlacements, default_placement};
 pub use ui::{DEFAULT_BOTTOM_PANEL_HEIGHT, UiState};
 
@@ -720,6 +722,9 @@ pub struct DocumentState {
     /// Commits asked for while their project folder moved, run once the move
     /// has finished.
     pub deferred_git_commits: Vec<DeferredGitCommit>,
+    /// The Gerber Viewer tab (mockup rows 193 and 193f): the package shown
+    /// and the app-wide recent packages. Its slice owns it.
+    pub gerber_viewer: crate::app::gerber_viewer::GerberViewerState,
 }
 
 /// A project folder a rename moved from `old` to `new`.

@@ -445,9 +445,82 @@ mod tests {
         assert_eq!(state.row.parameters["value"], meas(33_000.0, "ohm"));
     }
 
+    /// Mockup row 139: `10k` typed into the number field stays as typed,
+    /// with no refusal, and Enter stores 10 kΩ.
+    #[test]
+    fn a_trailing_prefix_letter_typed_into_the_number_picks_the_prefix() {
+        let mut state = state_with("value", meas(4.7, "ohm"));
+        set_measurement_buf(&mut state, "value".into(), "10k".into(), None);
+        assert_eq!(
+            state.params_edit_buf.get("value").map(String::as_str),
+            Some("10k")
+        );
+        assert!(state.params_error.is_empty());
+        commit_measurement(&mut state, "value".into(), "ohm".into());
+        assert_eq!(state.row.parameters["value"], meas(10_000.0, "ohm"));
+        assert!(state.dirty);
+    }
+
+    /// The letter resolves on commit, not per keystroke: `4k7` typed key
+    /// by key is refused, not stored as 47 kΩ; `4.7k` typed key by key
+    /// stores 4.7 kΩ.
+    #[test]
+    fn a_prefix_letter_typed_key_by_key_resolves_on_commit() {
+        let mut state = state_with("value", meas(1000.0, "ohm"));
+        for typed in ["4", "4k", "4k7"] {
+            set_measurement_buf(&mut state, "value".into(), typed.into(), None);
+        }
+        assert!(state.params_error.contains_key("value"));
+        commit_measurement(&mut state, "value".into(), "ohm".into());
+        assert_eq!(state.row.parameters["value"], meas(1000.0, "ohm"));
+        assert!(!state.dirty);
+
+        let mut state = state_with("value", meas(1000.0, "ohm"));
+        for typed in ["4", "4.", "4.7", "4.7k"] {
+            set_measurement_buf(&mut state, "value".into(), typed.into(), None);
+            assert!(state.params_error.is_empty(), "{typed}");
+        }
+        commit_measurement(&mut state, "value".into(), "ohm".into());
+        assert_eq!(state.row.parameters["value"], meas(4700.0, "ohm"));
+    }
+
+    /// A prefix picked while a letter is pending wins over the letter.
+    #[test]
+    fn a_picked_prefix_wins_over_a_pending_letter() {
+        let mut state = state_with("value", meas(1000.0, "ohm"));
+        set_measurement_buf(&mut state, "value".into(), "2.2k".into(), None);
+        pick_prefix(
+            &mut state,
+            "value".into(),
+            "ohm".into(),
+            SiPrefix::Mega,
+            None,
+        );
+        assert_eq!(state.row.parameters["value"], meas(2.2e6, "ohm"));
+    }
+
+    /// A slot's unit decides which letters count: `100u` on a farad slot
+    /// picks micro, a `k` on it is refused like any other letter.
+    #[test]
+    fn a_slot_unit_decides_which_typed_prefix_letters_count() {
+        let mut state = fixture();
+        let cap = slot("value", "F");
+        set_measurement_buf(&mut state, "value".into(), "100u".into(), Some(cap.clone()));
+        assert!(state.params_error.is_empty());
+        commit_measurement(&mut state, "value".into(), "F".into());
+        assert_eq!(state.row.parameters["value"], meas(100e-6, "F"));
+
+        set_measurement_buf(&mut state, "value".into(), "4.7k".into(), Some(cap));
+        assert!(state.params_error.contains_key("value"));
+        assert_eq!(
+            state.params_edit_buf.get("value").map(String::as_str),
+            Some("4.7k")
+        );
+    }
+
     #[test]
     fn a_prefix_typed_into_the_number_field_is_refused() {
-        for typed in ["4k7", "10k", "4.7uF"] {
+        for typed in ["4k7", "4.7uF"] {
             let mut state = state_with("value", meas(4700.0, "ohm"));
             set_measurement_buf(&mut state, "value".into(), typed.into(), None);
             commit_measurement(&mut state, "value".into(), "ohm".into());
