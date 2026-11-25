@@ -30,6 +30,10 @@ env:
   # Cargo.toml's [profile.release] so local `--release` builds stay fast.
   CARGO_PROFILE_RELEASE_LTO: thin
   CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "1"
+  # The tag's test job builds the workspace in the dev profile. Full debuginfo
+  # filled the hosted runner's disk on v26.11.1 ("No space left on device");
+  # ci.yml's `test · workspace` builds the same tree with line tables only.
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
 
 jobs:
   # Single source of the version string for every job below. A tag push uses
