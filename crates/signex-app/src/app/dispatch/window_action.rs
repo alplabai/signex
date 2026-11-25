@@ -226,6 +226,7 @@ fn command_edits_shown_board(message: &Message) -> bool {
         ),
         PcbMsg::PlaceToolPicked(_)
         | PcbMsg::LockRequested { .. }
+        | PcbMsg::UnfillRequested
         | PcbMsg::FootprintSwap(FootprintSwapMsg::Requested)
         | PcbMsg::PartSwap(PartSwapMsg::Requested(_))
         | PcbMsg::ReuseBlock(ReuseBlockMsg::SaveRequested)

@@ -66,6 +66,9 @@ pub(crate) use pcb_drc_check::LOOSE_BOARD_WARNING;
 pub(crate) use pcb_drc_results::DrcWaiverText;
 #[cfg(test)]
 mod held_rotate_window_tests;
+mod home_view;
+#[cfg(test)]
+mod home_view_tests;
 mod pcb_align;
 mod pcb_board_options;
 mod pcb_board_panel;
@@ -90,6 +93,11 @@ mod pcb_item_move_tests;
 pub(crate) mod pcb_layer_stack;
 pub(crate) mod pcb_layer_strip;
 mod pcb_layers_panel;
+mod pcb_net_focus;
+#[cfg(test)]
+mod pcb_net_focus_tests;
+#[cfg(test)]
+mod pcb_net_focus_window_tests;
 mod pcb_nets_panel;
 #[cfg(test)]
 mod pcb_nets_panel_tests;
@@ -120,10 +128,13 @@ pub(crate) mod pcb_tool;
 pub(crate) mod pcb_tune;
 #[cfg(test)]
 mod pcb_tune_tests;
+#[cfg(test)]
+mod pcb_unselected_drag_tests;
 mod pcb_via_move;
 #[cfg(test)]
 mod pcb_via_move_tests;
 pub mod pcb_view;
+mod pcb_view_persist;
 pub mod pcb_view_rotation;
 pub mod placed_part;
 pub(crate) mod placement_extras;

@@ -7,7 +7,7 @@
 use pcb_geom::{ClickMode, ItemRef};
 use signex_app::app::{
     BoardReannotateMsg, CommandPaletteMsg, ContextAction, ContextMenuMsg, EditMsg, FileMsg,
-    Message, PcbMsg, ReannotateProblem, Signex, TabDocument, WindowMsg,
+    Message, PcbMsg, ReannotateProblem, Signex, WindowMsg,
 };
 use signex_app::diagnostics;
 use signex_app::dock::DockMessage;
@@ -15,6 +15,7 @@ use signex_app::keymap::AppCommandId;
 use signex_app::menu_bar::MenuMessage;
 use signex_app::panels::{FootprintEditability, PanelKind, PanelMsg, PcbFootprintTextMsg};
 use signex_app::pcb_canvas::PcbCanvasMsg;
+use signex_app::test_adapter::BoardEngines;
 use signex_engine::pcb::designators::{
     BottomSideOrder, FootprintTextField, ReannotateOptions, ReannotateOrder, plan_reannotate,
 };
@@ -156,10 +157,8 @@ fn send(app: &mut Signex, message: Message) {
 
 fn live(app: &Signex) -> PcbBoard {
     let docs = &app.document_state;
-    docs.tabs[docs.active_tab]
-        .cached_document
-        .as_ref()
-        .and_then(TabDocument::as_pcb)
+    docs.tab_board_engine(docs.active_tab)
+        .map(|engine| engine.board())
         .expect("a board is open")
         .clone()
 }
@@ -723,11 +722,8 @@ struct Windows {
 
 fn board_of(app: &Signex, path: &std::path::Path) -> PcbBoard {
     app.document_state
-        .tabs
-        .iter()
-        .find(|t| t.path == path)
-        .and_then(|t| t.cached_document.as_ref())
-        .and_then(TabDocument::as_pcb)
+        .first_tab_board_engine(path)
+        .map(|engine| engine.board())
         .expect("board")
         .clone()
 }

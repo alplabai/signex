@@ -32,6 +32,7 @@ fn pour(n: u128, shelved: bool) -> Zone {
         min_island_area: 0.0,
         remove_dead_islands: false,
         shelved,
+        unfilled: false,
         unknown: Default::default(),
     }
 }

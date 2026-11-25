@@ -526,6 +526,10 @@ highlight_net_under_cursor	headless_refusal	headless_refusal	gui	none	routing
 highlight_related_net_objects	bridge	Ui(NetNav(RelatedNetHighlightRequested))	gui	selection	handler
 highlight_related_net_objects	in_window_rewrite	document_window	gui	window	routing
 highlight_related_net_objects	headless_refusal	headless_refusal	gui	none	routing
+home_view	bridge	Ui(HomeViewRequested)	gui	active document,render cache	handler
+home_view	in_window_rewrite	document_window	gui	window	routing
+home_view	refusal_needs	Canvas	gui	active document	routing
+home_view	headless_refusal	headless_refusal	gui	none	routing
 import_dxf	bridge	Pcb(DxfImport(Requested { outline: false }))	gui	active document,tool state,dialog answer	handler
 import_dxf	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,tool state,origin	handler
 import_dxf	in_window_rewrite	document_window	gui	window	routing
@@ -759,14 +763,30 @@ place_board_circle	bridge	Pcb(PlaceToolPicked(FullCircle))	gui	active document	g
 place_board_circle	in_window_rewrite	document_window	gui	window	routing
 place_board_circle	refusal_needs	EditablePcb	gui	active document	routing
 place_board_circle	headless_refusal	headless_refusal	gui	none	routing
+place_board_component	bridge	Pcb(PlaceToolPicked(Component))	gui	active document	gate
+place_board_component	in_window_rewrite	document_window	gui	window	routing
+place_board_component	refusal_needs	EditablePcb	gui	active document	routing
+place_board_component	headless_refusal	headless_refusal	gui	none	routing
 place_board_diff_pair	bridge	Pcb(PlaceToolPicked(DiffPairRouting))	gui	active document	gate
 place_board_diff_pair	in_window_rewrite	document_window	gui	window	routing
 place_board_diff_pair	refusal_needs	EditablePcb	gui	active document	routing
 place_board_diff_pair	headless_refusal	headless_refusal	gui	none	routing
-place_board_dimension	bridge	Pcb(PlaceToolPicked(Dimension))	gui	active document	gate
+place_board_dimension	bridge	Pcb(PlaceToolPicked(Dimension(Aligned)))	gui	active document	gate
 place_board_dimension	in_window_rewrite	document_window	gui	window	routing
 place_board_dimension	refusal_needs	EditablePcb	gui	active document	routing
 place_board_dimension	headless_refusal	headless_refusal	gui	none	routing
+place_board_dimension_horizontal	bridge	Pcb(PlaceToolPicked(Dimension(Horizontal)))	gui	active document	gate
+place_board_dimension_horizontal	in_window_rewrite	document_window	gui	window	routing
+place_board_dimension_horizontal	refusal_needs	EditablePcb	gui	active document	routing
+place_board_dimension_horizontal	headless_refusal	headless_refusal	gui	none	routing
+place_board_dimension_radial	bridge	Pcb(PlaceToolPicked(Dimension(Radial)))	gui	active document	gate
+place_board_dimension_radial	in_window_rewrite	document_window	gui	window	routing
+place_board_dimension_radial	refusal_needs	EditablePcb	gui	active document	routing
+place_board_dimension_radial	headless_refusal	headless_refusal	gui	none	routing
+place_board_dimension_vertical	bridge	Pcb(PlaceToolPicked(Dimension(Vertical)))	gui	active document	gate
+place_board_dimension_vertical	in_window_rewrite	document_window	gui	window	routing
+place_board_dimension_vertical	refusal_needs	EditablePcb	gui	active document	routing
+place_board_dimension_vertical	headless_refusal	headless_refusal	gui	none	routing
 place_board_fill	bridge	Pcb(PlaceToolPicked(Fill))	gui	active document	gate
 place_board_fill	in_window_rewrite	document_window	gui	window	routing
 place_board_fill	refusal_needs	EditablePcb	gui	active document	routing
@@ -1258,6 +1278,10 @@ save_layer_set	operand_handler	run_operands: named document	gui	origin,settings	
 save_layer_set	refusal_needs	Pcb	gui	active document	routing
 save_layer_set	refusal_needs_operands	needs_operands_reason	gui	none	routing
 save_layer_set	headless_missing_operand	needs `name`	gui	none	routing
+save_project_as	bridge	Project(SaveAs(Requested { project: None }))	gui	active document	gate
+save_project_as	in_window_rewrite	document_window	gui	window	routing
+save_project_as	refusal_needs	OpenProject	gui	active document	routing
+save_project_as	headless_refusal	headless_refusal	gui	none	routing
 save_workspace_layout	bridge	DockLayout(Workspace(Save(Requested)))	gui	settings	handler
 save_workspace_layout	in_window_rewrite	document_window	gui	window	routing
 save_workspace_layout	headless_refusal	headless_refusal	gui	none	routing
@@ -1526,6 +1550,10 @@ undo_last_segment	bridge	Tool(LastSegmentUndoRequested)	gui	in-progress edit	gat
 undo_last_segment	in_window_rewrite	document_window	gui	window	routing
 undo_last_segment	refusal_needs	DrawInProgress	gui	in-progress edit	routing
 undo_last_segment	headless_refusal	headless_refusal	gui	none	routing
+unfill_selected	bridge	Pcb(UnfillRequested)	core	active document,selection	handler
+unfill_selected	in_window_rewrite	document_window	gui	window	routing
+unfill_selected	refusal_needs	Pcb	core	active document	routing
+unfill_selected	headless_refusal	headless_refusal	core	none	routing
 unlock_board_items	bridge	Pcb(LockRequested { locked: false })	core	active document,selection	handler
 unlock_board_items	operand_handler	run_operands: named document	core	origin	handler
 unlock_board_items	in_window_rewrite	document_window	gui	window	routing

@@ -58,6 +58,7 @@ fn zone(n: u128, net: u32, fill: &str, layer: &str, rect: (f64, f64, f64, f64)) 
         min_island_area: 0.0,
         remove_dead_islands: false,
         shelved: false,
+        unfilled: false,
         unknown: Default::default(),
     }
 }
@@ -448,6 +449,39 @@ fn a_shelved_pour_has_no_fill_and_does_not_clear_other_pours() {
     let mut alone = board(Vec::new());
     alone.zones[0].shelved = true;
     assert!(zone_fills(&alone).is_empty());
+}
+
+/// #2506: an unfilled pour has no fill, clears no other pour and is listed
+/// as not filled until Repour (unlike a shelved one); once its flag is
+/// cleared it fills and clears again.
+#[test]
+fn an_unfilled_pour_has_no_fill_does_not_clear_and_is_listed_as_not_filled() {
+    let mut b = board(Vec::new());
+    b.zones
+        .push(zone(2, 2, POUR_FILL, "TopCopper", (0.0, -10.0, 20.0, 10.0)));
+    b.zones[1].priority = 5;
+    b.zones[1].unfilled = true;
+    let fills = zone_fills(&b);
+    assert!(fills.of(1).is_none(), "an unfilled pour holds no copper");
+    assert_eq!(fills.unfilled(1), Some(Unfilled::UntilRepour));
+    assert_eq!(fills.unfilled_pours().len(), 1);
+    assert_eq!(
+        twice_area(&fills.of(0).expect("filled").pieces),
+        FULL,
+        "the other pour fills its whole outline"
+    );
+    assert_eq!(pour_fill_order(&b), vec![1, 0], "it keeps its place");
+
+    b.zones[1].unfilled = false;
+    let fills = zone_fills(&b);
+    assert_eq!(fills.of(1).expect("filled again").pieces.len(), 1);
+    assert_eq!(fills.unfilled(1), None);
+    assert!(twice_area(&fills.of(0).expect("filled").pieces) < FULL);
+
+    // A shelved pour that is also flagged unfilled is shelved: not listed.
+    b.zones[1].unfilled = true;
+    b.zones[1].shelved = true;
+    assert_eq!(zone_fills(&b).unfilled(1), None);
 }
 
 /// #2216: a pour on another layer does not clear this one.

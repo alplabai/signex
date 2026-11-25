@@ -65,8 +65,8 @@ pub use body::{checked_body, courtyard_outline, footprint_body, is_courtyard};
 pub use closed_path::{PathRefusal, closed_path};
 pub use connections::{ConnectionCounts, NetUnrouted, PadName, connection_counts};
 pub use copper::{
-    CopperItem, collect_copper, copper_layers, layer_bit, layer_mask, net_at, pad_layers,
-    pad_pieces, pieces_on, via_layers, via_pieces,
+    CopperItem, collect_copper, copper_layers, layer_bit, layer_mask, net_at, no_net_copper,
+    pad_layers, pad_pieces, pieces_on, via_layers, via_pieces,
 };
 pub use drawn_copper::{DrawnCopperFault, board_graphic_copper, board_text_copper, drawn_copper};
 pub use flip::flip_footprint;
@@ -87,7 +87,7 @@ pub use index::{
 pub use measure::{Span, edge_gap};
 pub use mst::{Edge, euclidean_mst, spanning_forest};
 pub use net_length::{
-    item_net, net_copper, net_items, net_members, net_routed_length_mm, track_length_mm,
+    item_net, net_copper, net_items, net_members, net_routed_length_mm, nets_of, track_length_mm,
     tracks_length_mm, via_span,
 };
 pub use net_report::{NetReport, net_named, net_reports};
@@ -124,8 +124,8 @@ pub use text_frame::{
     text_frame_lines, text_frame_size_mm, wrap as wrap_text_frame,
 };
 pub use track_follow::{
-    ARC_FOLLOW_MAX_GROWTH, ArcEnds, ArcFollowFault, TrackEnds, arcs_on_vias, tracks_on_pads,
-    tracks_on_vias,
+    ARC_FOLLOW_MAX_GROWTH, ArcEnds, ArcFollowFault, TrackEnds, arcs_on_vias, stretch_rule,
+    tracks_on_pads, tracks_on_tracks, tracks_on_vias,
 };
 pub use transform::{Placement, Side, pad_shape, pad_world_center, pad_world_rotation_deg};
 pub use turned_marquee::{turned_marquee_corners, turned_marquee_mode, turned_marquee_select};

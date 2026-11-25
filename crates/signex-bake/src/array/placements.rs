@@ -45,7 +45,8 @@ impl InstanceBudget {
 pub(crate) enum PlacesRefused {
     /// A pattern does not expand, and this says why.
     DoesNotExpand(String),
-    /// The bake's [`InstanceBudget`] ran out.
+    /// The bake's [`InstanceBudget`] ran out, or one pattern alone goes
+    /// over [`MAX_ARRAY_INSTANCES`].
     OverCap,
 }
 
@@ -118,10 +119,16 @@ pub(crate) fn source_places(
     let mut places = Vec::new();
     for id in patterns {
         let mut warnings = Vec::new();
-        let expansion = Walk::new(sketch, solve, params_ast, &mut warnings)
+        let mut walk = Walk::new(sketch, solve, params_ast, &mut warnings);
+        let expansion = walk
             .expand(id)
             .map_err(|error| PlacesRefused::DoesNotExpand(error.to_string()))?;
+        // One pattern over the cap is refused as the cap, as several are.
+        let over_cap = walk.went_over_cap();
         let Some(expansion) = expansion else {
+            if over_cap {
+                return Err(PlacesRefused::OverCap);
+            }
             return Err(PlacesRefused::DoesNotExpand(
                 warnings
                     .pop()

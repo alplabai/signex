@@ -8,8 +8,8 @@
 //! Arrange in Box) for a footprint, the route rows (Lock, Unlock, Gloss
 //! Selected Routes, Add Teardrops) for a track or via, Select Net and
 //! Highlight Net for an object with a net, then Cross Probe, Properties,
-//! Polygon Manager on a polygon pour (mockup row 178) and Compare with
-//! Schematic. Each row runs its catalog command
+//! Unfill Selected (#2506) and Polygon Manager on a polygon pour (mockup row
+//! 178) and Compare with Schematic. Each row runs its catalog command
 //! and is live exactly when that command is enabled in the menu's window:
 //! on a read-only board every editing row is greyed.
 
@@ -40,6 +40,18 @@ pub(in crate::app::view::context_menu) fn pcb_canvas_menu_with_blocks(
     blocks: &[String],
 ) -> Vec<DropdownEntry<Message>> {
     board_canvas_menu(i18n, tid, ctx, active_submenu, sc, blocks, false)
+}
+
+/// The board canvas menu for the facts of the menu's window `ctx`, on a
+/// polygon pour.
+#[cfg(test)]
+pub(in crate::app::view::context_menu) fn pcb_pour_menu(
+    i18n: &I18n,
+    tid: ThemeId,
+    ctx: &CommandContext,
+    sc: &CanvasShortcuts,
+) -> Vec<DropdownEntry<Message>> {
+    board_canvas_menu(i18n, tid, ctx, None, sc, &[], true)
 }
 
 /// The board canvas menu; `on_pour` when the right-click is on a polygon
@@ -156,8 +168,10 @@ pub(in crate::app::view::context_menu) fn board_canvas_menu(
             Some(ic::icon_dd_properties(tid)),
             "edit_selected_object_properties",
         ));
-        // Mockup row 178: a pour opens the Polygon Manager with it ticked.
+        // #2506: a pour can be unfilled; mockup row 178: a pour opens the
+        // Polygon Manager with it ticked.
         if on_pour {
+            v.push(row(None, "unfill_selected"));
             v.push(row(None, "polygon_manager"));
         }
         // Compare with Schematic (#2462); the empty-area menu stays short.

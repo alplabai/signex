@@ -31,6 +31,7 @@ pub mod annotate_undo;
 pub mod app;
 pub mod autosave;
 pub mod board_3d_shader;
+pub mod board_view_prefs;
 pub mod canvas;
 pub(crate) mod choice;
 pub mod chrome;

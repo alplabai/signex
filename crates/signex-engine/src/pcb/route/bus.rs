@@ -14,7 +14,8 @@ use signex_types::pcb::{PcbBoard, Point, Segment};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use uuid::Uuid;
 
-use super::{RouteRefusal, RouteRules, lattice_step, nm};
+use super::cover::{hold_board_covers, uncovered};
+use super::{RouteDraft, RouteRefusal, RouteRules, RoutedLeg, lattice_step, nm};
 
 /// The tracks of a bus: their layer, width and the distance between the
 /// centre lines of two neighbours.
@@ -166,20 +167,36 @@ fn exit_step(members: &[BusMember], a: PointNm, b: PointNm, step: i64) -> Option
 }
 
 /// The members' tracks along `centre`: each member at its offset, joined
-/// straight from its start point. Empty for a centre line with no leg yet.
+/// straight from its start point, without the stretches a track of its net
+/// on `board` (or an earlier one of these) already covers (#2492). Empty
+/// for a centre line with no leg yet.
 pub fn bus_tracks(
+    board: &PcbBoard,
+    members: &[BusMember],
+    centre: &[Point],
+    style: &BusStyle,
+    ids: impl FnMut() -> Uuid,
+) -> Result<Vec<Segment>, RouteRefusal> {
+    bus_draft(board, members, centre, style, ids).map(|draft| draft.tracks)
+}
+
+/// [`bus_tracks`] as a draft that also holds the board tracks they were
+/// trimmed against, so [`super::draft_fits`] refuses it once one of those
+/// is gone or changed.
+pub fn bus_draft(
+    board: &PcbBoard,
     members: &[BusMember],
     centre: &[Point],
     style: &BusStyle,
     mut ids: impl FnMut() -> Uuid,
-) -> Result<Vec<Segment>, RouteRefusal> {
+) -> Result<RouteDraft, RouteRefusal> {
     let centre: Vec<PointNm> = centre.iter().map(|&p| nm(p)).collect::<Result<_, _>>()?;
     let Some(heading) = centre
         .iter()
         .find(|&&p| p != centre[0])
         .map(|p| p.minus(centre[0]))
     else {
-        return Ok(Vec::new());
+        return Ok(RouteDraft::default());
     };
     let (_, pitch) = widths(style)?;
     let mut ordered: Vec<(BusMember, PointNm)> = members
@@ -192,7 +209,8 @@ pub fn bus_tracks(
     let offsets = bus_offsets(ordered.len(), pitch);
     let paths = parallel_paths(&centre, &offsets).ok_or(RouteRefusal::TooSharp)?;
     let layer = pcb_layer_token(PcbLayer::Copper(style.layer));
-    let mut tracks = Vec::new();
+    let mut tracks: Vec<Segment> = Vec::new();
+    let mut covers: Vec<Segment> = Vec::new();
     for ((member, anchor), path) in ordered.into_iter().zip(paths) {
         let mut points = vec![anchor];
         points.extend(path);
@@ -204,19 +222,33 @@ pub fn bus_tracks(
                 p.to_mm()
             }
         };
-        tracks.extend(points.windows(2).map(|leg| Segment {
-            uuid: ids(),
-            locked: false,
-            attributes: Default::default(),
-            start: point(leg[0]),
-            end: point(leg[1]),
-            width: style.width_mm,
-            layer: layer.clone(),
-            net: member.net,
-            unknown_columns: Default::default(),
-        }));
+        for leg in points.windows(2) {
+            let track = Segment {
+                uuid: ids(),
+                locked: false,
+                attributes: Default::default(),
+                start: point(leg[0]),
+                end: point(leg[1]),
+                width: style.width_mm,
+                layer: layer.clone(),
+                net: member.net,
+                unknown_columns: Default::default(),
+            };
+            let pieces = {
+                let left = uncovered(track, board.segments.iter().chain(&tracks), &mut ids);
+                hold_board_covers(&mut covers, board, &left.covers);
+                left.pieces
+            };
+            tracks.extend(pieces);
+        }
     }
-    Ok(tracks)
+    let mut draft = RouteDraft::default();
+    draft.add(RoutedLeg {
+        tracks,
+        covers,
+        ..RoutedLeg::default()
+    });
+    Ok(draft)
 }
 
 /// What rounding the members' corners to whole nm can take off the gap

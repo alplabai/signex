@@ -7,6 +7,7 @@ open_document	file	Open document	Open...	General	-	-	Always	-	path:path
 save_document	file	Save document	Save	General	-	-	Always	-	document:document
 save_document_as	file	Save as	Save As...	General	-	-	Always	-	document:document,path:path,overwrite:bool?
 save_all	file	Save all unsaved documents	Save All	General	-	-	Always	gui_only	-
+save_project_as	file	Save the project to a new folder	Save Project As…	General	-	-	Always	gui_only	-
 revert	edit	Revert an agent's edit step	-	General	-	-	Always	mutates_doc	document:document,group:text,documents:text?
 close_active_document	file	Close active document	Close Document	General	-	-	Always	-	document:document
 close_all_documents	window	Close all documents	Close All Documents	General	-	-	Always	gui_only	-
@@ -126,6 +127,7 @@ place_text_string	place	Place text string	Text String	Schematic	-	-	RequiresDocu
 place_text_frame	place	Place text frame	Text Frame	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 place_note	place	Place note	Note	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 place_graphic	place	Place graphic	Graphic...	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
+place_board_component	place	Pick a library part and place its footprint on the board	Component...	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 place_board_pad	place	Place a free pad on the board	Pad	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 swap_pins	modify	Swap the nets of two equivalent pins of a component, on the board and on its schematic	Swap Pins	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:targets?,designator:text?,pins:text
 swap_gates	modify	Swap two equivalent gates of a component, on the board and on its schematic	Swap Gates	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:targets?,designator:text?,units:text
@@ -178,7 +180,10 @@ edit_blanket	place	Edit net blanket parameters	-	Schematic	-	-	RequiresDocument(
 edit_no_erc_rules	place	Edit No ERC rules	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,rules:text?,document:document?
 place_board_arc	place	Draw an arc on the active layer	Arc	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 place_board_string	place	Place a string on the active copper, silkscreen, mechanical or documentation layer	String	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
-place_board_dimension	place	Place a linear dimension on the board	Dimension	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
+place_board_dimension	place	Place an aligned dimension on the board, measured along its two points	Aligned	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
+place_board_dimension_horizontal	place	Place a linear dimension on the board, measured across	Linear Horizontal	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
+place_board_dimension_vertical	place	Place a linear dimension on the board, measured up or down	Linear Vertical	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
+place_board_dimension_radial	place	Place a radial dimension on an arc or circle of the board	Radial	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 place_board_line	place	Draw lines on the active layer, as tracks on copper	Line	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 place_board_graphic_arc	place	Draw an arc by its centre, start and end on the active layer, as a track arc on copper	Arc	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 place_board_circle	place	Draw a full circle by its centre and a point on it on the active layer	Full Circle	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
@@ -266,7 +271,8 @@ place_board_polygon_pour	place	Place a polygon pour on the active copper layer, 
 place_board_pour_cutout	place	Place a cutout region the polygon pours on the active copper layer leave empty	Pour Cutout	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 place_board_slice_pour	place	Slice the polygon pours on the active copper layer along a line	Slice Pour	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 repour_selected	pcb	Fill the selected polygon pours again and report their copper	Repour Selected	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
-repour_all	pcb	Fill every polygon pour of the board again and report their copper	Repour All	PCB	-	-	RequiresDocument(Pcb)	-	document:document
+repour_all	pcb	Fill every polygon pour of the board again and report their copper	Repour All	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document
+unfill_selected	pcb	Clear the copper of the selected polygon pours until the next repour	Unfill Selected	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 polygon_manager	pcb	Open the Polygon Manager of the board	Polygon Manager...	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 board_shape_from_selection	design	Make the selected closed lines the board outline	Board Shape from Selection	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:targets
 keepout_from_selection	design	Turn the selected area or closed lines into a keepout on its layer	Keepout from Selection	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:targets
@@ -367,6 +373,7 @@ view_rotate	view	Rotate the board view clockwise	Rotate View 90° Clockwise	PCB	
 view_rotate_ccw	view	Rotate the board view 90° counter-clockwise	Rotate View 90° Counter-Clockwise	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 view_rotate_180	view	Rotate the board view 180°	Rotate View 180°	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 view_rotate_reset	view	Reset the board view rotation to 0°	Reset View Rotation	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+home_view	view	Reset the view rotation and Flip, then fit the board or sheet	Home View	General	-	-	Always	gui_only	-
 toggle_origin_marker	view	Show or hide the board origin marker	Toggle Origin Marker	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 set_board_origin	edit	Set the board origin at a clicked point	Set	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 reset_board_origin	edit	Move the board origin to the bottom-left of the board outline	Reset	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document

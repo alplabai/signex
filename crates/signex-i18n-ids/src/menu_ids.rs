@@ -215,6 +215,13 @@ define_ids! {
         ZOOM_PILL_PRESETS = "zoom-pill-presets";
         ZOOM_PRESETS_PERCENT = "zoom-presets-percent";
         ZOOM_PRESETS_FIT_SELECTION = "zoom-presets-fit-selection";
+        ORIENTATION_TILE_X = "orientation-tile-x";
+        ORIENTATION_TILE_Y = "orientation-tile-y";
+        ORIENTATION_TILE_ANGLE = "orientation-tile-angle";
+        ORIENTATION_TILE_BOTTOM = "orientation-tile-bottom";
+        ORIENTATION_TILE_BOTTOM_ANGLE = "orientation-tile-bottom-angle";
+        HOME_VIEW_HINT_BOARD = "home-view-hint-board";
+        HOME_VIEW_HINT_SHEET = "home-view-hint-sheet";
         CTX_FP_MOVE_BY = "ctx-fp-move-by";
         CTX_FP_ROTATE_SELECTION = "ctx-fp-rotate-selection";
         CTX_FP_FLIP_SELECTION = "ctx-fp-flip-selection";

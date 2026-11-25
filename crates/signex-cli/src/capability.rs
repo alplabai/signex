@@ -92,6 +92,8 @@ const SAVES: &[&str] = &[
     "save_document_as",
     // Writes every unsaved document (#2844).
     "save_all",
+    // Writes a copy of the project into a new folder (#2908).
+    "save_project_as",
     "new_document",
     "new_project_with_profile",
     // Writes the blank sheet and lists it in the saved project (#2232).
@@ -166,6 +168,13 @@ mod tests {
         assert_eq!(cap("revert"), Capability::Edit);
     }
 
+    /// #2506: Repour All clears `unfilled` on the board's pours as an undo
+    /// step, so a read-only grant may not run it.
+    #[test]
+    fn repour_all_needs_the_edit_capability() {
+        assert_eq!(cap("repour_all"), Capability::Edit);
+    }
+
     #[test]
     fn the_catalogs_writers_and_exporters_are_pinned() {
         let non_default: BTreeSet<_> = all_command_ids()
@@ -179,6 +188,7 @@ mod tests {
             (Capability::Save, "save_document"),
             (Capability::Save, "save_document_as"),
             (Capability::Save, "save_all"),
+            (Capability::Save, "save_project_as"),
             (Capability::Save, "save_board_reuse_block"),
             (Capability::Save, "save_layer_set"),
             (Capability::Save, "save_workspace_layout"),

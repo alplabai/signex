@@ -349,7 +349,7 @@ fn tool_icon(tool: BoardPlaceTool, tid: ThemeId) -> ActiveBarIcon {
             svg(ic::icon_pcb_copper_area(tid))
         }
         T::TextString => svg(ic::icon_text(tid)),
-        T::Dimension => svg(ic::icon_pcb_dimension(tid)),
+        T::Dimension(_) => svg(ic::icon_pcb_dimension(tid)),
         T::Keepout => svg(ic::icon_pcb_keepout(tid)),
         T::Room => ActiveBarIcon::Glyph("\u{2B1A}"),
         T::Line => svg(ic::icon_shape_line(tid)),

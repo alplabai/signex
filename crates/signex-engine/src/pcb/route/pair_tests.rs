@@ -221,3 +221,40 @@ fn a_net_with_only_locked_tracks_is_left_and_named_while_the_others_are_tuned() 
         "the locked tracks stay as they were"
     );
 }
+
+/// #2492: a pair member routed along a track of its own net already on the
+/// board lays only what that track does not cover, ending on it.
+#[test]
+fn a_pair_member_along_its_own_track_lays_only_the_rest() {
+    let board = named_board(vec![
+        track(21, (0.0, 0.5), (1.0, 0.5), 1),
+        track(22, (0.0, -0.5), (1.0, -0.5), 2),
+        track(23, (4.0, -0.25), (12.0, -0.25), 2),
+    ]);
+    let pair = diff_pair_of(&board, &[], 1).expect("USB_P pairs with USB_N");
+    let members = [
+        BusMember {
+            net: pair.positive,
+            anchor: Point::new(1.0, 0.5),
+        },
+        BusMember {
+            net: pair.negative,
+            anchor: Point::new(1.0, -0.5),
+        },
+    ];
+    let style = BusStyle {
+        layer: signex_types::pcb_layer::CopperLayer::Top,
+        width_mm: 0.25,
+        pitch_mm: 0.5,
+    };
+    let centre = [bus_start(&members).unwrap(), Point::new(10.0, 0.0)];
+    let tracks = bus_tracks(&board, &members, &centre, &style, Uuid::now_v7).expect("tracks");
+    let negative: Vec<_> = tracks.iter().filter(|t| t.net == 2).collect();
+    assert_eq!(negative.len(), 2, "the join and the run up to the track");
+    assert_eq!(negative[1].end, Point::new(4.0, -0.25), "ends on the track");
+    assert_eq!(
+        tracks.iter().filter(|t| t.net == 1).count(),
+        2,
+        "USB_P is whole"
+    );
+}

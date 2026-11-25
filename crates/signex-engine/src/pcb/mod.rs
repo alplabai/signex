@@ -18,6 +18,9 @@ mod command;
 pub mod component;
 pub mod component_edit;
 pub mod designators;
+pub mod dimension_refit;
+#[cfg(test)]
+mod dimension_refit_tests;
 pub mod draw;
 mod draw_free;
 #[cfg(test)]

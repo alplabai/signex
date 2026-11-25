@@ -11,6 +11,7 @@
 //! so the tests under `tests/` reach it; the slice that lands `AppCore`
 //! removes it (ADR-0006, "Consequences").
 
+mod board;
 mod disk;
 mod gestures;
 #[cfg(test)]
@@ -23,6 +24,7 @@ use std::time::Duration;
 
 use iced::Task;
 
+pub use board::BoardEngines;
 pub use disk::{DiskWrite, TestDisk};
 
 use crate::app::command::{CommandArgs, CommandOutcome};

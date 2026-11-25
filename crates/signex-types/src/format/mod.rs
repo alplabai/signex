@@ -69,6 +69,8 @@ mod uuid_repair;
 mod wire_color_repair;
 
 #[cfg(test)]
+mod board_dimension_kind_tests;
+#[cfg(test)]
 mod board_dimension_tests;
 #[cfg(test)]
 mod board_free_tests;
@@ -156,6 +158,8 @@ mod version_tests;
 mod wire_color_tests;
 #[cfg(test)]
 mod zone_shelved_tests;
+#[cfg(test)]
+mod zone_unfilled_tests;
 
 // Public API re-exports — preserve the `format::…` import paths that
 // signex-app / signex-engine / signex-output rely on.

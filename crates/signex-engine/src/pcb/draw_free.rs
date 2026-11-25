@@ -10,9 +10,11 @@ use signex_types::format::pcb_layer_token;
 use signex_types::pcb::{DrillDef, Pad, PadNet, PadShape, PadType, PcbBoard, Point};
 use signex_types::pcb_arc::{ArcSweep, TrackArc};
 use signex_types::pcb_dimension::LinearDimension;
+use signex_types::pcb_dimension_kind::DimensionKind;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
 use uuid::Uuid;
 
+use super::dimension_refit::circle_near;
 use super::draw::net_under;
 
 /// The size of a new free pad, mm: round, 1.5 mm across.
@@ -277,6 +279,50 @@ pub fn new_dimension(
     // `LinearDimension::offset` reads it.
     let offset = ((through.x - start.x) * -dy + (through.y - start.y) * dx) / length;
     let mut dimension = LinearDimension::new(id, start, end, offset);
+    dimension.layer = pcb_layer_token(layer);
+    Some(dimension)
+}
+
+/// How near the edge of an arc or circle, in mm, a Radial dimension click
+/// must land to measure it (#2507).
+pub const RADIAL_PICK_REACH_MM: f64 = 1.0;
+
+/// A dimension of `kind` from `start` to `end`, its line through
+/// `through`, on `layer` (#2507): an aligned one is [`new_dimension`]; a
+/// horizontal or vertical one measures across or up, its offset how far
+/// `through` stands off `start` across its line. `None` when it measures
+/// nothing, and for a radial one, which [`new_radial_dimension`] places on
+/// a circle.
+pub fn new_kind_dimension(
+    kind: DimensionKind,
+    id: Uuid,
+    (start, end, through): (Point, Point, Point),
+    layer: PcbLayer,
+) -> Option<LinearDimension> {
+    match kind {
+        DimensionKind::Aligned => return new_dimension(id, start, end, through, layer),
+        DimensionKind::Radial => return None,
+        DimensionKind::Horizontal | DimensionKind::Vertical => {}
+    }
+    let (along, _) = kind.measure(start, end)?;
+    let offset = (through.x - start.x) * -along.y + (through.y - start.y) * along.x;
+    let mut dimension = LinearDimension::new(id, start, end, offset);
+    dimension.kind = kind;
+    dimension.layer = pcb_layer_token(layer);
+    Some(dimension)
+}
+
+/// A radial dimension on the arc or circle of `board` whose edge is nearest
+/// `at`, within [`RADIAL_PICK_REACH_MM`], its leader from the centre toward
+/// `at`, on `layer`; `None` with no arc or circle there.
+pub fn new_radial_dimension(
+    board: &PcbBoard,
+    id: Uuid,
+    at: Point,
+    layer: PcbLayer,
+) -> Option<LinearDimension> {
+    let circle = circle_near(board, at, RADIAL_PICK_REACH_MM)?;
+    let mut dimension = LinearDimension::radial(id, &circle, at);
     dimension.layer = pcb_layer_token(layer);
     Some(dimension)
 }

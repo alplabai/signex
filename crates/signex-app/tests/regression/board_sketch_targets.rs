@@ -5,10 +5,11 @@
 //! the same undo step as the outline; a board without them saves under its
 //! old token.
 
-use signex_app::app::{BoardSketchMsg, EditMsg, FileMsg, Message, PcbMsg, Signex, TabDocument};
+use signex_app::app::{BoardSketchMsg, EditMsg, FileMsg, Message, PcbMsg, Signex};
 use signex_app::dock::DockMessage;
 use signex_app::library::messages::RoleTag;
 use signex_app::panels::{BoardSketchAttrMsg, PanelMsg};
+use signex_app::test_adapter::BoardEngines;
 use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::plane::PlaneId;
@@ -92,10 +93,8 @@ fn bake(f: &mut Fixture) {
 
 fn live(f: &Fixture) -> PcbBoard {
     let docs = &f.app.document_state;
-    docs.tabs[docs.active_tab]
-        .cached_document
-        .as_ref()
-        .and_then(TabDocument::as_pcb)
+    docs.tab_board_engine(docs.active_tab)
+        .map(|engine| engine.board())
         .expect("a board is open")
         .clone()
 }

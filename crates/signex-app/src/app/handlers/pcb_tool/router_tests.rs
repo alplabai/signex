@@ -147,7 +147,7 @@ fn push_mode_moves_an_other_net_track_and_keeps_it_legal() {
 fn interactive_routing_is_a_live_tool_and_space_bends_its_route() {
     assert_eq!(
         BoardPlaceTool::InteractiveRouting.command(),
-        Some("place_board_route")
+        "place_board_route"
     );
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _path) = app_with(dir.path(), Vec::new(), Vec::new());

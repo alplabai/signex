@@ -134,6 +134,7 @@ fn ten_thousand_tracks_and_zones() -> PcbBoard {
                 min_island_area: 0.0,
                 remove_dead_islands: false,
                 shelved: false,
+                unfilled: false,
                 unknown: Default::default(),
             });
         }

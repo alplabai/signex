@@ -105,7 +105,8 @@ pub fn shove_run(world: &RouteWorld, legs: &[NewCopper]) -> ShoveRun {
 }
 
 /// Move track `index` clear of `pushers`, stretching the tracks joined at
-/// its ends. The indices it moved.
+/// its ends. The indices it moved. A track of no net (#2515) is not
+/// moved: the route walks round it.
 fn push_one(
     world: &RouteWorld,
     index: usize,
@@ -113,7 +114,8 @@ fn push_one(
     moved: &mut HashMap<usize, Shape>,
 ) -> Option<Vec<usize>> {
     let item = &world.items[index];
-    if moved.contains_key(&index) || !matches!(item.item, ItemRef::Track(_)) {
+    let movable = matches!(item.item, ItemRef::Track(_)) && item.net != 0;
+    if moved.contains_key(&index) || !movable {
         return None;
     }
     let Shape::Capsule { a, b, radius } = item.shape else {

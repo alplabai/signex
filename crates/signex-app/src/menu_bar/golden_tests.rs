@@ -317,10 +317,22 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     // #2410: File ▸ Import, fixture names only.
     ("import_dxf", "ImportDxf"),
     ("import_dxf_outline", "ImportDxfOutline"),
+    // #2505: Place ▸ Component on a board, fixture name only.
+    ("place_board_component", "PlaceBoardComponent"),
     ("place_board_pad", "PlaceBoardPad"),
     ("place_board_arc", "PlaceBoardArc"),
     ("place_board_string", "PlaceBoardString"),
     ("place_board_dimension", "PlaceBoardDimension"),
+    // #2507: Place ▸ Dimension on a board, fixture names only.
+    (
+        "place_board_dimension_horizontal",
+        "PlaceBoardDimensionHorizontal",
+    ),
+    (
+        "place_board_dimension_vertical",
+        "PlaceBoardDimensionVertical",
+    ),
+    ("place_board_dimension_radial", "PlaceBoardDimensionRadial"),
     // #2424: Place ▸ Graphics on a board, fixture names only.
     ("place_board_line", "PlaceBoardLine"),
     ("place_board_graphic_arc", "PlaceBoardGraphicArc"),
@@ -336,6 +348,8 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("save_document", "Save"),
     ("save_document_as", "SaveAs"),
     ("save_all", "SaveAll"),
+    // #2908: File ▸ Save Project As…, fixture name only.
+    ("save_project_as", "SaveProjectAs"),
     ("print", "Print"),
     ("undo", "Undo"),
     ("redo", "Redo"),
@@ -358,6 +372,8 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("zoom_in_at_cursor", "ZoomIn"),
     ("zoom_out_at_cursor", "ZoomOut"),
     ("zoom_to_fit", "ZoomFit"),
+    // Mockup row 194: fixture name only.
+    ("home_view", "HomeView"),
     ("toggle_visible_grid", "ToggleGrid"),
     ("toggle_auto_focus", "ToggleAutoFocus"),
     ("toggle_ratsnest", "ToggleRatsnest"),
@@ -410,6 +426,8 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("open_net_classes_panel", "OpenNetClassesPanel"),
     ("repour_selected", "RepourSelected"),
     ("repour_all", "RepourAll"),
+    // #2506: fixture name only.
+    ("unfill_selected", "UnfillSelected"),
     // Mockup row 178: Tools ▸ Polygon Manager..., fixture name only.
     ("polygon_manager", "PolygonManager"),
     ("reannotate_board", "ReannotateBoard"),
@@ -557,8 +575,8 @@ fn row_path(cols: &str) -> &str {
 
 const PLACE_BOARD_GOLDEN: &str = include_str!("testdata/menu_bar_place_board.golden.tsv");
 
-/// #2360: Place on a board lists the board's tools, greyed with the PCB
-/// Active Bar's reason, then Board Sketch, live.
+/// #2360, #2505: Place on a board lists the board's tools, each live, then
+/// Board Sketch.
 #[test]
 fn model_reproduces_golden_board_place_menu() {
     let ctxs = variants();

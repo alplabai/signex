@@ -170,7 +170,7 @@ pub(super) fn is_free(tool: BoardPlaceTool) -> bool {
         BoardPlaceTool::Pad
             | BoardPlaceTool::Arc
             | BoardPlaceTool::TextString
-            | BoardPlaceTool::Dimension
+            | BoardPlaceTool::Dimension(_)
     )
 }
 

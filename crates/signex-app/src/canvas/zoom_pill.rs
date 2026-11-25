@@ -32,11 +32,37 @@ const TIP_GAP: f32 = 4.0;
 /// Zoom levels the preset menu offers, in percent of the default scale.
 pub const PRESETS: [u16; 4] = [50, 100, 200, 400];
 
+/// Padding and border on each side of a pill shell.
+pub const SHELL_INSET: f32 = PAD + 1.0;
+
 /// Outer size of the pill: padding and the 1 px border on every side.
 pub fn pill_size() -> (f32, f32) {
     // `-`, readout, `+`, the hairline and Fit: four gaps between five cells.
     let inner_w = MINI + READOUT_W + MINI + 1.0 + FIT_W + 4.0 * GAP;
-    (inner_w + 2.0 * (PAD + 1.0), MINI + 2.0 * (PAD + 1.0))
+    (inner_w + 2.0 * SHELL_INSET, MINI + 2.0 * SHELL_INSET)
+}
+
+/// Outer size of the one-button Home pill (mockup row 194): as tall as the
+/// zoom pill, one control wide.
+pub fn home_size() -> (f32, f32) {
+    (MINI + 2.0 * SHELL_INSET, MINI + 2.0 * SHELL_INSET)
+}
+
+/// The pill's shell: raised fill, hairline border, button radius. The
+/// orientation tile above the pill wears it too (mockup row 194).
+pub fn shell_style(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style + 'static {
+    let raised = resolve(tokens).raised;
+    let line = ti(tokens.border);
+    move |_: &Theme| container::Style {
+        background: Some(Background::Color(raised)),
+        border: Border {
+            width: 1.0,
+            radius: Radii::GRAPHITE.button.into(),
+            color: line,
+            ..Border::default()
+        },
+        ..container::Style::default()
+    }
 }
 
 /// What the pill's controls send.
@@ -137,7 +163,6 @@ pub fn view_with<'a, M: Clone + 'a>(
     presets_open: bool,
 ) -> Element<'a, M> {
     let r = resolve(tokens);
-    let line = ti(tokens.border);
     let ink = ti(tokens.text_secondary);
     let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
     let [out_hint, in_hint, readout_hint, fit_hint] = labels.hints;
@@ -206,16 +231,78 @@ pub fn view_with<'a, M: Clone + 'a>(
         .padding(PAD)
         .width(w)
         .height(h)
+        .style(shell_style(tokens))
+        .boxed()
+}
+
+/// The Home pill (mockup row 194): one button with the house glyph and
+/// `hint` on hover; `away` puts an accent dot on it while the view is
+/// turned or flipped.
+pub fn home_view<'a, M: Clone + 'a>(
+    tokens: &ThemeTokens,
+    icon: iced::widget::svg::Handle,
+    on_press: M,
+    hint: Label<'a>,
+    away: bool,
+) -> Element<'a, M> {
+    let ink = ti(tokens.text_secondary);
+    let glyph = TS.body * 4.0 / 3.0;
+    let icon = iced::widget::svg(icon)
+        .width(glyph)
+        .height(glyph)
+        .style(move |_: &Theme, _| iced::widget::svg::Style {
+            color: Some(ink),
+            ..Default::default()
+        });
+    let mut face: iced::widget::Stack<Element<'a, M>> = iced::widget::Stack::new()
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .push(
+            container(icon)
+                .center_x(Length::Fill)
+                .center_y(Length::Fill)
+                .boxed(),
+        );
+    if away {
+        face = face.push(away_dot(tokens));
+    }
+    let control = button(face)
+        .width(MINI)
+        .height(MINI)
+        .padding(0)
+        .on_press(on_press)
+        .style(control_style(tokens, false))
+        .boxed();
+    let (w, h) = home_size();
+    container(with_hint(control, Some(hint), tokens))
+        .padding(PAD)
+        .width(w)
+        .height(h)
+        .style(shell_style(tokens))
+        .boxed()
+}
+
+/// The accent dot in the Home button's top-right corner.
+fn away_dot<'a, M: 'a>(tokens: &ThemeTokens) -> Element<'a, M> {
+    let accent = ti(tokens.accent);
+    let size = SP.s * 1.5;
+    let dot = container(Space::new())
+        .width(size)
+        .height(size)
         .style(move |_: &Theme| container::Style {
-            background: Some(Background::Color(r.raised)),
+            background: Some(Background::Color(accent)),
             border: Border {
-                width: 1.0,
-                radius: Radii::GRAPHITE.button.into(),
-                color: line,
+                radius: Radii::GRAPHITE.pill.into(),
                 ..Border::default()
             },
             ..container::Style::default()
-        })
+        });
+    container(dot)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .align_x(iced::alignment::Horizontal::Right)
+        .align_y(iced::alignment::Vertical::Top)
+        .padding(SP.xs * 1.5)
         .boxed()
 }
 

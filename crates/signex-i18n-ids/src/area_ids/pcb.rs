@@ -5,7 +5,7 @@ define_ids! {
     PCB_BAR_MOVE_TOOLTIP = "pcb-bar-move-tooltip";
     PCB_BAR_FILTER_TOOLTIP = "pcb-bar-filter-tooltip";
     PCB_BAR_ALIGN_TOOLTIP = "pcb-bar-align-tooltip";
-    PCB_BAR_COMPONENT_UNAVAILABLE = "pcb-bar-component-unavailable";
+    PCB_BAR_COMPONENT_TOOLTIP = "pcb-bar-component-tooltip";
     PCB_BAR_FILTER_OFF_COUNT = "pcb-bar-filter-off-count";
     PCB_BAR_GROUP = "pcb-bar-group";
     PCB_TOOL_COMPONENT = "pcb-tool-component";
@@ -47,6 +47,17 @@ define_ids! {
     PCB_TOOL_HINT_DIMENSION = "pcb-tool-hint-dimension";
     PCB_TOOL_NO_ARC = "pcb-tool-no-arc";
     PCB_TOOL_NO_DIMENSION = "pcb-tool-no-dimension";
+    // #2507: the dimension kinds.
+    PCB_TOOL_DIMENSION_HORIZONTAL = "pcb-tool-dimension-horizontal";
+    PCB_TOOL_DIMENSION_VERTICAL = "pcb-tool-dimension-vertical";
+    PCB_TOOL_DIMENSION_RADIAL = "pcb-tool-dimension-radial";
+    PCB_BAR_DIMENSION_HORIZONTAL_TOOLTIP = "pcb-bar-dimension-horizontal-tooltip";
+    PCB_BAR_DIMENSION_VERTICAL_TOOLTIP = "pcb-bar-dimension-vertical-tooltip";
+    PCB_BAR_DIMENSION_RADIAL_TOOLTIP = "pcb-bar-dimension-radial-tooltip";
+    PCB_TOOL_HINT_DIMENSION_HORIZONTAL = "pcb-tool-hint-dimension-horizontal";
+    PCB_TOOL_HINT_DIMENSION_VERTICAL = "pcb-tool-hint-dimension-vertical";
+    PCB_TOOL_HINT_DIMENSION_RADIAL = "pcb-tool-hint-dimension-radial";
+    PCB_TOOL_NO_RADIAL_DIMENSION = "pcb-tool-no-radial-dimension";
     PCB_ARC_MODE_CENTRE = "pcb-arc-mode-centre";
     PCB_ARC_MODE_EDGE = "pcb-arc-mode-edge";
     PCB_ARC_MODE_ANY = "pcb-arc-mode-any";
@@ -63,6 +74,7 @@ define_ids! {
     PCB_POUR_REPOURED = "pcb-pour-repoured";
     PCB_POUR_NONE = "pcb-pour-none";
     PCB_POUR_NONE_SELECTED = "pcb-pour-none-selected";
+    PCB_POUR_UNFILL_NONE_SELECTED = "pcb-pour-unfill-none-selected";
     PCB_LAYER_TAB_HIDE = "pcb-layer-tab-hide";
     PCB_LAYER_TAB_SHOW_ONLY = "pcb-layer-tab-show-only";
     PCB_LAYER_TAB_COLOUR = "pcb-layer-tab-colour";
@@ -173,6 +185,7 @@ define_ids! {
     PCB_POUR_UNFILLED_NO_LAYER = "pcb-pour-unfilled-no-layer";
     PCB_POUR_UNFILLED_OUTLINE = "pcb-pour-unfilled-outline";
     PCB_POUR_UNFILLED_CLEARANCE = "pcb-pour-unfilled-clearance";
+    PCB_POUR_UNFILLED_UNTIL_REPOUR = "pcb-pour-unfilled-until-repour";
     PCB_ROUTE_AIM_BLOCKED = "pcb-route-aim-blocked";
     PCB_TOOL_PAUSED = "pcb-tool-paused";
     PCB_TUNE_NEEDS_TRACKS = "pcb-tune-needs-tracks";

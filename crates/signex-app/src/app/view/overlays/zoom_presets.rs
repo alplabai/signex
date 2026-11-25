@@ -5,6 +5,7 @@
 //! click outside closes it (`OverlayId::ZoomPresets`).
 
 use iced::Element;
+use iced::widget::Widget as _;
 use signex_i18n::{Arg, I18n, menu_ids, t};
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem, MenuMetrics};
 
@@ -72,7 +73,9 @@ impl Signex {
 
     /// The preset menu over the zoom pill: the click-outside layer, then the
     /// card, its bottom one gap above the pill and its right edge on the
-    /// pill's. Main window only, like the pill.
+    /// pill's. Main window only, like the pill. Placed against the canvas
+    /// of the laid-out size, as the pill is, so a stale `window_size` cannot
+    /// part the two (#2911).
     pub(in crate::app::view) fn zoom_presets_overlay(
         &self,
         window_id: iced::window::Id,
@@ -80,20 +83,46 @@ impl Signex {
         if self.ui_state.main_window_id != Some(window_id) || !self.zoom_presets_shown() {
             return Vec::new();
         }
-        let panel_ctx = &self.document_state.panel_ctx;
         let zoom = self
             .interaction_state
             .canvas_for_window(window_id)
             .zoom_percent();
         let has_selection = self.command_context(None).has_selection;
+        let layer = iced::widget::responsive(move |size: iced::Size| {
+            let canvas = self.canvas_bounds_sized(None, (size.width, size.height));
+            let (card, extent) = self.zoom_presets_card(zoom, has_selection);
+            let layers = Self::menu_overlay(
+                Message::Ui(UiMsg::ZoomPresetsDismissed),
+                card,
+                presets_anchor(canvas, extent),
+            );
+            layers
+                .into_iter()
+                .fold(
+                    iced::widget::Stack::new()
+                        .width(iced::Length::Fill)
+                        .height(iced::Length::Fill),
+                    |stack, layer| stack.push(layer),
+                )
+                .boxed()
+        });
+        vec![layer.boxed()]
+    }
+
+    /// The preset card for a canvas at `zoom` percent, and its (width, height).
+    pub(in crate::app::view) fn zoom_presets_card(
+        &self,
+        zoom: f64,
+        has_selection: bool,
+    ) -> (Element<'_, Message>, (f32, f32)) {
+        let panel_ctx = &self.document_state.panel_ctx;
         let entries = zoom_preset_entries(&self.ui_state.i18n, zoom, has_selection);
         let metrics = MenuMetrics::GRAPHITE;
         let width = metrics.fitted_width(&entries, f32::MAX, &panel_ctx.ui_font_name);
         let height = metrics.card_height(&entries).unwrap_or_default();
-        let anchor = presets_anchor(self.canvas_bounds(), (width, height));
         let card =
             signex_widgets::active_bar_dropdown::view(entries, &panel_ctx.tokens, Some(width));
-        Self::menu_overlay(Message::Ui(UiMsg::ZoomPresetsDismissed), card, anchor)
+        (card, (width, height))
     }
 }
 

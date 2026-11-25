@@ -1,13 +1,14 @@
-//! Board-edge clearance (#2435): netted copper closer to the board outline
-//! than a written rule's minimum, one finding per item at its closest
-//! point. The outline is the board's saved outline; cutouts inside the
-//! board are not edges here yet.
+//! Board-edge clearance (#2435): copper closer to the board outline than a
+//! written rule's minimum, one finding per item at its closest point. The
+//! copper of no net counts too (#2515): pads, tracks, arcs and vias of net
+//! 0, and drawings and strings on copper. The outline is the board's saved
+//! outline; cutouts inside the board are not edges here yet.
 
 use std::collections::HashMap;
 
 use signex_types::pcb::PcbBoard;
 
-use pcb_geom::{ItemRef, PointNm, Shape, collect_copper};
+use pcb_geom::{ItemRef, PointNm, Shape, collect_copper, no_net_copper};
 
 use crate::near::{gap_under, near_pairs};
 use crate::user_rules::LimitKind;
@@ -21,7 +22,8 @@ pub(crate) fn violations(board: &PcbBoard, rules: &DrcRules) -> Vec<Violation> {
     if edges.is_empty() {
         return Vec::new();
     }
-    let copper = collect_copper(board);
+    let mut copper = collect_copper(board);
+    copper.extend(no_net_copper(board));
     let mut shapes: Vec<Shape> = edges.clone();
     shapes.extend(copper.iter().map(|c| c.shape.clone()));
     let limits: Vec<_> = copper

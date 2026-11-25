@@ -9,6 +9,7 @@
 use crate::app::contracts::BoardOriginMsg;
 use crate::app::pcb_tools::BoardPlaceTool;
 use crate::keymap::{AppCommandId, CatalogTextExt};
+use signex_types::pcb_dimension_kind::DimensionKind;
 
 use super::CommandArgs;
 #[cfg(test)]
@@ -226,10 +227,12 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "mirror_x" => Message::Edit(EditMsg::MirrorSelectedY),
         "mirror_y" => Message::Edit(EditMsg::MirrorSelectedX),
         "flip_selection" => Message::Edit(EditMsg::FlipSelection),
-        // No part in hand: choose one in the picker (#1767).
+        // No part in hand: choose one in the picker (#1767). The board's
+        // Component tool opens the same picker under its own gate (#2505).
         "open_components_panel" | "place_symbol" => {
             Message::Library(crate::library::LibraryMessage::OpenPicker)
         }
+        "place_board_component" => board_tool(BoardPlaceTool::Component),
         "new_document" | "new_project_with_profile" => Message::Menu(MenuMessage::NewProject),
         "open_command_palette" => Message::CommandPalette(CommandPaletteMsg::Open),
         "open_document" => Message::Menu(MenuMessage::OpenProject),
@@ -385,6 +388,10 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "save_document" => Message::File(FileMsg::Save),
         "save_document_as" => Message::Menu(MenuMessage::SaveAs),
         "save_all" => Message::Menu(MenuMessage::SaveAll),
+        // #2908: the dialog on the active document's project.
+        "save_project_as" => {
+            Message::from(crate::app::SaveProjectAsMsg::Requested { project: None })
+        }
         "select_all" => Message::Selection(selection_request::SelectionRequest::SelectAll),
         // An alias of `select_connection`, the Active Bar's Select > Connection (#1668).
         "select_expand_connection" => {
@@ -421,6 +428,8 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         // their copper came to.
         "repour_selected" => Message::Pcb(PcbMsg::RepourRequested { selected: true }),
         "repour_all" => Message::Pcb(PcbMsg::RepourRequested { selected: false }),
+        // #2506: clear the copper of the selected pours until Repour.
+        "unfill_selected" => Message::Pcb(PcbMsg::UnfillRequested),
         "place_board_keepout" => board_tool(BoardPlaceTool::Keepout),
         // #2457: Place ▸ Room and Design ▸ Rooms ▸ Create Rooms from Sheets.
         "place_board_room" => board_tool(BoardPlaceTool::Room),
@@ -445,7 +454,17 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "place_board_pad" => board_tool(BoardPlaceTool::Pad),
         "place_board_arc" => board_tool(BoardPlaceTool::Arc),
         "place_board_string" => board_tool(BoardPlaceTool::TextString),
-        "place_board_dimension" => board_tool(BoardPlaceTool::Dimension),
+        // #2507: one tool per dimension kind.
+        "place_board_dimension" => board_tool(BoardPlaceTool::Dimension(DimensionKind::Aligned)),
+        "place_board_dimension_horizontal" => {
+            board_tool(BoardPlaceTool::Dimension(DimensionKind::Horizontal))
+        }
+        "place_board_dimension_vertical" => {
+            board_tool(BoardPlaceTool::Dimension(DimensionKind::Vertical))
+        }
+        "place_board_dimension_radial" => {
+            board_tool(BoardPlaceTool::Dimension(DimensionKind::Radial))
+        }
         "cycle_arc_mode" => Message::Pcb(PcbMsg::ArcModeStepped),
         "change_footprint" => Message::Pcb(PcbMsg::FootprintSwap(
             crate::app::FootprintSwapMsg::Requested,
@@ -514,6 +533,8 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "view_rotate_ccw" => view_turn(ViewRotationMsg::TurnedBy(-90.0)),
         "view_rotate_180" => view_turn(ViewRotationMsg::TurnedBy(180.0)),
         "view_rotate_reset" => view_turn(ViewRotationMsg::AngleSet(0.0)),
+        // Mockup row 194: rotation 0°, Flip off, Fit.
+        "home_view" => Message::Ui(UiMsg::HomeViewRequested),
         "toggle_layers_panel" => {
             Message::Overlay(OverlayMsg::PanelToggled(crate::panels::PanelKind::Layers))
         }

@@ -85,7 +85,7 @@ impl Signex {
                 common.placement_paused = paused;
                 PcbPrimitiveFacts::Text(text_facts(board, common, &[&text], i18n))
             }
-            BoardPlaceTool::Dimension => {
+            BoardPlaceTool::Dimension(_) => {
                 let dimension = self.next_board_dimension()?;
                 let mut common =
                     self.primitive_common_on(board, target, Editability::Editable, None);

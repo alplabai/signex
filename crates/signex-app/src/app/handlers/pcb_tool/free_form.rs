@@ -31,7 +31,7 @@ impl Signex {
         edit: &PrimitiveEdit,
         what: MessageId,
     ) {
-        if tool == BoardPlaceTool::Dimension
+        if tool.dimension_kind().is_some()
             && let Some(style_edit) = dimension_style_edit(edit)
         {
             self.edit_dimension_tool_style(&style_edit, what);
@@ -84,13 +84,13 @@ impl Signex {
             (BoardPlaceTool::TextString, PrimitiveEdit::Number(F::Rotation, v)) => {
                 defaults.text_rotation = Some(v.rem_euclid(360.0));
             }
-            (BoardPlaceTool::Dimension, PrimitiveEdit::Number(F::LineWidth, v)) => {
+            (BoardPlaceTool::Dimension(_), PrimitiveEdit::Number(F::LineWidth, v)) => {
                 defaults.dimension_line_width_mm = Some(*v);
             }
-            (BoardPlaceTool::Dimension, PrimitiveEdit::Number(F::TextHeight, v)) => {
+            (BoardPlaceTool::Dimension(_), PrimitiveEdit::Number(F::TextHeight, v)) => {
                 defaults.dimension_text_height_mm = Some(*v);
             }
-            (BoardPlaceTool::Dimension, PrimitiveEdit::Number(F::Precision, v)) => {
+            (BoardPlaceTool::Dimension(_), PrimitiveEdit::Number(F::Precision, v)) => {
                 defaults.dimension_precision = precision_of(*v);
             }
             // The location and an arc's shape are the clicks'.
@@ -126,7 +126,7 @@ impl Signex {
     ) -> Result<(), String> {
         let i18n = &self.ui_state.i18n;
         match (tool, edit) {
-            (BoardPlaceTool::Dimension, PrimitiveEdit::Number(F::Precision, v))
+            (BoardPlaceTool::Dimension(_), PrimitiveEdit::Number(F::Precision, v))
                 if precision_of(*v).is_none() =>
             {
                 Err(t!(i18n, ids::PCB_PRIM_NOT_A_PRECISION).into_string())

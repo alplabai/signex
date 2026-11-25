@@ -2,7 +2,8 @@
 //! Its outline only bounds the copper; the copper itself is the fill
 //! `pcb_geom::zone_fills` computes, clear of other nets' copper by the
 //! pour's clearance. The fill is not stored: see `docs/PCB_TOOLS.md`,
-//! "Polygon Pour". A shelved pour (`Zone::shelved`) has no fill at all.
+//! "Polygon Pour". A shelved pour (`Zone::shelved`) has no fill at all, and
+//! an unfilled one (`Zone::unfilled`) none until the next Repour.
 
 use crate::pcb::{PcbBoard, Zone};
 
@@ -14,8 +15,8 @@ pub(crate) fn is_unset_area(value: &f64) -> bool {
     *value == 0.0
 }
 
-/// `Zone::remove_dead_islands` and `Zone::shelved` are left out of the file
-/// when off.
+/// `Zone::remove_dead_islands`, `Zone::shelved` and `Zone::unfilled` are
+/// left out of the file when off.
 pub(crate) fn is_off(value: &bool) -> bool {
     !*value
 }
@@ -31,6 +32,20 @@ impl Zone {
     /// ignored.
     pub fn is_shelved_pour(&self) -> bool {
         self.is_pour() && self.shelved
+    }
+
+    /// Whether this zone is an unfilled polygon pour (#2506): its outline
+    /// and settings stay and it has no fill until the next Repour. A shelved
+    /// pour is shelved, not unfilled; `unfilled` on any other zone is
+    /// ignored.
+    pub fn is_unfilled_pour(&self) -> bool {
+        self.is_pour() && self.unfilled && !self.shelved
+    }
+
+    /// Whether this zone is a polygon pour that fills: neither shelved nor
+    /// unfilled. Only such a pour holds copper and clears other copper.
+    pub fn is_filling_pour(&self) -> bool {
+        self.is_pour() && !self.shelved && !self.unfilled
     }
 
     /// How far, in mm, the pour's fill keeps from copper of other nets: its
@@ -102,5 +117,33 @@ mod tests {
         assert!(zone.is_shelved_pour());
         zone.fill_type = "solid".into();
         assert!(!zone.is_shelved_pour());
+    }
+
+    /// #2506: only a pour is unfilled; a shelved pour is shelved, not
+    /// unfilled; neither fills. The key is written only when on.
+    #[test]
+    fn only_a_pour_is_unfilled_and_neither_it_nor_a_shelved_pour_fills() {
+        let mut zone: Zone = serde_json::from_str(
+            r#"{ "uuid": "8d15b2f9-8f86-41d7-9ec4-0f54a4f3a651", "fill_type": "pour" }"#,
+        )
+        .expect("zone");
+        assert!(!zone.unfilled && !zone.is_unfilled_pour() && zone.is_filling_pour());
+        assert!(
+            !serde_json::to_string(&zone)
+                .expect("json")
+                .contains("unfilled")
+        );
+        zone.unfilled = true;
+        assert!(zone.is_unfilled_pour() && !zone.is_filling_pour());
+        assert!(
+            serde_json::to_string(&zone)
+                .expect("json")
+                .contains("\"unfilled\":true")
+        );
+        zone.shelved = true;
+        assert!(!zone.is_unfilled_pour() && !zone.is_filling_pour());
+        zone.shelved = false;
+        zone.fill_type = "solid".into();
+        assert!(!zone.is_unfilled_pour() && !zone.is_filling_pour());
     }
 }

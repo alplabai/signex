@@ -4,6 +4,7 @@
 
 use signex_types::format::parse_pcb_layer;
 use signex_types::pcb::{PadShape, PadType, Point};
+use signex_types::pcb_dimension_kind::DimensionKind;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
 
 use super::form_tests::{enter, form, panel, tab, typed};
@@ -77,9 +78,12 @@ fn the_four_tools_are_live_rows() {
         (BoardPlaceTool::Pad, "place_board_pad"),
         (BoardPlaceTool::Arc, "place_board_arc"),
         (BoardPlaceTool::TextString, "place_board_string"),
-        (BoardPlaceTool::Dimension, "place_board_dimension"),
+        (
+            BoardPlaceTool::Dimension(DimensionKind::Aligned),
+            "place_board_dimension",
+        ),
     ] {
-        assert_eq!(tool.command(), Some(command), "{tool:?}");
+        assert_eq!(tool.command(), command, "{tool:?}");
     }
 }
 

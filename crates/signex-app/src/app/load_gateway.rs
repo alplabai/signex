@@ -202,7 +202,12 @@ impl Signex {
         let view = self.pcb_layer_view(path);
         canvas.set_origin_marker_visible(view.origin_marker_visible());
         canvas.set_view_flipped(view.flipped());
-        let snapshot = self.undocked_pcb_snapshot(path, board);
+        // A new window has no tool or carry of its own yet: only a
+        // highlighted net dims the rest of its copper (#2514).
+        let snapshot = self.with_focus_on(
+            self.undocked_pcb_snapshot(path, board),
+            &self.board_highlight_nets(path),
+        );
         canvas.set_renderer_snapshot(Some(snapshot));
         canvas.fit_to_board();
         Some(canvas)
