@@ -170,6 +170,7 @@ impl Signex {
             open_panels: self.open_panels(),
             i18n: std::sync::Arc::clone(&ui.i18n),
             cross_select: interaction.cross_select.enabled,
+            notebook_badges: !ui.annotations.badges_hidden,
             pcb_sync: self.pcb_sync_label(Some(window_id)),
             layouts: self.layouts_menu(),
         };

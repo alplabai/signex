@@ -227,6 +227,8 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("toggle_visible_grid", "Shift+Ctrl+G")),
         cmd_item_gated(ctx, cmd("next_grid", "")),
         cmd_item_gated(ctx, cmd("toggle_auto_focus", "F9")),
+        // Mockup row 197: the sheet's Notebook badges, on by default.
+        cmd_toggle(ctx, cmd("toggle_notebook_badges", "B"), ctx.notebook_badges),
         SEP,
         // The board view: greyed unless a PCB is open.
         cmd_item_gated(ctx, cmd("toggle_ratsnest", "")),

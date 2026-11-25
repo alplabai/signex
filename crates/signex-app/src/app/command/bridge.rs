@@ -546,6 +546,12 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         )),
         "cross_probe" => Message::CrossProbe(CrossProbeMsg::ProbeRequested),
         "toggle_cross_select_mode" => Message::CrossProbe(CrossProbeMsg::CrossSelectModeToggled),
+        // Mockup row 197: View ▸ Notebook Badges (B).
+        "toggle_notebook_badges" => Message::Dock(crate::dock::DockMessage::Panel(
+            crate::panels::PanelMsg::NotebookReferences(
+                crate::app::notebook_references::NotebookReferenceMsg::BadgesToggled,
+            ),
+        )),
         // #1312: the Update PCB dialog for the document in view. Its headless
         // `apply=true` form runs through `run_operands`, not here.
         "update_pcb_from_schematic" => Message::UpdatePcb(UpdatePcbMsg::Requested { apply: false }),

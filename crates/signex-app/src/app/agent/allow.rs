@@ -131,6 +131,13 @@ mod tests {
                 "list_documents",
                 "lock_board_items",
                 "measure_board",
+                // Mockup rows 196 and 197: the notebook's references and
+                // badges of the named project.
+                "notebook_badges",
+                "notebook_fix_reference",
+                "notebook_reference_card",
+                "notebook_reference_picker",
+                "notebook_references",
                 "panelize_board",
                 // #2410: pin and gate swap and design reuse, on the named board.
                 "place_board_reuse_block",
