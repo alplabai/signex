@@ -1,13 +1,17 @@
 //! The Parameter Manager dialog: one row per placed symbol (power ports left
-//! out), one column per custom parameter in use. Cells write through as you
-//! type, one undo step per cell; the session of edited cells drives the
-//! changed marks, the footer count and Revert changes. The window title bar
-//! carries the title and the subtitle; `table.rs` draws the table.
+//! out) of the listed sheets, one column per custom parameter in use. The
+//! header's Active sheet / All sheets switch picks the sheets. Cells write
+//! through as you type, one undo step per cell; the session of edited cells
+//! drives the changed marks, the footer count and Revert changes. The
+//! window title bar carries the title and the subtitle; `table.rs` draws
+//! the table.
 //!
 //! Edits go through `ParameterManagerMsg`, so they are undoable and
 //! dirty-flagged like any other schematic edit.
 
 mod table;
+
+use std::path::Path;
 
 use super::*;
 use iced::widget::{Space, column, svg};
@@ -16,6 +20,8 @@ use signex_i18n::{Arg, I18n, ids, t};
 use signex_types::schematic::{SchematicSheet, Symbol};
 use signex_widgets::{text, text_input, tooltip};
 
+use crate::app::contracts::ParameterScope;
+use crate::panels::{EmptyStateAction, empty_state_card_with_actions};
 use crate::styles::{self, DialogButtonKind, ti, tokens::resolve};
 
 const TS: styles::TypeScale = styles::TypeScale::DEFAULT;
@@ -26,24 +32,40 @@ const FILTER_WIDTH_EM: f32 = 20.0;
 /// Width of the new parameter name box, in em (180 px by default).
 const NEW_KEY_WIDTH_EM: f32 = 15.0;
 
+/// One row of the table: a part and the sheet it is placed on.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct PartRow<'a> {
+    pub sheet: &'a Path,
+    pub symbol: &'a Symbol,
+}
+
 /// What the table area shows.
 pub(crate) enum TableBody<'a> {
-    /// The parts that pass the filter, in sheet order.
-    Rows(Vec<&'a Symbol>),
+    /// The parts that pass the filter, sheet by sheet in sheet order.
+    Rows(Vec<PartRow<'a>>),
     /// A filter is typed and no part passes it.
     NoMatch,
 }
 
-/// The rows the table lists: every placed symbol except power ports.
-fn parts(doc: &SchematicSheet) -> impl Iterator<Item = &Symbol> {
-    doc.symbols.iter().filter(|s| !s.is_power)
+/// The rows the table lists: every placed symbol except power ports, of
+/// every listed sheet.
+fn parts<'a>(sheets: &[(&'a Path, &'a SchematicSheet)]) -> impl Iterator<Item = PartRow<'a>> {
+    sheets.iter().flat_map(|&(sheet, doc)| {
+        (doc.symbols.iter())
+            .filter(|s| !s.is_power)
+            .map(move |symbol| PartRow { sheet, symbol })
+    })
 }
 
 /// The rows that pass `filter`, or [`TableBody::NoMatch`] when a filter is
 /// typed and none does.
-pub(crate) fn table_body<'a>(i18n: &I18n, filter: &str, doc: &'a SchematicSheet) -> TableBody<'a> {
-    let rows: Vec<&Symbol> = parts(doc)
-        .filter(|s| row_matches_filter(i18n, filter, s))
+pub(crate) fn table_body<'a>(
+    i18n: &I18n,
+    filter: &str,
+    sheets: &[(&'a Path, &'a SchematicSheet)],
+) -> TableBody<'a> {
+    let rows: Vec<PartRow<'a>> = parts(sheets)
+        .filter(|row| row_matches_filter(i18n, filter, row.symbol))
         .collect();
     if rows.is_empty() && !filter.trim().is_empty() {
         TableBody::NoMatch
@@ -54,12 +76,20 @@ pub(crate) fn table_body<'a>(i18n: &I18n, filter: &str, doc: &'a SchematicSheet)
 
 /// The parameter columns: every parameter a listed part carries, sorted.
 /// Only the parameters someone actually uses get a column.
-fn parameter_keys(doc: &SchematicSheet) -> Vec<String> {
-    parts(doc)
-        .flat_map(|s| s.fields.keys().cloned())
+fn parameter_keys(sheets: &[(&Path, &SchematicSheet)]) -> Vec<String> {
+    parts(sheets)
+        .flat_map(|row| row.symbol.fields.keys().cloned())
         .collect::<std::collections::BTreeSet<_>>()
         .into_iter()
         .collect()
+}
+
+/// A sheet's file name, as the subtitle, the Sheet column and the no-match
+/// card name it.
+pub(crate) fn sheet_file_name(path: &Path) -> String {
+    path.file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default()
 }
 
 /// Whether a row survives the filter: a case-insensitive substring of its
@@ -92,23 +122,42 @@ impl Signex {
         self.document_state
             .active_path
             .as_deref()
-            .and_then(std::path::Path::file_name)
-            .map(|name| name.to_string_lossy().into_owned())
+            .map(sheet_file_name)
             .unwrap_or_default()
     }
 
-    /// Title-bar subtitle: `<sheet> · N parts · M parameters`. `None`
-    /// without an active schematic.
+    fn is_all_parameter_sheets(&self) -> bool {
+        self.ui_state.parameter_table.scope == ParameterScope::AllSheets
+    }
+
+    /// Title-bar subtitle: `<sheet> · N parts · M parameters` for the
+    /// active sheet, `N sheets · N parts · M parameters` for all sheets.
+    /// `None` without an active schematic.
     pub(crate) fn parameter_manager_subtitle(&self) -> Option<String> {
-        let doc = self.document_state.active_engine()?.document();
-        Some(self.ui_state.i18n.message_plain(
-            ids::DIALOG_PARAMETER_MANAGER_SUBTITLE,
-            &[
-                ("sheet", Arg::from(self.parameter_sheet_name())),
-                ("parts", Arg::from(parts(doc).count())),
-                ("parameters", Arg::from(parameter_keys(doc).len())),
-            ],
-        ))
+        self.document_state.active_engine()?;
+        let sheets = self.parameter_documents();
+        let parts = Arg::from(parts(&sheets).count());
+        let parameters = Arg::from(parameter_keys(&sheets).len());
+        let i18n = &self.ui_state.i18n;
+        Some(if self.is_all_parameter_sheets() {
+            i18n.message_plain(
+                ids::DIALOG_PARAMETER_MANAGER_SUBTITLE_ALL,
+                &[
+                    ("sheets", Arg::from(sheets.len())),
+                    ("parts", parts),
+                    ("parameters", parameters),
+                ],
+            )
+        } else {
+            i18n.message_plain(
+                ids::DIALOG_PARAMETER_MANAGER_SUBTITLE,
+                &[
+                    ("sheet", Arg::from(self.parameter_sheet_name())),
+                    ("parts", parts),
+                    ("parameters", parameters),
+                ],
+            )
+        })
     }
 
     pub(super) fn view_parameter_manager_body(&self) -> Element<'_, Message> {
@@ -134,6 +183,7 @@ impl Signex {
         };
         container(
             column![
+                self.view_parameter_scope_bar(),
                 self.view_parameter_toolbar(),
                 container(area).width(Length::Fill).height(Length::Fill),
                 self.view_parameter_footer(),
@@ -150,38 +200,73 @@ impl Signex {
 
     /// The table, or the no-match card when the filter hides every part.
     fn view_parameter_table_area(&self, width: f32) -> Element<'_, Message> {
-        let Some(engine) = self.document_state.active_engine() else {
+        if self.document_state.active_engine().is_none() {
             return Space::new().boxed();
-        };
-        let doc = engine.document();
+        }
+        let sheets = self.parameter_documents();
         let i18n = &self.ui_state.i18n;
         let filter = &self.ui_state.parameter_table.filter;
-        match table_body(i18n, filter, doc) {
-            TableBody::Rows(rows) => table::view(self, &rows, parameter_keys(doc), width),
-            TableBody::NoMatch => {
-                let tokens = &self.document_state.panel_ctx.tokens;
-                let card = crate::panels::empty_state_card(
-                    tokens,
-                    t!(i18n, ids::DIALOG_PARAMETER_MANAGER_NO_MATCH_TITLE),
-                    t!(
-                        i18n,
-                        ids::DIALOG_PARAMETER_MANAGER_NO_MATCH_BODY,
-                        "sheet" => self.parameter_sheet_name(),
-                        "query" => filter.trim().to_string()
-                    ),
-                    None,
-                );
-                let clear = styles::dialog_button(
-                    t!(i18n, ids::DIALOG_PARAMETER_MANAGER_CLEAR_FILTER),
-                    DialogButtonKind::Secondary,
-                    Some(Message::ParameterManager(
-                        ParameterManagerMsg::FilterCleared,
-                    )),
-                    tokens,
-                );
-                empty_area(column![card, clear].spacing(SP.m).boxed())
+        let show_sheet = self.is_all_parameter_sheets();
+        match table_body(i18n, filter, &sheets) {
+            TableBody::Rows(rows) => {
+                table::view(self, &rows, parameter_keys(&sheets), width, show_sheet)
             }
+            TableBody::NoMatch => self.view_parameter_no_match(filter),
         }
+    }
+
+    /// The no-match card with Clear filter inside it (#2900).
+    fn view_parameter_no_match(&self, filter: &str) -> Element<'_, Message> {
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let i18n = &self.ui_state.i18n;
+        let query = filter.trim().to_string();
+        let body = if self.is_all_parameter_sheets() {
+            t!(i18n, ids::DIALOG_PARAMETER_MANAGER_NO_MATCH_BODY_ALL, "query" => query)
+        } else {
+            t!(
+                i18n,
+                ids::DIALOG_PARAMETER_MANAGER_NO_MATCH_BODY,
+                "sheet" => self.parameter_sheet_name(),
+                "query" => query
+            )
+        };
+        let clear = EmptyStateAction {
+            label: t!(i18n, ids::DIALOG_PARAMETER_MANAGER_CLEAR_FILTER),
+            on_press: Message::ParameterManager(ParameterManagerMsg::FilterCleared),
+            primary: false,
+        };
+        let card = empty_state_card_with_actions(
+            tokens,
+            t!(i18n, ids::DIALOG_PARAMETER_MANAGER_NO_MATCH_TITLE),
+            body,
+            None,
+            vec![clear],
+        );
+        empty_area(card)
+    }
+
+    /// The header's Active sheet / All sheets switch (Caner 2026-11-25).
+    fn view_parameter_scope_bar(&self) -> Element<'_, Message> {
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let i18n = &self.ui_state.i18n;
+        let r = resolve(tokens);
+        let switch = signex_widgets::segmented(
+            [
+                (
+                    ParameterScope::ActiveSheet,
+                    t!(i18n, ids::DIALOG_PARAMETER_MANAGER_SCOPE_ACTIVE).into(),
+                ),
+                (
+                    ParameterScope::AllSheets,
+                    t!(i18n, ids::DIALOG_PARAMETER_MANAGER_SCOPE_ALL).into(),
+                ),
+            ],
+            self.ui_state.parameter_table.scope,
+            r.segmented(TS.body),
+            |scope| Message::ParameterManager(ParameterManagerMsg::ScopePicked(scope)),
+        );
+        let bar = container(switch).padding([SP.m, SP.l]).width(Length::Fill);
+        column![bar, table::rule(r.line_soft, Length::Fill, true)].boxed()
     }
 
     /// Filter on the left with the fields it searches; the new parameter
@@ -416,10 +501,43 @@ mod toolbar_tests {
 }
 
 #[cfg(test)]
+mod no_match_tests {
+    use super::{SP, TS};
+    use crate::app::Signex;
+    use crate::layout_probe::{draw_pixels, find, lay_out_texts};
+    use iced::Size;
+    use signex_types::theme::{ThemeId, theme_tokens};
+
+    /// #2900: Clear filter sits inside the no-match card, so the card's
+    /// surface runs on under its button.
+    #[test]
+    fn clear_filter_sits_inside_the_no_match_card() {
+        for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+            let (mut app, _task) = Signex::new();
+            app.document_state.panel_ctx.tokens = theme_tokens(id);
+            let window = Size::new(TS.body * 60.0, TS.body * 30.0);
+            let texts = lay_out_texts(app.view_parameter_no_match("QFN-32"), window);
+            let label = find(&texts, "Clear filter").bounds;
+            let pixels = draw_pixels(app.view_parameter_no_match("QFN-32"), window);
+            let tokens = &app.document_state.panel_ctx.tokens;
+            let card = crate::styles::tokens::resolve(tokens).raised.into_rgba8();
+            let x = (label.x + 1.0) as usize;
+            let y = (label.y + label.height + SP.xs + 3.0) as usize;
+            let i = (y * window.width as usize + x) * 4;
+            assert!(
+                (0..3).all(|c| pixels[i + c].abs_diff(card[c]) <= 4),
+                "{id:?}: the card does not run on under Clear filter"
+            );
+        }
+    }
+}
+
+#[cfg(test)]
 mod filter_tests {
     use super::{TableBody, fields_match_filter, parameter_keys, table_body};
     use signex_i18n::I18n;
     use signex_types::schematic::{SchematicSheet, Symbol};
+    use std::path::Path;
 
     #[test]
     fn a_turkish_filter_finds_dotted_and_dotless_i() {
@@ -459,15 +577,18 @@ mod filter_tests {
         }
     }
 
+    const PATH: &str = "/w/power.snxsch";
+
     #[test]
     fn a_filter_nothing_matches_is_the_no_match_state() {
         let en = I18n::en_us();
         let doc = sheet();
+        let sheets = [(Path::new(PATH), &doc)];
         assert!(matches!(
-            table_body(&en, "QFN-32", &doc),
+            table_body(&en, "QFN-32", &sheets),
             TableBody::NoMatch
         ));
-        let TableBody::Rows(rows) = table_body(&en, "0603", &doc) else {
+        let TableBody::Rows(rows) = table_body(&en, "0603", &sheets) else {
             panic!("R1's footprint matches");
         };
         assert_eq!(rows.len(), 1);
@@ -477,10 +598,45 @@ mod filter_tests {
     fn power_ports_are_neither_rows_nor_columns() {
         let en = I18n::en_us();
         let doc = sheet();
-        let TableBody::Rows(rows) = table_body(&en, "", &doc) else {
+        let sheets = [(Path::new(PATH), &doc)];
+        let TableBody::Rows(rows) = table_body(&en, "", &sheets) else {
             panic!("no filter lists every part");
         };
         assert_eq!(rows.len(), 1);
-        assert_eq!(parameter_keys(&doc), vec!["MPN".to_string()]);
+        assert_eq!(parameter_keys(&sheets), vec!["MPN".to_string()]);
+    }
+
+    /// #1784: with several sheets the rows run sheet by sheet, each naming
+    /// its sheet, and the columns are every parameter of any listed sheet.
+    #[test]
+    fn rows_and_columns_span_every_listed_sheet() {
+        let en = I18n::en_us();
+        let power = sheet();
+        let mut u1 = Symbol {
+            reference: "U1".to_string(),
+            ..Default::default()
+        };
+        u1.fields.insert("Voltage".to_string(), "17V".to_string());
+        let logic = SchematicSheet {
+            symbols: vec![u1],
+            ..Default::default()
+        };
+        let sheets = [
+            (Path::new(PATH), &power),
+            (Path::new("/w/logic.snxsch"), &logic),
+        ];
+        let TableBody::Rows(rows) = table_body(&en, "", &sheets) else {
+            panic!("no filter lists every part");
+        };
+        let listed: Vec<(&str, &str)> = rows
+            .iter()
+            .map(|row| (row.sheet.to_str().unwrap(), row.symbol.reference.as_str()))
+            .collect();
+        assert_eq!(listed, [(PATH, "R1"), ("/w/logic.snxsch", "U1")]);
+        assert_eq!(parameter_keys(&sheets), ["MPN", "Voltage"]);
+        let TableBody::Rows(rows) = table_body(&en, "U1", &sheets) else {
+            panic!("U1 matches");
+        };
+        assert_eq!(rows.len(), 1);
     }
 }

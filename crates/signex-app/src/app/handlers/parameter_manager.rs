@@ -1,18 +1,27 @@
-//! Parameter Manager: the message router and the table edits (cell writes,
-//! column add and remove, Revert changes).
+//! Parameter Manager: the message router, the sheets the table lists and
+//! the table edits (cell writes, column add and remove, Revert changes).
 //!
-//! Every write goes through the mutation gateway, so each committed edit is
-//! exactly one engine history entry and dirty-flagging stays correct.
+//! An edit of the active sheet goes through the mutation gateway; a cell of
+//! another listed sheet goes through `execute_on_sheet`, one undo step on
+//! that sheet. An edit that changes several sheets (a column, Revert
+//! changes) is one undo group through `write_sheets_as_group`, so one
+//! Ctrl+Z takes it back on every sheet. All of them settle through the one
+//! edit tail, so dirty marks and repaints stay correct.
+
+use std::collections::{BTreeMap, HashMap};
+use std::path::{Path, PathBuf};
 
 use iced::Task;
 use iced::widget::operation::{Animation, scrollable::scroll_to};
 use iced::widget::scrollable::AbsoluteOffset;
 use signex_engine::Command;
-use uuid::Uuid;
+use signex_i18n::{ids, t};
+use signex_types::schematic::SchematicSheet;
 
-use crate::app::contracts::ParameterTablePane;
+use crate::app::contracts::{ParameterScope, ParameterTablePane};
+use crate::app::sheet_write::{SheetWrite, SheetWriteRefusal};
 use crate::app::state::{ModalId, ParameterCell, Signex};
-use crate::app::{Message, ParameterManagerMsg};
+use crate::app::{Message, ParameterManagerMsg, UndoGroupKind};
 
 /// Widget id of the scrollable parameter cells.
 pub(crate) const BODY_SCROLL_ID: &str = "parameter-manager-body";
@@ -39,10 +48,18 @@ impl Signex {
             }
             ParameterManagerMsg::Close => self.close_parameter_manager(),
             ParameterManagerMsg::Edit {
+                sheet,
                 symbol_uuid,
                 key,
                 value,
-            } => self.handle_parameter_manager_edit(symbol_uuid, key, value),
+            } => self.handle_parameter_manager_edit(
+                ParameterCell {
+                    sheet: Some(sheet),
+                    symbol: symbol_uuid,
+                    key,
+                },
+                value,
+            ),
             ParameterManagerMsg::CellSubmitted => {
                 self.end_parameter_edit_runs();
                 Task::none()
@@ -53,6 +70,10 @@ impl Signex {
                 Task::none()
             }
             ParameterManagerMsg::ColumnAdded => self.handle_parameter_column_added(),
+            ParameterManagerMsg::ScopePicked(scope) => {
+                self.ui_state.parameter_table.scope = scope;
+                Task::none()
+            }
             ParameterManagerMsg::FilterChanged(filter) => {
                 self.ui_state.parameter_table.filter = filter;
                 Task::none()
@@ -72,13 +93,20 @@ impl Signex {
                 Task::none()
             }
             ParameterManagerMsg::CellFocused {
+                sheet,
                 symbol_uuid,
+                key,
                 is_focused,
             } => {
-                let editing = &mut self.ui_state.parameter_table.editing_row;
+                let cell = ParameterCell {
+                    sheet: Some(sheet),
+                    symbol: symbol_uuid,
+                    key,
+                };
+                let editing = &mut self.ui_state.parameter_table.editing;
                 if is_focused {
-                    *editing = Some(symbol_uuid);
-                } else if *editing == Some(symbol_uuid) {
+                    *editing = Some(cell);
+                } else if editing.as_ref() == Some(&cell) {
                     *editing = None;
                 }
                 Task::none()
@@ -87,56 +115,91 @@ impl Signex {
         }
     }
 
+    /// The sheets the table lists, the active one first: with Active sheet
+    /// only it; with All sheets also every other open sheet of its project
+    /// (for a sheet outside any project, every other open sheet outside
+    /// one), by path. Empty without an active schematic.
+    pub(crate) fn parameter_sheets(&self) -> Vec<PathBuf> {
+        let docs = &self.document_state;
+        let Some(active) = docs.active_path.clone() else {
+            return Vec::new();
+        };
+        if !docs.engines.contains_key(&active) {
+            return Vec::new();
+        }
+        if self.ui_state.parameter_table.scope == ParameterScope::ActiveSheet {
+            return vec![active];
+        }
+        let project_of = |path: &Path| docs.document_project(path).map(|p| p.id);
+        let owner = project_of(&active);
+        let mut others: Vec<PathBuf> = docs
+            .engines
+            .keys()
+            .filter(|path| **path != active && project_of(path) == owner)
+            .cloned()
+            .collect();
+        others.sort();
+        std::iter::once(active).chain(others).collect()
+    }
+
+    /// [`Self::parameter_sheets`] with each sheet's live document.
+    pub(crate) fn parameter_documents(&self) -> Vec<(&Path, &SchematicSheet)> {
+        self.parameter_sheets()
+            .iter()
+            .filter_map(|path| {
+                let (path, engine) = self.document_state.engines.get_key_value(path)?;
+                Some((path.as_path(), engine.document()))
+            })
+            .collect()
+    }
+
     /// Write one parameter value now. An empty value empties the parameter,
-    /// it does not delete it. Keystrokes in one cell are one undo step.
+    /// it does not delete it. Keystrokes in one cell are one undo step on
+    /// the cell's sheet.
     pub(crate) fn handle_parameter_manager_edit(
         &mut self,
-        symbol_uuid: Uuid,
-        key: String,
+        cell: ParameterCell,
         value: String,
     ) -> Task<Message> {
+        let Some(sheet) = cell.sheet.clone() else {
+            return Task::none();
+        };
         // A run belongs to one document: moving to another sheet ends the
         // previous sheet's, so coming back never folds into an old step.
-        let path = self.document_state.active_path.clone();
-        if self.ui_state.parameter_table.run_path != path {
+        if self.ui_state.parameter_table.run_path.as_ref() != Some(&sheet) {
             self.end_parameter_edit_runs();
-            self.ui_state.parameter_table.run_path = path.clone();
+            self.ui_state.parameter_table.run_path = Some(sheet.clone());
         }
         // The value before the session's first edit of this cell, for the
         // changed mark and Revert changes. A symbol the sheet lacks is not
         // a cell; the edit below changes nothing either.
-        let before = self.document_state.active_engine().and_then(|engine| {
+        let before = self.document_state.engines.get(&sheet).and_then(|engine| {
             engine
                 .document()
                 .symbols
                 .iter()
-                .find(|s| s.uuid == symbol_uuid)
-                .map(|s| s.fields.get(&key).cloned())
+                .find(|s| s.uuid == cell.symbol)
+                .map(|s| s.fields.get(&cell.key).cloned())
         });
+        let command = Command::SetSymbolField {
+            symbol_id: cell.symbol,
+            key: cell.key.clone(),
+            value,
+        };
         if let Some(before) = before {
-            self.ui_state.parameter_table.session.record(
-                ParameterCell {
-                    sheet: path,
-                    symbol: symbol_uuid,
-                    key: key.clone(),
-                },
-                before,
-            );
+            self.ui_state.parameter_table.session.record(cell, before);
         }
-        // Same reasoning as `handle_move_selection_apply` (#585). The
-        // gateway clears the content cache, syncs the canvas and refreshes
-        // the panel context, so the hand-rolled versions of those are gone;
-        // the overlay cache and the selection info were not touched before
-        // and still are not.
-        self.apply_engine_command(
-            Command::SetSymbolField {
-                symbol_id: symbol_uuid,
-                key,
-                value,
-            },
-            false,
-            false,
-        );
+        if self.document_state.active_path.as_deref() == Some(sheet.as_path()) {
+            // Same reasoning as `handle_move_selection_apply` (#585): the
+            // gateway clears the content cache, syncs the canvas and
+            // refreshes the panel context; the overlay cache and the
+            // selection info are not touched.
+            self.apply_engine_command(command, false, false);
+        } else if self.refuse_if_read_only_at(&sheet).is_none()
+            && let Err(reason) = self.execute_on_sheet(&sheet, command)
+        {
+            crate::diagnostics::log_warning(format!("Parameter Manager: {reason}"));
+        }
         Task::none()
     }
 
@@ -152,36 +215,33 @@ impl Signex {
         }
     }
 
-    /// The cells of the active sheet edited since the dialog opened whose
+    /// The cells of the listed sheets edited since the dialog opened whose
     /// value now differs from before, each with that earlier value. It
-    /// reads the document, so Undo and Redo move the count too.
+    /// reads the documents, so Undo and Redo move the count too.
     pub(crate) fn parameter_session_changes(&self) -> Vec<(ParameterCell, Option<String>)> {
-        let Some(engine) = self.document_state.active_engine() else {
-            return Vec::new();
-        };
-        let symbols = &engine.document().symbols;
-        let sheet = self.document_state.active_path.as_deref();
-        self.ui_state
-            .parameter_table
-            .session
-            .cells_on(sheet)
-            .filter(|(cell, before)| {
-                symbols
+        let session = &self.ui_state.parameter_table.session;
+        let mut changes = Vec::new();
+        for (path, doc) in self.parameter_documents() {
+            let changed = session.cells_on(Some(path)).filter(|(cell, before)| {
+                doc.symbols
                     .iter()
                     .find(|s| s.uuid == cell.symbol)
                     .is_some_and(|s| s.fields.get(&cell.key) != before.as_ref())
-            })
-            .map(|(cell, before)| (cell.clone(), before.clone()))
-            .collect()
+            });
+            changes.extend(changed.map(|(cell, before)| (cell.clone(), before.clone())));
+        }
+        changes
     }
 
-    /// Put every changed cell of the session back, as one undo step: one
-    /// engine batch through the gateway, so one Undo brings the edits back.
+    /// Put every changed cell of the session back, as one undo step across
+    /// the sheets it touches, so one Undo brings the edits back.
     pub(crate) fn handle_parameter_session_reverted(&mut self) -> Task<Message> {
-        let commands: Vec<Command> = self
-            .parameter_session_changes()
-            .into_iter()
-            .map(|(cell, before)| match before {
+        let mut by_sheet: BTreeMap<PathBuf, Vec<Command>> = BTreeMap::new();
+        for (cell, before) in self.parameter_session_changes() {
+            let Some(sheet) = cell.sheet else {
+                continue;
+            };
+            let command = match before {
                 Some(value) => Command::SetSymbolField {
                     symbol_id: cell.symbol,
                     key: cell.key,
@@ -191,63 +251,121 @@ impl Signex {
                     symbol_id: cell.symbol,
                     key: cell.key,
                 },
-            })
-            .collect();
+            };
+            by_sheet.entry(sheet).or_default().push(command);
+        }
         // An open typing run would fold the revert into the last cell's step.
         self.end_parameter_edit_runs();
-        self.apply_engine_commands(commands, false, false);
+        self.apply_parameter_commands(by_sheet);
         Task::none()
     }
 
-    /// Delete parameter `key` from every non-power symbol that carries it
-    /// (the table hides power symbols), as one undo step.
+    /// Delete parameter `key` from every listed non-power symbol that
+    /// carries it (the table hides power symbols), as one undo step.
     pub(crate) fn handle_parameter_removed(&mut self, key: &str) -> Task<Message> {
-        let Some(engine) = self.document_state.active_engine() else {
-            return Task::none();
-        };
-        let commands: Vec<Command> = engine
-            .document()
-            .symbols
-            .iter()
-            .filter(|s| !s.is_power && s.fields.contains_key(key))
-            .map(|s| Command::RemoveSymbolField {
-                symbol_id: s.uuid,
-                key: key.to_string(),
-            })
-            .collect();
-        self.apply_engine_commands(commands, false, false);
+        let by_sheet = self.parameter_commands_by_sheet(|doc| {
+            (doc.symbols.iter())
+                .filter(|s| !s.is_power && s.fields.contains_key(key))
+                .map(|s| Command::RemoveSymbolField {
+                    symbol_id: s.uuid,
+                    key: key.to_string(),
+                })
+                .collect()
+        });
+        self.apply_parameter_commands(by_sheet);
         if self.ui_state.parameter_table.hovered_column.as_deref() == Some(key) {
             self.ui_state.parameter_table.hovered_column = None;
         }
         Task::none()
     }
 
-    /// Add the typed name as a parameter on every non-power symbol, empty,
-    /// as one undo step. A blank or reserved name adds nothing; a symbol
-    /// that already carries the name keeps its value.
+    /// Add the typed name as a parameter on every listed non-power symbol,
+    /// empty, as one undo step. A blank or reserved name adds nothing; a
+    /// symbol that already carries the name keeps its value.
     pub(crate) fn handle_parameter_column_added(&mut self) -> Task<Message> {
         let key = self.ui_state.parameter_table.new_key.trim().to_string();
         if key.is_empty() || signex_engine::is_reserved_symbol_key(&key) {
             return Task::none();
         }
-        let Some(engine) = self.document_state.active_engine() else {
-            return Task::none();
-        };
-        let commands: Vec<Command> = engine
-            .document()
-            .symbols
-            .iter()
-            .filter(|s| !s.is_power && !s.fields.contains_key(&key))
-            .map(|s| Command::SetSymbolField {
-                symbol_id: s.uuid,
-                key: key.clone(),
-                value: String::new(),
-            })
-            .collect();
-        if self.apply_engine_commands(commands, false, false) {
+        let by_sheet = self.parameter_commands_by_sheet(|doc| {
+            (doc.symbols.iter())
+                .filter(|s| !s.is_power && !s.fields.contains_key(&key))
+                .map(|s| Command::SetSymbolField {
+                    symbol_id: s.uuid,
+                    key: key.clone(),
+                    value: String::new(),
+                })
+                .collect()
+        });
+        if self.apply_parameter_commands(by_sheet) {
             self.ui_state.parameter_table.new_key.clear();
         }
         Task::none()
+    }
+
+    /// `commands` of each listed sheet's live document, by sheet.
+    fn parameter_commands_by_sheet(
+        &self,
+        commands: impl Fn(&SchematicSheet) -> Vec<Command>,
+    ) -> BTreeMap<PathBuf, Vec<Command>> {
+        self.parameter_documents()
+            .into_iter()
+            .map(|(path, doc)| (path.to_path_buf(), commands(doc)))
+            .collect()
+    }
+
+    /// Run each sheet's commands as one undo step: through the gateway when
+    /// only the active sheet has any, else as one undo group across the
+    /// sheets, all or nothing. `true` when a sheet changed.
+    fn apply_parameter_commands(&mut self, mut by_sheet: BTreeMap<PathBuf, Vec<Command>>) -> bool {
+        by_sheet.retain(|_, commands| !commands.is_empty());
+        let active = self.document_state.active_path.clone();
+        let has_active = active
+            .as_ref()
+            .is_some_and(|path| by_sheet.contains_key(path));
+        if by_sheet.is_empty() || (has_active && by_sheet.len() == 1) {
+            let commands = by_sheet.into_values().next().unwrap_or_default();
+            return self.apply_engine_commands(commands, false, false);
+        }
+        // A channel tab of a repeated sheet is a compiled view (#1279).
+        if has_active && self.refuse_if_channel_view().is_some() {
+            return false;
+        }
+        // An open typing run would fold this step into the last cell's.
+        self.end_parameter_edit_runs();
+        let loaded = HashMap::new();
+        let write = SheetWrite {
+            label: "Parameter Manager",
+            outcome: "edited",
+            kind: UndoGroupKind::Parameters,
+            loaded: &loaded,
+        };
+        match self.write_sheets_as_group(&write, by_sheet, |_, commands| commands.clone()) {
+            Ok(sheets) => sheets > 0,
+            Err(refusal) => {
+                self.log_parameter_refusal(&refusal);
+                false
+            }
+        }
+    }
+
+    /// Say in Messages why an edit across sheets changed nothing.
+    fn log_parameter_refusal(&self, refusal: &SheetWriteRefusal) {
+        let (id, path) = match refusal {
+            SheetWriteRefusal::Busy(path) => (ids::DIALOG_PARAMETER_MANAGER_REFUSED_BUSY, path),
+            SheetWriteRefusal::ReadOnly(path) => {
+                (ids::DIALOG_PARAMETER_MANAGER_REFUSED_READ_ONLY, path)
+            }
+            SheetWriteRefusal::NotLoaded(path) | SheetWriteRefusal::NotChanged(path) => {
+                (ids::DIALOG_PARAMETER_MANAGER_REFUSED_FAILED, path)
+            }
+        };
+        let sheet = path.file_name().map_or_else(
+            || path.display().to_string(),
+            |name| name.to_string_lossy().into_owned(),
+        );
+        let line = t!(self.ui_state.i18n, id, "sheet" => sheet).into_string();
+        crate::diagnostics::log_warning(line);
     }
 
     /// Close the manager's window and mark it closed; the session ends.
@@ -277,11 +395,16 @@ fn follow_table_scroll(pane: ParameterTablePane, x: f32, y: f32) -> Task<Message
 }
 
 #[cfg(test)]
+#[path = "parameter_manager_scope_tests.rs"]
+mod scope_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::app::{EditMsg, ParameterManagerMsg as Pm};
     use crate::app::{TabInfo, TabKind};
     use signex_types::schematic::{SchematicSheet, Symbol};
+    use uuid::Uuid;
 
     const SHEET: &str = "/w/parameters.snxsch";
 
@@ -340,6 +463,7 @@ mod tests {
 
     fn edit(app: &mut Signex, n: u128, value: &str) {
         let _ = app.update(Message::ParameterManager(Pm::Edit {
+            sheet: SHEET.into(),
             symbol_uuid: Uuid::from_u128(n),
             key: "Tolerance".to_string(),
             value: value.to_string(),
@@ -380,6 +504,7 @@ mod tests {
     fn revert_removes_a_parameter_the_session_created() {
         let mut app = app();
         let _ = app.update(Message::ParameterManager(Pm::Edit {
+            sheet: SHEET.into(),
             symbol_uuid: Uuid::from_u128(1),
             key: "MPN".to_string(),
             value: "GRM31CR71E106KA12".to_string(),
@@ -431,17 +556,16 @@ mod tests {
         let _ = app.update(Message::ParameterManager(Pm::FilterChanged(
             "QFN-32".to_string(),
         )));
-        let doc = app.document_state.active_engine().unwrap().document();
         let filter = &app.ui_state.parameter_table.filter;
         assert!(matches!(
-            table_body(&app.ui_state.i18n, filter, doc),
+            table_body(&app.ui_state.i18n, filter, &app.parameter_documents()),
             TableBody::NoMatch
         ));
 
         let _ = app.update(Message::ParameterManager(Pm::FilterCleared));
         assert!(app.ui_state.parameter_table.filter.is_empty());
-        let doc = app.document_state.active_engine().unwrap().document();
-        let TableBody::Rows(rows) = table_body(&app.ui_state.i18n, "", doc) else {
+        let sheets = app.parameter_documents();
+        let TableBody::Rows(rows) = table_body(&app.ui_state.i18n, "", &sheets) else {
             panic!("every row must show again");
         };
         assert_eq!(rows.len(), 3);
@@ -488,11 +612,16 @@ mod tests {
         let mut app = app();
         let focus = |n: u128, is_focused: bool| {
             Message::ParameterManager(Pm::CellFocused {
+                sheet: SHEET.into(),
                 symbol_uuid: Uuid::from_u128(n),
+                key: "Tolerance".to_string(),
                 is_focused,
             })
         };
-        let editing = |app: &Signex| app.ui_state.parameter_table.editing_row;
+        let editing = |app: &Signex| {
+            let cell = app.ui_state.parameter_table.editing.as_ref();
+            cell.map(|cell| cell.symbol)
+        };
         let _ = app.update(focus(1, true));
         assert_eq!(editing(&app), Some(Uuid::from_u128(1)));
         let _ = app.update(focus(3, true));
