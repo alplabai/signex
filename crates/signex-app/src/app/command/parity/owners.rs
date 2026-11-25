@@ -547,6 +547,7 @@ const OPERAND_DOCUMENT: &[&str] = &[
     "add_board_graphic",
     "add_net_class",
     "add_teardrops",
+    "apply_board_schematic_differences",
     "apply_edits",
     "arrange_in_box",
     "assign_board_net_class",
