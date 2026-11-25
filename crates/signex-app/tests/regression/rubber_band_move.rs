@@ -447,3 +447,83 @@ fn move_by_ignores_the_drag_wiring_mode() {
     let _ = app.update(Message::MoveSelection(MoveSelectionMsg::Apply));
     assert_connected_after_dy(&segments(&app, &path), 10.0);
 }
+
+/// The bundled sample sheet open in the app with C1 selected; keep wires on.
+fn app_with_the_sample_c1() -> (Signex, PathBuf) {
+    const SAMPLE: &str = include_str!("../../assets/sample-project/linear-regulator.snxsch");
+    let sheet = signex_types::format::SnxSchematic::parse(SAMPLE)
+        .expect("the sample parses")
+        .sheet;
+    let c1 = (sheet.symbols.iter())
+        .find(|s| s.reference == "C1")
+        .expect("C1")
+        .uuid;
+    let path = PathBuf::from("linear-regulator.snxsch");
+    let engine = signex_engine::Engine::new(sheet.clone()).expect("engine");
+    let (mut app, _task) = Signex::new();
+    app.ui_state.first_run_tour_open = false;
+    app.ui_state.snap_enabled = false;
+    app.ui_state.move_keeps_wires = true;
+    app.document_state.engines.insert(path.clone(), engine);
+    app.document_state.tabs.push(signex_app::app::TabInfo {
+        title: "linear-regulator".to_string(),
+        path: path.clone(),
+        cached_document: None,
+        project_id: None,
+        kind: signex_app::app::TabKind::Schematic,
+    });
+    app.document_state.active_tab = 0;
+    app.document_state.active_path = Some(path.clone());
+    app.interaction_state
+        .active_canvas_mut()
+        .set_render_cache(Some(
+            signex_app::schematic_runtime::SchematicRenderCache::from_sheet(&sheet),
+        ));
+    app.interaction_state.active_canvas_mut().selected =
+        vec![SelectedItem::new(c1, SelectedKind::Symbol)];
+    (app, path)
+}
+
+/// #2540 - a drag of C1, whose pin 1 sits on the +5V junction, leaves the
+/// rail where it is and grows a stub down to the pin, also past the part's
+/// own GND wire (four steps down).
+#[test]
+fn a_drag_off_a_junction_keeps_the_rail_and_grows_a_stub() {
+    let (mut app, path) = app_with_the_sample_c1();
+    let dy = 4.0 * 2.54;
+    drop_by(&mut app, 0.0, dy);
+    let segs = segments(&app, &path);
+    let same = |p: (f64, f64), q: (f64, f64)| (p.0 - q.0).abs() < 1e-6 && (p.1 - q.1).abs() < 1e-6;
+    let has = |a, b| {
+        segs.iter()
+            .any(|s| (same(s.0, a) && same(s.1, b)) || (same(s.0, b) && same(s.1, a)))
+    };
+    let pin_1 = (63.5, 99.06);
+    assert!(has((57.15, 99.06), pin_1), "the rail moved: {segs:?}");
+    assert!(has(pin_1, (66.04, 99.06)), "the rail moved: {segs:?}");
+    assert!(has(pin_1, (63.5, 99.06 + dy)), "no stub: {segs:?}");
+}
+
+/// #2516 - the 45° modes, cycled to during a drag, reach the commit: each
+/// wire leaves its fixed end on a 45° leg, then turns onto the pin's row.
+#[test]
+fn the_drag_commit_carries_a_45_degree_wiring_mode() {
+    let (mut app, path, _) = app_with_resistor();
+    for _ in 0..4 {
+        let _ = app.update(Message::Tool(
+            signex_app::toolbar::ToolMessage::DragWiringCycleRequested,
+        ));
+    }
+    assert_eq!(
+        app.interaction_state.drag_wiring,
+        signex_types::corner::DragWiringMode::Angle45Start
+    );
+    drop_by(&mut app, 0.0, 10.0);
+    let segs = segments(&app, &path);
+    let has = |a, b| segs.contains(&(a, b)) || segs.contains(&(b, a));
+    assert_eq!(segs.len(), 4, "one 45° bend per wire: {segs:?}");
+    assert!(has((30.0, 50.0), (40.0, 60.0)), "{segs:?}");
+    assert!(has((40.0, 60.0), (45.0, 60.0)), "{segs:?}");
+    assert!(has((75.0, 50.0), (65.0, 60.0)), "{segs:?}");
+    assert!(has((65.0, 60.0), (55.0, 60.0)), "{segs:?}");
+}

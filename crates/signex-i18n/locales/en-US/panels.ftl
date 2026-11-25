@@ -592,6 +592,9 @@ panels-status-bar-drag-with-wires = Dragging with wires ({ $key }: plain move)
 panels-status-bar-drag-wires-horizontal-first = Dragging with wires, horizontal first ({ $key }: plain move)
 panels-status-bar-drag-wires-vertical-first = Dragging with wires, vertical first ({ $key }: plain move)
 panels-status-bar-drag-wires-straight = Dragging with wires, straight ({ $key }: plain move)
+# The 45° modes: a 45° leg leaves the fixed end first, or reaches the pin last.
+panels-status-bar-drag-wires-45-start = Dragging with wires, 45° first ({ $key }: plain move)
+panels-status-bar-drag-wires-45-end = Dragging with wires, 45° last ({ $key }: plain move)
 # A drag in progress that leaves the wires. $key is the modifier key.
 panels-status-bar-move-without-wires = Moving without wires ({ $key }: drag with wires)
 # Measure tool prompts.

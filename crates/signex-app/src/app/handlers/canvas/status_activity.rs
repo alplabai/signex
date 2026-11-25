@@ -26,6 +26,8 @@ impl Signex {
                 ids::PANELS_STATUS_BAR_DRAG_WIRES_VERTICAL_FIRST
             }
             (true, DragWiringMode::Straight) => ids::PANELS_STATUS_BAR_DRAG_WIRES_STRAIGHT,
+            (true, DragWiringMode::Angle45Start) => ids::PANELS_STATUS_BAR_DRAG_WIRES_45_START,
+            (true, DragWiringMode::Angle45End) => ids::PANELS_STATUS_BAR_DRAG_WIRES_45_END,
         };
         Some(
             self.ui_state
@@ -156,6 +158,34 @@ mod tests {
             app.status_activity(window).map(|a| a.text).as_deref(),
             Some("Moving without wires (Alt: drag with wires)")
         );
+    }
+
+    /// #2516: a drag that keeps wires names the 45° modes too.
+    #[test]
+    fn the_status_names_the_45_degree_drag_wiring_modes() {
+        let (mut app, _task) = Signex::new();
+        let window = iced::window::Id::unique();
+        app.interaction_state
+            .canvas_for_window(window)
+            .move_behaviour
+            .set(Some(true));
+        for (mode, text) in [
+            (
+                DragWiringMode::Angle45Start,
+                "Dragging with wires, 45° first (Alt: plain move)",
+            ),
+            (
+                DragWiringMode::Angle45End,
+                "Dragging with wires, 45° last (Alt: plain move)",
+            ),
+        ] {
+            app.interaction_state.drag_wiring = mode;
+            assert_eq!(
+                app.status_activity(window).map(|a| a.text).as_deref(),
+                Some(text),
+                "{mode:?}"
+            );
+        }
     }
 
     /// #2059: the drag notes follow the interface language.
