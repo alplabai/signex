@@ -209,6 +209,36 @@ pub struct ChannelTabView {
     pub designators: Vec<String>,
     /// The card's drawing of the channel, from the last compile (#2658).
     pub miniature: Option<std::sync::Arc<signex_net::SheetMiniature>>,
+    /// The channel's parts as the last compile lists them, each with its
+    /// fit in [`ChannelStripView::variant`] (#2662); empty before a compile.
+    pub fits: Vec<ChannelPartFit>,
+}
+
+impl ChannelTabView {
+    /// How many of the channel's parts the variant leaves out.
+    pub fn not_fitted(&self) -> usize {
+        self.fits.iter().filter(|fit| !fit.is_fitted).count()
+    }
+
+    /// Whether the variant leaves out every part of the channel.
+    pub fn is_not_fitted(&self) -> bool {
+        !self.fits.is_empty() && self.not_fitted() == self.fits.len()
+    }
+
+    /// Whether the part this channel names `designator` is left out.
+    pub fn is_part_not_fitted(&self, designator: &str) -> bool {
+        self.fits
+            .iter()
+            .any(|fit| !fit.is_fitted && fit.part.designator == designator)
+    }
+}
+
+/// One part of a channel and its fit in the active variant.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ChannelPartFit {
+    /// The channel's copy of the part, as the variant settings name it.
+    pub part: signex_types::project::PartRef,
+    pub is_fitted: bool,
 }
 
 /// The channel strip of the active sheet, when it is repeated somewhere.
@@ -221,6 +251,12 @@ pub struct ChannelStripView {
     pub active: Option<u32>,
     /// The chosen channel's designator map: logical, value, channel.
     pub designator_map: Vec<(String, String, String)>,
+    /// The active variant the cards show the fit in; `None` is Base, which
+    /// is the sheets and is not set from a card.
+    pub variant: Option<String>,
+    /// The project's variant settings could not be read: a card cannot
+    /// change them.
+    pub is_fit_locked: bool,
 }
 
 /// Everything the multi-channel surfaces of the panels read.

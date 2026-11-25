@@ -8,6 +8,7 @@
 //! child-sheet identity edit (`repeat_edit.rs`), and the naming menus write
 //! the project's channel naming (`naming.rs`). Rules: `docs/MULTI_CHANNEL.md`.
 
+mod channel_fit;
 mod channels_of;
 mod job;
 mod naming;
@@ -63,6 +64,13 @@ pub enum CompiledDesignMsg {
     ChannelPicked {
         sheet: PathBuf,
         channel: Option<u32>,
+    },
+    /// A channel card's fit in the active variant was clicked (#2662):
+    /// `parts` (every part of the channel) left out (`Some(false)`) or as
+    /// the sheets say again (`None`), as one undo step.
+    ChannelFitPicked {
+        parts: Vec<signex_types::project::PartRef>,
+        fitted: Option<bool>,
     },
     /// The Repeat switch of a sheet symbol's Properties.
     RepeatToggled {

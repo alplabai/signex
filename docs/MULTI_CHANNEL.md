@@ -219,8 +219,42 @@ list opens it, docked on the left as a tab beside Projects.
 - Before the first compile the panel shows "Not compiled yet" with a Compile
   project button; the mode switch and search are disabled.
 
+## Per-channel variant state
+
+A variant can fit a part in one channel and leave it out in another (#2662).
+
+- **Model.** Each channel's copy of a part is a placed part of its own: its
+  placement is the channel's (see "Channel identity"), so its part link
+  (`SymbolLink`: that placement and the unit uuids) is the channel's. A
+  variant's fit or values for one copy are an ordinary `variant_settings`
+  part entry keyed by that link (Caner, 2026-11-25), so an entry stays on its
+  copy through a re-annotation or a change of the channel naming and never
+  lands on another channel's copy. Nothing new is stored and the `.snxprj`
+  token rule is unchanged: a project with any part entry writes
+  `snxprj/1.1` (`docs/FORMAT_VERSIONS.md`).
+- **Variant Manager.** A part on a repeated sheet has one matrix row for
+  every channel's copy: a fold chevron, its designator on the sheet, its
+  value and the number of channels, and per variant Fitted, Not fitted, or
+  "mixed · 1 of 3 not fitted" when the channels disagree. A click opens it
+  into one row per copy (the channel designators), each selected and set on
+  its own. The right pane of a copy also offers Fitted in every channel, Not
+  fitted in every channel and Every channel as on the sheets: one undo step
+  however many channels (`SetVariantPartsFit`). The matrix reads the
+  channels from the project walk (`signex_output::MatrixChannels`).
+- **Channel cards.** Once compiled, each card's header says how its channel
+  fits in the active variant ("Lite: Fitted", "Lite: 2 not fitted", "Lite:
+  Not fitted"); Base shows nothing, it is the sheets. A channel the variant
+  leaves out entirely is greyed and crossed, and the designators of the parts
+  it leaves out are greyed, on the drawing and in the list. A click on the fit leaves every part of the channel
+  out of the active variant, or, on a channel left out entirely, lets the
+  sheets decide for each again: one undo step. It is a project setting, not a
+  sheet edit, so a channel tab's read-only gate does not refuse it. The fit
+  is the BOM's (`signex_output::placed_part_fitted`).
+- **BOM.** The per-variant BOM reads the same entries: a copy the variant
+  leaves out is not fitted, the other channels' copies are.
+
 ## Not built yet
 
-- Per-channel variant state (a channel, or a part in one channel, not
-  fitted) and its display in the channel cards and the panel: it is set in
-  the Variant Manager tab, which does not exist yet (#2662).
+- The Compiled Design panel does not show per-channel variant state yet.
+- The canvas has no right-click "This channel only / All channels" for a
+  variant fit yet; it is set in the Variant Manager and on the cards.

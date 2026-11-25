@@ -4,6 +4,7 @@
 //! The data is built by the compile (`signex_net::sheet_miniature`); this
 //! only draws it.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use iced::alignment::{Horizontal, Vertical};
@@ -13,7 +14,7 @@ use signex_net::{MiniatureText, SheetMiniature};
 use signex_types::schematic::Aabb;
 
 use crate::panels::PanelContext;
-use crate::styles::{HAIRLINE, Radii, TypeScale, ti};
+use crate::styles::{HAIRLINE, Radii, TypeScale, ti, tokens::resolve};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 /// Height of the drawing: 120 px at the 12 px body.
@@ -73,12 +74,16 @@ struct Ink {
     designator: Color,
     net: Color,
     power: Color,
+    /// A designator whose part the active variant leaves out (#2662).
+    left_out: Color,
 }
 
 /// The drawing. Stateless; rebuilt by every view.
 struct Miniature {
     data: Arc<SheetMiniature>,
     ink: Ink,
+    /// The designators drawn in `Ink::left_out`.
+    left_out: HashSet<String>,
 }
 
 impl<M> canvas::Program<M> for Miniature {
@@ -131,7 +136,12 @@ impl<M> canvas::Program<M> for Miniature {
             label(&mut frame, &fit, t, color, Vertical::Bottom);
         }
         for t in &self.data.designators {
-            label(&mut frame, &fit, t, self.ink.designator, Vertical::Center);
+            let color = if self.left_out.contains(&t.text) {
+                self.ink.left_out
+            } else {
+                self.ink.designator
+            };
+            label(&mut frame, &fit, t, color, Vertical::Center);
         }
         vec![frame.into_geometry()]
     }
@@ -151,8 +161,13 @@ fn label(frame: &mut canvas::Frame, fit: &Fit, t: &MiniatureText, color: Color, 
     });
 }
 
-/// The drawing of `data`, as wide as the card.
-pub(super) fn view<'a, M: 'a>(ctx: &PanelContext, data: &Arc<SheetMiniature>) -> Element<'a, M> {
+/// The drawing of `data`, as wide as the card; the designators in
+/// `left_out` are greyed.
+pub(super) fn view<'a, M: 'a>(
+    ctx: &PanelContext,
+    data: &Arc<SheetMiniature>,
+    left_out: HashSet<String>,
+) -> Element<'a, M> {
     let colors = &ctx.canvas_colors;
     let program = Miniature {
         data: Arc::clone(data),
@@ -164,7 +179,9 @@ pub(super) fn view<'a, M: 'a>(ctx: &PanelContext, data: &Arc<SheetMiniature>) ->
             designator: ti(colors.reference),
             net: ti(colors.net_label),
             power: ti(colors.power),
+            left_out: super::fit::faded(resolve(&ctx.tokens).ink4),
         },
+        left_out,
     };
     canvas(program)
         .width(Length::Fill)

@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use iced::Task;
-use signex_output::{ExportContext, ProjectMetadata, VariantMatrix};
+use signex_output::{ExportContext, MatrixChannels, ProjectMetadata, VariantMatrix};
 
 use super::super::ProjectTabMsg;
 use super::super::general::tab_message;
@@ -172,5 +172,24 @@ fn read_parts(read: PartsRead) -> Result<VariantMatrix, PartsReadError> {
         netlist_sheets,
         current_sheet: None,
     };
-    Ok(signex_output::variant_matrix(&ctx, &read.variants))
+    Ok(signex_output::variant_matrix_in_channels(
+        &ctx,
+        &read.variants,
+        &matrix_channels(&channels),
+    ))
+}
+
+/// The walk's channel placements as the matrix reads them. A channel inside
+/// another is named by its channels, outermost first (`A1/CH2`).
+fn matrix_channels(channels: &signex_net::ChannelDesignators) -> MatrixChannels {
+    let mut out = MatrixChannels::default();
+    for (path, logical, inside) in channels.channel_placements() {
+        let name = inside
+            .iter()
+            .map(|channel| channel.name.as_str())
+            .collect::<Vec<_>>()
+            .join("/");
+        out.insert(path.clone(), logical.clone(), name);
+    }
+    out
 }

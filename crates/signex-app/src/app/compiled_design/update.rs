@@ -55,6 +55,10 @@ impl Signex {
                 self.pick_channel(sheet, channel);
                 Task::none()
             }
+            M::ChannelFitPicked { parts, fitted } => {
+                self.pick_channel_fit(parts, fitted);
+                Task::none()
+            }
             M::RepeatToggled { sheet_symbol, on } => {
                 self.toggle_repeat(sheet_symbol, on);
                 Task::none()

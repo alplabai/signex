@@ -243,6 +243,16 @@ impl ChannelDesignators {
         self.placements.contains_key(path)
     }
 
+    /// Every channel placement: its path, the repeated placement its
+    /// channels share and the channels it sits in, outermost first.
+    pub fn channel_placements(
+        &self,
+    ) -> impl Iterator<Item = (&InstancePath, &InstancePath, &[ChannelOccurrence])> {
+        self.placements
+            .iter()
+            .map(|(path, p)| (path, &p.logical, p.channels.as_slice()))
+    }
+
     /// The placement a designator of `path` is stored at: the repeated
     /// placement for a channel, else `path` itself.
     pub fn logical_path<'a>(&'a self, path: &'a InstancePath) -> &'a InstancePath {

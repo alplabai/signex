@@ -8,6 +8,7 @@ use signex_types::designator::compare_references;
 use signex_types::project::is_base_variant;
 use signex_types::schematic::{PartKey, Symbol, group_into_parts, normalized_lib_id};
 
+use super::channels::{MatrixChannels, RowChannel, row_channel};
 use super::part_is_fitted;
 use crate::ExportContext;
 use crate::bom::shown_parts;
@@ -41,6 +42,9 @@ pub struct VariantRow {
     /// Per column, whether the variant gives the part a parameter value of
     /// its own (`VariantMatrix::with_settings`); never Base.
     pub overridden: Vec<bool>,
+    /// Set when the row is one channel's copy of a part in a repeated sheet
+    /// (#2662).
+    pub channel: Option<RowChannel>,
 }
 
 impl VariantRow {
@@ -138,6 +142,16 @@ impl VariantMatrix {
 
 /// The matrix of the parts `ctx` places, for Base and each of `variants`.
 pub fn variant_matrix(ctx: &ExportContext, variants: &[String]) -> VariantMatrix {
+    variant_matrix_in_channels(ctx, variants, &MatrixChannels::default())
+}
+
+/// [`variant_matrix`], each row placed in one of `channels` marked as that
+/// channel's copy of its part.
+pub fn variant_matrix_in_channels(
+    ctx: &ExportContext,
+    variants: &[String],
+    channels: &MatrixChannels,
+) -> VariantMatrix {
     let shown = shown_parts(ctx);
     let placed: Vec<(&Symbol, &str)> = shown
         .iter()
@@ -155,12 +169,17 @@ pub fn variant_matrix(ctx: &ExportContext, variants: &[String]) -> VariantMatrix
         .iter()
         .map(|part| {
             let units: Vec<&Symbol> = part.iter().map(|&member| placed[member].0).collect();
+            let link = super::part_link(
+                part.iter()
+                    .map(|&member| (&shown[member].path, placed[member].0.uuid)),
+            );
+            let channel = row_channel(channels, link.as_ref(), |logical| {
+                units[0].designator_in(logical).trim().to_string()
+            });
             VariantRow {
                 designator: placed[part[0]].1.to_string(),
-                link: super::part_link(
-                    part.iter()
-                        .map(|&member| (&shown[member].path, placed[member].0.uuid)),
-                ),
+                link,
+                channel,
                 value: first_set(units.iter().map(|unit| unit.value.as_str())),
                 source_value: first_set(
                     part.iter()

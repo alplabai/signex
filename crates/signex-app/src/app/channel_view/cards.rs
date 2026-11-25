@@ -3,12 +3,16 @@
 //! its body draws the channel's sheet at card scale with its designators
 //! and net names (`miniature.rs`, #2658), or lists its designators before a
 //! compile. The chosen channel's card is outlined in the accent; a click
-//! chooses that channel.
+//! chooses that channel. The header shows the channel's fit in the active
+//! variant and a channel the variant leaves out is greyed and crossed
+//! (`fit`, #2662).
 
 use iced::widget::{Column, Row, Space, column, container, row, scrollable};
 use iced::{Alignment, Background, Border, Element, Length, Padding, Theme, Widget as _};
 use signex_i18n::{UserText, ids, t};
 use signex_widgets::text;
+
+use super::fit;
 
 use crate::app::{CompiledDesignMsg, Message};
 use crate::panels::PanelContext;
@@ -89,17 +93,29 @@ fn card<'a>(
         ),
         _ => t!(i18n, ids::PANELS_CHANNEL_VIEW_NOT_COMPILED),
     };
-    let header = row![
+    let is_not_fitted = tab.is_not_fitted();
+    let name_ink = if is_not_fitted {
+        res.ink4
+    } else {
+        ti(tokens.text)
+    };
+    let mut header = row![
         text(UserText::new(tab.channel.name.as_str()))
             .size(TS.body)
             .font(mono)
-            .color(ti(tokens.text)),
+            .color(name_ink),
         text(caption).size(TS.caption).color(res.ink3),
     ]
     .spacing(GAP)
     .align_y(Alignment::Center);
+    if let Some(pill) = fit::pill(ctx, view, tab) {
+        header = header
+            .push(Space::new().width(Length::Fill).height(Length::Shrink))
+            .push(pill)
+            .width(Length::Fill);
+    }
     let body: Element<'a, Message> = match &tab.miniature {
-        Some(miniature) => super::miniature::view(ctx, miniature),
+        Some(miniature) => super::miniature::view(ctx, miniature, fit::left_out(tab)),
         None => {
             let mut list: Column<Element<'a, Message>> = column![].spacing(LINE_GAP);
             for name in tab.designators.iter().take(BODY_ROWS) {
@@ -107,7 +123,7 @@ fn card<'a>(
                     text(UserText::new(name.as_str()))
                         .size(TS.caption)
                         .font(mono)
-                        .color(res.ink3)
+                        .color(fit::line_ink(ctx, tab, name))
                         .boxed(),
                 );
             }
@@ -128,6 +144,12 @@ fn card<'a>(
             },
             ..container::Style::default()
         });
+    // A channel the variant leaves out is greyed and crossed (#2662).
+    let content: Element<'a, Message> = if is_not_fitted {
+        iced::widget::stack![content, fit::cross(ctx)].boxed()
+    } else {
+        content.boxed()
+    };
     signex_widgets::button(content)
         .padding(0)
         .width(Length::Fill)
