@@ -44,7 +44,12 @@ format declares only its own table row below.
   read-only project shows a banner on its Project tab, gets no recovery copy,
   and changes to its file list are refused before any file moves. Close
   Project and Exit still save every other file with Save All, skipping it,
-  and offer a discard that drops only its unsaved settings (#2904).
+  and offer a discard that drops only its unsaved settings (#2904). The one
+  write of such a project is File ▸ Save Project As… (#2908): a copy in a new
+  folder whose `.snxprj` is written in this build's format, keeping the keys
+  this build does not know as they were read; its sheets and boards are
+  copied byte for byte, so a newer-minor sheet stays read-only in the copy.
+  The original file is never written.
 - **An older or foreign token** that is not in the list, or a garbled one
   (`snxsch/01`, `snxsch/1.`, a number in a `.snxprj`), is refused naming it.
 - **No token** is refused, except in `.snxprj`, where a file with no token

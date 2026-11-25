@@ -185,6 +185,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `save_all` | Save all unsaved documents | file | `Mod+Alt+S` | `Mod+Alt+S` |
 | `save_document` | Save document | file | `Mod+S` | `Mod+S` |
 | `save_document_as` | Save as | file | `Mod+Shift+S` | `Mod+Shift+S` |
+| `save_project_as` | Save the project to a new folder | file | — | — |
 | `save_workspace_layout` | Save the panel arrangement as a workspace layout | window | — | — |
 | `select_all` | Select all | select | `Mod+A` | `Mod+A` |
 | `send_drawings_backward` | Send drawings backward | edit | — | — |

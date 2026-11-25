@@ -293,3 +293,46 @@ does not list. Without `profile` the project's own setup is used, as before
 the dialog existed.
 `new_schematic_sheet` writes a file and needs the `save` capability in
 `signex-cli`.
+
+## Save Project As
+
+File ▸ Save Project As… (`save_project_as`, #2908) copies an open project
+into a new folder. The dialog takes the New Project name and location fields
+(name suggested as "`<project>` copy", location the folder that holds the
+project's folder) and always writes `<location>/<name>/<name>.snxprj`; the
+target is checked on the blocking pool as New Project checks it, so a folder
+that exists and is not empty, a project folder and a place inside a project
+(the open one included) are refused before Save copy is offered, and again
+when the copy is written.
+
+What the copy holds:
+
+- **The project file**, encoded from the project as it is in memory, unsaved
+  settings included, under the new name and folder, in this build's format:
+  the lowest `.snxprj` token its content needs (`snxprj_token`). A project
+  read from a newer minor (read-only here, `docs/FORMAT_VERSIONS.md`) is
+  written current; the keys this build does not know are kept as they were
+  read. A project with an id gets a new one: a Save As is a new document
+  (`docs/DOCUMENT_IDS.md`).
+- **Every document it lists in its folder**, byte for byte as last saved: the
+  root sheet, the sheets, the board, and each project library (its `.snxlib`
+  and the files under its library folders: `classes`, the symbol, footprint
+  and simulation folders, `3dmodels` and `assets/datasheets`). Shared and
+  global libraries are not copied; the copy lists them where they are. Unsaved
+  edits of a listed sheet or board are not in the copy, and the dialog says
+  how many documents have them. A sheet or board copied byte for byte keeps
+  its id, so with both projects open the copy's is renumbered in memory
+  (`Signex::reconcile_document_ids`).
+
+A listed file that is not on disk, or an entry that lies outside the project
+folder, refuses the whole copy before anything is written. Every file goes
+through `atomic_write`, the `.snxprj` last; a failure removes what the copy
+wrote and the folder it made, and the dialog shows why. The original folder
+is only read. Once written, the copy opens beside the project, which stays
+open and unchanged (its unsaved settings stay unsaved). A library's history
+(`.git`) is not copied.
+
+A project written by a newer build offers the same dialog from its Save
+Failed card (`NoticeAction::SaveProjectAs`) and from the Close Project and
+Exit prompts (`ProjectCloseChoice::SaveProjectAs`: the prompt closes as on
+Cancel and the dialog opens on the first read-only project it lists).

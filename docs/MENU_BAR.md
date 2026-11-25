@@ -517,6 +517,20 @@ File menu. The row and the key are off when nothing is unsaved
 (`CommandContext::has_dirty_documents`). It reports "Save All: saved N
 item(s)" or the failures in the Messages panel.
 
+## File ▸ Save Project As… {#file-save-project-as}
+
+Save Project As… (`save_project_as`, #2908) sits right after Save All, before
+the separator above Library; the File menu had no Save Project row to follow,
+so it goes after the last Save row. It is greyed with no project open
+(`Needs::OpenProject`) and no keymap preset binds it. It opens the Save Project
+As dialog on the active document's project (else the first open one): the New
+Project name and location fields, the `.snxprj` the copy lands on, and Save
+copy. The copy always goes in its own folder, `<location>/<name>/`; a folder
+that exists and is not empty, or a place inside a project, is refused as New
+Project refuses it. The same dialog opens from the Save Failed card of a
+project written by a newer build and from the Close Project and Exit prompts
+that list one. What the copy holds: [PROJECT_SETUP.md](PROJECT_SETUP.md#save-project-as).
+
 ## Place ▸ Sheet Entry, Tools ▸ Library Editor, View ▸ Window ▸ Close All Documents {#tools-library-editor}
 
 These three rows were planned stubs until #2247; each now runs a catalog
