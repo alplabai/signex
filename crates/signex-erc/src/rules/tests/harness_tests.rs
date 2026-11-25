@@ -211,6 +211,34 @@ fn matching_nested_entries_carried_through_a_child_report_nothing() {
     assert!(hits.is_empty(), "{hits:?}");
 }
 
+/// `parent` -> `sensor` -> `inner` (both passing the harness on) -> `deep`:
+/// ERC looks through both carrying sheets, as the netlist joins through both.
+#[test]
+fn a_harness_carried_through_two_children_is_matched_against_the_far_connector() {
+    let mut inner = pass_through();
+    inner.child_sheets[0].filename = "deep.snxsch".into();
+    let mut inner_ctx = ErcContext::from_snapshot(&inner);
+    inner_ctx.children.insert(
+        "deep.snxsch".into(),
+        Arc::new(ErcContext::from_snapshot(&child(&["SCK", "CS_ADC"]))),
+    );
+    let mut sensor = ErcContext::from_snapshot(&pass_through());
+    sensor
+        .children
+        .insert("inner.snxsch".into(), Arc::new(inner_ctx));
+    let mut ctx = ErcContext::from_snapshot(&parent(&["SCK", "CS"]));
+    ctx.children
+        .insert("sensor.snxsch".into(), Arc::new(sensor));
+    let messages: Vec<String> = found(&ctx, RuleKind::HarnessEntryMismatch)
+        .into_iter()
+        .map(|d| d.message)
+        .collect();
+    assert_eq!(
+        messages,
+        ["sensor expects entry CS_ADC; this harness has CS"]
+    );
+}
+
 /// The 2026-11-23 rule, kept where the carry reaches no connector: the
 /// signals stop at the child, so each entry is reported.
 #[test]
