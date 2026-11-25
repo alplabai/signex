@@ -367,7 +367,8 @@ fn the_object_list_and_the_parameter_manager_show_what_the_canvas_draws() {
 
         let path = Path::new(sheet);
         let doc = app.document_state.engines[path].document();
-        let listed: Vec<(String, String)> = sheet_rows(doc, path, &|_: Uuid| None::<String>)
+        let look = app.sheet_look(path, None);
+        let listed: Vec<(String, String)> = sheet_rows(doc, path, &look, &|_: Uuid| None::<String>)
             .into_iter()
             .filter(|row| row.kind == ObjectKind::Part)
             .map(|row| match (row.name, row.value) {

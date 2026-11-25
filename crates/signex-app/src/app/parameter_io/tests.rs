@@ -181,8 +181,9 @@ fn apply_writes_every_change_and_one_undo_takes_it_back() {
 #[test]
 fn an_import_after_cell_typing_is_its_own_undo_step() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let (mut app, answers, _sheet) = app_in(dir.path());
+    let (mut app, answers, sheet) = app_in(dir.path());
     let _ = app.update(Message::ParameterManager(ParameterManagerMsg::Edit {
+        sheet: sheet.clone(),
         symbol_uuid: Uuid::from_u128(2),
         key: "Tolerance".to_string(),
         value: "10%".to_string(),

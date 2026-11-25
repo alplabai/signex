@@ -230,7 +230,11 @@ impl Signex {
 
     /// How the canvas draws the sheet at `path`, with `special` as what its
     /// `${TOKEN}`s resolve to.
-    fn sheet_look(&self, path: &Path, special: Option<crate::canvas::SpecialStrings>) -> SheetLook {
+    pub(crate) fn sheet_look(
+        &self,
+        path: &Path,
+        special: Option<crate::canvas::SpecialStrings>,
+    ) -> SheetLook {
         SheetLook {
             placement: self.shown_placement(path),
             special,
