@@ -33,6 +33,14 @@ impl EngineNotice {
     }
 }
 
+/// How many notices the engine held at one moment, so the ones raised after
+/// it can be read without draining them ([`crate::Engine::notices_since`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NoticeMark {
+    pub(crate) warnings: usize,
+    pub(crate) notices: usize,
+}
+
 /// A pin end left without a dot, and the two nets a dot would have merged.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RefusedPinDot {

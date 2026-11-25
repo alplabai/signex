@@ -7,6 +7,7 @@ use super::projector::RefreshScope;
 use super::state::sheet_change;
 use super::undo_groups::StepDirection;
 use super::*;
+use signex_i18n_ids::ids;
 
 pub(crate) use super::core::mutation_outcome::MutationOutcome;
 
@@ -118,12 +119,14 @@ impl Signex {
         clear_overlay_cache: bool,
         update_selection_info: bool,
     ) -> (MutationOutcome, Option<String>) {
-        self.apply_engine_command_recording(
+        let (outcome, refusal, _) = self.apply_engine_command_recording(
             command,
             true,
             clear_overlay_cache,
             update_selection_info,
-        )
+            ids::NOTICE_EDIT_COMMAND_FAILED,
+        );
+        (outcome, refusal)
     }
 
     /// [`Self::apply_engine_command_reporting`] for load-time maintenance:
@@ -133,7 +136,39 @@ impl Signex {
         &mut self,
         command: signex_engine::Command,
     ) -> (MutationOutcome, Option<String>) {
-        self.apply_engine_command_recording(command, false, true, true)
+        let (outcome, refusal, _) = self.apply_engine_command_recording(
+            command,
+            false,
+            true,
+            true,
+            ids::NOTICE_EDIT_COMMAND_FAILED,
+        );
+        (outcome, refusal)
+    }
+
+    /// [`Self::apply_engine_command_reporting`] that also hands back the
+    /// engine notices the command raised (a pin the rubber band could not
+    /// keep), for a caller that answers with them (#2552). They still reach
+    /// Messages, after the commit inside an agent's edit list. A non-lock
+    /// refusal keeps the batch tail's Messages line, the operand move's on
+    /// trunk (Hakan, 2026-11-25, #2326 comment 7164045899).
+    pub(crate) fn apply_engine_command_noticing(
+        &mut self,
+        command: signex_engine::Command,
+        clear_overlay_cache: bool,
+        update_selection_info: bool,
+    ) -> (
+        MutationOutcome,
+        Option<String>,
+        Vec<signex_engine::EngineNotice>,
+    ) {
+        self.apply_engine_command_recording(
+            command,
+            true,
+            clear_overlay_cache,
+            update_selection_info,
+            ids::NOTICE_EDIT_COMMAND_EXECUTION_FAILED,
+        )
     }
 
     fn apply_engine_command_recording(
@@ -142,23 +177,35 @@ impl Signex {
         record_history: bool,
         clear_overlay_cache: bool,
         update_selection_info: bool,
-    ) -> (MutationOutcome, Option<String>) {
+        failure: signex_i18n_ids::MessageId,
+    ) -> (
+        MutationOutcome,
+        Option<String>,
+        Vec<signex_engine::EngineNotice>,
+    ) {
         if let Some(reason) = self.refuse_if_channel_view() {
-            return (MutationOutcome::Failed, Some(reason));
+            return (MutationOutcome::Failed, Some(reason), Vec::new());
         }
         let recorded = record_history
             .then(|| self.sheet_edit_to_record(std::slice::from_ref(&command)))
             .flatten();
+        let mark = self.document_state.edit_engine().map(|e| e.notice_mark());
         let edit = self
             .document_state
-            .execute_on_edit_path(command, record_history);
-        let done = self.project_sheet_edit(edit, clear_overlay_cache, update_selection_info);
-        if done.0 == MutationOutcome::Changed
+            .execute_on_edit_path(command, record_history, failure);
+        // An open transaction holds the notices until its commit (no event).
+        let notices = match (self.document_state.edit_engine(), mark) {
+            (Some(engine), Some(mark)) if engine.in_transaction() => engine.notices_since(mark),
+            _ => engine_notices_of(&edit.events),
+        };
+        let (outcome, refusal) =
+            self.project_sheet_edit(edit, clear_overlay_cache, update_selection_info);
+        if outcome == MutationOutcome::Changed
             && let Some(commands) = recorded
         {
             self.note_sheet_edit(commands);
         }
-        done
+        (outcome, refusal, notices)
     }
 
     /// Mark the active document as having unsaved edits, without running a
@@ -305,6 +352,21 @@ impl Signex {
             docs.active_path,
         );
     }
+}
+
+/// The engine's own notices among an edit's events, in order.
+fn engine_notices_of(events: &[super::core::event::CoreEvent]) -> Vec<signex_engine::EngineNotice> {
+    use super::core::event::{CoreEvent, NoticeBody};
+    events
+        .iter()
+        .filter_map(|event| match event {
+            CoreEvent::Notice(notice) => match &notice.body {
+                NoticeBody::Engine(engine) => Some(engine.clone()),
+                NoticeBody::Text(_) => None,
+            },
+            CoreEvent::DocumentChanged(_) => None,
+        })
+        .collect()
 }
 
 #[cfg(test)]

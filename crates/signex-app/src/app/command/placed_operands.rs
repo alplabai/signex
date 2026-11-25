@@ -37,12 +37,14 @@ impl PlacedRefusal {
 
 type Placed = Result<Value, PlacedRefusal>;
 
-/// `set_object_position id=.. at=x,y [document=..]`.
+/// `set_object_position id=.. at=x,y [keep_wires=..] [wiring=..] [document=..]`.
 pub(super) fn set_object_position(app: &mut Signex, args: &CommandArgs) -> Ran {
     run_edit(app, args, |app| {
         let item = app.placed_item_operand(args)?;
         let at = coordinate(args, "at")?;
-        answered(app.set_placed_position(item, at))
+        let wiring = super::placed_move::wiring(args)?;
+        let keep_wires = super::placed_move::keep_wires(args);
+        answered(app.move_placed(item, at, keep_wires, wiring))
     })
 }
 
@@ -186,7 +188,7 @@ impl Signex {
     }
 
     /// The object's id, kind and geometry after an edit, as the answer.
-    fn placed_answer(&self, item: SelectedItem) -> Placed {
+    pub(super) fn placed_answer(&self, item: SelectedItem) -> Placed {
         let engine = self
             .document_state
             .edit_engine()
@@ -213,13 +215,21 @@ impl Signex {
     }
 
     /// Put `item`'s position at `at` (stored mm), its wires following as a
-    /// drag's do when "keep wires" is on.
-    pub(crate) fn set_placed_position(&mut self, item: SelectedItem, at: Point) -> Placed {
-        let keep_wires = self.ui_state.move_keeps_wires;
+    /// drag's do when `keep_wires`: the Properties row's move, which passes
+    /// the person's "keep wires" preference.
+    pub(crate) fn set_placed_position(
+        &mut self,
+        item: SelectedItem,
+        at: Point,
+        keep_wires: bool,
+    ) -> Placed {
+        let wiring = signex_types::corner::DragWiringMode::Auto;
         let command = self
             .document_state
             .edit_engine()
-            .and_then(|e| signex_engine::move_to_command(e.document(), &item, at, keep_wires))
+            .and_then(|e| {
+                signex_engine::move_to_command(e.document(), &item, at, keep_wires, wiring)
+            })
             .ok_or_else(|| PlacedRefusal::new("this object has no position to set"))?;
         self.apply_placed_edit(command)?;
         self.placed_answer(item)

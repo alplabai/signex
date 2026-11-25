@@ -145,14 +145,16 @@ impl crate::Engine {
 }
 
 /// The move that puts `item`'s position at `to`: one `MoveSelection` by the
-/// difference, so wires on a part's pins follow it with `keep_wires` as a
-/// drag does. A sheet entry stays on its symbol's border, as when dragged.
+/// difference, so wires on a part's pins follow it with `keep_wires`, bent
+/// by `wiring`, as a drag does. A sheet entry stays on its symbol's border,
+/// as when dragged.
 #[must_use]
 pub fn move_to_command(
     sheet: &SchematicSheet,
     item: &SelectedItem,
     to: Point,
     keep_wires: bool,
+    wiring: signex_types::corner::DragWiringMode,
 ) -> Option<Command> {
     let from = placed_geometry(sheet, item)?.position;
     Some(Command::MoveSelection {
@@ -160,7 +162,7 @@ pub fn move_to_command(
         dx: to.x - from.x,
         dy: to.y - from.y,
         keep_wires,
-        wiring: signex_types::corner::DragWiringMode::Auto,
+        wiring,
     })
 }
 
@@ -427,14 +429,16 @@ mod tests {
             symbols: vec![s],
             ..Default::default()
         };
-        let cmd = move_to_command(&sheet, &item, Point::new(12.54, 7.46), true);
+        let straight = signex_types::corner::DragWiringMode::Straight;
+        let cmd = move_to_command(&sheet, &item, Point::new(12.54, 7.46), true, straight);
         assert!(matches!(
             cmd,
-            Some(Command::MoveSelection { dx, dy, keep_wires: true, .. })
-                if (dx - 2.54).abs() < 1e-9 && (dy + 2.54).abs() < 1e-9
+            Some(Command::MoveSelection { dx, dy, keep_wires: true, wiring, .. })
+                if (dx - 2.54).abs() < 1e-9 && (dy + 2.54).abs() < 1e-9 && wiring == straight
         ));
         let missing = SelectedItem::new(uuid::Uuid::now_v7(), SelectedKind::Wire);
-        assert!(move_to_command(&sheet, &missing, Point::new(0.0, 0.0), false).is_none());
+        let auto = signex_types::corner::DragWiringMode::Auto;
+        assert!(move_to_command(&sheet, &missing, Point::new(0.0, 0.0), false, auto).is_none());
     }
 
     /// Every rotation lands on the asked angle, mirrored or not.
