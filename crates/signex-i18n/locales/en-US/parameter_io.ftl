@@ -12,6 +12,11 @@ parameter-io-import-title = Import Parameters
 
 # Messages lines. $sheet is the sheet's file name, $file the CSV file's path.
 parameter-io-exported = Exported the parameters of { $sheet } to { $file }
+# An All sheets export. $sheets is how many sheets it listed.
+parameter-io-exported-all = Exported the parameters of { $sheets ->
+    [one] 1 sheet
+   *[other] { $sheets } sheets
+} to { $file }
 # $why says what went wrong, in the system's words.
 parameter-io-export-failed = Could not export the parameters to { $file }: { $why }
 # $why is one of the parameter-io-why messages below, or the system's words.
@@ -28,6 +33,8 @@ parameter-io-why-duplicate = two columns are titled { $column }
 # Under the preview window's title. $file is the CSV file's name, $sheet the
 # sheet's file name.
 parameter-io-preview-subtitle = { $file } into { $sheet }
+# An import read with All sheets. $sheets is how many sheets it goes into.
+parameter-io-preview-subtitle-all = { $file } into { $sheets } sheets
 # $changes is how many parameters change, $parts on how many parts.
 parameter-io-preview-summary =
     { $changes ->
@@ -43,13 +50,14 @@ parameter-io-preview-counts = { $added } added, { $changed } changed
 parameter-io-preview-undo = Apply is one undo step. Nothing changes until you apply.
 # $sheet is the sheet's file name.
 parameter-io-preview-nothing = The file changes nothing on { $sheet }.
-# $count is how many lines of the file match no part; $references names
-# them (a reference, or a unique id where the reference is blank), comma
-# separated.
+parameter-io-preview-nothing-all = The file changes nothing on the listed sheets.
+# $count is how many lines of the file match no listed part; $references
+# names them (a reference, or a unique id where the reference is blank),
+# comma separated.
 parameter-io-preview-unmatched =
     { $count ->
-        [one] { $count } line in the file matches no part on the sheet and is skipped: { $references }
-       *[other] { $count } lines in the file match no part on the sheet and are skipped: { $references }
+        [one] { $count } line in the file matches no listed part and is skipped: { $references }
+       *[other] { $count } lines in the file match no listed part and are skipped: { $references }
     }
 # $sheet is the sheet's file name.
 parameter-io-preview-sheet-gone = { $sheet } is no longer open.

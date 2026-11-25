@@ -1,12 +1,16 @@
 //! Import…: a CSV file read off the update thread into the Import
-//! Parameters preview, whose Apply writes every change as one undo step.
+//! Parameters preview, whose Apply writes every change, on every listed
+//! sheet, as one undo step.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use iced::Task;
 use signex_engine::Command;
 use signex_i18n::{I18n, ids, t};
-use signex_output::parameter_csv::{self, ImportPlan, ParameterCsv, ParameterCsvError};
+use signex_output::parameter_csv::{
+    self, ImportPlan, ListedSheet, ParameterCsv, ParameterCsvError,
+};
 
 use super::{ImportRead, ParameterIoMsg, file_name};
 use crate::app::state::{ModalId, ParameterCell};
@@ -64,17 +68,19 @@ pub(super) fn read_parameter_csv(path: &Path) -> Result<ParameterCsv, ImportRead
 /// The open Import Parameters preview.
 #[derive(Debug, Clone)]
 pub struct ParameterImportState {
-    /// The sheet the file goes into: the active one when Import… was
-    /// pressed.
+    /// The sheet Import… was pressed on: the active one then.
     pub sheet: PathBuf,
+    /// The sheets the file goes into: the ones the Parameter Manager listed
+    /// then (`sheet` alone with Active sheet, #1784).
+    pub sheets: Vec<PathBuf>,
     /// The file read.
     pub file: PathBuf,
     pub csv: ParameterCsv,
 }
 
 impl Signex {
-    /// Ask for a CSV file and read it off the update thread, for the active
-    /// sheet.
+    /// Ask for a CSV file and read it off the update thread, for the sheets
+    /// the Parameter Manager lists.
     pub(super) fn import_parameters(&mut self) -> Task<Message> {
         if self.document_state.active_engine().is_none() {
             return Task::none();
@@ -82,6 +88,7 @@ impl Signex {
         let Some(sheet) = self.document_state.active_path.clone() else {
             return Task::none();
         };
+        let sheets = self.parameter_sheets();
         let i18n = &self.ui_state.i18n;
         let mut dialog = self
             .ui_state
@@ -105,15 +112,23 @@ impl Signex {
                         .and_then(std::convert::identity);
                 Some((path, result))
             },
-            move |picked| ParameterIoMsg::ImportRead { sheet, picked }.into(),
+            move |picked| {
+                ParameterIoMsg::ImportRead {
+                    sheet,
+                    sheets,
+                    picked,
+                }
+                .into()
+            },
         )
     }
 
-    /// The file was read: open the preview for `sheet`, or say in Messages
+    /// The file was read: open the preview for `sheets`, or say in Messages
     /// why the file was refused.
     pub(super) fn parameter_import_read(
         &mut self,
         sheet: PathBuf,
+        sheets: Vec<PathBuf>,
         picked: Option<ImportRead>,
     ) -> Task<Message> {
         let Some((file, result)) = picked else {
@@ -121,8 +136,12 @@ impl Signex {
         };
         match result {
             Ok(csv) => {
-                self.ui_state.parameter_import =
-                    Some(Box::new(ParameterImportState { sheet, file, csv }));
+                self.ui_state.parameter_import = Some(Box::new(ParameterImportState {
+                    sheet,
+                    sheets,
+                    file,
+                    csv,
+                }));
                 self.handle_detach_modal(ModalId::ParameterImport)
             }
             Err(error) => {
@@ -140,17 +159,32 @@ impl Signex {
     }
 
     /// What Apply would change now: the open preview's file against its
-    /// sheet as it is. `None` with no preview, or when the sheet is closed.
+    /// sheets as they are. `None` with no preview, or when the sheet Import…
+    /// was pressed on is closed.
     pub(crate) fn parameter_import_plan(&self) -> Option<ImportPlan> {
-        let state = self.ui_state.parameter_import.as_ref()?;
-        let engine = self.document_state.engines.get(&state.sheet)?;
-        let parts = parameter_csv::listed_parts(engine.document());
-        Some(parameter_csv::plan_import(&parts, &state.csv))
+        self.planned_parameter_import().map(|(_, plan)| plan)
     }
 
-    /// Apply: every change in one engine batch through the edit gateway, so
-    /// one Undo takes the import back. The preview stays open when the sheet
-    /// is not the active one or the edit was refused.
+    /// [`Self::parameter_import_plan`], with the path of each sheet a
+    /// change's `sheet` index names. A listed sheet closed since is left
+    /// out, so its lines are unmatched.
+    fn planned_parameter_import(&self) -> Option<(Vec<PathBuf>, ImportPlan)> {
+        let state = self.ui_state.parameter_import.as_ref()?;
+        self.document_state.engines.get(&state.sheet)?;
+        let sheets = self.parameter_documents_of(&state.sheets);
+        let listed: Vec<ListedSheet<'_>> = sheets.iter().map(|sheet| sheet.listed()).collect();
+        let plan = parameter_csv::plan_import(&listed, &state.csv);
+        let paths = sheets
+            .iter()
+            .map(|sheet| sheet.path.to_path_buf())
+            .collect();
+        Some((paths, plan))
+    }
+
+    /// Apply: every change, on every sheet, as one undo step (the
+    /// Parameter Manager's own edit path, so one Undo takes the import back
+    /// on each sheet it changed). The preview stays open when the sheet
+    /// Import… was pressed on is not the active one or the edit was refused.
     pub(super) fn accept_parameter_import(&mut self) -> Task<Message> {
         let Some(sheet) = self
             .ui_state
@@ -169,27 +203,29 @@ impl Signex {
             crate::diagnostics::log_warning(line.into_string());
             return Task::none();
         }
-        let Some(plan) = self.parameter_import_plan() else {
+        let Some((paths, plan)) = self.planned_parameter_import() else {
             return Task::none();
         };
-        let commands: Vec<Command> = plan
-            .changes
-            .iter()
-            .map(|change| Command::SetSymbolField {
-                symbol_id: change.symbol,
-                key: change.key.clone(),
-                value: change.after.clone(),
-            })
-            .collect();
+        let mut by_sheet: BTreeMap<PathBuf, Vec<Command>> = BTreeMap::new();
+        for change in &plan.changes {
+            by_sheet
+                .entry(paths[change.sheet].clone())
+                .or_default()
+                .push(Command::SetSymbolField {
+                    symbol_id: change.symbol,
+                    key: change.key.clone(),
+                    value: change.after.clone(),
+                });
+        }
         // An open typing run would fold the import into the last cell's step.
         self.end_parameter_edit_runs();
-        if !commands.is_empty() && !self.apply_engine_commands(commands, false, false) {
+        if !by_sheet.is_empty() && !self.apply_parameter_commands(by_sheet) {
             return Task::none();
         }
         for change in plan.changes {
             self.ui_state.parameter_table.session.record(
                 ParameterCell {
-                    sheet: Some(sheet.clone()),
+                    sheet: Some(paths[change.sheet].clone()),
                     symbol: change.symbol,
                     key: change.key,
                 },
@@ -199,21 +235,36 @@ impl Signex {
         self.close_parameter_import()
     }
 
+    /// Whether the open preview goes into more than one sheet.
+    pub(crate) fn is_parameter_import_across_sheets(&self) -> bool {
+        (self.ui_state.parameter_import.as_ref()).is_some_and(|state| state.sheets.len() > 1)
+    }
+
     /// Close the preview; nothing is applied.
     pub(crate) fn close_parameter_import(&mut self) -> Task<Message> {
         self.ui_state.parameter_import = None;
         self.close_detached_modal(ModalId::ParameterImport)
     }
 
-    /// The preview's subtitle: the file and the sheet it goes into.
+    /// The preview's subtitle: the file and the sheet (or how many sheets)
+    /// it goes into.
     pub(crate) fn parameter_import_subtitle(&self) -> Option<String> {
         let state = self.ui_state.parameter_import.as_ref()?;
-        Some(self.ui_state.i18n.message_plain(
-            ids::PARAMETER_IO_PREVIEW_SUBTITLE,
-            &[
-                ("file", signex_i18n::Arg::from(file_name(&state.file))),
-                ("sheet", signex_i18n::Arg::from(file_name(&state.sheet))),
-            ],
-        ))
+        let file = ("file", signex_i18n::Arg::from(file_name(&state.file)));
+        let i18n = &self.ui_state.i18n;
+        Some(if self.is_parameter_import_across_sheets() {
+            i18n.message_plain(
+                ids::PARAMETER_IO_PREVIEW_SUBTITLE_ALL,
+                &[file, ("sheets", signex_i18n::Arg::from(state.sheets.len()))],
+            )
+        } else {
+            i18n.message_plain(
+                ids::PARAMETER_IO_PREVIEW_SUBTITLE,
+                &[
+                    file,
+                    ("sheet", signex_i18n::Arg::from(file_name(&state.sheet))),
+                ],
+            )
+        })
     }
 }

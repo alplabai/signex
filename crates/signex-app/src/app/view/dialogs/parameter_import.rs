@@ -102,11 +102,12 @@ impl Signex {
         let mut content: Column<Element<'a, Message>> =
             column![].spacing(SP.m).height(Length::Fill);
         if plan.changes.is_empty() {
-            content = content.push(
-                text(t!(i18n, ids::PARAMETER_IO_PREVIEW_NOTHING, "sheet" => sheet))
-                    .size(TS.body)
-                    .boxed(),
-            );
+            let nothing = if self.is_parameter_import_across_sheets() {
+                t!(i18n, ids::PARAMETER_IO_PREVIEW_NOTHING_ALL)
+            } else {
+                t!(i18n, ids::PARAMETER_IO_PREVIEW_NOTHING, "sheet" => sheet)
+            };
+            content = content.push(text(nothing).size(TS.body).boxed());
         } else {
             content = content
                 .push(
@@ -232,6 +233,7 @@ mod tests {
         let open = |app: &mut Signex, text: &str| {
             app.ui_state.parameter_import = Some(Box::new(ParameterImportState {
                 sheet: sheet.to_path_buf(),
+                sheets: vec![sheet.to_path_buf()],
                 file: "/w/edited.csv".into(),
                 csv: parameter_csv::parse(text.as_bytes()).expect("parse"),
             }));

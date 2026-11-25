@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use signex_i18n::I18n;
-use signex_types::designator::{DesignatorStandard, display_reference};
+use signex_types::designator::DesignatorStandard;
 use signex_types::schematic::{
     InstancePath, LabelType, Point, SchDirective, SchDrawing, SchematicSheet, SelectedItem,
     SelectedKind, Symbol,
@@ -19,7 +19,7 @@ use signex_widgets::chips::FilterSet;
 use uuid::Uuid;
 
 use crate::canvas::SpecialStrings;
-use crate::schematic_runtime::drawn_value::drawn_value;
+use crate::schematic_runtime::drawn_value::{drawn_designator, drawn_value};
 
 /// How many rows the panel draws before a "more" row; each press of it adds
 /// as many again.
@@ -214,11 +214,7 @@ pub struct SheetLook {
 impl SheetLook {
     /// A part's designator as the canvas draws it.
     fn designator<'a>(&self, symbol: &'a Symbol) -> std::borrow::Cow<'a, str> {
-        let stored = match &self.placement {
-            Some(placement) => symbol.designator_in(placement),
-            None => symbol.reference.as_str(),
-        };
-        display_reference(self.standard, stored)
+        drawn_designator(symbol, self.placement.as_ref(), self.standard)
     }
 
     /// A part's (or a power port's) value as the canvas draws it.

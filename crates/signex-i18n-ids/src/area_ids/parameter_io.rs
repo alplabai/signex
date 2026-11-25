@@ -8,6 +8,7 @@ define_ids! {
     PARAMETER_IO_EXPORT_TITLE = "parameter-io-export-title";
     PARAMETER_IO_IMPORT_TITLE = "parameter-io-import-title";
     PARAMETER_IO_EXPORTED = "parameter-io-exported";
+    PARAMETER_IO_EXPORTED_ALL = "parameter-io-exported-all";
     PARAMETER_IO_EXPORT_FAILED = "parameter-io-export-failed";
     PARAMETER_IO_IMPORT_FAILED = "parameter-io-import-failed";
     PARAMETER_IO_WHY_TOO_LARGE = "parameter-io-why-too-large";
@@ -16,10 +17,12 @@ define_ids! {
     PARAMETER_IO_WHY_NO_KEY = "parameter-io-why-no-key";
     PARAMETER_IO_WHY_DUPLICATE = "parameter-io-why-duplicate";
     PARAMETER_IO_PREVIEW_SUBTITLE = "parameter-io-preview-subtitle";
+    PARAMETER_IO_PREVIEW_SUBTITLE_ALL = "parameter-io-preview-subtitle-all";
     PARAMETER_IO_PREVIEW_SUMMARY = "parameter-io-preview-summary";
     PARAMETER_IO_PREVIEW_COUNTS = "parameter-io-preview-counts";
     PARAMETER_IO_PREVIEW_UNDO ="parameter-io-preview-undo";
     PARAMETER_IO_PREVIEW_NOTHING = "parameter-io-preview-nothing";
+    PARAMETER_IO_PREVIEW_NOTHING_ALL = "parameter-io-preview-nothing-all";
     PARAMETER_IO_PREVIEW_UNMATCHED = "parameter-io-preview-unmatched";
     PARAMETER_IO_PREVIEW_SHEET_GONE = "parameter-io-preview-sheet-gone";
     PARAMETER_IO_COLUMN_PART = "parameter-io-column-part";

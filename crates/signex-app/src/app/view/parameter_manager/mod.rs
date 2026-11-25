@@ -11,16 +11,19 @@
 
 mod table;
 
+use std::borrow::Cow;
 use std::path::Path;
 
 use super::*;
 use iced::widget::{Space, column, svg};
 use iced::{Alignment, Padding};
 use signex_i18n::{Arg, I18n, ids, t};
-use signex_types::schematic::{SchematicSheet, Symbol};
+use signex_output::parameter_csv;
+use signex_types::schematic::Symbol;
 use signex_widgets::{text, text_input, tooltip};
 
 use crate::app::contracts::ParameterScope;
+use crate::app::handlers::parameter_manager::ParameterSheet;
 use crate::panels::{EmptyStateAction, empty_state_card_with_actions};
 use crate::styles::{self, DialogButtonKind, ti, tokens::resolve};
 
@@ -32,11 +35,16 @@ const FILTER_WIDTH_EM: f32 = 20.0;
 /// Width of the new parameter name box, in em (180 px by default).
 const NEW_KEY_WIDTH_EM: f32 = 15.0;
 
-/// One row of the table: a part and the sheet it is placed on.
-#[derive(Debug, Clone, Copy)]
+/// One row of the table: a part, the sheet it is placed on and the names
+/// the row shows for them.
+#[derive(Debug, Clone)]
 pub(crate) struct PartRow<'a> {
     pub sheet: &'a Path,
     pub symbol: &'a Symbol,
+    /// The designator the sheet's canvas draws for the part (#1151).
+    pub reference: Cow<'a, str>,
+    /// What the Sheet column names the sheet.
+    pub sheet_name: String,
 }
 
 /// What the table area shows.
@@ -47,13 +55,16 @@ pub(crate) enum TableBody<'a> {
     NoMatch,
 }
 
-/// The rows the table lists: every placed symbol except power ports, of
+/// The rows the table lists: the parts [`ParameterSheet::listed`] lists, of
 /// every listed sheet.
-fn parts<'a>(sheets: &[(&'a Path, &'a SchematicSheet)]) -> impl Iterator<Item = PartRow<'a>> {
-    sheets.iter().flat_map(|&(sheet, doc)| {
-        (doc.symbols.iter())
-            .filter(|s| !s.is_power)
-            .map(move |symbol| PartRow { sheet, symbol })
+fn parts<'a>(sheets: &[ParameterSheet<'a>]) -> impl Iterator<Item = PartRow<'a>> {
+    sheets.iter().flat_map(|sheet| {
+        (sheet.listed().parts.into_iter()).map(move |part| PartRow {
+            sheet: sheet.path,
+            symbol: part.symbol,
+            reference: part.reference,
+            sheet_name: sheet.name.clone(),
+        })
     })
 }
 
@@ -62,10 +73,10 @@ fn parts<'a>(sheets: &[(&'a Path, &'a SchematicSheet)]) -> impl Iterator<Item = 
 pub(crate) fn table_body<'a>(
     i18n: &I18n,
     filter: &str,
-    sheets: &[(&'a Path, &'a SchematicSheet)],
+    sheets: &[ParameterSheet<'a>],
 ) -> TableBody<'a> {
     let rows: Vec<PartRow<'a>> = parts(sheets)
-        .filter(|row| row_matches_filter(i18n, filter, row.symbol))
+        .filter(|row| row_matches_filter(i18n, filter, row))
         .collect();
     if rows.is_empty() && !filter.trim().is_empty() {
         TableBody::NoMatch
@@ -76,12 +87,8 @@ pub(crate) fn table_body<'a>(
 
 /// The parameter columns: every parameter a listed part carries, sorted.
 /// Only the parameters someone actually uses get a column.
-fn parameter_keys(sheets: &[(&Path, &SchematicSheet)]) -> Vec<String> {
-    parts(sheets)
-        .flat_map(|row| row.symbol.fields.keys().cloned())
-        .collect::<std::collections::BTreeSet<_>>()
-        .into_iter()
-        .collect()
+fn parameter_keys(sheets: &[ParameterSheet<'_>]) -> Vec<String> {
+    parameter_csv::parameter_keys(parts(sheets).map(|row| row.symbol))
 }
 
 /// A sheet's file name, as the subtitle, the Sheet column and the no-match
@@ -93,17 +100,14 @@ pub(crate) fn sheet_file_name(path: &Path) -> String {
 }
 
 /// Whether a row survives the filter: a case-insensitive substring of its
-/// reference, value or footprint, folded with `i18n.fold_for_search` on both
-/// sides. An empty filter keeps every row.
-fn row_matches_filter(i18n: &I18n, filter: &str, sym: &Symbol) -> bool {
+/// reference (the designator the row shows), value or footprint, folded with
+/// `i18n.fold_for_search` on both sides. An empty filter keeps every row.
+fn row_matches_filter(i18n: &I18n, filter: &str, row: &PartRow<'_>) -> bool {
+    let sym = row.symbol;
     fields_match_filter(
         i18n,
         filter,
-        [
-            sym.reference.as_str(),
-            sym.value.as_str(),
-            sym.footprint.as_str(),
-        ],
+        [&*row.reference, sym.value.as_str(), sym.footprint.as_str()],
     )
 }
 
@@ -568,10 +572,24 @@ mod no_match_tests {
 
 #[cfg(test)]
 mod filter_tests {
-    use super::{TableBody, fields_match_filter, parameter_keys, table_body};
+    use super::{TableBody, fields_match_filter, parameter_keys, sheet_file_name, table_body};
+    use crate::app::handlers::parameter_manager::ParameterSheet;
     use signex_i18n::I18n;
-    use signex_types::schematic::{SchematicSheet, Symbol};
+    use signex_types::schematic::{InstancePath, SchematicSheet, Symbol, SymbolInstance};
     use std::path::Path;
+    use uuid::Uuid;
+
+    /// `doc` listed at `path`, drawn with each part's stored reference.
+    fn listed<'a>(path: &'a str, doc: &'a SchematicSheet) -> ParameterSheet<'a> {
+        let path = Path::new(path);
+        ParameterSheet {
+            path,
+            doc,
+            name: sheet_file_name(path),
+            placement: None,
+            standard: None,
+        }
+    }
 
     #[test]
     fn a_turkish_filter_finds_dotted_and_dotless_i() {
@@ -617,7 +635,7 @@ mod filter_tests {
     fn a_filter_nothing_matches_is_the_no_match_state() {
         let en = I18n::en_us();
         let doc = sheet();
-        let sheets = [(Path::new(PATH), &doc)];
+        let sheets = [listed(PATH, &doc)];
         assert!(matches!(
             table_body(&en, "QFN-32", &sheets),
             TableBody::NoMatch
@@ -632,7 +650,7 @@ mod filter_tests {
     fn power_ports_are_neither_rows_nor_columns() {
         let en = I18n::en_us();
         let doc = sheet();
-        let sheets = [(Path::new(PATH), &doc)];
+        let sheets = [listed(PATH, &doc)];
         let TableBody::Rows(rows) = table_body(&en, "", &sheets) else {
             panic!("no filter lists every part");
         };
@@ -655,10 +673,7 @@ mod filter_tests {
             symbols: vec![u1],
             ..Default::default()
         };
-        let sheets = [
-            (Path::new(PATH), &power),
-            (Path::new("/w/logic.snxsch"), &logic),
-        ];
+        let sheets = [listed(PATH, &power), listed("/w/logic.snxsch", &logic)];
         let TableBody::Rows(rows) = table_body(&en, "", &sheets) else {
             panic!("no filter lists every part");
         };
@@ -672,5 +687,47 @@ mod filter_tests {
             panic!("U1 matches");
         };
         assert_eq!(rows.len(), 1);
+    }
+
+    /// #1151: on a sheet shown at a placement, a row names its part by that
+    /// placement's designator, as the canvas does, and the filter finds it
+    /// by that designator.
+    #[test]
+    fn a_placed_sheet_names_its_parts_by_the_placement_designator() {
+        let en = I18n::en_us();
+        let placement = InstancePath::from_chain(vec![Uuid::from_u128(7)]);
+        let mut doc = sheet();
+        doc.symbols[0].instances.push(SymbolInstance {
+            path: placement.to_string(),
+            reference: "R101".to_string(),
+            ..Default::default()
+        });
+        let mut shown = listed(PATH, &doc);
+        shown.placement = Some(placement);
+        let sheets = [shown];
+        let TableBody::Rows(rows) = table_body(&en, "R101", &sheets) else {
+            panic!("the placement designator matches");
+        };
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].reference, "R101");
+        assert_eq!(rows[0].symbol.reference, "R1", "the file is unchanged");
+    }
+
+    /// Two listed sheets with one file name are told apart by their path
+    /// from the project folder; any other keeps its file name.
+    #[test]
+    fn sheets_sharing_a_file_name_are_named_by_their_path() {
+        use crate::app::handlers::parameter_manager::parameter_sheet_names;
+        let paths = [
+            Path::new("/w/top.snxsch"),
+            Path::new("/w/ch1/io.snxsch"),
+            Path::new("/w/ch2/io.snxsch"),
+            Path::new("/x/io.snxsch"),
+        ];
+        let names = parameter_sheet_names(&paths, Some(Path::new("/w")));
+        let ch1 = Path::new("ch1").join("io.snxsch").display().to_string();
+        let ch2 = Path::new("ch2").join("io.snxsch").display().to_string();
+        let outside = Path::new("/x/io.snxsch").display().to_string();
+        assert_eq!(names, ["top.snxsch".to_string(), ch1, ch2, outside]);
     }
 }

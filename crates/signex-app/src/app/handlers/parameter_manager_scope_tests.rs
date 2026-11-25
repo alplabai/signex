@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use signex_types::schematic::{SchematicSheet, Symbol};
+use signex_types::schematic::{InstancePath, SchematicSheet, Symbol, SymbolInstance};
 use uuid::Uuid;
 
 use crate::app::contracts::ParameterScope;
@@ -339,18 +339,82 @@ fn the_changed_count_follows_the_scope() {
 #[test]
 fn the_object_list_and_the_parameter_manager_show_what_the_canvas_draws() {
     let mut app = app();
-    all_sheets(&mut app);
-    typed(&mut app, A, 2, "0.1%");
-    typed(&mut app, B, 3, "20%");
+    edit_across_sheets(&mut app);
+    assert_lists_show_what_the_canvas_draws(&mut app);
+}
+
+/// The exit criterion on a child sheet placed twice (#1151): b's R3 is R103
+/// and R203 by placement, and its tab shows the R203 placement. The canvas,
+/// the Object List, the Parameter Manager and its CSV export all name it
+/// R203, never the stored R3.
+#[test]
+fn on_a_placed_child_sheet_every_list_names_the_placement_designator() {
+    let mut app = app();
+    let first = InstancePath::from_chain(vec![Uuid::from_u128(100)]);
+    let second = InstancePath::from_chain(vec![Uuid::from_u128(200)]);
+    let mut r3 = part(3, "R3", "10%");
+    r3.instances = [(&first, "R103"), (&second, "R203")]
+        .into_iter()
+        .map(|(placement, reference)| SymbolInstance {
+            project: "P".into(),
+            path: placement.to_string(),
+            reference: reference.into(),
+            unit: 1,
+        })
+        .collect();
+    let child = SchematicSheet {
+        uuid: Uuid::now_v7(),
+        paper_size: "A4".to_string(),
+        symbols: vec![r3],
+        ..Default::default()
+    };
+    let engine = signex_engine::Engine::new(child).expect("engine");
+    app.document_state.engines.insert(PathBuf::from(B), engine);
+    app.document_state
+        .tab_placements
+        .record(&PathBuf::from(B), Some(second));
+    edit_across_sheets(&mut app);
+    assert_lists_show_what_the_canvas_draws(&mut app);
+
+    show(&mut app, 1);
+    assert_eq!(
+        app.interaction_state
+            .active_canvas()
+            .designators
+            .get(&Uuid::from_u128(3))
+            .map(String::as_str),
+        Some("R203"),
+        "the canvas draws the placement's designator"
+    );
+    let csv = String::from_utf8(
+        app.listed_parameter_csv()
+            .expect("a sheet")
+            .expect("export"),
+    )
+    .expect("utf-8");
+    assert!(
+        csv.contains("00000000-0000-0000-0000-000000000003,R203,b.snxsch,"),
+        "the export names R3 as the table does: {csv}"
+    );
+}
+
+/// With All sheets: a cell typed on a and on b, and a column added to both.
+fn edit_across_sheets(app: &mut Signex) {
+    all_sheets(app);
+    typed(app, A, 2, "0.1%");
+    typed(app, B, 3, "20%");
     let _ = app.update(Message::ParameterManager(Pm::NewKeyChanged(
         "MPN".to_string(),
     )));
     let _ = app.update(Message::ParameterManager(Pm::ColumnAdded));
+}
 
+/// On a and on b in turn: the Object List's part rows and the Parameter
+/// Manager's rows name each part and give its value (and, for the table,
+/// its parameters) as the canvas draws them.
+fn assert_lists_show_what_the_canvas_draws(app: &mut Signex) {
     for (index, sheet) in [(0, A), (1, B)] {
-        if index != 0 {
-            show(&mut app, index);
-        }
+        show(app, index);
         let canvas = app.active_render_snapshot().expect("the sheet is drawn");
         let drawn: Vec<(String, String, HashMap<String, String>)> = (canvas.symbols.iter())
             .filter(|s| !s.is_power)
@@ -389,7 +453,7 @@ fn the_object_list_and_the_parameter_manager_show_what_the_canvas_draws() {
             .filter(|row| row.sheet == path)
             .map(|row| {
                 let s = row.symbol;
-                (s.reference.clone(), s.value.clone(), s.fields.clone())
+                (row.reference.to_string(), s.value.clone(), s.fields.clone())
             })
             .collect();
         assert_eq!(
@@ -397,4 +461,96 @@ fn the_object_list_and_the_parameter_manager_show_what_the_canvas_draws() {
             "{sheet}: Parameter Manager against the canvas"
         );
     }
+}
+
+fn add_mpn_column(app: &mut Signex) {
+    let _ = app.update(Message::ParameterManager(Pm::NewKeyChanged(
+        "MPN".to_string(),
+    )));
+    let _ = app.update(Message::ParameterManager(Pm::ColumnAdded));
+}
+
+/// The Messages lines said since `before`, without the bidi isolates.
+fn said_since(before: Option<u64>) -> Vec<String> {
+    crate::diagnostics::entries_since(before)
+        .entries
+        .into_iter()
+        .map(|e| e.message.replace(['\u{2068}', '\u{2069}'], ""))
+        .collect()
+}
+
+/// An edit across sheets is all or nothing: b opening read-only refuses the
+/// column on a too, and Messages says why.
+#[test]
+fn a_read_only_sheet_refuses_the_whole_cross_sheet_edit() {
+    let _ = crate::diagnostics::init_logging();
+    let mut app = app();
+    let mut newer = SchematicSheet {
+        uuid: Uuid::now_v7(),
+        symbols: vec![part(3, "R3", "10%")],
+        ..Default::default()
+    };
+    newer.unknown.newer_minor_source = Some("snxsch/1.99".into());
+    let engine = signex_engine::Engine::new(newer).expect("engine");
+    app.document_state.engines.insert(PathBuf::from(B), engine);
+    all_sheets(&mut app);
+    let before = crate::diagnostics::newest_entry_id();
+    add_mpn_column(&mut app);
+
+    assert_eq!(field(&app, A, 1, "MPN"), None, "a is left as it was");
+    assert_eq!(field(&app, B, 3, "MPN"), None);
+    assert!(!app.document_state.is_document_dirty(Path::new(A)));
+    assert_eq!(
+        app.ui_state.parameter_table.new_key, "MPN",
+        "the typed name stays for another try"
+    );
+    let lines = said_since(before);
+    assert!(
+        lines
+            .iter()
+            .any(|line| line.contains("b.snxsch opens read-only")),
+        "{lines:?}"
+    );
+}
+
+/// One Undo on any sheet of a cross-sheet edit takes it back on all of
+/// them, and one Redo there puts it back.
+#[test]
+fn one_undo_on_the_other_sheet_takes_a_cross_sheet_column_back() {
+    let mut app = app();
+    all_sheets(&mut app);
+    add_mpn_column(&mut app);
+    show(&mut app, 1);
+    undo(&mut app);
+    assert_eq!(field(&app, A, 1, "MPN"), None, "a is taken back from b");
+    assert_eq!(field(&app, B, 3, "MPN"), None);
+    let _ = app.update(Message::Edit(EditMsg::Redo));
+    assert_eq!(field(&app, A, 1, "MPN").as_deref(), Some(""));
+    assert_eq!(field(&app, B, 3, "MPN").as_deref(), Some(""));
+}
+
+/// A listed sheet shown as a channel tab (#1279) is a compiled view, active
+/// or not: its cells and an edit across sheets that reaches it are refused.
+#[test]
+fn a_sheet_shown_as_a_channel_refuses_edits_from_the_table() {
+    let _ = crate::diagnostics::init_logging();
+    let mut app = app();
+    all_sheets(&mut app);
+    let channels = &mut app.ui_state.compiled_design.channel_tabs;
+    channels.insert(PathBuf::from(B), 1);
+    let said = crate::diagnostics::said_on_this_thread();
+    typed(&mut app, B, 3, "12%");
+    assert_eq!(field(&app, B, 3, "Tolerance").as_deref(), Some("10%"));
+    assert!(
+        crate::diagnostics::said_on_this_thread() > said,
+        "Messages says why"
+    );
+
+    add_mpn_column(&mut app);
+    assert_eq!(
+        field(&app, A, 1, "MPN"),
+        None,
+        "nothing changed on a either"
+    );
+    assert_eq!(field(&app, B, 3, "MPN"), None);
 }

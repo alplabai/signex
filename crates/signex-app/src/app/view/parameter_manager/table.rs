@@ -8,12 +8,15 @@
 //! colours and metrics (`GridStyle`, `GridMetrics`) are reused, so both
 //! tables look alike.
 
+use std::path::Path;
+
 use iced::alignment::Vertical;
 use iced::widget::scrollable::{self, Scroll, Scrollbar, Source};
 use iced::widget::text::Wrapping;
 use iced::widget::{Space, column, container, mouse_area, row};
 use iced::{Alignment, Background, Border, Color, Element, Font, Length, Theme, Widget as _};
 use signex_i18n::{I18n, UserText, ids, t};
+use signex_types::schematic::Symbol;
 use signex_widgets::constraint_grid::{GridMetrics, GridStyle};
 use signex_widgets::theme_ext::HAIRLINE;
 use signex_widgets::{button, raw, text, text_input, tooltip};
@@ -343,16 +346,16 @@ fn param_header<'a>(
 /// One editable parameter cell, with the changed mark on its left.
 fn param_cell<'a>(
     app: &'a Signex,
-    part: PartRow<'a>,
+    sheet: &Path,
+    sym: &'a Symbol,
     key: &str,
     width: f32,
     style: GridStyle,
 ) -> Element<'a, Message> {
     let m = style.metrics();
-    let sym = part.symbol;
     let shown: &str = sym.fields.get(key).map_or("", String::as_str);
     let cell = ParameterCell {
-        sheet: Some(part.sheet.to_path_buf()),
+        sheet: Some(sheet.to_path_buf()),
         symbol: sym.uuid,
         key: key.to_string(),
     };
@@ -363,7 +366,7 @@ fn param_cell<'a>(
         .is_some_and(|before| before.as_deref() != sym.fields.get(key).map(String::as_str));
     let is_open = table.editing.as_ref() == Some(&cell);
     let symbol_uuid = sym.uuid;
-    let sheet = part.sheet.to_path_buf();
+    let sheet = sheet.to_path_buf();
     let (focus_sheet, focus_key) = (sheet.clone(), key.to_string());
     let focus = move |is_focused| {
         Message::ParameterManager(ParameterManagerMsg::CellFocused {
@@ -459,7 +462,7 @@ pub(super) fn view<'a>(
     .map(|id| t!(i18n, id).to_string());
     let syms = || rows.iter().map(|row| row.symbol);
     let fixed = [
-        longest(&titles[0], syms().map(|s| s.reference.as_str())),
+        longest(&titles[0], rows.iter().map(|row| &*row.reference)),
         longest(&titles[1], syms().map(|s| s.value.as_str())),
         longest(&titles[2], syms().map(|s| s.footprint.as_str())),
     ];
@@ -473,12 +476,8 @@ pub(super) fn view<'a>(
         })
         .collect();
     let sheet_title = t!(i18n, ids::DIALOG_PARAMETER_MANAGER_COLUMN_SHEET).to_string();
-    let sheet_names: Vec<String> = rows
-        .iter()
-        .map(|row| super::sheet_file_name(row.sheet))
-        .collect();
     let sheet_width = if show_sheet {
-        let chars = longest(&sheet_title, sheet_names.iter().map(String::as_str));
+        let chars = longest(&sheet_title, rows.iter().map(|row| row.sheet_name.as_str()));
         sheet_column_width(TS.body, m.pad, chars)
     } else {
         0.0
@@ -523,12 +522,12 @@ pub(super) fn view<'a>(
         sheet_width + widths.value + widths.footprint + widths.params.iter().sum::<f32>();
     let table = &app.ui_state.parameter_table;
     let [reference_ink, value_ink, footprint_ink] = fixed_cell_inks(style);
-    for (&part, sheet_name) in rows.iter().zip(&sheet_names) {
+    for part in rows {
         let sym = part.symbol;
         let fill = row_fill(table.is_editing_row(part.sheet, sym.uuid), style);
         references.push(filled(
             read_only_cell(
-                &sym.reference,
+                &part.reference,
                 widths.reference,
                 reference_ink,
                 reference_font(),
@@ -540,7 +539,7 @@ pub(super) fn view<'a>(
         let mut cells: Vec<Element<'a, Message>> = Vec::new();
         if show_sheet {
             cells.push(read_only_cell(
-                sheet_name,
+                &part.sheet_name,
                 sheet_width,
                 value_ink,
                 mono(),
@@ -562,7 +561,7 @@ pub(super) fn view<'a>(
             m,
         ));
         for (key, w) in keys.iter().zip(&widths.params) {
-            cells.push(param_cell(app, part, key, *w, style));
+            cells.push(param_cell(app, part.sheet, part.symbol, key, *w, style));
         }
         body_rows.push(filled(row(cells).align_y(Alignment::Center).boxed(), fill));
         body_rows.push(rule(style.line, Length::Fixed(body_width), true));

@@ -262,7 +262,7 @@ fn an_export_imports_back_to_no_change() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, answers, _sheet) = app_in(dir.path());
     let bytes = app
-        .active_parameter_csv()
+        .listed_parameter_csv()
         .expect("a sheet")
         .expect("export");
     let text = String::from_utf8(bytes).expect("utf-8");
@@ -270,4 +270,128 @@ fn an_export_imports_back_to_no_change() {
     let plan = app.parameter_import_plan().expect("plan");
     assert!(plan.changes.is_empty() && plan.unmatched.is_empty());
     assert_eq!(plan.unmatched_lines, 0);
+}
+
+/// The app of [`app_in`] with a second loose sheet, logic (R3), open beside
+/// power, power shown. Loose sheets list each other with All sheets.
+fn two_sheets_in(dir: &Path) -> (Signex, HeadlessAnswers, PathBuf, PathBuf) {
+    let (mut app, answers, power) = app_in(dir);
+    let logic = dir.join("logic.snxsch");
+    let doc = SchematicSheet {
+        uuid: Uuid::now_v7(),
+        symbols: vec![part(3, "R3", "10%")],
+        ..Default::default()
+    };
+    add_sheet_with(&mut app, &logic, doc);
+    app.document_state.active_tab = 0;
+    app.document_state.active_path = Some(power.clone());
+    app.sync_canvas_from_visible_schematic(crate::schematic_runtime::RenderInvalidation::FULL);
+    (app, answers, power, logic)
+}
+
+fn all_sheets(app: &mut Signex) {
+    let _ = app.update(Message::ParameterManager(ParameterManagerMsg::ScopePicked(
+        crate::app::contracts::ParameterScope::AllSheets,
+    )));
+}
+
+/// The Tolerance of part `n` on `sheet`.
+fn tolerance_on(app: &Signex, sheet: &Path, n: u128) -> Option<String> {
+    app.document_state.engines[sheet]
+        .document()
+        .symbols
+        .iter()
+        .find(|s| s.uuid == Uuid::from_u128(n))
+        .and_then(|s| s.fields.get("Tolerance").cloned())
+}
+
+/// #1784: with All sheets the export lists every listed sheet's parts, the
+/// active sheet first, with a Sheet column after Reference.
+#[test]
+fn an_all_sheets_export_lists_every_sheet_with_its_name() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, answers, _power, _logic) = two_sheets_in(dir.path());
+    all_sheets(&mut app);
+    let file = dir.path().join("out.csv");
+    answers.set("path", file.display().to_string());
+    send(&mut app, ParameterIoMsg::ExportRequested);
+    let written = std::fs::read(&file).expect("the export was written");
+    assert_eq!(
+        String::from_utf8(written).expect("utf-8"),
+        "\u{feff}Unique Id,Reference,Sheet,Value,Footprint,Tolerance\r\n\
+         00000000-0000-0000-0000-000000000001,R1,power.snxsch,10k,R_0603,1%\r\n\
+         00000000-0000-0000-0000-000000000002,R2,power.snxsch,10k,R_0603,5%\r\n\
+         00000000-0000-0000-0000-000000000003,R3,logic.snxsch,10k,R_0603,10%\r\n"
+    );
+}
+
+/// #1784: an import read with All sheets changes every listed sheet, as one
+/// undo step: one Undo takes it back on both.
+#[test]
+fn an_all_sheets_import_is_one_undo_step_across_sheets() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, answers, power, logic) = two_sheets_in(dir.path());
+    all_sheets(&mut app);
+    import(
+        &mut app,
+        &answers,
+        dir.path(),
+        "Unique Id,Reference,Sheet,Tolerance\r\n\
+         00000000-0000-0000-0000-000000000001,R1,power.snxsch,2%\r\n\
+         00000000-0000-0000-0000-000000000003,R3,logic.snxsch,20%\r\n",
+    );
+    let plan = app.parameter_import_plan().expect("plan");
+    assert_eq!((plan.changes.len(), plan.unmatched_lines), (2, 0));
+    send(&mut app, ParameterIoMsg::PreviewAccepted);
+    assert!(app.ui_state.parameter_import.is_none(), "Apply closes it");
+    assert_eq!(tolerance_on(&app, &power, 1).as_deref(), Some("2%"));
+    assert_eq!(tolerance_on(&app, &logic, 3).as_deref(), Some("20%"));
+    assert!(app.document_state.is_document_dirty(&logic));
+    assert_eq!(app.parameter_session_changes().len(), 2);
+
+    let _ = app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(tolerance_on(&app, &power, 1).as_deref(), Some("1%"));
+    assert_eq!(
+        tolerance_on(&app, &logic, 3).as_deref(),
+        Some("10%"),
+        "one Undo takes the import back on both sheets"
+    );
+}
+
+/// An export made with Active sheet has no Sheet column: read with All
+/// sheets, each line goes to the listed part its unique id names.
+#[test]
+fn an_active_sheet_file_imports_across_all_sheets() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, answers, _power, logic) = two_sheets_in(dir.path());
+    all_sheets(&mut app);
+    import(
+        &mut app,
+        &answers,
+        dir.path(),
+        "Unique Id,Reference,Tolerance\r\n\
+         00000000-0000-0000-0000-000000000003,R3,15%\r\n",
+    );
+    send(&mut app, ParameterIoMsg::PreviewAccepted);
+    assert_eq!(tolerance_on(&app, &logic, 3).as_deref(), Some("15%"));
+}
+
+/// With Active sheet the import goes into the active sheet only: a line for
+/// another sheet's part is unmatched.
+#[test]
+fn with_active_sheet_an_import_leaves_the_other_sheets_alone() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, answers, _power, logic) = two_sheets_in(dir.path());
+    import(
+        &mut app,
+        &answers,
+        dir.path(),
+        "Unique Id,Reference,Tolerance\r\n\
+         00000000-0000-0000-0000-000000000003,R3,15%\r\n",
+    );
+    let plan = app.parameter_import_plan().expect("plan");
+    assert!(plan.changes.is_empty());
+    assert_eq!(plan.unmatched, vec!["R3".to_string()]);
+    send(&mut app, ParameterIoMsg::PreviewAccepted);
+    assert_eq!(tolerance_on(&app, &logic, 3).as_deref(), Some("10%"));
 }
