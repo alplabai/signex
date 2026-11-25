@@ -49,7 +49,9 @@ pub(in crate::format) struct DimensionRaw {
     text_position: Option<DimensionTextPosition>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     text_gap: Option<i64>,
-    /// `LinearDimension::text_at`; absent at the middle of the line.
+    /// `LinearDimension::text_at`, written only for a Manual value and
+    /// absent at the middle of the line. Any other value reads where its
+    /// text position puts it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     text_along: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -100,7 +102,8 @@ pub(in crate::format) fn read(d: DimensionRaw) -> LinearDimension {
         suffix: d.suffix.unwrap_or(legacy.suffix),
         trailing_zeros: d.trailing_zeros.unwrap_or(legacy.trailing_zeros),
     };
-    LinearDimension {
+    let manual = Point::new(mm(d.text_along, 0.0), mm(d.text_across, 0.0));
+    let mut dimension = LinearDimension {
         uuid: d.uuid,
         start: point(d.start_x, d.start_y),
         end: point(d.end_x, d.end_y),
@@ -110,13 +113,17 @@ pub(in crate::format) fn read(d: DimensionRaw) -> LinearDimension {
         text_height: nm_to_mm(d.text_height),
         precision: d.precision,
         style,
-        text_at: Point::new(mm(d.text_along, 0.0), mm(d.text_across, 0.0)),
+        text_at: manual,
+    };
+    if dimension.style.text_position != DimensionTextPosition::Manual {
+        dimension.text_at = dimension.above_text_at();
     }
+    dimension
 }
 
 /// Whether saving `d` writes any look key: its look differs, to the nm,
-/// from the look of its own text height and line width, or its Manual
-/// point is off the middle of the line. A dimension the file cannot hold
+/// from the look of its own text height and line width, or it is Manual
+/// (its point is written only then). A dimension the file cannot hold
 /// (a number that is not finite) is refused on save and answers `false`.
 pub fn dimension_uses_style(d: &LinearDimension) -> bool {
     let Ok(row) = write(d) else {
@@ -141,6 +148,20 @@ pub fn board_uses_dimension_style(board: &crate::pcb::PcbBoard) -> bool {
 fn length(v: f64, was: f64, field: &'static str) -> Result<Option<i64>, NonFiniteField> {
     let nm = mm_to_nm(v, field)?;
     Ok((nm != mm_to_nm(was, field)?).then_some(nm))
+}
+
+/// One coordinate of the Manual point of `d` in nm, or `None` when `d` is
+/// not Manual (where its value sits follows its look, as the app places it)
+/// or the coordinate is 0, the middle of the line.
+fn manual_point(
+    d: &LinearDimension,
+    coordinate: fn(Point) -> f64,
+    field: &'static str,
+) -> Result<Option<i64>, NonFiniteField> {
+    if d.style.text_position != DimensionTextPosition::Manual {
+        return Ok(None);
+    }
+    length(coordinate(d.text_at), 0.0, field)
 }
 
 /// `v`, or `None` when it is `was`.
@@ -175,8 +196,8 @@ pub(in crate::format) fn write(d: &LinearDimension) -> Result<DimensionRaw, NonF
         text_width: length(s.text_width, legacy.text_width, "text_width")?,
         text_position: changed(&s.text_position, &legacy.text_position),
         text_gap: length(s.text_gap, legacy.text_gap, "text_gap")?,
-        text_along: length(d.text_at.x, 0.0, "text_along")?,
-        text_across: length(d.text_at.y, 0.0, "text_across")?,
+        text_along: manual_point(d, |p| p.x, "text_along")?,
+        text_across: manual_point(d, |p| p.y, "text_across")?,
         extension_offset: length(
             s.extension_offset,
             legacy.extension_offset,

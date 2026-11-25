@@ -79,9 +79,10 @@ pub struct DimensionDrawing {
 impl LinearDimension {
     /// A dimension from `start` to `end` standing `offset` mm off them, on
     /// the Dimensions layer with the PCB default line width and text height
-    /// and the look dimensions had before their settings.
+    /// and the look dimensions had before their settings; its Manual point
+    /// starts where Above puts the value, as a saved one reads.
     pub fn new(id: Uuid, start: Point, end: Point, offset: f64) -> Self {
-        Self {
+        let mut dimension = Self {
             uuid: id,
             start,
             end,
@@ -92,7 +93,9 @@ impl LinearDimension {
             precision: DIMENSION_DEFAULT_PRECISION,
             style: DimensionStyle::default(),
             text_at: Point::new(0.0, 0.0),
-        }
+        };
+        dimension.text_at = dimension.above_text_at();
+        dimension
     }
 
     /// This dimension with the line width, text height, decimals and look

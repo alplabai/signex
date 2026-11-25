@@ -9,7 +9,7 @@ use crate::format_version::FormatVersion;
 use crate::pcb::Point;
 use crate::pcb_dimension::LinearDimension;
 use crate::pcb_dimension_style::{
-    ArrowStyle, BoardFont, DimensionStyle, DimensionTextPosition, DimensionUnits,
+    ArrowStyle, BoardFont, DimensionDefaults, DimensionStyle, DimensionTextPosition, DimensionUnits,
 };
 
 /// The keys a dimension row had before the look settings.
@@ -58,6 +58,7 @@ fn a_dimension_of_the_old_look_writes_only_the_old_keys() {
     d.text_height = 2.0;
     d.line_width = 0.25;
     d.style = DimensionStyle::for_text_height(2.0, 0.25);
+    d.text_at = d.above_text_at();
     let text = saved(d.clone());
     for key in row_keys(&text) {
         assert!(OLD_KEYS.contains(&key.as_str()), "new key {key} in {text}");
@@ -155,8 +156,15 @@ fn a_board_uses_a_dimension_style_only_when_a_look_key_is_written() {
     filled.style.arrow_style = ArrowStyle::Filled;
     assert!(dimension_uses_style(&filled));
     let mut moved = d.clone();
+    moved.style.text_position = DimensionTextPosition::Manual;
     moved.text_at = Point::new(0.0, 1.0);
     assert!(dimension_uses_style(&moved), "a Manual point is a look key");
+    let mut unshown = d.clone();
+    unshown.text_at = Point::new(0.0, 1.0);
+    assert!(
+        !dimension_uses_style(&unshown),
+        "the point of a value Above is not drawn, so not written"
+    );
     board.free.dimensions.push(filled);
     assert!(board_uses_dimension_style(&board));
     let text = SnxPcb::new(board).write_string().expect("writes");
@@ -184,6 +192,7 @@ fn plain(n: u128) -> LinearDimension {
     d.uuid = Uuid::from_u128(n);
     d.text_height = 2.0;
     d.style = DimensionStyle::for_text_height(2.0, d.line_width);
+    d.text_at = d.above_text_at();
     d
 }
 
@@ -251,4 +260,68 @@ fn a_dimension_look_opens_read_only_in_a_build_that_knows_only_1_10() {
     assert!(one_ten.refuse_save(token).is_err(), "{token}");
     assert!(!SNXPCB_VERSION.is_newer_minor(token), "this build reads it");
     assert!(SNXPCB_VERSION.refuse_save(token).is_ok());
+}
+
+/// A dimension as the app makes one, its value Above with the point where
+/// Above puts it (never the middle of the line), writes no look key, so a
+/// board of them keeps its token.
+#[test]
+fn a_dimension_with_the_defaults_uses_no_style() {
+    for offset in [2.5, -2.5] {
+        let new = LinearDimension::new(
+            Uuid::from_u128(21),
+            Point::new(0.0, 0.0),
+            Point::new(20.0, 0.0),
+            offset,
+        );
+        assert!(!dimension_uses_style(&new), "new, offset {offset}");
+        let d = new.with_defaults(&DimensionDefaults::default());
+        assert_ne!(d.text_at, Point::new(0.0, 0.0), "Above is off the line");
+        assert!(!dimension_uses_style(&d), "with defaults, offset {offset}");
+        let text = saved(d.clone());
+        assert_eq!(token_of(&text), SNXPCB_FORMAT_V1, "{text}");
+        let back = SnxPcb::parse(&text).expect("reads").board;
+        assert_eq!(back.free.dimensions, vec![d]);
+    }
+}
+
+/// A row that is not Manual reads its point where Above puts the value, as
+/// the app would place it, and re-saves byte-identical.
+#[test]
+fn a_row_that_is_not_manual_reads_its_point_above() {
+    for position in [DimensionTextPosition::Above, DimensionTextPosition::Inline] {
+        let mut d = plain(21);
+        d.style.text_position = position;
+        d.text_at = Point::new(4.0, 4.0);
+        let text = saved(d);
+        assert!(!text.contains("text_along"), "{text}");
+        let file = SnxPcb::parse(&text).expect("reads");
+        let read = &file.board.free.dimensions[0];
+        assert_eq!(read.text_at, read.above_text_at(), "{position:?}");
+        assert_eq!(file.write_string().expect("writes again"), text);
+    }
+}
+
+/// A Manual value whose text was moved writes its point and `snxpcb/1.11`,
+/// and reads it back; one at the middle of the line writes no point.
+#[test]
+fn a_moved_manual_value_writes_snxpcb_1_11_and_round_trips_its_point() {
+    let mut d = plain(21);
+    d.style.text_position = DimensionTextPosition::Manual;
+    d.text_at = Point::new(1.5, -0.75);
+    let text = saved(d.clone());
+    assert_eq!(token_of(&text), SNXPCB_FORMAT_V1_11, "{text}");
+    assert!(text.contains("text_along = 1500000"), "{text}");
+    assert!(text.contains("text_across = -750000"), "{text}");
+    let file = SnxPcb::parse(&text).expect("reads");
+    assert_eq!(file.board.free.dimensions, vec![d]);
+    assert_eq!(file.write_string().expect("writes again"), text);
+
+    let mut middle = plain(21);
+    middle.style.text_position = DimensionTextPosition::Manual;
+    middle.text_at = Point::new(0.0, 0.0);
+    let text = saved(middle.clone());
+    assert!(!text.contains("text_along"), "{text}");
+    let back = SnxPcb::parse(&text).expect("reads").board;
+    assert_eq!(back.free.dimensions, vec![middle]);
 }
