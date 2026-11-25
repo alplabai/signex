@@ -66,6 +66,8 @@ fn show(app: &mut Signex, index: usize) {
     app.document_state.active_tab = index;
     app.document_state.active_path = Some(app.document_state.tabs[index].path.clone());
     app.sync_canvas_from_visible_schematic(RenderInvalidation::FULL);
+    // As a tab switch does, so the canvas names its parts by placement.
+    app.refresh_canvas_designators();
 }
 
 /// Sheets a (R1, R2) and b (R3) of project P and a loose sheet (R9) open,
