@@ -160,12 +160,9 @@ pub(crate) mod tests {
         app.open_pcb_tab(path.clone(), "board_repair".into(), repaired_board(false));
         assert!(app.document_state.is_document_dirty(&path));
         assert_eq!(crate::diagnostics::logged_count(needle), before + 1);
-        let Some(crate::app::TabDocument::Pcb(engine)) = app
-            .document_state
-            .tabs
-            .last()
-            .and_then(|tab| tab.cached_document.as_ref())
-        else {
+        let docs = &app.document_state;
+        let last = docs.tabs.len().checked_sub(1);
+        let Some(engine) = last.and_then(|idx| docs.tab_board_engine(idx)) else {
             panic!("a board tab");
         };
         assert!(engine.board().unknown.load_repairs.is_empty());

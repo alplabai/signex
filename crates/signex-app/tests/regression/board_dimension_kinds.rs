@@ -4,11 +4,12 @@
 //! step, and the board saves and reads the kind back.
 
 use pcb_geom::ClickMode;
-use signex_app::app::{EditMsg, FileMsg, Message, Signex, TabDocument};
+use signex_app::app::{EditMsg, FileMsg, Message, Signex};
 use signex_app::diagnostics;
 use signex_app::keymap::AppCommandId;
 use signex_app::menu_bar::MenuMessage;
 use signex_app::pcb_canvas::PcbCanvasMsg;
+use signex_app::test_adapter::BoardEngines;
 use signex_engine::pcb::{BoardCommand, BoardItem};
 use signex_types::format::{SNXPCB_FORMAT_V1_11, SnxPcb};
 use signex_types::pcb::{PcbBoard, Point};
@@ -60,10 +61,8 @@ fn send(app: &mut Signex, message: Message) {
 
 fn live(app: &Signex) -> PcbBoard {
     let docs = &app.document_state;
-    docs.tabs[docs.active_tab]
-        .cached_document
-        .as_ref()
-        .and_then(TabDocument::as_pcb)
+    docs.tab_board_engine(docs.active_tab)
+        .map(|engine| engine.board())
         .expect("a board is open")
         .clone()
 }
