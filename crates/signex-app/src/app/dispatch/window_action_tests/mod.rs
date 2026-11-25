@@ -827,3 +827,6 @@ mod surfaces;
 
 #[path = "panel_scope.rs"]
 mod panel_scope;
+
+#[path = "board_tools.rs"]
+mod board_tools;
