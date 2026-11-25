@@ -6,22 +6,18 @@ use signex_types::schematic::SchematicSheet;
 use super::*;
 
 impl Signex {
-    fn active_tab_cached_document(&self) -> Option<&TabDocument> {
-        self.document_state
-            .tabs
-            .get(self.document_state.active_tab)
-            .and_then(|tab| tab.cached_document.as_ref())
-    }
-
     pub(crate) fn active_schematic(&self) -> Option<&SchematicSheet> {
         self.document_state
             .active_engine()
             .map(|engine| engine.document())
     }
 
+    /// The active tab's own board: `None` on a Layer Stack tab, though it
+    /// shares the board's path.
     pub(crate) fn active_pcb(&self) -> Option<&PcbBoard> {
-        self.active_tab_cached_document()
-            .and_then(TabDocument::as_pcb)
+        let docs = &self.document_state;
+        docs.tab_board_engine(docs.active_tab)
+            .map(|engine| engine.board())
     }
 
     pub(crate) fn has_active_schematic(&self) -> bool {
@@ -183,11 +179,8 @@ impl Signex {
             return None;
         };
         self.document_state
-            .tabs
-            .iter()
-            .find(|tab| &tab.path == path)
-            .and_then(|tab| tab.cached_document.as_ref())
-            .and_then(TabDocument::as_pcb)
+            .first_tab_board_engine(path)
+            .map(|engine| engine.board())
     }
 
     /// A PCB canvas for an undocked window showing the PCB tab at `path`,
@@ -198,13 +191,7 @@ impl Signex {
         &self,
         path: &std::path::Path,
     ) -> Option<crate::pcb_canvas::PcbCanvas> {
-        let board = self
-            .document_state
-            .tabs
-            .iter()
-            .find(|tab| tab.path == path)
-            .and_then(|tab| tab.cached_document.as_ref())
-            .and_then(TabDocument::as_pcb)?;
+        let board = self.document_state.first_tab_board_engine(path)?.board();
         let main = &self.interaction_state.pcb_canvas;
         let mut canvas = crate::pcb_canvas::PcbCanvas::new();
         canvas.gpu_render = main.gpu_render;
@@ -307,13 +294,8 @@ impl Signex {
         self.document_state.autosave.begin_check(&path);
         self.document_state.recovery_check_due.push(path.clone());
         let dirty_path = path.clone();
-        self.document_state.tabs.push(TabInfo {
-            title,
-            path,
-            cached_document: Some(TabDocument::Pcb(engine)),
-            project_id,
-            kind: super::TabKind::Pcb,
-        });
+        self.document_state
+            .push_pcb_tab(title, path, project_id, engine);
         self.document_state.active_tab = self.document_state.tabs.len() - 1;
         self.apply_loaded_pcb_document(true, true);
         if repaired {
@@ -327,15 +309,15 @@ impl Signex {
         self.interaction_state.editing_text = None;
 
         // Schematic tabs store their engine in `document_state.engines`,
-        // keyed by the tab's path. PCB tabs still hold their board in
-        // `cached_document`. Dispatch on whichever backing storage owns
-        // the active tab's document.
+        // keyed by the tab's path. A PCB tab's board is read through the
+        // `state/pcb_board.rs` accessors. Dispatch on whichever backing
+        // storage owns the active tab's document.
         let active_path = self.active_tab_path();
         let is_schematic = active_path
             .as_ref()
             .map(|p| self.document_state.engines.contains_key(p))
             .unwrap_or(false);
-        let is_pcb = matches!(self.active_tab_cached_document(), Some(TabDocument::Pcb(_)));
+        let is_pcb = self.has_active_pcb();
         if !is_pcb {
             // The status bar's board angle field goes with the board (#2316).
             self.close_view_angle_entry_in(None);

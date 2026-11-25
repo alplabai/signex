@@ -72,6 +72,8 @@ mod home_view_tests;
 mod pcb_align;
 mod pcb_board_options;
 mod pcb_board_panel;
+#[cfg(test)]
+mod pcb_board_store_tests;
 mod pcb_clipboard;
 #[cfg(test)]
 mod pcb_clipboard_tests;
