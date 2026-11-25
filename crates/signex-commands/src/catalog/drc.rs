@@ -27,6 +27,18 @@ pub(super) const DRC: &[CommandMetadata] = &[
         operands: operands::CHECK_DRC,
         ..CommandMetadata::DEFAULT
     },
+    // #2939: each part's height and where it came from, read-only.
+    CommandMetadata {
+        id: "query_part_heights",
+        category: "validation",
+        label: command_ids::CMD_QUERY_PART_HEIGHTS,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::DOCUMENT,
+        ..CommandMetadata::DEFAULT
+    },
     // #2339: the project's requirements list run as checks, headless.
     CommandMetadata {
         id: "check_requirements",

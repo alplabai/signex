@@ -19,6 +19,8 @@ define_ids! {
         CMD_CENTER_ON_CURSOR = "cmd-center-on-cursor";
         CMD_CENTER_VIEW_AT_CURSOR = "cmd-center-view-at-cursor";
         CMD_CHECK_DRC = "cmd-check-drc";
+        CMD_QUERY_PART_HEIGHTS = "cmd-query-part-heights";
+        CMD_QUERY_LIBRARY = "cmd-query-library";
         CMD_CHECK_ERC = "cmd-check-erc";
         CMD_CHECK_REQUIREMENTS = "cmd-check-requirements";
         CMD_CLOSE_ACTIVE_DOCUMENT = "cmd-close-active-document";

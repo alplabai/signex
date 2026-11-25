@@ -242,6 +242,10 @@ pub(super) const WRITES: &[(&[&str], Surface, Writes)] = &[
         Settings,
     ),
     (OPERAND_DOCUMENT, Operand, Document),
+    // A read of the named board answered as a query is (#2939): it waits
+    // for the library models off the UI thread, so it is an operand
+    // handler, and the core's like every query row.
+    (&["query_part_heights"], Operand, Document),
     // Declared exception (#2326 slice 6.P2b): on a footprint editor tab the
     // Delete translator row deletes in the editor itself, a GUI route that
     // writes the footprint until slice S-L moves the editors onto the core.

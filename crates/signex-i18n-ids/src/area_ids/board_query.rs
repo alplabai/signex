@@ -35,4 +35,6 @@ define_ids! {
     BOARD_COMPONENT_MANY = "board-component-many";
     SHEET_TARGET_UNKNOWN = "sheet-target-unknown";
     DELETE_DOCUMENT_NOT_OPEN = "delete-document-not-open";
+    PART_HEIGHTS_NOT_A_BOARD = "part-heights-not-a-board";
+    PART_HEIGHTS_NOT_OPEN = "part-heights-not-open";
 }

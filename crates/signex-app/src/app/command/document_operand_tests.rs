@@ -513,6 +513,8 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     // The board queries (#2403).
                     "measure_board",
                     "query_board_nets",
+                    // #2939: each part's height on the named board.
+                    "query_part_heights",
                     "find_similar_items",
                     // #2408, #2409: the board Tools edits name their board.
                     "stitch_vias",

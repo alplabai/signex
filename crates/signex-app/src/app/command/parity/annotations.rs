@@ -415,6 +415,11 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Query,
         &[],
     ),
+    // #2944: a relative library path is read from the edited sheet's
+    // project folder (`open_library_named`), as `place_component` reads it.
+    (&["query_library"], Query, &[ActiveDocument]),
+    // #2939: the named board and the open libraries' models.
+    (&["query_part_heights"], Operand, &[]),
     // What the open or the new project dialog answers.
     (
         &["new_document", "open_document", "new_project_with_profile"],

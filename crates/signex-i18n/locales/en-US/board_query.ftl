@@ -51,3 +51,6 @@ board-component-many = ids names { $count } items, and this command acts on one 
 sheet-target-unknown = { $id } names nothing on the sheet this command acts on; nothing was changed
 # { $name } is the document delete_selection named; it deletes on an open sheet or board only.
 delete-document-not-open = { $name } is not an open sheet or board; nothing was deleted
+# query_part_heights (#2939) reads an open board. { $name } is the document it named.
+part-heights-not-a-board = { $name } is not a board; query_part_heights reads the parts of a board
+part-heights-not-open = { $name } is not open; open the board first

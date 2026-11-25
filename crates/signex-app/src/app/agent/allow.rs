@@ -150,6 +150,9 @@ mod tests {
                 "project_set_version_control",
                 "project_settings",
                 "query_board_nets",
+                // #2944, #2939: an open library's rows; each part's height.
+                "query_library",
+                "query_part_heights",
                 "query_pins",
                 "read_document",
                 "remove_board_panel",
