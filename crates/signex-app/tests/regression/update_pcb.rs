@@ -260,7 +260,7 @@ fn fixture_preparing(
     if let Some((board, newer)) = board {
         let mut text = SnxPcb::new(board).write_string().unwrap();
         if newer {
-            text = text.replacen(signex_types::format::SNXPCB_FORMAT_V1, "snxpcb/1.11", 1);
+            text = text.replacen(signex_types::format::SNXPCB_FORMAT_V1, "snxpcb/1.12", 1);
         }
         std::fs::write(&board_path, text).unwrap();
     }
