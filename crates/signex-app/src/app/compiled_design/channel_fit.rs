@@ -65,9 +65,17 @@ impl Signex {
             .get(path)
             .map(|engine| engine.document().symbols.as_slice())
             .unwrap_or_default();
+        // A power port is not a part: the BOM and the matrix leave it out.
+        let is_power = |id: uuid::Uuid| {
+            symbols
+                .iter()
+                .find(|s| s.uuid == id)
+                .is_some_and(|s| s.is_power || s.reference.starts_with("#PWR"))
+        };
         sheet
             .components
             .iter()
+            .filter(|component| !is_power(component.target.id))
             .map(|component| {
                 let target = &component.target;
                 let link = SymbolLink::new(target.occurrence.clone(), [target.id]);
