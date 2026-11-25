@@ -474,8 +474,8 @@ fn stitch_named(graph: &ProjectGraph, want: Want, naming: &ChannelNaming) -> Sti
     // the parent bus it meets.
     channels::join_repeat_entries(&mut l2, &occs, &edges, &analyses);
 
-    // Rule 3c (#1280): a harness-typed sheet entry joins the child bundle
-    // carrying the same-named harness port, entry by entry by path.
+    // Rule 3c (#1280, #2657): a harness-typed sheet entry joins the child's
+    // same-named harness port by path, through sheets that pass it on.
     crate::harness::join_across_sheets(&mut l2, &edges, |occ| &analyses[occ].harness);
 
     // Seed every net-root node so terminal-only nets (no label/binding) still

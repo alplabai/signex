@@ -150,6 +150,83 @@ fn an_entry_only_the_child_has_is_named() {
     );
 }
 
+/// `sensor` passing the harness on (#2657): a port `SPI_BUS` on a harness
+/// wire to the typed entry `SPI_BUS` of the sheet symbol `inner`, no
+/// connector.
+fn pass_through() -> SchematicSheet {
+    let mut s = parent(&[]);
+    s.harness.connectors.clear();
+    let port = s.harness.wires[0].start;
+    s.labels
+        .push(Label::new("SPI_BUS", port, LabelType::Hierarchical));
+    s.child_sheets[0].name = "inner".into();
+    s.child_sheets[0].filename = "inner.snxsch".into();
+    s
+}
+
+/// `parent` -> `sensor` (passing the harness on) -> `inner`, when given.
+fn through_sensor(parent: &SchematicSheet, inner: Option<&SchematicSheet>) -> ErcContext {
+    let mut sensor = ErcContext::from_snapshot(&pass_through());
+    if let Some(inner) = inner {
+        sensor.children.insert(
+            "inner.snxsch".into(),
+            Arc::new(ErcContext::from_snapshot(inner)),
+        );
+    }
+    let mut ctx = ErcContext::from_snapshot(parent);
+    ctx.children
+        .insert("sensor.snxsch".into(), Arc::new(sensor));
+    ctx
+}
+
+#[test]
+fn a_harness_carried_through_a_child_is_matched_against_the_grandchild() {
+    let ctx = through_sensor(&parent(&["SCK", "CS"]), Some(&child(&["CS", "SCK"])));
+    assert!(found(&ctx, RuleKind::HarnessEntryMismatch).is_empty());
+}
+
+#[test]
+fn a_carried_harness_names_the_entry_the_grandchild_expects() {
+    let ctx = through_sensor(&parent(&["SCK", "CS"]), Some(&child(&["SCK", "CS_ADC"])));
+    let messages: Vec<String> = found(&ctx, RuleKind::HarnessEntryMismatch)
+        .into_iter()
+        .map(|d| d.message)
+        .collect();
+    assert_eq!(
+        messages,
+        ["sensor expects entry CS_ADC; this harness has CS"]
+    );
+}
+
+#[test]
+fn matching_nested_entries_carried_through_a_child_report_nothing() {
+    let mut near = parent(&["UART"]);
+    nest_uart(&mut near, &["TX", "RX"]);
+    let mut far = child(&["UART"]);
+    nest_uart(&mut far, &["RX", "TX"]);
+    let hits = found(
+        &through_sensor(&near, Some(&far)),
+        RuleKind::HarnessEntryMismatch,
+    );
+    assert!(hits.is_empty(), "{hits:?}");
+}
+
+/// The 2026-11-23 rule, kept where the carry reaches no connector: the
+/// signals stop at the child, so each entry is reported.
+#[test]
+fn a_carry_that_reaches_no_connector_reports_every_entry() {
+    let ctx = through_sensor(&parent(&["SCK", "CS"]), None);
+    let mut messages: Vec<String> = found(&ctx, RuleKind::HarnessEntryMismatch)
+        .into_iter()
+        .map(|d| d.message)
+        .collect();
+    messages.sort();
+    assert_eq!(
+        messages,
+        ["sensor has no entry CS", "sensor has no entry SCK"]
+    );
+}
+
 /// `sheet`'s connector gets a `UART` connector of `names` nested at entry 0.
 fn nest_uart(sheet: &mut SchematicSheet, names: &[&str]) {
     let at = sheet.harness.connectors[0].entry_point(0);
