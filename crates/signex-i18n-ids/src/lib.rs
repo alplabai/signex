@@ -1009,6 +1009,8 @@ define_ids! {
     UPDATE_PCB_EXECUTE = "update-pcb-execute";
     UPDATE_PCB_DONE = "update-pcb-done";
     UPDATE_PCB_REFUSED = "update-pcb-refused";
+    UPDATE_PCB_COMMAND_MODE = "update-pcb-command-mode";
+    UPDATE_PCB_BUSY = "update-pcb-busy";
     UPDATE_PCB_LIBRARY_NOT_OPENED = "update-pcb-library-not-opened";
     UPDATE_PCB_REPORT_SAVED = "update-pcb-report-saved";
     UPDATE_PCB_REPORT_FAILED = "update-pcb-report-failed";

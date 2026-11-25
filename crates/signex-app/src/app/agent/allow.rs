@@ -214,6 +214,9 @@ mod tests {
                 "unlock_board_items",
                 "untile_documents",
                 "unwaive_drc_violation",
+                // #2470: Update PCB for the project of the named document,
+                // answered with the change list.
+                "update_pcb_from_schematic",
                 "waive_drc_violation",
             ]
         );

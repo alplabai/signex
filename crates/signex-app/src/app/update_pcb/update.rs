@@ -10,7 +10,7 @@ use signex_i18n::{MessageId, ids, t};
 
 use super::UpdatePcbMsg;
 use super::design::{self, DesignRequest};
-use super::state::{Phase, UpdatePcbState, file_name};
+use super::state::{HeadlessRun, Phase, UpdatePcbState, file_name};
 use crate::app::design_read::LibraryRows;
 use crate::app::project_sheets::{plan_project_sheets_for, project_root_sheet_path};
 use crate::app::state::{ErrorNotice, ProjectId};
@@ -156,6 +156,35 @@ impl Signex {
         project: ProjectId,
         apply: bool,
     ) -> Result<Task<Message>, MessageId> {
+        self.open_update_pcb_with(project, apply, None)
+    }
+
+    /// Update PCB for `project` run from operands (#2470): no dialog, and
+    /// `run`'s caller is answered once the list is ready (`headless.rs`).
+    pub(super) fn open_update_pcb_run(
+        &mut self,
+        project: ProjectId,
+        run: HeadlessRun,
+    ) -> Result<Task<Message>, MessageId> {
+        self.open_update_pcb_with(project, true, Some(run))
+    }
+
+    fn open_update_pcb_with(
+        &mut self,
+        project: ProjectId,
+        apply: bool,
+        headless: Option<HeadlessRun>,
+    ) -> Result<Task<Message>, MessageId> {
+        // A run from operands waits on this state: opening the dialog over
+        // it would leave its caller unanswered.
+        if self
+            .ui_state
+            .update_pcb
+            .as_ref()
+            .is_some_and(|state| state.headless.is_some())
+        {
+            return Err(ids::UPDATE_PCB_BUSY);
+        }
         let loaded = self
             .document_state
             .project_by_id(project)
@@ -165,12 +194,9 @@ impl Signex {
         if apply && board.is_none() {
             return Err(ids::UPDATE_PCB_NO_BOARD);
         }
-        self.ui_state.update_pcb = Some(Box::new(UpdatePcbState::new(
-            project,
-            name,
-            board.clone(),
-            apply,
-        )));
+        let mut state = UpdatePcbState::new(project, name, board.clone(), apply);
+        state.headless = headless;
+        self.ui_state.update_pcb = Some(Box::new(state));
         match board {
             Some(board) => Ok(self.begin_update_pcb_board(&board)),
             None => Ok(Task::none()),
@@ -214,8 +240,14 @@ impl Signex {
     }
 
     /// The pass after every update: a board the dialog waits for has opened
-    /// (start the read) or its open failed (say so).
+    /// (start the read) or its open failed (say so). A run from operands
+    /// that failed is answered then (`headless.rs`).
     pub(crate) fn sync_update_pcb(&mut self) -> Task<Message> {
+        let opened = self.sync_update_pcb_board();
+        Task::batch([opened, self.answer_failed_update_pcb_run()])
+    }
+
+    fn sync_update_pcb_board(&mut self) -> Task<Message> {
         let Some(state) = self.ui_state.update_pcb.as_ref() else {
             return Task::none();
         };
@@ -328,7 +360,7 @@ impl Signex {
                 state.list = Some(computed.list.clone());
                 state.phase = Phase::Ready;
                 if state.apply {
-                    return self.execute_update_pcb();
+                    return self.finish_update_pcb_list();
                 }
             }
             Err(why) => self.fail_update_pcb(why),
@@ -382,7 +414,7 @@ impl Signex {
     }
 
     /// The read failed: Messages and the dialog say why; a headless run
-    /// ends here.
+    /// ends here, and a run from operands is answered why (in en-US).
     pub(super) fn fail_update_pcb(&mut self, why: String) {
         let logged = why.clone();
         self.fail_update_pcb_as(&logged, why);
@@ -398,7 +430,9 @@ impl Signex {
         let Some(state) = self.ui_state.update_pcb.as_mut() else {
             return;
         };
-        if state.apply {
+        if state.headless.is_some() {
+            state.phase = Phase::Failed(logged.to_string());
+        } else if state.apply {
             self.ui_state.update_pcb = None;
         } else {
             state.phase = Phase::Failed(why);

@@ -608,6 +608,8 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "send_drawings_backward",
                     "send_drawings_to_back",
                     "delete_selection",
+                    // #2470: Update PCB for the named document's project.
+                    "update_pcb_from_schematic",
                 ]
                 .contains(&name),
                 "{name} declares a document operand"

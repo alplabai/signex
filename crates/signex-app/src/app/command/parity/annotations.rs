@@ -245,12 +245,9 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     ),
     // A run already going in the Project tab skips this one.
     (&["project_run_requirements"], Operand, &[Window]),
-    // The board update targets the window acting, else the active document.
-    (
-        &["update_pcb_from_schematic"],
-        Operand,
-        &[ActiveDocument, Window],
-    ),
+    // The board update acts on the project its `document` names (#2470);
+    // an open Update PCB dialog only refuses it.
+    (&["update_pcb_from_schematic"], Operand, &[]),
     // The new document joins the active document's project.
     (
         &["new_pcb_document", "new_schematic_sheet"],

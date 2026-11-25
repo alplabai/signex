@@ -134,6 +134,10 @@ update-pcb-done = Update PCB: { $count ->
        *[other] { $count } changes applied to { $board }.
     }
 update-pcb-refused = Update PCB did not run: { $why }
+# The command run from operands (#2470): it needs one of the two forms.
+update-pcb-command-mode = `update_pcb_from_schematic` lists its changes in the Update PCB dialog; run it with `apply=true` to execute the default ticks, or with `dry_run=true` to list them and change nothing
+# The dialog is open, or another run from operands has not finished.
+update-pcb-busy = Update PCB is already open or running; close its dialog or wait for the run to finish
 update-pcb-library-not-opened = Update PCB: library { $library } could not be opened ({ $why }); its parts have no footprint.
 update-pcb-report-saved = Update PCB report saved to { $path }.
 update-pcb-report-failed = The Update PCB report could not be written: { $why }
