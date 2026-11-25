@@ -92,6 +92,8 @@ const SAVES: &[&str] = &[
     "save_document_as",
     // Writes every unsaved document (#2844).
     "save_all",
+    // Writes a copy of the project into a new folder (#2908).
+    "save_project_as",
     "new_document",
     "new_project_with_profile",
     // Writes the blank sheet and lists it in the saved project (#2232).
@@ -186,6 +188,7 @@ mod tests {
             (Capability::Save, "save_document"),
             (Capability::Save, "save_document_as"),
             (Capability::Save, "save_all"),
+            (Capability::Save, "save_project_as"),
             (Capability::Save, "save_board_reuse_block"),
             (Capability::Save, "save_layer_set"),
             (Capability::Save, "save_workspace_layout"),
