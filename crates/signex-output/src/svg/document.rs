@@ -210,7 +210,11 @@ impl SvgRenderContext {
                 },
             });
         }
+        layers.mark(PdfLayer::WiresAndBuses, wires_start..elements.len());
+        let harness_start = elements.len();
         super::harness::push_harness(&mut elements, &sheet.schematic, &xform, palette, opts);
+        layers.mark(PdfLayer::SignalHarnesses, harness_start..elements.len());
+        let junctions_start = elements.len();
 
         let from_wires = signex_types::schematic::junction_wire_colors(&sheet.schematic, |wire| {
             wire_style::wire_color(wire, &sheet.schematic.net_colors, &opts.net_class_styles)
@@ -240,7 +244,7 @@ impl SvgRenderContext {
                 },
             ));
         }
-        layers.mark(PdfLayer::WiresAndBuses, wires_start..elements.len());
+        layers.mark(PdfLayer::WiresAndBuses, junctions_start..elements.len());
 
         if opts.include_no_connect_markers {
             for nc in &sheet.schematic.no_connects {

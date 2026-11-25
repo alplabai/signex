@@ -93,6 +93,7 @@ define_ids! {
     PDF_LAYERS_HELP = "pdf-layers-help";
     PDF_LAYERS_OFF = "pdf-layers-off";
     PDF_LAYER_WIRES = "pdf-layer-wires";
+    PDF_LAYER_HARNESSES = "pdf-layer-harnesses";
     PDF_LAYER_PARTS = "pdf-layer-parts";
     PDF_LAYER_NET_LABELS = "pdf-layer-net-labels";
     PDF_LAYER_POWER_PORTS = "pdf-layer-power-ports";

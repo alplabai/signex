@@ -399,6 +399,35 @@ fn the_watermark_layer_row_is_disabled_while_the_watermark_is_off() {
     assert!(!sent(&veiled, row), "{veiled:?}");
 }
 
+/// #2690: Signal harnesses is a layer row of its own, right under Wires and
+/// buses, named from the catalog; unticking it hides that group on open.
+#[test]
+fn signal_harnesses_have_their_own_layer_row() {
+    let (app, _task) = Signex::new();
+    let mut on = four_sheets();
+    on.dialog.layers.is_on = true;
+    let texts = texts_of(app.view_pdf_settings_column(&on), COLUMN);
+    let wires = texts.iter().position(|t| t == "Wires and buses");
+    let harnesses = texts.iter().position(|t| t == "Signal harnesses");
+    assert!(
+        wires.is_some() && harnesses == wires.map(|at| at + 1),
+        "{texts:#?}"
+    );
+    let off = four_sheets();
+    let (live, veiled) = click_on_and_off(&app, &on, &off, "Signal harnesses");
+    let row = |m: &PrintPreviewMsg| {
+        matches!(
+            m,
+            PrintPreviewMsg::PdfOption(PdfOptionMsg::PdfLayerVisibilityToggled(
+                PdfLayer::SignalHarnesses,
+                false
+            ))
+        )
+    };
+    assert!(sent(&live, row), "{live:?}");
+    assert!(!sent(&veiled, row), "{veiled:?}");
+}
+
 /// The part bookmarks' Group switch takes input only while "One bookmark
 /// per part" is ticked.
 #[test]
