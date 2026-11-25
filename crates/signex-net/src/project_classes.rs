@@ -124,12 +124,17 @@ pub struct ProjectNetClassConflict {
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ProjectClassConflicts {
     /// In project net order. A sheet placed several times (or repeated)
-    /// lists a conflict once: the first net that carries it.
+    /// lists a conflict once: the first net that carries it. Two nets the
+    /// same directives class are two conflicts.
     pub conflicts: Vec<ProjectNetClassConflict>,
     /// Every `(sheet, directive)` that classes a project net, conflicting or
-    /// not. The per-sheet check's answer for one of these is replaced by
-    /// this one; a directive on a sheet the roots never reach is not here.
+    /// not. A directive on a sheet the roots never reach is not here.
     pub judged: HashSet<(SheetKey, Uuid)>,
+    /// Every `(sheet, net)` of a sheet's own netlist (named as
+    /// [`crate::build_netlist`] names it) that is part of a project net. The
+    /// per-sheet check's answer for a judged directive on one of these is
+    /// replaced by this one; on a net not here the sheet keeps its own.
+    pub carried: HashSet<(SheetKey, String)>,
 }
 
 /// Every net class conflict of the stitched project netlist of `graph`,
@@ -154,8 +159,13 @@ pub fn project_net_class_conflicts(
         .nets;
     let masked = masked_sheets(graph.sheets);
     let sheets = masked.as_ref().unwrap_or(graph.sheets);
-    let mut out = ProjectClassConflicts::default();
-    let mut seen: HashSet<Vec<(SheetKey, Uuid)>> = HashSet::new();
+    let mut out = ProjectClassConflicts {
+        carried: carried_sheet_nets(graph.sheets, &nets),
+        ..Default::default()
+    };
+    // A conflict's directives and the wires of its net on their sheets.
+    type Identity = (Vec<(SheetKey, Uuid)>, Vec<Uuid>);
+    let mut seen: HashSet<Identity> = HashSet::new();
     for (net, list) in nets.iter().zip(project_class_assignments(sheets, &nets)) {
         out.judged.extend(
             list.iter()
@@ -165,16 +175,65 @@ pub fn project_net_class_conflicts(
         else {
             continue;
         };
-        let identity: Vec<(SheetKey, Uuid)> = std::iter::once(&winner)
+        let pairs: Vec<(SheetKey, Uuid)> = std::iter::once(&winner)
             .chain(&overridden)
             .map(|a| (a.sheet.clone(), a.assignment.directive))
             .collect();
-        if seen.insert(identity) {
+        let wires = wires_on(sheets, &pairs, net);
+        if seen.insert((pairs, wires)) {
             out.conflicts.push(ProjectNetClassConflict {
                 net_name: net.name.clone(),
                 winner,
                 overridden,
             });
+        }
+    }
+    out
+}
+
+/// The wires of `net` on the sheets of `pairs`, sorted: the net as those
+/// directives see it. The same sheet placed twice gives two project nets
+/// with these same wires, so its conflict folds into one; two nets on one
+/// sheet keep different wires and stay apart.
+fn wires_on(
+    sheets: &HashMap<SheetKey, SchematicSheet>,
+    pairs: &[(SheetKey, Uuid)],
+    net: &Net,
+) -> Vec<Uuid> {
+    let on_sheets: HashSet<Uuid> = pairs
+        .iter()
+        .filter_map(|(key, _)| sheets.get(key))
+        .flat_map(|s| s.wires.iter().map(|w| w.uuid))
+        .collect();
+    let mut wires: Vec<Uuid> = net
+        .wires
+        .iter()
+        .copied()
+        .filter(|w| on_sheets.contains(w))
+        .collect();
+    wires.sort_unstable();
+    wires.dedup();
+    wires
+}
+
+/// The nets of each sheet's own netlist that share a wire with a project
+/// net, for the sheets where the per-sheet check can find a conflict (two
+/// directives setting a class).
+fn carried_sheet_nets(
+    sheets: &HashMap<SheetKey, SchematicSheet>,
+    nets: &[Net],
+) -> HashSet<(SheetKey, String)> {
+    let project_wires: HashSet<Uuid> = nets.iter().flat_map(|n| n.wires.iter().copied()).collect();
+    let mut out = HashSet::new();
+    for (key, sheet) in sheets {
+        let classing = sheet.directives.iter().filter(|d| d.net_class().is_some());
+        if classing.count() < 2 {
+            continue;
+        }
+        for local in crate::build_netlist(sheet).nets {
+            if local.wires.iter().any(|w| project_wires.contains(w)) {
+                out.insert((key.clone(), local.name));
+            }
         }
     }
     out
