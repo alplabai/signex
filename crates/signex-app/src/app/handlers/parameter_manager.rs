@@ -84,6 +84,7 @@ impl Signex {
                 Task::none()
             }
             ParameterManagerMsg::TableScrolled { pane, x, y } => follow_table_scroll(pane, x, y),
+            ParameterManagerMsg::Io(msg) => self.dispatch_parameter_io(msg),
         }
     }
 

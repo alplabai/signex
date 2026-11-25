@@ -571,6 +571,7 @@ impl Signex {
                 net_color_palette: Default::default(),
                 parameter_manager_open: false,
                 parameter_table: Box::default(),
+                parameter_import: None,
                 reorder_picker: None,
                 move_pick: None,
                 pin_matrix_overrides: std::collections::HashMap::new(),

@@ -156,6 +156,7 @@ impl Signex {
             ModalId::MoveSelection => self.view_move_selection_body(),
             ModalId::NetColorPalette => self.view_net_color_palette_body(),
             ModalId::ParameterManager => self.view_parameter_manager_body(),
+            ModalId::ParameterImport => self.view_parameter_import_body(),
             ModalId::PrintPreview => self.view_print_preview_body(),
             ModalId::BomPreview => self.view_bom_preview_body(),
             ModalId::Preferences => self.view_preferences_body(),

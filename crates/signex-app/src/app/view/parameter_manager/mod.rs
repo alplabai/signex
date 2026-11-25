@@ -268,13 +268,35 @@ impl Signex {
         column![bar, table::rule(r.line_soft, Length::Fill, true)].boxed()
     }
 
-    /// How edits apply, the changed-cell count, Revert changes and Done.
+    /// How edits apply, Export… and Import… (#1295), the changed-cell count,
+    /// Revert changes and Done.
     fn view_parameter_footer(&self) -> Element<'_, Message> {
         let tokens = &self.document_state.panel_ctx.tokens;
         let i18n = &self.ui_state.i18n;
         let r = resolve(tokens);
         let changed = self.parameter_session_changes().len();
-        let mut actions = row![].spacing(SP.m).align_y(Alignment::Center);
+        let has_sheet = self.document_state.active_engine().is_some();
+        let csv_button = |label: signex_i18n::MessageId,
+                          msg: crate::app::parameter_io::ParameterIoMsg| {
+            styles::dialog_button(
+                t!(i18n, label),
+                DialogButtonKind::Secondary,
+                has_sheet.then(|| Message::from(msg)),
+                tokens,
+            )
+        };
+        let mut actions = row![
+            csv_button(
+                ids::PARAMETER_IO_EXPORT,
+                crate::app::parameter_io::ParameterIoMsg::ExportRequested
+            ),
+            csv_button(
+                ids::PARAMETER_IO_IMPORT,
+                crate::app::parameter_io::ParameterIoMsg::ImportRequested
+            ),
+        ]
+        .spacing(SP.m)
+        .align_y(Alignment::Center);
         if changed > 0 {
             actions = actions.push(
                 text(t!(i18n, ids::DIALOG_PARAMETER_MANAGER_CHANGED, "count" => changed))

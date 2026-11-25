@@ -259,6 +259,9 @@ pub enum ModalId {
     NetColorPalette,
     /// Parameter manager — bulk parameter editor.
     ParameterManager,
+    /// Import Parameters (#1295): the changes a CSV file makes, to apply.
+    /// Like the Parameter Manager it only ever opens as its own window.
+    ParameterImport,
     // Reserved for future draggable modals — wired in when each dialog's
     // header gets a drag hook.
     Preferences,
