@@ -701,6 +701,11 @@ pub struct Symbol {
     pub exclude_from_sim: bool,
     #[serde(default)]
     pub locked: bool,
+    /// A net tie (#1277): the part joins two named nets on purpose, which
+    /// stay two nets, and its board footprint is a copper bridge that DRC
+    /// allows. See `docs/NET_TIES.md`.
+    #[serde(default)]
+    pub net_tie: bool,
     #[serde(default)]
     pub fields: HashMap<String, String>,
     #[serde(default)]
@@ -785,6 +790,7 @@ impl Default for Symbol {
             on_board: true,
             exclude_from_sim: false,
             locked: false,
+            net_tie: false,
             fields: HashMap::new(),
             custom_properties: Vec::new(),
             pin_uuids: HashMap::new(),
