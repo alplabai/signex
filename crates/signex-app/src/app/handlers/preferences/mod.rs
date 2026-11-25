@@ -132,9 +132,8 @@ impl Signex {
         self.ui_state.preferences_draft_symbol_body_fill = self.ui_state.symbol_body_fill;
         self.ui_state.preferences_body_fill_palette_open = false;
         self.ui_state.preferences_body_fill_picker_open = false;
-        self.ui_state.preferences_pcb_defaults = Box::new(
-            crate::pcb_defaults_prefs::PcbDefaultsDraft::of(&self.ui_state.pcb_dimension_defaults),
-        );
+        *self.ui_state.preferences_pcb_defaults =
+            crate::pcb_defaults_prefs::PcbDefaultsDraft::of(&self.ui_state.pcb_dimension_defaults);
         self.ui_state.preferences_draft_trackpad_pan = self.ui_state.trackpad_pan;
         self.ui_state.preferences_draft_wheel_mode = self.ui_state.wheel_mode;
         self.ui_state.preferences_draft_layer_switcher = self.ui_state.layer_switcher;
