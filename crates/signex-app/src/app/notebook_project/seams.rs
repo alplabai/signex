@@ -20,7 +20,7 @@ impl Signex {
     /// Open the Generate options of `target`'s project.
     pub(crate) fn generate_design_notebook(&mut self, target: NotebookTarget) -> Task<Message> {
         say("Generate", &target);
-        Task::none()
+        self.dispatch_notebook_generate_message(crate::app::NotebookGenerateMsg::DialogOpened)
     }
 
     /// Open the Export notebook PDF dialog of `target`.

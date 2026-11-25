@@ -20,7 +20,7 @@ notebook-tab-block-note = Note
 notebook-tab-block-issue = Issue
 notebook-tab-block-decision = Decision
 notebook-tab-export-pdf = Export PDF…
-notebook-tab-export-pdf-tip = Export PDF is not available yet
+notebook-tab-export-pdf-tip = Export the notebook as a PDF, starting from the page in view
 notebook-tab-save = Save
 # $key is the shortcut as this system writes it (Ctrl+S, or ⌘S on macOS).
 notebook-tab-save-tip = Save the notebook ({ $key })
@@ -124,7 +124,7 @@ notebook-tab-template-lab = Lab notebook
 notebook-tab-template-lab-body = Dated entries, measurements and attachments, no fixed sections
 notebook-tab-create = Create from template
 notebook-tab-generate = Generate from project…
-notebook-tab-generate-tip = Generate from project is not available yet
+notebook-tab-generate-tip = Build a design report from the project into its own notebook file
 notebook-tab-import = Import .typ files…
 notebook-tab-import-title = Import Typst files
 notebook-tab-import-filter = Typst files

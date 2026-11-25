@@ -69,6 +69,9 @@ pub enum NotebookMsg {
     },
     /// View ▸ Notebook Badges (mockup row 197).
     BadgesToggled,
+    /// Generate design notebook (#2945, mockup row 201): its options dialog
+    /// and its runs, routed to the `notebook_generate` slice.
+    Generate(crate::app::NotebookGenerateMsg),
     /// The read of the notebook file and its chapters finished.
     Read {
         project_id: ProjectId,
@@ -219,7 +222,7 @@ impl NotebookMsg {
             M::OpenRequested { project }
             | M::GenerateRequested { project }
             | M::ExportPdfRequested { project } => *project,
-            M::BadgesToggled => None,
+            M::BadgesToggled | M::Generate(_) => None,
             M::Read { project_id, .. }
             | M::TextActed { project_id, .. }
             | M::ViewPicked { project_id, .. }

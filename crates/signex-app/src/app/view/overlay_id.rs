@@ -129,6 +129,8 @@ pub(crate) enum OverlayId {
     FabOutputs,
     /// Design ▸ Differential Pair Classes… (#1282).
     DiffPairClasses,
+    /// Generate design notebook (#2945, mockup row 201).
+    NotebookGenerate,
     /// Board Reports and Board Print / PDF (#2404, #2402).
     BoardOutput,
     /// Tools ▸ Annotation ▸ Back Annotate Schematics (#1312).
@@ -248,6 +250,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 85] = [
     OverlayId::CreateRooms,
     OverlayId::FabOutputs,
     OverlayId::DiffPairClasses,
+    OverlayId::NotebookGenerate,
     OverlayId::BoardOutput,
     OverlayId::BackAnnotate,
     OverlayId::CompareBoard,
@@ -392,6 +395,7 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::CreateRooms
         | OverlayId::FabOutputs
         | OverlayId::DiffPairClasses
+        | OverlayId::NotebookGenerate
         | OverlayId::BoardOutput
         | OverlayId::BackAnnotate
         | OverlayId::CompareBoard
@@ -635,6 +639,7 @@ impl Signex {
             OverlayId::CreateRooms => layers.extend(self.create_rooms_overlay()),
             OverlayId::FabOutputs => layers.extend(self.fab_outputs_overlay()),
             OverlayId::DiffPairClasses => layers.extend(self.diff_pair_classes_overlay()),
+            OverlayId::NotebookGenerate => layers.extend(self.notebook_generate_overlay()),
             OverlayId::BoardOutput => layers.extend(self.board_output_overlay()),
             OverlayId::BackAnnotate => layers.extend(self.back_annotate_overlay()),
             OverlayId::CompareBoard => layers.extend(self.compare_board_overlay()),

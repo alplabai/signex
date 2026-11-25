@@ -606,6 +606,8 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     // #2410: DXF import onto a board.
                     "import_dxf",
                     "import_dxf_outline",
+                    // #2945: the design report of the named project.
+                    "generate_design_notebook",
                     // #2216: Repour All on the named board.
                     "repour_all",
                     // #2389: length tuning on the named board.

@@ -66,6 +66,7 @@ pub mod library;
 #[cfg(test)]
 pub(crate) mod log_probe;
 pub mod menu_bar;
+pub mod notebook_cli;
 mod numeric_field;
 mod oversize_text;
 pub mod panels;

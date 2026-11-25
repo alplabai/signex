@@ -677,6 +677,22 @@ pub const CHECK_REQUIREMENTS: &[Operand] = &[
     required("document", OperandKind::Document),
     optional("baseline", OperandKind::Text),
 ];
+/// `generate_design_notebook` (#2945, mockup row 201): the design report of
+/// the project the named document is (or belongs to). `sections` is a comma
+/// list or `all`; `checks` is `run` or `last`; `save` writes
+/// `notebook/generated/design-report.snxnbk`, refused over an existing one
+/// unless `update`.
+pub const GENERATE_DESIGN_NOTEBOOK: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("sections", OperandKind::Text),
+    optional("variant", OperandKind::Text),
+    optional("template", OperandKind::Text),
+    optional("document_number", OperandKind::Text),
+    optional("revision", OperandKind::Text),
+    optional("checks", OperandKind::Text),
+    optional("save", OperandKind::Bool),
+    optional("update", OperandKind::Bool),
+];
 /// Select Net and Highlight Net on a board (#2403): the net by name; without
 /// it, the net of the selection or of what is under the cursor.
 pub const BOARD_NET: &[Operand] = &[optional("net", OperandKind::Text)];

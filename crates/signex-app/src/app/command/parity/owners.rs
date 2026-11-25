@@ -404,6 +404,7 @@ const MENU_SESSION: &[&str] = &[
     "footprint_mode_pads",
     "footprint_mode_sketch",
     "footprint_mode_view_3d",
+    // #2945: the Generate options dialog.
     "generate_design_notebook",
     "go_to_net_partner",
     "highlight_board_net",
@@ -597,6 +598,8 @@ const OPERAND_DOCUMENT: &[&str] = &[
     "export_board_report",
     "export_board_step",
     "export_notebook_timeline",
+    // #2945: the design report, written into the project with `save`.
+    "generate_design_notebook",
     "gloss_selected_routes",
     "import_dxf",
     "import_dxf_outline",

@@ -95,8 +95,8 @@ fn card<'a>(look: Look<'a>, template: Template, picked: bool) -> Element<'a, Not
     .boxed()
 }
 
-/// Create from template, Generate from project… (greyed until it ships)
-/// and Import .typ files….
+/// Create from template, Generate from project… (the Generate options of
+/// mockup row 201) and Import .typ files….
 fn actions<'a>(look: Look<'a>, template: Template) -> Element<'a, NotebookMsg> {
     let id = look.id;
     let create = button(text(look.t(ids::NOTEBOOK_TAB_CREATE)).size(TS.label))
@@ -110,6 +110,7 @@ fn actions<'a>(look: Look<'a>, template: Template) -> Element<'a, NotebookMsg> {
         button(text(look.t(ids::NOTEBOOK_TAB_GENERATE)).size(TS.label))
             .padding([SP.xs, SP.m])
             .style(crate::styles::outline_button(look.tokens))
+            .on_press(NotebookMsg::GenerateRequested { project: Some(id) })
             .boxed(),
         look.t(ids::NOTEBOOK_TAB_GENERATE_TIP),
         look.tokens,

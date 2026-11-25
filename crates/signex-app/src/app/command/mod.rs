@@ -24,6 +24,8 @@ mod board_operands;
 mod board_view_operand_tests;
 mod board_view_operands;
 pub(crate) mod bridge;
+mod command_line;
+pub use command_line::command_line_args;
 mod component_operand;
 #[cfg(test)]
 mod directive_operand_tests;
@@ -60,6 +62,8 @@ mod needs_reason_tests;
 pub(crate) use needs::needs as enablement_gate;
 #[cfg(test)]
 mod no_erc_operand_tests;
+#[cfg(test)]
+mod notebook_generate_tests;
 mod opened;
 #[cfg(test)]
 mod operand_handler_tests;

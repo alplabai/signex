@@ -50,12 +50,16 @@
 //! schematic values ([`cell`], mockup row 200); their results reach the
 //! page through [`CompileOptions::cells`].
 //!
+//! [`generate`] builds the design report of mockup row 201 from what the
+//! caller gathered about the project, as its own notebook file.
+//!
 //! UI-free and IO-free: the caller reads the files.
 
 pub mod attachment;
 pub mod bench;
 pub mod cell;
 pub mod edit;
+pub mod generate;
 pub mod measurement;
 pub mod report;
 pub mod scope;
@@ -173,6 +177,12 @@ mod tests_compile;
 mod tests_design;
 #[cfg(test)]
 mod tests_file;
+#[cfg(test)]
+mod tests_generate;
+#[cfg(test)]
+mod tests_generate_project;
+#[cfg(test)]
+mod tests_generate_report;
 #[cfg(test)]
 mod tests_measure_print;
 #[cfg(test)]

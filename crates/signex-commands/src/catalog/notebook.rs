@@ -72,7 +72,10 @@ pub(super) const NOTEBOOK: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
-    // Project ▸ Design Notebook ▸ Generate from Project… (mockup row 201).
+    // #2945, mockup row 201: Project ▸ Design Notebook ▸ Generate from
+    // Project…, the design report from requirements, checks, decisions, BOM,
+    // simulation and outputs, as its own notebook file. With no operands it
+    // opens the options dialog for the project in view.
     CommandMetadata {
         id: "generate_design_notebook",
         category: "design",
@@ -80,7 +83,8 @@ pub(super) const NOTEBOOK: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_GENERATE_DESIGN_NOTEBOOK),
         group: CommandGroup::General,
         enable: Enablement::Always,
-        flags: CommandFlags::GUI_ONLY,
+        flags: CommandFlags::NONE,
+        operands: super::operands::GENERATE_DESIGN_NOTEBOOK,
         ..CommandMetadata::DEFAULT
     },
     // File ▸ Export ▸ Design Notebook PDF… (mockup row 202).

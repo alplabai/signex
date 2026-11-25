@@ -72,6 +72,7 @@ struct OpenOverlays {
     create_rooms_open: bool,
     fab_outputs_open: bool,
     diff_pair_classes_open: bool,
+    notebook_generate_open: bool,
     board_output_open: bool,
     back_annotate_open: bool,
     compare_board_open: bool,
@@ -418,6 +419,9 @@ impl OpenOverlays {
             OverlayId::DiffPairClasses => self
                 .diff_pair_classes_open
                 .then(|| Message::from(crate::app::DiffPairClassesMsg::CancelRequested)),
+            OverlayId::NotebookGenerate => self
+                .notebook_generate_open
+                .then(|| Message::from(crate::app::NotebookGenerateMsg::DialogCancelled)),
             OverlayId::BoardOutput => self
                 .board_output_open
                 .then(|| Message::from(crate::app::BoardOutputMsg::Closed)),
@@ -793,6 +797,7 @@ impl Signex {
             create_rooms_open: self.ui_state.rooms.create.is_some(),
             fab_outputs_open: self.ui_state.fab_outputs.is_some(),
             diff_pair_classes_open: self.ui_state.diff_pair_classes.is_some(),
+            notebook_generate_open: self.ui_state.notebook_generate.dialog.is_some(),
             board_output_open: self.ui_state.board_output.dialog.is_some(),
             back_annotate_open: self.ui_state.back_annotate.is_some(),
             compare_board_open: self.ui_state.compare_board.is_some(),
@@ -2015,6 +2020,7 @@ mod tests {
             create_rooms_open,
             fab_outputs_open,
             diff_pair_classes_open,
+            notebook_generate_open,
             board_output_open,
             back_annotate_open,
             compare_board_open,
@@ -2106,6 +2112,9 @@ mod tests {
             ("fab_outputs_open", |o| o.fab_outputs_open = true),
             ("diff_pair_classes_open", |o| {
                 o.diff_pair_classes_open = true
+            }),
+            ("notebook_generate_open", |o| {
+                o.notebook_generate_open = true
             }),
             ("board_output_open", |o| o.board_output_open = true),
             ("back_annotate_open", |o| o.back_annotate_open = true),

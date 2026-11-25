@@ -365,6 +365,12 @@ impl Signex {
             .then(|| self.view_diff_pair_classes_dialog())
     }
 
+    /// Generate design notebook (#2945), while its options are open.
+    pub(in crate::app::view) fn notebook_generate_overlay(&self) -> Option<Element<'_, Message>> {
+        let dialog = self.ui_state.notebook_generate.dialog.as_ref()?;
+        Some(self.view_notebook_generate_dialog(dialog))
+    }
+
     /// Design ▸ Rooms ▸ Create Rooms from Sheets (#2457).
     pub(in crate::app::view) fn create_rooms_overlay(&self) -> Option<Element<'_, Message>> {
         self.ui_state

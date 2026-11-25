@@ -24,8 +24,9 @@ use crate::app::saved_channel_naming::SavedChannelNaming;
 use crate::app::state::LoadedProject;
 use crate::app::state::scope::CaseFold;
 
-/// What building the BOM needs, captured from memory.
-pub(super) struct BomInputs {
+/// What building the BOM needs, captured from memory. Also the BOM of a
+/// generated design report (`app::notebook_generate`).
+pub(crate) struct BomInputs {
     open: OpenSheets,
     pages: Vec<PathBuf>,
     root: Option<PathBuf>,
@@ -40,14 +41,22 @@ pub(super) struct BomInputs {
 
 /// The BOM grouped as it is bought, one row per part, and what could not be
 /// read on the way.
-pub(super) struct Boms {
-    pub(super) grouped: BomTable,
-    pub(super) parts: BomTable,
-    pub(super) warnings: Vec<String>,
+pub(crate) struct Boms {
+    pub(crate) grouped: BomTable,
+    pub(crate) parts: BomTable,
+    pub(crate) warnings: Vec<String>,
+}
+
+impl BomInputs {
+    /// The same inputs for `variant` (`None`: Base).
+    pub(crate) fn for_variant(self, variant: Option<String>) -> Self {
+        let variant = variant.filter(|v| !signex_types::project::is_base_variant(v));
+        Self { variant, ..self }
+    }
 }
 
 impl Signex {
-    pub(super) fn requirements_bom_inputs(&self, project: &LoadedProject) -> BomInputs {
+    pub(crate) fn requirements_bom_inputs(&self, project: &LoadedProject) -> BomInputs {
         let variant = project
             .data
             .active_variant
@@ -68,7 +77,7 @@ impl Signex {
 
 /// Build the BOM. Blocking: reads closed sheets, within `confine` when
 /// given. Refused when the project has no root sheet or it could not be read.
-pub(super) fn project_boms(
+pub(crate) fn project_boms(
     inputs: BomInputs,
     board: Option<&PcbBoard>,
     confine: Option<&Path>,

@@ -146,6 +146,8 @@ mod project_fs;
 mod repeat_placement;
 mod requirements_check;
 pub(crate) use requirements_check::REQUIREMENTS_CHECK;
+pub(crate) use requirements_check::board_path as project_board_path;
+pub(crate) use requirements_check::bom::{BomInputs, project_boms};
 pub mod selection_transform;
 pub mod selection_workflow;
 pub mod window_controls;

@@ -506,9 +506,10 @@ force_annotate_all_schematics	in_window_rewrite	document_window	gui	window	routi
 force_annotate_all_schematics	refusal_needs	ActiveSheet	core	active document	routing
 force_annotate_all_schematics	disabled_still_runs	explains_when_unavailable	core	active document,dialog answer	handler
 generate_design_notebook	bridge	Project(Notebook(GenerateRequested { project: None }))	gui	active document	gate
+generate_design_notebook	operand_handler	run_operands: named document	core	origin,settings	handler
 generate_design_notebook	in_window_rewrite	document_window	gui	window	routing
 generate_design_notebook	refusal_needs	OpenProject	gui	active document	routing
-generate_design_notebook	headless_refusal	headless_refusal	gui	none	routing
+generate_design_notebook	headless_missing_operand	needs `document`	core	none	routing
 gloss_selected_routes	translator	Pcb(Tools(GlossRequested))	gui	active document,selection	handler
 gloss_selected_routes	operand_handler	run_operands: named document	core	origin,settings	handler
 gloss_selected_routes	in_window_rewrite	document_window	gui	window	routing

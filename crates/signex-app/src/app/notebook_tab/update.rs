@@ -32,6 +32,7 @@ impl Signex {
                 self.with_notebook(project, Self::export_design_notebook_pdf)
             }
             M::BadgesToggled => self.toggle_notebook_badges(),
+            M::Generate(msg) => self.dispatch_notebook_generate_message(msg),
             M::Read { project_id, result } => self.notebook_read(project_id, result),
             M::TextActed { project_id, action } => self.notebook_text_acted(project_id, action),
             M::ViewPicked { project_id, view } => {

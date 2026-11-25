@@ -210,6 +210,11 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
         "attach_notebook_file",
         crate::app::notebook_measurements::attach_notebook_file,
     ),
+    // #2945, mockup row 201: the design report, answered once it is built.
+    (
+        "generate_design_notebook",
+        crate::app::notebook_generate::generate_design_notebook,
+    ),
     ("rules_matrix_set", crate::app::rules_tab::rules_matrix_set),
     ("rules_set_create", crate::app::rules_tab::rules_set_create),
     ("rules_set_edit", crate::app::rules_tab::rules_set_edit),

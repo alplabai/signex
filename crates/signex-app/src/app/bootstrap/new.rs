@@ -512,6 +512,7 @@ impl Signex {
                 rooms: Default::default(),
                 fab_outputs: None,
                 diff_pair_classes: None,
+                notebook_generate: Default::default(),
                 fab_outputs_writes: 0,
                 board_output: Default::default(),
                 back_annotate: None,
