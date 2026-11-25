@@ -476,7 +476,7 @@ pub(crate) fn modal_size(modal: ModalId) -> iced::Size {
             crate::app::handlers::editing_commands::move_selection_dialog::window_height(),
         ),
         ModalId::NetColorPalette => iced::Size::new(
-            360.0,
+            crate::app::handlers::editing_commands::net_color_palette::PALETTE_WIDTH,
             crate::app::handlers::editing_commands::net_color_palette::palette_window_height(0),
         ),
         ModalId::ParameterManager => iced::Size::new(900.0, 560.0),

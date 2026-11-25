@@ -32,6 +32,9 @@ pub(crate) const CHOOSER_COLORS: [(u8, u8, u8); 10] = [
 /// Rows the palette window is sized for before its list scrolls.
 const VISIBLE_ROWS: usize = 12;
 
+/// Width of the palette card and of the window it opens in (mockup row 71).
+pub(crate) const PALETTE_WIDTH: f32 = 360.0;
+
 /// How long the Clear toast shows (mockup row 71).
 const CLEAR_TOAST: std::time::Duration = std::time::Duration::from_secs(6);
 
