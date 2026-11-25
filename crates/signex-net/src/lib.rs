@@ -25,6 +25,11 @@ pub use directives::{
     net_parameters,
 };
 pub use directives::{DiffPair, blanket_net_classes, compile_masked, diff_pairs};
+mod project_classes;
+pub use project_classes::{
+    ProjectClassConflicts, ProjectNetClassConflict, SheetClassAssignment,
+    project_net_class_conflicts,
+};
 mod diff_pair_classes;
 pub use diff_pair_classes::{
     ClassMember, class_members, diff_pairs_with_classes, pair_count, pairs_by_every_suffix,

@@ -5,7 +5,7 @@ use signex_types::net::NetClassId;
 use signex_types::net_class::NetClass;
 use signex_types::schematic::{BlanketPour, DirectiveKind, NetRules, SchDirective};
 
-fn id(n: u128) -> Uuid {
+pub(super) fn id(n: u128) -> Uuid {
     Uuid::from_u128(n)
 }
 
@@ -46,7 +46,7 @@ fn mask(a: Point, b: Point) -> SchDirective {
     }
 }
 
-fn blanket(a: Point, b: Point, class: Option<&str>) -> SchDirective {
+pub(super) fn blanket(a: Point, b: Point, class: Option<&str>) -> SchDirective {
     edge_blanket(a, b, class, false)
 }
 
@@ -71,7 +71,7 @@ fn diff_pair(n: u128, at: Point, class: Option<&str>) -> SchDirective {
     }
 }
 
-fn net_parameters(at: Point, class: Option<&str>, rules: NetRules) -> SchDirective {
+pub(super) fn net_parameters(at: Point, class: Option<&str>, rules: NetRules) -> SchDirective {
     SchDirective::NetParameters {
         uuid: id(96),
         position: at,
@@ -400,7 +400,7 @@ fn the_project_netlist_applies_blanket_and_net_parameters_classes() {
 }
 
 /// `directive` with the uuid `n`, so two of one kind stay apart.
-fn with_id(mut directive: SchDirective, n: u128) -> SchDirective {
+pub(super) fn with_id(mut directive: SchDirective, n: u128) -> SchDirective {
     directive.set_uuid(id(n));
     directive
 }
@@ -457,7 +457,12 @@ fn the_resolution_follows_sheet_order_only() {
     assert_eq!(netlist.nets[0].class, class("SIGNAL"));
     let conflicts = crate::net_class_conflicts(&sheet, &netlist);
     assert_eq!(conflicts[0].winner.directive, id(102));
-    assert_eq!(conflicts, crate::net_class_conflicts(&sheet, &netlist));
+    let lost: Vec<(Uuid, &str)> = conflicts[0]
+        .overridden
+        .iter()
+        .map(|a| (a.directive, a.class.as_str()))
+        .collect();
+    assert_eq!(lost, [(id(101), "POWER")], "the first test's winner loses");
 }
 
 #[test]

@@ -494,3 +494,97 @@ fn the_units_pass_spans_the_project_only_not_loose_tabs() {
     assert_eq!(units(&loose_path).len(), 1);
     assert!(units(&loose_path)[0].ends_with("unit 1"));
 }
+
+/// A wire `(0,0)-(10,0)` with uuid `wire`, Global `VBUS` and a one-pin part,
+/// carrying `directives`.
+fn vbus_sheet(
+    wire: u128,
+    directives: Vec<signex_types::schematic::SchDirective>,
+) -> SchematicSheet {
+    let mut sheet = with_one_pin_part(named_wire(
+        ("VBUS", LabelType::Global),
+        ("VBUS", LabelType::Global),
+    ));
+    sheet.wires[0].uuid = Uuid::from_u128(wire);
+    sheet.directives = directives;
+    sheet
+}
+
+fn parameters(n: u128, class: &str) -> signex_types::schematic::SchDirective {
+    signex_types::schematic::SchDirective::NetParameters {
+        uuid: Uuid::from_u128(n),
+        position: pt(5.0, 0.0),
+        net_class: Some(class.into()),
+        diff_pair_class: None,
+        rules: Default::default(),
+        show_on_flag: false,
+    }
+}
+
+fn class_conflicts(list: &[Violation]) -> Vec<&Violation> {
+    list.iter()
+        .filter(|v| v.builtin_kind() == Some(RuleKind::NetClassConflict))
+        .collect()
+}
+
+/// #2656: the child gives global `VBUS` class POWER, the root SIGNAL, with a
+/// SW_NODE Blanket under its flag. The netlist reads the sheets in key order,
+/// so the child's POWER wins. The job reports both root directives as
+/// overridden by it, the Blanket once (the root's own finding against its
+/// SIGNAL flag is replaced, not doubled), and nothing on the child.
+#[test]
+fn the_job_reports_a_class_conflict_between_two_sheets() {
+    let (mut inputs, ..) = colliding_job();
+    let dir = Path::new("/proj");
+    let (root_path, child_path) = (dir.join("root.snxsch"), dir.join("child.snxsch"));
+    let blanket = signex_types::schematic::SchDirective::Blanket {
+        uuid: Uuid::from_u128(0x2656_11),
+        start: pt(-1.0, -1.0),
+        end: pt(11.0, 1.0),
+        net_class: Some("SW_NODE".into()),
+        erc_exclusions: Vec::new(),
+        track_width: None,
+        pour: Default::default(),
+        include_edge_nets: false,
+    };
+    let mut root = vbus_sheet(0x2656_01, vec![parameters(0x2656_12, "SIGNAL"), blanket]);
+    let mut placement = child_with_pin("child.snxsch", "UNUSED");
+    placement.pins.clear();
+    root.child_sheets.push(placement);
+    let child = vbus_sheet(0x2656_02, vec![parameters(0x2656_13, "POWER")]);
+    let open: crate::app::project_sheets::OpenSheets =
+        [(root_path.clone(), root), (child_path.clone(), child)]
+            .into_iter()
+            .collect();
+    inputs.tab_paths = open.keys().cloned().collect();
+    inputs.open = open;
+    inputs.root = Some(root_path.clone());
+
+    let outcome = run_erc_job(inputs);
+
+    let on_child = class_conflicts(&outcome.by_path[&child_path]);
+    assert!(
+        on_child.is_empty(),
+        "the winner is not overridden: {on_child:?}"
+    );
+    let on_root = class_conflicts(&outcome.by_path[&root_path]);
+    let mut primaries: Vec<Uuid> = on_root
+        .iter()
+        .filter_map(|v| v.primary.map(|p| p.uuid))
+        .collect();
+    primaries.sort();
+    assert_eq!(
+        primaries,
+        [Uuid::from_u128(0x2656_11), Uuid::from_u128(0x2656_12)],
+        "{on_root:?}"
+    );
+    for v in &on_root {
+        assert!(
+            v.message
+                .contains("takes class POWER from a Net Parameters directive on sheet"),
+            "{}",
+            v.message
+        );
+        assert_eq!(v.peer, None, "the winner is on the child's canvas");
+    }
+}

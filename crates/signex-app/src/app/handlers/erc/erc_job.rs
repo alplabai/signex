@@ -229,15 +229,26 @@ fn run_job(
         roots: &roots,
     });
     match naming {
-        Ok(naming) => add_project_net_names(
-            &mut by_path,
-            &graph,
-            &roots,
-            base_dir.as_deref(),
-            fold,
-            &inputs.overrides,
-            naming,
-        ),
+        Ok(naming) => {
+            add_project_net_names(
+                &mut by_path,
+                &graph,
+                &roots,
+                base_dir.as_deref(),
+                fold,
+                &inputs.overrides,
+                naming,
+            );
+            add_project_class_conflicts(
+                &mut by_path,
+                &graph,
+                &roots,
+                base_dir.as_deref(),
+                fold,
+                &inputs.overrides,
+                naming,
+            );
+        }
         Err(refused) => warnings.push(format!("ERC: {refused}")),
     }
     add_project_units_not_placed(&mut by_path, &snapshots, &project_paths, &inputs.overrides);
@@ -415,8 +426,58 @@ fn add_project_net_names(
                     .contains(&(key.clone(), signex_net::pt_key(&v.location)))
         });
     }
+    file_project_findings(by_path, graph, found.findings, overrides);
+}
+
+/// The project-wide `NetClassConflict` pass (#2656): a class a directive on
+/// another sheet gives a net is only visible in the stitched netlist. A
+/// sheet's own finding on a directive the project netlist classes a net with
+/// is dropped for the project's answer (ranked as the netlist ranks it); a
+/// sheet the roots never reach keeps its own.
+fn add_project_class_conflicts(
+    by_path: &mut ViolationsByPath,
+    graph: &project_sheets::AssembledGraph,
+    roots: &[signex_net::ProjectRoot],
+    base_dir: Option<&Path>,
+    fold: crate::app::state::scope::CaseFold,
+    overrides: &HashMap<signex_erc::RuleKind, signex_erc::Severity>,
+    naming: &signex_types::project::ChannelNaming,
+) {
+    if roots.is_empty() {
+        return;
+    }
+    let project = signex_net::ProjectGraph {
+        sheets: &graph.sheets,
+        resolved: &graph.resolved,
+        roots,
+    };
+    let found = signex_erc::project_net_class_conflicts_named(&project, naming);
+    for (path, list) in by_path.iter_mut() {
+        let key = project_sheets::sheet_key_with(path, base_dir, fold);
+        // A path that lost a key collision is not the sheet the graph holds.
+        if graph.paths.get(&key) != Some(path) {
+            continue;
+        }
+        list.retain(|v| {
+            v.builtin_kind() != Some(signex_erc::RuleKind::NetClassConflict)
+                || !v
+                    .primary
+                    .is_some_and(|p| found.covered.contains(&(key.clone(), p.uuid)))
+        });
+    }
+    file_project_findings(by_path, graph, found.findings, overrides);
+}
+
+/// File each project-pass finding under the path the graph read its sheet
+/// from, and re-sort the lists it lands in.
+fn file_project_findings(
+    by_path: &mut ViolationsByPath,
+    graph: &project_sheets::AssembledGraph,
+    findings: Vec<(signex_net::SheetKey, signex_erc::Violation)>,
+    overrides: &HashMap<signex_erc::RuleKind, signex_erc::Severity>,
+) {
     let mut touched: std::collections::HashSet<PathBuf> = std::collections::HashSet::new();
-    for (key, violation) in found.findings {
+    for (key, violation) in findings {
         let Some(path) = graph.paths.get(&key) else {
             continue;
         };
