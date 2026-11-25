@@ -539,6 +539,9 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     // #2410: they act on the board they name.
                     "swap_pins",
                     "swap_gates",
+                    // #1261: they act on the sheet they name.
+                    "swap_schematic_pins",
+                    "swap_schematic_gates",
                     "save_board_reuse_block",
                     "place_board_reuse_block",
                     "project_settings",

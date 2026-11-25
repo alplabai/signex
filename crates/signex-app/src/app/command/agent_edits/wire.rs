@@ -352,6 +352,9 @@ const NOT_YET_IN_LISTS: &[&str] = &[
     "send_drawings_backward",
     "send_drawings_to_back",
     "delete_selection",
+    // #1261: a schematic swap is its own step until a list is decided.
+    "swap_schematic_pins",
+    "swap_schematic_gates",
 ];
 
 /// Why `command` may not be one of the edits, or `None` when it may: it must
@@ -610,6 +613,9 @@ mod tests {
             ("send_drawings_backward", "does not carry it yet"),
             ("send_drawings_to_back", "does not carry it yet"),
             ("delete_selection", "does not carry it yet"),
+            // #1261: a schematic swap runs on its own.
+            ("swap_schematic_pins", "does not carry it yet"),
+            ("swap_schematic_gates", "does not carry it yet"),
         ] {
             let reason = edit_refusal(&id(command)).unwrap_or_else(|| panic!("{command}"));
             assert!(reason.contains(needle), "{command}: {reason}");

@@ -46,6 +46,8 @@ pub(crate) const TRANSLATED: &[&str] = &[
     "send_drawings_to_back",
     "swap_gates",
     "swap_pins",
+    "swap_schematic_gates",
+    "swap_schematic_pins",
 ];
 
 /// The translated ids a headless run without operands still runs on the
