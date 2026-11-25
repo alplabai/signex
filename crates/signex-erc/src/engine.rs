@@ -61,6 +61,7 @@ pub fn run_all_with_config(ctx: &ErcContext, config: &ErcConfig) -> Vec<Diagnost
     rules::repeat_entry_needs_bus(ctx, &mut out);
     rules::harness_entry_mismatch(ctx, &config.harness_definitions, &mut out);
     rules::harness_type_conflict(ctx, &mut out);
+    rules::net_class_conflict(ctx, &mut out);
     drop_suppressed(ctx, &mut out);
     out
 }
