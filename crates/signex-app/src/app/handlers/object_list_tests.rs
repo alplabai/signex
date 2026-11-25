@@ -383,6 +383,87 @@ fn a_twice_placed_childs_part_reads_as_the_placement_in_view() {
     assert_eq!(listed(&app), ["R101"]);
 }
 
+/// The special strings of `path` with the clock at `time`.
+fn special_at(path: &Path, time: &str) -> crate::canvas::SpecialStrings {
+    let mut metadata = signex_output::ProjectMetadata::default();
+    metadata.document_facts.current_time = time.to_string();
+    crate::canvas::SpecialStrings {
+        metadata,
+        path: path.to_path_buf(),
+        filename: "a.snxsch".into(),
+        sheet_name: "a".into(),
+        sheet_number: Some(1),
+        sheet_count: 1,
+    }
+}
+
+/// #2630: the clock (and every save's modified date) moves the canvas's
+/// special strings; a list with no text that resolves a token is not read
+/// again for that, and one with such a text is.
+#[test]
+fn the_clock_reads_the_rows_again_only_for_a_listed_token() {
+    let mut f = undocked();
+    let tick = |f: &mut Undocked, time: &str| {
+        let special = special_at(&f.main_path, time);
+        f.app.interaction_state.active_canvas_mut().special_strings = Some(special);
+        let _ = f.app.sync_object_list();
+        f.app.ui_state.object_list.source.generation
+    };
+    let read = tick(&mut f, "10:00");
+    assert_eq!(tick(&mut f, "10:01"), read, "R1's value uses no token");
+
+    let mut timed = sheet(1, "R1");
+    timed.symbols[0].value = "${CurrentTime}".into();
+    let engine = signex_engine::Engine::new(timed).expect("engine");
+    f.app
+        .document_state
+        .engines
+        .insert(f.main_path.clone(), engine);
+    let read = tick(&mut f, "10:01");
+    assert!(
+        tick(&mut f, "10:02") > read,
+        "a value showing the time is read again"
+    );
+}
+
+/// #2630: a window that closes while its Project read is on its way drops
+/// its rows, and the read landing after that does not bring them back.
+#[test]
+fn a_read_landing_after_its_window_closed_is_dropped() {
+    let mut f = undocked();
+    f.app.ui_state.object_list.windows.insert(
+        f.window,
+        ObjectRowsSource {
+            generation: 3,
+            reading: true,
+            ..ObjectRowsSource::default()
+        },
+    );
+    f.app.ui_state.windows.remove(&f.window);
+    f.app.interaction_state.canvases.remove(&f.window);
+    f.app.document_state.window_panel_ctx.remove(&f.window);
+    let _ = f.app.sync_object_list();
+    assert!(!f.app.ui_state.object_list.windows.contains_key(&f.window));
+
+    let rows = model::sheet_rows(
+        &sheet(2, "R2"),
+        &f.window_path,
+        &SheetLook::default(),
+        &|_: Uuid| None,
+    );
+    let _ = f
+        .app
+        .handle_object_list_message(ObjectListMsg::ProjectRowsRead {
+            window: Some(f.window),
+            generation: 3,
+            rows: Ok(Arc::new(rows)),
+        });
+    assert!(
+        !f.app.ui_state.object_list.windows.contains_key(&f.window),
+        "the late read lands nowhere"
+    );
+}
+
 /// #2630: the rows a closed window kept are dropped with it.
 #[test]
 fn a_closed_windows_rows_are_dropped() {
