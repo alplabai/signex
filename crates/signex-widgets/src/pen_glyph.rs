@@ -4,7 +4,7 @@
 use std::sync::OnceLock;
 
 use iced::widget::svg;
-use iced::{Color, Element, Theme};
+use iced::{Color, Element, Theme, Widget as _};
 
 /// Side of the glyph, in ems of the text it follows.
 pub(crate) const PEN_EM: f32 = 0.9;
@@ -27,5 +27,5 @@ pub(crate) fn pen_glyph<'a, M: 'a>(size: f32, ink: Color) -> Element<'a, M> {
             color: Some(ink),
             ..svg::Style::default()
         })
-        .into()
+        .boxed()
 }
