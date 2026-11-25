@@ -110,7 +110,7 @@ match is highlighted and the count under the list says how many match. The
 **Schematic / PCB / All** switch picks which editor's shortcuts are listed; it
 starts on the editor you are in (on **All** in a footprint or library
 editor, or with no editor open). **Edit in Preferences…** closes the sheet
-and opens **Preferences ▸ Keyboard Shortcuts**. `F1` again, **Close** or
+and opens **Preferences ▸ Keyboard shortcuts**. `F1` again, **Close** or
 `Esc` closes it.
 
 ## 3. Create a project
@@ -1066,7 +1066,7 @@ pins that connect nothing or two outputs wired together.
    dialog where you can set the severity of each rule and press **Run ERC**.
 2. The **ERC** panel opens with the results. At its top are the **Run ERC**
    button, with its key, and three count tiles for errors, warnings and info.
-   Press a tile to list only that severity; press it again to list all. A
+   Press a tile with findings to list only that severity; press it again to list all. A
    clean run shows "No problems found." with what it checked.
 3. The findings are grouped by rule: each group's heading shows the rule, its
    severity letter (`E` error, `W` warning, `I` info) and how many findings
@@ -1075,7 +1075,7 @@ pins that connect nothing or two outputs wired together.
    the item on the canvas. Hover a row, or select it, for its buttons:
    **Show** selects and frames the item; **Add No-Connect**, on an unused
    pin, places a no-connect marker on that pin; **Waive net**, on a finding
-   about a net, waives the rule for that net; **Waive** waives that one
+   about a net, waives the rule for that net; **Waive** asks for a reason, then waives that one
    finding. Waived findings and nets are listed in the **Waived** group at
    the end, each with **Restore**.
 4. To empty the list, press the clear button in the panel's title bar (its

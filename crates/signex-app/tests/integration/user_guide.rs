@@ -13,6 +13,7 @@ use signex_app::keymap::{
 
 const GUIDE: &str = include_str!("../../../../docs/USER_GUIDE.md");
 const PANELS_FTL: &str = include_str!("../../../signex-i18n/locales/en-US/panels.ftl");
+const PANEL_BODY_FTL: &str = include_str!("../../../signex-i18n/locales/en-US/panel_body.ftl");
 
 /// Menu labels the guide's walkthrough tells the user to click, as spelled in
 /// the menu model (ASCII `...`; the guide writes the ellipsis character).
@@ -326,8 +327,8 @@ fn keys_in_the_guide_text_are_the_default_profile_bindings() {
             "{phrase:?}: `{key}` is not bound to {command} in Signex Standard on {platform:?}"
         );
     }
-    // The tour card and the guide once named `Ctrl+K`, which no shipped
-    // profile binds to the palette.
+    // The tour card and the guide once named `Ctrl+K`; Signex Standard does
+    // not bind it to the palette (Classic does).
     assert!(
         !guide.contains("`Ctrl+K`"),
         "the palette key is Ctrl+Shift+P"
@@ -503,6 +504,10 @@ fn walkthrough_steps_match_the_new_project_dialog_and_the_wire_tool() {
 
 #[test]
 fn guide_erc_panel_matches_the_catalog() {
+    // Only section 9 counts: the same words appear in other sections.
+    let start = GUIDE.find("\n## 9.").expect("section 9");
+    let end = GUIDE[start + 1..].find("\n## 10.").expect("section 10") + start + 1;
+    let erc_section = &GUIDE[start..end];
     for (message, quoted) in [
         (
             "panels-erc-empty-hint = Run ERC to populate project-wide diagnostics",
@@ -520,11 +525,15 @@ fn guide_erc_panel_matches_the_catalog() {
             "panels-erc-clear-tooltip = Clear the ERC results",
             "\"Clear the ERC results\"",
         ),
+        ("panels-erc-waive = Waive", "**Waive**"),
     ] {
-        assert!(PANELS_FTL.contains(message), "{message:?} is gone");
         assert!(
-            GUIDE.contains(quoted),
-            "the guide does not quote {quoted:?}"
+            PANELS_FTL.contains(message) || PANEL_BODY_FTL.contains(message),
+            "{message:?} is gone"
+        );
+        assert!(
+            erc_section.contains(quoted),
+            "section 9 does not quote {quoted:?}"
         );
     }
     for stale in [
