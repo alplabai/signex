@@ -70,6 +70,7 @@ impl Signex {
             AgentMsg::Request(call) => self.handle_agent_request(call),
             AgentMsg::EditReadsLoaded(loaded) => self.handle_edit_reads_loaded(*loaded),
             AgentMsg::CheckFinished(finished) => self.handle_check_finished(&finished),
+            AgentMsg::AnnotationsListed(listed) => self.handle_annotations_listed(*listed),
             AgentMsg::PeerRefused { pid, reason } => {
                 let reason = printable(&reason);
                 crate::diagnostics::log_warning(format!(

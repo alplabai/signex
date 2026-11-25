@@ -15,6 +15,11 @@
 //! `DEC-002`). The earlier `#annotation(kind: "...", ...)` block is still
 //! read: [`scan`] lists its blocks and every problem it met, by line, and
 //! [`Filter`] picks the ones a list shows (`docs/NOTEBOOK_ANNOTATIONS.md`).
+//! Each block is a review record ([`Record`], mockup row 198): the fields
+//! its kind prints, a Measurement's rows with their [`Verdict`], and the
+//! ids it cites ([`links`]); a failing Measurement opens an Issue
+//! ([`open_failing_measurements`]). [`new_block_source`] is what an insert
+//! button writes.
 //!
 //! [`compile`] turns [`NotebookSources`] into pages over Typst, with the
 //! bundled `@signex/notebook` package and fonts only; a
@@ -38,6 +43,7 @@
 
 mod annotation;
 mod badge;
+mod block;
 mod card;
 mod compile;
 mod date;
@@ -53,16 +59,19 @@ mod id;
 mod insert;
 mod json;
 mod lexer;
+mod links;
 mod location;
 mod outline;
 mod picker;
 mod preview;
+mod record;
 mod reference;
 mod resolution;
 mod scan;
 mod sources;
 mod status;
 mod syntax;
+mod template;
 mod templates;
 mod world;
 
@@ -88,12 +97,20 @@ pub use header::{Header, HeaderError, NOTEBOOK_FORMAT, StoredReference};
 pub use highlight::{Highlights, Token};
 pub use id::{BlockId, SERIAL_WIDTH};
 pub use insert::{Inserted, Insertion, insertion_text, next_id, numbers_within_section};
+pub use links::{
+    Link, cited_by, issue_for_failure, links, open_failing_measurements, unopened_failures,
+};
 pub use location::{is_notebook_file, notebook_path};
 pub use outline::{
     BlockEntry, Figure, FigureKind, Outline, Section, SourceAt, outline, outline_of_text,
 };
 pub use picker::{Candidate, MAX_ROWS, matching};
 pub use preview::PageColours;
+pub use record::{
+    Alternative, CalculationRecord, Citation, DecisionRecord, IssueRecord, Limits,
+    MeasurementRecord, MeasurementRow, NoteRecord, Record, Severity, VERDICT_WARN_MARGIN, Verdict,
+    verdict_of,
+};
 pub use reference::{Reference, quote};
 pub use resolution::{
     ReferenceReport, ReferenceState, ResolvedReference, resolve_one, resolve_references,
@@ -102,6 +119,7 @@ pub use scan::{ProblemKind, SNIPPET_MAX_CHARS, ScanProblem, TITLE_MAX_CHARS, sca
 pub use sources::{LoadProblem, LoadProblemKind, NotebookSources, resolve};
 pub use status::{BlockCounts, NotebookStatus, header_line_count};
 pub use syntax::{Include, ReferenceAt, distinct_references, includes, references, typst_source};
+pub use template::{new_block_source, next_block_id};
 pub use templates::Template;
 pub use world::{PACKAGE_IMPORT, PACKAGE_NAME, PACKAGE_NAMESPACE, PACKAGE_VERSION};
 
@@ -125,5 +143,7 @@ mod tests_design;
 mod tests_file;
 #[cfg(test)]
 mod tests_model;
+#[cfg(test)]
+mod tests_records;
 #[cfg(test)]
 mod tests_references;

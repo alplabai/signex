@@ -165,9 +165,11 @@ unknown keys sorted, then one `[[references]]` table per reference).
 | `kept-unknown-keys` | unknown keys at the top of the header and in a reference entry, a net with no id, a pin with one |
 | `with-chapters/design` | the notebook file: the package import, the report layout, an `#include` of a chapter file |
 | `with-chapters/chapters/power` | a chapter with its own header; references in markup and in block targets, both pin forms; one block of each kind with a typed id; the earlier `#annotation` form |
+| `power-stage` | the "Power stage" page of mockup row 60b as review records: the page block, a Calculation with its target band and result, a Measurement table of three rails (pass, pass, warn), an Issue raised from it, a Decision and a Note naming a removed part (`src/tests_records.rs`) |
 
 `with-chapters` is also the compile fixture: it compiles with no
-diagnostic, and two PDF exports of it are the same bytes.
+diagnostic, and two PDF exports of it are the same bytes. `power-stage`
+compiles with no diagnostic too.
 
 ## Intentional format change
 

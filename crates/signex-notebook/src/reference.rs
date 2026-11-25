@@ -174,7 +174,7 @@ pub(crate) fn parse_args(text: &str) -> Vec<Arg> {
 }
 
 /// `piece` cut at each comma that is outside a string and every bracket.
-fn split_top_level(text: &str) -> Vec<&str> {
+pub(crate) fn split_top_level(text: &str) -> Vec<&str> {
     let mut pieces = Vec::new();
     let (mut depth, mut start, mut in_string, mut escaped) = (0usize, 0usize, false, false);
     for (i, c) in text.char_indices() {

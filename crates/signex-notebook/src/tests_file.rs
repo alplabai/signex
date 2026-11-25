@@ -37,7 +37,7 @@ fn corpus() -> Vec<PathBuf> {
 }
 
 /// The corpus cannot shrink unnoticed; raise it with the fixtures.
-const MIN_NOTEBOOK_FIXTURES: usize = 4;
+const MIN_NOTEBOOK_FIXTURES: usize = 6;
 
 #[test]
 fn every_corpus_notebook_saves_back_byte_for_byte() {

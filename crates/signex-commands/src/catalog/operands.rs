@@ -613,6 +613,15 @@ pub const QUERY_PINS: &[Operand] = &[
     required("document", OperandKind::Document),
     required("designator", OperandKind::Text),
 ];
+/// `list_annotations` (mockup row 198): the annotation blocks of the
+/// project the named document is (or belongs to), narrowed to one typed
+/// `id`, one `kind` or the blocks naming one `part`.
+pub const LIST_ANNOTATIONS: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("id", OperandKind::Text),
+    optional("kind", OperandKind::Text),
+    optional("part", OperandKind::Text),
+];
 /// `check_erc` (#2199): ERC on the project of the named sheet, answered as a
 /// check report; `baseline` is an earlier answer's `run`.
 pub const CHECK_ERC: &[Operand] = &[

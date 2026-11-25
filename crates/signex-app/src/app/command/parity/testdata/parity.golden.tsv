@@ -564,6 +564,8 @@ leave_sheet	in_window_rewrite	document_window	gui	window	routing
 leave_sheet	refusal_needs	ParentSheet	gui	active document	routing
 leave_sheet	disabled_still_runs	explains_when_unavailable	gui	active document	gate
 leave_sheet	headless_refusal	headless_refusal	gui	none	routing
+list_annotations	query	run_query	core	origin	handler
+list_annotations	headless_missing_operand	needs `document`	core	none	routing
 list_documents	query	run_query	core	origin	handler
 lock_board_items	bridge	Pcb(LockRequested { locked: true })	core	active document,selection	handler
 lock_board_items	operand_handler	run_operands: named document	core	origin	handler

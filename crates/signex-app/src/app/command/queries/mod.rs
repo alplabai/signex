@@ -8,8 +8,9 @@
 //! rule profile library, read off the update loop first), and the board
 //! queries `measure_board`, `query_board_nets` and `find_similar_items`
 //! (#2403), `board_panel` (#2410, `app::board_panel`), and the Project tab's
-//! `project_settings` (#1689-#1693, `app::project_tab`). Each
-//! answers with data through [`CommandOutcome::Answered`], never a bare
+//! `project_settings` (#1689-#1693, `app::project_tab`), and
+//! `list_annotations` (mockup row 198), answered once the project's notebook
+//! files are read. Each answers with data through [`CommandOutcome::Answered`], never a bare
 //! `Ran`, and reads only the documents (engines, boards, editors, projects,
 //! the library): no active tab, window, selection or panel is looked at, and
 //! none is changed. What it cannot answer yet it refuses with the reason; it
@@ -18,6 +19,8 @@
 //! Which ids the commands print, and where each kind stores one, is in
 //! `docs/DOCUMENT_IDS.md`; the answer shapes are in `docs/COMMANDS.md`.
 
+mod annotations;
+pub use annotations::AnnotationsListed;
 mod board;
 mod check_drc;
 mod check_erc;
@@ -64,6 +67,7 @@ const QUERY_IDS: &[&str] = &[
     "rules_preset_diff",
     "board_panel",
     "project_settings",
+    "list_annotations",
 ];
 
 /// The queries that run a check (`check_run`): each says nothing in
@@ -127,6 +131,8 @@ impl Signex {
             "check_erc" => return Some(self.check_erc(command, args)),
             "check_drc" => return Some(self.check_drc(command, args)),
             "check_requirements" => return Some(self.check_requirements(command, args)),
+            // The project's notebook files are read first (mockup row 198).
+            "list_annotations" => return Some(self.list_annotations(command, args)),
             // The Rules manager's reads (#2398).
             "rules_list" | "rules_get" | "rules_effective" | "rules_explain"
             | "rules_conflicts" => {
@@ -204,3 +210,5 @@ pub(crate) mod check_drc_tests;
 mod check_erc_tests;
 #[cfg(test)]
 mod check_requirements_tests;
+#[cfg(test)]
+mod annotations_tests;

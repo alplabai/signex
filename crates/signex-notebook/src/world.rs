@@ -30,9 +30,10 @@ pub const PACKAGE_VERSION: (u32, u32, u32) = (0, 1, 0);
 pub const PACKAGE_IMPORT: &str = "#import \"@signex/notebook:0.1.0\": *";
 
 /// The package's files, served by the world as written in the crate.
-const PACKAGE_FILES: [(&str, &str); 2] = [
+const PACKAGE_FILES: [(&str, &str); 3] = [
     ("typst.toml", include_str!("../typst/notebook/typst.toml")),
     ("lib.typ", include_str!("../typst/notebook/lib.typ")),
+    ("blocks.typ", include_str!("../typst/notebook/blocks.typ")),
 ];
 
 /// The extensions read as Typst source.

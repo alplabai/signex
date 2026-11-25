@@ -43,6 +43,7 @@ list_documents	file	List documents	-	General	-	-	Always	-	kind:text?,project:tex
 read_document	file	Read document	-	General	-	-	Always	-	document:document,ids:text?,kinds:text?,region:text?,fields:text?,offset:text?,limit:text?
 query_pins	file	Query pins	-	General	-	-	Always	-	document:document,designator:text
 resolve	file	Resolve id	-	General	-	-	Always	-	id:text
+list_annotations	design	List the annotation blocks of the project's Design Notebook	-	General	-	-	Always	-	document:document,id:text?,kind:text?,part:text?
 apply_edits	edit	Apply edits (agent)	-	General	-	-	Always	mutates_doc,undoable	document:document,expect_revision:text,edits:text,summary:text?,expect_revisions:text?
 undo	edit	Undo	-	General	-	-	Always	mutates_doc	document:document
 redo	edit	Redo	-	General	-	-	Always	mutates_doc	document:document

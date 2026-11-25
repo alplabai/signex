@@ -1,15 +1,20 @@
 //! Annotations panel (mockup row 165): every annotation block of the project's Design
-//! Notebook files (`notebook/*.snxnbk`), grouped by file, newest first,
-//! filtered by kind, part, status, date and text. A reference chip goes to
-//! its part or net. A pure view over [`AnnotationsView`], which
-//! `app/handlers/annotations.rs` builds from the last scan and the filters;
-//! the grammar the scan reads is in `docs/NOTEBOOK_ANNOTATIONS.md`.
+//! Notebook files (`notebook/**/*.snxnbk`, chapters included), grouped by
+//! file, newest first, filtered by kind, part, status, date and text. A row
+//! shows the block's typed id, and expanded its review record (mockup row
+//! 198, `fields`). A reference chip goes to its part or net. A pure view
+//! over [`AnnotationsView`], which `app/handlers/annotations.rs` builds from
+//! the last scan and the filters; the grammar the scan reads is in
+//! `docs/NOTEBOOK_ANNOTATIONS.md`.
 
 mod badges;
+mod fields;
 mod filters;
 mod rows;
 
 pub(crate) use badges::notebook_badges;
+pub(crate) use fields::record_fields;
+pub use fields::{FieldLabel, RowField, RowValue};
 pub use signex_notebook::Badge;
 
 use std::collections::HashMap;
@@ -25,6 +30,7 @@ use signex_widgets::theme_ext::AnnotationTone;
 
 pub use signex_notebook::{
     Annotation, AnnotationKind, DateWindow, Filter, IsoDate, Reference, ScanProblem, Status,
+    Verdict,
 };
 
 use super::{PanelContext, PanelMsg};
@@ -199,10 +205,16 @@ pub struct RefChip {
 pub struct AnnotationRow {
     pub key: RowKey,
     pub kind: AnnotationKind,
+    /// The typed id (`DEC-002`), shown in mono before the title.
+    pub id: Option<String>,
     pub title: String,
     pub snippet: String,
     pub chips: Vec<RefChip>,
     pub status: Option<Status>,
+    /// Pass, Warn or Fail of a Calculation or Measurement.
+    pub verdict: Option<Verdict>,
+    /// The review record an expanded row lists above its source.
+    pub fields: Vec<RowField>,
     pub date: Option<IsoDate>,
     pub expanded: bool,
     /// The block as written; shown when expanded.
