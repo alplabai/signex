@@ -537,7 +537,8 @@ pub const FOOTPRINT_TEXT_SET: &[Operand] = &[
 ];
 /// `swap_pins` (#2410): two pins of one component on the board `document`,
 /// as `pins` = `a,b` (pad numbers). The component is named by `ids` (its
-/// uuid) or by `designator`, exactly one of them (#2326).
+/// uuid) or by `designator`, exactly one of them (#2326). `swap_schematic_pins`
+/// (#1261) reads the same on a sheet: `ids` is a placed unit of the part.
 pub const SWAP_PINS: &[Operand] = &[
     required("document", OperandKind::Document),
     optional("ids", OperandKind::Targets),
