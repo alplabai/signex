@@ -150,6 +150,18 @@ pub(super) const VIEW: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
+    // Mockup row 194: rotation 0°, Flip off and Fit, on a board or a sheet
+    // (the Home button by the zoom pill). No default key.
+    CommandMetadata {
+        id: "home_view",
+        category: "view",
+        label: command_ids::CMD_HOME_VIEW,
+        menu_label: Some(command_ids::CMD_MENU_HOME_VIEW),
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
     // #2351: the board origin marker, shown by default. No default key.
     CommandMetadata {
         id: "toggle_origin_marker",

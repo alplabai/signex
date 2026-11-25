@@ -749,6 +749,7 @@ pub fn write_symbol_pin_selection_pref(mode: PinSelectionMode) {
     })
 }
 
+mod board_views;
 pub mod bundled;
 pub mod catalog;
 mod dock_layout;
@@ -788,6 +789,7 @@ pub use prefs_file::{
     move_prefs_file_aside_at, prefs_file_path,
 };
 
+pub use board_views::*;
 pub use dock_layout::*;
 pub use erc::*;
 pub use fast_grids::*;

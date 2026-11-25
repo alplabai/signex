@@ -239,6 +239,14 @@ preferences-group-pcb = PCB
 preferences-group-pcb-heading = PCB
 preferences-section-pcb-dimensions = PCB — New Dimensions
 preferences-pcb-dimensions-help = Each new project starts with these as its dimension defaults, and the dimensions you place in it start from them. Projects already made keep their own; a dimension's Properties change it afterwards.
+## PCB ▸ Display (#2514)
+# The page of how the board is drawn.
+preferences-page-pcb-display = Display
+preferences-section-pcb-display = PCB — Display
+preferences-pcb-dim-others = Dim other nets
+preferences-pcb-dim-others-help = While a net is highlighted, or while you route, drag, move or place copper, the copper of every other net is drawn this much fainter; the nets you are working on stay at full brightness. 0% leaves the board as it is, 100% hides the other copper.
+# Beside the slider: the dim amount, 0 to 100.
+preferences-pcb-dim-others-value = { $percent }%
 
 ## Default Component Classes
 preferences-classes-title = Default Component Classes

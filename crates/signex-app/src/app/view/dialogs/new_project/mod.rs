@@ -298,7 +298,13 @@ fn project_path_line(state: &NewProjectState, i18n: &I18n) -> Option<Label<'stat
 /// The inline reason Create is off. An empty name is asked for on the path
 /// line instead, so it is not said twice.
 fn blocker_text(state: &NewProjectState, i18n: &I18n) -> Option<Label<'static>> {
-    Some(match state.blocked_by()? {
+    blocker_line(state.blocked_by()?, i18n)
+}
+
+/// The inline line for `blocker`; `None` for an empty name. Shared with
+/// Save Project As (#2908), which checks its target the same way.
+pub(in crate::app::view) fn blocker_line(blocker: Blocker, i18n: &I18n) -> Option<Label<'static>> {
+    Some(match blocker {
         Blocker::Name(NameProblem::Empty) => return None,
         Blocker::Name(NameProblem::Invalid) => {
             t!(i18n, ids::DIALOG_NEW_PROJECT_ERR_NAME_INVALID).into()

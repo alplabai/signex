@@ -23,22 +23,31 @@ fn panel_msg(msg: LayersPanelMsg) -> PanelMsg {
 pub(super) fn entries(panel: &PcbLayersPanel) -> Vec<DropdownEntry<PanelMsg>> {
     let i18n = &panel.i18n;
     let label = |id: MessageId| t!(i18n, id).into_string();
-    let greyed = |id: MessageId| DropdownItem::passive(label(id)).disabled(true);
+    // A greyed row says why in its tooltip (#2480).
+    let greyed = |id: MessageId, why: MessageId| {
+        DropdownItem::passive(label(id))
+            .disabled(true)
+            .tooltip(label(why))
+    };
     let delete = match &panel.layer_set {
         Some(LayerSetId::Saved(name)) => DropdownItem::new(
             label(ids::PCB_LAYERS_SET_DELETE_CURRENT),
             panel_msg(LayersPanelMsg::SetDeleted(name.clone())),
         ),
-        _ => greyed(ids::PCB_LAYERS_SET_DELETE_CURRENT),
+        _ => greyed(
+            ids::PCB_LAYERS_SET_DELETE_CURRENT,
+            ids::PCB_LAYERS_SET_DELETE_NONE,
+        ),
     };
-    let not_yet = |id: MessageId| greyed(id).tooltip(label(ids::PCB_LAYERS_NOT_YET));
+    let not_yet = |id: MessageId| greyed(id, ids::PCB_LAYERS_NOT_YET);
     let layer_stack = if panel.layer_stack_live {
         DropdownItem::new(
             label(ids::PCB_LAYERS_LAYER_STACK),
             panel_msg(LayersPanelMsg::LayerStackPicked),
         )
     } else {
-        greyed(ids::PCB_LAYERS_LAYER_STACK)
+        let why = panel.layer_stack_reason.unwrap_or(ids::PCB_LAYERS_NOT_YET);
+        greyed(ids::PCB_LAYERS_LAYER_STACK, why)
     };
     let flip = DropdownItem::new(
         label(ids::PCB_LAYERS_VIEW_FROM_BOTTOM),

@@ -177,6 +177,8 @@ pub(crate) struct Walk<'a, 'w> {
     /// Keep the slots the suppression list holds back, marked `listed`
     /// ([`super::slots`]); the bake drops them.
     keep_listed: bool,
+    /// A pattern was skipped for going over [`super::MAX_ARRAY_INSTANCES`].
+    over_cap: bool,
 }
 
 impl<'a, 'w> Walk<'a, 'w> {
@@ -193,6 +195,7 @@ impl<'a, 'w> Walk<'a, 'w> {
             warnings,
             stack: Vec::new(),
             keep_listed: false,
+            over_cap: false,
         }
     }
 
@@ -200,6 +203,19 @@ impl<'a, 'w> Walk<'a, 'w> {
     pub(crate) fn keeping_listed(mut self) -> Self {
         self.keep_listed = true;
         self
+    }
+
+    /// Whether a pattern this walk met was skipped for going over the
+    /// instance cap, so a board bake can refuse it as the cap.
+    pub(crate) fn went_over_cap(&self) -> bool {
+        self.over_cap
+    }
+
+    /// [`super::within_instance_cap`], remembering a refusal.
+    fn within_cap(&mut self, label: &str, source: SketchEntityId, n: Option<usize>) -> bool {
+        let within = super::within_instance_cap(label, source, n, self.warnings);
+        self.over_cap |= !within;
+        within
     }
 
     fn xy(&self, id: SketchEntityId) -> Option<(f64, f64)> {
@@ -323,7 +339,7 @@ impl<'a, 'w> Walk<'a, 'w> {
             return Ok(None);
         };
         let total = walked.slots.len().checked_mul(inner.instances.len());
-        if !super::within_instance_cap("linked", source, total, self.warnings) {
+        if !self.within_cap("linked", source, total) {
             return Ok(None);
         }
         let mut instances = Vec::with_capacity(total.unwrap_or(0));
@@ -409,7 +425,7 @@ impl<'a, 'w> Walk<'a, 'w> {
                 let Some(ny) = self.count("grid", source, &ny_ast, &ctx)? else {
                     return Ok(None);
                 };
-                if !super::within_instance_cap("grid", source, nx.checked_mul(ny), self.warnings) {
+                if !self.within_cap("grid", source, nx.checked_mul(ny)) {
                     return Ok(None);
                 }
                 let mut slots = Vec::new();
@@ -495,7 +511,7 @@ impl<'a, 'w> Walk<'a, 'w> {
             return Ok(None);
         }
         let n = n as usize;
-        Ok(super::within_instance_cap(label, source, Some(n), self.warnings).then_some(n))
+        Ok(self.within_cap(label, source, Some(n)).then_some(n))
     }
 
     /// Whether the walk visits the slot at `ctx`'s index: `Some(false)`

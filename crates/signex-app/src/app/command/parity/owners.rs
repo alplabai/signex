@@ -300,6 +300,7 @@ const MENU_DOCUMENT: &[&str] = &[
     "tune_diff_pair",
     "tune_net_length",
     "undo",
+    "unfill_selected",
     "unlock_board_items",
 ];
 
@@ -392,6 +393,7 @@ const MENU_SESSION: &[&str] = &[
     "highlight_board_net",
     "highlight_net_under_cursor",
     "highlight_related_net_objects",
+    "home_view",
     "import_dxf",
     "import_dxf_outline",
     "import_graphics",
@@ -488,6 +490,7 @@ const MENU_SESSION: &[&str] = &[
     "reset_schematic_designators",
     "rubber_stamp_copy",
     "save_document_as",
+    "save_project_as",
     "save_workspace_layout",
     "select_all",
     "select_board_net",

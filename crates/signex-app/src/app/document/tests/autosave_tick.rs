@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use super::{Kind, fixture, tab};
 use crate::app::path_ops::settle_task;
-use crate::app::{Message, Signex, TabDocument, TabKind};
+use crate::app::{Message, Signex, TabKind};
 use crate::autosave::{AutosaveMsg, sidecar};
 
 struct Fx {
@@ -34,12 +34,9 @@ fn engine(app: &mut Signex, path: &Path, dirty: bool, with_tab: bool) {
 }
 
 fn pcb(app: &mut Signex, path: &Path, dirty: bool) {
-    let mut t = tab(path, TabKind::Pcb);
-    t.cached_document = Some(TabDocument::Pcb(signex_engine::pcb::BoardEngine::new(
-        super::save_routing::board(),
-        1,
-    )));
-    app.document_state.tabs.push(t);
+    let engine = signex_engine::pcb::BoardEngine::new(super::save_routing::board(), 1);
+    app.document_state
+        .push_pcb_tab("t".into(), path.to_path_buf(), None, engine);
     if dirty {
         app.document_state.mark_document_dirty(path);
     }

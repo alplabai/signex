@@ -479,3 +479,26 @@ fn a_read_only_project_alone_withholds_save_all_and_says_why() {
         "{texts:#?}"
     );
 }
+
+/// The Exit prompt of a read-only project offers Save Project As… for it
+/// (#2908).
+#[test]
+fn a_read_only_project_exit_prompt_offers_save_project_as() {
+    use crate::app::ProjectCloseChoice;
+    use crate::app::contracts::{Message, ProjectMsg};
+    let app = read_only_quitting(&["/x/p.snxprj"]);
+    let messages = crate::layout_probe::messages_on_click(
+        app.view_app_quit_confirm_body(),
+        iced::Size::new(500.0, 900.0),
+        "Save Project As…",
+    );
+    assert!(
+        matches!(
+            messages.as_slice(),
+            [Message::Project(ProjectMsg::AppQuitConfirm(
+                ProjectCloseChoice::SaveProjectAs
+            ))]
+        ),
+        "{messages:?}"
+    );
+}

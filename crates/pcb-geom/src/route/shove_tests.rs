@@ -178,3 +178,13 @@ fn a_shove_reports_the_rounds_it_took() {
     assert_eq!((run.pushed.as_ref(), run.settled), (None, false), "{run:?}");
     assert_eq!(run.rounds, super::shove::ROUNDS + 1);
 }
+
+/// #2515: a track of no net in the way is an obstacle the push leaves
+/// where it is.
+#[test]
+fn a_track_of_no_net_in_the_way_blocks_and_does_not_move() {
+    let board = board(Vec::new(), vec![track_at(1, (2.0, 0.3), (8.0, 0.3), 0)]);
+    let world = RouteWorld::new(&board, &rule);
+    assert!(!world.is_clear(&leg()), "the no-net track is in the way");
+    assert_eq!(shove(&world, &[leg()]), None, "not moved");
+}

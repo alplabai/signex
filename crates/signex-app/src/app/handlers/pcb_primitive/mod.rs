@@ -363,7 +363,7 @@ impl Signex {
         let is_dimension = match target.items.first() {
             Some(item) => matches!(item, ItemRef::Dimension(_)),
             None => self.interaction_state.pcb_tool.as_ref().is_some_and(|s| {
-                matches!(s.tool, crate::app::pcb_tools::BoardPlaceTool::Dimension)
+                matches!(s.tool, crate::app::pcb_tools::BoardPlaceTool::Dimension(_))
             }),
         };
         if is_dimension && is_dimension_length(field) {

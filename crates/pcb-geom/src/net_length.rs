@@ -211,6 +211,42 @@ pub fn via_span(stack: &[CopperLayer], via: &Via) -> Option<(usize, usize)> {
     Some((*reached.first()?, *reached.last()?))
 }
 
+/// The nets, ascending and once each, of the copper `picks` names by uuid:
+/// every pad of a footprint it names, and a track, via, copper arc, free
+/// pad or drawn area it names. No net (0) is left out. What a drag or a
+/// placement keeps bright while the other nets dim (#2514).
+pub fn nets_of(board: &PcbBoard, picks: impl Fn(uuid::Uuid) -> bool) -> Vec<u32> {
+    let picks = &picks;
+    let pad_net = |net: &Option<signex_types::pcb::PadNet>| net.as_ref().map(|n| n.number);
+    let footprint_pads = (board.footprints.iter())
+        .filter(|fp| picks(fp.uuid))
+        .flat_map(|fp| fp.pads.iter().filter_map(|p| pad_net(&p.net)));
+    let tracks = (board.segments.iter())
+        .filter(|s| picks(s.uuid))
+        .map(|s| s.net);
+    let vias = (board.vias.iter()).filter(|v| picks(v.uuid)).map(|v| v.net);
+    let arcs = (board.free.arcs.iter())
+        .filter(|a| picks(a.uuid))
+        .map(|a| a.net);
+    let free_pads = (board.free.pads.iter())
+        .filter(|p| picks(p.uuid))
+        .filter_map(|p| pad_net(&p.net));
+    let areas = (board.zones.iter())
+        .filter(|z| picks(z.uuid))
+        .map(|z| z.net);
+    let mut nets: Vec<u32> = footprint_pads
+        .chain(tracks)
+        .chain(vias)
+        .chain(arcs)
+        .chain(free_pads)
+        .chain(areas)
+        .filter(|&net| net != 0)
+        .collect();
+    nets.sort_unstable();
+    nets.dedup();
+    nets
+}
+
 #[cfg(test)]
 #[path = "net_length_tests.rs"]
 mod tests;

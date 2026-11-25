@@ -484,6 +484,10 @@ pub enum UiMsg {
     /// Fit All or Fit Selection was picked from the preset menu: the menu
     /// closes and the command runs as from the menu bar.
     ZoomPresetCommandPicked(crate::keymap::AppCommandId),
+    /// Home View was asked for (the Home button by the zoom pill, View ▸
+    /// Home View, `home_view`; mockup row 194): the main window's view goes
+    /// back to rotation 0°, Flip off, and fits.
+    HomeViewRequested,
 }
 
 /// Move Selection dialog message family (ADR-0001 D3). Namespaced under

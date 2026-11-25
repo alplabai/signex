@@ -421,6 +421,18 @@ fn the_origin_marker_is_shown_by_default_and_toggles() {
     assert!(!view.origin_marker_visible());
 }
 
+/// Mockup row 194: the orientation tile is shown until its View Options eye
+/// hides it, and a second press shows it again.
+#[test]
+fn the_orientation_tile_is_shown_by_default_and_toggles() {
+    let mut view = PcbLayerView::default();
+    assert!(view.orientation_tile_visible());
+    view.toggle_orientation_tile();
+    assert!(!view.orientation_tile_visible());
+    view.toggle_orientation_tile();
+    assert!(view.orientation_tile_visible());
+}
+
 /// #2379: the layer tab menu's Hide this layer and Show only this layer.
 #[test]
 fn hide_and_show_only_act_on_one_layer() {

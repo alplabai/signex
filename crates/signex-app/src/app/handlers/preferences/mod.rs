@@ -156,6 +156,8 @@ impl Signex {
         self.ui_state.preferences_draft_symbol_grid_style = self.ui_state.symbol_grid_style;
         self.ui_state.preferences_draft_symbol_pin_selection = self.ui_state.symbol_pin_selection;
         self.ui_state.preferences_draft_zoom_step_percent = self.ui_state.zoom_step_percent;
+        self.ui_state.preferences_draft_pcb_dim_others_percent =
+            self.ui_state.pcb_dim_others_percent;
         self.ui_state.preferences_draft_ui_scale_percent =
             crate::ui_scale::scale_to_percent(self.ui_state.ui_scale);
         // Mockup row 144a — the language in force, its preview and the system name.
@@ -358,6 +360,7 @@ impl Signex {
             | PrefMsg::DraftFastGrid(..)
             | PrefMsg::DraftSymbolGridStyle(..)
             | PrefMsg::DraftZoomStepPercent(..)
+            | PrefMsg::DraftPcbDimOthersPercent(..)
             | PrefMsg::DraftUiScalePercent(..)
             | PrefMsg::DraftSymbolPinSelection(..)
             | PrefMsg::DraftLanguage(..)

@@ -131,7 +131,7 @@ use bridge::core_to_message;
 pub(crate) use component_operand::component_by_uuid;
 pub use edit_reads::{EditReads, ReadsLoaded};
 pub(crate) use enablement::CommandContext;
-pub(crate) use enablement::is_enabled;
+pub(crate) use enablement::{disabled_reason, is_enabled};
 pub(crate) use opened::answers_with_the_new_document;
 pub(crate) use operand_handlers::runs_headless_without_operands;
 pub use operands::{OperandError, OperandValue};

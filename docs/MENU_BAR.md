@@ -244,7 +244,7 @@ because the command picks the direction (`DECISIONS.md`, 2026-11-10). Use
 fields. Properties has no standing note: it warns through the designator
 mismatch callout, with its Update PCB button (`DECISIONS.md`, 2026-11-23).
 
-## Tools ▸ Repour Selected, Repour All {#tools-repour}
+## Tools ▸ Repour Selected, Repour All, Unfill Selected {#tools-repour}
 
 Right after Re-Annotate Board, Tools ▸ Repour Selected and Repour All run
 `repour_selected` and `repour_all` (#2216) on the board in view, greyed while
@@ -252,6 +252,12 @@ no PCB is open. Both fill the board's polygon pours again and say in Messages
 how many pours, pieces of copper and removed islands they came to; Repour
 Selected reports the selected pours and says so when none is selected.
 Rules in `docs/PCB_TOOLS.md`, "Repour".
+
+Tools ▸ Unfill Selected, right after Repour All (#2506, DECISIONS
+2026-11-25), runs `unfill_selected` on the board in view, greyed while no
+PCB is open: the selected pours keep their outline and hold no copper until
+the next Repour, as one undo step, and with no pour selected Messages says
+to select one. Rules in `docs/PCB_TOOLS.md`, "Polygon Pour".
 
 Tools ▸ Polygon Manager..., after them, runs `polygon_manager` (mockup row
 178): it opens the board's Polygon Manager tab, or focuses the one that is
@@ -511,6 +517,20 @@ File menu. The row and the key are off when nothing is unsaved
 (`CommandContext::has_dirty_documents`). It reports "Save All: saved N
 item(s)" or the failures in the Messages panel.
 
+## File ▸ Save Project As… {#file-save-project-as}
+
+Save Project As… (`save_project_as`, #2908) sits right after Save All, before
+the separator above Library; the File menu had no Save Project row to follow,
+so it goes after the last Save row. It is greyed with no project open
+(`Needs::OpenProject`) and no keymap preset binds it. It opens the Save Project
+As dialog on the active document's project (else the first open one): the New
+Project name and location fields, the `.snxprj` the copy lands on, and Save
+copy. The copy always goes in its own folder, `<location>/<name>/`; a folder
+that exists and is not empty, or a place inside a project, is refused as New
+Project refuses it. The same dialog opens from the Save Failed card of a
+project written by a newer build and from the Close Project and Exit prompts
+that list one. What the copy holds: [PROJECT_SETUP.md](PROJECT_SETUP.md#save-project-as).
+
 ## Place ▸ Sheet Entry, Tools ▸ Library Editor, View ▸ Window ▸ Close All Documents {#tools-library-editor}
 
 These three rows were planned stubs until #2247; each now runs a catalog
@@ -590,7 +610,7 @@ Rows added by #2416, each a catalog command greyed without a sheet:
 ## Place on a board {#place-board}
 
 Place follows the document in view (#2360). While the window shows a board
-(`CommandContext::pcb.shown`), it lists the board's tools: Component, Pad,
+(`CommandContext::pcb.shown`), it lists the board's tools: Component..., Pad,
 Via, Interactive Routing, Track, Arc, Fill, Solid Region, Polygon Pour,
 String, Dimension, Keepout and Room (`place_board_room`, #2457), the
 Graphics submenu (Line, Arc, Full Circle,
@@ -599,13 +619,14 @@ Graphics group), then Board Sketch (`board_sketch`, the same command as
 Design ▸ Board Sketch and the PCB Active Bar's button). Every other tab keeps
 the sheet's Place rows.
 
-The rows come from one table, `app/pcb_tools.rs` (`BoardPlaceTool::state`),
+The rows come from one table, `app/pcb_tools.rs` (`BoardPlaceTool::command`),
 which the PCB Active Bar builds its buttons from (#2352), so the two surfaces
-run and grey the same set. A live tool (#2373) is a command row that runs the
-same command as its Active Bar button and arms the tool on the board in view;
-see "Board placement tools" in `docs/PCB_TOOLS.md`. A tool the board editor
-cannot run yet is an `ItemState::Placeholder` whose `reason` is its tooltip
-("Place Component: not available on boards yet").
+run the same set. Each tool (#2373) is a command row that runs the same
+command as its Active Bar button and arms the tool on the board in view;
+Component... (`place_board_component`, #2505) opens the part picker instead
+and the pick goes on the cursor; its row carries the ellipsis as on a sheet,
+while the Active Bar row reads "Component" (Caner, 2026-11-25). See "Board placement tools" in
+`docs/PCB_TOOLS.md`. No board tool is a greyed placeholder any more.
 
 The golden fixture marks the sheet's Place rows `-` in the `pcb` column: that
 variant's bar does not have them. `menu_bar/testdata/menu_bar_place_board.golden.tsv`
@@ -1154,6 +1175,12 @@ no undo step and does not mark the board dirty; a board opened into a tab
 starts at 0°. In an undocked PCB window the rows, the palette, the keys and
 its own status bar act on that window's board and leave the main window's as
 it is. See `docs/DECISIONS.md` (2026-11-12).
+
+View ▸ Home View (`home_view`, mockup row 194) sits after Fit All. It does
+what the Home button left of the canvas zoom pill does: on a board, rotation
+0°, Flip off, then Fit; on a sheet, Fit. It is live with a sheet or a board in
+view, acts on the main window, and has no default key. See
+`docs/PCB_TOOLS.md`, "Orientation tile and Home View".
 
 Two View rows come from the layer tab menu (#2394): Show Layer Numbers
 (`toggle_layer_numbers`) under Show All Layers, a per-user setting of the

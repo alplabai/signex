@@ -1,6 +1,6 @@
 //! #2517: a pattern repeats every board target, or the bake refuses it.
 
-use signex_sketch::array::{Array, ArrayId, ArrayKind, NumberingScheme};
+use signex_sketch::array::{Array, ArrayId, ArrayKind, GridDepopulation, NumberingScheme};
 use signex_sketch::attr::{
     BoardCutoutAttr, KeepoutAttr, KeepoutKinds, MountingHoleAttr, PourAttr, ThermalRelief,
     VScoreHintAttr, VScoreSide,
@@ -13,7 +13,7 @@ use signex_sketch::sketch::{PatternMirror, SketchData};
 use signex_types::pcb::{PcbBoard, Point};
 use signex_types::pcb_graphic::BoardGraphicKind;
 use signex_types::pcb_layer::{CopperLayer, MechanicalLayer, PcbLayer};
-use signex_types::sketch::board_attr::{ComponentAnchorAttr, MechanicalAttr};
+use signex_types::sketch::board_attr::{BoardSlotAttr, ComponentAnchorAttr, MechanicalAttr};
 use uuid::Uuid;
 
 use super::*;
@@ -660,4 +660,186 @@ fn a_rectangular_hole_pattern_bound_to_parameters_bakes_one_hole_per_instance() 
     s.data.parameters.insert("board_w", "70mm");
     let wider = s.bake().unwrap();
     assert_eq!(centres(&wider), grid([3.5, 66.5], [3.5, 36.5]));
+}
+
+fn polar(source: SketchEntityId, center: SketchEntityId, count: &str) -> ArrayKind {
+    ArrayKind::Polar {
+        source,
+        center,
+        count_expr: count.into(),
+        sweep_angle_expr: "360deg".into(),
+        depopulation: None,
+    }
+}
+
+fn distinct(uuids: impl Iterator<Item = Uuid>) -> usize {
+    uuids.collect::<std::collections::HashSet<_>>().len()
+}
+
+#[test]
+fn a_polar_hole_pattern_bakes_one_hole_per_instance() {
+    let mut s = Sketch::new();
+    let hole = s.circle(10.0, 0.0, 1.0);
+    s.get(hole).mounting_hole = Some(MountingHoleAttr::default());
+    let centre = s.point(0.0, 0.0);
+    s.pattern(polar(hole, centre, "4"));
+
+    let holes = s.bake().unwrap().holes;
+
+    let mut at: Vec<(i64, i64)> = holes
+        .iter()
+        .map(|h| (um(&[h.position.x])[0], um(&[h.position.y])[0]))
+        .collect();
+    at.sort_unstable();
+    let mut expected: Vec<(i64, i64)> = [(10.0, 0.0), (0.0, 10.0), (-10.0, 0.0), (0.0, -10.0)]
+        .iter()
+        .map(|&(x, y)| (um(&[x])[0], um(&[y])[0]))
+        .collect();
+    expected.sort_unstable();
+    assert_eq!(at, expected);
+    assert_eq!(distinct(holes.iter().map(|h| h.uuid)), 4);
+    assert!(
+        holes.iter().any(|h| h.uuid == hole.0),
+        "the source keeps its uuid"
+    );
+}
+
+#[test]
+fn a_grid_keepout_pattern_writes_every_kept_cell() {
+    let mut s = Sketch::new();
+    let edges = s.rect(0.0, 0.0, 2.0, 1.0);
+    s.get(edges[0]).keepout = Some(keepout());
+    let full = |depopulation| ArrayKind::Grid {
+        source: edges[0],
+        nx_expr: "2".into(),
+        ny_expr: "3".into(),
+        dx_expr: "5mm".into(),
+        dy_expr: "10mm".into(),
+        depopulation,
+    };
+    s.pattern(full(None));
+
+    let keepouts = s.bake().unwrap().keepouts;
+    assert_eq!(
+        lowest_xs(keepouts.iter().map(|k| &k.boundary)),
+        um(&[0.0, 0.0, 0.0, 5.0, 5.0, 5.0])
+    );
+    assert_eq!(distinct(keepouts.iter().map(|k| k.uuid)), 6);
+
+    s.data.arrays[0].kind = full(Some(GridDepopulation {
+        mask_expr: String::new(),
+        suppressed_instances: vec![(1, 0)],
+    }));
+    let kept = s.bake().unwrap().keepouts;
+    assert_eq!(kept.len(), 5, "a suppressed cell writes no keepout");
+    assert!(kept.iter().any(|k| k.uuid == edges[0].0));
+}
+
+/// A stadium 2 mm wide, 5 mm between its arc centres, tagged as a Slot
+/// cutout on its bottom edge.
+fn slot(s: &mut Sketch, x: f64, y: f64) -> SketchEntityId {
+    let (r, len) = (1.0, 5.0);
+    let (a, b) = (s.point(x, y), s.point(x + len, y));
+    let (c, d) = (s.point(x + len, y + 2.0 * r), s.point(x, y + 2.0 * r));
+    let (right, left) = (s.point(x + len, y + r), s.point(x, y + r));
+    let arc = |center, start, end| EntityKind::Arc {
+        center,
+        start,
+        end,
+        sweep_ccw: true,
+    };
+    let bottom = s.add(EntityKind::Line { start: a, end: b });
+    s.add(arc(right, b, c));
+    s.add(EntityKind::Line { start: c, end: d });
+    s.add(arc(left, d, a));
+    s.get(bottom).board_cutout = Some(BoardCutoutAttr {
+        edge_radius_expr: None,
+        through: true,
+    });
+    s.get(bottom).board_slot = Some(BoardSlotAttr::default());
+    bottom
+}
+
+#[test]
+fn a_linear_slot_pattern_bakes_a_slot_per_instance() {
+    let mut s = Sketch::new();
+    let seed = slot(&mut s, 0.0, 0.0);
+    s.pattern(row(seed, "3", "10mm", "0mm"));
+
+    let (baked, slots) = solved(&s.data, |ctx| baked_with_slots(ctx, &[])).unwrap();
+
+    assert_eq!(baked.cutouts.len(), 3);
+    assert_eq!(distinct(baked.cutouts.iter().map(|c| c.uuid)), 3);
+    assert!(
+        baked
+            .cutouts
+            .iter()
+            .all(|c| (c.edge_radius - 1.0).abs() < 1e-9)
+    );
+    assert_eq!(slots.len(), 3, "each instance is its own slot");
+    for (uuid, size) in &slots {
+        assert!(baked.cutouts.iter().any(|c| c.uuid == *uuid));
+        assert!((size.width - 2.0).abs() < 1e-6, "{size:?}");
+    }
+}
+
+/// One pattern over the cap on its own is refused as the cap, not as a
+/// count that does not evaluate: a row by its count, a grid by nx x ny.
+#[test]
+fn one_pattern_over_the_instance_cap_refuses_as_the_cap() {
+    let over = (MAX_ARRAY_INSTANCES + 1).to_string();
+    let half = (MAX_ARRAY_INSTANCES / 2 + 1).to_string();
+    let linear = |hole| row(hole, &over, "1mm", "0mm");
+    let grid = |hole| ArrayKind::Grid {
+        source: hole,
+        nx_expr: half.clone(),
+        ny_expr: "2".into(),
+        dx_expr: "1mm".into(),
+        dy_expr: "1mm".into(),
+        depopulation: None,
+    };
+    let kinds: [&dyn Fn(SketchEntityId) -> ArrayKind; 2] = [&linear, &grid];
+    for kind in kinds {
+        let mut s = Sketch::new();
+        let hole = s.circle(0.0, 0.0, 1.0);
+        s.get(hole).mounting_hole = Some(MountingHoleAttr::default());
+        s.pattern(kind(hole));
+
+        let error = s.bake().unwrap_err();
+
+        assert!(
+            matches!(error, BoardBakeError::TooManyInstances { entity, limit }
+                if entity == hole && limit == MAX_ARRAY_INSTANCES),
+            "{error:?}"
+        );
+        assert!(
+            error.to_string().contains("more than 10000 items"),
+            "{error}"
+        );
+    }
+}
+
+/// The refusal text is the Messages line the board sketch writes when the
+/// cap stops the bake; it names the limit and the item that went over.
+#[test]
+fn a_polar_pattern_over_the_instance_cap_refuses_with_the_limit() {
+    let each = (MAX_ARRAY_INSTANCES / 2 + 1).to_string();
+    let mut s = Sketch::new();
+    let hole = s.circle(10.0, 0.0, 1.0);
+    s.get(hole).mounting_hole = Some(MountingHoleAttr::default());
+    let centre = s.point(0.0, 0.0);
+    s.pattern(polar(hole, centre, &each));
+    s.pattern(polar(hole, centre, &each));
+
+    let error = s.bake().unwrap_err();
+
+    assert!(
+        matches!(error, BoardBakeError::TooManyInstances { entity, limit }
+            if entity == hole && limit == MAX_ARRAY_INSTANCES),
+        "{error:?}"
+    );
+    let line = error.to_string();
+    assert!(line.contains(&MAX_ARRAY_INSTANCES.to_string()), "{line}");
+    assert!(line.contains(&hole.to_string()), "{line}");
+    assert_eq!(error.place(), Some(hole), "the refusal selects the hole");
 }

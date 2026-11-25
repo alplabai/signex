@@ -5,13 +5,12 @@
 
 use pcb_geom::{ClickMode, ItemRef, PointNm, Shape, pad_shape};
 use signex_app::active_bar::{ActiveBarAction, ActiveBarMsg};
-use signex_app::app::{
-    ContextAction, ContextMenuMsg, EditMsg, FileMsg, Message, Signex, TabDocument, UiMsg,
-};
+use signex_app::app::{ContextAction, ContextMenuMsg, EditMsg, FileMsg, Message, Signex, UiMsg};
 use signex_app::diagnostics;
 use signex_app::keymap::{AppCommandId, KeyStroke, KeyToken, Modifiers};
 use signex_app::menu_bar::MenuMessage;
 use signex_app::pcb_canvas::PcbCanvasMsg;
+use signex_app::test_adapter::BoardEngines;
 use signex_types::format::SnxPcb;
 use signex_types::pcb::{
     Footprint, Pad, PadShape, PadType, PcbBoard, Point, Segment, Via, ViaType,
@@ -181,10 +180,8 @@ fn send(app: &mut Signex, message: Message) {
 
 fn live(app: &Signex) -> PcbBoard {
     let docs = &app.document_state;
-    docs.tabs[docs.active_tab]
-        .cached_document
-        .as_ref()
-        .and_then(TabDocument::as_pcb)
+    docs.tab_board_engine(docs.active_tab)
+        .map(|engine| engine.board())
         .expect("a board is open")
         .clone()
 }
@@ -415,17 +412,27 @@ fn a_ctrl_drag_leaves_the_tracks_and_a_plain_drag_takes_them_along() {
         (Point::new(0.0, 10.0), Point::new(8.0, 10.0))
     );
 
-    // No Ctrl: the end on the pad follows, as before.
+    // No Ctrl: the end on the pad follows to (10.7, 10.16), and since that
+    // is off the track's 0° line it bends at one 45° corner (#2513 (2)-(4)):
+    // the track keeps its fixed end and runs to the corner, a new leg of its
+    // width, layer and net runs on into the pad.
+    let near = |p: Point, x: f64, y: f64| (p.x - x).abs() < 1e-9 && (p.y - y).abs() < 1e-9;
     let mut f = open_board_with(with_track.clone());
     send(&mut f.app, drag(false));
     let edited = one_step(&mut f, dropped());
     assert!(moved_to(&edited));
-    let (start, end) = track(&edited);
+    let (start, corner) = track(&edited);
     assert_eq!(start, Point::new(0.0, 10.0));
-    assert!(
-        (end.x - 10.7).abs() < 1e-9 && (end.y - 10.16).abs() < 1e-9,
-        "{end:?}"
-    );
+    assert!(near(corner, 10.54, 10.0), "{corner:?}");
+    let was = with_track.segments.iter().find(|s| s.uuid == on_pad);
+    let was = was.expect("track");
+    let leg = edited
+        .segments
+        .iter()
+        .find(|s| s.uuid != on_pad && near(s.start, 10.54, 10.0))
+        .expect("the 45° leg into the pad");
+    assert!(near(leg.end, 10.7, 10.16), "{:?}", leg.end);
+    assert_eq!((leg.width, &leg.layer, leg.net), (was.width, &was.layer, 0));
 
     // Ctrl pressed mid-drag latches: a later step without it changes nothing.
     let mut f = open_board_with(with_track);
@@ -527,10 +534,7 @@ fn a_locked_footprint_refuses_every_edit_with_a_notice() {
 
 fn can_undo(app: &Signex) -> bool {
     let docs = &app.document_state;
-    docs.tabs[docs.active_tab]
-        .cached_document
-        .as_ref()
-        .and_then(TabDocument::as_pcb_engine)
+    docs.tab_board_engine(docs.active_tab)
         .expect("a board engine")
         .can_undo()
 }

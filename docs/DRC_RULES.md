@@ -125,11 +125,11 @@ keepouts alone.
 | Silkscreen to silkscreen | `on silk require spacing >= …` | the silkscreen of two parts, or of a part and a board drawing or string; two board drawings or strings are not checked against each other |
 | Mask sliver and expansion | `on mask require sliver >= … and expansion <= …` | the mask strip between two openings on one side (openings that touch leave none); the manual mask expansion of vias and tracks |
 | Paste expansion | `on paste require expansion >= … and expansion <= …` | the manual paste expansion of tracks |
-| Board outline clearance | `on edge require clearance >= …` | each netted copper item against the board outline, at its closest point |
+| Board outline clearance | `on edge require clearance >= …` | each copper item against the board outline, at its closest point; copper of no net included (#2515) |
 | Courtyard overlap | `on courtyard require spacing >= 0mm` | the courtyards of two parts on one side |
 | Keepout | always | the board sketch's keepouts |
 | Unrouted net | always | the links the ratsnest still shows |
-| Short circuit | always | copper of two nets that touches |
+| Short circuit | always | copper of two nets that touches; copper of no net counts as another net |
 
 What each measurement leaves out for now: a part's silkscreen is the strokes
 of its drawings, and a part's own texts are not measured; a board string is
@@ -138,8 +138,18 @@ expansion of its own), a via not tented on that side grown by its manual
 expansion, or a track with a manual mask expansion. A courtyard is the turned
 box of the part's courtyard drawings; a part without any is not checked. The
 board outline is the saved outline; cutouts inside the board are not edges
-yet, and copper wholly outside the outline is not reported. Unnetted copper
-is not checked against the edge.
+yet, and copper wholly outside the outline is not reported.
+
+Copper of no net (#2515): pads, free pads, tracks, copper arcs and vias of
+net 0, and drawings and strings on copper (#2883), listed by
+`pcb_geom::no_net_copper`. The clearance and short checks measure it
+against the copper of every net, and the board outline clearance against
+the edge; two items of no net are never a pair. It never makes a
+connection: the ratsnest and the unrouted check read netted copper only, so
+a track of no net across two pads of one net shorts to each and leaves
+them unrouted. An unplated pad of no net is copper only on the copper
+layers it lists, as the Gerber flashes it. A part's drawings on a copper
+layer are not copper (see `docs/PCB_TOOLS.md`, "Copper of no net").
 
 The DRC panel lists the base rules before the first run. A finding of each
 kind is a row of the DRC panel and a `check_drc` finding filed under its

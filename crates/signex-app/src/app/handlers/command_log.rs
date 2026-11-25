@@ -25,7 +25,7 @@ use crate::panels::command_log::{
 
 #[path = "command_log_replay/mod.rs"]
 mod replay;
-pub(crate) use replay::ReplayBook;
+pub(crate) use replay::{BoardDrop, ReplayBook};
 #[cfg(test)]
 #[path = "tests/command_log/mod.rs"]
 mod tests;

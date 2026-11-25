@@ -134,6 +134,7 @@ pub(super) fn dimension_facts(
 ) -> DimensionFacts {
     let origin = board.options.origin;
     DimensionFacts {
+        kind: shared(dimensions.iter().map(|d| d.kind)),
         start: (
             shared(dimensions.iter().map(|d| origin.user_x(d.start.x))),
             shared(dimensions.iter().map(|d| origin.user_y(d.start.y))),

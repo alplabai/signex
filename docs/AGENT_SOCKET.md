@@ -116,7 +116,8 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   `board_assembly_drawing` (#2486; answers one assembly drawing as SVG text
   and writes nothing),
   `repour_all` (#2216; fills the named board's pours again and answers with
-  each pour's pieces, copper area and removed islands; no undo step),
+  each pour's pieces, copper area and removed islands; one undo step when
+  it fills unfilled pours (#2506), so it needs `edit` and is journaled),
   `assign_net_class`, `autoplace_fields` (#1667; one undo step on the named
   sheet), `save_document`, `close_active_document`, the board
   view's layer commands `hide_layer`, `highlight_layer`, `hide_layer_group`,

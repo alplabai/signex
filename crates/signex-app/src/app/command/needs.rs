@@ -520,8 +520,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "fabrication_outputs"
         | "open_drc_panel" => Needs::Pcb,
         "open_net_classes" | "open_net_classes_panel" => Needs::NetClassTable,
-        // #2216, mockup row 178: the pours of the board in view.
-        "repour_selected" | "repour_all" | "polygon_manager" => Needs::Pcb,
+        // #2216, #2506, mockup row 178: the pours of the board in view.
+        "repour_selected" | "repour_all" | "unfill_selected" | "polygon_manager" => Needs::Pcb,
         // #2404, #2402, #2488: the board reports, Board Print / PDF and STEP.
         "board_report_bom"
         | "board_report_netlist"
@@ -552,11 +552,17 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "place_board_route"
         // #2457: a room by two corners.
         | "place_board_room"
+        // #2505: a library part's footprint, from the part picker.
+        | "place_board_component"
         // #2373: free pads, arcs, strings and dimensions.
         | "place_board_pad"
         | "place_board_arc"
         | "place_board_string"
         | "place_board_dimension"
+        // #2507: the other dimension kinds.
+        | "place_board_dimension_horizontal"
+        | "place_board_dimension_vertical"
+        | "place_board_dimension_radial"
         // #2424: the Graphics tools.
         | "place_board_line"
         | "place_board_graphic_arc"
@@ -604,10 +610,13 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "new_pcb_document" | "new_schematic_sheet" | "open_rules" => Needs::OpenProject,
         // #1282: the class dialog edits the project.
         "open_diff_pair_classes" => Needs::OpenProject,
+        // #2908: a copy of the project in a new folder.
+        "save_project_as" => Needs::OpenProject,
         // #2457: the dialog reads the sheets of the board's project.
         "create_rooms_from_sheets" => Needs::PcbInProject,
         "annotate_schematic_quietly" | "force_annotate_all_schematics" => Needs::ActiveSheet,
-        "zoom_in_at_cursor" | "zoom_out_at_cursor" => Needs::Canvas,
+        // Home View acts on the main window's sheet or board (mockup row 194).
+        "zoom_in_at_cursor" | "zoom_out_at_cursor" | "home_view" => Needs::Canvas,
         // Redraw, like a fit, acts on a main or undocked sheet or board canvas.
         "zoom_to_fit" | "zoom_to_all_objects" | "show_all_design_objects" | "refresh_view" => {
             Needs::FitTarget

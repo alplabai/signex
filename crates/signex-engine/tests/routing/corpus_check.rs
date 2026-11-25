@@ -11,7 +11,7 @@ use signex_types::format::parse_pcb_layer;
 use signex_types::pcb::{PcbBoard, Point};
 use signex_types::pcb_layer::PcbLayer;
 
-use crate::fixtures::{Fixture, corpus_paths, load};
+use crate::fixtures::{Fixture, REQUIRE_CORPUS, corpus_paths, corpus_required, load};
 
 /// The first layer name on `board` that is not a layer this build knows,
 /// or a copper item's layer that is not copper.
@@ -139,14 +139,9 @@ fn fault(fixture: &Fixture) -> Option<String> {
     }
 }
 
-/// Set to `1` where the corpus's Git LFS objects were fetched (CI does when
-/// the corpus or its readers change): an unfetched board or an empty corpus
-/// then fails instead of being skipped.
-const REQUIRE_CORPUS: &str = "SIGNEX_REQUIRE_ROUTING_CORPUS";
-
 #[test]
 fn every_corpus_board_loads_with_the_converter_invariants() {
-    let required = std::env::var(REQUIRE_CORPUS).is_ok_and(|v| v == "1");
+    let required = corpus_required();
     let paths = corpus_paths();
     assert!(
         !required || !paths.is_empty(),

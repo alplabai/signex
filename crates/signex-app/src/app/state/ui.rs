@@ -15,10 +15,20 @@ use super::{
 pub const DEFAULT_BOTTOM_PANEL_HEIGHT: f32 = 220.0;
 
 pub struct UiState {
-    /// What each open board shows of its layers and ratsnest (#2223). Session
-    /// only: never written to the `.snxpcb`.
+    /// What each board shown this session shows of its layers and ratsnest
+    /// (#2223). Never written to the `.snxpcb`; kept per board in
+    /// `prefs.json` (#2480, `board_view_prefs`).
     pub pcb_layer_views:
         std::collections::HashMap<std::path::PathBuf, signex_renderer::pcb::PcbLayerView>,
+    /// The views kept by earlier launches (#2480), by board path, until
+    /// their board opens and `pcb_layer_views` takes the view over. Boxed: a
+    /// pointer of the size budget (#2412).
+    pub saved_pcb_layer_views:
+        Box<std::collections::HashMap<std::path::PathBuf, signex_renderer::pcb::PcbLayerView>>,
+    /// Writes the views of `pcb_layer_views` to `prefs.json` (#2480),
+    /// debounced and off the UI thread. Boxed: a pointer of the size budget
+    /// (#2412).
+    pub pcb_layer_view_sync: Box<crate::board_view_prefs::BoardViewSync>,
     /// The board layer strip's tab names and saved layer sets (#2394), per
     /// user in `prefs.json`.
     pub layer_strip: crate::layer_strip_prefs::LayerStripPrefs,
@@ -374,6 +384,11 @@ pub struct UiState {
     /// Draft mirror of [`Self::ui_scale`], as a percent in 10 % steps.
     /// Applied on Save, like the other Appearance drafts.
     pub preferences_draft_ui_scale_percent: u16,
+    /// How much copper off a highlighted board net dims, percent (0..=100,
+    /// default 50; Preferences ▸ PCB ▸ Display, #2514).
+    pub pcb_dim_others_percent: u8,
+    /// Draft mirror of [`Self::pcb_dim_others_percent`]; applied on Save.
+    pub preferences_draft_pcb_dim_others_percent: u8,
     /// Draft mirror of [`Self::zoom_step_percent`]. Also the *effective*
     /// value the canvases zoom with (see [`Self::effective_zoom_step`]).
     pub preferences_draft_zoom_step_percent: u8,
@@ -506,6 +521,9 @@ pub struct UiState {
     /// The New Project setup dialog, while open (#2232). Nothing is on disk
     /// until its Create. Boxed so a closed dialog costs one pointer (#2412).
     pub new_project: Option<Box<crate::app::NewProjectState>>,
+    /// File ▸ Save Project As…, while open (#2908). Nothing is on disk until
+    /// its Save. Boxed like `new_project`.
+    pub save_project_as: Option<Box<crate::app::SaveProjectAsState>>,
     /// The New PCB or New Schematic setup dialog, while open (#2232).
     /// Nothing is made until its Create. Boxed like `new_project`.
     pub document_setup: Option<Box<crate::app::DocumentSetupState>>,
@@ -882,6 +900,7 @@ mod tests {
         let sizes = [
             ("document_setup", field_size(|ui| &ui.document_setup)),
             ("new_project", field_size(|ui| &ui.new_project)),
+            ("save_project_as", field_size(|ui| &ui.save_project_as)),
             (
                 "project_close_confirm",
                 field_size(|ui| &ui.project_close_confirm),

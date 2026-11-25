@@ -108,6 +108,8 @@ impl Signex {
         };
         let line = t!(self.ui_state.i18n, id, "net" => name.as_str());
         crate::diagnostics::log_info(line.into_string());
+        // Every other net dims or comes back (#2514): the refresh draws the
+        // board scene again.
         self.refresh_pcb_highlight();
     }
 

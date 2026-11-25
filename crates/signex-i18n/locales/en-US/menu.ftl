@@ -256,7 +256,8 @@ ctx-fp-silk-unknown = Silk graphic { $index }
 ctx-fp-silk-string = String
 ctx-fp-silk-region = Region
 
-# Place > Graphics > Dimension, and the Drawing Tools group header of the same name.
+# Place > Graphics > Dimension, and the Drawing Tools group header of the same name;
+# on a board, Place > Dimension and its heading in the Place flyout (#2507).
 menu-place-dimension = Dimension
 
 ## Active Bar Power menu and the Place flyout's power rows (Graphite
@@ -325,6 +326,17 @@ zoom-pill-presets = Zoom Presets
 # Rows of the menu the pill's percentage opens. { $percent } as above.
 zoom-presets-percent = { $percent }%
 zoom-presets-fit-selection = Fit Selection
+# The orientation tile above the zoom pill (mockup row 194): its axis labels,
+# then the caption row of a turned or flipped view. { $angle } is the view
+# rotation in degrees, '.' as the decimal mark.
+orientation-tile-x = +X
+orientation-tile-y = +Y
+orientation-tile-angle = { $angle }°
+orientation-tile-bottom = Bottom
+orientation-tile-bottom-angle = Bottom · { $angle }°
+# Hover hint of the Home button left of the zoom pill, on a board and on a sheet.
+home-view-hint-board = Home View · rotation 0°, Flip off, fit
+home-view-hint-sheet = Home View · rotation 0°, fit
 # Footprint editor menu on a pad: rows acting on the selection.
 ctx-fp-move-by = Move Selection By…
 ctx-fp-rotate-selection = Rotate Selection

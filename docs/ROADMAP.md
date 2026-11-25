@@ -51,11 +51,12 @@ Two of them placed different features at v1.4 and v1.5. A fourth axis
 
 Honesty first, because the previous revision of this document did not
 have this section and drifted six versions away from reality as a result.
-| Fact | State (2026-11-17) |
+| Fact | State (2026-11-25) |
 |------|--------------------|
 | Latest tagged release | **v26.11.0** (2026-11-17), the Community Preview release and the first full CalVer release; the schematic and PCB editors are the supported surface. **v26.11.0-rc.1** (2026-11-07) was its release candidate; **v1.0.0-rc.1** (2026-10-29) was the **last SemVer tag**, and `1.0.0` final is never cut |
-| `workspace.package.version` | **26.11.0** |
-| Latest CHANGELOG section | **26.11.0** — dated 2026-11-17 |
+| Next tag | **v26.11.1**, cut from this release-prep PR as a final, with no release candidate |
+| `workspace.package.version` | **26.11.1** |
+| Latest CHANGELOG section | **26.11.1** — dated 2026-11-25 |
 | Current work | Community Preview milestone: open issues are tracked on [the milestone](https://github.com/alplabai/signex/milestone/12) (a dated issue list here goes stale). AI Design work runs alongside (§8) |
 
 Phases 0–6 below (the original v0.1 → v0.8 schematic-editor plan) are
@@ -89,7 +90,7 @@ v1.0.0-rc.1) keep their numbers as history.
 | `YY` | Two-digit year of the release (calver.org `YY`: year − 2000, no padding): 2026 is `26`. |
 | `MM` | Month of the release, **without zero padding** (calver.org `MM`): January 2027 is `27.1.0`, never `27.01.0`. Cargo and semver reject leading zeros, so a padded month would not parse. |
 | `MICRO` | Starts at `0` each month and increments for every release in that month, patch releases included. |
-| Release candidate | `YY.MM.MICRO-rc.N`, e.g. `26.11.0-rc.1`. A release's version is fixed when its first release candidate is cut; the final keeps it even if it ships in a later month (`26.11.0-rc.1` → `26.11.0`). |
+| Release candidate | `YY.MM.MICRO-rc.N`, e.g. `26.11.0-rc.1`. A candidate is optional, not required: gate releases are cut as finals with no candidate (DECISIONS 2026-11-25). When a candidate is cut, the release's version is fixed then, and the final keeps it even if it ships in a later month (`26.11.0-rc.1` → `26.11.0`). |
 | Git tag | The `v` prefix stays: `v26.11.0`, `v26.11.0-rc.1`. The `release.yml` trigger (`v[0-9]+.[0-9]+.[0-9]+` / `-*`) and `scripts/check_release_version.sh` accept this shape unchanged. |
 
 Ordering stays monotonic because every CalVer major (26 and up) is above

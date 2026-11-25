@@ -190,6 +190,9 @@ context = "global"
 # `Mod+Shift+C` copies a screenshot of the view; both are greyed on a flat
 # board. On a board `H` is no longer the sheet's off-sheet connector key,
 # which needs a sheet. `Shift+E` steps the board's Snapping (#2879).
+# #2509: the board Place tools take the default profile's letter: `Shift+T`
+# Track, `Shift+V` Via, `Shift+G` Polygon Pour, and `Shift+Alt+F` Fill and
+# `Shift+Alt+R` Solid Region, as `Shift+F` and `Shift+R` are global keys.
 [[keyboard_shortcuts.sections]]
 context = "pcb"
 
@@ -209,9 +212,14 @@ context = "pcb"
 "K" = "place_board_keepout"
 "L" = "flip_selection"
 "Mod+Shift+C" = "copy_board_3d_screenshot"
+"Shift+Alt+F" = "place_board_fill"
+"Shift+Alt+R" = "place_board_region"
 "Shift+E" = "cycle_board_snapping"
+"Shift+G" = "place_board_polygon_pour"
 "Shift+O" = "set_board_origin"
 "Shift+S" = "toggle_single_layer_mode"
+"Shift+T" = "place_board_track"
+"Shift+V" = "place_board_via"
 
 # The board 3D view (mockup row 175): live only while the board is shown in
 # 3D, where it outranks the board's own keys, so `F` turns the board over

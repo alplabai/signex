@@ -11,7 +11,9 @@ use uuid::Uuid;
 
 use crate::app::handlers::menu::export::tests::app_workspace;
 use crate::app::{EditMsg, Message, Signex};
-use crate::pcb_canvas::{PcbCanvasState, board_without, carried_board, followed_arcs};
+use crate::pcb_canvas::{
+    PcbCanvasState, board_without, carried_board, followed_arcs, with_stretched_tracks,
+};
 
 const U1: Uuid = Uuid::from_u128(0x10);
 const FREE: Uuid = Uuid::from_u128(0x40);
@@ -187,11 +189,20 @@ fn a_dragged_via_lands_on_the_grid_keeps_its_net_and_undoes_in_one_step() {
     let via = rig.via(FREE);
     assert!(close(via.position, 24.0, 13.0), "{:?}", via.position);
     assert_eq!(via.net, 1, "the net is unchanged");
+    // Caner, 2026-11-25 (#2513): the track to the moved via bends at one 45°
+    // corner, straight from (15, 10) to (21, 10), then a new leg to (24, 13).
     let track = &rig.board().segments[0];
-    assert!(close(track.end, 24.0, 13.0), "its end follows: {track:?}");
+    assert!(
+        close(track.end, 21.0, 10.0),
+        "it keeps its fixed leg: {track:?}"
+    );
     assert!(
         close(track.start, 15.0, 10.0),
         "its far end stays: {track:?}"
+    );
+    assert!(
+        rig.has_track((21.0, 10.0), (24.0, 13.0)),
+        "the new 45° leg ends on the via"
     );
 
     let _ = rig.app.update(Message::Edit(EditMsg::Undo));
@@ -222,6 +233,16 @@ impl Rig {
     fn track(&self, id: Uuid) -> &signex_types::pcb::Segment {
         let segments = &self.board().segments;
         segments.iter().find(|s| s.uuid == id).unwrap()
+    }
+
+    /// Whether a track of the board runs from `a` to `b`.
+    fn has_track(&self, a: (f64, f64), b: (f64, f64)) -> bool {
+        (self.board().segments.iter()).any(|s| close(s.start, a.0, a.1) && close(s.end, b.0, b.1))
+    }
+
+    /// Whether a track of the board ends at `at`, its stretched end (#2513).
+    fn a_track_ends_at(&self, at: Point) -> bool {
+        (self.board().segments.iter()).any(|s| close(s.end, at.x, at.y))
     }
 
     /// `modifiers` pressed or released with the pointer at `at`.
@@ -256,7 +277,9 @@ impl Rig {
 fn a_track_of_another_net_or_a_locked_track_does_not_follow_the_via() {
     let mut rig = rig_on(board_with_other_tracks());
     rig.drag(Point::new(20.0, 10.0), Point::new(24.0, 13.0));
-    assert!(close(rig.track(TRACK).end, 24.0, 13.0), "its own track");
+    // Its own track bends at one 45° corner onto the via (Caner, 2026-11-25).
+    assert!(close(rig.track(TRACK).end, 21.0, 10.0), "its own track");
+    assert!(rig.has_track((21.0, 10.0), (24.0, 13.0)), "and its new leg");
     assert!(close(rig.track(OTHER_NET).end, 20.0, 10.0), "another net");
     assert!(close(rig.track(LOCKED_TRACK).end, 20.0, 10.0), "locked");
 }
@@ -308,8 +331,22 @@ fn the_preview_draws_the_via_and_its_track_where_they_are_going() {
     assert_eq!(following.len(), 1);
     assert_eq!(following[0].track, TRACK);
     let carry = rig.app.interaction_state.pcb_carry.as_ref().expect("carry");
+    // What the preview draws: the moved via and its track bent at one 45°
+    // corner, as the drop bends it (Caner, 2026-11-25, #2513).
     let drawn = carried_board(&before, &carry.carried(), &following, carry.delta);
-    assert!(close(drawn.segments[0].end, 24.0, 13.0), "the moved track");
+    let drawn = with_stretched_tracks(drawn, &before, carry, &following);
+    let runs = |a: (f64, f64), b: (f64, f64)| {
+        (drawn.segments.iter()).any(|s| close(s.start, a.0, a.1) && close(s.end, b.0, b.1))
+    };
+    assert_eq!(drawn.segments.len(), 2, "the track and its new leg");
+    assert!(
+        runs((15.0, 10.0), (21.0, 10.0)),
+        "the track keeps its far end"
+    );
+    assert!(
+        runs((21.0, 10.0), (24.0, 13.0)),
+        "the moved track ends on the via"
+    );
     assert!(close(drawn.vias[0].position, 24.0, 13.0), "the moved via");
     let left = board_without(&before, &carry.carried(), &following);
     assert!(left.segments.is_empty(), "the track left its old place");
@@ -524,7 +561,15 @@ fn assert_ctrl_latches(board: PcbBoard, track: Uuid, from: Point, at: fn(&Rig) -
         rig.drag(from, to);
         let moved = at(&rig);
         assert!(!close(moved, from.x, from.y), "the plain drag moved it");
-        assert!(close(rig.track(track).end, moved.x, moved.y), "it follows");
+        // The track bends at one 45° corner (Caner, 2026-11-25): its new leg
+        // runs from the object's own track to where the object went.
+        assert!(rig.a_track_ends_at(moved), "it follows");
+        let corner = rig.track(track).end;
+        let joined = (rig.board().segments.iter()).any(|s| {
+            (close(s.start, corner.x, corner.y) && close(s.end, moved.x, moved.y))
+                || (close(s.end, corner.x, corner.y) && close(s.start, moved.x, moved.y))
+        });
+        assert!(joined, "its own track's new leg ends at the object");
     }
 }
 

@@ -64,6 +64,7 @@ mod pin_table_tab;
 mod polygon_manager_tab;
 pub mod project_entry_disk;
 pub(crate) mod project_git;
+pub(crate) mod project_save_as;
 mod project_tab;
 pub(crate) mod projector;
 pub(crate) mod rail_rename;
@@ -77,6 +78,7 @@ pub(crate) mod sheet_sync;
 pub(crate) mod sheet_write;
 pub mod unions;
 pub use project_git::ProjectGitMsg;
+pub use project_save_as::{SaveProjectAsMsg, SaveProjectAsState};
 pub use project_tab::{ProjectGeneralFacts, ProjectSection, ProjectTabMsg, ProjectTabState};
 pub use rules_tab::{RulesTabMsg, RulesTabState};
 pub use sch_tables::TablesMsg;
@@ -228,6 +230,9 @@ impl Signex {
         // project in view changes (mockup row 165).
         tasks.push(self.sync_annotations_panel());
         tasks.push(self.sync_compare_board());
+        // A board that opened takes its kept view; a changed view is saved
+        // soon (#2480).
+        tasks.push(self.sync_pcb_layer_views());
         // A Properties draft of a board no window shows any more goes (#1312).
         self.prune_pcb_footprint_draft();
         self.prune_pcb_component_draft();
