@@ -279,7 +279,6 @@ define_ids! {
     TABLE_TOC_WRITTEN = "properties-table-toc-written";
     TABLE_TOC_EXISTS = "properties-table-toc-exists";
     TABLE_TOC_FAILED = "properties-table-toc-failed";
-    TABLE_TOC_NOT_SERIALISED = "properties-table-toc-not-serialised";
     TABLE_TOC_HEADING = "properties-table-toc-heading";
     TABLE_REFRESH_FAILED = "properties-table-refresh-failed";
     TABLE_REFRESH_NO_REASON = "properties-table-refresh-no-reason";
