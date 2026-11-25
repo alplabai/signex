@@ -66,6 +66,15 @@ impl Interface {
             .iter()
             .map(|(interface, _)| interface.clone())
     }
+
+    /// The fixed token of a known interface; `None` for
+    /// [`Interface::Other`].
+    pub fn known_token(&self) -> Option<&'static str> {
+        INTERFACE_TOKENS
+            .iter()
+            .find(|(interface, _)| interface == self)
+            .map(|(_, token)| *token)
+    }
 }
 
 #[cfg(test)]
@@ -97,5 +106,9 @@ mod tests {
         assert_eq!(known.len(), INTERFACE_TOKENS.len());
         assert!(known.iter().all(|i| !matches!(i, Interface::Other(_))));
         assert_eq!(known.first(), Some(&Interface::Signal));
+        for interface in &known {
+            assert_eq!(interface.known_token(), Some(interface.token()));
+        }
+        assert_eq!(Interface::Other("CAN".into()).known_token(), None);
     }
 }
