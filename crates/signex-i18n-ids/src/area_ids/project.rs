@@ -304,4 +304,8 @@ define_ids! {
     // dialog-polish
     PROJECT_PARAMETER_UNRESOLVED = "project-parameter-unresolved";
     PROJECT_READ_ONLY_BANNER = "project-read-only-banner";
+    // Snippets and templates (#1283).
+    SNIPPET_SAVED = "snippet-saved";
+    SNIPPET_NOT_WRITTEN = "snippet-not-written";
+    SNIPPET_REFUSED = "snippet-refused";
 }

@@ -597,6 +597,9 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         }),
         "place_design_block" => extras(PlacementExtrasMsg::DesignBlockRequested),
         "import_graphics" => extras(PlacementExtrasMsg::ImportGraphicsRequested),
+        // #1283: the snippets dialog, and the selection saved as a snippet.
+        "place_snippet" => extras(PlacementExtrasMsg::SnippetRequested),
+        "save_snippet" => extras(PlacementExtrasMsg::SnippetSaveRequested),
         // BRIDGE_ARMS_END — `tests::match_block` scans for command-id
         // literals up to this marker and no further. Everything below is
         // fallthrough machinery whose own string literals must not be

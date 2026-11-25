@@ -37,6 +37,8 @@ file-dialog-new-component-library = New Component Library
 file-dialog-place-design-block = Place Design Block
 # Import Graphics (#1667): lines, circles, arcs and polylines from a DXF file.
 file-dialog-import-graphics = Import Graphics
+# Place Snippet (#1283): a saved snippet, opened on the snippets folder.
+file-dialog-place-snippet = Place Snippet
 
 ## File type filters
 

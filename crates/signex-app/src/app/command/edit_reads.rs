@@ -505,6 +505,14 @@ impl Signex {
                     plan.texts.push(path);
                 }
             }
+            // #1283: a snippet's file, placed as a design block is.
+            "place_snippet" => {
+                if let Ok((_, _, file)) = super::reuse_operands::snippet_file(self, args, target)
+                    && !self.document_state.engines.contains_key(&file)
+                {
+                    plan.children.push(file);
+                }
+            }
             _ => {}
         }
     }
