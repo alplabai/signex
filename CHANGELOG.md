@@ -20,6 +20,17 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ## [26.11.1] — 2026-11-25
 
+_The PCB Design release: boards are laid out and routed from the schematic end to end, the Graphite interface reaches every panel and dialog, and Signex adds the full set of fabrication and assembly outputs._
+
+### Highlights
+
+- **Routing and dragging** — routed legs reuse same-net copper instead of overlapping it, unselected tracks, vias and parts drag in one gesture, and the tracks joined to them stretch at 0°, 45° or 90° (#2492, #2513).
+- **Board tools** — Linear, Radial and Aligned dimensions, unfilled pours, Pour Cutout regions, copper drawings as copper of no net, board sketch arrays, Place ▸ Component on boards, and an orientation tile with Home View (#2507, #2506, #2871, #2883, #2517, #2505, #2508).
+- **Outputs** — IPC-2581, ODB++, assembly drawings and board STEP beside the Gerber and drill outputs, with Export PDF, BOM export, Fabrication Outputs and Board Print on one screen each.
+- **Graphite everywhere** — the second Graphite wave and seven mockup-gap batches bring the PCB panels, Properties, Preferences, library dialogs, outputs and board sketch in line with the Graphite mockup.
+- **Safer files** — file versions go up only when a feature that needs them is used; a project saved by a newer build opens read-only, and File ▸ Save Project As copies it into an editable project (#2904, #2908).
+- **User guide** — the guide matches the app, its test checks every shortcut and menu path, and its screenshots are taken from the current build (#322).
+
 ### Added
 
 - **A new wire continues the wire it starts on (#114)** — a wire started on the end or the body of a coloured or widened wire takes that wire's colour and width; a wire that only ends on it keeps its own.
