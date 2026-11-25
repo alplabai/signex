@@ -801,6 +801,30 @@ Known limits:
   put in its place). The headless queries have the same gap; using it needs
   write access to the project folder.
 
+### `toggle_live_erc`
+
+```text
+toggle_live_erc [enabled=true|false]
+```
+
+Live ERC (#1288) re-checks the nets an edit changes in a window
+([ERC_RULES.md](ERC_RULES.md), "Live ERC"); a headless run never runs it and
+checks with `check_erc`. `toggle_live_erc` turns the preference (`live_erc`
+in `prefs.json`, on by default) on or off: `enabled` sets it, and without it
+the command flips it, as its palette row does. It needs no capability beyond
+`read`; a headless run writes the preference under its own config root,
+never the user's. It names no document, so the agent channel refuses it: a
+person's preference is theirs. The answer is the preference after the call
+and whether the call changed it:
+
+```bash
+signex-cli run demo.snxprj toggle_live_erc --arg enabled=false
+```
+
+```json
+{"enabled": false, "changed": true}
+```
+
 ### `check_drc`
 
 ```text
