@@ -31,12 +31,10 @@ impl std::error::Error for InvalidExtensionName {}
 
 impl ExtensionId {
     /// The id for `name`, which starts with a lowercase ASCII letter and
-    /// holds only lowercase ASCII letters, digits and `_`.
+    /// holds only lowercase ASCII letters, digits and `_`
+    /// ([`signex_commands::is_extension_name`]).
     pub fn new(name: &str) -> Result<Self, InvalidExtensionName> {
-        let mut chars = name.chars();
-        let starts_well = chars.next().is_some_and(|c| c.is_ascii_lowercase());
-        let rest_well = chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_');
-        if starts_well && rest_well {
+        if signex_commands::is_extension_name(name) {
             Ok(Self(Arc::from(name)))
         } else {
             Err(InvalidExtensionName(name.to_owned()))
