@@ -83,6 +83,16 @@ pub(super) fn channel_click(tab: &ChannelTabView) -> Option<bool> {
     }
 }
 
+/// The ink of a card's channel name, greyed when the variant leaves the
+/// whole channel out.
+pub(super) fn name_ink(ctx: &PanelContext, tab: &ChannelTabView) -> Color {
+    if tab.is_not_fitted() {
+        resolve(&ctx.tokens).ink4
+    } else {
+        ti(ctx.tokens.text)
+    }
+}
+
 /// The ink of a designator line, greyed when the variant leaves the part
 /// out.
 pub(super) fn line_ink(ctx: &PanelContext, tab: &ChannelTabView, designator: &str) -> Color {
