@@ -402,6 +402,12 @@ impl Signex {
         }
         let mut data = signex_types::project::parse_project(project_path)
             .with_context(|| format!("parse project {}", project_path.display()))?;
+        if let Some(token) = &data.unknown.newer_minor_source {
+            crate::diagnostics::log_warning(format!(
+                "{} was written by a newer Signex ({token}); it is read-only in this build -- saving is refused",
+                project_path.display()
+            ));
+        }
         // A project an older build wrote has no id yet: it gets one now and
         // the next save writes it (#2172). Not an edit, so not dirty.
         data.document_id

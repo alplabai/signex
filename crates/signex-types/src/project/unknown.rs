@@ -19,40 +19,49 @@ use serde_json::Value;
 /// Keys a build does not recognise, keyed by name, values kept as raw JSON.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct UnknownJson(BTreeMap<String, Value>);
+pub struct UnknownJson {
+    keys: BTreeMap<String, Value>,
+    /// On a project's bag only: the newer minor token the file was read as,
+    /// which makes the project read-only (as `BoardUnknown` does for a
+    /// board). Never written.
+    #[serde(skip)]
+    pub newer_minor_source: Option<String>,
+}
 
 impl UnknownJson {
     /// `true` when no foreign keys were captured.
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.keys.is_empty()
     }
 
     /// Read-only view of a captured key.
     pub fn get(&self, key: &str) -> Option<&Value> {
-        self.0.get(key)
+        self.keys.get(key)
     }
 
     /// Every captured key with its raw value, in key order.
     pub fn iter(&self) -> impl Iterator<Item = (&String, &Value)> {
-        self.0.iter()
+        self.keys.iter()
     }
 
     /// Take every key of `other` this bag lacks, so a replacement section can
     /// keep what the section it replaces held from a newer build.
     pub fn fill_missing_from(&mut self, other: &UnknownJson) {
-        for (key, value) in &other.0 {
-            self.0.entry(key.clone()).or_insert_with(|| value.clone());
+        for (key, value) in &other.keys {
+            self.keys
+                .entry(key.clone())
+                .or_insert_with(|| value.clone());
         }
     }
 
     /// Keep `value` under `key`, for a known key whose value this build
     /// cannot interpret.
     pub(crate) fn insert(&mut self, key: String, value: Value) {
-        self.0.insert(key, value);
+        self.keys.insert(key, value);
     }
 
     /// Drop a captured key, for a section an explicit edit now replaces.
     pub(crate) fn remove(&mut self, key: &str) {
-        self.0.remove(key);
+        self.keys.remove(key);
     }
 }

@@ -40,6 +40,7 @@ mod board_free;
 mod board_options;
 mod board_panel;
 mod board_sketch;
+mod drawn_copper;
 mod extras;
 mod finite_toml;
 mod header_id;
@@ -89,6 +90,8 @@ mod bus_style_tests;
 mod directive_tests;
 #[cfg(test)]
 mod drawing_placement_tests;
+#[cfg(test)]
+mod drawn_copper_tests;
 #[cfg(test)]
 mod extras_unknown_tests;
 #[cfg(test)]
@@ -157,6 +160,7 @@ mod zone_shelved_tests;
 // Public API re-exports — preserve the `format::…` import paths that
 // signex-app / signex-engine / signex-output rely on.
 pub use board_dimension::{board_uses_dimension_style, dimension_uses_style};
+pub use drawn_copper::board_has_drawn_copper;
 pub use header_id::document_id_in_header;
 pub use load_repair::{RepairedObject, SheetLoadRepair};
 pub use pcb_rows::{

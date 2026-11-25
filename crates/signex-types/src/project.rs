@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use crate::agent_journal::AgentJournalSettings;
 use crate::document_id::DocumentId;
-use crate::format_version::{FormatVersion, FormatVersionError, MissingToken, NewerMinor};
+use crate::format_version::FormatVersionError;
 
 mod annotate_undo;
 mod annotation;
@@ -30,6 +30,9 @@ mod setup;
 mod setup_profile;
 #[cfg(test)]
 mod setup_tests;
+mod token;
+#[cfg(test)]
+mod token_tests;
 mod unknown;
 mod user_profile;
 #[cfg(test)]
@@ -80,6 +83,9 @@ pub use setup_profile::{
     FabTemplate, LAYER_STEP, MIN_STEPPED_LAYERS, ProjectSetup, ResolvedSetup, SetupProfile,
     designator_token, stepped_layers,
 };
+pub use token::{
+    SNXPRJ_FORMAT_V1, SNXPRJ_FORMAT_V1_1, SNXPRJ_VERSION, snxprj_opens_read_only, snxprj_token,
+};
 pub use unknown::UnknownJson;
 pub use user_profile::{
     MAX_PROFILE_NAME_CHARS, PROJECT_PROFILE_TOKEN, ProfileNameProblem, ProfileRef,
@@ -103,18 +109,6 @@ where
         .and_then(Value::as_str)
         .and_then(|text| text.parse().ok()))
 }
-
-/// Format token written into every saved `.snxprj` (`"format"` key).
-pub const SNXPRJ_FORMAT_V1: &str = "snxprj/1";
-
-/// `.snxprj` version policy. A file without the token predates it and is
-/// read as version 1; a newer token is refused on load.
-pub const SNXPRJ_VERSION: FormatVersion = FormatVersion {
-    current: SNXPRJ_FORMAT_V1,
-    readable: &[SNXPRJ_FORMAT_V1],
-    newer_minor: NewerMinor::Refused,
-    missing: MissingToken::ReadAs(SNXPRJ_FORMAT_V1),
-};
 
 const FORMAT_KEY: &str = "format";
 
@@ -254,8 +248,8 @@ pub struct ProjectData {
     #[serde(default)]
     pub active_variant: Option<String>,
     /// The default variant and what each variant changes on its parts
-    /// (mockup row 32). Skipped on save when nothing is set; an old build
-    /// keeps the key in `unknown`. No format token changes.
+    /// (mockup row 32). Skipped on save when nothing is set; when set, the
+    /// file is `snxprj/1.1` ([`snxprj_token`]).
     #[serde(default, skip_serializing_if = "VariantSettings::is_empty")]
     pub variant_settings: VariantSettings,
     /// Component libraries referenced by this project. Project-open
@@ -700,11 +694,18 @@ pub enum ProjectError {
         #[source]
         source: FormatVersionError,
     },
+    /// A save of a project read from a newer minor, which opens read-only.
+    #[error("project file {path}: {source}")]
+    ReadOnly {
+        path: String,
+        #[source]
+        source: FormatVersionError,
+    },
 }
 
-/// Check the token through [`SNXPRJ_VERSION`]; a token that is not a string
-/// is refused as garbled.
-fn check_format_token(path: &Path, token: Option<&Value>) -> Result<(), ProjectError> {
+/// Check the token through [`SNXPRJ_VERSION`] and return the token the file
+/// reads as; a token that is not a string is refused as garbled.
+fn check_format_token(path: &Path, token: Option<&Value>) -> Result<String, ProjectError> {
     let found = match token {
         None => None,
         Some(Value::String(s)) => Some(s.clone()),
@@ -712,7 +713,6 @@ fn check_format_token(path: &Path, token: Option<&Value>) -> Result<(), ProjectE
     };
     SNXPRJ_VERSION
         .read(found.as_deref())
-        .map(drop)
         .map_err(|source| ProjectError::UnsupportedFormat {
             path: path.display().to_string(),
             source,
@@ -795,7 +795,7 @@ pub fn parse_project_bytes(path: &Path, bytes: &[u8]) -> Result<ProjectData, Pro
         };
         let mut value = serde_json::from_str::<Value>(trimmed).map_err(corrupt)?;
         let token = value.as_object_mut().and_then(|map| map.remove(FORMAT_KEY));
-        check_format_token(path, token.as_ref())?;
+        let format = check_format_token(path, token.as_ref())?;
         let rules = value.as_object_mut().and_then(|map| map.remove(RULES_KEY));
         let annotation = value
             .as_object_mut()
@@ -843,6 +843,8 @@ pub fn parse_project_bytes(path: &Path, bytes: &[u8]) -> Result<ProjectData, Pro
         if let Some(raw) = annotation {
             annotation::take_annotation(&mut data, raw);
         }
+        // A newer minor opens read-only: every save of it is refused.
+        data.unknown.newer_minor_source = snxprj_opens_read_only(&format).then_some(format);
         data.dir = dir.to_string_lossy().to_string();
         // Project name in the file is informational; the on-disk
         // filename is authoritative so renaming the .snxprj outside
@@ -916,6 +918,11 @@ pub fn parse_project_bytes(path: &Path, bytes: &[u8]) -> Result<ProjectData, Pro
 /// mid-write must never truncate it to a partial file — that would
 /// silently drop the project's contents on the next open.
 pub fn write_project(path: &Path, data: &ProjectData) -> Result<(), ProjectError> {
+    data.refuse_save()
+        .map_err(|source| ProjectError::ReadOnly {
+            path: path.display().to_string(),
+            source,
+        })?;
     let json = encode_project(data).map_err(|err| ProjectError::Io {
         path: path.display().to_string(),
         source: std::io::Error::other(err.to_string()),
@@ -930,10 +937,13 @@ pub fn write_project(path: &Path, data: &ProjectData) -> Result<(), ProjectError
 /// caller can encode on one thread and write on another, and compare what
 /// it wrote against the document it holds now.
 pub fn encode_project(data: &ProjectData) -> Result<Vec<u8>, serde_json::Error> {
+    // A project read from a newer minor is read-only: no bytes to write.
+    data.refuse_save()
+        .map_err(<serde_json::Error as serde::ser::Error>::custom)?;
     // Add the format token. serde_json's map is sorted (no `preserve_order`),
     // so keys come out alphabetically; the first save of an older file reorders it once.
     let mut stamped = serde_json::Map::new();
-    stamped.insert(FORMAT_KEY.into(), Value::String(SNXPRJ_FORMAT_V1.into()));
+    stamped.insert(FORMAT_KEY.into(), Value::String(snxprj_token(data).into()));
     if let Value::Object(fields) = serde_json::to_value(data)? {
         stamped.extend(fields);
     }
