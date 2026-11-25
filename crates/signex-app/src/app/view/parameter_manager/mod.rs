@@ -728,7 +728,12 @@ mod filter_tests {
         // The Sheet column writes a project path with `/` on every platform.
         assert_eq!(
             names,
-            ["top.snxsch", "ch1/io.snxsch", "ch2/io.snxsch", "/x/io.snxsch"]
+            [
+                "top.snxsch",
+                "ch1/io.snxsch",
+                "ch2/io.snxsch",
+                "/x/io.snxsch"
+            ]
         );
     }
 }
