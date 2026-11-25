@@ -106,7 +106,8 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   the board queries `measure_board`,
   `query_board_nets` and `find_similar_items` (#2403), and the board's panel
   `board_panel` (#2410), and the Project tab's `project_settings`
-  (#1689-#1693);
+  (#1689-#1693), and `query_rail_budget` (#2943), answered once its parts
+  are read ([CLI.md](CLI.md), "Rail budgets");
 - a command that names its document with a required `document` operand and
   takes no file path (the placements' optional `document` does not count; they
   stay reachable through `apply_edits`): today `apply_edits`, `revert`, `color_net`,
@@ -173,7 +174,9 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   (#1689-#1693; `document` is the project or any document of it), and the
   Requirements section's `project_add_requirement`,
   `project_set_requirement`, `project_remove_requirement`,
-  `project_enable_requirement` and `project_run_requirements` (#2339). A test
+  `project_enable_requirement` and `project_run_requirements` (#2339), and
+  `project_set_rail` (#2943; one undo step of the project's history,
+  [CLI.md](CLI.md), "Rail budgets"). A test
   pins this set, so a catalog row that joins or leaves it is a visible
   decision.
   The window-layout commands `tile_windows_horizontally`,

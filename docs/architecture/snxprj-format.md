@@ -389,6 +389,20 @@ saves byte-identical; a value that is not a positive number reads as absent
 and is dropped on the next save. No format token changes: a build that
 predates the field keeps the key as an unknown key.
 
+## Power rails (`rails`, #2943)
+
+An optional top-level object, a power rail by net name with its nominal
+`voltage` (volts, not 0) and an optional `tolerance_percent` (0 to below
+100): `"rails": {"+3V3": {"voltage": 3.3, "tolerance_percent": 5}}`. Unlike
+`router_tool_diameter` it is not a declared field of `ProjectData`: the value
+stays in the unknown-key bag as stored and is read through
+`ProjectData::rails()` and written through `ProjectData::set_rail`, so every
+rail nobody edited saves in the form it was written (`5` stays `5`), and a
+project that sets none saves byte-identical. A value this build cannot read
+is kept as written and not edited over. No format token changes: a build
+that predates the key keeps it as an unknown key. Rules: `docs/CLI.md`,
+"Rail budgets".
+
 ## Variant settings (`variant_settings`)
 
 `ProjectData.variant_settings` (`VariantSettings`) is an optional top-level

@@ -944,6 +944,8 @@ file).
 | `parts_state` | `states` (default `["released"]`; of `draft`, `in_review`, `released`, `deprecated`, `obsolete`) | every part the BOM buys was placed from a library row, of an open library, in one of the states |
 | `net_class` | `nets` (a `*`/`?` pattern), `class`, `min_trace_width_mm`, `min_clearance_mm` (all but `nets` optional, at least one given) | every board net matching `nets` is in `class`, and the class of each sets at least the given track width and clearance |
 | `bom_cost` | `quantity`, `currency`, `max_unit_cost` | the BOM costs at most `max_unit_cost` per board in `currency` when `quantity` boards are built |
+| `rail_budget` | `net` (a name or a `*`/`?` pattern), `voltage`, `tolerance_percent`, `max_current_a`, `margin_percent` (all but `net` optional) | every rail matching `net` has a voltage, one source and its loads, its voltage matches, and the summed load is within the source's supply less `margin_percent` (and at most `max_current_a`); see [Rail budgets](#rail-budgets) |
+| `layer_count` | `min_layers`, `max_layers` (at least one given) | the board has at least `min_layers` and at most `max_layers` copper layers |
 
 ```json
 "requirements": [
@@ -970,9 +972,15 @@ The report:
   class's set and minimum values; the cost's `unit_cost`, `total_cost`, `quantity` and `currency`;
   for `erc_clean`/`drc_clean` one finding with the counts (`errors`,
   `warnings`, `info`, `waived`, `run_warnings`) and the run's `rule_set`, not
-  a copy of every ERC or DRC finding.
-- `sheet` is the board file for `board_size`, `net_class` and `drc_clean`,
-  the project file otherwise.
+  a copy of every ERC or DRC finding; for `rail_budget` the `rail` (its
+  `query_rail_budget` entry without `problems`: `net`, `voltage`,
+  `tolerance_percent`, `source`, `sources`, `loads`, `total_a`, `supply_a`,
+  `headroom_a`), with `total_a`, `limit_a`, `supply_a`, `margin_percent` and
+  `max_current_a` on an overload and the rail's and the wanted `voltage` and
+  `tolerance_percent` on a voltage that does not match; for `layer_count` the
+  board's `count` of copper layers, `min_layers` and `max_layers`.
+- `sheet` is the board file for `board_size`, `net_class`, `layer_count` and
+  `drc_clean`, the project file otherwise.
 - `key` is a hash of the project file, the rule and what the finding is
   about (a part's designator, a net, a class and its value), so it holds
   while the measured values change.
@@ -992,8 +1000,12 @@ this build cannot read (an unknown kind, a missing or mistyped field, a field
 it does not know; it is kept in the file as written), an id used twice, a
 limit that is no positive length, no board or an unreadable one, a pattern no
 board net matches, a class the project does not have, an ERC or DRC run that
-did not finish, a part with no library row or one in no open library, and a
-BOM line with no cached price in the currency.
+did not finish, a part with no library row or one in no open library, a
+BOM line with no cached price in the currency, a pattern no rail matches, a
+rail with no voltage, no source, more than one source, no load or a rail
+parameter that is no current, rails the project file holds in a form this
+build cannot read, and a `layer_count` whose `min_layers` is above its
+`max_layers`.
 
 How each kind is measured:
 
@@ -1010,18 +1022,96 @@ How each kind is measured:
   that quantity's price break (the BOM export's own pricing); the line costs
   are rounded to cents and the total is divided by `quantity`. A price in another currency is not
   converted; the cost is then not known and the requirement fails.
+- `rail_budget` reads the project's rails and the parts the BOM buys, as
+  [Rail budgets](#rail-budgets) says.
+- `layer_count` counts the copper layers of the board's layer list, the count
+  the layer tabs and the layer stack show (two when the list names none).
 
 Known limits:
 
-- A project lists one board (`pcb_file`), so `drc_clean`, `board_size` and
-  `net_class` check that board.
-- Rail budgets (current and voltage per rail) are not a kind yet: the parts,
-  nets and classes do not carry that data.
+- A project lists one board (`pcb_file`), so `drc_clean`, `board_size`,
+  `net_class` and `layer_count` check that board.
 - Over the agent channel `document=` names one of the project's sheets or its
   board: the project file itself is refused at the agent gate, as for every
   command, because it is not a document of a project.
 - The ERC and DRC runs a requirement uses are not numbered or kept; run
   `check_erc` or `check_drc` for their findings.
+
+## Rail budgets
+
+```text
+project_set_rail document=<project, or one of its documents> net=<name> [voltage=<V>] [tolerance_percent=<%>] [remove=true]
+query_rail_budget document=<project, or one of its documents>
+```
+
+A power rail's budget (#2943) is what its source can supply against what its
+loads draw. The data lives in two places:
+
+- **The rail** — its nominal voltage and tolerance, by net name, in the
+  top-level `rails` object of the `.snxprj`:
+  `"rails": {"+3V3": {"voltage": 3.3, "tolerance_percent": 5}}`. `voltage`
+  is a number of volts other than 0 (negative for a negative rail);
+  `tolerance_percent` is optional, from 0 to below 100. A project that sets no
+  rail writes no `rails` key, a save writes every rail nobody edited as it was
+  written, and an older build keeps the key as one it does not know. A
+  `rails` value this build cannot read (another shape, a key it does not
+  know, a voltage of 0) is kept as written; `project_set_rail` refuses to
+  edit over it and `rail_budget` reports it.
+- **The parts** — a part names the current it draws from a rail with the
+  parameter `Rail Load <net>`, and a source part the current it can supply
+  with `Rail Supply <net>` (`set_symbol_parameter`, or the part's
+  Parameters). The value is in A: a number, optionally followed by `A`, `mA`,
+  `uA` or `µA` (`0.25`, `250mA`). Only the parts the BOM buys count (fitted,
+  in the BOM and on the board, the active variant applied, each placement of
+  a child sheet once), as for `parts_state`.
+
+`project_set_rail` sets the rail `net`: `voltage` and `tolerance_percent` as
+typed (a new rail needs a `voltage`; an empty `tolerance_percent` clears it),
+or `remove=true` takes the rail out. It is one undo step of the project's
+history (the Project tab's Undo takes it back), marks the project unsaved and
+writes nothing until it is saved. It needs the `edit` capability. It answers
+`{"rails": <the rails as stored>, "unreadable": null or why, "changed":
+true|false}`; a refused value changes nothing and says why.
+
+`query_rail_budget` changes nothing and needs only `read`. The parts are read
+off the UI thread (closed sheets from disk, within the folders a headless run
+may read), so the answer comes once that read lands. It answers:
+
+```json
+{"project": "/p/demo.snxprj", "count": 2, "warnings": [],
+ "rails": [
+  {"net": "+3V3", "voltage": 3.3, "tolerance_percent": 5,
+   "source": {"designator": "U1", "current_a": 1.0},
+   "sources": [{"designator": "U1", "current_a": 1.0}],
+   "loads": [{"designator": "U2", "current_a": 0.25}],
+   "total_a": 0.25, "supply_a": 1.0, "headroom_a": 0.75, "problems": []}
+ ]}
+```
+
+- `rails` lists, by name, every rail the project sets and every rail a
+  fitted part's parameter names.
+- `source` is the rail's one source, `null` with none or more than one
+  (`sources` lists them all); `supply_a` and `headroom_a` (`supply_a` less
+  `total_a`, no margin) are `null` then too.
+- `problems` says what keeps the budget from being told: no voltage, no
+  source, more than one source, no load, a rail parameter that is no
+  current. A `rail_budget` requirement reports each one as a finding.
+- `warnings` names the sheets the BOM could not read and a board that could
+  not be read.
+- Refused when the project's rails cannot be read or its BOM cannot be built
+  (no root sheet, the root sheet unreadable).
+
+A `rail_budget` requirement checks each rail matching `net`: `voltage`
+without `tolerance_percent` must equal the rail's voltage; with it, the
+rail's own band (its voltage ± its tolerance) must lie inside `voltage` ±
+`tolerance_percent`. The limit is the source's supply less `margin_percent`,
+and at most `max_current_a`; the summed load must not be over it.
+
+Known limits:
+
+- A rail parameter is trusted: whether the part is connected to that net is
+  not checked.
+- A rail has one source; parallel sources are a finding, not summed.
 
 ## Board queries
 
