@@ -11,8 +11,9 @@ pub const SNXPRJ_FORMAT_V1: &str = "snxprj/1";
 /// Written instead of [`SNXPRJ_FORMAT_V1`] when the project has variant
 /// settings (`variant_settings`, mockup row 32), DECISIONS 2026-11-25: a
 /// build that knows only `snxprj/1` would keep the section but not follow
-/// a variant rename or removal, so it opens 1.1 read-only. A project
-/// without them stays `snxprj/1`, byte for byte.
+/// a variant rename or removal, so it opens 1.1 read-only (builds before
+/// this policy refuse it on load). A project without them stays
+/// `snxprj/1`, byte for byte.
 pub const SNXPRJ_FORMAT_V1_1: &str = "snxprj/1.1";
 
 /// `.snxprj` version policy: a newer minor opens read-only, a newer major
