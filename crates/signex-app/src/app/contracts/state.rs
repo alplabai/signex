@@ -388,6 +388,9 @@ pub enum ProjectCloseChoice {
     /// Drop the engines for every dirty file in the project without
     /// writing to disk, then close.
     DiscardAll,
+    /// Drop only the unsaved settings of the read-only projects in the prompt
+    /// (#2904); anything else still unsaved is prompted for again.
+    DiscardReadOnly,
     /// Dismiss the modal; the project stays open.
     Cancel,
 }

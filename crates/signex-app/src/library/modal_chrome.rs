@@ -10,7 +10,7 @@
 use iced::widget::text::{Ellipsis, Wrapping};
 use iced::widget::{Column, Space, column, container, row};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget};
-use signex_i18n::{I18n, ids, t};
+use signex_i18n::{I18n, Localized, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 use signex_widgets::{Label, raw, text};
@@ -246,26 +246,33 @@ pub(crate) fn unsaved_body<'a, M: 'a>(
 }
 
 /// What the three buttons of an unsaved-changes prompt publish. A `None`
-/// Discard All or Save All is withheld (the button is left out).
+/// discard or Save All is withheld (the button is left out).
 pub(crate) struct UnsavedActions<M> {
-    pub discard_all: Option<M>,
+    pub discard: Option<M>,
+    /// The discard's label; `None` is Discard All.
+    pub discard_label: Option<Localized>,
     pub cancel: M,
     pub save_all: Option<M>,
 }
 
 /// The footer buttons of an unsaved-changes prompt as `(left, right)`: the
-/// red Discard All alone at the left, away from Save All; Cancel, then the
+/// red discard alone at the left, away from Save All; Cancel, then the
 /// primary Save All, at the right. The caller lays them on its footer.
 pub(crate) fn unsaved_footer_parts<'a, M: Clone + 'a>(
     i18n: &I18n,
     actions: UnsavedActions<M>,
     tokens: &ThemeTokens,
 ) -> (Vec<Element<'a, M>>, Vec<Element<'a, M>>) {
-    let left = actions
-        .discard_all
+    let UnsavedActions {
+        discard,
+        discard_label,
+        cancel,
+        save_all,
+    } = actions;
+    let left = discard
         .map(|message| {
             dialog_button(
-                t!(i18n, ids::DIALOG_UNSAVED_DISCARD_ALL),
+                discard_label.unwrap_or_else(|| t!(i18n, ids::DIALOG_UNSAVED_DISCARD_ALL)),
                 DialogButtonKind::Danger,
                 Some(message),
                 tokens,
@@ -276,10 +283,10 @@ pub(crate) fn unsaved_footer_parts<'a, M: Clone + 'a>(
     let mut right = vec![dialog_button(
         t!(i18n, ids::DIALOG_BUTTON_CANCEL),
         DialogButtonKind::Cancel,
-        Some(actions.cancel),
+        Some(cancel),
         tokens,
     )];
-    if let Some(message) = actions.save_all {
+    if let Some(message) = save_all {
         right.push(dialog_button(
             t!(i18n, ids::DIALOG_BUTTON_SAVE_ALL),
             DialogButtonKind::Primary,
@@ -410,7 +417,8 @@ mod tests {
     fn unsaved_footer(discard: bool) -> Element<'static, LibraryMessage> {
         let tokens = signex_types::theme::theme_tokens(ThemeId::BUILTINS[0]);
         let actions = UnsavedActions {
-            discard_all: discard.then_some(LibraryMessage::ClosePicker),
+            discard: discard.then_some(LibraryMessage::ClosePicker),
+            discard_label: None,
             cancel: LibraryMessage::ClosePicker,
             save_all: Some(LibraryMessage::ClosePicker),
         };

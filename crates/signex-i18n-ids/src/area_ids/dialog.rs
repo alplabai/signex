@@ -10,6 +10,7 @@ define_ids! {
     DIALOG_AUTOSAVE_RECOVERY_RESTORE = "dialog-autosave-recovery-restore";
     DIALOG_AUTOSAVE_RECOVERY_LATER = "dialog-autosave-recovery-later";
     DIALOG_UNSAVED_DISCARD_ALL = "dialog-unsaved-discard-all";
+    DIALOG_UNSAVED_DISCARD_READ_ONLY = "dialog-unsaved-discard-read-only";
     DIALOG_CREATE_CHILD_SHEET_OPEN_EXISTING = "dialog-create-child-sheet-open-existing";
     DIALOG_CREATE_CHILD_SHEET_BROWSE = "dialog-create-child-sheet-browse";
     DIALOG_CREATE_CHILD_SHEET_LATER = "dialog-create-child-sheet-later";
