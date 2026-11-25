@@ -552,8 +552,8 @@ editor: design, validate, route, DRC, and export to fabrication.
 | **Scripted Demo Videos** | Scripts that run catalog commands through the existing agent socket (or the CLI), with no second control port; one story script per feature (schematic to board, rules, routing); screen capture with a drawn pointer, click ripples and captions; idle stretches cut; MP4 and GIF output for the README, the docs and the website, re-recorded on every release so the videos never go stale |
 
 **Exit criteria:** a complete project can be designed, validated, and
-exported to manufacturing files; a real PCB designed in Signex has been
-successfully fabricated by at least one beta user; zero `tier: p0` bugs.
+exported to manufacturing files; zero `tier: p0` bugs. A board fabricated
+by a beta user is not a criterion (dropped 2026-11-25, `DECISIONS.md`).
 
 ### Internationalisation (tier not decided)
 
