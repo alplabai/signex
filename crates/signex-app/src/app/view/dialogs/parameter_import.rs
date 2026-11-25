@@ -103,7 +103,9 @@ impl Signex {
             column![].spacing(SP.m).height(Length::Fill);
         if plan.changes.is_empty() {
             content = content.push(
-                text(t!(i18n, ids::PARAMETER_IO_PREVIEW_NOTHING, "sheet" => sheet)).size(TS.body),
+                text(t!(i18n, ids::PARAMETER_IO_PREVIEW_NOTHING, "sheet" => sheet))
+                    .size(TS.body)
+                    .boxed(),
             );
         } else {
             content = content
@@ -114,12 +116,14 @@ impl Signex {
                         "changes" => plan.changes.len(),
                         "parts" => plan.part_count()
                     ))
-                    .size(TS.body),
+                    .size(TS.body)
+                    .boxed(),
                 )
                 .push(
                     text(t!(i18n, ids::PARAMETER_IO_PREVIEW_UNDO))
                         .size(TS.caption)
-                        .color(r.ink3),
+                        .color(r.ink3)
+                        .boxed(),
                 );
         }
         if !plan.unmatched.is_empty() {
@@ -131,7 +135,8 @@ impl Signex {
                     "references" => plan.unmatched.join(", ")
                 ))
                 .size(TS.caption)
-                .color(r.ink3),
+                .color(r.ink3)
+                .boxed(),
             );
         }
         if !plan.changes.is_empty() {
@@ -177,7 +182,8 @@ impl Signex {
                     before,
                     user(&change.after).color(r.accent_text).boxed(),
                 ]))
-                .padding([SP.xs, SP.m]),
+                .padding([SP.xs, SP.m])
+                .boxed(),
             );
         }
         container(column![
