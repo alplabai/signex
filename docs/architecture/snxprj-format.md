@@ -254,6 +254,18 @@ without bumping the `snxprj/1` token. It is deliberately not a child of
   verbatim in the unknown-key bag, written back untouched, not applied, and
   reported in the Messages panel when a part is placed. Choosing a standard in
   the Project tab replaces it.
+- `numbering` (#1292) is how Annotate numbers new designators:
+  `page_hundreds` (page N hands out N×100+1 to N×100+99) or `page_thousands`
+  (N×1000+1 to N×1000+999). Absent is continuous, the next number after the
+  highest in the project; continuous is never written, so choosing it on a
+  project that had no scheme re-saves byte-identical. The page is the number
+  the title block prints (`signex_net::sheet_numbering`); a file placed more
+  than once numbers each placement from its own page. A run refuses, changing
+  nothing, when two numbered pages share a number, a numbered sheet has no
+  page, or a page's block is full; numbers never spill into the next page.
+  An older build keeps the key inside the section, unread, so the token stays
+  `snxprj/1`; it numbers continuously. A value this build does not know makes
+  the section unreadable, kept and not applied, as an unknown standard does.
 
 ## Schematic defaults (`schematic_defaults`, #2026)
 

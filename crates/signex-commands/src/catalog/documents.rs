@@ -387,6 +387,18 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         operands: operands::PROJECT_ANNOTATE_UNDO,
         ..CommandMetadata::DEFAULT
     },
+    // #1292: the project's annotation numbering scheme.
+    CommandMetadata {
+        id: "project_set_annotate_numbering",
+        category: "design",
+        label: command_ids::CMD_PROJECT_SET_ANNOTATE_NUMBERING,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::PROJECT_ANNOTATE_NUMBERING,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "project_set_version_control",
         category: "design",

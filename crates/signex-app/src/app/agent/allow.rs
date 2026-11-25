@@ -145,6 +145,7 @@ mod tests {
                 "project_rename_variant",
                 "project_run_requirements",
                 "project_set_active_variant",
+                "project_set_annotate_numbering",
                 "project_set_annotate_undo",
                 "project_set_requirement",
                 "project_set_version_control",

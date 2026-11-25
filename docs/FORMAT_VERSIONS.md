@@ -109,7 +109,10 @@ token, byte for byte.
 (`schematic_design`: channel naming, harness definitions, differential pair
 classes) are one new top-level key, omitted at the defaults. An older build
 keeps an unknown top-level key and writes it back unchanged, so the key
-needs no new token (`docs/architecture/snxprj-format.md`).
+needs no new token (`docs/architecture/snxprj-format.md`). The annotation
+numbering scheme (`annotation.numbering`, #1292) is the same: an older build
+keeps the key in the section's unknown-key bag and numbers continuously, and
+the continuous default is never written.
 
 ## Changing a format
 

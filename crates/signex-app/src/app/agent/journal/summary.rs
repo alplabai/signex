@@ -47,6 +47,7 @@ const PROJECT_WIDE: [&str; 27] = [
     "project_set_active_variant",
     "project_move_library",
     "project_set_annotate_undo",
+    "project_set_annotate_numbering",
     "project_set_version_control",
     "project_add_requirement",
     "project_set_requirement",
