@@ -123,6 +123,9 @@ mod pcb_via_move;
 mod pcb_via_move_tests;
 pub mod pcb_view;
 pub mod pcb_view_rotation;
+mod home_view;
+#[cfg(test)]
+mod home_view_tests;
 pub mod placed_part;
 pub(crate) mod placement_extras;
 pub mod placement_session;

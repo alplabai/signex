@@ -1,5 +1,5 @@
 //! The Configuration row above the sections, and General Settings: 3D,
-//! Single Layer and Show Grid.
+//! Single Layer, Show Grid and the Orientation eye (the orientation tile).
 
 use iced::widget::tooltip::Position;
 use iced::widget::{container, mouse_area, row};
@@ -77,7 +77,7 @@ pub(super) fn configuration<'a>(
     .boxed()
 }
 
-/// General Settings: 3D, Single Layer, Show Grid and the Orientation Tile.
+/// General Settings: 3D, Single Layer, Show Grid and the Orientation eye.
 pub(super) fn rows<'a>(panel: &PcbLayersPanel, ctx: &PanelContext) -> Vec<Element<'a, PanelMsg>> {
     let i18n = &panel.i18n;
     let toggle_3d = Some(PanelMsg::LayersPanel(LayersPanelMsg::Board3dToggled));

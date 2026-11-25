@@ -41,6 +41,39 @@ pub(in crate::app::view) enum ViewOrientation {
     Sheet { origin: PageOrigin },
 }
 
+impl ViewOrientation {
+    pub fn axes(self) -> ScreenAxes {
+        match self {
+            Self::Board { rotation, .. } => ScreenAxes::of_board(rotation),
+            Self::Sheet { origin } => ScreenAxes::of_sheet(origin),
+        }
+    }
+
+    /// The tile's caption row: a board's turn and flip; a sheet has none.
+    pub fn caption(self, i18n: &signex_i18n::I18n) -> Option<String> {
+        match self {
+            Self::Board { rotation, .. } => {
+                board_caption(i18n, rotation.degrees(), rotation.is_mirrored())
+            }
+            Self::Sheet { .. } => None,
+        }
+    }
+
+    /// Whether the tile shows: a board's View Options eye; always on a sheet.
+    pub fn tile_shown(self) -> bool {
+        match self {
+            Self::Board { tile_shown, .. } => tile_shown,
+            Self::Sheet { .. } => true,
+        }
+    }
+
+    /// Whether the Home button carries its accent dot: the view is turned or
+    /// flipped, exactly when the tile has a caption.
+    pub fn away_from_home(self, i18n: &signex_i18n::I18n) -> bool {
+        self.caption(i18n).is_some()
+    }
+}
+
 /// Where each part of the corner cluster goes, in window coordinates.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(in crate::app::view) struct ClusterRects {
@@ -131,24 +164,15 @@ impl Signex {
     ) -> Element<'_, Message> {
         let tokens = &self.document_state.panel_ctx.tokens;
         let i18n = &self.ui_state.i18n;
-        let (axes, caption, tile_shown, hint) = match orientation {
-            ViewOrientation::Board {
-                rotation,
-                tile_shown,
-            } => (
-                ScreenAxes::of_board(rotation),
-                board_caption(i18n, rotation.degrees(), rotation.is_mirrored()),
-                tile_shown,
-                menu_ids::HOME_VIEW_HINT_BOARD,
-            ),
-            ViewOrientation::Sheet { origin } => (
-                ScreenAxes::of_sheet(origin),
-                None,
-                true,
-                menu_ids::HOME_VIEW_HINT_SHEET,
-            ),
+        let caption = orientation.caption(i18n);
+        let away = orientation.away_from_home(i18n);
+        let on_board = matches!(orientation, ViewOrientation::Board { .. });
+        let hint = if on_board {
+            menu_ids::HOME_VIEW_HINT_BOARD
+        } else {
+            menu_ids::HOME_VIEW_HINT_SHEET
         };
-        let rects = cluster_rects(canvas, tile_shown.then_some(caption.is_some()));
+        let rects = cluster_rects(canvas, orientation.tile_shown().then_some(away));
         let place = |element: Element<'static, Message>, at: Rectangle| -> Element<'static, Message> {
             // The `Translate` spans the window; only the card may take the wheel.
             signex_widgets::Translate::new(super::scroll_guard(element), (at.x, at.y)).boxed()
@@ -158,7 +182,7 @@ impl Signex {
             crate::icons::icon_chrome_home(self.ui_state.theme_id),
             Message::Ui(UiMsg::HomeViewRequested),
             t!(i18n, hint).into(),
-            caption.is_some(),
+            away,
         );
         let mut layers: Stack<Element<'_, Message>> = Stack::new()
             .width(Length::Fill)
@@ -169,9 +193,10 @@ impl Signex {
                 t!(i18n, menu_ids::ORIENTATION_TILE_X).into_string(),
                 t!(i18n, menu_ids::ORIENTATION_TILE_Y).into_string(),
             ];
-            layers = layers.push(place(tile::view(tokens, axes, labels, caption), at));
+            let tile = tile::view(tokens, orientation.axes(), labels, caption);
+            layers = layers.push(place(tile, at));
         }
-        if matches!(orientation, ViewOrientation::Board { .. }) {
+        if on_board {
             layers = layers.push(place(self.board_zoom_pill(), rects.pill));
         }
         layers.boxed()
