@@ -232,8 +232,9 @@ impl Signex {
     /// The footprints `symbol`'s library row offers (the Properties list) and
     /// the one it is built with now; `None` when its footprint text was typed
     /// over or its binding is no longer offered. Apply asks again to tell a
-    /// part changed since the read.
-    pub(super) fn footprint_offers(
+    /// part changed since the read; `query_footprint_assignments` (#2937)
+    /// answers with it.
+    pub(crate) fn footprint_offers(
         &self,
         symbol: &Symbol,
     ) -> (Vec<FootprintOffer>, Option<String>) {

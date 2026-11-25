@@ -16,6 +16,8 @@ pub(crate) mod part_swap_operands;
 pub(crate) mod part_swap_tests;
 mod swap;
 
+pub(crate) use swap::{SwapDone, SwapRefusal};
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
