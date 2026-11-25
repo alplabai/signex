@@ -763,7 +763,7 @@ place_board_circle	bridge	Pcb(PlaceToolPicked(FullCircle))	gui	active document	g
 place_board_circle	in_window_rewrite	document_window	gui	window	routing
 place_board_circle	refusal_needs	EditablePcb	gui	active document	routing
 place_board_circle	headless_refusal	headless_refusal	gui	none	routing
-place_board_component	bridge	Library(OpenPicker)	gui	active document	gate
+place_board_component	bridge	Pcb(PlaceToolPicked(Component))	gui	active document	gate
 place_board_component	in_window_rewrite	document_window	gui	window	routing
 place_board_component	refusal_needs	EditablePcb	gui	active document	routing
 place_board_component	headless_refusal	headless_refusal	gui	none	routing

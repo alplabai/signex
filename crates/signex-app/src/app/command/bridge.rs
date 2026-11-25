@@ -227,11 +227,12 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "mirror_x" => Message::Edit(EditMsg::MirrorSelectedY),
         "mirror_y" => Message::Edit(EditMsg::MirrorSelectedX),
         "flip_selection" => Message::Edit(EditMsg::FlipSelection),
-        // No part in hand: choose one in the picker (#1767). On a board the
-        // pick goes on the cursor as its footprint (#2505).
-        "open_components_panel" | "place_symbol" | "place_board_component" => {
+        // No part in hand: choose one in the picker (#1767). The board's
+        // Component tool opens the same picker under its own gate (#2505).
+        "open_components_panel" | "place_symbol" => {
             Message::Library(crate::library::LibraryMessage::OpenPicker)
         }
+        "place_board_component" => board_tool(BoardPlaceTool::Component),
         "new_document" | "new_project_with_profile" => Message::Menu(MenuMessage::NewProject),
         "open_command_palette" => Message::CommandPalette(CommandPaletteMsg::Open),
         "open_document" => Message::Menu(MenuMessage::OpenProject),
