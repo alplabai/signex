@@ -1053,6 +1053,42 @@ find_similar_items document=<board> id=<uuid> [fields=kind,value,...]
 
 Find by text on a board is `find_items` (designator and value).
 
+## Block diagrams from the hierarchy
+
+Two commands make a block diagram (`.snxblk`) from the project's sheet
+hierarchy and keep it in step with it (#2968, mockup row 171). Both need
+`--save`, read the hierarchy off the UI thread and are answered when the run
+lands. `document` is the project or one of its documents; `path` is the
+diagram file, read against the project folder, and the project's
+`<name>.snxblk` when left out.
+
+```text
+generate_block_diagram document=<project> [path=<file.snxblk>] [overwrite=true]
+regenerate_block_diagram document=<project> [path=<file.snxblk>] [apply=true]
+```
+
+- `generate_block_diagram` writes a new diagram: one block per sheet, linked
+  to the sheet by its document id, its sheet entries as ports, and one
+  connection per signal group that crosses sheets. An existing file is
+  refused without `overwrite=true`. The answer holds `path`, `written`,
+  `summary` (`blocks`, `connections`, `unlinked`) and the whole `diagram`.
+- `regenerate_block_diagram` reads the diagram and lists what the hierarchy
+  changes in it as `changes`, each with its `change`: `block_added`,
+  `sheet_moved` (a renamed or moved sheet, with `from` and `to`),
+  `sheet_removed` (the block stays, marked unlinked), `sheet_returned`,
+  `rails_changed`, `port_added`, `port_removed`, `port_changed`,
+  `connection_added`, `connection_changed` and `connection_removed`.
+  Nothing is written unless `apply=true`; then `written` is true when there
+  was a change. Positions, sizes, names, colours, notes, groups and
+  hand-drawn blocks and connections are kept.
+
+A sheet that is in the project but does not read refuses the run, so its
+block is never marked unlinked by mistake. In a window, the palette's
+Generate Block Diagram runs on the project in view and Regenerate Block
+Diagram lists the changes in Messages without applying them. Grouping and
+layout rules: [architecture/snxblk-format.md](architecture/snxblk-format.md),
+"Generate and regenerate".
+
 ## Working through a running Signex
 
 When a person has the project open in Signex with Preferences > System ›
