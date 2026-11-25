@@ -110,7 +110,7 @@ All of it is derived once, in `signex-net` (`directives.rs`,
   whose names or patterns match it. `build_netlist` writes the directive
   class to `Net::class`, and the project netlist does the same from the
   sheets each net's wires are on, read in sheet-key order
-  (`apply_project_classes`).
+  (`project_classes.rs`).
 - **Class conflicts** (`class_assignments`, `net_class_conflicts`, #2656).
   Every class the directives of a sheet give a net is listed in rank order:
   the Net Parameters directives on it in sheet order, then the Net Blankets
@@ -119,8 +119,17 @@ All of it is derived once, in `signex-net` (`directives.rs`,
   resolution stays the same and ERC reports `net_class_conflict` at the
   overridden directive (`docs/ERC_RULES.md`). Directives naming the same
   class agree. The check reads the sheet with its Compile Masks applied,
-  as the netlist does. Conflicts between sheets of a project are resolved
-  by sheet-key order and not reported yet.
+  as the netlist does.
+- **Class conflicts across sheets** (`project_net_class_conflicts`). The
+  project netlist ranks the directives of all its sheets for each stitched
+  net: the Net Parameters directives on one of its wires (sheets in key
+  order, each in sheet order), then the Net Blankets catching it (the same
+  order). Restricted to one sheet this is the sheet's order above. The
+  first is the class the project netlist writes, and ERC's project run
+  reports every later one naming another class, on the overridden
+  directive's sheet, in place of that sheet's own answer. A net with no
+  pin is not in the project netlist, so its directives keep the sheet's
+  answer; so does a sheet the project roots never reach.
 
 ## Differential pairs {#differential-pairs}
 
@@ -250,14 +259,15 @@ region is picked by a click near its edge, so a click inside it still
 reaches what it covers; a point directive by its mark or its flag
 (`schematic_runtime/directives.rs`).
 
-Exports draw them the same way (#2656): SVG, PDF and print are lowered from
-one page model, and the flag's lines and box come from the one function the
-canvas uses (`signex_types::schematic::directive_flag`). The first flag line
-is bold, as on the canvas. In the export options, "Blankets" shows or hides
-Net Blankets and "Parameter Sets" Net Parameters directives (both on by
-default); a Compile Mask and a Differential Pair have no option and are
-always drawn. The Differential Pair strokes keep their sheet size on paper
-(the canvas widens them when zoomed out).
+Exports draw Net Blankets and Net Parameters directives the same way
+(#2656): SVG, PDF and print are lowered from one page model, and the flag's
+lines and box come from the one function the canvas uses
+(`signex_types::schematic::directive_flag`). The first flag line is bold, as
+on the canvas. In the export options, "Blankets" shows or hides Net Blankets
+and "Parameter Sets" Net Parameters directives (both on by default), and
+Print Preview redraws when either changes. Compile Masks and Differential
+Pairs are not printed (#2656 asks for the other two only; whether they print,
+and behind which option, is open for the maintainer).
 
 ## No-ERC rule list
 
@@ -303,8 +313,8 @@ Copy, cut and paste carry No-ERC directives with their lists.
 
 - Copy and paste do not carry Net Blankets, Compile Masks, Differential Pair
   or Net Parameters directives.
-- Class conflicts between two sheets of a project (a net whose wires on two
-  sheets get different classes) are not reported.
+- Compile Masks and Differential Pairs are not printed (open for the
+  maintainer, #2656).
 - The board does not read a Blanket's `track_width` or `pour` (Keep short).
 - A class a directive gives reaches the board's rules by name only: a
   `Width_<CLASS>` rule applies to the board nets the project's net-class

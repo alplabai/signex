@@ -165,15 +165,46 @@ fn the_blankets_and_parameter_sets_options_hide_their_directives() {
     );
 }
 
+fn diff_pair() -> SchDirective {
+    SchDirective::DiffPair {
+        uuid: Uuid::from_u128(4),
+        position: Point::new(80.0, 80.0),
+        class: Some("USB_90R".into()),
+    }
+}
+
+/// #2656 asks for Net Blankets and Net Parameters on paper only: a Compile
+/// Mask and a Differential Pair, flag included, are not printed with any
+/// option.
 #[test]
-fn a_compile_mask_is_dotted_and_carries_no_flag() {
-    let dotted = drawn(&sheet(vec![mask()]), &PdfOptions::default());
-    let dashed = drawn(&sheet(vec![blanket(None)]), &PdfOptions::default());
-    assert!(texts(&dotted).is_empty() && texts(&dashed).is_empty());
-    assert!(
-        strokes(&dotted) > strokes(&dashed),
-        "dots are shorter marks"
-    );
+fn a_compile_mask_and_a_diff_pair_are_not_printed() {
+    let all_on = PdfOptions::default();
+    assert!(drawn(&sheet(vec![mask(), diff_pair()]), &all_on).is_empty());
+    let with_blanket = drawn(&sheet(vec![mask(), blanket(None), diff_pair()]), &all_on);
+    let blanket_only = drawn(&sheet(vec![blanket(None)]), &all_on);
+    assert_eq!(format!("{with_blanket:?}"), format!("{blanket_only:?}"));
+}
+
+/// A blanket without a class prints its dashed outline and no flag.
+#[test]
+fn a_classless_blanket_prints_a_dashed_outline_only() {
+    let out = drawn(&sheet(vec![blanket(None)]), &PdfOptions::default());
+    assert!(texts(&out).is_empty());
+    assert!(strokes(&out) > 4, "dashes, not four edges");
+}
+
+/// The PDF page is the bare page byte for byte with a mask and a pair on it.
+#[test]
+fn a_pdf_page_is_unchanged_by_a_compile_mask_or_a_diff_pair() {
+    let export = |directives: Vec<SchDirective>| {
+        let mut ctx = crate::pdf::tests::sample_ctx(1);
+        ctx.sheets[0].schematic.directives = directives;
+        PdfExporter
+            .export(&ctx, &PdfOptions::default())
+            .expect("export")
+            .bytes
+    };
+    assert!(export(vec![mask(), diff_pair()]) == export(Vec::new()));
 }
 
 #[test]

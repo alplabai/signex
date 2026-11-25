@@ -47,7 +47,7 @@ pub(crate) use repeat_entry::repeat_entry_needs_bus;
 mod harness;
 pub(crate) use harness::{harness_entry_mismatch, harness_type_conflict};
 mod net_class_conflict;
-pub(crate) use net_class_conflict::net_class_conflict;
+pub(crate) use net_class_conflict::{conflict_finding, net_class_conflict};
 
 use std::collections::{HashMap, HashSet};
 

@@ -121,13 +121,12 @@ pub struct PdfOptions {
     ///   `include_parameter_sets` (Net Parameters directives, #2656),
     ///   `include_blankets` (Net Blankets, #2656).
     ///
-    /// Dormant toggles — Standard's schema has no equivalent concept,
-    /// so these are stored for Altium-import parity but produce no
-    /// observable difference today: `include_probes` (Altium probe
-    /// markers), `include_collapsed_notes` (Altium collapsed-note
-    /// placards). Toggle them ahead of time so that round-tripping an
-    /// Altium project keeps the user's intent — when the corresponding
-    /// signex-types feature lands the gating is one-line.
+    /// Dormant toggles — the schematic model has no such object yet, so
+    /// these are stored but produce no observable difference today:
+    /// `include_probes` (probe markers), `include_collapsed_notes`
+    /// (collapsed-note placards). They keep the user's choice until the
+    /// object lands; the gating is then one line. Compile Masks and
+    /// Differential Pairs have no toggle and are not printed (#2656).
     pub include_no_erc_markers: bool,
     /// Draws the no-connect X marks. Separate from the No-ERC
     /// directive toggle above: they are different schematic objects.

@@ -35,6 +35,7 @@ mod hierarchy;
 mod net_finding;
 mod overrides;
 pub mod pin_matrix;
+mod project_class_conflicts;
 mod project_names;
 pub mod project_rules;
 mod project_units;
@@ -49,6 +50,7 @@ pub use hierarchy::HierarchyMemo;
 pub use net_finding::{NetFinding, NetFindingPin};
 pub use overrides::apply_overrides;
 pub use pin_matrix::{ErcConfig, PinAxis, PinMatrix};
+pub use project_class_conflicts::{ProjectClassFindings, project_net_class_conflicts_named};
 pub use project_names::{
     ProjectNetNames, project_net_multiple_names, project_net_multiple_names_named,
 };
