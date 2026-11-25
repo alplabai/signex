@@ -216,9 +216,19 @@ On success the dialog closes and Messages says how many changes went each
 way. Export report… writes the report, directions included, as plain text
 through the file port.
 
+### From the command line
+
+`check_board_against_schematic` answers the same report as JSON, with an
+id for every row, and changes nothing; `apply_board_schematic_differences`
+takes rows by id to the board or to the schematic and runs this Apply (one
+board undo step, one schematic undo group). `board_status` counts the same
+differences. Operands, answers and limits: [CLI.md](CLI.md), "Board against
+schematic" and "Board status".
+
 ### Not yet
 
 Update schematic is not available for Missing on board, Extra on board and
 net rows: placing a board-only part on a sheet and carrying a board net to
-the schematic need their own design. Taking a footprint mismatch into the
+the schematic need their own design (#2691). The command line refuses
+those directions with the same reason. Taking a footprint mismatch into the
 schematic through Assign Footprints is #2653 (Caner, 2026-11-20).
