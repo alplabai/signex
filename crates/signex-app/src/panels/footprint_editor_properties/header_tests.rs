@@ -663,3 +663,51 @@ fn undo_and_redo_clear_the_refused_field_text() {
     assert_eq!(selected_pad_3(&app).size_mm.0, 2.0);
     assert_eq!(count(&app, "Enter a number"), 0, "redo drops the text");
 }
+
+/// #2593: a through-hole pad's Air gap, Spoke width and Spokes are live Rule
+/// | Manual rows. A typed value is the pad's own and survives save and
+/// reopen; a value no pour can use stays in the field with its reason and
+/// the pad keeps the value it had.
+#[test]
+fn the_thermal_relief_rows_store_the_pads_own_values() {
+    use crate::library::editor::footprint::PadThermalField;
+    let mut app = app_with_eight(PadKind::Tht);
+    edit(&mut app, FootprintEditorMsg::SelectPad(Some(2)));
+    panel(
+        &mut app,
+        PanelMsg::FpEditorSetSelectedPadSide {
+            idx: 2,
+            side: PadSide::All,
+        },
+    );
+    for (field, value) in [
+        (PadThermalField::AirGap, "0.4"),
+        (PadThermalField::Spokes, "2"),
+        (PadThermalField::Spokes, "9"),
+    ] {
+        panel(
+            &mut app,
+            PanelMsg::FpEditorPadThermalTyped {
+                idx: Some(2),
+                field,
+                value: value.into(),
+            },
+        );
+    }
+    let editor = &app.document_state.footprint_editors[&PathBuf::from(PATH)];
+    let thermal = editor.state.pads[2].stack.thermal;
+    assert_eq!(
+        (thermal.air_gap, thermal.spoke_width, thermal.spokes),
+        (Some(0.4), None, Some(2)),
+        "9 spokes are refused; the width stays on the rule"
+    );
+    let text = editor.file.to_toml_string().expect("saves");
+    assert!(text.starts_with("format = \"snxfpt/1.4\"\n"), "{text}");
+    let back = FootprintFile::from_toml_str(&text).expect("reopens");
+    assert_eq!(back.footprints[0].pads[2].thermal, thermal);
+    assert_shows(
+        &pad_texts(&app),
+        &["Must be a whole number from 1 to 4"],
+        &[],
+    );
+}

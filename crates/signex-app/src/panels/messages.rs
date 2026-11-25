@@ -194,6 +194,13 @@ pub enum PanelMsg {
         idx: usize,
         value: bool,
     },
+    /// A pad's own thermal relief value typed (#2593): of the selected pad
+    /// `idx`, or of the next pad placed when `None`; empty text is Rule.
+    FpEditorPadThermalTyped {
+        idx: Option<usize>,
+        field: crate::library::editor::footprint::PadThermalField,
+        value: String,
+    },
     FpEditorSetSelectedPadFeatureTop {
         idx: usize,
         value: signex_sketch::attr::PadFeature,
