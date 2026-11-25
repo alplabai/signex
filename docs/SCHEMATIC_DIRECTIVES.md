@@ -118,8 +118,9 @@ All of it is derived once, in `signex-net` (`directives.rs`,
   above, from the same list). When a later one names another class, the
   resolution stays the same and ERC reports `net_class_conflict` at the
   overridden directive (`docs/ERC_RULES.md`). Directives naming the same
-  class agree. Conflicts between sheets of a project are resolved by
-  sheet-key order and not reported yet.
+  class agree. The check reads the sheet with its Compile Masks applied,
+  as the netlist does. Conflicts between sheets of a project are resolved
+  by sheet-key order and not reported yet.
 
 ## Differential pairs {#differential-pairs}
 
