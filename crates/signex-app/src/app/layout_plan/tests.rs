@@ -242,6 +242,12 @@ fn setting_the_plan_keeps_the_drc_run_current() {
     let after = answer(headless(&mut app, "layout_plan_status", &[&document]));
     assert_eq!(after["drc_current"], true, "{after}");
     assert_eq!(after["stages"][3]["state"], "done", "{after}");
+
+    // So does the window's Undo of that step.
+    let _ = app.update(Message::Edit(EditMsg::Undo));
+    assert!(plan(&app, &path).is_empty());
+    let undone = answer(headless(&mut app, "layout_plan_status", &[&document]));
+    assert_eq!(undone["drc_current"], true, "{undone}");
 }
 
 /// A palette or key call has no operands: refused with the reason, and the
