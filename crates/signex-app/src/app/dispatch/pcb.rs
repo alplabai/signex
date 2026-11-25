@@ -77,6 +77,10 @@ impl Signex {
                 self.repour_board_in_view(selected);
                 Task::none()
             }
+            PcbMsg::UnfillRequested => {
+                self.unfill_selected_in_view();
+                Task::none()
+            }
             PcbMsg::FootprintSwap(event) => self.handle_footprint_swap(event),
             PcbMsg::DxfImport(event) => self.handle_dxf_import(event),
             PcbMsg::PartSwap(event) => self.handle_part_swap(event),

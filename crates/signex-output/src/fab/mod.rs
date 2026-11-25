@@ -38,7 +38,7 @@ mod text;
 mod tests;
 
 use pcb_geom::PointNm;
-use signex_types::pcb::{PCB_DEFAULT_THICKNESS_MM, PcbBoard, Point};
+use signex_types::pcb::{PCB_DEFAULT_THICKNESS_MM, PcbBoard, Point, Zone};
 use signex_types::pcb_layer::PcbLayer;
 use signex_types::zone_keepout::KEEPOUT_FILL;
 use thiserror::Error;
@@ -299,18 +299,26 @@ pub fn generate(
     tally.skipped = skipped;
     // A keepout (#2373) is a zone on a copper layer with no copper to fill,
     // as is a pour cutout (#2871), and a shelved pour (#2523) holds none by
-    // choice.
+    // choice. An unfilled pour (#2506) holds none until Repour and is
+    // counted as not filled even when the fills are supplied.
+    let on_copper = |z: &&Zone| z.pcb_layer().is_some_and(PcbLayer::is_copper);
     let copper_zones = board
         .zones
         .iter()
         .filter(|z| z.fill_type != KEEPOUT_FILL && !z.is_pour_cutout() && !z.is_shelved_pour())
-        .filter(|z| z.pcb_layer().is_some_and(PcbLayer::is_copper))
+        .filter(on_copper)
+        .count();
+    let unfilled_pours = board
+        .zones
+        .iter()
+        .filter(|z| z.is_unfilled_pour())
+        .filter(on_copper)
         .count();
     let pours = options.gerber || options.ipc2581 || options.odb.is_some();
-    let zones_not_filled = if pours && extras.zone_fills.is_empty() {
-        copper_zones
-    } else {
-        0
+    let zones_not_filled = match (pours, extras.zone_fills.is_empty()) {
+        (true, true) => copper_zones,
+        (true, false) => unfilled_pours,
+        (false, _) => 0,
     };
     Ok(FabSet {
         files,

@@ -763,6 +763,7 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "lock_board_items",
             "unlock_board_items",
             "repour_selected",
+            "unfill_selected",
             "remove_teardrops",
         ],
         Bridge,

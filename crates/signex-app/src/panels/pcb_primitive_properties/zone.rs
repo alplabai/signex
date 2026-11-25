@@ -4,7 +4,8 @@
 //! vertices and area (#2871); a pour's Pour section with its
 //! fill rules, the thermal relief and corners it cannot use yet (greyed:
 //! the fill draws no spokes and stores no corners), and the Copper card with
-//! what the fill holds, Repour, Shelve or Unshelve and the board-wide menu.
+//! what the fill holds, Repour, Unfill (#2506), Shelve or Unshelve and the
+//! board-wide menu.
 
 use std::path::PathBuf;
 
@@ -40,9 +41,14 @@ use crate::styles::{Radii, ti};
 #[derive(Debug, Clone, PartialEq)]
 pub enum PourMsg {
     /// Repour: the board of `target`, which need not be the tab in view, is
-    /// filled again and the target's pours reported. Nothing in the
-    /// document changes.
+    /// filled again and the target's pours reported. Only an unfilled pour
+    /// changes the document: its flag is cleared as one undo step (#2506).
     RepourPressed {
+        target: PrimitiveTarget,
+    },
+    /// Unfill (#2506): the target's pours hold no copper until the next
+    /// Repour; one board undo step.
+    UnfillPressed {
         target: PrimitiveTarget,
     },
     /// Shelve or Unshelve: one board undo step.
@@ -470,7 +476,8 @@ fn copper_card<'a>(look: Look<'a>, f: &'a ZoneFacts) -> Element<'a, PanelMsg> {
     .boxed()
 }
 
-/// Repour (greyed while shelved), Shelve or Unshelve, and the ⋯ button.
+/// Repour (greyed while shelved), Unfill (#2506), Shelve or Unshelve, and
+/// the ⋯ button.
 fn card_actions<'a>(look: Look<'a>, f: &'a ZoneFacts) -> Element<'a, PanelMsg> {
     let shelved = f.shelved == Some(true);
     let repour = small_button(look, look.t(ids::PCB_PRIM_POUR_REPOUR), repour_message(f));
@@ -479,6 +486,11 @@ fn card_actions<'a>(look: Look<'a>, f: &'a ZoneFacts) -> Element<'a, PanelMsg> {
     } else {
         repour
     };
+    let unfill = with_tip(
+        look,
+        small_button(look, look.t(ids::PCB_PRIM_POUR_UNFILL), unfill_message(f)),
+        ids::PCB_PRIM_POUR_UNFILL_TIP,
+    );
     let shelve = if shelved {
         small_button(look, look.t(ids::PCB_PRIM_POUR_UNSHELVE), shelve_message(f))
     } else {
@@ -494,6 +506,7 @@ fn card_actions<'a>(look: Look<'a>, f: &'a ZoneFacts) -> Element<'a, PanelMsg> {
         .style(menu_button_style(look.tokens(), f.menu_open));
     row![
         repour,
+        unfill,
         shelve,
         Space::new().width(Length::Fill),
         with_tip(look, menu_button.boxed(), ids::PCB_PRIM_POUR_MENU_TIP),
@@ -508,6 +521,17 @@ fn card_actions<'a>(look: Look<'a>, f: &'a ZoneFacts) -> Element<'a, PanelMsg> {
 fn repour_message(f: &ZoneFacts) -> Option<PourMsg> {
     (f.shelved != Some(true)).then(|| PourMsg::RepourPressed {
         target: f.common.target.clone(),
+    })
+}
+
+/// What Unfill sends: nothing on a board that cannot be edited, while the
+/// pour is shelved, or once it is unfilled (Repour fills it again).
+fn unfill_message(f: &ZoneFacts) -> Option<PourMsg> {
+    let common = &f.common;
+    let unfilled = f.unfilled == Some(pcb_geom::Unfilled::UntilRepour);
+    let live = common.is_editable() && f.shelved != Some(true) && !unfilled;
+    live.then(|| PourMsg::UnfillPressed {
+        target: common.target.clone(),
     })
 }
 
@@ -672,6 +696,7 @@ pub(crate) fn unfilled_reason(why: pcb_geom::Unfilled) -> MessageId {
         pcb_geom::Unfilled::NoCopperLayer => ids::PCB_POUR_UNFILLED_NO_LAYER,
         pcb_geom::Unfilled::Outline => ids::PCB_POUR_UNFILLED_OUTLINE,
         pcb_geom::Unfilled::Clearance => ids::PCB_POUR_UNFILLED_CLEARANCE,
+        pcb_geom::Unfilled::UntilRepour => ids::PCB_POUR_UNFILLED_UNTIL_REPOUR,
     }
 }
 
@@ -736,6 +761,46 @@ mod tests {
         let mut read_only = pour(Some(false));
         read_only.common.editability = Editability::ReadOnly;
         assert_eq!(shelve_message(&read_only), None);
+    }
+
+    /// #2506: Unfill sends the target's pours; it is greyed while shelved,
+    /// once unfilled and on a read-only board.
+    #[test]
+    fn unfill_sends_the_pours_and_is_greyed_when_there_is_nothing_to_unfill() {
+        let open = pour(Some(false));
+        assert_eq!(
+            unfill_message(&open),
+            Some(PourMsg::UnfillPressed {
+                target: open.common.target.clone()
+            })
+        );
+        assert_eq!(unfill_message(&pour(Some(true))), None, "shelved");
+        let mut unfilled = pour(Some(false));
+        unfilled.unfilled = Some(pcb_geom::Unfilled::UntilRepour);
+        assert_eq!(unfill_message(&unfilled), None, "already unfilled");
+        assert!(repour_message(&unfilled).is_some(), "Repour fills it again");
+        let mut read_only = pour(Some(false));
+        read_only.common.editability = Editability::ReadOnly;
+        assert_eq!(unfill_message(&read_only), None);
+    }
+
+    /// Caner, 2026-11-25: the Copper card's buttons read Repour, Unfill,
+    /// Shelve from left to right, on one line.
+    #[test]
+    fn the_copper_card_puts_unfill_between_repour_and_shelve() {
+        use crate::layout_probe::{find, lay_out_texts};
+        let (app, _boot) = crate::app::Signex::new();
+        let ctx = app.document_state.panel_ctx.clone();
+        let look = Look::of(&ctx);
+        let f = pour(Some(false));
+        let texts = lay_out_texts(card_actions(look, &f), iced::Size::new(400.0, 200.0));
+        let (repour, unfill, shelve) = (
+            find(&texts, "Repour").bounds,
+            find(&texts, "Unfill").bounds,
+            find(&texts, "Shelve").bounds,
+        );
+        assert!(repour.x < unfill.x && unfill.x < shelve.x);
+        assert!((repour.y - unfill.y).abs() < 0.5 && (unfill.y - shelve.y).abs() < 0.5);
     }
 
     /// Caner, 2026-11-24: a placed pour's Copper card, with Repour and

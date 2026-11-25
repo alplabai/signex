@@ -268,6 +268,7 @@ fn top_pour(net: u32, net_name: &str, outline: &[(f64, f64)]) -> Zone {
         min_island_area: 0.0,
         remove_dead_islands: false,
         shelved: false,
+        unfilled: false,
         unknown: Default::default(),
     }
 }
@@ -329,6 +330,49 @@ fn a_pour_inside_the_board_is_a_region_in_the_top_copper_image() {
     assert!(
         copper.contains("%TO.N,GND*%\nG36*"),
         "the pour's fill: {copper}"
+    );
+}
+
+/// #2506: an unfilled pour puts no copper in the images and is counted as
+/// not filled, even while another pour's fill is supplied.
+#[test]
+fn an_unfilled_pour_has_no_copper_in_the_images_and_is_noted_as_not_filled() {
+    let mut with_zone = board(true);
+    with_zone.zones.push(top_pour(
+        1,
+        "GND",
+        &[(1.0, 1.0), (9.0, 1.0), (9.0, 9.0), (1.0, 9.0)],
+    ));
+    with_zone.zones.push(Zone {
+        uuid: Uuid::from_u128(0x81),
+        unfilled: true,
+        ..top_pour(
+            2,
+            "VCC",
+            &[(11.0, 1.0), (19.0, 1.0), (19.0, 9.0), (11.0, 9.0)],
+        )
+    });
+    let mut f = open(with_zone);
+    menu_row(&mut f.app);
+    let out = f.tmp.path().join("unfilled-out");
+    send(
+        &mut f.app,
+        fab(FabOutputsMsg::FolderPicked(Some(out.clone()))),
+    );
+    send(&mut f.app, fab(FabOutputsMsg::GenerateRequested));
+    let state = f.app.ui_state.fab_outputs.as_ref().expect("the dialog");
+    assert_eq!(
+        state.notes(),
+        [FabNote::ZonesNotFilled { count: 1 }].as_slice()
+    );
+    let copper = std::fs::read_to_string(out.join("board-copper-l1-top.gbr")).unwrap();
+    assert!(
+        copper.contains("%TO.N,GND*%\nG36*"),
+        "the other fill: {copper}"
+    );
+    assert!(
+        !copper.contains("VCC"),
+        "no copper for the unfilled pour: {copper}"
     );
 }
 

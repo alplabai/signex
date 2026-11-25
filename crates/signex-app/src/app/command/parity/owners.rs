@@ -300,6 +300,7 @@ const MENU_DOCUMENT: &[&str] = &[
     "tune_diff_pair",
     "tune_net_length",
     "undo",
+    "unfill_selected",
     "unlock_board_items",
 ];
 

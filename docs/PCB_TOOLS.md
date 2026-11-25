@@ -435,7 +435,8 @@ copper under its first corner on copper, or no net; a pour placed with no
 net says so in the status bar and Messages. A pour with no fill (on no
 copper layer, an outline or clearance the geometry cannot hold) says why in
 Messages when placed and in the Copper card of its Properties
-(`pcb_geom::Unfilled`; a shelved pour is not one of these). With a
+(`pcb_geom::Unfilled`; a shelved pour is not one of these, an unfilled one
+is). With a
 non-copper layer active the tool says so and draws nothing. It is
 stored as a zone with `fill_type = "pour"` and `clearance = 0`, which follows
 the board's clearance (`Zone::pour_clearance_mm`: the zone's own clearance
@@ -487,6 +488,23 @@ saves as before. A board with one writes `snxpcb/1.9` (#2738, DECISIONS
 instead of flooding the pour. Fabrication Outputs does not count a shelved
 pour as a zone left unfilled.
 
+An unfilled pour (`Zone::unfilled`, #2506, DECISIONS 2026-11-25) also keeps
+its outline and settings and holds no copper, until the next Repour.
+`pcb_geom::zone_fills` gives it no fill, so it clears no other pour and the
+canvas, fabrication and PDF outputs, ratsnest and stitching see no copper
+for it, as for a shelved pour. Unlike a shelved pour it counts as not
+filled: `ZoneFills::unfilled` lists it as `Unfilled::UntilRepour`, the
+Copper card says "not filled: it was unfilled; Repour fills it again", the
+Polygon Manager shows it Not filled, and Fabrication Outputs counts it as a
+zone left unfilled even when the other pours' fills are supplied. The
+canvas keeps its outline solid. `unfill_selected` (Unfill Selected: Tools,
+the Copper Areas group of the Active Bar, a pour's right-click, the
+palette; no default key) and the Copper card's Unfill set it on the
+selected pours, one undo step (`ZoneEdit::Unfilled`); on a shelved pour it
+changes nothing. The flag is the zone key `unfilled = true`, written only
+when on; a board with one writes `snxpcb/1.11`, so a build that knows only
+1.10 opens it read-only.
+
 ### Picking and editing a pour
 
 A placed pour is picked inside its outline (`PickKind::Polygons`, the
@@ -506,6 +524,9 @@ the fills the app holds), or "shelved · no copper". Its buttons:
 
 - **Repour** fills the board again and reports the pours the panel shows,
   as Repour Selected does; greyed while the pour is shelved.
+- **Unfill** (#2506) sets `unfilled` on the selected pours, one undo step;
+  greyed while the pour is shelved, once it is unfilled and on a board that
+  cannot be edited.
 - **Shelve** / **Unshelve** sets `shelved` on the selected pours, one undo
   step (`ZoneEdit::Shelved`). The fields stay editable while shelved.
 - **⋯** opens Repour all, Shelve all and Unshelve all, which act on every
@@ -561,11 +582,15 @@ Active Bar, the palette) fill the board in view again at once and say in
 Messages how many pours, pieces of copper and removed islands they came to;
 Repour Selected reports the selected pours. Fills depend on each other, so
 the whole board is filled either way. Nothing in the document changes, so
-there is no undo step. `repour_all document=<board>` answers an agent or the
-CLI with each pour's `zone`, `net`, `net_name`, `layer`, `priority`,
-`shelved`, `filled`, `pieces`, `area_mm2` and `islands_removed`; a shelved
-pour is not filled. The area panel's Copper card has the same Repour, and
-Repour all in its ⋯ menu.
+there is no undo step, unless a pour it acts on is unfilled (#2506): Repour
+first clears `unfilled` on those pours as one undo step
+(`pour_edit::refill_pours`), which marks the board changed; Repour All does
+so for every unfilled pour, from an agent or the CLI too. `repour_all
+document=<board>` answers an agent or the CLI with each pour's `zone`,
+`net`, `net_name`, `layer`, `priority`, `shelved`, `unfilled`, `filled`,
+`pieces`, `area_mm2` and `islands_removed`; a shelved pour is not filled.
+The area panel's Copper card has the same Repour, and Repour all in its ⋯
+menu.
 
 A round part of a grown obstacle is cut as a polygon whose chords lie on or
 outside the true arc, so the fill never comes closer than the clearance. The
@@ -919,7 +944,7 @@ group (#2392), from the table in `crates/signex-app/src/app/pcb_bar_groups.rs`:
 | Route | Interactive Routing, Differential Pair Routing, Quick Route, Multi-Route |
 | Tune | Length Tuning, Differential Pair Length Tuning |
 | Via / Pad | Via, Pad |
-| Copper areas | Polygon Pour, Pour Cutout, Slice Pour, Solid Region, Fill, Keepout, Repour Selected, Repour All |
+| Copper areas | Polygon Pour, Pour Cutout, Slice Pour, Solid Region, Fill, Keepout, Repour Selected, Repour All, Unfill Selected |
 | Copper drawing | Track, Arc |
 | Dimensions | Dimension |
 | Text | String |
@@ -936,7 +961,8 @@ the Tune rows are the length tuning commands of #2389 (palette, no menu row).
   window, as a schematic bar button is, and while its dropdown is open.
 - **Dropdown.** A right-click on a group with more than one row, or a
   click on the corner triangle, opens its rows under a heading with the group's name in capitals (mockup row 108). The tools
-  come first; a group's commands (Repour Selected and Repour All, Change
+  come first; a group's commands (Repour Selected, Repour All and Unfill
+  Selected, Change
   Footprint) sit below a separator after them. The row the button shows is
   drawn current, with the accent-soft fill. A live row runs its command and
   is greyed by the same gate as its menu row; a tool the board editor cannot

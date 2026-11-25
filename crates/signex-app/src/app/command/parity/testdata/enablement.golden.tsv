@@ -405,6 +405,7 @@ tune_diff_pair	Pcb	119d310e454dd5e4
 tune_net_length	Pcb	119d310e454dd5e4
 undo	Undo	70f18f3f5c67b144
 undo_last_segment	DrawInProgress	0f5e18afc16377f1
+unfill_selected	Pcb	119d310e454dd5e4
 unlock_board_items	Pcb	119d310e454dd5e4
 unselect_all	-	f2929686b07ef725
 untile_documents	Tiled	14233587d4d8c6b6

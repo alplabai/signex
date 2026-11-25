@@ -92,6 +92,7 @@ impl PcbBarGroup {
                 Tool(T::Room),
                 Command("repour_selected"),
                 Command("repour_all"),
+                Command("unfill_selected"),
             ],
             Self::Dimensions => &[Tool(T::Dimension)],
             Self::Text => &[Tool(T::TextString)],

@@ -117,12 +117,8 @@ pub fn connection_counts(board: &PcbBoard, lines: &[RatLine]) -> ConnectionCount
         net.pads
             .push((name_at(line.net, line.from), name_at(line.net, line.to)));
     }
-    // A shelved pour holds no copper, so it will connect nothing.
-    for zone in board
-        .zones
-        .iter()
-        .filter(|z| z.is_pour() && !z.is_shelved_pour())
-    {
+    // A shelved or unfilled pour holds no copper, so it will connect nothing.
+    for zone in board.zones.iter().filter(|z| z.is_filling_pour()) {
         if let Some(net) = per_net.get_mut(&zone.net) {
             net.pour_will_connect = true;
         }

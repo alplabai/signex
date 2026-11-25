@@ -1526,6 +1526,10 @@ undo_last_segment	bridge	Tool(LastSegmentUndoRequested)	gui	in-progress edit	gat
 undo_last_segment	in_window_rewrite	document_window	gui	window	routing
 undo_last_segment	refusal_needs	DrawInProgress	gui	in-progress edit	routing
 undo_last_segment	headless_refusal	headless_refusal	gui	none	routing
+unfill_selected	bridge	Pcb(UnfillRequested)	core	active document,selection	handler
+unfill_selected	in_window_rewrite	document_window	gui	window	routing
+unfill_selected	refusal_needs	Pcb	core	active document	routing
+unfill_selected	headless_refusal	headless_refusal	core	none	routing
 unlock_board_items	bridge	Pcb(LockRequested { locked: false })	core	active document,selection	handler
 unlock_board_items	operand_handler	run_operands: named document	core	origin	handler
 unlock_board_items	in_window_rewrite	document_window	gui	window	routing

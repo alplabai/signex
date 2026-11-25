@@ -271,6 +271,7 @@ fn the_copper_areas_group_lists_the_pour_rows() {
             Some("place_board_room"),
             Some("repour_selected"),
             Some("repour_all"),
+            Some("unfill_selected"),
         ]
     );
     let labels: Vec<String> = rows(&app, PcbBarMenu::Group(PcbBarGroup::CopperAreas))
@@ -278,9 +279,10 @@ fn the_copper_areas_group_lists_the_pour_rows() {
         .filter(|row| !row.disabled)
         .map(|row| row.label)
         .collect();
-    assert_eq!(labels.len(), 9, "every row is live: {labels:?}");
+    assert_eq!(labels.len(), 10, "every row is live: {labels:?}");
     assert!(labels.iter().any(|l| l == "Pour Cutout"), "{labels:?}");
     assert!(labels.iter().any(|l| l == "Repour All"), "{labels:?}");
+    assert!(labels.iter().any(|l| l == "Unfill Selected"), "{labels:?}");
     let _ = pick_from_group(
         &mut app,
         PcbBarGroup::CopperAreas,
@@ -339,7 +341,8 @@ fn a_group_dropdown_puts_its_commands_below_a_separator() {
     let app = board_app();
     let areas = entries(&app, PcbBarMenu::Group(PcbBarGroup::CopperAreas));
     // The Room tool joins the pour rows (#2457, Caner 2026-11-20).
-    assert_eq!(shape(&areas), "H*......-..", "Polygon Pour is current");
+    // Unfill Selected (#2506) follows the two Repour rows.
+    assert_eq!(shape(&areas), "H*......-...", "Polygon Pour is current");
     let DropdownEntry::Item(first_command) = &areas[9] else {
         panic!("a row after the separator");
     };
