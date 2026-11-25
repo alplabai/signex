@@ -53,7 +53,7 @@ fn a_cutout_is_a_region_of_its_own_and_the_pour_is_left_as_it_was() {
         (3, rect(-1.0, -1.0, 11.0, 11.0)),
     ] {
         let region =
-            draw::new_pour_cutout(Uuid::from_u128(0x100 + n), cut.clone(), CopperLayer::Bottom)
+            draw::new_pour_cutout(Uuid::from_u128(0xC00 + n), cut.clone(), CopperLayer::Bottom)
                 .expect("an area");
         let mut engine = BoardEngine::new(b.clone(), 1);
         engine.execute(draw::place_zone(region)).expect("applies");
