@@ -16,10 +16,15 @@ The Compiled Design panel shows the project as it compiles (#1308).
   parser is `signex_types::schematic::ChannelRepeat`.
 - A sheet entry named `Repeat(<net>)` gives one net per channel; the child
   sheet has a port named `<net>`. A plain entry is shared by every channel.
-  Every place that matches entries to ports asks
-  `signex_types::schematic::entry_port_name` (`Repeat(VOUT)` meets `VOUT`):
-  `bad_hier_sheet_pin`, Sync Sheet Pins and both directions of Synchronize
-  Sheet Entries and Ports (#2659). A `Repeat(<net>)` entry and its port
+  Sync Sheet Pins and both directions of Synchronize Sheet Entries and Ports
+  match entries to ports through
+  `signex_types::schematic::sheet_entry_port` (#2659): on a repeated sheet
+  symbol `Repeat(VOUT)` meets `VOUT`, the way the netlist joins it inside a
+  channel; on a plain sheet symbol only the written name meets a port, as
+  the netlist joins a plain placement, so a `Repeat(VOUT)` entry left over
+  after Repeat is turned off is offered as a rename to `VOUT`.
+  `bad_hier_sheet_pin` asks `entry_port_name` on every symbol. A
+  `Repeat(<net>)` entry and its port
   `<net>` agree, so a sync keeps the entry and adds no plain `<net>` entry
   beside it. When the port is renamed, the entry stays a repeat of the new
   name (`Repeat(VOUT_5V)`); when the port is gone, the generated entry is
@@ -249,10 +254,22 @@ A variant can fit a part in one channel and leave it out in another (#2662).
   it leaves out are greyed, on the drawing and in the list. A click on the fit leaves every part of the channel
   out of the active variant, or, on a channel left out entirely, lets the
   sheets decide for each again: one undo step. It is a project setting, not a
-  sheet edit, so a channel tab's read-only gate does not refuse it. The fit
-  is the BOM's (`signex_output::placed_part_fitted`).
+  sheet edit, so a channel tab's read-only gate does not refuse it, and it
+  is undone from the Project tab (its General history), not from the
+  channel tab or Editor. The fit is the BOM's (`signex_output::
+  not_fitted_symbols` over the channel's copy of the sheet) and so is the
+  part link the click writes: every unit of the part at the channel's
+  placement. An edit through one unit never narrows an entry that already
+  names more units of the part.
 - **BOM.** The per-variant BOM reads the same entries: a copy the variant
   leaves out is not fitted, the other channels' copies are.
+- **Canvas.** Editor shows the repeated sheet once for all its channels, so
+  "Cross out not-fitted parts" crosses a part out only when every channel's
+  copy is not fitted; a part fitted in some channels is drawn fitted. The
+  fit is decided as the BOM decides it, across the project's open sheets
+  (`signex_output::PlacedFits`): a unit on a sheet that is not open is not
+  counted. SVG and PDF print one page per channel and cross each channel's
+  copies out on its own page.
 
 ## Not built yet
 
