@@ -1387,14 +1387,22 @@ as on a sheet (#2403). The numbers and matches come from the domain crates
   pads and areas in the selection; Highlight draws its copper bright until
   it is run again for that net or Esc is pressed. Neither changes the
   board. A name the board does not have is refused.
-  While a net is highlighted, the tracks, arcs, vias, pads and zones of
-  every other net, net-less copper included, are drawn dimmer by
-  Preferences ▸ PCB ▸ Display ▸ Dim other nets (0–100 %, default 50 %,
-  `pcb_dim_others_percent` in `prefs.json`, #2514); the highlighted net
-  keeps full brightness. The board scene is drawn again when the highlight
-  starts or ends and when Save changes the amount. Copper is dimmed by its
-  net (`BoardPaint::net_opacity`), on top of the View Options transparency
-  of its kind.
+- **Dim other nets** (#2514, DECISIONS 2026-11-25): the board keeps some
+  nets bright and draws the tracks, arcs, vias, pads and zones of every
+  other net, net-less copper included, dimmer by Preferences ▸ PCB ▸
+  Display ▸ Dim other nets (0–100 %, default 50 %, `pcb_dim_others_percent`
+  in `prefs.json`). The nets in focus (`Signex::board_focus_nets`), first
+  that applies: the highlighted net; the net of a track run or route being
+  drawn (every member of a pair or bus route); the nets of what a drag,
+  Move, paste or part carries (`pcb_geom::nets_of`; a footprint brings its
+  pads' nets); the net set in the form of an armed Via, Pad, Arc, Track,
+  Fill, Solid Region or Polygon Pour tool. No net (0) is never in focus.
+  `refresh_pcb_highlight` draws the board scene again whenever that set or
+  the amount differs from the drawn one, so a tool or carry starting or
+  ending, Esc included, and Save of a new amount repaint it; the board
+  under a drag preview keeps the focus, the ghost on the cursor is never
+  dimmed. Copper is dimmed by its net (`BoardPaint::net_opacity`), on top
+  of the View Options transparency of its kind.
 - **Net Inspector**: lists the board's nets (see `MENU_BAR.md`, "Tools ▸ Net
   Inspector").
 
