@@ -459,3 +459,33 @@ fn the_position_row_honours_the_persons_keep_wires() {
         }
     }
 }
+
+/// The sheet, its undo and redo, its dirty state and its edit epoch.
+fn history_of(app: &Signex) -> (Shape, bool, bool, bool, u64) {
+    let engine = app.document_state.active_engine().expect("engine");
+    let path = app.document_state.active_path.clone().expect("a sheet");
+    (
+        shape(doc(app)),
+        engine.can_undo(),
+        engine.can_redo(),
+        app.document_state.is_document_dirty(&path),
+        app.document_state.sheet_edit_epoch,
+    )
+}
+
+/// A move to where the part already is leaves the undo history, the dirty
+/// state and the edit epoch as the Properties row's (trunk's batch tail)
+/// does: both record one undo step and mark the sheet dirty.
+#[test]
+fn a_zero_distance_move_leaves_history_and_dirty_as_the_position_row_does() {
+    let (sheet, r1) = resistor_with(vec![wire((30.0, 50.0), (45.0, 50.0))]);
+    let (mut row, _r) = app_with(sheet.clone());
+    let fresh = history_of(&row);
+    type_x(&mut row, r1, "50");
+    let (mut agent, _a) = app_with(sheet);
+    let answer = agent_move(&mut agent, r1, 0.0, 0.0, &[]);
+
+    assert_eq!(history_of(&agent), history_of(&row));
+    assert_eq!(history_of(&row).0, fresh.0, "the sheet is as it was");
+    assert_eq!(answer["moved_wires"], serde_json::json!([]), "{answer}");
+}
