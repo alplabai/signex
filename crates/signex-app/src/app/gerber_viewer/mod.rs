@@ -26,7 +26,7 @@ use std::sync::Arc;
 
 use pcb_geom::PointNm;
 
-pub use read::PackageRead;
+pub use read::{PackageRead, ReadFailure};
 pub use recent::{RecentPackage, RecentPackages};
 pub use state::{
     Camera, GerberViewerState, GripDrag, LayerLook, LengthUnit, ObjectRef, OpenPackage,
@@ -76,7 +76,7 @@ pub enum GerberViewerMsg {
     /// Read `job` finished.
     PackageRead {
         job: u64,
-        result: Result<Arc<PackageRead>, String>,
+        result: Result<Arc<PackageRead>, ReadFailure>,
     },
     /// A file is dragged over a window.
     FileHovered(PathBuf),

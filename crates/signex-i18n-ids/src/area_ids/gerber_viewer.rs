@@ -37,6 +37,7 @@ define_ids! {
     GERBER_VIEWER_DROP_FILES = "gerber-viewer-drop-files";
     GERBER_VIEWER_READING = "gerber-viewer-reading";
     GERBER_VIEWER_READ_FAILED = "gerber-viewer-read-failed";
+    GERBER_VIEWER_READ_ZIP_TOO_LARGE = "gerber-viewer-read-zip-too-large";
     GERBER_VIEWER_OPEN = "gerber-viewer-open";
     GERBER_VIEWER_OPEN_TIP = "gerber-viewer-open-tip";
     GERBER_VIEWER_FLIP = "gerber-viewer-flip";
