@@ -562,8 +562,11 @@ changes the child sheet's Hierarchical labels (never a Global label) as one
 undo step of the child, left unsaved; a closed child goes to a tabless
 engine. The closed child file is read off the UI thread first; a sheet that
 changed while it was read is refused with nothing applied, as any edit is.
-`to_sheet` is refused inside `apply_edits` and an agent's one-step run,
-whose undo step covers the edited sheet only. The answer is
+Inside `apply_edits` or an agent's one-step run, `to_sheet` brings the child
+into that step (#2501): the child's change commits with the step's other
+sheets under its undo group, so one undo reverts the parent and the child,
+and a refusal anywhere in the step leaves both as they were
+(`docs/AGENT_EDITS.md`, "Sheets an edit brings in"). The answer is
 `{"symbol", "name", "file", "direction", "added", "removed", "renamed"}`,
 `renamed` a list of `{"from", "to"}`; empty lists when the two sides agree.
 
