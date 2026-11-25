@@ -148,6 +148,27 @@ shape token, so a slot is as long as its oval pad says) and the zone fill
 sketch on `mixed-tht-smd` is written as a bake would store it; it is not
 re-baked in this test.
 
+## Design Notebooks (`.snxnbk`)
+
+`notebook/**/*.snxnbk` are walked by the `signex-notebook` crate tests
+(`src/tests_file.rs`, `src/tests_compile.rs`), not by this crate. Each file
+reads with `NotebookFile::parse` and saves back byte for byte; every file
+with a header is in the canonical form `Header::to_toml` writes, and every
+reference a header stores is one its text makes. `MIN_NOTEBOOK_FIXTURES`
+guards the count. Written by hand; keep headers canonical (format token,
+unknown keys sorted, then one `[[references]]` table per reference).
+
+| Fixture | Covers |
+|---|---|
+| `minimal` | a header with only the format token |
+| `no-header` | plain Typst with no header, read as `snxnbk/1` and kept without one; an `#annotation` block |
+| `kept-unknown-keys` | unknown keys at the top of the header and in a reference entry, a net with no id, a pin with one |
+| `with-chapters/design` | the notebook file: the package import, the report layout, an `#include` of a chapter file |
+| `with-chapters/chapters/power` | a chapter with its own header; references in markup and in block targets, both pin forms; one block of each kind with a typed id; the earlier `#annotation` form |
+
+`with-chapters` is also the compile fixture: it compiles with no
+diagnostic, and two PDF exports of it are the same bytes.
+
 ## Intentional format change
 
 Run the same bless command, review every fixture diff as the format
