@@ -203,9 +203,10 @@ fn sketch_sections_below<'a>(
     }
 }
 
-/// A board sketch with nothing selected: the board header, then the Sketch
-/// DOF, Parameters and Bake as sections right under it (mockup row 179),
-/// the board summary, then the sections the board showed before (#2234).
+/// A board sketch with nothing selected: the board header, a failing
+/// Outline checks section (mockup row 179d), then the Sketch DOF, Parameters
+/// and Bake as sections (mockup row 179), the board summary, then the
+/// sections the board showed before (#2234).
 fn view_board<'a>(
     mut col: Column<Element<'a, PanelMsg>>,
     cx: Ctx<'a, '_>,
@@ -217,6 +218,8 @@ fn view_board<'a>(
         Some(t!(i18n, ids::BOARD_SKETCH_TITLE).into()),
         cx.tokens,
     ));
+    // A failing outline check and its fix lead (mockup row 179d).
+    col = super::board::view_failing_outline_checks(col, board, cx.palette, cx.collapsed, i18n);
     let leads = super::sections::leads_with_solve(cx);
     if leads {
         col = super::sections::view_sketch_solve_section(col, cx);

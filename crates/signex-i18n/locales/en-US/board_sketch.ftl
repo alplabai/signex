@@ -329,3 +329,14 @@ board-pattern-bakes-unresolved = Bakes once its count and spacing resolve
 sketch-dof-suggest = Suggested: remove the conflicting { $kind }.
 sketch-dof-suggest-remove = Remove conflicting constraint
 sketch-dof-suggest-convert = Convert to reference
+board-sketch-fab-profile-none = Profile: none set. Set one in the project's Rules (Presets) to check corners and slots against it.
+# The Inside corners and Min slot lines naming the fab profile they were run
+# against (mockup row 179d); $profile is its name.
+board-sketch-check-corners-profile = Inside corners: the { $profile } router can cut them
+board-sketch-check-min-slot-profile = Slots: none narrower than the { $profile } min slot
+board-sketch-check-skipped-router-profile = { $check }: not checked, { $profile } names no router tool
+board-sketch-check-skipped-min-slot-profile = { $check }: not checked, { $profile } names no min slot
+board-sketch-check-corner-tight-profile = Inside corner R { $radius } < R { $tool } of the { $profile } router at ({ $x }, { $y })
+board-sketch-check-slot-narrow-profile = Slot { $width } mm wide < { $profile } min slot { $min } mm
+# The bake preview's degrees-of-freedom heading (mockup row 179).
+board-sketch-bake-dof = DOF

@@ -476,6 +476,57 @@ fn a_board_sketch_leads_with_the_sketch_dof_section() {
     assert!(!has(&texts, "SKETCH SOLVE"), "{texts:#?}");
 }
 
+/// Mockup row 179d (#2818): a failing outline check and Add fillets lead
+/// the board sketch, above the Sketch DOF section, so they show without
+/// scrolling; the section shows once. Passing checks keep their place
+/// under the board summary (a_board_sketch_leads_with_the_sketch_dof_section).
+#[test]
+fn a_failing_outline_check_and_add_fillets_lead_the_board_sketch() {
+    use crate::library::editor::footprint::{CheckLine, CheckStatus};
+    use signex_i18n::{Translatable, ids};
+    let app = app_with_eight_pads();
+    let mut fp = panel_ctx(&app);
+    fp.mode_kind = FootprintModeKind::Sketch;
+    fp.sketch_host = signex_types::sketch::SketchHost::Board;
+    let corner = Translatable::new(ids::BOARD_SKETCH_CHECK_CORNER_TIGHT)
+        .arg("radius", "0.00")
+        .arg("tool", "1.00")
+        .arg("x", "25.00")
+        .arg("y", "0.00");
+    fp.board = Some(crate::panels::BoardSketchProps {
+        outline_checks: vec![CheckLine {
+            status: CheckStatus::Failed,
+            text: corner,
+            place: None,
+            close_gap: None,
+        }],
+        fillet_radius: Some(1.0),
+        ..crate::panels::BoardSketchProps::default()
+    });
+    fp.last_solve = Some(FootprintSolveSummary {
+        iterations: 6,
+        elapsed_ms: 3,
+        final_residual_norm: 0.0,
+        over_constraint_count: 0,
+        over_constraints: Vec::new(),
+        redundant_constraints: Vec::new(),
+        dof: 2,
+        free_motions: Vec::new(),
+    });
+    let texts = texts(&app, &fp);
+    let dof = top_of(&texts, "SKETCH: 2 DOF");
+    for above in [
+        "Outline checks",
+        "Inside corner R 0.00 < R 1.00 at (25.00, 0.00)",
+        "Add fillets R 1.00",
+    ] {
+        assert!(top_of(&texts, above) < dof, "{above:?}: {texts:#?}");
+    }
+    assert!(top_of(&texts, "Board Sketch") < top_of(&texts, "Outline checks"));
+    let sections = texts.iter().filter(|t| t.text == "Outline checks").count();
+    assert_eq!(sections, 1, "{texts:#?}");
+}
+
 /// Mockup row 179: on a board the DOF card carries the constraint count and
 /// the solve time, so the Sketch DOF section drops those two rows and keeps
 /// the others. The footprint host keeps them (see

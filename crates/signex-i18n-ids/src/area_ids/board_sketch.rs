@@ -153,4 +153,11 @@ define_ids! {
     SKETCH_DOF_SUGGEST = "sketch-dof-suggest";
     SKETCH_DOF_SUGGEST_REMOVE = "sketch-dof-suggest-remove";
     SKETCH_DOF_SUGGEST_CONVERT = "sketch-dof-suggest-convert";
+    BOARD_SKETCH_CHECK_CORNERS_PROFILE = "board-sketch-check-corners-profile";
+    BOARD_SKETCH_CHECK_MIN_SLOT_PROFILE = "board-sketch-check-min-slot-profile";
+    BOARD_SKETCH_CHECK_SKIPPED_ROUTER_PROFILE = "board-sketch-check-skipped-router-profile";
+    BOARD_SKETCH_CHECK_SKIPPED_MIN_SLOT_PROFILE = "board-sketch-check-skipped-min-slot-profile";
+    BOARD_SKETCH_CHECK_CORNER_TIGHT_PROFILE = "board-sketch-check-corner-tight-profile";
+    BOARD_SKETCH_CHECK_SLOT_NARROW_PROFILE = "board-sketch-check-slot-narrow-profile";
+    BOARD_SKETCH_BAKE_DOF = "board-sketch-bake-dof";
 }

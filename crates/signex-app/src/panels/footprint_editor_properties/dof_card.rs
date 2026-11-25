@@ -115,6 +115,24 @@ pub(super) fn push_dof_card<'a>(
     cx: Ctx<'a, '_>,
     solve: &FootprintSolveSummary,
 ) -> Column<Element<'a, PanelMsg>> {
+    let (tile, ink) = dof_tile(cx, solve);
+    col = col.push(tile);
+    for motion in solve.free_motions.iter().take(MAX_MOTIONS) {
+        col = col.push(motion_row(motion, cx, ink));
+    }
+    if solve.free_motions.len() > MAX_MOTIONS {
+        let more = solve.free_motions.len() - MAX_MOTIONS;
+        col = col.push(super::sections::more_rows(cx, more));
+    }
+    col
+}
+
+/// The card alone, as the board's Bake panel shows it (mockup row 179),
+/// with the ink its free-motion rows take.
+pub(super) fn dof_tile<'a>(
+    cx: Ctx<'a, '_>,
+    solve: &FootprintSolveSummary,
+) -> (Element<'a, PanelMsg>, iced::Color) {
     let dof = card_dof(cx, solve);
     let card = dof_card(dof, solve, cx.fp.sketch_constraint_count, cx.i18n);
     let (fill, ink) = pill_colors(cx.tokens, card.tone);
@@ -141,20 +159,11 @@ pub(super) fn push_dof_card<'a>(
             },
             ..Default::default()
         });
-    col = col.push(
-        container(tile)
-            .padding([SP.xs, SP.m])
-            .width(Length::Fill)
-            .boxed(),
-    );
-    for motion in solve.free_motions.iter().take(MAX_MOTIONS) {
-        col = col.push(motion_row(motion, cx, ink));
-    }
-    if solve.free_motions.len() > MAX_MOTIONS {
-        let more = solve.free_motions.len() - MAX_MOTIONS;
-        col = col.push(super::sections::more_rows(cx, more));
-    }
-    col
+    let tile = container(tile)
+        .padding([SP.xs, SP.m])
+        .width(Length::Fill)
+        .boxed();
+    (tile, ink)
 }
 
 /// The DOF state the chip shows, else one read from `solve` itself.

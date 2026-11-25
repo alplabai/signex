@@ -435,3 +435,102 @@ fn a_refusal_and_close_gap_are_in_the_panel() {
         props(&app).bake
     );
 }
+
+/// The panel's laid-out texts, without Fluent's isolation marks.
+fn laid_out(app: &Signex) -> Vec<layout_probe::LaidOutText> {
+    let view = crate::panels::view_properties(&app.document_state.panel_ctx).boxed();
+    layout_probe::lay_out_texts(view, DOCK)
+        .into_iter()
+        .map(|mut laid| {
+            laid.text = plain(&laid.text);
+            laid
+        })
+        .collect()
+}
+
+/// The top of the first text reading `label` (a heading in capitals too).
+fn top_of(texts: &[layout_probe::LaidOutText], label: &str) -> f32 {
+    texts
+        .iter()
+        .find(|t| t.text == label || t.text == label.to_uppercase())
+        .unwrap_or_else(|| panic!("{label:?} missing: {texts:#?}"))
+        .bounds
+        .y
+}
+
+/// DECISIONS 2026-11-23, mockup row 179 (#2818): the Bake panel carries
+/// Bake result, Outline checks and DOF in that order. Outline checks lists
+/// every check, passing ones too, and DOF shows the DOF card.
+#[test]
+fn the_panel_shows_bake_result_outline_checks_and_dof() {
+    let (sketch, first, _) = every_target();
+    let (mut app, _tmp) = sketching(sketch, first);
+    toggle_preview(&mut app);
+    let texts = laid_out(&app);
+    let order = ["Bake result", "Outline checks", "Closed: one loop", "DOF"];
+    for pair in order.windows(2) {
+        let (above, below) = (top_of(&texts, pair[0]), top_of(&texts, pair[1]));
+        assert!(above < below, "{pair:?}: {texts:#?}");
+    }
+    let solve = app
+        .document_state
+        .panel_ctx
+        .footprint_editor
+        .as_ref()
+        .and_then(|fp| fp.last_solve.clone())
+        .expect("the sketch is solved");
+    let i18n = I18n::en_us();
+    let state = if solve.dof > 0 {
+        t!(i18n, ids::SKETCH_DOF_UNDER, "dof" => solve.dof)
+    } else {
+        t!(i18n, ids::SKETCH_DOF_FULL)
+    };
+    let card = top_of(&texts, &plain(&state.into_string()));
+    assert!(
+        top_of(&texts, "DOF") < card,
+        "the card under DOF: {texts:#?}"
+    );
+}
+
+/// Mockup row 179d (#2818): a failing inside corner and its Add fillets
+/// show in the Bake panel's Outline checks.
+#[test]
+fn a_failing_corner_and_add_fillets_are_in_the_panel() {
+    let mut s = Sketch::new();
+    let corners = [
+        (0.0, 0.0),
+        (20.0, 0.0),
+        (20.0, 10.0),
+        (10.0, 10.0),
+        (10.0, 20.0),
+        (0.0, 20.0),
+    ]
+    .map(|(x, y)| s.point(x, y));
+    let edges: Vec<_> = (0..corners.len())
+        .map(|i| s.line(corners[i], corners[(i + 1) % corners.len()]))
+        .collect();
+    for &edge in &edges[1..] {
+        s.get(edge).board_outline = true;
+    }
+    let (mut app, _tmp) = sketching(s.data, edges[0]);
+    toggle_preview(&mut app);
+    // The board has no project; give the session the Standard router tool
+    // as the project would, after the toggle re-read the project's.
+    let session = app.interaction_state.board_sketch.as_mut().expect("on");
+    session.editor.state.sketch_exit.router_tool_diameter = Some(2.0);
+    app.refresh_panel_ctx();
+    assert!(props(&app).bake.is_some(), "the preview is open");
+    let texts = panel_texts(&app);
+    assert!(
+        has(&texts, "Inside corner R 0.00 < R 1.00 at (10.00, 10.00)"),
+        "{texts:#?}"
+    );
+    let view = crate::panels::view_properties(&app.document_state.panel_ctx).boxed();
+    let messages = layout_probe::messages_on_click(view, DOCK, "Add fillets R 1.00");
+    assert!(
+        messages
+            .iter()
+            .any(|msg| matches!(msg, PanelMsg::SketchFix(SketchFixMsg::AddFilletsClicked))),
+        "Add fillets is in the panel: {messages:?}"
+    );
+}

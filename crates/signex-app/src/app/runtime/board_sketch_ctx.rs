@@ -6,7 +6,7 @@
 use signex_sketch::entity::EntityKind;
 
 use crate::app::FootprintDocument;
-use crate::library::editor::footprint::check_lines;
+use crate::library::editor::footprint::check_lines_against;
 use crate::library::editor::footprint::sketch_mode::roles::edge_slot_size;
 use crate::panels::pcb_board_properties::outline_is_rectangle;
 use crate::panels::{BoardSketchProps, MountingHoleProps};
@@ -58,10 +58,11 @@ impl crate::app::Signex {
         &self,
         editor: &FootprintDocument,
     ) -> Option<BoardSketchProps> {
-        board_sketch_props(editor).map(|board| BoardSketchProps {
+        let fab_profile = self.board_sketch_fab_profile();
+        board_sketch_props(editor, fab_profile.as_deref()).map(|board| BoardSketchProps {
             target: self.board_sketch_target(),
             bake: self.board_sketch_bake_preview(),
-            fab_profile: self.board_sketch_fab_profile(),
+            fab_profile,
             ..board
         })
     }
@@ -82,7 +83,10 @@ impl crate::app::Signex {
 
 /// The Board sections' values for `editor`, or `None` when it edits a
 /// footprint rather than a board sketch.
-fn board_sketch_props(editor: &FootprintDocument) -> Option<BoardSketchProps> {
+fn board_sketch_props(
+    editor: &FootprintDocument,
+    fab_profile: Option<&str>,
+) -> Option<BoardSketchProps> {
     let backdrop = editor.state.board_backdrop.as_ref()?;
     let sketch = editor.primitive().sketch.as_ref();
     let checks = editor.state.board_checks(sketch);
@@ -113,7 +117,7 @@ fn board_sketch_props(editor: &FootprintDocument) -> Option<BoardSketchProps> {
             |shape| shape.is_rectangle,
         ),
         // Read here, where every path that solves ends up, so they are live.
-        outline_checks: check_lines(checks.as_ref()),
+        outline_checks: check_lines_against(checks.as_ref(), fab_profile),
         router_tool_diameter: editor.state.sketch_exit.router_tool_diameter,
         min_slot: editor.state.sketch_exit.min_slot,
         fillet_radius,

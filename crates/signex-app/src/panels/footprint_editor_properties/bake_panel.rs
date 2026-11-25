@@ -1,9 +1,10 @@
-//! The Bake panel of a board sketch (mockup row 179): while the bake preview
-//! is open, Properties shows what Bake writes to the board, value by value,
-//! or why the sketch does not bake, with the solve state, Close gap and the
-//! failed outline checks. A line that names a place selects it on a click;
-//! a click on the canvas only highlights. The mode bar's Bake preview
-//! button closes the panel. See `docs/PCB_SKETCH.md`, "Sketch mode".
+//! The Bake panel of a board sketch (mockup rows 179, 179d): while the bake
+//! preview is open, Properties shows Bake result (what Bake writes to the
+//! board, value by value, or why the sketch does not bake, with Close gap),
+//! Outline checks (every check, with Add fillets) and DOF (the solve state
+//! and the DOF card). A line that names a place selects it on a click; a
+//! click on the canvas only highlights. The mode bar's Bake preview button
+//! closes the panel. See `docs/PCB_SKETCH.md`, "Sketch mode".
 //! A footprint sketch's open preview has its Bake panel here too (mockup
 //! row 190), so the preview card covers no canvas.
 
@@ -17,6 +18,7 @@ use super::super::{
     BakedHole, BakedKeepout, BakedOutline, BoardBakePreview, BoardBakeRefusal, BoardBakeRows,
     BoardSketchProps, PanelMsg, SketchFixMsg,
 };
+use super::board::outline_checks;
 use super::body::{Ctx, caption, ghost, is_open, kv_row, mini_head, object_header, section};
 use super::sections::solve_pill;
 use crate::library::editor::footprint::{CheckStatus, GapOffer, format_check_mm};
@@ -70,8 +72,8 @@ pub(super) fn view_footprint_bake_panel<'a>(
     col.push(super::roles::bake_buttons(cx))
 }
 
-/// The panel's head, the solve state, what Bake writes or why it does not,
-/// and the failed outline checks.
+/// The panel's head, what Bake writes or why it does not, the outline
+/// checks and the DOF section (DECISIONS 2026-11-23, mockup row 179).
 pub(super) fn view_bake_panel<'a>(
     mut col: Column<Element<'a, PanelMsg>>,
     cx: Ctx<'a, '_>,
@@ -80,13 +82,11 @@ pub(super) fn view_bake_panel<'a>(
 ) -> Column<Element<'a, PanelMsg>> {
     let i18n = cx.i18n;
     let status = t!(i18n, ids::BOARD_SKETCH_BAKE_STATUS, "board" => board.board_name.as_str());
-    col = col
-        .push(object_header(
-            t!(i18n, ids::BOARD_SKETCH_BAKE_TITLE),
-            Some(status.into()),
-            cx.tokens,
-        ))
-        .push(solve_row(cx));
+    col = col.push(object_header(
+        t!(i18n, ids::BOARD_SKETCH_BAKE_TITLE),
+        Some(status.into()),
+        cx.tokens,
+    ));
     let mut selectable = false;
     col = match preview {
         BoardBakePreview::Writes(rows) => push_writes(col, cx, rows),
@@ -95,30 +95,52 @@ pub(super) fn view_bake_panel<'a>(
             push_refusal(col, cx, refusal)
         }
     };
-    let failed: Vec<_> = board
-        .outline_checks
-        .iter()
-        .filter(|line| line.status == CheckStatus::Failed)
-        .collect();
-    if !failed.is_empty() {
-        col = col.push(mini_head(
-            &t!(i18n, ids::SKETCH_BAKE_CHECKS),
-            cx.tokens,
-            i18n,
-        ));
-        for line in failed {
-            selectable |= line.place.is_some();
-            let select = line
-                .place
-                .map(|id| PanelMsg::FpEditorSelectSketchEntity { id });
-            col = col.push(status_line(line.status, line.text.localized(i18n), select));
-        }
-        col = col.push(caption(t!(i18n, ids::SKETCH_BAKE_CHECKS_WARN), cx.tokens));
-    }
+    selectable |= board.outline_checks.iter().any(|line| line.place.is_some());
+    col = push_checks(col, cx, board);
+    col = push_dof(col, cx);
     if selectable {
         col = col.push(caption(t!(i18n, ids::SKETCH_BAKE_SELECT_HINT), cx.tokens));
     }
     col
+}
+
+/// Every outline check of the solve, with Add fillets on a failing corner
+/// (mockup rows 179, 179d); Close gap stays with the refusal.
+fn push_checks<'a>(
+    mut col: Column<Element<'a, PanelMsg>>,
+    cx: Ctx<'a, '_>,
+    board: &'a BoardSketchProps,
+) -> Column<Element<'a, PanelMsg>> {
+    let i18n = cx.i18n;
+    col = col.push(mini_head(
+        &t!(i18n, ids::SKETCH_BAKE_CHECKS),
+        cx.tokens,
+        i18n,
+    ));
+    col = outline_checks::push_check_lines(col, board, cx.palette, i18n, false);
+    if outline_checks::has_failure(board) {
+        col = col.push(caption(t!(i18n, ids::SKETCH_BAKE_CHECKS_WARN), cx.tokens));
+    }
+    col
+}
+
+/// The DOF section: the solve state, then the DOF card once the sketch
+/// was solved (mockup row 179).
+fn push_dof<'a>(
+    mut col: Column<Element<'a, PanelMsg>>,
+    cx: Ctx<'a, '_>,
+) -> Column<Element<'a, PanelMsg>> {
+    col = col
+        .push(mini_head(
+            &t!(cx.i18n, ids::BOARD_SKETCH_BAKE_DOF),
+            cx.tokens,
+            cx.i18n,
+        ))
+        .push(solve_row(cx));
+    match cx.fp.last_solve.as_ref() {
+        Some(solve) => col.push(super::dof_card::dof_tile(cx, solve).0),
+        None => col,
+    }
 }
 
 /// Under the panel: what never bakes, and how the panel closes.
