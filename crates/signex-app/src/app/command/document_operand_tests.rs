@@ -541,6 +541,9 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "swap_gates",
                     "save_board_reuse_block",
                     "place_board_reuse_block",
+                    // Mockup row 198: the review records of the named
+                    // project's notebook.
+                    "list_annotations",
                     "project_settings",
                     "project_move_sheet",
                     "project_add_variant",

@@ -60,6 +60,19 @@ pub(super) const QUERY: &[CommandMetadata] = &[
         operands: operands::RESOLVE,
         ..CommandMetadata::DEFAULT
     },
+    // Mockup row 198: the review records of the project's Design Notebook,
+    // cited by typed id.
+    CommandMetadata {
+        id: "list_annotations",
+        category: "design",
+        label: command_ids::CMD_LIST_ANNOTATIONS,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::LIST_ANNOTATIONS,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "apply_edits",
         category: "edit",

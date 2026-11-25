@@ -151,6 +151,7 @@ import_graphics	Schematic	f8bd7a5cb84e915b
 keepout_from_selection	PcbSelection	b2eee5a7d6ad7c41
 lasso_select	-	f2929686b07ef725
 leave_sheet	ParentSheet	1a0f94b7a1b59195
+list_annotations	-	f2929686b07ef725
 list_documents	-	f2929686b07ef725
 lock_board_items	Pcb	119d310e454dd5e4
 manage_workspace_layouts	-	f2929686b07ef725

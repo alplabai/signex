@@ -153,6 +153,7 @@ import_graphics
 keepout_from_selection
 lasso_select
 leave_sheet
+list_annotations
 list_documents
 lock_board_items
 manage_workspace_layouts

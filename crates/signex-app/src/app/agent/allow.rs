@@ -128,6 +128,8 @@ mod tests {
                 "hide_layer_group",
                 "highlight_layer",
                 "keepout_from_selection",
+                // Mockup row 198: the notebook's review records, by typed id.
+                "list_annotations",
                 "list_documents",
                 "lock_board_items",
                 "measure_board",

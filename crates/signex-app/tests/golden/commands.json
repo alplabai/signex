@@ -760,6 +760,11 @@
     "category": "navigation"
   },
   {
+    "id": "list_annotations",
+    "group": "General",
+    "category": "design"
+  },
+  {
     "id": "list_documents",
     "group": "General",
     "category": "file"

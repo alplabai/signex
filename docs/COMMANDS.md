@@ -44,6 +44,18 @@ one board. Rules in [CLI.md](CLI.md), "Checks on demand".
 [baseline=<run>]` runs the project's requirements list as checks and
 answers in the same shape; rules in [CLI.md](CLI.md), "Requirement
 checks".
+`list_annotations document=<project or one of its documents> [id=<block
+id>] [kind=<kind>] [part=<designator>]` answers, once the notebook files
+are read, with every annotation block of the project's Design Notebook
+and its chapters (mockup row 198): per file its blocks, each with its
+typed id (`DEC-002`), kind, title, status, date, line, references, the
+review record of its kind (a Measurement's rows with their `pass`,
+`warn` or `fail` verdict) and `cited_by` (the Issues it opens, the
+Decision that supersedes it, the Calculations reading it), and its
+problems by name (`bad_id`, `duplicate_id`, `bad_field`, ...); then every
+citation (`links`) and the failing Measurements that open no Issue yet
+(`unopened_failures`). Fields in
+[NOTEBOOK_ANNOTATIONS.md](NOTEBOOK_ANNOTATIONS.md), "Review records".
 `measure_board`, `query_board_nets` and `find_similar_items` are board
 queries: a distance on one board, point to point or edge to edge between
 two items; each net's routed length, members and routed state; and the
@@ -123,6 +135,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `find_text` | Find text | search | — | — |
 | `home_view` | Reset the view rotation and Flip, then fit the board or sheet | view | — | — |
 | `import_graphics` | Import graphics | place | — | `Mod+Shift+F` |
+| `list_annotations` | List the annotation blocks of the project's Design Notebook | design | — | — |
 | `list_documents` | List documents | file | — | — |
 | `manage_workspace_layouts` | Manage workspace layouts | window | — | — |
 | `measure_distance` | Measure distance | view | `Ctrl+M` | `Ctrl+M` |

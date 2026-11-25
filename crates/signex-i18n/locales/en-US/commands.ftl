@@ -66,6 +66,7 @@ cmd-find-text = Find text
 cmd-import-graphics = Import graphics
 cmd-menu-import-graphics = Import Graphics...
 cmd-list-documents = List documents
+cmd-list-annotations = List the annotation blocks of the project's Design Notebook
 cmd-measure-distance = Measure distance
 cmd-mirror-x = Mirror along X-axis
 cmd-menu-mirror-x = Mirror X

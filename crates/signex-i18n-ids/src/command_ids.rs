@@ -67,6 +67,7 @@ define_ids! {
         CMD_IMPORT_GRAPHICS = "cmd-import-graphics";
         CMD_MENU_IMPORT_GRAPHICS = "cmd-menu-import-graphics";
         CMD_LIST_DOCUMENTS = "cmd-list-documents";
+        CMD_LIST_ANNOTATIONS = "cmd-list-annotations";
         CMD_MEASURE_DISTANCE = "cmd-measure-distance";
         CMD_MIRROR_X = "cmd-mirror-x";
         CMD_MENU_MIRROR_X = "cmd-menu-mirror-x";

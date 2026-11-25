@@ -163,6 +163,7 @@ signex_standard	hint	-	-	list_documents
 signex_standard	hint	-	-	read_document
 signex_standard	hint	-	-	query_pins
 signex_standard	hint	-	-	resolve
+signex_standard	hint	-	-	list_annotations
 signex_standard	hint	-	-	apply_edits
 signex_standard	hint	-	⌘Z	undo
 signex_standard	hint	-	⌃Y	redo
@@ -716,6 +717,7 @@ classic	hint	-	-	list_documents
 classic	hint	-	-	read_document
 classic	hint	-	-	query_pins
 classic	hint	-	-	resolve
+classic	hint	-	-	list_annotations
 classic	hint	-	-	apply_edits
 classic	hint	-	⌘Z	undo
 classic	hint	-	⌃Y	redo

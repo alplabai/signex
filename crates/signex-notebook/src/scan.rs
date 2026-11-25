@@ -24,18 +24,22 @@ pub const TITLE_MAX_CHARS: usize = 60;
 pub const SNIPPET_MAX_CHARS: usize = 200;
 
 /// Something in a notebook that kept a block, or part of one, from being
-/// read. Nothing is passed over without one.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// read. Nothing is passed over without one. In a JSON result it is
+/// `{"line": 3, "text": ..., "problem": "bad_id", ...}`, the problem's own
+/// fields beside its name.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct ScanProblem {
     /// The 1-based line it is on.
     pub line: u32,
     /// That line as written, trimmed.
     pub text: String,
+    #[serde(flatten)]
     pub kind: ProblemKind,
 }
 
 /// What went wrong, and what the scan did about it.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(tag = "problem", rename_all = "snake_case")]
 pub enum ProblemKind {
     /// A `+++` front matter with no closing `+++`: the whole file is read as
     /// Typst.
