@@ -4,6 +4,7 @@
 
 mod annotations;
 mod assign_footprints;
+mod block_diagram;
 mod board_checks;
 mod board_output;
 mod board_panel;
@@ -57,6 +58,7 @@ mod workspace_layouts;
 
 pub use annotations::*;
 pub use assign_footprints::*;
+pub use block_diagram::*;
 pub use board_checks::*;
 pub use board_output::*;
 pub use board_panel::*;
@@ -114,6 +116,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
     [
         annotations::ANNOTATIONS,
         assign_footprints::ASSIGN_FOOTPRINTS,
+        block_diagram::BLOCK_DIAGRAM,
         board_checks::BOARD_CHECKS,
         board_output::BOARD_OUTPUT,
         board_panel::BOARD_PANEL,
