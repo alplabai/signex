@@ -106,7 +106,8 @@ fn describe(change: &EcoChange) -> String {
     }
 }
 
-pub(super) fn blocked_text(why: &EcoBlock) -> String {
+/// Why a row is blocked, as the report and the command's answer word it.
+pub fn blocked_text(why: &EcoBlock) -> String {
     match why {
         EcoBlock::MissingFootprint(e) => format!("no footprint: {e}"),
         EcoBlock::NeedsAnnotation => "not annotated; run Annotate".into(),
@@ -119,7 +120,8 @@ pub(super) fn blocked_text(why: &EcoBlock) -> String {
     }
 }
 
-pub(super) fn note_text(note: &EcoNote) -> String {
+/// A note of the list, as the report and the command's answer word it.
+pub fn note_text(note: &EcoNote) -> String {
     match note {
         EcoNote::UnreadableSheet(path) => format!(
             "a sheet could not be read ({}); nothing linked under it is removed",
