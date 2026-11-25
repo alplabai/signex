@@ -11,6 +11,9 @@
 //! Above all of these, the project's own variant settings (`.snxprj`
 //! `variant_settings`, mockup row 32) decide, applied in [`settings`].
 
+mod compare;
+#[cfg(test)]
+mod compare_tests;
 mod drawn_values;
 #[cfg(test)]
 mod drawn_values_tests;
@@ -25,6 +28,7 @@ mod tests;
 use signex_types::project::is_base_variant;
 use signex_types::schematic::Symbol;
 
+pub use compare::{CompareProblem, ComparedPart, PartChange, PartInVariant, VariantComparison};
 pub use drawn_values::{DrawnValueMap, DrawnValues, drawn_symbol, variant_value};
 #[cfg(test)]
 pub(crate) use fields::field_value_ci;
