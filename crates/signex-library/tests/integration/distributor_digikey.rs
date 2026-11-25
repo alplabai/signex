@@ -342,3 +342,87 @@ fn mismatched_state_is_refused_without_storing() {
         assert_eq!(*stored.borrow(), 0);
     });
 }
+
+/// A token endpoint that answers only a request whose client
+/// authentication `accepts`; anything else gets wiremock's 404.
+async fn mount_token_endpoint_requiring(
+    server: &MockServer,
+    accepts: fn(&wiremock::Request) -> bool,
+) {
+    Mock::given(method("POST"))
+        .and(path("/oauth/token"))
+        .and(accepts)
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "access_token": "access-tok",
+            "refresh_token": "refresh-tok",
+            "token_type": "Bearer",
+            "expires_in": 3600
+        })))
+        .expect(1)
+        .mount(server)
+        .await;
+}
+
+/// No Authorization header; the client id, and no secret, in the body.
+fn is_public_client(req: &wiremock::Request) -> bool {
+    let body = String::from_utf8_lossy(&req.body);
+    !req.headers.contains_key("authorization")
+        && body.contains("client_id=client-id")
+        && !body.contains("client_secret")
+}
+
+fn is_basic_auth(req: &wiremock::Request) -> bool {
+    req.headers
+        .get("authorization")
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| v.starts_with("Basic "))
+}
+
+fn mount_public_client_token(
+    server: &MockServer,
+) -> std::pin::Pin<Box<dyn Future<Output = ()> + '_>> {
+    Box::pin(mount_token_endpoint_requiring(server, is_public_client))
+}
+
+fn mount_basic_auth_token(server: &MockServer) -> std::pin::Pin<Box<dyn Future<Output = ()> + '_>> {
+    Box::pin(mount_token_endpoint_requiring(server, is_basic_auth))
+}
+
+fn exchange_with_secret(base: &str, secret: &str) -> Result<String, DigiKeyAuthError> {
+    let auth = DigiKeyAuth::with_endpoints(
+        "client-id",
+        secret,
+        "http://localhost/cb",
+        &format!("{base}/oauth/authorize"),
+        &format!("{base}/oauth/token"),
+    )
+    .unwrap();
+    let (_url, csrf, verifier) = auth.start_authorization();
+    auth.exchange_code_into(
+        "the-code",
+        verifier,
+        csrf.secret(),
+        &csrf,
+        &|| true,
+        &|_| Ok(()),
+    )
+}
+
+/// Built-in client id, no secret (Caner 2026-11-25): the exchange goes as a
+/// public client, the id in the body and no `id:` Basic header.
+#[test]
+fn an_empty_client_secret_exchanges_as_a_public_client() {
+    with_mock_server(mount_public_client_token, |base| {
+        let access = exchange_with_secret(&base, "").expect("public exchange succeeds");
+        assert_eq!(access, "access-tok");
+    });
+}
+
+/// Positive control: a set secret still authenticates with Basic auth.
+#[test]
+fn a_client_secret_exchanges_with_basic_auth() {
+    with_mock_server(mount_basic_auth_token, |base| {
+        let access = exchange_with_secret(&base, "client-secret").expect("exchange succeeds");
+        assert_eq!(access, "access-tok");
+    });
+}
