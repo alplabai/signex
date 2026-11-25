@@ -1126,7 +1126,9 @@ press on a selected one carries the whole selection (#2870).
 The tracks joined to a dragged track stretch: a track whose end lies exactly
 on an end of the dragged track, to the nanometre, on its layer and net, moves
 that end by the offset (`pcb_geom::tracks_on_tracks`). Its other end stays,
-on a pad, a via or wherever it is, so it stays joined there. A dragged via
+on a pad, a via or wherever it is, so it stays joined there. A joined end
+that also lies on a pad or via that does not move stays: that track keeps
+the pad or via and only the dragged track leaves it. A dragged via
 takes the track and copper arc ends on it along the same way
 (`pcb_geom::tracks_on_vias`, `arcs_on_vias`). A track carried whole, because
 it is in the dragged selection, moves whole and is not stretched by an end. A

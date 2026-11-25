@@ -562,8 +562,14 @@ fn assert_ctrl_latches(board: PcbBoard, track: Uuid, from: Point, at: fn(&Rig) -
         let moved = at(&rig);
         assert!(!close(moved, from.x, from.y), "the plain drag moved it");
         // The track bends at one 45° corner (Caner, 2026-11-25): its new leg
-        // ends where the object went.
+        // runs from the object's own track to where the object went.
         assert!(rig.a_track_ends_at(moved), "it follows");
+        let corner = rig.track(track).end;
+        let joined = (rig.board().segments.iter()).any(|s| {
+            (close(s.start, corner.x, corner.y) && close(s.end, moved.x, moved.y))
+                || (close(s.end, corner.x, corner.y) && close(s.start, moved.x, moved.y))
+        });
+        assert!(joined, "its own track's new leg ends at the object");
     }
 }
 
