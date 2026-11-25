@@ -10,7 +10,7 @@ use signex_engine::{DocumentPatch, UndoGroupId};
 use signex_i18n_ids::ids;
 
 use super::notices::{engine_error_notice, warning_notice};
-use super::{ActiveSettlement, DocumentState};
+use super::{DocumentState, Settlement};
 use crate::app::UndoGroupSheets;
 use crate::app::core::event::{ChangeCause, CoreEvent, DocumentChanged};
 
@@ -82,11 +82,15 @@ impl DocumentState {
         // A member sheet other than the active one changed too.
         self.note_sheet_edit();
         let settled = match active_patch {
-            Some(patch) => self.settle_active_into(patch, ChangeCause::Step, &mut step.active),
-            None => ActiveSettlement::Unchanged,
+            Some(patch) => {
+                debug_assert_ne!(patch, DocumentPatch::NONE, "#2645: a step with no patch");
+                let path = Some(active_path.as_path());
+                self.settle(path, patch, ChangeCause::Step, &mut step.active)
+            }
+            None => Settlement::Unchanged,
         };
-        step.stepped = settled != ActiveSettlement::Unchanged;
-        if moved_any && settled != ActiveSettlement::Shown {
+        step.stepped = settled != Settlement::Unchanged;
+        if moved_any && settled != Settlement::Shown {
             // The history moved all the same: an empty patch on the active
             // canvas only asks for the library drift check.
             let (path, patch, cause) = (active_path, DocumentPatch::NONE, ChangeCause::Step);

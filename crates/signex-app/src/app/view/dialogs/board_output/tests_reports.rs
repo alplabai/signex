@@ -1,6 +1,7 @@
 //! Mockup row 117 on screen: the catalog names, cells in the user's unit, numbers
 //! right-aligned in their own columns, one growing column a report, the
-//! rows in the shown order, and the count and caption.
+//! rows in the shown order, the count and caption, and the filter's
+//! magnifier.
 
 use std::path::PathBuf;
 
@@ -13,9 +14,9 @@ use signex_types::theme::{ThemeId, theme_tokens};
 
 use super::reports::{cell_text, kind_caption, kind_label, parts};
 use super::reports_table::{column_label, column_width, is_numeric};
-use crate::app::BoardReportsState;
 use crate::app::board_output::ReportSort;
-use crate::layout_probe::lay_out_texts;
+use crate::app::{BoardOutputMsg, BoardReportsState, Message, PcbMsg};
+use crate::layout_probe::{find, lay_out_inputs, lay_out_texts, messages_for_events};
 
 /// Every column has a heading and every kind a name in the catalog.
 #[test]
@@ -108,7 +109,7 @@ fn net_lengths() -> BoardReportsState {
 
 fn shown_texts(state: &BoardReportsState, i18n: &I18n) -> Vec<String> {
     let tokens = theme_tokens(ThemeId::BUILTINS[0]);
-    let (header, body, footer) = parts(state, Unit::Mm, i18n, &tokens);
+    let (header, body, footer) = parts(state, Unit::Mm, ThemeId::BUILTINS[0], i18n, &tokens);
     lay_out_texts(
         column![header, body, footer].boxed(),
         Size::new(900.0, 620.0),
@@ -116,6 +117,54 @@ fn shown_texts(state: &BoardReportsState, i18n: &I18n) -> Vec<String> {
     .into_iter()
     .map(|t| t.text)
     .collect()
+}
+
+/// The Filter rows field on its own, its input's box and a probe window.
+fn filter_probe<'a>(
+    state: &'a BoardReportsState,
+    i18n: &I18n,
+) -> (iced::Element<'a, Message>, iced::Rectangle, Size) {
+    let tokens = theme_tokens(ThemeId::BUILTINS[0]);
+    let theme = ThemeId::BUILTINS[0];
+    let window = Size::new(400.0, 100.0);
+    let field = || super::reports::filter_field(state, theme, i18n, &tokens);
+    let placeholder = t!(i18n, ids::BOARD_REPORTS_FILTER).into_string();
+    let input = find(&lay_out_inputs(field(), window), &placeholder).bounds;
+    (field(), input, window)
+}
+
+/// Mockup row 117: a magnifier leads the Filter rows field, inside it. The
+/// input's own box is the field outline, so it lights on hover and focus,
+/// and its text starts after the glyph.
+#[test]
+fn the_filter_field_is_led_by_a_magnifier() {
+    let i18n = I18n::en_us();
+    let state = net_lengths();
+    let (_, input, _) = filter_probe(&state, &i18n);
+    assert_eq!(input.x, 0.0, "the input is the field's outline: {input:?}");
+    let glyph = super::kit::field_glyph_bounds(input);
+    assert!(
+        input.x + super::kit::GLYPH_TEXT_INSET >= glyph.x + glyph.width,
+        "the text starts after the glyph: {glyph:?}"
+    );
+}
+
+/// Mockup row 117: the magnifier takes no click, so a click on it focuses
+/// the filter and the next key edits it.
+#[test]
+fn a_click_on_the_magnifier_focuses_the_filter() {
+    let i18n = I18n::en_us();
+    let state = net_lengths();
+    let (field, input, window) = filter_probe(&state, &i18n);
+    let at = super::kit::field_glyph_bounds(input).center();
+    let sent = messages_for_events(field, window, at, &super::kit::click_then_type("x"));
+    assert!(
+        sent.iter().any(|m| matches!(
+            m,
+            Message::Pcb(PcbMsg::Output(BoardOutputMsg::ReportFilterEdited(v))) if v == "x"
+        )),
+        "{sent:?}"
+    );
 }
 
 #[test]

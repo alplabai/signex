@@ -1,6 +1,7 @@
-//! Mockup row 95 (#2808): the Track panel's Position, Start and End each
-//! keep their X and Y on one row behind "X" / "Y" prefixes, and a value the
-//! selected tracks do not share reads "Mixed" in italics.
+//! Mockup row 95 (#2808): the Track panel has no Position row (the location
+//! is the header's lock), its Start and End each keep their X and Y on one
+//! row behind "X" / "Y" prefixes, and a value the selected tracks do not
+//! share reads "Mixed" in italics.
 
 use pcb_geom::ItemRef;
 use signex_i18n::{MessageId, ids, t};
@@ -72,8 +73,8 @@ fn on_row(at: &iced::Rectangle, label: &iced::Rectangle) -> bool {
     (at.center_y() - label.center_y()).abs() < label.height
 }
 
-/// Each of Position, Start and End: its label once, then on its row two
-/// fields, one "X" and one "Y" prefix.
+/// No Position row; each of Start and End: its label once, then on its row
+/// two fields, one "X" and one "Y" prefix.
 #[test]
 fn position_start_and_end_each_keep_x_and_y_on_one_row() {
     let ctx = context();
@@ -87,12 +88,13 @@ fn position_start_and_end_each_keep_x_and_y_on_one_row() {
         DOCK,
     );
     let (x, y) = (said(&ctx, ids::PCB_PRIM_X), said(&ctx, ids::PCB_PRIM_Y));
+    let position = said(&ctx, ids::PCB_PRIM_POSITION);
+    assert!(
+        texts.iter().all(|t| t.text != position),
+        "no {position} row: {texts:#?}"
+    );
     let mut tops = Vec::new();
-    for id in [
-        ids::PCB_PRIM_POSITION,
-        ids::PCB_PRIM_POINT_START,
-        ids::PCB_PRIM_POINT_END,
-    ] {
+    for id in [ids::PCB_PRIM_POINT_START, ids::PCB_PRIM_POINT_END] {
         let name = said(&ctx, id);
         let labels: Vec<&LaidOutText> = texts.iter().filter(|t| t.text == name).collect();
         assert_eq!(labels.len(), 1, "one {name} row: {texts:#?}");
@@ -117,7 +119,7 @@ fn position_start_and_end_each_keep_x_and_y_on_one_row() {
     }
     assert!(
         tops.windows(2).all(|w| w[0] < w[1]),
-        "Position, Start, End in order: {tops:?}"
+        "Start, End in order: {tops:?}"
     );
 }
 
@@ -135,8 +137,8 @@ fn ends_the_tracks_do_not_share_read_mixed_in_italics() {
     };
 
     let two = shown(&tracks(2));
-    // Position, Start and End: six halves, all Mixed.
-    assert_eq!(two.iter().filter(|t| **t == mixed).count(), 6, "{two:?}");
+    // Start and End: four halves, all Mixed (no Position row, mockup row 95).
+    assert_eq!(two.iter().filter(|t| **t == mixed).count(), 4, "{two:?}");
     let one = shown(&tracks(1));
     assert!(!one.contains(&mixed), "{one:?}");
 

@@ -1,9 +1,10 @@
 //! Role tags on baked loops (mockup row 190): a closed loop with a role
-//! names it in a small pill at its top-left corner, in the role's colour,
-//! whether the loop is selected or not. A pad's loop has no tag: the pad
-//! shows its number. Courtyard takes the board's Courtyard Top colour, so
-//! it no longer reads as a keepout; the fill does the same in its own
-//! priority (`fills::fill_colour`).
+//! names it in a small pill just right of its top-right corner, outside the
+//! loop as the mockup draws it, in the role's colour, whether the loop is
+//! selected or not. A pad's loop has no tag: the pad shows its number.
+//! Courtyard takes the board's Courtyard Top colour, so it no longer reads
+//! as a keepout; the fill does the same in its own priority
+//! (`fills::fill_colour`).
 
 use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point, Size};
@@ -26,8 +27,8 @@ const TAG_TEXT: f32 = TS.caption;
 const ADVANCE_EM: f32 = 0.6;
 const HEIGHT_EM: f32 = 1.5;
 const PAD_EM: f32 = 0.5;
-/// How far the tag sits inside the loop's top-left corner, in text heights.
-const INSET_EM: f32 = 0.4;
+/// How far the tag sits right of the loop's right edge, in text heights.
+const GAP_EM: f32 = 0.6;
 /// Border width of a tag, in px.
 const BORDER_PX: f32 = 1.0;
 
@@ -69,7 +70,8 @@ pub(super) fn role_colour(role: SketchRole) -> Option<Color> {
     Some(layer.color())
 }
 
-/// One loop's tag: its words, its top-left corner on screen and its colour.
+/// One loop's tag: its words, the pill's top-left corner on screen and its
+/// colour.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct LoopTag<'a> {
     pub text: &'a str,
@@ -99,20 +101,19 @@ pub(super) fn loop_tag<'a>(
     }
     let text = state.canvas_text.role_tag(host, role.on_host(host))?;
     let colour = role_colour(role).unwrap_or(SketchInk::board().label);
-    let (left, top) = closed
+    let (right, top) = closed
         .polygon
         .iter()
         .map(|p| cstate.world_to_screen((p[0], p[1])))
-        .fold((f32::INFINITY, f32::INFINITY), |(x, y), p| {
-            (x.min(p.x), y.min(p.y))
+        .fold((f32::NEG_INFINITY, f32::INFINITY), |(x, y), p| {
+            (x.max(p.x), y.min(p.y))
         });
-    if !left.is_finite() || !top.is_finite() {
+    if !right.is_finite() || !top.is_finite() {
         return None;
     }
-    let inset = TAG_TEXT * INSET_EM;
     Some(LoopTag {
         text,
-        at: Point::new(left + inset, top + inset),
+        at: Point::new(right + TAG_TEXT * GAP_EM, top),
         colour,
     })
 }
@@ -297,19 +298,58 @@ mod tests {
         assert_eq!(tags(&fp, &state), idle);
     }
 
-    /// The tag sits inside the loop's top-left corner.
+    /// Mockup row 190: the tag sits outside the loop, just right of its
+    /// top-right corner, clear of the values and corner handles on the loop.
     #[test]
-    fn the_tag_sits_at_the_top_left_corner() {
+    fn the_tag_sits_beside_the_top_right_corner() {
         let (mut fp, _, line) = rectangle();
         set_entity_role(&mut fp, line, SketchRole::Keepout);
         let state = state_for(&fp, SketchHost::Footprint);
         let cstate = FootprintCanvasState::default();
-        let corner = cstate.world_to_screen((1.0, 1.0));
+        let (a, b) = (
+            cstate.world_to_screen((1.0, 1.0)),
+            cstate.world_to_screen((5.0, 3.0)),
+        );
+        let (right, top) = (a.x.max(b.x), a.y.min(b.y));
         let drawn = tags(&fp, &state);
         assert_eq!(drawn.len(), 1);
+        assert!(drawn[0].1.x > right, "{drawn:?} is not right of {right}");
         assert!(
-            drawn[0].1.x > corner.x && drawn[0].1.y > corner.y,
-            "{drawn:?}"
+            (drawn[0].1.y - top).abs() < 1e-3,
+            "{drawn:?} is not at {top}"
+        );
+    }
+
+    /// The canvas has its words, so a loop draws its tag, as soon as the
+    /// footprint editor handles a message: an edit through the editor's
+    /// own message stream renders them, without waiting for a pointer move.
+    #[test]
+    fn an_editor_edit_renders_the_tag_words() {
+        use crate::app::{FootprintDocument, Message, Signex};
+        use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
+
+        let (fp, _, line) = rectangle();
+        let path = std::path::PathBuf::from("tags.snxfpt");
+        let (mut app, _task) = Signex::new();
+        let file = signex_library::FootprintFile::from_footprint(fp);
+        app.document_state
+            .footprint_editors
+            .insert(path.clone(), FootprintDocument::new(path.clone(), file));
+        let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+            path: path.clone(),
+            msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchSetRole {
+                id: line,
+                role: SketchRole::Courtyard,
+            }),
+        }));
+        let editor = &app.document_state.footprint_editors[&path];
+        assert!(
+            editor
+                .state
+                .canvas_text
+                .role_tag(SketchHost::Footprint, SketchRole::Courtyard)
+                .is_some(),
+            "the canvas words are not rendered"
         );
     }
 

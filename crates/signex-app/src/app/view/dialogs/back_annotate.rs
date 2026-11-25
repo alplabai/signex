@@ -18,7 +18,7 @@ use signex_widgets::{Label, text};
 
 use super::sizes;
 use super::update_pcb::change_rows::{
-    ChangeRow, GroupHeader, RowStatus, change_row, detail_text, group_header,
+    ChangeRow, GroupHeader, RowStatus, StatusGlyph, change_row, detail_text, group_header,
 };
 use super::update_pcb::{banner, line, link, list_frame};
 use crate::app::back_annotate::BackAnnotateState;
@@ -60,12 +60,12 @@ impl Signex {
         )
         .into_string();
         let close = Some(ba(BackAnnotateMsg::CloseRequested));
-        let header = super::header::graphite_header_closing(
+        // Mockup row 82: the subtitle on a second line, as in Update PCB.
+        let header = super::header::graphite_header_stacked(
             s(i18n, ids::BACK_ANNOTATE_TITLE),
-            Some(subtitle),
-            None,
+            subtitle,
             close.clone(),
-            super::header::DIALOG_HEADER_H,
+            super::header::STACKED_HEADER_H,
             tokens,
         );
         let muted = tokens::muted_text(tokens);
@@ -205,25 +205,14 @@ fn duplicate_banner<'a>(
     let Some(first) = first else {
         return Space::new().boxed();
     };
-    let (words, tone) = if shared > 0 {
-        (
-            t!(i18n, ids::BACK_ANNOTATE_SHARED_WARNING, "count" => shared),
-            PillTone::Warn,
-        )
+    let words = if shared > 0 {
+        t!(i18n, ids::BACK_ANNOTATE_SHARED_WARNING, "count" => shared)
     } else {
-        (
-            t!(i18n, ids::BACK_ANNOTATE_DUPLICATES_UNTICKED, "count" => flagged.len()),
-            PillTone::Info,
-        )
+        t!(i18n, ids::BACK_ANNOTATE_DUPLICATES_UNTICKED, "count" => flagged.len())
     };
-    let ink = pill_colors(tokens, tone).1;
-    let mark = if matches!(tone, PillTone::Warn) {
-        ids::CHANGE_ROW_ICON_WARN
-    } else {
-        ids::CHANGE_ROW_ICON_INFO
-    };
+    // Mockup row 82: a designator on two parts is a warning either way.
     let message = row![
-        text(t!(i18n, mark)).size(TS.body).color(ink),
+        StatusGlyph::Warn.view(ti(tokens.warning)),
         text(words).size(TS.body).color(ti(tokens.text)),
     ]
     .spacing(SP.s)
@@ -233,7 +222,7 @@ fn duplicate_banner<'a>(
         t!(i18n, ids::BACK_ANNOTATE_SHOW_ROW),
         ba(BackAnnotateMsg::DuplicateShown(first)),
     );
-    callout(banner(message, Some(show)), tone, tokens)
+    callout(banner(message, Some(show)), PillTone::Warn, tokens)
 }
 
 /// A banner on the soft fill of its tone.
@@ -259,8 +248,8 @@ fn callout<'a>(
         .boxed()
 }
 
-/// The ticked count as a pill and the last Validate's verdict.
-fn footer_left<'a>(
+/// The ticked count as a pill and, beside it, the last Validate's verdict.
+pub(super) fn footer_left<'a>(
     state: &BackAnnotateState,
     i18n: &I18n,
     tokens: &ThemeTokens,
@@ -285,26 +274,23 @@ fn footer_left<'a>(
         );
     }
     if let Some(verdict) = state.validation() {
-        let (glyph, words, ink): (MessageId, Label<'a>, iced::Color) = match verdict {
+        let (glyph, words, ink): (StatusGlyph, Label<'a>, iced::Color) = match verdict {
             Ok(()) => (
-                ids::UPDATE_PCB_STATUS_OK,
+                StatusGlyph::Check,
                 t!(i18n, ids::BACK_ANNOTATE_VALID).into(),
                 ti(tokens.success),
             ),
             Err(why) => (
-                ids::CHANGE_ROW_ICON_BLOCKED,
+                StatusGlyph::Blocked,
                 UserText::new(why.clone()).into(),
                 tokens::danger(tokens),
             ),
         };
         left.push(
-            row![
-                text(t!(i18n, glyph)).size(TS.body).color(ink),
-                text(words).size(TS.body).color(ink),
-            ]
-            .spacing(SP.s)
-            .align_y(Alignment::Center)
-            .boxed(),
+            row![glyph.view(ink), text(words).size(TS.body).color(ink)]
+                .spacing(SP.s)
+                .align_y(Alignment::Center)
+                .boxed(),
         );
     }
     left
@@ -402,25 +388,7 @@ fn row_view<'a>(
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
     let locked = state.checking;
-    let info = matches!(row.blocked, Some(BackBlock::FootprintFromBoard));
-    let (status, caption) = match (&row.blocked, flag) {
-        (Some(why), _) if info => (
-            RowStatus::Info,
-            Some((block_text(i18n, why), tokens::muted_text(tokens))),
-        ),
-        (Some(why), _) => (
-            RowStatus::Blocked,
-            Some((block_text(i18n, why), tokens::danger(tokens))),
-        ),
-        (None, Some(flag)) => (
-            RowStatus::Warn,
-            Some((duplicate_text(state, flag, i18n), ti(tokens.warning))),
-        ),
-        (None, None) if matches!(state.validation(), Some(Ok(()))) && row.applies() => {
-            (RowStatus::Applies, None)
-        }
-        (None, None) => (RowStatus::Quiet, None),
-    };
+    let (status, caption) = row_status(state, row, flag, i18n, tokens);
     let on_toggle: Option<Box<dyn Fn(bool) -> Message + 'a>> = if row.blocked.is_none() && !locked {
         let key = row.key;
         Some(Box::new(move |on| {
@@ -449,9 +417,39 @@ fn row_view<'a>(
             on_press: None,
             dimmed: row.blocked.is_some(),
         },
-        i18n,
         tokens,
     )
+}
+
+/// A row's status and caption: blocked (red), listed only (grey), a
+/// flagged rename (amber), the green tick once Validate passed with it
+/// ticked, else quiet.
+pub(super) fn row_status(
+    state: &BackAnnotateState,
+    row: &BackRow,
+    flag: Option<&DuplicateRename>,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> (RowStatus, Option<(Localized, iced::Color)>) {
+    let info = matches!(row.blocked, Some(BackBlock::FootprintFromBoard));
+    match (&row.blocked, flag) {
+        (Some(why), _) if info => (
+            RowStatus::Info,
+            Some((block_text(i18n, why), tokens::muted_text(tokens))),
+        ),
+        (Some(why), _) => (
+            RowStatus::Blocked,
+            Some((block_text(i18n, why), tokens::danger(tokens))),
+        ),
+        (None, Some(flag)) => (
+            RowStatus::Warn,
+            Some((duplicate_text(state, flag, i18n), ti(tokens.warning))),
+        ),
+        (None, None) if matches!(state.validation(), Some(Ok(()))) && row.applies() => {
+            (RowStatus::Applies, None)
+        }
+        (None, None) => (RowStatus::Quiet, None),
+    }
 }
 
 /// The caption of a flagged rename: where its new designator already is.
@@ -579,12 +577,9 @@ fn notes_view<'a>(
         .iter()
         .any(|n| matches!(n, BackNote::SharedDesignator { .. }));
     let mark = if warns {
-        (t!(i18n, ids::CHANGE_ROW_ICON_WARN), ti(tokens.warning))
+        (StatusGlyph::Warn, ti(tokens.warning))
     } else {
-        (
-            t!(i18n, ids::CHANGE_ROW_ICON_INFO),
-            tokens::resolve(tokens).info,
-        )
+        (StatusGlyph::Info, tokens::resolve(tokens).info)
     };
     let folded = state.notes_folded;
     let header = group_header(

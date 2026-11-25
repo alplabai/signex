@@ -1,10 +1,11 @@
 //! The Mirror ghost follows the Mirror card (mockup row 191): it draws the
 //! card's line and picks and the copies OK writes, never the selection.
 
-use signex_sketch::SketchData;
+use signex_sketch::array::{Array, ArrayId, ArrayKind, NumberingScheme};
 use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
+use signex_sketch::{SketchData, Solver};
 
 use super::{MirrorGhost, Positions};
 use crate::library::editor::footprint::sketch_mode::mirror_card::{
@@ -131,6 +132,142 @@ fn the_ghost_shows_the_line_the_next_pick_takes() {
     line_field.field = MirrorField::Line;
     let focused = MirrorGhost::plan(&at, Some(&line_field), Some((3.0, 0.5)), TOL);
     assert_eq!(focused.wide.len(), 1, "with Mirror line focused any Line");
+}
+
+/// Mockup row 191: a picked pattern of circles shows its mirrored copy,
+/// one circle per instance it bakes; a suppressed instance gets none.
+#[test]
+fn a_picked_pattern_draws_its_mirrored_instances() {
+    let mut d = drawing();
+    let plane = d.sketch.planes[0].id;
+    let (center, hole) = (SketchEntityId::new(), SketchEntityId::new());
+    d.sketch.entities.push(Entity::new(
+        center,
+        plane,
+        EntityKind::Point { x: 2.0, y: 0.0 },
+    ));
+    d.sketch.entities.push(Entity::new(
+        hole,
+        plane,
+        EntityKind::Circle {
+            center,
+            radius: 0.5,
+        },
+    ));
+    let mut array = Array {
+        id: ArrayId::new(),
+        kind: ArrayKind::Grid {
+            source: hole,
+            nx_expr: "3".into(),
+            ny_expr: "1".into(),
+            dx_expr: "1mm".into(),
+            dy_expr: "1mm".into(),
+            depopulation: None,
+        },
+        numbering: NumberingScheme::default(),
+    };
+    assert!(array.kind.set_instance_suppressed(2, 0, true));
+    let pattern = array.id;
+    d.sketch.arrays.push(array);
+    let params = signex_sketch::parameter::resolve(&d.sketch.parameters).expect("resolves");
+    let mut state = FootprintEditorState::empty();
+    state.last_solve = Some(Solver::default().solve(&d.sketch, &params).expect("solves"));
+
+    let picked = vec![MirrorObject::Pattern(pattern)];
+    let ghost = plan(&d, &state, Some(&card(picked, Some(d.centerline))));
+
+    assert_eq!(ghost.copies.len(), 2, "the source and the kept instance");
+    let centre = |path: &Vec<(f64, f64)>| {
+        let ring = &path[..path.len() - 1];
+        let n = ring.len() as f64;
+        let sum = ring.iter().fold((0.0, 0.0), |s, p| (s.0 + p.0, s.1 + p.1));
+        (sum.0 / n, sum.1 / n)
+    };
+    let mut centres: Vec<(f64, f64)> = ghost.copies.iter().map(centre).collect();
+    centres.sort_by(|a, b| b.0.total_cmp(&a.0));
+    let near_mm = |p: (f64, f64), want: (f64, f64)| (p.0 - want.0).hypot(p.1 - want.1) < 1e-6;
+    assert!(near_mm(centres[0], (-2.0, 0.0)), "{centres:?}");
+    assert!(near_mm(centres[1], (-3.0, 0.0)), "{centres:?}");
+}
+
+/// `d` with `kind` added as a pattern, solved into `state`; the pattern's id.
+fn with_pattern(d: &mut Drawing, kind: ArrayKind) -> (ArrayId, FootprintEditorState) {
+    let array = Array {
+        id: ArrayId::new(),
+        kind,
+        numbering: NumberingScheme::default(),
+    };
+    let id = array.id;
+    d.sketch.arrays.push(array);
+    let params = signex_sketch::parameter::resolve(&d.sketch.parameters).expect("resolves");
+    let mut state = FootprintEditorState::empty();
+    state.last_solve = Some(Solver::default().solve(&d.sketch, &params).expect("solves"));
+    (id, state)
+}
+
+/// Mockup row 191: a pattern of a Line mirrors the Line's own shape at
+/// each instance, not a mark; with the source Line picked too, the
+/// source's copy is drawn once.
+#[test]
+fn a_picked_pattern_mirrors_its_sources_shape_and_the_source_once() {
+    let mut d = drawing();
+    let kind = ArrayKind::Linear {
+        source: d.line,
+        count_expr: "2".into(),
+        dx_expr: "0mm".into(),
+        dy_expr: "3mm".into(),
+    };
+    let (pattern, state) = with_pattern(&mut d, kind);
+    let picked = vec![MirrorObject::Entity(d.line), MirrorObject::Pattern(pattern)];
+    let ghost = plan(&d, &state, Some(&card(picked, Some(d.centerline))));
+
+    assert!(
+        ghost.copied_points.is_empty(),
+        "a Line source copies as Lines"
+    );
+    assert_eq!(ghost.copies.len(), 2, "the source once, its instance once");
+    let source = &ghost.copies[0];
+    assert!(near_mm(source[0], (-2.0, 0.0)) && near_mm(source[1], (-4.0, 1.0)));
+    let moved = &ghost.copies[1];
+    assert!(
+        near_mm(moved[0], (-2.0, 3.0)) && near_mm(moved[1], (-4.0, 4.0)),
+        "{moved:?}"
+    );
+}
+
+/// A circular pattern's instances turn about its centre before the
+/// mirror, as the bake places them.
+#[test]
+fn a_picked_circular_pattern_mirrors_its_turned_instances() {
+    let mut d = drawing();
+    let plane = d.sketch.planes[0].id;
+    let centre = SketchEntityId::new();
+    d.sketch.entities.push(Entity::new(
+        centre,
+        plane,
+        EntityKind::Point { x: 3.0, y: -1.0 },
+    ));
+    let kind = ArrayKind::Polar {
+        source: d.line,
+        center: centre,
+        count_expr: "2".into(),
+        sweep_angle_expr: "360deg".into(),
+        depopulation: None,
+    };
+    let (pattern, state) = with_pattern(&mut d, kind);
+    let picked = vec![MirrorObject::Pattern(pattern)];
+    let ghost = plan(&d, &state, Some(&card(picked, Some(d.centerline))));
+
+    assert_eq!(ghost.copies.len(), 2, "{:?}", ghost.copies);
+    // The Line (2, 0)-(4, 1) turned half way about (3, -1) is
+    // (4, -2)-(2, -3); mirrored about x = 0, (-4, -2)-(-2, -3).
+    let turned = &ghost.copies[1];
+    assert!(near_mm(turned[0], (-4.0, -2.0)), "{turned:?}");
+    assert!(near_mm(turned[1], (-2.0, -3.0)), "{turned:?}");
+}
+
+fn near_mm(a: (f64, f64), b: (f64, f64)) -> bool {
+    (a.0 - b.0).hypot(a.1 - b.1) < 1e-6
 }
 
 #[test]

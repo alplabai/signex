@@ -8,6 +8,8 @@
 use std::collections::HashMap;
 
 use crate::constraint::{Constraint, ConstraintKind, DimTarget};
+use crate::entity::EntityKind;
+use crate::id::SketchEntityId;
 use crate::sketch::SketchData;
 use crate::solver::lm::SolveResult;
 use crate::solver::residual::residual;
@@ -49,6 +51,78 @@ pub fn measured_value_at(
     }
     let rows = residual(&zeroed, state, index, sketch, &HashMap::new()).ok()?;
     rows.first().copied().filter(|v| v.is_finite())
+}
+
+/// A sketch point in plane mm.
+type Xy = (f64, f64);
+
+/// Where dimension `kind`'s line runs: between the two points, from a
+/// point to its foot on a line, or from a point to the nearest point of a
+/// circle or arc. `point` places a sketch point and `solved_radius` gives
+/// a circle's solved radius (`None` keeps the authored one), so the sketch
+/// canvas and the bake preview draw the same line from their own
+/// positions. `None` for an angle, a relation, or geometry with no line
+/// (a zero-length line, a point at a circle's centre).
+pub fn dimension_span(
+    kind: &ConstraintKind,
+    sketch: &SketchData,
+    point: impl Fn(SketchEntityId) -> Option<Xy>,
+    solved_radius: impl Fn(SketchEntityId) -> Option<f64>,
+) -> Option<(Xy, Xy)> {
+    let entity = |id: SketchEntityId| sketch.entities.iter().find(|e| e.id == id);
+    match *kind {
+        ConstraintKind::DistancePtPt { p1, p2, .. } => Some((point(p1)?, point(p2)?)),
+        ConstraintKind::DistancePtLine { point: p, line, .. } => {
+            let EntityKind::Line { start, end } = entity(line)?.kind else {
+                return None;
+            };
+            let p = point(p)?;
+            Some((p, foot_on_line(p, point(start)?, point(end)?)?))
+        }
+        ConstraintKind::DistancePtCircle {
+            point: p, circle, ..
+        } => {
+            let (centre, radius) = match entity(circle)?.kind {
+                EntityKind::Circle { center, radius } => {
+                    (point(center)?, solved_radius(circle).unwrap_or(radius))
+                }
+                EntityKind::Arc { center, start, .. } => {
+                    let (c, s) = (point(center)?, point(start)?);
+                    (c, (s.0 - c.0).hypot(s.1 - c.1))
+                }
+                _ => return None,
+            };
+            let p = point(p)?;
+            Some((p, nearest_on_circle(p, centre, radius)?))
+        }
+        _ => None,
+    }
+}
+
+/// The foot of the perpendicular from `p` to the line through `a` and `b`;
+/// `None` when the two ends meet.
+fn foot_on_line(p: Xy, a: Xy, b: Xy) -> Option<Xy> {
+    let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+    let len2 = dx * dx + dy * dy;
+    if len2 <= f64::EPSILON {
+        return None;
+    }
+    let t = ((p.0 - a.0) * dx + (p.1 - a.1) * dy) / len2;
+    Some((a.0 + t * dx, a.1 + t * dy))
+}
+
+/// The point of the circle at `centre` with `radius` nearest `p`; `None`
+/// when `p` is the centre.
+fn nearest_on_circle(p: Xy, centre: Xy, radius: f64) -> Option<Xy> {
+    let d = (p.0 - centre.0).hypot(p.1 - centre.1);
+    if d <= f64::EPSILON {
+        return None;
+    }
+    let k = radius / d;
+    Some((
+        centre.0 + (p.0 - centre.0) * k,
+        centre.1 + (p.1 - centre.1) * k,
+    ))
 }
 
 #[cfg(test)]
@@ -205,5 +279,80 @@ mod tests {
             .expect("solves");
         let got = measured_value(&rig.sketch, Some(&out.result), &reference);
         assert!(close(got, 3.0), "it follows the driving value: {got:?}");
+    }
+
+    impl Rig {
+        /// The dimension line of `kind` on the authored geometry.
+        fn span(&self, kind: ConstraintKind) -> Option<(Xy, Xy)> {
+            dimension_span(&kind, &self.sketch, |id| self.authored(id), |_| None)
+        }
+
+        /// Where point `id` was drawn.
+        fn authored(&self, id: SketchEntityId) -> Option<Xy> {
+            match self.sketch.entities.iter().find(|e| e.id == id)?.kind {
+                EntityKind::Point { x, y } => Some((x, y)),
+                _ => None,
+            }
+        }
+    }
+
+    fn near(got: Option<(Xy, Xy)>, a: Xy, b: Xy) -> bool {
+        let at = |p: Xy, q: Xy| (p.0 - q.0).hypot(p.1 - q.1) < 1e-9;
+        got.is_some_and(|(p, q)| at(p, a) && at(q, b))
+    }
+
+    #[test]
+    fn a_distance_to_a_line_runs_to_the_foot_of_the_perpendicular() {
+        let mut rig = Rig::new();
+        let line = rig.line((0.0, 0.0), (10.0, 0.0));
+        let point = rig.point(3.0, 2.5);
+        let got = rig.span(ConstraintKind::DistancePtLine {
+            point,
+            line,
+            target: DimTarget::Literal(1.0),
+        });
+        assert!(near(got, (3.0, 2.5), (3.0, 0.0)), "{got:?}");
+    }
+
+    #[test]
+    fn a_distance_to_a_circle_runs_to_its_nearest_point() {
+        let mut rig = Rig::new();
+        let center = rig.point(0.0, 0.0);
+        let circle = rig.add(EntityKind::Circle {
+            center,
+            radius: 2.0,
+        });
+        let point = rig.point(0.0, 5.0);
+        let kind = ConstraintKind::DistancePtCircle {
+            point,
+            circle,
+            target: DimTarget::Literal(0.0),
+        };
+        assert!(near(rig.span(kind.clone()), (0.0, 5.0), (0.0, 2.0)));
+        let solved = dimension_span(&kind, &rig.sketch, |id| rig.authored(id), |_| Some(4.0));
+        assert!(
+            near(solved, (0.0, 5.0), (0.0, 4.0)),
+            "the solved radius wins"
+        );
+    }
+
+    #[test]
+    fn a_distance_between_points_runs_between_them_and_an_angle_has_no_line() {
+        let mut rig = Rig::new();
+        let (p1, p2) = (rig.point(1.0, 1.0), rig.point(4.0, 5.0));
+        let got = rig.span(ConstraintKind::DistancePtPt {
+            p1,
+            p2,
+            target: DimTarget::Literal(5.0),
+        });
+        assert!(near(got, (1.0, 1.0), (4.0, 5.0)), "{got:?}");
+        let l1 = rig.line((0.0, 0.0), (1.0, 0.0));
+        let l2 = rig.line((0.0, 0.0), (1.0, 1.0));
+        let angle = ConstraintKind::Angle {
+            l1,
+            l2,
+            target: DimTarget::Literal(0.5),
+        };
+        assert_eq!(rig.span(angle), None);
     }
 }

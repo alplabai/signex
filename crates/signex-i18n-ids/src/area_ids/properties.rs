@@ -279,7 +279,6 @@ define_ids! {
     TABLE_TOC_WRITTEN = "properties-table-toc-written";
     TABLE_TOC_EXISTS = "properties-table-toc-exists";
     TABLE_TOC_FAILED = "properties-table-toc-failed";
-    TABLE_TOC_NOT_SERIALISED = "properties-table-toc-not-serialised";
     TABLE_TOC_HEADING = "properties-table-toc-heading";
     TABLE_REFRESH_FAILED = "properties-table-refresh-failed";
     TABLE_REFRESH_NO_REASON = "properties-table-refresh-no-reason";
@@ -512,4 +511,20 @@ define_ids! {
     PROPERTIES_TEXT_STYLE_NOT_STORED = "properties-text-style-not-stored";
     PROPERTIES_POWER_ILLUSTRATION_STYLE = "properties-power-illustration-style";
     PROPERTIES_POWER_ILLUSTRATION_FONT_SIZE = "properties-power-illustration-font-size";
+    // mockup row 49
+    PROPERTIES_ALL_RULES_NAME = "properties-all-rules-name";
+    PROPERTIES_RULE_TOTAL = "properties-rule-total";
+    // mockup rows 47 and 48
+    PROPERTIES_DRAWING_ILLUSTRATION_BORDER = "properties-drawing-illustration-border";
+    PROPERTIES_DRAWING_SAMPLE_WIRE = "properties-drawing-sample-wire";
+    PROPERTIES_TEXT_NOTE_ILLUSTRATION_SIZE = "properties-text-note-illustration-size";
+    PROPERTIES_TEXT_NOTE_ILLUSTRATION_JUSTIFY = "properties-text-note-illustration-justify";
+    // mockup rows 192 and 125
+    PROPERTIES_FP_PAD_SCOPE_TITLE = "properties-fp-pad-scope-title";
+    PROPERTIES_FP_PAD_SCOPE_FROM = "properties-fp-pad-scope-from";
+    PROPERTIES_FP_PAD_SCOPE_ATTRIBUTE = "properties-fp-pad-scope-attribute";
+    PROPERTIES_FP_PAD_SCOPE_SCOPE = "properties-fp-pad-scope-scope";
+    PROPERTIES_FP_PAD_SCOPE_SOURCE = "properties-fp-pad-scope-source";
+    PROPERTIES_FP_PAD_SCOPE_NUMBERING = "properties-fp-pad-scope-numbering";
+    PROPERTIES_FP_PAD_SCOPE_PASTE = "properties-fp-pad-scope-paste";
 }

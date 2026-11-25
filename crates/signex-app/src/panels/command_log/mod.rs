@@ -23,6 +23,8 @@ use crate::styles::{
     tokens::{composite_over, hover_overlay, resolve},
 };
 
+pub(crate) use toolbar::title_actions;
+
 pub use crate::app::core::command_log::{
     CLI_CLIENT, CommandLog, JumpTarget, LogCounts, LogFilters, LogOutcome, LogRow, LogSource,
     MAX_ROWS, ResultFilter, SourceKind, failure_code, operand_text,
@@ -200,7 +202,7 @@ fn sized_view<'a>(ctx: &'a PanelContext, width: f32) -> Element<'a, PanelMsg> {
     };
     let mut col: Column<Element<'a, PanelMsg>> =
         Column::new().width(Length::Fill).height(Length::Fill);
-    col = col.push(toolbar::bar(ctx, state, &counts, empty, width));
+    col = col.push(toolbar::bar(ctx, state, &counts, empty));
     if state.more_open {
         col = col.push(toolbar::more_strip(ctx, state));
     }
@@ -454,18 +456,15 @@ fn labelled_button<'a>(
     b.boxed()
 }
 
-/// A 24 px square icon button with a hover fill and a tooltip; `on` gives it
-/// the soft accent fill.
+/// A 24 px square icon button with a hover fill and a tooltip.
 fn icon_button<'a>(
     tokens: &ThemeTokens,
     glyph: svg::Handle,
     tip: Localized,
-    on: bool,
     on_press: PanelMsg,
 ) -> Element<'a, PanelMsg> {
-    let r = resolve(tokens);
-    let ink = if on { r.accent_soft_ink } else { r.ink3 };
-    let (hover, soft) = (hover_overlay(tokens), r.accent_soft);
+    let ink = resolve(tokens).ink3;
+    let hover = hover_overlay(tokens);
     let side = CM.field - SP.xs;
     let face = button(container(icon(glyph, ICON, ink)).center(Length::Fill))
         .width(side)
@@ -474,12 +473,8 @@ fn icon_button<'a>(
         .on_press(on_press)
         .style(
             move |_: &iced::Theme, status: button::Status| button::Style {
-                background: if on {
-                    Some(Background::Color(soft))
-                } else {
-                    matches!(status, button::Status::Hovered | button::Status::Pressed)
-                        .then_some(Background::Color(hover))
-                },
+                background: matches!(status, button::Status::Hovered | button::Status::Pressed)
+                    .then_some(Background::Color(hover)),
                 border: Border {
                     radius: Radii::GRAPHITE.small.into(),
                     ..Border::default()
@@ -585,5 +580,171 @@ fn result_glyph(tokens: &ThemeTokens, outcome: &LogOutcome) -> (svg::Handle, Col
         LogOutcome::Ok(_) => (crate::icons::icon_log_ok(GLYPH_THEME), ti(tokens.success)),
         LogOutcome::Warn(_) => (crate::icons::icon_log_warn(GLYPH_THEME), ti(tokens.warning)),
         LogOutcome::Failed(_) => (crate::icons::icon_log_error(GLYPH_THEME), ti(tokens.error)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::layout_probe::{LaidOutText, lay_out_texts};
+
+    /// The short bottom dock of the audit capture (mockup row 161): the
+    /// panel's content below its title bar, at the 12 px body.
+    const SHORT_DOCK: iced::Size = iced::Size::new(890.0, 180.0);
+
+    fn context_with_one_row() -> PanelContext {
+        let (app, _boot) = crate::app::Signex::new();
+        let mut ctx = app.document_state.panel_ctx.clone();
+        let log = &mut std::sync::Arc::make_mut(&mut ctx.command_log).log;
+        let seq = log.record(LogRow {
+            seq: 0,
+            at: chrono::Local::now(),
+            source: LogSource::Gui { window: None },
+            command: "undo".to_string(),
+            label: "Undo".to_string(),
+            operands: serde_json::Map::new(),
+            outcome: LogOutcome::Failed("Nothing to undo".to_string()),
+            took: Duration::ZERO,
+            document: None,
+            project: None,
+            undoable: false,
+            view_only: false,
+            undone_at: None,
+        });
+        assert_eq!(seq, Some(1));
+        ctx
+    }
+
+    fn laid_out(ctx: &PanelContext, window: iced::Size) -> Vec<LaidOutText> {
+        lay_out_texts(view(ctx), window)
+            .into_iter()
+            .map(|t| LaidOutText {
+                text: t.text.replace(['\u{2068}', '\u{2069}'], ""),
+                ..t
+            })
+            .collect()
+    }
+
+    fn bounds(texts: &[LaidOutText], label: &str) -> iced::Rectangle {
+        crate::layout_probe::find(texts, label).bounds
+    }
+
+    /// Mockup row 161: search, Source chips, All / Failed / Undone and
+    /// Follow newest share one row in the bottom dock, Follow newest last.
+    #[test]
+    fn the_filters_and_follow_newest_share_one_row_in_the_bottom_dock() {
+        let ctx = context_with_one_row();
+        let texts = laid_out(&ctx, SHORT_DOCK);
+        let source = bounds(&texts, "Source");
+        let all = bounds(&texts, "All");
+        let follow = bounds(&texts, "Follow newest");
+        let line = |b: iced::Rectangle| b.center_y();
+        let tolerance = TS.body / 2.0;
+        assert!(
+            (line(all) - line(source)).abs() < tolerance,
+            "{all:?} vs {source:?}"
+        );
+        assert!(
+            (line(follow) - line(source)).abs() < tolerance,
+            "{follow:?}"
+        );
+        let undone = bounds(&texts, "Undone 0");
+        assert!(
+            (line(undone) - line(source)).abs() < tolerance,
+            "{undone:?}"
+        );
+        assert!(
+            follow.x > undone.x + undone.width,
+            "Follow newest comes after the last result segment"
+        );
+        assert!(follow.x + follow.width <= SHORT_DOCK.width, "{follow:?}");
+    }
+
+    /// A narrow side dock still shows Follow newest, on its own line.
+    #[test]
+    fn a_side_dock_keeps_follow_newest_inside_the_panel() {
+        let ctx = context_with_one_row();
+        let narrow = iced::Size::new(290.0, 400.0);
+        let follow = bounds(&laid_out(&ctx, narrow), "Follow newest");
+        assert!(follow.x + follow.width <= narrow.width, "{follow:?}");
+    }
+
+    /// Mockup row 161: in a side dock the filters and Follow newest do not
+    /// fit one line, so Follow newest takes its own line under the filters;
+    /// in the bottom dock it shares the filters' line.
+    #[test]
+    fn a_side_dock_puts_follow_newest_on_its_own_line() {
+        let ctx = context_with_one_row();
+        let texts = laid_out(&ctx, iced::Size::new(290.0, 400.0));
+        let source = bounds(&texts, "Source");
+        let undone = bounds(&texts, "Undone 0");
+        let follow = bounds(&texts, "Follow newest");
+        assert!(
+            follow.y >= source.y + source.height && follow.y >= undone.y + undone.height,
+            "under the filters: {follow:?} vs {source:?} {undone:?}"
+        );
+        let texts = laid_out(&ctx, SHORT_DOCK);
+        let (source, follow) = (bounds(&texts, "Source"), bounds(&texts, "Follow newest"));
+        assert!(
+            (follow.center_y() - source.center_y()).abs() < TS.body / 2.0,
+            "{follow:?} vs {source:?}"
+        );
+    }
+
+    /// The search field gives up width first: the widest panel gives it
+    /// the mock's width, a side dock its least, the bottom dock what lies
+    /// between, and Follow newest stays in the panel.
+    #[test]
+    fn the_search_field_shrinks_so_follow_newest_stays_in_the_dock() {
+        let ctx = context_with_one_row();
+        let i18n: &I18n = &ctx.i18n;
+        let placeholder = t!(i18n, ids::COMMAND_LOG_FILTER_PLACEHOLDER)
+            .into_string()
+            .replace(['\u{2068}', '\u{2069}'], "");
+        let input_width = |width: f32| {
+            let window = iced::Size::new(width, SHORT_DOCK.height);
+            let inputs = crate::layout_probe::lay_out_inputs(view(&ctx), window);
+            crate::layout_probe::find(&inputs, &placeholder)
+                .bounds
+                .width
+        };
+        let (wide, dock, side) = (input_width(1400.0), input_width(890.0), input_width(290.0));
+        assert!(
+            (wide - side - (layout::SEARCH_W - layout::SEARCH_MIN)).abs() < 0.5,
+            "the mock's width at 1400 px, the least in a side dock: {wide} {side}"
+        );
+        assert!(side <= dock && dock <= wide, "{side} {dock} {wide}");
+        let follow = bounds(&laid_out(&ctx, SHORT_DOCK), "Follow newest");
+        assert!(follow.x + follow.width <= SHORT_DOCK.width, "{follow:?}");
+    }
+
+    /// Mockup row 161: in a short dock the detail pane keeps Replay and Jump
+    /// to in view; the error, arguments, result, undo and CLI line scroll.
+    #[test]
+    fn a_short_dock_keeps_the_detail_actions_in_view() {
+        let ctx = context_with_one_row();
+        let texts = laid_out(&ctx, SHORT_DOCK);
+        let replay = bounds(&texts, "Replay");
+        assert!(
+            replay.y + replay.height <= SHORT_DOCK.height,
+            "Replay at {replay:?} is below the panel"
+        );
+        let jump = bounds(&texts, "Jump to object");
+        assert!(jump.y + jump.height <= SHORT_DOCK.height, "{jump:?}");
+    }
+
+    /// A failed row's Replay hint stays pinned under Replay, so a short dock
+    /// never shows Replay without the hint that qualifies it.
+    #[test]
+    fn a_short_dock_keeps_the_replay_hint_under_replay() {
+        let ctx = context_with_one_row();
+        let texts = laid_out(&ctx, SHORT_DOCK);
+        let replay = bounds(&texts, "Replay");
+        let hint = bounds(
+            &texts,
+            "Replay runs it again with the same arguments; it fails the same way until the cause is fixed.",
+        );
+        assert!(hint.y >= replay.y + replay.height, "{hint:?} vs {replay:?}");
+        assert!(hint.y + hint.height <= SHORT_DOCK.height, "{hint:?}");
     }
 }

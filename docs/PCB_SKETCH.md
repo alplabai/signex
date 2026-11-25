@@ -204,22 +204,25 @@ Bake**.
   It lists what Bake writes, baked at the current solve without solving
   again: outline size, each hole's drill and plating, each keepout's
   layers, each slot's size, each anchor's component, and counts for the
-  rest. Targets that get nothing are not listed. It also shows the solve
-  state, a Bake as role picker for each closed profile (one undo step per
-  pick), or why the sketch does not bake, with Close gap. A click on the
-  canvas only highlights; the panel stays. The mode bar's Bake preview
-  button closes it. It writes nothing. While it is open the canvas draws the result
-  (Graphite mockup row 190): a veil in the ground colour, then the baked outline over the
-  board area, cutouts and mounting holes as openings, keepouts outlined
-  and faintly filled, V-scores dashed, all in the theme slots of
+  rest. Targets that get nothing are not listed. Under this Bake result
+  come Outline checks (every [outline check](#outline-checks), each
+  failure selecting its place, with Add fillets on a failing corner; they
+  warn only) and DOF (the solve state and the DOF card), then a Bake as
+  role picker for each closed profile (one undo step per pick)
+  (DECISIONS 2026-11-23, mockup row 179). When the sketch does not bake,
+  Bake result says why, with Close gap. A click on the canvas only
+  highlights; the panel stays. The mode bar's Bake preview button closes
+  it. It writes nothing. While it is open the canvas draws the result
+  (Graphite mockup row 190): a veil in the ground colour, then the baked
+  outline rimmed in `BoardEdge` with a faint fill of the same colour (not
+  the opaque `BoardArea`, which would hide the sketch), cutouts and
+  mounting holes as openings, keepouts outlined and faintly filled,
+  V-scores dashed, all in the theme slots of
   [Drawing the board](#drawing-the-board), with the sketch faint on top.
   The bake runs in `BoardSketchSession::refresh_preview` and the canvas
   reads it from `SketchExit::board_result`; a refused bake draws nothing.
-  When the sketch does not bake, the panel names why, and a click on the
-  reason selects the entity the refusal names
-  (`BoardBakeError::place`). The panel also lists the failed
-  [outline checks](#outline-checks), each selecting its place; they warn
-  only.
+  A click on the refusal selects the entity it names
+  (`BoardBakeError::place`).
 
 A save, close, quit or undock still commits the copy and keeps the mode on
 (`settle_board_sketch_of`), so a save never drops sketch work; the working
@@ -250,7 +253,9 @@ table with its Close button.
 ## Outline checks {#outline-checks}
 
 With nothing selected, Properties shows an **Outline checks** section under
-the Board summary (Graphite mockup row 179d). The checks run on the solve the editor already
+the Board summary (Graphite mockup row 179d); while a check fails, the
+section and its Fab profile group move right under the Board Sketch header,
+so the failure and Add fillets show without scrolling. The checks run on the solve the editor already
 has (no second solve) and walk the outline with the bake's own profile walk
 (`signex_bake::board::outline_checks`), so they see what Bake would write.
 They are read each time the panel is built, so every edit, Properties edit,
@@ -280,7 +285,12 @@ The router tool diameter is the project's (`router_tool_diameter` in the
 `.snxprj`), set when a fab tier or a fab profile naming one is applied
 (`DRC_RULES.md`, "Fab profiles"). The board sketch session copies it from
 the board's project on entry and after every edit; Properties shows it in a
-**Fab profile** group (`Router tool Ø 2.00 · from profile`).
+**Fab profile** group (`Router tool Ø 2.00 · from profile`). When the
+project's rules name the profile they were seeded from, the group's Profile
+row names it and the Inside corners and Min slot lines say which profile they
+ran against (`Inside corner R 0.00 < R 1.00 of the Standard router at
+(x, y)`); with none named, the Profile row says none is set and where to set
+one (#2903).
 
 **Every outline check warns only; Bake still applies the sketch**
 (`DECISIONS.md`, Caner 2026-11-20, decision 3).
@@ -466,6 +476,12 @@ arc's centre connects nothing, and a circle is a shape of its own (Caner,
   or is over the cap, a spacing that does not evaluate, a looped source chain.
 - **Outline checks** read every instance: a hole, cutout or keepout with one
   instance outside the board is named by its entity.
+- **The pattern form** (mockup row 179e). A click on a pattern's glyph opens a
+  form titled by its kind (Rectangular, Linear or Circular pattern): Source,
+  Count, Spacing X and Y, and what the bake writes ("Bakes into 4 holes").
+  A spacing that names parameters (`board_w - 2*hole_inset`) shows the value
+  it resolves to beside it. A board item has no pad number, so the footprint
+  form's Numbering section is not offered on a board.
 
 ## Targets {#targets}
 

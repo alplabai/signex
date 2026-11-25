@@ -142,6 +142,64 @@ fn a_board_without_an_outline_is_not_panelized() {
     assert_eq!(panel(&app, &path), None);
 }
 
+/// The Properties texts of the board in view, isolation marks removed.
+fn properties_texts(app: &mut Signex) -> Vec<String> {
+    app.refresh_panel_ctx();
+    let ctx = &app.document_state.panel_ctx;
+    let view = crate::panels::view_panel(crate::panels::PanelKind::Properties, ctx);
+    crate::layout_probe::lay_out_texts(view, iced::Size::new(360.0, 6000.0))
+        .into_iter()
+        .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+        .collect()
+}
+
+fn panel_section_open(app: &Signex) -> bool {
+    let open = crate::panels::pcb_board_properties::panel_section_open_key();
+    app.document_state
+        .panel_ctx
+        .collapsed_sections
+        .contains(&open)
+}
+
+/// Mockup row 93 (#2902): Panelize Board opens the Panel section, so its
+/// settings and Remove Panel show under Grid Manager and Guide Manager.
+#[test]
+fn panelizing_opens_the_panel_section_under_the_managers() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _path) = app_with(dir.path(), true);
+    assert!(!panel_section_open(&app));
+    run(&mut app, "panelize_board");
+    assert!(panel_section_open(&app), "panelizing opens the section");
+    let texts = properties_texts(&mut app);
+    let at = |label: &str| {
+        texts
+            .iter()
+            .position(|t| t == label)
+            .unwrap_or_else(|| panic!("{label:?} missing from {texts:?}"))
+    };
+    assert!(at("GUIDE MANAGER") > at("GRID MANAGER"));
+    assert!(at("PANEL") > at("GUIDE MANAGER"));
+    assert!(at("Remove Panel") > at("PANEL"));
+
+    // Closed again by the user, a second Panelize Board (which keeps the
+    // panel) leaves it closed.
+    app.document_state
+        .panel_ctx
+        .collapsed_sections
+        .remove(&crate::panels::pcb_board_properties::panel_section_open_key());
+    run(&mut app, "panelize_board");
+    assert!(!panel_section_open(&app));
+}
+
+/// A refused Panelize Board opens nothing.
+#[test]
+fn a_refused_panelize_leaves_the_panel_section_closed() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _path) = app_with(dir.path(), false);
+    run(&mut app, "panelize_board");
+    assert!(!panel_section_open(&app));
+}
+
 #[test]
 fn the_properties_panel_section_edits_each_setting_as_an_undo_step() {
     let dir = tempfile::tempdir().unwrap();

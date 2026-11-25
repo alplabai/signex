@@ -10,31 +10,34 @@
 //! board's vias until the Layer Stack Manager stores them
 //! (`signex_engine::pcb::via_types`), so tenting stays editable here.
 
-use iced::widget::{column, pick_list, row};
-use iced::{Element, Length, Widget as _};
+use iced::alignment::{Horizontal, Vertical};
+use iced::widget::{Space, column, container, pick_list, row, stack as layered};
+use iced::{Background, Color, Element, Length, Padding, Theme, Widget as _};
 use signex_engine::pcb::via_types::ViaTypeKey;
-use signex_i18n::{MessageId, UserText, ids, t};
-use signex_types::pcb_layer::CopperLayer;
+use signex_i18n::{I18n, Localized, MessageId, UserText, ids, t};
+use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_types::pcb_stack::StackMode;
 use signex_types::pcb_via_protection::{Ipc4761, PlugSide, ViaFill};
-use signex_widgets::dropdown_style::GraphiteDropdown as _;
-use signex_widgets::{Label, button, chips};
+use signex_widgets::dropdown_style::{DropdownLook, FIELD_TEXT_SIZE, GraphiteDropdown as _};
+use signex_widgets::{Label, button, chips, text};
 
 use super::drawing::via as drawing;
-use super::linked::{Segment, segments};
+use super::linked::{Segment, prefixed, segments, two_fields, unit, with_unit};
 use super::mask::{flag_box, greyed_unless, via_mask_section};
 use super::rows::{
-    Look, Section, labelled, mm_field, net_row, pair, stack, sunken_value, value_box, with_tip,
+    Look, Section, labelled, mm_field, net_row, stack, sunken_value, value_box, with_tip,
 };
 use super::stack_rows::{
     caption, illustration, later_link, linked, mode_tiles, pill, size_rows, tagged, unstored,
     unstored_row, warn_callout,
 };
 use super::{
-    Editability, PcbPrimitiveMsg, PrimitiveField as F, PrimitiveFlag, PrimitiveTarget, SP, TS,
-    ViaFacts, format_number, net_info,
+    Editability, LayerChoice, PcbPrimitiveMsg, PrimitiveField as F, PrimitiveFlag, PrimitiveTarget,
+    SP, TS, ViaFacts, ViaTypeChoice, format_number, net_info,
 };
+use crate::panels::typed_pick::CHEVRON_ROOM;
 use crate::panels::{PanelContext, PanelMsg};
+use crate::pcb_canvas::layer_style;
 use crate::styles::ti;
 use crate::styles::tokens::{hover_overlay, resolve};
 
@@ -77,27 +80,7 @@ fn definition<'a>(look: Look<'a>, f: &'a ViaFacts) -> Option<Element<'a, PanelMs
         None,
     );
     s.push(common, ids::PCB_PRIM_NET, net_row(look, common));
-    let live = common.is_editable() && !common.target.is_placement();
-    let target = common.target.clone();
-    let list = pick_list(
-        f.via_type.clone(),
-        f.types.as_slice(),
-        |c: &super::ViaTypeChoice| c.label.clone(),
-    )
-    .graphite()
-    .padding(SP.s)
-    .width(Length::Fill);
-    let list = if live {
-        list.on_select(move |c: super::ViaTypeChoice| {
-            via_msg(ViaMsg::TypePicked {
-                target: target.clone(),
-                key: c.key,
-            })
-        })
-        .boxed()
-    } else {
-        list.boxed()
-    };
+    let list = via_type_field(look, f);
     s.push(
         common,
         ids::PCB_PRIM_VIA_TYPE,
@@ -181,9 +164,10 @@ fn definition<'a>(look: Look<'a>, f: &'a ViaFacts) -> Option<Element<'a, PanelMs
         labelled(
             look,
             ids::PCB_PRIM_POSITION,
-            pair(
-                mm_field(common, F::X, f.x, look),
-                mm_field(common, F::Y, f.y, look),
+            two_fields(
+                prefixed(look, common, F::X, f.x, ids::PCB_PRIM_X),
+                prefixed(look, common, F::Y, f.y, ids::PCB_PRIM_Y),
+                unit(look, ids::PCB_PRIM_UNIT_MM),
             ),
         ),
     );
@@ -201,6 +185,158 @@ fn definition<'a>(look: Look<'a>, f: &'a ViaFacts) -> Option<Element<'a, PanelMs
         ));
     }
     s.finish()
+}
+
+/// The Via Type dropdown (mockup row 96). Its entries name each type and
+/// its spec; the closed field shows the picked type's span glyph, name and
+/// sizes over the list, whose own text is hidden so it never shows cut.
+fn via_type_field<'a>(look: Look<'a>, f: &'a ViaFacts) -> Element<'a, PanelMsg> {
+    let list = via_type_list(f);
+    let Some(choice) = f.via_type.as_ref() else {
+        return list;
+    };
+    layered![list, type_face(look, f, choice)]
+        .width(Length::Fill)
+        .boxed()
+}
+
+/// The Via Type pick_list under the face: its entries are the full labels,
+/// its own text is transparent so only the face shows on the closed field.
+fn via_type_list(f: &ViaFacts) -> Element<'_, PanelMsg> {
+    let common = &f.common;
+    let live = common.is_editable() && !common.target.is_placement();
+    let target = common.target.clone();
+    let list = pick_list(
+        f.via_type.clone(),
+        f.types.as_slice(),
+        |c: &ViaTypeChoice| c.label.clone(),
+    )
+    .graphite()
+    .style(|theme: &Theme, status| pick_list::Style {
+        text_color: Color::TRANSPARENT,
+        ..DropdownLook::of_theme(theme).field_style(status)
+    })
+    .padding(SP.s)
+    .width(Length::Fill);
+    if live {
+        list.on_select(move |c: ViaTypeChoice| {
+            via_msg(ViaMsg::TypePicked {
+                target: target.clone(),
+                key: c.key,
+            })
+        })
+        .boxed()
+    } else {
+        list.boxed()
+    }
+}
+
+/// The closed Via Type field: span glyph, the type's name (cut with an
+/// ellipsis when the dock is narrow) and its diameter / drill. It leaves
+/// the chevron free and takes no input, so a press opens the list.
+fn type_face<'a>(
+    look: Look<'a>,
+    f: &'a ViaFacts,
+    choice: &'a ViaTypeChoice,
+) -> Element<'a, PanelMsg> {
+    let mut line = row![
+        span_glyph(look, &f.layers, choice.key),
+        text(UserText::new(choice.name.clone()))
+            .size(FIELD_TEXT_SIZE)
+            .color(look.ink)
+            .wrapping(iced::widget::text::Wrapping::None)
+            .ellipsis(iced::widget::text::Ellipsis::End)
+            .width(Length::Fill)
+            .boxed(),
+    ]
+    .spacing(SP.s)
+    .align_y(iced::Alignment::Center);
+    if let Some((diameter, drill)) = f.type_size {
+        let sizes = t!(
+            look.ctx.i18n,
+            ids::PCB_PRIM_VIA_TYPE_SIZES,
+            "diameter" => format_number(diameter),
+            "drill" => format_number(drill)
+        );
+        line = line.push(
+            text(sizes)
+                .size(TS.caption)
+                .font(iced::Font::MONOSPACE)
+                .color(resolve(look.tokens()).ink4)
+                .wrapping(iced::widget::text::Wrapping::None)
+                .boxed(),
+        );
+    }
+    container(line)
+        .padding(Padding {
+            top: SP.s,
+            bottom: SP.s,
+            left: SP.s,
+            right: CHEVRON_ROOM,
+        })
+        .height(Length::Fill)
+        .align_y(Vertical::Center)
+        .width(Length::Fill)
+        .boxed()
+}
+
+/// A via type's span glyph: the board's copper layers top to bottom as
+/// lines in their colours, and a bar over the layers the type spans. It is
+/// as tall as the field's text.
+fn span_glyph<'a>(
+    look: Look<'a>,
+    layers: &[LayerChoice],
+    key: ViaTypeKey,
+) -> Element<'a, PanelMsg> {
+    let order: Vec<CopperLayer> = if layers.is_empty() {
+        vec![key.top, key.bottom]
+    } else {
+        layers.iter().map(|l| l.layer).collect()
+    };
+    let count = order.len().max(1);
+    let at = |layer: CopperLayer, or: usize| order.iter().position(|l| *l == layer).unwrap_or(or);
+    let (a, b) = (at(key.top, 0), at(key.bottom, count - 1));
+    let (from, to) = (a.min(b), a.max(b));
+    let height = FIELD_TEXT_SIZE;
+    let pitch = height / count as f32;
+    let stroke = (pitch / 2.0).min(height / 6.0);
+    let swatch = |colour: Color, width: Length, tall: f32| -> Element<'a, PanelMsg> {
+        container(Space::new())
+            .width(width)
+            .height(Length::Fixed(tall))
+            .style(move |_: &Theme| container::Style {
+                background: Some(Background::Color(colour)),
+                ..container::Style::default()
+            })
+            .boxed()
+    };
+    let lines = column(order.iter().map(|&layer| {
+        // The palette colour: a layer repainted in the view (#2363) is not
+        // carried in `LayerChoice` yet.
+        let colour = layer_style::layer_colour(PcbLayer::from(layer), look.tokens());
+        container(swatch(Color { a: 1.0, ..colour }, Length::Fill, stroke))
+            .height(Length::Fixed(pitch))
+            .width(Length::Fill)
+            .align_y(Vertical::Center)
+            .boxed()
+    }));
+    let width = height + height / 8.0;
+    let bar = swatch(
+        look.muted,
+        Length::Fixed(width / 5.0),
+        pitch * (to - from + 1) as f32,
+    );
+    let bar = container(bar)
+        .padding(Padding {
+            top: pitch * from as f32,
+            ..Padding::ZERO
+        })
+        .width(Length::Fill)
+        .align_x(Horizontal::Center);
+    layered![lines.boxed(), bar.boxed()]
+        .width(Length::Fixed(width))
+        .height(Length::Fixed(height))
+        .boxed()
 }
 
 /// A row with an empty label column, for links under a field.
@@ -249,7 +385,11 @@ fn via_stack<'a>(look: Look<'a>, f: &'a ViaFacts) -> Option<Element<'a, PanelMsg
             ids::PCB_PRIM_FINISHED_HOLE,
             with_tip(
                 look,
-                tagged(look, finished, Some(ids::PCB_PRIM_FROM_DRILL)),
+                tagged(
+                    look,
+                    with_unit(finished, unit(look, ids::PCB_PRIM_UNIT_MM)),
+                    Some(ids::PCB_PRIM_FROM_DRILL),
+                ),
                 ids::PCB_PRIM_FINISHED_HOLE_TIP,
             ),
         ),
@@ -289,7 +429,12 @@ fn size_row<'a>(
     } else {
         mm_field(common, field, value, look)
     };
-    let mut value_row = row![input].spacing(SP.s).align_y(iced::Alignment::Center);
+    let mut value_row = row![
+        container(input).width(Length::Fill).boxed(),
+        unit(look, ids::PCB_PRIM_UNIT_MM)
+    ]
+    .spacing(SP.s)
+    .align_y(iced::Alignment::Center);
     if own {
         let icon = iced::widget::svg(crate::icons::icon_undo(look.ctx.theme_id))
             .width(Length::Fixed(TS.label))
@@ -400,23 +545,42 @@ pub(super) fn class_label(class: Ipc4761) -> MessageId {
     }
 }
 
+/// The short name of a class: "Type I-b", "open", "Custom". A via type's
+/// spec and the Protection header's chip both name it so.
+pub(crate) fn class_short(i18n: &I18n, class: Ipc4761) -> Localized {
+    match class.code() {
+        Some(code) => t!(i18n, ids::PCB_PRIM_IPC_CODE, "code" => code),
+        None if class == Ipc4761::Open => t!(i18n, ids::PCB_PRIM_IPC_SHORT_OPEN),
+        None => t!(i18n, ids::PCB_PRIM_IPC_CUSTOM),
+    }
+}
+
+/// The Protection header's badge (mockup row 96): the class chip and
+/// "from type".
+fn protection_badge<'a>(look: Look<'a>, class: Ipc4761) -> Element<'a, PanelMsg> {
+    row![
+        pill(look, class_short(&look.ctx.i18n, class)),
+        text(look.t(ids::PCB_PRIM_FROM_TYPE))
+            .size(TS.dense)
+            .color(resolve(look.tokens()).ink4)
+            .wrapping(iced::widget::text::Wrapping::None)
+            .boxed(),
+    ]
+    .spacing(SP.xs)
+    .align_y(iced::Alignment::Center)
+    .boxed()
+}
+
 fn protection<'a>(look: Look<'a>, f: &'a ViaFacts) -> Option<Element<'a, PanelMsg>> {
     let common = &f.common;
+    let class = f.protection.map(|p| p.class());
     let mut s = Section::new(look, ids::PCB_PRIM_PROTECTION).collapsible(
         "pcb_prim.via.protection",
         false,
         None,
     );
-    let class = f.protection.map(|p| p.class());
     if let Some(class) = class {
-        s.push_row(labelled_blank(
-            look,
-            tagged(
-                look,
-                row![pill(look, look.t(class_label(class)))].boxed(),
-                Some(ids::PCB_PRIM_FROM_TYPE),
-            ),
-        ));
+        s = s.badge(protection_badge(look, class));
     }
     let choices: Vec<ClassChoice> = Ipc4761::ALL
         .into_iter()

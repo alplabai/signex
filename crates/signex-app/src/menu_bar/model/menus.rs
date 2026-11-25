@@ -3,9 +3,9 @@
 
 use super::items::{
     cmd, cmd_item, cmd_item_gated, cmd_item_gated_as, cmd_toggle, header, item, item_if,
-    item_if_command, item_named, panel_item, placeholder, submenu, unavailable,
+    item_if_command, item_named, panel_item, placeholder, submenu, unavailable, with_icon,
 };
-use super::{MenuEntry, MenuMessage};
+use super::{MenuEntry, MenuIcon, MenuMessage};
 use crate::app::command::enablement::{new_part_menu_enabled, remove_part_menu_enabled};
 use crate::app::pcb_tools::{BoardPlaceTool, ToolState};
 use crate::app::update_pcb::PcbSyncLabel;
@@ -696,21 +696,25 @@ fn layouts(ctx: &MenuContext) -> Vec<MenuEntry> {
                     is_enabled: true,
                 },
                 checked: Some(layout.active),
+                icon: None,
             }));
         }
     }
     rows.push(SEP);
-    rows.push(cmd_item(ctx, cmd("save_workspace_layout", "")));
+    // Mockup row 166: the save and undo glyphs on Save Layout… and Reset.
+    rows.push(with_icon(
+        cmd_item(ctx, cmd("save_workspace_layout", "")),
+        MenuIcon::Save,
+    ));
     rows.push(cmd_item(ctx, cmd("manage_workspace_layouts", "")));
     if let Some(name) = &menu.resettable {
         let label = ctx.i18n.message_plain(
             menu_ids::MENU_WINDOW_LAYOUTS_RESET,
             &[("name", signex_i18n::Arg::from(name.as_str()))],
         );
-        rows.push(cmd_item_gated_as(
-            ctx,
-            cmd("reset_workspace_layout", ""),
-            label,
+        rows.push(with_icon(
+            cmd_item_gated_as(ctx, cmd("reset_workspace_layout", ""), label),
+            MenuIcon::Reset,
         ));
     }
     rows

@@ -93,8 +93,8 @@ immediately, each with its gesture or key:
 - **Pan**: right-drag
 - **Zoom**: the mouse wheel (with the wheel set to Scroll, Ctrl + wheel, or
   Cmd + wheel on macOS)
-- **Find any command**: the command palette key (`Ctrl+K` in the default
-  profile)
+- **Find any command**: the command palette key (`Ctrl+Shift+P` in the
+  default profile)
 - **All keyboard shortcuts**: `F1`
 
 Its footer says what the mouse wheel is set to; **change** opens
@@ -110,7 +110,7 @@ match is highlighted and the count under the list says how many match. The
 **Schematic / PCB / All** switch picks which editor's shortcuts are listed; it
 starts on the editor you are in (on **All** in a footprint or library
 editor, or with no editor open). **Edit in Preferences…** closes the sheet
-and opens **Preferences ▸ Keyboard Shortcuts**. `F1` again, **Close** or
+and opens **Preferences ▸ Keyboard shortcuts**. `F1` again, **Close** or
 `Esc` closes it.
 
 ## 3. Create a project
@@ -346,8 +346,8 @@ is tinted red; an undone one is struck through.
   leaves your selection as it was. If one of those items is gone or its
   document is closed, Replay says what is missing and changes nothing;
   **Jump to** shows the part, net or point it named.
-- Zoom, pan and selection commands are hidden until **More ▸ Show view
-  commands** is on.
+- Zoom, pan and selection commands are hidden until you press **More** and turn
+  on the **Show view commands** switch.
 - **Pause logging**, **Save log as…** (a `.jsonl` file), **Clear** and
   **More** are at the right end of the filter bar. The log is kept for this
   session only; nothing is written to disk unless you save it. Details:
@@ -1009,7 +1009,7 @@ Messages line and changes nothing; run it again.
 
 ### Find Similar Objects
 
-**Edit ▸ Find Similar Objects...** (`Shift+F`, or the right-click menu) starts
+**Edit ▸ Find Similar Objects…** (`Shift+F`, or the right-click menu) starts
 from the object under the cursor, or the one selected object. The dialog lists
 its properties with the object's value for each, and a **Same** / **Any**
 choice: **Kind** starts at Same and the rest at Any, so at first every object
@@ -1064,14 +1064,22 @@ pins that connect nothing or two outputs wired together.
 1. Press `F8`. This runs the check on the project immediately.
    Alternatively choose **Project ▸ Electrical Rules Check**, which opens a
    dialog where you can set the severity of each rule and press **Run ERC**.
-2. The **ERC** panel opens with the results. Its header shows the number of
-   errors, warnings and info items, and `<` and `>` step through them.
-3. Each row shows a severity letter (`E` error, `W` warning, `I` info), the
-   rule, the message, and the sheet and position. Click a row to jump to the
-   item on the canvas. The button at the end of a row either says **Show on
-   Canvas** or, for an unused pin, **Add No-Connect**, which places a
-   no-connect marker on that pin.
-4. **Clear** empties the list.
+2. The **ERC** panel opens with the results. At its top are the **Run ERC**
+   button, with its key, and three count tiles for errors, warnings and info.
+   Press a tile with findings to list only that severity; press it again to list all. A
+   clean run shows "No problems found." with what it checked.
+3. The findings are grouped by rule: each group's heading shows the rule, its
+   severity letter (`E` error, `W` warning, `I` info) and how many findings
+   it holds; click the heading to fold the group. Each row shows its severity
+   letter, the message, and the sheet and position. Click a row to jump to
+   the item on the canvas. Hover a row, or select it, for its buttons:
+   **Show** selects and frames the item; **Add No-Connect**, on an unused
+   pin, places a no-connect marker on that pin; **Waive net**, on a finding
+   about a net, waives the rule for that net; **Waive** asks for a reason, then waives that one
+   finding. Waived findings and nets are listed in the **Waived** group at
+   the end, each with **Restore**.
+4. To empty the list, press the clear button in the panel's title bar (its
+   tooltip says "Clear the ERC results"). It shows once ERC has run.
 
 Besides wiring mistakes, ERC runs completeness checks (a part with no
 footprint or value, an unannotated designator, a single-pin net, a net with no
@@ -1091,7 +1099,8 @@ names that wire's net, which is almost always a mistake.
 The **Messages** panel (**View ▸ Messages**) is the application's runtime
 log, not the ERC results. Read ERC results in the ERC panel.
 
-Before you run the check the panel shows "No ERC diagnostics yet". Run `F8`
+Before you run the check the panel shows
+"Run ERC to populate project-wide diagnostics". Run `F8`
 again after each round of edits. Until you do, the panel keeps the last run's
 results and warns "Results may be out of date": a finding whose part, wire or
 label you have deleted disappears from the panel and the sheet, and **Undo**
@@ -1100,7 +1109,8 @@ finding until the next run, so trust only a fresh run.
 
 In the picture below the check has run on the sheet from section 6. The wire
 ends on the lower pin of `R1`, but the upper pin connects to nothing, so the
-**ERC** panel lists one warning, "Unused pin", with an **Add No-Connect** button.
+**ERC** panel lists one warning in the "Unused pin" group; its row offers
+**Add No-Connect**.
 
 ![The ERC panel at the bottom of the window listing one unused-pin warning for R1](../assets/screenshots/guide-erc.png)
 
@@ -1163,7 +1173,6 @@ was not changed. Open the file in the newer Signex to edit it.
 
 ## 11. Export PDF and BOM
 The PDF is under **File ▸ Export**; the BOM, netlist and ERC report are under **Tools ▸ Reports**. Both need a schematic open.
-Both exports are under **File ▸ Export** and need a schematic open.
 
 **PDF**
 
@@ -1350,7 +1359,8 @@ a PDF. Each step names the section with the detail. The shortcuts are those of
 the default Signex Standard profile; the menu path always works.
 
 1. **Create the project.** Choose **File ▸ New Project**, name it in the
-   save dialog, and keep the `.snxprj` ending (section 3). Signex creates a
+   **New Project** dialog (**Project name**, **Location**) and press
+   **Create project** (section 3). Signex creates a
    folder named after the project; a blank `.snxsch` in it opens in a tab.
 2. **Find a part.** Open **View ▸ Components** and expand **Stock**
    (section 5). Type in the search field (a part number or a value such as
@@ -1361,7 +1371,8 @@ the default Signex Standard profile; the menu path always works.
    Components panel). The part follows the cursor; click to drop it and press
    `Esc` to let go (section 5).
 4. **Wire it.** Choose **Place ▸ Wire** (or press `P` then `W`, or `Ctrl+W`),
-   click to start, click to bend, and double-click to stop (section 6). End
+   click to start, click again to end it (the second click places the wire);
+   press `Insert` to add a corner and keep drawing (section 6). End
    each wire on a pin end of the part.
 5. **Name the net.** Choose **Place ▸ Net Label** (or press `P` then `N`),
    click the wire, press `Esc`, double-click the label, type the name, and press

@@ -16,6 +16,7 @@ use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::parameter_refs::{RowValue, resolve_rows};
 use signex_sketch::solver::FullSolveOutput;
+use signex_sketch::solver::measure::dimension_span;
 use signex_sketch::solver::residual::resolve_dim;
 use signex_sketch::solver::state::{circle_radius, point_xy};
 use signex_types::sketch::SketchHost;
@@ -57,6 +58,9 @@ pub(super) enum PreviewPad {
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct DrivingDimension {
     pub(super) at: Mm,
+    /// The dimension line, from one measured end to the other; `None` for
+    /// an angle.
+    pub(super) span: Option<(Mm, Mm)>,
     /// The parameter its expression names, when it names exactly one.
     pub(super) name: Option<String>,
     /// Millimetres, or radians for an angle.
@@ -146,6 +150,12 @@ impl BakePreview {
             .copied()
             .chain(pad_points)
             .chain(self.dimensions.iter().map(|d| d.at))
+            .chain(
+                self.dimensions
+                    .iter()
+                    .filter_map(|d| d.span)
+                    .flat_map(|(a, b)| [a, b]),
+            )
             .fold(None, |acc, p| {
                 Some(match acc {
                     None => (p, p),
@@ -255,6 +265,43 @@ impl Positions<'_> {
             }
         }
     }
+
+    /// The dimension line of `kind` at the solve, as the sketch canvas
+    /// draws it; `None` for an angle.
+    fn span(&self, kind: &ConstraintKind) -> Option<(Mm, Mm)> {
+        let result = &self.solve.result;
+        dimension_span(
+            kind,
+            self.sketch,
+            |id| self.point(id),
+            |id| circle_radius(id, &result.state, &result.index),
+        )
+    }
+
+    /// Where a dimension's label sits: the middle of its line, else the
+    /// middle of the entities it names. `None` when none can be placed.
+    fn label_at(
+        &self,
+        kind: &ConstraintKind,
+        span: Option<(Mm, Mm)>,
+        entities: &HashMap<SketchEntityId, &Entity>,
+    ) -> Option<Mm> {
+        if let Some((a, b)) = span {
+            return Some(((a.0 + b.0) / 2.0, (a.1 + b.1) / 2.0));
+        }
+        let anchors: Vec<Mm> = kind
+            .entities()
+            .filter_map(|id| self.anchor(id, entities))
+            .collect();
+        if anchors.is_empty() {
+            return None;
+        }
+        let n = anchors.len() as f64;
+        let (sx, sy) = anchors
+            .iter()
+            .fold((0.0, 0.0), |(x, y), p| (x + p.0, y + p.1));
+        Some((sx / n, sy / n))
+    }
 }
 
 /// Points along an arc of `sweep` radians from `from`, both ends included.
@@ -288,24 +335,16 @@ fn driving_dimensions(
         .filter_map(|c| {
             let target = c.kind.dim_target()?;
             let value = resolve_dim(target, &solve.params).ok()?;
-            let anchors: Vec<Mm> = c
-                .kind
-                .entities()
-                .filter_map(|id| at.anchor(id, &entities))
-                .collect();
-            if anchors.is_empty() {
-                return None;
-            }
-            let n = anchors.len() as f64;
-            let (sx, sy) = anchors
-                .iter()
-                .fold((0.0, 0.0), |(x, y), p| (x + p.0, y + p.1));
+            // The label sits on its dimension line, as on the sketch canvas.
+            let span = at.span(&c.kind);
+            let label_at = at.label_at(&c.kind, span, &entities)?;
             let name = match target {
                 DimTarget::Expr(source) => bound_parameter(source, sketch).map(str::to_owned),
                 DimTarget::Literal(_) => None,
             };
             Some(DrivingDimension {
-                at: (sx / n, sy / n),
+                at: label_at,
+                span,
                 is_last_good: name.as_ref().is_some_and(|n| failing.contains(n)),
                 name,
                 value,

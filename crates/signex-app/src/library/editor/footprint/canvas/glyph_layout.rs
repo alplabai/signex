@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 use iced::{Point, Rectangle, Size};
 use signex_sketch::SketchData;
-use signex_sketch::array::{Array, ArrayId};
+use signex_sketch::array::{Array, ArrayId, ArrayKind};
 use signex_sketch::constraint::{Constraint, ConstraintKind};
 use signex_sketch::entity::EntityKind;
 use signex_sketch::id::{ConstraintId, SketchEntityId};
@@ -138,7 +138,10 @@ pub(crate) fn glyph_at(glyphs: &[Glyph], p: Point) -> Option<&Glyph> {
 }
 
 /// A label `text` long, centred on `anchor`.
-fn label_rect(anchor: Point, text: &str) -> Rectangle {
+pub(in crate::library::editor::footprint::canvas) fn label_rect(
+    anchor: Point,
+    text: &str,
+) -> Rectangle {
     let width =
         text.chars().count() as f32 * GLYPH_TEXT * ADVANCE_EM + 2.0 * GLYPH_TEXT * LABEL_PAD_EM;
     let height = GLYPH_TEXT * LABEL_HEIGHT_EM;
@@ -226,26 +229,10 @@ impl Lookup<'_> {
         }
     }
 
-    /// A circle's or arc's centre and radius: the solved radius of a
-    /// circle, an arc's start distance.
-    fn round(&self, id: SketchEntityId) -> Option<((f64, f64), f64)> {
-        match self.kind(id)? {
-            EntityKind::Circle { center, radius } => {
-                let solved = self.state.last_solve.as_ref().and_then(|s| {
-                    signex_sketch::solver::state::circle_radius(
-                        id,
-                        &s.result.state,
-                        &s.result.index,
-                    )
-                });
-                Some((self.point(*center)?, solved.unwrap_or(*radius)))
-            }
-            EntityKind::Arc { center, start, .. } => {
-                let (c, s) = (self.point(*center)?, self.point(*start)?);
-                Some((c, (s.0 - c.0).hypot(s.1 - c.1)))
-            }
-            _ => None,
-        }
+    /// A circle's radius at the last solve, if there is one.
+    fn solved_radius(&self, id: SketchEntityId) -> Option<f64> {
+        let solve = self.state.last_solve.as_ref()?;
+        signex_sketch::solver::state::circle_radius(id, &solve.result.state, &solve.result.index)
     }
 
     /// Where an entity is drawn from: a point itself, a line's midpoint,
@@ -334,35 +321,16 @@ fn constraint_parts(kind: &ConstraintKind, l: &Lookup<'_>) -> (&'static str, Vec
     }
 }
 
-/// The dimension line of `kind` in world mm: between the two points, from
-/// a point to its foot on a line, or from a point to the nearest point of
-/// a circle. `None` for an angle (and anything not a distance).
+/// The dimension line of `kind` in world mm (see
+/// [`signex_sketch::solver::measure::dimension_span`]). `None` for an
+/// angle (and anything not a distance).
 fn dimension_span(kind: &ConstraintKind, l: &Lookup<'_>) -> Option<((f64, f64), (f64, f64))> {
-    match kind {
-        ConstraintKind::DistancePtPt { p1, p2, .. } => Some((l.point(*p1)?, l.point(*p2)?)),
-        ConstraintKind::DistancePtLine { point, line, .. } => {
-            let p = l.point(*point)?;
-            let (a, b) = l.line_ends(*line)?;
-            let (a, b) = (l.point(a)?, l.point(b)?);
-            let (dx, dy) = (b.0 - a.0, b.1 - a.1);
-            let len2 = dx * dx + dy * dy;
-            if len2 <= f64::EPSILON {
-                return None;
-            }
-            let t = ((p.0 - a.0) * dx + (p.1 - a.1) * dy) / len2;
-            Some((p, (a.0 + t * dx, a.1 + t * dy)))
-        }
-        ConstraintKind::DistancePtCircle { point, circle, .. } => {
-            let p = l.point(*point)?;
-            let (c, r) = l.round(*circle)?;
-            let d = (p.0 - c.0).hypot(p.1 - c.1);
-            if d <= f64::EPSILON {
-                return None;
-            }
-            Some((p, (c.0 + (p.0 - c.0) * r / d, c.1 + (p.1 - c.1) * r / d)))
-        }
-        _ => None,
-    }
+    signex_sketch::solver::measure::dimension_span(
+        kind,
+        l.sketch,
+        |id| l.point(id),
+        |id| l.solved_radius(id),
+    )
 }
 
 /// The text of a dimension's value glyph: what is being typed, the value a
@@ -468,6 +436,23 @@ fn pattern_value_name(
     }
 }
 
+/// The `name · value` label of a pattern value ("count = rows · 4"), as
+/// the selected pattern's glyphs and a linear pattern's dimensions at
+/// rest both show it.
+pub(in crate::library::editor::footprint::canvas) fn pattern_value_label(
+    field: PatternField,
+    kind: &ArrayKind,
+    sketch: &SketchData,
+    text: &SketchCanvasText,
+) -> String {
+    let source = field.expr(kind).unwrap_or_default();
+    format!(
+        "{} · {}",
+        pattern_value_name(field, source, sketch, text),
+        value_edit::pattern_value_text(sketch, field, source, text)
+    )
+}
+
 /// How many pattern links a glyph text follows: a pattern of a mirror of
 /// a pattern still reads ("P×4 of ⇔ L×4"); a longer chain stops there.
 const GLYPH_LINK_DEPTH: u8 = 2;
@@ -531,7 +516,6 @@ fn pattern_glyphs(
         return;
     }
     for (k, &field) in PatternField::of(&array.kind).iter().enumerate() {
-        let source_expr = field.expr(&array.kind).unwrap_or_default();
         let value_anchor = Point::new(anchor.x, anchor.y + (k + 1) as f32 * row);
         let edit = l
             .state
@@ -541,11 +525,7 @@ fn pattern_glyphs(
             .filter(|e| e.target == ValueTarget::Pattern(array.id, field));
         let text = match edit {
             Some(e) => e.buffer.clone(),
-            None => format!(
-                "{} · {}",
-                pattern_value_name(field, source_expr, l.sketch, text_set),
-                value_edit::pattern_value_text(l.sketch, field, source_expr, text_set)
-            ),
+            None => pattern_value_label(field, &array.kind, l.sketch, text_set),
         };
         out.push(Glyph {
             target: GlyphTarget::PatternValue(array.id, field),

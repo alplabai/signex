@@ -382,7 +382,6 @@ properties-table-toc-no-project = Add Table of Contents Sheet: the sheet belongs
 properties-table-toc-written = Contents sheet written: { $file }
 properties-table-toc-exists = Add Table of Contents Sheet: { $file } is there already and was kept
 properties-table-toc-failed = Add Table of Contents Sheet: { $file } was not written: { $why }
-properties-table-toc-not-serialised = Add Table of Contents Sheet: the contents sheet could not be written as text
 # The word after the project's name in the contents sheet's heading
 # ("dcdc-buck · Contents"). No placeable: the heading is sheet text, so it
 # must not carry the bidi isolation marks a placeable gets.
@@ -787,3 +786,33 @@ properties-text-style-not-stored = Bold, italic, underline and strikethrough are
 properties-power-illustration-style = Style · { $style }
 # Font Size callout of the power-port illustration. $size is the size in points.
 properties-power-illustration-font-size = Font Size { $size }
+# mockup row 49
+# Suppressed rules (mockup row 49): the All rules enable row, with the
+# number of built-in rules right-aligned on the same row.
+properties-all-rules-name = All rules
+properties-rule-total = { $count ->
+    [one] 1 rule
+   *[other] { $count } rules
+}
+# mockup rows 47 and 48
+# Border callout of the rectangle drawing (mockup row 48). $width is the
+# Border field's value in mm; $fill is the Fill segment's name.
+properties-drawing-illustration-border = Border { $width } mm · Fill { $fill }
+# Caption under the rectangle drawing.
+properties-drawing-sample-wire = The sample wire shows Behind / Above
+# Under the Text Size callout of the text note drawing (mockup row 47).
+# $size is the field's value, $unit its unit symbol.
+properties-text-note-illustration-size = { $size } { $unit }
+# Under the Position callout of the text note drawing. $h and $v are the
+# Justify H and Justify V segment names.
+properties-text-note-illustration-justify = Justify { $h } / { $v }
+# mockup rows 192 and 125
+# Attribute scope of a patterned pad (mockup row 192, item D1). $source and
+# $instance name the sketch geometry and the pattern instance behind it.
+properties-fp-pad-scope-title = Pad attributes ↔ sketch
+properties-fp-pad-scope-from = From sketch: { $source } · { $instance }
+properties-fp-pad-scope-attribute = Attribute
+properties-fp-pad-scope-scope = Scope
+properties-fp-pad-scope-source = Pattern source
+properties-fp-pad-scope-numbering = Numbering
+properties-fp-pad-scope-paste = Paste

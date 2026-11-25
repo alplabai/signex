@@ -13,6 +13,10 @@ pub(super) fn text_width(label: &str, size: f32) -> f32 {
 
 /// [`text_width`] in `font`.
 pub(crate) fn text_width_in(label: &str, size: f32, font: iced::Font) -> f32 {
+    // `main` loads the app's faces before any view; a test measures with
+    // them too, whichever test runs first.
+    #[cfg(test)]
+    crate::layout_probe::load_app_fonts();
     let para = Para::with_text(text::Text {
         content: label,
         bounds: Size::INFINITE,

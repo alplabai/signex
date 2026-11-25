@@ -74,3 +74,12 @@ sketch-bake-legend-paste = Paste
 sketch-bake-legend-mask = Mask
 sketch-bake-legend-silk = Silk
 sketch-bake-legend-courtyard = Courtyard
+# mockup row 190
+# The Pads ↔ Sketch section after Bake (mockup row 190): what the links are,
+# and the line shown until a pad is clicked.
+sketch-bake-outcome-link-caption = Each pad keeps a link to the sketch entity that made it. Click a pad on the canvas.
+sketch-bake-outcome-link-empty = No pad selected.
+# The clicked pad's row: the pad, the sketch entity it came from, and the
+# link that shows that entity in Sketch mode.
+sketch-bake-outcome-link-from = Pad { $number } ← { $source }
+sketch-bake-outcome-show-in-sketch = Show in Sketch

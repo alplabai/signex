@@ -12,11 +12,12 @@ use crate::library::editor::footprint::canvas::FootprintCanvasState;
 use crate::library::editor::footprint::layers::{FpLayer, LayerPalette};
 use crate::library::editor::footprint::state::FootprintEditorState;
 
-/// The plate of a selected loop, of an idle loop without a role, and the
-/// alpha a role's colour fills a loop at.
+/// The plate of a selected and of an idle loop without a role, and the
+/// alpha a role's colour fills an idle and a selected loop at.
 const SELECTED_PLATE: Color = Color::from_rgba(0.30, 0.55, 0.92, 0.45);
 const IDLE_PLATE: Color = Color::from_rgba(0.55, 0.75, 0.98, 0.18);
 const ROLE_ALPHA: f32 = 0.20;
+const SELECTED_ROLE_ALPHA: f32 = 0.45;
 
 /// v0.16.1 — Walk the sketch's line graph, find simple closed
 /// cycles, and render each as a filled polygon. Skips cycles where
@@ -207,20 +208,26 @@ pub(super) fn draw_filled_closed_loops(
     }
 }
 
-/// The plate a loop is filled with: the selected plate, else the colour of
-/// the first of its edges, then corners, that has a fill colour, else the
-/// idle pale plate.
+/// The plate a loop is filled with: the colour of the first of its edges,
+/// then corners, that has a fill colour, stronger while the loop is
+/// selected, so a selected loop still shows its role (mockup row 190); else
+/// the selected or the idle pale plate.
 fn loop_fill(sketch: &signex_sketch::SketchData, closed: &ClosedLoop, selected: bool) -> Color {
-    if selected {
-        return SELECTED_PLATE;
-    }
-    closed
+    let role = closed
         .lines
         .iter()
         .chain(closed.points.iter())
         .filter_map(|id| sketch.entities.iter().find(|e| e.id == *id))
-        .find_map(fill_colour)
-        .map_or(IDLE_PLATE, |c| Color { a: ROLE_ALPHA, ..c })
+        .find_map(fill_colour);
+    match (role, selected) {
+        (Some(c), true) => Color {
+            a: SELECTED_ROLE_ALPHA,
+            ..c
+        },
+        (Some(c), false) => Color { a: ROLE_ALPHA, ..c },
+        (None, true) => SELECTED_PLATE,
+        (None, false) => IDLE_PLATE,
+    }
 }
 
 /// The fill colour of one entity's role attributes, in the fill's own
@@ -371,6 +378,25 @@ mod tests {
         };
         assert_eq!(fill_of(&fp), want);
         assert_ne!(fill_of(&fp), tinted(FpLayer::EdgeCuts));
+    }
+
+    /// Mockup row 190: a selected courtyard loop stays in the courtyard
+    /// colour, stronger than idle, not the selected plate that hid its role.
+    #[test]
+    fn a_selected_role_loop_keeps_its_role_colour() {
+        let (mut fp, lines) = rectangle();
+        set_entity_role(&mut fp, lines[0], SketchRole::Courtyard);
+        let sketch = fp.sketch.as_ref().expect("a sketch");
+        let state = FootprintEditorState::from_footprint(&fp);
+        let loops = find_closed_loops(sketch, &state);
+        let selected = loop_fill(sketch, &loops[0], true);
+        assert_ne!(selected, SELECTED_PLATE);
+        let courtyard = LayerPalette::Editor.courtyard_colour();
+        assert_eq!(
+            (selected.r, selected.g, selected.b),
+            (courtyard.r, courtyard.g, courtyard.b)
+        );
+        assert!(selected.a > loop_fill(sketch, &loops[0], false).a);
     }
 
     /// No role: the idle plate; selected: the selected plate.

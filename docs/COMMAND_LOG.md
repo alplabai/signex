@@ -95,12 +95,21 @@ panel says what it will list.
 
 All six table columns stay at any width. Command, Arguments and Result shrink
 together to their least widths, then the table scrolls sideways, header and
-rows together. The detail pane takes at most half the panel. In the filter
-bar the search field shrinks first, then the filters wrap; in a narrow side
-dock Follow newest and the actions take their own line, so they are never
-clipped.
+rows together. The detail pane takes at most half the panel; its body
+scrolls and Replay and Jump to stay pinned under it, with a failed row's
+Replay hint, so a short dock never hides them. The filter row holds search,
+the Source chips, All / Failed / Undone and Follow newest at its right end;
+the search field shrinks first. Whether they share one line is decided at
+layout time from the parts' measured widths (`FitBar` in signex-widgets):
+when the filters and Follow newest fit with the search field at its least,
+they share the line and the search field takes the leftover up to the
+mock's width. Otherwise (a narrow side dock, a longer language) the filters
+wrap and Follow newest takes its own line, so nothing is clipped.
 
 ## Actions
+
+Pause logging, Save log as…, Clear and More are in the panel's dock title
+bar (mockup row 161); More opens its strip under the filter row.
 
 - **Pause logging** stops recording until Resume logging; **Clear** empties
   the log (numbering goes on).

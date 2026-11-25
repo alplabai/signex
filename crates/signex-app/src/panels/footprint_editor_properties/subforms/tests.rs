@@ -19,6 +19,7 @@ use signex_types::theme::{ThemeId, theme_tokens};
 
 use super::{cutout, keepout, pattern, sketch_pad, view_role_subform};
 use crate::app::{FootprintDocument, Message, Signex, TabInfo, TabKind};
+use crate::library::editor::footprint::EditorMode;
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use crate::panels::{
     ArrayKindSummary, CollapsedSections, FootprintEditorPanelContext, PanelMsg, PanelPalette,
@@ -72,10 +73,21 @@ fn pad_point(plane: PlaneId, sketch: &mut SketchData, drill: Option<DrillSpec>) 
 
 /// The panel context of an editor on `sketch` with `selected` selected.
 fn ctx_with(sketch: SketchData, selected: SketchEntityId) -> FootprintEditorPanelContext {
+    ctx_in_mode(sketch, selected, EditorMode::Normal)
+}
+
+/// [`ctx_with`] with the editor in `mode`: the selected entity's summary
+/// (its kind) is only built in Sketch mode.
+fn ctx_in_mode(
+    sketch: SketchData,
+    selected: SketchEntityId,
+    mode: EditorMode,
+) -> FootprintEditorPanelContext {
     let path = PathBuf::from(PATH);
     let mut footprint = Footprint::empty("roles");
     footprint.sketch = Some(sketch);
-    let editor = FootprintDocument::new(path.clone(), FootprintFile::from_footprint(footprint));
+    let mut editor = FootprintDocument::new(path.clone(), FootprintFile::from_footprint(footprint));
+    editor.state.mode = mode;
     let (mut app, _task) = Signex::new();
     app.document_state
         .footprint_editors
@@ -568,4 +580,163 @@ fn a_spacing_bound_to_parameters_shows_the_values_it_resolves_to() {
         Some("Spacing 53.00 × 33.00 mm")
     );
     assert_eq!(spacing_note(&spaced_grid_ctx("5mm", "5mm")), None);
+}
+
+/// A board sketch's 2 x 2 pattern of a mounting hole circle, spaced by `dx`
+/// and `dy` on the 60 x 40 size parameters, with the circle selected.
+fn board_hole_grid_ctx(dx: &str, dy: &str) -> FootprintEditorPanelContext {
+    use signex_sketch::attr::MountingHoleAttr;
+    let mut id = None;
+    let sketch = sketch(|plane, s| {
+        s.parameters.insert("board_w", "60mm");
+        s.parameters.insert("board_h", "40mm");
+        s.parameters.insert("hole_inset", "3.5mm");
+        let center = SketchEntityId::new();
+        s.entities.push(Entity::new(
+            center,
+            plane,
+            EntityKind::Point { x: 3.5, y: 3.5 },
+        ));
+        let circle = SketchEntityId::new();
+        let mut hole = Entity::new(
+            circle,
+            plane,
+            EntityKind::Circle {
+                center,
+                radius: 1.6,
+            },
+        );
+        hole.mounting_hole = Some(MountingHoleAttr::default());
+        s.entities.push(hole);
+        s.arrays.push(Array {
+            id: ArrayId::new(),
+            kind: ArrayKind::Grid {
+                source: circle,
+                nx_expr: "2".into(),
+                ny_expr: "2".into(),
+                dx_expr: dx.into(),
+                dy_expr: dy.into(),
+                depopulation: None,
+            },
+            numbering: NumberingScheme::default(),
+        });
+        id = Some(circle);
+    });
+    let id = id.unwrap();
+    // The board's role forms show in Sketch mode only (roles.rs).
+    let mut ctx = ctx_in_mode(sketch, id, EditorMode::Sketch);
+    ctx.sketch_host = signex_types::sketch::SketchHost::Board;
+    ctx.selected_sketch_role = signex_types::sketch::SketchRole::MountingHole;
+    ctx
+}
+
+/// The texts and the input values of the selected entity's sub-forms.
+fn form_texts(ctx: &FootprintEditorPanelContext) -> (Vec<String>, Vec<String>) {
+    let id = ctx.selected_sketch_entity_id.expect("a selection");
+    let tokens = theme_tokens(ThemeId::GraphiteLight);
+    let palette = PanelPalette::from_tokens(&tokens);
+    let collapsed = CollapsedSections::default();
+    let i18n = signex_i18n::I18n::en_us();
+    let clean = |t: crate::layout_probe::LaidOutText| t.text.replace(['\u{2068}', '\u{2069}'], "");
+    let size = iced::Size::new(320.0, 4000.0);
+    let form =
+        || view_role_subform(ctx, id, palette, &tokens, &collapsed, &i18n).expect("a pattern form");
+    let texts = crate::layout_probe::lay_out_texts(form(), size)
+        .into_iter()
+        .map(clean)
+        .collect();
+    let inputs = crate::layout_probe::lay_out_inputs(form(), size)
+        .into_iter()
+        .map(clean)
+        .collect();
+    (texts, inputs)
+}
+
+/// Mockup row 179e, #2894: a hole pattern on a board opens a Rectangular
+/// pattern form with Source, Count, Spacing X and Y written as expressions of
+/// the size parameters with their values, and "Bakes into 4 holes". A hole
+/// has no pad number, so there is no Numbering section.
+#[test]
+fn a_board_hole_pattern_shows_the_rectangular_pattern_form() {
+    let ctx = board_hole_grid_ctx("board_w - 2*hole_inset", "board_h - 2*hole_inset");
+    let (texts, inputs) = form_texts(&ctx);
+    for shown in [
+        "Rectangular pattern",
+        "4 instances",
+        "Bakes into 4 holes",
+        "Source",
+        "Circle · Mounting hole",
+        "Count",
+        "Spacing X",
+        "53.00 mm",
+        "Spacing Y",
+        "33.00 mm",
+        "Delete pattern",
+    ] {
+        assert!(texts.iter().any(|t| t == shown), "{shown:?}: {texts:#?}");
+    }
+    for footprint_only in ["Pattern", "Numbering", "Scheme", "nx / ny", "dX / dY"] {
+        assert!(
+            !texts.iter().any(|t| t.eq_ignore_ascii_case(footprint_only)),
+            "{footprint_only:?}: {texts:#?}"
+        );
+    }
+    for value in ["2", "board_w - 2*hole_inset", "board_h - 2*hole_inset"] {
+        assert!(inputs.iter().any(|t| t == value), "{value:?}: {inputs:#?}");
+    }
+}
+
+/// A plain spacing has nothing to resolve, so no value sits beside it; the
+/// footprint host keeps its own pattern form.
+#[test]
+fn a_plain_board_spacing_shows_no_value_and_a_footprint_keeps_its_form() {
+    let ctx = board_hole_grid_ctx("5mm", "5mm");
+    let (texts, _) = form_texts(&ctx);
+    assert!(texts.iter().any(|t| t == "Spacing X"), "{texts:#?}");
+    assert!(!texts.iter().any(|t| t == "5.00 mm"), "{texts:#?}");
+
+    let mut footprint = ctx;
+    footprint.sketch_host = signex_types::sketch::SketchHost::Footprint;
+    let (texts, _) = form_texts(&footprint);
+    assert!(texts.iter().any(|t| t == "Pattern"), "{texts:#?}");
+    assert!(
+        !texts.iter().any(|t| t == "Rectangular pattern"),
+        "{texts:#?}"
+    );
+}
+
+/// What the board form says a bake writes, by the source's target.
+#[test]
+fn the_board_pattern_names_what_the_bake_writes() {
+    use signex_types::sketch::SketchRole;
+    let i18n = signex_i18n::I18n::en_us();
+    let ctx = board_hole_grid_ctx("5mm", "5mm");
+    let preview = &ctx.selected_array.as_ref().expect("a pattern").preview;
+    let said = |role| {
+        super::board_pattern::bakes_into(role, preview, &i18n)
+            .map(|line| line.into_string().replace(['\u{2068}', '\u{2069}'], ""))
+    };
+    assert_eq!(
+        said(SketchRole::Keepout).as_deref(),
+        Some("Bakes into 4 keepouts")
+    );
+    assert_eq!(
+        said(SketchRole::BoardOutline).as_deref(),
+        Some("Bake refuses a pattern of the board outline or a component anchor")
+    );
+    assert_eq!(
+        said(SketchRole::Unassigned),
+        None,
+        "a profile point repeats its profile"
+    );
+    let unresolved = super::board_pattern::bakes_into(
+        SketchRole::MountingHole,
+        &ArrayPreview::Unresolved,
+        &i18n,
+    )
+    .map(|line| line.into_string());
+    assert_eq!(
+        unresolved.as_deref(),
+        Some("Bakes once its count and spacing resolve")
+    );
 }

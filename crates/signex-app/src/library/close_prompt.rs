@@ -142,11 +142,14 @@ pub fn view<'a>(
     let (left, right) = unsaved_footer_parts(
         i18n,
         UnsavedActions {
-            discard_all: Some(LibraryMessage::CloseLibraryConfirm(
+            discard: Some(LibraryMessage::CloseLibraryConfirm(
                 CloseLibraryChoice::DiscardAll,
             )),
+            discard_label: None,
             cancel,
-            save_all: LibraryMessage::CloseLibraryConfirm(CloseLibraryChoice::SaveAll),
+            save_all: Some(LibraryMessage::CloseLibraryConfirm(
+                CloseLibraryChoice::SaveAll,
+            )),
         },
         tokens,
     );

@@ -1,15 +1,14 @@
 //! The PDF Layers section of the Export PDF dialog (#1298, mockup row 168):
-//! "Write PDF layers" heads it; each group is a layer a reader can switch,
-//! its box says whether it is visible when the PDF opens.
+//! the "Write PDF layers" switch heads it; each group is a layer a reader
+//! can switch, its box says whether it is visible when the PDF opens.
 
 use iced::Widget as _;
 use iced::widget::{column, container, row};
 use signex_i18n::{MessageId, ids, t};
 use signex_output::PdfLayer;
-use signex_widgets::enable_section::EnableSection;
 
 use super::super::*;
-use super::form::{Look, SP, caption, check, gated};
+use super::form::{Look, SP, caption, check, gated, switch_section};
 use crate::app::state::PreviewState;
 
 /// A layer's row label. The file's group names (`PdfLayer::group_name`)
@@ -68,14 +67,13 @@ impl Signex {
             rows = rows.push(gated(line.boxed(), preview.layer_row_enabled(layer), &look));
         }
 
-        let mut body: iced::widget::Column<Element<'a, Message>> = column![
-            EnableSection::new(t!(i18n, ids::PDF_LAYERS_SWITCH), layers.is_on)
-                .on_toggle(|on| Message::from(PdfOptionMsg::PdfLayersToggled(on)))
-                .view(
-                    crate::panels::enable_section::enable_section_style(tokens),
-                    rows.boxed(),
-                )
-        ]
+        let mut body: iced::widget::Column<Element<'a, Message>> = column![switch_section(
+            t!(i18n, ids::PDF_LAYERS_SWITCH),
+            layers.is_on,
+            Message::from(PdfOptionMsg::PdfLayersToggled(!layers.is_on)),
+            rows.boxed(),
+            &look,
+        )]
         .spacing(SP.xs)
         .width(Length::Fill);
         if !layers.is_on {

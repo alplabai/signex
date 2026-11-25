@@ -132,6 +132,7 @@ fn render_item(
     let row = graphite::item_btn(
         &item.label,
         item.checked,
+        item.icon,
         shortcut,
         item.dispatches().cloned(),
         mc,

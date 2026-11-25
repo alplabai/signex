@@ -11,7 +11,7 @@ use iced::{Element, Length, Widget as _};
 use signex_i18n::{I18n, Localized, RenderTranslatable as _, ids, t};
 use signex_widgets::{button, text};
 
-use crate::library::editor::footprint::{GapOffer, format_check_mm};
+use crate::library::editor::footprint::{CheckStatus, GapOffer, format_check_mm};
 use crate::library::editor::standalone::sketch_exit::status_line;
 use crate::panels::{BoardSketchProps, CollapsedSections, PanelMsg, PanelPalette, SketchFixMsg};
 use crate::panels::{collapsible_section_header, is_section_collapsed};
@@ -44,18 +44,7 @@ pub(super) fn view_outline_checks<'a>(
         .boxed(),
     );
     if !is_section_collapsed(SECTION, collapsed_sections) {
-        for line in &board.outline_checks {
-            let select = line
-                .place
-                .map(|id| PanelMsg::FpEditorSelectSketchEntity { id });
-            col = col.push(status_line(line.status, line.text.localized(i18n), select));
-            if let Some(offer) = &line.close_gap {
-                col = col.push(close_gap_row(offer, palette, i18n));
-            }
-        }
-        if let Some(radius) = board.fillet_radius {
-            col = col.push(add_fillets_row(radius, i18n));
-        }
+        col = push_check_lines(col, board, palette, i18n, true);
         col = col.push(
             container(
                 text(t!(i18n, ids::BOARD_SKETCH_CHECKS_CAPTION))
@@ -68,6 +57,42 @@ pub(super) fn view_outline_checks<'a>(
         );
     }
     view_fab_profile(col, board, palette, collapsed_sections, i18n)
+}
+
+/// One line per check, a click on a failing line selecting its place, then
+/// Add fillets when a corner can take one (mockup row 179d). The Bake panel
+/// shows Close gap with its refusal, so it passes `close_gap` false.
+pub(in crate::panels::footprint_editor_properties) fn push_check_lines<'a>(
+    mut col: Column<Element<'a, PanelMsg>>,
+    board: &'a BoardSketchProps,
+    palette: PanelPalette,
+    i18n: &I18n,
+    close_gap: bool,
+) -> Column<Element<'a, PanelMsg>> {
+    for line in &board.outline_checks {
+        let select = line
+            .place
+            .map(|id| PanelMsg::FpEditorSelectSketchEntity { id });
+        col = col.push(status_line(line.status, line.text.localized(i18n), select));
+        if let Some(offer) = line.close_gap.as_ref().filter(|_| close_gap) {
+            col = col.push(close_gap_row(offer, palette, i18n));
+        }
+    }
+    match board.fillet_radius {
+        Some(radius) => col.push(add_fillets_row(radius, i18n)),
+        None => col,
+    }
+}
+
+/// Whether a check of `board` fails, so Properties lifts the section to the
+/// top where the failure shows without scrolling (mockup row 179d).
+pub(in crate::panels::footprint_editor_properties) fn has_failure(
+    board: &BoardSketchProps,
+) -> bool {
+    board
+        .outline_checks
+        .iter()
+        .any(|line| line.status == CheckStatus::Failed)
 }
 
 /// Add fillets on the failing inside corners (mockup row 179d).
@@ -280,6 +305,44 @@ mod tests {
         );
     }
 
+    /// Mockup row 179d (#2903): with a named fab profile the min slot and
+    /// inside-corner lines say which profile they ran against; the other
+    /// checks read as before.
+    #[test]
+    fn the_fab_checks_name_the_profile_they_ran_against() {
+        use crate::library::editor::footprint::check_lines_against;
+        use signex_i18n::RenderTranslatable;
+        let english = |lines: Vec<crate::library::editor::footprint::CheckLine>| -> Vec<String> {
+            lines
+                .iter()
+                .map(|line| {
+                    line.text
+                        .render_en_us()
+                        .replace(['\u{2068}', '\u{2069}'], "")
+                })
+                .collect()
+        };
+        let passed = english(check_lines_against(
+            Some(&checks(CheckState::Passed)),
+            Some("Standard"),
+        ));
+        assert_eq!(passed[4], "Slots: none narrower than the Standard min slot");
+        assert_eq!(
+            passed[3],
+            "Inside corners: not checked, the sketch draws no outline (the board keeps its own)"
+        );
+        let skipped = english(check_lines_against(
+            Some(&checks(CheckState::NotChecked(NotChecked::NoMinSlot))),
+            Some("Standard"),
+        ));
+        assert_eq!(
+            skipped[4],
+            "Min slot: not checked, Standard names no min slot"
+        );
+        let unnamed = english(check_lines(Some(&checks(CheckState::Passed))));
+        assert_eq!(unnamed[4], "Slots: none narrower than the min slot");
+    }
+
     fn lines(board: &BoardSketchProps) -> Vec<String> {
         fab_profile_lines(board, &I18n::en_us())
             .into_iter()
@@ -289,7 +352,7 @@ mod tests {
 
     /// Mockup row 179d and DECISIONS 2026-11-23: the Fab profile group names
     /// the project's profile above its router tool, and says when there is
-    /// none.
+    /// none set and where to set one (#2903).
     #[test]
     fn the_fab_profile_group_names_the_profile_above_the_router_tool() {
         let board = BoardSketchProps {
@@ -301,7 +364,10 @@ mod tests {
         assert_eq!(shown[0], "Profile Standard 4-layer");
         assert!(shown[1].starts_with("Router tool Ø 2.00"), "{shown:?}");
         let none = lines(&BoardSketchProps::default());
-        assert_eq!(none[0], "Profile: the project's rules name none");
+        assert_eq!(
+            none[0],
+            "Profile: none set. Set one in the project's Rules (Presets) to check corners and slots against it."
+        );
         assert_eq!(none[1], "Router tool: the project's fab profile names none");
     }
 }

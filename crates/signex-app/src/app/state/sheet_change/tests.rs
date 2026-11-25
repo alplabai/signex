@@ -149,14 +149,14 @@ fn the_active_tail_with_a_none_patch_neither_syncs_dirty_nor_emits() {
 }
 
 #[test]
-fn the_by_path_tail_with_a_none_patch_still_emits() {
+fn the_by_path_tail_with_a_none_patch_neither_syncs_dirty_nor_emits() {
     let (mut app, path) = colours::app_with_sheet("core-half-by-path-none.snxsch");
+    app.document_state.keep_document_dirty_until_saved(&path);
     let events = app
         .document_state
         .settle_sheet_at(&path, DocumentPatch::NONE, ChangeCause::Edit);
-    let changed = changes(&events);
-    assert_eq!(changed.len(), 1, "{events:?}");
-    assert_eq!(changed[0].patch, DocumentPatch::NONE);
+    assert!(events.is_empty(), "{events:?}");
+    assert!(dirty(&app, &path));
 }
 
 #[test]

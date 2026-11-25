@@ -1,9 +1,8 @@
 //! The Track panel (#2523, mockup row 95): the illustration, Net Information,
-//! Properties (net, layer, width, ends, position, the two ends, length,
-//! Tune Net To),
+//! Properties (net, layer, width, ends, the two ends, length, Tune Net To),
 //! then the paste and solder mask expansion sections. The lock is the
 //! header's icon. While placing, Net Information and the geometry rows are
-//! left out: the clicks set them.
+//! left out: the clicks set them. Lengths read to three decimals.
 
 use iced::widget::{container, row};
 use iced::{Element, Length, Widget as _};
@@ -12,9 +11,9 @@ use signex_types::pcb_layer::PcbLayer;
 use signex_widgets::text;
 
 use super::drawing::{self, keys};
-use super::linked::{self, linked_row, prefixed, two_fields, unit};
+use super::linked::{self, linked_row, mm_point};
 use super::mask::track_mask_section;
-use super::rows::{Look, Section, dropdown, net_value, stack};
+use super::rows::{Look, Section, dropdown, fixed_mm, net_value, stack};
 use super::{PcbPrimitiveMsg, PrimitiveField as F, SP, TS, TrackFacts, net_info};
 use crate::panels::{PanelContext, PanelMsg};
 use crate::pcb_canvas::layer_style;
@@ -91,7 +90,7 @@ fn properties<'a>(look: Look<'a>, f: &'a TrackFacts) -> Option<Element<'a, Panel
             common,
             keys::WIDTH,
             ids::PCB_PRIM_WIDTH,
-            linked::mm(look, common, F::Width, f.width),
+            linked::mm_text(look, common, F::Width, f.width.map(fixed_mm)),
         ),
     );
     s.push(
@@ -109,28 +108,8 @@ fn properties<'a>(look: Look<'a>, f: &'a TrackFacts) -> Option<Element<'a, Panel
     if common.target.is_placement() {
         return s.finish();
     }
-    let point = |fx, fy, at: (Option<f64>, Option<f64>)| {
-        two_fields(
-            prefixed(look, common, fx, at.0, ids::PCB_PRIM_X),
-            prefixed(look, common, fy, at.1, ids::PCB_PRIM_Y),
-            unit(look, ids::PCB_PRIM_UNIT_MM),
-        )
-    };
-    // The selection's corner: typing it moves every selected track, which
-    // Start and End cannot do once they read Mixed.
-    s.push(
-        common,
-        ids::PCB_PRIM_POSITION,
-        super::rows::labelled(
-            look,
-            ids::PCB_PRIM_POSITION,
-            point(
-                F::X,
-                F::Y,
-                (f.location.map(|l| l.0), f.location.map(|l| l.1)),
-            ),
-        ),
-    );
+    // No Position row: the location is the header's lock and Start / End
+    // (mockup row 95).
     s.push(
         common,
         ids::PCB_PRIM_POINT_START,
@@ -139,7 +118,7 @@ fn properties<'a>(look: Look<'a>, f: &'a TrackFacts) -> Option<Element<'a, Panel
             common,
             keys::START,
             ids::PCB_PRIM_POINT_START,
-            point(F::StartX, F::StartY, f.start),
+            mm_point(look, common, (F::StartX, F::StartY), f.start),
         ),
     );
     s.push(
@@ -150,7 +129,7 @@ fn properties<'a>(look: Look<'a>, f: &'a TrackFacts) -> Option<Element<'a, Panel
             common,
             keys::END,
             ids::PCB_PRIM_POINT_END,
-            point(F::EndX, F::EndY, f.end),
+            mm_point(look, common, (F::EndX, F::EndY), f.end),
         ),
     );
     s.push(
@@ -161,13 +140,13 @@ fn properties<'a>(look: Look<'a>, f: &'a TrackFacts) -> Option<Element<'a, Panel
             common,
             keys::LENGTH,
             ids::PCB_PRIM_LENGTH,
-            linked::length(look, f.length_mm),
+            linked::length(look, f.length_mm.map(fixed_mm)),
         ),
     );
     // #2389: a length for the track's net; Enter tunes the one selected
     // track to it.
     let tune = if common.target.items.len() == 1 {
-        linked::mm(look, common, F::TuneLength, None)
+        linked::mm_text(look, common, F::TuneLength, None)
     } else {
         container(
             text(look.t(ids::PCB_PRIM_TUNE_ONE_TRACK))

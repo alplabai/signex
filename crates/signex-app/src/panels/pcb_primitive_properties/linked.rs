@@ -109,12 +109,13 @@ pub(super) fn linked_row<'a>(
 }
 
 /// The header of a collapsible section: chevron, title, and on the right
-/// the summary. A press folds or unfolds it under `key`.
+/// the summary and then the badge. A press folds or unfolds it under `key`.
 pub(super) fn section_header<'a>(
     look: Look<'a>,
     title: Localized,
     is_open: bool,
     summary: Option<Label<'a>>,
+    badge: Option<Element<'a, PanelMsg>>,
     key: String,
 ) -> Element<'a, PanelMsg> {
     let faint = resolve(look.tokens()).ink4;
@@ -135,6 +136,9 @@ pub(super) fn section_header<'a>(
                 .boxed(),
         );
     }
+    if let Some(badge) = badge {
+        line = line.push(badge);
+    }
     button(container(line).padding([SP.s, PAD_X]).width(Length::Fill))
         .padding(0)
         .width(Length::Fill)
@@ -154,9 +158,34 @@ pub(super) struct Segment {
 /// A segmented row on the sunken frame: [`FitRow`] shares the width and
 /// folds the cells rather than overlap their labels.
 pub(super) fn segments<'a>(cells: Vec<Segment>) -> Element<'a, PanelMsg> {
+    segment_row(cells.into_iter().map(|cell| (cell, false)).collect())
+}
+
+/// How a segment cell draws: chosen, live (pressable), disabled (faded as
+/// a whole, as a disabled control is) or inert (greyed text unless chosen).
+pub(super) fn segment_style(
+    theme: &Theme,
+    is_on: bool,
+    is_live: bool,
+    is_disabled: bool,
+    status: iced::widget::button::Status,
+) -> iced::widget::button::Style {
+    if is_disabled && !is_on {
+        return crate::styles::dimmed_button(form_look::segment_cell(theme, false, false));
+    }
+    let hovered = is_live && matches!(status, iced::widget::button::Status::Hovered);
+    let mut style = form_look::segment_cell(theme, is_on, hovered && !is_on);
+    if !is_live && !is_on {
+        style.text_color = form_look::FormLook::of(theme).ink4;
+    }
+    style
+}
+
+/// [`segments`] with each cell marked disabled or not.
+fn segment_row<'a>(cells: Vec<(Segment, bool)>) -> Element<'a, PanelMsg> {
     let mut line: Vec<Element<'a, PanelMsg>> = Vec::with_capacity(cells.len());
-    for Segment { label, is_on, msg } in cells {
-        let is_live = msg.is_some();
+    for (Segment { label, is_on, msg }, is_disabled) in cells {
+        let is_live = msg.is_some() && !is_disabled;
         let cell = button(
             text(label)
                 .size(TS.caption)
@@ -165,14 +194,9 @@ pub(super) fn segments<'a>(cells: Vec<Segment>) -> Element<'a, PanelMsg> {
                 .ellipsis(iced::widget::text::Ellipsis::End),
         )
         .padding([SP.xs, SP.xs])
-        .on_press_maybe(msg.map(PanelMsg::PcbPrimitive))
+        .on_press_maybe(msg.filter(|_| is_live).map(PanelMsg::PcbPrimitive))
         .style(move |theme: &Theme, status| {
-            let hovered = is_live && matches!(status, iced::widget::button::Status::Hovered);
-            let mut style = form_look::segment_cell(theme, is_on, hovered && !is_on);
-            if !is_live && !is_on {
-                style.text_color = form_look::FormLook::of(theme).ink4;
-            }
-            style
+            segment_style(theme, is_on, is_live, is_disabled, status)
         });
         line.push(cell.boxed());
     }
@@ -212,21 +236,25 @@ pub fn ends_tip(is_copper: bool) -> MessageId {
     }
 }
 
-/// The Ends row's segments, with the reason the greyed ones are greyed.
+/// The Ends row's segments, Square and Flat faded as disabled (mockup rows
+/// 95 and 98), with the reason they are greyed.
 pub(super) fn ends<'a>(look: Look<'a>, is_copper: bool) -> Element<'a, PanelMsg> {
     let cells = end_choices()
         .into_iter()
-        .map(|choice| Segment {
-            label: look.t(match choice.cap {
-                Cap::Round => ids::PCB_PRIM_ENDS_ROUND,
-                Cap::Square => ids::PCB_PRIM_ENDS_SQUARE,
-                Cap::Flat => ids::PCB_PRIM_ENDS_FLAT,
-            }),
-            is_on: choice.is_on,
-            msg: None,
+        .map(|choice| {
+            let cell = Segment {
+                label: look.t(match choice.cap {
+                    Cap::Round => ids::PCB_PRIM_ENDS_ROUND,
+                    Cap::Square => ids::PCB_PRIM_ENDS_SQUARE,
+                    Cap::Flat => ids::PCB_PRIM_ENDS_FLAT,
+                }),
+                is_on: choice.is_on,
+                msg: None,
+            };
+            (cell, !choice.is_enabled)
         })
         .collect();
-    with_tip(look, segments(cells), ends_tip(is_copper))
+    with_tip(look, segment_row(cells), ends_tip(is_copper))
 }
 
 /// A field with a small prefix inside its frame ("X", "Start"), as the
@@ -238,8 +266,19 @@ pub(super) fn prefixed<'a>(
     value: Option<f64>,
     prefix: MessageId,
 ) -> Element<'a, PanelMsg> {
+    prefixed_text(look, common, field, value.map(format_number), prefix)
+}
+
+/// [`prefixed`] showing `value` as already formatted.
+pub(super) fn prefixed_text<'a>(
+    look: Look<'a>,
+    common: &PrimitiveCommon,
+    field: PrimitiveField,
+    value: Option<String>,
+    prefix: MessageId,
+) -> Element<'a, PanelMsg> {
     let faint = resolve(look.tokens()).ink4;
-    let bare = input(common, field, value.map(format_number), look)
+    let bare = input(common, field, value, look)
         .padding([SP.s, 0.0])
         .style(|theme: &Theme, status| {
             let mut style = form_look::text_input_style(theme, status);
@@ -277,6 +316,21 @@ pub(super) fn two_fields<'a>(
         .boxed()
 }
 
+/// A point as one X / Y row in mm, three decimals (mockup rows 95 and 98).
+pub(super) fn mm_point<'a>(
+    look: Look<'a>,
+    common: &PrimitiveCommon,
+    (fx, fy): (PrimitiveField, PrimitiveField),
+    (x, y): (Option<f64>, Option<f64>),
+) -> Element<'a, PanelMsg> {
+    use super::rows::fixed_mm;
+    two_fields(
+        prefixed_text(look, common, fx, x.map(fixed_mm), ids::PCB_PRIM_X),
+        prefixed_text(look, common, fy, y.map(fixed_mm), ids::PCB_PRIM_Y),
+        unit(look, ids::PCB_PRIM_UNIT_MM),
+    )
+}
+
 /// A value and the unit after it.
 pub(super) fn with_unit<'a>(
     value: Element<'a, PanelMsg>,
@@ -295,19 +349,30 @@ pub(super) fn mm<'a>(
     field: PrimitiveField,
     value: Option<f64>,
 ) -> Element<'a, PanelMsg> {
+    mm_text(look, common, field, value.map(format_number))
+}
+
+/// [`mm`] showing `value` as already formatted.
+pub(super) fn mm_text<'a>(
+    look: Look<'a>,
+    common: &PrimitiveCommon,
+    field: PrimitiveField,
+    value: Option<String>,
+) -> Element<'a, PanelMsg> {
     super::rows::field(
         common,
         field,
-        value.map(format_number),
+        value,
         Some(look.t(ids::PCB_PRIM_UNIT_MM)),
         look,
     )
 }
 
-/// A read-only length with "mm" after it; N/A when there is none.
-pub(super) fn length<'a>(look: Look<'a>, value: Option<f64>) -> Element<'a, PanelMsg> {
+/// A read-only length, already formatted, with "mm" after it; N/A when
+/// there is none.
+pub(super) fn length<'a>(look: Look<'a>, value: Option<String>) -> Element<'a, PanelMsg> {
     let shown = match value {
-        Some(v) => Label::from(signex_i18n::UserText::new(format_number(v))),
+        Some(v) => Label::from(signex_i18n::UserText::new(v)),
         None => Label::from(look.t(ids::PCB_PRIM_NOT_APPLICABLE)),
     };
     with_unit(read_only(look, shown), unit(look, ids::PCB_PRIM_UNIT_MM))

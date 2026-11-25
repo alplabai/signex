@@ -111,7 +111,7 @@ impl Signex {
                 self.apply_engine_commands(commands, true, true);
             }
             Err(FootprintChoiceRefusal { reference, why }) => {
-                self.report_footprint_choice_failure(&reference, why);
+                self.report_footprint_choice_failure(symbol_id, &reference, why);
             }
         }
         Task::none()
@@ -221,7 +221,7 @@ impl Signex {
             match self.footprint_binding_commands(doc, part.uuid, binding) {
                 Ok(part_commands) => commands.extend(part_commands),
                 Err(FootprintChoiceRefusal { reference, why }) => {
-                    self.report_footprint_choice_failure(&reference, why);
+                    self.report_footprint_choice_failure(part.uuid, &reference, why);
                     return;
                 }
             }
@@ -239,10 +239,17 @@ impl Signex {
         })
     }
 
-    fn report_footprint_choice_failure(&self, reference: &str, detail: &str) {
-        crate::diagnostics::log_warning(format!(
-            "Could not switch {reference} to another footprint: {detail}."
-        ));
+    /// The Messages line names the active sheet, and the part while it is
+    /// still there for Show to select (mockup row 86).
+    fn report_footprint_choice_failure(&self, symbol_id: Uuid, reference: &str, detail: &str) {
+        let line = format!("Could not switch {reference} to another footprint: {detail}.");
+        match self.document_state.active_path.clone() {
+            Some(sheet) => {
+                let object = self.placed_part_item(&sheet, symbol_id);
+                crate::diagnostics::log_warning_at(line, sheet, object);
+            }
+            None => crate::diagnostics::log_warning(line),
+        }
     }
 }
 
@@ -251,4 +258,47 @@ impl Signex {
 pub(crate) struct FootprintChoiceRefusal {
     pub(crate) reference: String,
     pub(crate) why: &'static str,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use signex_types::schematic::{SchematicSheet, SelectedItem, SelectedKind, Symbol};
+
+    /// Mockup row 86: a refused footprint switch names the sheet and the
+    /// part, so its Messages row shows the sheet and offers Show.
+    #[test]
+    fn a_refused_switch_names_its_sheet_and_part() {
+        let _ = crate::diagnostics::init_logging();
+        let reference = format!("FP{}", Uuid::now_v7().simple());
+        let part = Symbol {
+            uuid: Uuid::now_v7(),
+            reference: reference.clone(),
+            ..Default::default()
+        };
+        let sheet = SchematicSheet {
+            symbols: vec![part.clone()],
+            ..Default::default()
+        };
+        let path = std::path::PathBuf::from("/w/p/charger.snxsch");
+        let (mut app, _boot) = Signex::new();
+        app.document_state.engines.insert(
+            path.clone(),
+            signex_engine::Engine::new(sheet).expect("engine"),
+        );
+        app.document_state.active_path = Some(path.clone());
+        let binding = format!("{}:{}", Uuid::now_v7(), Uuid::now_v7());
+        let _ = app.handle_switch_footprint_choice(part.uuid, &binding);
+        let found: Vec<_> = crate::diagnostics::recent_entries()
+            .into_iter()
+            .filter(|e| {
+                e.message
+                    .starts_with(&format!("Could not switch {reference} "))
+            })
+            .collect();
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].document.as_deref(), Some(path.as_path()));
+        let item = SelectedItem::new(part.uuid, SelectedKind::Symbol);
+        assert_eq!(found[0].object, Some(item));
+    }
 }

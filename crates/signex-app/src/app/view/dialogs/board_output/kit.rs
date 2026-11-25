@@ -1,20 +1,21 @@
 //! Parts the board output dialogs share (Fabrication Outputs, Board Print /
 //! PDF, Board Reports): the uppercase section head with its count, the soft
 //! status banner and its glyphs, the status pill, the segmented look, a
-//! form tick box and the greyed form of a dependent control.
+//! form tick box, a text field led by a glyph and the greyed form of a
+//! dependent control.
 
 use std::sync::LazyLock;
 
-use iced::widget::{Row, Space, column, container, svg};
+use iced::widget::{Row, Space, TextInput, column, container, stack, svg};
 use iced::{Alignment, Background, Border, Color, Element, Length, Padding, Theme, Widget as _};
 use signex_i18n::{I18n, Localized, UserText};
-use signex_types::theme::ThemeTokens;
+use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::enable_section::dependents_veil;
 use signex_widgets::inert::unless_read_only_veiled;
 use signex_widgets::{CheckboxLabel as _, Label, SegmentedStyle, checkbox, text};
 
 use crate::app::Message;
-use crate::panels::form_look::checkbox_style;
+use crate::panels::form_look::{checkbox_style, text_input_style};
 use crate::styles::{HAIRLINE, PillTone, Radii, Spacing, TypeScale, pill, pill_colors, ti, tokens};
 
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -33,6 +34,99 @@ const GLYPH_WARN: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="
 /// The three glyphs parsed once: info, ok, warning.
 static GLYPHS: LazyLock<[svg::Handle; 3]> =
     LazyLock::new(|| [GLYPH_INFO, GLYPH_OK, GLYPH_WARN].map(svg::Handle::from_memory));
+
+/// Inset of a form field's text from its outline (6 px at the 11 px base).
+const FIELD_PAD: f32 = SP.s + SP.xs;
+/// Where the text of a glyph-led field starts: the inset, the glyph, then
+/// the field's gap.
+pub(in crate::app::view::dialogs) const GLYPH_TEXT_INSET: f32 = FIELD_PAD + GLYPH + SP.s;
+
+/// The glyph that leads a text field: what the field holds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::app::view::dialogs) enum FieldGlyph {
+    /// A folder path (Fabrication Outputs' Output folder).
+    Folder,
+    /// A filter (Board Reports' Filter rows).
+    Search,
+}
+
+impl FieldGlyph {
+    /// The icon set's glyph, the one other folder and filter fields draw.
+    fn handle(self, theme: ThemeId) -> svg::Handle {
+        match self {
+            FieldGlyph::Folder => crate::icons::icon_menu_folder(theme),
+            FieldGlyph::Search => crate::icons::icon_chrome_search(theme),
+        }
+    }
+}
+
+/// `input` as a form field with `glyph` inside its outline, before the
+/// text (mockup rows 115 and 117). The input keeps the form look, so it
+/// still lights on hover and focus; the glyph lies over its left padding
+/// and takes no pointer, so a click on it reaches the input.
+pub(in crate::app::view::dialogs) fn glyph_field<'a>(
+    glyph: FieldGlyph,
+    input: TextInput<'a, Message>,
+    theme: ThemeId,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let ink = tokens::resolve(tokens).ink4;
+    let icon = svg(glyph.handle(theme))
+        .width(Length::Fixed(GLYPH))
+        .height(Length::Fixed(GLYPH))
+        .style(move |_: &Theme, _| svg::Style {
+            color: Some(ink),
+            ..Default::default()
+        });
+    let input = input
+        .style(text_input_style)
+        .padding(Padding {
+            left: GLYPH_TEXT_INSET,
+            ..Padding::new(FIELD_PAD)
+        })
+        .width(Length::Fill);
+    let over = container(icon)
+        .padding(Padding {
+            left: FIELD_PAD,
+            ..Padding::ZERO
+        })
+        .center_y(Length::Fill);
+    stack![input, over].width(Length::Fill).boxed()
+}
+
+/// Where the glyph of a glyph-led field sits in `field`, the input's box.
+#[cfg(test)]
+pub(in crate::app::view::dialogs) fn field_glyph_bounds(field: iced::Rectangle) -> iced::Rectangle {
+    iced::Rectangle {
+        x: field.x + FIELD_PAD,
+        y: field.y + (field.height - GLYPH) / 2.0,
+        width: GLYPH,
+        height: GLYPH,
+    }
+}
+
+/// A left click, then `typed` keyed in: what a user does to start typing
+/// in a field.
+#[cfg(test)]
+pub(in crate::app::view::dialogs) fn click_then_type(typed: &str) -> Vec<iced::Event> {
+    use iced::keyboard::{Event as Key, Key as Logical, Location, Modifiers, key};
+    use iced::mouse::{Button, Event as Mouse};
+    let key = Logical::Character(typed.into());
+    let press = Key::KeyPressed {
+        key: key.clone(),
+        modified_key: key,
+        physical_key: key::Physical::Unidentified(key::NativeCode::Unidentified),
+        location: Location::Standard,
+        modifiers: Modifiers::default(),
+        text: Some(typed.into()),
+        repeat: false,
+    };
+    vec![
+        iced::Event::Mouse(Mouse::ButtonPressed(Button::Left)),
+        iced::Event::Mouse(Mouse::ButtonReleased(Button::Left)),
+        iced::Event::Keyboard(press),
+    ]
+}
 
 /// The glyph of `tone`: a circled i for information, a circled tick for
 /// success, a triangle for a warning or an error.

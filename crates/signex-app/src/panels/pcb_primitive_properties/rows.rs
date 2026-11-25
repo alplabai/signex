@@ -50,6 +50,7 @@ pub(super) struct Section<'a> {
     rows: Vec<Element<'a, PanelMsg>>,
     title: MessageId,
     collapse: Option<Collapse<'a>>,
+    badge: Option<Element<'a, PanelMsg>>,
 }
 
 /// How a collapsible section folds: its key in the panel's collapsed set,
@@ -83,6 +84,7 @@ impl<'a> Section<'a> {
             rows: Vec::new(),
             title,
             collapse: None,
+            badge: None,
         }
     }
 
@@ -99,6 +101,14 @@ impl<'a> Section<'a> {
             closed_by_default,
             summary,
         });
+        self
+    }
+
+    /// A chip after the summary in the header of a collapsible section (the
+    /// via's protection class, mockup row 96). Only a collapsible section
+    /// draws it.
+    pub fn badge(mut self, badge: Element<'a, PanelMsg>) -> Self {
+        self.badge = Some(badge);
         self
     }
 
@@ -121,6 +131,7 @@ impl<'a> Section<'a> {
         }
         let title = self.look.t(self.title);
         let Some(collapse) = self.collapse else {
+            debug_assert!(self.badge.is_none(), "a badge needs a collapsible section");
             let mut col: Column<Element<'a, PanelMsg>> = column![
                 container(crate::panels::widgets::section_title(
                     title,
@@ -137,8 +148,14 @@ impl<'a> Section<'a> {
         };
         let is_closed = collapse.is_closed(self.look.ctx);
         let set_key = collapse.set_key();
-        let header =
-            super::linked::section_header(self.look, title, !is_closed, collapse.summary, set_key);
+        let header = super::linked::section_header(
+            self.look,
+            title,
+            !is_closed,
+            collapse.summary,
+            self.badge,
+            set_key,
+        );
         let mut col: Column<Element<'a, PanelMsg>> = column![header].spacing(SP.xs);
         if !is_closed {
             for r in self.rows {
@@ -254,10 +271,35 @@ pub(super) fn sunken_value<'a>(
     )
 }
 
-/// A length in mm, "N/A" when `None`.
+/// Decimals a length reads with (mockup rows 95 and 98: "0.200 mm").
+const MM_DECIMALS: usize = 3;
+/// Decimals an angle reads with (mockup row 98: "Start 0.0 End 90.0").
+const DEGREE_DECIMALS: usize = 1;
+
+/// `value` to a fixed `decimals`; a value that rounds to zero never reads
+/// with a minus sign.
+fn fixed(value: f64, decimals: usize) -> String {
+    let text = format!("{value:.decimals$}");
+    match text.strip_prefix('-') {
+        Some(rest) if rest.chars().all(|c| c == '0' || c == '.') => rest.to_string(),
+        _ => text,
+    }
+}
+
+/// A length in mm as the track and arc panels show it: "0.200".
+pub(super) fn fixed_mm(value: f64) -> String {
+    fixed(value, MM_DECIMALS)
+}
+
+/// An angle in degrees as the arc panel shows it: "90.0".
+pub(super) fn fixed_degrees(value: f64) -> String {
+    fixed(value, DEGREE_DECIMALS)
+}
+
+/// A length in mm to three decimals, "N/A" when `None`.
 pub(super) fn mm_or_na(look: Look<'_>, value: Option<f64>) -> Localized {
     match value {
-        Some(v) => t!(look.ctx.i18n, signex_i18n::ids::PCB_PRIM_MM, "value" => format_number(v)),
+        Some(v) => t!(look.ctx.i18n, signex_i18n::ids::PCB_PRIM_MM, "value" => fixed_mm(v)),
         None => look.t(signex_i18n::ids::PCB_PRIM_NOT_APPLICABLE),
     }
 }

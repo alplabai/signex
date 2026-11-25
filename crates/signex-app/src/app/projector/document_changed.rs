@@ -48,16 +48,7 @@ impl Signex {
         update_selection_info: bool,
     ) {
         self.sync_canvas_from_visible_schematic(patch.into());
-        // The sheet's paper changed (a Page Options edit, or its undo or
-        // redo): the panel context and the drawn page follow the document.
-        if patch.intersects(DocumentPatch::PAPER)
-            && let Some(token) = self
-                .active_render_snapshot()
-                .map(|snapshot| crate::app::projector::effective_paper_size(&snapshot.paper_size))
-        {
-            self.document_state.panel_ctx.paper_size = token;
-            self.apply_page_dimensions_to_canvas();
-        }
+        self.follow_active_paper(patch);
         self.interaction_state
             .active_canvas_mut()
             .clear_content_cache();
@@ -75,12 +66,27 @@ impl Signex {
         }
     }
 
+    /// The active sheet's paper changed (a Page Options edit, or its undo or
+    /// redo, active or by path): the panel context and the drawn page follow
+    /// the document (#2645).
+    fn follow_active_paper(&mut self, patch: DocumentPatch) {
+        if patch.intersects(DocumentPatch::PAPER)
+            && let Some(token) = self
+                .active_render_snapshot()
+                .map(|snapshot| crate::app::projector::effective_paper_size(&snapshot.paper_size))
+        {
+            self.document_state.panel_ctx.paper_size = token;
+            self.apply_page_dimensions_to_canvas();
+        }
+    }
+
     /// The windows and tile pane showing `path`; when it is the main
     /// window's active sheet the same refresh keeps that canvas current.
     fn repaint_sheet(&mut self, path: &Path, patch: DocumentPatch) {
         let is_active = self.document_state.active_path.as_deref() == Some(path);
         self.refresh_slots_from_engine(path, is_active, patch.into(), false);
         if is_active {
+            self.follow_active_paper(patch);
             self.prune_selected_wires();
             if !patch.is_display_only() {
                 self.refresh_erc_after_edit();

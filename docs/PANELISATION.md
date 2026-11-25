@@ -118,7 +118,11 @@ operand-free form; a person edits the panel in the Panel section of the
 board's Properties (nothing selected): each setting typed and applied with
 Enter in the panel's unit, Mouse Bites | V-Score as a segmented control, the
 panel's size, copies and tabs or score lines under them, and Remove Panel.
-A board opened read-only shows the settings without editing them.
+A board opened read-only shows the settings without editing them. The
+section sits under Grid Manager and Guide Manager and starts closed; a
+Panelize Board from Tools, the palette or a key that makes a new panel opens
+it and scrolls Properties to its end, so Remove Panel is in view (mockup row
+93, #2902). The agent's `panelize_board` leaves the Properties view as it is.
 
 ## Preview
 

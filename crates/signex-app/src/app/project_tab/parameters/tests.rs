@@ -506,3 +506,62 @@ fn an_empty_value_reads_not_set_in_italics() {
     }
     assert_eq!(inline_font("", true), None);
 }
+
+/// Whether the Parameters section reports a Fill height once its widget
+/// tree is reconciled; Fit widgets adopt a Fill child's height there.
+fn section_fills_height(app: &Signex, id: ProjectId) -> bool {
+    use iced::advanced::Widget as _;
+    use iced::advanced::widget::Tree;
+    let project = &app.document_state.projects[0];
+    let tab = app.document_state.project_tabs.get(&id);
+    let i18n = app.ui_state.i18n.as_ref();
+    let tokens = &app.document_state.panel_ctx.tokens;
+    let mut element = super::view::view(project, tab, i18n, tokens);
+    let mut tree = Tree::new(&element);
+    tree.diff(&mut element);
+    element.size().height.is_fill()
+}
+
+/// Mockup row 30 (#2755): with the Title block folded, a filter set, an
+/// error row and a rename note, the section keeps its content height. A
+/// Fill height made the page scroller Fill, so the spacer under it took
+/// half the page and the list was cut at about 360 px.
+#[test]
+fn a_noted_row_keeps_the_section_height_to_its_content() {
+    let (mut app, id) = app();
+    add_variable(&mut app, id, "VOUT", "3.3V");
+    add_variable(&mut app, id, "VREF", "= VOUT / 2");
+    add_variable(&mut app, id, "IOUT_MAX", "= POUT / VOUT");
+    send(
+        &mut app,
+        ProjectTabMsg::SectionSelected {
+            project_id: id,
+            section: ProjectSection::Parameters,
+        },
+    );
+    send(
+        &mut app,
+        ProjectTabMsg::ParameterGroupToggled {
+            project_id: id,
+            group: ParameterGroup::TitleBlock,
+        },
+    );
+    assert!(!section_fills_height(&app, id), "Title block folded");
+    send(
+        &mut app,
+        ProjectTabMsg::ParameterFilterEdited {
+            project_id: id,
+            text: "VOUT".into(),
+        },
+    );
+    assert!(!section_fills_height(&app, id), "filter set");
+    send(
+        &mut app,
+        ProjectTabMsg::ParameterRenameEdited {
+            project_id: id,
+            from: "IOUT_MAX".into(),
+            text: "IMAX".into(),
+        },
+    );
+    assert!(!section_fills_height(&app, id), "rename note");
+}

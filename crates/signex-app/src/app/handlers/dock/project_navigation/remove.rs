@@ -85,6 +85,12 @@ impl Signex {
     ) -> bool {
         use crate::app::RemoveChoice;
         use crate::app::state::ErrorNotice;
+        // A read-only project's file list cannot change: nothing is excluded,
+        // moved or deleted (#2904).
+        if self.refuse_remove_in_read_only_project(state, choice == RemoveChoice::DeleteFile) {
+            self.refresh_panel_ctx();
+            return true;
+        }
         // No writes into a library open read-only for want of its Git
         // history (mockup row 138): deleting its files is one.
         if matches!(choice, RemoveChoice::DeleteFile)

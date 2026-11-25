@@ -1,6 +1,8 @@
 //! The detail pane of the picked row: a failed row's full error first, then
-//! time, client, duration and undo state, the arguments as JSON, the result,
-//! the row as a CLI line, and Replay and Jump to.
+//! time, client, duration and undo state, the arguments as JSON, the result
+//! and the row as a CLI line, scrolling; Replay and Jump to (with a failed
+//! row's Replay hint) stay pinned under them, so a short dock never hides
+//! them (mockup row 161).
 
 use iced::widget::scrollable::{Direction, Scrollbar};
 use iced::widget::{Column, Space, container, row, scrollable};
@@ -25,7 +27,7 @@ const CLI_SIZE: f32 = TS.body * 11.0 / 12.0;
 /// Space above a section label (the mock's 10 px and 12 px).
 const SECTION_GAP: f32 = SP.m + SP.xs;
 
-/// The pane for `row`.
+/// The pane for `row`: the scrolling body over the pinned actions.
 pub(super) fn view<'a>(
     ctx: &'a PanelContext,
     state: &'a CommandLogState,
@@ -33,55 +35,55 @@ pub(super) fn view<'a>(
     width: f32,
 ) -> Element<'a, PanelMsg> {
     let tokens = &ctx.tokens;
+    let scrolled = crate::panels::panel_scrollable(
+        container(body(ctx, state, row))
+            .padding([SP.l, SP.l + SP.xs])
+            .width(Length::Fill)
+            .boxed(),
+    );
+    let edge = ti(tokens.border);
+    let pinned = container(pinned(ctx, row))
+        .padding([SP.m, SP.l + SP.xs])
+        .width(Length::Fill)
+        .style(move |_: &Theme| container::Style {
+            border: Border {
+                top: iced::border::Side::default().color(edge).width(HAIRLINE),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        });
+    let pane: Column<Element<'a, PanelMsg>> = Column::new()
+        .push(scrolled.boxed())
+        .push(pinned.boxed())
+        .width(Length::Fill)
+        .height(Length::Fill);
+    container(pane)
+        .width(width)
+        .height(Length::Fill)
+        .style(move |_: &Theme| container::Style {
+            border: Border {
+                left: iced::border::Side::default().color(edge).width(HAIRLINE),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        })
+        .boxed()
+}
+
+/// What scrolls: the heading, a failed row's error, the facts, the
+/// arguments, the result and the CLI line.
+fn body<'a>(
+    ctx: &'a PanelContext,
+    state: &'a CommandLogState,
+    row: &'a super::LogRow,
+) -> Column<Element<'a, PanelMsg>> {
+    let tokens = &ctx.tokens;
     let i18n: &I18n = &ctx.i18n;
     let r = resolve(tokens);
     let failed = row.outcome.is_failed();
-    let mut col: Column<Element<'a, PanelMsg>> = Column::new().width(Length::Fill);
-    col = col.push(
-        row![
-            text(UserText::new(row.label.clone()))
-                .size(TS.title)
-                .font(weighted(iced::font::Weight::Semibold))
-                .color(ti(tokens.text)),
-            source_pill(tokens, i18n, &row.source),
-        ]
-        .spacing(SP.m)
-        .align_y(Alignment::Center)
-        .boxed(),
-    );
-    col = col.push(
-        text(UserText::new(row.command.clone()))
-            .size(TS.caption)
-            .font(mono())
-            .color(r.ink4)
-            .boxed(),
-    );
+    let mut col = heading(ctx, row);
     if failed {
-        col = col.push(gap(SECTION_GAP));
-        col = col.push(section(tokens, i18n, ids::COMMAND_LOG_DETAIL_RESULT));
-        col = col.push(gap(SP.s + SP.xs));
-        col = col.push(error_banner(tokens, row.outcome.text().unwrap_or_default()));
-        col = col.push(gap(SP.s + SP.xs));
-        let copied = matches!(state.copied, Some((CopyTarget::Error, _)));
-        let (glyph, label) = if copied {
-            (
-                crate::icons::icon_log_check(GLYPH_THEME),
-                t!(i18n, ids::COMMAND_LOG_COPIED),
-            )
-        } else {
-            (
-                crate::icons::icon_log_copy(GLYPH_THEME),
-                t!(i18n, ids::COMMAND_LOG_COPY_ERROR),
-            )
-        };
-        col = col.push(labelled_button(
-            tokens,
-            Look::Field,
-            true,
-            glyph,
-            label,
-            Some(message(CommandLogMsg::CopyErrorRequested(row.seq))),
-        ));
+        col = col.push(error_section(ctx, state, row));
     }
     col = col.push(gap(SP.m));
     col = col.push(facts(ctx, row));
@@ -109,34 +111,88 @@ pub(super) fn view<'a>(
     col = col.push(section(tokens, i18n, ids::COMMAND_LOG_COPY_AS_CLI));
     col = col.push(gap(SP.xs * 2.0));
     col = col.push(cli_box(ctx, state, row));
-    col = col.push(gap(SECTION_GAP + SP.xs));
-    col = col.push(actions(ctx, row));
-    if failed {
+    col
+}
+
+/// What stays pinned: Replay and Jump to, and under them on a failed row the
+/// hint that qualifies Replay, so the two are never apart.
+fn pinned<'a>(ctx: &'a PanelContext, row: &'a super::LogRow) -> Element<'a, PanelMsg> {
+    let mut col: Column<Element<'a, PanelMsg>> =
+        Column::new().push(actions(ctx, row)).width(Length::Fill);
+    if row.outcome.is_failed() {
         col = col.push(gap(SP.s + SP.xs));
         col = col.push(
-            text(t!(i18n, ids::COMMAND_LOG_REPLAY_FAILED_HINT))
+            text(t!(ctx.i18n, ids::COMMAND_LOG_REPLAY_FAILED_HINT))
                 .size(TS.caption)
-                .color(r.ink4)
+                .color(resolve(&ctx.tokens).ink4)
                 .boxed(),
         );
     }
-    let body = crate::panels::panel_scrollable(
-        container(col)
-            .padding([SP.l, SP.l + SP.xs])
-            .width(Length::Fill)
+    col.boxed()
+}
+
+/// The command's label with its source pill, and its catalog id.
+fn heading<'a>(ctx: &'a PanelContext, row: &'a super::LogRow) -> Column<Element<'a, PanelMsg>> {
+    let tokens = &ctx.tokens;
+    let i18n: &I18n = &ctx.i18n;
+    let mut col: Column<Element<'a, PanelMsg>> = Column::new().width(Length::Fill);
+    col = col.push(
+        row![
+            text(UserText::new(row.label.clone()))
+                .size(TS.title)
+                .font(weighted(iced::font::Weight::Semibold))
+                .color(ti(tokens.text)),
+            source_pill(tokens, i18n, &row.source),
+        ]
+        .spacing(SP.m)
+        .align_y(Alignment::Center)
+        .boxed(),
+    );
+    col = col.push(
+        text(UserText::new(row.command.clone()))
+            .size(TS.caption)
+            .font(mono())
+            .color(resolve(tokens).ink4)
             .boxed(),
     );
-    let edge = ti(tokens.border);
-    container(body)
-        .width(width)
-        .height(Length::Fill)
-        .style(move |_: &Theme| container::Style {
-            border: Border {
-                left: iced::border::Side::default().color(edge).width(HAIRLINE),
-                ..Border::default()
-            },
-            ..container::Style::default()
-        })
+    col
+}
+
+/// A failed row's full error, first, with Copy error.
+fn error_section<'a>(
+    ctx: &'a PanelContext,
+    state: &'a CommandLogState,
+    row: &'a super::LogRow,
+) -> Element<'a, PanelMsg> {
+    let tokens = &ctx.tokens;
+    let i18n: &I18n = &ctx.i18n;
+    let copied = matches!(state.copied, Some((CopyTarget::Error, _)));
+    let (glyph, label) = if copied {
+        (
+            crate::icons::icon_log_check(GLYPH_THEME),
+            t!(i18n, ids::COMMAND_LOG_COPIED),
+        )
+    } else {
+        (
+            crate::icons::icon_log_copy(GLYPH_THEME),
+            t!(i18n, ids::COMMAND_LOG_COPY_ERROR),
+        )
+    };
+    Column::<Element<'a, PanelMsg>>::new()
+        .width(Length::Fill)
+        .push(gap(SECTION_GAP))
+        .push(section(tokens, i18n, ids::COMMAND_LOG_DETAIL_RESULT))
+        .push(gap(SP.s + SP.xs))
+        .push(error_banner(tokens, row.outcome.text().unwrap_or_default()))
+        .push(gap(SP.s + SP.xs))
+        .push(labelled_button(
+            tokens,
+            Look::Field,
+            true,
+            glyph,
+            label,
+            Some(message(CommandLogMsg::CopyErrorRequested(row.seq))),
+        ))
         .boxed()
 }
 
@@ -334,7 +390,6 @@ fn cli_box<'a>(
                 tokens,
                 glyph,
                 tip,
-                false,
                 message(CommandLogMsg::CopyCliRequested(row.seq))
             ),
         ]

@@ -174,4 +174,245 @@ fn saving_a_newer_minor_project_writes_nothing_and_creates_no_library() {
         system.contains("read-only") && system.contains("snxprj/1.2"),
         "{notice:?}"
     );
+    // Its own sentence names the project and why (#2904).
+    let detail = notice.detail.render_en_us();
+    assert!(
+        detail.contains("Newer") && detail.contains("was not saved"),
+        "{detail}"
+    );
+}
+
+/// A newer-minor project with unsaved settings beside an unsaved sheet it
+/// lists, and both files' bytes on disk as they were.
+struct ReadOnlyWithSheet {
+    app: Signex,
+    _tmp: TempDir,
+    prj: std::path::PathBuf,
+    prj_bytes: Vec<u8>,
+    sheet: std::path::PathBuf,
+    sheet_bytes: Vec<u8>,
+}
+
+fn blank_sheet() -> SchematicSheet {
+    SchematicSheet {
+        uuid: uuid::Uuid::now_v7(),
+        paper_size: "A4".to_string(),
+        ..Default::default()
+    }
+}
+
+/// `Newer.snxprj`, written as `snxprj/1.2` and listing `one.snxsch`, loaded
+/// as an open leaves it, then its description edited; `one.snxsch` is open
+/// with an unsaved sheet that differs from the file.
+fn read_only_project_with_dirty_sheet() -> ReadOnlyWithSheet {
+    use signex_types::project::{SheetEntry, parse_project, write_project};
+    let _ = signex_app::diagnostics::init_logging();
+    let tmp = TempDir::new().expect("tempdir");
+    let sheet = tmp.path().join("one.snxsch");
+    let sheet_text = signex_types::format::SnxSchematic::new(blank_sheet())
+        .write_string()
+        .expect("serialise");
+    std::fs::write(&sheet, &sheet_text).expect("write sheet");
+    let prj = tmp.path().join("Newer.snxprj");
+    let mut data = bare_project();
+    data.schematic_root = Some("one.snxsch".to_string());
+    data.sheets = vec![SheetEntry {
+        name: "one.snxsch".to_string(),
+        filename: "one.snxsch".to_string(),
+        symbols_count: 0,
+        wires_count: 0,
+        labels_count: 0,
+        unknown: Default::default(),
+    }];
+    write_project(&prj, &data).expect("write project");
+    let mut body: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&prj).unwrap()).expect("project JSON");
+    body["format"] = serde_json::json!("snxprj/1.2");
+    let prj_bytes = serde_json::to_vec_pretty(&body).expect("encode");
+    std::fs::write(&prj, &prj_bytes).expect("write fixture");
+    let loaded = parse_project(&prj).expect("a newer minor opens");
+    assert!(loaded.is_from_newer_minor());
+
+    let (mut app, _boot) = Signex::new();
+    let id = app.document_state.mint_project_id();
+    app.document_state
+        .projects
+        .push(signex_app::app::LoadedProject {
+            id,
+            path: prj.clone(),
+            data: loaded,
+            pending_libraries: Default::default(),
+            case_fold: Default::default(),
+            case_probed: false,
+            case_decided: false,
+        });
+    app.document_state.active_project = Some(id);
+    app.document_state.projects[0].data.description = Some("typed".to_string());
+    app.document_state.mark_document_dirty(&prj);
+
+    let mut engine = signex_engine::Engine::new(blank_sheet()).expect("engine");
+    engine.set_path(Some(sheet.clone()));
+    app.document_state.engines.insert(sheet.clone(), engine);
+    app.document_state.tabs.push(TabInfo {
+        title: "one".into(),
+        path: sheet.clone(),
+        cached_document: None,
+        project_id: Some(id),
+        kind: TabKind::Schematic,
+    });
+    app.document_state.mark_document_dirty(&sheet);
+    ReadOnlyWithSheet {
+        app,
+        _tmp: tmp,
+        prj,
+        prj_bytes,
+        sheet,
+        sheet_bytes: sheet_text.into_bytes(),
+    }
+}
+
+fn logged(fragment: &str) -> bool {
+    signex_app::diagnostics::recent_entries()
+        .iter()
+        .any(|e| e.message.contains(fragment))
+}
+
+/// Exit with a newer-minor project and a sheet both unsaved (#2904, Caner
+/// 2026-11-25): Discard All is not offered and a forced one drops nothing;
+/// Save All saves the sheet and never writes the `.snxprj`, which keeps its
+/// bytes and its unsaved settings; the prompt then asks about the project
+/// alone, and its discard drops only that project's settings.
+#[test]
+fn exit_save_all_saves_the_sheet_and_never_writes_a_newer_minor_project() {
+    use signex_app::app::{ProjectCloseChoice, ProjectMsg, WindowMsg};
+    let mut f = read_only_project_with_dirty_sheet();
+    let choose = |choice| Message::Project(ProjectMsg::AppQuitConfirm(choice));
+    let _ = f.app.update(Message::Window(WindowMsg::CloseMainWindow));
+    let prompt = f.app.ui_state.app_quit_confirm.as_ref().expect("prompt");
+    assert!(
+        prompt.dirty_paths.contains(&f.prj) && prompt.dirty_paths.contains(&f.sheet),
+        "{:?}",
+        prompt.dirty_paths
+    );
+
+    let _ = f.app.update(choose(ProjectCloseChoice::DiscardAll));
+    assert!(f.app.ui_state.app_quit_confirm.is_some(), "refused");
+    assert!(f.app.document_state.is_document_dirty(&f.sheet));
+    assert!(f.app.document_state.is_document_dirty(&f.prj));
+
+    crate::settle_support::settle(&mut f.app, choose(ProjectCloseChoice::SaveAll));
+
+    assert_ne!(
+        std::fs::read(&f.sheet).unwrap(),
+        f.sheet_bytes,
+        "the sheet is saved"
+    );
+    assert!(!f.app.document_state.is_document_dirty(&f.sheet));
+    assert_eq!(
+        std::fs::read(&f.prj).unwrap(),
+        f.prj_bytes,
+        "byte-identical"
+    );
+    assert!(f.app.document_state.is_document_dirty(&f.prj));
+    assert!(logged("Save All skips 'Newer'"), "the skip is noted");
+    let again = f
+        .app
+        .ui_state
+        .app_quit_confirm
+        .as_ref()
+        .expect("asked again");
+    assert_eq!(again.dirty_paths, [f.prj.clone()]);
+
+    let _ = f.app.update(choose(ProjectCloseChoice::DiscardReadOnly));
+    assert!(!f.app.document_state.is_document_dirty(&f.prj));
+    assert!(f.app.ui_state.app_quit_confirm.is_none(), "nothing is left");
+    assert_eq!(
+        std::fs::read(&f.prj).unwrap(),
+        f.prj_bytes,
+        "byte-identical"
+    );
+}
+
+/// Close Project the same way: Save All saves the sheet and leaves the
+/// `.snxprj` byte for byte; the project stays open and the prompt asks about
+/// its settings alone, and their discard closes it without writing them.
+#[test]
+fn close_project_save_all_saves_the_sheet_and_never_writes_a_newer_minor_project() {
+    use signex_app::app::{ProjectCloseChoice, ProjectMsg};
+    let mut f = read_only_project_with_dirty_sheet();
+    let choose = |choice| Message::Project(ProjectMsg::CloseConfirm(choice));
+    crate::close_support::close_first_project(&mut f.app);
+    let prompt = f
+        .app
+        .ui_state
+        .project_close_confirm
+        .as_ref()
+        .expect("prompt");
+    assert!(
+        prompt.dirty_paths.contains(&f.prj) && prompt.dirty_paths.contains(&f.sheet),
+        "{:?}",
+        prompt.dirty_paths
+    );
+
+    let _ = f.app.update(choose(ProjectCloseChoice::DiscardAll));
+    assert!(f.app.ui_state.project_close_confirm.is_some(), "refused");
+    assert!(f.app.document_state.is_document_dirty(&f.sheet));
+
+    crate::settle_support::settle(&mut f.app, choose(ProjectCloseChoice::SaveAll));
+
+    assert_ne!(
+        std::fs::read(&f.sheet).unwrap(),
+        f.sheet_bytes,
+        "the sheet is saved"
+    );
+    assert!(!f.app.document_state.is_document_dirty(&f.sheet));
+    assert_eq!(
+        std::fs::read(&f.prj).unwrap(),
+        f.prj_bytes,
+        "byte-identical"
+    );
+    assert_eq!(f.app.document_state.projects.len(), 1, "still open");
+    let again = f
+        .app
+        .ui_state
+        .project_close_confirm
+        .as_ref()
+        .expect("asked again");
+    assert_eq!(again.dirty_paths, [f.prj.clone()]);
+
+    crate::settle_support::settle(&mut f.app, choose(ProjectCloseChoice::DiscardReadOnly));
+    assert!(f.app.document_state.projects.is_empty(), "closed");
+    assert_eq!(
+        std::fs::read(&f.prj).unwrap(),
+        f.prj_bytes,
+        "byte-identical"
+    );
+}
+
+/// A forced Save All with only the newer-minor project unsaved writes
+/// nothing, from either prompt, and leaves the prompt up.
+#[test]
+fn a_forced_save_all_never_writes_a_newer_minor_project() {
+    use signex_app::app::{AppQuitConfirmState, ProjectCloseChoice, ProjectMsg};
+    let mut f = read_only_project_with_dirty_sheet();
+    f.app.document_state.clear_document_dirty(&f.sheet);
+    f.app.ui_state.app_quit_confirm = Some(AppQuitConfirmState {
+        dirty_paths: vec![f.prj.clone()],
+        dirty_rows: Vec::new(),
+    });
+    crate::settle_support::settle(
+        &mut f.app,
+        Message::Project(ProjectMsg::AppQuitConfirm(ProjectCloseChoice::SaveAll)),
+    );
+    assert_eq!(
+        std::fs::read(&f.prj).unwrap(),
+        f.prj_bytes,
+        "byte-identical"
+    );
+    assert!(
+        f.app.ui_state.app_quit_confirm.is_some(),
+        "the prompt stays"
+    );
+    assert!(f.app.document_state.is_document_dirty(&f.prj));
+    assert_eq!(std::fs::read(&f.sheet).unwrap(), f.sheet_bytes);
 }

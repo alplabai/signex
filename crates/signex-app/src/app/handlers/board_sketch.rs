@@ -355,9 +355,14 @@ impl Signex {
         // The board's own selection is hidden in the mode: no key may act
         // on it unseen.
         self.clear_pcb_selection();
-        crate::diagnostics::log_info(
-            t!(self.ui_state.i18n, ids::BOARD_SKETCH_ENTERED).into_string(),
-        );
+        // The hint is said once a session: Messages never repeats it
+        // (mockup row 187).
+        if !self.interaction_state.board_sketch_hint_said {
+            self.interaction_state.board_sketch_hint_said = true;
+            crate::diagnostics::log_info(
+                t!(self.ui_state.i18n, ids::BOARD_SKETCH_ENTERED).into_string(),
+            );
+        }
     }
 
     /// Commit any change, then leave. Whether the mode is off afterwards.
@@ -577,3 +582,7 @@ mod tests;
 #[cfg(test)]
 #[path = "board_sketch_parameter_tests.rs"]
 mod parameter_tests;
+
+#[cfg(test)]
+#[path = "board_sketch_pattern_tests.rs"]
+mod pattern_tests;

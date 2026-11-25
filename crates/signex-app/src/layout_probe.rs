@@ -8,15 +8,20 @@
 //! size with a headless vello_cpu renderer, so text is measured with real
 //! fonts, and reports the bounds of every text widget in it.
 //!
-//! The fonts are whatever the system and iced's defaults provide, not the
-//! app's bundled faces, so widths are close to, not identical with, the
-//! running app's. Assert on relations a few pixels cannot flip: a label
-//! sits on one line, a button is at least as wide as its label.
+//! The probe measures with the app's own fonts: the faces `main` registers
+//! ([`crate::fonts::bundled::registered`]) are loaded once into iced's
+//! global font system, and the default font is the UI font at its default
+//! family (Inter), as `main` sets it when no other is saved. Widths do not
+//! depend on the machine's fonts, so a layout that passes here passes on
+//! CI. Still assert on relations rather than pixel counts: a label sits on
+//! one line, a button is at least as wide as its label.
+
+use std::sync::OnceLock;
 
 use iced::advanced::widget::operation::{Text, TextInput};
 use iced::advanced::widget::{Id, Operation, Tree};
 use iced::advanced::{Layout, Widget as _, layout, renderer};
-use iced::{Element, Font, Pixels, Rectangle, Size, Theme};
+use iced::{Element, Pixels, Rectangle, Size, Theme};
 
 /// One text widget as laid out: its content and its bounds in window
 /// coordinates.
@@ -363,9 +368,27 @@ pub(crate) fn natural<M>(element: Element<'_, M, Theme, iced::Renderer>, label: 
     find(&texts, label).bounds
 }
 
+/// Load the app's faces into iced's global font system, which the vello_cpu
+/// renderer draws with and every paragraph is measured with. Once per test
+/// process.
+pub(crate) fn load_app_fonts() {
+    static LOADED: OnceLock<()> = OnceLock::new();
+    LOADED.get_or_init(|| {
+        let mut fonts = iced::advanced::graphics::text::font_system()
+            .write()
+            .expect("font system");
+        for face in crate::fonts::bundled::registered() {
+            fonts.load_font(std::borrow::Cow::Borrowed(face));
+        }
+    });
+}
+
+/// The headless software renderer, with the app's fonts loaded and the UI
+/// font as its default.
 pub(crate) fn headless_renderer() -> iced::Renderer {
+    load_app_fonts();
     iced::Renderer::Secondary(iced_vello_cpu::Renderer::new(renderer::Settings {
-        font: Font::DEFAULT,
+        font: signex_widgets::ui_font::regular(),
         text_size: Pixels(16.0),
         ..renderer::Settings::default()
     }))

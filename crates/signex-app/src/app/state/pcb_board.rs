@@ -11,8 +11,8 @@
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 
-use super::DocumentState;
-use crate::app::{TabDocument, TabKind};
+use super::{DocumentState, ProjectId};
+use crate::app::{TabDocument, TabInfo, TabKind};
 use signex_engine::pcb::BoardEngine;
 use signex_types::designator::DesignatorStandard;
 use signex_types::pcb::PcbBoard;
@@ -144,6 +144,61 @@ impl DocumentState {
         if let Some(board) = self.parked_pcb_boards.remove(from) {
             self.parked_pcb_boards.insert(to.to_path_buf(), board);
         }
+    }
+
+    /// The engine the tab at `idx` holds, never a parked one. `None` for a
+    /// tab with no board: a page tab such as Layer Stack, which shares its
+    /// board's path, or a board a failed History restore dropped.
+    pub(crate) fn tab_board_engine(&self, idx: usize) -> Option<&BoardEngine> {
+        self.tabs
+            .get(idx)
+            .and_then(|tab| tab.cached_document.as_ref())
+            .and_then(TabDocument::as_pcb_engine)
+    }
+
+    /// [`Self::tab_board_engine`] of the first tab at `path`, whatever its
+    /// kind: what an undocked window showing `path` draws.
+    pub(crate) fn first_tab_board_engine(&self, path: &Path) -> Option<&BoardEngine> {
+        let idx = self.tabs.iter().position(|tab| tab.path == path)?;
+        self.tab_board_engine(idx)
+    }
+
+    /// [`Self::tab_board_engine`] for a write.
+    pub(crate) fn tab_board_engine_mut(&mut self, idx: usize) -> Option<&mut BoardEngine> {
+        self.tabs
+            .get_mut(idx)
+            .and_then(|tab| tab.cached_document.as_mut())
+            .and_then(TabDocument::as_pcb_engine_mut)
+    }
+
+    /// Take the engine out of the tab at `idx`, leaving the tab boardless.
+    pub(crate) fn take_tab_board_engine(&mut self, idx: usize) -> Option<BoardEngine> {
+        let TabDocument::Pcb(engine) = self.tabs.get_mut(idx)?.cached_document.take()?;
+        Some(engine)
+    }
+
+    /// Put `engine` (or none) into the tab at `idx`, whatever it held.
+    pub(super) fn set_tab_board_engine(&mut self, idx: usize, engine: Option<BoardEngine>) {
+        if let Some(tab) = self.tabs.get_mut(idx) {
+            tab.cached_document = engine.map(TabDocument::Pcb);
+        }
+    }
+
+    /// Append a PCB tab holding `engine`; the caller makes it active.
+    pub(crate) fn push_pcb_tab(
+        &mut self,
+        title: String,
+        path: PathBuf,
+        project_id: Option<ProjectId>,
+        engine: BoardEngine,
+    ) {
+        self.tabs.push(TabInfo {
+            title,
+            path,
+            cached_document: Some(TabDocument::Pcb(engine)),
+            project_id,
+            kind: TabKind::Pcb,
+        });
     }
 
     pub(crate) fn has_pcb_tab(&self, path: &Path) -> bool {

@@ -97,14 +97,16 @@ pub fn view_footprint<'a>(
         // The sketch mode bar: Bake preview · Discard changes · Bake (#2518).
         EditorMode::Sketch => stack
             .push(super::dof_chip::zoom_pill_overlay(editor, tokens))
-            .push(super::sketch_exit::footprint_overlay(editor, tokens, i18n))
-            .push(super::bake_legend::overlay(editor, tokens, i18n))
-            .push(chrome())
+            // The parameters table panel sits under the mode bar, an open
+            // bake preview card and its legend, so they stay in sight.
             .push(
                 crate::library::editor::footprint::parameters_table::view::overlay(
                     editor, tokens, i18n,
                 ),
             )
+            .push(super::sketch_exit::footprint_overlay(editor, tokens, i18n))
+            .push(super::bake_legend::overlay(editor, tokens, i18n))
+            .push(chrome())
             // The constraint / pattern menu at the right-click (mockup row 188).
             .push(
                 crate::library::editor::footprint::sketch_mode::constraint_menu::overlay(
@@ -116,6 +118,10 @@ pub fn view_footprint<'a>(
             .boxed(),
         EditorMode::Normal => stack
             .push(super::dof_chip::zoom_pill_overlay(editor, tokens))
+            // Edit in Sketch on a selected pad (mockup row 192).
+            .push(super::pad_link::edit_in_sketch_overlay(
+                editor, tokens, i18n,
+            ))
             .push(chrome())
             .push(
                 crate::library::editor::footprint::pad_scope_prompt::overlay(editor, tokens, i18n),

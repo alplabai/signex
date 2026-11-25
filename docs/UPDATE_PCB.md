@@ -29,7 +29,7 @@ open, it is opened first and the list is read once it is.
 The dialog's header and footer stay put; the table scrolls between them, so
 it works in a short window (#2371).
 
-- **Header**: the project and the board.
+- **Header**: the title, with the project and the board on a second line.
 - **Summary chips**: `Add n`, `Change n`, `Remove n` and `Problems n` (in the
   warning look when there is one). Clicking a chip lists only that kind;
   clicking it again lists every row. A pad that gets its first net is an Add
@@ -49,12 +49,13 @@ it works in a short window (#2371).
   Remove), Object (a designator, a net, or a pad as `R1.2`), Detail (the
   footprint, with the value unless it is the `*` placeholder, or old → new)
   and Status. Hovering the Object shows the whole change as a sentence.
-- **Status** is blank until Validate passes, then ✓ on every row that
-  applies. A ticked row that needs an unticked one reads Skipped.
+- **Status** is blank until Validate passes, then a green check on every
+  row that applies. A ticked row that needs an unticked one reads Skipped.
 - **Groups**: Components (every footprint row: add, remove, change,
-  designator, value, link), Nets and Pad nets. Each folds, and has a box: on
-  when every row that can be ticked is, drawn mixed (soft accent) when some
-  are; a click ticks them all, or unticks them all when all are ticked. Its
+  designator, value, link), Nets and Pad nets. Each folds behind a chevron,
+  and has a box: solid accent with a white tick when every row that can be
+  ticked is, solid accent with a white dash when some are; a click ticks them
+  all, or unticks them all when all are ticked. Its
   `n of m` counts the ticked rows of those that can be ticked. A group with a
   problem starts open; a clean group with more than ten rows starts folded.
 - **Problems**: a row that cannot be ticked is greyed, unticked, and shows
@@ -65,7 +66,8 @@ it works in a short window (#2371).
   and Cross Probe close the dialog.
 - **Notes** under the rows (an unreadable sheet, a pad that loses its net or
   lock, a kept unlinked footprint).
-- **Footer**: the last Validate's verdict, Close, Report... (the list as text,
+- **Footer**: the last Validate's verdict ("Validated: every ticked change
+  applies to the board." with a green check, or what blocks it), Close, Report... (the list as text,
   written where the user saves it), Validate (runs the ticked rows on a copy
   of the board) and Execute, which names how many changes it applies and is
   off when none is ticked.

@@ -53,9 +53,7 @@ pub(super) fn bake_polar(
     let pad_attr = match source_entity.pad.as_ref() {
         Some(p) => p,
         None => {
-            warnings.push(format!(
-                "polar array source {source}: no PadAttr on source entity — array skipped"
-            ));
+            warnings.push(super::not_a_pad("polar array", sketch, solve, source));
             return Ok(());
         }
     };

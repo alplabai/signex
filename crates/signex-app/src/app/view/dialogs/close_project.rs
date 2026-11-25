@@ -20,11 +20,10 @@ use super::widgets::modal_title_header;
 use crate::app::ProjectCloseChoice;
 use crate::app::file_extension::has_extension;
 use crate::app::handlers::modal_sizing::CLOSE_LIST_MAX_HEIGHT;
+use crate::app::read_only_project::{read_only_note, unsaved_actions};
 use crate::app::state::ModalId;
 use crate::app::state::sheet_refs::{bounded_names, file_label};
-use crate::library::modal_chrome::{
-    UnsavedActions, UnsavedBody, unsaved_body, unsaved_footer_parts,
-};
+use crate::library::modal_chrome::{UnsavedBody, unsaved_body, unsaved_footer_parts};
 use crate::styles::{CalloutTone, dialog_callout, dialog_footer_split, dialog_hint};
 
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -76,6 +75,13 @@ impl Signex {
                 tokens,
             ));
         }
+        // A read-only project's settings are never written: Save All saves
+        // the rest, and the discard drops only that project's (#2904).
+        let read_only = self.read_only_offer(&st.dirty_paths, st.dirty_rows.len());
+        if let Some(offer) = &read_only {
+            let line = text(read_only_note(i18n, offer)).size(TS.body).boxed();
+            below.push(dialog_callout(CalloutTone::Warn, line, tokens));
+        }
         let body = unsaved_body(
             UnsavedBody {
                 title: t!(i18n, ids::DIALOG_CLOSE_PROJECT_QUESTION).into_string(),
@@ -88,11 +94,7 @@ impl Signex {
         );
         let (extras, buttons) = unsaved_footer_parts(
             i18n,
-            UnsavedActions {
-                discard_all: discard_allowed.then(|| choose(ProjectCloseChoice::DiscardAll)),
-                cancel: choose(ProjectCloseChoice::Cancel),
-                save_all: choose(ProjectCloseChoice::SaveAll),
-            },
+            unsaved_actions(i18n, read_only.as_ref(), discard_allowed, choose),
             tokens,
         );
 

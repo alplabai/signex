@@ -157,7 +157,7 @@ pub(super) fn view<'a>(
 }
 
 /// One expression field of the array.
-fn param<'a>(
+pub(super) fn param<'a>(
     pattern: &ArraySummary,
     field: ArrayParamField,
     example: &'static str,
@@ -209,10 +209,7 @@ fn layout_rows<'a>(
             ny_expr,
             dx_expr,
             dy_expr,
-            mask_expr,
-            suppressed_instances,
-            nx_value,
-            ny_value,
+            ..
         } => {
             rows.push(field_row(
                 t!(i18n, ids::EDITORS_ROLE_PATTERN_NX_NY),
@@ -234,6 +231,67 @@ fn layout_rows<'a>(
             if let Some(spacing) = spacing_note(pattern, exprs, i18n) {
                 rows.push(note(spacing, tokens));
             }
+        }
+        ArrayKindSummary::Polar {
+            count_expr,
+            sweep_angle_expr,
+            ..
+        } => {
+            rows.push(count_sweep_row(
+                pattern,
+                count_expr,
+                sweep_angle_expr,
+                tokens,
+                i18n,
+            ));
+            rows.push(field_row(
+                t!(i18n, ids::EDITORS_ROLE_PATTERN_CENTRE),
+                centre_row(pattern, pattern.center_shown_mm, i18n),
+                tokens,
+            ));
+        }
+    }
+    rows.extend(mask_rows(pattern, tokens, i18n));
+    rows
+}
+
+/// A polar pattern's count and sweep on one row.
+pub(super) fn count_sweep_row<'a>(
+    pattern: &ArraySummary,
+    count_expr: &str,
+    sweep_angle_expr: &str,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, PanelMsg> {
+    use ArrayParamField as F;
+    field_row(
+        t!(i18n, ids::EDITORS_ROLE_PATTERN_COUNT_SWEEP),
+        pair(
+            param(pattern, F::PolarCountExpr, "1", count_expr),
+            param(pattern, F::PolarSweepAngleExpr, "360deg", sweep_angle_expr),
+        ),
+        tokens,
+    )
+}
+
+/// The Mask field and the per-instance checkboxes of a grid or polar
+/// pattern; a linear pattern has neither.
+pub(super) fn mask_rows<'a>(
+    pattern: &'a ArraySummary,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Vec<Element<'a, PanelMsg>> {
+    use ArrayParamField as F;
+    let mut rows = Vec::new();
+    match &pattern.kind {
+        ArrayKindSummary::Linear { .. } => {}
+        ArrayKindSummary::Grid {
+            mask_expr,
+            suppressed_instances,
+            nx_value,
+            ny_value,
+            ..
+        } => {
             rows.push(field_row(
                 t!(i18n, ids::EDITORS_PATTERN_MASK),
                 param(pattern, F::MaskExpr, "i != 0 || j != 0", mask_expr),
@@ -252,26 +310,11 @@ fn layout_rows<'a>(
             }
         }
         ArrayKindSummary::Polar {
-            count_expr,
-            sweep_angle_expr,
-            center_position_mm: _,
             mask_expr,
             suppressed_instances,
             count_value,
+            ..
         } => {
-            rows.push(field_row(
-                t!(i18n, ids::EDITORS_ROLE_PATTERN_COUNT_SWEEP),
-                pair(
-                    param(pattern, F::PolarCountExpr, "1", count_expr),
-                    param(pattern, F::PolarSweepAngleExpr, "360deg", sweep_angle_expr),
-                ),
-                tokens,
-            ));
-            rows.push(field_row(
-                t!(i18n, ids::EDITORS_ROLE_PATTERN_CENTRE),
-                centre_row(pattern, pattern.center_shown_mm, i18n),
-                tokens,
-            ));
             rows.push(field_row(
                 t!(i18n, ids::EDITORS_PATTERN_MASK),
                 param(pattern, F::MaskExpr, "i != 0", mask_expr),
@@ -312,7 +355,7 @@ pub(super) fn spacing_note(
 }
 
 /// A bare number with an optional `mm`: nothing to resolve.
-fn is_plain_length(expr: &str) -> bool {
+pub(super) fn is_plain_length(expr: &str) -> bool {
     let text = expr.trim().trim_start_matches('=').trim();
     let number = text.strip_suffix("mm").unwrap_or(text).trim();
     number.parse::<f64>().is_ok()
@@ -337,7 +380,7 @@ fn walked_spacing(pattern: &ArraySummary) -> Option<(f64, f64)> {
 }
 
 /// The centre position and the Re-pick button of a polar pattern.
-fn centre_row<'a>(
+pub(super) fn centre_row<'a>(
     pattern: &ArraySummary,
     centre: Option<[f64; 2]>,
     i18n: &I18n,

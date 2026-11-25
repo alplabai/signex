@@ -155,6 +155,7 @@ pub(super) fn dropdown_padding() -> iced::Padding {
 pub(super) fn item_btn(
     label: &str,
     checked: Option<bool>,
+    icon: Option<model::MenuIcon>,
     shortcut: Option<String>,
     msg: Option<MenuMessage>,
     mc: MenuColors,
@@ -162,7 +163,7 @@ pub(super) fn item_btn(
 ) -> Element<'static, MenuMessage> {
     let enabled = msg.is_some();
     let ink = if enabled { mc.text } else { mc.text_disabled };
-    let mut cells = cells(label, ink, checked);
+    let mut cells = cells(label, ink, checked, icon);
     if let Some(s) = shortcut {
         cells = cells.push(
             text(raw(s))
@@ -202,7 +203,7 @@ pub(super) fn header_row(label: &str, mc: MenuColors) -> Element<'static, MenuMe
 /// A row that opens a submenu: label and chevron, no shortcut; iced_aw opens
 /// the submenu on hover.
 pub(super) fn submenu_btn(label: &str, mc: MenuColors) -> Element<'static, MenuMessage> {
-    let cells = cells(label, mc.text, None).push(chevron_cell(CHEVRON, mc));
+    let cells = cells(label, mc.text, None, None).push(chevron_cell(CHEVRON, mc));
     row_button(cells, mc, Some(MenuMessage::NoOp))
 }
 
@@ -223,29 +224,28 @@ pub(super) fn separator(mc: MenuColors) -> Element<'static, MenuMessage> {
     .boxed()
 }
 
-/// The leading cells of a row: the check column (the mark only on a checked
-/// toggle row), the label and the gap that pushes the rest to the right edge.
+/// The leading cells of a row: the check column (the mark on a checked
+/// toggle row, else the row's icon), the label and the gap that pushes the
+/// rest to the right edge.
 fn cells(
     label: &str,
     ink: iced::Color,
     checked: Option<bool>,
+    icon: Option<model::MenuIcon>,
 ) -> Row<Element<'static, MenuMessage>> {
-    let mark = if checked == Some(true) {
-        "\u{2713}"
-    } else {
-        ""
+    let column = match (checked == Some(true), icon) {
+        (false, Some(icon)) => icon_cell(icon, ink),
+        (is_checked, _) => text(raw(if is_checked { "\u{2713}" } else { "" }))
+            .size(M.label_size)
+            .color(ink)
+            .width(Length::Fixed(MARK_WIDTH))
+            .boxed(),
     };
     Row::new()
         .spacing(M.row_spacing)
         .align_y(iced::Alignment::Center)
         .width(Length::Fill)
-        .push(
-            text(raw(mark))
-                .size(M.label_size)
-                .color(ink)
-                .width(Length::Fixed(MARK_WIDTH))
-                .boxed(),
-        )
+        .push(column)
         .push(
             text(raw(label.to_owned()))
                 .size(M.label_size)
@@ -254,6 +254,26 @@ fn cells(
                 .boxed(),
         )
         .push(Space::new().width(Length::Fill).boxed())
+}
+
+/// A row's icon in the check column, in the row's ink. The glyphs are line
+/// art; any theme's handle draws the same strokes and the style colours them.
+/// Sized to the check column (MARK_WIDTH), not M.icon_size, on purpose: a
+/// wider glyph would push labels off the shared start line.
+fn icon_cell(icon: model::MenuIcon, ink: iced::Color) -> Element<'static, MenuMessage> {
+    const GLYPH_THEME: signex_types::theme::ThemeId = signex_types::theme::ThemeId::GraphiteDark;
+    let handle = match icon {
+        model::MenuIcon::Save => crate::icons::icon_menu_save(GLYPH_THEME),
+        model::MenuIcon::Reset => crate::icons::icon_undo(GLYPH_THEME),
+    };
+    svg(handle)
+        .width(Length::Fixed(MARK_WIDTH))
+        .height(Length::Fixed(MARK_WIDTH))
+        .style(move |_: &Theme, _| svg::Style {
+            color: Some(ink),
+            ..svg::Style::default()
+        })
+        .boxed()
 }
 
 fn chevron_cell(glyph: &'static str, mc: MenuColors) -> Element<'static, MenuMessage> {
@@ -336,6 +356,7 @@ mod tests {
                 shortcut: None,
                 state: model::ItemState::Unavailable,
                 checked,
+                icon: None,
             })],
         };
         let plain = dropdown_width(&menu_of(None), "");

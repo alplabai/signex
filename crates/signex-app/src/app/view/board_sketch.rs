@@ -11,11 +11,12 @@ use signex_widgets::{text, theme_ext};
 
 use crate::app::state::BoardSketchSession;
 use crate::app::{BoardSketchMsg, Message, PcbMsg, Signex};
-use crate::library::editor::standalone::sketch_exit::{ModeBarLook, ModeBarMessages, mode_bar};
-use crate::styles::{Spacing, TypeScale};
+use crate::library::editor::standalone::sketch_exit::{
+    MODE_BAR_INSET, ModeBarLook, ModeBarMessages, mode_bar,
+};
+use crate::styles::TypeScale;
 
 const TS: TypeScale = TypeScale::DEFAULT;
-const SP: Spacing = Spacing::DEFAULT;
 
 impl Signex {
     /// The main window's body while its board is in sketch mode; `None`
@@ -87,7 +88,7 @@ impl Signex {
         // a card over the canvas; this bar's Bake preview button closes it.
         let exit = &session.editor.state.sketch_exit;
         container(mode_bar(look, exit, msgs, tokens, i18n))
-            .padding(SP.xl)
+            .padding(MODE_BAR_INSET)
             .width(Length::Fill)
             .height(Length::Fill)
             .align_x(Horizontal::Left)

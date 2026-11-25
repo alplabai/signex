@@ -160,11 +160,6 @@ pub(super) fn layer_label(
     }
 }
 
-/// `value` in mm as a callout reads it: three decimals.
-pub(super) fn mm3(value: f64) -> String {
-    format!("{value:.3}")
-}
-
 /// What the drawing tests share: a panel common to a selection of `items`.
 #[cfg(test)]
 pub(super) mod fixture {
