@@ -20,8 +20,9 @@ const SEARCH_MIN: f32 = TS.body * 10.0;
 const SEARCH_W: f32 = TS.body * 250.0 / 12.0;
 /// The filter row's width without the search field (chips, result switch,
 /// Follow newest, padding), at the English labels. The panel actions are in
-/// the dock title bar.
-const BAR_WITHOUT_SEARCH: f32 = TS.body * 58.0;
+/// the dock title bar. Measured at 713 px for a 12 px body (60 bodies, so
+/// the row never counts on more room than it has).
+const BAR_WITHOUT_SEARCH: f32 = TS.body * 60.0;
 /// From this width the filters and Follow newest share one row.
 const ONE_ROW_FROM: f32 = SEARCH_MIN + BAR_WITHOUT_SEARCH;
 
