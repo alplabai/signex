@@ -108,8 +108,14 @@ fn missing_library_box_cross(sym: &Symbol) -> [(Point, Point); 2] {
     let half = MISSING_LIBRARY_BOX_HALF_MM;
     let (x, y) = (sym.position.x, sym.position.y);
     [
-        (Point::new(x - half, y - half), Point::new(x + half, y + half)),
-        (Point::new(x - half, y + half), Point::new(x + half, y - half)),
+        (
+            Point::new(x - half, y - half),
+            Point::new(x + half, y + half),
+        ),
+        (
+            Point::new(x - half, y + half),
+            Point::new(x + half, y - half),
+        ),
     ]
 }
 

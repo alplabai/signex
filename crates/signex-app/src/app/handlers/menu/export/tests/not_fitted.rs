@@ -37,7 +37,10 @@ fn split_part_app() -> crate::app::Signex {
     top.child_sheets[0].uuid = Uuid::from_u128(1);
     let mut child = sheet_with_net("U1", "CHILD_NET", &[]);
     for (sheet, unit, dnp) in [(&mut top, 1, true), (&mut child, 2, false)] {
-        let lib = sheet.lib_symbols.get_mut("Device:R").expect("the part's library");
+        let lib = sheet
+            .lib_symbols
+            .get_mut("Device:R")
+            .expect("the part's library");
         lib.graphics.push(LibGraphic {
             unit: 0,
             body_style: 1,
@@ -92,7 +95,10 @@ fn child_drawn(ctx: &ExportContext, opts: &PdfOptions) -> ChildDrawn {
     };
     let svg = SvgRenderContext::from_sheet(page, opts, 297.0, 210.0, 1.0, Some(&inputs));
     let ink = opts.palette.symbol_stroke;
-    let [r, g, b] = greyed_ink([ink.0, ink.1, ink.2], [svg.paper.0, svg.paper.1, svg.paper.2]);
+    let [r, g, b] = greyed_ink(
+        [ink.0, ink.1, ink.2],
+        [svg.paper.0, svg.paper.1, svg.paper.2],
+    );
     let strokes: Vec<_> = svg
         .elements
         .iter()
