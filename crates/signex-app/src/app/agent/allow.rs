@@ -97,6 +97,8 @@ mod tests {
                 "apply_edits",
                 "arrange_in_box",
                 "assign_board_net_class",
+                // #2937: a part's footprint on the named sheet.
+                "assign_footprint",
                 "assign_net_class",
                 "autoplace_fields",
                 "board_assembly_drawing",
@@ -110,6 +112,8 @@ mod tests {
                 // items `ids` names on the named sheet (or board, Delete).
                 "bring_drawings_forward",
                 "bring_drawings_to_front",
+                // #2937: a footprint swap on the named board.
+                "change_footprint",
                 "check_drc",
                 "check_erc",
                 "check_requirements",
@@ -150,6 +154,7 @@ mod tests {
                 "project_set_version_control",
                 "project_settings",
                 "query_board_nets",
+                "query_footprint_assignments",
                 "query_pins",
                 "read_document",
                 "remove_board_panel",
@@ -187,6 +192,10 @@ mod tests {
                 "set_active_layer",
                 "set_board_graphic",
                 "set_board_panel",
+                // #2936: a footprint placed by id on the named board.
+                "set_footprint_position",
+                "set_footprint_rotation",
+                "set_footprint_side",
                 "set_footprint_text",
                 "set_layer_color",
                 "set_layer_sizes",

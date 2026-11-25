@@ -41,6 +41,12 @@ pub(crate) mod enablement;
 mod file_operand_tests;
 mod file_operands;
 #[cfg(test)]
+mod footprint_assign_operand_tests;
+mod footprint_assign_operands;
+#[cfg(test)]
+mod footprint_place_operand_tests;
+mod footprint_place_operands;
+#[cfg(test)]
 mod footprint_text_operand_tests;
 mod footprint_text_operands;
 #[cfg(test)]
