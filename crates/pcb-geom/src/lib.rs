@@ -65,8 +65,8 @@ pub use body::{checked_body, courtyard_outline, footprint_body, is_courtyard};
 pub use closed_path::{PathRefusal, closed_path};
 pub use connections::{ConnectionCounts, NetUnrouted, PadName, connection_counts};
 pub use copper::{
-    CopperItem, collect_copper, copper_layers, layer_bit, layer_mask, net_at, pad_layers,
-    pad_pieces, pieces_on, via_layers, via_pieces,
+    CopperItem, collect_copper, copper_layers, layer_bit, layer_mask, net_at, no_net_copper,
+    pad_layers, pad_pieces, pieces_on, via_layers, via_pieces,
 };
 pub use drawn_copper::{DrawnCopperFault, board_graphic_copper, board_text_copper, drawn_copper};
 pub use flip::flip_footprint;

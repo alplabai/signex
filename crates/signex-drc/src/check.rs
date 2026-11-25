@@ -8,7 +8,7 @@ use signex_types::pcb::PcbBoard;
 use signex_types::pcb_free::free_pad_frame;
 
 use pcb_geom::{
-    BoardIndex, CopperItem, IndexedItem, ItemRef, PointNm, collect_copper, drawn_copper,
+    BoardIndex, CopperItem, IndexedItem, ItemRef, PointNm, collect_copper, no_net_copper,
     pad_pieces, ratsnest, via_pieces,
 };
 
@@ -17,8 +17,9 @@ use super::{DrcReport, DrcRules, Violation, ViolationKind};
 /// Check `board` against `rules`.
 pub fn run(board: &PcbBoard, rules: &DrcRules) -> DrcReport {
     let items = per_layer_sizes(board, collect_copper(board));
+    let no_net = per_layer_sizes(board, no_net_copper(board));
     let index = BoardIndex::build(board);
-    let mut violations = copper_pairs(&items, &drawn_copper(board), &index, rules);
+    let mut violations = copper_pairs(&items, &no_net, &index, rules);
     violations.extend(unconnected(board, &items));
     let keepouts = super::keepout::check(board);
     violations.extend(keepouts.violations);
@@ -90,12 +91,13 @@ fn per_layer_sizes(board: &PcbBoard, items: Vec<CopperItem>) -> Vec<CopperItem> 
 }
 
 /// Shorts and clearance violations between copper of different nets:
-/// between the netted `items`, and between each piece of `drawn` copper (a
-/// drawing or string on copper, no net, #2883) and the netted items. Two
-/// pieces of no net are never a pair.
+/// between the netted `items`, and between each piece of `no_net` copper
+/// (pads, tracks, arcs and vias of net 0, drawings and strings on copper;
+/// #2883, #2515) and the netted items. Two pieces of no net are never a
+/// pair.
 fn copper_pairs(
     items: &[CopperItem],
-    drawn: &[CopperItem],
+    no_net: &[CopperItem],
     index: &BoardIndex,
     rules: &DrcRules,
 ) -> Vec<Violation> {
@@ -120,9 +122,9 @@ fn copper_pairs(
             found.keep(check_pair(a, &items[j], rules));
         }
     }
-    // The index holds no drawn copper, so each drawn piece looks for the
-    // netted copper as far as any net's rule reaches, and takes every
-    // per-layer copy of what it finds.
+    // Each piece of no net looks for the netted copper as far as any net's
+    // rule reaches, and takes every per-layer copy of what it finds; index
+    // hits on copper of no net have no slot and are passed over.
     let reach = items
         .iter()
         .map(|c| c.net)
@@ -132,7 +134,7 @@ fn copper_pairs(
         .map(|net| rules.reach_of(net))
         .max()
         .unwrap_or(0);
-    for a in drawn {
+    for a in no_net {
         let near = a.shape.aabb().inflate(reach);
         for hit in index.bounds_meeting(&near) {
             for j in copies_of(&slots, items, hit) {

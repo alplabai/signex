@@ -28,6 +28,12 @@ Each violation carries its items (sorted), the two nets, the shared layer
 mask (`copper_layers` lists them), a location and the two distances. The
 report is sorted, so a run is the same on every machine.
 
+Copper of no net (`pcb_geom::no_net_copper`, #2515: pads, tracks, arcs and
+vias of net 0, drawings and strings on copper) is measured against every
+net's copper for `Clearance` and `Short` (net 0 on its side) and against the
+board edge; two items of no net are never a pair. `Unconnected` reads the
+netted copper only, so copper of no net never closes a link.
+
 A gap equal to the rule passes; one nm under fails. The comparison is exact
 (`Separation::is_under` compares squared nm) for every pad shape:
 
@@ -161,7 +167,7 @@ severity := "error" | "warning" | "info"
 | `track` | `width >=`, `width <=` | none | checked |
 | `via` | `diameter >=`, `drill >=`, `pad_gap >=` | none | checked |
 | `hole` | `diameter >=`, `diameter <=`, `annular >=`, `spacing >=` | none | checked (#2435): every via and pad hole |
-| `edge` | `clearance >=` | none | checked: netted copper against the saved outline |
+| `edge` | `clearance >=` | none | checked: copper against the saved outline, copper of no net included (#2515) |
 | `silk`, `mask`, `paste`, `courtyard` | see `DRC_RULES.md`, "The base rules" | none | checked; board-wide only (no `when`) |
 
 | Condition | Scope | Net-scope rank |
@@ -429,8 +435,7 @@ many keepouts make it slow.
 
 ## Not checked yet
 
-Zone clearance (#2216), copper with no net (net 0 is skipped, like in the
-ratsnest, also against the board edge), clearance between copper and holes
+Zone clearance (#2216), clearance between copper and holes
 (the rule language parses it), region-scoped rules (v2) and the board
 setup's minimum width and via sizes. The base rules of #2435 measure
 approximately where `DRC_RULES.md` says so (a part's silkscreen texts, a
