@@ -42,6 +42,13 @@ stays as written. A custom format typed in the menu is checked first
 closed and known, and it needs a channel token and the designator or net
 token.
 
+The Designators and Local nets fields each open their menu as a layer
+floating over the dock, under the field and right-aligned to it, so the
+rows below stay where they are (#2674). The menu keeps inside the window,
+above the field when there is no room below. Picking a preset or an
+accepted custom format closes it, and so does a press anywhere outside the
+menu and its field; a press on the field toggles it.
+
 ## Stitching
 
 The project walk (`signex_net`, `project/channels.rs`) walks a repeated
@@ -198,7 +205,5 @@ list opens it, docked on the left as a tab beside Projects.
   drawn yet (#2658).
 - Ctrl+click on a panel row (open in a new tab): a sheet has one tab, so a
   row click focuses it (#2658).
-- The naming menu opens inline under its field, right-aligned to it, not as
-  a floating layer over the dock (#2674).
 - Sheet entry sync does not yet treat `Repeat(<net>)` as matching the port
   `<net>`; it offers to add `<net>` as a new entry (#2659).

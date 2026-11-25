@@ -1,8 +1,9 @@
 //! The Channel naming section of a repeated sheet symbol and its format
-//! menus (#1279): Designators and Local nets each open a menu right under
-//! the field, right-aligned to it, with the preset formats, a Custom
-//! format… field checked by `check_format`, and the token help line. The
-//! choice is a project setting (`app/compiled_design/naming.rs`).
+//! menus (#1279): Designators and Local nets each open a menu floating over
+//! the dock right under the field, right-aligned to it (#2674), with the
+//! preset formats, a Custom format… field checked by `check_format`, and
+//! the token help line. A press outside the menu and its field closes it.
+//! The choice is a project setting (`app/compiled_design/naming.rs`).
 
 use iced::widget::{Column, column, container, row};
 use iced::{Alignment, Background, Border, Element, Length, Shadow, Theme, Widget as _};
@@ -11,6 +12,7 @@ use signex_types::schematic::{ChannelFormatError, ChannelOccurrence};
 use signex_widgets::{text, text_input};
 
 use super::super::compiled_design::{NamingTarget, SheetSymbolRepeatView, msg};
+use super::super::field_dropdown::FieldDropdown;
 use super::super::{PROPERTY_LABEL_WIDTH, PanelContext, PanelMsg};
 use crate::app::CompiledDesignMsg;
 use crate::app::compiled_design::{DESIGNATOR_PRESETS, NET_PRESETS};
@@ -67,10 +69,7 @@ pub(super) fn naming_section<'a>(
         );
     }
     for target in [NamingTarget::Designators, NamingTarget::Nets] {
-        body = body.push(format_field(ctx, view, target));
-        if view.menu.target == Some(target) {
-            body = body.push(menu(ctx, view, target, &ch));
-        }
+        body = body.push(format_field(ctx, view, target, &ch));
     }
     body = body.push(
         container(
@@ -90,11 +89,13 @@ pub(super) fn naming_section<'a>(
     .boxed()
 }
 
-/// A dropdown field showing the format in mono; it opens its menu.
+/// A dropdown field showing the format in mono; it opens its menu, which
+/// floats under it while open.
 fn format_field<'a>(
     ctx: &'a PanelContext,
     view: &'a SheetSymbolRepeatView,
     target: NamingTarget,
+    ch: &ChannelOccurrence,
 ) -> Element<'a, PanelMsg> {
     let tokens = &ctx.tokens;
     let res = resolve(tokens);
@@ -120,6 +121,13 @@ fn format_field<'a>(
     .padding([SP.xs, SP.s])
     .on_press(msg(CompiledDesignMsg::NamingMenuToggled(target)))
     .style(move |_: &Theme, _| look);
+    let field: Element<'a, PanelMsg> = if is_open {
+        FieldDropdown::new(field.boxed(), menu(ctx, view, target, ch), SP.xs)
+            .on_outside_press(msg(CompiledDesignMsg::NamingMenuClosed))
+            .boxed()
+    } else {
+        field.boxed()
+    };
     container(
         row![
             text(t!(
@@ -166,7 +174,7 @@ fn format_field_look(
 }
 
 /// The open menu: title, a radio row per preset with its example, Custom
-/// format… and the token help line. Right-aligned under its field.
+/// format… and the token help line, as the card `FieldDropdown` floats.
 fn menu<'a>(
     ctx: &'a PanelContext,
     view: &'a SheetSymbolRepeatView,
@@ -286,11 +294,7 @@ fn menu<'a>(
             },
             ..container::Style::default()
         });
-    container(card)
-        .padding([0.0, SP.m])
-        .width(Length::Fill)
-        .align_x(iced::alignment::Horizontal::Right)
-        .boxed()
+    card.boxed()
 }
 
 fn rule<'a>(color: iced::Color) -> Element<'a, PanelMsg> {
