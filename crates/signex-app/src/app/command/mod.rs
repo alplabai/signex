@@ -51,6 +51,9 @@ mod hierarchy_operands;
 #[cfg(test)]
 pub(in crate::app) mod interaction_snapshot_tests;
 mod layer_strip_operands;
+#[cfg(test)]
+mod live_erc_operand_tests;
+mod live_erc_operands;
 mod need_context;
 mod needs;
 #[cfg(test)]

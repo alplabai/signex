@@ -22,6 +22,7 @@ use super::file_operands as file;
 use super::footprint_text_operands as fp_text;
 use super::hierarchy_operands as hierarchy;
 use super::layer_strip_operands as strip;
+use super::live_erc_operands as live_erc;
 use super::part_operands as part;
 use super::placed_operands as placed;
 use super::placement_extras_operands as extras;
@@ -120,6 +121,8 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("set_symbol_parameter", placed::set_symbol_parameter),
     ("set_sheet_variable", placed::set_sheet_variable),
     ("repair_pin_junctions", repair_reset::repair_pin_junctions),
+    // #1288: the live ERC preference.
+    ("toggle_live_erc", live_erc::toggle_live_erc),
     ("reset_board_origin", repair_reset::reset_board_origin),
     ("reset_layer_colors", repair_reset::reset_layer_colors),
     ("view_rotate", view_rotate),
@@ -358,7 +361,8 @@ pub(crate) fn operand_handler(command: &AppCommandId) -> Option<OperandHandler> 
 /// it for the missing `path` rather than the picker's refusal reading as run.
 /// `repair_pin_junctions` goes there too, so a headless run on the sheet in
 /// view answers how many dots it added (0 when nothing needed one) instead of
-/// a bare `Ran`.
+/// a bare `Ran`. `toggle_live_erc` too, so a headless flip answers with the
+/// preference it left.
 pub(crate) fn runs_headless_without_operands(command: &AppCommandId) -> bool {
     matches!(
         command.as_str(),
@@ -366,6 +370,7 @@ pub(crate) fn runs_headless_without_operands(command: &AppCommandId) -> bool {
             | "new_schematic_sheet"
             | "create_sheet_symbol_from_sheet"
             | "repair_pin_junctions"
+            | "toggle_live_erc"
     )
 }
 

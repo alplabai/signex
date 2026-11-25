@@ -348,6 +348,11 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "rotate_clockwise" => Message::Edit(EditMsg::RotateSelectedClockwise),
         "rotate_counterclockwise" => Message::Edit(EditMsg::RotateSelectedCounterclockwise),
         "open_erc_dialog" => Message::Erc(ErcMsg::OpenDialog),
+        // #1288: the live ERC preference flips; with `enabled`, the operand
+        // handler sets it.
+        "toggle_live_erc" => {
+            Message::Erc(ErcMsg::Live(crate::app::handlers::erc::LiveErcMsg::Toggled))
+        }
         "repair_pin_junctions" => Message::Erc(ErcMsg::PinJunctionRepairRequested),
         // #1300: the contents sheet of the active document's project.
         "add_table_of_contents" => Message::from(crate::app::TablesMsg::TableOfContentsRequested),
