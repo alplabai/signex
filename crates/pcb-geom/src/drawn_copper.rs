@@ -8,7 +8,7 @@ use signex_types::pcb::{BoardGraphic, BoardText, PCB_DEFAULT_TEXT_SIZE_MM, PcbBo
 use signex_types::schematic::HAlign;
 
 use crate::copper::{CopperItem, layer_mask};
-use crate::graphic::{board_graphic_placement, board_text_placement};
+use crate::graphic::{board_graphic_placement, board_text_placement, is_polygon_token};
 use crate::graphic_index::copper_graphic_strokes;
 use crate::index::ItemRef;
 use crate::pick_filter::PickKind;
@@ -46,12 +46,14 @@ pub fn drawn_copper(board: &PcbBoard) -> Vec<CopperItem> {
         if layers == 0 {
             continue;
         }
-        let (Some(kind), Ok(shapes)) = (graphic.kind(), board_graphic_copper(graphic)) else {
+        let Ok(shapes) = board_graphic_copper(graphic) else {
             continue;
         };
+        // A polygon is no kind the Graphics tools draw: it picks as other.
+        let kind = graphic.kind().map_or(PickKind::Other, PickKind::of_graphic);
         let item = ItemRef::Graphic {
             graphic: graphic.uuid,
-            kind: PickKind::of_graphic(kind),
+            kind,
         };
         push(&mut out, item, layers, shapes);
     }
@@ -78,10 +80,12 @@ fn push(out: &mut Vec<CopperItem>, item: ItemRef, layers: u32, shapes: Vec<Shape
 }
 
 /// A board drawing's copper, were it on a copper layer: its stroke and, for
-/// a text frame, the strokes of its lines. All or nothing: a drawing any
-/// part of which does not convert is refused whole, with why.
+/// a text frame, the strokes of its lines; for a `poly` or `polygon`, its
+/// closed outline at its width, as the Gerber draws it. All or nothing: a
+/// drawing any part of which does not convert is refused whole, with why
+/// (a polygon of fewer than two points misses its points).
 pub fn board_graphic_copper(graphic: &BoardGraphic) -> Result<Vec<Shape>, DrawnCopperFault> {
-    if graphic.kind().is_none() {
+    if graphic.kind().is_none() && !is_polygon_token(&graphic.graphic_type) {
         return Err(DrawnCopperFault::UnknownKind);
     }
     let placed = board_graphic_placement(graphic)?.ok_or(DrawnCopperFault::MissingPoints)?;

@@ -77,7 +77,7 @@ pub use free::{
 pub use gloss::{Glossed, gloss};
 pub use graphic::{
     GraphicShape, PlacedGraphic, board_graphic_placement, board_text_placement,
-    footprint_graphic_placement,
+    footprint_graphic_placement, is_polygon_token,
 };
 pub use graphic_index::graphic_strokes;
 pub use index::{

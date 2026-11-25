@@ -1,14 +1,15 @@
 //! #2883: a board drawing or string on copper is conductor copper of no
 //! net on the copper image; on a legend it stays a drawing.
 
-use signex_types::pcb::{BoardGraphic, BoardText, PcbBoard};
+use signex_types::pcb::{BoardGraphic, BoardText, PcbBoard, Point};
 use signex_types::pcb_layer::CopperLayer;
 use uuid::Uuid;
 
 use super::fixture::{fixture_board, p};
 use crate::fab::collect;
+use crate::fab::frame::FabFrame;
 use crate::fab::layers::{CopperStack, FabLayer};
-use crate::fab::marks::{Function, Mark};
+use crate::fab::marks::{Attributes, Function, Mark, Step};
 use crate::fab::notes::Tally;
 use crate::fab::{DrawnCopperFault, DrawnCopperItem, FabExtras, FabNote, FabOptions, generate};
 
@@ -177,6 +178,135 @@ fn copper_the_conversion_refuses_is_left_out_of_the_gerber_and_named() {
             1,
             "{:?}",
             all.notes
+        );
+    }
+}
+
+/// The Gerber copper and nothing else.
+fn gerber_only() -> FabOptions {
+    FabOptions {
+        drill: false,
+        centroid: false,
+        test_netlist: false,
+        ipc2581: false,
+        odb: None,
+        ..FabOptions::all("fab")
+    }
+}
+
+/// A copper `poly` or `polygon` drawing through `points`.
+fn polygon(id: u128, kind: &str, points: Vec<Point>) -> BoardGraphic {
+    BoardGraphic {
+        points,
+        ..drawing(id, kind, "TopCopper")
+    }
+}
+
+/// The corners of `drawing`'s rectangle, in the order a rectangle is drawn.
+fn corners() -> Vec<Point> {
+    vec![p(1.0, 1.0), p(4.0, 1.0), p(4.0, 3.0), p(1.0, 3.0)]
+}
+
+/// The marks on the top copper image, and what was left out.
+fn top_copper(board: &PcbBoard) -> (Vec<Mark>, Tally) {
+    let extras = FabExtras::default();
+    let stack = CopperStack::of(board, collect::used_copper(board, &extras).into_iter());
+    let mut tally = Tally::default();
+    let mut images = collect::collect(board, &extras, &stack, &mut tally);
+    let marks = images
+        .remove(&FabLayer::Copper(CopperLayer::Top))
+        .unwrap_or_default();
+    (marks, tally)
+}
+
+fn top_gerber(board: &PcbBoard) -> (String, Vec<FabNote>) {
+    let set = generate(board, &FabExtras::default(), &gerber_only()).expect("generates");
+    let gerber = super::file(&set, "fab-copper-l1-top.gbr")
+        .expect("the top copper is written")
+        .to_owned();
+    (gerber, set.notes)
+}
+
+/// A polygon on copper stays in the Gerber as the closed outline at its
+/// width it always was: the same bytes as the rectangle on its corners,
+/// whose drawing the shared conversion never changed.
+#[test]
+fn a_copper_polygon_is_written_as_its_closed_outline_as_before() {
+    let (before, _) = top_copper(&fixture_board());
+    let mut rect = fixture_board();
+    rect.graphics.push(drawing(88, "rect", "TopCopper"));
+    let (rect_gerber, _) = top_gerber(&rect);
+    for kind in ["poly", "polygon"] {
+        let mut board = fixture_board();
+        board.graphics.push(polygon(88, kind, corners()));
+        let frame = FabFrame::of(&board);
+        let at: Vec<_> = corners()
+            .into_iter()
+            .map(|c| frame.of_mm(c, "corner").expect("in range"))
+            .collect();
+        let outline = Mark::Stroke {
+            width: 200_000,
+            function: Function::Conductor,
+            start: at[0],
+            steps: vec![
+                Step::Line(at[1]),
+                Step::Line(at[2]),
+                Step::Line(at[3]),
+                Step::Line(at[0]),
+            ],
+            attributes: Attributes::default(),
+        };
+        let (marks, tally) = top_copper(&board);
+        assert_eq!(tally.skipped, 0, "{kind}");
+        assert!(tally.drawn_copper_skipped.is_empty(), "{kind}");
+        assert_eq!(marks.len(), before.len() + 1, "{kind}");
+        assert_eq!(
+            marks.iter().filter(|m| **m == outline).count(),
+            1,
+            "{kind}: {marks:?}"
+        );
+        let (gerber, notes) = top_gerber(&board);
+        assert!(notes.is_empty(), "{kind}: {notes:?}");
+        assert_eq!(gerber, rect_gerber, "{kind}");
+        assert_ne!(gerber, top_gerber(&fixture_board()).0, "{kind}");
+    }
+}
+
+#[test]
+fn a_copper_polygon_missing_or_with_bad_points_is_left_out_and_named() {
+    let top = FabLayer::Copper(CopperLayer::Top);
+    let named = |id: u128, fault: DrawnCopperFault| FabNote::DrawnCopperSkipped {
+        item: DrawnCopperItem::Drawing {
+            id: Uuid::from_u128(id),
+            kind: None,
+        },
+        layer: CopperLayer::Top,
+        fault,
+    };
+    for kind in ["poly", "polygon"] {
+        let mut board = fixture_board();
+        board.graphics.push(polygon(89, kind, vec![p(1.0, 1.0)]));
+        let mut points = corners();
+        points[2] = p(f64::NAN, 3.0);
+        board.graphics.push(polygon(90, kind, points));
+        assert_eq!(
+            strokes(&board, top),
+            strokes(&fixture_board(), top),
+            "{kind}"
+        );
+        let (_, notes) = top_gerber(&board);
+        assert_eq!(
+            notes,
+            vec![
+                named(89, DrawnCopperFault::MissingPoints),
+                named(
+                    90,
+                    DrawnCopperFault::Geometry(pcb_geom::GeomError::Unrepresentable(
+                        "graphic.points"
+                    ))
+                ),
+            ],
+            "{kind}"
         );
     }
 }
