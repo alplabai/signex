@@ -169,6 +169,33 @@ fn a_size_that_is_not_a_positive_number_is_refused_with_the_text_kept() {
     }
 }
 
+/// #2784: X and Y refuse nan and inf as well; the connector stays where it
+/// is and the box keeps the text.
+#[test]
+fn a_position_that_is_not_finite_is_refused_with_the_text_kept() {
+    let mut app = app_with_connector();
+    let id = doc(&app).harness.connectors[0].uuid;
+    let before = doc(&app).harness.connectors[0].clone();
+    for field in [HarnessField::X, HarnessField::Y] {
+        for bad in ["nan", "inf", "-inf", "1e400"] {
+            harness(
+                &mut app,
+                HarnessPanelMsg::FieldTyped {
+                    connector: id,
+                    field,
+                    text: bad.to_string(),
+                },
+            );
+            assert_eq!(doc(&app).harness.connectors[0], before, "{field:?} {bad}");
+            assert_eq!(
+                app.document_state.panel_ctx.harness.draft,
+                Some((field, bad.to_string())),
+                "the box keeps {bad}"
+            );
+        }
+    }
+}
+
 /// #2789: the Y box counts from the sheet's page origin.
 #[test]
 fn a_typed_y_counts_from_the_page_origin() {
