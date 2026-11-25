@@ -13,8 +13,9 @@ use super::*;
 use crate::canvas::zoom_pill::{PillMessages, PillText, pill_size, view_with as pill};
 use crate::menu_bar::MenuMessage;
 
-/// Gap between the pill and the canvas edges.
-const EDGE_GAP: f32 = 12.0;
+/// Gap between the pill and the canvas edges: one body line (12 px at the
+/// default size).
+const EDGE_GAP: f32 = TS.body;
 
 /// Commands behind `-`, `+` and Fit, whose menu text and shortcut the hints name.
 const ZOOM_OUT_COMMAND: &str = "zoom_out_at_cursor";
@@ -34,23 +35,39 @@ impl Signex {
     /// The zoom pill over the main window's schematic canvas. An undocked
     /// window has no known canvas rectangle and the zoom messages act on
     /// the main canvas, so it gets none.
+    ///
+    /// The layer spans the window, so it places the pill against the canvas
+    /// of the size it is laid out at, not `window_size`: that one only moves
+    /// on a resize event, and a stale value put the pill over the right dock
+    /// (#2911).
     pub(in crate::app::view) fn canvas_zoom_pill_overlay(
         &self,
         window_id: iced::window::Id,
     ) -> Option<Element<'_, Message>> {
-        let tokens = &self.document_state.panel_ctx.tokens;
         if self.ui_state.main_window_id != Some(window_id) {
             return None;
         }
         self.document_state
             .engine_for_window(window_id, &self.ui_state)?;
+        let layer = iced::widget::responsive(move |size: iced::Size| {
+            let canvas = self.canvas_bounds_sized(None, (size.width, size.height));
+            let at = pill_origin(canvas);
+            // The `Translate` spans the window; only the pill may take the wheel.
+            signex_widgets::Translate::new(super::scroll_guard(self.zoom_pill(window_id)), at)
+                .boxed()
+        });
+        Some(layer.boxed())
+    }
+
+    /// The pill itself, for the canvas of `window_id`.
+    fn zoom_pill(&self, window_id: iced::window::Id) -> Element<'_, Message> {
+        let tokens = &self.document_state.panel_ctx.tokens;
         let zoom = self
             .interaction_state
             .canvas_for_window(window_id)
             .zoom_percent();
-        let at = pill_origin(self.canvas_bounds());
         let i18n = &self.ui_state.i18n;
-        let pill = pill(
+        pill(
             tokens,
             PillMessages {
                 zoom_out: Message::Menu(MenuMessage::ZoomOut),
@@ -70,9 +87,7 @@ impl Signex {
                 ],
             },
             self.interaction_state.zoom_presets_open,
-        );
-        // The `Translate` spans the window; only the pill may take the wheel.
-        Some(signex_widgets::Translate::new(super::scroll_guard(pill), at).boxed())
+        )
     }
 
     /// Hover hint of a pill control: the command's menu text and, when the

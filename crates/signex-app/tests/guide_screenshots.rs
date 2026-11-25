@@ -493,6 +493,8 @@ fn render_readme_screenshots() {
     let tmp = tempfile::TempDir::new().expect("tempdir");
     let (mut app, _task) = Signex::new();
     app.ui_state.first_run_tour_open = false;
+    // The model's size is the one overlays place against (#2911).
+    app.ui_state.window_size = (WIDTH as f32, HEIGHT as f32);
     let sheet_path = open_readme_project(&mut app, tmp.path());
     let _ = app.update(Message::File(FileMsg::SchematicOpenFinished {
         path: sheet_path,
@@ -542,6 +544,8 @@ fn render_guide_screenshots() {
         return;
     };
     let (mut app, _task) = Signex::new();
+    // The model's size is the one overlays place against (#2911).
+    app.ui_state.window_size = (WIDTH as f32, HEIGHT as f32);
     shoot(&mut renderer, &app, "guide-first-run.png");
 
     app.ui_state.first_run_tour_open = false;
