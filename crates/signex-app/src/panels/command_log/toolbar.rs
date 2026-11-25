@@ -7,7 +7,9 @@ use iced::{Alignment, Background, Border, Color, Element, Length, Padding, Widge
 use signex_i18n::{I18n, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::chips::{ChipMetrics, ChipStyle, icon_chip};
-use signex_widgets::{Label, ToggleSwitchStyle, segmented, text, text_input, toggle_switch};
+use signex_widgets::{
+    FitBar, Label, ToggleSwitchStyle, segmented, text, text_input, toggle_switch,
+};
 
 use super::{
     CM, CommandLogMsg, CommandLogState, GLYPH_THEME, ICON, LogCounts, PanelContext, PanelMsg,
@@ -16,35 +18,66 @@ use super::{
 use crate::panels::TitleAction;
 use crate::styles::{self, HAIRLINE, ti, tokens::resolve};
 
-/// The filter row, `width` wide (mockup row 161): the filters, then Follow
-/// newest at the right end. The search field gives up width first; in a
-/// side dock the filters wrap and Follow newest takes its own line.
+/// The filter row (mockup row 161): the filters, then Follow newest at the
+/// right end. The choice is made at layout time from the measured widths:
+/// while the filters and Follow newest fit on one line with the search field
+/// at its least, they share it and the search field takes the leftover up to
+/// the mock's width; narrower (a side dock), the filters wrap and Follow
+/// newest takes its own line.
 pub(super) fn bar<'a>(
     ctx: &'a PanelContext,
     state: &'a CommandLogState,
     counts: &LogCounts,
     empty: bool,
-    width: f32,
 ) -> Element<'a, PanelMsg> {
-    let one_row = layout::filters_on_one_row(width);
-    let filters = filter_group(ctx, state, counts, empty, width);
-    let follow = follow_switch(ctx, state);
-    let line: Element<'a, PanelMsg> = if one_row {
-        row![filters, follow]
-            .spacing(SP.m + SP.xs)
-            .align_y(Alignment::Center)
-            .boxed()
-    } else {
-        column![filters, container(follow).align_right(Length::Fill)]
-            .spacing(SP.s + SP.xs)
-            .width(Length::Fill)
-            .boxed()
+    let tokens = &ctx.tokens;
+    let veiled = |filters: Element<'a, PanelMsg>| {
+        signex_widgets::inert::unless_read_only_veiled(empty, veil(tokens), filters)
     };
-    container(line)
+    let mut middle: Row<Element<'a, PanelMsg>> =
+        Row::new().spacing(FILTER_GAP).align_y(Alignment::Center);
+    for part in filter_parts(ctx, state, counts) {
+        middle = middle.push(part);
+    }
+    let one_line: Element<'a, PanelMsg> = FitBar::new(
+        veiled(search_field(ctx, &state.log.filters.query, Length::Fill)),
+        veiled(middle.boxed()),
+        follow_switch(ctx, state),
+        stacked(ctx, state, counts, empty),
+    )
+    .field_width(layout::SEARCH_MIN, layout::SEARCH_W)
+    .spacing(FILTER_GAP)
+    .end_spacing(FOLLOW_GAP)
+    .into();
+    container(one_line)
         .padding([SP.s + SP.xs, SP.m + SP.xs])
         .width(Length::Fill)
         .clip(true)
         .boxed()
+}
+
+/// The gap between filters.
+const FILTER_GAP: f32 = SP.s + SP.xs;
+/// The least gap before Follow newest on the shared line.
+const FOLLOW_GAP: f32 = SP.m + SP.xs;
+
+/// The bar when the filters and Follow newest do not share one line: the
+/// filters wrap, the search field at its least, and Follow newest sits on
+/// its own line at the right.
+fn stacked<'a>(
+    ctx: &'a PanelContext,
+    state: &'a CommandLogState,
+    counts: &LogCounts,
+    empty: bool,
+) -> Element<'a, PanelMsg> {
+    let follow = follow_switch(ctx, state);
+    column![
+        filter_group(ctx, state, counts, empty),
+        container(follow).align_right(Length::Fill)
+    ]
+    .spacing(SP.s + SP.xs)
+    .width(Length::Fill)
+    .boxed()
 }
 
 /// Search, source chips and the result switch, wrapping when they do not fit
@@ -54,22 +87,38 @@ fn filter_group<'a>(
     state: &'a CommandLogState,
     counts: &LogCounts,
     empty: bool,
-    width: f32,
 ) -> Element<'a, PanelMsg> {
-    let i18n: &I18n = &ctx.i18n;
     let tokens = &ctx.tokens;
     let mut filters: Row<Element<'a, PanelMsg>> = Row::new()
         .width(Length::Fill)
-        .spacing(SP.s + SP.xs)
+        .spacing(FILTER_GAP)
         .align_y(Alignment::Center);
     filters = filters.push(search_field(
-        tokens,
-        i18n,
+        ctx,
         &state.log.filters.query,
-        layout::search_width(width),
+        Length::Fixed(layout::SEARCH_MIN),
     ));
-    filters = filters.push(vsep(tokens));
-    filters = filters.push(
+    for part in filter_parts(ctx, state, counts) {
+        filters = filters.push(part);
+    }
+    // Wrapping: a longer language takes another line instead of running
+    // out of the panel.
+    let filters = filters.wrap().vertical_spacing(SP.xs).boxed();
+    signex_widgets::inert::unless_read_only_veiled(empty, veil(tokens), filters)
+}
+
+/// The filters after the search field: the Source label and chips, then
+/// the result switch, each group after a short rule.
+fn filter_parts<'a>(
+    ctx: &'a PanelContext,
+    state: &'a CommandLogState,
+    counts: &LogCounts,
+) -> Vec<Element<'a, PanelMsg>> {
+    let i18n: &I18n = &ctx.i18n;
+    let tokens = &ctx.tokens;
+    let mut filters: Vec<Element<'a, PanelMsg>> = Vec::new();
+    filters.push(vsep(tokens));
+    filters.push(
         text(t!(i18n, ids::COMMAND_LOG_SOURCE))
             .size(TS.caption)
             .color(resolve(tokens).ink4)
@@ -94,7 +143,7 @@ fn filter_group<'a>(
         ),
     ] {
         let count = u32::try_from(counts.of_source(kind)).unwrap_or(u32::MAX);
-        filters = filters.push(icon_chip(
+        filters.push(icon_chip(
             glyph,
             t!(i18n, label),
             Some(count),
@@ -105,17 +154,14 @@ fn filter_group<'a>(
             Some(message(CommandLogMsg::SourceToggled(kind))),
         ));
     }
-    filters = filters.push(vsep(tokens));
-    filters = filters.push(result_switch(
+    filters.push(vsep(tokens));
+    filters.push(result_switch(
         tokens,
         i18n,
         state.log.filters.result,
         counts,
     ));
-    // Wrapping in both layouts: a longer language takes a second line
-    // instead of running under Follow newest.
-    let filters = filters.wrap().vertical_spacing(SP.xs).boxed();
-    signex_widgets::inert::unless_read_only_veiled(empty, veil(tokens), filters)
+    filters
 }
 
 /// The Follow newest switch and its label.
@@ -224,13 +270,11 @@ pub(super) fn more_strip<'a>(
         .boxed()
 }
 
-/// The search field: a glyph and a borderless input in a field frame.
-fn search_field<'a>(
-    tokens: &ThemeTokens,
-    i18n: &I18n,
-    query: &'a str,
-    width: f32,
-) -> Element<'a, PanelMsg> {
+/// The search field, `width` wide: a glyph and a borderless input in a
+/// field frame.
+fn search_field<'a>(ctx: &'a PanelContext, query: &'a str, width: Length) -> Element<'a, PanelMsg> {
+    let tokens = &ctx.tokens;
+    let i18n: &I18n = &ctx.i18n;
     let r = resolve(tokens);
     let (ink, ink4, accent) = (ti(tokens.text), r.ink4, ti(tokens.accent));
     let input = text_input(t!(i18n, ids::COMMAND_LOG_FILTER_PLACEHOLDER), query)

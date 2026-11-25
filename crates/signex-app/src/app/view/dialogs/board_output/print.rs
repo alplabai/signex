@@ -10,7 +10,7 @@ use signex_output::{BoardLayerSet, BoardPrintOptions, BoardPrintPages, BoardPrin
 use signex_types::pcb::PcbBoard;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::segmented::SegmentedMetrics;
-use signex_widgets::{Label, SegmentedStyle, segmented, text, tooltip};
+use signex_widgets::{Label, MeasuredWidth, SegmentedStyle, segmented, text, tooltip};
 
 use super::{SP, TS, kit, out};
 use crate::app::board_output::set_label;
@@ -25,9 +25,12 @@ type Parts<'a> = (
     Element<'a, Message>,
 );
 
-/// Width of the options column (376 px): wide enough that the Pages
-/// segments stay on one line (282 px measured, mockup row 116).
-const OPTIONS_W: f32 = chrome_px(376.0 * 11.0 / 12.0);
+/// The options column's least width (340 px, mockup row 116). It is wider
+/// when the Layout lines need more to keep each control on one line.
+const OPTIONS_MIN: f32 = chrome_px(340.0 * 11.0 / 12.0);
+
+/// The options column's side padding.
+const OPTIONS_SIDE: f32 = SP.xl + SP.xs;
 
 fn flag_label(flag: BoardPrintFlag) -> MessageId {
     match flag {
@@ -60,13 +63,25 @@ pub(super) fn parts<'a>(
     let left = scrollable(container(options_column(options, i18n, tokens)).padding(
         iced::Padding {
             top: SP.xs * 2.0,
-            right: SP.xl + SP.xs,
+            right: OPTIONS_SIDE,
             bottom: SP.l,
-            left: SP.xl + SP.xs,
+            left: OPTIONS_SIDE,
         },
     ))
     .direction(crate::styles::thin_vertical())
     .height(Length::Fill);
+    // The column is as wide as the Layout lines laid out on their own, so
+    // the Pages segments keep one line in whatever the UI font measures.
+    let style = layout_style(tokens);
+    let measure = container(layout_grid(
+        layout_lines(options, style, i18n),
+        style,
+        tokens,
+    ))
+    .padding([0.0, OPTIONS_SIDE]);
+    let left: Element<'a, Message> = MeasuredWidth::new(left, measure)
+        .min_width(OPTIONS_MIN)
+        .into();
     let sunken = tokens::resolve(tokens).sunken;
     let right = container(
         scrollable(
@@ -81,13 +96,9 @@ pub(super) fn parts<'a>(
         background: Some(Background::Color(sunken)),
         ..container::Style::default()
     });
-    let body = row![
-        container(left).width(Length::Fixed(OPTIONS_W)),
-        vertical_rule(tokens),
-        right
-    ]
-    .height(Length::Fill)
-    .boxed();
+    let body = row![left, vertical_rule(tokens), right]
+        .height(Length::Fill)
+        .boxed();
     let can_export = !options.page_plan().is_empty();
     let footer = dialog_footer_split(
         vec![dialog_button(
@@ -167,7 +178,34 @@ fn layout_group<'a>(
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
-    let style = kit::segmented_style(tokens).fill_width(true).compact(true);
+    let style = layout_style(tokens);
+    Column::new()
+        .spacing(SP.s + SP.xs)
+        .push(kit::section_head(
+            t!(i18n, ids::BOARD_PRINT_LAYOUT),
+            None,
+            i18n,
+            tokens,
+        ))
+        .push(layout_grid(
+            layout_lines(options, style, i18n),
+            style,
+            tokens,
+        ))
+        .boxed()
+}
+
+/// The look of the Layout group's segmented controls.
+fn layout_style(tokens: &ThemeTokens) -> SegmentedStyle {
+    kit::segmented_style(tokens).fill_width(true).compact(true)
+}
+
+/// The Layout group's labelled lines: Pages, Scale and Ink.
+fn layout_lines<'a>(
+    options: &BoardPrintOptions,
+    style: SegmentedStyle,
+    i18n: &I18n,
+) -> [(Localized, Element<'a, Message>); 3] {
     let pages = segmented(
         [
             (
@@ -207,26 +245,17 @@ fn layout_group<'a>(
         style,
         |mono| out(BoardOutputMsg::PrintMonochromePicked(mono)),
     );
-    let lines = [
+    [
         (t!(i18n, ids::BOARD_PRINT_PAGES), pages),
         (t!(i18n, ids::BOARD_PRINT_SCALE), scale),
         (t!(i18n, ids::BOARD_PRINT_INK), ink),
-    ];
-    Column::new()
-        .spacing(SP.s + SP.xs)
-        .push(kit::section_head(
-            t!(i18n, ids::BOARD_PRINT_LAYOUT),
-            None,
-            i18n,
-            tokens,
-        ))
-        .push(layout_grid(lines, style, tokens))
-        .boxed()
+    ]
 }
 
 /// The Layout group's labelled lines: the labels in a column as wide as
-/// the widest of them, the controls taking the rest, so the two-segment
-/// Pages control keeps one line in the options column (mockup row 116).
+/// the widest of them, the controls taking the rest. The options column is
+/// measured from this grid, so the two-segment Pages control keeps one
+/// line (mockup row 116).
 fn layout_grid<'a>(
     lines: [(Localized, Element<'a, Message>); 3],
     style: SegmentedStyle,

@@ -99,9 +99,12 @@ rows together. The detail pane takes at most half the panel; its body
 scrolls and Replay and Jump to stay pinned under it, with a failed row's
 Replay hint, so a short dock never hides them. The filter row holds search,
 the Source chips, All / Failed / Undone and Follow newest at its right end;
-the search field shrinks first. Filters that still do not fit (a narrow side
-dock, a longer language) wrap to a second line, and in a narrow side dock
-Follow newest takes its own line, so nothing is clipped.
+the search field shrinks first. Whether they share one line is decided at
+layout time from the parts' measured widths (`FitBar` in signex-widgets):
+when the filters and Follow newest fit with the search field at its least,
+they share the line and the search field takes the leftover up to the
+mock's width. Otherwise (a narrow side dock, a longer language) the filters
+wrap and Follow newest takes its own line, so nothing is clipped.
 
 ## Actions
 

@@ -14,17 +14,12 @@ const TOOK_W: f32 = TS.body * 64.0 / 12.0;
 const COMMAND_MIN: f32 = TS.body * 10.0;
 const ARGUMENTS_MIN: f32 = TS.body * 6.0;
 const RESULT_MIN: f32 = TS.body * 100.0 / 12.0;
-/// The search field's least width.
-const SEARCH_MIN: f32 = TS.body * 10.0;
-/// The search field's width in the mock.
-const SEARCH_W: f32 = TS.body * 250.0 / 12.0;
-/// The filter row's width without the search field (chips, result switch,
-/// Follow newest, padding), at the English labels. The panel actions are in
-/// the dock title bar. Measured at 713 px for a 12 px body (60 bodies, so
-/// the row never counts on more room than it has).
-const BAR_WITHOUT_SEARCH: f32 = TS.body * 60.0;
-/// From this width the filters and Follow newest share one row.
-const ONE_ROW_FROM: f32 = SEARCH_MIN + BAR_WITHOUT_SEARCH;
+/// The search field's least width. The filter bar measures its other parts
+/// at layout time (`toolbar::bar`); the search field gives up width first,
+/// down to this, before Follow newest leaves the filters' line.
+pub(super) const SEARCH_MIN: f32 = TS.body * 10.0;
+/// The search field's width in the mock, the most it takes.
+pub(super) const SEARCH_W: f32 = TS.body * 250.0 / 12.0;
 
 /// Less than this over the width is float rounding, not overflow.
 const ROUNDING: f32 = 0.5;
@@ -79,17 +74,6 @@ pub(super) fn detail_width(panel: f32) -> f32 {
     DETAIL_WIDTH.min(panel / 2.0)
 }
 
-/// The search field gives up width first, so the bar stays on one line.
-pub(super) fn search_width(panel: f32) -> f32 {
-    (panel - BAR_WITHOUT_SEARCH).clamp(SEARCH_MIN, SEARCH_W)
-}
-
-/// Whether the filters and Follow newest fit on one row; narrower, the
-/// filters wrap and Follow newest takes its own line.
-pub(super) fn filters_on_one_row(panel: f32) -> bool {
-    panel >= ONE_ROW_FROM
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -140,20 +124,5 @@ mod tests {
     fn the_detail_pane_never_takes_more_than_half_the_panel() {
         assert!(close(detail_width(DOCK), DETAIL_WIDTH));
         assert!(close(detail_width(290.0), 145.0));
-    }
-
-    #[test]
-    fn the_search_field_shrinks_so_follow_newest_stays_in_the_dock() {
-        let search = search_width(DOCK);
-        assert!(search < SEARCH_W);
-        assert!(search + BAR_WITHOUT_SEARCH <= DOCK);
-        assert!(close(search_width(1400.0), SEARCH_W));
-        assert!(close(search_width(100.0), SEARCH_MIN));
-    }
-
-    #[test]
-    fn a_side_dock_puts_follow_newest_on_its_own_line() {
-        assert!(!filters_on_one_row(290.0));
-        assert!(filters_on_one_row(DOCK));
     }
 }

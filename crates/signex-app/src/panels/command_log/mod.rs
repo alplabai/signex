@@ -202,7 +202,7 @@ fn sized_view<'a>(ctx: &'a PanelContext, width: f32) -> Element<'a, PanelMsg> {
     };
     let mut col: Column<Element<'a, PanelMsg>> =
         Column::new().width(Length::Fill).height(Length::Fill);
-    col = col.push(toolbar::bar(ctx, state, &counts, empty, width));
+    col = col.push(toolbar::bar(ctx, state, &counts, empty));
     if state.more_open {
         col = col.push(toolbar::more_strip(ctx, state));
     }
@@ -667,6 +667,55 @@ mod tests {
         let narrow = iced::Size::new(290.0, 400.0);
         let follow = bounds(&laid_out(&ctx, narrow), "Follow newest");
         assert!(follow.x + follow.width <= narrow.width, "{follow:?}");
+    }
+
+    /// Mockup row 161: in a side dock the filters and Follow newest do not
+    /// fit one line, so Follow newest takes its own line under the filters;
+    /// in the bottom dock it shares the filters' line.
+    #[test]
+    fn a_side_dock_puts_follow_newest_on_its_own_line() {
+        let ctx = context_with_one_row();
+        let texts = laid_out(&ctx, iced::Size::new(290.0, 400.0));
+        let source = bounds(&texts, "Source");
+        let undone = bounds(&texts, "Undone 0");
+        let follow = bounds(&texts, "Follow newest");
+        assert!(
+            follow.y >= source.y + source.height && follow.y >= undone.y + undone.height,
+            "under the filters: {follow:?} vs {source:?} {undone:?}"
+        );
+        let texts = laid_out(&ctx, SHORT_DOCK);
+        let (source, follow) = (bounds(&texts, "Source"), bounds(&texts, "Follow newest"));
+        assert!(
+            (follow.center_y() - source.center_y()).abs() < TS.body / 2.0,
+            "{follow:?} vs {source:?}"
+        );
+    }
+
+    /// The search field gives up width first: the widest panel gives it
+    /// the mock's width, a side dock its least, the bottom dock what lies
+    /// between, and Follow newest stays in the panel.
+    #[test]
+    fn the_search_field_shrinks_so_follow_newest_stays_in_the_dock() {
+        let ctx = context_with_one_row();
+        let i18n: &I18n = &ctx.i18n;
+        let placeholder = t!(i18n, ids::COMMAND_LOG_FILTER_PLACEHOLDER)
+            .into_string()
+            .replace(['\u{2068}', '\u{2069}'], "");
+        let input_width = |width: f32| {
+            let window = iced::Size::new(width, SHORT_DOCK.height);
+            let inputs = crate::layout_probe::lay_out_inputs(view(&ctx), window);
+            crate::layout_probe::find(&inputs, &placeholder)
+                .bounds
+                .width
+        };
+        let (wide, dock, side) = (input_width(1400.0), input_width(890.0), input_width(290.0));
+        assert!(
+            (wide - side - (layout::SEARCH_W - layout::SEARCH_MIN)).abs() < 0.5,
+            "the mock's width at 1400 px, the least in a side dock: {wide} {side}"
+        );
+        assert!(side <= dock && dock <= wide, "{side} {dock} {wide}");
+        let follow = bounds(&laid_out(&ctx, SHORT_DOCK), "Follow newest");
+        assert!(follow.x + follow.width <= SHORT_DOCK.width, "{follow:?}");
     }
 
     /// Mockup row 161: in a short dock the detail pane keeps Replay and Jump
