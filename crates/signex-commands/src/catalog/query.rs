@@ -5,6 +5,20 @@ use super::{CommandFlags, CommandGroup, CommandMetadata, Enablement, operands};
 use signex_i18n_ids::command_ids;
 
 pub(super) const QUERY: &[CommandMetadata] = &[
+    // #1988: the BOM lines of a sheet's project, with a template's columns
+    // (computed ones included), as JSON. No menu row: the dialog is File ▸
+    // Export ▸ Export BOM….
+    CommandMetadata {
+        id: "bom_lines",
+        category: "reports",
+        label: command_ids::CMD_BOM_LINES,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::BOM_LINES,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "document_info",
         category: "file",

@@ -488,6 +488,8 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "document_info",
                     "read_document",
                     "query_pins",
+                    // #1988: the BOM lines of the named sheet's project.
+                    "bom_lines",
                     "check_erc",
                     "check_drc",
                     "check_requirements",
