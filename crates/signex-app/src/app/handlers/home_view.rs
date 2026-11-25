@@ -12,12 +12,14 @@ impl Signex {
     /// off, then Fit (Fit keeps the turn and the flip; Home does not). A
     /// sheet never turns, so there it is Fit.
     pub(crate) fn go_home_view(&mut self) -> Task<Message> {
+        let mut turned = Task::none();
         if self.has_active_pcb() {
             if self.pcb_layer_view_of_window(None).flipped() {
                 self.apply_pcb_view_event(None, PcbViewMsg::BoardFlipToggled);
             }
-            let _ = self.apply_view_rotation(None, ViewRotationMsg::AngleSet(0.0));
+            turned = self.apply_view_rotation(None, ViewRotationMsg::AngleSet(0.0));
         }
-        self.update(Message::CanvasEvent(CanvasEvent::FitAll))
+        let fit = self.update(Message::CanvasEvent(CanvasEvent::FitAll));
+        Task::batch([turned, fit])
     }
 }
