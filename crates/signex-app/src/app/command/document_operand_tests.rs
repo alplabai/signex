@@ -608,6 +608,11 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "send_drawings_backward",
                     "send_drawings_to_back",
                     "delete_selection",
+                    // #2462, #2460: the board against the schematic, its
+                    // apply form and the board status counters.
+                    "check_board_against_schematic",
+                    "apply_board_schematic_differences",
+                    "board_status",
                 ]
                 .contains(&name),
                 "{name} declares a document operand"
