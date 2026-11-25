@@ -53,7 +53,6 @@ fn app_on_symbol_tab() -> (Signex, iced::window::Id, PathBuf, tempfile::TempDir)
     app.document_state.tabs.push(TabInfo {
         title: "op".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::SymbolEditor(path.clone()),
     });

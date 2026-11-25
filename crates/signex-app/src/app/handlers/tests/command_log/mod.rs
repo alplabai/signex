@@ -602,7 +602,6 @@ fn a_symbol_properties_replay_is_refused() {
     app.document_state.tabs.push(TabInfo {
         title: "S".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::SymbolEditor(path.clone()),
     });

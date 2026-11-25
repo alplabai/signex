@@ -26,7 +26,6 @@ fn push_footprint_tab(app: &mut Signex, name: &str) {
     app.document_state.tabs.push(TabInfo {
         title: name.into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::FootprintEditor(path),
     });

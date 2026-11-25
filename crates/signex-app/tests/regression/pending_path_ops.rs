@@ -91,7 +91,6 @@ fn fixture(dirty: bool) -> Fixture {
     app.document_state.tabs.push(TabInfo {
         title: "Power".to_string(),
         path: old.clone(),
-        cached_document: None,
         project_id: Some(project),
         kind: TabKind::Schematic,
     });

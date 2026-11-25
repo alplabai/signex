@@ -104,7 +104,6 @@ fn fixture(dir: &Path) -> Fixture {
     app.document_state.tabs.push(TabInfo {
         title: "GATEDRV8".into(),
         path: symbol_path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::SymbolEditor(symbol_path.clone()),
     });
@@ -227,7 +226,6 @@ fn add_alternate_symbol_tab(f: &mut Fixture) -> PathBuf {
     f.app.document_state.tabs.push(TabInfo {
         title: "ALT".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::SymbolEditor(path.clone()),
     });

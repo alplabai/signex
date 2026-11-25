@@ -152,7 +152,6 @@ impl Signex {
             TabInfo {
                 title,
                 path: board,
-                cached_document: None,
                 project_id,
                 kind: page,
             },

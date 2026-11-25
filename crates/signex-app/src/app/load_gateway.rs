@@ -459,8 +459,7 @@ impl Signex {
     ///
     /// There is no "commit to the active tab" step: since the parked-session
     /// refactor, schematic tabs keep their document in
-    /// `document_state.engines` (keyed by path) and carry
-    /// `cached_document: None`. `TabDocument` has no `Schematic` variant to
+    /// `document_state.engines` (keyed by path), a tab holds no document to
     /// write back to, and the mutation gateway derives the dirty mark from
     /// the engine history (`mark_active_document_dirty`).
     /// Returns whether `schematic` was installed as a new active engine.

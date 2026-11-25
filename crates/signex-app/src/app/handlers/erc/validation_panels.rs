@@ -233,7 +233,6 @@ mod tests {
         app.document_state.tabs.push(crate::app::TabInfo {
             title: "power".to_owned(),
             path: path.clone(),
-            cached_document: None,
             project_id: None,
             kind: crate::app::TabKind::Schematic,
         });

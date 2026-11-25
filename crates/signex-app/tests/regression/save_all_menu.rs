@@ -118,7 +118,6 @@ fn save_all_also_writes_a_dirty_schematic_and_project() {
     app.document_state.tabs.push(TabInfo {
         title: "one".into(),
         path: sch.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

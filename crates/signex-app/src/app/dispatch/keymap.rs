@@ -240,7 +240,6 @@ mod tests {
         app.document_state.tabs.push(TabInfo {
             title: "part".to_string(),
             path: path.clone(),
-            cached_document: None,
             project_id: None,
             kind: TabKind::FootprintEditor(path),
         });

@@ -29,7 +29,6 @@ fn app_showing(kind: fn(PathBuf) -> TabKind) -> (Signex, iced::window::Id, PathB
     app.document_state.tabs.push(TabInfo {
         title: "e".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: kind(path.clone()),
     });

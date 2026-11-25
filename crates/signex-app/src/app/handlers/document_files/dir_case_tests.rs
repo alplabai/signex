@@ -30,7 +30,6 @@ fn app_holding_loose_lib() -> Signex {
     app.document_state.tabs.push(crate::app::TabInfo {
         title: "Other".to_string(),
         path: PathBuf::from(DIR).join("Other.snxsch"),
-        cached_document: None,
         project_id: None,
         kind: crate::app::TabKind::Schematic,
     });
@@ -306,7 +305,6 @@ fn a_loose_symbol_tab_starts_a_probe_and_a_case_variant_opens_apart_once_it_says
     app.document_state.tabs.push(crate::app::TabInfo {
         title: "R".to_string(),
         path: held.clone(),
-        cached_document: None,
         project_id: None,
         kind: crate::app::TabKind::SymbolEditor(held.clone()),
     });

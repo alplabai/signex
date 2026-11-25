@@ -444,13 +444,9 @@ mod tests {
     }
 
     fn push_tab(app: &mut Signex, path: &std::path::Path, kind: TabKind) {
-        app.document_state.tabs.push(TabInfo {
-            title: "doc".into(),
-            path: path.to_path_buf(),
-            cached_document: None,
-            project_id: None,
-            kind,
-        });
+        app.document_state
+            .tabs
+            .push(crate::test_adapter::boardless_tab("doc", path, kind));
         app.document_state.active_tab = app.document_state.tabs.len() - 1;
     }
 
@@ -1003,7 +999,6 @@ mod tests {
             TabInfo {
                 title: "undocked".into(),
                 path: path.clone(),
-                cached_document: None,
                 project_id: None,
                 kind: TabKind::Schematic,
             },

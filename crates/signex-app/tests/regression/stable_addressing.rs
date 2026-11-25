@@ -17,7 +17,6 @@ fn push_tab(app: &mut Signex, path: &Path, project_id: Option<signex_app::app::P
     app.document_state.tabs.push(TabInfo {
         title: path.display().to_string(),
         path: path.to_path_buf(),
-        cached_document: None,
         project_id,
         kind: TabKind::FootprintEditor(path.to_path_buf()),
     });
@@ -166,7 +165,6 @@ fn deleting_a_footprint_before_the_active_one_keeps_the_active_primitive() {
     app.document_state.tabs.push(TabInfo {
         title: "lib".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });
@@ -202,7 +200,6 @@ fn deleting_a_symbol_before_the_active_one_keeps_the_active_primitive() {
     app.document_state.tabs.push(TabInfo {
         title: "lib".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::SymbolEditor(path.clone()),
     });

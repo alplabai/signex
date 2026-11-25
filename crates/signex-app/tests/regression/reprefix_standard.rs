@@ -95,7 +95,6 @@ fn world(f: Fixture, root: Vec<Symbol>, child: Vec<Symbol>, child_read_only: boo
             app.document_state.tabs.push(TabInfo {
                 title: "child".to_string(),
                 path,
-                cached_document: None,
                 project_id: None,
                 kind: TabKind::Schematic,
             });

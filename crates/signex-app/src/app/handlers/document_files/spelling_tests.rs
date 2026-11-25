@@ -59,7 +59,6 @@ fn focus_another_tab(app: &mut Signex) {
     app.document_state.tabs.push(crate::app::TabInfo {
         title: "Other".to_string(),
         path: PathBuf::from("/w/proj/Other.snxsch"),
-        cached_document: None,
         project_id: None,
         kind: crate::app::TabKind::Schematic,
     });
@@ -91,13 +90,13 @@ fn the_pcb_open_under_another_case_reuses_the_tab() {
     app.document_state.projects[0].case_probed = true;
     app.document_state.projects[0].case_decided = true;
     let held = PathBuf::from("/w/proj/Board.snxpcb");
-    app.document_state.tabs.push(crate::app::TabInfo {
-        title: "Board".to_string(),
-        path: held.clone(),
-        cached_document: None,
-        project_id: None,
-        kind: crate::app::TabKind::Pcb,
-    });
+    app.document_state
+        .tabs
+        .push(crate::test_adapter::boardless_tab(
+            "Board",
+            &held,
+            crate::app::TabKind::Pcb,
+        ));
     focus_another_tab(&mut app);
     let _task: iced::Task<Message> =
         app.handle_document_file_opened(Some(PathBuf::from("/w/proj/BOARD.snxpcb")));
@@ -137,7 +136,6 @@ fn a_primitive_opened_under_another_case_reuses_the_tab() {
     app.document_state.tabs.push(crate::app::TabInfo {
         title: "Comp".to_string(),
         path: held.clone(),
-        cached_document: None,
         project_id: None,
         kind: crate::app::TabKind::SymbolEditor(held.clone()),
     });
@@ -248,7 +246,6 @@ fn primitive_save_as_onto_another_case_of_an_open_tab_is_refused() {
         app.document_state.tabs.push(crate::app::TabInfo {
             title: name.to_string(),
             path: path.clone(),
-            cached_document: None,
             project_id: None,
             kind: crate::app::TabKind::SymbolEditor(path),
         });

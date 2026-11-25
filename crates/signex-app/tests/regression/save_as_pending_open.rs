@@ -52,7 +52,6 @@ fn open_active(app: &mut Signex, path: &Path, symbol_uuid: uuid::Uuid) -> uuid::
     app.document_state.tabs.push(TabInfo {
         title: "A".to_string(),
         path: path.to_path_buf(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -441,7 +440,6 @@ fn second_tab(app: &mut Signex, path: &Path) {
     app.document_state.tabs.push(TabInfo {
         title: "B".to_string(),
         path: path.to_path_buf(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

@@ -67,7 +67,6 @@ pub(super) fn app_with_wires(wires: Vec<Wire>) -> (Signex, PathBuf) {
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "click-click-move".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });
@@ -287,7 +286,6 @@ fn switching_tabs_cancels_an_armed_or_floating_move() {
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "b".to_string(),
         path: other,
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });

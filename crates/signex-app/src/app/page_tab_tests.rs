@@ -9,13 +9,7 @@ use crate::app::handlers::menu::export::tests::app_workspace;
 use crate::tab_bar::tab_is_dirty as is_dirty;
 
 fn tab(kind: TabKind, path: &str) -> TabInfo {
-    TabInfo {
-        title: String::new(),
-        path: PathBuf::from(path),
-        cached_document: None,
-        project_id: None,
-        kind,
-    }
+    crate::test_adapter::boardless_tab(String::new(), path, kind)
 }
 
 fn workspace(name: &str) -> (Signex, ProjectId) {

@@ -150,7 +150,6 @@ fn app_with(sheet: SchematicSheet, selected: Vec<SelectedItem>) -> Signex {
     app.document_state.tabs.push(TabInfo {
         title: "rotate-mirror-selection".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
