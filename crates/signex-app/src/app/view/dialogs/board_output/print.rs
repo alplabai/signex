@@ -79,7 +79,7 @@ pub(super) fn parts<'a>(
         tokens,
     ))
     .padding([0.0, OPTIONS_SIDE]);
-    let left: Element<'a, Message> = MeasuredWidth::new(left, measure)
+    let left: Element<'a, Message> = MeasuredWidth::new(left.boxed(), measure.boxed())
         .min_width(OPTIONS_MIN)
         .into();
     let sunken = tokens::resolve(tokens).sunken;
