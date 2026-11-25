@@ -55,7 +55,7 @@ fn sheet_entry(name: &str) -> SheetEntry {
 /// An app with the project `P` (sheets `a` and `b`) open, the person on
 /// `b` with a wire selected, the wire tool, a wire in progress and a
 /// command-palette query typed; agent connections on and listening.
-pub(super) fn app_at_work() -> Signex {
+pub(in crate::app) fn app_at_work() -> Signex {
     app_in(path("a.snxsch").parent().unwrap())
 }
 

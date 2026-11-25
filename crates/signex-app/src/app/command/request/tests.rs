@@ -165,7 +165,9 @@ fn an_agent_query_is_answered() {
 
 #[test]
 fn a_request_at_its_documents_revision_runs() {
-    let mut app = app_with(&[("a.snxsch", 100)]);
+    // The agent surface sees only project documents (#1924): a.snxsch is a
+    // sheet of the agent tests' project.
+    let mut app = crate::app::agent::tests::app_at_work();
     let at = revision_a(&app);
     let document = document_a();
     let request = request("document_info", &[document.as_str()]).with_if_revision(Some(at));

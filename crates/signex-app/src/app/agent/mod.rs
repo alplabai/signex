@@ -27,7 +27,7 @@ mod window_layout;
 mod wire;
 
 #[cfg(test)]
-mod tests;
+pub(in crate::app) mod tests;
 
 use std::fmt;
 use std::sync::{Arc, Mutex, PoisonError};
