@@ -60,22 +60,27 @@ pub enum ParameterManagerMsg {
     Open,
     /// Close the dialog.
     Close,
-    /// A cell's text changed: write it to the document now. Keystrokes in
-    /// one cell share one undo step; an empty value keeps the parameter and
+    /// A cell's text changed: write it to `sheet` now. Keystrokes in one
+    /// cell share one undo step; an empty value keeps the parameter and
     /// empties it.
     Edit {
+        sheet: std::path::PathBuf,
         symbol_uuid: uuid::Uuid,
         key: String,
         value: String,
     },
     /// Enter in a cell: the next edit of that cell is a new undo step.
     CellSubmitted,
-    /// Delete the parameter `key` from every symbol, as one undo step.
+    /// Delete the parameter `key` from every listed symbol, as one undo
+    /// step across the listed sheets.
     ParameterRemoved { key: String },
     /// The "new parameter" name box changed.
     NewKeyChanged(String),
-    /// Add the typed parameter as a column on every symbol, empty.
+    /// Add the typed parameter as a column on every listed symbol, empty,
+    /// as one undo step across the listed sheets.
     ColumnAdded,
+    /// The header's Active sheet / All sheets switch was set.
+    ScopePicked(ParameterScope),
     /// The row filter changed.
     FilterChanged(String),
     /// Clear filter on the no-match card: every row shows again.
@@ -87,11 +92,13 @@ pub enum ParameterManagerMsg {
     /// column `key`. A leave names its column, so it never clears the
     /// hover of the header just entered.
     ColumnHeaderHovered { key: String, is_hovered: bool },
-    /// A cell in the row of `symbol_uuid` took (`is_focused`) or lost the
-    /// focus. A loss names its row, so it never clears the row just
-    /// focused.
+    /// The cell `key` of `symbol_uuid` on `sheet` took (`is_focused`) or
+    /// lost the focus. A loss names its cell, so it never clears the cell
+    /// just focused.
     CellFocused {
+        sheet: std::path::PathBuf,
         symbol_uuid: uuid::Uuid,
+        key: String,
         is_focused: bool,
     },
     /// One pane of the table scrolled to `x`, `y`; the others follow, so the
@@ -101,6 +108,16 @@ pub enum ParameterManagerMsg {
         x: f32,
         y: f32,
     },
+}
+
+/// Which sheets the Parameter Manager lists (Caner 2026-11-25).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ParameterScope {
+    /// The active sheet only.
+    #[default]
+    ActiveSheet,
+    /// Every open sheet of the active sheet's project.
+    AllSheets,
 }
 
 /// The scrolling panes of the Parameter Manager table.

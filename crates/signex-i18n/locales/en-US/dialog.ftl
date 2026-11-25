@@ -254,6 +254,11 @@ dialog-parameter-manager-add-column = Add column
 dialog-parameter-manager-column-reference = Reference
 dialog-parameter-manager-column-value = Value
 dialog-parameter-manager-column-footprint = Footprint
+# Shown with All sheets: the sheet file a part is placed on.
+dialog-parameter-manager-column-sheet = Sheet
+# The header switch: list the active sheet, or every open sheet of its project.
+dialog-parameter-manager-scope-active = Active sheet
+dialog-parameter-manager-scope-all = All sheets
 # The Parameter Manager footer and its no-match card.
 dialog-parameter-manager-clear-filter = Clear filter
 # Undoes every cell edit since the dialog opened; $count is how many.

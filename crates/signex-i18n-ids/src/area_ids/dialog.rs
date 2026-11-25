@@ -28,6 +28,9 @@ define_ids! {
     DIALOG_PARAMETER_MANAGER_COLUMN_REFERENCE = "dialog-parameter-manager-column-reference";
     DIALOG_PARAMETER_MANAGER_COLUMN_VALUE = "dialog-parameter-manager-column-value";
     DIALOG_PARAMETER_MANAGER_COLUMN_FOOTPRINT = "dialog-parameter-manager-column-footprint";
+    DIALOG_PARAMETER_MANAGER_COLUMN_SHEET = "dialog-parameter-manager-column-sheet";
+    DIALOG_PARAMETER_MANAGER_SCOPE_ACTIVE = "dialog-parameter-manager-scope-active";
+    DIALOG_PARAMETER_MANAGER_SCOPE_ALL = "dialog-parameter-manager-scope-all";
     DIALOG_PARAMETER_MANAGER_CLEAR_FILTER = "dialog-parameter-manager-clear-filter";
     DIALOG_PARAMETER_MANAGER_REVERT = "dialog-parameter-manager-revert";
     DIALOG_PARAMETER_MANAGER_DONE = "dialog-parameter-manager-done";

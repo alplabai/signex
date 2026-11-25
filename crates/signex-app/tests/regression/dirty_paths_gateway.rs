@@ -137,6 +137,7 @@ fn a_parameter_manager_edit_marks_the_document_dirty() {
     let (mut app, path) = app_with(vec![symbol(target, "R1", 0.0)]);
 
     let _ = app.update(Message::ParameterManager(ParameterManagerMsg::Edit {
+        sheet: path.clone(),
         symbol_uuid: target,
         key: "Tolerance".to_string(),
         value: "1%".to_string(),

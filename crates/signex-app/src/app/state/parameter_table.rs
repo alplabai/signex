@@ -9,23 +9,37 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use crate::app::contracts::ParameterScope;
+
 #[derive(Debug, Clone, Default)]
 pub struct ParameterTableState {
-    /// The sheet the last cell edit went to; a different active sheet ends
-    /// the cell-typing run.
+    /// The sheet the last cell edit went to; a different sheet ends the
+    /// cell-typing run.
     pub run_path: Option<PathBuf>,
     /// Name typed into the "new parameter" box.
     pub new_key: String,
     /// Case-insensitive row filter over reference / value / footprint.
     pub filter: String,
+    /// The header's Active sheet / All sheets switch; Active sheet on every
+    /// opening (Caner 2026-11-25).
+    pub scope: ParameterScope,
     /// The cells edited since the dialog opened. Cleared on open and close.
     pub session: ParameterSession,
     /// The parameter column whose header the pointer is over: its remove
     /// button shows only then.
     pub hovered_column: Option<String>,
-    /// The symbol whose row holds the focused cell: the row being edited,
-    /// drawn tinted (mockup row 70).
-    pub editing_row: Option<uuid::Uuid>,
+    /// The focused cell: drawn as an open input, its row tinted (mockup
+    /// row 70).
+    pub editing: Option<ParameterCell>,
+}
+
+impl ParameterTableState {
+    /// Whether the focused cell is in the row of `symbol` on `sheet`.
+    pub fn is_editing_row(&self, sheet: &Path, symbol: uuid::Uuid) -> bool {
+        self.editing
+            .as_ref()
+            .is_some_and(|cell| cell.symbol == symbol && cell.sheet.as_deref() == Some(sheet))
+    }
 }
 
 /// One cell of the table: a parameter of a symbol on a sheet.

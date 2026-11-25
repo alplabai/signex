@@ -179,6 +179,11 @@ define_ids! {
     DIALOG_PARAMETER_MANAGER_FOOTER_HINT = "dialog-parameter-manager-footer-hint";
     DIALOG_PARAMETER_MANAGER_CHANGED = "dialog-parameter-manager-changed";
     DIALOG_PARAMETER_MANAGER_REVERT_TIP = "dialog-parameter-manager-revert-tip";
+    DIALOG_PARAMETER_MANAGER_SUBTITLE_ALL = "dialog-parameter-manager-subtitle-all";
+    DIALOG_PARAMETER_MANAGER_NO_MATCH_BODY_ALL = "dialog-parameter-manager-no-match-body-all";
+    DIALOG_PARAMETER_MANAGER_REFUSED_BUSY = "dialog-parameter-manager-refused-busy";
+    DIALOG_PARAMETER_MANAGER_REFUSED_READ_ONLY = "dialog-parameter-manager-refused-read-only";
+    DIALOG_PARAMETER_MANAGER_REFUSED_FAILED = "dialog-parameter-manager-refused-failed";
     DIALOG_MOVE_SELECTION_MOVE = "dialog-move-selection-move";
     DIALOG_MOVE_SELECTION_HELP = "dialog-move-selection-help";
     DIALOG_MOVE_SELECTION_HELP_OFF_GRID = "dialog-move-selection-help-off-grid";
