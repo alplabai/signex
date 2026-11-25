@@ -189,6 +189,7 @@ clearance the design rules ask from other nets' copper (#2389).
   link), one the leg crosses, a pad or via in the way, or a move that would
   break a clearance (the leg's via included) or enter a keepout is not
   pushed: the leg walks around instead.
+  A track of no net is never pushed; the leg walks around it (Caner, 2026-11-25, #2515).
 - **Vias.** Making another copper layer active mid-route puts a through via
   (the board's via size, grown to the written rules' minimum diameter and
   drill for the net) at the route's end with the next leg; a via that would
