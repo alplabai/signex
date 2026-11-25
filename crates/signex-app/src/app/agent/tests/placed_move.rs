@@ -2,14 +2,15 @@
 //! inside `apply_edits`, whose transaction holds the engine's notices until
 //! it commits; the move's answer still names the contact it could not keep.
 
-use serde_json::json;
+use serde_json::{Value, json};
 
 use super::{app_in, call, sheet_entry};
 use crate::app::command::placed_move_tests::blocked_resistor;
 use crate::app::handlers::editing_commands::net_color_driver as fixture;
 
-#[test]
-fn an_agent_move_inside_apply_edits_names_the_contact_it_could_not_keep() {
+/// `edits` (made with R1's id) sent as one `apply_edits` on a project sheet
+/// holding the blocked resistor, the person on another sheet; the reply.
+fn apply_on_blocked_resistor(edits: impl FnOnce(String) -> Value) -> Value {
     let dir = tempfile::tempdir().expect("tempdir");
     let mut app = app_in(dir.path());
     let person = app.document_state.active_path.clone().expect("a sheet");
@@ -23,18 +24,25 @@ fn an_agent_move_inside_apply_edits_names_the_contact_it_could_not_keep() {
     app.document_state.mark_document_clean(&file);
     fixture::activate(&mut app, &person);
     let started = app.document_state.engines[&file].revision();
-
     let applied = call(
         &mut app,
         "apply_edits",
         json!({
             "document": file.display().to_string(),
             "expect_revision": started,
-            "edits": [{"id": "set_object_position", "args": {"id": r1.to_string(), "at": [50, 60]}}],
+            "edits": edits(r1.to_string()),
         }),
     );
-
     assert_eq!(applied["status"], "answered", "{applied}");
+    applied
+}
+
+#[test]
+fn an_agent_move_inside_apply_edits_names_the_contact_it_could_not_keep() {
+    let applied = apply_on_blocked_resistor(
+        |r1| json!([{"id": "set_object_position", "args": {"id": r1, "at": [50, 60]}}]),
+    );
+
     let answer = &applied["data"]["results"][0];
     let fallbacks = answer["fallbacks"].as_array().expect("a list");
     assert_eq!(fallbacks.len(), 1, "{applied}");
@@ -45,4 +53,22 @@ fn an_agent_move_inside_apply_edits_names_the_contact_it_could_not_keep() {
         messages.contains("R1 pin 1"),
         "still in Messages: {messages}"
     );
+}
+
+/// Each edit of the list answers only the notices it raised itself.
+#[test]
+fn a_later_move_in_the_list_does_not_repeat_an_earlier_ones_fallbacks() {
+    let applied = apply_on_blocked_resistor(|r1| {
+        json!([
+            {"id": "set_object_position", "args": {"id": r1, "at": [50, 60]}},
+            {"id": "set_object_position", "args": {"id": r1, "at": [70, 60], "keep_wires": false}},
+        ])
+    });
+
+    let results = &applied["data"]["results"];
+    assert_eq!(
+        results[0]["fallbacks"][0]["kind"], "pins_not_kept",
+        "{applied}"
+    );
+    assert_eq!(results[1]["fallbacks"], json!([]), "{applied}");
 }
