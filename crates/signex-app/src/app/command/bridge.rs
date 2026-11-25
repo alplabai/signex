@@ -553,6 +553,8 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "compare_board_with_schematic" => Message::from(crate::app::CompareBoardMsg::Requested),
         "back_annotate_schematics" => Message::from(crate::app::BackAnnotateMsg::Requested),
         "new_pcb_document" => Message::UpdatePcb(UpdatePcbMsg::NewPcbRequested(None)),
+        // #2796: an empty block diagram named after the project, unsaved.
+        "new_block_diagram" => Message::from(crate::app::BlockDiagramMsg::NewRequested),
         // #2232: the setup dialogs; a headless run with `profile` makes the
         // document through `run_operands` instead.
         "new_schematic_sheet" => Message::from(crate::app::DocumentSetupMsg::OpenRequested {

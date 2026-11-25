@@ -101,6 +101,18 @@ impl Signex {
     ) -> anyhow::Result<Option<Task<Message>>> {
         // Reported as this file's failure; the rest of the batch still saves.
         self.refuse_save_while_restoring(path)?;
+        // A block diagram is held by its slice (mockup row 171).
+        if self
+            .document_state
+            .block_diagrams
+            .editors
+            .contains_key(path)
+        {
+            return self
+                .begin_block_diagram_save(path)
+                .map(Some)
+                .map_err(|refusal| anyhow::anyhow!(refusal.english()));
+        }
         match self.document_state.document_key_for_path(path) {
             Some(DocumentKey::Schematic(_)) => self
                 .begin_schematic_save(path.to_path_buf(), None)

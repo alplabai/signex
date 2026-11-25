@@ -58,6 +58,8 @@ impl DocumentKey {
             TabKind::LibraryBrowser(_) => None,
             // Read-only fabrication files: nothing to save or undo.
             TabKind::GerberViewer => None,
+            // Saved and undone by its own slice (`app::block_diagram`).
+            TabKind::BlockDiagram(_) => None,
         }
     }
 }

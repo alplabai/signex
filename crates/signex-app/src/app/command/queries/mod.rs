@@ -64,6 +64,8 @@ const QUERY_IDS: &[&str] = &[
     "rules_preset_diff",
     "board_panel",
     "project_settings",
+    // #2796: a block diagram's blocks, ports, connections and groups.
+    "query_block_diagram",
 ];
 
 /// The queries that run a check (`check_run`): each says nothing in
@@ -153,6 +155,10 @@ impl Signex {
             }
             // A profile preset may need the profile library read first.
             "rules_preset_diff" => return Some(self.rules_preset_diff(args)),
+            // #2796: a block diagram, answered by its slice.
+            "query_block_diagram" => {
+                return Some((self.query_block_diagram_outcome(args), Task::none()));
+            }
             _ => {}
         }
         let answer = match id {

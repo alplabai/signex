@@ -28,16 +28,19 @@ pub(crate) enum DocumentKind {
     Footprint,
     Project,
     Component,
+    /// A `.snxblk` block diagram (mockup row 171), held by its slice.
+    BlockDiagram,
 }
 
 impl DocumentKind {
-    pub(crate) const ALL: [Self; 6] = [
+    pub(crate) const ALL: [Self; 7] = [
         Self::Schematic,
         Self::Pcb,
         Self::Symbol,
         Self::Footprint,
         Self::Project,
         Self::Component,
+        Self::BlockDiagram,
     ];
 
     pub(crate) const fn as_str(self) -> &'static str {
@@ -48,6 +51,7 @@ impl DocumentKind {
             Self::Footprint => "footprint",
             Self::Project => "project",
             Self::Component => "component",
+            Self::BlockDiagram => "block_diagram",
         }
     }
 
@@ -259,6 +263,7 @@ impl Signex {
                 false,
             ));
         }
+        self.push_block_diagrams(&mut entries);
         self.push_referenced_files(&mut entries);
         entries.sort_by(|a, b| {
             (a.kind as u8, a.path.as_deref(), a.name.as_str()).cmp(&(
@@ -268,6 +273,34 @@ impl Signex {
             ))
         });
         entries
+    }
+
+    /// The open block diagrams. A diagram has no [`DocumentKey`]: its slice
+    /// saves and undoes it, and a command names it by path or id. Its
+    /// project is the open project whose folder holds it.
+    fn push_block_diagrams(&self, entries: &mut Vec<DocumentEntry>) {
+        let docs = &self.document_state;
+        let diagrams = &docs.block_diagrams;
+        for (path, editor) in &diagrams.editors {
+            let project = docs
+                .projects
+                .iter()
+                .find(|p| path.starts_with(p.dir()))
+                .map(project_ref);
+            entries.push(DocumentEntry {
+                id: Some(editor.diagram.id),
+                kind: DocumentKind::BlockDiagram,
+                key: None,
+                name: file_stem(path),
+                project,
+                loaded: true,
+                dirty: editor.is_dirty(),
+                read_only: editor.is_read_only(),
+                saving: diagrams.saving.contains(path),
+                open_in_window: false,
+                path: Some(path.clone()),
+            });
+        }
     }
 
     /// The files an open project references that no loaded document covers,
