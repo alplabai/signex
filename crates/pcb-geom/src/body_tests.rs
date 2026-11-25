@@ -250,3 +250,26 @@ fn a_selected_pad_stands_for_its_footprint() {
         vec![footprint]
     );
 }
+
+/// A circle courtyard reaches its rim, not a saved radius that disagrees.
+#[test]
+fn a_circle_courtyard_takes_its_radius_from_its_rim() {
+    let circle = FpGraphic {
+        graphic_type: "circle".into(),
+        center: Some(Point::new(0.0, 0.0)),
+        end: Some(Point::new(2.0, 0.0)),
+        start: None,
+        radius: 5.0,
+        ..courtyard_rect((0.0, 0.0), (0.0, 0.0))
+    };
+    let fp = footprint(Vec::new(), vec![circle], 0.0, "TopCopper");
+    assert_eq!(
+        courtyard_outline(&fp).unwrap(),
+        Some(Shape::Rect {
+            center: PointNm::new(nm(10.0), nm(20.0)),
+            half_w: nm(2.0),
+            half_h: nm(2.0),
+            rotation_deg: 0.0,
+        })
+    );
+}

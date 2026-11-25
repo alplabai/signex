@@ -6,6 +6,7 @@
 
 use signex_types::pcb::{Footprint, Point};
 
+use crate::graphic::circle_radius;
 use crate::rect::RectNm;
 use crate::transform::pad_shape;
 use crate::units::{GeomError, PointNm, mm_to_nm};
@@ -56,7 +57,7 @@ pub fn footprint_extent(footprint: &Footprint) -> Result<RectNm, GeomError> {
         }
         if let Some(center) = graphic.center {
             let c = PointNm::from_mm(center, "graphic.center")?;
-            let r = mm_to_nm(graphic.radius, "graphic.radius")?.abs() + half;
+            let r = circle_radius(center, graphic.radius, graphic.start, graphic.end)? + half;
             extent = extent.union(&RectNm::around(c, r, r));
         }
     }

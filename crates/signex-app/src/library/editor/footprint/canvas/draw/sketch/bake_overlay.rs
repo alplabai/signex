@@ -333,10 +333,19 @@ fn graphic_path(cstate: &FootprintCanvasState, drawing: &BoardGraphic) -> Option
         )),
         BoardGraphicKind::Circle => Some(Path::circle(
             cstate.world_to_screen(at(drawing.center?)),
-            drawing.radius as f32 * cstate.scale,
+            circle_radius_mm(drawing)? as f32 * cstate.scale,
         )),
         BoardGraphicKind::Rectangle | BoardGraphicKind::TextFrame => None,
     }
+}
+
+/// A drawn circle's radius in mm, from its rim as the board reads it;
+/// `None` without a centre or with a radius that is not a length.
+fn circle_radius_mm(drawing: &BoardGraphic) -> Option<f64> {
+    let center = drawing.center?;
+    let radius =
+        pcb_geom::circle_radius(center, drawing.radius, drawing.start, drawing.end).ok()?;
+    Some(pcb_geom::nm_to_mm(radius))
 }
 
 fn dashed(colour: Color) -> Stroke<'static> {
@@ -480,4 +489,38 @@ fn arc_path(
             );
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use signex_types::pcb::{BoardGraphic, Point};
+    use uuid::Uuid;
+
+    use super::circle_radius_mm;
+
+    /// The preview draws a baked circle at its rim, not at a saved radius
+    /// that disagrees, as the Gerber and the copper check read it.
+    #[test]
+    fn a_baked_circle_is_drawn_at_its_rim() {
+        let circle = BoardGraphic {
+            uuid: Uuid::from_u128(1),
+            graphic_type: "circle".into(),
+            layer: "Mechanical1".into(),
+            width: 0.1,
+            start: None,
+            end: Some(Point::new(4.0, 3.0)),
+            center: Some(Point::new(1.0, -1.0)),
+            radius: 2.0,
+            points: Vec::new(),
+            text: String::new(),
+            font_size: 0.0,
+        };
+        let radius = circle_radius_mm(&circle).unwrap();
+        assert!((radius - 5.0).abs() < 1e-9, "radius {radius}");
+        let rimless = BoardGraphic {
+            end: None,
+            ..circle
+        };
+        assert_eq!(circle_radius_mm(&rimless), Some(2.0));
+    }
 }
