@@ -1,5 +1,6 @@
-//! The Update PCB dialog builds in every phase, and the mixed group box has
-//! the Graphite accent look (#1312).
+//! The Update PCB dialog builds in every phase, its marks are drawn glyphs
+//! and its ticks the solid-accent tri-state box (mockup rows 81, 82); the
+//! panels' mixed checkbox keeps the Graphite soft accent (#1312).
 
 use iced::Background;
 use signex_types::theme::{ThemeId, theme_tokens};
@@ -94,6 +95,8 @@ fn the_table_builds_with_problems_under_every_filter() {
     }
 }
 
+/// The panels' form_look mixed checkbox keeps the Graphite soft accent
+/// (#1312). This dialog's group box is `tick_box`, pinned below.
 #[test]
 fn a_mixed_group_box_is_drawn_on_the_soft_accent() {
     for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
@@ -290,4 +293,164 @@ fn back_annotate_and_reannotate_build_in_both_themes() {
             let _ = app.view_board_reannotate_dialog();
         }
     }
+}
+
+/// Mockup rows 81 and 82: every status mark of a row, a Notes header and a
+/// banner is a drawn glyph, never a font character that falls back to a
+/// missing-glyph box; the tick is green.
+#[test]
+fn every_row_status_is_a_drawn_glyph() {
+    use super::change_rows::{RowStatus, StatusGlyph};
+
+    assert_eq!(RowStatus::Quiet.glyph(), None);
+    assert_eq!(RowStatus::Applies.glyph(), Some(StatusGlyph::Check));
+    assert_eq!(RowStatus::Skipped.glyph(), Some(StatusGlyph::Dash));
+    assert_eq!(RowStatus::Blocked.glyph(), Some(StatusGlyph::Blocked));
+    assert_eq!(RowStatus::Info.glyph(), Some(StatusGlyph::Info));
+    assert_eq!(RowStatus::Warn.glyph(), Some(StatusGlyph::Warn));
+    for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+        let t = theme_tokens(id);
+        assert_eq!(RowStatus::Applies.ink(&t), ti(t.success), "{id:?}");
+        assert_eq!(RowStatus::Warn.ink(&t), ti(t.warning), "{id:?}");
+    }
+}
+
+/// Mockup row 81: a ticked or partly ticked box is solid accent with the
+/// white tick or dash; an empty one is the field with a strong hairline;
+/// a box that cannot change sits on the sunken fill.
+#[test]
+fn a_ticked_or_mixed_box_is_solid_accent() {
+    use signex_engine::pcb::eco::GroupTicks;
+
+    use super::change_rows::{StatusGlyph, Tick, tick_look};
+
+    assert_eq!(Tick::of_group(GroupTicks { on: 3, open: 3 }), Tick::On);
+    assert_eq!(Tick::of_group(GroupTicks { on: 1, open: 3 }), Tick::Mixed);
+    assert_eq!(Tick::of_group(GroupTicks { on: 0, open: 3 }), Tick::Off);
+    assert_eq!(Tick::of_group(GroupTicks { on: 0, open: 0 }), Tick::Off);
+    for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+        let t = theme_tokens(id);
+        let r = tokens::resolve(&t);
+        let accent = tokens::accent_fill(&t);
+        let white = tokens::on_accent(&t);
+        let on = tick_look(Tick::On, true, &t);
+        assert_eq!(
+            (on.fill, on.edge, on.mark),
+            (accent, accent, Some((StatusGlyph::Check, white))),
+            "{id:?}"
+        );
+        let mixed = tick_look(Tick::Mixed, true, &t);
+        assert_eq!(
+            (mixed.fill, mixed.edge, mixed.mark),
+            (accent, accent, Some((StatusGlyph::Dash, white))),
+            "{id:?}"
+        );
+        let off = tick_look(Tick::Off, true, &t);
+        assert_eq!(
+            (off.fill, off.edge, off.mark),
+            (r.field, r.line_strong, None),
+            "{id:?}"
+        );
+        let inert = tick_look(Tick::Off, false, &t);
+        assert_eq!((inert.fill, inert.edge), (r.sunken, r.line_soft), "{id:?}");
+        let inert_on = tick_look(Tick::On, false, &t);
+        assert_eq!(
+            (inert_on.fill, inert_on.mark),
+            (r.line_strong, Some((StatusGlyph::Check, white))),
+            "{id:?}"
+        );
+    }
+}
+
+/// Mockup row 81: after a passing Validate the footer says "Validated: ..."
+/// beside Report... with the green tick; a failing one keeps the reason.
+#[test]
+fn the_footer_says_validated() {
+    use super::change_rows::StatusGlyph;
+
+    let i18n = signex_i18n::I18n::en_us_ref();
+    let (mut app, _t) = crate::app::Signex::new();
+    let project = app.document_state.mint_project_id();
+    let mut state = UpdatePcbState::new(
+        project,
+        "demo.snxprj".to_string(),
+        Some(std::path::PathBuf::from("/w/demo.snxpcb")),
+        false,
+    );
+    assert!(super::validation_verdict(&state, i18n).is_none());
+    state.validation = Some(Ok(()));
+    let (glyph, words, ok) = super::validation_verdict(&state, i18n).expect("a verdict");
+    assert_eq!(glyph, StatusGlyph::Check);
+    assert!(ok);
+    assert_eq!(
+        words.into_string(),
+        "Validated: every ticked change applies to the board."
+    );
+    state.validation = Some(Err("stale".into()));
+    let (glyph, _, ok) = super::validation_verdict(&state, i18n).expect("a verdict");
+    assert_eq!(glyph, StatusGlyph::Blocked);
+    assert!(!ok);
+}
+
+/// Mockup row 82: a ticked Back Annotate row that applies shows the green
+/// tick once Validate passed, and the footer shows the verdict beside the
+/// `N of M changes ticked` pill.
+#[test]
+fn back_annotate_ticks_a_validated_row_and_says_so_beside_the_pill() {
+    use signex_engine::pcb::eco::{BackChange, BackChangeList, BackGroup, BackKey, BackRow};
+    use signex_types::schematic::InstancePath;
+    use uuid::Uuid;
+
+    use super::super::back_annotate::{footer_left, row_status};
+    use super::change_rows::RowStatus;
+    use crate::app::back_annotate::BackAnnotateState;
+    use crate::app::state::ProjectId;
+
+    let i18n = signex_i18n::I18n::en_us_ref();
+    let t = theme_tokens(ThemeId::GraphiteLight);
+    let id = Uuid::from_u128;
+    let value = BackRow {
+        key: BackKey::Value(id(1)),
+        group: BackGroup::Values,
+        change: BackChange::Value {
+            footprint: id(1),
+            sheet: InstancePath::root(),
+            units: vec![id(11)],
+            reference: "C1".into(),
+            from: "10uF".into(),
+            to: "22uF".into(),
+        },
+        on: true,
+        blocked: None,
+    };
+    let mut state = BackAnnotateState::new(
+        ProjectId::test_id(1),
+        "p.snxprj".into(),
+        Some("b.snxpcb".into()),
+    );
+    state.list = Some(BackChangeList {
+        revision: 1,
+        rows: vec![value.clone()],
+        notes: Vec::new(),
+        designators: Vec::new(),
+    });
+    state.phase = Phase::Ready;
+    assert_eq!(footer_left(&state, i18n, &t).len(), 1, "the pill alone");
+    assert_eq!(
+        row_status(&state, &value, None, i18n, &t).0,
+        RowStatus::Quiet
+    );
+    state.validation = Some(Ok(()));
+    let (status, caption) = row_status(&state, &value, None, i18n, &t);
+    assert_eq!(status, RowStatus::Applies);
+    assert!(caption.is_none());
+    assert_eq!(footer_left(&state, i18n, &t).len(), 2, "pill and verdict");
+}
+
+/// Mockup rows 81, 82: both dialogs stack the subtitle under the title, so
+/// their header is the taller one.
+#[test]
+fn the_stacked_header_is_taller_than_the_one_line_header() {
+    use super::super::header::{DIALOG_HEADER_H, STACKED_HEADER_H};
+    const { assert!(STACKED_HEADER_H > DIALOG_HEADER_H) };
 }

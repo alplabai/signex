@@ -2,7 +2,7 @@
 //! 44 px / 52 px header with a subtitle slot, and the neutral close button.
 //! Legacy themes keep the old strip and the red-hover X (`widgets.rs`).
 
-use iced::widget::{Space, container, row};
+use iced::widget::{Space, column, container, row};
 use iced::{Alignment, Background, Border, Color, Element, Length, Theme, Widget as _};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, raw, text};
@@ -16,6 +16,9 @@ const SP: Spacing = Spacing::DEFAULT;
 pub(crate) const DIALOG_HEADER_H: f32 = chrome_px(44.0 * 11.0 / 12.0);
 /// Header height of the Preferences dialog (52 px at the default base).
 pub(crate) const PREFERENCES_HEADER_H: f32 = chrome_px(52.0 * 11.0 / 12.0);
+/// Header height of a [`graphite_header_stacked`] dialog, the subtitle on a
+/// second line (52 px at the default base).
+pub(crate) const STACKED_HEADER_H: f32 = PREFERENCES_HEADER_H;
 
 /// The one modal scrim: the theme's scrim token.
 pub(crate) fn dialog_scrim(theme_tokens: &ThemeTokens) -> Color {
@@ -95,7 +98,7 @@ pub(crate) fn graphite_header_closing<'a, M: Clone + 'a>(
 ) -> Element<'a, M> {
     let r = tokens::resolve(theme_tokens);
     // raw: the caller passes a title and subtitle it already rendered.
-    let mut line = row![
+    let mut heading = row![
         text(raw(title.into()))
             .size(TS.heading)
             .color(ti(theme_tokens.text))
@@ -104,9 +107,44 @@ pub(crate) fn graphite_header_closing<'a, M: Clone + 'a>(
     .spacing(SP.l)
     .align_y(Alignment::Center);
     if let Some(sub) = subtitle {
-        line = line.push(text(raw(sub)).size(TS.label).color(r.ink3).boxed());
+        heading = heading.push(text(raw(sub)).size(TS.label).color(r.ink3).boxed());
     }
-    line = line.push(Space::new().width(Length::Fill).boxed());
+    header_bar(heading.boxed(), trailing, on_close, height, theme_tokens)
+}
+
+/// A Graphite header with the subtitle on a second line under the title, in
+/// the caption size (mockup rows 81, 82). `height` is [`STACKED_HEADER_H`].
+pub(crate) fn graphite_header_stacked<'a, M: Clone + 'a>(
+    title: impl Into<String>,
+    subtitle: String,
+    on_close: Option<M>,
+    height: f32,
+    theme_tokens: &ThemeTokens,
+) -> Element<'a, M> {
+    let r = tokens::resolve(theme_tokens);
+    // raw: the caller passes a title and subtitle it already rendered.
+    let heading = column![
+        text(raw(title.into()))
+            .size(TS.heading)
+            .color(ti(theme_tokens.text))
+            .boxed(),
+        text(raw(subtitle)).size(TS.caption).color(r.ink4).boxed(),
+    ];
+    header_bar(heading.boxed(), None, on_close, height, theme_tokens)
+}
+
+/// The header band: `heading`, free space, `trailing`, the close button.
+fn header_bar<'a, M: Clone + 'a>(
+    heading: Element<'a, M>,
+    trailing: Option<Element<'a, M>>,
+    on_close: Option<M>,
+    height: f32,
+    theme_tokens: &ThemeTokens,
+) -> Element<'a, M> {
+    let r = tokens::resolve(theme_tokens);
+    let mut line = row![heading, Space::new().width(Length::Fill).boxed()]
+        .spacing(SP.l)
+        .align_y(Alignment::Center);
     if let Some(extra) = trailing {
         line = line.push(extra);
     }

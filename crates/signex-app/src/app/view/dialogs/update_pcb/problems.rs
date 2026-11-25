@@ -11,7 +11,7 @@ use signex_i18n::{I18n, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{text, tooltip};
 
-use super::change_rows::hint;
+use super::change_rows::{StatusGlyph, hint};
 use super::{SP, TS, link, texts, up};
 use crate::app::update_pcb::table::{ProblemFix, can_cross_probe, object, problems};
 use crate::app::{Message, UpdatePcbMsg};
@@ -33,10 +33,9 @@ pub(super) fn card<'a>(
     }
     let danger = tokens::danger(tokens);
     let muted = tokens::muted_text(tokens);
+    // Mockup row 81: the card's marks are the drawn blocked glyph.
     let heading = row![
-        text(t!(i18n, ids::CHANGE_ROW_ICON_BLOCKED))
-            .size(TS.body)
-            .color(danger),
+        StatusGlyph::Blocked.view(danger),
         text(t!(
             i18n,
             ids::UPDATE_PCB_PROBLEMS_HEADING,
@@ -93,12 +92,7 @@ fn line<'a>(r: &EcoRow, i18n: &I18n, tokens: &ThemeTokens) -> Element<'a, Messag
     let mut line: Row<Element<'a, Message>> = Row::new()
         .spacing(SP.m)
         .align_y(Alignment::Center)
-        .push(
-            text(t!(i18n, ids::CHANGE_ROW_ICON_BLOCKED))
-                .size(TS.body)
-                .color(danger)
-                .boxed(),
-        )
+        .push(StatusGlyph::Blocked.view(danger))
         .push(
             text(UserText::new(object(&r.change)))
                 .size(TS.body)

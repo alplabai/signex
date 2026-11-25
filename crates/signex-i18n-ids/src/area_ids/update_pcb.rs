@@ -75,4 +75,6 @@ define_ids! {
     PCB_REANNOTATE_EXECUTE_COUNT = "pcb-reannotate-execute-count";
     // chrome-copy-help
     PCB_REANNOTATE_BACK_ANNOTATE = "pcb-reannotate-back-annotate";
+    // m7/update-pcb-dialog
+    UPDATE_PCB_VALIDATED = "update-pcb-validated";
 }

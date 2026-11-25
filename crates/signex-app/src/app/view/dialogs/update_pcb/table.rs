@@ -11,7 +11,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::text;
 
 use super::change_rows::{
-    ChangeRow, GroupHeader, RowStatus, change_row, detail_text, group_header,
+    ChangeRow, GroupHeader, RowStatus, StatusGlyph, change_row, detail_text, group_header,
 };
 use super::{SP, TS, texts, up};
 use crate::app::update_pcb::table::{Summary, group_ticks, object, rows_of};
@@ -117,10 +117,7 @@ fn notes<'a>(
             on_fold: up(UpdatePcbMsg::NotesFolded(!folded)),
             count: t!(i18n, ids::CHANGE_ROW_NOTES_COUNT, "count" => list.notes.len()),
             split: None,
-            mark: Some((
-                t!(i18n, ids::CHANGE_ROW_ICON_INFO),
-                tokens::resolve(tokens).info,
-            )),
+            mark: Some((StatusGlyph::Info, tokens::resolve(tokens).info)),
         },
         i18n,
         tokens,
@@ -182,7 +179,6 @@ fn row_view<'a>(
             on_press: Some(up(UpdatePcbMsg::RowFocused(r.key.clone()))),
             dimmed: problem,
         },
-        i18n,
         tokens,
     )
 }
