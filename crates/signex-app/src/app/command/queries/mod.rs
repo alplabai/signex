@@ -8,7 +8,8 @@
 //! rule profile library, read off the update loop first), and the board
 //! queries `measure_board`, `query_board_nets` and `find_similar_items`
 //! (#2403), `board_panel` (#2410, `app::board_panel`), and the Project tab's
-//! `project_settings` (#1689-#1693, `app::project_tab`). Each
+//! `project_settings` (#1689-#1693, `app::project_tab`), and the project's
+//! differential pairs `list_diff_pairs` (#2952, `app::diff_pair_classes`). Each
 //! answers with data through [`CommandOutcome::Answered`], never a bare
 //! `Ran`, and reads only the documents (engines, boards, editors, projects,
 //! the library): no active tab, window, selection or panel is looked at, and
@@ -64,6 +65,7 @@ const QUERY_IDS: &[&str] = &[
     "rules_preset_diff",
     "board_panel",
     "project_settings",
+    "list_diff_pairs",
 ];
 
 /// The queries that run a check (`check_run`): each says nothing in
@@ -146,6 +148,14 @@ impl Signex {
             // The Project tab's sections (#1689-#1693).
             "project_settings" => {
                 let outcome = match self.project_settings(args) {
+                    Ok(value) => CommandOutcome::Answered(value),
+                    Err(reason) => CommandOutcome::disabled(reason),
+                };
+                return Some((outcome, Task::none()));
+            }
+            // The project's differential pairs (#2952).
+            "list_diff_pairs" => {
+                let outcome = match self.list_diff_pairs(args) {
                     Ok(value) => CommandOutcome::Answered(value),
                     Err(reason) => CommandOutcome::disabled(reason),
                 };

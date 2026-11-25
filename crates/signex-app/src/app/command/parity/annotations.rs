@@ -407,6 +407,8 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "board_panel",
             "find_items",
             "find_similar_items",
+            // #2952: the named project's open sheets and classes.
+            "list_diff_pairs",
             "measure_board",
             "query_board_nets",
             "query_pins",
@@ -535,6 +537,9 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Operand,
         &[ToolState],
     ),
+    // #2953: a designator is written for the placement the sheet in view
+    // shows, and only on that sheet (`designator_edit_commands`).
+    (&["set_object_text"], Operand, &[ActiveDocument]),
     // The tool defaults, and the active layer when `layer` is not given.
     // Declared 6.P3 exception: still the person's form until #2876 (docs/DECISIONS.md, 2026-11-24).
     (

@@ -7,6 +7,7 @@
 //! 2026-11-19).
 //! Design note: `docs/SCHEMATIC_DIRECTIVES.md`, "Differential pairs".
 
+mod list;
 mod update;
 pub(crate) use update::NAME_INPUT_ID;
 
