@@ -100,6 +100,54 @@ check on the diagram they would leave and change nothing when it fails.
 An interface name this build does not know reads as `Interface::Other` and
 is written back as it was, so a newer build's interface survives a save.
 
+## Generate and regenerate
+
+`generate_block_diagram` and `regenerate_block_diagram` (#2968, `docs/CLI.md`,
+"Block diagrams from the hierarchy") make the diagram from the sheet
+hierarchy. `signex_net::derive_block_diagram` reads the compiled design into a
+`DerivedDiagram`; `signex_types::block_diagram::regenerate_block_diagram`
+merges it into a diagram (generate merges it into an empty one). No new file
+key: a generated connection is the one with `derived_from`, a linked block
+the one with `sheet`.
+
+**Blocks.** One per sheet file the hierarchy reaches, in walk order, named
+after the sheet symbol that first places it (the file stem for a page no
+symbol places). A sheet that places other sheets and has no parts of its own
+on any occurrence is the frame the blocks sit in, not a block. A repeated
+sheet is one block. A sheet whose file carries no document id cannot be
+linked and is left out. Ports are the sheet symbol's entries, a
+`Repeat(<net>)` entry by its net (a page no symbol places: its Hierarchical
+labels); inputs sit on the left side, outputs and the rest on the right,
+`PORT_PITCH_MM` apart, the block growing to fit. Rails are the power nets the
+sheet touches.
+
+**Connections.** Each net touching two or more blocks joins a signal group,
+the first rule that applies naming it:
+
+| Group | When | Interface | Label |
+|---|---|---|---|
+| the bus text | the net is a member of a bus an entry or a label writes (`D[0..7]`) | `bus` | the bus text |
+| the net | a power net | `power` | the net |
+| the harness type | the net is named `TYPE.ENTRY` | `bus` | the type |
+| the text before the last `_` | any other net (`I2C_SDA` is `I2C`, `VOUT_3V3_CH1` is `VOUT_3V3`) | the protocol the prefix names, trailing digits ignored (`SPI1` is `spi`), else `signal` | the signals after the prefix (`SCL, SDA`) for a protocol, the prefix for another group of several nets, the net for one |
+
+A group of one net goes by the net's own name. The flow starts at the first
+block whose port for the group is an output, else the first block, and runs
+to each other block: one connection per pair. A port matches the group by
+name, or as a bus entry that carries one of its nets or shares its prefix.
+
+**Regenerate.** A sheet with no block gets one, laid out in rows by depth
+below every existing block. A linked block follows its sheet: a renamed or
+moved file updates `sheet_path` (the document id stays), a sheet that left
+the project marks the block `unlinked` (it stays, with its ports and
+hand-drawn connections), a sheet that comes back links it again. Rails and
+ports follow the sheet; a hand-drawn connection on a port the sheet lost
+ends on the block's edge. Generated connections are matched by
+`derived_from` and their two blocks: changed in place, added or removed.
+Positions, sizes, names, colours, notes, groups and every hand-drawn block
+and connection stay. The changes are listed (`DiagramChange`) and written
+only when asked. A sheet that is there but does not read refuses the run.
+
 ## Version
 
 `snxblk/1` (`SNXBLK_VERSION`). A newer minor opens read-only and its saves

@@ -992,3 +992,20 @@ pub const SET_PAD_SHAPE: &[Operand] = &[
     optional("delta", OperandKind::Text),
     optional("corners", OperandKind::Text),
 ];
+/// `generate_block_diagram` (#2968): a block diagram of the project
+/// `document` names (the project, or one of its documents), written to
+/// `path`, the project's `<name>.snxblk` when left out; an existing file is
+/// replaced only with `overwrite=true`.
+pub const GENERATE_BLOCK_DIAGRAM: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("path", OperandKind::Path),
+    optional("overwrite", OperandKind::Bool),
+];
+/// `regenerate_block_diagram` (#2968): the changes the project's hierarchy
+/// makes to the diagram at `path` (the project's `<name>.snxblk` when left
+/// out), listed; with `apply=true` also written.
+pub const REGENERATE_BLOCK_DIAGRAM: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("path", OperandKind::Path),
+    optional("apply", OperandKind::Bool),
+];

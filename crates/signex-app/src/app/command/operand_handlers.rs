@@ -115,6 +115,15 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
         sheet_sync::create_sheet_symbol_from_sheet,
     ),
     ("sync_sheet_entries", sheet_sync::sync_sheet_entries),
+    // #2968: a block diagram from the sheet hierarchy.
+    (
+        "generate_block_diagram",
+        crate::app::block_diagram_sync::generate_block_diagram,
+    ),
+    (
+        "regenerate_block_diagram",
+        crate::app::block_diagram_sync::regenerate_block_diagram,
+    ),
     ("set_object_position", placed::set_object_position),
     ("set_object_rotation", placed::set_object_rotation),
     ("set_sheet_symbol_size", placed::set_sheet_symbol_size),

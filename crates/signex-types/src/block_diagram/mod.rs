@@ -22,6 +22,7 @@ mod edit;
 mod fault;
 mod file;
 mod geometry;
+mod sync;
 mod tokens;
 mod writer;
 
@@ -31,6 +32,8 @@ mod edit_tests;
 mod file_tests;
 #[cfg(test)]
 mod geometry_tests;
+#[cfg(test)]
+mod sync_tests;
 
 pub use edit::{BlockDiagramError, BlockFields, BlockPatch, RemovedBlock};
 pub use fault::DiagramFault;
@@ -39,6 +42,10 @@ pub use file::{
     read_block_diagram, write_block_diagram,
 };
 pub use geometry::{DiagramBox, GROUP_MARGIN_MM, PLACEMENT_GAP_MM, distance_to_segment};
+pub use sync::{
+    DerivedBlock, DerivedConnection, DerivedDiagram, DerivedEnd, DerivedPort, DiagramChange,
+    PORT_PITCH_MM, Regenerated, generate_block_diagram, regenerate_block_diagram,
+};
 pub use writer::encode_block_diagram;
 
 /// The file extension of a block diagram, without the dot.

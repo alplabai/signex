@@ -204,6 +204,9 @@ pub enum ProjectMsg {
     /// Multi-channel sheets and the Compiled Design panel (#1279, #1308);
     /// routed to `dispatch_compiled_design_message`.
     CompiledDesign(crate::app::CompiledDesignMsg),
+    /// A block diagram generated or regenerated from the sheet hierarchy
+    /// (#2968); routed to `dispatch_block_diagram_sync_message`.
+    BlockDiagramSync(crate::app::BlockDiagramSyncMsg),
     /// The off-thread child-sheet resolution that Close Project starts
     /// finished (#741). Carries the project by id, not index, because the
     /// project list can shift while the worker reads; `Err` is a worker that

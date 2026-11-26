@@ -18,6 +18,8 @@ pub(crate) mod back_annotate;
 pub mod block_diagram;
 pub use block_diagram::{BlockDiagramMsg, BlockDiagrams};
 pub(crate) mod block_diagram_export;
+pub(crate) mod block_diagram_sync;
+pub use block_diagram_sync::BlockDiagramSyncMsg;
 pub(crate) mod board_output;
 pub(crate) mod board_panel;
 pub(crate) mod board_reannotate;

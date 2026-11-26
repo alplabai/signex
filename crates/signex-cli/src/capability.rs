@@ -104,6 +104,10 @@ const SAVES: &[&str] = &[
     "save_layer_set",
     // Writes the named workspace layout into the user's preferences (mockup row 166).
     "save_workspace_layout",
+    // Write the project's block diagram file (#2968); a regenerate without
+    // `apply` lists its changes and writes nothing.
+    "generate_block_diagram",
+    "regenerate_block_diagram",
 ];
 
 /// The one capability `command` needs, from its catalog flags.
@@ -192,6 +196,8 @@ mod tests {
             (Capability::Save, "save_board_reuse_block"),
             (Capability::Save, "save_layer_set"),
             (Capability::Save, "save_workspace_layout"),
+            (Capability::Save, "generate_block_diagram"),
+            (Capability::Save, "regenerate_block_diagram"),
             (Capability::Export, "print"),
             (Capability::Export, "report_manager_bom"),
             (Capability::Export, "export_board_report"),

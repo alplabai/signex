@@ -28,6 +28,12 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Bridge,
         &[ActiveDocument],
     ),
+    // #2968: the project in view becomes the `document` operand.
+    (
+        &["generate_block_diagram", "regenerate_block_diagram"],
+        Translator,
+        &[ActiveDocument],
+    ),
     // The canvas selection and the union picked in the Unions panel (mockup row 158).
     (
         &["add_to_union", "remove_from_union", "break_union"],

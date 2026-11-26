@@ -399,3 +399,11 @@ project-parameter-unresolved = ?
 # The banner over the Project tab of a project written by a newer version
 # (#2904). $format is the format it was written in, such as "snxprj/1.2".
 project-read-only-banner = Read-only: this project was written by a newer { -brand-name } ({ $format }). Its changes cannot be saved in this build; edit it in that version.
+# Block diagram from the sheet hierarchy (#2968), said in Messages. $path is
+# the .snxblk file, $blocks and $connections what it holds, $changes how many
+# changes a regenerate found, $reason why nothing was done.
+project-block-diagram-generated = Block diagram { $path } generated: { $blocks } blocks, { $connections } connections.
+project-block-diagram-changes = Block diagram { $path }: { $changes } changes in the hierarchy, not applied yet.
+project-block-diagram-applied = Block diagram { $path }: { $changes } changes applied; the layout is kept.
+project-block-diagram-in-sync = Block diagram { $path } matches the sheet hierarchy.
+project-block-diagram-refused = Block diagram: { $reason }
