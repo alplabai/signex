@@ -42,7 +42,9 @@ deleted. Rows, primitives and files a user added are not in the record and
 are kept byte for byte; a missing or damaged record deletes nothing, and
 STEP files are never deleted. It never writes over a file the record does
 not list (a symbol envelope then goes to `<file_uuid>.snxsym`; any other
-clash refuses the update), keeps a recorded primitive a kept user row still
+clash refuses the update, saying whether the record lacks the file, is
+missing or was rejected; restore the record from git, or import into a
+fresh folder), keeps a recorded primitive a kept user row still
 uses, and refuses, before writing anything, an update in which a kept user
 row and an imported row share a part number, naming both rows. It never commits, so the app refuses an update
 over uncommitted changes (#3114) before running one.

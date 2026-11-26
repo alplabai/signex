@@ -439,7 +439,16 @@ fn an_update_never_overwrites_a_file_it_did_not_write() {
     w.add_footprint_file(synthetic::footprint(5)).unwrap();
     let err = w.write_update(&root).unwrap_err().to_string();
     assert!(err.contains(&fp_rel(5)), "{err}");
+    assert!(err.contains("the import ledger does not list it"), "{err}");
+    assert!(err.contains("fresh folder"), "{err}");
     assert_eq!(read_tree(&root), before);
+
+    // With the ledger gone, the refusal says so.
+    std::fs::remove_file(root.join(signex_library::writer::LEDGER_FILE)).unwrap();
+    let mut w = with_envelope();
+    w.add_footprint_file(synthetic::footprint(5)).unwrap();
+    let err = w.write_update(&root).unwrap_err().to_string();
+    assert!(err.contains("there is no import ledger"), "{err}");
 }
 
 /// A recorded footprint a kept user row still uses is not deleted.

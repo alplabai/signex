@@ -153,7 +153,8 @@ pub(super) fn write_update(w: &LibraryWriter, dir: &Path) -> Result<UpdateSummar
         &mut summary,
     );
     update_guard::check_kept_part_numbers(&kept_rows, w)?;
-    summary.files_moved = update_guard::relocate_unledgered(dir, w, &mut files, previous.as_ref())?;
+    summary.files_moved =
+        update_guard::relocate_unledgered(dir, w, &mut files, previous.as_ref(), &summary.ledger)?;
     existing.tables = tables;
     let kept = existing.manifest.clone();
     existing.manifest = w.manifest.clone();

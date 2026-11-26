@@ -8,7 +8,8 @@ use std::sync::Arc;
 
 use uuid::Uuid;
 
-use super::ledger::Ledger;
+use super::LedgerState;
+use super::ledger::{LEDGER_FILE, Ledger};
 use super::{LibraryWriter, SYMBOLS_DIR};
 use crate::adapter::LibraryError;
 use crate::adapters::local_git::library_row_to_component;
@@ -39,7 +40,13 @@ pub(super) fn relocate_unledgered(
     w: &LibraryWriter,
     files: &mut BTreeMap<PathBuf, Vec<u8>>,
     previous: Option<&Ledger>,
+    state: &LedgerState,
 ) -> Result<Vec<(String, String)>, LibraryError> {
+    let why_unlisted = match state {
+        LedgerState::Trusted => "the import ledger does not list it".to_string(),
+        LedgerState::Missing => format!("there is no import ledger ({LEDGER_FILE})"),
+        LedgerState::Rejected(why) => format!("the import ledger was rejected: {why}"),
+    };
     let mut moved = Vec::new();
     let clashes: Vec<PathBuf> = files
         .iter()
@@ -50,8 +57,10 @@ pub(super) fn relocate_unledgered(
         let text = rel_text(&rel);
         let refuse = |why: &str| {
             LibraryError::Conflict(format!(
-                "{text} in {} is not a file the previous import wrote{why}; the update \
-                 would overwrite it, so nothing was changed",
+                "{text} in {} is not a file the previous import wrote ({why_unlisted}){why}; \
+                 the update would overwrite it, so nothing was changed. Restore \
+                 {LEDGER_FILE} from git if it was lost or damaged, or import into a fresh \
+                 folder",
                 dir.display()
             ))
         };
