@@ -21,9 +21,6 @@ use signex_engine::pcb::BoardEngine;
 use signex_types::designator::DesignatorStandard;
 use signex_types::pcb::PcbBoard;
 
-/// The engines of closed dirty PCB tabs, by path.
-pub(crate) type ParkedBoards = std::collections::HashMap<PathBuf, BoardEngine>;
-
 impl DocumentState {
     /// Does a PCB tab, or a board parked without one, hold `path`?
     pub(crate) fn holds_pcb(&self, path: &Path) -> bool {

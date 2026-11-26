@@ -17,7 +17,6 @@ mod bom_preview;
 mod case_fold_tests;
 pub(crate) mod check_runs;
 pub(crate) mod cross_select;
-pub(crate) mod dir_case;
 mod dirty;
 #[cfg(test)]
 mod dirty_tests;
@@ -437,7 +436,7 @@ pub struct PdfExportRequest {
 pub struct DocumentState {
     /// Document ids a document cannot say itself: project files not loaded,
     /// and the order documents were first seen in (#2172).
-    pub document_ids: crate::app::document_ids::DocumentIds,
+    pub document_ids: crate::app::core::document_ids::DocumentIds,
     /// Counts the changes that can alter an ERC finding: an edit to a sheet
     /// (through the engine, or Annotate, Replace, library update and the like),
     /// a project-file change, and a sheet written behind the engines. Each calls
@@ -480,7 +479,8 @@ pub struct DocumentState {
     /// were seeded from has changed locally (#1085).
     pub profile_drift_noted: std::collections::HashSet<ProjectId>,
     /// Undo / redo of each project's stored rule set edits (#1085).
-    pub rules_history: std::collections::HashMap<ProjectId, rules_history::RulesHistory>,
+    pub rules_history:
+        std::collections::HashMap<ProjectId, crate::app::core::rules_history::RulesHistory>,
     /// Undo / redo of each project's General settings (engine-owned).
     pub general_history: std::collections::HashMap<ProjectId, signex_engine::ProjectGeneralHistory>,
     /// How many undo steps every history keeps (`undo_depth`); see
@@ -586,7 +586,7 @@ pub struct DocumentState {
     /// `state/pcb_board.rs`, the only reader and writer.
     pub(crate) boards: std::collections::HashMap<PathBuf, signex_engine::pcb::BoardEngine>,
     /// The engines of PCB tabs closed while dirty; see `state/pcb_board.rs`.
-    pub(crate) parked_pcb_boards: pcb_board::ParkedBoards,
+    pub(crate) parked_pcb_boards: crate::app::core::parked_boards::ParkedBoards,
     /// The sheets each undo group touched. Undo/redo of a
     /// grouped entry consults this to find the sheets that must move with it.
     pub undo_groups:
@@ -596,7 +596,7 @@ pub struct DocumentState {
     /// An agent's edit list in progress, and the labels of its undo steps (#2178).
     pub agent_edits: AgentEdits,
     /// The last runs of `check_erc`, for a later run's baseline (#2199).
-    pub(crate) check_runs: check_runs::CheckRuns,
+    pub(crate) check_runs: crate::app::core::check_runs::CheckRuns,
     /// Each open project's design reuse blocks, read or saved (#2410).
     pub(crate) reuse_blocks: crate::app::board_reuse::ReuseBlockStore,
     /// The one store of half-typed title-block and paper-edge text (#2027);
@@ -696,7 +696,7 @@ pub struct DocumentState {
     pub pending_opens: crate::app::document_read::InFlightReads,
     /// What the directory case probes of loose documents reported, and the
     /// opens and saves waiting on one (#1447).
-    pub dir_case: dir_case::DirCases,
+    pub dir_case: crate::app::core::dir_case::DirCases,
     /// #859 — History restores running on a worker, keyed by the document
     /// path. A second restore click for the same document is ignored until
     /// the first completes; closing the project or all documents cancels it.

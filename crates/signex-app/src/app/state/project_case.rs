@@ -23,20 +23,7 @@ use super::volume_case::probe_directory_case;
 use super::{DocumentState, LoadedProject, ProjectId};
 use crate::app::{Message, ProjectMsg};
 
-/// What the off-thread volume check reported.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CaseProbeOutcome {
-    /// The volume answered: `true` when it ignores case.
-    Decided(bool),
-    /// The probe ran but could not decide (empty, read-only or unreadable
-    /// volume).
-    Undecided,
-    /// The probe could not stat the entry it needed (deleted meanwhile,
-    /// permission denied); carries the reason.
-    StatFailed(String),
-    /// The worker itself failed; carries the reason.
-    Failed(String),
-}
+pub use crate::app::core::case_probe::CaseProbeOutcome;
 
 /// Probe `dir`'s volume on a blocking worker.
 pub(crate) async fn probe_case_outcome(dir: PathBuf) -> CaseProbeOutcome {

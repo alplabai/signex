@@ -3,7 +3,7 @@
 //! Open and Ctrl+S decide "is this the file a document already holds" with
 //! [`Signex::identity_fold_for`]; the answer comes from a probe of the
 //! document's directory that runs off the update thread. See
-//! `state/dir_case.rs` for the cache and `state/project_case.rs` for why
+//! `core/dir_case.rs` for the cache and `state/project_case.rs` for why
 //! identity and netlist keys differ on an unknown volume.
 
 use std::path::{Path, PathBuf};
