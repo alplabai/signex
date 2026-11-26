@@ -44,7 +44,8 @@ fn a_net_tie_parts_footprint_is_typed_a_net_tie_by_its_bom_flag() {
         [
             ("NT1", ComponentType::NetTieInBom),
             ("NT2", ComponentType::NetTie),
-            ("R1", ComponentType::Standard),
+            // The default type is the plain electrical part.
+            ("R1", ComponentType::default()),
         ]
     );
 }
