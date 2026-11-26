@@ -63,12 +63,14 @@ define_ids! {
     DRC_PANEL_TILE_SHORT = "drc-panel-tile-short";
     DRC_PANEL_TILE_UNCONNECTED = "drc-panel-tile-unconnected";
     DRC_PANEL_TILE_KEEPOUT = "drc-panel-tile-keepout";
+    DRC_PANEL_TILE_OTHER = "drc-panel-tile-other";
     DRC_PANEL_TILES_HINT = "drc-panel-tiles-hint";
     DRC_PANEL_TILES_SHOWING = "drc-panel-tiles-showing";
     DRC_PANEL_CATEGORY_CLEARANCE = "drc-panel-category-clearance";
     DRC_PANEL_CATEGORY_SHORT = "drc-panel-category-short";
     DRC_PANEL_CATEGORY_UNCONNECTED = "drc-panel-category-unconnected";
     DRC_PANEL_CATEGORY_KEEPOUT = "drc-panel-category-keepout";
+    DRC_PANEL_CATEGORY_OTHER = "drc-panel-category-other";
     DRC_PANEL_CLEAR_FILTER = "drc-panel-clear-filter";
     DRC_PANEL_SHOW_WAIVED_COUNT = "drc-panel-show-waived-count";
     DRC_PANEL_SHOW = "drc-panel-show";

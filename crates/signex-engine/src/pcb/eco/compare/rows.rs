@@ -205,7 +205,10 @@ fn eco_row(eco: &EcoRow) -> (CompareRow, bool) {
             link,
         } => {
             row.object = designator(reference);
-            (row.schematic, row.board) = (text(reference.trim()), text(reference.trim()));
+            // The board holds the footprint; what it lacks is the link
+            // (mockup row 162, #3059).
+            row.schematic = text(reference.trim());
+            row.board = Some(CompareValue::Unlinked);
             row.jump.footprint = Some(*footprint);
             row.jump.part = link.units.first().map(|unit| PartOccurrence {
                 sheet: link.sheet.clone(),

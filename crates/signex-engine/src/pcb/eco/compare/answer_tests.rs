@@ -222,3 +222,41 @@ fn choose_refuses_an_unknown_a_repeated_or_a_blocked_row_and_changes_nothing() {
     assert!(blocked.to_string().contains("not built yet"), "{blocked}");
     assert_eq!(report, before, "a refused choice changes no direction");
 }
+
+/// #3059 (mockup row 162): a Missing on board row for a footprint that is
+/// on the board but not linked shows the missing link on the board side,
+/// not the designator again, and says Update PCB links it to its part, in
+/// the dialog's data, the command-line answer and the report text.
+#[test]
+fn a_link_row_shows_the_missing_link() {
+    let link = EcoRow::new(
+        EcoKey::Link(u(0xa6)),
+        EcoGroup::Links,
+        EcoChange::Link {
+            footprint: u(0xa6),
+            reference: "R3".into(),
+            link: signex_types::pcb::SymbolLink::new(root(), [u(0x103)]),
+        },
+        true,
+    );
+    let report = compare(&eco_list(vec![link]), &back_list(Vec::new()));
+    let row = &report.rows[0];
+    assert_eq!(row.kind, CompareKind::MissingOnBoard);
+    assert_eq!(row.schematic, Some(CompareValue::Text("R3".into())));
+    assert_eq!(row.board, Some(CompareValue::Unlinked));
+    assert_eq!(row.jump.footprint, Some(u(0xa6)), "the footprint is there");
+    assert_eq!(row.direction, Direction::UpdatePcb);
+
+    let answer = report.answer();
+    let rows = answer["differences"].as_array().expect("differences");
+    assert_eq!(rows[0]["kind"], "missing_on_board");
+    assert_eq!(rows[0]["schematic"]["text"], "R3");
+    assert_eq!(rows[0]["board"], serde_json::json!({ "unlinked": true }));
+    assert_eq!(rows[0]["fixes"][0]["action"], "link_footprint");
+
+    let text = report.report_text();
+    assert!(
+        text.contains("  R3: schematic R3, board (not linked) -> Update PCB: Link to its part\n"),
+        "{text}"
+    );
+}

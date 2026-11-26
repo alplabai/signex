@@ -1745,8 +1745,10 @@ signex-cli run demo.snxprj --keep-going < compare.jsonl
   the dialog). `object` is `{"designator"}`, `{"net"}` or a pin
   `{"designator", "pad"}`.
 - `schematic` and `board` are the two sides: `null` when the object is not
-  on that side, `{"text"}`, a part `{"value", "footprint"}`, or
-  `{"no_net": true}` for a pad on no net.
+  on that side, `{"text"}`, a part `{"value", "footprint"}`,
+  `{"no_net": true}` for a pad on no net, or `{"unlinked": true}` on the
+  board side of a `link_footprint` row: the footprint is there, its link to
+  the part is not.
 - `fixes` lists the directions the row allows and what each does
   (`add_to_board`, `link_footprint`, `remove_from_board`, `add_net`,
   `remove_net`, `rename_net`, `move_pin`, `connect_pin`, `disconnect_pin`,

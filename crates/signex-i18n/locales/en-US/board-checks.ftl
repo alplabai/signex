@@ -84,6 +84,8 @@ drc-panel-tile-clearance = clearance
 drc-panel-tile-short = short
 drc-panel-tile-unconnected = unconn.
 drc-panel-tile-keepout = keepout
+# The tile under the four, for every other kind found (room, height, sizes).
+drc-panel-tile-other = other
 drc-panel-tiles-hint = Click a tile to list only that category.
 # $category is one of the category names below.
 drc-panel-tiles-showing = Showing { $category } only
@@ -91,6 +93,7 @@ drc-panel-category-clearance = clearance violations
 drc-panel-category-short = shorts
 drc-panel-category-unconnected = unconnected links
 drc-panel-category-keepout = keepout violations
+drc-panel-category-other = other violations
 drc-panel-clear-filter = Clear filter
 drc-panel-show-waived-count =
     { $count ->
