@@ -553,6 +553,9 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "swap_gates",
                     "save_board_reuse_block",
                     "place_board_reuse_block",
+                    // Mockup row 198: the review records of the named
+                    // project's notebook.
+                    "list_annotations",
                     "project_settings",
                     "project_move_sheet",
                     "project_add_variant",
@@ -612,11 +615,21 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "board_assembly_drawing",
                     // #2488: the board STEP model.
                     "export_board_step",
+                    // Mockup rows 196 and 197: the named project's notebook.
+                    "notebook_references",
+                    "notebook_reference_card",
+                    "notebook_reference_picker",
+                    "notebook_badges",
+                    "notebook_fix_reference",
+                    // Mockup row 202: the notebook of the named project.
+                    "export_notebook_pdf",
                     // #2470: the fabrication outputs into a folder.
                     "fabrication_outputs",
                     // #2410: DXF import onto a board.
                     "import_dxf",
                     "import_dxf_outline",
+                    // #2945: the design report of the named project.
+                    "generate_design_notebook",
                     // #2216: Repour All on the named board.
                     "repour_all",
                     // #2389: length tuning on the named board.
@@ -635,6 +648,18 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "send_drawings_backward",
                     "send_drawings_to_back",
                     "delete_selection",
+                    // #2795: the Design Notebook tab of the named project.
+                    "notebook_compile",
+                    "notebook_insert",
+                    "notebook_view",
+                    // Mockup row 199: the readings, timelines and
+                    // attachments of the named project's notebook.
+                    "notebook_measurements",
+                    "notebook_timeline",
+                    "notebook_attachments",
+                    "export_notebook_timeline",
+                    "mark_notebook_attachment_valid",
+                    "attach_notebook_file",
                     // #2470: Update PCB for the named document's project
                     // (left out: the active project).
                     "update_pcb_from_schematic",

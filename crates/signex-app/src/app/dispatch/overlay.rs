@@ -200,6 +200,7 @@ impl Signex {
             ProjectMsg::AppQuitConfirm(choice) => self.handle_app_quit_choice(choice),
             ProjectMsg::Tab(msg) => self.dispatch_project_tab_message(msg),
             ProjectMsg::Rules(msg) => self.dispatch_rules_tab_message(msg),
+            ProjectMsg::Notebook(msg) => self.dispatch_notebook_message(msg),
             ProjectMsg::Git(msg) => self.dispatch_project_git_message(msg),
             ProjectMsg::FileSaved(done) => self.handle_project_file_saved(*done),
             ProjectMsg::AddExistingFilePicked { project_id, paths } => {

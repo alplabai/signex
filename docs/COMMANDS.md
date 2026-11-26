@@ -44,6 +44,24 @@ one board. Rules in [CLI.md](CLI.md), "Checks on demand".
 [baseline=<run>]` runs the project's requirements list as checks and
 answers in the same shape; rules in [CLI.md](CLI.md), "Requirement
 checks".
+`list_annotations document=<project or one of its documents> [id=<block
+id>] [kind=<kind>] [part=<designator>]` answers, once the notebook files
+are read, with every annotation block of the project's Design Notebook
+and its chapters (mockup row 198): per file its blocks, each with its
+typed id (`DEC-002`), kind, title, status, date, line, references, the
+review record of its kind (a Measurement's rows with their `pass`,
+`warn` or `fail` verdict) and `cited_by` (the Issues it opens, the
+Decision that supersedes it, the Calculations reading it), and its
+problems by name (`bad_id`, `duplicate_id`, `bad_field`, ...); then every
+citation (`links`) and the failing Measurements that open no Issue yet
+(`unopened_failures`). Fields in
+[NOTEBOOK_ANNOTATIONS.md](NOTEBOOK_ANNOTATIONS.md), "Review records".
+`notebook_measurements`, `notebook_timeline` and `notebook_attachments`
+read the named project's Design Notebook once its files are read: every
+reading with its result, one net's, part's or pin's timeline, every
+attachment with its stale mark; `export_notebook_timeline`,
+`mark_notebook_attachment_valid` and `attach_notebook_file` write a file.
+Rules in [NOTEBOOK_MEASUREMENTS.md](NOTEBOOK_MEASUREMENTS.md).
 `measure_board`, `query_board_nets` and `find_similar_items` are board
 queries: a distance on one board, point to point or edge to edge between
 two items; each net's routed length, members and routed state; and the
@@ -78,6 +96,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `apply_layout_notebook` | Workspace layout: Notebook | window | — | — |
 | `apply_layout_review` | Workspace layout: Review | window | — | — |
 | `apply_layout_schematic` | Workspace layout: Schematic | window | — | — |
+| `attach_notebook_file` | Copy a file into the notebook as an attachment | design | — | — |
 | `autoplace_fields` | Autoplace fields | edit | — | `O` |
 | `board_status` | Board status counters | validation | — | — |
 | `bom_add_alternate` | Add an alternate part to a BOM line | design | — | — |
@@ -118,6 +137,8 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `edit_selected_symbol_in_symbol_editor` | Edit selected symbol in Symbol Editor | library | — | `Mod+E` |
 | `edit_text_in_place` | In-place edit selected text | edit | `F2` | — |
 | `edit_value` | Edit value | edit | — | `V` |
+| `export_notebook_pdf` | Export the Design Notebook as PDF | file | — | — |
+| `export_notebook_timeline` | Export a measurement timeline as a CSV file | reports | — | — |
 | `fast_grid_1` | Fast grid 1 | view | — | `Alt+1` |
 | `fast_grid_2` | Fast grid 2 | view | — | `Alt+2` |
 | `find` | Find | search | `Mod+F` | `Mod+F` |
@@ -127,12 +148,15 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `find_previous` | Find previous | search | `Shift+F3` | `Shift+F3` |
 | `find_similar_objects` | Find Similar Objects | select | `Shift+F` | `Shift+F` |
 | `find_text` | Find text | search | — | — |
+| `generate_design_notebook` | Generate a design notebook from the project | design | — | — |
 | `home_view` | Reset the view rotation and Flip, then fit the board or sheet | view | — | — |
 | `import_graphics` | Import graphics | place | — | `Mod+Shift+F` |
 | `keymap_assign` | Give a command a key in a custom keyboard profile | preferences | — | — |
 | `keymap_clear` | Take a command's keys away in a custom keyboard profile | preferences | — | — |
+| `list_annotations` | List the annotation blocks of the project's Design Notebook | design | — | — |
 | `list_documents` | List documents | file | — | — |
 | `manage_workspace_layouts` | Manage workspace layouts | window | — | — |
+| `mark_notebook_attachment_valid` | Mark a stale attachment or reading as still valid | design | — | — |
 | `measure_distance` | Measure distance | view | `Ctrl+M` | `Ctrl+M` |
 | `mirror_x` | Mirror along X-axis | modify | `X` | `X` |
 | `mirror_y` | Mirror along Y-axis | modify | `Y` | `Y` |
@@ -142,9 +166,21 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `new_project_with_profile` | New project from a profile | file | — | — |
 | `next_document_tab` | Next open document tab | window | `Ctrl+Tab` | — |
 | `next_grid` | Next grid | view | — | `N` |
+| `notebook_attachments` | List the notebook's attachments and their stale marks | design | — | — |
+| `notebook_badges` | List the Notebook badges and their blocks | design | — | — |
+| `notebook_compile` | Compile the project's Design Notebook and report its pages and problems | reports | — | — |
+| `notebook_fix_reference` | Fix a stale notebook reference | design | — | — |
+| `notebook_insert` | Insert a reference or a block into the open Design Notebook | edit | — | — |
+| `notebook_measurements` | List the notebook's measurements with their results | design | — | — |
+| `notebook_reference_card` | Read the hover card of a notebook reference | design | — | — |
+| `notebook_reference_picker` | List what the @ reference picker offers | design | — | — |
+| `notebook_references` | List the notebook's references and the stale ones | design | — | — |
+| `notebook_timeline` | Show the measurement timeline of a net, part or pin | design | — | — |
+| `notebook_view` | Set the view, the side panel or the next problem of the Design Notebook tab | view | — | — |
 | `open_command_palette` | Open command palette | commands | `Mod+Shift+P` | `Ctrl+K`, `Mod+Shift+P` |
 | `open_compiled_design` | Open Compiled Design panel | panels | — | — |
 | `open_datasheet` | Open datasheet | edit | — | `D` |
+| `open_design_notebook` | Open the Design Notebook of the project (Wiki) | design | — | — |
 | `open_diff_pair_classes` | Open the project's differential pair classes | design | — | — |
 | `open_document` | Open document | file | `Mod+O` | `Mod+O` |
 | `open_grid_picker` | Open grid picker | view | — | — |
@@ -368,6 +404,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `sheet_navigation_forward` | Sheet navigation forward | navigation | — | `Alt+Right` |
 | `sync_sheet_entries` | Synchronize the selected sheet symbol's entries and its sheet's ports, with a preview | design | — | — |
 | `sync_sheet_pins` | Sync the selected sheet symbol's pins with its child sheet | design | — | — |
+| `toggle_notebook_badges` | Show or hide the Notebook badges on the schematic | view | `B` | — |
 | `tool_select` | Tool select | select | — | — |
 | `update_pcb_from_schematic` | Update PCB from schematic | pcb_sync | — | — |
 

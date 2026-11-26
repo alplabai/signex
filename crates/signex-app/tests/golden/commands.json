@@ -135,6 +135,11 @@
     "category": "design"
   },
   {
+    "id": "attach_notebook_file",
+    "group": "General",
+    "category": "design"
+  },
+  {
     "id": "auto_place",
     "group": "Pcb",
     "category": "design"
@@ -620,6 +625,16 @@
     "category": "reports"
   },
   {
+    "id": "export_notebook_pdf",
+    "group": "General",
+    "category": "file"
+  },
+  {
+    "id": "export_notebook_timeline",
+    "group": "General",
+    "category": "reports"
+  },
+  {
     "id": "export_parameters",
     "group": "Schematic",
     "category": "design"
@@ -745,6 +760,11 @@
     "category": "design"
   },
   {
+    "id": "generate_design_notebook",
+    "group": "General",
+    "category": "design"
+  },
+  {
     "id": "gloss_selected_routes",
     "group": "Pcb",
     "category": "pcb"
@@ -850,6 +870,11 @@
     "category": "navigation"
   },
   {
+    "id": "list_annotations",
+    "group": "General",
+    "category": "design"
+  },
+  {
     "id": "list_documents",
     "group": "General",
     "category": "file"
@@ -863,6 +888,11 @@
     "id": "manage_workspace_layouts",
     "group": "General",
     "category": "window"
+  },
+  {
+    "id": "mark_notebook_attachment_valid",
+    "group": "General",
+    "category": "design"
   },
   {
     "id": "measure_board",
@@ -960,6 +990,61 @@
     "category": "view"
   },
   {
+    "id": "notebook_attachments",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "notebook_badges",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "notebook_compile",
+    "group": "General",
+    "category": "reports"
+  },
+  {
+    "id": "notebook_fix_reference",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "notebook_insert",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "notebook_measurements",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "notebook_reference_card",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "notebook_reference_picker",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "notebook_references",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "notebook_timeline",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "notebook_view",
+    "group": "General",
+    "category": "view"
+  },
+  {
     "id": "number_schematic_sheets",
     "group": "Schematic",
     "category": "design"
@@ -988,6 +1073,11 @@
     "id": "open_datasheet",
     "group": "General",
     "category": "edit"
+  },
+  {
+    "id": "open_design_notebook",
+    "group": "General",
+    "category": "design"
   },
   {
     "id": "open_diff_pair_classes",
@@ -2127,6 +2217,11 @@
   {
     "id": "toggle_layers_panel",
     "group": "Pcb",
+    "category": "view"
+  },
+  {
+    "id": "toggle_notebook_badges",
+    "group": "Schematic",
     "category": "view"
   },
   {

@@ -78,6 +78,43 @@ annotations-problem-missing-body = { $file } line { $line }: an annotation witho
 annotations-problem-unbalanced-block = { $file } line { $line }: this annotation is never closed; it and the rest of the file were skipped.
 annotations-problem-unclosed = { $file } line { $line }: a { $opener } is never closed; the rest of the file was not read.
 annotations-problem-bad-reference = { $file } line { $line }: { $reference } needs quoted names; the reference was left out.
+# $kind is the block's function (note, calculation, ...), $prefix its id prefix (NOTE, CALC, ...).
+annotations-problem-bad-id = { $file } line { $line }: "{ $id }" is not a { $kind } id such as { $prefix }-001; the block is listed without one.
+annotations-problem-duplicate-id = { $file } line { $line }: { $id } is the id of an earlier block too.
+annotations-problem-bad-field = { $file } line { $line }: { $argument }: { $value } is not a value it takes; it was ignored.
+
+## Review records (mockup row 198): the fields an expanded row lists.
+annotations-field-author = Author
+annotations-field-owner = Owner
+annotations-field-review = Review
+annotations-field-requirement = Requirement
+annotations-field-severity = Severity
+annotations-field-due = Due
+annotations-field-from = From
+# The Issues a block raised: the other side of their from:.
+annotations-field-opens = Opens
+annotations-field-supersedes = Supersedes
+annotations-field-superseded-by = Superseded by
+annotations-field-chosen = Chosen
+annotations-field-instrument = Instrument
+annotations-field-conditions = Conditions
+annotations-field-operator = Operator
+annotations-field-result = Result
+annotations-field-inputs = Inputs
+# The Calculations that read this block's value.
+annotations-field-read-by = Read by
+annotations-severity-minor = Minor
+annotations-severity-major = Major
+annotations-severity-critical = Critical
+## The verdict of a Calculation or Measurement against its limits: Warn is
+## inside them but under 1 % from one.
+annotations-verdict-pass = Pass
+annotations-verdict-warn = Warn
+annotations-verdict-fail = Fail
+# How many rows of a Measurement have each verdict ("2 pass · 1 warn").
+annotations-verdict-count-pass = { $count } pass
+annotations-verdict-count-warn = { $count } warn
+annotations-verdict-count-fail = { $count } fail
 
 ## Jumps from a reference
 annotations-jump-gone = { $name } is no longer in the design.

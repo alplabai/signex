@@ -79,6 +79,7 @@ define_ids! {
     PANELS_PROJECTS_OPEN_HINT = "panels-projects-open-hint";
     PANELS_PROJECTS_GROUP_SCHEMATICS = "panels-projects-group-schematics";
     PANELS_PROJECTS_GROUP_PCB = "panels-projects-group-pcb";
+    PANELS_PROJECTS_GROUP_NOTEBOOK = "panels-projects-group-notebook";
     PANELS_PROJECTS_GROUP_BOM = "panels-projects-group-bom";
     PANELS_PROJECTS_GROUP_OUTPUTS = "panels-projects-group-outputs";
     PANELS_PROJECTS_GROUP_LIBRARIES = "panels-projects-group-libraries";

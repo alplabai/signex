@@ -44,6 +44,10 @@ impl Signex {
         if self.interaction_state.editing_text.is_some() {
             return None;
         }
+        // Mockup row 197: a Notebook badge's card lists the blocks about it.
+        if let Some(card) = self.view_notebook_badge_card(window_id) {
+            return Some(card);
+        }
         // A net card (a wire, pin or label, #1270) takes the place of the
         // symbol card while the pointer rests on a pin.
         if let Some(card) = &self.document_state.net_nav.hover.card {

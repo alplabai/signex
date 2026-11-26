@@ -456,8 +456,9 @@ fn the_library_add_new_flyout_creates_component_symbol_and_footprint() {
     }
 }
 
-/// Add New to Project: the documents, the libraries, then the planned
-/// project files, with Constraint File and VHDL File kept as planned rows.
+/// Add New to Project: the documents, the libraries, then the project
+/// files: Design Notebook live (mockup row 195), Export Job, Constraint File
+/// and VHDL File kept as planned rows.
 #[test]
 fn the_add_new_to_project_flyout_is_grouped_documents_libraries_planned() {
     let rows = add_new_entries(
@@ -485,12 +486,16 @@ fn the_add_new_to_project_flyout_is_grouped_documents_libraries_planned() {
         "VHDL File",
     ]);
     assert_eq!(layout(&rows), expected);
-    for planned in [
-        "Design Notebook",
-        "Export Job",
-        "Constraint File",
-        "VHDL File",
-    ] {
+    let notebook = item(&rows, "Design Notebook");
+    assert!(!notebook.disabled);
+    assert_eq!(badge_of(notebook), None);
+    assert!(matches!(
+        &notebook.on_press,
+        Some(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+            ProjectTreeAction::AddNewDesignNotebook(key)
+        ))) if key == &vec!["proj".to_string()]
+    ));
+    for planned in ["Export Job", "Constraint File", "VHDL File"] {
         let it = item(&rows, planned);
         assert!(it.disabled && it.on_press.is_none(), "{planned}");
         assert_eq!(badge_of(it), Some("planned"), "{planned}");

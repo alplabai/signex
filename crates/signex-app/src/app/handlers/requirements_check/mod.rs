@@ -8,7 +8,7 @@
 //! or for an agent. It changes nothing and says nothing in Messages. See
 //! `docs/CLI.md`, "Requirement checks".
 
-mod bom;
+pub(super) mod bom;
 mod bom_job;
 mod rails;
 
@@ -137,7 +137,7 @@ impl Signex {
 }
 
 /// The project's board file, when it lists one.
-fn board_path(project: &LoadedProject) -> Option<PathBuf> {
+pub(crate) fn board_path(project: &LoadedProject) -> Option<PathBuf> {
     let file = project.data.pcb_file.as_deref().map(str::trim)?;
     (!file.is_empty()).then(|| project.dir().join(file))
 }

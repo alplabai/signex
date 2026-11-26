@@ -89,7 +89,11 @@ impl Signex {
     /// * an open **symbol/footprint primitive editor** → an off-thread
     ///   container save;
     /// * the project's own **`.snxprj`** → an off-thread project save, which
-    ///   creates pending libraries first.
+    ///   creates pending libraries first;
+    /// * a project's **Design Notebook** (`.snxnbk`), held with or without
+    ///   its tab → an off-thread notebook save;
+    /// * a **design report** Generate made in the app → an off-thread write
+    ///   of it.
     ///
     /// A dirty `.snxsym`/`.snxfpt` draft or `.snxprj` has no engine, so a
     /// loop that only knew engines would fail on them (#104). `Ok(None)`
@@ -101,6 +105,12 @@ impl Signex {
     ) -> anyhow::Result<Option<Task<Message>>> {
         // Reported as this file's failure; the rest of the batch still saves.
         self.refuse_save_while_restoring(path)?;
+        if self.notebook_at_path(path).is_some() {
+            return self.begin_notebook_save_at(path).map(Some);
+        }
+        if self.generated_report_at(path).is_some() {
+            return self.begin_generated_report_save_at(path).map(Some);
+        }
         match self.document_state.document_key_for_path(path) {
             Some(DocumentKey::Schematic(_)) => self
                 .begin_schematic_save(path.to_path_buf(), None)

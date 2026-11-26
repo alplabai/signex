@@ -583,12 +583,23 @@ pub struct UiState {
     /// Design ▸ Differential Pair Classes… (#1282), while open: a copy of
     /// the project's classes until OK.
     pub diff_pair_classes: Option<Box<crate::app::DiffPairClassesState>>,
+    /// Generate design notebook (#2945): its options dialog, and the newest
+    /// report made in the app, unsaved.
+    pub notebook_generate: Box<crate::app::NotebookGenerateUi>,
     /// Generation of the newest Fabrication Outputs write, outside the
     /// dialog so a reopened dialog never takes an older answer.
     pub fab_outputs_writes: u64,
     /// Board Reports and Board Print / PDF (#2404, #2402): the open dialog
     /// and the print options it was last used with.
     pub board_output: crate::app::BoardOutputState,
+    /// Export Design Notebook PDF (mockup row 202): the open dialog and the
+    /// checksum of each file exported this session. Boxed like
+    /// `new_project`.
+    pub notebook_pdf: Box<crate::app::NotebookPdfState>,
+    /// Each project's Design Notebook tab (mockup row 195): the editor, the
+    /// preview, the panels and the margin lane. The document it shows is in
+    /// `DocumentState::notebooks`.
+    pub notebook_tabs: Box<crate::app::notebook_tab::NotebookTabs>,
     /// Back Annotate (#1312), while open. Execute writes the sheets in
     /// memory as one undo group; nothing is written to disk. Boxed like
     /// `new_project`.
@@ -957,6 +968,7 @@ mod tests {
                 "board_output.dialog",
                 field_size(|ui| &ui.board_output.dialog),
             ),
+            ("notebook_pdf", field_size(|ui| &ui.notebook_pdf)),
             (
                 "preferences_pcb_defaults",
                 field_size(|ui| &ui.preferences_pcb_defaults),

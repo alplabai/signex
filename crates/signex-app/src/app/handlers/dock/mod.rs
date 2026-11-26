@@ -118,6 +118,10 @@ impl Signex {
                 let task = self.handle_annotations_message(annotations_msg.clone());
                 return Task::batch([task, self.finish_update()]);
             }
+            if let crate::panels::PanelMsg::NotebookReferences(reference_msg) = panel_msg {
+                let task = self.handle_notebook_reference_message(reference_msg.clone());
+                return Task::batch([task, self.finish_update()]);
+            }
             if let crate::panels::PanelMsg::History(history_msg) = panel_msg {
                 let task = self.handle_history_panel(history_msg.clone());
                 return Task::batch([task, self.finish_update()]);

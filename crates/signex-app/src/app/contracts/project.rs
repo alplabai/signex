@@ -276,6 +276,10 @@ pub enum ProjectMsg {
     Tab(crate::app::ProjectTabMsg),
     /// A Rules tab message (#2398), routed to the `rules_tab` slice.
     Rules(crate::app::RulesTabMsg),
+    /// The project's Design Notebook (#2795, mockup rows 195-202), routed
+    /// to the `notebook_tab` slice; the project-level requests (open,
+    /// generate, export, badges) are resolved by `notebook_project`.
+    Notebook(crate::app::NotebookMsg),
     /// The project's repository, branch switcher and author (mockup rows 35
     /// and 39), routed to the `project_git` slice.
     Git(crate::app::ProjectGitMsg),
