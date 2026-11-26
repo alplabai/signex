@@ -42,7 +42,6 @@ fn app_with_wires() -> (Signex, uuid::Uuid, uuid::Uuid) {
     app.document_state.tabs.push(TabInfo {
         title: "drag-direction".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

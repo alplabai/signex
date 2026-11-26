@@ -429,7 +429,6 @@ fn a_tab_switch_closes_the_presets() {
     app.document_state.tabs.push(TabInfo {
         title: "other".to_string(),
         path: other,
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

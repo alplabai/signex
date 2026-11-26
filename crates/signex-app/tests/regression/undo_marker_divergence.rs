@@ -72,7 +72,6 @@ fn add_tab(app: &mut Signex, path: &Path, sheet: SchematicSheet) {
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: path.to_string_lossy().to_string(),
         path: path.to_path_buf(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });

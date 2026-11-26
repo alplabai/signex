@@ -56,7 +56,6 @@ fn app_editing(designator: &str, second: Option<&str>) -> Signex {
     app.document_state.tabs.push(TabInfo {
         title: "repeat_edit".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

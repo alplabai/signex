@@ -125,7 +125,6 @@ fn primitive_fixture(dir: &Path, ext: &str) -> (Signex, PathBuf, PathBuf) {
     app.document_state.tabs.push(TabInfo {
         title: "new".to_string(),
         path: from.clone(),
-        cached_document: None,
         project_id: None,
         kind,
     });

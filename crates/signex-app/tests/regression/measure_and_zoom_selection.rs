@@ -44,7 +44,6 @@ fn app_with(wires: Vec<Wire>) -> Signex {
     app.document_state.tabs.push(TabInfo {
         title: "measure-and-zoom".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

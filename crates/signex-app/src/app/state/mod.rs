@@ -577,6 +577,9 @@ pub struct DocumentState {
     pub next_pcb_revision: u64,
     /// Board revision per PCB path (mirror of its engine); a save marks clean only if it matches.
     pub pcb_revisions: std::collections::HashMap<PathBuf, u64>,
+    /// The board engine of each open PCB tab, by path, like `engines`; see
+    /// `state/pcb_board.rs`, the only reader and writer.
+    pub(crate) boards: std::collections::HashMap<PathBuf, signex_engine::pcb::BoardEngine>,
     /// The engines of PCB tabs closed while dirty; see `state/pcb_board.rs`.
     pub(crate) parked_pcb_boards: pcb_board::ParkedBoards,
     /// The sheets each undo group touched. Undo/redo of a

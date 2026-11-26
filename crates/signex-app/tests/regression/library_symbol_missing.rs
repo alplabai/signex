@@ -36,7 +36,6 @@ pub(crate) fn open_container_editor(
     app.document_state.tabs.push(TabInfo {
         title: "two-unit".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::SymbolEditor(path.clone()),
     });

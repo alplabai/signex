@@ -120,6 +120,9 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("command", OperandKind::Text),
     ("keys", OperandKind::Text),
     ("context", OperandKind::Text),
+    // #2552: a move's wire handling, given by the caller, not the settings.
+    ("keep_wires", OperandKind::Bool),
+    ("wiring", OperandKind::Text),
 ];
 
 /// The commands whose `ids` is still text, not targets (#2326): a design

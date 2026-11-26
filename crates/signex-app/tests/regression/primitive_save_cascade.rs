@@ -165,7 +165,6 @@ fn fixture_with(setup: Setup) -> Fixture {
     app.document_state.tabs.push(TabInfo {
         title: "pair".into(),
         path: symbol_path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::SymbolEditor(symbol_path.clone()),
     });
@@ -286,7 +285,6 @@ fn saving_a_footprint_bumps_the_component_row_that_uses_it() {
     f.app.document_state.tabs.push(TabInfo {
         title: "fp".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::FootprintEditor(path),
     });

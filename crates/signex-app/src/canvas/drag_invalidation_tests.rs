@@ -121,7 +121,6 @@ fn app_with_selected_wire() -> Signex {
     app.document_state.tabs.push(TabInfo {
         title: "drag".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

@@ -64,7 +64,6 @@ fn app_with_library_tab(dir: &std::path::Path) -> (Signex, std::path::PathBuf, U
     app.document_state.tabs.push(TabInfo {
         title: "Lib".into(),
         path: file.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::LibraryBrowser(file.clone()),
     });

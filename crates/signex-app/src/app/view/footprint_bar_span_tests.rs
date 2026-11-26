@@ -38,7 +38,6 @@ fn app_in_sketch() -> (Signex, iced::window::Id) {
     app.document_state.tabs.push(TabInfo {
         title: "f".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });
@@ -65,7 +64,6 @@ fn tile(app: &mut Signex, count: usize) {
             TabInfo {
                 title: "t".into(),
                 path: path.clone(),
-                cached_document: None,
                 project_id: None,
                 kind: TabKind::FootprintEditor(path),
             },

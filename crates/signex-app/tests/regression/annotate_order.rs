@@ -38,7 +38,6 @@ fn annotate_grid_with(order: AnnotateOrder) -> Vec<String> {
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "annotate-order".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });

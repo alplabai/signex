@@ -38,13 +38,7 @@ fn sheet_window_beside_a_board() -> (Signex, iced::window::Id) {
 }
 
 fn tab(path: &Path, kind: TabKind) -> TabInfo {
-    TabInfo {
-        title: "t".to_string(),
-        path: path.to_path_buf(),
-        cached_document: None,
-        project_id: None,
-        kind,
-    }
+    crate::test_adapter::boardless_tab("t", path, kind)
 }
 
 fn scoped(window: iced::window::Id, inner: ContextMenuMsg) -> Message {

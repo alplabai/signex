@@ -248,6 +248,15 @@ declared exceptions: the off-grid check uses their grid size and snap setting
 (the refusal names the grid), and `add_board_graphic` takes their PCB tool
 form for what its operands leave out.
 
+A move or turn an agent makes takes its wire handling as an operand, never
+the person's "keep wires" preference: `set_object_position` and
+`set_object_rotation` take an optional `keep_wires` (default `true`, a part's
+wires follow it; `false`, a plain move or turn), and `set_object_position`
+also takes `wiring` ([CLI.md](CLI.md), "Editing placed objects";
+[DECISIONS.md](DECISIONS.md) 2026-11-19 and 2026-11-25). A `keep_wires` that
+is not `true` or `false` is refused. The person's own Position and Rotation
+rows in Properties still follow their preference.
+
 Refused with a reason: `undo` and `redo` (`PERSON_ONLY`, the one hand-kept
 constant, checked against the catalog by a test; the agent takes back its own
 step with `revert`), a command with a file path operand (`save_document_as`,

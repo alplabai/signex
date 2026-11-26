@@ -5,7 +5,7 @@
 use std::path::Path;
 
 use signex_engine::{Command, DocumentPatch, Engine, EngineError};
-use signex_i18n_ids::ids;
+use signex_i18n_ids::{MessageId, ids};
 
 use super::notices::{
     engine_error_notice, engine_notice_events, locked_refusal, skip_notice, warning_notice,
@@ -68,11 +68,13 @@ impl DocumentState {
     /// The gateway's single command, recorded as an undo step or not
     /// (`record_history`). Held items are skipped and named, a wire on a
     /// locked pin included; a command that is nothing but locked items still
-    /// reaches the engine, so the user is told why nothing happened.
+    /// reaches the engine, so the user is told why nothing happened. A
+    /// non-lock refusal is logged as `failure`.
     pub(crate) fn execute_on_edit_path(
         &mut self,
         command: Command,
         record_history: bool,
+        failure: MessageId,
     ) -> SheetEdit {
         let mut events = Vec::new();
         let engine = match self.prepare_edit_engine(&mut events) {
@@ -113,7 +115,7 @@ impl DocumentState {
                     // Same level as the skip notice a batch raises.
                     events.push(warning_notice(locked_refusal(references, action)));
                 } else {
-                    events.push(engine_error_notice(ids::NOTICE_EDIT_COMMAND_FAILED, error));
+                    events.push(engine_error_notice(failure, error));
                 }
                 SheetEdit::failed(reason, events)
             }

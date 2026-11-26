@@ -325,7 +325,6 @@ fn a_footprint_with_an_open_profile_offers_close_gap_and_closes_it() {
     docs.tabs.push(TabInfo {
         title: "open".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });

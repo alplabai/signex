@@ -264,7 +264,6 @@ fn properties_panel_shows_corner_radius_for_round_rect_pad() {
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "test".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::FootprintEditor(path.clone()),
     });
@@ -340,7 +339,6 @@ fn editing_corner_radius_updates_all_4_arcs() {
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "test".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::FootprintEditor(path.clone()),
     });
@@ -435,7 +433,6 @@ fn unlink_corner_radius_mints_per_corner_param() {
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "test".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::FootprintEditor(path.clone()),
     });
@@ -514,7 +511,6 @@ fn reverse_mirror_updates_pad_stack_corner_radius_pct() {
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "test".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::FootprintEditor(path.clone()),
     });
@@ -756,7 +752,6 @@ fn editing_oval_width_param_propagates_through_solve() {
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "test".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::FootprintEditor(path.clone()),
     });
@@ -1040,7 +1035,6 @@ fn editing_chamfer_len_propagates_through_solve() {
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "test".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::FootprintEditor(path.clone()),
     });
@@ -1167,7 +1161,6 @@ fn v025_oval_width_edit_mirrors_back_to_pad_size_mm() {
     app.document_state.tabs.push(TabInfo {
         title: "v025-oval".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });

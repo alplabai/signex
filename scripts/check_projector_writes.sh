@@ -54,7 +54,7 @@ LOAD_WRAPPERS="open_schematic_tab install_reloaded_schematic restore_loaded
 # The forms that delegate to the edit-tail wrappers.
 DELEGATING="apply_engine_command apply_engine_command_checked
   apply_engine_command_reporting apply_engine_command_unrecorded
-  apply_engine_commands apply_engine_commands_checked apply_engine_undo
+  apply_engine_command_noticing apply_engine_commands apply_engine_commands_checked apply_engine_undo
   apply_engine_redo refuse_if_active_read_only"
 # load_gateway functions that write core state: not load wrappers (#2705 names
 # seven), but callers of clear_schematic_ui_state that stay out of the

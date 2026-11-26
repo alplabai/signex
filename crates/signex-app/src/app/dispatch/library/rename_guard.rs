@@ -527,7 +527,6 @@ mod tests {
         app.document_state.tabs.push(crate::app::TabInfo {
             title: "r".into(),
             path: path.clone(),
-            cached_document: None,
             project_id: None,
             kind: crate::app::TabKind::SymbolEditor(path.clone()),
         });

@@ -37,7 +37,6 @@ fn app_with_first_leg() -> Signex {
     app.document_state.tabs.push(TabInfo {
         title: "wire-merge".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

@@ -97,7 +97,6 @@ pub(super) fn fixture(root: &Path, stem: &str, git: bool) -> Fixture {
     app.document_state.tabs.push(TabInfo {
         title: "main".into(),
         path: sheet.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -625,7 +624,6 @@ fn a_library_under_the_folder_refuses_the_folder_move_whatever_holds_it() {
             fx.app.document_state.tabs.push(TabInfo {
                 title: "p".into(),
                 path: p.clone(),
-                cached_document: None,
                 project_id: None,
                 kind: TabKind::LibraryBrowser(p),
             });

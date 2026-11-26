@@ -71,7 +71,6 @@ fn app_focused_on(focused: &str) -> Signex {
     app.document_state.tabs.push(TabInfo {
         title: "sheet".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: Some(id),
         kind: TabKind::Schematic,
     });
@@ -263,7 +262,6 @@ fn dragging_a_bus_on_the_canvas_carries_entry_and_wire() {
     app.document_state.tabs.push(TabInfo {
         title: "bus-drag".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

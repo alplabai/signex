@@ -30,7 +30,6 @@ fn saving_a_newer_minor_schematic_is_refused_and_stays_dirty() {
     app.document_state.tabs.push(TabInfo {
         title: "Newer".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -256,7 +255,6 @@ fn read_only_project_with_dirty_sheet() -> ReadOnlyWithSheet {
     app.document_state.tabs.push(TabInfo {
         title: "one".into(),
         path: sheet.clone(),
-        cached_document: None,
         project_id: Some(id),
         kind: TabKind::Schematic,
     });

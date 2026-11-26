@@ -53,7 +53,6 @@ fn app_with_selected_symbol(mirror_x: bool, mirror_y: bool) -> Signex {
     app.document_state.tabs.push(TabInfo {
         title: "rotate-direction".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
