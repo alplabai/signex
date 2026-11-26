@@ -221,7 +221,7 @@ impl Signex {
     /// headless run, past its throwaway config root: the one carve-out,
     /// `docs/CLI.md` (#2495). Nothing else reads it.
     pub fn edit_user_shortcuts_at(&mut self, path: std::path::PathBuf) {
-        self.ui_state.keymap_command_file = Some(path);
+        self.ui_state.keymap_command_file = Some(Box::new(path));
     }
 
     pub fn headless_answers(&self) -> Option<&HeadlessAnswers> {

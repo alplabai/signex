@@ -122,7 +122,7 @@ fn open_profile(app: &Signex, profile: &str) -> Result<Opened, Translatable> {
     let (set, path) = match &ui.keymap_command_file {
         Some(path) => (
             crate::keymap::load_profile_set_at(path).map_err(file_not_loaded)?,
-            path.clone(),
+            path.as_ref().clone(),
         ),
         None => {
             // The running set is the built-in fallback while the file on

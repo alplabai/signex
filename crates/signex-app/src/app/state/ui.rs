@@ -439,7 +439,8 @@ pub struct UiState {
     /// otherwise works under a throwaway config root (the one carve-out,
     /// `docs/CLI.md`). `None` everywhere else: they edit the live set and its
     /// file. Set by `Signex::edit_user_shortcuts_at`.
-    pub keymap_command_file: Option<std::path::PathBuf>,
+    /// Boxed to keep `UiState` under its size ceiling (#2412).
+    pub keymap_command_file: Option<Box<std::path::PathBuf>>,
     /// Path of `keyboard_shortcuts.toml.bak` when that file is on disk
     /// (#603).
     ///
