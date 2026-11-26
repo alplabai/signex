@@ -2,7 +2,8 @@
 //! headless run's throwaway config root: they edit the user's own
 //! `keyboard_shortcuts.toml` (docs/CLI.md). A temp home stands in for the
 //! user's; `dirs::config_dir` reads `XDG_CONFIG_HOME` on Linux and `HOME` on
-//! macOS.
+//! macOS. A binary built with the test redirect (a workspace test build)
+//! takes the same folder from `TEST_USER_CONFIG_ROOT_ENV` instead.
 #![cfg(unix)]
 
 mod support;
@@ -13,7 +14,7 @@ use serde_json::{Value, json};
 use signex_app::keymap::{
     AppCommandId, KeymapEditorModel, ShortcutBindingAction, ShortcutProfileSet,
 };
-use support::{fixture, jsonl, run_cli_env, temp_root};
+use support::{Output, fixture, jsonl, run_cli_env, temp_root};
 
 /// A catalog command the standard profile gives no key.
 const UNBOUND: &str = "open_compiled_design";
@@ -49,10 +50,36 @@ fn keys_of(file: &Path, command: &str) -> Vec<String> {
         .collect()
 }
 
+/// Run `signex-cli` with `home` as the user's home and its config folder as
+/// the user's config root, whichever way the binary was built.
+fn run_as_user(home: &Path, args: &[&str], commands: &[Value]) -> Output {
+    let config = home.join(".config");
+    let root = user_file(home)
+        .parent()
+        .expect("config root")
+        .to_path_buf();
+    let env = [
+        ("HOME", home),
+        ("XDG_CONFIG_HOME", config.as_path()),
+        (
+            signex_app::config_root::TEST_USER_CONFIG_ROOT_ENV,
+            root.as_path(),
+        ),
+    ];
+    run_cli_env(args, jsonl(commands), &env)
+}
+
 fn assign(profile: &str) -> Value {
     json!({"id": "keymap_assign", "args": {
         "command": UNBOUND, "keys": "Ctrl+Alt+Q", "profile": profile,
     }})
+}
+
+/// The refusal reason of the first line, or a panic naming what came back.
+fn refused(out: &Output) -> String {
+    let line = &out.lines[0];
+    assert_eq!(line["status"], "refused", "{}\n{}", out.stdout, out.stderr);
+    line["reason"].as_str().unwrap_or_default().to_string()
 }
 
 #[test]
@@ -63,10 +90,8 @@ fn keymap_assign_writes_the_users_file_and_a_second_run_sees_the_binding() {
     let (_home_guard, home) = temp_root();
     let file = user_file(&home);
     seed(&file);
-    let config = home.join(".config");
-    let env = [("HOME", home.as_path()), ("XDG_CONFIG_HOME", config.as_path())];
 
-    let first = run_cli_env(&["run", project, "--save"], jsonl(&[assign("mine")]), &env);
+    let first = run_as_user(&home, &["run", project, "--save"], &[assign("mine")]);
     let line = &first.lines[0];
     assert_eq!(line["status"], "answered", "{}\n{}", first.stdout, first.stderr);
     assert_eq!(line["data"]["unchanged"], false, "{}", first.stdout);
@@ -75,13 +100,13 @@ fn keymap_assign_writes_the_users_file_and_a_second_run_sees_the_binding() {
 
     // A second run reads the user's file: the binding is there, so the same
     // key is not added twice, and clear finds it.
-    let second = run_cli_env(
+    let second = run_as_user(
+        &home,
         &["run", project, "--save"],
-        jsonl(&[
+        &[
             assign("mine"),
             json!({"id": "keymap_clear", "args": {"command": UNBOUND, "profile": "mine"}}),
-        ]),
-        &env,
+        ],
     );
     assert_eq!(second.lines[0]["data"]["unchanged"], true, "{}", second.stdout);
     assert_eq!(second.lines[1]["data"]["removed"], 1, "{}", second.stdout);
@@ -97,17 +122,15 @@ fn the_save_capability_and_a_built_in_profile_are_still_refused() {
     let file = user_file(&home);
     seed(&file);
     let before = std::fs::read(&file).unwrap();
-    let config = home.join(".config");
-    let env = [("HOME", home.as_path()), ("XDG_CONFIG_HOME", config.as_path())];
 
-    let no_save = run_cli_env(&["run", project], jsonl(&[assign("mine")]), &env);
-    assert_eq!(no_save.lines[0]["status"], "refused", "{}", no_save.stdout);
-    let built_in = run_cli_env(
+    let no_save = refused(&run_as_user(&home, &["run", project], &[assign("mine")]));
+    assert!(no_save.contains("save"), "{no_save}");
+    let built_in = refused(&run_as_user(
+        &home,
         &["run", project, "--save"],
-        jsonl(&[assign("signex_standard")]),
-        &env,
-    );
-    assert_eq!(built_in.lines[0]["status"], "refused", "{}", built_in.stdout);
+        &[assign("signex_standard")],
+    ));
+    assert!(built_in.contains("read-only"), "{built_in}");
     assert_eq!(std::fs::read(&file).unwrap(), before, "the file is unchanged");
 }
 
@@ -120,12 +143,14 @@ fn a_users_file_that_does_not_load_is_not_written_over() {
     let file = user_file(&home);
     std::fs::create_dir_all(file.parent().unwrap()).unwrap();
     std::fs::write(&file, "this is [not a shortcuts file").unwrap();
-    let config = home.join(".config");
-    let env = [("HOME", home.as_path()), ("XDG_CONFIG_HOME", config.as_path())];
 
-    let out = run_cli_env(&["run", project, "--save"], jsonl(&[assign("mine")]), &env);
+    let reason = refused(&run_as_user(
+        &home,
+        &["run", project, "--save"],
+        &[assign("mine")],
+    ));
 
-    assert_eq!(out.lines[0]["status"], "refused", "{}", out.stdout);
+    assert!(reason.contains("could not be loaded"), "{reason}");
     assert_eq!(
         std::fs::read_to_string(&file).unwrap(),
         "this is [not a shortcuts file"

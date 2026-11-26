@@ -79,9 +79,23 @@ pub fn default_config_root() -> Option<PathBuf> {
 /// for the one documented carve-out from a headless run's throwaway root,
 /// the keyboard-shortcut commands of `signex-cli` (`docs/CLI.md`, #2495).
 /// Does not count as a config read. Nothing else may use it.
+///
+/// Under the test redirect it is the folder [`TEST_USER_CONFIG_ROOT_ENV`]
+/// names, else the redirect root: a `signex-cli` binary built with the
+/// redirect feature (any workspace test build) still never reaches the real
+/// config, and its end-to-end test can stand a folder in for the user's.
 pub fn user_config_root() -> Option<PathBuf> {
+    if is_test_redirect_active() {
+        return std::env::var_os(TEST_USER_CONFIG_ROOT_ENV)
+            .map(PathBuf::from)
+            .or_else(unoverridden_root);
+    }
     unoverridden_root()
 }
+
+/// The variable a test build reads for [`user_config_root`]; ignored
+/// outside the test redirect.
+pub const TEST_USER_CONFIG_ROOT_ENV: &str = "SIGNEX_TEST_USER_CONFIG_ROOT";
 
 /// The test redirect in a test build, the OS config directory otherwise.
 fn unoverridden_root() -> Option<PathBuf> {
