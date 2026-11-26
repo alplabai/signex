@@ -104,6 +104,8 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("autoplace_fields", extras::autoplace_fields),
     ("place_design_block", extras::place_design_block),
     ("import_graphics", extras::import_graphics),
+    // #1116: an image as a project asset.
+    ("place_graphic", super::image_operands::place_graphic),
     ("place_component", part::place_component),
     ("place_sheet_symbol", hierarchy::place_sheet_symbol),
     ("place_sheet_entry", hierarchy::place_sheet_entry),

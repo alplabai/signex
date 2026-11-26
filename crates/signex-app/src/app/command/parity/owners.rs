@@ -597,6 +597,7 @@ const OPERAND_DOCUMENT: &[&str] = &[
     "place_design_block",
     "place_diff_pair",
     "place_global_label",
+    "place_graphic",
     "place_hierarchical_label",
     "place_junction",
     "place_local_net_label",

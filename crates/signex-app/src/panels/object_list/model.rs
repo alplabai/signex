@@ -351,6 +351,7 @@ fn drawing_at(d: &SchDrawing) -> Point {
         SchDrawing::Bezier(b) => midpoint(b.start, b.end),
         SchDrawing::Dimension(d) => midpoint(d.from, d.to),
         SchDrawing::Table(t) => t.position,
+        SchDrawing::Image(i) => i.centre(),
     }
 }
 

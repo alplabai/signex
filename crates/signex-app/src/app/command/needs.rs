@@ -491,6 +491,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         // #1667: the file rows place onto the sheet in view.
         | "place_design_block"
         | "import_graphics"
+        // #1116: an image lands on the sheet in view.
+        | "place_graphic"
         // #1276: a sheet symbol lands on, or is synced from, the sheet in
         // view; with no sheet symbol selected the sync says what to select.
         | "create_sheet_symbol_from_sheet"

@@ -698,6 +698,25 @@ read off the UI thread before the edit runs. Without operands, in a window,
 `place_design_block` and `import_graphics` open a file dialog and put the
 content on the cursor; `autoplace_fields` acts on the selected parts.
 
+## Images
+
+```text
+place_graphic path=<PNG, JPEG, GIF or SVG file> at=x,y [width=<mm>] [document=..]
+```
+
+`place_graphic` (#1116) places an image as a project asset: the sheet stores
+the file's project-relative path and its content hash, never the picture. A
+file from outside the project gets a name under `assets/images/` and is
+copied there when the sheet is saved (`copied_on_save` in the answer); a file
+inside the project is placed where it is. `at` is the image's centre, refused
+off the grid; `width` is in mm and the height follows the aspect ratio;
+without it the image fills the sheet's free area. It answers
+`{"placed", "id", "file", "hash", "format", "width_px", "height_px", "size",
+"copied_on_save"}`. A file over 32 MiB or 64 Mpx, one that is not an image,
+and an SVG that refers to anything outside itself are refused with the
+reason. Without operands, in a window, it opens a file dialog and puts the
+image on the cursor. Rules in [SCHEMATIC_IMAGES.md](SCHEMATIC_IMAGES.md).
+
 ## Checks on demand
 
 ```text

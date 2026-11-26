@@ -330,6 +330,9 @@ pub enum SchDrawing {
     Dimension(super::SchDimension),
     /// A table (#1300); see `sch_table.rs`.
     Table(super::SchTable),
+    /// An image, a project asset (#1116); see `sch_image.rs`. Stored in
+    /// the file's `images` rows, not among the drawings.
+    Image(super::SchImage),
 }
 
 // ---------------------------------------------------------------------------
@@ -390,6 +393,7 @@ impl SchDrawing {
             Self::Bezier(b) => b.uuid,
             Self::Dimension(d) => d.uuid,
             Self::Table(t) => t.uuid,
+            Self::Image(i) => i.uuid,
         }
     }
 
@@ -404,6 +408,7 @@ impl SchDrawing {
             Self::Bezier(b) => b.uuid = id,
             Self::Dimension(d) => d.uuid = id,
             Self::Table(t) => t.uuid = id,
+            Self::Image(i) => i.uuid = id,
         }
     }
 
@@ -418,6 +423,7 @@ impl SchDrawing {
             Self::Bezier(b) => b.locked,
             Self::Dimension(d) => d.locked,
             Self::Table(t) => t.locked,
+            Self::Image(i) => i.locked,
         }
     }
 
@@ -432,11 +438,13 @@ impl SchDrawing {
             Self::Bezier(b) => b.locked = value,
             Self::Dimension(d) => d.locked = value,
             Self::Table(t) => t.locked = value,
+            Self::Image(i) => i.locked = value,
         }
     }
 
     /// Whether a sheet holding this drawing needs format `snxsch/1.3`: the
-    /// Bezier, dimension and table kinds are new in it (#1267, #1300).
+    /// Bezier, dimension and table kinds are new in it (#1267, #1300). An
+    /// image needs no new token: its rows are a key an older build keeps.
     pub fn needs_format_1_3(&self) -> bool {
         matches!(self, Self::Bezier(_) | Self::Dimension(_) | Self::Table(_))
     }
@@ -449,6 +457,7 @@ impl SchDrawing {
             Self::Bezier(b) => b.map_points(f),
             Self::Dimension(d) => d.map_points(f),
             Self::Table(t) => t.map_points(f),
+            Self::Image(i) => i.map_points(f),
             Self::Line { .. }
             | Self::Rect { .. }
             | Self::Circle { .. }

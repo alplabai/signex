@@ -21,7 +21,6 @@ pub const PLANNED_TOOLS: &[(ActiveBarAction, &str)] = &[
     ),
     (ActiveBarAction::PlaceReuseBlock, "Reuse Block"),
     (ActiveBarAction::DrawRoundRectangle, "Round Rectangle"),
-    (ActiveBarAction::PlaceGraphic, "Graphic"),
     (ActiveBarAction::DrawEllipse, "Ellipse"),
     (ActiveBarAction::DrawEllipticalArc, "Elliptical Arc"),
 ];
@@ -58,7 +57,6 @@ mod tests {
         "Device Sheet Symbol",
         "Reuse Block",
         "Round Rectangle",
-        "Graphic",
         "Ellipse",
         "Elliptical Arc",
     ];

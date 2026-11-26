@@ -19,6 +19,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use iced::Task;
+use signex_types::image_asset::{ImageReadError, PickedImage};
 use signex_types::schematic::SchematicSheet;
 use uuid::Uuid;
 
@@ -56,6 +57,8 @@ pub struct EditReads {
     pub(crate) escapes: HashMap<PathBuf, bool>,
     /// Text files an edit imports (`import_graphics`, #1667), by path.
     pub(crate) texts: HashMap<PathBuf, Result<String, String>>,
+    /// Image files an edit places (`place_graphic`, #1116), read and checked.
+    pub(crate) images: HashMap<PathBuf, Result<Arc<PickedImage>, ImageReadError>>,
     /// For a loose target, the files its sheet symbols refer to and what they
     /// place, as read.
     pub(crate) subtree: Option<ProjectSheetSet>,
@@ -101,6 +104,8 @@ struct ReadPlan {
     /// `(project folder, path)` to check for a link out of the folder.
     links: Vec<(PathBuf, PathBuf)>,
     texts: Vec<PathBuf>,
+    /// `(picked file, project root, names picks not saved yet took)`.
+    images: Vec<(PathBuf, PathBuf, Vec<(String, String)>)>,
 }
 
 impl ReadPlan {
@@ -111,6 +116,7 @@ impl ReadPlan {
             && self.children.is_empty()
             && self.links.is_empty()
             && self.texts.is_empty()
+            && self.images.is_empty()
     }
 
     /// Read everything. Blocking: run it off the UI thread.
@@ -158,6 +164,14 @@ impl ReadPlan {
                 (path, read)
             })
             .collect();
+        let images = self
+            .images
+            .into_iter()
+            .map(|(path, root, pending)| {
+                let read = crate::app::images::read::read_picked_image(&path, &root, &pending);
+                (path, read.map(Arc::new))
+            })
+            .collect();
         EditReads {
             project,
             subtree,
@@ -165,6 +179,7 @@ impl ReadPlan {
             children,
             escapes,
             texts,
+            images,
             failed: None,
         }
     }
@@ -307,6 +322,20 @@ impl Signex {
         let reads = self.document_state.agent_edits.reads.as_ref();
         match reads.and_then(|r| r.texts.get(path)) {
             Some(read) => read.clone(),
+            None => Err(NOT_READ.to_string()),
+        }
+    }
+
+    /// The image file at `path` an edit places, as read and checked; a
+    /// refusal is said in the person's language.
+    pub(super) fn prefetched_image(&self, path: &Path) -> Result<Arc<PickedImage>, String> {
+        let reads = self.document_state.agent_edits.reads.as_ref();
+        match reads.and_then(|r| r.images.get(path)) {
+            Some(Ok(picked)) => Ok(Arc::clone(picked)),
+            Some(Err(error)) => Err(crate::app::images::read_error_text(
+                &self.ui_state.i18n,
+                error,
+            )),
             None => Err(NOT_READ.to_string()),
         }
     }
@@ -503,6 +532,15 @@ impl Signex {
             "import_graphics" => {
                 if let Ok(path) = super::placement_extras_operands::path_operand(args) {
                     plan.texts.push(path);
+                }
+            }
+            // The image file Place ▸ Graphic… places (#1116), checked against
+            // the target's project.
+            "place_graphic" => {
+                if let Ok(path) = super::placement_extras_operands::path_operand(args) {
+                    let root = self.image_root(target);
+                    let pending = self.pending_image_names(&root);
+                    plan.images.push((path, root, pending));
                 }
             }
             _ => {}

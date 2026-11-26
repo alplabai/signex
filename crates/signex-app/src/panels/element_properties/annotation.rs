@@ -166,11 +166,14 @@ pub(super) fn view_annotation_properties<'a>(
             Some(super::dimension::view_dimension_properties(ctx, drawing, d))
         }
         SchDrawing::Table(t) => Some(super::table::view_table_properties(ctx, drawing, t)),
+        // #1116: an image takes the drawing rows (placement) until its own
+        // Image section is built.
         SchDrawing::Line { .. }
         | SchDrawing::Rect { .. }
         | SchDrawing::Circle { .. }
         | SchDrawing::Arc { .. }
-        | SchDrawing::Polyline { .. } => None,
+        | SchDrawing::Polyline { .. }
+        | SchDrawing::Image(_) => None,
     }
 }
 

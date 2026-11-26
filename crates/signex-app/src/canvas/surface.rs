@@ -16,6 +16,12 @@ use iced::{Event, Length, Size, Vector, window};
 
 use super::*;
 
+/// The image layers (#1116): under the content and over it.
+const BEHIND: signex_types::schematic::DrawingPlacement =
+    signex_types::schematic::DrawingPlacement::Behind;
+const ABOVE: signex_types::schematic::DrawingPlacement =
+    signex_types::schematic::DrawingPlacement::Above;
+
 /// The layers of one frame, bottom to top.
 pub(super) struct SurfaceLayers {
     pub(super) layers: Vec<canvas::Geometry>,
@@ -62,6 +68,9 @@ impl SchematicCanvas<'_> {
             } else {
                 layers.push(self.draw_background(renderer, bounds));
             }
+            // Layer 1.5: images behind the circuit (#1116); a GPU-mounted
+            // sheet draws them on its backdrop.
+            layers.extend(self.draw_images(renderer, bounds, self.active_snapshot(), BEHIND));
         }
 
         let drag_offset = self.drag_delta(state);
@@ -96,6 +105,8 @@ impl SchematicCanvas<'_> {
                 }
                 layers.push(content.geometry);
             }
+            // Images above the circuit (#1116).
+            layers.extend(self.draw_images(renderer, bounds, snapshot, ABOVE));
 
             // Layer 2.5: AutoFocus dim
             if let Some(dim) = self.draw_autofocus_dim(renderer, bounds, snapshot) {
@@ -134,6 +145,7 @@ impl SchematicCanvas<'_> {
                 layers.push(self.draw_moving_canvas_texts(renderer, bounds));
             }
         }
+        layers.extend(self.draw_images(renderer, bounds, self.active_snapshot(), ABOVE));
 
         // Layer 2.5: AutoFocus dim
         if let Some(dim) = self.draw_autofocus_dim(renderer, bounds, moving) {

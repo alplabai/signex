@@ -608,6 +608,7 @@ impl Signex {
                 command_log: Default::default(),
                 command_replay: Default::default(),
                 workspace_layouts: Box::new(workspace_layouts),
+                image_cache: Default::default(),
             },
             document_state: DocumentState {
                 drafts: drafts.clone(),
@@ -832,6 +833,7 @@ impl Signex {
                 moved_project_dirs: Vec::new(),
                 deferred_git_commits: Vec::new(),
                 gerber_viewer: Default::default(),
+                image_copies: Vec::new(),
             },
             interaction_state: InteractionState {
                 current_tool: Tool::Select,

@@ -668,8 +668,10 @@ impl Engine {
                             }
                         }
                         // Moved by `map_annotation_points` above.
-                        SchDrawing::Bezier(_) | SchDrawing::Dimension(_) | SchDrawing::Table(_) => {
-                        }
+                        SchDrawing::Bezier(_)
+                        | SchDrawing::Dimension(_)
+                        | SchDrawing::Table(_)
+                        | SchDrawing::Image(_) => {}
                     }
                     true
                 })

@@ -162,9 +162,36 @@ impl PlacementGhost {
             );
             *built = Some((key, scene));
         }
+        let transform = Self::transform_at(camera, anchor);
         if let Some((_, Some(scene))) = built.as_ref() {
-            let transform = Self::transform_at(camera, anchor);
             draw_built_scene(frame, scene, &transform, iced::Point::ORIGIN);
+        }
+        self.draw_image_boxes(frame, &transform, colors);
+    }
+
+    /// An image on the cursor shows its box (#1116): the scene draws only
+    /// its border, and its picture is the canvas's image layer.
+    fn draw_image_boxes(
+        &self,
+        frame: &mut canvas::Frame,
+        transform: &ScreenTransform,
+        colors: &CanvasColors,
+    ) {
+        for drawing in &self.fragment.drawings {
+            let signex_types::schematic::SchDrawing::Image(image) = drawing else {
+                continue;
+            };
+            let (lo, hi) = image.bounds();
+            let top_left = transform.world_to_screen((lo.x, lo.y));
+            let bottom_right = transform.world_to_screen((hi.x, hi.y));
+            let outline = canvas::Path::rectangle(
+                top_left,
+                iced::Size::new(bottom_right.x - top_left.x, bottom_right.y - top_left.y),
+            );
+            frame.stroke(
+                &outline,
+                canvas::Stroke::default().with_color(crate::render_config::to_iced(&colors.cursor)),
+            );
         }
     }
 }

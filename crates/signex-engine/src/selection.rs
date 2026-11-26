@@ -603,6 +603,12 @@ impl Engine {
                         info.push(("Rows".into(), rows.to_string()));
                         info.push(("Columns".into(), columns.to_string()));
                     }
+                    SchDrawing::Image(i) => {
+                        info.push(("Type".into(), "Image".into()));
+                        info.push(("File".into(), i.file.clone()));
+                        info.push(("Width".into(), format!("{:.3}", i.width)));
+                        info.push(("Height".into(), format!("{:.3}", i.height)));
+                    }
                 }
             }
             SelectedKind::SymbolRefField => {

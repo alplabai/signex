@@ -313,6 +313,15 @@ pub const PLACE_FILE: &[Operand] = &[
     required("at", OperandKind::Point),
     optional("document", OperandKind::Document),
 ];
+/// An image file `path` placed with its centre on `at` (#1116): the
+/// dialog's answer and the click. `width` is in mm (the height follows the
+/// aspect ratio); without it the image fills the sheet's free area.
+pub const PLACE_IMAGE: &[Operand] = &[
+    required("path", OperandKind::Path),
+    required("at", OperandKind::Point),
+    optional("width", OperandKind::Text),
+    optional("document", OperandKind::Document),
+];
 /// An open dialog's answer.
 pub const OPEN_PATH: &[Operand] = &[required("path", OperandKind::Path)];
 /// A save dialog's answer; `overwrite` lets it replace an existing file.

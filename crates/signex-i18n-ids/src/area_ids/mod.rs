@@ -25,6 +25,7 @@ mod file_dialog;
 mod find;
 mod fp_props;
 mod gerber_viewer;
+mod images;
 mod library;
 mod new_project;
 mod notice;
@@ -78,6 +79,7 @@ pub use file_dialog::*;
 pub use find::*;
 pub use fp_props::*;
 pub use gerber_viewer::*;
+pub use images::*;
 pub use library::*;
 pub use new_project::*;
 pub use notice::*;
@@ -134,6 +136,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         find::FIND,
         gerber_viewer::GERBER_VIEWER,
         fp_props::FP_PROPS,
+        images::IMAGES,
         library::LIBRARY,
         new_project::NEW_PROJECT,
         notice::NOTICE,

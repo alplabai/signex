@@ -671,6 +671,9 @@ pub struct CanvasViewPrefs<'a> {
     /// (`UiState::device_px_per_logical_px`): the stroke floor and the
     /// hairline snap work on that grid (#1887).
     pub device_px_per_logical_px: f32,
+    /// The pictures of placed images read so far (#1116); `None` draws
+    /// every image as still loading.
+    pub image_cache: Option<&'a crate::app::images::ImageCache>,
 }
 
 impl CanvasViewPrefs<'_> {
@@ -1153,6 +1156,7 @@ mod tests {
             },
             annotation_flags: Default::default(),
             device_px_per_logical_px: 1.0,
+            image_cache: None,
         }
     }
 

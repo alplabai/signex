@@ -411,6 +411,7 @@ impl Engine {
                 SchDrawing::Bezier(b) => b.map_points(|p| transform.point(centre, p)),
                 SchDrawing::Dimension(dim) => dim.map_points(|p| transform.point(centre, p)),
                 SchDrawing::Table(t) => t.map_points(|p| transform.point(centre, p)),
+                SchDrawing::Image(i) => i.map_points(|p| transform.point(centre, p)),
             }
         }
         for d in doc

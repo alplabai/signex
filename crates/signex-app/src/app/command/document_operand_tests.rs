@@ -462,6 +462,7 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
         "repair_pin_junctions",
         "place_design_block",
         "import_graphics",
+        "place_graphic",
     ];
     for name in all_command_ids() {
         let meta = metadata_for_str(name).expect("row");

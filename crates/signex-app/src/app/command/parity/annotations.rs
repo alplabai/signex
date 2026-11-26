@@ -525,6 +525,7 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "place_sheet_entry",
             "place_design_block",
             "import_graphics",
+            "place_graphic",
         ],
         Operand,
         &[ToolState],
@@ -862,7 +863,6 @@ const PLANNED: &[&str] = &[
     "draw_elliptical_arc",
     "draw_round_rectangle",
     "place_device_sheet_symbol",
-    "place_graphic",
     "place_reuse_block",
 ];
 
