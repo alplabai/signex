@@ -218,6 +218,23 @@ fn closing_a_project_drops_its_rules_history() {
     assert!(!app.document_state.rules_history.contains_key(&id));
 }
 
+/// #2975 — closing a project drops its General history with its rules
+/// history, so no stale steps outlive the project.
+#[test]
+fn closing_a_project_drops_its_general_history() {
+    let dir = std::env::temp_dir().join(format!("signex-close-general-{}", uuid::Uuid::now_v7()));
+    let mut app = project_app(&dir);
+    let id = app.document_state.projects[0].id;
+    app.document_state.general_history.entry(id).or_default();
+
+    let _ = app.close_project_at_tree_path(&[0]);
+    let refs = app.resolve_sheet_refs_blocking();
+    let _ = app.handle_close_refs_resolved(id, refs);
+
+    assert!(app.document_state.projects.iter().all(|p| p.id != id));
+    assert!(!app.document_state.general_history.contains_key(&id));
+}
+
 /// #1825 — a sheet the user made read-only is never replaced by a save.
 mod read_only_sheet {
     use super::*;

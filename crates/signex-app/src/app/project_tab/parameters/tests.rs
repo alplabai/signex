@@ -38,7 +38,7 @@ fn undo(app: &mut Signex, id: ProjectId) -> bool {
 
 /// How many General undo steps the tab holds, counted on copies.
 fn undo_steps(app: &Signex, id: ProjectId) -> usize {
-    let mut history = app.document_state.project_tabs[&id].general_history.clone();
+    let mut history = app.document_state.general_history[&id].clone();
     let mut data = app.document_state.projects[0].data.clone();
     let mut steps = 0;
     while history.undo(&mut data) {

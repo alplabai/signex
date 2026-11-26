@@ -111,9 +111,9 @@ impl Signex {
         let Some(project) = document.projects.iter_mut().find(|p| p.id == project_id) else {
             return;
         };
-        let tab = document.project_tabs.entry(project_id).or_default();
+        let history = document.general_history.entry(project_id).or_default();
         let command = ProjectGeneralCommand::SetFabOutputs(kinds.stored());
-        if tab.general_history.apply(&mut project.data, command) {
+        if history.apply(&mut project.data, command) {
             // Not a rule or a sheet: ERC results stay current.
             document.sync_project_history_dirty(project_id, false);
             self.refresh_panel_ctx();
