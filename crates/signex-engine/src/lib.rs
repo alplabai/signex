@@ -154,7 +154,8 @@ pub use multi_edit::{
 };
 pub use net_class_table::{
     HISTORY_LIMIT as NET_CLASS_HISTORY_LIMIT, NetClassCommand, NetClassError, NetClassHistory,
-    StepId as NetClassStepId, apply_net_class_command,
+    SchematicClass, StepId as NetClassStepId, apply_net_class_command, schematic_class_edit,
+    schematic_classes,
 };
 pub use patch::{CommandResult, DocumentPatch, PatchPair, SemanticPatch};
 pub use placed_edit::{

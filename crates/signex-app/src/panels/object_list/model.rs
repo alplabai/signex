@@ -209,6 +209,9 @@ pub struct SheetLook {
     pub special: Option<SpecialStrings>,
     /// The project's designator standard (#1416).
     pub standard: Option<DesignatorStandard>,
+    /// The active variant's own values for the sheet's parts (#2948), as
+    /// its canvas draws them; `None` draws the sheet's values.
+    pub variant_values: Option<signex_output::DrawnValueMap>,
 }
 
 impl SheetLook {
@@ -217,11 +220,18 @@ impl SheetLook {
         drawn_designator(symbol, self.placement.as_ref(), self.standard)
     }
 
-    /// A part's (or a power port's) value as the canvas draws it, without the
-    /// active variant's own values (#2948): the list shows, and its Value
-    /// cell edits, the value stored on the sheet.
+    /// A part's (or a power port's) value as the canvas draws it, the active
+    /// variant's own value included (#2948). The Value cell still edits the
+    /// value stored on the sheet.
     fn value(&self, symbols: &[Symbol], symbol: &Symbol) -> String {
-        drawn_value(symbols, symbol, self.special.as_ref(), self.standard, None)
+        let variant = self.variant_values.as_ref();
+        drawn_value(
+            symbols,
+            symbol,
+            self.special.as_ref(),
+            self.standard,
+            variant,
+        )
     }
 
     /// A text note as the canvas draws it.

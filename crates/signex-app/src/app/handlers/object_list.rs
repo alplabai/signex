@@ -264,16 +264,18 @@ impl Signex {
     }
 
     /// How the canvas draws the sheet at `path`, with `special` as what its
-    /// `${TOKEN}`s resolve to.
+    /// `${TOKEN}`s resolve to and the active variant's values (#2948).
     pub(crate) fn sheet_look(
         &self,
         path: &Path,
         special: Option<crate::canvas::SpecialStrings>,
     ) -> SheetLook {
+        let variant_values = self.variant_values_for_path(path);
         SheetLook {
             placement: self.shown_placement(path),
             special,
             standard: self.document_state.designator_standard_for(path),
+            variant_values: (!variant_values.is_empty()).then_some(variant_values),
         }
     }
 
@@ -324,6 +326,19 @@ impl Signex {
         ds.designator_standard_for(active).hash(&mut h);
         let project = ds.document_project(active);
         project.map(|p| &p.data.parameters).hash(&mut h);
+        // The active variant's own values (#2948).
+        if let Some(data) = project.map(|p| &p.data) {
+            data.active_variant_name().hash(&mut h);
+            for part in &data.variant_settings.parts {
+                (
+                    &part.variant,
+                    &part.designator,
+                    &part.part,
+                    &part.parameters,
+                )
+                    .hash(&mut h);
+            }
+        }
         let engine_stamp = |path: &Path, h: &mut std::collections::hash_map::DefaultHasher| {
             if let Some(engine) = ds.engines.get(path) {
                 (path, engine.instance_id(), engine.revision()).hash(h);

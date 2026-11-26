@@ -141,12 +141,23 @@ impl Signex {
         let project = state.project;
         let rule_rows = self.update_pcb_rule_rows(state);
         let rules_pending = super::rules_from_schematic::pending(&rule_rows);
+        // Exit criterion 3: the directive classes go with them.
+        let snapshot = state.snapshot.clone();
+        let classes_pending =
+            (snapshot.as_deref()).is_some_and(|s| self.update_pcb_class_edit(&board, s).is_some());
         // The dialog's Execute is off with nothing ticked; Enter is too.
-        if !state.apply && state.execute_count() == 0 && rules_pending == 0 {
+        if !state.apply && state.execute_count() == 0 && rules_pending == 0 && !classes_pending {
             return Task::none();
         }
         if state.execute_count() == 0 {
-            if let Err(why) = self.apply_update_pcb_rules(project, &rule_rows) {
+            let classes = |app: &mut Self| match snapshot.as_deref() {
+                Some(snapshot) => app.apply_update_pcb_classes(&board, snapshot),
+                None => Ok(()),
+            };
+            let applied = self
+                .apply_update_pcb_rules(project, &rule_rows)
+                .and_then(|()| classes(self));
+            if let Err(why) = applied {
                 self.refuse_execute(why);
                 return Task::none();
             }
@@ -177,6 +188,11 @@ impl Signex {
             Ok(()) => {
                 if let Err(why) = self.commit_update_pcb_rules(project, prepared) {
                     // The board step landed; say why the rules did not.
+                    crate::diagnostics::log_warning(why);
+                }
+                if let Some(snapshot) = snapshot.as_deref()
+                    && let Err(why) = self.apply_update_pcb_classes(&board, snapshot)
+                {
                     crate::diagnostics::log_warning(why);
                 }
                 self.ui_state.update_pcb = None;

@@ -23,7 +23,7 @@ use crate::app::state::LoadedProject;
 use crate::app::update_pcb::design::{DesignRequest, compute};
 
 pub(crate) const FOUR_CHANNEL: &str = "four-channel-variants";
-const CLASSES: &str = "net-class-directives";
+pub(crate) const CLASSES: &str = "net-class-directives";
 pub(crate) const VARIANTS: [&str; 2] = ["Full", "Lite"];
 
 pub(crate) fn fixture_dir(project: &str) -> PathBuf {

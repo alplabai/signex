@@ -252,6 +252,27 @@ rule instead. The rule name keeps letters, digits and `_` of the class or
 net name, so two names can give one rule name (`V+BUS` and `V-BUS` both
 give `Width_V_BUS`): the first keeps it and Messages names the other.
 
+## Update PCB classes {#update-pcb-classes}
+
+The board's net classes are the project's net-class table (the board's
+nets are classed by name through it, as DRC reads them). Execute also puts
+each class a Net Blanket or a Net Parameters directive gives into that
+table, as one step of the table's history (built in
+`signex_engine::net_class_table::schematic_class_edit`):
+
+- a class the table lacks is added at its end;
+- each net the netlist puts in the class is assigned to it by name, out of
+  every other class's member list (a pattern of an earlier class still
+  wins, as the table's order decides);
+- the class's board rules are set from its first Net Parameters directive
+  (width, clearance, via diameter and drill), a Net Blanket's track width
+  when no Net Parameters directive sets a width, and the diff-pair width
+  and gap of the project's diff-pair class that directive names. A rule the
+  directives leave unset keeps the table's value.
+
+A diff-pair class on a directive with no net class makes no board class.
+A later Update PCB with nothing new changes nothing.
+
 ## Drawing
 
 All four use the directive colour the No-ERC diamond uses (`no_connect`): a

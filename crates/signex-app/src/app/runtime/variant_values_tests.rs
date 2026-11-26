@@ -139,3 +139,75 @@ fn the_active_variant_command_redraws_the_canvas() {
     app.refresh_panel_ctx();
     assert_eq!(canvas_value(&app, r1), Some("47k"));
 }
+
+/// The Value the Object List lists for the active sheet's part `designator`.
+fn listed_value(app: &Signex, designator: &str) -> String {
+    use crate::panels::object_list::model::{RowName, RowValue};
+    let rows = &app.ui_state.object_list.source.rows;
+    let row = (rows.iter())
+        .find(|r| matches!(&r.name, RowName::Text(n) if n == designator))
+        .unwrap_or_else(|| panic!("{designator} is listed: {rows:?}"));
+    match &row.value {
+        RowValue::Text(text) => text.clone(),
+        other => panic!("{designator}'s value is text: {other:?}"),
+    }
+}
+
+/// The Object List shows the value the canvas draws: Lite's own value for
+/// R1, then an `=` variant value evaluated and formatted as the canvas
+/// draws it, then Base's sheet value again.
+#[test]
+fn the_object_list_shows_the_value_the_canvas_draws() {
+    let (mut app, r1, _dir) = app();
+    let r2 = Symbol {
+        uuid: Uuid::now_v7(),
+        lib_id: "Device:R".to_string(),
+        reference: "R2".to_string(),
+        value: "10kΩ".to_string(),
+        ..Default::default()
+    };
+    let path = app.document_state.active_path.clone().expect("a sheet");
+    let mut sheet = app
+        .document_state
+        .active_engine()
+        .expect("open")
+        .document()
+        .clone();
+    sheet.symbols.push(r2);
+    open_with(&mut app.document_state, &path, sheet);
+    app.document_state.tabs.push(crate::app::TabInfo {
+        title: "a".to_string(),
+        path: path.clone(),
+        project_id: None,
+        kind: crate::app::TabKind::Schematic,
+    });
+    app.document_state.active_tab = app.document_state.tabs.len() - 1;
+    app.document_state.active_path = Some(path);
+    app.document_state.dock.add_panel(
+        crate::dock::PanelPosition::Right,
+        crate::panels::PanelKind::ObjectList,
+    );
+    app.ui_state.object_list.scope = crate::panels::ObjectScope::ThisSheet;
+    let settle = |app: &mut Signex| {
+        app.refresh_all_variant_values();
+        let _ = app.sync_object_list();
+    };
+
+    app.document_state.projects[0].data.active_variant = Some("Lite".to_string());
+    settle(&mut app);
+    assert_eq!(drawn(&app, r1), "47k");
+    assert_eq!(listed_value(&app, "R1"), drawn(&app, r1));
+
+    app.document_state.projects[0]
+        .data
+        .set_variant_part_parameter("Lite", "R1", VALUE_PARAMETER, Some("= 2 * R2.Value"))
+        .expect("the value is set");
+    settle(&mut app);
+    assert_eq!(drawn(&app, r1), "20kΩ");
+    assert_eq!(listed_value(&app, "R1"), drawn(&app, r1));
+
+    app.document_state.projects[0].data.active_variant = None;
+    settle(&mut app);
+    assert_eq!(listed_value(&app, "R1"), "10k");
+    assert_eq!(listed_value(&app, "R1"), drawn(&app, r1));
+}

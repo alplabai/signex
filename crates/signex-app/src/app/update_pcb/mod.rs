@@ -6,6 +6,8 @@
 //! Execute runs the ticked rows as one labelled board step at the list's
 //! revision, so it is one undo step and refused once the board moved on.
 
+// Exit criterion 3: the directive classes into the board's net classes.
+mod classes_from_schematic;
 mod command;
 pub(crate) mod design;
 mod execute;
