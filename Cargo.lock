@@ -6581,12 +6581,14 @@ name = "signex-cli"
 version = "26.11.1"
 dependencies = [
  "dirs",
+ "resvg 0.48.1",
  "serde",
  "serde_json",
  "signex-app",
  "signex-engine",
  "signex-i18n",
  "signex-library",
+ "signex-renderer",
  "signex-types",
  "tempfile",
  "uuid",

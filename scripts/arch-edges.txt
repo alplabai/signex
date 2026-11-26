@@ -36,6 +36,7 @@ signex-bake -> signex-types
 signex-bom -> signex-types
 signex-cli -> signex-app
 signex-cli -> signex-i18n
+signex-cli -> signex-renderer
 signex-cli -> signex-types
 signex-commands -> signex-i18n-ids
 signex-commands -> signex-types

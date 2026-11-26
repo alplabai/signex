@@ -49,6 +49,7 @@ pub mod part_sync;
 pub mod picker;
 pub mod place;
 pub mod placed_part;
+pub mod primitive_scene;
 pub(crate) mod prefix_picker;
 pub mod preview_reads;
 #[cfg(test)]

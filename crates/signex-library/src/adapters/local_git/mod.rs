@@ -539,7 +539,8 @@ mod index_lock_tests;
 mod reinit_tree;
 pub(crate) use adapter::check_table_name;
 pub use helpers::component_to_library_row;
-pub(crate) use helpers::{library_row_to_component, slugify};
+pub(crate) use helpers::library_row_to_component;
+pub use helpers::slugify;
 pub(crate) use write_lock::lock_library_file;
 #[cfg(test)]
 mod ledger_hygiene_tests;
