@@ -272,6 +272,26 @@ impl ProjectData {
         })
     }
 
+    /// [`Self::set_variant_part_parameters`] for each of `parts` as one
+    /// edit: every channel's copy of a repeated part (mockup rows 208 and
+    /// 209). Refused for Base or an unknown variant before any part changes.
+    pub fn set_variant_parts_parameters(
+        &mut self,
+        variant: &str,
+        parts: &[PartRef],
+        parameters: &[(String, Option<String>)],
+    ) -> Result<(), VariantProblem> {
+        self.check_settings_readable()?;
+        if is_base_variant(variant) {
+            return Err(VariantProblem::Reserved);
+        }
+        self.defined_variant(variant)?;
+        for part in parts {
+            self.set_variant_part_parameters(variant, part.placed(), parameters)?;
+        }
+        Ok(())
+    }
+
     /// Add `name` as a copy of `from`: what `from` changes on its parts,
     /// then each of `sheet_fits` (a part's fit in `from` as its sheets say,
     /// where that differs from Base) that the copy does not set itself.

@@ -611,6 +611,9 @@ pub struct UiState {
     pub unions: Box<crate::app::unions::UnionsState>,
     /// The open Smart Paste dialog (mockup row 155).
     pub smart_paste: Option<Box<crate::smart_paste::SmartPasteState>>,
+    /// The open Alternate part picker or Edit value popover of the canvas's
+    /// In variant flyout (mockup rows 208, 209). Boxed: one pointer closed.
+    pub variant_part_edit: Option<Box<crate::app::variant_part_edit::VariantPartEdit>>,
     /// The Annotations panel's filters, expanded row and last scan (mockup row 165).
     /// Boxed: a pointer of the size budget (#2412).
     pub annotations: Box<crate::panels::AnnotationsState>,
@@ -929,6 +932,7 @@ mod tests {
             ("fab_outputs", field_size(|ui| &ui.fab_outputs)),
             ("find_similar", field_size(|ui| &ui.find_similar)),
             ("paste_array", field_size(|ui| &ui.paste_array)),
+            ("variant_part_edit", field_size(|ui| &ui.variant_part_edit)),
             (
                 "selection_filter_custom",
                 field_size(|ui| &ui.selection_filter_custom),

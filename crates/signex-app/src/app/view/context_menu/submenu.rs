@@ -393,10 +393,10 @@ pub(super) fn part_actions_entries(
 /// In variant submenu (mockup row 62, the rows of mockup row 59 b): headed
 /// "<part> in <variant>" for one selected part. On a repeated sheet
 /// (`copies`) Fitted and Not fitted set this channel's copy or every
-/// channel's (`variant_fit`, #2662); elsewhere, and for the part and value
-/// rows, changing a part in one variant from the canvas is not built, so
-/// those rows are greyed with what they will do. Show in Variant Manager and
-/// New variant… open the project's Variant Manager.
+/// channel's (`variant_fit`, #2662); elsewhere they are greyed with what
+/// they will do. Alternate… and Edit value for this variant… open the
+/// picker and the popover of mockup rows 208 and 209. Show in Variant
+/// Manager and New variant… open the project's Variant Manager.
 pub(super) fn in_variant_entries(
     i18n: &I18n,
     variant: &super::menus::MenuVariant,
@@ -405,6 +405,7 @@ pub(super) fn in_variant_entries(
 ) -> Vec<DropdownEntry<Message>> {
     let planned =
         |label| dd_planned_because(i18n, None, label, menu_ids::CTX_IN_VARIANT_PLANNED, false);
+    let is_base = signex_types::project::is_base_variant(&variant.name);
     let mut v = Vec::with_capacity(10);
     if let Some(part) = part {
         v.push(DropdownEntry::Header(i18n.message_plain(
@@ -417,7 +418,6 @@ pub(super) fn in_variant_entries(
     }
     match copies {
         Some(copies) => {
-            let is_base = signex_types::project::is_base_variant(&variant.name);
             v.extend(super::variant_fit::channel_fit_rows(i18n, copies, is_base));
         }
         None => v.extend([
@@ -425,9 +425,13 @@ pub(super) fn in_variant_entries(
             planned(signex_i18n::ids::PROJECT_VARIANTS_NOT_FITTED),
         ]),
     }
+    v.extend(super::variant_fit::part_edit_rows(
+        i18n,
+        is_base,
+        part.is_some(),
+        copies,
+    ));
     v.extend([
-        planned(menu_ids::CTX_IN_VARIANT_ALTERNATE_PART),
-        planned(menu_ids::CTX_IN_VARIANT_EDIT_VALUE),
         DropdownEntry::Separator,
         dd_kb(
             None,
@@ -983,33 +987,39 @@ mod tests {
                 "# R5 in Lite",
                 "Fitted",
                 "Not fitted",
-                "Alternate part…",
+                "Alternate…",
                 "Edit value for this variant…",
                 "---",
                 "Show in Variant Manager",
                 "New variant…",
             ]
         );
-        for label in [
-            "Fitted",
-            "Not fitted",
-            "Alternate part…",
-            "Edit value for this variant…",
-        ] {
+        for label in ["Fitted", "Not fitted"] {
             let row = item(&rows, label);
             assert!(row.disabled && row.on_press.is_none(), "{label}");
             assert_eq!(
                 row.tooltip.as_deref(),
                 Some(
-                    "Planned: change a part's fit, part or value in one variant. \
-                     The Variant Manager lists each part's fit today."
+                    "Planned: change a part's fit in one variant on a sheet that is \
+                     not repeated. The Variant Manager sets it today."
                 ),
                 "{label}"
             );
         }
-        // A multi-selection names no single part.
+        // Mockup rows 208 and 209: the part and value rows are live.
+        for label in ["Alternate…", "Edit value for this variant…"] {
+            let row = item(&rows, label);
+            assert!(!row.disabled && row.on_press.is_some(), "{label}");
+        }
+        // A multi-selection names no single part: the edits say to pick one.
         let rows = in_variant_entries(I18n::en_us_ref(), &lite(&app), None, None);
         assert_eq!(layout(&rows)[0], "Fitted");
+        let row = item(&rows, "Alternate…");
+        assert!(row.disabled && row.on_press.is_none());
+        assert_eq!(
+            row.tooltip.as_deref(),
+            Some("Select one part to change it in this variant.")
+        );
     }
 
     #[test]

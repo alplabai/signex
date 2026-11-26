@@ -1,5 +1,4 @@
 //! `Signex::subscription` — keyboard / window / tick event wiring.
-//! Split from `app/bootstrap.rs` as pure code motion.
 
 use super::super::*;
 
@@ -8,10 +7,6 @@ use crate::app::view::overlay_id::OverlayId;
 use iced::Subscription;
 
 /// Which overlays are open, as the Esc ladder sees them.
-///
-/// A named struct rather than the positional tuple this used to be: with
-/// twelve same-typed `bool`s, swapping two of them silently routed Esc to
-/// the wrong modal, with nothing to catch it.
 ///
 /// **Built in `update`, not in the subscription** (#535). Until then this
 /// was baked into `Subscription::with`, which forced `Hash` and — by
@@ -33,6 +28,7 @@ struct OpenOverlays {
     union_popover_open: bool,
     /// The Smart Paste dialog (mockup row 155).
     smart_paste_open: bool,
+    variant_part_edit_open: bool,
     kbd_shortcuts_open: bool,
     about_open: bool,
     first_run_tour_open: bool,
@@ -352,6 +348,9 @@ impl OpenOverlays {
                     crate::smart_paste::SmartPasteMsg::Cancelled,
                 ))
             }),
+            OverlayId::VariantPartEdit => self
+                .variant_part_edit_open
+                .then(|| Message::from(crate::app::VariantPartEditMsg::CancelPressed)),
             OverlayId::KeyboardShortcuts => self
                 .kbd_shortcuts_open
                 .then(|| Message::Overlay(OverlayMsg::CloseKeyboardShortcuts)),
@@ -759,6 +758,7 @@ impl Signex {
             paste_array_open: self.ui_state.paste_array.is_some(),
             union_popover_open: self.ui_state.unions.popover.is_some(),
             smart_paste_open: self.ui_state.smart_paste.is_some(),
+            variant_part_edit_open: self.ui_state.variant_part_edit.is_some(),
             kbd_shortcuts_open: self.ui_state.keyboard_shortcuts_open
                 && !modal_detached(crate::app::state::ModalId::KeyboardShortcuts),
             about_open: self.ui_state.about_open
@@ -1397,6 +1397,12 @@ mod tests {
             )))
         ));
         assert!(matches!(
+            only(|o| o.variant_part_edit_open = true),
+            Some(Message::Project(crate::app::ProjectMsg::VariantPartEdit(
+                crate::app::VariantPartEditMsg::CancelPressed
+            )))
+        ));
+        assert!(matches!(
             only(|o| o.sheet_sync_open = true),
             Some(Message::Edit(crate::app::EditMsg::SheetSync(
                 crate::app::SheetSyncMsg::CancelRequested
@@ -1996,6 +2002,7 @@ mod tests {
             paste_array_open,
             union_popover_open,
             smart_paste_open,
+            variant_part_edit_open,
             kbd_shortcuts_open,
             about_open,
             first_run_tour_open,
@@ -2071,6 +2078,9 @@ mod tests {
             ("paste_array_open", |o| o.paste_array_open = true),
             ("union_popover_open", |o| o.union_popover_open = true),
             ("smart_paste_open", |o| o.smart_paste_open = true),
+            ("variant_part_edit_open", |o| {
+                o.variant_part_edit_open = true
+            }),
             ("kbd_shortcuts_open", |o| o.kbd_shortcuts_open = true),
             ("about_open", |o| o.about_open = true),
             ("first_run_tour_open", |o| o.first_run_tour_open = true),

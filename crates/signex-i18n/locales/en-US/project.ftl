@@ -430,6 +430,94 @@ variant-command-bad-scope = The scope is part or channels.
 variant-command-not-repeated = { $designator } is not on a repeated sheet, so it has no other channels.
 variant-command-alternate-needs-mpn = An alternate part needs its part number (mpn).
 variant-command-no-copy-name = The project has no free name for the copy; name it with value.
+# The Alternate part picker (mockup row 208). $part is the part as the canvas
+# names it (CH1_C22 on a channel tab), $variant the active variant, $sheet
+# the sheet's file and $channel the channel tab shown.
+variant-edit-alternate-title = Alternate part
+variant-edit-where = { $part } in { $variant } · { $sheet }
+variant-edit-where-channel = { $part } in { $variant } · { $channel } tab of { $sheet }
+variant-edit-base-part = Base part
+variant-edit-fact-mpn = MPN
+variant-edit-fact-manufacturer = Manufacturer
+variant-edit-fact-value = Value
+variant-edit-fact-footprint = Footprint
+variant-edit-fact-pins = Pins
+variant-edit-fact-stock = Stock
+variant-edit-fact-lifecycle = Lifecycle
+variant-edit-search-placeholder = Search the project libraries by MPN, value or manufacturer
+variant-edit-same-footprint = Same footprint only
+# The candidate list's group headings. $library is the library file.
+variant-edit-group-alternates = Library alternates of { $part } in { $library } · { $count }
+variant-edit-group-no-row = Library alternates of { $part }: its library row is not in the project libraries
+variant-edit-group-found = Search results for "{ $query }" in the project libraries · { $shown } of { $total }
+variant-edit-group-found-empty = Type in the search field to look through the project libraries.
+variant-edit-reading = Reading the project libraries…
+variant-edit-read-failed = The project libraries could not be read: { $why }
+variant-edit-unread =
+    { $count ->
+        [one] 1 project library could not be read.
+       *[other] { $count } project libraries could not be read.
+    }
+# A candidate another variant already uses for the part.
+variant-edit-used-in = used in { $variant }
+variant-edit-used-in-tip = The { $variant } variant already uses this part for { $part }
+# A candidate whose stock the cached prices do not give.
+variant-edit-stock-unknown = —
+# An alternate's approval in its library row.
+variant-edit-status-approved = Approved
+variant-edit-status-conditional = Conditional
+variant-edit-status-disqualified = Disqualified
+# The compare strip: the picked part against the placed one.
+variant-edit-pins-match = Pins match
+variant-edit-pins-match-detail = { $count } of { $count }, same numbers and names
+variant-edit-pins-differ = Pins differ
+variant-edit-pins-differ-detail = { $theirs } pins vs { $ours }: numbers or names differ
+variant-edit-pins-unknown = Pins not compared
+variant-edit-pins-unknown-detail = The library part's symbol could not be read.
+variant-edit-same-footprint-head = Same footprint
+variant-edit-same-footprint-detail = { $footprint } in Base and in { $variant }
+variant-edit-footprint-differs = Footprint differs
+variant-edit-footprint-differs-detail = { $theirs } vs { $ours }: the board changes in { $variant }
+variant-edit-gets = { $variant } gets
+variant-edit-gets-detail = MPN { $mpn } · value { $value } · footprint { $footprint }
+# The scope on a channel tab (mockup rows 208, 209); $first and $last are the
+# first and last channel.
+variant-edit-scope = Scope
+variant-edit-scope-this = This channel only ({ $channel })
+variant-edit-scope-all = All channels ({ $first } to { $last })
+variant-edit-foot-one-step = Apply is one undo step. Nothing is written until you save the project.
+variant-edit-foot-differs = Pins or footprint differ: check the wiring and the board after Apply.
+variant-edit-apply = Apply to { $variant }
+# Messages line after Apply.
+variant-edit-alternate-done = { $part } uses { $mpn } in { $variant }.
+# The Edit value popover (mockup row 209).
+variant-edit-value-title = Edit value for this variant
+variant-edit-value-where = { $part } · { $variant }
+variant-edit-value-where-channel = { $part } · { $variant } · { $channel }
+variant-edit-parameter = Parameter
+variant-edit-base = Base
+variant-edit-base-tip = Base value, read-only here
+variant-edit-keys = Enter OK · Esc Cancel · one undo step
+variant-edit-empty = Type a value, or use Reset to base.
+variant-edit-reset = Reset to base
+variant-edit-reset-tip = Remove the { $variant } override; { $part } shows { $base } again
+variant-edit-parameters-head = Parameters of { $part } · Base value
+variant-edit-overridden-in = { $value } in { $variant }
+variant-edit-parameters-note = Orange: already overridden in { $variant }. To change the part or its footprint, use Alternate…
+# Messages lines after OK and Reset to base. $parameter is the parameter's name.
+variant-edit-value-done = { $part } { $parameter } is { $value } in { $variant }.
+variant-edit-reset-done = { $part } { $parameter } is the Base value again in { $variant }.
+# The canvas marks of a part the active variant changes (mockup rows 208,
+# 209), and their hover lines.
+variant-mark-alt = alt
+variant-mark-alt-head = Alternate part in { $variant }
+variant-mark-value = Δ
+variant-mark-value-head = Value in { $variant }: { $value }
+variant-mark-value-hint = Right-click ▸ In variant: { $variant } ▸ Edit value… to change it
+variant-mark-base = Base: { $value }
+# Tooltips of the Variant Manager cells of an alternate part and of a value.
+variant-manager-alternate-tip = Alternate part in { $variant }: { $mpn }
+variant-manager-value-tip = Value override in { $variant }
 # dialog-polish
 # The result pill of a project variable's `=` expression that does not
 # evaluate (mockup row 30); the reason is in the Error line under the row.

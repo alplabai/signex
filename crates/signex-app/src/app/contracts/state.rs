@@ -43,6 +43,9 @@ pub enum ContextAction {
         parts: Vec<signex_types::project::PartRef>,
         fitted: bool,
     },
+    /// In variant ▸ Alternate… / Edit value for this variant… (mockup rows
+    /// 208, 209): the picker or the popover opens for the selected part.
+    VariantPartEdit(crate::app::variant_part_edit::VariantEditKind),
 }
 
 /// Which click-to-open submenu is currently expanded inside the right-

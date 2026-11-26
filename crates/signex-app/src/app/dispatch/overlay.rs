@@ -160,6 +160,7 @@ impl Signex {
             ProjectMsg::CloseConfirm(choice) => self.handle_project_close_choice(choice),
             ProjectMsg::AssignFootprints(msg) => self.dispatch_assign_footprints_message(msg),
             ProjectMsg::CompiledDesign(msg) => self.dispatch_compiled_design_message(msg),
+            ProjectMsg::VariantPartEdit(msg) => self.dispatch_variant_part_edit_message(msg),
             ProjectMsg::CloseRefsResolved { project_id, result } => {
                 self.handle_close_refs_resolved(project_id, result)
             }
@@ -521,6 +522,7 @@ impl Signex {
             ContextMenuMsg::Action(action) => {
                 let menu = self.interaction_state.context_menu.take();
                 let opened_at = menu.as_ref().and_then(|menu| menu.world);
+                let anchor = menu.as_ref().map_or((0.0, 0.0), |menu| (menu.x, menu.y));
                 // The window the canvas menu opened in; `None` is the main one.
                 let menu_window = menu.and_then(|menu| menu.window);
                 // The project tree's menu closes with the canvas one: a row of
@@ -570,6 +572,9 @@ impl Signex {
                     ContextAction::VariantFit { parts, fitted } => {
                         self.pick_channel_fit(parts, Some(fitted));
                         Task::none()
+                    }
+                    ContextAction::VariantPartEdit(kind) => {
+                        self.open_variant_part_edit(kind, anchor, menu_window)
                     }
                 }
             }

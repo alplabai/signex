@@ -204,6 +204,10 @@ pub enum ProjectMsg {
     /// Multi-channel sheets and the Compiled Design panel (#1279, #1308);
     /// routed to `dispatch_compiled_design_message`.
     CompiledDesign(crate::app::CompiledDesignMsg),
+    /// The Alternate part picker and the Edit value popover of the canvas's
+    /// In variant flyout (mockup rows 208, 209); routed to
+    /// `dispatch_variant_part_edit_message`.
+    VariantPartEdit(crate::app::VariantPartEditMsg),
     /// The off-thread child-sheet resolution that Close Project starts
     /// finished (#741). Carries the project by id, not index, because the
     /// project list can shift while the worker reads; `Err` is a worker that

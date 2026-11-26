@@ -91,6 +91,13 @@ pub enum ProjectSectionCommand {
         part: Option<SymbolLink>,
         parameters: Vec<(String, Option<String>)>,
     },
+    /// The same parameter values for several parts in a variant as one
+    /// step: every channel's copy of a repeated part (mockup rows 208, 209).
+    SetVariantPartsParameters {
+        variant: String,
+        parts: Vec<PartRef>,
+        parameters: Vec<(String, Option<String>)>,
+    },
     /// Move a library one step up or down the list (#1691).
     MoveLibrary {
         path: PathBuf,
@@ -185,6 +192,11 @@ impl ProjectSectionCommand {
                 PlacedPart::new(designator, part.as_ref()),
                 parameters,
             )?,
+            Self::SetVariantPartsParameters {
+                variant,
+                parts,
+                parameters,
+            } => data.set_variant_parts_parameters(variant, parts, parameters)?,
             Self::MoveLibrary { path, step } => {
                 data.move_library(path, *step);
             }

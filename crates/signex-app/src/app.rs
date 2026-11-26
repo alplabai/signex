@@ -126,6 +126,9 @@ mod undo_groups;
 pub(crate) mod unread_sheets;
 pub(crate) mod update_pcb;
 pub use undo_groups::{UndoGroupKind, UndoGroupSheets};
+// Mockup rows 208 and 209: a part changed in one variant from the canvas.
+pub(crate) mod variant_part_edit;
+pub use variant_part_edit::VariantPartEditMsg;
 pub(crate) mod view;
 
 pub use assign_footprints::{

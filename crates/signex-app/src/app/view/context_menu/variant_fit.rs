@@ -17,7 +17,7 @@ use signex_widgets::active_bar_dropdown::DropdownEntry;
 impl Signex {
     /// The copies of the part selected in `window_id`, when its sheet is
     /// the repeated sheet the channel strip shows; `None` on a plain sheet.
-    pub(super) fn canvas_menu_channel_copies(
+    pub(crate) fn canvas_menu_channel_copies(
         &self,
         window_id: iced::window::Id,
     ) -> Option<ChannelCopies> {
@@ -95,4 +95,44 @@ fn fit_row(
         DropdownEntry::Item(item) => DropdownEntry::Item(item.tooltip(text(i18n, reason))),
         other => other,
     }
+}
+
+/// Alternate… and Edit value for this variant… (mockup rows 208, 209):
+/// live for one selected part in a variant, they open the picker and the
+/// popover. Greyed in Base, without one part selected, and on a repeated
+/// sheet (`copies`) before a compile, each saying why.
+pub(super) fn part_edit_rows(
+    i18n: &I18n,
+    is_base: bool,
+    has_part: bool,
+    copies: Option<&ChannelCopies>,
+) -> [DropdownEntry<Message>; 2] {
+    use crate::app::variant_part_edit::VariantEditKind;
+
+    let reason = if is_base {
+        Some(menu_ids::CTX_IN_VARIANT_EDIT_IN_BASE)
+    } else if !has_part {
+        Some(menu_ids::CTX_IN_VARIANT_ONE_PART)
+    } else if copies.is_some_and(|copies| copies.all.is_empty()) {
+        Some(menu_ids::CTX_IN_VARIANT_EDIT_COMPILE_FIRST)
+    } else {
+        None
+    };
+    [
+        (
+            menu_ids::CTX_IN_VARIANT_ALTERNATE_PART,
+            VariantEditKind::Alternate,
+        ),
+        (menu_ids::CTX_IN_VARIANT_EDIT_VALUE, VariantEditKind::Value),
+    ]
+    .map(|(label, kind)| {
+        let label = text(i18n, label);
+        match reason {
+            None => dd_kb(None, &label, "", ContextAction::VariantPartEdit(kind)),
+            Some(reason) => match dd_disabled(None, &label, None) {
+                DropdownEntry::Item(item) => DropdownEntry::Item(item.tooltip(text(i18n, reason))),
+                other => other,
+            },
+        }
+    })
 }

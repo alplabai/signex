@@ -528,6 +528,7 @@ impl Signex {
                 compiled_design: Default::default(),
                 unions: Default::default(),
                 smart_paste: None,
+                variant_part_edit: None,
                 object_list: Default::default(),
                 annotations: Default::default(),
                 paste_array: None,

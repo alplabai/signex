@@ -515,3 +515,42 @@ fn several_parameters_are_set_and_cleared_in_one_edit() {
         .unwrap();
     assert!(data.variant_settings.parts.is_empty(), "the entry goes");
 }
+
+/// Mockup rows 208 and 209: an alternate or a value for every channel's copy
+/// is one edit; a refused variant changes no copy, and clearing them all
+/// leaves no entry.
+#[test]
+fn every_channel_copy_gets_its_parameters_in_one_edit() {
+    let unit = Uuid::now_v7();
+    let copies = [
+        PartRef::new("CH1_C22", Some(channel_copy(unit, 1))),
+        PartRef::new("CH2_C22", Some(channel_copy(unit, 2))),
+    ];
+    let alternate = [(MPN_PARAMETER.to_string(), Some("CL21A226MPQNNNE".into()))];
+    let mut data = project();
+    data.set_variant_parts_parameters("lite", &copies, &alternate)
+        .unwrap();
+    for copy in &copies {
+        let entry = data.variant_settings.part(Some("Lite"), copy.placed());
+        assert_eq!(
+            entry.map(|entry| entry.parameters[MPN_PARAMETER].as_str()),
+            Some("CL21A226MPQNNNE")
+        );
+    }
+
+    let before = data.variant_settings.clone();
+    assert_eq!(
+        data.set_variant_parts_parameters("Base", &copies, &alternate),
+        Err(VariantProblem::Reserved)
+    );
+    assert_eq!(
+        data.set_variant_parts_parameters("Nope", &copies, &alternate),
+        Err(VariantProblem::Unknown("Nope".into()))
+    );
+    assert_eq!(data.variant_settings, before);
+
+    let cleared = [(MPN_PARAMETER.to_string(), None)];
+    data.set_variant_parts_parameters("Lite", &copies, &cleared)
+        .unwrap();
+    assert!(data.variant_settings.parts.is_empty());
+}

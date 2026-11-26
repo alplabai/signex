@@ -12,11 +12,12 @@ use iced::widget::{Column, Row, Space, column, container, mouse_area, row, scrol
 use iced::{Alignment, Background, Border, Color, Element, Length, Theme, Widget as _};
 use signex_i18n::{Localized, ids, t};
 use signex_output::{VariantMatrix, VariantRow};
-use signex_types::project::{FOOTPRINT_PARAMETER, VALUE_PARAMETER};
+use signex_types::project::{FOOTPRINT_PARAMETER, MPN_PARAMETER, VALUE_PARAMETER};
 use signex_widgets::{MinWidth, text};
 
 use super::super::ProjectTabMsg;
 use super::super::general::tab_message;
+use super::super::look::with_tip;
 use super::super::table::{SP, TS};
 use super::columns::Columns;
 use super::{
@@ -296,8 +297,19 @@ fn variant_cell<'a>(
     let Some(column) = m.column(variant) else {
         return body_cell(Space::new().boxed(), width, None);
     };
+    let name = variant.unwrap_or_default();
     let face = match own_value(m, part, variant, column) {
-        Some((value, kind)) => value_pill(m, value, kind),
+        Some(OwnValue::Alternate(mpn)) => with_tip(
+            alternate_pill(m, mpn),
+            t!(m.i18n, ids::VARIANT_MANAGER_ALTERNATE_TIP, "variant" => name, "mpn" => mpn),
+            m.tokens,
+        ),
+        Some(OwnValue::Value(value)) => with_tip(
+            value_pill(m, value, ids::VARIANT_MANAGER_OVERRIDE_VALUE),
+            t!(m.i18n, ids::VARIANT_MANAGER_VALUE_TIP, "variant" => name),
+            m.tokens,
+        ),
+        Some(OwnValue::Other(value, kind)) => value_pill(m, value, kind),
         None => cell_pill(
             m,
             part.differs_at(column),
@@ -340,28 +352,70 @@ fn variant_cell<'a>(
         .boxed()
 }
 
+/// What a cell with a value of its own shows.
+enum OwnValue<'s> {
+    /// An alternate part (mockup row 208): its part number.
+    Alternate(&'s str),
+    /// A value of its own (mockup row 209).
+    Value(&'s str),
+    /// A footprint or a field, with the kind of value it replaces.
+    Other(&'s str, signex_i18n::MessageId),
+}
+
 /// The value `variant` gives `part` instead of its own, shown in its cell:
-/// the value first, then the footprint, then a field; with the kind of
-/// value it replaces. Base, a cell without one and a part not fitted in
+/// an alternate part's number first, then the value, then the footprint,
+/// then a field. Base, a cell without one and a part not fitted in
 /// `column` (it shows Not fitted) have none.
 fn own_value<'s>(
     m: &'s Manager<'_>,
     part: &VariantRow,
     variant: Option<&str>,
     column: usize,
-) -> Option<(&'s str, signex_i18n::MessageId)> {
+) -> Option<OwnValue<'s>> {
     if !part.is_overridden_at(column) {
         return None;
     }
     let set = &m.own(variant, part)?.parameters;
+    if let Some(mpn) = set.get(MPN_PARAMETER) {
+        return Some(OwnValue::Alternate(mpn));
+    }
     if let Some(value) = set.get(VALUE_PARAMETER) {
-        return Some((value, ids::VARIANT_MANAGER_OVERRIDE_VALUE));
+        return Some(OwnValue::Value(value));
     }
     if let Some(value) = set.get(FOOTPRINT_PARAMETER) {
-        return Some((value, ids::VARIANT_MANAGER_OVERRIDE_FOOTPRINT));
+        return Some(OwnValue::Other(
+            value,
+            ids::VARIANT_MANAGER_OVERRIDE_FOOTPRINT,
+        ));
     }
     let (_, value) = set.iter().next()?;
-    Some((value, ids::VARIANT_MANAGER_OVERRIDE_FIELD))
+    Some(OwnValue::Other(value, ids::VARIANT_MANAGER_OVERRIDE_FIELD))
+}
+
+/// A cell that uses an alternate part (mockup row 208): its part number in
+/// the mono face on the info tint.
+fn alternate_pill<'a>(m: &Manager<'_>, mpn: &str) -> Element<'a, Message> {
+    let r = resolve(m.tokens);
+    let face = text(signex_i18n::UserText::new(mpn.to_string()))
+        .size(TS.caption)
+        .font(mono())
+        .color(r.info)
+        .wrapping(iced::widget::text::Wrapping::None);
+    let fill = r.info_soft;
+    container(face)
+        .height(Length::Fixed(TS.body * CELL_EMS))
+        .padding([0.0, SP.m * 0.75])
+        .align_y(iced::alignment::Vertical::Center)
+        .clip(true)
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(fill)),
+            border: Border {
+                radius: Radii::GRAPHITE.small.into(),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        })
+        .boxed()
 }
 
 /// A cell with a value of its own: the value in the mono face and, after

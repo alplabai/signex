@@ -953,9 +953,13 @@ the file (#2847).
 
 In variant: <name> (mockup row 62) names the project's active variant, Base
 when none is, and shows only when the project defines a variant. Its flyout is
-headed "<part> in <variant>" for one selected part. Fitted, Not fitted,
-Alternate part… and Edit value for this variant… are greyed with a "Planned"
-tooltip: changing a part's fit, part or value in one variant is not built.
+headed "<part> in <variant>" for one selected part. On a repeated sheet Fitted
+and Not fitted set this channel's copy or every channel's (#2662); on a sheet
+that is not repeated they are greyed with a "Planned" tooltip. Alternate…
+opens the Alternate part picker and Edit value for this variant… a popover on
+the part (mockup rows 208, 209; `docs/PROJECT_TAB.md`, "Alternate part and
+variant value on the canvas"); both are greyed in Base, without one part
+selected, and on a repeated sheet before a compile, each saying why.
 Show in Variant Manager opens the project's tab on its Variants section; New
 variant… opens it and adds the first free "Variant N" from Base with its name
 open for typing, as the section's `+` does.
