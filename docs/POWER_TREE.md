@@ -104,7 +104,7 @@ known.
   "converters": [{"part": {...}, "inputs": ["VIN_12V"], "outputs": ["VOUT_3V3"],
                   "efficiency": 0.88, "output_w": 2.11, "input_w": 2.4,
                   "loss_w": 0.29}],
-  "sheets": [{"sheet": "<sheet id>", "sheet_path": "dcdc.snxsch",
+  "sheet_budgets": [{"sheet": "<sheet id>", "sheet_path": "dcdc.snxsch",
               "draws": [{"net": "VIN_12V", "current_a": 0.2, "complete": true,
                          "parts": ["U1"]}],
               "feeds": [{"net": "VOUT_3V3", "limit_a": 3.0, "parts": ["U1"]}],

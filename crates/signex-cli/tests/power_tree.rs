@@ -82,7 +82,7 @@ fn the_power_tree_is_answered_headless_and_nothing_is_written() {
     assert_eq!(converter["part"]["designator"], "R1");
     assert_eq!(converter["efficiency"], json!(0.9));
 
-    let sheets = tree["sheets"].as_array().expect("sheets");
+    let sheets = tree["sheet_budgets"].as_array().expect("sheet_budgets");
     assert_eq!(sheets.len(), 1, "{tree}");
     assert_eq!(sheets[0]["sheet_path"], "main.snxsch");
 

@@ -642,7 +642,7 @@ navigate_up_hierarchy	in_window_rewrite	document_window	gui	window	routing
 navigate_up_hierarchy	refusal_needs	ParentSheet	gui	active document	routing
 navigate_up_hierarchy	disabled_still_runs	explains_when_unavailable	gui	active document	gate
 navigate_up_hierarchy	headless_refusal	headless_refusal	gui	none	routing
-new_block_diagram	bridge	BlockDiagram(NewRequested)	core	active document	gate
+new_block_diagram	bridge	BlockDiagram(NewRequested)	core	active document	handler
 new_block_diagram	operand_handler	run_operands: active-tab gate unless a document is named	core	active document	handler
 new_block_diagram	in_window_rewrite	document_window	gui	window	routing
 new_block_diagram	refusal_needs	OpenProject	core	active document	routing

@@ -132,7 +132,7 @@ fn the_power_tree_is_answered_from_a_closed_sheet_and_nothing_changes() {
     assert_eq!(converter["outputs"], json!(["+3V3"]));
     assert_eq!(converter["efficiency"], Value::Null, "no Efficiency given");
 
-    let sheets = tree["sheets"].as_array().expect("sheets");
+    let sheets = tree["sheet_budgets"].as_array().expect("sheet_budgets");
     assert_eq!(sheets.len(), 1, "{tree}");
     assert_eq!(sheets[0]["sheet"], CHILD_ID.to_string());
     assert_eq!(sheets[0]["sheet_path"], "child.snxsch");

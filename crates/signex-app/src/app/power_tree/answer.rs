@@ -42,7 +42,9 @@ pub(super) fn power_tree_answer(
         "grounds": topology.grounds,
         "rails": tree.rails.iter().map(|rail| parts.rail(rail)).collect::<Vec<_>>(),
         "converters": tree.converters.iter().map(|c| parts.converter(c)).collect::<Vec<_>>(),
-        "sheets": budgets.iter().map(|b| parts.sheet(b, tree)).collect::<Vec<_>>(),
+        // Not `sheets`: the command line filters a `sheets` list as documents
+        // the call named (docs/CLI.md, "Only this run's folders are shown").
+        "sheet_budgets": budgets.iter().map(|b| parts.sheet(b, tree)).collect::<Vec<_>>(),
         "warnings": context.warnings,
     })
 }

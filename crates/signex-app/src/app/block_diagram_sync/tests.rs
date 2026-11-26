@@ -205,17 +205,24 @@ fn headless(app: &mut Signex, id: &str, operands: &[&str]) -> CommandOutcome {
     app.run_headless_command_in_test(&command, args).0
 }
 
-/// With operands the run is answered when it lands, by its ticket.
+/// With operands the run is answered when it lands, by its ticket: a
+/// headless run settles the ticket and gives the answer the run made.
 #[test]
 fn with_operands_the_run_waits_on_a_ticket() {
     let dir = tempfile::tempdir().expect("dir");
+    write_hierarchy(dir.path(), &[("Alpha", "a.snxsch")]);
     let mut app = app_on(dir.path());
     let project = format!("document={}", dir.path().join("ProjectA.snxprj").display());
     for id in ["generate_block_diagram", "regenerate_block_diagram"] {
         let outcome = headless(&mut app, id, &[project.as_str()]);
+        let CommandOutcome::Answered(answer) = outcome else {
+            panic!("{id}: {outcome:?}");
+        };
         assert!(
-            matches!(outcome, CommandOutcome::Deferred { .. }),
-            "{id}: {outcome:?}"
+            answer["path"]
+                .as_str()
+                .is_some_and(|p| p.ends_with("ProjectA.snxblk")),
+            "{id}: {answer}"
         );
     }
 }
@@ -229,14 +236,21 @@ fn a_write_under_a_diagram_open_in_a_tab_is_refused() {
     use signex_types::block_diagram::BlockDiagram;
 
     let dir = tempfile::tempdir().expect("dir");
+    write_hierarchy(dir.path(), &[("Alpha", "a.snxsch")]);
     let mut app = app_on(dir.path());
+    let project = format!("document={}", dir.path().join("ProjectA.snxprj").display());
+    let generated = headless(&mut app, "generate_block_diagram", &[project.as_str()]);
+    assert!(
+        matches!(generated, CommandOutcome::Answered(_)),
+        "{generated:?}"
+    );
     let file = dir.path().join("ProjectA.snxblk");
+    let before = std::fs::read(&file).expect("generated");
     let editors = &mut app.document_state.block_diagrams.editors;
     editors.insert(
         file.clone(),
         BlockDiagramEditor::created(BlockDiagram::new()),
     );
-    let project = format!("document={}", dir.path().join("ProjectA.snxprj").display());
     for (id, extra) in [
         ("generate_block_diagram", "overwrite=true"),
         ("regenerate_block_diagram", "apply=true"),
@@ -247,12 +261,13 @@ fn a_write_under_a_diagram_open_in_a_tab_is_refused() {
         };
         assert!(reason.render_en_us().contains("open in a tab"), "{id}");
     }
-    assert!(!file.exists(), "nothing was written");
+    let kept = std::fs::read(&file).expect("kept");
+    assert_eq!(kept, before, "nothing written");
     let listed = headless(&mut app, "regenerate_block_diagram", &[project.as_str()]);
-    assert!(
-        matches!(listed, CommandOutcome::Deferred { .. }),
-        "{listed:?}"
-    );
+    let CommandOutcome::Answered(answer) = listed else {
+        panic!("{listed:?}");
+    };
+    assert_eq!(answer["written"], false, "{answer}");
 }
 
 #[test]

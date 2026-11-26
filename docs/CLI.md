@@ -1120,8 +1120,10 @@ query_block_diagram document=<diagram>
 ## Block diagram export
 
 `export_block_diagram` writes a block diagram (`.snxblk`) as an SVG or PDF
-file (#2796). It reads the diagram's saved file, so the diagram need not be
-open. It needs the `export` capability.
+file (#2796). It reads the diagram's saved file, not unsaved edits. A
+`document` operand names an open or listed document and diagrams are not
+listed in the project, so a run opens the diagram first
+(`open_document path=<diagram.snxblk>`). It needs the `export` capability.
 
 ```text
 export_block_diagram document=<diagram.snxblk> path=<file> [kind=svg|pdf] [monochrome=true] [title_block=false]

@@ -495,6 +495,9 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         HeadlessWithoutOperands,
         &[ActiveDocument],
     ),
+    // #2796: File ▸ New ▸ Block Diagram makes the diagram in the active
+    // document's project.
+    (&["new_block_diagram"], Bridge, &[ActiveDocument]),
     // #2796: a block diagram edit acts on the named diagram and its
     // operands only.
     (
