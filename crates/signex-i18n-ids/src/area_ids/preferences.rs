@@ -185,6 +185,16 @@ define_ids! {
     PREFERENCES_KEYMAP_NO_SHORTCUT = "preferences-keymap-no-shortcut";
     PREFERENCES_KEYMAP_NO_ROWS_IN_FILTER = "preferences-keymap-no-rows-in-filter";
     PREFERENCES_KEYMAP_RECORDING_LIVE = "preferences-keymap-recording-live";
+    // keymap_assign / keymap_clear refusals (#2495)
+    PREFERENCES_KEYMAP_CMD_NEEDS = "preferences-keymap-cmd-needs";
+    PREFERENCES_KEYMAP_CMD_UNKNOWN_COMMAND = "preferences-keymap-cmd-unknown-command";
+    PREFERENCES_KEYMAP_CMD_BAD_KEYS = "preferences-keymap-cmd-bad-keys";
+    PREFERENCES_KEYMAP_CMD_BAD_CONTEXT = "preferences-keymap-cmd-bad-context";
+    PREFERENCES_KEYMAP_CMD_NO_PROFILE = "preferences-keymap-cmd-no-profile";
+    PREFERENCES_KEYMAP_CMD_BUILT_IN = "preferences-keymap-cmd-built-in";
+    PREFERENCES_KEYMAP_CMD_FILE_NOT_LOADED = "preferences-keymap-cmd-file-not-loaded";
+    PREFERENCES_KEYMAP_CMD_NOT_SAVED = "preferences-keymap-cmd-not-saved";
+    PREFERENCES_KEYMAP_CMD_PAGE_UNSAVED = "preferences-keymap-cmd-page-unsaved";
     // Component Classes page.
     PREFERENCES_CLASSES_FILTER = "preferences-classes-filter";
     PREFERENCES_CLASSES_COUNT = "preferences-classes-count";
@@ -205,6 +215,8 @@ define_ids! {
     PREFERENCES_SYMBOL_BODY_FILL_HELP = "preferences-symbol-body-fill-help";
     PREFERENCES_SYMBOL_BODY_FILL_COLOUR = "preferences-symbol-body-fill-colour";
     PREFERENCES_SYMBOL_BODY_FILL_COLOUR_HELP = "preferences-symbol-body-fill-colour-help";
+    PREFERENCES_CROSS_OUT_NOT_FITTED = "preferences-cross-out-not-fitted";
+    PREFERENCES_CROSS_OUT_NOT_FITTED_HELP = "preferences-cross-out-not-fitted-help";
     PREFERENCES_PAGE_PCB_DEFAULTS = "preferences-page-pcb-defaults";
     PREFERENCES_GROUP_PCB = "preferences-group-pcb";
     PREFERENCES_GROUP_PCB_HEADING = "preferences-group-pcb-heading";
@@ -215,6 +227,20 @@ define_ids! {
     PREFERENCES_PCB_DIM_OTHERS = "preferences-pcb-dim-others";
     PREFERENCES_PCB_DIM_OTHERS_HELP = "preferences-pcb-dim-others-help";
     PREFERENCES_PCB_DIM_OTHERS_VALUE = "preferences-pcb-dim-others-value";
+    // An extension's page (#2495).
+    PREFERENCES_GROUP_EXTENSIONS = "preferences-group-extensions";
+    PREFERENCES_GROUP_EXTENSIONS_HEADING = "preferences-group-extensions-heading";
+    PREFERENCES_EXTENSION_PAGE = "preferences-extension-page";
+    PREFERENCES_EXTENSION_INTRO = "preferences-extension-intro";
+    PREFERENCES_EXTENSION_SECTION = "preferences-extension-section";
+    PREFERENCES_EXTENSION_KEY = "preferences-extension-key";
+    PREFERENCES_EXTENSION_VALUE = "preferences-extension-value";
+    PREFERENCES_EXTENSION_TYPE_TEXT = "preferences-extension-type-text";
+    PREFERENCES_EXTENSION_TYPE_NUMBER = "preferences-extension-type-number";
+    PREFERENCES_EXTENSION_TYPE_SWITCH = "preferences-extension-type-switch";
+    PREFERENCES_EXTENSION_TYPE_LIST = "preferences-extension-type-list";
+    PREFERENCES_EXTENSION_TYPE_GROUP = "preferences-extension-type-group";
+    PREFERENCES_EXTENSION_TYPE_EMPTY = "preferences-extension-type-empty";
     // prefs-shell-pages
     PREFERENCES_PAGE_GENERAL = "preferences-page-general";
     PREFERENCES_GENERAL_HEADING = "preferences-general-heading";

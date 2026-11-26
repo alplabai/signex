@@ -104,6 +104,9 @@ const SAVES: &[&str] = &[
     "save_layer_set",
     // Writes the named workspace layout into the user's preferences (mockup row 166).
     "save_workspace_layout",
+    // Write a binding into a custom profile of `keyboard_shortcuts.toml` (#2495).
+    "keymap_assign",
+    "keymap_clear",
 ];
 
 /// Commands outside the `reports` category that write an export file.
@@ -319,6 +322,8 @@ mod tests {
             (Capability::Save, "save_board_reuse_block"),
             (Capability::Save, "save_layer_set"),
             (Capability::Save, "save_workspace_layout"),
+            (Capability::Save, "keymap_assign"),
+            (Capability::Save, "keymap_clear"),
             (Capability::Export, "print"),
             (Capability::Export, "report_manager_bom"),
             (Capability::Export, "export_board_report"),

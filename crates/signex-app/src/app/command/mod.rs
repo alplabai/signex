@@ -63,6 +63,9 @@ mod hierarchy_operand_tests;
 mod hierarchy_operands;
 #[cfg(test)]
 pub(in crate::app) mod interaction_snapshot_tests;
+#[cfg(test)]
+mod keymap_operand_tests;
+mod keymap_operands;
 mod layer_strip_operands;
 mod need_context;
 mod needs;
@@ -111,6 +114,7 @@ pub(crate) mod queries;
 mod repair_reset_operand_tests;
 mod repair_reset_operands;
 mod replay;
+pub mod request;
 mod routing;
 #[cfg(test)]
 mod selection_filter_operand_tests;
@@ -156,9 +160,12 @@ pub use operands::{OperandError, OperandValue};
 pub(crate) use operands::{missing_headless_operand, operand_str, parse_targets};
 pub(crate) use part_operands::library_row;
 pub(crate) use placed_operands::PlacedRefusal;
+pub use request::{AgentGatePassed, CommandRequest, RefusalCause, RequestOutcome, RequestSurface};
 pub use signex_commands::CommandOutcome;
 
 use iced::Task;
+// The tests under this module read an outcome's reason through it.
+#[cfg(test)]
 use signex_i18n::RenderTranslatable;
 
 use super::*;
@@ -181,11 +188,14 @@ impl Signex {
         args: CommandArgs,
         window: Option<iced::window::Id>,
     ) -> Task<Message> {
-        let (outcome, task) = self.dispatch_command_reporting(command, args, window);
+        let request = CommandRequest::new(command.clone(), args);
+        let (outcome, task) = self.run_command_request(RequestSurface::Gui { window }, request);
         // Only the missing-operand refusal is said here; every other command
         // reports (or stays silent) exactly as before.
-        if let CommandOutcome::Disabled { reason } = outcome
-            && let reason = reason.render_en_us()
+        if let RequestOutcome::Refused {
+            reason,
+            cause: RefusalCause::NotAvailable,
+        } = outcome
             && operand_handlers::needs_operands_reason(command) == Some(reason.as_str())
         {
             crate::diagnostics::log_info(format!(
@@ -205,12 +215,16 @@ impl Signex {
         command: &crate::keymap::AppCommandId,
         window: Option<iced::window::Id>,
     ) -> Task<Message> {
-        let (outcome, task) = self.dispatch_command_reporting(command, CommandArgs::none(), window);
-        if let CommandOutcome::Disabled { reason } = outcome {
+        let request = CommandRequest::new(command.clone(), CommandArgs::none());
+        let (outcome, task) = self.run_command_request(RequestSurface::Gui { window }, request);
+        if let RequestOutcome::Refused {
+            reason,
+            cause: RefusalCause::NotAvailable,
+        } = outcome
+        {
             crate::diagnostics::log_info(format!(
-                "Menu: {} did nothing: {}",
-                command.as_str(),
-                reason.render_en_us()
+                "Menu: {} did nothing: {reason}",
+                command.as_str()
             ));
         }
         task
@@ -268,6 +282,13 @@ impl Signex {
         args: CommandArgs,
         window: Option<iced::window::Id>,
     ) -> (CommandOutcome, Task<Message>) {
+        // An installed extension's command runs its own handler (#2495); no
+        // built-in route below names an `ext.` id.
+        if command.is_extension()
+            && let Some(result) = self.dispatch_extension_command(command, &args)
+        {
+            return result;
+        }
         // A query answers an agent or the CLI with data; no GUI surface shows
         // that answer, so a palette, key or menu call is refused rather than
         // reported as run (#2172).

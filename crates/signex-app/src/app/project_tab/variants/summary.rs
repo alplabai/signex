@@ -200,6 +200,7 @@ mod tests {
             overridden: vec![false; fitted.len()],
             fitted,
             parameters: Vec::new(),
+            channel: None,
         };
         VariantMatrix {
             variants: variants.to_vec(),

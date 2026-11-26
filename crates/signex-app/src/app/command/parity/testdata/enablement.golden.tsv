@@ -123,6 +123,7 @@ export_assembly_svg	Pcb	119d310e454dd5e4
 export_board_pdf	Pcb	119d310e454dd5e4
 export_board_report	Pcb	119d310e454dd5e4
 export_board_step	Pcb	119d310e454dd5e4
+export_parameters	Schematic	f8bd7a5cb84e915b
 fabrication_outputs	Pcb	119d310e454dd5e4
 fast_grid_1	-	f2929686b07ef725
 fast_grid_2	-	f2929686b07ef725
@@ -159,7 +160,10 @@ home_view	Canvas	7db52528128cca61
 import_dxf	Pcb	119d310e454dd5e4
 import_dxf_outline	Pcb	119d310e454dd5e4
 import_graphics	Schematic	f8bd7a5cb84e915b
+import_parameters	Schematic	f8bd7a5cb84e915b
 keepout_from_selection	PcbSelection	b2eee5a7d6ad7c41
+keymap_assign	-	f2929686b07ef725
+keymap_clear	-	f2929686b07ef725
 lasso_select	-	f2929686b07ef725
 layout_plan_get	-	f2929686b07ef725
 layout_plan_set	-	f2929686b07ef725

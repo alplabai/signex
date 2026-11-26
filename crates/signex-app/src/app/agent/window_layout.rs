@@ -7,8 +7,6 @@
 use iced::Task;
 use serde_json::{Value, json};
 
-use super::handler::Verdict;
-use super::reply::outcome_verdict;
 use crate::app::command::CommandOutcome;
 use crate::app::command::enablement::disabled_reason;
 use crate::app::{DocumentKey, Message, Signex, TileLayout};
@@ -16,11 +14,12 @@ use crate::keymap::AppCommandId;
 
 impl Signex {
     /// Run the window-layout `command` as its menu row does, refused with
-    /// the row's reason when it is greyed.
-    pub(super) fn run_agent_window_layout(
+    /// the row's reason when it is greyed. The agent runner of
+    /// `run_command_request` calls it (#2495, "One request path").
+    pub(crate) fn run_agent_window_layout(
         &mut self,
         command: &AppCommandId,
-    ) -> (Verdict, Task<Message>) {
+    ) -> (CommandOutcome, Task<Message>) {
         // A greyed row's refusal is the command's own, not an access event.
         self.agent.reached_handler = true;
         let context = self.command_context(None);
@@ -28,10 +27,7 @@ impl Signex {
             let outcome = CommandOutcome::Disabled {
                 reason: reason.into(),
             };
-            return (
-                outcome_verdict(command.as_str(), outcome, None),
-                Task::none(),
-            );
+            return (outcome, Task::none());
         }
         let task = match command.as_str() {
             "tile_windows_horizontally" => self.tile(TileLayout::Stacked),
@@ -41,8 +37,7 @@ impl Signex {
         self.agent.serving = true;
         let layout = self.window_layout_json();
         self.agent.serving = false;
-        let outcome = CommandOutcome::Answered(layout);
-        (outcome_verdict(command.as_str(), outcome, None), task)
+        (CommandOutcome::Answered(layout), task)
     }
 
     /// The main window's layout: `tiled`, the `layout` (`stacked`,

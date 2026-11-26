@@ -68,6 +68,8 @@ autoplace_fields	edit	Autoplace fields	Autoplace Fields	General	-	-	RequiresSele
 open_datasheet	edit	Open datasheet	Open Datasheet	General	-	-	RequiresSelection	gui_only	-
 change_component	edit	Change the selected part's component	Change Component…	Schematic	-	-	RequiresSelection	mutates_doc,undoable	document:document,id:text,library:text,part:text
 open_parameter_manager	design	Open Parameter Manager	Parameter Manager...	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
+export_parameters	design	Export the active sheet's parameters to a CSV file	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
+import_parameters	design	Import parameters from a CSV file, with a preview to apply	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 set_symbol_parameter	edit	Set a parameter of a placed part	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,name:text,value:text?,document:document?
 set_sheet_variable	edit	Set a sheet variable	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	name:text,value:text?,remove:bool?,document:document?
 lock_board_items	modify	Lock the selected tracks and vias	Lock	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:targets
@@ -429,6 +431,8 @@ footprint_recompute_courtyard_outline	library	Recompute footprint courtyard outl
 open_command_palette	commands	Open command palette	-	General	-	-	Always	gui_only	-
 open_preferences	preferences	Open preferences	Preferences...	General	-	-	Always	gui_only	-
 open_schematic_preferences	preferences	Open schematic preferences	-	General	-	-	Always	gui_only	-
+keymap_assign	preferences	Give a command a key in a custom keyboard profile	-	General	-	-	Always	-	command:text,keys:text,profile:text,context:text?
+keymap_clear	preferences	Take a command's keys away in a custom keyboard profile	-	General	-	-	Always	-	command:text,profile:text,keys:text?
 show_current_command_hotkeys	help	Show graphical editing hotkey list for current command	Keyboard Shortcuts	General	-	-	Always	gui_only	-
 show_current_command_shortcuts	help	Show valid shortcuts for the current interactive command	-	General	-	-	Always	gui_only	-
 next_document_tab	window	Next open document tab	-	General	-	-	Always	gui_only	-

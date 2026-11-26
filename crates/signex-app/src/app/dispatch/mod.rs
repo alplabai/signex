@@ -134,6 +134,7 @@ impl Signex {
             Message::PanZoomBench(msg) => self.dispatch_pan_zoom_bench_message(msg),
             Message::DiffPairClasses(msg) => self.dispatch_diff_pair_classes_message(msg),
             Message::GerberViewer(msg) => self.dispatch_gerber_viewer_message(msg),
+            Message::Extension(msg) => self.extensions.route(msg),
         }
     }
 
@@ -278,6 +279,8 @@ impl Signex {
                                 self.ui_state.parameter_manager_open = false;
                                 *self.ui_state.parameter_table = Default::default();
                             }
+                            // A Cancel: nothing was applied.
+                            ModalId::ParameterImport => self.ui_state.parameter_import = None,
                             ModalId::RenameDialog => self.ui_state.rename_dialog = None,
                             ModalId::RemoveDialog => self.ui_state.remove_dialog = None,
                             ModalId::PrintPreview => self.dismiss_print_preview(),

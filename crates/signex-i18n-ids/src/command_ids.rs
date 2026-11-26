@@ -99,6 +99,8 @@ define_ids! {
         CMD_OPEN_PREFERENCES = "cmd-open-preferences";
         CMD_MENU_OPEN_PREFERENCES = "cmd-menu-open-preferences";
         CMD_OPEN_SCHEMATIC_PREFERENCES = "cmd-open-schematic-preferences";
+        CMD_KEYMAP_ASSIGN = "cmd-keymap-assign";
+        CMD_KEYMAP_CLEAR = "cmd-keymap-clear";
         CMD_PASTE = "cmd-paste";
         CMD_PASTE_ARRAY = "cmd-paste-array";
         CMD_PASTE_SPECIAL = "cmd-paste-special";
@@ -249,6 +251,8 @@ define_ids! {
         CMD_MENU_REPAIR_PIN_JUNCTIONS = "cmd-menu-repair-pin-junctions";
         CMD_OPEN_PARAMETER_MANAGER = "cmd-open-parameter-manager";
         CMD_MENU_OPEN_PARAMETER_MANAGER = "cmd-menu-open-parameter-manager";
+        CMD_EXPORT_PARAMETERS = "cmd-export-parameters";
+        CMD_IMPORT_PARAMETERS = "cmd-import-parameters";
         CMD_OPEN_RULES = "cmd-open-rules";
         CMD_MENU_OPEN_RULES = "cmd-menu-open-rules";
         CMD_RULES_LIST = "cmd-rules-list";

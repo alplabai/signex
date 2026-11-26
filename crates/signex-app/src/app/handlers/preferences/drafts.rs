@@ -63,6 +63,7 @@ impl UiState {
             }
             PrefNav::SchematicDisplay => {
                 self.preferences_draft_symbol_body_fill != self.symbol_body_fill
+                    || self.preferences_draft_cross_out_not_fitted != self.cross_out_not_fitted
             }
             PrefNav::PcbDisplay => {
                 self.preferences_draft_pcb_dim_others_percent != self.pcb_dim_others_percent
@@ -72,7 +73,8 @@ impl UiState {
                 .differs_from(&self.pcb_dimension_defaults),
             // Rule profiles save to their files at once, and distributor
             // settings live in the library state: neither has drafts.
-            PrefNav::RuleProfiles | PrefNav::LibraryDistributors => false,
+            // An extension's page shows its values and holds no draft.
+            PrefNav::RuleProfiles | PrefNav::LibraryDistributors | PrefNav::Extension(_) => false,
             PrefNav::ComponentClasses => {
                 self.preferences_draft_component_classes != self.component_classes
             }
@@ -164,6 +166,9 @@ impl Signex {
                 self.ui_state.preferences_draft_edge_pan.speed = speed;
             }
             PrefMsg::SymbolBodyFill(msg) => self.ui_state.apply_body_fill_message(msg),
+            PrefMsg::DraftCrossOutNotFitted(enabled) => {
+                self.ui_state.preferences_draft_cross_out_not_fitted = enabled;
+            }
             PrefMsg::DraftTrackpadPan(enabled) => {
                 self.ui_state.preferences_draft_trackpad_pan = enabled;
             }

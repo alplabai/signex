@@ -41,7 +41,8 @@ impl Signex {
                 }
                 Task::none()
             }
-            M::RowClicked(row) => self.open_compiled_row(row),
+            M::RowClicked(row) => self.open_compiled_row(row, false),
+            M::RowSourceClicked(row) => self.open_compiled_row(row, true),
             M::RowExpanded(row) => {
                 let expanded = &mut self.ui_state.compiled_design.expanded;
                 if !expanded.remove(&row) {
@@ -52,6 +53,10 @@ impl Signex {
             M::TargetClicked(target) => self.open_compiled_target(&target),
             M::ChannelPicked { sheet, channel } => {
                 self.pick_channel(sheet, channel);
+                Task::none()
+            }
+            M::ChannelFitPicked { parts, fitted } => {
+                self.pick_channel_fit(parts, fitted);
                 Task::none()
             }
             M::RepeatToggled { sheet_symbol, on } => {
@@ -209,8 +214,6 @@ impl Signex {
                 return;
             }
         };
-        // The clock is read here, in update; the view shows the stored text.
-        let compiled_at = chrono::Local::now().format("%H:%M").to_string();
         let loaded: Vec<ProjectId> = self.document_state.projects.iter().map(|p| p.id).collect();
         let store = &mut self.document_state.compiled_design;
         store.results.retain(|id, _| loaded.contains(id));
@@ -219,7 +222,8 @@ impl Signex {
             CompiledResult {
                 design: Arc::new(compiled.design.clone()),
                 paths: compiled.paths.clone(),
-                compiled_at,
+                compiled_at: compiled.finished_at,
+                miniatures: compiled.miniatures.clone(),
                 stale: Default::default(),
                 has_unread_sheets: compiled.has_unread_sheets,
                 unread_paths: compiled.unread_paths.clone(),

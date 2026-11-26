@@ -188,6 +188,8 @@ signex_standard	hint	-	-	autoplace_fields
 signex_standard	hint	-	-	open_datasheet
 signex_standard	hint	-	-	change_component
 signex_standard	hint	-	-	open_parameter_manager
+signex_standard	hint	-	-	export_parameters
+signex_standard	hint	-	-	import_parameters
 signex_standard	hint	-	-	set_symbol_parameter
 signex_standard	hint	-	-	set_sheet_variable
 signex_standard	hint	-	-	lock_board_items
@@ -549,6 +551,8 @@ signex_standard	hint	-	-	footprint_recompute_courtyard_outline
 signex_standard	hint	-	⇧⌘P	open_command_palette
 signex_standard	hint	-	⌘,	open_preferences
 signex_standard	hint	-	T P	open_schematic_preferences
+signex_standard	hint	-	-	keymap_assign
+signex_standard	hint	-	-	keymap_clear
 signex_standard	hint	-	F1	show_current_command_hotkeys
 signex_standard	hint	-	⇧F1	show_current_command_shortcuts
 signex_standard	hint	-	⌃TAB	next_document_tab
@@ -765,6 +769,8 @@ classic	hint	-	O	autoplace_fields
 classic	hint	-	D	open_datasheet
 classic	hint	-	-	change_component
 classic	hint	-	-	open_parameter_manager
+classic	hint	-	-	export_parameters
+classic	hint	-	-	import_parameters
 classic	hint	-	-	set_symbol_parameter
 classic	hint	-	-	set_sheet_variable
 classic	hint	-	-	lock_board_items
@@ -1126,6 +1132,8 @@ classic	hint	-	-	footprint_recompute_courtyard_outline
 classic	hint	-	⇧⌘P	open_command_palette
 classic	hint	-	⌘,	open_preferences
 classic	hint	-	-	open_schematic_preferences
+classic	hint	-	-	keymap_assign
+classic	hint	-	-	keymap_clear
 classic	hint	-	-	show_current_command_hotkeys
 classic	hint	-	-	show_current_command_shortcuts
 classic	hint	-	-	next_document_tab

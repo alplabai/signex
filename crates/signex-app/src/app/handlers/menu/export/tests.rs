@@ -749,7 +749,7 @@ pub(super) fn pdf_request_all_sheets(
     source: &std::path::Path,
 ) -> crate::app::state::PdfExportRequest {
     let (ctx, _) =
-        super::build_page_scope_for_source(&app.document_state, source).expect("source is open");
+        super::build_export_scope_for_source(&app.document_state, source).expect("source is open");
     crate::app::state::PdfExportRequest {
         source: source.to_path_buf(),
         options: Default::default(),
@@ -1007,6 +1007,7 @@ mod class_assign;
 mod class_picker;
 mod class_shared;
 mod class_styles;
+mod directive_toggles;
 mod net_text_hierarchy;
 
 mod bom_hierarchy;
@@ -1015,6 +1016,7 @@ pub(crate) mod current_placement;
 
 mod export_status;
 mod lazy_preview;
+mod not_fitted;
 mod sheet_numbering;
 mod tree_nesting_pins;
 

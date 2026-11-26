@@ -2,13 +2,16 @@
 //! on the flat side with the net wired into it, the harness wire leaving the
 //! tip with the type, and the Width and Entry pitch callouts. The body keeps
 //! the connector's width-to-pitch proportion within the drawing's bounds.
+//! In the mismatch state an entry the far side expects under another name is
+//! drawn in the warn colour, `expects CS_ADC` in its net's place (the Entries
+//! list above the drawing still names the net).
 
 use iced::Point;
 use signex_i18n::{I18n, UserText, ids, t};
 use signex_types::schematic::HarnessConnector;
 use signex_widgets::property_illustration::{
-    Anchor, Callout, Illustration, Ink, Paint, Part, Primitive, Style, TextLabel, TextRole, Tint,
-    Weight,
+    Anchor, Callout, Illustration, Ink, Paint, Part, Primitive, Style, Text, TextLabel, TextRole,
+    Tint, Weight,
 };
 
 use super::{HEIGHT_EM, fields};
@@ -35,14 +38,35 @@ const ENTRY_HALF: f32 = 4.0;
 /// Where the nets come in from.
 const NET_X: f32 = 8.0;
 
-/// The connector `c`, `nets[i]` being the net wired to entry `i` (empty when
-/// none), drawn in the project's harness `colour`.
-pub fn harness_connector(
-    c: &HarnessConnector,
-    nets: &[String],
-    colour: iced::Color,
-    i18n: &I18n,
-) -> Illustration {
+/// What the drawing shows of a connector beyond the connector itself.
+#[derive(Debug, Clone, Copy)]
+pub struct HarnessArt<'a> {
+    /// Per entry: the net wired into it, empty when none.
+    pub nets: &'a [String],
+    /// Per entry: the entry the far side expects in its place, if any.
+    pub expects: &'a [Option<String>],
+    /// The project's harness colour.
+    pub colour: iced::Color,
+    /// The colour a mismatched entry is drawn in.
+    pub warn: iced::Color,
+}
+
+/// How one entry row is drawn: the note above its wire (the net, or what
+/// the far side expects) and the inks of the note, the glyph and the name.
+struct EntryRow {
+    note: Text,
+    note_style: Style,
+    edge: Style,
+    name_style: Style,
+}
+
+/// A label in the document colour `colour`.
+fn coloured_text(colour: iced::Color) -> Style {
+    Style::outline(Ink::Secondary, Weight::Thin).with_stroke_paint(Paint::Document(colour))
+}
+
+/// The connector `c` with the nets and the mismatches of `art`.
+pub fn harness_connector(c: &HarnessConnector, art: HarnessArt<'_>, i18n: &I18n) -> Illustration {
     let shown = c.entries.len().min(MAX_ENTRIES);
     let slots = (shown + 1) as f32;
     let size = |mm: f64| {
@@ -59,7 +83,7 @@ pub fn harness_connector(
     let step = body_h / slots;
     let tip = TIP_MAX.min(body_h / 3.0).min(body_w / 2.0);
     let (left, top, right, bottom) = (BODY_X, BODY_Y, BODY_X + body_w, BODY_Y + body_h);
-    let harness = Paint::Document(colour);
+    let harness = Paint::Document(art.colour);
     let harness_edge = Style::edge().with_stroke_paint(harness);
     let body = Part::new(
         Primitive::Polyline {
@@ -78,7 +102,23 @@ pub fn harness_connector(
     let mut parts = vec![body];
     for (i, entry) in c.entries.iter().take(shown).enumerate() {
         let y = top + (i + 1) as f32 * step;
-        parts.extend(entry_parts(&entry.name, nets.get(i), y, harness_edge));
+        let row = match art.expects.get(i).and_then(Option::as_deref) {
+            Some(expects) => EntryRow {
+                note: t!(i18n, ids::PANELS_HARNESS_EXPECTS, "expects" => expects).into(),
+                note_style: coloured_text(art.warn),
+                edge: Style::outline(Ink::Secondary, Weight::Heavy)
+                    .with_stroke_paint(Paint::Document(art.warn))
+                    .with_fill(Paint::Document(art.warn), Tint::Light),
+                name_style: coloured_text(art.warn),
+            },
+            None => EntryRow {
+                note: UserText::new(art.nets.get(i).cloned().unwrap_or_default()).into(),
+                note_style: Style::outline(Ink::Tertiary, Weight::Thin),
+                edge: harness_edge,
+                name_style: Style::outline(Ink::Secondary, Weight::Thin),
+            },
+        };
+        parts.extend(entry_parts(&entry.name, row, y));
     }
     let mid = (top + bottom) / 2.0;
     parts.push(Part::new(
@@ -134,9 +174,9 @@ pub fn harness_connector(
         .part(Part::callout(pitch_callout).linked(fields::ENTRY_PITCH))
 }
 
-/// One entry at height `y`: the net's wire running in, its name above the
-/// wire, the entry glyph on the flat side and the entry's name.
-fn entry_parts(name: &str, net: Option<&String>, y: f32, edge: Style) -> Vec<Part> {
+/// One entry at height `y`: the net's wire running in, the row's note above
+/// the wire, the entry glyph on the flat side and the entry's name.
+fn entry_parts(name: &str, row: EntryRow, y: f32) -> Vec<Part> {
     let wire = Part::new(
         Primitive::Line {
             from: Point::new(NET_X, y),
@@ -155,27 +195,27 @@ fn entry_parts(name: &str, net: Option<&String>, y: f32, edge: Style) -> Vec<Par
             ],
             is_closed: true,
         },
-        edge,
+        row.edge,
     );
-    let entry = Part::label(
-        TextLabel {
+    let entry = Part::new(
+        Primitive::Label(TextLabel {
             at: Point::new(BODY_X + ENTRY_LEN + 3.0, y),
             text: UserText::new(name.to_string()).into(),
             anchor: Anchor::Start,
             role: TextRole::Caption,
-        },
-        Ink::Secondary,
+        }),
+        row.name_style,
     );
     let mut parts = vec![wire, glyph, entry];
-    if let Some(net) = net.filter(|n| !n.is_empty()) {
-        parts.push(Part::label(
-            TextLabel {
+    if !row.note.as_str().is_empty() {
+        parts.push(Part::new(
+            Primitive::Label(TextLabel {
                 at: Point::new(NET_X + 2.0, y - 6.0),
-                text: UserText::new(net.clone()).into(),
+                text: row.note,
                 anchor: Anchor::Start,
                 role: TextRole::Note,
-            },
-            Ink::Tertiary,
+            }),
+            row.note_style,
         ));
     }
     parts
@@ -221,6 +261,19 @@ mod tests {
         iced::Color::from_rgb8(0x6B, 0x4F, 0xA0)
     }
 
+    fn warn() -> iced::Color {
+        iced::Color::from_rgb8(0x8A, 0x5A, 0x10)
+    }
+
+    fn art<'a>(nets: &'a [String], expects: &'a [Option<String>]) -> HarnessArt<'a> {
+        HarnessArt {
+            nets,
+            expects,
+            colour: colour(),
+            warn: warn(),
+        }
+    }
+
     fn callout(drawing: &Illustration, field: &FieldId) -> Callout {
         drawing
             .visible_parts()
@@ -247,7 +300,7 @@ mod tests {
     #[test]
     fn the_connector_carries_width_and_entry_pitch_callouts() {
         let en = I18n::en_us();
-        let drawing = harness_connector(&spi(), &nets(), colour(), &en);
+        let drawing = harness_connector(&spi(), art(&nets(), &[]), &en);
         let width = callout(&drawing, &fields::WIDTH);
         let pitch = callout(&drawing, &fields::ENTRY_PITCH);
         assert_eq!(
@@ -271,7 +324,7 @@ mod tests {
     #[test]
     fn entries_nets_and_the_type_are_drawn_in_the_harness_colour() {
         let en = I18n::en_us();
-        let drawing = harness_connector(&spi(), &nets(), colour(), &en);
+        let drawing = harness_connector(&spi(), art(&nets(), &[]), &en);
         let shown = labels(&drawing);
         for text in ["SCK", "MOSI", "MISO", "CS", "SPI_SCK", "SPI_CS", "SPI_BUS"] {
             assert!(shown.iter().any(|l| l.contains(text)), "{text}: {shown:?}");
@@ -295,7 +348,7 @@ mod tests {
         let en = I18n::en_us();
         let names: Vec<String> = (1..=10).map(|n| format!("E{n}")).collect();
         let refs: Vec<&str> = names.iter().map(String::as_str).collect();
-        let drawing = harness_connector(&connector(10.16, 2.54, &refs), &[], colour(), &en);
+        let drawing = harness_connector(&connector(10.16, 2.54, &refs), art(&[], &[]), &en);
         let shown = labels(&drawing);
         let entries = shown.iter().filter(|l| l.starts_with('E')).count();
         assert_eq!(entries, MAX_ENTRIES, "{shown:?}");
@@ -307,12 +360,50 @@ mod tests {
         let en = I18n::en_us();
         let span = |width| {
             let c = connector(width, 5.08, &["SCK", "MOSI"]);
-            let w = callout(&harness_connector(&c, &[], colour(), &en), &fields::WIDTH);
+            let w = callout(&harness_connector(&c, art(&[], &[]), &en), &fields::WIDTH);
             w.to.x - w.from.x
         };
         assert!(span(5.08) < span(10.16));
         let bad = connector(f64::NAN, 0.0, &["SCK"]);
-        let w = callout(&harness_connector(&bad, &[], colour(), &en), &fields::WIDTH);
+        let w = callout(&harness_connector(&bad, art(&[], &[]), &en), &fields::WIDTH);
         assert!((w.to.x - w.from.x).is_finite() && w.to.x > w.from.x);
+    }
+
+    fn in_paint(drawing: &Illustration, paint: Paint) -> Vec<&Primitive> {
+        drawing
+            .visible_parts()
+            .filter(|p| p.style.stroke.is_some_and(|s| s.paint == paint))
+            .map(|p| &p.primitive)
+            .collect()
+    }
+
+    /// Mockup row 152, Entry mismatch: the mismatched entry's glyph and name
+    /// turn warn and `expects CS_ADC` takes its net's place; the other
+    /// entries keep the harness colour and their nets.
+    #[test]
+    fn a_mismatched_entry_is_drawn_warn_with_what_the_far_side_expects() {
+        let en = I18n::en_us();
+        let expects = [None, None, None, Some("CS_ADC".to_string())];
+        let drawing = harness_connector(&spi(), art(&nets(), &expects), &en);
+        let caption = t!(en, ids::PANELS_HARNESS_EXPECTS, "expects" => "CS_ADC").into_string();
+        let warned = in_paint(&drawing, Paint::Document(warn()));
+        let warned_labels: Vec<&str> = warned
+            .iter()
+            .filter_map(|p| match p {
+                Primitive::Label(l) => Some(l.text.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(warned_labels, ["CS", caption.as_str()], "{warned_labels:?}");
+        let warned_glyphs = warned
+            .iter()
+            .filter(|p| matches!(p, Primitive::Polyline { .. }))
+            .count();
+        assert_eq!(warned_glyphs, 1);
+        let shown = labels(&drawing);
+        assert!(!shown.iter().any(|l| l == "SPI_CS"), "{shown:?}");
+        assert!(shown.iter().any(|l| l == "SPI_MISO"), "{shown:?}");
+        // The body, three entry glyphs, the harness wire and the type.
+        assert_eq!(in_paint(&drawing, Paint::Document(colour())).len(), 6);
     }
 }

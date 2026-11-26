@@ -241,6 +241,8 @@ pub(super) const WRITES: &[(&[&str], Surface, Writes)] = &[
         Operand,
         Settings,
     ),
+    // A custom keyboard profile, written to `keyboard_shortcuts.toml` (#2495).
+    (&["keymap_assign", "keymap_clear"], Operand, Settings),
     (OPERAND_DOCUMENT, Operand, Document),
     // A read of the named board answered as a query is (#2939): it waits
     // for the library models off the UI thread, so it is an operand
@@ -378,6 +380,8 @@ const MENU_SESSION: &[&str] = &[
     "export_board_pdf",
     "export_board_report",
     "export_board_step",
+    // #1295: a file dialog; the file and the import preview come later.
+    "export_parameters",
     "fabrication_outputs",
     "fast_grid_1",
     "fast_grid_2",
@@ -400,6 +404,7 @@ const MENU_SESSION: &[&str] = &[
     "import_dxf",
     "import_dxf_outline",
     "import_graphics",
+    "import_parameters",
     "lasso_select",
     "leave_sheet",
     "manage_workspace_layouts",

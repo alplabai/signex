@@ -172,6 +172,10 @@ pub struct UiState {
     /// the view then computes the sections inline, so a stale cache is
     /// impossible by construction.
     pub shortcut_sections: Option<Vec<crate::keyboard_shortcuts_modal::ShortcutSection>>,
+    /// The installed extensions' commands as the keymap surfaces and the
+    /// palette name them (#2495); empty in the Community binary. Set once,
+    /// by `Signex::with_extensions`.
+    pub extension_commands: crate::keymap::ExtensionCommandNames,
     /// The shortcuts sheet's filter text and scope, set afresh each time
     /// the sheet opens (#2262).
     pub shortcut_sheet: crate::keyboard_shortcuts_modal::ShortcutSheet,
@@ -225,6 +229,13 @@ pub struct UiState {
     pub symbol_body_fill: crate::symbol_fill_prefs::SymbolBodyFill,
     /// Draft mirror of [`Self::symbol_body_fill`] for the Preferences dialog.
     pub preferences_draft_symbol_body_fill: crate::symbol_fill_prefs::SymbolBodyFill,
+    /// Saved "Cross out not-fitted parts" (#1294): a part that is DNP or not
+    /// fitted in the active variant draws greyed with a cross, on the canvas
+    /// and in PDF and SVG. On by default.
+    pub cross_out_not_fitted: bool,
+    /// Draft mirror of [`Self::cross_out_not_fitted`] for the Preferences
+    /// dialog.
+    pub preferences_draft_cross_out_not_fitted: bool,
     /// Saved PCB Defaults: what each new board dimension starts from (#2868).
     pub pcb_dimension_defaults: signex_types::pcb_dimension_style::DimensionDefaults,
     /// Draft of [`Self::pcb_dimension_defaults`] for the Preferences dialog,
@@ -423,6 +434,13 @@ pub struct UiState {
     /// transient feedback. Only a successful save clears it, because only
     /// then is the file on disk one this process wrote.
     pub keymap_load_error: Option<String>,
+    /// The user's own `keyboard_shortcuts.toml` that `keymap_assign` and
+    /// `keymap_clear` read and write in a headless `signex-cli` run, which
+    /// otherwise works under a throwaway config root (the one carve-out,
+    /// `docs/CLI.md`). `None` everywhere else: they edit the live set and its
+    /// file. Set by `Signex::edit_user_shortcuts_at`.
+    /// Boxed to keep `UiState` under its size ceiling (#2412).
+    pub keymap_command_file: Option<Box<std::path::PathBuf>>,
     /// Path of `keyboard_shortcuts.toml.bak` when that file is on disk
     /// (#603).
     ///
@@ -723,6 +741,9 @@ pub struct UiState {
     /// sheet of the last cell edit. Cell text itself is never held here.
     /// Boxed: a closed table costs one pointer (#2412).
     pub parameter_table: Box<crate::app::state::ParameterTableState>,
+    /// The Import Parameters preview (#1295): the file read and the sheet it
+    /// goes into; `None` while closed.
+    pub parameter_import: Option<Box<crate::app::parameter_io::ParameterImportState>>,
     /// Active "pick a reference item" mode for z-order operations
     /// (BringToFrontOf / SendToBackOf). When Some, the next canvas click
     /// resolves the reference uuid and submits the Reorder command.
@@ -854,7 +875,11 @@ impl UiState {
     /// dropped otherwise (the next open rebuilds it).
     pub fn refresh_shortcut_sections(&mut self) {
         self.shortcut_sections = self.keyboard_shortcuts_open.then(|| {
-            crate::keyboard_shortcuts_modal::build_sections(&self.i18n, &self.keymap_profiles)
+            crate::keyboard_shortcuts_modal::build_sections_with(
+                &self.i18n,
+                &self.keymap_profiles,
+                &self.extension_commands,
+            )
         });
     }
 
@@ -927,6 +952,7 @@ mod tests {
             ("profile_manager", field_size(|ui| &ui.profile_manager)),
             ("erc_rule_list", field_size(|ui| &ui.erc_rule_list)),
             ("parameter_table", field_size(|ui| &ui.parameter_table)),
+            ("parameter_import", field_size(|ui| &ui.parameter_import)),
             (
                 "board_output.dialog",
                 field_size(|ui| &ui.board_output.dialog),

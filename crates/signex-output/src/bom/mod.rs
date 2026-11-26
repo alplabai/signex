@@ -365,10 +365,43 @@ pub(crate) fn bom_sheets(
     ctx.sheet_placements()
 }
 
-/// Whether a placed symbol is a part: power ports are not, so neither the BOM
-/// nor the variant matrix lists them.
-pub(crate) fn is_part_symbol(sym: &Symbol) -> bool {
+/// Whether a placed symbol is a part: power ports are not, so neither the BOM,
+/// the variant matrix nor a channel card lists them.
+pub fn is_part_symbol(sym: &Symbol) -> bool {
     !(sym.reference.starts_with("#PWR") || sym.is_power)
+}
+
+/// One physical part of a placed-symbol list: its units (indices into the
+/// list, in list order, at least one) and the placed part the variant
+/// settings name it by (`variant_fit::part_link`).
+pub(crate) struct PlacedPartUnits {
+    pub members: Vec<usize>,
+    pub link: Option<signex_types::pcb::SymbolLink>,
+}
+
+/// The parts of `placed` (each symbol with its designator at its placement
+/// `paths[i]`), grouped across every sheet by designator, library symbol and
+/// unit. The one grouping the BOM and the not-fitted drawing share, so a part
+/// whose units sit on several sheets is one part in both.
+pub(crate) fn placed_parts(
+    placed: &[(&Symbol, &str)],
+    paths: &[&InstancePath],
+) -> Vec<PlacedPartUnits> {
+    group_into_parts(placed.iter().map(|(sym, designator)| PartKey {
+        reference: designator,
+        lib_id: normalized_lib_id(&sym.lib_id),
+        unit: sym.unit,
+    }))
+    .into_iter()
+    .map(|members| {
+        let link = crate::variant_fit::part_link(
+            members
+                .iter()
+                .map(|&member| (paths[member], placed[member].0.uuid)),
+        );
+        PlacedPartUnits { members, link }
+    })
+    .collect()
 }
 
 /// The components of a placed-symbol list, one per physical part. A part takes
@@ -383,20 +416,15 @@ fn placed_components(
 ) -> Vec<BomComponent> {
     let variant = opts.active_variant.as_deref();
     let mut components = Vec::new();
-    let parts = group_into_parts(placed.iter().map(|(sym, designator)| PartKey {
-        reference: designator,
-        lib_id: normalized_lib_id(&sym.lib_id),
-        unit: sym.unit,
-    }));
 
-    for part in &parts {
+    for PlacedPartUnits {
+        members: part,
+        link,
+    } in &placed_parts(placed, paths)
+    {
         let units: Vec<&Symbol> = part.iter().map(|&member| placed[member].0).collect();
         let sym = units[0];
         let designator = placed[part[0]].1;
-        let link = crate::variant_fit::part_link(
-            part.iter()
-                .map(|&member| (paths[member], placed[member].0.uuid)),
-        );
         let own = signex_types::project::PlacedPart::new(designator, link.as_ref());
         let mut merged = units::merge_units(&units, is_fit_state_field);
         // The variant's own values (mockup row 32) before any column reads them.

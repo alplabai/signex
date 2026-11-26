@@ -88,7 +88,7 @@ pub use error_notice::{
 pub use interaction::{ClickedPin, InteractionState};
 pub use keymap_recorder::KeymapRecorderState;
 pub use omitted_page::{OmittedPage, OmittedReason};
-pub use parameter_table::{ParameterCell, ParameterTableState};
+pub use parameter_table::{ClosedSheetCopies, ParameterCell, ParameterTableState};
 pub(crate) use pcb_drc::DrcInput;
 pub(crate) use pcb_ratsnest::{PcbRatsnest, RatsnestKey, RouteRatsKey};
 pub use pdf_dialog::{ANGLE_PRESETS, PdfDialogState, PdfSection, WatermarkPreset};
@@ -124,6 +124,8 @@ pub struct Signex {
     /// The pan/zoom frame bench (#2472); `None` unless the process was
     /// started with `SIGNEX_BENCH_PAN_ZOOM` set.
     pub(crate) pan_zoom_bench: Option<crate::pan_zoom_bench::PanZoomBench>,
+    /// The extensions the binary installed (#2495); none in Community.
+    pub(crate) extensions: crate::extension::ExtensionHost,
 }
 
 /// Role of a non-main window opened by Signex. Phase 2 adds detached
@@ -259,6 +261,9 @@ pub enum ModalId {
     NetColorPalette,
     /// Parameter manager — bulk parameter editor.
     ParameterManager,
+    /// Import Parameters (#1295): the changes a CSV file makes, to apply.
+    /// Like the Parameter Manager it only ever opens as its own window.
+    ParameterImport,
     // Reserved for future draggable modals — wired in when each dialog's
     // header gets a drag hook.
     Preferences,

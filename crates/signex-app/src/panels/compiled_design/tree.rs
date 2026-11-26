@@ -4,6 +4,7 @@
 use iced::widget::{Column, Space, column, container, row, scrollable, svg};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
 use signex_i18n::{UserText, ids, t};
+use signex_widgets::command_press::CommandPress;
 use signex_widgets::text;
 
 use super::{
@@ -215,6 +216,12 @@ fn sheet_row<'a>(
                 ..iced::widget::button::Style::default()
             }
         });
+    // Ctrl+click (Cmd on macOS) opens the source sheet on Editor (#2658).
+    let button: Element<'a, PanelMsg> = CommandPress::new(
+        button.boxed(),
+        msg(CompiledDesignMsg::RowSourceClicked(r.index)),
+    )
+    .boxed();
     let body: Element<'a, PanelMsg> = match tip {
         Some(tip) => signex_widgets::tooltip(
             button,
@@ -224,7 +231,7 @@ fn sheet_row<'a>(
             signex_widgets::tooltip::Position::Bottom,
         )
         .boxed(),
-        None => button.boxed(),
+        None => Element::from(button),
     };
     if !selected {
         return body;

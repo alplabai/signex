@@ -25,13 +25,47 @@ pub(super) fn graphite_label(item: PrefNav) -> MessageId {
         PrefNav::RuleProfiles => ids::PREFERENCES_PAGE_RULE_PROFILES,
         PrefNav::LibraryDistributors => ids::PREFERENCES_PAGE_DISTRIBUTORS,
         PrefNav::ComponentClasses => ids::PREFERENCES_PAGE_COMPONENT_CLASSES,
+        // Named by its extension: see `page_name`.
+        PrefNav::Extension(_) => ids::PREFERENCES_GROUP_EXTENSIONS,
     }
+}
+
+/// The page's name as the nav and the subtitle show it. An extension's page
+/// is named by its extension (#2495).
+pub(super) fn page_name(
+    i18n: &I18n,
+    item: PrefNav,
+    extensions: &crate::extension::ExtensionHost,
+) -> signex_i18n::Localized {
+    match item {
+        PrefNav::Extension(index) => t!(
+            i18n,
+            ids::PREFERENCES_EXTENSION_PAGE,
+            "extension" => extensions.name_at(index).unwrap_or_default()
+        ),
+        _ => t!(i18n, graphite_label(item)),
+    }
+}
+
+/// Whether an extension's nav row stays visible for the search `query`:
+/// its name, or the group's name in the UI language or in English.
+pub(super) fn extension_nav_matches(i18n: &I18n, name: &str, query: &str) -> bool {
+    let q = i18n.fold_for_search(query.trim());
+    let group = t!(i18n, ids::PREFERENCES_GROUP_EXTENSIONS).into_string();
+    q.is_empty()
+        || [name, group.as_str(), "Extensions"]
+            .into_iter()
+            .any(|text| i18n.fold_for_search(text).contains(&q))
 }
 
 /// The page's group: its name in the dialog subtitle and its nav heading
 /// (written in capitals).
 pub(super) fn group_messages(item: PrefNav) -> (MessageId, MessageId) {
     match item.group() {
+        "Extensions" => (
+            ids::PREFERENCES_GROUP_EXTENSIONS,
+            ids::PREFERENCES_GROUP_EXTENSIONS_HEADING,
+        ),
         "Schematic" => (
             ids::PREFERENCES_GROUP_SCHEMATIC,
             ids::PREFERENCES_GROUP_SCHEMATIC_HEADING,
@@ -70,7 +104,8 @@ fn former_names(item: PrefNav) -> &'static [&'static str] {
         | PrefNav::PcbDefaults
         | PrefNav::PcbDisplay
         | PrefNav::RuleProfiles
-        | PrefNav::LibraryDistributors => &[],
+        | PrefNav::LibraryDistributors
+        | PrefNav::Extension(_) => &[],
     }
 }
 
@@ -114,6 +149,7 @@ pub(crate) fn setting_labels(item: PrefNav) -> &'static [MessageId] {
         PrefNav::SchematicDisplay => &[
             ids::PREFERENCES_SYMBOL_BODY_FILL,
             ids::PREFERENCES_SYMBOL_BODY_FILL_COLOUR,
+            ids::PREFERENCES_CROSS_OUT_NOT_FITTED,
         ],
         PrefNav::PcbDefaults => &[
             ids::PCB_PRIM_LINE_WIDTH,
@@ -141,7 +177,8 @@ pub(crate) fn setting_labels(item: PrefNav) -> &'static [MessageId] {
         PrefNav::Keyboard
         | PrefNav::RuleProfiles
         | PrefNav::LibraryDistributors
-        | PrefNav::ComponentClasses => &[],
+        | PrefNav::ComponentClasses
+        | PrefNav::Extension(_) => &[],
     }
 }
 

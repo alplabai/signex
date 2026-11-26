@@ -173,6 +173,8 @@ impl PanelPosition {
             | PanelKind::Annotations
             // Beside the board while routing (mockup row 107).
             | PanelKind::LengthMatching => PanelPosition::Right,
+            // The home region the extension registered (#2495).
+            PanelKind::Extension(panel) => panel.home(),
         }
     }
 }

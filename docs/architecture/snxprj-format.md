@@ -437,6 +437,10 @@ the `snxprj/1` token. It sits beside `variant_definitions` and
   the old designator. `designator` is the name the part had when the entry
   was last set; an entry without `part` (written by hand) names the part by
   it. The Variant Manager writes `part` on every cell edit.
+- A channel's copy of a part on a repeated sheet is a part of its own: its
+  `part.sheet` ends in the channel's placement uuid, so an entry is per
+  channel (#2662, `docs/MULTI_CHANNEL.md`, "Per-channel variant state"). Its
+  `designator` is the channel designator (`CH2_R5`). No key is added for it.
 - A rename of a variant renames its entries and the default; a removal drops
   them (and the default falls back to Base). Both are refused, like every
   settings edit, while the section is unreadable.

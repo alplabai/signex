@@ -20,10 +20,16 @@ pub mod cross_probe;
 
 mod directives;
 pub use directives::{
-    BlanketCatch, BlanketNet, NetParametersOn, blanket_nets, directive_net_classes,
-    fill_pattern_classes, net_parameters,
+    BlanketCatch, BlanketNet, ClassAssignment, NetClassConflict, NetParametersOn, blanket_nets,
+    class_assignments, directive_net_classes, fill_pattern_classes, net_class_conflicts,
+    net_parameters,
 };
 pub use directives::{DiffPair, blanket_net_classes, compile_masked, diff_pairs};
+mod project_classes;
+pub use project_classes::{
+    ProjectClassConflicts, ProjectNetClassConflict, SheetClassAssignment,
+    project_net_class_conflicts,
+};
 mod diff_pair_classes;
 pub use diff_pair_classes::{
     ClassMember, class_members, diff_pairs_with_classes, pair_count, pairs_by_every_suffix,
@@ -84,6 +90,11 @@ pub use compiled::{
     CompiledDesign, CompiledNet, CompiledPart, CompiledSheet, CompiledSheetNet, CompiledTarget,
     SheetTitle, compile_design,
 };
+
+mod miniature;
+#[cfg(test)]
+mod miniature_tests;
+pub use miniature::{MiniatureText, SheetMiniature, sheet_miniature};
 
 mod harness;
 #[cfg(test)]
