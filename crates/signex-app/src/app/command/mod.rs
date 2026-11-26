@@ -96,6 +96,9 @@ mod repair_reset_operands;
 mod replay;
 mod routing;
 #[cfg(test)]
+mod schematic_pdf_operand_tests;
+mod schematic_pdf_operands;
+#[cfg(test)]
 mod selection_filter_operand_tests;
 mod selection_filter_operands;
 #[cfg(test)]

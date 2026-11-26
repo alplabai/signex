@@ -85,7 +85,13 @@ the compiled hierarchy, one row per channel. The write is atomic and refuses a f
 already there: the name is claimed with a create-new open first, so a file
 made there in the meantime is never overwritten. The new sheet is then added to the project the way Add
 Existing adds a file. Double-clicking a row of the contents table opens that
-row's sheet.
+row's sheet, and in the exported PDF each row is a link to the page that
+prints its sheet (#2663; the rules are in `docs/PDF_EXPORT.md`, "Table of
+contents links").
+
+A pin table follows a pin edit of its part: the edit reaches the sheet as the
+part's new body (Update from library), and the next compile rebuilds the rows
+(`sch_tables::pin_edit_golden_tests` pins the table before and after).
 
 ## Not built yet
 
@@ -93,7 +99,5 @@ row's sheet.
   `TablesMsg::CellEdited` (one undo step per cell), but the double-click
   editor on the canvas is not there yet.
 - The contents sheet as page 1 of the numbering, and its tab's `auto` pill.
-- Rows of the contents table as links in the exported PDF (they build on the
-  PDF bookmarks work; #2663).
 - Formulas in a typed table (the table is plain text, as drawn).
 - The Properties illustration does not light a field's callout on hover yet.

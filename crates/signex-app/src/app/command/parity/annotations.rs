@@ -150,6 +150,7 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "color_net",
             "export_board_report",
             "export_board_step",
+            "export_schematic_pdf",
             "export_assembly_svg",
             "board_assembly_drawing",
             "board_report_bom",

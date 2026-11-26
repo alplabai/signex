@@ -412,7 +412,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "edit_object_properties" | "edit_selected_object_properties" => Needs::SelectedObject,
         // The Export menu row is gated on `has_schematic`; without an
         // engine the handler does nothing.
-        "report_manager_bom" => Needs::Schematic,
+        // #2663: the sheet Print Preview needs a sheet in view.
+        "report_manager_bom" | "export_schematic_pdf" => Needs::Schematic,
         "leave_sheet" | "navigate_up_hierarchy" => Needs::ParentSheet,
         "delete_selection" => Needs::DeleteTarget,
         "rotate_clockwise"

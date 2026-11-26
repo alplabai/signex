@@ -154,3 +154,27 @@ jumps to its own page and position.
 
 With `bookmark_sheets` off there is no sheet item to nest under, so every
 group sits at the top level, as in global mode.
+
+## Table of contents links
+
+A table row that opens a sheet (a contents table's row,
+`docs/SCHEMATIC_TABLES.md`) is a link in the PDF (#2663): a borderless
+`/Link` annotation over the whole row whose GoTo action shows the page that
+prints that sheet, fitted in the window. The row's link is resolved from the
+folder of the sheet holding the table, the same way a double-click on the
+canvas resolves it.
+
+- A row whose sheet no exported page prints (a page range that leaves it
+  out, a sheet the project does not reach) stays plain text.
+- When several pages print one file (the channels of a repeated sheet), the
+  table's first row naming that file goes to the first such page, the second
+  to the second, and a row past the last goes to the first.
+- The links are always written; there is no option.
+
+Headless and CLI: `export_schematic_pdf document=<sheet> path=<file>` prints
+every page of the sheet's project with the options the Print Preview first
+opens with, written off the UI thread like the preview's Export. It answers
+`{"document", "path", "pages", "table_links"}`: `pages` are the sheet files
+in print order, and each `table_links` entry is
+`{"page", "row", "link", "target_page"}`, pages and rows counted from 1. In a
+window the command opens the sheet Print Preview, as Print does on a sheet.

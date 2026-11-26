@@ -259,6 +259,20 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         operands: super::operands::BOARD_PDF,
         ..CommandMetadata::DEFAULT
     },
+    // #2663: the sheet Print Preview (File > Export > PDF on a sheet opens
+    // it too); headless it writes every page of `document`'s project to
+    // `path` and answers with the contents rows written as links.
+    CommandMetadata {
+        id: "export_schematic_pdf",
+        category: "reports",
+        label: command_ids::CMD_EXPORT_SCHEMATIC_PDF,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::NONE,
+        operands: super::operands::SCHEMATIC_PDF,
+        ..CommandMetadata::DEFAULT
+    },
     // #2486: the assembly drawings as SVG files in a folder the person
     // picks; headless it writes `document`'s drawings into `path`.
     CommandMetadata {

@@ -40,6 +40,7 @@ mod page_setup;
 pub mod palette;
 mod subset;
 mod surface;
+mod table_links;
 pub(crate) mod text_document;
 mod watermark;
 
@@ -50,6 +51,7 @@ pub use page_setup::{
     parse_percent,
 };
 pub use palette::SchematicPalette;
+pub use table_links::{PdfTableLink, pdf_table_links};
 pub use watermark::{Watermark, WatermarkPages, WatermarkPlacement, WatermarkText};
 
 use crate::svg::{
@@ -198,6 +200,8 @@ pub struct PdfOutput {
     /// Characters none of the bundled fonts cover. They are drawn as the
     /// font's `.notdef` box; the caller should warn the user. Sorted, unique.
     pub uncovered_chars: Vec<char>,
+    /// The table rows written as links to their sheet's page (#2663).
+    pub table_links: Vec<PdfTableLink>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -392,6 +396,12 @@ impl Exporter for PdfExporter {
             None => Vec::new(),
         };
 
+        // One `/Link` annotation per linked table row, after the layers.
+        let row_links =
+            table_links::collect(ctx, opts, &sheet_indices, page_w_mm, page_h_mm, page_h_pt);
+        let link_base =
+            bookmark_id_base + pending_bookmarks.len() as i32 + layer_groups.len() as i32;
+
         let mut catalog = pdf.catalog(catalog_id);
         catalog.pages(page_tree_id);
         if bookmarks_active {
@@ -448,9 +458,14 @@ impl Exporter for PdfExporter {
             write_alpha_states(&mut resources, content);
             optional_content::write_page_properties(&mut resources, &layer_groups);
             resources.finish();
+            let annotations = table_links::page_annotation_refs(&row_links, idx, link_base);
+            if !annotations.is_empty() {
+                page.annotations(annotations);
+            }
 
             page.finish();
         }
+        table_links::write_annotations(&mut pdf, &row_links, link_base, &page_refs);
 
         // Outline tree must be written after every page Ref has been
         // allocated so /Dest entries can point at concrete pages.
@@ -471,6 +486,7 @@ impl Exporter for PdfExporter {
             bytes,
             page_count: page_refs.len(),
             uncovered_chars: fonts.uncovered_chars(),
+            table_links: row_links,
         })
     }
 }

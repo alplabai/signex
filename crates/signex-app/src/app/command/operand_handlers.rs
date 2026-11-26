@@ -27,6 +27,7 @@ use super::placed_operands as placed;
 use super::placement_extras_operands as extras;
 use super::placement_operands as place;
 use super::repair_reset_operands as repair_reset;
+use super::schematic_pdf_operands as schematic_pdf;
 use super::selection_filter_operands as filter;
 use super::selection_operands as selection;
 use super::sheet_sync_operands as sheet_sync;
@@ -150,6 +151,7 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("export_assembly_svg", output::export_assembly_svg),
     ("board_assembly_drawing", output::board_assembly_drawing),
     ("export_board_step", output::export_board_step),
+    ("export_schematic_pdf", schematic_pdf::export_schematic_pdf),
     ("add_board_graphic", graphic::add_board_graphic),
     ("set_board_graphic", graphic::set_board_graphic),
     ("set_footprint_text", fp_text::set_footprint_text),

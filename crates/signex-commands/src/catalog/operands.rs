@@ -480,6 +480,12 @@ pub const BOARD_PDF: &[Operand] = &[
     optional("drill_marks", OperandKind::Bool),
     optional("title_block", OperandKind::Bool),
 ];
+/// A project's sheets printed to PDF (#2663): a sheet of the project and the
+/// file; every page with the dialog's first options.
+pub const SCHEMATIC_PDF: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("path", OperandKind::Path),
+];
 /// The assembly drawings as SVG files (#2486): which board and the folder
 /// they go in. `sides` lists `top` and `bottom` (both when left out).
 pub const ASSEMBLY_SVG_EXPORT: &[Operand] = &[

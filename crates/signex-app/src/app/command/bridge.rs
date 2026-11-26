@@ -316,7 +316,8 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
             crate::workspace_layouts::WorkspaceLayoutMsg::ResetActiveRequested.into()
         }
         "open_parameter_manager" => Message::ParameterManager(ParameterManagerMsg::Open),
-        "print" => Message::PrintPreview(PrintPreviewMsg::Requested),
+        // #2663: in a window the sheet Print Preview, as Print on a sheet.
+        "print" | "export_schematic_pdf" => Message::PrintPreview(PrintPreviewMsg::Requested),
         "redo" => Message::Edit(EditMsg::Redo),
         // Tools ▸ Assign Footprints (#2248) and View ▸ Net Inspector (#1269).
         "assign_footprints" => Message::from(crate::app::AssignFootprintsMsg::Requested),
