@@ -49,6 +49,7 @@ fn new_library(path: &Path, name: &str) {
         library: LibrarySection {
             name: name.into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),

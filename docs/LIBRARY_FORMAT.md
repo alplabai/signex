@@ -30,6 +30,27 @@ SIGNEX_BLESS_LIBRARY_FORMAT=1 cargo test -p signex-library --test library_format
 and update this document in the same change. A converter's own test should
 diff its output for equivalent input against these files.
 
+**Writer and check.** A Rust converter can write through
+`signex_library::writer::LibraryWriter`, which writes a whole library in one
+pass with these serialisers and reproduces the fixture library byte for byte.
+It refuses a footprint whose STEP attachment it was not given the model
+for, and records the rows and primitive files it wrote in
+`.signex-import-ledger.json` in the library root. Its `write_update` treats
+what that record lists as a snapshot of the source: those rows and files are
+overwritten (user edits included) or, when the source no longer has them,
+deleted. Rows, primitives and files a user added are not in the record and
+are kept byte for byte; a missing or damaged record deletes nothing, and
+STEP files are never deleted. It never writes over a file the record does
+not list (a symbol envelope then goes to `<file_uuid>.snxsym`; any other
+clash refuses the update, saying whether the record lacks the file, is
+missing or was rejected; restore the record from git, or import into a
+fresh folder), keeps a recorded primitive a kept user row still
+uses, and refuses, before writing anything, an update in which a kept user
+row and an imported row share a part number, naming both rows. It never commits, so the app refuses an update
+over uncommitted changes (#3114) before running one.
+Any converter can verify its output with `signex-cli library check <dir>`
+(`docs/CLI.md`, "Library tools"), which tests the rules below.
+
 The fixture data is synthetic: it exercises the format, not real parts.
 
 ## 1. Library directory
@@ -41,7 +62,8 @@ The fixture data is synthetic: it exercises the format, not real parts.
 ├── footprints/<uuid>.snxfpt    footprint envelopes (section 4)
 ├── sims/<uuid>.snxsim          simulation models (not specified here)
 ├── step/<sha256>.step          STEP models of footprint attachments (4.3)
-└── assets/datasheets/<sha256>.pdf   pinned datasheets
+├── assets/datasheets/<sha256>.pdf   pinned datasheets
+└── .signex-import-ledger.json  a converter's record of what it wrote (optional)
 ```
 
 - The `.snxlib` file is the library: Signex opens a library by that path,
@@ -70,6 +92,10 @@ The fixture data is synthetic: it exercises the format, not real parts.
   lower-case hex SHA-256. The footprint editor writes the file when a model
   is attached; the board 3D view reads it and reports the footprint's model
   as missing when the file is absent.
+- **Import ledger.** `.signex-import-ledger.json` is written by Signex's
+  library writer and read only by its update: the `row_id`s and primitive
+  file names one import wrote, so the next import deletes only those. Signex
+  ignores it otherwise; a converter need not write one.
 - **Pinned datasheets.** A row's `hash_pinned` document resolves to
   `assets/datasheets/<hash>.pdf`, `<hash>` being the lower-case hex SHA-256
   of the file.
@@ -113,6 +139,10 @@ library_id = "<uuid>"
 [library]
 name = "<text>"
 description = "<text>"            # omitted when absent
+license = "<SPDX id>"             # omitted when absent
+source = "<text>"                 # omitted when absent
+converted_by = "<text>"           # omitted when absent
+requires = ["<uuid>"]             # omitted when empty
 
 [mode]
 kind = "local_git"
@@ -143,6 +173,18 @@ label = "<display label>"
   save writes it, so the file would not re-save byte for byte. Note that a
   missing `[users]` table reads `default_role` as `""`, while a `[users]`
   table without the key reads it as `"Designer"` (Open points).
+- **Provenance** (#3112), for a library a converter wrote. `license` is the
+  SPDX identifier of the content's licence (`CC-BY-SA-4.0`); `source` says
+  where it came from, a URL or a description with its version;
+  `converted_by` names the converter and its version. `requires` lists the
+  `library_id`s of the libraries this one's rows reference, for example a
+  parts library over a separate footprint library. All four are optional and
+  written only when set, in this order, so a manifest without them re-saves
+  unchanged. The Library Browser shows `license` and `source`; mounting a
+  library whose required library is not open reports it in Messages and
+  mounts it anyway. A `requires` entry that is not a UUID still opens and is
+  kept, and `library check` reports it. No token change: older builds keep
+  the keys as unknown keys.
 - `[mode]` may instead be `kind = "database"` with `url` and `auth`, for a
   library served by a Signex library server; a converter writes `local_git`.
 - `[[classes]]` keys must be unique; a duplicate key opens but refuses every
@@ -152,7 +194,9 @@ label = "<display label>"
   scanning the folders), but a part can only be placed through a row, so a
   converter that wants placeable parts writes rows.
 - Layout is TOML as section 5.3 describes: one blank line before each table
-  header, arrays of strings inline here (`roles = ["Librarian"]`).
+  header; an array of strings with one element inline
+  (`roles = ["Librarian"]`), with two or more one element per line as the
+  number arrays of 5.3.
 
 ### 2.2 Tables
 

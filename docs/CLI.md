@@ -13,6 +13,7 @@ signex-cli run <project> <command-id> [--arg key=value]... [options]
 signex-cli commands [--json]
 signex-cli agent-log <project> [--access]
 signex-cli notebook export-pdf --project <project> [options]
+signex-cli library check <library> [--with <library>]... [--strict] [--json]
 signex-cli library textconv <file.snxfpt>
 ```
 
@@ -47,7 +48,86 @@ Signex".
 ## Library tools
 
 `library <verb>` runs a library tool. It needs no project and no window,
-only reads, and takes none of the `run` options.
+only reads, and takes none of the `run` options. The verbs are `check` and
+`textconv`.
+
+### `library check`
+
+```
+signex-cli library check <library> [--with <library>]... [--strict] [--json]
+```
+
+Checks a library folder (or its `.snxlib`) the way Signex loads and saves it,
+with no window and no project (#3111). Library converters run it in their CI
+to prove their output is valid; `docs/LIBRARY_FORMAT.md` is what it checks
+against.
+
+- the `.snxlib` opens, and every table's rows read;
+- every row passes the checks a save runs (`row.invalid`), its `row_id` and
+  its non-blank `internal_pn` are unique in the library, and its stored
+  `content_hash` is the hash of its content;
+- every symbol, alternate symbol, footprint, alternate footprint and sim
+  reference resolves: into this library, or into a library given with
+  `--with`. A library the manifest `requires` must be given with `--with`;
+- library ids are unique across the checked library and the `--with` ones;
+- every `.snxsym`, `.snxfpt` and `.snxsim` reads (its format token included),
+  each footprint and sim file holds one item and is named by its uuid, and
+  every file, the `.snxlib` too, re-saves as its own bytes;
+- every footprint STEP attachment names a SHA-256 whose model is embedded
+  in the footprint file and decodes to that size and hash, or, for a
+  library written before `snxfpt/1.4`, is in `step/<hash>.step` with that
+  hash.
+
+The exit code is `0` when the check finds no error (warnings are allowed),
+`1` when it finds one, and `2` for a usage error. With `--strict` a warning
+fails the check too (exit `1`); converter CI runs `library check --strict`,
+so a converter's output carries no warning either. Without `--json` it prints
+one line per problem and a count; with `--json` one line:
+
+```json
+{"ok":false,"strict":false,"library":"Passives","errors":1,"warnings":0,"problems":[{"severity":"error","code":"ref.missing_footprint","file":"Passives.snxlib","item":"0194…","message":"row R-10K (\"resistors\"): footprint 0194… is not in library 0194…"}]}
+```
+
+`file` is relative to the library folder (empty for the library as a whole);
+`item` is the row id, primitive uuid or table the problem is about, or
+`null`. Codes are stable:
+
+| Code | Severity | Meaning |
+|---|---|---|
+| `library.not_found`, `library.ambiguous` | error | no `.snxlib`, or more than one, in the folder |
+| `library.unreadable` | error | the `.snxlib` or a library folder does not read |
+| `library.duplicate_id` | error | a `--with` library has the id of another checked library |
+| `with.unreadable` | error | a `--with` library does not open |
+| `manifest.requires_malformed` | error | a `requires` entry is not a UUID |
+| `requires.missing` | error | a required library was not given with `--with` (references into it are not checked) |
+| `snxlib.not_canonical` | error | the `.snxlib` would be rewritten by a save |
+| `table.unreadable` | error | a table's rows do not read |
+| `row.invalid` | error | a save refuses the row |
+| `row.duplicate_row_id`, `row.duplicate_internal_pn` | error | not unique in the library |
+| `row.content_hash` | warning | the stored hash is not the row's; change detection is defeated |
+| `ref.missing_symbol`, `ref.missing_footprint`, `ref.missing_sim` | error | the referenced primitive is not in its library |
+| `ref.unknown_library` | error | the reference names a library that is neither this one nor a `--with` one |
+| `ref.not_required` | warning | the reference resolves into a `--with` library the manifest does not `require` |
+| `format.unsupported` | error | a primitive file's format token is refused |
+| `symbol.unreadable`, `footprint.unreadable`, `sim.unreadable` | error | the file does not read |
+| `symbol.duplicate_uuid` | error | two symbols share a uuid |
+| `footprint.misnamed`, `sim.misnamed` | error | the file is not named `<uuid>` of its first item |
+| `footprint.unreachable`, `sim.unreachable` | error | a second item in one file, which nothing can reach |
+| `symbol.not_canonical`, `footprint.not_canonical`, `sim.not_canonical` | error | a save would rewrite the file |
+| `symbol.legacy_token`, `footprint.legacy_token`, `sim.legacy_token` | warning | only the format token would be rewritten: a token this build reads but no longer writes |
+| `model.bad_hash` | error | a STEP attachment's `content_hash` is not a lower-case SHA-256 |
+| `model.hash_mismatch` | error | `step/<hash>.step` holds other bytes |
+| `model.missing` | error | the model is neither embedded in the footprint file (`[[models]]`) nor in `step/<hash>.step` |
+| `model.embedded_invalid` | error | an embedded model does not inflate to its `size` and SHA-256 |
+| `model.unreadable` | error | `step/<hash>.step` is there but does not read |
+
+`footprint.legacy_token` is a warning on purpose: the stock library's
+footprints carry `snxfpt/1`, which Signex reads but no longer writes, so
+their bytes change only in that line on the next save (the format's open
+point 8). The stock library therefore passes `library check` and fails
+`library check --strict`.
+
+### `library textconv`
 
 `library textconv <file>` prints a footprint file (`.snxfpt`) with the `data`
 block of each embedded 3D model (`[[models]]`, `docs/FORMAT_VERSIONS.md`,

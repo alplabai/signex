@@ -238,6 +238,7 @@ pub(super) fn make_snxlib(path: &std::path::Path) {
         library: LibrarySection {
             name: "Added".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),

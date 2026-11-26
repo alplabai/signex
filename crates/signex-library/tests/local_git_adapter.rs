@@ -36,6 +36,7 @@ fn empty_snx_manifest(name: &str, review_required: bool) -> SnxlibManifest {
         library: LibrarySection {
             name: name.into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig {
@@ -1144,6 +1145,7 @@ fn snx_manifest_with_mode(name: &str, mode: WorkflowMode) -> SnxlibManifest {
         library: LibrarySection {
             name: name.into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig {

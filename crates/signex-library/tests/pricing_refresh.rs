@@ -116,6 +116,7 @@ fn library(dir: &Path) -> (LocalGitAdapter, Uuid) {
         library: LibrarySection {
             name: "Px".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),

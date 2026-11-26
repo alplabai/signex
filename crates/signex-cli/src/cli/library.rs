@@ -1,5 +1,6 @@
 //! `signex-cli library <verb>`: library tools that need no project and no
-//! window. `textconv <file>` prints a footprint file with each embedded
+//! window. `check <library>` checks a library folder (#3111, see
+//! `library_check`); `textconv <file>` prints a footprint file with each embedded
 //! model's `data` block as one summary line (#3109), for git's `textconv`
 //! diff driver; see `docs/CLI.md`, "Library tools".
 
@@ -9,11 +10,13 @@ use std::path::PathBuf;
 /// A `library` verb and its operands.
 #[derive(Debug, PartialEq, Eq)]
 pub enum LibraryCommand {
+    /// `library check <library> [--with <library>]... [--strict] [--json]`.
+    Check(super::library_check::LibraryCheckOptions),
     /// `library textconv <file>`.
     Textconv(PathBuf),
 }
 
-const VERBS: &str = "textconv";
+const VERBS: &str = "check, textconv";
 
 /// `library <verb> ...`.
 pub(super) fn parse(mut args: impl Iterator<Item = String>) -> Result<LibraryCommand, String> {
@@ -21,6 +24,7 @@ pub(super) fn parse(mut args: impl Iterator<Item = String>) -> Result<LibraryCom
         .next()
         .ok_or_else(|| format!("`library` needs a verb: {VERBS}"))?;
     match verb.as_str() {
+        "check" => super::library_check::parse(args).map(LibraryCommand::Check),
         "textconv" => {
             let mut file = None;
             for arg in args {
@@ -41,9 +45,13 @@ pub(super) fn parse(mut args: impl Iterator<Item = String>) -> Result<LibraryCom
     }
 }
 
-/// Run `command`, writing its text to `out`.
-pub fn run(command: &LibraryCommand, out: &mut impl Write) -> Result<(), String> {
+/// Run `command`, writing its text to `out`. `Ok(false)` when it ran and
+/// failed (a check that found problems).
+pub fn run(command: &LibraryCommand, out: &mut impl Write) -> Result<bool, String> {
     match command {
+        LibraryCommand::Check(options) => super::library_check::run(options, out)
+            .map(|failed| !failed)
+            .map_err(|error| format!("writing to standard output: {error}")),
         LibraryCommand::Textconv(file) => {
             let bytes = std::fs::read(file)
                 .map_err(|error| format!("reading {}: {error}", file.display()))?;
@@ -53,6 +61,7 @@ pub fn run(command: &LibraryCommand, out: &mut impl Write) -> Result<(), String>
                 Err(_) => bytes,
             };
             out.write_all(&shown)
+                .map(|()| true)
                 .map_err(|error| format!("writing to standard output: {error}"))
         }
     }
@@ -104,7 +113,7 @@ mod tests {
         std::fs::write(&path, &text).unwrap();
 
         let mut out = Vec::new();
-        run(&LibraryCommand::Textconv(path), &mut out).unwrap();
+        assert!(run(&LibraryCommand::Textconv(path), &mut out).unwrap());
         let shown = String::from_utf8(out).unwrap();
         assert_eq!(shown, signex_library::textconv_footprint_text(&text));
         let summary = format!(

@@ -25,6 +25,7 @@ fn library_on_disk(path: &Path) -> Uuid {
         library: LibrarySection {
             name: "parts".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),

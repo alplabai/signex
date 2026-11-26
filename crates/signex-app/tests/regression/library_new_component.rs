@@ -42,6 +42,7 @@ fn init_library(dir: &std::path::Path) -> PathBuf {
         library: LibrarySection {
             name: "fresh".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),
@@ -125,6 +126,7 @@ fn new_component_on_a_library_without_a_table_says_why() {
         display: LibraryDisplaySettings::default(),
         dangling: Default::default(),
         pricing: Default::default(),
+        provenance: Default::default(),
     });
     let before = diagnostics::newest_entry_id();
 

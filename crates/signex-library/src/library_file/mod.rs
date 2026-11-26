@@ -103,13 +103,69 @@ pub struct ClassEntry {
     pub label: String,
 }
 
-/// `[library]` block — human-readable name + description. The `library_id`
-/// lives at the TOML root, not here.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// `[library]` block — human-readable name + description, and the optional
+/// provenance keys of a converted library (#3112). The `library_id` lives at
+/// the TOML root, not here. The provenance keys are written only when set,
+/// so a manifest without them re-saves unchanged.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct LibrarySection {
     pub name: String,
     #[serde(default)]
     pub description: Option<String>,
+    /// SPDX licence identifier of the library content (`CC-BY-SA-4.0`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub license: Option<String>,
+    /// Where the content came from: a URL or a description, with version.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    /// The converter that wrote the library, with its version.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub converted_by: Option<String>,
+    /// `library_id`s of the libraries this one's rows reference, as
+    /// written; read them with [`LibrarySection::required_libraries`]. Kept
+    /// as text so a file with a malformed entry still opens.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub requires: Vec<String>,
+}
+
+/// The provenance keys of a `[library]` block, typed, for display and for
+/// finding required libraries.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct LibraryProvenance {
+    pub license: Option<String>,
+    pub source: Option<String>,
+    pub converted_by: Option<String>,
+    /// The `requires` entries that are library ids.
+    pub requires: Vec<Uuid>,
+}
+
+impl LibrarySection {
+    /// The provenance keys; malformed `requires` entries are left out.
+    pub fn provenance(&self) -> LibraryProvenance {
+        LibraryProvenance {
+            license: self.license.clone(),
+            source: self.source.clone(),
+            converted_by: self.converted_by.clone(),
+            requires: self.required_libraries(),
+        }
+    }
+
+    /// The `requires` entries that parse as UUIDs, in file order.
+    pub fn required_libraries(&self) -> Vec<Uuid> {
+        self.requires
+            .iter()
+            .filter_map(|text| Uuid::parse_str(text.trim()).ok())
+            .collect()
+    }
+
+    /// The `requires` entries that are not UUIDs.
+    pub fn malformed_requires(&self) -> Vec<&str> {
+        self.requires
+            .iter()
+            .filter(|text| Uuid::parse_str(text.trim()).is_err())
+            .map(String::as_str)
+            .collect()
+    }
 }
 
 /// Fixes a TSV row whose cell count mismatches its header; see
@@ -370,6 +426,8 @@ mod row_lines;
 pub(crate) use row_lines::RowLines;
 #[cfg(test)]
 mod pricing_tests;
+#[cfg(test)]
+mod provenance_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

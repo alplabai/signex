@@ -65,6 +65,7 @@ fn library() -> (tempfile::TempDir, PathBuf, Uuid) {
         library: LibrarySection {
             name: "L".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),

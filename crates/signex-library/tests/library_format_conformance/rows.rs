@@ -203,6 +203,7 @@ pub(crate) fn library_file() -> LibraryFile {
                 description: Some(
                     "Signex library format conformance fixture (docs/LIBRARY_FORMAT.md).".into(),
                 ),
+                ..Default::default()
             },
             mode: LibraryMode::LocalGit,
             workflow: WorkflowConfig::default(),

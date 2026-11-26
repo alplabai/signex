@@ -45,7 +45,8 @@ fn main() -> ExitCode {
         }
         Ok(Invocation::Library(command)) => {
             match cli::library::run(&command, &mut io::stdout().lock()) {
-                Ok(()) => ExitCode::SUCCESS,
+                Ok(true) => ExitCode::SUCCESS,
+                Ok(false) => ExitCode::from(EXIT_NOT_OK),
                 Err(error) => fail(&error),
             }
         }

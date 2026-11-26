@@ -103,6 +103,7 @@ fn fixture_with(setup: Setup) -> Fixture {
         library: LibrarySection {
             name: "Lib".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig {

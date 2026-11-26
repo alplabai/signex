@@ -38,6 +38,7 @@ fn library_views_trigger_no_adapter_call() {
         pricing: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
+        provenance: Default::default(),
     });
     calls.store(0, Ordering::SeqCst);
 

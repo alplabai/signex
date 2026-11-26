@@ -8,6 +8,7 @@ use crate::capability::{self, Capability};
 use crate::input::Limits;
 
 pub mod library;
+pub mod library_check;
 mod notebook;
 
 pub const USAGE: &str = "\
@@ -18,6 +19,7 @@ USAGE:
     signex-cli run <project> <command-id> [--arg key=value]... [OPTIONS]
     signex-cli commands [--json]
     signex-cli agent-log <project> [--access]
+    signex-cli library check <library> [--with <library>]... [--strict] [--json]
     signex-cli notebook generate --project <project> [--force] [--fail-on requirements,checks]
                [--sections <list>|all] [--variant <name>] [--template <name>]
                [--document <number>] [--revision <rev>] [--checks run|last] [OPTIONS]
@@ -62,6 +64,9 @@ notebook export-pdf writes the project's Design Notebook as a PDF file (the
 default name in Project Outputs/notebook/ without --out); it runs as
 `run <project> export_notebook_pdf --arg ... --allow export` and takes the
 run options.
+
+library check checks a library folder (or its .snxlib) as Signex would load
+and save it; exit 1 on an error (with --strict also on a warning), else 0.
 
 library textconv prints a footprint file with each embedded 3D model's data
 block as one summary line, for git's textconv diff driver. It only reads.

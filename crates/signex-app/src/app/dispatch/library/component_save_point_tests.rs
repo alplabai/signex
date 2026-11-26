@@ -45,6 +45,7 @@ fn app_with_clean_editor() -> (Signex, EditorAddress) {
         own_edit_stamp: None,
         display: Default::default(),
         pricing: Default::default(),
+        provenance: Default::default(),
     });
     let preview = ComponentPreviewState::from_row(root, TABLE.into(), row);
     app.library.editors.insert(address.clone(), preview);

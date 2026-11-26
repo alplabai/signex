@@ -14,6 +14,8 @@ pub mod alternate_symbol;
 pub mod alternate_symbol_edit;
 pub(crate) mod board_footprint;
 pub mod cascade;
+#[cfg(feature = "local-git")]
+pub mod check;
 pub mod component;
 pub mod dangling;
 pub mod datasheet_asset;
@@ -56,6 +58,8 @@ mod vcs_init_files;
 #[cfg(feature = "local-git")]
 pub mod vcs_target_guard;
 pub mod where_used;
+#[cfg(feature = "local-git")]
+pub mod writer;
 
 pub use adapter::{
     CommitOutcome, ComponentSummary, FileRewrite, HeldBackFile, HistoryEntry, LibraryAdapter,
@@ -105,8 +109,8 @@ pub use footprint_binding::{
 pub use hash::hash_row_content;
 pub use identity::{ComponentClass, InternalPn, Mpn, RowId};
 pub use library_file::{
-    ClassEntry, FORMAT_TOKEN, LibraryFile, LibraryFileError, LibraryRow, LibrarySection,
-    LibraryTable, SnxlibManifest,
+    ClassEntry, FORMAT_TOKEN, LibraryFile, LibraryFileError, LibraryProvenance, LibraryRow,
+    LibrarySection, LibraryTable, SnxlibManifest,
 };
 pub use lifecycle::LifecycleState;
 pub use manifest::{
@@ -149,6 +153,8 @@ pub use templates::{
 };
 pub use validate::validate_row_for_write;
 pub use where_used::{UseSite, WhereUsedIndex};
+#[cfg(feature = "local-git")]
+pub use writer::{LedgerState, LibraryWriter, TableDraft, UpdateSummary};
 
 #[cfg(feature = "local-git")]
 pub use adapters::local_git::{

@@ -55,6 +55,7 @@ pub fn stock_library_file() -> Result<LibraryFile, Box<dyn Error>> {
         library: LibrarySection {
             name: "Stock".to_string(),
             description: Some("Reference footprints and symbols bundled with Signex.".to_string()),
+            ..Default::default()
         },
         mode: LibraryMode::LocalGit,
         workflow: WorkflowConfig {

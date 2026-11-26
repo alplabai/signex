@@ -1200,6 +1200,7 @@ fn edit_symbol_on_a_stock_part_edits_a_copy_in_the_picked_library() {
             library: LibrarySection {
                 name: "Mine".into(),
                 description: None,
+                ..Default::default()
             },
             mode: LibraryMode::default(),
             workflow: WorkflowConfig::default(),

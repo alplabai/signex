@@ -178,6 +178,7 @@ fn prepare_opened(path: &Path, adapter: LocalGitAdapter, history_missing: bool) 
         pricing: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
+        provenance: adapter.provenance(),
     };
     // Same tolerance as the synchronous path: one unreadable table must
     // not sink the mount. The library opens with an empty cache and the

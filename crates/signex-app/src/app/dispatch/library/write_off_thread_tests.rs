@@ -51,6 +51,7 @@ fn fixture() -> Fixture {
         library: LibrarySection {
             name: "Lib".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),
@@ -95,6 +96,7 @@ fn fixture() -> Fixture {
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
         pricing: Default::default(),
+        provenance: Default::default(),
     });
     let mut browser = LibraryBrowserState::new(file.clone());
     browser.active_table = Some(TABLE.to_string());
@@ -708,6 +710,7 @@ fn the_git_reinit_of_a_library_runs_off_the_ui_thread() {
         library: LibrarySection {
             name: "Lib".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),
