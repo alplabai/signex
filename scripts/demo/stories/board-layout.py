@@ -29,6 +29,7 @@ def bom(result):
 def run(ctx):
     board = str(ctx.project.with_suffix(".snxpcb"))
     ctx.step("A routed two-layer microcontroller breakout", hold=2.0)
+    ctx.step("Frame the whole board", lambda: ctx.window("zoom_to_fit"), hold=1.5)
     ctx.step(
         "Highlight the top copper",
         lambda: ctx.ask("highlight_layer", document=board, layer="TopCopper"),

@@ -35,6 +35,7 @@ def pin_summary(answers):
 def run(ctx):
     sheet = ctx.project.with_suffix(".snxsch")
     doc = str(sheet)
+    ctx.step("The LED circuit, framed", lambda: ctx.window("zoom_to_fit"), hold=1.5)
     ctx.step(
         lambda r: f"A script connects to the running app: {r['data']['count']} documents open",
         lambda: ctx.ask("list_documents"),

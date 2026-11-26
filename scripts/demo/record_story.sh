@@ -67,6 +67,9 @@ cat >"$work/config/signex/window_geometry.json" <<EOF
  "width": $width, "height": $height, "maximized": false}
 EOF
 export XDG_CONFIG_HOME="$work/config" XDG_RUNTIME_DIR="$runtime"
+# Warnings and errors only: at info the window, D-Bus and settings dumps of
+# the libraries under the app run to megabytes. DEMO_LOG overrides it.
+export SIGNEX_LOG=${DEMO_LOG:-warn}
 
 echo "== $name: set-up" >&2
 mapfile -t open_paths < <(python3 "$here/drive_story.py" prepare "$story" --work "$work" --cli "$cli")

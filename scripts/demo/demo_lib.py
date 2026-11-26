@@ -123,6 +123,12 @@ class Context:
         work folder; the repository copy is never edited."""
         shutil.copytree(source, folder, dirs_exist_ok=True)
 
+    def copy_file(self, source: Path, target: Path) -> None:
+        """Copy one repository file (a sheet of a corpus project) into the
+        work folder; the repository copy is never edited."""
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, target)
+
     def show(self, project: Path, *documents: Path) -> None:
         """The project and documents the window opens at start."""
         self.project = project

@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -46,8 +47,10 @@ def main() -> int:
         print(story.TITLE)
         return 0
     if args.phase == "pending":
-        # A story whose commands have not merged yet sets PENDING to why.
-        print(getattr(story, "PENDING", ""))
+        # A story whose commands have not merged yet sets PENDING to why;
+        # DEMO_RUN_PENDING=1 runs it anyway (a build that has them).
+        if not os.environ.get("DEMO_RUN_PENDING"):
+            print(getattr(story, "PENDING", ""))
         return 0
 
     cli = args.cli or demo_lib.env_cli()

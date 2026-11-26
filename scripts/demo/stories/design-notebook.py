@@ -52,6 +52,7 @@ def reported(result):
 def run(ctx):
     project = str(ctx.project)
     ctx.step("A regulator board and its bring-up notebook", hold=2.0)
+    ctx.step("Frame the whole board", lambda: ctx.window("zoom_to_fit"), hold=1.5)
     ctx.step(
         "Show the notebook's annotations beside the board",
         lambda: ctx.window("set_dock_panel", panel="annotations", state="open"),

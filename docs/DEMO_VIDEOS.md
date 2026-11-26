@@ -53,7 +53,10 @@ encodes run under `nice`.
    repository's files are never edited.
 2. A virtual display (Xvfb, 1920x1080) starts, then the release app, opening
    the story's project with a private configuration: agent connections on,
-   Graphite Dark, the window filling the screen, the Messages panel collapsed.
+   Graphite Dark, the window filling the screen, the Messages panel collapsed,
+   its log at warnings (`SIGNEX_LOG=warn`; `DEMO_LOG` sets another level),
+   since at info the libraries under the app log megabytes of window and
+   D-Bus detail.
 3. ffmpeg captures the display.
 4. The story's steps run (`drive_story.py run`). Every action is a catalog
    command sent through the agent socket by one attached `signex-cli run`
@@ -86,7 +89,11 @@ on the agent channel, and `ctx.window` a window-layout command (`zoom_to_fit`,
 of the command's answer. `visual=False` marks a step that changes nothing on
 the canvas (a query), so no pointer is drawn for it. A story whose commands
 have not merged sets `PENDING` to the reason, and both `record_all.sh` modes
-skip it with that reason.
+skip it with that reason; `DEMO_RUN_PENDING=1` runs it anyway, with a
+`SIGNEX_CLI` built from the branch that has its commands. A story frames its
+content with `ctx.window("zoom_to_fit")` once there is something to frame
+(after the parts are placed, when a board opens), so the window shows the
+work, not an empty sheet around it.
 
 | Story | Shows |
 |---|---|
@@ -94,7 +101,7 @@ skip it with that reason.
 | `board-layout` | a routed two-layer microcontroller breakout from the test corpus; layer highlighting, teardrops, DRC, net status, the bill of materials |
 | `automation` | a script driving the running app over the agent socket: it reads the parts, colours nets, names a net, runs ERC and reverts its own step |
 | `design-notebook` | a regulator board from the test corpus with its bring-up notebook: the Annotations panel, the notebook compiled, its measurements checked against their limits, its attachments, the design report generated |
-| `block-diagram` | pending: waits for the Block Diagram batch |
+| `block-diagram` | pending until the Block Diagram batch merges (then set `BLOCK_DIAGRAM_MERGED = True` in the story): a three-sheet hierarchy from the test corpus gets a diagram generated from its sheets; a block is added, given a port, linked as power and grouped |
 | `routing-fab` | the regulator board with its LED net unrouted: Fit, the net routed pad to pad, the pours filled again, DRC, the fabrication files and a board PDF written into the project |
 
 Captions are plain English about what the product does. They name no other

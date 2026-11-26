@@ -5,6 +5,9 @@ from demo_lib import count_findings
 from led_circuit import STEPS
 
 TITLE = "Schematic capture"
+# The first steps place the parts (connector, resistor, LED); the view is
+# fitted to them before the wiring starts.
+PARTS = 3
 
 
 def prepare(ctx):
@@ -15,8 +18,12 @@ def prepare(ctx):
 def run(ctx):
     sheet = ctx.project.with_suffix(".snxsch")
     ctx.step("A new project with one empty sheet", hold=2.0)
-    for caption, edits in STEPS:
+    for index, (caption, edits) in enumerate(STEPS):
         ctx.step(caption, lambda edits=edits: ctx.edit(sheet, *edits))
+        if index == PARTS - 1:
+            ctx.step("Fit the view to the parts", lambda: ctx.window("zoom_to_fit"), hold=1.5)
+    # The wires, ports and label reach past the parts: frame them all.
+    ctx.step("Fit the whole circuit", lambda: ctx.window("zoom_to_fit"), hold=1.5)
     ctx.step(
         lambda r: f"Electrical rules check: {count_findings(r)}",
         lambda: ctx.ask("check_erc", document=str(sheet)),
