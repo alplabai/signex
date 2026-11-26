@@ -358,7 +358,10 @@ fn both_refused(app: &mut Signex, fragment: &str) {
     }
     assert_eq!(app.ui_state.keymap_profiles, live);
     assert_eq!(app.ui_state.preferences_keymap_editor, page);
-    assert!(!crate::keymap::config_path().unwrap().exists(), "nothing was written");
+    assert!(
+        !crate::keymap::config_path().unwrap().exists(),
+        "nothing was written"
+    );
 }
 
 /// Review finding: Apply would write the page's working copy over a CLI

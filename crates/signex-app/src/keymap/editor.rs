@@ -545,14 +545,18 @@ impl KeymapEditorModel {
         let Some(wanted) = resolved_strokes(keys, self.platform) else {
             return false;
         };
-        self.profiles.active_profile().bindings.iter().any(|binding| {
-            binding.applies_on(self.platform)
-                && binding.context == context
-                && matches!(&binding.action, ShortcutBindingAction::Command(c) if c == command)
-                && binding.triggers.iter().any(|trigger| {
-                    resolved_strokes(trigger, self.platform).as_ref() == Some(&wanted)
-                })
-        })
+        self.profiles
+            .active_profile()
+            .bindings
+            .iter()
+            .any(|binding| {
+                binding.applies_on(self.platform)
+                    && binding.context == context
+                    && matches!(&binding.action, ShortcutBindingAction::Command(c) if c == command)
+                    && binding.triggers.iter().any(|trigger| {
+                        resolved_strokes(trigger, self.platform).as_ref() == Some(&wanted)
+                    })
+            })
     }
 
     /// The conflicts of the active profile `command` takes part in on `keys`

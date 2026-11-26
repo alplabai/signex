@@ -144,12 +144,12 @@ fn open_profile(app: &Signex, profile: &str) -> Result<Opened, Translatable> {
         Translatable::new(ids::PREFERENCES_KEYMAP_CMD_NO_PROFILE)
             .arg("profile", profile.to_string())
     };
-    editor.set_active_profile(profile).map_err(|_| no_profile())?;
+    editor
+        .set_active_profile(profile)
+        .map_err(|_| no_profile())?;
     if !editor.active_profile_is_custom() {
-        return Err(
-            Translatable::new(ids::PREFERENCES_KEYMAP_CMD_BUILT_IN)
-                .arg("profile", profile.to_string()),
-        );
+        return Err(Translatable::new(ids::PREFERENCES_KEYMAP_CMD_BUILT_IN)
+            .arg("profile", profile.to_string()));
     }
     Ok(Opened {
         editor,

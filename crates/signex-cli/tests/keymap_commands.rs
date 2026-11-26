@@ -54,10 +54,7 @@ fn keys_of(file: &Path, command: &str) -> Vec<String> {
 /// the user's config root, whichever way the binary was built.
 fn run_as_user(home: &Path, args: &[&str], commands: &[Value]) -> Output {
     let config = home.join(".config");
-    let root = user_file(home)
-        .parent()
-        .expect("config root")
-        .to_path_buf();
+    let root = user_file(home).parent().expect("config root").to_path_buf();
     let env = [
         ("HOME", home),
         ("XDG_CONFIG_HOME", config.as_path()),
@@ -93,7 +90,11 @@ fn keymap_assign_writes_the_users_file_and_a_second_run_sees_the_binding() {
 
     let first = run_as_user(&home, &["run", project, "--save"], &[assign("mine")]);
     let line = &first.lines[0];
-    assert_eq!(line["status"], "answered", "{}\n{}", first.stdout, first.stderr);
+    assert_eq!(
+        line["status"], "answered",
+        "{}\n{}",
+        first.stdout, first.stderr
+    );
     assert_eq!(line["data"]["unchanged"], false, "{}", first.stdout);
     assert_eq!(line["data"]["file"], file.display().to_string());
     assert_eq!(keys_of(&file, UNBOUND), ["Ctrl+Alt+Q"]);
@@ -108,7 +109,11 @@ fn keymap_assign_writes_the_users_file_and_a_second_run_sees_the_binding() {
             json!({"id": "keymap_clear", "args": {"command": UNBOUND, "profile": "mine"}}),
         ],
     );
-    assert_eq!(second.lines[0]["data"]["unchanged"], true, "{}", second.stdout);
+    assert_eq!(
+        second.lines[0]["data"]["unchanged"], true,
+        "{}",
+        second.stdout
+    );
     assert_eq!(second.lines[1]["data"]["removed"], 1, "{}", second.stdout);
     assert!(keys_of(&file, UNBOUND).is_empty());
 }
@@ -131,7 +136,11 @@ fn the_save_capability_and_a_built_in_profile_are_still_refused() {
         &[assign("signex_standard")],
     ));
     assert!(built_in.contains("read-only"), "{built_in}");
-    assert_eq!(std::fs::read(&file).unwrap(), before, "the file is unchanged");
+    assert_eq!(
+        std::fs::read(&file).unwrap(),
+        before,
+        "the file is unchanged"
+    );
 }
 
 #[test]
