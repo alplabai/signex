@@ -514,6 +514,8 @@ pub enum ProjectTreeAction {
     /// Project root → Add New ▸ PCB: the project's one board, from its
     /// defaults, opened unsaved (#1312).
     AddNewPcb(signex_widgets::tree_view::TreeKey),
+    /// Project root → Add New ▸ Design Notebook: its notebook, unsaved.
+    AddNewDesignNotebook(signex_widgets::tree_view::TreeKey),
     /// Project root → Update PCB Document: the Update PCB dialog for that
     /// project (#1312).
     UpdatePcb(signex_widgets::tree_view::TreeKey),
@@ -572,6 +574,7 @@ impl ProjectTreeAction {
             | AddExistingToProject(k)
             | AddNewSchematic(k)
             | AddNewPcb(k)
+            | AddNewDesignNotebook(k)
             | UpdatePcb(k)
             | AddProjectSymbolLibrary(k)
             | AddProjectFootprintLibrary(k)

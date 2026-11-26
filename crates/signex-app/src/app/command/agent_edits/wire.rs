@@ -433,6 +433,16 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "smart_paste",
         "it pastes the person's copy in this window, which an agent did not make",
     ),
+    // #2795: the insert lands in the notebook tab's text, not on a sheet.
+    (
+        "notebook_insert",
+        "it edits the project's Design Notebook, which no sheet's undo step covers; run it as its own command",
+    ),
+    // Mockup row 196: a reference fix edits the notebook tab's text too.
+    (
+        "notebook_fix_reference",
+        "it edits the project's Design Notebook, which no sheet's undo step covers; run it as its own command",
+    ),
     (
         "project_set_rail",
         "it writes the project's settings, which no sheet's undo step covers",

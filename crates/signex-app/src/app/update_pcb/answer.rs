@@ -28,6 +28,9 @@ pub(crate) struct UpdatePcbAnswer {
     pub(crate) applied: usize,
     pub(crate) counts: Counts,
     pub(crate) changes: Vec<Change>,
+    /// Pads with no symbol pin, as `U1.4`, that keep their net and are
+    /// locked with the rows that apply (were locked, for an apply; #3060).
+    pub(crate) pad_locks: Vec<String>,
     pub(crate) notes: Vec<String>,
     /// The board's net classes the Net Blanket and Net Parameters directives
     /// add or change (exit criterion 3): put there by an apply, for a dry
@@ -105,6 +108,10 @@ impl UpdatePcbAnswer {
                 problems: summary.problems,
             },
             changes: list.rows.iter().map(|row| change(list, row)).collect(),
+            pad_locks: list
+                .applied_pad_locks()
+                .map(|lock| format!("{}.{}", lock.reference, lock.pad_number))
+                .collect(),
             notes: list.notes.iter().map(note_text).collect(),
             net_classes: at.net_classes,
             execute_blocked: at.execute_blocked,

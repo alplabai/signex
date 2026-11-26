@@ -622,6 +622,12 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "open_diff_pair_classes" => Needs::OpenProject,
         // #2908: a copy of the project in a new folder.
         "save_project_as" => Needs::OpenProject,
+        // The project's Design Notebook (mockup rows 195, 201, 202), and its
+        // badges on a sheet (row 197).
+        "open_design_notebook" | "generate_design_notebook" | "export_notebook_pdf" => {
+            Needs::OpenProject
+        }
+        "toggle_notebook_badges" => Needs::Schematic,
         // #2457: the dialog reads the sheets of the board's project.
         "create_rooms_from_sheets" => Needs::PcbInProject,
         // #2457, #2941: they move parts of the board in view.

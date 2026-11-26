@@ -166,6 +166,32 @@ harness above; each project file is checked to save back to its own bytes.
 | `nested-harness-carry` | the same design with `DEBUG` carried through `bridge.snxsch`, a sheet with no connector | the same golden netlist |
 | `net-class-directives` | one sheet, U1 and J1 on `VIN` (Net Blanket, class `POWER`), `CLK` (Net Parameters, class `HS`, width and clearance), `USB_P` / `USB_N` (Net Parameters, diff-pair class `USB`) and `SIG`; an empty board; the project's `POWER` and `HS` classes list no nets | the netlist with classes, `crates/signex-net/tests/golden/net_class_directives.netlist.tsv`; what Update PCB reads and writes, `crates/signex-app/tests/golden/advanced_schematic/net_class_directives.update_pcb.txt` |
 
+## Design Notebooks (`.snxnbk`)
+
+`notebook/**/*.snxnbk` are walked by the `signex-notebook` crate tests
+(`src/tests_file.rs`, `src/tests_compile.rs`), not by this crate. Each file
+reads with `NotebookFile::parse` and saves back byte for byte; every file
+with a header is in the canonical form `Header::to_toml` writes, and every
+reference a header stores is one its text makes. `MIN_NOTEBOOK_FIXTURES`
+guards the count. Written by hand; keep headers canonical (format token,
+unknown keys sorted, then one `[[references]]` table per reference).
+
+| Fixture | Covers |
+|---|---|
+| `minimal` | a header with only the format token |
+| `no-header` | plain Typst with no header, read as `snxnbk/1` and kept without one; an `#annotation` block |
+| `kept-unknown-keys` | unknown keys at the top of the header and in a reference entry, a net with no id, a pin with one |
+| `with-chapters/design` | the notebook file: the package import, the report layout, an `#include` of a chapter file |
+| `with-chapters/chapters/power` | a chapter with its own header; references in markup and in block targets, both pin forms; one block of each kind with a typed id; the earlier `#annotation` form |
+| `power-stage` | the "Power stage" page of mockup row 60b as review records: the page block, a Calculation with its target band and result, a Measurement table of three rails (pass, pass, warn), an Issue raised from it, a Decision and a Note naming a removed part (`src/tests_records.rs`) |
+| `with-measurements/design` | measurements (mockup row 199): a `#measurement` block of four readings (nominal and tolerance, max and min limits), a reading on its own that stores the part values it was taken with, and an `#attachment` of the scope capture in `with-measurements/attachments/scope/` (a CSV, not walked as a notebook) |
+
+`with-chapters` is also the compile fixture: it compiles with no
+diagnostic, and two PDF exports of it are the same bytes. `power-stage`
+compiles with no diagnostic too. `with-measurements` compiles with its
+capture read the way the app reads it
+(`NotebookSources::missing_attachments`).
+
 ## Intentional format change
 
 Run the same bless command, review every fixture diff as the format

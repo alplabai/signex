@@ -72,6 +72,7 @@ fn the_table_builds_with_problems_under_every_filter() {
             ),
         ],
         notes: Vec::new(),
+        pad_locks: Vec::new(),
     };
     let filters = [
         None,
@@ -163,6 +164,7 @@ fn the_redesign_builds_with_every_problem_and_filter() {
             reference: "J4".into(),
             footprint: uuid::Uuid::nil(),
         }],
+        pad_locks: Vec::new(),
     };
     let filters = [
         None,

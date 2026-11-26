@@ -736,6 +736,14 @@ pub struct DocumentState {
     /// The Gerber Viewer tab (mockup rows 193 and 193f): the package shown
     /// and the app-wide recent packages. Its slice owns it.
     pub gerber_viewer: crate::app::gerber_viewer::GerberViewerState,
+    /// Each project's Design Notebook (mockup row 195) as a document being
+    /// edited, kept while the project is loaded so a closed tab keeps its
+    /// unsaved text. The tab's view of it is `UiState::notebook_tabs`.
+    pub notebooks: std::collections::HashMap<ProjectId, signex_notebook::NotebookDocument>,
+    /// The design report Generate made in the app (mockup row 201), held
+    /// unsaved per project until Save writes it or Discard drops it.
+    pub generated_reports:
+        std::collections::HashMap<ProjectId, signex_notebook::generate::GeneratedNotebook>,
 }
 
 /// A project folder a rename moved from `old` to `new`.

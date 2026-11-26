@@ -104,6 +104,11 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     (&["place_board_via"], Operand, &[]),
     // The PDF's printed text is in the UI locale (`print_text`).
     (&["export_board_pdf"], Operand, &[Settings]),
+    // Mockup row 202: the stale check reads the named project's design on
+    // the worker (`notebook_design_inputs`), its open sheets as edited; the
+    // dialog opens on the project in view.
+    (&["export_notebook_pdf"], Operand, &[]),
+    (&["export_notebook_pdf"], Bridge, &[ActiveDocument]),
     // Save As of a background sheet is refused (`active_path`).
     (&["save_document_as"], Operand, &[ActiveDocument]),
     // The rfd picker (`save_as_dialog_for_active_tab`).
@@ -239,6 +244,10 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "send_drawings_backward",
             "send_drawings_to_back",
             "delete_selection",
+            // Mockup row 199: the named project's notebook files.
+            "export_notebook_timeline",
+            "mark_notebook_attachment_valid",
+            "attach_notebook_file",
             // #2470: the area tools take their layer and net as operands,
             // never the active layer or the tool's form.
             "place_board_fill",
@@ -334,6 +343,24 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     ),
     // A run already going in the Project tab skips this one.
     (&["project_run_requirements"], Operand, &[Window]),
+    // #2795: a compile reads the project's notebook as its tab holds it (or
+    // its file) and the view writes that tab's session, nothing implicit; an
+    // insert lands at the tab's cursor unless `line` names one.
+    (&["notebook_compile", "notebook_view"], Operand, &[]),
+    (&["notebook_insert"], Operand, &[Cursor]),
+    // Mockup rows 196 and 197: each reads the project it names first and
+    // answers from that read; a fix edits the notebook tab's text.
+    (
+        &[
+            "notebook_references",
+            "notebook_reference_card",
+            "notebook_reference_picker",
+            "notebook_badges",
+            "notebook_fix_reference",
+        ],
+        Operand,
+        &[],
+    ),
     // The board update acts on the project its `document` names (#2470),
     // else on the active project (the workspace pointer, not the tab in
     // view); an open Update PCB dialog only refuses it.
@@ -470,6 +497,8 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Check,
         &[Settings],
     ),
+    // The design report runs the same checks (#2945).
+    (&["generate_design_notebook"], Operand, &[Settings]),
     // The answer names the view angle of the board's canvas.
     (&["document_info"], Query, &[Window]),
     // `rules_explain` and `rules_get` read the board's last DRC run
@@ -525,6 +554,13 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "search_parts",
             "read_document",
             "variant_bom",
+            // Mockup row 199: the named project's notebook and sheets.
+            "notebook_measurements",
+            "notebook_timeline",
+            "notebook_attachments",
+            // Mockup row 198: the review records of the named project's
+            // notebook files, read from disk.
+            "list_annotations",
         ],
         Query,
         &[],
@@ -879,6 +915,7 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "show_current_command_shortcuts",
             "new_project_with_profile",
             "toggle_cross_select_mode",
+            "toggle_notebook_badges",
             "place_wire_to_bus_entry",
         ],
         Bridge,

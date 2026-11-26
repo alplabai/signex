@@ -60,7 +60,7 @@ impl Signex {
             mutator(&mut lib.display);
         }
         if let Some(editor) = self.document_state.symbol_editors.get_mut(&path) {
-            editor.canvas_cache.clear();
+            editor.gui.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
         true
@@ -91,7 +91,7 @@ impl Signex {
                 return false;
             }
             editor.mark_dirty();
-            editor.canvas_cache.clear();
+            editor.gui.canvas_cache.clear();
             true
         });
         if applied {
@@ -175,8 +175,8 @@ impl Signex {
         let Some(editor) = self.active_symbol_editor_mut() else {
             return true;
         };
-        let was_open = matches!(editor.graphic_fill_picker, Some(p) if p.idx == idx);
-        editor.graphic_fill_picker = if was_open {
+        let was_open = matches!(editor.gui.graphic_fill_picker, Some(p) if p.idx == idx);
+        editor.gui.graphic_fill_picker = if was_open {
             None
         } else {
             Some(crate::app::GraphicFillPicker {
@@ -184,7 +184,7 @@ impl Signex {
                 advanced: false,
             })
         };
-        editor.local_color_picker = None;
+        editor.gui.local_color_picker = None;
         self.refresh_panel_ctx();
         true
     }
@@ -195,11 +195,11 @@ impl Signex {
         let Some(editor) = self.active_symbol_editor_mut() else {
             return true;
         };
-        editor.graphic_fill_picker = Some(crate::app::GraphicFillPicker {
+        editor.gui.graphic_fill_picker = Some(crate::app::GraphicFillPicker {
             idx,
             advanced: true,
         });
-        editor.local_color_picker = None;
+        editor.gui.local_color_picker = None;
         self.refresh_panel_ctx();
         true
     }
@@ -209,7 +209,7 @@ impl Signex {
         let Some(editor) = self.active_symbol_editor_mut() else {
             return true;
         };
-        editor.graphic_fill_picker = None;
+        editor.gui.graphic_fill_picker = None;
         self.refresh_panel_ctx();
         true
     }
@@ -222,7 +222,7 @@ impl Signex {
         color: Option<[u8; 4]>,
     ) -> bool {
         self.sym_editor_record_edit(None, |editor| {
-            editor.graphic_fill_picker = None;
+            editor.gui.graphic_fill_picker = None;
             let Some(g) = editor.primitive_mut().graphics.get_mut(idx) else {
                 return false;
             };
@@ -242,8 +242,8 @@ impl Signex {
         let Some(editor) = self.active_symbol_editor_mut() else {
             return true;
         };
-        let was_open = matches!(editor.local_color_picker, Some(p) if p.slot == slot);
-        editor.local_color_picker = if was_open {
+        let was_open = matches!(editor.gui.local_color_picker, Some(p) if p.slot == slot);
+        editor.gui.local_color_picker = if was_open {
             None
         } else {
             Some(crate::app::LocalColorPicker {
@@ -251,7 +251,7 @@ impl Signex {
                 advanced: false,
             })
         };
-        editor.graphic_fill_picker = None;
+        editor.gui.graphic_fill_picker = None;
         self.refresh_panel_ctx();
         true
     }
@@ -265,11 +265,11 @@ impl Signex {
         let Some(editor) = self.active_symbol_editor_mut() else {
             return true;
         };
-        editor.local_color_picker = Some(crate::app::LocalColorPicker {
+        editor.gui.local_color_picker = Some(crate::app::LocalColorPicker {
             slot,
             advanced: true,
         });
-        editor.graphic_fill_picker = None;
+        editor.gui.graphic_fill_picker = None;
         self.refresh_panel_ctx();
         true
     }
@@ -279,7 +279,7 @@ impl Signex {
         let Some(editor) = self.active_symbol_editor_mut() else {
             return true;
         };
-        editor.local_color_picker = None;
+        editor.gui.local_color_picker = None;
         self.refresh_panel_ctx();
         true
     }
@@ -292,7 +292,7 @@ impl Signex {
         color: Option<[u8; 4]>,
     ) -> bool {
         self.sym_editor_record_edit(None, |editor| {
-            editor.local_color_picker = None;
+            editor.gui.local_color_picker = None;
             let sym = editor.primitive_mut();
             match slot {
                 crate::app::LocalColorSlot::Fill => sym.local_fill_color = color,
@@ -313,9 +313,9 @@ impl Signex {
         if idx >= editor.primitive().graphics.len() {
             return true;
         }
-        editor.selected =
+        editor.gui.selected =
             Some(crate::library::editor::symbol::state::SymbolSelection::Graphic(idx));
-        editor.canvas_cache.clear();
+        editor.gui.canvas_cache.clear();
         self.refresh_panel_ctx();
         true
     }
@@ -330,11 +330,11 @@ impl Signex {
         };
         let max = crate::library::editor::symbol::state::max_part_number(editor.primitive());
         let clamped = if part == 0 { 0 } else { part.min(max).max(1) };
-        if editor.active_part == clamped {
+        if editor.draft.active_part == clamped {
             return true;
         }
-        editor.active_part = clamped;
-        editor.canvas_cache.clear();
+        editor.draft.active_part = clamped;
+        editor.gui.canvas_cache.clear();
         self.refresh_panel_ctx();
         true
     }
@@ -346,10 +346,10 @@ impl Signex {
         if pin_idx >= editor.primitive().pins.len() {
             return true;
         }
-        editor.selected = Some(crate::library::editor::symbol::state::SymbolSelection::Pin(
+        editor.gui.selected = Some(crate::library::editor::symbol::state::SymbolSelection::Pin(
             pin_idx,
         ));
-        editor.canvas_cache.clear();
+        editor.gui.canvas_cache.clear();
         self.refresh_panel_ctx();
         true
     }
@@ -446,18 +446,18 @@ impl Signex {
             );
             return true;
         };
-        if idx >= editor.file.symbols.len() {
+        if idx >= editor.draft.file.symbols.len() {
             crate::diagnostics::log_warning(format!(
                 "{}: symbol select index {idx} is out of range ({} symbols)",
                 editor.path.display(),
-                editor.file.symbols.len()
+                editor.draft.file.symbols.len()
             ));
             return true;
         }
-        if editor.active_idx == idx {
+        if editor.draft.active_idx == idx {
             return true;
         }
-        editor.active_idx = idx;
+        editor.draft.active_idx = idx;
         // Switching symbols resets the unit, selection and viewport so
         // the new symbol does not inherit the previous one's.
         editor.reset_view_for_symbol_switch();
@@ -475,6 +475,7 @@ impl Signex {
         // Pick a fresh name that doesn't collide with any existing
         // symbol in the file. `NewSymbol`, then `NewSymbol-2`, etc.
         let used: std::collections::HashSet<&str> = editor
+            .draft
             .file
             .symbols
             .iter()
@@ -496,9 +497,9 @@ impl Signex {
         let snapshot = editor.snapshot();
         editor.commit_history(snapshot);
         let sym = signex_library::Symbol::empty(name);
-        editor.file.symbols.push(sym);
-        editor.file.updated = chrono::Utc::now();
-        editor.active_idx = editor.file.symbols.len() - 1;
+        editor.draft.file.symbols.push(sym);
+        editor.draft.file.updated = chrono::Utc::now();
+        editor.draft.active_idx = editor.draft.file.symbols.len() - 1;
         editor.reset_view_for_symbol_switch();
         let path = editor.path.clone();
         self.document_state.mark_document_dirty(&path);

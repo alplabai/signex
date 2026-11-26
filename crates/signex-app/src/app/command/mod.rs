@@ -81,6 +81,8 @@ pub(crate) use needs::needs as enablement_gate;
 mod net_tie_operand_tests;
 #[cfg(test)]
 mod no_erc_operand_tests;
+#[cfg(test)]
+mod notebook_generate_tests;
 mod opened;
 #[cfg(test)]
 mod operand_handler_tests;

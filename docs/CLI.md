@@ -12,6 +12,7 @@ signex-cli run <project> [options] < commands.jsonl
 signex-cli run <project> <command-id> [--arg key=value]... [options]
 signex-cli commands [--json]
 signex-cli agent-log <project> [--access]
+signex-cli notebook export-pdf --project <project> [options]
 ```
 
 `agent-log` prints the project's agent journal as a table: the edits agents
@@ -1358,6 +1359,77 @@ signex-cli run demo.snxprj bom_lines --arg document=main.snxsch \
   with `=` or does not parse, an unknown grouping and a variant the project
   does not define are refused with the reason.
 
+## Design notebook generation
+
+`generate_design_notebook` (#2945, mockup row 201) builds the project's
+design report: requirements and how each was met, the architecture, key
+decisions, a BOM summary, the ERC, DRC and requirement results, simulation
+results, outputs produced, open items and the change log. The report is its
+own notebook file, `notebook/generated/design-report.snxnbk`; the
+hand-written `notebook/design.snxnbk` is only read.
+
+```text
+generate_design_notebook document=<project, or one of its documents>
+    [sections=<list>|all] [variant=<name>] [template=design-report-a4]
+    [document_number=<text>] [revision=<text>] [checks=run|last]
+    [fail_on=requirements,checks] [save=true] [update=true]
+```
+
+It answers once its run lands with the summary below. Nothing is written
+without `save=true`, and an existing report is replaced only with
+`update=true`. `checks=run` (the default) runs ERC, DRC and the requirement
+checks; `checks=last` uses the newest runs the session keeps. `fail_on`
+names the conditions that make the summary's status `fail`. Its capability
+is `save`.
+
+The same from a terminal, with no window, is the `notebook generate` verb of
+`signex-cli` ([Design Notebook](#design-notebook)):
+
+```text
+signex-cli notebook generate --project buck-3v3.snxprj --json
+    [--force] [--fail-on requirements,checks] [--sections <list>]
+    [--variant <name>] [--template <name>] [--document <number>]
+    [--revision <rev>] [--checks run|last] [run options]
+```
+
+The result line's `data` is the summary:
+
+```json
+{
+  "command": "notebook.generate",
+  "project": "buck-3v3.snxprj",
+  "revision": "B", "variant": "Base",
+  "output": "notebook/generated/design-report.snxnbk",
+  "pages": 9,
+  "sections": ["summary", "requirements", "architecture", "decisions", "bom",
+               "checks", "simulation", "outputs", "open-items", "changelog"],
+  "requirements": { "total": 6, "pass": 5, "fail": 1, "failed": ["REQ-005"] },
+  "checks": { "erc": { "errors": 0, "warnings": 2, "waived": 0 },
+              "drc": { "errors": 0, "warnings": 0, "waived": 0 } },
+  "open_items": ["ISS-004", "ISS-005"],
+  "stale_references": 0,
+  "written": true,
+  "status": "ok",
+  "sources": [{ "section": "checks", "from": "ERC run for this report" }],
+  "not_read": [{ "section": "simulation", "why": "no simulation run is recorded for the project" }]
+}
+```
+
+- Exit code 0 when the report was made, a failing requirement included.
+  `--fail-on requirements` exits 1 when a requirement fails, `--fail-on
+  checks` when ERC or DRC has an error; the summary then says
+  `"status": "fail"` and names them in `failed_on`. A report that does not
+  compile is `"status": "error"`, exit 1.
+- A report that is already there is never replaced without `--force`: the
+  command is refused (the result line's `"status": "refused"`, exit 1) and
+  changes no file.
+- A bad command line or a project that cannot be opened exits 2.
+- Two runs on the same project write the same file: nothing in it depends
+  on the clock.
+- A block meets a requirement when its title or text names the
+  requirement's id; the measurements that name it are its evidence. See
+  `docs/DESIGN_NOTEBOOK_GENERATE.md`.
+
 ## Rail budgets
 
 ```text
@@ -1504,6 +1576,47 @@ pair is `{"name", "positive", "negative", "class", "found_by", "directive",
 and a missing half `null`. `unread_sheets` is `true` when a sheet of the
 project is not open, so its pairs are not listed.
 
+## Design Notebook
+
+`notebook <verb>` runs a Design Notebook command by its own name, as `run`
+would run its catalog command (mockup rows 201 and 202). It is the one
+command-line front end of the Design Notebook; its verbs are `generate` and
+`export-pdf`. It takes the project with `--project` (or as the first word
+after the verb), every `run` option, and `--json`, which changes nothing:
+every answer is a JSON line.
+
+```
+signex-cli notebook generate --project buck-3v3.snxprj [--force]
+    [--fail-on requirements,checks] [--sections <list>|all]
+    [--variant <name>] [--template <name>] [--document <number>]
+    [--revision <rev>] [--checks run|last] [--json] [run options]
+```
+
+`generate` is `run <project> generate_design_notebook --arg
+document=<project> --arg save=true --arg ... --allow save`: it writes the
+design report into `notebook/generated/design-report.snxnbk` and answers
+with its summary ([Design notebook generation](#design-notebook-generation)).
+`--force` is `update=true`, `--document` is `document_number`. The exit code
+follows the summary's `status`: anything but `ok` exits 1.
+
+```
+signex-cli notebook export-pdf --project buck-3v3.snxprj [--out <file>] [--overwrite]
+    [--notebook generated/design-report] [--pages all|current|3-7]
+    [--paper document|a4|letter] [--variant <name>] [--annotations <kinds>]
+    [--stale warn|fail] [--no-title-block] [--no-contents] [--no-bookmarks]
+    [--python-source] [--json] [run options]
+```
+
+`export-pdf` is `run <project> export_notebook_pdf --arg document=<project>
+--arg ... --allow export`: it writes the notebook as a PDF file (the default
+name in `Project Outputs/notebook/` without `--out`) and answers with the
+pages, paper, references and stale ones, the bookmarks written and the
+SHA-256 of the file. A notebook named without an extension is a `.snxnbk`
+file. A stale reference under `--stale fail` refuses the export (exit code 1).
+The file is a `.pdf`, never a Signex document, and a file that is there (the
+default one included) is replaced only with `--overwrite`.
+The settings and the answer are in [NOTEBOOK_PDF.md](NOTEBOOK_PDF.md).
+
 ### Part heights
 
 ```text
@@ -1606,6 +1719,7 @@ The answer:
     "footprint": "<uuid>", "pad": "<uuid>", "from": null, "to": "N$1",
     "locked": false, "ticked": true, "applies": true, "blocked": null}
  ],
+ "pad_locks": ["U1.4"],
  "notes": ["..."]}
 ```
 
@@ -1616,6 +1730,10 @@ The answer:
   apply did. A row applies when it is ticked, not blocked, and every row it
   needs applies too.
 - `counts` are the dialog's tiles: rows by action, and the blocked rows.
+- `pad_locks` lists the pads with no symbol pin, as `U1.4`, that keep their
+  net and are locked along with the rows that apply: what a dry run would
+  lock, what an apply locked. They are not changes and are not counted in
+  `applied`; with no row to apply the list is empty (#3060).
 - Each change has a `kind`: `add_footprint`, `remove_footprint`,
   `change_footprint` (a footprint swap, with `reason` `footprint` or
   `other_version`; another library version starts unticked),

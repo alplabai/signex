@@ -69,6 +69,7 @@ cmd-find-text = Find text
 cmd-import-graphics = Import graphics
 cmd-menu-import-graphics = Import Graphics...
 cmd-list-documents = List documents
+cmd-list-annotations = List the annotation blocks of the project's Design Notebook
 cmd-measure-distance = Measure distance
 cmd-mirror-x = Mirror along X-axis
 cmd-menu-mirror-x = Mirror X
@@ -818,3 +819,34 @@ cmd-place-snippet = Place a saved snippet
 cmd-menu-place-snippet = Snippet...
 cmd-list-snippets = List the snippets of the project and the library
 cmd-list-templates = List the sheet and project templates
+# design-notebook
+# The project's Design Notebook (mockup rows 195, 197, 201 and 202). "Wiki"
+# stays a search word of the notebook (mockup row 60b).
+cmd-open-design-notebook = Open the Design Notebook of the project (Wiki)
+cmd-menu-open-design-notebook = Open Design Notebook
+cmd-generate-design-notebook = Generate a design notebook from the project
+cmd-menu-generate-design-notebook = Generate from Project…
+cmd-export-notebook-pdf = Export the Design Notebook as PDF
+cmd-menu-export-notebook-pdf = Design Notebook PDF…
+cmd-toggle-notebook-badges = Show or hide the Notebook badges on the schematic
+cmd-menu-toggle-notebook-badges = Notebook Badges
+# notebook-tab
+# The Design Notebook tab's commands (mockup row 195).
+cmd-notebook-compile = Compile the project's Design Notebook and report its pages and problems
+cmd-notebook-insert = Insert a reference or a block into the open Design Notebook
+cmd-notebook-view = Set the view, the side panel or the next problem of the Design Notebook tab
+# notebook-references
+# Design Notebook references and the Notebook badges (mockup rows 196 and 197).
+cmd-notebook-references = List the notebook's references and the stale ones
+cmd-notebook-reference-card = Read the hover card of a notebook reference
+cmd-notebook-reference-picker = List what the @ reference picker offers
+cmd-notebook-badges = List the Notebook badges and their blocks
+cmd-notebook-fix-reference = Fix a stale notebook reference
+# notebook-measurements
+# Mockup row 199: the Design Notebook's readings, timelines and attachments.
+cmd-notebook-measurements = List the notebook's measurements with their results
+cmd-notebook-timeline = Show the measurement timeline of a net, part or pin
+cmd-notebook-attachments = List the notebook's attachments and their stale marks
+cmd-export-notebook-timeline = Export a measurement timeline as a CSV file
+cmd-mark-notebook-attachment-valid = Mark a stale attachment or reading as still valid
+cmd-attach-notebook-file = Copy a file into the notebook as an attachment

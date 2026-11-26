@@ -149,8 +149,8 @@ impl Signex {
             }
             DocumentKey::Symbol(path) => {
                 if let Some(editor) = docs.symbol_editors.get_mut(path) {
-                    editor.file.file_uuid = id.as_uuid();
-                    editor.baseline.file_uuid = id.as_uuid();
+                    editor.draft.file.file_uuid = id.as_uuid();
+                    editor.draft.baseline.file_uuid = id.as_uuid();
                 }
             }
             DocumentKey::Footprint(path) => {

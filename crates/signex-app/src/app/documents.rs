@@ -75,6 +75,11 @@ pub enum TabKind {
     /// is the `.snxsym` path, which Save writes; it sits after the symbol's
     /// own tab (`app/pin_table_tab`).
     PinTable,
+    /// The project's Design Notebook (mockup row 195), one tab per project.
+    /// Tab state lives in [`crate::app::DocumentState::notebooks`] keyed by
+    /// this id; `TabInfo.path` is the notebook file, which its Save writes
+    /// (`app/notebook_tab`).
+    Notebook(super::state::ProjectId),
 }
 
 impl TabKind {
@@ -165,6 +170,14 @@ impl TabKind {
         matches!(self, TabKind::PinTable)
     }
 
+    /// `Some(id)` if this tab is a project's Design Notebook tab.
+    pub fn as_notebook(&self) -> Option<super::state::ProjectId> {
+        match self {
+            TabKind::Notebook(id) => Some(*id),
+            _ => None,
+        }
+    }
+
     /// A page of an open document that holds no document of its own and
     /// shares its owner's path: the board pages (Layer Stack, Polygon
     /// Manager) and the Pin table tab. It sits after its owner's tab and
@@ -174,8 +187,8 @@ impl TabKind {
     }
 
     /// A page tab, not a drawing: the Project, Rules, Layer Stack, Pin
-    /// table and Variant Manager tabs. None is undocked or restored from
-    /// History.
+    /// table, Variant Manager and Design Notebook tabs. None is undocked or
+    /// restored from History.
     pub fn is_project_page(&self) -> bool {
         // Mockup row 178: the Polygon Manager is a page of its board.
         if self.is_polygon_manager() {
@@ -188,6 +201,7 @@ impl TabKind {
                 | TabKind::LayerStack
                 | TabKind::PinTable
                 | TabKind::VariantManager(_)
+                | TabKind::Notebook(_)
         )
     }
 }
@@ -273,43 +287,24 @@ pub enum SymbolViewRequest {
     CenterOrigin,
 }
 
+/// An open `.snxsym` editor, split as ADR-0006 asks before slice 4a: the
+/// core-bound [`SymbolDraft`] and the GUI [`SymbolEditorView`]. Undo and
+/// redo run here, not on the draft, because a step also clears the
+/// selection and, on a symbol switch, resets the camera.
 #[derive(Debug)]
 pub struct SymbolDocument {
     pub path: PathBuf,
-    /// Multi-symbol container backing this `.snxsym` tab. The editor
-    /// works against `file.symbols[active_idx]`; access via
-    /// [`primitive`](Self::primitive) / [`primitive_mut`](Self::primitive_mut).
-    pub file: signex_library::SymbolFile,
-    /// The container as this editor last loaded or saved it. A save
-    /// writes only the symbols that differ from it, so another window's
-    /// saves to the other symbols of the file survive (#902).
-    pub baseline: signex_library::SymbolFile,
-    /// Which symbol within the file is currently being edited. The
-    /// SCH-Library left-dock panel will eventually drive this index;
-    /// for now it always lands on the first symbol.
-    pub active_idx: usize,
-    /// Active sub-part for multi-part components (Altium "Part X / N"
-    /// arrows). `1` is the single-part default; higher values let the
-    /// user step through parts. Pins with `part_number == 0` (Part
-    /// Zero) render on every part; pins with `part_number == active_part`
-    /// render on the active part only.
-    pub active_part: u8,
-    /// Which body of a De Morgan symbol the canvas shows and new items are
-    /// stamped with. Items tagged body 0 show on both.
-    pub active_body: signex_types::schematic::BodyStyle,
+    pub draft: super::SymbolDraft,
+    pub gui: SymbolEditorView,
+}
+
+/// The GUI half of a symbol editor: canvas, camera, tool, selection and
+/// the transient pickers and menus. Never serialized, never in an undo step.
+#[derive(Debug)]
+pub struct SymbolEditorView {
     pub tool: crate::library::editor::symbol::canvas::SymbolTool,
     pub selected: Option<crate::library::editor::symbol::state::SymbolSelection>,
     pub canvas_cache: iced::widget::canvas::Cache,
-    /// Unsaved edits in this draft. Private: edits call [`Self::mark_dirty`];
-    /// the workspace reads and clears it through `DocumentState`.
-    dirty: bool,
-    /// The stamp of the last container save started from this editor
-    /// (`DocumentSaves::mint_generation`); `0` until one starts.
-    pub save_generation: u64,
-    /// Primitives of this container whose component rows a failed cascade
-    /// left behind and a retry can still move; the next Save cascades them
-    /// even with no new edit.
-    pub cascade_owed: Vec<uuid::Uuid>,
     /// Pan/zoom camera state — mirrors the schematic canvas so the
     /// user's viewport survives across tool / selection changes
     /// within the same `.snxsym` tab. New tabs and active-symbol
@@ -349,20 +344,6 @@ pub struct SymbolDocument {
     /// The pin type picked in the Place Pin dropdown, stamped on every
     /// following placed pin; `None` places unclassified pins (mockup row 141).
     pub pin_type: Option<signex_types::schematic::PinDirection>,
-    /// Undo / redo snapshots (each the whole `.snxsym` container, symbols
-    /// shared structurally between steps) and the depth at which this draft
-    /// last equalled its file, so Undo back to it reads clean (#1854).
-    /// Capped at [`Self::HISTORY_DEPTH`]; unknown stays dirty.
-    pub history: crate::app::History<crate::app::SymbolHistorySnapshot>,
-    /// Bumped by every history change: commit, undo, redo and a coalesced
-    /// field edit. Unlike the stack depths it moves at `HISTORY_DEPTH` and
-    /// while typing in one field, so it tells "the document changed". Starts
-    /// at a per-editor base from `DocumentState::next_symbol_history_base`.
-    pub history_generation: u64,
-    /// The field the last `record_edit` changed, tagged with the symbol
-    /// it belonged to, so a run of keystrokes in one text input shares
-    /// one undo step. Cleared by every other history push, undo and redo.
-    pub(in crate::app) last_edit_key: Option<(FieldEditKey, usize)>,
     /// Set to `true` on the first `Move`/`MoveAll`/`MoveGraphicHandle`
     /// in a drag sequence so subsequent move events in the same drag do
     /// NOT push additional snapshots (the pre-drag snapshot is already
@@ -416,34 +397,32 @@ pub struct SymbolDocument {
 }
 
 impl SymbolDocument {
-    /// Does this draft hold edits that are not on disk?
+    /// See [`SymbolDraft::is_dirty`](super::SymbolDraft::is_dirty).
     pub fn is_dirty(&self) -> bool {
-        self.dirty
+        self.draft.is_dirty()
     }
 
-    /// An edit changed the draft. A change at the saved depth that no
-    /// undo step records leaves no step that reproduces the file, so the
-    /// save point is forgotten; a recorded edit has already moved the depth.
+    /// See [`SymbolDraft::mark_dirty`](super::SymbolDraft::mark_dirty).
     pub fn mark_dirty(&mut self) {
-        self.dirty = true;
-        self.history.forget_if_current();
+        self.draft.mark_dirty();
     }
 
-    /// Set the flag outright: a save or discard clears it.
+    /// See [`SymbolDraft::set_dirty`](super::SymbolDraft::set_dirty).
     pub fn set_dirty(&mut self, dirty: bool) {
-        self.dirty = dirty;
+        self.draft.set_dirty(dirty);
     }
 
-    /// A save is writing the current content: it is the state Undo and Redo
-    /// return to as clean, and the flag clears until the next edit.
+    /// See [`SymbolDraft::mark_saved`](super::SymbolDraft::mark_saved).
     pub fn mark_saved(&mut self) {
-        self.history.mark_saved();
-        self.dirty = false;
+        self.draft.mark_saved();
     }
 
     /// The unit and body the editor currently shows.
     pub fn view(&self) -> crate::library::editor::symbol::state::PartView {
-        crate::library::editor::symbol::state::PartView::new(self.active_part, self.active_body)
+        crate::library::editor::symbol::state::PartView::new(
+            self.draft.active_part,
+            self.draft.active_body,
+        )
     }
 
     pub(crate) const DEFAULT_SYMBOL_VIEWPORT_WIDTH: f32 = 800.0;
@@ -455,17 +434,51 @@ impl SymbolDocument {
     pub fn new(path: PathBuf, file: signex_library::SymbolFile) -> Self {
         let mut state = Self {
             path,
-            baseline: file.clone(),
-            file,
-            active_idx: 0,
-            active_part: 1,
-            active_body: signex_types::schematic::BodyStyle::Normal,
+            draft: super::SymbolDraft::new(file, Self::HISTORY_DEPTH),
+            gui: SymbolEditorView::new(),
+        };
+        state.reset_camera_origin_center();
+        state
+    }
+
+    /// Reset pan/zoom and place world origin in the center of the
+    /// default symbol-canvas viewport.
+    pub(crate) fn reset_camera_origin_center(&mut self) {
+        self.gui.camera = crate::canvas::Camera::default();
+        self.gui.fitted = None;
+        self.gui.camera.offset = Point::new(
+            Self::DEFAULT_SYMBOL_VIEWPORT_WIDTH * 0.5,
+            Self::DEFAULT_SYMBOL_VIEWPORT_HEIGHT * 0.5,
+        );
+        // The default size above is only a placeholder until the
+        // canvas reports its real one.
+        self.gui.pending_view = Some(SymbolViewRequest::CenterOrigin);
+        // Fit against the placeholder too, so the first frame is not a
+        // speck at 100% while the real size is still unknown.
+        crate::library::editor::symbol::fit_to_viewport(
+            self,
+            Self::DEFAULT_SYMBOL_VIEWPORT_WIDTH,
+            Self::DEFAULT_SYMBOL_VIEWPORT_HEIGHT,
+        );
+    }
+
+    /// See [`SymbolDraft::primitive`](super::SymbolDraft::primitive).
+    pub fn primitive(&self) -> &Symbol {
+        self.draft.primitive()
+    }
+
+    /// See [`SymbolDraft::primitive_mut`](super::SymbolDraft::primitive_mut).
+    pub fn primitive_mut(&mut self) -> &mut Symbol {
+        self.draft.primitive_mut()
+    }
+}
+
+impl SymbolEditorView {
+    fn new() -> Self {
+        Self {
             tool: crate::library::editor::symbol::canvas::SymbolTool::Select,
             selected: None,
             canvas_cache: iced::widget::canvas::Cache::default(),
-            dirty: false,
-            save_generation: 0,
-            cascade_owed: Vec::new(),
             camera: crate::canvas::Camera::default(),
             zoom_step: default_zoom_step(),
             trackpad_pan: false,
@@ -478,9 +491,6 @@ impl SymbolDocument {
             active_bar_menu: None,
             placement_paused: false,
             pin_type: None,
-            history: crate::app::History::at_start(Self::HISTORY_DEPTH),
-            history_generation: 0,
-            last_edit_key: None,
             mid_drag: false,
             drag_corner_radius: None,
             graphic_fill_picker: None,
@@ -489,51 +499,7 @@ impl SymbolDocument {
             tool_epoch: 0,
             status_message: None,
             context_menu: None,
-        };
-        state.reset_camera_origin_center();
-        state
-    }
-
-    /// Reset pan/zoom and place world origin in the center of the
-    /// default symbol-canvas viewport.
-    pub(crate) fn reset_camera_origin_center(&mut self) {
-        self.camera = crate::canvas::Camera::default();
-        self.fitted = None;
-        self.camera.offset = Point::new(
-            Self::DEFAULT_SYMBOL_VIEWPORT_WIDTH * 0.5,
-            Self::DEFAULT_SYMBOL_VIEWPORT_HEIGHT * 0.5,
-        );
-        // The default size above is only a placeholder until the
-        // canvas reports its real one.
-        self.pending_view = Some(SymbolViewRequest::CenterOrigin);
-        // Fit against the placeholder too, so the first frame is not a
-        // speck at 100% while the real size is still unknown.
-        crate::library::editor::symbol::fit_to_viewport(
-            self,
-            Self::DEFAULT_SYMBOL_VIEWPORT_WIDTH,
-            Self::DEFAULT_SYMBOL_VIEWPORT_HEIGHT,
-        );
-    }
-
-    /// Borrow the symbol currently being edited. Falls back to the
-    /// first symbol in the file when `active_idx` is out of range
-    /// (defensive — should never happen in practice). Panics only
-    /// when the file has zero symbols, which the loader rejects.
-    pub fn primitive(&self) -> &Symbol {
-        let idx = self
-            .active_idx
-            .min(self.file.symbols.len().saturating_sub(1));
-        &self.file.symbols[idx]
-    }
-
-    /// Mutable borrow of the active symbol — used by canvas mutations
-    /// (add/move/delete pin etc.). Same out-of-range fallback as
-    /// [`primitive`](Self::primitive).
-    pub fn primitive_mut(&mut self) -> &mut Symbol {
-        let idx = self
-            .active_idx
-            .min(self.file.symbols.len().saturating_sub(1));
-        &mut self.file.symbols[idx]
+        }
     }
 }
 
@@ -558,7 +524,7 @@ pub struct FootprintDocument {
     /// [`primitive_mut`](Self::primitive_mut).
     pub file: signex_library::FootprintFile,
     /// The container as this editor last loaded or saved it; see
-    /// [`SymbolDocument::baseline`] (#902). Taken before the load
+    /// [`SymbolDraft::baseline`](super::SymbolDraft::baseline) (#902). Taken before the load
     /// repairs are cleared, so a repaired footprint counts as changed.
     pub baseline: signex_library::FootprintFile,
     /// Which footprint within the file is currently being edited.
@@ -574,7 +540,7 @@ pub struct FootprintDocument {
     pub state: crate::library::editor::footprint::state::FootprintEditorState,
     pub canvas_cache: iced::widget::canvas::Cache,
     /// Per-wheel-notch zoom factor (Preferences "Zoom speed"); see
-    /// [`SymbolDocument::zoom_step`].
+    /// [`SymbolEditorView::zoom_step`].
     pub zoom_step: f32,
     /// "Two-finger scroll pans" preference, synced with `zoom_step`.
     pub trackpad_pan: bool,

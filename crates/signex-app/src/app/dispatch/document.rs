@@ -353,6 +353,10 @@ impl Signex {
                 let task = self.handle_bom_written(source, *outcome);
                 iced::Task::batch([task, self.finish_update()])
             }
+            ExportMsg::NotebookPdf(msg) => {
+                let task = self.dispatch_notebook_pdf_message(msg);
+                iced::Task::batch([task, self.finish_update()])
+            }
         }
     }
 

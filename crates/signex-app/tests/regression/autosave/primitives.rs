@@ -327,7 +327,7 @@ fn a_tick_during_an_in_flight_save_that_then_fails_keeps_the_sidecar() {
 
 fn file_id(app: &Signex, kind: Kind, doc: &Path) -> uuid::Uuid {
     match kind {
-        Kind::Symbol => app.document_state.symbol_editors[doc].file.file_uuid,
+        Kind::Symbol => app.document_state.symbol_editors[doc].draft.file.file_uuid,
         Kind::Footprint => app.document_state.footprint_editors[doc].file.file_uuid,
     }
 }
@@ -339,6 +339,7 @@ fn set_file_id(app: &mut Signex, kind: Kind, doc: &Path, id: uuid::Uuid) {
                 .symbol_editors
                 .get_mut(doc)
                 .expect("editor")
+                .draft
                 .file
                 .file_uuid = id
         }

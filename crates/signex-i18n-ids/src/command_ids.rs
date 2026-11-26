@@ -70,6 +70,7 @@ define_ids! {
         CMD_IMPORT_GRAPHICS = "cmd-import-graphics";
         CMD_MENU_IMPORT_GRAPHICS = "cmd-menu-import-graphics";
         CMD_LIST_DOCUMENTS = "cmd-list-documents";
+        CMD_LIST_ANNOTATIONS = "cmd-list-annotations";
         CMD_MEASURE_DISTANCE = "cmd-measure-distance";
         CMD_MIRROR_X = "cmd-mirror-x";
         CMD_MENU_MIRROR_X = "cmd-menu-mirror-x";
@@ -776,5 +777,31 @@ define_ids! {
         CMD_MENU_PLACE_SNIPPET = "cmd-menu-place-snippet";
         CMD_LIST_SNIPPETS = "cmd-list-snippets";
         CMD_LIST_TEMPLATES = "cmd-list-templates";
+        // design-notebook
+        CMD_OPEN_DESIGN_NOTEBOOK = "cmd-open-design-notebook";
+        CMD_MENU_OPEN_DESIGN_NOTEBOOK = "cmd-menu-open-design-notebook";
+        CMD_GENERATE_DESIGN_NOTEBOOK = "cmd-generate-design-notebook";
+        CMD_MENU_GENERATE_DESIGN_NOTEBOOK = "cmd-menu-generate-design-notebook";
+        CMD_EXPORT_NOTEBOOK_PDF = "cmd-export-notebook-pdf";
+        CMD_MENU_EXPORT_NOTEBOOK_PDF = "cmd-menu-export-notebook-pdf";
+        CMD_TOGGLE_NOTEBOOK_BADGES = "cmd-toggle-notebook-badges";
+        CMD_MENU_TOGGLE_NOTEBOOK_BADGES = "cmd-menu-toggle-notebook-badges";
+        // notebook-tab
+        CMD_NOTEBOOK_COMPILE = "cmd-notebook-compile";
+        CMD_NOTEBOOK_INSERT = "cmd-notebook-insert";
+        CMD_NOTEBOOK_VIEW = "cmd-notebook-view";
+        // notebook-references
+        CMD_NOTEBOOK_REFERENCES = "cmd-notebook-references";
+        CMD_NOTEBOOK_REFERENCE_CARD = "cmd-notebook-reference-card";
+        CMD_NOTEBOOK_REFERENCE_PICKER = "cmd-notebook-reference-picker";
+        CMD_NOTEBOOK_BADGES = "cmd-notebook-badges";
+        CMD_NOTEBOOK_FIX_REFERENCE = "cmd-notebook-fix-reference";
+        // notebook-measurements
+        CMD_NOTEBOOK_MEASUREMENTS = "cmd-notebook-measurements";
+        CMD_NOTEBOOK_TIMELINE = "cmd-notebook-timeline";
+        CMD_NOTEBOOK_ATTACHMENTS = "cmd-notebook-attachments";
+        CMD_EXPORT_NOTEBOOK_TIMELINE = "cmd-export-notebook-timeline";
+        CMD_MARK_NOTEBOOK_ATTACHMENT_VALID = "cmd-mark-notebook-attachment-valid";
+        CMD_ATTACH_NOTEBOOK_FILE = "cmd-attach-notebook-file";
     }
 }

@@ -100,9 +100,13 @@ fn a_symbol_panel_edit_changes_only_the_windows_symbol() {
     );
 
     let editors = &app.document_state.symbol_editors;
-    assert_eq!(editors[&b].file.symbols[0].description, "edited");
-    assert_eq!(editors[&a].file.symbols[0].description, "");
-    assert_eq!(editors[&a].history.undo_len(), 0, "A has no undo step");
+    assert_eq!(editors[&b].draft.file.symbols[0].description, "edited");
+    assert_eq!(editors[&a].draft.file.symbols[0].description, "");
+    assert_eq!(
+        editors[&a].draft.history.undo_len(),
+        0,
+        "A has no undo step"
+    );
     assert!(!app.document_state.is_document_dirty(&a), "A stays clean");
     assert!(app.document_state.is_document_dirty(&b));
 }

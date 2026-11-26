@@ -32,6 +32,9 @@ pub(crate) struct MenuInputs {
     i18n: Arc<signex_i18n::I18n>,
     /// Cross Select Mode is on: its Tools row shows a check mark (#1312).
     cross_select: bool,
+    /// The Notebook badges are shown: their View row shows a check mark
+    /// (mockup row 197).
+    notebook_badges: bool,
     /// What Design ▸ Update PCB Document names (#1312).
     pcb_sync: Option<crate::app::update_pcb::PcbSyncLabel>,
     /// What View ▸ Window ▸ Layouts lists (mockup row 166).
@@ -49,6 +52,7 @@ impl PartialEq for MenuInputs {
             && self.locked == other.locked
             && self.open_panels == other.open_panels
             && self.cross_select == other.cross_select
+            && self.notebook_badges == other.notebook_badges
             && self.pcb_sync == other.pcb_sync
             && self.layouts == other.layouts
             && self.extension_rows == other.extension_rows
@@ -80,11 +84,21 @@ impl MenuInputs {
             keymap: None,
             i18n,
             cross_select: true,
+            notebook_badges: true,
             pcb_sync: None,
             layouts: Default::default(),
             extension_rows: Vec::new(),
             extension_panels: Vec::new(),
         }
+    }
+
+    pub(crate) fn with_notebook_badges(mut self, shown: bool) -> Self {
+        self.notebook_badges = shown;
+        self
+    }
+
+    pub(crate) fn notebook_badges(&self) -> bool {
+        self.notebook_badges
     }
 
     pub(crate) fn with_layouts(mut self, layouts: crate::workspace_layouts::LayoutsMenu) -> Self {

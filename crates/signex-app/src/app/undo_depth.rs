@@ -34,7 +34,7 @@ impl Signex {
             engine.set_undo_depth(depth);
         }
         for editor in docs.symbol_editors.values_mut() {
-            editor.history.set_cap(depth);
+            editor.draft.history.set_cap(depth);
         }
         for editor in docs.footprint_editors.values_mut() {
             editor.history.set_cap(depth);
@@ -119,7 +119,7 @@ mod tests {
                 .filter_map(|idx| d.tab_board_engine(idx))
                 .map(|e| e.undo_depth()),
         );
-        all.extend(d.symbol_editors.values().map(|e| e.history.cap()));
+        all.extend(d.symbol_editors.values().map(|e| e.draft.history.cap()));
         all.extend(d.footprint_editors.values().map(|e| e.history.cap()));
         all.extend(d.net_class_history.values().map(|h| h.undo_depth()));
         all.extend(d.rules_history.values().map(|h| h.undo_depth()));

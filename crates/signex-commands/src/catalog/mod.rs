@@ -26,6 +26,7 @@ mod history;
 mod layers;
 mod library;
 mod nets;
+mod notebook;
 mod operands;
 mod pcb_sync;
 mod placement;
@@ -349,6 +350,7 @@ const TABLES: &[&[CommandMetadata]] = &[
     grid::GRID,
     library::LIBRARY,
     workspace::WORKSPACE,
+    notebook::NOTEBOOK,
     bom::BOM,
 ];
 
@@ -471,6 +473,10 @@ const GLOBAL_COMMANDS: &[&str] = &[
     "new_pcb_document",
     "new_schematic_sheet",
     "open_rules",
+    // The project's Design Notebook, from any tab (mockup rows 195, 201, 202).
+    "open_design_notebook",
+    "generate_design_notebook",
+    "export_notebook_pdf",
 ];
 
 /// The editor contexts in which `command` can act, or `None` when it is
@@ -711,6 +717,7 @@ mod tests {
             ("library.rs", include_str!("library.rs")),
             ("workspace.rs", include_str!("workspace.rs")),
             ("reuse.rs", include_str!("reuse.rs")),
+            ("notebook.rs", include_str!("notebook.rs")),
             ("bom.rs", include_str!("bom.rs")),
         ];
 

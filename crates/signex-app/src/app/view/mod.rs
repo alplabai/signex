@@ -170,6 +170,7 @@ impl Signex {
             open_panels: self.open_panels(),
             i18n: std::sync::Arc::clone(&ui.i18n),
             cross_select: interaction.cross_select.enabled,
+            notebook_badges: !ui.annotations.badges_hidden,
             pcb_sync: self.pcb_sync_label(Some(window_id)),
             layouts: self.layouts_menu(),
             extension_rows: self.extensions.menu_rows(),
@@ -454,6 +455,9 @@ impl Signex {
         }
         if let Some(project_id) = self.rules_tab_in_window(is_main) {
             return self.view_rules_tab(project_id);
+        }
+        if let Some(project_id) = self.notebook_tab_in_window(is_main) {
+            return self.view_notebook_tab(project_id);
         }
         if let Some(project_id) = self.variant_manager_tab_in_window(is_main) {
             return self.view_variant_manager_tab(project_id);

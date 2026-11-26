@@ -39,6 +39,7 @@ define_ids! {
         MENU_PLACE_GRAPHICS = "menu-place-graphics";
         MENU_DESIGN_ROOMS = "menu-design-rooms";
         MENU_PROJECT_CLOSE = "menu-project-close";
+        MENU_PROJECT_DESIGN_NOTEBOOK = "menu-project-design-notebook";
         MENU_REPORTS_BOM = "menu-reports-bom";
         MENU_REPORTS_NETLIST = "menu-reports-netlist";
         MENU_REPORTS_ERC = "menu-reports-erc";

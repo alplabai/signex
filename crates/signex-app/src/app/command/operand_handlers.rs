@@ -45,6 +45,7 @@ use crate::app::board_reuse as reuse;
 use crate::app::board_tools as tools;
 use crate::app::handlers::pcb_component::part_swap_operands as swap;
 use crate::app::handlers::pcb_tune as tune;
+use crate::app::notebook_references::commands as notebook;
 use crate::app::rooms;
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
@@ -191,6 +192,11 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("export_assembly_svg", output::export_assembly_svg),
     ("board_assembly_drawing", output::board_assembly_drawing),
     ("export_board_step", output::export_board_step),
+    // Mockup row 202: the project's notebook as PDF.
+    (
+        "export_notebook_pdf",
+        crate::app::notebook_pdf::export_notebook_pdf,
+    ),
     // #2470: the Fabrication Outputs dialog's Generate from operands.
     (
         "fabrication_outputs",
@@ -271,6 +277,25 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     (
         "import_dxf_outline",
         crate::app::handlers::pcb_dxf_import::import_dxf_outline,
+    ),
+    // Mockup row 199: the notebook's timeline export, Mark still valid and
+    // the copy of a file into notebook/attachments/.
+    (
+        "export_notebook_timeline",
+        crate::app::notebook_measurements::export_notebook_timeline,
+    ),
+    (
+        "mark_notebook_attachment_valid",
+        crate::app::notebook_measurements::mark_notebook_attachment_valid,
+    ),
+    (
+        "attach_notebook_file",
+        crate::app::notebook_measurements::attach_notebook_file,
+    ),
+    // #2945, mockup row 201: the design report, answered once it is built.
+    (
+        "generate_design_notebook",
+        crate::app::notebook_generate::generate_design_notebook,
     ),
     ("rules_matrix_set", crate::app::rules_tab::rules_matrix_set),
     ("rules_set_create", crate::app::rules_tab::rules_set_create),
@@ -392,6 +417,22 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
         "project_run_requirements",
         crate::app::project_tab::project_run_requirements,
     ),
+    // #2795: the Design Notebook tab, on the project `document` names.
+    (
+        "notebook_compile",
+        crate::app::notebook_tab::notebook_compile,
+    ),
+    ("notebook_insert", crate::app::notebook_tab::notebook_insert),
+    ("notebook_view", crate::app::notebook_tab::notebook_view),
+    // Mockup rows 196 and 197: the notebook's references and badges.
+    ("notebook_references", notebook::notebook_references),
+    ("notebook_reference_card", notebook::notebook_reference_card),
+    (
+        "notebook_reference_picker",
+        notebook::notebook_reference_picker,
+    ),
+    ("notebook_badges", notebook::notebook_badges),
+    ("notebook_fix_reference", notebook::notebook_fix_reference),
     // #2938: a BOM line's alternates, one General step each.
     (
         "bom_add_alternate",
@@ -669,6 +710,19 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
             "`filter_drc_results` needs the operand `document` — \
              use the filters of the DRC panel",
         ),
+        // Mockup row 199: a person uses the notebook's margin lane.
+        "export_notebook_timeline" => Some(
+            "`export_notebook_timeline` needs the operands `document`, a target and `path` — \
+             use export CSV under the timeline in the notebook",
+        ),
+        "mark_notebook_attachment_valid" => Some(
+            "`mark_notebook_attachment_valid` needs the operands `document` and `file` or `id` — \
+             use Mark still valid on the stale figure in the notebook",
+        ),
+        "attach_notebook_file" => Some(
+            "`attach_notebook_file` needs the operands `document` and `path` — \
+             drop the file on the notebook page or use Figure",
+        ),
         "add_net_class"
         | "rename_net_class"
         | "delete_net_class"
@@ -728,6 +782,21 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         | "project_run_requirements" => Some(
             "the `project_*` edits need their operands — \
              use the Project tab (Project ▸ Project Options...)",
+        ),
+        "notebook_compile" | "notebook_insert" | "notebook_view" => Some(
+            "the `notebook_*` commands need their operands — \
+             use the Design Notebook tab",
+        ),
+        // Mockup rows 196 and 197: a person reads references on the
+        // notebook tab's References panel and cards, and the badges on the
+        // sheet (View ▸ Notebook Badges).
+        "notebook_references"
+        | "notebook_reference_card"
+        | "notebook_reference_picker"
+        | "notebook_badges"
+        | "notebook_fix_reference" => Some(
+            "the notebook reference commands need their operands — \
+             use the References panel of the Design Notebook tab",
         ),
         // #2943: no panel edits the rails yet.
         "project_set_rail" => Some(
@@ -815,6 +884,6 @@ impl Signex {
     }
 }
 
-pub(super) fn refused(reason: impl Into<String>) -> Ran {
+pub(crate) fn refused(reason: impl Into<String>) -> Ran {
     (CommandOutcome::disabled(reason), Task::none())
 }

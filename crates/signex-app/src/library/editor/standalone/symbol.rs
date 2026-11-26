@@ -203,7 +203,7 @@ fn graphite_toolbar<'a>(
         text(t!(
             i18n,
             ids::EDITORS_SYMBOL_PART_OF,
-            "part" => u32::from(editor.active_part),
+            "part" => u32::from(editor.draft.active_part),
             "parts" => u32::from(max_part)
         ))
         .size(TS.body)
@@ -224,7 +224,7 @@ fn graphite_toolbar<'a>(
     .spacing(SP.s)
     .align_y(iced::Alignment::Center);
     // A copy of a stock symbol can be made again from the editor (#813).
-    let part_row = match &editor.file.copied_from {
+    let part_row = match &editor.draft.file.copied_from {
         Some(_) => part_row.push(
             ghost(
                 t!(i18n, ids::EDITORS_SYMBOL_COPY_AGAIN),
@@ -262,7 +262,7 @@ fn graphite_zoom_pill<'a>(
     path: &std::path::Path,
     tokens: &signex_types::theme::ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
-    let anchor = editor.camera.offset;
+    let anchor = editor.gui.camera.offset;
     let sym = |m: SymbolEditorMsg| LibraryMessage::PrimitiveEditorEvent {
         path: path.to_path_buf(),
         msg: PrimitiveEdit::Symbol(m),
@@ -276,7 +276,7 @@ fn graphite_zoom_pill<'a>(
     };
     crate::canvas::zoom_pill::view(
         tokens,
-        editor.camera.zoom_percent(),
+        editor.gui.camera.zoom_percent(),
         zoom(1.0 / ZOOM_BUTTON_STEP),
         zoom(ZOOM_BUTTON_STEP),
         sym(SymbolEditorMsg::Fit),
@@ -297,12 +297,12 @@ pub(crate) fn symbol_canvas<'a>(
     let tokens = &panel_ctx.tokens;
     SymbolCanvas::new(
         editor.primitive(),
-        editor.selected.clone(),
-        editor.tool,
-        &editor.polygon_vertices,
+        editor.gui.selected.clone(),
+        editor.gui.tool,
+        &editor.gui.polygon_vertices,
         editor.view(),
-        editor.context_menu.is_some(),
-        &editor.camera,
+        editor.gui.context_menu.is_some(),
+        &editor.gui.camera,
         crate::canvas::grid::pitch_mm_exact(display.grid_size_mm),
         display.grid_visible,
         panel_ctx.symbol_grid_style,
@@ -317,13 +317,13 @@ pub(crate) fn symbol_canvas<'a>(
         },
     )
     .with_graphite(tokens)
-    .with_selection_filter(editor.selection_filter)
-    .with_view_pending(editor.pending_view.is_some())
-    .with_tool_epoch(editor.tool_epoch)
-    .with_measured_size(editor.viewport)
-    .with_trackpad_pan(editor.trackpad_pan)
-    .with_wheel_mode(editor.wheel_mode)
-    .with_zoom_step(editor.zoom_step)
+    .with_selection_filter(editor.gui.selection_filter)
+    .with_view_pending(editor.gui.pending_view.is_some())
+    .with_tool_epoch(editor.gui.tool_epoch)
+    .with_measured_size(editor.gui.viewport)
+    .with_trackpad_pan(editor.gui.trackpad_pan)
+    .with_wheel_mode(editor.gui.wheel_mode)
+    .with_zoom_step(editor.gui.zoom_step)
     .with_device_px_per_logical_px(device_px_per_logical_px)
 }
 

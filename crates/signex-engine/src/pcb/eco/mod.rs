@@ -24,6 +24,8 @@
 //! - Remove and change rows of a locked footprint start unticked.
 //! - A pad whose net is locked gets no pad net row, except to follow a
 //!   rename of its own net.
+//! - A pad that keeps its net and only gains its lock is no row: it is
+//!   locked along with the rows that apply ([`PadLock`], #3060).
 //! - A part that cannot be read back is never removed or changed.
 //! - A placed part whose footprint cannot be resolved gets a note, and the
 //!   pads of it and of an unread part are left out of net sync.
@@ -45,7 +47,8 @@ pub use back::{
     BackRow, SheetEdit, diff_schematic, sheet_commands,
 };
 pub use change::{
-    ChangeReason, EcoBlock, EcoChange, EcoChangeList, EcoGroup, EcoKey, EcoNote, EcoRow, GroupTicks,
+    ChangeReason, EcoBlock, EcoChange, EcoChangeList, EcoGroup, EcoKey, EcoNote, EcoRow,
+    GroupTicks, PadLock,
 };
 pub use compare::{
     ChooseRefusal, CompareAction, CompareCounts, CompareJump, CompareKind, CompareObject,
@@ -66,6 +69,8 @@ mod group_tests;
 mod net_tests;
 #[cfg(test)]
 mod net_tie_tests;
+#[cfg(test)]
+mod pad_lock_tests;
 #[cfg(test)]
 mod reannotate_tests;
 #[cfg(test)]

@@ -100,6 +100,13 @@ pub(crate) struct AgentState {
     pub(crate) deferred: Option<super::deferred::DeferredRequest>,
     /// The replies of requests waiting for their reads, by ticket.
     pub(super) waiting: std::collections::HashMap<u64, super::deferred::WaitingReply>,
+    /// The notebook read a waiting reference command runs again on: the
+    /// project it read and the read, `None` when it failed. Set only for
+    /// the length of that run (#3022, `notebook_references`).
+    pub(crate) notebook_read: Option<(
+        crate::app::ProjectId,
+        Option<Arc<crate::panels::annotations::NotebookScan>>,
+    )>,
 }
 
 impl AgentState {
@@ -141,6 +148,7 @@ impl AgentState {
             restarts: 0,
             deferred: None,
             waiting: std::collections::HashMap::new(),
+            notebook_read: None,
         }
     }
 

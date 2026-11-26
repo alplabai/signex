@@ -443,7 +443,7 @@ impl Signex {
     /// grid / etc.
     fn invalidate_primitive_canvas_cache(&mut self, path: &std::path::Path) {
         if let Some(editor) = self.document_state.symbol_editors.get_mut(path) {
-            editor.canvas_cache.clear();
+            editor.gui.canvas_cache.clear();
         }
         if let Some(editor) = self.document_state.footprint_editors.get_mut(path) {
             editor.canvas_cache.clear();

@@ -43,7 +43,7 @@ fn symbol_editor_on_part_two() -> Signex {
     let path = std::path::PathBuf::from("/w/menu-rows.snxsym");
     let editor = app.document_state.symbol_editors.get_mut(&path).unwrap();
     editor.primitive_mut().part_count = 2;
-    editor.active_part = 2;
+    editor.draft.active_part = 2;
     app
 }
 

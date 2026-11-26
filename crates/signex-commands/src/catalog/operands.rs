@@ -1,7 +1,7 @@
-//! The operands a command takes besides its id (#1934): what a CLI or an agent
-//! can pass in place of a pointer click or a dialog answer. One naming
-//! convention, kept by a test over every catalog row (the app's
-//! `OPERAND_CONVENTION`).
+//! A command's operands besides its id (#1934), for a CLI or an agent, in one
+//! naming convention (`OPERAND_CONVENTION`); the notebook's are in `notebook`.
+mod notebook;
+pub use notebook::*;
 
 /// The shape of one operand's value, as written in text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

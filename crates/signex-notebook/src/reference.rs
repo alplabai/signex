@@ -1,17 +1,61 @@
 //! References from a notebook to the design, and the argument lists they
 //! and the annotation block are written with.
 
-/// A part, net or pin the notebook names: `#component("U3")`,
-/// `#net("VBUS")`, `#pin("U1", "3")`. Parameter access after a component
-/// (`.value`, `.param("Vref")`) still names that component.
+/// A part, net or pin the notebook names. The file stores the calls
+/// `#component("R7")`, `#pin("U3", "3")` and `#net("+3V3")` (in code, such
+/// as a block's `target:`, without the `#`); a pin may also be written as
+/// one dotted name, `#pin("U3.3")`. Typing `@` in the editor only opens the
+/// reference picker: `@` is a label reference in Typst, so the file never
+/// stores it. Parameter access after a component (`.value`,
+/// `.param("Vref")`) still names that component.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Reference {
+    /// A part, by designator.
     Component(String),
+    /// A net, by name.
     Net(String),
+    /// A pin of a part, by designator and pin number or name.
     Pin { component: String, pin: String },
 }
 
 impl Reference {
+    /// The Typst function that writes this kind of reference: `component`,
+    /// `pin` or `net`.
+    pub fn function(&self) -> &'static str {
+        match self {
+            Reference::Component(_) => "component",
+            Reference::Net(_) => "net",
+            Reference::Pin { .. } => "pin",
+        }
+    }
+
+    /// The call as code, the form a block argument holds:
+    /// `component("R7")`, `pin("U3", "3")`, `net("+3V3")`.
+    pub fn to_code(&self) -> String {
+        let args = match self {
+            Reference::Component(name) | Reference::Net(name) => quote(name),
+            Reference::Pin { component, pin } => format!("{}, {}", quote(component), quote(pin)),
+        };
+        format!("{}({args})", self.function())
+    }
+
+    /// The call as markup, the form the editor inserts into running text:
+    /// `#component("R7")`, `#pin("U3", "3")`, `#net("+3V3")`.
+    pub fn to_markup(&self) -> String {
+        format!("#{}", self.to_code())
+    }
+
+    /// The pin a dotted name (`U3.3`) names, cut at its first dot; `None`
+    /// when either side is empty.
+    pub fn dotted_pin(text: &str) -> Option<Self> {
+        let (component, pin) = text.split_once('.')?;
+        let (component, pin) = (component.trim(), pin.trim());
+        (!component.is_empty() && !pin.is_empty()).then(|| Reference::Pin {
+            component: component.to_string(),
+            pin: pin.to_string(),
+        })
+    }
+
     /// The text a reference reads as: `U3`, `VBUS`, `U1.3`.
     pub fn name(&self) -> String {
         match self {
@@ -48,11 +92,48 @@ impl Reference {
                 component: component.clone(),
                 pin: pin.clone(),
             }),
+            ("pin", Some([dotted])) => Reference::dotted_pin(dotted).ok_or(()),
             ("component" | "net" | "pin", _) => Err(()),
             _ => return None,
         };
         Some(made)
     }
+}
+
+/// Written as `{"kind": "component", "name": "R7"}`, a pin adding its
+/// `component` and `pin`, in a JSON result.
+impl serde::Serialize for Reference {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(None)?;
+        map.serialize_entry("kind", self.function())?;
+        map.serialize_entry("name", &self.name())?;
+        if let Reference::Pin { component, pin } = self {
+            map.serialize_entry("component", component)?;
+            map.serialize_entry("pin", pin)?;
+        }
+        map.end()
+    }
+}
+
+/// `text` as a Typst string literal, `"` and `\` escaped and control
+/// characters written as `\u{..}`.
+pub fn quote(text: &str) -> String {
+    let mut out = String::with_capacity(text.len() + 2);
+    out.push('"');
+    for c in text.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\t' => out.push_str("\\t"),
+            '\r' => out.push_str("\\r"),
+            c if c.is_control() => out.push_str(&format!("\\u{{{:x}}}", u32::from(c))),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
 }
 
 /// One argument of a call: `name: value` or a positional `value`.
@@ -93,7 +174,7 @@ pub(crate) fn parse_args(text: &str) -> Vec<Arg> {
 }
 
 /// `piece` cut at each comma that is outside a string and every bracket.
-fn split_top_level(text: &str) -> Vec<&str> {
+pub(crate) fn split_top_level(text: &str) -> Vec<&str> {
     let mut pieces = Vec::new();
     let (mut depth, mut start, mut in_string, mut escaped) = (0usize, 0usize, false, false);
     for (i, c) in text.char_indices() {

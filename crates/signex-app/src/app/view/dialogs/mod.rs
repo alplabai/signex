@@ -34,6 +34,10 @@ pub(crate) mod grid_properties;
 mod header;
 mod netlist_incomplete;
 pub(crate) mod new_project;
+// #2945, mockup row 201: Generate design notebook.
+pub(crate) mod notebook_generate;
+// Mockup row 202: Export Design Notebook PDF.
+mod notebook_pdf;
 // #1295: Import Parameters, the preview of a CSV import.
 mod parameter_import;
 mod preview_frame;
