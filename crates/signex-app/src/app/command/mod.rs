@@ -81,7 +81,11 @@ mod operands;
 #[cfg(test)]
 mod parity;
 #[cfg(test)]
+mod part_height_operand_tests;
+mod part_height_operands;
+#[cfg(test)]
 mod part_operand_tests;
+pub(crate) use part_height_operands::PartHeightsRead;
 mod part_operands;
 mod placed_move;
 #[cfg(test)]

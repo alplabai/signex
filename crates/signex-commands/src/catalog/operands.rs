@@ -730,6 +730,14 @@ pub const QUERY_BOARD_NETS: &[Operand] = &[
     required("document", OperandKind::Document),
     optional("net", OperandKind::Text),
 ];
+/// `query_library` (#2944): the rows of the open library `library` (its id
+/// or path), or the row `part` names (a row id or a part number), or the
+/// rows holding `text`.
+pub const QUERY_LIBRARY: &[Operand] = &[
+    required("library", OperandKind::Text),
+    optional("part", OperandKind::Text),
+    optional("text", OperandKind::Text),
+];
 /// `find_similar_items` (#2403): what agrees with the item `id` on the
 /// properties `fields` lists.
 pub const FIND_SIMILAR_ITEMS: &[Operand] = &[
@@ -847,7 +855,7 @@ pub const RULES_ONE: &[Operand] = &[
     required("id", OperandKind::Text),
 ];
 /// `rules_add`: a rule of `kind` (a rule target: clearance, track, via, hole,
-/// edge, silk, mask, paste, courtyard) with its limits.
+/// edge, silk, mask, paste, courtyard, component) with its limits.
 pub const RULES_ADD: &[Operand] = &[
     required("document", OperandKind::Document),
     required("kind", OperandKind::Text),

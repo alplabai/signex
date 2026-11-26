@@ -62,7 +62,7 @@ mod units;
 mod zone_fill;
 
 pub use arrange::{arrange_in_box, pack_in_box, placed_extent};
-pub use body::{checked_body, courtyard_outline, footprint_body, is_courtyard};
+pub use body::{checked_body, courtyard_outline, footprint_body, is_courtyard, placed_box};
 pub use closed_path::{PathRefusal, closed_path};
 pub use connections::{ConnectionCounts, NetUnrouted, PadName, connection_counts};
 pub use copper::{
@@ -107,6 +107,7 @@ pub use selection::{
 };
 pub use shape::Shape;
 pub use shape_gap::Separation;
+pub use shape_polygon::ccw_ring;
 pub use staging::{Staging, footprint_extent, stage, stage_up};
 pub use stats::BoardStats;
 pub use stitch::{StitchSpec, stitch_points, stitch_spec_mm};

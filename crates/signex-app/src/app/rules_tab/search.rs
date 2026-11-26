@@ -249,6 +249,7 @@ pub(crate) fn column_label(column: &str) -> MessageId {
             ids::RULES_COLUMN_CHECK
         }
         "smd_entry" => ids::RULES_COLUMN_ENTRY,
+        "component_clearance_body_3d" => ids::RULES_COLUMN_BODY_3D,
         _ => ids::RULES_GRID_UNNAMED,
     }
 }

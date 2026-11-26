@@ -26,6 +26,7 @@ use super::footprint_place_operands as fp_place;
 use super::footprint_text_operands as fp_text;
 use super::hierarchy_operands as hierarchy;
 use super::layer_strip_operands as strip;
+use super::part_height_operands as part_heights;
 use super::part_operands as part;
 use super::placed_operands as placed;
 use super::placement_extras_operands as extras;
@@ -202,6 +203,8 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("rules_remove", crate::app::rules_tab::rules_remove),
     ("rules_enable", crate::app::rules_tab::rules_enable),
     ("show_drc_violation", board::show_drc_violation),
+    // #2939: each part's height and where it came from.
+    ("query_part_heights", part_heights::query_part_heights),
     ("waive_drc_violation", board::waive_drc_violation),
     ("unwaive_drc_violation", board::unwaive_drc_violation),
     ("fix_drc_violation", board::fix_drc_violation),
@@ -590,6 +593,10 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "fix_drc" => Some(
             "`fix_drc` needs the operand `document`, and `rule` for one kind — \
              run it from the command line with its operands",
+        ),
+        "query_part_heights" => Some(
+            "`query_part_heights` needs the operand `document` — \
+             a part's height is its Height row in Properties",
         ),
         "filter_drc_results" => Some(
             "`filter_drc_results` needs the operand `document` — \

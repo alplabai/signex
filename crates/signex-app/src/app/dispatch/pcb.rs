@@ -26,6 +26,7 @@ impl Signex {
                 self.handle_pcb_drc_violation_picked(index);
                 Task::none()
             }
+            PcbMsg::PartHeightsRead(read) => self.handle_part_heights_read(*read),
             PcbMsg::CanvasInWindow { window, msg } => {
                 self.run_in_window(window, false, |app| app.dispatch_pcb_canvas_message(msg))
             }

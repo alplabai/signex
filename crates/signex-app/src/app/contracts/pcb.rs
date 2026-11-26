@@ -32,6 +32,9 @@ pub enum PcbMsg {
     },
     /// A violation row (by its position in the report) was clicked.
     DrcViolationPicked(usize),
+    /// The library models a `query_part_heights` waited for were read
+    /// (#2939): answer it.
+    PartHeightsRead(Box<crate::app::command::PartHeightsRead>),
     /// The PCB canvas of the undocked window `window` reported `msg`: it
     /// acts on that window's board and selection (#2240).
     CanvasInWindow {

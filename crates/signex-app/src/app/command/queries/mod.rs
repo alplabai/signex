@@ -12,9 +12,10 @@
 //! the Project tab's `project_settings` (#1689-#1693, `app::project_tab`),
 //! `query_footprint_assignments` (#2937, `footprint_assign_operands`),
 //! `check_board_against_schematic` (#2462, `app::compare_board`),
-//! `board_status` (#2460), `query_rail_budget` (#2943) and the BOM and part
-//! search queries `query_bom` (#2938) and `search_parts` (#1297, `bom`),
-//! answered once their reads land. Each
+//! `board_status` (#2460), `query_rail_budget` (#2943), the BOM and part
+//! search queries `query_bom` (#2938) and `search_parts` (#1297, `bom`), and
+//! `query_library` (#2944, the rows of an open library), answered once their
+//! reads land. Each
 //! answers with data through [`CommandOutcome::Answered`], never a bare
 //! `Ran`, and reads only the documents (engines, boards, editors, projects,
 //! the library): no active tab, window, selection or panel is looked at, and
@@ -37,6 +38,7 @@ pub use check_run::CheckFinished;
 mod documents;
 mod elements;
 mod find;
+mod library;
 mod pins;
 pub(in crate::app::command) use pins::pin_id;
 mod rail_budget;
@@ -85,6 +87,8 @@ const QUERY_IDS: &[&str] = &[
     "query_rail_budget",
     "query_bom",
     "search_parts",
+    // #2944: the rows of an open library.
+    "query_library",
 ];
 
 /// The queries that run a check (`check_run`): each says nothing in
@@ -199,6 +203,7 @@ impl Signex {
             "query_footprint_assignments" => self.query_footprint_assignments(args),
             "layout_plan_get" | "layout_plan_status" => self.layout_plan_query(id, args),
             "search_parts" => self.search_parts_query(args),
+            "query_library" => self.query_library(args),
             _ => self.read_document(args),
         };
         // The heads of referenced files that were never read are read now,
@@ -233,10 +238,14 @@ pub(in crate::app) mod pins_tests;
 #[cfg(test)]
 mod check_drc_base_rules_tests;
 #[cfg(test)]
+mod check_drc_bodies_tests;
+#[cfg(test)]
 pub(crate) mod check_drc_tests;
 #[cfg(test)]
 mod check_erc_tests;
 #[cfg(test)]
 mod check_requirements_tests;
+#[cfg(test)]
+mod library_tests;
 #[cfg(test)]
 mod rail_budget_tests;

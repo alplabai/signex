@@ -202,6 +202,9 @@ mod tests {
                 // #2938: the priced BOM of the named project.
                 "query_bom",
                 "query_footprint_assignments",
+                // #2944, #2939: an open library's rows; each part's height.
+                "query_library",
+                "query_part_heights",
                 "query_pins",
                 "query_rail_budget",
                 "read_document",
