@@ -20,7 +20,7 @@ pub(super) fn apply_symbol_history(editor: &mut SymEditor, msg: SymbolEditorMsg)
             }
         }
         SymbolEditorMsg::DragCommit => {
-            editor.gui.mid_drag = false;
+            editor.draft.end_move_run();
         }
         _ => {}
     }
