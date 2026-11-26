@@ -22,6 +22,7 @@ use signex_types::schematic::Point as MmPoint;
 use uuid::Uuid;
 
 use super::TabEvent;
+use super::canvas_review::PreviewTags;
 use super::state::{BlockDiagramEditor, Camera, DiagramItem, DiagramTool};
 use crate::double_click::DoubleClick;
 
@@ -149,6 +150,8 @@ fn home_middle([x, y, w, h]: [f64; 4]) -> (f64, f64) {
 pub struct DiagramCanvas<'a> {
     pub editor: &'a BlockDiagramEditor,
     pub look: CanvasLook,
+    /// The Re-sync review's tag words.
+    pub tags: PreviewTags,
 }
 
 /// What a held button is doing.
@@ -454,7 +457,8 @@ impl Painter<'_, '_> {
             self.draw_block(frame, block);
         }
         if let Some(review) = &self.canvas.editor.review {
-            super::canvas_review::draw_review(frame, self.fit, diagram, review, look);
+            let tags = &self.canvas.tags;
+            super::canvas_review::draw_review(frame, self.fit, diagram, review, look, tags);
         }
         if let Some(end) = self.canvas.editor.connect_from {
             self.draw_connect_start(frame, diagram, end);
@@ -725,8 +729,9 @@ fn arrow_head(from: Point, tip: Point, length: f32) -> Path {
 pub fn diagram_canvas<'a>(
     editor: &'a BlockDiagramEditor,
     look: CanvasLook,
+    tags: PreviewTags,
 ) -> Element<'a, TabEvent> {
-    Canvas::new(DiagramCanvas { editor, look })
+    Canvas::new(DiagramCanvas { editor, look, tags })
         .width(Length::Fill)
         .height(Length::Fill)
         .boxed()

@@ -70,8 +70,15 @@ fn review_of(run: &Regenerated) -> ResyncReview {
     for change in &run.changes {
         match change {
             DiagramChange::BlockAdded { block, .. } => review.added.push(*block),
-            DiagramChange::SheetMoved { block, .. } if !review.moved.contains(block) => {
-                review.moved.push(*block)
+            DiagramChange::SheetMoved {
+                block, from, to, ..
+            } if !review.moved.contains(block) => {
+                review.moved.push(*block);
+                // A changed file name is a rename; only the folder, a move.
+                let file = |path: &str| path.rsplit(['/', '\\']).next().unwrap_or("").to_string();
+                if file(from) != file(to) {
+                    review.renamed.push(*block);
+                }
             }
             _ => {}
         }

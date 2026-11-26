@@ -3,7 +3,8 @@
 //! for a block that would become unlinked; Apply selected is one undo step;
 //! an unchecked row comes back next time. The headless `unlink` operand.
 //! The GUI path is `Signex::update` with the tab's messages and the layout
-//! probe of the side sheet; the previews are read from the review.
+//! probe of the side sheet; the previews are read from the review, their
+//! tags and the hover outline also from the drawn canvas.
 
 use std::path::{Path, PathBuf};
 
@@ -13,9 +14,12 @@ use signex_types::block_diagram::{LinkState, read_block_diagram};
 use super::tests::{app_on, write_hierarchy};
 use crate::app::block_diagram::{BlockDiagramMsg, Preview, ReviewEvent, TabEvent, previews};
 use crate::app::command::{CommandArgs, CommandOutcome};
+use crate::app::core::block_diagram_panes::ResyncReview;
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
-use crate::layout_probe::{lay_out_texts, messages_on_click};
+use crate::layout_probe::{draw_pixels, lay_out_texts, messages_for_moves, messages_on_click};
+use crate::styles::ti;
+use crate::styles::tokens::resolve;
 use crate::task_driver::TaskDriver;
 
 const WINDOW: Size = Size::new(1600.0, 900.0);
@@ -265,4 +269,128 @@ fn headless_regenerate_skips_or_applies_the_unlink() {
         &[&project, "unlink=maybe"],
     );
     assert!(matches!(bad, CommandOutcome::Disabled { .. }), "{bad:?}");
+}
+
+#[test]
+fn previewed_blocks_carry_their_tags_in_their_colours() {
+    let dir = tempfile::tempdir().expect("dir");
+    let (mut app, file) = generated(dir.path());
+    open(&mut app, &file);
+    change_hierarchy(dir.path());
+    send(&mut app, &file, TabEvent::ResyncPressed);
+
+    let tokens = app.document_state.panel_ctx.tokens;
+    let editor = &app.document_state.block_diagrams.editors[&file];
+    let id_of = |name: &str| {
+        editor
+            .diagram
+            .blocks
+            .iter()
+            .find(|b| b.name == name)
+            .expect(name)
+            .id
+    };
+    let (gamma, beta) = (id_of("Gamma"), id_of("Beta"));
+    let tags = app.block_diagram_review_tags(&file);
+    let tag = |block| tags.iter().find(|(id, ..)| *id == block).cloned();
+    let (_, word, ink) = tag(gamma).expect("Gamma is tagged");
+    assert_eq!((word.as_str(), ink), ("new", ti(tokens.success)));
+    let (_, word, ink) = tag(beta).expect("Beta is tagged");
+    assert_eq!((word.as_str(), ink), ("unlinked", ti(tokens.warning)));
+    assert_eq!(tags.len(), 2, "only the previewed blocks: {tags:?}");
+
+    // The canvas draws the words: blank words draw a different diagram.
+    let canvas = Size::new(1000.0, 700.0);
+    let worded = draw_pixels(app.block_diagram_canvas_in_test(&file, true), canvas);
+    let blank = draw_pixels(app.block_diagram_canvas_in_test(&file, false), canvas);
+    assert_ne!(worded, blank, "the tags are drawn on the canvas");
+
+    // Unticking Beta's row takes its tag away with its hatch.
+    send(
+        &mut app,
+        &file,
+        TabEvent::Review(ReviewEvent::RowToggled(beta, false)),
+    );
+    let tags = app.block_diagram_review_tags(&file);
+    assert!(tags.iter().all(|(id, ..)| *id != beta), "{tags:?}");
+
+    // A renamed sheet file reads "renamed", a moved one "moved", both in
+    // the moved colour.
+    let review = ResyncReview {
+        moved: vec![gamma, beta],
+        renamed: vec![gamma],
+        ..ResyncReview::default()
+    };
+    let shown = previews(&review);
+    assert_eq!(shown, [(gamma, Preview::Renamed), (beta, Preview::Moved)]);
+    let editor = app
+        .document_state
+        .block_diagrams
+        .editors
+        .get_mut(&file)
+        .expect("open");
+    editor.review = Some(review);
+    let tags = app.block_diagram_review_tags(&file);
+    let moved = resolve(&tokens).info;
+    assert_eq!(tags[0].1, "renamed");
+    assert_eq!(tags[1].1, "moved");
+    assert!(tags.iter().all(|(_, _, ink)| *ink == moved), "{tags:?}");
+}
+
+#[test]
+fn hovering_a_row_outlines_its_block() {
+    let dir = tempfile::tempdir().expect("dir");
+    let (mut app, file) = generated(dir.path());
+    open(&mut app, &file);
+    change_hierarchy(dir.path());
+    send(&mut app, &file, TabEvent::ResyncPressed);
+    let beta = app.document_state.block_diagrams.editors[&file]
+        .review
+        .as_ref()
+        .expect("open")
+        .unlink[0]
+        .block;
+
+    let laid = lay_out_texts(app.view_block_diagram_tab(file.clone()), WINDOW);
+    let row = laid
+        .iter()
+        .find(|t| t.text.replace(['\u{2068}', '\u{2069}'], "") == "Beta")
+        .expect("Beta's row")
+        .bounds;
+    let over = row.center();
+    let away = iced::Point::new(over.x, WINDOW.height - 2.0);
+    let events: Vec<TabEvent> = messages_for_moves(
+        app.view_block_diagram_tab(file.clone()),
+        WINDOW,
+        &[over, away],
+    )
+    .into_iter()
+    .filter_map(|m| match m {
+        Message::BlockDiagram(BlockDiagramMsg::Tab { event, .. }) => Some(event),
+        _ => None,
+    })
+    .collect();
+    assert_eq!(
+        events,
+        [
+            TabEvent::Review(ReviewEvent::RowHovered(Some(beta))),
+            TabEvent::Review(ReviewEvent::RowHovered(None)),
+        ]
+    );
+
+    let hovered = |app: &Signex| {
+        app.document_state.block_diagrams.editors[&file]
+            .review
+            .as_ref()
+            .expect("open")
+            .hovered
+    };
+    send(&mut app, &file, events[0].clone());
+    assert_eq!(hovered(&app), Some(beta), "Beta is outlined");
+    let canvas = Size::new(1000.0, 700.0);
+    let outlined = draw_pixels(app.block_diagram_canvas_in_test(&file, true), canvas);
+    send(&mut app, &file, events[1].clone());
+    assert_eq!(hovered(&app), None, "the outline goes with the pointer");
+    let plain = draw_pixels(app.block_diagram_canvas_in_test(&file, true), canvas);
+    assert_ne!(outlined, plain, "the hover outline is drawn");
 }

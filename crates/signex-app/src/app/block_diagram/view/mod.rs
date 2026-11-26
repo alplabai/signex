@@ -56,6 +56,48 @@ pub(crate) struct VariantField {
 }
 
 impl Signex {
+    /// The tags the canvas draws on the review's previews of the diagram at
+    /// `path`, worded and coloured as the view draws them (canvas text is
+    /// not a laid-out text, so a test reads them here).
+    #[cfg(test)]
+    pub(crate) fn block_diagram_review_tags(
+        &self,
+        path: &std::path::Path,
+    ) -> Vec<(uuid::Uuid, String, iced::Color)> {
+        let look = Look {
+            tokens: &self.document_state.panel_ctx.tokens,
+            i18n: &self.ui_state.i18n,
+        };
+        let Some(editor) = self.document_state.block_diagrams.editors.get(path) else {
+            return Vec::new();
+        };
+        let canvas = canvas_look(look, editor.show_ground);
+        editor.review.as_ref().map_or_else(Vec::new, |open| {
+            super::canvas_review::tags(open, &review::preview_tags(look), &canvas)
+        })
+    }
+
+    /// The diagram canvas of `path` as the tab draws it, with its review
+    /// tags worded (`worded`) or blank, for a drawn-pixels probe.
+    #[cfg(test)]
+    pub(crate) fn block_diagram_canvas_in_test(
+        &self,
+        path: &std::path::Path,
+        worded: bool,
+    ) -> Element<'_, TabEvent> {
+        let look = Look {
+            tokens: &self.document_state.panel_ctx.tokens,
+            i18n: &self.ui_state.i18n,
+        };
+        let editor = &self.document_state.block_diagrams.editors[path];
+        let words = if worded {
+            review::preview_tags(look)
+        } else {
+            Default::default()
+        };
+        diagram_canvas(editor, canvas_look(look, editor.show_ground), words)
+    }
+
     /// The Variant field of the diagram at `path`: the variant picked, else
     /// the project's active one, else Base.
     pub(crate) fn power_variant_field(&self, path: &std::path::Path) -> VariantField {
@@ -126,7 +168,11 @@ fn tab<'a>(
 ) -> Element<'a, TabEvent> {
     let (main, side) = match editor.view {
         DiagramView::Blocks => (
-            diagram_canvas(editor, canvas_look(look, editor.show_ground)),
+            diagram_canvas(
+                editor,
+                canvas_look(look, editor.show_ground),
+                review::preview_tags(look),
+            ),
             match &editor.review {
                 Some(open) => review::view(look, open),
                 None => properties::view(look, editor),

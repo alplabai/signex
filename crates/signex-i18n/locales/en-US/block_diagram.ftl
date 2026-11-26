@@ -219,3 +219,8 @@ block-diagram-review-nothing = Nothing to change
 block-diagram-review-nothing-note = The diagram matches the sheet hierarchy. Unlinked and manual blocks are left as they are.
 block-diagram-review-close = Close
 block-diagram-review-applied = { $file }: { $blocks } blocks unlinked from the sheets, layout kept. Undo with Ctrl+Z.
+# The tags on the previewed blocks, as mockup row 210 draws them.
+block-diagram-review-tag-added = new
+block-diagram-review-tag-renamed = renamed
+block-diagram-review-tag-moved = moved
+block-diagram-review-tag-unlinked = unlinked

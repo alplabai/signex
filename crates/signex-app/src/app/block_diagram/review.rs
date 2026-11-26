@@ -21,6 +21,9 @@ pub enum ReviewEvent {
     RowToggled(Uuid, bool),
     /// The Unlinked group's box: every row on or off.
     AllToggled(bool),
+    /// The pointer entered a row (its block) or left it (`None`): the
+    /// block is outlined on the diagram while it is over the row.
+    RowHovered(Option<Uuid>),
     /// Cancel, the close button or Close.
     Closed,
     ApplyPressed,
@@ -51,6 +54,7 @@ impl Signex {
             ReviewEvent::AllToggled(on) => {
                 review.unlink.iter_mut().for_each(|row| row.checked = on);
             }
+            ReviewEvent::RowHovered(block) => review.hovered = block,
             ReviewEvent::Closed | ReviewEvent::ApplyPressed => editor.review = None,
         }
         Task::none()

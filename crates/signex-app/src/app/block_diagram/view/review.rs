@@ -4,12 +4,13 @@
 //! it is open finds no block to unlink. It takes the place of Properties.
 //! A pure view; its events are the tab's (`TabEvent::Review`).
 
-use iced::widget::{Column, Space, column, container, row, scrollable};
+use iced::widget::{Column, Space, column, container, mouse_area, row, scrollable};
 use iced::{Alignment, Element, Length, Widget as _};
 use signex_i18n::{UserText, ids, t};
 use signex_widgets::{CheckboxLabel as _, button, checkbox, text};
 
 use super::{Look, SP, TS, caption};
+use crate::app::block_diagram::canvas_review::PreviewTags;
 use crate::app::block_diagram::state::ResyncReview;
 use crate::app::block_diagram::{ReviewEvent, TabEvent};
 use crate::styles::tokens::resolve;
@@ -19,6 +20,17 @@ type Items<'a> = Column<Element<'a, TabEvent>>;
 
 fn sent(event: ReviewEvent) -> TabEvent {
     TabEvent::Review(event)
+}
+
+/// The previews' tag words (mockup row 210), for the canvas.
+pub(super) fn preview_tags(look: Look<'_>) -> PreviewTags {
+    let word = |id| look.t(id).into_string();
+    PreviewTags {
+        added: word(ids::BLOCK_DIAGRAM_REVIEW_TAG_ADDED),
+        renamed: word(ids::BLOCK_DIAGRAM_REVIEW_TAG_RENAMED),
+        moved: word(ids::BLOCK_DIAGRAM_REVIEW_TAG_MOVED),
+        unlinked: word(ids::BLOCK_DIAGRAM_REVIEW_TAG_UNLINKED),
+    }
 }
 
 fn note<'a>(look: Look<'a>, line: impl Into<signex_widgets::Label<'a>>) -> Element<'a, TabEvent> {
@@ -101,7 +113,11 @@ pub(super) fn view<'a>(look: Look<'a>, review: &'a ResyncReview) -> Element<'a, 
             note(look, look.t(what)),
         ]
         .spacing(SP.xs);
-        list = list.push(container(body).padding([0.0, SP.m]).boxed());
+        // Hovering the row outlines its block on the diagram.
+        let hover = mouse_area(container(body).padding([0.0, SP.m]).width(Length::Fill))
+            .on_enter(sent(ReviewEvent::RowHovered(Some(block))))
+            .on_exit(sent(ReviewEvent::RowHovered(None)));
+        list = list.push(hover.boxed());
     }
     list = list.push(note(look, look.t(ids::BLOCK_DIAGRAM_REVIEW_MANUAL)));
     let checked = review.unlink.iter().filter(|row| row.checked).count();

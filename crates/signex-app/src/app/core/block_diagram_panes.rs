@@ -18,9 +18,14 @@ use uuid::Uuid;
 pub struct ResyncReview {
     pub added: Vec<Uuid>,
     pub moved: Vec<Uuid>,
+    /// Of `moved`, the blocks whose sheet file was renamed (its name, not
+    /// only its folder, changed); tagged "renamed" rather than "moved".
+    pub renamed: Vec<Uuid>,
     pub unlink: Vec<UnlinkRow>,
     /// Linked blocks the run left as they were.
     pub unchanged: usize,
+    /// The block of the row the pointer is over: outlined on the diagram.
+    pub hovered: Option<Uuid>,
 }
 
 impl ResyncReview {

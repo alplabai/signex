@@ -194,4 +194,8 @@ define_ids! {
     BLOCK_DIAGRAM_REVIEW_NOTHING_NOTE = "block-diagram-review-nothing-note";
     BLOCK_DIAGRAM_REVIEW_CLOSE = "block-diagram-review-close";
     BLOCK_DIAGRAM_REVIEW_APPLIED = "block-diagram-review-applied";
+    BLOCK_DIAGRAM_REVIEW_TAG_ADDED = "block-diagram-review-tag-added";
+    BLOCK_DIAGRAM_REVIEW_TAG_RENAMED = "block-diagram-review-tag-renamed";
+    BLOCK_DIAGRAM_REVIEW_TAG_MOVED = "block-diagram-review-tag-moved";
+    BLOCK_DIAGRAM_REVIEW_TAG_UNLINKED = "block-diagram-review-tag-unlinked";
 }

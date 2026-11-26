@@ -40,7 +40,9 @@ tab behaves.
   side sheet (mockup row 210) opens in Properties' place, with one checked
   row per such block. The diagram previews the run while it is open: the
   added blocks dashed in the added colour, the renamed or moved ones
-  outlined, and each checked row's block hatched amber. Apply selected
+  outlined, and each checked row's block hatched amber, each with its tag
+  ("new", "renamed", "moved", "unlinked") in the same colour. Hovering a
+  row outlines its block. Apply selected
   unlinks the checked blocks as one undo step; Cancel leaves them. An
   unchecked block is not remembered: the next Re-sync lists it again,
   checked. A Re-sync run while the side sheet is open and finding nothing
