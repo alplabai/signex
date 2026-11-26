@@ -35,10 +35,11 @@ fn app_with_a_custom_profile() -> Signex {
     app
 }
 
-/// A window's run: the path a key, a menu row or an attached CLI takes.
+/// The operand run in a window app (Preferences may be open), as an
+/// in-process request with operands runs it. A key or a menu row carries
+/// no operands; see `without_operands_a_key_or_the_palette_is_refused`.
 fn run_in_window(app: &mut Signex, command: &str, operands: &[&str]) -> CommandOutcome {
-    app.dispatch_command_reporting(&id(command), args(command, operands), None)
-        .0
+    app.run_operands(&id(command), &args(command, operands)).0
 }
 
 /// A headless run, as `signex-cli` does it.
@@ -82,6 +83,10 @@ const UNBOUND: &str = "open_compiled_design";
 fn assign_in_a_window_writes_the_custom_profile_and_runs_at_once() {
     let _root = IsolatedConfigRoot::new();
     let mut app = app_with_a_custom_profile();
+    let _ = app.update(crate::app::Message::Preferences(
+        crate::app::PreferencesMsg::Open,
+    ));
+    assert!(!app.ui_state.preferences_dirty, "fixture: Preferences opens clean");
     assert!(keys_of(&app.ui_state.keymap_profiles, "mine", UNBOUND).is_empty());
     let active_before = app.ui_state.keymap_profiles.active_profile_id().to_string();
 
