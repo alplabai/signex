@@ -115,6 +115,14 @@ numbering scheme (`annotation.numbering`, #1292) is the same: an older build
 keeps the key in the section's unknown-key bag and numbers continuously, and
 the continuous default is never written.
 
+The Part lifecycle requirement's `variant` and `fitted_only` keys (#2686)
+take no token either. They sit inside a `requirements` entry and are left
+out at their defaults (the active variant, fitted parts only), so a project
+that does not set them writes as before, byte for byte. An older build reads
+an entry with one of them as an entry it cannot read: it keeps the entry as
+written, writes it back unchanged and reports it as not checked, so nothing
+is dropped.
+
 ## Changing a format
 
 A change an older build would misread takes a new token: add it as the

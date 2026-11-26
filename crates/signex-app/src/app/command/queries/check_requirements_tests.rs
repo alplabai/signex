@@ -226,6 +226,93 @@ fn parts_and_cost_are_checked_on_the_closed_sheets_parts() {
     );
 }
 
+/// The messages of the findings filed under `rule`.
+fn messages_of(report: &Value, rule: &str) -> Vec<String> {
+    report["findings"]
+        .as_array()
+        .expect("findings")
+        .iter()
+        .filter(|f| f["rule"] == rule)
+        .map(|f| f["message"].as_str().unwrap().to_string())
+        .collect()
+}
+
+/// #2686, headless: a Part lifecycle requirement checks the BOM of the
+/// variant it names; with Fitted parts only (the default) a part that
+/// variant does not fit is left out, off it is checked; a variant the
+/// project does not have is not checked.
+#[test]
+fn parts_state_checks_the_variant_it_names_and_its_fitted_parts() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = project_app(&dir);
+    let mut sheet = child();
+    let row = (Uuid::from_u128(0xA), Uuid::from_u128(0xB));
+    sheet.symbols.push(part("R1", "10k", Some(row)));
+    let mut r2 = part("R2", "1k", None);
+    r2.fields.insert("DNP@Lite".into(), "true".into());
+    sheet.symbols.push(r2);
+    let text = SnxSchematic::new(sheet).write_string().expect("encode");
+    std::fs::write(dir.path().join("child.snxsch"), text).expect("write sheet");
+    app.document_state.projects[0].data.variant_definitions = vec!["Lite".into()];
+    set_requirements(
+        &mut app,
+        json!([
+            {"id": "base", "kind": "parts_state"},
+            {"id": "lite", "kind": "parts_state", "variant": "lite"},
+            {"id": "every", "kind": "parts_state", "variant": "Lite", "fitted_only": false},
+            {"id": "gone", "kind": "parts_state", "variant": "Gone"},
+        ]),
+    );
+    let project = project_path(&app);
+    let value = report(&mut app, &project, &[]);
+    let r1 = "R1's library row is in no open library".to_string();
+    let r2 = "R2 was not placed from a library row".to_string();
+    assert_eq!(messages_of(&value, "req::base"), [r1.clone(), r2.clone()]);
+    assert_eq!(messages_of(&value, "req::lite"), [r1.clone()]);
+    assert_eq!(messages_of(&value, "req::every"), [r1, r2]);
+    assert_eq!(
+        messages_of(&value, "req::gone"),
+        ["The parts could not be listed: the project has no variant `Gone`"]
+    );
+}
+
+/// #2686: the catalog command sets the new fields through the tab's path
+/// and refuses a variant the project does not have.
+#[test]
+fn project_set_requirement_sets_variant_and_fitted_parts_only() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = project_app(&dir);
+    app.document_state.projects[0].data.variant_definitions = vec!["Lite".into()];
+    set_requirements(&mut app, json!([{"id": "parts", "kind": "parts_state"}]));
+    let project = project_path(&app);
+    let set = |app: &mut Signex, field: &str, value: &str| {
+        let id = AppCommandId::new("project_set_requirement").expect("a catalog id");
+        let operands = [
+            format!("document={}", project.display()),
+            "requirement=parts".to_string(),
+            format!("field={field}"),
+            format!("value={value}"),
+        ];
+        let operands: Vec<&str> = operands.iter().map(String::as_str).collect();
+        let args = CommandArgs::parse_operands(&id, &operands).expect("operands parse");
+        app.run_operands(&id, &args).0
+    };
+    match set(&mut app, "variant", "LITE") {
+        CommandOutcome::Answered(value) => {
+            assert_eq!(value["requirements"][0]["variant"], "Lite");
+        }
+        other => panic!("not answered: {other:?}"),
+    }
+    match set(&mut app, "fitted_only", "false") {
+        CommandOutcome::Answered(value) => {
+            assert_eq!(value["requirements"][0]["fitted_only"], false);
+        }
+        other => panic!("not answered: {other:?}"),
+    }
+    let reason = refusal(set(&mut app, "variant", "Gone"));
+    assert!(reason.contains("no variant `Gone`"), "{reason}");
+}
+
 #[test]
 fn erc_clean_runs_the_projects_erc() {
     let dir = tempfile::tempdir().unwrap();

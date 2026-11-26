@@ -94,10 +94,17 @@ pub enum RequirementKind {
     },
     /// Every part the BOM buys has a library row in one of `states`
     /// (lifecycle state names: `draft`, `in_review`, `released`,
-    /// `deprecated`, `obsolete`).
+    /// `deprecated`, `obsolete`). The BOM is the one of `variant` (`None`:
+    /// the project's active variant; `Base` names Base). With `fitted_only`
+    /// (the default, written only when off) the parts that variant does not
+    /// fit are not checked; off, every listed part is (#2686, mockup row 38).
     PartsState {
         #[serde(default = "default_part_states")]
         states: Vec<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        variant: Option<String>,
+        #[serde(default = "default_enabled", skip_serializing_if = "is_true")]
+        fitted_only: bool,
     },
     /// The board nets matching the pattern `nets` (`*` and `?`) belong to
     /// `class`, and their class sets at least the given track width and
@@ -138,7 +145,7 @@ impl RequirementKind {
         match self {
             Self::ErcClean { .. } | Self::DrcClean { .. } => &["allow_warnings"],
             Self::BoardSize { .. } => &["max_width_mm", "max_height_mm"],
-            Self::PartsState { .. } => &["states"],
+            Self::PartsState { .. } => &["states", "variant", "fitted_only"],
             Self::NetClass { .. } => &["nets", "class", "min_trace_width_mm", "min_clearance_mm"],
             Self::BomCost { .. } => &["quantity", "currency", "max_unit_cost"],
         }

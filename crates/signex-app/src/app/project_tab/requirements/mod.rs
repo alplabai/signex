@@ -47,6 +47,9 @@ pub struct RequirementsRun {
     /// outline.
     pub board_mm: Option<(f64, f64)>,
     pub finished_at: DateTime<Utc>,
+    /// Each entry's stored value as the run checked it, in list order: a
+    /// card whose entry differs now says its edits are not checked yet.
+    pub checked: Vec<serde_json::Value>,
 }
 
 /// The Requirements section's own state: what is typed and not committed,
@@ -333,6 +336,12 @@ impl Signex {
             return Task::none();
         }
         let job = self.requirements_measured_check_job(project);
+        let checked = project
+            .data
+            .requirements
+            .iter()
+            .map(|entry| entry.raw().clone())
+            .collect();
         self.requirements_tab(project_id).running = true;
         Task::perform(
             async move {
@@ -344,6 +353,7 @@ impl Signex {
                     report: ran.map(|(report, _)| report),
                     board_mm,
                     finished_at: Utc::now(),
+                    checked,
                 }
             },
             move |run| message(project_id, RequirementsMsg::RunFinished(Arc::new(run))),

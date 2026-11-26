@@ -72,7 +72,9 @@ fn every_kind_reads_with_its_parameters() {
     assert_eq!(
         known[3].kind,
         RequirementKind::PartsState {
-            states: vec!["released".to_string()]
+            states: vec!["released".to_string()],
+            variant: None,
+            fitted_only: true,
         }
     );
     assert_eq!(known[4].kind.name(), "net_class");
