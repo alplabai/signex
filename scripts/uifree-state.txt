@@ -32,6 +32,8 @@ struct crates/signex-app/src/app/board_reuse/mod.rs SavedBlock
 # Drafts: the symbol and footprint drafts (split before 4a) and their history steps.
 # The symbol draft is split (#2974): its GUI half, SymbolEditorView, is not scanned.
 struct crates/signex-app/src/app/symbol_draft.rs SymbolDraft
+# The container stays scanned so a core field added to it later is counted (#2326).
+struct crates/signex-app/src/app/documents.rs SymbolDocument
 struct crates/signex-app/src/app/symbol_history.rs SymbolHistorySnapshot
 struct crates/signex-app/src/app/documents.rs FootprintDocument
 struct crates/signex-app/src/app/documents.rs FootprintHistorySnapshot
