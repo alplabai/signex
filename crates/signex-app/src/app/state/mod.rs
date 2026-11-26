@@ -480,6 +480,8 @@ pub struct DocumentState {
     pub profile_drift_noted: std::collections::HashSet<ProjectId>,
     /// Undo / redo of each project's stored rule set edits (#1085).
     pub rules_history: std::collections::HashMap<ProjectId, rules_history::RulesHistory>,
+    /// Undo / redo of each project's General settings (engine-owned).
+    pub general_history: std::collections::HashMap<ProjectId, signex_engine::ProjectGeneralHistory>,
     /// How many undo steps every history keeps (`undo_depth`); see
     /// [`Signex::set_undo_depth`](crate::app::Signex::set_undo_depth).
     pub undo_depth: usize,

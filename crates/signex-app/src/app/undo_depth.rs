@@ -45,8 +45,8 @@ impl Signex {
         for history in docs.rules_history.values_mut() {
             history.set_undo_depth(depth);
         }
-        for tab in docs.project_tabs.values_mut() {
-            tab.general_history.set_undo_depth(depth);
+        for history in docs.general_history.values_mut() {
+            history.set_undo_depth(depth);
         }
         for preview in self.library.editors.values_mut() {
             preview.history.set_undo_depth(depth);
@@ -94,7 +94,7 @@ mod tests {
         let project = crate::app::state::ProjectId::test_id(1);
         docs.net_class_history.insert(project, Default::default());
         docs.rules_history.insert(project, Default::default());
-        docs.project_tabs.insert(project, Default::default());
+        docs.general_history.insert(project, Default::default());
         let address = crate::library::state::EditorAddress::new(
             PathBuf::from("/p/t.snxlib"),
             "t".into(),
@@ -123,11 +123,7 @@ mod tests {
         all.extend(d.footprint_editors.values().map(|e| e.history.cap()));
         all.extend(d.net_class_history.values().map(|h| h.undo_depth()));
         all.extend(d.rules_history.values().map(|h| h.undo_depth()));
-        all.extend(
-            d.project_tabs
-                .values()
-                .map(|t| t.general_history.undo_depth()),
-        );
+        all.extend(d.general_history.values().map(|h| h.undo_depth()));
         all.extend(app.library.editors.values().map(|p| p.history.undo_depth()));
         all
     }
