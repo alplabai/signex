@@ -53,11 +53,19 @@ pub(crate) fn conflict_finding(
     .with_primary(sel(lost.directive, SelectedKind::Directive))
     // One Blanket can be overridden on several nets by the same peer; the
     // net keeps those findings apart.
-    .tagged(format!("net:{net_name}"));
+    .tagged(format!("{NET_TAG}{net_name}"));
     match winner_sheet {
         Some(_) => d,
         None => d.with_peer(sel(winner.directive, SelectedKind::Directive)),
     }
+}
+
+/// The prefix of a conflict finding's tag; the net's name follows it.
+const NET_TAG: &str = "net:";
+
+/// The net a conflict finding tagged `tag` is about.
+pub(crate) fn conflict_net(tag: Option<&str>) -> Option<&str> {
+    tag?.strip_prefix(NET_TAG)
 }
 
 pub(crate) fn net_class_conflict(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {

@@ -588,3 +588,88 @@ fn the_job_reports_a_class_conflict_between_two_sheets() {
         assert_eq!(v.peer, None, "the winner is on the child's canvas");
     }
 }
+
+/// #2961: a root page with local nets `N1` (y = 0) and `N2` (y = 5), each
+/// with a part, under two overlapping Blankets: HS (0x296111) ranked before
+/// PWR (0x296112).
+fn two_blankets_page() -> SchematicSheet {
+    let mut sheet = with_one_pin_part(named_wire(("N1", LabelType::Net), ("N1", LabelType::Net)));
+    sheet.wires[0].uuid = Uuid::now_v7();
+    let y = 5.0;
+    let mut n2 = named_wire(("N2", LabelType::Net), ("N2", LabelType::Net));
+    for w in &mut n2.wires {
+        w.uuid = Uuid::now_v7();
+        w.start.y = y;
+        w.end.y = y;
+    }
+    for l in &mut n2.labels {
+        l.position.y = y;
+    }
+    sheet.wires.append(&mut n2.wires);
+    sheet.labels.append(&mut n2.labels);
+    let r2 = signex_types::schematic::Symbol {
+        uuid: Uuid::now_v7(),
+        reference: "R2".to_string(),
+        position: pt(0.0, y),
+        ..sheet.symbols[0].clone()
+    };
+    sheet.symbols.push(r2);
+    let blanket =
+        |n: u128, inset: f64, class: &str| signex_types::schematic::SchDirective::Blanket {
+            uuid: Uuid::from_u128(n),
+            start: pt(-1.0 - inset, -1.0 - inset),
+            end: pt(11.0 + inset, y + 1.0 + inset),
+            net_class: Some(class.into()),
+            erc_exclusions: Vec::new(),
+            track_width: None,
+            pour: Default::default(),
+            include_edge_nets: false,
+        };
+    sheet.directives = vec![blanket(0x296111, 0.0, "HS"), blanket(0x296112, 1.0, "PWR")];
+    sheet
+}
+
+/// A class conflict finding's primary, peer and message.
+type Conflict = (Uuid, Uuid, String);
+
+/// The `NetClassConflict` findings of `sheet` checked on its own, and of the
+/// job run over it as the project's only root page, as (primary, peer,
+/// message), sorted.
+fn class_conflicts_alone_and_in_the_job(sheet: SchematicSheet) -> (Vec<Conflict>, Vec<Conflict>) {
+    let key = |v: &&Violation| {
+        let id = |s: Option<signex_types::schematic::SelectedItem>| s.map(|s| s.uuid);
+        (
+            id(v.primary).unwrap_or_default(),
+            id(v.peer).unwrap_or_default(),
+            v.message.clone(),
+        )
+    };
+    let alone = signex_erc::run(&sheet);
+    let mut alone: Vec<_> = class_conflicts(&alone).iter().map(key).collect();
+    alone.sort();
+    let (mut inputs, ..) = colliding_job();
+    let root_path = Path::new("/proj").join("root.snxsch");
+    let open: crate::app::project_sheets::OpenSheets =
+        [(root_path.clone(), sheet)].into_iter().collect();
+    inputs.tab_paths = open.keys().cloned().collect();
+    inputs.open = open;
+    inputs.root = Some(root_path.clone());
+    let outcome = run_erc_job(inputs);
+    let mut in_job: Vec<_> = class_conflicts(&outcome.by_path[&root_path])
+        .iter()
+        .map(key)
+        .collect();
+    in_job.sort();
+    (alone, in_job)
+}
+
+#[test]
+fn two_nets_under_the_same_two_blankets_give_two_findings_in_both_runs() {
+    let (alone, in_job) = class_conflicts_alone_and_in_the_job(two_blankets_page());
+    assert_eq!(alone.len(), 2, "{alone:?}");
+    assert_eq!(in_job, alone, "the project run agrees with the sheet's own");
+    for (primary, peer, _) in &alone {
+        assert_eq!(*primary, Uuid::from_u128(0x296112));
+        assert_eq!(*peer, Uuid::from_u128(0x296111));
+    }
+}

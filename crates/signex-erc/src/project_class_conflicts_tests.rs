@@ -174,3 +174,42 @@ fn a_no_erc_directive_on_the_overridden_directive_silences_it() {
     assert!(found.findings.is_empty(), "{:?}", found.findings);
     assert_eq!(found.covered.len(), 2, "still judged");
 }
+
+/// #2961: the project answer replaces a sheet's own `NetClassConflict`
+/// finding only on a directive it judged and a net it carries; a finding on
+/// another net, or of another rule, the sheet keeps.
+#[test]
+fn the_project_answer_replaces_a_sheet_finding_on_a_judged_directive_and_carried_net() {
+    let found = check(vec![(
+        "a",
+        vbus_sheet(
+            1,
+            "R1",
+            vec![
+                net_blanket(11, pt(-1.0, -1.0), pt(11.0, 1.0), "SIGNAL"),
+                net_parameters(12, pt(5.0, 0.0), "POWER"),
+            ],
+        ),
+    )]);
+    let (_, project) = only(&found);
+    let a = SheetKey::new("a");
+    let on_net = |net: &str| Violation {
+        tag: Some(format!("net:{net}")),
+        ..project.clone()
+    };
+    assert!(found.replaces(&a, &on_net("VBUS")));
+    assert!(
+        !found.replaces(&a, &on_net("OTHER")),
+        "a net it does not carry"
+    );
+    assert!(
+        !found.replaces(&SheetKey::new("b"), &on_net("VBUS")),
+        "a sheet it did not judge"
+    );
+    let other_rule = Violation {
+        rule: RuleKind::NetMultipleNames,
+        rule_id: crate::RuleId::builtin(RuleKind::NetMultipleNames),
+        ..on_net("VBUS")
+    };
+    assert!(!found.replaces(&a, &other_rule), "another rule");
+}
