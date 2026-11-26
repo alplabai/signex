@@ -133,6 +133,12 @@ update-pcb-done = Update PCB: { $count ->
         [one] 1 change applied to { $board }.
        *[other] { $count } changes applied to { $board }.
     }
+# Pads with no symbol pin that keep their net and were locked with the
+# applied rows (#3060).
+update-pcb-pads-locked = Update PCB: { $count ->
+        [one] locked 1 pad with no symbol pin.
+       *[other] locked { $count } pads with no symbol pin.
+    }
 update-pcb-refused = Update PCB did not run: { $why }
 # The command run from operands (#2470): it needs one of the two forms.
 update-pcb-command-mode = `update_pcb_from_schematic` lists its changes in the Update PCB dialog; run it with `apply=true` to execute the default ticks, or with `dry_run=true` to list them and change nothing

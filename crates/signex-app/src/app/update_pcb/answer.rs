@@ -28,6 +28,9 @@ pub(crate) struct UpdatePcbAnswer {
     pub(crate) applied: usize,
     pub(crate) counts: Counts,
     pub(crate) changes: Vec<Change>,
+    /// Pads with no symbol pin, as `U1.4`, that keep their net and are
+    /// locked with the rows that apply (were locked, for an apply; #3060).
+    pub(crate) pad_locks: Vec<String>,
     pub(crate) notes: Vec<String>,
     /// A dry run only: why an apply would be refused now (the board closed
     /// with unsaved edits, read-only, or moved past the list).
@@ -100,6 +103,10 @@ impl UpdatePcbAnswer {
                 problems: summary.problems,
             },
             changes: list.rows.iter().map(|row| change(list, row)).collect(),
+            pad_locks: list
+                .applied_pad_locks()
+                .map(|lock| format!("{}.{}", lock.reference, lock.pad_number))
+                .collect(),
             notes: list.notes.iter().map(note_text).collect(),
             execute_blocked: at.execute_blocked,
         }
