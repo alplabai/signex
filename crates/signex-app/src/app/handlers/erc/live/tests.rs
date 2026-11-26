@@ -33,7 +33,6 @@ fn app_with_a_dangling_wire() -> (Signex, PathBuf, Wire) {
     app.document_state.tabs.push(TabInfo {
         title: "top".to_owned(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

@@ -663,7 +663,7 @@ pub struct UiState {
     pub erc_running: bool,
     /// Live ERC (#1288): the preference, the wait after an edit and the
     /// sheets the last live check read. Boxed: its maps stay off `UiState`.
-    pub live_erc: Box<crate::app::handlers::erc::LiveErc>,
+    pub(crate) live_erc: Box<crate::app::handlers::erc::LiveErc>,
     /// `DocumentState::sheet_edit_epoch` when the sheets behind the cached ERC
     /// results were read; the results are stale once the document is past it.
     pub erc_epoch: u64,

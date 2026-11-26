@@ -189,7 +189,13 @@ fn quantity_and_the_cached_unit_price_are_line_names() {
         stock: Some(100),
         age: "today".into(),
     });
-    apply_computed_columns(&mut table, &members, &ctx.components, &[], &[cost.clone()]);
+    apply_computed_columns(
+        &mut table,
+        &members,
+        &ctx.components,
+        &[],
+        std::slice::from_ref(&cost),
+    );
     assert_eq!(
         table.rows[0].computed.get("Cost"),
         Some(&ComputedCell::Value { text: "0.5".into() })

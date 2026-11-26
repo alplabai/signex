@@ -268,7 +268,7 @@ fn parts_state_checks_the_variant_it_names_and_its_fitted_parts() {
     let r1 = "R1's library row is in no open library".to_string();
     let r2 = "R2 was not placed from a library row".to_string();
     assert_eq!(messages_of(&value, "req::base"), [r1.clone(), r2.clone()]);
-    assert_eq!(messages_of(&value, "req::lite"), [r1.clone()]);
+    assert_eq!(messages_of(&value, "req::lite"), std::slice::from_ref(&r1));
     assert_eq!(messages_of(&value, "req::every"), [r1, r2]);
     assert_eq!(
         messages_of(&value, "req::gone"),

@@ -147,6 +147,8 @@ fn svg_texts(ctx: &ExportContext, variant: Option<&str>) -> Vec<String> {
         global_refdes: &refdes,
         net_name_by_symbol_pin: &nets,
         cell: "",
+        variant_settings: None,
+        placed_fits: None,
         drawn_values: Some(&values),
     };
     let page = SvgRenderContext::from_sheet(

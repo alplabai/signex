@@ -25,7 +25,7 @@ pub enum SheetSwapRequest {
 }
 
 /// A swap started on the schematic, planned and checked.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct SheetSwap {
     pub designator: String,
     /// Each pin whose net moves, with the pin it trades with: the two pins,

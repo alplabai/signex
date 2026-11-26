@@ -8,7 +8,7 @@ use signex_engine::TextTarget;
 use uuid::Uuid;
 
 use super::super::model::{
-    ObjectKind, ObjectListState, ObjectListStatus, ObjectListView, sheet_rows,
+    ObjectKind, ObjectListState, ObjectListStatus, ObjectListView, SheetLook, sheet_rows,
 };
 use super::super::model_tests::power_sheet;
 use super::super::{ObjectListMsg, PanelContext, PanelMsg, view};
@@ -26,7 +26,12 @@ fn power_path() -> PathBuf {
 }
 
 fn rows() -> Vec<ObjectRow> {
-    sheet_rows(&power_sheet(), &power_path(), &|_: Uuid| None)
+    sheet_rows(
+        &power_sheet(),
+        &power_path(),
+        &SheetLook::default(),
+        &|_: Uuid| None,
+    )
 }
 
 fn row(kind: ObjectKind, n: u128) -> ObjectRow {
@@ -45,6 +50,7 @@ fn context(editing: Option<CellEditing>) -> PanelContext {
     let mut ctx = app.document_state.panel_ctx.clone();
     ctx.object_list = ObjectListView::build(
         &state,
+        &state.source,
         ObjectListStatus::Ready,
         Some(power_path()),
         &[],

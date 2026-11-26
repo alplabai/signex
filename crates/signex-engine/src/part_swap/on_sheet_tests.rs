@@ -118,7 +118,21 @@ fn two_pins_of_one_group_trade_their_wires() {
 fn any_unit_of_the_part_names_it() {
     let by_b = swap_on_sheet(&sheet(), B, &pins("1", "2")).unwrap();
     let by_a = swap_on_sheet(&sheet(), A, &pins("1", "2")).unwrap();
-    assert_eq!(by_a, by_b, "gate 2's uuid names the same part");
+    // `SchematicSheet` has no `==`: the sheets compare by what a swap moves.
+    let moved = |swap: &SheetSwap| {
+        let sheet = swap.sheet.as_ref();
+        (
+            swap.designator.clone(),
+            swap.pairs.clone(),
+            sheet.map(|s| s.wires.clone()),
+            sheet.map(|s| s.symbols.clone()),
+        )
+    };
+    assert_eq!(
+        moved(&by_a),
+        moved(&by_b),
+        "gate 2's uuid names the same part"
+    );
 }
 
 #[test]

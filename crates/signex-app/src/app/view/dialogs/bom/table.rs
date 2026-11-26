@@ -288,7 +288,7 @@ impl Signex {
         for &line in &preview.visible_lines {
             // `visible_lines` and `row_order` are rebuilt with `table` in
             // `update`; a stale index means that pairing broke.
-            let Some((row_idx, r)) = preview
+            let Some(row) = preview
                 .row_order
                 .get(line)
                 .and_then(|&row_idx| preview.table.rows.get(row_idx).map(|r| (row_idx, r)))
@@ -298,8 +298,7 @@ impl Signex {
             };
             lines.push(table_line(
                 preview,
-                r,
-                row_idx,
+                row,
                 line + 1,
                 &widths,
                 table_width,
@@ -451,12 +450,11 @@ impl Signex {
     }
 }
 
-/// One line: the gutter (line number, flag edge), the cells, then a soft
-/// rule. A click selects it.
+/// One line, `(row_idx, r)` of the table: the gutter (line number, flag
+/// edge), the cells, then a soft rule. A click selects it.
 fn table_line<'a>(
     preview: &BomPreviewState,
-    r: &BomRow,
-    row_idx: usize,
+    (row_idx, r): (usize, &BomRow),
     line_no: usize,
     widths: &[f32],
     table_width: f32,

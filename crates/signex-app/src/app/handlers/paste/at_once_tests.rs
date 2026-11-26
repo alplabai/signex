@@ -59,7 +59,6 @@ pub(crate) fn app_with_copy_at(path: &Path, sheet: SchematicSheet) -> Signex {
     app.document_state.tabs.push(TabInfo {
         title: "smart-paste".to_owned(),
         path: path.to_path_buf(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -99,9 +98,12 @@ pub(crate) fn copy_everything(app: &mut Signex) {
     );
 }
 
+/// Each landed object's text and place, in nm.
+pub(crate) type Landed = Vec<(String, i64, i64)>;
+
 /// What landed on the active sheet: each part's designator and place, each
 /// label's text and place, in a stable order (the ids differ per paste).
-pub(crate) fn landed(app: &Signex) -> (Vec<(String, i64, i64)>, Vec<(String, i64, i64)>) {
+pub(crate) fn landed(app: &Signex) -> (Landed, Landed) {
     let nm = |mm: f64| (mm * 1e6).round() as i64;
     let doc = app
         .document_state

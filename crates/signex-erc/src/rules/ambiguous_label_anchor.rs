@@ -114,6 +114,7 @@ mod tests {
             key: None,
             harness: Default::default(),
             class_conflicts: Vec::new(),
+            lone_pairs: Vec::new(),
         }
     }
 

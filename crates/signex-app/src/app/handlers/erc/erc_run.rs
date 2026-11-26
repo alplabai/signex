@@ -24,22 +24,15 @@ impl Signex {
     /// and says so once per project open in the Messages panel.
     fn erc_rule_settings(&mut self) -> (RuleOverrides, PinMatrixOverrides) {
         self.say_erc_rule_settings();
-        self.erc_rule_settings_quiet()
+        self.active_erc_rule_settings()
     }
 
-    /// [`Self::erc_rule_settings`] saying nothing, for a live check (#1288).
-    pub(super) fn erc_rule_settings_quiet(&self) -> (RuleOverrides, PinMatrixOverrides) {
+    /// [`Self::erc_rule_settings`] saying nothing, for a live check (#1288):
+    /// the active document's project's, as `check_erc` reads them.
+    pub(super) fn active_erc_rule_settings(&self) -> (RuleOverrides, PinMatrixOverrides) {
         let project = self.document_state.active_document_project();
-        match project.and_then(|p| p.data.rules.as_ref()) {
-            Some(rules) => {
-                let resolved = signex_erc::project_rules::resolve(&rules.erc);
-                (resolved.severity, resolved.pin_matrix)
-            }
-            None => (
-                self.ui_state.erc_severity_override.clone(),
-                self.ui_state.pin_matrix_overrides.clone(),
-            ),
-        }
+        let (overrides, pin_matrix, _notes) = self.erc_rule_settings_quiet(project);
+        (overrides, pin_matrix)
     }
 
     /// What [`Self::erc_rule_settings`] says in the Messages panel about the

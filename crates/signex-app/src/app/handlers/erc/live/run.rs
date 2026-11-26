@@ -104,7 +104,7 @@ impl Signex {
     /// Capture a live check's inputs (memory only, no IO, no Messages line)
     /// and claim its token. The ERC panel does not show it as running.
     pub(super) fn begin_live_erc(&mut self) -> (u64, LiveErcInputs) {
-        let rules = self.erc_rule_settings_quiet();
+        let rules = self.active_erc_rule_settings();
         let run = self.erc_run_inputs(rules);
         let live = &mut self.ui_state.live_erc;
         let generation = live.begin();

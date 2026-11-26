@@ -519,6 +519,9 @@ fn change_component_confirmed_for_an_undocked_windows_sheet_changes_that_sheet()
             rows: Vec::new(),
             dropped: Vec::new(),
             scope: ChangeScope::ThisPart,
+            pin_map: None,
+            pins: Vec::new(),
+            pin_choices: Vec::new(),
         })),
         ..Default::default()
     });

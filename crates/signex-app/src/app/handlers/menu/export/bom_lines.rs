@@ -78,8 +78,7 @@ impl Signex {
         if signex_types::project::is_base_variant(&name) {
             return Ok(None);
         }
-        let defined =
-            project.is_some_and(|p| p.data.variant_definitions.iter().any(|v| *v == name));
+        let defined = project.is_some_and(|p| p.data.variant_definitions.contains(&name));
         if defined {
             Ok(Some(name))
         } else {

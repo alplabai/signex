@@ -77,7 +77,11 @@ fn a_new_wire_brings_its_findings_and_leaves_the_rest_alone() {
     // added, and one already shown is kept.
     let merged = merge_live(&[], &[untouched.clone(), on_new.clone()], &scope);
     assert_eq!(ids(&merged), ids(std::slice::from_ref(&on_new)));
-    let merged = merge_live(std::slice::from_ref(&untouched), &[on_new.clone()], &scope);
+    let merged = merge_live(
+        std::slice::from_ref(&untouched),
+        std::slice::from_ref(&on_new),
+        &scope,
+    );
     let mut got = ids(&merged);
     got.sort_by_key(|(at, ..)| *at);
     assert_eq!(got, ids(&[untouched, on_new]));

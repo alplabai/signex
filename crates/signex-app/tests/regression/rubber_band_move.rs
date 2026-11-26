@@ -467,7 +467,6 @@ fn app_with_the_sample_c1() -> (Signex, PathBuf) {
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "linear-regulator".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });

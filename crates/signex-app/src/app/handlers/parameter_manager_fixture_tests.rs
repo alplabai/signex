@@ -45,7 +45,6 @@ fn app() -> Signex {
         app.document_state.tabs.push(TabInfo {
             title: path.file_stem().unwrap().to_string_lossy().into_owned(),
             path,
-            cached_document: None,
             project_id: project,
             kind: TabKind::Schematic,
         });

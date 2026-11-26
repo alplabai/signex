@@ -217,9 +217,11 @@ impl SheetLook {
         drawn_designator(symbol, self.placement.as_ref(), self.standard)
     }
 
-    /// A part's (or a power port's) value as the canvas draws it.
+    /// A part's (or a power port's) value as the canvas draws it, without the
+    /// active variant's own values (#2948): the list shows, and its Value
+    /// cell edits, the value stored on the sheet.
     fn value(&self, symbols: &[Symbol], symbol: &Symbol) -> String {
-        drawn_value(symbols, symbol, self.special.as_ref(), self.standard)
+        drawn_value(symbols, symbol, self.special.as_ref(), self.standard, None)
     }
 
     /// A text note as the canvas draws it.

@@ -12,7 +12,7 @@ use uuid::Uuid;
 use crate::app::handlers::editing_commands::net_color_driver::add_sheet_with;
 use crate::app::{Message, Signex};
 use crate::panels::object_list::cell_edit::{CellEditMsg, ObjectColumn};
-use crate::panels::object_list::model::sheet_rows;
+use crate::panels::object_list::model::{SheetLook, sheet_rows};
 use crate::panels::{ObjectListMsg, ObjectRef, PanelMsg};
 
 const PART: u128 = 1;
@@ -46,7 +46,7 @@ fn app_with(dir: &Path) -> (Signex, PathBuf) {
     let (mut app, _task) = Signex::new();
     let path = dir.join("main.snxsch");
     add_sheet_with(&mut app, &path, sheet());
-    let rows = sheet_rows(&sheet(), &path, &|_: Uuid| None);
+    let rows = sheet_rows(&sheet(), &path, &SheetLook::default(), &|_: Uuid| None);
     app.ui_state.object_list.source.rows = Arc::new(rows);
     (app, path)
 }
@@ -71,7 +71,7 @@ fn send(app: &mut Signex, msg: CellEditMsg) {
 }
 
 fn target(path: &Path, n: u128) -> ObjectRef {
-    let rows = sheet_rows(&sheet(), path, &|_: Uuid| None);
+    let rows = sheet_rows(&sheet(), path, &SheetLook::default(), &|_: Uuid| None);
     rows.into_iter()
         .find(|r| r.target.item.uuid == id(n))
         .expect("row")

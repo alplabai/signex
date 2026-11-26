@@ -42,7 +42,6 @@ fn app_with_power() -> Signex {
     app.document_state.tabs.push(crate::app::TabInfo {
         title: "bom-computed-1988".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: crate::app::TabKind::Schematic,
     });

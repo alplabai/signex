@@ -139,6 +139,7 @@ fn child_strokes(ctx: &ExportContext, opts: &PdfOptions) -> (Vec<Stroke>, Rgb) {
         cell: "",
         variant_settings: Some(&ctx.metadata.variant_settings),
         placed_fits: Some(&fits),
+        drawn_values: None,
     };
     let svg = SvgRenderContext::from_sheet(page, opts, 297.0, 210.0, 1.0, Some(&inputs));
     let strokes = svg

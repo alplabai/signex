@@ -727,7 +727,10 @@ mod tests {
         let mut setup = signex_types::project::ProjectSetup::default();
         setup.set_layers(6);
         let mut created = Created::default();
-        write_into(&target, "First", &mut created, Some(&setup), &|_| Ok(())).unwrap();
+        write_into(&target, "First", &mut created, Some(&setup), None, &|_| {
+            Ok(())
+        })
+        .unwrap();
         let data = signex_types::project::parse_project(&target.project_path).unwrap();
         assert_eq!(data.project_defaults, setup.defaults());
         assert!(data.designator_standard().is_some());

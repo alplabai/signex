@@ -111,7 +111,7 @@ fn the_ghost_of_a_junction_drag_is_its_commit() {
         let dy = f64::from(steps) * STEP;
         let (sheet, c1) = sample();
         let ghost = MovePreview::new(&sheet)
-            .moved_with_wiring(&[(c1.clone(), 0.0, dy)], true, DragWiringMode::Auto)
+            .moved_with_wiring(&[(c1, 0.0, dy)], true, DragWiringMode::Auto)
             .0;
         let mut engine = Engine::new(sheet).expect("engine");
         engine

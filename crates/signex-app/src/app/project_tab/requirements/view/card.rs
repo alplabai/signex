@@ -139,7 +139,8 @@ impl Card<'_> {
         if self.shows_edits_note(requirement, raw, verdict) {
             let note = text(t!(self.i18n, ids::REQUIREMENTS_EDITS_NOT_CHECKED))
                 .size(TS.caption)
-                .color(resolve(self.tokens).ink3);
+                .color(resolve(self.tokens).ink3)
+                .boxed();
             line = line.push(note);
         }
         line = line.push(self.remove());
