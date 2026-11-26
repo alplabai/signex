@@ -17,13 +17,31 @@ This records every story into `docs/media/`: `<story>.mp4` and an 800 px,
 new files with the release.
 
 `scripts/demo/record_all.sh --check` runs every story without a display, in a
-headless `signex-cli` run, and stops at the first command that is refused or
-fails. Run it after changing a story or a command a story uses.
+headless `signex-cli` run, and stops each story at the first command that is
+refused or fails; it says `ok` or names the stories that failed, and exits 1
+if any did. It needs only Python 3 and `signex-cli` (`SIGNEX_CLI` names
+another build, for example a debug one). Run it after changing a story or a
+command a story uses. A headless run does not apply the agent allowlist and
+has no window, so the check proves each step runs, not that an attached run
+accepts it, and it skips the window-layout steps (`ctx.window`).
 
-Needs: Linux, `Xvfb` (package `xvfb`), `ffmpeg` built with libass, libx264,
-libvpx and libwebp, Mesa's software Vulkan driver lavapipe
-(`mesa-vulkan-drivers`), and Python 3 with NumPy. No GPU and no desktop are
-needed. Only one recording runs at a time, and the encodes run under `nice`.
+Recording needs, on Linux (Debian/Ubuntu packages):
+
+| Package | For |
+|---|---|
+| `xvfb` | the virtual display the app draws on |
+| `ffmpeg`, built with libx264, libvpx, libwebp and libass (Debian's is) | the capture, the MP4 and GIF, the WebM hero and its poster, the burnt-in captions |
+| `mesa-vulkan-drivers` | lavapipe, Mesa's software Vulkan driver, for wgpu |
+| `python3-numpy` | `render.py`'s frame comparison |
+
+```bash
+sudo apt install xvfb ffmpeg mesa-vulkan-drivers python3-numpy
+```
+
+No GPU and no desktop are needed. `record_all.sh` and `record_story.sh`
+check for these first (`check_tools.sh`) and stop, naming each one that is
+missing, before anything starts. Only one recording runs at a time, and the
+encodes run under `nice`.
 
 ## How a recording is made
 
@@ -62,25 +80,32 @@ ctx.step(lambda r: f"Design rules check: {count_findings(r)}",
 ```
 
 `ctx.edit` sends `apply_edits` (one undo step), `ctx.ask` any other command
-on the agent channel. A caption may be a function of the command's answer.
-`visual=False` marks a step that changes nothing on the canvas (a query), so
-no pointer is drawn for it.
+on the agent channel, and `ctx.window` a window-layout command (`zoom_to_fit`,
+`set_dock_panel`), which a headless check skips. A caption may be a function
+of the command's answer. `visual=False` marks a step that changes nothing on
+the canvas (a query), so no pointer is drawn for it. A story whose commands
+have not merged sets `PENDING` to the reason, and both `record_all.sh` modes
+skip it with that reason.
 
 | Story | Shows |
 |---|---|
 | `schematic-capture` | a new project; a connector, a resistor and an LED from the stock library; wires, ground ports and a net label; ERC |
 | `board-layout` | a routed two-layer microcontroller breakout from the test corpus; layer highlighting, teardrops, DRC, net status, the bill of materials |
 | `automation` | a script driving the running app over the agent socket: it reads the parts, colours nets, names a net, runs ERC and reverts its own step |
+| `design-notebook` | a regulator board from the test corpus with its bring-up notebook: the Annotations panel, the notebook compiled, its measurements checked against their limits, its attachments, the design report generated |
+| `block-diagram` | pending: waits for the Block Diagram batch |
+| `routing-fab` | the regulator board with its LED net unrouted: Fit, the net routed pad to pad, the pours filled again, DRC, the fabrication files and a board PDF written into the project |
 
 Captions are plain English about what the product does. They name no other
 company or product.
 
 ## Limits
 
-- A story can only show what the agent channel accepts. Placing a new board
-  from the schematic (`update_pcb_from_schematic`), routing, placing pours,
-  annotating, fabrication outputs, zooming and opening panels are not on it
-  today, so the board story starts from a routed board and the window keeps
-  the view it opened with.
+- A story can only show what the agent channel accepts
+  ([AGENT_SOCKET.md](AGENT_SOCKET.md), "Allowlist"). Opening a document,
+  making a new project and making a new board are not on it (each brings a
+  tab to the front), so a story's set-up makes the project headless and the
+  window opens it at start.
+- There is no autorouter: the routing story routes its net pad to pad.
 - The GIFs are 800 px wide: canvas text that is small at 1920x1080 is not
   readable in them; the MP4s are.

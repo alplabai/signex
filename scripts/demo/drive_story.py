@@ -5,6 +5,8 @@
       headless set-up; writes DIR/open.json (the paths the window opens)
   drive_story.py run <story.py> --work DIR --cli PATH [--attach] [--log FILE]
       the story's steps: attached to the recorded window, or headless (check)
+  drive_story.py title <story.py>      the story's title
+  drive_story.py pending <story.py>    why the story waits, or nothing
 
 record_story.sh calls both around the window's start. See docs/DEMO_VIDEOS.md.
 """
@@ -30,7 +32,7 @@ def load_story(path: Path):
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("phase", choices=["prepare", "run", "title"])
+    parser.add_argument("phase", choices=["prepare", "run", "title", "pending"])
     parser.add_argument("story", type=Path)
     parser.add_argument("--work", type=Path)
     parser.add_argument("--cli", type=Path, default=None)
@@ -42,6 +44,10 @@ def main() -> int:
     story = load_story(args.story)
     if args.phase == "title":
         print(story.TITLE)
+        return 0
+    if args.phase == "pending":
+        # A story whose commands have not merged yet sets PENDING to why.
+        print(getattr(story, "PENDING", ""))
         return 0
 
     cli = args.cli or demo_lib.env_cli()

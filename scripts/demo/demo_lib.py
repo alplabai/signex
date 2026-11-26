@@ -118,6 +118,11 @@ class Context:
             shutil.copyfile(path, folder / path.name)
         return folder / source.name
 
+    def copy_folder(self, source: Path, folder: Path) -> None:
+        """Copy a repository folder (a notebook and its attachments) into the
+        work folder; the repository copy is never edited."""
+        shutil.copytree(source, folder, dirs_exist_ok=True)
+
     def show(self, project: Path, *documents: Path) -> None:
         """The project and documents the window opens at start."""
         self.project = project
@@ -137,6 +142,15 @@ class Context:
     def ask(self, command: str, **args) -> dict:
         assert self.cli
         return self.cli.ask(command, **args)
+
+    def window(self, command: str, **args) -> dict | None:
+        """A window-layout command (`zoom_to_fit`, `set_dock_panel`, the
+        tiling): sent to the recorded window, skipped in a headless check,
+        which has no window to lay out."""
+        if not self.attach:
+            print(f"  (window only, skipped headless) {command}", file=sys.stderr)
+            return None
+        return self.ask(command, **args)
 
     def revision(self, document: Path) -> int:
         return self.ask("read_document", document=str(document))["data"]["revision"]

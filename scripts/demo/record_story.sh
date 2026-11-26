@@ -18,6 +18,12 @@ height=${size#*x}
 bin=${SIGNEX_BIN:-$repo/target/release/signex}
 cli=${SIGNEX_CLI:-$repo/target/release/signex-cli}
 
+# Fail before anything starts when a tool is missing, naming its package.
+"$here/check_tools.sh" record
+for built in "$bin" "$cli"; do
+	[ -x "$built" ] || { echo "no $built: cargo build --release -p signex-app -p signex-cli" >&2; exit 2; }
+done
+
 work=$(mktemp -d "${TMPDIR:-/tmp}/signex-demo-$name.XXXXXX")
 xvfb_pid="" app_pid="" ffmpeg_pid=""
 cleanup() {
