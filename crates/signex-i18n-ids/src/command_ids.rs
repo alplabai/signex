@@ -284,6 +284,15 @@ define_ids! {
         CMD_PROJECT_REMOVE_REQUIREMENT = "cmd-project-remove-requirement";
         CMD_PROJECT_ENABLE_REQUIREMENT = "cmd-project-enable-requirement";
         CMD_PROJECT_RUN_REQUIREMENTS = "cmd-project-run-requirements";
+        CMD_OPEN_DESIGN_CHECKLIST = "cmd-open-design-checklist";
+        CMD_MENU_OPEN_DESIGN_CHECKLIST = "cmd-menu-open-design-checklist";
+        CMD_PROJECT_CHECKLIST = "cmd-project-checklist";
+        CMD_PROJECT_START_CHECKLIST = "cmd-project-start-checklist";
+        CMD_PROJECT_ADD_CHECKLIST_ITEM = "cmd-project-add-checklist-item";
+        CMD_PROJECT_SET_CHECKLIST_ITEM = "cmd-project-set-checklist-item";
+        CMD_PROJECT_SET_CHECKLIST_STATE = "cmd-project-set-checklist-state";
+        CMD_PROJECT_REMOVE_CHECKLIST_ITEM = "cmd-project-remove-checklist-item";
+        CMD_PROJECT_RUN_CHECKLIST = "cmd-project-run-checklist";
         CMD_NUMBER_SCHEMATIC_SHEETS = "cmd-number-schematic-sheets";
         CMD_MENU_NUMBER_SCHEMATIC_SHEETS = "cmd-menu-number-schematic-sheets";
         CMD_RESET_SCHEMATIC_DESIGNATORS = "cmd-reset-schematic-designators";

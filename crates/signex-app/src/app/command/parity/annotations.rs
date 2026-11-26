@@ -201,6 +201,11 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "project_set_version_control",
             "project_set_requirement",
             "project_enable_requirement",
+            "project_start_checklist",
+            "project_add_checklist_item",
+            "project_set_checklist_item",
+            "project_set_checklist_state",
+            "project_remove_checklist_item",
             "bring_drawings_forward",
             "bring_drawings_to_front",
             "send_drawings_backward",
@@ -243,8 +248,13 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Operand,
         &[InProgressEdit],
     ),
-    // A run already going in the Project tab skips this one.
-    (&["project_run_requirements"], Operand, &[Window]),
+    // A run already going in the Project tab (or the Design Checklist tab)
+    // skips this one.
+    (
+        &["project_run_requirements", "project_run_checklist"],
+        Operand,
+        &[Window],
+    ),
     // The board update targets the window acting, else the active document.
     (
         &["update_pcb_from_schematic"],
@@ -415,6 +425,9 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Query,
         &[],
     ),
+    // The checklist's last run is check results, core-bound session state
+    // (scripts/uifree-state.txt), so it is no implicit input.
+    (&["project_checklist"], Query, &[]),
     // What the open or the new project dialog answers.
     (
         &["new_document", "open_document", "new_project_with_profile"],

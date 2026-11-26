@@ -448,6 +448,8 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("toggle_cross_select_mode", "ToggleCrossSelectMode"),
     ("open_parameter_manager", "OpenParameterManager"),
     ("open_rules", "OpenRules"),
+    // #1291: Project ▸ Design Checklist, fixture name only.
+    ("open_design_checklist", "OpenDesignChecklist"),
     // #2248 / #1269: fixture names only.
     ("assign_footprints", "AssignFootprints"),
     ("repair_pin_junctions", "RepairPinJunctions"),

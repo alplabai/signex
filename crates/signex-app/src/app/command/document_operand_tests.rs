@@ -555,6 +555,14 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "project_remove_requirement",
                     "project_enable_requirement",
                     "project_run_requirements",
+                    // #1291: the Design Checklist's read, edits and run.
+                    "project_checklist",
+                    "project_start_checklist",
+                    "project_add_checklist_item",
+                    "project_set_checklist_item",
+                    "project_set_checklist_state",
+                    "project_remove_checklist_item",
+                    "project_run_checklist",
                     // #2394: the board view's layer commands.
                     "hide_layer",
                     "highlight_layer",

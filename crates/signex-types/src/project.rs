@@ -13,6 +13,9 @@ use crate::format_version::FormatVersionError;
 
 mod annotate_undo;
 mod annotation;
+mod checklist;
+#[cfg(test)]
+mod checklist_tests;
 mod erc_waiver;
 mod fab_outputs;
 mod fab_tier;
@@ -45,6 +48,12 @@ mod variants;
 mod variants_tests;
 pub use annotate_undo::AnnotateUndo;
 pub use annotation::{AnnotationSettings, AnnotationState};
+pub use checklist::{
+    CHECKLIST_KEY, CHECKLIST_TEMPLATES, ChecklistField, ChecklistItem, ChecklistLink,
+    ChecklistProblem, ChecklistStage, ChecklistTemplate, DesignChecklist, ItemState, LinkResult,
+    NewChecklistItem, StateCounts, TITLE_BLOCK_REQUIRED, TemplateItem, TemplateLink,
+    title_block_missing,
+};
 pub use erc_waiver::ErcWaiver;
 pub use fab_outputs::FabOutputKinds;
 pub use fab_tier::FabCapabilities;

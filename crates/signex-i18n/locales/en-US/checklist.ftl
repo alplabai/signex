@@ -1,0 +1,93 @@
+# The Design Checklist tab (#1291, mockup row 206).
+checklist-tab-title = Design Checklist
+checklist-tab-kind = CHK
+checklist-template-release-review = Release review
+checklist-template-prototype-build = Prototype build
+checklist-template-blank = Blank
+checklist-template-release-review-help = { $count } items for a production release
+checklist-template-prototype-build-help = { $count } items for a first board spin
+checklist-template-blank-help = The three stages, no items
+checklist-own-list = Own list
+checklist-summary = { $total } { $total ->
+        [one] item
+       *[other] items
+    } · { $open } open · { $waived } waived · stored in the project file
+checklist-filter-all = All
+checklist-search = Filter items, owners, links
+checklist-add = Add item
+checklist-run = Run checks
+checklist-running = Checking…
+checklist-run-failed = The checks did not finish: { $reason }
+checklist-stage-schematic = Schematic
+checklist-stage-layout = Layout
+checklist-stage-fabrication = Fabrication
+checklist-stage-release = Release
+checklist-stage-progress = { $closed } / { $total }
+checklist-stage-counts = { $done } done · { $waived } waived · { $open } open
+checklist-state-open = Open
+checklist-state-done = Done
+checklist-state-waived = Waived
+checklist-waive = Waived…
+checklist-column-state = State
+checklist-column-item = Item
+checklist-column-owner = Owner
+checklist-column-link = Linked to
+checklist-column-check = Check
+checklist-column-updated = Updated
+checklist-result-passes = pass
+checklist-result-fails = { $count } { $count ->
+        [one] finding
+       *[other] findings
+    }
+checklist-result-not-run = not run
+checklist-check-passes = Check passes
+checklist-mark-done = Mark done
+checklist-link-erc = ERC run
+checklist-link-drc = DRC run
+checklist-link-title-block = Title block
+checklist-link-requirement = Requirement { $id }
+checklist-link-none = Not linked
+checklist-detail-title = Item
+checklist-field-title = Title
+checklist-field-stage = Stage
+checklist-field-owner = Owner
+checklist-field-link = Linked to
+checklist-field-link-hint = erc, drc, title_block, requirement:ID or object:what
+checklist-field-notes = Notes
+checklist-field-reason = Reason
+checklist-reason-hint = Why is this item waived?
+checklist-waive-confirm = Waive
+checklist-waived-because = Waived: { $reason }
+checklist-remove = Remove item
+checklist-close-detail = Close
+checklist-empty-title = No checklist for this project yet
+checklist-empty-help = A checklist holds the review items to close before release, grouped by stage, each with an owner and a link to what proves it.
+checklist-start = Start from template
+checklist-empty-note = Nothing is written until you save the project.
+checklist-unreadable = This project's design checklist was written by a newer version of Signex. It is kept as written and cannot be edited here.
+checklist-no-match = No item matches the filter.
+checklist-new-item = New item
+checklist-problem-unreadable = The design checklist cannot be read by this version, so it cannot be edited.
+checklist-problem-already-started = This project already has a design checklist.
+checklist-problem-unknown-template = { $text } is no checklist template.
+checklist-problem-unknown-item = The design checklist has no item { $id }.
+checklist-problem-unknown-stage = { $text } is no stage.
+checklist-problem-unknown-state = { $text } is no state.
+checklist-problem-unknown-field = { $text } is no checklist field.
+checklist-problem-unknown-link = { $text } is not a link. Write erc, drc, title_block, requirement:ID or object:what.
+checklist-problem-empty-title = An item needs a title.
+checklist-problem-needs-reason = A waived item needs a reason.
+checklist-problem-not-stored = The design checklist was not stored: { $reason }
+# The titles of the template items; a started checklist keeps them as text.
+checklist-item-erc-clean = ERC passes with no errors
+checklist-item-title-block = Title block filled in
+checklist-item-parts-have-mpn = Every part has a manufacturer part number
+checklist-item-fitted-parts-reviewed = Fitted and not fitted parts reviewed
+checklist-item-requirements-met = Project requirements pass
+checklist-item-drc-clean = DRC passes with no errors
+checklist-item-board-outline = Board outline matches the enclosure
+checklist-item-placement-reviewed = Component placement reviewed
+checklist-item-fab-outputs-written = Fabrication outputs written
+checklist-item-gerbers-viewed = Gerber set checked in the viewer
+checklist-item-bom-released = Bill of materials released
+checklist-item-assembly-drawings = Assembly drawings written

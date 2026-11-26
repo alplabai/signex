@@ -75,6 +75,9 @@ pub enum TabKind {
     /// is the `.snxsym` path, which Save writes; it sits after the symbol's
     /// own tab (`app/pin_table_tab`).
     PinTable,
+    /// The project's Design Checklist as a page tab (mockup row 206);
+    /// `TabInfo.path` is the `.snxprj` path, which Save writes.
+    DesignChecklist(super::state::ProjectId),
 }
 
 impl TabKind {
@@ -160,6 +163,14 @@ impl TabKind {
         }
     }
 
+    /// `Some(id)` if this tab is a project's Design Checklist tab.
+    pub fn as_design_checklist(&self) -> Option<super::state::ProjectId> {
+        match self {
+            TabKind::DesignChecklist(id) => Some(*id),
+            _ => None,
+        }
+    }
+
     /// A symbol's Pin table tab.
     pub fn is_pin_table(&self) -> bool {
         matches!(self, TabKind::PinTable)
@@ -174,8 +185,8 @@ impl TabKind {
     }
 
     /// A page tab, not a drawing: the Project, Rules, Layer Stack, Pin
-    /// table and Variant Manager tabs. None is undocked or restored from
-    /// History.
+    /// table, Variant Manager and Design Checklist tabs. None is undocked or
+    /// restored from History.
     pub fn is_project_page(&self) -> bool {
         // Mockup row 178: the Polygon Manager is a page of its board.
         if self.is_polygon_manager() {
@@ -188,6 +199,7 @@ impl TabKind {
                 | TabKind::LayerStack
                 | TabKind::PinTable
                 | TabKind::VariantManager(_)
+                | TabKind::DesignChecklist(_)
         )
     }
 }

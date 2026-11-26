@@ -358,6 +358,10 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
                 project: None,
             }))
         }
+        // Project ▸ Design Checklist (#1291): the active document's project.
+        "open_design_checklist" => Message::Project(ProjectMsg::Tab(
+            crate::app::ProjectTabMsg::ChecklistOpenRequested { project: None },
+        )),
         // #2399: the board's DRC results panel.
         "open_drc_panel" => Message::Overlay(OverlayMsg::OpenPanel(crate::panels::PanelKind::Drc)),
         "reannotate_board" => Message::from(crate::app::BoardReannotateMsg::Requested),

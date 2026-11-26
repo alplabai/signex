@@ -94,6 +94,9 @@ greyed.
 - Compare Board with Schematic… (`compare_board_with_schematic`, see
   [below](#project-compare-board))
 - Project Options... (greyed with no project, like Close Project)
+- Design Checklist (`open_design_checklist`, #1291, mockup row 206): the
+  project's checklist as a document tab, greyed with no project open. See
+  [DESIGN_CHECKLIST.md](DESIGN_CHECKLIST.md).
 - Close Project
 
 **Tools ▸ Annotation** (top of Tools, then Tools ▸ Reports, then a

@@ -12,6 +12,7 @@ mod annotate;
 mod arrange;
 mod board;
 mod categories;
+mod checklist;
 mod clipboard;
 mod closest;
 mod documents;
@@ -307,6 +308,7 @@ pub fn command_menu_message(command_id: &str) -> MessageId {
 /// `docs/audit/command-registry-action-surface-2026-07-25.md` §4.
 const TABLES: &[&[CommandMetadata]] = &[
     documents::DOCUMENTS,
+    checklist::CHECKLIST,
     query::QUERY,
     history::HISTORY,
     clipboard::CLIPBOARD,
@@ -452,6 +454,7 @@ const GLOBAL_COMMANDS: &[&str] = &[
     "new_pcb_document",
     "new_schematic_sheet",
     "open_rules",
+    "open_design_checklist",
 ];
 
 /// The editor contexts in which `command` can act, or `None` when it is
@@ -667,6 +670,7 @@ mod tests {
     fn every_catalog_entry_sets_enable_and_flags() {
         const TABLE_SRC: &[(&str, &str)] = &[
             ("documents.rs", include_str!("documents.rs")),
+            ("checklist.rs", include_str!("checklist.rs")),
             ("query.rs", include_str!("query.rs")),
             ("history.rs", include_str!("history.rs")),
             ("clipboard.rs", include_str!("clipboard.rs")),

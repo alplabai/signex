@@ -12,6 +12,7 @@ mod board_sketch;
 mod board_status;
 mod board_view;
 mod bom;
+mod checklist;
 mod chrome;
 mod command_log;
 mod command_needs;
@@ -65,6 +66,7 @@ pub use board_sketch::*;
 pub use board_status::*;
 pub use board_view::*;
 pub use bom::*;
+pub use checklist::*;
 pub use chrome::*;
 pub use command_log::*;
 pub use command_needs::*;
@@ -121,6 +123,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         board_status::BOARD_STATUS,
         board_view::BOARD_VIEW,
         bom::BOM,
+        checklist::CHECKLIST,
         chrome::CHROME,
         command_log::COMMAND_LOG,
         command_needs::COMMAND_NEEDS,

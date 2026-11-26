@@ -326,3 +326,44 @@ fn a_harness_definitions_edit_is_one_undo_step() {
     assert!(history.undo(&mut data));
     assert!(data.schematic_design.harness_definitions.is_empty());
 }
+
+#[test]
+fn a_checklist_edit_is_one_undo_step_and_a_refused_one_records_nothing() {
+    use signex_types::project::{ChecklistProblem, ItemState};
+    let mut data = project();
+    let mut history = ProjectGeneralHistory::default();
+    let add = ProjectChecklistCommand::AddItem {
+        stage: "schematic".into(),
+        title: "ERC clean".into(),
+        today: Some("2026-11-26".into()),
+    };
+    assert_eq!(history.apply_checklist(&mut data, &add), Ok(true));
+    let done = ProjectChecklistCommand::SetState {
+        item: "1".into(),
+        state: ItemState::Done,
+        reason: None,
+        today: None,
+    };
+    assert_eq!(history.apply_checklist(&mut data, &done), Ok(true));
+    let after_done = data.design_checklist_value().cloned();
+    let refused = ProjectChecklistCommand::SetState {
+        item: "1".into(),
+        state: ItemState::Waived,
+        reason: None,
+        today: None,
+    };
+    assert_eq!(
+        history.apply_checklist(&mut data, &refused),
+        Err(ChecklistProblem::NeedsReason)
+    );
+    assert_eq!(data.design_checklist_value().cloned(), after_done);
+    assert_eq!(history.apply_checklist(&mut data, &done), Ok(false));
+    assert!(history.undo(&mut data), "the refused edit recorded no step");
+    let checklist = data.design_checklist().unwrap().unwrap();
+    assert_eq!(checklist.items[0].state, ItemState::Open);
+    assert!(history.undo(&mut data));
+    assert_eq!(data.design_checklist_value(), None);
+    assert!(history.redo(&mut data));
+    assert!(history.redo(&mut data));
+    assert_eq!(data.design_checklist_value().cloned(), after_done);
+}
