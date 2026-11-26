@@ -30,6 +30,7 @@ use crate::{ExportContext, Exporter, SubstitutionContext};
 pub mod board;
 mod bookmarks;
 mod colour;
+pub(crate) mod cross_ref;
 mod embed;
 mod font;
 pub(crate) mod frame;
@@ -178,6 +179,10 @@ pub struct PdfOptions {
     /// The project's resolved defaults for unset widths and sizes (#2026),
     /// the same value the canvas draws with. Built-in by default.
     pub schematic_defaults: signex_types::schematic::SchematicDefaults,
+    /// Off-sheet cross references beside Global labels (#1273), derived by
+    /// the caller from the stitched project; each entry is a link to its
+    /// page. Empty (the default) prints none.
+    pub port_cross_refs: crate::cross_ref::PortCrossRefs,
 }
 
 /// How the part bookmarks are grouped.
@@ -296,6 +301,7 @@ impl Default for PdfOptions {
             palette: SchematicPalette::classic(),
             net_class_styles: std::collections::HashMap::new(),
             schematic_defaults: Default::default(),
+            port_cross_refs: Default::default(),
         }
     }
 }
@@ -391,6 +397,11 @@ impl Exporter for PdfExporter {
             ),
             None => Vec::new(),
         };
+        // One link annotation per cross-reference entry (#1273), after the
+        // layers.
+        let links = cross_ref::page_links(ctx, opts, &sheet_indices, page_w_mm, page_h_mm);
+        let mut next_link =
+            bookmark_id_base + pending_bookmarks.len() as i32 + layer_groups.len() as i32;
 
         let mut catalog = pdf.catalog(catalog_id);
         catalog.pages(page_tree_id);
@@ -430,12 +441,18 @@ impl Exporter for PdfExporter {
         for (idx, content) in contents.iter().enumerate() {
             let content_ref = content_refs[idx];
             pdf.stream(content_ref, &content.bytes);
+            let page_links = links.get(idx).map_or(&[][..], Vec::as_slice);
+            let annotations = cross_ref::write_links(&mut pdf, page_links, next_link, &page_refs);
+            next_link += page_links.len() as i32;
 
             // Create the page object referencing the content stream.
             let mut page = pdf.page(page_refs[idx]);
             page.parent(page_tree_id)
                 .media_box(Rect::new(0.0, 0.0, page_w_pt, page_h_pt))
                 .contents(content_ref);
+            if !annotations.is_empty() {
+                page.annotations(annotations);
+            }
 
             // /Font resources dict — maps the F1-F4 aliases used in the
             // content streams to the embedded Type0 font objects.
@@ -476,6 +493,8 @@ impl Exporter for PdfExporter {
 }
 
 mod content;
+#[cfg(test)]
+mod cross_ref_tests;
 #[cfg(test)]
 mod glyph_height_tests;
 #[cfg(test)]

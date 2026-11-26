@@ -1006,6 +1006,7 @@ mod class_assign;
 mod class_picker;
 mod class_shared;
 mod class_styles;
+mod cross_refs;
 mod net_text_hierarchy;
 
 mod bom_hierarchy;

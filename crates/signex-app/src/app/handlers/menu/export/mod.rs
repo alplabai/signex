@@ -6,6 +6,7 @@ use signex_output::{ExportContext, ProjectMetadata, SheetSnapshot};
 use signex_types::schematic::InstancePath;
 
 use crate::app::Signex;
+use crate::app::cross_refs;
 use crate::app::saved_channel_naming::SavedChannelNaming;
 use crate::app::state::UnreadableCause;
 
@@ -579,7 +580,7 @@ fn build_scope(
         let naming = saved_naming.for_design(&project);
         issues.channel_naming_unreadable = naming.is_err();
         let naming = naming.unwrap_or(&default_naming);
-        let result = signex_net::build_project_netlist_named(&project, naming);
+        let (result, index) = signex_net::build_project_netlist_indexed_named(&project, naming);
         channels = signex_net::ChannelDesignators::of_project(&project, naming);
         let occurrences = signex_net::project_occurrences(&project);
         page_occurrences = occurrences.clone();
@@ -589,12 +590,17 @@ fn build_scope(
         if let Some(owner) = owning_project {
             let (numbering, numbering_issues) =
                 signex_net::sheet_numbering(&project, &owner.data.name);
-            issues.sheet_numbering = Some(sheet_numbers::ScopeNumbering::new(
-                numbering,
-                numbering_issues,
-                base_dir.clone(),
-                fold,
-            ));
+            // The off-sheet cross references the PDF prints (#1273).
+            let refs = cross_refs::project_cross_refs(&project, &graph.paths, &index, &numbering);
+            issues.sheet_numbering = Some(
+                sheet_numbers::ScopeNumbering::new(
+                    numbering,
+                    numbering_issues,
+                    base_dir.clone(),
+                    fold,
+                )
+                .with_cross_refs(refs),
+            );
         }
         // Hand the exporters the very sheets the netlist was derived from, in
         // key order so the output is deterministic: hierarchical children are

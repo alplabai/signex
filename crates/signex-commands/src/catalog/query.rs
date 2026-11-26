@@ -49,6 +49,19 @@ pub(super) const QUERY: &[CommandMetadata] = &[
         operands: operands::QUERY_PINS,
         ..CommandMetadata::DEFAULT
     },
+    // #1273: each Global label of a sheet with the pages and zones its net
+    // continues on, as the canvas and the PDF print them.
+    CommandMetadata {
+        id: "query_cross_references",
+        category: "file",
+        label: command_ids::CMD_QUERY_CROSS_REFERENCES,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::DOCUMENT,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "resolve",
         category: "file",

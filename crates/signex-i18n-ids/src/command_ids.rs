@@ -106,6 +106,7 @@ define_ids! {
         CMD_PRINT = "cmd-print";
         CMD_MENU_PRINT = "cmd-menu-print";
         CMD_QUERY_PINS = "cmd-query-pins";
+        CMD_QUERY_CROSS_REFERENCES = "cmd-query-cross-references";
         CMD_READ_DOCUMENT = "cmd-read-document";
         CMD_REDO = "cmd-redo";
         CMD_REFRESH_VIEW = "cmd-refresh-view";

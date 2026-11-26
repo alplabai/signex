@@ -47,6 +47,15 @@ pub struct Pending {
     pub cursor: Option<(f64, f64)>,
 }
 
+/// A `query_cross_references` (#1273) waiting for its project's index.
+#[derive(Debug, Clone, PartialEq)]
+pub struct WaitingCrossRefs {
+    pub project: crate::app::state::ProjectId,
+    /// The sheet the query named.
+    pub document: std::path::PathBuf,
+    pub waiting: crate::app::agent::WaitingCommand,
+}
+
 /// Everything cross-sheet navigation keeps between messages.
 #[derive(Default)]
 pub struct NetNavState {
@@ -63,6 +72,12 @@ pub struct NetNavState {
     /// What the highlight's index refresh last saw, so an update that changed
     /// no connectivity, sheet list or class table does no planning.
     pub refresh_stamp: Option<u64>,
+    /// The connectivity stamp and active sheet the cross references (#1273)
+    /// last asked an index for, so an update that changed neither plans
+    /// nothing.
+    pub cross_ref_stamp: Option<(u64, Option<std::path::PathBuf>)>,
+    /// Cross-reference queries waiting for an index build to land.
+    pub cross_ref_queries: Vec<WaitingCrossRefs>,
     /// The stitch the net-class style job and the index job of one project
     /// share while both are in flight.
     pub stitch_share: crate::app::stitched_netlist::StitchShare,

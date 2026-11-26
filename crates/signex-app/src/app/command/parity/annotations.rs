@@ -409,6 +409,7 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "find_similar_items",
             "measure_board",
             "query_board_nets",
+            "query_cross_references",
             "query_pins",
             "read_document",
         ],

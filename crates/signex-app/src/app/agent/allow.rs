@@ -150,6 +150,8 @@ mod tests {
                 "project_set_version_control",
                 "project_settings",
                 "query_board_nets",
+                // #1273: a sheet's off-sheet cross references, as JSON.
+                "query_cross_references",
                 "query_pins",
                 "read_document",
                 "remove_board_panel",
