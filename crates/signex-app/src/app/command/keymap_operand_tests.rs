@@ -86,7 +86,10 @@ fn assign_in_a_window_writes_the_custom_profile_and_runs_at_once() {
     let _ = app.update(crate::app::Message::Preferences(
         crate::app::PreferencesMsg::Open,
     ));
-    assert!(!app.ui_state.preferences_dirty, "fixture: Preferences opens clean");
+    assert!(
+        !app.ui_state.preferences_dirty,
+        "fixture: Preferences opens clean"
+    );
     assert!(keys_of(&app.ui_state.keymap_profiles, "mine", UNBOUND).is_empty());
     let active_before = app.ui_state.keymap_profiles.active_profile_id().to_string();
 
@@ -165,14 +168,22 @@ fn clear_with_keys_takes_only_that_key() {
     let answer = answered(run_headless(
         &mut app,
         "keymap_clear",
-        &["command=place_wire", &format!("keys={gone}"), "profile=mine"],
+        &[
+            "command=place_wire",
+            &format!("keys={gone}"),
+            "profile=mine",
+        ],
     ));
 
     assert_eq!(answer["removed"], 1);
     let left = keys_of(&saved(), "mine", "place_wire");
     assert_eq!(left, wire[1..]);
     assert_eq!(
-        keys_of(&app.ui_state.keymap_profiles, "signex_standard", "place_wire"),
+        keys_of(
+            &app.ui_state.keymap_profiles,
+            "signex_standard",
+            "place_wire"
+        ),
         wire,
         "the built-in profile it was copied from is untouched"
     );
@@ -276,7 +287,11 @@ fn an_installed_extension_command_is_assigned_and_a_kept_one_cleared() {
     answered(run_headless(
         &mut app,
         "keymap_assign",
-        &["command=ext.sample.say_hello", "keys=Ctrl+Alt+H", "profile=mine"],
+        &[
+            "command=ext.sample.say_hello",
+            "keys=Ctrl+Alt+H",
+            "profile=mine",
+        ],
     ));
     assert_eq!(
         keys_of(&saved(), "mine", "ext.sample.say_hello"),
@@ -298,8 +313,7 @@ fn an_installed_extension_command_is_assigned_and_a_kept_one_cleared() {
 fn without_operands_a_key_or_the_palette_is_refused() {
     let (mut app, _boot) = Signex::new();
     for command in ["keymap_assign", "keymap_clear"] {
-        let (outcome, _) =
-            app.dispatch_command_reporting(&id(command), CommandArgs::none(), None);
+        let (outcome, _) = app.dispatch_command_reporting(&id(command), CommandArgs::none(), None);
         let reason = refusal(outcome);
         assert!(reason.contains("Keyboard shortcuts"), "{command}: {reason}");
     }

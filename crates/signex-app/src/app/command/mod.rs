@@ -50,9 +50,9 @@ mod hierarchy_operand_tests;
 mod hierarchy_operands;
 #[cfg(test)]
 pub(in crate::app) mod interaction_snapshot_tests;
-mod keymap_operands;
 #[cfg(test)]
 mod keymap_operand_tests;
+mod keymap_operands;
 mod layer_strip_operands;
 mod need_context;
 mod needs;

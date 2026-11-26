@@ -29,11 +29,7 @@ fn ran(result: Result<Value, Translatable>) -> Ran {
 }
 
 /// The text operand `name` of `command`, or the refusal for its absence.
-fn required<'a>(
-    args: &'a CommandArgs,
-    command: &str,
-    name: &str,
-) -> Result<&'a str, Translatable> {
+fn required<'a>(args: &'a CommandArgs, command: &str, name: &str) -> Result<&'a str, Translatable> {
     text_operand(args, name).ok_or_else(|| {
         Translatable::new(ids::PREFERENCES_KEYMAP_CMD_NEEDS)
             .arg("command", command.to_string())
@@ -90,7 +86,9 @@ fn edit_profile<T>(
     // The running set is the built-in fallback while the file on disk could
     // not be read: writing now would lose the profiles still in it (#595).
     if app.ui_state.keymap_load_error.is_some() {
-        return Err(Translatable::new(ids::PREFERENCES_KEYMAP_CMD_FILE_NOT_LOADED));
+        return Err(Translatable::new(
+            ids::PREFERENCES_KEYMAP_CMD_FILE_NOT_LOADED,
+        ));
     }
     let live = app.ui_state.keymap_profiles.clone();
     let active = live.active_profile_id().to_string();
