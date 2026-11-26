@@ -373,14 +373,17 @@ fn preview_edits_apply_on_ok_and_undo_as_one_step() {
         .iter_mut()
         .find(|p| p.id == PROJECT)
         .unwrap();
-    let tab = document.project_tabs.get_mut(&PROJECT).expect("a history");
-    assert!(tab.general_history.undo(&mut project.data));
+    let history = document
+        .general_history
+        .get_mut(&PROJECT)
+        .expect("a history");
+    assert!(history.undo(&mut project.data));
     assert_eq!(
         project.data.schematic_design.diff_pair_classes,
         [class("USB")],
         "one undo step puts the preview edits back"
     );
-    assert!(!tab.general_history.can_undo());
+    assert!(!history.can_undo());
 }
 
 /// #2661, done when: the preview draws the dialog's copy while it is
