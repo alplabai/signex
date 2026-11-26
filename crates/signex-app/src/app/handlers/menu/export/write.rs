@@ -12,9 +12,28 @@ use crate::app::contracts::ExportWriteOutcome;
 use crate::app::state::ErrorNotice;
 use signex_i18n::Translatable;
 
+/// How a command's export may land (#2470): with `confine` (an agent's
+/// write) only inside that folder, links followed; without `replace` only
+/// where no file is, decided when the file is created.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct WriteRule {
+    pub(crate) confine: Option<PathBuf>,
+    pub(crate) replace: bool,
+}
+
+impl WriteRule {
+    /// A dialog's export: the person picked the file, so it is replaced.
+    fn dialog() -> Self {
+        Self {
+            confine: None,
+            replace: true,
+        }
+    }
+}
+
 /// Write `bytes` to `path` crash-safely off the UI thread. `what` names the
-/// deliverable in the failure text ("PDF", "netlist", "BOM"). With `confine`
-/// (an agent's write, #2470), a `path` outside that folder is not written.
+/// deliverable in the failure text ("PDF", "netlist", "BOM"); `rule` says
+/// where the file may land.
 fn write_export_task(
     path: PathBuf,
     bytes: Vec<u8>,
@@ -22,15 +41,27 @@ fn write_export_task(
     success_log: String,
     advisory: Option<ErrorNotice>,
     warnings: Vec<String>,
-    confine: Option<PathBuf>,
+    rule: WriteRule,
 ) -> Task<Message> {
     Task::perform(
         async move {
             let target = path.clone();
             let result = tokio::task::spawn_blocking(move || {
-                crate::app::notebook_project::confined_write(confine.as_deref(), &path)?;
-                signex_types::atomic_io::atomic_write(&path, &bytes)
-                    .map_err(|e| format!("{e}: could not write {what} to {}", path.display()))
+                crate::app::notebook_project::confined_write(rule.confine.as_deref(), &path)?;
+                let written = if rule.replace {
+                    signex_types::atomic_io::atomic_write(&path, &bytes)
+                } else {
+                    crate::app::path_op_jobs::write_new(&path, &bytes)
+                };
+                written.map_err(|e| {
+                    if e.kind() == std::io::ErrorKind::AlreadyExists {
+                        Translatable::new(signex_i18n::ids::NOTEBOOK_TAB_CMD_TARGET_EXISTS)
+                            .arg("value", path.display().to_string())
+                            .render_en_us()
+                    } else {
+                        format!("{e}: could not write {what} to {}", path.display())
+                    }
+                })
             })
             .await
             .unwrap_or_else(|e| Err(format!("Could not write {what}: {e}")));
@@ -170,16 +201,23 @@ impl Signex {
             return Task::none();
         }
         self.begin_project_write(&path);
-        write_export_task(path, bytes, what, success_log, advisory, warnings, None)
+        write_export_task(
+            path,
+            bytes,
+            what,
+            success_log,
+            advisory,
+            warnings,
+            WriteRule::dialog(),
+        )
     }
 
     /// [`Self::write_export`] of a command's file (#2470), with no notice
-    /// and no advisory: with `confine`, a `path` outside that folder or
-    /// behind a link is not written. The caller has checked the folder is
-    /// not being renamed (`refuse_while_project_moves`).
+    /// and no advisory, landing as `rule` says. The caller has checked the
+    /// folder is not being renamed (`refuse_while_project_moves`).
     pub(crate) fn write_command_export(
         &mut self,
-        confine: Option<PathBuf>,
+        rule: WriteRule,
         path: PathBuf,
         bytes: Vec<u8>,
         what: &'static str,
@@ -187,7 +225,7 @@ impl Signex {
         warnings: Vec<String>,
     ) -> Task<Message> {
         self.begin_project_write(&path);
-        write_export_task(path, bytes, what, success_log, None, warnings, confine)
+        write_export_task(path, bytes, what, success_log, None, warnings, rule)
     }
 
     /// [`export_pdf_task`], refused like [`Self::write_export`] while the

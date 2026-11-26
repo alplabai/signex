@@ -101,28 +101,15 @@ fn title_on_disk(path: &std::path::Path) -> Option<signex_net::SheetTitle> {
         .map(|sheet| signex_net::SheetTitle::of(&sheet))
 }
 
-/// Write `text` to `path` unless a file is there already. The name is
-/// claimed with `create_new` first, so a file made there after the check is
-/// never overwritten; the text then replaces only that empty claim, through
-/// the atomic write, and a failed write gives the name back.
+/// Write `text` to `path` unless a file is there already
+/// ([`crate::app::path_op_jobs::write_new`]).
 fn write_new(path: &std::path::Path, text: &str) -> Result<(), String> {
-    match std::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(path)
-    {
-        Ok(claim) => drop(claim),
-        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-            return Err("exists".to_string());
+    crate::app::path_op_jobs::write_new(path, text.as_bytes()).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::AlreadyExists {
+            "exists".to_string()
+        } else {
+            e.to_string()
         }
-        Err(e) => return Err(e.to_string()),
-    }
-    signex_types::atomic_io::atomic_write(path, text.as_bytes()).map_err(|e| {
-        // Only the empty claim made above is removed; nothing else was there.
-        if let Err(cleanup) = std::fs::remove_file(path) {
-            tracing::warn!(path = %path.display(), error = %cleanup, "could not remove the empty contents file");
-        }
-        e.to_string()
     })
 }
 

@@ -198,6 +198,21 @@ fn an_export_path_must_be_a_new_pdf() {
     assert!(replaced["bytes"].as_u64().unwrap_or(0) > 4);
 }
 
+/// #2470: the one export rule keeps an export out of a `.git` folder, in
+/// any case, whatever `overwrite` says.
+#[test]
+fn an_export_path_inside_a_git_folder_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = app_with_notebook(&dir);
+    for folder in [".git", ".Git"] {
+        let target = dir.path().join(folder).join("out.pdf");
+        let path = format!("path={}", target.display());
+        let reason = refusal(run(&mut app, &[path.as_str(), "overwrite=true"]));
+        assert!(reason.contains(".git folder"), "{reason}");
+        assert!(!target.exists());
+    }
+}
+
 #[test]
 fn a_bad_operand_is_refused_with_what_it_takes() {
     let dir = tempfile::tempdir().unwrap();

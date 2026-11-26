@@ -18,6 +18,7 @@ use super::{BoardOutputMsg, CommandWritten};
 use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::contracts::ExportWriteOutcome;
 use crate::app::document_ids::DocumentKind;
+use crate::app::handlers::menu::export::write::WriteRule;
 use crate::app::notebook_project::{because, export_target, overwrite};
 use crate::app::{ExportMsg, Message, Signex};
 use crate::keymap::AppCommandId;
@@ -127,7 +128,7 @@ pub(crate) fn export_board_report(app: &mut Signex, args: &CommandArgs) -> Ran {
     let Some(path) = file(args) else {
         return refused("needs the operand `path`");
     };
-    let (path, confine) = match command_target(app, &board, &path, "csv", args) {
+    let (path, rule) = match command_target(app, &board, &path, "csv", args) {
         Ok(found) => found,
         Err(ran) => return ran,
     };
@@ -148,7 +149,7 @@ pub(crate) fn export_board_report(app: &mut Signex, args: &CommandArgs) -> Ran {
         bytes: report.to_csv(),
         warnings: Vec::new(),
         path,
-        confine,
+        rule,
         answer,
     };
     write_command_file(app, args, file)
@@ -158,21 +159,29 @@ pub(crate) fn export_board_report(app: &mut Signex, args: &CommandArgs) -> Ran {
 /// one export rule (`notebook_project::export_target`: the `extension`, no
 /// Signex document, no `.git` folder, no file replaced without
 /// `overwrite=true`) and refused while its project folder is being renamed;
-/// with it, the folder an agent's write is confined to.
+/// with it, how the write lands (`WriteRule`: an agent's confinement, and
+/// whether a file already there may be replaced).
 fn command_target(
     app: &Signex,
     board: &Path,
     path: &Path,
     extension: &str,
     args: &CommandArgs,
-) -> Result<(PathBuf, Option<PathBuf>), Ran> {
+) -> Result<(PathBuf, WriteRule), Ran> {
     let disabled = |reason| (CommandOutcome::Disabled { reason }, Task::none());
     let folder = board.parent().unwrap_or(Path::new(""));
-    let target = export_target(folder, path, extension, overwrite(args)).map_err(disabled)?;
+    // Whether a file is already there is decided by the write, which claims
+    // the name (`write_new`): no disk read here, and no file that appears
+    // meanwhile is replaced.
+    let target = export_target(folder, path, extension, true).map_err(disabled)?;
     if let Err(why) = app.refuse_while_project_moves(&target, "export to") {
         return Err(disabled(because(why.to_string())));
     }
-    Ok((target, app.agent_write_root(board)))
+    let rule = WriteRule {
+        confine: app.agent_write_root(board),
+        replace: overwrite(args),
+    };
+    Ok((target, rule))
 }
 
 /// A board export command's file and its answer.
@@ -181,7 +190,7 @@ struct CommandFile {
     board: PathBuf,
     what: &'static str,
     path: PathBuf,
-    confine: Option<PathBuf>,
+    rule: WriteRule,
     bytes: Vec<u8>,
     success_log: String,
     warnings: Vec<String>,
@@ -199,7 +208,7 @@ fn write_command_file(app: &mut Signex, args: &CommandArgs, file: CommandFile) -
         board,
         what,
         path,
-        confine,
+        rule,
         bytes,
         success_log,
         warnings,
@@ -216,7 +225,7 @@ fn write_command_file(app: &mut Signex, args: &CommandArgs, file: CommandFile) -
         warnings: warnings.clone(),
     };
     let task = app
-        .write_command_export(confine, path, bytes, what, success_log, warnings)
+        .write_command_export(rule, path, bytes, what, success_log, warnings)
         .map(move |message| match message {
             Message::Export(ExportMsg::FileWritten(outcome)) => {
                 Message::from(BoardOutputMsg::CommandWritten(Box::new(CommandWritten {
@@ -323,7 +332,7 @@ pub(crate) fn export_board_pdf(app: &mut Signex, args: &CommandArgs) -> Ran {
     let Some(path) = file(args) else {
         return refused("needs the operand `path`");
     };
-    let (path, confine) = match command_target(app, &board, &path, "pdf", args) {
+    let (path, rule) = match command_target(app, &board, &path, "pdf", args) {
         Ok(found) => found,
         Err(ran) => return ran,
     };
@@ -352,7 +361,7 @@ pub(crate) fn export_board_pdf(app: &mut Signex, args: &CommandArgs) -> Ran {
         bytes: output.bytes,
         warnings,
         path,
-        confine,
+        rule,
         answer,
     };
     write_command_file(app, args, file)

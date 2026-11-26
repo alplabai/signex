@@ -2207,6 +2207,30 @@ reason. It is a query on the agent channel and needs only `read`.
 checked against (`null` for a row not read from a store). The library row
 and part write commands of #2944 are not in this build.
 
+## Board reports and PDF
+
+`export_board_report` writes a board report as CSV and `export_board_pdf`
+prints the board to PDF (`docs/BOARD_OUTPUT.md`). Both need the `export`
+capability (`--allow export`) and an open board.
+
+```text
+export_board_report document=<board> kind=bom|netlist|net_length|components path=<file.csv> [overwrite=true]
+export_board_pdf document=<board> path=<file.pdf> [overwrite=true] [layers=..] [pages=..] [scale=..] [..]
+```
+
+- `path` follows the one export rule of the notebook exports (#2470): the
+  `.csv` or `.pdf` extension, never a Signex document (`.snx*`), never inside
+  a `.git` folder, and on Windows no name ending in a dot or a space or
+  holding `:`.
+- A file already at `path` is refused, and left as it is, unless
+  `overwrite=true`. This is new in #2470: a run that wrote over an earlier
+  report or PDF now names `overwrite=true`.
+- The result line comes once the file is written: `answered`, with the path
+  and the rows or pages, or `refused` with the write's reason.
+- On the agent channel of a running Signex the `path` must also lie inside
+  the board's project folder ([AGENT_SOCKET.md](AGENT_SOCKET.md),
+  "Allowlist").
+
 ## Fabrication outputs
 
 `fabrication_outputs` writes what File ▸ Fabrication Outputs' Generate
