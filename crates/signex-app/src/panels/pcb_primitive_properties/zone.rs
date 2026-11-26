@@ -2,10 +2,9 @@
 //! keepouts and pour cutouts. Under the illustration: Net Information and the
 //! net of a copper area, the layer, a keepout's kinds, a pour cutout's
 //! vertices and area (#2871); a pour's Pour section with its
-//! fill rules, its fill mode and corners (`pour_shape`, #2578, #2579), the
-//! thermal relief it cannot use yet (greyed: the fill draws no spokes), and
-//! the Copper card with what the fill holds, Repour, Unfill (#2506), Shelve
-//! or Unshelve and the board-wide menu.
+//! fill rules, its fill mode and corners (`pour_shape`, #2578, #2579), its
+//! thermal relief (#2580), and the Copper card with what the fill holds,
+//! Repour, Unfill (#2506), Shelve or Unshelve and the board-wide menu.
 
 use std::path::PathBuf;
 
@@ -290,34 +289,44 @@ fn pour<'a>(look: Look<'a>, f: &'a ZoneFacts) -> Option<Element<'a, PanelMsg>> {
     s.finish()
 }
 
-/// The Thermal Relief subsection: the stored switch and Spoke / Gap, read
-/// only and greyed, since the fill joins pads solidly.
+/// The Thermal Relief subsection (#2580): the switch over Spoke / Gap in mm,
+/// all live; while on, the fill joins the pads of the pour's net through
+/// spokes. The section veils Spoke / Gap while off.
 fn thermal<'a>(look: Look<'a>, f: &'a ZoneFacts) -> Element<'a, PanelMsg> {
+    let common = &f.common;
     let (on, spoke, gap) = match f.thermal {
         Some((on, spoke, gap)) => (on, Some(spoke), Some(gap)),
         None => (false, None, None),
     };
-    let value = |v: Option<f64>| {
-        read_only(
-            look,
-            UserText::new(v.map(format_number).unwrap_or_default()),
-        )
-    };
     let spoke_gap = labelled(
-        greyed(look),
+        look,
         ids::PCB_PRIM_POUR_SPOKE_GAP,
-        two_fields(value(spoke), value(gap), unit(look, ids::PCB_PRIM_UNIT_MM)),
+        two_fields(
+            mm_field(common, F::ThermalSpokeWidth, spoke, look),
+            mm_field(common, F::ThermalAirGap, gap, look),
+            unit(look, ids::PCB_PRIM_UNIT_MM),
+        ),
     );
-    // The section veils its fields while off; while on they are veiled here.
-    let spoke_gap = if on {
-        veiled(look.tokens(), spoke_gap)
-    } else {
-        spoke_gap
-    };
-    let spoke_gap = with_tip(look, spoke_gap, ids::PCB_PRIM_POUR_THERMAL_TIP);
-    EnableSection::new(look.t(ids::PCB_PRIM_POUR_THERMAL), on)
-        .tip(look.t(ids::PCB_PRIM_POUR_THERMAL_TIP))
-        .view(enable_section_style(look.tokens()), spoke_gap)
+    let mut section = EnableSection::new(look.t(ids::PCB_PRIM_POUR_THERMAL), on)
+        .tip(look.t(ids::PCB_PRIM_POUR_THERMAL_TIP));
+    if let Some(msg) = thermal_message(common) {
+        section = section.on_toggle(msg);
+    }
+    section.view(enable_section_style(look.tokens()), spoke_gap)
+}
+
+/// What the Thermal Relief switch sends; `None` on a board that cannot be
+/// edited, where the switch is read only.
+fn thermal_message(common: &PrimitiveCommon) -> Option<impl Fn(bool) -> PanelMsg + use<>> {
+    let target = common.target.clone();
+    common.is_editable().then(move || {
+        move |on| {
+            PanelMsg::PcbPrimitive(PcbPrimitiveMsg::ThermalReliefToggled {
+                target: target.clone(),
+                on,
+            })
+        }
+    })
 }
 
 /// `look` with the label ink of a greyed row.
@@ -831,6 +840,38 @@ mod tests {
         let at = shown.iter().position(|t| *t == layer).expect("Layer");
         assert_eq!(shown.get(at + 1), Some(&keeps_out), "{shown:?}");
         assert!(!texts(&pour(Some(false))).contains(&keeps_out));
+    }
+
+    /// #2580: the Thermal Relief switch sends a toggle for the panel's
+    /// pours; on a read-only board it sends nothing.
+    #[test]
+    fn the_thermal_switch_toggles_the_pours_and_is_read_only_on_a_read_only_board() {
+        let open = pour(Some(false));
+        let send = thermal_message(&open.common).expect("a live switch");
+        let PanelMsg::PcbPrimitive(sent) = send(true) else {
+            panic!("the switch speaks to the board panel");
+        };
+        assert_eq!(
+            sent,
+            PcbPrimitiveMsg::ThermalReliefToggled {
+                target: open.common.target.clone(),
+                on: true,
+            }
+        );
+        let mut read_only = pour(Some(false));
+        read_only.common.editability = Editability::ReadOnly;
+        assert!(thermal_message(&read_only.common).is_none());
+    }
+
+    /// #2580: with Thermal Relief on, Spoke and Gap are two live fields.
+    #[test]
+    fn spoke_and_gap_take_typing_while_thermal_relief_is_on() {
+        let ctx = context();
+        let mut on = pour(Some(false));
+        on.thermal = Some((true, 0.254, 0.508));
+        let window = iced::Size::new(300.0, 80.0);
+        let inputs = crate::layout_probe::lay_out_inputs(thermal(Look::of(&ctx), &on), window);
+        assert_eq!(inputs.len(), 2, "{inputs:?}");
     }
 
     /// Mockup row 99: the greyed Corner Size still shows its value, the

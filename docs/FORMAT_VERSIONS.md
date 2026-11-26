@@ -81,7 +81,7 @@ format declares only its own table row below.
 | `.snxprj` | `snxprj/1` | `snxprj/1` | opens read-only | read as `snxprj/1` |
 | `.snxprj`, variant settings | `snxprj/1.1` while `variant_settings` is not empty (a default variant or a part entry, `project::snxprj_token`; DECISIONS 2026-11-25); else `snxprj/1`, byte for byte. A `snxprj/1` build would keep the section but not follow a variant rename or removal. Builds released before this policy (v26.11.0 and earlier) refuse any newer minor on load, so they refuse a 1.1 project rather than open it read-only | adds `snxprj/1.1` | opens read-only | read as `snxprj/1` |
 | `.snxlib` | `snxlib/2` | `snxlib/2` | refused | refused |
-| `.snxfpt` | `snxfpt/1.1`, `1.2` with sketch links (reference dimensions, pattern sources and mirrors, per-instance pad overrides), or `1.3` with generated features (silkscreen outline, pad clearance, pin 1 marker, assembly outline; mockup row 124, #2834) or a pattern numbering sweep other than row by row (mockup row 126), whatever else it holds | `snxfpt/1`, `1.1`, `1.2`, `1.3` | refused | refused |
+| `.snxfpt` | `snxfpt/1.1`, `1.2` with sketch links (reference dimensions, pattern sources and mirrors, per-instance pad overrides), or `1.3` with generated features (silkscreen outline, pad clearance, pin 1 marker, assembly outline; mockup row 124, #2834) or a pattern numbering sweep other than row by row (mockup row 126), whatever else it holds; `1.4` while a pad or a sketch pad sets its own thermal relief air gap, spoke width or spoke count (#2593: the `thermal_air_gap`, `thermal_spoke_width` and `thermal_spokes` pad columns, the sketch pad's `stack.thermal`), whatever else it holds. A 1.3 build refuses the pad columns and would drop the sketch pad's values on save | `snxfpt/1`, `1.1`, `1.2`, `1.3`, `1.4` | refused | refused |
 | `.snxsym` | `snxsym/v1`, `v2` or `v3` by content; `v4` while any graphic is a Bezier, Pie Chart, Elliptical Arc or Round Rectangle (#2838), whatever else it holds | `snxsym/v1`, `v2`, `v3`, `v4` | refused | refused |
 | `.snxsim` | `snxsim/v1` | `snxsim/v1` | refused | refused |
 
@@ -109,6 +109,13 @@ new drawing kinds and directive fields may refuse to parse the sheet instead
 drops unknown keys of a typed `buses` row on save, so it opens a 1.4 sheet
 read-only and refuses its saves. A sheet with no styled bus keeps its lower
 token, byte for byte.
+
+**A pad's `thermal` cell needs no `.snxpcb` token.** A board pad's own
+thermal relief values (#2593) ride the optional `thermal` cell of the `pads`
+rows, written only when some pad sets one. A build that does not know the
+column keeps it as a foreign cell and writes it back unchanged, and it draws
+no thermal relief spokes at all, so it reads nothing differently because of
+the cell. A free pad has no such key: its own values are refused on save.
 
 **`.snxprj` stays `snxprj/1`.** The Schematic Refinement project settings
 (`schematic_design`: channel naming, harness definitions, differential pair

@@ -240,6 +240,9 @@ pub(crate) fn zone_edit(edit: &PrimitiveEdit) -> Option<ZoneEdit> {
         PrimitiveEdit::PourFill(mode) => ZoneEdit::FillMode(mode),
         PrimitiveEdit::Number(F::HatchWidth, v) => ZoneEdit::HatchWidth(v),
         PrimitiveEdit::Number(F::HatchGap, v) => ZoneEdit::HatchGap(v),
+        PrimitiveEdit::ThermalRelief(on) => ZoneEdit::ThermalRelief(on),
+        PrimitiveEdit::Number(F::ThermalSpokeWidth, v) => ZoneEdit::ThermalSpokeWidth(v),
+        PrimitiveEdit::Number(F::ThermalAirGap, v) => ZoneEdit::ThermalAirGap(v),
         _ => return None,
     })
 }

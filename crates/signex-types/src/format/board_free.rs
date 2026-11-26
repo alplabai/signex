@@ -169,6 +169,7 @@ fn read_pad(row: usize, p: PadRaw) -> Result<Pad, FormatError> {
         trapezoid_delta: read_delta(p.trapezoid_delta.as_deref(), PADS, row)?,
         custom_outline: read_outline(p.custom_outline.as_deref(), PADS, row)?,
         net_locked: p.net_locked,
+        thermal: Default::default(),
         layer_sizes,
         unknown: Default::default(),
         unknown_columns: Default::default(),
@@ -241,6 +242,11 @@ fn write_arc(a: &TrackArc) -> Result<ArcRaw, NonFiniteField> {
 
 fn write_pad(p: &Pad) -> Result<PadRaw, NonFiniteField> {
     refuse_unreadable_shape(p)?;
+    // A free pad has no thermal key yet (#2593 sets footprint pads only): its
+    // own values would be lost, so the save is refused instead.
+    if !p.thermal.is_rule() {
+        return Err(NonFiniteField("thermal"));
+    }
     let drill = p
         .drill
         .as_ref()

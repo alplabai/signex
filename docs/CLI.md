@@ -663,6 +663,32 @@ delete_selection document=<sheet or board> ids=<uuids>
   the window's key does. Delete in a footprint editor stays the editor's own
   route until slice S-L and takes no operands.
 
+### Thermal relief
+
+How a polygon pour joins the pads of its net (#2580, #2593; the rules are in
+`docs/PCB_TOOLS.md`, "Thermal relief"). Both act on the board `document`
+names, are one undo step each, need the `edit` capability and are refused on
+a read-only board.
+
+```text
+set_pour_thermal_relief document=<board> ids=<pour uuids> [on=true|false] [spoke_width=<mm>] [air_gap=<mm>]
+set_pad_thermal_relief document=<board> ids=<pad uuids> [air_gap=rule|<mm>] [spoke_width=rule|<mm>] [spokes=rule|<n>]
+```
+
+- `set_pour_thermal_relief` sets the switch, spoke width and air gap of
+  polygon pours together, the pour panel's Thermal Relief rows. At least one
+  of the three is needed; a length is above 0 mm. Switching on a pour with no
+  stored width or gap sets 0.254 mm and 0.508 mm. A uuid that is no pour of
+  the board refuses the whole command. The answer is `{"document", "pours"}`,
+  each pour `{"id", "thermal_relief", "spoke_width", "air_gap"}`.
+- `set_pad_thermal_relief` sets footprint pads' own values: `rule` follows
+  the pour again, a value is the pad's own (a length above 0 mm, a spoke count
+  from 1 to 4); a value left out is kept. A pad of a locked footprint is
+  refused, as for every pad edit, and so is a uuid that is no footprint pad.
+  The answer is `{"document", "pads"}`, each pad `{"id", "air_gap",
+  "spoke_width", "spokes"}`, a number or `"rule"`. A library footprint's pads
+  are set in the footprint editor's pad Properties; placing it carries them.
+
 ## Placement extras
 
 The operand forms of three placement extras (#1667). Each is one undo step

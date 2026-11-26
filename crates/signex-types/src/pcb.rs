@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::format::{BoardUnknown, UnknownColumns, UnknownFields, parse_pcb_layer};
+use crate::pad_thermal::PadThermal;
 use crate::part::FootprintSourceRef;
 use crate::pcb_layer::{CopperLayer, PcbLayer};
 pub use crate::pcb_stack::{LayerSize, LayerSizes, LayerStack};
@@ -233,6 +234,10 @@ pub struct Pad {
     /// on every layer. Saved in the optional `layer_sizes` pad column.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub layer_sizes: Option<LayerSizes<Point>>,
+    /// The pad's own thermal relief values (#2593), each `None` following
+    /// the pour. Saved in the optional `thermal` pad column.
+    #[serde(default, skip_serializing_if = "PadThermal::is_rule")]
+    pub thermal: PadThermal,
     /// Keys in this pad's `[extras.pads.<uuid>]` table that this build
     /// does not recognise, kept so a save re-emits them.
     #[serde(default, skip_serializing_if = "UnknownFields::is_empty")]

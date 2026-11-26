@@ -146,6 +146,8 @@ pub(crate) enum PrimitiveEdit {
     /// A pour's Corners (#2578) and Fill Mode (#2579).
     PourCorners(PourCorners),
     PourFill(PourFillMode),
+    /// A pour's Thermal Relief switch (#2580).
+    ThermalRelief(bool),
     /// A field of a dimension's look (#2868).
     DimensionStyle(DimensionStyleEdit),
 }
@@ -217,6 +219,13 @@ impl Signex {
                     target,
                     PrimitiveEdit::PourFill(*fill),
                     ids::PCB_PRIM_POUR_FILL_MODE,
+                );
+            }
+            M::ThermalReliefToggled { target, on } => {
+                self.apply_primitive_edit(
+                    target,
+                    PrimitiveEdit::ThermalRelief(*on),
+                    ids::PCB_PRIM_POUR_THERMAL,
                 );
             }
             M::ShapePicked { target, shape } => {
@@ -510,6 +519,7 @@ fn field_name(field: PrimitiveField) -> MessageId {
         F::CornerSize => ids::PCB_PRIM_POUR_CORNER_SIZE,
         F::HatchWidth => ids::PCB_PRIM_POUR_HATCH_WIDTH,
         F::HatchGap => ids::PCB_PRIM_POUR_HATCH_GAP,
+        F::ThermalSpokeWidth | F::ThermalAirGap => ids::PCB_PRIM_POUR_SPOKE_GAP,
         F::CenterX | F::CenterY => ids::PCB_PRIM_GRAPHIC_CENTER,
         F::ArrowLength => ids::PCB_PRIM_DIM_ARROW_LENGTH,
         F::ArrowWidth => ids::PCB_PRIM_DIM_ARROW_WIDTH,

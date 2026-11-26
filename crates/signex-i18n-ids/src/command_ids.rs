@@ -567,6 +567,8 @@ define_ids! {
         CMD_SET_PAD_SHAPE = "cmd-set-pad-shape";
         CMD_SET_POUR_CORNERS = "cmd-set-pour-corners";
         CMD_SET_POUR_FILL = "cmd-set-pour-fill";
+        CMD_SET_POUR_THERMAL_RELIEF = "cmd-set-pour-thermal-relief";
+        CMD_SET_PAD_THERMAL_RELIEF = "cmd-set-pad-thermal-relief";
         CMD_STITCH_VIAS = "cmd-stitch-vias";
         CMD_MENU_STITCH_VIAS = "cmd-menu-stitch-vias";
         CMD_ADD_TEARDROPS = "cmd-add-teardrops";

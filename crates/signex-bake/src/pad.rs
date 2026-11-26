@@ -295,6 +295,7 @@ pub(crate) fn bake_one_pad(
         hole_rotation_deg: pad_attr.hole_rotation_deg,
         copper_offset_x_mm: pad_attr.copper_offset_x_mm,
         copper_offset_y_mm: pad_attr.copper_offset_y_mm,
+        thermal: pad_attr.stack.thermal,
     })
 }
 

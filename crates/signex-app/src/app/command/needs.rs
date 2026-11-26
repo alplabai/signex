@@ -599,7 +599,9 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "set_layer_sizes"
         | "set_pad_shape"
         | "set_pour_corners"
-        | "set_pour_fill" => Needs::Pcb,
+        | "set_pour_fill"
+        | "set_pour_thermal_relief"
+        | "set_pad_thermal_relief" => Needs::Pcb,
         // #2408: with nothing selected these act on every pour or net.
         "stitch_vias" | "add_teardrops" | "remove_teardrops" => Needs::Pcb,
         // #2408, #2409: these act on the selection only.

@@ -28,6 +28,7 @@ fn pad(n: u128, x: f64, y: f64, net: u32, layer: &str) -> Pad {
         rotation: 0.0,
         layer_sizes: None,
         net_locked: false,
+        thermal: Default::default(),
         unknown: Default::default(),
         unknown_columns: Default::default(),
     }

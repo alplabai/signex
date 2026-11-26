@@ -3,6 +3,7 @@
 
 use signex_library::{LayerId, Pad, PadKind, PadShape};
 use signex_sketch::attr::{ElectricalType, PadFeature, TestpointFlags};
+use signex_types::pad_thermal::PadThermal;
 
 use super::super::layers::FpLayer;
 
@@ -105,6 +106,9 @@ pub struct PadStackUi {
     pub mask_tented_bottom: bool,
     pub thermal_relief: bool,
     pub corner_radius_pct: Option<f64>,
+    /// The pad's own thermal relief air gap, spoke width and spokes
+    /// (#2593); each `None` is Rule.
+    pub thermal: PadThermal,
 }
 
 impl Default for PadStackUi {
@@ -120,6 +124,7 @@ impl Default for PadStackUi {
             mask_tented_bottom: false,
             thermal_relief: true,
             corner_radius_pct: None,
+            thermal: PadThermal::RULE,
         }
     }
 }
@@ -378,6 +383,7 @@ impl EditorPad {
                 mask_tented_bottom: p.mask_tented_bottom,
                 thermal_relief: p.thermal_relief,
                 corner_radius_pct: p.corner_radius_pct,
+                thermal: p.thermal,
             },
             feature_top: p.feature_top,
             feature_bottom: p.feature_bottom,
@@ -440,6 +446,7 @@ impl EditorPad {
             hole_rotation_deg: self.hole_rotation_deg,
             copper_offset_x_mm: self.copper_offset_x_mm,
             copper_offset_y_mm: self.copper_offset_y_mm,
+            thermal: self.stack.thermal,
         }
     }
 }

@@ -241,3 +241,74 @@ fn a_pours_corners_and_hatch_are_one_step_and_undone_exactly() {
     let mut keepout = with_fill(KEEPOUT_FILL);
     assert_eq!(edit(&mut keepout, ZoneEdit::HatchWidth(0.3)), Ok(false));
 }
+
+/// #2580: Thermal Relief on seeds a gap and spoke width that are no length
+/// with the defaults; the width and gap are lengths above 0; a fill, region
+/// or keepout has no relief.
+#[test]
+fn a_pour_switches_thermal_relief_and_takes_a_spoke_width_and_air_gap() {
+    use signex_types::pcb::{PCB_THERMAL_BRIDGE_MM, PCB_THERMAL_GAP_MM};
+    let mut b = with_fill(POUR_FILL);
+    b.zones[0].thermal_gap = 0.0;
+    b.zones[0].thermal_width = 0.0;
+    assert_eq!(edit(&mut b, ZoneEdit::ThermalRelief(true)), Ok(true));
+    let zone = &b.zones[0];
+    assert!(zone.thermal_relief);
+    assert_eq!(
+        (zone.thermal_gap, zone.thermal_width),
+        (PCB_THERMAL_GAP_MM, PCB_THERMAL_BRIDGE_MM)
+    );
+    assert_eq!(edit(&mut b, ZoneEdit::ThermalSpokeWidth(0.4)), Ok(true));
+    assert_eq!(edit(&mut b, ZoneEdit::ThermalAirGap(0.3)), Ok(true));
+    assert_eq!(
+        (b.zones[0].thermal_width, b.zones[0].thermal_gap),
+        (0.4, 0.3)
+    );
+    assert_eq!(edit(&mut b, ZoneEdit::ThermalRelief(false)), Ok(true));
+    assert_eq!(
+        (b.zones[0].thermal_width, b.zones[0].thermal_gap),
+        (0.4, 0.3),
+        "off keeps the width and gap"
+    );
+    for bad in [0.0, -0.1] {
+        assert_eq!(
+            edit(&mut b, ZoneEdit::ThermalAirGap(bad)),
+            Err(PrimitiveEditRefusal::NotPositive)
+        );
+    }
+    assert_eq!(
+        edit(&mut b, ZoneEdit::ThermalSpokeWidth(f64::NAN)),
+        Err(PrimitiveEditRefusal::NonFinite)
+    );
+    let mut solid = with_fill("solid");
+    assert_eq!(edit(&mut solid, ZoneEdit::ThermalRelief(true)), Ok(false));
+}
+
+/// #2580: several edits on the pours are one replace, undone exactly; one
+/// refused edit refuses them all.
+#[test]
+fn thermal_relief_edits_together_are_one_step() {
+    let b = with_fill(POUR_FILL);
+    let edits = [
+        ZoneEdit::ThermalRelief(true),
+        ZoneEdit::ThermalSpokeWidth(0.35),
+        ZoneEdit::ThermalAirGap(0.45),
+    ];
+    let command = zone_edits_command(&b, &[id(ZONE_1)], &edits)
+        .expect("allowed")
+        .expect("a change");
+    let mut engine = crate::pcb::BoardEngine::new(b.clone(), 1);
+    engine.execute(command).expect("applies");
+    let zone = &engine.board().zones[0];
+    assert_eq!(
+        (zone.thermal_relief, zone.thermal_width, zone.thermal_gap),
+        (true, 0.35, 0.45)
+    );
+    engine.undo().expect("undo").expect("a step");
+    assert_eq!(engine.board().zones, b.zones);
+    let refused = [ZoneEdit::ThermalRelief(true), ZoneEdit::ThermalAirGap(0.0)];
+    assert_eq!(
+        zone_edits_command(&b, &[id(ZONE_1)], &refused),
+        Err(PrimitiveEditRefusal::NotPositive)
+    );
+}

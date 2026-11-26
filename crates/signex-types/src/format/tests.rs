@@ -453,6 +453,7 @@ fn snxpcb_round_trip_with_data() {
         rotation: 0.0,
         layer_sizes: None,
         net_locked: false,
+        thermal: Default::default(),
     };
     let pad2 = Pad {
         unknown_columns: Default::default(),
@@ -475,6 +476,7 @@ fn snxpcb_round_trip_with_data() {
         rotation: 0.0,
         layer_sizes: None,
         net_locked: false,
+        thermal: Default::default(),
     };
 
     let footprint = Footprint {

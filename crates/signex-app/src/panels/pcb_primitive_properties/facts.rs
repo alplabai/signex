@@ -106,6 +106,9 @@ pub enum PrimitiveField {
     HatchGap,
     /// The smallest island a polygon pour keeps, in mm² (#2216).
     MinIslandArea,
+    /// A polygon pour's thermal relief spoke width and air gap, mm (#2580).
+    ThermalSpokeWidth,
+    ThermalAirGap,
     /// An arc's or circle's centre on a board drawing (#2424).
     CenterX,
     CenterY,
@@ -477,7 +480,8 @@ pub struct ZoneFacts {
     pub hatch_width: Option<f64>,
     pub hatch_gap: Option<f64>,
     /// The thermal relief the pours store: on, spoke width and air gap in
-    /// mm; `None` when they differ. The fill does not draw spokes yet.
+    /// mm; `None` when they differ. While on, the fill joins the pads of
+    /// the pour's net through spokes (#2580).
     pub thermal: Option<(bool, f64, f64)>,
     /// The Copper card's menu of board-wide pour commands is open.
     pub menu_open: bool,

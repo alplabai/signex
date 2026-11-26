@@ -206,6 +206,9 @@ mod tests {
                 "set_pad_shape",
                 "set_pour_corners",
                 "set_pour_fill",
+                // #2580, #2593: thermal relief on the named board.
+                "set_pad_thermal_relief",
+                "set_pour_thermal_relief",
                 "set_via_span",
                 "show_drc_violation",
                 "show_layer_group",

@@ -24,6 +24,7 @@ fn pad(uuid: Uuid, x: f64, y: f64, w: f64, h: f64) -> Pad {
         rotation: 0.0,
         layer_sizes: None,
         net_locked: false,
+        thermal: Default::default(),
         unknown: Default::default(),
         unknown_columns: Default::default(),
     }

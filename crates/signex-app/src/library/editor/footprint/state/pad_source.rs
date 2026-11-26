@@ -278,7 +278,7 @@ fn overrides_between(held: &PadAttrOverride, base: &PadAttr) -> InstanceOverride
         .with(PadAttribute::Rotation, held.rotation_expr.is_some())
         .with(
             PadAttribute::ThermalRelief,
-            stack_differs(|a, b| a.thermal_relief != b.thermal_relief),
+            stack_differs(|a, b| a.thermal_relief != b.thermal_relief || a.thermal != b.thermal),
         )
 }
 

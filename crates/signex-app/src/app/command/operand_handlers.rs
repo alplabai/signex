@@ -31,6 +31,7 @@ use super::repair_reset_operands as repair_reset;
 use super::selection_filter_operands as filter;
 use super::selection_operands as selection;
 use super::sheet_sync_operands as sheet_sync;
+use super::thermal_operands as thermal;
 use super::{CommandArgs, CommandOutcome, enablement};
 use crate::app::board_output as output;
 use crate::app::board_reuse as reuse;
@@ -183,6 +184,9 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("set_pad_shape", board_edit::set_pad_shape),
     ("set_pour_corners", pour::set_pour_corners),
     ("set_pour_fill", pour::set_pour_fill),
+    // #2580, #2593: a pour's thermal relief and a pad's own values.
+    ("set_pour_thermal_relief", thermal::set_pour_thermal_relief),
+    ("set_pad_thermal_relief", thermal::set_pad_thermal_relief),
     ("select_board_net", select_board_net),
     ("highlight_board_net", highlight_board_net),
     // #2408, #2409: the board Tools edits on the board `document` names.
@@ -545,6 +549,16 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "set_pour_fill" => Some(
             "`set_pour_fill` needs the operands `document`, `ids` and `fill` — \
              use the Fill Mode row of a pour's panel in Properties",
+        ),
+        "set_pour_thermal_relief" => Some(
+            "`set_pour_thermal_relief` needs the operands `document` and `ids`, with \
+             `on`, `spoke_width` or `air_gap` — use the Thermal Relief rows of the \
+             pour panel in Properties",
+        ),
+        "set_pad_thermal_relief" => Some(
+            "`set_pad_thermal_relief` needs the operands `document` and `ids`, with \
+             `air_gap`, `spoke_width` or `spokes` — set a library pad's values in the \
+             footprint editor's pad Properties",
         ),
         "edit_blanket" => Some(
             "`edit_blanket` needs the operand `id` and the values to set — \

@@ -133,6 +133,7 @@ impl PanelMsg {
             | Self::FpEditorToggleSelectedPadMaskTentedTop { .. }
             | Self::FpEditorToggleSelectedPadMaskTentedBottom { .. }
             | Self::FpEditorToggleSelectedPadThermalRelief { .. }
+            | Self::FpEditorPadThermalTyped { .. }
             | Self::FpEditorSetSelectedPadFeatureTop { .. }
             | Self::FpEditorSetSelectedPadFeatureBottom { .. }
             | Self::FpEditorToggleSelectedPadTestpointTopAssembly { .. }

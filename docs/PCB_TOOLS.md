@@ -554,10 +554,10 @@ priorities in board order. A pour of the same net may overlap an earlier one;
 one of another net keeps its clearance from it. So of two overlapping pours
 of different nets, the higher priority keeps the overlap.
 
-Copper of the pour's own net is filled over: a pad joins the pour solidly, with
-no thermal relief spokes (`thermal_relief`, `thermal_gap` and `thermal_width`
-are kept but not read yet). Not modelled yet: copper text and footprint copper
-graphics are not cleared.
+Copper of the pour's own net is filled over. A pad of the pour's net joins it
+solidly while the pour's Thermal Relief is off, and through spokes while it is
+on (see "Thermal relief" below). Not modelled yet: copper text and footprint
+copper graphics are not cleared.
 
 #### Corners and hatched fill
 
@@ -606,6 +606,48 @@ the board, an unknown token or a negative length. Each answers with the
 pours as `repour_all` reports them (`zone`, `filled`, `pieces`, `area_mm2`,
 ...) plus `corners`, `corner_size`, `fill`, `hatch_width` and `hatch_gap`.
 
+#### Thermal relief
+
+A pour with `thermal_relief` on (#2580) keeps every pad of its net on its
+layer clear by an air gap and bridges the gap with spokes
+(`pcb_geom` `zone_fill::relief`):
+
+- the air gap is the pad's copper on that layer grown by the gap; a
+  through-hole pad gets one on every layer the pour is on, a non-plated hole
+  none;
+- each spoke runs from the pad's centre across the gap and one spoke width
+  into the fill, along the pad's own axes (the footprint's and the pad's turn
+  composed): four spokes at 0°, 90°, 180° and 270°, two at 0° and 180°, one
+  at 0°, three 120° apart;
+- the spokes are cut to the copper the pour may hold, so they keep every
+  clearance to other nets, keepouts, cutouts and the board outline; they are
+  added after `min_thickness` removes the thin parts, so a spoke narrower than
+  it stays, and after a hatch, so a spoke stays solid; a spoke that meets no
+  fill is left out;
+- the gap and width are the pour's `thermal_gap` and `thermal_width`; a pour
+  switched on with neither stored (0) uses 0.508 mm and 0.254 mm
+  (`PCB_THERMAL_GAP_MM`, `PCB_THERMAL_BRIDGE_MM`), and so does the switch in
+  the panel, which writes them.
+
+A pad may set its own air gap, spoke width and spoke count (#2593,
+`Pad::thermal`, each Manual or Rule): its own value wins over the pour's, a
+Rule value follows the pour, and a pad on the Rule gets four spokes. A gap or
+width is a length above 0 mm, a count 1 to 4; anything else is refused on edit,
+on save and on load. The values come from the footprint (the pad Properties'
+Thermal relief rows in the footprint editor, saved as the `thermal_air_gap`,
+`thermal_spoke_width` and `thermal_spokes` pad columns of the `.snxfpt`, which
+write `snxfpt/1.4`), are carried to the board pad when the footprint is
+placed, and are saved in the board's optional `thermal` pad cell,
+`<gap nm>;<width nm>;<spokes>` with a Rule part left empty. A free pad takes
+no values yet: its own values are refused on save. Vias of the pour's net
+stay joined solidly.
+
+`set_pour_thermal_relief document= ids= [on=] [spoke_width=] [air_gap=]` sets
+the pours' switch, width and gap in one undo step;
+`set_pad_thermal_relief document= ids= [air_gap=rule|mm]
+[spoke_width=rule|mm] [spokes=rule|n]` sets footprint pads' own values in one
+undo step (`docs/CLI.md`, "Thermal relief").
+
 A shelved pour (`Zone::shelved`, #2523) keeps its outline and every setting
 but holds no copper: `pcb_geom::zone_fills` gives it no fill, so it clears no
 other pour, and the canvas, the fabrication and PDF outputs, the ratsnest
@@ -642,8 +684,8 @@ Polygons chip of the selection filter) and opens the area panel (#2523): its
 illustration, Net Information, then Net, Layer and the Pour section: Fill
 Mode (Solid or Hatched, #2579; with Hatch Width and Hatch Gap in mm while
 the pours are hatched, showing the default for a stored 0), Clearance,
-Minimum Width, Thermal Relief (the stored switch with Spoke / Gap, read only
-and greyed, since the fill draws no spokes), Corners (Sharp, Rounded or
+Minimum Width, Thermal Relief (the switch over Spoke / Gap in mm, live,
+#2580; the illustration draws the gap and spokes while on), Corners (Sharp, Rounded or
 Chamfer, #2578) and Corner Size in mm (greyed at 0 while Sharp), Priority (a
 whole number from 0), Remove Islands (below an area in mm²), Remove Dead
 Copper, and the Copper card. Each edit is one undo step; on a board that

@@ -1033,3 +1033,22 @@ pub const SET_PAD_SHAPE: &[Operand] = &[
     optional("delta", OperandKind::Text),
     optional("corners", OperandKind::Text),
 ];
+/// `set_pour_thermal_relief` (#2580): polygon pours by uuid, the switch and
+/// the spoke width and air gap in mm; at least one of the three.
+pub const SET_POUR_THERMAL_RELIEF: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("ids", OperandKind::Targets),
+    optional("on", OperandKind::Bool),
+    optional("spoke_width", OperandKind::Length),
+    optional("air_gap", OperandKind::Length),
+];
+/// `set_pad_thermal_relief` (#2593): footprint pads by uuid; each of
+/// `air_gap` and `spoke_width` is `rule` or mm, `spokes` is `rule` or a count
+/// from 1 to 4; at least one of the three.
+pub const SET_PAD_THERMAL_RELIEF: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("ids", OperandKind::Targets),
+    optional("air_gap", OperandKind::Text),
+    optional("spoke_width", OperandKind::Text),
+    optional("spokes", OperandKind::Text),
+];

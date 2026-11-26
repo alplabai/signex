@@ -221,6 +221,8 @@ fn copper_pad(pad: &Pad) -> Result<pcb::Pad, FootprintResolveError> {
         rotation: pad.rotation,
         layer_sizes: None,
         net_locked: false,
+        // #2593: the pour connecting to the board pad reads these.
+        thermal: pad.thermal,
         unknown: Default::default(),
         unknown_columns: Default::default(),
     };
