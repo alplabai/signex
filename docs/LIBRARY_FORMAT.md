@@ -166,6 +166,10 @@ key = "<machine key>"
 label = "<display label>"
 ```
 
+- **No classes:** when the library has no `[[classes]]` entries, Signex
+  writes the root key `classes = []` on the line straight after
+  `library_id` (line 3) instead, and no `[[classes]]` tables. A writer that
+  omits it produces a file Signex rewrites on save.
 - `library_id` is a UUID, written lower-case with hyphens. It identifies the
   library everywhere (rows and designs reference primitives by
   `(library_id, uuid)`); two mounted libraries may not share one.
@@ -649,7 +653,9 @@ points = [[x, y], ...]
   (`center`, `radius`), `arc` (`center`, `radius`, `start_deg`, `end_deg`,
   increasing-angle sweep), `text` (`position`, `content`, `size`, optional
   `frame = [w, h]`) or `polygon` (`vertices`).
-- `courtyard` is one polygon on the top courtyard.
+- `courtyard` is one polygon on the top courtyard. **It is always written**,
+  even when empty: an empty courtyard is `[footprints.courtyard]` followed by
+  `points = []` and a blank line, in the same place as a non-empty one.
 - `component_type`: `Standard`, `StandardNoBom`, `Mechanical`, `Graphical`,
   `NetTie`, `NetTieInBom`, `Jumper`.
 - Not specified here, so a converter omits them: `sketch` (the parametric
