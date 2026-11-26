@@ -233,7 +233,8 @@ fn a_notebook_is_named_inside_its_folder_with_or_without_extension() {
 
 #[test]
 fn the_operands_set_the_export_settings() {
-    let project = PathBuf::from("/p/ProjectA.snxprj");
+    // Absolute on every platform: `document=` refuses a relative path.
+    let project = std::env::temp_dir().join("ProjectA.snxprj");
     let parsed = export_options(&args(
         &[
             "pages=2-3",
