@@ -30,6 +30,18 @@ impl Signex {
         rules: Option<PcbDefaults>,
         fab: Option<FabTemplate>,
     ) -> Task<Message> {
+        self.request_new_pcb_at(project, None, rules, fab)
+    }
+
+    /// [`Self::request_new_pcb`] at `asked` (the `name` operand, #2470) when
+    /// the project names no board yet; the board it names wins.
+    pub(crate) fn request_new_pcb_at(
+        &mut self,
+        project: Option<ProjectId>,
+        asked: Option<PathBuf>,
+        rules: Option<PcbDefaults>,
+        fab: Option<FabTemplate>,
+    ) -> Task<Message> {
         let Some(project) = project.or_else(|| self.project_in_view()) else {
             self.refuse_new_pcb(ids::NEW_PCB_NO_PROJECT.into());
             return Task::none();
@@ -40,6 +52,7 @@ impl Signex {
         let named = Self::project_board(loaded);
         let path = named
             .clone()
+            .or(asked)
             .unwrap_or_else(|| new_board_path(&loaded.path));
         if self.document_state.holds_pcb(&path) || self.is_board_opening(&path) {
             self.refuse_new_pcb_taken(&path, named.is_some());

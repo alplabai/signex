@@ -64,7 +64,9 @@ the run. A save never overwrites a file that changed since it was read.
 sheets too, so the command is refused with `the next step belongs to a
 project-wide run (annotate, replace or re-prefix) and moves other sheets too;
 undo it from the sheet it was run on`. Undo the run in the app window, where
-Ctrl+Z restores every sheet until you save.
+Ctrl+Z restores every sheet until you save. Given `document=<sheet>`, they
+number that sheet's project and answer with each change; see "Numbering and a
+new board".
 
 An argument is a string, a number, a boolean, or `[x, y]` for a point (mm).
 The names, kinds and units of a command's arguments are in
@@ -1158,6 +1160,60 @@ The answer:
 - `notes` are the list's notes, as the dialog shows them.
 - A dry run adds `execute_blocked` when an apply would be refused now (the
   board closed with unsaved edits, or read-only).
+
+## Numbering and a new board
+
+These run what their menu entries run, from operands and without a dialog
+(#2470). None writes a file: what they change stays unsaved in memory, so a run
+needs `edit`, never `save` (see the numbering paragraph under "JSON Lines" for
+keeping the result).
+
+```text
+new_pcb_document [document=<project or a document of it>] [profile=<token>] [name=<file>]
+annotate_schematic_quietly document=<sheet>
+force_annotate_all_schematics document=<sheet>
+reannotate_board document=<board> [order=x_then_y|y_then_x] [bottom=after_top|with_top] [dry_run=true]
+back_annotate_schematics document=<project, its board or a sheet> [dry_run=true]
+```
+
+- `new_pcb_document` makes the project's one board with the profile's rules,
+  as the New PCB dialog's Create does, and opens it unsaved; the project names
+  it and is unsaved too. `document` names the project, else the project in
+  view; `name` is the board's file in the project folder (`.snxpcb` added when
+  missing), else `<project>.snxpcb`. A project that already names a board makes
+  that board, and a `name` other than it is refused. It answers with the new
+  board's `{id, path, kind}`, as `new_document` does.
+- `annotate_schematic_quietly` numbers the parts whose designator ends in `?`,
+  `force_annotate_all_schematics` resets and renumbers every part, across the
+  whole project of the sheet named, whatever tab is active. The run is the
+  menu's: the same undo step (one for the project, or one per sheet when the
+  project's Annotate undo setting asks for that) and the same refusals. It
+  answers `mode` (`incremental` or `reset_and_renumber`), `changes` (each
+  `{sheet, symbol, old, new}`: the sheet file, the symbol's uuid, the
+  designators before and after) and `sheets_changed`. A run that changed
+  nothing because it was refused is refused with the reason; one that changed
+  some sheets and skipped others also carries the skip as `notice`.
+- `reannotate_board` is Positional Re-Annotate on the board named: one labelled
+  board undo step. It answers `board`, `applied`, `renames` (each
+  `{footprint, old, new}` in numbering order), `kept` (each
+  `{footprint, designator, reason}`, `reason` being `locked`, `no_prefix` or
+  `unlinked`) and `unchanged` (the parts already in order). `dry_run=true`, or a
+  board with nothing to rename, answers with `applied: false` and changes
+  nothing. A read-only board is refused.
+- `back_annotate_schematics` reads the project's design against its board and
+  writes the rows the Back Annotate dialog ticks by default, as its Execute
+  does: one undo group across the changed sheets, a closed sheet loaded and
+  left unsaved. The board must be open. It answers `board`, `rows` (each
+  `{kind, footprint, designator, old, new, placement, sheet, applies,
+  blocked}`: `kind` is `designator`, `value` or `footprint`, `placement` the
+  part's place in the hierarchy, `sheet` its sheet file, `blocked` why a row
+  cannot apply, or `null`), `applied` and `sheets_changed`. `dry_run=true`
+  lists the rows and changes nothing. A sheet that changed on disk since the
+  read, or a board or sheet edited meanwhile, refuses the whole write.
+- `reannotate_board` and `back_annotate_schematics` are on the agent channel
+  (over it, `document=` names the board or a sheet: the project file is refused
+  at the gate). The others take an optional `document`, so they run headless
+  only. None of them can be an edit of `apply_edits`: each is its own step.
 
 ## Working through a running Signex
 

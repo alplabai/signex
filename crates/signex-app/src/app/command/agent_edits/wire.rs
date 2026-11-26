@@ -158,6 +158,20 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "update_pcb_from_schematic",
         "it edits the project's board, which no sheet's undo step covers; run it as its own command",
     ),
+    // #2470: numbering runs over the whole project or its board.
+    (
+        "annotate_schematic_quietly",
+        "it numbers the whole project, which no sheet's undo step covers; run it as its own command",
+    ),
+    (
+        "force_annotate_all_schematics",
+        "it numbers the whole project, which no sheet's undo step covers; run it as its own command",
+    ),
+    (
+        "back_annotate_schematics",
+        "it edits the project's sheets from its board, which no sheet's undo step covers; run it as its own command",
+    ),
+    ("reannotate_board", BOARD_EDIT),
     (
         "rules_add",
         "it writes the project's rule set, which no sheet's undo step covers",

@@ -142,6 +142,7 @@ impl Signex {
                 mode: signex_engine::AnnotateMode::Incremental,
                 reprefix: Some(&targets),
                 label: LABEL,
+                anchor: None,
             },
             set,
         );

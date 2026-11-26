@@ -35,6 +35,17 @@ impl Signex {
         ) else {
             return false;
         };
+        self.back_read_stale(list, read, board)
+    }
+
+    /// `list`, read as `read` against `board`, no longer describes them:
+    /// the dialog's check and the operand form's (#2470).
+    pub(crate) fn back_read_stale(
+        &self,
+        list: &BackChangeList,
+        read: &BackRead,
+        board: &std::path::Path,
+    ) -> bool {
         let board_moved = self
             .document_state
             .board_engine(board)
