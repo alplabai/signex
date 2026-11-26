@@ -70,22 +70,28 @@ fn cell_view<'a>(
         .column(cell.variant.as_deref())
         .and_then(|column| part.fitted.get(column).copied())
         .unwrap_or(true);
-    column![
+    let mut pane = column![
         heading(m, cell, part),
         field_label(
             t!(m.i18n, ids::VARIANT_MANAGER_FITTING, "variant" => m.name(cell.variant.as_deref())),
             m.tokens
         ),
         fitting(m, cell, part, fitted),
-        field_label(t!(m.i18n, ids::VARIANT_MANAGER_OVERRIDES), m.tokens),
-        overrides(m, cell, part, fitted),
-        field_label(
-            t!(m.i18n, ids::VARIANT_MANAGER_OTHER_VARIANTS, "designator" => part.designator.as_str()),
-            m.tokens
-        ),
-        others(m, cell, matrix, part),
     ]
-    .spacing(SP.m)
+    .spacing(SP.m);
+    if let Some(every) = super::channel_rows::every_channel(m, cell, matrix, part) {
+        pane = pane.push(every);
+    }
+    pane.push(field_label(
+        t!(m.i18n, ids::VARIANT_MANAGER_OVERRIDES),
+        m.tokens,
+    ))
+    .push(overrides(m, cell, part, fitted))
+    .push(field_label(
+        t!(m.i18n, ids::VARIANT_MANAGER_OTHER_VARIANTS, "designator" => part.designator.as_str()),
+        m.tokens,
+    ))
+    .push(others(m, cell, matrix, part))
     .boxed()
 }
 

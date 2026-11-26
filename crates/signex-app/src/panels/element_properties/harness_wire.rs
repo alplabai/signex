@@ -34,7 +34,8 @@ pub(super) fn push_harness_wire_sections<'a>(
         facts.wire_type.clone().unwrap_or_default(),
     ));
     if let Some((start, end)) = facts.wire_ends {
-        let at = |p: signex_types::schematic::Point| format!("{:.2}, {:.2}", p.x, p.y);
+        // Y counts from the sheet's page origin, as the connector's Y box does.
+        let at = |p: signex_types::schematic::Point| format!("{:.2}, {:.2}", p.x, ctx.shown_y(p.y));
         rows = rows
             .push(line(t!(i18n, ids::PANELS_HARNESS_START), at(start)))
             .push(line(t!(i18n, ids::PANELS_HARNESS_END), at(end)));
@@ -82,4 +83,46 @@ pub(super) fn push_sheet_entry_harness_type<'a>(
         },
         st.muted,
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use signex_types::schematic::{PageOrigin, Point};
+
+    fn shown_ends(origin: PageOrigin) -> Vec<String> {
+        let (app, _boot) = crate::app::Signex::new();
+        let mut ctx = app.document_state.panel_ctx.clone();
+        ctx.paper_size = "A4".to_string();
+        ctx.page_origin = origin;
+        ctx.harness.wire_ends = Some((Point::new(10.0, 20.0), Point::new(30.0, 20.0)));
+        let st = PanelStyle {
+            muted: Color::BLACK,
+            primary: Color::BLACK,
+            border_c: Color::BLACK,
+            palette: crate::panels::palette::PanelPalette::from_tokens(&ctx.tokens),
+        };
+        let section = push_harness_wire_sections(Column::new(), &ctx, st);
+        crate::layout_probe::lay_out_texts(section.boxed(), iced::Size::new(300.0, 200.0))
+            .into_iter()
+            .map(|t| t.text)
+            .filter(|t| t.contains(", "))
+            .collect()
+    }
+
+    /// #2789: a harness wire's Start and End read Y from the page origin, as
+    /// every other Properties readout does.
+    #[test]
+    fn the_wire_ends_read_y_from_the_page_origin() {
+        let paper_h = signex_types::schematic::paper_height_mm("A4");
+        let flipped = format!("{:.2}", paper_h - 20.0);
+        assert_eq!(
+            shown_ends(PageOrigin::LowerLeft),
+            [format!("10.00, {flipped}"), format!("30.00, {flipped}")]
+        );
+        assert_eq!(
+            shown_ends(PageOrigin::UpperLeft),
+            ["10.00, 20.00", "30.00, 20.00"]
+        );
+    }
 }

@@ -133,7 +133,13 @@ message. The chrome catalog draws a sample of it.
   see `docs/architecture/snxprj-format.md`) on the placed part, so they stay
   on it through a re-annotation, and laid over the read as it is shown, so
   an edit shows without reading the sheets again; the BOM lists a variant
-  with the same settings. No sheet preview of the part yet. Its
+  with the same settings. A part on a repeated sheet is one row for every
+  channel's copy (fold chevron, its designator on the sheet, the number of
+  channels; per variant Fitted, Not fitted or "mixed · 1 of 3 not fitted")
+  that a click opens into one row per copy, each set on its own; the right
+  pane of a copy also sets every channel's copy at once, one undo step
+  (`docs/MULTI_CHANNEL.md`, "Per-channel variant state"). No sheet preview
+  of the part yet. Its
   parts are read off the UI thread from every sheet of
   the project, open ones with their unsaved edits, each child sheet once per
   placement as the BOM counts it, with the BOM's own fit rule

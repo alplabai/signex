@@ -10,6 +10,10 @@
 
 mod bar;
 mod cells;
+mod channel_edits;
+mod channel_rows;
+#[cfg(test)]
+mod channel_tests;
 mod detail;
 mod edits;
 mod empty;
@@ -205,6 +209,13 @@ impl<'v> Manager<'v> {
 
     fn is_active(&self, variant: Option<&str>) -> bool {
         variant == self.active
+    }
+
+    /// Whether the row of a part on a repeated sheet is open into its
+    /// channels' copies.
+    fn is_channel_part_open(&self, part: &signex_types::pcb::SymbolLink) -> bool {
+        self.tab
+            .is_some_and(|tab| tab.variant_manager.open_channel_parts.contains(part))
     }
 }
 

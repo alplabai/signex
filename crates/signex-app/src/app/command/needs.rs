@@ -497,6 +497,9 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "sync_sheet_entries"
         // The table lists the active sheet's symbols.
         | "open_parameter_manager"
+        // #1295: the table's CSV, of and into the active sheet.
+        | "export_parameters"
+        | "import_parameters"
         // Lists the parts of the active schematic's project.
         | "assign_footprints"
         // Dots the bare pin touches of the sheet in view.

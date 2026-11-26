@@ -480,3 +480,26 @@ fn a_repaired_duplicate_keeps_the_old_waivers_and_gains_copies_under_its_new_id(
         assert_eq!(out.waived.len(), 1, "waived on both sheets");
     }
 }
+
+/// #2656: a net class conflict names two directives; it can be waived, and
+/// the waiver lapses when the overridden directive's class changes.
+#[test]
+fn a_class_conflict_is_waivable_and_lapses_with_the_class() {
+    let sheet = crate::fixtures::class_conflict_sheet();
+    let found: Vec<Violation> = crate::engine::run_all(&crate::ErcContext::from_snapshot(&sheet))
+        .into_iter()
+        .filter(|d| d.rule_kind == RuleKind::NetClassConflict)
+        .map(Violation::from)
+        .collect();
+    assert_eq!(found.len(), 1);
+    let v = found[0].clone();
+    let waivers = vec![waive(&v, &sheet)];
+    assert_eq!(split(v.clone(), &sheet, &waivers).waived.len(), 1);
+
+    let mut reclassed = sheet.clone();
+    reclassed.directives[0] =
+        crate::fixtures::net_blanket(11, Point::new(-1.0, -1.0), Point::new(11.0, 1.0), "OTHER");
+    let out = split(v, &reclassed, &waivers);
+    assert_eq!(out.kept.len(), 1, "the finding is back");
+    assert!(out.lapsed.contains(&0));
+}

@@ -575,6 +575,11 @@
     "category": "reports"
   },
   {
+    "id": "export_parameters",
+    "group": "Schematic",
+    "category": "design"
+  },
+  {
     "id": "fabrication_outputs",
     "group": "Pcb",
     "category": "file"
@@ -743,6 +748,11 @@
     "id": "import_graphics",
     "group": "General",
     "category": "place"
+  },
+  {
+    "id": "import_parameters",
+    "group": "Schematic",
+    "category": "design"
   },
   {
     "id": "keepout_from_selection",

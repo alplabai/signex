@@ -118,9 +118,9 @@ impl Signex {
             (rules.can_redo(), general_redo)
         };
         let position = docs
-            .project_tabs
+            .general_history
             .get(&id)
-            .map_or(0, |tab| tab.general_history.position());
+            .map_or(0, |history| history.position());
         can_rules && (!can_general || rules.steps_before_general(undo, position))
     }
 

@@ -122,9 +122,17 @@ impl SvgRenderContext {
             palette,
             &opts.schematic_defaults,
         );
+        // The parts drawn greyed and crossed out (#1294).
+        let not_fitted = super::not_fitted::drawn_not_fitted(sheet, opts, eval_inputs);
         // Body fills sit under the wires but belong to their parts.
         let fills_start = elements.len();
-        push_symbol_body_fills(&mut elements, &sheet.schematic, &xform, palette);
+        push_symbol_body_fills(
+            &mut elements,
+            &sheet.schematic,
+            &xform,
+            palette,
+            &not_fitted,
+        );
         layers.mark(PdfLayer::Parts, fills_start..elements.len());
 
         // Base primitives
@@ -257,6 +265,7 @@ impl SvgRenderContext {
                 );
             }
         }
+        super::directives::push_directives(&mut elements, &sheet.schematic, &xform, palette, opts);
 
         let document_family = sheet.schematic.font_family.as_deref();
         for label in &sheet.schematic.labels {
@@ -411,11 +420,11 @@ impl SvgRenderContext {
             });
 
             let lib = sheet.schematic.resolve_lib_symbol(sym);
-            if let Some(lib) = lib {
+            if let Some(lib) = lib.as_deref() {
                 push_symbol_lib_graphics(
                     &mut elements,
                     sym,
-                    Some(&lib),
+                    Some(lib),
                     &xform,
                     palette,
                     &opts.schematic_defaults,
@@ -423,7 +432,7 @@ impl SvgRenderContext {
                 push_symbol_pins(
                     &mut elements,
                     sym,
-                    &lib,
+                    lib,
                     &xform,
                     &symbol_eval_ctx,
                     symbol_pin_nets,
@@ -431,11 +440,12 @@ impl SvgRenderContext {
                 );
             } else {
                 // Fallback if library is missing.
+                let half = super::not_fitted::MISSING_LIBRARY_BOX_HALF_MM;
                 elements.push(rect_path(
-                    xform.x(sym.position.x - 5.0),
-                    xform.px_y(sym.position.y - 5.0),
-                    (10.0 * xform.mm_to_unit) as f32,
-                    (10.0 * xform.mm_to_unit) as f32,
+                    xform.x(sym.position.x - half),
+                    xform.px_y(sym.position.y - half),
+                    (2.0 * half * xform.mm_to_unit) as f32,
+                    (2.0 * half * xform.mm_to_unit) as f32,
                     SvgStyle {
                         stroke_alpha: 1.0,
                         stroke_rgb: Some(palette.symbol_stroke),
@@ -444,6 +454,17 @@ impl SvgRenderContext {
                             * xform.mm_to_unit) as f32,
                     },
                 ));
+            }
+            if not_fitted.contains(&sym.uuid) {
+                super::not_fitted::grey_elements(&mut elements[symbol_start..], palette.paper);
+                super::not_fitted::push_not_fitted_cross(
+                    &mut elements,
+                    sym,
+                    lib.as_deref(),
+                    &xform,
+                    palette,
+                    &opts.schematic_defaults,
+                );
             }
 
             // Match canvas renderer parity:

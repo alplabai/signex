@@ -128,7 +128,8 @@ fn net_parameters(show: bool) -> SchDirective {
 /// lists the rules only when told to.
 #[test]
 fn a_net_parameters_flag_sits_above_its_wire_and_holds_its_text() {
-    use super::directives::{flag, flag_lines};
+    use super::directives::flag;
+    use signex_types::schematic::directive_flag_lines as flag_lines;
     assert_eq!(flag_lines(&net_parameters(false)), ["Net Class = POWER_IN"]);
     assert_eq!(
         flag_lines(&net_parameters(true)),

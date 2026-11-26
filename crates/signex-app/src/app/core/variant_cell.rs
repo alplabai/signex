@@ -25,4 +25,7 @@ pub struct VariantManagerUi {
     pub cell: Option<VariantCell>,
     /// The value being typed in the right pane's overrides.
     pub draft: Option<OverrideDraft>,
+    /// The parts on a repeated sheet whose matrix row is open, one sub-row
+    /// per channel's copy (#2662), by the part every copy shares.
+    pub open_channel_parts: std::collections::HashSet<signex_types::pcb::SymbolLink>,
 }

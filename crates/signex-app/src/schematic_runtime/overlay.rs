@@ -109,13 +109,7 @@ pub fn draw_erc_markers(
             push_net_marker(&mut overlays, marker, transform, colors);
             continue;
         }
-        let (paper, background) = (to_iced(&colors.paper), to_iced(&colors.background));
-        // Graphite: errors in the theme's err, warnings in its warn.
-        let stroke = match (graphite, marker.severity) {
-            (ink, ErcSeverity::Error) => marker_stroke_from(ink.err, paper, background),
-            (ink, ErcSeverity::Warning) => marker_stroke_from(ink.warn, paper, background),
-            _ => marker_stroke(marker.severity, paper, background),
-        };
+        let stroke = point_marker_stroke(marker.severity, colors, graphite);
         let fill = Color {
             a: MARKER_DISC_ALPHA,
             ..stroke
@@ -136,6 +130,282 @@ pub fn draw_erc_markers(
         DirtyFlags::OVERLAY,
         transform,
     );
+}
+
+/// The ring and cross ink of a point marker. Graphite: errors in the theme's
+/// err, warnings in its warn.
+fn point_marker_stroke(
+    severity: ErcSeverity,
+    colors: &CanvasColors,
+    graphite: &crate::canvas::GraphiteCanvasInk,
+) -> Color {
+    let (paper, background) = (to_iced(&colors.paper), to_iced(&colors.background));
+    match severity {
+        ErcSeverity::Error => marker_stroke_from(graphite.err, paper, background),
+        ErcSeverity::Warning => marker_stroke_from(graphite.warn, paper, background),
+        ErcSeverity::Info => marker_stroke(severity, paper, background),
+    }
+}
+
+/// The text size of a marker caption, in screen px whatever the zoom.
+const CAPTION_PX: f32 = crate::styles::TypeScale::DEFAULT.caption;
+
+/// A finding's caption: the short line under its point marker, such as
+/// `expects CS_ADC` by a mismatched harness entry (mockup row 152).
+#[derive(Debug, Clone, Copy)]
+pub struct ErcCaption<'a> {
+    pub marker: ErcMarker,
+    pub text: &'a str,
+}
+
+/// Draw each caption centred under its marker's halo, in the marker's ink.
+/// Editor-only, like the markers: no print or export draws it.
+pub fn draw_erc_captions(
+    frame: &mut canvas::Frame,
+    captions: &[ErcCaption<'_>],
+    transform: &ScreenTransform,
+    colors: &CanvasColors,
+    graphite: &crate::canvas::GraphiteCanvasInk,
+) {
+    let font = crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT);
+    for caption in captions {
+        frame.fill_text(canvas::Text {
+            content: caption.text.to_string(),
+            position: caption_top_centre(&caption.marker, transform),
+            color: point_marker_stroke(caption.marker.severity, colors, graphite),
+            size: iced::Pixels(CAPTION_PX),
+            font,
+            align_x: iced::alignment::Horizontal::Center.into(),
+            ..canvas::Text::default()
+        });
+    }
+}
+
+/// A harness entry the far side expects under another name: its tab, and the
+/// severity of the finding that marks it (mockup row 152).
+#[derive(Debug, Clone)]
+pub struct MismatchedEntry {
+    pub tab: Vec<Point>,
+    /// The body outline of the connector the entry is on.
+    pub connector_outline: Vec<Point>,
+    /// The entry's name as the connector draws it, and where.
+    pub name: String,
+    pub name_at: Point,
+    pub family: Option<std::sync::Arc<str>>,
+    pub severity: ErcSeverity,
+}
+
+impl MismatchedEntry {
+    /// The harness entry `entry` of a connector on `snapshot`, flagged by a
+    /// finding of `severity`; `None` when no connector there holds it.
+    pub fn on(
+        snapshot: &SchematicRenderSnapshot,
+        entry: uuid::Uuid,
+        severity: ErcSeverity,
+    ) -> Option<Self> {
+        let (c, index) = snapshot.harness.entry(entry)?;
+        Some(Self {
+            tab: c.entry_tab(index),
+            connector_outline: c.outline(),
+            name: c.entries[index].name.clone(),
+            name_at: c.entry_label_point(index),
+            family: resolve_family(None, snapshot.font_family.as_deref()),
+            severity,
+        })
+    }
+}
+
+/// Redraw each mismatched entry over the sheet in its marker's ink: its tab a
+/// heavier outline on a faint fill, its connector's body outlined and its
+/// name bold (decision of 2026-11-25), so the entry reads as the one the
+/// caption names. Editor-only, like the markers.
+pub fn draw_mismatched_entries(
+    frame: &mut canvas::Frame,
+    entries: &[MismatchedEntry],
+    transform: &ScreenTransform,
+    colors: &CanvasColors,
+    graphite: &crate::canvas::GraphiteCanvasInk,
+) {
+    if entries.is_empty() {
+        return;
+    }
+    draw_renderer_snapshot(
+        frame,
+        &mismatched_entries_scene(entries, transform, colors, graphite),
+        &ResolvedTheme::from_canvas_colors(*colors),
+        DirtyFlags::OVERLAY | DirtyFlags::TEXT,
+        transform,
+    );
+}
+
+/// What [`draw_mismatched_entries`] draws.
+fn mismatched_entries_scene(
+    entries: &[MismatchedEntry],
+    transform: &ScreenTransform,
+    colors: &CanvasColors,
+    graphite: &crate::canvas::GraphiteCanvasInk,
+) -> RendererSnapshot {
+    let mut snapshot = RendererSnapshot::default();
+    for entry in entries {
+        let stroke = point_marker_stroke(entry.severity, colors, graphite);
+        push_entry_tint(&mut snapshot.overlays, &entry.tab, transform, stroke);
+        push_outline(
+            &mut snapshot.overlays,
+            &entry.connector_outline,
+            transform,
+            stroke,
+        );
+        snapshot.labels.push(TextInput {
+            content: entry.name.clone(),
+            position: [entry.name_at.x as f32, entry.name_at.y as f32],
+            size_mm: signex_types::schematic::SCHEMATIC_TEXT_MM as f32,
+            color: to_rgba(stroke),
+            bold: true,
+            italic: false,
+            family: entry.family.clone(),
+            rotation_rad: 0.0,
+            h_align: HAlign::Left,
+            v_align: VAlign::Center,
+        });
+    }
+    snapshot
+}
+
+/// A harness-typed sheet entry the far side disagrees with: where it sits
+/// and the severity of the finding (decision of 2026-11-25).
+#[derive(Debug, Clone, Copy)]
+pub struct BadgedSheetEntry {
+    pub at: Point,
+    pub severity: ErcSeverity,
+}
+
+impl BadgedSheetEntry {
+    /// The sheet entry `pin` of a sheet symbol on `snapshot`, flagged by a
+    /// finding of `severity`; `None` when no sheet symbol there holds it.
+    pub fn on(
+        snapshot: &SchematicRenderSnapshot,
+        pin: uuid::Uuid,
+        severity: ErcSeverity,
+    ) -> Option<Self> {
+        let at = snapshot
+            .child_sheets
+            .iter()
+            .flat_map(|cs| &cs.pins)
+            .find(|p| p.uuid == pin)?
+            .position;
+        Some(Self { at, severity })
+    }
+}
+
+/// The badge's radius: a world size that grows with zoom, floored in screen
+/// px so the "!" stays readable zoomed out.
+const BADGE_RADIUS_MM: f32 = 0.9;
+const BADGE_RADIUS_MIN_PX: f32 = 7.0;
+
+/// Draw a "!" badge in the marker's ink just above each sheet entry's tab.
+/// Editor-only, like the markers.
+pub fn draw_sheet_entry_badges(
+    frame: &mut canvas::Frame,
+    badges: &[BadgedSheetEntry],
+    transform: &ScreenTransform,
+    colors: &CanvasColors,
+    graphite: &crate::canvas::GraphiteCanvasInk,
+) {
+    if badges.is_empty() {
+        return;
+    }
+    draw_renderer_snapshot(
+        frame,
+        &sheet_entry_badges_scene(badges, transform, colors, graphite),
+        &ResolvedTheme::from_canvas_colors(*colors),
+        DirtyFlags::POLYGONS | DirtyFlags::TEXT,
+        transform,
+    );
+}
+
+/// What [`draw_sheet_entry_badges`] draws.
+fn sheet_entry_badges_scene(
+    badges: &[BadgedSheetEntry],
+    transform: &ScreenTransform,
+    colors: &CanvasColors,
+    graphite: &crate::canvas::GraphiteCanvasInk,
+) -> RendererSnapshot {
+    let floor = screen_px_to_world_mm(BADGE_RADIUS_MIN_PX, transform.scale) as f32;
+    let radius = BADGE_RADIUS_MM.max(floor);
+    let mut snapshot = RendererSnapshot::default();
+    for badge in badges {
+        let ink = point_marker_stroke(badge.severity, colors, graphite);
+        let above = super::harness::SHEET_ENTRY_TAB_HALF_HEIGHT_MM + f64::from(radius);
+        let centre = Point::new(badge.at.x, badge.at.y - above);
+        // A scene polygon, not an overlay one: those paint after the text
+        // and would hide the "!".
+        snapshot.polygons.push(PolygonInput {
+            vertices: circle_vertices([centre.x, centre.y], radius, 24),
+            fill_color: to_rgba(ink),
+            stroke_color: None,
+            stroke_width_mm: 0.0,
+        });
+        snapshot.labels.push(TextInput {
+            content: "!".to_string(),
+            position: [centre.x as f32, centre.y as f32],
+            size_mm: radius * 1.5,
+            color: to_rgba(to_iced(&colors.paper)),
+            bold: true,
+            italic: false,
+            family: None,
+            rotation_rad: 0.0,
+            h_align: HAlign::Center,
+            v_align: VAlign::Center,
+        });
+    }
+    snapshot
+}
+
+/// A closed outline in `stroke` with no fill, at the harness outline weight
+/// floored in screen px like the marker strokes.
+fn push_outline(
+    overlays: &mut OverlayInputs,
+    outline: &[Point],
+    transform: &ScreenTransform,
+    stroke: Color,
+) {
+    let floor = screen_px_to_world_mm(MARKER_STROKE_MIN_PX, transform.scale) as f32;
+    let weight = signex_types::schematic::SCHEMATIC_HARNESS_NESTED_OUTLINE_MM as f32;
+    overlays.ghost_polygons.push(OverlayPolygonInput {
+        vertices: outline.iter().map(|p| [p.x as f32, p.y as f32]).collect(),
+        fill_color: [0.0; 4],
+        stroke_color: Some(to_rgba(stroke)),
+        stroke_width_mm: weight.max(floor),
+    });
+}
+
+/// The tint of one entry tab: the harness's nested-entry outline weight,
+/// floored in screen px like the marker strokes.
+fn push_entry_tint(
+    overlays: &mut OverlayInputs,
+    tab: &[Point],
+    transform: &ScreenTransform,
+    stroke: Color,
+) {
+    let floor = screen_px_to_world_mm(MARKER_STROKE_MIN_PX, transform.scale) as f32;
+    let weight = signex_types::schematic::SCHEMATIC_HARNESS_NESTED_OUTLINE_MM as f32;
+    overlays.ghost_polygons.push(OverlayPolygonInput {
+        vertices: tab.iter().map(|p| [p.x as f32, p.y as f32]).collect(),
+        fill_color: to_rgba(Color {
+            a: MARKER_DISC_ALPHA,
+            ..stroke
+        }),
+        stroke_color: Some(to_rgba(stroke)),
+        stroke_width_mm: weight.max(floor),
+    });
+}
+
+/// The top centre of a marker's caption in screen px: right under the halo,
+/// which keeps its px floor zoomed out.
+fn caption_top_centre(marker: &ErcMarker, transform: &ScreenTransform) -> iced::Point {
+    let at = transform.world_to_screen((marker.x_mm, marker.y_mm));
+    let halo_px = (MARKER_HALO_RADIUS_MM * transform.scale).max(MARKER_HALO_RADIUS_MIN_PX);
+    iced::Point::new(at.x, at.y + halo_px)
 }
 
 /// A point finding: a faint halo and disc, a severity ring and a cross, all
@@ -255,6 +525,172 @@ mod tests {
                     "@{scale}: thin cross"
                 );
             }
+        }
+    }
+
+    /// Mockup row 152: a caption sits centred right under its marker's halo
+    /// at every zoom, so the marker never covers it.
+    #[test]
+    fn a_caption_sits_under_the_halo_at_every_zoom() {
+        let marker = ErcMarker {
+            x_mm: 10.0,
+            y_mm: 20.0,
+            severity: ErcSeverity::Warning,
+            net_level: false,
+        };
+        for scale in [1.5_f32, 3.0, 12.0, 40.0] {
+            let transform = ScreenTransform {
+                offset_x: 5.0,
+                offset_y: 7.0,
+                scale,
+                device_px_per_logical_px: 1.0,
+            };
+            let centre = transform.world_to_screen((marker.x_mm, marker.y_mm));
+            let top = caption_top_centre(&marker, &transform);
+            assert_eq!(top.x, centre.x, "@{scale}: centred");
+            let halo_px = (MARKER_HALO_RADIUS_MM * scale).max(MARKER_HALO_RADIUS_MIN_PX);
+            assert!((top.y - centre.y - halo_px).abs() < 1e-3, "@{scale}");
+            assert!(top.y - centre.y >= MARKER_HALO_RADIUS_MIN_PX - 1e-3);
+        }
+    }
+
+    /// Mockup row 152, Entry mismatch: the mismatched entry's tab is
+    /// redrawn in the marker's ink, outlined over a faint fill, never thinner
+    /// than the marker strokes on screen.
+    #[test]
+    fn a_mismatched_entry_tab_is_outlined_in_the_marker_ink() {
+        let tab = vec![
+            Point::new(0.0, 0.0),
+            Point::new(1.0, 0.0),
+            Point::new(1.5, 0.5),
+            Point::new(1.0, 1.0),
+            Point::new(0.0, 1.0),
+        ];
+        let ink = Color::from_rgb(0.6, 0.4, 0.1);
+        for scale in [1.5_f32, 3.0, 40.0] {
+            let transform = ScreenTransform {
+                offset_x: 0.0,
+                offset_y: 0.0,
+                scale,
+                device_px_per_logical_px: 1.0,
+            };
+            let mut overlays = OverlayInputs::default();
+            push_entry_tint(&mut overlays, &tab, &transform, ink);
+            let [poly] = overlays.ghost_polygons.as_slice() else {
+                panic!("one tint per entry");
+            };
+            assert_eq!(poly.vertices.len(), tab.len());
+            assert_eq!(poly.vertices[2], [1.5, 0.5]);
+            assert_eq!(poly.stroke_color, Some(to_rgba(ink)));
+            assert!(poly.fill_color[3] <= MARKER_DISC_ALPHA + 1e-6, "faint fill");
+            assert!(
+                poly.stroke_width_mm * scale >= MARKER_STROKE_MIN_PX - 1e-3,
+                "@{scale}: thin outline"
+            );
+            assert!(
+                poly.stroke_width_mm
+                    >= signex_types::schematic::SCHEMATIC_HARNESS_NESTED_OUTLINE_MM as f32 - 1e-6
+            );
+        }
+    }
+
+    fn graphite_light() -> (CanvasColors, crate::canvas::GraphiteCanvasInk) {
+        let tokens = signex_types::theme::theme_tokens(ThemeId::GraphiteLight);
+        (
+            canvas_colors(ThemeId::GraphiteLight),
+            crate::canvas::GraphiteCanvasInk::from_tokens(&tokens),
+        )
+    }
+
+    fn at_scale(scale: f32) -> ScreenTransform {
+        ScreenTransform {
+            offset_x: 0.0,
+            offset_y: 0.0,
+            scale,
+            device_px_per_logical_px: 1.0,
+        }
+    }
+
+    /// A mismatched harness entry also outlines its connector's body and
+    /// redraws its name bold, both in the warning ink of its finding (Caner,
+    /// 2026-11-25).
+    #[test]
+    fn a_mismatched_entry_outlines_its_connector_and_names_itself_bold_in_the_warn_ink() {
+        let (colors, graphite) = graphite_light();
+        let mut sheet = SchematicRenderSnapshot::default();
+        let entry = |n: u128, name: &str| signex_types::schematic::HarnessEntry {
+            uuid: uuid::Uuid::from_u128(n),
+            name: name.into(),
+        };
+        let connector = signex_types::schematic::HarnessConnector {
+            uuid: uuid::Uuid::from_u128(1),
+            harness_type: "SPI_BUS".into(),
+            position: Point::new(20.0, 20.0),
+            width: 10.16,
+            entry_pitch: 2.54,
+            rotation: 0.0,
+            entries: vec![entry(2, "SCK"), entry(3, "CS")],
+            locked: false,
+        };
+        let cs = connector.entries[1].uuid;
+        sheet.harness.connectors.push(connector.clone());
+        let entry = MismatchedEntry::on(&sheet, cs, ErcSeverity::Warning).expect("on the sheet");
+        assert_eq!(entry.name, "CS");
+        assert_eq!(entry.name_at, connector.entry_label_point(1));
+        let warn = point_marker_stroke(ErcSeverity::Warning, &colors, &graphite);
+        let scene = mismatched_entries_scene(&[entry], &at_scale(3.0), &colors, &graphite);
+        let outline = scene
+            .overlays
+            .ghost_polygons
+            .iter()
+            .find(|p| p.vertices.len() == connector.outline().len() && p.fill_color[3] == 0.0)
+            .expect("the connector outline");
+        assert_eq!(outline.stroke_color, Some(to_rgba(warn)));
+        let [name] = scene.labels.as_slice() else {
+            panic!("one name");
+        };
+        assert_eq!(name.content, "CS");
+        assert!(name.bold);
+        assert_eq!(name.color, to_rgba(warn));
+        assert!(
+            MismatchedEntry::on(&sheet, uuid::Uuid::from_u128(99), ErcSeverity::Warning).is_none()
+        );
+    }
+
+    /// The sheet entry a far-side mismatch leaves through gets a "!" badge in
+    /// the finding's ink, just above its tab, never smaller on screen than its
+    /// px floor (Caner, 2026-11-25).
+    #[test]
+    fn a_badged_sheet_entry_draws_a_bang_above_its_tab() {
+        let (colors, graphite) = graphite_light();
+        let warn = point_marker_stroke(ErcSeverity::Warning, &colors, &graphite);
+        let at = Point::new(40.0, 20.0);
+        let badge = BadgedSheetEntry {
+            at,
+            severity: ErcSeverity::Warning,
+        };
+        for scale in [1.5_f32, 3.0, 40.0] {
+            let scene = sheet_entry_badges_scene(&[badge], &at_scale(scale), &colors, &graphite);
+            let [disc] = scene.polygons.as_slice() else {
+                panic!("one disc");
+            };
+            assert_eq!(disc.fill_color, to_rgba(warn));
+            let lowest = disc.vertices.iter().map(|v| v[1]).fold(f32::MIN, f32::max);
+            let tab_top = (at.y - super::super::harness::SHEET_ENTRY_TAB_HALF_HEIGHT_MM) as f32;
+            assert!(
+                (lowest - tab_top).abs() < 0.05,
+                "@{scale}: just above the tab"
+            );
+            let top = disc.vertices.iter().map(|v| v[1]).fold(f32::MAX, f32::min);
+            assert!(
+                (lowest - top) * 0.5 * scale >= BADGE_RADIUS_MIN_PX - 0.1,
+                "@{scale}"
+            );
+            let [bang] = scene.labels.as_slice() else {
+                panic!("one mark");
+            };
+            assert_eq!(bang.content, "!");
+            assert_eq!(bang.color, to_rgba(to_iced(&colors.paper)));
         }
     }
 

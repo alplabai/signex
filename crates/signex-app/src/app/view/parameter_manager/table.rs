@@ -8,6 +8,8 @@
 //! colours and metrics (`GridStyle`, `GridMetrics`) are reused, so both
 //! tables look alike.
 
+use std::path::Path;
+
 use iced::alignment::Vertical;
 use iced::widget::scrollable::{self, Scroll, Scrollbar, Source};
 use iced::widget::text::Wrapping;
@@ -27,10 +29,14 @@ use crate::app::state::ParameterCell;
 use crate::app::{Message, ParameterManagerMsg, Signex};
 use crate::styles::{self, TypeScale};
 
+use super::PartRow;
+
 const TS: TypeScale = TypeScale::DEFAULT;
 
 /// Average glyph advance in em, to size a column to its longest text.
 const GLYPH_ADVANCE_EM: f32 = 0.62;
+/// `(min, max)` width in em of the Sheet column (All sheets only).
+const SHEET_EM: (f32, f32) = (7.0, 14.0);
 /// Smallest parameter column, in em of the body text (140 px by default).
 const PARAM_MIN_EM: f32 = 140.0 / 12.0;
 /// Room for the header's remove button beside the parameter name, in em.
@@ -221,8 +227,13 @@ fn filled<'a>(content: Element<'a, Message>, color: Color) -> Element<'a, Messag
         .boxed()
 }
 
-/// A text input that reads as text until it is hovered or focused.
-fn inline_cell_style(style: GridStyle) -> impl Fn(&Theme, text_input::Status) -> text_input::Style {
+/// A text input that reads as text until it is hovered or focused. The
+/// open cell (`is_open`, the model's focused cell) is drawn as an active
+/// input whatever the widget reports (#2900).
+fn inline_cell_style(
+    style: GridStyle,
+    is_open: bool,
+) -> impl Fn(&Theme, text_input::Status) -> text_input::Style {
     move |_: &Theme, status| {
         let frame = |line: Color| Border {
             width: HAIRLINE,
@@ -231,6 +242,7 @@ fn inline_cell_style(style: GridStyle) -> impl Fn(&Theme, text_input::Status) ->
             ..Border::default()
         };
         let (background, border) = match status {
+            _ if is_open => (Background::Color(style.field_fill), frame(style.accent)),
             text_input::Status::Focused { .. } => {
                 (Background::Color(style.field_fill), frame(style.accent))
             }
@@ -334,6 +346,7 @@ fn param_header<'a>(
 /// One editable parameter cell, with the changed mark on its left.
 fn param_cell<'a>(
     app: &'a Signex,
+    sheet: &Path,
     sym: &'a Symbol,
     key: &str,
     width: f32,
@@ -342,30 +355,35 @@ fn param_cell<'a>(
     let m = style.metrics();
     let shown: &str = sym.fields.get(key).map_or("", String::as_str);
     let cell = ParameterCell {
-        sheet: app.document_state.active_path.clone(),
+        sheet: Some(sheet.to_path_buf()),
         symbol: sym.uuid,
         key: key.to_string(),
     };
-    let is_changed = app
-        .ui_state
-        .parameter_table
+    let table = &app.ui_state.parameter_table;
+    let is_changed = table
         .session
         .original(&cell)
         .is_some_and(|before| before.as_deref() != sym.fields.get(key).map(String::as_str));
+    let is_open = table.editing.as_ref() == Some(&cell);
     let symbol_uuid = sym.uuid;
-    let edit_key = key.to_string();
+    let sheet = sheet.to_path_buf();
+    let (focus_sheet, focus_key) = (sheet.clone(), key.to_string());
     let focus = move |is_focused| {
         Message::ParameterManager(ParameterManagerMsg::CellFocused {
+            sheet: focus_sheet.clone(),
             symbol_uuid,
+            key: focus_key.clone(),
             is_focused,
         })
     };
+    let edit_key = key.to_string();
     let input = text_input(
         t!(app.ui_state.i18n, ids::DIALOG_PARAMETER_MANAGER_NOT_SET),
         shown,
     )
     .on_input(move |value| {
         Message::ParameterManager(ParameterManagerMsg::Edit {
+            sheet: sheet.clone(),
             symbol_uuid,
             key: edit_key.clone(),
             value,
@@ -383,11 +401,35 @@ fn param_cell<'a>(
         &app.document_state.panel_ctx.ui_font_name,
     ))
     .width(Length::Fill)
-    .style(inline_cell_style(style));
+    .style(inline_cell_style(style, is_open));
     container(row![changed_mark(is_changed, style), input].align_y(Alignment::Center))
         .width(Length::Fixed(width))
         .height(Length::Fixed(m.row_height))
         .align_y(Vertical::Center)
+        .boxed()
+}
+
+/// A parameter cell of a closed sheet: its value, read-only and muted; a
+/// press opens the sheet, so its cells can be edited (Caner 2026-11-25).
+fn closed_param_cell<'a>(
+    app: &'a Signex,
+    sheet: &Path,
+    sym: &'a Symbol,
+    key: &str,
+    width: f32,
+    style: GridStyle,
+) -> Element<'a, Message> {
+    let shown: &str = sym.fields.get(key).map_or("", String::as_str);
+    let [_, value_ink, _] = fixed_cell_inks(style);
+    let font = param_cell_font(shown, &app.document_state.panel_ctx.ui_font_name);
+    let cell = read_only_cell(shown, width, value_ink, font, style.metrics());
+    mouse_area(cell)
+        .on_press(Message::ParameterManager(
+            ParameterManagerMsg::ClosedSheetPressed {
+                sheet: sheet.to_path_buf(),
+            },
+        ))
+        .interaction(iced::mouse::Interaction::Pointer)
         .boxed()
 }
 
@@ -417,12 +459,19 @@ fn longest<'v>(header: &str, values: impl Iterator<Item = &'v str>) -> usize {
         .unwrap_or(0)
 }
 
+/// Width of the Sheet column for its longest text of `chars` characters.
+fn sheet_column_width(size: f32, pad: f32, chars: usize) -> f32 {
+    text_width(chars, size, pad).clamp(SHEET_EM.0 * size, SHEET_EM.1 * size)
+}
+
 /// The table for `rows` and the parameter columns `keys`, `width` px wide.
+/// `show_sheet` adds a Sheet column after Reference (All sheets).
 pub(super) fn view<'a>(
     app: &'a Signex,
-    rows: &[&'a Symbol],
+    rows: &[PartRow<'a>],
     keys: Vec<String>,
     width: f32,
+    show_sheet: bool,
 ) -> Element<'a, Message> {
     let tokens = &app.document_state.panel_ctx.tokens;
     let i18n = &app.ui_state.i18n;
@@ -435,29 +484,38 @@ pub(super) fn view<'a>(
         ids::DIALOG_PARAMETER_MANAGER_COLUMN_FOOTPRINT,
     ]
     .map(|id| t!(i18n, id).to_string());
+    let syms = || rows.iter().map(|row| row.symbol);
     let fixed = [
-        longest(&titles[0], rows.iter().map(|s| s.reference.as_str())),
-        longest(&titles[1], rows.iter().map(|s| s.value.as_str())),
-        longest(&titles[2], rows.iter().map(|s| s.footprint.as_str())),
+        longest(&titles[0], rows.iter().map(|row| &*row.reference)),
+        longest(&titles[1], syms().map(|s| s.value.as_str())),
+        longest(&titles[2], syms().map(|s| s.footprint.as_str())),
     ];
     let params: Vec<usize> = keys
         .iter()
         .map(|k| {
             longest(
                 k,
-                rows.iter()
-                    .map(|s| s.fields.get(k).map_or("", String::as_str)),
+                syms().map(|s| s.fields.get(k).map_or("", String::as_str)),
             )
         })
         .collect();
-    let widths = column_widths(TS.body, m.pad, width, fixed, &params);
+    let sheet_title = t!(i18n, ids::DIALOG_PARAMETER_MANAGER_COLUMN_SHEET).to_string();
+    let sheet_width = if show_sheet {
+        let chars = longest(&sheet_title, rows.iter().map(|row| row.sheet_name.as_str()));
+        sheet_column_width(TS.body, m.pad, chars)
+    } else {
+        0.0
+    };
+    let widths = column_widths(TS.body, m.pad, width - sheet_width, fixed, &params);
     let [reference_title, value_title, footprint_title] = titles;
 
     // The header row right of Reference: scrolls sideways with the body.
-    let mut header_cells: Vec<Element<'a, Message>> = vec![
-        header_cell(&value_title, i18n, widths.value, style),
-        header_cell(&footprint_title, i18n, widths.footprint, style),
-    ];
+    let mut header_cells: Vec<Element<'a, Message>> = Vec::new();
+    if show_sheet {
+        header_cells.push(header_cell(&sheet_title, i18n, sheet_width, style));
+    }
+    header_cells.push(header_cell(&value_title, i18n, widths.value, style));
+    header_cells.push(header_cell(&footprint_title, i18n, widths.footprint, style));
     for (key, w) in keys.iter().zip(&widths.params) {
         header_cells.push(param_header(app, key, *w, style));
     }
@@ -484,14 +542,16 @@ pub(super) fn view<'a>(
     // The Reference column: scrolls up and down with the body.
     let mut references: Vec<Element<'a, Message>> = Vec::with_capacity(rows.len() * 2);
     let mut body_rows: Vec<Element<'a, Message>> = Vec::with_capacity(rows.len() * 2);
-    let body_width = widths.value + widths.footprint + widths.params.iter().sum::<f32>();
-    let editing = app.ui_state.parameter_table.editing_row;
+    let body_width =
+        sheet_width + widths.value + widths.footprint + widths.params.iter().sum::<f32>();
+    let table = &app.ui_state.parameter_table;
     let [reference_ink, value_ink, footprint_ink] = fixed_cell_inks(style);
-    for &sym in rows {
-        let fill = row_fill(editing == Some(sym.uuid), style);
+    for part in rows {
+        let sym = part.symbol;
+        let fill = row_fill(table.is_editing_row(part.sheet, sym.uuid), style);
         references.push(filled(
             read_only_cell(
-                &sym.reference,
+                &part.reference,
                 widths.reference,
                 reference_ink,
                 reference_font(),
@@ -500,12 +560,37 @@ pub(super) fn view<'a>(
             fill,
         ));
         references.push(rule(style.line, Length::Fixed(widths.reference), true));
-        let mut cells: Vec<Element<'a, Message>> = vec![
-            read_only_cell(&sym.value, widths.value, value_ink, mono(), m),
-            read_only_cell(&sym.footprint, widths.footprint, footprint_ink, mono(), m),
-        ];
+        let mut cells: Vec<Element<'a, Message>> = Vec::new();
+        if show_sheet {
+            cells.push(read_only_cell(
+                &part.sheet_name,
+                sheet_width,
+                value_ink,
+                mono(),
+                m,
+            ));
+        }
+        cells.push(read_only_cell(
+            &sym.value,
+            widths.value,
+            value_ink,
+            mono(),
+            m,
+        ));
+        cells.push(read_only_cell(
+            &sym.footprint,
+            widths.footprint,
+            footprint_ink,
+            mono(),
+            m,
+        ));
         for (key, w) in keys.iter().zip(&widths.params) {
-            cells.push(param_cell(app, sym, key, *w, style));
+            let cell = if part.is_closed {
+                closed_param_cell(app, part.sheet, part.symbol, key, *w, style)
+            } else {
+                param_cell(app, part.sheet, part.symbol, key, *w, style)
+            };
+            cells.push(cell);
         }
         body_rows.push(filled(row(cells).align_y(Alignment::Center).boxed(), fill));
         body_rows.push(rule(style.line, Length::Fixed(body_width), true));
@@ -628,6 +713,33 @@ mod tests {
             fixed_cell_inks(style),
             [style.ink, style.muted_ink, style.muted_ink]
         );
+    }
+
+    /// #2900, mockup row 70: the open cell is drawn as an active input (the
+    /// field fill and the accent frame) whatever the widget reports; a
+    /// closed cell reads as text until it is hovered.
+    #[test]
+    fn the_open_cell_is_drawn_as_an_active_input() {
+        let style = graphite_style();
+        let theme = Theme::Light;
+        let open = inline_cell_style(style, true)(&theme, text_input::Status::Active);
+        assert_eq!(open.background, Background::Color(style.field_fill));
+        assert_eq!(open.border.color, style.accent);
+        assert_eq!(open.border.width, HAIRLINE);
+        let closed = inline_cell_style(style, false)(&theme, text_input::Status::Active);
+        assert_eq!(closed.background, Background::Color(Color::TRANSPARENT));
+        assert_eq!(closed.border, Border::default());
+        let hovered = inline_cell_style(style, false)(&theme, text_input::Status::Hovered);
+        assert_eq!(hovered.border.color, style.line);
+    }
+
+    /// The Sheet column (All sheets) fits a sheet name within its bounds.
+    #[test]
+    fn the_sheet_column_stays_within_its_bounds() {
+        assert_eq!(sheet_column_width(SIZE, PAD, 1), SHEET_EM.0 * SIZE);
+        assert_eq!(sheet_column_width(SIZE, PAD, 200), SHEET_EM.1 * SIZE);
+        let name = "power.snxsch".len();
+        assert!(sheet_column_width(SIZE, PAD, name) >= text_width(name, SIZE, PAD));
     }
 
     /// Mockup row 70: the row being edited is drawn on the accent tint; the

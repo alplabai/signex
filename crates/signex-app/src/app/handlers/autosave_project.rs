@@ -49,10 +49,11 @@ impl Signex {
         let id = project.id;
         project.data = data;
         // The undo steps were recorded against the data just replaced.
-        document.project_tabs.entry(id).and_modify(|tab| {
-            tab.general_history = Default::default();
-            tab.default_drafts.clear();
-        });
+        document
+            .project_tabs
+            .entry(id)
+            .and_modify(|tab| tab.default_drafts.clear());
+        document.general_history.remove(&id);
         document.rules_history.remove(&id);
         document
             .net_class_history

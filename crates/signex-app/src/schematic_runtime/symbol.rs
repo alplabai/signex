@@ -202,6 +202,42 @@ pub(super) fn push_fallback_box(
     });
 }
 
+/// `color` greyed toward `paper`, as a not-fitted part draws (#1294); the
+/// rule is `signex_types::schematic::greyed_ink`, the export's too.
+pub(super) fn not_fitted_ink(color: Color, paper: Color) -> Color {
+    let [r, g, b] = signex_types::schematic::greyed_ink(
+        [color.r, color.g, color.b],
+        [paper.r, paper.g, paper.b],
+    );
+    Color { r, g, b, ..color }
+}
+
+/// The cross over a not-fitted part's body (#1294), in `color`, at the
+/// export's width. Nothing for a symbol that draws no body.
+pub(super) fn push_not_fitted_cross(
+    lib: Option<&LibSymbol>,
+    symbol: &Symbol,
+    color: Color,
+    style: &SymbolStyle,
+    sink: &mut SymbolSink<'_>,
+) {
+    let Some(strokes) = lib.and_then(|lib| signex_types::schematic::not_fitted_cross(lib, symbol))
+    else {
+        return;
+    };
+    let width_mm =
+        style.stroke_mm(0.0) * signex_types::schematic::NOT_FITTED_CROSS_WIDTH_SCALE as f32;
+    for (i, (p0, p1)) in strokes.into_iter().enumerate() {
+        sink.wires.push(WireInput {
+            id: style.id.wrapping_add(i as u64),
+            p0: [p0.x as f32, p0.y as f32],
+            p1: [p1.x as f32, p1.y as f32],
+            width_mm,
+            explicit_color: Some(to_rgba(color)),
+        });
+    }
+}
+
 /// Colours the pin text of one symbol draws in.
 pub(super) struct PinTextStyle {
     pub name: Color,

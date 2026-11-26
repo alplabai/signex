@@ -2,9 +2,15 @@
 //! channel view (#1279). Editor is the editable sheet; a channel tab shows
 //! the compiled channels as cards, read-only (the gate is
 //! `Signex::refuse_if_channel_view`, at the mutation gateway). The strip's
-//! data is `PanelContext::compiled_design.strip`, built in update.
+//! data is `PanelContext::compiled_design.strip`, built in update. A card's
+//! variant fit is a project setting, not a sheet edit, so the read-only gate
+//! does not apply to it (#2662).
 
 mod cards;
+mod fit;
+#[cfg(test)]
+mod fit_tests;
+mod miniature;
 mod strip;
 
 use iced::widget::column;
@@ -63,6 +69,8 @@ mod tests {
             parts: Some(9),
             nets: Some(7),
             designators: vec![format!("CH{i}_R5")],
+            miniature: None,
+            fits: Vec::new(),
         };
         ChannelStripView {
             sheet: PathBuf::from("buck_channel.snxsch"),
@@ -70,6 +78,8 @@ mod tests {
             tabs: (1..=4).map(tab).collect(),
             active,
             designator_map: Vec::new(),
+            variant: None,
+            is_fit_locked: false,
         }
     }
 
@@ -111,6 +121,40 @@ mod tests {
                 header.y
             );
         }
+    }
+
+    /// mockup row 151, #2658: a compiled channel's card draws its sheet in
+    /// place of the designator list; before a compile it lists them.
+    #[test]
+    fn a_compiled_card_draws_its_channel_instead_of_listing_it() {
+        use signex_net::{MiniatureText, SheetMiniature};
+        use signex_types::schematic::{Aabb, Point};
+        let ctx = context(ThemeId::GraphiteDark);
+        let window = Size::new(1200.0, 700.0);
+        let shows = |view: &ChannelStripView, label: &str| {
+            lay_out_texts(super::cards::view(&ctx, view, 1), window)
+                .iter()
+                .any(|t| t.text.replace(['\u{2068}', '\u{2069}'], "") == label)
+        };
+        let listed = channels(Some(1));
+        assert!(shows(&listed, "CH1_R5"), "before a compile: the list");
+        let mut drawn = channels(Some(1));
+        for tab in &mut drawn.tabs {
+            tab.miniature = Some(std::sync::Arc::new(SheetMiniature {
+                bounds: Aabb::new(0.0, 0.0, 20.0, 10.0),
+                wires: vec![(Point::new(2.0, 5.0), Point::new(18.0, 5.0))],
+                buses: Vec::new(),
+                bodies: vec![Aabb::new(8.0, 3.0, 12.0, 7.0)],
+                designators: vec![MiniatureText {
+                    at: Point::new(10.0, 5.0),
+                    text: tab.designators[0].clone(),
+                    is_power: false,
+                }],
+                nets: Vec::new(),
+            }));
+        }
+        assert!(!shows(&drawn, "CH1_R5"), "the drawing replaces the list");
+        assert!(shows(&drawn, "CH1"), "the header stays");
     }
 
     /// mockup row 151: an off channel tab's label reads on the strip in both

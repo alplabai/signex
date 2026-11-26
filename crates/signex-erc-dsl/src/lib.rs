@@ -111,6 +111,7 @@ mod tests {
             children: HashMap::new(),
             key: None,
             harness: Default::default(),
+            class_conflicts: vec![],
         }
     }
 
