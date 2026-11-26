@@ -406,7 +406,14 @@ fn body_fills(sheet: &SchematicSheet, tint: Option<(f32, f32, f32)>) -> Vec<(f32
         ..SchematicPalette::classic()
     };
     let mut out = Vec::new();
-    push_symbol_body_fills(&mut out, sheet, &xform, &palette);
+    push_symbol_body_fills(
+        &mut out,
+        sheet,
+        &xform,
+        &palette,
+        &HashSet::new(),
+        &mut LayerSpans::default(),
+    );
     out.iter()
         .map(|e| match e {
             SvgElement::Path { style, .. } => {

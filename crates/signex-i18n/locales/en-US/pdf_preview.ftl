@@ -142,6 +142,7 @@ pdf-layer-parts = Parts
 pdf-layer-net-labels = Net labels and ports
 pdf-layer-power-ports = Power ports
 pdf-layer-title-block = Title block and border
+pdf-layer-not-fitted = Not-fitted parts (variant)
 pdf-layer-watermark = Watermark
 # Beside the Watermark layer while a watermark prints, and while none does.
 pdf-layer-watermark-locked = locked on in print

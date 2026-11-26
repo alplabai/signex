@@ -589,6 +589,8 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "board_report_components",
                     "export_board_report",
                     "export_board_pdf",
+                    // #2610, #2787: the schematic PDF.
+                    "export_schematic_pdf",
                     // #2486: the assembly drawings.
                     "export_assembly_svg",
                     "board_assembly_drawing",

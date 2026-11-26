@@ -9,6 +9,7 @@ use super::labels::{halign_to_svg, valign_to_svg};
 use super::text::glyph_em_pt;
 use super::*;
 use crate::pdf::layout::PageTransform;
+use crate::pdf::optional_content::{LayerSpans, PdfLayer};
 use crate::pdf::palette::SchematicPalette;
 use signex_types::markup::ExpressionEvalContext;
 use signex_types::schematic::{
@@ -16,17 +17,49 @@ use signex_types::schematic::{
     Symbol, SymbolPrimitive, default_body_fill_shapes, lower_pin_labels, lower_placed_symbol,
 };
 use signex_types::variables::{Resolver, TextTable};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+
+/// The parts of `sheet` not fitted in `variant` (`None` is Base), each
+/// symbol read on its own (`variant_fit::is_fitted`). They print in the
+/// Not-fitted parts PDF layer (#2610).
+pub(super) fn not_fitted_parts(
+    sheet: &SchematicSheet,
+    variant: Option<&str>,
+) -> HashSet<uuid::Uuid> {
+    sheet
+        .symbols
+        .iter()
+        .filter(|sym| {
+            crate::bom::is_part_symbol(sym) && !crate::variant_fit::is_fitted(sym, variant)
+        })
+        .map(|sym| sym.uuid)
+        .collect()
+}
+
+/// The PDF layer of a symbol's drawing: a power port's, a not-fitted
+/// part's (one in `not_fitted`) or a part's.
+pub(super) fn symbol_layer(sym: &Symbol, not_fitted: &HashSet<uuid::Uuid>) -> PdfLayer {
+    if sym.is_power {
+        PdfLayer::PowerPorts
+    } else if not_fitted.contains(&sym.uuid) {
+        PdfLayer::NotFittedParts
+    } else {
+        PdfLayer::Parts
+    }
+}
 
 /// The default body fill of every symbol on the sheet
 /// (`default_body_fill_shapes`), fill only, in `palette.symbol_body_tint`.
 /// Emitted before the wires and the symbols, as the canvas draws fills under
-/// every stroke; nothing when the tint is `None`.
+/// every stroke; nothing when the tint is `None`. A fill is in the Parts
+/// layer, or in the Not-fitted parts layer for a symbol in `not_fitted`.
 pub(super) fn push_symbol_body_fills(
     out: &mut Vec<SvgElement>,
     sheet: &SchematicSheet,
     xform: &PageTransform,
     palette: &SchematicPalette,
+    not_fitted: &HashSet<uuid::Uuid>,
+    layers: &mut LayerSpans,
 ) {
     let Some(tint) = palette.symbol_body_tint else {
         return;
@@ -39,6 +72,12 @@ pub(super) fn push_symbol_body_fills(
     };
     let px = |p: &Point| pt(xform.x(p.x), xform.px_y(p.y));
     for sym in &sheet.symbols {
+        let start = out.len();
+        let layer = if not_fitted.contains(&sym.uuid) {
+            PdfLayer::NotFittedParts
+        } else {
+            PdfLayer::Parts
+        };
         for shape in default_body_fill_shapes(sheet.body_of(sym), sym) {
             out.push(match shape {
                 BodyFillShape::Polygon(points) => {
@@ -64,6 +103,7 @@ pub(super) fn push_symbol_body_fills(
                 ),
             });
         }
+        layers.mark(layer, start..out.len());
     }
 }
 

@@ -384,13 +384,10 @@ impl Exporter for PdfExporter {
         let bookmark_id_base = outline_root_id.get() + 1;
 
         // One `/OCG` object per written PDF layer, after the outline items.
-        let layer_groups = match &opts.layers {
-            Some(_) => optional_content::assign_refs(
-                &optional_content::written_layers(opts.watermark.is_some()),
-                bookmark_id_base + pending_bookmarks.len() as i32,
-            ),
-            None => Vec::new(),
-        };
+        let layer_groups = optional_content::assign_refs(
+            &opts.written_layers(),
+            bookmark_id_base + pending_bookmarks.len() as i32,
+        );
 
         let mut catalog = pdf.catalog(catalog_id);
         catalog.pages(page_tree_id);
@@ -491,5 +488,5 @@ mod unicode_tests;
 mod watermark_tests;
 
 use content::build_page_content;
-pub use page_range::check_page_range;
 use page_range::resolve_page_range;
+pub use page_range::{check_page_range, printed_sheet_numbers};

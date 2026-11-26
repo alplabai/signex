@@ -413,6 +413,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         // The Export menu row is gated on `has_schematic`; without an
         // engine the handler does nothing.
         "report_manager_bom" => Needs::Schematic,
+        // #2610, #2787: the Export PDF dialog on the sheet in view.
+        "export_schematic_pdf" => Needs::Schematic,
         "leave_sheet" | "navigate_up_hierarchy" => Needs::ParentSheet,
         "delete_selection" => Needs::DeleteTarget,
         "rotate_clockwise"

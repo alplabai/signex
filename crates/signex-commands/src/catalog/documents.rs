@@ -1,7 +1,10 @@
 //! Document commands: create, open, save, revert, close and print a
 //! document or project, plus the project options and report dialogs.
 
-use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, operands};
+use super::{
+    CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, Operand, OperandKind,
+    operands,
+};
 use signex_i18n_ids::{command_ids, menu_ids};
 
 pub(super) const DOCUMENTS: &[CommandMetadata] = &[
@@ -259,6 +262,21 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         operands: super::operands::BOARD_PDF,
         ..CommandMetadata::DEFAULT
     },
+    // #2610, #2787: the Export PDF dialog on a sheet; headless it writes
+    // the schematic of `document` to `path`, the pages, layers and variant
+    // as the dialog sets them. No menu row of its own: File ▸ Export ▸ PDF
+    // stays `print`.
+    CommandMetadata {
+        id: "export_schematic_pdf",
+        category: "reports",
+        label: command_ids::CMD_EXPORT_SCHEMATIC_PDF,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::NONE,
+        operands: SCHEMATIC_PDF,
+        ..CommandMetadata::DEFAULT
+    },
     // #2486: the assembly drawings as SVG files in a folder the person
     // picks; headless it writes `document`'s drawings into `path`.
     CommandMetadata {
@@ -456,4 +474,17 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         operands: operands::DOCUMENT,
         ..CommandMetadata::DEFAULT
     },
+];
+
+/// A schematic printed to PDF (#2610, #2787): which document and the file;
+/// the rest defaults as the Export PDF dialog opens. `pages` is `all`,
+/// `current` or a list of sheet numbers and ranges (`1-2, 4`); `layers` is
+/// `all` or the ids of the PDF layers visible on open (`PdfLayer::id`), and
+/// writes a flat PDF when left out; `variant` names the printed variant.
+const SCHEMATIC_PDF: &[Operand] = &[
+    operands::required("document", OperandKind::Document),
+    operands::required("path", OperandKind::Path),
+    operands::optional("pages", OperandKind::Text),
+    operands::optional("layers", OperandKind::Text),
+    operands::optional("variant", OperandKind::Text),
 ];

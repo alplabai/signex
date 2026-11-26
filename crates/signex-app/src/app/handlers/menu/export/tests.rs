@@ -1014,6 +1014,8 @@ pub(crate) mod current_placement;
 
 mod export_status;
 mod lazy_preview;
+mod pages_field;
+mod pdf_command;
 mod sheet_numbering;
 mod tree_nesting_pins;
 

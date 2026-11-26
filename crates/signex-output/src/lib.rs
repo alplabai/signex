@@ -51,7 +51,7 @@ pub use pdf::{
     MarginEdge, MarginUpdate, Margins, PageRange, PageSetupError, PageSize, PageSizeKind,
     PartBookmarkOrder, PdfExporter, PdfLayer, PdfLayerVisibility, PdfOptions, PdfOutput, PdfScale,
     PdfScaleMode, SchematicPalette, Watermark, WatermarkPages, WatermarkPlacement, WatermarkText,
-    check_page_range, parse_custom_edge_mm, parse_mm, parse_percent,
+    check_page_range, parse_custom_edge_mm, parse_mm, parse_percent, printed_sheet_numbers,
 };
 pub use preview::{
     MAX_PREVIEW_EDGE_PX, PreviewOptions, PreviewPage, PreviewPageInfo, PreviewRasterizer,

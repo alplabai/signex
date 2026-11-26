@@ -1,7 +1,7 @@
 //! Print-preview modal handlers. Split from `menu/export.rs`.
 
 use iced::Task;
-use signex_output::{PageRange, PageSize, PdfOptions, PreviewOptions};
+use signex_output::{PageRange, PdfOptions, PreviewOptions};
 
 use super::page_list::parse_page_list;
 use super::raster_job::PreviewRasterJob;
@@ -50,25 +50,8 @@ impl Signex {
         // always defaulting to A4 landscape. Pull the palette from the
         // active theme so PDF wires / symbols / labels match the canvas.
         let pdf_opts = {
-            let (sheet_size, sheet_orientation) = ctx
-                .sheets
-                .first()
-                .map(|s| s.schematic.sheet_size())
-                .unwrap_or((
-                    signex_types::schematic::SheetSize::IsoA4,
-                    signex_types::schematic::SheetOrientation::Landscape,
-                ));
-            let (page_size, orientation) =
-                PageSize::from_sheet_size(&sheet_size, sheet_orientation);
-            let palette = signex_output::SchematicPalette::from(
-                &self.canvas_colors_for(self.ui_state.theme_id),
-            );
-            let mut options = PdfOptions {
-                page_size,
-                orientation,
-                palette,
-                ..PdfOptions::default()
-            };
+            // The same opening options `export_schematic_pdf` starts from.
+            let mut options = self.opening_pdf_options(&ctx);
             // Reopening for the same document restores what the user set up
             // last time (this session only); otherwise the sheet's own size.
             if let Some(remembered) = self
