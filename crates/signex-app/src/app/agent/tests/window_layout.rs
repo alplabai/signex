@@ -131,3 +131,47 @@ fn a_second_view_shows_the_document_twice_and_a_crosswise_split_is_refused() {
     assert_eq!(merged["data"]["tiled"], false, "{merged}");
     assert!(app.ui_state.workspace_layouts.panes.split.is_none());
 }
+
+/// Mockup row 207: Tile Grid answers with the grid's panes and their tabs;
+/// Sync Zoom answers with the panes at one zoom; Move Tab is refused with
+/// the pane's reason when it would leave one pane; Close Pane ends a split
+/// of two.
+#[test]
+fn tile_grid_and_the_pane_menu_commands_answer_with_the_panes() {
+    let mut app = app_with_recorded_panes();
+    let reply = call(&mut app, "tile_windows_grid", json!({}));
+    assert_eq!(reply["status"], "answered", "{reply}");
+    assert_eq!(reply["data"]["layout"], "grid");
+    assert_eq!(
+        panes(&reply),
+        [(json!("a"), json!(false)), (json!("b"), json!(true))]
+    );
+    assert_eq!(reply["data"]["panes"][0]["tabs"], json!(["a"]));
+    assert_eq!(reply["data"]["shares"], Value::Null);
+    assert_eq!(app.ui_state.document_tiling, Some(TileLayout::Grid));
+
+    app.interaction_state
+        .canvas
+        .set_pane_camera((0.0, 0.0, 6.0));
+    let synced = call(&mut app, "sync_pane_zoom", json!({}));
+    assert_eq!(synced["status"], "answered", "{synced}");
+    let zoom = &synced["data"]["panes"];
+    assert!(zoom[1]["zoom"].is_number(), "{synced}");
+    assert_eq!(zoom[0]["zoom"], zoom[1]["zoom"]);
+
+    let moved = call(&mut app, "move_tab_to_other_pane", json!({}));
+    assert_eq!(moved["status"], "refused", "{moved}");
+    assert!(
+        moved["reason"]
+            .as_str()
+            .is_some_and(|why| why.contains("cannot leave its pane")),
+        "{moved}"
+    );
+
+    let equal = call(&mut app, "equalize_panes", json!({}));
+    assert_eq!(equal["status"], "answered", "{equal}");
+    let closed = call(&mut app, "close_pane", json!({}));
+    assert_eq!(closed["data"]["tiled"], false, "{closed}");
+    let again = call(&mut app, "equalize_panes", json!({}));
+    assert_eq!(again["status"], "refused", "{again}");
+}

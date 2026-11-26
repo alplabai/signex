@@ -102,6 +102,10 @@ pub enum SplitRefusal {
     Crosswise,
     /// The window has [`MAX_PANES`] panes already.
     TooManyPanes,
+    /// The document area is not split into panes.
+    NotTiled,
+    /// The focused pane shows no sheet or board, so it has no zoom to give.
+    NoZoom,
 }
 
 /// One pane: the tabs dropped into it, and the tab it shows while another

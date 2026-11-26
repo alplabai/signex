@@ -150,6 +150,16 @@ define_ids! {
         CMD_MENU_SPLIT_PANE_DOWN = "cmd-menu-split-pane-down";
         CMD_OPEN_SECOND_VIEW = "cmd-open-second-view";
         CMD_MENU_OPEN_SECOND_VIEW = "cmd-menu-open-second-view";
+        CMD_TILE_WINDOWS_GRID = "cmd-tile-windows-grid";
+        CMD_MENU_TILE_WINDOWS_GRID = "cmd-menu-tile-windows-grid";
+        CMD_MOVE_TAB_TO_OTHER_PANE = "cmd-move-tab-to-other-pane";
+        CMD_MENU_MOVE_TAB_TO_OTHER_PANE = "cmd-menu-move-tab-to-other-pane";
+        CMD_CLOSE_PANE = "cmd-close-pane";
+        CMD_MENU_CLOSE_PANE = "cmd-menu-close-pane";
+        CMD_SYNC_PANE_ZOOM = "cmd-sync-pane-zoom";
+        CMD_MENU_SYNC_PANE_ZOOM = "cmd-menu-sync-pane-zoom";
+        CMD_EQUALIZE_PANES = "cmd-equalize-panes";
+        CMD_MENU_EQUALIZE_PANES = "cmd-menu-equalize-panes";
         CMD_APPLY_LAYOUT_SCHEMATIC = "cmd-apply-layout-schematic";
         CMD_MENU_APPLY_LAYOUT_SCHEMATIC = "cmd-menu-apply-layout-schematic";
         CMD_APPLY_LAYOUT_BOARD = "cmd-apply-layout-board";

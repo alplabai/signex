@@ -178,17 +178,23 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   decision.
   The window-layout commands `tile_windows_horizontally`,
   `tile_windows_vertically` and `untile_documents` (#2249), and the pane
-  commands `split_pane_right`, `split_pane_down` and `open_second_view`
-  (mockup row 207), name no document:
+  commands `tile_windows_grid`, `split_pane_right`, `split_pane_down`,
+  `open_second_view`, `move_tab_to_other_pane`, `close_pane`,
+  `sync_pane_zoom` and `equalize_panes` (mockup row 207), name no document:
   they are open to agents by the maintainer's rule that everything is
-  AI-controllable, run the View ▸ Window menu row's handler (refused with its reason
-  when the row is greyed, and a pane command with the split's reason when it
-  cannot split) and answer with the layout they left:
-  `{"tiled", "layout": "stacked" | "side_by_side" | null, "panes"}`, each
-  pane `{"focused", "document", "name"}` in pane order (`document` and
-  `name` are null for a pane outside an open project; a second view names
-  its document in two panes, one of them focused). They never change the
-  active tab. Headless, they are refused like every window command.
+  AI-controllable, run the View ▸ Window menu row's or the pane menu row's
+  handler (refused with its reason when the row is greyed, and a pane
+  command with the pane's reason when it cannot act) and answer with the
+  layout they left:
+  `{"tiled", "layout": "stacked" | "side_by_side" | "grid" | null, "shares", "panes"}`,
+  `shares` the pane sizes after a splitter drag (null when equal; left out
+  when not tiled), each pane `{"focused", "document", "name", "tabs",
+  "zoom"}` in pane order (`document` and `name` are null for a pane outside
+  an open project; a second view names its document in two panes, one of
+  them focused; `tabs` names the pane's tabs; `zoom` is its zoom in percent,
+  null for a pane that shows no sheet or board). Split, Tile and Untile
+  never change the active tab; Move Tab and Close Pane keep it, in another
+  pane. Headless, they are refused like every window command.
   The CSV, PDF, SVG and STEP writers `export_board_report`,
   `export_board_pdf`, `export_assembly_svg` and `export_board_step` take a
   `path`, so they are CLI only.

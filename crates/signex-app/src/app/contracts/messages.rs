@@ -134,15 +134,9 @@ pub enum WindowMsg {
     /// panes: it takes the focus and its document becomes the active one
     /// (#2249, #1307).
     TilePanePressed(usize),
-    /// View ▸ Window ▸ Split Right / Split Down / Open Second View (mockup
-    /// row 207): the active document moves into a new pane on `edge`, or
-    /// with `second_view` opens there as well.
-    PaneSplitRequested {
-        edge: crate::document_panes::DropEdge,
-        second_view: bool,
-    },
-    /// The kept panes' `prefs.json` write finished; an error goes to Messages.
-    DocumentPanesKept(Result<(), String>),
+    /// The document area's panes (mockup row 207): split, pane strips and
+    /// menus, splitters.
+    Pane(super::PaneMsg),
     /// Dock back was pressed in the title strip of the detached panel
     /// window: the window closes, which re-docks the panel (mockup row 8).
     DetachedPanelDockBackPressed(iced::window::Id),

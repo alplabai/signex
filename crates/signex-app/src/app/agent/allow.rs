@@ -24,6 +24,11 @@ pub(super) const WINDOW_LAYOUT: &[&str] = &[
     "split_pane_right",
     "split_pane_down",
     "open_second_view",
+    "tile_windows_grid",
+    "move_tab_to_other_pane",
+    "close_pane",
+    "sync_pane_zoom",
+    "equalize_panes",
 ];
 
 /// Is `command` one of [`WINDOW_LAYOUT`]?
@@ -119,10 +124,13 @@ mod tests {
                 "check_requirements",
                 "clear_all_net_colors",
                 "close_active_document",
+                // Mockup row 207: the pane commands, as the window layout.
+                "close_pane",
                 "color_net",
                 "delete_net_class",
                 "delete_selection",
                 "document_info",
+                "equalize_panes",
                 "filter_drc_results",
                 "find_items",
                 "find_similar_items",
@@ -135,6 +143,7 @@ mod tests {
                 "list_documents",
                 "lock_board_items",
                 "measure_board",
+                "move_tab_to_other_pane",
                 // Mockup row 207: the panes, as the window layout.
                 "open_second_view",
                 "panelize_board",
@@ -212,8 +221,10 @@ mod tests {
                 "stitch_vias",
                 "swap_gates",
                 "swap_pins",
+                "sync_pane_zoom",
                 // #2249: the window layout, by the maintainer's rule that
                 // everything is AI-controllable.
+                "tile_windows_grid",
                 "tile_windows_horizontally",
                 "tile_windows_vertically",
                 // #2389: length tuning on the named board.

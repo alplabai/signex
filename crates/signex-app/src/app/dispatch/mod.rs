@@ -173,10 +173,7 @@ impl Signex {
             WindowMsg::TileRequested(layout) => self.tile(layout),
             WindowMsg::UntileRequested => self.untile_documents(),
             WindowMsg::TilePanePressed(pane) => self.focus_tile_pane(pane),
-            WindowMsg::PaneSplitRequested { edge, second_view } => {
-                self.split_active_document_pane(edge, second_view)
-            }
-            WindowMsg::DocumentPanesKept(result) => self.document_panes_kept(result),
+            WindowMsg::Pane(msg) => self.dispatch_pane_message(msg),
             WindowMsg::WindowScaleChanged(id, scale) => {
                 // The CPU canvas caches its geometry, which was drawn with the
                 // old scale; a move to another display keeps the logical

@@ -100,4 +100,12 @@ define_ids! {
     WORKSPACE_LAYOUTS_PANES_CROSSWISE = "workspace-layouts-panes-crosswise";
     WORKSPACE_LAYOUTS_PANES_TOO_MANY = "workspace-layouts-panes-too-many";
     WORKSPACE_LAYOUTS_PANES_NOT_KEPT = "workspace-layouts-panes-not-kept";
+    WORKSPACE_LAYOUTS_PANES_NOT_TILED = "workspace-layouts-panes-not-tiled";
+    WORKSPACE_LAYOUTS_PANES_NO_ZOOM = "workspace-layouts-panes-no-zoom";
+    WORKSPACE_LAYOUTS_PANES_GRID_DONE = "workspace-layouts-panes-grid-done";
+    WORKSPACE_LAYOUTS_PANES_MENU = "workspace-layouts-panes-menu";
+    WORKSPACE_LAYOUTS_PANES_MENU_TOOLTIP = "workspace-layouts-panes-menu-tooltip";
+    WORKSPACE_LAYOUTS_PANES_PREVIEW_TITLE = "workspace-layouts-panes-preview-title";
+    WORKSPACE_LAYOUTS_PANES_PREVIEW_ONE_EACH = "workspace-layouts-panes-preview-one-each";
+    WORKSPACE_LAYOUTS_PANES_PREVIEW_GRID = "workspace-layouts-panes-preview-grid";
 }

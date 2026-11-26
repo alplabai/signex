@@ -170,10 +170,15 @@ impl Signex {
     /// View ▸ Window ▸ Tile: the docked documents into panes, and the main window
     /// with the undocked document windows over its screen. Either alone is
     /// done when the other has nothing to arrange. A split made by a drop
-    /// (mockup row 207) gives way to one pane per document.
+    /// (mockup row 207) gives way to one pane per document; Tile Grid makes
+    /// a split of its own, kept for the project.
     pub(crate) fn tile(&mut self, layout: TileLayout) -> Task<Message> {
-        let forgotten = self.forget_document_split();
-        let panes = self.tile_documents(layout);
+        let (panes, forgotten) = if layout == TileLayout::Grid {
+            self.tile_documents_grid()
+        } else {
+            let forgotten = self.forget_document_split();
+            (self.tile_documents(layout), forgotten)
+        };
         if self.tile_plan(layout).is_some() {
             return Task::batch([forgotten, self.tile_windows(layout)]);
         }
@@ -196,12 +201,14 @@ impl Signex {
         let before = self.canvas_bounds();
         self.ui_state.document_tiling = Some(layout);
         self.refresh_tile_pane_canvases();
+        self.finish_pane_handover(None);
         self.follow_main_canvas_resize(before);
         crate::diagnostics::log_info(format!(
             "Tile: {count} documents {} in the main window",
             match layout {
                 TileLayout::SideBySide => "side by side",
                 TileLayout::Stacked => "one above the other",
+                TileLayout::Grid => "in a grid",
             }
         ));
         true
@@ -217,6 +224,7 @@ impl Signex {
         let forgotten = self.forget_document_split();
         self.ui_state.document_tiling = None;
         self.interaction_state.tile_panes = Default::default();
+        self.finish_pane_handover(None);
         self.follow_main_canvas_resize(before);
         forgotten
     }
@@ -235,7 +243,8 @@ impl Signex {
         let before = self.canvas_bounds();
         let tab = self.focus_split_pane(pane).unwrap_or(drawn);
         if tab == self.document_state.active_tab {
-            self.refresh_tile_pane_canvases();
+            // A second view: the views of the two panes change places.
+            self.settle_document_tiling();
         } else {
             self.park_active_schematic_session();
             self.document_state.active_tab = tab;
@@ -247,13 +256,16 @@ impl Signex {
 
     /// After a tab closed, undocked or came back: fewer than two docked
     /// documents end the tiling (a split ends under two panes), and every
-    /// unfocused pane gets its canvas.
+    /// unfocused pane gets its canvas. When the focus moved to another pane,
+    /// each pane keeps its own view (`pane_views`).
     pub(crate) fn settle_document_tiling(&mut self) {
         let is_split = self.settle_document_panes();
         if !is_split && self.ui_state.document_tiling.is_some() && !self.can_tile_documents() {
             self.ui_state.document_tiling = None;
         }
+        let handover = self.pane_handover();
         self.refresh_tile_pane_canvases();
+        self.finish_pane_handover(handover);
     }
 
     /// A canvas for each unfocused schematic or board pane, kept while the

@@ -12,10 +12,11 @@ use std::sync::Arc;
 use iced::Task;
 use signex_i18n::{MessageId, ids, t};
 
-use crate::app::{Message, Signex, TabInfo, TabKind, TileLayout, WindowMsg};
+use crate::app::{Message, PaneMsg, Signex, TabInfo, TabKind, TileLayout, WindowMsg};
 use crate::diagnostics::{log_error_line, log_warning};
 use crate::document_panes::{
-    DropEdge, DropTarget, MAX_PANES, PaneSplit, PaneTab, SplitRefusal, drop_target, store,
+    DropEdge, DropTarget, MAX_PANES, PaneShares, PaneSplit, PaneTab, SplitRefusal, drop_target,
+    store,
 };
 
 /// The main window's panes as it draws them.
@@ -59,12 +60,14 @@ pub(crate) fn refusal_line(why: SplitRefusal) -> MessageId {
         SplitRefusal::LastTab => ids::WORKSPACE_LAYOUTS_PANES_LAST_TAB,
         SplitRefusal::Crosswise => ids::WORKSPACE_LAYOUTS_PANES_CROSSWISE,
         SplitRefusal::TooManyPanes => ids::WORKSPACE_LAYOUTS_PANES_TOO_MANY,
+        SplitRefusal::NotTiled => ids::WORKSPACE_LAYOUTS_PANES_NOT_TILED,
+        SplitRefusal::NoZoom => ids::WORKSPACE_LAYOUTS_PANES_NO_ZOOM,
     }
 }
 
 impl Signex {
     /// The main window's tabs (indices in strip order) and their pane keys.
-    fn docked_pane_tabs(&self) -> (Vec<usize>, Vec<PaneTab>) {
+    pub(super) fn docked_pane_tabs(&self) -> (Vec<usize>, Vec<PaneTab>) {
         let tabs = &self.document_state.tabs;
         self.docked_tab_indices()
             .into_iter()
@@ -72,7 +75,7 @@ impl Signex {
             .unzip()
     }
 
-    fn active_pane_tab(&self) -> Option<PaneTab> {
+    pub(super) fn active_pane_tab(&self) -> Option<PaneTab> {
         let active = self.document_state.active_tab;
         self.document_state.tabs.get(active).map(pane_tab)
     }
@@ -119,6 +122,29 @@ impl Signex {
             tabs,
             focused,
         })
+    }
+
+    /// The tabs of each pane the main window draws, as tab indices in strip
+    /// order: a split's lists, else the one tab of each pane. Empty when not
+    /// tiled. In the order of [`Self::tiled_pane_view`]'s panes.
+    pub(crate) fn pane_tab_lists(&self) -> Vec<Vec<usize>> {
+        let Some(view) = self.tiled_pane_view() else {
+            return Vec::new();
+        };
+        let Some(split) = self.ui_state.workspace_layouts.panes.split.as_ref() else {
+            return view.tabs.iter().map(|&tab| vec![tab]).collect();
+        };
+        let (docked, keys) = self.docked_pane_tabs();
+        split
+            .resolve(&keys)
+            .into_iter()
+            .map(|pane| {
+                pane.tabs
+                    .into_iter()
+                    .filter_map(|at| docked.get(at).copied())
+                    .collect()
+            })
+            .collect()
     }
 
     /// The tab a document-tab drag carries past the strip's drag threshold
@@ -222,7 +248,7 @@ impl Signex {
         Ok(self.keep_document_panes())
     }
 
-    fn say_split_refused(&mut self, why: SplitRefusal) -> Task<Message> {
+    pub(super) fn say_split_refused(&mut self, why: SplitRefusal) -> Task<Message> {
         let line = t!(self.ui_state.i18n, refusal_line(why));
         log_warning(line.into_string());
         self.sync_diagnostics_panel_ctx();
@@ -297,6 +323,9 @@ impl Signex {
         let Some(mut split) = store::split_from_json(entry, project_folder(&project)) else {
             return;
         };
+        // Sizes made for the panes as kept; a pane gone since makes them equal.
+        let shares = store::shares_from_json(entry)
+            .and_then(|kept| PaneShares::from_per_mille(split.direction, split.panes.len(), &kept));
         if !split.prune(keys) {
             return;
         }
@@ -308,6 +337,7 @@ impl Signex {
         let panes = &mut self.ui_state.workspace_layouts.panes;
         panes.restored.insert(project);
         panes.split = Some(split);
+        panes.shares = shares;
         self.follow_main_canvas_resize(before);
     }
 
@@ -325,7 +355,13 @@ impl Signex {
         panes.restored.insert(project);
         match &panes.split {
             Some(split) => {
+                let shares = panes
+                    .shares
+                    .as_ref()
+                    .filter(|s| !s.for_view(split.direction, split.panes.len()).is_empty())
+                    .map(PaneShares::per_mille);
                 let entry = store::split_to_json(split, &folder, panes.kept.get(&key));
+                let entry = store::with_shares(entry, shares.as_deref());
                 panes.kept.insert(key, entry);
             }
             None => {
@@ -339,7 +375,7 @@ impl Signex {
         crate::fonts::background_pref_merge(
             store::PREFS_KEY,
             move || sink.write(&value),
-            |result| Message::Window(WindowMsg::DocumentPanesKept(result)),
+            |result| Message::Window(WindowMsg::Pane(PaneMsg::Kept(result))),
         )
     }
 
@@ -362,7 +398,9 @@ impl Signex {
     /// tiles again, and the project forgets the split. `Task::none()` when
     /// there was no split.
     pub(crate) fn forget_document_split(&mut self) -> Task<Message> {
-        if self.ui_state.workspace_layouts.panes.split.take().is_none() {
+        let panes = &mut self.ui_state.workspace_layouts.panes;
+        panes.shares = None;
+        if panes.split.take().is_none() {
             return Task::none();
         }
         self.ui_state.document_tiling = None;

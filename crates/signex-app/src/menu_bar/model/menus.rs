@@ -3,7 +3,7 @@
 
 use super::items::{
     cmd, cmd_item, cmd_item_gated, cmd_item_gated_as, cmd_toggle, header, item, item_if,
-    item_if_command, item_named, panel_item, submenu, unavailable, with_icon,
+    item_if_command, item_named, panel_item, submenu, unavailable, with_icon, with_preview,
 };
 use super::{MenuEntry, MenuIcon, MenuMessage};
 use crate::app::command::enablement::{new_part_menu_enabled, remove_part_menu_enabled};
@@ -670,10 +670,14 @@ pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
 /// View ▸ Window: the document panes of the main window (#2249) and the
 /// undocked document windows.
 fn window(ctx: &MenuContext) -> Vec<MenuEntry> {
+    let previews = &ctx.tile_previews;
+    let tile = |id, preview| with_preview(cmd_item_gated(ctx, cmd(id, "")), preview);
     vec![
-        // Untile is live while tiled: docs/MENU_BAR.md#window-tile
-        cmd_item_gated(ctx, cmd("tile_windows_horizontally", "")),
-        cmd_item_gated(ctx, cmd("tile_windows_vertically", "")),
+        // Untile is live while tiled: docs/MENU_BAR.md#window-tile. Each
+        // tile row previews its panes while hovered (mockup row 207).
+        tile("tile_windows_horizontally", previews.horizontal.as_ref()),
+        tile("tile_windows_vertically", previews.vertical.as_ref()),
+        tile("tile_windows_grid", previews.grid.as_ref()),
         cmd_item_gated(ctx, cmd("untile_documents", "")),
         // Mockup row 207: docs/MENU_BAR.md#window-split
         cmd_item_gated(ctx, cmd("split_pane_right", "")),
@@ -714,6 +718,7 @@ fn layouts(ctx: &MenuContext) -> Vec<MenuEntry> {
                 },
                 checked: Some(layout.active),
                 icon: None,
+                preview: None,
             }));
         }
     }

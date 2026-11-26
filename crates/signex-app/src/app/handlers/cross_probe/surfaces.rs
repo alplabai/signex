@@ -17,7 +17,7 @@ pub(super) type Shown = (Option<iced::window::Id>, PathBuf);
 
 impl Signex {
     /// The sheet the main window shows, when its active tab is a sheet.
-    fn main_sheet(&self) -> Option<PathBuf> {
+    pub(super) fn main_sheet(&self) -> Option<PathBuf> {
         let docs = &self.document_state;
         let tab = docs.tabs.get(docs.active_tab)?;
         let shown = matches!(tab.kind, TabKind::Schematic)
@@ -27,7 +27,7 @@ impl Signex {
     }
 
     /// The board the main window shows, when its active tab is a board.
-    fn main_board(&self) -> Option<PathBuf> {
+    pub(super) fn main_board(&self) -> Option<PathBuf> {
         self.active_pcb()?;
         self.active_tab_path()
     }

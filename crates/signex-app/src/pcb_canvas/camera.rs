@@ -212,6 +212,24 @@ impl super::PcbCanvas {
         let world = Point::new(board.x as f32, board.y as f32);
         self.camera.borrow().world_to_screen(world)
     }
+
+    /// Show the board at `camera` (screen offset and pixels per mm, as
+    /// `live_camera` reads them), keeping the view's turn: the view a pane
+    /// kept while another had the focus (mockup row 207). A queued fit is
+    /// dropped; a value that is not a number is ignored.
+    pub fn set_pane_camera(&mut self, camera: (f32, f32, f32)) {
+        let (x, y, scale) = camera;
+        if !(x.is_finite() && y.is_finite() && scale.is_finite() && scale > 0.0) {
+            return;
+        }
+        let live = &mut self.camera.get_mut().camera;
+        live.offset = Point::new(x, y);
+        live.scale = scale.clamp(Camera::MIN_SCALE, MAX_BOARD_SCALE);
+        self.pending_fit.set(None);
+        self.fitted.set(None);
+        self.bg_cache.clear();
+        *self.content.get_mut() = None;
+    }
 }
 
 #[cfg(test)]

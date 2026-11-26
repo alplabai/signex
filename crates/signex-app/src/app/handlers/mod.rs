@@ -28,9 +28,12 @@ mod dialog_window;
 pub mod dock;
 pub mod document_files;
 mod document_identity;
+pub(crate) mod document_pane_actions;
+#[cfg(test)]
+mod document_pane_actions_tests;
 pub(crate) mod document_panes;
 #[cfg(test)]
-mod document_panes_tests;
+pub(crate) mod document_panes_tests;
 pub mod document_tabs;
 #[cfg(test)]
 mod document_tabs_tests;
@@ -55,6 +58,9 @@ pub mod native_menu;
 pub mod net_nav;
 mod object_list;
 mod pan_zoom_bench;
+pub(crate) mod pane_views;
+#[cfg(test)]
+mod pane_views_tests;
 pub mod parameter_manager;
 pub mod paste;
 pub mod pcb_drc;

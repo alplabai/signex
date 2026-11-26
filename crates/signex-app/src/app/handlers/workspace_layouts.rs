@@ -34,6 +34,7 @@ fn tile_layout(split: DocumentSplit) -> TileLayout {
     match split {
         DocumentSplit::SideBySide => TileLayout::SideBySide,
         DocumentSplit::Stacked => TileLayout::Stacked,
+        DocumentSplit::Grid => TileLayout::Grid,
     }
 }
 
@@ -81,6 +82,7 @@ impl Signex {
         self.tiled_panes().map(|(layout, _)| match layout {
             TileLayout::SideBySide => DocumentSplit::SideBySide,
             TileLayout::Stacked => DocumentSplit::Stacked,
+            TileLayout::Grid => DocumentSplit::Grid,
         })
     }
 

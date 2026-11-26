@@ -154,6 +154,16 @@ cmd-split-pane-down = Move the document into a new pane below
 cmd-menu-split-pane-down = Split Down
 cmd-open-second-view = Open a second view of the document on the right
 cmd-menu-open-second-view = Open Second View
+cmd-tile-windows-grid = Tile documents in a grid of up to four panes
+cmd-menu-tile-windows-grid = Tile Grid
+cmd-move-tab-to-other-pane = Move the active tab to the other pane
+cmd-menu-move-tab-to-other-pane = Move Tab to Other Pane
+cmd-close-pane = Close the focused pane; its tabs join the next pane
+cmd-menu-close-pane = Close Pane
+cmd-sync-pane-zoom = Give the other panes the focused pane's zoom
+cmd-menu-sync-pane-zoom = Sync Zoom with Other Pane
+cmd-equalize-panes = Make the panes the same size
+cmd-menu-equalize-panes = Equal Pane Sizes
 # Workspace layouts (mockup row 166): View ▸ Window ▸ Layouts.
 cmd-apply-layout-schematic = Workspace layout: Schematic
 cmd-menu-apply-layout-schematic = Schematic

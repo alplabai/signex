@@ -239,6 +239,8 @@ pub struct MenuContext<'a> {
     /// What View ▸ Window ▸ Layouts lists: the active layout, your layouts
     /// and the Reset row (mockup row 166).
     pub(crate) layouts: crate::workspace_layouts::LayoutsMenu,
+    /// What each tile row of View ▸ Window previews (mockup row 207).
+    pub(crate) tile_previews: model::TilePreviews,
 }
 
 impl Default for MenuContext<'_> {
@@ -253,6 +255,7 @@ impl Default for MenuContext<'_> {
             cross_select: true,
             pcb_sync: None,
             layouts: Default::default(),
+            tile_previews: Default::default(),
         }
     }
 }
@@ -333,6 +336,7 @@ impl MenuColors {
 mod graphite;
 pub mod model;
 pub(crate) mod native;
+mod tile_preview;
 mod view;
 
 #[cfg(test)]

@@ -72,8 +72,13 @@ impl Signex {
     ) -> iced::Rectangle {
         let area = self.document_area_sized(size);
         match (window, self.tiled_pane_view()) {
+            // Mockup row 207: the focused pane under its own tab strip, at
+            // the size a splitter drag left it.
             (None, Some(panes)) => {
-                canvas_region::pane_bounds(area, panes.tabs.len(), panes.focused, panes.layout)
+                let cells = self.pane_cells(&panes, (area.width, area.height));
+                cells
+                    .get(panes.focused)
+                    .map_or(area, |tile| canvas_region::pane_canvas(area, tile))
             }
             _ => area,
         }

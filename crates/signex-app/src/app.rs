@@ -141,6 +141,7 @@ pub use compare_board::{CompareBoardMsg, CompareBoardState, CompareRead, JumpSid
 pub use compiled_design::CompiledDesignMsg;
 pub use contracts::Board3dShot;
 pub use contracts::ErcProfileAction;
+pub use contracts::PaneMsg;
 pub use contracts::{
     AnnotateMsg, AppQuitConfirmState, Board3dGesture, Board3dModelsRead, Board3dMsg, BoardNetMsg,
     BoardSketchMsg, BoardToolsMsg, BomPreviewMsg, CommandPaletteMsg, ContextAction, ContextMenuMsg,
@@ -168,7 +169,7 @@ pub use fab_outputs::{BoardNote, FabOutput, FabOutputsMsg, FabOutputsState, FabP
 pub(crate) use handlers::document_files::is_pcb_path;
 pub(crate) use handlers::selection_workflow::passes_filter;
 pub use handlers::window_geometry_events::GeometryReadout;
-pub use handlers::window_tiling::{Tile, TileLayout, TilePlan, tiles};
+pub use handlers::window_tiling::{Tile, TileLayout, TilePlan, grid_tiles, linear_tiles, tiles};
 pub use new_project::{NewProjectMsg, NewProjectState, ProfileUndo};
 pub use sheet_numbering::{NumberingProblem, SheetNumberingMsg, SheetNumberingState};
 pub use sheet_sync::{SheetSyncMsg, SheetSyncProblem, SheetSyncState};

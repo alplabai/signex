@@ -409,6 +409,8 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("number_schematic_sheets", "NumberSchematicSheets"),
     ("tile_windows_horizontally", "TileHorizontally"),
     ("tile_windows_vertically", "TileVertically"),
+    // Mockup row 207: fixture name only.
+    ("tile_windows_grid", "TileGrid"),
     // #2249: fixture name only.
     ("untile_documents", "UntileDocuments"),
     // Mockup row 207: fixture names only.
@@ -827,6 +829,8 @@ fn reports_and_window_are_submenus_of_tools_and_view() {
         [
             "Tile Horizontally",
             "Tile Vertically",
+            // Mockup row 207: Tile Grid beside the other tile rows.
+            "Tile Grid",
             "Untile",
             // Mockup row 207: the pane rows after the tiling rows.
             "Split Right",

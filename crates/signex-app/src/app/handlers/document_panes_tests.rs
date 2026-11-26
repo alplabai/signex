@@ -26,13 +26,13 @@ impl DocumentPanesStore for Recorder {
     }
 }
 
-fn path(name: &str) -> PathBuf {
+pub(super) fn path(name: &str) -> PathBuf {
     PathBuf::from(DIR).join(name)
 }
 
 /// Three sheets of one project in the main window, `io` active, the main
 /// window known and laid out.
-fn app() -> (Signex, iced::window::Id) {
+pub(crate) fn app() -> (Signex, iced::window::Id) {
     let mut app = fx::app_workspace(DIR, &SHEETS);
     let project = app.document_state.projects[0].id;
     for name in SHEETS {
@@ -60,7 +60,7 @@ fn app() -> (Signex, iced::window::Id) {
 
 /// Drag tab `tab` from the strip and let go at the share `(fx, fy)` of the
 /// document area.
-fn drop_tab(app: &mut Signex, main: iced::window::Id, tab: usize, at: (f32, f32)) {
+pub(crate) fn drop_tab(app: &mut Signex, main: iced::window::Id, tab: usize, at: (f32, f32)) {
     let area = app.document_area_in(None);
     app.ui_state.tab_dragging = Some((tab, area.x, area.y - 20.0));
     app.interaction_state.last_mouse_pos =
@@ -80,7 +80,7 @@ fn hold_ctrl(app: &mut Signex, main: iced::window::Id, held: bool) {
     }));
 }
 
-fn kept_entry(app: &Signex) -> Option<serde_json::Value> {
+pub(super) fn kept_entry(app: &Signex) -> Option<serde_json::Value> {
     let key = path("ProjectA.snxprj").display().to_string();
     app.ui_state.workspace_layouts.panes.kept.get(&key).cloned()
 }

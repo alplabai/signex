@@ -927,6 +927,8 @@ impl Signex {
                 .bom_preview
                 .as_ref()
                 .is_some_and(|preview| preview.column_resize.is_some())
+            // Mockup row 207: a splitter between document panes.
+            || self.ui_state.workspace_layouts.panes.splitter_drag.is_some()
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
@@ -980,32 +982,12 @@ impl Signex {
                 // modal's resize would clobber the main window's size.
                 _ => Message::noop(),
             })
+        } else if self.ui_state.tab_dragging.is_some() {
+            // A document tab over the canvas, which takes the moves and the
+            // release (mockup row 207): `drag_events::tab_drag_events`.
+            iced::event::listen_with(super::drag_events::tab_drag_events)
         } else if drag_active {
-            // Like `listen()`: only events no widget captured. `listen_with`
-            // is used for the window the button was released in.
-            iced::event::listen_with(|event, status, window| {
-                if status == iced::event::Status::Captured {
-                    return None;
-                }
-                match event {
-                    iced::Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
-                        Some(Message::Ui(UiMsg::DragMovedIn {
-                            window,
-                            x: position.x,
-                            y: position.y,
-                        }))
-                    }
-                    iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
-                        iced::mouse::Button::Left,
-                    )) => Some(Message::Ui(UiMsg::DragEnd(window))),
-                    iced::Event::Mouse(iced::mouse::Event::ButtonPressed(
-                        iced::mouse::Button::Left,
-                    )) => Some(Message::ContextMenu(ContextMenuMsg::Close)),
-                    // Window::Resized is carried, with its id, by the
-                    // `window::resize_events()` subscription below.
-                    _ => None,
-                }
-            })
+            iced::event::listen_with(super::drag_events::drag_events)
         } else {
             // Always track the cursor so `last_mouse_pos` is fresh when the
             // user starts a modal drag — otherwise the first delta is huge

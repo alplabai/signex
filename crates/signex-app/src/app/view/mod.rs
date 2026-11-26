@@ -21,6 +21,9 @@ mod library_tab;
 mod modals;
 mod net_color;
 mod overlays;
+pub(crate) mod pane_chrome;
+#[cfg(test)]
+mod pane_chrome_tests;
 pub(crate) mod parameter_manager;
 mod pcb_active_bar;
 pub(in crate::app) mod pcb_strip;
@@ -172,6 +175,7 @@ impl Signex {
             cross_select: interaction.cross_select.enabled,
             pcb_sync: self.pcb_sync_label(Some(window_id)),
             layouts: self.layouts_menu(),
+            tile_previews: self.tile_previews(),
         };
         let undocked = ui.main_window_id != Some(window_id);
         let menu_row = || {
@@ -379,6 +383,10 @@ impl Signex {
         // the ghost.
         if is_main_window && let Some(target) = self.pane_drop_overlay() {
             overlays.push(target);
+        }
+        // The pane menu of a pane's ⋯ button.
+        if is_main_window && let Some(menu) = self.pane_menu_overlay() {
+            overlays.push(menu);
         }
         // Tab drag ghost: only renders once the cursor has travelled past
         // the same 6 px threshold the cursor gating uses

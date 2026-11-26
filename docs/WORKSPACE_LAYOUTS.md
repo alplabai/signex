@@ -15,7 +15,11 @@ updates, the file tasks) and
 
 - Stored: the docked panels per dock and their order, each dock's collapsed
   flag, the left and right docks' widths, and the document-area split when
-  the main window is tiled (side by side or stacked).
+  the main window is tiled (side by side, stacked, or Tile Grid's
+  `"tile_grid"`, mockup row 207). Applying a layout with a split tiles the
+  documents that way. The pane sizes of a splitter drag are not part of a
+  layout: they stay with the project's kept panes (`docs/MENU_BAR.md`,
+  "Panes").
 - Not stored: open documents. Applying a layout never opens, closes or
   switches a document; it only arranges panels around them.
 - Not stored yet: extra windows and their monitors (a document or panel in a

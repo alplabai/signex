@@ -136,3 +136,18 @@ workspace-layouts-panes-crosswise = The panes run the other way; drop on an edge
 workspace-layouts-panes-too-many = The main window has four panes already.
 # { $why } is the system's reason.
 workspace-layouts-panes-not-kept = The panes of the document area were not kept: { $why }
+workspace-layouts-panes-not-tiled = The document area is not split into panes.
+workspace-layouts-panes-no-zoom = The focused pane shows no sheet or board, so it has no zoom to give the other panes.
+# Messages after Tile Grid. { $count } documents, { $panes } panes.
+workspace-layouts-panes-grid-done = Tile Grid: { $count } documents in { $panes } panes.
+# The pane menu button on each pane's tab strip, and its tooltip.
+workspace-layouts-panes-menu = ⋯
+workspace-layouts-panes-menu-tooltip = Pane menu
+# The preview beside a tile row of View ▸ Window. { $layout } is the row's
+# name, { $count } the documents it arranges.
+workspace-layouts-panes-preview-title = { $layout } · { $count ->
+    [one] 1 open document
+   *[other] { $count } open documents
+}
+workspace-layouts-panes-preview-one-each = One pane per document; the active tab stays focused.
+workspace-layouts-panes-preview-grid = Up to four panes, one document type each where it can; the active tab stays focused.

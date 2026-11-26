@@ -68,6 +68,7 @@ fn direction_key(direction: TileLayout) -> &'static str {
     match direction {
         TileLayout::SideBySide => "side_by_side",
         TileLayout::Stacked => "stacked",
+        TileLayout::Grid => "tile_grid",
     }
 }
 
@@ -75,8 +76,38 @@ fn direction_from_key(key: &str) -> Option<TileLayout> {
     match key {
         "side_by_side" => Some(TileLayout::SideBySide),
         "stacked" => Some(TileLayout::Stacked),
+        "tile_grid" => Some(TileLayout::Grid),
         _ => None,
     }
+}
+
+/// `entry` with the pane sizes of a splitter drag, in thousandths
+/// (`"shares"`), or without them when the panes are equal (`None`).
+pub fn with_shares(entry: Value, shares: Option<&[u16]>) -> Value {
+    let Value::Object(mut entry) = entry else {
+        return entry;
+    };
+    match shares {
+        Some(shares) => {
+            entry.insert("shares".into(), json!(shares));
+        }
+        None => {
+            entry.remove("shares");
+        }
+    }
+    Value::Object(entry)
+}
+
+/// The pane sizes stored in `entry`, in thousandths; `None` when there are
+/// none or they are not whole numbers up to a thousand.
+pub fn shares_from_json(entry: &Value) -> Option<Vec<u16>> {
+    entry
+        .get("shares")?
+        .as_array()?
+        .iter()
+        .map(|n| n.as_u64().and_then(|n| u16::try_from(n).ok()))
+        .collect::<Option<Vec<u16>>>()
+        .filter(|shares| !shares.is_empty() && shares.iter().all(|n| *n <= 1000))
 }
 
 fn tab_to_json(tab: &PaneTab, folder: &Path) -> Value {
