@@ -147,6 +147,10 @@ label = "<display label>"
   library served by a Signex library server; a converter writes `local_git`.
 - `[[classes]]` keys must be unique; a duplicate key opens but refuses every
   save.
+- A library may have no part tables at all: Signex creates new libraries
+  that way. Its symbols and footprints are still listed (they are found by
+  scanning the folders), but a part can only be placed through a row, so a
+  converter that wants placeable parts writes rows.
 - Layout is TOML as section 5.3 describes: one blank line before each table
   header, arrays of strings inline here (`roles = ["Librarian"]`).
 
@@ -454,6 +458,17 @@ per pin, each ending in `\n`, no blank lines. Columns:
 | 20 | `part_number` | integer 0-255: the unit; `0` = on every unit |
 | 21 | `body_style` | only when present, see below: `0` both bodies, `1` normal, `2` alternate (De Morgan) |
 
+**Decoration columns (14-17).** The symbol editor draws `inside_edge_symbol`
+as the glyph just inside the body edge (a clock triangle belongs there in the
+editor's drawing) and `outside_edge_symbol` as the glyph just outside it (the
+inversion bubble). **Placing a symbol on a schematic reads only
+`outside_edge_symbol`**: `Dot` and the two `ActiveLow*` values become a bubble,
+`ClockEdge` a clock triangle, `SchmittTrigger` a Schmitt mark, and every other
+value and the other three columns are not drawn on the sheet. A converter that
+needs a clock or an inversion to show on schematics therefore writes it in
+`outside_edge_symbol`; when a pin carries both (an inverted clock), only one
+survives placement and the converter reports the loss.
+
 **The `body_style` column** is appended to a symbol's header only when at
 least one pin **of that symbol** has a body style other than 1; otherwise
 the header has 20 columns. The choice is per symbol, while the token is per
@@ -686,7 +701,12 @@ rotation_xyz = [rx, ry, rz]  # degrees
 in memory: the file holds the 64-bit value of the nearest 32-bit float,
 written as section 5.2 says. A converter must round each value to 32 bits
 first (0.6 becomes `0.6000000238418579`; the default colours are the
-values above). An optional `outline` (`[footprints.body_3d.outline]` with
+values above). The whole `[footprints.body_3d]` table is optional: when it is
+absent the body is `Extrude`, `height_mm = 1.0`, `offset_z_mm = 0.0`, top
+colour `[0.2, 0.2, 0.2, 1.0]`, side colour `[0.3, 0.3, 0.3, 1.0]` (each held as
+the nearest 32-bit float). Signex always writes the table on save, so a
+converter that wants byte-stable re-saves writes it too; one that knows no
+body height writes these defaults rather than inventing a height. An optional `outline` (`[footprints.body_3d.outline]` with
 `points`) overrides the fabrication outline the body is extruded from.
 
 Today the STEP bytes live outside the footprint file, in
@@ -878,9 +898,12 @@ data = '''
   before 1.4 (#3107).
 - Boards never embed models: a board footprint reaches its model through
   its library reference.
-- **Deflate level:** to be fixed by #3107. Byte-identical re-saves of
-  converter output need the same level and the same deflate
-  implementation's output; #3107 will specify both and add a fixture.
+- **Compressed bytes are not part of the contract.** `data` is a raw
+  deflate stream (RFC 1951, no zlib or gzip header). Signex writes level 6,
+  but any valid raw deflate stream is accepted, and on re-save Signex keeps
+  an unchanged entry's `data` exactly as stored (only re-wrapped at 76
+  columns). Conformance between two writers therefore compares the inflated
+  bytes (`size` and SHA-256), never the compressed ones.
 
 ## 9. Open points
 
