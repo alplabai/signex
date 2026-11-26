@@ -1165,7 +1165,7 @@ with its summary ([Design notebook generation](#design-notebook-generation)).
 follows the summary's `status`: anything but `ok` exits 1.
 
 ```
-signex-cli notebook export-pdf --project buck-3v3.snxprj [--out <file>]
+signex-cli notebook export-pdf --project buck-3v3.snxprj [--out <file>] [--overwrite]
     [--notebook generated/design-report] [--pages all|current|3-7]
     [--paper document|a4|letter] [--variant <name>] [--annotations <kinds>]
     [--stale warn|fail] [--no-title-block] [--no-contents] [--no-bookmarks]
@@ -1178,6 +1178,8 @@ name in `Project Outputs/notebook/` without `--out`) and answers with the
 pages, paper, references and stale ones, the bookmarks written and the
 SHA-256 of the file. A notebook named without an extension is a `.snxnbk`
 file. A stale reference under `--stale fail` refuses the export (exit code 1).
+The file is a `.pdf`, never a Signex document, and a file that is there (the
+default one included) is replaced only with `--overwrite`.
 The settings and the answer are in [NOTEBOOK_PDF.md](NOTEBOOK_PDF.md).
 
 ## Working through a running Signex

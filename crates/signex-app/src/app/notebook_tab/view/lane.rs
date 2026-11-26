@@ -29,7 +29,7 @@ enum LaneMsg {
     ReadingClicked(String, u32),
     ExportPressed,
     Remeasure,
-    MarkValid(u32),
+    MarkValid { file: String, source_file: String },
     ShowChange(String),
 }
 
@@ -47,7 +47,11 @@ impl LaneMsg {
             },
             LaneMsg::ExportPressed => NotebookMsg::TimelineExportPressed { project_id },
             LaneMsg::Remeasure => NotebookMsg::RemeasurePressed { project_id },
-            LaneMsg::MarkValid(line) => NotebookMsg::AttachmentMarkedValid { project_id, line },
+            LaneMsg::MarkValid { file, source_file } => NotebookMsg::AttachmentMarkedValid {
+                project_id,
+                file,
+                source_file,
+            },
             LaneMsg::ShowChange(part) => NotebookMsg::ChangeShown { project_id, part },
         }
     }
@@ -119,7 +123,10 @@ pub(super) fn view<'a>(look: Look<'a>, tab: &'a NotebookTab) -> Option<Element<'
             .unwrap_or_default();
         let actions = StaleActions {
             remeasure: LaneMsg::Remeasure,
-            mark_valid: LaneMsg::MarkValid(state.attachment.line),
+            mark_valid: LaneMsg::MarkValid {
+                file: state.attachment.file.clone(),
+                source_file: state.attachment.source_file.clone(),
+            },
             show_change: LaneMsg::ShowChange(part),
         };
         if let Some(card) = stale_card(state, look.tokens, look.i18n, actions) {

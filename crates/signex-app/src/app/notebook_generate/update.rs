@@ -86,6 +86,11 @@ impl Signex {
             M::GenerateClicked => return self.generate_from_dialog(),
             M::DialogCancelled => self.ui_state.notebook_generate.dialog = None,
             M::Generated(finished) => return self.finish_notebook_generate(*finished),
+            M::ReportSaved {
+                project_id,
+                text,
+                result,
+            } => self.generated_report_saved(project_id, &text, result),
         }
         Task::none()
     }
@@ -210,15 +215,19 @@ impl Signex {
                 self.finish_waiting_command(waiting, &request.project, move |_| answer(outcome))
             }
             None => {
-                self.show_generated(outcome);
+                self.show_generated(&request.project, outcome);
                 Task::none()
             }
         }
     }
 
-    /// The dialog's run landed: the report waits unsaved for the notebook
-    /// tab, or the dialog says why there is none.
-    fn show_generated(&mut self, outcome: Result<GenerateOutcome, String>) {
+    /// The dialog's run landed: the report is held unsaved for Save (its
+    /// path in the dirty set), or the dialog says why there is none.
+    fn show_generated(
+        &mut self,
+        project: &std::path::Path,
+        outcome: Result<GenerateOutcome, String>,
+    ) {
         let i18n = &self.ui_state.i18n;
         match outcome {
             Ok(done) => {
@@ -230,9 +239,8 @@ impl Signex {
                     "path" => path.as_str()
                 );
                 crate::diagnostics::log_info(line.into_string());
-                let state = &mut self.ui_state.notebook_generate;
-                state.dialog = None;
-                state.pending = Some(done.notebook);
+                self.ui_state.notebook_generate.dialog = None;
+                self.hold_generated_report(project, done.notebook);
             }
             Err(why) => {
                 let line = t!(i18n, ids::DIALOG_NB_GENERATE_FAILED, "why" => why.as_str());

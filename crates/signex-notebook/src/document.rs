@@ -3,8 +3,12 @@
 //! body as typed and the chapters it includes. UI-free: the notebook tab
 //! keeps the editor, the preview and the view beside it, and copies the
 //! body here after every edit (`docs/DESIGN_NOTEBOOK_TAB.md`).
+//!
+//! The text is held with `\n` line ends; a file read with `\r\n` is written
+//! back with `\r\n`, so an edit never changes every line of it.
 
 use std::path::PathBuf;
+use std::time::SystemTime;
 
 use crate::DEFAULT_NOTEBOOK_FILE;
 use crate::file::{NotebookFile, NotebookFileError};
@@ -51,8 +55,15 @@ pub struct NotebookDocument {
     pub saving: bool,
     /// Why the last save failed, until the next one.
     pub save_error: Option<String>,
-    /// When the last save landed, as the clock read then (`14:02`).
-    pub saved_at: Option<String>,
+    /// When the last save landed; the view says it in the person's clock.
+    pub saved_at: Option<SystemTime>,
+    /// The file was read with `\r\n` line ends, and is written with them.
+    pub crlf: bool,
+}
+
+/// `text` with `\n` line ends.
+fn lf(text: &str) -> String {
+    text.replace("\r\n", "\n")
 }
 
 impl NotebookDocument {
@@ -69,6 +80,7 @@ impl NotebookDocument {
             saving: false,
             save_error: None,
             saved_at: None,
+            crlf: false,
         }
     }
 
@@ -84,6 +96,12 @@ impl NotebookDocument {
     /// viewing and Save is refused.
     pub fn is_read_only(&self) -> bool {
         self.file.as_ref().is_some_and(NotebookFile::is_read_only)
+    }
+
+    /// True when the notebook was never saved: its first Save makes the
+    /// file, and must not replace one written meanwhile.
+    pub fn is_new(&self) -> bool {
+        self.saved_body.is_none()
     }
 
     /// The sources a compile reads: the chapters as read and the notebook
@@ -113,8 +131,10 @@ impl NotebookDocument {
 
     /// The file `text` was read: its body is the text to edit.
     pub fn open_text(&mut self, text: &str) -> Result<(), NotebookFileError> {
-        let file = NotebookFile::parse(text)?;
-        self.header_lines = header_line_count(text);
+        self.crlf = text.contains("\r\n");
+        let text = lf(text);
+        let file = NotebookFile::parse(&text)?;
+        self.header_lines = header_line_count(&text);
         self.body = Some(file.body.clone());
         self.saved_body = Some(file.body.clone());
         self.file = Some(file);
@@ -124,7 +144,7 @@ impl NotebookDocument {
 
     /// An empty notebook now holds the new `file`, not saved.
     pub fn start_new(&mut self, file: NotebookFile) {
-        self.body = Some(file.body.clone());
+        self.body = Some(lf(&file.body));
         self.header_lines = 0;
         self.saved_body = None;
         self.file = Some(file);
@@ -134,35 +154,76 @@ impl NotebookDocument {
     /// The whole file text `text` replaces the body and the header, as a
     /// reference fix writes it; written on Save like any edit.
     pub fn replace_file_text(&mut self, text: &str) -> Result<(), NotebookFileError> {
-        let file = NotebookFile::parse(text)?;
-        self.header_lines = header_line_count(text);
+        let text = lf(text);
+        let file = NotebookFile::parse(&text)?;
+        self.header_lines = header_line_count(&text);
         self.body = Some(file.body.clone());
         self.file = Some(file);
         Ok(())
     }
 
     /// The file text Save writes: the file (or a new one) with the body as
-    /// typed. `None` when there is nothing to write.
+    /// typed, in the line ends the file was read with. `None` when there
+    /// is nothing to write.
     pub fn written_text(&self) -> Option<Result<String, NotebookFileError>> {
         let body = self.body.as_ref()?;
         let mut file = self
             .file
             .clone()
             .unwrap_or_else(|| NotebookFile::new(String::new()));
-        file.body = body.clone();
-        Some(file.write())
+        file.body = lf(body);
+        let crlf = self.crlf;
+        Some(file.write().map(|text| {
+            let text = lf(&text);
+            if crlf {
+                text.replace('\n', "\r\n")
+            } else {
+                text
+            }
+        }))
     }
 
     /// The file now holds `written`: keep it as the file read, so the next
     /// save of an unchanged header writes it back byte for byte. `at` is
-    /// the clock's reading of the save.
-    pub fn mark_written(&mut self, written: &str, at: String) -> Result<(), NotebookFileError> {
+    /// when the save landed.
+    pub fn mark_written(&mut self, written: &str, at: SystemTime) -> Result<(), NotebookFileError> {
         self.load = NotebookLoad::Open;
         self.saved_at = Some(at);
-        let file = NotebookFile::parse(written)?;
+        let written = lf(written);
+        let file = NotebookFile::parse(&written)?;
         self.saved_body = Some(file.body.clone());
-        self.header_lines = header_line_count(written);
+        self.header_lines = header_line_count(&written);
         self.file = Some(file);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const CRLF: &str = "+++\r\nformat = \"snxnbk/1\"\r\n+++\r\n= Power\r\nText\r\n";
+
+    #[test]
+    fn a_crlf_file_is_held_with_lf_and_written_back_with_crlf() {
+        let mut doc = NotebookDocument::reading(PathBuf::from("design.snxnbk"));
+        doc.open_text(CRLF).expect("opens");
+        assert!(!doc.body.as_deref().unwrap_or_default().contains('\r'));
+        assert!(!doc.is_unsaved());
+        assert_eq!(
+            doc.written_text().expect("text").expect("writes"),
+            CRLF,
+            "unchanged, byte for byte"
+        );
+        doc.body = Some("= Power\nText more\n".into());
+        let written = doc.written_text().expect("text").expect("writes");
+        assert!(written.contains("Text more\r\n"), "{written:?}");
+        assert!(
+            !written.replace("\r\n", "").contains('\n'),
+            "no bare LF: {written:?}"
+        );
+        doc.mark_written(&written, SystemTime::UNIX_EPOCH)
+            .expect("reads back");
+        assert!(!doc.is_unsaved());
     }
 }

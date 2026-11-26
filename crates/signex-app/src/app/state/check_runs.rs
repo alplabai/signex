@@ -57,6 +57,15 @@ impl CheckRuns {
         self.reports.push((scope.to_path_buf(), report));
     }
 
+    /// A project closed: drop the reports of its file `project` and of what
+    /// is in its folder `dir` (a board), so they do not outlive it.
+    pub(crate) fn forget_reports_of(&mut self, project: &Path, dir: &Path) {
+        let under = |scope: &Path| {
+            scope == project || (!dir.as_os_str().is_empty() && scope.starts_with(dir))
+        };
+        self.reports.retain(|(scope, _)| !under(scope));
+    }
+
     /// The newest report of `check` over `scope`, when one is kept.
     pub(crate) fn last_report(&self, check: &str, scope: &Path) -> Option<&CheckReport> {
         self.reports
@@ -159,5 +168,20 @@ mod tests {
         assert_eq!(runs.last_report("drc", a).map(|r| r.run), Some(2));
         assert_eq!(runs.last_report("erc", b).map(|r| r.run), Some(4));
         assert!(runs.last_report("requirements", a).is_none());
+    }
+
+    #[test]
+    fn a_closed_projects_reports_are_dropped_and_the_others_kept() {
+        let mut runs = CheckRuns::default();
+        let a = Path::new("/p/a/a.snxprj");
+        let board = Path::new("/p/a/board.snxpcb");
+        let b = Path::new("/p/b/b.snxprj");
+        runs.keep_report(a, report("erc", 1));
+        runs.keep_report(board, report("drc", 2));
+        runs.keep_report(b, report("erc", 3));
+        runs.forget_reports_of(a, Path::new("/p/a"));
+        assert!(runs.last_report("erc", a).is_none());
+        assert!(runs.last_report("drc", board).is_none());
+        assert_eq!(runs.last_report("erc", b).map(|r| r.run), Some(3));
     }
 }

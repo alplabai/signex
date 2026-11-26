@@ -19,8 +19,9 @@ use super::design::DesignInputs;
 use super::job::{Ask, Job, NotebookRead, run};
 use crate::app::agent::AgentMsg;
 use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
-use crate::app::notebook_project::{because, needs_operand, refusal};
+use crate::app::notebook_project::{because, export_target, needs_operand, overwrite, refusal};
 use crate::app::project_sheets::open_sheets_snapshot;
+use crate::app::state::ProjectId;
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
 
@@ -167,7 +168,7 @@ fn start(
         Ok(ask) => ask,
         Err(reason) => return refusal(reason),
     };
-    let (project, job) = match app.notebook_job(command.as_str(), args, ask) {
+    let (project, project_id, job) = match app.notebook_job(command.as_str(), args, ask) {
         Ok(found) => found,
         Err(reason) => return refusal(reason),
     };
@@ -180,12 +181,13 @@ fn start(
                 .map_err(|e| {
                     Translatable::new(ids::NOTEBOOK_TAB_CMD_READ_STOPPED).arg("why", e.to_string())
                 })
-                .and_then(|answer| answer.map_err(because))
+                .and_then(|done| done)
         },
         move |answer| {
             Message::Agent(AgentMsg::NotebookRead(Box::new(NotebookRead {
                 waiting,
                 project,
+                project_id,
                 answer: Arc::new(answer),
             })))
         },
@@ -195,37 +197,58 @@ fn start(
 
 impl Signex {
     /// The project file `args` names and the job for it, captured here: the
-    /// project folder and the open sheets. Refused when `document` names
-    /// no open project.
+    /// project folder, the open sheets and the notebook file as its tab
+    /// holds it. Refused when `document` names no open project, or an
+    /// export path is not one it writes.
     fn notebook_job(
         &self,
         id: &str,
         args: &CommandArgs,
         ask: Ask,
-    ) -> Result<(PathBuf, Job), Translatable> {
+    ) -> Result<(PathBuf, ProjectId, Job), Translatable> {
         let project = self.notebook_project_named(id, args)?;
+        let project_id = project.id;
         let design = DesignInputs::of(project, open_sheets_snapshot(&self.document_state));
+        let mut ask = ask;
+        if let Ask::ExportTimeline { path, .. } = &mut ask {
+            *path = export_target(project.dir(), path, "csv", overwrite(args))?;
+        }
         let job = Job {
             ask,
             project_dir: project.dir().to_path_buf(),
             design,
+            held: self.notebook_tab_file_text(project_id),
         };
-        Ok((project.path.clone(), job))
+        Ok((project.path.clone(), project_id, job))
     }
 
-    /// A measurement command's work landed: answer its caller.
+    /// A measurement command's work landed: an edit of the notebook file
+    /// the tab holds goes into the tab (written on Save); then the caller
+    /// is answered.
     pub(crate) fn handle_notebook_read(&mut self, read: NotebookRead) -> Task<Message> {
         let NotebookRead {
             waiting,
             project,
+            project_id,
             answer,
         } = read;
+        let mut edited = Task::none();
         let outcome = match answer.as_ref() {
-            Ok(value) => CommandOutcome::Answered(value.clone()),
+            Ok(done) => match &done.tab_text {
+                None => CommandOutcome::Answered(done.answer.clone()),
+                Some(text) => match self.replace_notebook_tab_file_text(project_id, text) {
+                    Ok(task) => {
+                        edited = task;
+                        CommandOutcome::Answered(done.answer.clone())
+                    }
+                    Err(reason) => CommandOutcome::Disabled { reason },
+                },
+            },
             Err(reason) => CommandOutcome::Disabled {
                 reason: reason.clone(),
             },
         };
-        self.finish_waiting_command(waiting, &project, |_| outcome)
+        let answered = self.finish_waiting_command(waiting, &project, |_| outcome);
+        Task::batch([edited, answered])
     }
 }

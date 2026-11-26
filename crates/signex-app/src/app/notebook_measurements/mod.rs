@@ -10,7 +10,7 @@ mod operands;
 // The notebook tab's margin lane mounts these (mockup row 199).
 pub(crate) mod views;
 
-pub(crate) use design::values_of;
+pub(crate) use design::{DesignInputs, values_of};
 pub use job::NotebookRead;
 pub(crate) use operands::{
     QUERY_IDS, attach_notebook_file, export_notebook_timeline, mark_notebook_attachment_valid,
@@ -19,3 +19,5 @@ pub(crate) use operands::{
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_tab;

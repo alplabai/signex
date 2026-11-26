@@ -159,3 +159,14 @@ notebook-tab-cmd-bad-stale = `stale` is warn or fail, not { $value }
 notebook-tab-cmd-bad-annotations = `annotations` lists note, calculation, measurement, issue and decision, not { $value }
 notebook-tab-cmd-bad-block-id = `id` is a block id such as DEC-002 or CALC-2.1, not { $value }
 notebook-tab-cmd-bad-block-kind = `kind` is note, calculation, measurement, issue or decision, not { $value }
+# $file is a chapter (notebook/chapters/power.snxnbk): the open tab holds the
+# notebook file, so a change written to a chapter behind it is refused.
+notebook-tab-cmd-chapter-held = { $file } is a chapter of the notebook open in its tab: close the tab, or edit the chapter by hand
+# $what is "the attachment scope/a.csv".
+notebook-tab-cmd-not-found = { $what } is not in the notebook any more
+notebook-tab-cmd-in-chapter = { $what } is in the chapter { $file }: edit it there
+notebook-tab-cmd-bad-target-ext = `path` is a { $ext } file, not { $value }
+notebook-tab-cmd-snx-target = `path` names a Signex document ({ $value }): pick another file
+notebook-tab-cmd-target-exists = { $value } exists: pass overwrite=true to replace it
+# A new notebook's first Save finds a file at its path (written meanwhile).
+notebook-tab-cmd-file-appeared = { $path } was written since this notebook was started: it is not replaced

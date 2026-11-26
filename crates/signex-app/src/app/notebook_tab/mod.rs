@@ -32,6 +32,8 @@ mod tests_edit;
 #[cfg(test)]
 mod tests_lane;
 #[cfg(test)]
+mod tests_save;
+#[cfg(test)]
 mod tests_view;
 
 use std::path::PathBuf;
@@ -172,10 +174,13 @@ pub enum NotebookMsg {
         project_id: ProjectId,
         path: Option<PathBuf>,
     },
-    /// Mark still valid on the stale card of the attachment on `line`.
+    /// Mark still valid on the stale card of the attachment `file` (its
+    /// path inside `notebook/attachments/`) written in the notebook file
+    /// `source_file`; found again where it is now when it is applied.
     AttachmentMarkedValid {
         project_id: ProjectId,
-        line: u32,
+        file: String,
+        source_file: String,
     },
     /// Re-measure… on a stale card: a new Measurement block at the cursor.
     RemeasurePressed {

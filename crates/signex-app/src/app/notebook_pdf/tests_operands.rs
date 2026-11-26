@@ -4,28 +4,49 @@
 //! a bad operand or a document of no project is refused.
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use signex_i18n::RenderTranslatable as _;
 use signex_notebook::PACKAGE_IMPORT;
 use signex_notebook::export::sha256_hex;
+use signex_types::format::SnxSchematic;
+use signex_types::schematic::{SchematicSheet, Symbol};
 
 use super::operands::{export_options, notebook_file};
 use crate::app::Signex;
 use crate::app::command::{CommandArgs, CommandOutcome};
 use crate::app::handlers::menu::export::tests::app_workspace;
 use crate::keymap::AppCommandId;
-use crate::panels::annotations::{NotebookScan, PartIndex, PartPlace};
 
-fn app_with_notebook(dir: &tempfile::TempDir) -> Signex {
+const R7_AND_U1: &str = "= Power\nSee #component(\"R7\") and #component(\"U1\").\n";
+
+fn notebook_with(dir: &tempfile::TempDir, body: &str) {
     let folder = dir.path().join("notebook");
     std::fs::create_dir_all(&folder).expect("notebook folder");
-    let text = format!(
-        "{PACKAGE_IMPORT}\n#show: report.with(doc: \"DN-7\", rev: \"A\")\n\
-         = Power\nSee #component(\"R7\") and #component(\"U1\").\n"
-    );
+    let text = format!("{PACKAGE_IMPORT}\n#show: report.with(doc: \"DN-7\", rev: \"A\")\n{body}");
     std::fs::write(folder.join("design.snxnbk"), text).expect("notebook");
+}
+
+fn app_with_notebook(dir: &tempfile::TempDir) -> Signex {
+    notebook_with(dir, R7_AND_U1);
     app_workspace(&dir.path().to_string_lossy(), &[])
+}
+
+/// A project whose one sheet, on disk and not open, holds U1 alone (with no
+/// pins), and whose notebook says `body`.
+fn project_with_u1(dir: &tempfile::TempDir, body: &str) -> Signex {
+    let mut sheet = SchematicSheet::default();
+    sheet.symbols.push(Symbol {
+        uuid: uuid::Uuid::now_v7(),
+        lib_id: "Device:U".into(),
+        reference: "U1".into(),
+        value: "MCU".into(),
+        unit: 1,
+        ..Symbol::default()
+    });
+    let text = SnxSchematic::new(sheet).write_string().expect("encode");
+    std::fs::write(dir.path().join("top.snxsch"), text).expect("write sheet");
+    notebook_with(dir, body);
+    app_workspace(&dir.path().to_string_lossy(), &["top.snxsch"])
 }
 
 fn project_path(app: &Signex) -> PathBuf {
@@ -92,37 +113,20 @@ fn with_no_path_the_default_file_is_written() {
         .join("ProjectA-DN-7-revA.pdf");
     assert_eq!(value["path"], expected.display().to_string());
     assert!(expected.exists());
-    let again = answer(run(&mut app, &[]));
+    // The default file is there now: it is replaced only when asked.
+    let refused = refusal(run(&mut app, &[]));
+    assert!(refused.contains("overwrite=true"), "{refused}");
+    let again = answer(run(&mut app, &["overwrite=true"]));
     assert_eq!(again["sha256"], value["sha256"], "two exports, one file");
 }
 
-/// The Annotations scan of the project, which found only U1.
-fn design_with_u1(app: &mut Signex) {
-    let project = &app.document_state.projects[0];
-    let target = (project.id, project.dir().to_path_buf());
-    let mut parts = PartIndex::new();
-    parts.insert(
-        "U1".into(),
-        PartPlace {
-            sheet: PathBuf::from("top.snxsch"),
-            symbol: uuid::Uuid::nil(),
-            placement: None,
-        },
-    );
-    let state = &mut app.ui_state.annotations;
-    state.target = Some(target);
-    state.scan = Some(Arc::new(NotebookScan {
-        folder_found: true,
-        parts: Some(parts),
-        ..NotebookScan::default()
-    }));
-}
-
+/// The stale check reads the named project's design from disk, though
+/// nothing of it is open or in view and no panel has read it.
 #[test]
 fn a_stale_reference_refuses_the_export_under_stale_fail() {
     let dir = tempfile::tempdir().unwrap();
-    let mut app = app_with_notebook(&dir);
-    design_with_u1(&mut app);
+    let mut app = project_with_u1(&dir, R7_AND_U1);
+    assert!(app.ui_state.annotations.scan.is_none(), "no scan read it");
     let out = dir.path().join("out.pdf");
     let path = format!("path={}", out.display());
     let reason = refusal(run(&mut app, &[path.as_str(), "stale=fail"]));
@@ -131,6 +135,49 @@ fn a_stale_reference_refuses_the_export_under_stale_fail() {
     let value = answer(run(&mut app, &[path.as_str()]));
     assert_eq!(value["stale"][0]["name"], "R7", "Warn exports and lists it");
     assert!(out.exists());
+}
+
+#[test]
+fn a_removed_pin_is_stale() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = project_with_u1(&dir, "= Power\nThe reset #pin(\"U1\", \"7\").\n");
+    let out = dir.path().join("out.pdf");
+    let path = format!("path={}", out.display());
+    let reason = refusal(run(&mut app, &[path.as_str(), "stale=fail"]));
+    assert!(reason.contains("U1.7"), "{reason}");
+}
+
+/// Under Fail a project whose design cannot be read (no sheet) is not
+/// passed unchecked.
+#[test]
+fn stale_fail_refuses_a_design_it_cannot_read() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = app_with_notebook(&dir);
+    let out = dir.path().join("out.pdf");
+    let path = format!("path={}", out.display());
+    let reason = refusal(run(&mut app, &[path.as_str(), "stale=fail"]));
+    assert!(reason.contains("could not be read whole"), "{reason}");
+    assert!(!out.exists());
+}
+
+#[test]
+fn an_export_path_must_be_a_new_pdf() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = app_with_notebook(&dir);
+    let at = |name: &str| format!("path={}", dir.path().join(name).display());
+    let not_pdf = refusal(run(&mut app, &[at("out.txt").as_str()]));
+    assert!(not_pdf.contains(".pdf"), "{not_pdf}");
+    let snx = refusal(run(&mut app, &[at("top.snxsch").as_str()]));
+    assert!(snx.contains("Signex document"), "{snx}");
+    let notebook = refusal(run(&mut app, &[at("notebook/design.snxnbk").as_str()]));
+    assert!(notebook.contains("Signex document"), "{notebook}");
+    std::fs::write(dir.path().join("taken.pdf"), "mine").unwrap();
+    let taken = refusal(run(&mut app, &[at("taken.pdf").as_str()]));
+    assert!(taken.contains("overwrite=true"), "{taken}");
+    let kept = std::fs::read(dir.path().join("taken.pdf")).unwrap();
+    assert_eq!(kept, b"mine");
+    let replaced = answer(run(&mut app, &[at("taken.pdf").as_str(), "overwrite=true"]));
+    assert!(replaced["bytes"].as_u64().unwrap_or(0) > 4);
 }
 
 #[test]

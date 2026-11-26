@@ -119,8 +119,13 @@ pub(super) fn saved_text(look: Look<'_>) -> Localized {
     if doc.is_unsaved() {
         return look.t(ids::NOTEBOOK_TAB_STATUS_UNSAVED);
     }
-    match &doc.saved_at {
-        Some(time) => t!(look.i18n, ids::NOTEBOOK_TAB_STATUS_SAVED_AT, "time" => time.as_str()),
+    match doc.saved_at {
+        Some(at) => {
+            let time = chrono::DateTime::<chrono::Local>::from(at)
+                .format("%H:%M")
+                .to_string();
+            t!(look.i18n, ids::NOTEBOOK_TAB_STATUS_SAVED_AT, "time" => time)
+        }
         None => look.t(ids::NOTEBOOK_TAB_STATUS_SAVED),
     }
 }

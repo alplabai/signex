@@ -135,7 +135,6 @@ pub use edit_reads::{EditReads, ReadsLoaded};
 pub(crate) use enablement::CommandContext;
 pub(crate) use enablement::{disabled_reason, is_enabled};
 pub(crate) use opened::answers_with_the_new_document;
-pub(crate) use operand_handlers::refused as operand_refused;
 pub(crate) use operand_handlers::runs_headless_without_operands;
 pub use operands::{OperandError, OperandValue};
 pub(crate) use operands::{missing_headless_operand, parse_targets};

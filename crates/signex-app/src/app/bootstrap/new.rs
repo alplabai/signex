@@ -837,6 +837,7 @@ impl Signex {
                 deferred_git_commits: Vec::new(),
                 gerber_viewer: Default::default(),
                 notebooks: std::collections::HashMap::new(),
+                generated_reports: std::collections::HashMap::new(),
             },
             interaction_state: InteractionState {
                 current_tool: Tool::Select,

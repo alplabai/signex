@@ -96,3 +96,52 @@ fn remeasure_inserts_a_measurement_block_at_the_cursor() {
     let after = body(&app, id).matches("#measurement(").count();
     assert_eq!(after, before + 1);
 }
+
+/// A notebook file with a stale attachment, and a chapter with another.
+const ATTACHED: &str = "+++\nformat = \"snxnbk/1\"\n+++\n= Bring-up\n\
+    #attachment(\"scope/a.csv\", taken-with: (\"L1\": \"3.3 µH\"))\n\
+    #include \"chapters/b.snxnbk\"\n";
+const CHAPTER: &str = "= Bench\n#attachment(\"scope/b.csv\", taken-with: (\"L1\": \"3.3 µH\"))\n";
+
+fn attached_doc(main: &str) -> signex_notebook::NotebookDocument {
+    let mut doc = signex_notebook::NotebookDocument::reading("design.snxnbk".into());
+    doc.open_text(main).expect("opens");
+    assert!(doc.sources.insert("chapters/b.snxnbk", CHAPTER));
+    doc
+}
+
+fn l1_now() -> signex_notebook::attachment::DesignValues {
+    [("L1", "4.7 µH")].into_iter().collect()
+}
+
+/// Mark still valid is found again where the attachment is now, after an
+/// edit moved it since the card was drawn.
+#[test]
+fn mark_still_valid_finds_an_attachment_that_moved() {
+    let moved = ATTACHED.replace("= Bring-up\n", "= Bring-up\nA new line.\n\n");
+    let doc = attached_doc(&moved);
+    let marked =
+        super::lane::marked_valid(&doc, "scope/a.csv", "design.snxnbk", &l1_now()).expect("marked");
+    assert!(
+        marked.contains("#attachment(\"scope/a.csv\", taken-with: (\"L1\": \"4.7 µH\"))"),
+        "{marked}"
+    );
+    assert!(marked.contains("A new line."), "the rest is kept: {marked}");
+}
+
+/// The tab holds the notebook file only: an attachment in a chapter, or
+/// one no longer there, is refused.
+#[test]
+fn mark_still_valid_refuses_a_chapter_or_a_gone_attachment() {
+    use signex_i18n::RenderTranslatable as _;
+    let doc = attached_doc(ATTACHED);
+    let chapter = super::lane::marked_valid(&doc, "scope/b.csv", "chapters/b.snxnbk", &l1_now())
+        .expect_err("in a chapter");
+    assert!(chapter.render_en_us().contains("chapters/b.snxnbk"));
+    let moved_there = super::lane::marked_valid(&doc, "scope/b.csv", "design.snxnbk", &l1_now())
+        .expect_err("now in a chapter");
+    assert!(moved_there.render_en_us().contains("chapters/b.snxnbk"));
+    let gone = super::lane::marked_valid(&doc, "scope/c.csv", "design.snxnbk", &l1_now())
+        .expect_err("gone");
+    assert!(gone.render_en_us().contains("scope/c.csv"));
+}

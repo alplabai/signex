@@ -185,8 +185,49 @@ fn the_dialog_runs_the_same_code_and_keeps_the_report_unsaved() {
         .expect("the run lands");
     let state = &app.ui_state.notebook_generate;
     assert!(state.dialog.is_none(), "the dialog closes");
-    let pending = state.pending.as_ref().expect("the report waits unsaved");
+    let id = app.document_state.projects[0].id;
+    let pending = app
+        .document_state
+        .generated_reports
+        .get(&id)
+        .expect("the report waits unsaved");
     assert!(!pending.summary.written);
     assert!(!pending.summary.sections.contains(&"simulation"));
     assert!(!report_file(dir.path()).exists());
+}
+
+/// Mockup row 201 and the 2026-11-25 Generate row: the report made in the
+/// app is unsaved until Save, which Save All and the close and quit
+/// prompts see; Save writes it.
+#[test]
+fn the_dialogs_report_is_unsaved_until_save_all_writes_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = project_app(&dir);
+    let _ = app.update(NotebookGenerateMsg::DialogOpened.into());
+    let task = app.update(NotebookGenerateMsg::GenerateClicked.into());
+    crate::task_driver::TaskDriver::new()
+        .settle(&mut app, task)
+        .expect("the run lands");
+    let path = report_file(dir.path());
+    assert!(
+        app.document_state.is_document_dirty(&path),
+        "the prompts see it"
+    );
+    assert!(
+        app.document_state.dirty_document_paths().contains(&path),
+        "Save All lists it"
+    );
+    let save = app.begin_save_all(
+        "Save All",
+        std::slice::from_ref(&path),
+        &[],
+        crate::app::contracts::SaveAllNext::Nothing,
+    );
+    crate::task_driver::TaskDriver::new()
+        .settle(&mut app, save)
+        .expect("Save All lands");
+    let written = std::fs::read_to_string(&path).expect("Save wrote the report");
+    assert!(written.starts_with("+++"), "{written}");
+    assert!(!app.document_state.is_document_dirty(&path));
+    assert!(app.document_state.generated_reports.is_empty());
 }

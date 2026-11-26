@@ -99,9 +99,11 @@ impl Signex {
             M::TimelineExportChosen { project_id, path } => {
                 self.write_notebook_timeline_csv(project_id, path)
             }
-            M::AttachmentMarkedValid { project_id, line } => {
-                self.mark_notebook_attachment_valid_in_tab(project_id, line)
-            }
+            M::AttachmentMarkedValid {
+                project_id,
+                file,
+                source_file,
+            } => self.mark_notebook_attachment_valid_in_tab(project_id, &file, &source_file),
             M::RemeasurePressed { project_id } => {
                 let measurement =
                     signex_notebook::Insertion::Block(signex_notebook::AnnotationKind::Measurement);

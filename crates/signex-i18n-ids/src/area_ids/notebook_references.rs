@@ -50,4 +50,18 @@ define_ids! {
     NOTEBOOK_REF_NEEDS_TAB = "notebook-ref-needs-tab";
     NOTEBOOK_REF_OPEN_FIRST = "notebook-ref-open-first";
     NOTEBOOK_REF_OPEN_AT = "notebook-ref-open-at";
+    NOTEBOOK_REF_CMD_MOVED = "notebook-ref-cmd-moved";
+    NOTEBOOK_REF_CMD_UNREADABLE = "notebook-ref-cmd-unreadable";
+    NOTEBOOK_REF_CMD_NO_NOTEBOOK = "notebook-ref-cmd-no-notebook";
+    NOTEBOOK_REF_CMD_NO_DESIGN = "notebook-ref-cmd-no-design";
+    NOTEBOOK_REF_CMD_NEEDS_NAME = "notebook-ref-cmd-needs-name";
+    NOTEBOOK_REF_CMD_NOT_A_PIN = "notebook-ref-cmd-not-a-pin";
+    NOTEBOOK_REF_CMD_BAD_KIND = "notebook-ref-cmd-bad-kind";
+    NOTEBOOK_REF_CMD_BAD_LIMIT = "notebook-ref-cmd-bad-limit";
+    NOTEBOOK_REF_CMD_PART_OR_NET = "notebook-ref-cmd-part-or-net";
+    NOTEBOOK_REF_CMD_UPDATE_NEEDS_TO = "notebook-ref-cmd-update-needs-to";
+    NOTEBOOK_REF_CMD_PICK_NEEDS_PIN = "notebook-ref-cmd-pick-needs-pin";
+    NOTEBOOK_REF_CMD_BAD_FIX = "notebook-ref-cmd-bad-fix";
+    NOTEBOOK_REF_CMD_NO_FILE = "notebook-ref-cmd-no-file";
+    NOTEBOOK_REF_CMD_NOT_USED = "notebook-ref-cmd-not-used";
 }

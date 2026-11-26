@@ -115,4 +115,11 @@ define_ids! {
     NOTEBOOK_TAB_CMD_BAD_ANNOTATIONS = "notebook-tab-cmd-bad-annotations";
     NOTEBOOK_TAB_CMD_BAD_BLOCK_ID = "notebook-tab-cmd-bad-block-id";
     NOTEBOOK_TAB_CMD_BAD_BLOCK_KIND = "notebook-tab-cmd-bad-block-kind";
+    NOTEBOOK_TAB_CMD_CHAPTER_HELD = "notebook-tab-cmd-chapter-held";
+    NOTEBOOK_TAB_CMD_NOT_FOUND = "notebook-tab-cmd-not-found";
+    NOTEBOOK_TAB_CMD_IN_CHAPTER = "notebook-tab-cmd-in-chapter";
+    NOTEBOOK_TAB_CMD_BAD_TARGET_EXT = "notebook-tab-cmd-bad-target-ext";
+    NOTEBOOK_TAB_CMD_SNX_TARGET = "notebook-tab-cmd-snx-target";
+    NOTEBOOK_TAB_CMD_TARGET_EXISTS = "notebook-tab-cmd-target-exists";
+    NOTEBOOK_TAB_CMD_FILE_APPEARED = "notebook-tab-cmd-file-appeared";
 }

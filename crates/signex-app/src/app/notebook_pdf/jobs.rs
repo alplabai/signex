@@ -1,6 +1,9 @@
 //! The off-thread work of the notebook PDF export: reading the notebook
-//! files, inspecting them for the dialog and making the PDF, and the names
-//! of the design the stale check reads, captured in `update`.
+//! files, inspecting them for the dialog and making the PDF. The design the
+//! stale check reads (its designators, pins and nets) and the part values
+//! the Python cells read come from the named project itself, read on the
+//! worker from what `update` captured (the open sheets, with their unsaved
+//! edits), never from what another panel happens to hold.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -9,45 +12,36 @@ use iced::Task;
 use signex_notebook::attachment::DesignValues;
 use signex_notebook::cell::{CELL_CACHE_PATH, CellCache, NoRuntime, SandboxPolicy, Trust};
 use signex_notebook::export::{
-    DesignNames, ExportCells, NotebookInspection, OUTPUT_FOLDERS, TitleBlock, default_file_name,
-    export_pdf_running_cells, inspect,
+    DesignNames, ExportCells, NotebookInspection, OUTPUT_FOLDERS, StaleRule, TitleBlock,
+    default_file_name, export_pdf_running_cells, inspect,
 };
 use signex_notebook::{LoadProblem, NOTEBOOK_DIR, NotebookSources};
 use signex_types::project::{BASE_VARIANT, is_base_variant};
 
 use super::{BuildRequest, BuiltPdf, NotebookPdfMsg};
+use crate::app::notebook_measurements::DesignInputs;
+use crate::app::project_sheets::open_sheets_snapshot;
 use crate::app::{LoadedProject, Message, ProjectId, Signex};
 
 impl Signex {
-    /// What the design of `project` has now, for the stale check: the
-    /// designators the Annotations scan found (when it is of this project)
-    /// and the net names of its current net index. A list that is not
-    /// there is not checked.
-    pub(super) fn notebook_design_names(&self, project: ProjectId) -> DesignNames {
-        let annotations = &self.ui_state.annotations;
-        let components = annotations
-            .target
-            .as_ref()
-            .filter(|(id, _)| *id == project)
-            .and(annotations.scan.as_ref())
-            .and_then(|scan| scan.parts.as_ref())
-            .map(|parts| parts.keys().cloned().collect());
-        let ds = &self.document_state;
-        let nets = crate::app::runtime::net_class_styles::plan_projects(ds)
-            .into_iter()
-            .find(|planned| planned.project == project)
-            .and_then(|planned| ds.net_nav.index.fresh(project, &planned.key))
-            .map(|data| {
-                let index = &data.index;
-                (0..index.net_count())
-                    .filter_map(|i| index.net(i).map(|net| net.name.clone()))
-                    .collect()
-            });
-        DesignNames {
-            components,
-            pins: None,
-            nets,
-        }
+    /// What the design of `project` is read from on the worker: its sheets,
+    /// the open ones with their unsaved edits. `None` for a project with no
+    /// sheet.
+    pub(super) fn notebook_design_inputs(&self, project: ProjectId) -> Option<DesignInputs> {
+        let loaded = self.document_state.project_by_id(project)?;
+        DesignInputs::of(loaded, open_sheets_snapshot(&self.document_state))
+    }
+}
+
+/// Blocking: the design's names and part values, `None` names when the
+/// design could not be read whole.
+fn design_of(
+    design: Option<&DesignInputs>,
+    project_dir: &Path,
+) -> (Option<DesignNames>, DesignValues) {
+    match design {
+        Some(design) => (design.names(project_dir), design.values()),
+        None => (None, DesignValues::new()),
     }
 }
 
@@ -121,12 +115,16 @@ pub(super) fn inspect_task(
     generation: u64,
     project_dir: PathBuf,
     notebook: String,
-    names: DesignNames,
+    design: Option<DesignInputs>,
 ) -> Task<Message> {
     Task::perform(
         async move {
             tokio::task::spawn_blocking(move || -> Result<NotebookInspection, String> {
                 let sources = read_sources(&project_dir, &notebook)?;
+                let names = design
+                    .as_ref()
+                    .and_then(|design| design.names(&project_dir))
+                    .unwrap_or_default();
                 Ok(inspect(&sources, |r| names.has(r)))
             })
             .await
@@ -143,15 +141,11 @@ pub(super) fn inspect_task(
 
 /// Read the notebook, make its PDF and make the folder it goes in, off the
 /// update thread; the file itself is written by the export write path.
-pub(super) fn build_task(
-    request: BuildRequest,
-    names: DesignNames,
-    values: DesignValues,
-) -> Task<Message> {
+pub(super) fn build_task(request: BuildRequest, design: Option<DesignInputs>) -> Task<Message> {
     let job = request.clone();
     Task::perform(
         async move {
-            tokio::task::spawn_blocking(move || build(&job, &names, &values))
+            tokio::task::spawn_blocking(move || build(&job, design.as_ref()))
                 .await
                 .unwrap_or_else(|e| Err(format!("the export did not finish: {e}")))
         },
@@ -176,12 +170,23 @@ fn read_cell_cache(project_dir: &Path) -> CellCache {
 /// folder. The cells run as an export runs them (mockup row 200): this
 /// build has no Python runtime, so each prints its cached result greyed
 /// with the slim-install note, or none.
-fn build(
-    request: &BuildRequest,
-    names: &DesignNames,
-    values: &DesignValues,
-) -> Result<BuiltPdf, String> {
+fn build(request: &BuildRequest, design: Option<&DesignInputs>) -> Result<BuiltPdf, String> {
     let sources = read_sources(&request.project_dir, &request.notebook)?;
+    let (names, values) = design_of(design, &request.project_dir);
+    // Under Fail a design that could not be read whole checks nothing, so
+    // the export does not pass it silently.
+    let names = match names {
+        Some(names) => names,
+        None if request.options.stale == StaleRule::Fail => {
+            return Err(
+                "the project's design could not be read whole, so its references cannot be \
+                 checked for stale=fail"
+                    .to_string(),
+            );
+        }
+        None => DesignNames::default(),
+    };
+    let values = &values;
     let ident = pdf_ident(&request.project_name, &request.notebook);
     let mut cache = read_cell_cache(&request.project_dir);
     let policy = SandboxPolicy::new(&request.project_dir.to_string_lossy());
@@ -205,6 +210,14 @@ fn build(
             &export.summary.title,
         )),
     };
+    // A command's default file is checked here, once the title block named
+    // it; a path it named was checked in `update`.
+    if request.path.is_none() && request.overwrite == Some(false) && path.exists() {
+        return Err(format!(
+            "{} exists; pass overwrite=true to replace it",
+            path.display()
+        ));
+    }
     if let Some(folder) = path.parent() {
         std::fs::create_dir_all(folder)
             .map_err(|e| format!("{e}: could not make the folder {}", folder.display()))?;

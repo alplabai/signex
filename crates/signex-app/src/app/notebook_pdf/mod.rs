@@ -229,6 +229,9 @@ pub struct BuildRequest {
     pub notebook: String,
     /// The file; `None` takes the default name once the title block is read.
     pub path: Option<PathBuf>,
+    /// A command's `overwrite`: an existing file is replaced only with it.
+    /// `None` for the dialog, where the person picked the file.
+    pub overwrite: Option<bool>,
     pub options: ExportOptions,
     /// The dialog opening it was started from; `None` for the command.
     pub generation: Option<u64>,

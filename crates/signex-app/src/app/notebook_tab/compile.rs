@@ -261,7 +261,8 @@ impl Signex {
     }
 
     /// A compile landed: keep it, show its page when it gave pages, and run
-    /// the compile an edit owed meanwhile.
+    /// the compile an edit owed meanwhile. A compile that is not the one
+    /// running (the tab was reopened, or a later one started) is dropped.
     pub(super) fn notebook_compiled(
         &mut self,
         id: ProjectId,
@@ -270,6 +271,9 @@ impl Signex {
         let Some(tab) = self.ui_state.notebook_tabs.get_mut(&id) else {
             return Task::none();
         };
+        if tab.compile.running != Some(outcome.generation) {
+            return Task::none();
+        }
         land(tab, outcome);
         if tab.compile.owed {
             return self.request_notebook_compile(id);

@@ -7,8 +7,11 @@
 use std::path::PathBuf;
 
 use iced::Task;
-use signex_i18n::{ids, t};
-use signex_notebook::{Reference, ReferenceReport, reference_card};
+use signex_i18n::{Translatable, ids, t};
+use signex_notebook::attachment::mark_still_valid;
+use signex_notebook::bench::record;
+use signex_notebook::edit::{StaleTarget, locate};
+use signex_notebook::{NOTEBOOK_DIR, Reference, ReferenceReport, reference_card};
 
 use super::open::MAIN_FILE;
 use super::{NotebookMsg, TimelineTarget, ViewMode};
@@ -131,6 +134,23 @@ impl Signex {
         let Some(path) = path else {
             return Task::none();
         };
+        // The person picked the file (the save dialog asks before it is
+        // replaced); it is still a CSV and never a Signex document.
+        let folder = self
+            .document_state
+            .project_by_id(id)
+            .map(|project| project.dir().to_path_buf())
+            .unwrap_or_default();
+        let path = match crate::app::notebook_project::export_target(&folder, &path, "csv", true) {
+            Ok(path) => path,
+            Err(why) => {
+                crate::diagnostics::log_info(
+                    signex_i18n::RenderTranslatable::localized(&why, &self.ui_state.i18n)
+                        .into_string(),
+                );
+                return Task::none();
+            }
+        };
         let csv = self
             .ui_state
             .notebook_tabs
@@ -169,23 +189,18 @@ impl Signex {
         )
     }
 
-    /// Mark still valid on a stale card: the attachment on `line` of the
-    /// notebook file stores the part values of the design now. An edit of
-    /// the notebook's text, written on Save.
+    /// Mark still valid on a stale card: the attachment `file` stores the
+    /// part values of the design now. It is found again in the text as it
+    /// is now (the card was drawn from an earlier compile), and only in the
+    /// notebook file the tab holds: one in a chapter is refused. An edit of
+    /// the notebook's text, written on Save. A refusal is said in Messages.
     pub(super) fn mark_notebook_attachment_valid_in_tab(
         &mut self,
         id: ProjectId,
-        line: u32,
+        file: &str,
+        source_file: &str,
     ) -> Task<Message> {
-        let values = self.notebook_design_values(id);
-        let Some(text) = self.notebook_tab_file_text(id) else {
-            return Task::none();
-        };
-        let Some(marked) = signex_notebook::attachment::mark_still_valid(&text, line, &values)
-        else {
-            return Task::none();
-        };
-        match self.replace_notebook_tab_file_text(id, &marked) {
+        match self.mark_attachment_valid_in_tab(id, file, source_file) {
             Ok(task) => task,
             Err(why) => {
                 crate::diagnostics::log_info(
@@ -196,4 +211,52 @@ impl Signex {
             }
         }
     }
+
+    fn mark_attachment_valid_in_tab(
+        &mut self,
+        id: ProjectId,
+        file: &str,
+        source_file: &str,
+    ) -> Result<Task<Message>, Translatable> {
+        let doc = self
+            .document_state
+            .notebooks
+            .get(&id)
+            .ok_or_else(|| Translatable::new(ids::NOTEBOOK_TAB_CMD_NOT_OPEN))?;
+        let values = self.notebook_design_values(id);
+        let marked = marked_valid(doc, file, source_file, &values)?;
+        self.replace_notebook_tab_file_text(id, &marked)
+    }
+}
+
+/// The notebook file text of `doc` with the attachment `file` (written in
+/// `source_file` when the card was drawn) storing `values`: found again
+/// where it is now; refused when it is in a chapter or no longer there.
+pub(super) fn marked_valid(
+    doc: &signex_notebook::NotebookDocument,
+    file: &str,
+    source_file: &str,
+    values: &signex_notebook::attachment::DesignValues,
+) -> Result<String, Translatable> {
+    let what = format!("the attachment {file}");
+    let in_chapter = |chapter: &str| {
+        Translatable::new(ids::NOTEBOOK_TAB_CMD_IN_CHAPTER)
+            .arg("what", what.clone())
+            .arg("file", format!("{NOTEBOOK_DIR}/{chapter}"))
+    };
+    let not_found = || Translatable::new(ids::NOTEBOOK_TAB_CMD_NOT_FOUND).arg("what", what.clone());
+    if !source_file.is_empty() && source_file != MAIN_FILE {
+        return Err(in_chapter(source_file));
+    }
+    let found = record(&doc.compile_sources());
+    let target = StaleTarget::Attachment(file.to_string());
+    let (now_in, line) = locate(&found, &target).ok_or_else(not_found)?;
+    if now_in != MAIN_FILE {
+        return Err(in_chapter(&now_in));
+    }
+    let text = match doc.written_text() {
+        Some(Ok(text)) => text,
+        _ => return Err(Translatable::new(ids::NOTEBOOK_TAB_CMD_NOT_OPEN)),
+    };
+    mark_still_valid(&text, line, values).ok_or_else(not_found)
 }

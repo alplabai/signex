@@ -3,12 +3,13 @@
 //! dialog and the command line (`signex-cli notebook generate`), all running
 //! [`Signex::start_notebook_generate`]. The checks, the BOM and the notebook
 //! reads run off the UI thread (`job`); the report itself is built by
-//! `signex_notebook::generate`. In the app the report waits unsaved
-//! ([`NotebookGenerateUi::pending`]); with `save` it is written to
-//! `notebook/generated/design-report.snxnbk`, never over an existing one
-//! unless `update`. Design note: `docs/DESIGN_NOTEBOOK_GENERATE.md`.
+//! `signex_notebook::generate`. In the app the report is held unsaved and
+//! dirty-tracked until Save writes it (`pending`); with `save` the command
+//! writes `notebook/generated/design-report.snxnbk`, never over an existing
+//! one unless `update`. Design note: `docs/DESIGN_NOTEBOOK_GENERATE.md`.
 
 mod job;
+mod pending;
 mod request;
 mod update;
 
@@ -52,6 +53,13 @@ pub enum NotebookGenerateMsg {
     DialogCancelled,
     /// The off-thread run finished.
     Generated(Box<GenerateFinished>),
+    /// The write of the report held for `project_id` landed; `text` is
+    /// what it wrote.
+    ReportSaved {
+        project_id: crate::app::state::ProjectId,
+        text: String,
+        result: Result<(), String>,
+    },
 }
 
 /// One run of Generate: the project and what to make of it.
@@ -136,7 +144,4 @@ impl GenerateDialog {
 #[derive(Debug, Clone, Default)]
 pub struct NotebookGenerateUi {
     pub dialog: Option<GenerateDialog>,
-    /// The newest report made in the app, unsaved, for the notebook tab to
-    /// open; its Save writes it.
-    pub pending: Option<GeneratedNotebook>,
 }

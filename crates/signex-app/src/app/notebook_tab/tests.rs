@@ -217,7 +217,17 @@ fn a_closed_tab_keeps_its_unsaved_text_and_save_all_writes_it() {
     assert!(app.notebook_tab_index(id).is_none());
     assert!(is_dirty(&app, id), "still unsaved, so the prompts see it");
     let path = notebook_file(dir.path());
-    app.try_save_dirty_path(&path).expect("Save All writes it");
+    let paths = app.document_state.dirty_document_paths();
+    assert!(paths.contains(&path), "Save All lists it");
+    let save = app.begin_save_all(
+        "Save All",
+        std::slice::from_ref(&path),
+        &[],
+        crate::app::contracts::SaveAllNext::Nothing,
+    );
+    crate::task_driver::TaskDriver::new()
+        .settle(&mut app, save)
+        .expect("Save All lands");
     assert!(std::fs::read_to_string(&path).unwrap().contains("x#import"));
     assert!(!is_dirty(&app, id));
     open(&mut app, id);

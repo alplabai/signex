@@ -264,3 +264,35 @@ fn an_edit_with_paste_is_one_edit() {
     super::edit::sync_body(&mut doc, &mut tab);
     assert_eq!(tab.text.as_ref().unwrap().outline.sections.len(), 1);
 }
+
+/// A compile that is not the one running (a stale one, landing after the
+/// tab was reopened or a later compile started) is dropped.
+#[test]
+fn a_compile_that_is_not_the_running_one_is_dropped() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id) = app_with_notebook(dir.path(), NOTEBOOK);
+    let kept = app.ui_state.notebook_tabs[&id].compile.last.clone();
+    let good = kept.clone().expect("a compile");
+    let stale = CompileOutcome {
+        generation: 999,
+        finished_at: "stale".into(),
+        notebook: None,
+        page: None,
+        thumbnails: Vec::new(),
+        lane: super::Lane::default(),
+        elapsed_ms: 1,
+        status: good.status.clone(),
+    };
+    send(
+        &mut app,
+        NotebookMsg::Compiled {
+            project_id: id,
+            outcome: Arc::new(stale),
+        },
+    );
+    let last = app.ui_state.notebook_tabs[&id].compile.last.clone();
+    assert_eq!(
+        last.map(|l| l.finished_at.clone()),
+        kept.map(|k| k.finished_at.clone())
+    );
+}

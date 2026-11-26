@@ -30,7 +30,7 @@ impl Signex {
         let project_dir = project.dir().to_path_buf();
         let project_name = project.data.name.clone();
         let variants = jobs::variants_of(project);
-        let names = self.notebook_design_names(id);
+        let design = self.notebook_design_inputs(id);
         let state = &mut self.ui_state.notebook_pdf;
         state.generation += 1;
         let generation = state.generation;
@@ -50,7 +50,7 @@ impl Signex {
             stage: Stage::Reading,
             generation,
         });
-        jobs::inspect_task(generation, project_dir, notebook, names)
+        jobs::inspect_task(generation, project_dir, notebook, design)
     }
 
     /// Keep the inspection of this opening; the Save to field takes the
@@ -161,14 +161,13 @@ impl Signex {
         let Some(dialog) = self.ui_state.notebook_pdf.dialog.as_ref() else {
             return Task::none();
         };
-        let names = self.notebook_design_names(dialog.project);
-        let values = self.notebook_design_values(dialog.project);
+        let design = self.notebook_design_inputs(dialog.project);
         self.edit_notebook_pdf(|dialog| {
             if let Stage::Ready(inspection) = std::mem::replace(&mut dialog.stage, Stage::Reading) {
                 dialog.stage = Stage::Exporting(inspection);
             }
         });
-        jobs::build_task(request, names, values)
+        jobs::build_task(request, design)
     }
 
     /// What Export would make; `Err(None)` when the dialog is not ready,
@@ -192,6 +191,11 @@ impl Signex {
         }
         let path = jobs::resolve_path(&dialog.project_dir, &dialog.path_text)
             .ok_or_else(|| Some(Translatable::new(ids::NOTEBOOK_PDF_NO_PATH)))?;
+        // The person picked the file, so replacing it is theirs to choose;
+        // it is still a PDF and never a Signex document.
+        let path =
+            crate::app::notebook_project::export_target(&dialog.project_dir, &path, "pdf", true)
+                .map_err(Some)?;
         let mut options = dialog.options.clone();
         options.pages = pages;
         Ok(BuildRequest {
@@ -199,6 +203,7 @@ impl Signex {
             project_name: dialog.project_name.clone(),
             notebook: dialog.notebook.clone(),
             path: Some(path),
+            overwrite: None,
             options,
             generation: Some(dialog.generation),
             waiting: None,

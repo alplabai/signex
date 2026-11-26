@@ -10,7 +10,7 @@ use signex_notebook::{AnnotationKind, DEFAULT_NOTEBOOK_FILE, NOTEBOOK_DIR, NOTEB
 
 use super::{BuildRequest, jobs};
 use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
-use crate::app::notebook_project::{bad_value, because, refusal};
+use crate::app::notebook_project::{bad_value, because, export_target, overwrite, refusal};
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
 
@@ -119,7 +119,13 @@ pub(crate) fn export_notebook_pdf(app: &mut Signex, args: &CommandArgs) -> Ran {
         .map(notebook_file)
         .unwrap_or_else(|| DEFAULT_NOTEBOOK_FILE.to_string());
     let path = match args.operand("path") {
-        Some(OperandValue::Path(path)) => Some(std::path::PathBuf::from(path)),
+        Some(OperandValue::Path(path)) => {
+            let path = std::path::Path::new(path);
+            match export_target(project.dir(), path, "pdf", overwrite(args)) {
+                Ok(target) => Some(target),
+                Err(reason) => return refusal(reason),
+            }
+        }
         _ => None,
     };
     let (id, project_dir, project_name) = (
@@ -127,8 +133,7 @@ pub(crate) fn export_notebook_pdf(app: &mut Signex, args: &CommandArgs) -> Ran {
         project.dir().to_path_buf(),
         project.data.name.clone(),
     );
-    let names = app.notebook_design_names(id);
-    let values = app.notebook_design_values(id);
+    let design = app.notebook_design_inputs(id);
     let waiting = app.wait_for_command(&command, args);
     let ticket = waiting.ticket;
     let request = BuildRequest {
@@ -136,12 +141,13 @@ pub(crate) fn export_notebook_pdf(app: &mut Signex, args: &CommandArgs) -> Ran {
         project_name,
         notebook,
         path,
+        overwrite: Some(overwrite(args)),
         options,
         generation: None,
         waiting: Some(waiting),
     };
     (
         CommandOutcome::Deferred { ticket },
-        jobs::build_task(request, names, values),
+        jobs::build_task(request, design),
     )
 }

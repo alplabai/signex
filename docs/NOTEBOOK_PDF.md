@@ -64,9 +64,16 @@ ones; Review… writes each to Messages. Under Warn the export runs (the button
 reads Export anyway) and a stale reference prints as plain text with a mark
 in the left margin; under Fail the export is refused.
 
-The check reads the designators the Annotations scan found and the net names
-of the project's net index. A list that was not read calls nothing stale, and
-a pin is checked by its part only.
+The check reads the named project's design itself, on the export's worker:
+its sheets (the open ones as edited), their designators, every pin by number
+and by name, and the nets, so a project not in view is checked too and a pin
+the part no longer has is stale. When the design cannot be read whole (a
+sheet missing or unreadable, or no sheet at all) nothing is called stale, and
+under Fail the export is refused instead of passing unchecked.
+
+The file is a `.pdf`, never a Signex document (`.snx*`). The command's `path`
+is replaced, like the default file, only with `overwrite=true`; in the dialog
+the person picked it.
 
 ## Bookmarks
 
@@ -107,7 +114,7 @@ and Open PDF launch through the platform's file manager and viewer.
 
 ```
 export_notebook_pdf document=<project or one of its documents> [path=<file>]
-    [notebook=<file>] [pages=all|current|<n>|<n>-<m>] [paper=document|a4|letter]
+    [overwrite=true] [notebook=<file>] [pages=all|current|<n>|<n>-<m>] [paper=document|a4|letter]
     [variant=<name>] [annotations=all|none|<kind>,...] [stale=warn|fail]
     [title_block=<bool>] [contents=<bool>] [bookmarks=<bool>] [python_source=<bool>]
 ```
@@ -121,7 +128,7 @@ that does not compile or a page selection that names no page is refused with
 the reason. It needs the `export` capability.
 
 ```
-signex-cli notebook export-pdf --project buck-3v3.snxprj [--out <file>]
+signex-cli notebook export-pdf --project buck-3v3.snxprj [--out <file>] [--overwrite]
     [--notebook generated/design-report] [--pages ...] [--paper ...]
     [--variant ...] [--annotations ...] [--stale warn|fail] [--no-title-block]
     [--no-contents] [--no-bookmarks] [--python-source] [--json] [run options]

@@ -81,3 +81,20 @@ notebook-ref-copied = Copied { $reference }
 notebook-ref-needs-tab = This opens in the Design Notebook tab.
 notebook-ref-open-first = Open { $file } in the Design Notebook first: a fix edits the notebook, which is written on Save.
 notebook-ref-open-at = Design Notebook: { $file }, line { $line }
+
+## Commands: why a notebook reference command is refused. $value is what
+## was given, $file a notebook file inside notebook/, $name a reference.
+notebook-ref-cmd-moved = the notebook read moved to another project before it landed; ask again
+notebook-ref-cmd-unreadable = the project's notebook could not be read
+notebook-ref-cmd-no-notebook = the project has no Design Notebook (no notebook/ folder)
+notebook-ref-cmd-no-design = the project's design could not be read whole, so no reference is checked
+notebook-ref-cmd-needs-name = needs the operand `name`: a designator, a pin (`U3.3`) or a net
+notebook-ref-cmd-not-a-pin = `{ $value }` is not a pin: write it as `U3.3`
+notebook-ref-cmd-bad-kind = `kind` is `component`, `pin` or `net`, not `{ $value }`
+notebook-ref-cmd-bad-limit = `limit` is a count above 0, not `{ $value }`
+notebook-ref-cmd-part-or-net = name a `part` or a `net`, not both
+notebook-ref-cmd-update-needs-to = `update` needs the operand `to`: the reference is not renamed
+notebook-ref-cmd-pick-needs-pin = `pick_pin` needs the operand `pin`
+notebook-ref-cmd-bad-fix = `fix` is `update`, `remove`, `keep_text`, `pick_pin` or `update_all`, not `{ $value }`
+notebook-ref-cmd-no-file = the notebook has no file `{ $file }`
+notebook-ref-cmd-not-used = `{ $file }` does not use { $name }

@@ -34,7 +34,7 @@ fn part(reference: &str, value: &str) -> Symbol {
 
 /// A project whose one sheet holds L1 = 4.7 µH and C15 = 22 µF, with the
 /// notebook and its chapter written.
-fn project(dir: &tempfile::TempDir) -> (Signex, PathBuf) {
+pub(super) fn project(dir: &tempfile::TempDir) -> (Signex, PathBuf) {
     let mut sheet = SchematicSheet::default();
     sheet.symbols.push(part("L1", "4.7 µH"));
     sheet.symbols.push(part("C15", "22 µF"));
@@ -50,7 +50,7 @@ fn project(dir: &tempfile::TempDir) -> (Signex, PathBuf) {
 }
 
 /// Run `id` with `operands` after `document=<project>`, its read settled.
-fn run(app: &mut Signex, project: &Path, id: &str, operands: &[&str]) -> CommandOutcome {
+pub(super) fn run(app: &mut Signex, project: &Path, id: &str, operands: &[&str]) -> CommandOutcome {
     let command = AppCommandId::new(id).expect("a catalog id");
     let document = format!("document={}", project.display());
     let mut all = vec![document.as_str()];
@@ -66,14 +66,14 @@ fn run(app: &mut Signex, project: &Path, id: &str, operands: &[&str]) -> Command
     }
 }
 
-fn answer(outcome: CommandOutcome) -> Value {
+pub(super) fn answer(outcome: CommandOutcome) -> Value {
     match outcome {
         CommandOutcome::Answered(value) => value,
         other => panic!("not answered: {other:?}"),
     }
 }
 
-fn refusal(outcome: CommandOutcome) -> String {
+pub(super) fn refusal(outcome: CommandOutcome) -> String {
     match outcome {
         CommandOutcome::Disabled { reason } => reason.render_en_us(),
         other => panic!("not refused: {other:?}"),

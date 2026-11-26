@@ -732,6 +732,10 @@ pub struct DocumentState {
     /// edited, kept while the project is loaded so a closed tab keeps its
     /// unsaved text. The tab's view of it is `UiState::notebook_tabs`.
     pub notebooks: std::collections::HashMap<ProjectId, signex_notebook::NotebookDocument>,
+    /// The design report Generate made in the app (mockup row 201), held
+    /// unsaved per project until Save writes it or Discard drops it.
+    pub generated_reports:
+        std::collections::HashMap<ProjectId, signex_notebook::generate::GeneratedNotebook>,
 }
 
 /// A project folder a rename moved from `old` to `new`.

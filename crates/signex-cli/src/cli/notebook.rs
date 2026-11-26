@@ -40,6 +40,7 @@ const VERBS: &[Verb] = &[
             ("--stale", "stale"),
         ],
         switches: &[
+            ("--overwrite", "overwrite", true),
             ("--no-title-block", "title_block", false),
             ("--no-contents", "contents", false),
             ("--no-bookmarks", "bookmarks", false),

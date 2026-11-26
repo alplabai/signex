@@ -88,15 +88,11 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     ),
     // The PDF's printed text is in the UI locale (`print_text`).
     (&["export_board_pdf"], Operand, &[Settings]),
-    // Mockup row 202: the stale check reads the designators the Annotations
-    // scan found and the net index (`notebook_design_names`); the dialog
-    // opens on the project in view.
-    (&["export_notebook_pdf"], Operand, &[RenderCache]),
-    (
-        &["export_notebook_pdf"],
-        Bridge,
-        &[ActiveDocument, RenderCache],
-    ),
+    // Mockup row 202: the stale check reads the named project's design on
+    // the worker (`notebook_design_inputs`), its open sheets as edited; the
+    // dialog opens on the project in view.
+    (&["export_notebook_pdf"], Operand, &[]),
+    (&["export_notebook_pdf"], Bridge, &[ActiveDocument]),
     // Save As of a background sheet is refused (`active_path`).
     (&["save_document_as"], Operand, &[ActiveDocument]),
     // The rfd picker (`save_as_dialog_for_active_tab`).

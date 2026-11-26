@@ -32,6 +32,47 @@ pub(crate) fn bad_value(id: signex_i18n::MessageId, value: &str) -> Translatable
     Translatable::new(id).arg("value", value.trim().to_string())
 }
 
+/// The `overwrite=true` operand of an export.
+pub(crate) fn overwrite(args: &CommandArgs) -> bool {
+    matches!(args.operand("overwrite"), Some(OperandValue::Bool(true)))
+}
+
+/// The file an export writes, `path` resolved against the project folder
+/// `project_dir`: refused unless its extension is `extension`, when it
+/// names a Signex document (`.snx*`), and when it exists without
+/// `overwrite`.
+pub(crate) fn export_target(
+    project_dir: &std::path::Path,
+    path: &std::path::Path,
+    extension: &str,
+    overwrite: bool,
+) -> Result<std::path::PathBuf, Translatable> {
+    let target = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        project_dir.join(path)
+    };
+    let shown = target.display().to_string();
+    // A file extension, not UI text: ASCII lowercase in every language.
+    let ext = target
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(str::to_ascii_lowercase)
+        .unwrap_or_default();
+    if ext.starts_with("snx") {
+        return Err(Translatable::new(ids::NOTEBOOK_TAB_CMD_SNX_TARGET).arg("value", shown));
+    }
+    if ext != extension {
+        return Err(Translatable::new(ids::NOTEBOOK_TAB_CMD_BAD_TARGET_EXT)
+            .arg("ext", format!(".{extension}"))
+            .arg("value", shown));
+    }
+    if !overwrite && target.exists() {
+        return Err(Translatable::new(ids::NOTEBOOK_TAB_CMD_TARGET_EXISTS).arg("value", shown));
+    }
+    Ok(target)
+}
+
 impl Signex {
     /// The open project the `document` operand names: the project itself,
     /// or one of its documents.

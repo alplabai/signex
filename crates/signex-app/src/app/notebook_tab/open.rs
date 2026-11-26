@@ -215,10 +215,12 @@ impl Signex {
         Task::none()
     }
 
-    /// The project closed: its notebook goes with it.
+    /// The project closed: its notebook and its held design report go with
+    /// it.
     pub(crate) fn forget_notebook(&mut self, id: ProjectId) {
         self.document_state.notebooks.remove(&id);
         self.ui_state.notebook_tabs.remove(&id);
+        self.document_state.generated_reports.remove(&id);
     }
 
     /// The project whose notebook tab the main window shows, if it shows

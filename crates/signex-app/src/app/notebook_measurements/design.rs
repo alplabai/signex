@@ -3,9 +3,10 @@
 //! `update` (the open sheets, with their unsaved edits), assembled off the
 //! UI thread with the sheets that are not open read from disk.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use signex_notebook::attachment::DesignValues;
+use signex_notebook::export::DesignNames;
 use signex_types::schematic::SchematicSheet;
 
 use crate::app::CaseFold;
@@ -49,6 +50,47 @@ impl DesignInputs {
             return DesignValues::new();
         }
         values_of(set.sheets.values())
+    }
+
+    /// The designators, pins and nets of the design, read whole from the
+    /// project in `project_dir` (the open sheets with their unsaved edits):
+    /// what the PDF export's stale check reads (mockup row 202). `None`
+    /// when a sheet could not be read or is missing, or the design cannot
+    /// be stitched: then nothing is known to be gone. Blocking.
+    pub(crate) fn names(&self, project_dir: &Path) -> Option<DesignNames> {
+        let set = project_sheets::assemble_project_sheets_quiet_from(
+            &self.open,
+            &self.pages,
+            &self.root,
+            self.fold,
+        );
+        if !set.unreadable.is_empty() || !set.absent.is_empty() {
+            return None;
+        }
+        let design = crate::app::notebook_references::read_design(&set, project_dir)?;
+        let components = design
+            .parts()
+            .iter()
+            .map(|part| part.designator.clone())
+            .collect();
+        let pins = design
+            .parts()
+            .iter()
+            .flat_map(|part| {
+                part.pins.iter().flat_map(move |pin| {
+                    let by_number = format!("{}.{}", part.designator, pin.number);
+                    let by_name =
+                        (!pin.name.is_empty()).then(|| format!("{}.{}", part.designator, pin.name));
+                    std::iter::once(by_number).chain(by_name)
+                })
+            })
+            .collect();
+        let nets = design.nets().iter().map(|net| net.name.clone()).collect();
+        Some(DesignNames {
+            components: Some(components),
+            pins: Some(pins),
+            nets: Some(nets),
+        })
     }
 }
 

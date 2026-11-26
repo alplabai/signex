@@ -15,17 +15,26 @@ use signex_notebook::{
     ResolvedReference, badge_of, picker_entries, plan_update_all, reference_card, resolve_one,
 };
 
+use signex_i18n::{Translatable, ids};
+
 use super::{FileReferences, NotebookRerun, of_text};
 use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
+use crate::app::notebook_project::{bad_value, because};
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
 use crate::panels::annotations::NotebookScan;
 
 type Ran = (CommandOutcome, Task<Message>);
 
-/// A refusal with its reason: the operand handlers' one helper.
-fn refused(reason: impl Into<String>) -> Ran {
-    crate::app::command::operand_refused(reason)
+/// A refusal with its catalog reason (`notebook_references.ftl`,
+/// "Commands").
+fn refused(reason: Translatable) -> Ran {
+    crate::app::notebook_project::refusal(reason)
+}
+
+/// A catalog reason that takes no argument.
+fn reason(id: signex_i18n::MessageId) -> Translatable {
+    Translatable::new(id)
 }
 
 fn answered(value: Value) -> Ran {
@@ -49,34 +58,30 @@ struct Read {
 /// (`Err` holds the deferral); the run again after the read answers from
 /// it.
 fn read_first(app: &mut Signex, args: &CommandArgs, id: &str) -> Result<Read, Ran> {
-    let project = app.rules_project_named(args).map_err(refused)?;
+    let project = app
+        .rules_project_named(args)
+        .map_err(|why| refused(because(why)))?;
     let state = &app.ui_state.annotations;
     if state.answering {
         if state.target.as_ref().map(|t| t.0) != Some(project) {
-            return Err(refused(
-                "the notebook read moved to another project before it landed; ask again",
-            ));
+            return Err(refused(reason(ids::NOTEBOOK_REF_CMD_MOVED)));
         }
         let Some(scan) = state.scan.clone() else {
-            return Err(refused("the project's notebook could not be read"));
+            return Err(refused(reason(ids::NOTEBOOK_REF_CMD_UNREADABLE)));
         };
         if !scan.folder_found {
-            return Err(refused(
-                "the project has no Design Notebook (no notebook/ folder)",
-            ));
+            return Err(refused(reason(ids::NOTEBOOK_REF_CMD_NO_NOTEBOOK)));
         }
         let Some(design) = scan.design.clone() else {
-            return Err(refused(
-                "the project's design could not be read whole, so no reference is checked",
-            ));
+            return Err(refused(reason(ids::NOTEBOOK_REF_CMD_NO_DESIGN)));
         };
         return Ok(Read { scan, design });
     }
     let Some(loaded) = app.document_state.project_by_id(project) else {
-        return Err(refused("the project is no longer open"));
+        return Err(refused(reason(ids::NOTEBOOK_TAB_CMD_PROJECT_CLOSED)));
     };
     let (dir, file) = (loaded.dir().to_path_buf(), loaded.path.clone());
-    let command = AppCommandId::new(id).map_err(refused)?;
+    let command = AppCommandId::new(id).map_err(|why| refused(because(why)))?;
     let edits = &mut app.document_state.agent_edits;
     edits.tickets += 1;
     let ticket = edits.tickets;
@@ -108,19 +113,17 @@ fn current_files(app: &Signex, read: &Read) -> Vec<FileReferences> {
 
 /// The reference `kind` and `name` name: `component R7`, `pin U3.3`,
 /// `net +3V3`.
-pub(crate) fn reference_operand(args: &CommandArgs) -> Result<Reference, String> {
+pub(crate) fn reference_operand(args: &CommandArgs) -> Result<Reference, Translatable> {
     let kind = text(args, "kind").map(str::trim).unwrap_or_default();
     let Some(name) = text(args, "name").map(str::trim).filter(|n| !n.is_empty()) else {
-        return Err("needs the operand `name`: a designator, a pin (`U3.3`) or a net".into());
+        return Err(reason(ids::NOTEBOOK_REF_CMD_NEEDS_NAME));
     };
     match kind {
         "component" => Ok(Reference::Component(name.to_string())),
         "net" => Ok(Reference::Net(name.to_string())),
         "pin" => Reference::dotted_pin(name)
-            .ok_or_else(|| format!("`{name}` is not a pin: write it as `U3.3`")),
-        other => Err(format!(
-            "`kind` is `component`, `pin` or `net`, not `{other}`"
-        )),
+            .ok_or_else(|| bad_value(ids::NOTEBOOK_REF_CMD_NOT_A_PIN, name)),
+        other => Err(bad_value(ids::NOTEBOOK_REF_CMD_BAD_KIND, other)),
     }
 }
 
@@ -221,7 +224,7 @@ pub(crate) fn notebook_reference_picker(app: &mut Signex, args: &CommandArgs) ->
         None => PICKER_LIMIT,
         Some(limit) => match limit.parse::<usize>() {
             Ok(limit) if limit > 0 => limit,
-            _ => return refused(format!("`limit` is a count above 0, not `{limit}`")),
+            _ => return refused(bad_value(ids::NOTEBOOK_REF_CMD_BAD_LIMIT, limit)),
         },
     };
     let read = match read_first(app, args, "notebook_reference_picker") {
@@ -241,7 +244,7 @@ pub(crate) fn notebook_badges(app: &mut Signex, args: &CommandArgs) -> Ran {
         (Some(part), None) => Some(BadgeTarget::Part(part.trim().to_string())),
         (None, Some(net)) => Some(BadgeTarget::Net(net.trim().to_string())),
         (None, None) => None,
-        (Some(_), Some(_)) => return refused("name a `part` or a `net`, not both"),
+        (Some(_), Some(_)) => return refused(reason(ids::NOTEBOOK_REF_CMD_PART_OR_NET)),
     };
     let read = match read_first(app, args, "notebook_badges") {
         Ok(read) => read,
@@ -260,14 +263,14 @@ pub(crate) fn notebook_badges(app: &mut Signex, args: &CommandArgs) -> Ran {
 
 /// The fix `fix` names, with `to` or `pin` where it takes one; `update`
 /// without `to` takes the new name the stored id found.
-fn fix_operand(args: &CommandArgs, entry: &ResolvedReference) -> Result<Fix, String> {
+fn fix_operand(args: &CommandArgs, entry: &ResolvedReference) -> Result<Fix, Translatable> {
     let token = text(args, "fix").map(str::trim).unwrap_or_default();
     match token {
         "update" => match (text(args, "to"), &entry.state) {
             (Some(to), _) => Ok(Fix::UpdateTo {
                 to: match &entry.reference {
                     Reference::Pin { .. } => Reference::dotted_pin(to.trim())
-                        .ok_or_else(|| format!("`{to}` is not a pin: write it as `U3.3`"))?,
+                        .ok_or_else(|| bad_value(ids::NOTEBOOK_REF_CMD_NOT_A_PIN, to))?,
                     Reference::Component(_) => Reference::Component(to.trim().to_string()),
                     Reference::Net(_) => Reference::Net(to.trim().to_string()),
                 },
@@ -275,9 +278,7 @@ fn fix_operand(args: &CommandArgs, entry: &ResolvedReference) -> Result<Fix, Str
             (None, signex_notebook::ReferenceState::Renamed { now }) => {
                 Ok(Fix::UpdateTo { to: now.clone() })
             }
-            (None, _) => {
-                Err("`update` needs the operand `to`: the reference is not renamed".into())
-            }
+            (None, _) => Err(reason(ids::NOTEBOOK_REF_CMD_UPDATE_NEEDS_TO)),
         },
         "remove" => Ok(Fix::RemoveReference),
         "keep_text" => Ok(Fix::KeepAsPlainText),
@@ -285,10 +286,8 @@ fn fix_operand(args: &CommandArgs, entry: &ResolvedReference) -> Result<Fix, Str
             .map(|pin| Fix::PickAnotherPin {
                 pin: pin.trim().to_string(),
             })
-            .ok_or_else(|| "`pick_pin` needs the operand `pin`".to_string()),
-        other => Err(format!(
-            "`fix` is `update`, `remove`, `keep_text`, `pick_pin` or `update_all`, not `{other}`"
-        )),
+            .ok_or_else(|| reason(ids::NOTEBOOK_REF_CMD_PICK_NEEDS_PIN)),
+        other => Err(bad_value(ids::NOTEBOOK_REF_CMD_BAD_FIX, other)),
     }
 }
 
@@ -313,13 +312,19 @@ pub(crate) fn notebook_fix_reference(app: &mut Signex, args: &CommandArgs) -> Ra
     let name = text(args, "file").map_or(DEFAULT_NOTEBOOK_FILE, str::trim);
     let files = current_files(app, &read);
     let Some(file) = files.iter().find(|f| f.name == name) else {
-        return refused(format!("the notebook has no file `{name}`"));
+        return refused(
+            Translatable::new(ids::NOTEBOOK_REF_CMD_NO_FILE).arg("file", name.to_string()),
+        );
     };
     let result = match &reference {
         None => app.apply_update_all(name, &file.report),
         Some(reference) => {
             let Some(entry) = file.report.get(reference) else {
-                return refused(format!("`{name}` does not use {}", reference.name()));
+                return refused(
+                    Translatable::new(ids::NOTEBOOK_REF_CMD_NOT_USED)
+                        .arg("file", name.to_string())
+                        .arg("name", reference.name()),
+                );
             };
             match fix_operand(args, entry) {
                 Ok(fix) => app.fix_reference_in_buffer(name, reference, &fix),
@@ -332,6 +337,7 @@ pub(crate) fn notebook_fix_reference(app: &mut Signex, args: &CommandArgs) -> Ra
             CommandOutcome::Answered(json!({ "file": name, "changed": changed })),
             task,
         ),
-        Err(reason) => refused(reason),
+        // Already in the person's language: the buffer's own catalog line.
+        Err(why) => refused(because(why)),
     }
 }

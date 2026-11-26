@@ -13,8 +13,9 @@ reference: [CLI.md](CLI.md), "Design notebook generation". Decisions:
 The report is its own notebook file, `notebook/generated/design-report.snxnbk`
 (`snxnbk/1`, an empty header). Regenerate replaces it as a whole; the
 hand-written `notebook/design.snxnbk` and its chapters are read, never
-written. In the app the report waits unsaved for the notebook tab, whose Save
-writes it. With `save=true` (always, from `signex-cli notebook generate`) the run
+written. In the app the report is held unsaved, its path among the unsaved
+documents, so Save All and the close and quit prompts list it; their Save
+writes it (replacing the report made before) and Discard drops it. With `save=true` (always, from `signex-cli notebook generate`) the run
 writes it, and refuses when one is there unless `update=true` (`--force`).
 
 ## How it is built
