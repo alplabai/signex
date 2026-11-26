@@ -90,3 +90,33 @@ fn a_badge_reads_as_json_with_its_target_tone_and_blocks() {
     assert_eq!(json["blocks"][0]["status"], "done");
     assert_eq!(json["blocks"][0]["date"], "2026-11-24");
 }
+
+/// #3021: a measurement whose result fails its limits turns its badge red
+/// (the 2026-11-25 badge row).
+#[test]
+fn a_failing_measurement_turns_its_badge_red() {
+    let (blocks, problems) = scan(
+        "#measurement(id: \"MEAS-001\", status: \"done\", target: net(\"VBUS\"), value: 4.5, nominal: 5.0, tolerance: 5%)\n",
+    );
+    assert!(problems.is_empty(), "{problems:?}");
+    let found = badges([("design.snxnbk", blocks.as_slice())]);
+    let vbus = badge_of(&found, &BadgeTarget::Net("VBUS".into())).expect("VBUS");
+    assert!(vbus.blocks[0].failing);
+    assert_eq!(vbus.tone, BadgeTone::Failing);
+}
+
+/// #3021: a decision copied into the generated report under its own id
+/// counts once on the badge.
+#[test]
+fn a_block_copied_under_its_id_counts_once() {
+    let text = "#decision(id: \"DEC-001\", title: [Use 4.7 µH], status: \"accepted\", target: component(\"R7\"))[x]\n";
+    let (hand, _) = scan(text);
+    let (copy, _) = scan(text);
+    let found = badges([
+        ("design.snxnbk", hand.as_slice()),
+        ("generated/design-report.snxnbk", copy.as_slice()),
+    ]);
+    let r7 = badge_of(&found, &BadgeTarget::Part("R7".into())).expect("R7");
+    assert_eq!(r7.blocks.len(), 1);
+    assert_eq!(r7.blocks[0].file, "design.snxnbk");
+}

@@ -187,18 +187,38 @@ enum Found<'a> {
 }
 
 /// The stored id decides first: a part carrying it under `name` is named,
-/// under another designator renamed. With no id, or one no part carries,
-/// the name decides.
+/// under another designator of the same channel renamed. Every placement
+/// of a reused sheet carries the same id, so a rename resolves only within
+/// the channel the name is in (`R1_B` to `R2_B`, never to `R1_A`); with no
+/// one carrier left in that channel the part is gone (#3021). With no id,
+/// or one no part carries, the name decides.
 fn find_part<'a>(name: &str, stored: Option<Uuid>, design: &'a DesignIndex) -> Found<'a> {
     if let Some(id) = stored {
         let carrying: Vec<&DesignPart> = design.parts_with_id(id).collect();
-        if let Some(&first) = carrying.first() {
-            let named = carrying.iter().copied().find(|p| p.designator == name);
-            return named.map_or(Found::Renamed(first), Found::Named);
+        if !carrying.is_empty() {
+            if let Some(named) = carrying.iter().copied().find(|p| p.designator == name) {
+                return Found::Named(named);
+            }
+            let channel = channel_of(name);
+            let mut same = carrying
+                .iter()
+                .copied()
+                .filter(|p| channel_of(&p.designator) == channel);
+            return match (same.next(), same.next()) {
+                (Some(part), None) => Found::Renamed(part),
+                _ => Found::None,
+            };
         }
     }
     match design.part(name) {
         Some(part) => Found::Named(part),
         None => Found::None,
     }
+}
+
+/// The channel suffix of a designator: what follows its prefix letters and
+/// number (`_B` of `R1_B`; empty for `R7`).
+fn channel_of(designator: &str) -> &str {
+    let rest = designator.trim_start_matches(|c: char| c.is_ascii_alphabetic());
+    rest.trim_start_matches(|c: char| c.is_ascii_digit())
 }

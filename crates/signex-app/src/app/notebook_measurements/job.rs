@@ -28,7 +28,7 @@ use signex_types::atomic_io::{atomic_write, atomic_write_existing_dir};
 
 use super::design::DesignInputs;
 use crate::app::agent::WaitingCommand;
-use crate::app::notebook_project::because;
+use crate::app::notebook_project::{because, read_notebook_file};
 use crate::app::state::ProjectId;
 
 /// What a command asks of the notebook.
@@ -70,14 +70,62 @@ pub(crate) struct Job {
     /// The notebook file's text as the notebook tab holds it, when it holds
     /// one: read in place of the file on disk, and edited through the tab.
     pub(crate) held: Option<String>,
+    /// The project folder a headless or agent run reads only inside
+    /// (#2172, #3020); `None` for a person.
+    pub(crate) confine: Option<PathBuf>,
 }
 
-/// What a job did: the answer, and the notebook file text an edit made
-/// that goes through the notebook tab.
+/// What a job did: the answer, and the edit of the notebook file that goes
+/// through the notebook tab.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Done {
     pub(crate) answer: Value,
-    pub(crate) tab_text: Option<String>,
+    pub(crate) tab_edit: Option<TabEdit>,
+}
+
+/// An edit of the notebook file the tab holds, made again on the tab's text
+/// as it is when the job lands, so what was typed meanwhile stays (#3019).
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum TabEdit {
+    /// Mark still valid: the call `target` names stores `values`.
+    MarkValid {
+        target: StaleTarget,
+        values: signex_notebook::attachment::DesignValues,
+    },
+    /// Attach file: `call` at the end of the notebook file.
+    Append { call: String },
+}
+
+impl TabEdit {
+    /// The notebook file text `doc` holds with the edit made, or why it
+    /// cannot be: the call is in a chapter now, or no longer there.
+    pub(crate) fn apply(
+        &self,
+        doc: &signex_notebook::NotebookDocument,
+    ) -> Result<String, Translatable> {
+        let text = match doc.written_text() {
+            Some(Ok(text)) => text,
+            _ => return Err(Translatable::new(ids::NOTEBOOK_TAB_CMD_NOT_OPEN)),
+        };
+        match self {
+            TabEdit::Append { call } => Ok(append_call(&text, call)),
+            TabEdit::MarkValid { target, values } => {
+                let what = match target {
+                    StaleTarget::Attachment(file) => format!("the attachment {file}"),
+                    StaleTarget::Reading(id) => format!("the reading {id}"),
+                };
+                let not_found =
+                    || Translatable::new(ids::NOTEBOOK_TAB_CMD_NOT_FOUND).arg("what", what.clone());
+                let found = record(&doc.compile_sources());
+                let (file, line) = locate(&found, target).ok_or_else(not_found)?;
+                if file != DEFAULT_NOTEBOOK_FILE {
+                    return Err(Translatable::new(ids::NOTEBOOK_TAB_CMD_CHAPTER_HELD)
+                        .arg("file", format!("{NOTEBOOK_DIR}/{file}")));
+                }
+                mark_still_valid(&text, line, values).ok_or_else(not_found)
+            }
+        }
+    }
 }
 
 /// A command's work landed: answer the caller that waits on it.
@@ -93,13 +141,14 @@ pub struct NotebookRead {
 /// Do `job`: the command's answer, or why it was refused.
 pub(crate) fn run(job: Job) -> Result<Done, Translatable> {
     let folder = job.project_dir.join(NOTEBOOK_DIR);
-    let (mut sources, problems) = load(&folder, job.held.as_deref()).map_err(because)?;
+    let (mut sources, problems) =
+        load(&folder, job.held.as_deref(), job.confine.as_deref()).map_err(because)?;
     if let Some(design) = &job.design {
         sources.set_design_values(design.values());
     }
     let held = job.held.is_some();
     let notebook = format!("{NOTEBOOK_DIR}/{DEFAULT_NOTEBOOK_FILE}");
-    let mut tab_text = None;
+    let mut tab_edit = None;
     let mut answer = match job.ask {
         Ask::Measurements => to_value(&measurements_report(&sources))?,
         Ask::Attachments => to_value(&attachments_report(&sources))?,
@@ -128,7 +177,7 @@ pub(crate) fn run(job: Job) -> Result<Done, Translatable> {
         }
         Ask::MarkValid(target) => {
             let (value, edited) = mark_valid(&folder, &sources, &target, held)?;
-            tab_text = edited;
+            tab_edit = edited;
             value
         }
         Ask::Attach {
@@ -146,13 +195,13 @@ pub(crate) fn run(job: Job) -> Result<Done, Translatable> {
                 &targets,
                 held,
             )?;
-            tab_text = edited;
+            tab_edit = edited;
             value
         }
     };
     answer["notebook"] = json!(notebook);
     answer["load_problems"] = to_value(&problems)?;
-    Ok(Done { answer, tab_text })
+    Ok(Done { answer, tab_edit })
 }
 
 /// The notebook file (as the tab holds it, when it does), its chapters and
@@ -160,10 +209,14 @@ pub(crate) fn run(job: Job) -> Result<Done, Translatable> {
 /// be read; a chapter or attachment that cannot is listed, and an
 /// attachment missing from the folder is what the answer reports as
 /// missing.
-fn load(folder: &Path, held: Option<&str>) -> Result<(NotebookSources, Vec<LoadProblem>), String> {
+fn load(
+    folder: &Path,
+    held: Option<&str>,
+    confine: Option<&Path>,
+) -> Result<(NotebookSources, Vec<LoadProblem>), String> {
     let read = |path: &str| match (path, held) {
         (DEFAULT_NOTEBOOK_FILE, Some(text)) => Ok(text.as_bytes().to_vec()),
-        _ => std::fs::read(folder.join(path)),
+        _ => read_notebook_file(confine, &folder.join(path)),
     };
     let (mut sources, problems) = NotebookSources::load(DEFAULT_NOTEBOOK_FILE, read);
     if let Some(main) = problems.iter().find(|p| p.file.is_empty()) {
@@ -176,7 +229,7 @@ fn load(folder: &Path, held: Option<&str>) -> Result<(NotebookSources, Vec<LoadP
         ));
     }
     for path in sources.missing_attachments() {
-        if let Ok(bytes) = std::fs::read(folder.join(&path)) {
+        if let Ok(bytes) = read_notebook_file(confine, &folder.join(&path)) {
             sources.insert(&path, bytes);
         }
     }
@@ -198,17 +251,18 @@ fn editable<'a>(sources: &'a NotebookSources, file: &str) -> Result<&'a str, Tra
     Ok(text)
 }
 
-/// Write `text` as notebook file `file`, or hand it to the notebook tab
-/// when the tab holds the notebook: the notebook file goes through its
-/// buffer, a chapter is refused (the tab would not see it).
+/// Write `text` as notebook file `file`, or hand `edit` to the notebook tab
+/// when the tab holds the notebook: it is made again on the tab's text when
+/// the job lands; a chapter is refused (the tab would not see it).
 fn write_or_hand(
     folder: &Path,
     file: &str,
     text: String,
     held: bool,
-) -> Result<Option<String>, Translatable> {
+    edit: TabEdit,
+) -> Result<Option<TabEdit>, Translatable> {
     match (held, file == DEFAULT_NOTEBOOK_FILE) {
-        (true, true) => Ok(Some(text)),
+        (true, true) => Ok(Some(edit)),
         (true, false) => Err(Translatable::new(ids::NOTEBOOK_TAB_CMD_CHAPTER_HELD)
             .arg("file", format!("{NOTEBOOK_DIR}/{file}"))),
         (false, _) => {
@@ -226,7 +280,7 @@ fn mark_valid(
     sources: &NotebookSources,
     target: &StaleTarget,
     held: bool,
-) -> Result<(Value, Option<String>), Translatable> {
+) -> Result<(Value, Option<TabEdit>), Translatable> {
     let named = match target {
         StaleTarget::Attachment(file) => format!("the attachment {file}"),
         StaleTarget::Reading(id) => format!("the reading {id}"),
@@ -249,7 +303,11 @@ fn mark_valid(
             "{named} at {NOTEBOOK_DIR}/{file}:{line} stores no part values"
         ))
     })?;
-    let handed = write_or_hand(folder, &file, marked, held)?;
+    let edit = TabEdit::MarkValid {
+        target: target.clone(),
+        values: values.clone(),
+    };
+    let handed = write_or_hand(folder, &file, marked, held, edit)?;
     let answer = json!({
         "file": format!("{NOTEBOOK_DIR}/{file}"),
         "line": line,
@@ -269,7 +327,7 @@ fn attach(
     caption: &str,
     targets: &[Reference],
     held: bool,
-) -> Result<(Value, Option<String>), Translatable> {
+) -> Result<(Value, Option<TabEdit>), Translatable> {
     let kind = AttachmentKind::of(&from.to_string_lossy());
     let sub = asked.unwrap_or_else(|| folder_for(kind));
     let copy = plan_copy(from, sub, |path| folder.join(path).exists()).ok_or_else(|| {
@@ -284,11 +342,13 @@ fn attach(
     let call = attachment_call(copy.file(), caption, targets, sources.design_values());
     atomic_write(&folder.join(&copy.to), &bytes)
         .map_err(|e| because(format!("{NOTEBOOK_DIR}/{} was not written: {e}", copy.to)))?;
+    let edit = TabEdit::Append { call: call.clone() };
     let handed = write_or_hand(
         folder,
         DEFAULT_NOTEBOOK_FILE,
         append_call(main, &call),
         held,
+        edit,
     )?;
     let answer = json!({
         "file": copy.file(),

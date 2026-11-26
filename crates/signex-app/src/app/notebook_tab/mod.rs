@@ -28,6 +28,8 @@ mod view;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod tests_data_loss;
+#[cfg(test)]
 mod tests_edit;
 #[cfg(test)]
 mod tests_lane;

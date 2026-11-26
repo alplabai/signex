@@ -122,4 +122,6 @@ define_ids! {
     NOTEBOOK_TAB_CMD_SNX_TARGET = "notebook-tab-cmd-snx-target";
     NOTEBOOK_TAB_CMD_TARGET_EXISTS = "notebook-tab-cmd-target-exists";
     NOTEBOOK_TAB_CMD_FILE_APPEARED = "notebook-tab-cmd-file-appeared";
+    NOTEBOOK_TAB_CMD_CHANGED_ON_DISK = "notebook-tab-cmd-changed-on-disk";
+    NOTEBOOK_TAB_CMD_WRITE_OUTSIDE = "notebook-tab-cmd-write-outside";
 }

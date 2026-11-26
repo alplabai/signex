@@ -31,11 +31,23 @@ pub(super) fn written_text(doc: &NotebookDocument) -> Option<Result<String, Stri
 
 /// Blocking: write `text` to `path`, making the notebook folder first. A
 /// new notebook's write refuses a file at `path` (`appeared`, the reason).
-fn write_file(path: &Path, text: &str, appeared: Option<&str>) -> Result<(), String> {
+fn write_file(
+    path: &Path,
+    text: &str,
+    appeared: Option<&str>,
+    changed: Option<&(String, String)>,
+) -> Result<(), String> {
     if let Some(why) = appeared
         && path.exists()
     {
         return Err(why.to_string());
+    }
+    // Something else wrote the file since it was read or saved (#3019).
+    if let Some((was, why)) = changed
+        && let Ok(now) = std::fs::read_to_string(path)
+        && now != *was
+    {
+        return Err(why.clone());
     }
     if let Some(folder) = path.parent() {
         std::fs::create_dir_all(folder)
@@ -51,6 +63,9 @@ struct Write {
     path: PathBuf,
     text: String,
     appeared: Option<String>,
+    /// The file's text as last read or saved, and the reason a write gives
+    /// when the file is no longer so.
+    changed: Option<(String, String)>,
 }
 
 impl Signex {
@@ -62,6 +77,10 @@ impl Signex {
             .ok_or_else(|| "the project is no longer open".to_string())?;
         self.store_reference_ids(id);
         let appeared = self.notebook_appeared_reason(id, &path);
+        let changed_why = Translatable::new(ids::NOTEBOOK_TAB_CMD_CHANGED_ON_DISK)
+            .arg("path", path.display().to_string())
+            .localized(&self.ui_state.i18n)
+            .into_string();
         let doc = self
             .document_state
             .notebooks
@@ -82,12 +101,15 @@ impl Signex {
             doc.save_error = Some(why.clone());
             return Err(why.clone());
         }
+        // Checked on the write's worker, where the file is read.
+        let changed = doc.disk_text.clone().map(|was| (was, changed_why));
         doc.saving = true;
         doc.save_error = None;
         Ok(Write {
             path,
             text,
             appeared,
+            changed,
         })
     }
 
@@ -131,12 +153,13 @@ impl Signex {
             path,
             text,
             appeared,
+            changed,
         } = write;
         Task::perform(
             async move {
                 let written = text.clone();
                 let result = tokio::task::spawn_blocking(move || {
-                    write_file(&path, &text, appeared.as_deref())
+                    write_file(&path, &text, appeared.as_deref(), changed.as_ref())
                 })
                 .await
                 .map_err(|error| format!("the save did not finish: {error}"))
@@ -212,7 +235,12 @@ impl Signex {
         let write = self
             .notebook_write(id)
             .map_err(|why| anyhow::anyhow!("{}: {why}", path.display()))?;
-        let result = write_file(&write.path, &write.text, write.appeared.as_deref());
+        let result = write_file(
+            &write.path,
+            &write.text,
+            write.appeared.as_deref(),
+            write.changed.as_ref(),
+        );
         self.notebook_saved(id, &write.text, result.clone());
         result.map_err(anyhow::Error::msg)
     }

@@ -20,6 +20,27 @@ pub struct PlacedSheet<'a> {
     pub sheet: &'a SchematicSheet,
 }
 
+/// The value of every placed part of `sheets`, under the designator its
+/// placement gives it, as the notebook names parts (`R1_A`, `R1_B` for a
+/// sheet placed twice), so a stored `taken-with` value is compared with the
+/// right instance (#3019). Power ports and parts with no designator yet
+/// (`R?`) are left out.
+pub fn placed_values(sheets: &[PlacedSheet<'_>]) -> crate::attachment::DesignValues {
+    let mut values = crate::attachment::DesignValues::new();
+    for placed in sheets {
+        for symbol in placed.sheet.symbols.iter().filter(|s| !s.is_power) {
+            let designator = symbol.designator_in(placed.placement).trim();
+            if designator.is_empty() || designator.ends_with('?') {
+                continue;
+            }
+            if values.get(designator).is_none() {
+                values.insert(designator, symbol.value.clone());
+            }
+        }
+    }
+    values
+}
+
 /// The index of `sheets` (in walk order) and `netlist`. A part is listed
 /// under the designator its placement gives it; the units of one part share
 /// the entry of its first unit, whose id it carries. Power ports and parts

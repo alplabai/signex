@@ -80,6 +80,74 @@ fn with_the_tab_open_mark_still_valid_goes_into_the_tab_and_save_keeps_it() {
     assert!(on_disk(dir.path()).contains("taken-with: (\"L1\": \"4.7 µH\")"));
 }
 
+fn typed(c: char, id: crate::app::state::ProjectId) -> NotebookMsg {
+    NotebookMsg::TextActed {
+        project_id: id,
+        action: iced::widget::text_editor::Action::Edit(iced::widget::text_editor::Edit::Insert(c)),
+    }
+}
+
+/// #3019: a measurement command's result is made again on the tab's text
+/// as it is when the result lands: what was typed while it ran stays.
+#[test]
+fn a_mark_that_lands_after_typing_keeps_what_was_typed() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, project) = project(&dir);
+    std::fs::write(dir.path().join("notebook/design.snxnbk"), MAIN_READING).unwrap();
+    let id = open_tab(&mut app);
+    let command = crate::keymap::AppCommandId::new("mark_notebook_attachment_valid").unwrap();
+    let document = format!("document={}", project.display());
+    let args = crate::app::command::CommandArgs::parse_operands(
+        &command,
+        &[document.as_str(), "id=MEAS-007"],
+    )
+    .expect("operands");
+    let (outcome, task) = app.run_operands(&command, &args);
+    let crate::app::command::CommandOutcome::Deferred { ticket } = outcome else {
+        panic!("not deferred: {outcome:?}");
+    };
+    // Typed while the job runs.
+    send(&mut app, typed('Q', id));
+    let (landed, _) = app.settle_deferred(ticket, task);
+    let marked = answer(landed);
+    assert_eq!(marked["in_tab"], true);
+    let held = app.notebook_tab_file_text(id).expect("the tab's text");
+    assert!(held.contains('Q'), "what was typed stays: {held}");
+    assert!(held.contains("taken-with: (\"L1\": \"4.7 µH\")"), "{held}");
+}
+
+/// #3019: Mark still valid goes through the editor's history, so Undo in
+/// the tab takes it back and keeps the typing before it.
+#[test]
+fn undo_takes_back_a_mark_made_in_the_tab() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, project) = project(&dir);
+    std::fs::write(dir.path().join("notebook/design.snxnbk"), MAIN_READING).unwrap();
+    let id = open_tab(&mut app);
+    send(&mut app, typed('Q', id));
+    let _ = answer(run(
+        &mut app,
+        &project,
+        "mark_notebook_attachment_valid",
+        &["id=MEAS-007"],
+    ));
+    let held = app.notebook_tab_file_text(id).expect("the tab's text");
+    assert!(held.contains("\"4.7 µH\""), "{held}");
+    send(
+        &mut app,
+        NotebookMsg::TextActed {
+            project_id: id,
+            action: iced::widget::text_editor::Action::Edit(iced::widget::text_editor::Edit::Undo),
+        },
+    );
+    let undone = app.notebook_tab_file_text(id).expect("the tab's text");
+    assert!(
+        undone.contains("\"3.3 µH\""),
+        "the mark is undone: {undone}"
+    );
+    assert!(undone.contains('Q'), "the typing before it stays: {undone}");
+}
+
 #[test]
 fn with_the_tab_open_a_chapter_is_not_written_behind_it() {
     let dir = tempfile::tempdir().unwrap();

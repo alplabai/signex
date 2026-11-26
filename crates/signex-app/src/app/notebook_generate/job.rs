@@ -45,6 +45,8 @@ pub(super) struct GenerateJob {
     requirements: CheckSource,
     bom: BomInputs,
     board: Option<PcbBoard>,
+    /// The design the stale references are counted against.
+    design: Option<crate::app::notebook_measurements::DesignInputs>,
 }
 
 impl Signex {
@@ -73,6 +75,10 @@ impl Signex {
                 .as_deref()
                 .and_then(|path| self.document_state.pcb_board(path))
                 .cloned(),
+            design: crate::app::notebook_measurements::DesignInputs::of(
+                project,
+                crate::app::project_sheets::open_sheets_snapshot(&self.document_state),
+            ),
             request,
         }
     }
@@ -156,8 +162,11 @@ pub(super) fn base_facts(project: &LoadedProject, variant: Option<String>) -> Pr
     }
 }
 
-/// Run `job`: blocking, so it runs off the UI thread.
-pub(super) fn run(job: GenerateJob) -> Result<GenerateOutcome, String> {
+/// Run `job`: blocking, so it runs off the UI thread. The checks it ran,
+/// whatever came of the report, and the report or why it was refused.
+pub(super) fn run(
+    job: GenerateJob,
+) -> (Vec<(PathBuf, CheckReport)>, Result<GenerateOutcome, String>) {
     let GenerateJob {
         request,
         mut facts,
@@ -168,6 +177,7 @@ pub(super) fn run(job: GenerateJob) -> Result<GenerateOutcome, String> {
         requirements,
         bom,
         board,
+        design,
     } = job;
     let mut ran = Vec::new();
     facts.erc = take(erc, "ERC", &mut ran);
@@ -192,12 +202,41 @@ pub(super) fn run(job: GenerateJob) -> Result<GenerateOutcome, String> {
         Err(why) => Fact::not_read(why),
     };
     facts.blocks = read_blocks(&dir, confine.as_deref());
+    facts.stale_references = stale_references(&dir, confine.as_deref(), design.as_ref());
     let mut notebook = generate(&facts, &request.options);
     if request.save {
-        write_report(&dir, &notebook.text, request.update)?;
+        if let Err(why) = write_report(&dir, &notebook.text, request.update, confine.as_deref()) {
+            return (ran, Err(why));
+        }
         notebook.summary.written = true;
     }
-    Ok(GenerateOutcome { notebook, ran })
+    (
+        ran,
+        Ok(GenerateOutcome {
+            notebook,
+            ran: Vec::new(),
+        }),
+    )
+}
+
+/// How many distinct references of the notebook name nothing the design
+/// has now, as the PDF export counts them (#3021); 0 when the design could
+/// not be read whole.
+fn stale_references(
+    dir: &Path,
+    confine: Option<&Path>,
+    design: Option<&crate::app::notebook_measurements::DesignInputs>,
+) -> usize {
+    let Some(names) = design.and_then(|design| design.names(dir)) else {
+        return 0;
+    };
+    let folder = dir.join(NOTEBOOK_DIR);
+    let (sources, _) = NotebookSources::load(DEFAULT_NOTEBOOK_FILE, |path| {
+        crate::app::notebook_project::read_notebook_file(confine, &folder.join(path))
+    });
+    signex_notebook::export::StaleCheck::run(&sources, |r| names.has(r))
+        .stale
+        .len()
 }
 
 /// The report of `source`; one run now is kept in `ran` with its file.
@@ -245,8 +284,16 @@ fn read_blocks(dir: &Path, confine: Option<&Path>) -> Fact<Vec<signex_notebook::
 
 /// Write the report into the project, unless one is there and `update` was
 /// not asked for.
-fn write_report(dir: &Path, text: &str, update: bool) -> Result<(), String> {
+fn write_report(
+    dir: &Path,
+    text: &str,
+    update: bool,
+    confine: Option<&Path>,
+) -> Result<(), String> {
     let path = dir.join(generated_path());
+    // A headless or agent run writes only inside the project, through no
+    // link such as a linked `notebook/generated` (#3020).
+    crate::app::notebook_project::confined_write(confine, &path)?;
     match write_decision(path.exists(), update) {
         WriteDecision::Refuse => Err(format!(
             "{} already exists; run with update=true (signex-cli notebook generate --force) to replace it",
@@ -256,5 +303,23 @@ fn write_report(dir: &Path, text: &str, update: bool) -> Result<(), String> {
             signex_types::atomic_io::atomic_write(&path, text.as_bytes())
                 .map_err(|error| format!("{}: {error}", path.display()))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    /// #3020: with `notebook/generated` linked out of the project, a
+    /// headless `notebook generate` is refused and writes nothing there.
+    #[cfg(unix)]
+    #[test]
+    fn a_headless_report_is_not_written_through_a_link() {
+        let dir = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("notebook")).unwrap();
+        std::os::unix::fs::symlink(outside.path(), dir.path().join("notebook/generated")).unwrap();
+        let refused = super::write_report(dir.path(), "+++\n+++\n", true, Some(dir.path()));
+        assert!(refused.is_err(), "{refused:?}");
+        let left: Vec<_> = std::fs::read_dir(outside.path()).unwrap().collect();
+        assert!(left.is_empty(), "the outside folder stays empty");
     }
 }

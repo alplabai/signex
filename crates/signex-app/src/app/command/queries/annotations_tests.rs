@@ -165,8 +165,11 @@ fn a_bad_filter_is_refused_before_anything_is_read() {
 
 #[test]
 fn the_query_reads_its_filters() {
+    // An absolute path on every platform (`/p.snxprj` is not on Windows).
+    let project = std::env::temp_dir().join("p.snxprj");
+    let document = format!("document={}", project.display());
     let query = annotation_query(&args(&[
-        "document=/p.snxprj",
+        document.as_str(),
         "id=CALC-2.1",
         "kind=issue",
         "part=U3",
@@ -178,7 +181,7 @@ fn the_query_reads_its_filters() {
     let hidden = &query.filter.hidden_kinds;
     assert_eq!(hidden.len(), 4, "every kind but issue");
     assert!(!hidden.contains(&signex_notebook::AnnotationKind::Issue));
-    let none = annotation_query(&args(&["document=/p.snxprj"])).expect("a query");
+    let none = annotation_query(&args(&[document.as_str()])).expect("a query");
     assert_eq!(none, AnnotationQuery::default(), "no filter, none set");
 }
 

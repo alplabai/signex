@@ -231,3 +231,37 @@ fn the_dialogs_report_is_unsaved_until_save_all_writes_it() {
     assert!(!app.document_state.is_document_dirty(&path));
     assert!(app.document_state.generated_reports.is_empty());
 }
+
+/// #3019: Close Project asks for the report Generate holds unsaved, and
+/// keeps it, rather than closing and dropping it.
+#[test]
+fn close_project_asks_for_a_held_report() {
+    use crate::app::{ContextMenuMsg, Message, ProjectMsg, ProjectTreeAction};
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = project_app(&dir);
+    let _ = app.update(NotebookGenerateMsg::DialogOpened.into());
+    let task = app.update(NotebookGenerateMsg::GenerateClicked.into());
+    crate::task_driver::TaskDriver::new()
+        .settle(&mut app, task)
+        .expect("the run lands");
+    let id = app.document_state.projects[0].id;
+    let _ = app.update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+        ProjectTreeAction::CloseProject(vec![id.to_string()]),
+    )));
+    let result = app.resolve_sheet_refs_blocking();
+    let _ = app.update(Message::Project(ProjectMsg::CloseRefsResolved {
+        project_id: id,
+        result,
+    }));
+    let confirm = app
+        .ui_state
+        .project_close_confirm
+        .as_ref()
+        .expect("the close asks");
+    assert!(
+        confirm.dirty_paths.contains(&report_file(dir.path())),
+        "{:?}",
+        confirm.dirty_paths
+    );
+    assert!(app.document_state.generated_reports.contains_key(&id));
+}

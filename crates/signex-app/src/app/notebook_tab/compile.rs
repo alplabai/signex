@@ -39,6 +39,9 @@ pub struct Lane {
     pub attachments: Vec<AttachmentState>,
     /// The timeline of the target the lane shows, if one is open.
     pub timeline: Option<Timeline>,
+    /// The part values the stale marks were judged against, which Mark
+    /// still valid writes.
+    pub values: DesignValues,
 }
 
 /// What one compile gave.
@@ -102,7 +105,8 @@ struct CompileJob {
     sources: NotebookSources,
     /// The notebook folder, for the attachments the pages print.
     folder: PathBuf,
-    values: DesignValues,
+    /// What the part values are read from, on the worker (#3019).
+    design: Option<crate::app::notebook_measurements::DesignInputs>,
     timeline: Option<Reference>,
     page: usize,
     colours: PageColours,
@@ -119,7 +123,12 @@ impl CompileJob {
                 let _held = self.sources.insert(&path, bytes);
             }
         }
-        self.sources.set_design_values(self.values.clone());
+        let values = self
+            .design
+            .as_ref()
+            .map(crate::app::notebook_measurements::DesignInputs::values)
+            .unwrap_or_default();
+        self.sources.set_design_values(values.clone());
         let today = today();
         // No cell results: every Python cell shows as not run (mockup row
         // 200); cells run on export.
@@ -150,6 +159,7 @@ impl CompileJob {
                 .timeline
                 .as_ref()
                 .map(|reference| timeline_report(&self.sources, reference, None).timeline),
+            values,
         };
         CompileOutcome {
             generation: self.generation,
@@ -190,27 +200,28 @@ pub(super) fn handle(image: &PageImage) -> image::Handle {
 }
 
 impl Signex {
-    /// The part values of `id`'s open sheets, with their unsaved edits: what
-    /// an attachment's stale mark is judged against in the tab, and the
-    /// values the Python cells of an export read.
+    /// The part values the tab's newest compile judged the stale marks
+    /// against (each part under its instance designator, #3019): what Mark
+    /// still valid in the margin lane writes.
     pub(crate) fn notebook_design_values(&self, id: ProjectId) -> DesignValues {
-        let docs = &self.document_state;
-        let sheets = docs
-            .engines
-            .iter()
-            .filter(|(path, _)| {
-                docs.document_project(path)
-                    .is_some_and(|project| project.id == id)
-            })
-            .map(|(_, engine)| engine.document());
-        crate::app::notebook_measurements::values_of(sheets)
+        self.ui_state
+            .notebook_tabs
+            .get(&id)
+            .and_then(|tab| tab.compile.lane())
+            .map(|lane| lane.values.clone())
+            .unwrap_or_default()
     }
 
     /// Compile `id`'s notebook as typed, or note that one is owed when a
     /// compile is running.
     pub(super) fn request_notebook_compile(&mut self, id: ProjectId) -> Task<Message> {
         let colours = page_colours(&self.document_state.panel_ctx.tokens);
-        let values = self.notebook_design_values(id);
+        let design = self.document_state.project_by_id(id).and_then(|project| {
+            crate::app::notebook_measurements::DesignInputs::of(
+                project,
+                crate::app::project_sheets::open_sheets_snapshot(&self.document_state),
+            )
+        });
         let Some((doc, tab)) = self.notebook_parts_mut(id) else {
             return Task::none();
         };
@@ -228,7 +239,7 @@ impl Signex {
                 .path
                 .parent()
                 .map_or_else(PathBuf::new, std::path::Path::to_path_buf),
-            values,
+            design,
             timeline: tab.timeline.as_ref().map(|open| open.shown.clone()),
             page: tab.page,
             colours,
@@ -236,6 +247,7 @@ impl Signex {
         };
         tab.compile.running = Some(job.generation);
         tab.compile.owed = false;
+        let generation = job.generation;
         Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || job.run())
@@ -253,7 +265,7 @@ impl Signex {
                     ));
                     Message::from(NotebookMsg::Compiled {
                         project_id: id,
-                        outcome: Arc::new(CompileOutcome::failed_to_run(error)),
+                        outcome: Arc::new(CompileOutcome::failed_to_run(error, generation)),
                     })
                 }
             },
@@ -371,7 +383,7 @@ pub(super) fn land(tab: &mut NotebookTab, outcome: Arc<CompileOutcome>) {
 
 impl CompileOutcome {
     /// The outcome of a compile whose worker died: one error, no pages.
-    fn failed_to_run(error: String) -> Self {
+    pub(super) fn failed_to_run(error: String, generation: u64) -> Self {
         let sources = NotebookSources::new(super::open::MAIN_FILE, Vec::new());
         let compilation = signex_notebook::Compilation {
             notebook: None,
@@ -385,7 +397,9 @@ impl CompileOutcome {
             }],
         };
         CompileOutcome {
-            generation: 0,
+            // The generation it ran for, so it lands and the next edit
+            // compiles again (#3022).
+            generation,
             status: NotebookStatus::of(&sources, &compilation),
             notebook: None,
             elapsed_ms: 0,

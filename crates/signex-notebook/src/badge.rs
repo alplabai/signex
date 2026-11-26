@@ -63,13 +63,13 @@ pub struct BlockMention {
     pub file: String,
     /// The 1-based line the block starts on.
     pub line: u32,
-    /// True for a measurement whose result fails. Blocks are read without
-    /// a result today, so this is set only by a reader that has one.
+    /// True for a measurement whose result fails its limits (#3021).
     pub failing: bool,
 }
 
 impl BlockMention {
-    /// The mention of `annotation` in `file`.
+    /// The mention of `annotation` in `file`: a measurement fails when its
+    /// record's verdict is Fail.
     pub fn of(annotation: &Annotation, file: &str) -> Self {
         Self {
             kind: annotation.kind,
@@ -78,7 +78,8 @@ impl BlockMention {
             date: annotation.date,
             file: file.to_string(),
             line: annotation.line,
-            failing: false,
+            failing: annotation.kind == AnnotationKind::Measurement
+                && annotation.record.verdict() == Some(crate::Verdict::Fail),
         }
     }
 
@@ -138,6 +139,9 @@ pub fn worst_tone(blocks: &[BlockMention]) -> BadgeTone {
 /// `#pin("U1", "3")`) counts once. Sorted by target.
 pub fn badges<'a>(files: impl IntoIterator<Item = (&'a str, &'a [Annotation])>) -> Vec<Badge> {
     let mut found: Vec<(BadgeTarget, Vec<BlockMention>)> = Vec::new();
+    // The typed ids each badge already counts: a block copied under the
+    // same id (a generated report's decisions) counts once (#3021).
+    let mut counted: Vec<(BadgeTarget, crate::BlockId)> = Vec::new();
     for (file, annotations) in files {
         for annotation in annotations {
             let mut targets: Vec<BadgeTarget> = Vec::new();
@@ -147,6 +151,13 @@ pub fn badges<'a>(files: impl IntoIterator<Item = (&'a str, &'a [Annotation])>) 
                 }
             }
             for target in targets {
+                if let Some(id) = &annotation.id {
+                    let key = (target.clone(), id.clone());
+                    if counted.contains(&key) {
+                        continue;
+                    }
+                    counted.push(key);
+                }
                 let mention = BlockMention::of(annotation, file);
                 match found.iter_mut().find(|(t, _)| *t == target) {
                     Some((_, blocks)) => blocks.push(mention),

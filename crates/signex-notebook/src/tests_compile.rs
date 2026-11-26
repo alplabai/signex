@@ -176,3 +176,37 @@ fn a_diagnostic_is_a_json_object() {
     assert_eq!(json["file"], "design.snxnbk");
     assert_eq!(json["line"], 1);
 }
+
+/// #3023: every font family typst-assets embeds ships with its licence: a
+/// file in `fonts/`, which the release packages copy, named in
+/// THIRD_PARTY_NOTICES.md. A family added by a typst-assets update fails
+/// here until its licence is added.
+#[test]
+fn every_embedded_font_family_ships_its_licence() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let notices = std::fs::read_to_string(root.join("../../THIRD_PARTY_NOTICES.md"))
+        .expect("THIRD_PARTY_NOTICES.md");
+    let mut families = std::collections::BTreeSet::new();
+    for data in typst_assets::fonts() {
+        for info in typst::text::FontInfo::iter(data) {
+            families.insert(info.family);
+        }
+    }
+    assert!(!families.is_empty(), "the fonts feature is on");
+    for family in &families {
+        let licence = if family.starts_with("Libertinus") {
+            "OFL-LibertinusSerif.md"
+        } else if family.starts_with("New Computer Modern") {
+            "GUST-NewComputerModern.md"
+        } else if family.starts_with("DejaVu") {
+            "BitstreamVera-DejaVuSansMono.md"
+        } else {
+            panic!("{family} has no licence file in crates/signex-notebook/fonts");
+        };
+        assert!(root.join("fonts").join(licence).is_file(), "{licence}");
+        assert!(
+            notices.contains(licence),
+            "{licence} in THIRD_PARTY_NOTICES.md"
+        );
+    }
+}

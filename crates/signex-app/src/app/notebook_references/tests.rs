@@ -102,14 +102,9 @@ fn run(app: &mut Signex, id: &str, operands: &[&str]) -> CommandOutcome {
 /// The answer once the read landed: the run again answers from it.
 fn answer(app: &mut Signex, id: &str, operands: &[&str]) -> Value {
     let project = app.document_state.projects[0].id;
-    let dir = app.document_state.projects[0].dir().to_path_buf();
-    let state = &mut app.ui_state.annotations;
-    state.target = Some((project, dir));
-    state.scan = Some(Arc::new(scan()));
-    state.badges = Arc::new(crate::panels::annotations::notebook_badges(&scan()));
-    state.answering = true;
+    app.agent.notebook_read = Some((project, Some(Arc::new(scan()))));
     let outcome = run(app, id, operands);
-    app.ui_state.annotations.answering = false;
+    app.agent.notebook_read = None;
     match outcome {
         CommandOutcome::Answered(value) => value,
         other => panic!("{id} did not answer: {other:?}"),
@@ -155,13 +150,55 @@ fn a_command_reads_the_notebook_first_and_runs_again_when_it_lands() {
         matches!(outcome, CommandOutcome::Deferred { .. }),
         "{outcome:?}"
     );
-    let state = &app.ui_state.annotations;
-    assert_eq!(state.generation, generation + 1, "a read started");
-    assert_eq!(state.reruns.len(), 1, "the command waits for it");
-    assert_eq!(state.reruns[0].command.as_str(), "notebook_references");
-    let _ = app.rerun_waiting_notebook_commands();
-    assert!(app.ui_state.annotations.reruns.is_empty());
-    assert!(!app.ui_state.annotations.answering);
+    assert_eq!(
+        app.ui_state.annotations.generation, generation,
+        "the command reads for itself, not through the panel"
+    );
+    assert!(app.agent.notebook_read.is_none());
+}
+
+/// #3022: a reference command naming a project that is not the one in view
+/// answers from its own read, though the Annotations panel reads the
+/// project in view meanwhile.
+#[test]
+fn a_command_for_another_project_answers_from_its_own_read() {
+    let mut app = app();
+    let other = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(other.path().join("notebook")).unwrap();
+    std::fs::write(
+        other.path().join("notebook/design.snxnbk"),
+        "#note(id: \"NOTE-001\")[B]\n",
+    )
+    .unwrap();
+    let mut b = app.document_state.projects[0].clone();
+    b.id = app.document_state.mint_project_id();
+    b.path = other.path().join("ProjectB.snxprj");
+    b.data.dir = other.path().to_string_lossy().into_owned();
+    let b_path = b.path.clone();
+    app.document_state.projects.push(b);
+    crate::app::handlers::menu::export::tests::open_with(
+        &mut app.document_state,
+        &other.path().join("power.snxsch"),
+        signex_types::schematic::SchematicSheet::default(),
+    );
+    let command = AppCommandId::new("notebook_references").expect("a catalog id");
+    let document = format!("document={}", b_path.display());
+    let args = CommandArgs::parse_operands(&command, &[document.as_str()]).expect("operands");
+    let (outcome, task) = app.run_operands(&command, &args);
+    let CommandOutcome::Deferred { ticket } = outcome else {
+        panic!("not deferred: {outcome:?}");
+    };
+    // What `update` does after every message: the panel follows the
+    // project in view, which is not B.
+    let synced = app.sync_annotations_panel();
+    crate::app::path_ops::settle_task(&mut app, synced);
+    crate::app::path_ops::settle_task(&mut app, task);
+    match app.take_finished_edit(ticket) {
+        Some(CommandOutcome::Answered(value)) => {
+            assert_eq!(value["files"][0]["file"], "design.snxnbk", "{value}");
+        }
+        other => panic!("B's command was not answered: {other:?}"),
+    }
 }
 
 #[test]
@@ -230,13 +267,10 @@ fn a_fix_waits_for_the_notebook_tab_and_says_so() {
         "notebook_fix_reference",
         &["fix=update", "kind=component", "name=R7"],
     );
-    app.ui_state.annotations.answering = true;
-    app.ui_state.annotations.scan = Some(Arc::new(scan()));
     let project = app.document_state.projects[0].id;
-    let dir = app.document_state.projects[0].dir().to_path_buf();
-    app.ui_state.annotations.target = Some((project, dir));
+    app.agent.notebook_read = Some((project, Some(Arc::new(scan()))));
     let (outcome, _) = app.run_operands(&command, &args);
-    app.ui_state.annotations.answering = false;
+    app.agent.notebook_read = None;
     match outcome {
         CommandOutcome::Disabled { reason } => {
             assert!(reason.render_en_us().contains("Design Notebook first"));

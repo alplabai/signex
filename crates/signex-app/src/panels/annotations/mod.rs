@@ -172,12 +172,6 @@ pub struct AnnotationsState {
     pub badges_hidden: bool,
     /// The badge under the pointer on the sheet in view, for its card.
     pub hovered_badge: Option<signex_notebook::BadgeTarget>,
-    /// Notebook commands waiting for the read under way; each runs again
-    /// when it lands (`app::notebook_references`).
-    pub reruns: Vec<crate::app::notebook_references::NotebookRerun>,
-    /// A waiting notebook command is running again on the read that just
-    /// landed: it answers from it instead of reading again.
-    pub answering: bool,
     /// The project whose Close Project is resolving its sheets: a change of
     /// the project in view does not read its notebook meanwhile.
     pub closing: Option<crate::app::ProjectId>,

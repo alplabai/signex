@@ -20,6 +20,7 @@ use signex_types::project::{BASE_VARIANT, is_base_variant};
 
 use super::{BuildRequest, BuiltPdf, NotebookPdfMsg};
 use crate::app::notebook_measurements::DesignInputs;
+use crate::app::notebook_project::read_notebook_file;
 use crate::app::project_sheets::open_sheets_snapshot;
 use crate::app::{LoadedProject, Message, ProjectId, Signex};
 
@@ -85,18 +86,31 @@ pub(super) fn resolve_path(project_dir: &Path, text: &str) -> Option<PathBuf> {
     })
 }
 
-/// Read the notebook file `notebook` of the project in `project_dir` and
-/// the chapters it includes. Blocking: runs on a worker. A chapter that
+/// Read the notebook file `notebook` of the project in `project_dir`, the
+/// chapters it includes and the attachments they name, so the pages print
+/// each figure and plot (#3021). Blocking: runs on a worker. A chapter that
 /// cannot be read is left to the compile, which names it where it is
-/// included; the notebook file itself must read.
-pub(super) fn read_sources(project_dir: &Path, notebook: &str) -> Result<NotebookSources, String> {
+/// included; the notebook file itself must read. With `confine` (a
+/// headless or agent run) only regular files inside the project are read,
+/// through no link out of it (#3020).
+pub(super) fn read_sources(
+    project_dir: &Path,
+    notebook: &str,
+    confine: Option<&Path>,
+) -> Result<NotebookSources, String> {
     let folder = project_dir.join(NOTEBOOK_DIR);
-    let (sources, problems) =
-        NotebookSources::load(notebook, |path| std::fs::read(folder.join(path)));
-    match problems.iter().find(|problem| problem.file.is_empty()) {
-        Some(problem) => Err(main_problem(notebook, problem)),
-        None => Ok(sources),
+    let (mut sources, problems) = NotebookSources::load(notebook, |path| {
+        read_notebook_file(confine, &folder.join(path))
+    });
+    if let Some(problem) = problems.iter().find(|problem| problem.file.is_empty()) {
+        return Err(main_problem(notebook, problem));
     }
+    for path in sources.missing_attachments() {
+        if let Ok(bytes) = read_notebook_file(confine, &folder.join(&path)) {
+            let _held = sources.insert(&path, bytes);
+        }
+    }
+    Ok(sources)
 }
 
 fn main_problem(notebook: &str, problem: &LoadProblem) -> String {
@@ -120,7 +134,7 @@ pub(super) fn inspect_task(
     Task::perform(
         async move {
             tokio::task::spawn_blocking(move || -> Result<NotebookInspection, String> {
-                let sources = read_sources(&project_dir, &notebook)?;
+                let sources = read_sources(&project_dir, &notebook, None)?;
                 let names = design
                     .as_ref()
                     .and_then(|design| design.names(&project_dir))
@@ -171,7 +185,8 @@ fn read_cell_cache(project_dir: &Path) -> CellCache {
 /// build has no Python runtime, so each prints its cached result greyed
 /// with the slim-install note, or none.
 fn build(request: &BuildRequest, design: Option<&DesignInputs>) -> Result<BuiltPdf, String> {
-    let sources = read_sources(&request.project_dir, &request.notebook)?;
+    let confine = request.confined.then_some(request.project_dir.as_path());
+    let sources = read_sources(&request.project_dir, &request.notebook, confine)?;
     let (names, values) = design_of(design, &request.project_dir);
     // Under Fail a design that could not be read whole checks nothing, so
     // the export does not pass it silently.
@@ -218,9 +233,80 @@ fn build(request: &BuildRequest, design: Option<&DesignInputs>) -> Result<BuiltP
             path.display()
         ));
     }
+    // A headless or agent run writes its default file only inside the
+    // project, through no link (#3020); a named `path` is the caller's
+    // allowed-path policy's to check.
+    if request.path.is_none() {
+        crate::app::notebook_project::confined_write(confine, &path)?;
+    }
     if let Some(folder) = path.parent() {
         std::fs::create_dir_all(folder)
             .map_err(|e| format!("{e}: could not make the folder {}", folder.display()))?;
     }
     Ok(BuiltPdf { path, export })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::read_sources;
+
+    /// #3021: the PDF read loads the attachments the notebook names, so
+    /// each figure prints rather than "Missing attachment".
+    #[test]
+    fn the_pdf_read_loads_the_attachments() {
+        let dir = tempfile::tempdir().unwrap();
+        let folder = dir.path().join("notebook");
+        std::fs::create_dir_all(folder.join("attachments/scope")).unwrap();
+        std::fs::write(
+            folder.join("design.snxnbk"),
+            "#import \"@signex/notebook:0.1.0\": *\n#attachment(\"scope/a.csv\")\n",
+        )
+        .unwrap();
+        std::fs::write(folder.join("attachments/scope/a.csv"), "t,v\n0,1\n").unwrap();
+        let sources = read_sources(dir.path(), "design.snxnbk", None).expect("read");
+        assert!(sources.missing_attachments().is_empty());
+        assert!(sources.get("attachments/scope/a.csv").is_some());
+    }
+
+    /// #3020: a headless or agent export reads no chapter linked out of
+    /// the project; a person's export may.
+    #[cfg(unix)]
+    #[test]
+    fn a_confined_read_follows_no_link_out_of_the_project() {
+        let dir = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        std::fs::write(outside.path().join("k.snxnbk"), "SECRET\n").unwrap();
+        let folder = dir.path().join("notebook");
+        std::fs::create_dir_all(folder.join("chapters")).unwrap();
+        std::fs::write(
+            folder.join("design.snxnbk"),
+            "= A\n#include \"chapters/k.snxnbk\"\n",
+        )
+        .unwrap();
+        std::os::unix::fs::symlink(
+            outside.path().join("k.snxnbk"),
+            folder.join("chapters/k.snxnbk"),
+        )
+        .unwrap();
+        let confined = read_sources(dir.path(), "design.snxnbk", Some(dir.path())).expect("read");
+        assert!(confined.get("chapters/k.snxnbk").is_none(), "not read");
+        let person = read_sources(dir.path(), "design.snxnbk", None).expect("read");
+        assert!(person.get("chapters/k.snxnbk").is_some());
+    }
+
+    /// #3020: a headless export writes its default file only inside the
+    /// project, through no link.
+    #[cfg(unix)]
+    #[test]
+    fn a_confined_write_refuses_a_link_out_of_the_project() {
+        let dir = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        std::os::unix::fs::symlink(outside.path(), dir.path().join("out")).unwrap();
+        let target = dir.path().join("out/notebook.pdf");
+        let confine = Some(dir.path());
+        assert!(crate::app::notebook_project::confined_write(confine, &target).is_err());
+        let inside = dir.path().join("exports/notebook.pdf");
+        assert!(crate::app::notebook_project::confined_write(confine, &inside).is_ok());
+        assert!(crate::app::notebook_project::confined_write(None, &target).is_ok());
+    }
 }

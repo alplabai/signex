@@ -32,6 +32,54 @@ pub(crate) fn bad_value(id: signex_i18n::MessageId, value: &str) -> Translatable
     Translatable::new(id).arg("value", value.trim().to_string())
 }
 
+/// Blocking: read the notebook file, chapter or attachment `file`. With
+/// `confine` (a headless or agent run, #2172, #3020) only a regular file
+/// inside that project folder, reached through no link out of it.
+pub(crate) fn read_notebook_file(
+    confine: Option<&std::path::Path>,
+    file: &std::path::Path,
+) -> std::io::Result<Vec<u8>> {
+    if let Some(dir) = confine {
+        crate::app::document_ids::confined_read(dir, file).map_err(std::io::Error::other)?;
+    }
+    std::fs::read(file)
+}
+
+/// Blocking: refuse writing `target` for a headless or agent run (with
+/// `confine`, the project folder) when it is not inside that folder, or
+/// any existing folder on the way to it is a link out of it (#3020).
+pub(crate) fn confined_write(
+    confine: Option<&std::path::Path>,
+    target: &std::path::Path,
+) -> Result<(), String> {
+    let Some(dir) = confine else {
+        return Ok(());
+    };
+    use signex_i18n::RenderTranslatable;
+    let refused = || {
+        Translatable::new(ids::NOTEBOOK_TAB_CMD_WRITE_OUTSIDE)
+            .arg("path", target.display().to_string())
+            .render_en_us()
+    };
+    let Ok(folder) = std::fs::canonicalize(dir) else {
+        return Err(refused());
+    };
+    // The deepest part of the path that exists, links followed, must be in
+    // the project; a link at the target itself is refused too.
+    let mut existing = target.to_path_buf();
+    while !existing.exists() {
+        if !existing.pop() {
+            break;
+        }
+    }
+    let resolved = std::fs::canonicalize(&existing).unwrap_or(existing);
+    let is_link = std::fs::symlink_metadata(target).is_ok_and(|m| m.file_type().is_symlink());
+    if !resolved.starts_with(&folder) || is_link {
+        return Err(refused());
+    }
+    Ok(())
+}
+
 /// The `overwrite=true` operand of an export.
 pub(crate) fn overwrite(args: &CommandArgs) -> bool {
     matches!(args.operand("overwrite"), Some(OperandValue::Bool(true)))

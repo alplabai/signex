@@ -61,12 +61,14 @@ fn read_first(app: &mut Signex, args: &CommandArgs, id: &str) -> Result<Read, Ra
     let project = app
         .rules_project_named(args)
         .map_err(|why| refused(because(why)))?;
-    let state = &app.ui_state.annotations;
-    if state.answering {
-        if state.target.as_ref().map(|t| t.0) != Some(project) {
+    // The command's own read, held for the length of its run again; the
+    // Annotations panel reading the project in view meanwhile does not
+    // touch it (#3022).
+    if let Some((read_project, scan)) = app.agent.notebook_read.clone() {
+        if read_project != project {
             return Err(refused(reason(ids::NOTEBOOK_REF_CMD_MOVED)));
         }
-        let Some(scan) = state.scan.clone() else {
+        let Some(scan) = scan else {
             return Err(refused(reason(ids::NOTEBOOK_REF_CMD_UNREADABLE)));
         };
         if !scan.folder_found {
@@ -93,8 +95,29 @@ fn read_first(app: &mut Signex, args: &CommandArgs, id: &str) -> Result<Read, Ra
         origin: app.agent.origin.clone(),
         serving: app.agent.serving,
     };
-    let task = app.start_annotations_scan(Some((project, dir)));
-    app.ui_state.annotations.reruns.push(rerun);
+    let inputs = app.capture_annotation_inputs(project, &dir);
+    let task = Task::perform(
+        async move {
+            let read = tokio::task::spawn_blocking(move || {
+                crate::app::handlers::annotations::scan_notebooks(&inputs)
+            });
+            match read.await {
+                Ok(result) => result,
+                Err(e) => Err(format!("the notebook read stopped: {e}")),
+            }
+        },
+        move |result| {
+            let read = super::ReferenceCommandRead {
+                rerun: rerun.clone(),
+                project,
+                result: Arc::new(result),
+            };
+            let msg = super::NotebookReferenceMsg::CommandRead(Box::new(read));
+            Message::Dock(crate::dock::DockMessage::Panel(
+                crate::panels::PanelMsg::NotebookReferences(msg),
+            ))
+        },
+    );
     Err((CommandOutcome::Deferred { ticket }, task))
 }
 

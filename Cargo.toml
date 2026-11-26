@@ -142,7 +142,9 @@ signex-gerber = { path = "crates/signex-gerber" }
 signex-notebook = { path = "crates/signex-notebook" }
 
 # Design Notebook: the Typst compiler, its paged layout, PDF and raster
-# exporters and its bundled fonts (all Apache-2.0; DECISIONS, Typst row).
+# exporters (Apache-2.0; DECISIONS, Typst row) and typst-assets' fonts, which
+# carry their own licences (OFL-1.1, GUST, Bitstream Vera), shipped from
+# crates/signex-notebook/fonts and listed in THIRD_PARTY_NOTICES.md (#3023).
 typst = "0.15.1"
 typst-layout = "0.15.1"
 typst-pdf = "0.15.1"

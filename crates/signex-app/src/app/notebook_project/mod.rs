@@ -18,7 +18,10 @@ mod seams;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use refusal::{bad_value, because, export_target, needs_operand, overwrite, refusal};
+pub(crate) use refusal::{
+    bad_value, because, confined_write, export_target, needs_operand, overwrite,
+    read_notebook_file, refusal,
+};
 
 /// The notebook a request means: its project and its file, which may not
 /// exist yet (a notebook is written only on Save, mockup row 195).

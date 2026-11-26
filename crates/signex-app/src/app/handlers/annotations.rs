@@ -35,7 +35,7 @@ const TARGET: &str = "signex::notebook";
 const SECONDS_PER_DAY: u64 = 86_400;
 
 /// What a scan reads, captured in `update`.
-struct ScanInputs {
+pub(crate) struct ScanInputs {
     project_dir: PathBuf,
     /// The design to find the referenced parts in; `None` without a sheet.
     design: Option<DesignInputs>,
@@ -129,7 +129,7 @@ impl Signex {
         )
     }
 
-    fn capture_annotation_inputs(&self, id: ProjectId, dir: &Path) -> ScanInputs {
+    pub(crate) fn capture_annotation_inputs(&self, id: ProjectId, dir: &Path) -> ScanInputs {
         let ds = &self.document_state;
         let project = ds.projects.iter().find(|p| p.id == id);
         let pages = project_sheets::project_pages(project);
@@ -158,7 +158,7 @@ impl Signex {
                 }
                 self.apply_annotation_scan(result);
                 self.refresh_annotations_view();
-                return self.rerun_waiting_notebook_commands();
+                return Task::none();
             }
             AnnotationsMsg::QueryChanged(query) => state.filter.query = query,
             AnnotationsMsg::KindToggled(kind) => {
@@ -366,7 +366,7 @@ pub(crate) fn today() -> IsoDate {
 
 /// Read every notebook file of the project and find the design's parts.
 /// Blocking: runs on a worker.
-fn scan_notebooks(inputs: &ScanInputs) -> Result<NotebookScan, String> {
+pub(crate) fn scan_notebooks(inputs: &ScanInputs) -> Result<NotebookScan, String> {
     let (scan, texts) = read_notebook_texts(&inputs.project_dir)?;
     let set = inputs.design.as_ref().map(assemble_design);
     let parts = inputs
@@ -427,6 +427,11 @@ fn read_notebook_texts(project_dir: &Path) -> Result<(NotebookScan, Vec<Option<S
             let path = entry.path();
             // The entry's own type: a link to a folder is not followed.
             let is_dir = entry.file_type().is_ok_and(|kind| kind.is_dir());
+            // The generated design report copies the notebook's decisions:
+            // its blocks are not read again, so none counts twice (#3021).
+            if is_dir && path == folder.join(signex_notebook::generate::GENERATED_DIR) {
+                continue;
+            }
             if is_dir {
                 match std::fs::read_dir(&path) {
                     Ok(inner) => pending.push(inner),
@@ -1116,6 +1121,21 @@ mod tests {
         assert_eq!(id.map(ToString::to_string).as_deref(), Some("ISS-001"));
         assert!(scan.unlisted.is_empty());
         assert!(scan.parts.is_none(), "no parts are looked up");
+    }
+
+    /// #3021: the generated design report copies the decisions; its blocks
+    /// are not read, so `list_annotations` and the badges count each once.
+    #[test]
+    fn the_generated_reports_copies_are_not_read_again() {
+        let dir = tempfile::tempdir().unwrap();
+        let folder = dir.path().join(NOTEBOOK_DIR);
+        std::fs::create_dir_all(folder.join("generated")).unwrap();
+        let decision = "#decision(id: \"DEC-001\", target: component(\"R7\"))[A]\n";
+        std::fs::write(folder.join("design.snxnbk"), decision).unwrap();
+        std::fs::write(folder.join("generated/design-report.snxnbk"), decision).unwrap();
+        let scan = read_notebook_files(dir.path()).expect("read");
+        let labels: Vec<&str> = scan.files.iter().map(|f| f.label.as_str()).collect();
+        assert_eq!(labels, ["notebook/design.snxnbk"]);
     }
 
     #[test]

@@ -110,12 +110,33 @@ impl Signex {
         if !needs_read {
             return scan;
         }
+        let read = self.start_notebook_read(id, path);
+        Task::batch([read, scan])
+    }
+
+    /// The file of a held notebook changed on disk (a branch switch, a
+    /// write from outside): a clean one is read again, so Save never writes
+    /// the old text over the new file (#3019). `None` when `path` is no
+    /// held notebook, or it has unsaved text or a save running.
+    pub(crate) fn reread_clean_notebook(&mut self, path: &Path) -> Option<Task<Message>> {
+        let id = self.notebook_at_path(path)?;
+        let doc = self.document_state.notebooks.get(&id)?;
+        if doc.is_unsaved() || doc.saving || doc.load == Load::Reading {
+            return None;
+        }
+        let at = doc.path.clone();
+        Some(self.start_notebook_read(id, at))
+    }
+
+    /// Read `id`'s notebook at `path` afresh, the document marked as
+    /// reading and the tab's text dropped until it lands.
+    fn start_notebook_read(&mut self, id: ProjectId, path: PathBuf) -> Task<Message> {
         self.document_state
             .notebooks
             .insert(id, NotebookDocument::reading(path.clone()));
         self.ui_state.notebook_tabs.entry(id).or_default().text = None;
         let folder = path.parent().map_or_else(PathBuf::new, Path::to_path_buf);
-        let read = Task::perform(
+        Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || read_notebook(&folder))
                     .await
@@ -128,8 +149,7 @@ impl Signex {
                     result: result.map(Arc::new),
                 })
             },
-        );
-        Task::batch([read, scan])
+        )
     }
 
     /// The read of `id`'s notebook landed.

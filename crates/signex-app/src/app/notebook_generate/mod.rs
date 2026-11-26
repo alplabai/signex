@@ -91,6 +91,8 @@ pub struct GenerateFinished {
     pub request: GenerateRequest,
     /// The command call waiting for this run; `None` for the dialog.
     pub(crate) waiting: Option<WaitingCommand>,
+    /// The checks the run made, kept even when the report was refused.
+    pub ran: Vec<(PathBuf, CheckReport)>,
     pub outcome: Result<GenerateOutcome, String>,
 }
 

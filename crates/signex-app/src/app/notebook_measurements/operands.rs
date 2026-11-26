@@ -16,7 +16,7 @@ use signex_notebook::edit::StaleTarget;
 use signex_notebook::{BlockId, Reference};
 
 use super::design::DesignInputs;
-use super::job::{Ask, Job, NotebookRead, run};
+use super::job::{Ask, Job, NotebookRead, TabEdit, run};
 use crate::app::agent::AgentMsg;
 use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::notebook_project::{because, export_target, needs_operand, overwrite, refusal};
@@ -213,13 +213,31 @@ impl Signex {
         if let Ask::ExportTimeline { path, .. } = &mut ask {
             *path = export_target(project.dir(), path, "csv", overwrite(args))?;
         }
+        let confined = self.headless_answers().is_some() || self.agent.serving;
         let job = Job {
             ask,
             project_dir: project.dir().to_path_buf(),
             design,
             held: self.notebook_tab_file_text(project_id),
+            confine: confined.then(|| project.dir().to_path_buf()),
         };
         Ok((project.path.clone(), project_id, job))
+    }
+
+    /// Make `edit` on the notebook file text the tab holds now, through the
+    /// editor's history (#3019).
+    fn apply_notebook_tab_edit(
+        &mut self,
+        id: ProjectId,
+        edit: &TabEdit,
+    ) -> Result<Task<Message>, Translatable> {
+        let doc = self
+            .document_state
+            .notebooks
+            .get(&id)
+            .ok_or_else(|| Translatable::new(ids::NOTEBOOK_TAB_CMD_NOT_OPEN))?;
+        let text = edit.apply(doc)?;
+        self.replace_notebook_tab_file_text(id, &text)
     }
 
     /// A measurement command's work landed: an edit of the notebook file
@@ -234,9 +252,9 @@ impl Signex {
         } = read;
         let mut edited = Task::none();
         let outcome = match answer.as_ref() {
-            Ok(done) => match &done.tab_text {
+            Ok(done) => match &done.tab_edit {
                 None => CommandOutcome::Answered(done.answer.clone()),
-                Some(text) => match self.replace_notebook_tab_file_text(project_id, text) {
+                Some(edit) => match self.apply_notebook_tab_edit(project_id, edit) {
                     Ok(task) => {
                         edited = task;
                         CommandOutcome::Answered(done.answer.clone())

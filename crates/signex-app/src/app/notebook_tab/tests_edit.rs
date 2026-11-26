@@ -267,6 +267,40 @@ fn an_edit_with_paste_is_one_edit() {
 
 /// A compile that is not the one running (a stale one, landing after the
 /// tab was reopened or a later compile started) is dropped.
+/// #3022: a compile whose worker panicked answers with the generation it
+/// ran for, so it lands, the compile is no longer running and the next
+/// edit compiles again (the preview does not freeze).
+#[test]
+fn a_panicked_compile_lands_and_the_next_edit_compiles() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id) = app_with_notebook(dir.path(), NOTEBOOK);
+    let _compiling = app.update(crate::app::Message::from(NotebookMsg::TextActed {
+        project_id: id,
+        action: typed('x'),
+    }));
+    let generation = app.ui_state.notebook_tabs[&id]
+        .compile
+        .running
+        .expect("a compile runs");
+    let _ = app.update(crate::app::Message::from(NotebookMsg::Compiled {
+        project_id: id,
+        outcome: Arc::new(CompileOutcome::failed_to_run(
+            "the worker panicked".into(),
+            generation,
+        )),
+    }));
+    assert!(app.ui_state.notebook_tabs[&id].compile.running.is_none());
+    let _again = app.update(crate::app::Message::from(NotebookMsg::TextActed {
+        project_id: id,
+        action: typed('y'),
+    }));
+    let compile = &app.ui_state.notebook_tabs[&id].compile;
+    assert!(
+        compile.running.is_some_and(|next| next > generation),
+        "the next edit compiles"
+    );
+}
+
 #[test]
 fn a_compile_that_is_not_the_running_one_is_dropped() {
     let dir = tempfile::tempdir().unwrap();
