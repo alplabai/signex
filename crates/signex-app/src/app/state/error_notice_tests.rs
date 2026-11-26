@@ -223,6 +223,25 @@ fn a_save_failed_card_says_the_edits_are_still_open() {
     }
 }
 
+/// The one line that leaves the screen drops a sentence's closing period
+/// before the colon and the system part (#2991); with no system part the
+/// sentence keeps it.
+#[test]
+fn the_one_line_reason_drops_the_period_before_the_system_part() {
+    let named = ErrorNotice::save(verbatim("power.snxsch could not be written."))
+        .with_system("writing /w/power.snxsch\nAccess is denied. (os error 5)");
+    assert_eq!(
+        named.detail_line_en_us(),
+        "power.snxsch could not be written: writing /w/power.snxsch: Access is denied. \
+         (os error 5)"
+    );
+    let alone = ErrorNotice::save(verbatim("power.snxsch could not be written."));
+    assert_eq!(
+        alone.detail_line_en_us(),
+        "power.snxsch could not be written."
+    );
+}
+
 /// A Save Failed card for a write that leaves no open edits (the global
 /// library list) keeps the heading and claims nothing about unsaved edits.
 #[test]
