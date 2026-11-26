@@ -722,5 +722,11 @@ define_ids! {
         CMD_COPY_BOARD_3D_SCREENSHOT = "cmd-copy-board-3d-screenshot";
         // gerber-viewer-command
         CMD_OPEN_GERBER_VIEWER = "cmd-open-gerber-viewer";
+        // gerber-viewer-view-command
+        CMD_SELECT_GERBER_OBJECT = "cmd-select-gerber-object";
+        CMD_FLIP_GERBER_VIEW = "cmd-flip-gerber-view";
+        CMD_SHOW_GERBER_DRILLS_ON_TOP = "cmd-show-gerber-drills-on-top";
+        CMD_HIGHLIGHT_GERBER_NET = "cmd-highlight-gerber-net";
+        CMD_SHOW_GERBER_OPEN_MENU = "cmd-show-gerber-open-menu";
     }
 }

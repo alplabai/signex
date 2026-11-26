@@ -80,8 +80,9 @@ fn not_fitted_in_lite(designator: &str) -> VariantPart {
     }
 }
 
-/// The fixture project, with `top` in view.
-fn fixture() -> Signex {
+/// The fixture project, with `top` in view. The per-variant PDF goldens
+/// (`variant_pdf.rs`) export the same project.
+pub(super) fn fixture() -> Signex {
     let mut app = app_workspace(DIR, &["top.snxsch", "channel.snxsch"]);
     let top_path = PathBuf::from(DIR).join("top.snxsch");
 

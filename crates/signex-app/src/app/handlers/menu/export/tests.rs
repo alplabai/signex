@@ -1017,6 +1017,7 @@ mod lazy_preview;
 mod sheet_numbering;
 mod tree_nesting_pins;
 mod variant_bom;
+mod variant_pdf;
 
 /// Append a second loaded project (`listed` sheets under `dir`) to `app`.
 pub(crate) fn add_project(app: &mut Signex, dir: &str, listed: &[&str]) {

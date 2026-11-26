@@ -18,6 +18,7 @@ mod documents;
 mod drawing;
 mod drc;
 mod erc;
+mod gerber_viewer;
 mod grid;
 mod hierarchy;
 mod history;
@@ -331,6 +332,7 @@ const TABLES: &[&[CommandMetadata]] = &[
     grid::GRID,
     library::LIBRARY,
     workspace::WORKSPACE,
+    gerber_viewer::GERBER_VIEWER,
 ];
 
 /// Flattened iterator over every command's metadata, across all groups, in
@@ -402,6 +404,13 @@ const GLOBAL_COMMANDS: &[&str] = &[
     // #2896: the Gerber Viewer needs no editor; it opens from the start
     // screen too.
     "open_gerber_viewer",
+    // Mockup row 193: the viewer's states, set on the viewer tab, which is
+    // no editor.
+    "select_gerber_object",
+    "flip_gerber_view",
+    "show_gerber_drills_on_top",
+    "highlight_gerber_net",
+    "show_gerber_open_menu",
     "save_document",
     "save_document_as",
     "save_all",
@@ -694,6 +703,7 @@ mod tests {
             ("grid.rs", include_str!("grid.rs")),
             ("library.rs", include_str!("library.rs")),
             ("workspace.rs", include_str!("workspace.rs")),
+            ("gerber_viewer.rs", include_str!("gerber_viewer.rs")),
         ];
 
         let mut missing: Vec<String> = Vec::new();

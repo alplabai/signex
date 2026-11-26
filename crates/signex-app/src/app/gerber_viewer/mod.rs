@@ -8,7 +8,9 @@
 //! Open paths this round: a double-click on a `.gbr`, `.drl` or `.zip` row
 //! in Projects, files dropped on a window, the tab's own Open menu (Ctrl+O),
 //! a recent package and the catalog command `open_gerber_viewer`
-//! (`command.rs`). Every read runs in a task (`read.rs`).
+//! (`command.rs`). Every read runs in a task (`read.rs`). The states of
+//! mockup row 193 (a pad or a plane selected, flipped, a net highlighted,
+//! the Open menu) are set by catalog commands too (`view_commands.rs`).
 
 mod canvas;
 mod command;
@@ -18,12 +20,15 @@ mod state;
 mod tab;
 mod update;
 mod view;
+mod view_commands;
 mod view_update;
 
 #[cfg(test)]
 mod command_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod view_command_tests;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -35,6 +40,10 @@ pub use read::{PackageRead, ReadFailure};
 pub use recent::{RecentPackage, RecentPackages};
 pub use state::{
     Camera, GerberViewerState, GripDrag, LayerLook, LengthUnit, ObjectRef, OpenPackage,
+};
+pub(crate) use view_commands::{
+    flip_gerber_view, highlight_gerber_net, select_gerber_object, show_gerber_drills_on_top,
+    show_gerber_open_menu,
 };
 
 /// Whether a file named `file_name` opens in the viewer from elsewhere: a
@@ -78,9 +87,11 @@ pub enum GerberViewerMsg {
     /// Which recent packages are still there, by their paths.
     RecentChecked {
         found: Vec<(Vec<PathBuf>, bool)>,
-        /// The clock when the check ran (`None`: the check failed).
+        /// The clock when the check ran (`None`: no clock was read).
         now: Option<i64>,
     },
+    /// The check of the recent packages could not run, and why.
+    RecentCheckFailed(String),
     /// Read `job` of `paths` finished. `waiting` is the `open_gerber_viewer`
     /// call answered once it lands (#2896); `None` for a person's open.
     PackageRead {
@@ -121,6 +132,8 @@ pub enum GerberViewerMsg {
     /// Esc on the tab: it closes the Open menu, else lets go of a held
     /// row, else clears the selection.
     EscapePressed,
+    /// `select_gerber_object` without operands: nothing is selected.
+    SelectionCleared,
     FlipToggled,
     DrillsToggled,
     UnitPicked(LengthUnit),

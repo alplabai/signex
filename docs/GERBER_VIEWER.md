@@ -358,8 +358,48 @@ and 193f. It is in the File category, General group, enabled everywhere
   layer in the list's order, top first), `not_read` (the files not read)
   and `problems` (each with `severity`, `file`, `line` and `message`, the
   Messages sentence in the app's language). With nothing open the lists
-  are empty.
+  are empty. `view` says how the tab shows it; see the next section.
 - **Who may run it.** The CLI runs it with the `read` capability; its
   `path` is read, never written. The agent channel refuses it, as every
   command that takes a file path. It changes no document, so it makes no
   undo step and no dirty mark.
+
+## Setting the view by id
+
+Every state of mockup row 193 is reachable by id, so the screenshot run
+and a script can set it (`view_commands.rs`). All five are in the General
+group, enabled everywhere and offered on the start screen, with no default
+key and no menu row. A palette or key call sends the toolbar's own message
+(Flip, Drills, Highlight net, Open) or clears the selection; a call with
+operands, a headless call and an agent's call run the operand handler and
+answer with the `open_gerber_viewer` JSON. They change session state only:
+no undo step, no dirty mark, the `read` capability on the CLI.
+
+| Command | Operands | What it sets |
+| --- | --- | --- |
+| `select_gerber_object` | `at` (x,y in mm, the files' frame), `layer` (a file name) | `at` selects the topmost visible object there, as a click does; with `layer` too, the topmost object of that layer there, even under another layer ("Plane selected (L2)"); `layer` alone picks the layer row; neither clears the selection |
+| `flip_gerber_view` | `on` | the board seen from the bottom; without `on` it turns over |
+| `show_gerber_drills_on_top` | `on` | the holes drawn over everything; without `on` it turns over |
+| `highlight_gerber_net` | `net`, `on` | `net` keeps that X2 net at full strength; `on=false` lets the highlight go; otherwise the selected object's net, and without `on` a highlight already on is let go |
+| `show_gerber_open_menu` | `on` | the Open menu shows or closes; without `on` it toggles; showing it checks the recent packages |
+
+- **Tolerance.** A point given by id lands within 10 µm of an object: a
+  point inside a pad or a region selects it; a marker (an object with no
+  shape) needs its own point. A point on nothing selects nothing.
+- **Refusals,** from the catalog: no package is open (every command but
+  the Open menu); `layer` names no layer of the package, or a hidden one;
+  `at` is a pin reference, not a point; `net` is on no object; Highlight
+  net with no net to take gives the toolbar's own reason.
+- **The answer's `view`:** `flipped`, `drills_on_top`, `unit` (`mm` or
+  `mil`), `net` (the highlighted net or null), `open_menu`,
+  `current_layer` (the file of the layer row picked, or null) and
+  `selected` (null, or `layer` (its file), `object` (its place in that
+  file's objects), `kind` (`flash`, `line`, `arc`, `region` or `hole`)
+  and `net`).
+- **Not by id yet.** The mm / mil switch, a layer's eye, colour and place
+  in the list, and the camera keep their toolbar and list controls only.
+
+The check of which recent packages are still on disk runs on a worker.
+When the worker cannot run, Messages shows a Gerber Viewer warning worded
+by the catalog (`gerber-viewer-recent-check-failed`), and the list and its
+clock stay as they were.

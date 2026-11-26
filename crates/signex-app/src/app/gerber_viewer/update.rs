@@ -26,6 +26,7 @@ impl Signex {
             M::PathsPicked(None) => Task::none(),
             M::RecentPressed(index) => self.open_recent_gerber_package(index),
             M::RecentChecked { found, now } => self.gerber_recent_checked(found, now),
+            M::RecentCheckFailed(why) => self.gerber_recent_check_failed(&why),
             M::PackageRead {
                 job,
                 paths,
@@ -38,6 +39,7 @@ impl Signex {
             M::DropSettled { window } => self.gerber_drop_settled(window),
             M::UnitPicked(unit) => self.gerber_unit_picked(unit),
             M::EscapePressed => self.gerber_escape_pressed(),
+            M::SelectionCleared => self.on_gerber_package(|o| o.select(None)),
             M::LayerVisibilityToggled(layer) => self.on_gerber_package(|o| o.toggle_visible(layer)),
             M::LayerPicked(layer) => self.on_gerber_package(|o| o.pick_layer(layer)),
             M::SwatchPressed(layer) => self.on_gerber_package(|o| o.toggle_swatch(layer)),
@@ -206,6 +208,16 @@ impl Signex {
         Task::none()
     }
 
+    /// The recent-package check could not run: a Gerber Viewer warning in
+    /// Messages, from the catalog. The rows and the clock stay as they were.
+    fn gerber_recent_check_failed(&mut self, why: &str) -> Task<Message> {
+        let text = Translatable::new(ids::GERBER_VIEWER_RECENT_CHECK_FAILED)
+            .arg("why", why)
+            .render(&self.ui_state.i18n);
+        log::warn!(target: crate::app::gerber_read::TARGET, "{text}");
+        Task::none()
+    }
+
     /// Find out which recent packages are still on disk, off the UI thread.
     pub(crate) fn check_recent_gerber_packages(&self) -> Task<Message> {
         let listed = self.document_state.gerber_viewer.recent.all_paths();
@@ -216,15 +228,12 @@ impl Signex {
             crate::app::path_op_jobs::run_blocking(move || {
                 (recent_presence(listed), chrono::Utc::now().timestamp())
             }),
-            |result| {
-                let (found, now) = match result {
-                    Ok((found, now)) => (found, Some(now)),
-                    Err(why) => {
-                        crate::diagnostics::log_warning(why);
-                        (Vec::new(), None)
-                    }
-                };
-                Message::from(GerberViewerMsg::RecentChecked { found, now })
+            |result| match result {
+                Ok((found, now)) => Message::from(GerberViewerMsg::RecentChecked {
+                    found,
+                    now: Some(now),
+                }),
+                Err(why) => Message::from(GerberViewerMsg::RecentCheckFailed(why)),
             },
         )
     }

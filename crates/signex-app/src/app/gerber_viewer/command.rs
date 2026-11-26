@@ -11,9 +11,10 @@ use std::path::PathBuf;
 
 use iced::Task;
 use serde_json::{Value, json};
-use signex_gerber::{ReadProblem, Severity};
+use signex_gerber::{ObjectKind, ReadProblem, Severity};
 use signex_i18n::{I18n, Translatable};
 
+use super::state::{GerberViewerState, LengthUnit};
 use crate::app::agent::WaitingCommand;
 use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::gerber_read::problem_text;
@@ -78,6 +79,7 @@ impl Signex {
     pub(crate) fn gerber_viewer_answer(&self) -> Value {
         let viewer = &self.document_state.gerber_viewer;
         let reading = viewer.reading.is_some();
+        let view = view_answer(viewer);
         let Some(open) = viewer.open.as_ref() else {
             return json!({
                 "tab": "gerber_viewer",
@@ -86,6 +88,7 @@ impl Signex {
                 "layers": [],
                 "not_read": [],
                 "problems": [],
+                "view": view,
             });
         };
         let layers: Vec<&str> = open
@@ -118,7 +121,52 @@ impl Signex {
             "layers": layers,
             "not_read": not_read,
             "problems": problems,
+            "view": view,
         })
+    }
+}
+
+/// How the viewer shows what it holds (mockup row 193): the toolbar's
+/// switches, the highlighted net, the Open menu, the layer row picked and
+/// the selected object by its file and its place in that file's objects.
+fn view_answer(viewer: &GerberViewerState) -> Value {
+    let open = viewer.open.as_ref();
+    let file = |layer: usize| {
+        open.and_then(|open| open.package.layers.get(layer))
+            .map(|layer| layer.image.file.clone())
+    };
+    let selected = open.and_then(|open| {
+        let at = open.selected?;
+        let object = open.object(at)?;
+        Some(json!({
+            "layer": file(at.layer),
+            "object": at.object,
+            "kind": kind_name(&object.kind),
+            "net": object.attributes.net,
+        }))
+    });
+    let unit = match viewer.unit {
+        LengthUnit::Mm => "mm",
+        LengthUnit::Mil => "mil",
+    };
+    json!({
+        "flipped": open.is_some_and(|open| open.flipped),
+        "drills_on_top": open.is_some_and(|open| open.drills_on_top),
+        "unit": unit,
+        "net": open.and_then(|open| open.net.clone()),
+        "open_menu": viewer.open_menu,
+        "current_layer": open.and_then(|open| open.current).and_then(file),
+        "selected": selected,
+    })
+}
+
+fn kind_name(kind: &ObjectKind) -> &'static str {
+    match kind {
+        ObjectKind::Flash { .. } => "flash",
+        ObjectKind::Line { .. } => "line",
+        ObjectKind::Arc { .. } => "arc",
+        ObjectKind::Region { .. } => "region",
+        ObjectKind::Hole { .. } => "hole",
     }
 }
 

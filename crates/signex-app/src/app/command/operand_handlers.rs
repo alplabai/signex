@@ -34,6 +34,7 @@ use super::{CommandArgs, CommandOutcome, enablement};
 use crate::app::board_output as output;
 use crate::app::board_reuse as reuse;
 use crate::app::board_tools as tools;
+use crate::app::gerber_viewer as gerber;
 use crate::app::handlers::pcb_component::part_swap_operands as swap;
 use crate::app::handlers::pcb_tune as tune;
 use crate::app::{Message, Signex};
@@ -67,6 +68,15 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
         "open_gerber_viewer",
         crate::app::gerber_viewer::open_gerber_viewer,
     ),
+    // Mockup row 193: the viewer's states, each answered with what it shows.
+    ("select_gerber_object", gerber::select_gerber_object),
+    ("flip_gerber_view", gerber::flip_gerber_view),
+    (
+        "show_gerber_drills_on_top",
+        gerber::show_gerber_drills_on_top,
+    ),
+    ("highlight_gerber_net", gerber::highlight_gerber_net),
+    ("show_gerber_open_menu", gerber::show_gerber_open_menu),
     ("new_document", file::new_project),
     (
         "new_pcb_document",
@@ -363,7 +373,8 @@ pub(crate) fn operand_handler(command: &AppCommandId) -> Option<OperandHandler> 
 /// it for the missing `path` rather than the picker's refusal reading as run.
 /// `repair_pin_junctions` goes there too, so a headless run on the sheet in
 /// view answers how many dots it added (0 when nothing needed one) instead of
-/// a bare `Ran`. `open_gerber_viewer` (#2896) answers with what the tab shows.
+/// a bare `Ran`. `open_gerber_viewer` (#2896) and the viewer's state
+/// commands (mockup row 193) answer with what the tab shows.
 pub(crate) fn runs_headless_without_operands(command: &AppCommandId) -> bool {
     matches!(
         command.as_str(),
@@ -372,6 +383,11 @@ pub(crate) fn runs_headless_without_operands(command: &AppCommandId) -> bool {
             | "create_sheet_symbol_from_sheet"
             | "repair_pin_junctions"
             | "open_gerber_viewer"
+            | "select_gerber_object"
+            | "flip_gerber_view"
+            | "show_gerber_drills_on_top"
+            | "highlight_gerber_net"
+            | "show_gerber_open_menu"
     )
 }
 
