@@ -115,7 +115,7 @@ pub(super) fn view_bezier_properties<'a>(
     col.boxed()
 }
 
-fn width_label(p: WireWidthPreset) -> signex_i18n::MessageId {
+pub(super) fn width_label(p: WireWidthPreset) -> signex_i18n::MessageId {
     match p {
         WireWidthPreset::Smallest => ids::PROPERTIES_WIRE_WIDTH_SMALLEST,
         WireWidthPreset::Small => ids::PROPERTIES_WIRE_WIDTH_SMALL,

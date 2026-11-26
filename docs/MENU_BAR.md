@@ -578,7 +578,9 @@ buttons (`menu_bar/model/sheet_place.rs`):
   Round Rectangle, Polygon, Bezier, Table, then the **Dimension** submenu
   (Linear, Aligned); Graphic. Bezier (`draw_bezier`) went live and Table
   (`place_table`), Linear (`place_linear_dimension`) and Aligned
-  (`place_aligned_dimension`) were added with #1267 / #1300.
+  (`place_aligned_dimension`) were added with #1267 / #1300. Elliptical Arc
+  (`draw_elliptical_arc`), Ellipse (`draw_ellipse`) and Round Rectangle
+  (`draw_round_rectangle`) went live with #1267.
 
 A live row runs its catalog command, the one the Active Bar's row names, and
 is gated by it (`Needs::Schematic`: greyed without a sheet). Its shortcut is
@@ -1025,8 +1027,9 @@ what each will do:
 Every other menu row runs a command (#2247). The only greyed tool rows are the
 planned tools of Place on a sheet and on a board, each with its reason.
 
-Place on a sheet has six planned commands (#2415; Bezier left the list with
-#1267 and Parameter Set with #1489), greyed with the planned
+Place on a sheet has three planned commands (#2415; Bezier, Elliptical Arc,
+Ellipse and Round Rectangle left the list with #1267 and Parameter Set with
+#1489), greyed with the planned
 tooltip in every state until their tools are built
 (`menu_bar/model/sheet_place.rs`, `active_bar::PLANNED_TOOLS`). The three
 harness rows went live with the harness tools (#1280, see
@@ -1036,9 +1039,6 @@ harness rows went live with the harness tools (#1280, see
 |---|---|---|
 | Ports & Connectors | Device Sheet Symbol | `place_device_sheet_symbol` |
 | Ports & Connectors | Reuse Block... | `place_reuse_block` |
-| Graphics | Elliptical Arc | `draw_elliptical_arc` |
-| Graphics | Ellipse | `draw_ellipse` |
-| Graphics | Round Rectangle | `draw_round_rectangle` |
 | Graphics | Graphic... | `place_graphic` |
 
 Each one is the row of a planned Active Bar tool. It is not a

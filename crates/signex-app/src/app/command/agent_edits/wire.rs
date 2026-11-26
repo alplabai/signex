@@ -529,9 +529,13 @@ mod tests {
             "clear_all_net_colors",
             "color_net",
             "draw_bus",
+            // #1267: the curve drawings, placements like the rectangle.
+            "draw_ellipse",
+            "draw_elliptical_arc",
             "draw_graphic_line",
             "draw_line",
             "draw_rectangle",
+            "draw_round_rectangle",
             "draw_wire",
             "edit_blanket",
             "edit_no_erc_rules",

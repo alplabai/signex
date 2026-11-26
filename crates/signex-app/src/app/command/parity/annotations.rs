@@ -505,6 +505,10 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "draw_line",
             "draw_graphic_line",
             "draw_rectangle",
+            // #1267: the curve drawings.
+            "draw_ellipse",
+            "draw_elliptical_arc",
+            "draw_round_rectangle",
             "place_net_label",
             "place_local_net_label",
             "place_global_label",
@@ -858,9 +862,6 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
 ];
 
 const PLANNED: &[&str] = &[
-    "draw_ellipse",
-    "draw_elliptical_arc",
-    "draw_round_rectangle",
     "place_device_sheet_symbol",
     "place_graphic",
     "place_reuse_block",

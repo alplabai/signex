@@ -501,6 +501,9 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     // #1267, #1300: the Bezier, table and dimension tools, and the contents
     // sheet, fixture names only.
     ("draw_bezier", "DrawBezier"),
+    ("draw_elliptical_arc", "DrawEllipticalArc"),
+    ("draw_ellipse", "DrawEllipse"),
+    ("draw_round_rectangle", "DrawRoundRectangle"),
     ("place_table", "PlaceTable"),
     ("place_linear_dimension", "PlaceLinearDimension"),
     ("place_aligned_dimension", "PlaceAlignedDimension"),

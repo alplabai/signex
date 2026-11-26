@@ -123,7 +123,9 @@ the dialog cannot be answered.
 The placements (`place_net_label` and the other labels, `place_power_symbol`,
 `place_junction`, `place_no_connect`, `place_no_erc`, `place_wire`, `draw_wire`,
 `place_bus`, `draw_bus`, `place_text`, `place_text_string`, `draw_line`,
-`draw_graphic_line`, `draw_rectangle`, and the directives `place_blanket`,
+`draw_graphic_line`, `draw_rectangle`, the curve drawings `draw_ellipse`,
+`draw_elliptical_arc` and `draw_round_rectangle` (#1267, see "Curve drawings"
+below), and the directives `place_blanket`,
 `place_compile_mask`, `place_diff_pair` and `edit_blanket` (#2420) and
 `place_parameter_set` (#1489: `at` on a wire, refused off one; optional
 `class`, `diff_pair_class`, `width`, `clearance`, `via_diameter` and
@@ -662,6 +664,26 @@ delete_selection document=<sheet or board> ids=<uuids>
 - A headless run without operands acts on the session's own selection, as
   the window's key does. Delete in a footprint editor stays the editor's own
   route until slice S-L and takes no operands.
+
+## Curve drawings
+
+`draw_ellipse center=x,y radius_x=.. radius_y=..`,
+`draw_elliptical_arc center=x,y radius_x=.. radius_y=.. start_angle=..
+end_angle=..` and `draw_round_rectangle start=x,y end=x,y
+[corner_radius=..]` (#1267) place one drawing, one undo step, as the clicks
+of the same tool do. The centre and corners are points, refused off the grid
+as for any placement; the radii and the corner radius are lengths in mm above
+zero. Angles are degrees within ±360, measured counter-clockwise from the
++X direction in sheet coordinates, and the arc runs counter-clockwise from
+the start angle to the end angle. A left-out corner radius is 1.27 mm; any
+radius is held to half the short side. Width and fill are the project's shape
+defaults. A shape with no visible size, or an arc whose two angles are the
+same, is `refused`. The run answers with the drawing's `id` and its `kind`
+(`ellipse`, `elliptical_arc` or `round_rect`):
+
+```json
+{"id": "0192f3a4-...", "kind": "ellipse"}
+```
 
 ## Placement extras
 

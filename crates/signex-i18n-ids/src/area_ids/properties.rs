@@ -527,4 +527,26 @@ define_ids! {
     PROPERTIES_FP_PAD_SCOPE_SOURCE = "properties-fp-pad-scope-source";
     PROPERTIES_FP_PAD_SCOPE_NUMBERING = "properties-fp-pad-scope-numbering";
     PROPERTIES_FP_PAD_SCOPE_PASTE = "properties-fp-pad-scope-paste";
+    // Ellipse, elliptical arc and round rectangle drawings (#1267).
+    CANVAS_HINT_ELLIPSE_CENTER = "properties-curve-hint-ellipse-center";
+    CANVAS_HINT_ELLIPSE_CORNER = "properties-curve-hint-ellipse-corner";
+    CANVAS_HINT_ARC_CENTER = "properties-curve-hint-arc-center";
+    CANVAS_HINT_ARC_RADIUS_X = "properties-curve-hint-arc-radius-x";
+    CANVAS_HINT_ARC_RADIUS_Y = "properties-curve-hint-arc-radius-y";
+    CANVAS_HINT_ARC_START = "properties-curve-hint-arc-start";
+    CANVAS_HINT_ARC_END = "properties-curve-hint-arc-end";
+    CANVAS_HINT_ROUND_RECT_FIRST = "properties-curve-hint-round-rect-first";
+    CANVAS_HINT_ROUND_RECT_SECOND = "properties-curve-hint-round-rect-second";
+    PROPERTIES_ELLIPSE_TITLE = "properties-ellipse-title";
+    PROPERTIES_ELLIPTICAL_ARC_TITLE = "properties-elliptical-arc-title";
+    PROPERTIES_ROUND_RECT_TITLE = "properties-round-rect-title";
+    PROPERTIES_PIE_TITLE = "properties-pie-title";
+    PROPERTIES_CURVE_CAPTION = "properties-curve-caption";
+    PROPERTIES_CURVE_SECTION_SHAPE = "properties-curve-section-shape";
+    PROPERTIES_CURVE_RADIUS_X = "properties-curve-radius-x";
+    PROPERTIES_CURVE_RADIUS_Y = "properties-curve-radius-y";
+    PROPERTIES_CURVE_FIRST_CORNER = "properties-curve-first-corner";
+    PROPERTIES_CURVE_OPPOSITE_CORNER = "properties-curve-opposite-corner";
+    PROPERTIES_CURVE_CORNER_RADIUS = "properties-curve-corner-radius";
+    PROPERTIES_CURVE_ANGLES_NOTE = "properties-curve-angles-note";
 }

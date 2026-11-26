@@ -501,8 +501,11 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "assign_footprints"
         // Dots the bare pin touches of the sheet in view.
         | "repair_pin_junctions"
-        // #1267, #1300: the Bezier, dimension and table tools.
+        // #1267, #1300: the Bezier, curve, dimension and table tools.
         | "draw_bezier"
+        | "draw_ellipse"
+        | "draw_elliptical_arc"
+        | "draw_round_rectangle"
         | "place_table"
         | "place_linear_dimension"
         | "place_aligned_dimension"

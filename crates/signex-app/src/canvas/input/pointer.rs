@@ -50,7 +50,10 @@ impl SchematicCanvas<'_> {
             | Tool::HarnessWire
             | Tool::HarnessConnector
             | Tool::HarnessEntry
-            | Tool::NetParameters => true,
+            | Tool::NetParameters
+            | Tool::Ellipse
+            | Tool::EllipticalArc
+            | Tool::RoundRectangle => true,
         }
     }
 

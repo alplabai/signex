@@ -31,6 +31,8 @@ mod wire_style;
 pub(crate) use drawings::annotation_extent;
 #[cfg(test)]
 mod annotation_drawing_tests;
+#[cfg(test)]
+mod curve_drawing_tests;
 
 #[derive(Debug, Clone, Copy)]
 pub enum SvgTextAlign {

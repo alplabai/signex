@@ -44,6 +44,10 @@ mod pause_end;
 mod pause_end_tests;
 pub(crate) use dimension_tool::ends_held_resume_esc;
 mod place_bezier;
+mod place_curve;
+#[cfg(test)]
+mod place_curve_tests;
+pub(crate) use place_curve::curve_tool_of;
 mod place_dimension;
 pub(crate) use place_directive::{net_parameters_directive, parse_value};
 mod directive_panel;

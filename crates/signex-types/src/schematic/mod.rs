@@ -905,13 +905,22 @@ pub use harness::{
 };
 mod union;
 pub use union::{SchUnion, union_member_kinds};
+mod curve_shape;
+#[cfg(test)]
+mod curve_shape_tests;
 mod drawing_bezier;
+mod drawing_curve;
 mod drawing_dimension;
+mod drawing_ops;
 mod sch_table;
+pub use curve_shape::{
+    CurveShape, CurveTool, MIN_CURVE_SIZE_MM, angle_deg, max_corner_radius, point_on_ellipse,
+};
 pub use drawing_bezier::{
     BEZIER_FLATTEN_SEGMENTS, LINE_END_ARROW_HALF_WIDTH_MM, LINE_END_ARROW_LENGTH_MM, LineEnds,
     SchBezier,
 };
+pub use drawing_curve::SchCurve;
 pub use drawing_dimension::{
     DIMENSION_MAX_PRECISION, DIMENSION_TEXT_MM, DimensionArrows, DimensionDirection,
     DimensionGeometry, DimensionUnits, SchDimension,

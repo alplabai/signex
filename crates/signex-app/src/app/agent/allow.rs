@@ -255,6 +255,9 @@ mod tests {
             "draw_line",
             "draw_graphic_line",
             "draw_rectangle",
+            "draw_ellipse",
+            "draw_elliptical_arc",
+            "draw_round_rectangle",
         ] {
             let meta = metadata_for(&id(name)).expect("in the catalog");
             assert!(

@@ -30,6 +30,15 @@ pub enum AnnotationField {
     OverrideText,
     TableTextSize,
     TableCellPadding,
+    /// A curve's centre (#1267).
+    CurveCenter(Axis),
+    /// A curve's X or Y radius.
+    CurveRadius(Axis),
+    /// An arc's start (`false`) or end angle.
+    CurveAngle(bool),
+    /// A round rectangle's first (`false`) or opposite corner.
+    CurveCorner(bool, Axis),
+    CornerRadius,
 }
 
 impl AnnotationField {
@@ -53,6 +62,13 @@ impl AnnotationField {
             Self::OverrideText => AnnotationEdit::OverrideText(text.to_string()),
             Self::TableTextSize => AnnotationEdit::TableTextSize(number()?),
             Self::TableCellPadding => AnnotationEdit::TableCellPadding(number()?),
+            Self::CurveCenter(axis) => AnnotationEdit::CurveCenter(axis, coordinate(axis)?),
+            Self::CurveRadius(axis) => AnnotationEdit::CurveRadius(axis, number()?),
+            Self::CurveAngle(end) => AnnotationEdit::CurveAngle(end, number()?),
+            Self::CurveCorner(second, axis) => {
+                AnnotationEdit::CurveCorner(second, axis, coordinate(axis)?)
+            }
+            Self::CornerRadius => AnnotationEdit::CornerRadius(number()?),
         })
     }
 
@@ -62,7 +78,16 @@ impl AnnotationField {
         match self {
             Self::TableTextSize => !number.is_some_and(table_text_size_holds),
             Self::TableCellPadding => !number.is_some_and(table_padding_holds),
-            Self::BezierPoint(..) | Self::DimensionPoint(..) | Self::OverrideText => false,
+            Self::CurveRadius(_) => {
+                !number.is_some_and(|v| v >= signex_types::schematic::MIN_CURVE_SIZE_MM)
+            }
+            Self::CornerRadius => !number.is_some_and(|v| v >= 0.0),
+            Self::BezierPoint(..)
+            | Self::DimensionPoint(..)
+            | Self::OverrideText
+            | Self::CurveCenter(_)
+            | Self::CurveAngle(_)
+            | Self::CurveCorner(..) => false,
         }
     }
 }
@@ -166,6 +191,7 @@ pub(super) fn view_annotation_properties<'a>(
             Some(super::dimension::view_dimension_properties(ctx, drawing, d))
         }
         SchDrawing::Table(t) => Some(super::table::view_table_properties(ctx, drawing, t)),
+        SchDrawing::Curve(c) => Some(super::curve::view_curve_properties(ctx, drawing, c)),
         SchDrawing::Line { .. }
         | SchDrawing::Rect { .. }
         | SchDrawing::Circle { .. }

@@ -55,6 +55,7 @@ pub(super) fn push_drawing(
     out: &mut Vec<OrderedItem>,
 ) {
     let (uuid, width, fill, stroke_color) = match drawing {
+        SchDrawing::Curve(c) => (c.uuid, c.width, c.drawn_fill(), &c.stroke_color),
         SchDrawing::Bezier(b) => {
             let base = focus_color(to_iced(&colors.body), focus_set, b.uuid);
             return super::bezier::push_bezier(b, base, defaults, out);
@@ -128,6 +129,19 @@ pub(super) fn push_drawing(
             start, mid, end, ..
         } => push_arc_items([*start, *mid, *end], &look, scale, out),
         SchDrawing::Polyline { points, .. } => push_polyline(points, &look, fill, out),
+        // #1267: a closed curve is one polygon (filled or not), an arc its
+        // segments, from the shared outline the export draws too.
+        SchDrawing::Curve(c) => {
+            let outline = c.flatten();
+            if c.shape.is_closed() {
+                out.push(polygon(
+                    outline.iter().map(|p| [p.x as f32, p.y as f32]).collect(),
+                    &look,
+                ));
+            } else {
+                out.extend(outline.windows(2).map(|w| solid_line(w[0], w[1], &look)));
+            }
+        }
         // Returned early above.
         SchDrawing::Bezier(_) | SchDrawing::Dimension(_) | SchDrawing::Table(_) => {}
     }
@@ -158,7 +172,8 @@ pub(super) fn push_drawing_texts(
         | SchDrawing::Circle { .. }
         | SchDrawing::Arc { .. }
         | SchDrawing::Polyline { .. }
-        | SchDrawing::Bezier(_) => {}
+        | SchDrawing::Bezier(_)
+        | SchDrawing::Curve(_) => {}
     }
 }
 
@@ -176,11 +191,12 @@ pub(super) fn power_nets_if_tables(sheet: &SchematicSheet) -> std::collections::
     }
 }
 
-/// The box of a Bezier, dimension or table; empty at the origin for the
-/// classic shapes (their box is `drawing_aabb`'s own arms).
+/// The box of a Bezier, dimension, table or curve; empty at the origin for
+/// the classic shapes (their box is `drawing_aabb`'s own arms).
 pub(crate) fn annotation_aabb(drawing: &SchDrawing) -> Aabb {
     let points = match drawing {
         SchDrawing::Bezier(b) => b.flatten(),
+        SchDrawing::Curve(c) => c.flatten(),
         SchDrawing::Dimension(d) => d.outline_points(),
         SchDrawing::Table(t) => {
             let (lo, hi) = t.bounds();

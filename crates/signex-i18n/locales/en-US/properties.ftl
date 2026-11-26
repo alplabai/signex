@@ -816,3 +816,28 @@ properties-fp-pad-scope-scope = Scope
 properties-fp-pad-scope-source = Pattern source
 properties-fp-pad-scope-numbering = Numbering
 properties-fp-pad-scope-paste = Paste
+
+# Ellipse, elliptical arc and round rectangle tools (#1267): the hint bar at
+# the canvas's bottom-left, after the tool's name.
+properties-curve-hint-ellipse-center = click the center
+properties-curve-hint-ellipse-corner = click a corner of its box · Esc cancels
+properties-curve-hint-arc-center = click the center
+properties-curve-hint-arc-radius-x = click to set the X radius
+properties-curve-hint-arc-radius-y = click to set the Y radius
+properties-curve-hint-arc-start = click the start point
+properties-curve-hint-arc-end = click the end point · Esc cancels
+properties-curve-hint-round-rect-first = click the first corner
+properties-curve-hint-round-rect-second = click the opposite corner · Esc cancels
+# The Properties of a curve drawing.
+properties-ellipse-title = Ellipse
+properties-elliptical-arc-title = Elliptical Arc
+properties-round-rect-title = Round Rectangle
+properties-pie-title = Pie Chart
+properties-curve-caption = drawing · not part of any net
+properties-curve-section-shape = Shape
+properties-curve-radius-x = Radius X
+properties-curve-radius-y = Radius Y
+properties-curve-first-corner = Corner
+properties-curve-opposite-corner = Opposite corner
+properties-curve-corner-radius = Corner radius
+properties-curve-angles-note = Angles are degrees, counter-clockwise from the start to the end.

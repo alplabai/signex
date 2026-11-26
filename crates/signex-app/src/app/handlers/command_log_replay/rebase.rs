@@ -144,6 +144,10 @@ fn drawing_stores(drawing: &SchDrawing, after: &SchDrawing, live: &SchDrawing, k
             "center" | "radius" | "width" | "fill" | "stroke_color" | "locked"
         ),
         SchDrawing::Arc { .. } => matches!(key, "width" | "stroke_color" | "locked"),
+        // #1267: the shape is one typed value (its radius is clamped to it).
+        SchDrawing::Curve(_) => {
+            matches!(key, "shape" | "width" | "fill" | "stroke_color" | "locked")
+        }
         SchDrawing::Bezier(_) => matches!(
             key,
             "start"

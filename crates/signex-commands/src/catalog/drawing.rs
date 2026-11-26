@@ -1,8 +1,45 @@
 //! Drawing commands: arcs, circles, ellipses, lines, rectangles, polygons
 //! and curves on a schematic sheet, and graphics import.
 
-use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, operands};
+use super::{
+    CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, Operand, OperandKind,
+    operands,
+};
 use signex_i18n_ids::command_ids;
+
+const fn operand(name: &'static str, kind: OperandKind, required: bool) -> Operand {
+    Operand {
+        name,
+        kind,
+        required,
+    }
+}
+
+/// An ellipse (#1267): its centre and its two radii.
+const ELLIPSE: &[Operand] = &[
+    operand("center", OperandKind::Point, true),
+    operand("radius_x", OperandKind::Length, true),
+    operand("radius_y", OperandKind::Length, true),
+    operand("document", OperandKind::Document, false),
+];
+/// An elliptical arc (#1267): the ellipse, then the start and end angles in
+/// degrees, the arc running counter-clockwise from the start.
+const ELLIPTICAL_ARC: &[Operand] = &[
+    operand("center", OperandKind::Point, true),
+    operand("radius_x", OperandKind::Length, true),
+    operand("radius_y", OperandKind::Length, true),
+    operand("start_angle", OperandKind::Turn, true),
+    operand("end_angle", OperandKind::Turn, true),
+    operand("document", OperandKind::Document, false),
+];
+/// A round rectangle (#1267): two opposite corners and the corner radius;
+/// left out, 1.27 mm, held to half the short side.
+const ROUND_RECTANGLE: &[Operand] = &[
+    operand("start", OperandKind::Point, true),
+    operand("end", OperandKind::Point, true),
+    operand("corner_radius", OperandKind::Length, false),
+    operand("document", OperandKind::Document, false),
+];
 
 pub(super) const DRAWING: &[CommandMetadata] = &[
     CommandMetadata {
@@ -32,7 +69,8 @@ pub(super) const DRAWING: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_DRAW_ELLIPTICAL_ARC),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: ELLIPTICAL_ARC,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -42,7 +80,8 @@ pub(super) const DRAWING: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_DRAW_ELLIPSE),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: ELLIPSE,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -85,7 +124,8 @@ pub(super) const DRAWING: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_DRAW_ROUND_RECTANGLE),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: ROUND_RECTANGLE,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

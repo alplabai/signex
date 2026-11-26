@@ -159,7 +159,10 @@ pub(super) fn shift_snapshot_for_selection(
                 }
             }
             // Shifted by `map_annotation_points` above.
-            SchDrawing::Bezier(_) | SchDrawing::Dimension(_) | SchDrawing::Table(_) => {}
+            SchDrawing::Bezier(_)
+            | SchDrawing::Dimension(_)
+            | SchDrawing::Table(_)
+            | SchDrawing::Curve(_) => {}
         }
     }
     out

@@ -164,12 +164,12 @@ remove_teardrops	pcb	Remove the teardrops of the selected nets, or of every net	
 gloss_selected_routes	pcb	Shorten the selected routes by cutting their corners where the clearance allows	Gloss Selected Routes	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:targets
 draw_arc	place	Draw arc	Arc	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 draw_full_circle	place	Draw full circle	Full Circle	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
-draw_elliptical_arc	place	Draw elliptical arc	Elliptical Arc	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
-draw_ellipse	place	Draw ellipse	Ellipse	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
+draw_elliptical_arc	place	Draw elliptical arc	Elliptical Arc	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	center:point/mm,radius_x:length/mm,radius_y:length/mm,start_angle:turn/deg,end_angle:turn/deg,document:document?
+draw_ellipse	place	Draw ellipse	Ellipse	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	center:point/mm,radius_x:length/mm,radius_y:length/mm,document:document?
 draw_line	place	Draw line	Line	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm,document:document?
 draw_graphic_line	place	Draw graphic line	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm,document:document?
 draw_rectangle	place	Draw rectangle	Rectangle	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm,document:document?
-draw_round_rectangle	place	Draw round rectangle	Round Rectangle	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
+draw_round_rectangle	place	Draw round rectangle	Round Rectangle	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm,corner_radius:length/mm?,document:document?
 draw_polygon	place	Draw polygon	Polygon	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 draw_bezier	place	Draw bezier	Bezier	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 place_table	place	Place table	Table	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
