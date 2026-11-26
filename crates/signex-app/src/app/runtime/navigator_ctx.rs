@@ -173,9 +173,11 @@ impl Signex {
         navigator.numbers = assembly.numbers;
         navigator.fingerprint = assembly.fingerprint;
         // The canvas designators are a function of the hierarchy's placements,
-        // and so are its not-fitted parts.
+        // and so are its not-fitted parts and the variant values (the part a
+        // value is set on).
         self.refresh_canvas_designators();
         self.refresh_canvas_not_fitted();
+        self.refresh_all_variant_values();
         Task::none()
     }
 

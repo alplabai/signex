@@ -190,6 +190,19 @@ pub(super) const NETS: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
+    // #2952: the differential pairs of the named sheet's project, by
+    // directive or by name. A query; no key.
+    CommandMetadata {
+        id: "list_diff_pairs",
+        category: "design",
+        label: command_ids::CMD_LIST_DIFF_PAIRS,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::operands::DOCUMENT,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "add_net_class",
         category: "design",

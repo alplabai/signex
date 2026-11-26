@@ -5,6 +5,7 @@
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
+use signex_types::designator::NumberingScheme;
 use signex_types::pcb::SymbolLink;
 use signex_types::project::{
     AnnotateUndo, BomLineAlternates, ChannelNaming, ListMove, PartRef, PlacedPart, ProjectData,
@@ -80,6 +81,23 @@ pub enum ProjectSectionCommand {
         parameter: String,
         value: Option<String>,
     },
+    /// Several parameter values of one part in a variant as one step: an
+    /// alternate part's value, footprint and part number (#3038). `None`
+    /// is the part's own value again.
+    SetVariantPartParameters {
+        variant: String,
+        designator: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        part: Option<SymbolLink>,
+        parameters: Vec<(String, Option<String>)>,
+    },
+    /// The same parameter values for several parts in a variant as one
+    /// step: every channel's copy of a repeated part (mockup rows 208, 209).
+    SetVariantPartsParameters {
+        variant: String,
+        parts: Vec<PartRef>,
+        parameters: Vec<(String, Option<String>)>,
+    },
     /// Move a library one step up or down the list (#1691).
     MoveLibrary {
         path: PathBuf,
@@ -94,6 +112,11 @@ pub enum ProjectSectionCommand {
     /// (#1692). Clearing it over an unreadable section changes nothing.
     SetAnnotateUndo {
         choice: Option<AnnotateUndo>,
+    },
+    /// How Annotate numbers new designators (#1292). Continuous over an
+    /// unreadable section changes nothing, as clearing the undo choice.
+    SetAnnotateNumbering {
+        scheme: NumberingScheme,
     },
     /// Commit every save to the project's repository (#1693).
     SetVersionControl {
@@ -159,6 +182,21 @@ impl ProjectSectionCommand {
                 parameter,
                 value.as_deref(),
             )?,
+            Self::SetVariantPartParameters {
+                variant,
+                designator,
+                part,
+                parameters,
+            } => data.set_variant_part_parameters(
+                variant,
+                PlacedPart::new(designator, part.as_ref()),
+                parameters,
+            )?,
+            Self::SetVariantPartsParameters {
+                variant,
+                parts,
+                parameters,
+            } => data.set_variant_parts_parameters(variant, parts, parameters)?,
             Self::MoveLibrary { path, step } => {
                 data.move_library(path, *step);
             }
@@ -168,6 +206,13 @@ impl ProjectSectionCommand {
             Self::SetAnnotateUndo { choice } => {
                 if !(choice.is_none() && data.has_unreadable_annotation()) {
                     data.set_annotate_undo(*choice);
+                }
+            }
+            Self::SetAnnotateNumbering { scheme } => {
+                let keeps_unreadable =
+                    *scheme == NumberingScheme::Continuous && data.has_unreadable_annotation();
+                if !keeps_unreadable {
+                    data.set_annotate_numbering(*scheme);
                 }
             }
             Self::SetVersionControl { on } => data.enable_git = *on,

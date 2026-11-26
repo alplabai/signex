@@ -365,12 +365,28 @@ ctx-symbol-align-to-grid = Align To Grid
 ctx-in-variant = In variant: { $variant }
 # Header of the In variant flyout; { $part } is the selected part's designator.
 ctx-in-variant-part = { $part } in { $variant }
-ctx-in-variant-alternate-part = Alternate part…
+# The picker and the popover of mockup rows 208 and 209.
+ctx-in-variant-alternate-part = Alternate…
 ctx-in-variant-edit-value = Edit value for this variant…
-# Tooltip of the In variant rows that are not built yet.
-ctx-in-variant-planned = Planned: change a part's fit, part or value in one variant. The Variant Manager lists each part's fit today.
+# Tooltip of the In variant rows that are not built yet: the fit on a sheet
+# that is not repeated.
+ctx-in-variant-planned = Planned: change a part's fit in one variant on a sheet that is not repeated. The Variant Manager sets it today.
 ctx-in-variant-show-manager = Show in Variant Manager
 ctx-in-variant-new = New variant…
+# The In variant fit rows on a repeated sheet (#2662, mockup row 32). $fit
+# is Fitted or Not fitted, $channel the channel shown (CH2).
+ctx-in-variant-this-channel = { $fit } · This channel only ({ $channel })
+ctx-in-variant-all-channels = { $fit } · All channels
+# Tooltip of those rows before the project is compiled.
+ctx-in-variant-compile-first = Compile the project to set this part's fit per channel. The Variant Manager sets it today.
+# Tooltip of those rows while Base is the active variant.
+ctx-in-variant-in-base = Base fits every part as the sheets say. Switch to a variant first.
+# Tooltips of Alternate… and Edit value for this variant… when they cannot
+# open: in Base, without one part selected, before a compile on a repeated
+# sheet.
+ctx-in-variant-edit-in-base = Base keeps each part as placed. Switch to a variant first.
+ctx-in-variant-one-part = Select one part to change it in this variant.
+ctx-in-variant-edit-compile-first = Compile the project to change this part per channel. The Variant Manager changes it today.
 # project-tree-history-rows
 # A document leaf's row that opens the History panel filtered to the file.
 ctx-tree-show-history = Show History

@@ -32,9 +32,20 @@ impl Engine {
         items: &[SelectedItem],
         grid_mm: f64,
     ) -> Result<Option<CopiedSelection>, EngineError> {
+        let fragment = self.selection_fragment(items, uuid::Uuid::now_v7());
+        CopiedSelection::from_fragment(fragment, grid_mm)
+    }
+
+    /// The carriable part of `items` with the bodies its parts use, at their
+    /// own positions, as a sheet with the id `uuid`.
+    pub(crate) fn selection_fragment(
+        &self,
+        items: &[SelectedItem],
+        uuid: uuid::Uuid,
+    ) -> SchematicSheet {
         let clip = self.collect_selection_clipboard(items);
         let mut fragment = SchematicSheet {
-            uuid: uuid::Uuid::now_v7(),
+            uuid,
             symbols: clip.symbols,
             wires: clip.wires,
             buses: clip.buses,
@@ -53,7 +64,7 @@ impl Engine {
                     .insert(symbol.body_key().to_owned(), body.clone());
             }
         }
-        CopiedSelection::from_fragment(fragment, grid_mm)
+        fragment
     }
 }
 

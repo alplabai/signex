@@ -9,6 +9,7 @@ mod batch;
 mod break_wire;
 mod bus_style;
 pub(crate) mod change_component;
+pub(crate) mod change_component_pins;
 mod child_sheet_size;
 mod designator_in;
 mod directives;
@@ -29,6 +30,8 @@ mod unions;
 mod wire_end;
 
 #[cfg(test)]
+mod change_component_pin_map_tests;
+#[cfg(test)]
 mod change_component_tests;
 #[cfg(test)]
 mod designator_follow_tests;
@@ -48,6 +51,8 @@ mod harness_entry_slide;
 mod harness_entry_slide_tests;
 #[cfg(test)]
 mod harness_tests;
+#[cfg(test)]
+mod net_parameters_connectivity_tests;
 #[cfg(test)]
 mod patch_exactness_tests;
 #[cfg(test)]

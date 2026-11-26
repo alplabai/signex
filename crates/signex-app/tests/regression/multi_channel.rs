@@ -836,3 +836,57 @@ fn a_channel_card_fit_reaches_the_bom_and_the_variant_manager() {
         "the Variant Manager's channel rows"
     );
 }
+
+/// #2662, mockup rows 151 and 154: once a card leaves CH1 out of Lite, the
+/// Compiled Design tags CH1's row "Not fitted (Lite)" and CH2's not, and
+/// CH1's tab Properties name CH1 as left out.
+#[test]
+fn a_channel_left_out_is_tagged_in_the_panel_and_named_in_its_properties() {
+    use signex_app::panels::compiled_design::CompiledRowKind;
+
+    let mut f = fixture("Repeat(CH, 1, 2)", true);
+    let data = &mut f.app.document_state.projects[0].data;
+    data.variant_definitions = vec!["Lite".to_string()];
+    data.active_variant = Some("Lite".to_string());
+    send(&mut f.app, CompiledDesignMsg::CompileRequested);
+    let tags = |app: &Signex| -> Vec<(String, Option<String>)> {
+        app.document_state
+            .panel_ctx
+            .compiled_design
+            .panel
+            .rows
+            .iter()
+            .filter(|row| row.kind == CompiledRowKind::Channel)
+            .map(|row| (row.name.clone(), row.not_fitted_in.clone()))
+            .collect()
+    };
+    assert!(tags(&f.app).iter().all(|(_, tag)| tag.is_none()));
+
+    let ch1 = strip(&f.app).tabs[0].clone();
+    let parts = ch1.fits.iter().map(|fit| fit.part.clone()).collect();
+    send(
+        &mut f.app,
+        CompiledDesignMsg::ChannelFitPicked {
+            parts,
+            fitted: Some(false),
+        },
+    );
+    assert_eq!(
+        tags(&f.app),
+        [
+            ("CH1".to_string(), Some("Lite".to_string())),
+            ("CH2".to_string(), None),
+        ]
+    );
+
+    send(
+        &mut f.app,
+        CompiledDesignMsg::ChannelPicked {
+            sheet: f.child.clone(),
+            channel: Some(1),
+        },
+    );
+    let summary = strip(&f.app).variant_summary().expect("CH1 is shown");
+    assert_eq!(summary.left_out, ["CH1"]);
+    assert_eq!(summary.not_fitted, summary.parts);
+}

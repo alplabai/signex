@@ -172,8 +172,10 @@ impl Signex {
             );
             return Task::none();
         };
-        self.ui_state.save_profile_dialog =
-            Some(SaveProfileDialog::new(project, self.default_profile_name()));
+        self.ui_state.save_profile_dialog = Some(Box::new(SaveProfileDialog::new(
+            project,
+            self.default_profile_name(),
+        )));
         Task::none()
     }
 

@@ -456,3 +456,27 @@ fn the_stacked_header_is_taller_than_the_one_line_header() {
     use super::super::header::{DIALOG_HEADER_H, STACKED_HEADER_H};
     const { assert!(STACKED_HEADER_H > DIALOG_HEADER_H) };
 }
+
+/// Exit criterion 3: the net classes from the schematic are one summary
+/// line (no mockup row), worded by count, and nothing when there are none.
+#[test]
+fn the_classes_from_the_schematic_are_one_summary_line() {
+    let i18n = signex_i18n::I18n::en_us();
+    let tokens = theme_tokens(ThemeId::GraphiteLight);
+    assert!(super::schematic_rules::classes_line(0, &i18n, &tokens).is_none());
+    assert!(super::schematic_rules::classes_line(2, &i18n, &tokens).is_some());
+    let line = |count: usize| {
+        signex_i18n::t!(i18n, signex_i18n::ids::UPDATE_PCB_SCHEMATIC_CLASSES, "count" => count)
+            .into_string()
+    };
+    assert!(
+        line(1).starts_with("1 net class from the schematic"),
+        "{}",
+        line(1)
+    );
+    assert!(
+        line(2).contains("2") && line(2).ends_with("net classes from the schematic"),
+        "{}",
+        line(2)
+    );
+}

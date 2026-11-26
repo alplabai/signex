@@ -29,6 +29,7 @@ mod erc_job;
 mod erc_run;
 #[cfg(test)]
 mod erc_run_tests;
+mod live;
 mod reprefix;
 mod reprefix_confirm;
 mod reprefix_job;
@@ -49,6 +50,7 @@ pub(crate) use annotate_preview::{
 };
 pub(crate) use erc_check::ERC_CHECK;
 pub(crate) use erc_job::{ErcRunOutcome, PageFrames, WaivedFinding};
+pub(crate) use live::{LiveErc, LiveErcMsg};
 pub(crate) use reprefix_confirm::ReprefixConfirm;
 pub(crate) use reprefix_job::ReprefixSheets;
 mod machine_rules;

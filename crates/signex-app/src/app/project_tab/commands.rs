@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use iced::Task;
 use serde_json::{Value, json};
 use signex_engine::ProjectSectionCommand;
+use signex_types::designator::NumberingScheme;
 use signex_types::project::{AnnotateUndo, LibraryEntryKind, ListMove};
 
 use super::erc_annotation::ErcSource;
@@ -17,9 +18,9 @@ use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::state::ProjectId;
 use crate::app::{Message, Signex};
 
-type Ran = (CommandOutcome, Task<Message>);
+pub(in crate::app::project_tab) type Ran = (CommandOutcome, Task<Message>);
 
-fn refused(reason: impl Into<String>) -> Ran {
+pub(in crate::app::project_tab) fn refused(reason: impl Into<String>) -> Ran {
     (CommandOutcome::disabled(reason), Task::none())
 }
 
@@ -72,6 +73,25 @@ fn edit(
         }
         Err(problem) => refused(problem.to_string()),
     }
+}
+
+/// Apply a Variant Manager part edit (#3038) to the project `args` names
+/// and answer with the Variants section.
+pub(in crate::app::project_tab) fn variants_edit(
+    app: &mut Signex,
+    args: &CommandArgs,
+    command: ProjectSectionCommand,
+) -> Ran {
+    edit(app, args, command, Section::Variants)
+}
+
+/// The Variants section of `id` for an edit that changes nothing.
+pub(in crate::app::project_tab) fn variants_unchanged(app: &Signex, id: ProjectId) -> Ran {
+    let mut answer = app.project_section_json(id, Section::Variants);
+    if let Value::Object(map) = &mut answer {
+        map.insert("changed".into(), json!(false));
+    }
+    (CommandOutcome::Answered(answer), Task::none())
 }
 
 /// `project_move_sheet {document, sheet, direction}`.
@@ -143,6 +163,18 @@ pub(crate) fn project_set_active_variant(app: &mut Signex, args: &CommandArgs) -
     )
 }
 
+/// `project_set_default_variant {document, name?}` (#2949): the variant
+/// defaults, as Set as default sets them; none is Base.
+pub(crate) fn project_set_default_variant(app: &mut Signex, args: &CommandArgs) -> Ran {
+    let name = text(args, "name").map(str::to_string);
+    edit(
+        app,
+        args,
+        ProjectSectionCommand::SetDefaultVariant { name },
+        Section::Variants,
+    )
+}
+
 /// `project_move_library {document, library, direction}`: `library` is the
 /// path as the project stores it.
 pub(crate) fn project_move_library(app: &mut Signex, args: &CommandArgs) -> Ran {
@@ -186,6 +218,28 @@ pub(crate) fn project_set_annotate_undo(app: &mut Signex, args: &CommandArgs) ->
         app,
         args,
         ProjectSectionCommand::SetAnnotateUndo { choice },
+        Section::Annotation,
+    )
+}
+
+/// `project_set_annotate_numbering {document, value?}` (#1292):
+/// `continuous`, `page_hundreds` or `page_thousands`; none is continuous.
+pub(crate) fn project_set_annotate_numbering(app: &mut Signex, args: &CommandArgs) -> Ran {
+    let scheme = match text(args, "value") {
+        None => NumberingScheme::Continuous,
+        Some(token) => match NumberingScheme::parse(token) {
+            Some(scheme) => scheme,
+            None => {
+                return refused(
+                    "`value` is continuous, page_hundreds or page_thousands; leave it out for continuous",
+                );
+            }
+        },
+    };
+    edit(
+        app,
+        args,
+        ProjectSectionCommand::SetAnnotateNumbering { scheme },
         Section::Annotation,
     )
 }
@@ -259,6 +313,9 @@ impl Signex {
                 "variants": {
                     "defined": data.variant_definitions,
                     "active": data.active_variant_name(),
+                    "default": data
+                        .default_variant()
+                        .unwrap_or(signex_types::project::BASE_VARIANT),
                 }
             }),
             Section::Libraries => {
@@ -283,6 +340,7 @@ impl Signex {
                     "annotation": {
                         "annotate_undo": own.map(AnnotateUndo::token),
                         "annotate_undo_effective": effective.token(),
+                        "numbering": data.annotate_numbering().token(),
                         "erc_rules": ErcSource::of(project).token(),
                     }
                 })

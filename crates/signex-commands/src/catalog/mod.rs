@@ -32,11 +32,13 @@ mod pcb_sync;
 mod placement;
 mod properties;
 mod query;
+mod reuse;
 mod route_operands;
 mod search;
 mod selection;
 mod tool;
 mod transform;
+mod variant_operands;
 mod view;
 mod wiring;
 mod workspace;
@@ -330,6 +332,7 @@ const TABLES: &[&[CommandMetadata]] = &[
     arrange::ARRANGE,
     transform::TRANSFORM,
     placement::PLACEMENT,
+    reuse::REUSE,
     wiring::WIRING,
     drawing::DRAWING,
     tool::TOOL,
@@ -713,6 +716,7 @@ mod tests {
             ("grid.rs", include_str!("grid.rs")),
             ("library.rs", include_str!("library.rs")),
             ("workspace.rs", include_str!("workspace.rs")),
+            ("reuse.rs", include_str!("reuse.rs")),
             ("notebook.rs", include_str!("notebook.rs")),
             ("bom.rs", include_str!("bom.rs")),
         ];

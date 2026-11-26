@@ -75,6 +75,7 @@ format declares only its own table row below.
 | `.snxpcb`, unfilled pour | `snxpcb/1.11` while a pour that is not shelved carries `unfilled = true` (`Zone::is_unfilled_pour`, #2506; DECISIONS 2026-11-25), whatever else the board holds; else the tokens above, byte for byte, and the key is written only when on. A 1.10 build would flood the pour and export copper the author cleared | `snxpcb/1.11`, as above | opens read-only | refused |
 | `.snxpcb`, layout plan | `snxpcb/1.12` while `[board_options.layout_plan]` sets anything (`LayoutPlan::is_empty`, #2942; DECISIONS 2026-11-25), whatever else the board holds; else the tokens above, byte for byte, and clearing the last setting writes the lower token again. A 1.11 build would drop the plan on save | adds `snxpcb/1.12` | opens read-only | refused |
 | `.snxmat`, user material library | `snxmat/1` (`materials.snxmat` in the config folder: the person's own cores, prepregs, copper foils and masks, mockup row 177) | `snxmat/1` | refused | refused |
+| BOM template | `snxbomt/1` (a BOM column preset with computed columns, #1988; `docs/BOM_COLUMNS.md`). An unknown key is refused, so a newer template is never rewritten without it | `snxbomt/1` | refused | refused |
 | `.snxprj` | `snxprj/1` | `snxprj/1` | opens read-only | read as `snxprj/1` |
 | `.snxprj`, variant settings | `snxprj/1.1` while `variant_settings` is not empty (a default variant or a part entry, a channel's copy of a part on a repeated sheet included, #2662; `project::snxprj_token`; DECISIONS 2026-11-25); else `snxprj/1`, byte for byte. A `snxprj/1` build would keep the section but not follow a variant rename or removal. Builds released before this policy (v26.11.0 and earlier) refuse any newer minor on load, so they refuse a 1.1 project rather than open it read-only | adds `snxprj/1.1` | opens read-only | read as `snxprj/1` |
 | `.snxlib` | `snxlib/2` | `snxlib/2` | refused | refused |
@@ -114,7 +115,18 @@ token, byte for byte.
 (`schematic_design`: channel naming, harness definitions, differential pair
 classes) are one new top-level key, omitted at the defaults. An older build
 keeps an unknown top-level key and writes it back unchanged, so the key
-needs no new token (`docs/architecture/snxprj-format.md`).
+needs no new token (`docs/architecture/snxprj-format.md`). The annotation
+numbering scheme (`annotation.numbering`, #1292) is the same: an older build
+keeps the key in the section's unknown-key bag and numbers continuously, and
+the continuous default is never written.
+
+The Part lifecycle requirement's `variant` and `fitted_only` keys (#2686)
+take no token either. They sit inside a `requirements` entry and are left
+out at their defaults (the active variant, fitted parts only), so a project
+that does not set them writes as before, byte for byte. An older build reads
+an entry with one of them as an entry it cannot read: it keeps the entry as
+written, writes it back unchanged and reports it as not checked, so nothing
+is dropped.
 
 ## Changing a format
 

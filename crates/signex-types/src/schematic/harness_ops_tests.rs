@@ -177,3 +177,42 @@ fn uses_count_every_connector_of_a_type() {
     assert_eq!(harness_type_uses([&a, &b], "SPI_BUS"), 2);
     assert_eq!(harness_type_uses([&a, &b], "UART"), 0);
 }
+
+/// #3043: a harness-typed sheet entry is a use of its type too.
+#[test]
+fn uses_count_harness_typed_sheet_entries() {
+    let mut a = SheetHarness {
+        connectors: vec![connector(0.0, &[])],
+        ..Default::default()
+    };
+    a.entry_types.insert(id(7), "SPI_BUS".into());
+    a.entry_types.insert(id(8), "UART".into());
+    assert_eq!(harness_type_uses([&a], "SPI_BUS"), 2);
+    assert_eq!(harness_type_uses([&a], "UART"), 1);
+    assert_eq!(harness_type_uses([&a], "DEBUG"), 0);
+}
+
+/// #3043: a type a connector or a sheet entry uses but the project does not
+/// define is listed once, in first-use order, with the first connector's
+/// entries; a defined type is not listed again.
+#[test]
+fn undefined_types_come_from_the_objects_that_use_them() {
+    let mut plain = connector(0.0, &["A"]);
+    plain.harness_type = "HARNESS".into();
+    let mut again = connector(90.0, &["X", "Y", "Z"]);
+    again.harness_type = "HARNESS".into();
+    let mut a = SheetHarness {
+        connectors: vec![plain, connector(0.0, &["SCK"]), again],
+        ..Default::default()
+    };
+    a.entry_types.insert(id(7), "UART".into());
+    a.entry_types.insert(id(8), "SPI_BUS".into());
+    let defined = [definition("SPI_BUS", &["SCK", "MOSI"])];
+    let found = undefined_harness_types(&defined, [&a]);
+    let names: Vec<&str> = found.iter().map(|d| d.name.as_str()).collect();
+    assert_eq!(names, ["HARNESS", "UART"]);
+    assert_eq!(found[0].entry_names(), ["A"]);
+    assert!(found[0].entries.iter().all(|e| e.harness.is_none()));
+    assert!(found[1].entries.is_empty());
+    assert!(undefined_harness_types(&defined, [&SheetHarness::default()]).is_empty());
+}

@@ -3,6 +3,7 @@ mod hierarchy_memo;
 mod local_label_other_sheets;
 mod missing_library_body;
 mod multi_unit;
+mod net_tie;
 mod netlist_agreement;
 mod no_erc_directives;
 mod output_order;

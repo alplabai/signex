@@ -160,6 +160,7 @@ fn open_canvas_menu(app: &mut Signex, at: (f32, f32)) {
         x: at.0,
         y: at.1,
         world: None,
+        hit_object: false,
         window: None,
     });
 }

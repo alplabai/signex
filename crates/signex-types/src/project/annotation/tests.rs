@@ -1,4 +1,4 @@
-use crate::designator::DesignatorStandard;
+use crate::designator::{DesignatorStandard, NumberingScheme};
 use crate::project::{ProjectData, parse_project, write_project};
 
 fn project_file(dir: &std::path::Path, extra: &str) -> std::path::PathBuf {
@@ -108,4 +108,53 @@ fn an_empty_or_null_section_loads_as_none_and_resave_omits_it() {
             "{extra}"
         );
     }
+}
+
+/// #1292: a page scheme loads, round-trips byte for byte and keeps the
+/// project at `snxprj/1`.
+#[test]
+fn a_numbering_scheme_loads_and_round_trips_byte_identical() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = project_file(dir.path(), r#","annotation":{"numbering":"page_hundreds"}"#);
+    let (data, first) = resave(&path);
+    assert_eq!(data.annotate_numbering(), NumberingScheme::PageHundreds);
+    let (_, second) = resave(&path);
+    assert_eq!(first, second);
+    let json: serde_json::Value = serde_json::from_slice(&first).unwrap();
+    assert_eq!(json["annotation"]["numbering"], "page_hundreds");
+    let text = String::from_utf8_lossy(&first);
+    assert!(!text.contains("snxprj/1.1"), "{text}");
+}
+
+/// Continuous is the default: choosing it stores no key, so a project that
+/// never had a scheme saves as it was.
+#[test]
+fn choosing_continuous_stores_no_key() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = project_file(dir.path(), "");
+    let before = resave(&path).1;
+    let mut data = parse_project(&path).unwrap();
+    assert_eq!(data.annotate_numbering(), NumberingScheme::Continuous);
+    data.set_annotate_numbering(NumberingScheme::PageThousands);
+    assert_eq!(data.annotate_numbering(), NumberingScheme::PageThousands);
+    data.set_annotate_numbering(NumberingScheme::Continuous);
+    assert!(data.annotation.is_none());
+    write_project(&path, &data).unwrap();
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+}
+
+/// A scheme a newer build added is not applied and is kept verbatim, as an
+/// unknown standard is.
+#[test]
+fn an_unknown_scheme_is_not_applied_and_is_kept_verbatim() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = project_file(
+        dir.path(),
+        r#","annotation":{"numbering":"per_sheet_start"}"#,
+    );
+    let (data, first) = resave(&path);
+    assert_eq!(data.annotate_numbering(), NumberingScheme::Continuous);
+    assert!(data.has_unreadable_annotation());
+    let json: serde_json::Value = serde_json::from_slice(&first).unwrap();
+    assert_eq!(json["annotation"]["numbering"], "per_sheet_start");
 }

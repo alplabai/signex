@@ -88,6 +88,7 @@ mod rules_tab;
 pub(crate) mod sch_tables;
 pub(crate) mod sheet_numbering;
 pub(crate) mod sheet_repairs;
+pub(crate) mod sheet_swap;
 pub(crate) mod sheet_sync;
 pub(crate) mod sheet_write;
 pub mod unions;
@@ -97,6 +98,7 @@ pub use project_tab::{ProjectGeneralFacts, ProjectSection, ProjectTabMsg, Projec
 pub use rules_tab::{RulesTabMsg, RulesTabState};
 pub use sch_tables::TablesMsg;
 pub(crate) mod design_read;
+pub(crate) mod design_reuse;
 pub(crate) mod designator_scan;
 #[cfg(test)]
 mod designator_scan_tests;
@@ -140,6 +142,9 @@ mod undo_groups;
 pub(crate) mod unread_sheets;
 pub(crate) mod update_pcb;
 pub use undo_groups::{UndoGroupKind, UndoGroupSheets};
+// Mockup rows 208 and 209: a part changed in one variant from the canvas.
+pub(crate) mod variant_part_edit;
+pub use variant_part_edit::VariantPartEditMsg;
 pub(crate) mod view;
 
 pub use assign_footprints::{
@@ -192,6 +197,7 @@ pub use handlers::window_geometry_events::GeometryReadout;
 pub use handlers::window_tiling::{Tile, TileLayout, TilePlan, tiles};
 pub use new_project::{NewProjectMsg, NewProjectState, ProfileUndo};
 pub use sheet_numbering::{NumberingProblem, SheetNumberingMsg, SheetNumberingState};
+pub use sheet_swap::SheetSwapMsg;
 pub use sheet_sync::{SheetSyncMsg, SheetSyncProblem, SheetSyncState};
 pub use signex_history::History;
 pub(crate) use signex_history::SavePoint;
@@ -257,6 +263,9 @@ impl Signex {
         // A board that opened takes its kept view; a changed view is saved
         // soon (#2480).
         tasks.push(self.sync_pcb_layer_views());
+        // A sheet edit starts live ERC's wait (#1288); its timer is a
+        // subscription, so this update returns no task for it.
+        self.sync_live_erc();
         // A Properties draft of a board no window shows any more goes (#1312).
         self.prune_pcb_footprint_draft();
         self.prune_pcb_component_draft();

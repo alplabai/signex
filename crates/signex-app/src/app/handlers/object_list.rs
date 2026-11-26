@@ -127,6 +127,7 @@ impl Signex {
             ObjectListMsg::MoreRowsShown => state.shown = state.row_limit() + ROW_PAGE,
             ObjectListMsg::RowClicked(target) => return self.go_to_object(&target, false),
             ObjectListMsg::RowDoubleClicked(target) => return self.go_to_object(&target, true),
+            ObjectListMsg::CellEdit(edit) => return self.handle_object_list_cell_edit(edit),
             ObjectListMsg::ProjectRowsRead {
                 window,
                 generation,
@@ -263,16 +264,18 @@ impl Signex {
     }
 
     /// How the canvas draws the sheet at `path`, with `special` as what its
-    /// `${TOKEN}`s resolve to.
+    /// `${TOKEN}`s resolve to and the active variant's values (#2948).
     pub(crate) fn sheet_look(
         &self,
         path: &Path,
         special: Option<crate::canvas::SpecialStrings>,
     ) -> SheetLook {
+        let variant_values = self.variant_values_for_path(path);
         SheetLook {
             placement: self.shown_placement(path),
             special,
             standard: self.document_state.designator_standard_for(path),
+            variant_values: (!variant_values.is_empty()).then_some(variant_values),
         }
     }
 
@@ -323,6 +326,19 @@ impl Signex {
         ds.designator_standard_for(active).hash(&mut h);
         let project = ds.document_project(active);
         project.map(|p| &p.data.parameters).hash(&mut h);
+        // The active variant's own values (#2948).
+        if let Some(data) = project.map(|p| &p.data) {
+            data.active_variant_name().hash(&mut h);
+            for part in &data.variant_settings.parts {
+                (
+                    &part.variant,
+                    &part.designator,
+                    &part.part,
+                    &part.parameters,
+                )
+                    .hash(&mut h);
+            }
+        }
         let engine_stamp = |path: &Path, h: &mut std::collections::hash_map::DefaultHasher| {
             if let Some(engine) = ds.engines.get(path) {
                 (path, engine.instance_id(), engine.revision()).hash(h);
@@ -443,6 +459,9 @@ impl Signex {
             return Task::none();
         }
         let nets = self.object_list_nets(active);
+        // Wire rows name their net from the project index (#3039): build one
+        // when none is current; its landing moves the stamp and rereads.
+        let warm = self.warm_net_index_of(active);
         if scope == ObjectScope::ThisSheet {
             let look = self.sheet_look(active, special.clone());
             let rows = match self.document_state.engines.get(active) {
@@ -458,10 +477,10 @@ impl Signex {
             source.rows = Arc::new(rows);
             source.reading = false;
             source.failed = false;
-            return Task::none();
+            return warm;
         }
         let Some(root) = root else {
-            return Task::none();
+            return warm;
         };
         let ds = &self.document_state;
         let project = ds.document_project(active);
@@ -481,7 +500,7 @@ impl Signex {
         source.generation += 1;
         source.reading = true;
         let generation = source.generation;
-        Task::perform(
+        let read = Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || read_project_rows(read))
                     .await
@@ -497,7 +516,8 @@ impl Signex {
                     },
                 )))
             },
-        )
+        );
+        Task::batch([warm, read])
     }
 
     /// Build the view of `slot` again when its rows, the picks, the sheet in

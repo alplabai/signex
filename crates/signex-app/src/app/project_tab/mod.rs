@@ -59,8 +59,8 @@ mod undo_routing_tests;
 pub(crate) use bom_alternates::{bom_add_alternate, bom_remove_alternate, bom_set_alternate_order};
 pub(crate) use commands::{
     project_add_variant, project_move_library, project_move_sheet, project_remove_variant,
-    project_rename_variant, project_set_active_variant, project_set_annotate_undo,
-    project_set_version_control,
+    project_rename_variant, project_set_active_variant, project_set_annotate_numbering,
+    project_set_annotate_undo, project_set_default_variant, project_set_version_control,
 };
 pub use general::ProjectGeneralFacts;
 pub use parameters::ParameterGroup;
@@ -76,6 +76,10 @@ pub(crate) use requirements::{
 pub use row_drag::RowDragMsg;
 pub(crate) use sheets::sheet_thumbnail;
 pub use variants::VariantManagerMsg;
+pub(crate) use variants::{
+    alternate_parameters, project_duplicate_variant, project_set_variant_alternate,
+    project_set_variant_fit, project_set_variant_override, variant_parameters_command,
+};
 
 pub use crate::app::core::row_drag::RowDrag;
 use crate::app::state::ProjectId;

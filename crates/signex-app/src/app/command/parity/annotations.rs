@@ -144,6 +144,10 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Operand,
         &[Settings],
     ),
+    // The live ERC preference (#1288): a flip reads the value it flips.
+    (&["toggle_live_erc"], Bridge, &[Settings]),
+    (&["toggle_live_erc"], Operand, &[Settings]),
+    (&["toggle_live_erc"], HeadlessWithoutOperands, &[Settings]),
     // A project without rules of its own edits from the machine rules
     // (`rules_text_of` falls back on `ui_state.machine_drc_rules`); a preset
     // comes from the machine's profile library.
@@ -208,12 +212,15 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "layout_plan_set",
             "swap_pins",
             "swap_gates",
+            "swap_schematic_pins",
+            "swap_schematic_gates",
             "save_board_reuse_block",
             "place_board_reuse_block",
             "autoplace_fields",
             "sync_sheet_pins",
             "set_sheet_symbol_size",
             "set_symbol_parameter",
+            "set_net_tie",
             "project_move_sheet",
             "project_add_variant",
             "project_rename_variant",
@@ -221,6 +228,13 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "project_set_active_variant",
             "project_move_library",
             "project_set_annotate_undo",
+            "project_set_annotate_numbering",
+            "project_set_default_variant",
+            // #3038: the Variant Manager's part edits and Duplicate.
+            "project_set_variant_fit",
+            "project_set_variant_alternate",
+            "project_set_variant_override",
+            "project_duplicate_variant",
             "project_set_version_control",
             "project_set_requirement",
             "project_enable_requirement",
@@ -508,17 +522,25 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Query,
         &[Settings],
     ),
-    // Read: operands only. `layout_plan_status` reads the board's last DRC
-    // run, core-bound session state as for `rules_get` above.
+    // Read: operands only. `bom_lines` (#1988) reads the named sheet's
+    // project, its open board and the library's cached prices, as documents.
+    // `layout_plan_status` reads the board's last DRC run, core-bound session
+    // state as for `rules_get` above.
     (
         &[
             "board_panel",
+            "bom_lines",
+            // #2949: the named project's variants and sheets.
+            "compare_variants",
             "find_items",
             "find_similar_items",
+            // #2952: the named project's open sheets and classes.
+            "list_diff_pairs",
             "layout_plan_get",
             "layout_plan_status",
             "measure_board",
             "query_board_nets",
+            "query_net_ties",
             "query_pins",
             // #2943: the project's rails and its parts, read off the UI thread.
             "query_rail_budget",
@@ -531,6 +553,7 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "query_bom",
             "search_parts",
             "read_document",
+            "variant_bom",
             // Mockup row 199: the named project's notebook and sheets.
             "notebook_measurements",
             "notebook_timeline",
@@ -541,6 +564,13 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         ],
         Query,
         &[],
+    ),
+    // #1283: the snippet and template folders of the project in view
+    // (`reuse_roots_in_view`) and of the user's library.
+    (
+        &["list_snippets", "list_templates"],
+        Query,
+        &[ActiveDocument],
     ),
     // #2944: a relative library path is read from the edited sheet's
     // project folder (`open_library_named`), as `place_component` reads it.
@@ -660,10 +690,16 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "place_sheet_entry",
             "place_design_block",
             "import_graphics",
+            // #1283: a snippet is placed as a design block.
+            "place_snippet",
         ],
         Operand,
         &[ToolState],
     ),
+    // #1283: without `ids`, the selection on the sheet in view is saved.
+    (&["save_snippet"], Operand, &[Selection]),
+    // #2665: the in-app copy, and the grid its default offset is measured on.
+    (&["smart_paste"], Operand, &[ToolState, Clipboard]),
     // Move Keeps Wires is not read: both take `keep_wires` as an operand
     // (#2552; rotation, Hakan 2026-11-25, #2326 comment 7167743982).
     (
@@ -671,6 +707,9 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Operand,
         &[],
     ),
+    // #2953: a designator is written for the placement the sheet in view
+    // shows, and only on that sheet (`designator_edit_commands`).
+    (&["set_object_text"], Operand, &[ActiveDocument]),
     // The tool defaults, and the active layer when `layer` is not given.
     // Declared 6.P3 exception: still the person's form until #2876 (docs/DECISIONS.md, 2026-11-24).
     (
@@ -932,6 +971,8 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "save_board_reuse_block",
             "swap_gates",
             "swap_pins",
+            "swap_schematic_gates",
+            "swap_schematic_pins",
         ],
         Translator,
         &[Selection],

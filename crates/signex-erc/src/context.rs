@@ -355,6 +355,9 @@ pub struct ErcContext {
     /// Nets the sheet's directives give different classes (#2656), from the
     /// one ranking the netlist uses (`signex_net::net_class_conflicts`).
     pub class_conflicts: Vec<signex_net::NetClassConflict>,
+    /// Differential pair halves whose partner net is not on the sheet
+    /// (#2951), from `signex_net::lone_pair_members`.
+    pub lone_pairs: Vec<signex_net::LonePairMember>,
 }
 
 impl ErcContext {
@@ -551,6 +554,7 @@ impl ErcContext {
             key: None,
             harness: ErcHarness::from_sheet(snapshot),
             class_conflicts: class_conflicts(snapshot),
+            lone_pairs: signex_net::lone_pair_members(snapshot),
         }
     }
 }

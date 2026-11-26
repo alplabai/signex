@@ -1,7 +1,10 @@
 //! Document commands: create, open, save, revert, close and print a
 //! document or project, plus the project options and report dialogs.
 
-use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, operands};
+use super::{
+    CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, operands,
+    variant_operands,
+};
 use signex_i18n_ids::{command_ids, menu_ids};
 
 pub(super) const DOCUMENTS: &[CommandMetadata] = &[
@@ -368,6 +371,87 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         operands: operands::PROJECT_ACTIVE_VARIANT,
         ..CommandMetadata::DEFAULT
     },
+    // #2949: the Variant Manager's variant defaults, Compare variants and
+    // Open in BOM Studio.
+    CommandMetadata {
+        id: "project_set_default_variant",
+        category: "design",
+        label: command_ids::CMD_PROJECT_SET_DEFAULT_VARIANT,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::PROJECT_DEFAULT_VARIANT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "compare_variants",
+        category: "design",
+        label: command_ids::CMD_COMPARE_VARIANTS,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::COMPARE_VARIANTS,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "variant_bom",
+        category: "design",
+        label: command_ids::CMD_VARIANT_BOM,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::VARIANT_BOM,
+        ..CommandMetadata::DEFAULT
+    },
+    // #3038: the Variant Manager's part edits and Duplicate, each a General
+    // step of the project.
+    CommandMetadata {
+        id: "project_set_variant_fit",
+        category: "design",
+        label: command_ids::CMD_PROJECT_SET_VARIANT_FIT,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: variant_operands::PROJECT_VARIANT_FIT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "project_set_variant_alternate",
+        category: "design",
+        label: command_ids::CMD_PROJECT_SET_VARIANT_ALTERNATE,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: variant_operands::PROJECT_VARIANT_ALTERNATE,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "project_set_variant_override",
+        category: "design",
+        label: command_ids::CMD_PROJECT_SET_VARIANT_OVERRIDE,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: variant_operands::PROJECT_VARIANT_OVERRIDE,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "project_duplicate_variant",
+        category: "design",
+        label: command_ids::CMD_PROJECT_DUPLICATE_VARIANT,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: variant_operands::PROJECT_DUPLICATE_VARIANT,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "project_move_library",
         category: "design",
@@ -388,6 +472,18 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         enable: Enablement::Always,
         flags: CommandFlags::MUTATES,
         operands: operands::PROJECT_ANNOTATE_UNDO,
+        ..CommandMetadata::DEFAULT
+    },
+    // #1292: the project's annotation numbering scheme.
+    CommandMetadata {
+        id: "project_set_annotate_numbering",
+        category: "design",
+        label: command_ids::CMD_PROJECT_SET_ANNOTATE_NUMBERING,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::PROJECT_ANNOTATE_NUMBERING,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

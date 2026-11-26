@@ -82,7 +82,17 @@ impl Env {
         } else {
             (wire.start, wire.end)
         };
-        if self.anchored_inside(&fixed, &moving, &[index], Some(key(&new))) {
+        // The wires of this follow, and the legs already laid to the new tip,
+        // are the pin's own net: they do not hold the stretch cut away.
+        let kn = key(&new);
+        let mut own: Vec<usize> = group.to_vec();
+        own.extend(
+            (self.wires_near(kn, kn).into_iter())
+                .filter(|(_, w)| key(&w.start) == kn || key(&w.end) == kn)
+                .map(|(i, _)| i),
+        );
+        own.push(index);
+        if self.anchored_inside(&fixed, &moving, &own, Some(kn), false) {
             return false;
         }
         let (plans, far_keys) = self.follow_plans(index, fixed, moving, new);
@@ -157,22 +167,20 @@ impl Env {
     }
 
     /// The routes a chosen drag wiring mode gives from `fixed` to `new`, in
-    /// place of the slide and the wire-direction rule; `None` for Auto. A
-    /// zero-length leg of an aligned L is dropped by the caller.
+    /// place of the slide and the wire-direction rule; `None` for Auto. The
+    /// legs are the drawing rule's (`CornerRule::legs`): the mode's own rule
+    /// first, its flip as the fallback.
     fn mode_plans(
         &self,
         fixed: Point,
         new: Point,
         plan: impl Fn(Vec<(Point, Point)>) -> Plan,
     ) -> Option<Vec<Plan>> {
-        let (across, down) = (Point::new(new.x, fixed.y), Point::new(fixed.x, new.y));
-        let corners = match self.policy.wiring {
-            DragWiringMode::Auto => return None,
-            DragWiringMode::Straight => return Some(vec![plan(vec![(fixed, new)])]),
-            DragWiringMode::HorizontalFirst => [across, down],
-            DragWiringMode::VerticalFirst => [down, across],
-        };
-        Some(corners.map(|c| plan(vec![(fixed, c), (c, new)])).into())
+        if self.policy.wiring == DragWiringMode::Auto {
+            return None;
+        }
+        let rules = self.policy.wiring.rules().into_iter();
+        Some(rules.map(|rule| plan(rule.legs(fixed, new))).collect())
     }
 
     /// A wire that shrank to nothing goes when something else still holds its
@@ -237,7 +245,9 @@ impl Env {
         } else {
             kfar.1 == kf.1 && kfar.0 != kf.0
         };
-        if !perpendicular || self.anchored_inside(&far, &fixed, &[leg, index], Some(key(&new))) {
+        if !perpendicular
+            || self.anchored_inside(&far, &fixed, &[leg, index], Some(key(&new)), true)
+        {
             return None;
         }
         let elbow = if horizontal {

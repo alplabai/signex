@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use signex_engine::{DocumentPatch, UndoGroupId};
 
 use super::DocumentState;
+pub(crate) use crate::app::core::joined_sheet::JoinedSheet;
 use crate::app::core::origin::Origin;
 
 #[derive(Debug, Default)]
@@ -19,6 +20,10 @@ pub struct AgentEdits {
     /// Every sheet the running list edits (more than one when its edits name
     /// other sheets of the project); empty outside a list.
     pub(crate) touched: Vec<PathBuf>,
+    /// Sheets an edit brought into the running step without naming them
+    /// (#2501: `sync_sheet_entries direction=to_sheet` writes the child).
+    /// Each holds an open transaction until the step commits or rolls back.
+    pub(crate) joined: Vec<JoinedSheet>,
     /// Whether an edit list (not one placement naming a `document`) is running.
     pub(crate) listing: bool,
     /// What the running edit's checks read off the UI thread, set while it

@@ -4,6 +4,7 @@
 
 mod apply;
 mod group_run;
+mod joined;
 mod revert;
 mod single;
 mod wire;

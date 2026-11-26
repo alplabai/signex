@@ -506,6 +506,43 @@ mod layout_tests {
         );
     }
 
+    /// #3040, mockup row 143: the broken-file banner keeps the path alone on
+    /// its own line, the loader's reason as plain text under it, and nothing
+    /// runs past the banner at the dialog's opening size.
+    #[test]
+    fn the_broken_file_banner_keeps_the_path_on_its_own_line() {
+        const ERROR: &str = "is not valid JSON: EOF while parsing a value at line 1 column 11";
+        let window = iced::Size::new(900.0, 620.0);
+        let (mut app, _task) = Signex::new();
+        app.ui_state.prefs_load_error = Some(ERROR.into());
+        let path = crate::fonts::prefs_file_path().display().to_string();
+        let reason = format!("The file {ERROR}.");
+
+        let texts: Vec<LaidOutText> = lay_out_texts(app.view_preferences_body(), window)
+            .into_iter()
+            .map(|t| LaidOutText {
+                text: t.text.replace(['\u{2068}', '\u{2069}'], ""),
+                bounds: t.bounds,
+            })
+            .collect();
+
+        let at_path = find(&texts, &path).bounds;
+        let at_reason = find(&texts, &reason).bounds;
+        assert!(
+            at_reason.y >= at_path.y + at_path.height - 0.5,
+            "{texts:#?}"
+        );
+        for shown in [at_path, at_reason] {
+            assert!(shown.x + shown.width <= window.width + 0.5, "{shown:?}");
+        }
+        assert!(
+            !texts
+                .iter()
+                .any(|t| t.text.contains(&path) && t.text.contains("JSON")),
+            "the path and the reason share a line: {texts:#?}"
+        );
+    }
+
     fn preferences_texts(app: &Signex) -> Vec<String> {
         lay_out_texts(app.view_preferences_body(), iced::Size::new(900.0, 620.0))
             .into_iter()

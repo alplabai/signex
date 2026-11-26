@@ -32,6 +32,10 @@ pub(crate) struct UpdatePcbAnswer {
     /// locked with the rows that apply (were locked, for an apply; #3060).
     pub(crate) pad_locks: Vec<String>,
     pub(crate) notes: Vec<String>,
+    /// The board's net classes the Net Blanket and Net Parameters directives
+    /// add or change (exit criterion 3): put there by an apply, for a dry
+    /// run what an apply would put.
+    pub(crate) net_classes: Vec<String>,
     /// A dry run only: why an apply would be refused now (the board closed
     /// with unsaved edits, read-only, or moved past the list).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -84,6 +88,7 @@ pub(crate) struct AnswerFor<'a> {
     pub(crate) board: &'a Path,
     pub(crate) board_revision: u64,
     pub(crate) execute_blocked: Option<String>,
+    pub(crate) net_classes: Vec<String>,
 }
 
 impl UpdatePcbAnswer {
@@ -108,6 +113,7 @@ impl UpdatePcbAnswer {
                 .map(|lock| format!("{}.{}", lock.reference, lock.pad_number))
                 .collect(),
             notes: list.notes.iter().map(note_text).collect(),
+            net_classes: at.net_classes,
             execute_blocked: at.execute_blocked,
         }
     }

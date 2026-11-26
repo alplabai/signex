@@ -49,6 +49,7 @@ define_ids! {
     UPDATE_PCB_RULES_NOTE = "update-pcb-rules-note";
     UPDATE_PCB_RULE_NET_NOT_ON_BOARD = "update-pcb-rule-net-not-on-board";
     UPDATE_PCB_RULE_NAME_CLASH = "update-pcb-rule-name-clash";
+    UPDATE_PCB_SCHEMATIC_CLASSES = "update-pcb-schematic-classes";
     CHANGE_ROW_ICON_SKIPPED = "change-row-icon-skipped";
     CHANGE_ROW_ICON_BLOCKED = "change-row-icon-blocked";
     CHANGE_ROW_ICON_INFO = "change-row-icon-info";

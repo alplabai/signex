@@ -43,6 +43,7 @@ board_shape_from_selection
 board_sketch
 board_status
 bom_add_alternate
+bom_lines
 bom_remove_alternate
 bom_set_alternate_order
 break_union
@@ -67,6 +68,7 @@ close_active_document
 close_all_documents
 color_net
 compare_board_with_schematic
+compare_variants
 compile_project
 copy
 copy_attributes_or_add_vertex
@@ -176,7 +178,10 @@ layout_plan_set
 layout_plan_status
 leave_sheet
 list_annotations
+list_diff_pairs
 list_documents
+list_snippets
+list_templates
 lock_board_items
 manage_workspace_layouts
 mark_notebook_attachment_valid
@@ -295,6 +300,7 @@ place_reuse_block
 place_sheet_entry
 place_sheet_symbol
 place_signal_harness
+place_snippet
 place_symbol
 place_table
 place_text
@@ -313,6 +319,7 @@ previous_sheet
 print
 project_add_requirement
 project_add_variant
+project_duplicate_variant
 project_enable_requirement
 project_move_library
 project_move_sheet
@@ -321,15 +328,21 @@ project_remove_variant
 project_rename_variant
 project_run_requirements
 project_set_active_variant
+project_set_annotate_numbering
 project_set_annotate_undo
+project_set_default_variant
 project_set_rail
 project_set_requirement
+project_set_variant_alternate
+project_set_variant_fit
+project_set_variant_override
 project_set_version_control
 project_settings
 query_board_nets
 query_bom
 query_footprint_assignments
 query_library
+query_net_ties
 query_part_heights
 query_pins
 query_rail_budget
@@ -383,6 +396,7 @@ save_document
 save_document_as
 save_layer_set
 save_project_as
+save_snippet
 save_workspace_layout
 search_parts
 select_all
@@ -408,8 +422,10 @@ set_layer_stack
 set_layer_tab_names
 set_layer_visible
 set_net_class_rules
+set_net_tie
 set_object_position
 set_object_rotation
+set_object_text
 set_object_transparency
 set_object_visible
 set_pad_shape
@@ -433,6 +449,8 @@ snap_board_origin_to_corner
 stitch_vias
 swap_gates
 swap_pins
+swap_schematic_gates
+swap_schematic_pins
 switch_segment_posture
 sync_sheet_entries
 sync_sheet_pins
@@ -445,6 +463,7 @@ toggle_floating_panels
 toggle_layer_numbers
 toggle_layer_visibility
 toggle_layers_panel
+toggle_live_erc
 toggle_notebook_badges
 toggle_origin_marker
 toggle_properties_panel
@@ -466,6 +485,7 @@ unselect_all
 untile_documents
 unwaive_drc_violation
 update_pcb_from_schematic
+variant_bom
 view_board_3d
 view_rotate
 view_rotate_180

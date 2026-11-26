@@ -565,10 +565,57 @@ changes the child sheet's Hierarchical labels (never a Global label) as one
 undo step of the child, left unsaved; a closed child goes to a tabless
 engine. The closed child file is read off the UI thread first; a sheet that
 changed while it was read is refused with nothing applied, as any edit is.
-`to_sheet` is refused inside `apply_edits` and an agent's one-step run,
-whose undo step covers the edited sheet only. The answer is
+Inside `apply_edits` or an agent's one-step run, `to_sheet` brings the child
+into that step (#2501): the child's change commits with the step's other
+sheets under its undo group, so one undo reverts the parent and the child,
+and a refusal anywhere in the step leaves both as they were
+(`docs/AGENT_EDITS.md`, "Sheets an edit brings in"). The answer is
 `{"symbol", "name", "file", "direction", "added", "removed", "renamed"}`,
 `renamed` a list of `{"from", "to"}`; empty lists when the two sides agree.
+
+## Changing a part's component
+
+```text
+change_component document=<sheet> id=<part uuid> library=<id or path> part=<row id or part number>
+                 [pins=old:new,..] [drop=Name,..] [dry_run=true]
+```
+
+Change Component from operands (#1297, #2954): the placed part `id` (its
+uuid from `find_items` or `read_document`, every unit of it on the sheet) on
+the sheet `document` names takes the drawing, footprint, datasheet and
+identity fields of a library row, as the dialog's Change applies it: one
+engine edit, one undo step, position, rotation and designator kept. Without
+operands, in a window, it opens the Change Component dialog on the selected
+part as before. It is the swap half of "Place or swap" below.
+
+- `library` and `part` name the row as for `place_component`; the row is read
+  off the UI thread before the edit runs. A power symbol row is refused.
+- The pins map by number, then by name. `pins` maps by hand: each `old:new`
+  pair gives an old pin's new pin, `old:-` leaves it on no pin; a new pin
+  serves one old pin, so the old pin it served before is left on none. A pin
+  either part does not have is refused. With a hand mapping, what ends on a
+  connected old pin's tip moves to its new pin's tip; a mapping whose carried
+  wires would join another net is refused with the reason.
+- User and override parameters (those the new part does not supply) are
+  kept; `drop` names the ones cleared. A name that is not one of them is
+  refused with the list. Library-owned fields always come from the new part
+  (DECISIONS 2026-11-19).
+- A locked unit, units on other sheets, or a sheet that could hold units but
+  is not open refuse the change, with the same advice the dialog gives; so
+  does a new part with no drawing for a placed unit.
+- `dry_run=true` answers and changes nothing.
+
+The answer is `{"designator", "id", "changed", "from": {"lib_id",
+"library", "part"}, "to": {"lib_id", "library", "part", "internal_pn"},
+"pins": {"dangling", "moved", "carried", "gained"}, "mapped_by_hand",
+"mapping": [{"old", "old_name", "new", "new_name", "net"}], "kept",
+"dropped", "dry_run"}`: `pins` lists the pin numbers whose connection the
+swap leaves, moves, carries along a hand mapping or makes, as the dialog's
+warnings list them; `mapping` is one row per old pin, `new` and `new_name`
+null when it goes to no pin, `net` null when nothing is connected to it and
+an empty name for an unnamed net. `changed` is false on a dry run and when
+the swap changed nothing. In an `apply_edits` list its library row is read
+with the list, as for `place_component`.
 
 ## Editing placed objects
 
@@ -581,7 +628,7 @@ Properties rows read the panel's unit and the page origin instead. The answer
 is `{"id", "kind", "position", "rotation"?, "size"?}` after the edit.
 
 ```text
-set_object_position id=<uuid> at=x,y [keep_wires=true|false] [wiring=auto|horizontal_first|vertical_first|straight] [document=..]
+set_object_position id=<uuid> at=x,y [keep_wires=true|false] [wiring=auto|horizontal_first|vertical_first|straight|angle45_start|angle45_end] [document=..]
 set_object_rotation id=<uuid> rotation=0|90|180|270 [keep_wires=true|false] [document=..]
 set_sheet_symbol_size id=<uuid> size=w,h [document=..]
 set_symbol_parameter id=<uuid> name=Manufacturer [value=..] [document=..]
@@ -592,7 +639,8 @@ set_symbol_parameter id=<uuid> name=Manufacturer [value=..] [document=..]
   text note so its position is `at`. Its wire handling is in its operands,
   never the person's settings (#2552): `keep_wires` (default `true`) makes
   the wires on a moved part follow it, and `wiring` (default `auto`) bends
-  them as the drag wiring mode of that name does. It is the edit a drag of
+  them as the drag wiring mode of that name does (`angle45_start` and
+  `angle45_end` are the 45° modes, #2516). It is the edit a drag of
   the same distance commits, with the same rubber band and guard. A contact
   the guard cannot keep is left as a plain move; the answer adds
   `moved_wires` (ids of wires whose ends changed and of wires the move
@@ -618,6 +666,17 @@ set_symbol_parameter id=<uuid> name=Manufacturer [value=..] [document=..]
 - `set_symbol_parameter` sets one custom parameter of a placed part (left out
   or empty `value`: the parameter stays, with no value). `reference`, `value`
   and `footprint` have their own rows and commands and are refused here.
+
+`set_object_text id=<uuid> field=designator|value|text [value=..] [document=..]`
+sets a part's designator or value, a power port's name (its `value`), a
+label's name or a text note's text (`text`), with the engine edit the
+Properties row of that field sends, in one undo step (#2953). A double click
+on a Name or Value cell of the Object List edits it in place and Enter runs
+this edit. A left-out `value` is empty. A designator is written for the
+placement the sheet in view shows, so it is set on the sheet in view only; a
+field the object does not have is refused with the reason. The answer is the
+object's `{"id", "kind", "position", …}` plus `"text": {"field", "value"}`,
+the text as stored after the edit.
 
 `set_sheet_variable name=<NAME> [value=..] [remove=true] [document=..]` sets
 one variable of the sheet (what `${NAME}` and expressions on it resolve), as
@@ -700,6 +759,79 @@ holds it; a point off the grid is refused as for any placement. The file is
 read off the UI thread before the edit runs. Without operands, in a window,
 `place_design_block` and `import_graphics` open a file dialog and put the
 content on the cursor; `autoplace_fields` acts on the selected parts.
+
+### Smart Paste {#smart-paste}
+
+The Smart Paste dialog's choices as operands (#2665, mockup row 155): the
+copy made with `copy` pasted once at an offset or as an array, placed at once
+as one undo step.
+
+```text
+smart_paste [at=x,y] [delta=dx,dy] [copies=n] [designators=next_free|keep_if_free]
+            [nets=keep|rewrite] [net_pattern=..] [net_start=n] [document=..]
+```
+
+- `at` is where the dialog's click lands; left out, the copy's own place, so
+  copy 1 sits `delta` from the original. A pin reference is refused.
+- `delta` is the offset of copy 1 and the step between copies, `<x>,<y>` in
+  mm; left out, the copy's width on the grid plus one grid step, as the
+  dialog opens.
+- `copies` makes the paste an array of that many copies (1 to 64); copy `k`
+  sits `k` steps from `at`.
+- `designators`, `nets`, `net_pattern` and `net_start` are the dialog's
+  Designators and Net names choices, with its defaults (`next_free`,
+  `rewrite`, `${Net}_${n}`, `2`). Power nets are never rewritten.
+
+The project's closed sheets are read off the UI thread first, for their
+designators and net names. As in the dialog, a rewritten net name the project
+already uses, or a project sheet that cannot be read while a net is
+rewritten, refuses the paste and names it; nothing is placed. The answer is
+`{"document", "at", "copies", "delta", "items", "designators", "nets"}`:
+each copied designator with what each copy is called (`{"from", "to"}`),
+and each copied net with its names after the paste (`"after"`: a list,
+`"joins"` when kept, `"power"` for a power net). Without operands a
+headless `smart_paste` keeps its offset paste beside the sheet's content
+(Edit ▸ Paste Special in [MENU_BAR.md](MENU_BAR.md)). An edit list does not
+carry `smart_paste`: the copy it pastes is the person's.
+
+## Snippets and templates
+
+A snippet is a saved circuit fragment, a template the frame or settings a
+new sheet or project starts from (#1283). Where each is kept and what it
+carries: `docs/SNIPPETS_AND_TEMPLATES.md`.
+
+```text
+save_snippet name=.. [scope=project|library] [ids=..] [document=..] [overwrite=true]
+place_snippet name=.. [scope=project|library] at=x,y [document=..]
+list_snippets
+list_templates [kind=sheet|project]
+new_schematic_sheet [name=..] [profile=..] [template=.. [scope=..]]
+new_project_with_profile name=.. location=.. [..] [template=..]
+```
+
+- `save_snippet` writes the items `ids` names on `document` (the selection
+  on the sheet in view when left out) as the snippet `name` of `scope`
+  (`project` when left out) and leaves the sheet as it is. It answers, when
+  the write lands, `{"name", "scope", "file", "items", "document"}`. A name
+  already taken is refused unless `overwrite=true`.
+- `place_snippet` places the snippet as `place_design_block` places a file,
+  one undo step, and answers `{"name", "scope", "file", "placed",
+  "skipped_sheet_symbols"}`.
+- `list_snippets` answers `{"snippets": [{"name", "scope", "file"}],
+  "unreadable": [..], "folders": {"project", "library"}}`; `list_templates`
+  answers the same shape with `"templates"`, each entry also carrying
+  `"kind"` (`sheet` or `project`). A folder that is not there lists nothing;
+  one that cannot be read is named in `unreadable`. `folders` is `null` for
+  a scope with no folder (no project open, no user config folder).
+- `new_schematic_sheet template=..` gives the new sheet the frame of the
+  sheet template of `scope`; `new_project_with_profile template=..` starts
+  the project from the library's project template. A template name that
+  fails the name rules is refused; a template that cannot be read makes
+  nothing (the write fails and Messages says why).
+
+Without operands, in a window, `place_snippet` opens a file dialog on the
+snippets folder and puts the picked snippet on the cursor; `save_snippet`
+saves the selection to the project, named after its parts' designators.
 
 ## Checks on demand
 
@@ -819,6 +951,30 @@ Known limits:
 - A file can change between the check that allows it and its read (a link
   put in its place). The headless queries have the same gap; using it needs
   write access to the project folder.
+
+### `toggle_live_erc`
+
+```text
+toggle_live_erc [enabled=true|false]
+```
+
+Live ERC (#1288) re-checks the nets an edit changes in a window
+([ERC_RULES.md](ERC_RULES.md), "Live ERC"); a headless run never runs it and
+checks with `check_erc`. `toggle_live_erc` turns the preference (`live_erc`
+in `prefs.json`, on by default) on or off: `enabled` sets it, and without it
+the command flips it, as its palette row does. It needs no capability beyond
+`read`; a headless run writes the preference under its own config root,
+never the user's. It names no document, so the agent channel refuses it: a
+person's preference is theirs. The answer is the preference after the call
+and whether the call changed it:
+
+```bash
+signex-cli run demo.snxprj toggle_live_erc --arg enabled=false
+```
+
+```json
+{"enabled": false, "changed": true}
+```
 
 ### `check_drc`
 
@@ -1046,7 +1202,7 @@ file).
 | `erc_clean` | `allow_warnings` (default `false`) | the project's ERC run (as `check_erc` runs it from the root sheet) has no error finding, and no warning finding unless allowed |
 | `drc_clean` | `allow_warnings` (default `false`) | the DRC run of the project's board (as `check_drc` runs it) has no error finding, and no warning finding unless allowed |
 | `board_size` | `max_width_mm`, `max_height_mm` | the bounding box of the board outline is at most that wide and high |
-| `parts_state` | `states` (default `["released"]`; of `draft`, `in_review`, `released`, `deprecated`, `obsolete`) | every part the BOM buys was placed from a library row, of an open library, in one of the states |
+| `parts_state` | `states` (default `["released"]`; of `draft`, `in_review`, `released`, `deprecated`, `obsolete`), `variant` (optional: `Base` or one of the project's variants; left out, the active variant), `fitted_only` (default `true`, written only when `false`) | every part of that variant's BOM was placed from a library row, of an open library, in one of the states; with `fitted_only` only the parts the variant fits are checked |
 | `net_class` | `nets` (a `*`/`?` pattern), `class`, `min_trace_width_mm`, `min_clearance_mm` (all but `nets` optional, at least one given) | every board net matching `nets` is in `class`, and the class of each sets at least the given track width and clearance |
 | `bom_cost` | `quantity`, `currency`, `max_unit_cost` | the BOM costs at most `max_unit_cost` per board in `currency` when `quantity` boards are built |
 | `rail_budget` | `net` (a name or a `*`/`?` pattern), `voltage`, `tolerance_percent`, `max_current_a`, `margin_percent` (all but `net` optional) | every rail matching `net` has a voltage, one source and its loads, its voltage matches, and the summed load is within the source's supply less `margin_percent` (and at most `max_current_a`); see [Rail budgets](#rail-budgets) |
@@ -1117,7 +1273,13 @@ How each kind is measured:
 - `board_size` takes the outline's axis-aligned bounding box; a rotated board
   is not turned to fit.
 - `parts_state` checks the parts the BOM buys (fitted, in the BOM and on the
-  board, the active variant applied), each placement of a child sheet once.
+  board, the variant applied), each placement of a child sheet once. Its
+  `variant` names the BOM (Base, or a variant compared without ASCII case;
+  left out, the project's active variant), and a variant rename follows into
+  it. With `fitted_only` off it also checks the parts that variant does not
+  fit (DNP, not fitted, out of the BOM or off the board). A `variant` the
+  project no longer has is not checked: the finding says so. A part's
+  `evidence` also carries `variant` and `fitted_only` (#2686).
   The states come from the libraries open in the app.
 - `net_class` reads the nets of the project's board; a class's `0` (unset)
   value fails a minimum.
@@ -1141,6 +1303,61 @@ Known limits:
   command, because it is not a document of a project.
 - The ERC and DRC runs a requirement uses are not numbered or kept; run
   `check_erc` or `check_drc` for their findings.
+
+## BOM lines
+
+```text
+bom_lines document=<sheet> [template=<template text>] [variant=<name>]
+          [grouping=grouped|ungrouped|flat]
+```
+
+`bom_lines` (#1988) answers with the bill of materials of the named sheet's
+project, rolled up as File ▸ Export ▸ Export BOM… rolls it up: the open
+sheets as they are in memory, the library's current part names, the cached
+prices, the parts the open board leaves out of the BOM. `template` is the text
+of a BOM template (`snxbomt/1`, [BOM_COLUMNS.md](BOM_COLUMNS.md)); without one
+the columns are the export dialog's defaults. A text operand holds no control
+characters, so each line break of the template is written as the two
+characters `\n`; the answer's `template` is written the same way and can be
+passed back as it is. `variant` is one of the
+project's variants or `Base`; without one, the project's active variant.
+`grouping` defaults to `grouped`. It is a query: it changes nothing, writes no
+file, writes nothing to Messages and is on the agent channel.
+
+```bash
+signex-cli run demo.snxprj bom_lines --arg document=main.snxsch \
+  --arg template="$(awk '{printf "%s\\n", $0}' power.snxbomt)"
+```
+
+```json
+{"document": "/abs/main.snxsch", "variant": "Base", "grouping": "grouped",
+ "columns": [{"header": "Designator", "kind": "standard", "key": "designator"},
+   {"header": "MPN", "kind": "field", "field": "MPN"},
+   {"header": "Power", "kind": "computed", "expression": "= VCC^2 / Value"}],
+ "lines": [{"line": 1, "references": ["R1", "R2"], "qty": 2, "fitted_qty": 2,
+   "cells": ["R1, R2", "RC0603-10K", "2.5mW"],
+   "computed": {"Power": {"state": "value", "text": "2.5mW"}}}],
+ "issues": [{"line": 3, "references": ["C1"], "column": "Power",
+   "error": "unknown parameter 'VCC'"}],
+ "warnings": [],
+ "template": "format = \"snxbomt/1\"\\n\\n[[columns]]\\ncolumn = \"designator\"\\n..."}
+```
+
+- `cells` are the texts an exported CSV holds, one per column. A computed
+  cell's `computed` entry is `{"state": "value", "text": ...}`,
+  `{"state": "differs"}` (a grouped line whose parts give different results;
+  its cell reads `(members differ)`) or `{"state": "error", "error": ...}`
+  with `member`, the part it failed for, on a line of several parts (its
+  cell is empty).
+- `issues` lists every failed computed cell, by line in export order, then
+  column; the export dialog writes the same lines to Messages.
+- `warnings` are what the export would report about the project's hierarchy.
+- `template` is the template of the columns used, as Signex writes it: saved
+  to a file and passed back, it gives the same columns and the same text.
+- A template that has no or a newer token, a standard key Signex does not
+  know, a computed column without a name or whose expression does not start
+  with `=` or does not parse, an unknown grouping and a variant the project
+  does not define are refused with the reason.
 
 ## Design notebook generation
 
@@ -1319,6 +1536,46 @@ find_similar_items document=<board> id=<uuid> [fields=kind,value,...]
 
 Find by text on a board is `find_items` (designator and value).
 
+## Net ties
+
+A net tie joins two named nets on purpose (#1277; `docs/NET_TIES.md`).
+
+```text
+set_net_tie id=<uuid> on=true|false [document=..]
+query_net_ties document=<sheet or board>
+```
+
+- `set_net_tie` makes the placed part `id` a net tie (`on=true`) or an
+  ordinary part again, in one undo step. A power port, any object that is
+  not a part, and an unknown id are refused with the reason. The answer is
+  the placed-object answer ("Editing placed objects" above) with
+  `net_tie`. Without operands it says what it needs. A part placed from a
+  library symbol of type Net Tie is a tie already.
+- `query_net_ties` changes nothing and is on the agent channel. On a sheet
+  it answers `{"document", "kind": "schematic", "count", "ties"}`, each tie
+  `{"id", "designator", "nets", "pins": [{"pin", "net"}], "status"}`; on a
+  board `kind` is `pcb` and each tie is a net-tie footprint
+  `{"id", "designator", "component_type", "nets", "pads": [{"pad", "net"}],
+  "status"}`. `nets` are the distinct nets, sorted; a pin or pad on no net
+  is left out. `status` is `joins` (two or more nets), `one_net` (every pin
+  on one net) or `open` (fewer than two pins on a net). A project sheet that
+  is not open is read for the answer, as `query_pins` reads one.
+
+## Differential pairs
+
+`list_diff_pairs document=<project or one of its documents>` lists every
+differential pair of the project's open sheets (#2952), so they can be
+checked before Update PCB. It is a query: it answers with data, changes
+nothing, and is on the agent channel. A pair is found by a Differential Pair
+directive (or a Net Parameters directive naming a diff-pair class) or by name
+alone (`X_P` / `X_N`, `XDP` / `XDN`, `X+` / `X-` on one sheet); a pair found
+by name is listed once, and not at all when a directive lists the same two
+nets. The answer is `{"project", "count", "unread_sheets", "pairs"}`; each
+pair is `{"name", "positive", "negative", "class", "found_by", "directive",
+"sheet"}`, with `found_by` `directive` (and the directive's uuid) or `suffix`,
+and a missing half `null`. `unread_sheets` is `true` when a sheet of the
+project is not open, so its pairs are not listed.
+
 ## Design Notebook
 
 `notebook <verb>` runs a Design Notebook command by its own name, as `run`
@@ -1491,6 +1748,10 @@ The answer:
 - `blocked` says why a row cannot be ticked (a missing footprint, a part to
   annotate, a designator used twice); the rest still runs.
 - `notes` are the list's notes, as the dialog shows them.
+- `net_classes` names the board's net classes the Net Blanket and Net
+  Parameters directives add or change, as the dialog's summary line counts
+  them: put on the board by an apply, for a dry run what an apply would put
+  ([SCHEMATIC_DIRECTIVES.md](SCHEMATIC_DIRECTIVES.md), "Update PCB classes").
 - A dry run adds `execute_blocked` when an apply would be refused now (the
   board closed with unsaved edits, or read-only).
 
@@ -2165,12 +2426,9 @@ A match is placed with `place_component library=<library> part=<part>`
 (above), or swapped for a placed part with `change_component`: the part
 `id` names on the sheet `document` names gets the row's symbol, footprint
 and parameters, as the Change Component dialog's Change does with every
-Keep now box ticked: one undo step, the row read off the UI thread first. A
-locked part, a part whose units are on other sheets, and a row with no
-drawing for the placed unit are refused. The answer is `{designator, id,
-changed, from: {lib_id, library, part}, to: {lib_id, library, part,
-internal_pn}, pins: {dangling, moved, gained}}`, the pins whose connection
-the swap leaves, moves or makes. Without operands, in a window,
+Keep now box ticked (unless `drop` names some): one undo step, the row read
+off the UI thread first. The pins, the refusals and the answer are in
+"Changing a part's component" above. Without operands, in a window,
 `change_component` opens the dialog as it always did.
 
 Over the agent channel `document=` names one of the project's sheets or its

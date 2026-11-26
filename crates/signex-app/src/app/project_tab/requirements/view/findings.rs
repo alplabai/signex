@@ -18,9 +18,14 @@ pub(super) fn findings_sentence(findings: &[&Finding], i18n: &I18n) -> Option<St
             .iter()
             .map(|line| part_line(line, i18n))
             .collect();
+        let words = if shortfall.fitted_only {
+            ids::REQUIREMENTS_PARTS_UNMET_FITTED
+        } else {
+            ids::REQUIREMENTS_PARTS_UNMET
+        };
         let sentence = t!(
             i18n,
-            ids::REQUIREMENTS_PARTS_UNMET,
+            words,
             "missed" => shortfall.missed,
             "of" => shortfall.of,
             "allowed" => i18n.list(shortfall.allowed.as_slice(), ListKind::Or),

@@ -18,6 +18,7 @@ pub(crate) mod drawing_field;
 pub(crate) mod editor_address;
 pub(crate) mod event;
 pub(crate) mod file_stamp;
+pub(crate) mod joined_sheet;
 pub(crate) mod loaded_project;
 pub(crate) mod locked_items;
 pub(crate) mod mutation_outcome;

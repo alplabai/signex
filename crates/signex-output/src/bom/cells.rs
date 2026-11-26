@@ -1,7 +1,7 @@
 //! What each BOM column shows for a row, shared by every writer and the
 //! preview, and the per-currency total lines under a priced BOM (#1023).
 
-use signex_bom::{BomRow, BomTable};
+use signex_bom::{BomRow, BomTable, ComputedCell};
 
 use super::BomColumn;
 
@@ -28,9 +28,19 @@ pub fn cell_text(row: &BomRow, column: &BomColumn) -> String {
             .unwrap_or_default(),
         BomColumn::Distributor => price.map(|p| p.distributor.clone()).unwrap_or_default(),
         BomColumn::PriceAge => price.map(|p| p.age.clone()).unwrap_or_default(),
+        BomColumn::Computed(computed) => match row.computed.get(computed.name()) {
+            Some(ComputedCell::Value { text }) => text.clone(),
+            Some(ComputedCell::Differs) => MEMBERS_DIFFER.to_string(),
+            // A failed cell shows empty; Messages names it (#1988).
+            Some(ComputedCell::Error { .. }) | None => String::new(),
+        },
         BomColumn::Alternates => row.alternates.join(", "),
     }
 }
+
+/// What a computed cell of a grouped line whose parts give different results
+/// says in an exported file (#1988). The dialog shows its own words.
+pub const MEMBERS_DIFFER: &str = "(members differ)";
 
 /// The number `column` holds for `row`, for writers that keep numbers
 /// numeric (XLSX): the quantities, the prices and the stock. An extended

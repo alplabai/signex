@@ -27,6 +27,7 @@ pub mod inert;
 mod label;
 pub mod length_format;
 pub mod measured_width;
+pub mod min_width;
 pub mod passive_calculator;
 mod pen_glyph;
 pub mod press_outside;
@@ -60,6 +61,7 @@ pub use house_extra::{
 pub use label::{Label, raw};
 pub use length_format::LengthFormat;
 pub use measured_width::MeasuredWidth;
+pub use min_width::MinWidth;
 pub use segmented::{SegmentedStyle, segmented};
 pub use tab_pill::{AccentPosition, TabPill, TabPillStyle};
 pub use toggle_switch::{ToggleSwitchStyle, toggle_switch};

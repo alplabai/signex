@@ -291,6 +291,10 @@ pub struct CanvasSlot {
     /// What `not_fitted` was last computed from; `None` before the first
     /// refresh.
     pub not_fitted_key: Option<NotFittedKey>,
+    /// The values the project's active variant gives parts in place of their
+    /// own (#2948), by symbol uuid. Set by the app
+    /// (`refresh_all_variant_values`); drawn in place of `value`.
+    pub variant_values: signex_output::DrawnValueMap,
     /// ERC violations to highlight on the canvas — Altium-style marker
     /// dots + primary-item halos. Synced from `ui_state.erc_violations`
     /// after each ERC run so the overlay renders without the canvas
@@ -410,6 +414,7 @@ impl CanvasSlot {
             designators_key: None,
             not_fitted: std::collections::HashSet::new(),
             not_fitted_key: None,
+            variant_values: std::collections::HashMap::new(),
             focused_pin: None,
             erc_markers: Vec::new(),
             pending_net_color: None,
@@ -709,6 +714,7 @@ impl CanvasViewPrefs<'_> {
             defaults: self.schematic_defaults,
             designator_standard: self.designator_standard,
             special_strings: None,
+            variant_values: None,
         }
     }
 
@@ -767,6 +773,7 @@ impl<'a> SchematicCanvas<'a> {
             defaults: self.prefs.schematic_defaults,
             designator_standard: self.prefs.designator_standard,
             not_fitted: Some(&self.slot.not_fitted),
+            variant_values: Some(&self.slot.variant_values),
         }
     }
 

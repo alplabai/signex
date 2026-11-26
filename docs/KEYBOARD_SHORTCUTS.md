@@ -362,11 +362,20 @@ symbol or a directive region has its first point placed (#1669).
 
 `cycle_wiring_mode` (Signex Standard profile: `Ctrl+Space`) steps how the wires that
 follow a moved part bend in a drag and in click-click move: Auto (the corner
-the rubber band picks), horizontal first, vertical first, and straight (no
-corner, any slope). Press it during the move and the ghost changes at once; the
+the rubber band picks), horizontal first, vertical first, straight (no
+corner, any slope), 45° first (a 45° leg from the wire's fixed end, then a
+straight leg to the pin) and 45° last (the 45° leg reaches the pin), then Auto
+again. Each mode bends as the wire tool's corner mode of the same shape does;
+when its route is blocked it takes the other L, or the 45° leg at the other
+end (#2516). Press it during the move and the ghost changes at once; the
 drop commits what the ghost shows. The mode holds for later moves, and the
 status bar names it while it is not Auto. Move By, align and distribute,
 position edits, rotate and mirror always use Auto (#1669).
+
+In every mode, a pin that sits on a junction of two or more wires leaves those
+wires where they are: a stub grows or shrinks from the junction to the moved
+pin, as for a pin on a wire that passes through. Only when no stub fits do the
+wires follow the pin (#2540).
 
 A key bound in the keymap runs some commands once, however long it is held:
 `cycle_wiring_mode`, the corner mode and posture keys, the grid steps

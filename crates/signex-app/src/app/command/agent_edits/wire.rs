@@ -376,11 +376,35 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "it writes the project's settings, which no sheet's undo step covers",
     ),
     (
+        "project_set_default_variant",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_set_variant_fit",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_set_variant_alternate",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_set_variant_override",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_duplicate_variant",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
         "project_move_library",
         "it writes the project's settings, which no sheet's undo step covers",
     ),
     (
         "project_set_annotate_undo",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_set_annotate_numbering",
         "it writes the project's settings, which no sheet's undo step covers",
     ),
     (
@@ -402,6 +426,12 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
     (
         "project_enable_requirement",
         "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    // #2665: the copy it pastes is the person's in this window, not the
+    // agent's.
+    (
+        "smart_paste",
+        "it pastes the person's copy in this window, which an agent did not make",
     ),
     // #2795: the insert lands in the notebook tab's text, not on a sheet.
     (
@@ -444,6 +474,9 @@ const NOT_YET_IN_LISTS: &[&str] = &[
     "send_drawings_backward",
     "send_drawings_to_back",
     "delete_selection",
+    // #1261: a schematic swap is its own step until a list is decided.
+    "swap_schematic_pins",
+    "swap_schematic_gates",
 ];
 
 /// Why `command` may not be one of the edits, or `None` when it may: it must
@@ -646,17 +679,23 @@ mod tests {
             "place_power_symbol",
             "place_sheet_entry",
             "place_sheet_symbol",
+            // #1283: a saved snippet by name, its file read with the list's.
+            "place_snippet",
             "place_text",
             "place_text_string",
             "place_wire",
             // The sheet's bare pin touches get their dots.
             "repair_pin_junctions",
+            // #1277: a part made a net tie or an ordinary part.
+            "set_net_tie",
             "set_object_position",
             "set_object_rotation",
+            // #2953: a designator only on the sheet in view.
+            "set_object_text",
             "set_sheet_symbol_size",
             "set_sheet_variable",
             "set_symbol_parameter",
-            // #1276: `to_sheet` is refused inside a list (it edits the child).
+            // #1276; `to_sheet` brings the child into the list's step (#2501).
             "sync_sheet_entries",
             "sync_sheet_pins",
         ];
@@ -707,6 +746,11 @@ mod tests {
             ("send_drawings_backward", "does not carry it yet"),
             ("send_drawings_to_back", "does not carry it yet"),
             ("delete_selection", "does not carry it yet"),
+            // #1261: a schematic swap runs on its own.
+            ("swap_schematic_pins", "does not carry it yet"),
+            ("swap_schematic_gates", "does not carry it yet"),
+            // #2665: the copy is the person's.
+            ("smart_paste", "the person's copy"),
         ] {
             let reason = edit_refusal(&id(command)).unwrap_or_else(|| panic!("{command}"));
             assert!(reason.contains(needle), "{command}: {reason}");

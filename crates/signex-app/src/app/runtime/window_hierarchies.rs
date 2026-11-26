@@ -106,6 +106,7 @@ impl Signex {
         if applied {
             self.refresh_window_designators();
             self.refresh_window_not_fitted();
+            self.refresh_all_variant_values();
         }
         // `update` starts any follow-up assembly once this message is handled.
         Task::none()
@@ -135,6 +136,7 @@ impl Signex {
         }
         self.refresh_window_designators();
         self.refresh_window_not_fitted();
+        self.refresh_all_variant_values();
     }
 
     /// The hierarchy that describes the project owning the sheet at `path`,

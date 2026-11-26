@@ -153,3 +153,57 @@ fn a_real_difference_on_the_sample_is_listed_and_applied() {
 }
 
 const LOCKED_LINE: &str = "locked 1 pad with no symbol pin";
+
+/// Exit criterion 3 with #3060: a Net Parameters directive is the only
+/// difference, so the apply puts its class on the board and applies no row;
+/// the off-symbol tab's lock rides only with an applied row, so it stays
+/// unlocked and `pad_locks` is empty while `net_classes` names the class.
+#[test]
+fn a_class_only_apply_lists_its_class_and_takes_no_pad_lock() {
+    use signex_types::schematic::{NetRules, SchDirective};
+    let tmp = tempfile::tempdir().expect("tmp");
+    let mut sheet = sample_sheet();
+    let wire = sheet
+        .wires
+        .first()
+        .expect("a wire on the sample sheet")
+        .clone();
+    sheet.directives.push(SchDirective::NetParameters {
+        uuid: uuid::Uuid::now_v7(),
+        position: signex_types::schematic::Point::new(
+            (wire.start.x + wire.end.x) / 2.0,
+            (wire.start.y + wire.end.y) / 2.0,
+        ),
+        net_class: Some("HS".to_string()),
+        diff_pair_class: None,
+        rules: NetRules {
+            width_mm: Some(0.3),
+            ..NetRules::default()
+        },
+        show_on_flag: false,
+    });
+    let mut app = fixture(tmp.path(), sheet);
+    let before = revision(&app, tmp.path());
+
+    let answer = answered(run(&mut app, &[&document(tmp.path()), "dry_run=true"]));
+    assert_eq!(changes(&answer).len(), 0, "{answer}");
+    assert_eq!(answer["pad_locks"], serde_json::json!([]), "{answer}");
+    assert_eq!(answer["net_classes"], serde_json::json!(["HS"]), "{answer}");
+
+    let answer = answered(run(&mut app, &[&document(tmp.path()), "apply=true"]));
+    assert_eq!(answer["applied"], 0, "{answer}");
+    assert_eq!(answer["pad_locks"], serde_json::json!([]), "{answer}");
+    assert_eq!(answer["net_classes"], serde_json::json!(["HS"]), "{answer}");
+    assert_eq!(revision(&app, tmp.path()), before, "no board row applied");
+    assert!(
+        !tab_locked(&app, tmp.path()),
+        "no lock without an applied row"
+    );
+    let table = &app.document_state.projects[0].data.net_classes;
+    let hs = table
+        .iter()
+        .find(|c| c.name == "HS")
+        .expect("HS on the board");
+    assert_eq!(hs.trace_width, 0.3);
+    assert!(!hs.nets.is_empty(), "the directive's net is in the class");
+}

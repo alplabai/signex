@@ -16,8 +16,11 @@ use super::{Move, Policy};
 
 mod follow;
 mod grid;
+mod new_path;
 mod overlap;
 mod route;
+
+use new_path::NewPath;
 
 #[cfg(test)]
 pub(crate) use overlap::wires_overlap;
@@ -55,6 +58,9 @@ pub(super) struct Env {
     moved_no_connects: Vec<usize>,
     /// While a follow may still be undone: each wire end it moved, as it was.
     undo: Option<Vec<(usize, Point, Point)>>,
+    /// Old tips not rerouted yet, and the new paths waiting for them.
+    pending: HashSet<Key>,
+    deferred: Vec<NewPath>,
 }
 
 /// Everything on an old tip other than the wires attached to it.
@@ -145,6 +151,8 @@ impl Env {
             moved_junctions: Vec::new(),
             moved_no_connects: Vec::new(),
             undo: None,
+            pending: HashSet::new(),
+            deferred: Vec::new(),
         };
         env.build_grid();
         env
@@ -281,8 +289,8 @@ impl Env {
     }
 
     /// The keys of the labels, dots, no-connects and pin tips that can meet
-    /// the box `a`-`b`.
-    fn points_near(&self, a: Key, b: Key) -> Vec<Key> {
+    /// the box `a`-`b`; the moved pins' new tips only with `moved_pins`.
+    fn points_near(&self, a: Key, b: Key, moved_pins: bool) -> Vec<Key> {
         let of = |kind, list: &[(Uuid, Point)]| -> Vec<Key> {
             (self.grid.near(kind, a, b, list.len()).into_iter())
                 .map(|i| key(&list[i].1))
@@ -292,7 +300,10 @@ impl Env {
         keys.extend(of(Kind::Junction, &self.junctions));
         keys.extend(of(Kind::NoConnect, &self.no_connects));
         keys.extend(
-            (self.grid.near(Kind::Tip, a, b, self.tips.len()).into_iter()).map(|i| self.tips[i].1),
+            (self.grid.near(Kind::Tip, a, b, self.tips.len()).into_iter())
+                .map(|i| &self.tips[i])
+                .filter(|(owner, _)| moved_pins || !self.moving.contains(owner))
+                .map(|(_, k)| *k),
         );
         keys
     }
@@ -331,7 +342,7 @@ impl Env {
                 return true;
             }
         }
-        self.points_near(a, b)
+        self.points_near(a, b, true)
             .into_iter()
             .any(|k| free(k) && point_on_segment(k, a, b))
     }
@@ -339,19 +350,22 @@ impl Env {
     /// Anything other than the endpoints strictly inside the span `a`-`b`
     /// (other wires' ends, labels, dots, pins; `except` is the key of the
     /// pin the wire is following): shortening that wire would orphan it.
+    /// Without `moved_pins` the new tip of a moved pin does not count: it
+    /// joins nothing there until its own tip is rerouted (#2540).
     pub(super) fn anchored_inside(
         &self,
         a: &Point,
         b: &Point,
         skip: &[usize],
         except: Option<Key>,
+        moved_pins: bool,
     ) -> bool {
         let (ka, kb) = (key(a), key(b));
         let inside =
             |k: Key| k != ka && k != kb && Some(k) != except && point_on_segment(k, ka, kb);
         self.wires_near(ka, kb).into_iter().any(|(index, w)| {
             !skip.contains(&index) && (inside(key(&w.start)) || inside(key(&w.end)))
-        }) || self.points_near(ka, kb).into_iter().any(inside)
+        }) || self.points_near(ka, kb, moved_pins).into_iter().any(inside)
     }
 
     /// Unselected, unfinished wires with an end on `at`: `(index, end is start)`.
