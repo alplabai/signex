@@ -5,7 +5,7 @@
 
 use std::path::{Path, PathBuf};
 
-use signex_output::svg::{SvgElement, SvgEvaluatorInputs, SvgRenderContext};
+use signex_output::svg::{SvgElement, SvgEvaluatorInputs, SvgPathCommand, SvgRenderContext};
 use signex_output::{ExportContext, PdfOptions, PlacedFits};
 use signex_types::schematic::{FillType, Graphic, LibGraphic, Point, greyed_ink};
 use uuid::Uuid;
@@ -67,40 +67,60 @@ fn path(name: &str) -> PathBuf {
 /// How unit B draws on the child page of `ctx`, rendered as the PDF and
 /// the preview render a page: the fits decided over `ctx`, then the page.
 struct ChildDrawn {
-    /// Two-point strokes in the symbol ink beyond those the page draws with
-    /// the preference off: the cross. (A theme palette can draw wires in
-    /// the symbol ink.)
+    /// Strokes in the symbol ink running corner to corner of the body box:
+    /// the cross.
     crosses: usize,
     /// Whether the body outline is in the greyed symbol ink.
     greyed: bool,
 }
 
+type Rgb = (f32, f32, f32);
+
+/// One path on the page: its MoveTo/LineTo points, whether it closes, and
+/// its stroke.
+struct Stroke {
+    points: Vec<(f32, f32)>,
+    closed: bool,
+    rgb: Option<Rgb>,
+}
+
 fn child_drawn(ctx: &ExportContext, opts: &PdfOptions) -> ChildDrawn {
     let ink = opts.palette.symbol_stroke;
     let (strokes, paper) = child_strokes(ctx, opts);
-    let plain = PdfOptions {
-        draw_not_fitted: false,
-        ..opts.clone()
-    };
-    let ink_lines = |strokes: &Strokes| {
-        strokes
-            .iter()
-            .filter(|(count, stroke)| *count == 2 && *stroke == Some(ink))
-            .count()
-    };
     let [r, g, b] = greyed_ink([ink.0, ink.1, ink.2], [paper.0, paper.1, paper.2]);
+    let greyed_rgb = (r, g, b);
+    // The body: the one closed outline in the symbol ink, greyed or not.
+    let body = strokes
+        .iter()
+        .find(|s| s.closed && matches!(s.rgb, Some(c) if c == ink || c == greyed_rgb))
+        .expect("U1B's body outline");
+    let xs = body.points.iter().map(|p| p.0);
+    let ys = body.points.iter().map(|p| p.1);
+    let (x0, x1) = (
+        xs.clone().fold(f32::MAX, f32::min),
+        xs.fold(f32::MIN, f32::max),
+    );
+    let (y0, y1) = (
+        ys.clone().fold(f32::MAX, f32::min),
+        ys.fold(f32::MIN, f32::max),
+    );
+    let close = |a: (f32, f32), b: (f32, f32)| (a.0 - b.0).abs() < 1e-3 && (a.1 - b.1).abs() < 1e-3;
+    let joins = |s: &Stroke, a: (f32, f32), b: (f32, f32)| {
+        (close(s.points[0], a) && close(s.points[1], b))
+            || (close(s.points[0], b) && close(s.points[1], a))
+    };
     ChildDrawn {
-        crosses: ink_lines(&strokes) - ink_lines(&child_strokes(ctx, &plain).0),
-        greyed: strokes
+        crosses: strokes
             .iter()
-            .any(|(count, stroke)| *count == 5 && *stroke == Some((r, g, b))),
+            .filter(|s| !s.closed && s.points.len() == 2 && s.rgb == Some(ink))
+            .filter(|s| joins(s, (x0, y0), (x1, y1)) || joins(s, (x0, y1), (x1, y0)))
+            .count(),
+        greyed: body.rgb == Some(greyed_rgb),
     }
 }
 
-/// Every path on the child page as (command count, stroke), and the paper.
-type Strokes = Vec<(usize, Option<(f32, f32, f32)>)>;
-
-fn child_strokes(ctx: &ExportContext, opts: &PdfOptions) -> (Strokes, (f32, f32, f32)) {
+/// Every path on the child page of `ctx`, and the page's paper.
+fn child_strokes(ctx: &ExportContext, opts: &PdfOptions) -> (Vec<Stroke>, Rgb) {
     let page = ctx
         .sheets
         .iter()
@@ -125,7 +145,17 @@ fn child_strokes(ctx: &ExportContext, opts: &PdfOptions) -> (Strokes, (f32, f32,
         .elements
         .iter()
         .filter_map(|e| match e {
-            SvgElement::Path { commands, style } => Some((commands.len(), style.stroke_rgb)),
+            SvgElement::Path { commands, style } => Some(Stroke {
+                points: commands
+                    .iter()
+                    .filter_map(|c| match c {
+                        SvgPathCommand::MoveTo(p) | SvgPathCommand::LineTo(p) => Some((p.x, p.y)),
+                        _ => None,
+                    })
+                    .collect(),
+                closed: commands.iter().any(|c| matches!(c, SvgPathCommand::Close)),
+                rgb: style.stroke_rgb,
+            }),
             SvgElement::Text { .. } => None,
         })
         .collect();
