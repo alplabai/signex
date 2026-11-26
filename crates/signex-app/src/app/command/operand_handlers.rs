@@ -62,6 +62,11 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("save_document_as", doc::save_as),
     ("close_active_document", doc::close),
     ("open_document", file::open),
+    // #2896: the Gerber Viewer, empty or on the package `path` names.
+    (
+        "open_gerber_viewer",
+        crate::app::gerber_viewer::open_gerber_viewer,
+    ),
     ("new_document", file::new_project),
     (
         "new_pcb_document",
@@ -358,7 +363,7 @@ pub(crate) fn operand_handler(command: &AppCommandId) -> Option<OperandHandler> 
 /// it for the missing `path` rather than the picker's refusal reading as run.
 /// `repair_pin_junctions` goes there too, so a headless run on the sheet in
 /// view answers how many dots it added (0 when nothing needed one) instead of
-/// a bare `Ran`.
+/// a bare `Ran`. `open_gerber_viewer` (#2896) answers with what the tab shows.
 pub(crate) fn runs_headless_without_operands(command: &AppCommandId) -> bool {
     matches!(
         command.as_str(),
@@ -366,6 +371,7 @@ pub(crate) fn runs_headless_without_operands(command: &AppCommandId) -> bool {
             | "new_schematic_sheet"
             | "create_sheet_symbol_from_sheet"
             | "repair_pin_junctions"
+            | "open_gerber_viewer"
     )
 }
 

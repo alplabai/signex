@@ -58,7 +58,7 @@ gerber-viewer-drop-files = { $count ->
    *[other] Drop to open { $count } files
 }
 gerber-viewer-reading = Reading…
-gerber-viewer-read-failed = Gerber Viewer: the package could not be read ({ $why }).
+gerber-viewer-read-failed = Gerber Viewer: { $file }: the package could not be read ({ $why }).
 gerber-viewer-read-zip-too-large = Gerber Viewer: { $file }: the files in the zip come to more than { $limit } MiB together; the package is not opened.
 gerber-viewer-open = Open
 gerber-viewer-open-tip = Open a folder, a zip package or files ({ $key })
@@ -143,3 +143,8 @@ gerber-viewer-footer-problems = { $count ->
 gerber-viewer-footer-note = Read only: the files are never changed.
 gerber-viewer-read-unopenable = Gerber Viewer: { $file }, line { $line }: the file cannot be opened ({ $why }); it is listed as Not read.
 gerber-viewer-read-too-large = Gerber Viewer: { $file }, line { $line }: the file is larger than { $limit } MiB; it is listed as Not read.
+
+# gerber-viewer-command
+## open_gerber_viewer (#2896): a read that a later open replaced, as the
+## command's refusal. $file is the package's first file or folder name.
+gerber-viewer-read-superseded = Gerber Viewer: { $file }: a later open replaced this read; nothing was opened from it.

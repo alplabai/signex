@@ -399,6 +399,9 @@ const GLOBAL_COMMANDS: &[&str] = &[
     "new_document",
     "new_project_with_profile",
     "open_document",
+    // #2896: the Gerber Viewer needs no editor; it opens from the start
+    // screen too.
+    "open_gerber_viewer",
     "save_document",
     "save_document_as",
     "save_all",

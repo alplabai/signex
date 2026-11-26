@@ -6,10 +6,12 @@
 //! file. Rules: `docs/GERBER_VIEWER.md`, "The viewer tab".
 //!
 //! Open paths this round: a double-click on a `.gbr`, `.drl` or `.zip` row
-//! in Projects, files dropped on a window, the tab's own Open menu (Ctrl+O)
-//! and a recent package. Every read runs in a task (`read.rs`).
+//! in Projects, files dropped on a window, the tab's own Open menu (Ctrl+O),
+//! a recent package and the catalog command `open_gerber_viewer`
+//! (`command.rs`). Every read runs in a task (`read.rs`).
 
 mod canvas;
+mod command;
 mod read;
 mod recent;
 mod state;
@@ -19,6 +21,8 @@ mod view;
 mod view_update;
 
 #[cfg(test)]
+mod command_tests;
+#[cfg(test)]
 mod tests;
 
 use std::path::PathBuf;
@@ -26,6 +30,7 @@ use std::sync::Arc;
 
 use pcb_geom::PointNm;
 
+pub(crate) use command::open_gerber_viewer;
 pub use read::{PackageRead, ReadFailure};
 pub use recent::{RecentPackage, RecentPackages};
 pub use state::{
@@ -57,6 +62,9 @@ pub enum OpenKind {
 /// `dispatch_gerber_viewer_message`.
 #[derive(Debug, Clone)]
 pub enum GerberViewerMsg {
+    /// `open_gerber_viewer` without a path (the palette, a key): the tab
+    /// opens, or is focused, showing what it holds.
+    ViewerRequested,
     /// The Open button or Ctrl+O on the tab.
     OpenMenuToggled,
     /// Open folder…, Open zip package… or Open files… was pressed.
@@ -73,10 +81,13 @@ pub enum GerberViewerMsg {
         /// The clock when the check ran (`None`: the check failed).
         now: Option<i64>,
     },
-    /// Read `job` finished.
+    /// Read `job` of `paths` finished. `waiting` is the `open_gerber_viewer`
+    /// call answered once it lands (#2896); `None` for a person's open.
     PackageRead {
         job: u64,
+        paths: Vec<PathBuf>,
         result: Result<Arc<PackageRead>, ReadFailure>,
+        waiting: Option<crate::app::agent::WaitingCommand>,
     },
     /// A file is dragged over a window.
     FileHovered(PathBuf),

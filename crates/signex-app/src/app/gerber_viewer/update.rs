@@ -6,25 +6,32 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use iced::Task;
-use signex_i18n::{I18n, ids, t};
+use signex_i18n::{Translatable, ids};
 
 use super::read::{PackageRead, ReadFailure, read_paths};
 use super::recent::package_exists;
 use super::state::OpenPackage;
 use super::{GerberViewerMsg, OpenKind};
+use crate::app::agent::WaitingCommand;
 use crate::app::{Message, Signex};
 
 impl Signex {
     pub(crate) fn dispatch_gerber_viewer_message(&mut self, msg: GerberViewerMsg) -> Task<Message> {
         use GerberViewerMsg as M;
         match msg {
+            M::ViewerRequested => self.show_gerber_viewer(),
             M::OpenMenuToggled => self.toggle_gerber_open_menu(),
             M::OpenPressed(kind) => self.pick_gerber_paths(kind),
             M::PathsPicked(Some(paths)) | M::PathsOpened(paths) => self.open_gerber_paths(paths),
             M::PathsPicked(None) => Task::none(),
             M::RecentPressed(index) => self.open_recent_gerber_package(index),
             M::RecentChecked { found, now } => self.gerber_recent_checked(found, now),
-            M::PackageRead { job, result } => self.gerber_package_read(job, result),
+            M::PackageRead {
+                job,
+                paths,
+                result,
+                waiting,
+            } => self.gerber_package_read(job, paths, result, waiting),
             M::FileHovered(path) => self.gerber_file_hovered(path),
             M::FilesHoverLeft => self.gerber_hover_left(),
             M::FileDropped { window, path } => self.gerber_file_dropped(window, path),
@@ -66,6 +73,16 @@ impl Signex {
     /// on a worker. The tab opens first, so the read shows on it; the
     /// recent packages its empty state lists are checked alongside.
     pub(crate) fn open_gerber_paths(&mut self, paths: Vec<PathBuf>) -> Task<Message> {
+        self.open_gerber_paths_for(paths, None)
+    }
+
+    /// [`Self::open_gerber_paths`], answering the `open_gerber_viewer` call
+    /// `waiting` once the read lands (#2896).
+    pub(super) fn open_gerber_paths_for(
+        &mut self,
+        paths: Vec<PathBuf>,
+        waiting: Option<WaitingCommand>,
+    ) -> Task<Message> {
         if paths.is_empty() {
             return Task::none();
         }
@@ -73,19 +90,29 @@ impl Signex {
         let viewer = &mut self.document_state.gerber_viewer;
         viewer.open_menu = false;
         let job = viewer.start_read();
+        let reading = paths.clone();
         let read = Task::perform(
-            crate::app::path_op_jobs::run_blocking(move || read_paths(paths)),
+            crate::app::path_op_jobs::run_blocking(move || read_paths(reading)),
             move |result| {
                 Message::from(GerberViewerMsg::PackageRead {
                     job,
+                    paths,
                     result: result
                         .map_err(ReadFailure::from)
                         .and_then(|read| read)
                         .map(Arc::new),
+                    waiting,
                 })
             },
         );
         Task::batch([read, self.check_recent_gerber_packages()])
+    }
+
+    /// `open_gerber_viewer` without a path: the tab opens, or is focused,
+    /// and the recent packages its empty state lists are checked.
+    pub(super) fn show_gerber_viewer(&mut self) -> Task<Message> {
+        self.open_gerber_viewer_tab();
+        self.check_recent_gerber_packages()
     }
 
     fn pick_gerber_paths(&mut self, kind: OpenKind) -> Task<Message> {
@@ -125,22 +152,31 @@ impl Signex {
     }
 
     /// A read landed: show it, list it in Recent and report its problems
-    /// in Messages. A read a later open superseded is dropped.
+    /// in Messages. A read a later open superseded is dropped. The
+    /// `open_gerber_viewer` call `waiting` on it is answered either way.
     fn gerber_package_read(
         &mut self,
         job: u64,
+        paths: Vec<PathBuf>,
         result: Result<Arc<PackageRead>, ReadFailure>,
+        waiting: Option<WaitingCommand>,
     ) -> Task<Message> {
         let viewer = &mut self.document_state.gerber_viewer;
         if viewer.reading != Some(job) {
-            return Task::none();
+            let reason = Translatable::new(ids::GERBER_VIEWER_READ_SUPERSEDED)
+                .arg("file", package_name(&paths));
+            return self.refuse_gerber_command(waiting, &paths, reason);
         }
         viewer.reading = None;
         let read = match result {
             Ok(read) => Arc::unwrap_or_clone(read),
             Err(why) => {
-                log_read_failure(&self.ui_state.i18n, &why);
-                return self.check_recent_gerber_packages();
+                let reason = read_failure_reason(&why, &package_name(&paths));
+                let text = reason.render(&self.ui_state.i18n);
+                log::error!(target: crate::app::gerber_read::TARGET, "{text}");
+                let check = self.check_recent_gerber_packages();
+                let refused = self.refuse_gerber_command(waiting, &paths, reason);
+                return Task::batch([check, refused]);
             }
         };
         let package = Arc::new(read.package);
@@ -152,7 +188,7 @@ impl Signex {
         crate::app::gerber_read::report_read_problems(&package.problems(), &self.ui_state.i18n);
         viewer.open = Some(OpenPackage::new(package, read.paths));
         self.retitle_gerber_viewer_tab();
-        Task::none()
+        self.answer_gerber_command(waiting, &paths)
     }
 
     fn gerber_recent_checked(
@@ -252,18 +288,31 @@ impl PickedPaths {
     }
 }
 
-/// One Messages row for a package that could not be read at all.
-fn log_read_failure(i18n: &I18n, failure: &ReadFailure) {
-    let text = match failure {
-        ReadFailure::Unreadable(why) => {
-            t!(i18n, ids::GERBER_VIEWER_READ_FAILED, "why" => why.as_str())
+/// Why the package named `package` could not be read at all: its Messages
+/// row and the refusal of the `open_gerber_viewer` call that asked for it.
+fn read_failure_reason(failure: &ReadFailure, package: &str) -> Translatable {
+    match failure {
+        ReadFailure::Unreadable(why) => Translatable::new(ids::GERBER_VIEWER_READ_FAILED)
+            .arg("file", package)
+            .arg("why", why.as_str()),
+        ReadFailure::ZipTooLarge { file, limit_mib } => {
+            Translatable::new(ids::GERBER_VIEWER_READ_ZIP_TOO_LARGE)
+                .arg("file", file.as_str())
+                .arg("limit", *limit_mib)
         }
-        ReadFailure::ZipTooLarge { file, limit_mib } => t!(
-            i18n,
-            ids::GERBER_VIEWER_READ_ZIP_TOO_LARGE,
-            "file" => file.as_str(),
-            "limit" => *limit_mib
-        ),
-    };
-    log::error!(target: crate::app::gerber_read::TARGET, "{}", text.into_string());
+    }
+}
+
+/// The name a package is known by in Messages: the file name of its first
+/// path, as the tab title shows it (#2612).
+pub(super) fn package_name(paths: &[PathBuf]) -> String {
+    paths
+        .first()
+        .map(|path| {
+            path.file_name().map_or_else(
+                || path.display().to_string(),
+                |name| name.to_string_lossy().into_owned(),
+            )
+        })
+        .unwrap_or_default()
 }

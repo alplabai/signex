@@ -235,6 +235,9 @@ pub(super) const WRITES: &[(&[&str], Surface, Writes)] = &[
         Operand,
         Session,
     ),
+    // #2896: the Gerber Viewer tab and the package it reads are session
+    // state; the files are never written.
+    (&["open_gerber_viewer"], Operand, Session),
     // Saved layer sets and the tab-name style: machine settings.
     (
         &["save_layer_set", "delete_layer_set", "set_layer_tab_names"],
@@ -424,6 +427,7 @@ const MENU_SESSION: &[&str] = &[
     "open_document",
     "open_drc_panel",
     "open_erc_dialog",
+    "open_gerber_viewer",
     "open_grid_picker",
     "open_grid_properties",
     "open_harness_definitions",

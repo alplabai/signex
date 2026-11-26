@@ -115,4 +115,6 @@ define_ids! {
     GERBER_VIEWER_FOOTER_NOTE = "gerber-viewer-footer-note";
     GERBER_VIEWER_READ_UNOPENABLE = "gerber-viewer-read-unopenable";
     GERBER_VIEWER_READ_TOO_LARGE = "gerber-viewer-read-too-large";
+    // gerber-viewer-command
+    GERBER_VIEWER_READ_SUPERSEDED = "gerber-viewer-read-superseded";
 }

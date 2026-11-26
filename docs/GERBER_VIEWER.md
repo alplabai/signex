@@ -239,8 +239,13 @@ level is the problem's severity: errors as errors, the lost X2 file function
 and a missing end-of-file command as warnings, a file that is not
 fabrication data as information. The rows are logged under the target
 `signex::gerber_viewer`, whose Messages code is `SIGNEX-GERBER_VIEWER`.
-The Messages panel's Source column has no Gerber Viewer entry yet and
-shows App; the sentence itself names the viewer.
+The Messages panel's Source column shows them as **Gerber Viewer**
+(`panels::MessageSource::GerberViewer`, #2612), and its Source filter keeps
+or hides them as one source. A line the reader crate `signex_gerber` logs
+itself has the same Source; the exporter's Gerber writer stays under
+Project. A package that cannot be read at all is one Messages error under
+the same target, naming the package (the file name of its first path) and
+the reason.
 
 ## The viewer tab
 
@@ -323,8 +328,38 @@ package and keeps the recent list.
   closes, so a moved package is marked before anyone clicks it; its answer
   also sets the clock the "opened … ago" text reads. The list is kept for
   the session; it is not written to the preferences yet.
-- **Not in this change.** File ▸ Open Gerber / Drill and Tools ▸ Gerber
-  Viewer (the menu rows and catalog ids come next), Measure, Compare,
-  in-tab Messages, the From this project link, the Open menu's "Add files
-  to this view…", the layer right-click menu, pair hover, Alt+↑ / Alt+↓,
-  Alt-click on an eye, Reset order, Reload and the cursor read-out.
+- **Not in this change.** The menu rows File ▸ Open Gerber / Drill and
+  Tools ▸ Gerber Viewer (the catalog command is below; menu content is the
+  maintainers' call), Measure, Compare, in-tab Messages, the From this
+  project link, the Open menu's "Add files to this view…", the layer
+  right-click menu, pair hover, Alt+↑ / Alt+↓, Alt-click on an eye, Reset
+  order, Reload and the cursor read-out.
+
+## Opening from the catalog
+
+`open_gerber_viewer [path=<folder, zip or file>]` (#2896) is the catalog
+command that reaches the tab: the command palette, a key a profile binds,
+the CLI and the screenshot run that compares the app with mockup rows 193
+and 193f. It is in the File category, General group, enabled everywhere
+(the start screen too), with no default key and no menu row yet.
+
+- **Without `path`.** The tab opens, or is focused, showing what it holds:
+  the empty state, or the package already open. The recent packages are
+  checked as when the Open menu opens. A palette or key call runs this
+  form; a headless call answers at once.
+- **With `path`.** The folder, zip or file opens as one package, read as
+  a drop or the Open menu reads it (`read.rs`); its problems go to
+  Messages as above. The call is answered when the read lands. A read that
+  fails is refused with the Messages sentence; a read a later open
+  replaced, or that lands after the tab closed, is refused with
+  "a later open replaced this read".
+- **The answer.** JSON with `tab` (`"gerber_viewer"`), `reading` (a read
+  still in flight), `paths` (what is open), `layers` (the file of each
+  layer in the list's order, top first), `not_read` (the files not read)
+  and `problems` (each with `severity`, `file`, `line` and `message`, the
+  Messages sentence in the app's language). With nothing open the lists
+  are empty.
+- **Who may run it.** The CLI runs it with the `read` capability; its
+  `path` is read, never written. The agent channel refuses it, as every
+  command that takes a file path. It changes no document, so it makes no
+  undo step and no dirty mark.

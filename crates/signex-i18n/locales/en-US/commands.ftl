@@ -760,3 +760,6 @@ cmd-menu-polygon-manager = Polygon Manager...
 cmd-flip-board-3d = Turn the board over in the 3D view
 cmd-cycle-board-3d-lighting = Next lighting preset in the 3D view
 cmd-copy-board-3d-screenshot = Copy a screenshot of the 3D view
+# gerber-viewer-command
+# #2896: the Gerber Viewer tab, empty or on a fabrication package.
+cmd-open-gerber-viewer = Open the Gerber Viewer

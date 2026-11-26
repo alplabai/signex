@@ -318,6 +318,9 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "open_parameter_manager" => Message::ParameterManager(ParameterManagerMsg::Open),
         "print" => Message::PrintPreview(PrintPreviewMsg::Requested),
         "redo" => Message::Edit(EditMsg::Redo),
+        // #2896: the Gerber Viewer tab, as it holds; a path is the operand
+        // handler's.
+        "open_gerber_viewer" => Message::from(crate::app::GerberViewerMsg::ViewerRequested),
         // Tools ▸ Assign Footprints (#2248) and View ▸ Net Inspector (#1269).
         "assign_footprints" => Message::from(crate::app::AssignFootprintsMsg::Requested),
         "open_net_inspector" => Message::Overlay(OverlayMsg::OpenPanel(

@@ -444,6 +444,10 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         &[Settings],
     ),
     (&["open_document"], Operand, &[]),
+    // #2896: the Gerber Viewer reads only its `path`, and answers from the
+    // tab's own state, with or without one.
+    (&["open_gerber_viewer"], Operand, &[]),
+    (&["open_gerber_viewer"], HeadlessWithoutOperands, &[]),
     // Headless with no `document`: they act on the sheet in view (#2522).
     (
         &["create_sheet_symbol_from_sheet", "repair_pin_junctions"],
@@ -732,6 +736,7 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "find_and_replace",
             "open_command_palette",
             "open_compiled_design",
+            "open_gerber_viewer",
             "open_grid_properties",
             "open_net_color_palette",
             "open_net_inspector",

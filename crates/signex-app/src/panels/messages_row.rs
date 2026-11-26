@@ -20,6 +20,8 @@ pub enum MessageSource {
     Preferences,
     Sketch,
     Project,
+    /// The Gerber Viewer's reads (#2612).
+    GerberViewer,
     Graphics,
     Interface,
     System,
@@ -74,6 +76,8 @@ impl MessageSource {
             "FOOTPRINT_PAD" | "BAKE" => Self::Sketch,
             w if w.starts_with("SKETCH") => Self::Sketch,
             "PROJECT" | "FORMAT" | "FS" | "HISTORY" | "NET" | "ENGINE" | "OUTPUT" => Self::Project,
+            // The viewer tab's target and the reader crate's own lines.
+            "GERBER_VIEWER" | "GERBER" => Self::GerberViewer,
             "GFX" | "RENDERER" => Self::Graphics,
             "WINDOW" | "UI" | "TABS" | "WIDGETS" => Self::Interface,
             _ => return None,
@@ -91,6 +95,7 @@ impl MessageSource {
             Self::Preferences => ids::PANELS_MESSAGES_SOURCE_PREFERENCES,
             Self::Sketch => ids::PANELS_MESSAGES_SOURCE_SKETCH,
             Self::Project => ids::PANELS_MESSAGES_SOURCE_PROJECT,
+            Self::GerberViewer => ids::PANELS_MESSAGES_SOURCE_GERBER_VIEWER,
             Self::Graphics => ids::PANELS_MESSAGES_SOURCE_GRAPHICS,
             Self::Interface => ids::PANELS_MESSAGES_SOURCE_INTERFACE,
             Self::System => ids::PANELS_MESSAGES_SOURCE_SYSTEM,
@@ -174,6 +179,25 @@ mod tests {
         assert_eq!(source("signex_output::pdf"), MessageSource::Project);
         assert_eq!(source("signex::window"), MessageSource::Interface);
         assert_eq!(source("signex"), MessageSource::App);
+    }
+
+    /// #2612: the Gerber Viewer's rows have a Source of their own, from
+    /// the viewer's target and from the reader crate; the exporter's Gerber
+    /// writer stays under Project.
+    #[test]
+    fn the_gerber_viewer_has_its_own_source() {
+        let viewer = source(crate::app::gerber_read::TARGET);
+        assert_eq!(viewer, MessageSource::GerberViewer);
+        assert_eq!(viewer.id(), ids::PANELS_MESSAGES_SOURCE_GERBER_VIEWER);
+        assert_eq!(
+            source("signex_gerber::package"),
+            MessageSource::GerberViewer
+        );
+        assert_eq!(
+            source("signex_app::app::gerber_viewer::update"),
+            MessageSource::GerberViewer
+        );
+        assert_eq!(source("signex_output::gerber"), MessageSource::Project);
     }
 
     #[test]
