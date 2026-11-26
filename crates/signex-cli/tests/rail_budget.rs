@@ -85,19 +85,29 @@ fn a_rail_budget_and_a_layer_count_pass_on_one_project_and_fail_on_another() {
     assert_eq!(met["findings"], json!([]), "{met}");
 
     let unmet = check("0.95", 6);
-    assert_eq!(unmet["passed"], json!([]), "{unmet}");
+    // A check report leaves `passed` out when nothing passed.
+    assert!(unmet.get("passed").is_none(), "nothing passed: {unmet}");
     let findings = unmet["findings"].as_array().expect("findings");
-    let rules: Vec<&str> = findings
+    // The report lists findings in its own order (by document); each rule
+    // raises exactly one.
+    let mut rules: Vec<&str> = findings
         .iter()
         .map(|f| f["rule"].as_str().unwrap())
         .collect();
-    assert_eq!(rules, ["req::rails", "req::layers"], "{unmet}");
-    let rail = &findings[0]["evidence"];
+    rules.sort_unstable();
+    assert_eq!(rules, ["req::layers", "req::rails"], "{unmet}");
+    let of = |rule: &str| {
+        &findings
+            .iter()
+            .find(|f| f["rule"] == rule)
+            .expect("the finding")["evidence"]
+    };
+    let rail = of("req::rails");
     assert_eq!(rail["kind"], "rail_budget");
     assert_eq!(rail["rail"]["source"]["designator"], "R1", "{unmet}");
     assert_eq!(rail["rail"]["loads"][0]["designator"], "C1", "{unmet}");
     assert_eq!(rail["total_a"], 0.95, "{unmet}");
-    let layers = &findings[1]["evidence"];
+    let layers = of("req::layers");
     assert_eq!(layers["count"], 6, "{unmet}");
     assert_eq!(layers["max_layers"], 4, "{unmet}");
 }
@@ -108,8 +118,9 @@ fn the_rails_are_set_and_their_budget_answered_and_nothing_is_written() {
     let fx = pins_fixture(&root);
     give_rail_parameters(&fx.sheet, "250mA");
     let before = without_journals(snapshot(&root));
+    // `--keep-going`: the refused voltage of 0 does not end the run.
     let out = run_cli(
-        &["run", fx.project.to_str().unwrap()],
+        &["run", fx.project.to_str().unwrap(), "--keep-going"],
         jsonl(&[
             json!({"id": "project_set_rail", "args": {"document": "demo.snxprj",
                    "net": "+3V3", "voltage": "3.3", "tolerance_percent": "5"}}),

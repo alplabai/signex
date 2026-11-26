@@ -326,7 +326,6 @@ const MENU_SESSION: &[&str] = &[
     "center_on_cursor",
     "center_view_at_cursor",
     "change_component",
-    "change_footprint",
     "clear_net_color",
     "clear_net_highlighting",
     "color_net",

@@ -205,7 +205,22 @@ impl Signex {
             Err(why) => return self.refuse_swap(&what, why),
         };
         let Some(source) = template.library_ref.clone() else {
-            return self.refuse_swap(&what, "the footprint names no library".into());
+            // A replayed swap whose footprint names no library has no
+            // `footprint` operand to give: it runs the handler's swap core
+            // with the handler's `keep` rule, not a third way to swap.
+            match self.run_footprint_swap(board, footprints, &template, &what, false) {
+                Ok(Some(done)) => self.report_swap_leftovers(&done),
+                Ok(None) => {}
+                Err(SwapRefusal::BoardGone) => {
+                    let line = t!(self.ui_state.i18n, ids::PCB_FOOTPRINT_BOARD_GONE, "what" => what.as_str());
+                    crate::diagnostics::log_warning(line.into_string());
+                }
+                Err(SwapRefusal::Refused(why) | SwapRefusal::NotRun(why)) => {
+                    self.refuse_swap(&what, why);
+                }
+            }
+            self.sync_pcb_board_summary();
+            return;
         };
         let address = PrimitiveRef::new(source.library, source.footprint);
         let reads = EditReads {

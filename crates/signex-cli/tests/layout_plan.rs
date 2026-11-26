@@ -47,8 +47,10 @@ fn the_plan_is_set_read_judged_undone_and_saved_through_the_cli() {
     let fx = pins_fixture(&root);
     let path = fx.dir.join("board.snxpcb");
     write_board(&fx.project, &path);
+    // `--keep-going`: the refused setting of another stage does not end the
+    // run, so the undo and the read after it run too.
     let out = run_cli(
-        &["run", fx.project.to_str().unwrap()],
+        &["run", fx.project.to_str().unwrap(), "--keep-going"],
         jsonl(&[
             call("open_document", json!({"path": "board.snxpcb"})),
             call(
