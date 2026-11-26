@@ -28,7 +28,6 @@ fn app_with_symbol() -> (Signex, uuid::Uuid) {
     app.document_state.tabs.push(crate::app::TabInfo {
         title: NAME.to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: crate::app::TabKind::Schematic,
     });
@@ -385,7 +384,6 @@ fn a_restore_nothing_applied_to_leaves_a_parked_sheet_dirty_through_undo() {
     d.app.document_state.tabs.push(crate::app::TabInfo {
         title: "flow".to_string(),
         path: d.file.clone(),
-        cached_document: None,
         project_id: None,
         kind: crate::app::TabKind::Schematic,
     });

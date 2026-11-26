@@ -98,7 +98,6 @@ fn app_with_an_undocked_sheet() -> (Signex, iced::window::Id) {
         app.document_state.tabs.push(TabInfo {
             title: path.display().to_string(),
             path: path.to_path_buf(),
-            cached_document: None,
             project_id: None,
             kind: TabKind::Schematic,
         });

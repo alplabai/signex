@@ -37,7 +37,6 @@ fn other_library_tab(f: &mut Fixture) -> PathBuf {
     f.app.document_state.tabs.push(TabInfo {
         title: "Other".into(),
         path: other.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::LibraryBrowser(other.clone()),
     });

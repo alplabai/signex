@@ -1470,7 +1470,6 @@ fn fixture_schematic_with_symbol_and_child_sheet()
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "cut-gating".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });
@@ -1860,7 +1859,6 @@ fn project_git_commit_done_reloads_history_of_the_shown_file() {
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "Golf".to_string(),
         path: tab_path.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });

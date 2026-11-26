@@ -91,7 +91,6 @@ fn app_with_resistor() -> (Signex, PathBuf, Uuid) {
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "rubber-band-move".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });

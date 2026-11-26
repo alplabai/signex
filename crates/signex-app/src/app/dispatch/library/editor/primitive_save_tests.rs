@@ -27,7 +27,6 @@ fn app_with_symbol_named(dir: &Path, stem: &str) -> (Signex, PathBuf) {
     app.document_state.tabs.push(TabInfo {
         title: "Lib".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::SymbolEditor(path.clone()),
     });
@@ -295,7 +294,6 @@ fn a_late_completion_leaves_a_discarded_and_reopened_draft_alone() {
     app.document_state.tabs.push(TabInfo {
         title: "Lib".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::SymbolEditor(path.clone()),
     });
@@ -330,7 +328,6 @@ fn a_failed_save_as_keeps_the_draft_when_the_original_was_reopened() {
     app.document_state.tabs.push(TabInfo {
         title: "Lib".into(),
         path: from.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::SymbolEditor(from.clone()),
     });
@@ -613,7 +610,6 @@ fn app_with_dirty_footprint(dir: &Path) -> (Signex, PathBuf) {
     app.document_state.tabs.push(TabInfo {
         title: "Lib".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });

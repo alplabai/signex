@@ -106,7 +106,6 @@ fn dragging_the_reference_field_moves_drawn_text_and_hit_box() {
     app.document_state.tabs.push(TabInfo {
         title: "field-drag".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -184,7 +183,6 @@ fn moved_tall_symbol_is_hit_on_its_library_body() {
     app.document_state.tabs.push(TabInfo {
         title: "tall-symbol".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

@@ -274,15 +274,21 @@ pub const SYNC_SHEET_ENTRIES: &[Operand] = &[
 ];
 /// An absolute move of the placed object `id` (#2418): `at` is where its
 /// position goes (a part's origin, a wire's start, a sheet symbol's top-left).
+/// `keep_wires` (default true) and `wiring` (`auto`, `horizontal_first`,
+/// `vertical_first`, `straight`; default `auto`) say how wires follow (#2552).
 pub const OBJECT_POSITION: &[Operand] = &[
     required("id", OperandKind::Text),
     required("at", OperandKind::Point),
+    optional("keep_wires", OperandKind::Bool),
+    optional("wiring", OperandKind::Text),
     optional("document", OperandKind::Document),
 ];
-/// An absolute turn of the part or label `id`.
+/// An absolute turn of the part or label `id`. `keep_wires` (default true)
+/// says whether a part's wires follow, as for `OBJECT_POSITION`.
 pub const OBJECT_ROTATION: &[Operand] = &[
     required("id", OperandKind::Text),
     required("rotation", OperandKind::Angle),
+    optional("keep_wires", OperandKind::Bool),
     optional("document", OperandKind::Document),
 ];
 /// The width and height of the sheet symbol `id`, written `w,h` in mm.

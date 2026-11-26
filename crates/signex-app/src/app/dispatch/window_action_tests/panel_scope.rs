@@ -28,7 +28,6 @@ fn tab_of(path: &Path, kind: TabKind) -> TabInfo {
     TabInfo {
         title: "doc".into(),
         path: path.to_path_buf(),
-        cached_document: None,
         project_id: None,
         kind,
     }

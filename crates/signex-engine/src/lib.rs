@@ -8,7 +8,7 @@ mod clipboard_harness;
 mod clipboard_text;
 mod derived_ids;
 mod notice;
-pub use notice::{EngineNotice, RefusedPinDot};
+pub use notice::{EngineNotice, NoticeMark, RefusedPinDot};
 mod history;
 mod history_snapshot;
 mod id_collision;

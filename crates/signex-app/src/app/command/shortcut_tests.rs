@@ -116,13 +116,13 @@ fn both_search_panel_shortcuts_open_and_close_find() {
 fn app_with_tabs(kinds: Vec<TabKind>) -> Signex {
     let (mut app, _task) = Signex::new();
     for (i, kind) in kinds.into_iter().enumerate() {
-        app.document_state.tabs.push(crate::app::TabInfo {
-            title: format!("t{i}"),
-            path: PathBuf::from(format!("t{i}.snxsch")),
-            cached_document: None,
-            project_id: None,
-            kind,
-        });
+        app.document_state
+            .tabs
+            .push(crate::test_adapter::boardless_tab(
+                format!("t{i}"),
+                format!("t{i}.snxsch"),
+                kind,
+            ));
     }
     app.document_state.active_tab = 0;
     app

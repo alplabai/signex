@@ -552,6 +552,48 @@ fn a_transactions_notices_are_held_until_it_commits() {
     assert_eq!(warnings.len(), 1, "{warnings:?}");
 }
 
+/// R1 with a contact its "keep wires" move down 10 mm cannot keep.
+fn blocked_r1() -> (Engine, Uuid) {
+    let mut sheet = test_sheet();
+    let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0));
+    add_wire(&mut sheet, (30.0, 50.0), (45.0, 50.0));
+    add_wire(&mut sheet, (45.0, 55.0), (45.0, 58.0));
+    add_wire(&mut sheet, (30.0, 55.0), (30.0, 58.0));
+    (Engine::new(sheet).expect("engine"), r1)
+}
+
+#[test]
+fn notices_since_reads_the_held_notices_pins_first_without_draining_them() {
+    let (mut engine, r1) = blocked_r1();
+    engine.begin_transaction().unwrap();
+    let mark = engine.notice_mark();
+    // Raised before the pin notice, so pins-first is notices_since's order.
+    let typed = crate::EngineNotice::GripEndLeft {
+        at: Point::new(1.0, 2.0),
+    };
+    engine.notices.push(typed.clone());
+    mv(&mut engine, vec![symbol_item(r1)], 0.0, 10.0, true);
+
+    let read = engine.notices_since(mark);
+    assert_eq!(read.len(), 2, "{read:?}");
+    assert!(read[0].pins_not_kept().iter().any(|p| p == "R1 pin 1"));
+    assert_eq!(read[1], typed);
+    assert_eq!(engine.notices_since(mark), read, "reading drains nothing");
+
+    engine.commit_transaction(None).unwrap();
+    assert_eq!(engine.take_warnings().len(), 1, "still held for the commit");
+    assert_eq!(engine.take_notices(), vec![typed]);
+}
+
+#[test]
+fn notices_drained_after_the_mark_read_as_none() {
+    let (mut engine, r1) = blocked_r1();
+    mv(&mut engine, vec![symbol_item(r1)], 0.0, 10.0, true);
+    let mark = engine.notice_mark();
+    assert_eq!(engine.take_warnings().len(), 1);
+    assert!(engine.notices_since(mark).is_empty());
+}
+
 #[test]
 fn a_rolled_back_transaction_drops_its_notices() {
     let (mut engine, _) = warning_move_in_a_transaction();

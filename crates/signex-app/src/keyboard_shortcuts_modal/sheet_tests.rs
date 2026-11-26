@@ -44,7 +44,6 @@ fn a_footprint_editor_in_front_opens_the_sheet_on_all() {
     app.document_state.tabs.push(TabInfo {
         title: "part".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::FootprintEditor(path),
     });

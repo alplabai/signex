@@ -465,7 +465,6 @@ fn an_undocked_windows_net_table_and_stack_follow_an_edit_and_its_undo() {
     app.document_state.tabs.push(crate::app::TabInfo {
         title: "sheet".into(),
         path: dir.path().join("sheet.snxsch"),
-        cached_document: None,
         project_id: None,
         kind: crate::app::TabKind::Schematic,
     });

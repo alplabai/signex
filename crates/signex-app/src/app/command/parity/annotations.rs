@@ -541,11 +541,12 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     ),
     // #2665: the in-app copy, and the grid its default offset is measured on.
     (&["smart_paste"], Operand, &[ToolState, Clipboard]),
-    // Move Keeps Wires.
+    // Move Keeps Wires is not read: both take `keep_wires` as an operand
+    // (#2552; rotation, Hakan 2026-11-25, #2326 comment 7167743982).
     (
         &["set_object_position", "set_object_rotation"],
         Operand,
-        &[ToolState],
+        &[],
     ),
     // #2953: a designator is written for the placement the sheet in view
     // shows, and only on that sheet (`designator_edit_commands`).

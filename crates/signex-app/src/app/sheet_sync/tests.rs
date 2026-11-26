@@ -97,7 +97,6 @@ fn rig(symbol_pins: Vec<SheetPin>, child_labels: Vec<Label>) -> Rig {
     app.document_state.tabs.push(TabInfo {
         title: "parent".to_string(),
         path: parent_path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

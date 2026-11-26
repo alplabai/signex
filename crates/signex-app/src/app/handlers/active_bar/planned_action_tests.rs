@@ -21,7 +21,6 @@ fn app_with_empty_sheet() -> Signex {
     app.document_state.tabs.push(TabInfo {
         title: "param-set-unit".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

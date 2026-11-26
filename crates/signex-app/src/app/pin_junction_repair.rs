@@ -127,7 +127,6 @@ pub(crate) mod tests {
         app.document_state.tabs.push(crate::app::TabInfo {
             title: "bare_tap".to_string(),
             path: path.clone(),
-            cached_document: None,
             project_id: None,
             kind: crate::app::TabKind::Schematic,
         });
@@ -182,7 +181,6 @@ pub(crate) mod tests {
         app.document_state.tabs.push(crate::app::TabInfo {
             title: "in_view".to_string(),
             path: other.clone(),
-            cached_document: None,
             project_id: None,
             kind: crate::app::TabKind::Schematic,
         });

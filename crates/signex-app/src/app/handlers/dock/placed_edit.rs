@@ -47,7 +47,8 @@ impl Signex {
                 }
             }
             PlacedEditMsg::RotationPicked { item, degrees } => {
-                if let Err(refusal) = self.set_placed_rotation(*item, *degrees) {
+                let keeps = self.ui_state.move_keeps_wires;
+                if let Err(refusal) = self.set_placed_rotation(*item, *degrees, keeps) {
                     say_refusal(&refusal);
                 }
             }
@@ -301,11 +302,12 @@ impl Signex {
         // The page origin's mapping is its own inverse.
         let stored_y = sheet.page_y(typed);
         let is_run = matches!(item.kind, SelectedKind::Wire | SelectedKind::Bus);
+        let keeps = self.ui_state.move_keeps_wires;
         let placed = match field {
             PlacedField::X if is_run => self.set_run_end(item, true, Point::new(typed, at.y)),
             PlacedField::Y if is_run => self.set_run_end(item, true, Point::new(at.x, stored_y)),
-            PlacedField::X => self.set_placed_position(item, Point::new(typed, at.y)),
-            PlacedField::Y => self.set_placed_position(item, Point::new(at.x, stored_y)),
+            PlacedField::X => self.set_placed_position(item, Point::new(typed, at.y), keeps),
+            PlacedField::Y => self.set_placed_position(item, Point::new(at.x, stored_y), keeps),
             PlacedField::EndX | PlacedField::EndY => {
                 let (_, end) = ends
                     .ok_or_else(|| PlacedRefusal::new("only a wire or a bus has an end to set"))?;

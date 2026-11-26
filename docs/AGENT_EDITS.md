@@ -114,7 +114,9 @@ Two commands, both with capability `edit` in `signex-cli`:
   not the call's own sheet, which has no step.
 - Engine notices an edit raises (`Engine::take_warnings`) are held while the
   transaction is open and shown after the commit; a rollback drops them, so
-  Messages never reports a pin or a net of an edit that did not happen.
+  Messages never reports a pin or a net of an edit that did not happen. An
+  edit whose answer names them (`set_object_position`'s `fallbacks`, #2552)
+  reads the held ones without draining them (`Engine::notices_since`).
 - After the list: dirtiness is re-derived from history for that path, every
   slot that shows the sheet (the active canvas, undocked windows) is redrawn,
   and selected wires the list removed leave the selection. The person's

@@ -78,9 +78,14 @@ mod parity;
 #[cfg(test)]
 mod part_operand_tests;
 mod part_operands;
+mod placed_move;
+#[cfg(test)]
+pub(crate) mod placed_move_tests;
 #[cfg(test)]
 mod placed_operand_tests;
 mod placed_operands;
+#[cfg(test)]
+mod placed_rotation_tests;
 #[cfg(test)]
 mod placement_defaults_tests;
 #[cfg(test)]
@@ -611,13 +616,13 @@ mod tests {
     fn app_with_tabs(kinds: Vec<TabKind>) -> Signex {
         let (mut app, _task) = Signex::new();
         for (i, kind) in kinds.into_iter().enumerate() {
-            app.document_state.tabs.push(crate::app::TabInfo {
-                title: format!("t{i}"),
-                path: std::path::PathBuf::from(format!("t{i}.snxsch")),
-                cached_document: None,
-                project_id: None,
-                kind,
-            });
+            app.document_state
+                .tabs
+                .push(crate::test_adapter::boardless_tab(
+                    format!("t{i}"),
+                    format!("t{i}.snxsch"),
+                    kind,
+                ));
         }
         app.document_state.active_tab = 0;
         app

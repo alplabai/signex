@@ -12,7 +12,6 @@ fn tab(path: &std::path::Path, kind: TabKind) -> TabInfo {
     TabInfo {
         title: "t".into(),
         path: path.to_path_buf(),
-        cached_document: None,
         project_id: None,
         kind,
     }

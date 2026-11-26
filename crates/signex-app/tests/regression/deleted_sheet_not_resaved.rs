@@ -93,7 +93,6 @@ fn open_dirty_sheet(app: &mut Signex, path: &Path, project: ProjectId) {
     app.document_state.tabs.push(TabInfo {
         title: path.file_stem().unwrap().to_string_lossy().into_owned(),
         path: path.to_path_buf(),
-        cached_document: None,
         project_id: Some(project),
         kind: TabKind::Schematic,
     });
@@ -313,7 +312,6 @@ fn deleting_a_library_directory_drops_the_editors_and_tabs_inside_it() {
     app.document_state.tabs.push(TabInfo {
         title: "fp".into(),
         path: fp.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::FootprintEditor(fp.clone()),
     });

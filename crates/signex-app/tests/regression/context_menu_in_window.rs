@@ -14,6 +14,7 @@ use signex_app::app::{
 use signex_app::io_ports::{HeadlessAnswers, IoPorts};
 use signex_app::keymap::AppCommandId;
 use signex_app::menu_bar::MenuMessage;
+use signex_app::test_adapter::boardless_tab;
 use signex_types::schematic::{
     ChildSheet, FillType, Label, LabelType, Point, SchematicSheet, SelectedItem, SelectedKind,
 };
@@ -40,13 +41,9 @@ fn undock_beside_a_board(mut app: Signex, sheet: &Path) -> (Signex, iced::window
         path: sheet.to_path_buf(),
         id: window,
     }));
-    app.document_state.tabs.push(TabInfo {
-        title: "board".to_string(),
-        path: PathBuf::from("board-2267.snxpcb"),
-        cached_document: None,
-        project_id: None,
-        kind: TabKind::Pcb,
-    });
+    app.document_state
+        .tabs
+        .push(boardless_tab("board", "board-2267.snxpcb", TabKind::Pcb));
     app.document_state.active_tab = app.document_state.tabs.len() - 1;
     app.document_state.active_path = None;
     (app, window)
@@ -215,7 +212,6 @@ fn app_with_sheet_at(path: &Path, sheet: SchematicSheet) -> Signex {
     app.document_state.tabs.push(TabInfo {
         title: "parent".to_string(),
         path: path.to_path_buf(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

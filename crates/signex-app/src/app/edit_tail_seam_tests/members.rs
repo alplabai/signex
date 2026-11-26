@@ -92,7 +92,6 @@ pub(super) fn renumbered() -> crate::app::sheet_numbering::apply_tests::Rig {
     app.document_state.tabs.push(crate::app::TabInfo {
         title: "a.snxsch".into(),
         path: open.clone(),
-        cached_document: None,
         project_id: None,
         kind: crate::app::TabKind::Schematic,
     });
@@ -270,7 +269,6 @@ fn an_annotate_leaves_its_open_non_active_child_dirty_after_the_undo_today() {
     app.document_state.tabs.push(crate::app::TabInfo {
         title: "a_root.snxsch".into(),
         path: root.clone(),
-        cached_document: None,
         project_id: None,
         kind: crate::app::TabKind::Schematic,
     });

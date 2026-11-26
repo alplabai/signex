@@ -41,7 +41,6 @@ fn move_app() -> Signex {
     app.document_state.tabs.push(TabInfo {
         title: "non-finite-move".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -216,7 +215,6 @@ fn symbol_app() -> (Signex, PathBuf) {
     app.document_state.tabs.push(TabInfo {
         title: "nf".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::SymbolEditor(path.clone()),
     });

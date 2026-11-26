@@ -239,13 +239,7 @@ fn the_drill_sub_tab_is_picked_and_lists_the_through_pair() {
 }
 
 fn tab(kind: TabKind, path: &str) -> TabInfo {
-    TabInfo {
-        title: String::new(),
-        path: PathBuf::from(path),
-        cached_document: None,
-        project_id: None,
-        kind,
-    }
+    crate::test_adapter::boardless_tab(String::new(), path, kind)
 }
 
 #[test]

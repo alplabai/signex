@@ -202,7 +202,6 @@ mod tests {
         app.document_state.tabs.push(TabInfo {
             title: "move-up".to_string(),
             path: path.clone(),
-            cached_document: None,
             project_id: None,
             kind: TabKind::Schematic,
         });

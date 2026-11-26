@@ -88,7 +88,6 @@ fn app_with_symbol_and_wire(
     app.document_state.tabs.push(TabInfo {
         title: "hotspot-snap".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
