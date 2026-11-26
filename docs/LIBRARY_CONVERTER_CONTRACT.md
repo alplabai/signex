@@ -50,7 +50,7 @@ Prints one JSON object (schema `#/$defs/describe`) and exits 0:
 
 - `contract` is `<major>.<minor>`. Signex refuses a converter whose major is
   newer than the one it implements and accepts any minor of a known major.
-- `inputs[].extensions` are lower-case, without the dot. Signex builds its
+- `inputs[].extensions` are lower-case, without the leading dot. A source file that always has one fixed name (a library table, say) is listed by its whole lower-case file name, e.g. `"lib-table"`; Signex matches an entry against a picked file's extension first, then against its whole name. Signex builds its
   file-picker filters from them at run time, so no foreign extension is
   compiled into Signex.
 - `kind`: `library` (symbol, footprint or combined library file or folder) or
