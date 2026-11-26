@@ -120,7 +120,9 @@ fn a_partial_table_reads_defaults_and_a_bad_value_refuses_the_file() {
     assert_eq!(read.board.options.teardrops.length_share, 1.5);
 
     let wide = text.replace("width_share = 0.75", "width_share = 1.5");
-    let err = SnxPcb::parse(&wide).err().expect("refused");
+    let Err(err) = SnxPcb::parse(&wide) else {
+        panic!("refused");
+    };
     assert!(err.to_string().contains("teardrops"), "{err}");
 
     let key = PAD.hyphenated().to_string();

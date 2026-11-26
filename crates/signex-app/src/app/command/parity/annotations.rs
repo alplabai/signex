@@ -584,6 +584,8 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     (&["autoplace_fields"], Bridge, &[ActiveDocument, Selection]),
     (&["clear_all_net_colors"], ActiveBar, &[ActiveDocument]),
     (&["clear_net_color", "color_net"], ActiveBar, &[Selection]),
+    // #2585: without `net` it widens the selected pair tracks.
+    (&["set_diff_pair_width"], Operand, &[Selection]),
     (
         &[
             "bring_to_front_of",

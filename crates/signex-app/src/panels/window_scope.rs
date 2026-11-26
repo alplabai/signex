@@ -25,6 +25,12 @@ impl PanelMsg {
             Self::PcbBoard(board) => board.acts_on_board(),
             // The list and its highlight belong to the board the window shows.
             Self::PcbPanel(_) => true,
+            // The groups are the window's board's; opening the tab or
+            // docking the panel is the main window's.
+            Self::LengthMatching(msg) => !matches!(
+                msg,
+                super::LengthMatchingMsg::TabOpened | super::LengthMatchingMsg::PanelShown
+            ),
 
             // Project-wide views, and what opens or steps to a document.
             Self::NavigatorPanel { .. }

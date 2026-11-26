@@ -319,13 +319,11 @@ fn thermal<'a>(look: Look<'a>, f: &'a ZoneFacts) -> Element<'a, PanelMsg> {
 /// edited, where the switch is read only.
 fn thermal_message(common: &PrimitiveCommon) -> Option<impl Fn(bool) -> PanelMsg + use<>> {
     let target = common.target.clone();
-    common.is_editable().then(move || {
-        move |on| {
-            PanelMsg::PcbPrimitive(PcbPrimitiveMsg::ThermalReliefToggled {
-                target: target.clone(),
-                on,
-            })
-        }
+    common.is_editable().then_some(move |on| {
+        PanelMsg::PcbPrimitive(PcbPrimitiveMsg::ThermalReliefToggled {
+            target: target.clone(),
+            on,
+        })
     })
 }
 

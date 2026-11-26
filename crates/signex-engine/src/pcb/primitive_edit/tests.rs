@@ -207,7 +207,8 @@ fn a_pad_takes_its_own_thermal_relief_values_and_refuses_unusable_ones() {
         spoke_width: None,
         spokes: Some(Some(2)),
     };
-    run(&mut b, pad_edit_command(&b, &pad, &set).unwrap());
+    let command = pad_edit_command(&b, &pad, &set).unwrap();
+    run(&mut b, command);
     let want = PadThermal {
         air_gap: Some(0.3),
         spoke_width: None,
@@ -219,7 +220,8 @@ fn a_pad_takes_its_own_thermal_relief_values_and_refuses_unusable_ones() {
         spoke_width: None,
         spokes: None,
     };
-    run(&mut b, pad_edit_command(&b, &pad, &back).unwrap());
+    let command = pad_edit_command(&b, &pad, &back).unwrap();
+    run(&mut b, command);
     assert_eq!(b.footprints[0].pads[0].thermal.air_gap, None);
     assert_eq!(
         b.footprints[0].pads[0].thermal.spokes,

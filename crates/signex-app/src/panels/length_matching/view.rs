@@ -382,7 +382,7 @@ fn editor<'a>(
     if let Some(remove) = remove {
         actions = actions.push(remove);
     }
-    actions = actions.push(Space::new().width(Length::Fill)).push(action(
+    actions = actions.push(Space::new().width(Length::Fill).boxed()).push(action(
         ctx,
         ids::LENGTH_MATCHING_DELETE_GROUP,
         Some(msg(LengthMatchingMsg::GroupDeleted(uuid))),
