@@ -565,7 +565,6 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         AgentWindowLayout,
         &[Window, ActiveDocument],
     ),
-    // #2470: the main window's dock, by the panel the operands name.
     // #2470: the main window's dock; opening Net Classes on a board opens
     // the PCB panel (`show_panel`), so the active tab is read too.
     (

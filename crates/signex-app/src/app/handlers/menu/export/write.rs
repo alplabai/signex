@@ -156,8 +156,7 @@ impl Signex {
     /// [`write_export_task`], unless `path` lies in a project whose folder is
     /// being renamed: the write would run during the move and either land in
     /// the old folder before the re-key or recreate it as an orphan, so the
-    /// export is refused with a notice instead. A write an agent's request
-    /// makes stays in its project's folder (`agent_write_root`, #2470).
+    /// export is refused with a notice instead.
     pub(crate) fn write_export(
         &mut self,
         path: PathBuf,
@@ -171,8 +170,24 @@ impl Signex {
             return Task::none();
         }
         self.begin_project_write(&path);
-        let confine = self.agent_write_root(&path);
-        write_export_task(path, bytes, what, success_log, advisory, warnings, confine)
+        write_export_task(path, bytes, what, success_log, advisory, warnings, None)
+    }
+
+    /// [`Self::write_export`] of a command's file (#2470), with no notice
+    /// and no advisory: with `confine`, a `path` outside that folder or
+    /// behind a link is not written. The caller has checked the folder is
+    /// not being renamed (`refuse_while_project_moves`).
+    pub(crate) fn write_command_export(
+        &mut self,
+        confine: Option<PathBuf>,
+        path: PathBuf,
+        bytes: Vec<u8>,
+        what: &'static str,
+        success_log: String,
+        warnings: Vec<String>,
+    ) -> Task<Message> {
+        self.begin_project_write(&path);
+        write_export_task(path, bytes, what, success_log, None, warnings, confine)
     }
 
     /// [`export_pdf_task`], refused like [`Self::write_export`] while the

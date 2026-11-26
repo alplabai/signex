@@ -69,6 +69,9 @@ pub(crate) fn fabrication_outputs(app: &mut Signex, args: &CommandArgs) -> Ran {
         return refused(Translatable::new(ids::FAB_OUTPUTS_COMMAND_NO_PATH));
     };
     let folder = PathBuf::from(folder);
+    if let Err(reason) = crate::app::notebook_project::reserved_target(&folder) {
+        return refused(reason);
+    }
     let mut state = FabOutputsState::new(board.clone(), board_title(app, &board));
     let kinds = match args.operand("kinds") {
         Some(OperandValue::Text(list)) => match parse_kinds(list) {
@@ -97,7 +100,7 @@ pub(crate) fn fabrication_outputs(app: &mut Signex, args: &CommandArgs) -> Ran {
     };
     let mut job = app.generate_job(&state, kinds, copy);
     // An agent's files stay in its project's folder (#2470).
-    let confine = app.agent_write_root(&folder);
+    let confine = app.agent_write_root(&board);
     job.folder = folder;
     let command = AppCommandId::new("fabrication_outputs").expect("a catalog id is valid");
     let waiting = app.wait_for_command(&command, args);

@@ -238,12 +238,21 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   window-layout commands through though they only work in a window.
   The board writers `export_board_report`, `export_board_pdf` and
   `fabrication_outputs` (#2470) take a `path`, which on this channel must
-  lie inside the folder of the named board's project: absolute, with no
-  `..`, checked by its text before anything runs (`write_target.rs`), and
-  checked again on disk with links followed when the file is written, so a
-  folder in the project that links out of it writes nothing (the rule an
-  agent's notebook export follows, `confined_write`). They need the
-  `export` capability in `signex-cli`. `export_assembly_svg` and
+  lie inside the folder of the named board's project. The gate refuses a
+  path that is not absolute or holds `..` by its text (`write_target.rs`);
+  whether it lies in the project is decided when the file is written, with
+  the folder and the target both resolved and links followed
+  (`confined_write`, the rule an agent's notebook export follows), so a
+  folder in the project that links out of it writes nothing, and a project
+  reached through a link (macOS `/var`, a linked home) is not refused for
+  its spelling. The CSV and the PDF follow the one export rule
+  (`export_target`, as the notebook exports do): the right extension, never
+  a Signex document (`.snx*`), never inside a `.git` folder, on Windows no
+  name ending in a dot or a space or holding `:`, and an existing file only
+  with `overwrite=true`; the fabrication folder may not be inside `.git`
+  either. All three are answered once their files are written, so a write
+  that is refused is refused on the socket too. They need the `export`
+  capability in `signex-cli`. `export_assembly_svg` and
   `export_board_step` still take a path the channel does not check, so they
   are CLI only.
 
@@ -319,7 +328,8 @@ which names no document.
 `open_document` and `new_document` are refused on this channel: they take a
 path, and opening a tab changes what the person sees. `new_pcb_document`
 stays off it too: its board tab is brought to the front, which moves the
-person's tab (#2470 keeps these three open). A document that is not
+person's tab. All three are left for a later form that opens behind the
+person's tab (#2470). A document that is not
 part of a project open in this app (a loose sheet) is refused too, and while
 an agent's request runs `document_entries` lists only project-owned documents,
 so `list_documents`, `find_items` and `resolve` never show a loose sheet

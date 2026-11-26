@@ -13,6 +13,7 @@
 mod allow;
 pub mod client;
 mod deferred;
+mod document_gate;
 mod files;
 mod handler;
 pub mod journal;

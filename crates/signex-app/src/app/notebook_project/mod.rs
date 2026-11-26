@@ -20,7 +20,7 @@ mod tests;
 
 pub(crate) use refusal::{
     bad_value, because, confined_write, export_target, needs_operand, overwrite,
-    read_notebook_file, refusal,
+    read_notebook_file, refusal, reserved_target,
 };
 
 /// The notebook a request means: its project and its file, which may not

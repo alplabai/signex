@@ -456,19 +456,23 @@ pub const DOCK_PANEL: &[Operand] = &[
     required("state", OperandKind::Text),
 ];
 /// A board report written as CSV (#2404): which board, which report
-/// (`bom`, `netlist`, `net_length`, `components`) and the file.
+/// (`bom`, `netlist`, `net_length`, `components`) and the file, replaced
+/// only with `overwrite=true` (#2470).
 pub const BOARD_REPORT_EXPORT: &[Operand] = &[
     required("document", OperandKind::Document),
     required("kind", OperandKind::Text),
     required("path", OperandKind::Path),
+    optional("overwrite", OperandKind::Bool),
 ];
-/// A board printed to PDF (#2402): which board and the file; the rest
+/// A board printed to PDF (#2402): which board and the file (replaced only
+/// with `overwrite=true`, #2470); the rest
 /// defaults as the dialog opens. `layers` lists sets by id (`top`,
 /// `bottom`, `inner`, `mechanical`, `assembly_top`, `assembly_bottom`),
 /// `pages` is `per_set` or `composite`, `scale` is `fit` or `one_to_one`.
 pub const BOARD_PDF: &[Operand] = &[
     required("document", OperandKind::Document),
     required("path", OperandKind::Path),
+    optional("overwrite", OperandKind::Bool),
     optional("layers", OperandKind::Text),
     optional("pages", OperandKind::Text),
     optional("scale", OperandKind::Text),
