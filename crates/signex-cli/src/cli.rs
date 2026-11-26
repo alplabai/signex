@@ -18,7 +18,7 @@ USAGE:
     signex-cli run <project> <command-id> [--arg key=value]... [OPTIONS]
     signex-cli commands [--json]
     signex-cli agent-log <project> [--access]
-    signex-cli library check <library> [--with <library>]... [--json]
+    signex-cli library check <library> [--with <library>]... [--strict] [--json]
     signex-cli notebook generate --project <project> [--force] [--fail-on requirements,checks]
                [--sections <list>|all] [--variant <name>] [--template <name>]
                [--document <number>] [--revision <rev>] [--checks run|last] [OPTIONS]
@@ -64,7 +64,7 @@ default name in Project Outputs/notebook/ without --out); it runs as
 run options.
 
 library check checks a library folder (or its .snxlib) as Signex would load
-and save it; exit 1 on an error, 0 with warnings only.
+and save it; exit 1 on an error (with --strict also on a warning), else 0.
 
 agent-log prints the project's agent journal as a table (the edits agents made;
 with --access, who connected and with what rights). It only reads.

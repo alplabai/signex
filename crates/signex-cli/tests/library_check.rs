@@ -51,3 +51,18 @@ fn a_usage_error_exits_2() {
     let (code, _) = check(&["check", "lib", "--bogus"]);
     assert_eq!(code, 2);
 }
+
+#[test]
+fn strict_fails_on_warnings() {
+    let (code, stdout) = check(&["check", &repo("assets/stock-library"), "--strict", "--json"]);
+    assert_eq!(code, 1, "{stdout}");
+    let report: serde_json::Value = serde_json::from_str(stdout.trim()).unwrap();
+    assert_eq!(report["ok"], false);
+    assert_eq!(report["errors"], 0);
+    let (code, stdout) = check(&[
+        "check",
+        &repo("docs/fixtures/library-format/library"),
+        "--strict",
+    ]);
+    assert_eq!(code, 0, "the conformance fixtures are clean: {stdout}");
+}

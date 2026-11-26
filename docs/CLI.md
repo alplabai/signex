@@ -12,7 +12,7 @@ signex-cli run <project> [options] < commands.jsonl
 signex-cli run <project> <command-id> [--arg key=value]... [options]
 signex-cli commands [--json]
 signex-cli agent-log <project> [--access]
-signex-cli library check <library> [--with <library>]... [--json]
+signex-cli library check <library> [--with <library>]... [--strict] [--json]
 signex-cli notebook export-pdf --project <project> [options]
 ```
 
@@ -2270,7 +2270,7 @@ A board that is not open, an unknown kind or `kinds` naming none is
 ## Library check
 
 ```
-signex-cli library check <library> [--with <library>]... [--json]
+signex-cli library check <library> [--with <library>]... [--strict] [--json]
 ```
 
 Checks a library folder (or its `.snxlib`) the way Signex loads and saves it,
@@ -2293,11 +2293,13 @@ against.
   is present with that hash.
 
 The exit code is `0` when the check finds no error (warnings are allowed),
-`1` when it finds one, and `2` for a usage error. Without `--json` it prints
+`1` when it finds one, and `2` for a usage error. With `--strict` a warning
+fails the check too (exit `1`); converter CI runs `library check --strict`,
+so a converter's output carries no warning either. Without `--json` it prints
 one line per problem and a count; with `--json` one line:
 
 ```json
-{"ok":false,"library":"Passives","errors":1,"warnings":0,"problems":[{"severity":"error","code":"ref.missing_footprint","file":"Passives.snxlib","item":"0194…","message":"row R-10K (\"resistors\"): footprint 0194… is not in library 0194…"}]}
+{"ok":false,"strict":false,"library":"Passives","errors":1,"warnings":0,"problems":[{"severity":"error","code":"ref.missing_footprint","file":"Passives.snxlib","item":"0194…","message":"row R-10K (\"resistors\"): footprint 0194… is not in library 0194…"}]}
 ```
 
 `file` is relative to the library folder (empty for the library as a whole);
@@ -2329,14 +2331,14 @@ one line per problem and a count; with `--json` one line:
 | `symbol.legacy_token`, `footprint.legacy_token`, `sim.legacy_token` | warning | only the format token would be rewritten: a token this build reads but no longer writes |
 | `model.bad_hash` | error | a STEP attachment's `content_hash` is not a lower-case SHA-256 |
 | `model.hash_mismatch` | error | `step/<hash>.step` holds other bytes |
-| `model.missing` | warning | `step/<hash>.step` is absent; Signex shows the footprint without its model |
+| `model.missing` | error | `step/<hash>.step` is absent |
+| `model.unreadable` | error | `step/<hash>.step` is there but does not read |
 
-Two classes are warnings on purpose. The stock library's footprints carry
-`snxfpt/1`, which Signex reads but no longer writes, so their bytes change
-only in that line on the next save (`footprint.legacy_token`; the format's
-open point 8). A missing STEP model loses no data in the library and the app
-reports it where it draws the board, so it does not fail a converter that
-could not fetch a model (`model.missing`).
+`footprint.legacy_token` is a warning on purpose: the stock library's
+footprints carry `snxfpt/1`, which Signex reads but no longer writes, so
+their bytes change only in that line on the next save (the format's open
+point 8). The stock library therefore passes `library check` and fails
+`library check --strict`.
 
 ## Working through a running Signex
 

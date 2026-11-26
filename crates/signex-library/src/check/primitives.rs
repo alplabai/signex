@@ -307,12 +307,17 @@ fn check_step(root: &Path, rel: &str, footprint: Uuid, hash: &str, out: &mut Vec
                 ));
             }
         }
-        // The app shows the footprint without its model: a warning.
-        Err(_) => out.push(Problem::warning(
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => out.push(Problem::error(
             "model.missing",
             rel,
             item,
             format!("STEP model {step_rel} is not in the library"),
+        )),
+        Err(e) => out.push(Problem::error(
+            "model.unreadable",
+            &step_rel,
+            item,
+            format!("STEP model {step_rel} does not read: {e}"),
         )),
     }
 }

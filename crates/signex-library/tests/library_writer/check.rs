@@ -78,9 +78,7 @@ fn assert_reports(problems: &[Problem], code: &str, severity: Severity) {
 #[test]
 fn the_conformance_fixtures_pass() {
     let problems = check_library(&repo("docs/fixtures/library-format/library"), &[]);
-    assert!(!has_errors(&problems), "{problems:#?}");
-    // The fixture pins a STEP hash without shipping the model.
-    assert_eq!(codes(&problems, Severity::Warning), ["model.missing"]);
+    assert_eq!(problems, [], "the fixtures are clean, also under --strict");
 }
 
 /// The stock footprints carry `snxfpt/1`, read but no longer written
@@ -391,7 +389,7 @@ fn step_model_failures() {
     let root = dir.path().join("Synthetic");
     let mut w = synthetic::library(40);
     let hash = w.add_step_model(b"ISO-10303-21;\nEND-ISO-10303-21;\n".to_vec());
-    for (n, content_hash) in [(40, hash.clone()), (41, "NOT-A-HASH".to_string())] {
+    for (n, content_hash) in [(40, hash.clone()), (41, hash.clone())] {
         let mut file = synthetic::footprint(n);
         file.footprints[0].step_attachment = Some(StepAttachment {
             content_hash,
@@ -402,6 +400,10 @@ fn step_model_failures() {
         w.add_footprint_file(file).unwrap();
     }
     w.write(&root).unwrap();
+    assert_eq!(check_library(&root, &[]), []);
+    edit(&footprint_path(&root, 41), |t| {
+        t.replace(&hash, "NOT-A-HASH")
+    });
     let problems = check_library(&root, &[]);
     assert_reports(&problems, "model.bad_hash", Severity::Error);
     assert!(!problems.iter().any(|p| p.code == "model.missing"));
@@ -414,9 +416,11 @@ fn step_model_failures() {
         Severity::Error,
     );
     std::fs::remove_file(&step).unwrap();
+    assert_reports(&check_library(&root, &[]), "model.missing", Severity::Error);
+    std::fs::create_dir(&step).unwrap();
     assert_reports(
         &check_library(&root, &[]),
-        "model.missing",
-        Severity::Warning,
+        "model.unreadable",
+        Severity::Error,
     );
 }

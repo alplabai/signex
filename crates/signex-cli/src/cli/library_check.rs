@@ -1,7 +1,8 @@
-//! `signex-cli library check <dir> [--with <dir>]... [--json]` (#3111): check
-//! a library directory headlessly, for converters and their CI. Exit 0 when
-//! the check finds no error (warnings allowed), 1 when it does, 2 on a usage
-//! error. See `docs/CLI.md`, "Library check".
+//! `signex-cli library check <dir> [--with <dir>]... [--strict] [--json]`
+//! (#3111): check a library directory headlessly, for converters and their
+//! CI. Exit 0 when the check finds no error (no problem at all with
+//! `--strict`), 1 when it does, 2 on a usage error. See `docs/CLI.md`,
+//! "Library check".
 
 use std::io::{self, Write};
 use std::path::PathBuf;
@@ -12,6 +13,8 @@ use signex_library::check::{Problem, Severity, check_library, has_errors};
 pub struct LibraryCheckOptions {
     pub library: PathBuf,
     pub with: Vec<PathBuf>,
+    /// Warnings fail the check too: what converter CI runs.
+    pub strict: bool,
     pub json: bool,
 }
 
@@ -25,9 +28,11 @@ pub fn parse(mut args: impl Iterator<Item = String>) -> Result<LibraryCheckOptio
     let mut library = None;
     let mut with = Vec::new();
     let mut json = false;
+    let mut strict = false;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--json" => json = true,
+            "--strict" => strict = true,
             "--with" => with.push(PathBuf::from(
                 args.next().ok_or("--with needs a library folder")?,
             )),
@@ -40,15 +45,18 @@ pub fn parse(mut args: impl Iterator<Item = String>) -> Result<LibraryCheckOptio
     Ok(LibraryCheckOptions {
         library,
         with,
+        strict,
         json,
     })
 }
 
-/// Run the check, print the result and say whether it found an error.
+/// Run the check, print the result and say whether it failed: an error, or
+/// with `--strict` any problem.
 pub fn run(options: &LibraryCheckOptions, out: &mut impl Write) -> io::Result<bool> {
     let problems = check_library(&options.library, &options.with);
+    let failed = has_errors(&problems) || (options.strict && !problems.is_empty());
     if options.json {
-        writeln!(out, "{}", json_report(options, &problems))?;
+        writeln!(out, "{}", json_report(options, &problems, failed))?;
     } else {
         for p in &problems {
             let severity = match p.severity {
@@ -69,7 +77,7 @@ pub fn run(options: &LibraryCheckOptions, out: &mut impl Write) -> io::Result<bo
         let (errors, warnings) = counts(&problems);
         writeln!(out, "{errors} error(s), {warnings} warning(s)")?;
     }
-    Ok(has_errors(&problems))
+    Ok(failed)
 }
 
 fn counts(problems: &[Problem]) -> (usize, usize) {
@@ -80,10 +88,15 @@ fn counts(problems: &[Problem]) -> (usize, usize) {
     (errors, problems.len() - errors)
 }
 
-fn json_report(options: &LibraryCheckOptions, problems: &[Problem]) -> serde_json::Value {
+fn json_report(
+    options: &LibraryCheckOptions,
+    problems: &[Problem],
+    failed: bool,
+) -> serde_json::Value {
     let (errors, warnings) = counts(problems);
     serde_json::json!({
-        "ok": errors == 0,
+        "ok": !failed,
+        "strict": options.strict,
         "library": options.library,
         "errors": errors,
         "warnings": warnings,
@@ -106,6 +119,8 @@ mod tests {
         assert_eq!(options.library, PathBuf::from("lib"));
         assert_eq!(options.with, [PathBuf::from("a"), PathBuf::from("b")]);
         assert!(options.json);
+        assert!(!options.strict);
+        assert!(parse_args(&["check", "lib", "--strict"]).unwrap().strict);
     }
 
     #[test]
@@ -114,7 +129,7 @@ mod tests {
         assert!(parse_args(&["verify", "lib"]).is_err());
         assert!(parse_args(&["check"]).is_err());
         assert!(parse_args(&["check", "lib", "--with"]).is_err());
-        assert!(parse_args(&["check", "lib", "--strict"]).is_err());
+        assert!(parse_args(&["check", "lib", "--fast"]).is_err());
         assert!(parse_args(&["check", "lib", "other"]).is_err());
     }
 
