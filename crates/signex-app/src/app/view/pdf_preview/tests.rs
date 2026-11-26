@@ -156,7 +156,7 @@ fn the_pdf_text_follows_the_language() {
     assert_eq!(shown(&app), "SHEETS");
 }
 
-/// Folded sections say what they hold: "4 of 7" boxes of Schematics
+/// Folded sections say what they hold: "4 of 9" boxes of Schematics
 /// include, "3 on" of Bookmarks and Nets, the logical structure, and the
 /// ticked sheets.
 #[test]
@@ -169,7 +169,8 @@ fn folded_sections_show_their_summaries() {
         .map(|(k, _)| k.clone())
         .collect();
     let options = &mut preview.pdf_options;
-    // Schematics include: No-ERC, No-Connect, Notes and Collapsed notes.
+    // Schematics include: No-ERC, No-Connect, Notes and Collapsed notes
+    // (Compile Masks and Differential Pairs are off by default).
     options.include_parameter_sets = false;
     options.include_probes = false;
     options.include_blankets = false;
@@ -180,7 +181,7 @@ fn folded_sections_show_their_summaries() {
     options.use_physical_structure = false;
 
     let texts = texts_of(app.view_pdf_settings_column(&preview), COLUMN);
-    for summary in ["3 of 4", "4 of 7", "3 on", "Logical"] {
+    for summary in ["3 of 4", "4 of 9", "3 on", "Logical"] {
         assert!(texts.iter().any(|t| t == summary), "{summary}: {texts:#?}");
     }
     // Folded: their boxes are not drawn.
@@ -206,6 +207,27 @@ fn bookmarks_and_nets_has_no_component_parameters_box() {
         !texts.iter().any(|t| t.contains("Component Parameters")),
         "{texts:#?}"
     );
+}
+
+/// Schematics include names the directive boxes "Net Parameters" and "Net
+/// Blankets", and has a box each for Compile Masks and Differential Pairs
+/// (Caner, 2026-11-25).
+#[test]
+fn schematics_include_names_every_directive_kind() {
+    let (app, _task) = Signex::new();
+    let preview = four_sheets();
+    let texts = texts_of(app.view_pdf_settings_column(&preview), COLUMN);
+    for label in [
+        "Net Parameters",
+        "Net Blankets",
+        "Compile Masks",
+        "Differential Pairs",
+    ] {
+        assert!(texts.iter().any(|t| t == label), "{label}: {texts:#?}");
+    }
+    for old in ["Parameter Sets", "Blankets"] {
+        assert!(!texts.iter().any(|t| t == old), "{old}: {texts:#?}");
+    }
 }
 
 /// Clear and Select All re-render the preview: the "N of M" count, the

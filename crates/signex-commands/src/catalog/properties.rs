@@ -107,6 +107,28 @@ pub(super) const PROPERTIES: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
+    // #1295: the Parameter Manager footer's Export… and Import… (no key, no
+    // menu row). Import opens a preview; its Apply is the undo step.
+    CommandMetadata {
+        id: "export_parameters",
+        category: "design",
+        label: command_ids::CMD_EXPORT_PARAMETERS,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "import_parameters",
+        category: "design",
+        label: command_ids::CMD_IMPORT_PARAMETERS,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "set_symbol_parameter",
         category: "edit",

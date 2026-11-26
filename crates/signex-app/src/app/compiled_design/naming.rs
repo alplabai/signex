@@ -5,8 +5,10 @@
 use signex_types::project::ChannelNaming;
 use signex_types::schematic::check_format;
 
+use super::CompiledDesignMsg;
 use super::state::NamingMenu;
-use crate::app::Signex;
+use crate::app::{Message, Signex};
+use crate::panels::PanelKind;
 use crate::panels::compiled_design::NamingTarget;
 
 /// The preset formats of each menu, in menu order.
@@ -50,6 +52,15 @@ impl Signex {
             target,
             custom: String::new(),
         });
+    }
+
+    /// Esc closes the naming menu with no change (#2674), while it shows:
+    /// one sheet symbol selected, Properties in front.
+    pub(crate) fn naming_menu_escape(&self) -> Option<Message> {
+        let shows = self.ui_state.compiled_design.naming_menu.is_some()
+            && self.document_state.dock.is_frontmost(PanelKind::Properties)
+            && self.sheet_symbol_repeat_view().is_some();
+        shows.then(|| Message::from(CompiledDesignMsg::NamingMenuClosed))
     }
 
     /// A preset was picked: write it and close the menu.

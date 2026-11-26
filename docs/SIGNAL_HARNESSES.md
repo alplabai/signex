@@ -49,9 +49,15 @@ one net. An entry whose point a harness wire or a connector tip touches
 
 Across the hierarchy, a harness-typed sheet entry `N` on a sheet symbol joins
 the bundle it touches with the child sheet's bundle that carries the harness
-port `N`, entry by entry by path. A child that only passes a harness on to a
-grandchild (a port and a typed sheet entry on one bundle, no connector) does
-not carry it further yet.
+port `N`, entry by entry by path.
+
+A child that only passes a harness on to a grandchild **carries** it (#2657):
+a bundle with a harness port and a harness-typed sheet entry and no connector
+has no nets of its own, so the sides it meets (the parent's entry, the
+grandchild's port, or further carrying sheets) are joined to each other by
+path, nested paths included. The carry is inferred from those objects; nothing
+is stored for it. A bundle with no connector that lacks the port or the typed
+entry carries nothing.
 
 A sheet without harness objects takes none of these steps: its netlist is the
 same as before harnesses existed.
@@ -69,6 +75,11 @@ other name the naming rule ranks, see `docs/NET_NAMING.md`) outranks it.
 | `harness_entry_mismatch` | Warning | An entry the far side of the harness carries and this connector lacks (`sensor expects entry CS_ADC; this harness has CS`), an entry only this connector carries (`sensor has no entry CS2`), compared by full path so nested entries count (`sensor has no entry UART.RX`) and reported on the parent sheet, a definition entry the connector lacks, or a connector entry its definition does not list. Located on the entry. |
 | `harness_type_conflict` | Warning | Connectors or typed sheet entries of two types on one harness. |
 
+When the child only passes the harness on, the parent compares against the
+leaves of the connectors the carry reaches below it. When the carry reaches no
+connector, the signals stop at the child and each entry of the parent's
+connector is reported as one the child has no entry for.
+
 Waivers and No-ERC directives work as for every rule. A port on a harness
 wire is not a disconnected port, a typed sheet entry on a harness wire is not
 an unconnected sheet pin, and a wire into a harness entry neither dangles nor
@@ -80,7 +91,20 @@ entries as a warn banner with two buttons: **Rename** renames this side's entry
 (one undo step) and **Go to** opens the child sheet. An unpaired or nested
 difference appears in the ERC results only, because renaming a nested entry
 would move every signal under it. The canvas marks the entry with the ERC warning
-marker.
+marker; for a paired mismatch it also outlines the entry's tab in the marker's
+colour (heavier, over a faint fill), outlines the connector's body and redraws
+the entry's name bold in that colour, and writes what the far side expects
+(`expects CS_ADC`) under the marker, in the marker's colour, at the caption size
+at every zoom. The canvas also draws a "!" badge on the harness-typed sheet
+entry the harness leaves through (the outline, the bold name and the badge
+decided by Caner, 2026-11-25), in the marker's colour just above that entry's
+tab, one per entry. For the badge, every far-side finding names that sheet
+entry as its peer. Because the sheet entry is now one of the finding's objects, a
+waiver made on a far-side finding before this lapses once. The outlines, the
+name, the badge and the caption are editor-only, like the marker: no print or
+export draws them. The Properties drawing of the connector draws the mismatched entry in
+the warn colour with the same `expects CS_ADC` in place of its net (the Entries
+list, shown above the drawing in this state, still names the net).
 
 ## Colour
 
@@ -113,3 +137,9 @@ drops them on save. See `docs/architecture/snxsch-refinement-objects.md` and
 
 Wires end exactly on the entry points and tips the model computes, so the
 fixture holds whatever the connector geometry is.
+
+The carry fixture (`carry_fixture_netlist`, golden
+`testdata/harness_carry_netlist.golden.tsv`) sends the nested `DEBUG`
+harness from `mcu.snxsch` through `bridge.snxsch`, which holds only a port
+`DEBUG` on a harness wire to the `connectors` sheet symbol's typed entry
+`DEBUG`. Its netlist equals the direct fixture's.

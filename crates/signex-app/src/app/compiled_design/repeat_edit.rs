@@ -67,22 +67,26 @@ impl Signex {
 
     /// The plain designator in the sheet's undo history, so typing a repeat
     /// and undoing an off both keep it. With none there (the file already
-    /// held the repeat), the file's stem.
+    /// held the repeat), the file's stem, numbered (`stem_2`, ...) when
+    /// another sheet symbol holds it (#2790), as a symbol made from a sheet
+    /// is named; a file with no stem takes the channel name.
     fn plain_designator_for(&self, id: Uuid) -> String {
-        let earlier = self
-            .document_state
-            .edit_engine()
-            .and_then(|engine| engine.earlier_plain_sheet_name(id));
-        if let Some(name) = earlier {
+        let Some(engine) = self.document_state.edit_engine() else {
+            return String::new();
+        };
+        if let Some(name) = engine.earlier_plain_sheet_name(id) {
             return name.to_string();
         }
-        self.edited_sheet_symbol(id)
-            .and_then(|cs| {
-                std::path::Path::new(&cs.filename)
-                    .file_stem()
-                    .map(|s| s.to_string_lossy().into_owned())
-            })
-            .unwrap_or_default()
+        let Some(cs) = self.edited_sheet_symbol(id) else {
+            return String::new();
+        };
+        let stem = std::path::Path::new(&cs.filename)
+            .file_stem()
+            .map(|s| s.to_string_lossy().trim().to_string())
+            .filter(|stem| !stem.is_empty())
+            .or_else(|| ChannelRepeat::parse(&cs.name).map(|repeat| repeat.channel))
+            .unwrap_or_default();
+        signex_engine::unused_sheet_symbol_name(engine.document(), &stem)
     }
 
     pub(super) fn type_repeat_field(&mut self, id: Uuid, field: RepeatField, text: String) {

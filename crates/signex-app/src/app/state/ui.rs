@@ -225,6 +225,13 @@ pub struct UiState {
     pub symbol_body_fill: crate::symbol_fill_prefs::SymbolBodyFill,
     /// Draft mirror of [`Self::symbol_body_fill`] for the Preferences dialog.
     pub preferences_draft_symbol_body_fill: crate::symbol_fill_prefs::SymbolBodyFill,
+    /// Saved "Cross out not-fitted parts" (#1294): a part that is DNP or not
+    /// fitted in the active variant draws greyed with a cross, on the canvas
+    /// and in PDF and SVG. On by default.
+    pub cross_out_not_fitted: bool,
+    /// Draft mirror of [`Self::cross_out_not_fitted`] for the Preferences
+    /// dialog.
+    pub preferences_draft_cross_out_not_fitted: bool,
     /// Saved PCB Defaults: what each new board dimension starts from (#2868).
     pub pcb_dimension_defaults: signex_types::pcb_dimension_style::DimensionDefaults,
     /// Draft of [`Self::pcb_dimension_defaults`] for the Preferences dialog,
@@ -723,6 +730,9 @@ pub struct UiState {
     /// sheet of the last cell edit. Cell text itself is never held here.
     /// Boxed: a closed table costs one pointer (#2412).
     pub parameter_table: Box<crate::app::state::ParameterTableState>,
+    /// The Import Parameters preview (#1295): the file read and the sheet it
+    /// goes into; `None` while closed.
+    pub parameter_import: Option<Box<crate::app::parameter_io::ParameterImportState>>,
     /// Active "pick a reference item" mode for z-order operations
     /// (BringToFrontOf / SendToBackOf). When Some, the next canvas click
     /// resolves the reference uuid and submits the Reorder command.
@@ -927,6 +937,7 @@ mod tests {
             ("profile_manager", field_size(|ui| &ui.profile_manager)),
             ("erc_rule_list", field_size(|ui| &ui.erc_rule_list)),
             ("parameter_table", field_size(|ui| &ui.parameter_table)),
+            ("parameter_import", field_size(|ui| &ui.parameter_import)),
             (
                 "board_output.dialog",
                 field_size(|ui| &ui.board_output.dialog),

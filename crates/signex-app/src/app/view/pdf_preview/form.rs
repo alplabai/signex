@@ -296,7 +296,7 @@ fn toggle(
 }
 
 /// Schematics include: what the sheets print.
-pub(super) fn schematics_include() -> [Toggle; 7] {
+pub(super) fn schematics_include() -> [Toggle; 9] {
     use signex_i18n::ids;
     [
         toggle(
@@ -312,7 +312,7 @@ pub(super) fn schematics_include() -> [Toggle; 7] {
             false,
         ),
         toggle(
-            ids::PDF_PARAMETER_SETS,
+            ids::PDF_NET_PARAMETERS,
             |o| o.include_parameter_sets,
             PrintPreviewMsg::SetIncludeParameterSets,
             false,
@@ -324,9 +324,21 @@ pub(super) fn schematics_include() -> [Toggle; 7] {
             false,
         ),
         toggle(
-            ids::PDF_BLANKETS,
+            ids::PDF_NET_BLANKETS,
             |o| o.include_blankets,
             PrintPreviewMsg::SetIncludeBlankets,
+            false,
+        ),
+        toggle(
+            ids::PDF_COMPILE_MASKS,
+            |o| o.include_compile_masks,
+            PrintPreviewMsg::SetIncludeCompileMasks,
+            false,
+        ),
+        toggle(
+            ids::PDF_DIFF_PAIRS,
+            |o| o.include_diff_pairs,
+            PrintPreviewMsg::SetIncludeDiffPairs,
             false,
         ),
         toggle(

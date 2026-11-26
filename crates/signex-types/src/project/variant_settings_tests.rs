@@ -354,3 +354,125 @@ fn an_unreadable_section_refuses_a_rename_and_a_removal() {
     );
     assert_eq!(data.variant_definitions, ["Lite"]);
 }
+
+/// R5 on a sheet repeated as two channels: channel `n`'s copy of it, placed
+/// at that channel's placement (`sheet symbol uuid`, then the channel uuid).
+fn channel_copy(unit: Uuid, n: u128) -> crate::pcb::SymbolLink {
+    let symbol = Uuid::from_u128(0x2662_0000);
+    let channel = Uuid::from_u128(0x2662_0000 + n);
+    crate::pcb::SymbolLink::new(
+        crate::schematic::InstancePath::from_chain(vec![symbol, channel]),
+        [unit],
+    )
+}
+
+/// Per-channel variant state (#2662): an entry set on one channel's copy of
+/// a part names that copy only, keeps naming it under a new designator (a
+/// re-annotation or another channel naming), and round-trips as 1.1.
+#[test]
+fn a_channel_entry_names_its_channel_only_and_round_trips() {
+    let unit = Uuid::now_v7();
+    let (ch1, ch2) = (channel_copy(unit, 1), channel_copy(unit, 2));
+    let dir = tempfile::tempdir().unwrap();
+    let path = write_raw(dir.path(), &bare());
+    let mut data = parse_project(&path).unwrap();
+    data.add_variant("Lite").unwrap();
+    data.set_variant_part_fit("Lite", PlacedPart::new("CH2_R5", Some(&ch2)), Some(false))
+        .unwrap();
+
+    let settings = &data.variant_settings;
+    assert!(
+        settings
+            .part(Some("Lite"), PlacedPart::new("CH1_R5", Some(&ch1)))
+            .is_none(),
+        "the other channel follows its sheets"
+    );
+    let renamed = settings.part(Some("Lite"), PlacedPart::new("R7_CH2", Some(&ch2)));
+    assert_eq!(renamed.unwrap().fitted, Some(false));
+
+    write_project(&path, &data).unwrap();
+    let saved = saved_json(&path);
+    assert_eq!(saved["format"], json!(SNXPRJ_FORMAT_V1_1));
+    assert_eq!(
+        saved["variant_settings"]["parts"][0]["part"]["sheet"],
+        json!(
+            ch2.sheet
+                .chain()
+                .iter()
+                .map(Uuid::to_string)
+                .collect::<Vec<_>>()
+        )
+    );
+    let back = parse_project(&path).unwrap();
+    assert_eq!(back.variant_settings, data.variant_settings);
+}
+
+/// Every channel's copy at once is one edit; clearing them all leaves no
+/// entry, and a refused variant changes no copy.
+#[test]
+fn every_channel_copy_is_set_and_cleared_in_one_edit() {
+    let unit = Uuid::now_v7();
+    let copies = [
+        PartRef::new("CH1_R5", Some(channel_copy(unit, 1))),
+        PartRef::new("CH2_R5", Some(channel_copy(unit, 2))),
+    ];
+    let mut data = project();
+    data.set_variant_parts_fit("Lite", &copies, Some(false))
+        .unwrap();
+    for copy in &copies {
+        assert_eq!(
+            data.variant_settings
+                .part(Some("Lite"), copy.placed())
+                .unwrap()
+                .fitted,
+            Some(false)
+        );
+    }
+    assert!(
+        data.variant_settings
+            .part(Some("Pro"), copies[0].placed())
+            .is_none()
+    );
+
+    let before = data.variant_settings.clone();
+    assert_eq!(
+        data.set_variant_parts_fit("Base", &copies, Some(true)),
+        Err(VariantProblem::Reserved)
+    );
+    assert_eq!(
+        data.set_variant_parts_fit("Nope", &copies, Some(true)),
+        Err(VariantProblem::Unknown("Nope".into()))
+    );
+    assert_eq!(data.variant_settings, before);
+
+    data.set_variant_parts_fit("Lite", &copies, None).unwrap();
+    assert!(data.variant_settings.parts.is_empty());
+}
+
+/// An edit that knows one unit of a two-unit part (a channel card) keeps the
+/// units the matrix linked, so the entry still names the part when that unit
+/// is placed again.
+#[test]
+fn an_edit_through_one_unit_keeps_the_entrys_other_units() {
+    let mut data = project();
+    let (a, b) = (Uuid::now_v7(), Uuid::now_v7());
+    let both = crate::pcb::SymbolLink::new(crate::schematic::InstancePath::root(), [a, b]);
+    data.set_variant_part_parameter(
+        "Lite",
+        PlacedPart::new("U3", Some(&both)),
+        VALUE_PARAMETER,
+        Some("TL072"),
+    )
+    .unwrap();
+    let only_a = link(a);
+    data.set_variant_part_fit("Lite", PlacedPart::new("U3", Some(&only_a)), Some(false))
+        .unwrap();
+    let parts = &data.variant_settings.parts;
+    assert_eq!(parts.len(), 1);
+    assert_eq!(parts[0].part.as_ref(), Some(&both), "not narrowed to [A]");
+    let only_b = link(b);
+    let found = data
+        .variant_settings
+        .part(Some("Lite"), PlacedPart::new("U3", Some(&only_b)));
+    assert_eq!(found.and_then(|part| part.fitted), Some(false));
+}

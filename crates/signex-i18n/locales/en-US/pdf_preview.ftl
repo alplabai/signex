@@ -169,9 +169,11 @@ pdf-global-bookmarks = Global Bookmarks for Components and Nets
 ## Schematics include
 pdf-no-erc-markers = No-ERC Markers
 pdf-no-connect-markers = No-Connect Markers
-pdf-parameter-sets = Parameter Sets
+pdf-net-parameters = Net Parameters
 pdf-probes = Probes
-pdf-blankets = Blankets
+pdf-net-blankets = Net Blankets
+pdf-compile-masks = Compile Masks
+pdf-diff-pairs = Differential Pairs
 pdf-notes = Notes
 pdf-collapsed-notes = Collapsed notes
 # Paper size names in the page-size picker.

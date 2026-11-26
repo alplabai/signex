@@ -6,10 +6,10 @@
 //! Real temp dir: `root.snxsch` places `child.snxsch` once through a sheet
 //! symbol; both are open as tabs of one project.
 
-use signex_app::app::{CompiledDesignMsg, EditMsg, Message, Signex};
+use signex_app::app::{CompiledDesignMsg, EditMsg, InputMsg, Message, Signex};
 use signex_app::dock::DockMessage;
-use signex_app::panels::PanelMsg;
-use signex_app::panels::compiled_design::CompiledStatus;
+use signex_app::panels::compiled_design::{CompiledStatus, NamingTarget};
+use signex_app::panels::{PanelKind, PanelMsg};
 use signex_types::schematic::{
     ChildSheet, FillType, Point, SchDrawing, SchTable, SchematicSheet, SelectedItem, SelectedKind,
     Symbol, TableSource,
@@ -613,4 +613,225 @@ fn a_channel_tab_refuses_an_edit_with_a_message() {
         .iter()
         .any(|s| s.uuid == part);
     assert!(gone, "Editor is the editable sheet");
+}
+
+/// The child's channel strip as the panels last saw it.
+fn strip(app: &Signex) -> signex_app::panels::compiled_design::ChannelStripView {
+    app.document_state
+        .panel_ctx
+        .compiled_design
+        .strip
+        .clone()
+        .expect("the child is repeated, so it has a channel strip")
+}
+
+/// #2658: a click on a channel row opens the child on that channel's tab;
+/// a Ctrl+click opens the source sheet itself, on Editor.
+#[test]
+fn a_ctrl_click_on_a_channel_row_opens_the_source_sheet_on_editor() {
+    let mut f = fixture("Repeat(CH, 1, 2)", false);
+    send(&mut f.app, CompiledDesignMsg::CompileRequested);
+    let ch2 = f
+        .app
+        .document_state
+        .panel_ctx
+        .compiled_design
+        .panel
+        .rows
+        .iter()
+        .find(|r| r.name == "CH2")
+        .map(|r| r.index)
+        .expect("the CH2 row");
+
+    send(&mut f.app, CompiledDesignMsg::RowClicked(ch2));
+    assert_eq!(
+        f.app.document_state.active_path.as_deref(),
+        Some(f.child.as_path())
+    );
+    assert_eq!(strip(&f.app).active, Some(2), "a click: the channel's tab");
+
+    send(&mut f.app, CompiledDesignMsg::RowSourceClicked(ch2));
+    assert_eq!(
+        f.app.document_state.active_path.as_deref(),
+        Some(f.child.as_path())
+    );
+    assert_eq!(strip(&f.app).active, None, "a Ctrl+click: Editor");
+}
+
+/// #2658, mockup row 151: after a compile each channel card has its
+/// drawing, with the part named as that channel names it.
+#[test]
+fn a_compile_draws_each_channel_card_with_its_designators() {
+    let mut f = fixture("Repeat(CH, 1, 2)", true);
+    send(&mut f.app, CompiledDesignMsg::FindChanged(String::new()));
+    assert!(
+        strip(&f.app).tabs.iter().all(|t| t.miniature.is_none()),
+        "no drawing before a compile"
+    );
+    send(&mut f.app, CompiledDesignMsg::CompileRequested);
+    let tabs = strip(&f.app).tabs;
+    assert_eq!(tabs.len(), 2);
+    for tab in &tabs {
+        let drawing = tab.miniature.as_ref().expect("a drawing after the compile");
+        let names: Vec<&str> = drawing
+            .designators
+            .iter()
+            .map(|t| t.text.as_str())
+            .collect();
+        assert_eq!(names, [format!("{}_R5", tab.channel.name)]);
+    }
+}
+
+fn designator_format(f: &Fixture) -> String {
+    f.app.document_state.projects[0]
+        .data
+        .schematic_design
+        .channel_naming
+        .designator_format
+        .clone()
+}
+
+fn naming_menu_open(f: &Fixture) -> bool {
+    f.app.ui_state.compiled_design.naming_menu.is_some()
+}
+
+/// A repeated sheet symbol selected with Properties in front, so its
+/// Channel naming section shows.
+fn naming_fixture() -> Fixture {
+    let mut f = fixture("Repeat(CH, 1, 4)", false);
+    // The first-run tour claims Esc ahead of a panel menu.
+    f.app.ui_state.first_run_tour_open = false;
+    let id = f.sheet_symbol;
+    select(&mut f.app, id, SelectedKind::ChildSheet);
+    f.app.document_state.dock.show_panel(PanelKind::Properties);
+    f
+}
+
+/// #2674: a style picked in the naming menu is written and closes it.
+#[test]
+fn a_style_picked_in_the_naming_menu_is_the_channel_naming() {
+    let mut f = naming_fixture();
+    // Not the default `${Channel}_${Designator}`, so the pick is a change.
+    let picked = "${Designator}_${Channel}";
+    assert_ne!(designator_format(&f), picked, "the pick is a change");
+
+    send(
+        &mut f.app,
+        CompiledDesignMsg::NamingMenuToggled(NamingTarget::Designators),
+    );
+    assert!(naming_menu_open(&f));
+    send(
+        &mut f.app,
+        CompiledDesignMsg::NamingPicked {
+            target: NamingTarget::Designators,
+            format: picked.to_string(),
+        },
+    );
+
+    assert_eq!(designator_format(&f), picked);
+    assert!(!naming_menu_open(&f), "a pick closes the menu");
+}
+
+/// #2674: Esc closes the naming menu and leaves the naming as it was, a
+/// custom format typed but not submitted included.
+#[test]
+fn esc_closes_the_naming_menu_without_a_change() {
+    let mut f = naming_fixture();
+    let before = designator_format(&f);
+    send(
+        &mut f.app,
+        CompiledDesignMsg::NamingMenuToggled(NamingTarget::Designators),
+    );
+    send(
+        &mut f.app,
+        CompiledDesignMsg::NamingCustomTyped("${Designator}-${Index}".to_string()),
+    );
+    assert!(naming_menu_open(&f));
+
+    crate::settle_support::settle(
+        &mut f.app,
+        Message::Input(InputMsg::EscapePressed { window: None }),
+    );
+
+    assert!(!naming_menu_open(&f), "Esc closes the menu");
+    assert_eq!(designator_format(&f), before, "Esc changes nothing");
+    let selected = &f.app.interaction_state.active_canvas().selected;
+    assert_eq!(selected.len(), 1, "Esc goes no further than the menu");
+}
+
+/// The designators of the BOM preview's lines, Lite active.
+fn bom_designators(app: &mut Signex) -> Vec<String> {
+    let _ = app.update(Message::Menu(signex_app::menu_bar::MenuMessage::ExportBom));
+    let preview = app.document_state.bom_preview.as_ref().expect("preview");
+    preview
+        .table
+        .rows
+        .iter()
+        .flat_map(|row| row.references.iter().cloned())
+        .collect()
+}
+
+/// The Variant Manager's read of the project's parts, with the settings
+/// applied as the matrix shows them: `designator` to its fit in Lite.
+fn variant_manager_lite(app: &mut Signex) -> Vec<(String, bool)> {
+    let project_id = app.document_state.projects[0].id;
+    app.document_state
+        .project_tabs
+        .entry(project_id)
+        .or_default();
+    crate::settle_support::settle(
+        app,
+        Message::Project(signex_app::app::ProjectMsg::Tab(
+            signex_app::app::ProjectTabMsg::VariantPartsReadRequested { project_id },
+        )),
+    );
+    let tab = &app.document_state.project_tabs[&project_id];
+    let read = tab.variant_parts.as_deref().expect("a read landed");
+    let matrix = read.as_ref().expect("the parts were read");
+    let settings = &app.document_state.projects[0].data.variant_settings;
+    let mut rows: Vec<(String, bool)> = matrix
+        .with_settings(settings)
+        .rows
+        .iter()
+        .map(|row| (row.designator.clone(), row.fitted[1]))
+        .collect();
+    rows.sort();
+    rows
+}
+
+/// #2662, mockup row 151: a card's fit click, from the parts the compiled
+/// strip lists, is the fit the BOM and the Variant Manager read too: the
+/// channel's copy is left out of the Lite BOM and shows Not fitted in the
+/// matrix, the other channel's copy stays fitted.
+#[test]
+fn a_channel_card_fit_reaches_the_bom_and_the_variant_manager() {
+    let mut f = fixture("Repeat(CH, 1, 2)", true);
+    let data = &mut f.app.document_state.projects[0].data;
+    data.variant_definitions = vec!["Lite".to_string()];
+    data.active_variant = Some("Lite".to_string());
+    send(&mut f.app, CompiledDesignMsg::CompileRequested);
+    let ch1 = strip(&f.app).tabs[0].clone();
+    assert_eq!(ch1.channel.name, "CH1");
+    assert!(!ch1.fits.is_empty(), "the compile lists CH1's parts");
+    assert!(!ch1.is_not_fitted());
+    let mut before = bom_designators(&mut f.app);
+    before.sort();
+    assert_eq!(before, ["CH1_R5", "CH2_R5"]);
+
+    send(
+        &mut f.app,
+        CompiledDesignMsg::ChannelFitPicked {
+            parts: ch1.fits.iter().map(|fit| fit.part.clone()).collect(),
+            fitted: Some(false),
+        },
+    );
+
+    assert!(strip(&f.app).tabs[0].is_not_fitted(), "the card reads it");
+    assert!(!strip(&f.app).tabs[1].is_not_fitted());
+    assert_eq!(bom_designators(&mut f.app), ["CH2_R5"], "the Lite BOM");
+    assert_eq!(
+        variant_manager_lite(&mut f.app),
+        [("CH1_R5".to_string(), false), ("CH2_R5".to_string(), true)],
+        "the Variant Manager's channel rows"
+    );
 }

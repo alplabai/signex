@@ -16,6 +16,20 @@ The Compiled Design panel shows the project as it compiles (#1308).
   parser is `signex_types::schematic::ChannelRepeat`.
 - A sheet entry named `Repeat(<net>)` gives one net per channel; the child
   sheet has a port named `<net>`. A plain entry is shared by every channel.
+  Sync Sheet Pins and both directions of Synchronize Sheet Entries and Ports
+  match entries to ports through
+  `signex_types::schematic::sheet_entry_port` (#2659): on a repeated sheet
+  symbol `Repeat(VOUT)` meets `VOUT`, the way the netlist joins it inside a
+  channel; on a plain sheet symbol only the written name meets a port, as
+  the netlist joins a plain placement, so a `Repeat(VOUT)` entry left over
+  after Repeat is turned off is offered as a rename to `VOUT`.
+  `bad_hier_sheet_pin` asks `entry_port_name` on every symbol. A
+  `Repeat(<net>)` entry and its port
+  `<net>` agree, so a sync keeps the entry and adds no plain `<net>` entry
+  beside it. When the port is renamed, the entry stays a repeat of the new
+  name (`Repeat(VOUT_5V)`); when the port is gone, the generated entry is
+  removed under its written name. Symbol to sheet adds the port `<net>` for
+  a new `Repeat(<net>)` entry.
 - Nothing new is stored: the repeat is the designator text and the entry
   names, so a sheet that only uses multi-channel keeps its format version and
   an older build reads a plain sheet symbol with plain entries.
@@ -41,6 +55,14 @@ stays as written. A custom format typed in the menu is checked first
 (`check_format`): it must not be empty or hold spaces, every token must be
 closed and known, and it needs a channel token and the designator or net
 token.
+
+The Designators and Local nets fields each open their menu as a layer
+floating over the dock, under the field and right-aligned to it, so the
+rows below stay where they are (#2674). The menu keeps inside the window,
+above the field when there is no room below. Picking a preset or an
+accepted custom format closes it, and so does a press anywhere outside the
+menu and its field; a press on the field toggles it. Esc closes it with no
+change, the typed custom format dropped.
 
 ## Stitching
 
@@ -132,7 +154,10 @@ dependency, which this does not.
   designator and editing the Repeat fields write the same designator through
   the same Name edit, one undo step each. Turning Repeat off restores the
   newest plain designator in the sheet's undo history, however the repeat
-  was written; with none there it takes the file's stem. A From / To that
+  was written; with none there it takes the file's stem, numbered
+  (`child_2`, ...) when another sheet symbol on the sheet holds it, so the
+  switch never writes a name the Name edit refuses (#2790). A file name with
+  no stem gives the channel name. A From / To that
   is invalid or that another sheet symbol holds is refused: the document
   does not change and the box keeps the typed text, outlined as invalid.
 
@@ -145,6 +170,13 @@ read-only: any edit from the canvas, menus or keys, undo and redo included,
 is refused at the mutation gateway with the Messages line "Channel CH1 is a
 compiled view; switch to Editor to edit". Properties show the channel and its
 designator map (logical designator, value, channel designator).
+
+Each card draws its channel's sheet at card scale (#2658): wires, buses and
+part bodies, with the designators and net names that channel has, in the
+schematic canvas colours. Names are drawn at a fixed small size so a small
+card stays legible. The drawing is built by the compile, off the UI thread
+(`signex_net::sheet_miniature`), from the compile's own names, so it shows
+the last compile; before one, a card lists the channel's designators.
 
 ## Bound tables
 
@@ -180,25 +212,71 @@ list opens it, docked on the left as a tab beside Projects.
   Parts and Nets of that instance, under the designators and net names it has
   there. A search also finds them and opens the rows that hold a match.
 - Clicking a row opens its sheet; a channel row opens it on its channel tab.
-  Clicking a part or net row, or a net in Nets mode, opens that instance and
-  selects the element.
+  Ctrl+click (Cmd+click on macOS) on a channel row opens the source sheet
+  itself, on Editor; on a sheet row it is a plain click, as a sheet has one
+  tab (#2658). Clicking a part or net row, or a net in Nets mode, opens that
+  instance and selects the element.
+- The out-of-date banner and row tips give the compile's time in the user's
+  locale (`I18n::time`); the compile keeps the instant it finished, never a
+  worded time (#2733).
 - Out of date: an electrical edit to a compiled sheet (any `DocumentPatch`
   but a colour-only one) marks its rows amber with a dot, and a banner offers
   Recompile. Recompile is never automatic.
 - Before the first compile the panel shows "Not compiled yet" with a Compile
   project button; the mode switch and search are disabled.
 
+## Per-channel variant state
+
+A variant can fit a part in one channel and leave it out in another (#2662).
+
+- **Model.** Each channel's copy of a part is a placed part of its own: its
+  placement is the channel's (see "Channel identity"), so its part link
+  (`SymbolLink`: that placement and the unit uuids) is the channel's. A
+  variant's fit or values for one copy are an ordinary `variant_settings`
+  part entry keyed by that link (Caner, 2026-11-25), so an entry stays on its
+  copy through a re-annotation or a change of the channel naming and never
+  lands on another channel's copy. Nothing new is stored and the `.snxprj`
+  token rule is unchanged: a project with any part entry writes
+  `snxprj/1.1` (`docs/FORMAT_VERSIONS.md`).
+- **Variant Manager.** A part on a repeated sheet has one matrix row for
+  every channel's copy: a fold chevron, its designator on the sheet, its
+  value and the number of channels, and per variant Fitted, Not fitted, or
+  "mixed · 1 of 3 not fitted" when the channels disagree. A click opens it
+  into one row per copy (the channel designators), each selected and set on
+  its own. The right pane of a copy also offers Fitted in every channel, Not
+  fitted in every channel and Every channel as on the sheets: one undo step
+  however many channels (`SetVariantPartsFit`). The matrix reads the
+  channels from the project walk (`signex_output::MatrixChannels`).
+- **Channel cards.** Once compiled, each card's header says how its channel
+  fits in the active variant ("Lite: Fitted", "Lite: 2 not fitted", "Lite:
+  Not fitted"); Base shows nothing, it is the sheets. A channel the variant
+  leaves out entirely is greyed and crossed, and the designators of the parts
+  it leaves out are greyed, on the drawing and in the list. A click on the fit leaves every part of the channel
+  out of the active variant, or, on a channel left out entirely, lets the
+  sheets decide for each again: one undo step. It is a project setting, not a
+  sheet edit, so a channel tab's read-only gate does not refuse it, and it
+  is undone from the Project tab (its General history), not from the
+  channel tab or Editor. The fit is the BOM's (`signex_output::
+  not_fitted_symbols` over the channel's copy of the sheet) and so is the
+  part link the click writes: every unit of the part at the channel's
+  placement. An edit through one unit never narrows an entry that already
+  names more units of the part.
+- **BOM.** The per-variant BOM reads the same entries: a copy the variant
+  leaves out is not fitted, the other channels' copies are.
+- **Canvas.** Editor shows the repeated sheet once for all its channels, so
+  "Cross out not-fitted parts" crosses a part out only when every channel's
+  copy is not fitted; a part fitted in some channels is drawn fitted. The
+  fit is decided as the BOM decides it, across the project's open sheets
+  (`signex_output::PlacedFits`): a unit on a sheet that is not open is not
+  counted. SVG and PDF print one page per channel and cross each channel's
+  copies out on its own page.
+
 ## Not built yet
 
-- Per-channel variant state (a channel, or a part in one channel, not
-  fitted) and its display in the channel cards and the panel: it is set in
-  the Variant Manager tab, which does not exist yet (#2662).
-- The channel cards list the channel's designators; the miniature drawing of
-  the sheet at card scale with the channel's designators and net names is not
-  drawn yet (#2658).
-- Ctrl+click on a panel row (open in a new tab): a sheet has one tab, so a
-  row click focuses it (#2658).
-- The naming menu opens inline under its field, right-aligned to it, not as
-  a floating layer over the dock (#2674).
-- Sheet entry sync does not yet treat `Repeat(<net>)` as matching the port
-  `<net>`; it offers to add `<net>` as a new entry (#2659).
+- The Compiled Design panel does not show per-channel variant state yet
+  (the grey "Not fitted (Lite)" tag on a channel row, mockup row 154).
+- A channel tab's Properties have no Variant line yet ("In Lite, CH3 and
+  CH4 are Not fitted", mockup row 151).
+- The canvas has no right-click "This channel only / All channels" for a
+  variant fit yet (mockup row 32); it is set in the Variant Manager and on
+  the cards.

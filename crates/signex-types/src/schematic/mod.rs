@@ -842,8 +842,17 @@ pub use directive::{
 pub use directive::{
     BlanketPour, DIFF_PAIR_SUFFIX_PAIRS, DiffPairHalves, NetRules, diff_pair_halves,
 };
+mod directive_flag;
+pub use directive_flag::{
+    DIRECTIVE_FLAG_LINE_MM, DIRECTIVE_FLAG_PAD_MM, DIRECTIVE_FLAG_TEXT_MM, DirectiveFlag,
+    directive_flag, directive_flag_line_origin, directive_flag_lines,
+};
 mod no_erc;
 pub use no_erc::{NoErcDirective, canonical_no_erc_rules, no_erc_rules_suppress};
+mod not_fitted;
+pub use not_fitted::{
+    NOT_FITTED_CROSS_WIDTH_SCALE, NOT_FITTED_PAPER_SHARE, greyed_ink, not_fitted_cross,
+};
 mod sheet;
 pub use sheet::*;
 mod sheet_frame;
@@ -928,7 +937,8 @@ mod repeat;
 mod repeat_tests;
 pub use repeat::{
     ChannelFormatError, ChannelOccurrence, ChannelRepeat, MAX_CHANNELS, RepeatStack, StackLayer,
-    channel_alpha, check_format, repeated_entry_name,
+    channel_alpha, check_format, entry_port_name, renamed_entry, repeated_entry_name,
+    sheet_entry_port, sheet_entry_renamed,
 };
 mod harness_ops;
 pub use harness_ops::*;
