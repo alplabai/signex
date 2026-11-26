@@ -63,9 +63,10 @@ pub use substitution::{SubstitutionContext, resolve, resolve_text};
 pub use svg::board::{AssemblySvgOptions, assembly_svg};
 pub use template::{Template, TemplateError, TemplateId, TitleBlockField};
 pub use variant_fit::{
-    ChannelFit, MatrixChannels, PlacedFits, RowChannel, VariantMatrix, VariantRow, is_fitted,
-    not_fitted_symbols, part_is_fitted, placed_part_fitted, project_fit, variant_matrix,
-    variant_matrix_in_channels,
+    ChannelFit, CompareProblem, ComparedPart, DrawnValueMap, DrawnValues, MatrixChannels,
+    PartChange, PartInVariant, PlacedFits, RowChannel, VariantComparison, VariantMatrix,
+    VariantRow, drawn_symbol, is_fitted, not_fitted_symbols, part_is_fitted, placed_part_fitted,
+    project_fit, variant_matrix, variant_matrix_in_channels, variant_value,
 };
 
 /// The universal exporter trait — one impl per output format.

@@ -68,6 +68,15 @@ impl Signex {
             } => {
                 self.pick_channel_part_fit(project_id, variant, &part, fitted);
             }
+            VariantManagerMsg::CompareOpened => self.open_variant_compare(project_id),
+            VariantManagerMsg::CompareSidePicked { from, name } => {
+                self.pick_compare_side(project_id, from, name);
+            }
+            VariantManagerMsg::CompareSwapped => self.swap_compare_sides(project_id),
+            VariantManagerMsg::CompareClosed => self.close_variant_compare(project_id),
+            VariantManagerMsg::BomRequested { variant } => {
+                return self.open_variant_bom(project_id, variant);
+            }
         }
         iced::Task::none()
     }

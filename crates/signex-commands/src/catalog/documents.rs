@@ -365,6 +365,41 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         operands: operands::PROJECT_ACTIVE_VARIANT,
         ..CommandMetadata::DEFAULT
     },
+    // #2949: the Variant Manager's variant defaults, Compare variants and
+    // Open in BOM Studio.
+    CommandMetadata {
+        id: "project_set_default_variant",
+        category: "design",
+        label: command_ids::CMD_PROJECT_SET_DEFAULT_VARIANT,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::PROJECT_DEFAULT_VARIANT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "compare_variants",
+        category: "design",
+        label: command_ids::CMD_COMPARE_VARIANTS,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::COMPARE_VARIANTS,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "variant_bom",
+        category: "design",
+        label: command_ids::CMD_VARIANT_BOM,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::VARIANT_BOM,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "project_move_library",
         category: "design",

@@ -930,6 +930,25 @@ pub const PROJECT_ACTIVE_VARIANT: &[Operand] = &[
     required("document", OperandKind::Document),
     optional("name", OperandKind::Text),
 ];
+/// `project_set_default_variant` (#2949): a variant name; none, or `Base`,
+/// is Base.
+pub const PROJECT_DEFAULT_VARIANT: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("name", OperandKind::Text),
+];
+/// `compare_variants` (#2949): the two sides, `from` (none is Base) and
+/// `to` (none is the active variant, or the first one while Base is).
+pub const COMPARE_VARIANTS: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("from", OperandKind::Text),
+    optional("to", OperandKind::Text),
+];
+/// `variant_bom` (#2949): a variant name; none is the active variant,
+/// `Base` is Base.
+pub const VARIANT_BOM: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("name", OperandKind::Text),
+];
 /// `project_move_library`: a library as the project stores its path, `up`
 /// or `down`.
 pub const PROJECT_MOVE_LIBRARY: &[Operand] = &[

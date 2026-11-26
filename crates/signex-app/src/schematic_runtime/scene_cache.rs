@@ -46,6 +46,7 @@ pub(crate) struct SceneInputs {
     defaults: signex_types::schematic::SchematicDefaults,
     designator_standard: Option<signex_types::designator::DesignatorStandard>,
     not_fitted: Option<HashSet<uuid::Uuid>>,
+    variant_values: Option<signex_output::DrawnValueMap>,
 }
 
 struct Entry {
@@ -199,6 +200,7 @@ impl SceneInputs {
             defaults: overrides.defaults,
             designator_standard: overrides.designator_standard,
             not_fitted: overrides.not_fitted.cloned(),
+            variant_values: overrides.variant_values.cloned(),
         }
     }
 
@@ -221,6 +223,7 @@ impl SceneInputs {
             && self.defaults == overrides.defaults
             && self.designator_standard == overrides.designator_standard
             && self.not_fitted.as_ref() == overrides.not_fitted
+            && self.variant_values.as_ref() == overrides.variant_values
     }
 
     /// Like [`Self::fits`] but a pan of a pixel does not fit: for geometry

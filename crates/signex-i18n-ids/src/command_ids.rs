@@ -282,6 +282,9 @@ define_ids! {
         CMD_PROJECT_RENAME_VARIANT = "cmd-project-rename-variant";
         CMD_PROJECT_REMOVE_VARIANT = "cmd-project-remove-variant";
         CMD_PROJECT_SET_ACTIVE_VARIANT = "cmd-project-set-active-variant";
+        CMD_PROJECT_SET_DEFAULT_VARIANT = "cmd-project-set-default-variant";
+        CMD_COMPARE_VARIANTS = "cmd-compare-variants";
+        CMD_VARIANT_BOM = "cmd-variant-bom";
         CMD_PROJECT_MOVE_LIBRARY = "cmd-project-move-library";
         CMD_PROJECT_SET_ANNOTATE_UNDO = "cmd-project-set-annotate-undo";
         CMD_PROJECT_SET_ANNOTATE_NUMBERING = "cmd-project-set-annotate-numbering";

@@ -1,19 +1,27 @@
 //! The Variant Manager (#1690, #1293, mockup row 32), a document tab of its
 //! project (`tab`): a top bar (active variant, parts filter, Only rows that
-//! differ, the actions not built yet), the variant list with the selected
-//! variant's actions, a summary card per variant, the parts by variants
-//! matrix, read off the UI thread from the project's sheets, and the
-//! selected cell's part on the right. The project's variant settings are
-//! laid over the read as it is shown, so an edit shows at once. Every edit
-//! is one step of the General history; a refused one shows its reason and
-//! changes nothing. See `docs/PROJECT_TAB.md`, "Variants".
+//! differ, Compare variants and Open in BOM Studio), the variant list with
+//! the selected variant's actions, a summary card per variant, the parts by
+//! variants matrix, read off the UI thread from the project's sheets (or the
+//! comparison of two variants in their place), and the selected cell's part
+//! on the right. The project's variant settings are laid over the read as it
+//! is shown, so an edit shows at once. Every edit is one step of the General
+//! history; a refused one shows its reason and changes nothing. See
+//! `docs/PROJECT_TAB.md`, "Variants".
 
+mod actions;
 mod bar;
 mod cells;
 mod channel_edits;
 mod channel_rows;
 #[cfg(test)]
 mod channel_tests;
+mod commands;
+#[cfg(test)]
+mod commands_tests;
+mod compare;
+#[cfg(test)]
+mod compare_tests;
 mod detail;
 mod edits;
 mod empty;
@@ -333,8 +341,12 @@ fn frame<'a>(
         .boxed()
 }
 
-/// The centre: the summary cards over the matrix, or where the read stands.
+/// The centre: the summary cards over the matrix, or where the read stands;
+/// the comparison of two variants in their place while it is open.
 fn main<'a>(m: &Manager<'_>) -> Element<'a, Message> {
+    if let Some(sides) = m.tab.and_then(|tab| tab.variant_manager.compare.as_ref()) {
+        return compare::view(m, sides);
+    }
     let mut col: Column<Element<'a, Message>> = column![summary::view(m)]
         .spacing(SP.l)
         .padding(SP.l)

@@ -311,6 +311,10 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "it writes the project's settings, which no sheet's undo step covers",
     ),
     (
+        "project_set_default_variant",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
         "project_move_library",
         "it writes the project's settings, which no sheet's undo step covers",
     ),

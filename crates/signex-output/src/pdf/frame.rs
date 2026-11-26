@@ -412,6 +412,7 @@ mod special_string_tests {
             cell: "",
             variant_settings: None,
             placed_fits: None,
+            drawn_values: None,
         };
         let page = SvgRenderContext::from_sheet(&sheet, &opts, 297.0, 210.0, 1.0, Some(&inputs));
         assert!(

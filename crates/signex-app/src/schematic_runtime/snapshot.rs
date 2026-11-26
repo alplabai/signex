@@ -336,6 +336,7 @@ pub fn build_renderer_snapshot(
             symbol,
             overrides.special_strings,
             overrides.designator_standard,
+            overrides.variant_values,
         );
         if !symbol.value.is_empty()
             && let Some(text) = field_text_input(

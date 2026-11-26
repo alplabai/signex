@@ -17,6 +17,12 @@ mod channels_tests;
 mod drawn;
 #[cfg(test)]
 mod drawn_tests;
+mod compare;
+#[cfg(test)]
+mod compare_tests;
+mod drawn_values;
+#[cfg(test)]
+mod drawn_values_tests;
 mod fields;
 mod matrix;
 mod settings;
@@ -30,6 +36,8 @@ use signex_types::schematic::Symbol;
 
 pub use channels::{ChannelFit, MatrixChannels, RowChannel};
 pub use drawn::{PlacedFits, not_fitted_symbols};
+pub use compare::{CompareProblem, ComparedPart, PartChange, PartInVariant, VariantComparison};
+pub use drawn_values::{DrawnValueMap, DrawnValues, drawn_symbol, variant_value};
 #[cfg(test)]
 pub(crate) use fields::field_value_ci;
 pub(crate) use fields::{

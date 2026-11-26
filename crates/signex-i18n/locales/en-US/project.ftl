@@ -362,6 +362,23 @@ variant-manager-compare = Compare variants...
 variant-manager-open-bom = Open in BOM Studio
 # Tooltip of a top bar button whose surface is not built yet.
 variant-manager-not-built = Not built yet
+# Compare variants (mockup row 59, view d): the button between the two
+# sides, its tooltip, a parameter other than the value, the line shown when
+# the two sides do not differ, a side the project does not define, the
+# footer and its Close.
+variant-manager-compare-swap = Swap sides
+variant-manager-compare-swap-mark = ⇄
+variant-manager-compare-parameter = { $parameter }: { $value }
+variant-manager-compare-none = { $from } and { $to } fit every part alike, with the same values.
+variant-manager-compare-unknown = The variants cannot be compared: { $reason }
+variant-manager-compare-footer =
+    { $differences ->
+        [one] 1 difference
+       *[other] { $differences } differences
+    } · parts { $from } → { $to }
+variant-manager-compare-close = Close
+# Messages line when Open in BOM Studio finds no sheet of the project open.
+variant-manager-bom-no-sheet = Open a sheet of the project to open its BOM.
 variant-manager-duplicate = Duplicate
 variant-manager-set-default = Set as default
 # Pill on the default variant's row and card.

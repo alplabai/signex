@@ -61,6 +61,7 @@ fn printed_texts(schematic: SchematicSheet) -> Vec<String> {
         cell: "",
         variant_settings: None,
         placed_fits: None,
+        drawn_values: None,
     };
     let ctx = SvgRenderContext::from_sheet(&sheet, &opts, 297.0, 210.0, 1.0, Some(&inputs));
     ctx.elements

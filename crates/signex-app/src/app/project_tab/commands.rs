@@ -144,6 +144,18 @@ pub(crate) fn project_set_active_variant(app: &mut Signex, args: &CommandArgs) -
     )
 }
 
+/// `project_set_default_variant {document, name?}` (#2949): the variant
+/// defaults, as Set as default sets them; none is Base.
+pub(crate) fn project_set_default_variant(app: &mut Signex, args: &CommandArgs) -> Ran {
+    let name = text(args, "name").map(str::to_string);
+    edit(
+        app,
+        args,
+        ProjectSectionCommand::SetDefaultVariant { name },
+        Section::Variants,
+    )
+}
+
 /// `project_move_library {document, library, direction}`: `library` is the
 /// path as the project stores it.
 pub(crate) fn project_move_library(app: &mut Signex, args: &CommandArgs) -> Ran {
@@ -282,6 +294,9 @@ impl Signex {
                 "variants": {
                     "defined": data.variant_definitions,
                     "active": data.active_variant_name(),
+                    "default": data
+                        .default_variant()
+                        .unwrap_or(signex_types::project::BASE_VARIANT),
                 }
             }),
             Section::Libraries => {

@@ -120,6 +120,8 @@ mod tests {
                 "clear_all_net_colors",
                 "close_active_document",
                 "color_net",
+                // #2949: the Variant Manager's top bar actions.
+                "compare_variants",
                 "delete_net_class",
                 "delete_selection",
                 "document_info",
@@ -154,6 +156,7 @@ mod tests {
                 "project_set_active_variant",
                 "project_set_annotate_numbering",
                 "project_set_annotate_undo",
+                "project_set_default_variant",
                 "project_set_requirement",
                 "project_set_version_control",
                 "project_settings",
@@ -227,6 +230,7 @@ mod tests {
                 "unlock_board_items",
                 "untile_documents",
                 "unwaive_drc_violation",
+                "variant_bom",
                 "waive_drc_violation",
             ]
         );

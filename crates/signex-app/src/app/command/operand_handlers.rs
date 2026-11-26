@@ -266,6 +266,10 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
         crate::app::project_tab::project_set_active_variant,
     ),
     (
+        "project_set_default_variant",
+        crate::app::project_tab::project_set_default_variant,
+    ),
+    (
         "project_move_library",
         crate::app::project_tab::project_move_library,
     ),
@@ -554,6 +558,7 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         | "project_rename_variant"
         | "project_remove_variant"
         | "project_set_active_variant"
+        | "project_set_default_variant"
         | "project_move_library"
         | "project_set_annotate_undo"
         | "project_set_annotate_numbering"

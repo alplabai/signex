@@ -394,6 +394,10 @@ impl SvgRenderContext {
             refdes: global_refdes.as_ref().map(|t| t as &dyn Resolver),
             cell: eval_inputs.map(|e| e.cell),
         };
+        // The printed variant's own values (#2948), at this page's placement.
+        let drawn_values = eval_inputs
+            .and_then(|e| e.drawn_values)
+            .and_then(|values| values.at(&sheet.placement));
         for sym in &sheet.schematic.symbols {
             let symbol_start = elements.len();
             let symbol_vars = crate::field_value::symbol_eval_variables(sym);
@@ -502,6 +506,7 @@ impl SvgRenderContext {
             }
 
             // A power port's text is fixed to the port (docs/DECISIONS.md).
+            let drawn = crate::drawn_symbol(sym, drawn_values);
             if !sym.value.is_empty()
                 && let Some(val_text) = sheet.schematic.drawn_value_text(sym)
                 && !val_text.hidden
@@ -528,7 +533,7 @@ impl SvgRenderContext {
                     } else {
                         palette.value
                     },
-                    text: crate::shown_value(&value_scope, sym).text,
+                    text: crate::shown_value(&value_scope, &drawn).text,
                 });
             }
             let symbol_layer = if sym.is_power {
