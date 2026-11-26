@@ -284,8 +284,10 @@ a pointer or an empty corpus instead.
 
 - **Soak.** A seeded driver applies random actions through `BoardEngine`:
   routes and shoves (one or two legs from a ratsnest line or a pad, landed
-  as one step as the tool lands them), track and footprint moves, deletes,
-  undo and redo. After every action: nothing panicked, the engine's history
+  as one step as the tool lands them), track and footprint moves, track
+  drags (the tracks joined to its ends stretched after it, as a drop builds
+  them), vias placed on a track end (as the Via tool places them) and vias
+  moved with their tracks, deletes, undo and redo (#2967). After every action: nothing panicked, the engine's history
   matches the steps taken, undo and redo give back the board exactly as it
   was, ids are unique, tracks are finite, on copper and on known nets, no
   zero-length track appeared, a refused route changed nothing, and a
@@ -301,11 +303,20 @@ a pointer or an empty corpus instead.
   seed, action index and the command that replays it. A routed track laid
   over a same-net track already there and at least as wide (same layer, on
   one line, sharing a
-  stretch) fails the soak (#2492). Not checked yet (#2482):
-  dangling track ends and connectivity against the net list. The soak's own
-  edits make both on purpose (a stub routed into open board, a track moved
-  off its pads or across another net), so these checks must first tell an
-  edit's effect from a defect.
+  stretch) fails the soak (#2492). Connectivity (#2967): every net the
+  action did not touch keeps exactly its ratsnest lines, and a landed route
+  never leaves its own net with more open links. An edit only changes its
+  own nets' links, so this tells an edit's effect from a defect. Two kinds of
+  action are left out: a footprint move, undo and redo may change any net,
+  and a net with a zone may change after any edit, since a pour's fill is cut
+  back from other nets' copper. A route's own net is also left out when the
+  route pushed a track of that net. Shorts (#2967): a route's new track or via
+  that overlaps copper of another net on a shared layer fails the soak when
+  the design rule check reports that short; the overlap test only decides
+  whether to run the check. Not checked yet: dangling track ends, which the
+  soak's own stubs make on purpose. The soak also times every action that
+  changed the board and records the rounds of every shove; the stress report
+  below has the numbers.
 - **Bench.** One-leg routes, half of them shoves: the rounds each shove
   took (`pcb_geom::route::shove_run`). A shove converged when it settled
   within 8 rounds: it cleared the way, or found a push that cannot be made

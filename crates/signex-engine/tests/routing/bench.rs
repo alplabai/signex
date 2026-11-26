@@ -20,6 +20,7 @@ use crate::fixtures::Fixture;
 use crate::report::{budget, ms};
 use crate::rng::Rng;
 use crate::session::{Routed, ShoveTry, plan, route, rules_of, shove_rounds};
+use crate::stats;
 
 /// Rounds a shove may take on most actions.
 pub const ROUNDS_LIMIT: usize = 8;
@@ -54,15 +55,7 @@ impl BoardBench {
     /// way cleared, or a push found impossible so the router walks around.
     /// One that ran out of rounds never counts. 1 with none.
     pub fn converged_share(&self) -> f64 {
-        if self.shoves.is_empty() {
-            return 1.0;
-        }
-        let within = self
-            .shoves
-            .iter()
-            .filter(|s| s.settled && s.rounds <= ROUNDS_LIMIT)
-            .count();
-        within as f64 / self.shoves.len() as f64
+        stats::converged_share(&self.shoves)
     }
 
     fn cleared(&self) -> usize {
@@ -70,12 +63,7 @@ impl BoardBench {
     }
 
     pub fn percentile(&self, share: f64) -> Duration {
-        let mut sorted = self.latencies.clone();
-        sorted.sort_unstable();
-        let Some(last) = sorted.len().checked_sub(1) else {
-            return Duration::ZERO;
-        };
-        sorted[((last as f64) * share).round() as usize]
+        stats::percentile(&self.latencies, share)
     }
 
     /// Median latency within [`MEDIAN_LIMIT`] and p95 within [`P95_LIMIT`].

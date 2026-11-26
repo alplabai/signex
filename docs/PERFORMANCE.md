@@ -143,6 +143,7 @@ The code is `crates/signex-engine/tests/routing/`.
 | Run | Where | What is asserted |
 |---|---|---|
 | `soak_short`, `bench_short`, `a_soak_seed_replays_exactly` | every `cargo test`, the fixed boards | the soak invariants, the file round trip, the DRC delta, shove convergence |
+| `every_action_kind_runs_on_the_synthetic_board` and the stress report tests (`stress_tests.rs`) | every `cargo test` | every soak action kind lands with the invariants held; the connectivity and short checks; the report's fields |
 | `soak_long` (ignored) | the weekly `routing-soak` workflow, every board | the soak invariants on 10,000 actions, the sampled DRC delta and round trip |
 | `bench_thresholds` (ignored) | the weekly `routing-soak` workflow, every board | the DRC delta and shove convergence; latency only with `SIGNEX_ROUTING_ASSERT_LATENCY=1` |
 
@@ -170,6 +171,7 @@ cargo test --release -p signex-engine --test routing -- --ignored --nocapture --
 | `SIGNEX_BENCH_ACTIONS` | Route actions per board in `bench_thresholds`. | `300` |
 | `SIGNEX_ROUTING_ASSERT_LATENCY` | `1` fails `bench_thresholds` on the latency thresholds. | unset: reported only |
 | `SIGNEX_ROUTING_REPORT` | File the report lines are appended to. | unset: printed only |
+| `SIGNEX_ROUTING_REPORT_JSON` | File the soak's JSON stress report is written to (#2967), replaced by each soak test. | unset: not written |
 | `SIGNEX_REQUIRE_ROUTING_CORPUS` | `1` fails a run that finds a board left as a Git LFS pointer, or no boards. | unset: such a board is skipped |
 
 An empty variable counts as unset. Every empty dispatch input reaches the tests
@@ -192,7 +194,8 @@ The numbers above show the format only. They are not measurements.
 - `ROUTING-SOAK`: `result` is `ok` or `FAILED`. A failed line has
   `at_action` and `action` in place of the counts and is followed by the
   failure and the command that replays it. `landed` and `refused` count
-  route actions, and `edits` counts moves and deletes. `drc_checks` and
+  route actions, and `edits` counts moves, drags, via placements and
+  deletes. `drc_checks` and
   `round_trips` count the costlier checks that ran. A `round_trips` of 0 means
   the board did not round-trip as loaded, so the soak could not check it.
   `seconds` is the board's wall time.
@@ -209,3 +212,95 @@ The numbers above show the format only. They are not measurements.
 - `ROUTING-BENCH-MEDIAN`: the median board by copper count, which the
   latency thresholds apply to. `latency_asserted` says whether this run
   failed on them.
+
+### Stress report (#2967)
+
+After the `ROUTING-SOAK` lines, every soak test prints a summary table, one
+row per board, also appended to `SIGNEX_ROUTING_REPORT`:
+
+```text
+| board | result | actions run | landed | shoves | within 8 rounds % | p50 ms | p95 ms | p99 ms | failed at |
+|---|---|---|---|---|---|---|---|---|---|
+| odrive-v3 | ok | 10000 | 2210 | 1380 | 97.4 | 3.12 | 18.40 | 41.07 | - |
+| watchy | FAILED | 4812 | 1033 | 640 | 98.1 | 1.90 | 9.75 | 22.31 | 4811 (DragTrack) |
+```
+
+The latency here is the soak's: the time of every action that changed the
+board (a route or shove from click to landed step, an edit from picking the
+item to the landed step, an undo, a redo), the checks not counted. The
+latency thresholds are the bench's (`bench_thresholds`), on its own run.
+
+With `SIGNEX_ROUTING_REPORT_JSON` set, the same run is written there as one
+JSON document (numbers again only show the format):
+
+```json
+{
+  "format": "signex-routing-stress",
+  "version": 1,
+  "seed": "0x2a",
+  "actions": 10000,
+  "failed": 0,
+  "boards": [
+    {
+      "board": "odrive-v3",
+      "result": "ok",
+      "actions": 10000,
+      "actions_run": 10000,
+      "seconds": 412.7,
+      "counts": {
+        "landed": 2210, "refused": 771, "edits": 2381, "drags": 590,
+        "vias_placed": 480, "vias_moved": 410, "undos": 1290, "redos": 601,
+        "drc_checks": 88, "round_trips": 10, "link_checks": 8120
+      },
+      "shove": {
+        "tries": 1380,
+        "rounds_limit": 8,
+        "rounds_histogram": [702, 311, 160, 80, 41, 22, 12, 9, 7, 36],
+        "converged_pct": 97.4
+      },
+      "latency_ms": {"samples": 7950, "p50": 3.12, "p95": 18.4, "p99": 41.07},
+      "latency_ms_by_action": {
+        "Route": {"samples": 1700, "p50": 5.2, "p95": 21.0, "p99": 44.9}
+      },
+      "failure": null
+    }
+  ]
+}
+```
+
+- `rounds_histogram` has `rounds_limit + 2` entries: the shoves that
+  converged in 0, 1, ... `rounds_limit` rounds, then, last, the ones that
+  did not (past the limit, or never settled).
+- `latency_ms_by_action` has one entry per action kind that ran: `Route`,
+  `Shove`, `MoveTrack`, `DragTrack`, `PlaceVia`, `MoveVia`,
+  `MoveFootprint`, `Delete`, `Undo`, `Redo`. Percentiles are nearest rank,
+  in milliseconds to the microsecond.
+- `failure` is `null`, or the action `index`, the `action`, the `message`
+  and the `replay` command line, which runs the same board, seed and
+  actions again and fails at the same action.
+- `link_checks` counts the actions after which the untouched nets' links
+  were compared (`docs/PCB_TOOLS.md`, "Router soak and bench").
+
+A reader checks `format` and `version`; a change to the document's shape
+raises the version.
+
+### Release check
+
+Before a release, run the full stress run on every board and attach its
+report to the release-prep PR:
+
+```text
+git lfs pull
+bash scripts/routing_stress.sh --out target/routing-stress
+```
+
+It builds the routing tests in release, runs `soak_long` (10,000 actions per
+board, seed `0x2482` unless `--seed` gives one) and then `bench_thresholds`
+alone with the latency thresholds asserted. It writes `routing-stress.json`,
+`routing-report.txt` (the report lines and the table), `soak.log` and
+`bench.log` to the output directory, and exits non-zero when a board failed
+or a threshold was missed. Attach `routing-stress.json` and
+`routing-report.txt` to the PR. `--board`, `--seed` and `--actions` replay
+one failure; `--no-bench` skips the bench. Per PR, the cheap mode is
+`soak_short`: 150 actions with the fixed seed `0x2482` on the fixed
+boards, with every `cargo test`.

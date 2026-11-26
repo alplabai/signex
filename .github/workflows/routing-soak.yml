@@ -48,6 +48,9 @@ env:
   # A board left as a Git LFS pointer fails the run instead of being skipped.
   SIGNEX_REQUIRE_ROUTING_CORPUS: "1"
   SIGNEX_ROUTING_REPORT: ${{ github.workspace }}/routing-report.txt
+  # The soak's stress report (#2967): per board the shove histogram and the
+  # action latency p50/p95/p99, failures with their replay line.
+  SIGNEX_ROUTING_REPORT_JSON: ${{ github.workspace }}/routing-stress.json
 
 jobs:
   soak:
@@ -104,6 +107,7 @@ jobs:
           name: routing-report-${{ github.run_number }}
           path: |
             routing-report.txt
+            routing-stress.json
             soak.log
             bench.log
           if-no-files-found: warn
