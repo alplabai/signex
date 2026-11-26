@@ -507,7 +507,8 @@ impl Signex {
         plan: &mut ReadPlan,
     ) {
         match id {
-            "place_component" => self.plan_part_read(args, plan),
+            // #1297: the row `change_component` swaps a part for.
+            "place_component" | "change_component" => self.plan_part_read(args, plan),
             "place_sheet_symbol" => {
                 if let Ok((dir, path, _)) =
                     text(args, "file").and_then(|f| self.child_file_target(&f))

@@ -40,6 +40,7 @@ fn project(app: &mut Signex, dir: &std::path::Path) -> signex_app::app::ProjectI
         schematic_design: Default::default(),
         fab_outputs: None,
         router_tool_diameter: None,
+        bom_alternates: Vec::new(),
         requirements: Default::default(),
         unknown: Default::default(),
     };

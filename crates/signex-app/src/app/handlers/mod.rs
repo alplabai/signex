@@ -146,7 +146,7 @@ pub mod project_case;
 mod project_fs;
 mod repeat_placement;
 mod requirements_check;
-pub(crate) use requirements_check::REQUIREMENTS_CHECK;
+pub(crate) use requirements_check::{ProjectBom, REQUIREMENTS_CHECK};
 pub mod selection_transform;
 pub mod selection_workflow;
 pub mod window_controls;

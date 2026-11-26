@@ -94,7 +94,10 @@ pub(super) const PROPERTIES: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_CHANGE_COMPONENT),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresSelection,
-        flags: CommandFlags::GUI_MUTATES,
+        // #1297: with operands it swaps the part `id` names on the sheet
+        // `document` names, as the dialog's Change does.
+        flags: CommandFlags::MUTATES,
+        operands: super::bom::CHANGE_COMPONENT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

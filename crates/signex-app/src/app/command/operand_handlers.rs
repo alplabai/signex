@@ -340,6 +340,24 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
         "project_run_requirements",
         crate::app::project_tab::project_run_requirements,
     ),
+    // #2938: a BOM line's alternates, one General step each.
+    (
+        "bom_add_alternate",
+        crate::app::project_tab::bom_add_alternate,
+    ),
+    (
+        "bom_remove_alternate",
+        crate::app::project_tab::bom_remove_alternate,
+    ),
+    (
+        "bom_set_alternate_order",
+        crate::app::project_tab::bom_set_alternate_order,
+    ),
+    // #1297: the placed part `id` names swapped for a library row.
+    (
+        "change_component",
+        super::change_component_operands::change_component,
+    ),
 ];
 
 /// The turn `view_rotate` asks for: its `degrees`, else a quarter turn
@@ -635,6 +653,11 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "project_set_rail" => Some(
             "`project_set_rail` needs the operands `document` and `net`, with `voltage`, \
              `tolerance_percent` or `remove` — run it from the command line",
+        ),
+        // #2938: alternates have no window surface yet.
+        "bom_add_alternate" | "bom_remove_alternate" | "bom_set_alternate_order" => Some(
+            "the `bom_*` alternate edits need their operands, `document` first — \
+             `query_bom` answers each line's `key`",
         ),
         _ => None,
     }

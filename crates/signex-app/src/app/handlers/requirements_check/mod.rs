@@ -9,7 +9,10 @@
 //! `docs/CLI.md`, "Requirement checks".
 
 mod bom;
+mod bom_job;
 mod rails;
+
+pub(crate) use bom_job::ProjectBom;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

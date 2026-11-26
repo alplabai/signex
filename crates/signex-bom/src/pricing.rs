@@ -92,7 +92,7 @@ pub fn mpn_key(mpn: &str) -> String {
 
 pub use signex_types::schematic::MPN_FIELDS;
 
-fn row_mpn(row: &BomRow) -> Option<&str> {
+pub(crate) fn row_mpn(row: &BomRow) -> Option<&str> {
     MPN_FIELDS.iter().find_map(|wanted| {
         row.custom
             .iter()
@@ -126,25 +126,28 @@ pub struct BomPrice {
 /// nothing.
 pub fn apply_prices(table: &mut BomTable, book: &PriceBook) {
     for row in &mut table.rows {
-        row.price = book.quote_for(row).and_then(|quote| {
-            let minimum = quote.minimum_order()?.max(1);
-            let buy_qty = if row.fitted_qty == 0 {
-                0
-            } else {
-                row.fitted_qty.max(minimum)
-            };
-            let unit_price = quote.unit_price_at(buy_qty.max(minimum))?;
-            Some(BomPrice {
-                distributor: quote.distributor.clone(),
-                currency: quote.currency.clone(),
-                unit_price,
-                extended_price: round_cents(unit_price * f64::from(buy_qty)),
-                buy_qty,
-                stock: quote.stock,
-                age: quote.age.clone(),
-            })
-        });
+        row.price = book
+            .quote_for(row)
+            .and_then(|quote| price_of(quote, row.fitted_qty));
     }
+}
+
+/// What `fitted` parts cost from `quote`: bought at least at the minimum
+/// order, at that quantity's break; `None` for a quote without breaks.
+/// None fitted costs nothing, at the minimum order's unit price.
+pub fn price_of(quote: &PriceQuote, fitted: u32) -> Option<BomPrice> {
+    let minimum = quote.minimum_order()?.max(1);
+    let buy_qty = if fitted == 0 { 0 } else { fitted.max(minimum) };
+    let unit_price = quote.unit_price_at(buy_qty.max(minimum))?;
+    Some(BomPrice {
+        distributor: quote.distributor.clone(),
+        currency: quote.currency.clone(),
+        unit_price,
+        extended_price: round_cents(unit_price * f64::from(buy_qty)),
+        buy_qty,
+        stock: quote.stock,
+        age: quote.age.clone(),
+    })
 }
 
 /// `value` rounded to cents, halves away from zero. Extended prices are

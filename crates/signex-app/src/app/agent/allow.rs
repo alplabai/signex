@@ -123,10 +123,16 @@ mod tests {
                 "board_shape_from_selection",
                 // #2460: the board status bar's counters, as JSON.
                 "board_status",
+                // #2938: a BOM line's alternates, on the named project.
+                "bom_add_alternate",
+                "bom_remove_alternate",
+                "bom_set_alternate_order",
                 // #2326 slice 6.P2b: the drawing order and Delete, on the
                 // items `ids` names on the named sheet (or board, Delete).
                 "bring_drawings_forward",
                 "bring_drawings_to_front",
+                // #1297: the part `id` names swapped, on the named sheet.
+                "change_component",
                 // #2937: a footprint swap on the named board.
                 "change_footprint",
                 // #2462: Compare Board with Schematic as a query.
@@ -193,6 +199,8 @@ mod tests {
                 "project_set_version_control",
                 "project_settings",
                 "query_board_nets",
+                // #2938: the priced BOM of the named project.
+                "query_bom",
                 "query_footprint_assignments",
                 "query_pins",
                 "query_rail_budget",
@@ -227,6 +235,8 @@ mod tests {
                 "save_board_reuse_block",
                 "save_document",
                 "save_layer_set",
+                // #1297: the parametric part search, a query.
+                "search_parts",
                 "send_drawings_backward",
                 "send_drawings_to_back",
                 // #2363: the Layers panel's board view configuration.

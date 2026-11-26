@@ -36,7 +36,31 @@ pub struct WaitingCommand {
     pub(crate) origin: super::Origin,
 }
 
+/// A query whose work ran off the UI thread (`query_bom`, #2938): the
+/// request it answers, the document it named and its answer, or why there
+/// is none.
+#[derive(Debug, Clone)]
+pub struct QueryAnswered {
+    pub(crate) waiting: WaitingCommand,
+    pub(crate) document: std::path::PathBuf,
+    pub(crate) answer: Result<serde_json::Value, String>,
+}
+
 impl Signex {
+    /// The work of a query landed: answer its caller with it. A query writes
+    /// no edit journal line.
+    pub(crate) fn handle_query_answered(&mut self, answered: QueryAnswered) -> Task<Message> {
+        let QueryAnswered {
+            waiting,
+            document,
+            answer,
+        } = answered;
+        self.finish_waiting_command(waiting, &document, move |_| match answer {
+            Ok(value) => CommandOutcome::Answered(value),
+            Err(reason) => CommandOutcome::disabled(reason),
+        })
+    }
+
     /// Start waiting for `command`: a new ticket, answered by
     /// [`Signex::finish_waiting_command`].
     pub(crate) fn wait_for_command(

@@ -11,6 +11,7 @@ pub use operands::{MAX_TARGETS, Operand, OperandKind};
 mod annotate;
 mod arrange;
 mod board;
+mod bom;
 mod categories;
 mod clipboard;
 mod closest;
@@ -333,6 +334,7 @@ const TABLES: &[&[CommandMetadata]] = &[
     grid::GRID,
     library::LIBRARY,
     workspace::WORKSPACE,
+    bom::BOM,
 ];
 
 /// Flattened iterator over every command's metadata, across all groups, in

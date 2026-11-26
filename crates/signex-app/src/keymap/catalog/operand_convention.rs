@@ -148,6 +148,21 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("skip", OperandKind::Text),
     ("pours", OperandKind::Text),
     ("requirements", OperandKind::Text),
+    // #2938: a BOM line by its key, an alternate's place in the line's
+    // order, and the build a priced BOM is for.
+    ("line", OperandKind::Text),
+    ("position", OperandKind::Text),
+    ("quantity", OperandKind::Text),
+    ("currency", OperandKind::Text),
+    ("variant", OperandKind::Text),
+    // #1297: the part search's query, parameters and stock, and whether
+    // it asks for fresh supplier data.
+    ("query", OperandKind::Text),
+    ("package", OperandKind::Text),
+    ("tolerance", OperandKind::Text),
+    ("rating", OperandKind::Text),
+    ("min_stock", OperandKind::Text),
+    ("refresh", OperandKind::Bool),
 ];
 
 /// The commands whose `ids` is still text, not targets (#2326): a design

@@ -277,6 +277,24 @@ mod tests {
         assert_eq!(cap("layout_plan_status"), Capability::Read);
     }
 
+    /// #2938, #1297: the alternates and the swap change a project or a sheet
+    /// in memory (`edit`, written only by a save); the priced BOM and the
+    /// part search read cached data and write nothing (`read`, not the
+    /// `export` of a BOM file).
+    #[test]
+    fn the_bom_and_part_search_commands_need_edit_or_read() {
+        for id in [
+            "bom_add_alternate",
+            "bom_remove_alternate",
+            "bom_set_alternate_order",
+            "change_component",
+        ] {
+            assert_eq!(cap(id), Capability::Edit, "{id}");
+        }
+        assert_eq!(cap("query_bom"), Capability::Read);
+        assert_eq!(cap("search_parts"), Capability::Read);
+    }
+
     #[test]
     fn the_catalogs_writers_and_exporters_are_pinned() {
         let non_default: BTreeSet<_> = all_command_ids()

@@ -402,6 +402,19 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "project_set_rail",
         "it writes the project's settings, which no sheet's undo step covers",
     ),
+    // #2938: a BOM line's alternates are project settings.
+    (
+        "bom_add_alternate",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "bom_remove_alternate",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "bom_set_alternate_order",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
 ];
 
 const BOARD_EDIT: &str =
