@@ -427,6 +427,12 @@ pub struct UiState {
     /// transient feedback. Only a successful save clears it, because only
     /// then is the file on disk one this process wrote.
     pub keymap_load_error: Option<String>,
+    /// The user's own `keyboard_shortcuts.toml` that `keymap_assign` and
+    /// `keymap_clear` read and write in a headless `signex-cli` run, which
+    /// otherwise works under a throwaway config root (the one carve-out,
+    /// `docs/CLI.md`). `None` everywhere else: they edit the live set and its
+    /// file. Set by `Signex::edit_user_shortcuts_at`.
+    pub keymap_command_file: Option<std::path::PathBuf>,
     /// Path of `keyboard_shortcuts.toml.bak` when that file is on disk
     /// (#603).
     ///

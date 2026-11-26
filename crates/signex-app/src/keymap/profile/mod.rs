@@ -14,7 +14,7 @@ pub use storage::{
     RestoredProfiles, config_path, config_path_for_dir, export_custom_profile,
     export_custom_profiles, import_custom_profile, load_profile_set, load_profile_set_at,
     read_backup_profiles_at, read_profile_file, save_profile_set, save_profile_set_at,
-    write_profile_file,
+    user_config_path, write_profile_file,
 };
 
 #[cfg(test)]

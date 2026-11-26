@@ -476,6 +476,7 @@ impl Signex {
                 preferences_keymap_editor: keymap_editor,
                 preferences_keymap_status: String::new(),
                 keymap_load_error,
+                keymap_command_file: None,
                 // #603 — probed independently of `keymap_load_error`,
                 // because the backup outlives the failure that produced
                 // it and must stay reachable after a successful save

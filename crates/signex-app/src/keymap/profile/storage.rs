@@ -14,6 +14,13 @@ pub fn config_path() -> Option<PathBuf> {
     crate::config_root::config_root().map(|root| root.join(USER_SHORTCUTS_FILE_NAME))
 }
 
+/// The user's own shortcuts file, past a headless run's override: only for
+/// the `signex-cli` keymap commands (see
+/// [`crate::config_root::user_config_root`]).
+pub fn user_config_path() -> Option<PathBuf> {
+    crate::config_root::user_config_root().map(|root| root.join(USER_SHORTCUTS_FILE_NAME))
+}
+
 pub fn config_path_for_dir(base: &Path) -> PathBuf {
     crate::config_root::config_root_for_dir(base).join(USER_SHORTCUTS_FILE_NAME)
 }

@@ -528,6 +528,54 @@ impl KeymapEditorModel {
         self.active_keymap().conflicts()
     }
 
+    /// Whether any row holds typed trigger text, valid or not. A valid
+    /// draft is already in the profile, but its text is still the person's.
+    pub fn has_trigger_drafts(&self) -> bool {
+        !self.trigger_drafts.is_empty() || !self.invalid_trigger_drafts.is_empty()
+    }
+
+    /// Whether the active profile already binds `keys` to `command` in
+    /// `context` on this OS, compared as the strokes pressed here.
+    pub fn has_active_key(
+        &self,
+        command: &AppCommandId,
+        context: ShortcutContext,
+        keys: &ShortcutTrigger,
+    ) -> bool {
+        let Some(wanted) = resolved_strokes(keys, self.platform) else {
+            return false;
+        };
+        self.profiles.active_profile().bindings.iter().any(|binding| {
+            binding.applies_on(self.platform)
+                && binding.context == context
+                && matches!(&binding.action, ShortcutBindingAction::Command(c) if c == command)
+                && binding.triggers.iter().any(|trigger| {
+                    resolved_strokes(trigger, self.platform).as_ref() == Some(&wanted)
+                })
+        })
+    }
+
+    /// The conflicts of the active profile `command` takes part in on `keys`
+    /// in `context`: what the page's State column marks on that row.
+    pub fn key_conflicts(
+        &self,
+        command: &AppCommandId,
+        context: ShortcutContext,
+        keys: &ShortcutTrigger,
+    ) -> Vec<BindingConflict> {
+        let Some(wanted) = resolved_strokes(keys, self.platform) else {
+            return Vec::new();
+        };
+        self.active_conflicts()
+            .into_iter()
+            .filter(|conflict| {
+                conflict.context == context
+                    && conflict.sequence == wanted
+                    && (&conflict.first_command == command || &conflict.second_command == command)
+            })
+            .collect()
+    }
+
     pub fn into_profiles(self) -> ShortcutProfileSet {
         self.profiles
     }

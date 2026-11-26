@@ -194,6 +194,7 @@ define_ids! {
     PREFERENCES_KEYMAP_CMD_BUILT_IN = "preferences-keymap-cmd-built-in";
     PREFERENCES_KEYMAP_CMD_FILE_NOT_LOADED = "preferences-keymap-cmd-file-not-loaded";
     PREFERENCES_KEYMAP_CMD_NOT_SAVED = "preferences-keymap-cmd-not-saved";
+    PREFERENCES_KEYMAP_CMD_PAGE_UNSAVED = "preferences-keymap-cmd-page-unsaved";
     // Component Classes page.
     PREFERENCES_CLASSES_FILTER = "preferences-classes-filter";
     PREFERENCES_CLASSES_COUNT = "preferences-classes-count";

@@ -216,6 +216,14 @@ impl Signex {
 
     /// The dialog answers of an app from [`Self::boot_headless`]; `None`
     /// for an app with native dialogs.
+    /// Let `keymap_assign` and `keymap_clear` read and write the user's own
+    /// shortcuts file at `path` (from `keymap::user_config_path`) in this
+    /// headless run, past its throwaway config root: the one carve-out,
+    /// `docs/CLI.md` (#2495). Nothing else reads it.
+    pub fn edit_user_shortcuts_at(&mut self, path: std::path::PathBuf) {
+        self.ui_state.keymap_command_file = Some(path);
+    }
+
     pub fn headless_answers(&self) -> Option<&HeadlessAnswers> {
         match &self.ui_state.io.picker {
             Picker::Headless(answers) => Some(answers),

@@ -38,6 +38,12 @@ fn app_with_a_custom_profile() -> Signex {
 /// The operand run in a window app (Preferences may be open), as an
 /// in-process request with operands runs it. A key or a menu row carries
 /// no operands; see `without_operands_a_key_or_the_palette_is_refused`.
+/// Not `dispatch_command_reporting` with operands: that GUI entry routes an
+/// operand command through the bridge, where neither keymap command has an
+/// arm (a person records keys in Preferences), so it answers `NoBridgeArm`
+/// before any operand is read, as for every operand-only command
+/// without a bridge arm. Operands reach `run_operands` through the headless
+/// run (the CLI) and in-process requests.
 fn run_in_window(app: &mut Signex, command: &str, operands: &[&str]) -> CommandOutcome {
     app.run_operands(&id(command), &args(command, operands)).0
 }
@@ -107,6 +113,8 @@ fn assign_in_a_window_writes_the_custom_profile_and_runs_at_once() {
     assert_eq!(answer["command"], UNBOUND);
     assert_eq!(answer["keys"], "Ctrl+Alt+Q");
     assert_eq!(answer["context"], "global");
+    assert_eq!(answer["unchanged"], false);
+    assert_eq!(answer["conflicts"], serde_json::json!([]));
     assert_eq!(
         answer["file"],
         crate::keymap::config_path().unwrap().display().to_string()
@@ -316,5 +324,154 @@ fn without_operands_a_key_or_the_palette_is_refused() {
         let (outcome, _) = app.dispatch_command_reporting(&id(command), CommandArgs::none(), None);
         let reason = refusal(outcome);
         assert!(reason.contains("Keyboard shortcuts"), "{command}: {reason}");
+    }
+}
+
+fn open_preferences(app: &mut Signex) {
+    let _ = app.update(crate::app::Message::Preferences(
+        crate::app::PreferencesMsg::Open,
+    ));
+}
+
+/// Both commands, each refused for `fragment`, with nothing written and the
+/// live set and the page left as they were.
+fn both_refused(app: &mut Signex, fragment: &str) {
+    let live = app.ui_state.keymap_profiles.clone();
+    let page = app.ui_state.preferences_keymap_editor.clone();
+    for (command, operands) in [
+        (
+            "keymap_assign",
+            vec![
+                format!("command={UNBOUND}"),
+                "keys=Ctrl+Alt+Q".to_string(),
+                "profile=mine".to_string(),
+            ],
+        ),
+        (
+            "keymap_clear",
+            vec!["command=place_wire".to_string(), "profile=mine".to_string()],
+        ),
+    ] {
+        let given: Vec<&str> = operands.iter().map(String::as_str).collect();
+        let reason = refusal(run_in_window(app, command, &given));
+        assert!(reason.contains(fragment), "{command}: {reason}");
+    }
+    assert_eq!(app.ui_state.keymap_profiles, live);
+    assert_eq!(app.ui_state.preferences_keymap_editor, page);
+    assert!(!crate::keymap::config_path().unwrap().exists(), "nothing was written");
+}
+
+/// Review finding: Apply would write the page's working copy over a CLI
+/// edit, so the edit is refused while the page holds changes of its own.
+#[test]
+fn a_keyboard_page_with_unsaved_changes_refuses_both_commands() {
+    let _root = IsolatedConfigRoot::new();
+    let mut app = app_with_a_custom_profile();
+    open_preferences(&mut app);
+    // An unsaved change on the page: another custom profile.
+    let _ = app.update(crate::app::Message::Preferences(
+        crate::app::PreferencesMsg::Inner(crate::preferences::PrefMsg::KeymapCreateCustomProfile),
+    ));
+    assert!(app.ui_state.preferences_dirty, "fixture: the page is dirty");
+
+    both_refused(&mut app, "save or discard the keyboard changes");
+}
+
+/// A trigger typed on the page is the person's text even when it changed
+/// nothing, so it refuses the commands too.
+#[test]
+fn a_typed_trigger_draft_refuses_both_commands() {
+    let _root = IsolatedConfigRoot::new();
+    let (mut app, _boot) = Signex::new();
+    let mut editor = KeymapEditorModel::new(app.ui_state.keymap_profiles.clone());
+    editor.create_custom_from_active("mine", "Mine").unwrap();
+    let set = editor.into_profiles();
+    app.ui_state.set_keymap_profiles(set);
+    open_preferences(&mut app);
+    let row = app.ui_state.preferences_keymap_editor.rows()[0].clone();
+    // Retyping the row's own keys: the profile is unchanged, the draft held.
+    app.ui_state
+        .preferences_keymap_editor
+        .edit_active_trigger(row.slot, row.trigger_config.clone())
+        .unwrap();
+    assert!(
+        !app.ui_state
+            .preferences_keymap_editor
+            .differs_from(&app.ui_state.keymap_profiles),
+        "fixture: the page compares clean"
+    );
+
+    both_refused(&mut app, "save or discard the keyboard changes");
+}
+
+/// The answer lists the conflicts the new key takes part in, as the page's
+/// State column marks them.
+#[test]
+fn assign_lists_the_conflicts_its_key_makes() {
+    let _root = IsolatedConfigRoot::new();
+    let mut app = app_with_a_custom_profile();
+    let assign = |app: &mut Signex, command: &str| {
+        answered(run_headless(
+            app,
+            "keymap_assign",
+            &[
+                &format!("command={command}"),
+                "keys=Ctrl+Alt+F11",
+                "profile=mine",
+                "context=global",
+            ],
+        ))
+    };
+
+    let first = assign(&mut app, UNBOUND);
+    assert_eq!(first["conflicts"], serde_json::json!([]));
+    let second = assign(&mut app, "open_net_classes");
+
+    let conflicts = second["conflicts"].as_array().expect("a list");
+    assert_eq!(conflicts.len(), 1, "{second}");
+    let commands = &conflicts[0]["commands"];
+    assert!(
+        *commands == serde_json::json!([UNBOUND, "open_net_classes"])
+            || *commands == serde_json::json!(["open_net_classes", UNBOUND]),
+        "{second}"
+    );
+    assert_eq!(conflicts[0]["context"], "global");
+    assert_eq!(conflicts[0]["reserved_by_os"], false);
+}
+
+/// The same key on the same command is not added twice: answered unchanged,
+/// the file untouched.
+#[test]
+fn assigning_a_key_the_command_already_has_is_answered_unchanged() {
+    let _root = IsolatedConfigRoot::new();
+    let mut app = app_with_a_custom_profile();
+    let command = format!("command={UNBOUND}");
+    let operands = [command.as_str(), "keys=Ctrl+Alt+Q", "profile=mine"];
+    answered(run_headless(&mut app, "keymap_assign", &operands));
+    let path = crate::keymap::config_path().unwrap();
+    let written = std::fs::read(&path).unwrap();
+
+    let again = answered(run_headless(&mut app, "keymap_assign", &operands));
+
+    assert_eq!(again["unchanged"], true);
+    assert_eq!(keys_of(&saved(), "mine", UNBOUND), ["Ctrl+Alt+Q"]);
+    assert_eq!(std::fs::read(&path).unwrap(), written);
+}
+
+/// The refusal for a context that is not one names every context, from the
+/// contexts themselves.
+#[test]
+fn a_bad_context_is_refused_with_every_context_name() {
+    let _root = IsolatedConfigRoot::new();
+    let mut app = app_with_a_custom_profile();
+    let reason = refusal(run_headless(
+        &mut app,
+        "keymap_assign",
+        &["command=find", "keys=F9", "profile=mine", "context=nowhere"],
+    ));
+    for context in crate::keymap::ShortcutContext::ALL {
+        let name = serde_json::to_value(context).unwrap();
+        let name = name.as_str().unwrap();
+        assert!(reason.contains(name), "{name} missing: {reason}");
     }
 }

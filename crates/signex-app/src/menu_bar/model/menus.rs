@@ -235,9 +235,12 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
             )
         })
         .collect();
-    // Before the separator that ends the panel rows (the Window submenu
-    // follows it).
-    let at = entries.len().saturating_sub(2);
+    // Before the last separator, which ends the panel rows (the Window
+    // submenu follows it); found by value, not by its place from the end.
+    let at = entries
+        .iter()
+        .rposition(|entry| matches!(entry, MenuEntry::Separator))
+        .unwrap_or(entries.len());
     entries.insert(at, submenu(ctx, ids::PANELS_LIST_GROUP_EXTENSIONS, panels));
     entries
 }

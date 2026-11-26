@@ -86,6 +86,12 @@ impl Session {
         })
     }
 
+    /// Let the keymap commands edit the user's own shortcuts file at `path`
+    /// (the carve-out in `docs/CLI.md`, #2495).
+    pub fn edit_user_shortcuts_at(&mut self, path: PathBuf) {
+        self.app.edit_user_shortcuts_at(path);
+    }
+
     /// A line that is not a command (too long, not UTF-8, malformed, over the
     /// command limit): refused without the app being asked.
     pub fn reject(&self, seq: u64, raw: &str, reason: String) -> ResultLine {

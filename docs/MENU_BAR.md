@@ -808,6 +808,18 @@ and is never greyed. The panel lists every catalog command the session ran,
 from the GUI, the CLI and the agent socket; see
 [COMMAND_LOG.md](COMMAND_LOG.md).
 
+## View ▸ Extensions {#view-extensions}
+
+A submenu after the built-in panel rows, before the separator that ends them
+and the Window submenu (#2495). It shows only when an installed extension
+added a dock panel: one row per extension panel, titled by the extension's own
+message, which opens (or reveals) that panel and carries a check mark while it
+is open, like the other panel rows (`MenuMessage::OpenExtensionPanel`, not a
+catalog command, so no key). With no extension panel installed, View is the
+built-in menu row for row; the Community build installs none. The panels are
+also in the status bar's Panels list. See
+[EXTENSION_API.md](EXTENSION_API.md), "Dock panels".
+
 ## Tools: board edits {#tools-board-edits}
 
 Seven rows under Net Inspector (#2408, #2409) edit the board in view, each

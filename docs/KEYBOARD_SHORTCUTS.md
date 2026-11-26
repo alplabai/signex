@@ -285,7 +285,7 @@ The page (`preferences/keymap/`) reads top to bottom:
 ### Key bindings from the CLI (#2495)
 
 Two catalog commands edit a custom profile without the window, for
-`signex-cli` (which needs `--allow save` for them) or a script:
+`signex-cli` (which needs `--save` or `--allow save` for them) or a script:
 
 - `keymap_assign command=<id> keys=<keys> profile=<id> [context=<context>]`
   gives the command the key sequence `keys` (profile spelling, `Ctrl+Alt+Q`,
@@ -299,10 +299,28 @@ Two catalog commands edit a custom profile without the window, for
 Both edit the named profile with `KeymapEditorModel` (the active profile is
 not switched), write `keyboard_shortcuts.toml` through `atomic_write`, make
 the change the running keymap, and answer with JSON: `profile`, `command`,
-`keys`, `context` (assign) or `removed` (clear), and `file`. A built-in
-profile is refused and stays read-only, and nothing is written while the file
-failed to load at start (#595). Import… and Export… of a profile file stay
-Preferences actions (`read_profile_file`, `write_profile_file`).
+`keys`, `unchanged`, `file`, and `context` and `conflicts` (assign) or
+`removed` (clear). `conflicts` lists each clash the new key takes part in,
+as the page's State column marks it: its `keys`, `context`, the two
+`commands` and `reserved_by_os`. A key the command already has in that
+context is not added again and is answered `"unchanged": true`, and a clear
+that finds no key writes nothing. They are refused, with nothing written:
+
+- for a built-in profile, which stays read-only (Create copies it first);
+- while the file failed to load (#595);
+- while Preferences ▸ Keyboard shortcuts holds changes of its own or a
+  typed trigger, since Apply would then write the page's copy over the
+  command's edit ("save or discard the keyboard changes in Preferences
+  first").
+
+On a page with no changes of its own the command's edit shows at once, and
+an open recorder closes, since the rows it pointed at may have moved.
+
+In a headless `signex-cli` run, which otherwise works under a throwaway
+config root, these two commands read and write the user's own
+`keyboard_shortcuts.toml` (the one carve-out, `docs/CLI.md`), read fresh for
+each command. Import… and Export… of a profile file stay Preferences actions
+(`read_profile_file`, `write_profile_file`).
 
 The editor is backed by `KeymapEditorModel`, which exposes rows with:
 

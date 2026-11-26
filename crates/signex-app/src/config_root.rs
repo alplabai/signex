@@ -75,6 +75,14 @@ pub fn default_config_root() -> Option<PathBuf> {
     unoverridden_root()
 }
 
+/// The user's own config root, whatever [`set_config_root_override`] says:
+/// for the one documented carve-out from a headless run's throwaway root,
+/// the keyboard-shortcut commands of `signex-cli` (`docs/CLI.md`, #2495).
+/// Does not count as a config read. Nothing else may use it.
+pub fn user_config_root() -> Option<PathBuf> {
+    unoverridden_root()
+}
+
 /// The test redirect in a test build, the OS config directory otherwise.
 fn unoverridden_root() -> Option<PathBuf> {
     if is_test_redirect_active() {
