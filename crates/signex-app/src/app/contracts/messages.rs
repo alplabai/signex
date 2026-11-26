@@ -130,9 +130,19 @@ pub enum WindowMsg {
     TileRequested(crate::app::TileLayout),
     /// View ▸ Window ▸ Untile (#2249): back to one document in the main window.
     UntileRequested,
-    /// A press on an unfocused tile pane, carrying the index of the tab it
-    /// shows: that document becomes the active one (#2249).
+    /// A press on an unfocused tile pane, carrying its place among the
+    /// panes: it takes the focus and its document becomes the active one
+    /// (#2249, #1307).
     TilePanePressed(usize),
+    /// View ▸ Window ▸ Split Right / Split Down / Open Second View (mockup
+    /// row 207): the active document moves into a new pane on `edge`, or
+    /// with `second_view` opens there as well.
+    PaneSplitRequested {
+        edge: crate::document_panes::DropEdge,
+        second_view: bool,
+    },
+    /// The kept panes' `prefs.json` write finished; an error goes to Messages.
+    DocumentPanesKept(Result<(), String>),
     /// Dock back was pressed in the title strip of the detached panel
     /// window: the window closes, which re-docks the panel (mockup row 8).
     DetachedPanelDockBackPressed(iced::window::Id),

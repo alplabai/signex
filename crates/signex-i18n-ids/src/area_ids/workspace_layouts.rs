@@ -90,4 +90,14 @@ define_ids! {
     WORKSPACE_LAYOUTS_WHY_NO_LIST = "workspace-layouts-why-no-list";
     WORKSPACE_LAYOUTS_WHY_READ_FAILED = "workspace-layouts-why-read-failed";
     WORKSPACE_LAYOUTS_WHY_NOT_JSON = "workspace-layouts-why-not-json";
+    WORKSPACE_LAYOUTS_PANES_DROP_LEFT = "workspace-layouts-panes-drop-left";
+    WORKSPACE_LAYOUTS_PANES_DROP_RIGHT = "workspace-layouts-panes-drop-right";
+    WORKSPACE_LAYOUTS_PANES_DROP_TOP = "workspace-layouts-panes-drop-top";
+    WORKSPACE_LAYOUTS_PANES_DROP_BOTTOM = "workspace-layouts-panes-drop-bottom";
+    WORKSPACE_LAYOUTS_PANES_DROP_SECOND_VIEW = "workspace-layouts-panes-drop-second-view";
+    WORKSPACE_LAYOUTS_PANES_NOT_DOCKED = "workspace-layouts-panes-not-docked";
+    WORKSPACE_LAYOUTS_PANES_LAST_TAB = "workspace-layouts-panes-last-tab";
+    WORKSPACE_LAYOUTS_PANES_CROSSWISE = "workspace-layouts-panes-crosswise";
+    WORKSPACE_LAYOUTS_PANES_TOO_MANY = "workspace-layouts-panes-too-many";
+    WORKSPACE_LAYOUTS_PANES_NOT_KEPT = "workspace-layouts-panes-not-kept";
 }

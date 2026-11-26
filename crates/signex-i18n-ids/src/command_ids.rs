@@ -144,6 +144,12 @@ define_ids! {
         CMD_MENU_TILE_WINDOWS_VERTICALLY = "cmd-menu-tile-windows-vertically";
         CMD_UNTILE_DOCUMENTS = "cmd-untile-documents";
         CMD_MENU_UNTILE_DOCUMENTS = "cmd-menu-untile-documents";
+        CMD_SPLIT_PANE_RIGHT = "cmd-split-pane-right";
+        CMD_MENU_SPLIT_PANE_RIGHT = "cmd-menu-split-pane-right";
+        CMD_SPLIT_PANE_DOWN = "cmd-split-pane-down";
+        CMD_MENU_SPLIT_PANE_DOWN = "cmd-menu-split-pane-down";
+        CMD_OPEN_SECOND_VIEW = "cmd-open-second-view";
+        CMD_MENU_OPEN_SECOND_VIEW = "cmd-menu-open-second-view";
         CMD_APPLY_LAYOUT_SCHEMATIC = "cmd-apply-layout-schematic";
         CMD_MENU_APPLY_LAYOUT_SCHEMATIC = "cmd-menu-apply-layout-schematic";
         CMD_APPLY_LAYOUT_BOARD = "cmd-apply-layout-board";

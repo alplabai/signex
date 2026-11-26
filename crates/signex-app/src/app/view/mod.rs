@@ -45,8 +45,8 @@ pub(crate) const CHROME_SEARCH_LEFT_GAP: f32 = 16.0;
 pub(crate) const CHROME_SEARCH_RIGHT_GAP: f32 = 16.0;
 
 /// Pointer travel (px) before a tab press counts as a drag, for both the
-/// grab cursor and the drag ghost.
-const TAB_DRAG_THRESHOLD_PX: f32 = 6.0;
+/// grab cursor, the drag ghost and the pane drop targets.
+pub(in crate::app) const TAB_DRAG_THRESHOLD_PX: f32 = 6.0;
 
 impl Signex {
     pub fn view(&self, window_id: iced::window::Id) -> Element<'_, Message> {
@@ -375,6 +375,11 @@ impl Signex {
             .is_some()
             .then(|| self.locked_window_layer());
         let mut overlays = self.collect_overlays(lock, window_id);
+        // Mockup row 207: the half a dropped tab would split into, under
+        // the ghost.
+        if is_main_window && let Some(target) = self.pane_drop_overlay() {
+            overlays.push(target);
+        }
         // Tab drag ghost: only renders once the cursor has travelled past
         // the same 6 px threshold the cursor gating uses
         // (`tab_bar::view`). Mirrors that gate here so press-without-move

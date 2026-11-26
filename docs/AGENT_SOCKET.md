@@ -177,14 +177,18 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   pins this set, so a catalog row that joins or leaves it is a visible
   decision.
   The window-layout commands `tile_windows_horizontally`,
-  `tile_windows_vertically` and `untile_documents` (#2249) name no document:
+  `tile_windows_vertically` and `untile_documents` (#2249), and the pane
+  commands `split_pane_right`, `split_pane_down` and `open_second_view`
+  (mockup row 207), name no document:
   they are open to agents by the maintainer's rule that everything is
   AI-controllable, run the View ▸ Window menu row's handler (refused with its reason
-  when the row is greyed) and answer with the layout they left:
+  when the row is greyed, and a pane command with the split's reason when it
+  cannot split) and answer with the layout they left:
   `{"tiled", "layout": "stacked" | "side_by_side" | null, "panes"}`, each
   pane `{"focused", "document", "name"}` in pane order (`document` and
-  `name` are null for a pane outside an open project). They never change the
-  active tab.
+  `name` are null for a pane outside an open project; a second view names
+  its document in two panes, one of them focused). They never change the
+  active tab. Headless, they are refused like every window command.
   The CSV, PDF, SVG and STEP writers `export_board_report`,
   `export_board_pdf`, `export_assembly_svg` and `export_board_step` take a
   `path`, so they are CLI only.

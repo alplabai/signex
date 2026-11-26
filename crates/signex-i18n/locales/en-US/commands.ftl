@@ -147,6 +147,13 @@ cmd-tile-windows-vertically = Tile windows side by side
 cmd-menu-tile-windows-vertically = Tile Vertically
 cmd-untile-documents = Untile documents
 cmd-menu-untile-documents = Untile
+# Mockup row 207: the document area splits into panes.
+cmd-split-pane-right = Move the document into a new pane on the right
+cmd-menu-split-pane-right = Split Right
+cmd-split-pane-down = Move the document into a new pane below
+cmd-menu-split-pane-down = Split Down
+cmd-open-second-view = Open a second view of the document on the right
+cmd-menu-open-second-view = Open Second View
 # Workspace layouts (mockup row 166): View ▸ Window ▸ Layouts.
 cmd-apply-layout-schematic = Workspace layout: Schematic
 cmd-menu-apply-layout-schematic = Schematic

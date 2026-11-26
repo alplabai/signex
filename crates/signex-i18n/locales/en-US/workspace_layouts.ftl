@@ -121,3 +121,18 @@ workspace-layouts-why-no-list = it has no layouts list
 # { $error } is the system's or the parser's reason.
 workspace-layouts-why-read-failed = reading it failed: { $error }
 workspace-layouts-why-not-json = it is not JSON: { $error }
+
+# Document panes (mockup row 207): what a tab dropped on an edge of the
+# document area does. { $name } is the tab's title.
+workspace-layouts-panes-drop-left = Split left · { $name }
+workspace-layouts-panes-drop-right = Split right · { $name }
+workspace-layouts-panes-drop-top = Split up · { $name }
+workspace-layouts-panes-drop-bottom = Split down · { $name }
+workspace-layouts-panes-drop-second-view = Second view · { $name }
+# Why a split was not made.
+workspace-layouts-panes-not-docked = The document is in a window of its own; only a tab of the main window splits into a pane.
+workspace-layouts-panes-last-tab = The only document of the main window cannot leave its pane; hold Ctrl (Cmd on macOS) to open a second view.
+workspace-layouts-panes-crosswise = The panes run the other way; drop on an edge along them.
+workspace-layouts-panes-too-many = The main window has four panes already.
+# { $why } is the system's reason.
+workspace-layouts-panes-not-kept = The panes of the document area were not kept: { $why }

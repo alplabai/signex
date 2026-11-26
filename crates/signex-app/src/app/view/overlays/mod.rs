@@ -27,6 +27,7 @@ mod orientation;
 mod palette;
 #[cfg(test)]
 mod palette_scrim_tests;
+mod pane_drop;
 mod panel_list;
 mod placement_paused;
 pub(super) mod read_only_badge;
@@ -70,11 +71,9 @@ impl Signex {
         size: (f32, f32),
     ) -> iced::Rectangle {
         let area = self.document_area_sized(size);
-        match (window, self.tiled_panes()) {
-            (None, Some((layout, panes))) => {
-                let active = self.document_state.active_tab;
-                let index = panes.iter().position(|tab| *tab == active).unwrap_or(0);
-                canvas_region::pane_bounds(area, panes.len(), index, layout)
+        match (window, self.tiled_pane_view()) {
+            (None, Some(panes)) => {
+                canvas_region::pane_bounds(area, panes.tabs.len(), panes.focused, panes.layout)
             }
             _ => area,
         }

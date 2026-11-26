@@ -20,6 +20,10 @@ pub(super) const WINDOW_LAYOUT: &[&str] = &[
     "tile_windows_horizontally",
     "tile_windows_vertically",
     "untile_documents",
+    // Mockup row 207: the document area's panes.
+    "split_pane_right",
+    "split_pane_down",
+    "open_second_view",
 ];
 
 /// Is `command` one of [`WINDOW_LAYOUT`]?
@@ -131,6 +135,8 @@ mod tests {
                 "list_documents",
                 "lock_board_items",
                 "measure_board",
+                // Mockup row 207: the panes, as the window layout.
+                "open_second_view",
                 "panelize_board",
                 // #2410: pin and gate swap and design reuse, on the named board.
                 "place_board_reuse_block",
@@ -201,6 +207,8 @@ mod tests {
                 "show_layer_group",
                 "show_layer_set",
                 "show_used_layers_only",
+                "split_pane_down",
+                "split_pane_right",
                 "stitch_vias",
                 "swap_gates",
                 "swap_pins",

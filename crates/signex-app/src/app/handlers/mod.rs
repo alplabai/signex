@@ -28,6 +28,9 @@ mod dialog_window;
 pub mod dock;
 pub mod document_files;
 mod document_identity;
+pub(crate) mod document_panes;
+#[cfg(test)]
+mod document_panes_tests;
 pub mod document_tabs;
 #[cfg(test)]
 mod document_tabs_tests;
@@ -153,3 +156,5 @@ pub mod window_geometry_events;
 pub mod window_placement;
 pub mod window_tiling;
 pub(crate) mod workspace_layouts;
+#[cfg(test)]
+mod workspace_layouts_undo_tests;

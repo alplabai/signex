@@ -14,7 +14,15 @@ impl Signex {
             // owns it is decided in `dispatch/input.rs` against live
             // state (#557 phase 1) — the subscription no longer decides
             // anything.
-            InputMsg::KeyInput { window, event } => self.handle_key_input(window, event),
+            InputMsg::KeyInput { window, event } => {
+                // Mockup row 207: Ctrl (Cmd on macOS) held turns a tab
+                // dropped on an edge into a second view.
+                if let iced::keyboard::Event::ModifiersChanged(mods) = &event {
+                    self.ui_state.workspace_layouts.panes.second_view_held =
+                        mods.control() || mods.command();
+                }
+                self.handle_key_input(window, event)
+            }
             InputMsg::HeldEscapeEnded => {
                 self.interaction_state.annotation_tool.is_resume_esc_held = false;
                 Task::none()

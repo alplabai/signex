@@ -72,3 +72,62 @@ fn untile_answers_with_no_panes_and_is_refused_when_not_tiled() {
         "{again}"
     );
 }
+
+/// The kept panes go to a recorder, never to the test's `prefs.json`.
+#[derive(Default)]
+struct PanesRecorder;
+
+impl crate::document_panes::DocumentPanesStore for PanesRecorder {
+    fn write(&self, _value: &Value) -> Result<(), String> {
+        Ok(())
+    }
+}
+
+fn app_with_recorded_panes() -> Signex {
+    let mut app = app_at_work();
+    app.ui_state.workspace_layouts.panes.store = std::sync::Arc::new(PanesRecorder);
+    app
+}
+
+/// Mockup row 207: Split Right moves the active document into a new pane on
+/// the right, which has the focus; the other document stays on the left.
+#[test]
+fn split_right_moves_the_active_document_into_a_new_pane() {
+    let mut app = app_with_recorded_panes();
+    let active = app.document_state.active_tab;
+    let reply = call(&mut app, "split_pane_right", json!({}));
+    assert_eq!(reply["status"], "answered", "{reply}");
+    assert_eq!(reply["data"]["layout"], "side_by_side");
+    assert_eq!(
+        panes(&reply),
+        [(json!("a"), json!(false)), (json!("b"), json!(true))]
+    );
+    assert_eq!(app.document_state.active_tab, active, "the tab stays");
+    assert!(app.ui_state.workspace_layouts.panes.split.is_some());
+}
+
+/// Open Second View shows the active document in a second pane as well; a
+/// split across the panes is refused with its reason, and Untile merges.
+#[test]
+fn a_second_view_shows_the_document_twice_and_a_crosswise_split_is_refused() {
+    let mut app = app_with_recorded_panes();
+    let reply = call(&mut app, "open_second_view", json!({}));
+    assert_eq!(reply["status"], "answered", "{reply}");
+    assert_eq!(
+        panes(&reply),
+        [(json!("b"), json!(false)), (json!("b"), json!(true))]
+    );
+
+    let across = call(&mut app, "split_pane_down", json!({}));
+    assert_eq!(across["status"], "refused", "{across}");
+    assert!(
+        across["reason"]
+            .as_str()
+            .is_some_and(|why| why.contains("run the other way")),
+        "{across}"
+    );
+
+    let merged = call(&mut app, "untile_documents", json!({}));
+    assert_eq!(merged["data"]["tiled"], false, "{merged}");
+    assert!(app.ui_state.workspace_layouts.panes.split.is_none());
+}

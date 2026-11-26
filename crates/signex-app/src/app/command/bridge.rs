@@ -299,6 +299,20 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         }
         // View ▸ Window ▸ Untile (#2249).
         "untile_documents" => Message::Window(WindowMsg::UntileRequested),
+        // View ▸ Window ▸ Split Right / Split Down / Open Second View
+        // (mockup row 207).
+        "split_pane_right" => Message::Window(WindowMsg::PaneSplitRequested {
+            edge: crate::document_panes::DropEdge::Right,
+            second_view: false,
+        }),
+        "split_pane_down" => Message::Window(WindowMsg::PaneSplitRequested {
+            edge: crate::document_panes::DropEdge::Bottom,
+            second_view: false,
+        }),
+        "open_second_view" => Message::Window(WindowMsg::PaneSplitRequested {
+            edge: crate::document_panes::DropEdge::Right,
+            second_view: true,
+        }),
         // View ▸ Window ▸ Layouts (mockup row 166).
         "apply_layout_schematic"
         | "apply_layout_board"

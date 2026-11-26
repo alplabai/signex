@@ -668,6 +668,11 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "compile_project" => Needs::ProjectSheet,
         "tile_windows_horizontally" | "tile_windows_vertically" => Needs::TileableWindows,
         "untile_documents" => Needs::Tiled,
+        // Mockup row 207: moving a tab out needs another to stay behind; a
+        // second view needs only a document. The handler refuses what the
+        // gate lets through (a lone tab beside undocked windows).
+        "split_pane_right" | "split_pane_down" => Needs::TileableWindows,
+        "open_second_view" => Needs::Document,
         _ => return None,
     })
 }

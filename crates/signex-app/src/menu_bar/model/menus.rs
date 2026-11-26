@@ -675,6 +675,10 @@ fn window(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("tile_windows_horizontally", "")),
         cmd_item_gated(ctx, cmd("tile_windows_vertically", "")),
         cmd_item_gated(ctx, cmd("untile_documents", "")),
+        // Mockup row 207: docs/MENU_BAR.md#window-split
+        cmd_item_gated(ctx, cmd("split_pane_right", "")),
+        cmd_item_gated(ctx, cmd("split_pane_down", "")),
+        cmd_item_gated(ctx, cmd("open_second_view", "")),
         SEP,
         // Mockup row 166: docs/MENU_BAR.md#window-layouts
         submenu(ctx, menu_ids::MENU_WINDOW_LAYOUTS, layouts(ctx)),

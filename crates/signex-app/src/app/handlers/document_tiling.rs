@@ -160,22 +160,22 @@ impl Signex {
     }
 
     /// The layout and the tab of each pane when the main window is tiled:
-    /// two docked tabs or more, the active one among them.
+    /// two panes or more, the active tab among them. A second view repeats
+    /// its tab (`tiled_pane_view` says which pane has the focus).
     #[must_use]
     pub fn tiled_panes(&self) -> Option<(TileLayout, Vec<usize>)> {
-        let layout = self.ui_state.document_tiling?;
-        let panes = self.docked_tab_indices();
-        (panes.len() >= 2 && panes.contains(&self.document_state.active_tab))
-            .then_some((layout, panes))
+        self.tiled_pane_view().map(|view| (view.layout, view.tabs))
     }
 
     /// View ▸ Window ▸ Tile: the docked documents into panes, and the main window
     /// with the undocked document windows over its screen. Either alone is
-    /// done when the other has nothing to arrange.
+    /// done when the other has nothing to arrange. A split made by a drop
+    /// (mockup row 207) gives way to one pane per document.
     pub(crate) fn tile(&mut self, layout: TileLayout) -> Task<Message> {
+        let forgotten = self.forget_document_split();
         let panes = self.tile_documents(layout);
         if self.tile_plan(layout).is_some() {
-            return self.tile_windows(layout);
+            return Task::batch([forgotten, self.tile_windows(layout)]);
         }
         if !panes {
             crate::diagnostics::log_warning(
@@ -183,7 +183,7 @@ impl Signex {
                  and a main window whose screen is known; nothing was arranged.",
             );
         }
-        Task::none()
+        forgotten
     }
 
     /// Show the docked documents in `layout` panes; `false` with fewer than
@@ -207,39 +207,50 @@ impl Signex {
         true
     }
 
-    /// View ▸ Window ▸ Untile: the active document fills the main window again.
+    /// View ▸ Window ▸ Untile: the active document fills the main window
+    /// again. A split made by a drop is merged and forgotten for its project.
     pub(crate) fn untile_documents(&mut self) -> Task<Message> {
         if self.ui_state.document_tiling.is_none() {
             return Task::none();
         }
         let before = self.canvas_bounds();
+        let forgotten = self.forget_document_split();
         self.ui_state.document_tiling = None;
         self.interaction_state.tile_panes = Default::default();
         self.follow_main_canvas_resize(before);
-        Task::none()
+        forgotten
     }
 
-    /// A press on the pane of tab `index`: its document becomes the active
-    /// one, as a tab click would make it.
-    pub(crate) fn focus_tile_pane(&mut self, index: usize) -> Task<Message> {
-        let Some((_, panes)) = self.tiled_panes() else {
+    /// A press on pane `pane` (its place among the panes): it takes the
+    /// focus and the document it draws becomes the active one, as a tab
+    /// click would make it. A second view of the active document only
+    /// takes the focus.
+    pub(crate) fn focus_tile_pane(&mut self, pane: usize) -> Task<Message> {
+        let Some(view) = self.tiled_pane_view() else {
             return Task::none();
         };
-        if index == self.document_state.active_tab || !panes.contains(&index) {
+        let Some(&drawn) = view.tabs.get(pane).filter(|_| pane != view.focused) else {
             return Task::none();
-        }
+        };
         let before = self.canvas_bounds();
-        self.park_active_schematic_session();
-        self.document_state.active_tab = index;
-        self.sync_active_tab();
+        let tab = self.focus_split_pane(pane).unwrap_or(drawn);
+        if tab == self.document_state.active_tab {
+            self.refresh_tile_pane_canvases();
+        } else {
+            self.park_active_schematic_session();
+            self.document_state.active_tab = tab;
+            self.sync_active_tab();
+        }
         self.follow_main_canvas_resize(before);
         Task::none()
     }
 
     /// After a tab closed, undocked or came back: fewer than two docked
-    /// documents end the tiling, and every unfocused pane gets its canvas.
+    /// documents end the tiling (a split ends under two panes), and every
+    /// unfocused pane gets its canvas.
     pub(crate) fn settle_document_tiling(&mut self) {
-        if self.ui_state.document_tiling.is_some() && !self.can_tile_documents() {
+        let is_split = self.settle_document_panes();
+        if !is_split && self.ui_state.document_tiling.is_some() && !self.can_tile_documents() {
             self.ui_state.document_tiling = None;
         }
         self.refresh_tile_pane_canvases();
@@ -250,15 +261,17 @@ impl Signex {
     /// A pane that was focused gets a fresh one from its document as it is
     /// now.
     pub(crate) fn refresh_tile_pane_canvases(&mut self) {
-        let Some((_, panes)) = self.tiled_panes() else {
+        let Some(view) = self.tiled_pane_view() else {
             self.interaction_state.tile_panes = Default::default();
             return;
         };
-        let active = self.document_state.active_tab;
-        let shown: Vec<PathBuf> = panes
-            .into_iter()
-            .filter(|index| *index != active)
-            .filter_map(|index| self.document_state.tabs.get(index))
+        // A second view of the active document is an unfocused pane too.
+        let shown: Vec<PathBuf> = view
+            .tabs
+            .iter()
+            .enumerate()
+            .filter(|(n, _)| *n != view.focused)
+            .filter_map(|(_, &index)| self.document_state.tabs.get(index))
             .map(|tab| tab.path.clone())
             .collect();
         let tile_panes = &mut self.interaction_state.tile_panes;

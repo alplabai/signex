@@ -3,8 +3,12 @@
 //! editor; every other pane draws its document and takes a press as "focus
 //! this one", so its first click never lands on the wrong document. Pane
 //! sizes are the split `canvas_bounds` reports, so overlays placed on the
-//! focused canvas line up. State: `UiState::document_tiling`,
-//! `InteractionState::tile_panes`; see `handlers::document_tiling`.
+//! focused canvas line up. After a tab was dropped on an edge (mockup row
+//! 207) the panes are the split's, each drawing one of its tabs, and a
+//! second view draws its document in two panes. State:
+//! `UiState::document_tiling`, `WorkspaceLayoutsState::panes`,
+//! `InteractionState::tile_panes`; see `handlers::document_tiling` and
+//! `handlers::document_panes`.
 
 use iced::widget::{Column, Row, Space, canvas, container, mouse_area, opaque, stack};
 use iced::{Border, Element, Length, Widget as _};
@@ -24,23 +28,24 @@ impl Signex {
         window_id: iced::window::Id,
     ) -> Element<'_, Message> {
         let tiled = if self.ui_state.main_window_id == Some(window_id) {
-            self.tiled_panes()
+            self.tiled_pane_view()
         } else {
             None
         };
-        let Some((layout, panes)) = tiled else {
+        let Some(view) = tiled else {
             return self.view_center(window_id);
         };
+        let (layout, panes) = (view.layout, &view.tabs);
         let area = self.document_area_in(None);
         let tiles = crate::app::tiles(panes.len(), (area.width, area.height), layout);
         let last = panes.len() - 1;
-        let active = self.document_state.active_tab;
         let cells: Vec<Element<'_, Message>> = panes
             .iter()
             .zip(tiles)
             .enumerate()
             .map(|(n, (&tab, tile))| {
-                let focused = tab == active;
+                // A second view repeats its tab: the focus is the pane's.
+                let focused = n == view.focused;
                 let content = if focused {
                     self.view_center(window_id)
                 } else {
@@ -59,7 +64,7 @@ impl Signex {
                     TileLayout::SideBySide => (along(tile.size.0), Length::Fill),
                     TileLayout::Stacked => (Length::Fill, along(tile.size.1)),
                 };
-                container(self.framed_pane(content, focused, tab))
+                container(self.framed_pane(content, focused, n))
                     .width(width)
                     .height(height)
                     .boxed()
@@ -79,11 +84,12 @@ impl Signex {
 
     /// `content` with its pane edge: the accent ring on the focused pane, the
     /// border hairline on the others, which also take a press to focus.
+    /// `pane` is its place among the panes.
     fn framed_pane<'a>(
         &'a self,
         content: Element<'a, Message>,
         focused: bool,
-        tab: usize,
+        pane: usize,
     ) -> Element<'a, Message> {
         let tokens = &self.document_state.panel_ctx.tokens;
         let (color, width) = if focused {
@@ -108,7 +114,7 @@ impl Signex {
         }
         let press = opaque(
             mouse_area(Space::new().width(Length::Fill).height(Length::Fill))
-                .on_press(Message::Window(WindowMsg::TilePanePressed(tab))),
+                .on_press(Message::Window(WindowMsg::TilePanePressed(pane))),
         );
         stack![content, press, edge].boxed()
     }

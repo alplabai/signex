@@ -411,6 +411,10 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("tile_windows_vertically", "TileVertically"),
     // #2249: fixture name only.
     ("untile_documents", "UntileDocuments"),
+    // Mockup row 207: fixture names only.
+    ("split_pane_right", "SplitPaneRight"),
+    ("split_pane_down", "SplitPaneDown"),
+    ("open_second_view", "OpenSecondView"),
     // Mockup row 166: View ▸ Window ▸ Layouts, fixture names only.
     ("apply_layout_schematic", "ApplyLayoutSchematic"),
     ("apply_layout_board", "ApplyLayoutBoard"),
@@ -824,6 +828,10 @@ fn reports_and_window_are_submenus_of_tools_and_view() {
             "Tile Horizontally",
             "Tile Vertically",
             "Untile",
+            // Mockup row 207: the pane rows after the tiling rows.
+            "Split Right",
+            "Split Down",
+            "Open Second View",
             "---",
             // Mockup row 166: the Layouts submenu joins the old Window rows.
             "Layouts>",
