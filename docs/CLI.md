@@ -1286,7 +1286,15 @@ is enforced before the app sees a command.
   document with unsaved changes closes its tab and parks the edits in memory,
   as in the GUI; the end-of-run log lists the sheet as unsaved.
 - **No code execution, no network.** The run uses a throwaway config root,
-  never the user's. Launching a browser, viewer or file manager is refused by
+  never the user's, with one carve-out (#2495, decided for Caner overnight
+  2026-11-26, to confirm): `keymap_assign` and `keymap_clear` read and write
+  the user's own `keyboard_shortcuts.toml`, the file the app loads its
+  keyboard profiles from, through `atomic_write`. They need the `save`
+  capability, refuse a built-in profile and refuse a file that does not
+  load; nothing else in the run reads the user's config, and the agent
+  socket still refuses both (they name no document). See
+  `docs/KEYBOARD_SHORTCUTS.md`, "Key bindings from the CLI".
+  Launching a browser, viewer or file manager is refused by
   the app's headless ports, and no command that reaches a library server is
   runnable headless (every `library` command is `gui_only`).
 - **Same enablement as the GUI.** `dispatch_command`'s enablement gate

@@ -115,6 +115,11 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("diff_pair_class", OperandKind::Text),
     ("via_hole", OperandKind::Text),
     ("current", OperandKind::Text),
+    // #2495: a key binding: the command id it runs, its key sequence and
+    // the shortcut context it applies in.
+    ("command", OperandKind::Text),
+    ("keys", OperandKind::Text),
+    ("context", OperandKind::Text),
     // #2552: a move's wire handling, given by the caller, not the settings.
     ("keep_wires", OperandKind::Bool),
     ("wiring", OperandKind::Text),

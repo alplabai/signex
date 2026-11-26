@@ -168,6 +168,9 @@ pub enum Message {
     /// The Gerber Viewer tab and window file drops (mockup rows 193 and
     /// 193f). Routed to `dispatch_gerber_viewer_message`.
     GerberViewer(crate::app::GerberViewerMsg),
+    /// A message for one installed extension (#2495), routed to it alone by
+    /// `ExtensionHost::route`. Never sent in the Community binary.
+    Extension(crate::extension::ExtensionMsg),
 }
 
 impl Message {

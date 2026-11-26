@@ -13,17 +13,35 @@ use iced::Task;
 use super::reply::outcome_verdict;
 use super::{AgentReply, ChangeSnapshot};
 use crate::app::command::queries::CheckFinished;
-use crate::app::command::{CommandArgs, CommandOutcome, ReadsLoaded};
+use crate::app::command::{CommandArgs, CommandOutcome, ReadsLoaded, RequestOutcome};
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
 
 /// What the reply to a waiting request needs: the request's id and caller,
-/// and the session token it was let in with.
+/// the session token it was let in with, and its `if_revision`, checked
+/// again when its work lands.
 pub(crate) struct WaitingReply {
     pub(super) id: Option<String>,
     pub(super) pid: Option<u32>,
     pub(super) reply: AgentReply,
     pub(super) token: Option<String>,
+    pub(super) if_revision: Option<u64>,
+}
+
+/// The request just run waits on `ticket` for its own work; `if_revision`
+/// is the one it was sent with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct DeferredRequest {
+    pub(crate) ticket: u64,
+    pub(crate) if_revision: Option<u64>,
+}
+
+/// What a waiting request came to once its work landed.
+enum Waited {
+    /// It ran, or was turned away at the gate.
+    Ran(CommandOutcome),
+    /// Its `if_revision` no longer held: nothing ran.
+    Revision(RequestOutcome),
 }
 
 /// A command run with operands that waits on its own off-thread work (a file
@@ -70,12 +88,11 @@ impl Signex {
         } = waiting;
         let mark = crate::diagnostics::newest_entry_id();
         let before = self.change_snapshot();
-        let (outcome, task) = match self.agent_gate_closed(ticket, &command, &args) {
-            Some(reason) => self.turned_away_waiting(ticket, target, reason),
-            None => self.with_origin(origin, |app| {
+        let (outcome, task) = self.run_waiting(ticket, &command, &args, target, |app| {
+            app.with_origin(origin, |app| {
                 app.journaled(&command, &args, |app| (run(app), Task::none()))
-            }),
-        };
+            })
+        });
         self.answer_waiting(ticket, command.as_str(), mark, &before, outcome);
         task
     }
@@ -91,16 +108,14 @@ impl Signex {
         // (its first pass was refused with nothing applied).
         let mark = crate::diagnostics::newest_entry_id();
         let before = self.change_snapshot();
-        let (outcome, task) = match self.agent_gate_closed(ticket, &loaded.command, &loaded.args) {
-            Some(reason) => self.turned_away_waiting(ticket, &loaded.target, reason),
-            // A socket or headless edit is journaled as one that did not wait.
-            None => {
-                let (command, args) = (loaded.command.clone(), loaded.args.clone());
-                self.with_origin(loaded.origin.clone(), |app| {
-                    app.journaled(&command, &args, |app| app.run_with_reads(loaded))
-                })
-            }
-        };
+        let (command, args) = (loaded.command.clone(), loaded.args.clone());
+        let target = loaded.target.clone();
+        // A socket or headless edit is journaled as one that did not wait.
+        let (outcome, task) = self.run_waiting(ticket, &command, &args, &target, |app| {
+            app.with_origin(loaded.origin.clone(), |app| {
+                app.journaled(&command, &args, |app| app.run_with_reads(loaded))
+            })
+        });
         self.answer_waiting(ticket, &id, mark, &before, outcome);
         task
     }
@@ -111,11 +126,13 @@ impl Signex {
         let request = &finished.request;
         let mark = crate::diagnostics::newest_entry_id();
         let before = self.change_snapshot();
-        let (outcome, task) =
-            match self.agent_gate_closed(request.ticket, &request.command, &request.args) {
-                Some(reason) => self.turned_away_waiting(request.ticket, &request.document, reason),
-                None => (self.check_answer(finished), Task::none()),
-            };
+        let (outcome, task) = self.run_waiting(
+            request.ticket,
+            &request.command,
+            &request.args,
+            &request.document,
+            |app| (app.check_answer(finished), Task::none()),
+        );
         let id = request.command.as_str().to_string();
         self.answer_waiting(request.ticket, &id, mark, &before, outcome);
         task
@@ -136,17 +153,46 @@ impl Signex {
     ) -> Task<Message> {
         let mark = crate::diagnostics::newest_entry_id();
         let before = self.change_snapshot();
-        let (outcome, task) = match self.agent_gate_closed(ticket, command, args) {
-            Some(reason) => self.turned_away_waiting(ticket, document, reason),
-            None => self.with_origin(origin, |app| {
+        let (outcome, task) = self.run_waiting(ticket, command, args, document, |app| {
+            app.with_origin(origin, |app| {
                 let serving = std::mem::replace(&mut app.agent.serving, serving);
                 let ran = app.journaled(command, args, |app| app.run_operands(command, args));
                 app.agent.serving = serving;
                 ran
-            }),
-        };
+            })
+        });
         self.answer_waiting(ticket, command.as_str(), mark, &before, outcome);
         task
+    }
+
+    /// The gate a waiting request meets again when its work lands: turned
+    /// away when the gate closed meanwhile, refused when its `if_revision`
+    /// no longer holds (as at request time: nothing runs and no journal line
+    /// is written), else `run`.
+    fn run_waiting(
+        &mut self,
+        ticket: u64,
+        command: &AppCommandId,
+        args: &CommandArgs,
+        target: &Path,
+        run: impl FnOnce(&mut Self) -> (CommandOutcome, Task<Message>),
+    ) -> (Waited, Task<Message>) {
+        if let Some(reason) = self.agent_gate_closed(ticket, command, args) {
+            let (outcome, task) = self.turned_away_waiting(ticket, target, reason);
+            return (Waited::Ran(outcome), task);
+        }
+        let expected = self
+            .agent
+            .waiting
+            .get(&ticket)
+            .and_then(|waiting| waiting.if_revision);
+        if let Some(expected) = expected
+            && let Some(refusal) = self.revision_refusal(args, expected)
+        {
+            return (Waited::Revision(refusal), Task::none());
+        }
+        let (outcome, task) = run(self);
+        (Waited::Ran(outcome), task)
     }
 
     /// Turned away at the gate, as at request time: an access event, no edit
@@ -174,11 +220,14 @@ impl Signex {
         id: &str,
         mark: Option<u64>,
         before: &ChangeSnapshot,
-        outcome: CommandOutcome,
+        outcome: Waited,
     ) {
         match self.agent.waiting.remove(&ticket) {
             Some(waiting) => {
-                let verdict = outcome_verdict(id, outcome, None);
+                let verdict = match outcome {
+                    Waited::Ran(outcome) => outcome_verdict(id, outcome, None),
+                    Waited::Revision(refusal) => refusal.into_verdict(),
+                };
                 self.send_agent_reply(
                     waiting.id.as_deref(),
                     waiting.pid,
@@ -188,12 +237,19 @@ impl Signex {
                     &waiting.reply,
                 );
             }
-            None => {
-                self.document_state
-                    .agent_edits
-                    .finished
-                    .insert(ticket, outcome);
-            }
+            // A headless run's ticket. Only a socket request carries
+            // `if_revision`, so its outcome is never a revision refusal.
+            None => match outcome {
+                Waited::Ran(outcome) => {
+                    self.document_state
+                        .agent_edits
+                        .finished
+                        .insert(ticket, outcome);
+                }
+                Waited::Revision(_) => {
+                    tracing::warn!(ticket, "a revision refusal for a request nobody waits on");
+                }
+            },
         }
     }
 

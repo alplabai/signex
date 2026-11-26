@@ -54,6 +54,10 @@ impl Signex {
         if let DockMessage::Library(lib_msg) = msg.clone() {
             return self.dispatch_library_message(lib_msg);
         }
+        // An extension panel's message goes to its extension alone (#2495).
+        if let DockMessage::Extension(extension_msg) = msg {
+            return self.extensions.route(extension_msg);
+        }
 
         if let DockMessage::Panel(panel_msg) = &msg {
             // Panel-control, project-navigation, and SCH-library handlers

@@ -44,18 +44,21 @@ impl DockArea {
                 active: 0,
                 collapsed: false,
                 tab_offset: 0,
+                kept: Vec::new(),
             },
             right: DockRegion {
                 panels: Vec::new(),
                 active: 0,
                 collapsed: false,
                 tab_offset: 0,
+                kept: Vec::new(),
             },
             bottom: DockRegion {
                 panels: Vec::new(),
                 active: 0,
                 collapsed: false,
                 tab_offset: 0,
+                kept: Vec::new(),
             },
             floating: Vec::new(),
             tab_drag: None,
@@ -348,6 +351,8 @@ impl DockArea {
                 // library subsystem before reaching this update path.
                 // Reaching here is harmless — no dock state to mutate.
             }
+            // Routed by `handle_dock_message` to the extension.
+            DockMessage::Extension(_) => {}
         }
     }
 

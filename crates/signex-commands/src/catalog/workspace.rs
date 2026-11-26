@@ -35,6 +35,30 @@ pub(super) const WORKSPACE: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
+    // #2495: a key binding in a custom keyboard profile, from a CLI run or
+    // a script; a person uses Preferences ▸ Keyboard shortcuts.
+    CommandMetadata {
+        id: "keymap_assign",
+        category: "preferences",
+        label: command_ids::CMD_KEYMAP_ASSIGN,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::operands::KEYMAP_ASSIGN,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "keymap_clear",
+        category: "preferences",
+        label: command_ids::CMD_KEYMAP_CLEAR,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::operands::KEYMAP_CLEAR,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "show_current_command_hotkeys",
         category: "help",

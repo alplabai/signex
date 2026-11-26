@@ -213,11 +213,7 @@ impl Signex {
                 (
                     serde_json::to_value(engine.document()).map_err(|e| e.to_string())?,
                     SHEET_ARRAYS,
-                    if entry.loaded {
-                        json!(engine.revision())
-                    } else {
-                        Value::Null
-                    },
+                    json!(self.document_revision(&entry)),
                 )
             }
             Some(DocumentKey::Pcb(path)) => {
@@ -225,7 +221,7 @@ impl Signex {
                 (
                     serde_json::to_value(board).map_err(|e| e.to_string())?,
                     BOARD_ARRAYS,
-                    json!(docs.pcb_revisions.get(path)),
+                    json!(self.document_revision(&entry)),
                 )
             }
             Some(DocumentKey::Symbol(path)) => {

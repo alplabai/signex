@@ -154,6 +154,15 @@ Project tree actions with no menu message or command id (add or remove a
 document, Enable Version Control, History, Validate Project) stay in the tree's
 context menu; the menu gets no stub for them.
 
+## Extension rows {#extension-rows}
+
+A binary built on `signex-app` can install extensions that add rows (#2495,
+`docs/EXTENSION_API.md`, "Menu bar and Active Bar rows"). Each one goes at the
+end of its root menu, after every built-in row and below one separator, and
+runs the extension's own `ext.<name>.` command through `dispatch_command` like
+any command row. The Community binary installs none, so its bar and
+`menu_bar.golden.tsv` are the built-in rows alone.
+
 ## Rows that name a different command {#own-action}
 
 Every row that carries a command id runs that id; no row keeps an action of its
@@ -798,6 +807,18 @@ while the panel is open, like the other panel rows. It runs
 and is never greyed. The panel lists every catalog command the session ran,
 from the GUI, the CLI and the agent socket; see
 [COMMAND_LOG.md](COMMAND_LOG.md).
+
+## View ▸ Extensions {#view-extensions}
+
+A submenu after the built-in panel rows, before the separator that ends them
+and the Window submenu (#2495). It shows only when an installed extension
+added a dock panel: one row per extension panel, titled by the extension's own
+message, which opens (or reveals) that panel and carries a check mark while it
+is open, like the other panel rows (`MenuMessage::OpenExtensionPanel`, not a
+catalog command, so no key). With no extension panel installed, View is the
+built-in menu row for row; the Community build installs none. The panels are
+also in the status bar's Panels list. See
+[EXTENSION_API.md](EXTENSION_API.md), "Dock panels".
 
 ## Tools: board edits {#tools-board-edits}
 

@@ -85,6 +85,7 @@ impl DockArea {
         position: PanelPosition,
         ctx: &'a panels::PanelContext,
         library: &'a crate::library::LibraryState,
+        extensions: &'a crate::extension::ExtensionHost,
         grid: SheetGrid,
     ) -> Element<'a, DockMessage> {
         let region = match position {
@@ -312,6 +313,7 @@ impl DockArea {
                             .map(DockMessage::Library)
                             .boxed()
                     }
+                    PanelKind::Extension(panel) => extension_panel(extensions, panel, ctx),
                     _ => panels::view_panel(*panel, ctx)
                         .map(DockMessage::Panel)
                         .boxed(),
@@ -468,6 +470,7 @@ impl DockArea {
         idx: usize,
         ctx: &'a panels::PanelContext,
         library: &'a crate::library::LibraryState,
+        extensions: &'a crate::extension::ExtensionHost,
         grid: SheetGrid,
     ) -> Option<Element<'a, DockMessage>> {
         let fp = self.floating.get(idx)?;
@@ -483,6 +486,7 @@ impl DockArea {
                     .map(DockMessage::Library)
                     .boxed()
             }
+            PanelKind::Extension(panel) => extension_panel(extensions, panel, ctx),
             _ => panels::view_panel(kind, ctx)
                 .map(DockMessage::Panel)
                 .boxed(),
@@ -560,6 +564,20 @@ fn open_library_button<'a>(
         &ctx.tokens,
         iced::widget::tooltip::Position::Bottom,
     ))
+}
+
+/// The body of an extension panel (#2495), drawn by its extension's view
+/// hook in the window's theme and language.
+pub(crate) fn extension_panel<'a>(
+    extensions: &'a crate::extension::ExtensionHost,
+    panel: crate::extension::points::ExtensionPanelKind,
+    ctx: &'a panels::PanelContext,
+) -> Element<'a, DockMessage> {
+    let cx = crate::extension::ViewContext::new(&ctx.tokens, &ctx.i18n);
+    extensions
+        .view_panel(panel, cx)
+        .map(DockMessage::Extension)
+        .boxed()
 }
 
 /// The name of a collapsed panel on the side rail, in `i18n`'s language.

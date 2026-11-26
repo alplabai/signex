@@ -18,7 +18,7 @@ use signex_i18n::I18n;
 use crate::keymap::CompiledKeymap;
 
 pub use filter::{ShortcutScope, ShortcutSheet};
-pub use sections::{ShortcutSection, build_sections};
+pub use sections::{ShortcutSection, build_sections, build_sections_with};
 pub(crate) use view::key_cap;
 pub use view::{SheetFacts, view, window_view};
 

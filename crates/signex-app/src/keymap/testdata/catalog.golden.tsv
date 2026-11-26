@@ -412,6 +412,8 @@ footprint_recompute_courtyard_outline	library	Recompute footprint courtyard outl
 open_command_palette	commands	Open command palette	-	General	-	-	Always	gui_only	-
 open_preferences	preferences	Open preferences	Preferences...	General	-	-	Always	gui_only	-
 open_schematic_preferences	preferences	Open schematic preferences	-	General	-	-	Always	gui_only	-
+keymap_assign	preferences	Give a command a key in a custom keyboard profile	-	General	-	-	Always	-	command:text,keys:text,profile:text,context:text?
+keymap_clear	preferences	Take a command's keys away in a custom keyboard profile	-	General	-	-	Always	-	command:text,profile:text,keys:text?
 show_current_command_hotkeys	help	Show graphical editing hotkey list for current command	Keyboard Shortcuts	General	-	-	Always	gui_only	-
 show_current_command_shortcuts	help	Show valid shortcuts for the current interactive command	-	General	-	-	Always	gui_only	-
 next_document_tab	window	Next open document tab	-	General	-	-	Always	gui_only	-
