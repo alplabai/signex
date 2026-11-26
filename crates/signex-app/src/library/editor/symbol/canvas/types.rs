@@ -175,7 +175,7 @@ pub enum CanvasAction {
         y_mm: Option<f64>,
     },
     /// Emitted on `ButtonReleased(Left)` when a drag was in progress.
-    /// The dispatcher uses this to clear `mid_drag` so the next drag
+    /// The dispatcher uses this to close the draft's move run so the next drag
     /// starts a fresh undo snapshot group.
     DragCommit,
     /// Undo — Ctrl+Z while the canvas has keyboard focus.
