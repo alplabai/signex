@@ -30,6 +30,8 @@ mod git_history;
 pub mod git_identity;
 pub mod hash;
 pub mod identity;
+#[cfg(feature = "local-git")]
+pub mod import_snapshot;
 pub mod library_file;
 pub mod lifecycle;
 pub mod manifest;
@@ -158,8 +160,8 @@ pub use writer::{LedgerState, LibraryWriter, TableDraft, UpdateSummary};
 
 #[cfg(feature = "local-git")]
 pub use adapters::local_git::{
-    DiskStamp, LocalGitAdapter, WRITE_LOCK_WAIT, enclosing_library_file, is_write_lock_file,
-    rewrite_file_under_library_lock, write_lock_path,
+    DiskStamp, HeldWriteLock, LocalGitAdapter, WRITE_LOCK_WAIT, enclosing_library_file,
+    hold_library_write_lock, is_write_lock_file, rewrite_file_under_library_lock, write_lock_path,
 };
 
 /// Project-level "Enable Version Control" helper. Runs

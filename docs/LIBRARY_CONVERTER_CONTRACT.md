@@ -26,8 +26,19 @@ file, one JSON summary line); a converter can offer both.
 Each converter is installed separately. Signex finds it by:
 
 1. an environment variable naming the binary's path, if set (the variable
-   name is the converter's, listed in the user guide), else
-2. the binary's name on `PATH` (absolute `PATH` entries only).
+   name is the converter's, listed in the user guide),
+2. `SIGNEX_LIBRARY_CONVERTERS`, a list of converter programs in `PATH`
+   syntax, and
+3. every executable on `PATH` (absolute entries only) named
+   `signex-<format>-import` (plus `.exe` on Windows).
+
+Signex lists no converter by name: each candidate is asked `describe --json`
+(§2.1, a few seconds at most) and offered only when it answers with a
+supported contract, so a single-file importer without `describe` is not
+offered for libraries. The same program found twice (by canonical path) is
+listed once; when two converters read the same extension, both are offered.
+A converter path set in Preferences is a follow-up; there is no such
+preference yet.
 
 Signex never ships a converter with a licence that differs from its own; a
 user installs it. A missing converter is reported with its install hint and
@@ -242,7 +253,17 @@ human-readable `import-report.md` with the same content. Schema
 4. On exit 0 or 2: initialise git, commit, mount the library (and the
    libraries its manifest `requires`), show the report.
 5. On exit 1 or a 120 s silence: show the error and the stderr tail; Signex
-   removes a target directory it created for this run.
+   removes a target directory it created for this run. A failed `--update`
+   (which Signex only starts over a clean repository, holding the library's
+   write lock and refusing while the library has unsaved work in the app)
+   is reset to the last import commit: tracked files checked out again,
+   untracked files the run added removed, ignored files kept.
+
+A stop kills the converter's whole process group on Unix (it is started in
+a group of its own). On Windows only the converter process itself is
+killed; a Job object that takes its children along is a follow-up. After
+the converter exits, its pipes are read for at most 2 s more, so a process
+it left behind cannot hold the import.
 
 ## 7. Versioning this contract
 

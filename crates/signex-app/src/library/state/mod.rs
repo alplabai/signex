@@ -781,6 +781,8 @@ pub struct LibraryState {
     /// Stock files whose copy is being written, so a second open of the
     /// same file does not start a second copy.
     pub stock_copies_in_flight: std::collections::HashSet<PathBuf>,
+    /// The library import running, and the last one finished (#3114).
+    pub import: crate::library_import::run_state::ImportState,
     /// The Properties panel state of each symbol editor (mockup rows 122
     /// and 123): its tab, Pins filter, part chip and illustration hover, by
     /// `.snxsym` path. Session only; an entry outlives its tab so a
