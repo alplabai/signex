@@ -46,6 +46,8 @@ pub(super) fn r5() -> Symbol {
 pub(super) fn app() -> (Signex, ProjectId, PathBuf, tempfile::TempDir) {
     let dir = tempfile::tempdir().expect("a folder");
     let mut app = app_workspace(&dir.path().to_string_lossy(), &["power.snxsch"]);
+    // The first-run tour is its own Esc rung above every card.
+    app.ui_state.first_run_tour_open = false;
     let path = dir.path().join("power.snxsch");
     let sheet = SchematicSheet {
         symbols: vec![r5()],
@@ -337,7 +339,7 @@ fn a_part_whose_footprint_differs_still_applies() {
 #[test]
 fn on_a_channel_tab_all_channels_is_the_default_scope() {
     let (mut app, id, path, _dir) = app();
-    app.document_state.panel_ctx.compiled_design.strip = Some(strip(path, Some(2)));
+    app.document_state.panel_ctx.compiled_design.strip = Some(strip(path.clone(), Some(2)));
     open(&mut app, VariantEditKind::Value);
     let Some(VariantPartEdit::Value(popover)) = app.ui_state.variant_part_edit.as_deref() else {
         panic!("the popover opens");
@@ -361,6 +363,8 @@ fn on_a_channel_tab_all_channels_is_the_default_scope() {
     }
     assert!(app.step_project_tab_history(id, true));
     assert!(settings_empty(&app), "one step takes every channel");
+    // The undo refreshes the panels, which drop the test's compiled strip.
+    app.document_state.panel_ctx.compiled_design.strip = Some(strip(path.clone(), Some(2)));
 
     open(&mut app, VariantEditKind::Value);
     send(

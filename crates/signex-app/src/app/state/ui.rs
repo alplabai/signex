@@ -98,8 +98,9 @@ pub struct UiState {
     /// the machine has one, else Signex Default" (#1608). Persisted in
     /// `prefs.json`.
     pub default_rule_profile: Option<String>,
-    /// The open "Save as profile" dialog of the ERC dialog (#1608).
-    pub save_profile_dialog: Option<crate::app::state::rule_profile_ui::SaveProfileDialog>,
+    /// The open "Save as profile" dialog of the ERC dialog (#1608). Boxed:
+    /// a closed dialog is one pointer of `UiState`.
+    pub save_profile_dialog: Option<Box<crate::app::state::rule_profile_ui::SaveProfileDialog>>,
     /// Profile file writes waiting their turn (#1608).
     pub profile_writes: crate::app::state::rule_profile_ui::ProfileWriteQueue,
     /// Loaded keyboard-shortcut profiles (bundled Signex Standard / Classic
@@ -945,6 +946,10 @@ mod tests {
             ("erc_rule_list", field_size(|ui| &ui.erc_rule_list)),
             ("parameter_table", field_size(|ui| &ui.parameter_table)),
             ("parameter_import", field_size(|ui| &ui.parameter_import)),
+            (
+                "save_profile_dialog",
+                field_size(|ui| &ui.save_profile_dialog),
+            ),
             ("live_erc", field_size(|ui| &ui.live_erc)),
             (
                 "board_output.dialog",
