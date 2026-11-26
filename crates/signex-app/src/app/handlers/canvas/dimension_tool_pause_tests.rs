@@ -28,7 +28,6 @@ pub(super) fn app_on_sheet_a(others: &[&str]) -> (Signex, Vec<PathBuf>) {
         app.document_state.tabs.push(TabInfo {
             title: (*name).to_string(),
             path: path.clone(),
-            cached_document: None,
             project_id: None,
             kind: TabKind::Schematic,
         });

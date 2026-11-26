@@ -10,7 +10,7 @@ use super::{Kind, fixture, tab};
 use crate::app::command::{CommandArgs, is_enabled};
 use crate::app::path_ops::settle_task;
 use crate::app::state::WindowKind;
-use crate::app::{FileMsg, Message, Signex, TabDocument, TabInfo, TabKind};
+use crate::app::{FileMsg, Message, Signex, TabInfo, TabKind};
 use crate::keymap::AppCommandId;
 
 const OLD: &[u8] = b"OLD";
@@ -82,13 +82,7 @@ struct Fx {
 fn setup(kind: Kind, project_dirty: bool, missing: bool) -> Fx {
     let dir = tempfile::tempdir().unwrap();
     std::fs::create_dir(dir.path().join("lib.snxlib")).unwrap();
-    let (mut app, mut t) = fixture(dir.path(), kind, true);
-    if matches!(kind, Kind::Pcb) {
-        t.cached_document = Some(TabDocument::Pcb(signex_engine::pcb::BoardEngine::new(
-            board(),
-            1,
-        )));
-    }
+    let (mut app, t) = fixture(dir.path(), kind, true);
     let project = app.document_state.projects[0].path.clone();
     std::fs::write(&project, OLD).unwrap();
     let file = doc_path(&app, &t);
@@ -109,7 +103,13 @@ fn setup(kind: Kind, project_dirty: bool, missing: bool) -> Fx {
     app.document_state.active_project = Some(id);
     app.document_state.active_path = matches!(kind, Kind::Schematic).then(|| t.path.clone());
     let tab_path = t.path.clone();
-    app.document_state.tabs.push(t);
+    if matches!(kind, Kind::Pcb) {
+        let engine = signex_engine::pcb::BoardEngine::new(board(), 1);
+        app.document_state
+            .push_pcb_tab(t.title, t.path, t.project_id, engine);
+    } else {
+        app.document_state.tabs.push(t);
+    }
     app.document_state.active_tab = 0;
     Fx {
         app,

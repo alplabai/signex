@@ -133,7 +133,6 @@ fn the_primitive_save_as_dialog_refuses_without_a_path() {
     app.document_state.tabs.push(crate::app::TabInfo {
         title: "part".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: crate::app::TabKind::SymbolEditor(path),
     });

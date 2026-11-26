@@ -103,7 +103,6 @@ fn rig(reference: &str, lock_symbol: bool, lock_wire: bool) -> Rig {
     app.document_state.tabs.push(TabInfo {
         title: "drag-ghost-parity".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

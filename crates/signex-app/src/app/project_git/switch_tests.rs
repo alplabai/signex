@@ -322,7 +322,6 @@ fn a_title_block_draft_typed_during_the_switch_holds_the_reopen() {
     app.document_state.tabs.push(TabInfo {
         title: "a".into(),
         path: sheet.clone(),
-        cached_document: None,
         project_id: Some(id),
         kind: TabKind::Schematic,
     });
@@ -378,13 +377,13 @@ fn a_reopened_board_gets_its_layer_stack_tab_back() {
         .project_git
         .reopened_stacks
         .insert(board.clone(), true);
-    app.document_state.tabs.push(TabInfo {
-        title: "b".into(),
-        path: board.clone(),
-        cached_document: None,
-        project_id: None,
-        kind: TabKind::Pcb,
-    });
+    app.document_state
+        .tabs
+        .push(crate::test_adapter::boardless_tab(
+            "b",
+            &board,
+            TabKind::Pcb,
+        ));
 
     let takes_focus = app.ui_state.project_git.take_reopened_stack(&board);
     assert_eq!(takes_focus, Some(true));
@@ -477,7 +476,6 @@ fn a_layer_stack_tab_does_not_hold_its_board() {
     app.document_state.tabs.push(TabInfo {
         title: "stack".into(),
         path: root.join("b.snxpcb"),
-        cached_document: None,
         project_id: None,
         kind: TabKind::LayerStack,
     });

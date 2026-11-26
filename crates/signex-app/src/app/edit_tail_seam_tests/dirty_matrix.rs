@@ -65,7 +65,6 @@ fn annotated_root(dir: &tempfile::TempDir) -> (Signex, PathBuf) {
     app.document_state.tabs.push(crate::app::TabInfo {
         title: "a_root.snxsch".into(),
         path: root.clone(),
-        cached_document: None,
         project_id: None,
         kind: crate::app::TabKind::Schematic,
     });

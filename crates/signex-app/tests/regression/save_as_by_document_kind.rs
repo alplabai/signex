@@ -7,9 +7,7 @@
 //! write rolls the re-key back, and every refusal reaches the Messages
 //! panel.
 
-use signex_app::app::{
-    FileMsg, FootprintDocument, Message, Signex, SymbolDocument, TabInfo, TabKind,
-};
+use signex_app::app::{FileMsg, FootprintDocument, Message, Signex, SymbolDocument, TabKind};
 use signex_library::{Footprint, FootprintFile, Symbol, SymbolFile};
 use std::path::Path;
 use tempfile::TempDir;
@@ -35,13 +33,9 @@ fn open_footprint_tab(app: &mut Signex, path: &Path) {
 fn push_tab(app: &mut Signex, path: &Path, kind: TabKind) {
     // Install the logger before the act step so `logged` can see it.
     let _ = signex_app::diagnostics::init_logging();
-    app.document_state.tabs.push(TabInfo {
-        title: "doc".into(),
-        path: path.to_path_buf(),
-        cached_document: None,
-        project_id: None,
-        kind,
-    });
+    app.document_state
+        .tabs
+        .push(signex_app::test_adapter::boardless_tab("doc", path, kind));
     app.document_state.mark_document_dirty(path);
     app.document_state.active_tab = app.document_state.tabs.len() - 1;
 }

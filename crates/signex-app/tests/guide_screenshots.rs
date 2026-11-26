@@ -255,7 +255,6 @@ fn placed_parts() -> SchematicSheet {
     app.document_state.tabs.push(TabInfo {
         title: "scratch".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

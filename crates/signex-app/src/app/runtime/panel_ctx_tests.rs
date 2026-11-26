@@ -59,7 +59,6 @@ fn an_active_component_tab_folds_the_fresh_left_dock() {
     app.document_state.tabs.push(TabInfo {
         title: "R1".into(),
         path: address.synthetic_tab_path(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::ComponentEditor(ComponentEditorTab {
             library_path,

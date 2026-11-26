@@ -105,7 +105,6 @@ mod tests {
         app.document_state.tabs.push(crate::app::TabInfo {
             title: "Status".into(),
             path: root.clone(),
-            cached_document: None,
             project_id: None,
             kind: crate::app::TabKind::LibraryBrowser(root.clone()),
         });

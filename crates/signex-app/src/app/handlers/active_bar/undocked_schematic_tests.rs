@@ -22,7 +22,6 @@ fn tab(path: &Path) -> TabInfo {
     TabInfo {
         title: "t".to_string(),
         path: path.to_path_buf(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     }

@@ -21,7 +21,6 @@ fn app_on_a_sheet() -> Signex {
     app.document_state.tabs.push(TabInfo {
         title: "redraw".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

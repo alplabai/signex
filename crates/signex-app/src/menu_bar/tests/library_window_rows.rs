@@ -166,7 +166,6 @@ fn library_editor_opens_the_library_of_the_active_editor_tab() {
     app.document_state.tabs.push(TabInfo {
         title: "part".into(),
         path: symbol.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::SymbolEditor(symbol),
     });
@@ -210,7 +209,6 @@ fn close_all_documents_closes_every_tab() {
     app.document_state.tabs.push(TabInfo {
         title: "symbol".into(),
         path: extra.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::SymbolEditor(extra),
     });

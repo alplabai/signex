@@ -239,7 +239,6 @@ mod tests {
         app.document_state.tabs.push(crate::app::TabInfo {
             title: "a.snxsch".into(),
             path: "a.snxsch".into(),
-            cached_document: None,
             project_id: None,
             kind: crate::app::TabKind::Schematic,
         });
@@ -269,7 +268,6 @@ mod tests {
         app.document_state.tabs.push(crate::app::TabInfo {
             title: "f".into(),
             path: path.clone(),
-            cached_document: None,
             project_id: None,
             kind: crate::app::TabKind::FootprintEditor(path.clone()),
         });
@@ -305,7 +303,6 @@ mod tests {
         app.document_state.tabs.push(crate::app::TabInfo {
             title: "a.snxsch".into(),
             path: "a.snxsch".into(),
-            cached_document: None,
             project_id: None,
             kind: crate::app::TabKind::Schematic,
         });
@@ -489,13 +486,9 @@ mod tests {
             ("a.snxsch", crate::app::TabKind::Schematic),
             ("b.snxpcb", crate::app::TabKind::Pcb),
         ] {
-            app.document_state.tabs.push(crate::app::TabInfo {
-                title: name.into(),
-                path: name.into(),
-                cached_document: None,
-                project_id: None,
-                kind,
-            });
+            app.document_state
+                .tabs
+                .push(crate::test_adapter::boardless_tab(name, name, kind));
         }
         app.document_state.active_tab = 0;
         let _ = app.update(right_click(window));
@@ -528,7 +521,6 @@ mod tests {
         app.document_state.tabs.push(crate::app::TabInfo {
             title: "a.snxsch".into(),
             path: path.clone(),
-            cached_document: None,
             project_id: None,
             kind: crate::app::TabKind::Schematic,
         });

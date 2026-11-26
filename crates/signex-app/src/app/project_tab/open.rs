@@ -31,7 +31,6 @@ impl Signex {
                 self.document_state.tabs.push(TabInfo {
                     title,
                     path,
-                    cached_document: None,
                     project_id: Some(id),
                     kind,
                 });

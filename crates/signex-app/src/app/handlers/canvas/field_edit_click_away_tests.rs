@@ -22,7 +22,6 @@ fn app_with(sheet: SchematicSheet) -> Signex {
     app.document_state.tabs.push(TabInfo {
         title: "field-edit".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

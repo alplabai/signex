@@ -52,7 +52,6 @@ fn fixture(autosave_on: bool) -> Fixture {
     app.document_state.tabs.push(TabInfo {
         title: "autosave".to_string(),
         path: doc.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

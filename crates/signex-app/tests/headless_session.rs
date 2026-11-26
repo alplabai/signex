@@ -78,7 +78,6 @@ fn a_pending_title_block_draft_is_committed_and_reported_at_session_end() {
     app.document_state.tabs.push(TabInfo {
         title: "draft".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

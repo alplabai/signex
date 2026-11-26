@@ -41,7 +41,6 @@ fn clear_all_net_colours_then_one_undo_restores_them_all() {
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "palette-clear-all".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });

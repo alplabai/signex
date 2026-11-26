@@ -224,7 +224,6 @@ pub(crate) fn second_sheet(app: &mut Signex) -> PathBuf {
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "other".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });
@@ -535,7 +534,6 @@ fn sheet_in(f: &Fixture, dir: &std::path::Path, name: &str) -> (Signex, PathBuf)
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: name.to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });

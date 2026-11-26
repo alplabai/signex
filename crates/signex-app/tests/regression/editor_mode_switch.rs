@@ -30,7 +30,6 @@ fn rig() -> Rig {
     app.document_state.tabs.push(TabInfo {
         title: "mode-switch".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });

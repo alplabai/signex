@@ -76,7 +76,6 @@ fn project_with_two_sheets(dir: &Path) -> Signex {
         app.document_state.tabs.push(TabInfo {
             title: name.to_string(),
             path: path.clone(),
-            cached_document: None,
             project_id: Some(id),
             kind: TabKind::Schematic,
         });

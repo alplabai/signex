@@ -87,7 +87,6 @@ impl Signex {
             TabInfo {
                 title,
                 path: symbol,
-                cached_document: None,
                 project_id,
                 kind: TabKind::PinTable,
             },

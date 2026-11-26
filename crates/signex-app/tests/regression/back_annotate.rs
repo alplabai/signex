@@ -250,7 +250,6 @@ fn rig_with(board: PcbBoard, other_project: bool) -> Rig {
     app.document_state.tabs.push(TabInfo {
         title: "root".to_string(),
         path: root.clone(),
-        cached_document: None,
         project_id: Some(project),
         kind: TabKind::Schematic,
     });

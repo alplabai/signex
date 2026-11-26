@@ -361,11 +361,10 @@ fn ctrl_s_on_a_newer_minor_board_writes_nothing() {
 
 /// The board the first tab holds, as `begin_pcb_save` encodes it.
 fn empty_board_with(app: &Signex) -> signex_types::pcb::PcbBoard {
-    app.document_state.tabs[0]
-        .cached_document
-        .as_ref()
-        .and_then(|doc| doc.as_pcb())
+    app.document_state
+        .tab_board_engine(0)
         .expect("pcb tab")
+        .board()
         .clone()
 }
 

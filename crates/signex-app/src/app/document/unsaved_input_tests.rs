@@ -33,7 +33,6 @@ fn app_with_half_typed_row() -> (Signex, EditorAddress) {
     app.document_state.tabs.push(TabInfo {
         title: "U1".into(),
         path: address.synthetic_tab_path(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::ComponentEditor(ComponentEditorTab {
             library_path: lib,

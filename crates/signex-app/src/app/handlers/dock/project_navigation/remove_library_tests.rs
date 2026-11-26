@@ -260,7 +260,6 @@ fn footprint_tab(f: &mut Fixture, path: &std::path::Path) {
     f.app.document_state.tabs.push(crate::app::TabInfo {
         title: "fp".into(),
         path: path.to_path_buf(),
-        cached_document: None,
         project_id: None,
         kind: crate::app::TabKind::FootprintEditor(path.to_path_buf()),
     });

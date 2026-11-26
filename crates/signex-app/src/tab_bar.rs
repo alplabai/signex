@@ -399,7 +399,6 @@ mod tests {
         TabInfo {
             title: path.to_owned(),
             path: PathBuf::from(path),
-            cached_document: None,
             project_id: None,
             kind: TabKind::Schematic,
         }

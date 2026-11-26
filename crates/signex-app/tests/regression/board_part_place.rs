@@ -11,12 +11,13 @@
 use std::path::PathBuf;
 
 use pcb_geom::ClickMode;
-use signex_app::app::{ContextMenuMsg, EditMsg, FileMsg, InputMsg, Message, Signex, TabDocument};
+use signex_app::app::{ContextMenuMsg, EditMsg, FileMsg, InputMsg, Message, Signex};
 use signex_app::diagnostics;
 use signex_app::library::LibraryMessage;
 use signex_app::library::messages::BoardPartError;
 use signex_app::library::state::{ComponentsPanelRowKey, ComponentsRowAction};
 use signex_app::pcb_canvas::{CarryKind, PcbCanvasMsg};
+use signex_app::test_adapter::BoardEngines;
 use signex_types::format::SnxPcb;
 use signex_types::pcb::{Footprint, PCB_GRID_MM, PcbBoard, Point};
 use uuid::Uuid;
@@ -66,10 +67,8 @@ pub(crate) fn open() -> Fixture {
 
 fn live(app: &Signex) -> PcbBoard {
     let docs = &app.document_state;
-    docs.tabs[docs.active_tab]
-        .cached_document
-        .as_ref()
-        .and_then(TabDocument::as_pcb)
+    docs.tab_board_engine(docs.active_tab)
+        .map(|engine| engine.board())
         .expect("a board is open")
         .clone()
 }

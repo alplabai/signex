@@ -195,7 +195,6 @@ fn a_file_another_sheet_of_the_project_references_is_refused() {
     app.document_state.tabs.push(TabInfo {
         title: "other".to_string(),
         path: other.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

@@ -49,7 +49,6 @@ fn parent_with_symbol(dir: &Path) -> (Signex, PathBuf, Uuid) {
     app.document_state.tabs.push(TabInfo {
         title: "top".into(),
         path: top.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -387,7 +386,6 @@ fn switch_to_other_sheet_with_same_symbol(app: &mut Signex, dir: &Path, id: Uuid
     app.document_state.tabs.push(TabInfo {
         title: "other".into(),
         path: other.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -918,7 +916,6 @@ fn a_missing_child_is_not_offered_against_another_sheet_after_a_tab_switch() {
     app.document_state.tabs.push(TabInfo {
         title: "other".into(),
         path: other.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

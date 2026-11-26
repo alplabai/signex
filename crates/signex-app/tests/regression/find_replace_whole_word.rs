@@ -28,7 +28,6 @@ fn vout_app() -> Signex {
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "find-replace-whole-word".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });

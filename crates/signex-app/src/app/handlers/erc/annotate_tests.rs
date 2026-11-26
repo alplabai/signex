@@ -272,7 +272,6 @@ fn undocked_slot_stale_after_annotate_heals_on_the_next_narrow_edit() {
     app.document_state.tabs.push(crate::app::TabInfo {
         title: "z_child".into(),
         path: child_path.clone(),
-        cached_document: None,
         project_id: None,
         kind: crate::app::TabKind::Schematic,
     });
@@ -385,7 +384,6 @@ fn open_and_check_recovery(app: &mut Signex, path: &std::path::Path) {
     app.document_state.tabs.push(crate::app::TabInfo {
         title: "z_child".into(),
         path: path.to_path_buf(),
-        cached_document: None,
         project_id: None,
         kind: crate::app::TabKind::Schematic,
     });

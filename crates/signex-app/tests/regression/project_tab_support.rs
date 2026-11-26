@@ -126,7 +126,6 @@ pub fn open_dirty_root_sheet(f: &mut Fixture) -> PathBuf {
     document.tabs.push(TabInfo {
         title: "Oscar".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: Some(project_id),
         kind: TabKind::Schematic,
     });

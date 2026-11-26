@@ -186,7 +186,6 @@ fn schematic_in(app: &mut Signex, path: &Path) {
     app.document_state.tabs.push(TabInfo {
         title: file_name(path),
         path: path.to_path_buf(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -231,7 +230,6 @@ fn primitive_save_as_onto_a_restoring_file_is_refused_and_rolled_back() {
     app.document_state.tabs.push(TabInfo {
         title: "other".into(),
         path: other.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::FootprintEditor(other.clone()),
     });

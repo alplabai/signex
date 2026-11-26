@@ -105,7 +105,6 @@ fn app_with_gated_sheet(dir: &Path, path: &Path) -> (Signex, mpsc::Receiver<()>,
     app.document_state.tabs.push(TabInfo {
         title: "doc".into(),
         path: path.to_path_buf(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

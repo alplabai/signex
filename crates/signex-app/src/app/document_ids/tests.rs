@@ -539,7 +539,6 @@ fn a_repeated_file_uuid_of_a_symbol_or_footprint_file_is_repaired() {
         app.document_state.tabs.push(crate::app::TabInfo {
             title: name.into(),
             path: path.clone(),
-            cached_document: None,
             project_id: None,
             kind: crate::app::TabKind::SymbolEditor(path),
         });
@@ -553,7 +552,6 @@ fn a_repeated_file_uuid_of_a_symbol_or_footprint_file_is_repaired() {
         app.document_state.tabs.push(crate::app::TabInfo {
             title: name.into(),
             path: path.clone(),
-            cached_document: None,
             project_id: None,
             kind: crate::app::TabKind::FootprintEditor(path),
         });
@@ -1031,22 +1029,15 @@ fn board_with(id: uuid::Uuid, thickness: f64) -> signex_types::pcb::PcbBoard {
 /// dirty tab (#2149).
 fn parked_board(app: &mut Signex, path: &Path, id: uuid::Uuid) {
     app.open_pcb_tab(path.to_path_buf(), "Board".into(), board_with(id, 1.6));
-    let tab = app
-        .document_state
-        .tabs
-        .iter_mut()
-        .find(|t| t.path == path)
-        .unwrap();
-    tab.cached_document = Some(crate::app::TabDocument::Pcb(
-        signex_engine::pcb::BoardEngine::new(board_with(id, 2.4), 1),
-    ));
-    app.document_state.mark_document_dirty(path);
     let index = app
         .document_state
         .tabs
         .iter()
         .position(|t| t.path == path)
         .unwrap();
+    *app.document_state.tab_board_engine_mut(index).unwrap() =
+        signex_engine::pcb::BoardEngine::new(board_with(id, 2.4), 1);
+    app.document_state.mark_document_dirty(path);
     let _ = app.close_tab_parking_dirty(index);
     assert!(app.document_state.parked_pcb_boards.contains_key(path));
 }
