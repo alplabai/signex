@@ -70,7 +70,10 @@ impl Signex {
             erc,
             drc,
             requirements,
-            bom: self.requirements_bom_inputs(project).for_variant(variant),
+            // A variant named Base is the base design.
+            bom: self
+                .requirements_bom_inputs(project)
+                .for_variant(variant.filter(|v| !signex_types::project::is_base_variant(v))),
             board: board_file
                 .as_deref()
                 .and_then(|path| self.document_state.pcb_board(path))

@@ -62,4 +62,7 @@ define_ids! {
     FAB_OUTPUTS_NOTE_MODEL_UNREAD = "fab-outputs-note-model-unread";
     FAB_OUTPUTS_NOTE_CHARS = "fab-outputs-note-chars";
     FAB_OUTPUTS_STALE = "fab-outputs-stale";
+    FAB_OUTPUTS_COMMAND_NO_PATH = "fab-outputs-command-no-path";
+    FAB_OUTPUTS_COMMAND_BAD_KIND = "fab-outputs-command-bad-kind";
+    FAB_OUTPUTS_COMMAND_NO_KIND = "fab-outputs-command-no-kind";
 }

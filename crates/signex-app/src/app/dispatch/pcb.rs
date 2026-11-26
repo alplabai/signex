@@ -26,6 +26,8 @@ impl Signex {
                 self.handle_pcb_drc_violation_picked(index);
                 Task::none()
             }
+            PcbMsg::PartHeightsRead(read) => self.handle_part_heights_read(*read),
+            PcbMsg::DrcFixComputed(done) => self.handle_drc_fix_computed(*done),
             PcbMsg::CanvasInWindow { window, msg } => {
                 self.run_in_window(window, false, |app| app.dispatch_pcb_canvas_message(msg))
             }
@@ -92,6 +94,7 @@ impl Signex {
             PcbMsg::PartSwap(event) => self.handle_part_swap(event),
             PcbMsg::Room(event) => self.handle_room(event),
             PcbMsg::CreateRooms(event) => self.handle_create_rooms(event),
+            PcbMsg::RoomTool(event) => self.handle_room_tool(event),
             PcbMsg::ReuseBlock(event) => self.handle_reuse_block(event),
             PcbMsg::LayerTabMenu(event) => self.handle_layer_tab_menu(event),
             PcbMsg::LayerSetMenu(event) => self.handle_layer_set_menu(event),

@@ -12,6 +12,8 @@ pub(super) fn kind_words(kind: &str) -> MessageId {
         "board_size" => ids::REQUIREMENTS_KIND_BOARD_SIZE,
         "parts_state" => ids::REQUIREMENTS_KIND_PARTS_STATE,
         "net_class" => ids::REQUIREMENTS_KIND_NET_CLASS,
+        "rail_budget" => ids::REQUIREMENTS_KIND_RAIL_BUDGET,
+        "layer_count" => ids::REQUIREMENTS_KIND_LAYER_COUNT,
         _ => ids::REQUIREMENTS_KIND_BOM_COST,
     }
 }
@@ -32,6 +34,13 @@ pub(super) fn field_words(field: RequirementField) -> MessageId {
         RequirementField::Quantity => ids::REQUIREMENTS_FIELD_QUANTITY,
         RequirementField::Currency => ids::REQUIREMENTS_FIELD_CURRENCY,
         RequirementField::MaxUnitCost => ids::REQUIREMENTS_FIELD_MAX_UNIT_COST,
+        RequirementField::Net => ids::REQUIREMENTS_FIELD_NET,
+        RequirementField::Voltage => ids::REQUIREMENTS_FIELD_VOLTAGE,
+        RequirementField::TolerancePercent => ids::REQUIREMENTS_FIELD_TOLERANCE,
+        RequirementField::MaxCurrentA => ids::REQUIREMENTS_FIELD_MAX_CURRENT,
+        RequirementField::MarginPercent => ids::REQUIREMENTS_FIELD_MARGIN,
+        RequirementField::MinLayers => ids::REQUIREMENTS_FIELD_MIN_LAYERS,
+        RequirementField::MaxLayers => ids::REQUIREMENTS_FIELD_MAX_LAYERS,
     }
 }
 
@@ -75,5 +84,12 @@ pub(super) fn problem_words(problem: &RequirementProblem, i18n: &I18n) -> Locali
             t!(i18n, ids::REQUIREMENTS_PROBLEM_UNKNOWN_STATE, "state" => state.as_str())
         }
         P::NetClassAsksNothing => t!(i18n, ids::REQUIREMENTS_PROBLEM_NET_CLASS_ASKS_NOTHING),
+        P::NotAVoltage(text) => {
+            t!(i18n, ids::REQUIREMENTS_PROBLEM_NOT_A_VOLTAGE, "text" => text.as_str())
+        }
+        P::NotAPercent(text) => {
+            t!(i18n, ids::REQUIREMENTS_PROBLEM_NOT_A_PERCENT, "text" => text.as_str())
+        }
+        P::LayerCountAsksNothing => t!(i18n, ids::REQUIREMENTS_PROBLEM_LAYER_COUNT_ASKS_NOTHING),
     }
 }

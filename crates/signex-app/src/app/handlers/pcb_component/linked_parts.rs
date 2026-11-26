@@ -15,7 +15,7 @@ use crate::library::place::lib_id_of;
 
 /// Why a linked part kept its footprint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum NotUpdated {
+pub(crate) enum NotUpdated {
     /// No open sheet holds the part.
     SheetNotOpen,
     /// Its sheet opened read-only.

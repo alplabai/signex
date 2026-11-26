@@ -131,6 +131,7 @@ fn project_data(dir: &Path, board: Option<&str>, rules: &str) -> ProjectData {
         schematic_design: Default::default(),
         fab_outputs: None,
         router_tool_diameter: None,
+        bom_alternates: Vec::new(),
         requirements: serde_json::from_value(json!([{ "id": "parts", "kind": "parts_state" }]))
             .expect("a requirements list"),
         parameters: Default::default(),

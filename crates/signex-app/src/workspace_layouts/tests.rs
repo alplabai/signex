@@ -26,6 +26,7 @@ fn region(panels: &[PanelKind], width: Option<u32>) -> RegionLayout {
         panels: panels.to_vec(),
         collapsed: false,
         width,
+        kept: Vec::new(),
     }
 }
 

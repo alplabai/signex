@@ -47,14 +47,6 @@ pub(crate) struct Boms {
     pub(crate) warnings: Vec<String>,
 }
 
-impl BomInputs {
-    /// The same inputs for `variant` (`None`: Base).
-    pub(crate) fn for_variant(self, variant: Option<String>) -> Self {
-        let variant = variant.filter(|v| !signex_types::project::is_base_variant(v));
-        Self { variant, ..self }
-    }
-}
-
 impl Signex {
     pub(crate) fn requirements_bom_inputs(&self, project: &LoadedProject) -> BomInputs {
         let variant = project
@@ -72,6 +64,15 @@ impl Signex {
             variant,
             naming: SavedChannelNaming::of(&project.data),
         }
+    }
+}
+
+impl BomInputs {
+    /// The BOM of `variant` (`None`: the base design) instead of the
+    /// project's active one (`query_bom variant=`, #2938; a generated design
+    /// report's variant, #2945).
+    pub(crate) fn for_variant(self, variant: Option<String>) -> Self {
+        Self { variant, ..self }
     }
 }
 

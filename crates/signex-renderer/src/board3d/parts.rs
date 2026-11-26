@@ -167,33 +167,40 @@ fn body_box(footprint: &Footprint, stand: &Stand) -> Option<Vec<[f32; 2]>> {
 }
 
 fn append_model(scene: &mut Scene3d, stand: &Stand, model: &AttachedModel) {
-    let [rx, ry, rz] = model.rotation_deg.map(f64::to_radians);
     for mesh in &model.meshes {
         let positions: Option<Vec<[f32; 3]>> = mesh
             .positions
             .iter()
-            .map(|p| {
-                let p = turn_xyz(
-                    [f64::from(p[0]), f64::from(p[1]), f64::from(p[2])],
-                    rx,
-                    ry,
-                    rz,
-                );
-                let p = [
-                    p[0] + model.offset_mm[0],
-                    p[1] + model.offset_mm[1],
-                    p[2] + model.offset_mm[2],
-                ];
-                // The model's y points up the board; the footprint frame's
-                // y points down it.
-                let xy = stand.xy([p[0], -p[1]])?;
-                Some([xy[0], xy[1], stand.z(p[2])])
+            .map(|&p| {
+                let [x, y, z] = model_point_on_footprint(model, p);
+                let xy = stand.xy([x, y])?;
+                Some([xy[0], xy[1], stand.z(z)])
             })
             .collect();
         if let Some(positions) = positions {
             scene.append(&positions, &mesh.triangles, stand.tint(mesh.color));
         }
     }
+}
+
+/// A point of `model`'s mesh in the footprint's frame (mm, y down the
+/// board, z up from the face the part stands on), turned and offset by its
+/// attachment: what the 3D view draws and DRC measures (#2939).
+pub fn model_point_on_footprint(model: &AttachedModel, p: [f32; 3]) -> [f64; 3] {
+    let [rx, ry, rz] = model.rotation_deg.map(f64::to_radians);
+    let p = turn_xyz(
+        [f64::from(p[0]), f64::from(p[1]), f64::from(p[2])],
+        rx,
+        ry,
+        rz,
+    );
+    // The model's y points up the board; the footprint frame's y points
+    // down it.
+    [
+        p[0] + model.offset_mm[0],
+        -(p[1] + model.offset_mm[1]),
+        p[2] + model.offset_mm[2],
+    ]
 }
 
 /// `p` turned about x by `rx`, then y by `ry`, then z by `rz` (radians,

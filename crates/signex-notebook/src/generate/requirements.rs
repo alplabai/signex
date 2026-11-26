@@ -184,5 +184,37 @@ pub fn statement(kind: &RequirementKind) -> String {
             currency,
             max_unit_cost,
         } => format!("BOM at most {max_unit_cost} {currency} per board at {quantity} boards"),
+        // #2943: the rail budget and the copper layer count.
+        RequirementKind::RailBudget {
+            net,
+            voltage,
+            tolerance_percent,
+            max_current_a,
+            margin_percent,
+        } => {
+            let mut line = format!("Rail {net} covers its load");
+            if let Some(voltage) = voltage {
+                line.push_str(&format!(", at {voltage} V"));
+                if let Some(tolerance) = tolerance_percent {
+                    line.push_str(&format!(" ± {tolerance} %"));
+                }
+            }
+            if let Some(current) = max_current_a {
+                line.push_str(&format!(", load at most {current} A"));
+            }
+            if let Some(margin) = margin_percent {
+                line.push_str(&format!(", with {margin} % margin"));
+            }
+            line
+        }
+        RequirementKind::LayerCount {
+            min_layers,
+            max_layers,
+        } => match (min_layers, max_layers) {
+            (Some(min), Some(max)) => format!("Board has {min} to {max} copper layers"),
+            (Some(min), None) => format!("Board has at least {min} copper layers"),
+            (None, Some(max)) => format!("Board has at most {max} copper layers"),
+            (None, None) => "Board copper layers".to_string(),
+        },
     }
 }

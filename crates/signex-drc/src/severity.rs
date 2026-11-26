@@ -12,7 +12,7 @@ use crate::{LimitKind, UserRule, ViolationKind};
 
 impl ViolationKind {
     /// Every kind, most severe first (the report order).
-    pub const ALL: [ViolationKind; 19] = [
+    pub const ALL: [ViolationKind; 21] = [
         ViolationKind::Short,
         ViolationKind::Clearance,
         ViolationKind::Unconnected,
@@ -32,6 +32,8 @@ impl ViolationKind {
         ViolationKind::PasteExpansion,
         ViolationKind::CourtyardOverlap,
         ViolationKind::PartOutsideRoom,
+        ViolationKind::ComponentHeight,
+        ViolationKind::BodyClearance,
     ];
 
     /// Stable rule id, stored in profiles and projects; never renamed.
@@ -56,6 +58,8 @@ impl ViolationKind {
             ViolationKind::PasteExpansion => "builtin::paste_expansion",
             ViolationKind::CourtyardOverlap => "builtin::courtyard_overlap",
             ViolationKind::PartOutsideRoom => "builtin::part_outside_room",
+            ViolationKind::ComponentHeight => "builtin::component_height",
+            ViolationKind::BodyClearance => "builtin::body_clearance",
         }
     }
 
@@ -85,7 +89,9 @@ impl ViolationKind {
             | ViolationKind::MaskExpansion
             | ViolationKind::PasteExpansion
             | ViolationKind::CourtyardOverlap
-            | ViolationKind::PartOutsideRoom => Severity::Error,
+            | ViolationKind::PartOutsideRoom
+            | ViolationKind::ComponentHeight
+            | ViolationKind::BodyClearance => Severity::Error,
         }
     }
 
@@ -115,6 +121,8 @@ impl ViolationKind {
                 &[LimitKind::MinPasteExpansion, LimitKind::MaxPasteExpansion]
             }
             ViolationKind::CourtyardOverlap => &[LimitKind::MinCourtyardGap],
+            ViolationKind::ComponentHeight => &[LimitKind::MaxComponentHeight],
+            ViolationKind::BodyClearance => &[LimitKind::MinBodyClearance],
         }
     }
 }

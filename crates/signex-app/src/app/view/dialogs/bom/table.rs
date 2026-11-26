@@ -38,6 +38,7 @@ pub(super) fn column_name(c: &BomColumn) -> Option<signex_i18n::MessageId> {
         BomColumn::Stock => ids::BOM_COLUMN_STOCK,
         BomColumn::Distributor => ids::BOM_COLUMN_DISTRIBUTOR,
         BomColumn::PriceAge => ids::BOM_COLUMN_PRICE_AGE,
+        BomColumn::Alternates => ids::BOM_COLUMN_ALTERNATES,
     })
 }
 
@@ -115,6 +116,7 @@ pub(in crate::app) fn default_column_width(c: &BomColumn) -> f32 {
         BomColumn::BuyQty | BomColumn::Stock => 66.0,
         BomColumn::Currency => 70.0,
         BomColumn::Distributor | BomColumn::PriceAge => 100.0,
+        BomColumn::Alternates => 160.0,
     }
 }
 

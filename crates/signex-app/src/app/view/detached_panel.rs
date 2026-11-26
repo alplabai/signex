@@ -228,6 +228,9 @@ impl Signex {
             PanelKind::Library | PanelKind::SchLibrary | PanelKind::FootprintLibrary => {
                 crate::library::panel::view(&self.library, ctx)
             }
+            PanelKind::Extension(panel) => {
+                crate::dock::extension_panel(&self.extensions, panel, ctx)
+            }
             other => crate::panels::view_panel(other, ctx)
                 .map(crate::dock::DockMessage::Panel)
                 .boxed(),

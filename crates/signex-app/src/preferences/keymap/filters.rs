@@ -95,6 +95,7 @@ impl KeymapContextFilter {
 /// The rows the table shows: those matching the search and the chip,
 /// sorted by command name ascending (on-screen collation, stable, so rows
 /// of one command keep their profile order).
+#[cfg(test)]
 pub(super) fn visible_rows(
     editor: &KeymapEditorModel,
     i18n: &I18n,
@@ -103,11 +104,57 @@ pub(super) fn visible_rows(
     conflicts: &[BindingConflict],
     platform: Platform,
 ) -> Vec<KeymapEditorRow> {
+    let none = crate::keymap::ExtensionCommandNames::default();
+    visible_rows_with(editor, i18n, &none, search, filter, conflicts, platform)
+}
+
+/// [`visible_rows`] with the installed extensions' commands named by
+/// `extensions` (#2495): the binding rows only, without [`page_rows`]'s
+/// commands that have no key.
+#[cfg(test)]
+pub(super) fn visible_rows_with(
+    editor: &KeymapEditorModel,
+    i18n: &I18n,
+    extensions: &crate::keymap::ExtensionCommandNames,
+    search: &str,
+    filter: KeymapContextFilter,
+    conflicts: &[BindingConflict],
+    platform: Platform,
+) -> Vec<KeymapEditorRow> {
     let mut rows: Vec<KeymapEditorRow> = editor
-        .filtered_rows_in(i18n, search)
+        .filtered_rows_in_with(i18n, extensions, search)
         .into_iter()
         .filter(|row| filter.matches(row, conflicts, platform))
         .collect();
+    i18n.sort_for_display(&mut rows, |row| row.label.as_str());
+    rows
+}
+
+/// The rows the page shows: [`visible_rows_with`] plus a row for each
+/// command with no key that the search and the chip let through, so any
+/// command, built-in or extension, can be given a key. A catalog command is
+/// listed when a key can run it, the rule the command palette uses.
+pub(super) fn page_rows(
+    editor: &KeymapEditorModel,
+    i18n: &I18n,
+    extensions: &crate::keymap::ExtensionCommandNames,
+    search: &str,
+    filter: KeymapContextFilter,
+    conflicts: &[BindingConflict],
+    platform: Platform,
+) -> Vec<KeymapEditorRow> {
+    let mut rows = editor.filtered_rows_in_with(i18n, extensions, search);
+    rows.extend(
+        editor
+            .unassigned_rows_in_with(
+                i18n,
+                extensions,
+                crate::app::command::bridge::is_dispatchable,
+            )
+            .into_iter()
+            .filter(|row| row.matches_query_in(i18n, search)),
+    );
+    rows.retain(|row| filter.matches(row, conflicts, platform));
     i18n.sort_for_display(&mut rows, |row| row.label.as_str());
     rows
 }

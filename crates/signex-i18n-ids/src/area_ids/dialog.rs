@@ -282,4 +282,5 @@ define_ids! {
     DIALOG_NB_GENERATE_NO_PROJECT = "dialog-nb-generate-no-project";
     DIALOG_NB_GENERATE_DONE = "dialog-nb-generate-done";
     DIALOG_NB_GENERATE_FAILED = "dialog-nb-generate-failed";
+    DIALOG_ANNOTATE_COMMAND_REFUSED = "dialog-annotate-command-refused";
 }

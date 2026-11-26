@@ -83,4 +83,20 @@ define_ids! {
     ROOMS_READ_FAILED = "rooms-read-failed";
     ROOMS_NO_SHEETS = "rooms-no-sheets";
     ROOMS_KEPT = "rooms-kept";
+    ROOMS_UNDO_ARRANGE = "rooms-undo-arrange";
+    ROOMS_UNDO_AUTO_PLACE = "rooms-undo-auto-place";
+    ROOMS_ARRANGED = "rooms-arranged";
+    ROOMS_AUTO_PLACED = "rooms-auto-placed";
+    ROOMS_SELECT_ONE = "rooms-select-one";
+    ROOMS_BOARD_NO_PROJECT = "rooms-board-no-project";
+    ROOMS_NO_ROOMS = "rooms-no-rooms";
+    ROOMS_UNKNOWN_ROOM = "rooms-unknown-room";
+    ROOMS_NAME_TAKEN = "rooms-name-taken";
+    ROOMS_BAD_SIDE = "rooms-bad-side";
+    ROOMS_BAD_SHAPE = "rooms-bad-shape";
+    ROOMS_BAD_SHEET = "rooms-bad-sheet";
+    ROOMS_BAD_CORNERS = "rooms-bad-corners";
+    ROOMS_OUTLINE_NEEDED = "rooms-outline-needed";
+    ROOMS_NO_AREA = "rooms-no-area";
+    ROOMS_BAD_WEIGHTS = "rooms-bad-weights";
 }

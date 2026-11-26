@@ -173,6 +173,8 @@ pub(super) fn menu_context_in(app: &Signex, window: Option<iced::window::Id>) ->
         notebook_badges: !app.ui_state.annotations.badges_hidden,
         pcb_sync: app.pcb_sync_label(window),
         layouts: app.layouts_menu(),
+        extension_rows: app.extensions().menu_rows(),
+        extension_panels: app.extensions().panels(),
     }
 }
 
@@ -494,6 +496,7 @@ pub(super) fn open_project(app: &mut Signex, file: &str) -> usize {
             schematic_design: Default::default(),
             fab_outputs: None,
             router_tool_diameter: None,
+            bom_alternates: Vec::new(),
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),

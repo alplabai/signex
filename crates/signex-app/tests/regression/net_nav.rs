@@ -125,6 +125,7 @@ pub(crate) mod flows {
                 schematic_design: Default::default(),
                 fab_outputs: None,
                 router_tool_diameter: None,
+                bom_alternates: Vec::new(),
                 requirements: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),

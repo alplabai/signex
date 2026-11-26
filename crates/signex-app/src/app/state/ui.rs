@@ -172,6 +172,10 @@ pub struct UiState {
     /// the view then computes the sections inline, so a stale cache is
     /// impossible by construction.
     pub shortcut_sections: Option<Vec<crate::keyboard_shortcuts_modal::ShortcutSection>>,
+    /// The installed extensions' commands as the keymap surfaces and the
+    /// palette name them (#2495); empty in the Community binary. Set once,
+    /// by `Signex::with_extensions`.
+    pub extension_commands: crate::keymap::ExtensionCommandNames,
     /// The shortcuts sheet's filter text and scope, set afresh each time
     /// the sheet opens (#2262).
     pub shortcut_sheet: crate::keyboard_shortcuts_modal::ShortcutSheet,
@@ -430,6 +434,13 @@ pub struct UiState {
     /// transient feedback. Only a successful save clears it, because only
     /// then is the file on disk one this process wrote.
     pub keymap_load_error: Option<String>,
+    /// The user's own `keyboard_shortcuts.toml` that `keymap_assign` and
+    /// `keymap_clear` read and write in a headless `signex-cli` run, which
+    /// otherwise works under a throwaway config root (the one carve-out,
+    /// `docs/CLI.md`). `None` everywhere else: they edit the live set and its
+    /// file. Set by `Signex::edit_user_shortcuts_at`.
+    /// Boxed to keep `UiState` under its size ceiling (#2412).
+    pub keymap_command_file: Option<Box<std::path::PathBuf>>,
     /// Path of `keyboard_shortcuts.toml.bak` when that file is on disk
     /// (#603).
     ///
@@ -875,7 +886,11 @@ impl UiState {
     /// dropped otherwise (the next open rebuilds it).
     pub fn refresh_shortcut_sections(&mut self) {
         self.shortcut_sections = self.keyboard_shortcuts_open.then(|| {
-            crate::keyboard_shortcuts_modal::build_sections(&self.i18n, &self.keymap_profiles)
+            crate::keyboard_shortcuts_modal::build_sections_with(
+                &self.i18n,
+                &self.keymap_profiles,
+                &self.extension_commands,
+            )
         });
     }
 

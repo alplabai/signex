@@ -49,6 +49,19 @@ pub(super) const QUERY: &[CommandMetadata] = &[
         operands: operands::QUERY_PINS,
         ..CommandMetadata::DEFAULT
     },
+    // #2944: the rows of an open library as the app holds them; reads no
+    // file and reaches no library server, so it does not need the network.
+    CommandMetadata {
+        id: "query_library",
+        category: "library",
+        label: command_ids::CMD_QUERY_LIBRARY,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::QUERY_LIBRARY,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "resolve",
         category: "file",

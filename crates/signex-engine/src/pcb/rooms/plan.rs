@@ -107,6 +107,19 @@ impl RoomPlan {
         removed.chain(added).chain(moved).collect()
     }
 
+    /// Keep only the rooms whose name `keep` accepts, and the moves of
+    /// their members: the rooms a person left unticked, or a command left
+    /// out, are not made.
+    pub fn retain_rooms(&mut self, keep: impl Fn(&str) -> bool) {
+        self.rooms.retain(|p| keep(&p.room.name));
+        let members: std::collections::BTreeSet<Uuid> = self
+            .rooms
+            .iter()
+            .flat_map(|p| p.members.iter().copied())
+            .collect();
+        self.moves.retain(|(fp, _)| members.contains(fp));
+    }
+
     /// How many rooms are channels of a sheet placed more than once.
     pub fn channel_rooms(&self) -> usize {
         self.rooms

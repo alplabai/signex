@@ -3,9 +3,14 @@ use std::collections::{BTreeMap, HashMap};
 use serde::{Deserialize, Serialize};
 use signex_types::designator::compare_references;
 
+mod priced;
 mod pricing;
+pub use priced::{
+    BuildOrder, PricedAlternate, PricedBom, PricedLine, ServedBy, Shortfall, apply_alternates,
+    line_key, priced_bom,
+};
 pub use pricing::{
-    BomPrice, MPN_FIELDS, PriceBook, PriceQuote, apply_prices, library_row_key, mpn_key,
+    BomPrice, MPN_FIELDS, PriceBook, PriceQuote, apply_prices, library_row_key, mpn_key, price_of,
     price_totals, round_cents,
 };
 
@@ -300,6 +305,10 @@ pub struct BomRow {
     /// The cached price, once [`apply_prices`] has run and found one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub price: Option<BomPrice>,
+    /// The line's alternate parts (library row keys, most preferred first),
+    /// once [`apply_alternates`] has run (#2938).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub alternates: Vec<String>,
 }
 
 /// Generated BOM table.
@@ -412,6 +421,7 @@ pub fn build_table(ctx: &BomContext, opts: &BomEngineOptions) -> BomTable {
                         custom,
                         library_row: shared_library_row(&grouped_components),
                         price: None,
+                        alternates: Vec::new(),
                     }
                 })
                 .collect::<Vec<_>>();
@@ -435,6 +445,7 @@ pub fn build_table(ctx: &BomContext, opts: &BomEngineOptions) -> BomTable {
                     custom: component.custom.clone(),
                     library_row: component.library_row.clone(),
                     price: None,
+                    alternates: Vec::new(),
                 })
                 .collect::<Vec<_>>();
 

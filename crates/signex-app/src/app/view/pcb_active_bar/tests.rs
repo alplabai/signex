@@ -336,6 +336,7 @@ pub(super) fn entries(app: &Signex, menu: PcbBarMenu) -> Vec<DropdownEntry<Messa
         presets: &app.ui_state.pcb_filter_presets,
         editing: app.ui_state.pcb_filter_preset_editing,
         last: &app.ui_state.pcb_bar_last_tools,
+        extensions: app.extensions(),
     };
     pcb_bar_menu_entries(
         menu,

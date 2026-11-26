@@ -368,6 +368,18 @@ mod tests {
         assert_eq!(erc, "`open_erc_dialog` only works in a window");
     }
 
+    /// `signex-cli` installs no extension (#2495), so an extension's command
+    /// id is well formed but unknown to it.
+    #[test]
+    fn an_extension_command_id_is_unknown_to_the_cli() {
+        let fx = fixture();
+        let all = policy(&Capability::ALL);
+        let ext = authorize(&all, &fx, &request("ext.sample.say_hello", &[])).unwrap_err();
+        assert_eq!(ext, "unknown command `ext.sample.say_hello`");
+        let bad = authorize(&all, &fx, &request("ext.sample", &[])).unwrap_err();
+        assert!(bad.contains("ext.<name>.<command>"), "{bad}");
+    }
+
     #[test]
     fn a_path_operand_is_resolved_against_the_project_and_confined() {
         let fx = fixture();

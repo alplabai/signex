@@ -27,7 +27,7 @@ mod window_layout;
 mod wire;
 
 #[cfg(test)]
-mod tests;
+pub(in crate::app) mod tests;
 
 use std::fmt;
 use std::sync::{Arc, Mutex, PoisonError};
@@ -35,9 +35,10 @@ use std::sync::{Arc, Mutex, PoisonError};
 use iced::futures::channel::oneshot;
 
 pub(crate) use crate::app::core::origin::Origin;
-// The parity table lists this route (`command::parity`).
-#[cfg(test)]
+// The agent runner of the request path routes it (`command::request`), and
+// the parity table lists the route (`command::parity`).
 pub(in crate::app) use allow::is_window_layout;
+pub use deferred::QueryAnswered;
 pub(crate) use deferred::WaitingCommand;
 pub use reply::{
     ChangeSnapshot, MessageLine, Status, changed_between, messages_since, outcome_verdict,
@@ -83,6 +84,10 @@ pub enum AgentMsg {
     /// The notebook read a measurement command waited for landed (mockup
     /// row 199): answer its caller (the socket, or a headless run).
     NotebookRead(Box<crate::app::notebook_measurements::NotebookRead>),
+    /// The off-thread work a query waited for finished (`query_bom`, #2938;
+    /// `query_rail_budget`, #2943): answer its caller (the socket, or a
+    /// headless run).
+    QueryAnswered(Box<QueryAnswered>),
     /// A client connected and passed the peer check (#2253).
     ConnectionOpened { pid: Option<u32> },
     /// A connection ended: the client left, idled out or was dropped.

@@ -44,24 +44,6 @@ one board. Rules in [CLI.md](CLI.md), "Checks on demand".
 [baseline=<run>]` runs the project's requirements list as checks and
 answers in the same shape; rules in [CLI.md](CLI.md), "Requirement
 checks".
-`list_annotations document=<project or one of its documents> [id=<block
-id>] [kind=<kind>] [part=<designator>]` answers, once the notebook files
-are read, with every annotation block of the project's Design Notebook
-and its chapters (mockup row 198): per file its blocks, each with its
-typed id (`DEC-002`), kind, title, status, date, line, references, the
-review record of its kind (a Measurement's rows with their `pass`,
-`warn` or `fail` verdict) and `cited_by` (the Issues it opens, the
-Decision that supersedes it, the Calculations reading it), and its
-problems by name (`bad_id`, `duplicate_id`, `bad_field`, ...); then every
-citation (`links`) and the failing Measurements that open no Issue yet
-(`unopened_failures`). Fields in
-[NOTEBOOK_ANNOTATIONS.md](NOTEBOOK_ANNOTATIONS.md), "Review records".
-`notebook_measurements`, `notebook_timeline` and `notebook_attachments`
-read the named project's Design Notebook once its files are read: every
-reading with its result, one net's, part's or pin's timeline, every
-attachment with its stale mark; `export_notebook_timeline`,
-`mark_notebook_attachment_valid` and `attach_notebook_file` write a file.
-Rules in [NOTEBOOK_MEASUREMENTS.md](NOTEBOOK_MEASUREMENTS.md).
 `measure_board`, `query_board_nets` and `find_similar_items` are board
 queries: a distance on one board, point to point or edge to edge between
 two items; each net's routed length, members and routed state; and the
@@ -90,19 +72,24 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 
 | command id | label | category | Signex Standard | Classic |
 | --- | --- | --- | --- | --- |
+| `apply_board_schematic_differences` | Apply board and schematic differences by id | pcb_sync | — | — |
 | `apply_edits` | Apply edits (agent) | edit | — | — |
 | `apply_layout_board` | Workspace layout: Layout | window | — | — |
 | `apply_layout_notebook` | Workspace layout: Notebook | window | — | — |
 | `apply_layout_review` | Workspace layout: Review | window | — | — |
 | `apply_layout_schematic` | Workspace layout: Schematic | window | — | — |
-| `attach_notebook_file` | Copy a file into the notebook as an attachment | design | — | — |
 | `autoplace_fields` | Autoplace fields | edit | — | `O` |
+| `board_status` | Board status counters | validation | — | — |
+| `bom_add_alternate` | Add an alternate part to a BOM line | design | — | — |
+| `bom_remove_alternate` | Remove an alternate part from a BOM line | design | — | — |
+| `bom_set_alternate_order` | Move an alternate part in a BOM line's order | design | — | — |
 | `break_wire` | Break wire | modify | `E W` | — |
 | `bring_drawings_forward` | Bring drawings forward | edit | — | — |
 | `bring_drawings_to_front` | Bring drawings to front | edit | — | — |
 | `cancel_current_tool` | Cancel current stage / exit placement mode | interactive | `Escape` | `Escape` |
 | `center_on_cursor` | Center on cursor | view | — | `F4` |
 | `center_view_at_cursor` | Center/redraw view around cursor | view | `Home` | — |
+| `check_board_against_schematic` | Check the board against the schematic | pcb_sync | — | — |
 | `check_drc` | Check design rules | validation | — | — |
 | `check_erc` | Check electrical rules | validation | — | — |
 | `check_requirements` | Check project requirements | validation | — | — |
@@ -131,8 +118,6 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `edit_selected_symbol_in_symbol_editor` | Edit selected symbol in Symbol Editor | library | — | `Mod+E` |
 | `edit_text_in_place` | In-place edit selected text | edit | `F2` | — |
 | `edit_value` | Edit value | edit | — | `V` |
-| `export_notebook_pdf` | Export the Design Notebook as PDF | file | — | — |
-| `export_notebook_timeline` | Export a measurement timeline as a CSV file | reports | — | — |
 | `fast_grid_1` | Fast grid 1 | view | — | `Alt+1` |
 | `fast_grid_2` | Fast grid 2 | view | — | `Alt+2` |
 | `find` | Find | search | `Mod+F` | `Mod+F` |
@@ -142,13 +127,12 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `find_previous` | Find previous | search | `Shift+F3` | `Shift+F3` |
 | `find_similar_objects` | Find Similar Objects | select | `Shift+F` | `Shift+F` |
 | `find_text` | Find text | search | — | — |
-| `generate_design_notebook` | Generate a design notebook from the project | design | — | — |
 | `home_view` | Reset the view rotation and Flip, then fit the board or sheet | view | — | — |
 | `import_graphics` | Import graphics | place | — | `Mod+Shift+F` |
-| `list_annotations` | List the annotation blocks of the project's Design Notebook | design | — | — |
+| `keymap_assign` | Give a command a key in a custom keyboard profile | preferences | — | — |
+| `keymap_clear` | Take a command's keys away in a custom keyboard profile | preferences | — | — |
 | `list_documents` | List documents | file | — | — |
 | `manage_workspace_layouts` | Manage workspace layouts | window | — | — |
-| `mark_notebook_attachment_valid` | Mark a stale attachment or reading as still valid | design | — | — |
 | `measure_distance` | Measure distance | view | `Ctrl+M` | `Ctrl+M` |
 | `mirror_x` | Mirror along X-axis | modify | `X` | `X` |
 | `mirror_y` | Mirror along Y-axis | modify | `Y` | `Y` |
@@ -158,21 +142,9 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `new_project_with_profile` | New project from a profile | file | — | — |
 | `next_document_tab` | Next open document tab | window | `Ctrl+Tab` | — |
 | `next_grid` | Next grid | view | — | `N` |
-| `notebook_attachments` | List the notebook's attachments and their stale marks | design | — | — |
-| `notebook_badges` | List the Notebook badges and their blocks | design | — | — |
-| `notebook_compile` | Compile the project's Design Notebook and report its pages and problems | reports | — | — |
-| `notebook_fix_reference` | Fix a stale notebook reference | design | — | — |
-| `notebook_insert` | Insert a reference or a block into the open Design Notebook | edit | — | — |
-| `notebook_measurements` | List the notebook's measurements with their results | design | — | — |
-| `notebook_reference_card` | Read the hover card of a notebook reference | design | — | — |
-| `notebook_reference_picker` | List what the @ reference picker offers | design | — | — |
-| `notebook_references` | List the notebook's references and the stale ones | design | — | — |
-| `notebook_timeline` | Show the measurement timeline of a net, part or pin | design | — | — |
-| `notebook_view` | Set the view, the side panel or the next problem of the Design Notebook tab | view | — | — |
 | `open_command_palette` | Open command palette | commands | `Mod+Shift+P` | `Ctrl+K`, `Mod+Shift+P` |
 | `open_compiled_design` | Open Compiled Design panel | panels | — | — |
 | `open_datasheet` | Open datasheet | edit | — | `D` |
-| `open_design_notebook` | Open the Design Notebook of the project (Wiki) | design | — | — |
 | `open_diff_pair_classes` | Open the project's differential pair classes | design | — | — |
 | `open_document` | Open document | file | `Mod+O` | `Mod+O` |
 | `open_grid_picker` | Open grid picker | view | — | — |
@@ -202,10 +174,14 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `project_run_requirements` | Run the project's requirement checks in the Project tab | validation | — | — |
 | `project_set_active_variant` | Choose the active variant of the project | design | — | — |
 | `project_set_annotate_undo` | Set how many undo steps an annotate run of the project is | design | — | — |
+| `project_set_rail` | Set a power rail's voltage and tolerance | design | — | — |
 | `project_set_requirement` | Set a field of a project requirement | design | — | — |
 | `project_set_version_control` | Turn commit on save on or off for the project | design | — | — |
 | `project_settings` | Read the settings of the project | design | — | — |
+| `query_bom` | Query the priced BOM | design | — | — |
+| `query_library` | Query a library | library | — | — |
 | `query_pins` | Query pins | file | — | — |
+| `query_rail_budget` | Query the project's rail budget | validation | — | — |
 | `read_document` | Read document | file | — | — |
 | `redo` | Redo | edit | `Mod+Shift+Z` (macOS), `Ctrl+Shift+Z`, `Ctrl+Y` | `Ctrl+Shift+Z`, `Mod+Shift+Z` (macOS), `Ctrl+Y` |
 | `refresh_view` | Refresh/redraw | view | `End` | `F5` |
@@ -224,6 +200,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `save_document_as` | Save as | file | `Mod+Shift+S` | `Mod+Shift+S` |
 | `save_project_as` | Save the project to a new folder | file | — | — |
 | `save_workspace_layout` | Save the panel arrangement as a workspace layout | window | — | — |
+| `search_parts` | Search parts by parameters | library | — | — |
 | `select_all` | Select all | select | `Mod+A` | `Mod+A` |
 | `send_drawings_backward` | Send drawings backward | edit | — | — |
 | `send_drawings_to_back` | Send drawings to back | edit | — | — |
@@ -270,6 +247,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `annotate_schematic` | Annotate schematic | design | `T A` | — |
 | `annotate_schematic_quietly` | Annotate schematic quietly | design | `Alt+A` | `Alt+A` |
 | `apply_selection_filter_preset` | Apply a selection filter preset | select | — | — |
+| `assign_footprint` | Set the footprint of a placed part | design | — | — |
 | `assign_footprints` | Assign footprints | design | — | — |
 | `assign_net_class` | Assign net to class | design | — | — |
 | `back_annotate_schematics` | Back-annotate the board's designators and values to the schematic | pcb_sync | — | — |
@@ -368,6 +346,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `place_wire_to_bus_entry` | Place wire-to-bus entry | place | — | — |
 | `previous_highlighted_net_item` | Previous item on highlighted net | select | — | `Shift+Tab` |
 | `previous_sheet` | Previous sheet | navigation | — | `PageUp` |
+| `query_footprint_assignments` | List the footprint of every part | design | — | — |
 | `remove_from_union` | Remove the selection from its union | edit | — | — |
 | `repair_pin_junctions` | Add a junction where a pin end touches a wire | validation | — | — |
 | `reset_schematic_designators` | Reset schematic designators | design | `T A E` | — |
@@ -389,7 +368,6 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `sheet_navigation_forward` | Sheet navigation forward | navigation | — | `Alt+Right` |
 | `sync_sheet_entries` | Synchronize the selected sheet symbol's entries and its sheet's ports, with a preview | design | — | — |
 | `sync_sheet_pins` | Sync the selected sheet symbol's pins with its child sheet | design | — | — |
-| `toggle_notebook_badges` | Show or hide the Notebook badges on the schematic | view | `B` | — |
 | `tool_select` | Tool select | select | — | — |
 | `update_pcb_from_schematic` | Update PCB from schematic | pcb_sync | — | — |
 
@@ -401,7 +379,9 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `add_net_class` | Add a net class | design | — | — |
 | `add_teardrops` | Add teardrops where tracks of the selected nets, or of every net, enter a pad or via | pcb | — | — |
 | `arrange_in_box` | Arrange the selected components inside a box drawn on the board | modify | — | — |
+| `arrange_in_room` | Pack the parts of the selected room inside it again | design | — | — |
 | `assign_board_net_class` | Put a board net in a net class | design | — | — |
+| `auto_place` | Place the parts of each room inside it by connection length, heat, noise and connector edges | design | — | — |
 | `board_assembly_drawing` | Open Board Print / PDF for an assembly drawing | pcb | — | — |
 | `board_layer_stack` | Open the layer stack manager of the board | design | — | — |
 | `board_panel` | Describe the board's panel | pcb | — | — |
@@ -428,6 +408,8 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `fabrication_outputs` | Generate the board's fabrication outputs | file | — | — |
 | `filter_drc_results` | Filter the DRC results by rule, layer and severity | pcb | — | — |
 | `find_similar_items` | Find similar items on a board | search | — | — |
+| `fix_drc` | Fix the DRC violations of one rule, or of every rule with a fix | pcb | — | — |
+| `fix_drc_violation` | Fix one DRC violation without waiving it | pcb | — | — |
 | `flip_board_3d` | Turn the board over in the 3D view | view | `F` | `F` |
 | `flip_board_view` | View the board from below, or from above again | view | — | — |
 | `flip_selection` | Flip selection to the other board side | modify | `L` | `L` |
@@ -439,6 +421,9 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `import_dxf` | Import a DXF drawing onto the active layer of the board | file | — | — |
 | `import_dxf_outline` | Import the largest closed shape of a DXF drawing as the board outline | file | — | — |
 | `keepout_from_selection` | Turn the selected area or closed lines into a keepout on its layer | design | — | — |
+| `layout_plan_get` | Read the board's layout plan | pcb | — | — |
+| `layout_plan_set` | Change a stage of the board's layout plan | pcb | — | — |
+| `layout_plan_status` | Say how far each stage of the board's layout plan is | pcb | — | — |
 | `lock_board_items` | Lock the selected tracks and vias | modify | — | — |
 | `measure_board` | Measure on a board | search | — | — |
 | `new_pcb_document` | New PCB in the project | file | — | — |
@@ -477,6 +462,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `polygon_manager` | Open the Polygon Manager of the board | pcb | — | — |
 | `prev_layer` | Make the previous layer of the board active | view | `-` | `-` |
 | `query_board_nets` | Query board nets | search | — | — |
+| `query_part_heights` | Query part heights | validation | — | — |
 | `reannotate_board` | Re-annotate the board's designators by position | design | — | — |
 | `remove_board_panel` | Remove the board's panel | pcb | — | — |
 | `remove_teardrops` | Remove the teardrops of the selected nets, or of every net | pcb | — | — |
@@ -509,6 +495,9 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `set_board_graphic` | Set one field of a board drawing | edit | — | — |
 | `set_board_origin` | Set the board origin at a clicked point | edit | `E O S` | `Shift+O` |
 | `set_board_panel` | Change a setting of the board's panel | pcb | — | — |
+| `set_footprint_position` | Move a component on the board to a point | edit | — | — |
+| `set_footprint_rotation` | Set the rotation of a component on the board | edit | — | — |
+| `set_footprint_side` | Put a component on the top or bottom side of the board | edit | — | — |
 | `set_footprint_text` | Set the place, angle, height or justification of a component's designator or comment | edit | — | — |
 | `set_layer_color` | Give one layer its own color, saved with the board, or the palette color again | view | — | — |
 | `set_layer_sizes` | Set the per-layer copper sizes of vias or pads | modify | — | — |

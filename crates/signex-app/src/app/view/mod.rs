@@ -173,6 +173,8 @@ impl Signex {
             notebook_badges: !ui.annotations.badges_hidden,
             pcb_sync: self.pcb_sync_label(Some(window_id)),
             layouts: self.layouts_menu(),
+            extension_rows: self.extensions.menu_rows(),
+            extension_panels: self.extensions.panels(),
         };
         let undocked = ui.main_window_id != Some(window_id);
         let menu_row = || {
@@ -654,6 +656,7 @@ impl Signex {
                         state: &self.ui_state.start_screen,
                         // `update` stamps it whenever the screen shows.
                         now: self.ui_state.start_screen.now.unwrap_or_default(),
+                        extensions: &self.extensions,
                     },
                 ),
             }

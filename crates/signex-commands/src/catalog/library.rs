@@ -13,6 +13,8 @@ pub(super) const LIBRARY: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
+        // The browser searches distributors and library servers.
+        needs_network: true,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

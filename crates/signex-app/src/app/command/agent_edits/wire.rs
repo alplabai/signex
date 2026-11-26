@@ -158,6 +158,25 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "update_pcb_from_schematic",
         "it edits the project's board, which no sheet's undo step covers; run it as its own command",
     ),
+    // #2470: numbering runs over the whole project or its board.
+    (
+        "annotate_schematic_quietly",
+        "it numbers the whole project, which no sheet's undo step covers; run it as its own command",
+    ),
+    (
+        "force_annotate_all_schematics",
+        "it numbers the whole project, which no sheet's undo step covers; run it as its own command",
+    ),
+    (
+        "back_annotate_schematics",
+        "it edits the project's sheets from its board, which no sheet's undo step covers; run it as its own command",
+    ),
+    ("reannotate_board", BOARD_EDIT),
+    // #2462: one board step and one schematic undo group of its own.
+    (
+        "apply_board_schematic_differences",
+        "it edits the project's board and sheets, which no sheet's undo step covers; run it as its own command",
+    ),
     (
         "rules_add",
         "it writes the project's rule set, which no sheet's undo step covers",
@@ -204,6 +223,9 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "unwaive_drc_violation",
         "it edits the board, which no sheet's undo step covers; run it as its own command",
     ),
+    // #2940: the DRC fixes are one step of their own on the board.
+    ("fix_drc_violation", BOARD_EDIT),
+    ("fix_drc", BOARD_EDIT),
     // #2401, #2407: board edits, each its own step on the board it names.
     ("set_layer_stack", BOARD_EDIT),
     ("lock_board_items", BOARD_EDIT),
@@ -225,6 +247,19 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
     ("arrange_in_box", BOARD_EDIT),
     // #2506: it refills the board's unfilled pours as one board step.
     ("repour_all", BOARD_EDIT),
+    // #2470: each route or via from operands is one step on the board.
+    ("place_board_via", BOARD_EDIT),
+    ("place_board_track", BOARD_EDIT),
+    ("place_board_route", BOARD_EDIT),
+    ("place_board_diff_pair", BOARD_EDIT),
+    ("place_board_quick_route", BOARD_EDIT),
+    ("place_board_multi_route", BOARD_EDIT),
+    // #2470: each area tool adds one zone as a board step of its own.
+    ("place_board_fill", BOARD_EDIT),
+    ("place_board_region", BOARD_EDIT),
+    ("place_board_polygon_pour", BOARD_EDIT),
+    ("place_board_keepout", BOARD_EDIT),
+    ("place_board_pour_cutout", BOARD_EDIT),
     (
         "rules_matrix_set",
         "it writes the project's rule set, which no sheet's undo step covers",
@@ -257,6 +292,34 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "set_footprint_text",
         "it edits a board, which no sheet's undo step covers; run it as its own command",
     ),
+    // #2936: a footprint placed by id; a list form (`ids`) is one board step.
+    (
+        "set_footprint_position",
+        "it edits a board, which no sheet's undo step covers; run it as its own command",
+    ),
+    (
+        "set_footprint_rotation",
+        "it edits a board, which no sheet's undo step covers; run it as its own command",
+    ),
+    (
+        "set_footprint_side",
+        "it edits a board, which no sheet's undo step covers; run it as its own command",
+    ),
+    // #2937: the swap edits the board and its linked sheets together; an
+    // assignment reads the footprint's pads from its library first.
+    (
+        "change_footprint",
+        "it edits the board and its sheet together; run it as its own command",
+    ),
+    (
+        "assign_footprint",
+        "it reads the footprint from its library first; run it as its own command",
+    ),
+    // #2457, #2941: each rooms command is one step on the board.
+    ("place_board_room", BOARD_EDIT),
+    ("create_rooms_from_sheets", BOARD_EDIT),
+    ("arrange_in_room", BOARD_EDIT),
+    ("auto_place", BOARD_EDIT),
     // #2389: length tuning lands on the named board's own undo stack.
     (
         "tune_net_length",
@@ -278,6 +341,8 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "set_board_panel",
         "it edits a board, which no sheet's undo step covers; run it as its own command",
     ),
+    // #2942: the layout plan is board data, a board step of its own.
+    ("layout_plan_set", BOARD_EDIT),
     (
         "swap_pins",
         "it edits the board and its sheet together; run it as its own command",
@@ -347,6 +412,23 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
     (
         "notebook_fix_reference",
         "it edits the project's Design Notebook, which no sheet's undo step covers; run it as its own command",
+    ),
+    (
+        "project_set_rail",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    // #2938: a BOM line's alternates are project settings.
+    (
+        "bom_add_alternate",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "bom_remove_alternate",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "bom_set_alternate_order",
+        "it writes the project's settings, which no sheet's undo step covers",
     ),
 ];
 
@@ -536,6 +618,9 @@ mod tests {
     fn the_editable_commands_are_the_sheet_placements_and_net_colours() {
         let expected = [
             "autoplace_fields",
+            // #1297: its library row is read with the list, as for
+            // `place_component`.
+            "change_component",
             "clear_all_net_colors",
             "color_net",
             "draw_bus",
@@ -613,6 +698,8 @@ mod tests {
             ("reset_layer_colors", "edits a board"),
             ("reset_board_origin", "edits a board"),
             ("repour_all", "edits a board"),
+            ("place_board_route", "edits a board"),
+            ("place_board_via", "edits a board"),
             ("set_board_origin", "not runnable headless"),
             // #2326 slice 6.P2b: run by uuid on their own, not in a list yet.
             ("bring_drawings_forward", "does not carry it yet"),

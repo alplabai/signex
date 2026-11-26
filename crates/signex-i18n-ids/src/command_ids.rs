@@ -19,8 +19,11 @@ define_ids! {
         CMD_CENTER_ON_CURSOR = "cmd-center-on-cursor";
         CMD_CENTER_VIEW_AT_CURSOR = "cmd-center-view-at-cursor";
         CMD_CHECK_DRC = "cmd-check-drc";
+        CMD_QUERY_PART_HEIGHTS = "cmd-query-part-heights";
+        CMD_QUERY_LIBRARY = "cmd-query-library";
         CMD_CHECK_ERC = "cmd-check-erc";
         CMD_CHECK_REQUIREMENTS = "cmd-check-requirements";
+        CMD_QUERY_RAIL_BUDGET = "cmd-query-rail-budget";
         CMD_CLOSE_ACTIVE_DOCUMENT = "cmd-close-active-document";
         CMD_MENU_CLOSE_ACTIVE_DOCUMENT = "cmd-menu-close-active-document";
         CMD_CLOSE_ALL_DOCUMENTS = "cmd-close-all-documents";
@@ -97,6 +100,8 @@ define_ids! {
         CMD_OPEN_PREFERENCES = "cmd-open-preferences";
         CMD_MENU_OPEN_PREFERENCES = "cmd-menu-open-preferences";
         CMD_OPEN_SCHEMATIC_PREFERENCES = "cmd-open-schematic-preferences";
+        CMD_KEYMAP_ASSIGN = "cmd-keymap-assign";
+        CMD_KEYMAP_CLEAR = "cmd-keymap-clear";
         CMD_PASTE = "cmd-paste";
         CMD_PASTE_ARRAY = "cmd-paste-array";
         CMD_PASTE_SPECIAL = "cmd-paste-special";
@@ -273,6 +278,9 @@ define_ids! {
         CMD_MENU_REMOVE_BOARD_PANEL = "cmd-menu-remove-board-panel";
         CMD_SET_BOARD_PANEL = "cmd-set-board-panel";
         CMD_BOARD_PANEL = "cmd-board-panel";
+        CMD_LAYOUT_PLAN_GET = "cmd-layout-plan-get";
+        CMD_LAYOUT_PLAN_SET = "cmd-layout-plan-set";
+        CMD_LAYOUT_PLAN_STATUS = "cmd-layout-plan-status";
         CMD_PROJECT_SETTINGS = "cmd-project-settings";
         CMD_PROJECT_MOVE_SHEET = "cmd-project-move-sheet";
         CMD_PROJECT_ADD_VARIANT = "cmd-project-add-variant";
@@ -287,6 +295,12 @@ define_ids! {
         CMD_PROJECT_REMOVE_REQUIREMENT = "cmd-project-remove-requirement";
         CMD_PROJECT_ENABLE_REQUIREMENT = "cmd-project-enable-requirement";
         CMD_PROJECT_RUN_REQUIREMENTS = "cmd-project-run-requirements";
+        CMD_PROJECT_SET_RAIL = "cmd-project-set-rail";
+        CMD_BOM_ADD_ALTERNATE = "cmd-bom-add-alternate";
+        CMD_BOM_REMOVE_ALTERNATE = "cmd-bom-remove-alternate";
+        CMD_BOM_SET_ALTERNATE_ORDER = "cmd-bom-set-alternate-order";
+        CMD_QUERY_BOM = "cmd-query-bom";
+        CMD_SEARCH_PARTS = "cmd-search-parts";
         CMD_NUMBER_SCHEMATIC_SHEETS = "cmd-number-schematic-sheets";
         CMD_MENU_NUMBER_SCHEMATIC_SHEETS = "cmd-menu-number-schematic-sheets";
         CMD_RESET_SCHEMATIC_DESIGNATORS = "cmd-reset-schematic-designators";
@@ -305,6 +319,9 @@ define_ids! {
         CMD_UPDATE_PCB_FROM_SCHEMATIC = "cmd-update-pcb-from-schematic";
         CMD_COMPARE_BOARD_WITH_SCHEMATIC = "cmd-compare-board-with-schematic";
         CMD_MENU_COMPARE_BOARD_WITH_SCHEMATIC = "cmd-menu-compare-board-with-schematic";
+        CMD_CHECK_BOARD_AGAINST_SCHEMATIC = "cmd-check-board-against-schematic";
+        CMD_APPLY_BOARD_SCHEMATIC_DIFFERENCES = "cmd-apply-board-schematic-differences";
+        CMD_BOARD_STATUS = "cmd-board-status";
         CMD_BACK_ANNOTATE_SCHEMATICS = "cmd-back-annotate-schematics";
         CMD_MENU_BACK_ANNOTATE_SCHEMATICS = "cmd-menu-back-annotate-schematics";
         CMD_OPEN_SELECTION_FILTER = "cmd-open-selection-filter";
@@ -440,6 +457,8 @@ define_ids! {
         CMD_SHOW_DRC_VIOLATION = "cmd-show-drc-violation";
         CMD_WAIVE_DRC_VIOLATION = "cmd-waive-drc-violation";
         CMD_UNWAIVE_DRC_VIOLATION = "cmd-unwaive-drc-violation";
+        CMD_FIX_DRC_VIOLATION = "cmd-fix-drc-violation";
+        CMD_FIX_DRC = "cmd-fix-drc";
         CMD_FILTER_DRC_RESULTS = "cmd-filter-drc-results";
         CMD_OPEN_NET_CLASSES_PANEL = "cmd-open-net-classes-panel";
         CMD_MENU_OPEN_NET_CLASSES_PANEL = "cmd-menu-open-net-classes-panel";
@@ -615,6 +634,11 @@ define_ids! {
         CMD_ADD_BOARD_GRAPHIC = "cmd-add-board-graphic";
         CMD_SET_BOARD_GRAPHIC = "cmd-set-board-graphic";
         CMD_SET_FOOTPRINT_TEXT = "cmd-set-footprint-text";
+        CMD_SET_FOOTPRINT_POSITION = "cmd-set-footprint-position";
+        CMD_SET_FOOTPRINT_ROTATION = "cmd-set-footprint-rotation";
+        CMD_SET_FOOTPRINT_SIDE = "cmd-set-footprint-side";
+        CMD_ASSIGN_FOOTPRINT = "cmd-assign-footprint";
+        CMD_QUERY_FOOTPRINT_ASSIGNMENTS = "cmd-query-footprint-assignments";
         CMD_PLACE_BOARD_DIFF_PAIR = "cmd-place-board-diff-pair";
         CMD_MENU_PLACE_BOARD_DIFF_PAIR = "cmd-menu-place-board-diff-pair";
         CMD_PLACE_BOARD_QUICK_ROUTE = "cmd-place-board-quick-route";
@@ -664,6 +688,10 @@ define_ids! {
         CMD_MENU_PLACE_BOARD_ROOM = "cmd-menu-place-board-room";
         CMD_CREATE_ROOMS_FROM_SHEETS = "cmd-create-rooms-from-sheets";
         CMD_MENU_CREATE_ROOMS_FROM_SHEETS = "cmd-menu-create-rooms-from-sheets";
+        CMD_ARRANGE_IN_ROOM = "cmd-arrange-in-room";
+        CMD_MENU_ARRANGE_IN_ROOM = "cmd-menu-arrange-in-room";
+        CMD_AUTO_PLACE = "cmd-auto-place";
+        CMD_MENU_AUTO_PLACE = "cmd-menu-auto-place";
         CMD_FOOTPRINT_MODE_PADS = "cmd-footprint-mode-pads";
         CMD_FOOTPRINT_MODE_SKETCH = "cmd-footprint-mode-sketch";
         CMD_FOOTPRINT_MODE_VIEW_3D = "cmd-footprint-mode-view-3d";

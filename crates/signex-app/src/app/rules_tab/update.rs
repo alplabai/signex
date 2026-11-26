@@ -244,6 +244,7 @@ impl Signex {
             RuleKind::Mask => "0.1mm",
             RuleKind::Paste => "0mm",
             RuleKind::Courtyard => "0mm",
+            RuleKind::Component => "6mm",
         };
         if draft.set_values(first).is_err() {
             return;

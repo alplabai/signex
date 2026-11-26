@@ -465,3 +465,31 @@ fn a_room_round_its_parts_grows_over_the_rows_packed_below_it() {
         );
     }
 }
+
+/// Arrange in Room packs every unlocked member inside the room again; a
+/// locked member stays, and the parts of no member are not moved.
+#[test]
+fn arranging_a_room_packs_its_unlocked_members_inside_it() {
+    let mut b = with_extent(board());
+    b.footprints[0].locked = true;
+    let r = room(100, rect(20.0, 2.0, 30.0, 20.0), SHEET_A);
+    let arranged = arrange_room(&r, &b);
+    let moved: Vec<Uuid> = arranged.moves.iter().map(|(id, _)| *id).collect();
+    assert_eq!(moved, vec![Uuid::from_u128(2)], "the locked R1 stays");
+    assert!(arranged.outside.is_empty());
+    let inner = inner_box(&r).unwrap();
+    let (_, to) = arranged.moves[0];
+    assert!(inner.min.x < to.x && to.x < inner.max.x, "{to:?}");
+    assert!(inner.min.y < to.y && to.y < inner.max.y, "{to:?}");
+}
+
+/// What does not fit goes in rows below the room and is named.
+#[test]
+fn arranging_a_room_too_small_names_the_parts_left_outside() {
+    let b = with_extent(board());
+    let r = room(100, rect(20.0, 2.0, 1.0, 1.0), SHEET_A);
+    let arranged = arrange_room(&r, &b);
+    let mut outside = arranged.outside.clone();
+    outside.sort();
+    assert_eq!(outside, vec![Uuid::from_u128(1), Uuid::from_u128(2)]);
+}

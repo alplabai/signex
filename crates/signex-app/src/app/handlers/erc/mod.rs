@@ -3,6 +3,9 @@
 mod annotate;
 #[cfg(test)]
 mod annotate_colour_tests;
+mod annotate_command;
+#[cfg(test)]
+mod annotate_command_tests;
 #[cfg(test)]
 mod annotate_golden_tests;
 mod annotate_job;
@@ -35,6 +38,7 @@ mod stale_findings;
 #[cfg(test)]
 mod stale_findings_tests;
 
+pub(crate) use annotate_command::{annotate_quietly_by_operands, force_annotate_by_operands};
 pub(crate) use annotate_job::{AnnotateRuns, SheetsRead};
 pub(crate) use annotate_preview::rows::{
     AnnotateListView, AnnotateSession, PlacementLabel, SheetTickRow, TickState, change_count,
