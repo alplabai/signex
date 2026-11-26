@@ -7,6 +7,11 @@
 //! no longer has, and overwrites the ones it has again, user edits
 //! included. Rows, primitives and files a user added are not in the ledger
 //! and survive byte for byte. A missing or rejected ledger deletes nothing.
+//! An import file is never written over a file the previous ledger does not
+//! list: a symbol envelope moves to `<file_uuid>.snxsym`, any other clash
+//! refuses the update. A recorded file a kept user row still uses is kept,
+//! and a kept user row whose part number an import row holds refuses the
+//! update; both refusals happen before anything is written.
 //! STEP files are never deleted. The writer never commits, so only what was
 //! committed survives in git history; refusing a library with uncommitted
 //! changes is the app's job before it runs an update (#3114).
@@ -37,6 +42,7 @@ use uuid::Uuid;
 
 use super::ledger::{self, LEDGER_FILE, Ledger, LedgerRead};
 use super::render::{hashed, header, render};
+use super::update_guard;
 use super::{LibraryWriter, TableDraft};
 use crate::adapter::LibraryError;
 use crate::adapters::local_git::{component_to_library_row, library_row_to_component};
@@ -71,6 +77,13 @@ pub struct UpdateSummary {
     pub rows_kept: usize,
     /// What the ledger allowed: nothing is deleted unless it is trusted.
     pub ledger: LedgerState,
+    /// Recorded files the writer no longer has, kept because a kept user
+    /// row still uses a primitive in them.
+    pub files_kept_in_use: Vec<String>,
+    /// Symbol envelopes written under `<file_uuid>.snxsym` because a file
+    /// the previous import did not write held their usual name: `(name,
+    /// written as)`.
+    pub files_moved: Vec<(String, String)>,
     /// Primitive and model files written because their bytes changed.
     pub files_written: usize,
     /// Primitive and model files deleted because the writer no longer has them.
@@ -132,13 +145,15 @@ pub(super) fn write_update(w: &LibraryWriter, dir: &Path) -> Result<UpdateSummar
         )?;
         tables.insert(name.clone(), table);
     }
-    keep_unrecorded_rows(
+    let kept_rows = keep_unrecorded_rows(
         &existing,
         &old_rows,
         previous.as_ref(),
         &mut tables,
         &mut summary,
     );
+    update_guard::check_kept_part_numbers(&kept_rows, w)?;
+    summary.files_moved = update_guard::relocate_unledgered(dir, w, &mut files, previous.as_ref())?;
     existing.tables = tables;
     let kept = existing.manifest.clone();
     existing.manifest = w.manifest.clone();
@@ -147,16 +162,26 @@ pub(super) fn write_update(w: &LibraryWriter, dir: &Path) -> Result<UpdateSummar
     existing.manifest.users = kept.users;
     let new_text = existing.write()?;
 
-    let ledger = w.ledger(&files);
-    let gone: Vec<String> = previous
-        .map(|p| {
-            p.files
-                .into_iter()
-                .filter(|f| !ledger.files.contains(f))
-                .collect()
-        })
-        .unwrap_or_default();
-    let done = (gone.as_slice(), ledger.to_bytes());
+    let mut ledger = w.ledger(&files);
+    let in_use = update_guard::KeptRefs::of(&kept_rows);
+    let mut gone = Vec::new();
+    for rel in previous.iter().flat_map(|p| &p.files) {
+        if ledger.files.contains(rel) {
+            continue;
+        }
+        if in_use.uses(dir, rel) {
+            // Still the import's file: a later update may delete it.
+            summary.files_kept_in_use.push(rel.clone());
+            ledger.files.insert(rel.clone());
+        } else {
+            gone.push(rel.clone());
+        }
+    }
+    let first_ledger = previous
+        .as_ref()
+        .map_or_else(|| ledger.clone(), |p| p.union(&ledger));
+    let ledgers = (first_ledger.to_bytes(), ledger.to_bytes());
+    let done = (gone.as_slice(), ledgers);
     apply(dir, &snxlib, &files, (&text, &new_text), done, &mut summary).map_err(|e| {
         LibraryError::Backend(format!(
             "the update of {} stopped part way ({e}); the library now mixes old and new \
@@ -167,16 +192,20 @@ pub(super) fn write_update(w: &LibraryWriter, dir: &Path) -> Result<UpdateSummar
     Ok(summary)
 }
 
-/// Write what changed, then the `.snxlib`, then delete what is gone, then
-/// the new ledger.
+/// The union ledger, then what changed, then the `.snxlib`, then delete
+/// what is gone, then the exact new ledger.
 fn apply(
     dir: &Path,
     snxlib: &Path,
     files: &BTreeMap<PathBuf, Vec<u8>>,
     (text, new_text): (&str, &str),
-    (gone, ledger): (&[String], Vec<u8>),
+    (gone, (first_ledger, ledger)): (&[String], (Vec<u8>, Vec<u8>)),
     summary: &mut UpdateSummary,
 ) -> Result<(), LibraryError> {
+    // First the union of the old and new ledgers, so a crash from here on
+    // leaves every file this update writes recorded, none orphaned.
+    let ledger_path = dir.join(LEDGER_FILE);
+    write_if_changed(&ledger_path, &first_ledger)?;
     for (rel, bytes) in files {
         let path = dir.join(rel);
         if std::fs::read(&path).ok().as_deref() != Some(bytes.as_slice()) {
@@ -188,10 +217,13 @@ fn apply(
         signex_types::atomic_io::atomic_write_existing_dir(snxlib, new_text.as_bytes())?;
     }
     summary.files_deleted = delete_recorded(dir, gone)?;
-    // Last: until it is replaced, a re-run still knows what to delete.
-    let ledger_path = dir.join(LEDGER_FILE);
-    if std::fs::read(&ledger_path).ok().as_deref() != Some(ledger.as_slice()) {
-        signex_types::atomic_io::atomic_write_existing_dir(&ledger_path, &ledger)?;
+    // Last, the exact ledger: until then a re-run still knows what to delete.
+    write_if_changed(&ledger_path, &ledger)
+}
+
+fn write_if_changed(path: &Path, bytes: &[u8]) -> Result<(), LibraryError> {
+    if std::fs::read(path).ok().as_deref() != Some(bytes) {
+        signex_types::atomic_io::atomic_write_existing_dir(path, bytes)?;
     }
     Ok(())
 }
@@ -347,7 +379,8 @@ fn keep_unrecorded_rows(
     previous: Option<&Ledger>,
     tables: &mut BTreeMap<String, LibraryTable>,
     summary: &mut UpdateSummary,
-) {
+) -> Vec<Arc<LibraryRow>> {
+    let mut kept = Vec::new();
     for (name, old_table) in &existing.tables {
         for row in &old_table.rows {
             let Some(id) = row.cells.get("row_id").and_then(|t| t.parse::<Uuid>().ok()) else {
@@ -375,9 +408,11 @@ fn keep_unrecorded_rows(
                 table.pricing.insert(id.to_string(), prices.clone());
             }
             table.rows.push(Arc::clone(row));
+            kept.push(Arc::clone(row));
             summary.rows_kept += 1;
         }
     }
+    kept
 }
 
 #[cfg(test)]

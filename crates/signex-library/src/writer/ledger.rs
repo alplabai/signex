@@ -51,6 +51,15 @@ impl Ledger {
         }
     }
 
+    /// Everything `self` or `other` records: what an update writes first,
+    /// so a crash part way leaves nothing it wrote unrecorded.
+    pub(super) fn union(&self, other: &Ledger) -> Ledger {
+        let mut out = other.clone();
+        out.rows.extend(self.rows.iter().copied());
+        out.files.extend(self.files.iter().cloned());
+        out
+    }
+
     /// The ledger's bytes: pretty JSON, sorted, ending in one `\n`.
     pub(super) fn to_bytes(&self) -> Vec<u8> {
         let mut text = serde_json::to_string_pretty(self).expect("ledger serialises");

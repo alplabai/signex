@@ -40,7 +40,11 @@ what that record lists as a snapshot of the source: those rows and files are
 overwritten (user edits included) or, when the source no longer has them,
 deleted. Rows, primitives and files a user added are not in the record and
 are kept byte for byte; a missing or damaged record deletes nothing, and
-STEP files are never deleted. It never commits, so the app refuses an update
+STEP files are never deleted. It never writes over a file the record does
+not list (a symbol envelope then goes to `<file_uuid>.snxsym`; any other
+clash refuses the update), keeps a recorded primitive a kept user row still
+uses, and refuses, before writing anything, an update in which a kept user
+row and an imported row share a part number, naming both rows. It never commits, so the app refuses an update
 over uncommitted changes (#3114) before running one.
 Any converter can verify its output with `signex-cli library check <dir>`
 (`docs/CLI.md`, "Library tools"), which tests the rules below.

@@ -364,3 +364,181 @@ fn an_update_never_deletes_through_a_link() {
         b"keep"
     );
 }
+
+fn fp_rel(n: usize) -> String {
+    format!(
+        "footprints/{}.snxfpt",
+        synthetic::footprint(n).footprints[0].uuid
+    )
+}
+
+fn ledger_files(root: &std::path::Path) -> Vec<String> {
+    let text = std::fs::read_to_string(root.join(signex_library::writer::LEDGER_FILE)).unwrap();
+    let json: serde_json::Value = serde_json::from_str(&text).unwrap();
+    json["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| f.as_str().unwrap().to_string())
+        .collect()
+}
+
+/// An import file is never written over a file the previous import did
+/// not write: a symbol envelope moves to its uuid name, a footprint clash
+/// refuses the update.
+#[test]
+fn an_update_never_overwrites_a_file_it_did_not_write() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("Synthetic");
+    synthetic::library(20).write(&root).unwrap();
+    let user_env = synthetic::envelope(99, vec![synthetic::symbol(600)]);
+    let user_bytes = user_env.to_toml_string().unwrap();
+    std::fs::write(root.join("symbols/symbols-9.snxsym"), &user_bytes).unwrap();
+
+    let with_envelope = || {
+        let mut w = synthetic::library(20);
+        w.add_symbol_file(synthetic::envelope(9, vec![synthetic::symbol(500)]));
+        w
+    };
+    let summary = with_envelope().write_update(&root).unwrap();
+    let moved_to = format!(
+        "symbols/{}.snxsym",
+        synthetic::envelope(9, Vec::new()).file_uuid
+    );
+    assert_eq!(
+        summary.files_moved,
+        [("symbols/symbols-9.snxsym".to_string(), moved_to.clone())]
+    );
+    assert_eq!(
+        std::fs::read_to_string(root.join("symbols/symbols-9.snxsym")).unwrap(),
+        user_bytes
+    );
+    assert!(root.join(&moved_to).is_file());
+    assert!(ledger_files(&root).contains(&moved_to));
+    assert!(!ledger_files(&root).contains(&"symbols/symbols-9.snxsym".to_string()));
+    // Again: same result, nothing more moved or written.
+    let again = with_envelope().write_update(&root).unwrap();
+    assert_eq!(again.files_written, 0);
+
+    // A user envelope at that name holding a symbol the import writes.
+    let sharing = synthetic::envelope(98, vec![synthetic::symbol(500)]);
+    std::fs::write(
+        root.join("symbols/symbols-9.snxsym"),
+        sharing.to_toml_string().unwrap(),
+    )
+    .unwrap();
+    let before = read_tree(&root);
+    assert!(with_envelope().write_update(&root).is_err());
+    assert_eq!(read_tree(&root), before);
+
+    // A footprint file the import did not write, at an import footprint's name.
+    std::fs::write(root.join("symbols/symbols-9.snxsym"), &user_bytes).unwrap();
+    std::fs::write(root.join(fp_rel(5)), b"a user's footprint\n").unwrap();
+    let before = read_tree(&root);
+    let mut w = with_envelope();
+    w.add_footprint_file(synthetic::footprint(5)).unwrap();
+    let err = w.write_update(&root).unwrap_err().to_string();
+    assert!(err.contains(&fp_rel(5)), "{err}");
+    assert_eq!(read_tree(&root), before);
+}
+
+/// A recorded footprint a kept user row still uses is not deleted.
+#[test]
+fn a_recorded_primitive_a_user_row_uses_is_kept() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("Synthetic");
+    let snxlib = synthetic::library(20).write(&root).unwrap();
+    // A user row on footprint 1, which the update below no longer writes.
+    let text = std::fs::read_to_string(&snxlib).unwrap();
+    let mut file = LibraryFile::parse(&text).unwrap();
+    let mut row = synthetic::row(900, 1, 2);
+    row.internal_pn = signex_library::identity::InternalPn::new("MINE-900");
+    row.footprint_ref = Some(synthetic::lib_ref(
+        synthetic::footprint(1).footprints[0].uuid,
+    ));
+    row.refresh_content_hash().unwrap();
+    let cells = signex_library::adapters::local_git::component_to_library_row(&row).unwrap();
+    file.tables
+        .get_mut(synthetic::table_of(0))
+        .unwrap()
+        .rows
+        .push(std::sync::Arc::new(cells));
+    std::fs::write(&snxlib, file.write().unwrap()).unwrap();
+
+    let summary = synthetic::library(10).write_update(&root).unwrap();
+    assert_eq!(summary.files_deleted, 0);
+    assert_eq!(summary.files_kept_in_use, [fp_rel(1)]);
+    assert!(root.join(fp_rel(1)).is_file());
+    assert!(
+        ledger_files(&root).contains(&fp_rel(1)),
+        "still the import's"
+    );
+    let adapter = LocalGitAdapter::open(&snxlib).unwrap();
+    assert!(
+        adapter
+            .get_footprint(synthetic::footprint(1).footprints[0].uuid)
+            .is_ok()
+    );
+}
+
+/// A kept user row and an import row with one part number refuse the
+/// update, naming both rows.
+#[test]
+fn a_user_row_with_an_import_part_number_refuses_the_update() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("Synthetic");
+    let snxlib = synthetic::library(10).write(&root).unwrap();
+    let text = std::fs::read_to_string(&snxlib).unwrap();
+    let mut file = LibraryFile::parse(&text).unwrap();
+    let mut row = synthetic::row(900, 1, 1);
+    row.internal_pn = synthetic::row(3, 1, 1).internal_pn;
+    row.refresh_content_hash().unwrap();
+    let cells = signex_library::adapters::local_git::component_to_library_row(&row).unwrap();
+    file.tables
+        .get_mut(synthetic::table_of(0))
+        .unwrap()
+        .rows
+        .push(std::sync::Arc::new(cells));
+    std::fs::write(&snxlib, file.write().unwrap()).unwrap();
+    let before = read_tree(&root);
+    let err = synthetic::library(10)
+        .write_update(&root)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("PN-000003"), "{err}");
+    assert!(
+        err.contains(&row_id(900).to_string()) && err.contains(&row_id(3).to_string()),
+        "{err}"
+    );
+    assert_eq!(read_tree(&root), before);
+}
+
+/// The ledger on disk records old and new files from before the first
+/// primitive write, so an update that stops part way orphans nothing.
+#[cfg(unix)]
+#[test]
+fn an_update_that_stops_part_way_leaves_everything_recorded() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("Synthetic");
+    synthetic::library(20).write(&root).unwrap();
+    let mut w = synthetic::library(10);
+    w.add_footprint_file(synthetic::footprint(7)).unwrap();
+    let footprints = root.join("footprints");
+    std::fs::set_permissions(&footprints, std::fs::Permissions::from_mode(0o555)).unwrap();
+    let err = w.write_update(&root).map(|_| ()).unwrap_err().to_string();
+    std::fs::set_permissions(&footprints, std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert!(err.contains("Run the update again"), "{err}");
+    let recorded = ledger_files(&root);
+    assert!(
+        recorded.contains(&fp_rel(1)),
+        "the old file is still recorded"
+    );
+    assert!(
+        recorded.contains(&fp_rel(7)),
+        "the new file is recorded before it is written"
+    );
+    let summary = w.write_update(&root).unwrap();
+    assert_eq!(summary.files_deleted, 1);
+    assert!(!ledger_files(&root).contains(&fp_rel(1)));
+}

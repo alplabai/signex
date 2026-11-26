@@ -13,6 +13,7 @@ mod dir_swap;
 pub mod ledger;
 mod render;
 mod update;
+mod update_guard;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
