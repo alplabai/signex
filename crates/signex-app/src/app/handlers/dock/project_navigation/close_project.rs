@@ -388,6 +388,7 @@ impl Signex {
         self.document_state.project_tabs.remove(&target_id);
         self.forget_notebook(target_id);
         self.document_state.rules_history.remove(&target_id);
+        self.document_state.general_history.remove(&target_id);
         self.document_state.profile_drift_noted.remove(&target_id);
         self.document_state.active_project = self
             .document_state

@@ -299,11 +299,9 @@ impl Signex {
             return Ok(false);
         };
         let tab = document.project_tabs.entry(project_id).or_default();
+        let history = document.general_history.entry(project_id).or_default();
         let before = project.data.requirements.clone();
-        if !tab
-            .general_history
-            .apply_requirement(&mut project.data, command)?
-        {
+        if !history.apply_requirement(&mut project.data, command)? {
             return Ok(false);
         }
         let removed = match command {

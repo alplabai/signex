@@ -1,6 +1,6 @@
 # UI-free state baseline (scripts/check_uifree_state.sh, ADR-0006). The count may only go down.
 # Regenerate with: bash scripts/check_uifree_state.sh --generate
-count=164
+count=158
 field=crate::app::agent::journal::queue::Gate.lines
 field=crate::app::agent::journal::queue::JournalMark.gate
 field=crate::app::agent::journal::queue::JournalQueue.gate
@@ -59,11 +59,6 @@ field=crate::app::path_ops::PendingPathOp.kind
 field=crate::app::path_ops::PendingPathOps.ops
 field=crate::app::project_sheets::ProjectSheetSet.fold
 field=crate::app::project_sheets::ProjectSheetSet.refused
-field=crate::app::project_tab::ProjectTabState.requirements
-field=crate::app::project_tab::ProjectTabState.rules
-field=crate::app::project_tab::ProjectTabState.section
-field=crate::app::project_tab::ProjectTabState.setup_draft
-field=crate::app::project_tab::ProjectTabState.variant_rename
 field=crate::app::state::DocumentState.agent_edits
 field=crate::app::state::DocumentState.altium_import_running
 field=crate::app::state::DocumentState.autosave
@@ -133,7 +128,6 @@ field=crate::app::state::rule_profile_ui::ProfileWriteQueue.gate
 field=crate::app::state::rule_profile_ui::ProfileWriteQueue.running
 field=crate::app::state::rule_profile_ui::ProfileWriteQueue.waiting
 field=crate::app::state::rule_profile_ui::QueuedWrite::ProfileEdit.edit
-field=crate::app::state::rules_history::RulesHistory.0
 field=crate::app::state::sheet_refs::SheetRefs.keys
 field=crate::app::state::sheet_refs::SheetRefs.resolved_for
 field=crate::app::state::sheet_refs::SheetRefs.unreadable
