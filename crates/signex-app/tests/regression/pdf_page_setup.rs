@@ -53,7 +53,6 @@ fn app_with_sheet(paper: &str) -> Signex {
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "page-setup".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });
@@ -704,7 +703,6 @@ fn closing_another_tab_keeps_the_page_setup() {
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "other".to_string(),
         path: PathBuf::from("other.snxsch"),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });
@@ -822,7 +820,6 @@ fn closing_one_of_two_tabs_on_a_path_keeps_the_page_setup() {
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "page-setup twin".to_string(),
         path: PathBuf::from("page-setup.snxsch"),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });

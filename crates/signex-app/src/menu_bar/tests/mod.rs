@@ -80,7 +80,6 @@ pub(super) fn app_with_at(sheet: SchematicSheet, path: std::path::PathBuf) -> Si
     app.document_state.tabs.push(TabInfo {
         title: "menu-rows".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -154,7 +153,6 @@ fn push_tab(app: &mut Signex, path: &std::path::Path, kind: TabKind) {
     app.document_state.tabs.push(TabInfo {
         title: "doc".into(),
         path: path.to_path_buf(),
-        cached_document: None,
         project_id: None,
         kind,
     });

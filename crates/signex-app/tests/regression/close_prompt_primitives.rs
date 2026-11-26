@@ -23,7 +23,6 @@ fn open_dirty_symbol(app: &mut Signex, path: &Path) {
     app.document_state.tabs.push(TabInfo {
         title: "Sym1".into(),
         path: path.to_path_buf(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::SymbolEditor(path.to_path_buf()),
     });

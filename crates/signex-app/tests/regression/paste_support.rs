@@ -187,7 +187,6 @@ pub(crate) mod sheet {
         app.document_state.tabs.push(TabInfo {
             title: "paste-1263".to_owned(),
             path: path.clone(),
-            cached_document: None,
             project_id: None,
             kind: TabKind::Schematic,
         });

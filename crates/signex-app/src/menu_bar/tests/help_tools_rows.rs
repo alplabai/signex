@@ -142,7 +142,6 @@ fn document_options_opens_the_modal_for_an_editor_in_a_mounted_library() {
         app.document_state.tabs.push(TabInfo {
             title: "part".into(),
             path: file,
-            cached_document: None,
             project_id: None,
             kind: tab_kind,
         });

@@ -29,7 +29,6 @@ fn renumbered() -> (Rig, UndoGroupId) {
     app.document_state.tabs.push(crate::app::TabInfo {
         title: "a.snxsch".into(),
         path: open.clone(),
-        cached_document: None,
         project_id: None,
         kind: crate::app::TabKind::Schematic,
     });
@@ -74,7 +73,6 @@ fn an_undo_keeps_a_parked_member_the_user_opened_in_a_tab() {
     rig.app.document_state.tabs.push(crate::app::TabInfo {
         title: "parked.snxsch".into(),
         path: parked.clone(),
-        cached_document: None,
         project_id: None,
         kind: crate::app::TabKind::Schematic,
     });

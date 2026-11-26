@@ -588,7 +588,6 @@ mod tests {
             app.document_state.tabs.push(TabInfo {
                 title: "t".into(),
                 path,
-                cached_document: None,
                 project_id: None,
                 kind,
             });

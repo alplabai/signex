@@ -68,7 +68,6 @@ fn fixture_empty_footprint_editor(stem: &str) -> (Signex, std::path::PathBuf, Te
     app.document_state.tabs.push(TabInfo {
         title: stem.into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });
@@ -265,7 +264,6 @@ fn ctrl_z_during_tangent_arc_undoes_last_segment() {
     app.document_state.tabs.push(TabInfo {
         title: "test".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });
@@ -519,7 +517,6 @@ fn place_round_rect_then_select_arc_unlink_then_undo_restores_link() {
     app.document_state.tabs.push(TabInfo {
         title: "test".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });
@@ -646,7 +643,6 @@ fn editing_corner_r_via_properties_updates_all_4_arcs() {
     app.document_state.tabs.push(TabInfo {
         title: "test".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });
@@ -785,7 +781,6 @@ fn unlink_one_corner_only_that_arc_reads_per_corner_param() {
     app.document_state.tabs.push(TabInfo {
         title: "test".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });
@@ -942,7 +937,6 @@ fn oval_width_edit_propagates_to_arc_centre_via_solve() {
     app.document_state.tabs.push(TabInfo {
         title: "test".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });

@@ -582,7 +582,6 @@ fn board_undocked_behind_a_schematic(dir: &Path) -> (Signex, PathBuf, iced::wind
     app.document_state.tabs.push(crate::app::TabInfo {
         title: "sheet".into(),
         path: dir.join("sheet.snxsch"),
-        cached_document: None,
         project_id: None,
         kind: crate::app::TabKind::Schematic,
     });

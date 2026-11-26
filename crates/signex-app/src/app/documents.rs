@@ -1,9 +1,7 @@
 use std::path::PathBuf;
 
 use iced::Point;
-use signex_engine::pcb::BoardEngine;
 use signex_library::{Footprint, Symbol};
-use signex_types::pcb::PcbBoard;
 
 // v0.9-refactor-2: DBLib model. Identity payload for a Component
 // Preview tab — `(library_path, table, row_id)` triple from
@@ -208,41 +206,13 @@ impl TabKind {
     }
 }
 
-/// Per-tab auxiliary document payload. Schematic tabs keep their
-/// engine in `DocumentState::engines` (keyed by path) rather than in
-/// this enum; currently only PCB tabs carry a document here. Kept as
-/// an enum so future tab kinds (symbol editor, footprint editor, 3D
-/// viewer) can slot in without reshaping callers.
-#[derive(Debug)]
-pub enum TabDocument {
-    Pcb(BoardEngine),
-}
-
-impl TabDocument {
-    pub fn as_pcb(&self) -> Option<&PcbBoard> {
-        match self {
-            Self::Pcb(engine) => Some(engine.board()),
-        }
-    }
-
-    pub fn as_pcb_engine(&self) -> Option<&BoardEngine> {
-        match self {
-            Self::Pcb(engine) => Some(engine),
-        }
-    }
-
-    pub fn as_pcb_engine_mut(&mut self) -> Option<&mut BoardEngine> {
-        match self {
-            Self::Pcb(engine) => Some(engine),
-        }
-    }
-}
-
+/// An open document's tab. It holds no document: a schematic's engine and a
+/// PCB's board engine live in `DocumentState` (`engines`, `boards`), keyed
+/// by `path`.
 #[derive(Debug)]
 pub struct TabInfo {
     pub title: String,
     pub path: PathBuf,
-    pub cached_document: Option<TabDocument>,
     /// Which loaded project this tab belongs to, if any. Resolved at
     /// open time via `DocumentState::project_for_path`; a tab opened
     /// without a matching project (lone file open, project closed

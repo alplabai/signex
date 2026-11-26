@@ -456,10 +456,7 @@ fn view_rotate_by_operands_is_the_view_row() {
     assert_eq!(outcome, CommandOutcome::Ran);
     assert_eq!(angle(&by_operands), 323.0);
     let docs = &by_operands.document_state;
-    let board = docs.tabs[docs.active_tab]
-        .cached_document
-        .as_ref()
-        .and_then(crate::app::TabDocument::as_pcb_engine);
+    let board = docs.tab_board_engine(docs.active_tab);
     assert!(!board.expect("a board").can_undo());
 }
 

@@ -396,7 +396,6 @@ mod tests {
         app.document_state.tabs.push(crate::app::TabInfo {
             title: "s".into(),
             path: path.to_path_buf(),
-            cached_document: None,
             project_id: None,
             kind: crate::app::TabKind::Schematic,
         });
@@ -491,7 +490,6 @@ mod tests {
         app.document_state.tabs.push(crate::app::TabInfo {
             title: "parts".into(),
             path: library.clone(),
-            cached_document: None,
             project_id: None,
             kind: crate::app::TabKind::LibraryBrowser(library.clone()),
         });

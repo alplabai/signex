@@ -139,7 +139,6 @@ fn history_reload_does_not_repeat_the_repair_warning_and_keeps_the_tab_dirty() {
     app.document_state.tabs.push(TabInfo {
         title: "arc".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });

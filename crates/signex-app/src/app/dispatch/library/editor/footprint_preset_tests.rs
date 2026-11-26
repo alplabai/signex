@@ -120,7 +120,6 @@ fn app_with_active_footprint_tab() -> Signex {
     app.document_state.tabs.push(crate::app::TabInfo {
         title: "part".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: crate::app::TabKind::FootprintEditor(path),
     });

@@ -8,8 +8,9 @@ use std::path::{Path, PathBuf};
 
 use signex_app::app::{
     CommandPaletteMsg, CompareBoardMsg, ContextAction, ContextMenuMsg, EditMsg, Message, Signex,
-    TabDocument, TabInfo, TabKind,
+    TabInfo, TabKind,
 };
+use signex_app::test_adapter::BoardEngines;
 use signex_engine::pcb::BoardEngine;
 use signex_engine::pcb::eco::{BackKey, CompareKind, CompareReport, CompareRow, Direction, EcoKey};
 use signex_types::format::{SnxPcb, SnxSchematic};
@@ -153,7 +154,6 @@ fn rig() -> Rig {
     app.document_state.tabs.push(TabInfo {
         title: "root".to_string(),
         path: root.clone(),
-        cached_document: None,
         project_id: Some(id),
         kind: TabKind::Schematic,
     });
@@ -206,11 +206,7 @@ fn pick(rig: &mut Rig, key: &EcoKey, direction: Direction) {
 fn engine(rig: &Rig) -> &BoardEngine {
     rig.app
         .document_state
-        .tabs
-        .iter()
-        .find(|t| t.path == rig.board)
-        .and_then(|t| t.cached_document.as_ref())
-        .and_then(TabDocument::as_pcb_engine)
+        .first_tab_board_engine(&rig.board)
         .expect("the board is open")
 }
 

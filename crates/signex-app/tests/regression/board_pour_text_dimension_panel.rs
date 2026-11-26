@@ -5,7 +5,7 @@
 //! saved with the board.
 
 use pcb_geom::{ClickMode, ItemRef};
-use signex_app::app::{EditMsg, FileMsg, Message, Signex, TabDocument};
+use signex_app::app::{EditMsg, FileMsg, Message, Signex};
 use signex_app::diagnostics;
 use signex_app::dock::DockMessage;
 use signex_app::panels::pcb_primitive_properties::{
@@ -13,6 +13,7 @@ use signex_app::panels::pcb_primitive_properties::{
 };
 use signex_app::panels::{PanelMsg, PcbPrimitiveMsg};
 use signex_app::pcb_canvas::PcbCanvasMsg;
+use signex_app::test_adapter::BoardEngines;
 use signex_types::format::SnxPcb;
 use signex_types::pcb::{PcbBoard, Point};
 use uuid::Uuid;
@@ -91,10 +92,8 @@ fn pour(msg: PourMsg) -> Message {
 
 fn live(f: &Fixture) -> PcbBoard {
     let docs = &f.app.document_state;
-    docs.tabs[docs.active_tab]
-        .cached_document
-        .as_ref()
-        .and_then(TabDocument::as_pcb)
+    docs.tab_board_engine(docs.active_tab)
+        .map(|engine| engine.board())
         .expect("a board is open")
         .clone()
 }
@@ -255,11 +254,8 @@ fn shelve_all_and_unshelve_all_are_one_step_each_and_close_the_menu() {
 fn board_at(f: &Fixture, path: &std::path::Path) -> PcbBoard {
     f.app
         .document_state
-        .tabs
-        .iter()
-        .find(|tab| tab.path == path)
-        .and_then(|tab| tab.cached_document.as_ref())
-        .and_then(TabDocument::as_pcb)
+        .first_tab_board_engine(path)
+        .map(|engine| engine.board())
         .expect("the board is open")
         .clone()
 }

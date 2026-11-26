@@ -41,7 +41,6 @@ pub(super) fn add_sheet(app: &mut Signex, path: &Path, ids: &[(&str, u128)]) {
     app.document_state.tabs.push(TabInfo {
         title: path.display().to_string(),
         path: path.to_path_buf(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -232,7 +231,6 @@ pub(super) fn app_with_footprint() -> (Signex, PathBuf) {
     app.document_state.tabs.push(TabInfo {
         title: "F".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });

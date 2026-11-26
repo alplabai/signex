@@ -30,7 +30,6 @@ fn app_with(label: Label, line: SchDrawing) -> (Signex, PathBuf) {
     app.document_state.tabs.push(TabInfo {
         title: "origin".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

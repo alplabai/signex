@@ -38,7 +38,6 @@ fn app_with_wires() -> Signex {
     app.document_state.tabs.push(TabInfo {
         title: "filter-panel".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

@@ -34,7 +34,6 @@ fn app_with_two_findings() -> (Signex, PathBuf, SelectedItem) {
     app.document_state.tabs.push(TabInfo {
         title: "top".to_owned(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
