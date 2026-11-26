@@ -1181,6 +1181,8 @@ impl Signex {
             hover_tick,
             hover_tooltip_tick,
             net_hover_tick,
+            // Live ERC's wait after an edit (#1288); none while nothing is owed.
+            self.live_erc_subscription(),
             library_poll,
             autosave_tick,
             self.edge_pan_subscription(),

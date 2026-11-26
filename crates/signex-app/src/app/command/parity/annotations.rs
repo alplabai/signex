@@ -123,6 +123,10 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Operand,
         &[Settings],
     ),
+    // The live ERC preference (#1288): a flip reads the value it flips.
+    (&["toggle_live_erc"], Bridge, &[Settings]),
+    (&["toggle_live_erc"], Operand, &[Settings]),
+    (&["toggle_live_erc"], HeadlessWithoutOperands, &[Settings]),
     // A project without rules of its own edits from the machine rules
     // (`rules_text_of` falls back on `ui_state.machine_drc_rules`); a preset
     // comes from the machine's profile library.

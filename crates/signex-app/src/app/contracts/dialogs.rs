@@ -307,6 +307,8 @@ pub enum ErcMsg {
         generation: u64,
         result: std::sync::Arc<Result<crate::app::handlers::erc::ErcRunOutcome, String>>,
     },
+    /// Live ERC (#1288): the wait after an edit, a finished check, the toggle.
+    Live(crate::app::handlers::erc::LiveErcMsg),
     /// The footer's "Profile" menu button was pressed: the menu opened, or
     /// closed when it was open.
     ProfileMenuToggled,

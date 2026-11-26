@@ -153,6 +153,39 @@ format: `docs/SCHEMATIC_DIRECTIVES.md`.
 A waiver on a finding about a directive lapses when the directive's kind,
 class or place changes.
 
+## Live ERC
+
+Added for #1288 (Caner, 2026-11-25): live ERC is on by default and quiet.
+The nets an edit changes are checked again after it, the canvas markers and
+the ERC counts follow, Run ERC (F8) stays the full check, and the `live_erc`
+preference turns live checking off.
+
+- **When.** Every sheet edit (an undo and a redo included) restarts a
+  400 ms wait (`LIVE_ERC_DEBOUNCE`); when it ends with no newer edit, the
+  check runs in the background, as Run ERC does. While a Run ERC or another
+  live check is in flight the wait starts again, and a Run ERC started
+  during a live check drops that check's result.
+- **What it re-checks.** Each open sheet is compared with the copy the last
+  live check read (`signex_erc::live::edit_scope`): the objects that came,
+  went or changed, the points they sit on before and after, and every object
+  and wire end of a net whose contents changed. A finding is re-checked when
+  its primary or peer object, its point or its net's name is in that scope;
+  on a sheet the edit did not change, only findings on a net whose name
+  changed elsewhere are. A change the scope cannot place (the sheet's library
+  symbols, harness objects or sheet variables) re-checks the whole sheet, and
+  so does a sheet first seen in the update that edited it.
+- **Quiet.** Every other finding stays as the last check left it: a live
+  check never brings up findings on parts of the design nobody touched, and
+  it writes no line in Messages (only a failed worker is said). It does not
+  bring the ERC panel forward, does not show "Running…", and leaves the
+  "checked" summary, the waiver counts and the stale banner to Run ERC: the
+  banner still says the results come from before the last edit, since only
+  the touched nets were checked again.
+- **Where.** Only with a window; a headless run checks with `check_erc`.
+- **Off.** `toggle_live_erc` flips the preference; `toggle_live_erc
+  enabled=false` sets it (`docs/CLI.md`, "Checks on demand"). Turning it off
+  drops a wait and a check in flight; the findings already shown stay.
+
 ## Waivers
 
 Added for #1285. A designer can accept one finding with a reason instead of

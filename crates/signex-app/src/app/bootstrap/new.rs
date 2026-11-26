@@ -200,6 +200,7 @@ impl Signex {
             ));
         }
         let remember_window_geometry = crate::fonts::read_remember_window_geometry_pref_from(prefs);
+        let live_erc = crate::fonts::read_live_erc_pref_from(prefs);
         let drag_direction_select = crate::fonts::read_drag_direction_select_pref_from(prefs);
         let increment_step = crate::fonts::read_increment_step_pref_from(prefs);
         let paste_designators = crate::fonts::read_paste_designators_pref_from(prefs);
@@ -548,6 +549,7 @@ impl Signex {
                 erc_run_rule_set: None,
                 pending_profile_update: None,
                 erc_running: false,
+                live_erc: Box::new(crate::app::handlers::erc::LiveErc::new(live_erc)),
                 // The machine's rules live in the `User Default` profile; the
                 // boot task loads them (`ErcMsg::UserDefaultLoaded`).
                 erc_severity_override: std::collections::HashMap::new(),

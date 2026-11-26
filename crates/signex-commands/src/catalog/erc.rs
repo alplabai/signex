@@ -1,5 +1,5 @@
-//! Electrical rule check commands: run the ERC, check it headless and open
-//! its dialog.
+//! Electrical rule check commands: run the ERC, check it headless, open its
+//! dialog and turn live ERC on or off.
 
 use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, operands};
 use signex_i18n_ids::command_ids;
@@ -34,6 +34,19 @@ pub(super) const ERC: &[CommandMetadata] = &[
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
         flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    // Live ERC (#1288, Caner 2026-11-25): on by default; this turns the
+    // preference off and on. `enabled` sets it; without it the command flips it.
+    CommandMetadata {
+        id: "toggle_live_erc",
+        category: "validation",
+        label: command_ids::CMD_TOGGLE_LIVE_ERC,
+        menu_label: Some(command_ids::CMD_MENU_TOGGLE_LIVE_ERC),
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::TOGGLE_LIVE_ERC,
         ..CommandMetadata::DEFAULT
     },
     // A dot on every pin end of the sheet that lies inside a wire with none

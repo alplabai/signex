@@ -619,6 +619,9 @@ pub const CHECK_ERC: &[Operand] = &[
     required("document", OperandKind::Document),
     optional("baseline", OperandKind::Text),
 ];
+/// `toggle_live_erc` (#1288): the live ERC preference; without `enabled` it
+/// flips.
+pub const TOGGLE_LIVE_ERC: &[Operand] = &[optional("enabled", OperandKind::Bool)];
 /// `check_drc` (#2199): DRC on the named board, answered as a check report;
 /// `baseline` is an earlier answer's `run` on the same board.
 pub const CHECK_DRC: &[Operand] = &[

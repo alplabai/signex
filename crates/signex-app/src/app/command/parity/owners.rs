@@ -188,6 +188,10 @@ pub(super) const WRITES: &[(&[&str], Surface, Writes)] = &[
     (&["board_sketch"], Menu, Pending),
     // The layer strip's name style and numbers, written to the prefs.
     (&["toggle_layer_numbers"], Menu, Settings),
+    // The live ERC preference (#1288), written to the prefs, from a key or
+    // the palette and from its operand.
+    (&["toggle_live_erc"], Menu, Settings),
+    (&["toggle_live_erc"], Operand, Settings),
     // Applying or resetting a workspace layout arranges the panels and
     // saves the dock layout and the layout list to the prefs (mockup row
     // 166); Save and Manage only open their dialogs.
