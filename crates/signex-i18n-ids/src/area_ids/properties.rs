@@ -527,4 +527,8 @@ define_ids! {
     PROPERTIES_FP_PAD_SCOPE_SOURCE = "properties-fp-pad-scope-source";
     PROPERTIES_FP_PAD_SCOPE_NUMBERING = "properties-fp-pad-scope-numbering";
     PROPERTIES_FP_PAD_SCOPE_PASTE = "properties-fp-pad-scope-paste";
+    // mockup row 203 (#1114)
+    PROPERTIES_NOTE_FORMAT = "properties-note-format";
+    PROPERTIES_NOTE_FORMAT_PLAIN = "properties-note-format-plain";
+    PROPERTIES_NOTE_FORMAT_RICH = "properties-note-format-rich";
 }

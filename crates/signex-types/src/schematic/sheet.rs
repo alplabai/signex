@@ -161,6 +161,9 @@ pub struct TextNote {
     /// Frozen against every edit until unlocked (#1573); see `Symbol::locked`.
     #[serde(default, skip_serializing_if = "is_false")]
     pub locked: bool,
+    /// Plain or rich (Typst) text (#1114); the text is the source either way.
+    #[serde(default, skip_serializing_if = "TextNoteFormat::is_plain")]
+    pub format: TextNoteFormat,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

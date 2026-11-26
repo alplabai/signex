@@ -196,6 +196,7 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "sync_sheet_pins",
             "set_sheet_symbol_size",
             "set_symbol_parameter",
+            "set_text_note_format",
             "project_move_sheet",
             "project_add_variant",
             "project_rename_variant",

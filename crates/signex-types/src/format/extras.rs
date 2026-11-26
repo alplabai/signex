@@ -365,6 +365,11 @@ pub(in crate::format) struct SheetExtras {
     /// `docs/architecture/snxsch-object-lock.md`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(in crate::format) locked_objects: Vec<String>,
+    /// Text-note formats by note uuid (#1114); only rich notes are written,
+    /// beside the notes for the reason [`Self::note_font_families`] is.
+    /// Format: `docs/architecture/snxsch-note-format.md`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(in crate::format) note_formats: BTreeMap<String, String>,
     /// Frame settings (`[extras.sheet.frame]`); omitted at the default so a
     /// sheet that never changed them re-saves byte-identical.
     #[serde(default, skip_serializing_if = "FrameExtras::is_default")]
@@ -415,6 +420,7 @@ impl SheetExtras {
             && self.text_extents.is_empty()
             && self.drawing_placements.is_empty()
             && self.locked_objects.is_empty()
+            && self.note_formats.is_empty()
             && self.frame.is_default()
             && self.page.is_default()
             && self.variables.is_empty()
@@ -436,6 +442,7 @@ impl SheetExtras {
                 .map(|mut note| {
                     note.font_family = None;
                     note.locked = false;
+                    note.format = crate::schematic::TextNoteFormat::Plain;
                     note
                 })
                 .collect(),
@@ -494,6 +501,7 @@ impl SheetExtras {
                 )
                 .map(|id| id.to_string())
                 .collect(),
+            note_formats: super::note_format_extras::encode(s),
             frame: FrameExtras {
                 settings: s.frame,
                 unknown: s.unknown.frame.clone(),

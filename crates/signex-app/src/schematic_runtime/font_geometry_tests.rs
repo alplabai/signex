@@ -193,6 +193,7 @@ fn note(font_family: Option<&str>) -> TextNote {
         justify_h: HAlign::Left,
         justify_v: VAlign::Top,
         locked: false,
+        format: Default::default(),
     }
 }
 
@@ -318,6 +319,7 @@ fn text_box_perf() {
             justify_h: HAlign::Left,
             justify_v: VAlign::Top,
             locked: false,
+            format: Default::default(),
         });
         let mut l = label(LabelType::Net, None);
         l.text = format!("NET_{i}_SIG");

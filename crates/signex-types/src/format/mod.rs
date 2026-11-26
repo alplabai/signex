@@ -45,6 +45,7 @@ mod extras;
 mod finite_toml;
 mod header_id;
 mod load_repair;
+mod note_format_extras;
 mod pad_shape_cells;
 mod page_extras;
 mod pcb_cells;
@@ -108,6 +109,8 @@ mod net_colors_tests;
 mod no_erc_tests;
 #[cfg(test)]
 mod non_finite_tests;
+#[cfg(test)]
+mod note_format_tests;
 #[cfg(test)]
 mod object_lock_tests;
 #[cfg(test)]
@@ -624,6 +627,8 @@ impl SnxSchematic {
         }
         let entry_types =
             refinement_extras::entry_types_from_read(sheet_extras.harness_entry_types)?;
+        let (note_formats, unread_note_formats) =
+            note_format_extras::decode(sheet_extras.note_formats);
         let mut sheet = SchematicSheet {
             uuid: raw.schematic_id,
             version: raw.version,
@@ -650,6 +655,10 @@ impl SnxSchematic {
                         .cloned()
                         .or(note.font_family);
                     note.locked = locked_objects.contains(note.uuid.to_string().as_str());
+                    note.format = note_formats
+                        .get(&note.uuid.to_string())
+                        .copied()
+                        .unwrap_or_default();
                     note
                 })
                 .collect(),
@@ -699,6 +708,7 @@ impl SnxSchematic {
                     .then(|| format.clone()),
                 load_repairs: Vec::new(),
                 source_hash: None,
+                note_formats: unread_note_formats,
             },
         };
         sheet.upgrade_unversioned_bodies();

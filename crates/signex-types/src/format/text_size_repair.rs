@@ -99,6 +99,7 @@ mod tests {
             justify_h: HAlign::Left,
             justify_v: VAlign::Top,
             locked: false,
+            format: Default::default(),
         }
     }
 

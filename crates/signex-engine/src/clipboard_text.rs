@@ -233,6 +233,7 @@ mod tests {
             justify_h: Default::default(),
             justify_v: Default::default(),
             locked: true,
+            format: Default::default(),
         });
         sheet.labels.push(
             serde_json::from_str(&format!(

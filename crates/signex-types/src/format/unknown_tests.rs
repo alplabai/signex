@@ -173,6 +173,7 @@ fn unknown_tables_survive_adding_a_text_note() {
         justify_h: crate::schematic::HAlign::Left,
         justify_v: crate::schematic::VAlign::Bottom,
         locked: false,
+        format: Default::default(),
     });
     let again = load(&save(&sheet));
     assert_eq!(again.text_notes.len(), 1);

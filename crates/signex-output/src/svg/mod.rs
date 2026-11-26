@@ -340,6 +340,7 @@ mod tests {
                 justify_h: Default::default(),
                 justify_v: Default::default(),
                 locked: false,
+                format: Default::default(),
             });
         let opts = PdfOptions::default();
         let (w_mm, h_mm) = opts.page_size.dimensions_mm(opts.orientation);

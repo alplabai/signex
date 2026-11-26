@@ -265,6 +265,7 @@ pub(crate) mod flows {
             justify_h: HAlign::default(),
             justify_v: VAlign::default(),
             locked: false,
+            format: Default::default(),
         });
         let (mut app, _boot) = Signex::new();
         app.ui_state.main_window_id = Some(iced::window::Id::unique());

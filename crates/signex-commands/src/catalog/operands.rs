@@ -300,6 +300,12 @@ pub const SHEET_VARIABLE: &[Operand] = &[
     optional("remove", OperandKind::Bool),
     optional("document", OperandKind::Document),
 ];
+/// The `format` (`plain` or `typst`) of the text note `id` (#1114).
+pub const TEXT_NOTE_FORMAT: &[Operand] = &[
+    required("id", OperandKind::Text),
+    required("format", OperandKind::Text),
+    optional("document", OperandKind::Document),
+];
 /// The placed part `id` on the sheet `document` (#1667): named, since an
 /// agent has no selection.
 pub const PART_ON_DOCUMENT: &[Operand] = &[

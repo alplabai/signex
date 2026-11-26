@@ -1,5 +1,5 @@
-//! `Command::UpdateTextNoteProps`: a text note's justification, turn and
-//! text size, as its Properties rows set them.
+//! `Command::UpdateTextNoteProps`: a text note's justification, turn, text
+//! size and format (plain or rich, #1114), as its Properties rows set them.
 
 use crate::*;
 
@@ -41,6 +41,12 @@ impl Engine {
             note.font_size = size;
             changed = true;
         }
+        if let Some(format) = props.format
+            && note.format != format
+        {
+            note.format = format;
+            changed = true;
+        }
         if !changed {
             return CommandResult::unchanged();
         }
@@ -69,6 +75,7 @@ mod tests {
             justify_h: HAlign::Left,
             justify_v: VAlign::Top,
             locked: false,
+            format: Default::default(),
         };
         let id = note.uuid;
         let sheet = SchematicSheet {
@@ -99,6 +106,41 @@ mod tests {
         let note = &engine.document().text_notes[0];
         assert_eq!(note.justify_h, HAlign::Left);
         assert!(note.rotation.abs() < 1e-9);
+    }
+
+    /// #1114: Rich text is one undo step and keeps the text as it is; the
+    /// format the note already has records nothing.
+    #[test]
+    fn the_format_is_one_undo_step_and_keeps_the_text() {
+        use signex_types::schematic::TextNoteFormat;
+        let (mut engine, id) = engine_with_note();
+        let rich = TextNoteProps {
+            format: Some(TextNoteFormat::Typst),
+            ..Default::default()
+        };
+        let done = engine
+            .execute(Command::UpdateTextNoteProps {
+                note_id: id,
+                props: rich,
+            })
+            .expect("applied");
+        assert!(done.changed);
+        let note = &engine.document().text_notes[0];
+        assert_eq!(note.format, TextNoteFormat::Typst);
+        assert_eq!(note.text, "n");
+        let again = engine
+            .execute(Command::UpdateTextNoteProps {
+                note_id: id,
+                props: rich,
+            })
+            .expect("ran");
+        assert!(!again.changed);
+        engine.undo().expect("one step back");
+        assert_eq!(
+            engine.document().text_notes[0].format,
+            TextNoteFormat::Plain
+        );
+        assert!(!engine.can_undo(), "one step only");
     }
 
     #[test]

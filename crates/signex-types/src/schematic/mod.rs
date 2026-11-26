@@ -844,6 +844,8 @@ pub use directive::{
 };
 mod no_erc;
 pub use no_erc::{NoErcDirective, canonical_no_erc_rules, no_erc_rules_suppress};
+mod note_format;
+pub use note_format::TextNoteFormat;
 mod sheet;
 pub use sheet::*;
 mod sheet_frame;
