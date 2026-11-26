@@ -62,7 +62,12 @@ fn run(
     body: &str,
     mode: RunMode,
     limits: RunLimits,
-) -> (tempfile::TempDir, PathBuf, Vec<ProgressEvent>, Result<RunOutcome, RunFailure>) {
+) -> (
+    tempfile::TempDir,
+    PathBuf,
+    Vec<ProgressEvent>,
+    Result<RunOutcome, RunFailure>,
+) {
     let dir = tempfile::tempdir().unwrap();
     let command = sh(dir.path(), body);
     let out = dir.path().join("Passives");
@@ -106,9 +111,22 @@ fn arguments_follow_the_contract() {
     assert_eq!(
         args,
         [
-            "library", "/in/Passives.lib1", "--output", "/o/P", "--name", "Passives", "--db",
-            "Driver=x", "--search-path", "/s1", "--search-path", "/s2", "--models", "skip",
-            "--update", "--progress"
+            "library",
+            "/in/Passives.lib1",
+            "--output",
+            "/o/P",
+            "--name",
+            "Passives",
+            "--db",
+            "Driver=x",
+            "--search-path",
+            "/s1",
+            "--search-path",
+            "/s2",
+            "--models",
+            "skip",
+            "--update",
+            "--progress"
         ]
     );
     let preview = request(PathBuf::from("/o/P"), RunMode::Preview).args();
@@ -166,7 +184,10 @@ fn a_silent_converter_is_stopped_and_its_new_folder_removed() {
     assert_eq!(failure.error, ImportError::Silent { seconds: 1 });
     assert!(failure.removed_output);
     assert!(!out.exists());
-    assert!(started.elapsed() < Duration::from_secs(10), "did not wait it out");
+    assert!(
+        started.elapsed() < Duration::from_secs(10),
+        "did not wait it out"
+    );
 }
 
 #[test]
@@ -194,14 +215,21 @@ fn a_failed_run_keeps_a_folder_that_existed_and_carries_the_report() {
             message: "bad input".into()
         }
     );
-    assert!(failure.report.is_some(), "the report is read for inspection");
+    assert!(
+        failure.report.is_some(),
+        "the report is read for inspection"
+    );
     assert!(!failure.removed_output);
     assert!(out.join("mine.txt").exists());
 }
 
 #[test]
 fn a_failed_new_import_removes_its_folder() {
-    let body = format!("{}{}\nexit 1\n", write_report_line(), summary("failed", false));
+    let body = format!(
+        "{}{}\nexit 1\n",
+        write_report_line(),
+        summary("failed", false)
+    );
     let (_dir, out, _e, result) = run(&body, RunMode::Import, FAST);
     let failure = result.unwrap_err();
     assert!(failure.removed_output);
@@ -210,7 +238,11 @@ fn a_failed_new_import_removes_its_folder() {
 
 #[test]
 fn exit_code_and_summary_must_agree() {
-    let body = format!("{}{}\nexit 0\n", write_report_line(), summary("partial", true));
+    let body = format!(
+        "{}{}\nexit 0\n",
+        write_report_line(),
+        summary("partial", true)
+    );
     let (_d, _o, _e, result) = run(&body, RunMode::Import, FAST);
     assert!(matches!(
         result.unwrap_err().error,
@@ -283,7 +315,10 @@ fn describe_is_parsed_and_a_newer_major_refused() {
     assert_eq!(d.picker_filters().len(), 3);
     let newer = sh(
         dir.path(),
-        &format!("cat <<'EOF'\n{}\nEOF\n", fixture.replace("\"1.0\"", "\"2.1\"")),
+        &format!(
+            "cat <<'EOF'\n{}\nEOF\n",
+            fixture.replace("\"1.0\"", "\"2.1\"")
+        ),
     );
     assert_eq!(
         run_describe(&newer, "example-import", DESCRIBE_TIMEOUT).unwrap_err(),

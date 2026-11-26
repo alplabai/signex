@@ -345,11 +345,9 @@ fn finish(request: &LibraryRunRequest, finished: Finished) -> Result<RunOutcome,
         (Some(0), ExitKind::Ok, true) => ExitKind::Ok,
         (Some(2), ExitKind::Partial, true) => ExitKind::Partial,
         (_, ExitKind::Failed, _) | (Some(1), _, _) | (_, _, false) => {
-            let report = confined_report(&summary, &request.output).and_then(|p| read_report(&p).ok());
-            let message = summary
-                .error
-                .clone()
-                .unwrap_or_else(|| status.to_string());
+            let report =
+                confined_report(&summary, &request.output).and_then(|p| read_report(&p).ok());
+            let message = summary.error.clone().unwrap_or_else(|| status.to_string());
             return Err(fail(ImportError::ConverterFailed { message }, report));
         }
         (code, exit, _) => {
@@ -364,7 +362,9 @@ fn finish(request: &LibraryRunRequest, finished: Finished) -> Result<RunOutcome,
     };
     let library = match (&summary.library, request.mode) {
         (_, RunMode::Preview) => None,
-        (Some(reported), _) => Some(confine_reported(reported, &request.output).map_err(|e| fail(e, None))?),
+        (Some(reported), _) => {
+            Some(confine_reported(reported, &request.output).map_err(|e| fail(e, None))?)
+        }
         (None, _) => {
             return Err(fail(
                 ImportError::NoLibraryFile {

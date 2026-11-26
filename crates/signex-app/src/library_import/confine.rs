@@ -9,7 +9,10 @@ pub enum ConfineError {
     /// It resolves outside the output folder, or the folder cannot be read.
     Outside,
     /// It cannot be resolved (it does not exist, say).
-    Unreadable { joined: PathBuf, error: std::io::Error },
+    Unreadable {
+        joined: PathBuf,
+        error: std::io::Error,
+    },
 }
 
 /// `reported`, resolved against `out_dir` when relative, refused unless it

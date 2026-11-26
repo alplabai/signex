@@ -166,7 +166,9 @@ pub fn commit_snapshot(root: &Path, message: &str) -> Result<Option<String>, Lib
         lfs::install_pre_push_hook(&repo).map_err(|e| backend("git lfs hook", e))?;
     }
     index.write().map_err(|e| backend("git index write", e))?;
-    let tree_id = index.write_tree().map_err(|e| backend("git write tree", e))?;
+    let tree_id = index
+        .write_tree()
+        .map_err(|e| backend("git write tree", e))?;
     let parent = repo.head().ok().and_then(|h| h.peel_to_commit().ok());
     if parent.as_ref().is_some_and(|p| p.tree_id() == tree_id) {
         return Ok(None);

@@ -19,8 +19,19 @@ file, one JSON summary line); a converter can offer both.
 Each converter is installed separately. Signex finds it by:
 
 1. an environment variable naming the binary's path, if set (the variable
-   name is the converter's, listed in the user guide), else
-2. the binary's name on `PATH` (absolute `PATH` entries only).
+   name is the converter's, listed in the user guide),
+2. `SIGNEX_LIBRARY_CONVERTERS`, a list of converter programs in `PATH`
+   syntax, and
+3. every executable on `PATH` (absolute entries only) named
+   `signex-<format>-import` (plus `.exe` on Windows).
+
+Signex lists no converter by name: each candidate is asked `describe --json`
+(§2.1, a few seconds at most) and offered only when it answers with a
+supported contract, so a single-file importer without `describe` is not
+offered for libraries. The same program found twice (by canonical path) is
+listed once; when two converters read the same extension, both are offered.
+A converter path set in Preferences is a follow-up; there is no such
+preference yet.
 
 Signex never ships a converter with a licence that differs from its own; a
 user installs it. A missing converter is reported with its install hint and

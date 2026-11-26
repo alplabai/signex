@@ -30,9 +30,12 @@ impl Signex {
     /// Start `job`, mounting the result for `scope`. Refused while another
     /// import runs. `ThisProject` with no project open mounts for all
     /// projects instead, and says so.
-    #[allow(
-        dead_code,
-        reason = "the entry point of the Import Library dialog, which is not built yet"
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "the entry point of the Import Library dialog (batch D); tests call it"
+        )
     )]
     pub(crate) fn start_library_import(
         &mut self,
@@ -74,15 +77,19 @@ impl Signex {
                 })
             });
             let finished = worker.await.unwrap_or_else(|e| ImportFinished {
-                result: Err(RunFailure::new(crate::library_import::ImportError::WaitFailed {
-                    detail: e.to_string(),
-                })),
+                result: Err(RunFailure::new(
+                    crate::library_import::ImportError::WaitFailed {
+                        detail: e.to_string(),
+                    },
+                )),
                 target: failed_target,
                 registered_global: None,
             });
-            out.send(import_message(LibraryImportMsg::Finished(Box::new(finished))))
-                .await
-                .ignore("the runtime stopped listening; nothing is left to tell");
+            out.send(import_message(LibraryImportMsg::Finished(Box::new(
+                finished,
+            ))))
+            .await
+            .ignore("the runtime stopped listening; nothing is left to tell");
         });
         Task::run(stream, |message| message)
     }
@@ -172,22 +179,22 @@ impl Signex {
             (MountTarget::Global, Some(Err(reason))) => {
                 self.report_global_libraries_save_failure("record the imported library", reason);
             }
-            (MountTarget::Project(project), _) => self.add_imported_library_to_project(
-                project,
-                &file,
-                outcome.library_id,
-            ),
+            (MountTarget::Project(project), _) => {
+                self.add_imported_library_to_project(project, &file, outcome.library_id)
+            }
             (MountTarget::Global, None) => {}
         }
         self.log_import_result(outcome, &file);
         let mut tasks = vec![self.mount_required_libraries(&[])];
-        tasks.push(match self.library.request_mount(&file, MountIntent::Silent) {
-            MountRequest::Spawn => spawn_pending_mounts(vec![file]),
-            MountRequest::AlreadyMounted => {
-                refresh_task(&mut self.library, &file, RefreshFollowUp::Nothing)
-            }
-            MountRequest::InFlight => Task::none(),
-        });
+        tasks.push(
+            match self.library.request_mount(&file, MountIntent::Silent) {
+                MountRequest::Spawn => spawn_pending_mounts(vec![file]),
+                MountRequest::AlreadyMounted => {
+                    refresh_task(&mut self.library, &file, RefreshFollowUp::Nothing)
+                }
+                MountRequest::InFlight => Task::none(),
+            },
+        );
         self.refresh_panel_ctx();
         Task::batch(tasks)
     }

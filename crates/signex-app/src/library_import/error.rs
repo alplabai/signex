@@ -8,10 +8,10 @@ use signex_i18n::{RenderTranslatable as _, Translatable, ids};
 /// A refused or failed library import step.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ImportError {
-    NotInstalled {
-        binary: String,
+    /// No program answered as a library converter; `env` is the variable
+    /// that can list them.
+    NoConverters {
         env: String,
-        install: String,
     },
     OverrideNotAFile {
         env: String,
@@ -87,14 +87,9 @@ impl ImportError {
     pub fn to_translatable(&self) -> Translatable {
         let path = |p: &PathBuf| p.display().to_string();
         match self {
-            Self::NotInstalled {
-                binary,
-                env,
-                install,
-            } => Translatable::new(ids::LIBRARY_IMPORT_NOT_INSTALLED)
-                .arg("binary", binary.as_str())
-                .arg("env", env.as_str())
-                .arg("install", install.as_str()),
+            Self::NoConverters { env } => {
+                Translatable::new(ids::LIBRARY_IMPORT_NOT_INSTALLED).arg("env", env.as_str())
+            }
             Self::OverrideNotAFile { env, path: p } => {
                 Translatable::new(ids::LIBRARY_IMPORT_OVERRIDE_NOT_A_FILE)
                     .arg("env", env.as_str())
@@ -127,11 +122,9 @@ impl ImportError {
                 Translatable::new(ids::LIBRARY_IMPORT_CONVERTER_FAILED)
                     .arg("error", message.as_str())
             }
-            Self::NoSummary { status, stderr } => {
-                Translatable::new(ids::LIBRARY_IMPORT_NO_SUMMARY)
-                    .arg("status", status.as_str())
-                    .arg("stderr", stderr.as_str())
-            }
+            Self::NoSummary { status, stderr } => Translatable::new(ids::LIBRARY_IMPORT_NO_SUMMARY)
+                .arg("status", status.as_str())
+                .arg("stderr", stderr.as_str()),
             Self::ExitMismatch { code, exit } => {
                 Translatable::new(ids::LIBRARY_IMPORT_EXIT_MISMATCH)
                     .arg("code", code.as_str())
@@ -195,7 +188,10 @@ mod tests {
             paths: (0..7).map(|i| format!("f{i}.snxsym")).collect(),
         }
         .to_string();
-        assert!(dirty.contains("f4.snxsym") && !dirty.contains("f5.snxsym"), "{dirty}");
+        assert!(
+            dirty.contains("f4.snxsym") && !dirty.contains("f5.snxsym"),
+            "{dirty}"
+        );
         assert!(dirty.contains('7'), "{dirty}");
         let contract = ImportError::UnsupportedContract {
             converter: "c".into(),

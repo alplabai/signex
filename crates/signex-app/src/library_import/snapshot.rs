@@ -161,8 +161,10 @@ pub fn commit_message(
     let file_names: Vec<String> = sources
         .iter()
         .map(|p| {
-            p.file_name()
-                .map_or_else(|| p.display().to_string(), |n| n.to_string_lossy().into_owned())
+            p.file_name().map_or_else(
+                || p.display().to_string(),
+                |n| n.to_string_lossy().into_owned(),
+            )
         })
         .collect();
     let mut message = format!("{verb} library {name} from {}\n\n", file_names.join(", "));
@@ -235,7 +237,10 @@ mod tests {
         let m = commit_message(
             RunMode::Import,
             "Passives",
-            &[PathBuf::from("/in/Passives.lib1"), PathBuf::from("/in/Caps.lib1")],
+            &[
+                PathBuf::from("/in/Passives.lib1"),
+                PathBuf::from("/in/Caps.lib1"),
+            ],
             "example-import",
             "0.16.0",
         );
@@ -269,6 +274,9 @@ mod tests {
         ));
         std::fs::write(dir.path().join("B.snxlib"), "").unwrap();
         std::fs::write(dir.path().join("A.snxlib"), "").unwrap();
-        assert_eq!(find_library_file(dir.path()).unwrap(), dir.path().join("A.snxlib"));
+        assert_eq!(
+            find_library_file(dir.path()).unwrap(),
+            dir.path().join("A.snxlib")
+        );
     }
 }

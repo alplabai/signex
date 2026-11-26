@@ -78,7 +78,10 @@ fn an_import_is_committed_mounted_for_all_projects_and_lists_its_parts() {
     let head = repo.head().unwrap().peel_to_commit().unwrap();
     let message = head.message().unwrap().to_string();
     assert!(message.contains("Passives.lib1"), "{message}");
-    assert!(message.contains("Signex-Import: example-import 0.16.0"), "{message}");
+    assert!(
+        message.contains("Signex-Import: example-import 0.16.0"),
+        "{message}"
+    );
     assert!(
         std::fs::read_to_string(out.join(".gitattributes"))
             .unwrap()

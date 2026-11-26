@@ -281,7 +281,10 @@ mod tests {
     #[test]
     fn malformed_and_oversized_lines_are_skipped() {
         let mut text = String::from("not json\n{\"event\":\"phase\"}\n");
-        text.push_str(&format!("{{\"event\":\"progress\",\"item\":\"{}\"}}\n", "x".repeat(300)));
+        text.push_str(&format!(
+            "{{\"event\":\"progress\",\"item\":\"{}\"}}\n",
+            "x".repeat(300)
+        ));
         text.push_str("{\"event\":\"future\",\"x\":1}\n");
         text.push_str(SUMMARY_FAILED);
         let (fold, events) = fold(text.as_bytes(), 256);

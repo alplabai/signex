@@ -96,8 +96,8 @@ struct RawInput {
 /// Parse the JSON `describe` printed. A newer or unknown contract major is
 /// refused; any minor of major [`CONTRACT_MAJOR`] is accepted.
 pub fn parse_describe(stdout: &str) -> Result<ConverterDescription, DescribeError> {
-    let raw: RawDescribe = serde_json::from_str(stdout.trim())
-        .map_err(|e| DescribeError::Malformed(e.to_string()))?;
+    let raw: RawDescribe =
+        serde_json::from_str(stdout.trim()).map_err(|e| DescribeError::Malformed(e.to_string()))?;
     let contract = ContractVersion::parse(&raw.contract)
         .ok_or_else(|| DescribeError::Malformed(format!("contract {:?}", raw.contract)))?;
     if contract.major != CONTRACT_MAJOR {
@@ -197,7 +197,12 @@ mod tests {
 
     #[test]
     fn garbage_is_malformed_not_a_panic() {
-        for text in ["", "{", "[]", r#"{"contract":"one","converter":"x","version":"1"}"#] {
+        for text in [
+            "",
+            "{",
+            "[]",
+            r#"{"contract":"one","converter":"x","version":"1"}"#,
+        ] {
             assert!(
                 matches!(parse_describe(text), Err(DescribeError::Malformed(_))),
                 "{text}"
@@ -214,8 +219,14 @@ mod tests {
         )
         .unwrap();
         assert_eq!(d.input_for(Path::new("/x/A.Lib1")).unwrap().label, "Lib");
-        assert_eq!(d.input_for(Path::new("/x/lib-table")).unwrap().label, "Table");
-        assert_eq!(d.input_for(Path::new("/x/LIB-TABLE")).unwrap().label, "Table");
+        assert_eq!(
+            d.input_for(Path::new("/x/lib-table")).unwrap().label,
+            "Table"
+        );
+        assert_eq!(
+            d.input_for(Path::new("/x/LIB-TABLE")).unwrap().label,
+            "Table"
+        );
         assert!(d.input_for(Path::new("/x/a.txt")).is_none());
     }
 }

@@ -861,8 +861,8 @@ library-change-component-warn-gained = New pins landing on a wire they were not 
 # The × that removes an applied range filter chip.
 library-range-filter-remove = ✕
 
-# Library import (#3113, #3114). $binary is a program name, $env an environment variable, $install a shell command.
-library-import-not-installed = The library converter { $binary } was not found on PATH. Install it with { $install }, or set { $env } to its path.
+# Library import (#3113, #3114). $env is an environment variable.
+library-import-not-installed = No library converter was found. Install one as a program named signex-<format>-import on PATH, or list converter programs in { $env }.
 # $env is an environment variable, $path a file path.
 library-import-override-not-a-file = { $env } is set to { $path }, which is not a file. Point it at the converter, or unset it to search PATH.
 # $converter is a program name, $error the reason.
