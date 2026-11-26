@@ -185,6 +185,7 @@ impl ReadPlan {
             escapes,
             texts,
             footprints,
+            room_sheets: None,
             failed: None,
         }
     }
