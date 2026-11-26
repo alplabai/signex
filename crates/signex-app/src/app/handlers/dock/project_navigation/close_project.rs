@@ -351,10 +351,15 @@ impl Signex {
                 .into_iter()
                 .map(|(path, _)| path)
                 .collect();
+            let closed_dir = closed.dir().to_path_buf();
             self.document_state.forget_project_saved_state(&closed_path);
             self.document_state
                 .document_ids
                 .forget_headers_of(own.iter().map(|p| p.as_path()));
+            // The design report's last check results (#2945) go with it.
+            self.document_state
+                .check_runs
+                .forget_reports_of(&closed_path, &closed_dir);
         }
 
         // A pricing walk keeps running: closing a project does not unmount its
@@ -381,6 +386,7 @@ impl Signex {
         });
         self.document_state.net_class_history.remove(&target_id);
         self.document_state.project_tabs.remove(&target_id);
+        self.forget_notebook(target_id);
         self.document_state.rules_history.remove(&target_id);
         self.document_state.general_history.remove(&target_id);
         self.document_state.profile_drift_noted.remove(&target_id);
@@ -604,6 +610,12 @@ impl Signex {
         {
             return self.save_primitive_tab_blocking(path);
         }
+        if self.notebook_at_path(path).is_some() {
+            return self.save_notebook_blocking(path);
+        }
+        if self.generated_report_at(path).is_some() {
+            return self.save_generated_report_blocking(path);
+        }
         anyhow::bail!("no open editor or engine backs this file — it can't be saved automatically")
     }
 
@@ -755,7 +767,9 @@ impl Signex {
         self.document_state.document_saves.forget_disk_records(path);
         self.document_state.remove_engine(path);
         self.document_state.clear_document_dirty(path);
-        self.discard_primitive_editor(path)
+        self.discard_generated_report_at(path);
+        let notebook = self.discard_notebook_at(path);
+        Task::batch([notebook, self.discard_primitive_editor(path)])
     }
 
     /// Drop the symbol/footprint editor behind `path`, and its tab, so a

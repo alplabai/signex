@@ -361,6 +361,12 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
                 project: None,
             }))
         }
+        // The Design Notebook of the active document's project (mockup rows
+        // 195, 201, 202) and the schematic's Notebook badges (row 197).
+        "open_design_notebook" => NotebookMsg::OpenRequested { project: None }.into(),
+        "generate_design_notebook" => NotebookMsg::GenerateRequested { project: None }.into(),
+        "export_notebook_pdf" => NotebookMsg::ExportPdfRequested { project: None }.into(),
+        "toggle_notebook_badges" => NotebookMsg::BadgesToggled.into(),
         // #2399: the board's DRC results panel.
         "open_drc_panel" => Message::Overlay(OverlayMsg::OpenPanel(crate::panels::PanelKind::Drc)),
         "reannotate_board" => Message::from(crate::app::BoardReannotateMsg::Requested),

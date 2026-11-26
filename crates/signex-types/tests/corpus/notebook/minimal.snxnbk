@@ -1,0 +1,8 @@
++++
+format = "snxnbk/1"
++++
+#import "@signex/notebook:0.1.0": *
+
+= Notes
+
+A notebook with nothing but its format token in the header.

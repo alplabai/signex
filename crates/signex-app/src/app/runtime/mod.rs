@@ -668,7 +668,7 @@ impl Signex {
                     .sheet_path_for_window(window, &self.ui_state)
                     .map(std::path::PathBuf::as_path),
             ),
-            annotation_flags: self.annotation_flag_view(
+            notebook_badges: self.notebook_badge_view(
                 self.document_state
                     .sheet_path_for_window(window, &self.ui_state)
                     .map(std::path::PathBuf::as_path),

@@ -149,6 +149,8 @@ impl Signex {
                 // index only once the dwell is up.
                 let hit = self.item_hit_at(x as f64, y as f64);
                 self.observe_net_hover(hit, (x as f64, y as f64));
+                // Mockup row 197: a Notebook badge under the pointer shows its card.
+                self.observe_notebook_badge_hover(x as f64, y as f64);
                 let hover_uuid: Option<uuid::Uuid> = hit.and_then(|hit| {
                     matches!(hit.kind, signex_types::schematic::SelectedKind::Symbol)
                         .then_some(hit.uuid)

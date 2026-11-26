@@ -1,0 +1,20 @@
++++
+format = "snxnbk/1"
+layout = "split"
+
+[[references]]
+kind = "net"
+net = "VBUS"
+checked = "2026-11-24"
+
+[[references]]
+kind = "pin"
+component = "J1"
+pin = "A4"
+id = "0193a0c4-5b1e-7c3a-9f00-6f1c2d3e4a04"
+side = "top"
++++
+= Kept keys
+
+#net("VBUS") arrives on #pin("J1", "A4"). The header keys this build does
+not know are written back as they were.

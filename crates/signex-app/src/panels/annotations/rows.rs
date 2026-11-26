@@ -3,7 +3,7 @@
 //! hover action box; and the expanded source with its Jump button.
 
 use iced::font::Weight;
-use iced::widget::{Column, Row, Stack, column, container, hover, row};
+use iced::widget::{Column, Row, Stack, container, hover, row};
 use iced::{
     Alignment, Background, Border, Color, Element, Font, Length, Padding, Shadow, Theme, Vector,
     Widget as _,
@@ -212,16 +212,30 @@ fn kind_box<'a>(ctx: &'a PanelContext, kind: AnnotationKind) -> Element<'a, Pane
     )
 }
 
-/// The title, medium weight, ending in an ellipsis.
+/// The typed id in mono, then the title, medium weight, ending in an
+/// ellipsis.
 fn title_line<'a>(ctx: &'a PanelContext, item: &'a AnnotationRow) -> Element<'a, PanelMsg> {
-    text(UserText::new(item.title.as_str()))
+    let title = text(UserText::new(item.title.as_str()))
         .size(TS.body)
         .font(medium())
         .color(ti(ctx.tokens.text))
         .wrapping(iced::widget::text::Wrapping::None)
         .ellipsis(iced::widget::text::Ellipsis::End)
-        .width(Length::Fill)
-        .boxed()
+        .width(Length::Fill);
+    let Some(id) = &item.id else {
+        return title.boxed();
+    };
+    row![
+        text(UserText::new(id.as_str()))
+            .size(TS.caption)
+            .font(mono())
+            .color(resolve(&ctx.tokens).ink3)
+            .wrapping(iced::widget::text::Wrapping::None),
+        title,
+    ]
+    .spacing(PAD_TIGHT)
+    .align_y(Alignment::Center)
+    .boxed()
 }
 
 /// The reference chips and the status pill, wrapping; the date on the
@@ -234,6 +248,9 @@ fn meta_line<'a>(ctx: &'a PanelContext, item: &'a AnnotationRow) -> Element<'a, 
     }
     if let Some(status) = item.status {
         chips = chips.push(status_pill(ctx, status));
+    }
+    if let Some(verdict) = item.verdict {
+        chips = chips.push(super::fields::verdict_pill(ctx, verdict));
     }
     let mut line = Row::<Element<'a, PanelMsg>>::new()
         .push_boxed(container(chips.wrap().vertical_spacing(PAD_TIGHT)).width(Length::Fill))
@@ -363,8 +380,9 @@ fn action_box<'a>(ctx: &'a PanelContext, jump: Reference) -> Element<'a, PanelMs
         .boxed()
 }
 
-/// An expanded row's source: "<file> · line N", the block as written on the
-/// sunken fill, and Jump to its first part.
+/// An expanded row's review record (mockup row 198), then its source:
+/// "<file> · line N", the block as written on the sunken fill, and Jump to
+/// its first part.
 fn source_block<'a>(ctx: &'a PanelContext, item: &'a AnnotationRow) -> Element<'a, PanelMsg> {
     let tokens = &ctx.tokens;
     let r = resolve(tokens);
@@ -392,7 +410,13 @@ fn source_block<'a>(ctx: &'a PanelContext, item: &'a AnnotationRow) -> Element<'
         },
         ..container::Style::default()
     });
-    let mut block = column![text(caption).size(TS.caption).color(r.ink3), source,]
+    let mut block = Column::<Element<'a, PanelMsg>>::new();
+    if !item.fields.is_empty() {
+        block = block.push(super::fields::field_grid(ctx, &item.fields));
+    }
+    let mut block = block
+        .push_boxed(text(caption).size(TS.caption).color(r.ink3))
+        .push_boxed(source)
         .spacing(LINE_GAP * 1.5)
         .padding(Padding {
             top: TOOL_GAP_DETAIL,

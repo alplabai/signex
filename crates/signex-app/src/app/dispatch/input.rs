@@ -392,7 +392,8 @@ impl Signex {
                     .diff_pair_preview_key(event)
                     .or_else(|| self.rules_drawing_key(window, event))
                     .or_else(|| self.project_preview_key(window, event))
-                    .or_else(|| self.gerber_viewer_key(window, event));
+                    .or_else(|| self.gerber_viewer_key(window, event))
+                    .or_else(|| self.notebook_key(window, event));
                 match (target, key) {
                     (InputTarget::Main | InputTarget::UndockedTab, Some(message)) => {
                         Claim::consume(message)

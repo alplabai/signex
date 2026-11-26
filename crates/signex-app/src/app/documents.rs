@@ -75,6 +75,11 @@ pub enum TabKind {
     /// is the `.snxsym` path, which Save writes; it sits after the symbol's
     /// own tab (`app/pin_table_tab`).
     PinTable,
+    /// The project's Design Notebook (mockup row 195), one tab per project.
+    /// Tab state lives in [`crate::app::DocumentState::notebooks`] keyed by
+    /// this id; `TabInfo.path` is the notebook file, which its Save writes
+    /// (`app/notebook_tab`).
+    Notebook(super::state::ProjectId),
 }
 
 impl TabKind {
@@ -165,6 +170,14 @@ impl TabKind {
         matches!(self, TabKind::PinTable)
     }
 
+    /// `Some(id)` if this tab is a project's Design Notebook tab.
+    pub fn as_notebook(&self) -> Option<super::state::ProjectId> {
+        match self {
+            TabKind::Notebook(id) => Some(*id),
+            _ => None,
+        }
+    }
+
     /// A page of an open document that holds no document of its own and
     /// shares its owner's path: the board pages (Layer Stack, Polygon
     /// Manager) and the Pin table tab. It sits after its owner's tab and
@@ -174,8 +187,8 @@ impl TabKind {
     }
 
     /// A page tab, not a drawing: the Project, Rules, Layer Stack, Pin
-    /// table and Variant Manager tabs. None is undocked or restored from
-    /// History.
+    /// table, Variant Manager and Design Notebook tabs. None is undocked or
+    /// restored from History.
     pub fn is_project_page(&self) -> bool {
         // Mockup row 178: the Polygon Manager is a page of its board.
         if self.is_polygon_manager() {
@@ -188,6 +201,7 @@ impl TabKind {
                 | TabKind::LayerStack
                 | TabKind::PinTable
                 | TabKind::VariantManager(_)
+                | TabKind::Notebook(_)
         )
     }
 }
