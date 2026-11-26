@@ -78,7 +78,13 @@ impl Signex {
             return Task::none();
         };
         let target = export_path(path, &draft.file);
-        let operands = vec![
+        let variant = self
+            .document_state
+            .block_diagrams
+            .editors
+            .get(path)
+            .and_then(|editor| editor.power.variant.clone());
+        let mut operands = vec![
             (
                 "path",
                 OperandValue::Path(target.to_string_lossy().into_owned()),
@@ -87,6 +93,23 @@ impl Signex {
             ("monochrome", OperandValue::Bool(draft.monochrome)),
             ("title_block", OperandValue::Bool(draft.title_block)),
         ];
+        // An SVG is the diagram alone; a PDF prints the pages ticked.
+        if draft.kind == ExportKind::Pdf {
+            let pages: Vec<&str> = draft.pages.iter().map(|page| page.token()).collect();
+            let orientation = if draft.portrait {
+                "portrait"
+            } else {
+                "landscape"
+            };
+            operands.extend([
+                ("pages", OperandValue::Text(pages.join(","))),
+                ("paper", OperandValue::Text(draft.paper.token().to_string())),
+                ("orientation", OperandValue::Text(orientation.to_string())),
+            ]);
+            if let Some(variant) = variant {
+                operands.push(("variant", OperandValue::Text(variant)));
+            }
+        }
         let (outcome, task) = translator::run(self, "export_block_diagram", path, operands);
         if let CommandOutcome::Disabled { reason } = outcome {
             let i18n = &self.ui_state.i18n;
@@ -112,6 +135,9 @@ fn edit_draft(draft: &mut ExportDraft, event: ExportEvent, stem: &str) {
         ExportEvent::FileEdited(file) => draft.file = file,
         ExportEvent::MonochromePicked(on) => draft.monochrome = on,
         ExportEvent::TitleBlockToggled(on) => draft.title_block = on,
+        ExportEvent::PageToggled(page, on) => draft.set_page(page, on),
+        ExportEvent::PaperPicked(paper) => draft.paper = paper,
+        ExportEvent::PortraitPicked(on) => draft.portrait = on,
         ExportEvent::Opened(_) | ExportEvent::Cancelled | ExportEvent::ExportPressed => {}
     }
 }

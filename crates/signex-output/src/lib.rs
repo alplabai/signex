@@ -48,7 +48,8 @@ pub use erc::{
 pub use field_value::{ShownValue, ValueScope, sheet_context, shown_value};
 pub use netlist::{NetlistExporter, NetlistFormat, NetlistOptions, NetlistOutput};
 pub use pdf::block_diagram::{
-    BlockDiagramPdfOptions, BlockDiagramPdfOutput, BlockDiagramPdfText, block_diagram_pdf,
+    BlockDiagramPage, BlockDiagramPdfOptions, BlockDiagramPdfOutput, BlockDiagramPdfText,
+    BlockDiagramTable, BlockDiagramTableRow, block_diagram_pdf, block_diagram_pdf_pages,
 };
 pub use pdf::board::{
     BoardLayerSet, BoardPdfError, BoardPdfOutput, BoardPdfPage, BoardPrintOptions, BoardPrintPages,

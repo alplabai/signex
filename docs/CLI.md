@@ -1134,6 +1134,8 @@ folder (see "Block diagrams"). It needs the `export` capability.
 
 ```text
 export_block_diagram document=<diagram.snxblk> path=<file> [kind=svg|pdf] [monochrome=true] [title_block=false]
+                     [pages=blocks,power_tree,budget] [paper=a4|a3|a2|letter|tabloid]
+                     [orientation=landscape|portrait] [variant=<name>]
 ```
 
 - `document` is the diagram: a path (relative to the project folder) or the
@@ -1143,13 +1145,24 @@ export_block_diagram document=<diagram.snxblk> path=<file> [kind=svg|pdf] [monoc
   neither and no `kind` is refused, as is `path` naming the diagram itself.
 - `monochrome=true` draws every mark in black. `title_block=false` leaves
   the PDF's title block off; an SVG has none.
+- `pages` lists a PDF's pages in print order: `blocks` (the diagram, the
+  default), `power_tree` (the project's power tree as an outline, each rail
+  with its sources and loads) and `budget` (one row per rail: voltage,
+  source, limit, load, headroom). A table runs on over as many pages as it
+  needs. An SVG is the diagram only; another page is refused. The power
+  pages read the project whose folder holds the diagram, for `variant`
+  (its active variant without it); a variant the project does not have is
+  refused.
+- `paper` (default `a4`) and `orientation` (default `landscape`) set the
+  PDF's page.
 
 The command is answered once the file is written, with `document`, `path`,
 `kind`, `blocks`, `connections`, `groups`, `bytes` (the size written),
 `extent_mm` (`min` and `max`, diagram mm), `scale` (page mm per diagram mm
 on the PDF page; `null` for SVG, which is 1:1), `uncovered_chars`
 (characters no bundled font covers, PDF only) and `read_only` (the file is
-from a newer Signex; it still exports). A diagram that cannot be read is
+from a newer Signex; it still exports), `pages` (the page tokens printed)
+and `page_count` (pages written, 1 for SVG). A diagram that cannot be read is
 refused after the read, with nothing written. What is drawn is in
 [BLOCK_DIAGRAM_EXPORT.md](BLOCK_DIAGRAM_EXPORT.md).
 

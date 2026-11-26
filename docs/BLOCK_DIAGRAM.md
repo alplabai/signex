@@ -17,10 +17,11 @@ tab behaves.
   says Read-only.
 - One tab per diagram, in the main window only: it does not undock, and
   History does not restore a diagram yet.
-- The Projects tree lists each diagram held open in a project's folder
+- The Projects tree lists every `.snxblk` in a project's folder (three
+  folders deep, hidden folders skipped) and every diagram held open there,
   under Source Documents, with the `.snxblk` icon and a BLK tag; a double
-  click opens its tab. The folder is not listed, so a diagram that is not
-  open has no row.
+  click opens its tab. The folder is listed by the tree's off-thread file
+  probe, never in `update` or `view`.
 - A command that names a diagram that is not open reads it first and holds
   it without a tab ([CLI.md](CLI.md), "Block diagrams").
 
@@ -69,19 +70,32 @@ picture.
 ## Power tree view
 
 The view switch's Power tree reads the project's power tree off the update
-thread with the run behind `query_power_tree`, for the project's active
-variant, each time the view is picked ([POWER_TREE.md](POWER_TREE.md)). One
-row per rail: its sources (a converter or a source part), the rail with its
-voltage and total draw, and its loads. A source's bar is the rail's draw
-against its limit, green under 50 %, amber to 90 %, red above; a load's bar
-is its share of the rail in one neutral colour. The side panel lists the
-rails; a click on one shows its nominal voltage, source, limit, load and
-headroom. Showing the tree changes nothing in the diagram.
+thread with the run behind `query_power_tree`, for the variant in the
+toolbar's Variant field (the project's active one until a person picks;
+picking does not change the project), each time the view or a variant is
+picked ([POWER_TREE.md](POWER_TREE.md)). The totals line names the scenario
+(Max load, every fitted load at its stated draw, the one scenario there
+is), how many sources feed a load in it, and the rail with the least
+headroom. One row per rail: its sources (a converter or a source part), the
+rail with its voltage and total draw, and its loads. A source's bar is the
+rail's draw against its limit, green under 50 %, amber to 90 %, red above;
+a load's bar is its share of the rail, accent under 50 %, amber to 90 %,
+red above. A click on a source or load opens its sheet at the part's sheet
+occurrence with the part selected. The side panel lists the rails; a click
+on one shows its nominal voltage, source, limit, load and headroom. Showing
+the tree changes nothing in the diagram.
+
+Show GND on the Block diagram view's toolbar draws and picks the ground
+connections (a power connection whose net is a ground); it is off, as
+drawn. It is view state: nothing is saved, and an export draws every
+connection.
 
 ## Export popover
 
 SVG and PDF… open a popover over the canvas: the format, print colours or
-as shown, the PDF title block, and the file, offered as
+as shown, and for a PDF its Pages (Block diagram and Power tree ticked,
+Budget table not, as drawn), its Paper (A4, A3, A2, Letter, Tabloid,
+landscape or portrait) and title block, and the file, offered as
 `outputs/<name>_blocks.<svg or pdf>` beside the diagram. Export runs
 `export_block_diagram` with those operands
 ([BLOCK_DIAGRAM_EXPORT.md](BLOCK_DIAGRAM_EXPORT.md)); the saved file is

@@ -149,7 +149,7 @@ fn the_export_popover_runs_export_block_diagram_with_its_settings() {
         TabEvent::Export(ExportEvent::Opened(ExportKind::Pdf)),
     );
     let shown = texts(&app, &path);
-    for expected in ["Export the saved diagram", "A4 landscape", "Title block"] {
+    for expected in ["Export the saved diagram", "Landscape", "Title block"] {
         assert!(shown.iter().any(|t| t == expected), "{expected}: {shown:?}");
     }
     let inputs = lay_out_inputs(app.view_block_diagram_tab(path.clone()), WINDOW);

@@ -45,7 +45,34 @@ impl Look<'_> {
     }
 }
 
+/// The Variant field (mockup row 171): the project's variants, Base first,
+/// and the one the Power tree reads.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub(crate) struct VariantField {
+    pub names: Vec<String>,
+    pub shown: String,
+}
+
 impl Signex {
+    /// The Variant field of the diagram at `path`: the variant picked, else
+    /// the project's active one, else Base.
+    pub(crate) fn power_variant_field(&self, path: &std::path::Path) -> VariantField {
+        let base = signex_types::project::BASE_VARIANT.to_string();
+        let project = super::project_holding(&self.document_state, path);
+        let mut names = vec![base.clone()];
+        if let Some(project) = project {
+            names.extend(project.data.variant_definitions.iter().cloned());
+        }
+        let picked = (self.document_state.block_diagrams.editors.get(path))
+            .and_then(|editor| editor.power.variant.clone());
+        let active = project.and_then(|p| p.data.active_variant.clone());
+        let shown = picked
+            .or(active)
+            .filter(|name| !name.trim().is_empty())
+            .unwrap_or(base);
+        VariantField { names, shown }
+    }
+
     /// The tab of the diagram at `path`.
     pub(crate) fn view_block_diagram_tab(&self, path: PathBuf) -> Element<'_, Message> {
         let look = Look {
@@ -57,7 +84,8 @@ impl Signex {
                 .padding(SP.l)
                 .boxed();
         };
-        tab(look, editor)
+        let variant = self.power_variant_field(&path);
+        tab(look, editor, variant)
             .map(move |event| {
                 Message::BlockDiagram(BlockDiagramMsg::Tab {
                     path: path.clone(),
@@ -69,7 +97,7 @@ impl Signex {
 }
 
 /// The canvas colours from the theme tokens.
-fn canvas_look(look: Look<'_>) -> CanvasLook {
+pub(super) fn canvas_look(look: Look<'_>, show_ground: bool) -> CanvasLook {
     let tokens = look.tokens;
     CanvasLook {
         background: ti(tokens.paper),
@@ -82,14 +110,19 @@ fn canvas_look(look: Look<'_>) -> CanvasLook {
         unlinked: ti(tokens.warning),
         text_size: TS.body,
         slop: TS.body * SLOP_EMS,
+        show_ground,
     }
 }
 
 /// The whole tab.
-fn tab<'a>(look: Look<'a>, editor: &'a BlockDiagramEditor) -> Element<'a, TabEvent> {
+fn tab<'a>(
+    look: Look<'a>,
+    editor: &'a BlockDiagramEditor,
+    variant: VariantField,
+) -> Element<'a, TabEvent> {
     let (main, side) = match editor.view {
         DiagramView::Blocks => (
-            diagram_canvas(editor, canvas_look(look)),
+            diagram_canvas(editor, canvas_look(look, editor.show_ground)),
             properties::view(look, editor),
         ),
         DiagramView::PowerTree => (
@@ -124,7 +157,7 @@ fn tab<'a>(look: Look<'a>, editor: &'a BlockDiagramEditor) -> Element<'a, TabEve
         body.boxed(),
         DocTabShellStyle::from_tokens(look.tokens, TS.body),
     )
-    .toolbar(toolbar::view(look, editor))
+    .toolbar(toolbar::view(look, editor, variant))
     .footer(footer(look, editor))
     .view()
 }

@@ -9,17 +9,18 @@
 
 mod command;
 mod job;
+mod plan;
+mod power_pages;
 
 use std::path::{Path, PathBuf};
 
 use iced::Task;
 use signex_i18n::{Translatable, ids, t};
-use signex_output::{
-    BlockDiagramFormat, BlockDiagramLook, BlockDiagramPdfOptions, BlockDiagramPdfText,
-};
+use signex_output::BlockDiagramFormat;
 use signex_types::block_diagram::BLOCK_DIAGRAM_EXTENSION;
 
 use crate::app::agent::WaitingCommand;
+use crate::app::block_diagram::PowerTreeRun;
 use crate::app::command::CommandOutcome;
 use crate::app::contracts::ExportWriteOutcome;
 use crate::app::handlers::menu::export::uncovered_chars_warning;
@@ -29,6 +30,7 @@ use crate::app::{ExportMsg, Message, Signex};
 pub(crate) use command::export_block_diagram;
 use job::is_block_diagram;
 pub use job::{ExportJob, Exported};
+use plan::ExportSettings;
 
 impl From<BlockDiagramExportMsg> for Message {
     fn from(msg: BlockDiagramExportMsg) -> Self {
@@ -153,49 +155,26 @@ impl Signex {
         if self.refuse_with_notice_while_project_moves(&path, "export to", ErrorNotice::export) {
             return Task::none();
         }
-        let job = self.block_diagram_job(diagram, path, format, BlockDiagramLook::default(), true);
-        self.start_block_diagram_export(job, None)
-    }
-
-    /// The job for `diagram` to `path`; the PDF title block in the user's
-    /// language.
-    pub(super) fn block_diagram_job(
-        &self,
-        diagram: PathBuf,
-        path: PathBuf,
-        format: BlockDiagramFormat,
-        look: BlockDiagramLook,
-        title_block: bool,
-    ) -> ExportJob {
-        let label = t!(self.ui_state.i18n, ids::BLOCK_DIAGRAM_EXPORT_PAGE_LABEL).into_string();
-        ExportJob {
-            text: BlockDiagramPdfText {
-                title: file_label(&diagram),
-                label,
-            },
-            pdf: BlockDiagramPdfOptions {
-                title_block,
-                monochrome: look.monochrome,
-                ..BlockDiagramPdfOptions::default()
-            },
-            diagram,
-            path,
-            format,
-            look,
-        }
+        let settings = ExportSettings::default();
+        let job = self.block_diagram_job(diagram, path, format, &settings);
+        self.start_block_diagram_export(job, None, None)
     }
 
     /// Run `job` on the blocking pool, held as a project write so a folder
-    /// rename waits for it. The caller checked the rename guard.
+    /// rename waits for it; `power` reads the power tree its pages need
+    /// first, on the same worker. The caller checked the rename guard.
     pub(super) fn start_block_diagram_export(
         &mut self,
         job: ExportJob,
         waiting: Option<WaitingCommand>,
+        power: Option<PowerTreeRun>,
     ) -> Task<Message> {
         self.begin_project_write(&job.path);
         let work = job.clone();
         Task::perform(
-            crate::app::path_op_jobs::run_blocking(move || job::run(&work)),
+            crate::app::path_op_jobs::run_blocking(move || {
+                job::run(&work, power.map(|read| read()))
+            }),
             move |result| {
                 Message::from(BlockDiagramExportMsg::Written(Box::new(ExportWritten {
                     job,

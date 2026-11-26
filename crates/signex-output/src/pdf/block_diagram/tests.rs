@@ -82,3 +82,49 @@ fn an_empty_diagram_and_no_title_block_still_print_a_page() {
     let out = block_diagram_pdf(&empty, &options, &BlockDiagramPdfText::default()).expect("pdf");
     assert_eq!(page_objects(&out.bytes), 1);
 }
+
+fn table(rows: usize) -> BlockDiagramTable {
+    BlockDiagramTable {
+        heading: "Budget table".into(),
+        columns: vec!["Rail".into(), "Load".into()],
+        rows: (0..rows)
+            .map(|i| BlockDiagramTableRow {
+                cells: vec![format!("RAIL_{i}"), "0.10 A".into()],
+                indent: (i % 2) as u8,
+                strong: i % 2 == 0,
+            })
+            .collect(),
+    }
+}
+
+/// Mockup row 171's Pages: the diagram, then each table on as many pages
+/// as its rows need, on the paper asked for.
+#[test]
+fn pages_print_in_order_and_a_long_table_runs_on() {
+    let a3 = BlockDiagramPdfOptions {
+        page_size: crate::pdf::PageSize::IsoA3,
+        ..BlockDiagramPdfOptions::default()
+    };
+    let diagram = drawing(&dcdc(), false);
+    let (short, long) = (table(3), table(200));
+    let pages = [
+        BlockDiagramPage::Diagram(&diagram),
+        BlockDiagramPage::Table(&short),
+        BlockDiagramPage::Table(&long),
+    ];
+    let out = block_diagram_pdf_pages(&pages, &a3, &text()).expect("pdf");
+    let per_page = tables::rows_per_page(a3.page_size.dimensions_mm(a3.orientation));
+    assert_eq!(page_objects(&out.bytes), 2 + 200usize.div_ceil(per_page));
+    let media = |bytes: &[u8]| {
+        let file = String::from_utf8_lossy(bytes).into_owned();
+        let at = file.find("/MediaBox").expect("a media box");
+        file[at..].lines().next().unwrap_or_default().to_string()
+    };
+    let a4 = block_diagram_pdf(&diagram, &BlockDiagramPdfOptions::default(), &text()).expect("a4");
+    assert_ne!(media(&out.bytes), media(&a4.bytes), "the paper asked for");
+
+    let tables_only = [BlockDiagramPage::Table(&short)];
+    let out = block_diagram_pdf_pages(&tables_only, &a3, &text()).expect("pdf");
+    assert_eq!(page_objects(&out.bytes), 1);
+    assert_eq!(out.scale, 1.0);
+}

@@ -13,6 +13,7 @@
 
 mod budget;
 mod quantity;
+mod scenario;
 mod topology;
 mod tree;
 
@@ -20,6 +21,8 @@ mod tree;
 mod budget_tests;
 #[cfg(test)]
 mod quantity_tests;
+#[cfg(test)]
+mod scenario_tests;
 #[cfg(test)]
 mod topology_tests;
 #[cfg(test)]
@@ -33,6 +36,7 @@ pub use quantity::{
     EFFICIENCY_PARAMETER, LOAD_PARAMETER, RailRole, SUPPLY_PARAMETER, is_ground_net,
     parse_current_a, parse_efficiency, rail_parameter, voltage_from_net_name,
 };
+pub use scenario::{MAX_LOAD_SCENARIO, ScenarioSummary, scenario_summary};
 pub use topology::{PowerPart, PowerTopology, power_topology};
 pub use tree::{
     Converter, CurrentFrom, ListedRail, PowerProblem, PowerRail, PowerTree, RailLoad, RailSource,

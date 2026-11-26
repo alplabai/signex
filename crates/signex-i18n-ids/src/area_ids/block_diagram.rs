@@ -174,4 +174,8 @@ define_ids! {
     BLOCK_DIAGRAM_POWER_WARNING = "block-diagram-power-warning";
     BLOCK_DIAGRAM_POWER_FOOTER = "block-diagram-power-footer";
     BLOCK_DIAGRAM_POWER_FOOTER_NOTE = "block-diagram-power-footer-note";
+    BLOCK_DIAGRAM_POWER_SCENARIO = "block-diagram-power-scenario";
+    BLOCK_DIAGRAM_POWER_SCENARIO_NO_LIMIT = "block-diagram-power-scenario-no-limit";
+    BLOCK_DIAGRAM_VARIANT = "block-diagram-variant";
+    BLOCK_DIAGRAM_SHOW_GND = "block-diagram-show-gnd";
 }

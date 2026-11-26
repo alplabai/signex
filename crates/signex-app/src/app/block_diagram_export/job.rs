@@ -1,15 +1,19 @@
 //! The blocking half of a block diagram export: read the `.snxblk`, draw
-//! it, write the SVG or PDF crash-safely. Plain data in and out, no
-//! `Signex` state, run on the blocking pool; the result goes back to
-//! `update` as a message.
+//! it, write the SVG or PDF crash-safely. A PDF prints the pages asked for
+//! (the diagram, the power tree, the budget table) on the paper asked for.
+//! Plain data in and out, no `Signex` state, run on the blocking pool; the
+//! result goes back to `update` as a message.
 
 use std::path::{Path, PathBuf};
 
 use signex_output::{
-    BlockDiagramFormat, BlockDiagramLook, BlockDiagramPdfOptions, BlockDiagramPdfText,
-    block_diagram_drawing, block_diagram_pdf, block_diagram_svg,
+    BlockDiagramFormat, BlockDiagramLook, BlockDiagramPage, BlockDiagramPdfOptions,
+    BlockDiagramPdfText, block_diagram_drawing, block_diagram_pdf_pages, block_diagram_svg,
 };
 use signex_types::block_diagram::read_block_diagram;
+
+use super::power_pages::{PowerPageWords, budget_table, power_tree_table};
+use crate::app::core::block_diagram_panes::{ExportPage, PowerTreeRead};
 
 /// The largest diagram an export reads: far past any real one, so a stray
 /// pick of a huge file is refused instead of read into memory.
@@ -22,9 +26,23 @@ pub struct ExportJob {
     pub path: PathBuf,
     pub format: BlockDiagramFormat,
     pub look: BlockDiagramLook,
+    /// The paper, orientation and title block of a PDF.
     pub pdf: BlockDiagramPdfOptions,
     /// The PDF title block's words, in the user's language.
     pub text: BlockDiagramPdfText,
+    /// The PDF's pages in print order; an SVG is the diagram only.
+    pub pages: Vec<ExportPage>,
+    /// The power tree pages' words.
+    pub words: PowerPageWords,
+}
+
+impl ExportJob {
+    /// Whether a page needs the project's power tree.
+    pub fn needs_power_tree(&self) -> bool {
+        self.pages
+            .iter()
+            .any(|page| matches!(page, ExportPage::PowerTree | ExportPage::Budget))
+    }
 }
 
 /// What a written export holds, for the Messages line and the answer.
@@ -44,10 +62,16 @@ pub struct Exported {
     /// The diagram is from a newer minor and opens read-only; it still
     /// exports.
     pub read_only: bool,
+    /// Pages written: 1 for an SVG.
+    pub page_count: usize,
 }
 
-/// Run `job`: the reason text when nothing was written.
-pub fn run(job: &ExportJob) -> Result<Exported, String> {
+/// Run `job`, with the power tree its pages need (read on this worker
+/// before): the reason text when nothing was written.
+pub fn run(
+    job: &ExportJob,
+    power: Option<Result<PowerTreeRead, String>>,
+) -> Result<Exported, String> {
     let size = std::fs::metadata(&job.diagram)
         .map_err(|e| e.to_string())?
         .len();
@@ -59,12 +83,42 @@ pub fn run(job: &ExportJob) -> Result<Exported, String> {
     let read = read_block_diagram(&job.diagram).map_err(|e| e.to_string())?;
     let diagram = &read.diagram;
     let drawing = block_diagram_drawing(diagram, &job.look);
-    let (bytes, scale, uncovered_chars) = match job.format {
-        BlockDiagramFormat::Svg => (block_diagram_svg(&drawing).into_bytes(), None, Vec::new()),
+    let (bytes, scale, uncovered_chars, page_count) = match job.format {
+        BlockDiagramFormat::Svg => {
+            let svg = block_diagram_svg(&drawing).into_bytes();
+            (svg, None, Vec::new(), 1)
+        }
         BlockDiagramFormat::Pdf => {
+            let tree = match power {
+                Some(read) => Some(read.map_err(|why| format!("the power tree: {why}"))?),
+                None => None,
+            };
+            let tables: Vec<_> = job
+                .pages
+                .iter()
+                .filter_map(|page| match (page, tree.as_ref()) {
+                    (ExportPage::PowerTree, Some(t)) => Some(power_tree_table(t, &job.words)),
+                    (ExportPage::Budget, Some(t)) => Some(budget_table(t, &job.words)),
+                    _ => None,
+                })
+                .collect();
+            let mut next_table = tables.iter();
+            let pages: Vec<BlockDiagramPage<'_>> = job
+                .pages
+                .iter()
+                .filter_map(|page| match page {
+                    ExportPage::Blocks => Some(BlockDiagramPage::Diagram(&drawing)),
+                    _ => next_table.next().map(BlockDiagramPage::Table),
+                })
+                .collect();
             let out =
-                block_diagram_pdf(&drawing, &job.pdf, &job.text).map_err(|e| e.to_string())?;
-            (out.bytes, Some(out.scale), out.uncovered_chars)
+                block_diagram_pdf_pages(&pages, &job.pdf, &job.text).map_err(|e| e.to_string())?;
+            (
+                out.bytes,
+                Some(out.scale),
+                out.uncovered_chars,
+                out.page_count,
+            )
         }
     };
     signex_types::atomic_io::atomic_write(&job.path, &bytes).map_err(|e| e.to_string())?;
@@ -77,6 +131,7 @@ pub fn run(job: &ExportJob) -> Result<Exported, String> {
         scale,
         uncovered_chars,
         read_only: read.is_read_only(),
+        page_count,
     })
 }
 

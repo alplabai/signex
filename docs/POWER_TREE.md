@@ -119,6 +119,14 @@ is the sheet's document id and `symbol` the part's first placed unit, where a
 click on the part goes. `current_from` is `parameter` or `converter`.
 `voltage_from` is `project` or `net_name`. Numbers not known are `null`.
 
+## Scenario
+
+There is one scenario, Max load: every fitted load at the current it
+states. `scenario_summary` gives the block diagram tab's totals line: the
+sources that are not converters, how many of them feed a load (the others
+are alternate sources not in the scenario), and the rail with the least
+headroom against its limit.
+
 ## Open seam
 
 The project's rail list (`.snxprj` `rails`, #2943) is not on trunk yet. The job

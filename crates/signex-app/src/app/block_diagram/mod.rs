@@ -27,12 +27,15 @@ mod command_tests;
 #[cfg(test)]
 mod on_demand_tests;
 #[cfg(test)]
+mod page_tests;
+#[cfg(test)]
 mod tab_tests;
 #[cfg(test)]
 mod tests;
 
 pub use on_demand::CommandRerun;
 pub use power::PowerTreeLanded;
+pub(crate) use power::PowerTreeRun;
 
 use std::path::{Path, PathBuf};
 
@@ -53,8 +56,16 @@ use crate::app::core::block_diagram_editor as state;
 pub use io::{DiagramFile, FileFailure};
 pub use state::{
     BlockDiagramEditor, BlockDiagrams, Camera, DiagramItem, DiagramTool, DiagramView, ExportKind,
-    PropertyField,
+    ExportPage, ExportPaper, PropertyField,
 };
+
+/// Whether `link` is a ground connection, which Show GND hides: a power
+/// connection whose label, or the net it was made from, is a ground.
+pub(crate) fn is_ground_link(link: &signex_types::block_diagram::Connection) -> bool {
+    use signex_net::power_tree::is_ground_net;
+    link.interface == signex_types::block_diagram::Interface::Power
+        && (is_ground_net(&link.label) || link.derived_from.as_deref().is_some_and(is_ground_net))
+}
 
 pub use signex_types::block_diagram::BLOCK_DIAGRAM_EXTENSION;
 
@@ -129,6 +140,11 @@ pub enum ExportEvent {
     /// Print colours (black) or as shown.
     MonochromePicked(bool),
     TitleBlockToggled(bool),
+    /// A page ticked (`true`) or unticked in Pages.
+    PageToggled(ExportPage, bool),
+    PaperPicked(ExportPaper),
+    /// Portrait (`true`) or landscape.
+    PortraitPicked(bool),
     Cancelled,
     ExportPressed,
 }
@@ -174,6 +190,13 @@ pub enum TabEvent {
     ViewPicked(DiagramView),
     /// A rail picked in the Power tree view.
     RailPicked(String),
+    /// A part clicked in the Power tree view, by its place in the run's
+    /// topology: its sheet opens with it selected.
+    PartOpened(usize),
+    /// The Power tree's Variant field.
+    VariantPicked(String),
+    /// Show GND on the Block diagram view.
+    ShowGroundToggled(bool),
     /// Re-sync: the diagram rebuilt from the sheet hierarchy, layout kept.
     ResyncPressed,
     Export(ExportEvent),

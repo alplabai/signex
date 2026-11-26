@@ -9,7 +9,8 @@
 use iced::widget::{Column, Row, Space, column, container, row, scrollable};
 use iced::{Alignment, Background, Border, Color, Element, Length, Theme, Widget as _};
 use signex_i18n::{Localized, MessageId, UserText, ids, t};
-use signex_net::power_tree::{BudgetLevel, PowerRail, PowerTopology};
+use signex_net::power_tree::{BudgetLevel, PowerRail, PowerTopology, scenario_summary};
+use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, text};
 
 use super::{Look, SP, TS, caption};
@@ -100,6 +101,42 @@ fn level_ink(look: Look<'_>, level: BudgetLevel) -> Color {
     }
 }
 
+/// A load's bar, as mockup row 171 draws it: the accent under half the
+/// rail, the warning tone to 90 %, the error tone above.
+pub(super) fn load_ink(tokens: &ThemeTokens, share: f64) -> Color {
+    match BudgetLevel::of(share, 1.0) {
+        Some(BudgetLevel::Close) => ti(tokens.warning),
+        Some(BudgetLevel::Over) => ti(tokens.error),
+        Some(BudgetLevel::Fine) | None => ti(tokens.accent),
+    }
+}
+
+/// A source or load card that opens its part's sheet when clicked
+/// (#1313).
+fn part_card<'a>(look: Look<'a>, body: Items<'a>, part: usize) -> Element<'a, TabEvent> {
+    button(card(look, body, false))
+        .padding(0)
+        .style(crate::styles::ghost_button(look.tokens))
+        .on_press(TabEvent::PartOpened(part))
+        .boxed()
+}
+
+/// The totals line (mockup row 171): the scenario, the sources active in it
+/// and the rail with the least headroom.
+fn scenario_line(look: Look<'_>, read: &PowerTreeRead) -> Localized {
+    let summary = scenario_summary(&read.tree);
+    match summary.worst_rail {
+        Some((rail, share)) => t!(look.i18n, ids::BLOCK_DIAGRAM_POWER_SCENARIO,
+            "active" => summary.active_sources,
+            "sources" => summary.sources,
+            "headroom" => percent(share),
+            "rail" => rail),
+        None => t!(look.i18n, ids::BLOCK_DIAGRAM_POWER_SCENARIO_NO_LIMIT,
+            "active" => summary.active_sources,
+            "sources" => summary.sources),
+    }
+}
+
 fn card<'a>(look: Look<'a>, body: Items<'a>, picked: bool) -> Element<'a, TabEvent> {
     let r = resolve(look.tokens);
     let edge = if picked {
@@ -171,7 +208,7 @@ fn sources<'a>(look: Look<'a>, read: &'a PowerTreeRead, rail: &'a PowerRail) -> 
                     "used" => amps(rail.total_a), "limit" => amps(limit), "share" => percent(share)),
             ));
         }
-        list = list.push(card(look, body, false));
+        list = list.push(part_card(look, body, source.part));
     }
     if rail.sources.is_empty() {
         list = list.push(note(look, look.t(ids::BLOCK_DIAGRAM_POWER_NO_SOURCE)));
@@ -204,7 +241,6 @@ fn rail_card<'a>(look: Look<'a>, rail: &'a PowerRail, picked: bool) -> Element<'
 }
 
 fn loads<'a>(look: Look<'a>, read: &'a PowerTreeRead, rail: &'a PowerRail) -> Items<'a> {
-    let neutral = ti(look.tokens.text_secondary);
     let mut list: Items<'a> = Column::new().spacing(SP.s);
     for load in &rail.loads {
         let mut body: Items<'a> = column![strong(
@@ -219,7 +255,8 @@ fn loads<'a>(look: Look<'a>, read: &'a PowerTreeRead, rail: &'a PowerRail) -> It
                     t!(look.i18n, ids::BLOCK_DIAGRAM_POWER_DRAW, "amps" => amps(current)),
                 ));
                 if let Some(share) = share {
-                    body = body.push(bar(look, share, neutral)).push(note(
+                    let ink = load_ink(look.tokens, share);
+                    body = body.push(bar(look, share, ink)).push(note(
                         look,
                         t!(look.i18n, ids::BLOCK_DIAGRAM_POWER_SHARE, "share" => percent(share)),
                     ));
@@ -227,7 +264,7 @@ fn loads<'a>(look: Look<'a>, read: &'a PowerTreeRead, rail: &'a PowerRail) -> It
             }
             None => body = body.push(note(look, look.t(ids::BLOCK_DIAGRAM_POWER_UNKNOWN_DRAW))),
         }
-        list = list.push(card(look, body, false));
+        list = list.push(part_card(look, body, load.part));
     }
     list
 }
@@ -252,7 +289,8 @@ pub(super) fn main<'a>(look: Look<'a>, editor: &'a BlockDiagramEditor) -> Elemen
             note(look, look.t(ids::BLOCK_DIAGRAM_POWER_EMPTY))
         }
         Some(Ok(read)) => {
-            let mut rows: Items<'a> = Column::new().spacing(SP.l);
+            let mut rows: Items<'a> =
+                column![strong(look, scenario_line(look, read))].spacing(SP.l);
             for rail in &read.tree.rails {
                 let picked = power.rail.as_deref() == Some(rail.net.as_str());
                 rows = rows.push(
@@ -405,5 +443,25 @@ pub(super) fn status(look: Look<'_>, editor: &BlockDiagramEditor) -> Localized {
             "rails" => read.tree.rails.len(),
             "converters" => read.tree.converters.len()),
         _ => look.t(ids::BLOCK_DIAGRAM_POWER_READING),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use signex_types::theme::{ThemeId, theme_tokens};
+
+    use super::*;
+
+    /// Mockup row 171's load bars: J2 at 78 % of the rail in the warning
+    /// tone, U3 at 22 % in the accent, a load over 90 % in the error tone.
+    #[test]
+    fn a_load_bar_takes_its_colour_from_its_share_of_the_rail() {
+        for theme in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+            let tokens = theme_tokens(theme);
+            assert_eq!(load_ink(&tokens, 0.22), ti(tokens.accent), "{theme:?}");
+            assert_eq!(load_ink(&tokens, 0.78), ti(tokens.warning), "{theme:?}");
+            assert_eq!(load_ink(&tokens, 0.95), ti(tokens.error), "{theme:?}");
+            assert_ne!(load_ink(&tokens, 0.22), load_ink(&tokens, 0.78));
+        }
     }
 }

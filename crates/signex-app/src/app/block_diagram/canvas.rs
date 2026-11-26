@@ -48,6 +48,15 @@ pub struct CanvasLook {
     pub text_size: f32,
     /// How far, in px, a click may land off an object and still pick it.
     pub slop: f32,
+    /// Show GND: ground connections are drawn and picked only when on.
+    pub show_ground: bool,
+}
+
+impl CanvasLook {
+    /// Whether `link` is drawn and picked: a ground only with Show GND.
+    pub fn shows(&self, link: &Connection) -> bool {
+        self.show_ground || !super::is_ground_link(link)
+    }
 }
 
 /// Where the diagram sits on the canvas for one camera.
@@ -181,7 +190,8 @@ impl DiagramCanvas<'_> {
         if let Some(block) = d.block_at(p) {
             return Some(DiagramItem::Block(block));
         }
-        if let Some(link) = d.connection_at(p, slop) {
+        let shown = |id| d.connection(id).is_some_and(|l| self.look.shows(l));
+        if let Some(link) = d.connection_at(p, slop).filter(|id| shown(*id)) {
             return Some(DiagramItem::Connection(link));
         }
         d.group_at(p, slop).map(DiagramItem::Group)
@@ -433,7 +443,8 @@ impl Painter<'_, '_> {
         for group in &diagram.groups {
             self.draw_group(frame, diagram, group);
         }
-        for link in &diagram.connections {
+        let look = self.look();
+        for link in diagram.connections.iter().filter(|l| look.shows(l)) {
             self.draw_connection(frame, diagram, link);
         }
         for block in &diagram.blocks {

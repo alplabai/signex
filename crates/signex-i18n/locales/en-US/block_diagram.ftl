@@ -166,7 +166,7 @@ block-diagram-resync-tip = Rebuild blocks and connections from the sheet hierarc
 block-diagram-power-reading = Reading the power tree…
 block-diagram-power-unread = The power tree could not be read: { $reason }
 block-diagram-power-empty = No power rails yet. Name the power nets (VIN_12V, VOUT_3V3) or give parts a `Rail Load <net>` parameter.
-block-diagram-power-legend = A source's bar is the rail's load against its limit: green under 50 %, amber to 90 %, red above. A load's bar is its share of the rail.
+block-diagram-power-legend = A source's bar is the rail's load against its limit: green under 50 %, amber to 90 %, red above. A load's bar is its share of the rail: accent under 50 %, amber to 90 %, red above. Click a part to open its sheet.
 block-diagram-power-arrow = →
 block-diagram-power-source = Source
 block-diagram-power-converter = Converter
@@ -193,4 +193,10 @@ block-diagram-power-free = { $share } % free
 block-diagram-power-not-known = —
 block-diagram-power-warning = Note: { $text }
 block-diagram-power-footer = { $rails } rails · { $converters } converters
-block-diagram-power-footer-note = Read from the schematic for the project's variant. Switch views to read it again.
+block-diagram-power-footer-note = Read from the schematic for the variant in the Variant field. Switch views to read it again.
+# The totals line. $active of $sources sources feed a load in the scenario;
+# $rail has the least headroom, $headroom percent of its limit.
+block-diagram-power-scenario = Scenario Max load · sources { $active } of { $sources } active · worst rail headroom { $headroom } % ({ $rail })
+block-diagram-power-scenario-no-limit = Scenario Max load · sources { $active } of { $sources } active · no rail has a limit
+block-diagram-variant = Variant
+block-diagram-show-gnd = Show GND

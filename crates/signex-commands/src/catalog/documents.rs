@@ -14,6 +14,13 @@ const BLOCK_DIAGRAM_EXPORT: &[Operand] = &[
     optional("kind", OperandKind::Text),
     optional("monochrome", OperandKind::Bool),
     optional("title_block", OperandKind::Bool),
+    // A PDF's pages (`blocks,power_tree,budget`), its paper
+    // (`a4|a3|a2|letter|tabloid`), `landscape|portrait`, and the variant
+    // the power tree pages read (mockup row 171).
+    optional("pages", OperandKind::Text),
+    optional("paper", OperandKind::Text),
+    optional("orientation", OperandKind::Text),
+    optional("variant", OperandKind::Text),
 ];
 
 pub(super) const DOCUMENTS: &[CommandMetadata] = &[

@@ -52,10 +52,14 @@ diagram always gives the same bytes.
 
 ## PDF
 
-One page, A4 landscape, the drawing fitted inside a 10 mm margin, with the
-title block of the board PDF under it (the diagram's file name, "Block
-diagram" in the person's language, the scale and `1 / 1`) unless
-`title_block=false`. The fonts are the embedded, subset Roboto of every
+The pages `pages` asks for, in order, on the paper `paper` and
+`orientation` name (A4 landscape by default). The diagram's page is the
+drawing fitted inside a 10 mm margin, with the title block of the board PDF
+under it (the diagram's file name, "Block diagram" in the person's
+language, the scale and the page number) unless `title_block=false`. The
+Power tree and Budget table pages are tables of the project's power tree
+(`signex_output::BlockDiagramTable`), read by the run behind
+`query_power_tree`; a table runs on over as many pages as its rows need. The fonts are the embedded, subset Roboto of every
 Signex PDF. Characters no bundled font covers are listed in the answer and in
 the Messages panel, as for the other PDFs.
 

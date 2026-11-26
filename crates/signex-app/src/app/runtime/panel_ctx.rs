@@ -179,6 +179,7 @@ impl Signex {
             request.exists.extend(files.map(|f| dir.join(f)));
             if let Some(project_dir) = p.path.parent() {
                 request.exists.push(git_marker(project_dir));
+                request.diagram_dirs.push(p.dir().to_path_buf());
             }
             for entry in &p.data.libraries {
                 let resolved = p.data.resolve_library_path(entry);
@@ -422,10 +423,8 @@ impl Signex {
                     .map(lookup)
                     .unwrap_or((false, false, false));
 
-                // F24 — a file the project lists that is neither on disk nor
-                // held by an open or unsaved document shows as `(missing)`.
-                // Read from the cache, never the disk (#111): the off-thread
-                // probe keeps it current.
+                // F24: a listed file not on disk nor held shows `(missing)`;
+                // read from the probe's cache, never the disk (#111).
                 let fs_facts = &self.document_state.project_fs.facts;
                 let missing =
                     |filename: &str| marks.is_missing(fs_facts, &project_dir.join(filename));
@@ -480,9 +479,7 @@ impl Signex {
                         display_name: format!("{} (pending)", spec.display_name),
                         root: spec.lib_path.clone(),
                         mounted: false,
-                        // Pending entries are intentionally absent on
-                        // disk (they materialise at save time) — not
-                        // a missing-orphan situation.
+                        // Absent until save, not missing.
                         missing: false,
                         is_open: false,
                         is_dirty: false,

@@ -114,3 +114,35 @@ fn a_run_names_a_diagram_it_did_not_open() {
     let saved = std::fs::read_to_string(fx.dir.join("dcdc-buck.snxblk")).expect("saved");
     assert!(saved.contains("Sensor"), "the edit was saved");
 }
+
+/// Mockup row 171's Pages and Paper as operands: the diagram, the power
+/// tree and the budget table on A3 portrait.
+#[test]
+fn a_run_prints_the_pages_and_paper_it_names() {
+    let (_guard, root) = temp_root();
+    let fx = fixture(&root);
+    std::fs::write(fx.dir.join("dcdc-buck.snxblk"), DCDC).expect("write the diagram");
+    let project = fx.project.to_str().unwrap();
+    let commands = jsonl(&[
+        json!({"id": "export_block_diagram",
+               "args": {"document": "dcdc-buck.snxblk", "path": "pages.pdf",
+                        "pages": "blocks,power_tree,budget", "paper": "a3",
+                        "orientation": "portrait"}}),
+        json!({"id": "export_block_diagram",
+               "args": {"document": "dcdc-buck.snxblk", "path": "budget.svg",
+                        "pages": "budget"}}),
+    ]);
+    let out = run_cli(&["run", project, "--allow", "export"], &commands);
+    let pdf = &out.lines[0];
+    assert_eq!(pdf["status"], "answered", "{}", out.stdout);
+    assert_eq!(pdf["data"]["page_count"], 3, "{}", out.stdout);
+    assert_eq!(
+        pdf["data"]["pages"],
+        json!(["blocks", "power_tree", "budget"]),
+        "{}",
+        out.stdout
+    );
+    assert!(fx.dir.join("pages.pdf").exists());
+    assert_eq!(out.lines[1]["status"], "refused", "{}", out.stdout);
+    assert!(!fx.dir.join("budget.svg").exists());
+}

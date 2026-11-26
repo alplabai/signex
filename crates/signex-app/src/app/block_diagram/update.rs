@@ -74,6 +74,14 @@ impl Signex {
                 self.pick_power_rail(&path, rail);
                 Ok(())
             }
+            TabEvent::PartOpened(part) => return self.open_power_part(&path, part),
+            TabEvent::VariantPicked(variant) => return self.pick_power_variant(&path, variant),
+            TabEvent::ShowGroundToggled(on) => {
+                if let Some(editor) = self.document_state.block_diagrams.editors.get_mut(&path) {
+                    editor.show_ground = on;
+                }
+                Ok(())
+            }
             TabEvent::ResyncPressed => return self.resync_block_diagram(),
             TabEvent::Export(event) => return self.block_diagram_export_event(&path, event),
             TabEvent::EndPicked(end) => self.pick_connection_end(&path, end),

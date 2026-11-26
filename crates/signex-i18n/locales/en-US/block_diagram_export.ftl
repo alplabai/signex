@@ -34,9 +34,46 @@ block-diagram-export-colours = Colors
 block-diagram-export-colours-print = Print
 block-diagram-export-colours-shown = As shown
 block-diagram-export-paper = Paper
-block-diagram-export-paper-a4 = A4 landscape
+block-diagram-export-paper-a4 = A4
 block-diagram-export-page = Page
 block-diagram-export-title-block = Title block
 block-diagram-export-file = File
 block-diagram-export-saved-only = The saved file is exported; save first to include unsaved edits.
 block-diagram-export-run = Export
+block-diagram-export-pages = Pages
+block-diagram-export-page-blocks = Block diagram
+block-diagram-export-page-power = Power tree
+block-diagram-export-page-budget = Budget table
+block-diagram-export-paper-a3 = A3
+block-diagram-export-paper-a2 = A2
+block-diagram-export-paper-letter = Letter
+block-diagram-export-paper-tabloid = Tabloid
+block-diagram-export-landscape = Landscape
+block-diagram-export-portrait = Portrait
+
+# The Power tree and Budget table pages' columns and the role of each row.
+block-diagram-export-col-item = Item
+block-diagram-export-col-role = Role
+block-diagram-export-col-voltage = Voltage
+block-diagram-export-col-current = Current
+block-diagram-export-col-limit = Limit
+block-diagram-export-col-share = Share of rail
+block-diagram-export-col-rail = Rail
+block-diagram-export-col-source = Source
+block-diagram-export-col-load = Load
+block-diagram-export-col-headroom = Headroom
+block-diagram-export-role-rail = Rail
+block-diagram-export-role-source = Source
+block-diagram-export-role-converter = Converter
+block-diagram-export-role-load = Load
+block-diagram-export-not-known = —
+
+# Why the pages or paper asked for were refused. $page, $paper,
+# $orientation and $variant are as given; $document is the diagram.
+block-diagram-export-bad-page = `{ $page }` is not a page: use blocks, power_tree or budget.
+block-diagram-export-no-pages = Name at least one page with `pages`.
+block-diagram-export-svg-pages = An SVG holds the block diagram only; export a PDF for the power tree or budget pages.
+block-diagram-export-bad-paper = `{ $paper }` is not a paper size: use a4, a3, a2, letter or tabloid.
+block-diagram-export-bad-orientation = `{ $orientation }` is not an orientation: use landscape or portrait.
+block-diagram-export-no-project = { $document } is not in the folder of an open project, so it has no power tree to print.
+block-diagram-export-bad-variant = `{ $variant }` is not a variant of the project.

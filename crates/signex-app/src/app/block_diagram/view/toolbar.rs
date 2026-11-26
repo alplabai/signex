@@ -1,25 +1,32 @@
 //! The toolbar (mockup row 171): the view switch and Re-sync, then the
 //! Select and Connect tools, Add Block, Add Port, Group and Delete, Undo,
-//! Redo, Save and Fit, and the SVG and PDF… exports. The Power tree view
-//! keeps the switch and Re-sync only. A tool that has nothing to act on is
+//! Redo, Save and Fit, and the SVG and PDF… exports, with the Variant field
+//! and Show GND. The Power tree view keeps the switch, Re-sync and Variant. A tool that has nothing to act on is
 //! greyed with the reason as its hint; on a read-only diagram every edit is
 //! greyed and the end of the bar says so.
 
+use iced::widget::{pick_list, row};
 use iced::{Element, Widget as _};
 use signex_i18n::{Localized, MessageId, ids};
 use signex_widgets::doc_tab_shell::Toolbar;
-use signex_widgets::{button, segmented, text};
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
+use signex_widgets::{CheckboxLabel as _, button, checkbox, segmented, text};
 
-use super::{Look, SP, TS};
+use super::{Look, SP, TS, VariantField};
 use crate::app::block_diagram::state::{
     BlockDiagramEditor, DiagramItem, DiagramTool, DiagramView, ExportKind,
 };
 use crate::app::block_diagram::{ExportEvent, TabEvent};
+use crate::choice::{Choice, chosen};
 use crate::panels::graphite::hint_tooltip;
 use crate::styles::ti;
 use crate::styles::tokens::resolve;
 
-pub(super) fn view<'a>(look: Look<'a>, editor: &'a BlockDiagramEditor) -> Toolbar<'a, TabEvent> {
+pub(super) fn view<'a>(
+    look: Look<'a>,
+    editor: &'a BlockDiagramEditor,
+    variant: VariantField,
+) -> Toolbar<'a, TabEvent> {
     let editable = !editor.is_read_only();
     let one_block = matches!(editor.single_selection(), Some(DiagramItem::Block(_)));
     let some_block = !editor.selected_blocks().is_empty();
@@ -44,11 +51,21 @@ pub(super) fn view<'a>(look: Look<'a>, editor: &'a BlockDiagramEditor) -> Toolba
             true,
             ids::BLOCK_DIAGRAM_RESYNC_TIP,
             ids::BLOCK_DIAGRAM_RESYNC_TIP,
-        ));
+        ))
+        .separator()
+        .push(variant_field(look, variant));
     if editor.view == DiagramView::PowerTree {
         return head;
     }
+    let show_ground = checkbox(editor.show_ground)
+        .style(crate::panels::form_look::checkbox_style)
+        .size(TS.body)
+        .labelled(look.t(ids::BLOCK_DIAGRAM_SHOW_GND))
+        .text_size(TS.dense)
+        .on_toggle(TabEvent::ShowGroundToggled)
+        .boxed();
     let mut bar = head
+        .push(show_ground)
         .separator()
         .push(tools(look, editor))
         .separator()
@@ -146,6 +163,34 @@ pub(super) fn view<'a>(look: Look<'a>, editor: &'a BlockDiagramEditor) -> Toolba
         );
     }
     bar
+}
+
+/// The Variant field: one variant at a time (mockup row 171).
+fn variant_field<'a>(look: Look<'a>, field: VariantField) -> Element<'a, TabEvent> {
+    let choices: Vec<Choice<String>> = field
+        .names
+        .into_iter()
+        .map(|name| Choice {
+            label: name.clone(),
+            value: name,
+        })
+        .collect();
+    let selected = chosen(&choices, &field.shown);
+    let list = pick_list(selected, choices, |c: &Choice<String>| c.label.clone())
+        .graphite()
+        .on_select(|c: Choice<String>| TabEvent::VariantPicked(c.value))
+        .text_size(TS.dense)
+        .boxed();
+    row![
+        text(look.t(ids::BLOCK_DIAGRAM_VARIANT))
+            .size(TS.dense)
+            .color(resolve(look.tokens).ink3)
+            .boxed(),
+        list,
+    ]
+    .spacing(SP.xs)
+    .align_y(iced::Alignment::Center)
+    .boxed()
 }
 
 /// The view switch: Block diagram | Power tree.

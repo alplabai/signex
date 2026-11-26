@@ -20,23 +20,30 @@ fn title_of(path: &Path) -> String {
 }
 
 impl Signex {
-    /// The Projects tree rows of the diagrams held in `project`'s folder,
-    /// by file name. Read from memory: no folder is listed.
+    /// The Projects tree rows of `project`'s block diagrams, by file name:
+    /// every `.snxblk` the folder probe found in its folder, and the ones
+    /// held in memory (a new one not saved yet). The listing comes from the
+    /// off-thread probe (`state::project_fs`); nothing here reads the disk.
     pub(crate) fn block_diagram_rows(&self, project: &LoadedProject) -> Vec<DiagramRow> {
         let docs = &self.document_state;
         let active = docs.tabs.get(docs.active_tab).map(|tab| &tab.kind);
-        docs.block_diagrams
+        let listed = docs.project_fs.facts.diagrams_in(project.dir()).iter();
+        let paths: std::collections::BTreeSet<&PathBuf> = docs
+            .block_diagrams
             .editors
-            .iter()
-            .filter(|(path, _)| {
-                super::project_holding(docs, path).is_some_and(|p| p.id == project.id)
-            })
-            .map(|(path, editor)| {
+            .keys()
+            .chain(listed)
+            .filter(|path| super::project_holding(docs, path).is_some_and(|p| p.id == project.id))
+            .collect();
+        paths
+            .into_iter()
+            .map(|path| {
                 let relative = path.strip_prefix(project.dir()).unwrap_or(path);
+                let editor = docs.block_diagrams.editors.get(path);
                 DiagramRow {
                     filename: relative.to_string_lossy().replace('\\', "/"),
                     is_open: self.block_diagram_tab(path).is_some(),
-                    is_dirty: editor.is_dirty(),
+                    is_dirty: editor.is_some_and(|e| e.is_dirty()),
                     is_active: matches!(active, Some(TabKind::BlockDiagram(p)) if p == path),
                 }
             })
