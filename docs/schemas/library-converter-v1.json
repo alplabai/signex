@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://signex.dev/schemas/library-converter-v1.json",
+  "title": "Signex library converter contract v1",
+  "description": "Outputs of a library converter: describe, progress events, summary and loss report. See docs/LIBRARY_CONVERTER_CONTRACT.md.",
+  "oneOf": [
+    { "$ref": "#/$defs/describe" },
+    { "$ref": "#/$defs/event" },
+    { "$ref": "#/$defs/report" }
+  ],
+  "$defs": {
+    "contract_version": { "type": "string", "pattern": "^1\\.[0-9]+$" },
+    "abs_path": { "type": "string", "minLength": 1 },
+    "describe": {
+      "type": "object",
+      "required": ["contract", "converter", "version", "inputs"],
+      "properties": {
+        "contract": { "$ref": "#/$defs/contract_version" },
+        "converter": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 },
+        "inputs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["label", "extensions", "kind"],
+            "properties": {
+              "label": { "type": "string", "minLength": 1 },
+              "extensions": {
+                "type": "array",
+                "minItems": 1,
+                "items": { "type": "string", "pattern": "^[a-z0-9_]+$" }
+              },
+              "kind": { "enum": ["library", "database"] }
+            }
+          }
+        }
+      }
+    },
+    "event": {
+      "oneOf": [
+        { "$ref": "#/$defs/phase" },
+        { "$ref": "#/$defs/progress" },
+        { "$ref": "#/$defs/summary" }
+      ]
+    },
+    "phase": {
+      "type": "object",
+      "required": ["event", "phase", "total"],
+      "properties": {
+        "event": { "const": "phase" },
+        "phase": { "enum": ["read", "convert", "write", "models"] },
+        "total": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "progress": {
+      "type": "object",
+      "required": ["event", "done", "total"],
+      "properties": {
+        "event": { "const": "progress" },
+        "done": { "type": "integer", "minimum": 0 },
+        "total": { "type": ["integer", "null"], "minimum": 0 },
+        "item": { "type": ["string", "null"] }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "properties": {
+        "symbols": { "type": "integer", "minimum": 0 },
+        "footprints": { "type": "integer", "minimum": 0 },
+        "parts": { "type": "integer", "minimum": 0 },
+        "models": { "type": "integer", "minimum": 0 },
+        "skipped": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["event", "ok", "error", "exit", "files", "warnings"],
+      "properties": {
+        "event": { "const": "summary" },
+        "ok": { "type": "boolean" },
+        "error": { "type": ["string", "null"] },
+        "exit": { "enum": ["ok", "partial", "failed"] },
+        "library": { "type": ["string", "null"] },
+        "report": { "type": ["string", "null"] },
+        "files": { "type": "array", "items": { "$ref": "#/$defs/abs_path" } },
+        "counts": { "$ref": "#/$defs/counts" },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["message", "count"],
+            "properties": {
+              "message": { "type": "string" },
+              "count": { "type": "integer", "minimum": 1 }
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "ok": { "const": true } } },
+          "then": {
+            "required": ["library", "report", "counts"],
+            "properties": {
+              "error": { "const": null },
+              "exit": { "enum": ["ok", "partial"] },
+              "library": { "type": "string" }
+            }
+          },
+          "else": {
+            "properties": { "error": { "type": "string" }, "exit": { "const": "failed" } }
+          }
+        }
+      ]
+    },
+    "report": {
+      "type": "object",
+      "required": ["contract", "converter", "converter_version", "started", "sources", "library_id", "counts", "items"],
+      "properties": {
+        "contract": { "$ref": "#/$defs/contract_version" },
+        "converter": { "type": "string" },
+        "converter_version": { "type": "string" },
+        "started": { "type": "string", "format": "date-time" },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path", "sha256"],
+            "properties": {
+              "path": { "type": "string" },
+              "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+            }
+          }
+        },
+        "library_id": { "type": ["string", "null"], "format": "uuid" },
+        "counts": {
+          "type": "object",
+          "required": ["source", "written"],
+          "properties": {
+            "source": { "$ref": "#/$defs/counts" },
+            "written": { "$ref": "#/$defs/counts" }
+          }
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["kind", "source", "id", "code", "severity", "message"],
+            "properties": {
+              "kind": { "enum": ["symbol", "footprint", "part", "model", "row", "library"] },
+              "source": { "type": "string" },
+              "id": { "type": ["string", "null"], "format": "uuid" },
+              "code": { "type": "string", "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)+$" },
+              "severity": { "enum": ["info", "approximated", "dropped", "error"] },
+              "message": { "type": "string" },
+              "detail": {}
+            }
+          }
+        }
+      }
+    }
+  }
+}

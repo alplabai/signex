@@ -1,0 +1,17 @@
+{
+  "contract": "1.0",
+  "converter": "example-import",
+  "converter_version": "0.16.0",
+  "started": "2026-11-26T21:00:00Z",
+  "sources": [{ "path": "/abs/in/Passives.lib1", "sha256": "0000000000000000000000000000000000000000000000000000000000000000" }],
+  "library_id": "0193a6f0-0000-7000-8000-000000000001",
+  "counts": {
+    "source":  { "symbols": 2, "footprints": 2, "parts": 4, "models": 1 },
+    "written": { "symbols": 2, "footprints": 2, "parts": 3, "models": 1 }
+  },
+  "items": [
+    { "kind": "footprint", "source": "Passives:R0603", "id": "0193a6f0-0000-7000-8000-000000000010", "code": "pad.octagon_as_outline", "severity": "approximated", "message": "octagonal pad written as a custom outline", "detail": { "pads": 2 } },
+    { "kind": "symbol", "source": "Passives:NAND2", "id": "0193a6f0-0000-7000-8000-000000000020", "code": "symbol.body_style_dropped", "severity": "dropped", "message": "third body style not converted", "detail": { "style": 3 } },
+    { "kind": "part", "source": "Passives:R-ARRAY-4", "id": null, "code": "part.footprint_missing", "severity": "error", "message": "footprint SOIC-16W not found in the given libraries; part skipped", "detail": { "footprint": "SOIC-16W" } }
+  ]
+}

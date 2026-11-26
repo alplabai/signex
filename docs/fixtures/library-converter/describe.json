@@ -1,0 +1,1 @@
+{"contract":"1.0","converter":"example-import","version":"0.16.0","inputs":[{"label":"Integrated library","extensions":["lib1"],"kind":"library"},{"label":"Symbol library","extensions":["sym1"],"kind":"library"},{"label":"Database library","extensions":["dblink"],"kind":"database"}]}
