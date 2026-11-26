@@ -79,6 +79,9 @@ impl Signex {
             VariantManagerMsg::BomRequested { variant } => {
                 return self.open_variant_bom(project_id, variant);
             }
+            VariantManagerMsg::AlternateRequested { cell } => {
+                return self.open_alternate_of_cell(project_id, &cell);
+            }
         }
         iced::Task::none()
     }

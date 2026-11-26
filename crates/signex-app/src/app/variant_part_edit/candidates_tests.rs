@@ -70,6 +70,8 @@ fn query(row: Option<(Uuid, Uuid)>, text: &str) -> CandidateQuery {
         query: text.to_string(),
         project_libraries: Vec::new(),
         open_libraries: Vec::new(),
+        sheet: None,
+        units: Vec::new(),
     }
 }
 

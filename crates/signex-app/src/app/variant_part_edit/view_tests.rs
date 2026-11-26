@@ -231,3 +231,50 @@ fn the_parameter_list_marks_a_value_lite_already_sets() {
     let shown = texts(&app);
     assert!(has(&shown, "0.5% in Lite"), "{shown:?}");
 }
+
+/// The Base card says whether the variant fits the part (mockup row 208):
+/// the variant's own fit, else what the sheets say.
+#[test]
+fn the_base_card_says_whether_the_variant_fits_the_part() {
+    for theme in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+        let (mut app, _id, _path, _dir) = app();
+        set_theme(&mut app, theme);
+        open(&mut app, VariantEditKind::Alternate);
+        assert!(has(&texts(&app), "Fitted in Lite"), "{theme:?}");
+        app.document_state.projects[0]
+            .data
+            .set_variant_part_fit("Lite", "R5", Some(false))
+            .expect("Lite is defined");
+        assert!(has(&texts(&app), "Not fitted in Lite"), "{theme:?}");
+    }
+}
+
+/// With the part's wiring read, a candidate whose pins differ names the pin
+/// that would have no wire (mockup row 208, "pin 3 (GND) has no wire").
+#[test]
+fn the_compare_strip_names_the_pin_left_without_a_wire() {
+    let (mut app, _id, _path, _dir) = app();
+    open(&mut app, VariantEditKind::Alternate);
+    let pin = |number: &str, name: &str| (number.to_string(), name.to_string());
+    let mut three = alternate("NFM31PC276B0J3L");
+    three.pins = Some(vec![pin("1", "~"), pin("2", "~"), pin("3", "GND")]);
+    land(
+        &mut app,
+        Candidates {
+            alternates: vec![three],
+            wired: Some(vec!["1".to_string(), "2".to_string()]),
+            ..Candidates::default()
+        },
+    );
+    if let Some(super::VariantPartEdit::Alternate(picker)) =
+        app.ui_state.variant_part_edit.as_deref_mut()
+    {
+        picker.part.base.pins = vec![pin("1", "~"), pin("2", "~")];
+    }
+    send(&mut app, VariantPartEditMsg::CandidatePicked(0));
+    let shown = texts(&app);
+    assert!(
+        has(&shown, "3 pins vs 2: pin 3 (GND) has no wire"),
+        "{shown:?}"
+    );
+}

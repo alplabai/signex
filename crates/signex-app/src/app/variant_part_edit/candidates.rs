@@ -58,6 +58,9 @@ pub struct Candidates {
     pub found_total: usize,
     /// Project libraries that could not be read.
     pub unread: usize,
+    /// The placed part's pins that carry a wire on its sheet
+    /// (`super::wiring`), when this read was asked to work them out.
+    pub wired: Option<Vec<String>>,
 }
 
 impl Candidates {
@@ -68,7 +71,7 @@ impl Candidates {
 }
 
 /// What a read looks for.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct CandidateQuery {
     /// The part's row: `(library, row)`.
     pub row: Option<(Uuid, Uuid)>,
@@ -79,6 +82,11 @@ pub struct CandidateQuery {
     pub project_libraries: Vec<PathBuf>,
     /// Every open library, for a row's symbol or footprint in another one.
     pub open_libraries: Vec<(Uuid, PathBuf)>,
+    /// The sheet the part is placed on, when the read also works out which
+    /// of its pins carry a wire (the first read of a picker).
+    pub sheet: Option<std::sync::Arc<signex_types::schematic::SchematicSheet>>,
+    /// The part's units on that sheet.
+    pub units: Vec<Uuid>,
 }
 
 /// The candidates `query` names. Blocking IO: run it in a `Task`.
@@ -97,7 +105,15 @@ pub fn read_candidates(query: &CandidateQuery) -> Candidates {
         let adapter = LocalGitAdapter::open_to_read(path).ok()?;
         Some(Box::new(adapter))
     };
-    let mut out = Candidates::default();
+    // The part's wired pins come from the one connectivity the app derives.
+    let wired = query
+        .sheet
+        .as_deref()
+        .map(|sheet| super::wiring::wired_pins(&signex_net::build_netlist(sheet), &query.units));
+    let mut out = Candidates {
+        wired,
+        ..Candidates::default()
+    };
     for path in &paths {
         let Ok(adapter) = LocalGitAdapter::open_to_read(path) else {
             out.unread += 1;

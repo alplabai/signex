@@ -118,12 +118,13 @@ pub(super) fn picker_card<'a>(
     .align_y(Alignment::Center);
     let mut body = vec![
         head.boxed(),
-        base_card(part, i18n, tokens),
+        base_card(part, part.is_fitted(settings), i18n, tokens),
         search.boxed(),
         candidate_list(picker, settings, i18n, tokens),
     ];
     if let Some(picked) = picker.picked.as_ref() {
-        body.push(compare_strip(part, picked, i18n, tokens));
+        let wired = picker.wired.as_deref();
+        body.push(compare_strip(part, picked, wired, i18n, tokens));
     }
     if let Some(scope) = scope_choice(part, picker.scope, i18n) {
         body.push(scope);

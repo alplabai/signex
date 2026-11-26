@@ -60,7 +60,12 @@ impl Signex {
                     && query == picker.query.trim();
                 if awaited {
                     picker.read = match read {
-                        Ok(candidates) => CandidateRead::Read(candidates),
+                        Ok(candidates) => {
+                            if candidates.wired.is_some() {
+                                picker.wired.clone_from(&candidates.wired);
+                            }
+                            CandidateRead::Read(candidates)
+                        }
                         Err(why) => CandidateRead::Failed(why),
                     };
                 }

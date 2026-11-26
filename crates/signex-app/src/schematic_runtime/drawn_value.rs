@@ -39,6 +39,14 @@ pub(crate) fn drawn_value(
     }
 }
 
+/// Whether `variant` gives `symbol` a value other than its own: the value
+/// the canvas then draws in the accent (mockup row 209).
+pub(crate) fn is_variant_value(symbol: &Symbol, variant: Option<&DrawnValueMap>) -> bool {
+    variant
+        .and_then(|values| values.get(&symbol.uuid))
+        .is_some_and(|value| *value != symbol.value)
+}
+
 /// The designator the canvas draws for `symbol` on a sheet shown at
 /// `placement` (its designator there, #1151; `reference` with none), in the
 /// project's designator `standard` (#1416).

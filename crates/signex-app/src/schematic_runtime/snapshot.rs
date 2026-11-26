@@ -309,6 +309,13 @@ pub fn build_renderer_snapshot(
             },
         ));
 
+        // A value the active variant gives the part draws in the accent
+        // (mockup row 209), on the CPU replay and the GPU path alike.
+        let value_rgb = if super::drawn_value::is_variant_value(symbol, overrides.variant_values) {
+            &colors.selection
+        } else {
+            value_rgb
+        };
         let value_color = focus_color(to_iced(value_rgb), focus_set, symbol.uuid);
         let reference = overrides
             .designators

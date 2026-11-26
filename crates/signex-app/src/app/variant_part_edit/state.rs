@@ -105,6 +105,11 @@ pub struct EditedPart {
     pub variant: String,
     /// The sheet's file name, for the picker's heading.
     pub sheet: String,
+    /// The sheet's path: where the picker reads the part's wiring.
+    pub path: std::path::PathBuf,
+    /// Whether the part's sheets fit it in the variant, before the
+    /// variant's own fit (`EditedPart::is_fitted`).
+    pub sheet_fitted: bool,
     /// The copy the canvas shows (`CH1_C22` on a channel tab), or the part
     /// on a sheet that is not repeated.
     pub this_part: PartRef,
@@ -141,6 +146,15 @@ impl EditedPart {
         self.channel.is_some() && !self.every_channel.is_empty()
     }
 
+    /// Whether the shown part is fitted in the edited variant: the variant's
+    /// own fit, else what its sheets say (the BOM's rule).
+    pub fn is_fitted(&self, settings: &VariantSettings) -> bool {
+        settings
+            .part(Some(self.variant.as_str()), self.this_part.placed())
+            .and_then(|own| own.fitted)
+            .unwrap_or(self.sheet_fitted)
+    }
+
     /// The value `settings` give `parameter` of the shown part in the
     /// edited variant, if any.
     pub fn own_value<'s>(&self, settings: &'s VariantSettings, parameter: &str) -> Option<&'s str> {
@@ -175,6 +189,8 @@ pub struct AlternatePicker {
     pub picked: Option<Candidate>,
     /// Why the last Apply was refused.
     pub problem: Option<String>,
+    /// The placed part's wired pins, from the picker's first read.
+    pub wired: Option<Vec<String>>,
 }
 
 impl AlternatePicker {
@@ -189,6 +205,7 @@ impl AlternatePicker {
             generation: 0,
             picked: None,
             problem: None,
+            wired: None,
         }
     }
 }

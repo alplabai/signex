@@ -13,6 +13,7 @@ use super::candidates::{
     Candidate, CandidateStatus, PinCompare, alternate_values, compare_pins, same_footprint,
 };
 use super::state::EditedPart;
+use super::wiring::{PinProblem, pin_problem};
 use crate::app::Message;
 use crate::library::picker::mono;
 use crate::styles::tokens::resolve;
@@ -113,9 +114,11 @@ pub(super) fn status_words(status: CandidateStatus) -> (MessageId, PillTone) {
     }
 }
 
-/// The Base part on top: the designator, then its facts.
+/// The Base part on top: the designator, its facts, and whether the edited
+/// variant fits it (`fitted`).
 pub(super) fn base_card<'a>(
     part: &EditedPart,
+    fitted: bool,
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
@@ -146,19 +149,33 @@ pub(super) fn base_card<'a>(
         words(t!(i18n, ids::VARIANT_EDIT_BASE_PART), TS.caption, r.ink4),
     ]
     .spacing(SP.xs / 2.0);
+    let (fit, tone) = if fitted {
+        (ids::VARIANT_EDIT_FITTED_IN, PillTone::Neutral)
+    } else {
+        (ids::VARIANT_EDIT_NOT_FITTED_IN, PillTone::Warn)
+    };
+    let fit = status_pill(
+        t!(i18n, fit, "variant" => part.variant.as_str()),
+        tone,
+        tokens,
+    );
     let fill = r.sunken;
-    container(row![who, facts].spacing(SP.l).align_y(Alignment::Center))
-        .width(Length::Fill)
-        .padding([SP.s, SP.m])
-        .style(move |_: &Theme| container::Style {
-            background: Some(Background::Color(fill)),
-            border: Border {
-                radius: Radii::GRAPHITE.control.into(),
-                ..Border::default()
-            },
-            ..container::Style::default()
-        })
-        .boxed()
+    container(
+        row![who, facts, fit]
+            .spacing(SP.l)
+            .align_y(Alignment::Center),
+    )
+    .width(Length::Fill)
+    .padding([SP.s, SP.m])
+    .style(move |_: &Theme| container::Style {
+        background: Some(Background::Color(fill)),
+        border: Border {
+            radius: Radii::GRAPHITE.control.into(),
+            ..Border::default()
+        },
+        ..container::Style::default()
+    })
+    .boxed()
 }
 
 /// The column captions over the candidate rows.
@@ -291,10 +308,12 @@ fn compare_cell<'a>(
 
 /// The compare strip for `candidate` (mockup row 208): its pins, its
 /// footprint, and what the variant gets. A difference is amber and says
-/// what changes; Apply stays live (DECISIONS 2026-11-26).
+/// what changes, naming the pin whose wiring changes once the placed part's
+/// wired pins (`wired`) are read; Apply stays live (DECISIONS 2026-11-26).
 pub(super) fn compare_strip<'a>(
     part: &EditedPart,
     candidate: &Candidate,
+    wired: Option<&[String]>,
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
@@ -312,17 +331,41 @@ pub(super) fn compare_strip<'a>(
             PillTone::Ok,
             tokens,
         ),
-        PinCompare::Differ { theirs, ours } => compare_cell(
-            t!(i18n, ids::VARIANT_EDIT_PINS_DIFFER),
-            detail(t!(
-                i18n,
-                ids::VARIANT_EDIT_PINS_DIFFER_DETAIL,
-                "theirs" => theirs,
-                "ours" => ours
-            )),
-            PillTone::Warn,
-            tokens,
-        ),
+        PinCompare::Differ { theirs, ours } => {
+            let problem = wired
+                .zip(candidate.pins.as_deref())
+                .and_then(|(wired, pins)| pin_problem(&base.pins, wired, pins));
+            let words = match problem {
+                Some(PinProblem::LosesWire { pin, name }) => t!(
+                    i18n,
+                    ids::VARIANT_EDIT_PINS_LOSES_WIRE,
+                    "theirs" => theirs,
+                    "ours" => ours,
+                    "pin" => pin,
+                    "name" => name
+                ),
+                Some(PinProblem::NoWire { pin, name }) => t!(
+                    i18n,
+                    ids::VARIANT_EDIT_PINS_NO_WIRE,
+                    "theirs" => theirs,
+                    "ours" => ours,
+                    "pin" => pin,
+                    "name" => name
+                ),
+                None => t!(
+                    i18n,
+                    ids::VARIANT_EDIT_PINS_DIFFER_DETAIL,
+                    "theirs" => theirs,
+                    "ours" => ours
+                ),
+            };
+            compare_cell(
+                t!(i18n, ids::VARIANT_EDIT_PINS_DIFFER),
+                detail(words),
+                PillTone::Warn,
+                tokens,
+            )
+        }
         PinCompare::Unknown => compare_cell(
             t!(i18n, ids::VARIANT_EDIT_PINS_UNKNOWN),
             detail(t!(i18n, ids::VARIANT_EDIT_PINS_UNKNOWN_DETAIL)),

@@ -10,6 +10,9 @@
 //! `docs/PROJECT_TAB.md`, "Variants".
 
 mod actions;
+mod alternate;
+#[cfg(test)]
+mod alternate_tests;
 mod bar;
 #[cfg(test)]
 mod cell_tests;
