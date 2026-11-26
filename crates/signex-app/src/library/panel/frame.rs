@@ -82,12 +82,39 @@ fn chip_count(n: usize) -> Option<u32> {
     Some(u32::try_from(n).unwrap_or(u32::MAX))
 }
 
-/// The kind chips: Symbols, Footprints and Parts with their counts. With
-/// nothing open they are inert and say why.
+/// The kind chips: Symbols, Footprints and Parts with their counts, on one
+/// line at any panel width (#3007). With nothing open they are inert and say
+/// why.
 pub(super) fn kind_chips<'a>(
     kind: LibraryPanelKind,
     counts: KindCounts,
     enabled: bool,
+    tokens: &'a ThemeTokens,
+    i18n: &'a I18n,
+) -> Element<'a, DockMessage> {
+    let line = iced::widget::responsive(move |size| {
+        chip_line(kind, counts, enabled, size.width, tokens, i18n)
+    })
+    .height(Length::Shrink);
+    container(line)
+        .padding(Padding {
+            top: SP.m,
+            right: SP.m,
+            bottom: SP.s,
+            left: SP.m,
+        })
+        .width(Length::Fill)
+        .clip(true)
+        .boxed()
+}
+
+/// The chips in `available` px: their side padding shrinks, down to `SP.xs`,
+/// so the three stay on one line instead of wrapping.
+fn chip_line<'a>(
+    kind: LibraryPanelKind,
+    counts: KindCounts,
+    enabled: bool,
+    available: f32,
     tokens: &ThemeTokens,
     i18n: &I18n,
 ) -> Element<'a, DockMessage> {
@@ -100,7 +127,7 @@ pub(super) fn kind_chips<'a>(
         on_fill: r.accent_soft,
         on_ink: r.accent_soft_ink,
     };
-    let metrics = ChipMetrics::from_text_size(TS.body);
+    let full = ChipMetrics::from_text_size(TS.body);
     let chips = [
         (
             LibraryPanelKind::Symbols,
@@ -121,14 +148,33 @@ pub(super) fn kind_chips<'a>(
             counts.parts,
         ),
     ];
+    let shown_count = |count: usize| if enabled { count } else { 0 };
+    let contents: Vec<f32> = chips
+        .iter()
+        .map(|&(value, label, _, count)| {
+            let count = signex_widgets::chips::count_text(
+                i18n,
+                chip_count(shown_count(count)).unwrap_or_default(),
+            );
+            super::chip_fit::content_width(
+                &t!(i18n, label).to_string(),
+                &count,
+                value == kind,
+                full,
+            )
+        })
+        .collect();
+    let metrics = ChipMetrics {
+        pad_h: super::chip_fit::fitted_pad(&contents, full.row_gap, full.pad_h, SP.xs, available),
+        ..full
+    };
     let mut bar: Row<Element<'a, DockMessage>> = Row::new().spacing(metrics.row_gap);
     for (value, label, hint, count) in chips {
         let on_press =
             enabled.then(|| lib(LibraryMessage::Picker(PickerMsg::PanelKindPicked(value))));
-        let shown_count = if enabled { count } else { 0 };
         let pill = chip(
             t!(i18n, label),
-            chip_count(shown_count),
+            chip_count(shown_count(count)),
             value == kind,
             style,
             metrics,
@@ -142,15 +188,7 @@ pub(super) fn kind_chips<'a>(
         };
         bar = bar.push(hint_tooltip(pill, tip, tokens, Position::Bottom));
     }
-    container(bar.wrap().vertical_spacing(metrics.row_gap))
-        .padding(Padding {
-            top: SP.m,
-            right: SP.m,
-            bottom: SP.s,
-            left: SP.m,
-        })
-        .width(Length::Fill)
-        .boxed()
+    bar.boxed()
 }
 
 /// What the breadcrumb under the chips names.
