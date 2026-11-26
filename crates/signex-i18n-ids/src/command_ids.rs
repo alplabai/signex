@@ -636,6 +636,8 @@ define_ids! {
         CMD_MENU_EXPORT_BOARD_REPORT = "cmd-menu-export-board-report";
         CMD_EXPORT_BOARD_PDF = "cmd-export-board-pdf";
         CMD_MENU_EXPORT_BOARD_PDF = "cmd-menu-export-board-pdf";
+        CMD_EXPORT_SCHEMATIC_PDF = "cmd-export-schematic-pdf";
+        CMD_MENU_EXPORT_SCHEMATIC_PDF = "cmd-menu-export-schematic-pdf";
         CMD_EXPORT_ASSEMBLY_SVG = "cmd-export-assembly-svg";
         CMD_MENU_EXPORT_ASSEMBLY_SVG = "cmd-menu-export-assembly-svg";
         CMD_BOARD_ASSEMBLY_DRAWING = "cmd-board-assembly-drawing";

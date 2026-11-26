@@ -21,6 +21,7 @@ mod omitted;
 pub(crate) mod page_list;
 mod page_setup;
 mod pdf_netlist;
+pub(crate) mod pdf_operands;
 pub(crate) mod placements;
 mod print_preview;
 mod raster_job;

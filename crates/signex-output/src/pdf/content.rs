@@ -1,5 +1,6 @@
 //! Per-page PDF content-stream builder + markup/text helpers.
 
+use super::links::{LinkTarget, PageLink, linkable_uri};
 use super::surface::PageContent;
 use super::*;
 
@@ -56,6 +57,7 @@ pub(super) fn build_page_content(
     // each layer's run wrapped in its marked content when layers are on.
     let layered = opts.layers.is_some();
     let mut open_until: Option<usize> = None;
+    let mut text_links = Vec::new();
     for (index, element) in svg_ctx.elements.iter().enumerate() {
         if open_until == Some(index) {
             surface.raw_operator(optional_content::END_OPERATOR);
@@ -65,7 +67,8 @@ pub(super) fn build_page_content(
             surface.raw_operator(&optional_content::begin_operator(layer));
             open_until = Some(end);
         }
-        draw_element(&mut surface, element, &colour_map, page_h_pt);
+        let links = opts.links.then_some(&mut text_links);
+        draw_element(&mut surface, element, &colour_map, page_h_pt, links);
     }
     if open_until.is_some() {
         surface.raw_operator(optional_content::END_OPERATOR);
@@ -86,15 +89,19 @@ pub(super) fn build_page_content(
         }
     }
 
-    Ok(surface.finish_page())
+    let mut content = surface.finish_page();
+    content.links = text_links;
+    Ok(content)
 }
 
-/// Write one element of the intermediate SVG page as PDF operators.
+/// Write one element of the intermediate SVG page as PDF operators. A text
+/// link's area goes into `links` when given.
 fn draw_element(
     surface: &mut PdfSurface<'_>,
     element: &SvgElement,
     colour_map: &ColourMap,
     page_h_pt: f32,
+    mut links: Option<&mut Vec<PageLink>>,
 ) {
     match element {
         SvgElement::Path { commands, style } => {
@@ -226,6 +233,28 @@ fn draw_element(
                     );
                 }
 
+                if let (Some(url), Some(links)) = (run.url, links.as_deref_mut()) {
+                    // The run's box in its own frame: ascent above the
+                    // baseline, descent below, turned with the text.
+                    let corners = [
+                        place(cursor_u, run_v - run_size * 0.8),
+                        place(cursor_u + run_advance, run_v - run_size * 0.8),
+                        place(cursor_u, run_v + run_size * 0.2),
+                        place(cursor_u + run_advance, run_v + run_size * 0.2),
+                    ];
+                    let xs = corners.map(|(cx, _)| cx);
+                    let ys = corners.map(|(_, cy)| page_h_pt - cy);
+                    let min = |v: [f32; 4]| v.into_iter().fold(f32::INFINITY, f32::min);
+                    let max = |v: [f32; 4]| v.into_iter().fold(f32::NEG_INFINITY, f32::max);
+                    links.push(PageLink::over(
+                        min(xs),
+                        min(ys),
+                        max(xs),
+                        max(ys),
+                        LinkTarget::Uri(url),
+                    ));
+                }
+
                 cursor_u += run_advance;
             }
         }
@@ -238,61 +267,49 @@ struct PdfTextRun {
     scale: f32,
     baseline_offset: f32,
     overbar: bool,
+    /// The address a link run opens (#1298); `None` for other text and for
+    /// an address no link may open (`links::linkable_uri`).
+    url: Option<String>,
+}
+
+impl PdfTextRun {
+    fn new(text: String, scale: f32, baseline_offset: f32) -> Self {
+        Self {
+            text,
+            scale,
+            baseline_offset,
+            overbar: false,
+            url: None,
+        }
+    }
 }
 
 fn pdf_markup_runs(input: &str) -> Vec<PdfTextRun> {
     let expanded = normalize_standard_text(input);
     let segments = parse_signex_markup(&expanded);
     if segments.is_empty() {
-        return vec![PdfTextRun {
-            text: expanded,
-            scale: 1.0,
-            baseline_offset: 0.0,
-            overbar: false,
-        }];
+        return vec![PdfTextRun::new(expanded, 1.0, 0.0)];
     }
 
     segments
         .into_iter()
         .map(|seg| match seg {
-            RichSegment::Normal(t) => PdfTextRun {
-                text: t,
-                scale: 1.0,
-                baseline_offset: 0.0,
-                overbar: false,
-            },
+            RichSegment::Normal(t) => PdfTextRun::new(t, 1.0, 0.0),
             // TODO: visual decoration for bold/italic/strike
-            RichSegment::Bold(t) | RichSegment::Italic(t) | RichSegment::Strike(t) => PdfTextRun {
-                text: t,
-                scale: 1.0,
-                baseline_offset: 0.0,
-                overbar: false,
-            },
+            RichSegment::Bold(t) | RichSegment::Italic(t) | RichSegment::Strike(t) => {
+                PdfTextRun::new(t, 1.0, 0.0)
+            }
             RichSegment::Overbar(t) => PdfTextRun {
-                text: t,
-                scale: 1.0,
-                baseline_offset: 0.0,
                 overbar: true,
+                ..PdfTextRun::new(t, 1.0, 0.0)
             },
-            RichSegment::Subscript(t) => PdfTextRun {
-                text: t,
-                scale: 0.72,
-                baseline_offset: 0.26,
-                overbar: false,
-            },
-            RichSegment::Superscript(t) => PdfTextRun {
-                text: t,
-                scale: 0.72,
-                baseline_offset: -0.34,
-                overbar: false,
-            },
-            // Links render as plain label text on the canvas — URL is ignored
-            // until link rendering ships in a later phase.
-            RichSegment::Link { label, .. } => PdfTextRun {
-                text: label,
-                scale: 1.0,
-                baseline_offset: 0.0,
-                overbar: false,
+            RichSegment::Subscript(t) => PdfTextRun::new(t, 0.72, 0.26),
+            RichSegment::Superscript(t) => PdfTextRun::new(t, 0.72, -0.34),
+            // The label prints as plain text; the address becomes a link
+            // annotation over it.
+            RichSegment::Link { label, url } => PdfTextRun {
+                url: linkable_uri(&url).map(str::to_owned),
+                ..PdfTextRun::new(label, 1.0, 0.0)
             },
         })
         .filter(|run| !run.text.is_empty())

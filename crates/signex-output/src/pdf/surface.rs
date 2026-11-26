@@ -36,11 +36,13 @@ const OPAQUE_LEVEL: u8 = u8::MAX;
 
 /// A finished page: its content stream and the stroke- and fill-alpha
 /// levels the stream names with `gs`, which the page's `/ExtGState` must
-/// define.
+/// define. `links` are the text links the page drew (#1298); the stream
+/// itself carries none.
 pub struct PageContent {
     pub bytes: Vec<u8>,
     pub stroke_alphas: BTreeSet<u8>,
     pub fill_alphas: BTreeSet<u8>,
+    pub links: Vec<super::links::PageLink>,
 }
 
 /// Stroke alpha (0.0-1.0) as a 0-255 level, the precision a wire colour has.
@@ -136,6 +138,7 @@ impl<'a> PdfSurface<'a> {
             bytes: self.bytes,
             stroke_alphas: self.stroke_alphas,
             fill_alphas: self.fill_alphas,
+            links: Vec::new(),
         }
     }
 

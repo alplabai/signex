@@ -86,8 +86,13 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Operand,
         &[Settings],
     ),
-    // The PDF's printed text is in the UI locale (`print_text`).
-    (&["export_board_pdf"], Operand, &[Settings]),
+    // The PDF's printed text is in the UI locale (`print_text`); the sheet
+    // PDF draws in the theme's palette (`sheet_pdf_options`).
+    (
+        &["export_board_pdf", "export_schematic_pdf"],
+        Operand,
+        &[Settings],
+    ),
     // Save As of a background sheet is refused (`active_path`).
     (&["save_document_as"], Operand, &[ActiveDocument]),
     // The rfd picker (`save_as_dialog_for_active_tab`).

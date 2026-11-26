@@ -1,10 +1,10 @@
-# PDF export: watermark, layers and bookmarks
+# PDF export: watermark, layers, bookmarks and links
 
-This page describes three groups of schematic PDF options in
-`signex_output::PdfOptions`: the watermark, the PDF layers and the bookmarks
-(issue #1298). The Print Preview / Export PDF dialog sets them; the exporter
-itself chooses nothing. All three keep today's output when left at their
-defaults.
+This page describes four groups of schematic PDF options in
+`signex_output::PdfOptions`: the watermark, the PDF layers, the bookmarks and
+the links (issue #1298). The Print Preview / Export PDF dialog sets them; the
+exporter itself chooses nothing. The first three keep today's output when left
+at their defaults; links are on by default (see "Links").
 
 PDF text is locale-invariant (docs/DECISIONS.md, 2026-11-07). The watermark
 presets, the layer names and the bookmark group names are written in English
@@ -21,6 +21,7 @@ whatever the UI language.
 | `part_bookmark_order` | `BySheet` | Parts are listed under the sheet they are on. |
 | `generate_nets_info` | `true` | The "one bookmark per net" option, unchanged. |
 | `global_bookmarks` | `false` | The Components and Nets groups sit under each sheet. |
+| `links` | `true` | Link annotations as described in "Links". A sheet with nothing to link writes none, so its PDF is byte-identical to one written with `links` off. |
 
 The domain defaults keep the watermark and the layers off, and so does the
 Export PDF dialog ("Write PDF layers" is off by default, Caner 2026-11-20).
@@ -54,7 +55,10 @@ angle, the colour, the pages and an optional revision line. The default is
   graphics state and writes none.
 - **Colour.** The colour goes through the page's colour mode like any other
   text: Greyscale prints its luma, Black and White prints it black (still at
-  the chosen opacity, so it reads as grey).
+  the chosen opacity, so it reads as grey). The Export PDF dialog picks it
+  (#2609): a typed `#RRGGBB` code or one of four quick swatches, the default
+  red, a neutral grey, black and white. The dialog remembers the colour for
+  the document with the page setup, for the session.
 - **Font.** The bold sans face embedded for the rest of the page. A custom
   text that face cannot show falls back to the embedded face that covers
   most of it. Its glyphs are added to the font subset.
@@ -154,3 +158,42 @@ jumps to its own page and position.
 
 With `bookmark_sheets` off there is no sheet item to nest under, so every
 group sits at the top level, as in global mode.
+
+## Links
+
+With `links: true` (the default) each page lists `/Link` annotations in its
+`/Annots` array. A link has no border and no appearance of its own; the
+reader shows a hand cursor over it. Annotation objects are numbered after
+the PDF layer groups, so a page with no link writes nothing new.
+
+| Clickable area | Goes to |
+|---|---|
+| A sheet symbol's box | The top-left corner of the page that prints its child sheet. |
+| A sheet entry (a square one text height round the entry point) | The child page's port of the same name, else that page's top-left corner. |
+| A port (hierarchical label) on a child page | The entry of the same name on the sheet symbol that places the page, else that symbol's corner. |
+| A global label | The same-named global label on the next exported page that has one, wrapping round to the first page. |
+| A part whose datasheet is a web address | The datasheet, as a URI action, over the part's body. |
+| A `[label](address)` link in text | The address, as a URI action, over the label as printed. |
+
+- **Partner pages.** The child page is the exported page at the sheet
+  symbol's placement (`InstancePath`), else the exported page of the file the
+  symbol names, next to the parent sheet's file. A partner that is not among
+  the exported pages (left out by the page range or the sheet picks) gets no
+  link.
+- **Where a page link lands.** `/XYZ` at the target point, keeping the
+  reader's zoom.
+- **Addresses.** Only `https://`, `http://` and `mailto:` addresses become
+  links, and only plain ASCII ones with no space or control character
+  (`links::linkable_uri`). A file path, a `~` placeholder or any other scheme
+  prints as text with no link, so a PDF never asks a reader to open a local
+  file or run a script.
+- **Areas.** The area is the axis-aligned box of what is printed: a label's
+  text box with half a text height round it, a part's body box, a text link's
+  run from its ascent to its descent (turned text gets the box round the
+  turned run).
+- **Order.** Sheet symbols, then their entries, then parts, then ports and
+  global labels, then text links, so the smaller area wins where two overlap.
+
+The headless and CLI command `export_schematic_pdf` writes the same PDF; its
+`links=false` operand turns them off. The dialog has no switch for them yet
+(no mockup row draws one).
