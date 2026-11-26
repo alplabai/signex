@@ -23,7 +23,7 @@ use rows::*;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
 use chrono::{DateTime, TimeZone, Utc};
 use serde::Serialize;
@@ -71,7 +71,7 @@ fn generated() -> BTreeMap<String, String> {
         lib(SYMBOL_ENVELOPE),
         symbol_envelope().to_toml_string().expect("write .snxsym"),
     );
-    for (fp, file) in [(r0603(), R0603_FILE), (r0805(), R0805_FILE)] {
+    for (fp, file) in footprints() {
         let rel = lib(&format!("footprints/{}.snxfpt", fp.uuid));
         let text = footprint_envelope(fp, file)
             .to_toml_string()
@@ -85,11 +85,25 @@ fn generated() -> BTreeMap<String, String> {
     out
 }
 
+/// The committed fixture files; panics when the core files are missing, so
+/// an empty or misplaced fixture folder cannot pass as "nothing to check".
 fn committed() -> BTreeMap<String, String> {
     let root = fixture_root();
     let mut out = BTreeMap::new();
     for dir in ["library", "content-hash"] {
         collect(&root, &root.join(dir), &mut out);
+    }
+    let mut required = vec![
+        format!("library/{SNXLIB_NAME}"),
+        format!("library/{SYMBOL_ENVELOPE}"),
+    ];
+    required.extend(footprints().map(|(fp, _)| format!("library/footprints/{}.snxfpt", fp.uuid)));
+    for rel in required {
+        assert!(
+            out.contains_key(&rel),
+            "fixture {rel} is missing under {}; bless with {BLESS_VAR}=1",
+            root.display()
+        );
     }
     out
 }
@@ -114,26 +128,36 @@ fn collect(root: &Path, dir: &Path, out: &mut BTreeMap<String, String>) {
     }
 }
 
-/// With [`BLESS_VAR`] set, rewrite the fixtures once per test run.
-fn bless_if_asked() {
-    static BLESSED: OnceLock<()> = OnceLock::new();
-    BLESSED.get_or_init(|| {
-        if std::env::var(BLESS_VAR).as_deref() != Ok("1") {
-            return;
+fn blessing() -> bool {
+    std::env::var(BLESS_VAR).as_deref() == Ok("1")
+}
+
+/// Rewrite the fixtures from [`generated`]. Called only by
+/// [`the_writer_produces_the_committed_fixtures`]; every other test skips
+/// while blessing, so no test reads a half-written fixture under a runner
+/// that runs tests in parallel or in separate processes.
+fn bless() {
+    let root = fixture_root();
+    for dir in ["library", "content-hash"] {
+        let path = root.join(dir);
+        if path.exists() {
+            std::fs::remove_dir_all(&path).expect("clear old fixtures");
         }
-        let root = fixture_root();
-        for dir in ["library", "content-hash"] {
-            let path = root.join(dir);
-            if path.exists() {
-                std::fs::remove_dir_all(&path).expect("clear old fixtures");
-            }
-        }
-        for (rel, text) in generated() {
-            let path = root.join(rel);
-            std::fs::create_dir_all(path.parent().expect("fixture parent")).expect("mkdir");
-            std::fs::write(&path, text).expect("write fixture");
-        }
-    });
+    }
+    for (rel, text) in generated() {
+        let path = root.join(rel);
+        std::fs::create_dir_all(path.parent().expect("fixture parent")).expect("mkdir");
+        std::fs::write(&path, text).expect("write fixture");
+    }
+}
+
+/// True (and a note on stderr) when this test should not run: the fixtures
+/// are being rewritten.
+fn skip_while_blessing() -> bool {
+    if blessing() {
+        eprintln!("{BLESS_VAR}=1: skipped; run again without it to check the new fixtures");
+    }
+    blessing()
 }
 
 fn first_difference(want: &str, got: &str) -> String {
@@ -166,7 +190,9 @@ fn read_fixture(rel: &str) -> String {
 
 #[test]
 fn the_writer_produces_the_committed_fixtures() {
-    bless_if_asked();
+    if blessing() {
+        bless();
+    }
     let written = generated();
     let on_disk = committed();
     assert_eq!(
@@ -181,7 +207,9 @@ fn the_writer_produces_the_committed_fixtures() {
 
 #[test]
 fn every_committed_file_resaves_byte_identically() {
-    bless_if_asked();
+    if skip_while_blessing() {
+        return;
+    }
     for (rel, text) in committed() {
         let resaved = if rel.ends_with(".snxlib") {
             LibraryFile::parse(&text).unwrap().write().unwrap()
@@ -204,7 +232,6 @@ fn every_committed_file_resaves_byte_identically() {
 
 /// Copy the fixture library to a scratch folder and open it as Signex does.
 fn open_copy() -> (tempfile::TempDir, LocalGitAdapter) {
-    bless_if_asked();
     let dir = tempfile::tempdir().unwrap();
     let dest = dir.path().join("Conformance");
     for (rel, text) in committed() {
@@ -221,6 +248,9 @@ fn open_copy() -> (tempfile::TempDir, LocalGitAdapter) {
 
 #[test]
 fn signex_opens_the_fixture_and_every_reference_resolves() {
+    if skip_while_blessing() {
+        return;
+    }
     let (_dir, adapter) = open_copy();
     assert_eq!(adapter.library_id(), id(LIBRARY_ID));
     assert_eq!(adapter.list_tables().unwrap(), ["logic", "resistors"]);
@@ -241,6 +271,9 @@ fn signex_opens_the_fixture_and_every_reference_resolves() {
 
 #[test]
 fn rows_read_back_and_resave_to_the_same_cells() {
+    if skip_while_blessing() {
+        return;
+    }
     let (_dir, adapter) = open_copy();
     let mut file = LibraryFile::parse(&read_fixture(&format!("library/{SNXLIB_NAME}"))).unwrap();
     for (name, table) in &mut file.tables {
@@ -260,6 +293,9 @@ fn rows_read_back_and_resave_to_the_same_cells() {
 
 #[test]
 fn content_hash_is_sha256_of_the_canonical_json() {
+    if skip_while_blessing() {
+        return;
+    }
     let (_dir, adapter) = open_copy();
     for (_, r) in adapter.iter_rows().unwrap() {
         let json = read_fixture(&format!("content-hash/{}.json", r.row_id));
@@ -272,6 +308,42 @@ fn content_hash_is_sha256_of_the_canonical_json() {
             r.internal_pn
         );
         assert_eq!(json.as_bytes(), canonical_json(&r), "spec transcription");
+    }
+}
+
+/// Every fixture footprint converts to a board footprint, as placing it on
+/// a board does: the named layer tokens resolve and pad coordinates are
+/// copied unchanged (the footprint frame is the board's, +y down the screen).
+#[test]
+fn every_fixture_footprint_converts_to_a_board_footprint() {
+    if skip_while_blessing() {
+        return;
+    }
+    let (_dir, adapter) = open_copy();
+    let expected_layers = ["TopCopper", "TopSolderMask", "TopPaste"];
+    for (fp, _) in footprints() {
+        let address = lib_ref(&fp.uuid.to_string());
+        let resolved = signex_library::part_footprint::resolve_named_footprint(&address, |a, _| {
+            adapter.get_footprint(a.uuid).ok()
+        })
+        .unwrap_or_else(|e| panic!("{} does not convert: {e}", fp.name));
+        let board = &resolved.footprint;
+        assert_eq!(board.pads.len(), fp.pads.len(), "{}", fp.name);
+        for (lib_pad, board_pad) in fp.pads.iter().zip(&board.pads) {
+            assert_eq!(board_pad.number, lib_pad.number);
+            assert_eq!(
+                board_pad.layers, expected_layers,
+                "{} pad {}",
+                fp.name, lib_pad.number
+            );
+            assert_eq!(
+                [board_pad.position.x, board_pad.position.y],
+                lib_pad.position,
+                "{} pad {}",
+                fp.name,
+                lib_pad.number
+            );
+        }
     }
 }
 

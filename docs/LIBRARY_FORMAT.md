@@ -12,8 +12,8 @@ writer accepts more than it writes, the spec says what it writes.
 
 **Conformance fixtures.** `docs/fixtures/library-format/library/` is a
 complete small library written by Signex's own writer: two symbols (one with
-two units and De Morgan bodies), two footprints (one with a STEP
-attachment) and three part rows covering every structured cell form.
+two units and De Morgan bodies), three footprints (one with a STEP
+attachment, one with an asymmetric pad layout) and three part rows covering every structured cell form.
 `docs/fixtures/library-format/content-hash/<row_id>.json` holds the exact
 bytes each row's `content_hash` is computed over. The test
 `crates/signex-library/tests/library_format_conformance/` builds the same
@@ -38,6 +38,7 @@ The fixture data is synthetic: it exercises the format, not real parts.
 ├── symbols/*.snxsym            symbol envelopes (section 3)
 ├── footprints/<uuid>.snxfpt    footprint envelopes (section 4)
 ├── sims/<uuid>.snxsim          simulation models (not specified here)
+├── step/<sha256>.step          STEP models of footprint attachments (4.3)
 └── assets/datasheets/<sha256>.pdf   pinned datasheets
 ```
 
@@ -47,10 +48,13 @@ The fixture data is synthetic: it exercises the format, not real parts.
 - **Symbols.** Every `*.snxsym` directly in `symbols/` is read (no
   subfolders). The file name is not an identifier: a symbol is found by its
   `uuid` inside the envelope. One envelope may hold any number of symbols.
-  Signex names a new envelope after its `display_name` in lower case, with
-  every run of characters other than ASCII letters and digits replaced by one
-  `-` (`Conformance Symbols` becomes `conformance-symbols.snxsym`), and falls
-  back to `<file_uuid>.snxsym` on a name clash. A converter may use either.
+  Signex names a new envelope after its `display_name` (or, when that is
+  empty, its first symbol's name): ASCII letters and digits in lower case,
+  every run of other characters replaced by one `-`, with no `-` at the
+  start or end; a name with no letter or digit becomes `untitled`
+  (`Conformance Symbols` becomes `conformance-symbols.snxsym`). When that
+  file already exists it uses `<file_uuid>.snxsym`. A converter may use
+  either form.
 - **Footprints.** A footprint is found by file name:
   `footprints/<footprint uuid>.snxfpt`, the `uuid` of the footprint, not the
   envelope's `file_uuid`. Signex reads the **first** footprint in that file
@@ -59,6 +63,11 @@ The fixture data is synthetic: it exercises the format, not real parts.
   converter writes **one footprint per `.snxfpt`**, named by its uuid. See
   Open points.
 - **Sims.** `sims/<model uuid>.snxsim`, same rule as footprints.
+- **STEP models.** A footprint's `step_attachment` (4.3) names
+  `step/<content_hash>.step`: the raw bytes of the STEP file, named by their
+  lower-case hex SHA-256. The footprint editor writes the file when a model
+  is attached; the board 3D view reads it and reports the footprint's model
+  as missing when the file is absent.
 - **Pinned datasheets.** A row's `hash_pinned` document resolves to
   `assets/datasheets/<hash>.pdf`, `<hash>` being the lower-case hex SHA-256
   of the file.
@@ -508,8 +517,22 @@ recomputed.
 
 ## 4. `.snxfpt` footprint envelope (`snxfpt/1`, `1.1` to `1.3`)
 
-A TOML document. Coordinates are millimetres in the footprint's frame,
-rotations and angles in degrees.
+A TOML document. Coordinates are millimetres, rotations and angles in
+degrees.
+
+**Footprint frame.** The footprint frame is the board's model frame: +x to
+the right and **+y down the screen**, origin at the footprint's reference
+point. The footprint editor draws a point `(x, y)` at screen
+`(x·scale, y·scale)` with no flip, the board view does the same with board
+coordinates, and placing a footprint on a board copies pad and graphic
+coordinates unchanged, then (top side) rotates them about the origin and
+moves them to the footprint's position; a bottom-side footprint negates x
+first. The PCB view reports positions to the user with Y up, so a stored
+`y` of `-1.1` reads as `+1.1` there. A rotation or an angle turns from +x
+towards +y (`x' = x cos a − y sin a`, `y' = x sin a + y cos a`), which is
+clockwise on screen. This is the opposite of symbols (section 3), whose +y
+is up. In the fixture `SOT-23`, pads 1 and 2 at `y = 1.1` sit below pad 3
+at `y = -1.1`, as on the real part with pin 1 at bottom left.
 
 ### 4.1 Keys, in write order
 
@@ -598,16 +621,26 @@ bottom-right, each `0`/`1`), `trapezoid:<dx>,<dy>` (at most one non-zero),
 `custom:<x>,<y>|<x>,<y>|...` (outline relative to the pad centre). Numbers
 inside tokens follow section 5.2.
 
-**Layer tokens.** The cell is opaque text to the envelope. Signex's board
-conversion accepts the board's own tokens (`TopCopper`, `BottomCopper`,
-`Inner<n>Copper`, `TopSolderMask`, `BottomSolderMask`, `TopPaste`,
-`BottomPaste`, `TopSilkscreen`, ...), the named tokens the stock library
-uses (`Top Layer`, `Bottom Layer`, `Multi-Layer`, `Top Solder`,
-`Bottom Solder`, `Top Paste`, `Bottom Paste`, `Top Overlay`,
-`Bottom Overlay`) and the short tokens the footprint editor writes
-(`board_footprint.rs`, `pcb_layers`); anything else makes that footprint
-unplaceable on a board. A converter should use the stock library's named
-tokens, as the fixture does. A token may not contain `|`.
+**Layer tokens.** The cell lists the layers the pad is on: copper, solder
+mask and paste, each a separate token. Write the named tokens, in this
+order, the sets the footprint editor's sketch bake writes:
+
+| Pad | `layers` cell |
+|---|---|
+| `Smd` or `ConnectorPad`, top | `Top Layer\|Top Solder\|Top Paste` |
+| `Smd` or `ConnectorPad`, bottom | `Bottom Layer\|Bottom Solder\|Bottom Paste` |
+| `Tht` or `Castellated` | `Top Layer\|Bottom Layer\|Top Solder\|Bottom Solder` |
+| `NptHole` | `Top Solder\|Bottom Solder` |
+| `Fiducial`, top | `Top Layer\|Top Solder` |
+
+The named tokens are `Top Layer`, `Bottom Layer` (copper), `Multi-Layer`
+(top and bottom copper, **no** mask), `Top Solder`, `Bottom Solder` (solder
+mask), `Top Paste`, `Bottom Paste`, `Top Overlay`, `Bottom Overlay`
+(silkscreen). Signex also accepts the board's own tokens (`TopCopper`,
+`BottomCopper`, `Inner<n>Copper`, `TopSolderMask`, `BottomSolderMask`,
+`TopPaste`, `BottomPaste`, ...); any other token makes the footprint
+unplaceable on a board. A token may not contain `|`. The conformance test
+places every fixture footprint through the board conversion.
 
 **Extended columns.** After the base columns come only those of the
 following that some pad of the footprint sets to a non-default value, in
@@ -652,8 +685,11 @@ first (0.6 becomes `0.6000000238418579`; the default colours are the
 values above). An optional `outline` (`[footprints.body_3d.outline]` with
 `points`) overrides the fabrication outline the body is extruded from.
 
-Today the STEP bytes themselves are not stored by the library format; only
-the attachment record is. Section 8 adds them.
+Today the STEP bytes live outside the footprint file, in
+`step/<content_hash>.step` under the library root (section 1): the raw file,
+named by the lower-case hex SHA-256 that `content_hash` holds. A converter
+that attaches a model writes that file too. Section 8 (format 1.4) moves the
+bytes into the footprint file.
 
 ### 4.4 Token
 
@@ -663,8 +699,8 @@ the attachment record is. Section 8 adds them.
 | `snxfpt/1.2` | else, any sketch holds reference dimensions, pattern links or per-instance pad overrides |
 | `snxfpt/1.1` | otherwise |
 
-`snxfpt/1` is read but never written. A footprint without a sketch always
-writes `snxfpt/1.1`.
+`snxfpt/1` is read but never written. A file whose footprints have no
+sketch and no generated features always writes `snxfpt/1.1`.
 
 ## 5. Canonical output
 
@@ -820,7 +856,10 @@ data = '''
   that footprint's `step_attachment.content_hash`. `filename` is the
   original name. `encoding` is `deflate+base64`, the only value. `size` is
   the raw (inflated) byte count. `data` is the base64 of the deflated bytes,
-  wrapped at 76 columns, in a `'''` literal string.
+  wrapped at 76 columns, in a `'''` literal string. The string starts with
+  a line break after the opening `'''` (which TOML drops) and its last line
+  ends with `\n` before the closing `'''`. A reader removes every line
+  break before decoding the base64.
 - One entry per distinct hash per file, entries sorted by `hash`. Footprints
   with the same model share one entry; the same model in two files is
   stored twice.
@@ -831,6 +870,8 @@ data = '''
   without one keeps the token its content selects today (`1.1` to `1.3`),
   byte for byte, so older builds refuse model files by name instead of
   dropping the models.
+- The `step/` folder (4.3) stays a read fallback for libraries written
+  before 1.4 (#3107).
 - Boards never embed models: a board footprint reaches its model through
   its library reference.
 - **Deflate level:** to be fixed by #3107. Byte-identical re-saves of
@@ -847,10 +888,13 @@ Things the code does not pin, or where it surprises:
    footprints in one envelope parse, but only the first is reachable, so
    grouping footprints per source library in one envelope does not work
    today. Symbols have no such limit.
-2. **Footprint y axis.** The footprint canvas draws +y downward (see the
-   arc note on `FpGraphicKind::Arc`); symbols are +y up. The board
-   conversion copies footprint coordinates unchanged. Whether a converter
-   must flip y depends on the source; the fixtures do not settle it.
+2. **Footprint y axis.** Settled in section 4: +y down the screen, as the
+   board model. The one place that draws it the other way is the footprint
+   editor's 3D preview, which flips y so that +y goes up
+   (`crates/signex-app/src/library/editor/footprint/preview3d.rs:68`); it is
+   display only and writes nothing. A converter from a source whose +y is up
+   negates every y and every angle, and swaps each arc's start and end
+   angles so the arc keeps its sweep.
 3. **Pin cells and control characters.** The pin writer refuses only tab,
    LF and `'''` (`primitive/symbol/serde_tsv.rs`, `pin_to_tsv_row`); a pin
    name with another control character (CR, U+0001) is written into a TOML
@@ -865,8 +909,9 @@ Things the code does not pin, or where it surprises:
    `released` cells are read and then re-saved as a value (2.3).
 6. **Symbol load repairs.** Arcs with negative or full-turn angles and a
    `part_count` below the highest pin unit are rewritten on load (3.3, 3.4).
-7. **STEP bytes today.** No code stores or reads the model file a
-   `step_attachment` names; the record alone is kept until section 8 lands.
+7. **STEP bytes.** Today the app stores STEP bytes in `step/`; section 8
+   (format 1.4) embeds them in the footprint file, and `step/` stays a read
+   fallback for older libraries (#3107).
 8. **Stock library tokens.** The committed stock footprints carry
    `snxfpt/1`, which the writer never writes (it writes `1.1`), so they do
    not re-save byte for byte; the stock symbols do.

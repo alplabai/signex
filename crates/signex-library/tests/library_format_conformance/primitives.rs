@@ -289,6 +289,45 @@ pub(crate) fn r0805() -> Footprint {
     fp
 }
 
+/// Asymmetric: pads 1 and 2 at +y, pad 3 alone at -y. The footprint frame
+/// is the board's, +y down the screen, so pad 3 shows above pads 1 and 2.
+pub(crate) fn sot23() -> Footprint {
+    let mut fp = Footprint::with_identity("SOT-23", id(SOT23_FOOTPRINT), created());
+    fp.updated = updated();
+    fp.version = "1.0.0".into();
+    let pad = |number: &str, x: f64, y: f64| Pad {
+        position: [x, y],
+        ..chip_pad(number, x, [0.6, 0.7], PadShape::Rect)
+    };
+    fp.pads = vec![
+        pad("1", -0.95, 1.1),
+        pad("2", 0.95, 1.1),
+        pad("3", 0.0, -1.1),
+    ];
+    fp.courtyard = rectangle(1.7, 1.75);
+    fp.silk_f = vec![FpGraphic::drawn(
+        FpGraphicKind::Circle {
+            center: [-1.45, 1.6],
+            radius: 0.1,
+        },
+        0.12,
+        true,
+    )];
+    fp.default_designator = "Q?".into();
+    fp.description = "SOT-23, pin 1 at bottom left".into();
+    fp
+}
+
+/// Every fixture footprint with its envelope's file uuid.
+pub(crate) fn footprints() -> impl Iterator<Item = (Footprint, &'static str)> {
+    [
+        (r0603(), R0603_FILE),
+        (r0805(), R0805_FILE),
+        (sot23(), SOT23_FILE),
+    ]
+    .into_iter()
+}
+
 pub(crate) fn footprint_envelope(fp: Footprint, file_uuid: &str) -> FootprintFile {
     let mut file = FootprintFile::with_identity(fp, id(file_uuid), created());
     file.updated = updated();
