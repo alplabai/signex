@@ -1069,6 +1069,96 @@ find_similar_items document=<board> id=<uuid> [fields=kind,value,...]
 
 Find by text on a board is `find_items` (designator and value).
 
+## Update PCB from schematic
+
+`update_pcb_from_schematic` brings the board of a project in line with its
+schematic without the dialog (#1312, #2470). It reads the same change list
+the Update PCB dialog shows ([UPDATE_PCB.md](UPDATE_PCB.md)) and answers
+with it as JSON.
+
+```text
+update_pcb_from_schematic [document=<project, one of its sheets or its board>] dry_run=true
+update_pcb_from_schematic [document=<project, one of its sheets or its board>] apply=true
+```
+
+- `document` names the project. Left out, the run acts on the active
+  project's board, so `update_pcb_from_schematic apply=true` works as it
+  did before #2470. The active project is the workspace's: the project
+  opened (or opened again) last, headless too, so `signex-cli run` on one
+  project acts on that project; closing it makes a neighbour active. It is
+  never the tab in view. With one project open and none made active, that
+  project is the default.
+- Another project's board is never updated in the active one's place.
+  When the active project has no board, the run is refused and the refusal
+  lists the other open projects' boards to name with `document=`; with
+  several projects open and none active it is refused and lists every open
+  project's board. With no board to list it is refused as having none, and
+  with no project open as not part of a project.
+- Over the agent channel `document` is always required and is one of the
+  project's sheets or its board: the channel's gate needs a named document
+  (an agent never acts on the person's active one), so the active-project
+  default does not apply there.
+- `dry_run=true` lists the changes and changes nothing: no undo step, no
+  dirty flag. When `apply=true` is given too (`--dry-run` on a script), the
+  dry run wins.
+- `apply=true` executes the rows ticked by default, as the dialog's Execute
+  does: one labelled undo step on the board, refused with nothing changed
+  when the board is closed with unsaved edits, read-only or moved on while
+  the list was read. The rules the schematic's Net Parameters directives ask
+  for are applied with it, as Execute does. The person's tab does not move.
+- Without either the command is refused, a bare headless run included (it
+  opens no dialog). It is refused too while the Update
+  PCB dialog is open, or while another run waits for its list; the dialog
+  does not open over a run that waits.
+- The project's board is opened when it is not; a project with no board is
+  refused (make one with `new_pcb_document`).
+- It needs `edit` (`apply=true` changes the board). The answer comes once
+  the list is read, as for a check.
+
+The answer:
+
+```json
+{"dry_run": true, "project": "/p/demo.snxprj", "board": "/p/demo.snxpcb",
+ "revision": 7, "board_revision": 7, "applied": 3,
+ "counts": {"add": 2, "change": 1, "remove": 0, "problems": 1},
+ "changes": [
+   {"kind": "add_footprint", "action": "add", "object": "R1",
+    "footprint": "<uuid>", "value": "10k", "to": "<library footprint>",
+    "ticked": true, "applies": true, "blocked": null},
+   {"kind": "set_value", "action": "change", "object": "R2",
+    "footprint": "<uuid>", "from": "1k", "to": "10k",
+    "ticked": true, "applies": true, "blocked": null},
+   {"kind": "pad_net", "action": "add", "object": "R1.2",
+    "footprint": "<uuid>", "pad": "<uuid>", "from": null, "to": "N$1",
+    "locked": false, "ticked": true, "applies": true, "blocked": null}
+ ],
+ "notes": ["..."]}
+```
+
+- `revision` is the board revision the list was read at; `board_revision`
+  is the board's revision after the run (the same for a dry run, or when
+  nothing was applied).
+- `applied` counts the rows that apply: what a dry run would do, what an
+  apply did. A row applies when it is ticked, not blocked, and every row it
+  needs applies too.
+- `counts` are the dialog's tiles: rows by action, and the blocked rows.
+- Each change has a `kind`: `add_footprint`, `remove_footprint`,
+  `change_footprint` (a footprint swap, with `reason` `footprint` or
+  `other_version`; another library version starts unticked),
+  `set_designator`, `set_value`, `link`, `add_net`, `remove_net`,
+  `rename_net` (with the board `net` number) and `pad_net` (a pad's net,
+  with `locked`). `action` is `add`, `change` or `remove`: a pad that gets
+  its first net is an add and one that loses it a remove. `object` is a
+  designator, a net name, or a pad as `R1.2`. `footprint` is the board
+  footprint's uuid (for an add, the uuid the new footprint gets), `pad` the
+  pad's. `from` and `to` are the old and new designator, value, footprint
+  or net; `null` is a pad with no net.
+- `blocked` says why a row cannot be ticked (a missing footprint, a part to
+  annotate, a designator used twice); the rest still runs.
+- `notes` are the list's notes, as the dialog shows them.
+- A dry run adds `execute_blocked` when an apply would be refused now (the
+  board closed with unsaved edits, or read-only).
+
 ## Working through a running Signex
 
 When a person has the project open in Signex with Preferences > System ›

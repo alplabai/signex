@@ -55,7 +55,7 @@ pub use diff::diff_board;
 pub(crate) use diff::remint_pads;
 pub use lower::{EcoRefusal, check, lower};
 pub use nets::refresh_nets;
-pub use report::report_text;
+pub use report::{blocked_text, note_text, report_text};
 
 #[cfg(test)]
 mod fixture;

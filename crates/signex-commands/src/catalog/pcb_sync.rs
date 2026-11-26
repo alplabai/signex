@@ -6,7 +6,9 @@ use signex_i18n_ids::command_ids;
 
 pub(super) const PCB_SYNC: &[CommandMetadata] = &[
     // #1312: the Update PCB dialog, from a schematic or (Import Changes) a
-    // board of a project. Execute is one undo step on the board.
+    // board of a project. Execute is one undo step on the board. From
+    // operands (#2470): `document` names the project (left out: the active
+    // project), `apply` or `dry_run` the run, and the answer is the change list.
     CommandMetadata {
         id: "update_pcb_from_schematic",
         category: "pcb_sync",
@@ -15,7 +17,7 @@ pub(super) const PCB_SYNC: &[CommandMetadata] = &[
         group: CommandGroup::Schematic,
         enable: Enablement::Always,
         flags: CommandFlags::MUTATES,
-        operands: operands::APPLY,
+        operands: operands::UPDATE_PCB,
         ..CommandMetadata::DEFAULT
     },
     // #2462: the report of every difference between the schematic and the

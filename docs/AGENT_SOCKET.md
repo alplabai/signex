@@ -151,7 +151,14 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   its own, one board undo step, answered with the text as JSON), and the
   length tuning commands
   `tune_net_length` and `tune_diff_pair` (#2389; one undo step on the named
-  board, answered with the tuned nets and their lengths as JSON), and the
+  board, answered with the tuned nets and their lengths as JSON), and
+  `update_pcb_from_schematic` (#2470; for the project of the named sheet or
+  board, `dry_run=true` or `apply=true`, answered with the change list once
+  it is read; an apply is one undo step on the board, [CLI.md](CLI.md),
+  "Update PCB from schematic"; its `document` is optional in the catalog,
+  for a script's call on the active project, but the channel keeps it required, by
+  hand in `DOCUMENT_NAMED_ON_CHANNEL`, since its gate acts only on a named
+  document), and the
   panel edits `panelize_board`, `remove_board_panel` and `set_board_panel`
   (#2410; one undo step on the named board each, answered with the panel as
   JSON), and the board's `swap_pins`, `swap_gates`,

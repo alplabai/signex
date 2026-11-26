@@ -24,6 +24,7 @@ mod presence;
 mod query_surfaces;
 mod refusals;
 mod round_trip;
+mod update_pcb;
 mod window_layout;
 
 use serde_json::{Value, json};

@@ -22,6 +22,12 @@ pub(super) const WINDOW_LAYOUT: &[&str] = &[
     "untile_documents",
 ];
 
+/// Commands whose `document` is optional in the catalog, for a script's old
+/// call, but which the channel takes only with it named: the agent gate
+/// (`check_agent_document`) refuses them without one. `update_pcb_from_schematic`
+/// takes the active project's board elsewhere (Caner, 2026-11-25), never here.
+pub(super) const DOCUMENT_NAMED_ON_CHANNEL: &[&str] = &["update_pcb_from_schematic"];
+
 /// Is `command` one of [`WINDOW_LAYOUT`]?
 pub(in crate::app) fn is_window_layout(command: &AppCommandId) -> bool {
     WINDOW_LAYOUT.contains(&command.as_str())
@@ -53,11 +59,13 @@ pub(super) fn refusal(command: &AppCommandId) -> Option<String> {
         ));
     }
     // A required `document`: a placement's optional one does not open it, so a
-    // placement stays reachable only through `apply_edits` (#2199).
-    let names_document = meta
-        .operands
-        .iter()
-        .any(|op| op.name == "document" && op.kind == OperandKind::Document && op.required);
+    // placement stays reachable only through `apply_edits` (#2199). A
+    // [`DOCUMENT_NAMED_ON_CHANNEL`] command counts as required here.
+    let names_document = meta.operands.iter().any(|op| {
+        op.name == "document"
+            && op.kind == OperandKind::Document
+            && (op.required || DOCUMENT_NAMED_ON_CHANNEL.contains(&id))
+    });
     if !names_document {
         return Some(format!(
             "`{id}` does not name a document, so it is not on the agent channel"
@@ -214,6 +222,9 @@ mod tests {
                 "unlock_board_items",
                 "untile_documents",
                 "unwaive_drc_violation",
+                // #2470: Update PCB for the project of the named document,
+                // answered with the change list.
+                "update_pcb_from_schematic",
                 "waive_drc_violation",
             ]
         );
@@ -230,6 +241,21 @@ mod tests {
                 "`{name}` names no document, so it needs no entry here"
             );
             assert!(meta.headless_refusal().is_none(), "`{name}` is window-only");
+        }
+    }
+
+    /// Each [`DOCUMENT_NAMED_ON_CHANNEL`] id takes an optional `document`:
+    /// a required one needs no entry.
+    #[test]
+    fn the_named_on_channel_list_names_commands_with_an_optional_document() {
+        for name in DOCUMENT_NAMED_ON_CHANNEL {
+            let meta = metadata_for(&id(name)).expect("in the catalog");
+            assert!(
+                meta.operands.iter().any(|op| op.name == "document"
+                    && op.kind == OperandKind::Document
+                    && !op.required),
+                "`{name}` takes no optional document, so it needs no entry here"
+            );
         }
     }
 

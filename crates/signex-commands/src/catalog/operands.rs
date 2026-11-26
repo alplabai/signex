@@ -331,9 +331,17 @@ pub const NEW_PROJECT: &[Operand] = &[
     optional("overrides", OperandKind::Text),
 ];
 
-/// Update PCB without the dialog (#1312): `apply=true` executes the rows
-/// ticked by default.
-pub const APPLY: &[Operand] = &[required("apply", OperandKind::Bool)];
+/// Update PCB without the dialog (#1312, #2470): for the project of
+/// `document` (the project, one of its sheets or its board), `apply=true`
+/// executes the rows ticked by default and `dry_run=true` lists them and
+/// changes nothing. Either answers with the change list. Without `document`
+/// it acts on the active project's board, so `apply=true` alone still runs;
+/// with no board there, or no active project, it is refused, listing boards.
+pub const UPDATE_PCB: &[Operand] = &[
+    optional("document", OperandKind::Document),
+    optional("apply", OperandKind::Bool),
+    optional("dry_run", OperandKind::Bool),
+];
 
 /// New PCB without the dialog (#2232): `profile` is `project` (the default,
 /// the project's own setup), a built-in token or a saved user profile.
