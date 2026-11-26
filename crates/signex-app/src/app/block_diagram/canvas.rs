@@ -44,6 +44,9 @@ pub struct CanvasLook {
     pub accent: Color,
     pub power: Color,
     pub unlinked: Color,
+    /// The Re-sync review's previews: an added block, a moved one.
+    pub added: Color,
+    pub moved: Color,
     /// Body text size, px.
     pub text_size: f32,
     /// How far, in px, a click may land off an object and still pick it.
@@ -449,6 +452,9 @@ impl Painter<'_, '_> {
         }
         for block in &diagram.blocks {
             self.draw_block(frame, block);
+        }
+        if let Some(review) = &self.canvas.editor.review {
+            super::canvas_review::draw_review(frame, self.fit, diagram, review, look);
         }
         if let Some(end) = self.canvas.editor.connect_from {
             self.draw_connect_start(frame, diagram, end);

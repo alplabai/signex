@@ -1177,7 +1177,7 @@ diagram file, read against the project folder, and the project's
 
 ```text
 generate_block_diagram document=<project> [path=<file.snxblk>] [overwrite=true]
-regenerate_block_diagram document=<project> [path=<file.snxblk>] [apply=true]
+regenerate_block_diagram document=<project> [path=<file.snxblk>] [apply=true] [unlink=apply|skip]
 ```
 
 - `generate_block_diagram` writes a new diagram: one block per sheet, linked
@@ -1188,12 +1188,17 @@ regenerate_block_diagram document=<project> [path=<file.snxblk>] [apply=true]
 - `regenerate_block_diagram` reads the diagram and lists what the hierarchy
   changes in it as `changes`, each with its `change`: `block_added`,
   `sheet_moved` (a renamed or moved sheet, with `from` and `to`),
+  `name_followed` (the block still had the name the old file gave it, so
+  it takes the new one; a name the person typed is kept),
   `sheet_removed` (the block stays, marked unlinked), `sheet_returned`,
   `rails_changed`, `port_added`, `port_removed`, `port_changed`,
   `connection_added`, `connection_changed` and `connection_removed`.
   Nothing is written unless `apply=true`; then `written` is true when there
   was a change. Positions, sizes, names, colours, notes, groups and
-  hand-drawn blocks and connections are kept.
+  hand-drawn blocks and connections are kept. `unlink=skip` leaves a block
+  whose sheet left the project as it is, linked, with its connections, and
+  lists its `sheet_removed` under `skipped` instead of `changes`;
+  `unlink=apply`, the default, unlinks it. `skipped` is always answered.
 
 A sheet that is in the project but does not read refuses the run, so its
 block is never marked unlinked by mistake. A run that writes (generate, or

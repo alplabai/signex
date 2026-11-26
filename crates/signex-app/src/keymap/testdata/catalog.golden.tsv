@@ -218,7 +218,7 @@ sync_sheet_entries	design	Synchronize the selected sheet symbol's entries and it
 number_schematic_sheets	design	Number schematic sheets	Number Schematic Sheets...	Schematic	-	-	Always	gui_only	-
 compile_project	design	Compile the project	Compile Project	Schematic	-	-	Always	gui_only	-
 generate_block_diagram	design	Generate a block diagram from the sheet hierarchy	Generate Block Diagram	Schematic	-	-	Always	-	document:document,path:path?,overwrite:bool?
-regenerate_block_diagram	design	Regenerate the block diagram from the sheet hierarchy	Regenerate Block Diagram	Schematic	-	-	Always	-	document:document,path:path?,apply:bool?
+regenerate_block_diagram	design	Regenerate the block diagram from the sheet hierarchy	Regenerate Block Diagram	Schematic	-	-	Always	-	document:document,path:path?,apply:bool?,unlink:text?
 open_child_sheet	navigation	Open the selected sheet symbol's child sheet	Open Child Sheet	Schematic	-	-	RequiresSelection	gui_only	-
 leave_sheet	navigation	Leave sheet / go to parent sheet	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 navigate_up_hierarchy	navigation	Navigate up hierarchy	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-

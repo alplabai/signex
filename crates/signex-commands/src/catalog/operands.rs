@@ -1010,9 +1010,12 @@ pub const GENERATE_BLOCK_DIAGRAM: &[Operand] = &[
 ];
 /// `regenerate_block_diagram` (#2968): the changes the project's hierarchy
 /// makes to the diagram at `path` (the project's `<name>.snxblk` when left
-/// out), listed; with `apply=true` also written.
+/// out), listed; with `apply=true` also written. `unlink=skip` leaves a
+/// block whose sheet left the project as it is and lists it as skipped
+/// (mockup row 210); `unlink=apply` is the default.
 pub const REGENERATE_BLOCK_DIAGRAM: &[Operand] = &[
     required("document", OperandKind::Document),
     optional("path", OperandKind::Path),
     optional("apply", OperandKind::Bool),
+    optional("unlink", OperandKind::Text),
 ];

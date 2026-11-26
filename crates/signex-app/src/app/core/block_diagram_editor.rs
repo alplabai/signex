@@ -11,6 +11,7 @@ use uuid::Uuid;
 
 pub use super::block_diagram_panes::{
     DiagramView, ExportDraft, ExportKind, ExportPage, ExportPaper, PowerTreeRead, PowerTreeView,
+    ResyncReview,
 };
 
 /// Every open block diagram, and the paths being read or written.
@@ -131,6 +132,8 @@ pub struct BlockDiagramEditor {
     pub export: Option<ExportDraft>,
     /// Show GND (mockup row 171): ground connections are hidden until on.
     pub show_ground: bool,
+    /// The Re-sync review while it is open (mockup row 210).
+    pub review: Option<ResyncReview>,
 }
 
 impl BlockDiagramEditor {
@@ -160,6 +163,7 @@ impl BlockDiagramEditor {
             power: PowerTreeView::default(),
             export: None,
             show_ground: false,
+            review: None,
         }
     }
 

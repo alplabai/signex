@@ -144,9 +144,17 @@ hand-drawn connections), a sheet that comes back links it again. Rails and
 ports follow the sheet; a hand-drawn connection on a port the sheet lost
 ends on the block's edge. Generated connections are matched by
 `derived_from` and their two blocks: changed in place, added or removed.
-Positions, sizes, names, colours, notes, groups and every hand-drawn block
-and connection stay. The changes are listed (`DiagramChange`) and written
-only when asked. A sheet that is there but does not read refuses the run.
+Positions, sizes, colours, notes, groups and every hand-drawn block and
+connection stay. A name stays too, except that a block still named after
+its old file (the stem a sheet with no symbol name gives) follows a renamed
+sheet (`name_followed`); no key in the file records whether a name was
+typed, so the format is unchanged. With `RegenerateOptions { unlink: false
+}` (the tab's Re-sync, `unlink=skip`) a block whose sheet left the project
+stays linked with its generated connections and is listed in `skipped`;
+`unlink_blocks` unlinks chosen blocks afterwards, as the review's Apply
+selected does (mockup row 210). The changes are listed (`DiagramChange`) and
+written only when asked. A sheet that is there but does not read refuses
+the run.
 
 **Writes.** A run that writes the file is a project write: it is refused
 while its project folder is being renamed, and a rename waits for it. A run

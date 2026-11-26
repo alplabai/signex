@@ -442,3 +442,7 @@ project-block-diagram-not-run = nothing was written: { $reason }
 project-block-diagram-applied-in-tab = Block diagram { $path }: { $changes } changes applied to the open diagram; the layout is kept. Save to keep them.
 project-block-diagram-resync-changed = { $path } was edited while Re-sync read the hierarchy; nothing was applied. Run Re-sync again.
 project-block-diagram-resync-closed = { $path } was closed while Re-sync read the hierarchy; nothing was applied.
+# Blocks whose sheet left the project, left for the review (mockup row 210)
+# or by unlink=skip. $blocks is how many.
+project-block-diagram-skipped = Block diagram { $path }: { $blocks } blocks would become unlinked; review them before they change.
+project-block-diagram-bad-unlink = `unlink` takes apply or skip, not `{ $value }`

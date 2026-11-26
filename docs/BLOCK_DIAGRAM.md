@@ -35,6 +35,16 @@ tab behaves.
   keeps the layout (`regenerate_block_diagram apply=true`). On the open
   diagram it is one undo step and writes nothing until Save; an edit made
   while it read the hierarchy wins and Messages says nothing was applied.
+- Added blocks and renamed or moved sheets apply at once. A block whose
+  sheet left the project is not unlinked at once: the "Re-sync from sheets"
+  side sheet (mockup row 210) opens in Properties' place, with one checked
+  row per such block. The diagram previews the run while it is open: the
+  added blocks dashed in the added colour, the renamed or moved ones
+  outlined, and each checked row's block hatched amber. Apply selected
+  unlinks the checked blocks as one undo step; Cancel leaves them. An
+  unchecked block is not remembered: the next Re-sync lists it again,
+  checked. A Re-sync run while the side sheet is open and finding nothing
+  to unlink shows "Nothing to change".
 - On the canvas a click picks a block, a port, a connection or a group's
   frame; Shift adds to the selection. A drag on a block moves it and lands
   as one edit on release; a drag on empty canvas, or with the middle

@@ -200,3 +200,22 @@ block-diagram-power-scenario = Scenario Max load · sources { $active } of { $so
 block-diagram-power-scenario-no-limit = Scenario Max load · sources { $active } of { $sources } active · no rail has a limit
 block-diagram-variant = Variant
 block-diagram-show-gnd = Show GND
+
+# block-diagram-review: the Re-sync review side sheet (mockup row 210). It
+# opens when a block would become unlinked; the added and renamed or moved
+# blocks are applied already.
+block-diagram-review-title = Re-sync from sheets
+block-diagram-review-close-mark = ✕
+block-diagram-review-compared = Compared with the sheet hierarchy of the project.
+block-diagram-review-summary = { $added } added · { $moved } renamed or moved · { $unlinked } unlinked · { $unchanged } unchanged
+block-diagram-review-applied-note = The added and the renamed or moved blocks are applied; Undo takes them back.
+block-diagram-review-unlinked-group = Unlinked { $count }
+block-diagram-review-unlink-on = Sheet deleted · the block stays with its layout and note, marked unlinked · its connections from the sheets are dropped
+block-diagram-review-unlink-off = Off: the block stays as it is, linked to a sheet that no longer exists. The next Re-sync lists it again.
+block-diagram-review-manual = Manual blocks are not part of Re-sync and stay as drawn.
+block-diagram-review-selected = { $checked } of { $total } selected · one undo step
+block-diagram-review-apply = Apply selected
+block-diagram-review-nothing = Nothing to change
+block-diagram-review-nothing-note = The diagram matches the sheet hierarchy. Unlinked and manual blocks are left as they are.
+block-diagram-review-close = Close
+block-diagram-review-applied = { $file }: { $blocks } blocks unlinked from the sheets, layout kept. Undo with Ctrl+Z.

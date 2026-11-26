@@ -13,6 +13,8 @@
 
 mod job;
 mod operands;
+#[cfg(test)]
+mod review_tests;
 mod tab_merge;
 #[cfg(test)]
 mod tab_merge_tests;
@@ -168,6 +170,12 @@ impl Signex {
             }
         };
         crate::diagnostics::log_info(line.into_string());
+        let skipped = answer["skipped"].as_array().map_or(0, Vec::len);
+        if skipped > 0 {
+            let line = t!(i18n, ids::PROJECT_BLOCK_DIAGRAM_SKIPPED,
+                "path" => path, "blocks" => skipped as i64);
+            crate::diagnostics::log_info(line.into_string());
+        }
     }
 
     fn say_block_diagram_refused(&self, reason: &str) {

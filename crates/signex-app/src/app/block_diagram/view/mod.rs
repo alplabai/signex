@@ -2,11 +2,13 @@
 //! shell with the toolbar, the canvas and Properties side by side, and the
 //! footer counting blocks and connections with the mockup's hint. The view
 //! switch puts the Power tree and its rails there instead; the export
-//! popover sits over the canvas.
+//! popover sits over the canvas. The Re-sync review (mockup row 210) takes
+//! Properties' place while it is open.
 
 mod export;
 mod power_tree;
 mod properties;
+mod review;
 mod toolbar;
 
 use std::path::PathBuf;
@@ -108,6 +110,8 @@ pub(super) fn canvas_look(look: Look<'_>, show_ground: bool) -> CanvasLook {
         accent: ti(tokens.accent),
         power: ti(tokens.error),
         unlinked: ti(tokens.warning),
+        added: ti(tokens.success),
+        moved: resolve(tokens).info,
         text_size: TS.body,
         slop: TS.body * SLOP_EMS,
         show_ground,
@@ -123,7 +127,10 @@ fn tab<'a>(
     let (main, side) = match editor.view {
         DiagramView::Blocks => (
             diagram_canvas(editor, canvas_look(look, editor.show_ground)),
-            properties::view(look, editor),
+            match &editor.review {
+                Some(open) => review::view(look, open),
+                None => properties::view(look, editor),
+            },
         ),
         DiagramView::PowerTree => (
             power_tree::main(look, editor),

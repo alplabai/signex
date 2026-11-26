@@ -33,6 +33,8 @@ mod file_tests;
 #[cfg(test)]
 mod geometry_tests;
 #[cfg(test)]
+mod sync_review_tests;
+#[cfg(test)]
 mod sync_tests;
 
 pub use edit::{BlockDiagramError, BlockFields, BlockPatch, RemovedBlock};
@@ -44,7 +46,8 @@ pub use file::{
 pub use geometry::{DiagramBox, GROUP_MARGIN_MM, PLACEMENT_GAP_MM, distance_to_segment};
 pub use sync::{
     DerivedBlock, DerivedConnection, DerivedDiagram, DerivedEnd, DerivedPort, DiagramChange,
-    PORT_PITCH_MM, Regenerated, generate_block_diagram, regenerate_block_diagram,
+    PORT_PITCH_MM, RegenerateOptions, Regenerated, generate_block_diagram,
+    regenerate_block_diagram, regenerate_block_diagram_with, unlink_blocks,
 };
 pub use writer::encode_block_diagram;
 

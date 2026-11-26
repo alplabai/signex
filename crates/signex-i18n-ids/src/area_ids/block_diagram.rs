@@ -178,4 +178,20 @@ define_ids! {
     BLOCK_DIAGRAM_POWER_SCENARIO_NO_LIMIT = "block-diagram-power-scenario-no-limit";
     BLOCK_DIAGRAM_VARIANT = "block-diagram-variant";
     BLOCK_DIAGRAM_SHOW_GND = "block-diagram-show-gnd";
+    // block-diagram-review: the Re-sync review side sheet (mockup row 210).
+    BLOCK_DIAGRAM_REVIEW_TITLE = "block-diagram-review-title";
+    BLOCK_DIAGRAM_REVIEW_CLOSE_MARK = "block-diagram-review-close-mark";
+    BLOCK_DIAGRAM_REVIEW_COMPARED = "block-diagram-review-compared";
+    BLOCK_DIAGRAM_REVIEW_SUMMARY = "block-diagram-review-summary";
+    BLOCK_DIAGRAM_REVIEW_APPLIED_NOTE = "block-diagram-review-applied-note";
+    BLOCK_DIAGRAM_REVIEW_UNLINKED_GROUP = "block-diagram-review-unlinked-group";
+    BLOCK_DIAGRAM_REVIEW_UNLINK_ON = "block-diagram-review-unlink-on";
+    BLOCK_DIAGRAM_REVIEW_UNLINK_OFF = "block-diagram-review-unlink-off";
+    BLOCK_DIAGRAM_REVIEW_MANUAL = "block-diagram-review-manual";
+    BLOCK_DIAGRAM_REVIEW_SELECTED = "block-diagram-review-selected";
+    BLOCK_DIAGRAM_REVIEW_APPLY = "block-diagram-review-apply";
+    BLOCK_DIAGRAM_REVIEW_NOTHING = "block-diagram-review-nothing";
+    BLOCK_DIAGRAM_REVIEW_NOTHING_NOTE = "block-diagram-review-nothing-note";
+    BLOCK_DIAGRAM_REVIEW_CLOSE = "block-diagram-review-close";
+    BLOCK_DIAGRAM_REVIEW_APPLIED = "block-diagram-review-applied";
 }

@@ -109,6 +109,14 @@ pub enum DiagramChange {
         from: String,
         to: String,
     },
+    /// A linked sheet was renamed and the block still had the name the old
+    /// file gave it: the name follows the sheet (a name the person typed is
+    /// kept, mockup row 210).
+    NameFollowed {
+        block: Uuid,
+        from: String,
+        to: String,
+    },
     /// A linked sheet left the project; the block stays, marked unlinked.
     SheetRemoved {
         block: Uuid,
@@ -170,6 +178,24 @@ pub struct Regenerated {
     pub diagram: BlockDiagram,
     /// The changes; empty when the diagram already matched the schematic.
     pub changes: Vec<DiagramChange>,
+    /// The changes left out by [`RegenerateOptions`]: a block that would
+    /// have become unlinked and stays as it is.
+    pub skipped: Vec<DiagramChange>,
+}
+
+/// What a regenerate may change.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RegenerateOptions {
+    /// Mark unlinked a block whose sheet left the project (and drop its
+    /// generated connections); with `false` the block stays as it is,
+    /// linked to the missing sheet, and the change is listed as skipped.
+    pub unlink: bool,
+}
+
+impl Default for RegenerateOptions {
+    fn default() -> Self {
+        Self { unlink: true }
+    }
 }
 
 /// A new diagram with id `id` holding what `derived` says: one block per
@@ -194,8 +220,20 @@ pub fn regenerate_block_diagram(
     derived: &DerivedDiagram,
     ids: &mut dyn IdSource,
 ) -> Result<Regenerated, BlockDiagramError> {
+    regenerate_block_diagram_with(diagram, derived, ids, RegenerateOptions::default())
+}
+
+/// [`regenerate_block_diagram`] with what `options` allow; a change they
+/// leave out is listed in [`Regenerated::skipped`].
+pub fn regenerate_block_diagram_with(
+    diagram: &BlockDiagram,
+    derived: &DerivedDiagram,
+    ids: &mut dyn IdSource,
+    options: RegenerateOptions,
+) -> Result<Regenerated, BlockDiagramError> {
     let mut next = diagram.clone();
     let mut changes = Vec::new();
+    let mut skipped = Vec::new();
     let top = next
         .blocks
         .iter()
@@ -219,15 +257,58 @@ pub fn regenerate_block_diagram(
         }
     }
     lay_out(&mut next.blocks, &added, top);
-    mark_removed_sheets(&mut next, derived, &mut changes);
-    sync_connections(&mut next, derived, ids, &mut changes);
+    let removed = removed_sheet_blocks(&next, derived);
+    let kept: HashSet<Uuid> = if options.unlink {
+        mark_unlinked(&mut next, &removed, &mut changes);
+        HashSet::new()
+    } else {
+        mark_unlinked(&mut next.clone(), &removed, &mut skipped);
+        removed.into_iter().collect()
+    };
+    sync_connections(&mut next, derived, ids, &kept, &mut changes);
     if let Some(fault) = next.fault() {
         return Err(fault.into());
     }
     Ok(Regenerated {
         diagram: next,
         changes,
+        skipped,
     })
+}
+
+/// Mark the linked blocks `blocks` unlinked, as a regenerate does when
+/// their sheets left the project, and drop their generated connections;
+/// hand-drawn connections stay. The review's Apply selected (mockup row
+/// 210). `diagram` itself is not changed.
+pub fn unlink_blocks(diagram: &BlockDiagram, blocks: &[Uuid]) -> Regenerated {
+    let mut next = diagram.clone();
+    let mut changes = Vec::new();
+    mark_unlinked(&mut next, blocks, &mut changes);
+    let unlinked: HashSet<Uuid> = changes
+        .iter()
+        .filter_map(|c| match c {
+            DiagramChange::SheetRemoved { block, .. } => Some(*block),
+            _ => None,
+        })
+        .collect();
+    next.connections.retain(|c| {
+        let Some(group) = c.derived_from.as_ref() else {
+            return true;
+        };
+        if !unlinked.contains(&c.from.block) && !unlinked.contains(&c.to.block) {
+            return true;
+        }
+        changes.push(DiagramChange::ConnectionRemoved {
+            connection: c.id,
+            derived_from: group.clone(),
+        });
+        false
+    });
+    Regenerated {
+        diagram: next,
+        changes,
+        skipped: Vec::new(),
+    }
 }
 
 fn is_linked_to(block: &Block, sheet: DocumentId) -> bool {
@@ -267,7 +348,13 @@ fn block_name(want: &DerivedBlock) -> String {
     if !name.is_empty() {
         return name.to_string();
     }
-    let file = want.path.rsplit('/').next().unwrap_or(&want.path);
+    file_stem(&want.path)
+}
+
+/// The name a sheet with no symbol name gives its block: the file stem of
+/// its `/`-separated `path`.
+fn file_stem(path: &str) -> String {
+    let file = path.rsplit('/').next().unwrap_or(path);
     let stem = file.rsplit_once('.').map_or(file, |(stem, _)| stem).trim();
     if stem.is_empty() {
         "Sheet".to_string()
@@ -357,6 +444,7 @@ fn follow_sheet(
 ) {
     let block = &mut diagram.blocks[at];
     let id = block.id;
+    let mut moved_from = None;
     if let Some(link) = block.sheet.as_mut() {
         if link.state == LinkState::Unlinked {
             link.state = LinkState::Linked;
@@ -368,11 +456,25 @@ fn follow_sheet(
         }
         if link.path != want.path && !want.path.trim().is_empty() {
             let from = std::mem::replace(&mut link.path, want.path.clone());
+            moved_from = Some(from.clone());
             changes.push(DiagramChange::SheetMoved {
                 block: id,
                 sheet: want.sheet,
                 from,
                 to: want.path.clone(),
+            });
+        }
+    }
+    // A name the old file gave the block follows the sheet; one the person
+    // typed stays (mockup row 210).
+    if let Some(from) = moved_from {
+        let to = block_name(want);
+        if block.name == file_stem(&from) && block.name != to {
+            let from = std::mem::replace(&mut block.name, to.clone());
+            changes.push(DiagramChange::NameFollowed {
+                block: id,
+                from,
+                to,
             });
         }
     }
@@ -447,19 +549,29 @@ fn detach_from_ports(diagram: &mut BlockDiagram, removed: &[Uuid]) {
     }
 }
 
-/// Mark unlinked every linked block whose sheet the hierarchy no longer has.
-fn mark_removed_sheets(
-    diagram: &mut BlockDiagram,
-    derived: &DerivedDiagram,
-    changes: &mut Vec<DiagramChange>,
-) {
+/// The linked blocks whose sheet the hierarchy no longer has.
+fn removed_sheet_blocks(diagram: &BlockDiagram, derived: &DerivedDiagram) -> Vec<Uuid> {
     let present: HashSet<DocumentId> = derived.blocks.iter().map(|b| b.sheet).collect();
-    for block in &mut diagram.blocks {
+    diagram
+        .blocks
+        .iter()
+        .filter(|b| {
+            b.sheet
+                .as_ref()
+                .is_some_and(|l| l.state == LinkState::Linked && !present.contains(&l.sheet))
+        })
+        .map(|b| b.id)
+        .collect()
+}
+
+/// Mark the linked blocks `blocks` unlinked, each one change.
+fn mark_unlinked(diagram: &mut BlockDiagram, blocks: &[Uuid], changes: &mut Vec<DiagramChange>) {
+    for block in diagram.blocks.iter_mut().filter(|b| blocks.contains(&b.id)) {
         let id = block.id;
         let Some(link) = block.sheet.as_mut() else {
             continue;
         };
-        if link.state == LinkState::Linked && !present.contains(&link.sheet) {
+        if link.state == LinkState::Linked {
             link.state = LinkState::Unlinked;
             changes.push(DiagramChange::SheetRemoved {
                 block: id,
@@ -471,11 +583,13 @@ fn mark_removed_sheets(
 }
 
 /// Add, change and remove generated connections to match `derived`; a
-/// hand-drawn connection (no `derived_from`) is never touched here.
+/// hand-drawn connection (no `derived_from`) is never touched here, nor a
+/// connection of a block in `kept` (one left linked to a missing sheet).
 fn sync_connections(
     diagram: &mut BlockDiagram,
     derived: &DerivedDiagram,
     ids: &mut dyn IdSource,
+    kept_blocks: &HashSet<Uuid>,
     changes: &mut Vec<DiagramChange>,
 ) {
     let linked: HashMap<DocumentId, Uuid> = diagram
@@ -549,7 +663,10 @@ fn sync_connections(
         let Some(group) = c.derived_from.as_ref() else {
             return true;
         };
-        if kept.contains(&c.id) {
+        if kept.contains(&c.id)
+            || kept_blocks.contains(&c.from.block)
+            || kept_blocks.contains(&c.to.block)
+        {
             return true;
         }
         changes.push(DiagramChange::ConnectionRemoved {

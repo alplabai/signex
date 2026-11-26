@@ -9,6 +9,7 @@
 //! diagram from the sheet hierarchy and exports it (`export.rs`).
 
 mod canvas;
+mod canvas_review;
 mod commands;
 mod edit;
 mod export;
@@ -18,6 +19,7 @@ mod on_demand;
 mod power;
 mod query;
 mod refusal;
+mod review;
 mod tab;
 mod update;
 mod view;
@@ -33,9 +35,12 @@ mod tab_tests;
 #[cfg(test)]
 mod tests;
 
+#[cfg(test)]
+pub(crate) use canvas_review::{Preview, previews};
 pub use on_demand::CommandRerun;
 pub use power::PowerTreeLanded;
 pub(crate) use power::PowerTreeRun;
+pub use review::ReviewEvent;
 
 use std::path::{Path, PathBuf};
 
@@ -56,7 +61,7 @@ use crate::app::core::block_diagram_editor as state;
 pub use io::{DiagramFile, FileFailure};
 pub use state::{
     BlockDiagramEditor, BlockDiagrams, Camera, DiagramItem, DiagramTool, DiagramView, ExportKind,
-    ExportPage, ExportPaper, PropertyField,
+    ExportPage, ExportPaper, PropertyField, ResyncReview,
 };
 
 /// Whether `link` is a ground connection, which Show GND hides: a power
@@ -197,6 +202,8 @@ pub enum TabEvent {
     VariantPicked(String),
     /// Show GND on the Block diagram view.
     ShowGroundToggled(bool),
+    /// The Re-sync review side sheet (mockup row 210).
+    Review(ReviewEvent),
     /// Re-sync: the diagram rebuilt from the sheet hierarchy, layout kept.
     ResyncPressed,
     Export(ExportEvent),

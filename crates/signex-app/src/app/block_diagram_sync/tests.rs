@@ -77,6 +77,7 @@ fn job(dir: &Path, mode: SyncMode) -> SyncJob {
         root,
         fold: Default::default(),
         naming: Default::default(),
+        unlink: true,
     }
 }
 

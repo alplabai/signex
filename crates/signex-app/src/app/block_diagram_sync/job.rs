@@ -10,8 +10,8 @@ use std::path::{Path, PathBuf};
 use serde_json::{Value, json};
 use signex_i18n::{Translatable, ids};
 use signex_types::block_diagram::{
-    BlockDiagram, DerivedDiagram, LinkState, SNXBLK_FORMAT_V1, generate_block_diagram,
-    read_block_diagram, regenerate_block_diagram, write_block_diagram,
+    BlockDiagram, DerivedDiagram, LinkState, RegenerateOptions, Regenerated, SNXBLK_FORMAT_V1,
+    generate_block_diagram, read_block_diagram, regenerate_block_diagram_with, write_block_diagram,
 };
 use signex_types::document_id::DocumentId;
 use signex_types::object_id::UuidV7Ids;
@@ -55,6 +55,9 @@ pub(crate) struct SyncJob {
     pub(crate) root: PathBuf,
     pub(crate) fold: CaseFold,
     pub(crate) naming: ChannelNaming,
+    /// A regenerate marks unlinked a block whose sheet left the project
+    /// (`unlink=apply`); with `false` it is listed as skipped instead.
+    pub(crate) unlink: bool,
 }
 
 impl SyncJob {
@@ -69,14 +72,19 @@ impl SyncJob {
     }
 
     /// Regenerate into `base`, the diagram as its tab holds it: the answer
-    /// and the merged diagram. Nothing is written; the tab takes it as an
-    /// undo step and its Save writes it.
+    /// and the regenerated diagram with its changes. Nothing is written; the
+    /// tab takes it as an undo step and its Save writes it. With `unlink`
+    /// off, a block that would become unlinked is left for the review
+    /// (mockup row 210).
     pub(crate) fn run_merge(
         self,
         base: &BlockDiagram,
-    ) -> Result<(Value, BlockDiagram), Translatable> {
+    ) -> Result<(Value, Regenerated), Translatable> {
         let derived = self.derive()?;
-        let regenerated = regenerate_block_diagram(base, &derived, &mut UuidV7Ids)
+        let options = RegenerateOptions {
+            unlink: self.unlink,
+        };
+        let regenerated = regenerate_block_diagram_with(base, &derived, &mut UuidV7Ids, options)
             .map_err(|e| not_run(e.to_string()))?;
         let answer = json!({
             "path": self.target.display().to_string(),
@@ -84,10 +92,11 @@ impl SyncJob {
             "written": false,
             "into_tab": true,
             "changes": regenerated.changes,
+            "skipped": regenerated.skipped,
             "summary": summary(&regenerated.diagram),
             "diagram": regenerated.diagram,
         });
-        Ok((answer, regenerated.diagram))
+        Ok((answer, regenerated))
     }
 
     fn derive(&self) -> Result<DerivedDiagram, Translatable> {
@@ -146,8 +155,12 @@ impl SyncJob {
                 .about(ids::PROJECT_BLOCK_DIAGRAM_READ_ONLY)
                 .arg("format", read.token.clone()));
         }
-        let regenerated = regenerate_block_diagram(&read.diagram, derived, &mut UuidV7Ids)
-            .map_err(|e| not_run(e.to_string()))?;
+        let options = RegenerateOptions {
+            unlink: self.unlink,
+        };
+        let regenerated =
+            regenerate_block_diagram_with(&read.diagram, derived, &mut UuidV7Ids, options)
+                .map_err(|e| not_run(e.to_string()))?;
         let write = apply && !regenerated.changes.is_empty();
         if write {
             write_block_diagram(&self.target, &regenerated.diagram, &read.token).map_err(|e| {
@@ -160,6 +173,7 @@ impl SyncJob {
             "applied": apply,
             "written": write,
             "changes": regenerated.changes,
+            "skipped": regenerated.skipped,
             "summary": summary(&regenerated.diagram),
             "diagram": regenerated.diagram,
         }))

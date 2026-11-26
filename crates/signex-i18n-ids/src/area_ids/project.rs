@@ -331,4 +331,6 @@ define_ids! {
     PROJECT_BLOCK_DIAGRAM_APPLIED_IN_TAB = "project-block-diagram-applied-in-tab";
     PROJECT_BLOCK_DIAGRAM_RESYNC_CHANGED = "project-block-diagram-resync-changed";
     PROJECT_BLOCK_DIAGRAM_RESYNC_CLOSED = "project-block-diagram-resync-closed";
+    PROJECT_BLOCK_DIAGRAM_SKIPPED = "project-block-diagram-skipped";
+    PROJECT_BLOCK_DIAGRAM_BAD_UNLINK = "project-block-diagram-bad-unlink";
 }

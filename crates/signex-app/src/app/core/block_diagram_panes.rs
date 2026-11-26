@@ -1,12 +1,48 @@
 //! The block diagram tab's second view and its export popover (mockup row
 //! 171): which view the tab shows, the project's power tree as the last run
-//! read it, and the export settings being filled in. Pure data.
+//! read it, the export settings being filled in, and the Re-sync review
+//! (mockup row 210). Pure data.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
 
 use signex_net::SheetKey;
 use signex_net::power_tree::{PowerTopology, PowerTree};
+use uuid::Uuid;
+
+/// The review a Re-sync opens when a block would become unlinked (mockup
+/// row 210). The added and the renamed or moved blocks are already applied
+/// (one undo step) and are previewed while it is open; each block whose
+/// sheet left the project has a row, checked until unticked.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ResyncReview {
+    pub added: Vec<Uuid>,
+    pub moved: Vec<Uuid>,
+    pub unlink: Vec<UnlinkRow>,
+    /// Linked blocks the run left as they were.
+    pub unchanged: usize,
+}
+
+impl ResyncReview {
+    /// The rows checked: the blocks Apply selected unlinks.
+    pub fn checked(&self) -> Vec<Uuid> {
+        self.unlink
+            .iter()
+            .filter(|row| row.checked)
+            .map(|row| row.block)
+            .collect()
+    }
+}
+
+/// One block that would become unlinked.
+#[derive(Debug, Clone, PartialEq)]
+pub struct UnlinkRow {
+    pub block: Uuid,
+    pub name: String,
+    /// The sheet path that left the project.
+    pub path: String,
+    pub checked: bool,
+}
 
 /// What the tab shows: the diagram, or the project's power tree.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

@@ -1,0 +1,268 @@
+//! Mockup row 210, "Re-sync from sheets: review the changes": the tab's
+//! Re-sync applies added and moved blocks at once and opens the review only
+//! for a block that would become unlinked; Apply selected is one undo step;
+//! an unchecked row comes back next time. The headless `unlink` operand.
+//! The GUI path is `Signex::update` with the tab's messages and the layout
+//! probe of the side sheet; the previews are read from the review.
+
+use std::path::{Path, PathBuf};
+
+use iced::Size;
+use signex_types::block_diagram::{LinkState, read_block_diagram};
+
+use super::tests::{app_on, write_hierarchy};
+use crate::app::block_diagram::{BlockDiagramMsg, Preview, ReviewEvent, TabEvent, previews};
+use crate::app::command::{CommandArgs, CommandOutcome};
+use crate::app::{Message, Signex};
+use crate::keymap::AppCommandId;
+use crate::layout_probe::{lay_out_texts, messages_on_click};
+use crate::task_driver::TaskDriver;
+
+const WINDOW: Size = Size::new(1600.0, 900.0);
+
+fn run(app: &mut Signex, id: &str, operands: &[&str]) -> CommandOutcome {
+    let command = AppCommandId::new(id).expect("catalog id");
+    let args = CommandArgs::parse_operands(&command, operands).expect("operands parse");
+    let (outcome, task) = app.run_headless_command_in_test(&command, args);
+    TaskDriver::new().settle(app, task).expect("settles");
+    outcome
+}
+
+/// Alpha and Beta, generated to `ProjectA.snxblk`.
+fn generated(dir: &Path) -> (Signex, PathBuf) {
+    write_hierarchy(dir, &[("Alpha", "a.snxsch"), ("Beta", "b.snxsch")]);
+    let mut app = app_on(dir);
+    let project = format!("document={}", dir.join("ProjectA.snxprj").display());
+    let outcome = run(&mut app, "generate_block_diagram", &[&project]);
+    assert!(
+        matches!(outcome, CommandOutcome::Answered(_)),
+        "{outcome:?}"
+    );
+    (app, dir.join("ProjectA.snxblk"))
+}
+
+fn send(app: &mut Signex, path: &Path, event: TabEvent) {
+    let task = app.update(Message::from(BlockDiagramMsg::Tab {
+        path: path.to_path_buf(),
+        event,
+    }));
+    TaskDriver::new().settle(app, task).expect("settles");
+}
+
+fn open(app: &mut Signex, path: &Path) {
+    let task = app.open_block_diagram_file(path.to_path_buf());
+    TaskDriver::new().settle(app, task).expect("settles");
+}
+
+fn texts(app: &Signex, path: &Path) -> Vec<String> {
+    lay_out_texts(app.view_block_diagram_tab(path.to_path_buf()), WINDOW)
+        .into_iter()
+        .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+        .collect()
+}
+
+fn block_state(app: &Signex, path: &Path, name: &str) -> LinkState {
+    let diagram = &app.document_state.block_diagrams.editors[path].diagram;
+    let block = diagram.blocks.iter().find(|b| b.name == name).expect(name);
+    block.sheet.as_ref().expect("linked").state
+}
+
+/// Beta's sheet leaves the hierarchy and Gamma's comes in.
+fn change_hierarchy(dir: &Path) {
+    write_hierarchy(dir, &[("Alpha", "a.snxsch"), ("Gamma", "c.snxsch")]);
+}
+
+#[test]
+fn resync_applies_the_new_block_and_reviews_the_unlink() {
+    let dir = tempfile::tempdir().expect("dir");
+    let (mut app, file) = generated(dir.path());
+    open(&mut app, &file);
+    change_hierarchy(dir.path());
+    send(&mut app, &file, TabEvent::ResyncPressed);
+
+    let editor = &app.document_state.block_diagrams.editors[&file];
+    assert_eq!(editor.undo.len(), 1, "Gamma came in as one step");
+    assert!(editor.diagram.blocks.iter().any(|b| b.name == "Gamma"));
+    assert_eq!(
+        block_state(&app, &file, "Beta"),
+        LinkState::Linked,
+        "not yet"
+    );
+    let review = editor.review.as_ref().expect("the review opened");
+    assert_eq!(review.unlink.len(), 1);
+    assert_eq!(review.added.len(), 1);
+    let shown = previews(review);
+    assert!(shown.iter().any(|(_, p)| *p == Preview::Added), "{shown:?}");
+    assert!(
+        shown.iter().any(|(_, p)| *p == Preview::Unlinked),
+        "{shown:?}"
+    );
+
+    let shown = texts(&app, &file);
+    for expected in [
+        "Re-sync from sheets",
+        "Unlinked 1",
+        "Beta",
+        "1 of 1 selected · one undo step",
+    ] {
+        assert!(shown.iter().any(|t| t == expected), "{expected}: {shown:?}");
+    }
+    let beta = review.unlink[0].block;
+    send(
+        &mut app,
+        &file,
+        TabEvent::Review(ReviewEvent::RowToggled(beta, false)),
+    );
+    let review = app.document_state.block_diagrams.editors[&file]
+        .review
+        .as_ref()
+        .expect("open");
+    let shown = previews(review);
+    assert!(
+        !shown.iter().any(|(_, p)| *p == Preview::Unlinked),
+        "unticked: no hatch"
+    );
+    assert!(
+        texts(&app, &file)
+            .iter()
+            .any(|t| t == "0 of 1 selected · one undo step")
+    );
+    send(
+        &mut app,
+        &file,
+        TabEvent::Review(ReviewEvent::RowToggled(beta, true)),
+    );
+
+    let clicked: Vec<TabEvent> = messages_on_click(
+        app.view_block_diagram_tab(file.clone()),
+        WINDOW,
+        "Apply selected",
+    )
+    .into_iter()
+    .filter_map(|m| match m {
+        Message::BlockDiagram(BlockDiagramMsg::Tab { event, .. }) => Some(event),
+        _ => None,
+    })
+    .collect();
+    assert_eq!(clicked, [TabEvent::Review(ReviewEvent::ApplyPressed)]);
+    send(&mut app, &file, TabEvent::Review(ReviewEvent::ApplyPressed));
+    let editor = &app.document_state.block_diagrams.editors[&file];
+    assert!(editor.review.is_none());
+    assert_eq!(editor.undo.len(), 2, "Apply selected is one undo step");
+    assert_eq!(block_state(&app, &file, "Beta"), LinkState::Unlinked);
+    send(&mut app, &file, TabEvent::UndoPressed);
+    assert_eq!(block_state(&app, &file, "Beta"), LinkState::Linked);
+}
+
+#[test]
+fn an_unchecked_row_is_listed_again_next_time_and_nothing_to_change_closes() {
+    let dir = tempfile::tempdir().expect("dir");
+    let (mut app, file) = generated(dir.path());
+    open(&mut app, &file);
+    change_hierarchy(dir.path());
+    send(&mut app, &file, TabEvent::ResyncPressed);
+    let beta = app.document_state.block_diagrams.editors[&file]
+        .review
+        .as_ref()
+        .expect("open")
+        .unlink[0]
+        .block;
+    send(
+        &mut app,
+        &file,
+        TabEvent::Review(ReviewEvent::RowToggled(beta, false)),
+    );
+    send(&mut app, &file, TabEvent::Review(ReviewEvent::ApplyPressed));
+    assert_eq!(block_state(&app, &file, "Beta"), LinkState::Linked);
+
+    send(&mut app, &file, TabEvent::ResyncPressed);
+    let review = app.document_state.block_diagrams.editors[&file]
+        .review
+        .clone()
+        .expect("listed again");
+    assert_eq!(review.unlink.len(), 1);
+    assert!(review.unlink[0].checked, "checked again");
+
+    // Beta's sheet comes back while the review is open.
+    write_hierarchy(
+        dir.path(),
+        &[
+            ("Alpha", "a.snxsch"),
+            ("Beta", "b.snxsch"),
+            ("Gamma", "c.snxsch"),
+        ],
+    );
+    send(&mut app, &file, TabEvent::ResyncPressed);
+    assert!(texts(&app, &file).iter().any(|t| t == "Nothing to change"));
+    send(&mut app, &file, TabEvent::Review(ReviewEvent::Closed));
+    assert!(
+        app.document_state.block_diagrams.editors[&file]
+            .review
+            .is_none()
+    );
+
+    // With nothing to unlink no review opens.
+    send(&mut app, &file, TabEvent::ResyncPressed);
+    assert!(
+        app.document_state.block_diagrams.editors[&file]
+            .review
+            .is_none()
+    );
+}
+
+#[test]
+fn headless_regenerate_skips_or_applies_the_unlink() {
+    let dir = tempfile::tempdir().expect("dir");
+    let (mut app, file) = generated(dir.path());
+    change_hierarchy(dir.path());
+    let project = format!("document={}", dir.path().join("ProjectA.snxprj").display());
+    let skip = run(
+        &mut app,
+        "regenerate_block_diagram",
+        &[&project, "apply=true", "unlink=skip"],
+    );
+    let CommandOutcome::Answered(answer) = skip else {
+        panic!("{skip:?}");
+    };
+    assert_eq!(
+        answer["skipped"].as_array().map(Vec::len),
+        Some(1),
+        "{answer}"
+    );
+    assert_eq!(answer["skipped"][0]["change"], "sheet_removed", "{answer}");
+    assert!(
+        !answer["changes"]
+            .as_array()
+            .expect("changes")
+            .iter()
+            .any(|c| c["change"] == "sheet_removed"),
+        "{answer}"
+    );
+    let read = read_block_diagram(&file).expect("written").diagram;
+    let beta = read.blocks.iter().find(|b| b.name == "Beta").expect("Beta");
+    assert_eq!(beta.sheet.as_ref().unwrap().state, LinkState::Linked);
+    assert!(
+        read.blocks.iter().any(|b| b.name == "Gamma"),
+        "the rest applied"
+    );
+
+    let apply = run(
+        &mut app,
+        "regenerate_block_diagram",
+        &[&project, "apply=true", "unlink=apply"],
+    );
+    let CommandOutcome::Answered(answer) = apply else {
+        panic!("{apply:?}");
+    };
+    assert_eq!(answer["skipped"], serde_json::json!([]), "{answer}");
+    let read = read_block_diagram(&file).expect("written").diagram;
+    let beta = read.blocks.iter().find(|b| b.name == "Beta").expect("Beta");
+    assert_eq!(beta.sheet.as_ref().unwrap().state, LinkState::Unlinked);
+
+    let bad = run(
+        &mut app,
+        "regenerate_block_diagram",
+        &[&project, "unlink=maybe"],
+    );
+    assert!(matches!(bad, CommandOutcome::Disabled { .. }), "{bad:?}");
+}

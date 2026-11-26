@@ -76,6 +76,7 @@ impl Signex {
             }
             TabEvent::PartOpened(part) => return self.open_power_part(&path, part),
             TabEvent::VariantPicked(variant) => return self.pick_power_variant(&path, variant),
+            TabEvent::Review(event) => return self.block_diagram_review_event(&path, event),
             TabEvent::ShowGroundToggled(on) => {
                 if let Some(editor) = self.document_state.block_diagrams.editors.get_mut(&path) {
                     editor.show_ground = on;

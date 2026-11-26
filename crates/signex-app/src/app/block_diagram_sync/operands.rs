@@ -184,6 +184,9 @@ impl Signex {
             }
             _ => (target, None),
         };
+        // The tab's own Re-sync leaves unlinking for its review (mockup row
+        // 210); with operands `unlink=skip` does the same.
+        let unlink = base.is_none() && unlink_operand(args)?;
         let job = SyncJob {
             mode,
             target,
@@ -193,6 +196,7 @@ impl Signex {
             root,
             fold,
             naming: project.data.schematic_design.channel_naming.clone(),
+            unlink,
         };
         Ok(Planned {
             job,
@@ -231,6 +235,22 @@ fn target_path(args: &CommandArgs, project: &LoadedProject) -> Result<PathBuf, T
             .arg("path", path.display().to_string()));
     }
     Ok(path)
+}
+
+/// `unlink=apply` (the default) or `unlink=skip`.
+fn unlink_operand(args: &CommandArgs) -> Result<bool, Translatable> {
+    let bad = |text: &str| {
+        Translatable::new(ids::PROJECT_BLOCK_DIAGRAM_BAD_UNLINK).arg("value", text.to_string())
+    };
+    match args.operand("unlink") {
+        None => Ok(true),
+        Some(OperandValue::Text(text)) => match text.trim() {
+            "apply" => Ok(true),
+            "skip" => Ok(false),
+            other => Err(bad(other)),
+        },
+        Some(_) => Err(bad("")),
+    }
 }
 
 fn bool_operand(args: &CommandArgs, name: &str) -> Option<bool> {
