@@ -860,3 +860,46 @@ library-change-component-warn-gained = New pins landing on a wire they were not 
 # range-filter-chip glyph
 # The × that removes an applied range filter chip.
 library-range-filter-remove = ✕
+
+# Library import (#3113, #3114). $binary is a program name, $env an environment variable, $install a shell command.
+library-import-not-installed = The library converter { $binary } was not found on PATH. Install it with { $install }, or set { $env } to its path.
+# $env is an environment variable, $path a file path.
+library-import-override-not-a-file = { $env } is set to { $path }, which is not a file. Point it at the converter, or unset it to search PATH.
+# $converter is a program name, $error the reason.
+library-import-describe-failed = Could not ask { $converter } what it imports: { $error }
+# $contract is a version such as 2.0.
+library-import-unsupported-contract = { $converter } speaks converter contract { $contract }, which this Signex does not support. Update Signex, or install an older converter.
+library-import-path-not-absolute = { $path } is not an absolute path.
+library-import-start-failed = Could not start { $path }: { $error }
+library-import-cancelled = The import was cancelled.
+# $seconds is a whole number.
+library-import-silent = The converter reported nothing for { $seconds } s and was stopped.
+# $error is the converter's own message.
+library-import-converter-failed = The converter failed: { $error }
+# $status is the process exit status, $stderr the end of its error output.
+library-import-no-summary = The converter ended without a result ({ $status }). { $stderr }
+# $code is the exit code, $exit the result the converter printed.
+library-import-exit-mismatch = The converter exited with { $code } but reported { $exit }; the import is treated as failed.
+# $output is the folder the library was written to.
+library-import-path-outside = The converter reported { $path }, which is not inside { $output }.
+library-import-path-unreadable = The converter reported { $path }, which cannot be read: { $error }
+library-import-wait-failed = Could not wait for the converter: { $error }
+# $count is a whole number, $paths a comma-separated list of files.
+library-import-uncommitted = { $count ->
+        [one] The library has an uncommitted change ({ $paths }). An update would overwrite it: commit or discard it first.
+       *[other] The library has { $count } uncommitted changes ({ $paths }). An update would overwrite them: commit or discard them first.
+    }
+library-import-git-failed = The library was written, but its version history could not be recorded: { $error }
+library-import-no-library-file = { $path } holds no .snxlib library file.
+library-import-failed-title = Library Import Failed
+library-import-done-title = Library Imported
+# $name is the library name, $parts and $skipped whole numbers.
+library-import-done = Imported { $name } to { $path }: { $parts } parts, { $skipped } skipped. See import-report.md there for what was approximated or left out.
+# $count is a whole number.
+library-import-local-commits = { $count ->
+        [one] The library has { $count } commit that is not an import. Updating replaces its content with the source; the commit stays in the history.
+       *[other] The library has { $count } commits that are not imports. Updating replaces their content with the source; the commits stay in the history.
+    }
+# $path is the library being imported.
+library-import-running = An import of { $path } is still running; wait for it to finish or cancel it.
+library-import-no-project = No project is open to add the library to; it was added for all projects instead.

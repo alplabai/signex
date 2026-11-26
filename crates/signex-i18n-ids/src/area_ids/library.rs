@@ -340,4 +340,28 @@ define_ids! {
     LIBRARY_CHANGE_COMPONENT_WARN_GAINED = "library-change-component-warn-gained";
     // range-filter-chip glyph
     LIBRARY_RANGE_FILTER_REMOVE = "library-range-filter-remove";
+    // library import (#3113, #3114)
+    LIBRARY_IMPORT_NOT_INSTALLED = "library-import-not-installed";
+    LIBRARY_IMPORT_OVERRIDE_NOT_A_FILE = "library-import-override-not-a-file";
+    LIBRARY_IMPORT_DESCRIBE_FAILED = "library-import-describe-failed";
+    LIBRARY_IMPORT_UNSUPPORTED_CONTRACT = "library-import-unsupported-contract";
+    LIBRARY_IMPORT_PATH_NOT_ABSOLUTE = "library-import-path-not-absolute";
+    LIBRARY_IMPORT_START_FAILED = "library-import-start-failed";
+    LIBRARY_IMPORT_CANCELLED = "library-import-cancelled";
+    LIBRARY_IMPORT_SILENT = "library-import-silent";
+    LIBRARY_IMPORT_CONVERTER_FAILED = "library-import-converter-failed";
+    LIBRARY_IMPORT_NO_SUMMARY = "library-import-no-summary";
+    LIBRARY_IMPORT_EXIT_MISMATCH = "library-import-exit-mismatch";
+    LIBRARY_IMPORT_PATH_OUTSIDE = "library-import-path-outside";
+    LIBRARY_IMPORT_PATH_UNREADABLE = "library-import-path-unreadable";
+    LIBRARY_IMPORT_WAIT_FAILED = "library-import-wait-failed";
+    LIBRARY_IMPORT_UNCOMMITTED = "library-import-uncommitted";
+    LIBRARY_IMPORT_GIT_FAILED = "library-import-git-failed";
+    LIBRARY_IMPORT_NO_LIBRARY_FILE = "library-import-no-library-file";
+    LIBRARY_IMPORT_FAILED_TITLE = "library-import-failed-title";
+    LIBRARY_IMPORT_DONE_TITLE = "library-import-done-title";
+    LIBRARY_IMPORT_DONE = "library-import-done";
+    LIBRARY_IMPORT_LOCAL_COMMITS = "library-import-local-commits";
+    LIBRARY_IMPORT_RUNNING = "library-import-running";
+    LIBRARY_IMPORT_NO_PROJECT = "library-import-no-project";
 }

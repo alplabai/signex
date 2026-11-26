@@ -28,6 +28,7 @@ pub mod about;
 pub mod about_modal;
 pub mod active_bar;
 pub mod altium_import;
+pub mod library_import;
 pub mod annotate_undo;
 pub mod app;
 pub mod autosave;
