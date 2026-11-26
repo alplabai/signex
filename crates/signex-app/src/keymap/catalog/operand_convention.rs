@@ -128,6 +128,28 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("pin", OperandKind::Text),
     // Mockup row 199: a notebook timeline's quantity.
     ("quantity", OperandKind::Text),
+    // #2945, mockup row 201: Generate design notebook's sections (a comma
+    // list or `all`), variant, page template, document number, revision,
+    // check source (`run`, `last`), the `--fail-on` conditions, and
+    // whether it writes the report and replaces one that is there.
+    ("sections", OperandKind::Text),
+    ("variant", OperandKind::Text),
+    ("template", OperandKind::Text),
+    ("document_number", OperandKind::Text),
+    ("revision", OperandKind::Text),
+    ("checks", OperandKind::Text),
+    ("fail_on", OperandKind::Text),
+    ("save", OperandKind::Bool),
+    ("update", OperandKind::Bool),
+    // Mockup row 202: the notebook PDF export's notebook file, paper, stale
+    // rule, annotation kinds and what it prints.
+    ("notebook", OperandKind::Text),
+    ("paper", OperandKind::Text),
+    ("stale", OperandKind::Text),
+    ("annotations", OperandKind::Text),
+    ("contents", OperandKind::Bool),
+    ("bookmarks", OperandKind::Bool),
+    ("python_source", OperandKind::Bool),
     // #2552: a move's wire handling, given by the caller, not the settings.
     ("keep_wires", OperandKind::Bool),
     ("wiring", OperandKind::Text),

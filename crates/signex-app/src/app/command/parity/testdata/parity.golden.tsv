@@ -664,11 +664,13 @@ next_signal_layer	headless_refusal	headless_refusal	gui	none	routing
 notebook_attachments	query	run_query	core	origin	handler
 notebook_attachments	headless_missing_operand	needs `document`	core	none	routing
 notebook_badges	operand_handler	run_operands: named document	gui	origin	handler
+notebook_badges	refusal_needs_operands	needs_operands_reason	gui	none	routing
 notebook_badges	headless_missing_operand	needs `document`	gui	none	routing
 notebook_compile	operand_handler	run_operands: named document	core	origin	handler
 notebook_compile	refusal_needs_operands	needs_operands_reason	gui	none	routing
 notebook_compile	headless_missing_operand	needs `document`	core	none	routing
 notebook_fix_reference	operand_handler	run_operands: named document	core	origin	handler
+notebook_fix_reference	refusal_needs_operands	needs_operands_reason	gui	none	routing
 notebook_fix_reference	headless_missing_operand	needs `document`	core	none	routing
 notebook_insert	operand_handler	run_operands: named document	core	cursor,origin	handler
 notebook_insert	refusal_needs_operands	needs_operands_reason	gui	none	routing
@@ -676,10 +678,13 @@ notebook_insert	headless_missing_operand	needs `document`	core	none	routing
 notebook_measurements	query	run_query	core	origin	handler
 notebook_measurements	headless_missing_operand	needs `document`	core	none	routing
 notebook_reference_card	operand_handler	run_operands: named document	gui	origin	handler
+notebook_reference_card	refusal_needs_operands	needs_operands_reason	gui	none	routing
 notebook_reference_card	headless_missing_operand	needs `document`	gui	none	routing
 notebook_reference_picker	operand_handler	run_operands: named document	gui	origin	handler
+notebook_reference_picker	refusal_needs_operands	needs_operands_reason	gui	none	routing
 notebook_reference_picker	headless_missing_operand	needs `document`	gui	none	routing
 notebook_references	operand_handler	run_operands: named document	gui	origin	handler
+notebook_references	refusal_needs_operands	needs_operands_reason	gui	none	routing
 notebook_references	headless_missing_operand	needs `document`	gui	none	routing
 notebook_timeline	query	run_query	core	origin	handler
 notebook_timeline	headless_missing_operand	needs `document`	core	none	routing

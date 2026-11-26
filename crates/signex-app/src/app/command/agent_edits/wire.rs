@@ -343,6 +343,11 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "notebook_insert",
         "it edits the project's Design Notebook, which no sheet's undo step covers; run it as its own command",
     ),
+    // Mockup row 196: a reference fix edits the notebook tab's text too.
+    (
+        "notebook_fix_reference",
+        "it edits the project's Design Notebook, which no sheet's undo step covers; run it as its own command",
+    ),
 ];
 
 const BOARD_EDIT: &str =

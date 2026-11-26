@@ -593,6 +593,17 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
             "the `notebook_*` commands need their operands — \
              use the Design Notebook tab",
         ),
+        // Mockup rows 196 and 197: a person reads references on the
+        // notebook tab's References panel and cards, and the badges on the
+        // sheet (View ▸ Notebook Badges).
+        "notebook_references"
+        | "notebook_reference_card"
+        | "notebook_reference_picker"
+        | "notebook_badges"
+        | "notebook_fix_reference" => Some(
+            "the notebook reference commands need their operands — \
+             use the References panel of the Design Notebook tab",
+        ),
         _ => None,
     }
 }

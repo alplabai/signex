@@ -154,6 +154,12 @@ mod tests {
         ctx
     }
 
+    /// The section's title as its header draws it: "DESIGN NOTES" in
+    /// en-US.
+    fn heading(ctx: &PanelContext) -> String {
+        ctx.i18n.upper_for_display("Design notes")
+    }
+
     fn section<'a>(ctx: &'a PanelContext, designator: &str) -> Element<'a, PanelMsg> {
         push_design_notes_section(Column::new(), ctx, designator).boxed()
     }
@@ -171,7 +177,9 @@ mod tests {
     fn each_note_shows_its_kind_title_status_and_date() {
         let ctx = ctx();
         let texts = lay_out_texts(section(&ctx, "R7"), WINDOW);
-        find(&texts, "Design notes");
+        // A Properties section title is upper-cased for the locale, as
+        // every section header draws it (#2531).
+        find(&texts, &heading(&ctx));
         find(&texts, "Calculation");
         find(&texts, "Output voltage");
         find(&texts, "Up to date");
@@ -185,7 +193,8 @@ mod tests {
     fn a_part_the_notebook_does_not_write_about_has_no_section() {
         let ctx = ctx();
         let texts = lay_out_texts(section(&ctx, "C9"), WINDOW);
-        assert!(texts.iter().all(|t| t.text != "Design notes"), "{texts:?}");
+        let heading = heading(&ctx);
+        assert!(texts.iter().all(|t| t.text != heading), "{texts:?}");
     }
 
     #[test]
