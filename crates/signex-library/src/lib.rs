@@ -28,6 +28,8 @@ mod git_history;
 pub mod git_identity;
 pub mod hash;
 pub mod identity;
+#[cfg(feature = "local-git")]
+pub mod import_snapshot;
 pub mod library_file;
 pub mod lifecycle;
 pub mod manifest;
