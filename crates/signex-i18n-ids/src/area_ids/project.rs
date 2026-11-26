@@ -354,6 +354,10 @@ define_ids! {
     VARIANT_EDIT_PINS_MATCH_DETAIL = "variant-edit-pins-match-detail";
     VARIANT_EDIT_PINS_DIFFER = "variant-edit-pins-differ";
     VARIANT_EDIT_PINS_DIFFER_DETAIL = "variant-edit-pins-differ-detail";
+    VARIANT_EDIT_PINS_LOSES_WIRE = "variant-edit-pins-loses-wire";
+    VARIANT_EDIT_PINS_NO_WIRE = "variant-edit-pins-no-wire";
+    VARIANT_EDIT_FITTED_IN = "variant-edit-fitted-in";
+    VARIANT_EDIT_NOT_FITTED_IN = "variant-edit-not-fitted-in";
     VARIANT_EDIT_PINS_UNKNOWN = "variant-edit-pins-unknown";
     VARIANT_EDIT_PINS_UNKNOWN_DETAIL = "variant-edit-pins-unknown-detail";
     VARIANT_EDIT_SAME_FOOTPRINT_HEAD = "variant-edit-same-footprint-head";

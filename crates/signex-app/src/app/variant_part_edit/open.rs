@@ -7,7 +7,7 @@ use std::sync::LazyLock;
 use iced::Task;
 use signex_types::pcb::SymbolLink;
 use signex_types::project::{PartRef, is_base_variant};
-use signex_types::schematic::{InstancePath, normalized_lib_id};
+use signex_types::schematic::{InstancePath, SchematicSheet, Symbol, normalized_lib_id};
 
 use super::VariantPartEditMsg;
 use super::candidates::{CandidateQuery, read_candidates};
@@ -15,11 +15,25 @@ use super::state::{
     AlternatePicker, CandidateRead, EditedPart, PartFacts, ValuePopover, VariantEditKind,
     VariantPartEdit,
 };
+use crate::app::state::ProjectId;
 use crate::app::{Message, Signex};
 
 /// The popover's value field, focused when it opens.
 pub static VARIANT_VALUE_INPUT_ID: LazyLock<iced::widget::Id> =
     LazyLock::new(|| iced::widget::Id::new("signex.variant_value"));
+
+/// A part the Variant Manager names, for the picker: its project, the
+/// cell's variant, the part (a channel's copy on a repeated sheet), and for a
+/// copy its channel, the first and last channel and every channel's copy.
+#[derive(Debug, Clone)]
+pub(crate) struct ManagedPart {
+    pub project: ProjectId,
+    pub variant: String,
+    pub this_part: PartRef,
+    pub channel: Option<String>,
+    pub channels: Option<(String, String)>,
+    pub every_channel: Vec<PartRef>,
+}
 
 impl Signex {
     /// In variant ▸ Alternate… or Edit value for this variant…, picked in
@@ -50,6 +64,63 @@ impl Signex {
                 iced::widget::operation::focus(VARIANT_VALUE_INPUT_ID.clone())
             }
         }
+    }
+
+    /// Alternate… of a Variant Manager cell (mockup rows 32, 208): the
+    /// picker for `part`, read from the open sheet that places its first
+    /// unit. Nothing opens in Base or when no open sheet places it.
+    pub(crate) fn open_alternate_for(&mut self, part: ManagedPart) -> Task<Message> {
+        let Some(part) = self.managed_edited_part(part) else {
+            return Task::none();
+        };
+        let picker = AlternatePicker::new(part);
+        self.ui_state.variant_part_edit = Some(Box::new(VariantPartEdit::Alternate(picker)));
+        self.read_variant_candidates()
+    }
+
+    /// `part` with the sheet that places it: its first placed unit on the
+    /// project's open sheets (a channel's copy names its own placement).
+    fn managed_edited_part(&self, part: ManagedPart) -> Option<EditedPart> {
+        if is_base_variant(&part.variant) {
+            return None;
+        }
+        let link = part.this_part.part.as_ref();
+        let designator = part.this_part.designator.as_str();
+        let mut paths: Vec<&std::path::PathBuf> = self
+            .document_state
+            .engines
+            .keys()
+            .filter(|path| {
+                self.document_state
+                    .document_project(path)
+                    .is_some_and(|project| project.id == part.project)
+            })
+            .collect();
+        paths.sort();
+        let (path, sheet, symbol) = paths.into_iter().find_map(|path| {
+            let sheet = self.document_state.engines.get(path)?.document();
+            let symbol = sheet.symbols.iter().find(|symbol| match link {
+                Some(link) => link.units.contains(&symbol.uuid),
+                None => !symbol.is_power && symbol.reference == designator,
+            })?;
+            Some((path, sheet, symbol))
+        })?;
+        let placement = link.map_or_else(InstancePath::root, |link| link.sheet.clone());
+        Some(EditedPart {
+            project: part.project,
+            sheet: file_name(path),
+            path: path.clone(),
+            sheet_fitted: sheets_fit(sheet, symbol, &placement, &part.variant),
+            variant: part.variant,
+            this_part: part.this_part,
+            channel: part.channel,
+            channels: part.channels,
+            every_channel: part.every_channel,
+            base: PartFacts::of(sheet, symbol),
+            row: symbol.library_id.zip(symbol.row_id),
+            anchor: (0.0, 0.0),
+            window: None,
+        })
     }
 
     /// The part selected in `window` and where an edit of it applies; `None`
@@ -108,20 +179,18 @@ impl Signex {
                     (PartRef::new(designator, Some(link)), None, None, Vec::new())
                 }
             };
-        let row = symbol.library_id.zip(symbol.row_id);
         Some(EditedPart {
             project: project.id,
             variant: variant.to_string(),
-            sheet: path
-                .file_name()
-                .map(|name| name.to_string_lossy().into_owned())
-                .unwrap_or_default(),
+            sheet: file_name(path),
+            path: path.clone(),
+            sheet_fitted: sheets_fit(sheet, symbol, &placement, variant),
             this_part,
             channel,
             channels,
             every_channel,
             base: PartFacts::of(sheet, symbol),
-            row,
+            row: symbol.library_id.zip(symbol.row_id),
             anchor,
             window,
         })
@@ -182,6 +251,20 @@ impl Signex {
                     .collect()
             })
             .unwrap_or_default();
+        // The part's wiring is read once, with the picker's first read.
+        let sheet = picker
+            .wired
+            .is_none()
+            .then(|| self.document_state.engines.get(&picker.part.path))
+            .flatten()
+            .map(|engine| std::sync::Arc::new(engine.document().clone()));
+        let units = picker
+            .part
+            .this_part
+            .part
+            .as_ref()
+            .map(|link| link.units.clone())
+            .unwrap_or_default();
         CandidateQuery {
             row: picker.part.row,
             base_mpn: picker.part.base.mpn.clone(),
@@ -193,6 +276,37 @@ impl Signex {
                 .iter()
                 .map(|lib| (lib.library_id, lib.root.clone()))
                 .collect(),
+            sheet,
+            units,
         }
     }
+}
+
+/// A sheet's file name, for the picker's heading.
+pub(super) fn file_name(path: &std::path::Path) -> String {
+    path.file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default()
+}
+
+/// Whether the sheets fit the part `symbol` belongs to in `variant`: its
+/// units on `sheet` at `placement`, as the BOM decides before the variant's
+/// own fit.
+pub(super) fn sheets_fit(
+    sheet: &SchematicSheet,
+    symbol: &Symbol,
+    placement: &InstancePath,
+    variant: &str,
+) -> bool {
+    let designator = symbol.designator_in(placement).trim();
+    let lib_id = normalized_lib_id(&symbol.lib_id);
+    let units: Vec<&Symbol> = sheet
+        .symbols
+        .iter()
+        .filter(|unit| {
+            unit.designator_in(placement).trim() == designator
+                && normalized_lib_id(&unit.lib_id) == lib_id
+        })
+        .collect();
+    signex_output::part_is_fitted(&units, Some(variant))
 }

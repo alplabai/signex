@@ -24,8 +24,12 @@ mod update;
 mod update_tests;
 #[cfg(test)]
 mod view_tests;
+mod wiring;
+#[cfg(test)]
+mod wiring_tests;
 
 pub use candidates::Candidates;
+pub(crate) use open::ManagedPart;
 pub(crate) use picker::EditCard;
 pub use state::{EditScope, VariantEditKind, VariantPartEdit};
 

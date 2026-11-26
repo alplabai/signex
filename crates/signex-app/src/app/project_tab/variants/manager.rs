@@ -59,4 +59,7 @@ pub enum VariantManagerMsg {
     /// Open in BOM Studio: the BOM of the project with `variant` picked
     /// (`None` is Base).
     BomRequested { variant: Option<String> },
+    /// Alternate… in the right pane: the Alternate part picker (mockup row
+    /// 208) opens for the cell's part in the cell's variant.
+    AlternateRequested { cell: VariantCell },
 }

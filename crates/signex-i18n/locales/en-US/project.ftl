@@ -437,6 +437,9 @@ variant-edit-alternate-title = Alternate part
 variant-edit-where = { $part } in { $variant } · { $sheet }
 variant-edit-where-channel = { $part } in { $variant } · { $channel } tab of { $sheet }
 variant-edit-base-part = Base part
+# The Base part card's pill: whether the variant fits the part.
+variant-edit-fitted-in = Fitted in { $variant }
+variant-edit-not-fitted-in = Not fitted in { $variant }
 variant-edit-fact-mpn = MPN
 variant-edit-fact-manufacturer = Manufacturer
 variant-edit-fact-value = Value
@@ -472,6 +475,10 @@ variant-edit-pins-match = Pins match
 variant-edit-pins-match-detail = { $count } of { $count }, same numbers and names
 variant-edit-pins-differ = Pins differ
 variant-edit-pins-differ-detail = { $theirs } pins vs { $ours }: numbers or names differ
+# The pin whose wiring changes, from the sheet's connectivity: $pin is its
+# number, $name its name.
+variant-edit-pins-loses-wire = { $theirs } pins vs { $ours }: pin { $pin } ({ $name }) loses its wire
+variant-edit-pins-no-wire = { $theirs } pins vs { $ours }: pin { $pin } ({ $name }) has no wire
 variant-edit-pins-unknown = Pins not compared
 variant-edit-pins-unknown-detail = The library part's symbol could not be read.
 variant-edit-same-footprint-head = Same footprint

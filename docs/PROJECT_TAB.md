@@ -136,8 +136,9 @@ message. The chrome catalog draws a sample of it.
   208), and a cell with a value of its own shows the value and what it
   replaces (value, footprint, override); hovering either says what the
   variant sets. A click selects a cell and the right pane shows that part in
-  that variant: a Fitting switch (Fitted, Not fitted; Alternate is greyed,
-  not built yet; As on the sheets drops the cell's own fit; picking the fit
+  that variant: a Fitting switch (Fitted, Not fitted; Alternate… opens the
+  canvas's Alternate part picker for the part, see "Alternate part and
+  variant value on the canvas"; As on the sheets drops the cell's own fit; picking the fit
   the sheets already give records nothing), the parameter overrides
   (Parameter, Base and variant columns: Value, Footprint and the part's
   fields with Base's value, the variant's value typed in place and stored on
@@ -309,7 +310,8 @@ are greyed in Base, without one part selected and on a repeated sheet
 before a compile. Code: `crates/signex-app/src/app/variant_part_edit/`.
 
 - **Picker.** The Base part on top (MPN, manufacturer, value, footprint,
-  pins). Candidates: the manufacturer alternates of the library row the part
+  pins, and "Fitted in <variant>" or "Not fitted in <variant>": the
+  variant's own fit, else the sheets'). Candidates: the manufacturer alternates of the library row the part
   was placed from, then a search over the project libraries for the typed
   words (part numbers, manufacturer, description, value, internal number;
   the part's own part number left out; the first 20 shown with the count).
@@ -323,6 +325,15 @@ before a compile. Code: `crates/signex-app/src/app/variant_part_edit/`.
   (numbers and names), footprint, and what the variant gets: the part
   number, and the value and footprint where they differ from the placed
   part's. A difference warns and Apply stays live (DECISIONS 2026-11-26).
+  Pins that differ name the pin whose wiring changes: a wired pin the
+  candidate lacks ("pin 2 (K) loses its wire"), else a candidate pin no
+  wire reaches ("pin 3 (GND) has no wire"). The part's wired pins come from
+  its sheet's netlist (`signex_net::build_netlist`), worked out in the
+  picker's first candidates read, off the update thread.
+- **From the Variant Manager.** Alternate… in the right pane opens the same
+  picker for the selected cell's part in the cell's variant: the part's
+  first placed unit on the project's open sheets, and for a channel's copy
+  that channel's placement, shown as the channel tab with the scope.
 - **Popover.** Parameter (Value by default; the list holds the part's Base
   parameters, an override already set shown in orange), Base read-only, the
   variant's value, then Reset to base, Cancel and OK. An empty field is not a
@@ -339,15 +350,15 @@ before a compile. Code: `crates/signex-app/src/app/variant_part_edit/`.
   outside cancel.
 - **Canvas marks.** In the active variant a part with an alternate draws a
   small `alt` tag by its designator, and a part with a value of its own a
-  `Δ` by its value (the value itself is drawn by the canvas's variant
-  values). Hovering a mark names the variant, what it sets and the Base
+  `Δ` by its value; the value itself draws in the accent (the theme's
+  selection colour) in place of the sheet's, on the CPU replay and the GPU
+  path from the one content scene. Hovering a mark names the variant, what it sets and the Base
   value. The marks are a layer of widgets over the canvas, placed through
   the live camera; Base marks nothing.
 
-Not built: the value drawn in the accent colour, the toast with Undo after
-Apply (Messages says what changed), the stock and lifecycle of a
-manufacturer alternate (the library keeps them per row), and opening the
-picker from a Variant Manager cell.
+Not built: the toast with Undo after Apply, which waits for the shared
+toast surface of #3002 (Messages says what changed meanwhile), and the stock
+and lifecycle of a manufacturer alternate (the library keeps them per row).
 
 ## Commands
 

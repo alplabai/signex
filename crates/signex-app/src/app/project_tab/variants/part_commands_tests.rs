@@ -230,7 +230,7 @@ fn an_unknown_part_a_bad_scope_and_base_are_refused() {
 
 /// `a.snxsch` places `child.snxsch` as `Repeat(CH, 1, 3)`; the child holds
 /// R5. Both are open; Lite is defined. The folder lives as long as the guard.
-fn repeated() -> (Signex, ProjectId, tempfile::TempDir) {
+pub(super) fn repeated() -> (Signex, ProjectId, tempfile::TempDir) {
     let dir = tempfile::tempdir().expect("a folder");
     let mut app = app_workspace(&dir.path().to_string_lossy(), &["a.snxsch", "child.snxsch"]);
     let root = SchematicSheet {
