@@ -28,6 +28,9 @@ mod sheet_tree;
 pub(crate) mod sheet_tree_tests;
 mod symbol_ctx;
 mod value_evaluation;
+mod variant_values;
+#[cfg(test)]
+mod variant_values_tests;
 mod window_panel_ctx;
 pub(crate) use window_panel_ctx::WindowCtxKey;
 #[cfg(test)]
@@ -668,7 +671,7 @@ impl Signex {
                     .sheet_path_for_window(window, &self.ui_state)
                     .map(std::path::PathBuf::as_path),
             ),
-            annotation_flags: self.annotation_flag_view(
+            notebook_badges: self.notebook_badge_view(
                 self.document_state
                     .sheet_path_for_window(window, &self.ui_state)
                     .map(std::path::PathBuf::as_path),

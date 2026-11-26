@@ -120,11 +120,15 @@ impl SyncJob {
             .iter()
             .map(|(key, path)| (key.clone(), project_relative(path, &self.project_dir)))
             .collect();
-        Ok(signex_net::derive_block_diagram(
-            &design.project(),
-            &self.naming,
-            &paths,
-        ))
+        let derived = signex_net::derive_block_diagram(&design.project(), &self.naming, &paths);
+        // A sheet with no id cannot be linked: refuse rather than leave its
+        // block out (an empty diagram, or an unlink on the next Re-sync).
+        if let Some(path) = derived.unidentified.first() {
+            return Err(Translatable::new(ids::PROJECT_BLOCK_DIAGRAM_SHEET_NO_ID)
+                .arg("path", path.clone())
+                .arg("count", derived.unidentified.len()));
+        }
+        Ok(derived)
     }
 
     fn generate(&self, derived: &DerivedDiagram, overwrite: bool) -> Result<Value, Translatable> {

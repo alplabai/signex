@@ -475,3 +475,61 @@ fn a_closed_windows_rows_are_dropped() {
     let _ = f.app.sync_object_list();
     assert!(!f.app.ui_state.object_list.windows.contains_key(&f.window));
 }
+
+/// #3039, mockup row 57: a wire row names its net. Listing a project sheet
+/// with no current net index starts a build; once it lands the row reads
+/// the net and the length in the panel.
+#[test]
+fn a_wire_row_names_its_net_once_the_listing_builds_the_index() {
+    use crate::app::handlers::menu::export::tests::{app_workspace, sheet_with_net};
+    use crate::panels::object_list::model::RowValue;
+    let dir = tempfile::tempdir().expect("temp dir");
+    let file = dir.path().join("u.snxsch");
+    let sheet = sheet_with_net("R1", "SW", &[]);
+    let wire = sheet.wires[0].uuid;
+    let text = signex_types::format::SnxSchematic::new(sheet)
+        .write_string()
+        .expect("encode");
+    std::fs::write(&file, text).expect("write");
+    let mut app = app_workspace(&dir.path().to_string_lossy(), &["u.snxsch"]);
+    assert!(app.open_or_focus_sheet_path(file));
+    let path = app.document_state.active_path.clone().expect("the sheet");
+    app.ui_state.object_list.scope = ObjectScope::ThisSheet;
+    app.document_state
+        .dock
+        .add_panel(PanelPosition::Right, PanelKind::ObjectList);
+    // From a clean slate: no index, no rows read yet.
+    app.document_state.net_nav.index = Default::default();
+    app.ui_state.object_list.source.reset();
+    let value = |app: &Signex| {
+        let rows = &app.ui_state.object_list.source.rows;
+        rows.iter()
+            .find(|r| r.target.item.uuid == wire)
+            .map(|r| r.value.clone())
+    };
+
+    let task = app.refresh_object_rows(ListSlot::Main, &path);
+    assert!(task.units() > 0, "the listing starts the index build");
+    assert!(
+        matches!(value(&app), Some(RowValue::Length { net: None, .. })),
+        "{:?}",
+        value(&app)
+    );
+
+    app.settle_net_index_blocking();
+    let _ = app.sync_object_list();
+    assert!(
+        matches!(value(&app), Some(RowValue::Length { net: Some(ref n), .. }) if n == "SW"),
+        "{:?}",
+        value(&app)
+    );
+    let ctx = &app.document_state.panel_ctx;
+    let shown: Vec<String> = crate::layout_probe::lay_out_texts(
+        crate::panels::object_list::view(ctx),
+        iced::Size::new(600.0, 1200.0),
+    )
+    .into_iter()
+    .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+    .collect();
+    assert!(shown.iter().any(|t| t.starts_with("SW, ")), "{shown:?}");
+}

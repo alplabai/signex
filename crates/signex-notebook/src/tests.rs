@@ -338,13 +338,16 @@ fn annotation(
 ) -> Annotation {
     Annotation {
         kind,
+        id: None,
         title: format!("Title {line}"),
         status,
         date: day.map(date),
         source: String::new(),
         snippet: "Ripple on VOUT".into(),
         references: vec![component("U3"), Reference::Net("VBUS".into())],
+        record: crate::Record::empty(kind),
         line,
+        span: 0..0,
     }
 }
 

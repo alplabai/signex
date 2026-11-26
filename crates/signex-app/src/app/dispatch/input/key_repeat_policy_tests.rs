@@ -15,8 +15,9 @@ fn in_catalog(text: &str) -> bool {
 }
 
 /// How many catalog ids start with `cycle_` or `toggle_`
-/// (`cycle_board_snapping` added by #2879).
-const CYCLE_AND_TOGGLE_IDS: usize = 27;
+/// (`cycle_board_snapping` added by #2879, `toggle_live_erc` by #1288,
+/// `toggle_notebook_badges`, View ▸ Notebook Badges on B, by mockup row 197).
+const CYCLE_AND_TOGGLE_IDS: usize = 29;
 
 #[test]
 fn every_cycle_and_toggle_id_in_the_catalog_runs_once() {

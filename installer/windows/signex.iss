@@ -80,6 +80,8 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "{#Binary}"; DestDir: "{app}"; Flags: ignoreversion
 ; Licenses of the fonts compiled into the binary (#1179).
 Source: "..\..\crates\signex-app\assets\fonts\OFL-*.md"; DestDir: "{app}\licenses\fonts"; Flags: ignoreversion
+; The typst-assets fonts the Design Notebook embeds: OFL, GUST, Bitstream Vera (#3023).
+Source: "..\..\crates\signex-notebook\fonts\*.md"; DestDir: "{app}\licenses\fonts"; Flags: ignoreversion
 ; Licence, NOTICE and third-party notices (Apache-2.0 §4(d), #2487).
 Source: "..\..\LICENSE"; DestDir: "{app}\licenses"; Flags: ignoreversion
 Source: "..\..\LICENSE-APACHE"; DestDir: "{app}\licenses"; Flags: ignoreversion

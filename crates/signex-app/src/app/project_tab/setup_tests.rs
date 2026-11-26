@@ -575,7 +575,7 @@ fn a_saved_profile_edit_changes_the_profile_only() {
     );
     edit(&mut app, NewProjectMsg::ProfileEditSaved);
     assert!(
-        app.ui_state
+        app.document_state
             .setup_profiles
             .iter()
             .any(|p| p.edited && p.id == "advanced" && p.pcb.clearance_mm == 0.12),
@@ -589,7 +589,7 @@ fn a_saved_profile_edit_changes_the_profile_only() {
 fn saved_profile(app: &mut Signex) -> String {
     let setup = signex_types::project::ProjectSetup::default();
     signex_types::project::save_user_profile(
-        &mut app.ui_state.setup_profiles,
+        &mut app.document_state.setup_profiles,
         "Mine",
         setup.pcb,
         setup.sheet,

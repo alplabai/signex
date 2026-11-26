@@ -1043,6 +1043,7 @@ fn page_tab_in_front(name: Option<&str>) -> PanelContext {
             pcb_file_dirty: false,
             pcb_file_active: false,
             pcb_file_missing: false,
+            has_notebook: false,
             sheets: Vec::new(),
             libraries: Vec::new(),
             is_active: true,

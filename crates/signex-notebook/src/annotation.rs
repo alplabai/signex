@@ -1,6 +1,10 @@
 //! An annotation block, its kind and its status.
 
+use std::ops::Range;
+
 use crate::date::IsoDate;
+use crate::id::BlockId;
+use crate::record::Record;
 use crate::reference::Reference;
 
 /// What an annotation records. Written as the `kind:` argument of the block.
@@ -101,29 +105,70 @@ impl Status {
     }
 }
 
-/// One `#annotation(...)[...]` block of a notebook.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// One annotation block of a notebook: `#note(...)`, `#calculation(...)`,
+/// `#measurement(...)`, `#issue(...)`, `#decision(...)`, or the earlier
+/// `#annotation(kind: ...)[...]`.
+#[derive(Debug, Clone, PartialEq)]
 pub struct Annotation {
     pub kind: AnnotationKind,
+    /// The typed id (`DEC-002`); the earlier form and a block written
+    /// without one have none.
+    pub id: Option<BlockId>,
     /// The `title:` argument, else the first line of the body (see
     /// `docs/NOTEBOOK_ANNOTATIONS.md`, "Title").
     pub title: String,
     pub status: Option<Status>,
     pub date: Option<IsoDate>,
-    /// The whole block as written, from `#annotation` to its closing `]`.
+    /// The whole block as written, from its `#` to its closing bracket.
     pub source: String,
     /// The body as plain text, references shown as their names.
     pub snippet: String,
-    /// The parts, nets and pins the body names, first mention first, each
-    /// once.
+    /// The parts, nets and pins the block names (its `target:` first, then
+    /// its fields and body), first mention first, each once.
     pub references: Vec<Reference>,
+    /// The review-record fields of its kind.
+    pub record: Record,
     /// The 1-based line the block starts on.
     pub line: u32,
+    /// The bytes of the file text the block spans.
+    pub span: Range<usize>,
 }
 
 impl Annotation {
     /// The first part the block names (a component, else a pin's part).
     pub fn first_component(&self) -> Option<&str> {
         self.references.iter().find_map(Reference::component)
+    }
+}
+
+impl serde::Serialize for AnnotationKind {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.token())
+    }
+}
+
+impl serde::Serialize for Status {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.token())
+    }
+}
+
+/// Written as `{"id": "DEC-002", "kind": "decision", "title": ...,
+/// "status": "accepted", "date": "2026-11-18", "line": 214, "references":
+/// [...], "snippet": ..., "record": {...}}` in a JSON result.
+impl serde::Serialize for Annotation {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(None)?;
+        map.serialize_entry("id", &self.id)?;
+        map.serialize_entry("kind", &self.kind)?;
+        map.serialize_entry("title", &self.title)?;
+        map.serialize_entry("status", &self.status)?;
+        map.serialize_entry("date", &self.date.map(|date| date.to_string()))?;
+        map.serialize_entry("line", &self.line)?;
+        map.serialize_entry("references", &self.references)?;
+        map.serialize_entry("snippet", &self.snippet)?;
+        map.serialize_entry("record", &self.record)?;
+        map.end()
     }
 }

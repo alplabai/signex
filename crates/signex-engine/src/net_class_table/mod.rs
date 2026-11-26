@@ -15,6 +15,10 @@ use serde::{Deserialize, Serialize};
 use signex_history::{DEFAULT_UNDO_DEPTH, History};
 use signex_types::net_class::{NetClass, NetClassBoardRules, NetClassStyle};
 
+mod from_schematic;
+
+pub use from_schematic::{SchematicClass, schematic_class_edit, schematic_classes};
+
 /// How many undo steps are kept unless the `undo_depth` setting says
 /// otherwise.
 pub const HISTORY_LIMIT: usize = DEFAULT_UNDO_DEPTH;

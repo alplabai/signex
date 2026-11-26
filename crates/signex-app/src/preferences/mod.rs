@@ -651,14 +651,25 @@ fn build_prefs_file_banner<'a>(
                 .color(ink)
                 .boxed(),
         );
-        // $error is the loader's English reason (#2061).
+        // The path alone in mono (mockup row 143, #3040). A path wider than
+        // the banner breaks inside it rather than running past its edge.
         lines = lines.push(
-            text(t!(i18n, ids::PREFERENCES_FILE_WHERE, "path" => path, "error" => error))
+            text(signex_i18n::UserText::new(path))
                 .size(chrome_px(11.5 * 11.0 / 12.0))
                 .font(crate::fonts::iced_font_for_family(
                     crate::fonts::CHROME_MONO_FONT,
                 ))
                 .color(ink)
+                .width(Length::Fill)
+                .wrapping(iced::widget::text::Wrapping::WordOrGlyph)
+                .boxed(),
+        );
+        // $error is the loader's English reason (#2061), as plain text.
+        lines = lines.push(
+            text(t!(i18n, ids::PREFERENCES_FILE_REASON, "error" => error))
+                .size(TS.caption)
+                .color(ink)
+                .width(Length::Fill)
                 .boxed(),
         );
         // Scoped to what `prefs.json` actually backs: Keyboard Shortcuts

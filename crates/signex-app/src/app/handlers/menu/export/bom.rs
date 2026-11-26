@@ -7,6 +7,11 @@ use signex_output::{BomColumn, BomExporter, BomFormat, BomGrouping, BomOptions, 
 
 use super::super::super::super::*;
 
+#[cfg(test)]
+#[path = "bom_computed_tests.rs"]
+mod computed_tests;
+#[path = "bom_lines.rs"]
+mod lines;
 #[path = "bom_rows.rs"]
 mod rows;
 #[cfg(test)]
@@ -21,39 +26,50 @@ impl Signex {
     /// in the modal and clicks Export to drive the file dialog.
     pub(crate) fn handle_bom_preview_open(&mut self) -> Task<Message> {
         let anchor = self.document_state.active_path.clone();
-        self.commit_drafts_in_scope_of(anchor.as_deref());
-        if let Some(anchor) = anchor.as_deref() {
-            self.report_part_field_issues_in_scope_of(anchor);
-        }
         if !self.document_state.has_active_engine() {
+            self.commit_drafts_in_scope_of(anchor.as_deref());
+            if let Some(anchor) = anchor.as_deref() {
+                self.report_part_field_issues_in_scope_of(anchor);
+            }
             log::warn!("BOM preview: no active schematic");
             return Task::none();
         }
         // Pin the preview to the document it is built for; Export writes
         // this one even after a tab switch (#852).
-        let Some(source) = self.document_state.active_path.clone() else {
+        let Some(source) = anchor else {
             crate::diagnostics::log_warning("BOM preview: no active document to export");
             return Task::none();
         };
         let active_variant = self
             .document_state
-            .active_document_project()
-            .and_then(|p| p.data.active_variant.clone())
-            .unwrap_or_else(|| "Base".to_string());
+            .document_project(&source)
+            .and_then(|p| p.data.active_variant.clone());
+        self.open_bom_preview_in(source, active_variant)
+    }
+
+    /// The BOM preview of the sheets `source` (an open sheet) belongs to,
+    /// with `variant` picked in its variant select (`None` or Base's name is
+    /// Base): the dialog Open in BOM Studio opens from the Variant Manager
+    /// (#2949) and File ▸ Reports ▸ BOM opens on the active variant.
+    pub(crate) fn open_bom_preview_in(
+        &mut self,
+        source: PathBuf,
+        variant: Option<String>,
+    ) -> Task<Message> {
+        self.commit_drafts_in_scope_of(Some(&source));
+        self.report_part_field_issues_in_scope_of(&source);
         let variants = self
             .document_state
-            .active_document_project()
+            .document_project(&source)
             .map(|p| p.data.variant_definitions.clone())
             .unwrap_or_default();
         let opts = BomOptions {
-            active_variant: if active_variant.eq_ignore_ascii_case("Base") {
-                None
-            } else {
-                Some(active_variant)
-            },
+            active_variant: variant.filter(|name| !signex_types::project::is_base_variant(name)),
             ..BomOptions::default()
         };
-        let Some((ctx, issues)) = super::build_bom_export_scope(&self.document_state) else {
+        let Some((ctx, issues)) =
+            super::build_bom_export_scope_for_source(&self.document_state, &source)
+        else {
             self.refuse_export(signex_i18n::ids::NOTICE_BOM_NO_SHEET);
             return Task::none();
         };
@@ -195,15 +211,33 @@ impl Signex {
     /// preserving the original slot would require a separate
     /// "available columns" Vec).
     pub(crate) fn handle_bom_preview_toggle_column(&mut self, col: BomColumn) {
+        let is_computed = matches!(col, BomColumn::Computed(_));
+        let mut added = false;
         if let Some(preview) = self.document_state.bom_preview.as_mut() {
             if let Some(idx) = preview.options.columns.iter().position(|c| c == &col) {
                 preview.options.columns.remove(idx);
             } else {
                 preview.options.columns.push(col);
+                added = true;
             }
         }
-        // Column toggles don't change the rolled-up table, only the
-        // displayed columns + the export columns. No rerollup needed.
+        // A column toggle changes only the shown and exported columns, except
+        // that a computed column's cells are evaluated in the rollup (#1988).
+        if added && is_computed {
+            self.rerollup_bom_preview();
+            self.report_computed_bom_issues();
+        }
+    }
+
+    /// One Messages line per computed cell of the preview that failed
+    /// (#1988), naming its line and the error.
+    pub(crate) fn report_computed_bom_issues(&self) {
+        let Some(preview) = self.document_state.bom_preview.as_ref() else {
+            return;
+        };
+        for issue in signex_output::bom::computed_issues(&preview.table, &preview.options.columns) {
+            crate::diagnostics::log_warning(issue.to_string());
+        }
     }
 
     /// Switch the active variant in the BOM preview. `None` is the
@@ -415,7 +449,7 @@ impl Signex {
     }
 
     /// The rolled-up table and its validation of an assembled scope.
-    fn bom_table_of(
+    pub(crate) fn bom_table_of(
         &self,
         mut ctx: signex_output::ExportContext,
         opts: &BomOptions,
@@ -522,6 +556,10 @@ impl Signex {
                 // Advisory, not a gate: the file is written; tell the
                 // user what validation found instead of dropping it.
                 let advisory = bom_validation_notice(&output.validation_report, &save_path);
+                // A computed cell that failed is written empty (#1988).
+                for issue in &output.computed_issues {
+                    crate::diagnostics::log_warning(issue.to_string());
+                }
                 let write = self.write_export(
                     save_path,
                     output.bytes,
@@ -555,7 +593,7 @@ impl Signex {
     /// [`Self::board_left_out_of_bom`] for the document in view.
     /// The alternates per line of `source`'s project (#2938), for the
     /// Alternates column; none for a sheet outside a project.
-    fn bom_alternates_of(
+    pub(super) fn bom_alternates_of(
         &self,
         source: &std::path::Path,
     ) -> Vec<signex_types::project::BomLineAlternates> {

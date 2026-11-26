@@ -307,6 +307,8 @@ pub enum ErcMsg {
         generation: u64,
         result: std::sync::Arc<Result<crate::app::handlers::erc::ErcRunOutcome, String>>,
     },
+    /// Live ERC (#1288): the wait after an edit, a finished check, the toggle.
+    Live(crate::app::handlers::erc::LiveErcMsg),
     /// The footer's "Profile" menu button was pressed: the menu opened, or
     /// closed when it was open.
     ProfileMenuToggled,
@@ -576,6 +578,9 @@ pub enum ExportMsg {
     },
     /// A block diagram's SVG or PDF export (#2796).
     BlockDiagram(crate::app::BlockDiagramExportMsg),
+    /// Export Design Notebook PDF (mockup row 202), routed to
+    /// `dispatch_notebook_pdf_message`.
+    NotebookPdf(crate::app::NotebookPdfMsg),
 }
 
 /// What an export's background file write produced, carried back to `update`
@@ -718,6 +723,8 @@ pub enum EditMsg {
     ArrangeDrawings(signex_engine::DrawingArrange),
     /// A placement extra on a sheet (#1667).
     Extras(super::PlacementExtrasMsg),
+    /// A pin or gate swap started on the sheet (#1261).
+    SheetSwap(crate::app::SheetSwapMsg),
     /// Bottom-up hierarchy (#1276): a sheet symbol from a sheet, and the
     /// sheet entry sync with its preview.
     SheetSync(crate::app::SheetSyncMsg),

@@ -98,8 +98,9 @@ pub struct UiState {
     /// the machine has one, else Signex Default" (#1608). Persisted in
     /// `prefs.json`.
     pub default_rule_profile: Option<String>,
-    /// The open "Save as profile" dialog of the ERC dialog (#1608).
-    pub save_profile_dialog: Option<crate::app::state::rule_profile_ui::SaveProfileDialog>,
+    /// The open "Save as profile" dialog of the ERC dialog (#1608). Boxed:
+    /// a closed dialog is one pointer of `UiState`.
+    pub save_profile_dialog: Option<Box<crate::app::state::rule_profile_ui::SaveProfileDialog>>,
     /// Profile file writes waiting their turn (#1608).
     pub profile_writes: crate::app::state::rule_profile_ui::ProfileWriteQueue,
     /// Loaded keyboard-shortcut profiles (bundled Signex Standard / Classic
@@ -545,15 +546,6 @@ pub struct UiState {
     /// The New PCB or New Schematic setup dialog, while open (#2232).
     /// Nothing is made until its Create. Boxed like `new_project`.
     pub document_setup: Option<Box<crate::app::DocumentSetupState>>,
-    /// The user's saved setup profiles (#2232), loaded from `prefs.json` at
-    /// boot and saved on every Save as profile and Remove.
-    pub setup_profiles: Vec<signex_types::project::UserProfile>,
-    /// Names of the profiles removed this session, by id, so a project that
-    /// still names one can say which.
-    pub removed_profile_names: std::collections::HashMap<String, String>,
-    /// Profile ids a project named and the user did not have, already said
-    /// in Messages this session.
-    pub missing_profiles_warned: std::collections::HashSet<String>,
     /// The Update PCB dialog, while open, or a headless `apply=true` run
     /// (#1312). Boxed like `new_project`.
     pub update_pcb: Option<Box<crate::app::UpdatePcbState>>,
@@ -583,12 +575,23 @@ pub struct UiState {
     /// Design ▸ Differential Pair Classes… (#1282), while open: a copy of
     /// the project's classes until OK.
     pub diff_pair_classes: Option<Box<crate::app::DiffPairClassesState>>,
+    /// Generate design notebook (#2945): its options dialog, and the newest
+    /// report made in the app, unsaved.
+    pub notebook_generate: Box<crate::app::NotebookGenerateUi>,
     /// Generation of the newest Fabrication Outputs write, outside the
     /// dialog so a reopened dialog never takes an older answer.
     pub fab_outputs_writes: u64,
     /// Board Reports and Board Print / PDF (#2404, #2402): the open dialog
     /// and the print options it was last used with.
     pub board_output: crate::app::BoardOutputState,
+    /// Export Design Notebook PDF (mockup row 202): the open dialog and the
+    /// checksum of each file exported this session. Boxed like
+    /// `new_project`.
+    pub notebook_pdf: Box<crate::app::NotebookPdfState>,
+    /// Each project's Design Notebook tab (mockup row 195): the editor, the
+    /// preview, the panels and the margin lane. The document it shows is in
+    /// `DocumentState::notebooks`.
+    pub notebook_tabs: Box<crate::app::notebook_tab::NotebookTabs>,
     /// Back Annotate (#1312), while open. Execute writes the sheets in
     /// memory as one undo group; nothing is written to disk. Boxed like
     /// `new_project`.
@@ -622,6 +625,9 @@ pub struct UiState {
     pub unions: Box<crate::app::unions::UnionsState>,
     /// The open Smart Paste dialog (mockup row 155).
     pub smart_paste: Option<Box<crate::smart_paste::SmartPasteState>>,
+    /// The open Alternate part picker or Edit value popover of the canvas's
+    /// In variant flyout (mockup rows 208, 209). Boxed: one pointer closed.
+    pub variant_part_edit: Option<Box<crate::app::variant_part_edit::VariantPartEdit>>,
     /// The Annotations panel's filters, expanded row and last scan (mockup row 165).
     /// Boxed: a pointer of the size budget (#2412).
     pub annotations: Box<crate::panels::AnnotationsState>,
@@ -672,6 +678,9 @@ pub struct UiState {
     pub erc_run_generation: u64,
     /// An ERC run is in flight; the ERC panel shows "Running…".
     pub erc_running: bool,
+    /// Live ERC (#1288): the preference, the wait after an edit and the
+    /// sheets the last live check read. Boxed: its maps stay off `UiState`.
+    pub(crate) live_erc: Box<crate::app::handlers::erc::LiveErc>,
     /// `DocumentState::sheet_edit_epoch` when the sheets behind the cached ERC
     /// results were read; the results are stale once the document is past it.
     pub erc_epoch: u64,
@@ -941,6 +950,7 @@ mod tests {
             ("fab_outputs", field_size(|ui| &ui.fab_outputs)),
             ("find_similar", field_size(|ui| &ui.find_similar)),
             ("paste_array", field_size(|ui| &ui.paste_array)),
+            ("variant_part_edit", field_size(|ui| &ui.variant_part_edit)),
             (
                 "selection_filter_custom",
                 field_size(|ui| &ui.selection_filter_custom),
@@ -954,9 +964,15 @@ mod tests {
             ("parameter_table", field_size(|ui| &ui.parameter_table)),
             ("parameter_import", field_size(|ui| &ui.parameter_import)),
             (
+                "save_profile_dialog",
+                field_size(|ui| &ui.save_profile_dialog),
+            ),
+            ("live_erc", field_size(|ui| &ui.live_erc)),
+            (
                 "board_output.dialog",
                 field_size(|ui| &ui.board_output.dialog),
             ),
+            ("notebook_pdf", field_size(|ui| &ui.notebook_pdf)),
             (
                 "preferences_pcb_defaults",
                 field_size(|ui| &ui.preferences_pcb_defaults),

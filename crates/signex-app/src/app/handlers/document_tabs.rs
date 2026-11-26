@@ -245,6 +245,15 @@ impl Signex {
         {
             return self.close_block_diagram_tab(idx, keep_session);
         }
+        // A notebook's text stays with its project (`app/notebook_tab`).
+        if self
+            .document_state
+            .tabs
+            .get(idx)
+            .is_some_and(|tab| tab.kind.as_notebook().is_some())
+        {
+            return self.close_notebook_tab(idx, keep_session);
+        }
         if let Some(tab) = self.document_state.tabs.get(idx) {
             let path = tab.path.clone();
             if park_dirty && !keep_session {

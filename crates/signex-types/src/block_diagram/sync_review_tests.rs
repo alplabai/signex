@@ -54,6 +54,7 @@ fn two_sheets() -> DerivedDiagram {
                 port: Some("LED".into()),
             },
         }],
+        unidentified: Vec::new(),
     }
 }
 

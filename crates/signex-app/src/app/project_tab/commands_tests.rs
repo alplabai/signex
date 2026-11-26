@@ -177,6 +177,42 @@ fn project_set_annotate_undo_stores_and_clears_the_choice() {
     assert_eq!(value["annotation"]["annotate_undo"], Value::Null);
 }
 
+/// #1292: the scheme is stored in the project, answered with the section,
+/// one General step, and continuous again with no value.
+#[test]
+fn project_set_annotate_numbering_stores_and_clears_the_scheme() {
+    use signex_types::designator::NumberingScheme;
+    let (mut app, id) = app();
+    let value = answer(&mut app, "project_settings", &[]);
+    assert_eq!(value["annotation"]["numbering"], "continuous");
+    let value = answer(
+        &mut app,
+        "project_set_annotate_numbering",
+        &["value=page_hundreds"],
+    );
+    assert_eq!(value["annotation"]["numbering"], "page_hundreds");
+    assert_eq!(value["changed"], true);
+    assert_eq!(
+        app.document_state.projects[0].data.annotate_numbering(),
+        NumberingScheme::PageHundreds
+    );
+    let refused = refusal(&mut app, "project_set_annotate_numbering", &["value=sheet"]);
+    assert!(refused.contains("page_thousands"), "{refused}");
+    let value = answer(&mut app, "project_set_annotate_numbering", &[]);
+    assert_eq!(value["annotation"]["numbering"], "continuous");
+    let stored = (app.document_state.projects[0].data.annotation.as_ref())
+        .and_then(|settings| settings.numbering);
+    assert_eq!(stored, None, "continuous is stored as no key");
+    // Two steps: the page scheme, then continuous again.
+    assert!(app.step_project_tab_history(id, true));
+    assert_eq!(
+        app.document_state.projects[0].data.annotate_numbering(),
+        NumberingScheme::PageHundreds
+    );
+    assert!(app.step_project_tab_history(id, true));
+    assert!(!app.step_project_tab_history(id, true));
+}
+
 #[test]
 fn project_set_version_control_refuses_without_a_repository() {
     let (mut app, _) = app();

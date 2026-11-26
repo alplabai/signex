@@ -514,6 +514,11 @@ impl Signex {
             .collect();
         let mut reloads = Vec::new();
         for path in stale {
+            // A clean held Design Notebook is read again (#3019).
+            if let Some(reread) = self.reread_clean_notebook(&path) {
+                reloads.push(reread);
+                continue;
+            }
             let has_tab = self.document_state.tabs.iter().any(|tab| {
                 tab.path == path && matches!(tab.kind, TabKind::Schematic | TabKind::Pcb)
             });

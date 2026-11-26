@@ -6,7 +6,7 @@ use super::super::*;
 use iced::widget::{Row, Space, column, container, mouse_area, row, scrollable};
 use iced::{Background, Color, Element, Length, Theme, Widget};
 use signex_i18n::UserText;
-use signex_output::{BomColumn, BomIssueSeverity, BomRow};
+use signex_output::{BomColumn, BomIssueSeverity, BomRow, ComputedCell};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, raw, text};
 
@@ -17,8 +17,9 @@ use crate::styles::{ChromeMetrics, HAIRLINE, Spacing, TypeScale, ti};
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
-/// The catalog name of a standard column; `None` for a custom-field column,
-/// whose name is the field's own. Exported files keep `BomColumn::header`.
+/// The catalog name of a standard column; `None` for a custom-field or a
+/// computed column (#1988), whose name is its own. Exported files keep
+/// `BomColumn::header`.
 pub(super) fn column_name(c: &BomColumn) -> Option<signex_i18n::MessageId> {
     use signex_i18n::ids;
     Some(match c {
@@ -30,7 +31,7 @@ pub(super) fn column_name(c: &BomColumn) -> Option<signex_i18n::MessageId> {
         BomColumn::Value => ids::BOM_COLUMN_VALUE,
         BomColumn::Footprint => ids::BOM_COLUMN_FOOTPRINT,
         BomColumn::Description => ids::BOM_COLUMN_DESCRIPTION,
-        BomColumn::Custom(_) => return None,
+        BomColumn::Custom(_) | BomColumn::Computed(_) => return None,
         BomColumn::UnitPrice => ids::BOM_COLUMN_UNIT_PRICE,
         BomColumn::BuyQty => ids::BOM_COLUMN_BUY_QTY,
         BomColumn::ExtendedPrice => ids::BOM_COLUMN_EXT_PRICE,
@@ -82,6 +83,14 @@ fn column_value(c: &BomColumn, r: &BomRow) -> String {
     signex_output::bom::cell_text(r, c)
 }
 
+/// Whether `c` is a computed column whose cell on `r`, a grouped line, has
+/// parts that give different results (#1988): the dialog says so in its own
+/// words, an exported file in `signex_output::bom::MEMBERS_DIFFER`.
+pub(super) fn parts_differ(c: &BomColumn, r: &BomRow) -> bool {
+    matches!(c, BomColumn::Computed(computed)
+        if matches!(r.computed.get(computed.name()), Some(ComputedCell::Differs)))
+}
+
 /// Columns of numbers: right-aligned, in the mono face.
 fn is_numeric(c: &BomColumn) -> bool {
     matches!(
@@ -111,7 +120,7 @@ pub(in crate::app) fn default_column_width(c: &BomColumn) -> f32 {
         BomColumn::Footprint => 118.0,
         BomColumn::LibRef => 110.0,
         BomColumn::Qty => 44.0,
-        BomColumn::Custom(_) => 120.0,
+        BomColumn::Custom(_) | BomColumn::Computed(_) => 120.0,
         BomColumn::UnitPrice | BomColumn::ExtendedPrice => 74.0,
         BomColumn::BuyQty | BomColumn::Stock => 66.0,
         BomColumn::Currency => 70.0,
@@ -281,7 +290,7 @@ impl Signex {
         for &line in &preview.visible_lines {
             // `visible_lines` and `row_order` are rebuilt with `table` in
             // `update`; a stale index means that pairing broke.
-            let Some((row_idx, r)) = preview
+            let Some(row) = preview
                 .row_order
                 .get(line)
                 .and_then(|&row_idx| preview.table.rows.get(row_idx).map(|r| (row_idx, r)))
@@ -291,12 +300,12 @@ impl Signex {
             };
             lines.push(table_line(
                 preview,
-                r,
-                row_idx,
+                row,
                 line + 1,
                 &widths,
                 table_width,
                 tokens,
+                self.ui_state.i18n.as_ref(),
             ));
         }
         // Room under the last line for the floating horizontal scrollbar.
@@ -443,17 +452,18 @@ impl Signex {
     }
 }
 
-/// One line: the gutter (line number, flag edge), the cells, then a soft
-/// rule. A click selects it.
+/// One line, `(row_idx, r)` of the table: the gutter (line number, flag
+/// edge), the cells, then a soft rule. A click selects it.
 fn table_line<'a>(
     preview: &BomPreviewState,
-    r: &BomRow,
-    row_idx: usize,
+    (row_idx, r): (usize, &BomRow),
     line_no: usize,
     widths: &[f32],
     table_width: f32,
     tokens: &ThemeTokens,
+    i18n: &signex_i18n::I18n,
 ) -> Element<'a, Message> {
+    use signex_i18n::ids;
     let res = resolve(tokens);
     let ink = ti(tokens.text);
     let mono = super::super::graphite::mono();
@@ -491,7 +501,9 @@ fn table_line<'a>(
     for (idx, c) in preview.options.columns.iter().enumerate() {
         let value = column_value(c, r);
         // An empty cell reads as a muted dash, as drawn.
-        let face = if value.is_empty() {
+        let face = if parts_differ(c, r) {
+            text(i18n.message(ids::BOM_COMPUTED_DIFFERS, &[])).color(res.ink4)
+        } else if value.is_empty() {
             // raw: a dash glyph for "nothing here", not language.
             text(raw("\u{2014}")).color(res.ink4)
         } else {

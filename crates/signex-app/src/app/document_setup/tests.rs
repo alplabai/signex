@@ -23,7 +23,7 @@ fn fixture(defaults: ProjectDefaults) -> Fixture {
     let tmp = tempfile::tempdir().expect("tempdir");
     let dir = tmp.path().to_path_buf();
     let (mut app, _boot) = Signex::new();
-    app.ui_state.setup_profiles.clear();
+    app.document_state.setup_profiles.clear();
     let data = ProjectData {
         document_id: None,
         description: None,
@@ -172,7 +172,7 @@ fn headless_new_pcb_with_an_unknown_profile_is_refused() {
 fn headless_new_schematic_with_a_saved_profile_writes_its_sheet() {
     let mut f = fixture(ProjectDefaults::default());
     save_user_profile(
-        &mut f.app.ui_state.setup_profiles,
+        &mut f.app.document_state.setup_profiles,
         "Big sheets",
         SetupProfile::Standard.pcb(8),
         SheetDefaults {
@@ -273,6 +273,59 @@ fn the_dialog_closes_when_its_project_closes() {
     f.app.document_state.active_project = None;
     let _ = f.app.update(Message::noop());
     assert!(f.app.ui_state.document_setup.is_none());
+}
+
+/// #1283: Add New from a sheet template of the project takes its frame; a
+/// template that is not there makes no sheet, and `scope` alone is refused.
+#[test]
+fn headless_new_schematic_from_a_sheet_template_takes_its_frame() {
+    use signex_types::reuse::ReuseKind;
+    let mut f = fixture(ProjectDefaults::default());
+    let mut frame = signex_types::schematic::SchematicSheet {
+        uuid: uuid::Uuid::now_v7(),
+        version: 1,
+        paper_size: "A1".to_string(),
+        ..Default::default()
+    };
+    frame
+        .title_block
+        .insert("title".to_string(), "Power stage".to_string());
+    let text = signex_types::format::SnxSchematic::new(frame)
+        .write_string()
+        .expect("encodes");
+    let file = ReuseKind::SheetTemplate.entry_path(&f.dir, "A1 power");
+    std::fs::create_dir_all(file.parent().expect("a folder")).expect("folder");
+    std::fs::write(&file, text).expect("the template");
+
+    let outcome = run(
+        &mut f.app,
+        "new_schematic_sheet",
+        &["name=Power", "template=A1 power"],
+    );
+    assert!(matches!(outcome, CommandOutcome::Ran), "{outcome:?}");
+    let text = std::fs::read_to_string(f.dir.join("Power.snxsch")).expect("the sheet");
+    let sheet = signex_types::format::SnxSchematic::parse(&text)
+        .expect("a sheet")
+        .sheet;
+    assert_eq!(sheet.paper_size, "A1");
+    assert_eq!(sheet.title_block["title"], "Power stage");
+
+    let _ = run(
+        &mut f.app,
+        "new_schematic_sheet",
+        &["name=Gone", "template=missing"],
+    );
+    assert!(!f.dir.join("Gone.snxsch").exists(), "no sheet is made");
+
+    let outcome = run(
+        &mut f.app,
+        "new_schematic_sheet",
+        &["name=Scoped", "scope=library"],
+    );
+    assert!(
+        matches!(&outcome, CommandOutcome::Disabled { reason } if signex_i18n::RenderTranslatable::render_en_us(reason).contains("name the template")),
+        "{outcome:?}"
+    );
 }
 
 /// #2470: `document` names the project the board joins and `name` its file;

@@ -207,6 +207,10 @@ pub enum ProjectMsg {
     /// A block diagram generated or regenerated from the sheet hierarchy
     /// (#2968); routed to `dispatch_block_diagram_sync_message`.
     BlockDiagramSync(crate::app::BlockDiagramSyncMsg),
+    /// The Alternate part picker and the Edit value popover of the canvas's
+    /// In variant flyout (mockup rows 208, 209); routed to
+    /// `dispatch_variant_part_edit_message`.
+    VariantPartEdit(crate::app::VariantPartEditMsg),
     /// The off-thread child-sheet resolution that Close Project starts
     /// finished (#741). Carries the project by id, not index, because the
     /// project list can shift while the worker reads; `Err` is a worker that
@@ -279,6 +283,10 @@ pub enum ProjectMsg {
     Tab(crate::app::ProjectTabMsg),
     /// A Rules tab message (#2398), routed to the `rules_tab` slice.
     Rules(crate::app::RulesTabMsg),
+    /// The project's Design Notebook (#2795, mockup rows 195-202), routed
+    /// to the `notebook_tab` slice; the project-level requests (open,
+    /// generate, export, badges) are resolved by `notebook_project`.
+    Notebook(crate::app::NotebookMsg),
     /// The project's repository, branch switcher and author (mockup rows 35
     /// and 39), routed to the `project_git` slice.
     Git(crate::app::ProjectGitMsg),

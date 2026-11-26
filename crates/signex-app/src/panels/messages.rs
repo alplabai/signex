@@ -764,6 +764,9 @@ pub enum PanelMsg {
     CommandLog(super::CommandLogMsg),
     /// The Annotations panel and its scans (mockup row 165).
     Annotations(super::AnnotationsMsg),
+    /// Notebook references, their cards, the Notebook badges and
+    /// Properties ▸ Design notes (mockup rows 196 and 197).
+    NotebookReferences(crate::app::notebook_references::NotebookReferenceMsg),
     /// Toggle a symbol's mirror_x.
     ToggleSymbolMirrorX(uuid::Uuid),
     /// Toggle a symbol's mirror_y.

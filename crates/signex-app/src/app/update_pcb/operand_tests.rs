@@ -180,6 +180,7 @@ fn the_dialog_lists_and_executes_what_the_operand_form_answers() {
             board: &tmp.path().join("demo.snxpcb"),
             board_revision: list.revision,
             execute_blocked: None,
+            net_classes: Vec::new(),
         },
     );
 

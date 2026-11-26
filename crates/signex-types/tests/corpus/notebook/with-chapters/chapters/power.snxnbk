@@ -1,0 +1,49 @@
++++
+format = "snxnbk/1"
+
+[[references]]
+kind = "component"
+component = "R7"
+id = "0193a0c4-5b1e-7c3a-9f00-6f1c2d3e40e2"
+
+[[references]]
+kind = "pin"
+component = "U3"
+pin = "12"
+id = "0193a0c4-5b1e-7c3a-9f00-6f1c2d3e4003"
+
+[[references]]
+kind = "net"
+net = "+3V3"
++++
+= Power stage
+
+The output is set by the divider #component("R7"), #component("R8") into
+#pin("U3", "12"), the FB pin, and appears on #net("+3V3").
+
+#calculation(id: "CALC-2.1", title: [Output voltage], status: "current")[
+  $ V_"out" = V_"ref" (1 + R_1 / R_2) = 0.8 "V" times (1 + 100 / 31.6) = 3.332 "V" $
+]
+
+#note(id: "NOTE-012", title: [Switch-node copper], target: net("SW"))[
+  Keep the copper of the switch node small.
+]
+
+#measurement(id: "MEAS-010", target: net("VIN"), value: 310, unit: "mV", limit: (max: 250))
+
+#issue(
+  id: "ISS-004",
+  title: [Worst-case output above +2 %],
+  status: "open",
+  owner: "j.berg",
+  target: (component("R7"), component("R8")),
+)[The top of the tolerance band exceeds the limit by 51 mV.]
+
+#decision(
+  id: "DEC-002",
+  title: [Inductor for the power stage],
+  status: "accepted",
+  target: (component("L1"), pin("U3.3")),
+)[Candidate A, 4.7 µH, 6.2 A saturation, 24 mΩ.]
+
+#annotation(kind: "note", date: "2026-11-17")[The earlier block form still prints.]

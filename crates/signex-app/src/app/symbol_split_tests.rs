@@ -28,7 +28,7 @@ fn touch_the_view(editor: &mut SymbolDocument) -> Point {
     editor.gui.camera.offset = offset;
     editor.gui.pending_view = None;
     editor.gui.selected = Some(SymbolSelection::Pin(0));
-    editor.gui.mid_drag = true;
+    editor.draft.begin_move_run();
     offset
 }
 
@@ -41,7 +41,7 @@ fn undo_on_the_same_symbol_clears_the_selection_and_drag_but_keeps_the_camera() 
 
     assert_eq!(editor.primitive().name, "Sym1", "the content stepped back");
     assert_eq!(editor.gui.selected, None);
-    assert!(!editor.gui.mid_drag);
+    assert!(!editor.draft.is_moving());
     assert_eq!(
         editor.gui.camera.offset, offset,
         "the pan survives the step"
@@ -59,7 +59,7 @@ fn redo_on_the_same_symbol_touches_the_view_like_undo() {
 
     assert_eq!(editor.primitive().name, "Renamed");
     assert_eq!(editor.gui.selected, None);
-    assert!(!editor.gui.mid_drag);
+    assert!(!editor.draft.is_moving());
     assert_eq!(editor.gui.camera.offset, offset);
     assert_ne!(
         editor.gui.pending_view,

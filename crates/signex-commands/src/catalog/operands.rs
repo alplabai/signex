@@ -1,7 +1,7 @@
-//! The operands a command takes besides its id (#1934): what a CLI or an agent
-//! can pass in place of a pointer click or a dialog answer. One naming
-//! convention, kept by a test over every catalog row (the app's
-//! `OPERAND_CONVENTION`).
+//! A command's operands besides its id (#1934), for a CLI or an agent, in one
+//! naming convention (`OPERAND_CONVENTION`); the notebook's are in `notebook`.
+mod notebook;
+pub use notebook::*;
 
 /// The shape of one operand's value, as written in text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -292,12 +292,27 @@ pub const SYMBOL_PARAMETER: &[Operand] = &[
     optional("value", OperandKind::Text),
     optional("document", OperandKind::Document),
 ];
+/// `set_object_text` (#2953): `field` is `designator` or `value` of a placed
+/// part, or `text` of a label or a text note; a left-out `value` is empty.
+pub const OBJECT_TEXT: &[Operand] = &[
+    required("id", OperandKind::Text),
+    required("field", OperandKind::Text),
+    optional("value", OperandKind::Text),
+    optional("document", OperandKind::Document),
+];
 /// One sheet variable: its `name` and `value` (left out or empty: the
 /// variable stays, with no value), or `remove=true` to delete it.
 pub const SHEET_VARIABLE: &[Operand] = &[
     required("name", OperandKind::Text),
     optional("value", OperandKind::Text),
     optional("remove", OperandKind::Bool),
+    optional("document", OperandKind::Document),
+];
+/// The placed part `id` made a net tie (`on=true`) or an ordinary part
+/// (`on=false`, #1277).
+pub const NET_TIE: &[Operand] = &[
+    required("id", OperandKind::Text),
+    required("on", OperandKind::Bool),
     optional("document", OperandKind::Document),
 ];
 /// The placed part `id` on the sheet `document` (#1667): named, since an
@@ -322,20 +337,25 @@ pub const SAVE_PATH: &[Operand] = &[
 ];
 
 /// A new project from the dialog's choices (#2232): where, which profile
-/// and `key=value` overrides.
+/// and `key=value` overrides, and a project `template` of the library
+/// (#1283).
 pub const NEW_PROJECT: &[Operand] = &[
     required("name", OperandKind::Text),
     required("location", OperandKind::Path),
     optional("make_folder", OperandKind::Bool),
     optional("profile", OperandKind::Text),
     optional("overrides", OperandKind::Text),
+    optional("template", OperandKind::Text),
 ];
 
 /// New Schematic without the dialog (#2232): `profile` as for `NEW_PCB`;
-/// `name` is the file stem in the project folder (default `Sheet<n>`).
+/// `name` is the file stem in the project folder (default `Sheet<n>`);
+/// `template` a sheet template kept in `scope` (#1283).
 pub const NEW_SCHEMATIC: &[Operand] = &[
     optional("profile", OperandKind::Text),
     optional("name", OperandKind::Text),
+    optional("template", OperandKind::Text),
+    optional("scope", OperandKind::Text),
 ];
 
 /// Turn the board view by `degrees` (90 when left out), clockwise positive
@@ -535,7 +555,8 @@ pub const FOOTPRINT_TEXT_SET: &[Operand] = &[
 ];
 /// `swap_pins` (#2410): two pins of one component on the board `document`,
 /// as `pins` = `a,b` (pad numbers). The component is named by `ids` (its
-/// uuid) or by `designator`, exactly one of them (#2326).
+/// uuid) or by `designator`, exactly one of them (#2326). `swap_schematic_pins`
+/// (#1261) reads the same on a sheet: `ids` is a placed unit of the part.
 pub const SWAP_PINS: &[Operand] = &[
     required("document", OperandKind::Document),
     optional("ids", OperandKind::Targets),
@@ -618,12 +639,24 @@ pub const QUERY_POWER_TREE: &[Operand] = &[
     required("document", OperandKind::Document),
     optional("variant", OperandKind::Text),
 ];
+/// `bom_lines` (#1988): the BOM of the named sheet's project; `template` is
+/// a BOM template's text (`snxbomt/1`), `variant` a variant of the project
+/// or `Base`, `grouping` one of `grouped`, `ungrouped` and `flat`.
+pub const BOM_LINES: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("template", OperandKind::Text),
+    optional("variant", OperandKind::Text),
+    optional("grouping", OperandKind::Text),
+];
 /// `check_erc` (#2199): ERC on the project of the named sheet, answered as a
 /// check report; `baseline` is an earlier answer's `run`.
 pub const CHECK_ERC: &[Operand] = &[
     required("document", OperandKind::Document),
     optional("baseline", OperandKind::Text),
 ];
+/// `toggle_live_erc` (#1288): the live ERC preference; without `enabled` it
+/// flips.
+pub const TOGGLE_LIVE_ERC: &[Operand] = &[optional("enabled", OperandKind::Bool)];
 /// `check_drc` (#2199): DRC on the named board, answered as a check report;
 /// `baseline` is an earlier answer's `run` on the same board.
 pub const CHECK_DRC: &[Operand] = &[
@@ -914,6 +947,25 @@ pub const PROJECT_ACTIVE_VARIANT: &[Operand] = &[
     required("document", OperandKind::Document),
     optional("name", OperandKind::Text),
 ];
+/// `project_set_default_variant` (#2949): a variant name; none, or `Base`,
+/// is Base.
+pub const PROJECT_DEFAULT_VARIANT: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("name", OperandKind::Text),
+];
+/// `compare_variants` (#2949): the two sides, `from` (none is Base) and
+/// `to` (none is the active variant, or the first one while Base is).
+pub const COMPARE_VARIANTS: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("from", OperandKind::Text),
+    optional("to", OperandKind::Text),
+];
+/// `variant_bom` (#2949): a variant name; none is the active variant,
+/// `Base` is Base.
+pub const VARIANT_BOM: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("name", OperandKind::Text),
+];
 /// `project_move_library`: a library as the project stores its path, `up`
 /// or `down`.
 pub const PROJECT_MOVE_LIBRARY: &[Operand] = &[
@@ -924,6 +976,12 @@ pub const PROJECT_MOVE_LIBRARY: &[Operand] = &[
 /// `project_set_annotate_undo`: `project` or `per_sheet`; none follows
 /// Preferences.
 pub const PROJECT_ANNOTATE_UNDO: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("value", OperandKind::Text),
+];
+/// `project_set_annotate_numbering` (#1292): `continuous`, `page_hundreds`
+/// or `page_thousands`; none is continuous.
+pub const PROJECT_ANNOTATE_NUMBERING: &[Operand] = &[
     required("document", OperandKind::Document),
     optional("value", OperandKind::Text),
 ];

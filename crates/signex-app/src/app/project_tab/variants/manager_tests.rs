@@ -30,7 +30,7 @@ fn part(reference: &str, value: &str, fields: &[(&str, &str)]) -> Symbol {
 
 /// R1 (fitted everywhere, 1% tolerance) and R2 (not fitted in Lite on its
 /// sheet); Lite is defined. The folder lives as long as the guard.
-fn app() -> (Signex, ProjectId, tempfile::TempDir) {
+pub(super) fn app() -> (Signex, ProjectId, tempfile::TempDir) {
     let dir = tempfile::tempdir().expect("a folder");
     let mut app = app_workspace(&dir.path().to_string_lossy(), &["a.snxsch"]);
     app.ui_state.erc_severity_override.clear();
@@ -52,7 +52,11 @@ fn send(app: &mut Signex, msg: ProjectTabMsg) -> iced::Task<Message> {
     app.update(Message::Project(ProjectMsg::Tab(msg)))
 }
 
-fn manage(app: &mut Signex, id: ProjectId, msg: VariantManagerMsg) -> iced::Task<Message> {
+pub(super) fn manage(
+    app: &mut Signex,
+    id: ProjectId,
+    msg: VariantManagerMsg,
+) -> iced::Task<Message> {
     send(
         app,
         ProjectTabMsg::VariantManager {
@@ -62,14 +66,14 @@ fn manage(app: &mut Signex, id: ProjectId, msg: VariantManagerMsg) -> iced::Task
     )
 }
 
-fn settle(app: &mut Signex, task: iced::Task<Message>) {
+pub(super) fn settle(app: &mut Signex, task: iced::Task<Message>) {
     crate::task_driver::TaskDriver::new()
         .settle(app, task)
         .expect("the task settles");
 }
 
 /// The Variants row of the Project tab's list, as a click sends it.
-fn open_manager(app: &mut Signex, id: ProjectId) {
+pub(super) fn open_manager(app: &mut Signex, id: ProjectId) {
     let task = send(
         app,
         ProjectTabMsg::SectionSelected {
@@ -80,7 +84,7 @@ fn open_manager(app: &mut Signex, id: ProjectId) {
     settle(app, task);
 }
 
-fn cell(variant: Option<&str>, designator: &str) -> VariantCell {
+pub(super) fn cell(variant: Option<&str>, designator: &str) -> VariantCell {
     VariantCell {
         variant: variant.map(str::to_string),
         designator: designator.to_string(),
@@ -95,7 +99,7 @@ fn manager_tabs(app: &Signex, id: ProjectId) -> usize {
         .count()
 }
 
-fn data(app: &Signex) -> &signex_types::project::ProjectData {
+pub(super) fn data(app: &Signex) -> &signex_types::project::ProjectData {
     &app.document_state.projects[0].data
 }
 
@@ -348,8 +352,8 @@ fn set_as_default_moves_the_star_and_undo_moves_it_back() {
     assert_eq!(data(&app).default_variant(), Some("Lite"));
 }
 
-/// Settings, Compare variants and Open in BOM Studio have no surface yet:
-/// greyed, with the catalog's "not built yet" tooltip.
+/// Settings has no surface yet: greyed, with the catalog's "not built yet"
+/// tooltip. Compare variants and Open in BOM Studio are built (#2949).
 #[test]
 fn the_top_bar_actions_not_built_yet_read_from_the_catalog() {
     let i18n = signex_i18n::I18n::en_us();
@@ -357,10 +361,7 @@ fn the_top_bar_actions_not_built_yet_read_from_the_catalog() {
         .iter()
         .map(|id| i18n.message_plain(*id, &[]))
         .collect();
-    assert_eq!(
-        labels,
-        ["Settings...", "Compare variants...", "Open in BOM Studio"]
-    );
+    assert_eq!(labels, ["Settings..."]);
     assert_eq!(
         i18n.message_plain(signex_i18n::ids::VARIANT_MANAGER_NOT_BUILT, &[]),
         "Not built yet"

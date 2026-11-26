@@ -34,6 +34,12 @@ net's copper for `Clearance` and `Short` (net 0 on its side) and against the
 board edge; two items of no net are never a pair. `Unconnected` reads the
 netted copper only, so copper of no net never closes a link.
 
+Two pads of one net-tie footprint (component type Net Tie or Net Tie (in
+BOM)) are never a pair either (#1277; Caner, 2026-11-25): they are the copper
+bridge the tie is, an intended short, so they may overlap or sit closer than
+the clearance. A tie's pad against any other copper, a pad of another tie
+included, is checked as every pad is. See `docs/NET_TIES.md`.
+
 A gap equal to the rule passes; one nm under fails. The comparison is exact
 (`Separation::is_under` compares squared nm) for every pad shape:
 

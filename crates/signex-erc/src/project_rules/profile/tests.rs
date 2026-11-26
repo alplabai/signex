@@ -17,13 +17,15 @@ fn builtin_profile_lists_every_rule_and_hashes_stably() {
 /// missing library body rule (#2781), profile 1.3, moved it again, from
 /// `70e9a6b0e4e58df5604b78547c89a610a1a350392232af9013b2b032af7d0171`. The
 /// net class conflict rule (#2656), profile 1.4, moved it again, from
-/// `8d8a0a838d8ebcffe929e2c7f88b5f51c80ed5a091c208b05a87ba84bb4d9c7d`.
+/// `8d8a0a838d8ebcffe929e2c7f88b5f51c80ed5a091c208b05a87ba84bb4d9c7d`. The
+/// differential pair partner rule (#2951), profile 1.5, moved it again, from
+/// `9cf4b1e7ab547b10273923a79db43363a2beff64841271f8511fb35bf378f3f2`.
 #[test]
 fn builtin_profile_hash_and_bytes_are_unchanged_by_the_drc_section() {
     let p = builtin_profile();
     assert_eq!(
         p.content_sha256(),
-        "9cf4b1e7ab547b10273923a79db43363a2beff64841271f8511fb35bf378f3f2"
+        "50fb2ad61832bde7de3a7045fb1af85ae6e59483c60fce54ee833a96c09812ab"
     );
     assert!(
         !String::from_utf8(p.to_json_bytes())

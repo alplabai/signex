@@ -133,6 +133,12 @@ update-pcb-done = Update PCB: { $count ->
         [one] 1 change applied to { $board }.
        *[other] { $count } changes applied to { $board }.
     }
+# Pads with no symbol pin that keep their net and were locked with the
+# applied rows (#3060).
+update-pcb-pads-locked = Update PCB: { $count ->
+        [one] locked 1 pad with no symbol pin.
+       *[other] locked { $count } pads with no symbol pin.
+    }
 update-pcb-refused = Update PCB did not run: { $why }
 # The command run from operands (#2470): it needs one of the two forms.
 update-pcb-command-mode = `update_pcb_from_schematic` lists its changes in the Update PCB dialog; run it with `apply=true` to execute the default ticks, or with `dry_run=true` to list them and change nothing
@@ -173,6 +179,12 @@ update-pcb-rules-note = Execute writes these into the project's design rules, ma
 update-pcb-rule-net-not-on-board = Update PCB: no rule for net { $net }: that name is not a board net (a net on a placed or repeated sheet takes another name on the board). Give its Net Parameters directive a net class to make a rule.
 # Messages: two scopes give one rule name. $rule is the rule, $kept and $dropped the class or net names.
 update-pcb-rule-name-clash = Update PCB: { $kept } and { $dropped } both make rule { $rule }; it is kept for { $kept } and nothing is made for { $dropped }. Rename one of them.
+# The one summary line of the net classes Execute puts into the board's net
+# classes from the Net Blanket and Net Parameters directives (exit criterion 3).
+update-pcb-schematic-classes = { $count ->
+    [one] 1 net class from the schematic
+   *[other] { $count } net classes from the schematic
+}
 
 # The change-list rows and group headers Update PCB and Back Annotate share
 # (#2533). Status icons; their words are the row's tooltip.

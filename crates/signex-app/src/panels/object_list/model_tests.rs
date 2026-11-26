@@ -352,6 +352,7 @@ fn names_and_values_read_as_the_canvas_draws_them() {
         placement: Some(placement.clone()),
         special: Some(vcc_special()),
         standard: Some(signex_types::designator::DesignatorStandard::Iec81346_2Full),
+        variant_values: None,
     };
     let rows = sheet_rows(&sheet, &power_path(), &look, &|_: Uuid| None);
     let part = row(&rows, 1);

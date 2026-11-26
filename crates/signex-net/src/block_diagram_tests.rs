@@ -135,12 +135,30 @@ fn an_output_entry_starts_the_flow() {
 }
 
 #[test]
-fn a_sheet_without_a_document_id_is_left_out() {
+fn a_sheet_without_a_document_id_is_left_out_and_listed() {
     let mut p = linked_project();
     p.sheet_mut(MCU).uuid = Uuid::nil();
     let d = derived(&p);
     assert_eq!(d.blocks.len(), 2);
     assert!(d.connections.iter().all(|c| c.group != "VOUT_3V3"));
+    assert_eq!(d.unidentified, ["sheets/mcu.snxsch"], "named, not dropped");
+}
+
+/// A hierarchy whose top sheet places N sheet symbols gives N blocks, none
+/// left unlisted; with no id on any sheet (a file no build has saved since
+/// ids came in) it gives none, and every one is listed.
+#[test]
+fn n_sheet_symbols_give_n_blocks() {
+    let p = linked_project();
+    let symbols = p.sheets[&SheetKey::new(TOP)].child_sheets.len();
+    assert_eq!(symbols, 3);
+    let d = derived(&p);
+    assert_eq!(d.blocks.len(), symbols);
+    assert!(d.unidentified.is_empty());
+
+    let d = derived(&project());
+    assert!(d.blocks.is_empty());
+    assert_eq!(d.unidentified.len(), symbols, "{:?}", d.unidentified);
 }
 
 #[test]

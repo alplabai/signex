@@ -147,6 +147,8 @@ mod tests {
                 "board_status",
                 // #2938: a BOM line's alternates, on the named project.
                 "bom_add_alternate",
+                // #1988: the BOM lines of the named sheet's project, a query.
+                "bom_lines",
                 "bom_remove_alternate",
                 "bom_set_alternate_order",
                 // #2326 slice 6.P2b: the drawing order and Delete, on the
@@ -165,6 +167,8 @@ mod tests {
                 "clear_all_net_colors",
                 "close_active_document",
                 "color_net",
+                // #2949: the Variant Manager's top bar actions.
+                "compare_variants",
                 "create_rooms_from_sheets",
                 "delete_net_class",
                 "delete_selection",
@@ -175,6 +179,8 @@ mod tests {
                 // #2940: the DRC fixes, on the named board.
                 "fix_drc",
                 "fix_drc_violation",
+                // #2945: the design report of the named project.
+                "generate_design_notebook",
                 "gloss_selected_routes",
                 // #2394: the board view's layers, on the named board.
                 "hide_layer",
@@ -185,9 +191,32 @@ mod tests {
                 "layout_plan_get",
                 "layout_plan_set",
                 "layout_plan_status",
+                // Mockup row 198: the notebook's review records, by typed id.
+                "list_annotations",
+                // #2952: a query.
+                "list_diff_pairs",
                 "list_documents",
+                // #1283: the snippets and templates in view, as JSON.
+                "list_snippets",
+                "list_templates",
                 "lock_board_items",
+                // Mockup row 199: the notebook's measurements, timelines and
+                // attachments, and Mark still valid, on the named project.
+                "mark_notebook_attachment_valid",
                 "measure_board",
+                // #2795, mockup rows 195-199: the Design Notebook tab, its
+                // references, badges and measurements, on the named project.
+                "notebook_attachments",
+                "notebook_badges",
+                "notebook_compile",
+                "notebook_fix_reference",
+                "notebook_insert",
+                "notebook_measurements",
+                "notebook_reference_card",
+                "notebook_reference_picker",
+                "notebook_references",
+                "notebook_timeline",
+                "notebook_view",
                 "panelize_board",
                 // #2470: the routing tools, the via and the area tools, on
                 // the named board.
@@ -208,6 +237,8 @@ mod tests {
                 // #2339: the Requirements section's edits and run.
                 "project_add_requirement",
                 "project_add_variant",
+                // #3038: the Variant Manager's part edits and Duplicate.
+                "project_duplicate_variant",
                 "project_enable_requirement",
                 "project_move_library",
                 "project_move_sheet",
@@ -216,10 +247,15 @@ mod tests {
                 "project_rename_variant",
                 "project_run_requirements",
                 "project_set_active_variant",
+                "project_set_annotate_numbering",
                 "project_set_annotate_undo",
+                "project_set_default_variant",
                 // #2943: the project's rails and their budget.
                 "project_set_rail",
                 "project_set_requirement",
+                "project_set_variant_alternate",
+                "project_set_variant_fit",
+                "project_set_variant_override",
                 "project_set_version_control",
                 "project_settings",
                 // #2796: a block diagram as JSON.
@@ -230,6 +266,8 @@ mod tests {
                 "query_footprint_assignments",
                 // #2944, #2939: an open library's rows; each part's height.
                 "query_library",
+                // #1277: a sheet's or a board's net ties, as JSON.
+                "query_net_ties",
                 "query_part_heights",
                 "query_pins",
                 // #1313: the project's power tree.
@@ -295,6 +333,9 @@ mod tests {
                 "stitch_vias",
                 "swap_gates",
                 "swap_pins",
+                // #1261: the same swaps started on the named sheet.
+                "swap_schematic_gates",
+                "swap_schematic_pins",
                 // #2249: the window layout, by the maintainer's rule that
                 // everything is AI-controllable.
                 "tile_windows_horizontally",
@@ -308,6 +349,7 @@ mod tests {
                 // #2470: Update PCB for the project of the named document,
                 // answered with the change list.
                 "update_pcb_from_schematic",
+                "variant_bom",
                 "waive_drc_violation",
             ]
         );

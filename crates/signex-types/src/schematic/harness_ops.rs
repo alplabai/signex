@@ -365,16 +365,61 @@ pub fn next_entry_name(connector: &HarnessConnector, definitions: &[HarnessDefin
         .unwrap_or_else(|| "ENTRY".to_string())
 }
 
-/// How many connectors of the sheets use the type `name`.
+/// How many objects of the sheets carry the type `name`: its connectors and
+/// its harness-typed sheet entries. A harness wire takes the type of the
+/// connectors it joins, so it is not counted on its own.
 pub fn harness_type_uses<'a>(
     sheets: impl IntoIterator<Item = &'a SheetHarness>,
     name: &str,
 ) -> usize {
     sheets
         .into_iter()
+        .map(|h| {
+            let connectors = h.connectors.iter().filter(|c| c.harness_type == name);
+            let entries = h.entry_types.values().filter(|t| t.as_str() == name);
+            connectors.count() + entries.count()
+        })
+        .sum()
+}
+
+/// The types the sheets use that `defined` lacks, in the order the sheets
+/// first use them (connectors before sheet entries): each one as the first
+/// connector of the type shows it, its entries all signals. A type only a
+/// sheet entry carries has no entries. A harness wire's type is its
+/// connectors' type, so this covers wires too.
+pub fn undefined_harness_types<'a>(
+    defined: &[HarnessDefinition],
+    sheets: impl IntoIterator<Item = &'a SheetHarness>,
+) -> Vec<HarnessDefinition> {
+    let sheets: Vec<&SheetHarness> = sheets.into_iter().collect();
+    let connectors = sheets
+        .iter()
         .flat_map(|h| h.connectors.iter())
-        .filter(|c| c.harness_type == name)
-        .count()
+        .map(|c| (c.harness_type.as_str(), c.entries.as_slice()));
+    let entries = sheets
+        .iter()
+        .flat_map(|h| h.entry_types.values())
+        .map(|t| (t.as_str(), &[] as &[HarnessEntry]));
+    let mut found: Vec<HarnessDefinition> = Vec::new();
+    for (name, carried) in connectors.chain(entries) {
+        let known = harness_definition(defined, name).is_some()
+            || harness_definition(&found, name).is_some();
+        if name.is_empty() || known {
+            continue;
+        }
+        found.push(HarnessDefinition {
+            name: name.to_string(),
+            description: String::new(),
+            entries: carried
+                .iter()
+                .map(|e| super::HarnessDefinitionEntry {
+                    name: e.name.clone(),
+                    harness: None,
+                })
+                .collect(),
+        });
+    }
+    found
 }
 
 /// `(dx, dy)` snapped to the nearest axis unit vector; `(1, 0)` for a zero

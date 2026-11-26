@@ -104,6 +104,8 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("set", OperandKind::Text),
     ("preset", OperandKind::Text),
     ("pins", OperandKind::Text),
+    // #2954: the user parameters Change Component clears.
+    ("drop", OperandKind::Text),
     ("units", OperandKind::Text),
     ("shape", OperandKind::Text),
     ("delta", OperandKind::Text),
@@ -117,6 +119,52 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("diff_pair_class", OperandKind::Text),
     ("via_hole", OperandKind::Text),
     ("current", OperandKind::Text),
+    // #1283: the template a new sheet or project starts from; #1988: a BOM
+    // template's text and the BOM grouping (`variant` is declared with the
+    // priced BOM below).
+    ("template", OperandKind::Text),
+    ("grouping", OperandKind::Text),
+    // #2665: the Smart Paste dialog's array count, numbering and net names
+    // (`nets` is declared with the routes below).
+    ("copies", OperandKind::Text),
+    ("designators", OperandKind::Text),
+    ("net_pattern", OperandKind::Text),
+    ("net_start", OperandKind::Text),
+    // #2795: the Design Notebook tab's view, side panel and next problem
+    // (its `line`, from 1, is the #2938 row below).
+    ("view", OperandKind::Text),
+    ("panel", OperandKind::Text),
+    ("next_problem", OperandKind::Bool),
+    // Mockup rows 196 and 199: the fix of a stale notebook reference, the
+    // name it is updated to and the pin (`U3.3`) it or a timeline names.
+    ("fix", OperandKind::Text),
+    ("to", OperandKind::Text),
+    // #2949: Compare variants' left-hand variant (its right-hand one is `to`).
+    ("from", OperandKind::Text),
+    ("pin", OperandKind::Text),
+    // #2945, mockup row 201: Generate design notebook's sections (a comma
+    // list or `all`), page template, document number, revision, check
+    // source (`run`, `last`), the `--fail-on` conditions, and whether it
+    // writes the report and replaces one that is there (its `template` is
+    // the #1283 row above). Its `variant`, and
+    // a notebook timeline's `quantity` (mockup row 199), are the #2938 rows
+    // below.
+    ("sections", OperandKind::Text),
+    ("document_number", OperandKind::Text),
+    ("revision", OperandKind::Text),
+    ("checks", OperandKind::Text),
+    ("fail_on", OperandKind::Text),
+    ("save", OperandKind::Bool),
+    ("update", OperandKind::Bool),
+    // Mockup row 202: the notebook PDF export's notebook file, paper, stale
+    // rule, annotation kinds and what it prints.
+    ("notebook", OperandKind::Text),
+    ("paper", OperandKind::Text),
+    ("stale", OperandKind::Text),
+    ("annotations", OperandKind::Text),
+    ("contents", OperandKind::Bool),
+    ("bookmarks", OperandKind::Bool),
+    ("python_source", OperandKind::Bool),
     // #2495: a key binding: the command id it runs, its key sequence and
     // the shortcut context it applies in.
     ("command", OperandKind::Text),
@@ -132,10 +180,12 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("specs", OperandKind::Text),
     ("clear", OperandKind::Text),
     ("block", OperandKind::Text),
-    ("from", OperandKind::Text),
-    ("to", OperandKind::Text),
     ("interface", OperandKind::Text),
     ("label", OperandKind::Text),
+    // #3038: a part's fit in a variant, and an alternate part's part number
+    // (its `footprint` is declared with #2937 below).
+    ("fitted", OperandKind::Bool),
+    ("mpn", OperandKind::Text),
     // #2470: Re-Annotate Board's numbering order and bottom side.
     ("order", OperandKind::Text),
     ("bottom", OperandKind::Text),

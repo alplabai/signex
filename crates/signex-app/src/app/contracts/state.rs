@@ -37,6 +37,15 @@ pub enum ContextAction {
     /// In variant ▸ New variant… (mockup row 62): the Variant Manager opens
     /// and a variant from Base is added with its name open for typing.
     NewVariant(crate::app::ProjectId),
+    /// In variant ▸ Fitted / Not fitted on a repeated sheet (#2662): `parts`
+    /// fitted or not in the active variant, one General undo step.
+    VariantFit {
+        parts: Vec<signex_types::project::PartRef>,
+        fitted: bool,
+    },
+    /// In variant ▸ Alternate… / Edit value for this variant… (mockup rows
+    /// 208, 209): the picker or the popover opens for the selected part.
+    VariantPartEdit(crate::app::variant_part_edit::VariantEditKind),
 }
 
 /// Which click-to-open submenu is currently expanded inside the right-
@@ -117,6 +126,9 @@ pub struct ContextMenuState {
     /// Where on the sheet the menu was opened, in world mm; `None` when the
     /// cursor position was not known to belong to this document.
     pub world: Option<(f64, f64)>,
+    /// `world` lay on an object of the menu's sheet, worked out when the
+    /// menu opened on that sheet (#2629); the view reads it as it is.
+    pub hit_object: bool,
     /// The undocked window the menu was opened in; `None` for the main
     /// window. Only that window paints it and its actions act on that
     /// window's sheet (#1910).
@@ -502,6 +514,8 @@ pub enum ProjectTreeAction {
     /// Project root → Add New ▸ PCB: the project's one board, from its
     /// defaults, opened unsaved (#1312).
     AddNewPcb(signex_widgets::tree_view::TreeKey),
+    /// Project root → Add New ▸ Design Notebook: its notebook, unsaved.
+    AddNewDesignNotebook(signex_widgets::tree_view::TreeKey),
     /// Project root → Update PCB Document: the Update PCB dialog for that
     /// project (#1312).
     UpdatePcb(signex_widgets::tree_view::TreeKey),
@@ -560,6 +574,7 @@ impl ProjectTreeAction {
             | AddExistingToProject(k)
             | AddNewSchematic(k)
             | AddNewPcb(k)
+            | AddNewDesignNotebook(k)
             | UpdatePcb(k)
             | AddProjectSymbolLibrary(k)
             | AddProjectFootprintLibrary(k)

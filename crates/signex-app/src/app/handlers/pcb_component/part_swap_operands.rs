@@ -21,7 +21,12 @@ fn refused(reason: impl Into<String>) -> Ran {
 
 /// The two members of operand `name`, written `a,b`, trimmed; the board
 /// menu (`from_view`) sends the pad numbers as they are, spaces included.
-fn pair(args: &CommandArgs, name: &str, from_view: bool) -> Result<(String, String), String> {
+/// The schematic swaps (#1261) read their operands with it too.
+pub(crate) fn pair(
+    args: &CommandArgs,
+    name: &str,
+    from_view: bool,
+) -> Result<(String, String), String> {
     let text = match args.operand(name) {
         Some(OperandValue::Text(text)) => text.as_str(),
         _ => return Err(format!("needs the operand `{name}`, written `a,b`")),
@@ -85,14 +90,18 @@ pub(crate) fn swap_pins(app: &mut Signex, args: &CommandArgs) -> Ran {
 
 /// `swap_gates document=<board> (ids=<uuid> | designator=<ref>) units=<a>,<b>`.
 pub(crate) fn swap_gates(app: &mut Signex, args: &CommandArgs) -> Ran {
-    let request = pair(args, "units", false).and_then(|(a, b)| {
-        let unit = |text: &str| {
-            text.parse::<u32>()
-                .ok()
-                .filter(|unit| *unit > 0)
-                .ok_or_else(|| format!("`units` are unit numbers from 1, not `{text}`"))
-        };
-        Ok(SwapRequest::Gates(unit(a.as_str())?, unit(b.as_str())?))
-    });
+    let request = unit_pair(args).map(|(a, b)| SwapRequest::Gates(a, b));
     swap(app, args, request)
+}
+
+/// The two unit numbers of the `units` operand, `a,b`, each from 1.
+pub(crate) fn unit_pair(args: &CommandArgs) -> Result<(u32, u32), String> {
+    let (a, b) = pair(args, "units", false)?;
+    let unit = |text: &str| {
+        text.parse::<u32>()
+            .ok()
+            .filter(|unit| *unit > 0)
+            .ok_or_else(|| format!("`units` are unit numbers from 1, not `{text}`"))
+    };
+    Ok((unit(a.as_str())?, unit(b.as_str())?))
 }

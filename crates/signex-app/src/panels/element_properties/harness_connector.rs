@@ -57,7 +57,11 @@ pub struct HarnessPanel {
     /// The project's settings section is unreadable: definitions cannot be
     /// edited.
     pub are_definitions_locked: bool,
-    /// Per definition: how many connectors of the open sheets use it.
+    /// Types the open sheets use that the project does not define (#3043),
+    /// each as its first connector shows it. Listed, never edited.
+    pub undefined_types: Vec<HarnessDefinition>,
+    /// Per definition, then per undefined type: how many connectors and
+    /// sheet entries of the open sheets use it.
     pub uses: Vec<usize>,
     /// The selected connector (or the one owning the selected entry).
     pub connector: Option<HarnessConnector>,

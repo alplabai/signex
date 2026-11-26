@@ -97,12 +97,17 @@ impl Signex {
     /// for the Pins rows of a clicked symbol. The task's landing refreshes the
     /// rows (`refresh_pin_rows`); nothing is parked.
     pub(crate) fn warm_net_index_for_pin_rows(&mut self) -> Task<Message> {
-        let Some(project) = self
-            .document_state
-            .active_path
-            .as_deref()
-            .and_then(|p| self.project_of_sheet(p))
-        else {
+        match self.document_state.active_path.clone() {
+            Some(active) => self.warm_net_index_of(&active),
+            None => Task::none(),
+        }
+    }
+
+    /// Start a build of the index of the project that owns `sheet` when it
+    /// has none current, for a reader that shows nets when one lands (the
+    /// Pins rows, the Object List's wire rows, #3039); nothing is parked.
+    pub(crate) fn warm_net_index_of(&mut self, sheet: &std::path::Path) -> Task<Message> {
+        let Some(project) = self.project_of_sheet(sheet) else {
             return Task::none();
         };
         if self.ready_net_data(project).is_some() {

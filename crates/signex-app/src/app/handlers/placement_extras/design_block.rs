@@ -8,6 +8,7 @@ use std::sync::Arc;
 use iced::Task;
 use signex_engine::DesignBlock;
 use signex_i18n::ids;
+use signex_types::reuse::{ReuseKind, ReuseScope};
 use signex_types::schematic::SchematicSheet;
 
 use crate::app::{EditMsg, Message, PlacementExtrasMsg, Signex};
@@ -33,15 +34,44 @@ impl Signex {
         if self.fragment_target(WHAT).is_none() {
             return Task::none();
         }
+        self.pick_block_file(ids::FILE_DIALOG_PLACE_DESIGN_BLOCK, None)
+    }
+
+    /// Place Snippet without operands (#1283): the same dialog, opened on
+    /// the snippets folder of the sheet's project, else of the user's
+    /// library. The picked snippet then lands on the cursor as a design
+    /// block does.
+    pub(super) fn snippet_dialog(&mut self) -> Task<Message> {
+        let Some(target) = self.fragment_target("Place snippet") else {
+            return Task::none();
+        };
+        let folder = [ReuseScope::Project, ReuseScope::Library]
+            .into_iter()
+            .find_map(|scope| self.reuse_root(scope, Some(&target)).ok())
+            .map(|root| ReuseKind::Snippet.folder(&root));
+        self.pick_block_file(ids::FILE_DIALOG_PLACE_SNIPPET, folder)
+    }
+
+    /// The sheet file dialog of a design block, titled `title`, opened on
+    /// `folder` when one is given.
+    fn pick_block_file(
+        &self,
+        title: signex_i18n::MessageId,
+        folder: Option<PathBuf>,
+    ) -> Task<Message> {
         let i18n = &self.ui_state.i18n;
         let dialog = self
             .ui_state
             .io
             .picker
             .dialog()
-            .title_in(i18n, ids::FILE_DIALOG_PLACE_DESIGN_BLOCK)
+            .title_in(i18n, title)
             .filter_in(i18n, ids::FILE_FILTER_SCHEMATIC, &["snxsch"])
             .filter_in(i18n, ids::FILE_FILTER_ALL_FILES, &["*"]);
+        let dialog = match folder {
+            Some(folder) => dialog.set_directory(folder),
+            None => dialog,
+        };
         Task::perform(dialog.pick_file(), |path| {
             extras(PlacementExtrasMsg::DesignBlockPicked(path))
         })

@@ -50,7 +50,7 @@ impl Signex {
         let selected = tab.map(|tab| tab.section).unwrap_or_default();
         let setup_draft = tab.and_then(|tab| tab.setup_draft.as_ref());
         let row_drag = tab.and_then(|tab| tab.row_drag.as_ref());
-        let users = &self.ui_state.setup_profiles;
+        let users = &self.document_state.setup_profiles;
         let content = match selected {
             ProjectSection::General => general::view(&self.ui_state.i18n, project, tokens),
             ProjectSection::Parameters => parameters::view(project, tab, i18n, tokens),
@@ -179,7 +179,7 @@ impl Signex {
                 sheets::popup_drawing(
                     project,
                     setup_draft,
-                    &self.ui_state.setup_profiles,
+                    &self.document_state.setup_profiles,
                     canvas,
                     i18n,
                     tokens,

@@ -36,6 +36,7 @@ pub fn derive_block_diagram(
     DerivedDiagram {
         blocks: sheets.blocks,
         connections,
+        unidentified: sheets.unidentified,
     }
 }
 
@@ -45,6 +46,8 @@ struct BlockSheets {
     blocks: Vec<DerivedBlock>,
     /// Sheet key -> index into `blocks`.
     index: HashMap<SheetKey, usize>,
+    /// The paths of the sheets that would be blocks but hold no id.
+    unidentified: Vec<String>,
 }
 
 impl BlockSheets {
@@ -56,6 +59,7 @@ impl BlockSheets {
         let placed = first_placements(design, graph);
         let mut blocks = Vec::new();
         let mut index = HashMap::new();
+        let mut unidentified = Vec::new();
         let mut seen: HashSet<&SheetKey> = HashSet::new();
         for row in &design.sheets {
             if !seen.insert(&row.key) {
@@ -64,20 +68,21 @@ impl BlockSheets {
             let Some(sheet) = graph.sheets.get(&row.key) else {
                 continue;
             };
-            let Some(id) = DocumentId::from_uuid(sheet.uuid) else {
-                continue;
-            };
             if is_frame(design, &row.key, sheet) {
                 continue;
             }
-            let ports = match placed.get(&row.key) {
-                Some(symbol) => entry_ports(symbol),
-                None => label_ports(sheet),
-            };
             let path = paths
                 .get(&row.key)
                 .cloned()
                 .unwrap_or_else(|| row.key.as_str().replace('\\', "/"));
+            let Some(id) = DocumentId::from_uuid(sheet.uuid) else {
+                unidentified.push(path);
+                continue;
+            };
+            let ports = match placed.get(&row.key) {
+                Some(symbol) => entry_ports(symbol),
+                None => label_ports(sheet),
+            };
             index.insert(row.key.clone(), blocks.len());
             blocks.push(DerivedBlock {
                 sheet: id,
@@ -100,7 +105,11 @@ impl BlockSheets {
                 }
             }
         }
-        Self { blocks, index }
+        Self {
+            blocks,
+            index,
+            unidentified,
+        }
     }
 }
 

@@ -327,10 +327,18 @@ fn warnings<'a>(
             ids::LIBRARY_CHANGE_COMPONENT_WARN_MOVED,
         ),
         (&preview.gained, ids::LIBRARY_CHANGE_COMPONENT_WARN_GAINED),
+        (&preview.carried, ids::LIBRARY_CHANGE_COMPONENT_WARN_CARRIED),
     ] {
         if !pins.is_empty() {
             said.push(t!(i18n, id, "pins" => pins.join(", ")));
         }
+    }
+    if let Some(reason) = &preview.refused {
+        said.push(t!(
+            i18n,
+            ids::LIBRARY_CHANGE_COMPONENT_WARN_REFUSED,
+            "reason" => reason.as_str()
+        ));
     }
     let mut lines = column![].spacing(SP.xs);
     for line in said {
@@ -339,7 +347,26 @@ fn warnings<'a>(
     lines.boxed()
 }
 
-/// What stays: the designator, the placement and the pins matched.
+/// Each new pin that keeps a net, as "pin 1 on VOUT_3V3" (mockup row 155).
+fn kept_pins(change: &ChangePreview, i18n: &I18n) -> Vec<String> {
+    change
+        .pins
+        .iter()
+        .filter_map(|row| {
+            let net = row.net.as_deref()?;
+            let (pin, _) = row.new.as_ref()?;
+            let line = if net.is_empty() {
+                t!(i18n, ids::LIBRARY_CHANGE_COMPONENT_KEPT_PIN_UNNAMED, "pin" => pin.as_str())
+            } else {
+                t!(i18n, ids::LIBRARY_CHANGE_COMPONENT_KEPT_PIN, "pin" => pin.as_str(), "net" => net)
+            };
+            Some(line.into_string())
+        })
+        .collect()
+}
+
+/// What stays: the designator, the placement, the pins that keep a net
+/// and how many pins are matched (or mapped by hand).
 fn kept<'a>(
     session: &ChangeSession,
     change: &ChangePreview,
@@ -348,16 +375,45 @@ fn kept<'a>(
 ) -> Element<'a, LibraryMessage> {
     let mapping = &change.preview.mapping;
     let matched = mapping.pairs.len();
-    text(t!(
-        i18n,
-        ids::LIBRARY_CHANGE_COMPONENT_KEPT_SUMMARY,
-        "reference" => session.reference.as_str(),
-        "matched" => matched,
-        "total" => matched + mapping.unmatched.len()
-    ))
-    .size(TS.caption)
-    .color(crate::styles::tokens::resolve(tokens).ink3)
-    .boxed()
+    let total = matched + mapping.unmatched.len();
+    let reference = session.reference.as_str();
+    let pins = kept_pins(change, i18n);
+    let line = match (change.pin_map.is_some(), pins.is_empty()) {
+        (false, true) => t!(
+            i18n,
+            ids::LIBRARY_CHANGE_COMPONENT_KEPT_SUMMARY,
+            "reference" => reference,
+            "matched" => matched,
+            "total" => total
+        ),
+        (false, false) => t!(
+            i18n,
+            ids::LIBRARY_CHANGE_COMPONENT_KEPT_SUMMARY_PINS,
+            "reference" => reference,
+            "pins" => pins.join(", "),
+            "matched" => matched,
+            "total" => total
+        ),
+        (true, _) => {
+            let pins = if pins.is_empty() {
+                t!(i18n, ids::LIBRARY_CHANGE_COMPONENT_KEPT_NO_NETS).into_string()
+            } else {
+                pins.join(", ")
+            };
+            t!(
+                i18n,
+                ids::LIBRARY_CHANGE_COMPONENT_KEPT_SUMMARY_MAPPED,
+                "reference" => reference,
+                "pins" => pins,
+                "matched" => matched,
+                "total" => total
+            )
+        }
+    };
+    text(line)
+        .size(TS.caption)
+        .color(crate::styles::tokens::resolve(tokens).ink3)
+        .boxed()
 }
 
 /// The Apply to choice: only this part. The channel and same-MPN scopes of

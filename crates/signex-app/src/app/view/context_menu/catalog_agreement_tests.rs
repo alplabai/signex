@@ -67,13 +67,14 @@ const SURFACE_LOCAL: &[(&str, &str)] = &[
     ("Comment...", "planned, no behaviour"),
     ("Pin Mapping...", "planned, no behaviour"),
     ("Supplier Links...", "planned, no behaviour"),
-    // Canvas: the In variant flyout (mockup row 62). The per-variant edits
-    // are not built; the last two open the project's Variant Manager, which
-    // the palette cannot name.
+    // Canvas: the In variant flyout (mockup row 62). The fit off a repeated
+    // sheet is not built; Alternate… and Edit value open the picker and the
+    // popover of the selected part (mockup rows 208, 209), and the last two
+    // open the project's Variant Manager, none of which the palette can name.
     ("Fitted", "planned, no behaviour"),
     ("Not fitted", "planned, no behaviour"),
-    ("Alternate part…", "planned, no behaviour"),
-    ("Edit value for this variant…", "planned, no behaviour"),
+    ("Alternate…", "part-addressed dialog"),
+    ("Edit value for this variant…", "part-addressed popover"),
     ("Show in Variant Manager", "project-addressed"),
     ("New variant…", "project-addressed"),
     // Project tree: every action is addressed by a tree key or path the
@@ -107,7 +108,7 @@ const SURFACE_LOCAL: &[(&str, &str)] = &[
     ("PCB", "tree-addressed"),
     ("Component Library", "project action"),
     ("PCB Library", "tree-addressed"),
-    ("Design Notebook", "planned, tree-addressed"),
+    ("Design Notebook", "tree-addressed"),
     ("Export Job", "planned, tree-addressed"),
     ("Constraint File", "planned, tree-addressed"),
     ("VHDL File", "planned, tree-addressed"),
@@ -376,7 +377,10 @@ fn command_rows_read_label_and_shortcut_from_the_catalog() {
                 // Mockup row 158: the Unions flyout.
                 ("unions", unions_entries(i18n, selection, &hint)),
                 // Mockup row 62: the In variant flyout.
-                ("in variant", in_variant_entries(i18n, &variant, Some("R1"))),
+                (
+                    "in variant",
+                    in_variant_entries(i18n, &variant, Some("R1"), None),
+                ),
             ];
             for (name, rows) in flyouts {
                 check_rows(

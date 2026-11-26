@@ -61,6 +61,7 @@ pub(crate) fn build_for(inputs: &MenuInputs) -> iced_menu::Menu<Message> {
         active_keymap: inputs.keymap(),
         i18n: inputs.i18n(),
         cross_select: inputs.cross_select(),
+        notebook_badges: inputs.notebook_badges(),
         pcb_sync: inputs.pcb_sync(),
         layouts: inputs.layouts().clone(),
         extension_rows: inputs.extension_rows().to_vec(),

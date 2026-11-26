@@ -27,16 +27,19 @@ mod history;
 mod layers;
 mod library;
 mod nets;
+mod notebook;
 mod operands;
 mod pcb_sync;
 mod placement;
 mod properties;
 mod query;
+mod reuse;
 mod route_operands;
 mod search;
 mod selection;
 mod tool;
 mod transform;
+mod variant_operands;
 mod view;
 mod wiring;
 mod workspace;
@@ -330,6 +333,7 @@ const TABLES: &[&[CommandMetadata]] = &[
     arrange::ARRANGE,
     transform::TRANSFORM,
     placement::PLACEMENT,
+    reuse::REUSE,
     wiring::WIRING,
     drawing::DRAWING,
     tool::TOOL,
@@ -348,6 +352,7 @@ const TABLES: &[&[CommandMetadata]] = &[
     library::LIBRARY,
     workspace::WORKSPACE,
     block_diagram::BLOCK_DIAGRAM,
+    notebook::NOTEBOOK,
     bom::BOM,
 ];
 
@@ -472,6 +477,10 @@ const GLOBAL_COMMANDS: &[&str] = &[
     "new_pcb_document",
     "new_schematic_sheet",
     "open_rules",
+    // The project's Design Notebook, from any tab (mockup rows 195, 201, 202).
+    "open_design_notebook",
+    "generate_design_notebook",
+    "export_notebook_pdf",
 ];
 
 /// The editor contexts in which `command` can act, or `None` when it is
@@ -712,6 +721,8 @@ mod tests {
             ("library.rs", include_str!("library.rs")),
             ("workspace.rs", include_str!("workspace.rs")),
             ("block_diagram.rs", include_str!("block_diagram.rs")),
+            ("reuse.rs", include_str!("reuse.rs")),
+            ("notebook.rs", include_str!("notebook.rs")),
             ("bom.rs", include_str!("bom.rs")),
         ];
 

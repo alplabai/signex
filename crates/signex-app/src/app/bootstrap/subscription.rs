@@ -1,17 +1,14 @@
 //! `Signex::subscription` — keyboard / window / tick event wiring.
-//! Split from `app/bootstrap.rs` as pure code motion.
 
 use super::super::*;
 
 use super::window_subscriptions;
 use crate::app::view::overlay_id::OverlayId;
 use iced::Subscription;
+mod edit_escape;
+mod notebook_escape;
 
 /// Which overlays are open, as the Esc ladder sees them.
-///
-/// A named struct rather than the positional tuple this used to be: with
-/// twelve same-typed `bool`s, swapping two of them silently routed Esc to
-/// the wrong modal, with nothing to catch it.
 ///
 /// **Built in `update`, not in the subscription** (#535). Until then this
 /// was baked into `Subscription::with`, which forced `Hash` and — by
@@ -33,6 +30,7 @@ struct OpenOverlays {
     union_popover_open: bool,
     /// The Smart Paste dialog (mockup row 155).
     smart_paste_open: bool,
+    variant_part_edit_open: bool,
     kbd_shortcuts_open: bool,
     about_open: bool,
     first_run_tour_open: bool,
@@ -72,7 +70,9 @@ struct OpenOverlays {
     create_rooms_open: bool,
     fab_outputs_open: bool,
     diff_pair_classes_open: bool,
+    notebook_generate_open: bool,
     board_output_open: bool,
+    notebook_pdf_open: bool,
     back_annotate_open: bool,
     compare_board_open: bool,
     compare_board_confirm_open: bool,
@@ -335,23 +335,10 @@ impl OpenOverlays {
                     ),
                 )
             }),
-            OverlayId::PasteArray => self.paste_array_open.then(|| {
-                Message::Edit(crate::app::EditMsg::PasteArray(
-                    crate::paste_array::PasteArrayMsg::EscapePressed,
-                ))
-            }),
-            OverlayId::UnionPopover => self.union_popover_open.then(|| {
-                Message::Edit(crate::app::EditMsg::Unions(
-                    crate::app::unions::UnionsMsg::Popover(
-                        crate::app::unions::UnionPopoverMsg::Cancelled,
-                    ),
-                ))
-            }),
-            OverlayId::SmartPaste => self.smart_paste_open.then(|| {
-                Message::Edit(crate::app::EditMsg::SmartPasteDialog(
-                    crate::smart_paste::SmartPasteMsg::Cancelled,
-                ))
-            }),
+            OverlayId::PasteArray
+            | OverlayId::UnionPopover
+            | OverlayId::SmartPaste
+            | OverlayId::VariantPartEdit => self.edit_escape(id),
             OverlayId::KeyboardShortcuts => self
                 .kbd_shortcuts_open
                 .then(|| Message::Overlay(OverlayMsg::CloseKeyboardShortcuts)),
@@ -418,6 +405,7 @@ impl OpenOverlays {
             OverlayId::DiffPairClasses => self
                 .diff_pair_classes_open
                 .then(|| Message::from(crate::app::DiffPairClassesMsg::CancelRequested)),
+            OverlayId::NotebookGenerate | OverlayId::NotebookPdf => self.notebook_escape(id),
             OverlayId::BoardOutput => self
                 .board_output_open
                 .then(|| Message::from(crate::app::BoardOutputMsg::Closed)),
@@ -759,6 +747,7 @@ impl Signex {
             paste_array_open: self.ui_state.paste_array.is_some(),
             union_popover_open: self.ui_state.unions.popover.is_some(),
             smart_paste_open: self.ui_state.smart_paste.is_some(),
+            variant_part_edit_open: self.ui_state.variant_part_edit.is_some(),
             kbd_shortcuts_open: self.ui_state.keyboard_shortcuts_open
                 && !modal_detached(crate::app::state::ModalId::KeyboardShortcuts),
             about_open: self.ui_state.about_open
@@ -804,7 +793,9 @@ impl Signex {
             create_rooms_open: self.ui_state.rooms.create.is_some(),
             fab_outputs_open: self.ui_state.fab_outputs.is_some(),
             diff_pair_classes_open: self.ui_state.diff_pair_classes.is_some(),
+            notebook_generate_open: self.ui_state.notebook_generate.dialog.is_some(),
             board_output_open: self.ui_state.board_output.dialog.is_some(),
+            notebook_pdf_open: self.ui_state.notebook_pdf.dialog.is_some(),
             back_annotate_open: self.ui_state.back_annotate.is_some(),
             compare_board_open: self.ui_state.compare_board.is_some(),
             compare_board_confirm_open: self
@@ -1181,6 +1172,8 @@ impl Signex {
             hover_tick,
             hover_tooltip_tick,
             net_hover_tick,
+            // Live ERC's wait after an edit (#1288); none while nothing is owed.
+            self.live_erc_subscription(),
             library_poll,
             autosave_tick,
             self.edge_pan_subscription(),
@@ -1392,6 +1385,12 @@ mod tests {
             only(|o| o.smart_paste_open = true),
             Some(Message::Edit(crate::app::EditMsg::SmartPasteDialog(
                 crate::smart_paste::SmartPasteMsg::Cancelled
+            )))
+        ));
+        assert!(matches!(
+            only(|o| o.variant_part_edit_open = true),
+            Some(Message::Project(crate::app::ProjectMsg::VariantPartEdit(
+                crate::app::VariantPartEditMsg::CancelPressed
             )))
         ));
         assert!(matches!(
@@ -1994,6 +1993,7 @@ mod tests {
             paste_array_open,
             union_popover_open,
             smart_paste_open,
+            variant_part_edit_open,
             kbd_shortcuts_open,
             about_open,
             first_run_tour_open,
@@ -2026,7 +2026,9 @@ mod tests {
             create_rooms_open,
             fab_outputs_open,
             diff_pair_classes_open,
+            notebook_generate_open,
             board_output_open,
+            notebook_pdf_open,
             back_annotate_open,
             compare_board_open,
             compare_board_confirm_open,
@@ -2069,6 +2071,9 @@ mod tests {
             ("paste_array_open", |o| o.paste_array_open = true),
             ("union_popover_open", |o| o.union_popover_open = true),
             ("smart_paste_open", |o| o.smart_paste_open = true),
+            ("variant_part_edit_open", |o| {
+                o.variant_part_edit_open = true
+            }),
             ("kbd_shortcuts_open", |o| o.kbd_shortcuts_open = true),
             ("about_open", |o| o.about_open = true),
             ("first_run_tour_open", |o| o.first_run_tour_open = true),
@@ -2118,7 +2123,11 @@ mod tests {
             ("diff_pair_classes_open", |o| {
                 o.diff_pair_classes_open = true
             }),
+            ("notebook_generate_open", |o| {
+                o.notebook_generate_open = true
+            }),
             ("board_output_open", |o| o.board_output_open = true),
+            ("notebook_pdf_open", |o| o.notebook_pdf_open = true),
             ("back_annotate_open", |o| o.back_annotate_open = true),
             ("compare_board_open", |o| o.compare_board_open = true),
             ("compare_board_confirm_open", |o| {

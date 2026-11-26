@@ -35,6 +35,11 @@ pub struct DerivedDiagram {
     pub blocks: Vec<DerivedBlock>,
     /// One connection per signal group and pair of blocks it joins.
     pub connections: Vec<DerivedConnection>,
+    /// The paths of sheets that would be blocks but hold no document id
+    /// yet (the nil `schematic_id` of a sheet no build has saved since ids
+    /// came in): no block can link to them, so a run refuses rather than
+    /// leave them out.
+    pub unidentified: Vec<String>,
 }
 
 /// The block one sheet stands for.

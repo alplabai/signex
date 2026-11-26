@@ -34,6 +34,7 @@ pub(super) mod read_only_badge;
 mod save_project_as_offer_tests;
 mod symbol_hover;
 mod text_edit;
+mod variant_part_edit;
 #[cfg(test)]
 mod window_gate_tests;
 mod zoom_pill;

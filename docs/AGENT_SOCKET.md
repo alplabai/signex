@@ -120,8 +120,9 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   `board_status` (#2460), each answered once its reads land
   ([CLI.md](CLI.md), "Board against schematic" and "Board status"),
   `query_rail_budget` (#2943), answered once its parts are read
-  ([CLI.md](CLI.md), "Rail budgets"), and `query_power_tree` (#1313),
-  answered once its run lands ([CLI.md](CLI.md), "Power tree");
+  ([CLI.md](CLI.md), "Rail budgets"), the BOM's `bom_lines` (#1988;
+  [CLI.md](CLI.md), "BOM lines"), and `query_power_tree` (#1313), answered
+  once its run lands ([CLI.md](CLI.md), "Power tree");
 - a command that names its document with a required `document` operand and
   takes no file path (the placements' optional `document` does not count; they
   stay reachable through `apply_edits`): today `apply_edits`, `revert`, `color_net`,
@@ -194,7 +195,10 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   file in the project's `reuse-blocks` folder, and a place may wait for the
   project's blocks to be read like an edit waiting for its reads; a swap or
   a place names its component by `ids`, its uuid, or by `designator`,
-  exactly one), and the drawing order `bring_drawings_forward`,
+  exactly one), and the same swaps on a sheet, `swap_schematic_pins` and
+  `swap_schematic_gates` (#1261; one undo step on the named sheet, the
+  board left for Update PCB, the part named by `ids`, one placed unit's
+  uuid, or by `designator`), and the drawing order `bring_drawings_forward`,
   `bring_drawings_to_front`, `send_drawings_backward` and
   `send_drawings_to_back` and `delete_selection` (#2326; one undo step on
   the items `ids` names by uuid on the named sheet, or for a delete the named

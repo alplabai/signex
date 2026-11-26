@@ -10,10 +10,10 @@ use signex_types::schematic::{
 };
 use uuid::Uuid;
 
-const OLD: &str = "L:OLD";
+pub(super) const OLD: &str = "L:OLD";
 const NEW: &str = "L:NEW";
 
-fn lib_pin(number: &str, name: &str, x: f64) -> LibPin {
+pub(super) fn lib_pin(number: &str, name: &str, x: f64) -> LibPin {
     LibPin {
         unit: 1,
         body_style: 1,
@@ -38,7 +38,7 @@ fn lib_symbol(id: &str, pins: Vec<LibPin>) -> LibSymbol {
     lib
 }
 
-fn replacement(pins: Vec<LibPin>) -> ComponentReplacement {
+pub(super) fn replacement(pins: Vec<LibPin>) -> ComponentReplacement {
     ComponentReplacement {
         lib_symbol: lib_symbol(NEW, pins),
         library_id: Some(Uuid::from_u128(0xA)),
@@ -52,12 +52,13 @@ fn replacement(pins: Vec<LibPin>) -> ComponentReplacement {
             ("MPN".into(), "NEW-MPN".into()),
             ("Manufacturer".into(), String::new()),
         ],
+        pin_map: None,
     }
 }
 
 /// U1 at (10, 10) drawn as OLD (pins "1" at x=-2.54 and "2" at x=2.54),
 /// with a wire on pin "2" (world 12.54, 10).
-fn engine_with_wired_pin_2() -> (Engine, Uuid) {
+pub(super) fn engine_with_wired_pin_2() -> (Engine, Uuid) {
     let mut sheet = test_sheet();
     sheet.lib_symbols.insert(
         OLD.into(),

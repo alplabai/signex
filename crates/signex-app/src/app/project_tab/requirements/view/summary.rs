@@ -168,7 +168,7 @@ pub(in crate::app::project_tab::requirements) fn summary_words(
             "width" => value(RequirementField::MaxWidthMm),
             "height" => value(RequirementField::MaxHeightMm),
         ),
-        RequirementKind::PartsState { states } => t!(
+        RequirementKind::PartsState { states, .. } => t!(
             i18n,
             ids::REQUIREMENTS_SUMMARY_PARTS_STATE,
             "states" => i18n.list(states.as_slice(), ListKind::Or),

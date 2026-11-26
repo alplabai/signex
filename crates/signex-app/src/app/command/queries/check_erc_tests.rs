@@ -231,7 +231,7 @@ fn a_baseline_that_is_not_kept_is_refused() {
     assert!(why.contains("no such run"), "{why}");
     // The refused run is not numbered.
     assert_eq!(report(&mut app, &top(&dir), &[])["run"], 1);
-    for _ in 0..crate::app::state::check_runs::KEPT_CHECK_RUNS {
+    for _ in 0..crate::app::core::check_runs::KEPT_CHECK_RUNS {
         report(&mut app, &top(&dir), &[]);
     }
     let why = refusal(check(&mut app, &top(&dir), &["baseline=1"]));

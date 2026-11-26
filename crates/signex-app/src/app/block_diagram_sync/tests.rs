@@ -169,6 +169,60 @@ fn a_sheet_that_does_not_read_refuses_the_run() {
     );
 }
 
+/// The corpus hierarchy's sheets hold the nil `schematic_id` (no build has
+/// saved them since ids came in): the run refuses, naming a sheet, and
+/// writes nothing, where it used to write a diagram with no blocks. With
+/// ids, its sheet symbols give their blocks.
+#[test]
+fn a_hierarchy_of_sheets_without_ids_refuses_and_with_ids_gives_its_blocks() {
+    let dir = tempfile::tempdir().expect("dir");
+    let corpus =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../signex-types/tests/corpus/schematic");
+    let files = [
+        "hierarchy-root-two-children.snxsch",
+        "hierarchy-nested-middle.snxsch",
+        "hierarchy-child-leaf.snxsch",
+    ];
+    for file in files {
+        std::fs::copy(corpus.join(file), dir.path().join(file)).expect("copy the fixture");
+    }
+    let root = dir.path().join(files[0]);
+    let run = |root: &Path| SyncJob {
+        pages: vec![root.to_path_buf()],
+        root: root.to_path_buf(),
+        ..job(dir.path(), SyncMode::Generate { overwrite: true })
+    };
+    let refused = run(&root).run().expect_err("refused");
+    assert!(
+        refused.render_en_us().contains("no document id"),
+        "{}",
+        refused.render_en_us()
+    );
+    assert!(!dir.path().join("demo.snxblk").exists(), "nothing written");
+
+    for file in files {
+        let path = dir.path().join(file);
+        let mut sheet = crate::app::project_sheets::load_sheet_file(&path)
+            .expect("reads")
+            .expect("there");
+        sheet.uuid = uuid::Uuid::now_v7();
+        std::fs::remove_file(&path).expect("the old file");
+        save(sheet, &path);
+    }
+    let answer = run(&root).run().expect("generated");
+    let blocks = read_block_diagram(&dir.path().join("demo.snxblk"))
+        .expect("written")
+        .diagram
+        .blocks;
+    // The top and the middle sheet only place sheets (frames); the leaf,
+    // placed by both, is the one block.
+    let paths: Vec<_> = (blocks.iter())
+        .filter_map(|b| b.sheet.as_ref().map(|l| l.path.clone()))
+        .collect();
+    assert_eq!(paths, ["hierarchy-child-leaf.snxsch"], "{answer}");
+    assert_eq!(answer["summary"]["blocks"], blocks.len(), "{answer}");
+}
+
 /// An app with the project of `dir` (root `top.snxsch`) active.
 pub(crate) fn app_on(dir: &Path) -> Signex {
     let mut app = app_workspace(&dir.to_string_lossy(), &["top.snxsch"]);

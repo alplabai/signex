@@ -111,6 +111,7 @@ panels-projects-open-hint = File > Open to begin
 # Branches of a project in the Projects tree.
 panels-projects-group-schematics = Schematics
 panels-projects-group-pcb = PCB
+panels-projects-group-notebook = Notebook
 panels-projects-group-bom = Bill of Materials
 panels-projects-group-outputs = Export Jobs
 panels-projects-group-libraries = Libraries

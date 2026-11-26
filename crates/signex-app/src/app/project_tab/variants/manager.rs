@@ -1,10 +1,11 @@
 //! The Variant Manager tab's own state and messages (mockup row 32): the
 //! selected matrix cell, a parameter value being typed for it, and the
 //! edits the tab adds to the Variants section's (cell fit, parameter
-//! values, Duplicate, Set as default).
+//! values, Duplicate, Set as default) and its top bar actions (Compare
+//! variants, Open in BOM Studio, #2949).
 
 // The tab's view state is plain data, kept in the UI-free core (ADR-0006).
-pub use crate::app::core::variant_cell::{OverrideDraft, VariantCell};
+pub use crate::app::core::variant_cell::{CompareSides, OverrideDraft, VariantCell};
 use signex_types::pcb::SymbolLink;
 
 /// Messages of the Variant Manager tab, namespaced under
@@ -45,4 +46,20 @@ pub enum VariantManagerMsg {
         part: SymbolLink,
         fitted: Option<bool>,
     },
+    /// Compare variants... in the top bar: the comparison shows, Base against
+    /// the selected variant (the first definition while Base is selected).
+    CompareOpened,
+    /// A side of the comparison was picked: the left one (`from`) or the
+    /// right one; `None` is Base.
+    CompareSidePicked { from: bool, name: Option<String> },
+    /// The swap button between the two sides.
+    CompareSwapped,
+    /// Close: the cards and the matrix again.
+    CompareClosed,
+    /// Open in BOM Studio: the BOM of the project with `variant` picked
+    /// (`None` is Base).
+    BomRequested { variant: Option<String> },
+    /// Alternate… in the right pane: the Alternate part picker (mockup row
+    /// 208) opens for the cell's part in the cell's variant.
+    AlternateRequested { cell: VariantCell },
 }

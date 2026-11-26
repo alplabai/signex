@@ -217,3 +217,69 @@ fn every_channel_copy_set_at_once_is_one_undo_step() {
     assert!(data.variant_settings.is_empty(), "one step takes all three");
     assert!(!history.undo(&mut data));
 }
+
+/// #3038: an alternate part's value, footprint and part number are one
+/// step, which round-trips as plain data and one undo takes back.
+#[test]
+fn an_alternate_parts_values_are_one_step() {
+    use signex_types::project::{FOOTPRINT_PARAMETER, MPN_PARAMETER};
+
+    let command = ProjectSectionCommand::SetVariantPartParameters {
+        variant: "Lite".into(),
+        designator: "R5".into(),
+        part: None,
+        parameters: vec![
+            (VALUE_PARAMETER.into(), Some("47k".into())),
+            (FOOTPRINT_PARAMETER.into(), Some("RES_0402".into())),
+            (MPN_PARAMETER.into(), Some("RC0402FR-0747KL".into())),
+        ],
+    };
+    let json = serde_json::to_value(&command).unwrap();
+    let back: ProjectSectionCommand = serde_json::from_value(json).unwrap();
+    assert_eq!(back, command);
+
+    let mut data = project();
+    let mut history = ProjectGeneralHistory::default();
+    assert_eq!(apply(&mut history, &mut data, command.clone()), Ok(true));
+    let entry = data.variant_settings.part(Some("Lite"), "R5").unwrap();
+    assert_eq!(entry.parameters.len(), 3);
+    assert_eq!(apply(&mut history, &mut data, command), Ok(false));
+    assert!(history.undo(&mut data));
+    assert!(data.variant_settings.is_empty(), "one step takes all three");
+    assert!(!history.can_undo());
+}
+
+/// Mockup rows 208 and 209: an alternate for every channel's copy is one
+/// step, which round-trips as plain data and one undo takes back.
+#[test]
+fn every_channel_copys_alternate_is_one_step() {
+    use signex_types::pcb::SymbolLink;
+    use signex_types::project::{MPN_PARAMETER, PartRef};
+    use signex_types::schematic::InstancePath;
+
+    let unit = uuid::Uuid::now_v7();
+    let copy = |n: u128| {
+        let path = InstancePath::from_chain(vec![
+            uuid::Uuid::from_u128(0x0208),
+            uuid::Uuid::from_u128(0x0208 + n),
+        ]);
+        PartRef::new(format!("CH{n}_C22"), Some(SymbolLink::new(path, [unit])))
+    };
+    let command = ProjectSectionCommand::SetVariantPartsParameters {
+        variant: "Lite".into(),
+        parts: vec![copy(1), copy(2), copy(3)],
+        parameters: vec![(MPN_PARAMETER.into(), Some("CL21A226MPQNNNE".into()))],
+    };
+    let json = serde_json::to_value(&command).unwrap();
+    let back: ProjectSectionCommand = serde_json::from_value(json).unwrap();
+    assert_eq!(back, command);
+
+    let mut data = project();
+    let mut history = ProjectGeneralHistory::default();
+    assert_eq!(apply(&mut history, &mut data, command.clone()), Ok(true));
+    assert_eq!(data.variant_settings.parts.len(), 3);
+    assert_eq!(apply(&mut history, &mut data, command), Ok(false));
+    assert!(history.undo(&mut data));
+    assert!(data.variant_settings.is_empty(), "one step takes all three");
+    assert!(!history.can_undo());
+}

@@ -114,15 +114,28 @@ impl Signex {
             self.drop_update_pcb_run();
             return (refusal(ids::UPDATE_PCB_NO_BOARD.into()), Task::none());
         };
+        // Exit criterion 3: the classes, read before an apply puts them.
+        let mut net_classes = self.update_pcb_class_names(state);
+        let snapshot = state.snapshot.clone();
         if dry_run {
             let blocked = self.update_pcb_execute_block_in(&signex_i18n::I18n::en_us());
             self.drop_update_pcb_run();
-            let outcome = self.update_pcb_answer(&list, &project, &board, true, blocked);
+            let outcome =
+                self.update_pcb_answer(&list, (&project, &board), true, blocked, net_classes);
             return (outcome, Task::none());
         }
         let task = self.execute_update_pcb();
+        // A class step that failed after the board step is a Messages
+        // warning, as for the rules; the answer leaves out what it did not
+        // put.
+        if let Some(edit) =
+            (snapshot.as_deref()).and_then(|s| self.update_pcb_class_edit(&board, s))
+        {
+            let missed = super::classes_from_schematic::classes_in(&edit);
+            net_classes.retain(|class| !missed.contains(class));
+        }
         let outcome = match self.ui_state.update_pcb.take() {
-            None => self.update_pcb_answer(&list, &project, &board, false, None),
+            None => self.update_pcb_answer(&list, (&project, &board), false, None, net_classes),
             Some(left) => match left.failure() {
                 Some(why) => refusal(did_not_run(why)),
                 None => refusal(
@@ -137,10 +150,10 @@ impl Signex {
     fn update_pcb_answer(
         &self,
         list: &EcoChangeList,
-        project: &Path,
-        board: &Path,
+        (project, board): (&Path, &Path),
         dry_run: bool,
         execute_blocked: Option<String>,
+        net_classes: Vec<String>,
     ) -> CommandOutcome {
         let board_revision = self
             .document_state
@@ -152,6 +165,7 @@ impl Signex {
             board,
             board_revision,
             execute_blocked,
+            net_classes,
         };
         match serde_json::to_value(UpdatePcbAnswer::of(list, at)) {
             Ok(value) => CommandOutcome::Answered(value),

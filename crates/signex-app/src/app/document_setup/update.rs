@@ -18,13 +18,16 @@ impl Signex {
     /// values are used.
     pub(crate) fn resolved_project_setup(&mut self, project: ProjectId) -> Option<ResolvedSetup> {
         let loaded = self.document_state.project_by_id(project)?;
-        let resolved = super::new_document_setup(&loaded.data, &self.ui_state.setup_profiles);
-        let ui = &mut self.ui_state;
+        let resolved = super::new_document_setup(&loaded.data, &self.document_state.setup_profiles);
+        // Copied so the borrow of `loaded` ends before the warned set is written.
+        let project_name = loaded.data.name.clone();
+        let ui = &self.ui_state;
+        let docs = &mut self.document_state;
         if let Some(missing) = &resolved.missing_profile
-            && ui.missing_profiles_warned.insert(missing.clone())
+            && docs.missing_profiles_warned.insert(missing.clone())
         {
-            let project = loaded.data.name.as_str();
-            let note = match ui.removed_profile_names.get(missing) {
+            let project = project_name.as_str();
+            let note = match docs.removed_profile_names.get(missing) {
                 Some(name) => t!(
                     ui.i18n,
                     ids::SETUP_PROFILE_MISSING,
@@ -206,9 +209,10 @@ impl Signex {
                     _ => {}
                 }
                 let project = state.project;
-                match store_profile(&mut state.draft, &mut ui.setup_profiles, &edit) {
+                let users = &mut self.document_state.setup_profiles;
+                match store_profile(&mut state.draft, users, &edit) {
                     ProfileStored::NotAStore => {
-                        state.draft.apply_setup(edit, &ui.setup_profiles);
+                        state.draft.apply_setup(edit, users);
                         Task::none()
                     }
                     // Removing this project's default profile un-names it, as

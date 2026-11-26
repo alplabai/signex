@@ -73,7 +73,7 @@ fn build_bom_export_scope(
 
 /// [`build_bom_export_scope`] for an explicit source document (#852): the BOM
 /// completion path, where the dialog may have outlived the originating tab.
-fn build_bom_export_scope_for_source(
+pub(crate) fn build_bom_export_scope_for_source(
     document_state: &crate::app::state::DocumentState,
     source: &std::path::Path,
 ) -> Option<(ExportContext, ExportIssues)> {

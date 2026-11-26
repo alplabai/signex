@@ -111,6 +111,10 @@ impl Signex {
                 Task::batch([task, self.finish_update()])
             }
             EditMsg::Extras(msg) => self.dispatch_placement_extras(msg),
+            EditMsg::SheetSwap(msg) => {
+                let task = self.handle_sheet_swap(msg);
+                Task::batch([task, self.finish_update()])
+            }
             EditMsg::SheetSync(msg) => self.dispatch_sheet_sync(msg),
             EditMsg::RailRename(msg) => self.dispatch_rail_rename(msg),
             EditMsg::Tables(msg) => self.dispatch_tables(msg),
@@ -351,6 +355,10 @@ impl Signex {
             }
             ExportMsg::BlockDiagram(msg) => {
                 let task = self.handle_block_diagram_export(msg);
+                iced::Task::batch([task, self.finish_update()])
+            }
+            ExportMsg::NotebookPdf(msg) => {
+                let task = self.dispatch_notebook_pdf_message(msg);
                 iced::Task::batch([task, self.finish_update()])
             }
         }

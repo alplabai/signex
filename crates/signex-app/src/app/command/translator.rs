@@ -49,10 +49,13 @@ pub(crate) const TRANSLATED: &[&str] = &[
     "place_board_reuse_block",
     "regenerate_block_diagram",
     "save_board_reuse_block",
+    "save_snippet",
     "send_drawings_backward",
     "send_drawings_to_back",
     "swap_gates",
     "swap_pins",
+    "swap_schematic_gates",
+    "swap_schematic_pins",
 ];
 
 /// The translated ids a headless run without operands still runs on the

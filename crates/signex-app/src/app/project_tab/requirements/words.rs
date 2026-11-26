@@ -27,6 +27,8 @@ pub(super) fn field_words(field: RequirementField) -> MessageId {
         RequirementField::MaxWidthMm => ids::REQUIREMENTS_FIELD_MAX_WIDTH,
         RequirementField::MaxHeightMm => ids::REQUIREMENTS_FIELD_MAX_HEIGHT,
         RequirementField::States => ids::REQUIREMENTS_FIELD_STATES,
+        RequirementField::Variant => ids::REQUIREMENTS_FIELD_VARIANT,
+        RequirementField::FittedOnly => ids::REQUIREMENTS_FIELD_FITTED_ONLY,
         RequirementField::Nets => ids::REQUIREMENTS_FIELD_NETS,
         RequirementField::Class => ids::REQUIREMENTS_FIELD_CLASS,
         RequirementField::MinTraceWidthMm => ids::REQUIREMENTS_FIELD_MIN_TRACE,
@@ -82,6 +84,9 @@ pub(super) fn problem_words(problem: &RequirementProblem, i18n: &I18n) -> Locali
         P::Empty(_) => t!(i18n, ids::REQUIREMENTS_PROBLEM_EMPTY),
         P::UnknownState(state) => {
             t!(i18n, ids::REQUIREMENTS_PROBLEM_UNKNOWN_STATE, "state" => state.as_str())
+        }
+        P::UnknownVariant(name) => {
+            t!(i18n, ids::REQUIREMENTS_PROBLEM_UNKNOWN_VARIANT, "name" => name.as_str())
         }
         P::NetClassAsksNothing => t!(i18n, ids::REQUIREMENTS_PROBLEM_NET_CLASS_ASKS_NOTHING),
         P::NotAVoltage(text) => {

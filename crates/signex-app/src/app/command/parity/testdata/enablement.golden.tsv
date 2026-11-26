@@ -26,6 +26,7 @@ assign_board_net_class	-	f2929686b07ef725
 assign_footprint	Schematic	f8bd7a5cb84e915b
 assign_footprints	Schematic	f8bd7a5cb84e915b
 assign_net_class	-	f2929686b07ef725
+attach_notebook_file	-	f2929686b07ef725
 auto_place	EditablePcb	bd0dadc1f2af5e61
 autoplace_fields	-	f2929686b07ef725
 back_annotate_schematics	PcbSync	a85dffe6af2a0327
@@ -51,6 +52,7 @@ board_shape_from_selection	PcbSelection	b2eee5a7d6ad7c41
 board_sketch	EditablePcb	bd0dadc1f2af5e61
 board_status	-	f2929686b07ef725
 bom_add_alternate	-	f2929686b07ef725
+bom_lines	-	f2929686b07ef725
 bom_remove_alternate	-	f2929686b07ef725
 bom_set_alternate_order	-	f2929686b07ef725
 break_union	Schematic	f8bd7a5cb84e915b
@@ -75,6 +77,7 @@ close_active_document	Document	fcd050005940b9eb
 close_all_documents	Document	fcd050005940b9eb
 color_net	-	f2929686b07ef725
 compare_board_with_schematic	PcbSync	a85dffe6af2a0327
+compare_variants	-	f2929686b07ef725
 compile_project	ProjectSheet	b9cf07c7e6ca1a9f
 copy	CopyTarget	817202b19c108dea
 copy_attributes_or_add_vertex	-	f2929686b07ef725
@@ -135,6 +138,8 @@ export_block_diagram	-	f2929686b07ef725
 export_board_pdf	Pcb	119d310e454dd5e4
 export_board_report	Pcb	119d310e454dd5e4
 export_board_step	Pcb	119d310e454dd5e4
+export_notebook_pdf	OpenProject	ee0317ecaf5bfb5b
+export_notebook_timeline	-	f2929686b07ef725
 export_parameters	Schematic	f8bd7a5cb84e915b
 fabrication_outputs	Pcb	119d310e454dd5e4
 fast_grid_1	-	f2929686b07ef725
@@ -161,6 +166,7 @@ footprint_mode_view_3d	-	f2929686b07ef725
 footprint_recompute_courtyard_outline	-	f2929686b07ef725
 force_annotate_all_schematics	ActiveSheet	cff87b9cc03394bf
 generate_block_diagram	ProjectSheet	b9cf07c7e6ca1a9f
+generate_design_notebook	OpenProject	ee0317ecaf5bfb5b
 gloss_selected_routes	PcbSelection	b2eee5a7d6ad7c41
 go_to_net_partner	-	f2929686b07ef725
 hide_layer	Pcb	119d310e454dd5e4
@@ -182,9 +188,14 @@ layout_plan_get	-	f2929686b07ef725
 layout_plan_set	-	f2929686b07ef725
 layout_plan_status	-	f2929686b07ef725
 leave_sheet	ParentSheet	1a0f94b7a1b59195
+list_annotations	-	f2929686b07ef725
+list_diff_pairs	-	f2929686b07ef725
 list_documents	-	f2929686b07ef725
+list_snippets	-	f2929686b07ef725
+list_templates	-	f2929686b07ef725
 lock_board_items	Pcb	119d310e454dd5e4
 manage_workspace_layouts	-	f2929686b07ef725
+mark_notebook_attachment_valid	-	f2929686b07ef725
 measure_board	-	f2929686b07ef725
 measure_distance	MeasureTarget	ac2868db6f01027f
 mirror_x	Turn	50ba39b5e679cbc7
@@ -205,12 +216,24 @@ next_highlighted_net_item	-	f2929686b07ef725
 next_layer	Pcb	119d310e454dd5e4
 next_sheet	-	f2929686b07ef725
 next_signal_layer	Pcb	119d310e454dd5e4
+notebook_attachments	-	f2929686b07ef725
+notebook_badges	-	f2929686b07ef725
+notebook_compile	-	f2929686b07ef725
+notebook_fix_reference	-	f2929686b07ef725
+notebook_insert	-	f2929686b07ef725
+notebook_measurements	-	f2929686b07ef725
+notebook_reference_card	-	f2929686b07ef725
+notebook_reference_picker	-	f2929686b07ef725
+notebook_references	-	f2929686b07ef725
+notebook_timeline	-	f2929686b07ef725
+notebook_view	-	f2929686b07ef725
 number_schematic_sheets	ProjectSheet	b9cf07c7e6ca1a9f
 open_child_sheet	-	f2929686b07ef725
 open_command_palette	-	f2929686b07ef725
 open_compiled_design	-	f2929686b07ef725
 open_components_panel	Schematic	f8bd7a5cb84e915b
 open_datasheet	-	f2929686b07ef725
+open_design_notebook	OpenProject	ee0317ecaf5bfb5b
 open_diff_pair_classes	OpenProject	ee0317ecaf5bfb5b
 open_document	-	f2929686b07ef725
 open_drc_panel	Pcb	119d310e454dd5e4
@@ -289,6 +312,7 @@ place_reuse_block	Planned	51d88627df287325
 place_sheet_entry	Schematic	f8bd7a5cb84e915b
 place_sheet_symbol	Schematic	f8bd7a5cb84e915b
 place_signal_harness	Schematic	f8bd7a5cb84e915b
+place_snippet	Schematic	f8bd7a5cb84e915b
 place_symbol	Schematic	f8bd7a5cb84e915b
 place_table	Schematic	f8bd7a5cb84e915b
 place_text	Schematic	f8bd7a5cb84e915b
@@ -307,6 +331,7 @@ previous_sheet	-	f2929686b07ef725
 print	PrintTarget	cd658d4d58e303b6
 project_add_requirement	-	f2929686b07ef725
 project_add_variant	-	f2929686b07ef725
+project_duplicate_variant	-	f2929686b07ef725
 project_enable_requirement	-	f2929686b07ef725
 project_move_library	-	f2929686b07ef725
 project_move_sheet	-	f2929686b07ef725
@@ -315,9 +340,14 @@ project_remove_variant	-	f2929686b07ef725
 project_rename_variant	-	f2929686b07ef725
 project_run_requirements	-	f2929686b07ef725
 project_set_active_variant	-	f2929686b07ef725
+project_set_annotate_numbering	-	f2929686b07ef725
 project_set_annotate_undo	-	f2929686b07ef725
+project_set_default_variant	-	f2929686b07ef725
 project_set_rail	-	f2929686b07ef725
 project_set_requirement	-	f2929686b07ef725
+project_set_variant_alternate	-	f2929686b07ef725
+project_set_variant_fit	-	f2929686b07ef725
+project_set_variant_override	-	f2929686b07ef725
 project_set_version_control	-	f2929686b07ef725
 project_settings	-	f2929686b07ef725
 query_block_diagram	-	f2929686b07ef725
@@ -325,6 +355,7 @@ query_board_nets	-	f2929686b07ef725
 query_bom	-	f2929686b07ef725
 query_footprint_assignments	-	f2929686b07ef725
 query_library	-	f2929686b07ef725
+query_net_ties	-	f2929686b07ef725
 query_part_heights	-	f2929686b07ef725
 query_pins	-	f2929686b07ef725
 query_power_tree	-	f2929686b07ef725
@@ -380,6 +411,7 @@ save_document	SaveTarget	2a52f0b0dbe3f4f7
 save_document_as	SaveAsTarget	b6cfd6e46a78555f
 save_layer_set	Pcb	119d310e454dd5e4
 save_project_as	OpenProject	ee0317ecaf5bfb5b
+save_snippet	Schematic	f8bd7a5cb84e915b
 save_workspace_layout	-	f2929686b07ef725
 search_parts	-	f2929686b07ef725
 select_all	SelectAllTarget	ac2868db6f01027f
@@ -405,8 +437,10 @@ set_layer_stack	Pcb	119d310e454dd5e4
 set_layer_tab_names	Pcb	119d310e454dd5e4
 set_layer_visible	Pcb	119d310e454dd5e4
 set_net_class_rules	-	f2929686b07ef725
+set_net_tie	-	f2929686b07ef725
 set_object_position	-	f2929686b07ef725
 set_object_rotation	-	f2929686b07ef725
+set_object_text	-	f2929686b07ef725
 set_object_transparency	Pcb	119d310e454dd5e4
 set_object_visible	Pcb	119d310e454dd5e4
 set_pad_shape	Pcb	119d310e454dd5e4
@@ -430,6 +464,8 @@ snap_board_origin_to_corner	EditablePcb	bd0dadc1f2af5e61
 stitch_vias	Pcb	119d310e454dd5e4
 swap_gates	PadPair	5b3d10fb1363d7d6
 swap_pins	PadPair	5b3d10fb1363d7d6
+swap_schematic_gates	-	f2929686b07ef725
+swap_schematic_pins	-	f2929686b07ef725
 switch_segment_posture	-	f2929686b07ef725
 sync_sheet_entries	Schematic	f8bd7a5cb84e915b
 sync_sheet_pins	-	f2929686b07ef725
@@ -442,6 +478,8 @@ toggle_floating_panels	-	f2929686b07ef725
 toggle_layer_numbers	Pcb	119d310e454dd5e4
 toggle_layer_visibility	Pcb	119d310e454dd5e4
 toggle_layers_panel	-	f2929686b07ef725
+toggle_live_erc	-	f2929686b07ef725
+toggle_notebook_badges	Schematic	f8bd7a5cb84e915b
 toggle_origin_marker	Pcb	119d310e454dd5e4
 toggle_properties_panel	-	f2929686b07ef725
 toggle_ratsnest	Pcb	119d310e454dd5e4
@@ -462,6 +500,7 @@ unselect_all	-	f2929686b07ef725
 untile_documents	Tiled	14233587d4d8c6b6
 unwaive_drc_violation	-	f2929686b07ef725
 update_pcb_from_schematic	PcbSync	a85dffe6af2a0327
+variant_bom	-	f2929686b07ef725
 view_board_3d	Pcb	119d310e454dd5e4
 view_rotate	Pcb	119d310e454dd5e4
 view_rotate_180	Pcb	119d310e454dd5e4

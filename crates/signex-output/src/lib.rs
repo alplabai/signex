@@ -39,7 +39,7 @@ pub use board_report::{
 pub use bom::{
     BomColumn, BomError, BomExporter, BomFormat, BomGrouping, BomIssueSeverity, BomMetadata,
     BomOptions, BomOutput, BomRow, BomRule, BomRuleOptions, BomTable, BomValidationIssue,
-    BomValidationReport, rollup,
+    BomValidationReport, ComputedCell, ComputedColumn, ComputedIssue, rollup,
 };
 pub use erc::{
     ErcReportError, ErcReportExporter, ErcReportFormat, ErcReportOptions, ErcReportOutput,
@@ -72,9 +72,10 @@ pub use svg::block_diagram::block_diagram_svg;
 pub use svg::board::{AssemblySvgOptions, assembly_svg};
 pub use template::{Template, TemplateError, TemplateId, TitleBlockField};
 pub use variant_fit::{
-    ChannelFit, MatrixChannels, PlacedFits, RowChannel, VariantMatrix, VariantRow, is_fitted,
-    not_fitted_symbols, part_is_fitted, placed_part_fitted, project_fit, variant_matrix,
-    variant_matrix_in_channels,
+    ChannelFit, CompareProblem, ComparedPart, DrawnValueMap, DrawnValues, MatrixChannels,
+    PartChange, PartInVariant, PlacedFits, RowChannel, VariantComparison, VariantMatrix,
+    VariantRow, drawn_symbol, is_fitted, not_fitted_symbols, part_is_fitted, placed_part_fitted,
+    project_fit, variant_matrix, variant_matrix_in_channels, variant_value,
 };
 
 /// The universal exporter trait — one impl per output format.

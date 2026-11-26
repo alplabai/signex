@@ -71,6 +71,9 @@ pub struct ProjectPanelInfo {
     pub pcb_file_active: bool,
     /// F24 — `(missing)` indicator for the companion PCB file.
     pub pcb_file_missing: bool,
+    /// The project's Design Notebook file is on disk: the tree lists it
+    /// under Notebook (mockup row 19).
+    pub has_notebook: bool,
     pub sheets: Vec<SheetInfo>,
     /// Component libraries attached to this project. One entry per
     /// `Project::libraries[]`. Drives the `Libraries` branch under
@@ -216,6 +219,16 @@ fn sheet_node(sheet: &SheetInfo) -> TreeNode {
         .with_active(sheet.is_active)
 }
 
+/// Key of the Design Notebook row: its path in the project folder, which no
+/// sheet or board row can have.
+pub(crate) const NOTEBOOK_ROW_KEY: &str = "notebook/design.snxnbk";
+
+/// The Design Notebook row: the file name, keyed by its project path.
+fn notebook_node() -> TreeNode {
+    TreeNode::leaf(signex_notebook::DEFAULT_NOTEBOOK_FILE, TreeIcon::File)
+        .with_key(NOTEBOOK_ROW_KEY)
+}
+
 /// One project root — "Source Documents" / "Libraries" / "Settings".
 /// The Libraries branch lists this project's mounted `*.snxlib`
 /// entries (right-click → Add New ▸ Component Library to add one);
@@ -254,6 +267,10 @@ fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
             .with_dirty(row.is_dirty)
             .with_active(row.is_active)
     }));
+
+    if project.has_notebook {
+        source_docs.push(notebook_node());
+    }
 
     // Render each `Project::libraries[i]` entry as a single `.snxlib`
     // leaf — no children, no chevron. Under the v0.9 `.snxlib`-as-file

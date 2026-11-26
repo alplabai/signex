@@ -34,10 +34,15 @@ pub fn compare(eco: &EcoChangeList, back: &BackChangeList) -> CompareReport {
         }
     }
     rows.sort_by_key(|(row, _)| row.kind);
+    // Apply sets no lock the report does not show (docs/UPDATE_PCB.md).
+    let eco = EcoChangeList {
+        pad_locks: Vec::new(),
+        ..eco.clone()
+    };
     let mut report = CompareReport {
         rows: Vec::with_capacity(rows.len()),
         compared: Compared::default(),
-        eco: eco.clone(),
+        eco,
         back: back.clone(),
     };
     for (mut row, starts_on) in rows {
@@ -48,9 +53,7 @@ pub fn compare(eco: &EcoChangeList, back: &BackChangeList) -> CompareReport {
     report
 }
 
-/// A pad row whose net stays exactly as it is and only gains its lock: not
-/// a difference between board and schematic (mockup row 162). One that
-/// another row needs stays, or that row could never be applied.
+/// Guards hand-built lists only: `pad_rows` no longer emits from == to rows (#3060).
 fn only_locks_pad(row: &EcoRow, needed: &HashSet<EcoKey>) -> bool {
     matches!(&row.change, EcoChange::PadNet { from, to, .. } if from == to)
         && !needed.contains(&row.key)

@@ -1,3 +1,4 @@
+mod advanced_fixtures;
 mod pcb_layer_corpus;
 mod pre_2209_upgrade;
 mod real_boards;

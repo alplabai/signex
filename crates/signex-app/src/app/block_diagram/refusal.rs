@@ -146,7 +146,7 @@ impl Refusal {
 
     /// The message in en-US, for the log.
     pub(crate) fn english(&self) -> String {
-        self.translatable().render(I18n::en_us_ref())
+        self.translatable().render(&I18n::en_us())
     }
 }
 

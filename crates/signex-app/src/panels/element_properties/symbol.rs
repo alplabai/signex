@@ -99,6 +99,9 @@ pub(super) fn push_symbol_sections<'a>(
     col = super::placed_rows::push_parameters_section(col, ctx, params, look);
 
     col = super::footprint_section::push_footprint_section(col, ctx);
+    // Mockup row 197: the notebook blocks about the part.
+    let designator = info_row(&ctx.selection_info, "Reference");
+    col = super::design_notes::push_design_notes_section(col, ctx, &designator);
     super::pins::push_pins_section(col, ctx, primary, border_c)
 }
 

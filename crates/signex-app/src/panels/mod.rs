@@ -250,6 +250,8 @@ pub use pre_placement::{
     PlacementPosition, PositionField, PrePlacementData, PrePlacementKind, PrePlacementPositionMsg,
     PrePlacementStyle,
 };
+#[cfg(test)]
+pub(crate) use projects::NOTEBOOK_ROW_KEY;
 pub(super) use projects::view_projects;
 pub use projects::{DiagramRow, LibraryNodeInfo, ProjectPanelInfo, SheetInfo, build_project_tree};
 pub(crate) use projects::{MISSING_MARK, UNREADABLE_MARK};

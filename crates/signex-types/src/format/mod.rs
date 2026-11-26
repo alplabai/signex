@@ -108,6 +108,8 @@ mod library_link_tests;
 #[cfg(test)]
 mod net_colors_tests;
 #[cfg(test)]
+mod net_tie_tests;
+#[cfg(test)]
 mod no_erc_tests;
 #[cfg(test)]
 mod non_finite_tests;

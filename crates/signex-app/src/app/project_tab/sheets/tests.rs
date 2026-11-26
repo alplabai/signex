@@ -156,7 +156,7 @@ fn new_sheets_shows_the_a4_a_new_schematic_starts_from() {
     let (app, _) = app();
     let data = &app.document_state.projects[0].data;
     assert!(data.project_defaults.sheet.is_none());
-    let shown = NewProjectState::of_project(data, &app.ui_state.setup_profiles);
+    let shown = NewProjectState::of_project(data, &app.document_state.setup_profiles);
     assert_eq!(shown.setup.sheet.paper_size, "A4");
     assert!(data.project_defaults.sheet.is_none());
 }

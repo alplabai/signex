@@ -1,0 +1,7 @@
+[package]
+name = "notebook"
+version = "0.1.0"
+entrypoint = "lib.typ"
+authors = ["The Signex project"]
+license = "Apache-2.0"
+description = "References, annotation blocks and the report layout of a Signex Design Notebook."

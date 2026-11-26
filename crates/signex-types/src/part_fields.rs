@@ -180,14 +180,38 @@ pub fn part_field_value(
     if let Err(error) = refuse_signed_reference(body, symbols, signed) {
         return Some(Err(error));
     }
-    let parts = PartFields::new(symbols, signed);
+    let key = part_key(symbol, symbols);
+    let symbols = with_own_text(symbols, symbol, &key, field, text);
+    let parts = PartFields::new(&symbols, signed);
     let mut layers: Vec<&dyn Resolver> = vec![&parts];
     layers.extend_from_slice(variables);
     let model = Layered::new(layers);
     // Evaluated as a reference to the field itself, so a field that refers
     // back to itself, directly or through another part, is a cycle.
-    let reference = ExprNode::Ref(format!("{}.{field}", part_key(symbol, symbols)));
+    let reference = ExprNode::Ref(format!("{key}.{field}"));
     Some(eval(&reference, &model).map(|value| value.to_string()))
+}
+
+/// `symbols` with the part `key` names read as `symbol`, when `symbol`'s
+/// `field` says something else than the stored part's: `symbol` is then a
+/// drawn copy (a variant's own value, #2948), and its expression must be
+/// the one evaluated, not the sheet's text.
+fn with_own_text<'a>(
+    symbols: &'a [Symbol],
+    symbol: &Symbol,
+    key: &str,
+    field: &str,
+    text: &str,
+) -> Cow<'a, [Symbol]> {
+    let Some(at) = part_named(symbols, key)
+        .filter(|stored| part_field_text(stored, field) != Some(text))
+        .and_then(|stored| symbols.iter().position(|s| s.uuid == stored.uuid))
+    else {
+        return Cow::Borrowed(symbols);
+    };
+    let mut owned = symbols.to_vec();
+    owned[at] = symbol.clone();
+    Cow::Owned(owned)
 }
 
 /// [`part_field_value`] as drawn: the value, or the source text when the

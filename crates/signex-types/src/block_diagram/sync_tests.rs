@@ -84,6 +84,7 @@ fn three_sheets() -> DerivedDiagram {
                 Interface::Power,
             ),
         ],
+        unidentified: Vec::new(),
     }
 }
 
