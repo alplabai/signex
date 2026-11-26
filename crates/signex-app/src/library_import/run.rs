@@ -3,18 +3,17 @@
 //! map its summary and exit code. Blocking; call from `spawn_blocking`.
 
 use std::ffi::OsString;
-use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, ExitStatus, Stdio};
+use std::process::ExitStatus;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use super::confine::{ConfineError, confine};
 use super::error::ImportError;
 use super::events::{ExitKind, ProgressEvent, StreamFold, Summary};
+use super::process::{Polled, Running};
 use super::report::{ImportReport, read_report};
-use super::stream::{Line, LineSplitter};
+use super::stream::Line;
 
 /// How long a run may go without an event before it is stopped (§3.1).
 pub const SILENCE_LIMIT: Duration = Duration::from_secs(120);
@@ -22,8 +21,11 @@ pub const SILENCE_LIMIT: Duration = Duration::from_secs(120);
 /// How long `describe` may take.
 pub const DESCRIBE_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// Bound on the stderr tail kept for the error message.
-const STDERR_TAIL: usize = 4 << 10;
+/// Bound on everything a `library` run may print on stdout.
+const RUN_STDOUT_CAP: usize = 256 << 20;
+
+/// Bound on what `describe` may print.
+const DESCRIBE_STDOUT_CAP: usize = 1 << 20;
 
 /// The program to run and what goes before the contract's own arguments
 /// (nothing for an installed converter; the script for a test's `sh`).
@@ -183,10 +185,13 @@ pub struct RunOutcome {
 pub struct RunFailure {
     pub error: ImportError,
     /// The report, when the run got far enough to write one.
-    pub report: Option<ImportReport>,
+    pub report: Option<Box<ImportReport>>,
     pub stderr_tail: String,
     /// The output folder this run created was removed.
     pub removed_output: bool,
+    /// For an update over a clean tree: whether the tree was put back to
+    /// its last import.
+    pub restored: Option<Result<(), String>>,
 }
 
 impl RunFailure {
@@ -196,6 +201,7 @@ impl RunFailure {
             report: None,
             stderr_tail: String::new(),
             removed_output: false,
+            restored: None,
         }
     }
 }
@@ -237,23 +243,6 @@ struct Finished {
     stderr_tail: String,
 }
 
-fn spawn(command: &ConverterCommand, args: &[OsString]) -> Result<Child, ImportError> {
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "runs an external library converter, not a browser or viewer"
-    )]
-    Command::new(&command.program)
-        .args(args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| ImportError::StartFailed {
-            program: command.program.clone(),
-            detail: e.to_string(),
-        })
-}
-
 fn stream_run(
     command: &ConverterCommand,
     args: &[OsString],
@@ -261,62 +250,55 @@ fn stream_run(
     cancel: &AtomicBool,
     on_event: &mut dyn FnMut(&ProgressEvent),
 ) -> Result<Finished, RunFailure> {
-    let mut child = spawn(command, args).map_err(RunFailure::new)?;
-    let stderr = drain_tail(child.stderr.take());
-    let lines = read_lines(child.stdout.take());
+    let mut running = Running::spawn(command, args, RUN_STDOUT_CAP).map_err(RunFailure::new)?;
     let mut fold = StreamFold::default();
     let mut watch = SilenceWatch::new(limits.silence, Instant::now());
-    let mut stdout_open = true;
-    // A stopped run's stderr is not waited for: a process the converter
-    // started may still hold the pipe open.
-    let stopped = |child: &mut Child, error: ImportError| {
-        stop(child);
+    let mut take = |line: Line, watch: &mut SilenceWatch| {
+        let (was_event, event) = fold.take(line);
+        if was_event {
+            watch.heard(Instant::now());
+        }
+        if let Some(event) = event {
+            on_event(&event);
+        }
+    };
+    // A stopped run's stderr is not waited for.
+    let stopped = |running: &mut Running, error: ImportError| {
+        running.stop();
         RunFailure::new(error)
     };
-    loop {
-        if stdout_open {
-            match lines.recv_timeout(limits.poll) {
-                Ok(line) => {
-                    let (was_event, event) = fold.take(line);
-                    if was_event {
-                        watch.heard(Instant::now());
-                    }
-                    if let Some(event) = event {
-                        on_event(&event);
-                    }
-                }
-                Err(mpsc::RecvTimeoutError::Timeout) => {}
-                Err(mpsc::RecvTimeoutError::Disconnected) => stdout_open = false,
-            }
-        } else {
-            std::thread::sleep(limits.poll);
+    let status = loop {
+        if let Polled::Line(line) = running.poll_line(limits.poll) {
+            take(line, &mut watch);
         }
         if cancel.load(Ordering::Relaxed) {
-            return Err(stopped(&mut child, ImportError::Cancelled));
+            return Err(stopped(&mut running, ImportError::Cancelled));
         }
-        match child.try_wait() {
-            Ok(Some(status)) if !stdout_open => {
-                return Ok(Finished {
-                    status,
-                    summary: fold.into_summary(),
-                    stderr_tail: tail_text(stderr.join().unwrap_or_default()),
-                });
-            }
-            Ok(_) => {}
+        match running.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) => {}
             Err(e) => {
                 let error = ImportError::WaitFailed {
                     detail: e.to_string(),
                 };
-                return Err(stopped(&mut child, error));
+                return Err(stopped(&mut running, error));
             }
         }
         if watch.expired(Instant::now()) {
             let error = ImportError::Silent {
                 seconds: limits.silence.as_secs(),
             };
-            return Err(stopped(&mut child, error));
+            return Err(stopped(&mut running, error));
         }
-    }
+    };
+    // Exited: what is still in the pipes is read for a bounded time; a
+    // process it left holding them cannot hold the run.
+    running.drain_after_exit(&mut |line| take(line, &mut watch));
+    Ok(Finished {
+        status,
+        summary: fold.into_summary(),
+        stderr_tail: running.stderr_tail(),
+    })
 }
 
 /// Map exit code and summary (§3.3), then confine and read what it names.
@@ -328,9 +310,10 @@ fn finish(request: &LibraryRunRequest, finished: Finished) -> Result<RunOutcome,
     } = finished;
     let fail = |error: ImportError, report: Option<ImportReport>| RunFailure {
         error,
-        report,
+        report: report.map(Box::new),
         stderr_tail: stderr_tail.clone(),
         removed_output: false,
+        restored: None,
     };
     let Some(summary) = summary else {
         return Err(fail(
@@ -363,7 +346,17 @@ fn finish(request: &LibraryRunRequest, finished: Finished) -> Result<RunOutcome,
     let library = match (&summary.library, request.mode) {
         (_, RunMode::Preview) => None,
         (Some(reported), _) => {
-            Some(confine_reported(reported, &request.output).map_err(|e| fail(e, None))?)
+            let library = confine_reported(reported, &request.output).map_err(|e| fail(e, None))?;
+            if !same_folder(&library, &request.output) {
+                return Err(fail(
+                    ImportError::LibraryNotOutput {
+                        library,
+                        output: request.output.clone(),
+                    },
+                    None,
+                ));
+            }
+            Some(library)
         }
         (None, _) => {
             return Err(fail(
@@ -392,6 +385,12 @@ fn finish(request: &LibraryRunRequest, finished: Finished) -> Result<RunOutcome,
         report_problem,
         stderr_tail,
     })
+}
+
+/// The library is `--output` itself, so the folder checked before an
+/// update is the one committed after it.
+fn same_folder(a: &Path, b: &Path) -> bool {
+    matches!((a.canonicalize(), b.canonicalize()), (Ok(a), Ok(b)) if a == b)
 }
 
 fn confine_reported(reported: &Path, output: &Path) -> Result<PathBuf, ImportError> {
@@ -424,30 +423,36 @@ pub fn run_describe(
     };
     let mut args = command.leading_args.clone();
     args.extend(["describe".into(), "--json".into()]);
-    let mut child = spawn(command, &args)?;
-    let stderr = drain_tail(child.stderr.take());
-    let lines = read_lines(child.stdout.take());
+    let mut running = Running::spawn(command, &args, DESCRIBE_STDOUT_CAP)?;
     let deadline = Instant::now() + timeout;
     let mut text = String::new();
-    loop {
-        match lines.recv_timeout(Duration::from_millis(20)) {
-            Ok(Line::Text(line)) => text.push_str(&line),
-            Ok(Line::Oversized(len)) => {
-                stop(&mut child);
+    let status = loop {
+        match running.poll_line(Duration::from_millis(20)) {
+            Polled::Line(Line::Text(line)) => text.push_str(&line),
+            Polled::Line(Line::Oversized(len)) => {
+                running.stop();
                 return Err(failed(format!("a {len}-byte line")));
             }
-            Err(mpsc::RecvTimeoutError::Timeout) => {}
-            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            Polled::Nothing | Polled::Closed => {}
+        }
+        if !running.stdout_open() {
+            match running.try_wait() {
+                Ok(Some(status)) => break status,
+                Ok(None) => {}
+                Err(e) => {
+                    running.stop();
+                    return Err(failed(e.to_string()));
+                }
+            }
         }
         if Instant::now() >= deadline {
-            stop(&mut child);
+            running.stop();
             return Err(failed(format!("no answer after {} s", timeout.as_secs())));
         }
-    }
-    let status = child.wait().map_err(|e| failed(e.to_string()))?;
+    };
     if !status.success() {
-        let tail = tail_text(stderr.join().unwrap_or_default());
-        return Err(failed(format!("{status} {}", tail.trim())));
+        running.drain_after_exit(&mut |_| {});
+        return Err(failed(format!("{status} {}", running.stderr_tail().trim())));
     }
     parse_describe(&text).map_err(|e| match e {
         DescribeError::Malformed(why) => failed(why),
@@ -456,73 +461,4 @@ pub fn run_describe(
             contract,
         },
     })
-}
-
-/// Kill and reap the converter. It may have exited in the meantime.
-fn stop(child: &mut Child) {
-    if let Err(e) = child.kill() {
-        log::debug!("library import: kill: {e}");
-    }
-    if let Err(e) = child.wait() {
-        log::debug!("library import: reap: {e}");
-    }
-}
-
-/// Read stdout on a thread, line by line, into a channel that closes at
-/// end of stream.
-fn read_lines<R: Read + Send + 'static>(pipe: Option<R>) -> mpsc::Receiver<Line> {
-    let (tx, rx) = mpsc::channel();
-    // A blocking pipe read of a child process inside the import worker: the
-    // child would stall on a full pipe if nobody drained it.
-    // ast-grep-ignore: no-raw-spawn
-    std::thread::spawn(move || {
-        let Some(mut pipe) = pipe else {
-            return;
-        };
-        let mut splitter = LineSplitter::default();
-        let mut chunk = [0u8; 8192];
-        let mut lines = Vec::new();
-        loop {
-            let n = match pipe.read(&mut chunk) {
-                Ok(0) | Err(_) => break,
-                Ok(n) => n,
-            };
-            splitter.push(&chunk[..n], &mut lines);
-            for line in lines.drain(..) {
-                if tx.send(line).is_err() {
-                    return;
-                }
-            }
-        }
-        if let Some(last) = splitter.finish() {
-            let _receiver_gone = tx.send(last);
-        }
-    });
-    rx
-}
-
-/// Read stderr to its end on a thread, keeping the last bytes.
-fn drain_tail<R: Read + Send + 'static>(pipe: Option<R>) -> std::thread::JoinHandle<Vec<u8>> {
-    // ast-grep-ignore: no-raw-spawn
-    std::thread::spawn(move || {
-        let mut kept = Vec::new();
-        let Some(mut pipe) = pipe else {
-            return kept;
-        };
-        let mut chunk = [0u8; 8192];
-        loop {
-            let n = match pipe.read(&mut chunk) {
-                Ok(0) | Err(_) => break,
-                Ok(n) => n,
-            };
-            kept.extend_from_slice(&chunk[..n]);
-            let excess = kept.len().saturating_sub(STDERR_TAIL);
-            kept.drain(..excess);
-        }
-        kept
-    })
-}
-
-fn tail_text(bytes: Vec<u8>) -> String {
-    String::from_utf8_lossy(&bytes).into_owned()
 }

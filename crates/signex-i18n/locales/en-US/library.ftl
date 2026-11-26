@@ -903,3 +903,14 @@ library-import-local-commits = { $count ->
 # $path is the library being imported.
 library-import-running = An import of { $path } is still running; wait for it to finish or cancel it.
 library-import-no-project = No project is open to add the library to; it was added for all projects instead.
+# $path is the folder the converter reported, $output the one it was given.
+library-import-library-not-output = The converter reported the library at { $path }, not in { $output } where it was asked to write it.
+library-import-not-a-repository = { $path } has no version history, so it is not an imported library that can be updated. Import into a new folder instead.
+# $what names an unsaved document or editor.
+library-import-unsaved = The library has unsaved changes in Signex ({ $what }). Save or close them before updating it.
+# $error is why the update failed.
+library-import-update-restored = The update failed, and the library was restored to its last import: { $error }
+# $error is why the update failed, $reason why the restore did not happen.
+library-import-update-not-restored = The update failed: { $error } The library could not be restored to its last import ({ $reason }); check its folder before using it.
+# $path is the imported library, $other the mounted library with the same id.
+library-import-id-clash = The imported library { $path } has the same library id as { $other }, which is already open, so it was not added. Close the other library first.

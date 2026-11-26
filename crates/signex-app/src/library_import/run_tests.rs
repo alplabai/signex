@@ -333,3 +333,79 @@ fn describe_is_parsed_and_a_newer_major_refused() {
         ImportError::DescribeFailed { .. }
     ));
 }
+
+#[test]
+fn a_library_other_than_the_output_folder_is_refused() {
+    let body = format!(
+        "{}mkdir -p \"$out/inner\"\necho '{{\"event\":\"summary\",\"ok\":true,\"error\":null,\"exit\":\"ok\",\"library\":\"'\"$out\"'/inner\",\"report\":\"'\"$out\"'/import-report.json\",\"files\":[],\"warnings\":[]}}'\nexit 0\n",
+        write_report_line()
+    );
+    let (_d, out, _e, result) = run(&body, RunMode::Import, FAST);
+    let failure = result.unwrap_err();
+    assert!(
+        matches!(failure.error, ImportError::LibraryNotOutput { .. }),
+        "{:?}",
+        failure.error
+    );
+    assert!(!out.exists());
+}
+
+#[test]
+fn a_process_left_holding_stdout_does_not_hold_a_finished_run() {
+    // The background sleep inherits stdout and stderr.
+    let body = format!(
+        "{}sleep 30 &\n{}\nexit 0\n",
+        write_report_line(),
+        summary("ok", true)
+    );
+    let limits = RunLimits {
+        silence: Duration::from_secs(60),
+        ..FAST
+    };
+    let started = Instant::now();
+    let (_d, _o, _e, result) = run(&body, RunMode::Import, limits);
+    assert_eq!(result.unwrap().exit, ExitKind::Ok);
+    assert!(
+        started.elapsed() < Duration::from_secs(10),
+        "did not wait it out"
+    );
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn cancel_kills_what_the_converter_started() {
+    let dir = tempfile::tempdir().unwrap();
+    let pid_file = dir.path().join("child.pid");
+    let command = sh(
+        dir.path(),
+        &format!(
+            "sleep 30 &\necho $! > '{}'\necho '{{\"event\":\"phase\",\"phase\":\"read\",\"total\":null}}'\nwait\n",
+            pid_file.display()
+        ),
+    );
+    let cancel = AtomicBool::new(false);
+    let mut asked = false;
+    let result = run_library(
+        &command,
+        &request(dir.path().join("P"), RunMode::Import),
+        RunLimits {
+            silence: Duration::from_secs(60),
+            ..FAST
+        },
+        &cancel,
+        &mut |_| {
+            if !asked {
+                asked = true;
+                cancel.store(true, Ordering::Relaxed);
+            }
+        },
+    );
+    assert_eq!(result.unwrap_err().error, ImportError::Cancelled);
+    let pid = std::fs::read_to_string(&pid_file).unwrap();
+    let proc_dir = PathBuf::from(format!("/proc/{}", pid.trim()));
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while proc_dir.exists() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert!(!proc_dir.exists(), "the converter's child was killed");
+}

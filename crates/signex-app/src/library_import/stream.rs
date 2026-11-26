@@ -107,7 +107,7 @@ mod tests {
 
     #[test]
     fn an_oversized_line_is_dropped_and_the_next_one_kept() {
-        let long = vec![b'x'; 100];
+        let long = [b'x'; 100];
         let out = split(10, &[&long[..60], &long[60..], b"\nok\n"]);
         assert_eq!(out, [Line::Oversized(100), text("ok")]);
     }

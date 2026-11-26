@@ -102,9 +102,10 @@ impl ImportJob {
         };
         let keep_run = |error: ImportError, run: &RunOutcome| RunFailure {
             error,
-            report: run.report.clone(),
+            report: run.report.clone().map(Box::new),
             stderr_tail: run.stderr_tail.clone(),
             removed_output: false,
+            restored: None,
         };
         let library_file = find_library_file(&library_dir).map_err(|e| keep_run(e, &run))?;
         let message = self.commit_message(&library_file);

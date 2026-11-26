@@ -59,6 +59,20 @@ pub enum ImportError {
         path: PathBuf,
         output: PathBuf,
     },
+    /// The summary's `library` is not the `--output` folder.
+    LibraryNotOutput {
+        library: PathBuf,
+        output: PathBuf,
+    },
+    /// An update was asked for a folder that is not an imported library's
+    /// repository.
+    NotAnImportedLibrary {
+        dir: PathBuf,
+    },
+    /// An update was asked while the library has unsaved work in the app.
+    UnsavedInApp {
+        what: String,
+    },
     PathUnreadable {
         path: PathBuf,
         detail: String,
@@ -134,6 +148,17 @@ impl ImportError {
                 Translatable::new(ids::LIBRARY_IMPORT_PATH_OUTSIDE)
                     .arg("path", path(p))
                     .arg("output", path(output))
+            }
+            Self::LibraryNotOutput { library, output } => {
+                Translatable::new(ids::LIBRARY_IMPORT_LIBRARY_NOT_OUTPUT)
+                    .arg("path", path(library))
+                    .arg("output", path(output))
+            }
+            Self::NotAnImportedLibrary { dir } => {
+                Translatable::new(ids::LIBRARY_IMPORT_NOT_A_REPOSITORY).arg("path", path(dir))
+            }
+            Self::UnsavedInApp { what } => {
+                Translatable::new(ids::LIBRARY_IMPORT_UNSAVED).arg("what", what.as_str())
             }
             Self::PathUnreadable { path: p, detail } => {
                 Translatable::new(ids::LIBRARY_IMPORT_PATH_UNREADABLE)

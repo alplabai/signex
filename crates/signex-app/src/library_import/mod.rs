@@ -6,20 +6,21 @@
 //! it returns. Everything here that touches a process, the disk or git is
 //! blocking and runs on a worker (`spawn_blocking`), never in `update`.
 //!
-//! - [`discovery`]: which converters are installed, found by what they answer.
-//! - [`describe`]: `<converter> describe --json` and the picker filters.
-//! - [`events`] / [`stream`]: the NDJSON progress stream and its summary.
-//! - [`report`]: `import-report.json`.
-//! - [`run`]: one `library` run, with the 120 s silence rule.
-//! - [`snapshot`]: git setup, the import commit, the default location.
-//! - [`run_state`]: what the app keeps about a run, and its worker half.
-//! - [`error`]: every refusal, as translatable text.
+//! - [`discovery`] — which converters are installed, found by what they answer.
+//! - [`describe`] — `<converter> describe --json` and the picker filters.
+//! - [`events`] / [`stream`] — the NDJSON progress stream and its summary.
+//! - [`report`] — `import-report.json`.
+//! - [`run`] — one `library` run, with the 120 s silence rule.
+//! - [`snapshot`] — git setup, the import commit, the default location.
+//! - [`run_state`] — what the app keeps about a run.
+//! - [`error`] — every refusal, as translatable text.
 
 pub mod confine;
 pub mod describe;
 pub mod discovery;
 pub mod error;
 pub mod events;
+mod process;
 pub mod report;
 pub mod run;
 pub mod run_state;

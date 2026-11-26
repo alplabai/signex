@@ -154,7 +154,7 @@ impl ConverterDescription {
             let wanted = wanted?;
             self.inputs
                 .iter()
-                .find(|input| input.extensions.iter().any(|e| *e == wanted))
+                .find(|input| input.extensions.contains(&wanted))
         };
         lists(path.extension().map(lower)).or_else(|| lists(path.file_name().map(lower)))
     }
