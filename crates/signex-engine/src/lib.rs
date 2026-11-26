@@ -76,6 +76,8 @@ mod drag_wiring_tests;
 #[cfg(test)]
 mod field_follow_tests;
 #[cfg(test)]
+mod junction_drag_tests;
+#[cfg(test)]
 mod lock_tests;
 #[cfg(test)]
 mod move_fold_local_tests;
