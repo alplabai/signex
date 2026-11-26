@@ -67,8 +67,8 @@ fn path(name: &str) -> PathBuf {
 /// How unit B draws on the child page of `ctx`, rendered as the PDF and
 /// the preview render a page: the fits decided over `ctx`, then the page.
 struct ChildDrawn {
-    /// Strokes in the symbol ink running corner to corner of the body box:
-    /// the cross.
+    /// Strokes in the error ink running corner to corner of the body box:
+    /// the cross (its colour is decided in docs/DECISIONS.md, 2026-11-25).
     crosses: usize,
     /// Whether the body outline is in the greyed symbol ink.
     greyed: bool,
@@ -112,7 +112,7 @@ fn child_drawn(ctx: &ExportContext, opts: &PdfOptions) -> ChildDrawn {
     ChildDrawn {
         crosses: strokes
             .iter()
-            .filter(|s| !s.closed && s.points.len() == 2 && s.rgb == Some(ink))
+            .filter(|s| !s.closed && s.points.len() == 2 && s.rgb == Some(opts.palette.error))
             .filter(|s| joins(s, (x0, y0), (x1, y1)) || joins(s, (x0, y1), (x1, y0)))
             .count(),
         greyed: body.rgb == Some(greyed_rgb),

@@ -277,7 +277,7 @@ fn a_dnp_part_whose_library_is_missing_prints_its_box_crossed() {
         .iter()
         .filter_map(|e| match e {
             SvgElement::Path { commands, style }
-                if commands.len() == 2 && style.stroke_rgb == Some(palette.symbol_stroke) =>
+                if commands.len() == 2 && style.stroke_rgb == Some(palette.error) =>
             {
                 Some(corners(commands))
             }
