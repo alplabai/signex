@@ -1670,6 +1670,37 @@ pins in the same places, a part whose gates are on more than one sheet, and
 for Swap Gates on two pads of one gate. Pads that already share their nets
 change nothing and say so.
 
+### Started on the schematic
+
+The same swaps can start on the sheet (#1261), by the part's same swap groups
+and the same sheet rewiring (`signex_engine::part_swap::swap_on_sheet`).
+Only the sheet changes, as one undo step of that sheet; the board is left as
+it is until Update PCB, whose change list then gives each pad the net its pin
+now has (Pad nets rows), like any other schematic edit. The footprint's Pin
+Swapping and Part Swapping switches are not read: they hold back swaps made
+on the board.
+
+- **Swap Pins** (`swap_schematic_pins`): on the sheet right-click menu, Part
+  Actions ▸ Swap Pins swaps the clicked pin of the selected part with the one
+  other pin of its pin swap group. A group of three or more asks which pin,
+  and the row stays greyed; name both with operands.
+- **Swap Gates** (`swap_schematic_gates`): Part Actions ▸ Swap Gates swaps
+  two selected units of one part, or one selected unit with the one other
+  gate of its gate swap group placed on the sheet.
+- With operands, `swap_schematic_pins document=<sheet> pins=<a>,<b>` and
+  `swap_schematic_gates document=<sheet> units=<a>,<b>` name the part by
+  `ids` (one placed unit's uuid) or `designator`, exactly one, and answer
+  `{document, designator, kind, swapped, pairs, changed}`: `pairs` lists each
+  pin with the pin it traded with, `changed` is `false` when nothing ends on
+  either pin. Both are on the agent channel; an edit list does not carry
+  them yet.
+
+Refused, with nothing changed and the reason in Messages: pins or gates
+outside one swap group, a locked unit of the part, a read-only sheet, a gate
+not placed on the sheet, gates not drawn alike, and anything the rewiring
+refuses (a pin tip in the middle of a wire or on another pin, a locked wire,
+a rewired wire that would join nets).
+
 ## Design reuse blocks
 
 A reuse block (#2410) is a placed and routed group saved once and placed

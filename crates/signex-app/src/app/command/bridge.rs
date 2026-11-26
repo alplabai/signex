@@ -511,6 +511,8 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         // #2410: the two pads selected on the board name the pins or gates.
         "swap_pins" => part_swap(signex_engine::pcb::pad_swap::SwapKind::Pins),
         "swap_gates" => part_swap(signex_engine::pcb::pad_swap::SwapKind::Gates),
+        "swap_schematic_pins" => Message::from(crate::app::SheetSwapMsg::PinsRequested),
+        "swap_schematic_gates" => Message::from(crate::app::SheetSwapMsg::GatesRequested),
         "save_board_reuse_block" => {
             Message::Pcb(PcbMsg::ReuseBlock(crate::app::ReuseBlockMsg::SaveRequested))
         }

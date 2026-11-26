@@ -28,6 +28,8 @@ const SHEET_ROWS: &[&str] = &[
     "open_datasheet",
     "edit_selected_symbol_in_symbol_editor",
     "change_component",
+    "swap_schematic_pins",
+    "swap_schematic_gates",
     "autoplace_fields",
     "copy_attributes_or_add_vertex",
     "open_child_sheet",

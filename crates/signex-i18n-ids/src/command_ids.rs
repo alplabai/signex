@@ -659,6 +659,10 @@ define_ids! {
         CMD_MENU_SWAP_PINS = "cmd-menu-swap-pins";
         CMD_SWAP_GATES = "cmd-swap-gates";
         CMD_MENU_SWAP_GATES = "cmd-menu-swap-gates";
+        CMD_SWAP_SCHEMATIC_PINS = "cmd-swap-schematic-pins";
+        CMD_MENU_SWAP_SCHEMATIC_PINS = "cmd-menu-swap-schematic-pins";
+        CMD_SWAP_SCHEMATIC_GATES = "cmd-swap-schematic-gates";
+        CMD_MENU_SWAP_SCHEMATIC_GATES = "cmd-menu-swap-schematic-gates";
         CMD_SAVE_BOARD_REUSE_BLOCK = "cmd-save-board-reuse-block";
         CMD_MENU_SAVE_BOARD_REUSE_BLOCK = "cmd-menu-save-board-reuse-block";
         CMD_PLACE_BOARD_REUSE_BLOCK = "cmd-place-board-reuse-block";

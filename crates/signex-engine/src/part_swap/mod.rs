@@ -12,7 +12,17 @@
 //!   would join nets the swap does not mean to join, and when a pin tip
 //!   meets something it cannot move (the middle of a wire, another pin).
 //!
+//! A swap started on the schematic changes the sheet alone (`on_sheet`,
+//! #1261); Update PCB carries it to the board.
+//!
 //! Rules and limits: `docs/PCB_TOOLS.md`, "Pin and gate swap".
+
+mod on_sheet;
+
+pub use on_sheet::{
+    SheetSwap, SheetSwapRequest, check_gate_group, check_pin_group, gates_of_selection,
+    pins_of_clicked_pin, swap_on_sheet, unit_holding,
+};
 
 use signex_net::{point_on_segment, pt_key};
 use signex_types::schematic::{LibSymbol, Point, SchematicSheet, pin_tips};
@@ -45,6 +55,34 @@ pub enum SheetSwapRefusal {
     SymbolLocked(String),
     #[error("units {a} and {b} of {designator} do not draw the same pins in the same places")]
     GatesDiffer { designator: String, a: u32, b: u32 },
+    #[error("the library symbol of {0} is not on its sheet")]
+    NoLibrarySymbol(String),
+    #[error("{designator} has no pin {pin}")]
+    UnknownPin { designator: String, pin: String },
+    #[error("pins {a} and {b} of {designator} are not in one pin swap group of its part")]
+    PinsNotGrouped {
+        designator: String,
+        a: String,
+        b: String,
+    },
+    #[error("gates {a} and {b} of {designator} are not in one gate swap group of its part")]
+    GatesNotGrouped { designator: String, a: u32, b: u32 },
+    #[error("the gate of pin {pin} of {designator} is not placed on its sheet")]
+    PinGateNotPlaced { designator: String, pin: String },
+    #[error("gate {unit} of {designator} is not placed on this sheet; place it to swap it")]
+    GateNotPlaced { designator: String, unit: u32 },
+    #[error("pin {pin} of {designator} is in no pin swap group of its part")]
+    PinInNoGroup { designator: String, pin: String },
+    #[error("gate {unit} of {designator} has no other gate of its swap group on this sheet")]
+    GateInNoGroup { designator: String, unit: u32 },
+    #[error("{member} of {designator} can trade with {others}; name the one to swap with")]
+    ManyPartners {
+        designator: String,
+        member: String,
+        others: String,
+    },
+    #[error("select one or two units of one part on the sheet")]
+    NotOnePart,
 }
 
 /// One pin of a placed unit: the unit's symbol and the pin's number.

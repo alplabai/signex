@@ -209,6 +209,9 @@ mod tests {
                 "stitch_vias",
                 "swap_gates",
                 "swap_pins",
+                // #1261: the same swaps started on the named sheet.
+                "swap_schematic_gates",
+                "swap_schematic_pins",
                 // #2249: the window layout, by the maintainer's rule that
                 // everything is AI-controllable.
                 "tile_windows_horizontally",
