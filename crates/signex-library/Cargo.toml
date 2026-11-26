@@ -106,6 +106,12 @@ required-features = ["local-git"]
 name = "pricing_refresh"
 required-features = ["local-git"]
 
+# Golden test for docs/LIBRARY_FORMAT.md; bless with SIGNEX_BLESS_LIBRARY_FORMAT=1.
+[[test]]
+name = "library_format_conformance"
+path = "tests/library_format_conformance/main.rs"
+required-features = ["local-git"]
+
 # GH #548 — inherit [workspace.lints.rust] (unused_must_use = deny).
 [lints]
 workspace = true
