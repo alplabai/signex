@@ -11,7 +11,7 @@ use crate::dock::{DOCK_LAYOUT_SAVE_DEBOUNCE, DockLayoutMsg, DockLayoutSnapshot, 
 use crate::app::{Message, Signex};
 
 impl Signex {
-    /// Call after any change to `document_state.dock`. Starts the
+    /// Call after any change to `document_view.dock`. Starts the
     /// debounce timer when the persisted layout really changed; hover and
     /// other transient messages leave it unchanged and cost nothing.
     pub(crate) fn persist_dock_layout_soon(&mut self) -> Task<Message> {

@@ -104,9 +104,10 @@ mod wire_undo_tests;
 /// user's Width/Fill edits when committing the next click.
 pub(crate) fn pre_placement_shape(
     doc: &super::super::state::DocumentState,
+    view: &super::super::state::DocumentViewState,
 ) -> (f64, signex_types::schematic::FillType) {
     let (default_mm, default_fill) = default_shape(doc);
-    doc.panel_ctx
+    view.panel_ctx
         .pre_placement
         .as_ref()
         .map(|pp| {

@@ -2,7 +2,7 @@
 //! off the UI thread, flushed on quit, and a failed write is reported.
 //!
 //! `DockLayoutStore` is the seam: each test swaps a recording double into
-//! `document_state.dock_layout_sync`, so no `prefs.json` is touched and the
+//! `document_view.dock_layout_sync`, so no `prefs.json` is touched and the
 //! writes can be counted. `iced::Task`s are driven to completion with
 //! `iced_runtime::task::into_stream` on a tokio runtime, which is what
 //! the real runtime does with them.

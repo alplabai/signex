@@ -324,11 +324,8 @@ impl Signex {
             FootprintEditorMsg::CopyPad
             | FootprintEditorMsg::CutPad
             | FootprintEditorMsg::PastePad => {
-                let crate::app::DocumentState {
-                    footprint_editors,
-                    pad_clipboard,
-                    ..
-                } = &mut self.document_state;
+                let footprint_editors = &mut self.document_state.footprint_editors;
+                let pad_clipboard = &mut self.document_state.pad_clipboard;
                 if let Some(editor) = footprint_editors.get_mut(&path) {
                     apply_footprint_clipboard_op(editor, pad_clipboard, &msg);
                 }

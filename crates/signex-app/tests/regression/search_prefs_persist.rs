@@ -2,7 +2,7 @@
 //! and flushed on quit; `update` itself never touches `prefs.json`.
 //!
 //! The store is the seam: each test swaps a recording double into
-//! `document_state.search_prefs`, so the real prefs file is untouched.
+//! `document_view.search_prefs`, so the real prefs file is untouched.
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};

@@ -9,7 +9,7 @@ use std::path::PathBuf;
 //
 // Drives `apply_footprint_clipboard_op` via the public Message
 // surface so the split-borrow at dispatch/library.rs:3499 is
-// exercised end-to-end (DocumentState.pad_clipboard + the path-keyed
+// exercised end-to-end (DocumentViewState.pad_clipboard + the path-keyed
 // FootprintDocument mutated together).
 // ─────────────────────────────────────────────────────────────────
 

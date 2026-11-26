@@ -2,7 +2,7 @@
 //!
 //! The document keeps the name its author chose; these only tell the user
 //! that the canvas and the exports draw the bundled default instead. Each
-//! family is reported once per document (`DocumentState::missing_fonts`).
+//! family is reported once per document (`DocumentViewState::missing_fonts`).
 
 use std::path::Path;
 

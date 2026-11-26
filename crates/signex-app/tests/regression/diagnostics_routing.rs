@@ -2,7 +2,7 @@
 //! Messages panel by the time that message finishes.
 //!
 //! The panel does not read the diagnostics ring buffer directly — it
-//! renders `document_state.panel_ctx.diagnostics`, which is a snapshot
+//! renders `document_view.panel_ctx.diagnostics`, which is a snapshot
 //! republished by `sync_diagnostics_panel_ctx`. `finish_update` calls
 //! that, but not every dispatcher calls `finish_update`:
 //! `dispatch_preferences_message` deliberately does not, because
