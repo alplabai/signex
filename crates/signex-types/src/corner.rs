@@ -33,6 +33,32 @@ impl CornerMode {
             Self::FreeAngle => Self::Ortho90,
         }
     }
+
+    /// Every mode, in [`Self::next`] order.
+    pub const ALL: [Self; 4] = [
+        Self::Ortho90,
+        Self::Angle45Start,
+        Self::Angle45End,
+        Self::FreeAngle,
+    ];
+
+    /// The mode's name for an agent or the CLI (`route_options`, #2719).
+    pub const fn token(self) -> &'static str {
+        match self {
+            Self::Ortho90 => "90",
+            Self::Angle45Start => "45_start",
+            Self::Angle45End => "45_end",
+            Self::FreeAngle => "any_angle",
+        }
+    }
+
+    /// The mode named `token` ([`Self::token`]), any case.
+    pub fn from_token(token: &str) -> Option<Self> {
+        let token = token.trim();
+        Self::ALL
+            .into_iter()
+            .find(|m| m.token().eq_ignore_ascii_case(token))
+    }
 }
 
 /// The leg order a rule draws, once its flip is applied.
@@ -178,6 +204,19 @@ mod tests {
                 DragWiringMode::Auto
             ]
         );
+    }
+
+    /// #2719: every corner mode has its own token, read back in any case,
+    /// and `ALL` runs in `next` order.
+    #[test]
+    fn corner_mode_tokens_round_trip_in_cycle_order() {
+        for (i, mode) in CornerMode::ALL.into_iter().enumerate() {
+            assert_eq!(CornerMode::from_token(mode.token()), Some(mode));
+            let upper = mode.token().to_ascii_uppercase();
+            assert_eq!(CornerMode::from_token(&upper), Some(mode));
+            assert_eq!(mode.next(), CornerMode::ALL[(i + 1) % 4]);
+        }
+        assert_eq!(CornerMode::from_token("arc"), None);
     }
 
     fn rule(mode: CornerMode, is_flipped: bool) -> CornerRule {

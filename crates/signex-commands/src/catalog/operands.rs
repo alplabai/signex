@@ -641,6 +641,18 @@ pub const CHECK_REQUIREMENTS: &[Operand] = &[
 /// Select Net and Highlight Net on a board (#2403): the net by name; without
 /// it, the net of the selection or of what is under the cursor.
 pub const BOARD_NET: &[Operand] = &[optional("net", OperandKind::Text)];
+/// `route_options` (#2719): the Interactive Routing options for the named
+/// board; each one given is set first. `conflict_mode` is `walkaround` or
+/// `push_and_shove`, `corner_mode` `90`, `45_start`, `45_end` or
+/// `any_angle`.
+pub const ROUTE_OPTIONS: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("conflict_mode", OperandKind::Text),
+    optional("corner_mode", OperandKind::Text),
+    optional("width", OperandKind::Length),
+    optional("via_diameter", OperandKind::Length),
+    optional("via_hole", OperandKind::Length),
+];
 /// `measure_board` (#2403): point to point from `start` to `end`, or edge to
 /// edge between the two items `ids` names.
 pub const MEASURE_BOARD: &[Operand] = &[

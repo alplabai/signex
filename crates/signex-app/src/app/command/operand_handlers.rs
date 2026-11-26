@@ -171,6 +171,8 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("delete_net_class", board::delete_net_class),
     ("set_net_class_rules", board::set_net_class_rules),
     ("assign_board_net_class", board::assign_board_net_class),
+    // #2719: the Interactive Routing options, read and set.
+    ("route_options", board::route_options),
     ("set_layer_stack", board_edit::set_layer_stack),
     ("lock_board_items", board_edit::lock_board_items),
     ("unlock_board_items", board_edit::unlock_board_items),
@@ -480,6 +482,13 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "filter_drc_results" => Some(
             "`filter_drc_results` needs the operand `document` — \
              use the filters of the DRC panel",
+        ),
+        // #2719: a person routes with Shift+Space and `cycle_route_mode`,
+        // and sets the width in Properties while Tab pauses the route.
+        "route_options" => Some(
+            "`route_options` needs the operand `document` — \
+             while routing, Shift+Space steps the corner mode and Tab pauses \
+             the route for its width in Properties",
         ),
         "add_net_class"
         | "rename_net_class"

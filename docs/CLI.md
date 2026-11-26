@@ -1069,6 +1069,45 @@ find_similar_items document=<board> id=<uuid> [fields=kind,value,...]
 
 Find by text on a board is `find_items` (designator and value).
 
+## Routing options
+
+`route_options` (#2719) reads the Interactive Routing options for the board
+it names, and sets each option it is given first. It changes no board and
+makes no undo step; it is on the agent channel. The options are the ones
+the router reads, the same the routing keys set (`cycle_route_mode`,
+Shift+Space), so a mode set here is the mode the next leg routes in.
+
+```text
+route_options document=<board> [conflict_mode=walkaround|push_and_shove]
+  [corner_mode=90|45_start|45_end|any_angle] [width=<mm>]
+  [via_diameter=<mm>] [via_hole=<mm>]
+```
+
+The answer:
+
+- `conflict_mode` and the `conflict_modes` there are; `corner_mode`, the
+  `corner_modes` there are and `corner_flipped` (Space swaps the two legs).
+  The corner mode is the one wires use too (#2372).
+- `layer`: the board's active layer, which a route starts on
+  (`set_active_layer` sets it).
+- `width_mm` and `width_from`: `route` (the route being drawn), `set` (by
+  this command or the tool's form) or `net_class_or_board` (the board's
+  track width is shown; a route takes its net class's width when the class
+  sets one).
+- `via_diameter_mm`, `via_hole_mm` and `via_from` (`set` or `board`): the
+  via a layer change adds, before the written rules grow it to their
+  minimum; a hole larger than the diameter is held to the diameter.
+- `route`: `null` unless a route is being drawn on the board; else its
+  `net`, `name` and `class` (`null` for no net or no class), `layer`,
+  `routed_length_mm` (the net's tracks on the board, `null` for no net)
+  and `draft_length_mm` (the legs not landed yet; `null` for Track, whose
+  clicks land as they go).
+
+A token that names no mode, or a size not above zero, refuses the command
+with the reason and changes nothing. Delay and the step 2 behaviours of
+#2719 (arc corners, glossing, loop removal and the rest) are not options
+until the router does them.
+
 ## Working through a running Signex
 
 When a person has the project open in Signex with Preferences > System ›

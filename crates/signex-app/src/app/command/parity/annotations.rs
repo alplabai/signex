@@ -218,6 +218,10 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     // category listed in scripts/uifree-state.txt, so it is no implicit input.
     (&["show_drc_violation"], Operand, &[ActiveDocument, Window]),
     (&["filter_drc_results"], Operand, &[ActiveDocument]),
+    // The routing options (#2719) are the router's tool state (conflict and
+    // corner mode, the route being drawn) and the tool form's width and via
+    // size (`pcb_tool_defaults`).
+    (&["route_options"], Operand, &[PrePlacementForm, ToolState]),
     // A waiver is refused on a stale last run (`set_drc_waiver`): the core
     // session state above, so nothing implicit.
     (

@@ -4,7 +4,7 @@
 //! the via stack and the Protection header (mockup row 96).
 
 use pcb_geom::ItemRef;
-use signex_engine::pcb::via_types::ViaTypeKey;
+use signex_engine::pcb::via_types::{SizeOverride, ViaTypeKey};
 use signex_i18n::{ids, t};
 use signex_types::pcb::ViaType;
 use signex_types::pcb_layer::CopperLayer;
@@ -64,6 +64,7 @@ fn via(kind: ViaType, unstored_open: bool) -> ViaFacts {
         via_type: Some(choice),
         type_size: Some((0.6, 0.3)),
         overridden: Some(false),
+        overridden_sizes: Some(SizeOverride::default()),
         protection: None,
         drill_pair: None,
         finished_hole: None,
@@ -263,8 +264,36 @@ fn the_via_stack_has_no_override_switch_and_a_changed_size_loses_from_type() {
     let mut own = via(ViaType::Through, false);
     own.diameter = Some(0.8);
     own.overridden = Some(true);
+    own.overridden_sizes = Some(SizeOverride {
+        diameter: true,
+        drill: false,
+    });
     let shown = stack_texts(&ctx, &own);
     assert_eq!(count(&shown), 1, "only Drill is the type's: {shown:?}");
+}
+
+/// #2735: the rows read the engine's judgement, never their own: a value
+/// that looks off the type's but is judged the type's keeps "from type",
+/// and a judged override loses it whatever the value reads.
+#[test]
+fn the_size_rows_follow_the_engines_override_judgement() {
+    let ctx = context();
+    let from_type = said(&ctx, ids::PCB_PRIM_FROM_TYPE);
+    let count = |texts: &[String]| texts.iter().filter(|t| **t == from_type).count();
+
+    let mut noise = via(ViaType::Through, false);
+    noise.hole = Some(0.3 + 5e-8);
+    let shown = stack_texts(&ctx, &noise);
+    assert_eq!(count(&shown), 2, "Diameter and Drill: {shown:?}");
+
+    let mut drill = via(ViaType::Through, false);
+    drill.overridden = Some(true);
+    drill.overridden_sizes = Some(SizeOverride {
+        diameter: false,
+        drill: true,
+    });
+    let shown = stack_texts(&ctx, &drill);
+    assert_eq!(count(&shown), 1, "only Diameter is the type's: {shown:?}");
 }
 
 /// #2751, mockup row 96: the stack tiles, the widest labels of any segmented

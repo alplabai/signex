@@ -554,6 +554,7 @@ define_ids! {
         CMD_PLACE_BOARD_ROUTE = "cmd-place-board-route";
         CMD_MENU_PLACE_BOARD_ROUTE = "cmd-menu-place-board-route";
         CMD_CYCLE_ROUTE_MODE = "cmd-cycle-route-mode";
+        CMD_ROUTE_OPTIONS = "cmd-route-options";
         CMD_BOARD_LAYER_STACK = "cmd-board-layer-stack";
         CMD_MENU_BOARD_LAYER_STACK = "cmd-menu-board-layer-stack";
         CMD_SET_LAYER_STACK = "cmd-set-layer-stack";

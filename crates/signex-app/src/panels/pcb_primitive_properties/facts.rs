@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 use pcb_geom::ItemRef;
 use signex_engine::pcb::draw::ArcMode;
-use signex_engine::pcb::via_types::ViaTypeKey;
+use signex_engine::pcb::via_types::{SizeOverride, ViaTypeKey};
 use signex_types::pcb::{MaskExpansion, PadShape, ViaType};
 use signex_types::pcb_dimension_kind::DimensionKind;
 use signex_types::pcb_dimension_style::{
@@ -365,6 +365,10 @@ pub struct ViaFacts {
     pub type_size: Option<(f64, f64)>,
     /// Whether the vias' diameter or drill differs from their type's.
     pub overridden: Option<bool>,
+    /// Which of those sizes differ, as the engine judges it
+    /// (`via_types::overridden_fields`, #2735): what the Diameter and Drill
+    /// rows read. Filled with `overridden`, from the same judgement.
+    pub overridden_sizes: Option<SizeOverride>,
     /// The protection the vias share (IPC-4761); fill and cap read as none
     /// until the board stores them.
     pub protection: Option<ViaProtection>,
@@ -372,7 +376,8 @@ pub struct ViaFacts {
     pub drill_pair: Option<String>,
     /// The drill less the plating.
     pub finished_hole: Option<f64>,
-    /// The board's smallest via drill, when its setup sets one.
+    /// The smallest drill the vias are held to: the written design rule's
+    /// for them, as the check applies it, else the board setup's (#2735).
     pub min_drill: Option<f64>,
     /// Whether the vias reach the Top and the Bottom layer.
     pub reaches: (bool, bool),

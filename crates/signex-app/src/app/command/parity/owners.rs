@@ -210,10 +210,11 @@ pub(super) const WRITES: &[(&[&str], Surface, Writes)] = &[
         Session,
     ),
     // The board's view (`ui_state.pcb_layer_views`), the selection, the
-    // selection filter, the view angle (#2550) and the DRC panel's list:
-    // never the board, no undo step.
+    // selection filter, the view angle (#2550), the DRC panel's list and
+    // the routing tool's options (#2719): never the board, no undo step.
     (
         &[
+            "route_options",
             "select_board_net",
             "highlight_board_net",
             "set_selection_filters",

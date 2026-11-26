@@ -251,6 +251,58 @@ fn the_setup_sizes_the_tool_type_and_sets_the_minimum_drill() {
     assert_eq!((types[0].diameter, types[0].drill), (0.7, 0.35));
 }
 
+/// #2735: the override is judged per size by the engine alone; a size in
+/// float noise of the type's (well under the 1 nm the file keeps) is the
+/// type's.
+#[test]
+fn each_size_is_judged_against_its_type_and_float_noise_is_no_override() {
+    let b = four_layer_board(vec![
+        through(1, (0.6, 0.3)),
+        through(2, (0.6, 0.3)),
+        through(3, (0.6, 0.3 + 5e-8)),
+        through(4, (0.8, 0.3)),
+        through(5, (0.8, 0.4)),
+    ]);
+    let types = via_types(&b);
+    let t = &types[0];
+    assert_eq!((t.diameter, t.drill), (0.6, 0.3), "{types:?}");
+    assert_eq!(overridden_fields(t, &b.vias[2]), SizeOverride::default());
+    assert!(!is_overridden(t, &b.vias[2]), "5e-8 mm off is the type's");
+    let diameter = overridden_fields(t, &b.vias[3]);
+    assert_eq!(
+        diameter,
+        SizeOverride {
+            diameter: true,
+            drill: false
+        }
+    );
+    let both = overridden_fields(t, &b.vias[4]);
+    assert!(both.diameter && both.drill);
+    assert_eq!(diameter.either(SizeOverride::default()), diameter);
+    assert!(diameter.any() && !SizeOverride::default().any());
+}
+
+/// #2735: the minimum drill is the written rule's for the via when one
+/// applies (what the check holds it to), else the setup's.
+#[test]
+fn the_minimum_drill_is_the_rule_for_the_via_else_the_setup() {
+    let mut b = four_layer_board(Vec::new());
+    assert_eq!(via_min_drill(&b, None), None, "no rule, no setup");
+    assert_eq!(via_min_drill(&b, Some(0.2)), Some(0.2));
+    b.setup = Some(signex_types::pcb::PcbSetup {
+        grid_size: 0.0,
+        trace_width: 0.0,
+        via_diameter: 0.6,
+        via_drill: 0.3,
+        clearance: 0.0,
+        track_min_width: 0.0,
+        via_min_diameter: 0.0,
+        via_min_drill: 0.3,
+    });
+    assert_eq!(via_min_drill(&b, Some(0.2)), Some(0.2), "the rule wins");
+    assert_eq!(via_min_drill(&b, None), Some(0.3), "else the setup");
+}
+
 #[test]
 fn the_finished_hole_is_the_drill_less_the_plating() {
     assert!((ViaTypeDef::finished_hole(0.3) - 0.25).abs() < 1e-12);

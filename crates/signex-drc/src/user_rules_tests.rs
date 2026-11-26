@@ -541,6 +541,37 @@ fn via_rules_check_diameter_and_drill() {
     assert!(run(&b, &rules_for(&b, vec![inner])).is_clean());
 }
 
+/// #2735: the drill limit a via is shown is the one the check flags it by:
+/// a class rule over the board rule for its nets, none without a rule.
+#[test]
+fn a_vias_drill_limit_is_the_one_the_check_holds_it_to() {
+    let mut gnd = via(1, (0.0, 0.0), 1);
+    let mut hv = via(2, (20.0, 0.0), 2);
+    gnd.drill = 0.25;
+    hv.drill = 0.25;
+    let b = named(board(vec![], vec![], vec![gnd.clone(), hv.clone()]));
+    let user = vec![
+        rule("all", NetScope::Board, vec![Limit::MinViaDrill(200_000)]),
+        rule(
+            "power",
+            NetScope::Class("HV".into()),
+            vec![Limit::MinViaDrill(300_000)],
+        ),
+    ];
+    let rules = rules_for(&b, user);
+    assert_eq!(rules.via_drill_limit_mm(&gnd), Some(0.2));
+    assert_eq!(rules.via_drill_limit_mm(&hv), Some(0.3));
+    let report = run(&b, &rules);
+    let flagged: Vec<_> = report
+        .violations
+        .iter()
+        .filter(|v| v.kind == ViolationKind::ViaDrill)
+        .map(|v| v.nets.0)
+        .collect();
+    assert_eq!(flagged, [2], "only the HV via, as its limit says");
+    assert_eq!(rules_for(&b, Vec::new()).via_drill_limit_mm(&gnd), None);
+}
+
 #[test]
 fn setup_minimums_are_not_checked_without_a_written_rule() {
     let mut b = widths(0.05);
