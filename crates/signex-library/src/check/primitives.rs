@@ -73,7 +73,7 @@ impl LibraryIndex {
             }
             for fp in &file.footprints {
                 if let Some(step) = &fp.step_attachment {
-                    check_step(root, &rel, fp.uuid, &step.content_hash, out);
+                    check_step(root, &rel, &file, fp, &step.content_hash, out);
                 }
             }
         }
@@ -279,9 +279,18 @@ fn ext_of(rel: &str) -> String {
         .unwrap_or_default()
 }
 
-/// A footprint's STEP attachment must be a SHA-256 whose model is present.
-fn check_step(root: &Path, rel: &str, footprint: Uuid, hash: &str, out: &mut Vec<Problem>) {
-    let item = Some(footprint.to_string());
+/// A footprint's STEP attachment must be a SHA-256 whose model is present:
+/// embedded in its own file (`[[models]]`, `snxfpt/1.4`) first, else in
+/// `step/<hash>.step`, the store of libraries written before 1.4.
+fn check_step(
+    root: &Path,
+    rel: &str,
+    file: &FootprintFile,
+    footprint: &crate::primitive::Footprint,
+    hash: &str,
+    out: &mut Vec<Problem>,
+) {
+    let item = Some(footprint.uuid.to_string());
     if hash.len() != 64 || !hash.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')) {
         out.push(Problem::error(
             "model.bad_hash",
@@ -291,7 +300,16 @@ fn check_step(root: &Path, rel: &str, footprint: Uuid, hash: &str, out: &mut Vec
         ));
         return;
     }
-    if embedded_model(rel, hash).is_some() {
+    if file.models.get(hash).is_some() {
+        // Inflated and checked against its `size` and SHA-256.
+        if let Err(e) = file.step_model(footprint) {
+            out.push(Problem::error(
+                "model.embedded_invalid",
+                rel,
+                item,
+                e.to_string(),
+            ));
+        }
         return;
     }
     let step_rel = format!("{STEP_DIR}/{hash}.step");
@@ -320,11 +338,4 @@ fn check_step(root: &Path, rel: &str, footprint: Uuid, hash: &str, out: &mut Vec
             format!("STEP model {step_rel} does not read: {e}"),
         )),
     }
-}
-
-/// Hook for embedded models (`[[models]]`, `snxfpt/1.4`, #3107): the model
-/// with `hash` stored inside the footprint file `rel`, once the format has
-/// them. Until then nothing is embedded and `step/` is the only store.
-fn embedded_model(_rel: &str, _hash: &str) -> Option<()> {
-    None
 }

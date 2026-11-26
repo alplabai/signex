@@ -43,7 +43,7 @@ are kept byte for byte; a missing or damaged record deletes nothing, and
 STEP files are never deleted. It never commits, so the app refuses an update
 over uncommitted changes (#3114) before running one.
 Any converter can verify its output with `signex-cli library check <dir>`
-(`docs/CLI.md`, "Library check"), which tests the rules below.
+(`docs/CLI.md`, "Library tools"), which tests the rules below.
 
 The fixture data is synthetic: it exercises the format, not real parts.
 

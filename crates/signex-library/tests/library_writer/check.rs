@@ -424,3 +424,29 @@ fn step_model_failures() {
         Severity::Error,
     );
 }
+
+/// A model embedded in the footprint file (`snxfpt/1.4`) resolves without
+/// `step/`, and one whose data does not match its size or hash fails.
+#[test]
+fn embedded_models_resolve_and_are_verified() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("Synthetic");
+    let mut w = synthetic::library(40);
+    let mut file = synthetic::footprint(40);
+    let uuid = file.footprints[0].uuid;
+    let step: Vec<u8> = (0..2000u32).flat_map(|i| i.to_be_bytes()).collect();
+    file.attach_step_model(uuid, "part.step", &step).unwrap();
+    w.add_footprint_file(file).unwrap();
+    w.write(&root).unwrap();
+    assert!(!root.join("step").exists(), "nothing goes to step/");
+    assert_eq!(check_library(&root, &[]), []);
+
+    edit(&footprint_path(&root, 40), |t| {
+        t.replacen(&format!("size = {}", step.len()), "size = 7", 1)
+    });
+    assert_reports(
+        &check_library(&root, &[]),
+        "model.embedded_invalid",
+        Severity::Error,
+    );
+}

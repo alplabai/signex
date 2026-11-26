@@ -175,3 +175,25 @@ fn stale_staging_folders_of_the_same_target_are_removed() {
         .collect();
     assert_eq!(names.len(), 2, "{names:?}");
 }
+
+#[test]
+fn an_embedded_model_needs_no_step_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut w = synthetic::library(10);
+    let mut file = synthetic::footprint(10);
+    let uuid = file.footprints[0].uuid;
+    file.attach_step_model(uuid, "part.step", b"ISO-10303-21;\n")
+        .unwrap();
+    w.add_footprint_file(file).unwrap();
+    let snxlib = w.write(&dir.path().join("a")).unwrap();
+    let adapter = LocalGitAdapter::open(&snxlib).unwrap();
+    let fp = adapter.get_footprint(uuid).unwrap();
+    assert!(fp.step_attachment.is_some());
+    let text =
+        std::fs::read_to_string(dir.path().join(format!("a/footprints/{uuid}.snxfpt"))).unwrap();
+    assert!(
+        text.starts_with("format = \"snxfpt/1.4\""),
+        "{}",
+        &text[..40]
+    );
+}

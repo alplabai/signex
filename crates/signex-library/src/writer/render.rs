@@ -115,17 +115,26 @@ fn check_file_stem(stem: &str) -> Result<(), LibraryError> {
 }
 
 /// Refuse a footprint whose STEP attachment names a model the writer was
-/// not given: the library would ship the reference without the model.
+/// not given, embedded in its file (`[[models]]`) or added with
+/// [`LibraryWriter::add_step_model`]: the library would ship the reference
+/// without the model. An embedded model that does not decode to its size
+/// and hash is refused too.
 fn check_step_models(w: &LibraryWriter) -> Result<(), LibraryError> {
-    for fp in w.footprints.values().flat_map(|f| &f.footprints) {
-        let Some(step) = &fp.step_attachment else {
-            continue;
-        };
-        if !w.step_models.contains_key(&step.content_hash) {
-            return Err(LibraryError::InvalidData(format!(
-                "footprint {} ({}) attaches STEP model {} ({}), which was not added with add_step_model",
-                fp.name, fp.uuid, step.content_hash, step.filename
-            )));
+    for file in w.footprints.values() {
+        file.verify_models()
+            .map_err(|e| LibraryError::InvalidData(e.to_string()))?;
+        for fp in &file.footprints {
+            let Some(step) = &fp.step_attachment else {
+                continue;
+            };
+            let embedded = file.models.get(&step.content_hash).is_some();
+            if !embedded && !w.step_models.contains_key(&step.content_hash) {
+                return Err(LibraryError::InvalidData(format!(
+                    "footprint {} ({}) attaches STEP model {} ({}), which is neither embedded \
+                     in its file nor added with add_step_model",
+                    fp.name, fp.uuid, step.content_hash, step.filename
+                )));
+            }
         }
     }
     Ok(())
