@@ -13,7 +13,8 @@ use crate::app::state::ErrorNotice;
 use signex_i18n::Translatable;
 
 /// Write `bytes` to `path` crash-safely off the UI thread. `what` names the
-/// deliverable in the failure text ("PDF", "netlist", "BOM").
+/// deliverable in the failure text ("PDF", "netlist", "BOM"). With `confine`
+/// (an agent's write, #2470), a `path` outside that folder is not written.
 fn write_export_task(
     path: PathBuf,
     bytes: Vec<u8>,
@@ -21,11 +22,13 @@ fn write_export_task(
     success_log: String,
     advisory: Option<ErrorNotice>,
     warnings: Vec<String>,
+    confine: Option<PathBuf>,
 ) -> Task<Message> {
     Task::perform(
         async move {
             let target = path.clone();
             let result = tokio::task::spawn_blocking(move || {
+                crate::app::notebook_project::confined_write(confine.as_deref(), &path)?;
                 signex_types::atomic_io::atomic_write(&path, &bytes)
                     .map_err(|e| format!("{e}: could not write {what} to {}", path.display()))
             })
@@ -153,7 +156,8 @@ impl Signex {
     /// [`write_export_task`], unless `path` lies in a project whose folder is
     /// being renamed: the write would run during the move and either land in
     /// the old folder before the re-key or recreate it as an orphan, so the
-    /// export is refused with a notice instead.
+    /// export is refused with a notice instead. A write an agent's request
+    /// makes stays in its project's folder (`agent_write_root`, #2470).
     pub(crate) fn write_export(
         &mut self,
         path: PathBuf,
@@ -167,7 +171,8 @@ impl Signex {
             return Task::none();
         }
         self.begin_project_write(&path);
-        write_export_task(path, bytes, what, success_log, advisory, warnings)
+        let confine = self.agent_write_root(&path);
+        write_export_task(path, bytes, what, success_log, advisory, warnings, confine)
     }
 
     /// [`export_pdf_task`], refused like [`Self::write_export`] while the

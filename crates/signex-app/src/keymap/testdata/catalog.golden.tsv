@@ -441,6 +441,7 @@ previous_document_tab	window	Previous open document tab	-	General	-	-	Always	gui
 tile_windows_horizontally	window	Tile windows one above the other	Tile Horizontally	General	-	-	Always	gui_only	-
 tile_windows_vertically	window	Tile windows side by side	Tile Vertically	General	-	-	Always	gui_only	-
 untile_documents	window	Untile documents	Untile	General	-	-	Always	gui_only	-
+set_dock_panel	panels	Open, close, collapse or expand a dock panel	-	General	-	-	Always	-	panel:text,state:text
 toggle_floating_panels	window	Toggle floating panels	-	General	-	-	Always	gui_only	-
 toggle_properties_panel	panels	Toggle Properties panel	-	General	-	-	Always	gui_only	-
 toggle_schematic_filter_panel	panels	Toggle schematic filter panel	-	General	-	-	Always	gui_only	-

@@ -240,6 +240,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `select_all` | Select all | select | `Mod+A` | `Mod+A` |
 | `send_drawings_backward` | Send drawings backward | edit | — | — |
 | `send_drawings_to_back` | Send drawings to back | edit | — | — |
+| `set_dock_panel` | Open, close, collapse or expand a dock panel | panels | — | — |
 | `show_all_design_objects` | Show all design objects | view | — | — |
 | `show_current_command_hotkeys` | Show graphical editing hotkey list for current command | help | `F1` | — |
 | `show_current_command_shortcuts` | Show valid shortcuts for the current interactive command | help | `Shift+F1` | — |

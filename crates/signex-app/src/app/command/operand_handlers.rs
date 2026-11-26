@@ -204,6 +204,11 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("set_footprint_side", fp_place::set_footprint_side),
     ("assign_footprint", fp_assign::assign_footprint),
     ("change_footprint", fp_assign::change_footprint),
+    // #2470: a dock panel by its layout key.
+    (
+        "set_dock_panel",
+        crate::app::handlers::dock::panel_command::set_dock_panel,
+    ),
     ("set_selection_filters", filter::set_selection_filters),
     (
         "apply_selection_filter_preset",

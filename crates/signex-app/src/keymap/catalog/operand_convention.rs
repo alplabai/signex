@@ -121,6 +121,8 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     // (its `line`, from 1, is the #2938 row below).
     ("view", OperandKind::Text),
     ("panel", OperandKind::Text),
+    // `set_dock_panel` (#2470): open, close, collapse or expand.
+    ("state", OperandKind::Text),
     ("next_problem", OperandKind::Bool),
     // Mockup rows 196 and 199: the fix of a stale notebook reference, the
     // name it is updated to and the pin (`U3.3`) it or a timeline names.

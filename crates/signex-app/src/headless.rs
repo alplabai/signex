@@ -25,7 +25,8 @@ use crate::keymap::CatalogTextExt;
 
 pub use crate::app::agent::{
     ChangeSnapshot, MessageLine, Status, changed_between, client as agent_client,
-    journal as agent_journal, messages_since, outcome_verdict,
+    is_agent_window_command, journal as agent_journal, messages_since, names_document_on_channel,
+    outcome_verdict,
 };
 pub use crate::app::command::queries::is_query;
 pub use crate::app::command::{

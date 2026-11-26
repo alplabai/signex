@@ -449,6 +449,12 @@ pub const DOCUMENT: &[Operand] = &[required("document", OperandKind::Document)];
 /// A sheet edit that takes nothing but the sheet: the one in view, or the one
 /// `document` names (a CLI or an agent's edit list).
 pub const OPTIONAL_DOCUMENT: &[Operand] = &[optional("document", OperandKind::Document)];
+/// A dock panel by its layout key (`messages`, `properties`, ...) and what
+/// to do with it: `open`, `close`, `collapse` or `expand` (#2470).
+pub const DOCK_PANEL: &[Operand] = &[
+    required("panel", OperandKind::Text),
+    required("state", OperandKind::Text),
+];
 /// A board report written as CSV (#2404): which board, which report
 /// (`bom`, `netlist`, `net_length`, `components`) and the file.
 pub const BOARD_REPORT_EXPORT: &[Operand] = &[

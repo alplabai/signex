@@ -2213,8 +2213,10 @@ and part write commands of #2944 are not in this build.
 writes (#2470): the same files, built the same way from the board as it is in
 memory, into a folder. It needs the `export` capability (`--allow export`)
 and an open board (`open_document` it first). It changes nothing on the
-board and makes no undo step. It takes a `path`, so it is not on the agent
-channel of a running Signex.
+board and makes no undo step. On the agent channel of a running Signex
+(#2470), as for `export_board_pdf` and `export_board_report`, its `path`
+must lie inside the board's project folder ([AGENT_SOCKET.md](AGENT_SOCKET.md),
+"Allowlist").
 
 ```text
 fabrication_outputs document=<board> path=<folder> [kinds=<list>] [name=<stem>] [whole_panel=<bool>]
@@ -2291,7 +2293,16 @@ in the middle of continues.
   on the app's agent channel: sent on their own, with or without `document`,
   the CLI refuses them ("reaches a running Signex only through
   `apply_edits`") and sends nothing; send them as edits of an `apply_edits`
-  call.
+  call. `update_pcb_from_schematic` and `annotate_schematic_quietly` also
+  take an optional `document`, but the channel takes them as commands with
+  it named (#2470), so they are sent on their own and refused without one.
+- **Window layout.** The commands that act on the main window rather than a
+  document (`tile_windows_horizontally`, `tile_windows_vertically`,
+  `untile_documents`, `zoom_to_fit` and `set_dock_panel`) are sent by an
+  attached run though the first four only work in a window, which a
+  headless run refuses ([AGENT_SOCKET.md](AGENT_SOCKET.md), "Allowlist").
+  `set_dock_panel panel=<key> state=open|close|collapse|expand` names a
+  panel by its layout key (`messages`, `properties`, `projects`, ...).
 - **Only this run's folders are shown.** The app answers a query across every
   project it has open, so the CLI filters each answer before it prints it:
   a document whose `path` lies outside the folders this run may use (the

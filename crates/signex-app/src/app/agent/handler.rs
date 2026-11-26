@@ -730,11 +730,17 @@ impl Signex {
             }
         };
         let entry = self.resolve_document_target(target)?;
-        if entry.project.is_none() {
+        let Some(project) = &entry.project else {
             return Err(format!(
                 "{} is not part of a project open in this app",
                 entry.name
             ));
+        };
+        if allow::writes_in_project(id) {
+            let folder = project.path.parent().unwrap_or(std::path::Path::new(""));
+            if let Some(why) = super::write_target::path_refusal(args, folder) {
+                return Err(why);
+            }
         }
         if id == "close_active_document" {
             let active = self

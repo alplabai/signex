@@ -1469,3 +1469,8 @@ panels-pcb-classes-diff-pair = Diff pair
 # Kind code of an Export Job (.snxout) document, as on its tab and in the
 # unsaved list of the Exit confirm.
 panels-tab-kind-output-job = OUT
+# The refusals of `set_dock_panel` (#2470), a command for agents and scripts.
+panels-dock-command-unknown-panel = `panel` is one of { $panels }.
+panels-dock-command-unknown-state = `state` is one of open, close, collapse, expand.
+panels-dock-command-in-window = The { $panel } panel is in a window of its own; close that window.
+panels-dock-command-not-docked = The { $panel } panel is not docked, so it has no region to { $state }.

@@ -129,6 +129,20 @@ pub(super) const WORKSPACE: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
+    // #2470: a dock panel opened, closed, collapsed or expanded by its
+    // layout key, for an agent or a script. No menu row and no default key:
+    // a person uses the panel list, the tab and the region's arrow.
+    CommandMetadata {
+        id: "set_dock_panel",
+        category: "panels",
+        label: command_ids::CMD_SET_DOCK_PANEL,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::operands::DOCK_PANEL,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "toggle_floating_panels",
         category: "window",

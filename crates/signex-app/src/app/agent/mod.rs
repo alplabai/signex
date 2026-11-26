@@ -25,6 +25,7 @@ mod token;
 mod transport;
 mod window_layout;
 mod wire;
+mod write_target;
 
 #[cfg(test)]
 pub(in crate::app) mod tests;
@@ -38,6 +39,7 @@ pub(crate) use crate::app::core::origin::Origin;
 // The agent runner of the request path routes it (`command::request`), and
 // the parity table lists the route (`command::parity`).
 pub(in crate::app) use allow::is_window_layout;
+pub use allow::{is_agent_window_command, names_document_on_channel};
 pub use deferred::QueryAnswered;
 pub(crate) use deferred::WaitingCommand;
 pub use reply::{

@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 use signex_app::headless::agent_client::{Connection, Reply};
+use signex_app::headless::names_document_on_channel;
 
 use signex_app::keymap::OperandKind;
 
@@ -78,7 +79,7 @@ impl Attached {
         let refused = |reason: String| (Status::Refused, reason);
         let mut approved = self
             .policy
-            .authorize(request, &self.project_dir, &self.roots)
+            .authorize_attached(request, &self.project_dir, &self.roots)
             .map_err(refused)?;
         names_its_document(&approved).map_err(refused)?;
         let (policy, roots, connection) = (&self.policy, &self.roots, &mut self.connection);
@@ -173,7 +174,10 @@ impl Attached {
 fn names_its_document(approved: &Approved) -> Result<(), String> {
     // The placements (an optional `document`, and they change it) are not on
     // the app's agent channel: they reach it only as edits of `apply_edits`.
+    // A command the channel takes only with its optional `document` named
+    // (`update_pcb_from_schematic`, `annotate_schematic_quietly`) is not one.
     let is_placement = approved.meta.flags.mutates_doc
+        && !names_document_on_channel(approved.command.as_str())
         && approved
             .meta
             .operands
@@ -291,4 +295,48 @@ fn resolve(connection: &mut Connection, text: &str) -> Result<PathBuf, String> {
         .and_then(|data| data["path"].as_str())
         .map(PathBuf::from)
         .ok_or_else(|| "it has no file".to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::confine::canonical;
+    use crate::input::Limits;
+    use crate::protocol::request_from_args;
+
+    fn approved(root: &Path, id: &str, args: &[String]) -> Approved {
+        let policy = Policy {
+            capabilities: Capability::ALL.into_iter().collect(),
+            allow_paths: Vec::new(),
+            limits: Limits::default(),
+        };
+        let request = request_from_args(id, args).expect("a request");
+        policy
+            .authorize_attached(&request, root, &[root.to_path_buf()])
+            .expect("authorized")
+    }
+
+    /// #2470: a command the channel takes only with its optional `document`
+    /// named is sent as a command when it names one, and refused without;
+    /// a placement still goes through `apply_edits`.
+    #[test]
+    fn a_document_named_on_the_channel_is_not_a_placement() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let root = canonical(dir.path()).expect("canonical");
+        let sheet = format!("document={}", root.join("a.snxsch").display());
+        for id in ["annotate_schematic_quietly", "update_pcb_from_schematic"] {
+            let named = approved(&root, id, std::slice::from_ref(&sheet));
+            assert_eq!(names_its_document(&named), Ok(()), "{id}");
+            let bare = approved(&root, id, &[]);
+            let why = names_its_document(&bare).unwrap_err();
+            assert!(why.contains("needs an explicit `document`"), "{id}: {why}");
+        }
+        let label = approved(
+            &root,
+            "place_net_label",
+            &[sheet, "at=1,2".to_string(), "text=N".to_string()],
+        );
+        let why = names_its_document(&label).unwrap_err();
+        assert!(why.contains("only through `apply_edits`"), "{why}");
+    }
 }

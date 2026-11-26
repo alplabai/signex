@@ -396,6 +396,7 @@ set_active_layer	Pcb	119d310e454dd5e4
 set_board_graphic	Pcb	119d310e454dd5e4
 set_board_origin	EditablePcb	bd0dadc1f2af5e61
 set_board_panel	Pcb	119d310e454dd5e4
+set_dock_panel	-	f2929686b07ef725
 set_footprint_position	Pcb	119d310e454dd5e4
 set_footprint_rotation	Pcb	119d310e454dd5e4
 set_footprint_side	Pcb	119d310e454dd5e4
