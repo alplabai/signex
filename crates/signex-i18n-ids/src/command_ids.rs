@@ -666,6 +666,7 @@ define_ids! {
         CMD_FOOTPRINT_MODE_SKETCH = "cmd-footprint-mode-sketch";
         CMD_FOOTPRINT_MODE_VIEW_3D = "cmd-footprint-mode-view-3d";
         CMD_FOOTPRINT_RECOMPUTE_COURTYARD_OUTLINE = "cmd-footprint-recompute-courtyard-outline";
+        CMD_EDIT_SYMBOL_PINS = "cmd-edit-symbol-pins";
         CMD_CATEGORY_EDIT = "cmd-category-edit";
         CMD_CATEGORY_MODIFY = "cmd-category-modify";
         CMD_CATEGORY_INTERACTIVE = "cmd-category-interactive";

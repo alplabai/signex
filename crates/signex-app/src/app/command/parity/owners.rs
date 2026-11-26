@@ -574,6 +574,7 @@ const OPERAND_DOCUMENT: &[&str] = &[
     "draw_wire",
     "edit_blanket",
     "edit_no_erc_rules",
+    "edit_symbol_pins",
     "export_assembly_svg",
     "export_board_pdf",
     "export_board_report",

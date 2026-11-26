@@ -691,6 +691,7 @@ cmd-footprint-mode-pads = Switch footprint editor to Pads mode
 cmd-footprint-mode-sketch = Switch footprint editor to Sketch mode
 cmd-footprint-mode-view-3d = Switch footprint editor to 3D View mode
 cmd-footprint-recompute-courtyard-outline = Recompute footprint courtyard outline from pads
+cmd-edit-symbol-pins = Set a symbol's pins by number, or paste pin rows
 
 cmd-category-edit = Edit
 cmd-category-modify = Modify

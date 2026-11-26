@@ -663,6 +663,48 @@ delete_selection document=<sheet or board> ids=<uuids>
   the window's key does. Delete in a footprint editor stays the editor's own
   route until slice S-L and takes no operands.
 
+## Symbol pins
+
+`edit_symbol_pins` is the Pin table tab's bulk edit, Delete selected and
+Paste rows (mockup row 122b, #2817) on an open symbol file. Open the file
+first (`open_document path=<.snxsym>`); write it with `save_document`.
+
+```text
+edit_symbol_pins document=<.snxsym> [symbol=<name>] pins=<json> [dry_run=true]
+edit_symbol_pins document=<.snxsym> [symbol=<name>] paste=<rows> [fields=..] [mode=..] [dry_run=true]
+```
+
+- `pins` is a JSON object of pin number to the fields to set:
+  `{"1": {"name": "OUTA", "electrical": "output"}, "4": null}`. `null`
+  removes the pin. The fields are `number`, `name`, `electrical` (the type
+  ids `query_pins` answers with, such as `input`, `power_input`, `passive`),
+  `part` (0 to 255), `length` (mm, by the Properties field's rule),
+  `orientation` (`left`, `right`, `up`, `down`), `hidden` and
+  `description`. A row finds its pin by the number it has before the edit,
+  so two pins can swap numbers in one call.
+- `paste` is read as the Paste rows box reads it: a row per line, cells
+  split on a tab or a run of two or more spaces, datasheet type words (`I`,
+  `O`, `I/O`, `P`) and dashes read as there. An operand cannot carry a line
+  break or a tab, so write `\n` and `\t`; `\\` is a backslash. `fields` is
+  the column map, comma separated, from `number`, `name`, `electrical`,
+  `part`, `length`, `description` and `ignore`; columns past it are read as
+  number, name, type and description. `mode` is `update_by_number` (the
+  default), `append` or `replace_all`. New pins go on part 1's normal body,
+  whatever part the editor shows.
+- Give `pins` or `paste`, not both. A file of more than one symbol needs
+  `symbol`. A row naming a number no pin has, or one two pins share, a
+  field or value that cannot be read, or a length a pin cannot have refuses
+  the whole command and nothing is written. A pasted length a pin cannot
+  have keeps the pin's length, as in the tab, and is counted.
+- The edit is one undo step on the symbol file (`undo document=<.snxsym>`
+  takes it back); the same values again change nothing and make no step.
+  The answer is `{"document", "symbol", "changed", "dry_run", "updated",
+  "added", "removed", "replaced", "lengths_refused", "duplicate_numbers",
+  "pins"}`, each pin with the fields above. With `dry_run=true` the answer
+  is what the edit would leave, and the symbol is not changed.
+- In a window without operands it says what it needs and does nothing; a
+  person uses the Pin table tab.
+
 ## Placement extras
 
 The operand forms of three placement extras (#1667). Each is one undo step

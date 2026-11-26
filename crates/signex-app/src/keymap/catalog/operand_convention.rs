@@ -118,6 +118,9 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     // #2552: a move's wire handling, given by the caller, not the settings.
     ("keep_wires", OperandKind::Bool),
     ("wiring", OperandKind::Text),
+    // #2817: the Pin table's Paste rows text and its paste mode.
+    ("paste", OperandKind::Text),
+    ("mode", OperandKind::Text),
 ];
 
 /// The commands whose `ids` is still text, not targets (#2326): a design

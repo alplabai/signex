@@ -180,6 +180,9 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "set_object_transparency",
             "set_board_graphic",
             "set_footprint_text",
+            // #2817: the symbol file `document` names; new pasted pins go
+            // on part 1's normal body, not the editor's view.
+            "edit_symbol_pins",
             "repour_all",
             "panelize_board",
             "remove_board_panel",

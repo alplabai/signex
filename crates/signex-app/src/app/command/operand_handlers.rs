@@ -31,6 +31,7 @@ use super::schematic_pdf_operands as schematic_pdf;
 use super::selection_filter_operands as filter;
 use super::selection_operands as selection;
 use super::sheet_sync_operands as sheet_sync;
+use super::symbol_pin_operands as symbol_pins;
 use super::{CommandArgs, CommandOutcome, enablement};
 use crate::app::board_output as output;
 use crate::app::board_reuse as reuse;
@@ -155,6 +156,8 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("add_board_graphic", graphic::add_board_graphic),
     ("set_board_graphic", graphic::set_board_graphic),
     ("set_footprint_text", fp_text::set_footprint_text),
+    // #2817: the Pin table's bulk edit and Paste rows on a symbol file.
+    ("edit_symbol_pins", symbol_pins::edit_symbol_pins),
     ("set_selection_filters", filter::set_selection_filters),
     (
         "apply_selection_filter_preset",
@@ -469,6 +472,11 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "set_footprint_text" => Some(
             "`set_footprint_text` needs the operands `document`, `designator`, `text`, \
              `field` and `value` — drag the designator or comment on the board",
+        ),
+        // #2817: a person edits the pins in the Pin table tab.
+        "edit_symbol_pins" => Some(
+            "`edit_symbol_pins` needs the operands `document` and `pins` or `paste` — \
+             use Edit pins in table… on the symbol's Pins tab",
         ),
         "rules_add" | "rules_set" | "rules_remove" | "rules_enable" | "rules_matrix_set"
         | "rules_set_create" | "rules_set_edit" | "rules_set_apply" | "rules_preset_apply" => Some(

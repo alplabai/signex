@@ -148,7 +148,11 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   `add_board_graphic` and `set_board_graphic` (#2424; one board undo step
   each, answered with the drawing as JSON), and `set_footprint_text` (#2368;
   a component's designator or comment placed, turned, sized or justified on
-  its own, one board undo step, answered with the text as JSON), and the
+  its own, one board undo step, answered with the text as JSON), and
+  `edit_symbol_pins` (#2817; the Pin table's bulk edit and Paste rows on a
+  symbol file, one undo step on it, answered with the pins as JSON; an
+  agent names only an open project's documents, so a loose symbol file is
+  for the CLI; [CLI.md](CLI.md), "Symbol pins"), and the
   length tuning commands
   `tune_net_length` and `tune_diff_pair` (#2389; one undo step on the named
   board, answered with the tuned nets and their lengths as JSON), and the
