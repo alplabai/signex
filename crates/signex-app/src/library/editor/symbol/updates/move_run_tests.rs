@@ -59,7 +59,7 @@ fn undo_during_a_drag_closes_the_run_so_the_next_tick_records_a_new_step() {
 }
 
 #[test]
-fn redo_during_a_drag_closes_the_run_so_the_next_tick_records_a_new_step() {
+fn a_tick_after_a_redo_records_a_new_step() {
     let mut editor = editor_with_selected_pin();
     tick(&mut editor);
     apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::DragCommit);
@@ -73,6 +73,33 @@ fn redo_during_a_drag_closes_the_run_so_the_next_tick_records_a_new_step() {
     tick(&mut editor);
 
     assert_eq!(undo_depth(&editor), 2, "the redo closed the run");
+}
+
+#[test]
+fn redo_with_nothing_to_redo_during_a_drag_leaves_the_run_open() {
+    let mut editor = editor_with_selected_pin();
+    tick(&mut editor);
+
+    apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::Redo);
+
+    assert!(editor.draft.is_moving(), "no step, so the run stays open");
+    tick(&mut editor);
+    assert_eq!(undo_depth(&editor), 1, "the drag still joins its step");
+}
+
+#[test]
+fn a_redo_step_during_an_open_run_closes_it() {
+    let mut editor = editor_with_selected_pin();
+    tick(&mut editor);
+    apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::Undo);
+    // A movement tick would clear the redo stack, so the run is opened
+    // directly to put an open run and a redo step side by side.
+    editor.draft.begin_move_run();
+
+    apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::Redo);
+
+    assert_eq!(undo_depth(&editor), 1, "the redo step was applied");
+    assert!(!editor.draft.is_moving(), "the step closed the run");
 }
 
 #[test]

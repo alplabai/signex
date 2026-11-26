@@ -57,7 +57,8 @@ pub struct SymbolDraft {
     pub(in crate::app) last_edit_key: Option<(FieldEditKey, usize)>,
     /// A drag's undo step is recorded and its later ticks join it. Opened by
     /// the first movement tick, closed by the drag commit or an Undo / Redo
-    /// step; another history push leaves it open.
+    /// step; another history push leaves it open. It groups undo steps, like
+    /// `last_edit_key`, so it is history state, not a front-end operand.
     move_run_open: bool,
 }
 
@@ -81,17 +82,17 @@ impl SymbolDraft {
     }
 
     /// Is a drag's undo step open, so a movement tick records nothing?
-    pub fn is_moving(&self) -> bool {
+    pub(crate) fn is_moving(&self) -> bool {
         self.move_run_open
     }
 
     /// Open the move run. The caller records the drag's undo step first.
-    pub fn begin_move_run(&mut self) {
+    pub(crate) fn begin_move_run(&mut self) {
         self.move_run_open = true;
     }
 
     /// Close the move run: the next movement tick records a new step.
-    pub fn end_move_run(&mut self) {
+    pub(crate) fn end_move_run(&mut self) {
         self.move_run_open = false;
     }
 
