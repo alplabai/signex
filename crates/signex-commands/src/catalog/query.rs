@@ -49,6 +49,19 @@ pub(super) const QUERY: &[CommandMetadata] = &[
         operands: operands::QUERY_PINS,
         ..CommandMetadata::DEFAULT
     },
+    // #1277: the net ties of a sheet, with the nets each joins, or of a
+    // board, with the nets each tie footprint's pads bridge.
+    CommandMetadata {
+        id: "query_net_ties",
+        category: "file",
+        label: command_ids::CMD_QUERY_NET_TIES,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::DOCUMENT,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "resolve",
         category: "file",

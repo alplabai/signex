@@ -93,6 +93,7 @@ fn resolved() -> ResolvedPlacement {
         internal_pn: "R-0603-31K6".into(),
         value: "31.6k".into(),
         is_power: false,
+        net_tie: false,
         prefix: "R".into(),
         class: "resistor".into(),
         prefix_override: None,

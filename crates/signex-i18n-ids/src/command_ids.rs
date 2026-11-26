@@ -106,6 +106,7 @@ define_ids! {
         CMD_PRINT = "cmd-print";
         CMD_MENU_PRINT = "cmd-menu-print";
         CMD_QUERY_PINS = "cmd-query-pins";
+        CMD_QUERY_NET_TIES = "cmd-query-net-ties";
         CMD_READ_DOCUMENT = "cmd-read-document";
         CMD_REDO = "cmd-redo";
         CMD_REFRESH_VIEW = "cmd-refresh-view";
@@ -433,6 +434,7 @@ define_ids! {
         CMD_SET_SHEET_SYMBOL_SIZE = "cmd-set-sheet-symbol-size";
         CMD_SET_SYMBOL_PARAMETER = "cmd-set-symbol-parameter";
         CMD_SET_SHEET_VARIABLE = "cmd-set-sheet-variable";
+        CMD_SET_NET_TIE = "cmd-set-net-tie";
         CMD_MENU_PLACE_COMPONENT = "cmd-menu-place-component";
         CMD_RUN_DRC = "cmd-run-drc";
         CMD_MENU_RUN_DRC = "cmd-menu-run-drc";

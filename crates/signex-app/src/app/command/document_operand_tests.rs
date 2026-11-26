@@ -413,6 +413,7 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
         "document_info",
         "read_document",
         "query_pins",
+        "query_net_ties",
         "apply_edits",
         "revert",
     ] {
@@ -459,6 +460,7 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
         "set_sheet_symbol_size",
         "set_symbol_parameter",
         "set_sheet_variable",
+        "set_net_tie",
         "repair_pin_junctions",
         "place_design_block",
         "import_graphics",
@@ -488,6 +490,7 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "document_info",
                     "read_document",
                     "query_pins",
+                    "query_net_ties",
                     "check_erc",
                     "check_drc",
                     "check_requirements",

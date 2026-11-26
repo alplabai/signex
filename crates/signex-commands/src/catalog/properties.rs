@@ -153,6 +153,20 @@ pub(super) const PROPERTIES: &[CommandMetadata] = &[
         operands: operands::SHEET_VARIABLE,
         ..CommandMetadata::DEFAULT
     },
+    // #1277: a part joins two named nets on purpose. No Properties row yet
+    // (no mockup row); the CLI, an agent and placement from a Net Tie
+    // library symbol set it.
+    CommandMetadata {
+        id: "set_net_tie",
+        category: "edit",
+        label: command_ids::CMD_SET_NET_TIE,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::MUTATES,
+        operands: operands::NET_TIE,
+        ..CommandMetadata::DEFAULT
+    },
     // #2407: lock or unlock the selected tracks and vias (the board menu's
     // rows), or the ones `ids` names on `document`. One undo step.
     CommandMetadata {

@@ -107,6 +107,7 @@ cmd-previous-grid = Previous grid
 cmd-print = Print
 cmd-menu-print = Print...
 cmd-query-pins = Query pins
+cmd-query-net-ties = Query net ties
 cmd-read-document = Read document
 cmd-redo = Redo
 cmd-refresh-view = Refresh/redraw
@@ -451,6 +452,7 @@ cmd-set-object-rotation = Set the rotation of a placed part or label
 cmd-set-sheet-symbol-size = Set the size of a sheet symbol
 cmd-set-symbol-parameter = Set a parameter of a placed part
 cmd-set-sheet-variable = Set a sheet variable
+cmd-set-net-tie = Mark a placed part as a net tie
 cmd-menu-assign-net-class = Assign Net Class...
 cmd-place-component = Place component
 # Noun: a component placed on the sheet.

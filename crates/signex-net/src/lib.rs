@@ -106,3 +106,6 @@ pub use harness::{
 
 mod names_in_use;
 pub use names_in_use::sheet_net_names;
+
+#[cfg(test)]
+mod net_tie_tests;

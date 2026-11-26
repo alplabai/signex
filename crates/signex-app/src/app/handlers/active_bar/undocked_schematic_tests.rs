@@ -486,6 +486,7 @@ fn change_component_confirmed_for_an_undocked_windows_sheet_changes_that_sheet()
         internal_pn: "NEW-1".to_string(),
         value: "NEWVALUE".to_string(),
         is_power: false,
+        net_tie: false,
         prefix: "R".to_string(),
         class: "generic".to_string(),
         prefix_override: None,

@@ -62,6 +62,8 @@ mod needs_reason_tests;
 #[cfg(test)]
 pub(crate) use needs::needs as enablement_gate;
 #[cfg(test)]
+mod net_tie_operand_tests;
+#[cfg(test)]
 mod no_erc_operand_tests;
 mod opened;
 #[cfg(test)]

@@ -8,8 +8,9 @@
 //! rule profile library, read off the update loop first), and the board
 //! queries `measure_board`, `query_board_nets` and `find_similar_items`
 //! (#2403), `board_panel` (#2410, `app::board_panel`), the Project tab's
-//! `project_settings` (#1689-#1693, `app::project_tab`), and `list_snippets`
-//! and `list_templates` (#1283, `app::design_reuse`). Each
+//! `project_settings` (#1689-#1693, `app::project_tab`), `list_snippets`
+//! and `list_templates` (#1283, `app::design_reuse`), and `query_net_ties`
+//! (#1277). Each
 //! answers with data through [`CommandOutcome::Answered`], never a bare
 //! `Ran`, and reads only the documents (engines, boards, editors, projects,
 //! the library): no active tab, window, selection or panel is looked at, and
@@ -28,6 +29,7 @@ pub use check_run::CheckFinished;
 mod documents;
 mod elements;
 mod find;
+mod net_ties;
 mod pins;
 pub(in crate::app::command) use pins::pin_id;
 mod read;
@@ -50,6 +52,7 @@ const QUERY_IDS: &[&str] = &[
     "find_items",
     "read_document",
     "query_pins",
+    "query_net_ties",
     "check_erc",
     "check_drc",
     "check_requirements",
@@ -168,6 +171,7 @@ impl Signex {
             "resolve" => self.resolve_id(args),
             "find_items" => self.find(args),
             "query_pins" => self.query_pins(args),
+            "query_net_ties" => self.query_net_ties(args),
             "measure_board" => self.measure_board(args),
             "query_board_nets" => self.query_board_nets(args),
             "find_similar_items" => self.find_similar_items(args),

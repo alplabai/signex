@@ -153,6 +153,8 @@ mod tests {
                 "project_set_version_control",
                 "project_settings",
                 "query_board_nets",
+                // #1277: a sheet's or a board's net ties, as JSON.
+                "query_net_ties",
                 "query_pins",
                 "read_document",
                 "remove_board_panel",

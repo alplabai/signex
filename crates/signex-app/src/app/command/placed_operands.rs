@@ -1,5 +1,6 @@
 //! The placed-object edits (#2418): `set_object_position`,
-//! `set_object_rotation`, `set_sheet_symbol_size` and `set_symbol_parameter`.
+//! `set_object_rotation`, `set_sheet_symbol_size`, `set_symbol_parameter`
+//! and `set_net_tie` (#1277).
 //! A Properties row and an operand run call the same `Signex` method here, so
 //! a typed value, a CLI call and an agent's edit end in one engine command
 //! and one undo step. Coordinates are stored mm (Y down from the paper's
@@ -73,6 +74,17 @@ pub(super) fn set_symbol_parameter(app: &mut Signex, args: &CommandArgs) -> Ran 
         let name = text(args, "name")?;
         let value = text(args, "value").unwrap_or_default();
         answered(app.set_symbol_parameter(item, &name, &value))
+    })
+}
+
+/// `set_net_tie id=.. on=true|false [document=..]` (#1277).
+pub(super) fn set_net_tie(app: &mut Signex, args: &CommandArgs) -> Ran {
+    run_edit(app, args, |app| {
+        let item = app.placed_item_operand(args)?;
+        let Some(OperandValue::Bool(on)) = args.operand("on") else {
+            return Err("operand `on` is missing".to_string());
+        };
+        answered(app.set_net_tie(item, *on))
     })
 }
 
@@ -327,6 +339,33 @@ impl Signex {
         applied?;
         let mut answer = self.placed_answer(item)?;
         answer["parameter"] = json!({ "name": name, "value": value });
+        Ok(answer)
+    }
+
+    /// Make the placed part `item` a net tie (`on`), joining two named nets
+    /// on purpose, or an ordinary part again (#1277). A power port names a
+    /// net and is never a tie. Answers with the part and its `net_tie`.
+    pub(crate) fn set_net_tie(&mut self, item: SelectedItem, on: bool) -> Placed {
+        if item.kind != SelectedKind::Symbol {
+            return Err(PlacedRefusal::new("only a placed part can be a net tie"));
+        }
+        let is_power = self
+            .document_state
+            .edit_engine()
+            .and_then(|e| e.document().symbols.iter().find(|s| s.uuid == item.uuid))
+            .is_some_and(|s| s.is_power);
+        if is_power {
+            return Err(PlacedRefusal::new(
+                "a power port names its net; it cannot be a net tie",
+            ));
+        }
+        self.apply_placed_edit(signex_engine::Command::SetSymbolFlag {
+            symbol_id: item.uuid,
+            flag: signex_engine::SymbolFlag::NetTie,
+            value: on,
+        })?;
+        let mut answer = self.placed_answer(item)?;
+        answer["net_tie"] = json!(on);
         Ok(answer)
     }
 }
