@@ -93,7 +93,8 @@ struct AnnotateJob {
 #[derive(Debug, Default)]
 pub struct AnnotateRuns {
     generation: u64,
-    job: Option<AnnotateJob>,
+    /// Boxed: with no run going it costs `UiState` one pointer (#2412).
+    job: Option<Box<AnnotateJob>>,
 }
 
 /// Why a read result was not applied.
@@ -167,14 +168,14 @@ impl Signex {
         let runs = &mut self.ui_state.annotate_runs;
         runs.generation += 1;
         let generation = runs.generation;
-        runs.job = Some(AnnotateJob {
+        runs.job = Some(Box::new(AnnotateJob {
             generation,
             kind,
             guard,
             read,
             reprefix,
             waiting,
-        });
+        }));
         Ok(Task::perform(
             crate::app::path_op_jobs::run_blocking(move || SheetsRead(plan.assemble())),
             move |read| {
@@ -245,7 +246,7 @@ impl Signex {
     }
 
     /// Take the run's own job when `generation` is the live one.
-    fn take_run(&mut self, generation: u64) -> Option<AnnotateJob> {
+    fn take_run(&mut self, generation: u64) -> Option<Box<AnnotateJob>> {
         let job = self.ui_state.annotate_runs.job.take()?;
         if job.generation == generation {
             return Some(job);
@@ -261,7 +262,7 @@ impl Signex {
         generation: u64,
         result: &Result<SheetsRead, String>,
     ) -> Task<Message> {
-        let Some(mut job) = self.take_run(generation) else {
+        let Some(mut job) = self.take_run(generation).map(|job| *job) else {
             return Task::none();
         };
         // Released first: the checks below ask whether ANOTHER operation holds

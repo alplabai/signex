@@ -414,14 +414,15 @@ fn a_component_rule_sets_height_and_body_clearance_for_a_side() {
             Limit::MinBodyClearance(250_000)
         ]
     );
-    let wide = one("rule tall on component require height <= 6mm");
+    let wide = one("rule tall on component require height <= 6mm then error");
     assert!(wide.diagnostics.is_empty(), "{:?}", wide.diagnostics);
     assert_eq!(wide.rules[0].layers, None);
 }
 
 #[test]
 fn a_component_rule_takes_no_net_condition() {
-    let got = compile(r#"rule tall on component when net == "GND" require height <= 6mm"#);
+    let got =
+        compile(r#"rule tall on component when net == "GND" require height <= 6mm then error"#);
     assert!(
         messages(&got)
             .iter()

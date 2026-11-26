@@ -167,6 +167,12 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("rating", OperandKind::Text),
     ("min_stock", OperandKind::Text),
     ("refresh", OperandKind::Bool),
+    // #2943: a rail's voltage and tolerance, as typed.
+    ("voltage", OperandKind::Text),
+    ("tolerance_percent", OperandKind::Text),
+    // #2462: the difference ids taken to the board and to the schematic.
+    ("to_board", OperandKind::Text),
+    ("to_schematic", OperandKind::Text),
 ];
 
 /// The commands whose `ids` is still text, not targets (#2326): a design

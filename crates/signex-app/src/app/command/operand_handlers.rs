@@ -691,20 +691,29 @@ pub(crate) fn names_its_document(command: &AppCommandId) -> bool {
     })
 }
 
+/// Does `command`, run from operands without `document`, pick its project
+/// itself rather than through the active tab's gate? `update_pcb_from_schematic`
+/// (#2470) takes the active project's board, or the one project's when none is
+/// active, and refuses with the boards to name otherwise (Caner, 2026-11-25).
+pub(crate) fn picks_its_own_project(command: &AppCommandId) -> bool {
+    command.as_str() == "update_pcb_from_schematic"
+}
+
 impl Signex {
     /// Run `command` from the operands in `args`: its handler. A command with
     /// no handler is refused. One that names its document (`document`) is
     /// run on that document, with ids made unique first and without the
-    /// active tab's enablement; any other is behind the same enablement gate
-    /// as a dispatch.
+    /// active tab's enablement; one that [picks its own
+    /// project](picks_its_own_project) runs without that gate too; any other
+    /// is behind the same enablement gate as a dispatch.
     pub(crate) fn run_operands(&mut self, command: &AppCommandId, args: &CommandArgs) -> Ran {
         let Some(handler) = operand_handler(command) else {
             return refused("operands are declared but not run yet (#1934)");
         };
         if names_its_document(command) || args.operand("document").is_some() {
             self.reconcile_document_ids();
-        } else if let Some(reason) =
-            enablement::disabled_reason(command, &self.command_context(None))
+        } else if !picks_its_own_project(command)
+            && let Some(reason) = enablement::disabled_reason(command, &self.command_context(None))
         {
             let outcome = CommandOutcome::Disabled {
                 reason: reason.into(),

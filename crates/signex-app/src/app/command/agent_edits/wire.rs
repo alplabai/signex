@@ -315,6 +315,11 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "assign_footprint",
         "it reads the footprint from its library first; run it as its own command",
     ),
+    // #2457, #2941: each rooms command is one step on the board.
+    ("place_board_room", BOARD_EDIT),
+    ("create_rooms_from_sheets", BOARD_EDIT),
+    ("arrange_in_room", BOARD_EDIT),
+    ("auto_place", BOARD_EDIT),
     // #2389: length tuning lands on the named board's own undo stack.
     (
         "tune_net_length",
@@ -603,6 +608,9 @@ mod tests {
     fn the_editable_commands_are_the_sheet_placements_and_net_colours() {
         let expected = [
             "autoplace_fields",
+            // #1297: its library row is read with the list, as for
+            // `place_component`.
+            "change_component",
             "clear_all_net_colors",
             "color_net",
             "draw_bus",

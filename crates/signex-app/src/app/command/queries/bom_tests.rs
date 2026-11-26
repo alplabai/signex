@@ -71,7 +71,10 @@ fn priced(sku: &str, stock: u32, breaks: &[(u32, f64)]) -> RowPricing {
                         unit_price: *unit_price,
                     })
                     .collect(),
-                fetched_at: Utc::now() - Duration::days(2),
+                // Ages are read against the library's clock, set before
+                // this fixture runs: two days and two hours keeps the
+                // label at two days whatever the gap between the two.
+                fetched_at: Utc::now() - Duration::hours(50),
             },
         )]),
     )])
