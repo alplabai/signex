@@ -299,6 +299,32 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         operands: super::operands::BOARD_STEP,
         ..CommandMetadata::DEFAULT
     },
+    // #1299: the pages of the schematic's project as PNG files in a folder
+    // the person picks; headless it writes `document`'s pages into `path`.
+    CommandMetadata {
+        id: "export_sheet_png",
+        category: "reports",
+        label: command_ids::CMD_EXPORT_SHEET_PNG,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::NONE,
+        operands: super::operands::SHEET_PNG_EXPORT,
+        ..CommandMetadata::DEFAULT
+    },
+    // #1299: an Export Job (`.snxout`) the person picks, or the one `path`
+    // names, writes every enabled output or the one `name` names.
+    CommandMetadata {
+        id: "run_output_job",
+        category: "reports",
+        label: command_ids::CMD_RUN_OUTPUT_JOB,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::operands::OUTPUT_JOB_RUN,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "project_settings",
         category: "design",

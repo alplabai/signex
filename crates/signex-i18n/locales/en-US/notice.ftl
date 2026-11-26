@@ -258,6 +258,10 @@ notice-pdf-source-closed = PDF export refused: the source document { $path } is 
 notice-pdf-no-files = Cannot export PDF: no files selected in the Settings tab.
 # $error is the system's reason, in English.
 notice-netlist-export-failed = Netlist export failed: { $error }
+# $job is the .snxout file; $reason is why, in English. Nothing was written.
+notice-output-job-failed = Export Job { $job } wrote nothing: { $reason }
+# $error is why, in English.
+notice-sheet-png-failed = PNG export failed: { $error }
 notice-preview-no-pages = Preview has no pages for the selected range. Check page range input.
 # $reason is why, in English.
 notice-preview-render-failed = The preview could not be rendered: { $reason }

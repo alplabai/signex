@@ -16,6 +16,7 @@ mod current_page_tests;
 mod erc_report;
 #[cfg(test)]
 mod filter_names_tests;
+pub(crate) mod job_outputs;
 mod loose_bom;
 mod omitted;
 pub(crate) mod page_list;
@@ -41,9 +42,8 @@ pub(crate) mod tests;
 /// `rerasterize_print_preview` calls this on every settings toggle *and* on
 /// every keystroke in the specific-page input; the Messages panel keeps only
 /// `MAX_DIAGNOSTIC_ENTRIES` (200) with no dedupe, so those copies evicted the
-/// user's ERC results and eventually the earliest copies of the very stitch
-/// warnings this path exists to deliver. Surfacing belongs to the user
-/// actions — see [`log_stitch_issues`].
+/// user's ERC results and then the very stitch warnings this path delivers.
+/// Surfacing belongs to the user actions — see [`log_stitch_issues`].
 #[cfg(test)]
 fn build_export_context(
     document_state: &crate::app::state::DocumentState,

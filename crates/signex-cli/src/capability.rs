@@ -198,6 +198,9 @@ mod tests {
             (Capability::Export, "export_board_pdf"),
             (Capability::Export, "export_assembly_svg"),
             (Capability::Export, "export_board_step"),
+            // #1299: PNG pages, and an Export Job's outputs.
+            (Capability::Export, "export_sheet_png"),
+            (Capability::Export, "run_output_job"),
         ]);
         assert_eq!(non_default, pinned);
     }

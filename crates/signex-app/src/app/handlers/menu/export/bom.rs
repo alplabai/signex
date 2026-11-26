@@ -557,7 +557,7 @@ impl Signex {
     /// The parts whose footprint on the board of `source`'s project is of a
     /// type the BOM leaves out (#2365). Read from the board while it is
     /// open; a board that is not open leaves every part in.
-    fn board_left_out_of_bom(
+    pub(super) fn board_left_out_of_bom(
         &self,
         source: &std::path::Path,
     ) -> Vec<signex_types::pcb::SymbolLink> {

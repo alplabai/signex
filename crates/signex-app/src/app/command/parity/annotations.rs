@@ -88,6 +88,8 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     ),
     // The PDF's printed text is in the UI locale (`print_text`).
     (&["export_board_pdf"], Operand, &[Settings]),
+    // #1299: checks the job's project and starts its read; the build is later.
+    (&["run_output_job"], Operand, &[]),
     // Save As of a background sheet is refused (`active_path`).
     (&["save_document_as"], Operand, &[ActiveDocument]),
     // The rfd picker (`save_as_dialog_for_active_tab`).
@@ -150,6 +152,7 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "color_net",
             "export_board_report",
             "export_board_step",
+            "export_sheet_png",
             "export_assembly_svg",
             "board_assembly_drawing",
             "board_report_bom",

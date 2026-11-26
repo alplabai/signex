@@ -381,6 +381,9 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
             ))
         }
         "export_board_step" => Message::from(crate::app::BoardOutputMsg::StepExportRequested),
+        // #1299: the PNG pages and an Export Job, each through its picker.
+        "export_sheet_png" => Message::from(crate::app::OutputJobMsg::PngRequested),
+        "run_output_job" => Message::from(crate::app::OutputJobMsg::RunRequested),
         // #2410: Tools ▸ Panelize Board and Remove Panel, on the board in view.
         "panelize_board" => Message::from(crate::app::BoardPanelMsg::PanelizeRequested),
         "remove_board_panel" => Message::from(crate::app::BoardPanelMsg::RemoveRequested),
