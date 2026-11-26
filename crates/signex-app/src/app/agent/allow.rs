@@ -129,6 +129,9 @@ mod tests {
                 "highlight_layer",
                 "keepout_from_selection",
                 "list_documents",
+                // #1283: the snippets and templates in view, as JSON.
+                "list_snippets",
+                "list_templates",
                 "lock_board_items",
                 "measure_board",
                 "panelize_board",

@@ -1,9 +1,10 @@
 //! Content for the cursor that is not a copy of the selection (#1667): a
-//! design block (another sheet's content), drawings imported from a file, and
-//! another of a placed part (Copy attributes).
+//! design block (another sheet's content), drawings imported from a file,
+//! another of a placed part (Copy attributes), and the sheet a selection is
+//! saved as a snippet to be placed as a design block later (#1283).
 
 use signex_types::object_id::IdSource;
-use signex_types::schematic::{Point, SchDrawing, SchematicSheet};
+use signex_types::schematic::{Point, SchDrawing, SchematicSheet, SelectedItem};
 use uuid::Uuid;
 
 use crate::{CopiedSelection, Engine, EngineError, PlacementPayload};
@@ -73,6 +74,23 @@ impl CopiedSelection {
 }
 
 impl Engine {
+    /// The circuit `items` names, as the sheet a snippet is saved as (#1283):
+    /// what a copy carries, the bodies its parts use with it, centred on the
+    /// origin. Placed again, it is a design block. `None` when `items`
+    /// carries nothing. The sheet takes its id from `ids`.
+    pub fn snippet_sheet(
+        &self,
+        items: &[SelectedItem],
+        ids: &mut dyn IdSource,
+    ) -> Result<Option<SchematicSheet>, EngineError> {
+        let Some(copied) = self.copy_selection(items, 0.0)? else {
+            return Ok(None);
+        };
+        let mut sheet = copied.payload.fragment().clone();
+        sheet.uuid = ids.next_id();
+        Ok(Some(sheet))
+    }
+
     /// Another of the placed part `id`, for the cursor: its body, value,
     /// footprint, fields and look, its origin on the cursor and `reference`
     /// as its designator. Unlocked, with no per-placement designators. `None`

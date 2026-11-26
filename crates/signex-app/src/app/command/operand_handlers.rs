@@ -28,6 +28,7 @@ use super::placed_operands as placed;
 use super::placement_extras_operands as extras;
 use super::placement_operands as place;
 use super::repair_reset_operands as repair_reset;
+use super::reuse_operands as snippet;
 use super::selection_filter_operands as filter;
 use super::selection_operands as selection;
 use super::sheet_sync_operands as sheet_sync;
@@ -104,6 +105,9 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("place_parameter_set", directive::net_parameters),
     ("autoplace_fields", extras::autoplace_fields),
     ("place_design_block", extras::place_design_block),
+    // #1283: snippets, kept per project and in the user's library.
+    ("save_snippet", snippet::save_snippet),
+    ("place_snippet", snippet::place_snippet),
     ("import_graphics", extras::import_graphics),
     ("place_component", part::place_component),
     ("place_sheet_symbol", hierarchy::place_sheet_symbol),

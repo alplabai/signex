@@ -413,3 +413,9 @@ project-parameter-unresolved = ?
 # The banner over the Project tab of a project written by a newer version
 # (#2904). $format is the format it was written in, such as "snxprj/1.2".
 project-read-only-banner = Read-only: this project was written by a newer { -brand-name } ({ $format }). Its changes cannot be saved in this build; edit it in that version.
+# Snippets (#1283), in Messages. $name is the snippet's name, $file its file,
+# $items how many objects it holds.
+snippet-saved = Snippet { $name } saved to { $file }: { $items } objects
+snippet-not-written = Snippet { $name } could not be written to { $file }: { $why }
+# $what is the command's menu label, $why the reason.
+snippet-refused = { $what }: { $why }

@@ -7,8 +7,9 @@
 //! `rules_preset_diff` (#2398, `app::rules_tab`; a profile preset reads the
 //! rule profile library, read off the update loop first), and the board
 //! queries `measure_board`, `query_board_nets` and `find_similar_items`
-//! (#2403), `board_panel` (#2410, `app::board_panel`), and the Project tab's
-//! `project_settings` (#1689-#1693, `app::project_tab`). Each
+//! (#2403), `board_panel` (#2410, `app::board_panel`), the Project tab's
+//! `project_settings` (#1689-#1693, `app::project_tab`), and `list_snippets`
+//! and `list_templates` (#1283, `app::design_reuse`). Each
 //! answers with data through [`CommandOutcome::Answered`], never a bare
 //! `Ran`, and reads only the documents (engines, boards, editors, projects,
 //! the library): no active tab, window, selection or panel is looked at, and
@@ -64,6 +65,10 @@ const QUERY_IDS: &[&str] = &[
     "rules_preset_diff",
     "board_panel",
     "project_settings",
+    // #1283: the snippets and templates of the project in view and the
+    // library, answered once their folders are read.
+    "list_snippets",
+    "list_templates",
 ];
 
 /// The queries that run a check (`check_run`): each says nothing in
@@ -153,6 +158,8 @@ impl Signex {
             }
             // A profile preset may need the profile library read first.
             "rules_preset_diff" => return Some(self.rules_preset_diff(args)),
+            "list_snippets" => return Some(self.list_snippets(args)),
+            "list_templates" => return Some(self.list_templates(args)),
             _ => {}
         }
         let answer = match id {

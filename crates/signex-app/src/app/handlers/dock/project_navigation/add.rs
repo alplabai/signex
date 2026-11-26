@@ -267,6 +267,8 @@ impl Signex {
         // job lands. The setup dialog's sheet values win over the project's;
         // its designator standard is applied when the write lands (#2232).
         let designators = choice.as_ref().and_then(|c| c.designators);
+        // A sheet template (#1283) is read by the write, off this thread.
+        let template = choice.as_ref().and_then(|c| c.template.clone());
         let sheet_defaults = match choice {
             Some(choice) => Some(choice.sheet),
             None => self
@@ -285,6 +287,7 @@ impl Signex {
                             &entry,
                             fold,
                             sheet_defaults.as_ref(),
+                            template.as_deref(),
                         )
                     })
                     .await

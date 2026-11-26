@@ -238,6 +238,8 @@ impl Signex {
         let plan = NewProjectPlan {
             layout,
             setup: Some(state.setup.clone()),
+            // The dialog has no template picker yet (#1283).
+            template: None,
         };
         let chosen = location.join(format!("{name}.snxprj"));
         // A Create that would not start says why in the dialog instead of

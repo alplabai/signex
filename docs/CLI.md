@@ -682,6 +682,45 @@ read off the UI thread before the edit runs. Without operands, in a window,
 `place_design_block` and `import_graphics` open a file dialog and put the
 content on the cursor; `autoplace_fields` acts on the selected parts.
 
+## Snippets and templates
+
+A snippet is a saved circuit fragment, a template the frame or settings a
+new sheet or project starts from (#1283). Where each is kept and what it
+carries: `docs/SNIPPETS_AND_TEMPLATES.md`.
+
+```text
+save_snippet name=.. [scope=project|library] [ids=..] [document=..] [overwrite=true]
+place_snippet name=.. [scope=project|library] at=x,y [document=..]
+list_snippets
+list_templates [kind=sheet|project]
+new_schematic_sheet [name=..] [profile=..] [template=.. [scope=..]]
+new_project_with_profile name=.. location=.. [..] [template=..]
+```
+
+- `save_snippet` writes the items `ids` names on `document` (the selection
+  on the sheet in view when left out) as the snippet `name` of `scope`
+  (`project` when left out) and leaves the sheet as it is. It answers, when
+  the write lands, `{"name", "scope", "file", "items", "document"}`. A name
+  already taken is refused unless `overwrite=true`.
+- `place_snippet` places the snippet as `place_design_block` places a file,
+  one undo step, and answers `{"name", "scope", "file", "placed",
+  "skipped_sheet_symbols"}`.
+- `list_snippets` answers `{"snippets": [{"name", "scope", "file"}],
+  "unreadable": [..], "folders": {"project", "library"}}`; `list_templates`
+  answers the same shape with `"templates"`, each entry also carrying
+  `"kind"` (`sheet` or `project`). A folder that is not there lists nothing;
+  one that cannot be read is named in `unreadable`. `folders` is `null` for
+  a scope with no folder (no project open, no user config folder).
+- `new_schematic_sheet template=..` gives the new sheet the frame of the
+  sheet template of `scope`; `new_project_with_profile template=..` starts
+  the project from the library's project template. A template name that
+  fails the name rules is refused; a template that cannot be read makes
+  nothing (the write fails and Messages says why).
+
+Without operands, in a window, `place_snippet` opens a file dialog on the
+snippets folder and puts the picked snippet on the cursor; `save_snippet`
+saves the selection to the project, named after its parts' designators.
+
 ## Checks on demand
 
 ```text

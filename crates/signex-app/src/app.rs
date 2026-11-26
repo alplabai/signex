@@ -84,6 +84,7 @@ pub use project_tab::{ProjectGeneralFacts, ProjectSection, ProjectTabMsg, Projec
 pub use rules_tab::{RulesTabMsg, RulesTabState};
 pub use sch_tables::TablesMsg;
 pub(crate) mod design_read;
+pub(crate) mod design_reuse;
 pub(crate) mod designator_scan;
 #[cfg(test)]
 mod designator_scan_tests;
