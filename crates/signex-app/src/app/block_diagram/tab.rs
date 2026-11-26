@@ -3,17 +3,45 @@
 //! Save writes and the dirty mark follows. It draws in the main window
 //! only (`TabKind::is_block_diagram`). Closing the tab of a diagram with
 //! unsaved edits keeps the diagram held, so Save All and the quit prompt
-//! still see it and reopening the file shows those edits.
+//! still see it and reopening the file shows those edits. The Projects
+//! tree lists each held diagram under its project's Source Documents.
 
 use std::path::{Path, PathBuf};
 
 use iced::Task;
 
+use crate::app::state::LoadedProject;
 use crate::app::{Message, Signex, TabInfo, TabKind};
+use crate::panels::DiagramRow;
 
 fn title_of(path: &Path) -> String {
     path.file_stem()
         .map_or_else(String::new, |s| s.to_string_lossy().into_owned())
+}
+
+impl Signex {
+    /// The Projects tree rows of the diagrams held in `project`'s folder,
+    /// by file name. Read from memory: no folder is listed.
+    pub(crate) fn block_diagram_rows(&self, project: &LoadedProject) -> Vec<DiagramRow> {
+        let docs = &self.document_state;
+        let active = docs.tabs.get(docs.active_tab).map(|tab| &tab.kind);
+        docs.block_diagrams
+            .editors
+            .iter()
+            .filter(|(path, _)| {
+                super::project_holding(docs, path).is_some_and(|p| p.id == project.id)
+            })
+            .map(|(path, editor)| {
+                let relative = path.strip_prefix(project.dir()).unwrap_or(path);
+                DiagramRow {
+                    filename: relative.to_string_lossy().replace('\\', "/"),
+                    is_open: self.block_diagram_tab(path).is_some(),
+                    is_dirty: editor.is_dirty(),
+                    is_active: matches!(active, Some(TabKind::BlockDiagram(p)) if p == path),
+                }
+            })
+            .collect()
+    }
 }
 
 impl Signex {
@@ -70,6 +98,10 @@ impl Signex {
             || diagrams.editors.get(&path).is_some_and(|e| e.is_dirty());
         if !keep {
             diagrams.editors.remove(&path);
+            // A later open starts its own disk baseline.
+            self.document_state
+                .document_saves
+                .forget_disk_records(&path);
         }
         let len = self.document_state.tabs.len();
         let active = self.document_state.active_tab;

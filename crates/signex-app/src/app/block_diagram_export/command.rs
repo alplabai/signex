@@ -92,6 +92,16 @@ pub(crate) fn export_block_diagram(app: &mut Signex, args: &CommandArgs) -> Ran 
     };
     let title_block = flag(args, "title_block").unwrap_or(true);
     let job = app.block_diagram_job(diagram, path, format, look, title_block);
+    // The tab's popover (the translator) is answered as the dialogs' export
+    // is: a notice and a Messages line once the file is written.
+    if app.agent.from_view {
+        let started = json!({
+            "started": "export_block_diagram",
+            "path": job.path.display().to_string(),
+        });
+        let task = app.start_block_diagram_export(job, None);
+        return (CommandOutcome::Answered(started), task);
+    }
     let command = AppCommandId::new("export_block_diagram").expect("a catalog id is valid");
     let waiting = app.wait_for_command(&command, args);
     let ticket = waiting.ticket;

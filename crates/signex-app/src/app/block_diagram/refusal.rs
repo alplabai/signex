@@ -10,23 +10,63 @@ use uuid::Uuid;
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Refusal {
     NoDocument,
-    NotADiagram { name: String, kind: &'static str },
-    NotOpen { file: String },
-    ReadOnly { file: String, token: String },
-    Saving { file: String },
+    NotADiagram {
+        name: String,
+        kind: &'static str,
+    },
+    NotOpen {
+        file: String,
+    },
+    ReadOnly {
+        file: String,
+        token: String,
+    },
+    Saving {
+        file: String,
+    },
+    /// The diagram does not encode; nothing is written.
+    Unwritable {
+        file: String,
+        reason: String,
+    },
     NoProject,
-    AlreadyOpen { file: String },
-    BadName { name: String },
-    Needs { operand: &'static str },
-    BadId { operand: &'static str, text: String },
-    PinPoint { operand: &'static str },
-    BadShape { text: String },
-    BadSide { text: String },
-    BadDirection { text: String },
-    BadClear { text: String },
-    BadSpec { text: String },
-    BadLength { text: String },
-    NoEnd { text: String },
+    AlreadyOpen {
+        file: String,
+    },
+    BadName {
+        name: String,
+    },
+    Needs {
+        operand: &'static str,
+    },
+    BadId {
+        operand: &'static str,
+        text: String,
+    },
+    PinPoint {
+        operand: &'static str,
+    },
+    BadShape {
+        text: String,
+    },
+    BadSide {
+        text: String,
+    },
+    BadDirection {
+        text: String,
+    },
+    BadClear {
+        text: String,
+    },
+    BadSpec {
+        text: String,
+    },
+    BadLength {
+        text: String,
+    },
+    NoEnd {
+        text: String,
+    },
     Edit(BlockDiagramError),
 }
 
@@ -59,6 +99,11 @@ impl Refusal {
                 .arg("token", token.as_str()),
             R::Saving { file } => {
                 Translatable::new(ids::BLOCK_DIAGRAM_REFUSED_SAVING).arg("file", file.as_str())
+            }
+            R::Unwritable { file, reason } => {
+                Translatable::new(ids::BLOCK_DIAGRAM_REFUSED_UNWRITABLE)
+                    .arg("file", file.as_str())
+                    .arg("reason", reason.as_str())
             }
             R::NoProject => Translatable::new(ids::BLOCK_DIAGRAM_REFUSED_NO_PROJECT),
             R::AlreadyOpen { file } => Translatable::new(ids::BLOCK_DIAGRAM_REFUSED_ALREADY_OPEN)

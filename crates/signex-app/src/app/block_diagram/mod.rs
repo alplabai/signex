@@ -3,16 +3,19 @@
 //! signal-flow connections between them with a protocol label, groups drawn
 //! as frames, the toolbar, and Properties for what is selected. Every edit
 //! goes through `edit.rs`, which the `block_*` commands (`commands.rs`) run
-//! too. Reads and writes run in tasks (`io.rs`).
-//!
-//! The Power tree view, Re-sync from the sheet hierarchy and the exports
-//! of mockup row 171 belong to the other units of the Block Diagram band.
+//! too. Reads and writes run in tasks (`io.rs`); a command naming a
+//! diagram not open reads it first (`on_demand.rs`). The tab's view switch
+//! shows the project's Power tree (`power.rs`); its toolbar re-syncs the
+//! diagram from the sheet hierarchy and exports it (`export.rs`).
 
 mod canvas;
 mod commands;
 mod edit;
+mod export;
 mod fields;
 mod io;
+mod on_demand;
+mod power;
 mod query;
 mod refusal;
 mod tab;
@@ -22,14 +25,23 @@ mod view;
 #[cfg(test)]
 mod command_tests;
 #[cfg(test)]
+mod on_demand_tests;
+#[cfg(test)]
+mod tab_tests;
+#[cfg(test)]
 mod tests;
+
+pub use on_demand::CommandRerun;
+pub use power::PowerTreeLanded;
 
 use std::path::{Path, PathBuf};
 
-use signex_types::block_diagram::{BlockDiagram, BlockShape, Endpoint, ReadBlockDiagram};
+use signex_types::block_diagram::{BlockDiagram, BlockShape, Endpoint};
 use signex_types::schematic::Point;
 use signex_types::theme::Color;
 use uuid::Uuid;
+
+use crate::persist::ContentHash;
 
 pub(crate) use commands::{
     block_add, block_group, block_group_set, block_link, block_link_set, block_port_add,
@@ -38,9 +50,10 @@ pub(crate) use commands::{
 };
 // The state is core-bound (ADR-0006), so it lives in the application core.
 use crate::app::core::block_diagram_editor as state;
-pub use io::FileFailure;
+pub use io::{DiagramFile, FileFailure};
 pub use state::{
-    BlockDiagramEditor, BlockDiagrams, Camera, DiagramItem, DiagramTool, PropertyField,
+    BlockDiagramEditor, BlockDiagrams, Camera, DiagramItem, DiagramTool, DiagramView, ExportKind,
+    PropertyField,
 };
 
 pub use signex_types::block_diagram::BLOCK_DIAGRAM_EXTENSION;
@@ -48,6 +61,17 @@ pub use signex_types::block_diagram::BLOCK_DIAGRAM_EXTENSION;
 /// Whether `path` names a block diagram file, in any letter case.
 pub fn is_block_diagram_path(path: &Path) -> bool {
     crate::app::file_extension::has_extension(path, BLOCK_DIAGRAM_EXTENSION)
+}
+
+/// The open project a diagram belongs to: the one whose folder holds it
+/// (diagrams are not listed in `.snxprj`).
+pub(crate) fn project_holding<'a>(
+    docs: &'a crate::app::state::DocumentState,
+    path: &Path,
+) -> Option<&'a crate::app::state::LoadedProject> {
+    docs.projects
+        .iter()
+        .find(|p| crate::app::state::scope::path_is_under(path, p.dir(), p.case_fold))
 }
 
 /// The file name of `path`, for messages.
@@ -73,16 +97,40 @@ pub enum BlockDiagramMsg {
     /// The read of `path` finished.
     Read {
         path: PathBuf,
-        result: Result<Box<ReadBlockDiagram>, FileFailure>,
+        result: Result<Box<DiagramFile>, FileFailure>,
     },
-    /// The write of `path` finished; `written` is the diagram it wrote.
+    /// The write of `path` finished; `written` is the diagram it wrote and
+    /// `hash` the fingerprint of its bytes.
     Saved {
         path: PathBuf,
         written: Box<BlockDiagram>,
+        hash: ContentHash,
         result: Result<(), FileFailure>,
     },
+    /// The read a command waited for finished (`on_demand`).
+    ReadForCommand {
+        path: PathBuf,
+        result: Result<Box<DiagramFile>, FileFailure>,
+        rerun: Box<CommandRerun>,
+    },
+    /// The power tree run for the diagram at `path` finished.
+    PowerTreeRead(Box<PowerTreeLanded>),
     /// Something happened on the tab of the diagram at `path`.
     Tab { path: PathBuf, event: TabEvent },
+}
+
+/// What happened in the export popover.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ExportEvent {
+    /// The toolbar's SVG or PDF… opened the popover for that format.
+    Opened(ExportKind),
+    KindPicked(ExportKind),
+    FileEdited(String),
+    /// Print colours (black) or as shown.
+    MonochromePicked(bool),
+    TitleBlockToggled(bool),
+    Cancelled,
+    ExportPressed,
 }
 
 /// What happened on a diagram's tab: its toolbar, canvas or Properties.
@@ -122,4 +170,11 @@ pub enum TabEvent {
     GroupPicked(Option<Uuid>),
     /// A swatch for the selected block or group; `None` is the theme's.
     ColorPicked(Option<Color>),
+    /// The view switch: Blocks or Power tree.
+    ViewPicked(DiagramView),
+    /// A rail picked in the Power tree view.
+    RailPicked(String),
+    /// Re-sync: the diagram rebuilt from the sheet hierarchy, layout kept.
+    ResyncPressed,
+    Export(ExportEvent),
 }

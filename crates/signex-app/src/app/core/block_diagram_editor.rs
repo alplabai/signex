@@ -9,6 +9,10 @@ use std::path::PathBuf;
 use signex_types::block_diagram::{BlockDiagram, Endpoint, ReadBlockDiagram, SNXBLK_VERSION};
 use uuid::Uuid;
 
+pub use super::block_diagram_panes::{
+    DiagramView, ExportDraft, ExportKind, PowerTreeRead, PowerTreeView,
+};
+
 /// Every open block diagram, and the paths being read or written.
 #[derive(Debug, Default)]
 pub struct BlockDiagrams {
@@ -120,6 +124,11 @@ pub struct BlockDiagramEditor {
     pub camera: Camera,
     /// Properties text typed and not committed yet.
     pub drafts: BTreeMap<PropertyField, String>,
+    /// What the tab shows.
+    pub view: DiagramView,
+    pub power: PowerTreeView,
+    /// The export popover while it is open.
+    pub export: Option<ExportDraft>,
 }
 
 impl BlockDiagramEditor {
@@ -145,6 +154,9 @@ impl BlockDiagramEditor {
             connect_from: None,
             camera: Camera::default(),
             drafts: BTreeMap::new(),
+            view: DiagramView::Blocks,
+            power: PowerTreeView::default(),
+            export: None,
         }
     }
 

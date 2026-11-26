@@ -33,8 +33,15 @@ impl Signex {
             BlockDiagramMsg::Saved {
                 path,
                 written,
+                hash,
                 result,
-            } => self.block_diagram_saved(path, *written, result),
+            } => self.block_diagram_saved(path, *written, hash, result),
+            BlockDiagramMsg::ReadForCommand {
+                path,
+                result,
+                rerun,
+            } => self.block_diagram_read_for_command(path, result, *rerun),
+            BlockDiagramMsg::PowerTreeRead(landed) => self.power_tree_landed(*landed),
             BlockDiagramMsg::Tab { path, event } => self.block_diagram_event(path, event),
         }
     }
@@ -62,6 +69,13 @@ impl Signex {
                 Err(refusal) => Err(refusal),
             },
             TabEvent::BlockOpened(block) => return self.open_block_sheet(&path, block),
+            TabEvent::ViewPicked(view) => return self.pick_diagram_view(&path, view),
+            TabEvent::RailPicked(rail) => {
+                self.pick_power_rail(&path, rail);
+                Ok(())
+            }
+            TabEvent::ResyncPressed => return self.resync_block_diagram(),
+            TabEvent::Export(event) => return self.block_diagram_export_event(&path, event),
             TabEvent::EndPicked(end) => self.pick_connection_end(&path, end),
             TabEvent::BlockMoved { block, to } => {
                 let patch = BlockPatch {

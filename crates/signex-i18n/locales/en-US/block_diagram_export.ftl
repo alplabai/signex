@@ -20,3 +20,23 @@ block-diagram-export-unknown-format = { $file } does not end in .svg or .pdf: na
 block-diagram-export-unknown-extension = { $file } does not end in .svg or .pdf: pick one of the two.
 block-diagram-export-same-file = { $file } is the block diagram itself: pick another file to write.
 block-diagram-export-failed = Could not export { $document }: { $reason }
+
+# The block diagram tab's SVG and PDF… buttons and their popover (mockup row
+# 171, "Export PDF…"). The popover exports the saved file.
+block-diagram-export-svg = SVG
+block-diagram-export-svg-tip = Export the saved diagram as an SVG file
+block-diagram-export-pdf = PDF…
+block-diagram-export-pdf-tip = Export the saved diagram as a PDF page
+block-diagram-export-pdf-format = PDF
+block-diagram-export-heading = Export the saved diagram
+block-diagram-export-format = Format
+block-diagram-export-colours = Colors
+block-diagram-export-colours-print = Print
+block-diagram-export-colours-shown = As shown
+block-diagram-export-paper = Paper
+block-diagram-export-paper-a4 = A4 landscape
+block-diagram-export-page = Page
+block-diagram-export-title-block = Title block
+block-diagram-export-file = File
+block-diagram-export-saved-only = The saved file is exported; save first to include unsaved edits.
+block-diagram-export-run = Export

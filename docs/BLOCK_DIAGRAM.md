@@ -17,12 +17,23 @@ tab behaves.
   says Read-only.
 - One tab per diagram, in the main window only: it does not undock, and
   History does not restore a diagram yet.
+- The Projects tree lists each diagram held open in a project's folder
+  under Source Documents, with the `.snxblk` icon and a BLK tag; a double
+  click opens its tab. The folder is not listed, so a diagram that is not
+  open has no row.
+- A command that names a diagram that is not open reads it first and holds
+  it without a tab ([CLI.md](CLI.md), "Block diagrams").
 
 ## Editing
 
-- The toolbar has the Select and Connect tools, Add Block, Add Port, Group,
-  Delete, Undo, Redo, Save and Fit. A button with nothing to act on is
-  greyed and its hint says why.
+- The toolbar starts with the view switch (Block diagram, Power tree) and
+  Re-sync, then the Select and Connect tools, Add Block, Add Port, Group,
+  Delete, Undo, Redo, Save and Fit, and SVG and PDF…. A button with nothing
+  to act on is greyed and its hint says why.
+- Re-sync rebuilds blocks and connections from the sheet hierarchy and
+  keeps the layout (`regenerate_block_diagram apply=true`). On the open
+  diagram it is one undo step and writes nothing until Save; an edit made
+  while it read the hierarchy wins and Messages says nothing was applied.
 - On the canvas a click picks a block, a port, a connection or a group's
   frame; Shift adds to the selection. A drag on a block moves it and lands
   as one edit on release; a drag on empty canvas, or with the middle
@@ -55,11 +66,35 @@ geometry (port points, routes, label points, frames, hits) is
 `signex_types::block_diagram::geometry`, so an export draws the same
 picture.
 
+## Power tree view
+
+The view switch's Power tree reads the project's power tree off the update
+thread with the run behind `query_power_tree`, for the project's active
+variant, each time the view is picked ([POWER_TREE.md](POWER_TREE.md)). One
+row per rail: its sources (a converter or a source part), the rail with its
+voltage and total draw, and its loads. A source's bar is the rail's draw
+against its limit, green under 50 %, amber to 90 %, red above; a load's bar
+is its share of the rail in one neutral colour. The side panel lists the
+rails; a click on one shows its nominal voltage, source, limit, load and
+headroom. Showing the tree changes nothing in the diagram.
+
+## Export popover
+
+SVG and PDF… open a popover over the canvas: the format, print colours or
+as shown, the PDF title block, and the file, offered as
+`outputs/<name>_blocks.<svg or pdf>` beside the diagram. Export runs
+`export_block_diagram` with those operands
+([BLOCK_DIAGRAM_EXPORT.md](BLOCK_DIAGRAM_EXPORT.md)); the saved file is
+exported, and the popover says so while the diagram has unsaved edits.
+
 ## Saving
 
-Save writes the diagram in a task with an atomic write and marks it clean
-with the diagram it wrote, so an edit made while the write runs stays
-dirty. The first save of a new diagram refuses to replace a file already at
+Save writes the diagram in a task through the document save tracker and
+marks it clean with the diagram it wrote, so an edit made while the write
+runs stays dirty. Writes to one file are ordered and quit waits for a
+running one. A file another program changed since it was read or saved is
+not overwritten: the save is refused with a notice and the edits stay
+(`docs/architecture/external-change.md`). The first save of a new diagram refuses to replace a file already at
 its path. Closing the tab of a diagram with unsaved edits keeps the diagram
 held: Save All and the quit prompt see it, and opening the file again shows
 the edits.

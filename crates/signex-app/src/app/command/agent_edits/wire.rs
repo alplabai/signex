@@ -526,6 +526,19 @@ mod tests {
     fn the_editable_commands_are_the_sheet_placements_and_net_colours() {
         let expected = [
             "autoplace_fields",
+            // #2796: the block diagram edits (DECISIONS, "Block diagram
+            // tab", point 8).
+            "block_add",
+            "block_group",
+            "block_group_set",
+            "block_link",
+            "block_link_set",
+            "block_port_add",
+            "block_port_remove",
+            "block_remove",
+            "block_set",
+            "block_ungroup",
+            "block_unlink",
             "clear_all_net_colors",
             "color_net",
             "draw_bus",

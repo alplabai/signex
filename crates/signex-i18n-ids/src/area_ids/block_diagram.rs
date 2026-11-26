@@ -136,4 +136,42 @@ define_ids! {
     BLOCK_DIAGRAM_FAULT_MISSING_PORT = "block-diagram-fault-missing-port";
     BLOCK_DIAGRAM_FAULT_CLOSED = "block-diagram-fault-closed";
     BLOCK_DIAGRAM_FAULT_INTERFACE = "block-diagram-fault-interface";
+    // block-diagram-files, continued
+    BLOCK_DIAGRAM_READ_FOR_COMMAND_FAILED = "block-diagram-read-for-command-failed";
+    BLOCK_DIAGRAM_SAVE_CHANGED = "block-diagram-save-changed";
+    BLOCK_DIAGRAM_REFUSED_UNWRITABLE = "block-diagram-refused-unwritable";
+    // block-diagram-views
+    BLOCK_DIAGRAM_VIEW_BLOCKS = "block-diagram-view-blocks";
+    BLOCK_DIAGRAM_VIEW_POWER = "block-diagram-view-power";
+    BLOCK_DIAGRAM_RESYNC = "block-diagram-resync";
+    BLOCK_DIAGRAM_RESYNC_TIP = "block-diagram-resync-tip";
+    // block-diagram-power
+    BLOCK_DIAGRAM_POWER_READING = "block-diagram-power-reading";
+    BLOCK_DIAGRAM_POWER_UNREAD = "block-diagram-power-unread";
+    BLOCK_DIAGRAM_POWER_EMPTY = "block-diagram-power-empty";
+    BLOCK_DIAGRAM_POWER_LEGEND = "block-diagram-power-legend";
+    BLOCK_DIAGRAM_POWER_ARROW = "block-diagram-power-arrow";
+    BLOCK_DIAGRAM_POWER_SOURCE = "block-diagram-power-source";
+    BLOCK_DIAGRAM_POWER_CONVERTER = "block-diagram-power-converter";
+    BLOCK_DIAGRAM_POWER_NO_SOURCE = "block-diagram-power-no-source";
+    BLOCK_DIAGRAM_POWER_OF_LIMIT = "block-diagram-power-of-limit";
+    BLOCK_DIAGRAM_POWER_VOLTAGE = "block-diagram-power-voltage";
+    BLOCK_DIAGRAM_POWER_VOLTAGE_TOL = "block-diagram-power-voltage-tol";
+    BLOCK_DIAGRAM_POWER_NO_VOLTAGE = "block-diagram-power-no-voltage";
+    BLOCK_DIAGRAM_POWER_TOTAL = "block-diagram-power-total";
+    BLOCK_DIAGRAM_POWER_LOADS = "block-diagram-power-loads";
+    BLOCK_DIAGRAM_POWER_DRAW = "block-diagram-power-draw";
+    BLOCK_DIAGRAM_POWER_SHARE = "block-diagram-power-share";
+    BLOCK_DIAGRAM_POWER_UNKNOWN_DRAW = "block-diagram-power-unknown-draw";
+    BLOCK_DIAGRAM_POWER_RAILS = "block-diagram-power-rails";
+    BLOCK_DIAGRAM_POWER_RAIL = "block-diagram-power-rail";
+    BLOCK_DIAGRAM_POWER_NOMINAL = "block-diagram-power-nominal";
+    BLOCK_DIAGRAM_POWER_LIMIT = "block-diagram-power-limit";
+    BLOCK_DIAGRAM_POWER_LOAD = "block-diagram-power-load";
+    BLOCK_DIAGRAM_POWER_HEADROOM = "block-diagram-power-headroom";
+    BLOCK_DIAGRAM_POWER_FREE = "block-diagram-power-free";
+    BLOCK_DIAGRAM_POWER_NOT_KNOWN = "block-diagram-power-not-known";
+    BLOCK_DIAGRAM_POWER_WARNING = "block-diagram-power-warning";
+    BLOCK_DIAGRAM_POWER_FOOTER = "block-diagram-power-footer";
+    BLOCK_DIAGRAM_POWER_FOOTER_NOTE = "block-diagram-power-footer-note";
 }

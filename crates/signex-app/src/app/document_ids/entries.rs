@@ -282,11 +282,7 @@ impl Signex {
         let docs = &self.document_state;
         let diagrams = &docs.block_diagrams;
         for (path, editor) in &diagrams.editors {
-            let project = docs
-                .projects
-                .iter()
-                .find(|p| path.starts_with(p.dir()))
-                .map(project_ref);
+            let project = crate::app::block_diagram::project_holding(docs, path).map(project_ref);
             entries.push(DocumentEntry {
                 id: Some(editor.diagram.id),
                 kind: DocumentKind::BlockDiagram,
@@ -301,6 +297,34 @@ impl Signex {
                 path: Some(path.clone()),
             });
         }
+    }
+
+    /// A `.snxblk` at `path`, inside an open project's folder, that is not
+    /// open: a command naming it opens it on demand
+    /// (`block_diagram::on_demand`). Nothing is read here; a file that is not
+    /// there fails that read. An absolute path with no `..` only.
+    pub(crate) fn unopened_block_diagram(&self, path: &Path) -> Option<DocumentEntry> {
+        let climbs = path
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir));
+        if !path.is_absolute() || climbs || !crate::app::block_diagram::is_block_diagram_path(path)
+        {
+            return None;
+        }
+        let project = crate::app::block_diagram::project_holding(&self.document_state, path)?;
+        Some(DocumentEntry {
+            id: None,
+            kind: DocumentKind::BlockDiagram,
+            key: None,
+            name: file_stem(path),
+            project: Some(project_ref(project)),
+            loaded: false,
+            dirty: false,
+            read_only: false,
+            saving: false,
+            open_in_window: false,
+            path: Some(path.to_path_buf()),
+        })
     }
 
     /// The files an open project references that no loaded document covers,

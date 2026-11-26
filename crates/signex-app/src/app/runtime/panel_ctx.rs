@@ -454,20 +454,8 @@ impl Signex {
                                 .unwrap_or_else(|| entry.path.display().to_string()),
                         };
                         let missing = fs_facts.is_missing(&resolved);
-                        // F30 — list `.snxsym` / `.snxfpt` FILES, not
-                        // individual primitives. Each file can hold
-                        // hundreds-to-thousands of symbols, so
-                        // enumerating cached_symbols would explode the
-                        // tree. The user opens a `.snxsym` file to
-                        // browse the symbols inside it via the SCH
-                        // Library panel, not via the project tree.
-                        //
-                        // F34 (2026-05-03) — Add New ▸ Symbol Library
-                        // now opens a Save-As dialog so the user names
-                        // the file at create time and the `.snxsym`
-                        // lands on disk immediately. No in-memory
-                        // merging needed; the next refresh after the
-                        // dialog confirm picks up the new file.
+                        // F30: one row per library file, never per
+                        // primitive (a file can hold thousands).
                         let resolved_clone = resolved.clone();
                         let is_open = open_paths.contains(&resolved_clone);
                         let is_dirty = dirty_paths.contains(&resolved_clone);
@@ -519,6 +507,7 @@ impl Signex {
                     is_active: Some(p.id) == active_id,
                     is_dirty: dirty_paths.contains(&p.path),
                     version_control: p.data.enable_git,
+                    block_diagrams: self.block_diagram_rows(p),
                 }
             })
             .collect();

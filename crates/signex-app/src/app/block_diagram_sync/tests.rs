@@ -42,7 +42,7 @@ fn save(sheet: SchematicSheet, path: &Path) {
 
 /// `top.snxsch` in `dir` placing `children`, each an empty sheet written
 /// once.
-fn write_hierarchy(dir: &Path, children: &[(&str, &str)]) -> PathBuf {
+pub(crate) fn write_hierarchy(dir: &Path, children: &[(&str, &str)]) -> PathBuf {
     let mut top = SchematicSheet {
         uuid: uuid::Uuid::now_v7(),
         ..Default::default()
@@ -169,7 +169,7 @@ fn a_sheet_that_does_not_read_refuses_the_run() {
 }
 
 /// An app with the project of `dir` (root `top.snxsch`) active.
-fn app_on(dir: &Path) -> Signex {
+pub(crate) fn app_on(dir: &Path) -> Signex {
     let mut app = app_workspace(&dir.to_string_lossy(), &["top.snxsch"]);
     app.ui_state.first_run_tour_open = false;
     app.document_state.active_project = Some(app.document_state.projects[0].id);

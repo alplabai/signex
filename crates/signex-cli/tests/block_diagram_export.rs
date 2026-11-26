@@ -1,8 +1,8 @@
 //! End to end (#2796): `export_block_diagram` through the real `signex-cli`
 //! binary writes a project's block diagram as SVG and PDF, answers once the
 //! file is written, needs the `export` capability and writes nothing outside
-//! the project. The command line names a document it has open or that its
-//! project lists, so each run opens the diagram first.
+//! the project. A run may open the diagram first, or name it by path: a
+//! diagram in the project's folder is read on demand.
 
 mod support;
 
@@ -79,4 +79,38 @@ fn the_export_needs_its_capability_and_stays_inside_the_project() {
         "refused for its path, not its document: {reason}"
     );
     assert!(!outside.exists(), "nothing written outside the project");
+}
+
+/// No `open_document` first: the diagram is named by its path in the project
+/// folder. The export reads the saved file; an edit and a query read the
+/// diagram on demand and answer once it is read; `--save` writes the edit.
+#[test]
+fn a_run_names_a_diagram_it_did_not_open() {
+    let (_guard, root) = temp_root();
+    let fx = fixture(&root);
+    std::fs::write(fx.dir.join("dcdc-buck.snxblk"), DCDC).expect("write the diagram");
+    let project = fx.project.to_str().unwrap();
+    let commands = jsonl(&[
+        json!({"id": "export_block_diagram",
+               "args": {"document": "dcdc-buck.snxblk", "path": "blocks.svg"}}),
+        json!({"id": "block_add",
+               "args": {"document": "dcdc-buck.snxblk", "name": "Sensor"}}),
+        json!({"id": "query_block_diagram", "args": {"document": "dcdc-buck.snxblk"}}),
+        json!({"id": "save_document", "args": {"document": "dcdc-buck.snxblk"}}),
+    ]);
+    let out = run_cli(&["run", project, "--allow", "export", "--save"], &commands);
+    assert_eq!(out.code, Some(0), "{}\n{}", out.stdout, out.stderr);
+    for line in &out.lines[..4] {
+        assert!(
+            line["status"] == "answered" || line["status"] == "ran",
+            "{}",
+            out.stdout
+        );
+    }
+    assert_eq!(out.lines[0]["data"]["blocks"], 6, "{}", out.stdout);
+    assert!(fx.dir.join("blocks.svg").exists());
+    assert!(out.lines[1]["data"]["id"].is_string(), "{}", out.stdout);
+    assert_eq!(out.lines[2]["data"]["dirty"], true, "{}", out.stdout);
+    let saved = std::fs::read_to_string(fx.dir.join("dcdc-buck.snxblk")).expect("saved");
+    assert!(saved.contains("Sensor"), "the edit was saved");
 }

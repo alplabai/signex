@@ -5,7 +5,8 @@ converters, rails and loads, with the current each part draws and a budget per
 block. It is generated from the schematic every time it is asked for; nothing
 of it is stored. The domain code is `signex_net::power_tree`; the command is
 `query_power_tree` ([CLI.md](CLI.md), "Power tree"). The block diagram tab
-that draws it is not built yet.
+draws it ([BLOCK_DIAGRAM.md](BLOCK_DIAGRAM.md), "Power tree view") from the
+same run.
 
 ## Rails
 

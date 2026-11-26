@@ -42,6 +42,20 @@ fn answered(result: Result<Value, Refusal>) -> Ran {
     (outcome, Task::none())
 }
 
+/// Run the edit `id` on the diagram `args` names, read first when it is
+/// not open (`on_demand`).
+fn edited(
+    app: &mut Signex,
+    id: &str,
+    args: &CommandArgs,
+    edit: impl FnOnce(&mut Signex, &CommandArgs) -> Result<Value, Refusal>,
+) -> Ran {
+    match app.open_diagram_first(id, args) {
+        Some(waiting) => waiting,
+        None => answered(edit(app, args)),
+    }
+}
+
 fn text<'a>(args: &'a CommandArgs, name: &str) -> Option<&'a str> {
     match args.operand(name) {
         Some(OperandValue::Text(text)) => Some(text.as_str()),
@@ -240,7 +254,7 @@ fn block_patch(args: &CommandArgs) -> Result<BlockPatch, Refusal> {
 /// `block_add document= name= [at= size= function= note= shape= color=
 /// group= rails= specs=]`. Without `at` the block goes right of the others.
 pub(crate) fn block_add(app: &mut Signex, args: &CommandArgs) -> Ran {
-    answered(add_block(app, args))
+    edited(app, "block_add", args, add_block)
 }
 
 fn add_block(app: &mut Signex, args: &CommandArgs) -> Result<Value, Refusal> {
@@ -269,7 +283,7 @@ fn add_block(app: &mut Signex, args: &CommandArgs) -> Result<Value, Refusal> {
 /// `block_set document= id= [name= at= size= function= note= shape= color=
 /// group= rails= specs= clear=]`.
 pub(crate) fn block_set(app: &mut Signex, args: &CommandArgs) -> Ran {
-    answered(set_block(app, args))
+    edited(app, "block_set", args, set_block)
 }
 
 fn set_block(app: &mut Signex, args: &CommandArgs) -> Result<Value, Refusal> {
@@ -288,22 +302,30 @@ fn set_block(app: &mut Signex, args: &CommandArgs) -> Result<Value, Refusal> {
 
 /// `block_remove document= id=`: the block, its ports and connections.
 pub(crate) fn block_remove(app: &mut Signex, args: &CommandArgs) -> Ran {
-    answered(one_object(app, args, DiagramEdit::RemoveBlock))
+    edited(app, "block_remove", args, |app, args| {
+        one_object(app, args, DiagramEdit::RemoveBlock)
+    })
 }
 
 /// `block_port_remove document= id=`: the port and its connections.
 pub(crate) fn block_port_remove(app: &mut Signex, args: &CommandArgs) -> Ran {
-    answered(one_object(app, args, DiagramEdit::RemovePort))
+    edited(app, "block_port_remove", args, |app, args| {
+        one_object(app, args, DiagramEdit::RemovePort)
+    })
 }
 
 /// `block_unlink document= id=`: the connection.
 pub(crate) fn block_unlink(app: &mut Signex, args: &CommandArgs) -> Ran {
-    answered(one_object(app, args, DiagramEdit::Disconnect))
+    edited(app, "block_unlink", args, |app, args| {
+        one_object(app, args, DiagramEdit::Disconnect)
+    })
 }
 
 /// `block_ungroup document= id=`: the group; its blocks stay.
 pub(crate) fn block_ungroup(app: &mut Signex, args: &CommandArgs) -> Ran {
-    answered(one_object(app, args, DiagramEdit::RemoveGroup))
+    edited(app, "block_ungroup", args, |app, args| {
+        one_object(app, args, DiagramEdit::RemoveGroup)
+    })
 }
 
 fn one_object(
@@ -318,7 +340,7 @@ fn one_object(
 
 /// `block_port_add document= block= name= [side= offset= direction=]`.
 pub(crate) fn block_port_add(app: &mut Signex, args: &CommandArgs) -> Ran {
-    answered(add_port(app, args))
+    edited(app, "block_port_add", args, add_port)
 }
 
 fn add_port(app: &mut Signex, args: &CommandArgs) -> Result<Value, Refusal> {
@@ -383,7 +405,7 @@ fn endpoint(
 
 /// `block_link document= from= to= [interface= label=]`.
 pub(crate) fn block_link(app: &mut Signex, args: &CommandArgs) -> Ran {
-    answered(link(app, args))
+    edited(app, "block_link", args, link)
 }
 
 fn link(app: &mut Signex, args: &CommandArgs) -> Result<Value, Refusal> {
@@ -404,7 +426,7 @@ fn link(app: &mut Signex, args: &CommandArgs) -> Result<Value, Refusal> {
 
 /// `block_link_set document= id= [interface= label=]`.
 pub(crate) fn block_link_set(app: &mut Signex, args: &CommandArgs) -> Ran {
-    answered(set_link(app, args))
+    edited(app, "block_link_set", args, set_link)
 }
 
 fn set_link(app: &mut Signex, args: &CommandArgs) -> Result<Value, Refusal> {
@@ -419,7 +441,7 @@ fn set_link(app: &mut Signex, args: &CommandArgs) -> Result<Value, Refusal> {
 
 /// `block_group document= name= [ids= color=]`.
 pub(crate) fn block_group(app: &mut Signex, args: &CommandArgs) -> Ran {
-    answered(group(app, args))
+    edited(app, "block_group", args, group)
 }
 
 fn group(app: &mut Signex, args: &CommandArgs) -> Result<Value, Refusal> {
@@ -437,7 +459,7 @@ fn group(app: &mut Signex, args: &CommandArgs) -> Result<Value, Refusal> {
 
 /// `block_group_set document= id= [name= color= clear=]`.
 pub(crate) fn block_group_set(app: &mut Signex, args: &CommandArgs) -> Ran {
-    answered(set_group(app, args))
+    edited(app, "block_group_set", args, set_group)
 }
 
 fn set_group(app: &mut Signex, args: &CommandArgs) -> Result<Value, Refusal> {

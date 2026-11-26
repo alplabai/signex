@@ -1080,6 +1080,14 @@ until `save_document document=<diagram>`, and the first save of a new
 diagram refuses to replace a file already at its path. `list_documents`
 lists open diagrams as kind `block_diagram`.
 
+A diagram is not listed in its project, so `document` also names a
+`.snxblk` by path (relative to the project folder) anywhere in an open
+project's folder. An edit or `query_block_diagram` on a diagram that is not
+open reads it first and runs once the read lands, as if `open_document` had
+run; the diagram stays held without a tab. A file that does not read is
+refused with the reader's reason. A save is refused, with nothing written,
+when another program changed the file since it was read or saved.
+
 Every edit names its diagram by path or id, is one step of the diagram's
 own history (`undo` / `redo document=<diagram>`), and answers with the `id`
 of what it made or changed:
@@ -1120,10 +1128,9 @@ query_block_diagram document=<diagram>
 ## Block diagram export
 
 `export_block_diagram` writes a block diagram (`.snxblk`) as an SVG or PDF
-file (#2796). It reads the diagram's saved file, not unsaved edits. A
-`document` operand names an open or listed document and diagrams are not
-listed in the project, so a run opens the diagram first
-(`open_document path=<diagram.snxblk>`). It needs the `export` capability.
+file (#2796). It reads the diagram's saved file, not unsaved edits, so the
+diagram need not be open: `document` names it by path in an open project's
+folder (see "Block diagrams"). It needs the `export` capability.
 
 ```text
 export_block_diagram document=<diagram.snxblk> path=<file> [kind=svg|pdf] [monochrome=true] [title_block=false]

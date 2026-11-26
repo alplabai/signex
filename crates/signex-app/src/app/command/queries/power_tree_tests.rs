@@ -41,7 +41,7 @@ fn part(reference: &str, fields: &[(&str, &str)]) -> Symbol {
 /// The closed child sheet: J1 supplies VIN_12V (1.5 A), U1 draws 250 mA
 /// from it and supplies +3V3 (3 A), U2 draws 640 mA from +3V3 and is not
 /// fitted in Lite.
-fn write_child_with_rails(dir: &tempfile::TempDir) {
+pub(crate) fn write_child_with_rails(dir: &tempfile::TempDir) {
     let mut sheet = child();
     sheet.uuid = CHILD_ID;
     sheet

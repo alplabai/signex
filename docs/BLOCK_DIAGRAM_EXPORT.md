@@ -72,8 +72,10 @@ With operands (`docs/CLI.md`, "Block diagram export") it writes
 `document` to `path` and answers once the file is written. It needs the
 `export` capability.
 
-The diagram tab's toolbar (mockup row 171: SVG, and PDF… with its paper and
-colour choices) is the diagram tab's own change; it runs this command.
+The diagram tab's toolbar (mockup row 171: SVG, and PDF…) opens a popover
+with the format, colours, title block and file, and its Export runs this
+command through the translator; the written file is reported as the
+dialogs' export is ([BLOCK_DIAGRAM.md](BLOCK_DIAGRAM.md), "Export popover").
 
 ## Output Jobs
 

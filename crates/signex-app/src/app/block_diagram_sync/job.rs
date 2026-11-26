@@ -32,6 +32,17 @@ pub(crate) enum SyncMode {
     Regenerate { apply: bool },
 }
 
+impl SyncMode {
+    /// Whether the run writes the `.snxblk`: a generate, or an applied
+    /// regenerate.
+    pub(crate) fn writes(self) -> bool {
+        matches!(
+            self,
+            Self::Generate { .. } | Self::Regenerate { apply: true }
+        )
+    }
+}
+
 /// Everything a run needs, owned so it can leave the UI thread.
 pub(crate) struct SyncJob {
     pub(crate) mode: SyncMode,
@@ -55,6 +66,28 @@ impl SyncJob {
             SyncMode::Generate { overwrite } => self.generate(&derived, overwrite),
             SyncMode::Regenerate { apply } => self.regenerate(&derived, apply),
         }
+    }
+
+    /// Regenerate into `base`, the diagram as its tab holds it: the answer
+    /// and the merged diagram. Nothing is written; the tab takes it as an
+    /// undo step and its Save writes it.
+    pub(crate) fn run_merge(
+        self,
+        base: &BlockDiagram,
+    ) -> Result<(Value, BlockDiagram), Translatable> {
+        let derived = self.derive()?;
+        let regenerated = regenerate_block_diagram(base, &derived, &mut UuidV7Ids)
+            .map_err(|e| not_run(e.to_string()))?;
+        let answer = json!({
+            "path": self.target.display().to_string(),
+            "applied": true,
+            "written": false,
+            "into_tab": true,
+            "changes": regenerated.changes,
+            "summary": summary(&regenerated.diagram),
+            "diagram": regenerated.diagram,
+        });
+        Ok((answer, regenerated.diagram))
     }
 
     fn derive(&self) -> Result<DerivedDiagram, Translatable> {

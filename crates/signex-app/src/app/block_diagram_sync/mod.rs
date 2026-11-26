@@ -6,15 +6,21 @@
 //! once the run lands; run by a person (the palette) it goes through the
 //! same handler (`command::translator`) and Messages says what it did. A
 //! regenerate a person runs lists its changes and applies nothing; the
-//! block diagram tab's Re-sync applies them (`Requested { apply: true }`).
+//! block diagram tab's Re-sync applies them (`Requested { apply: true }`)
+//! into the open diagram, as an undo step (`tab_merge`). A run that writes
+//! the file holds it as a project write until it lands.
 //! Rules: `docs/architecture/snxblk-format.md`, "Generate and regenerate".
 
 mod job;
 mod operands;
+mod tab_merge;
 #[cfg(test)]
-mod tests;
+mod tab_merge_tests;
+#[cfg(test)]
+pub(crate) mod tests;
 
 pub(crate) use operands::{generate_block_diagram, regenerate_block_diagram};
+pub use tab_merge::TabMerge;
 
 use std::path::PathBuf;
 
@@ -45,6 +51,10 @@ pub struct SyncLanded {
     /// The project file the run read.
     pub(crate) project: PathBuf,
     pub(crate) result: Result<Value, Translatable>,
+    /// The `.snxblk` the run held as a project write, released on landing.
+    pub(crate) written_to: Option<PathBuf>,
+    /// The tab's Re-sync: what it merges into the open diagram.
+    pub(crate) merge: Option<TabMerge>,
 }
 
 impl Signex {
@@ -63,21 +73,30 @@ impl Signex {
     /// A person's run on the project in view, through the same handler an
     /// agent runs.
     fn request_block_diagram_sync(&mut self, regenerate: bool, apply: bool) -> Task<Message> {
-        let project = self
-            .compile_target()
-            .and_then(|id| self.document_state.project_by_id(id))
-            .map(|project| project.path.clone());
+        // A diagram in view is the one run on, in its own project.
+        let diagram = self.block_diagram_tab_in_window(true);
+        let project = match &diagram {
+            Some(path) => crate::app::block_diagram::project_holding(&self.document_state, path),
+            None => self
+                .compile_target()
+                .and_then(|id| self.document_state.project_by_id(id)),
+        }
+        .map(|project| project.path.clone());
         let Some(project) = project else {
             let why = Translatable::new(ids::PROJECT_BLOCK_DIAGRAM_NO_PROJECT);
             self.say_block_diagram_refused(&why.render(&self.ui_state.i18n));
             return Task::none();
         };
-        let (id, operands) = if regenerate {
+        let (id, mut operands) = if regenerate {
             let apply = vec![("apply", OperandValue::Bool(apply))];
             ("regenerate_block_diagram", apply)
         } else {
             ("generate_block_diagram", Vec::new())
         };
+        if let Some(path) = diagram {
+            let path = path.to_string_lossy().into_owned();
+            operands.push(("path", OperandValue::Path(path)));
+        }
         let (outcome, task) = translator::run(self, id, &project, operands);
         if let CommandOutcome::Disabled { reason } = outcome {
             let why = reason.render(&self.ui_state.i18n);
@@ -91,7 +110,16 @@ impl Signex {
             waiting,
             project,
             result,
+            written_to,
+            merge,
         } = landed;
+        if let Some(target) = &written_to {
+            self.end_project_write(target);
+        }
+        let result = match (merge, result) {
+            (Some(merge), Ok(answer)) => self.merge_into_tab(merge).map(|()| answer),
+            (_, result) => result,
+        };
         match waiting {
             Some(waiting) => {
                 self.finish_waiting_command(waiting, &project, move |_| match result {
@@ -129,7 +157,9 @@ impl Signex {
                 t!(i18n, ids::PROJECT_BLOCK_DIAGRAM_IN_SYNC, "path" => path)
             }
             Some(changes) => {
-                let id = if answer["written"].as_bool() == Some(true) {
+                let id = if answer["into_tab"].as_bool() == Some(true) {
+                    ids::PROJECT_BLOCK_DIAGRAM_APPLIED_IN_TAB
+                } else if answer["written"].as_bool() == Some(true) {
                     ids::PROJECT_BLOCK_DIAGRAM_APPLIED
                 } else {
                     ids::PROJECT_BLOCK_DIAGRAM_CHANGES

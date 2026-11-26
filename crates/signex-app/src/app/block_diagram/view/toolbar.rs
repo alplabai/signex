@@ -1,7 +1,9 @@
-//! The toolbar (mockup row 171): the Select and Connect tools, Add Block,
-//! Add Port, Group and Delete, then Undo, Redo, Save and Fit. A tool that
-//! has nothing to act on is greyed with the reason as its hint; on a
-//! read-only diagram every edit is greyed and the end of the bar says so.
+//! The toolbar (mockup row 171): the view switch and Re-sync, then the
+//! Select and Connect tools, Add Block, Add Port, Group and Delete, Undo,
+//! Redo, Save and Fit, and the SVG and PDF… exports. The Power tree view
+//! keeps the switch and Re-sync only. A tool that has nothing to act on is
+//! greyed with the reason as its hint; on a read-only diagram every edit is
+//! greyed and the end of the bar says so.
 
 use iced::{Element, Widget as _};
 use signex_i18n::{Localized, MessageId, ids};
@@ -9,8 +11,10 @@ use signex_widgets::doc_tab_shell::Toolbar;
 use signex_widgets::{button, segmented, text};
 
 use super::{Look, SP, TS};
-use crate::app::block_diagram::TabEvent;
-use crate::app::block_diagram::state::{BlockDiagramEditor, DiagramItem, DiagramTool};
+use crate::app::block_diagram::state::{
+    BlockDiagramEditor, DiagramItem, DiagramTool, DiagramView, ExportKind,
+};
+use crate::app::block_diagram::{ExportEvent, TabEvent};
 use crate::panels::graphite::hint_tooltip;
 use crate::styles::ti;
 use crate::styles::tokens::resolve;
@@ -31,7 +35,21 @@ pub(super) fn view<'a>(look: Look<'a>, editor: &'a BlockDiagramEditor) -> Toolba
         };
         tool(look, label, false, on_press, hint)
     };
-    let mut bar = Toolbar::new()
+    let head = Toolbar::new()
+        .push(views(look, editor))
+        .separator()
+        .push(edit(
+            ids::BLOCK_DIAGRAM_RESYNC,
+            TabEvent::ResyncPressed,
+            true,
+            ids::BLOCK_DIAGRAM_RESYNC_TIP,
+            ids::BLOCK_DIAGRAM_RESYNC_TIP,
+        ));
+    if editor.view == DiagramView::PowerTree {
+        return head;
+    }
+    let mut bar = head
+        .separator()
         .push(tools(look, editor))
         .separator()
         .push(edit(
@@ -90,6 +108,27 @@ pub(super) fn view<'a>(look: Look<'a>, editor: &'a BlockDiagramEditor) -> Toolba
             false,
             Some(TabEvent::FitPressed),
             look.t(ids::BLOCK_DIAGRAM_FIT_TIP),
+        ))
+        .separator()
+        .push(tool(
+            look,
+            ids::BLOCK_DIAGRAM_EXPORT_SVG,
+            editor
+                .export
+                .as_ref()
+                .is_some_and(|d| d.kind == ExportKind::Svg),
+            Some(TabEvent::Export(ExportEvent::Opened(ExportKind::Svg))),
+            look.t(ids::BLOCK_DIAGRAM_EXPORT_SVG_TIP),
+        ))
+        .push(tool(
+            look,
+            ids::BLOCK_DIAGRAM_EXPORT_PDF,
+            editor
+                .export
+                .as_ref()
+                .is_some_and(|d| d.kind == ExportKind::Pdf),
+            Some(TabEvent::Export(ExportEvent::Opened(ExportKind::Pdf))),
+            look.t(ids::BLOCK_DIAGRAM_EXPORT_PDF_TIP),
         ));
     if !editable {
         bar = bar.push_end(
@@ -107,6 +146,26 @@ pub(super) fn view<'a>(look: Look<'a>, editor: &'a BlockDiagramEditor) -> Toolba
         );
     }
     bar
+}
+
+/// The view switch: Block diagram | Power tree.
+fn views<'a>(look: Look<'a>, editor: &BlockDiagramEditor) -> Element<'a, TabEvent> {
+    let cells: Vec<(DiagramView, signex_widgets::Label<'a>)> = vec![
+        (
+            DiagramView::Blocks,
+            look.t(ids::BLOCK_DIAGRAM_VIEW_BLOCKS).into(),
+        ),
+        (
+            DiagramView::PowerTree,
+            look.t(ids::BLOCK_DIAGRAM_VIEW_POWER).into(),
+        ),
+    ];
+    segmented(
+        cells,
+        editor.view,
+        resolve(look.tokens).segmented(TS.dense),
+        TabEvent::ViewPicked,
+    )
 }
 
 /// Select | Connect.

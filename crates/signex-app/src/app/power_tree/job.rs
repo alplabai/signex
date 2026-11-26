@@ -4,15 +4,17 @@
 //! or for an agent), then `signex_net::power_tree` builds the tree and the
 //! budget per sheet for the variant asked for.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
+use signex_net::SheetKey;
 use signex_net::power_tree::{ListedRail, power_topology, power_tree, sheet_budgets};
 use signex_types::schematic::Symbol;
 
 use super::answer::{AnswerContext, power_tree_answer};
 use crate::app::Signex;
+use crate::app::core::block_diagram_panes::PowerTreeRead;
 use crate::app::project_sheets::{
     OpenSheets, assemble_project_sheets_guarded_from, open_sheets_snapshot, project_graph_quiet,
     project_pages, project_root_sheet_path, project_roots, sheet_key_with, stitch_issue_message,
@@ -69,6 +71,29 @@ impl PowerTreeJob {
     /// the project has no root sheet, the root cannot be read or the
     /// channel naming cannot be read for a design that repeats sheets.
     pub(crate) fn run(self) -> Result<Value, String> {
+        let built = self.build()?;
+        let budgets = sheet_budgets(&built.read.topology, &built.read.tree);
+        let context = AnswerContext {
+            project: &self.project_file,
+            dir: &self.dir,
+            variant: self.variant.as_deref(),
+            paths: &built.paths,
+            warnings: built.read.warnings.clone(),
+        };
+        Ok(power_tree_answer(
+            &built.read.topology,
+            &built.read.tree,
+            &budgets,
+            context,
+        ))
+    }
+
+    /// The same run, for the block diagram tab's Power tree view.
+    pub(crate) fn read(self) -> Result<PowerTreeRead, String> {
+        self.build().map(|built| built.read)
+    }
+
+    fn build(&self) -> Result<Built, String> {
         let Some(root) = self.root.clone() else {
             return Err("the project has no root sheet".to_string());
         };
@@ -116,14 +141,20 @@ impl PowerTreeJob {
         let listed: BTreeSet<String> = self.listed.keys().cloned().collect();
         let topology = power_topology(&walk, naming, &listed, &fitted);
         let tree = power_tree(&topology, &self.listed);
-        let budgets = sheet_budgets(&topology, &tree);
-        let context = AnswerContext {
-            project: &self.project_file,
-            dir: &self.dir,
-            variant,
-            paths: &graph.paths,
-            warnings,
-        };
-        Ok(power_tree_answer(&topology, &tree, &budgets, context))
+        Ok(Built {
+            read: PowerTreeRead {
+                variant: self.variant.clone(),
+                topology,
+                tree,
+                warnings,
+            },
+            paths: graph.paths,
+        })
     }
+}
+
+/// A run's tree and the file of each sheet, which the answer names.
+struct Built {
+    read: PowerTreeRead,
+    paths: HashMap<SheetKey, PathBuf>,
 }

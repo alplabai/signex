@@ -423,3 +423,8 @@ project-block-diagram-unreadable = { $path } could not be read: { $reason }
 project-block-diagram-not-written = { $path } was not written: { $reason }
 project-block-diagram-read-only = { $path } was written by a newer version ({ $format }) and is read-only here
 project-block-diagram-not-run = nothing was written: { $reason }
+# The block diagram tab's Re-sync, which merges into the open diagram as an
+# undo step. $path is the .snxblk file, $changes how many changes it applied.
+project-block-diagram-applied-in-tab = Block diagram { $path }: { $changes } changes applied to the open diagram; the layout is kept. Save to keep them.
+project-block-diagram-resync-changed = { $path } was edited while Re-sync read the hierarchy; nothing was applied. Run Re-sync again.
+project-block-diagram-resync-closed = { $path } was closed while Re-sync read the hierarchy; nothing was applied.

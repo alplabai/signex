@@ -6,7 +6,6 @@
 //! (`app::power_tree`). See `docs/POWER_TREE.md`.
 
 use iced::Task;
-use signex_types::project::is_base_variant;
 
 use super::{refused, text_operand};
 use crate::app::command::{CommandArgs, CommandOutcome};
@@ -28,18 +27,11 @@ impl Signex {
         let Some(project) = self.document_state.project_by_id(id) else {
             return refused("`query_power_tree`: the project is no longer open".into());
         };
-        let variant = match text_operand(args, "variant") {
-            Some(name) => name.to_string(),
-            None => project.data.active_variant.clone().unwrap_or_default(),
+        let named = text_operand(args, "variant");
+        let variant = match crate::app::power_tree::power_tree_variant(project, named) {
+            Ok(variant) => variant,
+            Err(reason) => return refused(format!("`query_power_tree`: {reason}")),
         };
-        let variant = (!variant.trim().is_empty() && !is_base_variant(&variant)).then_some(variant);
-        if let Some(name) = &variant
-            && !project.data.variant_definitions.iter().any(|v| v == name)
-        {
-            return refused(format!(
-                "`query_power_tree`: the project has no variant `{name}`"
-            ));
-        }
         let job = self.power_tree_job(project, variant);
         let target = project.path.clone();
         self.answer_off_thread(command, args, target, move || job.run())

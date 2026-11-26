@@ -322,4 +322,7 @@ define_ids! {
     PROJECT_BLOCK_DIAGRAM_NOT_WRITTEN = "project-block-diagram-not-written";
     PROJECT_BLOCK_DIAGRAM_READ_ONLY = "project-block-diagram-read-only";
     PROJECT_BLOCK_DIAGRAM_NOT_RUN = "project-block-diagram-not-run";
+    PROJECT_BLOCK_DIAGRAM_APPLIED_IN_TAB = "project-block-diagram-applied-in-tab";
+    PROJECT_BLOCK_DIAGRAM_RESYNC_CHANGED = "project-block-diagram-resync-changed";
+    PROJECT_BLOCK_DIAGRAM_RESYNC_CLOSED = "project-block-diagram-resync-closed";
 }

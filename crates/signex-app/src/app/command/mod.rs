@@ -87,7 +87,7 @@ mod placement_extras_operands;
 mod placement_operand_tests;
 mod placement_operands;
 #[cfg(test)]
-mod project_name_tests;
+pub(crate) mod project_name_tests;
 mod project_names;
 pub(crate) mod queries;
 #[cfg(test)]

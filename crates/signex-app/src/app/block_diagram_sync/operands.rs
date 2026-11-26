@@ -7,9 +7,10 @@ use std::path::{Path, PathBuf};
 
 use iced::Task;
 use signex_i18n::{Translatable, ids};
+use signex_types::block_diagram::BlockDiagram;
 
 use super::job::{SyncJob, SyncMode, not_run};
-use super::{BlockDiagramSyncMsg, SyncLanded};
+use super::{BlockDiagramSyncMsg, SyncLanded, TabMerge};
 use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::document_ids::DocumentKind;
 use crate::app::project_sheets;
@@ -21,6 +22,16 @@ use crate::app::{Message, ProjectMsg, Signex};
 use crate::keymap::AppCommandId;
 
 type Ran = (CommandOutcome, Task<Message>);
+
+/// A run planned on the UI thread.
+struct Planned {
+    job: SyncJob,
+    /// The project file it reads.
+    project: PathBuf,
+    /// The diagram its tab holds, for the tab's own Re-sync: the run merges
+    /// into it and writes nothing.
+    base: Option<BlockDiagram>,
+}
 
 /// The file extension of a block diagram, without the dot.
 const SNXBLK: &str = signex_types::block_diagram::BLOCK_DIAGRAM_EXTENSION;
@@ -51,21 +62,41 @@ fn start(app: &mut Signex, args: &CommandArgs, id: &str, mode: SyncMode) -> Ran 
         Ok(command) => command,
         Err(reason) => return refused(not_run(reason)),
     };
-    let (job, project) = match app.block_diagram_sync_job(args, id, mode) {
+    let Planned { job, project, base } = match app.block_diagram_sync_job(args, id, mode) {
         Ok(planned) => planned,
         Err(reason) => return refused(reason),
     };
+    // A run that writes the file is a project write: a folder rename waits
+    // for it, and it waits for a rename already moving the folder.
+    let writes_file = base.is_none() && mode.writes();
+    let written_to = writes_file.then(|| job.target.clone());
+    if let Some(target) = &written_to {
+        if let Err(why) = app.refuse_while_project_moves(target, "write") {
+            return refused(crate::app::state::untranslated(why.to_string()));
+        }
+        app.begin_project_write(target);
+    }
+    let merge = base.as_ref().map(|base| (job.target.clone(), base.clone()));
     // A person's run (the translator) is answered in Messages; a caller with
     // operands waits on its ticket.
     let waiting = (!app.agent.from_view).then(|| app.wait_for_command(&command, args));
     let ticket = waiting.as_ref().map(|w| w.ticket);
     let task = Task::perform(
-        crate::app::path_op_jobs::run_blocking(move || job.run()),
-        move |result| {
+        crate::app::path_op_jobs::run_blocking(move || match base {
+            Some(base) => job
+                .run_merge(&base)
+                .map(|(answer, merged)| (answer, Some(merged))),
+            None => job.run().map(|answer| (answer, None)),
+        }),
+        move |ran| {
+            let ran = ran.map_err(not_run).and_then(|ran| ran);
+            let merged = ran.as_ref().ok().and_then(|(_, merged)| merged.clone());
             let landed = SyncLanded {
                 waiting,
                 project,
-                result: result.map_err(not_run).and_then(|answer| answer),
+                result: ran.map(|(answer, _)| answer),
+                written_to,
+                merge: merge.map(|(path, base)| TabMerge { path, base, merged }),
             };
             Message::Project(ProjectMsg::BlockDiagramSync(BlockDiagramSyncMsg::Synced(
                 Box::new(landed),
@@ -90,7 +121,7 @@ impl Signex {
         args: &CommandArgs,
         id: &str,
         mode: SyncMode,
-    ) -> Result<(SyncJob, PathBuf), Translatable> {
+    ) -> Result<Planned, Translatable> {
         let Some(OperandValue::Document(named)) = args.operand("document") else {
             return Err(
                 Translatable::new(ids::PROJECT_BLOCK_DIAGRAM_NEEDS_DOCUMENT).arg("command", id)
@@ -135,18 +166,24 @@ impl Signex {
             ),
         };
         // A run that writes never writes under a diagram open in a tab: the
-        // tab's next save would put back what the run wrote over.
-        let writes = matches!(
-            mode,
-            SyncMode::Generate { .. } | SyncMode::Regenerate { apply: true }
-        );
+        // tab's next save would put back what the run wrote over. The tab's
+        // own Re-sync merges into the open diagram instead, as an undo step.
         let target_key = path_key_with(&target, fold);
-        let open_in_tab = (self.document_state.block_diagrams.editors.keys())
-            .any(|open| path_key_with(open, fold) == target_key);
-        if writes && open_in_tab {
-            return Err(Translatable::new(ids::PROJECT_BLOCK_DIAGRAM_OPEN_IN_TAB)
-                .arg("path", target.display().to_string()));
-        }
+        let held = (self.document_state.block_diagrams.editors.iter())
+            .find(|(open, _)| path_key_with(open, fold) == target_key);
+        let (target, base) = match held {
+            Some((open, editor)) if mode.writes() => {
+                let resync = self.agent.from_view
+                    && mode == (SyncMode::Regenerate { apply: true })
+                    && !editor.is_read_only();
+                if !resync {
+                    return Err(Translatable::new(ids::PROJECT_BLOCK_DIAGRAM_OPEN_IN_TAB)
+                        .arg("path", target.display().to_string()));
+                }
+                (open.clone(), Some(editor.diagram.clone()))
+            }
+            _ => (target, None),
+        };
         let job = SyncJob {
             mode,
             target,
@@ -157,7 +194,11 @@ impl Signex {
             fold,
             naming: project.data.schematic_design.channel_naming.clone(),
         };
-        Ok((job, project.path.clone()))
+        Ok(Planned {
+            job,
+            project: project.path.clone(),
+            base,
+        })
     }
 }
 

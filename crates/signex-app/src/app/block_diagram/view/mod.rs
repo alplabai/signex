@@ -1,20 +1,24 @@
 //! The block diagram tab's view (mockup row 171): the shared document-tab
 //! shell with the toolbar, the canvas and Properties side by side, and the
-//! footer counting blocks and connections with the mockup's hint.
+//! footer counting blocks and connections with the mockup's hint. The view
+//! switch puts the Power tree and its rails there instead; the export
+//! popover sits over the canvas.
 
+mod export;
+mod power_tree;
 mod properties;
 mod toolbar;
 
 use std::path::PathBuf;
 
-use iced::widget::{container, row};
-use iced::{Element, Length, Widget as _};
+use iced::widget::{container, row, stack};
+use iced::{Alignment, Element, Length, Widget as _};
 use signex_i18n::{I18n, Localized, MessageId, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::doc_tab_shell::{DocTabShell, DocTabShellStyle, Footer};
 
 use super::canvas::{CanvasLook, diagram_canvas};
-use super::state::BlockDiagramEditor;
+use super::state::{BlockDiagramEditor, DiagramView};
 use super::{BlockDiagramMsg, TabEvent};
 use crate::app::{Message, Signex};
 use crate::styles::tokens::resolve;
@@ -83,12 +87,34 @@ fn canvas_look(look: Look<'_>) -> CanvasLook {
 
 /// The whole tab.
 fn tab<'a>(look: Look<'a>, editor: &'a BlockDiagramEditor) -> Element<'a, TabEvent> {
+    let (main, side) = match editor.view {
+        DiagramView::Blocks => (
+            diagram_canvas(editor, canvas_look(look)),
+            properties::view(look, editor),
+        ),
+        DiagramView::PowerTree => (
+            power_tree::main(look, editor),
+            power_tree::side(look, editor),
+        ),
+    };
+    // The export popover sits over the canvas's top right (mockup row 171).
+    let main = match &editor.export {
+        Some(draft) => stack![
+            main,
+            container(export::view(look, editor, draft))
+                .padding(SP.s)
+                .width(Length::Fill)
+                .align_x(Alignment::End),
+        ]
+        .boxed(),
+        None => main,
+    };
     let body = row![
-        container(diagram_canvas(editor, canvas_look(look)))
+        container(main)
             .width(Length::Fill)
             .height(Length::Fill)
             .boxed(),
-        container(properties::view(look, editor))
+        container(side)
             .width(Length::Fixed(TS.body * SIDE_EMS))
             .height(Length::Fill)
             .boxed(),
@@ -105,6 +131,10 @@ fn tab<'a>(look: Look<'a>, editor: &'a BlockDiagramEditor) -> Element<'a, TabEve
 
 /// "4 blocks · 4 connections", and how the canvas is used.
 fn footer<'a>(look: Look<'a>, editor: &BlockDiagramEditor) -> Footer<'a> {
+    if editor.view == DiagramView::PowerTree {
+        let note = look.t(ids::BLOCK_DIAGRAM_POWER_FOOTER_NOTE);
+        return Footer::new(power_tree::status(look, editor)).note(note);
+    }
     let diagram = &editor.diagram;
     let status = t!(
         look.i18n,

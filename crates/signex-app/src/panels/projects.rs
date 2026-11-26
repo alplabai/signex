@@ -89,6 +89,19 @@ pub struct ProjectPanelInfo {
     /// The project has local version control on (`.snxprj` `enable_git`).
     /// Drives the "git" pill on the Graphite project card.
     pub version_control: bool,
+    /// The block diagrams held open in the project's folder (they are not
+    /// listed in `.snxprj`).
+    pub block_diagrams: Vec<DiagramRow>,
+}
+
+/// A held block diagram's row under Source Documents.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DiagramRow {
+    /// Relative to the project folder, `/`-separated.
+    pub filename: String,
+    pub is_open: bool,
+    pub is_dirty: bool,
+    pub is_active: bool,
 }
 
 /// Per-library bundle for the project tree's `Libraries` group.
@@ -234,6 +247,13 @@ fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
                 .with_active(project.pcb_file_active),
         );
     }
+    source_docs.extend(project.block_diagrams.iter().map(|row| {
+        TreeNode::leaf(row.filename.clone(), TreeIcon::SnxBlockDiagram)
+            .with_key(row.filename.clone())
+            .with_open(row.is_open)
+            .with_dirty(row.is_dirty)
+            .with_active(row.is_active)
+    }));
 
     // Render each `Project::libraries[i]` entry as a single `.snxlib`
     // leaf — no children, no chevron. Under the v0.9 `.snxlib`-as-file

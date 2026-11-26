@@ -148,6 +148,13 @@ Positions, sizes, names, colours, notes, groups and every hand-drawn block
 and connection stay. The changes are listed (`DiagramChange`) and written
 only when asked. A sheet that is there but does not read refuses the run.
 
+**Writes.** A run that writes the file is a project write: it is refused
+while its project folder is being renamed, and a rename waits for it. A run
+that would write under a diagram held open is refused, except the tab's own
+Re-sync, which merges into the open diagram as one undo step (answer key
+`into_tab`) and leaves the write to Save. An edit made while Re-sync reads
+the hierarchy wins: the merge is dropped and Messages says so.
+
 ## Version
 
 `snxblk/1` (`SNXBLK_VERSION`). A newer minor opens read-only and its saves

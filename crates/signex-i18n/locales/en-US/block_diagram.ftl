@@ -147,3 +147,50 @@ block-diagram-fault-missing-block = Connection { $id } ends on block { $other },
 block-diagram-fault-missing-port = Connection { $id } ends on port { $other }, which its block does not have.
 block-diagram-fault-closed = A connection cannot start and end at the same place ({ $id }).
 block-diagram-fault-interface = A connection's interface needs a name ({ $id }).
+
+# block-diagram-files, continued. $file is the diagram's file name, $reason
+# the reader's own words.
+block-diagram-read-for-command-failed = { $file } could not be read as a block diagram: { $reason }
+block-diagram-save-changed = { $file } was not saved: the file changed on disk since it was opened or saved. Close the diagram and open it again to see that version; your edits stay here until then.
+block-diagram-refused-unwritable = { $file } was not saved: { $reason }
+
+# block-diagram-views: the view switch and Re-sync (mockup row 171).
+block-diagram-view-blocks = Block diagram
+block-diagram-view-power = Power tree
+block-diagram-resync = Re-sync
+block-diagram-resync-tip = Rebuild blocks and connections from the sheet hierarchy. Your layout is kept, and the change is one undo step.
+
+# block-diagram-power: the Power tree view (mockup row 171, #1313). Amounts
+# come pre-formatted: $amps, $used and $limit in A, $volts in V, $share and
+# $tolerance in percent.
+block-diagram-power-reading = Reading the power tree…
+block-diagram-power-unread = The power tree could not be read: { $reason }
+block-diagram-power-empty = No power rails yet. Name the power nets (VIN_12V, VOUT_3V3) or give parts a `Rail Load <net>` parameter.
+block-diagram-power-legend = A source's bar is the rail's load against its limit: green under 50 %, amber to 90 %, red above. A load's bar is its share of the rail.
+block-diagram-power-arrow = →
+block-diagram-power-source = Source
+block-diagram-power-converter = Converter
+block-diagram-power-no-source = No source
+block-diagram-power-of-limit = { $used } A of { $limit } A · { $share } %
+block-diagram-power-voltage = { $volts } V
+block-diagram-power-voltage-tol = { $volts } V ±{ $tolerance } %
+block-diagram-power-no-voltage = Voltage not known
+block-diagram-power-total = { $amps } A max
+block-diagram-power-loads = { $count ->
+        [one] 1 load
+       *[other] { $count } loads
+    }
+block-diagram-power-draw = { $amps } A
+block-diagram-power-share = { $share } % of the rail
+block-diagram-power-unknown-draw = Load not known
+block-diagram-power-rails = Rails
+block-diagram-power-rail = Rail
+block-diagram-power-nominal = Nominal
+block-diagram-power-limit = Limit
+block-diagram-power-load = Load
+block-diagram-power-headroom = Headroom
+block-diagram-power-free = { $share } % free
+block-diagram-power-not-known = —
+block-diagram-power-warning = Note: { $text }
+block-diagram-power-footer = { $rails } rails · { $converters } converters
+block-diagram-power-footer-note = Read from the schematic for the project's variant. Switch views to read it again.

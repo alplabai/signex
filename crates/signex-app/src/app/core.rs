@@ -3,6 +3,7 @@
 //! `signex-app` outside `app::core`; `scripts/check_core_guard.sh` enforces it.
 
 pub(crate) mod block_diagram_editor;
+pub(crate) mod block_diagram_panes;
 pub(crate) mod branch_switch;
 pub(crate) mod case_fold;
 pub(crate) mod command_log;

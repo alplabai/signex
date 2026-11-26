@@ -163,8 +163,12 @@ impl Signex {
             }
             // A profile preset may need the profile library read first.
             "rules_preset_diff" => return Some(self.rules_preset_diff(args)),
-            // #2796: a block diagram, answered by its slice.
+            // #2796: a block diagram, answered by its slice; one not open is
+            // read first.
             "query_block_diagram" => {
+                if let Some(waiting) = self.open_diagram_first(id, args) {
+                    return Some(waiting);
+                }
                 return Some((self.query_block_diagram_outcome(args), Task::none()));
             }
             _ => {}
@@ -219,4 +223,4 @@ mod check_erc_tests;
 #[cfg(test)]
 mod check_requirements_tests;
 #[cfg(test)]
-mod power_tree_tests;
+pub(crate) mod power_tree_tests;

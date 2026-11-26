@@ -33,6 +33,9 @@ impl Signex {
                             path_key_with(path, self.identity_fold_for(path)) == key
                         })
                     })
+                    // A block diagram is not listed in its project: one in
+                    // a project's folder is named by path, opened on demand.
+                    .or_else(|| self.unopened_block_diagram(given))
                     .ok_or_else(|| format!("not an open or referenced document: {text}"))
             }
         }
