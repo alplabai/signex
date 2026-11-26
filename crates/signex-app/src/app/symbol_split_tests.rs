@@ -7,7 +7,7 @@ use iced::Point;
 use signex_library::{Symbol, SymbolFile};
 
 use super::{SymbolDocument, SymbolViewRequest};
-use crate::library::editor::symbol::state::SymbolSelection;
+use crate::library::editor::symbol::SymbolSelection;
 
 fn edited_editor() -> SymbolDocument {
     let mut editor = SymbolDocument::new(

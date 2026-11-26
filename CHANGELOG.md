@@ -18,6 +18,14 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ## [Unreleased]
 
+### Added
+
+- **Agent and CLI moves choose how wires follow (#2552)** — `set_object_position` takes `keep_wires` (default on) and `wiring` (`auto`, `horizontal_first`, `vertical_first`, `straight`) instead of reading your "keep wires" preference, and the answer lists the moved and removed wires and every contact that could not be kept.
+
+### Changed
+
+- **Agent and CLI rotations keep the wires by default (#2326)** — `set_object_rotation` takes `keep_wires` (default on) instead of reading your "keep wires" preference, so an agent or CLI rotation keeps a part's wires connected unless it passes `keep_wires=false`. Rotating in the Properties panel still follows your preference.
+
 ## [26.11.1] — 2026-11-25
 
 _The PCB Design release: boards are laid out and routed from the schematic end to end, the Graphite interface reaches every panel and dialog, and Signex adds the full set of fabrication and assembly outputs._
