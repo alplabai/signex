@@ -10,20 +10,35 @@
 //! (`read.rs`). Entry points: Project ▸ Compare Board with Schematic…, the
 //! board right-click menu, the palette. Behaviour and decisions:
 //! `docs/UPDATE_PCB.md`, "Compare Board with Schematic".
+//!
+//! From the command line (`command.rs`, `job.rs`): the query
+//! `check_board_against_schematic` and its apply form
+//! `apply_board_schematic_differences` run the same reads, report and Apply
+//! without the dialog; `board_status` reads the same report for its
+//! board-against-schematic counter. `request.rs` holds what both share.
 
 mod apply;
+mod command;
+mod job;
 mod read;
+mod request;
 mod state;
 mod update;
 
 #[cfg(test)]
 mod tests;
 
+#[cfg(test)]
+mod job_tests;
+
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use signex_engine::pcb::eco::{CompareJump, CompareKind, CompareReport, CompareRowId, Direction};
 
+pub(crate) use command::apply_board_schematic_differences;
+pub use job::CompareJobMsg;
+pub(crate) use job::JobMode;
 pub use read::CompareRead;
 pub use state::CompareBoardState;
 
@@ -88,4 +103,8 @@ pub enum CompareBoardMsg {
         target: CompareJump,
     },
     CloseRequested,
+    /// A step of a command-line run (`check_board_against_schematic`,
+    /// `apply_board_schematic_differences`, `board_status`) landed; the
+    /// dialog is not involved.
+    Job(CompareJobMsg),
 }

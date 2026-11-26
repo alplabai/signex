@@ -98,6 +98,11 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
         "back_annotate_schematics",
         crate::app::back_annotate::back_annotate_schematics,
     ),
+    // #2462: the Compare Board with Schematic dialog's Apply, by row id.
+    (
+        "apply_board_schematic_differences",
+        crate::app::compare_board::apply_board_schematic_differences,
+    ),
     ("apply_edits", agent::apply_edits),
     ("revert", agent::revert),
     ("place_net_label", place::net_label),
@@ -430,6 +435,10 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "apply_edits" => Some(
             "`apply_edits` needs the operands `document`, `expect_revision` and `edits` — \
              it has no surface but an agent's call",
+        ),
+        "apply_board_schematic_differences" => Some(
+            "`apply_board_schematic_differences` needs the operands `document` and \
+             `to_board` or `to_schematic` — use Apply in Compare Board with Schematic",
         ),
         "revert" => Some(
             "`revert` needs the operands `document` and `group` — \

@@ -102,6 +102,8 @@ mod tests {
                 "add_board_graphic",
                 "add_net_class",
                 "add_teardrops",
+                // #2462: Compare Board with Schematic's Apply, by row id.
+                "apply_board_schematic_differences",
                 "apply_edits",
                 "arrange_in_box",
                 "assign_board_net_class",
@@ -119,12 +121,16 @@ mod tests {
                 "board_report_net_length",
                 "board_report_netlist",
                 "board_shape_from_selection",
+                // #2460: the board status bar's counters, as JSON.
+                "board_status",
                 // #2326 slice 6.P2b: the drawing order and Delete, on the
                 // items `ids` names on the named sheet (or board, Delete).
                 "bring_drawings_forward",
                 "bring_drawings_to_front",
                 // #2937: a footprint swap on the named board.
                 "change_footprint",
+                // #2462: Compare Board with Schematic as a query.
+                "check_board_against_schematic",
                 "check_drc",
                 "check_erc",
                 "check_requirements",

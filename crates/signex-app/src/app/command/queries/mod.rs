@@ -7,9 +7,11 @@
 //! `rules_preset_diff` (#2398, `app::rules_tab`; a profile preset reads the
 //! rule profile library, read off the update loop first), and the board
 //! queries `measure_board`, `query_board_nets` and `find_similar_items`
-//! (#2403), `board_panel` (#2410, `app::board_panel`), and the Project tab's
-//! `project_settings` (#1689-#1693, `app::project_tab`), and
-//! `query_footprint_assignments` (#2937, `footprint_assign_operands`). Each
+//! (#2403), `board_panel` (#2410, `app::board_panel`), the Project tab's
+//! `project_settings` (#1689-#1693, `app::project_tab`),
+//! `query_footprint_assignments` (#2937, `footprint_assign_operands`), and
+//! `check_board_against_schematic` (#2462, `app::compare_board`) and
+//! `board_status` (#2460), answered once their reads land. Each
 //! answers with data through [`CommandOutcome::Answered`], never a bare
 //! `Ran`, and reads only the documents (engines, boards, editors, projects,
 //! the library): no active tab, window, selection or panel is looked at, and
@@ -20,6 +22,7 @@
 //! `docs/DOCUMENT_IDS.md`; the answer shapes are in `docs/COMMANDS.md`.
 
 mod board;
+mod board_status;
 mod check_drc;
 mod check_erc;
 mod check_requirements;
@@ -67,6 +70,8 @@ const QUERY_IDS: &[&str] = &[
     "project_settings",
     // #2937: every part's footprint (`footprint_assign_operands`).
     "query_footprint_assignments",
+    "check_board_against_schematic",
+    "board_status",
 ];
 
 /// The queries that run a check (`check_run`): each says nothing in
@@ -130,6 +135,12 @@ impl Signex {
             "check_erc" => return Some(self.check_erc(command, args)),
             "check_drc" => return Some(self.check_drc(command, args)),
             "check_requirements" => return Some(self.check_requirements(command, args)),
+            // Compare Board with Schematic as a query (#2462) and the board
+            // counters with it (#2460), answered once the reads land.
+            "check_board_against_schematic" => {
+                return Some(self.check_board_against_schematic(command, args));
+            }
+            "board_status" => return Some(self.board_status(command, args)),
             // The Rules manager's reads (#2398).
             "rules_list" | "rules_get" | "rules_effective" | "rules_explain"
             | "rules_conflicts" => {

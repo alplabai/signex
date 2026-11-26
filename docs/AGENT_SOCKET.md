@@ -106,7 +106,10 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   the board queries `measure_board`,
   `query_board_nets` and `find_similar_items` (#2403), and the board's panel
   `board_panel` (#2410), and the Project tab's `project_settings`
-  (#1689-#1693);
+  (#1689-#1693), and the board against the schematic
+  `check_board_against_schematic` (#2462) and the board's counters
+  `board_status` (#2460), each answered once its reads land
+  ([CLI.md](CLI.md), "Board against schematic" and "Board status");
 - a command that names its document with a required `document` operand and
   takes no file path (the placements' optional `document` does not count; they
   stay reachable through `apply_edits`): today `apply_edits`, `revert`, `color_net`,
@@ -189,7 +192,10 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   (#1689-#1693; `document` is the project or any document of it), and the
   Requirements section's `project_add_requirement`,
   `project_set_requirement`, `project_remove_requirement`,
-  `project_enable_requirement` and `project_run_requirements` (#2339). A test
+  `project_enable_requirement` and `project_run_requirements` (#2339), and
+  `apply_board_schematic_differences` (#2462; the Compare Board with
+  Schematic Apply for the rows named by id, one board undo step and one
+  schematic undo group, answered once its reads land). A test
   pins this set, so a catalog row that joins or leaves it is a visible
   decision.
   The window-layout commands `tile_windows_horizontally`,

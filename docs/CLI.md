@@ -1464,6 +1464,148 @@ and `to`.
 {"id": "auto_place", "args": {"document": "board.snxpcb", "weights": "connection:3,edges:5", "dry_run": true}}
 ```
 
+## Board against schematic
+
+```text
+check_board_against_schematic document=<board, or a sheet or the file of its project>
+apply_board_schematic_differences document=<same> [to_board=<id>,<id>] [to_schematic=<id>,<id>] [expect_revision=<n>]
+```
+
+`check_board_against_schematic` (#2462) is Compare Board with Schematic as
+a query: the same reads, the same report and the same default directions as
+the dialog ([UPDATE_PCB.md](UPDATE_PCB.md), "Compare Board with
+Schematic"), answered as JSON once the reads land. It changes nothing and
+opens no dialog. A board names the project that lists it as its `pcb_file`;
+a sheet or the project file names its project, and the board is the one the
+project lists. The board must be open (`open_document path=<board>` first);
+a project with no board or no root sheet is refused with the dialog's
+reason. Capability `read`.
+
+```bash
+signex-cli run demo.snxprj --keep-going < compare.jsonl
+# {"id": "open_document", "args": {"path": "demo.snxpcb"}}
+# {"id": "check_board_against_schematic", "args": {"document": "demo.snxpcb"}}
+```
+
+```json
+{"board": "/abs/demo.snxpcb", "project": "/abs/demo.snxprj",
+ "revision": 12, "matches": false, "summary": "3 differences",
+ "compared": {"parts": 2, "nets": 0, "footprints": 3},
+ "count": 3,
+ "kinds": {"missing_on_board": 0, "extra_on_board": 1, "net_difference": 0,
+   "footprint_mismatch": 0, "value_change": 2},
+ "differences": [
+   {"id": "5f0c2a9e41d7b3c8", "kind": "extra_on_board",
+    "object": {"designator": "TP3"}, "label": "TP3",
+    "schematic": null, "board": {"value": "TestPoint", "footprint": "TP_1mm"},
+    "fixes": [{"direction": "update_pcb", "action": "remove_from_board"}],
+    "blocked": [{"direction": "update_schematic",
+      "reason": "taking this difference into the schematic is not built yet"}],
+    "default": "skip", "waits": false, "removes_from_board": true,
+    "board_item": "<footprint uuid>", "schematic_part": null,
+    "schematic_net": null, "board_net": null},
+   {"id": "...", "kind": "value_change", "object": {"designator": "R1"},
+    "schematic": {"text": "10k"}, "board": {"text": "22k"},
+    "fixes": [{"direction": "update_pcb", "action": "set_value"},
+      {"direction": "update_schematic", "action": "take_board_value"}],
+    "blocked": [], "default": "update_pcb", "...": "..."}],
+ "notes": ["TP7 is not linked to a part"]}
+```
+
+- `matches` is `true` and `summary` is `Board matches schematic` when there
+  is no difference; otherwise `summary` is `N differences`.
+- `id` names the difference in every read of the same board and design: a
+  hash of the change list keys it pairs (footprint, pad, part and net ids,
+  never its place in the list). It is what the apply form takes.
+- `kind`: `missing_on_board`, `extra_on_board`, `net_difference`,
+  `footprint_mismatch`, `value_change` (designators are value changes, as in
+  the dialog). `object` is `{"designator"}`, `{"net"}` or a pin
+  `{"designator", "pad"}`.
+- `schematic` and `board` are the two sides: `null` when the object is not
+  on that side, `{"text"}`, a part `{"value", "footprint"}`, or
+  `{"no_net": true}` for a pad on no net.
+- `fixes` lists the directions the row allows and what each does
+  (`add_to_board`, `link_footprint`, `remove_from_board`, `add_net`,
+  `remove_net`, `rename_net`, `move_pin`, `connect_pin`, `disconnect_pin`,
+  `swap_footprint`, `take_board_footprint`, `set_value`, `take_board_value`,
+  `set_designator`, `take_board_designator`); `blocked` the directions it
+  does not, with the reason in the dialog's words. `default` is the
+  dialog's starting choice; `waits` is true for a row whose change needs a
+  row that starts skipped.
+- `board_item` (a footprint uuid), `schematic_part` (`sheet` as the
+  placement path, `symbol` uuid), `schematic_net` and `board_net` say where
+  the difference is on each side.
+- `notes` are the notes of both change lists, as Export report… words them.
+
+`apply_board_schematic_differences` (#2462) is the dialog's Apply for the
+rows named: each id in `to_board` takes Update PCB, each in `to_schematic`
+Update schematic, and every other row is skipped. The PCB side is one
+labelled board undo step ("Compare Board with Schematic") and the schematic
+side one Back Annotate undo group, as from the dialog; Messages gets the
+dialog's line. Naming a deletion in `to_board` is its confirmation. It is
+refused, with nothing applied, when no id is named, an id is unknown or
+named twice, a direction is one the row does not allow (Update schematic for
+a board-only part or a net row is not built yet, #2691), a row named
+`to_board` needs a row that is not named, the board is not at
+`expect_revision` (the `revision` the check answered), the board or a sheet
+the read used changed since, a closed sheet changed on disk, or the board is
+read-only. Naming a footprint row can change the net rows; a net row named
+with it whose id changed is refused, so apply the footprint rows first, then
+check again. Capability `edit`; it cannot be one of the edits of an
+`apply_edits` list.
+
+```json
+{"board": "/abs/demo.snxpcb", "read_at": 12, "revision": 13,
+ "to_board": ["<id>"], "to_schematic": ["<id>"], "removed_from_board": [],
+ "board_changes": 1, "schematic_changes": 1, "sheets": 1}
+```
+
+`board_changes` and `schematic_changes` count the change list rows applied
+each way (a row of the report can carry more than one), `sheets` the sheets
+the schematic side changed, `revision` the board's revision after it.
+
+## Board status
+
+```text
+board_status document=<board>
+```
+
+`board_status` (#2460) answers the numbers the board's status bar shows,
+read from the same state, with the counters the bar does not show yet. It
+changes nothing. Capability `read`.
+
+```json
+{"board": "/abs/demo.snxpcb", "revision": 12,
+ "parts": {"total": 24, "unplaced": {"count": 2, "ids": ["<uuid>", "<uuid>"]}},
+ "connections": {"total": 46, "routed": 38, "unrouted": 8},
+ "unrouted_nets": 3,
+ "drc": {"ran": true, "violations": 4, "waived": 1, "edits_since": 2},
+ "routed_length_mm": 512.4,
+ "schematic": {"matches": false, "differences": 3, "summary": "3 differences",
+   "revision": 12}}
+```
+
+- `connections` are the status bar's Routed and Unrouted counts (a net
+  needs one connection fewer than its pad islands; a connection a pour will
+  make counts as unrouted). `unrouted_nets` is the number of nets with an
+  unrouted connection.
+- `parts.unplaced`: the footprints whose origin is not inside the board
+  outline (Update PCB stages a new part beside the board); `null` for a
+  board without an outline.
+- `drc` is the last Run DRC of the board, as the DRC counter shows it:
+  `violations` counts the waived ones too, `waived` how many of them are
+  waived, `edits_since` the board's edits since the run. Before any run
+  `ran` is `false`. It does not run DRC; `check_drc` does.
+- `routed_length_mm` sums the routed length of every named net, as
+  `query_board_nets` gives it per net.
+- `schematic` is the board against its schematic, the count
+  `check_board_against_schematic` answers: the answer comes once that read
+  lands. A board in no open project, or one whose project has no root
+  sheet, answers at once with `"schematic": null`.
+
+Known limits: the status bar does not show the unplaced, waived, schematic
+and routed length counters yet; `board_status` reads them now.
+
 ## Working through a running Signex
 
 When a person has the project open in Signex with Preferences > System ›

@@ -172,6 +172,11 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "it edits the project's sheets from its board, which no sheet's undo step covers; run it as its own command",
     ),
     ("reannotate_board", BOARD_EDIT),
+    // #2462: one board step and one schematic undo group of its own.
+    (
+        "apply_board_schematic_differences",
+        "it edits the project's board and sheets, which no sheet's undo step covers; run it as its own command",
+    ),
     (
         "rules_add",
         "it writes the project's rule set, which no sheet's undo step covers",

@@ -5,15 +5,26 @@
 //! the schematic side reaches is stated again off the update thread first,
 //! so nothing is applied when it changed on disk.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use iced::Task;
 use signex_i18n::{ids, t};
 
 use super::CompareBoardMsg;
+use super::read::CompareRead;
 use super::state::PendingApply;
 use crate::app::sheet_write::disk_changed;
+use crate::app::update_pcb::file_name;
 use crate::app::{Message, Signex};
+
+/// What an Apply changed: the rows taken to the board and to the
+/// schematic, and the sheets the schematic side wrote.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct AppliedCompare {
+    pub(crate) to_pcb: usize,
+    pub(crate) to_schematic: usize,
+    pub(crate) sheets: usize,
+}
 
 impl Signex {
     /// The report no longer describes the board or the design: the board
@@ -26,19 +37,7 @@ impl Signex {
         let (Some(report), Some(read)) = (state.report.as_ref(), state.read.as_ref()) else {
             return false;
         };
-        let board_moved = self
-            .document_state
-            .board_engine(&state.board)
-            .is_none_or(|engine| engine.revision() != report.revision());
-        let edited = |revisions: &[(PathBuf, Option<u64>)]| {
-            revisions.iter().any(|(path, then)| {
-                let now = self.document_state.engines.get(path).map(|e| e.revision());
-                now != *then
-            })
-        };
-        board_moved
-            || edited(read.pcb.snapshot.sheet_revisions.as_slice())
-            || edited(read.back.sheet_revisions.as_slice())
+        self.compare_read_stale(&state.board, report, read)
     }
 
     /// Why Apply cannot run now: the board is parked, read-only or gone, or
@@ -152,10 +151,30 @@ impl Signex {
         let Some(state) = self.ui_state.compare_board.as_ref() else {
             return Task::none();
         };
-        let (board, board_name) = (state.board.clone(), state.board_name());
+        let board = state.board.clone();
         let Some(read) = state.read.clone() else {
             return Task::none();
         };
+        match self.apply_compare_plan(&board, &read, pending) {
+            Ok(_) => {
+                self.ui_state.compare_board = None;
+                Task::none()
+            }
+            Err(why) => self.refuse_compare_apply(why),
+        }
+    }
+
+    /// The PCB side of `pending` as one labelled board step, then its
+    /// schematic side as one Back Annotate undo group, and the line in
+    /// Messages: the dialog's Apply and `apply_board_schematic_differences`
+    /// both end here. A refused PCB side applies nothing; a refused
+    /// schematic side after the board changed says so.
+    pub(crate) fn apply_compare_plan(
+        &mut self,
+        board: &Path,
+        read: &CompareRead,
+        pending: PendingApply,
+    ) -> Result<AppliedCompare, String> {
         let to_pcb = pending
             .eco
             .rows
@@ -165,38 +184,38 @@ impl Signex {
         let to_schematic = pending.back.rows.iter().filter(|r| r.applies()).count();
         if to_pcb > 0 {
             let label = t!(self.ui_state.i18n, ids::COMPARE_BOARD_TITLE).into_string();
-            if let Err(why) = self.execute_eco_list(&board, &pending.eco, &label) {
-                return self.refuse_compare_apply(why);
-            }
+            self.execute_eco_list(board, &pending.eco, &label)?;
         }
-        if !pending.edits.is_empty()
-            && let Err(why) =
-                self.write_back_annotation(&read.back, pending.edits, &pending.checked)
-        {
-            let why = if to_pcb > 0 {
-                t!(
-                    self.ui_state.i18n,
-                    ids::COMPARE_BOARD_SCHEMATIC_REFUSED,
-                    "why" => why
-                )
-                .into_string()
-            } else {
-                why
-            };
-            return self.refuse_compare_apply(why);
+        let mut sheets = 0;
+        if !pending.edits.is_empty() {
+            match self.write_back_annotation(&read.back, pending.edits, &pending.checked) {
+                Ok(written) => sheets = written,
+                Err(why) if to_pcb > 0 => {
+                    return Err(t!(
+                        self.ui_state.i18n,
+                        ids::COMPARE_BOARD_SCHEMATIC_REFUSED,
+                        "why" => why
+                    )
+                    .into_string());
+                }
+                Err(why) => return Err(why),
+            }
         }
         crate::diagnostics::log_info(
             t!(
                 self.ui_state.i18n,
                 ids::COMPARE_BOARD_DONE,
                 "pcb" => to_pcb,
-                "board" => board_name,
+                "board" => file_name(board),
                 "schematic" => to_schematic
             )
             .into_string(),
         );
-        self.ui_state.compare_board = None;
-        Task::none()
+        Ok(AppliedCompare {
+            to_pcb,
+            to_schematic,
+            sheets,
+        })
     }
 
     /// Keep the dialog open with `why` shown; Messages gets it too.

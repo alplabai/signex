@@ -48,8 +48,9 @@ pub use change::{
     ChangeReason, EcoBlock, EcoChange, EcoChangeList, EcoGroup, EcoKey, EcoNote, EcoRow, GroupTicks,
 };
 pub use compare::{
-    CompareAction, CompareCounts, CompareJump, CompareKind, CompareObject, CompareReport,
-    CompareRow, CompareRowId, CompareValue, Compared, Direction, Unavailable, compare,
+    ChooseRefusal, CompareAction, CompareCounts, CompareJump, CompareKind, CompareObject,
+    CompareReport, CompareRow, CompareRowId, CompareValue, Compared, Direction, Unavailable,
+    compare, unavailable_text,
 };
 pub use diff::diff_board;
 pub(crate) use diff::remint_pads;

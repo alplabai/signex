@@ -1,5 +1,7 @@
 //! Schematic-to-board sync commands: update the board from the schematic,
-//! compare the two, assign footprints and change a placed footprint.
+//! compare the two (in the dialog, or as a query and its apply form), the
+//! board's status counters, assign footprints and change a placed
+//! footprint.
 
 use super::{
     CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, footprint_operands,
@@ -34,6 +36,46 @@ pub(super) const PCB_SYNC: &[CommandMetadata] = &[
         group: CommandGroup::Schematic,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2462: the same report as a query, answered as JSON once the dialog's
+    // reads land; it changes nothing.
+    CommandMetadata {
+        id: "check_board_against_schematic",
+        category: "pcb_sync",
+        label: command_ids::CMD_CHECK_BOARD_AGAINST_SCHEMATIC,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::CHECK_BOARD_AGAINST_SCHEMATIC,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2462: the dialog's Apply for the rows named by id, each to the board
+    // or to the schematic: one board undo step and one schematic undo group.
+    CommandMetadata {
+        id: "apply_board_schematic_differences",
+        category: "pcb_sync",
+        label: command_ids::CMD_APPLY_BOARD_SCHEMATIC_DIFFERENCES,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::APPLY_BOARD_SCHEMATIC_DIFFERENCES,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2460: the board status bar's counters, with the parts not placed,
+    // the waived DRC findings, the board against the schematic and the
+    // routed length, as JSON.
+    CommandMetadata {
+        id: "board_status",
+        category: "validation",
+        label: command_ids::CMD_BOARD_STATUS,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::BOARD_STATUS,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

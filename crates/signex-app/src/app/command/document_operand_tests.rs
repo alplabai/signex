@@ -624,6 +624,11 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     // #2470: Update PCB for the named document's project
                     // (left out: the active project).
                     "update_pcb_from_schematic",
+                    // #2462, #2460: the board against the schematic, its
+                    // apply form and the board status counters.
+                    "check_board_against_schematic",
+                    "apply_board_schematic_differences",
+                    "board_status",
                 ]
                 .contains(&name),
                 "{name} declares a document operand"

@@ -198,6 +198,16 @@ mod tests {
         }
     }
 
+    /// #2462, #2460: comparing the board with the schematic and reading the
+    /// board's status change nothing; applying differences edits the board
+    /// and the sheets in memory (a closed sheet is loaded, not written).
+    #[test]
+    fn the_board_against_schematic_reads_and_its_apply_form_edits() {
+        assert_eq!(cap("check_board_against_schematic"), Capability::Read);
+        assert_eq!(cap("board_status"), Capability::Read);
+        assert_eq!(cap("apply_board_schematic_differences"), Capability::Edit);
+    }
+
     /// #2506: Repour All clears `unfilled` on the board's pours as an undo
     /// step, so a read-only grant may not run it.
     #[test]
