@@ -300,6 +300,7 @@ fn compare_cell<'a>(
             width: 1.0,
             color: line,
             radius: Radii::GRAPHITE.control.into(),
+            ..Border::default()
         },
         ..container::Style::default()
     })

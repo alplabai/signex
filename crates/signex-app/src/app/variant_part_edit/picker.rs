@@ -254,6 +254,7 @@ fn framed<'a>(rows: Column<Element<'a, Message>>, tokens: &ThemeTokens) -> Eleme
             width: 1.0,
             color: edge,
             radius: crate::styles::Radii::GRAPHITE.button.into(),
+            ..iced::Border::default()
         },
         ..container::Style::default()
     })
