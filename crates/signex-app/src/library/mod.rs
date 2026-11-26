@@ -49,7 +49,6 @@ pub mod part_sync;
 pub mod picker;
 pub mod place;
 pub mod placed_part;
-pub mod primitive_scene;
 pub(crate) mod prefix_picker;
 pub mod preview_reads;
 #[cfg(test)]
@@ -61,6 +60,7 @@ mod preview_refresh_tests;
 pub mod pricing;
 pub(crate) mod primitive_label;
 pub mod primitive_picker;
+pub mod primitive_scene;
 pub mod range_filter;
 pub mod recovery;
 pub mod refresh;

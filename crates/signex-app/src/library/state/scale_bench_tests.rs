@@ -347,4 +347,13 @@ fn scale_bench() {
         SEARCH_LIMIT.as_millis(),
         worst.max(typing) < SEARCH_LIMIT
     );
+    assert!(
+        cold < MOUNT_LIMIT,
+        "cold mount {cold:?} breaches {MOUNT_LIMIT:?}"
+    );
+    assert!(
+        worst.max(typing) < SEARCH_LIMIT,
+        "search {:?} breaches {SEARCH_LIMIT:?}",
+        worst.max(typing)
+    );
 }

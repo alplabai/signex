@@ -5,6 +5,10 @@
 //! graphics `draw_silk_graphics` and `draw_courtyard` stroke onto the editor's
 //! canvas, in the same board-palette colours, lowered to scene primitives
 //! because a canvas frame cannot be replayed without a window.
+//!
+//! Kept in step with `draw_silk_graphics` (draw/silk.rs), `draw_courtyard`
+//! (draw/layers.rs) and `draw_pad_number` (draw/pad.rs); `parity_tests`
+//! pins the geometry. One shared lowering is epic #662.
 
 use iced::Color;
 use signex_gfx::primitive::arc::Arc;
@@ -189,3 +193,7 @@ impl PreviewFootprint {
         scene
     }
 }
+
+#[cfg(test)]
+#[path = "preview_scene_parity_tests.rs"]
+mod parity_tests;

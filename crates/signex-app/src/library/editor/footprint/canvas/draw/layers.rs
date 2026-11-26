@@ -74,6 +74,8 @@ pub(crate) fn draw_back_layers(
     draw_silk_graphics(frame, cam, silk_b, FpLayer::BSilks, None, palette);
 }
 
+/// Kept in step with `PreviewFootprint::scene` (canvas/preview_scene.rs).
+///
 /// Courtyard: the outline polygon when present, else the bbox rectangle.
 pub(crate) fn draw_courtyard(
     frame: &mut canvas::Frame,

@@ -160,6 +160,9 @@ Both are world-space scenes. `signex-renderer`'s `scene_svg` replays a scene's
 buckets in the shared draw order (`GPU_SCENE_DRAW_ORDER`) as SVG, one unit per
 millimetre; overlay and marker buckets are editing aids and are left out.
 Numbers print to four decimals, so the same library gives the same bytes.
+The SVG names its font family (Iosevka, then `sans-serif`) and embeds no glyphs,
+so text looks as the viewer's installed fonts draw it; the PNG uses the bundled
+fonts.
 
 Differences from the live editor view: no grid, no selection, and a footprint
 pad the board cannot hold (custom shape, slot, copper offset) is not drawn.
