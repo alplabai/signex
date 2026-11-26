@@ -1,0 +1,69 @@
+format = "snxfpt/1.1"
+file_uuid = "01940000-0000-7000-8000-000000000034"
+display_name = "Layer sets"
+created = "2026-01-01T00:00:00Z"
+updated = "2026-01-02T03:04:05Z"
+
+[[footprints]]
+uuid = "01940000-0000-7000-8000-000000000024"
+name = "Layer sets"
+anchor = [
+    0.0,
+    0.0,
+]
+pads_tsv = '''
+number	kind	shape	size_x	size_y	pos_x	pos_y	rotation	layers	drill_diameter	drill_slot_length	solder_mask_margin	paste_margin
+1	Tht	round	1.6	1.6	-3	0	0	Top Layer|Bottom Layer|Top Solder|Bottom Solder	0.8			
+2	Smd	rect	1.6	1.6	-1	0	0	Bottom Layer|Bottom Solder|Bottom Paste				
+FID1	Fiducial	round	1.6	1.6	1	0	0	Top Layer|Top Solder				
+FID2	Fiducial	round	1.6	1.6	3	0	0	Bottom Layer|Bottom Solder				
+'''
+silk_f = []
+silk_b = []
+fab_f = []
+fab_b = []
+version = "1.0.0"
+released = false
+created = "2026-01-01T00:00:00Z"
+updated = "2026-01-02T03:04:05Z"
+schema_version = 3
+description = "One pad per layer set of the format spec"
+
+[footprints.courtyard]
+points = [
+    [
+    -4.0,
+    -1.0,
+],
+    [
+    4.0,
+    -1.0,
+],
+    [
+    4.0,
+    1.0,
+],
+    [
+    -4.0,
+    1.0,
+],
+]
+
+[footprints.body_3d]
+shape = "Extrude"
+height_mm = 1.0
+offset_z_mm = 0.0
+top_color = [
+    0.20000000298023224,
+    0.20000000298023224,
+    0.20000000298023224,
+    1.0,
+]
+side_color = [
+    0.30000001192092896,
+    0.30000001192092896,
+    0.30000001192092896,
+    1.0,
+]
+
+[footprints.pcb_params]

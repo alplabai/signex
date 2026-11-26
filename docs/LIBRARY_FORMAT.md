@@ -12,8 +12,10 @@ writer accepts more than it writes, the spec says what it writes.
 
 **Conformance fixtures.** `docs/fixtures/library-format/library/` is a
 complete small library written by Signex's own writer: two symbols (one with
-two units and De Morgan bodies), three footprints (one with a STEP
-attachment, one with an asymmetric pad layout) and three part rows covering every structured cell form.
+two units and De Morgan bodies), four footprints (one with a STEP
+attachment and its `step/` file, one with an asymmetric pad layout, one
+with a pad of each remaining layer set of section 4.2) and three part rows
+covering every structured cell form.
 `docs/fixtures/library-format/content-hash/<row_id>.json` holds the exact
 bytes each row's `content_hash` is computed over. The test
 `crates/signex-library/tests/library_format_conformance/` builds the same
@@ -72,7 +74,8 @@ The fixture data is synthetic: it exercises the format, not real parts.
   `assets/datasheets/<hash>.pdf`, `<hash>` being the lower-case hex SHA-256
   of the file.
 - Other folders (`classes/`, `3dmodels/`) are recognised as part of the
-  library by the app but carry no format of their own.
+  library by the app but carry no format of their own; `step/` holds the raw
+  STEP files described above.
 - **Text.** Every file is UTF-8 without a byte-order mark, LF line endings,
   ending in exactly one `\n`.
 
@@ -632,6 +635,7 @@ order, the sets the footprint editor's sketch bake writes:
 | `Tht` or `Castellated` | `Top Layer\|Bottom Layer\|Top Solder\|Bottom Solder` |
 | `NptHole` | `Top Solder\|Bottom Solder` |
 | `Fiducial`, top | `Top Layer\|Top Solder` |
+| `Fiducial`, bottom | `Bottom Layer\|Bottom Solder` |
 
 The named tokens are `Top Layer`, `Bottom Layer` (copper), `Multi-Layer`
 (top and bottom copper, **no** mask), `Top Solder`, `Bottom Solder` (solder
