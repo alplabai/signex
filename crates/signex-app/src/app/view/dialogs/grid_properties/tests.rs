@@ -214,3 +214,118 @@ fn a_label_holding_text_that_is_not_a_length_stays_open_with_a_note() {
     assert!(st.preview_labels.editing_index().is_none());
     assert_eq!(st.step_mm.parse::<f64>().ok(), Some(0.2));
 }
+
+/// Mockup row 142 (#3012): the scale pad is filled in top copper from the
+/// board palette, with no outline, whatever the chrome theme.
+#[test]
+fn the_scale_pad_is_filled_top_copper() {
+    use crate::styles::board_palette::{BoardPalette, BoardSwatch};
+    use signex_widgets::property_illustration::{Paint, Tint};
+    let st = draft("1", 5, GridDisplay::Lines, GridDisplay::Lines);
+    let illustration = preview::illustration(&st, size(), en());
+    let pads: Vec<_> = illustration
+        .visible_parts()
+        .filter(|p| matches!(p.primitive, Primitive::RoundedRect { .. }))
+        .collect();
+    assert_eq!(pads.len(), 1, "one pad for scale");
+    let style = pads[0].style;
+    assert!(style.stroke.is_none(), "filled, not outlined");
+    let fill = style.fill.expect("the pad is filled");
+    assert_eq!(fill.tint, Tint::Solid);
+    let Paint::Document(colour) = fill.paint else {
+        panic!("the pad takes a board colour, not a chrome ink: {fill:?}");
+    };
+    let copper = BoardPalette::new().swatch(BoardSwatch::TopCopper);
+    assert_eq!(
+        (colour.r, colour.g, colour.b),
+        (copper.r, copper.g, copper.b)
+    );
+    assert!(colour.a >= 0.75, "a solid fill, not a tint: {}", colour.a);
+    assert_eq!(colour, preview::pad_fill());
+}
+
+/// The preview's ground and inks are the board's: the board canvas colour
+/// and the Graphite Dark tokens, under either chrome theme.
+#[test]
+fn the_preview_takes_the_board_ground_and_inks() {
+    use crate::styles::board_palette::BoardPalette;
+    use signex_types::theme::{ThemeId, theme_tokens};
+    assert_eq!(preview::ground(), BoardPalette::new().canvas);
+    let [r, g, b, _] = preview::ground().into_rgba8();
+    assert_eq!((r, g, b), (0x11, 0x12, 0x14));
+    assert_eq!(preview::board_tokens(), theme_tokens(ThemeId::GraphiteDark));
+}
+
+/// An app with a footprint editor in view, under the chrome theme `id`,
+/// with Grid Properties opened through `Signex::update`.
+fn app_with_grid_properties(id: signex_types::theme::ThemeId) -> crate::app::Signex {
+    use crate::app::{FootprintDocument, Message, Signex, TabInfo, TabKind};
+    let (mut app, _boot) = Signex::new();
+    app.document_state.panel_ctx.tokens = signex_types::theme::theme_tokens(id);
+    app.ui_state.window_size = (1400.0, 900.0);
+    let path = std::path::PathBuf::from("/w/part.snxfpt");
+    let file =
+        signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("fp"));
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), FootprintDocument::new(path.clone(), file));
+    app.document_state.tabs.push(TabInfo {
+        title: "part".to_string(),
+        path: path.clone(),
+        project_id: None,
+        kind: TabKind::FootprintEditor(path),
+    });
+    app.document_state.active_tab = 0;
+    let _ = app.update(Message::GridProperties(GridPropertiesMsg::Open));
+    assert!(app.ui_state.grid_properties.is_some(), "the dialog opened");
+    app
+}
+
+fn rgb8(c: iced::Color) -> [u8; 3] {
+    let [r, g, b, _] = c.into_rgba8();
+    [r, g, b]
+}
+
+/// How many pixels of the drawn dialog are `want`, within `tolerance`.
+fn pixels_of(app: &crate::app::Signex, want: [u8; 3], tolerance: u8) -> usize {
+    let window = iced::Size::new(480.0, 600.0);
+    let pixels = crate::layout_probe::draw_pixels(app.view_grid_properties_dialog_body(), window);
+    pixels
+        .chunks_exact(4)
+        .filter(|p| (0..3).all(|i| p[i].abs_diff(want[i]) <= tolerance))
+        .count()
+}
+
+/// Mockup row 142 (#3012): the drawn dialog shows the preview on the board
+/// ground in the light chrome theme as in the dark one.
+#[test]
+fn the_drawn_preview_sits_on_the_board_ground_in_both_themes() {
+    use signex_types::theme::ThemeId;
+    let ground = rgb8(preview::ground());
+    for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+        let app = app_with_grid_properties(id);
+        let count = pixels_of(&app, ground, 1);
+        // The preview is the dialog width by about 180 px; grid lines and
+        // labels cover part of it.
+        assert!(count >= 20_000, "{id:?}: {count} board-ground pixels");
+    }
+}
+
+/// Mockup row 142 (#3012): the drawn scale pad is filled copper over the
+/// board ground in both chrome themes.
+#[test]
+fn the_drawn_scale_pad_is_filled_copper_in_both_themes() {
+    use signex_types::theme::ThemeId;
+    let copper = rgb8(crate::styles::tokens::composite_over(
+        preview::pad_fill(),
+        preview::ground(),
+    ));
+    for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+        let app = app_with_grid_properties(id);
+        let count = pixels_of(&app, copper, 3);
+        assert!(
+            count >= 150,
+            "{id:?}: {count} copper pixels, want {copper:?}"
+        );
+    }
+}
