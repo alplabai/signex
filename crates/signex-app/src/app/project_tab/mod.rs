@@ -54,8 +54,8 @@ mod undo_routing_tests;
 
 pub(crate) use commands::{
     project_add_variant, project_move_library, project_move_sheet, project_remove_variant,
-    project_rename_variant, project_set_active_variant, project_set_annotate_undo,
-    project_set_version_control,
+    project_rename_variant, project_set_active_variant, project_set_annotate_numbering,
+    project_set_annotate_undo, project_set_version_control,
 };
 pub use general::ProjectGeneralFacts;
 pub use parameters::ParameterGroup;

@@ -5,6 +5,7 @@
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
+use signex_types::designator::NumberingScheme;
 use signex_types::pcb::SymbolLink;
 use signex_types::project::{
     AnnotateUndo, ChannelNaming, ListMove, PartRef, PlacedPart, ProjectData, RequirementEntry,
@@ -95,6 +96,11 @@ pub enum ProjectSectionCommand {
     SetAnnotateUndo {
         choice: Option<AnnotateUndo>,
     },
+    /// How Annotate numbers new designators (#1292). Continuous over an
+    /// unreadable section changes nothing, as clearing the undo choice.
+    SetAnnotateNumbering {
+        scheme: NumberingScheme,
+    },
     /// Commit every save to the project's repository (#1693).
     SetVersionControl {
         on: bool,
@@ -168,6 +174,13 @@ impl ProjectSectionCommand {
             Self::SetAnnotateUndo { choice } => {
                 if !(choice.is_none() && data.has_unreadable_annotation()) {
                     data.set_annotate_undo(*choice);
+                }
+            }
+            Self::SetAnnotateNumbering { scheme } => {
+                let keeps_unreadable =
+                    *scheme == NumberingScheme::Continuous && data.has_unreadable_annotation();
+                if !keeps_unreadable {
+                    data.set_annotate_numbering(*scheme);
                 }
             }
             Self::SetVersionControl { on } => data.enable_git = *on,

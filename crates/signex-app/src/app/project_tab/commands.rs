@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use iced::Task;
 use serde_json::{Value, json};
 use signex_engine::ProjectSectionCommand;
+use signex_types::designator::NumberingScheme;
 use signex_types::project::{AnnotateUndo, LibraryEntryKind, ListMove};
 
 use super::erc_annotation::ErcSource;
@@ -190,6 +191,28 @@ pub(crate) fn project_set_annotate_undo(app: &mut Signex, args: &CommandArgs) ->
     )
 }
 
+/// `project_set_annotate_numbering {document, value?}` (#1292):
+/// `continuous`, `page_hundreds` or `page_thousands`; none is continuous.
+pub(crate) fn project_set_annotate_numbering(app: &mut Signex, args: &CommandArgs) -> Ran {
+    let scheme = match text(args, "value") {
+        None => NumberingScheme::Continuous,
+        Some(token) => match NumberingScheme::parse(token) {
+            Some(scheme) => scheme,
+            None => {
+                return refused(
+                    "`value` is continuous, page_hundreds or page_thousands; leave it out for continuous",
+                );
+            }
+        },
+    };
+    edit(
+        app,
+        args,
+        ProjectSectionCommand::SetAnnotateNumbering { scheme },
+        Section::Annotation,
+    )
+}
+
 /// `project_set_version_control {document, on}`.
 pub(crate) fn project_set_version_control(app: &mut Signex, args: &CommandArgs) -> Ran {
     let Some(OperandValue::Bool(on)) = args.operand("on") else {
@@ -283,6 +306,7 @@ impl Signex {
                     "annotation": {
                         "annotate_undo": own.map(AnnotateUndo::token),
                         "annotate_undo_effective": effective.token(),
+                        "numbering": data.annotate_numbering().token(),
                         "erc_rules": ErcSource::of(project).token(),
                     }
                 })

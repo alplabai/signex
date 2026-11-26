@@ -293,6 +293,7 @@ cmd-project-remove-variant = Remove a variant of the project
 cmd-project-set-active-variant = Choose the active variant of the project
 cmd-project-move-library = Move a library in the library order of the project
 cmd-project-set-annotate-undo = Set how many undo steps an annotate run of the project is
+cmd-project-set-annotate-numbering = Set how Annotate numbers the designators of the project
 cmd-project-set-version-control = Turn commit on save on or off for the project
 cmd-project-add-requirement = Add a requirement to the project
 cmd-project-set-requirement = Set a field of a project requirement

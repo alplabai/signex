@@ -197,6 +197,9 @@ pub(crate) struct SheetTickRow {
     pub ticked: bool,
     /// The sheet the active tab shows.
     pub is_current: bool,
+    /// The first number of its page block under a page numbering scheme
+    /// (#1292); `None` numbers on from the project, shown as 1.
+    pub start: Option<u32>,
 }
 
 /// The tick of the sheets table's header box.
@@ -245,16 +248,17 @@ pub(crate) struct ResetScope {
 
 impl AnnotatePreviewCache {
     /// Every project sheet of the loaded preview as table rows, a file the
-    /// project places more than once as one row per placement.
+    /// project places more than once as one row per placement. Rows are the
+    /// numbering units in walk order, so row n shows unit n's start.
     pub(crate) fn sheet_rows(
         &self,
         unticked: &BTreeSet<PathBuf>,
         active: Option<&Path>,
     ) -> Vec<SheetTickRow> {
         let names = sheet_symbol_names(&self.sheets.sheets);
-        let mut rows = Vec::new();
+        let mut rows: Vec<SheetTickRow> = Vec::new();
         for sheet in &self.sheets.sheets {
-            let row = |placement: Option<PlacementLabel>| SheetTickRow {
+            let row = |placement: Option<PlacementLabel>, unit: usize| SheetTickRow {
                 path: sheet.path.clone(),
                 name: file_name(sheet),
                 placement,
@@ -262,6 +266,7 @@ impl AnnotatePreviewCache {
                 is_current: active.map_or(sheet.path.as_os_str().is_empty(), |a| {
                     a == sheet.path.as_path()
                 }),
+                start: self.starts.get(unit).copied().flatten(),
             };
             let places = self
                 .sheets
@@ -269,7 +274,8 @@ impl AnnotatePreviewCache {
                 .get(&sheet.path)
                 .filter(|places| places.len() > 1);
             let Some(places) = places else {
-                rows.push(row(None));
+                let unit = rows.len();
+                rows.push(row(None, unit));
                 continue;
             };
             for (n, place) in places.iter().enumerate() {
@@ -280,7 +286,8 @@ impl AnnotatePreviewCache {
                     .map_or(PlacementLabel::Ordinal(n + 1), |name| {
                         PlacementLabel::Named(name.clone())
                     });
-                rows.push(row(Some(label)));
+                let unit = rows.len();
+                rows.push(row(Some(label), unit));
             }
         }
         rows
@@ -461,6 +468,7 @@ mod tests {
                 preview("sensors.snxsch", SchematicSheet::default()),
             ],
             multi,
+            ..Default::default()
         };
         let cache = AnnotatePreviewCache {
             fingerprint: Some(1),

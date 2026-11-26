@@ -280,8 +280,9 @@ section as one object: `sheets` (`page`, `name`, `file`, in page order),
 `path` as stored, `kind` `project_local` / `shared` / `global`, `state`
 `mounted` / `read_only` / `missing` / `not_mounted`), `annotation`
 (`annotate_undo` `project` / `per_sheet` / null for the Preferences
-default, `annotate_undo_effective`, `erc_rules` `project` / `preferences` /
-`unreadable`) and `version_control` (`commit_on_save`, `repository`
+default, `annotate_undo_effective`, `numbering` `continuous` /
+`page_hundreds` / `page_thousands` (#1292), `erc_rules` `project` /
+`preferences` / `unreadable`) and `version_control` (`commit_on_save`, `repository`
 `present` / `absent` / `unknown`, `pending_commits`) and the requirements:
 `requirements` (each entry as stored), `unreadable` (`index`, `reason` of
 each entry this build cannot read) and `list_unreadable`.
@@ -299,6 +300,7 @@ list):
 | `project_set_active_variant` | `name`, optional; none or `Base` is Base |
 | `project_move_library` | `library` (path as stored), `direction` |
 | `project_set_annotate_undo` | `value` `project` / `per_sheet`, optional; none follows Preferences |
+| `project_set_annotate_numbering` | `value` `continuous` / `page_hundreds` / `page_thousands`, optional; none is continuous (#1292) |
 | `project_set_version_control` | `on`; on is refused without a repository |
 | `project_add_requirement` | `kind`, `id` optional (the kind's name, made unique) |
 | `project_set_requirement` | `requirement` (its id), `field` (as the file names it), `value` as typed; empty clears an optional field |

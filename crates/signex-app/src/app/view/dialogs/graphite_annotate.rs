@@ -419,8 +419,9 @@ pub(super) fn sheet_table<'a>(
         let line = cols(
             tick_button(checkbox_pip(theme_tokens, sheet.ticked), toggle),
             sheet_name_cell(theme_tokens, i18n, sheet),
-            // raw: the start number is not language; it cannot change yet.
-            text(raw("1"))
+            // raw: the start number is not language. A page numbering scheme
+            // (#1292) starts each page at its block; else numbering runs on.
+            text(raw(sheet.start.unwrap_or(1).to_string()))
                 .size(TS.body)
                 .color(r.ink4)
                 .font(mono())

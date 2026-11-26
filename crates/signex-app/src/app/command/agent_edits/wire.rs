@@ -319,6 +319,10 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "it writes the project's settings, which no sheet's undo step covers",
     ),
     (
+        "project_set_annotate_numbering",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
         "project_set_version_control",
         "it writes the project's settings, which no sheet's undo step covers",
     ),
@@ -566,7 +570,7 @@ mod tests {
             "set_sheet_symbol_size",
             "set_sheet_variable",
             "set_symbol_parameter",
-            // #1276: `to_sheet` is refused inside a list (it edits the child).
+            // #1276; `to_sheet` brings the child into the list's step (#2501).
             "sync_sheet_entries",
             "sync_sheet_pins",
         ];

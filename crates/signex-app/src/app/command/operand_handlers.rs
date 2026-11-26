@@ -268,6 +268,10 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
         crate::app::project_tab::project_set_annotate_undo,
     ),
     (
+        "project_set_annotate_numbering",
+        crate::app::project_tab::project_set_annotate_numbering,
+    ),
+    (
         "project_set_version_control",
         crate::app::project_tab::project_set_version_control,
     ),
@@ -546,6 +550,7 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         | "project_set_active_variant"
         | "project_move_library"
         | "project_set_annotate_undo"
+        | "project_set_annotate_numbering"
         | "project_set_version_control"
         | "project_add_requirement"
         | "project_set_requirement"

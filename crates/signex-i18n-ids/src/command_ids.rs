@@ -283,6 +283,7 @@ define_ids! {
         CMD_PROJECT_SET_ACTIVE_VARIANT = "cmd-project-set-active-variant";
         CMD_PROJECT_MOVE_LIBRARY = "cmd-project-move-library";
         CMD_PROJECT_SET_ANNOTATE_UNDO = "cmd-project-set-annotate-undo";
+        CMD_PROJECT_SET_ANNOTATE_NUMBERING = "cmd-project-set-annotate-numbering";
         CMD_PROJECT_SET_VERSION_CONTROL = "cmd-project-set-version-control";
         CMD_PROJECT_ADD_REQUIREMENT = "cmd-project-add-requirement";
         CMD_PROJECT_SET_REQUIREMENT = "cmd-project-set-requirement";

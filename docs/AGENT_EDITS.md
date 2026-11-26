@@ -120,6 +120,29 @@ Two commands, both with capability `edit` in `signex-cli`:
   and selected wires the list removed leave the selection. The person's
   selection is otherwise untouched.
 
+## Sheets an edit brings in (#2501)
+
+An edit may write a sheet the call does not name: `sync_sheet_entries
+direction=to_sheet` writes the child of the sheet symbol it syncs. Inside an
+`apply_edits` list or an agent's one-step run, that sheet joins the running
+step (`Signex::join_agent_step`, `command/agent_edits/joined.rs`):
+
+- It gets the checks of a grouped sheet write: a sheet no engine holds is
+  refused while it is being saved or moved, and is loaded into a tabless
+  engine from the copy the edit read (the read and its staleness refusal are
+  the ones the command makes on its own, "Edits that read the disk"); a
+  read-only sheet is refused. A sheet the step already holds (its target, a
+  sheet the list names, one joined before) is used as it is.
+- It opens a transaction of its own, committed under the step's undo group
+  with the named sheets (every engine is checked ready first), or rolled back
+  with them when any edit is refused; a tabless engine loaded for the step is
+  then dropped, as is one the step left unchanged.
+- A step that changed a joined sheet is recorded as an `AgentEdit` group over
+  every sheet it changed, a loaded one parked (clean again after an undo), so
+  the person's Ctrl+Z or a `revert` naming those sheets takes back the parent
+  and the child in one step. The answer's `sheets` lists a joined sheet the
+  step changed, and the child is left unsaved.
+
 ## Undo
 
 - The step is labelled "Agent: <summary>" (the `summary` argument, else the

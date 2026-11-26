@@ -921,6 +921,12 @@ pub const PROJECT_ANNOTATE_UNDO: &[Operand] = &[
     required("document", OperandKind::Document),
     optional("value", OperandKind::Text),
 ];
+/// `project_set_annotate_numbering` (#1292): `continuous`, `page_hundreds`
+/// or `page_thousands`; none is continuous.
+pub const PROJECT_ANNOTATE_NUMBERING: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("value", OperandKind::Text),
+];
 /// `project_set_version_control`: commit every save, or not.
 pub const PROJECT_VERSION_CONTROL: &[Operand] = &[
     required("document", OperandKind::Document),

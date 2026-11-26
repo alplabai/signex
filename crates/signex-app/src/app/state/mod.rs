@@ -73,6 +73,7 @@ mod window_tab;
 pub use crate::app::core::case_fold::CaseFold;
 pub use crate::app::core::document_times::DocumentTimes;
 pub use agent_edits::AgentEdits;
+pub(crate) use agent_edits::JoinedSheet;
 pub use board_3d::{Board3dSession, BuiltScene, CaptureResult, MatteBackdrop};
 pub use board_net_classes::BoardNetClassPanelState;
 pub use board_sketch::BoardSketchSession;
