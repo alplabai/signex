@@ -444,6 +444,9 @@ impl Signex {
             return Task::none();
         }
         let nets = self.object_list_nets(active);
+        // Wire rows name their net from the project index (#3039): build one
+        // when none is current; its landing moves the stamp and rereads.
+        let warm = self.warm_net_index_of(active);
         if scope == ObjectScope::ThisSheet {
             let look = self.sheet_look(active, special.clone());
             let rows = match self.document_state.engines.get(active) {
@@ -459,10 +462,10 @@ impl Signex {
             source.rows = Arc::new(rows);
             source.reading = false;
             source.failed = false;
-            return Task::none();
+            return warm;
         }
         let Some(root) = root else {
-            return Task::none();
+            return warm;
         };
         let ds = &self.document_state;
         let project = ds.document_project(active);
@@ -482,7 +485,7 @@ impl Signex {
         source.generation += 1;
         source.reading = true;
         let generation = source.generation;
-        Task::perform(
+        let read = Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || read_project_rows(read))
                     .await
@@ -498,7 +501,8 @@ impl Signex {
                     },
                 )))
             },
-        )
+        );
+        Task::batch([warm, read])
     }
 
     /// Build the view of `slot` again when its rows, the picks, the sheet in
