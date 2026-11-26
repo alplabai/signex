@@ -71,7 +71,7 @@ impl Signex {
     ) -> Element<'a, Message> {
         let tokens = &self.document_state.panel_ctx.tokens;
         let i18n = self.ui_state.i18n.as_ref();
-        let users = &self.ui_state.setup_profiles;
+        let users = &self.document_state.setup_profiles;
         let draft = &state.draft;
         let (title, create) = match state.kind {
             SetupKind::Pcb => (ids::NEW_PCB_TITLE, ids::SETUP_CREATE_PCB),

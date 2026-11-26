@@ -647,6 +647,15 @@ pub struct DocumentState {
     /// What the directory case probes of loose documents reported, and the
     /// opens and saves waiting on one (#1447).
     pub dir_case: crate::app::core::dir_case::DirCases,
+    /// The user's saved setup profiles (#2232), loaded from `prefs.json` at
+    /// boot and saved on every Save as profile and Remove.
+    pub setup_profiles: Vec<signex_types::project::UserProfile>,
+    /// Names of the profiles removed this session, by id, so a project that
+    /// still names one can say which.
+    pub removed_profile_names: std::collections::HashMap<String, String>,
+    /// Profile ids a project named and the user did not have, already said
+    /// in Messages this session.
+    pub missing_profiles_warned: std::collections::HashSet<String>,
     /// #859 — History restores running on a worker, keyed by the document
     /// path. A second restore click for the same document is ignored until
     /// the first completes; closing the project or all documents cancels it.
