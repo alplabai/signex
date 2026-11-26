@@ -104,6 +104,8 @@ const SAVES: &[&str] = &[
     "save_layer_set",
     // Writes the named workspace layout into the user's preferences (mockup row 166).
     "save_workspace_layout",
+    // Copies the font file into the project's `assets/fonts` folder (#1178).
+    "project_add_font",
 ];
 
 /// The one capability `command` needs, from its catalog flags.
@@ -192,6 +194,7 @@ mod tests {
             (Capability::Save, "save_board_reuse_block"),
             (Capability::Save, "save_layer_set"),
             (Capability::Save, "save_workspace_layout"),
+            (Capability::Save, "project_add_font"),
             (Capability::Export, "print"),
             (Capability::Export, "report_manager_bom"),
             (Capability::Export, "export_board_report"),

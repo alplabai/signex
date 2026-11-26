@@ -16,6 +16,9 @@ mod annotation;
 mod erc_waiver;
 mod fab_outputs;
 mod fab_tier;
+mod fonts;
+#[cfg(test)]
+mod fonts_tests;
 mod min_slot;
 mod order;
 mod profile_override;
@@ -48,6 +51,12 @@ pub use annotation::{AnnotationSettings, AnnotationState};
 pub use erc_waiver::ErcWaiver;
 pub use fab_outputs::FabOutputKinds;
 pub use fab_tier::FabCapabilities;
+pub use fonts::{
+    FontEmbedding, FontFace, FontFileInfo, MAX_FONT_LICENSE_CHARS, MAX_PROJECT_FONT_BYTES,
+    PROJECT_FONT_EXTENSIONS, PROJECT_FONTS_DIR, PROJECT_FONTS_KEY, ProjectFontFamily,
+    ProjectFontFile, ProjectFontProblem, is_project_font_asset_path, project_font_asset_path,
+    project_font_extension,
+};
 pub use order::ListMove;
 pub use profile_override::{
     ProfileChange, builtin_override, duplicate_profile, override_builtin, rename_user_profile,

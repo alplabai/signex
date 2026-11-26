@@ -77,8 +77,11 @@ const TEXT_EXTENSIONS: &[&str] = &[
     "snxlib", "snxmod",
 ];
 
-/// Attachments git must not diff or merge.
-const BINARY_EXTENSIONS: &[&str] = &["step", "stp", "wrl", "iges", "png", "jpg", "jpeg", "pdf"];
+/// Attachments git must not diff or merge; the font files are the project
+/// fonts of `assets/fonts/` (#1178).
+const BINARY_EXTENSIONS: &[&str] = &[
+    "step", "stp", "wrl", "iges", "png", "jpg", "jpeg", "pdf", "ttf", "otf", "ttc",
+];
 
 /// 3D model extensions that go to Git LFS when the user opts in.
 const LFS_MODEL_EXTENSIONS: &[&str] = &["step", "stp", "wrl", "iges"];
@@ -101,11 +104,12 @@ pub fn gitattributes_block_body(use_lfs: bool) -> String {
         out.push_str(&format!("*.{ext}\tbinary\n"));
     }
     if use_lfs {
-        out.push_str("# 3D models and raster assets go through Git LFS.\n");
+        out.push_str("# 3D models, raster assets and project fonts go through Git LFS.\n");
         for ext in LFS_MODEL_EXTENSIONS {
             out.push_str(&format!("*.{ext} {LFS_ATTRS}\n"));
         }
         out.push_str(&format!("assets/3d-models/** {LFS_ATTRS}\n"));
+        out.push_str(&format!("assets/fonts/** {LFS_ATTRS}\n"));
         for ext in LFS_ASSET_EXTENSIONS {
             out.push_str(&format!("assets/*.{ext} {LFS_ATTRS}\n"));
         }

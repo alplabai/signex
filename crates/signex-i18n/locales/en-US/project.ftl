@@ -399,3 +399,57 @@ project-parameter-unresolved = ?
 # The banner over the Project tab of a project written by a newer version
 # (#2904). $format is the format it was written in, such as "snxprj/1.2".
 project-read-only-banner = Read-only: this project was written by a newer { -brand-name } ({ $format }). Its changes cannot be saved in this build; edit it in that version.
+
+# Fonts section (#1178, mockup row 205): font files stored with the project.
+project-section-fonts = Fonts
+project-fonts-help = Font files stored with the project in assets/fonts/, so they travel with it to every machine that opens it.
+project-fonts-title = Project fonts
+project-fonts-summary = { $families ->
+    [one] 1 family
+   *[other] { $families } families
+} · { $files ->
+    [one] 1 font file
+   *[other] { $files } font files
+}
+project-fonts-add = Add font file...
+project-fonts-adding = Adding...
+project-fonts-empty = No fonts are stored with this project. Add a .ttf, .otf or .ttc file to keep a font that is not installed everywhere with the project.
+project-fonts-col-family = Family
+project-fonts-col-styles = Styles
+project-fonts-col-embedding = Embedding
+project-fonts-col-license = License
+# The file count under a family's name.
+project-fonts-files = { $count ->
+    [one] 1 file
+   *[other] { $count } files
+}
+project-fonts-no-style = Regular
+project-fonts-license-placeholder = SPDX id or license file
+project-fonts-license-missing = A license is not set for every font. Check that each font's license lets it travel with the project.
+project-fonts-remove = Remove from the project; the file stays in assets/fonts/
+# The OS/2 embedding permission a font file states.
+project-fonts-embedding-installable = Installable
+project-fonts-embedding-editable = Editable
+project-fonts-embedding-preview-and-print = Preview & print
+project-fonts-embedding-restricted = Restricted
+project-fonts-dialog-title = Add font file to the project
+project-fonts-filter = Font files
+# Messages lines of an add.
+project-fonts-added = Added { $file } to the project as { $families } ({ $embedding }), stored as { $path }.
+project-fonts-license-hint = { $file } names its license: { $license }
+project-fonts-refused = { $file } was not added to the project: { $why }
+# Why a font file or a font edit was refused; nothing was changed.
+project-fonts-not-a-font-file = { $file } is not a .ttf, .otf or .ttc font file
+project-fonts-too-large = { $file } is larger than { $mib } MiB, the most a project font may be
+project-fonts-unreadable-file = { $file } is not a font this build can read
+project-fonts-no-family = the font file names no font family
+project-fonts-restricted = { $family } does not allow embedding, so it is not copied into the project
+project-fonts-io = { $file } could not be read or copied: { $why }
+project-fonts-list-unreadable = The project's font list could not be read. It is kept as it is and cannot be changed.
+project-fonts-no-such-family = The project has no font { $family }
+project-fonts-license-too-long = A license is at most { $max } characters
+project-fonts-bad-path = { $path } is not a file of the project's assets/fonts folder
+project-fonts-read-only = This project was written by a newer version and is read-only, so no font is added to it
+project-fonts-project-moving = The project folder is being moved or renamed; add the font once that has finished
+project-fonts-no-project = { $document } is not an open project or a document of one
+project-fonts-project-gone = The project is no longer open

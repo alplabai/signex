@@ -39,11 +39,12 @@ pub(in crate::app::project_tab) enum Glyph {
     Save,
     Expand,
     Grip,
+    Font,
 }
 
 impl Glyph {
     /// Every glyph, in declaration order.
-    pub(in crate::app::project_tab) const ALL: [Glyph; 28] = [
+    pub(in crate::app::project_tab) const ALL: [Glyph; 29] = [
         Glyph::Up,
         Glyph::Down,
         Glyph::Lock,
@@ -72,6 +73,7 @@ impl Glyph {
         Glyph::Save,
         Glyph::Expand,
         Glyph::Grip,
+        Glyph::Font,
     ];
 
     /// Position in [`Glyph::ALL`] and in the parsed handles.
@@ -110,6 +112,7 @@ impl Glyph {
             Glyph::Save => SAVE,
             Glyph::Expand => EXPAND,
             Glyph::Grip => GRIP,
+            Glyph::Font => FONT,
         }
     }
 }
@@ -143,8 +146,10 @@ const SAVE: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24
 const EXPAND: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-7 7M10 20H4v-6M4 20l7-7"/></svg>"##;
 const GRIP: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#000"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>"##;
 
+const FONT: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 20L12 4l7 16M8 14h8"/></svg>"##;
+
 /// The glyphs parsed once, in [`Glyph::ALL`] order.
-static HANDLES: LazyLock<[svg::Handle; 28]> =
+static HANDLES: LazyLock<[svg::Handle; 29]> =
     LazyLock::new(|| Glyph::ALL.map(|g| svg::Handle::from_memory(g.source())));
 
 /// `g` drawn `size` px square in `color`.

@@ -456,4 +456,39 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         operands: operands::DOCUMENT,
         ..CommandMetadata::DEFAULT
     },
+    // #1178: the Project tab's Fonts section (mockup row 205). An edit is
+    // one General step; the add copies the file into `assets/fonts/` first.
+    CommandMetadata {
+        id: "project_add_font",
+        category: "design",
+        label: command_ids::CMD_PROJECT_ADD_FONT,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::PROJECT_ADD_FONT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "project_remove_font",
+        category: "design",
+        label: command_ids::CMD_PROJECT_REMOVE_FONT,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::PROJECT_FONT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "project_set_font_license",
+        category: "design",
+        label: command_ids::CMD_PROJECT_SET_FONT_LICENSE,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::PROJECT_FONT_LICENSE,
+        ..CommandMetadata::DEFAULT
+    },
 ];

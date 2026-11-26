@@ -280,6 +280,19 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
         "project_run_requirements",
         crate::app::project_tab::project_run_requirements,
     ),
+    // #1178: the Project tab's Fonts section.
+    (
+        "project_add_font",
+        crate::app::project_tab::project_add_font,
+    ),
+    (
+        "project_remove_font",
+        crate::app::project_tab::project_remove_font,
+    ),
+    (
+        "project_set_font_license",
+        crate::app::project_tab::project_set_font_license,
+    ),
 ];
 
 /// The turn `view_rotate` asks for: its `degrees`, else a quarter turn
@@ -531,7 +544,10 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         | "project_set_requirement"
         | "project_remove_requirement"
         | "project_enable_requirement"
-        | "project_run_requirements" => Some(
+        | "project_run_requirements"
+        | "project_add_font"
+        | "project_remove_font"
+        | "project_set_font_license" => Some(
             "the `project_*` edits need their operands — \
              use the Project tab (Project ▸ Project Options...)",
         ),

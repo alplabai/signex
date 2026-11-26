@@ -437,6 +437,37 @@ the `snxprj/1` token. It sits beside `variant_definitions` and
 - A section this build cannot read opens the project, is not applied, is
   written back verbatim and refuses every variant settings edit.
 
+## Project fonts (`fonts`, #1178)
+
+An optional top-level list of the font families the project carries in
+`assets/fonts/` (mockup row 205), added without a new token:
+
+```json
+"fonts": [
+  {
+    "family": "Carrier Sans", "license": "OFL-1.1",
+    "files": [
+      { "path": "assets/fonts/9f2c….otf", "style": "Bold", "embedding": "installable" }
+    ]
+  }
+]
+```
+
+- `path` is relative to the project folder and names the file by the
+  SHA-256 of its bytes. Only a file directly in `assets/fonts/` with a
+  `.ttf`, `.otf` or `.ttc` extension is ever read; any other stored path is
+  ignored, since the project may come from someone else.
+- `embedding` is the font's `OS/2.fsType` permission as read when it was
+  added: `installable`, `editable` or `preview_and_print`. A `restricted`
+  font is never added.
+- `license` is what the person typed; absent when not set.
+- Unlike the other sections, the list is not a declared `ProjectData`
+  field: it stays in the unknown-key bag as JSON and is read and written
+  through `ProjectData::project_fonts` and its edit methods. A value this
+  build cannot read is therefore kept byte for byte and refuses every font
+  edit, and keys a newer build writes inside an entry are kept. The key is
+  omitted when no font is listed (`project::fonts_tests`).
+
 ## Known gaps (open questions)
 
 - **Unknown keys and the version token (#788, fixed).** `ProjectData`,

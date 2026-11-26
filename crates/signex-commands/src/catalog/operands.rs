@@ -942,6 +942,9 @@ pub const PROJECT_ENABLE_REQUIREMENT: &[Operand] = &[
     required("requirement", OperandKind::Text),
     required("on", OperandKind::Bool),
 ];
+// #1178: the Project tab's Fonts commands.
+mod fonts;
+pub use fonts::{PROJECT_ADD_FONT, PROJECT_FONT, PROJECT_FONT_LICENSE};
 
 /// `set_layer_stack` (#2401): the named board's whole stack, top to bottom,
 /// as JSON rows (`{"layers": [...]}` or the list); a copper row names the

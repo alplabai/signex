@@ -19,6 +19,9 @@ impl Signex {
             ProjectTabMsg::Requirements { project_id, msg } => {
                 return self.dispatch_requirements(project_id, msg);
             }
+            ProjectTabMsg::Fonts { project_id, msg } => {
+                return self.dispatch_project_fonts(project_id, msg);
+            }
             ProjectTabMsg::AddSchematicRequested { project_id } => {
                 return self.add_schematic_from_tab(project_id);
             }
@@ -239,6 +242,7 @@ impl Signex {
             // Routed by `dispatch_project_tab_message`, which returns their task.
             ProjectTabMsg::SetupEdited { .. }
             | ProjectTabMsg::Requirements { .. }
+            | ProjectTabMsg::Fonts { .. }
             | ProjectTabMsg::PreviewActed { .. }
             | ProjectTabMsg::VariantPartsReadRequested { .. }
             | ProjectTabMsg::VariantManager { .. } => {}
@@ -412,6 +416,7 @@ impl Signex {
             tab.parameter_rename = None;
             tab.parameter_rename_refused = false;
             tab.requirements.clear_drafts();
+            tab.fonts.clear_drafts();
         }
     }
 
