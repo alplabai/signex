@@ -56,7 +56,8 @@ impl RuleKind {
             | RuleKind::LabelsOnlyNet
             | RuleKind::MissingPowerFlag
             | RuleKind::PowerPortShort
-            | RuleKind::NetClassConflict => RuleGroup::Nets,
+            | RuleKind::NetClassConflict
+            | RuleKind::DiffPairPartnerMissing => RuleGroup::Nets,
             RuleKind::NetLabelConflict
             | RuleKind::OrphanLabel
             | RuleKind::AmbiguousLabelAnchor
@@ -152,6 +153,7 @@ mod tests {
             (RuleKind::HarnessEntryMismatch, Hierarchy),
             (RuleKind::HarnessTypeConflict, Hierarchy),
             (RuleKind::NetClassConflict, Nets),
+            (RuleKind::DiffPairPartnerMissing, Nets),
         ];
         assert_eq!(expected.len(), RuleKind::ALL.len());
         for (rule, group) in expected {

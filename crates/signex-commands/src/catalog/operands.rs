@@ -299,6 +299,14 @@ pub const SYMBOL_PARAMETER: &[Operand] = &[
     optional("value", OperandKind::Text),
     optional("document", OperandKind::Document),
 ];
+/// `set_object_text` (#2953): `field` is `designator` or `value` of a placed
+/// part, or `text` of a label or a text note; a left-out `value` is empty.
+pub const OBJECT_TEXT: &[Operand] = &[
+    required("id", OperandKind::Text),
+    required("field", OperandKind::Text),
+    optional("value", OperandKind::Text),
+    optional("document", OperandKind::Document),
+];
 /// One sheet variable: its `name` and `value` (left out or empty: the
 /// variable stays, with no value), or `remove=true` to delete it.
 pub const SHEET_VARIABLE: &[Operand] = &[

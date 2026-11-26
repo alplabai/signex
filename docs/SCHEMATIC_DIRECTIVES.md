@@ -143,6 +143,14 @@ matched by `_P` / `_N` only. A directive on no wire, or on a net with no
 suffix, pairs nothing; a half whose partner is not on the sheet is an
 incomplete pair.
 
+A net named as a positive half (`_P`, `DP`, `+`) is a pair member by name
+alone, with no directive; a negative name alone (`RESET_N`) is not, since it
+is an active-low signal far more often. The ERC rule
+`diff_pair_partner_missing` reports a half whose partner is missing (#2951,
+`signex_net::lone_pair_members`), and `list_diff_pairs` lists every pair of
+the project, by directive or by name, with its class (#2952,
+`signex_net::listed_pairs`; `docs/CLI.md`, "Differential pairs").
+
 ### Differential Pair Classes {#differential-pair-classes}
 
 Design ▸ Differential Pair Classes… (`open_diff_pair_classes`) edits the

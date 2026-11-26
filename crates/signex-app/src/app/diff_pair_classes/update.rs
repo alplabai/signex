@@ -133,7 +133,10 @@ impl Signex {
 
     /// Whether a page of `project` has no open tab, so the pairs on it are
     /// not counted.
-    fn project_has_closed_sheets(&self, project: &crate::app::state::LoadedProject) -> bool {
+    pub(super) fn project_has_closed_sheets(
+        &self,
+        project: &crate::app::state::LoadedProject,
+    ) -> bool {
         use crate::app::sheet_hierarchy::normalised_key;
         let fold = crate::app::state::project_case::fold_of(Some(project));
         let open: std::collections::HashSet<String> = self
@@ -154,25 +157,7 @@ impl Signex {
         id: crate::app::state::ProjectId,
         classes: &[signex_types::diff_pair_class::DiffPairClass],
     ) -> Vec<PairMemberRow> {
-        let mut sheets: Vec<(String, &signex_types::schematic::SchematicSheet)> = self
-            .document_state
-            .engines
-            .iter()
-            .filter(|(path, _)| {
-                self.document_state
-                    .document_project(path)
-                    .is_some_and(|p| p.id == id)
-            })
-            .map(|(path, engine)| {
-                let name = path
-                    .file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_default();
-                (name, engine.document())
-            })
-            .collect();
-        sheets.sort_by(|a, b| a.0.cmp(&b.0));
-        signex_net::class_members(&sheets, classes)
+        signex_net::class_members(&self.project_open_sheets(id), classes)
             .into_iter()
             .map(|m| PairMemberRow {
                 class: m.pair.class.clone().unwrap_or_default(),

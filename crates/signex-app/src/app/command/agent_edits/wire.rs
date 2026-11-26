@@ -579,6 +579,8 @@ mod tests {
             "set_net_tie",
             "set_object_position",
             "set_object_rotation",
+            // #2953: a designator only on the sheet in view.
+            "set_object_text",
             "set_sheet_symbol_size",
             "set_sheet_variable",
             "set_symbol_parameter",

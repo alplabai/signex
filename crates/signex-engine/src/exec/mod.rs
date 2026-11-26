@@ -52,6 +52,8 @@ mod harness_entry_slide_tests;
 #[cfg(test)]
 mod harness_tests;
 #[cfg(test)]
+mod net_parameters_connectivity_tests;
+#[cfg(test)]
 mod patch_exactness_tests;
 #[cfg(test)]
 mod port_text_tests;

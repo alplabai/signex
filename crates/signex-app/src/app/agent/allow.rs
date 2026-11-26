@@ -134,6 +134,8 @@ mod tests {
                 "hide_layer_group",
                 "highlight_layer",
                 "keepout_from_selection",
+                // #2952: a query.
+                "list_diff_pairs",
                 "list_documents",
                 // #1283: the snippets and templates in view, as JSON.
                 "list_snippets",

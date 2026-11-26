@@ -43,6 +43,10 @@ impl Signex {
         if self.restore_drawing_field() {
             return self.finish_update();
         }
+        // Esc in an Object List cell puts its text back (#2953).
+        if self.cancel_object_list_cell_edit() {
+            return self.finish_update();
+        }
         // Esc in the status bar's angle field closes it and goes no further
         // (#2316): the board's tool and selection stay.
         if self.close_view_angle_entry_in(window) {

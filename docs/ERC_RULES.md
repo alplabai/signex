@@ -139,6 +139,15 @@ a library symbol claiming more than 256 units (`MAX_UNITS_PER_PART`) is
 reported once as likely corrupt instead of being enumerated, and a message
 lists at most eight missing units before "(+N more)".
 
+## Differential pairs
+
+Added for #2951. Pairs and their suffix styles: `docs/SCHEMATIC_DIRECTIVES.md`,
+"Differential pairs".
+
+| Rule (key) | Default | What fires |
+|---|---|---|
+| `diff_pair_partner_missing` | Warning | One half of a differential pair whose partner net is not on the sheet (`signex_net::lone_pair_members`): a net named as a positive half (`USB_D_P`, `USB_DP`, `CLK+`) with no `USB_D_N` / `USB_DN` / `CLK-`, or the half a Differential Pair directive (or a Net Parameters directive naming a diff-pair class) sits on when the other is missing. A negative name alone (`RESET_N`, `PWRDN`) is not reported: it is an active-low signal far more often than half a pair, so only a directive makes it a member. A power net is never a member by name. One finding per net, at the label that names it (its primary, so the finding is waivable and a Blanket or No-ERC there silences it), else at the directive, tagged `pair:<name>`: `Net USB_D_P is named as the positive half of differential pair USB_D, but its partner USB_D_N is not on this sheet`. The check is per sheet: a pair whose halves sit on two sheets is reported on the sheet with the positive half (and on a sheet whose directive marks the other). |
+
 ## Blankets and Compile Masks
 
 Added for #2420. ERC never sees what a Compile Mask covers, and drops a

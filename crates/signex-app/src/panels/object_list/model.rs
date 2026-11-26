@@ -453,6 +453,8 @@ pub struct ObjectListState {
     /// Each undocked document window's rows: its panels list the sheet it
     /// shows (#2630). The picks above are shared.
     pub windows: HashMap<iced::window::Id, ObjectRowsSource>,
+    /// The cell being edited in place (#2953).
+    pub editing: Option<super::cell_edit::CellEditing>,
 }
 
 impl ObjectListState {
@@ -487,6 +489,9 @@ impl ObjectListState {
             kind.hash(&mut h);
         }
         (self.more_open, self.shown).hash(&mut h);
+        let cell = self.editing.as_ref();
+        cell.map(|e| (&e.target.sheet, e.target.item.uuid, e.column, &e.draft))
+            .hash(&mut h);
         h.finish()
     }
 }
@@ -538,6 +543,8 @@ pub enum ObjectListMsg {
     RowClicked(ObjectRef),
     /// A row was double-clicked: select its object and zoom to it.
     RowDoubleClicked(ObjectRef),
+    /// A cell editor event (#2953).
+    CellEdit(super::cell_edit::CellEditMsg),
     /// The project's sheets were read for the Project scope of the main
     /// window (`window: None`) or of an undocked window; the error is a
     /// worker that died.
@@ -580,6 +587,8 @@ pub struct ObjectListView {
     pub selected_count: usize,
     /// A newer project read is on its way.
     pub reading: bool,
+    /// The cell being edited in place (#2953).
+    pub editing: Option<super::cell_edit::CellEditing>,
 }
 
 impl ObjectListView {
@@ -608,6 +617,7 @@ impl ObjectListView {
             selected: Arc::new(selected.iter().map(|s| s.uuid).collect()),
             selected_count: 0,
             reading: source.reading,
+            editing: state.editing.clone(),
         };
         view.selected_count = view.rows.iter().filter(|r| view.is_selected(r)).count();
         view

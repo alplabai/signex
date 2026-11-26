@@ -56,6 +56,7 @@ impl RuleId {
             RuleKind::HarnessEntryMismatch => "builtin::harness_entry_mismatch",
             RuleKind::HarnessTypeConflict => "builtin::harness_type_conflict",
             RuleKind::NetClassConflict => "builtin::net_class_conflict",
+            RuleKind::DiffPairPartnerMissing => "builtin::diff_pair_partner_missing",
         };
         RuleId(id.to_string())
     }
@@ -272,6 +273,10 @@ mod tests {
             "builtin::harness_type_conflict",
         ),
         (RuleKind::NetClassConflict, "builtin::net_class_conflict"),
+        (
+            RuleKind::DiffPairPartnerMissing,
+            "builtin::diff_pair_partner_missing",
+        ),
     ];
 
     #[test]

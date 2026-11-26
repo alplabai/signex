@@ -457,6 +457,7 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
         "sync_sheet_entries",
         "set_object_position",
         "set_object_rotation",
+        "set_object_text",
         "set_sheet_symbol_size",
         "set_symbol_parameter",
         "set_sheet_variable",
@@ -550,6 +551,8 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "save_board_reuse_block",
                     "place_board_reuse_block",
                     "project_settings",
+                    // #2952: the pairs of the named project.
+                    "list_diff_pairs",
                     "project_move_sheet",
                     "project_add_variant",
                     "project_rename_variant",

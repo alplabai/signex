@@ -11,7 +11,8 @@
 //! `project_settings` (#1689-#1693, `app::project_tab`) with the Variant
 //! Manager's `compare_variants` and `variant_bom` (#2949), `list_snippets`
 //! and `list_templates` (#1283, `app::design_reuse`), `query_net_ties`
-//! (#1277) and the BOM's `bom_lines` (#1988). Each
+//! (#1277), the BOM's `bom_lines` (#1988) and the project's differential
+//! pairs `list_diff_pairs` (#2952, `app::diff_pair_classes`). Each
 //! answers with data through [`CommandOutcome::Answered`], never a bare
 //! `Ran`, and reads only the documents (engines, boards, editors, projects,
 //! the library): no active tab, window, selection or panel is looked at, and
@@ -78,6 +79,7 @@ const QUERY_IDS: &[&str] = &[
     // #2949: the Variant Manager's Compare variants and Open in BOM Studio.
     "compare_variants",
     "variant_bom",
+    "list_diff_pairs",
 ];
 
 /// The queries that run a check (`check_run`): each says nothing in
@@ -165,6 +167,14 @@ impl Signex {
                     _ => self.project_settings(args),
                 };
                 let outcome = match answer {
+                    Ok(value) => CommandOutcome::Answered(value),
+                    Err(reason) => CommandOutcome::disabled(reason),
+                };
+                return Some((outcome, Task::none()));
+            }
+            // The project's differential pairs (#2952).
+            "list_diff_pairs" => {
+                let outcome = match self.list_diff_pairs(args) {
                     Ok(value) => CommandOutcome::Answered(value),
                     Err(reason) => CommandOutcome::disabled(reason),
                 };

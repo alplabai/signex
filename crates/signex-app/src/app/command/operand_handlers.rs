@@ -130,6 +130,7 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("set_object_rotation", placed::set_object_rotation),
     ("set_sheet_symbol_size", placed::set_sheet_symbol_size),
     ("set_symbol_parameter", placed::set_symbol_parameter),
+    ("set_object_text", placed::set_object_text),
     ("set_sheet_variable", placed::set_sheet_variable),
     ("set_net_tie", placed::set_net_tie),
     ("repair_pin_junctions", repair_reset::repair_pin_junctions),
@@ -476,6 +477,10 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "set_symbol_parameter" => Some(
             "`set_symbol_parameter` needs the operands `id` and `name` — \
              use the Parameters rows in Properties",
+        ),
+        "set_object_text" => Some(
+            "`set_object_text` needs the operands `id` and `field` — \
+             use Properties or double-click the cell in the Object List",
         ),
         "set_sheet_variable" => Some(
             "`set_sheet_variable` needs the operand `name` — \

@@ -138,7 +138,7 @@ pub use exec::change_component_pins::{PinChoice, PinMapRow, pin_choices, pin_tab
 pub use exec::pin_changes::{SwitchBlockers, switch_blockers};
 pub use find::{
     DesignatorScope, FindHit, FindKind, FindQuery, MatchOptions, PatternError, designator_commands,
-    replace_all_ci, replace_commands, scan_sheet, value_part_name,
+    replace_all_ci, replace_commands, scan_sheet, stored_text, value_part_name,
 };
 pub use find_similar::{
     SimilarProperty, SimilarValue, describe, find_similar, kind_label, properties_of,

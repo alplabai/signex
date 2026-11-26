@@ -642,6 +642,17 @@ set_symbol_parameter id=<uuid> name=Manufacturer [value=..] [document=..]
   or empty `value`: the parameter stays, with no value). `reference`, `value`
   and `footprint` have their own rows and commands and are refused here.
 
+`set_object_text id=<uuid> field=designator|value|text [value=..] [document=..]`
+sets a part's designator or value, a power port's name (its `value`), a
+label's name or a text note's text (`text`), with the engine edit the
+Properties row of that field sends, in one undo step (#2953). A double click
+on a Name or Value cell of the Object List edits it in place and Enter runs
+this edit. A left-out `value` is empty. A designator is written for the
+placement the sheet in view shows, so it is set on the sheet in view only; a
+field the object does not have is refused with the reason. The answer is the
+object's `{"id", "kind", "position", …}` plus `"text": {"field", "value"}`,
+the text as stored after the edit.
+
 `set_sheet_variable name=<NAME> [value=..] [remove=true] [document=..]` sets
 one variable of the sheet (what `${NAME}` and expressions on it resolve), as
 the Sheet Variables rows in Properties do, in one undo step. A left-out or
@@ -1274,6 +1285,21 @@ query_net_ties document=<sheet or board>
   is left out. `status` is `joins` (two or more nets), `one_net` (every pin
   on one net) or `open` (fewer than two pins on a net). A project sheet that
   is not open is read for the answer, as `query_pins` reads one.
+
+## Differential pairs
+
+`list_diff_pairs document=<project or one of its documents>` lists every
+differential pair of the project's open sheets (#2952), so they can be
+checked before Update PCB. It is a query: it answers with data, changes
+nothing, and is on the agent channel. A pair is found by a Differential Pair
+directive (or a Net Parameters directive naming a diff-pair class) or by name
+alone (`X_P` / `X_N`, `XDP` / `XDN`, `X+` / `X-` on one sheet); a pair found
+by name is listed once, and not at all when a directive lists the same two
+nets. The answer is `{"project", "count", "unread_sheets", "pairs"}`; each
+pair is `{"name", "positive", "negative", "class", "found_by", "directive",
+"sheet"}`, with `found_by` `directive` (and the directive's uuid) or `suffix`,
+and a missing half `null`. `unread_sheets` is `true` when a sheet of the
+project is not open, so its pairs are not listed.
 
 ## Working through a running Signex
 
