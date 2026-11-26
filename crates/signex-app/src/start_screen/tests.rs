@@ -38,6 +38,8 @@ pub(super) struct Fixture {
     shortcuts_shortcut: String,
     tokens: ThemeTokens,
     i18n: Arc<I18n>,
+    /// None unless a test installs some (#2495).
+    pub extensions: crate::extension::ExtensionHost,
 }
 
 impl Fixture {
@@ -52,6 +54,7 @@ impl Fixture {
             shortcuts_shortcut: "F1".to_owned(),
             tokens: signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteDark),
             i18n: I18n::en_us(),
+            extensions: crate::extension::ExtensionHost::default(),
         }
     }
 
@@ -78,6 +81,7 @@ impl Fixture {
                 thumbnails: &self.thumbnails,
                 state: &self.state,
                 now: Utc::now(),
+                extensions: &self.extensions,
             },
         )
     }

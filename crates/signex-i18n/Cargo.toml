@@ -13,6 +13,9 @@ chrono = { workspace = true }
 fluent-bundle = "0.16"
 fluent-langneg = "0.13"
 fluent-pseudo = "0.3"
+# The entry ids of an extension's `.ftl` file, checked before it joins a
+# bundle (#2495); already in the tree through `fluent-bundle`.
+fluent-syntax = "0.12"
 icu_casemap = "~2.2"
 icu_collator = "~2.2"
 icu_datetime = "~2.2"
@@ -31,7 +34,6 @@ unic-langid = "0.9"
 test-support = []
 
 [dev-dependencies]
-fluent-syntax = "0.12"
 signex-i18n-ids = { workspace = true, features = ["test-support"] }
 
 [lints]

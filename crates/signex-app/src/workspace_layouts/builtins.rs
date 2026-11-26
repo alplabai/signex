@@ -12,6 +12,7 @@ fn side(panels: &[PanelKind], width: f32) -> RegionLayout {
         panels: panels.to_vec(),
         collapsed: false,
         width: Some(width.round() as u32),
+        kept: Vec::new(),
     }
 }
 
@@ -20,6 +21,7 @@ fn bottom(panels: &[PanelKind]) -> RegionLayout {
         panels: panels.to_vec(),
         collapsed: false,
         width: None,
+        kept: Vec::new(),
     }
 }
 

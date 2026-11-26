@@ -328,6 +328,9 @@ pub enum PanelKind {
     /// Every annotation block of the project's Design Notebook files,
     /// filterable; a reference chip goes to its part or net (mockup row 165).
     Annotations,
+    /// A panel an installed extension registered (#2495). Not in
+    /// [`ALL_PANELS`]; the dock draws it through the extension's view hook.
+    Extension(crate::extension::points::ExtensionPanelKind),
 }
 
 /// Every panel kind, in the panel list's order. The list leaves out the
@@ -444,6 +447,7 @@ impl PanelKind {
             PanelKind::CompiledDesign => ids::PANELS_KIND_COMPILED_DESIGN,
             PanelKind::Unions => ids::PANELS_KIND_UNIONS,
             PanelKind::Annotations => ids::PANELS_KIND_ANNOTATIONS,
+            PanelKind::Extension(panel) => panel.title(),
         }
     }
 
@@ -488,6 +492,8 @@ impl PanelKind {
             PanelKind::CompiledDesign => "Compiled Design",
             PanelKind::Unions => "Unions",
             PanelKind::Annotations => "Annotations",
+            // No English name of its own: the layout key names it.
+            PanelKind::Extension(panel) => panel.key(),
         }
     }
 }
@@ -633,6 +639,9 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::CompiledDesign => return compiled_design::view(ctx),
         PanelKind::Unions => return unions::view(ctx),
         PanelKind::Annotations => return annotations::view(ctx),
+        // The dock and the detached window draw it with the extension's
+        // view hook; this arm is only reached by a surface that does not.
+        PanelKind::Extension(_) => return iced::widget::Space::new().boxed(),
     };
 
     let scroller = panel_scrollable(content);

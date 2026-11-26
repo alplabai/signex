@@ -27,7 +27,7 @@ mod window_layout;
 mod wire;
 
 #[cfg(test)]
-mod tests;
+pub(in crate::app) mod tests;
 
 use std::fmt;
 use std::sync::{Arc, Mutex, PoisonError};
@@ -35,8 +35,8 @@ use std::sync::{Arc, Mutex, PoisonError};
 use iced::futures::channel::oneshot;
 
 pub(crate) use crate::app::core::origin::Origin;
-// The parity table lists this route (`command::parity`).
-#[cfg(test)]
+// The agent runner of the request path routes it (`command::request`), and
+// the parity table lists the route (`command::parity`).
 pub(in crate::app) use allow::is_window_layout;
 pub(crate) use deferred::WaitingCommand;
 pub use reply::{

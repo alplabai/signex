@@ -19,6 +19,40 @@ impl MessageId {
         self.0
     }
 
+    /// The id of a message an extension ships in its own `.ftl` file:
+    /// `ext-` and then lowercase ASCII letters, digits, `_` and `-`. `None`
+    /// for any other id, so code outside this crate cannot make the id of a
+    /// built-in message; no built-in id starts with `ext-`. Which extension
+    /// owns the id (`ext-<name>-…`) is checked where the extension registers
+    /// its messages. A `const fn`, so an extension's catalog row can name
+    /// its label in a `static`.
+    pub const fn extension(id: &'static str) -> Option<Self> {
+        let bytes = id.as_bytes();
+        let prefix = EXTENSION_MESSAGE_PREFIX.as_bytes();
+        if bytes.len() <= prefix.len() {
+            return None;
+        }
+        let mut i = 0;
+        while i < bytes.len() {
+            let byte = bytes[i];
+            let fits = if i < prefix.len() {
+                byte == prefix[i]
+            } else {
+                byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_' || byte == b'-'
+            };
+            if !fits {
+                return None;
+            }
+            i += 1;
+        }
+        Some(Self(id))
+    }
+
+    /// Is this an extension's message id (`ext-…`)?
+    pub fn is_extension(self) -> bool {
+        self.0.starts_with(EXTENSION_MESSAGE_PREFIX)
+    }
+
     /// An id outside the registry, for `signex-i18n`'s tests of a message
     /// the catalog lacks.
     #[cfg(feature = "test-support")]
@@ -27,6 +61,9 @@ impl MessageId {
         Self(id)
     }
 }
+
+/// The prefix of every message id an extension ships (`ext-<name>-…`).
+pub const EXTENSION_MESSAGE_PREFIX: &str = "ext-";
 
 /// Text the user wrote (net names, part descriptions, parameter values).
 /// Never translated.

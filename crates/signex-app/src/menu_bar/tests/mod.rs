@@ -171,6 +171,8 @@ pub(super) fn menu_context_in(app: &Signex, window: Option<iced::window::Id>) ->
         cross_select: app.interaction_state.cross_select.enabled,
         pcb_sync: app.pcb_sync_label(window),
         layouts: app.layouts_menu(),
+        extension_rows: app.extensions().menu_rows(),
+        extension_panels: app.extensions().panels(),
     }
 }
 
