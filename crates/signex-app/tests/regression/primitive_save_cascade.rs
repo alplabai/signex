@@ -189,7 +189,7 @@ fn edit_a(f: &mut Fixture) {
         .symbol_editors
         .get_mut(&f.symbol_path)
         .unwrap();
-    editor.file.symbols[0].description = "edited".into();
+    editor.draft.file.symbols[0].description = "edited".into();
     editor.mark_dirty();
 }
 
@@ -339,6 +339,7 @@ fn a_second_save_without_edits_bumps_nothing_and_the_next_edit_bumps_once_more()
         .symbol_editors
         .get_mut(&f.symbol_path)
         .unwrap()
+        .draft
         .file
         .symbols[0]
         .description = "edited again".into();
@@ -494,7 +495,7 @@ fn a_failed_cascade_is_retried_by_the_next_save_without_edits() {
             editor.is_dirty(),
             f.app.document_state.is_document_dirty(&f.symbol_path),
             f.app.document_state.has_dirty_documents(),
-            editor.cascade_owed.len(),
+            editor.draft.cascade_owed.len(),
         )
     };
     assert_eq!(owed(&f), (true, true, true, 1));
@@ -502,11 +503,13 @@ fn a_failed_cascade_is_retried_by_the_next_save_without_edits() {
     // Save again, nothing edited. Nothing is written, so the container is
     // not stamped as changed: autosave and crash recovery see no new edit.
     let stamped = f.app.document_state.symbol_editors[&f.symbol_path]
+        .draft
         .file
         .updated;
     save(&mut f.app);
     assert_eq!(
         f.app.document_state.symbol_editors[&f.symbol_path]
+            .draft
             .file
             .updated,
         stamped,
@@ -522,6 +525,7 @@ fn a_failed_cascade_is_retried_by_the_next_save_without_edits() {
     );
     assert_eq!(
         f.app.document_state.symbol_editors[&f.symbol_path]
+            .draft
             .cascade_owed
             .len(),
         0,
@@ -535,6 +539,7 @@ fn a_failed_cascade_is_retried_by_the_next_save_without_edits() {
 
 fn owed_count(f: &Fixture) -> usize {
     f.app.document_state.symbol_editors[&f.symbol_path]
+        .draft
         .cascade_owed
         .len()
 }

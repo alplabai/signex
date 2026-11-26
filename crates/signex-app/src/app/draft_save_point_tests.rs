@@ -77,7 +77,7 @@ fn an_edit_coalesced_into_the_saved_step_forgets_the_save_point() {
         e.mark_dirty();
         true
     });
-    assert_eq!(editor.history.undo_len(), 1, "one coalesced step");
+    assert_eq!(editor.draft.history.undo_len(), 1, "one coalesced step");
 
     assert!(editor.undo());
     assert!(editor.redo());
@@ -107,7 +107,7 @@ fn a_recovery_copy_never_reads_clean_after_undo() {
 fn rows_still_owed_keep_an_undone_draft_dirty() {
     let mut editor = editor();
     rename(&mut editor, "A");
-    editor.cascade_owed = vec![uuid::Uuid::now_v7()];
+    editor.draft.cascade_owed = vec![uuid::Uuid::now_v7()];
     assert!(editor.undo());
     assert!(editor.is_dirty());
 }

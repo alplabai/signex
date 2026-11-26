@@ -11,7 +11,7 @@ pub(super) fn apply_symbol_transform(editor: &mut SymEditor, msg: SymbolEditorMs
             // row 141) and Redo survives.
             let snapshot = editor.snapshot();
             let before = editor.primitive().clone();
-            let selected = editor.selected.clone();
+            let selected = editor.gui.selected.clone();
             let pivot_mode = rotate_pivot_msg_to_state(pivot);
             crate::library::editor::symbol::state::rotate_selected_with_pivot(
                 editor.primitive_mut(),
@@ -45,7 +45,7 @@ pub(super) fn apply_symbol_transform(editor: &mut SymEditor, msg: SymbolEditorMs
             // the redo stack, so a no-op align (e.g. Select-All on an
             // empty symbol, or a selection already on-grid) silently
             // destroyed the user's redo stack.
-            let selected = editor.selected.clone();
+            let selected = editor.gui.selected.clone();
             if crate::library::editor::symbol::state::selected_is_alignable(&selected) {
                 let snapshot = editor.snapshot();
                 let changed = crate::library::editor::symbol::state::align_selected_to_grid(
@@ -58,10 +58,10 @@ pub(super) fn apply_symbol_transform(editor: &mut SymEditor, msg: SymbolEditorMs
                     mark_dirty(editor);
                 }
             }
-            editor.active_bar_menu = None;
+            editor.gui.active_bar_menu = None;
         }
         SymbolEditorMsg::DeleteSelected => {
-            let selected = editor.selected.clone();
+            let selected = editor.gui.selected.clone();
             // Validate before snapshotting: a no-op delete (None / All /
             // Field selection) must not push an undo entry that would
             // evict real history — same discipline as apply_symbol_join.
@@ -71,7 +71,7 @@ pub(super) fn apply_symbol_transform(editor: &mut SymEditor, msg: SymbolEditorMs
                     editor.primitive_mut(),
                     selected,
                 ) {
-                    editor.selected = new_sel;
+                    editor.gui.selected = new_sel;
                     close_pickers(editor);
                     mark_dirty(editor);
                 }
@@ -110,8 +110,8 @@ mod tests {
             let file = SymbolFile::from_symbol(Symbol::empty("T"));
             let mut editor = SymbolDocument::new(PathBuf::from("t.snxsym"), file);
             let spare = editor.snapshot();
-            editor.history.redo_steps_mut().push(spare);
-            editor.selected = selected;
+            editor.draft.history.redo_steps_mut().push(spare);
+            editor.gui.selected = selected;
 
             apply_symbol_transform(
                 &mut editor,
@@ -122,8 +122,8 @@ mod tests {
             );
 
             assert!(!editor.is_dirty());
-            assert!(!editor.history.can_undo());
-            assert_eq!(editor.history.redo_len(), 1, "Redo survives");
+            assert!(!editor.draft.history.can_undo());
+            assert_eq!(editor.draft.history.redo_len(), 1, "Redo survives");
         }
     }
 
@@ -145,8 +145,8 @@ mod tests {
         });
         let file = SymbolFile::from_symbol(sym);
         let mut editor = SymbolDocument::new(PathBuf::from("t.snxsym"), file);
-        editor.selected = Some(SymbolSelection::Graphic(0));
-        editor.graphic_fill_picker = Some(GraphicFillPicker {
+        editor.gui.selected = Some(SymbolSelection::Graphic(0));
+        editor.gui.graphic_fill_picker = Some(GraphicFillPicker {
             idx: 0,
             advanced: true,
         });
@@ -158,7 +158,7 @@ mod tests {
             "graphic should be deleted"
         );
         assert!(
-            editor.graphic_fill_picker.is_none(),
+            editor.gui.graphic_fill_picker.is_none(),
             "fill picker must close when its graphic is deleted"
         );
     }
@@ -176,7 +176,7 @@ mod tests {
     #[test]
     fn align_selected_to_grid_with_no_selection_stays_clean() {
         let mut editor = new_editor();
-        editor.selected = None;
+        editor.gui.selected = None;
 
         apply_symbol_transform(&mut editor, SymbolEditorMsg::AlignSelectedToGrid);
 
@@ -185,7 +185,7 @@ mod tests {
             "no-op align must not dirty the document"
         );
         assert!(
-            !editor.history.can_undo(),
+            !editor.draft.history.can_undo(),
             "no-op align must not stack undo history"
         );
     }
@@ -205,20 +205,20 @@ mod tests {
         );
         let mut editor =
             SymbolDocument::new(PathBuf::from("t.snxsym"), SymbolFile::from_symbol(sym));
-        editor.selected = Some(SymbolSelection::Pin(idx));
+        editor.gui.selected = Some(SymbolSelection::Pin(idx));
         let current = editor.snapshot();
-        editor.history.redo_steps_mut().push(current);
+        editor.draft.history.redo_steps_mut().push(current);
 
         apply_symbol_transform(&mut editor, SymbolEditorMsg::AlignSelectedToGrid);
 
         assert!(editor.is_dirty(), "a real align dirties the document");
         assert_eq!(
-            editor.history.undo_len(),
+            editor.draft.history.undo_len(),
             1,
             "exactly one undo snapshot per real align (no double-push)"
         );
         assert!(
-            !editor.history.can_redo(),
+            !editor.draft.history.can_redo(),
             "a real align still clears the redo stack, same as every other mutation"
         );
         assert_eq!(
@@ -242,9 +242,9 @@ mod tests {
     #[test]
     fn align_selected_to_grid_with_all_selection_on_empty_symbol_stays_clean() {
         let mut editor = new_editor();
-        editor.selected = Some(SymbolSelection::All);
+        editor.gui.selected = Some(SymbolSelection::All);
         let current = editor.snapshot();
-        editor.history.redo_steps_mut().push(current);
+        editor.draft.history.redo_steps_mut().push(current);
 
         apply_symbol_transform(&mut editor, SymbolEditorMsg::AlignSelectedToGrid);
 
@@ -253,11 +253,11 @@ mod tests {
             "no-op align on an empty symbol must not dirty the document"
         );
         assert!(
-            !editor.history.can_undo(),
+            !editor.draft.history.can_undo(),
             "no-op align on an empty symbol must not stack undo history"
         );
         assert_eq!(
-            editor.history.redo_len(),
+            editor.draft.history.redo_len(),
             1,
             "no-op align must not clear the redo stack"
         );
@@ -283,7 +283,7 @@ mod tests {
         );
         let mut editor =
             SymbolDocument::new(PathBuf::from("t.snxsym"), SymbolFile::from_symbol(sym));
-        editor.selected = Some(SymbolSelection::All);
+        editor.gui.selected = Some(SymbolSelection::All);
 
         apply_symbol_transform(&mut editor, SymbolEditorMsg::AlignSelectedToGrid);
 
@@ -312,9 +312,9 @@ mod tests {
         );
         let mut editor =
             SymbolDocument::new(PathBuf::from("t.snxsym"), SymbolFile::from_symbol(sym));
-        editor.selected = Some(SymbolSelection::Pin(idx));
+        editor.gui.selected = Some(SymbolSelection::Pin(idx));
         let current = editor.snapshot();
-        editor.history.redo_steps_mut().push(current);
+        editor.draft.history.redo_steps_mut().push(current);
 
         apply_symbol_transform(&mut editor, SymbolEditorMsg::AlignSelectedToGrid);
 
@@ -323,11 +323,11 @@ mod tests {
             "aligning an already-on-grid pin must not dirty the document"
         );
         assert!(
-            !editor.history.can_undo(),
+            !editor.draft.history.can_undo(),
             "aligning an already-on-grid pin must not stack undo history"
         );
         assert_eq!(
-            editor.history.redo_len(),
+            editor.draft.history.redo_len(),
             1,
             "no-op align of an already-aligned pin must not clear the redo stack"
         );

@@ -225,7 +225,7 @@ impl Signex {
             });
         let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
         let mut state = crate::app::SymbolDocument::new(path.clone(), file);
-        state.history_generation = self.document_state.next_symbol_history_base();
+        state.draft.history_generation = self.document_state.next_symbol_history_base();
         self.document_state
             .symbol_editors
             .insert(path.clone(), state);

@@ -178,7 +178,10 @@ fn delete_selected_removes_the_ticked_pins_and_their_ticks() {
     assert_eq!(numbers, ["1", "3"]);
     assert!(app.library.symbol_props[&path].table.checked.is_empty());
     assert!(
-        app.document_state.symbol_editors[&path].selected.is_none(),
+        app.document_state.symbol_editors[&path]
+            .gui
+            .selected
+            .is_none(),
         "the selected pin index named another pin now"
     );
 }
