@@ -173,7 +173,7 @@ fn assert_not_fitted(drawn: &ChildDrawn, what: &str) {
 #[test]
 fn the_svg_page_draws_a_unit_not_fitted_when_its_part_is_dnp_on_the_root() {
     let app = split_part_app();
-    let (ctx, _) = super::super::build_page_scope(&app.document_state).expect("scope");
+    let (ctx, _) = super::super::build_export_scope(&app.document_state).expect("scope");
     let opts = PdfOptions {
         draw_not_fitted: true,
         ..PdfOptions::default()
@@ -186,7 +186,7 @@ fn the_pdf_draws_a_child_unit_not_fitted_even_with_only_the_child_page_picked() 
     let app = split_part_app();
     let source: &Path = &path("top.snxsch");
     let (mut ctx, _) =
-        super::super::build_page_scope_for_source(&app.document_state, source).expect("scope");
+        super::super::build_export_scope_for_source(&app.document_state, source).expect("scope");
     let mut opts = PdfOptions {
         draw_not_fitted: true,
         ..PdfOptions::default()

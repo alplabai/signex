@@ -51,7 +51,7 @@ impl Signex {
         };
 
         let (mut ctx, issues) =
-            match super::build_page_scope_for_source(&self.document_state, &source) {
+            match super::build_export_scope_for_source(&self.document_state, &source) {
                 Some(c) => c,
                 None => {
                     self.refuse_export(

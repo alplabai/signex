@@ -22,7 +22,7 @@ impl Signex {
             return iced::Task::none();
         }
 
-        let (ctx, issues) = match super::build_page_scope(&self.document_state) {
+        let (ctx, issues) = match super::build_export_scope(&self.document_state) {
             Some(c) => c,
             None => {
                 log::warn!("Print preview: no active schematic");
@@ -391,7 +391,7 @@ impl Signex {
         // Rasterise the document the preview was opened for, not whichever tab
         // is active now: Export prints `preview.source`, so the two must agree.
         let (mut ctx, issues) =
-            match super::build_page_scope_for_source(&self.document_state, &source) {
+            match super::build_export_scope_for_source(&self.document_state, &source) {
                 Some(scope) => scope,
                 None => {
                     crate::diagnostics::log_warning(format!(

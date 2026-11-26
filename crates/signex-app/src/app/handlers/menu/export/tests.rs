@@ -748,7 +748,7 @@ pub(super) fn pdf_request_all_sheets(
     source: &std::path::Path,
 ) -> crate::app::state::PdfExportRequest {
     let (ctx, _) =
-        super::build_page_scope_for_source(&app.document_state, source).expect("source is open");
+        super::build_export_scope_for_source(&app.document_state, source).expect("source is open");
     crate::app::state::PdfExportRequest {
         source: source.to_path_buf(),
         options: Default::default(),
