@@ -71,6 +71,22 @@ is written only when one of them is ticked.
 The writers live in `crates/signex-output/src/fab/` (no UI); the dialog in
 `crates/signex-app/src/app/fab_outputs/`.
 
+## From the command line
+
+`fabrication_outputs` named a board (`document`) and a folder (`path`) runs
+Generate with no dialog (#2470): `signex-cli run` with `--allow export`. It
+builds the same job as the dialog (the board as it is in memory, the
+project's designator standard, the assembly PDF's page and words) and writes
+it on the same worker, every file made before any is written. `kinds` picks
+the files by the `.snxprj` keys above (`odb_folder` is the ODB++ job as a
+folder); without it, the project's ticks. `name` is the stem, the board's
+file name by default; a board with a panel writes the panel unless
+`whole_panel=false`. The command never changes the ticks, so it makes no
+undo step. Its answer, once the files are written, lists each file with its
+kind, size and SHA-256, the notes and the older files; the same line as
+Generate's goes to Messages. The operands and the answer:
+`docs/CLI.md`, "Fabrication outputs".
+
 ## Files
 
 | File | Holds |

@@ -56,11 +56,14 @@ impl Signex {
             net_classes: classes.clone(),
         });
         self.refresh_panel_ctx();
+        let libraries = self.open_library_roots();
         Task::perform(
             async move {
-                tokio::task::spawn_blocking(move || run_check(&board, &classes, &layers))
-                    .await
-                    .unwrap_or_else(|e| Err(format!("DRC worker failed: {e}")))
+                tokio::task::spawn_blocking(move || {
+                    run_check_with(&board, &classes, &layers, &libraries)
+                })
+                .await
+                .unwrap_or_else(|e| Err(format!("DRC worker failed: {e}")))
             },
             move |result| {
                 Message::Pcb(PcbMsg::DrcFinished {
@@ -336,13 +339,34 @@ pub(super) struct Layers {
 }
 
 /// The run itself, off the UI thread: the rule text is compiled here too.
+/// No library model is read: a part's 3D body is its stored height.
+#[cfg(test)]
 pub(super) fn run_check(
     board: &signex_types::pcb::PcbBoard,
     classes: &[signex_types::net_class::NetClass],
     layers: &Layers,
 ) -> DrcRunResult {
-    let rules = compile_rules(board, classes, layers)?;
-    let report = signex_drc::run(board, &rules);
+    run_check_with(board, classes, layers, &[])
+}
+
+/// [`run_check`], the parts' 3D bodies read from the open `libraries` when
+/// a rule measures them (#2939); a model that cannot be read is a note,
+/// and that part's stored height is used.
+pub(super) fn run_check_with(
+    board: &signex_types::pcb::PcbBoard,
+    classes: &[signex_types::net_class::NetClass],
+    layers: &Layers,
+    libraries: &[(uuid::Uuid, std::path::PathBuf)],
+) -> DrcRunResult {
+    let mut rules = compile_rules(board, classes, layers)?;
+    let models = if rules.measures_bodies() {
+        let (models, unread) = super::pcb_drc_bodies::body_models(board, libraries);
+        rules.notes.extend(unread);
+        models
+    } else {
+        signex_drc::BodyModels::new()
+    };
+    let report = signex_drc::run_with_bodies(board, &rules, &models);
     let names = board
         .nets
         .iter()

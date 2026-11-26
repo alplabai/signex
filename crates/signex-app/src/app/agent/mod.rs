@@ -38,6 +38,7 @@ pub(crate) use crate::app::core::origin::Origin;
 // The agent runner of the request path routes it (`command::request`), and
 // the parity table lists the route (`command::parity`).
 pub(in crate::app) use allow::is_window_layout;
+pub use deferred::QueryAnswered;
 pub(crate) use deferred::WaitingCommand;
 pub use reply::{
     ChangeSnapshot, MessageLine, Status, changed_between, messages_since, outcome_verdict,
@@ -77,6 +78,10 @@ pub enum AgentMsg {
     /// The run a check (`check_erc`, `check_drc`) waited for finished
     /// (#2199): answer its caller (the socket, or a headless run).
     CheckFinished(Box<crate::app::command::queries::CheckFinished>),
+    /// The off-thread work a query waited for finished (`query_bom`, #2938;
+    /// `query_rail_budget`, #2943): answer its caller (the socket, or a
+    /// headless run).
+    QueryAnswered(Box<QueryAnswered>),
     /// A client connected and passed the peer check (#2253).
     ConnectionOpened { pid: Option<u32> },
     /// A connection ended: the client left, idled out or was dropped.

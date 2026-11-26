@@ -28,6 +28,26 @@ struct Changed {
 }
 
 impl Signex {
+    /// `assign_footprint` (#2937): `binding` for each `(part, designator)`
+    /// of the open sheet `sheet`, through Apply's own checks and undo group,
+    /// all or nothing.
+    pub(crate) fn assign_footprint_on_sheet(
+        &mut self,
+        sheet: &std::path::Path,
+        parts: &[(uuid::Uuid, String)],
+        binding: &str,
+    ) -> Result<(), AssignProblem> {
+        let picks = parts
+            .iter()
+            .map(|(symbol_id, designator)| Pick {
+                symbol_id: *symbol_id,
+                binding: binding.to_string(),
+                designator: designator.clone(),
+            })
+            .collect();
+        self.assign_across_sheets(BTreeMap::from([(sheet.to_path_buf(), picks)]), parts.len())
+    }
+
     /// Apply the dialog's picks. On success the dialog closes; on a refusal
     /// it stays open with the reason, and no sheet is changed.
     pub(super) fn apply_footprint_assignments(&mut self) {

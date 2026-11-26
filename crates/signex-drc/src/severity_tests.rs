@@ -38,6 +38,8 @@ fn every_kind_has_a_stable_builtin_rule_id() {
             "builtin::paste_expansion",
             "builtin::courtyard_overlap",
             "builtin::part_outside_room",
+            "builtin::component_height",
+            "builtin::body_clearance",
         ]
     );
     for kind in ViolationKind::ALL {

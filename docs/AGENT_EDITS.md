@@ -43,8 +43,14 @@ Two commands, both with capability `edit` in `signex-cli`:
   are the board net-class edits (`add_net_class`, `rename_net_class`,
   `delete_net_class`, `set_net_class_rules`, `assign_board_net_class`), the
   DRC waivers (`waive_drc_violation`, `unwaive_drc_violation`), #2399 and
-  #2400, and the length tuning commands `tune_net_length` and
-  `tune_diff_pair` (#2389): each is one step on the named board. A command
+  #2400, the DRC fixes (`fix_drc`, `fix_drc_violation`, #2940), the
+  length tuning commands `tune_net_length` and
+  `tune_diff_pair` (#2389), and the routing tools and Via from operands
+  (`place_board_route`, `place_board_track`, `place_board_quick_route`,
+  `place_board_diff_pair`, `place_board_multi_route`, `place_board_via`,
+  #2470), and the rooms commands (`place_board_room`,
+  `create_rooms_from_sheets`, `arrange_in_room`, `auto_place`, #2457,
+  #2941): each is one step on the named board. A command
   that takes a file path (`place_design_block`, `import_graphics`, #1667)
   is refused: an edit list does not read a file it names. The drawing order
   (`bring_drawings_forward`, `bring_drawings_to_front`,
@@ -201,7 +207,8 @@ works on these steps by the rules above. A command that makes no undo step
 An edit never reads a file inside `update` (epic #665; decision
 https://github.com/alplabai/signex/issues/2199#issuecomment-6771692137).
 What its checks need from disk (`command::edit_reads`): the library row of
-`place_component`, the closed child file of `sync_sheet_pins` and whether a
+`place_component` and `change_component` (#1297), the closed child file of
+`sync_sheet_pins` and whether a
 `place_sheet_symbol` file leaves the project through a link are planned from
 the operands, and an `apply_edits` list plans the union of its edits, each on
 the sheet it acts on; an edit

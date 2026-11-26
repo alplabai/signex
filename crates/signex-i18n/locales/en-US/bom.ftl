@@ -61,6 +61,7 @@ bom-column-currency = Currency
 bom-column-stock = Stock
 bom-column-distributor = Distributor
 bom-column-price-age = Price Age
+bom-column-alternates = Alternates
 bom-no-issues-found = No issues found.
 # Issue list heading; $count is how many errors (a whole number).
 bom-issues-errors = Errors ({ $count })
@@ -97,3 +98,7 @@ bom-rule-missing-mpn = Missing MPN
 bom-rule-duplicate-designator = Duplicate designator
 bom-rule-empty-or-zero-qty = Empty or zero quantity
 bom-rule-unit-field-conflict = Conflicting unit fields
+# A `query_bom` run that answered nothing; $why is the reason in words.
+bom-query-refused = BOM not read: { $why }
+# A `bom_*` alternate edit that changed nothing; $why is the reason in words.
+bom-alternate-refused = Alternates not changed: { $why }

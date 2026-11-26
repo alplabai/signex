@@ -11,6 +11,7 @@ mod deferred;
 #[cfg(unix)]
 mod hold;
 mod journal;
+mod layout_plan;
 #[cfg(unix)]
 mod live;
 mod net_class_membership;
@@ -25,6 +26,7 @@ mod query_surfaces;
 mod refusals;
 mod request_path;
 mod round_trip;
+mod update_pcb;
 mod window_layout;
 
 use serde_json::{Value, json};
@@ -96,6 +98,7 @@ pub(super) fn app_in(dir: &std::path::Path) -> Signex {
             schematic_design: Default::default(),
             fab_outputs: None,
             router_tool_diameter: None,
+            bom_alternates: Vec::new(),
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),

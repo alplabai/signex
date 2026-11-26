@@ -424,6 +424,12 @@ impl Signex {
         let opts = BomOptions {
             price_book: crate::library::bom_prices::price_book(&self.library),
             board_left_out: self.active_board_left_out_of_bom(),
+            alternates: self
+                .document_state
+                .active_path
+                .as_deref()
+                .map(|source| self.bom_alternates_of(source))
+                .unwrap_or_default(),
             ..opts.clone()
         };
         signex_output::bom::rollup_with_validation(&ctx, &opts)
@@ -504,6 +510,7 @@ impl Signex {
         opts.format = BomFormat::from_output_path(&save_path);
         opts.price_book = crate::library::bom_prices::price_book(&self.library);
         opts.board_left_out = self.board_left_out_of_bom(&source);
+        opts.alternates = self.bom_alternates_of(&source);
 
         match BomExporter.export(&ctx, &opts) {
             Ok(output) => {
@@ -546,6 +553,18 @@ impl Signex {
     }
 
     /// [`Self::board_left_out_of_bom`] for the document in view.
+    /// The alternates per line of `source`'s project (#2938), for the
+    /// Alternates column; none for a sheet outside a project.
+    fn bom_alternates_of(
+        &self,
+        source: &std::path::Path,
+    ) -> Vec<signex_types::project::BomLineAlternates> {
+        self.document_state
+            .document_project(source)
+            .map(|project| project.data.bom_alternates.clone())
+            .unwrap_or_default()
+    }
+
     fn active_board_left_out_of_bom(&self) -> Vec<signex_types::pcb::SymbolLink> {
         self.document_state
             .active_path

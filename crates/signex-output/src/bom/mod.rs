@@ -20,6 +20,8 @@ use crate::variant_fit::{
 };
 use crate::{ExportContext, Exporter};
 
+#[cfg(test)]
+mod alternates_tests;
 mod cells;
 pub(crate) mod csv;
 #[cfg(test)]
@@ -35,8 +37,8 @@ pub use csv::emit as csv_emit;
 pub use html::emit as html_emit;
 pub use signex_bom::{
     BomGrouping, BomIssueSeverity, BomMetadata, BomPrice, BomRow, BomRule, BomRuleOptions,
-    BomTable, BomValidationIssue, BomValidationReport, PriceBook, PriceQuote, library_row_key,
-    mpn_key, price_totals,
+    BomTable, BomValidationIssue, BomValidationReport, BuildOrder, PriceBook, PriceQuote,
+    PricedBom, Shortfall, library_row_key, line_key, mpn_key, price_of, price_totals, priced_bom,
 };
 pub use xlsx::emit as xlsx_emit;
 
@@ -64,6 +66,9 @@ pub struct BomOptions {
     /// project's board (#2365). Such a part is listed only with the
     /// not-fitted parts, like one marked out of the BOM on the schematic.
     pub board_left_out: Vec<signex_types::pcb::SymbolLink>,
+    /// The project's alternates per BOM line (#2938), shown in the
+    /// Alternates column. Empty: the column stays blank.
+    pub alternates: Vec<signex_types::project::BomLineAlternates>,
 }
 
 impl Default for BomOptions {
@@ -85,6 +90,7 @@ impl Default for BomOptions {
             rule_options: BomRuleOptions::default(),
             price_book: signex_bom::PriceBook::default(),
             board_left_out: Vec::new(),
+            alternates: Vec::new(),
         }
     }
 }
@@ -116,6 +122,8 @@ pub enum BomColumn {
     Distributor,
     /// How old the cached price is.
     PriceAge,
+    /// The line's alternate parts, most preferred first (#2938).
+    Alternates,
 }
 
 impl BomColumn {
@@ -148,6 +156,7 @@ impl BomColumn {
             Self::Stock => "Stock",
             Self::Distributor => "Distributor",
             Self::PriceAge => "Price Age",
+            Self::Alternates => "Alternates",
         }
     }
 }
@@ -210,6 +219,7 @@ pub fn rollup(ctx: &ExportContext, opts: &BomOptions) -> BomTable {
 
     let mut table = build_table(&bom_ctx, &engine_opts);
     signex_bom::apply_prices(&mut table, &opts.price_book);
+    signex_bom::apply_alternates(&mut table, &opts.alternates);
     table
 }
 
@@ -223,6 +233,7 @@ pub fn rollup_with_validation(
     let bom_ctx = build_bom_context(ctx, opts);
     let mut table = build_table(&bom_ctx, &engine_options_from_opts(opts));
     signex_bom::apply_prices(&mut table, &opts.price_book);
+    signex_bom::apply_alternates(&mut table, &opts.alternates);
     let report = validate_table(
         &build_validation_context(&bom_ctx, opts),
         &table,

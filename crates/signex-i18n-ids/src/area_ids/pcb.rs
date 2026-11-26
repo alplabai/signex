@@ -180,6 +180,19 @@ define_ids! {
     PCB_ROUTE_END_OTHER_NET = "pcb-route-end-other-net";
     PCB_ROUTE_PAD_JOINED = "pcb-route-pad-joined";
     PCB_ROUTE_JOIN_GONE = "pcb-route-join-gone";
+    PCB_ROUTE_ORDER_NO_LAYER = "pcb-route-order-no-layer";
+    PCB_ROUTE_ORDER_LAYER = "pcb-route-order-layer";
+    PCB_ROUTE_ORDER_POINTS = "pcb-route-order-points";
+    PCB_ROUTE_ORDER_LENGTH = "pcb-route-order-length";
+    PCB_ROUTE_ORDER_RANGE = "pcb-route-order-range";
+    PCB_ROUTE_ORDER_CORNER = "pcb-route-order-corner";
+    PCB_ROUTE_ORDER_MODE = "pcb-route-order-mode";
+    PCB_ROUTE_ORDER_NETS = "pcb-route-order-nets";
+    PCB_ROUTE_ORDER_PAD = "pcb-route-order-pad";
+    PCB_ROUTE_ORDER_PAD_MANY = "pcb-route-order-pad-many";
+    PCB_ROUTE_ORDER_SPAN = "pcb-route-order-span";
+    PCB_ROUTE_ORDER_DRILL = "pcb-route-order-drill";
+    PCB_ROUTE_ORDER_NOT_PLACED = "pcb-route-order-not-placed";
     PCB_POUR_NO_NET = "pcb-pour-no-net";
     PCB_POUR_NOT_FILLED = "pcb-pour-not-filled";
     PCB_POUR_UNFILLED_NO_LAYER = "pcb-pour-unfilled-no-layer";
@@ -252,4 +265,7 @@ define_ids! {
     PCB_3D_SHOT_INTERRUPTED = "pcb-3d-shot-interrupted";
     PCB_3D_LIGHTING_NEXT_KEY = "pcb-3d-lighting-next-key";
     PCB_3D_TOOLTIP_KEYED = "pcb-3d-tooltip-keyed";
+    PCB_AREA_COMMAND_REFUSED = "pcb-area-command-refused";
+    PCB_FOOTPRINT_COMMAND_REFUSED = "pcb-footprint-command-refused";
+    PCB_REANNOTATE_COMMAND_REFUSED = "pcb-reannotate-command-refused";
 }

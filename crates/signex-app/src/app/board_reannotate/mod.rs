@@ -2,10 +2,14 @@
 //! numbers the board's parts by position within each prefix, shows the
 //! renames, and Execute runs them as one labelled board step. The plan is
 //! `signex_engine::pcb::designators::plan_reannotate`; the board is read in
-//! memory, so nothing runs on a worker.
+//! memory, so nothing runs on a worker. `command.rs` is the operand form
+//! (#2470).
 
+mod command;
 pub(crate) mod preview;
 mod update;
+
+pub(crate) use command::reannotate_board;
 
 use std::path::PathBuf;
 
@@ -69,5 +73,7 @@ impl BoardReannotateState {
     }
 }
 
+#[cfg(test)]
+mod command_tests;
 #[cfg(test)]
 mod tests;

@@ -67,9 +67,13 @@ The language has no comments yet.
 | `mask` | `sliver >= <length>`, `expansion >= <length>`, `expansion <= <length>` |
 | `paste` | `expansion >= <length>`, `expansion <= <length>` |
 | `courtyard` | `spacing >= <length>` |
+| `component` | `height <= <length>` (component height), `clearance >= <length>` (3D body clearance) |
 
 A `silk`, `mask`, `paste` or `courtyard` rule is board-wide: it takes no
-`when` condition. What each one measures is under [The base rules](#the-base-rules).
+`when` condition. A `component` rule takes one condition only, the side its
+parts sit on: `layer == TopCopper` or `layer == BottomCopper`. What each one
+measures is under [The base rules](#the-base-rules) and, for `component`,
+[Component height and 3D body clearance](#component-height-and-3d-body-clearance).
 
 A length is a number with its unit: `0.2mm` or `0.2 mm`, `8mil`, `150um`
 (or `150µm`), `125000nm`. A limit of 0 is reported: a minimum of 0 checks
@@ -167,6 +171,53 @@ body is not inside the room's outline shrunk by the room's margin is a
 finding naming the part, the room and the distance ("R2 is 1.2 mm outside
 room dcdc"). A board without such rooms gets the report it got before. Rooms:
 [PCB_ROOMS.md](PCB_ROOMS.md#design-rule).
+
+## Component height and 3D body clearance
+
+Two limits of the `component` target (#2939) check the parts' 3D bodies.
+Neither is a base rule: a board is checked for them only when a rule sets
+them, and only then are the library models read.
+
+```text
+rule tall on component require height <= 6mm then error
+rule bottom_tall on component when layer == BottomCopper require height <= 2mm then error
+rule bodies on component require clearance >= 0.25mm then warning
+```
+
+A part's 3D body is an outline on the board and a span of heights above the
+face it stands on, taken in this order:
+
+1. the model file attached to its library footprint, measured as the box of
+   its points (placed by the attachment's offset and turn, as the 3D view
+   draws it): source `model`;
+2. else the library footprint's 3D Body: its outline (or the part's
+   courtyard, else its pads), raised by its offset and as tall as its height:
+   source `body`;
+3. else the Height stored on the part, from the board up over its courtyard
+   (else its pads): source `stored`.
+
+A part with none of these has no height and is not checked; a library that
+is not open, or a model that cannot be read, leaves the stored Height, and
+Run DRC and `check_drc` say which model was not read. `query_part_heights`
+answers each part's height and source (`docs/CLI.md`, "Part heights").
+
+- **Component height** (`builtin::component_height`): the tallest point of
+  a part's body above its face over the limit is a finding naming the part,
+  its height and the limit ("U3 is 7 mm tall, needs at most 6 mm"). A rule
+  with a `layer` condition is for the parts on that side only; a part on a
+  side with no such rule takes the board-wide one.
+- **3D body clearance** (`builtin::body_clearance`): two parts on one side
+  whose bodies come closer than the limit in 3D are a finding naming both,
+  with the distance. The distance combines the gap between their outlines
+  and the gap between their height spans, so a short part under a raised
+  body (a body with an offset, over the part) is measured straight up, and
+  is found when the gap is under the limit. `clearance >= 0mm` finds bodies
+  that touch or overlap.
+
+Both findings carry `designators` in their evidence beside `measured_nm`
+and `required_nm`, are errors by default and are set on the Rules tab's
+Placement domain: Height ▸ Max and Component Clearance ▸ 3D body. A region
+condition is not supported yet.
 
 ## Which rule applies
 
@@ -362,13 +413,13 @@ step each and answer with data; refusals say why.
 
 | Command | Answer |
 |---|---|
-| `rules_list [kind] [enabled]` | `stored_in` (`project` or `machine`), `board`, `syntax_errors`, `sets` (as `rules_set_create` answers each), `rules`: each with `id`, `name`, `enabled`, `applied`, `kind`, `domain` (the grid domain it shows on: `clearance`, `physical`, `high_speed`, `manufacturing`, `smt`, `mask`, `plane`, `testpoint`, `placement`), `scope`, `layer`, `pair`, `limits` (by column id: `min_clearance`, `min_width`, `max_width`, `min_diameter`, `min_drill`, `min_pad_gap`, `min_hole`, `max_hole`, `min_annular`, `min_hole_spacing`, `min_edge_clearance`, `min_silk_pad`, `min_silk_spacing`, `min_sliver`, `min_mask_expansion`, `max_mask_expansion`, `min_paste_expansion`, `max_paste_expansion`, `min_courtyard_spacing`), `severity` (the word written), `effective_severity` (what a finding gets: a severity entry's, or `off`), `message`, `text_only`, `problems` (with line and column) and `text` |
+| `rules_list [kind] [enabled]` | `stored_in` (`project` or `machine`), `board`, `syntax_errors`, `sets` (as `rules_set_create` answers each), `rules`: each with `id`, `name`, `enabled`, `applied`, `kind`, `domain` (the grid domain it shows on: `clearance`, `physical`, `high_speed`, `manufacturing`, `smt`, `mask`, `plane`, `testpoint`, `placement`), `scope`, `layer`, `pair`, `limits` (by column id: `min_clearance`, `min_width`, `max_width`, `min_diameter`, `min_drill`, `min_pad_gap`, `min_hole`, `max_hole`, `min_annular`, `min_hole_spacing`, `min_edge_clearance`, `min_silk_pad`, `min_silk_spacing`, `min_sliver`, `min_mask_expansion`, `max_mask_expansion`, `min_paste_expansion`, `max_paste_expansion`, `min_courtyard_spacing`, `max_height`, `min_body_clearance`), `severity` (the word written), `effective_severity` (what a finding gets: a severity entry's, or `off`), `message`, `text_only`, `problems` (with line and column) and `text` |
 | `rules_get id` | one rule as above, plus `flags`, `scope_objects` and `result` (`violations`, `measured_mm`, `required_mm`, `margin_mm`, `stale`) when the board is open |
-| `rules_add kind values [scope] [layer] [pair] [severity] [name]` | `id`, `name`; `kind` is a target (`clearance`, `track`, `via`, `hole`, `edge`, `silk`, `mask`, `paste`, `courtyard`); `values` is `min_width=0.1mm, max_width=12mil` or one bare length for the kind's first limit |
+| `rules_add kind values [scope] [layer] [pair] [severity] [name]` | `id`, `name`; `kind` is a target (`clearance`, `track`, `via`, `hole`, `edge`, `silk`, `mask`, `paste`, `courtyard`, `component`); `values` is `min_width=0.1mm, max_width=12mil` or one bare length for the kind's first limit |
 | `rules_set id field [value]` | `rule`; `field` is `name`, `scope`, `layer`, `pair`, `severity`, `message`, `enabled` or a limit; no `value` clears it |
 | `rules_remove id` | `removed` |
 | `rules_enable id on` | `id`, `enabled` |
-| `rules_effective net [kind] [layer]` | `value_mm`, `source`, `without_rules_mm` and the `chain` of candidates with their `verdict` (`kind` is a limit id: `min_clearance`, `min_track_width`, `max_track_width`, `min_via_diameter`, `min_via_drill`, `min_hole_size`, `max_hole_size`, `min_annular_ring`, `min_hole_to_hole`, `min_edge_clearance`, `min_via_pad_gap`, `min_silk_to_pad`, `min_silk_to_silk`, `min_mask_sliver`, `min_mask_expansion`, `max_mask_expansion`, `min_paste_expansion`, `max_paste_expansion`, `min_courtyard_gap`) |
+| `rules_effective net [kind] [layer]` | `value_mm`, `source`, `without_rules_mm` and the `chain` of candidates with their `verdict` (`kind` is a limit id: `min_clearance`, `min_track_width`, `max_track_width`, `min_via_diameter`, `min_via_drill`, `min_hole_size`, `max_hole_size`, `min_annular_ring`, `min_hole_to_hole`, `min_edge_clearance`, `min_via_pad_gap`, `min_silk_to_pad`, `min_silk_to_silk`, `min_mask_sliver`, `min_mask_expansion`, `max_mask_expansion`, `min_paste_expansion`, `max_paste_expansion`, `min_courtyard_gap`, `max_component_height`, `min_body_clearance`) |
 | `rules_explain violation` | for finding `violation` of the last run: `required_mm`, `rule` and one `sides` entry per net, as `rules_effective` answers |
 | `rules_conflicts` | `flags`: `shadowed` (`by`), `conflict` (`with`), `lowers_class` (`class`, `from_mm`, `to_mm`), `no_nets`, `below_fab_floor` (`floor`, `limit`, `from_mm`, `to_mm`) |
 | `rules_matrix_get` | `classes`, `cells` (each `class_a`, `class_b`, `object_pair`, `layer`, `value`, `rule`, `enabled`), `defaults` (each `class_a`, `class_b`, `object_pair`, `value_mm`) and `defaults_from_board` |
@@ -522,6 +573,47 @@ and `check_drc` say so in Messages, `DRC rule 'tight' asks min_clearance
 flags it. A `fab_*` rule more specific than the written rule (one for inner
 layers against a board-wide rule) is left out of that comparison: it wins
 on its own scope, so the broad rule loosens nothing there.
+
+## Fixing findings
+
+Six rule kinds have a fix (#2940), run with `fix_drc` and
+`fix_drc_violation` (`docs/CLI.md`, "Fixing DRC findings"). Each fix
+changes the least it can to clear its finding:
+
+| Rule | Fix |
+|---|---|
+| Clearance | Move the track or via of the two, a track first, the least distance that takes it the rule's clearance from the other item, away from it. The tracks joined to a moved track's ends, and those on a moved via, follow it. |
+| Track width | Set the track or copper arc to the limit it breaks: the rule's minimum, or its maximum. |
+| Annular ring | Grow the via's diameter, or the pad's sides, to its hole plus the rule's ring on each side. The hole stays. |
+| Hole to hole | Move the via of the two the least distance that takes its hole the rule's gap from the other hole; the tracks on it follow. Two pad holes are left: a pad's hole moves with its part. |
+| Silkscreen to pad | Move the board string or drawing the least distance that takes it the rule's gap from the pad. A part's own silkscreen is its footprint's and is left. |
+| Solder mask sliver | Shrink the opening of a via, or of a track with a mask expansion of its own, by what the strip lacks; between two openings of one net, merge them by growing one until they meet. A pad's opening comes from its footprint and is left. |
+
+Every fix is tried on a copy of the board and checked with the same rules
+as Run DRC. It is kept only when its finding is gone and no new finding
+appeared (a finding that names no item counts by its rule alone); otherwise
+the next way is tried, and when none is left the finding stays. A length is
+rounded up to a whole micrometre and one more, so the fix still holds once
+the board stores it in nanometres. A move is at most 10 mm.
+
+A fix never waives a finding: a waived finding is left as it is, and a fix
+whose change would lapse a waiver counts as a new finding. A fix never
+changes a locked track or via, a track joined to the end of a moved track
+when that one is locked, or a pad of a part that is locked in place or
+whose pads are locked. A via or pad with sizes by layer, and a pad drawn
+from its own corners, are left to a person. The fixes are worked out off
+the UI thread on a copy of the board, checked with Run DRC's rules and the
+parts' 3D bodies (as `check_drc` reads them), and land as one step that
+passes the board's lease check (`docs/architecture/pcb-board-engine.md`,
+"Collab leases"; today it allows every edit) and is refused, with nothing
+changed, when the board moved on while they were worked out.
+
+Each finding left carries a reason: `no_fix` (its rule has no fix),
+`waived`, `locked` (with the locked items), `cannot_change` (no
+item the fix may change, and why), `new_violation` (every way tried makes a
+new finding, with their keys), `not_cleared` and `refused` (the board
+refused the edit). Rerouting a track that cannot move, and clipping a
+part's own silkscreen, are not in this version.
 
 ## Not in this version
 

@@ -69,8 +69,9 @@ pub fn via_edit_command(
 
 /// `edit` set on each of `vias` in place, as [`via_edit_command`] sets it;
 /// `copper` are the board's copper layers. Refused when a via is locked and
-/// the edit is not the unlock, or when a value is not a number.
-pub(crate) fn edit_vias(
+/// the edit is not the unlock, or when a value is not a number. A new via
+/// not on a board yet is sized and spanned with it too (#2470).
+pub fn edit_vias(
     vias: &mut [Via],
     edit: &ViaEdit,
     copper: &[CopperLayer],

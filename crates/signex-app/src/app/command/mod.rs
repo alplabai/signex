@@ -15,15 +15,22 @@ mod agent_edit_cross_sheet_tests;
 mod agent_edit_tests;
 mod agent_edits;
 mod args;
+#[cfg(test)]
+mod board_area_operand_tests;
+mod board_area_operands;
 mod board_edit_operands;
 #[cfg(test)]
 mod board_graphic_operand_tests;
 mod board_graphic_operands;
 mod board_operands;
+mod board_route_operands;
 #[cfg(test)]
 mod board_view_operand_tests;
 mod board_view_operands;
 pub(crate) mod bridge;
+#[cfg(test)]
+mod change_component_operand_tests;
+mod change_component_operands;
 mod component_operand;
 #[cfg(test)]
 mod directive_operand_tests;
@@ -40,6 +47,12 @@ pub(crate) mod enablement;
 #[cfg(test)]
 mod file_operand_tests;
 mod file_operands;
+#[cfg(test)]
+mod footprint_assign_operand_tests;
+mod footprint_assign_operands;
+#[cfg(test)]
+mod footprint_place_operand_tests;
+mod footprint_place_operands;
 #[cfg(test)]
 mod footprint_text_operand_tests;
 mod footprint_text_operands;
@@ -71,7 +84,11 @@ mod operands;
 #[cfg(test)]
 mod parity;
 #[cfg(test)]
+mod part_height_operand_tests;
+mod part_height_operands;
+#[cfg(test)]
 mod part_operand_tests;
+pub(crate) use part_height_operands::PartHeightsRead;
 mod part_operands;
 mod placed_move;
 #[cfg(test)]
@@ -131,6 +148,7 @@ pub use agent_edits::{
 };
 pub use args::CommandArgs;
 pub(crate) use args::InvocationContext;
+pub(crate) use board_edit_operands::mm_points;
 use bridge::core_to_message;
 pub(crate) use component_operand::component_by_uuid;
 pub use edit_reads::{EditReads, ReadsLoaded};
@@ -139,7 +157,8 @@ pub(crate) use enablement::{disabled_reason, is_enabled};
 pub(crate) use opened::answers_with_the_new_document;
 pub(crate) use operand_handlers::runs_headless_without_operands;
 pub use operands::{OperandError, OperandValue};
-pub(crate) use operands::{missing_headless_operand, parse_targets};
+pub(crate) use operands::{missing_headless_operand, operand_str, parse_targets};
+pub(crate) use part_operands::library_row;
 pub(crate) use placed_operands::PlacedRefusal;
 pub use request::{AgentGatePassed, CommandRequest, RefusalCause, RequestOutcome, RequestSurface};
 pub use signex_commands::CommandOutcome;
