@@ -66,6 +66,7 @@ fn a_dry_run_on_the_matching_sample_lists_nothing() {
     assert_eq!(changes(&answer).len(), 0, "{answer}");
     assert_eq!(answer["applied"], 0, "{answer}");
     assert_eq!(answer["counts"]["change"], 0, "{answer}");
+    assert_eq!(answer["pad_locks"], serde_json::json!([]), "{answer}");
     assert_eq!(revision(&app, tmp.path()), before);
 }
 
@@ -78,6 +79,7 @@ fn an_apply_on_the_matching_sample_changes_nothing() {
     assert_eq!(changes(&answer).len(), 0, "{answer}");
     assert_eq!(answer["applied"], 0, "{answer}");
     assert_eq!(answer["board_revision"], before, "{answer}");
+    assert_eq!(answer["pad_locks"], serde_json::json!([]), "{answer}");
     assert_eq!(revision(&app, tmp.path()), before, "the board did not move");
     assert!(!tab_locked(&app, tmp.path()));
 }
@@ -135,10 +137,19 @@ fn a_real_difference_on_the_sample_is_listed_and_applied() {
     assert_eq!(rows[0]["from"], old.as_str());
     assert_eq!(rows[0]["to"], format!("{old}0"));
     assert_eq!(answer["applied"], 1, "{answer}");
+    assert_eq!(answer["pad_locks"], serde_json::json!(["U1.4"]), "{answer}");
 
     let before = revision(&app, tmp.path());
+    let said = crate::diagnostics::logged_count(LOCKED_LINE);
     let answer = answered(run(&mut app, &[&document(tmp.path()), "apply=true"]));
     assert_eq!(answer["applied"], 1, "{answer}");
+    assert_eq!(answer["pad_locks"], serde_json::json!(["U1.4"]), "{answer}");
     assert_ne!(revision(&app, tmp.path()), before, "the board moved");
     assert!(tab_locked(&app, tmp.path()), "the tab locks with the row");
+    assert!(
+        crate::diagnostics::logged_count(LOCKED_LINE) > said,
+        "Messages says the pad was locked"
+    );
 }
+
+const LOCKED_LINE: &str = "locked 1 pad with no symbol pin";

@@ -84,6 +84,30 @@ fn a_real_difference_is_listed_and_the_lock_rides_along() {
     assert!(after.rows.is_empty() && after.pad_locks.is_empty());
 }
 
+/// The lock is part of Execute's one undo step: undo restores the value
+/// and the unlocked tab, redo takes both again.
+#[test]
+fn undo_takes_back_the_lock_with_the_row_and_redo_takes_it_again() {
+    let mut design = in_sync();
+    design.parts[0].value = "AMS1117".into();
+    let list = design.diff();
+    let mut engine = crate::pcb::BoardEngine::new(design.board.clone(), design.revision);
+    let commands = lower(&list, engine.board());
+    engine
+        .execute_labelled(commands, "Update PCB", list.revision)
+        .unwrap();
+    let state = |engine: &crate::pcb::BoardEngine| {
+        let fp = &engine.board().footprints[0];
+        (fp.value.clone(), fp.pads[3].net_locked)
+    };
+    assert_eq!(state(&engine), ("AMS1117".to_string(), true));
+    assert!(engine.undo().unwrap().is_some(), "one undo step");
+    assert_eq!(state(&engine), ("LDO".to_string(), false));
+    assert_eq!(engine.board().footprints[0].pads[3].net, tab(&design).net);
+    assert!(engine.redo().unwrap().is_some());
+    assert_eq!(state(&engine), ("AMS1117".to_string(), true));
+}
+
 /// A pad net that differs is still a row, whose from and to differ.
 #[test]
 fn a_pad_net_difference_is_still_listed() {

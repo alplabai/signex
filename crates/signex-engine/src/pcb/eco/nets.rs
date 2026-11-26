@@ -324,6 +324,8 @@ fn pad_rows(
             locks.push(PadLock {
                 footprint: fp.uuid,
                 pad: pad.uuid,
+                reference: fp.reference.clone(),
+                pad_number: pad.number.clone(),
                 net: pad.net.clone(),
                 needs: brought.get(&fp.uuid).cloned().into_iter().collect(),
             });

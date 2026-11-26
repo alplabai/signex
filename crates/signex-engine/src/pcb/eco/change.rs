@@ -280,6 +280,9 @@ pub struct EcoChangeList {
 pub struct PadLock {
     pub footprint: Uuid,
     pub pad: Uuid,
+    /// The footprint's designator and the pad's number, as `U1` and `4`.
+    pub reference: String,
+    pub pad_number: String,
     /// The net the pad keeps.
     pub net: Option<PadNet>,
     /// The rows it only makes sense with (the footprint row that brought

@@ -1349,6 +1349,7 @@ The answer:
     "footprint": "<uuid>", "pad": "<uuid>", "from": null, "to": "N$1",
     "locked": false, "ticked": true, "applies": true, "blocked": null}
  ],
+ "pad_locks": ["U1.4"],
  "notes": ["..."]}
 ```
 
@@ -1359,6 +1360,10 @@ The answer:
   apply did. A row applies when it is ticked, not blocked, and every row it
   needs applies too.
 - `counts` are the dialog's tiles: rows by action, and the blocked rows.
+- `pad_locks` lists the pads with no symbol pin, as `U1.4`, that keep their
+  net and are locked along with the rows that apply: what a dry run would
+  lock, what an apply locked. They are not changes and are not counted in
+  `applied`; with no row to apply the list is empty (#3060).
 - Each change has a `kind`: `add_footprint`, `remove_footprint`,
   `change_footprint` (a footprint swap, with `reason` `footprint` or
   `other_version`; another library version starts unticked),
