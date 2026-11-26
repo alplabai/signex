@@ -15,6 +15,7 @@ use super::agent_edits as agent;
 use super::board_edit_operands as board_edit;
 use super::board_graphic_operands as graphic;
 use super::board_operands as board;
+use super::board_route_operands as route;
 use super::board_view_operands as board_view;
 use super::directive_operands as directive;
 use super::document_operands as doc;
@@ -204,6 +205,13 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("board_shape_from_selection", tools::board_shape_by_operands),
     ("keepout_from_selection", tools::keepout_by_operands),
     ("arrange_in_box", tools::arrange_in_box_by_operands),
+    // #2470: the routing tools and the via, net by net on a named board.
+    ("place_board_via", route::place_board_via),
+    ("place_board_track", route::place_board_track),
+    ("place_board_route", route::place_board_route),
+    ("place_board_diff_pair", route::place_board_diff_pair),
+    ("place_board_quick_route", route::place_board_quick_route),
+    ("place_board_multi_route", route::place_board_multi_route),
     (
         "import_dxf",
         crate::app::handlers::pcb_dxf_import::import_dxf,

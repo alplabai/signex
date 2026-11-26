@@ -170,6 +170,13 @@ geometry rows are left out. A value the selected tracks do not share reads
 drawn on the active copper layer like a Track run, but each leg keeps the
 clearance the design rules ask from other nets' copper (#2389).
 
+The routing tools and Via also run from operands on a named board, from
+the command line (#2470): the start, the corners and the end are given as
+points or pads, each one a click, and the whole route is one undo step. The
+same rules below apply; the board's defaults take the place of the tool's
+form, corner rule and mode. Operands and answer: `docs/CLI.md`, "Routing a
+board".
+
 - **Start.** The first click starts the route on the net of the copper under
   it (a pad or a track end), or no net over bare board, which then takes the
   net of the copper its next point lands on. Copper that does not reach the

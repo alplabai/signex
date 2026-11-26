@@ -143,8 +143,15 @@ mod tests {
                 "lock_board_items",
                 "measure_board",
                 "panelize_board",
+                // #2470: the routing tools and the via, on the named board.
+                "place_board_diff_pair",
+                "place_board_multi_route",
+                "place_board_quick_route",
                 // #2410: pin and gate swap and design reuse, on the named board.
                 "place_board_reuse_block",
+                "place_board_route",
+                "place_board_track",
+                "place_board_via",
                 // #2339: the Requirements section's edits and run.
                 "project_add_requirement",
                 "project_add_variant",

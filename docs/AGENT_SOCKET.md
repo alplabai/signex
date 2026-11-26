@@ -159,6 +159,11 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   for a script's call on the active project, but the channel keeps it required, by
   hand in `DOCUMENT_NAMED_ON_CHANNEL`, since its gate acts only on a named
   document), and the
+  routing tools `place_board_route`, `place_board_track`,
+  `place_board_quick_route`, `place_board_diff_pair`,
+  `place_board_multi_route` and `place_board_via` (#2470; one undo step on
+  the named board, answered with the tracks and vias made;
+  [CLI.md](CLI.md), "Routing a board"), and the
   panel edits `panelize_board`, `remove_board_panel` and `set_board_panel`
   (#2410; one undo step on the named board each, answered with the panel as
   JSON), and the board's `swap_pins`, `swap_gates`,

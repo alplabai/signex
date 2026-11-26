@@ -190,6 +190,22 @@ mod tests {
         }
     }
 
+    /// #2470: a route or a via from operands is an undo step on the board in
+    /// memory, never a write: `edit`.
+    #[test]
+    fn the_routing_tools_need_the_edit_capability() {
+        for id in [
+            "place_board_route",
+            "place_board_track",
+            "place_board_quick_route",
+            "place_board_diff_pair",
+            "place_board_multi_route",
+            "place_board_via",
+        ] {
+            assert_eq!(cap(id), Capability::Edit, "{id}");
+        }
+    }
+
     #[test]
     fn the_catalogs_writers_and_exporters_are_pinned() {
         let non_default: BTreeSet<_> = all_command_ids()

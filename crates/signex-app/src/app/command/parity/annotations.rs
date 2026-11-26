@@ -86,6 +86,22 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Operand,
         &[Settings],
     ),
+    // The routing tools from their operands (#2470): the rules the route
+    // keeps come from `board_design_rules` -> `drc_inputs`; none reads the
+    // person's tool form, corner rule or route mode (handlers/pcb_tool/
+    // route_order.rs). A via reads nothing past its operands and the board.
+    (
+        &[
+            "place_board_track",
+            "place_board_quick_route",
+            "place_board_route",
+            "place_board_diff_pair",
+            "place_board_multi_route",
+        ],
+        Operand,
+        &[Settings],
+    ),
+    (&["place_board_via"], Operand, &[]),
     // The PDF's printed text is in the UI locale (`print_text`).
     (&["export_board_pdf"], Operand, &[Settings]),
     // Save As of a background sheet is refused (`active_path`).

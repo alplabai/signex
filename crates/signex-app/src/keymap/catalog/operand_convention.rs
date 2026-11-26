@@ -121,6 +121,12 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     // #2470: Re-Annotate Board's numbering order and bottom side.
     ("order", OperandKind::Text),
     ("bottom", OperandKind::Text),
+    // #2470: a board route's corners between its ends (`x,y;x,y`), how each
+    // leg bends, walk around or push, and the nets of a Multi-Route.
+    ("through", OperandKind::Text),
+    ("corner", OperandKind::Text),
+    ("mode", OperandKind::Text),
+    ("nets", OperandKind::Text),
 ];
 
 /// The commands whose `ids` is still text, not targets (#2326): a design

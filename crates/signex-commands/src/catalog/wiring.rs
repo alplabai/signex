@@ -174,7 +174,8 @@ pub(super) const WIRING: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     // #2389: Interactive Routing. Each route is one undo step when it ends.
-    // No default key.
+    // No default key. From its operands it routes one net on the board
+    // `document` names, one undo step (#2470).
     CommandMetadata {
         id: "place_board_route",
         category: "place",
@@ -182,7 +183,8 @@ pub(super) const WIRING: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_ROUTE),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: super::route_operands::BOARD_ROUTE,
         ..CommandMetadata::DEFAULT
     },
     // #2389: walk around or push and shove. Changes no board. No default key.
@@ -207,7 +209,8 @@ pub(super) const WIRING: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     // #2389: the routing tools of the Route group. Each route is one undo
-    // step when it ends. No default key.
+    // step when it ends. No default key. From their operands each routes
+    // the nets named on the board `document` names, one undo step (#2470).
     CommandMetadata {
         id: "place_board_diff_pair",
         category: "place",
@@ -215,7 +218,8 @@ pub(super) const WIRING: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_DIFF_PAIR),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: super::route_operands::BOARD_PAIR_ROUTE,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -225,7 +229,8 @@ pub(super) const WIRING: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_QUICK_ROUTE),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: super::route_operands::BOARD_TRACK,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -235,7 +240,8 @@ pub(super) const WIRING: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_MULTI_ROUTE),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: super::route_operands::BOARD_MULTI_ROUTE,
         ..CommandMetadata::DEFAULT
     },
     // #2389: the Tune group. Without operands they tune the selected

@@ -20,6 +20,7 @@ mod board_edit_operands;
 mod board_graphic_operand_tests;
 mod board_graphic_operands;
 mod board_operands;
+mod board_route_operands;
 #[cfg(test)]
 mod board_view_operand_tests;
 mod board_view_operands;

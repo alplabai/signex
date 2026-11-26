@@ -300,6 +300,22 @@ pcb-route-end-other-net = { $pad } is on net { $pad_net }, the route is on net {
 # it as a net set on the board.
 pcb-route-pad-joined = { $pad } joined net { $net }
 pcb-route-join-gone = a pad the route joins is gone, or its net is no longer in the board's net table
+# A route or via run from its operands by the CLI (#2470): why the operands
+# were refused, said after the tool's name. $layer is a layer name as
+# given, $operand an operand's name, $pad a pad as given (U1.3), $drill and
+# $diameter lengths in mm, $why what the board said.
+pcb-route-order-no-layer = no copper of a net is under the start; name the copper layer with `layer`
+pcb-route-order-layer = { $layer } is not a copper layer of this board
+pcb-route-order-points = `through` lists the corners as x,y;x,y in mm, from the board origin with Y up
+pcb-route-order-length = `{ $operand }` takes a length in mm above zero
+pcb-route-order-corner = `corner` is one of 90, 45_start, 45_end or free
+pcb-route-order-mode = `mode` is walkaround or shove
+pcb-route-order-nets = `nets` names two or more nets of the board, comma separated
+pcb-route-order-pad = { $pad } names no pad on this board
+pcb-route-order-pad-many = { $pad } names more than one pad on this board
+pcb-route-order-span = `layers` names two copper layers of this board, as TopCopper,BottomCopper
+pcb-route-order-drill = the via's hole ({ $drill } mm) is wider than its copper ({ $diameter } mm)
+pcb-route-order-not-placed = the board refused the edit: { $why }
 # A Polygon Pour placed with no net; $tool is its name.
 pcb-pour-no-net = { $tool } has no net; set it in Properties
 # A pour the fill left empty; $pour names it, $why is one of the reasons

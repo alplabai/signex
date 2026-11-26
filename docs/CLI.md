@@ -1215,6 +1215,78 @@ back_annotate_schematics document=<project, its board or a sheet> [dry_run=true]
   at the gate). The others take an optional `document`, so they run headless
   only. None of them can be an edit of `apply_edits`: each is its own step.
 
+## Routing a board
+
+The routing tools and the Via tool run from operands on the board
+`document` names (#2470), so a board is routed net by net from the command
+line through the same interactive router a person drives with clicks. There
+is no autorouter: each command routes the nets it names, along the points
+it is given. Each is one undo step and changes the board in memory only
+(capability `edit`); `save_document` writes it.
+
+```text
+place_board_route document=<board> start=<pt> end=<pt> [through=x,y;x,y]
+                  [layer=..] [width=..] [net=..] [corner=..] [mode=..] [dry_run=..]
+place_board_track document=<board> start=<pt> end=<pt> [through=..] [layer=..]
+                  [width=..] [net=..] [corner=..] [dry_run=..]
+place_board_quick_route  (the operands of place_board_track)
+place_board_diff_pair document=<board> net=<either net> start=<pt> end=<pt>
+                  [through=..] [layer=..] [corner=..] [dry_run=..]
+place_board_multi_route document=<board> nets=<a,b,..> start=<pt> end=<pt>
+                  [through=..] [layer=..] [corner=..] [dry_run=..]
+place_board_via document=<board> at=<pt> [net=..] [layers=<from>,<to>]
+                  [via_diameter=..] [via_drill=..] [dry_run=..]
+```
+
+- A point is `x,y` in mm from the board origin with Y up, as the status bar
+  shows it, or a pad as `<designator>.<pad number>` (`U1.3`), its centre.
+  `through` lists the corners between `start` and `end`, in order; each one
+  ends a leg, as a click does.
+- `layer` is a copper layer of the board (`TopCopper`, `Inner1Copper`);
+  left out, the layer of the netted copper under `start`. With no copper
+  under `start` it is needed.
+- `net` and `width` take the place of what the tool's form would set.
+  Left out, the route takes the net of the copper under `start` and the
+  width of its net class (else the board's), held within the rules' track
+  width limits; Track does not hold it there, as its click does not. Copper
+  under `start` off `layer` starts the route with a via.
+- `corner` bends each leg: `90` (the default), `45_start`, `45_end` or
+  `free`. `mode` is Interactive Routing's: `walkaround` (the default) goes
+  around other nets' copper at the rule clearance, `shove` pushes their
+  tracks aside. The person's own corner rule, route mode and tool form are
+  never read.
+- What each tool does at a leg is what its click does: Interactive Routing
+  routes around other nets and refuses a leg it finds no way for; Track and
+  Quick Route lay straight legs and do not avoid other nets (Track refuses a
+  leg that ends on a pad of another net); a pad of no net that a routed leg
+  ends on joins the route's net in the same step; a pad off the leg's layer
+  is reached with a via. A pair takes its net class's coupled width and gap
+  and starts each net at its copper nearest `start`; Multi-Route runs the
+  nets named side by side. See `docs/PCB_TOOLS.md`, "Interactive Routing".
+- `place_board_via` places the board's via (its setup size) at `at`, on the
+  net under it unless `net` names one, through from top to bottom unless
+  `layers` names the two copper layers it joins.
+- `dry_run=true` answers as the command would and changes nothing; the ids
+  in its answer are not on the board. `--dry-run` sets it.
+
+A route answers `{"document", "dry_run", "revision", "layer", "width_mm",
+"nets", "tracks", "vias", "pushed", "joined_pads"}`: the nets by name
+(`null` for no net); each track as `{"id", "start", "end", "width_mm",
+"layer", "net"}` and each via as `{"id", "at", "layers", "via_type",
+"diameter_mm", "drill_mm", "net"}`, points as `[x, y]` from the origin; the
+ids of the other nets' tracks it pushed; and each pad that joined a net as
+`{"pad", "net"}`. A via answers `{"document", "dry_run", "revision",
+"vias"}`. The design rule check is not run by the command; `check_drc`
+reports the board's findings.
+
+Refused with the reason, nothing changed: a pad that is not on the board or
+names more than one pad, a layer the board does not have, a net it does not
+have, a leg with no way that keeps the clearance, a leg that ends on a pad
+of another net, a net in no differential pair, fewer than two nets for
+Multi-Route, a via hole wider than its copper, and a read-only board. A
+headless run without operands is asked for `document`; in a window, the
+same ids with no operands arm the tool, as before.
+
 ## Working through a running Signex
 
 When a person has the project open in Signex with Preferences > System ›
