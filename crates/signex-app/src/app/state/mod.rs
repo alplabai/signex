@@ -15,7 +15,6 @@ mod board_sketch_dxf;
 mod bom_preview;
 #[cfg(test)]
 mod case_fold_tests;
-pub(crate) mod check_runs;
 pub(crate) mod cross_select;
 mod dirty;
 #[cfg(test)]

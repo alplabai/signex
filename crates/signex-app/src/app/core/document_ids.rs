@@ -118,3 +118,35 @@ impl DocumentIds {
         self.next_seen
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+    use std::time::{Duration, SystemTime};
+
+    use super::*;
+
+    fn never_asked() -> std::io::Result<SystemTime> {
+        panic!("the modification time must not be read")
+    }
+
+    #[test]
+    fn a_head_never_read_or_without_an_id_is_wanted_without_a_stat() {
+        let path = Path::new("/p/a.snxsch");
+        let mut ids = DocumentIds::default();
+        assert!(ids.header_wanted_given(path, never_asked));
+        ids.set_header(path.to_path_buf(), None, Some(SystemTime::UNIX_EPOCH));
+        assert!(ids.header_wanted_given(path, never_asked));
+    }
+
+    #[test]
+    fn a_head_with_an_id_is_wanted_only_when_its_file_changed() {
+        let path = Path::new("/p/a.snxsch");
+        let read_at = SystemTime::UNIX_EPOCH;
+        let mut ids = DocumentIds::default();
+        ids.set_header(path.to_path_buf(), Some(DocumentId::new()), Some(read_at));
+        assert!(!ids.header_wanted_given(path, || Ok(read_at)));
+        assert!(ids.header_wanted_given(path, || Ok(read_at + Duration::from_secs(1))));
+        assert!(!ids.header_wanted_given(path, || Err(std::io::Error::other("no stat"))));
+    }
+}
