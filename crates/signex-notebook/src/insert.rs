@@ -7,6 +7,7 @@ use crate::annotation::AnnotationKind;
 use crate::id::BlockId;
 use crate::outline::Outline;
 use crate::reference::Reference;
+use crate::template::next_block_id;
 
 /// What to insert.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -68,7 +69,8 @@ pub fn insertion_text(insertion: &Insertion, outline: &Outline, file: &str, line
             id: None,
         },
         Insertion::Block(kind) => {
-            let id = next_id(*kind, outline, file, line);
+            let section = section_of(*kind, outline, file, line);
+            let id = next_block_id(*kind, &section, outline.block_ids());
             Inserted {
                 text: block_text(*kind, &id),
                 id: Some(id),
@@ -77,19 +79,18 @@ pub fn insertion_text(insertion: &Insertion, outline: &Outline, file: &str, line
     }
 }
 
-/// The next free id of `kind` for a block written at `line` of `file`.
-pub fn next_id(kind: AnnotationKind, outline: &Outline, file: &str, line: u32) -> BlockId {
-    let section: Vec<u64> = if numbers_within_section(kind) {
-        outline
-            .section_at(file, line)
-            .and_then(|section| section.number.split('.').next())
-            .and_then(|top| top.parse::<u64>().ok())
-            .into_iter()
-            .collect()
-    } else {
-        Vec::new()
-    };
-    BlockId::next_free(kind, &section, outline.block_ids())
+/// The section a block of `kind` written at `line` of `file` is numbered
+/// in: its top-level section for a Calculation, none for the others.
+fn section_of(kind: AnnotationKind, outline: &Outline, file: &str, line: u32) -> Vec<u64> {
+    if !numbers_within_section(kind) {
+        return Vec::new();
+    }
+    outline
+        .section_at(file, line)
+        .and_then(|section| section.number.split('.').next())
+        .and_then(|top| top.parse::<u64>().ok())
+        .into_iter()
+        .collect()
 }
 
 /// A block of `kind` with `id`, its fields left to fill in.

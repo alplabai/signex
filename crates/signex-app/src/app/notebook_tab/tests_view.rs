@@ -155,8 +155,9 @@ fn an_open_notebook_shows_the_toolbar_outline_editor_preview_and_status() {
 fn a_compile_error_shows_its_mark_its_peek_its_row_and_the_banner() {
     let dir = tempfile::tempdir().unwrap();
     let (app, id) = app_with_notebook(dir.path(), &broken());
-    let tab = &app.document_state.notebooks[&id];
-    assert!(marks(tab).contains(&(1, Mark::Error)), "{:?}", marks(tab));
+    let (doc, tab) = app.notebook_parts(id).unwrap();
+    let held = marks(doc, tab);
+    assert!(held.contains(&(1, Mark::Error)), "{held:?}");
     let texts = shown(&app, id);
     let parts = [
         "Go to error",
@@ -217,7 +218,7 @@ fn the_pages_panel_shows_a_thumbnail_per_page() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, id) = app_with_notebook(dir.path(), NOTEBOOK);
     pick_panel(&mut app, id, SidePanel::Pages);
-    let tab = &app.document_state.notebooks[&id];
+    let tab = &app.ui_state.notebook_tabs[&id];
     let pages = tab.compile.last_good.as_ref().unwrap().status.pages.len();
     assert_eq!(tab.compile.thumbnails.len(), pages);
     assert!(has(&shown(&app, id), "Page "));

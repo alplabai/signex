@@ -162,12 +162,13 @@ impl Signex {
             return Task::none();
         };
         let names = self.notebook_design_names(dialog.project);
+        let values = self.notebook_design_values(dialog.project);
         self.edit_notebook_pdf(|dialog| {
             if let Stage::Ready(inspection) = std::mem::replace(&mut dialog.stage, Stage::Reading) {
                 dialog.stage = Stage::Exporting(inspection);
             }
         });
-        jobs::build_task(request, names)
+        jobs::build_task(request, names, values)
     }
 
     /// What Export would make; `Err(None)` when the dialog is not ready,
@@ -292,8 +293,9 @@ impl Signex {
     ) -> Task<Message> {
         if let Some(waiting) = request.waiting {
             let target = request.project_dir.clone();
+            let reason = crate::app::notebook_project::because(why);
             return self
-                .finish_waiting_command(waiting, &target, |_| CommandOutcome::disabled(why));
+                .finish_waiting_command(waiting, &target, |_| CommandOutcome::Disabled { reason });
         }
         self.edit_notebook_pdf(|dialog| {
             if Some(dialog.generation) != request.generation {

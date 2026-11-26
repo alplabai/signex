@@ -58,7 +58,7 @@ pub(super) fn app_with_notebook(dir: &Path, text: &str) -> (Signex, ProjectId) {
 }
 
 pub(super) fn body(app: &Signex, id: ProjectId) -> String {
-    app.document_state.notebooks[&id]
+    app.ui_state.notebook_tabs[&id]
         .text
         .as_ref()
         .expect("text")
@@ -124,9 +124,10 @@ fn opening_twice_focuses_the_one_tab() {
 fn an_existing_notebook_opens_its_body_below_its_header_and_compiles() {
     let dir = tempfile::tempdir().unwrap();
     let (app, id) = app_with_notebook(dir.path(), NOTEBOOK);
-    let tab = &app.document_state.notebooks[&id];
-    assert_eq!(tab.load, Load::Open);
-    assert_eq!(tab.header_lines, 3);
+    let doc = &app.document_state.notebooks[&id];
+    let tab = &app.ui_state.notebook_tabs[&id];
+    assert_eq!(doc.load, Load::Open);
+    assert_eq!(doc.header_lines, 3);
     let typed = body(&app, id);
     assert!(typed.starts_with("#import"), "no header in the editor");
     assert_eq!(tab.view, super::ViewMode::Split, "Split, as drawn");
@@ -270,9 +271,9 @@ fn a_file_that_is_not_utf8_is_not_opened_for_editing() {
     std::fs::write(&path, [0xff, 0xfe, b'=', b' ', b'A']).unwrap();
     let (mut app, id) = app_in(dir.path());
     open(&mut app, id);
-    let tab = &app.document_state.notebooks[&id];
-    assert!(matches!(tab.load, Load::Failed(_)), "{:?}", tab.load);
-    assert!(tab.text.is_none());
+    let doc = &app.document_state.notebooks[&id];
+    assert!(matches!(doc.load, Load::Failed(_)), "{:?}", doc.load);
+    assert!(app.ui_state.notebook_tabs[&id].text.is_none());
 }
 
 #[test]
@@ -281,6 +282,7 @@ fn closing_the_project_forgets_its_notebook() {
     let (mut app, id) = app_with_notebook(dir.path(), NOTEBOOK);
     app.forget_notebook(id);
     assert!(!app.document_state.notebooks.contains_key(&id));
+    assert!(!app.ui_state.notebook_tabs.contains_key(&id));
 }
 
 #[test]
@@ -380,7 +382,7 @@ fn notebook_view_picks_the_view_and_the_panel_and_answers_with_them() {
     let value = answer(&mut app, "notebook_view", &operands);
     assert_eq!(value["view"], "preview");
     assert_eq!(value["panel"], "references");
-    let tab = &app.document_state.notebooks[&id];
+    let tab = &app.ui_state.notebook_tabs[&id];
     assert_eq!(tab.view, super::ViewMode::Preview);
     assert_eq!(tab.panel, super::SidePanel::References);
     let refused = run(&mut app, "notebook_view", &["view=wide"]);

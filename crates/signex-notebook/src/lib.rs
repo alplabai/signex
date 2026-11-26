@@ -29,8 +29,8 @@
 //! chosen, the bookmarks and the Output Job entry.
 //!
 //! The notebook tab reads the rest from here: the [`outline`], Typst
-//! [`Highlights`], the insert toolbar's text ([`insertion_text`]), the
-//! reference picker's order ([`matching`]), the preview's page colours
+//! [`Highlights`], the insert toolbar's text ([`insertion_text`], its ids
+//! from [`next_block_id`]), the preview's page colours
 //! ([`PageColours`]), the empty state's [`Template`]s and the compile
 //! status ([`NotebookStatus`]).
 //!
@@ -83,6 +83,7 @@ mod date;
 mod design;
 mod design_picker;
 mod design_read;
+mod document;
 mod file;
 mod filter;
 mod fix;
@@ -95,7 +96,6 @@ mod lexer;
 mod links;
 mod location;
 mod outline;
-mod picker;
 mod preview;
 mod record;
 mod reference;
@@ -121,6 +121,7 @@ pub use date::IsoDate;
 pub use design::{DesignIndex, DesignNet, DesignPart, DesignPin, PinName, natural_order};
 pub use design_picker::{PICKER_LIMIT, PickerEntry, picker_entries};
 pub use design_read::{PlacedSheet, design_index};
+pub use document::{NotebookDocument, NotebookLoad};
 pub use file::{HEADER_FENCE, NotebookFile, NotebookFileError};
 pub use filter::{DateWindow, Filter, newest_first};
 pub use fix::{
@@ -129,7 +130,7 @@ pub use fix::{
 pub use header::{Header, HeaderError, NOTEBOOK_FORMAT, StoredReference};
 pub use highlight::{Highlights, Token};
 pub use id::{BlockId, SERIAL_WIDTH};
-pub use insert::{Inserted, Insertion, insertion_text, next_id, numbers_within_section};
+pub use insert::{Inserted, Insertion, insertion_text, numbers_within_section};
 pub use links::{
     Link, cited_by, issue_for_failure, links, open_failing_measurements, unopened_failures,
 };
@@ -137,7 +138,6 @@ pub use location::{is_notebook_file, notebook_path};
 pub use outline::{
     BlockEntry, Figure, FigureKind, Outline, Section, SourceAt, outline, outline_of_text,
 };
-pub use picker::{Candidate, MAX_ROWS, matching};
 pub use preview::PageColours;
 pub use record::{
     Alternative, CalculationRecord, Citation, DecisionRecord, IssueRecord, Limits,
@@ -152,7 +152,7 @@ pub use scan::{ProblemKind, SNIPPET_MAX_CHARS, ScanProblem, TITLE_MAX_CHARS, sca
 pub use sources::{LoadProblem, LoadProblemKind, NotebookSources, resolve};
 pub use status::{BlockCounts, NotebookStatus, header_line_count};
 pub use syntax::{Include, ReferenceAt, distinct_references, includes, references, typst_source};
-pub use template::{new_block_source, next_block_id};
+pub use template::{block_ids, new_block_source, next_block_id};
 pub use templates::Template;
 pub use world::{PACKAGE_IMPORT, PACKAGE_NAME, PACKAGE_NAMESPACE, PACKAGE_VERSION};
 

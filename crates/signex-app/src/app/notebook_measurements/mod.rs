@@ -7,17 +7,10 @@
 mod design;
 mod job;
 mod operands;
-// The notebook tab's margin lane does not mount these yet
-// (`docs/NOTEBOOK_MEASUREMENTS.md`, "Not built yet"); their tests use them.
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "mounted once the notebook tab has its margin lane"
-    )
-)]
+// The notebook tab's margin lane mounts these (mockup row 199).
 pub(crate) mod views;
 
+pub(crate) use design::values_of;
 pub use job::NotebookRead;
 pub(crate) use operands::{
     QUERY_IDS, attach_notebook_file, export_notebook_timeline, mark_notebook_attachment_valid,

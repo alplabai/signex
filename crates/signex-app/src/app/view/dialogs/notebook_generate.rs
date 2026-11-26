@@ -360,7 +360,7 @@ fn checks<'a>(dialog: &GenerateDialog, i18n: &I18n) -> Element<'a, Message> {
     .boxed()
 }
 
-/// "Same as signex notebook generate", and why the last run made nothing.
+/// "Same as signex-cli notebook generate", and why the last run made nothing.
 fn footer_extras<'a>(
     dialog: &'a GenerateDialog,
     i18n: &I18n,

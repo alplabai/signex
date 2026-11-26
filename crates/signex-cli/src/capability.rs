@@ -109,13 +109,32 @@ const SAVES: &[&str] = &[
     // Copies a file into notebook/attachments/ and writes the notebook file
     // (mockup row 199).
     "attach_notebook_file",
+    // With `save`, writes notebook/generated/design-report.snxnbk (mockup
+    // row 201).
+    "generate_design_notebook",
+];
+
+/// Commands outside the `reports` category that write an export file.
+const EXPORTS: &[&str] = &[
+    "print",
+    // A `file` command (File ▸ Export ▸ Design Notebook PDF…, mockup row
+    // 202) that writes the PDF.
+    "export_notebook_pdf",
+];
+
+/// `reports` commands that write no file: they answer with what they read.
+const READS: &[&str] = &[
+    // Compiles the notebook and answers with its status (mockup row 195).
+    "notebook_compile",
 ];
 
 /// The one capability `command` needs, from its catalog flags.
 pub fn capability_of(command: &CommandMetadata) -> Capability {
     if SAVES.contains(&command.id) {
         Capability::Save
-    } else if command.category == "reports" || command.id == "print" {
+    } else if READS.contains(&command.id) {
+        Capability::Read
+    } else if command.category == "reports" || EXPORTS.contains(&command.id) {
         Capability::Export
     } else if command.category == "library" && command.flags.mutates_doc {
         Capability::LibraryWrite
@@ -199,6 +218,7 @@ mod tests {
             (Capability::Save, "save_workspace_layout"),
             (Capability::Save, "mark_notebook_attachment_valid"),
             (Capability::Save, "attach_notebook_file"),
+            (Capability::Save, "generate_design_notebook"),
             (Capability::Export, "print"),
             (Capability::Export, "report_manager_bom"),
             (Capability::Export, "export_board_report"),

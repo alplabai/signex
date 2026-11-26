@@ -1,15 +1,17 @@
 //! Edits in the notebook editor: typing (with `@` opening the reference
 //! picker in place of typing an `@`), the insert toolbar, the picker's
 //! choice, and moving the cursor to a line or the next problem. Every edit
-//! reads the outline and colours again, marks the file unsaved while the
-//! text differs from it, and asks for a compile.
+//! copies the body into the notebook document, reads the outline and
+//! colours again, marks the file unsaved while the body differs from it,
+//! and asks for a compile.
 
 use std::sync::Arc;
 
 use iced::Task;
 use iced::advanced::text::Position;
 use iced::widget::text_editor::{Action, Cursor, Edit};
-use signex_notebook::{Inserted, Insertion, insertion_text};
+use signex_i18n::{Translatable, ids};
+use signex_notebook::{Inserted, Insertion, NotebookDocument, Reference, insertion_text};
 
 use super::open::MAIN_FILE;
 use super::picker::{PICKER_INPUT_ID, Picker};
@@ -29,8 +31,8 @@ pub(super) enum Acted {
 }
 
 /// Perform `action` on `tab`'s text. A read-only file takes no edit.
-pub(super) fn act(tab: &mut NotebookTab, action: Action) -> Acted {
-    let read_only = tab.is_read_only();
+pub(super) fn act(doc: &NotebookDocument, tab: &mut NotebookTab, action: Action) -> Acted {
+    let read_only = doc.is_read_only();
     let Some(text) = &mut tab.text else {
         return Acted::Moved;
     };
@@ -43,6 +45,15 @@ pub(super) fn act(tab: &mut NotebookTab, action: Action) -> Acted {
     let edits = action.is_edit();
     text.content.perform(action);
     if edits { Acted::Edited } else { Acted::Moved }
+}
+
+/// Copy the editor's body into `doc` and read the outline and colours
+/// again: the one step after every edit.
+pub(super) fn sync_body(doc: &mut NotebookDocument, tab: &mut NotebookTab) {
+    if let Some(text) = &mut tab.text {
+        doc.body = Some(text.body());
+        text.refresh(doc);
+    }
 }
 
 /// Insert `inserted` at the cursor of `text`, on a line of its own for a
@@ -68,60 +79,59 @@ pub(super) fn move_to_line(text: &mut NotebookText, line: usize) {
 }
 
 impl Signex {
-    /// The notebook file text of `id`'s tab as typed, header and body;
-    /// `None` while the tab holds no text.
+    /// The notebook file text of `id` as typed, header and body; `None`
+    /// while it has no body.
     pub(crate) fn notebook_tab_file_text(&self, id: ProjectId) -> Option<String> {
-        let tab = self.document_state.notebooks.get(&id)?;
-        super::save::written_text(tab)?.ok()
+        let doc = self.document_state.notebooks.get(&id)?;
+        super::save::written_text(doc)?.ok()
     }
 
-    /// Put the file text `text` in `id`'s tab, as a reference fix does
-    /// (mockup row 196): its header becomes the tab's, its body goes in the
-    /// editor, and the tab compiles. Written on Save, like any edit.
+    /// Put the file text `text` in `id`'s notebook, as a reference fix does
+    /// (mockup row 196): its header becomes the document's, its body goes
+    /// in the editor, and the tab compiles. Written on Save, like any edit.
     pub(crate) fn replace_notebook_tab_file_text(
         &mut self,
         id: ProjectId,
         text: &str,
-    ) -> Result<Task<Message>, String> {
-        let Some(tab) = self.document_state.notebooks.get_mut(&id) else {
-            return Err("the Design Notebook of the project is not open".into());
+    ) -> Result<Task<Message>, Translatable> {
+        let Some((doc, tab)) = self.notebook_parts_mut(id) else {
+            return Err(Translatable::new(ids::NOTEBOOK_TAB_CMD_NOT_OPEN));
         };
-        if tab.is_read_only() {
-            return Err(
-                "the Design Notebook was written by a newer Signex and is read-only".into(),
-            );
+        if doc.is_read_only() {
+            return Err(Translatable::new(ids::NOTEBOOK_TAB_CMD_READ_ONLY));
         }
-        let file = signex_notebook::NotebookFile::parse(text).map_err(|why| why.to_string())?;
-        let Some(editor) = &mut tab.text else {
-            return Err("the Design Notebook of the project holds no text yet".into());
-        };
-        editor.content = iced::widget::text_editor::Content::with_text(&file.body);
-        tab.header_lines = signex_notebook::header_line_count(text);
-        tab.file = Some(file);
+        if doc.body.is_none() {
+            return Err(Translatable::new(ids::NOTEBOOK_TAB_CMD_NOT_OPEN));
+        }
+        doc.replace_file_text(text)
+            .map_err(|why| crate::app::notebook_project::because(why.to_string()))?;
+        if let (Some(editor), Some(body)) = (&mut tab.text, &doc.body) {
+            editor.content = iced::widget::text_editor::Content::with_text(body);
+        }
         Ok(self.notebook_edited(id))
     }
 
     /// An editor action landed.
     pub(super) fn notebook_text_acted(&mut self, id: ProjectId, action: Action) -> Task<Message> {
-        let Some(tab) = self.document_state.notebooks.get_mut(&id) else {
+        let Some((doc, tab)) = self.notebook_parts_mut(id) else {
             return Task::none();
         };
-        match act(tab, action) {
+        match act(doc, tab, action) {
             Acted::Moved => Task::none(),
             Acted::Edited => self.notebook_edited(id),
             Acted::OpensPicker => self.open_notebook_picker(id),
         }
     }
 
-    /// The text changed: read it again, mark it unsaved (or saved again
-    /// when it is back to the file), and compile.
+    /// The text changed: copy it into the document, read it again, mark it
+    /// unsaved (or saved again when it is back to the file), and compile.
     pub(super) fn notebook_edited(&mut self, id: ProjectId) -> Task<Message> {
-        let Some(tab) = self.document_state.notebooks.get_mut(&id) else {
+        let Some((doc, tab)) = self.notebook_parts_mut(id) else {
             return Task::none();
         };
-        tab.refresh_text();
-        let path = tab.path.clone();
-        if tab.is_unsaved() {
+        sync_body(doc, tab);
+        let path = doc.path.clone();
+        if doc.is_unsaved() {
             self.document_state.mark_document_dirty(&path);
         } else {
             self.document_state.clear_document_dirty(&path);
@@ -145,30 +155,32 @@ impl Signex {
         id: ProjectId,
         insertion: &Insertion,
     ) -> (Option<Inserted>, Task<Message>) {
-        let Some(tab) = self.document_state.notebooks.get_mut(&id) else {
+        let Some((doc, tab)) = self.notebook_parts_mut(id) else {
             return (None, Task::none());
         };
         tab.block_menu = false;
-        if tab.is_read_only() {
+        if doc.is_read_only() {
             return (None, Task::none());
         }
-        let Some(inserted) = insert_at_cursor(tab, insertion) else {
+        let Some(inserted) = insert_at_cursor(doc, tab, insertion) else {
             return (None, Task::none());
         };
         (Some(inserted), self.notebook_edited(id))
     }
 
-    /// Open the picker over the editor and focus its query.
+    /// Open the picker over the editor and focus its query. It lists the
+    /// parts, pins and nets of the design the project's last notebook read
+    /// built (`signex_notebook::picker_entries`, mockup row 196).
     pub(super) fn open_notebook_picker(&mut self, id: ProjectId) -> Task<Message> {
-        let candidates = self.notebook_candidates(id);
-        let Some(tab) = self.document_state.notebooks.get_mut(&id) else {
+        let design = self.notebook_design(id);
+        let Some((doc, tab)) = self.notebook_parts_mut(id) else {
             return Task::none();
         };
-        if tab.text.is_none() || tab.is_read_only() {
+        if tab.text.is_none() || doc.is_read_only() {
             return Task::none();
         }
         tab.block_menu = false;
-        tab.picker = Some(Picker::new(candidates));
+        tab.picker = Some(Picker::new(design));
         iced::widget::operation::focus(iced::widget::Id::new(PICKER_INPUT_ID))
     }
 
@@ -178,12 +190,25 @@ impl Signex {
         id: ProjectId,
         row: Option<usize>,
     ) -> Task<Message> {
-        let Some(tab) = self.document_state.notebooks.get_mut(&id) else {
-            return Task::none();
-        };
-        let chosen = tab.picker.as_ref().and_then(|picker| picker.chosen(row));
-        tab.picker = None;
-        let Some(reference) = chosen else {
+        let chosen = self
+            .ui_state
+            .notebook_tabs
+            .get(&id)
+            .and_then(|tab| tab.picker.as_ref())
+            .and_then(|picker| picker.chosen(row));
+        self.notebook_reference_picked(id, chosen)
+    }
+
+    /// A picker entry was picked: insert its call, close the picker.
+    pub(super) fn notebook_reference_picked(
+        &mut self,
+        id: ProjectId,
+        reference: Option<Reference>,
+    ) -> Task<Message> {
+        if let Some(tab) = self.ui_state.notebook_tabs.get_mut(&id) {
+            tab.picker = None;
+        }
+        let Some(reference) = reference else {
             return Task::none();
         };
         self.notebook_insert(id, &Insertion::Reference(reference))
@@ -191,10 +216,10 @@ impl Signex {
 
     /// Move the cursor to 1-based line `line` of the notebook file.
     pub(super) fn notebook_line_picked(&mut self, id: ProjectId, line: u32) {
-        let Some(tab) = self.document_state.notebooks.get_mut(&id) else {
+        let Some((doc, tab)) = self.notebook_parts_mut(id) else {
             return;
         };
-        let Some(body_line) = tab.body_line(line) else {
+        let Some(body_line) = doc.body_line(line) else {
             return;
         };
         if tab.view == super::ViewMode::Preview {
@@ -208,10 +233,10 @@ impl Signex {
     /// F8 or Go to error: the cursor moves to the problem after it in the
     /// notebook file, wrapping to the first.
     pub(super) fn notebook_next_problem(&mut self, id: ProjectId) -> Option<(u32, u32)> {
-        let tab = self.document_state.notebooks.get(&id)?;
+        let (doc, tab) = self.notebook_parts(id)?;
         let text = tab.text.as_ref()?;
         let (line, _) = text.cursor();
-        let here = tab.file_line(line);
+        let here = doc.file_line(line);
         let outcome = tab.compile.last.clone()?;
         let problem = outcome.status.next_problem(MAIN_FILE, here)?;
         let at = (problem.line, problem.column);
@@ -221,15 +246,19 @@ impl Signex {
 }
 
 /// Write `insertion` at `tab`'s cursor; `None` when the tab holds no text.
-pub(super) fn insert_at_cursor(tab: &mut NotebookTab, insertion: &Insertion) -> Option<Inserted> {
+pub(super) fn insert_at_cursor(
+    doc: &mut NotebookDocument,
+    tab: &mut NotebookTab,
+    insertion: &Insertion,
+) -> Option<Inserted> {
     let line = tab.text.as_ref().map(|text| text.cursor().0)?;
-    let file_line = tab.file_line(line);
+    let file_line = doc.file_line(line);
     let text = tab.text.as_mut()?;
     let inserted = insertion_text(insertion, &text.outline, MAIN_FILE, file_line);
     let own_line = !matches!(insertion, Insertion::Reference(_));
     paste(text, &inserted, own_line);
-    if tab.load == Load::Missing {
-        tab.load = Load::Open;
+    if doc.load == Load::Missing {
+        doc.load = Load::Open;
     }
     Some(inserted)
 }

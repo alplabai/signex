@@ -105,9 +105,30 @@ also closes the Block menu.
   `DEC-001`, `NOTE-001`). An Issue starts `open`, a Decision `proposed`.
 - A block or a figure starts on a line of its own.
 
-The picker lists the parts and net labels of the project's sheets that are
-open, with value, footprint and sheet. Pins of a part (typing `.` after
-it) come with the reference resolution of mockup row 196.
+The picker lists the parts, then the nets, of the design the project's
+last notebook read built (mockup row 196), filtered as you type; `U3.`
+lists the pins of U3. The read starts when the tab opens.
+
+## Margin lane
+
+Beside the preview (Split or Preview; opening it from Source switches to
+Split), the lane shows the card of a reference picked in References, the
+timeline of a net, part or pin opened from a card, a notebook badge or a
+timeline tab (mockup row 199: its tabs, export CSV and Close), and the card
+of each stale attachment: Re-measure… inserts a Measurement block at the
+cursor, Mark still valid writes the current part values into the text (an
+edit, written on Save), Show change cross-probes the part. References lists
+the references resolved against the design with their uses, a stale one in
+the warning colour, under "31 references · 3 stale"; the status footer adds
+the measurement counts.
+
+## State
+
+The notebook document (the path, where its read stands, the file, the body
+as typed, the header lines, the chapters, the save state) is a
+`signex_notebook::NotebookDocument` in `DocumentState::notebooks`; the
+editor, the view, the panels, the compile and preview, the picker and the
+lane are the tab's state in `UiState::notebook_tabs`.
 
 ## Saving
 

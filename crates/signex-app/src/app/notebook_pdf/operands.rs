@@ -4,22 +4,19 @@
 //! export and write path as the dialog. Operands: `docs/NOTEBOOK_PDF.md`.
 
 use iced::Task;
+use signex_i18n::{Translatable, ids};
 use signex_notebook::export::{ExportOptions, PageSelection, Paper, StaleRule};
 use signex_notebook::{AnnotationKind, DEFAULT_NOTEBOOK_FILE, NOTEBOOK_DIR, NOTEBOOK_EXTENSION};
 
 use super::{BuildRequest, jobs};
 use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
-use crate::app::document_ids::DocumentKind;
-use crate::app::{LoadedProject, Message, Signex};
+use crate::app::notebook_project::{bad_value, because, refusal};
+use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
 
 type Ran = (CommandOutcome, Task<Message>);
 
 const ID: &str = "export_notebook_pdf";
-
-fn refused(reason: impl Into<String>) -> Ran {
-    (CommandOutcome::disabled(reason), Task::none())
-}
 
 fn text<'a>(args: &'a CommandArgs, name: &str) -> Option<&'a str> {
     match args.operand(name) {
@@ -36,23 +33,22 @@ fn flag(args: &CommandArgs, name: &str) -> Option<bool> {
 }
 
 /// The export settings the operands give; the rest is the dialog's default.
-pub(super) fn export_options(args: &CommandArgs) -> Result<ExportOptions, String> {
+pub(super) fn export_options(args: &CommandArgs) -> Result<ExportOptions, Translatable> {
     let mut options = ExportOptions::default();
     if let Some(pages) = text(args, "pages") {
-        options.pages = PageSelection::parse(pages, 1).ok_or_else(|| {
-            format!("`pages` is all, current, a page or a range such as 3-7, not `{pages}`")
-        })?;
+        options.pages = PageSelection::parse(pages, 1)
+            .ok_or_else(|| bad_value(ids::NOTEBOOK_TAB_CMD_BAD_PAGES, pages))?;
     }
     if let Some(paper) = text(args, "paper") {
-        options.paper = Paper::parse(paper)
-            .ok_or_else(|| format!("`paper` is document, a4 or letter, not `{paper}`"))?;
+        options.paper =
+            Paper::parse(paper).ok_or_else(|| bad_value(ids::NOTEBOOK_TAB_CMD_BAD_PAPER, paper))?;
     }
     if let Some(variant) = text(args, "variant") {
         options.variant = variant.trim().to_string();
     }
     if let Some(stale) = text(args, "stale") {
         options.stale = StaleRule::parse(stale)
-            .ok_or_else(|| format!("`stale` is warn or fail, not `{stale}`"))?;
+            .ok_or_else(|| bad_value(ids::NOTEBOOK_TAB_CMD_BAD_STALE, stale))?;
     }
     if let Some(kinds) = text(args, "annotations") {
         options.annotations = annotation_kinds(kinds)?;
@@ -89,7 +85,9 @@ pub(super) fn notebook_file(name: &str) -> String {
 }
 
 /// `note,issue` or `all` or `none`.
-fn annotation_kinds(list: &str) -> Result<std::collections::BTreeSet<AnnotationKind>, String> {
+fn annotation_kinds(
+    list: &str,
+) -> Result<std::collections::BTreeSet<AnnotationKind>, Translatable> {
     match list.trim() {
         "all" => return Ok(AnnotationKind::ALL.into_iter().collect()),
         "none" | "" => return Ok(Default::default()),
@@ -97,56 +95,25 @@ fn annotation_kinds(list: &str) -> Result<std::collections::BTreeSet<AnnotationK
     }
     list.split(',')
         .map(|token| {
-            AnnotationKind::parse(token.trim()).ok_or_else(|| {
-                format!(
-                    "`annotations` lists note, calculation, measurement, issue and decision, not `{}`",
-                    token.trim()
-                )
-            })
+            AnnotationKind::parse(token.trim())
+                .ok_or_else(|| bad_value(ids::NOTEBOOK_TAB_CMD_BAD_ANNOTATIONS, token))
         })
         .collect()
-}
-
-impl Signex {
-    /// The open project `document` names: the project itself, or one of
-    /// its documents.
-    fn named_notebook_project(&self, args: &CommandArgs) -> Result<&LoadedProject, String> {
-        let Some(OperandValue::Document(named)) = args.operand("document") else {
-            return Err(format!("`{ID}` needs the operand `document`"));
-        };
-        let entry = self.resolve_document_target(named)?;
-        let path = match entry.kind {
-            DocumentKind::Project => entry.path.clone(),
-            _ => entry.project.as_ref().map(|project| project.path.clone()),
-        };
-        path.and_then(|path| {
-            self.document_state
-                .projects
-                .iter()
-                .find(|project| project.path == path)
-        })
-        .ok_or_else(|| {
-            format!(
-                "`{ID}` exports a project's notebook, and {} is not part of an open one",
-                entry.name
-            )
-        })
-    }
 }
 
 /// Export the notebook `args` name; answered once the PDF is written.
 pub(crate) fn export_notebook_pdf(app: &mut Signex, args: &CommandArgs) -> Ran {
     let command = match AppCommandId::new(ID) {
         Ok(command) => command,
-        Err(reason) => return refused(reason),
+        Err(reason) => return refusal(because(reason)),
     };
     let options = match export_options(args) {
         Ok(options) => options,
-        Err(reason) => return refused(reason),
+        Err(reason) => return refusal(reason),
     };
-    let project = match app.named_notebook_project(args) {
+    let project = match app.notebook_project_named(ID, args) {
         Ok(project) => project,
-        Err(reason) => return refused(reason),
+        Err(reason) => return refusal(reason),
     };
     let notebook = text(args, "notebook")
         .map(notebook_file)
@@ -161,6 +128,7 @@ pub(crate) fn export_notebook_pdf(app: &mut Signex, args: &CommandArgs) -> Ran {
         project.data.name.clone(),
     );
     let names = app.notebook_design_names(id);
+    let values = app.notebook_design_values(id);
     let waiting = app.wait_for_command(&command, args);
     let ticket = waiting.ticket;
     let request = BuildRequest {
@@ -174,6 +142,6 @@ pub(crate) fn export_notebook_pdf(app: &mut Signex, args: &CommandArgs) -> Ran {
     };
     (
         CommandOutcome::Deferred { ticket },
-        jobs::build_task(request, names),
+        jobs::build_task(request, names, values),
     )
 }

@@ -10,13 +10,15 @@
 //! - `notebook_view {document, view?, panel?, next_problem?}` picks Source,
 //!   Split or Preview and the side panel, or moves to the next problem.
 //!
-//! Shapes: `docs/DESIGN_NOTEBOOK_TAB.md`, "Commands".
+//! Shapes: `docs/DESIGN_NOTEBOOK_TAB.md`, "Commands". Refusals are catalog
+//! lines (`notebook_tab.ftl`, "Commands").
 
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use iced::Task;
 use serde_json::{Value, json};
+use signex_i18n::{Translatable, ids};
 use signex_notebook::{
     CompileOptions, Insertion, NotebookSources, NotebookStatus, Reference, compile,
 };
@@ -25,18 +27,15 @@ use super::open::{NotebookRead, read_notebook};
 use super::{NotebookMsg, SidePanel, ViewMode};
 use crate::app::agent::WaitingCommand;
 use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
+use crate::app::notebook_project::{bad_value, because, refusal};
 use crate::app::state::ProjectId;
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
 
 type Ran = (CommandOutcome, Task<Message>);
 
-/// Why an insert or a view change is refused with no notebook text open.
-const NOT_OPEN: &str =
-    "the project's Design Notebook is not open: open it with Project ▸ Design Notebook";
-
-fn refused(reason: impl Into<String>) -> Ran {
-    (CommandOutcome::disabled(reason), Task::none())
+fn refused(id: signex_i18n::MessageId) -> Ran {
+    refusal(Translatable::new(id))
 }
 
 fn text<'a>(args: &'a CommandArgs, name: &str) -> Option<&'a str> {
@@ -60,21 +59,21 @@ pub(super) enum CompileSource {
 pub(crate) fn notebook_compile(app: &mut Signex, args: &CommandArgs) -> Ran {
     let id = match app.rules_project_named(args) {
         Ok(id) => id,
-        Err(reason) => return refused(reason),
+        Err(reason) => return refusal(because(reason)),
     };
     let Some(path) = app.notebook_path_of(id) else {
-        return refused("the project is no longer open");
+        return refused(ids::NOTEBOOK_TAB_CMD_PROJECT_CLOSED);
     };
-    let source = match app.document_state.notebooks.get(&id) {
-        Some(tab) if tab.text.is_some() => CompileSource::Held {
-            sources: tab.compile_sources(),
-            unsaved: tab.is_unsaved(),
+    let source = match app.notebook_parts(id) {
+        Some((doc, tab)) if tab.text.is_some() => CompileSource::Held {
+            sources: doc.compile_sources(),
+            unsaved: doc.is_unsaved(),
         },
         _ => CompileSource::Disk,
     };
     let command = match AppCommandId::new("notebook_compile") {
         Ok(command) => command,
-        Err(reason) => return refused(reason),
+        Err(reason) => return refusal(because(reason)),
     };
     let waiting = app.wait_for_command(&command, args);
     let ticket = waiting.ticket;
@@ -83,7 +82,10 @@ pub(crate) fn notebook_compile(app: &mut Signex, args: &CommandArgs) -> Ran {
             let job_path = path.clone();
             let answer = tokio::task::spawn_blocking(move || compile_answer(&job_path, source))
                 .await
-                .map_err(|error| format!("the compile did not finish: {error}"))
+                .map_err(|error| {
+                    Translatable::new(ids::NOTEBOOK_TAB_CMD_COMPILE_STOPPED)
+                        .arg("why", error.to_string())
+                })
                 .and_then(|answer| answer);
             (path, answer)
         },
@@ -104,12 +106,12 @@ pub(crate) fn notebook_compile(app: &mut Signex, args: &CommandArgs) -> Ran {
 pub(super) fn compile_answer(
     path: &std::path::Path,
     source: CompileSource,
-) -> Result<Value, String> {
+) -> Result<Value, Translatable> {
     let (sources, unsaved) = match source {
         CompileSource::Held { sources, unsaved } => (sources, unsaved),
         CompileSource::Disk => {
             let folder = path.parent().map_or_else(PathBuf::new, PathBuf::from);
-            let NotebookRead { text, sources, .. } = read_notebook(&folder)?;
+            let NotebookRead { text, sources, .. } = read_notebook(&folder).map_err(because)?;
             if text.is_none() {
                 return Ok(json!({
                     "notebook": path.display().to_string(),
@@ -128,7 +130,7 @@ pub(super) fn compile_answer(
         },
     );
     let status = NotebookStatus::of(&sources, &compilation);
-    let mut answer = serde_json::to_value(&status).map_err(|error| error.to_string())?;
+    let mut answer = serde_json::to_value(&status).map_err(|error| because(error.to_string()))?;
     if let Value::Object(map) = &mut answer {
         map.insert("notebook".into(), json!(path.display().to_string()));
         map.insert("exists".into(), json!(true));
@@ -147,22 +149,26 @@ impl Signex {
         &mut self,
         waiting: WaitingCommand,
         path: &std::path::Path,
-        answer: &Result<Value, String>,
+        answer: &Result<Value, Translatable>,
     ) -> Task<Message> {
         let outcome = match answer {
             Ok(value) => CommandOutcome::Answered(value.clone()),
-            Err(why) => CommandOutcome::disabled(why.clone()),
+            Err(why) => CommandOutcome::Disabled {
+                reason: why.clone(),
+            },
         };
         self.finish_waiting_command(waiting, path, |_| outcome)
     }
 }
 
 /// The insertion `kind` (and `name`, for a reference) names.
-pub(super) fn insertion_named(kind: &str, name: Option<&str>) -> Result<Insertion, String> {
+pub(super) fn insertion_named(kind: &str, name: Option<&str>) -> Result<Insertion, Translatable> {
     let named = || {
         name.map(str::trim)
             .filter(|name| !name.is_empty())
-            .ok_or_else(|| format!("`kind={kind}` needs the operand `name`"))
+            .ok_or_else(|| {
+                Translatable::new(ids::NOTEBOOK_TAB_CMD_NEEDS_NAME).arg("kind", kind.to_string())
+            })
     };
     match kind {
         "component" => Ok(Insertion::Reference(Reference::Component(named()?.into()))),
@@ -171,13 +177,11 @@ pub(super) fn insertion_named(kind: &str, name: Option<&str>) -> Result<Insertio
             let name = named()?;
             Reference::dotted_pin(name)
                 .map(Insertion::Reference)
-                .ok_or_else(|| format!("`{name}` is no pin: write it as `U3.12`"))
+                .ok_or_else(|| bad_value(ids::NOTEBOOK_TAB_CMD_NOT_A_PIN, name))
         }
         other => Insertion::parse(other).ok_or_else(|| {
-            format!(
-                "`kind` is component, pin, net or one of {}",
-                Insertion::TOKENS.join(", ")
-            )
+            Translatable::new(ids::NOTEBOOK_TAB_CMD_BAD_KIND)
+                .arg("kinds", Insertion::TOKENS.join(", "))
         }),
     }
 }
@@ -186,24 +190,22 @@ pub(super) fn insertion_named(kind: &str, name: Option<&str>) -> Result<Insertio
 pub(crate) fn notebook_insert(app: &mut Signex, args: &CommandArgs) -> Ran {
     let id = match open_notebook(app, args) {
         Ok(id) => id,
-        Err(reason) => return refused(reason),
+        Err(reason) => return refusal(reason),
     };
     let kind = text(args, "kind").unwrap_or_default();
     let insertion = match insertion_named(kind, text(args, "name")) {
         Ok(insertion) => insertion,
-        Err(reason) => return refused(reason),
+        Err(reason) => return refusal(reason),
     };
     if let Some(line) = text(args, "line") {
         let Some(line) = line.trim().parse::<u32>().ok().filter(|line| *line > 0) else {
-            return refused("`line` is a line number of the notebook file, from 1");
+            return refused(ids::NOTEBOOK_TAB_CMD_BAD_LINE);
         };
         app.notebook_line_picked(id, line);
     }
     let line = app
-        .document_state
-        .notebooks
-        .get(&id)
-        .and_then(|tab| tab.text.as_ref().map(|text| tab.file_line(text.cursor().0)));
+        .notebook_parts(id)
+        .and_then(|(doc, tab)| tab.text.as_ref().map(|text| doc.file_line(text.cursor().0)));
     match app.notebook_insert_at_cursor(id, &insertion) {
         (Some(inserted), task) => {
             let answer = json!({
@@ -213,7 +215,7 @@ pub(crate) fn notebook_insert(app: &mut Signex, args: &CommandArgs) -> Ran {
             });
             (CommandOutcome::Answered(answer), task)
         }
-        (None, _) => refused("the notebook is read-only: a newer Signex wrote it"),
+        (None, _) => refused(ids::NOTEBOOK_TAB_CMD_READ_ONLY),
     }
 }
 
@@ -221,19 +223,19 @@ pub(crate) fn notebook_insert(app: &mut Signex, args: &CommandArgs) -> Ran {
 pub(crate) fn notebook_view(app: &mut Signex, args: &CommandArgs) -> Ran {
     let id = match open_notebook(app, args) {
         Ok(id) => id,
-        Err(reason) => return refused(reason),
+        Err(reason) => return refusal(reason),
     };
     let view = match text(args, "view").map(|token| ViewMode::parse(token.trim())) {
-        Some(None) => return refused("`view` is source, split or preview"),
+        Some(None) => return refused(ids::NOTEBOOK_TAB_CMD_BAD_VIEW),
         Some(Some(view)) => Some(view),
         None => None,
     };
     let panel = match text(args, "panel").map(|token| SidePanel::parse(token.trim())) {
-        Some(None) => return refused("`panel` is outline, pages or references"),
+        Some(None) => return refused(ids::NOTEBOOK_TAB_CMD_BAD_PANEL),
         Some(Some(panel)) => Some(panel),
         None => None,
     };
-    if let (Some(view), Some(tab)) = (view, app.document_state.notebooks.get_mut(&id)) {
+    if let (Some(view), Some(tab)) = (view, app.ui_state.notebook_tabs.get_mut(&id)) {
         tab.view = view;
     }
     let task = match panel {
@@ -250,12 +252,12 @@ pub(crate) fn notebook_view(app: &mut Signex, args: &CommandArgs) -> Ran {
 
 /// The tab's view, panel, page and cursor, and the problem moved to.
 fn view_answer(app: &Signex, id: ProjectId, problem: Option<(u32, u32)>) -> Value {
-    let Some(tab) = app.document_state.notebooks.get(&id) else {
+    let Some((doc, tab)) = app.notebook_parts(id) else {
         return json!({});
     };
     let cursor = tab.text.as_ref().map(|text| {
         let (line, column) = text.cursor();
-        json!({ "line": tab.file_line(line), "column": column + 1 })
+        json!({ "line": doc.file_line(line), "column": column + 1 })
     });
     json!({
         "view": tab.view.token(),
@@ -267,10 +269,10 @@ fn view_answer(app: &Signex, id: ProjectId, problem: Option<(u32, u32)>) -> Valu
 }
 
 /// The project `args` names, when its notebook tab holds text to act on.
-fn open_notebook(app: &mut Signex, args: &CommandArgs) -> Result<ProjectId, String> {
-    let id = app.rules_project_named(args)?;
-    match app.document_state.notebooks.get(&id) {
+fn open_notebook(app: &mut Signex, args: &CommandArgs) -> Result<ProjectId, Translatable> {
+    let id = app.rules_project_named(args).map_err(because)?;
+    match app.ui_state.notebook_tabs.get(&id) {
         Some(tab) if tab.text.is_some() => Ok(id),
-        _ => Err(NOT_OPEN.into()),
+        _ => Err(Translatable::new(ids::NOTEBOOK_TAB_CMD_NOT_OPEN)),
     }
 }

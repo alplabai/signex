@@ -2,16 +2,22 @@
 //! runs at a time off the UI thread and an edit made meanwhile asks for one
 //! more when it lands, so the preview never falls behind by more than one
 //! compile. An error keeps the last good compile on screen under its
-//! banner instead of a blank page.
+//! banner instead of a blank page. The same job reads what the margin lane
+//! shows (mockup row 199): the measurement counts, the stale attachments
+//! and the open timeline, against the part values of the open sheets.
 
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
 use iced::Task;
 use iced::widget::image;
+use signex_notebook::attachment::DesignValues;
+use signex_notebook::measurement::Timeline;
+use signex_notebook::report::{AttachmentState, Summary, attachments_report, timeline_report};
 use signex_notebook::{
     CompileOptions, CompiledNotebook, IsoDate, NotebookSources, NotebookStatus, PageColours,
-    PageImage, compile,
+    PageImage, Reference, compile,
 };
 
 use super::{NotebookMsg, NotebookTab};
@@ -23,6 +29,17 @@ use crate::app::{Message, Signex};
 pub(super) const PREVIEW_PIXELS_PER_PT: f64 = 2.0;
 /// Pixels per point of a page thumbnail in the Pages panel.
 pub(super) const THUMBNAIL_PIXELS_PER_PT: f64 = 0.25;
+
+/// What the margin lane shows of one compile (mockup row 199).
+#[derive(Debug, Default)]
+pub struct Lane {
+    /// The status strip's counts.
+    pub summary: Summary,
+    /// Every attachment with its stale mark.
+    pub attachments: Vec<AttachmentState>,
+    /// The timeline of the target the lane shows, if one is open.
+    pub timeline: Option<Timeline>,
+}
 
 /// What one compile gave.
 #[derive(Debug)]
@@ -38,6 +55,7 @@ pub struct CompileOutcome {
     pub page: Option<(usize, Arc<PageImage>)>,
     /// Every page small, for the Pages panel; empty when it was not shown.
     pub thumbnails: Vec<Arc<PageImage>>,
+    pub lane: Lane,
 }
 
 /// A page ready for the image widget.
@@ -71,24 +89,40 @@ impl CompileState {
             .as_ref()
             .is_some_and(|outcome| !outcome.status.compiled)
     }
+
+    /// What the margin lane shows: of the newest compile.
+    pub fn lane(&self) -> Option<&Lane> {
+        self.last.as_ref().map(|outcome| &outcome.lane)
+    }
 }
 
 /// What a compile job reads, gathered in `update`.
 struct CompileJob {
     generation: u64,
     sources: NotebookSources,
+    /// The notebook folder, for the attachments the pages print.
+    folder: PathBuf,
+    values: DesignValues,
+    timeline: Option<Reference>,
     page: usize,
     colours: PageColours,
     thumbnails: bool,
 }
 
 impl CompileJob {
-    /// Compile, draw the preview page and, when asked, the thumbnails.
-    fn run(self) -> CompileOutcome {
+    /// Compile, draw the preview page and, when asked, the thumbnails; read
+    /// the margin lane's counts, attachments and timeline.
+    fn run(mut self) -> CompileOutcome {
         let started = Instant::now();
+        for path in self.sources.missing_attachments() {
+            if let Ok(bytes) = std::fs::read(self.folder.join(&path)) {
+                let _held = self.sources.insert(&path, bytes);
+            }
+        }
+        self.sources.set_design_values(self.values.clone());
         let today = today();
-        // No cell results yet: every Python cell shows as not run (mockup
-        // row 200); the tab's Run cell and Run all are not built.
+        // No cell results: every Python cell shows as not run (mockup row
+        // 200); cells run on export.
         let options = CompileOptions {
             today,
             ..CompileOptions::default()
@@ -108,6 +142,15 @@ impl CompileJob {
                 .collect(),
             _ => Vec::new(),
         };
+        let report = attachments_report(&self.sources);
+        let lane = Lane {
+            summary: report.summary,
+            attachments: report.attachments,
+            timeline: self
+                .timeline
+                .as_ref()
+                .map(|reference| timeline_report(&self.sources, reference, None).timeline),
+        };
         CompileOutcome {
             generation: self.generation,
             status,
@@ -116,6 +159,7 @@ impl CompileJob {
             finished_at: chrono::Local::now().format("%H:%M:%S").to_string(),
             page,
             thumbnails,
+            lane,
         }
     }
 }
@@ -146,11 +190,28 @@ pub(super) fn handle(image: &PageImage) -> image::Handle {
 }
 
 impl Signex {
+    /// The part values of `id`'s open sheets, with their unsaved edits: what
+    /// an attachment's stale mark is judged against in the tab, and the
+    /// values the Python cells of an export read.
+    pub(crate) fn notebook_design_values(&self, id: ProjectId) -> DesignValues {
+        let docs = &self.document_state;
+        let sheets = docs
+            .engines
+            .iter()
+            .filter(|(path, _)| {
+                docs.document_project(path)
+                    .is_some_and(|project| project.id == id)
+            })
+            .map(|(_, engine)| engine.document());
+        crate::app::notebook_measurements::values_of(sheets)
+    }
+
     /// Compile `id`'s notebook as typed, or note that one is owed when a
     /// compile is running.
     pub(super) fn request_notebook_compile(&mut self, id: ProjectId) -> Task<Message> {
         let colours = page_colours(&self.document_state.panel_ctx.tokens);
-        let Some(tab) = self.document_state.notebooks.get_mut(&id) else {
+        let values = self.notebook_design_values(id);
+        let Some((doc, tab)) = self.notebook_parts_mut(id) else {
             return Task::none();
         };
         let Some(text) = &tab.text else {
@@ -162,7 +223,13 @@ impl Signex {
         }
         let job = CompileJob {
             generation: text.generation,
-            sources: tab.compile_sources(),
+            sources: doc.compile_sources(),
+            folder: doc
+                .path
+                .parent()
+                .map_or_else(PathBuf::new, std::path::Path::to_path_buf),
+            values,
+            timeline: tab.timeline.as_ref().map(|open| open.shown.clone()),
             page: tab.page,
             colours,
             thumbnails: tab.panel == super::SidePanel::Pages,
@@ -200,7 +267,7 @@ impl Signex {
         id: ProjectId,
         outcome: Arc<CompileOutcome>,
     ) -> Task<Message> {
-        let Some(tab) = self.document_state.notebooks.get_mut(&id) else {
+        let Some(tab) = self.ui_state.notebook_tabs.get_mut(&id) else {
             return Task::none();
         };
         land(tab, outcome);
@@ -213,7 +280,7 @@ impl Signex {
     /// Draw page `page` of the last good compile for the preview.
     pub(super) fn draw_notebook_page(&mut self, id: ProjectId, page: usize) -> Task<Message> {
         let colours = page_colours(&self.document_state.panel_ctx.tokens);
-        let Some(tab) = self.document_state.notebooks.get_mut(&id) else {
+        let Some(tab) = self.ui_state.notebook_tabs.get_mut(&id) else {
             return Task::none();
         };
         let Some(good) = tab.compile.last_good.clone() else {
@@ -257,7 +324,7 @@ impl Signex {
         page: usize,
         image: &PageImage,
     ) {
-        let Some(tab) = self.document_state.notebooks.get_mut(&id) else {
+        let Some(tab) = self.ui_state.notebook_tabs.get_mut(&id) else {
             return;
         };
         let current = tab
@@ -321,6 +388,7 @@ impl CompileOutcome {
             finished_at: chrono::Local::now().format("%H:%M:%S").to_string(),
             page: None,
             thumbnails: Vec::new(),
+            lane: Lane::default(),
         }
     }
 }

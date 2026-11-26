@@ -12,6 +12,7 @@ use signex_widgets::segmented::segmented_disabled;
 use signex_widgets::{button, segmented, text};
 
 use super::{Look, SP, TS};
+use crate::app::Message;
 use crate::app::notebook_tab::{Load, NotebookMsg, NotebookTab, ViewMode};
 use crate::panels::graphite::hint_tooltip;
 use crate::styles::ti;
@@ -27,41 +28,45 @@ pub(super) const BLOCK_ROWS: [(AnnotationKind, MessageId); 3] = [
     (AnnotationKind::Decision, ids::NOTEBOOK_TAB_BLOCK_DECISION),
 ];
 
-pub(super) fn view<'a>(look: Look<'a>, tab: &'a NotebookTab) -> Toolbar<'a, NotebookMsg> {
-    let open = tab.load == Load::Open;
-    let editable = open && !tab.is_read_only();
+pub(super) fn view<'a>(look: Look<'a>, tab: &'a NotebookTab) -> Toolbar<'a, Message> {
+    let open = look.doc.load == Load::Open;
+    let editable = open && !look.doc.is_read_only();
     let id = look.id;
-    let mut bar = Toolbar::new().push(views(look, tab, open));
+    let lift = |item: Element<'a, NotebookMsg>| item.map(Message::from).boxed();
+    let mut bar = Toolbar::new().push(lift(views(look, tab, open)));
     if editable {
         bar = bar
             .separator()
-            .push(tool(
+            .push(lift(tool(
                 look,
                 ids::NOTEBOOK_TAB_INSERT_REFERENCE,
                 Some(NotebookMsg::PickerOpened { project_id: id }),
-            ))
-            .push(insert(
+            )))
+            .push(lift(insert(
                 look,
                 ids::NOTEBOOK_TAB_INSERT_CALCULATION,
                 Insertion::Block(AnnotationKind::Calculation),
-            ))
-            .push(insert(
+            )))
+            .push(lift(insert(
                 look,
                 ids::NOTEBOOK_TAB_INSERT_MEASUREMENT,
                 Insertion::Block(AnnotationKind::Measurement),
-            ))
-            .push(insert(
+            )))
+            .push(lift(insert(
                 look,
                 ids::NOTEBOOK_TAB_INSERT_FIGURE,
                 Insertion::Figure,
-            ))
-            .push(block_button(look));
+            )))
+            .push(lift(block_button(look)));
     }
     // The export reads the notebook as saved, so it waits for a file.
-    let saved = tab
+    let saved = look
+        .doc
         .file
         .is_some()
-        .then_some(NotebookMsg::ExportPdfRequested { project: Some(id) });
+        .then_some(Message::from(NotebookMsg::ExportPdfRequested {
+            project: Some(id),
+        }));
     let export = hint_tooltip(
         button(text(look.t(ids::NOTEBOOK_TAB_EXPORT_PDF)).size(TS.dense))
             .padding([SP.xs, SP.s])
@@ -74,7 +79,7 @@ pub(super) fn view<'a>(look: Look<'a>, tab: &'a NotebookTab) -> Toolbar<'a, Note
     );
     bar = bar.push_end(export);
     if open {
-        bar = bar.push_end(save_button(look, tab));
+        bar = bar.push_end(lift(save_button(look, tab)));
     }
     bar
 }
@@ -168,8 +173,9 @@ pub(super) fn block_menu<'a>(look: Look<'a>) -> Element<'a, NotebookMsg> {
 
 /// Save, the primary action, with its shortcut; greyed while the text is
 /// saved or the file is read-only.
-fn save_button<'a>(look: Look<'a>, tab: &NotebookTab) -> Element<'a, NotebookMsg> {
-    let can_save = tab.is_unsaved() && !tab.saving && !tab.is_read_only();
+fn save_button<'a>(look: Look<'a>, _tab: &NotebookTab) -> Element<'a, NotebookMsg> {
+    let doc = look.doc;
+    let can_save = doc.is_unsaved() && !doc.saving && !doc.is_read_only();
     let face = button(text(look.t(ids::NOTEBOOK_TAB_SAVE)).size(TS.dense))
         .padding([SP.xs, SP.m])
         .style(crate::styles::primary_button(look.tokens))

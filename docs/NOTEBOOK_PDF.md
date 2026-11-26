@@ -46,6 +46,15 @@ block: project `buck-3v3`, `doc: "DN-0042"`, `rev: "B"` give
 stands in; with no revision the `-rev` part is left out; a character a file
 name cannot hold becomes `_`.
 
+## Python cells
+
+The export runs the Python cells before it compiles, as Run all does: every
+cell with no result or an out-of-date one runs, and the pages print each
+cell's result; the source prints only with Python cell source on
+(`docs/NOTEBOOK_CELLS.md`). Until the Python runtime is built the app runs
+them with no runtime, so a cell prints its cached result, greyed, with the
+slim-install note.
+
 ## Stale references
 
 Before it exports, the dialog checks every part, pin and net the notebook

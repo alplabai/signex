@@ -579,10 +579,13 @@ fn the_notebook_file_has_its_own_group() {
         .iter()
         .position(|t| t == "design.snxnbk")
         .expect("the notebook row");
-    assert_eq!(shown[at - 3], "NOTEBOOK", "{shown:#?}");
+    // The header, its count, then the row: a notebook row has an icon and
+    // no kind tag (mockup row 19).
+    assert_eq!(shown[at - 2], "NOTEBOOK", "{shown:#?}");
+    assert_eq!(shown[at - 1], "1", "{shown:#?}");
     let pcb = shown
         .iter()
         .position(|t| t == "PCB")
         .expect("the PCB group");
-    assert!(pcb < at - 3, "Notebook follows PCB: {shown:#?}");
+    assert!(pcb < at - 2, "Notebook follows PCB: {shown:#?}");
 }

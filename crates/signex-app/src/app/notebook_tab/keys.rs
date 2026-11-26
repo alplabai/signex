@@ -84,7 +84,7 @@ impl Signex {
             .document_state
             .tab_shown_in_window(window, &self.ui_state)?;
         let id = shown.kind.as_notebook()?;
-        let tab = self.document_state.notebooks.get(&id)?;
+        let tab = self.ui_state.notebook_tabs.get(&id)?;
         let found = tab_key(key, *modifiers, tab.picker.is_some(), tab.block_menu)?;
         if found == TabKey::Escape && self.escape_overlay_message().is_some() {
             return None;

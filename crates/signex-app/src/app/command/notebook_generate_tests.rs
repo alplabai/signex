@@ -149,14 +149,12 @@ fn bad_operands_are_refused_with_the_reason() {
     assert!(why.contains("`run` or `last`"), "{why}");
     let why = refusal(run(&mut app, &["variant=Max"]));
     assert!(why.contains("`Max`"), "{why}");
+    // `document` is a required operand: the parse refuses the call before
+    // it runs.
     let id = AppCommandId::new("generate_design_notebook").expect("a catalog id");
-    let why = refusal(
-        app.run_operands_settled(
-            &id,
-            &CommandArgs::parse_operands(&id, &["sections=all"]).unwrap(),
-        )
-        .0,
-    );
+    let why = CommandArgs::parse_operands(&id, &["sections=all"])
+        .expect_err("no document")
+        .to_string();
     assert!(why.contains("`document`"), "{why}");
 }
 

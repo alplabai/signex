@@ -5,7 +5,7 @@
 //! text a fix says so.
 
 use iced::Task;
-use signex_i18n::{ids, t};
+use signex_i18n::{RenderTranslatable, ids, t};
 use signex_notebook::{
     DEFAULT_NOTEBOOK_FILE, Fix, Reference, ReferenceReport, apply_fix, apply_plan, plan_update_all,
 };
@@ -49,6 +49,7 @@ impl Signex {
                 t!(self.ui_state.i18n, ids::NOTEBOOK_REF_OPEN_FIRST, "file" => file).into_string()
             })?;
         self.replace_notebook_tab_file_text(project, &text)
+            .map_err(|why| why.localized(&self.ui_state.i18n).into_string())
     }
 
     /// Open the notebook tab at the block of `file` starting on `line`: the

@@ -52,7 +52,6 @@ define_ids! {
     // notebook-tab-picker
     NOTEBOOK_TAB_PICKER_PLACEHOLDER = "notebook-tab-picker-placeholder";
     NOTEBOOK_TAB_PICKER_COUNT = "notebook-tab-picker-count";
-    NOTEBOOK_TAB_PICKER_NONE = "notebook-tab-picker-none";
     NOTEBOOK_TAB_PICKER_HINT = "notebook-tab-picker-hint";
     // notebook-tab-preview
     NOTEBOOK_TAB_PREVIEW_PAGE = "notebook-tab-preview-page";
@@ -89,4 +88,31 @@ define_ids! {
     NOTEBOOK_TAB_IMPORT_TITLE = "notebook-tab-import-title";
     NOTEBOOK_TAB_IMPORT_FILTER = "notebook-tab-import-filter";
     NOTEBOOK_TAB_EMPTY_NOTE = "notebook-tab-empty-note";
+    // notebook-tab-commands
+    NOTEBOOK_TAB_CMD_BECAUSE = "notebook-tab-cmd-because";
+    NOTEBOOK_TAB_CMD_PROJECT_CLOSED = "notebook-tab-cmd-project-closed";
+    NOTEBOOK_TAB_CMD_NOT_OPEN = "notebook-tab-cmd-not-open";
+    NOTEBOOK_TAB_CMD_READ_ONLY = "notebook-tab-cmd-read-only";
+    NOTEBOOK_TAB_CMD_COMPILE_STOPPED = "notebook-tab-cmd-compile-stopped";
+    NOTEBOOK_TAB_CMD_READ_STOPPED = "notebook-tab-cmd-read-stopped";
+    NOTEBOOK_TAB_CMD_FILES_UNREADABLE = "notebook-tab-cmd-files-unreadable";
+    NOTEBOOK_TAB_CMD_NEEDS_OPERAND = "notebook-tab-cmd-needs-operand";
+    NOTEBOOK_TAB_CMD_NOT_IN_PROJECT = "notebook-tab-cmd-not-in-project";
+    NOTEBOOK_TAB_CMD_NEEDS_NAME = "notebook-tab-cmd-needs-name";
+    NOTEBOOK_TAB_CMD_NOT_A_PIN = "notebook-tab-cmd-not-a-pin";
+    NOTEBOOK_TAB_CMD_BAD_KIND = "notebook-tab-cmd-bad-kind";
+    NOTEBOOK_TAB_CMD_BAD_LINE = "notebook-tab-cmd-bad-line";
+    NOTEBOOK_TAB_CMD_BAD_VIEW = "notebook-tab-cmd-bad-view";
+    NOTEBOOK_TAB_CMD_BAD_PANEL = "notebook-tab-cmd-bad-panel";
+    NOTEBOOK_TAB_CMD_NEEDS_TARGET = "notebook-tab-cmd-needs-target";
+    NOTEBOOK_TAB_CMD_ONE_TARGET = "notebook-tab-cmd-one-target";
+    NOTEBOOK_TAB_CMD_BAD_PIN = "notebook-tab-cmd-bad-pin";
+    NOTEBOOK_TAB_CMD_BAD_READING = "notebook-tab-cmd-bad-reading";
+    NOTEBOOK_TAB_CMD_NEEDS_FILE_OR_ID = "notebook-tab-cmd-needs-file-or-id";
+    NOTEBOOK_TAB_CMD_BAD_PAGES = "notebook-tab-cmd-bad-pages";
+    NOTEBOOK_TAB_CMD_BAD_PAPER = "notebook-tab-cmd-bad-paper";
+    NOTEBOOK_TAB_CMD_BAD_STALE = "notebook-tab-cmd-bad-stale";
+    NOTEBOOK_TAB_CMD_BAD_ANNOTATIONS = "notebook-tab-cmd-bad-annotations";
+    NOTEBOOK_TAB_CMD_BAD_BLOCK_ID = "notebook-tab-cmd-bad-block-id";
+    NOTEBOOK_TAB_CMD_BAD_BLOCK_KIND = "notebook-tab-cmd-bad-block-kind";
 }

@@ -17,6 +17,9 @@ USAGE:
     signex-cli run <project> <command-id> [--arg key=value]... [OPTIONS]
     signex-cli commands [--json]
     signex-cli agent-log <project> [--access]
+    signex-cli notebook generate --project <project> [--force] [--fail-on requirements,checks]
+               [--sections <list>|all] [--variant <name>] [--template <name>]
+               [--document <number>] [--revision <rev>] [--checks run|last] [OPTIONS]
     signex-cli notebook export-pdf --project <project> [--out <file>] [--notebook <file>]
                [--pages all|current|3-7] [--paper document|a4|letter] [--variant <name>]
                [--annotations <kinds>] [--stale warn|fail] [--no-title-block]
@@ -46,6 +49,11 @@ OPTIONS (run):
     --max-line-bytes <n>    longest command line (default 65536)
     --max-commands <n>      most commands per run (default 10000)
     --max-file-bytes <n>    largest file a command may read (default 67108864)
+
+notebook generate writes the project's design report into
+notebook/generated/design-report.snxnbk (never over one that is there without
+--force); it runs as `run <project> generate_design_notebook --arg save=true
+... --allow save` and exits 1 when a --fail-on condition holds.
 
 notebook export-pdf writes the project's Design Notebook as a PDF file (the
 default name in Project Outputs/notebook/ without --out); it runs as
@@ -91,6 +99,9 @@ pub struct RunOptions {
     pub capabilities: BTreeSet<Capability>,
     pub allow_paths: Vec<PathBuf>,
     pub limits: Limits,
+    /// The single command's answer is not ok unless its `status` is `ok`
+    /// (`notebook generate --fail-on`).
+    pub status_exit: bool,
 }
 
 pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Invocation, String> {
@@ -138,6 +149,7 @@ fn parse_run(mut args: impl Iterator<Item = String>) -> Result<RunOptions, Strin
         capabilities: Capability::DEFAULT.into_iter().collect(),
         allow_paths: Vec::new(),
         limits: Limits::default(),
+        status_exit: false,
     };
     while let Some(arg) = args.next() {
         let mut value = |flag: &str| args.next().ok_or_else(|| format!("{flag} needs a value"));

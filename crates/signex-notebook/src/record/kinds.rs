@@ -162,8 +162,28 @@ pub(super) fn read_calculation(reader: &mut Reader) -> CalculationRecord {
     }
 }
 
+/// The arguments of a reading (mockup row 199) the scanner takes without
+/// keeping: the measurement model (`crate::measurement`) reads them.
+const READING_ARGUMENTS: [&str; 6] = [
+    "attach",
+    "taken-with",
+    "computed",
+    "supersedes",
+    "caption",
+    "timestamp",
+];
+
+/// One `#measurement` for mockup rows 198 and 199: the record block's rows
+/// and fields, and a reading's arguments (`quantity`, `nominal`,
+/// `tolerance`, `requirements`, `rev`, `board` and those of
+/// [`READING_ARGUMENTS`]).
 pub(super) fn read_measurement(reader: &mut Reader) -> MeasurementRecord {
     let rows = measurement_rows(reader);
+    let mut requirements = reader.texts("requirement");
+    requirements.extend(reader.texts("requirements"));
+    for argument in READING_ARGUMENTS {
+        reader.value(argument);
+    }
     MeasurementRecord {
         verdict: rows.iter().filter_map(|row| row.verdict).max(),
         rows,
@@ -171,7 +191,9 @@ pub(super) fn read_measurement(reader: &mut Reader) -> MeasurementRecord {
         conditions: reader.text("conditions"),
         instrument: reader.text("instrument"),
         operator: reader.text("operator"),
-        requirements: reader.texts("requirement"),
+        requirements,
+        rev: reader.text("rev"),
+        board: reader.text("board"),
     }
 }
 

@@ -697,7 +697,8 @@ pub const CHECK_REQUIREMENTS: &[Operand] = &[
 ];
 /// `generate_design_notebook` (#2945, mockup row 201): the design report of
 /// the project the named document is (or belongs to). `sections` is a comma
-/// list or `all`; `checks` is `run` or `last`; `save` writes
+/// list or `all`; `checks` is `run` or `last`; `fail_on` (`requirements`,
+/// `checks`) makes the summary's status `fail` when one holds; `save` writes
 /// `notebook/generated/design-report.snxnbk`, refused over an existing one
 /// unless `update`.
 pub const GENERATE_DESIGN_NOTEBOOK: &[Operand] = &[
@@ -708,6 +709,7 @@ pub const GENERATE_DESIGN_NOTEBOOK: &[Operand] = &[
     optional("document_number", OperandKind::Text),
     optional("revision", OperandKind::Text),
     optional("checks", OperandKind::Text),
+    optional("fail_on", OperandKind::Text),
     optional("save", OperandKind::Bool),
     optional("update", OperandKind::Bool),
 ];

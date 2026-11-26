@@ -167,6 +167,8 @@ pub struct GenerateOptions {
     /// The report's own revision (`A`), printed in the footer.
     pub revision: Option<String>,
     pub checks: ChecksSource,
+    /// The conditions that make the run's status `fail` (`--fail-on`).
+    pub fail_on: Vec<super::FailOn>,
 }
 
 impl Default for GenerateOptions {
@@ -179,6 +181,7 @@ impl Default for GenerateOptions {
             document: None,
             revision: None,
             checks: ChecksSource::default(),
+            fail_on: Vec::new(),
         }
     }
 }

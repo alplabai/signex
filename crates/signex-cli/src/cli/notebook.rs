@@ -1,7 +1,8 @@
 //! `signex-cli notebook <verb> --project <project> [options]` (mockup
 //! rows 201 and 202): a Design Notebook command by its own name, run as
 //! `run <project> <command-id> --arg ...` runs it, with the capability it
-//! needs. Every option `run` takes is taken here too.
+//! needs. Every option `run` takes is taken here too. The one command-line
+//! front end of the Design Notebook: `generate` and `export-pdf`.
 
 use super::{RunOptions, parse_run};
 
@@ -11,33 +12,62 @@ struct Verb {
     command: &'static str,
     /// The capabilities the command needs beyond `run`'s default.
     allow: &'static str,
+    /// Operands every run of the verb passes.
+    fixed: &'static [&'static str],
     /// `--flag value` options and the operand each sets.
     values: &'static [(&'static str, &'static str)],
     /// `--flag` switches, the operand each sets and to what.
     switches: &'static [(&'static str, &'static str, bool)],
+    /// The answer's `status` decides the exit code: anything but `ok` is
+    /// not ok (`generate --fail-on`).
+    status_exit: bool,
 }
 
 /// Every notebook verb.
-const VERBS: &[Verb] = &[Verb {
-    name: "export-pdf",
-    command: "export_notebook_pdf",
-    allow: "export",
-    values: &[
-        ("--out", "path"),
-        ("--notebook", "notebook"),
-        ("--pages", "pages"),
-        ("--paper", "paper"),
-        ("--variant", "variant"),
-        ("--annotations", "annotations"),
-        ("--stale", "stale"),
-    ],
-    switches: &[
-        ("--no-title-block", "title_block", false),
-        ("--no-contents", "contents", false),
-        ("--no-bookmarks", "bookmarks", false),
-        ("--python-source", "python_source", true),
-    ],
-}];
+const VERBS: &[Verb] = &[
+    Verb {
+        name: "export-pdf",
+        command: "export_notebook_pdf",
+        allow: "export",
+        fixed: &[],
+        values: &[
+            ("--out", "path"),
+            ("--notebook", "notebook"),
+            ("--pages", "pages"),
+            ("--paper", "paper"),
+            ("--variant", "variant"),
+            ("--annotations", "annotations"),
+            ("--stale", "stale"),
+        ],
+        switches: &[
+            ("--no-title-block", "title_block", false),
+            ("--no-contents", "contents", false),
+            ("--no-bookmarks", "bookmarks", false),
+            ("--python-source", "python_source", true),
+        ],
+        status_exit: false,
+    },
+    // Mockup row 201: the design report into
+    // notebook/generated/design-report.snxnbk, never over one that is there
+    // without --force.
+    Verb {
+        name: "generate",
+        command: "generate_design_notebook",
+        allow: "save",
+        fixed: &["save=true"],
+        values: &[
+            ("--sections", "sections"),
+            ("--variant", "variant"),
+            ("--template", "template"),
+            ("--document", "document_number"),
+            ("--revision", "revision"),
+            ("--checks", "checks"),
+            ("--fail-on", "fail_on"),
+        ],
+        switches: &[("--force", "update", true)],
+        status_exit: true,
+    },
+];
 
 /// The verbs, for the usage error.
 fn verb_names() -> String {
@@ -82,12 +112,15 @@ pub(super) fn parse(mut args: impl Iterator<Item = String>) -> Result<RunOptions
     let project = project.ok_or("`notebook` needs the project: --project <file>.snxprj")?;
     let mut run = vec![project.clone(), verb.command.to_string()];
     run.extend(["--arg".to_string(), format!("document={project}")]);
-    for operand in operands {
+    let fixed = verb.fixed.iter().map(ToString::to_string);
+    for operand in fixed.chain(operands) {
         run.extend(["--arg".to_string(), operand]);
     }
     run.extend(["--allow".to_string(), verb.allow.to_string()]);
     run.extend(passed);
-    parse_run(run.into_iter())
+    let mut options = parse_run(run.into_iter())?;
+    options.status_exit = verb.status_exit;
+    Ok(options)
 }
 
 #[cfg(test)]
@@ -184,6 +217,79 @@ mod tests {
                 &["export-pdf", "p.snxprj", "--frob"],
                 "unknown option `--frob`",
             ),
+        ] {
+            let err = notebook(args).unwrap_err();
+            assert!(err.contains(wanted), "{args:?}: {err}");
+        }
+    }
+
+    /// Mockup row 201: `notebook generate --project <file>.snxprj --json`
+    /// saves the design report, with the save capability and nothing more,
+    /// and its exit follows the summary's status.
+    #[test]
+    fn generate_runs_the_generate_command_saving_with_the_save_capability() {
+        let options =
+            notebook(&["generate", "--project", "buck-3v3.snxprj", "--json"]).expect("parses");
+        assert_eq!(
+            options.single,
+            Some((
+                "generate_design_notebook".to_string(),
+                vec![
+                    "document=buck-3v3.snxprj".to_string(),
+                    "save=true".to_string(),
+                ]
+            ))
+        );
+        let want = BTreeSet::from([Capability::Read, Capability::Edit, Capability::Save]);
+        assert_eq!(options.capabilities, want);
+        assert!(options.status_exit, "--fail-on decides the exit");
+        let export = notebook(&["export-pdf", "p.snxprj"]).expect("parses");
+        assert!(!export.status_exit);
+    }
+
+    #[test]
+    fn the_generate_options_become_the_commands_operands() {
+        let options = notebook(&[
+            "generate",
+            "--project",
+            "/p/buck.snxprj",
+            "--force",
+            "--fail-on",
+            "requirements",
+            "--sections",
+            "summary,checks",
+            "--document",
+            "DN-0043",
+            "--revision",
+            "A",
+            "--checks",
+            "last",
+            "--variant",
+            "Lite",
+            "--template",
+            "design-report-a4",
+        ])
+        .expect("parses");
+        let (_, operands) = options.single.expect("one command");
+        assert_eq!(
+            operands,
+            [
+                "document=/p/buck.snxprj",
+                "save=true",
+                "update=true",
+                "fail_on=requirements",
+                "sections=summary,checks",
+                "document_number=DN-0043",
+                "revision=A",
+                "checks=last",
+                "variant=Lite",
+                "template=design-report-a4",
+            ]
+        );
+        for (args, wanted) in [
+            (&["generate", "--json"][..], "needs the project"),
+            (&["generate", "p", "--revision"], "--revision needs a value"),
+            (&["generate", "p", "--bogus"], "unknown option `--bogus`"),
         ] {
             let err = notebook(args).unwrap_err();
             assert!(err.contains(wanted), "{args:?}: {err}");

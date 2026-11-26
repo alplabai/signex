@@ -8,11 +8,10 @@ use std::sync::Arc;
 
 use iced::Task;
 use signex_notebook::{
-    DEFAULT_NOTEBOOK_FILE, LoadProblem, NotebookFile, NotebookSources, header_line_count,
-    notebook_path,
+    DEFAULT_NOTEBOOK_FILE, LoadProblem, NotebookDocument, NotebookSources, notebook_path,
 };
 
-use super::{Load, NotebookMsg, NotebookTab, NotebookText};
+use super::{Load, NotebookMsg};
 use crate::app::state::ProjectId;
 use crate::app::{Message, Signex, TabInfo, TabKind};
 
@@ -101,19 +100,23 @@ impl Signex {
             self.document_state.active_tab = idx;
             self.sync_active_tab();
         }
+        // The references, badges and design index the tab shows come from
+        // the project's notebook read (mockup rows 196 and 197).
+        let scan = self.read_notebook_references_of(id);
         let needs_read = self
             .document_state
             .notebooks
             .get(&id)
-            .is_none_or(|tab| tab.text.is_none() && tab.load != Load::Reading);
+            .is_none_or(|doc| doc.body.is_none() && doc.load != Load::Reading);
         if !needs_read {
-            return Task::none();
+            return scan;
         }
         self.document_state
             .notebooks
-            .insert(id, NotebookTab::reading(path.clone()));
+            .insert(id, NotebookDocument::reading(path.clone()));
+        self.ui_state.notebook_tabs.entry(id).or_default().text = None;
         let folder = path.parent().map_or_else(PathBuf::new, Path::to_path_buf);
-        Task::perform(
+        let read = Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || read_notebook(&folder))
                     .await
@@ -126,7 +129,8 @@ impl Signex {
                     result: result.map(Arc::new),
                 })
             },
-        )
+        );
+        Task::batch([read, scan])
     }
 
     /// The read of `id`'s notebook landed.
@@ -135,18 +139,18 @@ impl Signex {
         id: ProjectId,
         result: Result<Arc<NotebookRead>, String>,
     ) -> Task<Message> {
-        let Some(tab) = self.document_state.notebooks.get_mut(&id) else {
+        let Some((doc, tab)) = self.notebook_parts_mut(id) else {
             return Task::none();
         };
         // An edit or a template since the read started wins over it.
-        if tab.load != Load::Reading {
+        if doc.load != Load::Reading {
             return Task::none();
         }
         let read = match result {
             Ok(read) => read,
             Err(why) => {
                 crate::diagnostics::log_warning(format!("[notebook] {why}"));
-                tab.load = Load::Failed(why);
+                doc.load = Load::Failed(why);
                 return Task::none();
             }
         };
@@ -156,28 +160,38 @@ impl Signex {
                 problem.file, problem.line, problem.path
             ));
         }
-        tab.sources = read.sources.clone();
+        doc.sources = read.sources.clone();
         let Some(text) = read.text.as_deref() else {
-            tab.load = Load::Missing;
+            doc.load = Load::Missing;
             return Task::none();
         };
-        match NotebookFile::parse(text) {
-            Ok(file) => {
-                tab.header_lines = header_line_count(text);
-                tab.text = Some(NotebookText::new(&file.body));
-                tab.saved_body = Some(file.body.clone());
-                tab.file = Some(file);
-                tab.load = Load::Open;
-                tab.refresh_text();
+        match doc.open_text(text) {
+            Ok(()) => {
+                tab.show_body(doc);
                 self.request_notebook_compile(id)
             }
             Err(error) => {
-                let why = format!("{}: {error}", tab.path.display());
+                let why = format!("{}: {error}", doc.path.display());
                 crate::diagnostics::log_warning(format!("[notebook] {why}"));
-                tab.load = Load::Failed(why);
+                doc.load = Load::Failed(why);
                 Task::none()
             }
         }
+    }
+
+    /// Read `id`'s notebook files and design for its references, badges and
+    /// `@` picker, unless that read is already the one held.
+    fn read_notebook_references_of(&mut self, id: ProjectId) -> Task<Message> {
+        let Some(project) = self.document_state.project_by_id(id) else {
+            return Task::none();
+        };
+        let target = (id, project.dir().to_path_buf());
+        if self.ui_state.annotations.target.as_ref() == Some(&target)
+            && self.ui_state.annotations.scan.is_some()
+        {
+            return Task::none();
+        }
+        self.start_annotations_scan(Some(target))
     }
 
     /// Close the notebook tab at `idx`. Its state stays with the project,
@@ -205,6 +219,7 @@ impl Signex {
     /// The project closed: its notebook goes with it.
     pub(crate) fn forget_notebook(&mut self, id: ProjectId) {
         self.document_state.notebooks.remove(&id);
+        self.ui_state.notebook_tabs.remove(&id);
     }
 
     /// The project whose notebook tab the main window shows, if it shows

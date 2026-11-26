@@ -4,12 +4,14 @@
 //! `notebook_attachments`) are queries; `export_notebook_timeline`,
 //! `mark_notebook_attachment_valid` and `attach_notebook_file` write a
 //! file. Every one reads the notebook off the UI thread and is answered
-//! when it lands ([`CommandOutcome::Deferred`]).
+//! when it lands ([`CommandOutcome::Deferred`]). Refusals are catalog
+//! lines (`notebook_tab.ftl`, "Commands").
 
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use iced::Task;
+use signex_i18n::{Translatable, ids};
 use signex_notebook::edit::StaleTarget;
 use signex_notebook::{BlockId, Reference};
 
@@ -17,7 +19,7 @@ use super::design::DesignInputs;
 use super::job::{Ask, Job, NotebookRead, run};
 use crate::app::agent::AgentMsg;
 use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
-use crate::app::document_ids::DocumentKind;
+use crate::app::notebook_project::{because, needs_operand, refusal};
 use crate::app::project_sheets::open_sheets_snapshot;
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
@@ -31,10 +33,6 @@ pub(crate) const QUERY_IDS: [&str; 3] = [
     "notebook_attachments",
 ];
 
-fn refused(reason: impl Into<String>) -> Ran {
-    (CommandOutcome::disabled(reason), Task::none())
-}
-
 fn text<'a>(args: &'a CommandArgs, name: &str) -> Option<&'a str> {
     match args.operand(name) {
         Some(OperandValue::Text(text)) => Some(text.trim()).filter(|t| !t.is_empty()),
@@ -42,28 +40,28 @@ fn text<'a>(args: &'a CommandArgs, name: &str) -> Option<&'a str> {
     }
 }
 
-fn path(args: &CommandArgs, id: &str) -> Result<PathBuf, String> {
+fn naming(id: signex_i18n::MessageId, command: &str) -> Translatable {
+    Translatable::new(id).arg("command", command.to_string())
+}
+
+fn path(args: &CommandArgs, id: &str) -> Result<PathBuf, Translatable> {
     match args.operand("path") {
         Some(OperandValue::Path(path)) => Ok(PathBuf::from(path)),
-        _ => Err(format!("`{id}` needs the operand `path`")),
+        _ => Err(needs_operand(id, "path")),
     }
 }
 
 /// The one target `net`, `part` or `pin` names (`pin` as `U3.3`).
-pub(crate) fn target_of(args: &CommandArgs, id: &str) -> Result<Reference, String> {
+pub(crate) fn target_of(args: &CommandArgs, id: &str) -> Result<Reference, Translatable> {
     match targets_of(args, id)?.as_slice() {
         [one] => Ok(one.clone()),
-        [] => Err(format!(
-            "`{id}` needs one of the operands `net`, `part` or `pin`"
-        )),
-        _ => Err(format!(
-            "`{id}` takes one of `net`, `part` or `pin`, not several"
-        )),
+        [] => Err(naming(ids::NOTEBOOK_TAB_CMD_NEEDS_TARGET, id)),
+        _ => Err(naming(ids::NOTEBOOK_TAB_CMD_ONE_TARGET, id)),
     }
 }
 
 /// Every target `net`, `part` and `pin` name (each optional).
-fn targets_of(args: &CommandArgs, id: &str) -> Result<Vec<Reference>, String> {
+fn targets_of(args: &CommandArgs, id: &str) -> Result<Vec<Reference>, Translatable> {
     let mut found = Vec::new();
     if let Some(net) = text(args, "net") {
         found.push(Reference::Net(net.to_string()));
@@ -72,14 +70,15 @@ fn targets_of(args: &CommandArgs, id: &str) -> Result<Vec<Reference>, String> {
         found.push(Reference::Component(part.to_string()));
     }
     if let Some(pin) = text(args, "pin") {
-        let pin = Reference::dotted_pin(pin)
-            .ok_or_else(|| format!("`{id}`: `pin` is a part and a pin, `U3.3`, not `{pin}`"))?;
+        let pin = Reference::dotted_pin(pin).ok_or_else(|| {
+            naming(ids::NOTEBOOK_TAB_CMD_BAD_PIN, id).arg("value", pin.to_string())
+        })?;
         found.push(pin);
     }
     Ok(found)
 }
 
-fn timeline_of(args: &CommandArgs, id: &str) -> Result<(Reference, Option<String>), String> {
+fn timeline_of(args: &CommandArgs, id: &str) -> Result<(Reference, Option<String>), Translatable> {
     let quantity = text(args, "quantity").map(str::to_string);
     Ok((target_of(args, id)?, quantity))
 }
@@ -120,10 +119,10 @@ pub(crate) fn mark_notebook_attachment_valid(app: &mut Signex, args: &CommandArg
         (Some(file), None) => Ok(Ask::MarkValid(StaleTarget::Attachment(file.to_string()))),
         (None, Some(reading)) => BlockId::parse(reading)
             .map(|block| Ask::MarkValid(StaleTarget::Reading(block)))
-            .ok_or_else(|| format!("`{id}`: `{reading}` is not a block id such as MEAS-005")),
-        _ => Err(format!(
-            "`{id}` needs one of the operands `file` (an attachment) or `id` (a reading)"
-        )),
+            .ok_or_else(|| {
+                naming(ids::NOTEBOOK_TAB_CMD_BAD_READING, id).arg("value", reading.to_string())
+            }),
+        _ => Err(naming(ids::NOTEBOOK_TAB_CMD_NEEDS_FILE_OR_ID, id)),
     };
     start_by_id(app, id, args, ask)
 }
@@ -144,10 +143,15 @@ pub(crate) fn attach_notebook_file(app: &mut Signex, args: &CommandArgs) -> Ran 
     start_by_id(app, id, args, ask)
 }
 
-fn start_by_id(app: &mut Signex, id: &str, args: &CommandArgs, ask: Result<Ask, String>) -> Ran {
+fn start_by_id(
+    app: &mut Signex,
+    id: &str,
+    args: &CommandArgs,
+    ask: Result<Ask, Translatable>,
+) -> Ran {
     match AppCommandId::new(id) {
         Ok(command) => start(app, &command, args, ask),
-        Err(reason) => refused(reason),
+        Err(reason) => refusal(because(reason)),
     }
 }
 
@@ -157,15 +161,15 @@ fn start(
     app: &mut Signex,
     command: &AppCommandId,
     args: &CommandArgs,
-    ask: Result<Ask, String>,
+    ask: Result<Ask, Translatable>,
 ) -> Ran {
     let ask = match ask {
         Ok(ask) => ask,
-        Err(reason) => return refused(reason),
+        Err(reason) => return refusal(reason),
     };
     let (project, job) = match app.notebook_job(command.as_str(), args, ask) {
         Ok(found) => found,
-        Err(reason) => return refused(reason),
+        Err(reason) => return refusal(reason),
     };
     let waiting = app.wait_for_command(command, args);
     let ticket = waiting.ticket;
@@ -173,8 +177,10 @@ fn start(
         async move {
             tokio::task::spawn_blocking(move || run(job))
                 .await
-                .map_err(|e| format!("the notebook read stopped: {e}"))
-                .and_then(|answer| answer)
+                .map_err(|e| {
+                    Translatable::new(ids::NOTEBOOK_TAB_CMD_READ_STOPPED).arg("why", e.to_string())
+                })
+                .and_then(|answer| answer.map_err(because))
         },
         move |answer| {
             Message::Agent(AgentMsg::NotebookRead(Box::new(NotebookRead {
@@ -196,27 +202,8 @@ impl Signex {
         id: &str,
         args: &CommandArgs,
         ask: Ask,
-    ) -> Result<(PathBuf, Job), String> {
-        let Some(OperandValue::Document(named)) = args.operand("document") else {
-            return Err(format!("`{id}` needs the operand `document`"));
-        };
-        let entry = self.resolve_document_target(named)?;
-        let path = match entry.kind {
-            DocumentKind::Project => entry.path.clone(),
-            _ => entry.project.as_ref().map(|project| project.path.clone()),
-        };
-        let project = path.and_then(|path| {
-            self.document_state
-                .projects
-                .iter()
-                .find(|project| project.path == path)
-        });
-        let Some(project) = project else {
-            return Err(format!(
-                "`{id}` reads a project's notebook, and {} is not part of an open one",
-                entry.name
-            ));
-        };
+    ) -> Result<(PathBuf, Job), Translatable> {
+        let project = self.notebook_project_named(id, args)?;
         let design = DesignInputs::of(project, open_sheets_snapshot(&self.document_state));
         let job = Job {
             ask,
@@ -235,7 +222,9 @@ impl Signex {
         } = read;
         let outcome = match answer.as_ref() {
             Ok(value) => CommandOutcome::Answered(value.clone()),
-            Err(reason) => CommandOutcome::disabled(reason.clone()),
+            Err(reason) => CommandOutcome::Disabled {
+                reason: reason.clone(),
+            },
         };
         self.finish_waiting_command(waiting, &project, |_| outcome)
     }

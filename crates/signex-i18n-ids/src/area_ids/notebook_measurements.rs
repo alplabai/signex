@@ -16,6 +16,10 @@ define_ids! {
     NOTEBOOK_TIMELINE_EMPTY = "notebook-timeline-empty";
     NOTEBOOK_TIMELINE_SUMMARY = "notebook-timeline-summary";
     NOTEBOOK_TIMELINE_EXPORT = "notebook-timeline-export";
+    NOTEBOOK_TIMELINE_EXPORT_TITLE = "notebook-timeline-export-title";
+    NOTEBOOK_TIMELINE_EXPORTED = "notebook-timeline-exported";
+    NOTEBOOK_TIMELINE_EXPORT_FAILED = "notebook-timeline-export-failed";
+    NOTEBOOK_TIMELINE_CLOSE = "notebook-timeline-close";
     NOTEBOOK_STALE_TITLE = "notebook-stale-title";
     NOTEBOOK_STALE_WHY = "notebook-stale-why";
     NOTEBOOK_STALE_TAKEN = "notebook-stale-taken";

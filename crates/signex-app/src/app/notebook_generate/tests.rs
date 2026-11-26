@@ -120,9 +120,15 @@ fn the_dialog_does_not_open_without_a_project_in_view() {
     assert!(app.ui_state.notebook_generate.dialog.is_none());
 }
 
+/// `operands` with the `document` every call names (the options do not
+/// read it).
 fn args(operands: &[&str]) -> CommandArgs {
     let id = AppCommandId::new("generate_design_notebook").expect("a catalog id");
-    CommandArgs::parse_operands(&id, operands).expect("operands parse")
+    let project = std::env::temp_dir().join("buck-3v3.snxprj");
+    let document = format!("document={}", project.display());
+    let mut all = vec![document.as_str()];
+    all.extend_from_slice(operands);
+    CommandArgs::parse_operands(&id, &all).expect("operands parse")
 }
 
 #[test]

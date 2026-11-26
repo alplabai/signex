@@ -7,11 +7,12 @@
 use iced::widget::{Column, column, container, image, row, scrollable};
 use iced::{Alignment, Element, Length, Widget as _};
 use signex_i18n::{MessageId, ids, t};
-use signex_notebook::{FigureKind, Reference, SourceAt};
+use signex_notebook::{FigureKind, Reference, ReferenceReport, SourceAt};
 use signex_widgets::{button, segmented, text, text_input};
 
 use super::editor::mono;
 use super::{Look, SP, TS, user};
+use crate::app::notebook_references::views::{picker_list, summary_line};
 use crate::app::notebook_tab::open::MAIN_FILE;
 use crate::app::notebook_tab::picker::{PICKER_INPUT_ID, Picker};
 use crate::app::notebook_tab::{NotebookMsg, NotebookTab, SidePanel};
@@ -182,7 +183,14 @@ fn pages<'a>(look: Look<'a>, tab: &'a NotebookTab) -> Element<'a, NotebookMsg> {
     list.boxed()
 }
 
+/// Each reference the notebook file makes. Once the project's notebook
+/// read has resolved them against the design (mockup row 196): the summary
+/// line, then every reference with its uses, a stale one in the warning
+/// colour; a row shows its card in the margin lane.
 fn references<'a>(look: Look<'a>, tab: &'a NotebookTab) -> Element<'a, NotebookMsg> {
+    if let Some(report) = look.references {
+        return resolved_references(look, report);
+    }
     let Some(outcome) = &tab.compile.last else {
         return quiet(look, ids::NOTEBOOK_TAB_REFERENCES_EMPTY);
     };
@@ -210,6 +218,55 @@ fn references<'a>(look: Look<'a>, tab: &'a NotebookTab) -> Element<'a, NotebookM
     list.boxed()
 }
 
+fn resolved_references<'a>(
+    look: Look<'a>,
+    report: &'a ReferenceReport,
+) -> Element<'a, NotebookMsg> {
+    if report.references.is_empty() {
+        return quiet(look, ids::NOTEBOOK_TAB_REFERENCES_EMPTY);
+    }
+    let r = resolve(look.tokens);
+    let summary = summary_line(look.i18n, report);
+    let mut list: Column<Element<'a, NotebookMsg>> =
+        column![text(summary).size(TS.caption).color(r.ink3).boxed()].spacing(SP.xs);
+    for entry in &report.references {
+        let ink = if entry.is_stale() {
+            ti(look.tokens.warning)
+        } else {
+            ti(look.tokens.text)
+        };
+        let face = row![
+            text(user(entry.reference.name()))
+                .size(TS.dense)
+                .font(mono())
+                .color(ink)
+                .boxed(),
+            text(look.t(kind_label(&entry.reference)))
+                .size(TS.caption)
+                .color(r.ink3)
+                .width(Length::Fill)
+                .boxed(),
+            text(user(entry.uses().to_string()))
+                .size(TS.caption)
+                .color(r.ink3)
+                .boxed(),
+        ]
+        .spacing(SP.s);
+        list = list.push(
+            button(face)
+                .padding([0.0, SP.xs])
+                .width(Length::Fill)
+                .style(crate::styles::ghost_button(look.tokens))
+                .on_press(NotebookMsg::ReferenceShown {
+                    project_id: look.id,
+                    reference: Some(entry.reference.clone()),
+                })
+                .boxed(),
+        );
+    }
+    list.boxed()
+}
+
 pub(super) fn kind_label(reference: &Reference) -> MessageId {
     match reference {
         Reference::Component(_) => ids::NOTEBOOK_TAB_KIND_COMPONENT,
@@ -232,8 +289,9 @@ fn quiet<'a>(look: Look<'a>, label: MessageId) -> Element<'a, NotebookMsg> {
         .boxed()
 }
 
-/// The reference picker: the query, the matching parts and nets with their
-/// value, footprint and sheet, and the keys.
+/// The reference picker: the query, the count, the matching parts, pins and
+/// nets of the design as the `@` picker lists them (mockup row 196), and
+/// the keys.
 pub(super) fn picker_card<'a>(look: Look<'a>, picker: &'a Picker) -> Element<'a, NotebookMsg> {
     let id = look.id;
     let r = resolve(look.tokens);
@@ -250,56 +308,25 @@ pub(super) fn picker_card<'a>(look: Look<'a>, picker: &'a Picker) -> Element<'a,
         })
         .size(TS.body)
         .padding([SP.xs, SP.s]);
-    let rows = picker.rows();
     let count = t!(
         look.i18n,
         ids::NOTEBOOK_TAB_PICKER_COUNT,
-        "shown" => rows.len(),
-        "count" => picker.match_count()
+        "shown" => picker.entries.len(),
+        "count" => picker.matches
     );
+    let entries =
+        picker_list(&picker.entries, picker.row, look.i18n, look.tokens).map(move |entry| {
+            NotebookMsg::PickerEntryPicked {
+                project_id: id,
+                reference: entry.reference,
+            }
+        });
     let mut list: Column<Element<'a, NotebookMsg>> = column![
         input.boxed(),
-        text(count).size(TS.caption).color(r.ink3).boxed()
+        text(count).size(TS.caption).color(r.ink3).boxed(),
+        entries.boxed(),
     ]
     .spacing(SP.xs);
-    if rows.is_empty() {
-        list = list.push(quiet(look, ids::NOTEBOOK_TAB_PICKER_NONE));
-    }
-    for (index, candidate) in rows.iter().enumerate() {
-        let ink = if index == picker.row {
-            r.accent_text
-        } else {
-            ti(look.tokens.text)
-        };
-        let face = row![
-            text(user(candidate.reference.name()))
-                .size(TS.dense)
-                .font(mono())
-                .color(ink)
-                .boxed(),
-            text(user(candidate.detail.clone()))
-                .size(TS.caption)
-                .color(r.ink3)
-                .width(Length::Fill)
-                .boxed(),
-            text(user(candidate.sheet.clone()))
-                .size(TS.caption)
-                .color(r.ink3)
-                .boxed(),
-        ]
-        .spacing(SP.s);
-        list = list.push(
-            button(face)
-                .padding([0.0, SP.xs])
-                .width(Length::Fill)
-                .style(crate::styles::ghost_button(look.tokens))
-                .on_press(NotebookMsg::PickerChosen {
-                    project_id: id,
-                    row: Some(index),
-                })
-                .boxed(),
-        );
-    }
     let call = picker
         .chosen(None)
         .map(|reference| reference.to_markup())

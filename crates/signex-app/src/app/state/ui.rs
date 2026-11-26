@@ -578,6 +578,10 @@ pub struct UiState {
     /// checksum of each file exported this session. Boxed like
     /// `new_project`.
     pub notebook_pdf: Box<crate::app::NotebookPdfState>,
+    /// Each project's Design Notebook tab (mockup row 195): the editor, the
+    /// preview, the panels and the margin lane. The document it shows is in
+    /// `DocumentState::notebooks`.
+    pub notebook_tabs: Box<crate::app::notebook_tab::NotebookTabs>,
     /// Back Annotate (#1312), while open. Execute writes the sheets in
     /// memory as one undo group; nothing is written to disk. Boxed like
     /// `new_project`.

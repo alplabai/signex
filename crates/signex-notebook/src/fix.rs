@@ -96,7 +96,11 @@ pub fn apply_fix(text: &str, reference: &Reference, fix: &Fix) -> Result<Fixed, 
         let start = span.range.start.saturating_sub(shift);
         let end = span.range.end.saturating_sub(shift);
         let in_markup = body[..start].ends_with('#');
-        let read_as_value = body[end..].starts_with('.');
+        // `#component("U7").value` reads a field; `#component("U7").` ends
+        // a sentence.
+        let read_as_value = body[end..]
+            .strip_prefix('.')
+            .is_some_and(|rest| rest.starts_with(|c: char| c.is_alphabetic() || c == '_'));
         let (from, with) = match (&target, in_markup) {
             (Some(new), _) => (start, new.to_code()),
             (None, _) if read_as_value => {

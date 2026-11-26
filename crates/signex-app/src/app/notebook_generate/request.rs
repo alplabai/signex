@@ -4,7 +4,7 @@
 //! with the reason.
 
 use signex_notebook::generate::{
-    ChecksSource, GenerateOptions, Template, parse_sections, variant_of,
+    ChecksSource, GenerateOptions, Template, parse_fail_on, parse_sections, variant_of,
 };
 
 use super::GenerateRequest;
@@ -42,6 +42,9 @@ pub(super) fn options_from_args(args: &CommandArgs) -> Result<GenerateOptions, S
     if let Some(token) = text(args, "checks") {
         options.checks = ChecksSource::parse(token.trim())
             .ok_or_else(|| format!("`{ID}`: `checks` is `run` or `last`, not `{token}`"))?;
+    }
+    if let Some(list) = text(args, "fail_on") {
+        options.fail_on = parse_fail_on(list).map_err(|why| format!("`{ID}`: {why}"))?;
     }
     let typed = |name| text(args, name).map(str::trim).filter(|t| !t.is_empty());
     options.document = typed("document_number").map(str::to_string);

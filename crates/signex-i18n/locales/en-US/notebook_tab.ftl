@@ -69,7 +69,6 @@ notebook-tab-problems-more = and { $count } more
 ## Reference picker
 notebook-tab-picker-placeholder = Find a part or net
 notebook-tab-picker-count = { $shown } of { $count }
-notebook-tab-picker-none = No part or net matches.
 # $call is what Enter writes, such as #component("R7").
 notebook-tab-picker-hint = Enter inserts { $call } · ↑↓ choose · Esc closes
 
@@ -129,3 +128,34 @@ notebook-tab-import = Import .typ files…
 notebook-tab-import-title = Import Typst files
 notebook-tab-import-filter = Typst files
 notebook-tab-empty-note = Creates notebook/design.snxnbk on Save; nothing is written to disk before that.
+
+## Commands: why a Design Notebook command (notebook_*, list_annotations,
+## export_notebook_pdf, the measurement commands) is refused. $command is
+## the command id, $operand an operand name, $value what was given.
+# A reason another part of Signex gave (a document that cannot be found).
+notebook-tab-cmd-because = { $why }
+notebook-tab-cmd-project-closed = the project is no longer open
+notebook-tab-cmd-not-open = the project's Design Notebook is not open: open it with Project ▸ Design Notebook
+notebook-tab-cmd-read-only = the notebook is read-only: a newer Signex wrote it
+notebook-tab-cmd-compile-stopped = the compile did not finish: { $why }
+notebook-tab-cmd-read-stopped = the notebook read stopped: { $why }
+notebook-tab-cmd-files-unreadable = the notebook files could not be read: { $why }
+notebook-tab-cmd-needs-operand = `{ $command }` needs the operand `{ $operand }`
+notebook-tab-cmd-not-in-project = `{ $command }` reads a project's notebook, and { $name } is not part of an open one
+notebook-tab-cmd-needs-name = `kind={ $kind }` needs the operand `name`
+notebook-tab-cmd-not-a-pin = { $value } is no pin: write it as `U3.12`
+notebook-tab-cmd-bad-kind = `kind` is component, pin, net or one of { $kinds }
+notebook-tab-cmd-bad-line = `line` is a line number of the notebook file, from 1
+notebook-tab-cmd-bad-view = `view` is source, split or preview
+notebook-tab-cmd-bad-panel = `panel` is outline, pages or references
+notebook-tab-cmd-needs-target = `{ $command }` needs one of the operands `net`, `part` or `pin`
+notebook-tab-cmd-one-target = `{ $command }` takes one of `net`, `part` or `pin`, not several
+notebook-tab-cmd-bad-pin = `{ $command }`: `pin` is a part and a pin, `U3.3`, not { $value }
+notebook-tab-cmd-bad-reading = `{ $command }`: { $value } is not a block id such as MEAS-005
+notebook-tab-cmd-needs-file-or-id = `{ $command }` needs one of the operands `file` (an attachment) or `id` (a reading)
+notebook-tab-cmd-bad-pages = `pages` is all, current, a page or a range such as 3-7, not { $value }
+notebook-tab-cmd-bad-paper = `paper` is document, a4 or letter, not { $value }
+notebook-tab-cmd-bad-stale = `stale` is warn or fail, not { $value }
+notebook-tab-cmd-bad-annotations = `annotations` lists note, calculation, measurement, issue and decision, not { $value }
+notebook-tab-cmd-bad-block-id = `id` is a block id such as DEC-002 or CALC-2.1, not { $value }
+notebook-tab-cmd-bad-block-kind = `kind` is note, calculation, measurement, issue or decision, not { $value }

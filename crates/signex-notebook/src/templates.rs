@@ -8,11 +8,12 @@ use crate::file::NotebookFile;
 use crate::reference::quote;
 use crate::world::PACKAGE_IMPORT;
 
-/// A notebook to start from.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// A notebook to start from; the design report is the card picked first.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Template {
     /// Title block, contents, Introduction, Requirements, Design, Bring-up,
     /// Decisions and open issues, Change log.
+    #[default]
     DesignReport,
     /// Dated entries, measurements and attachments, no fixed sections.
     LabNotebook,

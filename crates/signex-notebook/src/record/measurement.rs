@@ -140,13 +140,42 @@ impl MeasurementRow {
 
 /// The rows of a Measurement: `rows: ((net("VBUS"), 5.00, 5%, 4.78), ...)`
 /// (what, nominal, tolerance, measured; or what, `(max: ..)`, measured), or
-/// the one row of `target:`, `value:` and `limit:`.
+/// the one row of a reading: `target:`, `quantity:` and `value:`, judged
+/// against `limit:` or against `nominal:` and `tolerance:` (the reading
+/// form of mockup row 199).
 pub(super) fn measurement_rows(reader: &mut Reader) -> Vec<MeasurementRow> {
     let target = reader.value("target");
+    let quantity = reader.text("quantity");
+    let nominal = reader.value("nominal");
+    let tolerance = reader.value("tolerance");
     let mut rows = Vec::new();
     if let Some(measured) = reader.number("value") {
-        let limits = reader.limits("limit");
-        rows.push(MeasurementRow::new(target, None, limits, measured));
+        let (row_nominal, band) = match (nominal, tolerance) {
+            (Some(nominal), Some(tolerance)) => {
+                let pair = FieldValue::Array(vec![nominal.clone(), tolerance.clone()]);
+                match band_of(&pair) {
+                    Some((nominal, limits)) => (Some(nominal), Some(limits)),
+                    None => {
+                        reader.bad("tolerance");
+                        (None, None)
+                    }
+                }
+            }
+            (Some(nominal), None) => match nominal.as_number() {
+                Some((nominal, _)) => (Some(nominal), None),
+                None => {
+                    reader.bad("nominal");
+                    (None, None)
+                }
+            },
+            _ => (None, None),
+        };
+        let limits = reader.limits("limit").or(band);
+        let mut row = MeasurementRow::new(target, row_nominal, limits, measured);
+        if quantity.is_some() {
+            row.quantity = quantity;
+        }
+        rows.push(row);
     }
     let Some(value) = reader.value("rows") else {
         return rows;

@@ -2,16 +2,23 @@
 //! check, the compile with the export's settings, the pages chosen, the
 //! bookmarks and a PDF that is the same file every time. The dialog, the
 //! `export_notebook_pdf` command and the Design Notebook PDF output of an
-//! Output Job all call [`export_pdf`]. Rules: `docs/NOTEBOOK_PDF.md`.
+//! Output Job all call [`export_pdf`]; an export that runs the Python cells
+//! first (mockup row 200) calls [`export_pdf_running_cells`]. Rules:
+//! `docs/NOTEBOOK_PDF.md`.
 
 mod bookmarks;
+mod cells;
 mod file_name;
 mod options;
 mod output_job;
 mod stale;
 mod title;
 
+#[cfg(test)]
+mod tests_cells;
+
 pub use bookmarks::BookmarkCounts;
+pub use cells::{ExportCells, export_pdf_running_cells};
 pub use file_name::{OUTPUT_FOLDERS, default_file_name};
 pub use options::{ExportOptions, PageSelection, Paper, StaleRule};
 pub use output_job::{NOTEBOOK_PDF_OUTPUT_KIND, NotebookPdfOutput};
@@ -21,6 +28,7 @@ pub use title::TitleBlock;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
+use crate::cell::PageCells;
 use crate::compile::{
     CompileOptions, Diagnostic, DiagnosticSeverity, PageInfo, compile_with_inputs,
 };
@@ -177,6 +185,17 @@ pub fn export_pdf(
     ident: &str,
     is_live: impl Fn(&Reference) -> bool,
 ) -> Result<NotebookExport, ExportError> {
+    export_with_cells(sources, options, ident, is_live, PageCells::default())
+}
+
+/// [`export_pdf`] with the cells printing `cells`.
+fn export_with_cells(
+    sources: &NotebookSources,
+    options: &ExportOptions,
+    ident: &str,
+    is_live: impl Fn(&Reference) -> bool,
+    cells: PageCells,
+) -> Result<NotebookExport, ExportError> {
     let stale = StaleCheck::run(sources, is_live);
     if options.stale == StaleRule::Fail && !stale.stale.is_empty() {
         return Err(ExportError::Stale(stale));
@@ -184,7 +203,7 @@ pub fn export_pdf(
     let title = main_title(sources);
     let compile_options = CompileOptions {
         today: title.date,
-        ..CompileOptions::default()
+        cells,
     };
     let inputs = options.typst_inputs(&stale.stale_names());
     let compilation = compile_with_inputs(sources, &compile_options, &inputs);

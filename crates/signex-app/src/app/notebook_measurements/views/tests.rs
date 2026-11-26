@@ -115,7 +115,16 @@ fn the_timeline_publishes_its_tab_reading_and_export() {
         tokens: &tokens,
         i18n: &i18n,
     };
-    let click = |label: &str| messages_on_click(timeline_panel(view(), actions()), LANE, label);
+    // A label as drawn: the catalog isolates each argument (U+2068/U+2069).
+    let click = |label: &str| {
+        let texts = lay_out_texts(timeline_panel(view(), actions()), LANE);
+        let drawn = texts
+            .iter()
+            .find(|t| t.text.replace(['\u{2068}', '\u{2069}'], "") == label)
+            .map(|t| t.text.clone())
+            .unwrap_or_else(|| panic!("no text {label:?}"));
+        messages_on_click(timeline_panel(view(), actions()), LANE, &drawn)
+    };
     assert_eq!(click("export CSV"), [Probe::Export]);
     assert_eq!(
         click("Part C15"),

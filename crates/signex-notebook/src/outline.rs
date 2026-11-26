@@ -243,7 +243,13 @@ fn items(source: &str) -> Vec<Item> {
         let line = line_of(&text, offset);
         if let Some(heading) = node.cast::<ast::Heading>() {
             let depth = u8::try_from(heading.depth().get()).unwrap_or(u8::MAX);
-            let (title, label) = split_label(&node_text(heading.body().to_untyped()));
+            let (title, in_body) = split_label(&node_text(heading.body().to_untyped()));
+            // Typst parses a trailing `<label>` beside the heading, not in
+            // its body: it is read from the heading's line.
+            let label = in_body.or_else(|| {
+                let line_text = text.lines().nth(line.saturating_sub(1) as usize)?;
+                split_label(line_text).1
+            });
             found.push(Item::Heading {
                 depth,
                 title,

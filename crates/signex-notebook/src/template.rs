@@ -7,14 +7,20 @@ use crate::date::IsoDate;
 use crate::id::BlockId;
 use crate::reference::quote;
 
-/// The next free id of `kind` among the blocks of `annotations`, in
-/// `section` (empty for a flat id: `MEAS-010` after `MEAS-009`).
-pub fn next_block_id(kind: AnnotationKind, section: &[u64], annotations: &[Annotation]) -> BlockId {
-    BlockId::next_free(
-        kind,
-        section,
-        annotations.iter().filter_map(|a| a.id.as_ref()),
-    )
+/// The next free id of `kind` among the ids `taken`, in `section` (empty
+/// for a flat id: `MEAS-010` after `MEAS-009`). The one rule the insert
+/// buttons, the reference fixes and the generator number blocks by.
+pub fn next_block_id<'a>(
+    kind: AnnotationKind,
+    section: &[u64],
+    taken: impl IntoIterator<Item = &'a BlockId>,
+) -> BlockId {
+    BlockId::next_free(kind, section, taken)
+}
+
+/// The ids the blocks of `annotations` carry, for [`next_block_id`].
+pub fn block_ids(annotations: &[Annotation]) -> impl Iterator<Item = &BlockId> {
+    annotations.iter().filter_map(|a| a.id.as_ref())
 }
 
 /// A new, empty block of `id`'s kind, dated `today`: the fields the kind

@@ -11,13 +11,14 @@ use std::sync::Arc;
 
 use iced::Task;
 use serde_json::{Value, json};
+use signex_i18n::{Translatable, ids};
 use signex_notebook::{Annotation, AnnotationKind, BlockId, Filter, IsoDate, links};
 
 use super::text_operand;
 use crate::app::agent::{AgentMsg, WaitingCommand};
-use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
-use crate::app::document_ids::DocumentKind;
+use crate::app::command::{CommandArgs, CommandOutcome};
 use crate::app::handlers::annotations::read_notebook_files;
+use crate::app::notebook_project::{bad_value, refusal};
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
 use crate::panels::annotations::{FileReadError, NotebookScan};
@@ -49,14 +50,13 @@ impl Signex {
         command: &AppCommandId,
         args: &CommandArgs,
     ) -> (CommandOutcome, Task<Message>) {
-        let refused = |reason: String| (CommandOutcome::disabled(reason), Task::none());
-        let (project, dir) = match self.annotations_project(args) {
-            Ok(found) => found,
-            Err(reason) => return refused(reason),
+        let (project, dir) = match self.notebook_project_named("list_annotations", args) {
+            Ok(project) => (project.path.clone(), project.dir().to_path_buf()),
+            Err(reason) => return refusal(reason),
         };
         let query = match annotation_query(args) {
             Ok(query) => query,
-            Err(reason) => return refused(reason),
+            Err(reason) => return refusal(reason),
         };
         let waiting = self.wait_for_command(command, args);
         let ticket = waiting.ticket;
@@ -90,56 +90,31 @@ impl Signex {
         } = listed;
         let outcome = match scan.as_ref() {
             Ok(scan) => CommandOutcome::Answered(annotations_answer(&project, &query, scan)),
-            Err(why) => {
-                CommandOutcome::disabled(format!("the notebook files could not be read: {why}"))
-            }
+            Err(why) => CommandOutcome::Disabled {
+                reason: Translatable::new(ids::NOTEBOOK_TAB_CMD_FILES_UNREADABLE)
+                    .arg("why", why.clone()),
+            },
         };
         self.finish_waiting_command(waiting, &project, move |_| outcome)
-    }
-
-    /// The project file and folder the `document` operand names: a project,
-    /// or one of its documents.
-    fn annotations_project(&self, args: &CommandArgs) -> Result<(PathBuf, PathBuf), String> {
-        let Some(OperandValue::Document(named)) = args.operand("document") else {
-            return Err("`list_annotations` needs the operand `document`".to_string());
-        };
-        let entry = self.resolve_document_target(named)?;
-        let path = match entry.kind {
-            DocumentKind::Project => entry.path.clone(),
-            _ => entry.project.as_ref().map(|project| project.path.clone()),
-        };
-        path.and_then(|path| {
-            self.document_state
-                .projects
-                .iter()
-                .find(|project| project.path == path)
-        })
-        .map(|project| (project.path.clone(), project.dir().to_path_buf()))
-        .ok_or_else(|| {
-            format!(
-                "`list_annotations` reads a project's notebook, and {} is not part of an open one",
-                entry.name
-            )
-        })
     }
 }
 
 /// The filters of `args`: an `id` that is a typed id, a `kind` that is one
 /// of the five, a `part` designator.
-pub(crate) fn annotation_query(args: &CommandArgs) -> Result<AnnotationQuery, String> {
+pub(crate) fn annotation_query(args: &CommandArgs) -> Result<AnnotationQuery, Translatable> {
     let id = match text_operand(args, "id").map(str::trim) {
         None | Some("") => None,
-        Some(text) => Some(BlockId::parse(text).ok_or_else(|| {
-            format!("`id` is a block id such as DEC-002 or CALC-2.1, not `{text}`")
-        })?),
+        Some(text) => Some(
+            BlockId::parse(text)
+                .ok_or_else(|| bad_value(ids::NOTEBOOK_TAB_CMD_BAD_BLOCK_ID, text))?,
+        ),
     };
     let mut filter = Filter::default();
     if let Some(text) = text_operand(args, "kind").map(str::trim)
         && !text.is_empty()
     {
-        let kind = AnnotationKind::parse(text).ok_or_else(|| {
-            format!("`kind` is note, calculation, measurement, issue or decision, not `{text}`")
-        })?;
+        let kind = AnnotationKind::parse(text)
+            .ok_or_else(|| bad_value(ids::NOTEBOOK_TAB_CMD_BAD_BLOCK_KIND, text))?;
         filter.hidden_kinds = AnnotationKind::ALL
             .into_iter()
             .filter(|other| *other != kind)

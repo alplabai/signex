@@ -17,6 +17,7 @@ mod compile;
 mod edit;
 mod highlighter;
 mod keys;
+mod lane;
 mod open;
 mod picker;
 mod save;
@@ -29,19 +30,23 @@ mod tests;
 #[cfg(test)]
 mod tests_edit;
 #[cfg(test)]
+mod tests_lane;
+#[cfg(test)]
 mod tests_view;
 
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use iced::widget::text_editor;
-use signex_notebook::{Insertion, Template};
+use signex_notebook::{Insertion, Reference, Template};
 
 pub(crate) use commands::{notebook_compile, notebook_insert, notebook_view};
-pub use compile::{CompileOutcome, CompileState, ShownPage};
+pub use compile::{CompileOutcome, CompileState, Lane, ShownPage};
 pub use open::NotebookRead;
 pub use picker::Picker;
-pub use state::{Load, NotebookTab, NotebookText, SidePanel, ViewMode};
+pub use state::{
+    Load, NotebookTab, NotebookTabs, NotebookText, SidePanel, TimelineTarget, ViewMode,
+};
 
 use crate::app::state::ProjectId;
 
@@ -132,6 +137,55 @@ pub enum NotebookMsg {
     PickerClosed {
         project_id: ProjectId,
     },
+    /// A row of the picker's list was pressed: insert its call.
+    PickerEntryPicked {
+        project_id: ProjectId,
+        reference: Reference,
+    },
+    /// A References row was pressed: its card shows in the margin lane
+    /// (`None` closes it, mockup row 196).
+    ReferenceShown {
+        project_id: ProjectId,
+        reference: Option<Reference>,
+    },
+    /// A reference card, a notebook badge or a timeline tab opens the
+    /// timeline of `reference` in the margin lane (mockup row 199).
+    TimelineOpened {
+        project_id: ProjectId,
+        reference: Reference,
+    },
+    TimelineClosed {
+        project_id: ProjectId,
+    },
+    /// A timeline reading was pressed: the cursor moves to its block.
+    TimelineReadingClicked {
+        project_id: ProjectId,
+        file: String,
+        line: u32,
+    },
+    /// The timeline's export CSV: the save dialog opens.
+    TimelineExportPressed {
+        project_id: ProjectId,
+    },
+    /// The save dialog closed (`None`: cancelled).
+    TimelineExportChosen {
+        project_id: ProjectId,
+        path: Option<PathBuf>,
+    },
+    /// Mark still valid on the stale card of the attachment on `line`.
+    AttachmentMarkedValid {
+        project_id: ProjectId,
+        line: u32,
+    },
+    /// Re-measure… on a stale card: a new Measurement block at the cursor.
+    RemeasurePressed {
+        project_id: ProjectId,
+    },
+    /// Show change on a stale card: the part whose value changed.
+    ChangeShown {
+        project_id: ProjectId,
+        part: String,
+    },
     /// A compile finished.
     Compiled {
         project_id: ProjectId,
@@ -199,7 +253,7 @@ pub enum NotebookMsg {
         project_id: ProjectId,
         waiting: Box<crate::app::agent::WaitingCommand>,
         path: PathBuf,
-        answer: Arc<Result<serde_json::Value, String>>,
+        answer: Arc<Result<serde_json::Value, signex_i18n::Translatable>>,
     },
     /// Esc on the tab: the picker, else the Block menu, closes.
     EscapePressed {
@@ -236,6 +290,16 @@ impl NotebookMsg {
             | M::PickerMoved { project_id, .. }
             | M::PickerChosen { project_id, .. }
             | M::PickerClosed { project_id }
+            | M::PickerEntryPicked { project_id, .. }
+            | M::ReferenceShown { project_id, .. }
+            | M::TimelineOpened { project_id, .. }
+            | M::TimelineClosed { project_id }
+            | M::TimelineReadingClicked { project_id, .. }
+            | M::TimelineExportPressed { project_id }
+            | M::TimelineExportChosen { project_id, .. }
+            | M::AttachmentMarkedValid { project_id, .. }
+            | M::RemeasurePressed { project_id }
+            | M::ChangeShown { project_id, .. }
             | M::Compiled { project_id, .. }
             | M::PageStepped { project_id, .. }
             | M::PagePicked { project_id, .. }

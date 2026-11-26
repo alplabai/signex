@@ -24,8 +24,6 @@ mod board_operands;
 mod board_view_operand_tests;
 mod board_view_operands;
 pub(crate) mod bridge;
-mod command_line;
-pub use command_line::command_line_args;
 mod component_operand;
 #[cfg(test)]
 mod directive_operand_tests;

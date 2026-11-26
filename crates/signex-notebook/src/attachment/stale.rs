@@ -51,6 +51,18 @@ impl<K: Into<String>, V: Into<String>> FromIterator<(K, V)> for DesignValues {
     }
 }
 
+/// The part values a Python cell reads (mockup row 200); they hold no
+/// other parameter.
+impl crate::cell::DesignValues for DesignValues {
+    fn value(&self, designator: &str) -> Option<String> {
+        self.get(designator).map(str::to_string)
+    }
+
+    fn param(&self, _designator: &str, _name: &str) -> Option<String> {
+        None
+    }
+}
+
 /// One part whose value is not what it was.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct ValueChange {

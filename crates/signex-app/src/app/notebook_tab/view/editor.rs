@@ -36,10 +36,13 @@ pub(in crate::app::notebook_tab) enum Mark {
 
 /// The gutter mark of every body line with a problem of the notebook file,
 /// the worse one where a line has both.
-pub(in crate::app::notebook_tab) fn marks(tab: &NotebookTab) -> Vec<(usize, Mark)> {
+pub(in crate::app::notebook_tab) fn marks(
+    doc: &signex_notebook::NotebookDocument,
+    tab: &NotebookTab,
+) -> Vec<(usize, Mark)> {
     let mut marks: Vec<(usize, Mark)> = Vec::new();
     for problem in main_problems(tab) {
-        let Some(line) = tab.body_line(problem.line) else {
+        let Some(line) = doc.body_line(problem.line) else {
             continue;
         };
         let mark = match problem.severity {
@@ -131,7 +134,7 @@ fn code<'a>(
     let r = resolve(tokens);
     let colours = Colours::of(look);
     let line_px = TS.body * LINE_EM;
-    let marks = marks(tab);
+    let marks = marks(look.doc, tab);
     let (cursor_line, _) = text.cursor();
     let (placeholder, value, selection) = (r.ink4, ti(tokens.text), ti(tokens.selection));
     let editor = text_editor(&text.content)
@@ -180,14 +183,14 @@ fn code<'a>(
                 })
                 .boxed(),
         );
-        gutter = gutter.push(gutter_row(look, tab.file_line(line), mark, line_px));
+        gutter = gutter.push(gutter_row(look, look.doc.file_line(line), mark, line_px));
     }
     let code = Stack::new()
         .push(editor.boxed())
         .push_under(wash.boxed())
         .width(Length::Fill);
     let mut rows: Column<Element<'a, NotebookMsg>> = Column::new().padding([SP.s, 0.0]);
-    if tab.header_lines > 0 {
+    if look.doc.header_lines > 0 {
         rows = rows.push(header_row(look, tab, line_px));
     }
     rows = rows.push(
@@ -258,9 +261,10 @@ fn gutter_row<'a>(
 }
 
 /// The header, folded to one line: Signex owns it.
-fn header_row<'a>(look: Look<'a>, tab: &NotebookTab, line_px: f32) -> Element<'a, NotebookMsg> {
+fn header_row<'a>(look: Look<'a>, _tab: &NotebookTab, line_px: f32) -> Element<'a, NotebookMsg> {
     let r = resolve(look.tokens);
-    let count = tab
+    let count = look
+        .doc
         .file
         .as_ref()
         .map_or(0, |file| file.header.references.len());

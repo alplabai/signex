@@ -64,6 +64,12 @@ pub struct MeasurementRecord {
     pub requirements: Vec<String>,
     /// The worst verdict of the rows; `None` without rows.
     pub verdict: Option<Verdict>,
+    /// The board revision a reading was taken on (`rev: "B"`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rev: Option<String>,
+    /// The board a reading was taken on (`board: "SN 0007"`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub board: Option<String>,
 }
 
 impl MeasurementRecord {

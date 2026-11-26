@@ -5,7 +5,9 @@
 use std::sync::Arc;
 
 use iced::widget::text_editor::{Action, Edit, Motion};
-use signex_notebook::{AnnotationKind, Candidate, Insertion, Reference};
+use signex_notebook::{
+    AnnotationKind, DesignIndex, DesignPart, Insertion, NotebookDocument, Reference,
+};
 
 use super::compile::{CompileOutcome, land};
 use super::edit::{Acted, act, insert_at_cursor, typed};
@@ -13,13 +15,19 @@ use super::picker::Picker;
 use super::tests::{NOTEBOOK, app_with_notebook, body, send};
 use super::{Load, NotebookMsg, NotebookTab, NotebookText, SidePanel, ViewMode};
 
-fn open_tab(body: &str, header_lines: u32) -> NotebookTab {
-    let mut tab = NotebookTab::reading(std::path::PathBuf::from("/p/notebook/design.snxnbk"));
-    tab.text = Some(NotebookText::new(body));
-    tab.header_lines = header_lines;
-    tab.load = Load::Open;
-    tab.refresh_text();
-    tab
+/// An open notebook document with `body` below `header_lines` header
+/// lines, and its tab.
+fn open_tab(body: &str, header_lines: u32) -> (NotebookDocument, NotebookTab) {
+    let mut doc = NotebookDocument::reading(std::path::PathBuf::from("/p/notebook/design.snxnbk"));
+    doc.body = Some(body.to_string());
+    doc.header_lines = header_lines;
+    doc.load = Load::Open;
+    let mut tab = NotebookTab {
+        text: Some(NotebookText::new(body)),
+        ..NotebookTab::default()
+    };
+    tab.text.as_mut().unwrap().refresh(&doc);
+    (doc, tab)
 }
 
 /// Put `tab`'s cursor at the end of its text.
@@ -32,12 +40,24 @@ fn id_of(inserted: &signex_notebook::Inserted) -> Option<String> {
     inserted.id.as_ref().map(ToString::to_string)
 }
 
-fn part(name: &str) -> Candidate {
-    Candidate {
-        reference: Reference::Component(name.into()),
-        detail: String::new(),
-        sheet: "power.snxsch".into(),
-    }
+/// A design of the parts `names`, on one sheet, with no nets.
+fn design_of(names: &[&str]) -> Arc<DesignIndex> {
+    let parts = names
+        .iter()
+        .zip(1u128..)
+        .map(|(name, n)| DesignPart {
+            designator: (*name).into(),
+            id: uuid::Uuid::from_u128(n),
+            value: String::new(),
+            description: String::new(),
+            footprint: String::new(),
+            sheet: "power.snxsch".into(),
+            fitted_in: Vec::new(),
+            variant_count: 0,
+            pins: Vec::new(),
+        })
+        .collect();
+    Arc::new(DesignIndex::new(parts, Vec::new()))
 }
 
 #[test]
@@ -58,59 +78,63 @@ fn the_views_cycle_and_every_token_reads_back() {
 
 #[test]
 fn body_lines_are_numbered_from_one_past_the_header() {
-    let tab = open_tab("a\nb\n", 3);
-    assert_eq!(tab.file_line(0), 4);
-    assert_eq!(tab.body_line(4), Some(0));
-    assert_eq!(tab.body_line(3), None, "a header line");
-    let sources = tab.compile_sources();
+    let (doc, _tab) = open_tab("a\nb\n", 3);
+    assert_eq!(doc.file_line(0), 4);
+    assert_eq!(doc.body_line(4), Some(0));
+    assert_eq!(doc.body_line(3), None, "a header line");
+    let sources = doc.compile_sources();
     let main = String::from_utf8(sources.get("design.snxnbk").unwrap().to_vec()).unwrap();
     assert_eq!(main, "\n\n\na\nb\n", "header lines blank, numbers kept");
 }
 
 #[test]
 fn typing_at_opens_the_picker_and_types_nothing() {
-    let mut tab = open_tab("x", 0);
-    assert_eq!(act(&mut tab, typed('@')), Acted::OpensPicker);
+    let (doc, mut tab) = open_tab("x", 0);
+    assert_eq!(act(&doc, &mut tab, typed('@')), Acted::OpensPicker);
     assert_eq!(tab.text.as_ref().unwrap().body(), "x");
-    assert_eq!(act(&mut tab, typed('y')), Acted::Edited);
+    assert_eq!(act(&doc, &mut tab, typed('y')), Acted::Edited);
     let right = Action::Move(Motion::Right);
-    assert_eq!(act(&mut tab, right), Acted::Moved);
+    assert_eq!(act(&doc, &mut tab, right), Acted::Moved);
 }
 
 #[test]
 fn a_block_goes_on_a_line_of_its_own_and_a_reference_runs_in_the_text() {
-    let mut tab = open_tab("= Intro\nText", 0);
+    let (mut doc, mut tab) = open_tab("= Intro\nText", 0);
     to_end(&mut tab);
     let note = Insertion::Block(AnnotationKind::Note);
-    let inserted = insert_at_cursor(&mut tab, &note).unwrap();
+    let inserted = insert_at_cursor(&mut doc, &mut tab, &note).unwrap();
     assert_eq!(id_of(&inserted).as_deref(), Some("NOTE-001"));
     let typed_text = tab.text.as_ref().unwrap().body();
     let own_line = typed_text.contains("Text\n#note(id: \"NOTE-001\")");
     assert!(own_line, "{typed_text}");
-    let mut tab = open_tab("See ", 0);
+    let (mut doc, mut tab) = open_tab("See ", 0);
     to_end(&mut tab);
     let reference = Insertion::Reference(Reference::Component("R7".into()));
-    assert!(insert_at_cursor(&mut tab, &reference).is_some());
+    assert!(insert_at_cursor(&mut doc, &mut tab, &reference).is_some());
     assert_eq!(tab.text.as_ref().unwrap().body(), "See #component(\"R7\")");
 }
 
 #[test]
 fn a_calculation_takes_the_section_of_the_cursor_in_the_file() {
-    let mut tab = open_tab("= A\n= B\n", 3);
+    let (mut doc, mut tab) = open_tab("= A\n= B\n", 3);
     let text = tab.text.as_mut().unwrap();
     super::edit::move_to_line(text, 2);
     let calculation = Insertion::Block(AnnotationKind::Calculation);
-    let inserted = insert_at_cursor(&mut tab, &calculation).unwrap();
+    let inserted = insert_at_cursor(&mut doc, &mut tab, &calculation).unwrap();
     assert_eq!(id_of(&inserted).as_deref(), Some("CALC-2.1"));
 }
 
 #[test]
 fn the_picker_filters_steps_and_chooses() {
-    let mut picker = Picker::new(vec![part("R10"), part("R2"), part("C1")]);
-    picker.query = "r".into();
-    let names: Vec<String> = picker.rows().iter().map(|c| c.reference.name()).collect();
+    let mut picker = Picker::new(design_of(&["R10", "R2", "C1"]));
+    picker.set_query("r".into());
+    let names: Vec<String> = picker
+        .entries
+        .iter()
+        .map(|entry| entry.reference.name())
+        .collect();
     assert_eq!(names, ["R2", "R10"]);
-    assert_eq!(picker.match_count(), 2);
+    assert_eq!(picker.matches, 2);
     picker.step(true);
     picker.step(true);
     assert_eq!(picker.row, 1, "stays on the list");
@@ -126,10 +150,10 @@ fn the_picker_filters_steps_and_chooses() {
 fn a_failed_compile_keeps_the_last_good_one_on_screen() {
     let dir = tempfile::tempdir().unwrap();
     let (app, id) = app_with_notebook(dir.path(), NOTEBOOK);
-    let tab = &app.document_state.notebooks[&id];
+    let tab = &app.ui_state.notebook_tabs[&id];
     let good = tab.compile.last.clone().expect("a compile");
     assert!(good.status.compiled);
-    let mut broken = open_tab("#(1 + ", 0);
+    let (_doc, mut broken) = open_tab("#(1 + ", 0);
     broken.compile.last_good = Some(good.clone());
     broken.compile.shown = tab.compile.shown.clone();
     let failed = CompileOutcome {
@@ -144,6 +168,7 @@ fn a_failed_compile_keeps_the_last_good_one_on_screen() {
         finished_at: "14:02:19".into(),
         page: None,
         thumbnails: Vec::new(),
+        lane: super::Lane::default(),
     };
     land(&mut broken, Arc::new(failed));
     assert!(broken.compile.failed());
@@ -164,18 +189,11 @@ fn the_at_key_in_the_tab_opens_the_picker_and_enter_inserts_its_row() {
             action: typed('@'),
         },
     );
-    let picker = app.document_state.notebooks[&id].picker.as_ref();
+    let picker = app.ui_state.notebook_tabs[&id].picker.as_ref();
     assert!(picker.is_some(), "the picker opened");
-    // No sheet is open, so the picker lists nothing and Enter inserts
-    // nothing; a candidate is offered once a sheet is.
-    app.document_state
-        .notebooks
-        .get_mut(&id)
-        .unwrap()
-        .picker
-        .as_mut()
-        .unwrap()
-        .candidates = vec![part("R7")];
+    // No design is read here, so the picker lists nothing and Enter
+    // inserts nothing; an entry is offered once a design is.
+    app.ui_state.notebook_tabs.get_mut(&id).unwrap().picker = Some(Picker::new(design_of(&["R7"])));
     send(
         &mut app,
         NotebookMsg::PickerChosen {
@@ -183,7 +201,7 @@ fn the_at_key_in_the_tab_opens_the_picker_and_enter_inserts_its_row() {
             row: None,
         },
     );
-    assert!(app.document_state.notebooks[&id].picker.is_none());
+    assert!(app.ui_state.notebook_tabs[&id].picker.is_none());
     let typed_text = body(&app, id);
     assert!(typed_text.starts_with("#component(\"R7\")"), "{typed_text}");
 }
@@ -194,13 +212,13 @@ fn esc_closes_the_picker_then_the_block_menu() {
     let (mut app, id) = app_with_notebook(dir.path(), NOTEBOOK);
     send(&mut app, NotebookMsg::BlockMenuToggled { project_id: id });
     send(&mut app, NotebookMsg::PickerOpened { project_id: id });
-    let tab = &app.document_state.notebooks[&id];
+    let tab = &app.ui_state.notebook_tabs[&id];
     assert!(tab.picker.is_some());
     assert!(!tab.block_menu, "one at a time");
     send(&mut app, NotebookMsg::BlockMenuToggled { project_id: id });
     send(&mut app, NotebookMsg::EscapePressed { project_id: id });
-    assert!(app.document_state.notebooks[&id].picker.is_none());
-    assert!(!app.document_state.notebooks[&id].block_menu);
+    assert!(app.ui_state.notebook_tabs[&id].picker.is_none());
+    assert!(!app.ui_state.notebook_tabs[&id].block_menu);
 }
 
 #[test]
@@ -210,9 +228,9 @@ fn f8_moves_the_cursor_to_the_next_problem_and_wraps() {
     let (mut app, id) = app_with_notebook(dir.path(), &broken);
     let at = app.notebook_next_problem(id).expect("a problem");
     assert_eq!(at.0, 6, "the line in the file");
-    let tab = &app.document_state.notebooks[&id];
+    let (doc, tab) = app.notebook_parts(id).unwrap();
     let (line, _) = tab.text.as_ref().unwrap().cursor();
-    assert_eq!(tab.file_line(line), 6);
+    assert_eq!(doc.file_line(line), 6);
     // However many problems follow, F8 comes back round to the first.
     let lines: Vec<u32> = (0..8)
         .filter_map(|_| app.notebook_next_problem(id).map(|(line, _)| line))
@@ -232,17 +250,17 @@ fn a_view_pick_and_ctrl_backslash_change_only_the_view() {
             view: ViewMode::Source,
         },
     );
-    assert_eq!(app.document_state.notebooks[&id].view, ViewMode::Source);
+    assert_eq!(app.ui_state.notebook_tabs[&id].view, ViewMode::Source);
     send(&mut app, NotebookMsg::ViewCycled { project_id: id });
-    assert_eq!(app.document_state.notebooks[&id].view, ViewMode::Split);
+    assert_eq!(app.ui_state.notebook_tabs[&id].view, ViewMode::Split);
     assert!(!super::tests::is_dirty(&app, id));
 }
 
 #[test]
 fn an_edit_with_paste_is_one_edit() {
-    let mut tab = open_tab("", 0);
+    let (mut doc, mut tab) = open_tab("", 0);
     let paste = Action::Edit(Edit::Paste(Arc::new("= A\n".into())));
-    assert_eq!(act(&mut tab, paste), Acted::Edited);
-    tab.refresh_text();
+    assert_eq!(act(&doc, &mut tab, paste), Acted::Edited);
+    super::edit::sync_body(&mut doc, &mut tab);
     assert_eq!(tab.text.as_ref().unwrap().outline.sections.len(), 1);
 }

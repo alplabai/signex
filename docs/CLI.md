@@ -1037,23 +1037,27 @@ hand-written `notebook/design.snxnbk` is only read.
 generate_design_notebook document=<project, or one of its documents>
     [sections=<list>|all] [variant=<name>] [template=design-report-a4]
     [document_number=<text>] [revision=<text>] [checks=run|last]
-    [save=true] [update=true]
+    [fail_on=requirements,checks] [save=true] [update=true]
 ```
 
 It answers once its run lands with the summary below. Nothing is written
 without `save=true`, and an existing report is replaced only with
 `update=true`. `checks=run` (the default) runs ERC, DRC and the requirement
-checks; `checks=last` uses the newest runs the session keeps. Its capability
-is `export`.
+checks; `checks=last` uses the newest runs the session keeps. `fail_on`
+names the conditions that make the summary's status `fail`. Its capability
+is `save`.
 
-The same from a terminal, with no window:
+The same from a terminal, with no window, is the `notebook generate` verb of
+`signex-cli` ([Design Notebook](#design-notebook)):
 
 ```text
-signex notebook generate --project buck-3v3.snxprj --json
+signex-cli notebook generate --project buck-3v3.snxprj --json
     [--force] [--fail-on requirements,checks] [--sections <list>]
     [--variant <name>] [--template <name>] [--document <number>]
-    [--revision <rev>] [--checks run|last]
+    [--revision <rev>] [--checks run|last] [run options]
 ```
+
+The result line's `data` is the summary:
 
 ```json
 {
@@ -1082,8 +1086,8 @@ signex notebook generate --project buck-3v3.snxprj --json
   `"status": "fail"` and names them in `failed_on`. A report that does not
   compile is `"status": "error"`, exit 1.
 - A report that is already there is never replaced without `--force`: the
-  run refuses (exit 1, `"status": "refused"` with `--json`) and changes no
-  file.
+  command is refused (the result line's `"status": "refused"`, exit 1) and
+  changes no file.
 - A bad command line or a project that cannot be opened exits 2.
 - Two runs on the same project write the same file: nothing in it depends
   on the clock.
@@ -1124,9 +1128,25 @@ Find by text on a board is `find_items` (designator and value).
 ## Design Notebook
 
 `notebook <verb>` runs a Design Notebook command by its own name, as `run`
-would run its catalog command (mockup rows 201 and 202). It takes the
-project with `--project` (or as the first word after the verb), every `run`
-option, and `--json`, which changes nothing: every answer is a JSON line.
+would run its catalog command (mockup rows 201 and 202). It is the one
+command-line front end of the Design Notebook; its verbs are `generate` and
+`export-pdf`. It takes the project with `--project` (or as the first word
+after the verb), every `run` option, and `--json`, which changes nothing:
+every answer is a JSON line.
+
+```
+signex-cli notebook generate --project buck-3v3.snxprj [--force]
+    [--fail-on requirements,checks] [--sections <list>|all]
+    [--variant <name>] [--template <name>] [--document <number>]
+    [--revision <rev>] [--checks run|last] [--json] [run options]
+```
+
+`generate` is `run <project> generate_design_notebook --arg
+document=<project> --arg save=true --arg ... --allow save`: it writes the
+design report into `notebook/generated/design-report.snxnbk` and answers
+with its summary ([Design notebook generation](#design-notebook-generation)).
+`--force` is `update=true`, `--document` is `document_number`. The exit code
+follows the summary's `status`: anything but `ok` exits 1.
 
 ```
 signex-cli notebook export-pdf --project buck-3v3.snxprj [--out <file>]

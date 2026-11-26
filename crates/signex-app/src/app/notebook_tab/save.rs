@@ -7,22 +7,17 @@
 use std::path::Path;
 
 use iced::Task;
-use signex_notebook::NotebookFile;
+use signex_notebook::NotebookDocument;
 
-use super::{Load, NotebookMsg, NotebookTab};
+use super::NotebookMsg;
 use crate::app::state::ProjectId;
 use crate::app::{Message, Signex};
 
-/// The file text Save writes for `tab`: its file (or a new one) with the
+/// The file text Save writes for `doc`: its file (or a new one) with the
 /// body as typed. `None` when there is nothing to write.
-pub(super) fn written_text(tab: &NotebookTab) -> Option<Result<String, String>> {
-    let text = tab.text.as_ref()?;
-    let mut file = tab
-        .file
-        .clone()
-        .unwrap_or_else(|| NotebookFile::new(String::new()));
-    file.body = text.body();
-    Some(file.write().map_err(|error| error.to_string()))
+pub(super) fn written_text(doc: &NotebookDocument) -> Option<Result<String, String>> {
+    doc.written_text()
+        .map(|written| written.map_err(|error| error.to_string()))
 }
 
 /// Blocking: write `text` to `path`, making the notebook folder first.
@@ -41,23 +36,23 @@ impl Signex {
         let Some(path) = self.sync_notebook_path(id) else {
             return Task::none();
         };
-        let Some(tab) = self.document_state.notebooks.get_mut(&id) else {
+        let Some(doc) = self.document_state.notebooks.get_mut(&id) else {
             return Task::none();
         };
-        if tab.saving {
+        if doc.saving {
             return Task::none();
         }
-        let text = match written_text(tab) {
+        let text = match written_text(doc) {
             Some(Ok(text)) => text,
             Some(Err(why)) => {
-                tab.save_error = Some(why.clone());
+                doc.save_error = Some(why.clone());
                 crate::diagnostics::log_warning(format!("[notebook] Save refused: {why}"));
                 return Task::none();
             }
             None => return Task::none(),
         };
-        tab.saving = true;
-        tab.save_error = None;
+        doc.saving = true;
+        doc.save_error = None;
         Task::perform(
             async move {
                 let written = text.clone();
@@ -85,18 +80,18 @@ impl Signex {
         written: &str,
         result: Result<(), String>,
     ) {
-        let Some(tab) = self.document_state.notebooks.get_mut(&id) else {
+        let Some(doc) = self.document_state.notebooks.get_mut(&id) else {
             return;
         };
-        tab.saving = false;
+        doc.saving = false;
         if let Err(why) = result {
             crate::diagnostics::log_warning(format!("[notebook] Save failed: {why}"));
-            tab.save_error = Some(why);
+            doc.save_error = Some(why);
             return;
         }
-        let path = tab.path.clone();
-        mark_written(tab, written);
-        if !tab.is_unsaved() {
+        let path = doc.path.clone();
+        mark_written(doc, written);
+        if !doc.is_unsaved() {
             self.document_state.clear_document_dirty(&path);
         }
     }
@@ -110,16 +105,16 @@ impl Signex {
             .sync_notebook_path(id)
             .unwrap_or_else(|| path.to_path_buf());
         let path = target.as_path();
-        let Some(tab) = self.document_state.notebooks.get_mut(&id) else {
+        let Some(doc) = self.document_state.notebooks.get_mut(&id) else {
             anyhow::bail!("no notebook is open at {}", path.display());
         };
-        let text = match written_text(tab) {
+        let text = match written_text(doc) {
             Some(Ok(text)) => text,
             Some(Err(why)) => anyhow::bail!("{}: {why}", path.display()),
             None => anyhow::bail!("{} has no text to save", path.display()),
         };
         write_file(path, &text).map_err(anyhow::Error::msg)?;
-        mark_written(tab, &text);
+        mark_written(doc, &text);
         self.document_state.clear_document_dirty(path);
         Ok(())
     }
@@ -130,6 +125,7 @@ impl Signex {
             return Task::none();
         };
         self.document_state.notebooks.remove(&id);
+        self.ui_state.notebook_tabs.remove(&id);
         self.document_state.clear_document_dirty(path);
         match self.notebook_tab_index(id) {
             Some(idx) => self.close_notebook_tab(idx, false),
@@ -140,19 +136,11 @@ impl Signex {
 
 /// The file now holds `written`: keep it as the file read, so the next
 /// save of an unchanged header writes it back byte for byte.
-fn mark_written(tab: &mut NotebookTab, written: &str) {
-    match NotebookFile::parse(written) {
-        Ok(file) => {
-            tab.saved_body = Some(file.body.clone());
-            tab.header_lines = signex_notebook::header_line_count(written);
-            tab.file = Some(file);
-        }
-        Err(error) => {
-            crate::diagnostics::log_warning(format!(
-                "[notebook] the saved file reads back with an error: {error}"
-            ));
-        }
+fn mark_written(doc: &mut NotebookDocument, written: &str) {
+    let at = chrono::Local::now().format("%H:%M").to_string();
+    if let Err(error) = doc.mark_written(written, at) {
+        crate::diagnostics::log_warning(format!(
+            "[notebook] the saved file reads back with an error: {error}"
+        ));
     }
-    tab.load = Load::Open;
-    tab.saved_at = Some(chrono::Local::now().format("%H:%M").to_string());
 }

@@ -25,6 +25,10 @@ notebook-timeline-summary =
     } · { $fails } fail · { $stale } stale
 # A link under the list: write it as a CSV file.
 notebook-timeline-export = export CSV
+notebook-timeline-export-title = Export the timeline as CSV
+notebook-timeline-exported = Design Notebook: the timeline was written to { $path }
+notebook-timeline-export-failed = Design Notebook: the timeline could not be written to { $path }: { $why }
+notebook-timeline-close = Close
 
 ## Stale attachment
 notebook-stale-title = { $name } is stale

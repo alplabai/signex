@@ -215,19 +215,24 @@ impl CompiledNotebook {
     }
 
     /// [`Self::pdf`] of pages `first` to `last` only (1-based, both
-    /// included); `None` writes every page.
+    /// included); `None` writes every page. Every page is written as a
+    /// tagged PDF; Typst cannot tag a page range, so a range is written
+    /// untagged.
     pub fn pdf_pages(
         &self,
         ident: &str,
         pages: Option<(usize, usize)>,
     ) -> Result<Vec<u8>, Vec<String>> {
-        let page_ranges = pages.map(|(first, last)| {
+        let every = self.page_count();
+        let range = pages.filter(|&(first, last)| (first, last) != (1, every));
+        let page_ranges = range.map(|(first, last)| {
             PageRanges::new(vec![NonZeroUsize::new(first)..=NonZeroUsize::new(last)])
         });
         let options = typst_pdf::PdfOptions {
             ident: Smart::Custom(ident.to_string()),
             creator: Smart::Custom(Some(PDF_CREATOR.to_string())),
             timestamp: None,
+            tagged: page_ranges.is_none(),
             page_ranges,
             ..typst_pdf::PdfOptions::default()
         };
@@ -263,13 +268,27 @@ fn diagnostic(world: &NotebookWorld, source: &SourceDiagnostic) -> Diagnostic {
     }
 }
 
+/// The text runs of `frame`, each followed by a space. A run that goes on
+/// where the one before it ended (a glyph a fallback font drew, `ΔY`)
+/// joins it, and a no-break space reads as a space.
 fn frame_text(frame: &typst::layout::Frame, out: &mut String) {
-    for (_, item) in frame.items() {
+    let mut end: Option<typst::layout::Point> = None;
+    for (at, item) in frame.items() {
         match item {
-            typst::layout::FrameItem::Group(group) => frame_text(&group.frame, out),
+            typst::layout::FrameItem::Group(group) => {
+                frame_text(&group.frame, out);
+                end = None;
+            }
             typst::layout::FrameItem::Text(run) => {
-                out.push_str(&run.text);
+                let touches = end.is_some_and(|end| {
+                    (end.y - at.y).abs().to_pt() < 0.01 && (end.x - at.x).abs().to_pt() < 0.01
+                });
+                if touches && out.ends_with(' ') {
+                    out.pop();
+                }
+                out.push_str(&run.text.as_str().replace('\u{a0}', " "));
                 out.push(' ');
+                end = Some(typst::layout::Point::new(at.x + run.width(), at.y));
             }
             _ => {}
         }

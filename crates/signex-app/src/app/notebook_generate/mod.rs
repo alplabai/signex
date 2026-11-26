@@ -1,6 +1,6 @@
 //! Generate design notebook (#2945, mockup row 201): one catalog command,
 //! `generate_design_notebook`, reached from command search, the options
-//! dialog and the command line (`signex notebook generate`), all running
+//! dialog and the command line (`signex-cli notebook generate`), all running
 //! [`Signex::start_notebook_generate`]. The checks, the BOM and the notebook
 //! reads run off the UI thread (`job`); the report itself is built by
 //! `signex_notebook::generate`. In the app the report waits unsaved
@@ -27,7 +27,7 @@ use crate::app::agent::WaitingCommand;
 pub(crate) use update::generate_design_notebook;
 
 /// The command line that does what the dialog does, as its footer names it.
-pub const GENERATE_COMMAND_LINE: &str = "signex notebook generate";
+pub const GENERATE_COMMAND_LINE: &str = "signex-cli notebook generate";
 
 impl From<NotebookGenerateMsg> for crate::app::Message {
     fn from(msg: NotebookGenerateMsg) -> Self {

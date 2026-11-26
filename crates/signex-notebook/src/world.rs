@@ -149,7 +149,15 @@ impl NotebookWorld {
             }
         };
         let text = if extension == crate::NOTEBOOK_EXTENSION {
-            typst_source(&text)
+            let typst = typst_source(&text);
+            if id != self.main && typst.starts_with('\n') {
+                // A chapter is evaluated in its own scope by `#include`:
+                // it reads the package on its first header line, which is
+                // blank, so every line keeps its number.
+                format!("{PACKAGE_IMPORT}{typst}")
+            } else {
+                typst
+            }
         } else {
             text
         };

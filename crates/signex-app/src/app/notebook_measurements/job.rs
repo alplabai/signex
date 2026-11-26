@@ -66,7 +66,7 @@ pub struct NotebookRead {
     pub(crate) waiting: WaitingCommand,
     /// The project file the command named, for the reply's gate.
     pub(crate) project: PathBuf,
-    pub(crate) answer: Arc<Result<Value, String>>,
+    pub(crate) answer: Arc<Result<Value, signex_i18n::Translatable>>,
 }
 
 /// Do `job`: the command's answer, or why it was refused.

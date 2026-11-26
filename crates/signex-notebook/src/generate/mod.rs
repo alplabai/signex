@@ -41,7 +41,7 @@ pub const GENERATED_DIR: &str = "generated";
 /// The file name of the generated design report.
 pub const GENERATED_FILE: &str = "design-report.snxnbk";
 /// The report as a notebook name, the form `--notebook` takes
-/// (`signex notebook export-pdf --notebook generated/design-report`).
+/// (`signex-cli notebook export-pdf --notebook generated/design-report`).
 pub const GENERATED_NOTEBOOK: &str = "generated/design-report";
 /// The command name the summary carries.
 pub const GENERATE_COMMAND: &str = "notebook.generate";
@@ -96,7 +96,8 @@ pub fn generate(facts: &ProjectFacts, options: &GenerateOptions) -> GeneratedNot
         .notebook
         .as_ref()
         .map_or(0, |notebook| notebook.page_count());
-    let summary = GenerateSummary::of(facts, options, &rows, pages, problems);
+    let mut summary = GenerateSummary::of(facts, options, &rows, pages, problems);
+    summary.apply_fail_on(&options.fail_on);
     GeneratedNotebook {
         path: generated_path(),
         text,

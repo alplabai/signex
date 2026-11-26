@@ -4,7 +4,7 @@ Generate design notebook (#2945, mockup row 201) assembles a design report
 from what the project already knows. It is one catalog command,
 `generate_design_notebook`, reached from command search (the options
 dialog), its operands (`signex-cli run`, an agent) and the command line
-(`signex notebook generate`); all of them run the same start. Command
+(`signex-cli notebook generate`); all of them run the same start. Command
 reference: [CLI.md](CLI.md), "Design notebook generation". Decisions:
 [DECISIONS.md](DECISIONS.md), the 2026-11-25 Generate rows.
 
@@ -14,7 +14,7 @@ The report is its own notebook file, `notebook/generated/design-report.snxnbk`
 (`snxnbk/1`, an empty header). Regenerate replaces it as a whole; the
 hand-written `notebook/design.snxnbk` and its chapters are read, never
 written. In the app the report waits unsaved for the notebook tab, whose Save
-writes it. With `save=true` (always, from `signex notebook generate`) the run
+writes it. With `save=true` (always, from `signex-cli notebook generate`) the run
 writes it, and refuses when one is there unless `update=true` (`--force`).
 
 ## How it is built

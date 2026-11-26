@@ -9,8 +9,8 @@ use std::path::Path;
 use crate::{
     Alternative, Annotation, AnnotationKind, BlockId, Citation, CompileOptions, Filter, IsoDate,
     Limits, NotebookSources, PACKAGE_IMPORT, ProblemKind, Record, Reference, Severity, Status,
-    Verdict, cited_by, compile, issue_for_failure, links, new_block_source, next_block_id,
-    open_failing_measurements, scan, unopened_failures, verdict_of,
+    Verdict, block_ids, cited_by, compile, issue_for_failure, links, new_block_source,
+    next_block_id, open_failing_measurements, scan, unopened_failures, verdict_of,
 };
 
 /// The blocks of mockup row 198's source pane, as drawn (the Issue's body
@@ -435,7 +435,7 @@ fn a_sectioned_measurement_opens_an_issue_in_its_section() {
 fn a_new_block_of_each_kind_reads_back_with_its_id_and_no_problem() {
     let today = date("2026-11-25");
     for kind in AnnotationKind::ALL {
-        let block_id = next_block_id(kind, &[], &blocks(ROW_198));
+        let block_id = next_block_id(kind, &[], block_ids(&blocks(ROW_198)));
         let source = new_block_source(&block_id, today);
         let (found, problems) = scan(&source);
         assert!(problems.is_empty(), "{kind:?}: {problems:?}\n{source}");
@@ -453,11 +453,11 @@ fn a_new_block_of_each_kind_reads_back_with_its_id_and_no_problem() {
         );
     }
     assert_eq!(
-        next_block_id(AnnotationKind::Issue, &[], &blocks(ROW_198)),
+        next_block_id(AnnotationKind::Issue, &[], block_ids(&blocks(ROW_198))),
         id("ISS-005")
     );
     assert_eq!(
-        next_block_id(AnnotationKind::Calculation, &[2], &[]),
+        next_block_id(AnnotationKind::Calculation, &[2], std::iter::empty()),
         id("CALC-2.1")
     );
 }
@@ -631,6 +631,65 @@ fn field_values_read_numbers_units_arrays_dictionaries_and_references() {
     assert_eq!(V::read("pin(\"U3\", 3)"), V::Other, "not the quoted names");
     assert_eq!(V::read("(a) + (b)"), V::Other, "two groups, not one");
     assert_eq!(V::read("x.y"), V::Other);
+}
+
+/// Mockup rows 198 and 199 share one `#measurement`: a reading as the
+/// timeline writes it scans with no problem, and its quantity, nominal
+/// band, requirements, revision and board land in the record.
+#[test]
+fn a_reading_shaped_measurement_scans_as_a_record_with_no_problem() {
+    let found = blocks(
+        r#"#measurement(
+  id: "MEAS-003",
+  title: [Output rail at 2 A],
+  caption: [Bring-up results, rev B],
+  target: net("+3V3"),
+  quantity: "ripple",
+  value: 3.31,
+  unit: "V",
+  nominal: 3.3,
+  tolerance: 2%,
+  instrument: "LAB-0117",
+  requirements: ("REQ-001", "REQ-002"),
+  conditions: "VIN 12.0 V, 2.0 A, 25 °C",
+  operator: "j.berg",
+  timestamp: "2026-11-24T15:12",
+  rev: "B",
+  board: "SN 0007",
+  attach: "scope/ripple-2A-revB.csv",
+  taken-with: ("L1": "4.7 µH"),
+)
+"#,
+    );
+    assert_eq!(found.len(), 1);
+    let Record::Measurement(record) = &found[0].record else {
+        panic!("{:?}", found[0].record);
+    };
+    assert_eq!(record.rows.len(), 1);
+    let row = &record.rows[0];
+    assert_eq!(row.quantity.as_deref(), Some("ripple"));
+    assert_eq!(row.target, Some(net("+3V3")));
+    assert_eq!(row.nominal, Some(3.3));
+    assert_eq!(row.verdict, Some(Verdict::Pass));
+    assert_eq!(record.requirements, ["REQ-001", "REQ-002"]);
+    assert_eq!(record.instrument.as_deref(), Some("LAB-0117"));
+    assert_eq!(record.rev.as_deref(), Some("B"));
+    assert_eq!(record.board.as_deref(), Some("SN 0007"));
+    assert_eq!(found[0].references, [net("+3V3")]);
+}
+
+/// The corpus notebook of mockup row 199 reads with no scanner problem.
+#[test]
+fn the_with_measurements_fixture_scans_with_no_problem() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../signex-types/tests/corpus/notebook/with-measurements/design.snxnbk");
+    let text = std::fs::read_to_string(path).expect("the with-measurements fixture");
+    let found = blocks(&text);
+    let ids: Vec<String> = found
+        .iter()
+        .filter_map(|block| block.id.as_ref().map(ToString::to_string))
+        .collect();
+    assert_eq!(ids, ["MEAS-009", "MEAS-005"]);
 }
 
 #[test]

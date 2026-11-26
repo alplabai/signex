@@ -6,9 +6,11 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use iced::Task;
+use signex_notebook::attachment::DesignValues;
+use signex_notebook::cell::{CELL_CACHE_PATH, CellCache, NoRuntime, SandboxPolicy, Trust};
 use signex_notebook::export::{
-    DesignNames, NotebookInspection, OUTPUT_FOLDERS, TitleBlock, default_file_name, export_pdf,
-    inspect,
+    DesignNames, ExportCells, NotebookInspection, OUTPUT_FOLDERS, TitleBlock, default_file_name,
+    export_pdf_running_cells, inspect,
 };
 use signex_notebook::{LoadProblem, NOTEBOOK_DIR, NotebookSources};
 use signex_types::project::{BASE_VARIANT, is_base_variant};
@@ -141,11 +143,15 @@ pub(super) fn inspect_task(
 
 /// Read the notebook, make its PDF and make the folder it goes in, off the
 /// update thread; the file itself is written by the export write path.
-pub(super) fn build_task(request: BuildRequest, names: DesignNames) -> Task<Message> {
+pub(super) fn build_task(
+    request: BuildRequest,
+    names: DesignNames,
+    values: DesignValues,
+) -> Task<Message> {
     let job = request.clone();
     Task::perform(
         async move {
-            tokio::task::spawn_blocking(move || build(&job, &names))
+            tokio::task::spawn_blocking(move || build(&job, &names, &values))
                 .await
                 .unwrap_or_else(|e| Err(format!("the export did not finish: {e}")))
         },
@@ -158,12 +164,39 @@ pub(super) fn build_task(request: BuildRequest, names: DesignNames) -> Task<Mess
     )
 }
 
-/// Blocking: read, export, and make the output folder.
-fn build(request: &BuildRequest, names: &DesignNames) -> Result<BuiltPdf, String> {
+/// Blocking: the project's cell results; none when the file is missing or
+/// this build cannot read it (it is a cache).
+fn read_cell_cache(project_dir: &Path) -> CellCache {
+    std::fs::read(project_dir.join(CELL_CACHE_PATH))
+        .map(|bytes| CellCache::read(&bytes).0)
+        .unwrap_or_default()
+}
+
+/// Blocking: read, run the Python cells, export, and make the output
+/// folder. The cells run as an export runs them (mockup row 200): this
+/// build has no Python runtime, so each prints its cached result greyed
+/// with the slim-install note, or none.
+fn build(
+    request: &BuildRequest,
+    names: &DesignNames,
+    values: &DesignValues,
+) -> Result<BuiltPdf, String> {
     let sources = read_sources(&request.project_dir, &request.notebook)?;
     let ident = pdf_ident(&request.project_name, &request.notebook);
-    let export = export_pdf(&sources, &request.options, &ident, |r| names.has(r))
-        .map_err(|e| e.to_string())?;
+    let mut cache = read_cell_cache(&request.project_dir);
+    let policy = SandboxPolicy::new(&request.project_dir.to_string_lossy());
+    let now = chrono::Local::now().format("%Y-%m-%dT%H:%M").to_string();
+    let cells = ExportCells {
+        design: values,
+        runner: &NoRuntime,
+        policy: &policy,
+        trust: Trust::Unasked,
+        now: &now,
+        cache: &mut cache,
+    };
+    let (export, _report) =
+        export_pdf_running_cells(&sources, &request.options, &ident, |r| names.has(r), cells)
+            .map_err(|e| e.to_string())?;
     let path = match &request.path {
         Some(path) => path.clone(),
         None => request.project_dir.join(default_path(

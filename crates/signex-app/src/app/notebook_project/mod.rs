@@ -13,9 +13,12 @@ use iced::Task;
 use crate::app::state::ProjectId;
 use crate::app::{Message, NotebookMsg, Signex};
 
+mod refusal;
 mod seams;
 #[cfg(test)]
 mod tests;
+
+pub(crate) use refusal::{bad_value, because, needs_operand, refusal};
 
 /// The notebook a request means: its project and its file, which may not
 /// exist yet (a notebook is written only on Save, mockup row 195).

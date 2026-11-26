@@ -63,12 +63,56 @@ impl Signex {
             M::PickerQueryChanged { project_id, query } => {
                 self.on_notebook(project_id, |tab| {
                     if let Some(picker) = &mut tab.picker {
-                        picker.query = query;
-                        picker.row = 0;
+                        picker.set_query(query);
                     }
                 });
                 Task::none()
             }
+            M::PickerEntryPicked {
+                project_id,
+                reference,
+            } => self.notebook_reference_picked(project_id, Some(reference)),
+            M::ReferenceShown {
+                project_id,
+                reference,
+            } => {
+                self.notebook_reference_shown(project_id, reference.as_ref());
+                Task::none()
+            }
+            M::TimelineOpened {
+                project_id,
+                reference,
+            } => self.notebook_timeline_opened(project_id, reference),
+            M::TimelineClosed { project_id } => {
+                self.on_notebook(project_id, |tab| tab.timeline = None);
+                Task::none()
+            }
+            M::TimelineReadingClicked {
+                project_id,
+                file,
+                line,
+            } => {
+                self.notebook_block_shown(project_id, &file, line);
+                Task::none()
+            }
+            M::TimelineExportPressed { project_id } => self.pick_notebook_timeline_csv(project_id),
+            M::TimelineExportChosen { project_id, path } => {
+                self.write_notebook_timeline_csv(project_id, path)
+            }
+            M::AttachmentMarkedValid { project_id, line } => {
+                self.mark_notebook_attachment_valid_in_tab(project_id, line)
+            }
+            M::RemeasurePressed { project_id } => {
+                let measurement =
+                    signex_notebook::Insertion::Block(signex_notebook::AnnotationKind::Measurement);
+                self.notebook_insert(project_id, &measurement)
+            }
+            M::ChangeShown { part, .. } => self.handle_notebook_reference_message(
+                crate::app::notebook_references::NotebookReferenceMsg::CardActionPicked {
+                    reference: signex_notebook::Reference::Component(part),
+                    action: signex_notebook::CardAction::CrossProbe,
+                },
+            ),
             M::PickerMoved { project_id, down } => {
                 self.on_notebook(project_id, |tab| {
                     if let Some(picker) = &mut tab.picker {
@@ -148,7 +192,7 @@ impl Signex {
 
     /// Run `change` on `id`'s notebook tab state, if it is held.
     fn on_notebook(&mut self, id: ProjectId, change: impl FnOnce(&mut super::NotebookTab)) {
-        if let Some(tab) = self.document_state.notebooks.get_mut(&id) {
+        if let Some(tab) = self.ui_state.notebook_tabs.get_mut(&id) {
             change(tab);
         }
     }
@@ -160,7 +204,7 @@ impl Signex {
         id: ProjectId,
         panel: SidePanel,
     ) -> Task<Message> {
-        let Some(tab) = self.document_state.notebooks.get_mut(&id) else {
+        let Some(tab) = self.ui_state.notebook_tabs.get_mut(&id) else {
             return Task::none();
         };
         tab.panel = panel;
@@ -172,7 +216,7 @@ impl Signex {
 
     /// The page navigator's previous or next page.
     fn notebook_page_stepped(&mut self, id: ProjectId, forward: bool) -> Task<Message> {
-        let Some(tab) = self.document_state.notebooks.get(&id) else {
+        let Some(tab) = self.ui_state.notebook_tabs.get(&id) else {
             return Task::none();
         };
         let count = tab
@@ -203,14 +247,13 @@ impl Signex {
             crate::diagnostics::log_warning("[notebook] the clock gives no date");
             return Task::none();
         };
-        let Some(tab) = self.document_state.notebooks.get_mut(&id) else {
+        let Some((doc, tab)) = self.notebook_parts_mut(id) else {
             return Task::none();
         };
-        if tab.load != Load::Missing {
+        if doc.load != Load::Missing {
             return Task::none();
         }
-        let file = template.file(&name, today);
-        start_new(tab, file);
+        start_new(doc, tab, template.file(&name, today));
         self.notebook_edited(id)
     }
 
@@ -270,24 +313,26 @@ impl Signex {
                 return Task::none();
             }
         };
-        let Some(tab) = self.document_state.notebooks.get_mut(&id) else {
+        let Some((doc, tab)) = self.notebook_parts_mut(id) else {
             return Task::none();
         };
-        if tab.load != Load::Missing {
+        if doc.load != Load::Missing {
             return Task::none();
         }
-        start_new(tab, NotebookFile::new(body));
+        start_new(doc, tab, NotebookFile::new(body));
         self.notebook_edited(id)
     }
 }
 
-/// `tab`, empty until now, holds the new notebook `file`, not saved.
-pub(super) fn start_new(tab: &mut super::NotebookTab, file: NotebookFile) {
-    tab.text = Some(NotebookText::new(&file.body));
-    tab.header_lines = 0;
-    tab.saved_body = None;
-    tab.file = Some(file);
-    tab.load = Load::Open;
+/// `doc`, empty until now, holds the new notebook `file`, not saved; its
+/// tab's editor shows the body.
+pub(super) fn start_new(
+    doc: &mut signex_notebook::NotebookDocument,
+    tab: &mut super::NotebookTab,
+    file: NotebookFile,
+) {
+    doc.start_new(file);
+    tab.text = doc.body.as_deref().map(NotebookText::new);
 }
 
 /// Blocking: the text of the `.typ` files at `paths`, one after the other.

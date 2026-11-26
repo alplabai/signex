@@ -103,9 +103,22 @@ impl Signex {
     }
 
     /// A card action: cross-probe and Open sheet go to the part (a net is
-    /// highlighted), Copy reference writes the call to the clipboard. The
-    /// timeline (mockup row 199) and the source belong to the notebook tab.
+    /// highlighted), Copy reference writes the call to the clipboard,
+    /// Timeline opens the notebook tab of the project read with the
+    /// reference's timeline in its margin lane (mockup row 199). The source
+    /// and Update all belong to the notebook tab.
     fn run_card_action(&mut self, reference: &Reference, action: CardAction) -> Task<Message> {
+        if action == CardAction::Timeline
+            && let Some((project, _)) = self.ui_state.annotations.target.clone()
+        {
+            let open = self.open_notebook_tab(project);
+            let timeline = crate::app::notebook_tab::NotebookMsg::TimelineOpened {
+                project_id: project,
+                reference: reference.clone(),
+            };
+            let shown = self.dispatch_notebook_message(timeline);
+            return Task::batch([open, shown]);
+        }
         match action {
             CardAction::CrossProbe | CardAction::OpenSheet | CardAction::HighlightNet => {
                 self.jump_to_reference(reference)

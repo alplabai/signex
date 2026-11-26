@@ -249,7 +249,7 @@ fn write_report(dir: &Path, text: &str, update: bool) -> Result<(), String> {
     let path = dir.join(generated_path());
     match write_decision(path.exists(), update) {
         WriteDecision::Refuse => Err(format!(
-            "{} already exists; run with update=true (signex notebook generate --force) to replace it",
+            "{} already exists; run with update=true (signex-cli notebook generate --force) to replace it",
             generated_path()
         )),
         WriteDecision::Create | WriteDecision::Replace => {
