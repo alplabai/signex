@@ -612,6 +612,11 @@ define_ids! {
         CMD_ADD_BOARD_GRAPHIC = "cmd-add-board-graphic";
         CMD_SET_BOARD_GRAPHIC = "cmd-set-board-graphic";
         CMD_SET_FOOTPRINT_TEXT = "cmd-set-footprint-text";
+        CMD_SET_FOOTPRINT_POSITION = "cmd-set-footprint-position";
+        CMD_SET_FOOTPRINT_ROTATION = "cmd-set-footprint-rotation";
+        CMD_SET_FOOTPRINT_SIDE = "cmd-set-footprint-side";
+        CMD_ASSIGN_FOOTPRINT = "cmd-assign-footprint";
+        CMD_QUERY_FOOTPRINT_ASSIGNMENTS = "cmd-query-footprint-assignments";
         CMD_PLACE_BOARD_DIFF_PAIR = "cmd-place-board-diff-pair";
         CMD_MENU_PLACE_BOARD_DIFF_PAIR = "cmd-menu-place-board-diff-pair";
         CMD_PLACE_BOARD_QUICK_ROUTE = "cmd-place-board-quick-route";

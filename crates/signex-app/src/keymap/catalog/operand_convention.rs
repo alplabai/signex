@@ -127,6 +127,10 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("corner", OperandKind::Text),
     ("mode", OperandKind::Text),
     ("nets", OperandKind::Text),
+    // #2936: one board point `x,y` per id of `ids`, `;` separated.
+    ("points", OperandKind::Text),
+    // #2937: a library footprint, `<library>:<footprint>`.
+    ("footprint", OperandKind::Text),
 ];
 
 /// The commands whose `ids` is still text, not targets (#2326): a design

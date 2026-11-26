@@ -18,6 +18,7 @@ mod documents;
 mod drawing;
 mod drc;
 mod erc;
+mod footprint_operands;
 mod grid;
 mod hierarchy;
 mod history;

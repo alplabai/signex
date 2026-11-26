@@ -8,7 +8,8 @@
 //! rule profile library, read off the update loop first), and the board
 //! queries `measure_board`, `query_board_nets` and `find_similar_items`
 //! (#2403), `board_panel` (#2410, `app::board_panel`), and the Project tab's
-//! `project_settings` (#1689-#1693, `app::project_tab`). Each
+//! `project_settings` (#1689-#1693, `app::project_tab`), and
+//! `query_footprint_assignments` (#2937, `footprint_assign_operands`). Each
 //! answers with data through [`CommandOutcome::Answered`], never a bare
 //! `Ran`, and reads only the documents (engines, boards, editors, projects,
 //! the library): no active tab, window, selection or panel is looked at, and
@@ -64,6 +65,8 @@ const QUERY_IDS: &[&str] = &[
     "rules_preset_diff",
     "board_panel",
     "project_settings",
+    // #2937: every part's footprint (`footprint_assign_operands`).
+    "query_footprint_assignments",
 ];
 
 /// The queries that run a check (`check_run`): each says nothing in
@@ -165,6 +168,7 @@ impl Signex {
             "query_board_nets" => self.query_board_nets(args),
             "find_similar_items" => self.find_similar_items(args),
             "board_panel" => self.board_panel_query(args),
+            "query_footprint_assignments" => self.query_footprint_assignments(args),
             _ => self.read_document(args),
         };
         // The heads of referenced files that were never read are read now,

@@ -21,6 +21,8 @@ use super::board_view_operands as board_view;
 use super::directive_operands as directive;
 use super::document_operands as doc;
 use super::file_operands as file;
+use super::footprint_assign_operands as fp_assign;
+use super::footprint_place_operands as fp_place;
 use super::footprint_text_operands as fp_text;
 use super::hierarchy_operands as hierarchy;
 use super::layer_strip_operands as strip;
@@ -178,6 +180,12 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("place_board_keepout", area::place_keepout),
     ("place_board_pour_cutout", area::place_pour_cutout),
     ("set_footprint_text", fp_text::set_footprint_text),
+    // #2936, #2937: board footprints by id, and footprint assignment.
+    ("set_footprint_position", fp_place::set_footprint_position),
+    ("set_footprint_rotation", fp_place::set_footprint_rotation),
+    ("set_footprint_side", fp_place::set_footprint_side),
+    ("assign_footprint", fp_assign::assign_footprint),
+    ("change_footprint", fp_assign::change_footprint),
     ("set_selection_filters", filter::set_selection_filters),
     (
         "apply_selection_filter_preset",
@@ -502,6 +510,21 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "set_footprint_text" => Some(
             "`set_footprint_text` needs the operands `document`, `designator`, `text`, \
              `field` and `value` — drag the designator or comment on the board",
+        ),
+        // #2936: a person drags the footprint, or uses the Location and
+        // Layer rows of the Component view.
+        "set_footprint_position" => Some(
+            "`set_footprint_position` needs the operands `document`, `id` and `at` — \
+             drag the footprint on the board",
+        ),
+        "set_footprint_rotation" | "set_footprint_side" => Some(
+            "this command needs the operands `document`, `id` and its value — \
+             use the Rotation and Layer rows of the Component view in Properties",
+        ),
+        // #2937: a person uses Tools ▸ Assign Footprints.
+        "assign_footprint" => Some(
+            "`assign_footprint` needs the operands `document`, `id` and `footprint` — \
+             use Tools ▸ Assign Footprints",
         ),
         "rules_add" | "rules_set" | "rules_remove" | "rules_enable" | "rules_matrix_set"
         | "rules_set_create" | "rules_set_edit" | "rules_set_apply" | "rules_preset_apply" => Some(

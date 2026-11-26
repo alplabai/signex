@@ -284,6 +284,29 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "set_footprint_text",
         "it edits a board, which no sheet's undo step covers; run it as its own command",
     ),
+    // #2936: a footprint placed by id; a list form (`ids`) is one board step.
+    (
+        "set_footprint_position",
+        "it edits a board, which no sheet's undo step covers; run it as its own command",
+    ),
+    (
+        "set_footprint_rotation",
+        "it edits a board, which no sheet's undo step covers; run it as its own command",
+    ),
+    (
+        "set_footprint_side",
+        "it edits a board, which no sheet's undo step covers; run it as its own command",
+    ),
+    // #2937: the swap edits the board and its linked sheets together; an
+    // assignment reads the footprint's pads from its library first.
+    (
+        "change_footprint",
+        "it edits the board and its sheet together; run it as its own command",
+    ),
+    (
+        "assign_footprint",
+        "it reads the footprint from its library first; run it as its own command",
+    ),
     // #2389: length tuning lands on the named board's own undo stack.
     (
         "tune_net_length",

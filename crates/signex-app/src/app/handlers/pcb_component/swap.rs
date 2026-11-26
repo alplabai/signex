@@ -25,6 +25,38 @@ use crate::library::messages::LibraryMessage;
 use crate::library::place::resolve_library_footprint;
 use crate::library::state::PrimitivePickerTarget;
 
+/// What a footprint swap left behind, for Messages or an answer.
+#[derive(Debug, Clone)]
+pub(crate) struct SwapDone {
+    /// The old pads that went with no new pad of their number.
+    pub(crate) unmatched: Vec<UnmatchedPad>,
+    /// The linked parts that kept their footprint, with why.
+    pub(crate) not_updated: Vec<(String, NotUpdated)>,
+}
+
+/// Why a footprint swap changed nothing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum SwapRefusal {
+    /// The board is no longer open.
+    BoardGone,
+    /// The swap was refused before anything ran; the reason in English.
+    Refused(String),
+    /// The board refused the step; the sheets were put back.
+    NotRun(String),
+}
+
+/// The refusal of a swap whose new footprint has no pad for some old ones.
+fn unmatched_reason(unmatched: &[UnmatchedPad]) -> String {
+    let pads: Vec<String> = unmatched
+        .iter()
+        .map(|pad| format!("{}.{}", pad.reference, pad.number))
+        .collect();
+    format!(
+        "the new footprint has no pad for {}; nothing was changed",
+        pads.join(", ")
+    )
+}
+
 impl Signex {
     pub(crate) fn handle_footprint_swap(&mut self, msg: FootprintSwapMsg) -> Task<Message> {
         match msg {
@@ -167,19 +199,56 @@ impl Signex {
             Ok(template) => *template,
             Err(why) => return self.refuse_swap(&what, why),
         };
-        let Some(engine) = self.document_state.board_engine(board) else {
-            let line =
-                t!(self.ui_state.i18n, ids::PCB_FOOTPRINT_BOARD_GONE, "what" => what.as_str());
-            crate::diagnostics::log_warning(line.into_string());
-            return;
+        let done = match self.run_footprint_swap(board, footprints, &template, &what, false) {
+            Ok(Some(done)) => done,
+            Ok(None) => return,
+            Err(SwapRefusal::BoardGone) => {
+                let line =
+                    t!(self.ui_state.i18n, ids::PCB_FOOTPRINT_BOARD_GONE, "what" => what.as_str());
+                crate::diagnostics::log_warning(line.into_string());
+                return;
+            }
+            Err(SwapRefusal::Refused(why)) => return self.refuse_swap(&what, why),
+            Err(SwapRefusal::NotRun(why)) => {
+                self.refuse_swap(&what, why);
+                self.sync_pcb_board_summary();
+                return;
+            }
         };
+        for pad in &done.unmatched {
+            self.report_unmatched_pad(pad);
+        }
+        for (designator, why) in &done.not_updated {
+            self.report_part_not_updated(designator, *why);
+        }
+        self.sync_pcb_board_summary();
+    }
+
+    /// Replace `footprints` on `board` with `template` and give their linked
+    /// schematic parts the same footprint, as one undo step labelled `what`:
+    /// the swap both the picker and `change_footprint document=..` run.
+    /// `None` when every footprint already is the template. With
+    /// `refuse_unmatched`, an old pad that no new pad takes over refuses the
+    /// swap, naming the pads, and nothing changes.
+    pub(crate) fn run_footprint_swap(
+        &mut self,
+        board: &Path,
+        footprints: &[Uuid],
+        template: &Footprint,
+        what: &str,
+        refuse_unmatched: bool,
+    ) -> Result<Option<SwapDone>, SwapRefusal> {
+        let engine = (self.document_state.board_engine(board)).ok_or(SwapRefusal::BoardGone)?;
         let revision = engine.revision();
         let ids: BTreeSet<Uuid> = footprints.iter().copied().collect();
-        let swap = match footprint_swap::swap_commands(engine.board(), &ids, &template) {
+        let swap = match footprint_swap::swap_commands(engine.board(), &ids, template) {
             Ok(swap) if !swap.commands.is_empty() => swap,
-            Ok(_) => return,
-            Err(refusal) => return self.refuse_swap(&what, refusal.to_string()),
+            Ok(_) => return Ok(None),
+            Err(refusal) => return Err(SwapRefusal::Refused(refusal.to_string())),
         };
+        if refuse_unmatched && !swap.unmatched.is_empty() {
+            return Err(SwapRefusal::Refused(unmatched_reason(&swap.unmatched)));
+        }
         let links: Vec<(String, SymbolLink)> = engine
             .board()
             .footprints
@@ -195,38 +264,30 @@ impl Signex {
             _ => LinkedPlan::default(),
         };
         let step = CheckedStep {
-            label: &what,
+            label: what,
             expected_revision: revision,
         };
-        let ran = if plan.sheets.is_empty() {
+        if plan.sheets.is_empty() {
             self.execute_board_commands(board, swap.commands, Some(step))
-                .map_err(|error| self.refuse_swap(&what, error.to_string()))
-                .is_ok()
+                .map_err(|error| SwapRefusal::NotRun(error.to_string()))?;
         } else {
             let group = self.mint_undo_group();
-            let changed = self.run_linked_footprints(plan.sheets, group, &what);
+            let changed = self.run_linked_footprints(plan.sheets, group, what);
             match self.execute_board_commands_grouped(board, swap.commands, step, group) {
                 Ok(_) => {
                     let kind = crate::app::UndoGroupKind::FootprintSwap;
                     self.commit_linked_footprints(changed, group, board.to_path_buf(), kind);
-                    true
                 }
                 Err(error) => {
-                    self.roll_back_linked_footprints(&changed, group, &what);
-                    self.refuse_swap(&what, error.to_string());
-                    false
+                    self.roll_back_linked_footprints(&changed, group, what);
+                    return Err(SwapRefusal::NotRun(error.to_string()));
                 }
             }
-        };
-        if ran {
-            for pad in &swap.unmatched {
-                self.report_unmatched_pad(pad);
-            }
-            for (designator, why) in &plan.not_updated {
-                self.report_part_not_updated(designator, *why);
-            }
         }
-        self.sync_pcb_board_summary();
+        Ok(Some(SwapDone {
+            unmatched: swap.unmatched,
+            not_updated: plan.not_updated,
+        }))
     }
 
     fn refuse_swap(&self, what: &str, why: String) {

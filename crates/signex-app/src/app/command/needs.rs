@@ -584,6 +584,10 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "add_board_graphic" | "set_board_graphic" => Needs::Pcb,
         // #2368: a footprint text on the board `document` names.
         "set_footprint_text" => Needs::Pcb,
+        // #2936: a footprint placed by id on the board `document` names.
+        "set_footprint_position" | "set_footprint_rotation" | "set_footprint_side" => Needs::Pcb,
+        // #2937: a part's footprint on the sheet `document` names.
+        "assign_footprint" => Needs::Schematic,
         // #2389: length tuning of the selected tracks' nets.
         "tune_net_length" | "tune_diff_pair" => Needs::Pcb,
         // #2401, #2407: the layer stack and the track and via edits.

@@ -168,6 +168,22 @@ mod tests {
         assert_eq!(cap("revert"), Capability::Edit);
     }
 
+    /// #2936, #2937: the footprint edits change a document in memory as one
+    /// undo step; the assignment query only reads.
+    #[test]
+    fn the_footprint_edits_need_edit_and_their_query_read() {
+        for id in [
+            "set_footprint_position",
+            "set_footprint_rotation",
+            "set_footprint_side",
+            "assign_footprint",
+            "change_footprint",
+        ] {
+            assert_eq!(cap(id), Capability::Edit, "{id}");
+        }
+        assert_eq!(cap("query_footprint_assignments"), Capability::Read);
+    }
+
     /// #2506: Repour All clears `unfilled` on the board's pours as an undo
     /// step, so a read-only grant may not run it.
     #[test]
