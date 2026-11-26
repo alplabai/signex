@@ -3,6 +3,11 @@
 //! (`signex_engine::pcb::rooms::auto_place`), as one undo step, or only
 //! reported with `dry_run=true`. Placement only: nothing is routed. See
 //! `docs/CLI.md`, "Rooms and placement".
+//!
+//! Known debt (#665): the placer runs synchronously in `update`, here and
+//! from the palette (`rooms/tool.rs`). Moving it to a worker as `fix_drc`
+//! does means answering the palette run when the plan lands; see
+//! `docs/DECISIONS.md`, 2026-11-26, "Auto Place in Rooms runs in update".
 
 use iced::Task;
 use serde_json::{Value, json};

@@ -87,6 +87,60 @@ fn two_bodies_closer_than_the_limit_are_found_and_farther_ones_pass() {
     assert!(rules_of(&checked(narrow, two_parts([2.0, 2.0]))).is_empty());
 }
 
+/// #2940: `fix_drc` checks the board as `check_drc` does, the parts' 3D
+/// bodies included: what it says remains is what `check_drc` finds, and a
+/// body clearance finding (no fix) is left as such.
+#[test]
+fn fix_drc_leaves_what_check_drc_finds_bodies_included() {
+    use std::collections::BTreeSet;
+
+    use crate::app::command::{CommandArgs, CommandOutcome};
+    use crate::keymap::AppCommandId;
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = project_app(&dir);
+    let path = dir.path().join(BOARD);
+    write_board(&path, two_parts([2.0, 2.0]));
+    app.document_state.projects[0].data.pcb_file = Some(BOARD.into());
+    let rules = "rule bodies on component require clearance >= 1.5mm then error";
+    set_rules(
+        &mut app,
+        ProjectRules {
+            drc: dsl(rules),
+            ..ProjectRules::default()
+        },
+    );
+    let found = report(&mut app, &path, &[]);
+    open_board(&mut app, &path);
+    let id = AppCommandId::new("fix_drc").expect("a catalog id");
+    let doc = format!("document={}", path.display());
+    let args = CommandArgs::parse_operands(&id, &[doc.as_str(), "dry_run=true"]).expect("operands");
+    let CommandOutcome::Answered(fixed) = app.run_operands_settled(&id, &args).0 else {
+        panic!("fix_drc did not answer");
+    };
+    let keys = |list: &Value, at: &[&str]| -> BTreeSet<String> {
+        list.as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|f| at.iter().try_fold(f, |v, k| v.get(*k)))
+            .filter_map(|v| v.as_str().map(str::to_string))
+            .collect()
+    };
+    let checked = keys(&found["findings"], &["evidence", "waiver_key"]);
+    assert!(!checked.is_empty(), "{found}");
+    assert_eq!(
+        keys(&fixed["remaining"]["findings"], &["id"]),
+        checked,
+        "{fixed}"
+    );
+    let left = fixed["left"].as_array().cloned().unwrap_or_default();
+    assert!(
+        left.iter()
+            .any(|f| f["rule"] == "user::bodies" && f["reason"] == "no_fix"),
+        "{fixed}"
+    );
+}
+
 #[test]
 fn a_board_with_no_component_rule_reports_as_before() {
     let found = checked("", two_parts([3.0, 70.0]));

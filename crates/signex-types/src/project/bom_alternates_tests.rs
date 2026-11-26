@@ -94,3 +94,45 @@ fn alternates_round_trip_in_the_project_file_and_are_skipped_when_empty() {
     let back = parse_project(&path).unwrap();
     assert_eq!(back.bom_alternates, data.bom_alternates);
 }
+
+/// A key a newer build wrote on a line is kept through a load and a save.
+#[test]
+fn an_unknown_key_on_a_line_survives_a_round_trip() {
+    let text = format!(
+        r#"{{"format":"{SNXPRJ_FORMAT_V1}","name":"P","dir":"","schematic_root":null,"pcb_file":null,
+        "bom_alternates":[{{"line":"{LINE}","rows":["{ALT_A}"],"note":"from the buyer"}}]}}"#
+    );
+    let path = std::path::Path::new("P.snxprj");
+    let data = parse_project_bytes(path, text.as_bytes()).expect("the project opens");
+    assert_eq!(data.bom_alternates_of(LINE), [ALT_A]);
+    let written: serde_json::Value =
+        serde_json::from_slice(&encode_project(&data).unwrap()).unwrap();
+    assert_eq!(written["bom_alternates"][0]["note"], "from the buyer");
+    assert_eq!(written["bom_alternates"][0]["rows"][0], ALT_A);
+}
+
+/// A `bom_alternates` value this build cannot read does not refuse the
+/// project: it is kept as written for the next save, and edits of the
+/// alternates are refused rather than write a second one over it.
+#[test]
+fn a_malformed_alternates_value_still_opens_the_project_and_is_kept() {
+    let text = format!(
+        r#"{{"format":"{SNXPRJ_FORMAT_V1}","name":"P","dir":"","schematic_root":null,"pcb_file":null,
+        "bom_alternates":{{"not":"a list"}}}}"#
+    );
+    let path = std::path::Path::new("P.snxprj");
+    let mut data = parse_project_bytes(path, text.as_bytes()).expect("the project opens");
+    assert!(data.bom_alternates.is_empty());
+    assert!(data.has_unreadable_bom_alternates());
+    assert_eq!(
+        data.add_bom_alternate(LINE, ALT_A),
+        Err(BomAlternateProblem::Unreadable)
+    );
+    let written: serde_json::Value =
+        serde_json::from_slice(&encode_project(&data).unwrap()).unwrap();
+    assert_eq!(
+        written["bom_alternates"],
+        serde_json::json!({"not": "a list"}),
+        "kept as written"
+    );
+}

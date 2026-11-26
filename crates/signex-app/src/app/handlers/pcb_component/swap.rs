@@ -8,8 +8,9 @@
 //! takes over, and parts whose sheet is closed or read-only, are listed in
 //! Messages; a refusal says why and changes nothing.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use iced::Task;
 use signex_engine::pcb::footprint_swap::{self, UnmatchedPad};
@@ -19,6 +20,7 @@ use signex_types::pcb::{Footprint, PcbBoard, SymbolLink};
 use uuid::Uuid;
 
 use super::linked_parts::{LinkedPlan, NotUpdated};
+use crate::app::command::{CommandOutcome, EditReads, OperandValue, translator};
 use crate::app::state::pcb_edit::CheckedStep;
 use crate::app::{FootprintSwapMsg, Message, Signex};
 use crate::library::messages::LibraryMessage;
@@ -184,10 +186,13 @@ impl Signex {
         )
     }
 
-    /// Replace `footprints` on `board` with the footprint read, and give
-    /// their linked schematic parts the same footprint, as one undo step.
-    /// The old pads that went with no match, and the parts whose sheet could
-    /// not take the footprint, are listed in Messages.
+    /// The picker's Swap (and its replay): `change_footprint` on
+    /// `footprints` of `board` with the footprint read, through the GUI
+    /// translator, so it runs the operand handler the CLI and the socket
+    /// run. `unmatched=keep`: old pads no new pad takes over go, and they and
+    /// the parts whose sheet could not take the footprint are listed in
+    /// Messages, as the picker always did. The footprint already read is
+    /// handed to the handler as its read, so nothing is read again.
     pub(crate) fn swap_footprints(
         &mut self,
         board: &Path,
@@ -199,29 +204,40 @@ impl Signex {
             Ok(template) => *template,
             Err(why) => return self.refuse_swap(&what, why),
         };
-        let done = match self.run_footprint_swap(board, footprints, &template, &what, false) {
-            Ok(Some(done)) => done,
-            Ok(None) => return,
-            Err(SwapRefusal::BoardGone) => {
-                let line =
-                    t!(self.ui_state.i18n, ids::PCB_FOOTPRINT_BOARD_GONE, "what" => what.as_str());
-                crate::diagnostics::log_warning(line.into_string());
-                return;
-            }
-            Err(SwapRefusal::Refused(why)) => return self.refuse_swap(&what, why),
-            Err(SwapRefusal::NotRun(why)) => {
-                self.refuse_swap(&what, why);
-                self.sync_pcb_board_summary();
-                return;
-            }
+        let Some(source) = template.library_ref.clone() else {
+            return self.refuse_swap(&what, "the footprint names no library".into());
         };
+        let address = PrimitiveRef::new(source.library, source.footprint);
+        let reads = EditReads {
+            footprints: HashMap::from([(address, Ok(template))]),
+            ..EditReads::default()
+        };
+        let operands = vec![
+            ("ids", OperandValue::Targets(footprints.to_vec())),
+            (
+                "footprint",
+                OperandValue::Text(format!("{}:{}", source.library, source.footprint)),
+            ),
+            ("unmatched", OperandValue::Text("keep".into())),
+        ];
+        self.document_state.agent_edits.reads = Some(Arc::new(reads));
+        let (outcome, _) = translator::run(self, "change_footprint", board, operands);
+        self.document_state.agent_edits.reads = None;
+        if let CommandOutcome::Disabled { reason } = outcome {
+            crate::diagnostics::log_warning(reason.render(&self.ui_state.i18n));
+            self.sync_pcb_board_summary();
+        }
+    }
+
+    /// The old pads a kept swap dropped and the linked parts whose sheet
+    /// could not take the footprint, said in Messages.
+    pub(crate) fn report_swap_leftovers(&self, done: &SwapDone) {
         for pad in &done.unmatched {
             self.report_unmatched_pad(pad);
         }
         for (designator, why) in &done.not_updated {
             self.report_part_not_updated(designator, *why);
         }
-        self.sync_pcb_board_summary();
     }
 
     /// Replace `footprints` on `board` with `template` and give their linked

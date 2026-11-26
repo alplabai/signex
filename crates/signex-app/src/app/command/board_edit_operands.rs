@@ -326,10 +326,20 @@ fn pad_geometry(args: &CommandArgs) -> Result<PadEdit, String> {
 /// The `corners` operand, `<x>,<y>;<x>,<y>;..` in mm: a custom pad's outline
 /// (#2242), an area's (#2470).
 pub(super) fn mm_corners(raw: &str) -> Result<Vec<Point>, String> {
-    raw.split(';')
+    mm_points(raw).ok_or_else(|| format!("`corners` must be <x>,<y>;<x>,<y>;.. in mm, not `{raw}`"))
+}
+
+/// A list of points `<x>,<y>;<x>,<y>;..` in mm, as typed (blank entries,
+/// as after a closing `;`, skipped): the one reader of a point list the
+/// operand handlers share (`corners`, `through`, `points`). `None` when one
+/// entry is not two numbers, or there is none.
+pub(crate) fn mm_points(raw: &str) -> Option<Vec<Point>> {
+    let points: Vec<Point> = (raw.split(';'))
+        .map(str::trim)
+        .filter(|entry| !entry.is_empty())
         .map(mm_point)
-        .collect::<Option<Vec<_>>>()
-        .ok_or_else(|| format!("`corners` must be <x>,<y>;<x>,<y>;.. in mm, not `{raw}`"))
+        .collect::<Option<_>>()?;
+    (!points.is_empty()).then_some(points)
 }
 
 /// A point typed as `<x>,<y>` in mm.

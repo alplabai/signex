@@ -940,7 +940,10 @@ bare or as `builtin::<kind>`; any other `rule` is refused with that list.
 What each fix changes: `docs/DRC_RULES.md`, "Fixing findings" (#2940).
 
 The board must be open (`open_document` first in a headless run). The
-check uses Run DRC's rules for the board, as `check_drc` does. A fix never
+check uses Run DRC's rules for the board and the parts' 3D bodies, as
+`check_drc` does. The fixes are worked out off the UI thread on a copy of
+the board and the answer comes when they land; a board edited meanwhile
+refuses the run with nothing changed (run it again). A fix never
 waives a finding and never changes a locked item; one it cannot make, or
 whose change would make a new finding, is left with the reason. Every fix
 of one run is one undo step on the board, labelled "Fix DRC Violations";
@@ -985,7 +988,7 @@ The answer:
   changed. A finding an earlier fix of the same run cleared has an empty
   `changed` and that fix's key in `cleared_by`.
 - `left`: each finding left as it is, with `reason` (`no_fix`, `waived`,
-  `locked`, `leased`, `cannot_change`, `new_violation`, `not_cleared` or
+  `locked`, `cannot_change`, `new_violation`, `not_cleared` or
   `refused`) and `why` in words. `fix_drc` with no `rule` lists the
   findings of the kinds with no fix here too, as `no_fix`.
 - `remaining`: a check of the board after the fixes (for a dry run, of the
@@ -997,8 +1000,8 @@ Known limits:
 - A clearance fix moves a track or via; it does not reroute a track that
   cannot move. A part's own silkscreen and a pad's mask opening are the
   footprint's and are left.
-- The check runs in the app's update, as Interactive Routing's does: a
-  large board with many findings answers after one check per fix tried.
+- The fixes are worked out off the UI thread, one check per fix tried, so
+  a large board with many findings answers later; the window stays live.
 
 ## Requirement checks
 
@@ -1578,7 +1581,7 @@ window does. Each edit is one undo step.
 
 ```text
 assign_footprint document=<sheet> id=<part uuid> footprint=<library>:<footprint>
-change_footprint document=<board> id=<uuid> footprint=<library>:<footprint>
+change_footprint document=<board> id=<uuid> footprint=<library>:<footprint> [unmatched=refuse|keep]
 query_footprint_assignments document=<project or sheet>
 ```
 
@@ -1593,8 +1596,13 @@ query_footprint_assignments document=<project or sheet>
   value and pad nets (by pad number) stay, and each linked schematic part on
   an open sheet takes the same footprint in the same undo step. The answer
   is `{"document", "footprint", "changed", "footprints": [..as above..],
-  "parts_not_updated": [designators]}`. Without operands it opens the
-  footprint picker for the selection, as before.
+  "parts_not_updated": [designators], "pads_dropped": ["R1.1", ..]}`.
+  `unmatched` is what an old pad no new pad takes over does: `refuse` (the
+  default) refuses the swap naming those pads; `keep` makes the swap, lists
+  them in `pads_dropped` and says them, and the parts whose sheet could not
+  follow, in Messages. The footprint picker's Swap is this command with
+  `unmatched=keep` and the selection as `ids`. Without operands it opens
+  the footprint picker for the selection, as before.
 - `query_footprint_assignments` answers `{"document", "parts":
   [{"id", "sheet", "designator", "value", "footprint", "binding",
   "resolves"}], "sheets_not_open"}` for the open sheets of the project (or
@@ -1605,7 +1613,7 @@ query_footprint_assignments document=<project or sheet>
 A footprint that is not in the library is refused with the reason. One
 whose pads do not cover the part is refused with the pins it lacks
 (`R1 pins 1, 2`), and a board footprint whose old pads the new one lacks
-with those pads (`R1.1, R1.2`); nothing changes.
+with those pads (`R1.1, R1.2`) unless `unmatched=keep`; nothing changes.
 
 ## Rooms and placement
 
@@ -1781,7 +1789,7 @@ changes nothing. Capability `read`.
 
 ```json
 {"board": "/abs/demo.snxpcb", "revision": 12,
- "parts": {"total": 24, "unplaced": {"count": 2, "ids": ["<uuid>", "<uuid>"]}},
+ "parts": {"total": 24, "off_board": {"count": 2, "ids": ["<uuid>", "<uuid>"]}},
  "connections": {"total": 46, "routed": 38, "unrouted": 8},
  "unrouted_nets": 3,
  "drc": {"ran": true, "violations": 4, "waived": 1, "edits_since": 2},
@@ -1794,9 +1802,12 @@ changes nothing. Capability `read`.
   needs one connection fewer than its pad islands; a connection a pour will
   make counts as unrouted). `unrouted_nets` is the number of nets with an
   unrouted connection.
-- `parts.unplaced`: the footprints whose origin is not inside the board
+- `parts.off_board`: the footprints whose origin is not inside the board
   outline (Update PCB stages a new part beside the board); `null` for a
-  board without an outline.
+  board without an outline. It is not the layout plan's "placed"
+  (`layout_plan_status`, "Layout plan"), which asks that a part's whole
+  body box lie inside the outline, or inside its room for the rooms the
+  plan names: a part can be on the board here and not placed there.
 - `drc` is the last Run DRC of the board, as the DRC counter shows it:
   `violations` counts the waived ones too, `waived` how many of them are
   waived, `edits_since` the board's edits since the run. Before any run
@@ -1808,7 +1819,7 @@ changes nothing. Capability `read`.
   lands. A board in no open project, or one whose project has no root
   sheet, answers at once with `"schematic": null`.
 
-Known limits: the status bar does not show the unplaced, waived, schematic
+Known limits: the status bar does not show the off-board, waived, schematic
 and routed length counters yet; `board_status` reads them now.
 
 ## Layout plan

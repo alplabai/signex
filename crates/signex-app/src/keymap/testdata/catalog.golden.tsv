@@ -43,7 +43,7 @@ document_info	file	Document info	-	General	-	-	Always	-	document:document
 list_documents	file	List documents	-	General	-	-	Always	-	kind:text?,project:text?,name:text?,dirty:bool?
 read_document	file	Read document	-	General	-	-	Always	-	document:document,ids:text?,kinds:text?,region:text?,fields:text?,offset:text?,limit:text?
 query_pins	file	Query pins	-	General	-	-	Always	-	document:document,designator:text
-query_library	file	Query a library	-	General	-	-	Always	-	library:text,part:text?,text:text?
+query_library	library	Query a library	-	General	-	-	Always	-	library:text,part:text?,text:text?
 resolve	file	Resolve id	-	General	-	-	Always	-	id:text
 apply_edits	edit	Apply edits (agent)	-	General	-	-	Always	mutates_doc,undoable	document:document,expect_revision:text,edits:text,summary:text?,expect_revisions:text?
 undo	edit	Undo	-	General	-	-	Always	mutates_doc	document:document
@@ -274,7 +274,7 @@ board_status	validation	Board status counters	-	General	-	-	Always	-	document:do
 assign_footprints	design	Assign footprints	Assign Footprints	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 assign_footprint	design	Set the footprint of a placed part	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	document:document,id:text?,designator:text?,ids:targets?,footprint:text
 query_footprint_assignments	design	List the footprint of every part	-	Schematic	-	-	Always	-	document:document
-change_footprint	modify	Change the footprint of the selected components	Change Footprint...	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,id:text?,designator:text?,ids:targets?,footprint:text
+change_footprint	modify	Change the footprint of the selected components	Change Footprint...	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,id:text?,designator:text?,ids:targets?,footprint:text,unmatched:text?
 place_board_via	place	Place a via on the board	Via	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,at:point/mm,net:text?,layers:text?,via_diameter:text?,via_drill:text?,dry_run:bool?
 place_board_track	place	Route a track on the active copper layer	Track	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,start:point/mm,end:point/mm,through:text?,layer:text?,width:text?,net:text?,corner:text?,dry_run:bool?
 place_board_fill	place	Place a rectangle of solid copper on the active copper layer	Fill	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,layer:text,start:point/mm,end:point/mm,net:text?
@@ -451,4 +451,4 @@ bom_add_alternate	design	Add an alternate part to a BOM line	-	General	-	-	Alway
 bom_remove_alternate	design	Remove an alternate part from a BOM line	-	General	-	-	Always	mutates_doc,undoable	document:document,line:text,library:text,part:text
 bom_set_alternate_order	design	Move an alternate part in a BOM line's order	-	General	-	-	Always	mutates_doc,undoable	document:document,line:text,library:text,part:text,position:text
 query_bom	design	Query the priced BOM	-	General	-	-	Always	-	document:document,quantity:text?,currency:text?,variant:text?
-search_parts	search	Search parts by parameters	-	General	-	-	Always	-	query:text?,value:text?,package:text?,tolerance:text?,rating:text?,min_stock:text?,quantity:text?,refresh:bool?,limit:text?
+search_parts	library	Search parts by parameters	-	General	-	-	Always	-	query:text?,value:text?,package:text?,tolerance:text?,rating:text?,min_stock:text?,quantity:text?,refresh:bool?,limit:text?

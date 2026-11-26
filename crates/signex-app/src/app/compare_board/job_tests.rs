@@ -451,7 +451,7 @@ fn board_status_counts_the_same_differences_as_the_check() {
     let status = answered(run(&mut rig, "board_status", &[&board]));
     assert_eq!(status["board"], rig.board.display().to_string());
     assert_eq!(status["parts"]["total"], 3, "{status}");
-    assert_eq!(status["parts"]["unplaced"], Value::Null, "no outline");
+    assert_eq!(status["parts"]["off_board"], Value::Null, "no outline");
     assert_eq!(status["drc"]["ran"], false);
     assert_eq!(status["connections"]["unrouted"], 0);
     assert_eq!(status["routed_length_mm"], 0.0);

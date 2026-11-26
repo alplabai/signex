@@ -1532,7 +1532,7 @@
   {
     "id": "query_library",
     "group": "General",
-    "category": "file"
+    "category": "library"
   },
   {
     "id": "query_part_heights",
@@ -1807,7 +1807,7 @@
   {
     "id": "search_parts",
     "group": "General",
-    "category": "search"
+    "category": "library"
   },
   {
     "id": "select_all",

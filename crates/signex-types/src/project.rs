@@ -49,7 +49,7 @@ pub use annotate_undo::AnnotateUndo;
 pub use annotation::{AnnotationSettings, AnnotationState};
 pub use bom_alternates::{
     BomAlternateProblem, BomLineAlternates, MAX_BOM_KEY_CHARS, MPN_LINE_PREFIX, bom_line_key,
-    bom_row_key,
+    bom_mpn_key, bom_row_key,
 };
 pub use erc_waiver::ErcWaiver;
 pub use fab_outputs::FabOutputKinds;
@@ -834,7 +834,13 @@ pub fn parse_project_bytes(path: &Path, bytes: &[u8]) -> Result<ProjectData, Pro
         let variants = value
             .as_object_mut()
             .and_then(|map| map.remove(variant_settings::VARIANT_SETTINGS_KEY));
+        let alternates = value
+            .as_object_mut()
+            .and_then(|map| map.remove(bom_alternates::BOM_ALTERNATES_KEY));
         let mut data = serde_json::from_value::<ProjectData>(value).map_err(corrupt)?;
+        if let Some(raw) = alternates {
+            bom_alternates::take_bom_alternates(&mut data, raw);
+        }
         if let Some(raw) = requirements {
             requirements::take_requirements(&mut data, raw);
         }

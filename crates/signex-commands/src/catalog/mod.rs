@@ -240,6 +240,11 @@ pub struct CommandMetadata {
     /// pre-placement form and project defaults as for a click. Empty: the
     /// command has no operand form (#1934).
     pub operands: &'static [Operand],
+    /// It may reach the network or launch a program: a library server, a
+    /// distributor, a web page. A headless caller may only run one behind a
+    /// capability check for that (`signex-cli`'s
+    /// `no_network_command_is_runnable_headless`). Defaults to `false`.
+    pub needs_network: bool,
 }
 
 impl CommandMetadata {
@@ -265,6 +270,7 @@ impl CommandMetadata {
             hidden: false,
         },
         operands: &[],
+        needs_network: false,
     };
 
     /// How a headless caller may use this command, or `None` while nobody

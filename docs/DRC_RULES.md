@@ -601,12 +601,15 @@ whose change would lapse a waiver counts as a new finding. A fix never
 changes a locked track or via, a track joined to the end of a moved track
 when that one is locked, or a pad of a part that is locked in place or
 whose pads are locked. A via or pad with sizes by layer, and a pad drawn
-from its own corners, are left to a person. Every edit also passes the
-board's lease check (`docs/architecture/pcb-board-engine.md`, "Collab
-leases"); today it allows every edit.
+from its own corners, are left to a person. The fixes are worked out off
+the UI thread on a copy of the board, checked with Run DRC's rules and the
+parts' 3D bodies (as `check_drc` reads them), and land as one step that
+passes the board's lease check (`docs/architecture/pcb-board-engine.md`,
+"Collab leases"; today it allows every edit) and is refused, with nothing
+changed, when the board moved on while they were worked out.
 
 Each finding left carries a reason: `no_fix` (its rule has no fix),
-`waived`, `locked` (with the locked items), `leased`, `cannot_change` (no
+`waived`, `locked` (with the locked items), `cannot_change` (no
 item the fix may change, and why), `new_violation` (every way tried makes a
 new finding, with their keys), `not_cleared` and `refused` (the board
 refused the edit). Rerouting a track that cannot move, and clipping a

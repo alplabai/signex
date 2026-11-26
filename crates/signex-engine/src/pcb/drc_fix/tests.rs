@@ -12,6 +12,7 @@ use signex_types::violation::Severity;
 use uuid::Uuid;
 
 use super::*;
+use crate::pcb::BoardEngine;
 
 /// A 0.25 mm top track.
 pub(super) fn track(n: u128, a: (f64, f64), b: (f64, f64), net: u32) -> Value {
@@ -77,8 +78,8 @@ pub(super) fn rules(board: &PcbBoard, limits: Vec<Limit>) -> DrcRules {
 
 /// Fix what `scope` names on `board`.
 pub(super) fn fix(board: &PcbBoard, rules: &DrcRules, scope: FixScope) -> FixRun {
-    let engine = BoardEngine::new(board.clone(), 1);
-    fix_findings(&engine, rules, &scope, &mut SequentialIds::default()).expect("a scope")
+    let models = BodyModels::new();
+    fix_findings(board, rules, &models, &scope, &mut SequentialIds::default()).expect("a scope")
 }
 
 /// Fix every finding of `rule` on `board`.
@@ -290,12 +291,90 @@ fn a_finding_whose_rule_has_no_fix_is_left_and_named() {
 #[test]
 fn an_unknown_finding_key_is_refused() {
     let before = board(json!({"segments": [track(11, (0.0, 0.0), (5.0, 0.0), 1)]}));
-    let engine = BoardEngine::new(before.clone(), 1);
     let rules = rules(&before, Vec::new());
     let scope = FixScope::One("feed".into());
-    let refused = fix_findings(&engine, &rules, &scope, &mut SequentialIds::default());
+    let models = BodyModels::new();
+    let refused = fix_findings(
+        &before,
+        &rules,
+        &models,
+        &scope,
+        &mut SequentialIds::default(),
+    );
     assert_eq!(
         refused.err(),
         Some(FixScopeError::NoSuchFinding("feed".into()))
     );
+}
+
+/// #2939, #2940: a run checks the board with the parts' 3D bodies, as Run
+/// DRC and `check_drc` do: a body clearance finding only the library model
+/// shows is in its check, judged by its new-finding test and left (it has
+/// no fix); without the models the run does not see it.
+#[test]
+fn a_run_checks_the_board_with_the_parts_3d_bodies() {
+    use signex_drc::{BodyModel, DrcReport};
+    use signex_types::part::FootprintSourceRef;
+
+    let mut before = board(json!({"footprints": [
+        part(31, (0.0, 0.0), smd_pad(32)),
+        part(41, (5.0, 0.0), smd_pad(42)),
+    ]}));
+    let source = FootprintSourceRef {
+        library: Uuid::from_u128(7),
+        footprint: Uuid::from_u128(8),
+        version: "1".into(),
+    };
+    before.footprints[0].library_ref = Some(source.clone());
+    before.footprints[1].component.height_mm = 1.0;
+    // U31's model reaches x = 4 mm: 0.5 mm from U41's 1 mm tall body.
+    let models = BodyModels::from([(
+        source,
+        BodyModel::Extrusion {
+            outline: Some(vec![[-1.0, -1.0], [4.0, -1.0], [4.0, 1.0], [-1.0, 1.0]]),
+            offset_z_mm: 0.0,
+            height_mm: 1.0,
+        },
+    )]);
+    let rules = rules(&before, vec![Limit::MinBodyClearance(1_000_000)]);
+    let bodies = |report: &DrcReport| {
+        report
+            .violations
+            .iter()
+            .filter(|v| v.kind == ViolationKind::BodyClearance)
+            .count()
+    };
+    let every = FixScope::Every(None);
+    let with = fix_findings(
+        &before,
+        &rules,
+        &models,
+        &every,
+        &mut SequentialIds::default(),
+    )
+    .expect("a scope");
+    assert_eq!(bodies(&with.report), 1, "the model's body is measured");
+    assert_eq!(
+        bodies(&with.report),
+        bodies(&signex_drc::run_with_bodies(&before, &rules, &models)),
+        "the same check as Run DRC's"
+    );
+    assert!(
+        with.left
+            .iter()
+            .any(|l| l.violation.kind == ViolationKind::BodyClearance
+                && l.reason == LeftReason::NoFix),
+        "{:?}",
+        with.left
+    );
+    let none = BodyModels::new();
+    let without = fix_findings(
+        &before,
+        &rules,
+        &none,
+        &every,
+        &mut SequentialIds::default(),
+    )
+    .expect("a scope");
+    assert_eq!(bodies(&without.report), 0, "no model, no body for U31");
 }

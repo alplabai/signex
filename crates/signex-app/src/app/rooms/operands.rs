@@ -87,16 +87,7 @@ fn side(args: &CommandArgs) -> Result<Option<RoomLayer>, Translatable> {
 
 /// `<x>,<y>;<x>,<y>;..` in mm, three corners or more.
 fn corners(text: &str) -> Option<Vec<Point>> {
-    let number = |t: &str| t.trim().parse::<f64>().ok().filter(|v| v.is_finite());
-    let points: Vec<Point> = text
-        .split(';')
-        .filter(|p| !p.trim().is_empty())
-        .map(|p| {
-            let (x, y) = p.split_once(',')?;
-            Some(Point::new(number(x)?, number(y)?))
-        })
-        .collect::<Option<_>>()?;
-    (points.len() >= 3).then_some(points)
+    crate::app::command::mm_points(text).filter(|points| points.len() >= 3)
 }
 
 /// The outline `start` and `end`, or `corners`, give.

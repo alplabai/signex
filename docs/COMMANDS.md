@@ -177,7 +177,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `project_set_version_control` | Turn commit on save on or off for the project | design | — | — |
 | `project_settings` | Read the settings of the project | design | — | — |
 | `query_bom` | Query the priced BOM | design | — | — |
-| `query_library` | Query a library | file | — | — |
+| `query_library` | Query a library | library | — | — |
 | `query_pins` | Query pins | file | — | — |
 | `query_rail_budget` | Query the project's rail budget | validation | — | — |
 | `read_document` | Read document | file | — | — |
@@ -198,7 +198,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `save_document_as` | Save as | file | `Mod+Shift+S` | `Mod+Shift+S` |
 | `save_project_as` | Save the project to a new folder | file | — | — |
 | `save_workspace_layout` | Save the panel arrangement as a workspace layout | window | — | — |
-| `search_parts` | Search parts by parameters | search | — | — |
+| `search_parts` | Search parts by parameters | library | — | — |
 | `select_all` | Select all | select | `Mod+A` | `Mod+A` |
 | `send_drawings_backward` | Send drawings backward | edit | — | — |
 | `send_drawings_to_back` | Send drawings to back | edit | — | — |

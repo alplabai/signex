@@ -57,7 +57,7 @@ pub mod paste;
 pub mod pcb_drc;
 pub(crate) mod pcb_drc_bodies;
 mod pcb_drc_check;
-mod pcb_drc_fix;
+pub(crate) mod pcb_drc_fix;
 mod pcb_drc_results;
 #[cfg(test)]
 mod pcb_drc_results_tests;

@@ -35,12 +35,7 @@ fn refused(reason: impl Into<String>) -> Ran {
     (CommandOutcome::Disabled { reason }, Task::none())
 }
 
-fn text<'a>(args: &'a CommandArgs, name: &str) -> Option<&'a str> {
-    match args.operand(name) {
-        Some(OperandValue::Text(text)) => Some(text.as_str()),
-        _ => None,
-    }
-}
+use super::operand_str as text;
 
 fn point(args: &CommandArgs, name: &str) -> Option<Point> {
     match args.operand(name) {

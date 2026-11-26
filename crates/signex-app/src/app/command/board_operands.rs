@@ -101,30 +101,47 @@ fn dry_run(args: &CommandArgs) -> bool {
     matches!(args.operand("dry_run"), Some(OperandValue::Bool(true)))
 }
 
+/// A DRC fix run started off the UI thread, or why it could not start.
+fn fix_started(result: Result<Ran, String>) -> Ran {
+    result.unwrap_or_else(|why| {
+        (
+            crate::app::handlers::pcb_drc_fix::fix_refused(why),
+            Task::none(),
+        )
+    })
+}
+
 /// `fix_drc_violation document=.. violation=K [dry_run=]` (#2940): fix the
-/// finding with waiver key `K`, never by waiving it; one board undo step.
-fn fix_drc_violation_answer(app: &mut Signex, args: &CommandArgs) -> Result<Value, String> {
-    let what = "`fix_drc_violation`";
-    let board = named_board(app, args, what)?;
-    let key = required_text(args, "violation", what)?.trim().to_string();
-    app.fix_drc(&board, &FixScope::One(key), dry_run(args))
+/// finding with waiver key `K`, never by waiving it; one board undo step,
+/// answered once the fixes worked out off the UI thread land.
+pub(super) fn fix_drc_violation(app: &mut Signex, args: &CommandArgs) -> Ran {
+    fix_started((|| {
+        let what = "fix_drc_violation";
+        let board = named_board(app, args, &format!("`{what}`"))?;
+        let key = required_text(args, "violation", &format!("`{what}`"))?
+            .trim()
+            .to_string();
+        app.start_fix_drc(what, args, board, FixScope::One(key), dry_run(args))
+    })())
 }
 
 /// `fix_drc document=.. [rule=<kind>] [dry_run=]` (#2940): fix every
 /// finding of one rule kind, or of every kind with a fix (`all` or left out).
-fn fix_drc_answer(app: &mut Signex, args: &CommandArgs) -> Result<Value, String> {
-    let board = named_board(app, args, "`fix_drc`")?;
-    let rule = match filter_text(args, "rule") {
-        None => None,
-        Some(token) => Some(FixRule::parse(token).ok_or_else(|| {
-            let kinds: Vec<&str> = FixRule::ALL.iter().map(|r| r.token()).collect();
-            format!(
-                "`{token}` is not a rule with a fix; one of {}",
-                kinds.join(", ")
-            )
-        })?),
-    };
-    app.fix_drc(&board, &FixScope::Every(rule), dry_run(args))
+pub(super) fn fix_drc(app: &mut Signex, args: &CommandArgs) -> Ran {
+    fix_started((|| {
+        let board = named_board(app, args, "`fix_drc`")?;
+        let rule = match filter_text(args, "rule") {
+            None => None,
+            Some(token) => Some(FixRule::parse(token).ok_or_else(|| {
+                let kinds: Vec<&str> = FixRule::ALL.iter().map(|r| r.token()).collect();
+                format!(
+                    "`{token}` is not a rule with a fix; one of {}",
+                    kinds.join(", ")
+                )
+            })?),
+        };
+        app.start_fix_drc("fix_drc", args, board, FixScope::Every(rule), dry_run(args))
+    })())
 }
 
 /// A filter operand: left out or `all` is every value.
@@ -265,8 +282,6 @@ answering! {
     show_drc_violation => show_drc_violation_answer;
     waive_drc_violation => waive_drc_violation_answer;
     unwaive_drc_violation => unwaive_drc_violation_answer;
-    fix_drc_violation => fix_drc_violation_answer;
-    fix_drc => fix_drc_answer;
     filter_drc_results => filter_drc_results_answer;
     add_net_class => add_net_class_answer;
     rename_net_class => rename_net_class_answer;

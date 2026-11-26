@@ -144,6 +144,7 @@ pub use agent_edits::{
 };
 pub use args::CommandArgs;
 pub(crate) use args::InvocationContext;
+pub(crate) use board_edit_operands::mm_points;
 use bridge::core_to_message;
 pub(crate) use component_operand::component_by_uuid;
 pub use edit_reads::{EditReads, ReadsLoaded};
@@ -152,7 +153,7 @@ pub(crate) use enablement::{disabled_reason, is_enabled};
 pub(crate) use opened::answers_with_the_new_document;
 pub(crate) use operand_handlers::runs_headless_without_operands;
 pub use operands::{OperandError, OperandValue};
-pub(crate) use operands::{missing_headless_operand, parse_targets};
+pub(crate) use operands::{missing_headless_operand, operand_str, parse_targets};
 pub(crate) use part_operands::library_row;
 pub(crate) use placed_operands::PlacedRefusal;
 pub use signex_commands::CommandOutcome;

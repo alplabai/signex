@@ -10,6 +10,7 @@ use signex_types::project::{PROJECT_PROFILE_TOKEN, ProjectSetup};
 
 use super::SheetChoice;
 use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
+use crate::app::document_ids::NoProjectNamed;
 use crate::app::handlers::dock::project_navigation::add_io::on_blocking_pool;
 use crate::app::state::ProjectId;
 use crate::app::{Message, ProjectMsg, Signex};
@@ -55,17 +56,14 @@ fn named_project(
     target: &crate::app::document_ids::DocumentTarget,
     command: &str,
 ) -> Result<ProjectId, String> {
-    let entry = app.resolve_document_target(target)?;
-    let path = entry
-        .path
-        .ok_or_else(|| format!("`{command}`: {} has no file", entry.name))?;
-    let docs = &app.document_state;
-    docs.projects
-        .iter()
-        .find(|project| project.path == path)
-        .or_else(|| app.owning_project(&path))
+    app.project_named(target)
         .map(|project| project.id)
-        .ok_or_else(|| format!("`{command}`: {} is in no open project", entry.name))
+        .map_err(|why| match why {
+            NoProjectNamed::Unresolved(why) => why,
+            NoProjectNamed::NotInProject(name) => {
+                format!("`{command}`: {name} is in no open project")
+            }
+        })
 }
 
 /// The board file `name` names in the project folder `dir`: `name` with

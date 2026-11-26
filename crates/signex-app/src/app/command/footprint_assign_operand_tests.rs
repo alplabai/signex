@@ -221,3 +221,75 @@ fn a_board_swap_to_a_footprint_without_the_pads_is_refused_with_them() {
     let kept = app.document_state.pcb_board(&board).expect("board");
     assert!(kept.footprints[0].library_ref.is_none(), "nothing changed");
 }
+
+/// `unmatched=keep` swaps anyway and answers the pads that went, as the
+/// footprint picker swaps.
+#[test]
+fn a_board_swap_that_keeps_unmatched_pads_swaps_and_names_them() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _sheet) = app_with_resistor(dir.path());
+    let board = open_board(&mut app, dir.path());
+    let document = format!("document={}", board.display());
+    let id = format!("id={R1}");
+    let footprint = format!("footprint={STOCK}:Fiducial-1mm");
+    let answer = answered(run(
+        &mut app,
+        "change_footprint",
+        &[&document, &id, &footprint, "unmatched=keep"],
+    ));
+    assert_eq!(answer["changed"], true, "{answer}");
+    assert_eq!(
+        answer["pads_dropped"],
+        serde_json::json!(["R1.1", "R1.2"]),
+        "{answer}"
+    );
+    let bad = refusal(run(
+        &mut app,
+        "change_footprint",
+        &[&document, &id, &footprint, "unmatched=maybe"],
+    ));
+    assert!(bad.contains("`refuse` or `keep`"), "{bad}");
+}
+
+/// The picker's Swap runs `change_footprint` through the GUI translator,
+/// with the picked footprint as read and `unmatched=keep`: the pads with no
+/// match go, as the picker always swapped.
+#[test]
+fn the_pickers_swap_runs_change_footprint_through_the_translator() {
+    use crate::app::command::translator;
+    use crate::app::{FootprintSwapMsg, PcbMsg};
+
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _sheet) = app_with_resistor(dir.path());
+    let board = open_board(&mut app, dir.path());
+    let library = app
+        .library
+        .open_libraries
+        .iter()
+        .find(|lib| lib.library_id.to_string() == STOCK)
+        .expect("the Stock library");
+    let fiducial = library
+        .cached_footprints
+        .iter()
+        .find(|s| s.name == "Fiducial-1mm")
+        .expect("Fiducial-1mm")
+        .uuid;
+    let address = signex_library::PrimitiveRef::new(library.library_id, fiducial);
+    let roots = app.open_library_roots();
+    let template = crate::library::place::resolve_library_footprint(&address, &roots)
+        .expect("the footprint reads");
+    let _ = app.update(Message::Pcb(PcbMsg::FootprintSwap(
+        FootprintSwapMsg::Resolved {
+            board: board.clone(),
+            footprints: vec![R1],
+            result: Ok(Box::new(template)),
+        },
+    )));
+    assert!(translator::ran("change_footprint"), "the picker translates");
+    let swapped = app.document_state.pcb_board(&board).expect("board");
+    let r1 = swapped.footprints.iter().find(|f| f.uuid == R1).unwrap();
+    assert!(
+        r1.library_ref.is_some(),
+        "the unmatched pads went and the swap was made"
+    );
+}

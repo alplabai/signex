@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use super::*;
-use crate::PriceQuote;
+use crate::{PriceQuote, mpn_key};
 
 const R: &str = "lib/r";
 const C: &str = "lib/c";
@@ -61,6 +61,7 @@ fn fixture() -> (BomTable, PriceBook, Vec<BomLineAlternates>) {
     let alternates = vec![BomLineAlternates {
         line: U.into(),
         rows: vec![ALT.into()],
+        unknown: Default::default(),
     }];
     (table, book, alternates)
 }

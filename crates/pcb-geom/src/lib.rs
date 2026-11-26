@@ -94,7 +94,7 @@ pub use net_length::{
 pub use net_report::{NetReport, net_named, net_reports};
 pub use pick_filter::{PickFilter, PickKind};
 pub use pour_edit::{AreaShape, cut_area, slice_area};
-pub use progress::{total_routed_length_mm, unplaced_footprints};
+pub use progress::{off_board_footprints, total_routed_length_mm};
 pub use ratsnest::{RatLine, ratsnest, ratsnest_with_fills};
 pub use rect::RectNm;
 pub use region::{

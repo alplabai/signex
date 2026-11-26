@@ -14,7 +14,7 @@ use signex_i18n::{MessageId, ids};
 
 use super::job::JobMode;
 use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
-use crate::app::document_ids::DocumentKind;
+use crate::app::document_ids::{DocumentKind, NoProjectNamed};
 use crate::app::project_sheets::project_root_sheet_path;
 use crate::app::state::ProjectId;
 use crate::app::update_pcb::file_name;
@@ -85,29 +85,17 @@ impl Signex {
         };
         let entry = self.resolve_document_target(named)?;
         let docs = &self.document_state;
-        // A board names the project that lists it as its `pcb_file`, as
-        // `check_drc` finds it; any other document names its own project.
-        let (project, board) = match (entry.kind, entry.path.as_ref()) {
-            (DocumentKind::Pcb, Some(path)) => {
-                let named = entry.project.as_ref().map(|project| project.path.as_path());
-                let project = docs.board_project(path, named);
-                (project, project.map(|_| path.clone()))
-            }
-            (kind, path) => {
-                let project_path = match kind {
-                    DocumentKind::Project => path.cloned(),
-                    _ => entry.project.as_ref().map(|project| project.path.clone()),
-                };
-                let project = project_path
-                    .and_then(|path| docs.projects.iter().find(|project| project.path == path));
-                (project, project.and_then(Self::project_board))
-            }
-        };
-        let Some(project) = project else {
-            return Err(format!(
-                "`{id}` compares a project's board with its schematic, and {} is not part of an open project",
-                entry.name
-            ));
+        // The project by the one rule (`project_named`); a board named is
+        // the board compared, any other document names its project's board.
+        let project = self.project_named(named).map_err(|why| match why {
+            NoProjectNamed::Unresolved(why) => why,
+            NoProjectNamed::NotInProject(name) => format!(
+                "`{id}` compares a project's board with its schematic, and {name} is not part of an open project"
+            ),
+        })?;
+        let board = match (entry.kind, entry.path) {
+            (DocumentKind::Pcb, Some(path)) => Some(path),
+            _ => Self::project_board(project),
         };
         let Some(board) = board else {
             return Err(en_us(ids::COMPARE_BOARD_NO_BOARD));

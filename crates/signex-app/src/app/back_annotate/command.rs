@@ -41,17 +41,12 @@ fn named_project_board(app: &Signex, args: &CommandArgs) -> Result<(ProjectId, P
     let Some(OperandValue::Document(target)) = args.operand("document") else {
         return Err(format!("`{ID}` needs the operand `document`"));
     };
-    let entry = app.resolve_document_target(target)?;
-    let path = entry
-        .path
-        .ok_or_else(|| format!("{} has no file", entry.name))?;
-    let project = app
-        .document_state
-        .projects
-        .iter()
-        .find(|project| project.path == path)
-        .or_else(|| app.owning_project(&path))
-        .ok_or_else(|| format!("`{ID}`: {} is in no open project", entry.name))?;
+    let project = app.project_named(target).map_err(|why| match why {
+        crate::app::document_ids::NoProjectNamed::Unresolved(why) => why,
+        crate::app::document_ids::NoProjectNamed::NotInProject(name) => {
+            format!("`{ID}`: {name} is in no open project")
+        }
+    })?;
     let board = Signex::project_board(project)
         .ok_or_else(|| format!("`{ID}`: the project names no board"))?;
     if app.document_state.board_engine(&board).is_none() {

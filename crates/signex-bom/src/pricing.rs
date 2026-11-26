@@ -85,9 +85,10 @@ pub fn library_row_key(library_id: &str, row_id: &str) -> String {
     format!("{library_id}/{row_id}")
 }
 
-/// An MPN as it is looked up: trimmed and upper-cased.
+/// An MPN as it is looked up: the project's BOM key normalisation
+/// (`signex_types::project::bom_mpn_key`), so a price and a line key agree.
 pub fn mpn_key(mpn: &str) -> String {
-    mpn.trim().to_uppercase()
+    signex_types::project::bom_mpn_key(mpn)
 }
 
 pub use signex_types::schematic::MPN_FIELDS;

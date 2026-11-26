@@ -124,7 +124,7 @@ pub(super) const PCB_SYNC: &[CommandMetadata] = &[
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::MUTATES,
-        operands: footprint_operands::FOOTPRINT_CHOICE,
+        operands: footprint_operands::FOOTPRINT_SWAP,
         ..CommandMetadata::DEFAULT
     },
 ];

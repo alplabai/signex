@@ -8,18 +8,20 @@
 use std::collections::BTreeMap;
 
 use serde::Serialize;
-use signex_types::project::{BomLineAlternates, MPN_LINE_PREFIX};
+use signex_types::project::{BomLineAlternates, MPN_LINE_PREFIX, bom_line_key, bom_row_key};
 
 use crate::pricing::{price_of, row_mpn};
-use crate::{BomPrice, BomRow, BomTable, PriceBook, mpn_key, round_cents};
+use crate::{BomPrice, BomRow, BomTable, PriceBook, round_cents};
 
-/// The key a line's alternates are stored under: the library row its
-/// parts were placed from, else `mpn:` and its MPN as the BOM matches it;
-/// `None` for a line with neither.
+/// The key a line's alternates are stored under, as the project stores it
+/// (`bom_row_key`, `bom_line_key`): the library row its parts were placed
+/// from, else `mpn:` and its MPN; `None` for a line with neither. A row
+/// that is not `<uuid>/<uuid>` is its own key, as written.
 pub fn line_key(row: &BomRow) -> Option<String> {
-    row.library_row
-        .clone()
-        .or_else(|| row_mpn(row).map(|mpn| format!("{MPN_LINE_PREFIX}{}", mpn_key(mpn))))
+    let by_row = (row.library_row.as_deref()).map(|r| bom_row_key(r).unwrap_or_else(|_| r.into()));
+    by_row.or_else(|| {
+        row_mpn(row).and_then(|mpn| bom_line_key(&format!("{MPN_LINE_PREFIX}{mpn}")).ok())
+    })
 }
 
 /// What the build asks: how many boards, and the currency the total is in

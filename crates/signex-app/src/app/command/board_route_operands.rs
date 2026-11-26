@@ -183,12 +183,7 @@ fn via_order(board: &PcbBoard, args: &CommandArgs) -> Result<ViaOrder, Translata
     })
 }
 
-fn text<'a>(args: &'a CommandArgs, name: &str) -> Option<&'a str> {
-    match args.operand(name) {
-        Some(OperandValue::Text(text)) => Some(text.as_str()),
-        _ => None,
-    }
-}
+use super::operand_str as text;
 
 fn flag(args: &CommandArgs, name: &str) -> bool {
     matches!(args.operand(name), Some(OperandValue::Bool(true)))
@@ -226,22 +221,13 @@ fn pad_point(board: &PcbBoard, designator: &str, pin: &str) -> Result<Point, Tra
 
 /// The corners `through` lists, `x,y;x,y`, as board points.
 fn through(board: &PcbBoard, args: &CommandArgs) -> Result<Vec<Point>, Translatable> {
-    let Some(list) = text(args, "through") else {
+    let Some(list) = text(args, "through").filter(|list| !list.trim().is_empty()) else {
         return Ok(Vec::new());
     };
     let origin = board.options.origin;
-    let number = |s: &str| s.trim().parse::<f64>().ok().filter(|n| n.is_finite());
-    (list.split(';'))
-        .map(str::trim)
-        .filter(|corner| !corner.is_empty())
-        .map(|corner| {
-            let (x, y) = corner.split_once(',').unwrap_or((corner, ""));
-            match (number(x), number(y)) {
-                (Some(x), Some(y)) => Ok(origin.from_user(Point::new(x, y))),
-                _ => Err(Translatable::new(ids::PCB_ROUTE_ORDER_POINTS)),
-            }
-        })
-        .collect()
+    let points =
+        super::mm_points(list).ok_or_else(|| Translatable::new(ids::PCB_ROUTE_ORDER_POINTS))?;
+    Ok(points.into_iter().map(|p| origin.from_user(p)).collect())
 }
 
 /// The copper layer `name` names, when the board has it.

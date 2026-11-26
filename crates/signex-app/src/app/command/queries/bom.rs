@@ -14,7 +14,7 @@ use signex_types::project::is_base_variant;
 use super::{Answer, bool_operand, text_operand};
 use crate::app::agent::{AgentMsg, QueryAnswered};
 use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
-use crate::app::document_ids::DocumentKind;
+use crate::app::document_ids::NoProjectNamed;
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
 use crate::library::part_search::{PartSearch, ValueFilter, search_parts};
@@ -88,24 +88,12 @@ impl Signex {
         let Some(OperandValue::Document(named)) = args.operand("document") else {
             return Err("`query_bom` needs the operand `document`".to_string());
         };
-        let entry = self.resolve_document_target(named)?;
-        let path = match entry.kind {
-            DocumentKind::Project => entry.path.clone(),
-            _ => entry.project.as_ref().map(|project| project.path.clone()),
-        };
-        let project = path
-            .and_then(|path| {
-                self.document_state
-                    .projects
-                    .iter()
-                    .find(|project| project.path == path)
-            })
-            .ok_or_else(|| {
-                format!(
-                    "`query_bom` prices a project's BOM, and {} is not part of an open one",
-                    entry.name
-                )
-            })?;
+        let project = self.project_named(named).map_err(|why| match why {
+            NoProjectNamed::Unresolved(why) => why,
+            NoProjectNamed::NotInProject(name) => {
+                format!("`query_bom` prices a project's BOM, and {name} is not part of an open one")
+            }
+        })?;
         let quantity = whole(args, "quantity", MAX_QUANTITY)?.unwrap_or(1);
         let currency = trimmed(args, "currency").map(str::to_uppercase);
         let data = &project.data;

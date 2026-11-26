@@ -22,7 +22,6 @@ use signex_engine::pcb::footprint_place::{self, FootprintPlace};
 use signex_engine::pcb::placement;
 use signex_i18n::{MessageId, ids, t};
 use signex_types::format::mm_as_stored_nm;
-use signex_types::numeric::parse_finite_f64;
 use signex_types::pcb::{PcbBoard, Point};
 use signex_types::pcb_layer::BoardSide;
 use uuid::Uuid;
@@ -45,12 +44,7 @@ pub(super) fn footprint_refused(why: impl Into<String>) -> CommandOutcome {
     CommandOutcome::Disabled { reason }
 }
 
-fn text<'a>(args: &'a CommandArgs, name: &str) -> Option<&'a str> {
-    match args.operand(name) {
-        Some(OperandValue::Text(text)) => Some(text.as_str()),
-        _ => None,
-    }
-}
+use super::operand_str as text;
 
 /// The side as the operand and the answer write it.
 pub(super) fn side_id(side: BoardSide) -> &'static str {
@@ -118,21 +112,20 @@ fn model_point(board: &PcbBoard, x: f64, y: f64) -> Point {
 }
 
 /// `points=x,y;x,y`: one point per footprint of `ids`, in the board frame.
+/// The list is read by the one point-list reader (`mm_points`); a point the
+/// board file cannot store is refused.
 fn parse_points(textual: &str) -> Result<Vec<(f64, f64)>, String> {
-    let number = |part: &str| {
-        parse_finite_f64(part)
-            .ok()
-            .filter(|mm| mm_as_stored_nm(*mm).is_some())
-    };
-    textual
-        .split(';')
-        .map(|pair| {
-            let (x, y) = pair
-                .split_once(',')
-                .ok_or_else(|| format!("`{pair}` in `points` is not x,y"))?;
-            number(x)
-                .zip(number(y))
-                .ok_or_else(|| format!("`{pair}` in `points` is not x,y in mm"))
+    let points = super::mm_points(textual)
+        .ok_or_else(|| format!("`points` must be x,y;x,y in mm, not `{textual}`"))?;
+    points
+        .into_iter()
+        .map(|p| {
+            let stored = |mm: f64| mm_as_stored_nm(mm).is_some();
+            (stored(p.x) && stored(p.y))
+                .then_some((p.x, p.y))
+                .ok_or_else(|| {
+                    format!("`{},{}` in `points` is outside the board's range", p.x, p.y)
+                })
         })
         .collect()
 }

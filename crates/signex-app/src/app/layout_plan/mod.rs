@@ -36,12 +36,7 @@ fn answered(result: Result<Value, String>) -> Ran {
     (outcome, Task::none())
 }
 
-fn text<'a>(args: &'a CommandArgs, name: &str) -> Option<&'a str> {
-    match args.operand(name) {
-        Some(OperandValue::Text(text)) => Some(text.as_str()),
-        _ => None,
-    }
-}
+use crate::app::command::operand_str as text;
 
 /// The settings of `stage` by operand name, every one listed.
 fn settings_json(plan: &LayoutPlan, stage: LayoutStage) -> Value {

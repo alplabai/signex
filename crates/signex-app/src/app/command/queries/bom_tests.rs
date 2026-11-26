@@ -224,6 +224,7 @@ fn bom_app(dir: &tempfile::TempDir) -> (Signex, Rows, String) {
     data.bom_alternates = vec![BomLineAlternates {
         line: key(&rows, rows.regulator),
         rows: vec![key(&rows, rows.alternate)],
+        unknown: Default::default(),
     }];
     let document = format!("document={}", app.document_state.projects[0].path.display());
     (app, rows, document)

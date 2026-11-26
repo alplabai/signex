@@ -11,7 +11,7 @@ use signex_i18n::{Translatable, ids};
 
 use super::state::HeadlessRun;
 use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
-use crate::app::document_ids::DocumentKind;
+use crate::app::document_ids::NoProjectNamed;
 use crate::app::state::ProjectId;
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
@@ -77,19 +77,11 @@ fn named_project(app: &Signex, args: &CommandArgs) -> Result<ProjectId, Translat
     let Some(OperandValue::Document(named)) = args.operand("document") else {
         return active_project_with_board(app);
     };
-    let entry = app.resolve_document_target(named).map_err(did_not_run)?;
-    let path = match entry.kind {
-        DocumentKind::Project => entry.path,
-        _ => entry.project.map(|project| project.path),
-    };
-    path.and_then(|path| {
-        app.document_state
-            .projects
-            .iter()
-            .find(|project| project.path == path)
-            .map(|project| project.id)
-    })
-    .ok_or_else(|| ids::UPDATE_PCB_NOT_IN_PROJECT.into())
+    match app.project_named(named) {
+        Ok(project) => Ok(project.id),
+        Err(NoProjectNamed::Unresolved(why)) => Err(did_not_run(why)),
+        Err(NoProjectNamed::NotInProject(_)) => Err(ids::UPDATE_PCB_NOT_IN_PROJECT.into()),
+    }
 }
 
 /// No `document`: the active project's board (Caner, 2026-11-25). The

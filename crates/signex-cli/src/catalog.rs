@@ -92,15 +92,23 @@ mod tests {
         assert_eq!(find(&catalog, "save_document")["capability"], "save");
     }
 
-    /// No network and no launches: the only commands that could reach a
-    /// library server or a browser are the `library` ones, and none is runnable.
+    /// No network and no launches: a command that could reach a library
+    /// server, a distributor or a browser says so (`needs_network`), and
+    /// none of them is runnable. Its category does not decide it: a
+    /// `library` query that reads the open libraries in memory is runnable.
     #[test]
-    fn no_library_command_is_runnable_headless() {
+    fn no_network_command_is_runnable_headless() {
         for id in all_command_ids() {
             let meta = metadata_for_str(id).unwrap();
             assert!(
-                meta.category != "library" || meta.flags.gui_only,
-                "{id} is a runnable library command: give it a capability check for the network"
+                !meta.needs_network || meta.flags.gui_only,
+                "{id} may reach the network and is runnable: give it a capability check for the network"
+            );
+        }
+        for id in ["open_library_browser", "open_datasheet"] {
+            assert!(
+                metadata_for_str(id).unwrap().needs_network,
+                "{id} reaches the network"
             );
         }
     }

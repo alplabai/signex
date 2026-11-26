@@ -185,7 +185,7 @@ change_component	bridge	Library(PlacedPart(ActionRequested(ChangeComponent)))	gu
 change_component	operand_handler	run_operands: named document	core	origin	handler
 change_component	in_window_rewrite	document_window	gui	window	routing
 change_component	headless_missing_operand	needs `document`	core	none	routing
-change_footprint	bridge	Pcb(FootprintSwap(Requested))	gui	active document,selection	gate
+change_footprint	translator	Pcb(FootprintSwap(Requested))	gui	active document,selection	gate
 change_footprint	operand_handler	run_operands: named document	core	origin	handler
 change_footprint	in_window_rewrite	document_window	gui	window	routing
 change_footprint	refusal_needs	SwapFootprints	gui	active document,selection	routing

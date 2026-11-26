@@ -219,3 +219,57 @@ fn a_rule_with_no_fix_is_refused_with_the_rules_that_have_one() {
     );
     assert!(reason.contains("mask_sliver"), "{reason}");
 }
+
+/// The fixes are worked out off the UI thread: the run is deferred, the
+/// board is untouched until they land, and the answer comes then.
+#[test]
+fn fix_drc_is_deferred_and_the_board_changes_only_when_the_fixes_land() {
+    let _serial = drc_serial();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = board_app(&dir, false);
+    let id = AppCommandId::new("fix_drc").expect("a catalog id");
+    let doc = document(&path);
+    let args = CommandArgs::parse_operands(&id, &[&doc, "rule=clearance"]).expect("operands");
+    let (outcome, task) = app.run_operands(&id, &args);
+    let CommandOutcome::Deferred { ticket } = outcome else {
+        panic!("not deferred: {outcome:?}");
+    };
+    assert_eq!(track_y(&app, &path, GND_TRACK), 0.0, "nothing moved yet");
+    assert_eq!(undo_steps(&app, &path), 0, "no undo step yet");
+    let got = answer(app.settle_deferred(ticket, task).0);
+    assert_eq!(got["changed"], true, "{got}");
+    assert_eq!(track_y(&app, &path, GND_TRACK), -0.051);
+    assert_eq!(undo_steps(&app, &path), 1);
+}
+
+/// A board edited while the fixes were worked out refuses them: nothing
+/// of the run lands and the edit made meanwhile stays.
+#[test]
+fn fixes_worked_out_on_a_board_that_moved_on_are_refused() {
+    let _serial = drc_serial();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = board_app(&dir, false);
+    let id = AppCommandId::new("fix_drc").expect("a catalog id");
+    let doc = document(&path);
+    let args = CommandArgs::parse_operands(&id, &[&doc, "rule=clearance"]).expect("operands");
+    let (outcome, task) = app.run_operands(&id, &args);
+    let CommandOutcome::Deferred { ticket } = outcome else {
+        panic!("not deferred: {outcome:?}");
+    };
+    // The person moves VCC while the fixes are worked out.
+    let edit = signex_engine::pcb::BoardCommand::ReplaceItems {
+        items: vec![signex_engine::pcb::BoardItem::Segment(track(
+            VCC_TRACK, 2, 0.4, false,
+        ))],
+    };
+    app.execute_board_commands(&path, vec![edit], None)
+        .expect("the person's edit");
+    let landed = app.settle_deferred(ticket, task).0;
+    assert!(
+        matches!(landed, CommandOutcome::Disabled { .. }),
+        "a stale run is refused: {landed:?}"
+    );
+    assert_eq!(track_y(&app, &path, GND_TRACK), 0.0, "the fix did not land");
+    assert_eq!(track_y(&app, &path, VCC_TRACK), 0.4, "the edit stays");
+    assert_eq!(undo_steps(&app, &path), 1, "only the person's step");
+}

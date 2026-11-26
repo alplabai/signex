@@ -35,6 +35,9 @@ pub enum PcbMsg {
     /// The library models a `query_part_heights` waited for were read
     /// (#2939): answer it.
     PartHeightsRead(Box<crate::app::command::PartHeightsRead>),
+    /// The DRC fixes a `fix_drc` or `fix_drc_violation` worked out off the
+    /// UI thread (#2940): land them and answer.
+    DrcFixComputed(Box<crate::app::handlers::pcb_drc_fix::DrcFixComputed>),
     /// The PCB canvas of the undocked window `window` reported `msg`: it
     /// acts on that window's board and selection (#2240).
     CanvasInWindow {

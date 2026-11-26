@@ -7,10 +7,14 @@
 //! skipped when empty; no format token changes. See `docs/CLI.md`, "BOM".
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use thiserror::Error;
 use uuid::Uuid;
 
-use super::ProjectData;
+use super::{ProjectData, UnknownJson};
+
+/// The `.snxprj` key the alternates are stored under.
+pub(crate) const BOM_ALTERNATES_KEY: &str = "bom_alternates";
 
 /// The longest line key or row key kept, in characters.
 pub const MAX_BOM_KEY_CHARS: usize = 256;
@@ -24,6 +28,26 @@ pub struct BomLineAlternates {
     pub line: String,
     #[serde(default)]
     pub rows: Vec<String>,
+    /// Keys written by a newer build that this one does not know; kept so a
+    /// save does not drop them (#788).
+    #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
+    pub unknown: UnknownJson,
+}
+
+/// The file's `bom_alternates` value: read when it is a list of lines;
+/// anything else is kept verbatim for the next save, said in the log, and
+/// the project still opens (edits of the alternates are refused then).
+pub(crate) fn take_bom_alternates(data: &mut ProjectData, raw: Value) {
+    match serde_json::from_value::<Vec<BomLineAlternates>>(raw.clone()) {
+        Ok(lines) => data.bom_alternates = lines,
+        Err(error) => {
+            tracing::warn!(
+                target: "signex::project",
+                "The project's BOM alternates could not be read ({error}); they are kept as written."
+            );
+            data.unknown.insert(BOM_ALTERNATES_KEY.to_string(), raw);
+        }
+    }
 }
 
 /// Why an alternate edit was refused. A refused edit changes nothing.
@@ -47,6 +71,10 @@ pub enum BomAlternateProblem {
         position: usize,
         count: usize,
     },
+    #[error(
+        "the project's BOM alternates could not be read; they are kept as written and are not edited"
+    )]
+    Unreadable,
 }
 
 /// `<library id>/<row id>`, both hyphenated uuids, as written; `None` for
@@ -76,12 +104,33 @@ pub fn bom_line_key(text: &str) -> Result<String, BomAlternateProblem> {
         return Ok(key);
     }
     match text.strip_prefix(MPN_LINE_PREFIX).map(str::trim) {
-        Some(mpn) if !mpn.is_empty() => Ok(format!("{MPN_LINE_PREFIX}{}", mpn.to_uppercase())),
+        Some(mpn) if !mpn.is_empty() => Ok(format!("{MPN_LINE_PREFIX}{}", bom_mpn_key(mpn))),
         _ => Err(bad()),
     }
 }
 
+/// An MPN as the BOM compares it, in a line key and in the price book:
+/// trimmed and upper-cased. The one normalisation (`signex_bom` calls it).
+pub fn bom_mpn_key(mpn: &str) -> String {
+    mpn.trim().to_uppercase()
+}
+
 impl ProjectData {
+    /// The file has a `bom_alternates` value this build could not read: kept
+    /// verbatim for re-save.
+    pub fn has_unreadable_bom_alternates(&self) -> bool {
+        self.unknown.get(BOM_ALTERNATES_KEY).is_some()
+    }
+
+    /// Refused while the stored alternates are unreadable: an edit would
+    /// write a second `bom_alternates` over the kept one.
+    fn alternates_editable(&self) -> Result<(), BomAlternateProblem> {
+        if self.has_unreadable_bom_alternates() {
+            return Err(BomAlternateProblem::Unreadable);
+        }
+        Ok(())
+    }
+
     /// The alternates of the line `line` (a stored key), most preferred
     /// first; empty when it has none.
     pub fn bom_alternates_of(&self, line: &str) -> &[String] {
@@ -93,6 +142,7 @@ impl ProjectData {
 
     /// Add `row` after the line's other alternates.
     pub fn add_bom_alternate(&mut self, line: &str, row: &str) -> Result<(), BomAlternateProblem> {
+        self.alternates_editable()?;
         let (line, row) = (bom_line_key(line)?, bom_row_key(row)?);
         if line == row {
             return Err(BomAlternateProblem::OwnPart { row });
@@ -105,6 +155,7 @@ impl ProjectData {
             None => self.bom_alternates.push(BomLineAlternates {
                 line,
                 rows: vec![row],
+                unknown: UnknownJson::default(),
             }),
         }
         Ok(())
@@ -117,6 +168,7 @@ impl ProjectData {
         line: &str,
         row: &str,
     ) -> Result<(), BomAlternateProblem> {
+        self.alternates_editable()?;
         let (line, row) = (bom_line_key(line)?, bom_row_key(row)?);
         let place = self.alternate_place(&line, &row)?;
         let entry = &mut self.bom_alternates[place.0];
@@ -135,6 +187,7 @@ impl ProjectData {
         row: &str,
         position: usize,
     ) -> Result<(), BomAlternateProblem> {
+        self.alternates_editable()?;
         let (line, row) = (bom_line_key(line)?, bom_row_key(row)?);
         let (entry, at) = self.alternate_place(&line, &row)?;
         let count = self.bom_alternates[entry].rows.len();

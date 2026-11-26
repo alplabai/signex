@@ -39,12 +39,7 @@ fn refused(reason: impl Into<String>) -> Ran {
     (footprint_refused(reason), Task::none())
 }
 
-fn text<'a>(args: &'a CommandArgs, name: &str) -> Option<&'a str> {
-    match args.operand(name) {
-        Some(OperandValue::Text(text)) => Some(text.as_str()),
-        _ => None,
-    }
-}
+use super::operand_str as text;
 
 /// The copper pad numbers of `footprint`, each once.
 fn pad_numbers(footprint: &Footprint) -> Vec<String> {
@@ -268,13 +263,32 @@ pub(super) fn assign_footprint(app: &mut Signex, args: &CommandArgs) -> Ran {
     (CommandOutcome::Answered(answer), Task::none())
 }
 
-/// `change_footprint document=<board> id=<uuid> footprint=<library>:<fp>`
-/// (or `designator=`, or `ids=`): each named footprint swapped for the
-/// library one as the footprint picker swaps it, one undo step.
+/// `change_footprint document=<board> id=<uuid> footprint=<library>:<fp>
+/// [unmatched=refuse|keep]` (or `designator=`, or `ids=`): each named
+/// footprint swapped for the library one, one undo step. An old pad no new
+/// pad takes over refuses the swap, unless `unmatched=keep`: then the swap
+/// is made and those pads, and the parts whose sheet could not follow, are
+/// listed in Messages, as the footprint picker (which runs this) does.
 pub(super) fn change_footprint(app: &mut Signex, args: &CommandArgs) -> Ran {
+    // The picker's own refusal line ("Change Footprint: why; nothing
+    // changed"), so the window says what it always said.
+    let what = t!(app.ui_state.i18n, ids::PCB_COMPONENT_FOOTPRINT_SWAP).into_string();
+    let refused = |why: String| -> Ran {
+        let reason = signex_i18n::Translatable::new(ids::PCB_FOOTPRINT_REFUSED)
+            .arg("what", what.clone())
+            .arg("why", why);
+        (CommandOutcome::Disabled { reason }, Task::none())
+    };
     let board = match app.editable_named_board(args) {
         Ok(board) => board,
         Err(reason) => return refused(reason),
+    };
+    let keep_unmatched = match text(args, "unmatched").map(str::trim) {
+        None | Some("refuse") => false,
+        Some("keep") => true,
+        Some(other) => {
+            return refused(format!("`unmatched` is `refuse` or `keep`, not `{other}`"));
+        }
     };
     let footprints = match named_footprints(app, &board, args) {
         Ok(footprints) => footprints,
@@ -288,15 +302,23 @@ pub(super) fn change_footprint(app: &mut Signex, args: &CommandArgs) -> Ran {
         Ok(template) => template,
         Err(reason) => return refused(reason),
     };
-    let what = t!(app.ui_state.i18n, ids::PCB_COMPONENT_FOOTPRINT_SWAP).into_string();
-    let done = match app.run_footprint_swap(&board, &footprints, &template, &what, true) {
+    let refuse_unmatched = !keep_unmatched;
+    let done = match app.run_footprint_swap(&board, &footprints, &template, &what, refuse_unmatched)
+    {
         Ok(done) => done,
-        Err(SwapRefusal::BoardGone) => return refused("the board is not open"),
-        Err(SwapRefusal::Refused(why) | SwapRefusal::NotRun(why)) => return refused(why),
+        Err(SwapRefusal::BoardGone) => return refused("the board is not open".into()),
+        Err(SwapRefusal::Refused(why)) => return refused(why),
+        Err(SwapRefusal::NotRun(why)) => {
+            app.sync_pcb_board_summary();
+            return refused(why);
+        }
     };
+    if let (true, Some(done)) = (keep_unmatched, &done) {
+        app.report_swap_leftovers(done);
+    }
     app.sync_pcb_board_summary();
     let Some(open) = app.document_state.pcb_board(&board) else {
-        return refused("the board is not open");
+        return refused("the board is not open".into());
     };
     let answered: Vec<Value> = (footprints.iter())
         .map(|id| footprint_answer(open, *id))
@@ -305,12 +327,21 @@ pub(super) fn change_footprint(app: &mut Signex, args: &CommandArgs) -> Ran {
         .as_ref()
         .map(|done| done.not_updated.iter().map(|(d, _)| d.as_str()).collect())
         .unwrap_or_default();
+    let dropped: Vec<String> = done
+        .as_ref()
+        .map(|done| {
+            (done.unmatched.iter())
+                .map(|pad| format!("{}.{}", pad.reference, pad.number))
+                .collect()
+        })
+        .unwrap_or_default();
     let answer = json!({
         "document": board.display().to_string(),
         "footprint": lib_id_of(&address),
         "changed": done.is_some(),
         "footprints": answered,
         "parts_not_updated": kept,
+        "pads_dropped": dropped,
     });
     (CommandOutcome::Answered(answer), Task::none())
 }

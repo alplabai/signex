@@ -32,13 +32,24 @@ pub const FOOTPRINT_SIDE: &[Operand] = &[
     optional("ids", OperandKind::Targets),
     required("side", OperandKind::Text),
 ];
-/// `assign_footprint` on the sheet `document` and `change_footprint` on the
-/// board `document`: the parts or footprints named take `footprint`,
-/// `<library>:<footprint>` (each by id or name).
+/// `assign_footprint` on the sheet `document`: the parts named take
+/// `footprint`, `<library>:<footprint>` (each by id or name).
 pub const FOOTPRINT_CHOICE: &[Operand] = &[
     required("document", OperandKind::Document),
     optional("id", OperandKind::Text),
     optional("designator", OperandKind::Text),
     optional("ids", OperandKind::Targets),
     required("footprint", OperandKind::Text),
+];
+/// `change_footprint` on the board `document`: the footprints named take
+/// `footprint`, as for [`FOOTPRINT_CHOICE`]; `unmatched` is what an old pad
+/// no new pad takes over does: `refuse` the swap (the default) or `keep`
+/// swapping and list it, as the footprint picker does.
+pub const FOOTPRINT_SWAP: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("id", OperandKind::Text),
+    optional("designator", OperandKind::Text),
+    optional("ids", OperandKind::Targets),
+    required("footprint", OperandKind::Text),
+    optional("unmatched", OperandKind::Text),
 ];

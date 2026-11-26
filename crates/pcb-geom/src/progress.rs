@@ -14,8 +14,10 @@ use crate::units::PointNm;
 /// stages a new part beside the board, `staging`), in board order. `None`
 /// without an outline of three points or more, or with an outline point the
 /// geometry cannot hold: then nothing says where the board is. A footprint
-/// whose position the geometry cannot hold counts as unplaced.
-pub fn unplaced_footprints(board: &PcbBoard) -> Option<Vec<Uuid>> {
+/// whose position the geometry cannot hold counts as off the board. This is
+/// not the layout plan's "placed" (`signex_drc::layout_plan`, the body box
+/// inside the outline or its room): it is where the origin is, nothing else.
+pub fn off_board_footprints(board: &PcbBoard) -> Option<Vec<Uuid>> {
     if board.outline.len() < 3 {
         return None;
     }
@@ -25,7 +27,7 @@ pub fn unplaced_footprints(board: &PcbBoard) -> Option<Vec<Uuid>> {
         .map(|p| PointNm::from_mm(*p, "outline"))
         .collect::<Result<_, _>>()
         .ok()?;
-    let unplaced = board
+    let off_board = board
         .footprints
         .iter()
         .filter(|fp| {
@@ -36,7 +38,7 @@ pub fn unplaced_footprints(board: &PcbBoard) -> Option<Vec<Uuid>> {
         })
         .map(|fp| fp.uuid)
         .collect();
-    Some(unplaced)
+    Some(off_board)
 }
 
 /// The routed length of every named net of the board summed, mm: the
@@ -123,16 +125,16 @@ mod tests {
     }
 
     #[test]
-    fn a_footprint_outside_the_outline_is_unplaced() {
+    fn a_footprint_outside_the_outline_is_off_the_board() {
         let board = board();
-        assert_eq!(unplaced_footprints(&board), Some(vec![Uuid::from_u128(2)]));
+        assert_eq!(off_board_footprints(&board), Some(vec![Uuid::from_u128(2)]));
     }
 
     #[test]
-    fn without_an_outline_nothing_says_what_is_unplaced() {
+    fn without_an_outline_nothing_says_what_is_off_the_board() {
         let mut board = board();
         board.outline.truncate(2);
-        assert_eq!(unplaced_footprints(&board), None);
+        assert_eq!(off_board_footprints(&board), None);
     }
 
     #[test]

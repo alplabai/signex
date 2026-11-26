@@ -131,8 +131,10 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("nets", OperandKind::Text),
     // #2936: one board point `x,y` per id of `ids`, `;` separated.
     ("points", OperandKind::Text),
-    // #2937: a library footprint, `<library>:<footprint>`.
+    // #2937: a library footprint, `<library>:<footprint>`, and what a swap
+    // does with an old pad no new pad takes over (`refuse` or `keep`).
     ("footprint", OperandKind::Text),
+    ("unmatched", OperandKind::Text),
     // #2457, #2941: rooms and Auto Place in Rooms.
     ("margin", OperandKind::Length),
     ("move_parts", OperandKind::Bool),

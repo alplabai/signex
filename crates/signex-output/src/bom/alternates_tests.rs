@@ -33,6 +33,7 @@ fn the_csv_lists_a_lines_alternates_in_order() {
         alternates: vec![BomLineAlternates {
             line,
             rows: vec![ALT_B.into(), ALT_A.into()],
+            unknown: Default::default(),
         }],
         ..BomOptions::default()
     };

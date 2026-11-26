@@ -85,6 +85,8 @@ pub(super) const PROPERTIES: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
         flags: CommandFlags::GUI_ONLY,
+        // It opens the datasheet's address in the system browser.
+        needs_network: true,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

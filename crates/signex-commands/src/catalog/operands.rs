@@ -331,45 +331,6 @@ pub const NEW_PROJECT: &[Operand] = &[
     optional("overrides", OperandKind::Text),
 ];
 
-/// Update PCB without the dialog (#1312, #2470): for the project of
-/// `document` (the project, one of its sheets or its board), `apply=true`
-/// executes the rows ticked by default and `dry_run=true` lists them and
-/// changes nothing. Either answers with the change list. Without `document`
-/// it acts on the active project's board, so `apply=true` alone still runs;
-/// with no board there, or no active project, it is refused, listing boards.
-pub const UPDATE_PCB: &[Operand] = &[
-    optional("document", OperandKind::Document),
-    optional("apply", OperandKind::Bool),
-    optional("dry_run", OperandKind::Bool),
-];
-
-/// New PCB without the dialog (#2232): `profile` is `project` (the default,
-/// the project's own setup), a built-in token or a saved user profile.
-/// `document` is the project (or a document of it) the board joins, else the
-/// project in view; `name` is the board's file in the project folder (#2470).
-pub const NEW_PCB: &[Operand] = &[
-    optional("profile", OperandKind::Text),
-    optional("document", OperandKind::Document),
-    optional("name", OperandKind::Text),
-];
-
-/// Positional Re-Annotate of a board (#2470): `order` is `x_then_y` (the
-/// default) or `y_then_x`, `bottom` is `after_top` (the default) or
-/// `with_top`; `dry_run` lists the renames without making them.
-pub const REANNOTATE_BOARD: &[Operand] = &[
-    required("document", OperandKind::Document),
-    optional("order", OperandKind::Text),
-    optional("bottom", OperandKind::Text),
-    optional("dry_run", OperandKind::Bool),
-];
-
-/// Back Annotate of the project `document` belongs to (a project, its board
-/// or a sheet), with the rows ticked by default (#2470); `dry_run` lists them.
-pub const BACK_ANNOTATE: &[Operand] = &[
-    required("document", OperandKind::Document),
-    optional("dry_run", OperandKind::Bool),
-];
-
 /// New Schematic without the dialog (#2232): `profile` as for `NEW_PCB`;
 /// `name` is the file stem in the project folder (default `Sheet<n>`).
 pub const NEW_SCHEMATIC: &[Operand] = &[
@@ -535,45 +496,6 @@ pub const BOARD_STEP: &[Operand] = &[
     required("path", OperandKind::Path),
     optional("schema", OperandKind::Text),
 ];
-/// `place_board_fill` from its operands (#2470): the rectangle between
-/// `start` and `end` (mm from the board origin, Y up) on the copper `layer`
-/// (`TopCopper`) of the board `document` names. `net` names a board net, or
-/// is empty for no net; left out, the net of the copper under its corners.
-pub const BOARD_FILL: &[Operand] = &[
-    required("document", OperandKind::Document),
-    required("layer", OperandKind::Text),
-    required("start", OperandKind::Point),
-    required("end", OperandKind::Point),
-    optional("net", OperandKind::Text),
-];
-/// `place_board_region` and `place_board_polygon_pour` from their operands
-/// (#2470): the `corners` `<x>,<y>;<x>,<y>;..` (mm from the board origin, Y
-/// up) on the copper `layer` of the board `document` names; `net` as for
-/// [`BOARD_FILL`].
-pub const BOARD_COPPER_AREA: &[Operand] = &[
-    required("document", OperandKind::Document),
-    required("layer", OperandKind::Text),
-    required("corners", OperandKind::Text),
-    optional("net", OperandKind::Text),
-];
-/// `place_board_keepout` (a copper or keep-out `layer`) and
-/// `place_board_pour_cutout` (a copper `layer`) from their operands (#2470):
-/// `corners` as for [`BOARD_COPPER_AREA`]. Neither has a net.
-pub const BOARD_NETLESS_AREA: &[Operand] = &[
-    required("document", OperandKind::Document),
-    required("layer", OperandKind::Text),
-    required("corners", OperandKind::Text),
-];
-/// The Fabrication Outputs dialog's Generate (#2470): which board and the
-/// folder; `kinds` lists the files (the project's ticks when left out),
-/// `name` the file-name stem, `whole_panel` whether a panel is written.
-pub const FABRICATION_OUTPUTS: &[Operand] = &[
-    required("document", OperandKind::Document),
-    required("path", OperandKind::Path),
-    optional("kinds", OperandKind::Text),
-    optional("name", OperandKind::Text),
-    optional("whole_panel", OperandKind::Bool),
-];
 /// `add_board_graphic` (#2424): a drawing of `kind` (`line`, `arc`,
 /// `circle`, `rectangle`, `text_frame`) on the board `document` names. A
 /// line, rectangle or text frame takes `start` and `end`; an arc its centre
@@ -708,22 +630,6 @@ pub const CHECK_REQUIREMENTS: &[Operand] = &[
     required("document", OperandKind::Document),
     optional("baseline", OperandKind::Text),
 ];
-/// `check_board_against_schematic` (#2462): the board of the project the
-/// named document is (or belongs to) against its schematic.
-pub const CHECK_BOARD_AGAINST_SCHEMATIC: &[Operand] =
-    &[required("document", OperandKind::Document)];
-/// `apply_board_schematic_differences` (#2462): the difference ids (as the
-/// check answered them, comma separated) to take to the board and to the
-/// schematic; every other difference is skipped. `expect_revision` is the
-/// board revision the check answered.
-pub const APPLY_BOARD_SCHEMATIC_DIFFERENCES: &[Operand] = &[
-    required("document", OperandKind::Document),
-    optional("to_board", OperandKind::Text),
-    optional("to_schematic", OperandKind::Text),
-    optional("expect_revision", OperandKind::Text),
-];
-/// `board_status` (#2460): the named board's status counters.
-pub const BOARD_STATUS: &[Operand] = &[required("document", OperandKind::Document)];
 /// Select Net and Highlight Net on a board (#2403): the net by name; without
 /// it, the net of the selection or of what is under the cursor.
 pub const BOARD_NET: &[Operand] = &[optional("net", OperandKind::Text)];
@@ -739,14 +645,6 @@ pub const MEASURE_BOARD: &[Operand] = &[
 pub const QUERY_BOARD_NETS: &[Operand] = &[
     required("document", OperandKind::Document),
     optional("net", OperandKind::Text),
-];
-/// `query_library` (#2944): the rows of the open library `library` (its id
-/// or path), or the row `part` names (a row id or a part number), or the
-/// rows holding `text`.
-pub const QUERY_LIBRARY: &[Operand] = &[
-    required("library", OperandKind::Text),
-    optional("part", OperandKind::Text),
-    optional("text", OperandKind::Text),
 ];
 /// `find_similar_items` (#2403): what agrees with the item `id` on the
 /// properties `fields` lists.
@@ -966,24 +864,6 @@ pub const SET_BOARD_PANEL: &[Operand] = &[
     required("field", OperandKind::Text),
     required("value", OperandKind::Text),
 ];
-/// `layout_plan_set` (#2942): one stage of the named board's layout plan
-/// (`placement`, `routing`, `pours`, `checks`) and the settings of that
-/// stage to change, each a comma list (empty clears it); `remove` clears
-/// the whole stage.
-pub const LAYOUT_PLAN_SET: &[Operand] = &[
-    required("document", OperandKind::Document),
-    required("stage", OperandKind::Text),
-    optional("weights", OperandKind::Text),
-    optional("rooms", OperandKind::Text),
-    optional("keep", OperandKind::Text),
-    optional("nets", OperandKind::Text),
-    optional("skip", OperandKind::Text),
-    optional("pours", OperandKind::Text),
-    optional("rules", OperandKind::Text),
-    optional("requirements", OperandKind::Text),
-    optional("remove", OperandKind::Bool),
-];
-
 // The `project_*` commands (#1689-#1693): `document` is the project or any
 // of its documents.
 
@@ -1053,16 +933,6 @@ pub const PROJECT_ENABLE_REQUIREMENT: &[Operand] = &[
     required("requirement", OperandKind::Text),
     required("on", OperandKind::Bool),
 ];
-/// `project_set_rail` (#2943): the rail `net`'s voltage and tolerance as
-/// typed (an empty tolerance clears it), or `remove` to take it out.
-pub const PROJECT_SET_RAIL: &[Operand] = &[
-    required("document", OperandKind::Document),
-    required("net", OperandKind::Text),
-    optional("voltage", OperandKind::Text),
-    optional("tolerance_percent", OperandKind::Text),
-    optional("remove", OperandKind::Bool),
-];
-
 /// `set_layer_stack` (#2401): the named board's whole stack, top to bottom,
 /// as JSON rows (`{"layers": [...]}` or the list); a copper row names the
 /// board layer it was, or none for a new layer.
@@ -1113,5 +983,11 @@ pub const SET_PAD_SHAPE: &[Operand] = &[
     optional("corners", OperandKind::Text),
 ];
 
+mod board;
+mod pcb_sync;
+mod project;
 mod rooms;
+pub use board::*;
+pub use pcb_sync::*;
+pub use project::PROJECT_SET_RAIL;
 pub use rooms::{ARRANGE_ROOM, AUTO_PLACE, CREATE_ROOMS, PLACE_ROOM};

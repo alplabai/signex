@@ -50,11 +50,10 @@ pub(super) const QUERY: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     // #2944: the rows of an open library as the app holds them; reads no
-    // file and reaches no library server, so it is a query like these and
-    // not one of the window-only `library` commands.
+    // file and reaches no library server, so it does not need the network.
     CommandMetadata {
         id: "query_library",
-        category: "file",
+        category: "library",
         label: command_ids::CMD_QUERY_LIBRARY,
         menu_label: None,
         group: CommandGroup::General,

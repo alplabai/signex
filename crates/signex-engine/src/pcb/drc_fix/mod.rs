@@ -2,9 +2,11 @@
 //! ring, hole to hole, silkscreen to pad and solder mask sliver. A fix never
 //! waives a finding and never edits a locked item. A finding it cannot fix,
 //! or whose fix would make a new finding, is left as it is with the reason.
-//! Pure: the board and its rules go in, the commands and what they do come
-//! out, and the caller runs the commands as one undo step. How each fix
-//! works: `docs/DRC_RULES.md`, "Fixing findings".
+//! Pure: the board, its rules and its parts' 3D bodies go in, the commands
+//! and what they do come out, and the caller runs the commands as one undo
+//! step (the engine's lease check runs then). The checks are Run DRC's,
+//! bodies included, so a fix judged clean here is clean to `check_drc`.
+//! How each fix works: `docs/DRC_RULES.md`, "Fixing findings".
 
 mod mask;
 mod moves;
@@ -13,11 +15,11 @@ mod sizes;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use signex_drc::{DrcReport, DrcRules, Violation, ViolationKind, WaiverState};
+use signex_drc::{BodyModels, DrcReport, DrcRules, Violation, ViolationKind, WaiverState};
 use signex_types::object_id::IdSource;
 use signex_types::pcb::PcbBoard;
 
-use super::{BoardCommand, BoardEngine};
+use super::BoardCommand;
 use plan::Plan;
 
 /// How many times one fix is planned again on the board it left while its
@@ -96,8 +98,6 @@ pub enum LeftReason {
     Waived,
     /// The fix would change these locked items (`track <uuid>`, ...).
     Locked(Vec<String>),
-    /// The board's lease check refused the edit.
-    Leased(String),
     /// Nothing the fix may change can clear it, and why.
     CannotChange(&'static str),
     /// Every way tried makes these new findings (their waiver keys).
@@ -115,7 +115,6 @@ impl LeftReason {
             Self::NoFix => "no_fix",
             Self::Waived => "waived",
             Self::Locked(_) => "locked",
-            Self::Leased(_) => "leased",
             Self::CannotChange(_) => "cannot_change",
             Self::WouldMakeNew(_) => "new_violation",
             Self::NotCleared => "not_cleared",
@@ -129,7 +128,6 @@ impl LeftReason {
             Self::NoFix => "this rule has no fix; change the board by hand".into(),
             Self::Waived => "it is waived; unwaive it first to fix it".into(),
             Self::Locked(names) => format!("the fix would change {}, locked", names.join(", ")),
-            Self::Leased(why) => format!("the board refused the edit: {why}"),
             Self::CannotChange(why) => (*why).to_string(),
             Self::WouldMakeNew(keys) => {
                 format!("every fix tried makes a new finding ({})", keys.join(", "))
@@ -179,21 +177,24 @@ pub enum FixScopeError {
     NoSuchFinding(String),
 }
 
-/// Fix the findings `scope` names on `engine`'s board, checked with
-/// `rules`. Each fix is tried on a copy and kept only when its finding is
-/// gone and no new one appeared; nothing here changes the board.
+/// Fix the findings `scope` names on `board`, checked with `rules` and the
+/// parts' 3D `models` (empty when no rule measures a body). Each fix is
+/// tried on a copy and kept only when its finding is gone and no new one
+/// appeared; nothing here changes the board. Pure and blocking: run it off
+/// the UI thread.
 pub fn fix_findings(
-    engine: &BoardEngine,
+    board: &PcbBoard,
     rules: &DrcRules,
+    models: &BodyModels,
     scope: &FixScope,
     new_ids: &mut dyn IdSource,
 ) -> Result<FixRun, FixScopeError> {
-    let board = engine.board().clone();
-    let report = signex_drc::run(&board, rules);
+    let board = board.clone();
+    let report = signex_drc::run_with_bodies(&board, rules, models);
     let targets = targets(&report, &board, scope)?;
     let mut session = Session {
-        engine,
         rules,
+        models,
         board,
         report,
         commands: Vec::new(),
@@ -283,8 +284,8 @@ fn targets(
 
 /// The board as the fixes so far left it.
 struct Session<'a> {
-    engine: &'a BoardEngine,
     rules: &'a DrcRules,
+    models: &'a BodyModels,
     board: PcbBoard,
     report: DrcReport,
     commands: Vec<BoardCommand>,
@@ -351,9 +352,6 @@ impl Session<'_> {
         };
         let mut step = first;
         for _ in 0..MAX_ATTEMPTS {
-            self.engine
-                .check_lease(&step.commands)
-                .map_err(|e| LeftReason::Leased(e.to_string()))?;
             for command in &step.commands {
                 command
                     .clone()
@@ -366,7 +364,7 @@ impl Session<'_> {
                     trial.changed.push(id);
                 }
             }
-            trial.report = signex_drc::run(&trial.board, self.rules);
+            trial.report = signex_drc::run_with_bodies(&trial.board, self.rules, self.models);
             let made = made_new(&baseline, &trial.report, &trial.board);
             if !made.is_empty() {
                 return Err(LeftReason::WouldMakeNew(made));

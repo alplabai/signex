@@ -82,7 +82,7 @@ impl Signex {
                 pcb_geom::connection_counts(board, &pcb_geom::ratsnest_with_fills(board, &fills))
             }
         };
-        let unplaced = pcb_geom::unplaced_footprints(board).map(|ids| {
+        let off_board = pcb_geom::off_board_footprints(board).map(|ids| {
             let ids: Vec<String> = ids.iter().map(ToString::to_string).collect();
             json!({ "count": ids.len(), "ids": ids })
         });
@@ -104,7 +104,7 @@ impl Signex {
         json!({
             "board": path.display().to_string(),
             "revision": revision,
-            "parts": { "total": board.footprints.len(), "unplaced": unplaced },
+            "parts": { "total": board.footprints.len(), "off_board": off_board },
             "connections": {
                 "total": counts.total,
                 "routed": counts.routed(),
