@@ -160,4 +160,13 @@ define_ids! {
     BOARD_SKETCH_CHECK_CORNER_TIGHT_PROFILE = "board-sketch-check-corner-tight-profile";
     BOARD_SKETCH_CHECK_SLOT_NARROW_PROFILE = "board-sketch-check-slot-narrow-profile";
     BOARD_SKETCH_BAKE_DOF = "board-sketch-bake-dof";
+    // open-outline refusal toast (mockup row 110)
+    BOARD_SKETCH_REFUSED_OUTLINE_OPEN = "board-sketch-refused-outline-open";
+    BOARD_SKETCH_REFUSED_PROFILE_OPEN = "board-sketch-refused-profile-open";
+    BOARD_SKETCH_REFUSED_OUTLINE_NOT_CLOSED = "board-sketch-refused-outline-not-closed";
+    BOARD_SKETCH_REFUSED_PROFILE_NOT_CLOSED = "board-sketch-refused-profile-not-closed";
+    BOARD_SKETCH_REFUSED_PLACE = "board-sketch-refused-place";
+    BOARD_SKETCH_REFUSED_PLACE_END = "board-sketch-refused-place-end";
+    BOARD_SKETCH_REFUSED_PLACE_TOOLTIP = "board-sketch-refused-place-tooltip";
+    BOARD_SKETCH_REFUSED_DISMISS = "board-sketch-refused-dismiss";
 }

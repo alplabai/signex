@@ -78,7 +78,10 @@ pub(crate) fn notice_says_held(f: &Fixture) -> bool {
         .as_ref()
         .is_some_and(|notice| {
             notice.detail.render_en_us().contains(&held)
-                && notice.detail.render_en_us().contains("closed profile")
+                && notice
+                    .detail
+                    .render_en_us()
+                    .contains("the outline is not closed at (")
         })
 }
 

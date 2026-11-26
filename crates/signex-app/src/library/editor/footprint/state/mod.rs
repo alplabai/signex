@@ -319,6 +319,9 @@ pub struct FootprintEditorState {
     pub context_menu: Option<FootprintContextMenuState>,
     /// v0.26-C — one-shot "fit canvas to content" request.
     pub fit_pending: bool,
+    /// What that fit frames, `(min_x, min_y, max_x, max_y)` mm; `None`
+    /// frames the content. A board sketch refusal's gap link sets it.
+    pub fit_target_mm: Option<(f64, f64, f64, f64)>,
     /// The zoom pill's last `-` / `+` click, applied once by the canvas.
     pub zoom_request: ZoomRequest,
     /// The pointer as the edge pan reads it, and the pan the widget-held
@@ -470,6 +473,7 @@ impl FootprintEditorState {
             numeric_buffers: std::collections::HashMap::new(),
             context_menu: None,
             fit_pending: false,
+            fit_target_mm: None,
             zoom_request: ZoomRequest::default(),
             edge_pan: Default::default(),
             board_backdrop: None,

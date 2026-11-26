@@ -39,7 +39,7 @@ pub(super) fn send(app: &mut Signex, message: Message) {
 }
 
 /// A two-layer board with a 40 x 25 mm outline, open and in sketch mode.
-fn sketching() -> (Signex, tempfile::TempDir) {
+pub(super) fn sketching() -> (Signex, tempfile::TempDir) {
     sketching_with(|_| {})
 }
 

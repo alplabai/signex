@@ -55,6 +55,8 @@ impl Signex {
                     session.editor.state.sketch_exit.confirming_discard = false;
                 }
             }
+            BoardSketchMsg::RefusalGapClicked => self.frame_board_sketch_refusal_gap(),
+            BoardSketchMsg::RefusalToastDismissed => self.dismiss_board_sketch_refusal(),
         }
         self.refresh_panel_ctx();
         Task::none()
@@ -378,7 +380,8 @@ impl Signex {
     }
 
     /// Bake the working copy and run it as one board command. Whether the
-    /// board took it; a refusal is told on the notice card and in Messages.
+    /// board took it; a refusal is told in the error toast and in Messages
+    /// (`board_sketch_refusal`).
     fn commit_board_sketch(&mut self) -> bool {
         let Some(session) = self.interaction_state.board_sketch.as_ref() else {
             return false;
@@ -393,7 +396,7 @@ impl Signex {
         let (command, locked) = match board_sketch_command(sketch, board) {
             Ok(made) => made,
             Err(error) => {
-                self.refuse_board_sketch(error.to_string());
+                self.refuse_board_sketch_bake(&error);
                 return false;
             }
         };
@@ -421,18 +424,6 @@ impl Signex {
             session.mark_committed(stored, board);
         }
         true
-    }
-
-    /// The board did not take the sketch: say why on the notice card, in
-    /// Messages and in the mode's bar. The board and the copy are unchanged.
-    fn refuse_board_sketch(&mut self, reason: String) {
-        let detail = Translatable::new(ids::BOARD_SKETCH_REFUSED).arg("reason", reason);
-        crate::diagnostics::log_warning(detail.render_en_us());
-        // The bar keeps the message, so it follows a language switch.
-        if let Some(session) = self.interaction_state.board_sketch.as_mut() {
-            session.refusal = Some(detail.clone());
-        }
-        self.document_state.error_notice = Some(ErrorNotice::new(ids::BOARD_SKETCH_TITLE, detail));
     }
 
     /// Whether a sketch editor message for `path` is the board sketch's: it
@@ -586,3 +577,7 @@ mod parameter_tests;
 #[cfg(test)]
 #[path = "board_sketch_pattern_tests.rs"]
 mod pattern_tests;
+
+#[cfg(test)]
+#[path = "board_sketch_refusal_tests.rs"]
+mod refusal_tests;

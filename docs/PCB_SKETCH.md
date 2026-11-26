@@ -195,8 +195,14 @@ Bake**.
   mode. A commit runs `bake_board` on the copy and, if it bakes, executes
   `BoardCommand::set_board_sketch` as one board step: undo, dirty and save
   are those of any board edit. If the bake (or the board command) refuses,
-  the error text is shown on the notice card, in Messages and in the mode
-  bar; the board is unchanged and the mode stays on.
+  the board is unchanged and the mode stays on, and the reason is told in
+  Messages and in an error toast just above the mode bar (mockup row 110,
+  `handlers/board_sketch_refusal.rs`), until its close button or the next
+  commit. A profile that is not closed is named by where it is open, the
+  same place Outline checks gives, never by an edge id; the toast's "Gap at
+  (x, y) mm" is a link that frames the gap on the canvas
+  (`FootprintEditorState::fit_target_mm`, taken by the canvas's pending
+  fit). A refusal for a board not in view goes on the notice card instead.
 - **Discard changes** ends the mode without committing. When the copy
   differs from what the board last took it asks first ("Keep editing" or
   "Discard changes"). It never writes.
