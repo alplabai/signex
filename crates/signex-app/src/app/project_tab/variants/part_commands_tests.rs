@@ -299,3 +299,83 @@ fn a_channels_copy_is_set_alone_and_every_channel_in_one_step() {
     assert!(app.step_project_tab_history(id, true));
     assert!(settings(&app).is_empty(), "one step takes every channel");
 }
+
+/// Mockup rows 208 and 209: `scope=channels` gives every channel's copy the
+/// alternate, or the value, at once, one undo step each; the canvas's
+/// picker and popover apply the same section command.
+#[test]
+fn an_alternate_and_a_value_for_every_channel_are_one_step_each() {
+    let (mut app, id, _dir) = repeated();
+    let alternate = [
+        "variant=Lite",
+        "designator=CH1_R5",
+        "mpn=RC0603FR-0747KL",
+        "scope=channels",
+    ];
+    let value = answer(&mut app, "project_set_variant_alternate", &alternate);
+    assert_eq!(value["changed"], true);
+    assert_eq!(value["parts"].as_array().map(Vec::len), Some(3));
+    let entries = settings(&app).parts;
+    assert_eq!(entries.len(), 3);
+    assert!(
+        entries
+            .iter()
+            .all(|entry| entry.parameters[MPN_PARAMETER] == "RC0603FR-0747KL")
+    );
+    assert!(app.step_project_tab_history(id, true));
+    assert!(settings(&app).is_empty(), "one step takes every channel");
+
+    let set = [
+        "variant=Lite",
+        "designator=CH2_R5",
+        "field=Value",
+        "value=47k",
+        "scope=channels",
+    ];
+    let _ = answer(&mut app, "project_set_variant_override", &set);
+    let entries = settings(&app).parts;
+    assert_eq!(entries.len(), 3);
+    assert!(
+        entries
+            .iter()
+            .all(|entry| entry.parameters[VALUE_PARAMETER] == "47k")
+    );
+    assert!(app.step_project_tab_history(id, true));
+    assert!(settings(&app).is_empty(), "one step");
+
+    // `part` (the default) sets the copy named only.
+    let one = [
+        "variant=Lite",
+        "designator=CH2_R5",
+        "field=Value",
+        "value=47k",
+    ];
+    let _ = answer(&mut app, "project_set_variant_override", &one);
+    assert_eq!(settings(&app).parts.len(), 1);
+}
+
+/// A bad scope, and every channel of a part on a plain sheet, are refused
+/// for the alternate and the value as for the fit, and change nothing.
+#[test]
+fn an_alternate_or_a_value_with_a_bad_scope_is_refused() {
+    let (mut app, _id, _dir) = app();
+    let refused = refusal(
+        &mut app,
+        "project_set_variant_alternate",
+        &["variant=Lite", "designator=R1", "mpn=X1", "scope=all"],
+    );
+    assert!(refused.contains("part or channels"), "{refused}");
+    let refused = refusal(
+        &mut app,
+        "project_set_variant_override",
+        &[
+            "variant=Lite",
+            "designator=R1",
+            "field=Value",
+            "value=2k",
+            "scope=channels",
+        ],
+    );
+    assert!(refused.contains("not on a repeated sheet"), "{refused}");
+    assert!(settings(&app).is_empty());
+}

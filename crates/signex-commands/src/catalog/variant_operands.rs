@@ -16,7 +16,7 @@ pub const PROJECT_VARIANT_FIT: &[Operand] = &[
 ];
 /// `project_set_variant_alternate`: the part in `variant` replaced by the
 /// part numbered `mpn`, with its `value` and `footprint`; none is the
-/// part's own again.
+/// part's own again. `scope` as for the fit.
 pub const PROJECT_VARIANT_ALTERNATE: &[Operand] = &[
     required("document", OperandKind::Document),
     required("variant", OperandKind::Text),
@@ -24,15 +24,18 @@ pub const PROJECT_VARIANT_ALTERNATE: &[Operand] = &[
     optional("mpn", OperandKind::Text),
     optional("value", OperandKind::Text),
     optional("footprint", OperandKind::Text),
+    optional("scope", OperandKind::Text),
 ];
 /// `project_set_variant_override`: the part's `field` (`Value`, `Footprint`
 /// or a field name) in `variant`; no `value` is the part's own again.
+/// `scope` as for the fit.
 pub const PROJECT_VARIANT_OVERRIDE: &[Operand] = &[
     required("document", OperandKind::Document),
     required("variant", OperandKind::Text),
     required("designator", OperandKind::Text),
     required("field", OperandKind::Text),
     optional("value", OperandKind::Text),
+    optional("scope", OperandKind::Text),
 ];
 /// `project_duplicate_variant`: a copy of the variant `name` (`Base` copies
 /// Base) named `value`, by default the first free "<name> copy".

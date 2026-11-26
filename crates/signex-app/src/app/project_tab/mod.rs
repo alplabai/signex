@@ -71,8 +71,8 @@ pub use row_drag::RowDragMsg;
 pub(crate) use sheets::sheet_thumbnail;
 pub use variants::VariantManagerMsg;
 pub(crate) use variants::{
-    project_duplicate_variant, project_set_variant_alternate, project_set_variant_fit,
-    project_set_variant_override,
+    alternate_parameters, project_duplicate_variant, project_set_variant_alternate,
+    project_set_variant_fit, project_set_variant_override, variant_parameters_command,
 };
 
 pub use crate::app::core::row_drag::RowDrag;

@@ -131,9 +131,11 @@ message. The chrome catalog draws a sample of it.
   card per variant
   (parts fitted, cost "—" while no prices are known, changes against Base)
   and the parts matrix: one row per part, a column per variant, Fitted or
-  Not fitted, only cells that differ from Base coloured; a cell with a value
-  of its own shows the value and what it replaces (value, footprint,
-  override). A click selects a cell and the right pane shows that part in
+  Not fitted, only cells that differ from Base coloured; a cell whose part
+  uses an alternate shows its part number on the info tint (mockup row
+  208), and a cell with a value of its own shows the value and what it
+  replaces (value, footprint, override); hovering either says what the
+  variant sets. A click selects a cell and the right pane shows that part in
   that variant: a Fitting switch (Fitted, Not fitted; Alternate is greyed,
   not built yet; As on the sheets drops the cell's own fit; picking the fit
   the sheets already give records nothing), the parameter overrides
@@ -298,6 +300,55 @@ The Preferences values seed a new project (its ERC rules and its Annotate
 undo choice) and are the default of a project that stores none. They never
 overwrite a value the project stores.
 
+## Alternate part and variant value on the canvas
+
+Right-click one placed part in a variant ▸ In variant ▸ Alternate… (mockup
+row 208) opens the Alternate part picker over the editor; Edit value for
+this variant… (mockup row 209) opens a popover where the menu opened. Both
+are greyed in Base, without one part selected and on a repeated sheet
+before a compile. Code: `crates/signex-app/src/app/variant_part_edit/`.
+
+- **Picker.** The Base part on top (MPN, manufacturer, value, footprint,
+  pins). Candidates: the manufacturer alternates of the library row the part
+  was placed from, then a search over the project libraries for the typed
+  words (part numbers, manufacturer, description, value, internal number;
+  the part's own part number left out; the first 20 shown with the count).
+  The libraries are read off the update thread on open and on each change of
+  the search; a read the picker no longer waits for is dropped. A row shows
+  MPN, manufacturer, value, footprint (amber when it differs from Base),
+  stock from the cached prices ("—" when unknown), the library's status
+  (an alternate's approval, a row's lifecycle state) and "used in <variant>"
+  when another variant already uses that part number for the part. Same
+  footprint only hides the rest. The compare strip of the picked row: pins
+  (numbers and names), footprint, and what the variant gets: the part
+  number, and the value and footprint where they differ from the placed
+  part's. A difference warns and Apply stays live (DECISIONS 2026-11-26).
+- **Popover.** Parameter (Value by default; the list holds the part's Base
+  parameters, an override already set shown in orange), Base read-only, the
+  variant's value, then Reset to base, Cancel and OK. An empty field is not a
+  value: OK is greyed and says so (DECISIONS 2026-11-26).
+- **Scope.** On a channel tab: This channel only or All channels, All
+  channels by default. On Editor the edit sets every channel's copy; on a
+  sheet that is not repeated, the part.
+- **Applying.** Apply, OK and Reset to base build the section command the
+  catalog commands `project_set_variant_alternate` and
+  `project_set_variant_override` build (`variant_parameters_command`): one
+  part is `SetVariantPartParameters` or `SetVariantPartParameter`, every
+  channel's copy `SetVariantPartsParameters`. Each is one step of the General
+  history. A refusal keeps the card open with its reason; Esc and a click
+  outside cancel.
+- **Canvas marks.** In the active variant a part with an alternate draws a
+  small `alt` tag by its designator, and a part with a value of its own a
+  `Δ` by its value (the value itself is drawn by the canvas's variant
+  values). Hovering a mark names the variant, what it sets and the Base
+  value. The marks are a layer of widgets over the canvas, placed through
+  the live camera; Base marks nothing.
+
+Not built: the value drawn in the accent colour, the toast with Undo after
+Apply (Messages says what changed), the stock and lifecycle of a
+manufacturer alternate (the library keeps them per row), and opening the
+picker from a Variant Manager cell.
+
 ## Commands
 
 `project_settings document=<project or any of its documents>` answers every
@@ -367,14 +418,16 @@ null for as on the sheets, and its `parameters`):
 | Command | Operands |
 |---|---|
 | `project_set_variant_fit` | `variant`, `designator`, `fitted` optional (none is as on the sheets), `scope` `part` (default) or `channels` (every channel's copy of a part on a repeated sheet) |
-| `project_set_variant_alternate` | `variant`, `designator`, `mpn`, `value`, `footprint`, each optional; one left out is the part's own again, none is the part itself again; a value or footprint needs `mpn` |
-| `project_set_variant_override` | `variant`, `designator`, `field` (`Value`, `Footprint` or a field name), `value` optional; none is the Base value again |
+| `project_set_variant_alternate` | `variant`, `designator`, `mpn`, `value`, `footprint`, each optional; one left out is the part's own again, none is the part itself again; a value or footprint needs `mpn`; `scope` as for the fit |
+| `project_set_variant_override` | `variant`, `designator`, `field` (`Value`, `Footprint` or a field name), `value` optional; none is the Base value again; `scope` as for the fit |
 | `project_duplicate_variant` | `name` (the variant to copy, or `Base`), `value` optional (the copy's name; none is the first free "<name> copy") |
 
 Picking the fit the sheets already give a part that sets none records
 nothing (`changed` false), as the Fitting switch does. An alternate part is
 its part number (the `MPN` field), value and footprint set together as one
-step; the part picker that chooses one is not built.
+step. On the canvas, In variant ▸ Alternate… and Edit value for this
+variant… make the same edits through the same section commands; see
+"Alternate part and variant value on the canvas" below.
 `project_duplicate_variant` answers `name`, the copy's name. Set as default
 is `project_set_default_variant`. A part the read does not list, a `scope`
 of `channels` on a part that is not on a repeated sheet, Base and an

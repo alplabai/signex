@@ -98,6 +98,9 @@ pub(crate) enum OverlayId {
     UnionPopover,
     /// Edit ▸ Paste Special (mockup row 155).
     SmartPaste,
+    /// In variant ▸ Alternate… / Edit value for this variant… (mockup rows
+    /// 208, 209): the picker, or the popover at the part.
+    VariantPartEdit,
     KeyboardShortcuts,
     About,
     PassiveCalculator,
@@ -184,7 +187,7 @@ const PRE_BLOCKING: usize = 5;
 /// behaviour change to both the paint stack and the Esc precedence, and
 /// `paint_order_is_exhaustive_and_unique` keeps it honest about covering
 /// every [`OverlayId`] exactly once.
-pub(crate) const PAINT_ORDER: [OverlayId; 85] = [
+pub(crate) const PAINT_ORDER: [OverlayId; 86] = [
     OverlayId::ErrorNotice,
     OverlayId::NetlistIncompletePrompt,
     OverlayId::PrintPreview,
@@ -225,6 +228,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 85] = [
     OverlayId::PasteArray,
     OverlayId::UnionPopover,
     OverlayId::SmartPaste,
+    OverlayId::VariantPartEdit,
     OverlayId::KeyboardShortcuts,
     OverlayId::About,
     OverlayId::PassiveCalculator,
@@ -370,6 +374,7 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::PasteArray
         | OverlayId::UnionPopover
         | OverlayId::SmartPaste
+        | OverlayId::VariantPartEdit
         | OverlayId::KeyboardShortcuts
         | OverlayId::About
         | OverlayId::PassiveCalculator
@@ -438,6 +443,9 @@ pub(crate) fn has_menu_backdrop(id: OverlayId) -> bool {
             | OverlayId::GridPicker
             | OverlayId::UnionPopover
             | OverlayId::ZoomPresets
+            // The Edit value popover is laid like a menu; the picker's
+            // click-outside layer stops the wheel itself.
+            | OverlayId::VariantPartEdit
     )
 }
 
@@ -609,6 +617,7 @@ impl Signex {
             OverlayId::PasteArray => layers.extend(self.paste_array_overlay()),
             OverlayId::UnionPopover => layers.extend(self.union_popover_overlay()),
             OverlayId::SmartPaste => layers.extend(self.smart_paste_overlay()),
+            OverlayId::VariantPartEdit => layers.extend(self.variant_part_edit_overlay(window_id)),
             OverlayId::KeyboardShortcuts => layers.extend(self.keyboard_shortcuts_overlay()),
             OverlayId::About => layers.extend(self.about_overlay()),
             OverlayId::PassiveCalculator => layers.extend(self.passive_calculator_overlay()),

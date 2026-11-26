@@ -34,8 +34,8 @@ project_set_default_variant	design	Choose the default variant of the project	-	G
 compare_variants	design	Compare two variants of the project	-	General	-	-	Always	-	document:document,from:text?,to:text?
 variant_bom	design	Read the BOM of a variant of the project	-	General	-	-	Always	-	document:document,name:text?
 project_set_variant_fit	design	Set whether a variant fits a part of the project	-	General	-	-	Always	mutates_doc,undoable	document:document,variant:text,designator:text,fitted:bool?,scope:text?
-project_set_variant_alternate	design	Set the alternate part a variant uses for a part of the project	-	General	-	-	Always	mutates_doc,undoable	document:document,variant:text,designator:text,mpn:text?,value:text?,footprint:text?
-project_set_variant_override	design	Set a parameter value a variant gives a part of the project	-	General	-	-	Always	mutates_doc,undoable	document:document,variant:text,designator:text,field:text,value:text?
+project_set_variant_alternate	design	Set the alternate part a variant uses for a part of the project	-	General	-	-	Always	mutates_doc,undoable	document:document,variant:text,designator:text,mpn:text?,value:text?,footprint:text?,scope:text?
+project_set_variant_override	design	Set a parameter value a variant gives a part of the project	-	General	-	-	Always	mutates_doc,undoable	document:document,variant:text,designator:text,field:text,value:text?,scope:text?
 project_duplicate_variant	design	Duplicate a variant of the project	-	General	-	-	Always	mutates_doc,undoable	document:document,name:text,value:text?
 project_move_library	design	Move a library in the library order of the project	-	General	-	-	Always	mutates_doc,undoable	document:document,library:text,direction:text
 project_set_annotate_undo	design	Set how many undo steps an annotate run of the project is	-	General	-	-	Always	mutates_doc,undoable	document:document,value:text?

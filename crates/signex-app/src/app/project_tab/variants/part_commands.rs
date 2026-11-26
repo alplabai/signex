@@ -121,16 +121,46 @@ fn with_parts(app: &Signex, named: &NamedPart, parts: &[PartRef], ran: Ran) -> R
     (CommandOutcome::Answered(answer), task)
 }
 
+/// Whether `scope` asks for every channel's copy (`channels`) or the copy
+/// named (`part`, the default); refused for anything else.
+fn every_channel(args: &CommandArgs) -> Result<bool, Ran> {
+    match text(args, "scope") {
+        None | Some("part") => Ok(false),
+        Some("channels") => Ok(true),
+        Some(_) => Err(declined(Translatable::new(ids::VARIANT_COMMAND_BAD_SCOPE))),
+    }
+}
+
+/// The parts an edit names: the copy `named` lists, or every channel's copy
+/// of it; refused for every channel of a part on a sheet that is not
+/// repeated.
+fn edited_parts(named: &NamedPart, every_channel: bool) -> Result<Vec<PartRef>, Ran> {
+    if !every_channel {
+        return Ok(vec![named.part_ref()]);
+    }
+    let Some(channel) = &named.row().channel else {
+        let reason = Translatable::new(ids::VARIANT_COMMAND_NOT_REPEATED);
+        return Err(declined(
+            reason.arg("designator", named.row().designator.clone()),
+        ));
+    };
+    Ok(named
+        .matrix
+        .channel_copies(&channel.part)
+        .iter()
+        .map(|row| PartRef::new(row.designator.clone(), row.link.clone()))
+        .collect())
+}
+
 /// `project_set_variant_fit {document, variant, designator, fitted?,
 /// scope?}`: the part fitted or not in `variant`, or as on its sheets with
 /// no `fitted`. `scope` `channels` sets every channel's copy of a part on a
 /// repeated sheet at once; `part` (the default) the copy named. Picking
 /// the fit the sheets already give a part that sets none changes nothing.
 pub(crate) fn project_set_variant_fit(app: &mut Signex, args: &CommandArgs) -> Ran {
-    let every_channel = match text(args, "scope") {
-        None | Some("part") => false,
-        Some("channels") => true,
-        Some(_) => return declined(Translatable::new(ids::VARIANT_COMMAND_BAD_SCOPE)),
+    let every_channel = match every_channel(args) {
+        Ok(every_channel) => every_channel,
+        Err(ran) => return ran,
     };
     let named = match named_part(app, args) {
         Ok(named) => named,
@@ -165,16 +195,10 @@ fn fit_every_channel(
     named: &NamedPart,
     fitted: Option<bool>,
 ) -> Ran {
-    let Some(channel) = &named.row().channel else {
-        let reason = Translatable::new(ids::VARIANT_COMMAND_NOT_REPEATED);
-        return declined(reason.arg("designator", named.row().designator.clone()));
+    let parts = match edited_parts(named, true) {
+        Ok(parts) => parts,
+        Err(ran) => return ran,
     };
-    let parts: Vec<PartRef> = named
-        .matrix
-        .channel_copies(&channel.part)
-        .iter()
-        .map(|row| PartRef::new(row.designator.clone(), row.link.clone()))
-        .collect();
     let command = ProjectSectionCommand::SetVariantPartsFit {
         variant: named.variant.clone(),
         parts: parts.clone(),
@@ -199,10 +223,89 @@ fn fit_repeats(app: &Signex, named: &NamedPart, picked: bool) -> bool {
     )
 }
 
+/// The parameters an alternate part sets: its part number, value and
+/// footprint, each `None` (the part's own again) when not given. The one
+/// shape `project_set_variant_alternate` and the Alternate part picker
+/// (mockup row 208) both write.
+pub(crate) fn alternate_parameters(
+    mpn: Option<String>,
+    value: Option<String>,
+    footprint: Option<String>,
+) -> Vec<(String, Option<String>)> {
+    vec![
+        (MPN_PARAMETER.to_string(), mpn),
+        (VALUE_PARAMETER.to_string(), value),
+        (FOOTPRINT_PARAMETER.to_string(), footprint),
+    ]
+}
+
+/// The section command that gives `parts` the values `parameters` in
+/// `variant`, as one step: the one edit `project_set_variant_alternate`,
+/// `project_set_variant_override` and the canvas's Alternate part picker
+/// and Edit value popover (mockup rows 208 and 209) all apply. `None` for
+/// no part.
+pub(crate) fn variant_parameters_command(
+    variant: &str,
+    parts: &[PartRef],
+    parameters: Vec<(String, Option<String>)>,
+) -> Option<ProjectSectionCommand> {
+    match parts {
+        [] => None,
+        [part] => Some(match <[_; 1]>::try_from(parameters) {
+            Ok([(parameter, value)]) => ProjectSectionCommand::SetVariantPartParameter {
+                variant: variant.to_string(),
+                designator: part.designator.clone(),
+                part: part.part.clone(),
+                parameter,
+                value,
+            },
+            Err(parameters) => ProjectSectionCommand::SetVariantPartParameters {
+                variant: variant.to_string(),
+                designator: part.designator.clone(),
+                part: part.part.clone(),
+                parameters,
+            },
+        }),
+        _ => Some(ProjectSectionCommand::SetVariantPartsParameters {
+            variant: variant.to_string(),
+            parts: parts.to_vec(),
+            parameters,
+        }),
+    }
+}
+
+/// Apply the parameters `parameters` to the parts `args` names (`scope`
+/// as in [`project_set_variant_fit`]) and answer with their settings.
+fn set_parameters(
+    app: &mut Signex,
+    args: &CommandArgs,
+    parameters: Vec<(String, Option<String>)>,
+) -> Ran {
+    let every_channel = match every_channel(args) {
+        Ok(every_channel) => every_channel,
+        Err(ran) => return ran,
+    };
+    let named = match named_part(app, args) {
+        Ok(named) => named,
+        Err(ran) => return ran,
+    };
+    let parts = match edited_parts(&named, every_channel) {
+        Ok(parts) => parts,
+        Err(ran) => return ran,
+    };
+    let Some(command) = variant_parameters_command(&named.variant, &parts, parameters) else {
+        let reason = Translatable::new(ids::VARIANT_COMMAND_NO_PART);
+        return declined(reason.arg("designator", named.row().designator.clone()));
+    };
+    let ran = variants_edit(app, args, command);
+    with_parts(app, &named, &parts, ran)
+}
+
 /// `project_set_variant_alternate {document, variant, designator, mpn?,
-/// value?, footprint?}`: the part replaced in `variant` by the part
+/// value?, footprint?, scope?}`: the part replaced in `variant` by the part
 /// numbered `mpn`, with its value and footprint, as one step; each one left
 /// out is the part's own again. With none, the part is its own again.
+/// `scope` as in [`project_set_variant_fit`].
 pub(crate) fn project_set_variant_alternate(app: &mut Signex, args: &CommandArgs) -> Ran {
     let given = |name: &str| {
         text(args, name)
@@ -214,48 +317,20 @@ pub(crate) fn project_set_variant_alternate(app: &mut Signex, args: &CommandArgs
     if mpn.is_none() && (value.is_some() || footprint.is_some()) {
         return declined(Translatable::new(ids::VARIANT_COMMAND_ALTERNATE_NEEDS_MPN));
     }
-    let named = match named_part(app, args) {
-        Ok(named) => named,
-        Err(ran) => return ran,
-    };
-    let part = named.part_ref();
-    let command = ProjectSectionCommand::SetVariantPartParameters {
-        variant: named.variant.clone(),
-        designator: part.designator.clone(),
-        part: part.part.clone(),
-        parameters: vec![
-            (MPN_PARAMETER.to_string(), mpn),
-            (VALUE_PARAMETER.to_string(), value),
-            (FOOTPRINT_PARAMETER.to_string(), footprint),
-        ],
-    };
-    let ran = variants_edit(app, args, command);
-    with_parts(app, &named, &[part], ran)
+    set_parameters(app, args, alternate_parameters(mpn, value, footprint))
 }
 
 /// `project_set_variant_override {document, variant, designator, field,
-/// value?}`: the part's `field` (`Value`, `Footprint` or a field name) in
-/// `variant`; an empty or missing `value` is the part's own value again, as
-/// an emptied override in the Variant Manager.
+/// value?, scope?}`: the part's `field` (`Value`, `Footprint` or a field
+/// name) in `variant`; an empty or missing `value` is the part's own value
+/// again, as an emptied override in the Variant Manager. `scope` as in
+/// [`project_set_variant_fit`].
 pub(crate) fn project_set_variant_override(app: &mut Signex, args: &CommandArgs) -> Ran {
     let field = text(args, "field").unwrap_or_default().to_string();
     let value = text(args, "value")
         .filter(|value| !value.trim().is_empty())
         .map(str::to_string);
-    let named = match named_part(app, args) {
-        Ok(named) => named,
-        Err(ran) => return ran,
-    };
-    let part = named.part_ref();
-    let command = ProjectSectionCommand::SetVariantPartParameter {
-        variant: named.variant.clone(),
-        designator: part.designator.clone(),
-        part: part.part.clone(),
-        parameter: field,
-        value,
-    };
-    let ran = variants_edit(app, args, command);
-    with_parts(app, &named, &[part], ran)
+    set_parameters(app, args, vec![(field, value)])
 }
 
 /// `project_duplicate_variant {document, name, value?}`: a copy of the
