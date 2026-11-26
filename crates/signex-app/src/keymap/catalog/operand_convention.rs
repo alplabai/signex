@@ -115,8 +115,11 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("diff_pair_class", OperandKind::Text),
     ("via_hole", OperandKind::Text),
     ("current", OperandKind::Text),
-    // #1283: the template a new sheet or project starts from.
+    // #1283: the template a new sheet or project starts from; #1988: a BOM
+    // template's text. #1988 also adds a project variant and the BOM grouping.
     ("template", OperandKind::Text),
+    ("variant", OperandKind::Text),
+    ("grouping", OperandKind::Text),
 ];
 
 /// The commands whose `ids` is still text, not targets (#2326): a design

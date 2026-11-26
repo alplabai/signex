@@ -406,10 +406,12 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Query,
         &[Settings],
     ),
-    // Read: operands only.
+    // Read: operands only. `bom_lines` (#1988) reads the named sheet's
+    // project, its open board and the library's cached prices, as documents.
     (
         &[
             "board_panel",
+            "bom_lines",
             "find_items",
             "find_similar_items",
             "measure_board",

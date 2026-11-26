@@ -626,6 +626,15 @@ pub const QUERY_PINS: &[Operand] = &[
     required("document", OperandKind::Document),
     required("designator", OperandKind::Text),
 ];
+/// `bom_lines` (#1988): the BOM of the named sheet's project; `template` is
+/// a BOM template's text (`snxbomt/1`), `variant` a variant of the project
+/// or `Base`, `grouping` one of `grouped`, `ungrouped` and `flat`.
+pub const BOM_LINES: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("template", OperandKind::Text),
+    optional("variant", OperandKind::Text),
+    optional("grouping", OperandKind::Text),
+];
 /// `check_erc` (#2199): ERC on the project of the named sheet, answered as a
 /// check report; `baseline` is an earlier answer's `run`.
 pub const CHECK_ERC: &[Operand] = &[

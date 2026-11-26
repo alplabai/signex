@@ -106,7 +106,8 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   the board queries `measure_board`,
   `query_board_nets` and `find_similar_items` (#2403), and the board's panel
   `board_panel` (#2410), and the Project tab's `project_settings`
-  (#1689-#1693);
+  (#1689-#1693), and the BOM's `bom_lines` (#1988; [CLI.md](CLI.md), "BOM
+  lines");
 - a command that names its document with a required `document` operand and
   takes no file path (the placements' optional `document` does not count; they
   stay reachable through `apply_edits`): today `apply_edits`, `revert`, `color_net`,

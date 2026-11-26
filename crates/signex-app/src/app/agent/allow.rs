@@ -106,6 +106,8 @@ mod tests {
                 "board_report_net_length",
                 "board_report_netlist",
                 "board_shape_from_selection",
+                // #1988: the BOM lines of the named sheet's project, a query.
+                "bom_lines",
                 // #2326 slice 6.P2b: the drawing order and Delete, on the
                 // items `ids` names on the named sheet (or board, Delete).
                 "bring_drawings_forward",

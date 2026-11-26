@@ -35,7 +35,7 @@ pub use board_report::{
 pub use bom::{
     BomColumn, BomError, BomExporter, BomFormat, BomGrouping, BomIssueSeverity, BomMetadata,
     BomOptions, BomOutput, BomRow, BomRule, BomRuleOptions, BomTable, BomValidationIssue,
-    BomValidationReport, rollup,
+    BomValidationReport, ComputedCell, ComputedColumn, ComputedIssue, rollup,
 };
 pub use erc::{
     ErcReportError, ErcReportExporter, ErcReportFormat, ErcReportOptions, ErcReportOutput,

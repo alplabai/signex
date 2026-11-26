@@ -5,7 +5,9 @@
 
 use std::path::Path;
 
-use signex_bom::{BomComponent, BomContext, BomEngineOptions, build_table, validate_table};
+use signex_bom::{
+    BomComponent, BomContext, BomEngineOptions, build_table_with_members, validate_table,
+};
 use signex_types::schematic::{
     InstancePath, PartKey, SchematicSheet, Symbol, group_into_parts, normalized_lib_id,
 };
@@ -21,23 +23,29 @@ use crate::variant_fit::{
 use crate::{ExportContext, Exporter};
 
 mod cells;
+#[cfg(test)]
+mod computed_tests;
 pub(crate) mod csv;
 #[cfg(test)]
 mod expression_tests;
 mod html;
 #[cfg(test)]
 mod pricing_tests;
+mod template;
+#[cfg(test)]
+mod template_tests;
 mod units;
 mod xlsx;
 
-pub use cells::{cell_number, cell_text, money, total_lines, unit_money};
+pub use cells::{MEMBERS_DIFFER, cell_number, cell_text, money, total_lines, unit_money};
 pub use csv::emit as csv_emit;
 pub use html::emit as html_emit;
 pub use signex_bom::{
     BomGrouping, BomIssueSeverity, BomMetadata, BomPrice, BomRow, BomRule, BomRuleOptions,
-    BomTable, BomValidationIssue, BomValidationReport, PriceBook, PriceQuote, library_row_key,
-    mpn_key, price_totals,
+    BomTable, BomValidationIssue, BomValidationReport, ComputedCell, ComputedColumn, ComputedIssue,
+    PriceBook, PriceQuote, library_row_key, mpn_key, price_totals,
 };
+pub use template::{columns_of_template, template_of_columns};
 pub use xlsx::emit as xlsx_emit;
 
 // ============================================================================
@@ -116,6 +124,9 @@ pub enum BomColumn {
     Distributor,
     /// How old the cached price is.
     PriceAge,
+    /// An `=` expression over the line's fields and the project variables
+    /// (#1988), shown with its derived unit.
+    Computed(signex_bom::ComputedColumn),
 }
 
 impl BomColumn {
@@ -148,6 +159,7 @@ impl BomColumn {
             Self::Stock => "Stock",
             Self::Distributor => "Distributor",
             Self::PriceAge => "Price Age",
+            Self::Computed(column) => column.name(),
         }
     }
 }
@@ -182,6 +194,8 @@ impl BomFormat {
 pub struct BomOutput {
     pub bytes: Vec<u8>,
     pub validation_report: BomValidationReport,
+    /// The computed cells that failed and were written empty (#1988).
+    pub computed_issues: Vec<signex_bom::ComputedIssue>,
 }
 
 #[derive(Debug, Error)]
@@ -205,12 +219,40 @@ impl From<rust_xlsxwriter::XlsxError> for BomError {
 /// Walks every sheet in the ExportContext, aggregates components according
 /// to the BomOptions, and returns a BomTable ready to emit.
 pub fn rollup(ctx: &ExportContext, opts: &BomOptions) -> BomTable {
-    let bom_ctx = build_bom_context(ctx, opts);
-    let engine_opts = engine_options_from_opts(opts);
+    rolled_up(ctx, opts).1
+}
 
-    let mut table = build_table(&bom_ctx, &engine_opts);
+/// The components and the priced table, with the computed columns of
+/// `opts.columns` evaluated after the prices (#1988).
+fn rolled_up(ctx: &ExportContext, opts: &BomOptions) -> (BomContext, BomTable) {
+    let (bom_ctx, variables) = build_bom_context(ctx, opts);
+    let (mut table, members) = build_table_with_members(&bom_ctx, &engine_options_from_opts(opts));
     signex_bom::apply_prices(&mut table, &opts.price_book);
-    table
+    signex_bom::apply_computed_columns(
+        &mut table,
+        &members,
+        &bom_ctx.components,
+        &variables,
+        &computed_columns(&opts.columns),
+    );
+    (bom_ctx, table)
+}
+
+/// The computed columns among `columns`, in their order.
+pub fn computed_columns(columns: &[BomColumn]) -> Vec<signex_bom::ComputedColumn> {
+    columns
+        .iter()
+        .filter_map(|column| match column {
+            BomColumn::Computed(computed) => Some(computed.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// The failed cells of the computed columns among `columns` in `table`: one
+/// Messages line each (#1988).
+pub fn computed_issues(table: &BomTable, columns: &[BomColumn]) -> Vec<signex_bom::ComputedIssue> {
+    signex_bom::computed_issues(table, &computed_columns(columns))
 }
 
 /// Roll up and validate in one pass — the same table + report
@@ -220,9 +262,7 @@ pub fn rollup_with_validation(
     ctx: &ExportContext,
     opts: &BomOptions,
 ) -> (BomTable, BomValidationReport) {
-    let bom_ctx = build_bom_context(ctx, opts);
-    let mut table = build_table(&bom_ctx, &engine_options_from_opts(opts));
-    signex_bom::apply_prices(&mut table, &opts.price_book);
+    let (bom_ctx, table) = rolled_up(ctx, opts);
     let report = validate_table(
         &build_validation_context(&bom_ctx, opts),
         &table,
@@ -235,7 +275,7 @@ pub fn rollup_with_validation(
 /// which does not change the table). Uses the same exported-rows filter as
 /// [`BomExporter::export`].
 pub fn validate(ctx: &ExportContext, opts: &BomOptions, table: &BomTable) -> BomValidationReport {
-    let bom_ctx = build_bom_context(ctx, opts);
+    let (bom_ctx, _) = build_bom_context(ctx, opts);
     validate_table(
         &build_validation_context(&bom_ctx, opts),
         table,
@@ -256,7 +296,12 @@ fn engine_options_from_opts(opts: &BomOptions) -> BomEngineOptions {
     }
 }
 
-fn build_bom_context(ctx: &ExportContext, opts: &BomOptions) -> BomContext {
+/// The BOM's components, one per part, and the variables each part's
+/// computed cells read: those of the sheet its first unit sits on (#1988).
+fn build_bom_context(
+    ctx: &ExportContext,
+    opts: &BomOptions,
+) -> (BomContext, Vec<signex_bom::MemberVariables>) {
     // One ordered symbol list over every sheet placement, grouped once: the
     // units of a multi-unit part are bought and fitted once even when they sit
     // on different pages (#691). A sheet placed N times contributes its symbols
@@ -288,15 +333,20 @@ fn build_bom_context(ctx: &ExportContext, opts: &BomOptions) -> BomContext {
         opts,
         &ctx.metadata.variant_settings,
     );
+    let variables = placed_parts(&placed, &paths)
+        .iter()
+        .map(|part| shown[part.members[0]].variables.clone())
+        .collect();
 
-    BomContext {
+    let bom_ctx = BomContext {
         components,
         metadata: BomMetadata {
             title: ctx.metadata.title.clone(),
             revision: ctx.metadata.revision.clone(),
             date: ctx.metadata.date.clone(),
         },
-    }
+    };
+    (bom_ctx, variables)
 }
 
 /// One placed part symbol as the BOM and the variant matrix list it.
@@ -311,6 +361,9 @@ pub(crate) struct ShownPart {
     pub designator: String,
     /// The sheet placement the symbol sits in.
     pub path: signex_types::schematic::InstancePath,
+    /// Its sheet's variables and the project's, which a computed BOM column
+    /// reads (#1988).
+    pub variables: signex_bom::MemberVariables,
 }
 
 /// Every part symbol of every [`bom_sheets`] placement, in sheet order, each
@@ -321,6 +374,10 @@ pub(crate) fn shown_parts(ctx: &ExportContext) -> Vec<ShownPart> {
         let metadata = ctx.metadata.for_schematic(sheet);
         let special = crate::field_value::sheet_context(&metadata);
         let scope = crate::ValueScope::of_sheet(&sheet.symbols, Some(&special));
+        let variables = signex_bom::MemberVariables {
+            sheet: metadata.sheet_variables.clone(),
+            project: metadata.custom_fields.clone(),
+        };
         for sym in sheet.symbols.iter().filter(|sym| is_part_symbol(sym)) {
             let mut symbol = sym.clone();
             symbol.value = crate::shown_value(&scope, sym).text;
@@ -329,6 +386,7 @@ pub(crate) fn shown_parts(ctx: &ExportContext) -> Vec<ShownPart> {
                 source_value: sym.value.clone(),
                 designator: sym.designator_in(&path).trim().to_string(),
                 path: path.clone(),
+                variables: variables.clone(),
             });
         }
     }
@@ -360,6 +418,7 @@ pub fn is_part_symbol(sym: &Symbol) -> bool {
     !(sym.reference.starts_with("#PWR") || sym.is_power)
 }
 
+<<<<<<< HEAD
 /// One physical part of a placed-symbol list: its units (indices into the
 /// list, in list order, at least one) and the placed part the variant
 /// settings name it by (`variant_fit::part_link`).
@@ -525,6 +584,7 @@ impl Exporter for BomExporter {
         Ok(BomOutput {
             bytes,
             validation_report,
+            computed_issues: computed_issues(&table, &opts.columns),
         })
     }
 }

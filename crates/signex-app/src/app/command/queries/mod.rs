@@ -9,8 +9,8 @@
 //! queries `measure_board`, `query_board_nets` and `find_similar_items`
 //! (#2403), `board_panel` (#2410, `app::board_panel`), the Project tab's
 //! `project_settings` (#1689-#1693, `app::project_tab`), `list_snippets`
-//! and `list_templates` (#1283, `app::design_reuse`), and `query_net_ties`
-//! (#1277). Each
+//! and `list_templates` (#1283, `app::design_reuse`), `query_net_ties`
+//! (#1277) and the BOM's `bom_lines` (#1988). Each
 //! answers with data through [`CommandOutcome::Answered`], never a bare
 //! `Ran`, and reads only the documents (engines, boards, editors, projects,
 //! the library): no active tab, window, selection or panel is looked at, and
@@ -21,6 +21,7 @@
 //! `docs/DOCUMENT_IDS.md`; the answer shapes are in `docs/COMMANDS.md`.
 
 mod board;
+mod bom_lines;
 mod check_drc;
 mod check_erc;
 mod check_requirements;
@@ -72,6 +73,7 @@ const QUERY_IDS: &[&str] = &[
     // library, answered once their folders are read.
     "list_snippets",
     "list_templates",
+    "bom_lines",
 ];
 
 /// The queries that run a check (`check_run`): each says nothing in
@@ -172,6 +174,7 @@ impl Signex {
             "find_items" => self.find(args),
             "query_pins" => self.query_pins(args),
             "query_net_ties" => self.query_net_ties(args),
+            "bom_lines" => self.bom_lines(args),
             "measure_board" => self.measure_board(args),
             "query_board_nets" => self.query_board_nets(args),
             "find_similar_items" => self.find_similar_items(args),

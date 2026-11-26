@@ -108,6 +108,7 @@ cmd-print = Print
 cmd-menu-print = Print...
 cmd-query-pins = Query pins
 cmd-query-net-ties = Query net ties
+cmd-bom-lines = Read the bill of materials
 cmd-read-document = Read document
 cmd-redo = Redo
 cmd-refresh-view = Refresh/redraw
