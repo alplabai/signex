@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use crate::capability::{self, Capability};
 use crate::input::Limits;
 
+pub mod library_check;
 mod notebook;
 
 pub const USAGE: &str = "\
@@ -17,6 +18,7 @@ USAGE:
     signex-cli run <project> <command-id> [--arg key=value]... [OPTIONS]
     signex-cli commands [--json]
     signex-cli agent-log <project> [--access]
+    signex-cli library check <library> [--with <library>]... [--json]
     signex-cli notebook generate --project <project> [--force] [--fail-on requirements,checks]
                [--sections <list>|all] [--variant <name>] [--template <name>]
                [--document <number>] [--revision <rev>] [--checks run|last] [OPTIONS]
@@ -61,6 +63,9 @@ default name in Project Outputs/notebook/ without --out); it runs as
 `run <project> export_notebook_pdf --arg ... --allow export` and takes the
 run options.
 
+library check checks a library folder (or its .snxlib) as Signex would load
+and save it; exit 1 on an error, 0 with warnings only.
+
 agent-log prints the project's agent journal as a table (the edits agents made;
 with --access, who connected and with what rights). It only reads.
 
@@ -74,6 +79,8 @@ pub enum Invocation {
     Run(RunOptions),
     /// `agent-log <project> [--access]`.
     AgentLog(PathBuf, crate::agent_log::Which),
+    /// `library check <library> [--with <library>]... [--json]`.
+    LibraryCheck(library_check::LibraryCheckOptions),
 }
 
 /// Where a run may work (#1924): through a running Signex that has the
@@ -118,6 +125,7 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Invocation, Strin
         Some("run") => parse_run(args).map(Invocation::Run),
         Some("notebook") => notebook::parse(args).map(Invocation::Run),
         Some("agent-log") => parse_agent_log(args),
+        Some("library") => library_check::parse(args).map(Invocation::LibraryCheck),
         Some(other) => Err(format!("unknown subcommand `{other}`")),
     }
 }

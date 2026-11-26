@@ -12,6 +12,7 @@ signex-cli run <project> [options] < commands.jsonl
 signex-cli run <project> <command-id> [--arg key=value]... [options]
 signex-cli commands [--json]
 signex-cli agent-log <project> [--access]
+signex-cli library check <library> [--with <library>]... [--json]
 signex-cli notebook export-pdf --project <project> [options]
 ```
 
@@ -20,6 +21,8 @@ made (`.signex/agent-edits.jsonl`), or with `--access` who connected and with
 what rights (`.signex/agent-access.jsonl`). It only reads; what it skipped (a
 partial last line, a line of a newer version) goes to standard error. See
 `docs/AGENT_JOURNALS.md`.
+
+`library check` checks a component library folder; see "Library check".
 
 `<project>` is a `.snxprj` (or a loose `.snxsch`). The exit code is `0` when
 every command was ok, `1` when a command was refused or failed, `2` for a
@@ -2263,6 +2266,77 @@ A board that is not open, an unknown kind or `kinds` naming none is
 `refused` before anything is written; so is a board with no outline or a bad
 `name`, and a folder or file that cannot be written, once the run is tried.
 `docs/FABRICATION_OUTPUTS.md` describes the files.
+
+## Library check
+
+```
+signex-cli library check <library> [--with <library>]... [--json]
+```
+
+Checks a library folder (or its `.snxlib`) the way Signex loads and saves it,
+with no window and no project (#3111). Library converters run it in their CI
+to prove their output is valid; `docs/LIBRARY_FORMAT.md` is what it checks
+against.
+
+- the `.snxlib` opens, and every table's rows read;
+- every row passes the checks a save runs (`row.invalid`), its `row_id` and
+  its non-blank `internal_pn` are unique in the library, and its stored
+  `content_hash` is the hash of its content;
+- every symbol, alternate symbol, footprint, alternate footprint and sim
+  reference resolves: into this library, or into a library given with
+  `--with`. A library the manifest `requires` must be given with `--with`;
+- library ids are unique across the checked library and the `--with` ones;
+- every `.snxsym`, `.snxfpt` and `.snxsim` reads (its format token included),
+  each footprint and sim file holds one item and is named by its uuid, and
+  every file, the `.snxlib` too, re-saves as its own bytes;
+- every footprint STEP attachment names a SHA-256 whose `step/<hash>.step`
+  is present with that hash.
+
+The exit code is `0` when the check finds no error (warnings are allowed),
+`1` when it finds one, and `2` for a usage error. Without `--json` it prints
+one line per problem and a count; with `--json` one line:
+
+```json
+{"ok":false,"library":"Passives","errors":1,"warnings":0,"problems":[{"severity":"error","code":"ref.missing_footprint","file":"Passives.snxlib","item":"0194…","message":"row R-10K (\"resistors\"): footprint 0194… is not in library 0194…"}]}
+```
+
+`file` is relative to the library folder (empty for the library as a whole);
+`item` is the row id, primitive uuid or table the problem is about, or
+`null`. Codes are stable:
+
+| Code | Severity | Meaning |
+|---|---|---|
+| `library.not_found`, `library.ambiguous` | error | no `.snxlib`, or more than one, in the folder |
+| `library.unreadable` | error | the `.snxlib` or a library folder does not read |
+| `library.duplicate_id` | error | a `--with` library has the id of another checked library |
+| `with.unreadable` | error | a `--with` library does not open |
+| `manifest.requires_malformed` | error | a `requires` entry is not a UUID |
+| `requires.missing` | error | a required library was not given with `--with` (references into it are not checked) |
+| `snxlib.not_canonical` | error | the `.snxlib` would be rewritten by a save |
+| `table.unreadable` | error | a table's rows do not read |
+| `row.invalid` | error | a save refuses the row |
+| `row.duplicate_row_id`, `row.duplicate_internal_pn` | error | not unique in the library |
+| `row.content_hash` | warning | the stored hash is not the row's; change detection is defeated |
+| `ref.missing_symbol`, `ref.missing_footprint`, `ref.missing_sim` | error | the referenced primitive is not in its library |
+| `ref.unknown_library` | error | the reference names a library that is neither this one nor a `--with` one |
+| `ref.not_required` | warning | the reference resolves into a `--with` library the manifest does not `require` |
+| `format.unsupported` | error | a primitive file's format token is refused |
+| `symbol.unreadable`, `footprint.unreadable`, `sim.unreadable` | error | the file does not read |
+| `symbol.duplicate_uuid` | error | two symbols share a uuid |
+| `footprint.misnamed`, `sim.misnamed` | error | the file is not named `<uuid>` of its first item |
+| `footprint.unreachable`, `sim.unreachable` | error | a second item in one file, which nothing can reach |
+| `symbol.not_canonical`, `footprint.not_canonical`, `sim.not_canonical` | error | a save would rewrite the file |
+| `symbol.legacy_token`, `footprint.legacy_token`, `sim.legacy_token` | warning | only the format token would be rewritten: a token this build reads but no longer writes |
+| `model.bad_hash` | error | a STEP attachment's `content_hash` is not a lower-case SHA-256 |
+| `model.hash_mismatch` | error | `step/<hash>.step` holds other bytes |
+| `model.missing` | warning | `step/<hash>.step` is absent; Signex shows the footprint without its model |
+
+Two classes are warnings on purpose. The stock library's footprints carry
+`snxfpt/1`, which Signex reads but no longer writes, so their bytes change
+only in that line on the next save (`footprint.legacy_token`; the format's
+open point 8). A missing STEP model loses no data in the library and the app
+reports it where it draws the board, so it does not fail a converter that
+could not fetch a model (`model.missing`).
 
 ## Working through a running Signex
 

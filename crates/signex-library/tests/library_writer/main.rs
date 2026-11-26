@@ -3,6 +3,7 @@
 
 #![cfg(feature = "local-git")]
 
+mod check;
 mod synthetic;
 mod update;
 mod write;

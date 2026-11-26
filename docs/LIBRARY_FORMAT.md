@@ -28,6 +28,12 @@ SIGNEX_BLESS_LIBRARY_FORMAT=1 cargo test -p signex-library --test library_format
 and update this document in the same change. A converter's own test should
 diff its output for equivalent input against these files.
 
+**Writer and check.** A Rust converter can write through
+`signex_library::writer::LibraryWriter`, which writes a whole library in one
+pass with these serialisers and reproduces the fixture library byte for byte.
+Any converter can verify its output with `signex-cli library check <dir>`
+(`docs/CLI.md`, "Library check"), which tests the rules below.
+
 The fixture data is synthetic: it exercises the format, not real parts.
 
 ## 1. Library directory

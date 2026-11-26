@@ -14,6 +14,8 @@ pub mod alternate_symbol;
 pub mod alternate_symbol_edit;
 pub(crate) mod board_footprint;
 pub mod cascade;
+#[cfg(feature = "local-git")]
+pub mod check;
 pub mod component;
 pub mod dangling;
 pub mod datasheet_asset;
