@@ -1,0 +1,81 @@
+{
+  "active_variant": null,
+  "dir": "",
+  "enable_git": false,
+  "format": "snxprj/1",
+  "libraries": [],
+  "name": "nested-harness",
+  "pcb_file": null,
+  "schematic_design": {
+    "harness_definitions": [
+      {
+        "entries": [
+          {
+            "name": "SCK"
+          },
+          {
+            "name": "MOSI"
+          },
+          {
+            "name": "MISO"
+          },
+          {
+            "name": "CS"
+          }
+        ],
+        "name": "SPI_BUS"
+      },
+      {
+        "entries": [
+          {
+            "name": "TX"
+          },
+          {
+            "name": "RX"
+          }
+        ],
+        "name": "UART"
+      },
+      {
+        "entries": [
+          {
+            "name": "SWDIO"
+          },
+          {
+            "name": "SWCLK"
+          },
+          {
+            "harness": "UART",
+            "name": "UART"
+          }
+        ],
+        "name": "DEBUG"
+      }
+    ]
+  },
+  "schematic_root": "mcu.snxsch",
+  "sheets": [
+    {
+      "filename": "mcu.snxsch",
+      "labels_count": 0,
+      "name": "mcu.snxsch",
+      "symbols_count": 0,
+      "wires_count": 0
+    },
+    {
+      "filename": "sensor.snxsch",
+      "labels_count": 0,
+      "name": "sensor.snxsch",
+      "symbols_count": 0,
+      "wires_count": 0
+    },
+    {
+      "filename": "connectors.snxsch",
+      "labels_count": 0,
+      "name": "connectors.snxsch",
+      "symbols_count": 0,
+      "wires_count": 0
+    }
+  ],
+  "variant_definitions": []
+}

@@ -97,7 +97,18 @@ fn every_generated_file_saves_back_to_its_own_bytes() {
             }
             other => panic!("{file}: unexpected extension {other:?}"),
         };
-        assert!(resaved == bytes, "{file}: a no-edit save changes the file");
+        let (old, new) = (text(&bytes), String::from_utf8_lossy(&resaved));
+        let first = old
+            .lines()
+            .zip(new.lines())
+            .enumerate()
+            .find(|(_, (a, b))| a != b)
+            .map(|(n, (a, b))| format!("line {}: generated `{a}`, saved `{b}`", n + 1))
+            .unwrap_or_else(|| "one file is longer".into());
+        assert!(
+            resaved == bytes,
+            "{file}: a no-edit save changes the file; first difference: {first}"
+        );
     }
 }
 

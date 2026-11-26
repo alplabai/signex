@@ -47,8 +47,9 @@ pub(super) fn empty_sheet(ids: &mut Ids) -> SchematicSheet {
 }
 
 /// The library part `lib_id` with `pins` passive pins numbered 1.., pin `i`
-/// at local `(0, -2.54 i)`.
-fn add_lib(sheet: &mut SchematicSheet, lib_id: &str, pins: usize) {
+/// at local `(0, -2.54 i)`, embedded under its versioned body ref as a
+/// load would store it; returns that ref.
+fn add_lib(sheet: &mut SchematicSheet, lib_id: &str, pins: usize) -> String {
     let pins = (1..=pins)
         .map(|i| LibPin {
             unit: 0,
@@ -67,9 +68,8 @@ fn add_lib(sheet: &mut SchematicSheet, lib_id: &str, pins: usize) {
             },
         })
         .collect();
-    sheet.lib_symbols.insert(
-        lib_id.to_string(),
-        LibSymbol {
+    sheet
+        .embed_body(LibSymbol {
             id: lib_id.to_string(),
             reference: String::new(),
             value: String::new(),
@@ -87,8 +87,8 @@ fn add_lib(sheet: &mut SchematicSheet, lib_id: &str, pins: usize) {
             show_pin_numbers: true,
             show_pin_names: true,
             pin_name_offset: 0.0,
-        },
-    );
+        })
+        .expect("one body per library part")
 }
 
 /// What a placed part is: its designator, value, footprint, library part
@@ -109,10 +109,11 @@ pub(super) fn place(
     spec: &PartSpec<'_>,
     o: Point,
 ) -> (usize, Vec<Point>) {
-    add_lib(sheet, spec.lib_id, spec.pins);
+    let body_ref = add_lib(sheet, spec.lib_id, spec.pins);
     sheet.symbols.push(Symbol {
         uuid: ids.next(),
         lib_id: spec.lib_id.to_string(),
+        body_ref,
         reference: spec.reference.to_string(),
         value: spec.value.to_string(),
         footprint: spec.footprint.to_string(),
