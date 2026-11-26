@@ -67,6 +67,59 @@ fn redo_on_the_same_symbol_touches_the_view_like_undo() {
     );
 }
 
+fn fresh_editor() -> SymbolDocument {
+    SymbolDocument::new(
+        PathBuf::from("Lib.snxsym"),
+        SymbolFile::from_symbol(Symbol::empty("Sym1")),
+    )
+}
+
+#[test]
+fn redo_onto_fewer_units_clamps_the_active_part_to_the_last_unit() {
+    let mut editor = fresh_editor();
+    editor.primitive_mut().part_count = 3;
+    editor.draft.active_part = 3;
+    editor.record_edit(None, |e| {
+        e.primitive_mut().part_count = 1;
+        e.mark_dirty();
+        true
+    });
+    assert!(editor.undo());
+    assert_eq!(editor.draft.active_part, 3, "unit 3 exists again");
+
+    assert!(editor.redo());
+
+    assert_eq!(editor.primitive().part_count, 1);
+    assert_eq!(editor.draft.active_part, 1, "no unit past the last one");
+}
+
+#[test]
+fn typing_again_in_the_same_field_after_undo_records_its_own_step() {
+    let mut editor = fresh_editor();
+    let type_name = |editor: &mut SymbolDocument, text: &str| {
+        editor.record_edit(Some(("name", 1)), |e| {
+            e.primitive_mut().name = text.into();
+            e.mark_dirty();
+            true
+        });
+    };
+    type_name(&mut editor, "A");
+    type_name(&mut editor, "AB");
+    assert_eq!(editor.draft.history.undo_len(), 1, "one coalesced step");
+    assert!(editor.undo());
+    let undo_len = editor.draft.history.undo_len();
+
+    type_name(&mut editor, "X");
+
+    assert_eq!(editor.draft.history.undo_len(), undo_len + 1);
+    assert!(editor.undo());
+    assert_eq!(
+        editor.primitive().name,
+        "Sym1",
+        "back to the post-undo text"
+    );
+}
+
 #[test]
 fn each_history_step_moves_the_generation_once_and_leaves_the_save_stamp() {
     let mut editor = edited_editor();
