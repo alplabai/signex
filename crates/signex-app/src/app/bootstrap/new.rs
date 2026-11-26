@@ -184,6 +184,7 @@ impl Signex {
         let net_hover_enabled = crate::fonts::read_net_hover_pref_from(prefs);
         let edge_pan = crate::fonts::read_edge_pan_pref_from(prefs);
         let symbol_body_fill = crate::symbol_fill_prefs::SymbolBodyFill::from_prefs(prefs);
+        let cross_out_not_fitted = crate::fonts::read_cross_out_not_fitted_pref_from(prefs);
         let pcb_dimension_defaults = crate::pcb_defaults_prefs::from_prefs(prefs);
         let trackpad_pan = crate::fonts::read_trackpad_pan_pref_from(prefs);
         let wheel_mode = crate::fonts::read_wheel_mode_pref_from(prefs);
@@ -413,6 +414,8 @@ impl Signex {
                 preferences_draft_edge_pan: edge_pan,
                 symbol_body_fill,
                 preferences_draft_symbol_body_fill: symbol_body_fill,
+                cross_out_not_fitted,
+                preferences_draft_cross_out_not_fitted: cross_out_not_fitted,
                 preferences_pcb_defaults: Box::new(
                     crate::pcb_defaults_prefs::PcbDefaultsDraft::of(&pcb_dimension_defaults),
                 ),
@@ -585,6 +588,7 @@ impl Signex {
                 net_color_palette: Default::default(),
                 parameter_manager_open: false,
                 parameter_table: Box::default(),
+                parameter_import: None,
                 reorder_picker: None,
                 move_pick: None,
                 pin_matrix_overrides: std::collections::HashMap::new(),

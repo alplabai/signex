@@ -119,6 +119,7 @@ export_board_report
 export_board_step
 export_notebook_pdf
 export_notebook_timeline
+export_parameters
 fabrication_outputs
 fast_grid_1
 fast_grid_2
@@ -154,6 +155,7 @@ home_view
 import_dxf
 import_dxf_outline
 import_graphics
+import_parameters
 keepout_from_selection
 lasso_select
 leave_sheet

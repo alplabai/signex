@@ -1,6 +1,7 @@
 use super::{
     ChannelFormatError, ChannelOccurrence, ChannelRepeat, MAX_CHANNELS, RepeatStack, channel_alpha,
-    check_format, repeated_entry_name,
+    check_format, entry_port_name, renamed_entry, repeated_entry_name, sheet_entry_port,
+    sheet_entry_renamed,
 };
 use crate::project::ChannelNaming;
 
@@ -98,6 +99,45 @@ fn repeated_entry_names() {
     assert_eq!(repeated_entry_name("Repeat()"), None);
     assert_eq!(repeated_entry_name("Repeat(A B)"), None);
     assert_eq!(repeated_entry_name("Repeat(CH, 1, 4)"), None);
+}
+
+/// #2659: a `Repeat(<net>)` entry meets the port `<net>`.
+#[test]
+fn an_entry_meets_its_port() {
+    assert_eq!(entry_port_name(" Repeat( VOUT_3V3 ) "), Some("VOUT_3V3"));
+    assert_eq!(entry_port_name(" EN "), Some("EN"));
+    assert_eq!(entry_port_name("Repeat(A B)"), Some("Repeat(A B)"));
+    assert_eq!(entry_port_name("  "), None);
+}
+
+/// #2659: a renamed port keeps a repeat entry a repeat.
+#[test]
+fn a_renamed_repeat_entry_stays_a_repeat() {
+    assert_eq!(
+        renamed_entry("Repeat(VOUT)", "VOUT_3V3"),
+        "Repeat(VOUT_3V3)"
+    );
+    assert_eq!(renamed_entry("VIN", "VIN_12V"), "VIN_12V");
+}
+
+/// #2659: only a repeated sheet symbol's `Repeat(<net>)` entry meets `<net>`;
+/// on a plain symbol the written name is the port, and a rename takes the
+/// port's plain name.
+#[test]
+fn a_sheet_entry_meets_its_port_by_the_symbols_repeat() {
+    let repeated = "Repeat(CH, 1, 4)";
+    assert_eq!(sheet_entry_port(repeated, "Repeat(VOUT)"), Some("VOUT"));
+    assert_eq!(
+        sheet_entry_port("Buck", " Repeat(VOUT) "),
+        Some("Repeat(VOUT)")
+    );
+    assert_eq!(sheet_entry_port("Buck", " EN "), Some("EN"));
+    assert_eq!(sheet_entry_port("Buck", "  "), None);
+    assert_eq!(
+        sheet_entry_renamed(repeated, "Repeat(VOUT)", "VOUT_5V"),
+        "Repeat(VOUT_5V)"
+    );
+    assert_eq!(sheet_entry_renamed("Buck", "Repeat(VOUT)", "VOUT"), "VOUT");
 }
 
 #[test]

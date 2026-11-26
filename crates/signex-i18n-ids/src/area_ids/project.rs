@@ -301,6 +301,12 @@ define_ids! {
     VARIANT_MANAGER_PARAMETER_VALUE = "variant-manager-parameter-value";
     VARIANT_MANAGER_PARAMETER_FOOTPRINT = "variant-manager-parameter-footprint";
     VARIANT_MANAGER_SETTINGS_UNREADABLE = "variant-manager-settings-unreadable";
+    PROJECT_VARIANTS_CHANNEL_COPIES = "project-variants-channel-copies";
+    PROJECT_VARIANTS_CHANNEL_MIXED = "project-variants-channel-mixed";
+    VARIANT_MANAGER_EVERY_CHANNEL = "variant-manager-every-channel";
+    VARIANT_MANAGER_FIT_EVERY_CHANNEL = "variant-manager-fit-every-channel";
+    VARIANT_MANAGER_UNFIT_EVERY_CHANNEL = "variant-manager-unfit-every-channel";
+    VARIANT_MANAGER_EVERY_CHANNEL_AS_ON_SHEETS = "variant-manager-every-channel-as-on-sheets";
     // dialog-polish
     PROJECT_PARAMETER_UNRESOLVED = "project-parameter-unresolved";
     PROJECT_READ_ONLY_BANNER = "project-read-only-banner";

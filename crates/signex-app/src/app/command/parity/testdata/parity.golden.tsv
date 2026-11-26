@@ -430,6 +430,10 @@ export_notebook_pdf	headless_missing_operand	needs `document`	core	none	routing
 export_notebook_timeline	operand_handler	run_operands: named document	core	origin	handler
 export_notebook_timeline	refusal_needs_operands	needs_operands_reason	gui	none	routing
 export_notebook_timeline	headless_missing_operand	needs `document`	core	none	routing
+export_parameters	bridge	ParameterManager(Io(ExportRequested))	gui	active document	gate
+export_parameters	in_window_rewrite	document_window	gui	window	routing
+export_parameters	refusal_needs	Schematic	gui	active document	routing
+export_parameters	headless_refusal	headless_refusal	gui	none	routing
 fabrication_outputs	bridge	Pcb(FabOutputs(Requested))	gui	active document	gate
 fabrication_outputs	in_window_rewrite	document_window	gui	window	routing
 fabrication_outputs	refusal_needs	Pcb	gui	active document	routing
@@ -559,6 +563,10 @@ import_graphics	operand_handler	run_operands: active-tab gate unless a document 
 import_graphics	in_window_rewrite	document_window	gui	window	routing
 import_graphics	refusal_needs	Schematic	gui	active document	routing
 import_graphics	headless_missing_operand	needs `at`	core	none	routing
+import_parameters	bridge	ParameterManager(Io(ImportRequested))	gui	active document	gate
+import_parameters	in_window_rewrite	document_window	gui	window	routing
+import_parameters	refusal_needs	Schematic	gui	active document	routing
+import_parameters	headless_refusal	headless_refusal	gui	none	routing
 keepout_from_selection	translator	Pcb(Tools(KeepoutRequested))	gui	active document,selection	handler
 keepout_from_selection	operand_handler	run_operands: named document	core	origin,settings	handler
 keepout_from_selection	in_window_rewrite	document_window	gui	window	routing

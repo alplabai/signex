@@ -7,6 +7,7 @@ pub mod active_bar;
 pub mod branch_switcher;
 pub mod chevron;
 pub mod chips;
+pub mod command_press;
 pub mod compact_group;
 pub mod constraint_grid;
 pub mod dimension_label;

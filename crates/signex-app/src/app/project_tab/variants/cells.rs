@@ -58,12 +58,22 @@ impl Signex {
                 let command = ProjectSectionCommand::SetDefaultVariant { name };
                 self.apply_variant_manager_edit(project_id, &command);
             }
+            VariantManagerMsg::ChannelPartToggled { part } => {
+                self.toggle_channel_part(project_id, part);
+            }
+            VariantManagerMsg::ChannelPartFitPicked {
+                variant,
+                part,
+                fitted,
+            } => {
+                self.pick_channel_part_fit(project_id, variant, &part, fitted);
+            }
         }
         iced::Task::none()
     }
 
     /// Apply one Variant Manager edit; a refusal is shown in the list.
-    fn apply_variant_manager_edit(
+    pub(super) fn apply_variant_manager_edit(
         &mut self,
         project_id: ProjectId,
         command: &ProjectSectionCommand,
@@ -77,7 +87,7 @@ impl Signex {
     }
 
     /// The parts read of the project's tab, whether or not it still holds.
-    fn variant_read(&self, project_id: ProjectId) -> Option<&VariantMatrix> {
+    pub(super) fn variant_read(&self, project_id: ProjectId) -> Option<&VariantMatrix> {
         let tab = self.document_state.project_tabs.get(&project_id)?;
         tab.variant_parts.as_deref()?.as_ref().ok()
     }

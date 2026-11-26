@@ -387,8 +387,10 @@ impl Signex {
                     Some(SetupPreviewKey::Swallow) => return Claim::Swallow,
                     None => {}
                 }
+                // The Differential Pair Classes dialog sits above the tabs.
                 let key = self
-                    .rules_drawing_key(window, event)
+                    .diff_pair_preview_key(event)
+                    .or_else(|| self.rules_drawing_key(window, event))
                     .or_else(|| self.project_preview_key(window, event))
                     .or_else(|| self.gerber_viewer_key(window, event))
                     .or_else(|| self.notebook_key(window, event));

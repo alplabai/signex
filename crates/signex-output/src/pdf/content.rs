@@ -27,6 +27,8 @@ pub(super) fn build_page_content(
         global_refdes: &expr_tables.global_refdes,
         net_name_by_symbol_pin: &expr_tables.net_name_by_symbol_pin,
         cell: &cell,
+        variant_settings: Some(&ctx.metadata.variant_settings),
+        placed_fits: expr_tables.placed_fits.as_ref(),
     };
     let (mut svg_ctx, mut layer_spans) = SvgRenderContext::from_sheet_layered(
         sheet,

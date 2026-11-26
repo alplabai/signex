@@ -247,6 +247,7 @@ impl Signex {
         }
         // The canvas draws the designators of the placement just recorded.
         self.refresh_canvas_designators();
+        self.refresh_canvas_not_fitted();
         // The net highlight is per placement: show it for this one.
         self.sync_net_highlight_to_canvases();
     }

@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use signex_types::schematic::{SelectedItem, SelectedKind};
 
-use super::model::{ObjectListState, ObjectListStatus, ObjectListView, sheet_rows};
+use super::model::{ObjectListState, ObjectListStatus, ObjectListView, SheetLook, sheet_rows};
 use super::model_tests::power_sheet;
 use super::*;
 use crate::layout_probe::{lay_out_texts, messages_on_click};
@@ -29,10 +29,12 @@ fn listed(selected: &[SelectedItem]) -> PanelContext {
     state.source.rows = Arc::new(sheet_rows(
         &power_sheet(),
         &power_path(),
+        &SheetLook::default(),
         &|_: uuid::Uuid| None,
     ));
     context(ObjectListView::build(
         &state,
+        &state.source,
         ObjectListStatus::Ready,
         Some(power_path()),
         selected,

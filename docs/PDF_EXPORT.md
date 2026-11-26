@@ -39,6 +39,11 @@ and the sheet bookmarks carry no tag (Caner, 2026-11-20). The helper hands
 the renderer `variant: None` for Base, after it has taken the project's
 active variant out of the title-block fields.
 
+A part that is not fitted in the printed variant (or marked DNP) prints
+greyed with a cross over its body while `draw_not_fitted` is on: the user's
+"Cross out not-fitted parts" preference, on by default (#1294). The rule is
+`docs/RENDERING_RULES.md`, "sch-not-fitted".
+
 ## Watermark
 
 `Watermark` holds the text (`Draft` prints "DRAFT", `Confidential` prints

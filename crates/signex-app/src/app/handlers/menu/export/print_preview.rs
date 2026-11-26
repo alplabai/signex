@@ -22,7 +22,7 @@ impl Signex {
             return iced::Task::none();
         }
 
-        let (ctx, issues) = match super::build_page_scope(&self.document_state) {
+        let (ctx, issues) = match super::build_export_scope(&self.document_state) {
             Some(c) => c,
             None => {
                 log::warn!("Print preview: no active schematic");
@@ -391,7 +391,7 @@ impl Signex {
         // Rasterise the document the preview was opened for, not whichever tab
         // is active now: Export prints `preview.source`, so the two must agree.
         let (mut ctx, issues) =
-            match super::build_page_scope_for_source(&self.document_state, &source) {
+            match super::build_export_scope_for_source(&self.document_state, &source) {
                 Some(scope) => scope,
                 None => {
                     crate::diagnostics::log_warning(format!(
@@ -411,6 +411,7 @@ impl Signex {
         pdf_opts.net_class_styles =
             super::class_styles::export_class_styles(&self.document_state, &source, &ctx);
         pdf_opts.schematic_defaults = self.document_state.schematic_defaults_for(&source);
+        pdf_opts.draw_not_fitted = self.ui_state.cross_out_not_fitted;
         // Re-seed the picker from the freshly built context. `sheet_files` was
         // captured once at modal open; if the active document changed while the
         // preview was up, the stale list names paths no longer in `ctx` and the

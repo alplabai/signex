@@ -217,6 +217,7 @@ impl Signex {
         history
             .or(layers)
             .map(|msg| Message::Dock(crate::dock::DockMessage::Panel(msg)))
+            .or_else(|| self.naming_menu_escape())
     }
 
     /// Stop a floating-panel drag in flight, leaving the panel floating.
