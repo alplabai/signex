@@ -123,10 +123,10 @@ pub(super) fn footprint_targets(editor: &FootprintDocument) -> EditorTargets {
 
 /// The selection of the symbol editor `editor`, as recorded.
 pub(super) fn symbol_targets(editor: &SymbolDocument) -> EditorTargets {
-    let (pins, graphics) = symbol_selection_items(editor, editor.selected.as_ref());
+    let (pins, graphics) = symbol_selection_items(editor, editor.gui.selected.as_ref());
     EditorTargets::Symbol {
-        symbol: editor.active_idx,
-        selection: editor.selected.clone(),
+        symbol: editor.draft.active_idx,
+        selection: editor.gui.selected.clone(),
         pins,
         graphics,
     }
@@ -266,7 +266,7 @@ impl Signex {
             return None;
         }
         let editor = self.document_state.symbol_editors.get(path)?;
-        if needs_selection && editor.selected.is_none() {
+        if needs_selection && editor.gui.selected.is_none() {
             return None;
         }
         let mut messages = Vec::new();
@@ -278,7 +278,7 @@ impl Signex {
         }
         messages.push(PrimitiveEdit::Symbol(msg.clone()));
         Some(EditorEditProbe {
-            history: (editor.history_generation, 0),
+            history: (editor.draft.history_generation, 0),
             input: ReplayInput::Editor {
                 path: path.to_path_buf(),
                 targets: symbol_targets(editor),
@@ -368,7 +368,7 @@ impl Signex {
                 ..
             } => {
                 let editor = self.document_state.symbol_editors.get(path)?;
-                let same = editor.active_idx == *symbol;
+                let same = editor.draft.active_idx == *symbol;
                 Some(gone_symbol_items(editor, same, pins, graphics))
             }
         }
@@ -408,7 +408,7 @@ impl Signex {
             .or_else(|| {
                 docs.symbol_editors
                     .get(path)
-                    .map(|e| (e.history_generation, 0))
+                    .map(|e| (e.draft.history_generation, 0))
             })
     }
 
@@ -452,11 +452,11 @@ impl Signex {
             EditorTargets::Symbol { selection, .. } => {
                 let editor = self.document_state.symbol_editors.get_mut(path)?;
                 let held = HeldEditor::Symbol {
-                    selection: editor.selected.clone(),
+                    selection: editor.gui.selected.clone(),
                     pins: editor.primitive().pins.len(),
                     graphics: editor.primitive().graphics.len(),
                 };
-                editor.selected = selection.clone();
+                editor.gui.selected = selection.clone();
                 Some(held)
             }
         }
@@ -502,7 +502,7 @@ impl Signex {
                 };
                 let same = editor.primitive().pins.len() == pins
                     && editor.primitive().graphics.len() == graphics;
-                editor.selected = selection.filter(|_| same);
+                editor.gui.selected = selection.filter(|_| same);
             }
         }
     }

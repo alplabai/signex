@@ -233,6 +233,7 @@ impl Signex {
                     .symbol_editors
                     .get(path)
                     .ok_or("the symbol file is not loaded")?
+                    .draft
                     .file;
                 (
                     serde_json::to_value(file).map_err(|e| e.to_string())?,

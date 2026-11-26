@@ -139,7 +139,7 @@ impl Signex {
                 .document_state
                 .symbol_editors
                 .get(&copy_path)
-                .and_then(|editor| editor.file.copied_from),
+                .and_then(|editor| editor.draft.file.copied_from),
             StockPrimitiveKind::Footprint => self
                 .document_state
                 .footprint_editors

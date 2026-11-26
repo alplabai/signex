@@ -193,7 +193,7 @@ fn deleting_a_symbol_before_the_active_one_keeps_the_active_primitive() {
     }
     let active_uuid = file.symbols[2].uuid;
     let mut editor = SymbolDocument::new(path.clone(), file);
-    editor.active_idx = 2;
+    editor.draft.active_idx = 2;
     app.document_state
         .symbol_editors
         .insert(path.clone(), editor);
@@ -210,5 +210,8 @@ fn deleting_a_symbol_before_the_active_one_keeps_the_active_primitive() {
     )));
 
     let editor = &app.document_state.symbol_editors[&path];
-    assert_eq!(editor.file.symbols[editor.active_idx].uuid, active_uuid);
+    assert_eq!(
+        editor.draft.file.symbols[editor.draft.active_idx].uuid,
+        active_uuid
+    );
 }

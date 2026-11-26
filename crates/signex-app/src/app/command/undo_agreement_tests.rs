@@ -54,7 +54,7 @@ fn fingerprint(app: &Signex) -> String {
     let mut symbols: Vec<_> = ds.symbol_editors.iter().collect();
     symbols.sort_by_key(|(p, _)| (*p).clone());
     for (path, e) in symbols {
-        let h = &e.history;
+        let h = &e.draft.history;
         parts.push(format!(
             "S {} {} {}",
             path.display(),

@@ -20,24 +20,24 @@ impl Signex {
             );
             return Task::none();
         };
-        if editor.file.symbols.len() <= 1 {
+        if editor.draft.file.symbols.len() <= 1 {
             crate::diagnostics::log_warning(format!(
                 "{}: refused to delete the last symbol in the file",
                 editor.path.display()
             ));
             return Task::none();
         }
-        if idx >= editor.file.symbols.len() {
+        if idx >= editor.draft.file.symbols.len() {
             crate::diagnostics::log_warning(format!(
                 "{}: symbol delete index {idx} is out of range ({} symbols)",
                 editor.path.display(),
-                editor.file.symbols.len()
+                editor.draft.file.symbols.len()
             ));
             return Task::none();
         }
-        let (path, symbol) = (editor.path.clone(), editor.file.symbols[idx].uuid);
-        let history = editor.history_generation;
-        let name = editor.file.symbols[idx].name.clone();
+        let (path, symbol) = (editor.path.clone(), editor.draft.file.symbols[idx].uuid);
+        let history = editor.draft.history_generation;
+        let name = editor.draft.file.symbols[idx].name.clone();
         let (mut usage, target) = self.symbol_usage_lines(&path, symbol);
         let plan = self.closed_scan_plan();
         let checking = plan.has_work();
@@ -440,8 +440,8 @@ impl Signex {
         let Some(editor) = self.document_state.symbol_editors.get_mut(path) else {
             return true;
         };
-        if editor.file.symbols.len() <= 1
-            || editor.file.symbols.get(idx).map(|s| s.uuid) != Some(symbol)
+        if editor.draft.file.symbols.len() <= 1
+            || editor.draft.file.symbols.get(idx).map(|s| s.uuid) != Some(symbol)
         {
             return true;
         }
@@ -450,16 +450,16 @@ impl Signex {
         // the previous edit alone.
         let snapshot = editor.snapshot();
         editor.commit_history(snapshot);
-        editor.file.symbols.remove(idx);
-        editor.file.updated = chrono::Utc::now();
+        editor.draft.file.symbols.remove(idx);
+        editor.draft.file.updated = chrono::Utc::now();
         // A sibling before the active one shifted it down a slot: follow
         // it. Deleting the active symbol lands on the one that took its
         // slot (or the last, when the tail went).
-        let active_moved = idx <= editor.active_idx;
-        if idx < editor.active_idx {
-            editor.active_idx -= 1;
-        } else if editor.active_idx >= editor.file.symbols.len() {
-            editor.active_idx = editor.file.symbols.len() - 1;
+        let active_moved = idx <= editor.draft.active_idx;
+        if idx < editor.draft.active_idx {
+            editor.draft.active_idx -= 1;
+        } else if editor.draft.active_idx >= editor.draft.file.symbols.len() {
+            editor.draft.active_idx = editor.draft.file.symbols.len() - 1;
         }
         if active_moved {
             editor.reset_view_for_symbol_switch();
@@ -510,7 +510,11 @@ mod tests {
     }
 
     fn count(app: &Signex, path: &std::path::Path) -> usize {
-        app.document_state.symbol_editors[path].file.symbols.len()
+        app.document_state.symbol_editors[path]
+            .draft
+            .file
+            .symbols
+            .len()
     }
 
     fn shown(texts: &[crate::layout_probe::LaidOutText]) -> Vec<String> {

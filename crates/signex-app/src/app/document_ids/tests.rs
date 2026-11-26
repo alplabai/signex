@@ -560,7 +560,12 @@ fn a_repeated_file_uuid_of_a_symbol_or_footprint_file_is_repaired() {
     // The board was repaired as it opened; the project is left for now.
     assert_eq!(repaired.len(), 2, "{repaired:?}");
     let docs = &app.document_state;
-    let sym = |n: &str| docs.symbol_editors[&dir.path().join(n)].file.file_uuid;
+    let sym = |n: &str| {
+        docs.symbol_editors[&dir.path().join(n)]
+            .draft
+            .file
+            .file_uuid
+    };
     let fpt = |n: &str| docs.footprint_editors[&dir.path().join(n)].file.file_uuid;
     assert_eq!(sym("a.snxsym"), symbol.file_uuid, "the first keeps it");
     assert_ne!(sym("b.snxsym"), symbol.file_uuid);
@@ -568,7 +573,7 @@ fn a_repeated_file_uuid_of_a_symbol_or_footprint_file_is_repaired() {
     assert_ne!(fpt("b.snxfpt"), footprint.file_uuid);
     let b = &docs.symbol_editors[&dir.path().join("b.snxsym")];
     assert_eq!(
-        b.file.file_uuid, b.baseline.file_uuid,
+        b.draft.file.file_uuid, b.draft.baseline.file_uuid,
         "the repair is not an edit"
     );
     assert!(!b.is_dirty());
@@ -915,15 +920,15 @@ fn undo_and_redo_keep_a_symbol_files_live_id() {
         signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("A")),
     );
     assert!(doc.record_edit(None, |d| {
-        d.file.symbols[0].name.push('x');
+        d.draft.file.symbols[0].name.push('x');
         true
     }));
-    doc.file.file_uuid = uid(9);
+    doc.draft.file.file_uuid = uid(9);
     assert!(doc.undo());
-    assert_eq!(doc.file.file_uuid, uid(9), "undo");
-    doc.file.file_uuid = uid(10);
+    assert_eq!(doc.draft.file.file_uuid, uid(9), "undo");
+    doc.draft.file.file_uuid = uid(10);
     assert!(doc.redo());
-    assert_eq!(doc.file.file_uuid, uid(10), "redo");
+    assert_eq!(doc.draft.file.file_uuid, uid(10), "redo");
 }
 
 #[test]

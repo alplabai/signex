@@ -435,7 +435,7 @@ impl Signex {
             return Vec::new();
         };
         let tokens = &document.panel_ctx.tokens;
-        let Some(menu_state) = editor.context_menu.as_ref() else {
+        let Some(menu_state) = editor.gui.context_menu.as_ref() else {
             return Vec::new();
         };
         let Some(card) = crate::library::editor::symbol::context_menu::view_context_menu(

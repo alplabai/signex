@@ -87,9 +87,9 @@ impl Signex {
             canvas.wheel_mode = wheel_mode;
         }
         for editor in self.document_state.symbol_editors.values_mut() {
-            editor.zoom_step = zoom_step;
-            editor.trackpad_pan = trackpad_pan;
-            editor.wheel_mode = wheel_mode;
+            editor.gui.zoom_step = zoom_step;
+            editor.gui.trackpad_pan = trackpad_pan;
+            editor.gui.wheel_mode = wheel_mode;
         }
         for editor in self.document_state.footprint_editors.values_mut() {
             editor.zoom_step = zoom_step;
@@ -692,7 +692,7 @@ impl Signex {
             canvas.clear_content_cache();
         }
         for editor in self.document_state.symbol_editors.values_mut() {
-            editor.canvas_cache.clear();
+            editor.gui.canvas_cache.clear();
         }
         for editor in self.document_state.footprint_editors.values_mut() {
             editor.canvas_cache.clear();
