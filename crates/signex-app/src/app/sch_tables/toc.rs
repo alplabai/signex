@@ -104,7 +104,7 @@ fn title_on_disk(path: &std::path::Path) -> Option<signex_net::SheetTitle> {
 /// Write `text` to `path` unless a file is there already
 /// ([`crate::app::path_op_jobs::write_new`]).
 fn write_new(path: &std::path::Path, text: &str) -> Result<(), String> {
-    crate::app::path_op_jobs::write_new(path, text.as_bytes()).map_err(|e| {
+    crate::app::path_op_jobs::write_new(path, text.as_bytes(), false).map_err(|e| {
         if e.kind() == std::io::ErrorKind::AlreadyExists {
             "exists".to_string()
         } else {
@@ -308,6 +308,17 @@ mod tests {
         assert_eq!(std::fs::read_to_string(&path).expect("read"), "mine");
         let fresh = dir.path().join("other.snxsch");
         assert_eq!(write_new(&fresh, "new"), Ok(()));
+    }
+
+    /// The root sheet's folder went away meanwhile: the write fails and
+    /// makes neither the folder nor an orphan contents sheet.
+    #[test]
+    fn a_contents_file_in_a_missing_folder_fails_and_creates_nothing() {
+        let dir = tempfile::tempdir().expect("dir");
+        let gone = dir.path().join("gone");
+        let path = gone.join(CONTENTS_FILE);
+        assert!(write_new(&path, "rows").is_err());
+        assert!(!gone.exists(), "the folder is not made again");
     }
 
     fn title(title: &str, revision: &str) -> SheetTitle {

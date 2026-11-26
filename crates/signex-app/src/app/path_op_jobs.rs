@@ -29,9 +29,14 @@ pub async fn run_blocking<T: Send + 'static>(
 /// name is claimed with `create_new` first, so a file made there after any
 /// earlier check is never replaced (an `AlreadyExists` error, nothing
 /// written); the bytes then replace only that empty claim through the atomic
-/// write, and a failed write gives the name back.
-pub(crate) fn write_new(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
-    if let Some(parent) = path.parent()
+/// write, and a failed write gives the name back. With `create_parents` a
+/// missing folder is made first (an export into a new folder); without it a
+/// missing folder fails with `NotFound` and nothing is created (a table of
+/// contents beside a root sheet whose folder went away). A crash between the
+/// claim and the atomic write's rename can leave the claim as an empty file.
+pub(crate) fn write_new(path: &Path, bytes: &[u8], create_parents: bool) -> std::io::Result<()> {
+    if create_parents
+        && let Some(parent) = path.parent()
         && !parent.as_os_str().is_empty()
     {
         std::fs::create_dir_all(parent)?;
@@ -492,12 +497,12 @@ mod write_new_tests {
         let dir = tempfile::tempdir().expect("temp dir");
         let taken = dir.path().join("taken.csv");
         std::fs::write(&taken, "mine").expect("write");
-        let error = write_new(&taken, b"theirs").expect_err("refused");
+        let error = write_new(&taken, b"theirs", true).expect_err("refused");
         assert_eq!(error.kind(), std::io::ErrorKind::AlreadyExists);
         assert_eq!(std::fs::read(&taken).expect("read"), b"mine");
 
         let fresh = dir.path().join("sub").join("new.csv");
-        write_new(&fresh, b"rows").expect("written");
+        write_new(&fresh, b"rows", true).expect("written");
         assert_eq!(std::fs::read(&fresh).expect("read"), b"rows");
     }
 }

@@ -51,7 +51,7 @@ fn write_export_task(
                 let written = if rule.replace {
                     signex_types::atomic_io::atomic_write(&path, &bytes)
                 } else {
-                    crate::app::path_op_jobs::write_new(&path, &bytes)
+                    crate::app::path_op_jobs::write_new(&path, &bytes, true)
                 };
                 written.map_err(|e| {
                     if e.kind() == std::io::ErrorKind::AlreadyExists {
