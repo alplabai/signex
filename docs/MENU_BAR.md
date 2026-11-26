@@ -20,7 +20,10 @@ shortcut typed there does. Only some ids act on that window's own document:
 Save, Save As, Print, Close Document and the tab steppers, Undo and Redo, and
 the commands that send a canvas event (Fit All). Cut, Copy, Paste, Delete,
 Select All, Find, the Place rows, Zoom In / Out and AutoFocus still act on the
-main window's active tab, as their shortcuts do.
+main window's active tab, as their shortcuts do. Every board Tools row (Via
+Stitching, Add and Remove Teardrops, Gloss, Board Shape, Keepout, Arrange),
+Repour Selected, Repour All and the two Tune rows edit the board an undocked
+board window shows, never the main window's (#2629).
 
 A menu click that cannot run is not silent: `run_menu_command` logs a command
 the window cannot act on to the Messages panel ("Menu: <id> did nothing:

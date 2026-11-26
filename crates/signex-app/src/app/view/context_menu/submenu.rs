@@ -1008,6 +1008,7 @@ mod tests {
             x: 0.0,
             y: 0.0,
             world: None,
+            hit_object: false,
             window: None,
         });
         let rows = in_variant_entries(I18n::en_us_ref(), &lite(&app), None);

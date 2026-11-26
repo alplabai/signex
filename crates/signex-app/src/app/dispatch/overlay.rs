@@ -352,6 +352,7 @@ impl Signex {
                 x,
                 y,
                 world,
+                hit_object: self.sheet_object_at(world),
                 window,
             });
         }
