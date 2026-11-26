@@ -85,6 +85,7 @@ pub(super) fn power_sheet() -> SchematicSheet {
         justify_h: Default::default(),
         justify_v: Default::default(),
         locked: false,
+        format: Default::default(),
     });
     s.junctions.push(Junction {
         uuid: id(10),

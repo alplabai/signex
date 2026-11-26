@@ -252,6 +252,7 @@ pub(super) fn generate(cols: usize, rows: usize, v: Variant) -> Generated {
                     justify_h: HAlign::Left,
                     justify_v: VAlign::Top,
                     locked: false,
+                    format: Default::default(),
                 });
                 cell.push(SelectedItem::new(uuid, SelectedKind::TextNote));
             }

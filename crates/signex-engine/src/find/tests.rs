@@ -217,6 +217,7 @@ fn vout_sheet() -> SchematicSheet {
             justify_h: Default::default(),
             justify_v: Default::default(),
             locked: false,
+            format: Default::default(),
         }],
         symbols: vec![Symbol {
             uuid: id(14),

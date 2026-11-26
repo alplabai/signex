@@ -561,6 +561,8 @@ mod tests {
             "set_sheet_symbol_size",
             "set_sheet_variable",
             "set_symbol_parameter",
+            // #1114: a text note's Format row.
+            "set_text_note_format",
             // #1276: `to_sheet` is refused inside a list (it edits the child).
             "sync_sheet_entries",
             "sync_sheet_pins",

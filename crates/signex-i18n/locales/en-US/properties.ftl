@@ -816,3 +816,8 @@ properties-fp-pad-scope-scope = Scope
 properties-fp-pad-scope-source = Pattern source
 properties-fp-pad-scope-numbering = Numbering
 properties-fp-pad-scope-paste = Paste
+# A text note's Format row (mockup row 203): plain text, or rich text whose
+# body is Typst markup. Switching keeps the text as it is.
+properties-note-format = Format
+properties-note-format-plain = Plain
+properties-note-format-rich = Rich text

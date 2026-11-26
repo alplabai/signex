@@ -433,6 +433,7 @@ mod tests {
             justify_h: HAlign::Left,
             justify_v: Default::default(),
             locked: false,
+            format: Default::default(),
         };
         let selected =
             signex_types::schematic::SelectedItem::new(note.uuid, SelectedKind::TextNote);

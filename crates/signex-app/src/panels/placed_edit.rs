@@ -7,7 +7,7 @@
 use std::path::{Path, PathBuf};
 
 use iced::widget::text_editor;
-use signex_types::schematic::{HAlign, Point, SelectedItem, VAlign};
+use signex_types::schematic::{HAlign, Point, SelectedItem, TextNoteFormat, VAlign};
 
 /// One editable box of a placed object.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -68,13 +68,15 @@ pub enum PlacedEditMsg {
     PortNameSubmitted { item: SelectedItem },
 }
 
-/// What a text note's Rotation and Justify rows set.
+/// What a text note's Rotation, Format and Justify rows set.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum NoteLayout {
     JustifyH(HAlign),
     JustifyV(VAlign),
     /// Stored degrees, counter-clockwise.
     Rotation(f64),
+    /// Plain or Rich text (#1114, mockup row 203).
+    Format(TextNoteFormat),
 }
 
 impl NoteLayout {
@@ -92,6 +94,10 @@ impl NoteLayout {
             },
             Self::Rotation(degrees) => signex_engine::TextNoteProps {
                 rotation_degrees: Some(degrees),
+                ..none
+            },
+            Self::Format(format) => signex_engine::TextNoteProps {
+                format: Some(format),
                 ..none
             },
         }

@@ -1,5 +1,6 @@
 //! The placed-object edits (#2418): `set_object_position`,
-//! `set_object_rotation`, `set_sheet_symbol_size` and `set_symbol_parameter`.
+//! `set_object_rotation`, `set_sheet_symbol_size`, `set_symbol_parameter` and
+//! `set_text_note_format` (#1114).
 //! A Properties row and an operand run call the same `Signex` method here, so
 //! a typed value, a CLI call and an agent's edit end in one engine command
 //! and one undo step. Coordinates are stored mm (Y down from the paper's
@@ -9,7 +10,7 @@
 
 use iced::Task;
 use serde_json::{Value, json};
-use signex_types::schematic::{Point, SchematicSheet, SelectedItem, SelectedKind};
+use signex_types::schematic::{Point, SchematicSheet, SelectedItem, SelectedKind, TextNoteFormat};
 
 use super::placement_operands::{run_edit, text};
 use super::{CommandArgs, CommandOutcome, OperandValue};
@@ -76,6 +77,26 @@ pub(super) fn set_symbol_parameter(app: &mut Signex, args: &CommandArgs) -> Ran 
         let name = text(args, "name")?;
         let value = text(args, "value").unwrap_or_default();
         answered(app.set_symbol_parameter(item, &name, &value))
+    })
+}
+
+/// `set_text_note_format id=.. format=plain|typst [document=..]`: the Format
+/// row of a text note. The text is kept as it is; the answer adds `format`.
+pub(super) fn set_text_note_format(app: &mut Signex, args: &CommandArgs) -> Ran {
+    run_edit(app, args, |app| {
+        let item = app.placed_item_operand(args)?;
+        let word = text(args, "format")?;
+        let format = TextNoteFormat::from_word(word.trim())
+            .ok_or_else(|| format!("`format` is `plain` or `typst`, got `{word}`"))?;
+        let props = signex_engine::TextNoteProps {
+            format: Some(format),
+            ..Default::default()
+        };
+        let mut answer = app
+            .set_text_note_props(item, props)
+            .map_err(|refusal| refusal.reason)?;
+        answer["format"] = json!(format.as_str());
+        Ok(CommandOutcome::Answered(answer))
     })
 }
 
@@ -263,8 +284,9 @@ impl Signex {
         self.placed_answer(item)
     }
 
-    /// Set `props` on the text note `item` (its justification, turn or text
-    /// size): one engine edit, one undo step, none when nothing changes.
+    /// Set `props` on the text note `item` (its justification, turn, text
+    /// size or format): one engine edit, one undo step, none when nothing
+    /// changes.
     /// Refused while a lock holds the note.
     pub(crate) fn set_text_note_props(
         &mut self,

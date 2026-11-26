@@ -111,6 +111,8 @@ mod sheet_sync_operand_tests;
 mod sheet_sync_operands;
 #[cfg(test)]
 mod sheet_variable_operand_tests;
+#[cfg(test)]
+mod text_note_format_tests;
 pub(crate) mod translator;
 #[cfg(test)]
 mod undo_agreement_tests;
