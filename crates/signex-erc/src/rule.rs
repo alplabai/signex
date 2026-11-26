@@ -55,6 +55,7 @@ impl RuleId {
             RuleKind::RepeatEntryNeedsBus => "builtin::repeat_entry_needs_bus",
             RuleKind::HarnessEntryMismatch => "builtin::harness_entry_mismatch",
             RuleKind::HarnessTypeConflict => "builtin::harness_type_conflict",
+            RuleKind::NetClassConflict => "builtin::net_class_conflict",
         };
         RuleId(id.to_string())
     }
@@ -172,7 +173,7 @@ mod tests {
 
     /// Every built-in id string is persisted in saved profiles and project
     /// rule sets, so it must never follow a label rewording.
-    const PINNED_IDS: [(RuleKind, &str); 37] = [
+    const PINNED_IDS: [(RuleKind, &str); 38] = [
         (RuleKind::UnusedPin, "builtin::unused_pin"),
         (
             RuleKind::DuplicateRefDesignator,
@@ -270,6 +271,7 @@ mod tests {
             RuleKind::HarnessTypeConflict,
             "builtin::harness_type_conflict",
         ),
+        (RuleKind::NetClassConflict, "builtin::net_class_conflict"),
     ];
 
     #[test]

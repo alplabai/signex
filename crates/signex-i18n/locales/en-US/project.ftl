@@ -392,6 +392,20 @@ variant-manager-override-field = override
 variant-manager-parameter-value = Value
 variant-manager-parameter-footprint = Footprint
 variant-manager-settings-unreadable = The project's variant settings could not be read. They are kept as they are and cannot be changed.
+# Per-channel variant state (#2662): the matrix row of a part on a repeated
+# sheet stands for every channel's copy of it. $count is the number of copies.
+project-variants-channel-copies =
+    { $count ->
+        [one] 1 channel
+       *[other] { $count } channels
+    }
+# A cell of that row where the channels disagree.
+project-variants-channel-mixed = mixed · { $count } of { $total } not fitted
+# The right pane of a channel's copy: its fit in every channel at once.
+variant-manager-every-channel = Every channel ({ $count })
+variant-manager-fit-every-channel = Fitted in every channel
+variant-manager-unfit-every-channel = Not fitted in every channel
+variant-manager-every-channel-as-on-sheets = Every channel as on the sheets
 # dialog-polish
 # The result pill of a project variable's `=` expression that does not
 # evaluate (mockup row 30); the reason is in the Error line under the row.

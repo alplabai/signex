@@ -55,6 +55,7 @@ impl RuleKind {
             RuleKind::RepeatEntryNeedsBus => "repeat_entry_needs_bus",
             RuleKind::HarnessEntryMismatch => "harness_entry_mismatch",
             RuleKind::HarnessTypeConflict => "harness_type_conflict",
+            RuleKind::NetClassConflict => "net_class_conflict",
         }
     }
 

@@ -1141,6 +1141,13 @@ panels-channel-strip-count = { $count }
 panels-channel-card-caption = { $parts } parts · { $nets } nets
 # Shown in the compiled view before the project is compiled.
 panels-channel-view-not-compiled = Compile the project to fill the channels with their parts and nets.
+# A channel card's fit in the active variant (#2662). $variant is its name.
+# A click on it leaves every part of the channel out of the variant, or lets
+# the sheets decide again.
+panels-channel-card-fitted = { $variant }: Fitted
+panels-channel-card-not-fitted = { $variant }: Not fitted
+# Some of the channel's parts are not fitted; $count is how many.
+panels-channel-card-partly-fitted = { $variant }: { $count } not fitted
 # The Messages line when an edit is tried in a channel tab. $channel is CH1.
 panels-channel-read-only = Channel { $channel } is a compiled view; switch to Editor to edit
 # The compile result in Messages.
@@ -1173,6 +1180,8 @@ panels-harness-entries = Entries
 panels-harness-entry = Entry
 panels-harness-net = Net on this sheet
 panels-harness-expects-pill = { $far } expects { $expects }
+# By a mismatched harness entry, in the Properties drawing and on the sheet: the entry name the far side expects in its place.
+panels-harness-expects = expects { $expects }
 # $example is a compiled net name such as SPI_BUS.SCK.
 panels-harness-compiled = Compiled net names: { $example } … unless a net label names them.
 panels-harness-start = Start
@@ -1332,6 +1341,8 @@ panels-harness-msg-entry-off-connector = Harness entry not placed: click on a ha
 panels-compiled-design-msg-no-project = Compile project: open a sheet of a project first; a sheet outside a project has no compiled design.
 # $why says why the project refused the edit.
 panels-compiled-design-naming-refused = Channel naming not changed: { $why }
+# A channel card's variant fit click was refused; $why says why.
+panels-compiled-design-fit-refused = Channel fit not changed: { $why }
 
 # sch-panels-tidy
 # The Canvas Font field (mockup row 40): $family is the font, $size its size in points.

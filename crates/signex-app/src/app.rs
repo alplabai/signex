@@ -61,6 +61,7 @@ mod load_gateway;
 mod mutation_gateway;
 pub(crate) mod new_project;
 pub(crate) mod page_tab;
+pub(crate) mod parameter_io;
 pub mod parent_reference_disk;
 mod parked_sheets;
 pub mod path_op_jobs;
@@ -237,6 +238,9 @@ impl Signex {
         // The Annotations panel reads the notebook when shown or when the
         // project in view changes (mockup row 165).
         tasks.push(self.sync_annotations_panel());
+        // The Parameter Manager's closed-sheet copies follow the tabs and
+        // the active project.
+        tasks.push(self.sync_closed_parameter_sheets());
         tasks.push(self.sync_compare_board());
         // A board that opened takes its kept view; a changed view is saved
         // soon (#2480).

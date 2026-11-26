@@ -284,6 +284,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `draw_wire` | Draw wire | place | — | — |
 | `edit_blanket` | Edit net blanket parameters | place | — | — |
 | `edit_no_erc_rules` | Edit No ERC rules | place | — | — |
+| `export_parameters` | Export the active sheet's parameters to a CSV file | design | — | — |
 | `flip_selected_x` | Flip selected x | modify | — | — |
 | `flip_selected_y` | Flip selected y | modify | — | — |
 | `force_annotate_all_schematics` | Force annotate all schematics | design | `Shift+Alt+A` | `Shift+Alt+A` |
@@ -291,6 +292,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `go_to_net_partner` | Go to net partner on another sheet | navigation | — | — |
 | `highlight_net_under_cursor` | Highlight net under cursor | select | — | ``` |
 | `highlight_related_net_objects` | Highlight/select related net objects across sheets | select | `Alt+Click` | — |
+| `import_parameters` | Import parameters from a CSV file, with a preview to apply | design | — | — |
 | `lasso_select` | Lasso select | select | — | — |
 | `leave_sheet` | Leave sheet / go to parent sheet | navigation | — | `Alt+Backspace` |
 | `move_selection_xy` | Move selection x y | modify | — | — |

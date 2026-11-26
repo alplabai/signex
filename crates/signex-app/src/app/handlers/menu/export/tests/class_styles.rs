@@ -60,7 +60,7 @@ fn an_export_styles_a_child_sheet_that_is_not_open_in_a_tab() {
     app.document_state.active_path = Some(top.clone());
 
     let (ctx, _issues) =
-        super::super::build_page_scope_for_source(&app.document_state, &top).expect("scope");
+        super::super::build_export_scope_for_source(&app.document_state, &top).expect("scope");
     let styles = super::super::class_styles::export_class_styles(&app.document_state, &top, &ctx);
     std::fs::remove_dir_all(&dir).ok();
 
@@ -122,7 +122,7 @@ fn the_canvas_and_the_export_resolve_the_same_styles() {
 
     settle(&mut app);
     let (ctx, _issues) =
-        super::super::build_page_scope_for_source(&app.document_state, &top).expect("scope");
+        super::super::build_export_scope_for_source(&app.document_state, &top).expect("scope");
     let exported = super::super::class_styles::export_class_styles(&app.document_state, &top, &ctx);
 
     assert_eq!(&exported, app.ui_state.net_class_styles.styles());
@@ -243,7 +243,7 @@ fn an_export_carries_the_live_net_colours() {
     let root = dir.join("top.snxsch");
     let exported = |app: &Signex| {
         let (ctx, _issues) =
-            super::super::build_page_scope_for_source(&app.document_state, &root).expect("scope");
+            super::super::build_export_scope_for_source(&app.document_state, &root).expect("scope");
         ctx.sheets
             .iter()
             .find_map(|s| s.schematic.net_colors.get(&parent_wire).copied())

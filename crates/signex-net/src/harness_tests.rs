@@ -4,8 +4,8 @@
 use super::*;
 use crate::build_netlist;
 use crate::harness_fixture::{
-    connector, connectors, fixture_netlist, golden_text, harness_wire, mcu, place_part, sensor,
-    stitch, wire,
+    bridge, carry_fixture_netlist, connector, connectors, fixture_netlist, golden_text,
+    harness_wire, mcu, mcu_through_bridge, place_part, sensor, stitch, wire,
 };
 use signex_types::schematic::{Label, LabelType, SchematicSheet};
 
@@ -38,6 +38,101 @@ fn the_fixture_netlist_matches_its_golden_netlist() {
         golden_text(&stitched.netlist),
         include_str!("testdata/harness_netlist.golden.tsv")
     );
+}
+
+/// #2657: the nested `DEBUG` harness carried through `bridge`, a sheet with
+/// only a port and a typed entry, joins as if it ran straight to the child.
+#[test]
+fn the_carry_fixture_netlist_matches_its_golden_netlist() {
+    let stitched = carry_fixture_netlist();
+    assert!(stitched.issues.is_empty(), "{:?}", stitched.issues);
+    let text = golden_text(&stitched.netlist);
+    assert_eq!(
+        text,
+        include_str!("testdata/harness_carry_netlist.golden.tsv")
+    );
+    assert_eq!(text, golden_text(&fixture_netlist().netlist));
+}
+
+#[test]
+fn a_harness_carries_through_two_sheets_that_only_pass_it_on() {
+    let stitched = stitch(
+        mcu_through_bridge(),
+        vec![
+            ("sensor.snxsch", sensor()),
+            ("bridge.snxsch", bridge("inner", "inner.snxsch")),
+            ("inner.snxsch", bridge("connectors", "connectors.snxsch")),
+            ("connectors.snxsch", connectors()),
+        ],
+    );
+    assert!(stitched.issues.is_empty(), "{:?}", stitched.issues);
+    assert_eq!(
+        golden_text(&stitched.netlist),
+        include_str!("testdata/harness_carry_netlist.golden.tsv")
+    );
+}
+
+/// The carry is by port name: a port the parent's entry does not name
+/// carries nothing, so the signals stop at the bridge.
+#[test]
+fn a_bridge_port_of_another_name_carries_nothing() {
+    let mut through = bridge("connectors", "connectors.snxsch");
+    through.labels[0].text = "DBG".into();
+    let stitched = stitch(
+        mcu_through_bridge(),
+        vec![
+            ("bridge.snxsch", through),
+            ("connectors.snxsch", connectors()),
+        ],
+    );
+    let swdio = stitched
+        .netlist
+        .nets
+        .iter()
+        .find(|n| {
+            n.terminals
+                .iter()
+                .any(|t| t.reference == "U3" && t.pin == "5")
+        })
+        .expect("U3.5 is on a net");
+    assert!(
+        swdio.terminals.iter().all(|t| t.reference != "J2"),
+        "{swdio:?}"
+    );
+}
+
+#[test]
+fn a_port_and_a_typed_entry_with_no_connector_pass_the_harness_on() {
+    let through = bridge("connectors", "connectors.snxsch");
+    let bundles = harness_bundles(&through);
+    assert_eq!(bundles.len(), 1, "{bundles:?}");
+    assert!(bundles[0].passes_through());
+    assert!(
+        harness_bundles(&connectors())
+            .iter()
+            .all(|b| !b.passes_through())
+    );
+    assert!(harness_bundles(&mcu()).iter().all(|b| !b.passes_through()));
+    // A port alone, with no typed entry, passes nothing on.
+    let mut port_only = through.clone();
+    port_only.child_sheets.clear();
+    assert!(
+        harness_bundles(&port_only)
+            .iter()
+            .all(|b| !b.passes_through())
+    );
+
+    let mut parent = crate::build::merged_sheet_parent(&through);
+    let sampled = sample(&through, &mut parent);
+    assert_eq!(
+        sampled.carries,
+        [Carry {
+            pins: vec![(0, "DEBUG".to_string())],
+            ports: vec!["DEBUG".to_string()],
+        }]
+    );
+    assert!(sampled.ports.is_empty());
+    assert!(sampled.pins[0].is_empty());
 }
 
 #[test]

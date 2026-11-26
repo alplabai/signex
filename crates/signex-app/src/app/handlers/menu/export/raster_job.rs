@@ -32,7 +32,7 @@ pub(super) struct PreviewRasterJob {
     generation: u64,
     latest: Arc<AtomicU64>,
     pub(super) ctx: Arc<ExportContext>,
-    options: PreviewOptions,
+    pub(super) options: PreviewOptions,
     work: RasterWork,
 }
 

@@ -48,7 +48,7 @@ pub(crate) mod tests;
 fn build_export_context(
     document_state: &crate::app::state::DocumentState,
 ) -> Option<ExportContext> {
-    build_page_scope(document_state).map(|(ctx, _issues)| ctx)
+    build_export_scope(document_state).map(|(ctx, _issues)| ctx)
 }
 
 /// The BOM's context: like [`build_export_context`] but carrying the project
@@ -404,50 +404,30 @@ fn apply_printed_variant(metadata: &mut ProjectMetadata, variant: &mut Option<St
 /// is machine-consumed and refuses on a hole, the PDF is human-consumed and
 /// degrades loudly. See `handle_export_netlist_finished` /
 /// `handle_export_pdf_finished`.
-#[cfg(test)]
+///
+/// The PDF, print preview and print draw from it too, hierarchy included, so
+/// a page's not-fitted parts are decided across the project as the BOM
+/// decides them (#2962).
 fn build_export_scope(
     document_state: &crate::app::state::DocumentState,
 ) -> Option<(ExportContext, ExportIssues)> {
-    build_scope(document_state, document_state.active_path.as_deref()?, true)
+    build_scope(document_state, document_state.active_path.as_deref()?)
 }
 
-/// [`build_export_scope`] without `ExportContext::netlist_sheets`, for the
-/// paths that never read it (PDF, print preview). Skips the per-sheet
-/// copy that only the `.NET` netlist needs.
-fn build_page_scope(
-    document_state: &crate::app::state::DocumentState,
-) -> Option<(ExportContext, ExportIssues)> {
-    build_scope(
-        document_state,
-        document_state.active_path.as_deref()?,
-        false,
-    )
-}
-
-/// [`build_page_scope`] for an explicit source document rather than the active
-/// tab — the BOM / PDF completion path, where the OS dialog may have outlived
-/// the tab the export was started from (#833). `None` when `source` is no
-/// longer open.
-fn build_page_scope_for_source(
-    document_state: &crate::app::state::DocumentState,
-    source: &std::path::Path,
-) -> Option<(ExportContext, ExportIssues)> {
-    build_scope(document_state, source, false)
-}
-
-/// [`build_export_scope`] for an explicit source document (#852): the netlist
-/// completion path.
+/// [`build_export_scope`] for an explicit source document rather than the
+/// active tab (#852, #833): the netlist and PDF completion paths and the
+/// preview raster path, where the OS dialog may have outlived the tab the
+/// export was started from. `None` when `source` is no longer open.
 fn build_export_scope_for_source(
     document_state: &crate::app::state::DocumentState,
     source: &std::path::Path,
 ) -> Option<(ExportContext, ExportIssues)> {
-    build_scope(document_state, source, true)
+    build_scope(document_state, source)
 }
 
 fn build_scope(
     document_state: &crate::app::state::DocumentState,
     active_path: &std::path::Path,
-    with_netlist_sheets: bool,
 ) -> Option<(ExportContext, ExportIssues)> {
     let active_engine = document_state.engines.get(active_path)?;
 
@@ -599,22 +579,16 @@ fn build_scope(
         // Hand the exporters the very sheets the netlist was derived from, in
         // key order so the output is deterministic: hierarchical children are
         // not printed pages, yet their parts sit in the netlist's terminals.
-        if with_netlist_sheets {
-            // Placements come from the same occurrence walk the netlist just
-            // used: the BOM multiplies a child by how often it is placed
-            // (#730) and the `.NET` file resolves designators per placement.
-            // A sheet the walk never reaches has none and counts zero.
-            let mut keyed: Vec<_> = graph.sheets.into_iter().collect();
-            keyed.sort_by(|a, b| a.0.cmp(&b.0));
-            let keys: Vec<_> = keyed.iter().map(|(key, _)| key.clone()).collect();
-            netlist_placements = placements::netlist_placements(&keys, occurrences);
-            netlist_sheets = keyed.into_iter().map(|(_, sheet)| sheet).collect();
-            placements::stamp_channel_designators(
-                &mut netlist_sheets,
-                &netlist_placements,
-                &channels,
-            );
-        }
+        // Placements come from the same occurrence walk the netlist just
+        // used: the BOM multiplies a child by how often it is placed (#730)
+        // and the `.NET` file resolves designators per placement. A sheet the
+        // walk never reaches has none and counts zero.
+        let mut keyed: Vec<_> = graph.sheets.into_iter().collect();
+        keyed.sort_by(|a, b| a.0.cmp(&b.0));
+        let keys: Vec<_> = keyed.iter().map(|(key, _)| key.clone()).collect();
+        netlist_placements = placements::netlist_placements(&keys, occurrences);
+        netlist_sheets = keyed.into_iter().map(|(_, sheet)| sheet).collect();
+        placements::stamp_channel_designators(&mut netlist_sheets, &netlist_placements, &channels);
         let mut stitch = result.issues;
         stitch.extend(graph.issues);
         issues.stitch = stitch;

@@ -5,6 +5,7 @@
 
 // The tab's view state is plain data, kept in the UI-free core (ADR-0006).
 pub use crate::app::core::variant_cell::{OverrideDraft, VariantCell};
+use signex_types::pcb::SymbolLink;
 
 /// Messages of the Variant Manager tab, namespaced under
 /// `ProjectTabMsg::VariantManager`.
@@ -33,4 +34,15 @@ pub enum VariantManagerMsg {
     DuplicateRequested { from: Option<String> },
     /// Set as default; `None` is Base.
     DefaultPicked { name: Option<String> },
+    /// The row of a part on a repeated sheet was clicked: its channel
+    /// copies' rows open or close (#2662).
+    ChannelPartToggled { part: SymbolLink },
+    /// The right pane's every-channel fit: every channel's copy of `part`
+    /// fitted or left out in `variant`, or following the sheets again
+    /// (`None`), as one undo step.
+    ChannelPartFitPicked {
+        variant: String,
+        part: SymbolLink,
+        fitted: Option<bool>,
+    },
 }

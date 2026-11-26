@@ -402,6 +402,17 @@ dialog-parameter-manager-subtitle = { $sheet } · { $parts ->
     [one] 1 parameter
    *[other] { $parameters } parameters
 }
+# Window subtitle with All sheets: the listed sheets, their parts and parameter columns.
+dialog-parameter-manager-subtitle-all = { $sheets ->
+    [one] 1 sheet
+   *[other] { $sheets } sheets
+} · { $parts ->
+    [one] 1 part
+   *[other] { $parts } parts
+} · { $parameters ->
+    [one] 1 parameter
+   *[other] { $parameters } parameters
+}
 # Beside the filter box: the fields the filter searches.
 dialog-parameter-manager-filter-hint = Reference, value or footprint
 # An empty parameter cell.
@@ -410,6 +421,33 @@ dialog-parameter-manager-remove-column = Remove column
 dialog-parameter-manager-no-match-title = No part matches the filter
 # $sheet is the sheet's file name, $query the typed filter.
 dialog-parameter-manager-no-match-body = No reference, value or footprint on { $sheet } contains { $query }.
+# The no-match card with All sheets. $query is the typed filter.
+dialog-parameter-manager-no-match-body-all = No reference, value or footprint on the listed sheets contains { $query }.
+# Beside the scope switch with All sheets: closed project sheets the table does not list because they were not read (yet, or at all).
+dialog-parameter-manager-closed-sheets = { $count ->
+    [one] 1 sheet of the project is closed and not listed; open it to edit its parameters.
+   *[other] { $count } sheets of the project are closed and not listed; open them to edit their parameters.
+}
+# Scope bar note, All sheets: closed sheets read from disk are listed read-only.
+dialog-parameter-manager-closed-listed = { $count ->
+    [one] 1 closed sheet is listed read-only; click one of its cells to open it.
+   *[other] { $count } closed sheets are listed read-only; click one of their cells to open it.
+}
+# Scope bar note, All sheets: the closed sheets are being read.
+dialog-parameter-manager-closed-reading = Reading the closed sheets…
+# Messages line: a closed sheet All sheets would list could not be read. $sheet is the file name; $reason says why, starting "could not be".
+dialog-parameter-manager-closed-unread = Parameter Manager: { $sheet } is not listed, it { $reason }.
+# Messages line: an edit across sheets would change closed sheets, so nothing changed. $sheets lists their file names.
+dialog-parameter-manager-refused-closed = { $count ->
+    [one] Parameter Manager: nothing changed; open { $sheets } first, it is closed.
+   *[other] Parameter Manager: nothing changed; open { $sheets } first, they are closed.
+}
+# Messages lines: an edit across several sheets changed no sheet. $sheet is the file name.
+dialog-parameter-manager-refused-busy = Parameter Manager: nothing changed, { $sheet } is being saved or moved.
+dialog-parameter-manager-refused-read-only = Parameter Manager: nothing changed, { $sheet } opens read-only.
+dialog-parameter-manager-refused-failed = Parameter Manager: nothing changed, { $sheet } refused the edit.
+# Messages line: a cell of another listed sheet was not written. $reason says why, in the edit's own words.
+dialog-parameter-manager-cell-refused = Parameter Manager: { $reason }
 dialog-parameter-manager-no-schematic-title = No active schematic
 dialog-parameter-manager-no-schematic-body = The Parameter Manager edits the parts of the active sheet. Open a schematic sheet, then open it again from Tools ▸ Parameter Manager.
 dialog-parameter-manager-footer-hint = Edits apply as you type · each cell is one undo step (Ctrl+Z)

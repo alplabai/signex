@@ -53,6 +53,8 @@ pub fn rasterize_page(
         global_refdes: &expr_tables.global_refdes,
         net_name_by_symbol_pin: &expr_tables.net_name_by_symbol_pin,
         cell: &cell,
+        variant_settings: Some(&ctx.metadata.variant_settings),
+        placed_fits: expr_tables.placed_fits.as_ref(),
     };
 
     let mut svg_ctx = SvgRenderContext::from_sheet(

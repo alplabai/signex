@@ -14,6 +14,9 @@ mod history_repo;
 mod label_class_pick;
 pub(super) mod navigator_ctx;
 pub(in crate::app) mod net_class_styles;
+mod not_fitted;
+#[cfg(test)]
+mod not_fitted_tests;
 mod panel_ctx;
 mod pin_focus;
 mod placed_ctx;
@@ -199,8 +202,8 @@ impl Signex {
     pub(crate) fn sync_active_tab(&mut self) {
         // A tab switch ends every Project tab's typing run: what is typed
         // after coming back is its own undo step.
-        for tab in self.document_state.project_tabs.values_mut() {
-            tab.general_history.close_run();
+        for history in self.document_state.general_history.values_mut() {
+            history.close_run();
         }
         // Follow the focused tab into its project: the Projects-panel
         // accent and active_project-scoped handlers (ERC / annotate /

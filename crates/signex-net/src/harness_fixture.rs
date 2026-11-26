@@ -258,6 +258,43 @@ pub(crate) fn connectors() -> SchematicSheet {
     s
 }
 
+/// A child that only passes the `DEBUG` harness on (#2657): a port `DEBUG`
+/// on a harness wire to the typed entry `DEBUG` of the sheet symbol `name`
+/// (`file`), no connector.
+pub(crate) fn bridge(name: &str, file: &str) -> SchematicSheet {
+    let mut s = empty();
+    let port_at = pt(10.0, 20.0);
+    let to_child = pt(60.0, 20.0);
+    s.harness.wires.push(harness_wire(port_at, to_child));
+    s.labels.push(port("DEBUG", port_at));
+    typed_sheet_symbol(&mut s, name, file, "DEBUG", "DEBUG", to_child);
+    s
+}
+
+/// [`mcu`] with its `DEBUG` harness going to `bridge.snxsch` instead of
+/// straight to `connectors.snxsch`.
+pub(crate) fn mcu_through_bridge() -> SchematicSheet {
+    let mut s = mcu();
+    if let Some(cs) = s.child_sheets.iter_mut().find(|cs| cs.name == "connectors") {
+        cs.name = "bridge".to_string();
+        cs.filename = "bridge.snxsch".to_string();
+    }
+    s
+}
+
+/// The carry fixture project, stitched: `mcu` -> `bridge` -> `connectors`
+/// for the nested `DEBUG` harness, `mcu` -> `sensor` for `SPI_BUS`.
+pub(crate) fn carry_fixture_netlist() -> ProjectNetlist {
+    stitch(
+        mcu_through_bridge(),
+        vec![
+            ("sensor.snxsch", sensor()),
+            ("bridge.snxsch", bridge("connectors", "connectors.snxsch")),
+            ("connectors.snxsch", connectors()),
+        ],
+    )
+}
+
 /// Stitch `root` with `children`, each child keyed by its own file name.
 pub(crate) fn stitch(
     root: SchematicSheet,

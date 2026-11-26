@@ -330,6 +330,9 @@ define_ids! {
     PANELS_CHANNEL_STRIP_COUNT = "panels-channel-strip-count";
     PANELS_CHANNEL_CARD_CAPTION = "panels-channel-card-caption";
     PANELS_CHANNEL_VIEW_NOT_COMPILED = "panels-channel-view-not-compiled";
+    PANELS_CHANNEL_CARD_FITTED = "panels-channel-card-fitted";
+    PANELS_CHANNEL_CARD_NOT_FITTED = "panels-channel-card-not-fitted";
+    PANELS_CHANNEL_CARD_PARTLY_FITTED = "panels-channel-card-partly-fitted";
     PANELS_CHANNEL_READ_ONLY = "panels-channel-read-only";
     PANELS_COMPILED_DESIGN_FAILED = "panels-compiled-design-failed";
     // Signal harnesses (#1280).
@@ -352,6 +355,7 @@ define_ids! {
     PANELS_HARNESS_ENTRY = "panels-harness-entry";
     PANELS_HARNESS_NET = "panels-harness-net";
     PANELS_HARNESS_EXPECTS_PILL = "panels-harness-expects-pill";
+    PANELS_HARNESS_EXPECTS = "panels-harness-expects";
     PANELS_HARNESS_COMPILED = "panels-harness-compiled";
     PANELS_HARNESS_START = "panels-harness-start";
     PANELS_HARNESS_END = "panels-harness-end";
@@ -453,6 +457,7 @@ define_ids! {
     HARNESS_MSG_ENTRY_OFF_CONNECTOR = "panels-harness-msg-entry-off-connector";
     PANELS_COMPILED_DESIGN_MSG_NO_PROJECT = "panels-compiled-design-msg-no-project";
     PANELS_COMPILED_DESIGN_NAMING_REFUSED = "panels-compiled-design-naming-refused";
+    PANELS_COMPILED_DESIGN_FIT_REFUSED = "panels-compiled-design-fit-refused";
     // sch-panels-tidy
     PANELS_CANVAS_FONT_SUMMARY = "panels-canvas-font-summary";
     // harness-connector-properties

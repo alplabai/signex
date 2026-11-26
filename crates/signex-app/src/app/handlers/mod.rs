@@ -4,6 +4,8 @@ pub mod autosave;
 pub mod autosave_pcb;
 pub mod autosave_primitives;
 pub mod autosave_project;
+#[cfg(test)]
+mod autosave_project_tests;
 pub mod autosave_recovery;
 pub mod autosave_row;
 pub(crate) mod board_3d;
@@ -52,6 +54,7 @@ pub mod native_menu;
 pub mod net_nav;
 mod object_list;
 mod pan_zoom_bench;
+mod parameter_closed_sheets;
 pub mod parameter_manager;
 pub mod paste;
 pub mod pcb_drc;

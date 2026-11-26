@@ -16,29 +16,35 @@ use signex_types::schematic::{
     Symbol, SymbolPrimitive, default_body_fill_shapes, lower_pin_labels, lower_placed_symbol,
 };
 use signex_types::variables::{Resolver, TextTable};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// The default body fill of every symbol on the sheet
 /// (`default_body_fill_shapes`), fill only, in `palette.symbol_body_tint`.
 /// Emitted before the wires and the symbols, as the canvas draws fills under
-/// every stroke; nothing when the tint is `None`.
+/// every stroke; nothing when the tint is `None`. A symbol in `not_fitted`
+/// fills greyed (#1294).
 pub(super) fn push_symbol_body_fills(
     out: &mut Vec<SvgElement>,
     sheet: &SchematicSheet,
     xform: &PageTransform,
     palette: &SchematicPalette,
+    not_fitted: &HashSet<uuid::Uuid>,
 ) {
     let Some(tint) = palette.symbol_body_tint else {
         return;
     };
-    let style = SvgStyle {
-        stroke_alpha: 1.0,
-        stroke_rgb: None,
-        fill_rgb: Some(tint),
-        stroke_width: 0.0,
-    };
     let px = |p: &Point| pt(xform.x(p.x), xform.px_y(p.y));
     for sym in &sheet.symbols {
+        let style = SvgStyle {
+            stroke_alpha: 1.0,
+            stroke_rgb: None,
+            fill_rgb: Some(if not_fitted.contains(&sym.uuid) {
+                super::not_fitted::greyed_rgb(tint, palette.paper)
+            } else {
+                tint
+            }),
+            stroke_width: 0.0,
+        };
         for shape in default_body_fill_shapes(sheet.body_of(sym), sym) {
             out.push(match shape {
                 BodyFillShape::Polygon(points) => {

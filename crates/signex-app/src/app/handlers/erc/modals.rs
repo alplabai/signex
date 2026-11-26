@@ -237,6 +237,9 @@ impl Signex {
             ModalId::ParameterManager => {
                 Some(Message::ParameterManager(ParameterManagerMsg::Close))
             }
+            ModalId::ParameterImport => {
+                Some(crate::app::parameter_io::ParameterIoMsg::PreviewCancelled.into())
+            }
             ModalId::Preferences => Some(Message::Preferences(PreferencesMsg::Close)),
             ModalId::PrintPreview => Some(Message::PrintPreview(PrintPreviewMsg::Close)),
             ModalId::BomPreview => Some(Message::BomPreview(BomPreviewMsg::Close)),
@@ -481,6 +484,11 @@ pub(crate) fn modal_size(modal: ModalId) -> iced::Size {
             crate::app::handlers::editing_commands::net_color_palette::palette_window_height(0),
         ),
         ModalId::ParameterManager => iced::Size::new(900.0, 560.0),
+        // Authored at the 11 px base, so it follows the type scale.
+        ModalId::ParameterImport => iced::Size::new(
+            crate::styles::chrome_px(620.0),
+            crate::styles::chrome_px(460.0),
+        ),
         ModalId::Preferences => iced::Size::new(900.0, 620.0),
         // One size for the window and the fallback card (mockup row 21).
         ModalId::NewProject => {
@@ -560,6 +568,7 @@ pub(crate) fn modal_is_fixed(modal: ModalId) -> bool {
         | ModalId::MoveSelection
         | ModalId::NetColorPalette
         | ModalId::ParameterManager
+        | ModalId::ParameterImport
         | ModalId::Preferences
         | ModalId::FindReplace
         | ModalId::PrintPreview
