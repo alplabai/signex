@@ -260,6 +260,9 @@ notice-pdf-no-files = Cannot export PDF: no files selected in the Settings tab.
 notice-netlist-export-failed = Netlist export failed: { $error }
 # $job is the .snxout file; $reason is why, in English. Nothing was written.
 notice-output-job-failed = Export Job { $job } wrote nothing: { $reason }
+# $job is the .snxout file, $profile the run profile, $count its outputs out of
+# date when the project closed (mockup row 114, Before closing the project: Ask).
+notice-output-job-out-of-date = Export Job { $job }: profile { $profile } has { $count } outputs out of date. Open the project and run it to bring them up to date.
 # $error is why, in English.
 notice-sheet-png-failed = PNG export failed: { $error }
 notice-preview-no-pages = Preview has no pages for the selected range. Check page range input.

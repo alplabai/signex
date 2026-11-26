@@ -1,18 +1,18 @@
-//! An Export Job run: pick or name the job, read it off the UI thread, build
-//! its outputs from the project's scope, write them off the UI thread, and
-//! answer the caller (the Messages panel, or the CLI / agent that waits).
+//! An Export Job run from a key, the palette or a command: pick or name the
+//! job, read it off the UI thread, then hand it to the run pipeline
+//! (`pipeline/`), which builds and writes it and answers the caller (the
+//! Messages panel, or the CLI / agent that waits).
 
 use std::path::{Path, PathBuf};
 
 use iced::Task;
 use signex_i18n::{Translatable, ids};
-use signex_types::output_job::{OUTPUT_JOB_EXTENSION, OutputJob, read_output_job};
+use signex_types::output_job::{OUTPUT_JOB_EXTENSION, RunTrigger, read_output_job};
 
-use super::write::{JobReport, build_and_write};
-use super::{JobRead, JobWritten, OutputJobMsg};
+use super::pipeline::StartRun;
+use super::write::JobReport;
+use super::{JobRead, OutputJobMsg};
 use crate::app::agent::WaitingCommand;
-use crate::app::command::CommandOutcome;
-use crate::app::handlers::menu::export::job_outputs::JobWork;
 use crate::app::{Message, Signex};
 
 /// The project a job belongs to and the open sheet its outputs are built
@@ -21,23 +21,28 @@ pub(super) struct JobScope {
     pub(super) project_dir: PathBuf,
     /// The project's file name, which names the default files.
     pub(super) stem: String,
+    /// The project's revision parameter, empty when it has none.
+    pub(super) rev: String,
     /// The project's root sheet when it is open, else its first open sheet.
     pub(super) source: PathBuf,
 }
 
-/// A run ready to write: the report so far, the folder it must stay in and
-/// the outputs.
-struct PreparedJob {
-    report: JobReport,
-    project_dir: PathBuf,
-    work: Vec<JobWork>,
+/// What a run asks for besides the job: the profile, one output, Run
+/// Selected, a subset to keep up to date, and what started it.
+#[derive(Debug, Clone, Default)]
+pub struct RunAsk {
+    pub(crate) profile: Option<String>,
+    pub(crate) only: Option<String>,
+    pub(crate) selected: bool,
+    pub(crate) among: Option<Vec<String>>,
+    pub(crate) trigger: Option<RunTrigger>,
 }
 
 /// Read the job file off the UI thread; the outcome comes back as
 /// `OutputJobMsg::JobRead`.
 pub(super) fn read_job(
     job: PathBuf,
-    only: Option<String>,
+    ask: RunAsk,
     waiting: Option<WaitingCommand>,
 ) -> Task<Message> {
     let reading = job.clone();
@@ -53,12 +58,21 @@ pub(super) fn read_job(
         move |result| {
             Message::from(OutputJobMsg::JobRead(Box::new(JobRead {
                 job,
-                only,
+                ask,
                 waiting,
                 result,
             })))
         },
     )
+}
+
+/// The revision a project names in its parameters (`Revision` or `Rev`).
+fn project_rev(parameters: &std::collections::BTreeMap<String, String>) -> String {
+    parameters
+        .iter()
+        .find(|(key, _)| key.eq_ignore_ascii_case("revision") || key.eq_ignore_ascii_case("rev"))
+        .map(|(_, value)| value.trim().to_string())
+        .unwrap_or_default()
 }
 
 impl Signex {
@@ -95,13 +109,18 @@ impl Signex {
         Ok(JobScope {
             project_dir: project.dir().to_path_buf(),
             stem,
+            rev: project_rev(&project.data.parameters),
             source,
         })
     }
 
     /// The variant `named` names in `job`'s project, as the project spells
     /// it; the project's active variant when `named` is `None`.
-    fn output_job_variant(&self, job: &Path, named: Option<&str>) -> Result<String, String> {
+    pub(super) fn output_job_variant(
+        &self,
+        job: &Path,
+        named: Option<&str>,
+    ) -> Result<String, String> {
         let project = self
             .document_state
             .document_project(job)
@@ -145,119 +164,39 @@ impl Signex {
         if let Ok(scope) = self.output_job_scope(&job) {
             self.commit_drafts_in_scope_of(Some(&scope.source));
         }
-        read_job(job, None, None)
+        let ask = RunAsk {
+            trigger: Some(RunTrigger::Manual),
+            ..RunAsk::default()
+        };
+        read_job(job, ask, None)
     }
 
-    /// The job file landed: build its outputs and write them off the UI
-    /// thread, or answer why nothing is written.
+    /// The job file landed: start its run, or answer why nothing is written.
     pub(super) fn handle_output_job_read(&mut self, read: JobRead) -> Task<Message> {
         let JobRead {
             job,
-            only,
+            ask,
             waiting,
             result,
         } = read;
-        let prepared = result.and_then(|loaded| self.prepare_job(&job, &loaded, only.as_deref()));
-        let prepared = match prepared {
-            Ok(prepared) => prepared,
-            Err(reason) => return self.finish_output_job(job, waiting, Err(reason)),
-        };
-        if let Err(e) = self.refuse_while_project_moves(&job, "run the Export Job") {
-            return self.finish_output_job(job, waiting, Err(e.to_string()));
+        let trigger = ask.trigger.unwrap_or(match waiting {
+            Some(_) => RunTrigger::Command,
+            None => RunTrigger::Manual,
+        });
+        match result {
+            Ok(loaded) => self.start_job_run(StartRun {
+                job_path: job,
+                job: loaded,
+                ask,
+                trigger,
+                waiting,
+            }),
+            Err(reason) => self.finish_unstarted_run(job, trigger, waiting, reason),
         }
-        self.begin_project_write(&job);
-        let PreparedJob {
-            mut report,
-            project_dir,
-            work,
-        } = prepared;
-        let folder = PathBuf::from(&report.folder);
-        Task::perform(
-            async move {
-                tokio::task::spawn_blocking(move || {
-                    build_and_write(&folder, Some(&project_dir), work)
-                })
-                .await
-                .map_err(|e| format!("the run did not finish: {e}"))
-                .and_then(|written| written)
-            },
-            move |written| {
-                let result = written.map(|(outputs, said)| {
-                    report.outputs = outputs;
-                    report.warnings.extend(said);
-                    report
-                });
-                Message::from(OutputJobMsg::JobWritten(Box::new(JobWritten {
-                    target: job,
-                    waiting,
-                    result,
-                })))
-            },
-        )
-    }
-
-    /// The report so far, the project folder and the work of `job`.
-    fn prepare_job(
-        &self,
-        job_path: &Path,
-        job: &OutputJob,
-        only: Option<&str>,
-    ) -> Result<PreparedJob, String> {
-        let scope = self.output_job_scope(job_path)?;
-        let plan = job.plan(&scope.stem, only).map_err(|e| e.to_string())?;
-        let variant = self.output_job_variant(job_path, job.variant.as_deref())?;
-        let job_folder = job_path.parent().unwrap_or_else(|| Path::new(""));
-        let folder = job.output_folder(job_folder).map_err(|e| e.to_string())?;
-        let build = self.output_job_work(&scope.source, &plan.outputs, &variant)?;
-        Ok(PreparedJob {
-            report: JobReport {
-                job: job_path.display().to_string(),
-                folder: folder.display().to_string(),
-                variant,
-                outputs: Vec::new(),
-                skipped: plan.skipped,
-                warnings: build.warnings,
-            },
-            project_dir: scope.project_dir,
-            work: build.work,
-        })
-    }
-
-    pub(super) fn handle_output_job_written(&mut self, written: JobWritten) -> Task<Message> {
-        self.end_project_write(&written.target);
-        self.finish_output_job(written.target, written.waiting, written.result)
-    }
-
-    /// Say how the run ended: in the Messages panel (and the notice card for
-    /// a run the person started), and to the waiting CLI or agent call.
-    fn finish_output_job(
-        &mut self,
-        job: PathBuf,
-        waiting: Option<WaitingCommand>,
-        result: Result<JobReport, String>,
-    ) -> Task<Message> {
-        match &result {
-            Ok(report) => log_report("Export Job", report),
-            Err(reason) if waiting.is_none() => self.refuse_output_job(&job, reason),
-            Err(reason) => crate::diagnostics::log_warning(format!(
-                "Export Job {} wrote nothing: {reason}",
-                job.display()
-            )),
-        }
-        let Some(waiting) = waiting else {
-            return Task::none();
-        };
-        let outcome = match result {
-            Ok(report) => CommandOutcome::Answered(
-                serde_json::to_value(&report).unwrap_or(serde_json::Value::Null),
-            ),
-            Err(reason) => super::operands::job_refusal(&job, reason),
-        };
-        self.finish_waiting_command(waiting, &job, move |_| outcome)
     }
 
     /// The notice card and a Messages line: nothing of `job` was written.
-    fn refuse_output_job(&mut self, job: &Path, reason: &str) {
+    pub(super) fn refuse_output_job(&mut self, job: &Path, reason: &str) {
         self.refuse_export(
             Translatable::new(ids::NOTICE_OUTPUT_JOB_FAILED)
                 .arg("job", job.display().to_string())

@@ -70,7 +70,13 @@ pub(crate) fn region_from_json(region: &serde_json::Value) -> crate::dock::Regio
                 // Layer Stack is a document tab now, never docked. A stored
                 // SCH Filter panel reads as Filter, which covers it (mockup
                 // rows 40, 55); it is not shown twice.
-                .filter(|kind| *kind != crate::panels::PanelKind::LayerStack)
+                // Export Jobs is a document tab too (mockup row 114).
+                .filter(|kind| {
+                    !matches!(
+                        kind,
+                        crate::panels::PanelKind::LayerStack | crate::panels::PanelKind::OutputJobs
+                    )
+                })
                 .collect()
         })
         .unwrap_or_default();

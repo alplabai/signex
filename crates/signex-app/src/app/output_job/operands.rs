@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use iced::Task;
 use signex_i18n::{Translatable, ids};
-use signex_types::output_job::{MAX_PNG_DPI, MIN_PNG_DPI, OUTPUT_JOB_EXTENSION};
+use signex_types::output_job::{MAX_PNG_DPI, MIN_PNG_DPI, OUTPUT_JOB_EXTENSION, RunTrigger};
 
 use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::document_ids::DocumentKind;
@@ -34,14 +34,14 @@ pub(super) fn png_refusal(reason: impl Into<String>) -> CommandOutcome {
     }
 }
 
-fn path_operand(args: &CommandArgs) -> Option<PathBuf> {
+pub(super) fn path_operand(args: &CommandArgs) -> Option<PathBuf> {
     match args.operand("path") {
         Some(OperandValue::Path(path)) => Some(PathBuf::from(path)),
         _ => None,
     }
 }
 
-fn text_operand<'a>(args: &'a CommandArgs, name: &str) -> Option<&'a str> {
+pub(super) fn text_operand<'a>(args: &'a CommandArgs, name: &str) -> Option<&'a str> {
     match args.operand(name) {
         Some(OperandValue::Text(text)) => Some(text.as_str()),
         _ => None,
@@ -53,6 +53,17 @@ pub(super) fn is_job_file(path: &Path) -> bool {
     path.extension()
         .and_then(|ext| ext.to_str())
         .is_some_and(|ext| ext.eq_ignore_ascii_case(OUTPUT_JOB_EXTENSION))
+}
+
+/// `Err` unless `path` names an Export Job file.
+pub(super) fn check_job_file(path: &Path) -> Result<(), String> {
+    match is_job_file(path) {
+        true => Ok(()),
+        false => Err(format!(
+            "{} is not an Export Job (.snxout) file",
+            path.display()
+        )),
+    }
 }
 
 /// `dpi` as written: whole dots per inch within the range a PNG takes.
@@ -69,9 +80,10 @@ pub(super) fn parse_dpi(text: Option<&str>) -> Result<u32, String> {
         })
 }
 
-/// `run_output_job path=<job> [name=<output>]`: checked now, answered once
-/// the job file is read and its files are written
-/// ([`CommandOutcome::Deferred`]).
+/// `run_output_job path=<job> [name=<output>] [profile=<profile>]
+/// [selected=<bool>]`: checked now, answered once the job file is read and
+/// its run has ended ([`CommandOutcome::Deferred`]). A profile's Validate
+/// that would ask stops the run instead: a command has no person to ask.
 pub(crate) fn run_output_job(app: &mut Signex, args: &CommandArgs) -> Ran {
     let Some(job) = path_operand(args) else {
         return (
@@ -86,10 +98,16 @@ pub(crate) fn run_output_job(app: &mut Signex, args: &CommandArgs) -> Ran {
         Ok(command) => command,
         Err(reason) => return (job_refusal(&job, reason), Task::none()),
     };
-    let only = text_operand(args, "name").map(str::to_string);
+    let ask = super::run::RunAsk {
+        profile: text_operand(args, "profile").map(str::to_string),
+        only: text_operand(args, "name").map(str::to_string),
+        selected: matches!(args.operand("selected"), Some(OperandValue::Bool(true))),
+        among: None,
+        trigger: Some(RunTrigger::Command),
+    };
     let waiting = app.wait_for_command(&command, args);
     let ticket = waiting.ticket;
-    let task = super::run::read_job(job, only, Some(waiting));
+    let task = super::run::read_job(job, ask, Some(waiting));
     (CommandOutcome::Deferred { ticket }, task)
 }
 

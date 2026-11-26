@@ -75,6 +75,10 @@ pub enum TabKind {
     /// is the `.snxsym` path, which Save writes; it sits after the symbol's
     /// own tab (`app/pin_table_tab`).
     PinTable,
+    /// An Export Job (`.snxout`, mockup row 114), main window only. Its
+    /// draft lives in [`crate::app::DocumentState::output_jobs`] keyed by
+    /// `TabInfo.path`, which Save writes (`app/output_job`).
+    OutputJob,
 }
 
 impl TabKind {
@@ -82,6 +86,11 @@ impl TabKind {
     /// save or restore from History.
     pub fn is_gerber_viewer(&self) -> bool {
         matches!(self, TabKind::GerberViewer)
+    }
+
+    /// An Export Job tab: never undocked, not restored from History.
+    pub fn is_output_job(&self) -> bool {
+        matches!(self, TabKind::OutputJob)
     }
 
     pub fn is_component_editor(&self) -> bool {

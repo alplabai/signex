@@ -79,12 +79,9 @@ impl Signex {
             .map_err(|e| e.to_string())?;
         self.begin_project_write(&folder);
         let mut report = JobReport {
-            job: String::new(),
             folder: folder.display().to_string(),
             variant,
-            outputs: Vec::new(),
-            skipped: Vec::new(),
-            warnings: Vec::new(),
+            ..JobReport::default()
         };
         let writing = folder.clone();
         Ok(Task::perform(

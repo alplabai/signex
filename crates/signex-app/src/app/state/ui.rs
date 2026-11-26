@@ -568,6 +568,9 @@ pub struct UiState {
     /// Generation of the newest Fabrication Outputs write, outside the
     /// dialog so a reopened dialog never takes an older answer.
     pub fab_outputs_writes: u64,
+    /// The Export Job tabs' view state, the runs and the automation
+    /// (#1299). Boxed: a pointer of the size budget (#2412).
+    pub output_jobs: Box<crate::app::output_job::OutputJobUi>,
     /// Board Reports and Board Print / PDF (#2404, #2402): the open dialog
     /// and the print options it was last used with.
     pub board_output: crate::app::BoardOutputState,

@@ -167,6 +167,13 @@ impl Signex {
                 None => Task::none(),
             };
         }
+        // mockup row 114: a `.snxout` row opens its Export Job tab.
+        if crate::app::output_job::opens_by_name(&label) {
+            return match self.tree_path_to_file_path(path) {
+                Some(file) => self.open_output_job_tab(file),
+                None => Task::none(),
+            };
+        }
         match self.open_project_tree_document(path, label) {
             Ok(task) => task,
             Err(error) => {
@@ -420,6 +427,7 @@ fn tree_row_opens(node: &signex_widgets::tree_view::TreeNode) -> bool {
             | TreeIcon::SnxLibrary
             | TreeIcon::SnxSymbol
     ) || crate::app::gerber_viewer::opens_by_name(&node.label)
+        || crate::app::output_job::opens_by_name(&node.label)
 }
 
 fn set_expanded_recursive(nodes: &mut [signex_widgets::tree_view::TreeNode], expanded: bool) {

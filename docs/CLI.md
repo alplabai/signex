@@ -1071,15 +1071,25 @@ Find by text on a board is `find_items` (designator and value).
 
 ## Export Jobs and PNG pages
 
-`run_output_job path=<job.snxout> [name=<output>]` runs an Export Job of an
-open project: every enabled output it lists, or the one `name` names, into
-the job's folder. `export_sheet_png document=<sheet> path=<folder>
-[dpi=<n>]` writes the pages of the sheet's project as PNG files (300 dpi when
-`dpi` is left out). A schematic of the project must be open. Both need
-`--allow export`, and both answer once the files are written with `folder`,
-`variant`, `outputs` (each `name` and its `files`), `skipped` and
-`warnings`; a run that cannot build every output writes nothing and is
-refused with the reason. The file format and the rules are in
+`run_output_job path=<job.snxout> [name=<output>] [profile=<profile>]
+[selected=true]` runs an Export Job of an open project: a run profile (the
+job's default when `profile` is left out; Validate, Generate, Package), every
+enabled output of a job with no profile, or the one `name` names, into the
+job's folder. A profile's Validate that would ask stops the run instead.
+`export_sheet_png document=<sheet> path=<folder> [dpi=<n>]` writes the pages
+of the sheet's project as PNG files (300 dpi when `dpi` is left out). A
+schematic of the project must be open, and the board for a board output.
+Both need `--allow export`, and both answer once the files are written with
+`folder`, `variant`, `outputs` (each `name` and its `files`), `skipped` and
+`warnings` (and `profile`, `checks`, `zip` and `removed` when they apply); a
+run that cannot build every output writes nothing and is refused with the
+reason. A headless run leaves the job's history as it is.
+
+The Export Job tab's actions are commands too: `new_output_job`,
+`add_job_output`, `set_job_output`, `set_job_profile` and
+`set_job_triggers` write the job file (`--save`); `read_output_job`,
+`open_output_job`, `stop_output_job` and `view_output_job_run` read or show.
+The file format, the commands' operands and the rules are in
 [OUTPUT_JOBS.md](OUTPUT_JOBS.md).
 
 ## Working through a running Signex

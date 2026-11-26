@@ -88,8 +88,9 @@ impl Signex {
             );
             return Task::none();
         }
-        // The Gerber Viewer draws in the main window only (mockup row 193).
-        if tab.kind.is_gerber_viewer() {
+        // The Gerber Viewer and an Export Job draw in the main window only
+        // (mockup rows 193 and 114).
+        if tab.kind.is_gerber_viewer() || tab.kind.is_output_job() {
             self.ui_state.tab_dragging = None;
             return Task::none();
         }

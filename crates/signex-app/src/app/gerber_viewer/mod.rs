@@ -10,6 +10,7 @@
 //! and a recent package. Every read runs in a task (`read.rs`).
 
 mod canvas;
+mod from_run;
 mod read;
 mod recent;
 mod state;
@@ -26,6 +27,7 @@ use std::sync::Arc;
 
 use pcb_geom::PointNm;
 
+pub use from_run::RunOrigin;
 pub use read::{PackageRead, ReadFailure};
 pub use recent::{RecentPackage, RecentPackages};
 pub use state::{
@@ -122,4 +124,8 @@ pub enum GerberViewerMsg {
         at: PointNm,
         tolerance: i64,
     },
+    /// The Export Job run banner's close (mockup row 193b).
+    RunBannerClosed,
+    /// The run banner's Back to run summary.
+    BackToRunPressed,
 }

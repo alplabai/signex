@@ -40,9 +40,18 @@ pub(crate) enum JobWork {
         ctx: Box<ExportContext>,
         options: Box<PreviewOptions>,
     },
+    /// A board output's files, made off the UI thread from a copy of the
+    /// board (`app::output_job::board_work`).
+    Board {
+        output: String,
+        i18n: std::sync::Arc<signex_i18n::I18n>,
+        job: Box<crate::app::fab_outputs::GenerateJob>,
+    },
 }
 
-/// One file of a run: the output it belongs to and its name in the folder.
+/// One file of a run: the output it belongs to and its name in the folder,
+/// `/`-separated when an ODB++ folder tree puts it in a subfolder.
+#[derive(Clone)]
 pub(crate) struct JobFile {
     pub(crate) output: String,
     pub(crate) file: String,
@@ -53,6 +62,9 @@ pub(crate) struct JobFile {
 pub(crate) struct JobBuild {
     pub(crate) work: Vec<JobWork>,
     pub(crate) warnings: Vec<String>,
+    /// What the BOM checks found, for a run's Validate (mockup row 114).
+    pub(crate) bom_errors: usize,
+    pub(crate) bom_warnings: usize,
 }
 
 impl JobWork {
@@ -101,6 +113,9 @@ impl JobWork {
                 ctx,
                 options,
             } => render_png(output, &file, &ctx, &options),
+            Self::Board { output, i18n, job } => {
+                crate::app::output_job::render_board(output, &i18n, *job)
+            }
         }
     }
 }
@@ -161,9 +176,12 @@ impl Signex {
         let mut build = JobBuild {
             work: Vec::new(),
             warnings: issues.messages(),
+            bom_errors: 0,
+            bom_warnings: 0,
         };
         for output in plan {
             let work = match output.kind {
+                kind if kind.is_board() => self.board_job_work(source, output, variant)?,
                 OutputKind::SchematicPdf => {
                     let (ctx, options) = self.job_pages(source, &ctx, variant)?;
                     JobWork::Pdf {
@@ -185,10 +203,10 @@ impl Signex {
                         }),
                     }
                 }
-                OutputKind::Bom => {
-                    self.job_bom(source, &ctx, variant, output, &mut build.warnings)?
-                }
+                OutputKind::Bom => self.job_bom(source, &ctx, variant, output, &mut build)?,
                 OutputKind::Netlist => job_netlist(&ctx, &issues, output)?,
+                // Board kinds are taken by the first arm.
+                _ => return Err(format!("{}: not a schematic output", output.name)),
             };
             build.work.push(work);
         }
@@ -265,12 +283,12 @@ impl Signex {
         ctx: &ExportContext,
         variant: &str,
         output: &PlannedOutput,
-        warnings: &mut Vec<String>,
+        build: &mut JobBuild,
     ) -> Result<JobWork, String> {
         let mut ctx = ctx.clone();
         crate::library::drift::apply_library_names(&mut ctx, &self.library.drift.names);
         if ctx.netlist_sheets.is_empty() {
-            warnings.push(format!(
+            build.warnings.push(format!(
                 "{}: the project hierarchy could not be derived, so parts on child sheets are not listed",
                 output.name
             ));
@@ -286,8 +304,10 @@ impl Signex {
             .export(&ctx, &options)
             .map_err(|e| format!("{}: BOM export failed: {e}", output.name))?;
         let report = &bom.validation_report;
+        build.bom_errors += report.error_count();
+        build.bom_warnings += report.warning_count();
         if !report.issues.is_empty() {
-            warnings.push(format!(
+            build.warnings.push(format!(
                 "{}: the BOM checks found {} error(s) and {} warning(s)",
                 output.name,
                 report.error_count(),

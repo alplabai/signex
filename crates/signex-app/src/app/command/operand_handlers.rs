@@ -153,6 +153,22 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     // #1299: the PNG pages of a schematic, and an Export Job run.
     ("export_sheet_png", crate::app::output_job::export_sheet_png),
     ("run_output_job", crate::app::output_job::run_output_job),
+    // Mockup row 114: the Export Job tab's actions.
+    ("new_output_job", crate::app::output_job::new_output_job),
+    ("open_output_job", crate::app::output_job::open_output_job),
+    (
+        "read_output_job",
+        crate::app::output_job::read_output_job_command,
+    ),
+    ("add_job_output", crate::app::output_job::add_job_output),
+    ("set_job_output", crate::app::output_job::set_job_output),
+    ("set_job_profile", crate::app::output_job::set_job_profile),
+    ("set_job_triggers", crate::app::output_job::set_job_triggers),
+    ("stop_output_job", crate::app::output_job::stop_output_job),
+    (
+        "view_output_job_run",
+        crate::app::output_job::view_output_job_run,
+    ),
     ("add_board_graphic", graphic::add_board_graphic),
     ("set_board_graphic", graphic::set_board_graphic),
     ("set_footprint_text", fp_text::set_footprint_text),
@@ -409,6 +425,17 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "set_layer_tab_names" => Some(
             "`set_layer_tab_names` needs the operand `style` — \
              right-click a layer tab under the board",
+        ),
+        // Mockup row 114: a person uses the Export Job tab.
+        "read_output_job"
+        | "add_job_output"
+        | "set_job_output"
+        | "set_job_profile"
+        | "set_job_triggers"
+        | "stop_output_job"
+        | "view_output_job_run" => Some(
+            "this command needs the operand `path` and the job's settings — \
+             use the Export Job tab",
         ),
         // #2363: a person uses the Layers panel.
         "set_layer_visible" | "set_active_layer" | "set_layer_color" => Some(

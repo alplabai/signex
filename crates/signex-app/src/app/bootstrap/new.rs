@@ -513,6 +513,7 @@ impl Signex {
                 fab_outputs: None,
                 diff_pair_classes: None,
                 fab_outputs_writes: 0,
+                output_jobs: Default::default(),
                 board_output: Default::default(),
                 back_annotate: None,
                 compare_board: None,
@@ -832,6 +833,7 @@ impl Signex {
                 moved_project_dirs: Vec::new(),
                 deferred_git_commits: Vec::new(),
                 gerber_viewer: Default::default(),
+                output_jobs: Default::default(),
             },
             interaction_state: InteractionState {
                 current_tool: Tool::Select,

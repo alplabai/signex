@@ -89,7 +89,23 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     // The PDF's printed text is in the UI locale (`print_text`).
     (&["export_board_pdf"], Operand, &[Settings]),
     // #1299: checks the job's project and starts its read; the build is later.
-    (&["run_output_job"], Operand, &[]),
+    // The tab's commands (mockup row 114) read the job's draft or its file.
+    (
+        &[
+            "run_output_job",
+            "new_output_job",
+            "open_output_job",
+            "read_output_job",
+            "add_job_output",
+            "set_job_output",
+            "set_job_profile",
+            "set_job_triggers",
+            "stop_output_job",
+            "view_output_job_run",
+        ],
+        Operand,
+        &[],
+    ),
     // Save As of a background sheet is refused (`active_path`).
     (&["save_document_as"], Operand, &[ActiveDocument]),
     // The rfd picker (`save_as_dialog_for_active_tab`).

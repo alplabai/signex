@@ -310,6 +310,8 @@ impl Signex {
             .collect();
         tasks.push(project_write);
         tasks.push(self.refresh_project_thumbnail(&path));
+        // Export Job profiles that run on save (mockup row 114).
+        tasks.push(self.auto_runs_after_save(&path));
         Task::batch(tasks)
     }
 

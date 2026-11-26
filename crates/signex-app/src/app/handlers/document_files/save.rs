@@ -84,6 +84,13 @@ impl Signex {
         {
             return Ok(iced::Task::none());
         }
+        // An Export Job writes its draft (`app/output_job/document`).
+        if let Some(tab) = self.document_state.tabs.get(self.document_state.active_tab)
+            && tab.kind.is_output_job()
+        {
+            let job = tab.path.clone();
+            return Ok(self.write_output_job_draft(&job, None));
+        }
         let key = match self.document_state.tabs.get(self.document_state.active_tab) {
             Some(tab) => {
                 // Refused before any branch below could ask for a Save As
@@ -280,6 +287,9 @@ impl Signex {
     ) -> Result<iced::Task<Message>> {
         self.refuse_save_while_path_op(path)?;
         self.refuse_save_while_restoring(path)?;
+        if self.document_state.output_jobs.contains_key(path) {
+            return Ok(self.write_output_job_draft(path, None));
+        }
         match self.document_state.document_key_for_path(path) {
             Some(DocumentKey::Schematic(_)) => match self.guard_spelling_save(path)? {
                 super::dir_case::SaveGuard::Clear => {

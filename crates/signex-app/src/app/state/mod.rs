@@ -728,6 +728,8 @@ pub struct DocumentState {
     /// The Gerber Viewer tab (mockup rows 193 and 193f): the package shown
     /// and the app-wide recent packages. Its slice owns it.
     pub gerber_viewer: crate::app::gerber_viewer::GerberViewerState,
+    /// Export Jobs open as tabs, or closed with unsaved edits (#1299).
+    pub output_jobs: std::collections::BTreeMap<PathBuf, signex_types::output_job::OutputJob>,
 }
 
 /// A project folder a rename moved from `old` to `new`.

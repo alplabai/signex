@@ -77,7 +77,7 @@ pub struct Operand {
     pub required: bool,
 }
 
-const fn required(name: &'static str, kind: OperandKind) -> Operand {
+pub(super) const fn required(name: &'static str, kind: OperandKind) -> Operand {
     Operand {
         name,
         kind,
@@ -85,7 +85,7 @@ const fn required(name: &'static str, kind: OperandKind) -> Operand {
     }
 }
 
-const fn optional(name: &'static str, kind: OperandKind) -> Operand {
+pub(super) const fn optional(name: &'static str, kind: OperandKind) -> Operand {
     Operand {
         name,
         kind,
@@ -510,12 +510,6 @@ pub const SHEET_PNG_EXPORT: &[Operand] = &[
     required("document", OperandKind::Document),
     required("path", OperandKind::Path),
     optional("dpi", OperandKind::Text),
-];
-/// An Export Job run (#1299): the `.snxout` file, and the `name` of the one
-/// output to write (every enabled one if absent).
-pub const OUTPUT_JOB_RUN: &[Operand] = &[
-    required("path", OperandKind::Path),
-    optional("name", OperandKind::Text),
 ];
 /// `add_board_graphic` (#2424): a drawing of `kind` (`line`, `arc`,
 /// `circle`, `rectangle`, `text_frame`) on the board `document` names. A

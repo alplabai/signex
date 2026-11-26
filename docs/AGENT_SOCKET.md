@@ -188,7 +188,11 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   The CSV, PDF, SVG and STEP writers `export_board_report`,
   `export_board_pdf`, `export_assembly_svg` and `export_board_step` take a
   `path`, so they are CLI only, as are the PNG pages `export_sheet_png` and
-  an Export Job run `run_output_job` (#1299, `docs/OUTPUT_JOBS.md`).
+  an Export Job run `run_output_job` and the Export Job tab's commands
+  (`new_output_job`, `open_output_job`, `read_output_job`, `add_job_output`,
+  `set_job_output`, `set_job_profile`, `set_job_triggers`,
+  `stop_output_job`, `view_output_job_run`), which name the job by `path`
+  (#1299, `docs/OUTPUT_JOBS.md`).
 
 The last three are open to agents by the maintainer's decision (#1924):
 

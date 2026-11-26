@@ -300,6 +300,8 @@ fn history_target_of(active: &crate::app::TabInfo) -> Option<std::path::PathBuf>
     match &active.kind {
         // Fabrication files are read, never written: nothing to restore.
         crate::app::TabKind::GerberViewer => None,
+        // An Export Job is not restored from History yet.
+        crate::app::TabKind::OutputJob => None,
         crate::app::TabKind::LibraryBrowser(p) => Some(p.clone()),
         crate::app::TabKind::ComponentEditor(_) => None,
         // A board page; its board's tab offers the board's history.

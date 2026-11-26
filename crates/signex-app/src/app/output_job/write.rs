@@ -17,7 +17,7 @@ pub struct WrittenOutput {
 
 /// What a run wrote: the JSON answer of `run_output_job` and
 /// `export_sheet_png`, and the Messages lines.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize)]
 pub struct JobReport {
     /// The job file; empty for a PNG export.
     pub job: String,
@@ -27,6 +27,25 @@ pub struct JobReport {
     /// Enabled outputs of a kind this Signex does not write.
     pub skipped: Vec<String>,
     pub warnings: Vec<String>,
+    /// The run profile (mockup row 114), when the job has one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub profile: Option<String>,
+    /// What Validate found, when the run validated.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub checks: Option<CheckCounts>,
+    /// The zip written beside the folder.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub zip: Option<String>,
+    /// Files Clear the folder deleted, as the run did not write them.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub removed: Vec<String>,
+}
+
+/// The errors and warnings a run's Validate found.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
+pub struct CheckCounts {
+    pub errors: usize,
+    pub warnings: usize,
 }
 
 impl JobReport {
@@ -80,7 +99,7 @@ pub(super) fn build_and_write(
 
 /// `Err` unless the nearest folder of `folder` that exists resolves, links
 /// followed, inside `project`.
-fn confined(folder: &Path, project: &Path) -> Result<(), String> {
+pub(super) fn confined(folder: &Path, project: &Path) -> Result<(), String> {
     let outside = || {
         format!(
             "the folder {} is not inside the project folder {}",

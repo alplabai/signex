@@ -394,6 +394,10 @@ pub struct GerberViewerState {
     /// The clock, in Unix seconds, read in `update` when the recent list
     /// was last checked; the rows' times read against it.
     pub now: Option<i64>,
+    /// The Export Job run the files came from (mockup row 193b).
+    pub from_run: Option<super::RunOrigin>,
+    /// The run's files could not be read: they moved since.
+    pub run_missing: bool,
 }
 
 impl GerberViewerState {

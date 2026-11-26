@@ -171,7 +171,11 @@ pub(crate) use handlers::selection_workflow::passes_filter;
 pub use handlers::window_geometry_events::GeometryReadout;
 pub use handlers::window_tiling::{Tile, TileLayout, TilePlan, tiles};
 pub use new_project::{NewProjectMsg, NewProjectState, ProfileUndo};
-pub use output_job::{JobRead, JobReport, JobWritten, OutputJobMsg, WrittenOutput};
+pub use output_job::{
+    AutoMsg, Built, CheckCounts, JobDocMsg, JobRead, JobReport, JobTabMsg, JobWritten, ListPurpose,
+    NamingMode, OutputJobMsg, Packaged, PackagingSwitch, RunAsk, RunMsg, TabPage, TriggerEdit,
+    ValidateOutcome, WrittenOutput,
+};
 pub use sheet_numbering::{NumberingProblem, SheetNumberingMsg, SheetNumberingState};
 pub use sheet_sync::{SheetSyncMsg, SheetSyncProblem, SheetSyncState};
 pub use signex_history::History;

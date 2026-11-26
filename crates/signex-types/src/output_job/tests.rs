@@ -17,7 +17,7 @@ fn sample() -> OutputJob {
             bom,
             JobOutput::new("Netlist", OutputKind::Netlist),
         ],
-        unknown: UnknownFields::default(),
+        ..OutputJob::default()
     }
 }
 

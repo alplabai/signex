@@ -121,3 +121,42 @@ fn the_pages_as_png_through_the_cli() {
     let png = std::fs::read(fx.dir.join("png").join("demo-1.png")).expect("the page");
     assert!(png.starts_with(b"\x89PNG\r\n\x1a\n"));
 }
+
+/// Mockup row 114 through the binary: a new job, an output added, a profile
+/// made the default, then the profile run headless, as the tab's command
+/// line for CI does. Editing the job needs `--save`.
+#[test]
+fn a_job_made_and_run_by_profile_through_the_cli() {
+    let (_guard, root) = temp_root();
+    let fx = pins_fixture(&root);
+    let project = fx.project.to_str().unwrap();
+    let edits = jsonl(&[
+        json!({"id": "new_output_job", "args": {"path": "fab.snxout"}}),
+        json!({"id": "add_job_output", "args": {"path": "fab.snxout", "kind": "netlist"}}),
+        json!({"id": "set_job_profile", "args": {
+            "path": "fab.snxout", "profile": "Release", "outputs": "Netlist",
+            "default": true, "validate": false, "folder": "release"}}),
+        json!({"id": "read_output_job", "args": {"path": "fab.snxout"}}),
+    ]);
+    let refused = run_cli(&["run", project], edits.clone());
+    assert_ne!(refused.lines[0]["status"], "answered", "{}", refused.stdout);
+    assert!(
+        !fx.dir.join("fab.snxout").exists(),
+        "nothing written without --save"
+    );
+
+    let out = run_cli(&["run", project, "--save"], edits);
+    assert_eq!(out.code, Some(0), "{}\n{}", out.stdout, out.stderr);
+    let read = &out.lines[3]["data"];
+    assert_eq!(read["default_profile"], "Release", "{}", out.stdout);
+    assert_eq!(read["outputs"][0]["name"], "Netlist");
+
+    let run = jsonl(&[
+        json!({"id": "open_document", "args": {"path": "main.snxsch"}}),
+        json!({"id": "run_output_job", "args": {"path": "fab.snxout"}}),
+    ]);
+    let out = run_cli(&["run", project, "--allow", "export"], run);
+    assert_eq!(out.lines[1]["status"], "answered", "{}", out.stdout);
+    assert_eq!(out.lines[1]["data"]["profile"], "Release");
+    assert!(fx.dir.join("release").join("demo.NET").is_file());
+}

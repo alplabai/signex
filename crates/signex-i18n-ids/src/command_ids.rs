@@ -644,6 +644,15 @@ define_ids! {
         CMD_MENU_EXPORT_BOARD_STEP = "cmd-menu-export-board-step";
         CMD_EXPORT_SHEET_PNG = "cmd-export-sheet-png";
         CMD_RUN_OUTPUT_JOB = "cmd-run-output-job";
+        CMD_NEW_OUTPUT_JOB = "cmd-new-output-job";
+        CMD_OPEN_OUTPUT_JOB = "cmd-open-output-job";
+        CMD_READ_OUTPUT_JOB = "cmd-read-output-job";
+        CMD_ADD_JOB_OUTPUT = "cmd-add-job-output";
+        CMD_SET_JOB_OUTPUT = "cmd-set-job-output";
+        CMD_SET_JOB_PROFILE = "cmd-set-job-profile";
+        CMD_SET_JOB_TRIGGERS = "cmd-set-job-triggers";
+        CMD_STOP_OUTPUT_JOB = "cmd-stop-output-job";
+        CMD_VIEW_OUTPUT_JOB_RUN = "cmd-view-output-job-run";
         CMD_SELECT_BOARD_NET = "cmd-select-board-net";
         CMD_MENU_SELECT_BOARD_NET = "cmd-menu-select-board-net";
         CMD_HIGHLIGHT_BOARD_NET = "cmd-highlight-board-net";

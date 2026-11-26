@@ -1,8 +1,23 @@
-//! The Export Job file (`.snxout`, #1299; mockup rows 167 and 193b): the
-//! outputs one run writes, the variant they show and the folder they go to.
-//! A run writes every enabled output, or the one it names. The file is TOML
-//! under the token `snxout/1`; keys this build does not know are kept. See
+//! The Export Job file (`.snxout`, #1299; mockup rows 114, 167 and 193b):
+//! the outputs one run writes, the variant they show and the folder they go
+//! to. A run writes every enabled output, the one it names, or the ticked
+//! outputs of a run profile (`profile.rs`); the runs from the window are
+//! kept in its history (`history.rs`). The file is TOML under the token
+//! `snxout/1`; keys this build does not know are kept. See
 //! `docs/OUTPUT_JOBS.md`.
+
+mod history;
+mod kind;
+mod profile;
+
+pub use history::{
+    MAX_HISTORY, MAX_RECORD_WARNINGS, RunRecord, RunResult, RunTrigger, append_run_record,
+};
+pub use kind::{OutputGroup, OutputKind};
+pub use profile::{
+    BeforeClose, DEFAULT_SAVE_WAIT_SECONDS, JobProfile, JobTriggers, MAX_SAVE_WAIT_SECONDS,
+    OnErrors, OnWarnings, Packaging, RunPlan, RunRequest, expand_naming, release_folder_name,
+};
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -40,53 +55,6 @@ pub const MAX_PNG_DPI: u32 = 1200;
 /// The largest job file a run reads.
 pub const MAX_OUTPUT_JOB_BYTES: u64 = 1024 * 1024;
 
-/// What one output writes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum OutputKind {
-    /// Every page of the project as one PDF.
-    SchematicPdf,
-    /// Every page of the project as a PNG file each.
-    SchematicPng,
-    /// The bill of materials; CSV, HTML or XLSX by the file's extension.
-    Bom,
-    /// The `.NET` netlist.
-    Netlist,
-}
-
-impl OutputKind {
-    pub const ALL: [Self; 4] = [
-        Self::SchematicPdf,
-        Self::SchematicPng,
-        Self::Bom,
-        Self::Netlist,
-    ];
-
-    /// The id the file and the answers spell.
-    pub fn id(self) -> &'static str {
-        match self {
-            Self::SchematicPdf => "schematic_pdf",
-            Self::SchematicPng => "schematic_png",
-            Self::Bom => "bom",
-            Self::Netlist => "netlist",
-        }
-    }
-
-    pub fn from_id(id: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|kind| kind.id() == id.trim())
-    }
-
-    /// The file an output of this kind writes when it names none.
-    pub fn default_file(self, stem: &str) -> String {
-        match self {
-            Self::SchematicPdf => format!("{stem}.pdf"),
-            Self::SchematicPng => format!("{stem}.png"),
-            Self::Bom => format!("{stem}-bom.csv"),
-            Self::Netlist => format!("{stem}.NET"),
-        }
-    }
-}
-
 /// The file page `page` of a PNG output named `file` writes:
 /// `board.png` gives `board-1.png`, `board-2.png`, ...
 pub fn png_page_file(file: &str, page: usize) -> String {
@@ -117,11 +85,15 @@ pub struct JobOutput {
     #[serde(default = "enabled_by_default")]
     pub enabled: bool,
     /// The file name in the job's folder; the kind's default when absent.
+    /// A board output names the stem its files start with.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub file: Option<String>,
     /// A PNG output's resolution; [`DEFAULT_PNG_DPI`] when absent.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dpi: Option<u32>,
+    /// An ODB++ output's job as its folder tree rather than one archive.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub odb_folder: Option<bool>,
     #[serde(default, flatten, skip_serializing_if = "UnknownFields::is_empty")]
     pub unknown: UnknownFields,
 }
@@ -135,8 +107,14 @@ impl JobOutput {
             enabled: true,
             file: None,
             dpi: None,
+            odb_folder: None,
             unknown: UnknownFields::default(),
         }
+    }
+
+    /// The output's kind, when this build writes it.
+    pub fn known_kind(&self) -> Option<OutputKind> {
+        OutputKind::from_id(&self.kind)
     }
 }
 
@@ -150,8 +128,16 @@ pub struct OutputJob {
     /// absent.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub variant: Option<String>,
+    /// The profile a run that names none uses.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_profile: Option<String>,
     #[serde(default)]
     pub outputs: Vec<JobOutput>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub profiles: Vec<JobProfile>,
+    /// The runs from the window, newest first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub history: Vec<RunRecord>,
     #[serde(default, flatten, skip_serializing_if = "UnknownFields::is_empty")]
     pub unknown: UnknownFields,
 }
@@ -161,7 +147,10 @@ impl Default for OutputJob {
         Self {
             folder: default_folder(),
             variant: None,
+            default_profile: None,
             outputs: Vec::new(),
+            profiles: Vec::new(),
+            history: Vec::new(),
             unknown: UnknownFields::default(),
         }
     }
@@ -180,6 +169,14 @@ pub enum OutputJobFault {
     BadFile { name: String, file: String },
     #[error("output {name:?}: {dpi} dpi is outside 36 to 1200")]
     BadDpi { name: String, dpi: u32 },
+    #[error("a profile needs a name")]
+    NoProfileName,
+    #[error("two profiles are named {0:?}")]
+    ProfileTwice(String),
+    #[error("the default profile {0:?} is not a profile of the job")]
+    NoDefault(String),
+    #[error("profile {profile:?}: a wait of {seconds} s is longer than an hour")]
+    BadWait { profile: String, seconds: u32 },
 }
 
 /// Why a job file could not be read or written.
@@ -214,6 +211,10 @@ pub enum PlanProblem {
         second: String,
         file: String,
     },
+    #[error("the job has no profile named {0:?}")]
+    NoSuchProfile(String),
+    #[error("profile {0:?} ticks no enabled output")]
+    NothingTicked(String),
 }
 
 /// One output a run writes.
@@ -222,9 +223,13 @@ pub struct PlannedOutput {
     pub name: String,
     pub kind: OutputKind,
     /// The file name in the job's folder; a PNG output writes
-    /// [`png_page_file`] names from it, one per page.
+    /// [`png_page_file`] names from it, one per page, and a board output's
+    /// files start with it.
     pub file: String,
     pub dpi: u32,
+    /// An ODB++ output's job as its folder tree.
+    #[serde(skip)]
+    pub odb_folder: bool,
 }
 
 /// What a run writes, and the outputs it leaves out.
@@ -261,6 +266,12 @@ fn relative_folder(text: &str) -> Option<PathBuf> {
     Some(out)
 }
 
+/// `text` as a folder below the job file's folder, if it is one: the check a
+/// profile's folder and a run's release folder pass.
+pub fn folder_below(text: &str) -> Option<PathBuf> {
+    relative_folder(text)
+}
+
 impl OutputJob {
     /// What keeps the job from running or being saved; `None` for a good one.
     pub fn fault(&self) -> Option<OutputJobFault> {
@@ -293,7 +304,18 @@ impl OutputJob {
                 });
             }
         }
-        None
+        self.profile_fault()
+    }
+
+    /// The output named `name`.
+    pub fn output(&self, name: &str) -> Option<&JobOutput> {
+        self.outputs.iter().find(|o| o.name.trim() == name.trim())
+    }
+
+    pub fn output_mut(&mut self, name: &str) -> Option<&mut JobOutput> {
+        self.outputs
+            .iter_mut()
+            .find(|o| o.name.trim() == name.trim())
     }
 
     /// The output folder below `job_folder`, the folder holding the job file.
@@ -306,6 +328,17 @@ impl OutputJob {
     /// The outputs a run writes: every enabled one, or only the one named
     /// `only`. `stem` names the default files (the project's file name).
     pub fn plan(&self, stem: &str, only: Option<&str>) -> Result<JobPlan, PlanProblem> {
+        self.plan_among(stem, only, None)
+    }
+
+    /// [`Self::plan`] over the outputs `among` names (every output when
+    /// `None`); an output it does not name is left out quietly.
+    pub fn plan_among(
+        &self,
+        stem: &str,
+        only: Option<&str>,
+        among: Option<&[String]>,
+    ) -> Result<JobPlan, PlanProblem> {
         if let Some(fault) = self.fault() {
             return Err(fault.into());
         }
@@ -315,6 +348,10 @@ impl OutputJob {
         for output in &self.outputs {
             let name = output.name.trim();
             if only.is_some_and(|only| only != name) {
+                continue;
+            }
+            if only.is_none() && among.is_some_and(|among| !among.iter().any(|n| n.trim() == name))
+            {
                 continue;
             }
             if !output.enabled {
@@ -345,7 +382,12 @@ impl OutputJob {
                 .into());
             }
             // Compared without case: one file on a case-insensitive volume.
-            let key = file.to_lowercase();
+            // A board output's files start with its stem and its kind's
+            // own suffixes, so only two of one kind can meet.
+            let key = match kind.file_is_stem() {
+                true => format!("{}:{}", kind.id(), file.to_lowercase()),
+                false => file.to_lowercase(),
+            };
             if let Some((first, _)) = files.iter().find(|(_, other)| *other == key) {
                 return Err(PlanProblem::SameFile {
                     first: first.clone(),
@@ -359,6 +401,7 @@ impl OutputJob {
                 kind,
                 file,
                 dpi: output.dpi.unwrap_or(DEFAULT_PNG_DPI),
+                odb_folder: output.odb_folder.unwrap_or(false),
             });
         }
         match only {
@@ -436,5 +479,6 @@ pub fn write_output_job(path: &Path, job: &OutputJob) -> Result<(), OutputJobErr
 }
 
 #[cfg(test)]
-#[path = "output_job_tests.rs"]
+mod profile_tests;
+#[cfg(test)]
 mod tests;
