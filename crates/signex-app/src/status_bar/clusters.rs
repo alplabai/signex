@@ -494,6 +494,7 @@ mod tests {
             board: Some(BoardReadout::default()),
             no_document: false,
             missing_libraries: 0,
+            focused_pin: None,
         }
     }
 

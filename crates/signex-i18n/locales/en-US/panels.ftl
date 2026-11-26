@@ -566,6 +566,9 @@ panels-status-bar-selection-one-kind = Sel: { $kind }
 # The canvas selection when it holds several kinds; $count is the total and
 # $kinds the panels-status-bar-selected-* texts, separated by commas.
 panels-status-bar-selection-kinds = Sel: { $count } ({ $kinds })
+# The selection while a click has picked a pin of the selected part (mockup
+# row 50); $selection is one of the two texts above and $pin the pin number.
+panels-status-bar-selection-pin = { $selection } · pin { $pin }
 panels-status-bar-selected-components = { $count ->
         [one] { $count } component
        *[other] { $count } components
