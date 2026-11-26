@@ -266,6 +266,8 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
         crate::app::board_panel::remove_board_panel,
     ),
     ("set_board_panel", crate::app::board_panel::set_board_panel),
+    // #2942: one stage of the named board's layout plan.
+    ("layout_plan_set", crate::app::layout_plan::layout_plan_set),
     ("swap_pins", swap::swap_pins),
     ("swap_gates", swap::swap_gates),
     ("save_board_reuse_block", reuse::save_board_reuse_block),
@@ -484,6 +486,11 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "set_board_panel" => Some(
             "`set_board_panel` needs the operands `document`, `field` and `value` — \
              use the Panel section of the board's Properties",
+        ),
+        // #2942: the layout plan has no surface but its commands.
+        "layout_plan_set" => Some(
+            "`layout_plan_set` needs the operands `document`, `stage` and a setting \
+             of that stage — it has no surface but its command",
         ),
         "set_selection_filters" => Some(
             "`set_selection_filters` needs the operand `kinds` — \

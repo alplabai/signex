@@ -585,6 +585,7 @@ const OPERAND_DOCUMENT: &[&str] = &[
     "import_dxf_outline",
     "import_graphics",
     "keepout_from_selection",
+    "layout_plan_set",
     "lock_board_items",
     "new_document",
     "new_pcb_document",

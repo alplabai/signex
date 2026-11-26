@@ -141,6 +141,13 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("weights", OperandKind::Text),
     ("thermal_gap", OperandKind::Length),
     ("separation_gap", OperandKind::Length),
+    // #2942: a stage of the board's layout plan and its settings, each a
+    // comma list (`weights`, `rooms` and `nets` as above).
+    ("stage", OperandKind::Text),
+    ("keep", OperandKind::Text),
+    ("skip", OperandKind::Text),
+    ("pours", OperandKind::Text),
+    ("requirements", OperandKind::Text),
 ];
 
 /// The commands whose `ids` is still text, not targets (#2326): a design

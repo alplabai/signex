@@ -7,8 +7,9 @@
 //! `rules_preset_diff` (#2398, `app::rules_tab`; a profile preset reads the
 //! rule profile library, read off the update loop first), and the board
 //! queries `measure_board`, `query_board_nets` and `find_similar_items`
-//! (#2403), `board_panel` (#2410, `app::board_panel`), the Project tab's
-//! `project_settings` (#1689-#1693, `app::project_tab`),
+//! (#2403), `board_panel` (#2410, `app::board_panel`), the layout plan's
+//! `layout_plan_get` and `layout_plan_status` (#2942, `app::layout_plan`),
+//! the Project tab's `project_settings` (#1689-#1693, `app::project_tab`),
 //! `query_footprint_assignments` (#2937, `footprint_assign_operands`), and
 //! `check_board_against_schematic` (#2462, `app::compare_board`) and
 //! `board_status` (#2460), answered once their reads land. Each
@@ -72,6 +73,8 @@ const QUERY_IDS: &[&str] = &[
     "query_footprint_assignments",
     "check_board_against_schematic",
     "board_status",
+    "layout_plan_get",
+    "layout_plan_status",
 ];
 
 /// The queries that run a check (`check_run`): each says nothing in
@@ -180,6 +183,7 @@ impl Signex {
             "find_similar_items" => self.find_similar_items(args),
             "board_panel" => self.board_panel_query(args),
             "query_footprint_assignments" => self.query_footprint_assignments(args),
+            "layout_plan_get" | "layout_plan_status" => self.layout_plan_query(id, args),
             _ => self.read_document(args),
         };
         // The heads of referenced files that were never read are read now,

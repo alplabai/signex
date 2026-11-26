@@ -148,6 +148,7 @@ define_ids! {
     PCB_BOARD_GRID_ORIGIN_Y = "pcb-board-grid-origin-y";
     PCB_BOARD_GRID_NEW_NAME = "pcb-board-grid-new-name";
     PCB_BOARD_OPTIONS_UNDO = "pcb-board-options-undo";
+    PCB_BOARD_LAYOUT_PLAN_UNDO = "pcb-board-layout-plan-undo";
     PCB_BOARD_OPTIONS_REFUSED = "pcb-board-options-refused";
     PCB_BOARD_GUIDE_VERTICAL = "pcb-board-guide-vertical";
     PCB_BOARD_GUIDE_HORIZONTAL = "pcb-board-guide-horizontal";

@@ -57,6 +57,7 @@ fn options() -> BoardOptions {
         }],
         panel: Some(panel()),
         layer_colors: Vec::new(),
+        layout_plan: Default::default(),
     }
 }
 

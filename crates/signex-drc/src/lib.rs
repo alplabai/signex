@@ -15,6 +15,7 @@ pub mod findings;
 mod flags;
 mod holes;
 mod keepout;
+pub mod layout_plan;
 mod limit_kind;
 mod limits;
 mod mask;

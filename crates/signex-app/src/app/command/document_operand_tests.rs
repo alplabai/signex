@@ -542,6 +542,10 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "remove_board_panel",
                     "set_board_panel",
                     "board_panel",
+                    // #2942: the layout plan of the board they name.
+                    "layout_plan_get",
+                    "layout_plan_set",
+                    "layout_plan_status",
                     // #2410: they act on the board they name.
                     "swap_pins",
                     "swap_gates",

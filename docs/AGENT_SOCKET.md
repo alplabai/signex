@@ -105,7 +105,8 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   `rules_conflicts`, `rules_matrix_get` and `rules_preset_diff` (#2398), and
   the board queries `measure_board`,
   `query_board_nets` and `find_similar_items` (#2403), and the board's panel
-  `board_panel` (#2410), and the Project tab's `project_settings`
+  `board_panel` (#2410), the board's layout plan `layout_plan_get` and
+  `layout_plan_status` (#2942), and the Project tab's `project_settings`
   (#1689-#1693), and the board against the schematic
   `check_board_against_schematic` (#2462) and the board's counters
   `board_status` (#2460), each answered once its reads land
@@ -175,7 +176,8 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   [CLI.md](CLI.md), "Routing a board"), and the
   panel edits `panelize_board`, `remove_board_panel` and `set_board_panel`
   (#2410; one undo step on the named board each, answered with the panel as
-  JSON), and the board's `swap_pins`, `swap_gates`,
+  JSON), and `layout_plan_set` (#2942; one undo step on the named board,
+  answered with the plan as JSON), and the board's `swap_pins`, `swap_gates`,
   `save_board_reuse_block` and `place_board_reuse_block` (#2410; a swap is
   one undo step across the board and its sheet, a save writes the block's
   file in the project's `reuse-blocks` folder, and a place may wait for the

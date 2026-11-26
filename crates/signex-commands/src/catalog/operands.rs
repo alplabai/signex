@@ -948,6 +948,23 @@ pub const SET_BOARD_PANEL: &[Operand] = &[
     required("field", OperandKind::Text),
     required("value", OperandKind::Text),
 ];
+/// `layout_plan_set` (#2942): one stage of the named board's layout plan
+/// (`placement`, `routing`, `pours`, `checks`) and the settings of that
+/// stage to change, each a comma list (empty clears it); `remove` clears
+/// the whole stage.
+pub const LAYOUT_PLAN_SET: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("stage", OperandKind::Text),
+    optional("weights", OperandKind::Text),
+    optional("rooms", OperandKind::Text),
+    optional("keep", OperandKind::Text),
+    optional("nets", OperandKind::Text),
+    optional("skip", OperandKind::Text),
+    optional("pours", OperandKind::Text),
+    optional("rules", OperandKind::Text),
+    optional("requirements", OperandKind::Text),
+    optional("remove", OperandKind::Bool),
+];
 
 // The `project_*` commands (#1689-#1693): `document` is the project or any
 // of its documents.

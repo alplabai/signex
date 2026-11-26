@@ -270,6 +270,9 @@ define_ids! {
         CMD_MENU_REMOVE_BOARD_PANEL = "cmd-menu-remove-board-panel";
         CMD_SET_BOARD_PANEL = "cmd-set-board-panel";
         CMD_BOARD_PANEL = "cmd-board-panel";
+        CMD_LAYOUT_PLAN_GET = "cmd-layout-plan-get";
+        CMD_LAYOUT_PLAN_SET = "cmd-layout-plan-set";
+        CMD_LAYOUT_PLAN_STATUS = "cmd-layout-plan-status";
         CMD_PROJECT_SETTINGS = "cmd-project-settings";
         CMD_PROJECT_MOVE_SHEET = "cmd-project-move-sheet";
         CMD_PROJECT_ADD_VARIANT = "cmd-project-add-variant";
