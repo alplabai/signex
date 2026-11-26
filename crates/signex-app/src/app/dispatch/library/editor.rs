@@ -20,6 +20,8 @@ mod primitive_save;
 #[cfg(test)]
 mod primitive_save_fold_tests;
 #[cfg(test)]
+mod primitive_save_models_tests;
+#[cfg(test)]
 mod primitive_save_refresh_tests;
 #[cfg(test)]
 mod primitive_save_tests;

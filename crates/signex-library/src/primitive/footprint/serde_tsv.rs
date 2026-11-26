@@ -382,6 +382,18 @@ pub enum FootprintFileError {
     /// save fails loudly instead of writing an empty cell or panicking.
     #[error("{field} holds a non-finite number (NaN or infinity); it cannot be saved")]
     NonFiniteField { field: String },
+    /// A `[[models]]` entry this build cannot read (#3107); `users` names
+    /// the footprints that attach it.
+    #[error("embedded 3D model {hash:?} of {users}: {reason}")]
+    InvalidModelEntry {
+        hash: String,
+        users: String,
+        reason: String,
+    },
+    /// The writer could not find the one `data` line of embedded model
+    /// `index` (another string spells its placeholder); nothing is written.
+    #[error("embedded 3D model {index}: its data could not be placed; nothing was saved")]
+    ModelDataPlacement { index: usize },
 }
 
 impl From<signex_types::numeric::TomlFiniteError> for FootprintFileError {

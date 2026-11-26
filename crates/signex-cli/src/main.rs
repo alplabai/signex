@@ -43,6 +43,12 @@ fn main() -> ExitCode {
                 Err(error) => fail(&error),
             }
         }
+        Ok(Invocation::Library(command)) => {
+            match cli::library::run(&command, &mut io::stdout().lock()) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(error) => fail(&error),
+            }
+        }
         Err(error) => fail(&format!("{error}\n\n{USAGE}")),
     }
 }

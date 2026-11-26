@@ -27,6 +27,14 @@ pub fn read_model_file(path: &Path, name: &str) -> Result<Vec<ModelMesh>, String
     Ok(meshes.into_iter().filter_map(model_mesh).collect())
 }
 
+/// The meshes of a STEP model held in memory: one a footprint file embeds
+/// (#3107). Embedded models are STEP only.
+pub fn read_step_bytes(bytes: &[u8]) -> Result<Vec<ModelMesh>, String> {
+    let source = std::str::from_utf8(bytes).map_err(|e| format!("not STEP text: {e}"))?;
+    let result = step::p21::parse_to_meshes(source).map_err(|e| e.to_string())?;
+    Ok(result.meshes.into_iter().filter_map(model_mesh).collect())
+}
+
 fn model_mesh(mesh: VrmlMesh) -> Option<ModelMesh> {
     let positions: Vec<[f32; 3]> = mesh
         .positions

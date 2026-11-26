@@ -13,6 +13,7 @@ signex-cli run <project> <command-id> [--arg key=value]... [options]
 signex-cli commands [--json]
 signex-cli agent-log <project> [--access]
 signex-cli notebook export-pdf --project <project> [options]
+signex-cli library textconv <file.snxfpt>
 ```
 
 `agent-log` prints the project's agent journal as a table: the edits agents
@@ -42,6 +43,34 @@ Signex".
 | `--allow <caps>` | also allow capabilities (comma list) |
 | `--allow-path <dir>` | also allow paths inside `<dir>` (repeatable) |
 | `--max-line-bytes`, `--max-commands`, `--max-file-bytes` | tighten or raise the input limits |
+
+## Library tools
+
+`library <verb>` runs a library tool. It needs no project and no window,
+only reads, and takes none of the `run` options.
+
+`library textconv <file>` prints a footprint file (`.snxfpt`) with the `data`
+block of each embedded 3D model (`[[models]]`, `docs/FORMAT_VERSIONS.md`,
+`snxfpt/1.4`) replaced by one summary line:
+
+```
+data = <deflate+base64, 482113 bytes, sha256 ab12cd34ef56…>
+```
+
+Every other line is printed as it is, so a file with no embedded model comes
+out unchanged, and a file that is not text is printed byte for byte. It is
+meant as git's `textconv` driver, so that `git diff` and `git log -p` show a
+changed model as its `hash`, `size` and summary lines instead of thousands of
+base64 lines. A library's git setup wires it with this `.gitattributes` line
+and local setting (written when an imported library is initialised, #3114):
+
+```
+*.snxfpt diff=snxfpt
+git config diff.snxfpt.textconv "signex-cli library textconv"
+```
+
+Without the setting, git shows the full text diff, which is correct, only
+long. The exit code is `0`, or `2` when the file cannot be read.
 
 ## JSON Lines
 

@@ -599,6 +599,7 @@ fn list_primitives_rejects_zero_primitive_envelope() {
         footprints: Vec::new(),
         created: now,
         updated: now,
+        models: Default::default(),
     };
     let fpt_dir = root.join("footprints");
     std::fs::create_dir_all(&fpt_dir).unwrap();

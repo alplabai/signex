@@ -13,7 +13,9 @@ use iced::{Subscription, Task};
 use pcb_geom::ItemRef;
 use signex_i18n::{ids, t};
 use signex_library::adapters::local_git::LocalGitAdapter;
-use signex_renderer::board3d::{AttachedModel, BodyExtrusion, ComponentModel, read_model_file};
+use signex_renderer::board3d::{
+    AttachedModel, BodyExtrusion, ComponentModel, read_model_file, read_step_bytes,
+};
 use signex_types::part::FootprintSourceRef;
 use uuid::Uuid;
 
@@ -417,30 +419,30 @@ pub(crate) fn read_models(
 }
 
 /// The model of the library footprint `source` from its open library
-/// `adapter` at `root`: its attached model file, placed by the attachment's
-/// offset and turn; else its 3D Body.
+/// `adapter` at `root`: its attached model, placed by the attachment's
+/// offset and turn; else its 3D Body. The model is the one its footprint
+/// file embeds (#3107), else `step/<hash>.step` beside the library, where
+/// libraries written before #3107 keep it.
 fn read_model(
     source: &FootprintSourceRef,
     adapter: &LocalGitAdapter,
     root: &Path,
 ) -> Result<ComponentModel, String> {
-    use signex_library::LibraryAdapter as _;
-
-    let footprint = adapter
-        .get_footprint(source.footprint)
+    let file = adapter
+        .read_footprint_file(source.footprint)
         .map_err(|e| e.to_string())?;
+    let footprint = file
+        .footprints
+        .first()
+        .ok_or_else(|| "its footprint file holds no footprint".to_string())?;
     if let Some(attachment) = footprint.step_attachment.as_ref() {
-        let hash = attachment.content_hash.as_str();
-        // The hash names a file in `step/`; only a hex digest may, so a
-        // hostile footprint file cannot point the read elsewhere.
-        if hash.is_empty() || hash.len() > 128 || !hash.bytes().all(|b| b.is_ascii_hexdigit()) {
-            return Err(format!("its model name {hash} is not a hex digest"));
-        }
-        let dir = root
-            .parent()
-            .ok_or_else(|| format!("{} has no folder", root.display()))?;
-        let path = dir.join("step").join(format!("{hash}.step"));
-        let meshes = read_model_file(&path, &attachment.filename)?;
+        let meshes = match file.step_model(footprint).map_err(|e| e.to_string())? {
+            Some(bytes) => read_step_bytes(&bytes)?,
+            None => read_model_file(
+                &legacy_model_path(&attachment.content_hash, root)?,
+                &attachment.filename,
+            )?,
+        };
         return Ok(ComponentModel::Model(AttachedModel {
             meshes,
             offset_mm: attachment.offset_xyz,
@@ -454,4 +456,17 @@ fn read_model(
         offset_z_mm: f64::from(body.offset_z_mm),
         colors: Some((body.top_color, body.side_color)),
     }))
+}
+
+/// `step/<hash>.step` beside the library file `root`. The hash names a file;
+/// only a hex digest may, so a hostile footprint file cannot point the read
+/// elsewhere.
+fn legacy_model_path(hash: &str, root: &Path) -> Result<PathBuf, String> {
+    if hash.is_empty() || hash.len() > 128 || !hash.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err(format!("its model name {hash} is not a hex digest"));
+    }
+    let dir = root
+        .parent()
+        .ok_or_else(|| format!("{} has no folder", root.display()))?;
+    Ok(dir.join("step").join(format!("{hash}.step")))
 }
