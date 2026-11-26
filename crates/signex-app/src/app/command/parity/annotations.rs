@@ -222,6 +222,13 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "send_drawings_backward",
             "send_drawings_to_back",
             "delete_selection",
+            // #2470: the area tools take their layer and net as operands,
+            // never the active layer or the tool's form.
+            "place_board_fill",
+            "place_board_region",
+            "place_board_polygon_pour",
+            "place_board_keepout",
+            "place_board_pour_cutout",
         ],
         Operand,
         &[],

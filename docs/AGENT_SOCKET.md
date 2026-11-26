@@ -146,7 +146,11 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   answered with the uuids it added, removed and changed
   ([PCB_TOOLS.md](PCB_TOOLS.md), "Board Tools"), and the board drawing edits
   `add_board_graphic` and `set_board_graphic` (#2424; one board undo step
-  each, answered with the drawing as JSON), and `set_footprint_text` (#2368;
+  each, answered with the drawing as JSON), the area tools
+  `place_board_fill`, `place_board_region`, `place_board_polygon_pour`,
+  `place_board_keepout` and `place_board_pour_cutout` with their board,
+  layer, corners and net (#2470; one board undo step each, answered with
+  the area as JSON, [CLI.md](CLI.md), "Board areas"), and `set_footprint_text` (#2368;
   a component's designator or comment placed, turned, sized or justified on
   its own, one board undo step, answered with the text as JSON), and the
   length tuning commands

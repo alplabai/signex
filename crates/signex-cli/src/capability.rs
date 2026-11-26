@@ -206,6 +206,20 @@ mod tests {
         }
     }
 
+    /// #2470: the area tools add an area to the board in memory: `edit`.
+    #[test]
+    fn the_area_tools_need_the_edit_capability() {
+        for id in [
+            "place_board_fill",
+            "place_board_region",
+            "place_board_polygon_pour",
+            "place_board_keepout",
+            "place_board_pour_cutout",
+        ] {
+            assert_eq!(cap(id), Capability::Edit, "{id}");
+        }
+    }
+
     #[test]
     fn the_catalogs_writers_and_exporters_are_pinned() {
         let non_default: BTreeSet<_> = all_command_ids()

@@ -31,6 +31,9 @@ pub(super) const BOARD: &[CommandMetadata] = &[
         operands: super::route_operands::BOARD_TRACK,
         ..CommandMetadata::DEFAULT
     },
+    // #2470: the area tools also run from their operands (the board, the
+    // layer, the outline and, for copper, the net) without a window: one
+    // undo step each, answered with the area as JSON.
     CommandMetadata {
         id: "place_board_fill",
         category: "place",
@@ -38,7 +41,8 @@ pub(super) const BOARD: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_FILL),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::BOARD_FILL,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -48,7 +52,8 @@ pub(super) const BOARD: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_REGION),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::BOARD_COPPER_AREA,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -58,7 +63,8 @@ pub(super) const BOARD: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_KEEPOUT),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::BOARD_NETLESS_AREA,
         ..CommandMetadata::DEFAULT
     },
     // #2234: enter the board sketch of the board in view, or leave it
@@ -81,7 +87,8 @@ pub(super) const BOARD: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_POLYGON_POUR),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::BOARD_COPPER_AREA,
         ..CommandMetadata::DEFAULT
     },
     // #2216: cut an area out of the pours on the active copper layer, or
@@ -93,7 +100,8 @@ pub(super) const BOARD: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_POUR_CUTOUT),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::BOARD_NETLESS_AREA,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

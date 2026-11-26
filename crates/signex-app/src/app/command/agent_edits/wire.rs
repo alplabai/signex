@@ -246,6 +246,12 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
     ("place_board_diff_pair", BOARD_EDIT),
     ("place_board_quick_route", BOARD_EDIT),
     ("place_board_multi_route", BOARD_EDIT),
+    // #2470: each area tool adds one zone as a board step of its own.
+    ("place_board_fill", BOARD_EDIT),
+    ("place_board_region", BOARD_EDIT),
+    ("place_board_polygon_pour", BOARD_EDIT),
+    ("place_board_keepout", BOARD_EDIT),
+    ("place_board_pour_cutout", BOARD_EDIT),
     (
         "rules_matrix_set",
         "it writes the project's rule set, which no sheet's undo step covers",

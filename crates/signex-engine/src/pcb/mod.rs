@@ -10,6 +10,7 @@
 //! board bit for bit.
 
 pub mod align;
+pub mod area;
 mod batch;
 mod board_sketch;
 pub mod board_tools;

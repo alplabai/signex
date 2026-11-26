@@ -143,10 +143,16 @@ mod tests {
                 "lock_board_items",
                 "measure_board",
                 "panelize_board",
-                // #2470: the routing tools and the via, on the named board.
+                // #2470: the routing tools, the via and the area tools, on
+                // the named board.
                 "place_board_diff_pair",
+                "place_board_fill",
+                "place_board_keepout",
                 "place_board_multi_route",
+                "place_board_polygon_pour",
+                "place_board_pour_cutout",
                 "place_board_quick_route",
+                "place_board_region",
                 // #2410: pin and gate swap and design reuse, on the named board.
                 "place_board_reuse_block",
                 "place_board_route",

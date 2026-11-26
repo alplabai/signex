@@ -15,6 +15,9 @@ mod agent_edit_cross_sheet_tests;
 mod agent_edit_tests;
 mod agent_edits;
 mod args;
+#[cfg(test)]
+mod board_area_operand_tests;
+mod board_area_operands;
 mod board_edit_operands;
 #[cfg(test)]
 mod board_graphic_operand_tests;
