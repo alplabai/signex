@@ -67,6 +67,7 @@ const QUERY_IDS: &[&str] = &[
     "board_panel",
     "project_settings",
     "project_checklist",
+    "project_checklist_link_choices",
 ];
 
 /// The queries that run a check (`check_run`): each says nothing in
@@ -154,9 +155,14 @@ impl Signex {
                 };
                 return Some((outcome, Task::none()));
             }
-            // The Design Checklist tab (#1291).
-            "project_checklist" => {
-                let outcome = match self.project_checklist(args) {
+            // The Design Checklist tab (#1291) and its link picker.
+            "project_checklist" | "project_checklist_link_choices" => {
+                let answer = if id == "project_checklist" {
+                    self.project_checklist(args)
+                } else {
+                    self.project_checklist_link_choices(args)
+                };
+                let outcome = match answer {
                     Ok(value) => CommandOutcome::Answered(value),
                     Err(reason) => CommandOutcome::disabled(reason),
                 };

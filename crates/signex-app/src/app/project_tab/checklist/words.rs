@@ -1,11 +1,13 @@
 //! The catalog words of the Design Checklist tab: templates, stages, states,
-//! links, results and the reason an edit was refused.
+//! links, results, notices and the reason an edit was refused.
 
-use signex_i18n::{I18n, Localized, MessageId, UserText, ids, t};
+use signex_i18n::{I18n, Localized, MessageId, ids, t};
 use signex_types::project::{
     ChecklistLink, ChecklistProblem, ChecklistStage, ChecklistTemplate, ItemState, LinkResult,
+    ObjectTarget,
 };
-use signex_widgets::Label;
+
+use super::ChecklistNotice;
 
 /// The name of a template.
 pub(super) fn template_words(template: ChecklistTemplate) -> MessageId {
@@ -59,18 +61,68 @@ pub(super) fn state_words(state: ItemState) -> MessageId {
     }
 }
 
-/// What a link is to, as the table shows it: catalog words, or the design
-/// object as it was typed.
-pub(super) fn link_words(link: Option<&ChecklistLink>, i18n: &I18n) -> Label<'static> {
+/// What a link is to, as the table shows it: catalog words, with the part,
+/// pin, net or sheet it names, or the design object as it was typed.
+pub(super) fn link_words(link: Option<&ChecklistLink>, i18n: &I18n) -> Localized {
     match link {
-        None => t!(i18n, ids::CHECKLIST_LINK_NONE).into(),
-        Some(ChecklistLink::Erc) => t!(i18n, ids::CHECKLIST_LINK_ERC).into(),
-        Some(ChecklistLink::Drc) => t!(i18n, ids::CHECKLIST_LINK_DRC).into(),
-        Some(ChecklistLink::TitleBlock) => t!(i18n, ids::CHECKLIST_LINK_TITLE_BLOCK).into(),
+        None => t!(i18n, ids::CHECKLIST_LINK_NONE),
+        Some(ChecklistLink::Erc) => t!(i18n, ids::CHECKLIST_LINK_ERC),
+        Some(ChecklistLink::Drc) => t!(i18n, ids::CHECKLIST_LINK_DRC),
+        Some(ChecklistLink::TitleBlock) => t!(i18n, ids::CHECKLIST_LINK_TITLE_BLOCK),
         Some(ChecklistLink::Requirement { id }) => {
-            t!(i18n, ids::CHECKLIST_LINK_REQUIREMENT, "id" => id.as_str()).into()
+            t!(i18n, ids::CHECKLIST_LINK_REQUIREMENT, "id" => id.as_str())
         }
-        Some(ChecklistLink::Object { target }) => UserText::new(target.clone()).into(),
+        Some(ChecklistLink::Object { target }) => object_words(&ObjectTarget::parse(target), i18n),
+    }
+}
+
+/// What a design-object link names.
+fn object_words(target: &ObjectTarget, i18n: &I18n) -> Localized {
+    match target {
+        ObjectTarget::Part(part) => t!(i18n, ids::CHECKLIST_LINK_PART, "part" => part.as_str()),
+        ObjectTarget::Pin { part, pin } => t!(
+            i18n,
+            ids::CHECKLIST_LINK_PIN,
+            "part" => part.as_str(),
+            "pin" => pin.as_str()
+        ),
+        ObjectTarget::Net(net) => t!(i18n, ids::CHECKLIST_LINK_NET, "net" => net.as_str()),
+        ObjectTarget::Sheet(sheet) => {
+            t!(i18n, ids::CHECKLIST_LINK_SHEET, "sheet" => sheet.as_str())
+        }
+        ObjectTarget::Board => t!(i18n, ids::CHECKLIST_LINK_BOARD),
+        ObjectTarget::Text(what) => t!(i18n, ids::CHECKLIST_LINK_OBJECT, "what" => what.as_str()),
+    }
+}
+
+/// The words of a notice, and whether it says something failed.
+pub(super) fn notice_words(notice: &ChecklistNotice, i18n: &I18n) -> (Localized, bool) {
+    use ChecklistNotice as N;
+    match notice {
+        N::TemplateSaved(name) => (
+            t!(i18n, ids::CHECKLIST_NOTICE_TEMPLATE_SAVED, "name" => name.as_str()),
+            false,
+        ),
+        N::TemplateNotSaved(reason) => (
+            t!(i18n, ids::CHECKLIST_NOTICE_TEMPLATE_NOT_SAVED, "reason" => reason.as_str()),
+            true,
+        ),
+        N::LibraryUnreadable(reason) => (
+            t!(i18n, ids::CHECKLIST_NOTICE_LIBRARY_UNREADABLE, "reason" => reason.as_str()),
+            true,
+        ),
+        N::ImportFailed(reason) => (
+            t!(i18n, ids::CHECKLIST_NOTICE_IMPORT_FAILED, "reason" => reason.as_str()),
+            true,
+        ),
+        N::NothingToImport(project) => (
+            t!(i18n, ids::CHECKLIST_NOTICE_NOTHING_TO_IMPORT, "project" => project.as_str()),
+            true,
+        ),
+        N::LinkNotFound(what) => (
+            t!(i18n, ids::CHECKLIST_NOTICE_LINK_NOT_FOUND, "what" => what.as_str()),
+            true,
+        ),
     }
 }
 
@@ -91,6 +143,12 @@ pub(super) fn problem_words(problem: &ChecklistProblem, i18n: &I18n) -> Localize
     match problem {
         P::Unreadable => t!(i18n, ids::CHECKLIST_PROBLEM_UNREADABLE),
         P::AlreadyStarted => t!(i18n, ids::CHECKLIST_PROBLEM_ALREADY_STARTED),
+        P::NotStarted => t!(i18n, ids::CHECKLIST_PROBLEM_NOT_STARTED),
+        P::NoTemplate => t!(i18n, ids::CHECKLIST_PROBLEM_NO_TEMPLATE),
+        P::UnknownSavedTemplate(name) => {
+            t!(i18n, ids::CHECKLIST_PROBLEM_UNKNOWN_SAVED_TEMPLATE, "name" => name.as_str())
+        }
+        P::EmptyName => t!(i18n, ids::CHECKLIST_PROBLEM_EMPTY_NAME),
         P::UnknownTemplate(text) => {
             t!(i18n, ids::CHECKLIST_PROBLEM_UNKNOWN_TEMPLATE, "text" => text.as_str())
         }

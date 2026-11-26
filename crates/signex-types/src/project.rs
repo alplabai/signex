@@ -15,6 +15,8 @@ mod annotate_undo;
 mod annotation;
 mod checklist;
 #[cfg(test)]
+mod checklist_library_tests;
+#[cfg(test)]
 mod checklist_tests;
 mod erc_waiver;
 mod fab_outputs;
@@ -49,10 +51,12 @@ mod variants_tests;
 pub use annotate_undo::AnnotateUndo;
 pub use annotation::{AnnotationSettings, AnnotationState};
 pub use checklist::{
-    CHECKLIST_KEY, CHECKLIST_TEMPLATES, ChecklistField, ChecklistItem, ChecklistLink,
-    ChecklistProblem, ChecklistStage, ChecklistTemplate, DesignChecklist, ItemState, LinkResult,
-    NewChecklistItem, StateCounts, TITLE_BLOCK_REQUIRED, TemplateItem, TemplateLink,
-    title_block_missing,
+    CHECKLIST_KEY, CHECKLIST_TEMPLATES, CSV_COLUMNS, ChecklistField, ChecklistItem, ChecklistLink,
+    ChecklistProblem, ChecklistStage, ChecklistTemplate, DesignChecklist, EditStamp, HISTORY_LIMIT,
+    HistoryEntry, HistoryEvent, ItemState, LinkResult, NewChecklistItem, ObjectTarget,
+    SavedTemplate, SavedTemplateItem, SheetTargets, StateCounts, TEMPLATE_LIBRARY_FILE,
+    TITLE_BLOCK_REQUIRED, TemplateItem, TemplateLibrary, TemplateLink, TemplateRef, merge_link_run,
+    sheet_targets, title_block_missing,
 };
 pub use erc_waiver::ErcWaiver;
 pub use fab_outputs::FabOutputKinds;

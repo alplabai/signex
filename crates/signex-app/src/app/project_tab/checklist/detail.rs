@@ -1,7 +1,8 @@
 //! The selected item's pane (mockup row 206, Item): its title, state
 //! (Open, Done, Waived… which asks for the reason and will not save without
-//! one), stage, owner, link with what it says now, notes, the last refusal
-//! and Remove. A text box commits on Enter.
+//! one), owner, stage, the link card with the link picker (`link_card`),
+//! notes, the history (`history_view`), the last refusal and Remove. A text
+//! box commits on Enter.
 
 use iced::widget::{Column, Space, column, container, pick_list, row};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
@@ -10,11 +11,11 @@ use signex_types::project::{ChecklistField, ChecklistItem, ChecklistStage, ItemS
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::{text, text_input};
 
-use super::super::look::{ButtonKind, Glyph, field_label, pill, text_button, ui_font};
-use super::super::table::{SP, TS, note, problem};
+use super::super::look::{ButtonKind, Glyph, field_label, text_button, ui_font};
+use super::super::table::{SP, TS, note, page_scroller, problem};
 use super::ChecklistMsg;
-use super::view::{Ctx, result_tone};
-use super::words::{problem_words, result_words, stage_words, state_words};
+use super::view::Ctx;
+use super::words::{problem_words, stage_words, state_words};
 use crate::app::Message;
 use crate::styles::{HAIRLINE, ti};
 
@@ -241,7 +242,6 @@ pub(super) fn pane<'a>(ctx: &Ctx, item: &ChecklistItem) -> Element<'a, Message> 
         body = body.push(reason);
     }
     body = body
-        .push(stage_picker(ctx, item))
         .push(field(
             ctx,
             item,
@@ -249,25 +249,18 @@ pub(super) fn pane<'a>(ctx: &Ctx, item: &ChecklistItem) -> Element<'a, Message> 
             t!(i18n, ids::CHECKLIST_FIELD_OWNER),
             t!(i18n, ids::CHECKLIST_FIELD_OWNER),
         ))
+        .push(stage_picker(ctx, item))
+        .push(super::link_card::link_block(ctx, item))
         .push(field(
             ctx,
             item,
-            ChecklistField::Link,
-            t!(i18n, ids::CHECKLIST_FIELD_LINK),
-            t!(i18n, ids::CHECKLIST_FIELD_LINK_HINT),
+            ChecklistField::Notes,
+            t!(i18n, ids::CHECKLIST_FIELD_NOTES),
+            t!(i18n, ids::CHECKLIST_FIELD_NOTES),
         ));
-    if let Some(result) = ctx.result_of(item)
-        && let Some(words) = result_words(result, i18n)
-    {
-        body = body.push(pill(words, result_tone(result), None, tokens));
+    if let Some(history) = super::history_view::history(ctx, item) {
+        body = body.push(history);
     }
-    body = body.push(field(
-        ctx,
-        item,
-        ChecklistField::Notes,
-        t!(i18n, ids::CHECKLIST_FIELD_NOTES),
-        t!(i18n, ids::CHECKLIST_FIELD_NOTES),
-    ));
     if let Some(refused) = ctx.state.and_then(|state| state.problem.as_ref()) {
         body = body.push(problem(problem_words(refused, i18n), tokens));
     }
@@ -281,10 +274,10 @@ pub(super) fn pane<'a>(ctx: &Ctx, item: &ChecklistItem) -> Element<'a, Message> 
         tokens,
     ));
     let (fill, line) = (ti(tokens.panel_bg), ti(tokens.border));
-    container(body)
+    let body = container(body).width(Length::Fill).padding(SP.l);
+    container(page_scroller(body.boxed(), tokens))
         .width(Length::Fixed(PANE_W))
         .height(Length::Fill)
-        .padding(SP.l)
         .style(move |_: &Theme| container::Style {
             background: Some(Background::Color(fill)),
             border: Border::default()

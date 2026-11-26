@@ -305,6 +305,30 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
         "project_run_checklist",
         crate::app::project_tab::project_run_checklist,
     ),
+    (
+        "project_reset_checklist",
+        crate::app::project_tab::project_reset_checklist,
+    ),
+    (
+        "project_checklist_templates",
+        crate::app::project_tab::project_checklist_templates,
+    ),
+    (
+        "project_save_checklist_template",
+        crate::app::project_tab::project_save_checklist_template,
+    ),
+    (
+        "project_export_checklist_csv",
+        crate::app::project_tab::project_export_checklist_csv,
+    ),
+    (
+        "project_import_checklist",
+        crate::app::project_tab::project_import_checklist,
+    ),
+    (
+        "project_open_checklist_link",
+        crate::app::project_tab::project_open_checklist_link,
+    ),
 ];
 
 /// The turn `view_rotate` asks for: its `degrees`, else a quarter turn
@@ -565,7 +589,13 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         | "project_set_checklist_item"
         | "project_set_checklist_state"
         | "project_remove_checklist_item"
-        | "project_run_checklist" => Some(
+        | "project_run_checklist"
+        | "project_reset_checklist"
+        | "project_checklist_templates"
+        | "project_save_checklist_template"
+        | "project_export_checklist_csv"
+        | "project_import_checklist"
+        | "project_open_checklist_link" => Some(
             "the design checklist edits need their operands — \
              use the Design Checklist tab (Project ▸ Design Checklist)",
         ),

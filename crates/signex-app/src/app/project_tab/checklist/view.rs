@@ -1,25 +1,25 @@
 //! The Design Checklist tab's view (mockup row 206). Pure: the project and
-//! the tab's state in, widgets out. Started, it is the bar (name, summary,
-//! filter, Run checks, Add item), the progress per stage, then the items
-//! grouped by stage, with the selected item's pane at the right (`detail`).
-//! Empty, it offers the templates; unreadable, it says so and offers nothing.
+//! the tab's state in, widgets out. Started, it is the bar (`bar`), the
+//! progress per stage, then the items grouped by stage, with the selected
+//! item's pane at the right (`detail`). Empty, it offers the templates
+//! (`empty`); unreadable, it says so and offers nothing.
 
 use iced::widget::{Column, Row, Space, column, container, mouse_area, row};
 use iced::{Alignment, Background, Border, Color, Element, Length, Theme, Widget as _};
 use signex_i18n::{I18n, Localized, UserText, ids, t};
 use signex_types::check::CheckReport;
 use signex_types::project::{
-    CHECKLIST_TEMPLATES, ChecklistItem, ChecklistStage, ChecklistTemplate, DesignChecklist,
-    ItemState, LinkResult, ProjectData, StateCounts,
+    ChecklistItem, ChecklistLink, ChecklistStage, DesignChecklist, ItemState, LinkResult,
+    ProjectData, StateCounts,
 };
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{text, text_input};
+use signex_widgets::text;
 
 use super::super::look::{ButtonKind, Glyph, pill, text_button, ui_font};
 use super::super::table::{SP, TS, note, page_scroller, problem};
+use super::links::LinkChoice;
 use super::words::{
-    link_words, problem_words, result_words, stage_words, state_words, template_help,
-    template_words,
+    link_words, notice_words, problem_words, result_words, stage_words, state_words,
 };
 use super::{ChecklistMsg, ChecklistTabState, message};
 use crate::app::Message;
@@ -39,8 +39,6 @@ const UPDATED_W: f32 = TS.body * 20.0 / 3.0;
 const BAR_H: f32 = TS.body / 2.0;
 /// Width of a stage heading's bar (120 px).
 const GROUP_BAR_W: f32 = TS.body * 10.0;
-/// Width of the filter box, in `body`-size characters (200 px).
-const SEARCH_EMS: f32 = 16.7;
 
 /// What every part of the view reads.
 pub(super) struct Ctx<'s> {
@@ -48,6 +46,10 @@ pub(super) struct Ctx<'s> {
     pub(super) data: &'s ProjectData,
     pub(super) state: Option<&'s ChecklistTabState>,
     pub(super) report: Option<&'s CheckReport>,
+    /// Who Mine is: the user's name, empty until it is known.
+    pub(super) me: &'s str,
+    /// The link picker's rows, while it is open.
+    pub(super) choices: &'s [LinkChoice],
     pub(super) i18n: &'s I18n,
     pub(super) tokens: &'s ThemeTokens,
 }
@@ -65,100 +67,72 @@ impl Ctx<'_> {
     }
 }
 
+/// What [`view`] shows beside the project and the tab's state.
+pub(super) struct Seen<'s> {
+    pub(super) me: &'s str,
+    pub(super) choices: &'s [LinkChoice],
+    pub(super) i18n: &'s I18n,
+    pub(super) tokens: &'s ThemeTokens,
+}
+
 pub(super) fn view<'a>(
     project: &LoadedProject,
     state: Option<&ChecklistTabState>,
-    i18n: &I18n,
-    tokens: &ThemeTokens,
+    seen: &Seen,
 ) -> Element<'a, Message> {
     let ctx = Ctx {
         project_id: project.id,
         data: &project.data,
         state,
         report: state.and_then(ChecklistTabState::report),
-        i18n,
-        tokens,
+        me: seen.me,
+        choices: seen.choices,
+        i18n: seen.i18n,
+        tokens: seen.tokens,
     };
     match project.data.design_checklist() {
-        Err(_) => padded(problem(t!(i18n, ids::CHECKLIST_UNREADABLE), tokens), tokens),
-        Ok(None) => padded(empty(&ctx), tokens),
+        Err(_) => padded(
+            problem(t!(seen.i18n, ids::CHECKLIST_UNREADABLE), seen.tokens),
+            seen.tokens,
+        ),
+        Ok(None) => padded(super::empty::empty(&ctx), seen.tokens),
         Ok(Some(checklist)) => started(&ctx, &checklist),
     }
 }
 
 /// `content` padded and scrolling like a Project tab page.
-fn padded<'a>(content: Element<'a, Message>, tokens: &ThemeTokens) -> Element<'a, Message> {
+pub(super) fn padded<'a>(
+    content: Element<'a, Message>,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
     let inner = container(content)
         .width(Length::Fill)
         .padding([SP.xl + SP.s, SP.xl * 2.0]);
     page_scroller(inner.boxed(), tokens)
 }
 
-/// The empty tab: the templates, Start from template, and the note that
-/// nothing is written until Save.
-fn empty<'a>(ctx: &Ctx) -> Element<'a, Message> {
-    let (i18n, tokens) = (ctx.i18n, ctx.tokens);
-    let picked = ctx
-        .state
-        .and_then(|state| state.template)
-        .unwrap_or(ChecklistTemplate::ReleaseReview);
-    let mut cards: Row<Element<'a, Message>> = Row::new().spacing(SP.l);
-    for template in CHECKLIST_TEMPLATES {
-        let kind = if template == picked {
-            ButtonKind::Primary
-        } else {
-            ButtonKind::Outline
-        };
-        let count = template.items().len();
-        let card = column![
-            text_button(
-                None,
-                t!(i18n, template_words(template)),
-                Some(ctx.send(ChecklistMsg::TemplatePicked(template))),
-                kind,
-                tokens,
-            ),
-            note(t!(i18n, template_help(template), "count" => count), tokens),
-        ]
-        .spacing(SP.xs);
-        cards = cards.push(card.boxed());
-    }
-    let start = row![
-        text_button(
-            None,
-            t!(i18n, ids::CHECKLIST_START),
-            Some(ctx.send(ChecklistMsg::StartPressed)),
-            ButtonKind::PrimaryLarge,
-            tokens,
-        ),
-        note(t!(i18n, ids::CHECKLIST_EMPTY_NOTE), tokens),
-    ]
-    .spacing(SP.l)
-    .align_y(Alignment::Center);
-    let mut body: Column<Element<'a, Message>> = column![
-        text(t!(i18n, ids::CHECKLIST_EMPTY_TITLE))
-            .size(TS.heading)
-            .font(ui_font(iced::font::Weight::Semibold))
-            .color(ti(tokens.text)),
-        note(t!(i18n, ids::CHECKLIST_EMPTY_HELP), tokens),
-        cards,
-        start,
-    ]
-    .spacing(SP.l);
-    if let Some(refused) = ctx.state.and_then(|state| state.problem.as_ref()) {
-        body = body.push(problem(problem_words(refused, i18n), tokens));
-    }
-    body.boxed()
+/// What the last action that was not an edit came to, when it said so.
+pub(super) fn notice_line<'a>(ctx: &Ctx) -> Option<Element<'a, Message>> {
+    let notice = ctx.state?.notice.as_ref()?;
+    let (words, failed) = notice_words(notice, ctx.i18n);
+    Some(if failed {
+        problem(words, ctx.tokens)
+    } else {
+        note(words, ctx.tokens)
+    })
 }
 
 /// A started checklist: the list column, and the selected item's pane.
 fn started<'a>(ctx: &Ctx, checklist: &DesignChecklist) -> Element<'a, Message> {
     let mut list: Column<Element<'a, Message>> = Column::new()
         .spacing(SP.l)
-        .push(bar(ctx, checklist))
+        .push(super::bar::bar(ctx, checklist))
         .push(stage_cards(ctx, checklist));
     if let Some(reason) = run_failed(ctx) {
         list = list.push(problem(reason, ctx.tokens));
+    }
+    if let Some(line) = notice_line(ctx) {
+        list = list.push(line);
     }
     let selected = ctx
         .state
@@ -184,102 +158,6 @@ fn run_failed(ctx: &Ctx) -> Option<Localized> {
     let run = ctx.state?.last_run.as_deref()?;
     let reason = run.report.as_ref().err()?;
     Some(t!(ctx.i18n, ids::CHECKLIST_RUN_FAILED, "reason" => reason.as_str()))
-}
-
-/// The bar over the list: the name, the summary, the state filter, the
-/// filter box, Run checks and Add item.
-fn bar<'a>(ctx: &Ctx, checklist: &DesignChecklist) -> Element<'a, Message> {
-    let (i18n, tokens) = (ctx.i18n, ctx.tokens);
-    let name = match checklist
-        .template
-        .as_deref()
-        .and_then(ChecklistTemplate::parse)
-    {
-        Some(template) => t!(i18n, template_words(template)),
-        None => t!(i18n, ids::CHECKLIST_OWN_LIST),
-    };
-    let counts = checklist.counts(None);
-    let summary = t!(
-        i18n,
-        ids::CHECKLIST_SUMMARY,
-        "total" => counts.total(),
-        "open" => counts.open,
-        "waived" => counts.waived
-    );
-    let filter = ctx.state.and_then(|state| state.filter);
-    let mut line: Row<Element<'a, Message>> = Row::new()
-        .spacing(SP.m)
-        .align_y(Alignment::Center)
-        .push(
-            text(name)
-                .size(TS.body)
-                .font(ui_font(iced::font::Weight::Semibold))
-                .color(ti(tokens.text))
-                .boxed(),
-        )
-        .push(
-            text(summary)
-                .size(TS.caption)
-                .color(muted_text(tokens))
-                .boxed(),
-        )
-        .push(Space::new().width(Length::Fill).boxed());
-    let chips = [
-        (None, ids::CHECKLIST_FILTER_ALL),
-        (Some(ItemState::Open), ids::CHECKLIST_STATE_OPEN),
-        (Some(ItemState::Done), ids::CHECKLIST_STATE_DONE),
-        (Some(ItemState::Waived), ids::CHECKLIST_STATE_WAIVED),
-    ];
-    for (state, words) in chips {
-        let kind = if state == filter {
-            ButtonKind::Small
-        } else {
-            ButtonKind::Ghost
-        };
-        let press = ctx.send(ChecklistMsg::FilterPicked(state));
-        line = line.push(text_button(
-            None,
-            t!(i18n, words),
-            Some(press),
-            kind,
-            tokens,
-        ));
-    }
-    let search = ctx
-        .state
-        .map(|state| state.search.clone())
-        .unwrap_or_default();
-    let project_id = ctx.project_id;
-    let search = text_input(t!(i18n, ids::CHECKLIST_SEARCH), search)
-        .on_input(move |text| message(project_id, ChecklistMsg::SearchEdited(text)))
-        .style(crate::panels::form_look::text_input_style)
-        .size(TS.body)
-        .padding(SP.xs)
-        .width(Length::Fixed(TS.body * SEARCH_EMS));
-    let running = ctx.state.is_some_and(|state| state.running);
-    let run_words = if running {
-        t!(i18n, ids::CHECKLIST_RUNNING)
-    } else {
-        t!(i18n, ids::CHECKLIST_RUN)
-    };
-    let run = (!running).then(|| ctx.send(ChecklistMsg::RunPressed));
-    line.push(search.boxed())
-        .push(text_button(
-            Some(Glyph::Play),
-            run_words,
-            run,
-            ButtonKind::Outline,
-            tokens,
-        ))
-        .push(text_button(
-            Some(Glyph::Plus),
-            t!(i18n, ids::CHECKLIST_ADD),
-            Some(ctx.send(ChecklistMsg::AddPressed)),
-            ButtonKind::Primary,
-            tokens,
-        ))
-        .width(Length::Fill)
-        .boxed()
 }
 
 /// One card per stage and the release total: closed of all, the bar, and
@@ -374,19 +252,19 @@ fn segment<'a>(count: usize, color: Color) -> Element<'a, Message> {
         .boxed()
 }
 
-/// Does `item` pass the state filter and the filter text?
-fn shown(ctx: &Ctx, item: &ChecklistItem) -> bool {
+/// Does `item` pass the filter chip and the filter text?
+pub(super) fn shown(ctx: &Ctx, item: &ChecklistItem) -> bool {
     let Some(state) = ctx.state else {
         return true;
     };
-    if state.filter.is_some_and(|filter| filter != item.state) {
+    if !state.filter.shows(item, ctx.me) {
         return false;
     }
     let needle = state.search.trim().to_lowercase();
     if needle.is_empty() {
         return true;
     }
-    let link = item.link.as_ref().map(|link| link.to_text());
+    let link = item.link.as_ref().map(ChecklistLink::to_text);
     [Some(&item.title), item.owner.as_ref(), link.as_ref()]
         .into_iter()
         .flatten()
@@ -521,16 +399,26 @@ pub(super) fn result_tone(result: LinkResult) -> PillTone {
 
 /// The link's words and what it says: a linked check that passes on an open
 /// item says so and offers Mark done, which the owner presses; any other
-/// result is a pill.
+/// result is a pill. A design object's words cross-probe when clicked.
 fn link_cell<'a>(ctx: &Ctx, item: &ChecklistItem) -> Element<'a, Message> {
     let (i18n, tokens) = (ctx.i18n, ctx.tokens);
-    let words = text(link_words(item.link.as_ref(), i18n))
-        .size(TS.body)
-        .color(ti(tokens.text_secondary));
+    let words = link_words(item.link.as_ref(), i18n);
+    let words = match &item.link {
+        Some(ChecklistLink::Object { .. }) => {
+            let probe = ctx.send(ChecklistMsg::LinkOpenPressed {
+                item: item.id.clone(),
+            });
+            text_button(None, words, Some(probe), ButtonKind::Ghost, tokens)
+        }
+        _ => text(words)
+            .size(TS.body)
+            .color(ti(tokens.text_secondary))
+            .boxed(),
+    };
     let mut link: Row<Element<'a, Message>> = Row::new()
         .spacing(SP.s)
         .align_y(Alignment::Center)
-        .push(words.boxed());
+        .push(words);
     match ctx.result_of(item) {
         Some(LinkResult::Passes) if item.state == ItemState::Open => {
             let done = ChecklistMsg::StatePicked {

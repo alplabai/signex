@@ -358,6 +358,10 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "project_remove_checklist_item",
         "it writes the project's settings, which no sheet's undo step covers",
     ),
+    (
+        "project_reset_checklist",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
 ];
 
 const BOARD_EDIT: &str =

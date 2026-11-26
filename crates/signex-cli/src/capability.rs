@@ -104,6 +104,9 @@ const SAVES: &[&str] = &[
     "save_layer_set",
     // Writes the named workspace layout into the user's preferences (mockup row 166).
     "save_workspace_layout",
+    // Writes the design checklist as a template into the user's config
+    // folder (#1291, mockup row 206).
+    "project_save_checklist_template",
 ];
 
 /// The one capability `command` needs, from its catalog flags.
@@ -192,12 +195,14 @@ mod tests {
             (Capability::Save, "save_board_reuse_block"),
             (Capability::Save, "save_layer_set"),
             (Capability::Save, "save_workspace_layout"),
+            (Capability::Save, "project_save_checklist_template"),
             (Capability::Export, "print"),
             (Capability::Export, "report_manager_bom"),
             (Capability::Export, "export_board_report"),
             (Capability::Export, "export_board_pdf"),
             (Capability::Export, "export_assembly_svg"),
             (Capability::Export, "export_board_step"),
+            (Capability::Export, "project_export_checklist_csv"),
         ]);
         assert_eq!(non_default, pinned);
     }

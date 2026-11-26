@@ -12,7 +12,6 @@ checklist-summary = { $total } { $total ->
         [one] item
        *[other] items
     } · { $open } open · { $waived } waived · stored in the project file
-checklist-filter-all = All
 checklist-search = Filter items, owners, links
 checklist-add = Add item
 checklist-run = Run checks
@@ -91,3 +90,83 @@ checklist-item-fab-outputs-written = Fabrication outputs written
 checklist-item-gerbers-viewed = Gerber set checked in the viewer
 checklist-item-bom-released = Bill of materials released
 checklist-item-assembly-drawings = Assembly drawings written
+# Filter chips with their counts (mockup row 206).
+checklist-chip-all = All { $count }
+checklist-chip-open = Open { $count }
+checklist-chip-done = Done { $count }
+checklist-chip-waived = Waived { $count }
+checklist-chip-mine = Mine { $count }
+# The More menu, Save as template and the user's own templates.
+checklist-more = More
+checklist-save-as-template = Save as template…
+checklist-export-csv = Export CSV…
+checklist-reset = Reset from template
+checklist-template-name = Template name
+checklist-template-name-help = Saved to your templates, not to the project.
+checklist-template-save = Save template
+checklist-cancel = Cancel
+checklist-template-stages = Schematic { $schematic } · Layout { $layout } · Fabrication { $fabrication }
+checklist-your-templates = Your templates
+checklist-saved-template = { $name }
+checklist-saved-template-help = { $count } { $count ->
+        [one] item
+       *[other] items
+    }
+checklist-saved-template-from = { $count } { $count ->
+        [one] item
+       *[other] items
+    } · saved from { $project }
+checklist-import = Import from another project…
+checklist-import-title = Import a design checklist from a project
+checklist-export-title = Export the design checklist
+checklist-notice-template-saved = Saved { $name } to your templates.
+checklist-notice-template-not-saved = The template was not saved: { $reason }
+checklist-notice-library-unreadable = Your templates could not be read: { $reason }
+checklist-notice-import-failed = The project could not be read: { $reason }
+checklist-notice-nothing-to-import = { $project } has no design checklist to import.
+checklist-notice-link-not-found = { $what } is not in the project's open documents.
+checklist-problem-not-started = This project has no design checklist yet.
+checklist-problem-no-template = This checklist was not started from a template, so there is none to reset from.
+checklist-problem-unknown-saved-template = None of your templates is called { $name }.
+checklist-problem-empty-name = A template needs a name.
+# What a design-object link names, and the link picker.
+checklist-link-part = Part { $part }
+checklist-link-pin = { $part } pin { $pin }
+checklist-link-net = Net { $net }
+checklist-link-sheet = Sheet { $sheet }
+checklist-link-board = The board
+checklist-link-object = { $what }
+checklist-link-pick = Link a design object or check…
+checklist-link-clear = Remove link
+checklist-link-search = Filter checks, requirements, parts, nets, sheets
+checklist-link-typed = Link to { $what }
+checklist-group-checks = Checks
+checklist-group-requirements = Requirements
+checklist-group-parts = Parts
+checklist-group-nets = Nets
+checklist-group-sheets = Sheets
+checklist-group-board = Board
+checklist-open-in-requirements = Open in Requirements
+checklist-open-results = Open results
+checklist-open-parameters = Open in Parameters
+checklist-show-object = Show
+checklist-run-check = Run check
+# An item's history.
+checklist-history = History
+checklist-history-created = Created
+checklist-history-created-from = Created from the template { $template }
+checklist-history-imported = Imported from { $project }
+checklist-history-title = Renamed to { $title }
+checklist-history-stage = Moved to { $stage }
+checklist-history-owner = Owner set to { $owner }
+checklist-history-owner-cleared = Owner cleared
+checklist-history-link = Linked to { $link }
+checklist-history-link-cleared = Link removed
+checklist-history-notes = Notes edited
+checklist-history-opened = Opened again
+checklist-history-done = Marked done
+checklist-history-waived = Waived: { $reason }
+checklist-history-other = { $event }
+checklist-history-by-on = { $by } · { $on }
+checklist-history-by = { $by }
+checklist-history-on = { $on }

@@ -293,6 +293,13 @@ define_ids! {
         CMD_PROJECT_SET_CHECKLIST_STATE = "cmd-project-set-checklist-state";
         CMD_PROJECT_REMOVE_CHECKLIST_ITEM = "cmd-project-remove-checklist-item";
         CMD_PROJECT_RUN_CHECKLIST = "cmd-project-run-checklist";
+        CMD_PROJECT_RESET_CHECKLIST = "cmd-project-reset-checklist";
+        CMD_PROJECT_IMPORT_CHECKLIST = "cmd-project-import-checklist";
+        CMD_PROJECT_CHECKLIST_TEMPLATES = "cmd-project-checklist-templates";
+        CMD_PROJECT_SAVE_CHECKLIST_TEMPLATE = "cmd-project-save-checklist-template";
+        CMD_PROJECT_EXPORT_CHECKLIST_CSV = "cmd-project-export-checklist-csv";
+        CMD_PROJECT_CHECKLIST_LINK_CHOICES = "cmd-project-checklist-link-choices";
+        CMD_PROJECT_OPEN_CHECKLIST_LINK = "cmd-project-open-checklist-link";
         CMD_NUMBER_SCHEMATIC_SHEETS = "cmd-number-schematic-sheets";
         CMD_MENU_NUMBER_SCHEMATIC_SHEETS = "cmd-menu-number-schematic-sheets";
         CMD_RESET_SCHEMATIC_DESIGNATORS = "cmd-reset-schematic-designators";

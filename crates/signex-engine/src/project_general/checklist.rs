@@ -1,40 +1,56 @@
 //! The Design Checklist tab's edits (#1291, mockup row 206): start from a
-//! template, add an item, set a field, set the state, remove. Each is one
-//! step on the project's General history; the checks that refuse one live
-//! in `signex-types`.
+//! template or from another project's items, reset from the template, add
+//! an item, set a field, set the state, remove. Each is one step on the
+//! project's General history; the checks that refuse one live in
+//! `signex-types`.
 
 use signex_types::project::{
-    ChecklistField, ChecklistProblem, ItemState, NewChecklistItem, ProjectData,
+    ChecklistField, ChecklistProblem, EditStamp, ItemState, NewChecklistItem, ProjectData,
 };
 
-/// One edit of the design checklist. An item is named by its id. `today` is
-/// the day the edit is stamped with (`YYYY-MM-DD`), given by the editor.
+/// One edit of the design checklist. An item is named by its id. `stamp` is
+/// the day and the editor an edit is stamped with, given by the editor.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ProjectChecklistCommand {
-    /// Start the checklist from `template` with `items`, worded already.
+    /// Start the checklist from `template` (its key, `None` for a list of
+    /// one's own) with `items`, worded already.
     Start {
+        template: Option<String>,
+        items: Vec<NewChecklistItem>,
+        stamp: EditStamp,
+    },
+    /// Start the checklist from another project's items; `from` names it.
+    Import {
+        from: String,
+        template: Option<String>,
+        items: Vec<NewChecklistItem>,
+        stamp: EditStamp,
+    },
+    /// Put the template's items back in place of every item.
+    Reset {
         template: String,
         items: Vec<NewChecklistItem>,
+        stamp: EditStamp,
     },
     /// Add an open item after the others.
     AddItem {
         stage: String,
         title: String,
-        today: Option<String>,
+        stamp: EditStamp,
     },
     /// One field as typed; empty clears the owner, the link and the notes.
     SetField {
         item: String,
         field: ChecklistField,
         text: String,
-        today: Option<String>,
+        stamp: EditStamp,
     },
     /// Open, Done, or Waived with a reason.
     SetState {
         item: String,
         state: ItemState,
         reason: Option<String>,
-        today: Option<String>,
+        stamp: EditStamp,
     },
     RemoveItem {
         item: String,
@@ -45,26 +61,39 @@ impl ProjectChecklistCommand {
     /// Apply to `data`. A refused edit changes nothing.
     pub fn apply(&self, data: &mut ProjectData) -> Result<(), ChecklistProblem> {
         match self {
-            Self::Start { template, items } => data.start_design_checklist(template, items.clone()),
+            Self::Start {
+                template,
+                items,
+                stamp,
+            } => data.start_design_checklist(template.as_deref(), items.clone(), stamp),
+            Self::Import {
+                from,
+                template,
+                items,
+                stamp,
+            } => data.import_design_checklist(from, template.as_deref(), items.clone(), stamp),
+            Self::Reset {
+                template,
+                items,
+                stamp,
+            } => data.reset_design_checklist(template, items.clone(), stamp),
             Self::AddItem {
                 stage,
                 title,
-                today,
-            } => data
-                .add_checklist_item(stage, title, today.as_deref())
-                .map(|_| ()),
+                stamp,
+            } => data.add_checklist_item(stage, title, stamp).map(|_| ()),
             Self::SetField {
                 item,
                 field,
                 text,
-                today,
-            } => data.set_checklist_field(item, *field, text, today.as_deref()),
+                stamp,
+            } => data.set_checklist_field(item, *field, text, stamp),
             Self::SetState {
                 item,
                 state,
                 reason,
-                today,
-            } => data.set_checklist_state(item, *state, reason.as_deref(), today.as_deref()),
+                stamp,
+            } => data.set_checklist_state(item, *state, reason.as_deref(), stamp),
             Self::RemoveItem { item } => data.remove_checklist_item(item),
         }
     }

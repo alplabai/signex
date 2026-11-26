@@ -8,15 +8,27 @@
 //! changes: a build that predates the checklist keeps the key as it is.
 //! Rules: `docs/DESIGN_CHECKLIST.md`.
 
+mod csv;
 mod edit;
+mod history;
+mod library;
 mod link;
+mod object;
 mod template;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+pub use csv::CSV_COLUMNS;
 pub use edit::{ChecklistField, ChecklistProblem, NewChecklistItem};
-pub use link::{ChecklistLink, LinkResult, TITLE_BLOCK_REQUIRED, title_block_missing};
+pub use history::{EditStamp, HISTORY_LIMIT, HistoryEntry, HistoryEvent};
+pub use library::{
+    SavedTemplate, SavedTemplateItem, TEMPLATE_LIBRARY_FILE, TemplateLibrary, TemplateRef,
+};
+pub use link::{
+    ChecklistLink, LinkResult, TITLE_BLOCK_REQUIRED, merge_link_run, title_block_missing,
+};
+pub use object::{ObjectTarget, SheetTargets, sheet_targets};
 pub use template::{CHECKLIST_TEMPLATES, ChecklistTemplate, TemplateItem, TemplateLink};
 
 use super::{ProjectData, UnknownJson};
@@ -106,9 +118,24 @@ pub struct ChecklistItem {
     /// The day of the last edit, `YYYY-MM-DD`, as the editor gave it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub updated: Option<String>,
+    /// What was done to the item, oldest first (the Item pane's History).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub history: Vec<HistoryEntry>,
     /// Keys written by a newer build that this one does not know.
     #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
     pub unknown: UnknownJson,
+}
+
+impl ChecklistItem {
+    /// Is `who` the item's owner? Blank names own nothing; case is ignored.
+    pub fn is_owned_by(&self, who: &str) -> bool {
+        let who = who.trim();
+        !who.is_empty()
+            && self
+                .owner
+                .as_deref()
+                .is_some_and(|owner| owner.trim().eq_ignore_ascii_case(who))
+    }
 }
 
 /// The checklist: the template it started from and its items in list order.
@@ -166,6 +193,14 @@ impl DesignChecklist {
             }
         }
         counts
+    }
+
+    /// How many items `who` owns (the Mine filter's count).
+    pub fn owned_by(&self, who: &str) -> usize {
+        self.items
+            .iter()
+            .filter(|item| item.is_owned_by(who))
+            .count()
     }
 
     /// The id a new item gets: one above the highest number in use.

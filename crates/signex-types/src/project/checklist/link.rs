@@ -140,6 +140,33 @@ impl ChecklistLink {
     }
 }
 
+/// The report after a run of only the links whose run ids are `run_ids`
+/// (one item's Run check): `ran`, plus what `previous` said of every other
+/// link, so a check run alone does not forget the others' results.
+pub fn merge_link_run(
+    previous: Option<&CheckReport>,
+    mut ran: CheckReport,
+    run_ids: &[String],
+) -> CheckReport {
+    let Some(previous) = previous else {
+        return ran;
+    };
+    let rules: Vec<String> = run_ids.iter().map(|id| format!("req::{id}")).collect();
+    let kept = previous
+        .findings
+        .iter()
+        .filter(|finding| !rules.contains(&finding.rule))
+        .cloned();
+    ran.findings.extend(kept);
+    let passed = previous
+        .passed
+        .iter()
+        .filter(|rule| !rules.contains(rule))
+        .cloned();
+    ran.passed.extend(passed);
+    ran
+}
+
 /// The [`TITLE_BLOCK_REQUIRED`] parameters `data` leaves blank.
 pub fn title_block_missing(data: &ProjectData) -> Vec<&'static str> {
     TITLE_BLOCK_REQUIRED

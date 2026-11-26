@@ -55,7 +55,9 @@ mod undo_routing_tests;
 
 pub use checklist::ChecklistMsg;
 pub(crate) use checklist::{
-    project_add_checklist_item, project_remove_checklist_item, project_run_checklist,
+    project_add_checklist_item, project_checklist_templates, project_export_checklist_csv,
+    project_import_checklist, project_open_checklist_link, project_remove_checklist_item,
+    project_reset_checklist, project_run_checklist, project_save_checklist_template,
     project_set_checklist_item, project_set_checklist_state, project_start_checklist,
 };
 pub(crate) use commands::{

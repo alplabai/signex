@@ -563,6 +563,14 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "project_set_checklist_state",
                     "project_remove_checklist_item",
                     "project_run_checklist",
+                    // #1291: its templates, files and links.
+                    "project_reset_checklist",
+                    "project_import_checklist",
+                    "project_checklist_templates",
+                    "project_save_checklist_template",
+                    "project_export_checklist_csv",
+                    "project_checklist_link_choices",
+                    "project_open_checklist_link",
                     // #2394: the board view's layer commands.
                     "hide_layer",
                     "highlight_layer",

@@ -11,7 +11,7 @@ use signex_i18n::RenderTranslatable;
 use signex_types::check::{CheckReport, Finding, Severity};
 use signex_types::project::{
     ChecklistField, ChecklistLink, ChecklistTemplate, ItemState, LinkResult, RequirementEntry,
-    TITLE_BLOCK_REQUIRED, parse_project, write_project,
+    TITLE_BLOCK_REQUIRED, TemplateRef, parse_project, write_project,
 };
 
 use super::ChecklistMsg;
@@ -23,7 +23,7 @@ use crate::keymap::AppCommandId;
 
 /// A project over a project file written to a folder of its own, its
 /// Project tab active; the folder lives as long as the returned guard.
-fn app() -> (Signex, ProjectId, tempfile::TempDir) {
+pub(super) fn app() -> (Signex, ProjectId, tempfile::TempDir) {
     let dir = tempfile::tempdir().expect("a folder");
     let mut app = app_workspace(&dir.path().to_string_lossy(), &["a.snxsch"]);
     let project = &app.document_state.projects[0];
@@ -33,7 +33,7 @@ fn app() -> (Signex, ProjectId, tempfile::TempDir) {
     (app, id, dir)
 }
 
-fn send(app: &mut Signex, id: ProjectId, msg: ChecklistMsg) -> iced::Task<Message> {
+pub(super) fn send(app: &mut Signex, id: ProjectId, msg: ChecklistMsg) -> iced::Task<Message> {
     app.update(Message::Project(ProjectMsg::Tab(
         ProjectTabMsg::Checklist {
             project_id: id,
@@ -42,13 +42,13 @@ fn send(app: &mut Signex, id: ProjectId, msg: ChecklistMsg) -> iced::Task<Messag
     )))
 }
 
-fn settle(app: &mut Signex, task: iced::Task<Message>) {
+pub(super) fn settle(app: &mut Signex, task: iced::Task<Message>) {
     crate::task_driver::TaskDriver::new()
         .settle(app, task)
         .expect("the task settles");
 }
 
-fn items(app: &Signex) -> Vec<Value> {
+pub(super) fn items(app: &Signex) -> Vec<Value> {
     app.document_state.projects[0]
         .data
         .design_checklist_value()
@@ -62,25 +62,28 @@ fn on_disk(app: &Signex) -> Vec<u8> {
     std::fs::read(&app.document_state.projects[0].path).expect("the project file")
 }
 
-fn dirty(app: &Signex) -> bool {
+pub(super) fn dirty(app: &Signex) -> bool {
     let path = &app.document_state.projects[0].path;
     app.document_state.is_document_dirty(path)
 }
 
-fn undo(app: &mut Signex, id: ProjectId, back: bool) -> bool {
+pub(super) fn undo(app: &mut Signex, id: ProjectId, back: bool) -> bool {
     app.step_project_tab_history(id, back)
 }
 
-fn tab(app: &Signex, id: ProjectId) -> &super::ChecklistTabState {
+pub(super) fn tab(app: &Signex, id: ProjectId) -> &super::ChecklistTabState {
     &app.document_state.project_tabs[&id].checklist
 }
 
-fn start(app: &mut Signex, id: ProjectId, template: ChecklistTemplate) {
-    let _ = send(app, id, ChecklistMsg::TemplatePicked(template));
+pub(super) fn start(app: &mut Signex, id: ProjectId, template: ChecklistTemplate) {
+    let picked = ChecklistMsg::TemplatePicked(TemplateRef::Builtin(template));
+    let _ = send(app, id, picked);
     let _ = send(app, id, ChecklistMsg::StartPressed);
 }
 
-fn run(app: &mut Signex, id: &str, operands: &[&str]) -> CommandOutcome {
+/// Run catalog command `id` on the project with `operands`, as a headless
+/// run does: a command that waits for its file work is answered once it ran.
+pub(super) fn run(app: &mut Signex, id: &str, operands: &[&str]) -> CommandOutcome {
     let document = format!("document={}", app.document_state.projects[0].path.display());
     let mut all = vec![document.as_str()];
     all.extend_from_slice(operands);
@@ -88,20 +91,20 @@ fn run(app: &mut Signex, id: &str, operands: &[&str]) -> CommandOutcome {
     let args = CommandArgs::parse_operands(&command, &all).expect("operands parse");
     let (outcome, task) = match app.run_query(&command, &args) {
         Some(ran) => ran,
-        None => app.run_operands(&command, &args),
+        None => app.run_operands_settled(&command, &args),
     };
     settle(app, task);
     outcome
 }
 
-fn answer(app: &mut Signex, id: &str, operands: &[&str]) -> Value {
+pub(super) fn answer(app: &mut Signex, id: &str, operands: &[&str]) -> Value {
     match run(app, id, operands) {
         CommandOutcome::Answered(value) => value,
         other => panic!("{id} did not answer: {other:?}"),
     }
 }
 
-fn refusal(app: &mut Signex, id: &str, operands: &[&str]) -> String {
+pub(super) fn refusal(app: &mut Signex, id: &str, operands: &[&str]) -> String {
     match run(app, id, operands) {
         CommandOutcome::Disabled { reason } => reason.render_en_us(),
         other => panic!("{id} was not refused: {other:?}"),

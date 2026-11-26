@@ -235,9 +235,23 @@ pub(super) const WRITES: &[(&[&str], Surface, Writes)] = &[
         Operand,
         Session,
     ),
-    // Saved layer sets and the tab-name style: machine settings.
+    // The Design Checklist tab's list of saved templates, and the link's
+    // Open: a tab, a section, a panel, a sheet shown and its object
+    // selected (#1291).
     (
-        &["save_layer_set", "delete_layer_set", "set_layer_tab_names"],
+        &["project_checklist_templates", "project_open_checklist_link"],
+        Operand,
+        Session,
+    ),
+    // Saved layer sets and the tab-name style: machine settings. So is a
+    // saved checklist template, kept in the user's config folder (#1291).
+    (
+        &[
+            "save_layer_set",
+            "delete_layer_set",
+            "set_layer_tab_names",
+            "project_save_checklist_template",
+        ],
         Operand,
         Settings,
     ),
@@ -615,12 +629,15 @@ const OPERAND_DOCUMENT: &[&str] = &[
     "project_add_requirement",
     "project_add_variant",
     "project_enable_requirement",
+    "project_export_checklist_csv",
+    "project_import_checklist",
     "project_move_library",
     "project_move_sheet",
     "project_remove_checklist_item",
     "project_remove_requirement",
     "project_remove_variant",
     "project_rename_variant",
+    "project_reset_checklist",
     "project_run_checklist",
     "project_run_requirements",
     "project_set_active_variant",

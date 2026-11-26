@@ -23,8 +23,7 @@ impl Signex {
                 return self.dispatch_checklist(project_id, msg);
             }
             ProjectTabMsg::ChecklistOpenRequested { project } => {
-                self.open_design_checklist(project);
-                return iced::Task::none();
+                return self.open_design_checklist(project);
             }
             ProjectTabMsg::AddSchematicRequested { project_id } => {
                 return self.add_schematic_from_tab(project_id);

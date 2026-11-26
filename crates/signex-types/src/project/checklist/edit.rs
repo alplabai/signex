@@ -1,8 +1,11 @@
-//! Editing the design checklist (#1291): start it from a template, add an
-//! item, set one field of an item from typed text, move an item to Open, Done
-//! or Waived, and remove one. A refused edit changes nothing and says why. An
-//! unreadable stored checklist is never edited over.
+//! Editing the design checklist (#1291): start it from a template or from
+//! another project's items, reset it from its template, add an item, set one
+//! field of an item from typed text, move an item to Open, Done or Waived,
+//! and remove one. Each change to an item is a line of its history. A
+//! refused edit changes nothing and says why. An unreadable stored checklist
+//! is never edited over.
 
+use super::history::{EditStamp, HistoryEntry, HistoryEvent, record};
 use super::link::ChecklistLink;
 use super::{ChecklistItem, ChecklistStage, DesignChecklist, ItemState};
 use crate::project::{ProjectData, UnknownJson};
@@ -41,6 +44,17 @@ impl ChecklistField {
     pub fn parse(key: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|field| field.key() == key)
     }
+
+    /// The history event a change of this field writes.
+    const fn event(self) -> HistoryEvent {
+        match self {
+            Self::Title => HistoryEvent::Title,
+            Self::Stage => HistoryEvent::Stage,
+            Self::Owner => HistoryEvent::Owner,
+            Self::Link => HistoryEvent::Link,
+            Self::Notes => HistoryEvent::Notes,
+        }
+    }
 }
 
 /// An item a start adds: its stage, its title in the person's words and its
@@ -60,7 +74,16 @@ pub enum ChecklistProblem {
     Unreadable,
     /// The project already has a checklist; a start would replace it.
     AlreadyStarted,
+    /// The project has no checklist yet: start one first.
+    NotStarted,
+    /// The checklist was not started from a template, so there is none to
+    /// reset from.
+    NoTemplate,
     UnknownTemplate(String),
+    /// None of the user's saved templates has this name.
+    UnknownSavedTemplate(String),
+    /// A saved template needs a name.
+    EmptyName,
     /// No item has this id.
     UnknownItem(String),
     UnknownStage(String),
@@ -82,10 +105,18 @@ impl std::fmt::Display for ChecklistProblem {
                 "the project's design checklist cannot be read by this version; it is kept as written",
             ),
             Self::AlreadyStarted => f.write_str("the project already has a design checklist"),
+            Self::NotStarted => f.write_str("the project has no design checklist yet"),
+            Self::NoTemplate => {
+                f.write_str("the design checklist was not started from a template")
+            }
             Self::UnknownTemplate(text) => write!(
                 f,
-                "`{text}` is no checklist template; release_review, prototype_build or blank"
+                "`{text}` is no checklist template; release_review, prototype_build, blank or user:<name>"
             ),
+            Self::UnknownSavedTemplate(name) => {
+                write!(f, "no saved checklist template is called `{name}`")
+            }
+            Self::EmptyName => f.write_str("a checklist template needs a name"),
             Self::UnknownItem(id) => write!(f, "the design checklist has no item `{id}`"),
             Self::UnknownStage(text) => {
                 write!(f, "`{text}` is no stage; schematic, layout or fabrication")
@@ -109,31 +140,37 @@ impl std::fmt::Display for ChecklistProblem {
 impl std::error::Error for ChecklistProblem {}
 
 /// `text` trimmed; `None` when that leaves nothing.
-fn optional_text(text: &str) -> Option<String> {
+pub(super) fn optional_text(text: &str) -> Option<String> {
     let text = text.trim();
     (!text.is_empty()).then(|| text.to_string())
 }
 
-/// A new open item.
-fn new_item(
-    id: String,
-    stage: ChecklistStage,
-    title: String,
-    link: Option<ChecklistLink>,
-    today: Option<&str>,
-) -> ChecklistItem {
-    ChecklistItem {
-        id,
-        stage,
-        title,
-        state: ItemState::Open,
-        reason: None,
-        owner: None,
-        link,
-        notes: None,
-        updated: today.map(str::to_string),
-        unknown: UnknownJson::default(),
+/// Add `items` to `checklist` as new open items, numbered after the ones it
+/// has, each with a first history line `made`.
+fn fill(
+    checklist: &mut DesignChecklist,
+    items: Vec<NewChecklistItem>,
+    made: &HistoryEntry,
+    stamp: &EditStamp,
+) -> Result<(), ChecklistProblem> {
+    for item in items {
+        let title = optional_text(&item.title).ok_or(ChecklistProblem::EmptyTitle)?;
+        let id = checklist.next_id();
+        checklist.items.push(ChecklistItem {
+            id,
+            stage: item.stage,
+            title,
+            state: ItemState::Open,
+            reason: None,
+            owner: None,
+            link: item.link,
+            notes: None,
+            updated: stamp.day.clone(),
+            history: vec![made.clone()],
+            unknown: UnknownJson::default(),
+        });
     }
+    Ok(())
 }
 
 impl ProjectData {
@@ -142,27 +179,64 @@ impl ProjectData {
         Ok(self.design_checklist()?.unwrap_or_default())
     }
 
-    /// Start the checklist from template `template` with `items`. Refused
-    /// when the project has one.
+    /// Start the checklist from `template` (its key; `None` for a list of
+    /// one's own) with `items`. Refused when the project has one.
     pub fn start_design_checklist(
         &mut self,
-        template: &str,
+        template: Option<&str>,
         items: Vec<NewChecklistItem>,
+        stamp: &EditStamp,
     ) -> Result<(), ChecklistProblem> {
         if self.design_checklist()?.is_some() {
             return Err(ChecklistProblem::AlreadyStarted);
         }
         let mut checklist = DesignChecklist {
-            template: Some(template.to_string()),
+            template: template.map(str::to_string),
             ..DesignChecklist::default()
         };
-        for item in items {
-            let title = optional_text(&item.title).ok_or(ChecklistProblem::EmptyTitle)?;
-            let id = checklist.next_id();
-            checklist
-                .items
-                .push(new_item(id, item.stage, title, item.link, None));
+        let made = HistoryEntry::new(HistoryEvent::Created, checklist.template.clone(), stamp);
+        fill(&mut checklist, items, &made, stamp)?;
+        self.store_design_checklist(&checklist)
+    }
+
+    /// Start the checklist from the items of another project's checklist,
+    /// `from` naming that project; it keeps that checklist's `template`.
+    /// Each item comes in open, with its stage, title and link only.
+    pub fn import_design_checklist(
+        &mut self,
+        from: &str,
+        template: Option<&str>,
+        items: Vec<NewChecklistItem>,
+        stamp: &EditStamp,
+    ) -> Result<(), ChecklistProblem> {
+        if self.design_checklist()?.is_some() {
+            return Err(ChecklistProblem::AlreadyStarted);
         }
+        let mut checklist = DesignChecklist {
+            template: template.map(str::to_string),
+            ..DesignChecklist::default()
+        };
+        let made = HistoryEntry::new(HistoryEvent::Imported, Some(from.to_string()), stamp);
+        fill(&mut checklist, items, &made, stamp)?;
+        self.store_design_checklist(&checklist)
+    }
+
+    /// Put the items of `template` back in place of every item, numbered
+    /// from 1 again; keys a newer build wrote on the checklist are kept.
+    /// Refused when the project has no checklist.
+    pub fn reset_design_checklist(
+        &mut self,
+        template: &str,
+        items: Vec<NewChecklistItem>,
+        stamp: &EditStamp,
+    ) -> Result<(), ChecklistProblem> {
+        let mut checklist = self
+            .design_checklist()?
+            .ok_or(ChecklistProblem::NotStarted)?;
+        checklist.template = Some(template.to_string());
+        checklist.items.clear();
+        let made = HistoryEntry::new(HistoryEvent::Created, Some(template.to_string()), stamp);
+        fill(&mut checklist, items, &made, stamp)?;
         self.store_design_checklist(&checklist)
     }
 
@@ -172,16 +246,24 @@ impl ProjectData {
         &mut self,
         stage: &str,
         title: &str,
-        today: Option<&str>,
+        stamp: &EditStamp,
     ) -> Result<String, ChecklistProblem> {
         let mut checklist = self.checklist_to_edit()?;
         let stage = ChecklistStage::parse(stage.trim())
             .ok_or_else(|| ChecklistProblem::UnknownStage(stage.to_string()))?;
         let title = optional_text(title).ok_or(ChecklistProblem::EmptyTitle)?;
-        let id = checklist.next_id();
-        checklist
+        let item = NewChecklistItem {
+            stage,
+            title,
+            link: None,
+        };
+        let made = HistoryEntry::new(HistoryEvent::Created, None, stamp);
+        fill(&mut checklist, vec![item], &made, stamp)?;
+        let id = checklist
             .items
-            .push(new_item(id.clone(), stage, title, None, today));
+            .last()
+            .map(|item| item.id.clone())
+            .unwrap_or_default();
         self.store_design_checklist(&checklist)?;
         Ok(id)
     }
@@ -193,26 +275,36 @@ impl ProjectData {
         id: &str,
         field: ChecklistField,
         text: &str,
-        today: Option<&str>,
+        stamp: &EditStamp,
     ) -> Result<(), ChecklistProblem> {
         let mut checklist = self.checklist_to_edit()?;
         let item = item_mut(&mut checklist, id)?;
         let before = item.clone();
-        match field {
+        let value = match field {
             ChecklistField::Title => {
                 item.title = optional_text(text).ok_or(ChecklistProblem::EmptyTitle)?;
+                Some(item.title.clone())
             }
             ChecklistField::Stage => {
                 item.stage = ChecklistStage::parse(text.trim())
                     .ok_or_else(|| ChecklistProblem::UnknownStage(text.to_string()))?;
+                Some(item.stage.key().to_string())
             }
-            ChecklistField::Owner => item.owner = optional_text(text),
+            ChecklistField::Owner => {
+                item.owner = optional_text(text);
+                item.owner.clone()
+            }
             ChecklistField::Link => {
                 item.link = ChecklistLink::parse(text).map_err(ChecklistProblem::UnknownLink)?;
+                item.link.as_ref().map(ChecklistLink::to_text)
             }
-            ChecklistField::Notes => item.notes = optional_text(text),
-        }
-        touch(item, &before, today);
+            ChecklistField::Notes => {
+                item.notes = optional_text(text);
+                None
+            }
+        };
+        let line = HistoryEntry::new(field.event(), value, stamp);
+        touch(item, &before, stamp, line);
         self.store_design_checklist(&checklist)
     }
 
@@ -223,7 +315,7 @@ impl ProjectData {
         id: &str,
         state: ItemState,
         reason: Option<&str>,
-        today: Option<&str>,
+        stamp: &EditStamp,
     ) -> Result<(), ChecklistProblem> {
         let mut checklist = self.checklist_to_edit()?;
         let item = item_mut(&mut checklist, id)?;
@@ -237,7 +329,13 @@ impl ProjectData {
             ItemState::Open | ItemState::Done => None,
         };
         item.state = state;
-        touch(item, &before, today);
+        let event = match state {
+            ItemState::Open => HistoryEvent::Opened,
+            ItemState::Done => HistoryEvent::Done,
+            ItemState::Waived => HistoryEvent::Waived,
+        };
+        let line = HistoryEntry::new(event, item.reason.clone(), stamp);
+        touch(item, &before, stamp, line);
         self.store_design_checklist(&checklist)
     }
 
@@ -265,12 +363,15 @@ fn item_mut<'c>(
         .ok_or_else(|| ChecklistProblem::UnknownItem(id.to_string()))
 }
 
-/// Stamp the day of the edit, when the editor gave one and the edit changed
-/// the item (it was `before`).
-fn touch(item: &mut ChecklistItem, before: &ChecklistItem, today: Option<&str>) {
-    if let Some(today) = today
-        && item != before
-    {
-        item.updated = Some(today.to_string());
+/// When the edit changed the item (it was `before`): stamp the day, when
+/// the editor gave one, and write `line` to its history. An edit that
+/// changed nothing leaves the item as it was.
+fn touch(item: &mut ChecklistItem, before: &ChecklistItem, stamp: &EditStamp, line: HistoryEntry) {
+    if item == before {
+        return;
     }
+    if let Some(day) = &stamp.day {
+        item.updated = Some(day.clone());
+    }
+    record(&mut item.history, line);
 }

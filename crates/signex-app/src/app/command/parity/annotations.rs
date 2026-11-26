@@ -119,6 +119,8 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "save_layer_set",
             "delete_layer_set",
             "set_layer_tab_names",
+            "project_checklist_templates",
+            "project_save_checklist_template",
         ],
         Operand,
         &[Settings],
@@ -206,6 +208,10 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "project_set_checklist_item",
             "project_set_checklist_state",
             "project_remove_checklist_item",
+            "project_reset_checklist",
+            "project_import_checklist",
+            "project_export_checklist_csv",
+            "project_open_checklist_link",
             "bring_drawings_forward",
             "bring_drawings_to_front",
             "send_drawings_backward",
@@ -427,7 +433,11 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     ),
     // The checklist's last run is check results, core-bound session state
     // (scripts/uifree-state.txt), so it is no implicit input.
-    (&["project_checklist"], Query, &[]),
+    (
+        &["project_checklist", "project_checklist_link_choices"],
+        Query,
+        &[],
+    ),
     // What the open or the new project dialog answers.
     (
         &["new_document", "open_document", "new_project_with_profile"],
