@@ -62,6 +62,9 @@ pub struct EditReads {
     pub(crate) texts: HashMap<PathBuf, Result<String, String>>,
     /// Library footprints in their board form, by address (#2937).
     pub(crate) footprints: HashMap<PrimitiveRef, Result<Footprint, String>>,
+    /// The sheets Create Rooms from Sheets makes rooms for, as its dialog
+    /// read them (#2987): the handler takes them rather than the dialog.
+    pub(crate) room_sheets: Option<Vec<signex_engine::pcb::rooms::SheetMembers>>,
     /// For a loose target, the files its sheet symbols refer to and what they
     /// place, as read.
     pub(crate) subtree: Option<ProjectSheetSet>,

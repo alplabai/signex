@@ -368,3 +368,32 @@ fn search_parts_matches_words_and_parameters_from_the_cache() {
     let reason = refusal(&mut app, "search_parts", &["query=10k", "rating=high"]);
     assert!(reason.contains("`rating` is a number"), "{reason}");
 }
+
+/// #2986: the answer does not follow the window's language. Under tr-TR a
+/// `pic` typed in the panel folds to `pic` and `PIC16F` to `pıc16f`; the
+/// search folds both by the invariant rules and finds the part.
+#[test]
+fn search_parts_finds_the_same_parts_whatever_the_window_language() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = project_app(&dir);
+    let rows = mount_library(&mut app);
+    let pic = row("PIC16F", "DK-P", &[]);
+    let pic_id = pic.row_id;
+    let library = app
+        .library
+        .open_libraries
+        .iter_mut()
+        .find(|l| l.library_id == rows.library)
+        .expect("the library");
+    library
+        .tables
+        .get_mut("Parts")
+        .expect("the table")
+        .push(pic);
+    app.library.touch_data();
+    app.ui_state.i18n =
+        std::sync::Arc::new(signex_i18n::I18n::with_message_locale_for_test("tr"));
+    let found = answer(&mut app, "search_parts", &["query=pic"]);
+    assert_eq!(found["count"], 1, "{found}");
+    assert_eq!(found["matches"][0]["part"], json!(pic_id.to_string()));
+}

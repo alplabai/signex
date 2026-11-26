@@ -255,15 +255,22 @@ impl Search<'_> {
 /// Auto Place on `board` with `options`.
 pub fn auto_place(board: &PcbBoard, options: &AutoPlaceOptions) -> AutoPlacePlan {
     let fps = &board.footprints;
-    let rooms: Vec<&Room> = board
-        .rooms
-        .iter()
-        .filter(|r| options.rooms.is_empty() || options.rooms.contains(&r.uuid))
-        .collect();
+    let every: Vec<&Room> = board.rooms.iter().collect();
+    let picked = |r: &Room| options.rooms.is_empty() || options.rooms.contains(&r.uuid);
+    let rooms: Vec<&Room> = every.iter().copied().filter(|r| picked(r)).collect();
     let traits: Vec<Traits> = fps.iter().map(traits_of).collect();
     let sides: Vec<Side> = fps.iter().map(|fp| Side::of_layer(&fp.layer)).collect();
     let mut boxes: Vec<Option<RectNm>> = fps.iter().map(placed_box).collect();
-    let owners: Vec<Option<usize>> = fps.iter().map(|fp| owner_of(fp, &rooms)).collect();
+    // A part's room is the deepest room of the board that holds it; a part
+    // whose room is not being placed stays where it is (#2985,
+    // docs/PCB_ROOMS.md).
+    let owners: Vec<Option<usize>> = fps
+        .iter()
+        .map(|fp| {
+            let owner = every[owner_of(fp, &every)?];
+            rooms.iter().position(|r| r.uuid == owner.uuid)
+        })
+        .collect();
     let counted: Vec<bool> = owners.iter().map(Option::is_some).collect();
     let region = board_region(board);
     let gaps = options.gaps;

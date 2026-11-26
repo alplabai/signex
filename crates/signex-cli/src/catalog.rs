@@ -92,18 +92,38 @@ mod tests {
         assert_eq!(find(&catalog, "save_document")["capability"], "save");
     }
 
-    /// No network and no launches: a command that could reach a library
-    /// server, a distributor or a browser says so (`needs_network`), and
-    /// none of them is runnable. Its category does not decide it: a
-    /// `library` query that reads the open libraries in memory is runnable.
+    /// The `library` commands a headless run may run: each was reviewed to
+    /// read only the open libraries and the cache, never a library server
+    /// or a distributor (#2938, #1297). A new runnable `library` command
+    /// fails [`no_network_command_is_runnable_headless`] until it is
+    /// reviewed and listed here.
+    const RUNNABLE_LIBRARY_COMMANDS: &[&str] = &["query_library", "search_parts"];
+
+    /// No network and no launches: the `library` commands are the ones that
+    /// could reach a library server, a distributor or a browser, and none is
+    /// runnable unless reviewed as reading only what is open
+    /// ([`RUNNABLE_LIBRARY_COMMANDS`]); a command of any category that may
+    /// reach the network says so (`needs_network`) and is not runnable
+    /// either.
     #[test]
     fn no_network_command_is_runnable_headless() {
         for id in all_command_ids() {
             let meta = metadata_for_str(id).unwrap();
             assert!(
+                meta.category != "library"
+                    || meta.flags.gui_only
+                    || RUNNABLE_LIBRARY_COMMANDS.contains(&id),
+                "{id} is a runnable library command: give it a capability check for the network"
+            );
+            assert!(
                 !meta.needs_network || meta.flags.gui_only,
                 "{id} may reach the network and is runnable: give it a capability check for the network"
             );
+        }
+        for id in RUNNABLE_LIBRARY_COMMANDS {
+            let meta = metadata_for_str(id).unwrap();
+            assert_eq!(meta.category, "library", "{id}");
+            assert!(!meta.needs_network, "{id} reads only what is open");
         }
         for id in ["open_library_browser", "open_datasheet"] {
             assert!(

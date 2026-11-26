@@ -10,7 +10,7 @@ use signex_i18n::{MessageId, ids, t};
 
 use super::UpdatePcbMsg;
 use super::design::{self, DesignRequest};
-use super::state::{HeadlessRun, Phase, UpdatePcbState, file_name};
+use super::state::{Phase, UpdatePcbJob, UpdatePcbState, file_name};
 use crate::app::design_read::LibraryRows;
 use crate::app::project_sheets::{plan_project_sheets_for, project_root_sheet_path};
 use crate::app::state::{ErrorNotice, ProjectId};
@@ -164,7 +164,7 @@ impl Signex {
     pub(super) fn open_update_pcb_run(
         &mut self,
         project: ProjectId,
-        run: HeadlessRun,
+        run: UpdatePcbJob,
     ) -> Result<Task<Message>, MessageId> {
         self.open_update_pcb_with(project, true, Some(run))
     }
@@ -173,16 +173,11 @@ impl Signex {
         &mut self,
         project: ProjectId,
         apply: bool,
-        headless: Option<HeadlessRun>,
+        run: Option<UpdatePcbJob>,
     ) -> Result<Task<Message>, MessageId> {
         // A run from operands waits on this state: opening the dialog over
         // it would leave its caller unanswered.
-        if self
-            .ui_state
-            .update_pcb
-            .as_ref()
-            .is_some_and(|state| state.headless.is_some())
-        {
+        if self.is_update_pcb_run() {
             return Err(ids::UPDATE_PCB_BUSY);
         }
         let loaded = self
@@ -194,8 +189,8 @@ impl Signex {
         if apply && board.is_none() {
             return Err(ids::UPDATE_PCB_NO_BOARD);
         }
-        let mut state = UpdatePcbState::new(project, name, board.clone(), apply);
-        state.headless = headless;
+        let state = UpdatePcbState::new(project, name, board.clone(), apply);
+        self.agent.update_pcb_job = run;
         self.ui_state.update_pcb = Some(Box::new(state));
         match board {
             Some(board) => Ok(self.begin_update_pcb_board(&board)),
@@ -212,7 +207,13 @@ impl Signex {
         if self.is_board_opening(board) {
             return Task::none();
         }
-        match self.open_path_reported(board.to_path_buf()) {
+        // A run from operands opens it behind the person's tab (#2984).
+        let opened = if self.is_update_pcb_run() {
+            self.open_board_behind(board.to_path_buf())
+        } else {
+            self.open_path_reported(board.to_path_buf())
+        };
+        match opened {
             Ok(task) => task,
             Err(_) => {
                 self.fail_update_pcb_board_missing(board);
@@ -427,10 +428,11 @@ impl Signex {
             return;
         }
         self.log_update_pcb_refused(logged);
+        let from_operands = self.is_update_pcb_run();
         let Some(state) = self.ui_state.update_pcb.as_mut() else {
             return;
         };
-        if state.headless.is_some() {
+        if from_operands {
             state.phase = Phase::Failed(logged.to_string());
         } else if state.apply {
             self.ui_state.update_pcb = None;

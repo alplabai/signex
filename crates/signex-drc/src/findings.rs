@@ -324,7 +324,7 @@ fn key(v: &Violation, board: &str, message: &str) -> String {
 /// What Run DRC says in Messages about the rules, in its words (numbers in
 /// [`mm`]), in its order: unrecognised entries, the rule text's notes and
 /// remarks, what was not applied, and a clearance taken from the default.
-fn rule_warnings(rules: &DrcRules) -> Vec<String> {
+pub fn rule_warnings(rules: &DrcRules) -> Vec<String> {
     let mut out: Vec<String> = rules
         .severities
         .unrecognised

@@ -9,7 +9,7 @@
 use iced::Task;
 use signex_i18n::{Translatable, ids};
 
-use super::state::HeadlessRun;
+use super::state::UpdatePcbJob;
 use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::document_ids::NoProjectNamed;
 use crate::app::state::ProjectId;
@@ -55,7 +55,7 @@ pub(crate) fn update_pcb_from_schematic(app: &mut Signex, args: &CommandArgs) ->
     };
     let waiting = app.wait_for_command(&command, args);
     let ticket = waiting.ticket;
-    let task = match app.open_update_pcb_run(project, HeadlessRun { waiting, dry_run }) {
+    let task = match app.open_update_pcb_run(project, UpdatePcbJob { waiting, dry_run }) {
         Ok(task) => task,
         Err(why) => return refused(why),
     };

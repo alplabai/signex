@@ -431,3 +431,20 @@ fn a_component_rule_takes_no_net_condition() {
         messages(&got)
     );
 }
+
+/// #2986: a component rule's side is TopCopper or BottomCopper; `inner`,
+/// `outer` or an inner layer is refused rather than compiled into a rule
+/// that never matches.
+#[test]
+fn a_component_rule_on_an_inner_or_outer_layer_is_refused() {
+    for side in ["inner", "outer", "Inner1Copper"] {
+        let text = format!("rule h on component when layer == {side} require height <= 1mm then error");
+        let got = compile(&text);
+        let found = messages(&got);
+        assert_eq!(found.len(), 1, "{side}: {found:?}");
+        assert!(
+            found[0].contains("takes only a 'layer' condition"),
+            "{side}: {found:?}"
+        );
+    }
+}

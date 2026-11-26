@@ -280,3 +280,37 @@ fn roles_come_from_the_placement_property_and_connector_designators() {
     assert!(roles[1].connector);
     assert!(!roles[2].connector, "a jumper is no connector");
 }
+
+/// #2985: with `rooms=[A]`, a part of the nested room B (a child sheet of
+/// A's) is B's, not A's, and B is not placed: it stays where it is.
+#[test]
+fn a_part_of_a_nested_room_not_named_stays() {
+    const CHILD: u128 = 0xB;
+    let mut child = part(2, "U2", (40.0, 15.0), 0, "", false);
+    child["schematic_link"]["sheet"] = json!([id(SHEET), id(CHILD)]);
+    let parts = vec![part(1, "U1", (5.0, 35.0), 0, "", false), child];
+    let mut b = board((0.0, 0.0, 60.0, 40.0), parts);
+    let outline = RoomOutline::Rect {
+        x_mm: 35.0,
+        y_mm: 10.0,
+        w_mm: 10.0,
+        h_mm: 10.0,
+    };
+    let mut nested = Room::drawn(id(101), "ldo".into(), "#58A0C8", outline);
+    nested.source = Some(RoomSource {
+        sheet: InstancePath::from_chain(vec![id(SHEET), id(CHILD)]),
+        channel: None,
+    });
+    b.rooms.push(nested);
+    let options = AutoPlaceOptions {
+        rooms: vec![id(100)],
+        ..AutoPlaceOptions::default()
+    };
+    let plan = auto_place(&b, &options);
+    assert_eq!(plan.rooms, ["dcdc"]);
+    assert!(
+        plan.moves.iter().all(|m| m.footprint != id(2)),
+        "U2 is the nested room's: {:?}",
+        plan.moves
+    );
+}

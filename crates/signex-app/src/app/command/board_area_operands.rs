@@ -16,7 +16,7 @@ use serde_json::{Value, json};
 use signex_engine::pcb::area::{AreaKind, named_area};
 use signex_engine::pcb::draw;
 use signex_i18n::t;
-use signex_types::format::parse_pcb_layer;
+use signex_types::format::{mm_as_stored_nm, parse_pcb_layer};
 use signex_types::pcb::{PcbBoard, Point, Zone};
 use uuid::Uuid;
 
@@ -44,21 +44,25 @@ fn point(args: &CommandArgs, name: &str) -> Option<Point> {
     }
 }
 
-/// The outline the operands name, in the board's own coordinates.
+/// The outline the operands name, in the board's own coordinates. A corner
+/// the board file cannot store is refused (#2985).
 fn outline(board: &PcbBoard, kind: AreaKind, args: &CommandArgs) -> Result<Vec<Point>, String> {
     let origin = board.options.origin;
-    if kind == AreaKind::Fill {
+    let points = if kind == AreaKind::Fill {
         let (Some(start), Some(end)) = (point(args, "start"), point(args, "end")) else {
             return Err("a fill needs the operands `start` and `end`".to_string());
         };
-        return Ok(draw::rectangle(
-            origin.from_user(start),
-            origin.from_user(end),
-        ));
+        draw::rectangle(origin.from_user(start), origin.from_user(end))
+    } else {
+        let raw = text(args, "corners").ok_or("this area needs the operand `corners`")?;
+        let corners = mm_corners(raw)?;
+        corners.into_iter().map(|p| origin.from_user(p)).collect()
+    };
+    let stored = |p: &Point| mm_as_stored_nm(p.x).is_some() && mm_as_stored_nm(p.y).is_some();
+    if !points.iter().all(stored) {
+        return Err("a corner is outside what the board file can store".to_string());
     }
-    let raw = text(args, "corners").ok_or("this area needs the operand `corners`")?;
-    let corners = mm_corners(raw)?;
-    Ok(corners.into_iter().map(|p| origin.from_user(p)).collect())
+    Ok(points)
 }
 
 /// The net `net` names on `board`: `None` when it is left out, `Some(0)`

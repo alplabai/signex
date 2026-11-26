@@ -14,6 +14,7 @@ use signex_engine::pcb::rooms::{
     PlanShape, RoomOptions, SheetMembers, arrange_room, plan_rooms_from_sheets,
 };
 use signex_i18n::{Translatable, ids, t};
+use signex_types::format::mm_as_stored_nm;
 use signex_types::object_id::UuidV7Ids;
 use signex_types::pcb::room::{next_room_name, palette_colour};
 use signex_types::pcb::{PcbBoard, Point, Room, RoomLayer, RoomOutline, RoomSource};
@@ -90,26 +91,52 @@ fn corners(text: &str) -> Option<Vec<Point>> {
     crate::app::command::mm_points(text).filter(|points| points.len() >= 3)
 }
 
-/// The outline `start` and `end`, or `corners`, give.
-fn outline(args: &CommandArgs) -> Result<RoomOutline, Translatable> {
+/// The outline `start` and `end`, or `corners`, give in the board's frame
+/// (its origin, Y up, #2985), as the model stores it. A corner the board
+/// file cannot store is refused with the empty outline.
+fn outline(board: &PcbBoard, args: &CommandArgs) -> Result<RoomOutline, Translatable> {
+    let origin = board.options.origin;
     let (start, end) = (point(args, "start"), point(args, "end"));
     let outline = match (start, end, text(args, "corners")) {
-        (Some(a), Some(b), None) => RoomOutline::rect_between(a, b),
-        (None, None, Some(raw)) => RoomOutline::Polygon(corners(raw).ok_or_else(|| {
-            Translatable::new(ids::ROOMS_BAD_CORNERS).arg("corners", raw.to_string())
-        })?),
+        (Some(a), Some(b), None) => {
+            RoomOutline::rect_between(origin.from_user(a), origin.from_user(b))
+        }
+        (None, None, Some(raw)) => {
+            let points = corners(raw).ok_or_else(|| {
+                Translatable::new(ids::ROOMS_BAD_CORNERS).arg("corners", raw.to_string())
+            })?;
+            RoomOutline::Polygon(points.into_iter().map(|p| origin.from_user(p)).collect())
+        }
         _ => return Err(Translatable::new(ids::ROOMS_OUTLINE_NEEDED)),
     };
-    if !outline.is_finite() || !outline.has_area() {
+    let stored = |p: &Point| mm_as_stored_nm(p.x).is_some() && mm_as_stored_nm(p.y).is_some();
+    if !outline.is_finite() || !outline.has_area() || !outline_corners(&outline).iter().all(stored)
+    {
         return Err(Translatable::new(ids::ROOMS_NO_AREA));
     }
     Ok(outline)
 }
 
+/// The corners that bound `outline`.
+fn outline_corners(outline: &RoomOutline) -> Vec<Point> {
+    match outline {
+        RoomOutline::Rect {
+            x_mm,
+            y_mm,
+            w_mm,
+            h_mm,
+        } => vec![
+            Point::new(*x_mm, *y_mm),
+            Point::new(x_mm + w_mm, y_mm + h_mm),
+        ],
+        RoomOutline::Polygon(points) => points.clone(),
+    }
+}
+
 /// The room `place_board_room`'s operands describe on `board`; `prefix`
 /// names it `Room N` when no `name` is given.
 fn room_of(board: &PcbBoard, args: &CommandArgs, prefix: &str) -> Result<Room, Translatable> {
-    let outline = outline(args)?;
+    let outline = outline(board, args)?;
     let name = match text(args, "name") {
         Some(name) if board.rooms.iter().any(|r| r.name == name) => {
             return Err(Translatable::new(ids::ROOMS_NAME_TAKEN).arg("room", name.to_string()));
@@ -221,7 +248,8 @@ fn room_options(args: &CommandArgs) -> Result<RoomOptions, Translatable> {
 /// move_parts=? keep_parts_inside=? replace=? rooms=?`: the project's
 /// sheets are read off the UI thread, then the rooms are made as one undo
 /// step and the command is answered ([`CommandOutcome::Deferred`]). The
-/// dialog's Create runs it on the sheets the dialog read, at once.
+/// dialog's Create hands over the sheets it read (`EditReads::room_sheets`)
+/// and it runs on them at once.
 pub(crate) fn create_rooms_by_operands(app: &mut Signex, args: &CommandArgs) -> Ran {
     let path = match app.named_output_board(args) {
         Ok(path) => path,
@@ -231,11 +259,9 @@ pub(crate) fn create_rooms_by_operands(app: &mut Signex, args: &CommandArgs) -> 
         Ok(request) => request,
         Err(reason) => return refused(reason),
     };
-    let read = app.agent.from_view.then(|| {
-        let dialog = app.ui_state.rooms.create.as_deref();
-        dialog.filter(|d| d.board == path).map(|d| d.sheets.clone())
-    });
-    if let Some(sheets) = read.flatten() {
+    // The dialog's Create hands over the sheets it read (#2987).
+    let given = app.document_state.agent_edits.reads.as_ref();
+    if let Some(sheets) = given.and_then(|reads| reads.room_sheets.clone()) {
         let outcome = match app.make_rooms_from_sheets(&path, Ok(sheets), &request) {
             Ok(answer) => CommandOutcome::Answered(answer),
             Err(reason) => CommandOutcome::Disabled { reason },

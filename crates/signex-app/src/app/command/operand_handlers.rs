@@ -692,11 +692,13 @@ pub(crate) fn names_its_document(command: &AppCommandId) -> bool {
 }
 
 /// Does `command`, run from operands without `document`, pick its project
-/// itself rather than through the active tab's gate? `update_pcb_from_schematic`
-/// (#2470) takes the active project's board, or the one project's when none is
-/// active, and refuses with the boards to name otherwise (Caner, 2026-11-25).
+/// itself rather than through the active tab's gate? The catalog says so
+/// (`CommandMetadata::picks_own_project`): `update_pcb_from_schematic`
+/// (#2470) takes the active project's board, or the one project's when none
+/// is active, and refuses with the boards to name otherwise (Caner,
+/// 2026-11-25).
 pub(crate) fn picks_its_own_project(command: &AppCommandId) -> bool {
-    command.as_str() == "update_pcb_from_schematic"
+    crate::keymap::metadata_for(command).is_some_and(|meta| meta.picks_own_project)
 }
 
 impl Signex {

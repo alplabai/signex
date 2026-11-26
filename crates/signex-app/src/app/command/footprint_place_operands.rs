@@ -20,7 +20,8 @@ use signex_engine::pcb::BoardCommand;
 use signex_engine::pcb::component::{self, LocationField};
 use signex_engine::pcb::footprint_place::{self, FootprintPlace};
 use signex_engine::pcb::placement;
-use signex_i18n::{MessageId, ids, t};
+use signex_i18n::{MessageId, RenderTranslatable, ids, t};
+use signex_types::corner::CornerRule;
 use signex_types::format::mm_as_stored_nm;
 use signex_types::pcb::{PcbBoard, Point};
 use signex_types::pcb_layer::BoardSide;
@@ -240,10 +241,18 @@ fn id_set(ids: &[Uuid]) -> BTreeSet<Uuid> {
 
 /// `set_footprint_position document=<board> id=<uuid> at=x,y` (or
 /// `designator=`, or `ids=` with `points=x,y;..`): each footprint's origin
-/// to its point, as a drag takes it there.
+/// to its point, as a drag takes it there. The tracks on its pads bend by
+/// `corner` (90 when left out, #2987), never by the session's tool state.
 pub(super) fn set_footprint_position(app: &mut Signex, args: &CommandArgs) -> Ran {
-    run(app, args, ids::PCB_COMPONENT_POSITION, |app, board, ids| {
-        let corner = pcb_geom::stretch_rule(app.interaction_state.corner_rule);
+    let rule = match text(args, "corner") {
+        Some(name) => match super::board_route_operands::corner_rule(name) {
+            Ok(rule) => rule,
+            Err(reason) => return refused(reason.render_en_us()),
+        },
+        None => CornerRule::default(),
+    };
+    run(app, args, ids::PCB_COMPONENT_POSITION, move |_, board, ids| {
+        let corner = pcb_geom::stretch_rule(rule);
         let places = places(board, ids, args)?;
         let mut new_ids = signex_types::object_id::UuidV7Ids;
         footprint_place::position_commands(board, &places, corner, &mut new_ids)

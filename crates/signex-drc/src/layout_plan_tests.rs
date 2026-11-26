@@ -360,3 +360,25 @@ fn a_long_list_of_reasons_is_cut_and_counted() {
     assert_eq!(cut.len(), LISTED + 1);
     assert_eq!(cut[LISTED], "and 3 more");
 }
+
+/// #2986: a finding whose rule is switched off is not shown by Run DRC and
+/// does not hold the Checks stage back.
+#[test]
+fn checks_do_not_count_a_finding_whose_rule_is_off() {
+    let board = board();
+    let unconnected = Violation {
+        kind: ViolationKind::Unconnected,
+        ..clearance()
+    };
+    let mut off = report(vec![unconnected]);
+    let mut project = signex_types::project::DrcRuleSet::default();
+    project
+        .severity
+        .insert("builtin::unconnected".into(), "off".into());
+    off.rules.severities = crate::resolve_severities(None, Some(&project));
+    let all = status(&LayoutPlan::default(), &board, Some(&off));
+    let checks = of(&all, LayoutStage::Checks);
+    assert_eq!(checks.state, StageState::Done, "{checks:?}");
+    assert_eq!(checks.counts.get("findings").copied().unwrap_or(0), 0);
+    assert!(checks.reasons.is_empty(), "{:?}", checks.reasons);
+}

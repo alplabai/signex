@@ -1,5 +1,9 @@
 //! The routing tools and the Via tool from their operands (#2470): what the
-//! command line runs to route a board net by net through the interactive
+//! co/// A length in mm above zero that the board file can store (#2985): a
+/// size past its range would make every later Save fail.
+fn length(operand: &'static str, value: &str) -> Result<f64, Translatable> {
+    parse_number(value)
+        .filter(|mm| *mm > 0.0 && mm_as_stored_nm(*mm).is_some())and line runs to route a board net by net through the interactive
 //! router, on the board `document` names. The points count from the board
 //! origin with Y up; a point also takes a pad as `<designator>.<pad>`. The
 //! route is planned and landed by `handlers::pcb_tool::route_order` as one
@@ -13,7 +17,7 @@ use serde_json::{Value, json};
 use signex_engine::pcb::route::RouteMode;
 use signex_i18n::{Translatable, ids};
 use signex_types::corner::{CornerMode, CornerRule};
-use signex_types::format::{parse_pcb_layer, pcb_layer_token};
+use signex_types::format::{mm_as_stored_nm, parse_pcb_layer, pcb_layer_token};
 use signex_types::pcb::{PcbBoard, Point, Segment, Via};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_types::pcb_stack::board_copper_layers;
@@ -193,10 +197,19 @@ fn flag(args: &CommandArgs, name: &str) -> bool {
 /// origin with Y up, or the centre of the pad `<designator>.<pad>`.
 fn board_point(board: &PcbBoard, args: &CommandArgs, name: &str) -> Result<Point, Translatable> {
     match args.operand(name) {
-        Some(OperandValue::Point(x, y)) => Ok(board.options.origin.from_user(Point::new(*x, *y))),
+        Some(OperandValue::Point(x, y)) => {
+            stored(board.options.origin.from_user(Point::new(*x, *y)))
+        }
         Some(OperandValue::PinRef { designator, pin }) => pad_point(board, designator, pin),
         _ => Err(Translatable::new(ids::PCB_ROUTE_ORDER_POINTS)),
     }
+}
+
+/// `p` when the board file can store it (#2985).
+fn stored(p: Point) -> Result<Point, Translatable> {
+    let fits = mm_as_stored_nm(p.x).is_some() && mm_as_stored_nm(p.y).is_some();
+    fits.then_some(p)
+        .ok_or_else(|| Translatable::new(ids::PCB_ROUTE_ORDER_RANGE))
 }
 
 /// The centre of the one pad `pin` of the part `designator`.
@@ -227,7 +240,7 @@ fn through(board: &PcbBoard, args: &CommandArgs) -> Result<Vec<Point>, Translata
     let origin = board.options.origin;
     let points =
         super::mm_points(list).ok_or_else(|| Translatable::new(ids::PCB_ROUTE_ORDER_POINTS))?;
-    Ok(points.into_iter().map(|p| origin.from_user(p)).collect())
+    points.into_iter().map(|p| stored(origin.from_user(p))).collect()
 }
 
 /// The copper layer `name` names, when the board has it.
@@ -250,10 +263,11 @@ fn via_span(board: &PcbBoard, names: &str) -> Result<(CopperLayer, CopperLayer),
     }
 }
 
-/// A length in mm above zero.
+/// A length in mm above zero that the board file can store (#2985): a
+/// size past its range would make every later Save fail.
 fn length(operand: &'static str, value: &str) -> Result<f64, Translatable> {
     parse_number(value)
-        .filter(|mm| mm.is_finite() && *mm > 0.0)
+        .filter(|mm| *mm > 0.0 && mm_as_stored_nm(*mm).is_some())
         .ok_or_else(|| Translatable::new(ids::PCB_ROUTE_ORDER_LENGTH).arg("operand", operand))
 }
 
@@ -281,7 +295,7 @@ fn net_list(board: &PcbBoard, names: &str) -> Result<Vec<u32>, Translatable> {
 }
 
 /// How each leg bends: `90`, `45_start`, `45_end` or `free`.
-fn corner_rule(name: &str) -> Result<CornerRule, Translatable> {
+pub(super) fn corner_rule(name: &str) -> Result<CornerRule, Translatable> {
     let mode = match name.trim() {
         "90" => CornerMode::Ortho90,
         "45_start" => CornerMode::Angle45Start,

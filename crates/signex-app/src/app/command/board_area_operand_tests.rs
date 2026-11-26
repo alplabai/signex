@@ -173,6 +173,12 @@ fn an_area_the_board_cannot_take_is_refused_with_the_reason() {
             vec!["layer=TopCopper", "start=1,1", "end=4,4", "net=NOPE"],
             "no net named `NOPE`",
         ),
+        // #2985: a corner past what the board file stores.
+        (
+            "place_board_region",
+            vec!["layer=TopCopper", "corners=0,0;1e13,0;0,4"],
+            "outside what the board file can store",
+        ),
         (
             "place_board_pour_cutout",
             vec!["layer=Top", SQUARE],

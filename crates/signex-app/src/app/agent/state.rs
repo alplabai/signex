@@ -40,6 +40,10 @@ pub(crate) struct AgentState {
     /// (`command::translator`): its operands come from what is in view, so
     /// a handler does not read again what the view already holds.
     pub(crate) from_view: bool,
+    /// The run of `update_pcb_from_schematic` from operands waiting for its
+    /// change list, with its caller's ticket (#2470, #2987). The dialog's
+    /// state drives the read; the job is not part of it.
+    pub(crate) update_pcb_job: Option<crate::app::update_pcb::UpdatePcbJob>,
     /// Who the command running now comes from; the person outside
     /// [`Signex::with_origin`].
     pub(crate) origin: super::Origin,
@@ -116,6 +120,7 @@ impl AgentState {
             registered: None,
             serving: false,
             from_view: false,
+            update_pcb_job: None,
             origin: super::Origin::Person,
             journals_on: false,
             run_client: None,

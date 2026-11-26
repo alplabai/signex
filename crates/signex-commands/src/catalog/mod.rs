@@ -245,6 +245,11 @@ pub struct CommandMetadata {
     /// capability check for that (`signex-cli`'s
     /// `no_network_command_is_runnable_headless`). Defaults to `false`.
     pub needs_network: bool,
+    /// Run from operands without `document`, it picks its project itself
+    /// (the active project, or the one project open) and refuses with the
+    /// documents to name otherwise, instead of acting on the active tab
+    /// behind its enablement gate (#2470, #2987). Defaults to `false`.
+    pub picks_own_project: bool,
 }
 
 impl CommandMetadata {
@@ -271,6 +276,7 @@ impl CommandMetadata {
         },
         operands: &[],
         needs_network: false,
+        picks_own_project: false,
     };
 
     /// How a headless caller may use this command, or `None` while nobody

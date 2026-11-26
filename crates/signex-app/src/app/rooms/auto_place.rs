@@ -63,7 +63,12 @@ fn scores(s: &Scores) -> Value {
 }
 
 /// The plan as the command answers it.
-fn answer_of(plan: &AutoPlacePlan, options: &AutoPlaceOptions, dry_run: bool) -> Value {
+fn answer_of(
+    board: &PcbBoard,
+    plan: &AutoPlacePlan,
+    options: &AutoPlaceOptions,
+    dry_run: bool,
+) -> Value {
     let moved: Vec<Value> = plan
         .moves
         .iter()
@@ -72,8 +77,8 @@ fn answer_of(plan: &AutoPlacePlan, options: &AutoPlaceOptions, dry_run: bool) ->
                 "id": m.footprint.to_string(),
                 "designator": m.designator,
                 "room": m.room,
-                "from": point(m.from),
-                "to": point(m.to),
+                "from": point(board, m.from),
+                "to": point(board, m.to),
                 "rotation": m.rotation,
                 "side": if m.bottom { "bottom" } else { "top" },
             })
@@ -127,7 +132,7 @@ pub(crate) fn auto_place_by_operands(app: &mut Signex, args: &CommandArgs) -> Ra
     };
     let dry_run = matches!(args.operand("dry_run"), Some(OperandValue::Bool(true)));
     let plan = placer::auto_place(board, &options);
-    let mut answer = answer_of(&plan, &options, dry_run);
+    let mut answer = answer_of(board, &plan, &options, dry_run);
     answer["document"] = json!(path.display().to_string());
     if !dry_run
         && !plan.moves.is_empty()

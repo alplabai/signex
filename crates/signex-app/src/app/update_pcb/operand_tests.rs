@@ -400,7 +400,7 @@ fn a_run_while_the_dialog_is_open_is_refused() {
     );
     let state = app.ui_state.update_pcb.as_ref().expect("the dialog");
     assert!(
-        state.headless.is_none() && !state.apply,
+        app.agent.update_pcb_job.is_none() && !state.apply,
         "still the person's"
     );
 }
@@ -418,8 +418,8 @@ fn the_dialog_does_not_open_over_a_waiting_run() {
         panic!("the run waits for its list");
     };
     let _ = app.update(Message::from(UpdatePcbMsg::Requested { apply: false }));
-    let state = app.ui_state.update_pcb.as_ref().expect("the run");
-    assert!(state.headless.is_some(), "the run is kept");
+    assert!(app.ui_state.update_pcb.is_some(), "the run");
+    assert!(app.agent.update_pcb_job.is_some(), "the run is kept");
     assert!(
         app.document_state.error_notice.is_some(),
         "the person is told"

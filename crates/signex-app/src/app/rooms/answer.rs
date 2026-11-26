@@ -1,14 +1,17 @@
 //! What the rooms commands answer with (#2935): rooms, their parts and the
-//! parts a command moved, in board mm, a point as `[x, y]`. The shapes are
-//! in `docs/CLI.md`, "Rooms and placement".
+//! parts a command moved, in board mm, a point as `[x, y]` in the board's
+//! frame (its origin, Y up, #2985), as the footprint and area commands read
+//! and answer them. The shapes are in `docs/CLI.md`, "Rooms and placement".
 
 use serde_json::{Value, json};
 use signex_engine::pcb::rooms::members_outside;
 use signex_types::pcb::{PcbBoard, Point, Room, RoomOutline};
 use uuid::Uuid;
 
-pub(super) fn point(p: Point) -> Value {
-    json!([p.x, p.y])
+/// `p` of the model as `[x, y]` in the board's frame.
+pub(super) fn point(board: &PcbBoard, p: Point) -> Value {
+    let user = board.options.origin.to_user(p);
+    json!([user.x, user.y])
 }
 
 /// The outline's area, mm²: a polygon's by its corners in order.
@@ -28,19 +31,30 @@ fn area_mm2(outline: &RoomOutline) -> f64 {
     }
 }
 
-fn outline(outline: &RoomOutline) -> Value {
+/// The outline in the board's frame: a rectangle by its lower-left corner
+/// there.
+fn outline(board: &PcbBoard, outline: &RoomOutline) -> Value {
     match outline {
         RoomOutline::Rect {
             x_mm,
             y_mm,
             w_mm,
             h_mm,
-        } => json!({
-            "shape": "rectangle", "x": x_mm, "y": y_mm, "width": w_mm, "height": h_mm,
-        }),
+        } => {
+            let origin = board.options.origin;
+            let a = origin.to_user(Point::new(*x_mm, *y_mm));
+            let b = origin.to_user(Point::new(x_mm + w_mm, y_mm + h_mm));
+            json!({
+                "shape": "rectangle",
+                "x": a.x.min(b.x),
+                "y": a.y.min(b.y),
+                "width": w_mm,
+                "height": h_mm,
+            })
+        }
         RoomOutline::Polygon(points) => json!({
             "shape": "polygon",
-            "corners": points.iter().map(|p| point(*p)).collect::<Vec<_>>(),
+            "corners": points.iter().map(|p| point(board, *p)).collect::<Vec<_>>(),
         }),
     }
 }
@@ -69,7 +83,7 @@ pub(super) fn room(room: &Room, board: &PcbBoard) -> Value {
         "sheet": room.source.as_ref().map(|s| s.sheet.to_string()),
         "channel": room.source.as_ref().and_then(|s| s.channel),
         "side": room.layer.token(),
-        "outline": outline(&room.outline),
+        "outline": outline(board, &room.outline),
         "area_mm2": area_mm2(&room.outline),
         "color": room.colour,
         "keep_parts_inside": room.keep_parts_inside,
@@ -88,8 +102,8 @@ pub(super) fn moves(board: &PcbBoard, moves: &[(Uuid, Point)]) -> Vec<Value> {
             Some(json!({
                 "id": id.to_string(),
                 "designator": fp.reference,
-                "from": point(fp.position),
-                "to": point(*to),
+                "from": point(board, fp.position),
+                "to": point(board, *to),
             }))
         })
         .collect()

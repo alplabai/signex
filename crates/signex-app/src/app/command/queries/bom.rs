@@ -162,7 +162,10 @@ impl Signex {
                     .to_string(),
             );
         }
-        let i18n = &self.ui_state.i18n;
+        // The answer does not follow the window's language: words fold by
+        // the invariant (en-US) rules, so `pic` finds `PIC16F` under tr-TR
+        // too (#2986).
+        let i18n = signex_i18n::I18n::en_us_ref();
         let value = trimmed(args, "value").map(|text| match ValueWord::parse(text) {
             Some(word) => ValueFilter::Value(word),
             None => ValueFilter::Text(text.to_string()),

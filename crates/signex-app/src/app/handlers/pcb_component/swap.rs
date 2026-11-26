@@ -83,9 +83,9 @@ impl Signex {
                         .note_footprint_swap(footprints.clone(), template.clone());
                 }
                 let before = self.board_revision(&board);
-                self.swap_footprints(&board, &footprints, result);
+                let task = self.swap_footprints(&board, &footprints, result);
                 self.finish_footprint_swap_record(&board, before);
-                Task::none()
+                task
             }
         }
     }
@@ -192,17 +192,21 @@ impl Signex {
     /// run. `unmatched=keep`: old pads no new pad takes over go, and they and
     /// the parts whose sheet could not take the footprint are listed in
     /// Messages, as the picker always did. The footprint already read is
-    /// handed to the handler as its read, so nothing is read again.
+    /// handed to the handler as its read, so nothing is read again. Returns
+    /// what the handler's step left to do.
     pub(crate) fn swap_footprints(
         &mut self,
         board: &Path,
         footprints: &[Uuid],
         result: Result<Box<Footprint>, String>,
-    ) {
+    ) -> Task<Message> {
         let what = self.catalog(ids::PCB_COMPONENT_FOOTPRINT_SWAP);
         let template = match result {
             Ok(template) => *template,
-            Err(why) => return self.refuse_swap(&what, why),
+            Err(why) => {
+                self.refuse_swap(&what, why);
+                return Task::none();
+            }
         };
         let Some(source) = template.library_ref.clone() else {
             // A replayed swap whose footprint names no library has no
@@ -220,7 +224,7 @@ impl Signex {
                 }
             }
             self.sync_pcb_board_summary();
-            return;
+            return Task::none();
         };
         let address = PrimitiveRef::new(source.library, source.footprint);
         let reads = EditReads {
@@ -236,12 +240,13 @@ impl Signex {
             ("unmatched", OperandValue::Text("keep".into())),
         ];
         self.document_state.agent_edits.reads = Some(Arc::new(reads));
-        let (outcome, _) = translator::run(self, "change_footprint", board, operands);
+        let (outcome, task) = translator::run(self, "change_footprint", board, operands);
         self.document_state.agent_edits.reads = None;
         if let CommandOutcome::Disabled { reason } = outcome {
             crate::diagnostics::log_warning(reason.render(&self.ui_state.i18n));
             self.sync_pcb_board_summary();
         }
+        task
     }
 
     /// The old pads a kept swap dropped and the linked parts whose sheet

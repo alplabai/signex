@@ -230,6 +230,8 @@ pub(in crate::app) mod tests;
 pub(in crate::app) mod pins_tests;
 
 #[cfg(test)]
+mod board_status_tests;
+#[cfg(test)]
 mod check_drc_base_rules_tests;
 #[cfg(test)]
 mod check_drc_bodies_tests;

@@ -4,6 +4,7 @@
 //! lists are read off the update thread.
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use iced::Task;
 use pcb_geom::ItemRef;
@@ -21,7 +22,7 @@ use signex_types::object_id::short_id;
 use signex_types::schematic::InstancePath;
 
 use super::{CreateRoomsDialog, CreateRoomsMsg, RoomField, RoomMsg};
-use crate::app::command::{CommandOutcome, OperandValue, translator};
+use crate::app::command::{CommandOutcome, EditReads, OperandValue, translator};
 use crate::app::pcb_tools::BoardPlaceTool;
 use crate::app::project_sheets::{
     ProjectSheetPlan, plan_project_sheets_for, project_root_sheet_path,
@@ -214,20 +215,27 @@ impl Signex {
 
     /// Place ▸ Room's second corner: the room from `a` to `b` as one step,
     /// placed by the operand handler the CLI runs (`start`, `end`), then
-    /// selected so Properties shows it. Whether it was placed; two corners
-    /// on one line place nothing.
-    pub(crate) fn place_drawn_room(&mut self, a: Point, b: Point) -> bool {
+    /// selected so Properties shows it. `a` and `b` are model points; the
+    /// operands take them in the board's frame (#2985). Whether it was
+    /// placed, and what the step left to do; two corners on one line place
+    /// nothing.
+    pub(crate) fn place_drawn_room(&mut self, a: Point, b: Point) -> (bool, Task<Message>) {
         let Some(path) = self.active_tab_path().filter(|_| self.has_active_pcb()) else {
-            return false;
+            return (false, Task::none());
+        };
+        let Some(board) = self.document_state.pcb_board(&path) else {
+            return (false, Task::none());
         };
         if !RoomOutline::rect_between(a, b).has_area() {
-            return false;
+            return (false, Task::none());
         }
+        let origin = board.options.origin;
+        let (a, b) = (origin.to_user(a), origin.to_user(b));
         let corners = vec![
             ("start", OperandValue::Point(a.x, a.y)),
             ("end", OperandValue::Point(b.x, b.y)),
         ];
-        let (outcome, _) = translator::run(self, "place_board_room", &path, corners);
+        let (outcome, task) = translator::run(self, "place_board_room", &path, corners);
         let placed = match outcome {
             CommandOutcome::Answered(answer) => answer["room"]["id"]
                 .as_str()
@@ -238,11 +246,10 @@ impl Signex {
             }
             _ => None,
         };
-        let Some(id) = placed else {
-            return false;
-        };
-        self.select_pcb_items(&[ItemRef::Room(id)]);
-        true
+        if let Some(id) = placed {
+            self.select_pcb_items(&[ItemRef::Room(id)]);
+        }
+        (placed.is_some(), task)
     }
 
     /// The selected rooms, and the room Place ▸ Room is drawing from its
@@ -283,8 +290,7 @@ impl Signex {
             return self.finish_rooms_from_sheets(*waiting, board, request, result);
         }
         if matches!(msg, CreateRoomsMsg::Confirmed) {
-            self.create_rooms();
-            return Task::none();
+            return self.create_rooms();
         }
         let rooms = &mut self.ui_state.rooms;
         if matches!(msg, CreateRoomsMsg::Cancelled) {
@@ -377,33 +383,42 @@ impl Signex {
 
     /// Create: the ticked rooms and their part moves as one step on the
     /// board the dialog was opened on, made by the operand handler the CLI
-    /// runs, on the sheets the dialog read. Rooms of a name already on the
-    /// board that are kept are said in Messages.
-    fn create_rooms(&mut self) {
-        let Some(dialog) = self.ui_state.rooms.create.as_deref() else {
-            return;
+    /// runs, on the sheets the dialog read, handed over as the handler's
+    /// read (#2987). Rooms of a name already on the board that are kept are
+    /// said in Messages. Returns what the step left to do.
+    fn create_rooms(&mut self) -> Task<Message> {
+        let Some(dialog) = self.ui_state.rooms.create.take() else {
+            return Task::none();
         };
         let path = dialog.board.clone();
-        let operands = self
+        let Some(operands) = self
             .document_state
             .pcb_board(&path)
-            .and_then(|board| dialog.operands(board));
-        let ran = operands
-            .map(|operands| translator::run(self, "create_rooms_from_sheets", &path, operands).0);
-        self.ui_state.rooms.create = None;
-        match ran {
-            Some(CommandOutcome::Answered(answer)) => {
+            .and_then(|board| dialog.operands(board))
+        else {
+            return Task::none();
+        };
+        let reads = EditReads {
+            room_sheets: Some(dialog.sheets),
+            ..EditReads::default()
+        };
+        self.document_state.agent_edits.reads = Some(Arc::new(reads));
+        let (outcome, task) = translator::run(self, "create_rooms_from_sheets", &path, operands);
+        self.document_state.agent_edits.reads = None;
+        match outcome {
+            CommandOutcome::Answered(answer) => {
                 let kept = answer["kept"].as_array().cloned().unwrap_or_default();
                 for name in kept.iter().filter_map(|n| n.as_str()) {
                     let line = t!(self.ui_state.i18n, ids::ROOMS_KEPT, "room" => name.to_string());
                     crate::diagnostics::log_info(line.into_string());
                 }
             }
-            Some(CommandOutcome::Disabled { reason }) => {
+            CommandOutcome::Disabled { reason } => {
                 crate::diagnostics::log_warning(reason.render(&self.ui_state.i18n));
             }
             _ => {}
         }
+        task
     }
 
     /// What reading the sheets of `board`'s project needs: the sheets to

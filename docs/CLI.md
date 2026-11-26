@@ -974,9 +974,10 @@ The answer:
    "kind": "builtin::clearance", "message": "...", "items": ["..."],
    "at_mm": [1.0, 2.0], "reason": "locked",
    "why": "the fix would change track <uuid>, locked"}],
- "remaining": {"count": 1, "waived": 0, "findings": [{"id": "...",
-   "rule": "...", "kind": "...", "message": "...", "items": ["..."],
-   "at_mm": [1.0, 2.0]}]}}
+ "remaining": {"count": 1, "complete": true, "waived": 0,
+   "findings": [{"id": "...", "rule": "...", "kind": "...",
+   "message": "...", "items": ["..."], "at_mm": [1.0, 2.0]}]},
+ "warnings": []}
 ```
 
 - `changed`: whether the board changed (an undo step was made); `false`
@@ -994,6 +995,12 @@ The answer:
 - `remaining`: a check of the board after the fixes (for a dry run, of the
   board the fixes would leave): the open findings in the same shape, their
   `count`, and how many are `waived`. A rule switched `off` is not listed.
+  When a part's 3D model could not be read, that part was judged on its
+  stored height: `complete` is `false` and `count` is `null`, never a 0 the
+  check could not vouch for (#2986).
+- `warnings`: what the check behind the fixes could not judge, in Run
+  DRC's words: the rule text's notes, rule text not applied (a syntax
+  error), written rules not applied, and each 3D model it could not read.
 
 Known limits:
 
@@ -1550,8 +1557,9 @@ set_footprint_side document=<board> id=<uuid> side=top|bottom
 ```
 
 - `set_footprint_position` moves the footprint's origin to `at` as a drag
-  does: the track ends on its pads follow, bent at the corner rule a drag
-  uses. With `ids`, `points` holds one point per id in the same order, and
+  does: the track ends on its pads follow, bent by `corner` (`90`,
+  `45_start`, `45_end` or `free`, as for the route commands; `90` when left
+  out, whatever the window's corner rule is). With `ids`, `points` holds one point per id in the same order, and
   the whole list is one undo step; a track between two listed footprints
   follows both.
 - `set_footprint_rotation` turns each footprint about its own origin to the
@@ -1620,8 +1628,10 @@ with those pads (`R1.1, R1.2`) unless `unmatched=keep`; nothing changes.
 The rooms of a board (#2457, `docs/PCB_ROOMS.md`) and Auto Place in Rooms
 (#2941) run from operands on the open board `document` names. Each is one
 board undo step and needs the `edit` capability; none writes a file.
-Coordinates are board mm as the file stores them, a point is `[x, y]`. A
-refusal names what is wrong (`room` not on the board, `side` not top, bottom
+Coordinates are board mm from the board origin with Y up, as the footprint,
+area and route commands read and answer them (#2985); a point is
+`[x, y]`, and a rectangle's outline is answered by its lower-left corner.
+A refusal names what is wrong (`room` not on the board, `side` not top, bottom
 or both, an outline without area) and changes nothing.
 
 ```text
@@ -1810,7 +1820,9 @@ changes nothing. Capability `read`.
   plan names: a part can be on the board here and not placed there.
 - `drc` is the last Run DRC of the board, as the DRC counter shows it:
   `violations` counts the waived ones too, `waived` how many of them are
-  waived, `edits_since` the board's edits since the run. Before any run
+  waived (every finding of the report whose rule is on, not only the rows
+  the DRC panel lists, #2986), `edits_since` the board's edits since the
+  run. Before any run
   `ran` is `false`. It does not run DRC; `check_drc` does.
 - `routed_length_mm` sums the routed length of every named net, as
   `query_board_nets` gives it per net.
@@ -2014,7 +2026,9 @@ lists a line's alternates.
 The rows of every open library that match: `query` is read as the
 Components panel reads its search words (`100n`, `4k7` and `16V` match a
 parameter of that value, other words the part numbers, manufacturer and
-description), and each parameter operand must hold too: `value` (the row's
+description; case folds by the same rules whatever the window's language,
+so `pic` finds `PIC16F` under Turkish too, #2986), and each parameter
+operand must hold too: `value` (the row's
 value, as a number with a prefix and unit, else as text), `package`
 (the package, case ignored), `tolerance` (at most this, `1%`), `rating`
 (at least this, `16V`, read from `rating`, `voltage_max`, `power` or

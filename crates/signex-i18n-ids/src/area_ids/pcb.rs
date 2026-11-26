@@ -184,6 +184,7 @@ define_ids! {
     PCB_ROUTE_ORDER_LAYER = "pcb-route-order-layer";
     PCB_ROUTE_ORDER_POINTS = "pcb-route-order-points";
     PCB_ROUTE_ORDER_LENGTH = "pcb-route-order-length";
+    PCB_ROUTE_ORDER_RANGE = "pcb-route-order-range";
     PCB_ROUTE_ORDER_CORNER = "pcb-route-order-corner";
     PCB_ROUTE_ORDER_MODE = "pcb-route-order-mode";
     PCB_ROUTE_ORDER_NETS = "pcb-route-order-nets";

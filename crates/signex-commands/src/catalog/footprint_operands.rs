@@ -6,7 +6,9 @@ use super::operands::{Operand, OperandKind, optional, required};
 
 /// `set_footprint_position`: the footprint goes to `at` (`x,y` in mm from
 /// the board origin, Y up); with `ids`, `points` holds one `x,y` per id,
-/// `;` separated, and the list is one undo step.
+/// `;` separated, and the list is one undo step. `corner` (90, 45_start,
+/// 45_end or free; 90 when left out) is how the tracks on the moved pads
+/// bend, as for the route commands (#2987).
 pub const FOOTPRINT_POSITION: &[Operand] = &[
     required("document", OperandKind::Document),
     optional("id", OperandKind::Text),
@@ -14,6 +16,7 @@ pub const FOOTPRINT_POSITION: &[Operand] = &[
     optional("ids", OperandKind::Targets),
     optional("at", OperandKind::Point),
     optional("points", OperandKind::Text),
+    optional("corner", OperandKind::Text),
 ];
 /// `set_footprint_rotation`: each named footprint turned to `rotation`
 /// about its own origin.

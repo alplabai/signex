@@ -13,7 +13,7 @@ use signex_i18n::{Translatable, ids};
 
 use super::answer::{AnswerFor, UpdatePcbAnswer};
 use super::command::did_not_run;
-use super::state::{HeadlessRun, file_name};
+use super::state::{UpdatePcbJob, file_name};
 use crate::app::agent::WaitingCommand;
 use crate::app::command::CommandOutcome;
 use crate::app::{Message, Signex};
@@ -26,7 +26,7 @@ impl Signex {
     /// The list is ready and no dialog shows it: a run from operands is
     /// answered; a state no caller waits on executes as before.
     pub(super) fn finish_update_pcb_list(&mut self) -> Task<Message> {
-        let Some(HeadlessRun { waiting, dry_run }) = self.update_pcb_run() else {
+        let Some(UpdatePcbJob { waiting, dry_run }) = self.update_pcb_run() else {
             return self.execute_update_pcb();
         };
         let target = self.update_pcb_run_target();
@@ -61,17 +61,25 @@ impl Signex {
     }
 
     fn failed_update_pcb_run(&self) -> Option<(WaitingCommand, String)> {
+        let run = self.update_pcb_run()?;
         let state = self.ui_state.update_pcb.as_ref()?;
-        let run = state.headless.as_ref()?;
-        Some((run.waiting.clone(), state.failure()?.to_string()))
+        Some((run.waiting, state.failure()?.to_string()))
     }
 
-    fn update_pcb_run(&self) -> Option<HeadlessRun> {
-        self.ui_state.update_pcb.as_ref()?.headless.clone()
+    /// The run from operands the state in progress serves, if any: its job
+    /// is held with the agent's deferred work (#2987).
+    fn update_pcb_run(&self) -> Option<UpdatePcbJob> {
+        self.ui_state.update_pcb.as_ref()?;
+        self.agent.update_pcb_job.clone()
+    }
+
+    /// Whether the state in progress serves a run from operands.
+    pub(super) fn is_update_pcb_run(&self) -> bool {
+        self.ui_state.update_pcb.is_some() && self.agent.update_pcb_job.is_some()
     }
 
     fn drop_update_pcb_run(&mut self) {
-        if self.update_pcb_run().is_some() {
+        if self.agent.update_pcb_job.take().is_some() {
             self.ui_state.update_pcb = None;
         }
     }

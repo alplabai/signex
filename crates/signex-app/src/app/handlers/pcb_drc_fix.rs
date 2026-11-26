@@ -33,7 +33,20 @@ pub struct DrcFixComputed {
     /// The board revision the fixes were worked out from.
     pub(crate) expected_revision: u64,
     pub(crate) dry_run: bool,
-    pub(crate) result: Result<Arc<FixRun>, String>,
+    pub(crate) result: Result<Arc<WorkedFixes>, String>,
+}
+
+/// The fixes worked out, with what the check behind them could not judge
+/// as Run DRC would say it (#2986).
+#[derive(Debug, Clone)]
+pub struct WorkedFixes {
+    pub(crate) run: FixRun,
+    /// The rule text's notes and what it did not apply, as Run DRC's
+    /// Messages say them.
+    pub(crate) rule_warnings: Vec<String>,
+    /// The 3D models that could not be read: those parts were judged on
+    /// their stored height.
+    pub(crate) unread_models: Vec<String>,
 }
 
 impl PartialEq for DrcFixComputed {
@@ -58,20 +71,27 @@ pub(crate) fn fix_refused(why: impl Into<String>) -> CommandOutcome {
 }
 
 /// The fixes of `scope` on `board`, with the models of its parts read
-/// first when a rule measures a body. Blocking IO and many DRC passes: a
-/// worker's job.
+/// first when a rule measures a body, and what Run DRC would say beside
+/// them: the rule text's warnings and the models it could not read
+/// (#2986). Blocking IO and many DRC passes: a worker's job.
 fn fixes_off_thread(
     board: &PcbBoard,
     rules: &DrcRules,
     libraries: &[(Uuid, PathBuf)],
     scope: &FixScope,
-) -> Result<FixRun, String> {
-    let models = if rules.measures_bodies() {
-        super::pcb_drc_bodies::body_models(board, libraries).0
+) -> Result<WorkedFixes, String> {
+    let (models, unread_models) = if rules.measures_bodies() {
+        super::pcb_drc_bodies::body_models(board, libraries)
     } else {
-        BodyModels::new()
+        (BodyModels::new(), Vec::new())
     };
-    fix_findings(board, rules, &models, scope, &mut UuidV7Ids).map_err(|e| e.to_string())
+    let run =
+        fix_findings(board, rules, &models, scope, &mut UuidV7Ids).map_err(|e| e.to_string())?;
+    Ok(WorkedFixes {
+        run,
+        rule_warnings: signex_drc::findings::rule_warnings(rules),
+        unread_models,
+    })
 }
 
 impl Signex {
@@ -150,14 +170,11 @@ impl Signex {
         board: &Path,
         expected_revision: u64,
         dry_run: bool,
-        result: Result<Arc<FixRun>, String>,
+        result: Result<Arc<WorkedFixes>, String>,
     ) -> Result<Value, String> {
-        let run = Arc::unwrap_or_clone(result?);
-        let changes = !dry_run && !run.commands.is_empty();
-        let mut answer = run_json(board, &run, dry_run, changes);
-        // The check of the board the fixes leave, bodies included: what a
-        // dry run would leave, and what is there once they land.
-        answer["remaining"] = remaining_json(&run.report, &run.board);
+        let worked = Arc::unwrap_or_clone(result?);
+        let changes = !dry_run && !worked.run.commands.is_empty();
+        let answer = fix_answer(board, &worked, dry_run, changes);
         if !changes {
             return Ok(answer);
         }
@@ -166,11 +183,32 @@ impl Signex {
             label: &label,
             expected_revision,
         };
-        self.execute_board_commands(board, run.commands, Some(step))
+        self.execute_board_commands(board, worked.run.commands, Some(step))
             .map_err(|e| e.to_string())?;
         self.refresh_panel_ctx();
         Ok(answer)
     }
+}
+
+/// The answer to a fix run: what it fixed and left, the check of the board
+/// the fixes leave (bodies included), and what that check could not judge
+/// as Run DRC says it (#2986). A part whose model could not be read was
+/// judged on its stored height, so the remaining count is not given as if
+/// the check were whole: `count` is null and `complete` false.
+pub(super) fn fix_answer(board: &Path, worked: &WorkedFixes, dry_run: bool, changes: bool) -> Value {
+    let run = &worked.run;
+    let mut answer = run_json(board, run, dry_run, changes);
+    answer["remaining"] = remaining_json(&run.report, &run.board);
+    let complete = worked.unread_models.is_empty();
+    answer["remaining"]["complete"] = json!(complete);
+    if !complete {
+        answer["remaining"]["count"] = Value::Null;
+    }
+    let warnings: Vec<&String> = (worked.rule_warnings.iter())
+        .chain(&worked.unread_models)
+        .collect();
+    answer["warnings"] = json!(warnings);
+    answer
 }
 
 /// What a run fixed and left, before the check after it.

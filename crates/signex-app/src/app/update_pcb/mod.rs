@@ -25,7 +25,7 @@ pub(crate) use command::update_pcb_from_schematic;
 pub(crate) use design::DesignSnapshot;
 pub(crate) use new_pcb::new_board_path;
 pub use state::UpdatePcbState;
-pub(crate) use state::{BoardStatus, Phase, file_name};
+pub(crate) use state::{BoardStatus, Phase, UpdatePcbJob, file_name};
 pub use table::{RowAction, RowFilter, TableGroup};
 pub(crate) use target::PcbSyncLabel;
 

@@ -11,7 +11,7 @@ use signex_types::net_class::NetClass;
 use signex_types::pcb::{Footprint, PcbBoard, Room, Zone};
 use signex_types::pcb_layout_plan::{LayoutPlan, LayoutStage, RouteTarget};
 
-use crate::{DrcReport, ViolationKind, WaiverState, rooms, rule_id, waiver_state};
+use crate::{DrcReport, Violation, ViolationKind, WaiverState, rooms, rule_id, waiver_state};
 
 /// The most items a reason list names; the rest are counted.
 pub const LISTED: usize = 20;
@@ -396,7 +396,10 @@ fn checks(plan: &LayoutPlan, input: &PlanInput) -> StageStatus {
     let in_scope = |rule: &str| stage.rules.is_empty() || stage.rules.iter().any(|r| r == rule);
     let mut open: BTreeMap<&str, usize> = BTreeMap::new();
     let waivers = &input.board.options.drc_waivers;
-    for v in report.violations.iter().filter(|v| in_scope(rule_id(v))) {
+    // A finding whose rule is switched off is not shown and does not count
+    // (#2986), as Run DRC and `check_drc` leave it out.
+    let shown = |v: &&Violation| report.severity_of(v).is_some() && in_scope(rule_id(v));
+    for v in report.violations.iter().filter(shown) {
         match waiver_state(waivers, v, input.board) {
             WaiverState::Waived(_) => *counts.entry("waived").or_default() += 1,
             WaiverState::Lapsed(_) | WaiverState::Open => {

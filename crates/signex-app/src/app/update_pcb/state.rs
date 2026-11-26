@@ -35,9 +35,12 @@ pub(crate) enum BoardStatus {
     ReadOnly,
 }
 
-/// A run of `update_pcb_from_schematic` from operands, waiting for its list.
+/// A run of `update_pcb_from_schematic` from operands, waiting for its list
+/// (#2470). The job, with the ticket its caller waits on, is held with the
+/// agent's deferred work (`AgentState::update_pcb_job`), not in the dialog's
+/// state (#2987).
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct HeadlessRun {
+pub(crate) struct UpdatePcbJob {
     pub(crate) waiting: crate::app::agent::WaitingCommand,
     /// `dry_run=true`: answer the list and change nothing.
     pub(crate) dry_run: bool,
@@ -56,11 +59,8 @@ pub struct UpdatePcbState {
     pub(crate) job: u64,
     /// No dialog: the run of `update_pcb_from_schematic` from operands. It
     /// executes the default ticks once the list is ready, or answers the
-    /// list (`headless` says which).
+    /// list (its [`UpdatePcbJob`] says which).
     pub(crate) apply: bool,
-    /// The command run from operands that waits for this list (#2470): its
-    /// ticket is answered with the change list, or why it did not run.
-    pub(crate) headless: Option<HeadlessRun>,
     /// The design as read and the list built from it.
     pub(crate) snapshot: Option<Arc<DesignSnapshot>>,
     pub(crate) list: Option<EcoChangeList>,
@@ -94,7 +94,6 @@ impl UpdatePcbState {
             board,
             job: 0,
             apply,
-            headless: None,
             snapshot: None,
             logged_library_errors: std::collections::HashSet::new(),
             logged_rule_problems: std::collections::HashSet::new(),

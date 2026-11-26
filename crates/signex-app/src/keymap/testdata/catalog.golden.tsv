@@ -112,7 +112,7 @@ mirror_y	modify	Mirror along Y-axis	Mirror Y	General	-	-	RequiresSelection	mutat
 flip_selection	modify	Flip selection to the other board side	Flip Selection	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	-
 set_object_position	edit	Set the position of a placed object	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,at:point/mm,keep_wires:bool?,wiring:text?,document:document?
 set_object_rotation	edit	Set the rotation of a placed part or label	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,rotation:angle/deg,keep_wires:bool?,document:document?
-set_footprint_position	edit	Move a component on the board to a point	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,id:text?,designator:text?,ids:targets?,at:point/mm?,points:text?
+set_footprint_position	edit	Move a component on the board to a point	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,id:text?,designator:text?,ids:targets?,at:point/mm?,points:text?,corner:text?
 set_footprint_rotation	edit	Set the rotation of a component on the board	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,id:text?,designator:text?,ids:targets?,rotation:angle/deg
 set_footprint_side	edit	Put a component on the top or bottom side of the board	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,id:text?,designator:text?,ids:targets?,side:text
 place_component	place	Place component	Part	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	library:text,part:text,at:point/mm,unit:text?,designator:text?,value:text?,rotation:angle/deg?,mirror:text?,document:document?

@@ -466,3 +466,84 @@ fn across<'a>(extra: &[&'a str]) -> Vec<&'a str> {
     all.extend(extra);
     all
 }
+
+/// #2985: a size or a point the board file cannot store is refused, so no
+/// step lands that every later Save would fail on.
+#[test]
+fn a_size_or_point_past_what_the_board_file_stores_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = open(dir.path(), around_board(vec![], vec![]));
+    let before = live(&app, &path);
+    let revision = app.board_revision(&path);
+    let cases: Vec<(&str, Vec<&str>, &str)> = vec![
+        (
+            "place_board_via",
+            vec!["at=1,1", "via_diameter=1e13"],
+            "`via_diameter` takes a length",
+        ),
+        (
+            "place_board_via",
+            vec!["at=1,1", "via_drill=1e13"],
+            "`via_drill` takes a length",
+        ),
+        (
+            "place_board_route",
+            across(&["width=1e13"]),
+            "`width` takes a length",
+        ),
+        (
+            "place_board_route",
+            across(&["through=1e13,0"]),
+            "outside what the board file can store",
+        ),
+    ];
+    for (command, operands, why) in cases {
+        let mut all = vec![document(&path)];
+        all.extend(operands.iter().map(|s| s.to_string()));
+        let reason = refusal(headless(&mut app, command, &all));
+        assert!(reason.contains(why), "{command} {operands:?}: {reason}");
+        assert_eq!(live(&app, &path), before, "{command} changed nothing");
+        assert_eq!(app.board_revision(&path), revision, "{command}: no step");
+    }
+}
+
+/// #2988: the click and the operand form plan a pair's start with one
+/// planner. One net's only copper is on the bottom, so both start it with a
+/// via at the same anchor, on the same net, and route the same tracks.
+#[test]
+fn a_pair_start_off_the_layer_is_planned_alike_by_click_and_operands() {
+    let mut board = pair_board(["USB_P", "USB_N"]);
+    board["segments"][1]["layer"] = json!("BottomCopper");
+    let starts = |app: &Signex, path: &Path| {
+        let board = board_of(app, path);
+        let mut vias: Vec<String> = (board.vias.iter())
+            .map(|v| format!("{:?} {}", v.position, v.net))
+            .collect();
+        vias.sort();
+        let mut tracks: Vec<String> = (board.segments.iter())
+            .map(|s| format!("{:?} {:?} {} {}", s.start, s.end, s.layer, s.net))
+            .collect();
+        tracks.sort();
+        (vias, tracks)
+    };
+    let clicked_dir = tempfile::tempdir().unwrap();
+    let (mut clicked, clicked_path) = open(clicked_dir.path(), board.clone());
+    run(&mut clicked, "place_board_diff_pair");
+    click(&mut clicked, 1.0, 0.5);
+    click(&mut clicked, 11.0, 0.0);
+    escape(&mut clicked);
+
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = open(dir.path(), board);
+    let operands = [
+        document(&path),
+        "net=USB_N".into(),
+        point(&app, &path, "start", 1.0, 0.5),
+        point(&app, &path, "end", 11.0, 0.0),
+    ];
+    answered(headless(&mut app, "place_board_diff_pair", &operands));
+
+    let (vias, tracks) = starts(&app, &path);
+    assert_eq!(vias.len(), 1, "one start via: {vias:?}");
+    assert_eq!((vias, tracks), starts(&clicked, &clicked_path));
+}

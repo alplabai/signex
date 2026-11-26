@@ -199,7 +199,9 @@ fn write_made(
 
 /// Where the file named `name` (`/`-separated, as the writers name the
 /// ODB++ folder's files) goes under `folder`. A name that is empty, absolute
-/// or steps out of the folder is refused.
+/// or steps out of the folder is refused, and so is one with a link on its
+/// way below the folder (#2983): a committed `<name>-odb` link would carry
+/// the files out of it.
 fn file_path(folder: &Path, name: &str) -> Result<PathBuf, FabProblem> {
     let mut path = folder.to_path_buf();
     for part in name.split('/') {
@@ -212,6 +214,12 @@ fn file_path(folder: &Path, name: &str) -> Result<PathBuf, FabProblem> {
             )));
         }
         path.push(part);
+        if std::fs::symlink_metadata(&path).is_ok_and(|meta| meta.file_type().is_symlink()) {
+            return Err(FabProblem::WriteFailed(format!(
+                "{} is a symbolic link; writing through a link is refused",
+                path.display()
+            )));
+        }
     }
     Ok(path)
 }

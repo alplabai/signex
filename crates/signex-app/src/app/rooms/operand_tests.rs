@@ -154,7 +154,7 @@ fn place_board_room_from_operands_places_the_room_described_as_one_step() {
         &mut app,
         &path,
         "place_board_room",
-        &["start=5,5", "end=25,20", "name=dcdc", &sheet, "side=both"],
+        &["start=5,-5", "end=25,-20", "name=dcdc", &sheet, "side=both"],
     ));
     let room = &answer["room"];
     assert_eq!(room["name"], "dcdc");
@@ -176,7 +176,7 @@ fn place_board_room_from_operands_places_the_room_described_as_one_step() {
         &mut app,
         &path,
         "place_board_room",
-        &["corners=30,0;40,0;35,10"],
+        &["corners=30,0;40,0;35,-10"],
     ));
     assert_eq!(polygon["room"]["name"], "Room 1");
     assert_eq!(polygon["room"]["outline"]["shape"], "polygon");
@@ -287,7 +287,7 @@ fn arrange_in_room_packs_the_rooms_parts_and_answers_each_move() {
         &mut app,
         &path,
         "place_board_room",
-        &["start=30,5", "end=55,30", "name=dcdc", &sheet],
+        &["start=30,-5", "end=55,-30", "name=dcdc", &sheet],
     );
     let steps = undo_len(&app, &path);
     let answer = answered(headless(&mut app, &path, "arrange_in_room", &["room=dcdc"]));
@@ -313,7 +313,7 @@ fn arrange_in_room_from_the_gui_acts_on_the_selected_room() {
         &mut app,
         &path,
         "place_board_room",
-        &["start=30,5", "end=55,30", &sheet],
+        &["start=30,-5", "end=55,-30", &sheet],
     ));
     let room = Uuid::parse_str(placed["room"]["id"].as_str().expect("id")).expect("uuid");
     app.select_pcb_items(&[ItemRef::Room(room)]);
@@ -334,7 +334,7 @@ fn auto_place_answers_each_move_and_the_scores_and_a_dry_run_changes_nothing() {
         &mut app,
         &path,
         "place_board_room",
-        &["start=30,5", "end=55,30", "name=dcdc", &sheet],
+        &["start=30,-5", "end=55,-30", "name=dcdc", &sheet],
     );
     let before = serde_json::to_value(live(&app, &path)).expect("json");
     let steps = undo_len(&app, &path);
@@ -378,7 +378,7 @@ fn auto_place_from_the_gui_runs_the_operand_handler() {
         &mut app,
         &path,
         "place_board_room",
-        &["start=30,5", "end=55,30", &sheet],
+        &["start=30,-5", "end=55,-30", &sheet],
     );
     let steps = undo_len(&app, &path);
     run_menu(&mut app, "auto_place");
@@ -386,4 +386,37 @@ fn auto_place_from_the_gui_runs_the_operand_handler() {
     assert_eq!(undo_len(&app, &path), steps + 1);
     run_menu(&mut app, "undo");
     assert_eq!(undo_len(&app, &path), steps, "one undo takes it back");
+}
+
+/// #2985: a room's operands are in the board's frame (its origin, Y up),
+/// as a footprint's are: a part moved to the room's middle is inside it.
+#[test]
+fn a_room_and_a_footprint_from_operands_share_the_board_frame() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, path) = app_with(dir.path());
+    let moved = headless(
+        &mut app,
+        &path,
+        "set_footprint_position",
+        &["designator=R1", "at=10,10"],
+    );
+    assert!(
+        !matches!(moved, CommandOutcome::Disabled { .. }),
+        "{moved:?}"
+    );
+    let sheet = format!("sheet=/{}", id(SHEET_A));
+    let answer = answered(headless(
+        &mut app,
+        &path,
+        "place_board_room",
+        &["start=0,0", "end=20,20", &sheet],
+    ));
+    let parts = answer["room"]["parts"].as_array().expect("parts");
+    let r1 = parts
+        .iter()
+        .find(|p| p["designator"] == "R1")
+        .expect("R1 is the room's");
+    assert_eq!(r1["inside"], true, "{answer}");
+    let outline = &answer["room"]["outline"];
+    assert_eq!((outline["x"].as_f64(), outline["y"].as_f64()), (Some(0.0), Some(0.0)));
 }

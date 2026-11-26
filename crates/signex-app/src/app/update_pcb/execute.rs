@@ -140,7 +140,7 @@ impl Signex {
         // #1489: the rules the schematic asks for go with the board's rows.
         let project = state.project;
         // A run from operands never moves the person's tab.
-        let from_operands = state.headless.is_some();
+        let from_operands = self.is_update_pcb_run();
         let rule_rows = self.update_pcb_rule_rows(state);
         let rules_pending = super::rules_from_schematic::pending(&rule_rows);
         // The dialog's Execute is off with nothing ticked; Enter is too.
@@ -233,11 +233,12 @@ impl Signex {
     /// language) word the reason differently.
     fn refuse_execute_as(&mut self, logged: &str, why: String) {
         self.log_update_pcb_refused(logged);
+        let from_operands = self.is_update_pcb_run();
         let Some(state) = self.ui_state.update_pcb.as_mut() else {
             return;
         };
         // A run from operands answers why, in en-US (`headless.rs`).
-        if state.headless.is_some() {
+        if from_operands {
             state.phase = Phase::Failed(logged.to_string());
         } else if state.apply {
             self.ui_state.update_pcb = None;

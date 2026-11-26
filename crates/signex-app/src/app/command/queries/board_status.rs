@@ -91,8 +91,20 @@ impl Signex {
                 json!({ "ran": false, "violations": 0, "waived": 0, "edits_since": Value::Null })
             }
             Some(done) => {
-                let rows = self.pcb_drc_panel_for(path, board).rows;
-                let waived = rows.iter().filter(|row| row.waiver.is_some()).count();
+                // Every shown finding the board's waivers cover, read from
+                // the report itself: the DRC panel lists at most its first
+                // rows (#2986).
+                let report = &done.report;
+                let waivers = &board.options.drc_waivers;
+                let waived = (report.violations.iter())
+                    .filter(|v| report.severity_of(v).is_some())
+                    .filter(|v| {
+                        matches!(
+                            signex_drc::waiver_state(waivers, v, board),
+                            signex_drc::WaiverState::Waived(_)
+                        )
+                    })
+                    .count();
                 json!({
                     "ran": true,
                     "violations": done.report.violations.len(),

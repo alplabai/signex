@@ -23,6 +23,7 @@ pub(super) const PCB_SYNC: &[CommandMetadata] = &[
         enable: Enablement::Always,
         flags: CommandFlags::MUTATES,
         operands: operands::UPDATE_PCB,
+        picks_own_project: true,
         ..CommandMetadata::DEFAULT
     },
     // #2462: the report of every difference between the schematic and the

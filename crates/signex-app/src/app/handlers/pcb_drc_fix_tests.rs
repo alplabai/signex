@@ -273,3 +273,70 @@ fn fixes_worked_out_on_a_board_that_moved_on_are_refused() {
     assert_eq!(track_y(&app, &path, VCC_TRACK), 0.4, "the edit stays");
     assert_eq!(undo_steps(&app, &path), 1, "only the person's step");
 }
+
+/// #2986: rule text with a syntax error is said in the answer, as
+/// `check_drc` and Run DRC say it, not dropped.
+#[test]
+fn fix_drc_says_the_rule_text_it_did_not_apply() {
+    let _serial = drc_serial();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = board_app(&dir, false);
+    app.document_state.projects[0].data.rules = Some(signex_types::project::ProjectRules {
+        drc: signex_types::project::DrcRuleSet {
+            dsl: Some("rule bad on via".into()),
+            ..Default::default()
+        },
+        ..Default::default()
+    });
+    let got = answer(run(
+        &mut app,
+        "fix_drc",
+        &[&document(&path), "rule=clearance", "dry_run=true"],
+    ));
+    let warnings = got["warnings"].as_array().expect("warnings");
+    assert!(
+        warnings
+            .iter()
+            .any(|w| w == "DRC rules: the rule text was not applied (syntax error)"),
+        "{got}"
+    );
+}
+
+/// #2986: a part whose 3D model could not be read was judged on its stored
+/// height: the answer names the model and does not give the remaining
+/// count as if the check were whole.
+#[test]
+fn a_fix_judged_on_a_stored_height_names_the_model_and_gives_no_count() {
+    let _serial = drc_serial();
+    let dir = tempfile::tempdir().unwrap();
+    let (app, path) = board_app(&dir, false);
+    let pcb = app.document_state.pcb_board(&path).expect("open").clone();
+    let (rules, _) = app.board_design_rules(&path, &pcb).expect("rules");
+    let scope = signex_engine::pcb::drc_fix::FixScope::Every(None);
+    let run = signex_engine::pcb::drc_fix::fix_findings(
+        &pcb,
+        &rules,
+        &signex_drc::BodyModels::new(),
+        &scope,
+        &mut signex_types::object_id::UuidV7Ids,
+    )
+    .expect("fixes");
+    let unread = "DRC: the 3D model of lib:U1 could not be read (bad file); its stored height is used";
+    let worked = super::WorkedFixes {
+        run,
+        rule_warnings: Vec::new(),
+        unread_models: vec![unread.to_string()],
+    };
+    let got = super::fix_answer(&path, &worked, true, false);
+    assert_eq!(got["remaining"]["count"], Value::Null, "{got}");
+    assert_eq!(got["remaining"]["complete"], false, "{got}");
+    assert_eq!(got["warnings"], serde_json::json!([unread]), "{got}");
+
+    let whole = super::WorkedFixes {
+        unread_models: Vec::new(),
+        ..worked
+    };
+    let got = super::fix_answer(&path, &whole, true, false);
+    assert_eq!(got["remaining"]["count"], 0, "{got}");
+    assert_eq!(got["remaining"]["complete"], true, "{got}");
+}

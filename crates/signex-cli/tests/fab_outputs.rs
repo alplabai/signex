@@ -117,3 +117,34 @@ fn fabrication_outputs_needs_the_export_capability() {
     );
     assert!(!fx.dir.join("fab").exists(), "nothing written");
 }
+
+/// #2983: a link committed inside the output folder (`fab/board-odb`
+/// pointing out of the project) is refused; nothing lands where it points.
+#[cfg(unix)]
+#[test]
+fn fabrication_outputs_refuses_a_link_inside_its_folder() {
+    let (_guard, root) = temp_root();
+    let fx = fixture(&root);
+    write_board(&fx.dir.join("board.snxpcb"));
+    set_board(&fx.project, "board.snxpcb");
+    let elsewhere = tempfile::tempdir().expect("tmp");
+    std::fs::create_dir_all(fx.dir.join("fab")).expect("fab");
+    std::os::unix::fs::symlink(elsewhere.path(), fx.dir.join("fab/board-odb")).expect("link");
+    let project = fx.project.to_str().unwrap();
+
+    let lines = jsonl(&[
+        json!({"id": "open_document", "args": {"path": "board.snxpcb"}}),
+        json!({"id": "fabrication_outputs", "args": {
+            "document": "board.snxpcb", "path": "fab", "kinds": "odb_folder", "name": "board"
+        }}),
+    ]);
+    let out = run_cli(&["run", project, "--allow", "export"], lines);
+    let line = &out.lines[1];
+    assert_eq!(line["status"], "refused", "{}\n{}", out.stdout, out.stderr);
+    let reason = line["reason"].as_str().unwrap_or_default();
+    assert!(reason.contains("symbolic link"), "{reason}");
+    let landed: Vec<_> = std::fs::read_dir(elsewhere.path())
+        .expect("list")
+        .collect();
+    assert!(landed.is_empty(), "nothing written through the link: {landed:?}");
+}

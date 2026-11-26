@@ -7,8 +7,7 @@ use pcb_geom::CopperItem;
 use signex_drc::DrcRules;
 use signex_engine::pcb::draw::{self, TrackStyle};
 use signex_engine::pcb::route::{
-    BusMember, RouteDraft, bus_draft, bus_start, diff_pair_of, draft_fits, nearest_net_point,
-    route_bus_leg,
+    BusMember, RouteDraft, bus_draft, bus_start, diff_pair_of, draft_fits, route_bus_leg,
 };
 use signex_i18n::{Translatable, ids};
 use signex_types::net_class::NetClass;
@@ -17,8 +16,8 @@ use signex_types::pcb_layer::CopperLayer;
 use uuid::Uuid;
 
 use super::route_order::{RouteMade, RouteOrder, order_layer, tool_refusal};
-use super::router::{rule_via, walk_rules};
-use super::side_by_side::{BusAsk, bus_style, nearest_on_any_layer, net_name};
+use super::router::walk_rules;
+use super::side_by_side::{BusAsk, bus_style, member_starts, net_name};
 use crate::app::pcb_tools::BoardPlaceTool;
 
 /// The nets an order routes side by side: the pair of its `net`, or the
@@ -50,38 +49,21 @@ fn order_nets(
     Ok(nets)
 }
 
-/// Each net's start: its copper on `layer` nearest the order's start, else
-/// its copper on another layer with a via there (`start_bus_route`).
-fn member_starts(
+/// Each net's start, planned as the click plans it (`member_starts`), with
+/// a start via of the board's own size rather than the tool form's.
+fn order_starts(
     board: &PcbBoard,
     rules: &DrcRules,
     tool: BoardPlaceTool,
     (nets, layer): (&[u32], CopperLayer),
     at: Point,
 ) -> Result<(Vec<BusMember>, Vec<Via>), Translatable> {
-    let mut members = Vec::with_capacity(nets.len());
-    let mut start_vias = Vec::new();
-    for &net in nets {
-        let (anchor, off_layer) = match nearest_net_point(board, net, layer, at) {
-            Some(anchor) => (Some(anchor), false),
-            None => (nearest_on_any_layer(board, net, at), true),
-        };
-        let anchor = anchor.ok_or_else(|| {
-            let why =
-                Translatable::new(ids::PCB_ROUTE_MEMBER_NO_COPPER).arg("net", net_name(board, net));
-            tool_refusal(tool, why)
-        })?;
-        if off_layer {
-            let via = Via {
-                attributes: Default::default(),
-                net,
-                ..draw::new_via(board, Uuid::now_v7(), anchor)
-            };
-            start_vias.push(rule_via(via, rules));
-        }
-        members.push(BusMember { net, anchor });
-    }
-    Ok((members, start_vias))
+    let via_at = |anchor| draw::new_via(board, Uuid::now_v7(), anchor);
+    member_starts(board, rules, (nets, layer), at, via_at).map_err(|net| {
+        let why =
+            Translatable::new(ids::PCB_ROUTE_MEMBER_NO_COPPER).arg("net", net_name(board, net));
+        tool_refusal(tool, why)
+    })
 }
 
 /// A pair or Multi-Route: the centre line from the members' start through
@@ -103,7 +85,7 @@ pub(super) fn plan_bus(
     };
     let layer = order_layer(board, order, start)?;
     let nets = order_nets(board, classes, order)?;
-    let (members, start_vias) = member_starts(board, rules, tool, (&nets, layer), start)?;
+    let (members, start_vias) = order_starts(board, rules, tool, (&nets, layer), start)?;
     let Some(centre_start) = bus_start(&members) else {
         return Err(tool_refusal(
             tool,
