@@ -593,7 +593,7 @@ impl Signex {
     /// [`Self::board_left_out_of_bom`] for the document in view.
     /// The alternates per line of `source`'s project (#2938), for the
     /// Alternates column; none for a sheet outside a project.
-    fn bom_alternates_of(
+    pub(super) fn bom_alternates_of(
         &self,
         source: &std::path::Path,
     ) -> Vec<signex_types::project::BomLineAlternates> {

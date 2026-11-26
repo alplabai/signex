@@ -9,7 +9,7 @@ use super::BomColumn;
 
 /// The standard columns by their template key, in the order the keys are
 /// documented.
-const STANDARD: [(&str, BomColumn); 15] = [
+const STANDARD: [(&str, BomColumn); 16] = [
     ("name", BomColumn::Name),
     ("designator", BomColumn::Designator),
     ("lib_ref", BomColumn::LibRef),
@@ -25,16 +25,36 @@ const STANDARD: [(&str, BomColumn); 15] = [
     ("stock", BomColumn::Stock),
     ("distributor", BomColumn::Distributor),
     ("price_age", BomColumn::PriceAge),
+    ("alternates", BomColumn::Alternates),
 ];
 
 impl BomColumn {
     /// The key of a standard column in a template; `None` for a field or a
-    /// computed column.
+    /// computed column. Every other column has one: the match names each, so
+    /// a new column cannot be left without a key.
     pub fn template_key(&self) -> Option<&'static str> {
-        STANDARD
-            .iter()
-            .find(|(_, column)| column == self)
-            .map(|(key, _)| *key)
+        match self {
+            Self::Custom(_) | Self::Computed(_) => None,
+            Self::Name
+            | Self::Designator
+            | Self::LibRef
+            | Self::Reference
+            | Self::Qty
+            | Self::Value
+            | Self::Footprint
+            | Self::Description
+            | Self::UnitPrice
+            | Self::BuyQty
+            | Self::ExtendedPrice
+            | Self::Currency
+            | Self::Stock
+            | Self::Distributor
+            | Self::PriceAge
+            | Self::Alternates => STANDARD
+                .iter()
+                .find(|(_, column)| column == self)
+                .map(|(key, _)| *key),
+        }
     }
 }
 
@@ -71,19 +91,21 @@ pub fn columns_of_template(template: &BomTemplate) -> Result<Vec<BomColumn>, Str
         .collect()
 }
 
-/// The template of `columns`, in their order.
+/// The template of `columns`, in their order. A standard column with no key
+/// (none today: `BomColumn::template_key` names each) is left out rather
+/// than written as a key no build reads.
 pub fn template_of_columns(columns: &[BomColumn]) -> BomTemplate {
     let columns = columns
         .iter()
-        .map(|column| match column {
-            BomColumn::Custom(name) => TemplateColumn::Field(name.clone()),
-            BomColumn::Computed(computed) => TemplateColumn::Computed {
+        .filter_map(|column| match column {
+            BomColumn::Custom(name) => Some(TemplateColumn::Field(name.clone())),
+            BomColumn::Computed(computed) => Some(TemplateColumn::Computed {
                 name: computed.name().to_string(),
                 expression: computed.expression().to_string(),
-            },
-            standard => {
-                TemplateColumn::Standard(standard.template_key().unwrap_or_default().to_string())
-            }
+            }),
+            standard => standard
+                .template_key()
+                .map(|key| TemplateColumn::Standard(key.to_string())),
         })
         .collect();
     BomTemplate { columns }

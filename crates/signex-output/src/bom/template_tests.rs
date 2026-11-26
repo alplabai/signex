@@ -61,3 +61,60 @@ fn an_unknown_standard_key_is_refused_naming_the_column() {
     assert!(why.starts_with("column 2 of the BOM template"), "{why}");
     assert!(why.contains("`weight`"), "{why}");
 }
+
+/// Every standard column, Alternates included, goes through a template file
+/// and back. The match is the list's witness: a new `BomColumn` fails to
+/// compile here until it is added below and given a template key.
+#[test]
+fn every_standard_column_round_trips_through_a_template_file() {
+    let witness = |column: &BomColumn| match column {
+        BomColumn::Name
+        | BomColumn::Designator
+        | BomColumn::LibRef
+        | BomColumn::Reference
+        | BomColumn::Qty
+        | BomColumn::Value
+        | BomColumn::Footprint
+        | BomColumn::Description
+        | BomColumn::UnitPrice
+        | BomColumn::BuyQty
+        | BomColumn::ExtendedPrice
+        | BomColumn::Currency
+        | BomColumn::Stock
+        | BomColumn::Distributor
+        | BomColumn::PriceAge
+        | BomColumn::Alternates => true,
+        BomColumn::Custom(_) | BomColumn::Computed(_) => false,
+    };
+    let every = vec![
+        BomColumn::Name,
+        BomColumn::Designator,
+        BomColumn::LibRef,
+        BomColumn::Reference,
+        BomColumn::Qty,
+        BomColumn::Value,
+        BomColumn::Footprint,
+        BomColumn::Description,
+        BomColumn::UnitPrice,
+        BomColumn::BuyQty,
+        BomColumn::ExtendedPrice,
+        BomColumn::Currency,
+        BomColumn::Stock,
+        BomColumn::Distributor,
+        BomColumn::PriceAge,
+        BomColumn::Alternates,
+    ];
+    assert!(every.iter().all(witness));
+    let template = template_of_columns(&every);
+    assert_eq!(template.columns.len(), every.len(), "no column is left out");
+    assert!(
+        template
+            .columns
+            .iter()
+            .all(|c| !matches!(c, TemplateColumn::Standard(key) if key.is_empty())),
+        "no empty key"
+    );
+    let text = encode_bom_template(&template).unwrap();
+    let read = parse_bom_template(&text).unwrap();
+    assert_eq!(columns_of_template(&read).unwrap(), every);
+}

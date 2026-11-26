@@ -76,7 +76,7 @@ Each column is one of:
 - `column`: a standard column by key: `name`, `designator`, `lib_ref`,
   `reference`, `qty`, `value`, `footprint`, `description`, `unit_price`,
   `buy_qty`, `extended_price`, `currency`, `stock`, `distributor`,
-  `price_age`;
+  `price_age`, `alternates` (a line's alternate parts, #2938);
 - `field`: a part field by name;
 - `name` with `expression`: a computed column.
 

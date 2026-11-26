@@ -361,7 +361,7 @@ mod hand_mapping {
     fn pin_row<'a>(answer: &'a Value, old: &str) -> &'a Value {
         answer["mapping"]
             .as_array()
-            .expect("pins")
+            .expect("mapping")
             .iter()
             .find(|row| row["old"] == old)
             .unwrap_or_else(|| panic!("no row for pin {old}: {answer}"))

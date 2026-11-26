@@ -115,7 +115,8 @@ impl Signex {
             return (refusal(ids::UPDATE_PCB_NO_BOARD.into()), Task::none());
         };
         // Exit criterion 3: the classes, read before an apply puts them.
-        let net_classes = self.update_pcb_class_names(state);
+        let mut net_classes = self.update_pcb_class_names(state);
+        let snapshot = state.snapshot.clone();
         if dry_run {
             let blocked = self.update_pcb_execute_block_in(&signex_i18n::I18n::en_us());
             self.drop_update_pcb_run();
@@ -124,6 +125,15 @@ impl Signex {
             return (outcome, Task::none());
         }
         let task = self.execute_update_pcb();
+        // A class step that failed after the board step is a Messages
+        // warning, as for the rules; the answer leaves out what it did not
+        // put.
+        if let Some(edit) =
+            (snapshot.as_deref()).and_then(|s| self.update_pcb_class_edit(&board, s))
+        {
+            let missed = super::classes_from_schematic::classes_in(&edit);
+            net_classes.retain(|class| !missed.contains(class));
+        }
         let outcome = match self.ui_state.update_pcb.take() {
             None => self.update_pcb_answer(&list, (&project, &board), false, None, net_classes),
             Some(left) => match left.failure() {

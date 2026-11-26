@@ -150,3 +150,43 @@ fn execute_in_the_dialog_applies_classes_alone() {
     assert_eq!(class_of("VIN").as_deref(), Some("POWER"));
     assert_eq!(class_of("CLK").as_deref(), Some("HS"));
 }
+
+/// `update_pcb_from_schematic` from operands answers the classes the Net
+/// Blanket and the Net Parameters directive give in `net_classes`: what a
+/// dry run would put, then what the apply put; a second apply puts none.
+#[test]
+fn update_pcb_from_operands_answers_the_classes_it_puts() {
+    let mut app = open_fixture(CLASSES);
+    let dir = fixture_dir(CLASSES);
+    let board_path = dir.join(format!("{CLASSES}.snxpcb"));
+    let text = std::fs::read_to_string(&board_path).expect("the board file");
+    let board = SnxPcb::parse(&text).expect("the board reads").board;
+    app.open_pcb_tab(board_path, format!("{CLASSES}.snxpcb"), board);
+    let document = format!(
+        "document={}",
+        dir.join(format!("{CLASSES}.snxprj")).display()
+    );
+    let mut run = |operands: &[&str]| {
+        let id = crate::keymap::AppCommandId::new("update_pcb_from_schematic").expect("id");
+        let args =
+            crate::app::command::CommandArgs::parse_operands(&id, operands).expect("operands");
+        let (outcome, task) = app.run_operands_settled(&id, &args);
+        crate::task_driver::TaskDriver::new()
+            .settle(&mut app, task)
+            .expect("settled");
+        match outcome {
+            crate::app::command::CommandOutcome::Answered(value) => value,
+            other => panic!("answered: {other:?}"),
+        }
+    };
+    let classes = |answer: &serde_json::Value| -> Vec<String> {
+        serde_json::from_value(answer["net_classes"].clone()).expect("net_classes")
+    };
+
+    let dry = run(&[&document, "dry_run=true"]);
+    assert_eq!(classes(&dry), ["POWER", "HS"], "{dry}");
+    let applied = run(&[&document, "apply=true"]);
+    assert_eq!(classes(&applied), ["POWER", "HS"], "{applied}");
+    let again = run(&[&document, "apply=true"]);
+    assert!(classes(&again).is_empty(), "{again}");
+}

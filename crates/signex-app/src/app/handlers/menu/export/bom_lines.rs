@@ -125,6 +125,7 @@ impl Signex {
             active_variant: variant.clone(),
             price_book: crate::library::bom_prices::price_book(&self.library),
             board_left_out: self.board_left_out_of_bom(source),
+            alternates: self.bom_alternates_of(source),
             ..BomOptions::default()
         };
         let (table, _) = rollup_with_validation(&ctx, &opts);
