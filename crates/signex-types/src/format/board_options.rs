@@ -59,6 +59,9 @@ pub(in crate::format) struct BoardOptionsRaw {
     /// `format::length_groups`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     length_groups: Vec<super::length_groups::LengthGroupRaw>,
+    /// `[board_options.teardrops]` (`snxpcb/1.12`), `format::board_teardrops`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    teardrops: Option<super::board_teardrops::TeardropsRaw>,
 }
 
 /// The layer colours of `raw`, in token order; a token this build does not
@@ -180,6 +183,7 @@ pub(in crate::format) fn read(raw: Option<BoardOptionsRaw>) -> Result<BoardOptio
         panel: raw.panel.map(super::board_panel::read).transpose()?,
         layer_colors: layer_colors(raw.layer_colors)?,
         length_groups: super::length_groups::read(raw.length_groups)?,
+        teardrops: super::board_teardrops::read(raw.teardrops)?,
     })
 }
 
@@ -284,6 +288,7 @@ pub(in crate::format) fn write(out: &mut String, board: &PcbBoard) -> Result<(),
                 .map(|c| (super::pcb_layer_token(c.layer), c.color.to_hex()))
                 .collect(),
             length_groups: super::length_groups::write(&options.length_groups)?,
+            teardrops: super::board_teardrops::write(&options.teardrops)?,
         },
     };
     out.push('\n');

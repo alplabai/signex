@@ -1697,7 +1697,9 @@ from a base across the track at the point nearest the pad's centre out to
 the track's width, one radius past where the track leaves the pad or at the
 track's far end when the track is shorter. The base reaches 0.9 of the way
 to the pad's (or via's) inscribed edge on the nearer side, so a track that
-enters off centre or at an angle keeps both sides on it. It is
+enters off centre or at an angle keeps both sides on it. Those are the
+defaults of the board's teardrop rule (below), which can change both and
+leave pads or vias out. It is
 a zone with `fill_type = "teardrop"` on the track's net and layer, solid
 copper like a Solid Region. A track as wide as the pad gets none. A teardrop
 that would come closer than the clearance to another net's copper, or meet a
@@ -1709,6 +1711,52 @@ on the net `net` names, or every net.
 
 Teardrops are not tied to their track: moving or deleting the track leaves
 the teardrop where it was until Teardrops runs again.
+
+### Teardrop rule
+
+The board carries one teardrop rule (`BoardOptions::teardrops`,
+`signex_types::pcb_teardrop_rule`) that Add Teardrops reads:
+
+| Field | Default | Meaning |
+|---|---|---|
+| `pads` | on | pads of the track's net take teardrops |
+| `vias` | on | vias of the track's net take teardrops |
+| `width_share` | 0.9 | how far the base reaches across, as a share of the pad's inscribed radius on the track's nearer side; above 0, at most 1 |
+| `length_share` | 1.0 | how far the tip runs past the pad's edge, in pad radii; above 0, at most 4 |
+| pad overrides | none | a pad set `on` always takes a teardrop, `off` never, whatever `pads` says |
+
+A track end that sits in both a via and a pad takes the via's teardrop
+when vias take them, else the pad's. A pad or via the rule leaves out is
+not counted as skipped. The default rule is what Add Teardrops did before
+the rule existed. A rule other than the default is saved as
+`[board_options.teardrops]` and the board writes `snxpcb/1.12`
+(`docs/FORMAT_VERSIONS.md`); pad overrides are keyed by pad uuid.
+Changing the rule does not move teardrops already on the board: run Add
+Teardrops again.
+
+`set_teardrop_rule document=.. [pads=..] [vias=..] [width_share=..]
+[length_share=..]` sets the fields given and keeps the others; a share out
+of range is refused. `set_pad_teardrop document=.. ids=.. teardrop=on|off|rule`
+sets the pads' own setting, `rule` going back to the rule; an id that is
+not a pad of the board refuses the whole edit. Each is one undo step and
+answers with the rule (`teardrop_rule`: `pads`, `vias`, `width_share`,
+`length_share`, `pad_overrides`) or the pads (`pads`: `id`, `teardrop`,
+`takes_teardrop`). No panel shows the rule yet; there is no mockup row for
+it or for a pad's Teardrop row.
+
+### Pour properties
+
+A polygon pour's fill priority and island removal are set in its
+Properties (Priority, Remove Islands, Remove Dead Copper) and in the
+Polygon Manager. A higher priority fills first and keeps its copper where
+pours of other nets overlap; Remove Islands drops copper pieces smaller
+than the area given (mm², 0 keeps every piece); Remove Dead Copper drops
+pieces that touch no copper of the pour's net (`pcb_geom::zone_fill`).
+`set_pour_properties document=.. ids=.. [priority=..] [islands_below=..]
+[dead_copper=..]` sets the same fields from operands as one undo step;
+priority is a whole number from 0, the area is not negative, and every id
+must be a polygon pour. It answers with `pours`: `id`, `priority`,
+`islands_below_mm2`, `dead_copper`.
 
 ### Gloss
 

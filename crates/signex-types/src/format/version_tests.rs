@@ -79,9 +79,10 @@ fn snxpcb_1_11_is_readable_and_opens_for_editing() {
     assert!(snxpcb_opens_read_only("snxpcb/1.13"));
 }
 
-/// #2797 and #2578 / #2579: `snxpcb/1.12` (length-matching groups, pour
-/// corners, hatched fill) is the current token: it opens for editing and
-/// saves, and it ranks above 1.11.
+/// #2797, #2578 / #2579 and the teardrop rule: `snxpcb/1.12`
+/// (length-matching groups, pour corners, hatched fill, a teardrop rule) is
+/// the current token: it opens for editing and saves, and it ranks above
+/// 1.11; 1.13 is newer.
 #[test]
 fn snxpcb_1_12_is_current_and_opens_for_editing() {
     assert_eq!(SNXPCB_VERSION.current, SNXPCB_FORMAT_V1_12);

@@ -40,6 +40,7 @@ pub mod pcb_panel;
 pub mod pcb_route_attrs;
 pub mod pcb_sketch;
 pub mod pcb_stack;
+pub mod pcb_teardrop_rule;
 pub mod pcb_via_protection;
 pub mod project;
 pub mod project_vcs_files;

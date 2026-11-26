@@ -377,6 +377,31 @@ pub(super) const WIRING: &[CommandMetadata] = &[
         operands: super::operands::TEARDROPS,
         ..CommandMetadata::DEFAULT
     },
+    // The board's teardrop rule and a pad's own teardrop setting (PCB
+    // Routing): board data, one undo step each, that Add Teardrops reads.
+    // No menu row or mockup yet; operands only. No default key.
+    CommandMetadata {
+        id: "set_teardrop_rule",
+        category: "pcb",
+        label: command_ids::CMD_SET_TEARDROP_RULE,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::board_rule_operands::SET_TEARDROP_RULE,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "set_pad_teardrop",
+        category: "pcb",
+        label: command_ids::CMD_SET_PAD_TEARDROP,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::board_rule_operands::SET_PAD_TEARDROP,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "gloss_selected_routes",
         category: "pcb",

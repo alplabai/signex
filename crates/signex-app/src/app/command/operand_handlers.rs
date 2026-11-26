@@ -15,6 +15,7 @@ use super::agent_edits as agent;
 use super::board_edit_operands as board_edit;
 use super::board_graphic_operands as graphic;
 use super::board_operands as board;
+use super::board_rule_operands as board_rule;
 use super::board_view_operands as board_view;
 use super::directive_operands as directive;
 use super::document_operands as doc;
@@ -193,6 +194,10 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("stitch_vias", tools::stitch_by_operands),
     ("add_teardrops", tools::add_teardrops_by_operands),
     ("remove_teardrops", tools::remove_teardrops_by_operands),
+    // The board's teardrop rule, a pad's own setting, a pour's fill rules.
+    ("set_teardrop_rule", board_rule::set_teardrop_rule),
+    ("set_pad_teardrop", board_rule::set_pad_teardrop),
+    ("set_pour_properties", board_rule::set_pour_properties),
     ("gloss_selected_routes", tools::gloss_by_operands),
     ("board_shape_from_selection", tools::board_shape_by_operands),
     ("keepout_from_selection", tools::keepout_by_operands),
@@ -559,6 +564,14 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
             "`set_pad_thermal_relief` needs the operands `document` and `ids`, with \
              `air_gap`, `spoke_width` or `spokes` — set a library pad's values in the \
              footprint editor's pad Properties",
+        ),
+        "set_teardrop_rule" | "set_pad_teardrop" => Some(
+            "the teardrop rule edits need their operands, `document` first — \
+             no panel shows the teardrop rule yet",
+        ),
+        "set_pour_properties" => Some(
+            "`set_pour_properties` needs the operands `document` and `ids` — \
+             use the Priority and Remove Islands rows of the pour in Properties",
         ),
         "edit_blanket" => Some(
             "`edit_blanket` needs the operand `id` and the values to set — \

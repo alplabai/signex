@@ -40,6 +40,7 @@ mod board_free;
 mod board_options;
 mod board_panel;
 mod board_sketch;
+mod board_teardrops;
 mod drawn_copper;
 mod extras;
 mod finite_toml;
@@ -84,6 +85,8 @@ mod board_pattern_token_tests;
 mod board_sketch_targets_tests;
 #[cfg(test)]
 mod board_sketch_tests;
+#[cfg(test)]
+mod board_teardrops_tests;
 #[cfg(test)]
 mod body_style_tests;
 #[cfg(test)]

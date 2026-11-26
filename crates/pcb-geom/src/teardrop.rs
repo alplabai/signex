@@ -3,11 +3,14 @@
 //! width, so the joint keeps its copper when a drill wanders. One per track
 //! end, straight-sided; skipped where it would come closer than the
 //! clearance to copper of another net or meet a keepout that forbids
-//! routing. Rules: `docs/PCB_TOOLS.md`, "Teardrops".
+//! routing. The board's teardrop rule (`board.options.teardrops`) says
+//! which pads and vias take one and how wide and long it is. Rules:
+//! `docs/PCB_TOOLS.md`, "Teardrops" and "Teardrop rule".
 
 use std::collections::BTreeSet;
 
 use signex_types::pcb::{PcbBoard, Segment};
+use signex_types::pcb_teardrop_rule::TeardropRule;
 use uuid::Uuid;
 
 use crate::copper::{layer_mask, pad_layers, via_layers};
@@ -16,10 +19,6 @@ use crate::obstacle::{NewCopper, copper_obstacles, keepout_areas, ring_clashes};
 use crate::shape::Shape;
 use crate::transform::{pad_shape, pad_world_center};
 use crate::units::{PointNm, mm_to_nm};
-
-/// How far out the teardrop's base reaches, as a share of the pad's or
-/// via's inscribed radius: inside it, so the base never sticks out.
-const BASE_SHARE: f64 = 0.9;
 
 /// One teardrop: its outline and what it belongs to.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -51,6 +50,7 @@ pub fn teardrops<F: Fn(u32, u32) -> i64>(
     nets: Option<&BTreeSet<u32>>,
     clearance: F,
 ) -> TeardropPlan {
+    let rule = &board.options.teardrops;
     let obstacles = copper_obstacles(board);
     let keepouts = keepout_areas(board);
     let mut plan = TeardropPlan::default();
@@ -64,10 +64,10 @@ pub fn teardrops<F: Fn(u32, u32) -> i64>(
             continue;
         };
         for (near, far) in [(a, b), (b, a)] {
-            let Some((center, radius)) = anchor(board, segment, layers, near) else {
+            let Some((center, radius)) = anchor(board, rule, segment, layers, near) else {
                 continue;
             };
-            let Some(outline) = taper(center, radius, near, far, half) else {
+            let Some(outline) = taper(rule, center, radius, near, far, half) else {
                 continue;
             };
             let blocked = ring_clashes(&outline, segment.net, layers, &obstacles, &clearance)
@@ -90,9 +90,16 @@ pub fn teardrops<F: Fn(u32, u32) -> i64>(
 }
 
 /// The centre and inscribed radius of the via or pad of the track's net
-/// that holds `end` on the track's layer; vias first.
-fn anchor(board: &PcbBoard, track: &Segment, layers: u32, end: PointNm) -> Option<(PointNm, i64)> {
-    let via = board.vias.iter().find_map(|via| {
+/// that holds `end` on the track's layer and takes a teardrop by `rule`;
+/// vias first.
+fn anchor(
+    board: &PcbBoard,
+    rule: &TeardropRule,
+    track: &Segment,
+    layers: u32,
+    end: PointNm,
+) -> Option<(PointNm, i64)> {
+    let via = board.vias.iter().filter(|_| rule.vias).find_map(|via| {
         let center = PointNm::from_mm(via.position, "via.position").ok()?;
         let radius = (mm_to_nm(via.diameter, "via.diameter").ok()? / 2).abs();
         let holds = via.net == track.net
@@ -104,7 +111,8 @@ fn anchor(board: &PcbBoard, track: &Segment, layers: u32, end: PointNm) -> Optio
         board.footprints.iter().find_map(|footprint| {
             footprint.pads.iter().find_map(|pad| {
                 let on_net = pad.net.as_ref().is_some_and(|n| n.number == track.net);
-                if !on_net || pad_layers(footprint, pad) & layers == 0 {
+                if !on_net || !rule.pad_wants(pad.uuid) || pad_layers(footprint, pad) & layers == 0
+                {
                     return None;
                 }
                 if !pad_shape(footprint, pad).ok()?.contains(end, 0) {
@@ -124,9 +132,12 @@ fn anchor(board: &PcbBoard, track: &Segment, layers: u32, end: PointNm) -> Optio
 /// its base crosses the track's line at the point nearest the pad centre,
 /// on both sides as far as the pad's nearer edge allows, so a track that
 /// enters off centre or at an angle keeps both sides on it and the base
-/// stays inside the pad. `None` when the track is as wide as that base or
-/// too short to hold the taper.
+/// stays inside the pad. The rule's shares set how far across (of the
+/// nearer edge) and how far along (in pad radii past the edge) it reaches.
+/// `None` when the track is as wide as that base or too short to hold the
+/// taper.
 fn taper(
+    rule: &TeardropRule,
     center: PointNm,
     radius: i64,
     near: PointNm,
@@ -152,13 +163,14 @@ fn taper(
     let chord = (r * r - off * off).sqrt();
     // The base runs across the track through the foot, on a line through
     // the pad centre, so the pad's nearer edge is `r - |off|` away.
-    let base = (r - off.abs()) * BASE_SHARE;
+    let base = (r - off.abs()) * rule.width_share;
     let reach = length - foot;
     if reach <= chord || base <= h * 1.05 {
         return None;
     }
-    // The tip lies a pad radius past the pad's edge, or at the far end.
-    let tip = chord + r.min(reach - chord);
+    // The tip lies the rule's share of a pad radius past the pad's edge, or
+    // at the far end.
+    let tip = chord + (r * rule.length_share).min(reach - chord);
     let (px, py) = (near.x as f64 + ux * foot, near.y as f64 + uy * foot);
     let at = |along: f64, across: f64| {
         PointNm::new(

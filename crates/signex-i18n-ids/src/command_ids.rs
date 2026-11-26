@@ -575,6 +575,9 @@ define_ids! {
         CMD_MENU_ADD_TEARDROPS = "cmd-menu-add-teardrops";
         CMD_REMOVE_TEARDROPS = "cmd-remove-teardrops";
         CMD_MENU_REMOVE_TEARDROPS = "cmd-menu-remove-teardrops";
+        CMD_SET_TEARDROP_RULE = "cmd-set-teardrop-rule";
+        CMD_SET_PAD_TEARDROP = "cmd-set-pad-teardrop";
+        CMD_SET_POUR_PROPERTIES = "cmd-set-pour-properties";
         CMD_GLOSS_SELECTED_ROUTES = "cmd-gloss-selected-routes";
         CMD_MENU_GLOSS_SELECTED_ROUTES = "cmd-menu-gloss-selected-routes";
         CMD_BOARD_SHAPE_FROM_SELECTION = "cmd-board-shape-from-selection";

@@ -223,6 +223,9 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
     ("stitch_vias", BOARD_EDIT),
     ("add_teardrops", BOARD_EDIT),
     ("remove_teardrops", BOARD_EDIT),
+    ("set_teardrop_rule", BOARD_EDIT),
+    ("set_pad_teardrop", BOARD_EDIT),
+    ("set_pour_properties", BOARD_EDIT),
     ("gloss_selected_routes", BOARD_EDIT),
     // Layer colours are saved with the board (2026-11-18): a board step.
     ("set_layer_color", BOARD_EDIT),

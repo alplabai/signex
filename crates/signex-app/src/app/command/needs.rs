@@ -604,6 +604,7 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "set_pad_thermal_relief" => Needs::Pcb,
         // #2408: with nothing selected these act on every pour or net.
         "stitch_vias" | "add_teardrops" | "remove_teardrops" => Needs::Pcb,
+        "set_teardrop_rule" | "set_pad_teardrop" | "set_pour_properties" => Needs::Pcb,
         // #2408, #2409: these act on the selection only.
         "gloss_selected_routes" | "board_shape_from_selection" | "keepout_from_selection" => {
             Needs::PcbSelection

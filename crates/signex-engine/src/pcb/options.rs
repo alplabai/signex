@@ -91,6 +91,10 @@ fn check(options: &BoardOptions) -> Result<(), BoardCommandError> {
             return Err(BoardCommandError::DuplicateOption(group.uuid));
         }
     }
+    options
+        .teardrops
+        .check()
+        .map_err(BoardCommandError::TeardropRule)?;
     Ok(())
 }
 
