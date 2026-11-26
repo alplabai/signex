@@ -548,6 +548,21 @@ preferences-keymap-no-shortcut = —
 preferences-keymap-no-rows-in-filter = No shortcuts in this context.
 # Recorder popover, while keys are being captured.
 preferences-keymap-recording-live = ● Recording
+## keymap_assign / keymap_clear refusals (#2495). Each ends "nothing was changed".
+# $command is the command id given, $operand the operand it lacks.
+preferences-keymap-cmd-needs = { $command } needs the operand { $operand }; nothing was changed.
+# $command is the id given.
+preferences-keymap-cmd-unknown-command = { $command } is not a command of the catalog or of an installed extension; nothing was changed.
+# $keys is the key sequence given, $error why it does not read.
+preferences-keymap-cmd-bad-keys = { $keys } is not a key sequence ({ $error }); nothing was changed.
+# $context is the context given.
+preferences-keymap-cmd-bad-context = { $context } is not a shortcut context (global, schematic, pcb, footprint, library, modal, text_input, command_palette, placement, board_3d); nothing was changed.
+# $profile is the profile id given.
+preferences-keymap-cmd-no-profile = No keyboard profile is called { $profile }; nothing was changed.
+preferences-keymap-cmd-built-in = { $profile } is a built-in keyboard profile and stays read-only; copy it to a custom profile first (Create). Nothing was changed.
+preferences-keymap-cmd-file-not-loaded = The keyboard shortcuts file could not be loaded at start, so it is not written over; save it from Preferences ▸ Keyboard shortcuts first. Nothing was changed.
+# $error is the write error.
+preferences-keymap-cmd-not-saved = The keyboard shortcuts file could not be written ({ $error }); nothing was changed.
 
 ## Component Classes page (Library ▸ Component Classes)
 # Placeholder of the filter field above the table.

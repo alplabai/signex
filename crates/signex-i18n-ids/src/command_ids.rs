@@ -96,6 +96,8 @@ define_ids! {
         CMD_OPEN_PREFERENCES = "cmd-open-preferences";
         CMD_MENU_OPEN_PREFERENCES = "cmd-menu-open-preferences";
         CMD_OPEN_SCHEMATIC_PREFERENCES = "cmd-open-schematic-preferences";
+        CMD_KEYMAP_ASSIGN = "cmd-keymap-assign";
+        CMD_KEYMAP_CLEAR = "cmd-keymap-clear";
         CMD_PASTE = "cmd-paste";
         CMD_PASTE_ARRAY = "cmd-paste-array";
         CMD_PASTE_SPECIAL = "cmd-paste-special";

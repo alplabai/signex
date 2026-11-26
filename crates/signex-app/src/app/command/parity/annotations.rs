@@ -474,6 +474,9 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     // (`interaction_state.custom_filter_presets`, prefs-backed through
     // fonts/presets.rs): configuration.
     (&["apply_selection_filter_preset"], Operand, &[Settings]),
+    // The live keyboard profiles (`ui_state.keymap_profiles`, the saved
+    // `keyboard_shortcuts.toml`) and the installed extensions' commands (#2495).
+    (&["keymap_assign", "keymap_clear"], Operand, &[Settings]),
     (&["set_selection_filters"], Operand, &[]),
     (
         &[

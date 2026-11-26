@@ -548,6 +548,12 @@ keepout_from_selection	operand_handler	run_operands: named document	core	origin,
 keepout_from_selection	in_window_rewrite	document_window	gui	window	routing
 keepout_from_selection	refusal_needs	PcbSelection	gui	active document,selection	routing
 keepout_from_selection	headless_missing_operand	needs `document`	core	none	routing
+keymap_assign	operand_handler	run_operands: active-tab gate unless a document is named	gui	settings	handler
+keymap_assign	refusal_needs_operands	needs_operands_reason	gui	none	routing
+keymap_assign	headless_missing_operand	needs `command`	gui	none	routing
+keymap_clear	operand_handler	run_operands: active-tab gate unless a document is named	gui	settings	handler
+keymap_clear	refusal_needs_operands	needs_operands_reason	gui	none	routing
+keymap_clear	headless_missing_operand	needs `command`	gui	none	routing
 lasso_select	active_bar	LassoSelect	gui	none	handler
 lasso_select	in_window_rewrite	document_window	gui	window	routing
 lasso_select	headless_refusal	headless_refusal	gui	none	routing

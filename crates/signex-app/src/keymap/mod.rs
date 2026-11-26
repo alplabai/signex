@@ -46,6 +46,7 @@ pub use catalog::{
 pub(crate) use catalog::{IDS_STILL_TEXT, OPERAND_CONVENTION};
 pub use editor::{
     BindingSlot, KeymapEditorModel, KeymapEditorProfile, KeymapEditorRow, KeymapEditorSource,
+    default_context,
 };
 pub use extension_names::{ExtensionCommandName, ExtensionCommandNames};
 pub use mod_migration::{

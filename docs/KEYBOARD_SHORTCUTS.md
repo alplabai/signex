@@ -282,12 +282,27 @@ The page (`preferences/keymap/`) reads top to bottom:
   its `ext.` id. On a built-in profile these rows have no Edit: Create
   copies the profile first.
 
-`KeymapEditorModel` also has `clear_active_command_keys` (take every key from
-one command) and the profile file IO `read_profile_file` and
-`write_profile_file` (Export… writes through `atomic_write` in a task). They
-are the pieces a CLI run would use to import, export, set or clear a binding;
-those commands are not in the catalog yet (see `docs/DECISIONS.md`,
-2026-11-25).
+### Key bindings from the CLI (#2495)
+
+Two catalog commands edit a custom profile without the window, for
+`signex-cli` (which needs `--allow save` for them) or a script:
+
+- `keymap_assign command=<id> keys=<keys> profile=<id> [context=<context>]`
+  gives the command the key sequence `keys` (profile spelling, `Ctrl+Alt+Q`,
+  `P W`). `context` is a section name of the file (`global`, `schematic`,
+  `pcb`, `board_3d`, …); without it, the one editor the command acts in, else
+  `global`. The command is a catalog id or an installed extension's.
+- `keymap_clear command=<id> profile=<id> [keys=<keys>]` takes that key, or
+  every key, from the command; an extension id that is not installed is
+  accepted, so a kept binding can be cleared.
+
+Both edit the named profile with `KeymapEditorModel` (the active profile is
+not switched), write `keyboard_shortcuts.toml` through `atomic_write`, make
+the change the running keymap, and answer with JSON: `profile`, `command`,
+`keys`, `context` (assign) or `removed` (clear), and `file`. A built-in
+profile is refused and stays read-only, and nothing is written while the file
+failed to load at start (#595). Import… and Export… of a profile file stay
+Preferences actions (`read_profile_file`, `write_profile_file`).
 
 The editor is backed by `KeymapEditorModel`, which exposes rows with:
 

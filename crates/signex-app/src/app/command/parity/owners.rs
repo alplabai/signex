@@ -241,6 +241,8 @@ pub(super) const WRITES: &[(&[&str], Surface, Writes)] = &[
         Operand,
         Settings,
     ),
+    // A custom keyboard profile, written to `keyboard_shortcuts.toml` (#2495).
+    (&["keymap_assign", "keymap_clear"], Operand, Settings),
     (OPERAND_DOCUMENT, Operand, Document),
     // Declared exception (#2326 slice 6.P2b): on a footprint editor tab the
     // Delete translator row deletes in the editor itself, a GUI route that
