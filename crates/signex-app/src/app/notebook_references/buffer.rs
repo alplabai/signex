@@ -7,8 +7,7 @@
 use iced::Task;
 use signex_i18n::{ids, t};
 use signex_notebook::{
-    DEFAULT_NOTEBOOK_FILE, Fix, Reference, ReferenceReport, apply_fix, apply_plan,
-    plan_update_all,
+    DEFAULT_NOTEBOOK_FILE, Fix, Reference, ReferenceReport, apply_fix, apply_plan, plan_update_all,
 };
 
 use crate::app::state::ProjectId;

@@ -195,6 +195,8 @@ fn a_file_that_could_not_be_read_says_why() {
         }],
         unlisted: vec!["denied".into()],
         parts: None,
+        design: None,
+        references: Vec::new(),
     };
     let value = annotations_answer(Path::new("/p/p.snxprj"), &AnnotationQuery::default(), &scan);
     assert_eq!(value["files"][0]["read_error"], "not_utf8");

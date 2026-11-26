@@ -432,10 +432,10 @@ fn rule_and_path<'a>(
         Some(out(M::BrowseRequested)),
         tokens,
     );
-    let path = Row::new()
+    let path = Row::<Element<'a, Message>>::new()
         .spacing(SP.s)
         .align_y(Alignment::Center)
-        .push(field)
+        .push(field.boxed())
         .push(browse)
         .boxed();
     Column::new()

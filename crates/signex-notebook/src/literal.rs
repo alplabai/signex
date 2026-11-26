@@ -188,7 +188,7 @@ fn read_call(
 
 /// `expr` as the literal it is written as.
 pub(crate) fn literal(expr: ast::Expr<'_>) -> Literal {
-    let source = || expr.to_untyped().clone().into_text().to_string();
+    let source = || expr.to_untyped().full_text().to_string();
     match expr {
         ast::Expr::Str(text) => Literal::Str(text.get().to_string()),
         ast::Expr::Int(int) => Literal::Number(int.get() as f64, source()),
@@ -232,8 +232,8 @@ pub(crate) fn literal(expr: ast::Expr<'_>) -> Literal {
                 })
                 .collect(),
         ),
-        ast::Expr::Content(block) => {
-            let text = block.body().to_untyped().clone().into_text();
+        ast::Expr::ContentBlock(block) => {
+            let text = block.body().to_untyped().full_text();
             Literal::Content(text.trim().to_string())
         }
         _ => Literal::Other(source()),

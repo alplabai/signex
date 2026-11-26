@@ -200,14 +200,7 @@ impl ExportOptions {
     }
 }
 
-/// Serialised as its token.
-impl Serialize for AnnotationKind {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(self.token())
-    }
-}
-
-/// Read from its token.
+/// Read from its token; it is written as its token (`annotation.rs`).
 impl<'de> Deserialize<'de> for AnnotationKind {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let token = String::deserialize(deserializer)?;

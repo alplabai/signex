@@ -725,6 +725,7 @@ impl Signex {
                     object_list: Default::default(),
                     command_log: Default::default(),
                     annotations: Default::default(),
+                    notebook_badges: Default::default(),
                     pcb_board: None,
                     layer_stack: None,
                     polygons: None,

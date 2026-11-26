@@ -140,10 +140,13 @@ fn a_header_without_a_token_reads_as_version_one() {
     assert_eq!(header.written_token(), NOTEBOOK_FORMAT.current);
 }
 
+/// A bad header and the refusal it must give.
+type BadHeader = (&'static str, fn(&HeaderError) -> bool);
+
 #[test]
 fn a_bad_header_is_refused_with_its_reason() {
     let bad_entry = |e: &HeaderError| matches!(e, HeaderError::BadEntry { index: 0, .. });
-    let cases: [(&str, fn(&HeaderError) -> bool); 7] = [
+    let cases: [BadHeader; 7] = [
         ("format = ", |e| matches!(e, HeaderError::Toml(_))),
         ("format = 1", |e| matches!(e, HeaderError::NotText { .. })),
         ("format = \"snxnbk/2\"", |e| {

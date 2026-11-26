@@ -7,12 +7,12 @@
 use crate::attachment::{
     Attachment, AttachmentKind, AttachmentProblemKind, ValueChange, changes, reading_changes,
 };
+use crate::bench::{FileProblem, NotebookRecord, record};
 use crate::id::BlockId;
 use crate::measurement::{
     MeasurementProblemKind, Reading, Timeline, Verdict, error_text, quantities_of, quantity_text,
     timeline,
 };
-use crate::bench::{FileProblem, NotebookRecord, record};
 use crate::reference::Reference;
 use crate::scope::{ScopePlot, parse_csv, plot};
 use crate::sources::NotebookSources;

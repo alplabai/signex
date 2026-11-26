@@ -6,7 +6,7 @@
 //! Design notes, which the Notebook tab routes here.
 
 use iced::widget::{Column, Row, canvas, column, container, row};
-use iced::{Alignment, Background, Border, Element, Length, Theme};
+use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
 use signex_i18n::{I18n, UserText, ids, t};
 use signex_notebook::Reference;
 use signex_notebook::measurement::{Timeline, TimelineEntry, Verdict, quantity_text};
@@ -78,14 +78,18 @@ pub(crate) fn timeline_panel<'a, M: Clone + 'a>(
         dialog_button(target_label(i18n, target), kind, Some(picked), tokens)
     }))
     .spacing(GAP);
-    let mut body = Column::new().push(heading).push(tabs).spacing(PAD);
+    let mut body = Column::<Element<'a, M>>::new()
+        .push(heading.boxed())
+        .push(tabs.boxed())
+        .spacing(PAD);
     body = body.push(chart_block(timeline, tokens, i18n));
     if timeline.entries.is_empty() {
         let name = timeline.reference.name();
         body = body.push(
             text(t!(i18n, ids::NOTEBOOK_TIMELINE_EMPTY, "name" => name))
                 .size(TS.caption)
-                .color(r.ink3),
+                .color(r.ink3)
+                .boxed(),
         );
     }
     for entry in &timeline.entries {
@@ -114,7 +118,8 @@ pub(crate) fn timeline_panel<'a, M: Clone + 'a>(
     body = body.push(
         row![text(summary).size(TS.caption).color(r.ink3), export]
             .spacing(GAP * 2.0)
-            .align_y(Alignment::Center),
+            .align_y(Alignment::Center)
+            .boxed(),
     );
     let fill = r.raised;
     let line = r.line_soft;
@@ -130,7 +135,7 @@ pub(crate) fn timeline_panel<'a, M: Clone + 'a>(
             },
             ..container::Style::default()
         })
-        .into()
+        .boxed()
 }
 
 /// The chart with its limit and computed captions; nothing while no
@@ -142,7 +147,7 @@ fn chart_block<'a, M: Clone + 'a>(
 ) -> Element<'a, M> {
     let r = resolve(tokens);
     let Some(laid) = layout(timeline) else {
-        return Column::new().into();
+        return Column::<Element<'a, M>>::new().boxed();
     };
     let ink = ChartInk {
         line: r.ink3,
@@ -176,7 +181,7 @@ fn chart_block<'a, M: Clone + 'a>(
             .height(Length::Fixed(CHART_HEIGHT)),
     ]
     .spacing(GAP)
-    .into()
+    .boxed()
 }
 
 /// One reading: id, revision and board; conditions and operator; a fail
@@ -255,5 +260,5 @@ fn entry_row<'a, M: Clone + 'a>(
         .width(Length::Fill)
         .style(ghost_button(tokens))
         .on_press(clicked(entry.file.clone(), entry.line))
-        .into()
+        .boxed()
 }

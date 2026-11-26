@@ -316,7 +316,7 @@ fn named_text(call: ast::FuncCall<'_>, name: &str) -> Option<String> {
     call.args().items().find_map(|arg| match arg {
         ast::Arg::Named(named) if named.name().as_str() == name => Some(match named.expr() {
             ast::Expr::Str(text) => text.get().to_string(),
-            ast::Expr::Content(block) => node_text(block.body().to_untyped()),
+            ast::Expr::ContentBlock(block) => node_text(block.body().to_untyped()),
             other => node_text(other.to_untyped()),
         }),
         _ => None,
@@ -325,7 +325,7 @@ fn named_text(call: ast::FuncCall<'_>, name: &str) -> Option<String> {
 
 /// The source text of `node`, trimmed, on one line.
 fn node_text(node: &typst::syntax::SyntaxNode) -> String {
-    let text = node.clone().into_text();
+    let text = node.full_text();
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 

@@ -27,7 +27,7 @@ impl Signex {
             .target
             .as_ref()
             .filter(|(id, _)| *id == project)
-            .and_then(|_| annotations.scan.as_ref())
+            .and(annotations.scan.as_ref())
             .and_then(|scan| scan.parts.as_ref())
             .map(|parts| parts.keys().cloned().collect());
         let ds = &self.document_state;

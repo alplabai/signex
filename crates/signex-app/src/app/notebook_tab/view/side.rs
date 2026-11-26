@@ -64,14 +64,14 @@ pub(super) fn panel_label(panel: SidePanel) -> MessageId {
 }
 
 fn outline<'a>(look: Look<'a>, tab: &'a NotebookTab) -> Element<'a, NotebookMsg> {
-    let Some(text) = &tab.text else {
-        return column![].boxed();
+    let Some(typed) = &tab.text else {
+        return Column::<Element<'a, NotebookMsg>>::new().boxed();
     };
-    let outline = &text.outline;
+    let outline = &typed.outline;
     if outline.sections.is_empty() && outline.figures.is_empty() && outline.blocks.is_empty() {
         return quiet(look, ids::NOTEBOOK_TAB_OUTLINE_EMPTY);
     }
-    let mut list: Column<'a, NotebookMsg> = column![].spacing(SP.xs);
+    let mut list: Column<Element<'a, NotebookMsg>> = column![].spacing(SP.xs);
     if !outline.sections.is_empty() {
         list = list.push(group(look, ids::NOTEBOOK_TAB_OUTLINE_SECTIONS));
         for section in &outline.sections {
@@ -151,7 +151,8 @@ fn pages<'a>(look: Look<'a>, tab: &'a NotebookTab) -> Element<'a, NotebookMsg> {
         return quiet(look, ids::NOTEBOOK_TAB_PAGES_EMPTY);
     }
     let accent = ti(look.tokens.accent);
-    let mut list: Column<'a, NotebookMsg> = column![].spacing(SP.s).align_x(Alignment::Center);
+    let mut list: Column<Element<'a, NotebookMsg>> =
+        column![].spacing(SP.s).align_x(Alignment::Center);
     for (index, thumb) in tab.compile.thumbnails.iter().enumerate() {
         let number = t!(look.i18n, ids::NOTEBOOK_TAB_PAGE_ROW, "number" => index + 1);
         let ink = if index == tab.page {
@@ -188,7 +189,7 @@ fn references<'a>(look: Look<'a>, tab: &'a NotebookTab) -> Element<'a, NotebookM
     if outcome.status.references.is_empty() {
         return quiet(look, ids::NOTEBOOK_TAB_REFERENCES_EMPTY);
     }
-    let mut list: Column<'a, NotebookMsg> = column![].spacing(SP.xs);
+    let mut list: Column<Element<'a, NotebookMsg>> = column![].spacing(SP.xs);
     for reference in &outcome.status.references {
         list = list.push(
             row![
@@ -256,7 +257,7 @@ pub(super) fn picker_card<'a>(look: Look<'a>, picker: &'a Picker) -> Element<'a,
         "shown" => rows.len(),
         "count" => picker.match_count()
     );
-    let mut list: Column<'a, NotebookMsg> = column![
+    let mut list: Column<Element<'a, NotebookMsg>> = column![
         input.boxed(),
         text(count).size(TS.caption).color(r.ink3).boxed()
     ]

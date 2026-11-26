@@ -4,11 +4,11 @@
 use std::path::Path;
 
 use crate::attachment::DesignValues;
+use crate::bench::record;
 use crate::measurement::{
     Limit, MeasurementProblemKind, Tolerance, Verdict, changed_saved_readings, check, error_text,
     quantities_of, quantity_text, readings, timeline,
 };
-use crate::bench::record;
 use crate::report::measurements_report;
 use crate::{BlockId, NotebookSources, Reference};
 

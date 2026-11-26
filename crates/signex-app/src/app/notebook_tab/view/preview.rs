@@ -16,7 +16,7 @@ use crate::styles::tokens::resolve;
 use crate::styles::{Radii, ti};
 
 pub(super) fn view<'a>(look: Look<'a>, tab: &'a NotebookTab) -> Element<'a, NotebookMsg> {
-    let mut pane: Column<'a, NotebookMsg> = column![].spacing(SP.s).padding(SP.s);
+    let mut pane: Column<Element<'a, NotebookMsg>> = column![].spacing(SP.s).padding(SP.s);
     if let Some(banner) = failed_banner(look, tab) {
         pane = pane.push(banner);
     }

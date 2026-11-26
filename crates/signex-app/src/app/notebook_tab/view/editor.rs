@@ -78,7 +78,8 @@ pub(super) fn view<'a>(look: Look<'a>, tab: &'a NotebookTab) -> Element<'a, Note
             .boxed(),
         None => code,
     };
-    let mut body: Column<'a, NotebookMsg> = column![header_strip(look, tab), code].spacing(SP.xs);
+    let mut body: Column<Element<'a, NotebookMsg>> =
+        column![header_strip(look, tab), code].spacing(SP.xs);
     if let Some(peek) = peek(look, tab) {
         body = body.push(peek);
     }
@@ -156,8 +157,8 @@ fn code<'a>(
             move |token: Token, _: &Theme| colours.style(token),
         );
     let lines = text.content.line_count().max(1);
-    let mut wash: Column<'a, NotebookMsg> = Column::new();
-    let mut gutter: Column<'a, NotebookMsg> = Column::new().padding([0.0, SP.s]);
+    let mut wash: Column<Element<'a, NotebookMsg>> = Column::new();
+    let mut gutter: Column<Element<'a, NotebookMsg>> = Column::new().padding([0.0, SP.s]);
     for line in 0..lines {
         let mark = marks
             .iter()
@@ -185,11 +186,15 @@ fn code<'a>(
         .push(editor.boxed())
         .push_under(wash.boxed())
         .width(Length::Fill);
-    let mut rows: Column<'a, NotebookMsg> = Column::new().padding([SP.s, 0.0]);
+    let mut rows: Column<Element<'a, NotebookMsg>> = Column::new().padding([SP.s, 0.0]);
     if tab.header_lines > 0 {
         rows = rows.push(header_row(look, tab, line_px));
     }
-    rows = rows.push(row![gutter.boxed(), code.boxed()].width(Length::Fill));
+    rows = rows.push(
+        row![gutter.boxed(), code.boxed()]
+            .width(Length::Fill)
+            .boxed(),
+    );
     let (field, line) = (r.field, ti(tokens.border));
     container(
         scrollable(rows)
@@ -282,7 +287,7 @@ fn header_row<'a>(look: Look<'a>, tab: &NotebookTab, line_px: f32) -> Element<'a
 /// The first error of the notebook file with its hints, and Go to error.
 fn peek<'a>(look: Look<'a>, tab: &'a NotebookTab) -> Option<Element<'a, NotebookMsg>> {
     let first = main_problems(tab).find(|d| d.severity == DiagnosticSeverity::Error)?;
-    let mut lines: Column<'a, NotebookMsg> = column![
+    let mut lines: Column<Element<'a, NotebookMsg>> = column![
         text(user(first.message.clone()))
             .size(TS.body)
             .color(ti(look.tokens.error))
@@ -340,7 +345,7 @@ fn problems<'a>(look: Look<'a>, tab: &'a NotebookTab) -> Element<'a, NotebookMsg
         let at = t!(look.i18n, ids::NOTEBOOK_TAB_LAST_GOOD, "time" => good.finished_at.as_str());
         title = title.push(text(at).size(TS.caption).color(r.ink3).boxed());
     }
-    let mut strip: Column<'a, NotebookMsg> = column![title.boxed()].spacing(SP.xs);
+    let mut strip: Column<Element<'a, NotebookMsg>> = column![title.boxed()].spacing(SP.xs);
     if all.is_empty() {
         strip = strip.push(
             text(look.t(ids::NOTEBOOK_TAB_NO_PROBLEMS))

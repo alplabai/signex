@@ -167,7 +167,9 @@ fn a_finished_run_answers_with_its_summary_or_its_refusal() {
 /// The smallest facts a report is built from: nothing read.
 fn signex_notebook_facts() -> signex_notebook::generate::ProjectFacts {
     use signex_notebook::generate::{Fact, ProjectFacts};
-    let none = || Fact::not_read("not in this test");
+    fn none<T>() -> Fact<T> {
+        Fact::not_read("not in this test")
+    }
     ProjectFacts {
         project_file: "p.snxprj".into(),
         name: "p".into(),

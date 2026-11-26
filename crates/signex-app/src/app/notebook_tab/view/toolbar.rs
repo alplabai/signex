@@ -58,7 +58,10 @@ pub(super) fn view<'a>(look: Look<'a>, tab: &'a NotebookTab) -> Toolbar<'a, Note
             .push(block_button(look));
     }
     // The export reads the notebook as saved, so it waits for a file.
-    let saved = tab.file.is_some().then_some(NotebookMsg::ExportPdfRequested { project: Some(id) });
+    let saved = tab
+        .file
+        .is_some()
+        .then_some(NotebookMsg::ExportPdfRequested { project: Some(id) });
     let export = hint_tooltip(
         button(text(look.t(ids::NOTEBOOK_TAB_EXPORT_PDF)).size(TS.dense))
             .padding([SP.xs, SP.s])
@@ -143,7 +146,7 @@ fn block_button<'a>(look: Look<'a>) -> Element<'a, NotebookMsg> {
 /// The Block menu: Note, Issue, Decision.
 pub(super) fn block_menu<'a>(look: Look<'a>) -> Element<'a, NotebookMsg> {
     let id = look.id;
-    let mut rows: Column<'a, NotebookMsg> = column![].spacing(SP.xs);
+    let mut rows: Column<Element<'a, NotebookMsg>> = column![].spacing(SP.xs);
     for (kind, label) in BLOCK_ROWS {
         rows = rows.push(
             button(text(look.t(label)).size(TS.dense))

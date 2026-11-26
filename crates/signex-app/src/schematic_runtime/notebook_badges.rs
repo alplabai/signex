@@ -96,7 +96,6 @@ impl NotebookBadgeInk {
         }
     }
 
-    #[must_use]
     pub fn of(&self, tone: BadgeTone) -> Color {
         match tone {
             BadgeTone::Notes => self.notes,

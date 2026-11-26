@@ -28,7 +28,9 @@ preview, then the status footer.
 
 **Toolbar.** Source | Split | Preview. Insert reference, Calculation,
 Measurement, Figure, Block (Note, Issue, Decision). At the end: Export PDF…
-and Save. Export PDF… is greyed until the PDF export ships. With no
+and Save. Export PDF… opens the PDF export dialog (`docs/NOTEBOOK_PDF.md`)
+on the page in view; it is greyed until the notebook is saved, since the
+export reads the file on disk. With no
 notebook the view switch is greyed and the insert buttons are hidden. A
 file a newer Signex wrote opens read-only: no insert buttons, Save greyed.
 
@@ -72,8 +74,8 @@ UTF-8`.
 **Empty state.** "This project has no Design Notebook yet", two template
 cards (Design report: title block, contents, Introduction, Requirements,
 Design, Bring-up, Decisions, Change log; Lab notebook: dated entries, no
-fixed sections), Create from template, Generate from project… (greyed
-until it ships) and Import .typ files…, which starts a notebook from the
+fixed sections), Create from template, Generate from project… (the
+Generate options, `docs/DESIGN_NOTEBOOK_GENERATE.md`) and Import .typ files…, which starts a notebook from the
 picked files.
 
 ## Compiling

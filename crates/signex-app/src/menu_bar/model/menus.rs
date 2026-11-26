@@ -2,8 +2,8 @@
 //! menu contract pinned by `testdata/menu_bar.golden.tsv`.
 
 use super::items::{
-    cmd, cmd_item, cmd_item_gated, cmd_item_gated_as, cmd_toggle, cmd_toggle_gated, header,
-    item, item_if, item_if_command, item_named, panel_item, submenu, unavailable, with_icon,
+    cmd, cmd_item, cmd_item_gated, cmd_item_gated_as, cmd_toggle, cmd_toggle_gated, header, item,
+    item_if, item_if_command, item_named, panel_item, submenu, unavailable, with_icon,
 };
 use super::{MenuEntry, MenuIcon, MenuMessage};
 use crate::app::command::enablement::{new_part_menu_enabled, remove_part_menu_enabled};

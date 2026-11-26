@@ -30,7 +30,7 @@ enum CheckSource {
     /// Run it now, over this file.
     Run(PathBuf, Run),
     /// The newest kept report, or why there is none.
-    Kept(Fact<CheckReport>),
+    Kept(Box<Fact<CheckReport>>),
 }
 
 /// Everything a run needs, captured from memory.
@@ -88,14 +88,14 @@ impl Signex {
                 let run: Run = Box::new(move || Ok(job()));
                 CheckSource::Run(project.path.clone(), run)
             }
-            None => CheckSource::Kept(Fact::not_read("the project has no root sheet")),
+            None => CheckSource::Kept(Box::new(Fact::not_read("the project has no root sheet"))),
         };
         let drc = match board {
             Some(board) => {
                 let run: Run = Box::new(self.drc_check_job(board, Some(project)));
                 CheckSource::Run(board.to_path_buf(), run)
             }
-            None => CheckSource::Kept(Fact::not_read("the project has no board")),
+            None => CheckSource::Kept(Box::new(Fact::not_read("the project has no board"))),
         };
         let run: Run = Box::new(self.requirements_check_job(project));
         let requirements = CheckSource::Run(project.path.clone(), run);
@@ -110,12 +110,12 @@ impl Signex {
         let runs = &self.document_state.check_runs;
         let kept = |check: &str, scope: Option<&Path>| {
             let found = scope.and_then(|scope| runs.last_report(check, scope));
-            CheckSource::Kept(match found {
+            CheckSource::Kept(Box::new(match found {
                 Some(report) => {
                     Fact::read(report.clone(), format!("check_{check} run {}", report.run))
                 }
                 None => Fact::not_read(format!("no {check} run of this project is kept")),
-            })
+            }))
         };
         (
             kept(ERC_CHECK, Some(project.path.as_path())),
@@ -133,7 +133,9 @@ pub(super) fn base_facts(project: &LoadedProject, variant: Option<String>) -> Pr
         .path
         .file_name()
         .map_or_else(String::new, |name| name.to_string_lossy().into_owned());
-    let not_yet = || Fact::not_read("not read yet");
+    fn not_yet<T>() -> Fact<T> {
+        Fact::not_read("not read yet")
+    }
     ProjectFacts {
         project_file,
         name: data.name.clone(),
@@ -205,7 +207,7 @@ fn take(
     ran: &mut Vec<(PathBuf, CheckReport)>,
 ) -> Fact<CheckReport> {
     match source {
-        CheckSource::Kept(fact) => fact,
+        CheckSource::Kept(fact) => *fact,
         CheckSource::Run(scope, run) => match run() {
             Ok(report) => {
                 ran.push((scope, report.clone()));

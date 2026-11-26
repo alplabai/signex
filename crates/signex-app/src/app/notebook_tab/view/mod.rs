@@ -61,8 +61,10 @@ impl Signex {
             i18n: &self.ui_state.i18n,
         };
         match self.document_state.notebooks.get(&id) {
-            Some(tab) => tab_view(look, tab).map(Message::from),
-            None => notice(look, look.t(ids::NOTEBOOK_TAB_READING)).map(Message::from),
+            Some(tab) => tab_view(look, tab).map(Message::from).boxed(),
+            None => notice(look, look.t(ids::NOTEBOOK_TAB_READING))
+                .map(Message::from)
+                .boxed(),
         }
     }
 }
@@ -86,7 +88,7 @@ pub(super) fn tab_view<'a>(look: Look<'a>, tab: &'a NotebookTab) -> Element<'a, 
 
 /// Side panel, editor, preview.
 fn open_body<'a>(look: Look<'a>, tab: &'a NotebookTab) -> Element<'a, NotebookMsg> {
-    let mut panes: Row<'a, NotebookMsg> = Row::new().height(Length::Fill);
+    let mut panes: Row<Element<'a, NotebookMsg>> = Row::new().height(Length::Fill);
     panes = panes.push(
         container(side::view(look, tab))
             .width(Length::Fixed(TS.body * SIDE_EMS))

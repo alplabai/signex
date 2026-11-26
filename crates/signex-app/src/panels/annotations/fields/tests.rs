@@ -9,7 +9,7 @@ use iced::Size;
 use signex_notebook::{BlockId, Citation, Severity, Verdict};
 
 use super::{FieldLabel, RowField, RowValue, record_fields};
-use crate::app::handlers::annotations::build_view;
+use crate::app::build_annotations_view as build_view;
 use crate::layout_probe::{find, lay_out_texts};
 use crate::panels::PanelContext;
 use crate::panels::annotations::{
@@ -123,6 +123,8 @@ fn rows_of(expanded: Option<u32>) -> Vec<AnnotationRow> {
             }],
             unlisted: Vec::new(),
             parts: None,
+            design: None,
+            references: Vec::new(),
         })),
         status: ListStatus::Ready,
         expanded: expanded.map(|line| RowKey { file: path, line }),

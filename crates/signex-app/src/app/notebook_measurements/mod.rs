@@ -7,6 +7,15 @@
 mod design;
 mod job;
 mod operands;
+// The notebook tab's margin lane does not mount these yet
+// (`docs/NOTEBOOK_MEASUREMENTS.md`, "Not built yet"); their tests use them.
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "mounted once the notebook tab has its margin lane"
+    )
+)]
 pub(crate) mod views;
 
 pub use job::NotebookRead;

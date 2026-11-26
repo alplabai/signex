@@ -249,9 +249,11 @@ pub use pre_placement::{
     PlacementPosition, PositionField, PrePlacementData, PrePlacementKind, PrePlacementPositionMsg,
     PrePlacementStyle,
 };
+#[cfg(test)]
+pub(crate) use projects::NOTEBOOK_ROW_KEY;
 pub(super) use projects::view_projects;
 pub use projects::{LibraryNodeInfo, ProjectPanelInfo, SheetInfo, build_project_tree};
-pub(crate) use projects::{MISSING_MARK, NOTEBOOK_ROW_KEY, UNREADABLE_MARK};
+pub(crate) use projects::{MISSING_MARK, UNREADABLE_MARK};
 pub use projects_graphite::{ProjectsMsg, ProjectsView};
 pub use properties::DrawingFieldId;
 pub(super) use properties::{

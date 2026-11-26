@@ -178,6 +178,9 @@ pub use documents::{
     TabKind, Tool,
 };
 pub use fab_outputs::{BoardNote, FabOutput, FabOutputsMsg, FabOutputsState, FabProblem};
+// The Annotations panel's view model, for the panel's own layout tests.
+#[cfg(test)]
+pub(crate) use handlers::annotations::build_view as build_annotations_view;
 pub(crate) use handlers::document_files::is_pcb_path;
 pub(crate) use handlers::selection_workflow::passes_filter;
 pub use handlers::window_geometry_events::GeometryReadout;

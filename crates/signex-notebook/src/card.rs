@@ -220,13 +220,13 @@ pub const CONTEXT_ACTIONS: [CardAction; 5] = [
 /// The newest dated measurement of `blocks`; undated ones only when none
 /// is dated, the last of them.
 pub fn last_measurement(blocks: &[BlockMention]) -> Option<BlockMention> {
-    let measurements = blocks
+    let mut measurements = blocks
         .iter()
         .filter(|b| b.kind == AnnotationKind::Measurement);
     measurements
         .clone()
         .filter(|b| b.date.is_some())
         .max_by_key(|b| b.date)
-        .or_else(|| measurements.last())
+        .or_else(|| measurements.next_back())
         .cloned()
 }

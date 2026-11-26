@@ -20,10 +20,8 @@ impl Timestamp {
     /// (seconds, `:SS`, are read and dropped).
     pub fn parse(text: &str) -> Option<Self> {
         let text = text.trim();
-        let (date, time) = match text.get(..10) {
-            Some(date) => (date, &text[10..]),
-            None => return None,
-        };
+        let date = text.get(..10)?;
+        let time = &text[10..];
         let date = IsoDate::parse(date)?;
         if time.is_empty() {
             return Some(Self { date, minute: None });

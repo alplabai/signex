@@ -91,7 +91,7 @@ fn literal_text(expr: ast::Expr<'_>) -> Option<String> {
     let text = match expr {
         ast::Expr::Str(text) => text.get().to_string(),
         ast::Expr::Int(number) => number.get().to_string(),
-        ast::Expr::Content(block) => block.body().to_untyped().clone().into_text().to_string(),
+        ast::Expr::ContentBlock(block) => block.body().to_untyped().full_text().to_string(),
         _ => return None,
     };
     let text = text.trim().to_string();

@@ -87,7 +87,13 @@ impl CompileJob {
     fn run(self) -> CompileOutcome {
         let started = Instant::now();
         let today = today();
-        let compilation = compile(&self.sources, &CompileOptions { today });
+        // No cell results yet: every Python cell shows as not run (mockup
+        // row 200); the tab's Run cell and Run all are not built.
+        let options = CompileOptions {
+            today,
+            ..CompileOptions::default()
+        };
+        let compilation = compile(&self.sources, &options);
         let status = NotebookStatus::of(&self.sources, &compilation);
         let notebook = compilation.notebook.map(Arc::new);
         let page = notebook.as_ref().and_then(|notebook| {

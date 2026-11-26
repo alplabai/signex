@@ -344,15 +344,16 @@ and the schematic side as one undo group. Rows, defaults and Apply:
 ## Project ▸ Design Notebook {#project-design-notebook}
 
 A project has one Design Notebook, `notebook/design.snxnbk` (mockup row 195).
-These rows and commands reach it; all are in the palette and none has a
-default key, so no shipped profile binds one:
+These rows and commands reach it; all are in the palette. Only the badges
+toggle has a default key, `B` in Signex Standard (Classic keeps `B` for
+Place Bus):
 
 | Row | Command | Greyed |
 |---|---|---|
 | Project ▸ Design Notebook ▸ Open Design Notebook | `open_design_notebook` | with no project open |
 | Project ▸ Design Notebook ▸ Generate from Project… | `generate_design_notebook` | with no project open |
 | File ▸ Export ▸ Design Notebook PDF… | `export_notebook_pdf` | with no project open |
-| View ▸ Notebook Badges, after AutoFocus | `toggle_notebook_badges` | with no sheet in view |
+| View ▸ Notebook Badges, after AutoFocus, checked while the badges show | `toggle_notebook_badges` | with no sheet in view |
 
 Each acts on the project of the active document, else the active project,
 by the same rule as Design ▸ Rules. The Projects tree reaches the same
@@ -361,8 +362,11 @@ the notebook landed; before, a planned row) and a double-click on the
 notebook's row. The row shows under a Notebook group, after PCB, once the
 project probe finds the file; a notebook that was never saved has no row.
 A palette search for "notebook" or "wiki" finds `open_design_notebook`:
-"Wiki" is the old dock panel's name (mockup row 60b). Each command is
-window-only, so a headless run is refused it with a reason.
+"Wiki" is the old dock panel's name (mockup row 60b). Open Design Notebook
+and Notebook Badges are window-only, so a headless run is refused with a
+reason; `generate_design_notebook` and `export_notebook_pdf` also run
+headless with operands (`docs/DESIGN_NOTEBOOK_GENERATE.md`,
+`docs/NOTEBOOK_PDF.md`). Each request is also said in Messages.
 
 ## Board Properties: designator and value {#board-properties}
 

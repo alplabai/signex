@@ -38,7 +38,7 @@ pub(super) fn view<'a>(look: Look<'a>, tab: &NotebookTab) -> Element<'a, Noteboo
     for template in Template::ALL {
         cards = cards.push(card(look, template, tab.template == template));
     }
-    let lines: Column<'a, NotebookMsg> = column![
+    let lines: Column<Element<'a, NotebookMsg>> = column![
         text(look.t(ids::NOTEBOOK_TAB_EMPTY_TITLE))
             .size(TS.title)
             .color(ti(look.tokens.text))

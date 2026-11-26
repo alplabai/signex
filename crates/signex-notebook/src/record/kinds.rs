@@ -165,7 +165,7 @@ pub(super) fn read_calculation(reader: &mut Reader) -> CalculationRecord {
 pub(super) fn read_measurement(reader: &mut Reader) -> MeasurementRecord {
     let rows = measurement_rows(reader);
     MeasurementRecord {
-        verdict: rows.iter().map(|row| row.verdict).max(),
+        verdict: rows.iter().filter_map(|row| row.verdict).max(),
         rows,
         unit: reader.text("unit"),
         conditions: reader.text("conditions"),

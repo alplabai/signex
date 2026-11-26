@@ -291,15 +291,18 @@ fn sections<'a>(
             .boxed(),
     ]
     .align_y(Alignment::Center);
-    let mut columns: Row<'a, Message> = Row::new().spacing(SP.xl);
+    let mut columns: Row<Element<'a, Message>> = Row::new().spacing(SP.xl);
     for sections in SECTION_COLUMNS {
-        let mut list: Column<'a, Message> = Column::new().spacing(SP.s).width(Length::Fill);
+        let mut list: Column<Element<'a, Message>> =
+            Column::new().spacing(SP.s).width(Length::Fill);
         for section in sections {
             list = list.push(section_box(section, dialog, i18n, tokens));
         }
-        columns = columns.push(list);
+        columns = columns.push(list.boxed());
     }
-    column![heading, columns].spacing(SP.s).boxed()
+    column![heading.boxed(), columns.boxed()]
+        .spacing(SP.s)
+        .boxed()
 }
 
 fn section_box<'a>(

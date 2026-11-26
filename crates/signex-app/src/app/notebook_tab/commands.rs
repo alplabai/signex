@@ -124,6 +124,7 @@ pub(super) fn compile_answer(
         &sources,
         &CompileOptions {
             today: super::compile::today(),
+            ..CompileOptions::default()
         },
     );
     let status = NotebookStatus::of(&sources, &compilation);

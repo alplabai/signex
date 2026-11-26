@@ -87,7 +87,9 @@ impl Signex {
             return Err("the Design Notebook of the project is not open".into());
         };
         if tab.is_read_only() {
-            return Err("the Design Notebook was written by a newer Signex and is read-only".into());
+            return Err(
+                "the Design Notebook was written by a newer Signex and is read-only".into(),
+            );
         }
         let file = signex_notebook::NotebookFile::parse(text).map_err(|why| why.to_string())?;
         let Some(editor) = &mut tab.text else {

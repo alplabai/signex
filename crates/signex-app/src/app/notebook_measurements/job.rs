@@ -11,8 +11,8 @@ use serde_json::{Value, json};
 use signex_notebook::attachment::{
     AttachmentKind, attachment_call, folder_for, mark_still_valid, plan_copy,
 };
-use signex_notebook::edit::{StaleTarget, append_call, locate};
 use signex_notebook::bench::record;
+use signex_notebook::edit::{StaleTarget, append_call, locate};
 use signex_notebook::report::{attachments_report, measurements_report, timeline_report};
 use signex_notebook::{
     DEFAULT_NOTEBOOK_FILE, LoadProblem, LoadProblemKind, NOTEBOOK_DIR, NotebookSources, Reference,

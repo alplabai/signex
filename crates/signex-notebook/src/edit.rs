@@ -1,8 +1,8 @@
 //! The edits the measurement commands make to a notebook file: which call
 //! Mark still valid rewrites, and where a new attachment is written.
 
-use crate::id::BlockId;
 use crate::bench::NotebookRecord;
+use crate::id::BlockId;
 
 /// What Mark still valid acts on: an attachment, by its file inside
 /// `notebook/attachments/`, or a reading, by its block id.

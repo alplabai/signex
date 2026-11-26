@@ -227,12 +227,14 @@ fn a_list_that_was_not_read_calls_nothing_stale() {
 
 #[test]
 fn the_output_job_entry_keeps_the_settings_and_reads_back() {
-    let mut options = ExportOptions::default();
-    options.pages = PageSelection::Current { page: 4 };
-    options.stale = StaleRule::Fail;
-    options.annotations = [AnnotationKind::Issue, AnnotationKind::Decision]
-        .into_iter()
-        .collect();
+    let options = ExportOptions {
+        pages: PageSelection::Current { page: 4 },
+        stale: StaleRule::Fail,
+        annotations: [AnnotationKind::Issue, AnnotationKind::Decision]
+            .into_iter()
+            .collect(),
+        ..ExportOptions::default()
+    };
     let output = NotebookPdfOutput::new("design.snxnbk", &options);
     assert_eq!(output.kind, NOTEBOOK_PDF_OUTPUT_KIND);
     assert!(output.enabled);
@@ -250,9 +252,11 @@ fn the_output_job_entry_keeps_the_settings_and_reads_back() {
 
 #[test]
 fn the_settings_read_back_from_json_and_fill_in_defaults() {
-    let mut options = ExportOptions::default();
-    options.pages = PageSelection::Range { first: 3, last: 7 };
-    options.paper = Paper::Letter;
+    let options = ExportOptions {
+        pages: PageSelection::Range { first: 3, last: 7 },
+        paper: Paper::Letter,
+        ..ExportOptions::default()
+    };
     let json = serde_json::to_string(&options).expect("json");
     let back: ExportOptions = serde_json::from_str(&json).expect("read back");
     assert_eq!(back, options);

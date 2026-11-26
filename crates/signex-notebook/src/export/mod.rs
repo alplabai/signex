@@ -148,7 +148,10 @@ pub fn inspect(
     is_live: impl Fn(&Reference) -> bool,
 ) -> NotebookInspection {
     let title = main_title(sources);
-    let options = CompileOptions { today: title.date };
+    let options = CompileOptions {
+        today: title.date,
+        ..CompileOptions::default()
+    };
     let compilation = compile_with_inputs(sources, &options, &[]);
     let pages = compilation
         .notebook
@@ -179,7 +182,10 @@ pub fn export_pdf(
         return Err(ExportError::Stale(stale));
     }
     let title = main_title(sources);
-    let compile_options = CompileOptions { today: title.date };
+    let compile_options = CompileOptions {
+        today: title.date,
+        ..CompileOptions::default()
+    };
     let inputs = options.typst_inputs(&stale.stale_names());
     let compilation = compile_with_inputs(sources, &compile_options, &inputs);
     let Some(notebook) = compilation.notebook else {

@@ -7,6 +7,7 @@
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
+use signex_i18n::RenderTranslatable;
 use signex_notebook::Template;
 
 use super::{Load, NotebookMsg};

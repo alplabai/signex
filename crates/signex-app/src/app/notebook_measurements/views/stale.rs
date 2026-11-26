@@ -3,7 +3,7 @@
 //! it, and Re-measure…, Mark still valid and Show change.
 
 use iced::widget::{Column, Row, container};
-use iced::{Background, Border, Element, Length, Theme};
+use iced::{Background, Border, Element, Length, Theme, Widget as _};
 use signex_i18n::{I18n, UserText, ids, t};
 use signex_notebook::report::AttachmentState;
 use signex_types::theme::ThemeTokens;
@@ -36,18 +36,20 @@ pub(crate) fn stale_card<'a, M: Clone + 'a>(
     let warn = ti(tokens.warning);
     let attachment = &state.attachment;
     let name = attachment.path_in_notebook();
-    let mut card = Column::new()
+    let mut card = Column::<Element<'a, M>>::new()
         .spacing(GAP)
         .width(Length::Fill)
         .push(
             text(t!(i18n, ids::NOTEBOOK_STALE_TITLE, "name" => name))
                 .size(TS.body)
-                .color(warn),
+                .color(warn)
+                .boxed(),
         )
         .push(
             text(t!(i18n, ids::NOTEBOOK_STALE_WHY))
                 .size(TS.caption)
-                .color(r.ink3),
+                .color(r.ink3)
+                .boxed(),
         );
     if let Some(taken) = attachment.taken {
         let date = taken.to_string();
@@ -57,7 +59,7 @@ pub(crate) fn stale_card<'a, M: Clone + 'a>(
             let rev = attachment.rev.as_str();
             t!(i18n, ids::NOTEBOOK_STALE_TAKEN_REV, "date" => date, "rev" => rev)
         };
-        card = card.push(text(line).size(TS.caption).color(ti(tokens.text)));
+        card = card.push(text(line).size(TS.caption).color(ti(tokens.text)).boxed());
     }
     for change in &state.changes {
         let line = match &change.now {
@@ -73,7 +75,7 @@ pub(crate) fn stale_card<'a, M: Clone + 'a>(
                 "was" => change.was.as_str()
             ),
         };
-        card = card.push(text(line).size(TS.caption).color(ti(tokens.text)));
+        card = card.push(text(line).size(TS.caption).color(ti(tokens.text)).boxed());
     }
     if !state.readings.is_empty() {
         let readings: Vec<String> = state.readings.iter().map(ToString::to_string).collect();
@@ -89,7 +91,8 @@ pub(crate) fn stale_card<'a, M: Clone + 'a>(
                     text(UserText::new(readings.join(", ")))
                         .size(TS.caption)
                         .color(warn),
-                ),
+                )
+                .boxed(),
         );
     }
     let buttons = Row::new()
@@ -112,10 +115,11 @@ pub(crate) fn stale_card<'a, M: Clone + 'a>(
             Some(actions.show_change),
             tokens,
         ));
-    card = card.push(buttons).push(
+    card = card.push(buttons.boxed()).push(
         text(t!(i18n, ids::NOTEBOOK_STALE_NOTE))
             .size(TS.caption)
-            .color(r.ink3),
+            .color(r.ink3)
+            .boxed(),
     );
     let fill = r.warn_soft;
     Some(
@@ -131,6 +135,6 @@ pub(crate) fn stale_card<'a, M: Clone + 'a>(
                 },
                 ..container::Style::default()
             })
-            .into(),
+            .boxed(),
     )
 }

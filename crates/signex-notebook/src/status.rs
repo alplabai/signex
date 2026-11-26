@@ -175,7 +175,7 @@ mod tests {
             message: String::new(),
             hints: Vec::new(),
         };
-        let status = NotebookStatus {
+        let found = NotebookStatus {
             problems: vec![
                 problem("design.snxnbk", 40),
                 problem("chapters/a.snxnbk", 3),
@@ -185,7 +185,7 @@ mod tests {
             ..status("= A\n")
         };
         let next = |file, line| {
-            status
+            found
                 .next_problem(file, line)
                 .map(|d| (d.file.clone(), d.line))
         };

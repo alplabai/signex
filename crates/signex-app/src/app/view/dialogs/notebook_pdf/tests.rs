@@ -199,7 +199,7 @@ fn a_range_that_names_no_page_greys_export() {
     dialog.range_text = "9-3".into();
     assert_eq!(export_state(&dialog), (false, false));
     dialog.range_text = "3-7".into();
-    assert_eq!(export_state(&dialog).0, true);
+    assert!(export_state(&dialog).0);
 }
 
 #[test]

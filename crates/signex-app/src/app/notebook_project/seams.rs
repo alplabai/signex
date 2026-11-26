@@ -28,7 +28,8 @@ impl Signex {
         say("Export PDF", &target);
         // The notebook tab passes the page it shows (1-based) when it is
         // the tab in view.
-        let in_view = self.notebook_tab_index(target.project) == Some(self.document_state.active_tab);
+        let in_view =
+            self.notebook_tab_index(target.project) == Some(self.document_state.active_tab);
         let current_page = in_view
             .then(|| self.document_state.notebooks.get(&target.project))
             .flatten()
