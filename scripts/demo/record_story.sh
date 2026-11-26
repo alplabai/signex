@@ -25,6 +25,10 @@ for built in "$bin" "$cli"; do
 done
 
 work=$(mktemp -d "${TMPDIR:-/tmp}/signex-demo-$name.XXXXXX")
+# The runtime folder holds the agent socket, whose path must fit a Unix
+# socket address (about 100 bytes): a short folder of its own in /tmp, not
+# under a long TMPDIR.
+runtime=$(mktemp -d /tmp/sxd.XXXXXX)
 xvfb_pid="" app_pid="" ffmpeg_pid=""
 cleanup() {
 	[ -n "$ffmpeg_pid" ] && kill -INT "$ffmpeg_pid" 2>/dev/null && wait "$ffmpeg_pid" 2>/dev/null
@@ -32,14 +36,15 @@ cleanup() {
 	[ -n "$app_pid" ] && kill "$app_pid" 2>/dev/null && sleep 2 && kill -9 "$app_pid" 2>/dev/null
 	[ -n "$xvfb_pid" ] && kill "$xvfb_pid" 2>/dev/null
 	if [ "${DEMO_KEEP_WORK:-0}" != 1 ]; then rm -rf "$work"; fi
+	rm -rf "$runtime"
 	return 0
 }
 trap cleanup EXIT
 
 # A private config root and runtime folder: the window and signex-cli meet in
 # the same agent registry, and the user's own preferences are never read.
-mkdir -p "$work/config/signex" "$work/runtime"
-chmod 700 "$work/runtime"
+mkdir -p "$work/config/signex"
+chmod 700 "$runtime"
 cat >"$work/config/signex/prefs.json" <<EOF
 {
   "agent_connections_enabled": true,
@@ -59,7 +64,7 @@ cat >"$work/config/signex/window_geometry.json" <<EOF
 {"version": 1, "monitor_name": null, "monitor_index": 0, "x": 0, "y": 0,
  "width": $width, "height": $height, "maximized": false}
 EOF
-export XDG_CONFIG_HOME="$work/config" XDG_RUNTIME_DIR="$work/runtime"
+export XDG_CONFIG_HOME="$work/config" XDG_RUNTIME_DIR="$runtime"
 
 echo "== $name: set-up" >&2
 mapfile -t open_paths < <(python3 "$here/drive_story.py" prepare "$story" --work "$work" --cli "$cli")
@@ -81,7 +86,7 @@ app_pid=$!
 # Ready when the project's registry entry names the agent socket.
 ready=0
 for _ in $(seq 180); do
-	if grep -qs '"socket": *"/' "$work"/runtime/signex-agent/registry/*.json; then ready=1; break; fi
+	if grep -qs '"socket": *"/' "$runtime"/signex-agent/registry/*.json; then ready=1; break; fi
 	kill -0 "$app_pid" 2>/dev/null || break
 	sleep 0.5
 done
