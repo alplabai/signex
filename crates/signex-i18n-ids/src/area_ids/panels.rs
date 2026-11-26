@@ -366,6 +366,7 @@ define_ids! {
     PANELS_HARNESS_DEFS_TITLE = "panels-harness-defs-title";
     PANELS_HARNESS_DEFS_CAPTION = "panels-harness-defs-caption";
     PANELS_HARNESS_DEFS_USES = "panels-harness-defs-uses";
+    PANELS_HARNESS_DEFS_UNDEFINED_USES = "panels-harness-defs-undefined-uses";
     PANELS_HARNESS_DEFS_NAME = "panels-harness-defs-name";
     PANELS_HARNESS_DEFS_DESCRIPTION = "panels-harness-defs-description";
     PANELS_HARNESS_DEFS_KIND = "panels-harness-defs-kind";

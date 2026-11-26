@@ -1202,6 +1202,11 @@ panels-harness-defs-uses = { $entries } entries · { $uses ->
     [one] 1 use
    *[other] { $uses } uses
 }
+# A type placed objects use that the project does not define (#3043); $entries as above, taken from its first connector.
+panels-harness-defs-undefined-uses = { $entries } entries · { $uses ->
+    [one] 1 use
+   *[other] { $uses } uses
+} · not defined
 panels-harness-defs-name = Name
 panels-harness-defs-description = Description
 panels-harness-defs-kind = Kind

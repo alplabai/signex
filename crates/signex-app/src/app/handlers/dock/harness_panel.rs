@@ -13,6 +13,7 @@ use super::super::super::*;
 use crate::panels::{HarnessField, HarnessMismatchRow, HarnessPanel, HarnessPanelMsg};
 use signex_types::schematic::{
     HarnessDefinition, HarnessDefinitionEntry, SelectedKind, harness_type_uses,
+    undefined_harness_types,
 };
 
 /// The ERC rule whose findings drive the mismatch banner.
@@ -105,10 +106,13 @@ impl Signex {
         facts.are_definitions_locked =
             project.is_some_and(|p| p.data.has_unreadable_schematic_design());
         let engines = &self.document_state.engines;
+        let sheets = move || engines.values().map(|e| &e.document().harness);
+        facts.undefined_types = undefined_harness_types(&facts.definitions, sheets());
         facts.uses = facts
             .definitions
             .iter()
-            .map(|d| harness_type_uses(engines.values().map(|e| &e.document().harness), &d.name))
+            .chain(&facts.undefined_types)
+            .map(|d| harness_type_uses(sheets(), &d.name))
             .collect();
         let Some(engine) = self.document_state.active_engine() else {
             return facts;

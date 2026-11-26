@@ -213,10 +213,7 @@ fn object_row<'a>(
         .color(ink)
         .wrapping(iced::widget::text::Wrapping::None)
         .boxed();
-    let sheet = text(UserText::new(r.sheet.as_str()))
-        .size(TS.caption)
-        .color(muted)
-        .wrapping(iced::widget::text::Wrapping::None);
+    let sheet = sheet_cell(ctx, r.sheet.as_str(), muted);
     let cells = row![
         mark,
         container(cell(view, r, ObjectColumn::Name, name))
@@ -225,7 +222,7 @@ fn object_row<'a>(
         container(cell(view, r, ObjectColumn::Value, value))
             .width(Length::FillPortion(3))
             .clip(true),
-        container(sheet).width(Length::Fixed(SHEET_W)).clip(true),
+        sheet,
     ]
     .spacing(SP.s)
     .height(ROW_H)
@@ -262,6 +259,27 @@ fn object_row<'a>(
         .on_double_click(msg(ObjectListMsg::RowDoubleClicked(r.target.clone())))
         .interaction(iced::mouse::Interaction::Pointer)
         .boxed()
+}
+
+/// The Sheet cell (#3039): one line cut with an ellipsis at the column's
+/// edge, the full name in a tooltip.
+fn sheet_cell<'a>(ctx: &PanelContext, sheet: &'a str, muted: iced::Color) -> Element<'a, PanelMsg> {
+    let shown = text(UserText::new(sheet))
+        .size(TS.caption)
+        .color(muted)
+        .width(Length::Fill)
+        .wrapping(iced::widget::text::Wrapping::None)
+        .ellipsis(iced::widget::text::Ellipsis::End);
+    let tip = container(text(UserText::new(sheet)).size(TS.caption))
+        .padding([SP.xs, SP.s])
+        .style(crate::styles::context_menu(&ctx.tokens));
+    signex_widgets::tooltip(
+        container(shown).width(Length::Fixed(SHEET_W)).clip(true),
+        tip,
+        iced::widget::tooltip::Position::Top,
+    )
+    .gap(SP.xs)
+    .boxed()
 }
 
 /// A Name or Value cell: its editor while it is open, else `content`, which
