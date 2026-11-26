@@ -80,8 +80,12 @@ impl Signex {
                 }
                 Task::none()
             }
-            ParameterManagerMsg::ClosedSheetsRead { generation, sheets } => {
-                self.handle_closed_parameter_sheets_read(generation, sheets);
+            ParameterManagerMsg::ClosedSheetsRead {
+                generation,
+                sheets,
+                unread,
+            } => {
+                self.handle_closed_parameter_sheets_read(generation, sheets, unread);
                 Task::none()
             }
             ParameterManagerMsg::ClosedSheetPressed { sheet } => {
@@ -228,7 +232,7 @@ impl Signex {
             return Task::none();
         };
         // A closed sheet is listed read-only: an edit opens it and writes
-        // nothing (Caner 2026-11-25).
+        // nothing.
         if (self.listed_closed_sheets().iter()).any(|(path, _)| *path == sheet.as_path()) {
             return self.open_closed_parameter_sheet(sheet);
         }
@@ -398,7 +402,7 @@ impl Signex {
     ) -> bool {
         by_sheet.retain(|_, commands| !commands.is_empty());
         // A closed sheet is opened before it is edited: change nothing and
-        // name the ones to open (Caner 2026-11-25).
+        // name the ones to open.
         if self.refuse_closed_parameter_sheets(by_sheet.keys()) {
             return false;
         }

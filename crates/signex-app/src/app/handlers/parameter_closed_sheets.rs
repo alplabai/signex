@@ -49,32 +49,58 @@ impl Signex {
         let closed = &mut self.ui_state.parameter_table.closed;
         closed.generation += 1;
         closed.sheets = Arc::default();
+        closed.pages = pages.clone();
         closed.reading = !pages.is_empty();
         if pages.is_empty() {
             return Task::none();
         }
         let generation = closed.generation;
-        Task::perform(
-            async move {
-                tokio::task::spawn_blocking(move || read_sheets(&pages))
-                    .await
-                    .unwrap_or_default()
-            },
-            move |sheets| {
-                Message::ParameterManager(ParameterManagerMsg::ClosedSheetsRead {
-                    generation,
-                    sheets: Arc::new(sheets),
-                })
-            },
-        )
+        Task::perform(read_on_worker(pages, read_sheets), move |read| {
+            Message::ParameterManager(ParameterManagerMsg::ClosedSheetsRead {
+                generation,
+                sheets: Arc::new(read.sheets),
+                unread: read.unread,
+            })
+        })
+    }
+
+    /// With All sheets shown, keep the closed copies in step with the tabs
+    /// and the active project: a copy whose sheet opened goes; a project
+    /// sheet that closed, or another project (or none) in the main window,
+    /// reads the closed sheets again, since the disk may hold a newer save.
+    pub(crate) fn sync_closed_parameter_sheets(&mut self) -> Task<Message> {
+        let table = &self.ui_state.parameter_table;
+        if !self.ui_state.parameter_manager_open || table.scope != ParameterScope::AllSheets {
+            return Task::none();
+        }
+        let pages = self.closed_project_pages();
+        let held = &table.closed.pages;
+        if pages == *held {
+            return Task::none();
+        }
+        // No closed page left (all open, or no project): this also ends a
+        // read still on its way.
+        if pages.is_empty() || !pages.iter().all(|page| held.contains(page)) {
+            return self.read_closed_parameter_sheets();
+        }
+        let closed = &mut self.ui_state.parameter_table.closed;
+        let kept: Vec<_> = (closed.sheets.iter())
+            .filter(|(path, _)| pages.contains(path))
+            .cloned()
+            .collect();
+        closed.sheets = Arc::new(kept);
+        closed.pages = pages;
+        Task::none()
     }
 
     /// Keep a finished read of the closed sheets, unless a newer read
-    /// started or All sheets was left meanwhile.
+    /// started or All sheets was left meanwhile. Messages names each sheet
+    /// the read could not bring in, and why.
     pub(crate) fn handle_closed_parameter_sheets_read(
         &mut self,
         generation: u64,
         sheets: crate::app::state::ClosedSheetCopies,
+        unread: Vec<(PathBuf, String)>,
     ) {
         let table = &mut self.ui_state.parameter_table;
         if table.closed.generation != generation || table.scope != ParameterScope::AllSheets {
@@ -82,16 +108,27 @@ impl Signex {
         }
         table.closed.reading = false;
         table.closed.sheets = sheets;
+        for (path, reason) in unread {
+            let line = t!(
+                self.ui_state.i18n,
+                ids::DIALOG_PARAMETER_MANAGER_CLOSED_UNREAD,
+                "sheet" => crate::app::view::parameter_manager::sheet_file_name(&path),
+                "reason" => reason
+            );
+            crate::diagnostics::log_warning(line.into_string());
+        }
     }
 
-    /// The closed sheets read for All sheets that are still closed, by path.
+    /// The closed sheets read for All sheets that are still closed pages of
+    /// the active sheet's project, by path.
     pub(crate) fn listed_closed_sheets(&self) -> Vec<(&Path, &SchematicSheet)> {
         let table = &self.ui_state.parameter_table;
         if table.scope != ParameterScope::AllSheets {
             return Vec::new();
         }
+        let pages = self.closed_project_pages();
         let mut listed: Vec<(&Path, &SchematicSheet)> = (table.closed.sheets.iter())
-            .filter(|(path, _)| !self.is_parameter_page_open(path))
+            .filter(|(path, _)| pages.contains(path))
             .map(|(path, sheet)| (path.as_path(), sheet))
             .collect();
         listed.sort_by(|a, b| a.0.cmp(b.0));
@@ -153,18 +190,44 @@ impl Signex {
     }
 }
 
+/// What one read of the closed sheets brought in.
+#[derive(Debug, Default)]
+pub(super) struct ClosedSheetsReading {
+    /// Each page that read as a sheet, by path.
+    pub(super) sheets: Vec<(PathBuf, SchematicSheet)>,
+    /// Each page that could not be read, with why ("could not be …").
+    pub(super) unread: Vec<(PathBuf, String)>,
+}
+
+/// Run `read` over `pages` on a blocking worker. A read that fails or
+/// panics reports every page as unread, with the reason.
+pub(super) async fn read_on_worker(
+    pages: Vec<PathBuf>,
+    read: fn(&[PathBuf]) -> ClosedSheetsReading,
+) -> ClosedSheetsReading {
+    let held = pages.clone();
+    match tokio::task::spawn_blocking(move || read(&pages)).await {
+        Ok(reading) => reading,
+        Err(why) => ClosedSheetsReading {
+            sheets: Vec::new(),
+            unread: (held.into_iter())
+                .map(|page| (page, format!("could not be read (the read failed: {why})")))
+                .collect(),
+        },
+    }
+}
+
 /// Each of `pages` that reads as a sheet, by path; a page that cannot be read
-/// is left out (the scope bar counts it as not listed). Blocking.
-fn read_sheets(pages: &[PathBuf]) -> Vec<(PathBuf, SchematicSheet)> {
-    pages
-        .iter()
-        .filter_map(|page| match crate::app::project_sheets::load_sheet_file(page) {
-            Ok(Some(sheet)) => Some((page.clone(), sheet)),
-            Ok(None) => None,
-            Err(why) => {
-                tracing::debug!(path = %page.display(), %why, "Parameter Manager: a closed sheet was not read");
-                None
-            }
-        })
-        .collect()
+/// is reported unread (the scope bar counts it as not listed). A page that is
+/// not on disk is neither. Blocking.
+pub(super) fn read_sheets(pages: &[PathBuf]) -> ClosedSheetsReading {
+    let mut reading = ClosedSheetsReading::default();
+    for page in pages {
+        match crate::app::project_sheets::load_sheet_file(page) {
+            Ok(Some(sheet)) => reading.sheets.push((page.clone(), sheet)),
+            Ok(None) => {}
+            Err(why) => reading.unread.push((page.clone(), why)),
+        }
+    }
+    reading
 }

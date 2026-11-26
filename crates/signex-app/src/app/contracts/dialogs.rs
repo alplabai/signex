@@ -112,10 +112,12 @@ pub enum ParameterManagerMsg {
     /// `app::parameter_io`.
     Io(crate::app::parameter_io::ParameterIoMsg),
     /// The closed project sheets All sheets lists were read from disk, under
-    /// read `generation`.
+    /// read `generation`; `unread` names each sheet that could not be read,
+    /// with why.
     ClosedSheetsRead {
         generation: u64,
         sheets: crate::app::state::ClosedSheetCopies,
+        unread: Vec<(std::path::PathBuf, String)>,
     },
     /// A cell of a closed sheet's row was pressed: open that sheet, so its
     /// cells can be edited.

@@ -46,6 +46,9 @@ pub struct ClosedParameterSheets {
     pub generation: u64,
     /// A read is on its way.
     pub reading: bool,
+    /// The closed pages of the active sheet's project the copies are kept
+    /// for: those of the last read, less any that opened since.
+    pub pages: Vec<PathBuf>,
     /// Each sheet that was read, by path.
     pub sheets: ClosedSheetCopies,
 }

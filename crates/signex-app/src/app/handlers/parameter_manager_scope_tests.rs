@@ -581,6 +581,7 @@ fn with_closed_b_read() -> Signex {
     let _ = app.update(Message::ParameterManager(Pm::ClosedSheetsRead {
         generation,
         sheets: std::sync::Arc::new(vec![(PathBuf::from(B), b)]),
+        unread: Vec::new(),
     }));
     app
 }
@@ -641,12 +642,13 @@ fn a_stale_read_of_the_closed_sheets_is_dropped() {
     let _ = app.update(Message::ParameterManager(Pm::ClosedSheetsRead {
         generation: first,
         sheets: std::sync::Arc::new(vec![(PathBuf::from(B), SchematicSheet::default())]),
+        unread: Vec::new(),
     }));
     assert_eq!(app.parameter_sheets(), paths(&[A]), "an older read");
 }
 
-/// Editing a closed sheet opens it and writes nothing (Caner 2026-11-25:
-/// the conservative choice): a typed cell, or a press on one, asks for the
+/// Editing a closed sheet opens it and writes nothing (the conservative
+/// choice): a typed cell, or a press on one, asks for the
 /// sheet to be opened; the copy read for the table keeps its value.
 #[test]
 fn an_edit_of_a_closed_sheet_opens_it_and_writes_nothing() {
@@ -697,4 +699,222 @@ fn the_scope_switch_reads_active_sheet_and_all_sheets() {
         t!(i18n, ids::DIALOG_PARAMETER_MANAGER_SCOPE_ALL).into_string(),
         "All sheets"
     );
+}
+
+/// Run the per-message syncs, as any message does.
+fn settle(app: &mut Signex) {
+    let _ = app.update(Message::ParameterManager(Pm::FilterChanged(String::new())));
+}
+
+/// Land a read of the closed sheets under `generation`.
+fn land(app: &mut Signex, generation: u64, sheets: Vec<(PathBuf, SchematicSheet)>) {
+    let _ = app.update(Message::ParameterManager(Pm::ClosedSheetsRead {
+        generation,
+        sheets: std::sync::Arc::new(sheets),
+        unread: Vec::new(),
+    }));
+}
+
+fn sheet_with(symbols: Vec<Symbol>) -> SchematicSheet {
+    SchematicSheet {
+        uuid: Uuid::now_v7(),
+        paper_size: "A4".to_string(),
+        symbols,
+        ..Default::default()
+    }
+}
+
+fn listed_csv(app: &Signex) -> String {
+    let csv = app.listed_parameter_csv().expect("a sheet").expect("csv");
+    String::from_utf8(csv).expect("utf-8")
+}
+
+fn close_tab(app: &mut Signex, path: &str) {
+    app.document_state.engines.remove(Path::new(path));
+    app.document_state
+        .tabs
+        .retain(|tab| tab.path != Path::new(path));
+    settle(app);
+}
+
+/// A closed sheet opened, saved at 12% and closed again is read again: the
+/// table and the CSV list 12%, never the 10% copy read before it opened.
+#[test]
+fn a_closed_sheet_opened_saved_and_closed_is_listed_with_its_saved_value() {
+    let mut app = with_closed_b_read();
+    let id = app.document_state.projects[0].id;
+    let before = app.ui_state.parameter_table.closed.generation;
+
+    open(&mut app, B, vec![part(3, "R3", "12%")], Some(id));
+    settle(&mut app);
+    assert!(
+        app.ui_state.parameter_table.closed.sheets.is_empty(),
+        "b's copy goes once b opens"
+    );
+    let sheets = app.parameter_documents();
+    assert_eq!(
+        sheets.iter().map(|s| s.is_closed).collect::<Vec<_>>(),
+        [false, false]
+    );
+
+    close_tab(&mut app, B);
+    let closed = &app.ui_state.parameter_table.closed;
+    assert!(closed.reading, "b is read again once it closes");
+    assert!(closed.generation > before);
+    assert!(app.listed_closed_sheets().is_empty(), "no stale copy");
+    assert!(!listed_csv(&app).contains("10%"));
+
+    land(
+        &mut app,
+        before,
+        vec![(PathBuf::from(B), sheet_with(vec![part(3, "R3", "10%")]))],
+    );
+    assert!(app.listed_closed_sheets().is_empty(), "an older read");
+
+    let generation = app.ui_state.parameter_table.closed.generation;
+    land(
+        &mut app,
+        generation,
+        vec![(PathBuf::from(B), sheet_with(vec![part(3, "R3", "12%")]))],
+    );
+    let listed = app.listed_closed_sheets();
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].1.symbols[0].fields["Tolerance"], "12%");
+    let csv = listed_csv(&app);
+    assert!(csv.contains("12%") && !csv.contains("10%"), "{csv}");
+}
+
+/// Project Q in `/v`, listing sheets c and d.
+const PROJECT_Q: &str = r#"{"name":"Q","dir":"/v","schematic_root":"c.snxsch","pcb_file":null,
+"sheets":[
+{"name":"c.snxsch","filename":"c.snxsch","symbols_count":0,"wires_count":0,"labels_count":0},
+{"name":"d.snxsch","filename":"d.snxsch","symbols_count":0,"wires_count":0,"labels_count":0}]}"#;
+
+/// Another project, or a loose sheet, in the main window: the closed sheets
+/// of P read for All sheets are neither listed nor exported.
+#[test]
+fn another_project_in_the_main_window_lists_and_exports_none_of_ps_closed_sheets() {
+    let mut app = with_closed_b_read();
+    let p_read = app.ui_state.parameter_table.closed.generation;
+    let prj = Path::new("/v/Q.snxprj");
+    let data =
+        signex_types::project::parse_project_bytes(prj, PROJECT_Q.as_bytes()).expect("project");
+    let q = app.document_state.mint_project_id();
+    app.document_state.projects.push(LoadedProject {
+        id: q,
+        path: prj.to_path_buf(),
+        data,
+        pending_libraries: HashMap::new(),
+        case_fold: Default::default(),
+        case_probed: false,
+        case_decided: false,
+    });
+    open(&mut app, "/v/c.snxsch", vec![part(5, "R5", "2%")], Some(q));
+    let c = app.document_state.tabs.len() - 1;
+    show(&mut app, c);
+    settle(&mut app);
+
+    assert!(app.listed_closed_sheets().is_empty());
+    assert_eq!(app.parameter_sheets(), paths(&["/v/c.snxsch"]));
+    let csv = listed_csv(&app);
+    assert!(!csv.contains("R3") && !csv.contains("b.snxsch"), "{csv}");
+    let closed = &app.ui_state.parameter_table.closed;
+    assert!(closed.reading, "Q's closed sheet d is read");
+    assert_eq!(closed.pages, paths(&["/v/d.snxsch"]));
+    land(
+        &mut app,
+        p_read,
+        vec![(PathBuf::from(B), sheet_with(vec![part(3, "R3", "10%")]))],
+    );
+    assert!(app.listed_closed_sheets().is_empty(), "P's read is dropped");
+
+    // The loose sheet: no project, no closed sheet.
+    let tabs = &app.document_state.tabs;
+    let loose = tabs.iter().position(|tab| tab.path == Path::new(LOOSE));
+    show(&mut app, loose.expect("the loose tab"));
+    settle(&mut app);
+    assert!(app.listed_closed_sheets().is_empty());
+    assert!(!app.ui_state.parameter_table.closed.reading);
+    let csv = listed_csv(&app);
+    assert!(!csv.contains("R3") && !csv.contains("R5"), "{csv}");
+}
+
+/// A closed sheet that cannot be read is left out of the table, and
+/// Messages names it with why.
+#[test]
+fn a_closed_sheet_that_cannot_be_read_is_named_in_messages_with_why() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let bad = dir.path().join("bad.snxsch");
+    std::fs::write(&bad, "not a sheet").expect("write");
+    let missing = dir.path().join("missing.snxsch");
+    let read = super::super::parameter_closed_sheets::read_sheets(&[bad.clone(), missing]);
+    assert!(read.sheets.is_empty());
+    assert_eq!(read.unread.len(), 1, "a missing sheet is not unreadable");
+    assert_eq!(read.unread[0].0, bad);
+    assert!(
+        read.unread[0].1.starts_with("could not be"),
+        "{}",
+        read.unread[0].1
+    );
+
+    let _ = crate::diagnostics::init_logging();
+    let mut app = app();
+    close_tab(&mut app, B);
+    all_sheets(&mut app);
+    let generation = app.ui_state.parameter_table.closed.generation;
+    let before = crate::diagnostics::newest_entry_id();
+    let _ = app.update(Message::ParameterManager(Pm::ClosedSheetsRead {
+        generation,
+        sheets: std::sync::Arc::default(),
+        unread: vec![(PathBuf::from(B), "could not be parsed (line 1)".to_string())],
+    }));
+    let said = said_since(before);
+    assert!(
+        said.iter().any(|line| line
+            == "Parameter Manager: b.snxsch is not listed, it could not be parsed (line 1)."),
+        "{said:?}"
+    );
+    assert_eq!(
+        app.closed_parameter_sheets(),
+        1,
+        "b is counted as not listed"
+    );
+}
+
+/// A read of the closed sheets that fails on its worker names every sheet
+/// it was for, with why; nothing is listed.
+#[test]
+fn a_failed_read_of_the_closed_sheets_names_each_sheet_in_messages() {
+    use super::super::parameter_closed_sheets::read_on_worker;
+    let runtime = tokio::runtime::Runtime::new().expect("runtime");
+    let read = runtime.block_on(read_on_worker(paths(&[B]), |_| panic!("worker stopped")));
+    assert!(read.sheets.is_empty());
+    assert_eq!(read.unread.len(), 1);
+    assert_eq!(read.unread[0].0, Path::new(B));
+    assert!(
+        read.unread[0]
+            .1
+            .starts_with("could not be read (the read failed:"),
+        "{}",
+        read.unread[0].1
+    );
+
+    let _ = crate::diagnostics::init_logging();
+    let mut app = app();
+    close_tab(&mut app, B);
+    all_sheets(&mut app);
+    let generation = app.ui_state.parameter_table.closed.generation;
+    let before = crate::diagnostics::newest_entry_id();
+    let _ = app.update(Message::ParameterManager(Pm::ClosedSheetsRead {
+        generation,
+        sheets: std::sync::Arc::new(read.sheets),
+        unread: read.unread,
+    }));
+    let said = said_since(before);
+    assert!(
+        said.iter()
+            .any(|line| line.contains("b.snxsch is not listed, it could not be read")),
+        "{said:?}"
+    );
+    assert!(app.listed_closed_sheets().is_empty());
 }

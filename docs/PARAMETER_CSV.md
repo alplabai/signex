@@ -100,10 +100,18 @@ With All sheets, the Parameter Manager also lists the sheets of the active
 sheet's project that are not open, after the open ones, by path (decided by
 Caner, 2026-11-25). They are read from disk on a worker when All sheets is
 picked; until the read lands, the scope bar says it is reading, and a sheet
-that could not be read stays counted as not listed. Their rows are
+that could not be read stays counted as not listed, Messages naming it and
+why (a read that fails on its worker names every sheet it was for). Their
+rows are
 read-only: a press on one of their cells opens the sheet, and once it is
 open its cells are edited as on any open sheet. An edit across sheets (a
 column added or removed, Apply of an import) that would change a closed
 sheet changes nothing and names the closed sheets to open. Nothing is ever
-written to a closed sheet's file. The copy is not read again while the
-window stays on All sheets; picking All sheets again reads it again.
+written to a closed sheet's file.
+
+Only the copies of the closed pages of the active sheet's project are
+listed and exported. While All sheets is shown, a copy goes when its sheet
+opens, and the closed sheets are read again when a project sheet closes (it
+may have been saved meanwhile) or when the main window moves to another
+project or to a loose file. A read that lands after a newer one started is
+dropped. Picking All sheets again also reads them again.

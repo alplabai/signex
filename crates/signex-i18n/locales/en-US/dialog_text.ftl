@@ -435,6 +435,8 @@ dialog-parameter-manager-closed-listed = { $count ->
 }
 # Scope bar note, All sheets: the closed sheets are being read.
 dialog-parameter-manager-closed-reading = Reading the closed sheets…
+# Messages line: a closed sheet All sheets would list could not be read. $sheet is the file name; $reason says why, starting "could not be".
+dialog-parameter-manager-closed-unread = Parameter Manager: { $sheet } is not listed, it { $reason }.
 # Messages line: an edit across sheets would change closed sheets, so nothing changed. $sheets lists their file names.
 dialog-parameter-manager-refused-closed = { $count ->
     [one] Parameter Manager: nothing changed; open { $sheets } first, it is closed.
