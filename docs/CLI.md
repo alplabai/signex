@@ -2069,6 +2069,58 @@ reason. It is a query on the agent channel and needs only `read`.
 checked against (`null` for a row not read from a store). The library row
 and part write commands of #2944 are not in this build.
 
+## Fabrication outputs
+
+`fabrication_outputs` writes what File ▸ Fabrication Outputs' Generate
+writes (#2470): the same files, built the same way from the board as it is in
+memory, into a folder. It needs the `export` capability (`--allow export`)
+and an open board (`open_document` it first). It changes nothing on the
+board and makes no undo step. It takes a `path`, so it is not on the agent
+channel of a running Signex.
+
+```text
+fabrication_outputs document=<board> path=<folder> [kinds=<list>] [name=<stem>] [whole_panel=<bool>]
+```
+
+- `path` is the output folder, made when missing; a relative one is read
+  against the project folder. Files of the same name are replaced; older
+  files of the same stem are listed, never deleted.
+- `kinds` lists what to write, comma separated: `gerber`, `drill` (Excellon,
+  with its drill table), `centroid` (pick and place), `test_netlist`
+  (IPC-D-356), `ipc2581`, `odb` (the ODB++ archive), `odb_folder` (the ODB++
+  job as a folder), `assembly_pdf`, `assembly_svg`, `step`. Left out, the
+  kinds the dialog has ticked for the board (its project's `fab_outputs`).
+  A job file is written whenever a kind other than the drawings and the
+  STEP model is.
+- `name` is the file-name stem (`<name>-centroid.csv`); the board's file
+  name when left out.
+- A board with a panel writes the whole panel unless `whole_panel=false`.
+
+The result line is `answered` once every file is written:
+
+```json
+{"document": "/p/board.snxpcb", "folder": "/p/fab", "name": "board",
+ "kinds": ["gerber", "drill", "centroid"], "whole_panel": false,
+ "files": [{"name": "board-centroid.csv", "path": "/p/fab/board-centroid.csv",
+            "kind": "centroid", "bytes": 214, "sha256": "<64 hex digits>"}],
+ "notes": [{"severity": "warning", "text": "..."}],
+ "stale": []}
+```
+
+- `files` lists every file written, in the job file's order: `kind` is
+  `gerber`, `drill`, `drill_table`, `centroid`, `test_netlist`, `ipc2581`,
+  `odb` (the archive, or each file of the folder form, named with `/`),
+  `job`, `assembly_pdf`, `assembly_svg` or `step`; `sha256` is the SHA-256 of
+  the bytes written, in lowercase hex.
+- `notes` are the dialog's notes: what the files leave out (`warning`) and
+  older files beside them (`error`), worded as in Messages.
+- `stale` names the older files of the same stem in the folder.
+
+A board that is not open, an unknown kind or `kinds` naming none is
+`refused` before anything is written; so is a board with no outline or a bad
+`name`, and a folder or file that cannot be written, once the run is tried.
+`docs/FABRICATION_OUTPUTS.md` describes the files.
+
 ## Working through a running Signex
 
 When a person has the project open in Signex with Preferences > System ›

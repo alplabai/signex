@@ -178,6 +178,11 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("export_assembly_svg", output::export_assembly_svg),
     ("board_assembly_drawing", output::board_assembly_drawing),
     ("export_board_step", output::export_board_step),
+    // #2470: the Fabrication Outputs dialog's Generate from operands.
+    (
+        "fabrication_outputs",
+        crate::app::fab_outputs::fabrication_outputs,
+    ),
     ("add_board_graphic", graphic::add_board_graphic),
     ("set_board_graphic", graphic::set_board_graphic),
     // #2470: the area tools on the board `document` names.

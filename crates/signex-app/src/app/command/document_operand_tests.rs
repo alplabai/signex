@@ -612,6 +612,8 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "board_assembly_drawing",
                     // #2488: the board STEP model.
                     "export_board_step",
+                    // #2470: the fabrication outputs into a folder.
+                    "fabrication_outputs",
                     // #2410: DXF import onto a board.
                     "import_dxf",
                     "import_dxf_outline",

@@ -75,6 +75,8 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("sides", OperandKind::Text),
     // #2488: the STEP schema of a board export.
     ("schema", OperandKind::Text),
+    // #2470: the fabrication outputs of a board's panel, not the board alone.
+    ("whole_panel", OperandKind::Bool),
     ("field", OperandKind::Text),
     ("requirement", OperandKind::Text),
     ("on", OperandKind::Bool),
