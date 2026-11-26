@@ -17,8 +17,10 @@
 //! The Sheets, Variants, Libraries, ERC and annotation and Version control
 //! sections (#1689-#1693) edit through the same history; their commands are
 //! in `sections` and each is a step of its own. So do the Requirements
-//! section's edits (#2339, `requirements`).
+//! section's edits (#2339, `requirements`) and the rails edit (#2943,
+//! `rails`).
 
+mod rails;
 mod requirements;
 mod sections;
 
@@ -33,6 +35,7 @@ use signex_types::project::{
     SchematicDefaultField, SchematicDefaultOverrides,
 };
 
+pub use rails::ProjectRailCommand;
 pub use requirements::ProjectRequirementCommand;
 pub use sections::ProjectSectionCommand;
 use sections::SectionsSnapshot;
@@ -369,6 +372,16 @@ impl ProjectGeneralHistory {
         data: &mut ProjectData,
         command: &ProjectRequirementCommand,
     ) -> Result<bool, signex_types::project::RequirementProblem> {
+        self.apply_step(data, |data| command.apply(data))
+    }
+
+    /// Apply one rails edit (#2943) as an undo step of its own, like
+    /// [`Self::apply_section`].
+    pub fn apply_rail(
+        &mut self,
+        data: &mut ProjectData,
+        command: &ProjectRailCommand,
+    ) -> Result<bool, signex_types::project::RailProblem> {
         self.apply_step(data, |data| command.apply(data))
     }
 

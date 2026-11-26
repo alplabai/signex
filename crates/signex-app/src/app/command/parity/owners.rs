@@ -636,6 +636,7 @@ const OPERAND_DOCUMENT: &[&str] = &[
     "project_run_requirements",
     "project_set_active_variant",
     "project_set_annotate_undo",
+    "project_set_rail",
     "project_set_requirement",
     "project_set_version_control",
     "redo",

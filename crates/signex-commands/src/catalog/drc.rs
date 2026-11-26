@@ -1,5 +1,6 @@
 //! Design rule check commands: run the DRC on the board in view and check
-//! it headless; and check the project's requirements headless.
+//! it headless; check the project's requirements headless; and answer its
+//! rail budget.
 
 use super::operands::{optional, required};
 use super::{
@@ -56,6 +57,18 @@ pub(super) const DRC: &[CommandMetadata] = &[
         enable: Enablement::Always,
         flags: CommandFlags::NONE,
         operands: operands::CHECK_REQUIREMENTS,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2943: every rail of the project against its parts; changes nothing.
+    CommandMetadata {
+        id: "query_rail_budget",
+        category: "validation",
+        label: command_ids::CMD_QUERY_RAIL_BUDGET,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::DOCUMENT,
         ..CommandMetadata::DEFAULT
     },
     // #2399: the DRC results panel and what it does. A violation is named by

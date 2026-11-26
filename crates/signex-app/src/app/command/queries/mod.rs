@@ -10,9 +10,10 @@
 //! (#2403), `board_panel` (#2410, `app::board_panel`), the layout plan's
 //! `layout_plan_get` and `layout_plan_status` (#2942, `app::layout_plan`),
 //! the Project tab's `project_settings` (#1689-#1693, `app::project_tab`),
-//! `query_footprint_assignments` (#2937, `footprint_assign_operands`), and
-//! `check_board_against_schematic` (#2462, `app::compare_board`) and
-//! `board_status` (#2460), answered once their reads land. Each
+//! `query_footprint_assignments` (#2937, `footprint_assign_operands`),
+//! `check_board_against_schematic` (#2462, `app::compare_board`),
+//! `board_status` (#2460) and `query_rail_budget` (#2943), answered once
+//! their reads land. Each
 //! answers with data through [`CommandOutcome::Answered`], never a bare
 //! `Ran`, and reads only the documents (engines, boards, editors, projects,
 //! the library): no active tab, window, selection or panel is looked at, and
@@ -34,6 +35,8 @@ mod elements;
 mod find;
 mod pins;
 pub(in crate::app::command) use pins::pin_id;
+mod rail_budget;
+pub use rail_budget::RailBudgetAnswered;
 mod read;
 mod sheet_view;
 mod transient;
@@ -75,6 +78,7 @@ const QUERY_IDS: &[&str] = &[
     "board_status",
     "layout_plan_get",
     "layout_plan_status",
+    "query_rail_budget",
 ];
 
 /// The queries that run a check (`check_run`): each says nothing in
@@ -144,6 +148,8 @@ impl Signex {
                 return Some(self.check_board_against_schematic(command, args));
             }
             "board_status" => return Some(self.board_status(command, args)),
+            // The project's rails against its parts, read off the UI thread.
+            "query_rail_budget" => return Some(self.query_rail_budget(command, args)),
             // The Rules manager's reads (#2398).
             "rules_list" | "rules_get" | "rules_effective" | "rules_explain"
             | "rules_conflicts" => {
@@ -223,3 +229,5 @@ pub(crate) mod check_drc_tests;
 mod check_erc_tests;
 #[cfg(test)]
 mod check_requirements_tests;
+#[cfg(test)]
+mod rail_budget_tests;

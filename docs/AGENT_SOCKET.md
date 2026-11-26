@@ -110,7 +110,9 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   (#1689-#1693), and the board against the schematic
   `check_board_against_schematic` (#2462) and the board's counters
   `board_status` (#2460), each answered once its reads land
-  ([CLI.md](CLI.md), "Board against schematic" and "Board status");
+  ([CLI.md](CLI.md), "Board against schematic" and "Board status"), and
+  `query_rail_budget` (#2943), answered once its parts are read
+  ([CLI.md](CLI.md), "Rail budgets");
 - a command that names its document with a required `document` operand and
   takes no file path (the placements' optional `document` does not count; they
   stay reachable through `apply_edits`): today `apply_edits`, `revert`, `color_net`,
@@ -199,7 +201,9 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   `project_enable_requirement` and `project_run_requirements` (#2339), and
   `apply_board_schematic_differences` (#2462; the Compare Board with
   Schematic Apply for the rows named by id, one board undo step and one
-  schematic undo group, answered once its reads land). A test
+  schematic undo group, answered once its reads land), and
+  `project_set_rail` (#2943; one undo step of the project's history,
+  [CLI.md](CLI.md), "Rail budgets"). A test
   pins this set, so a catalog row that joins or leaves it is a visible
   decision.
   The window-layout commands `tile_windows_horizontally`,

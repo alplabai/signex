@@ -218,6 +218,7 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "project_set_version_control",
             "project_set_requirement",
             "project_enable_requirement",
+            "project_set_rail",
             "bring_drawings_forward",
             "bring_drawings_to_front",
             "send_drawings_backward",
@@ -444,6 +445,8 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "measure_board",
             "query_board_nets",
             "query_pins",
+            // #2943: the project's rails and its parts, read off the UI thread.
+            "query_rail_budget",
             "read_document",
         ],
         Query,

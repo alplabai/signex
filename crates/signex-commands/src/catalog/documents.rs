@@ -456,4 +456,16 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         operands: operands::DOCUMENT,
         ..CommandMetadata::DEFAULT
     },
+    // #2943: a power rail's voltage and tolerance, one General step.
+    CommandMetadata {
+        id: "project_set_rail",
+        category: "design",
+        label: command_ids::CMD_PROJECT_SET_RAIL,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::PROJECT_SET_RAIL,
+        ..CommandMetadata::DEFAULT
+    },
 ];

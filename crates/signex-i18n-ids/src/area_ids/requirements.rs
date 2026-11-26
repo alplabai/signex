@@ -94,4 +94,26 @@ define_ids! {
     REQUIREMENTS_BOARD_MARGIN = "requirements-board-margin";
     REQUIREMENTS_BOARD_FITS = "requirements-board-fits";
     REQUIREMENTS_BOARD_DOES_NOT_FIT = "requirements-board-does-not-fit";
+    // requirements-rails-and-layers (#2943)
+    REQUIREMENTS_KIND_RAIL_BUDGET = "requirements-kind-rail-budget";
+    REQUIREMENTS_KIND_LAYER_COUNT = "requirements-kind-layer-count";
+    REQUIREMENTS_FIELD_NET = "requirements-field-net";
+    REQUIREMENTS_FIELD_VOLTAGE = "requirements-field-voltage";
+    REQUIREMENTS_FIELD_TOLERANCE = "requirements-field-tolerance";
+    REQUIREMENTS_FIELD_MAX_CURRENT = "requirements-field-max-current";
+    REQUIREMENTS_FIELD_MARGIN = "requirements-field-margin";
+    REQUIREMENTS_FIELD_MIN_LAYERS = "requirements-field-min-layers";
+    REQUIREMENTS_FIELD_MAX_LAYERS = "requirements-field-max-layers";
+    REQUIREMENTS_SUMMARY_RAIL_BUDGET = "requirements-summary-rail-budget";
+    REQUIREMENTS_SUMMARY_RAIL_SUPPLY = "requirements-summary-rail-supply";
+    REQUIREMENTS_SUMMARY_RAIL_VOLTAGE = "requirements-summary-rail-voltage";
+    REQUIREMENTS_SUMMARY_RAIL_VOLTAGE_TOLERANCE = "requirements-summary-rail-voltage-tolerance";
+    REQUIREMENTS_SUMMARY_RAIL_MAX_CURRENT = "requirements-summary-rail-max-current";
+    REQUIREMENTS_SUMMARY_RAIL_MARGIN = "requirements-summary-rail-margin";
+    REQUIREMENTS_SUMMARY_LAYER_RANGE = "requirements-summary-layer-range";
+    REQUIREMENTS_SUMMARY_LAYER_MIN = "requirements-summary-layer-min";
+    REQUIREMENTS_SUMMARY_LAYER_MAX = "requirements-summary-layer-max";
+    REQUIREMENTS_PROBLEM_NOT_A_VOLTAGE = "requirements-problem-not-a-voltage";
+    REQUIREMENTS_PROBLEM_NOT_A_PERCENT = "requirements-problem-not-a-percent";
+    REQUIREMENTS_PROBLEM_LAYER_COUNT_ASKS_NOTHING = "requirements-problem-layer-count-asks-nothing";
 }

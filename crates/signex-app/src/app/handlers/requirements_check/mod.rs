@@ -9,6 +9,7 @@
 //! `docs/CLI.md`, "Requirement checks".
 
 mod bom;
+mod rails;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -84,6 +85,7 @@ impl Signex {
             } else {
                 Default::default()
             },
+            rails: data.rails(),
             warnings: Vec::new(),
         };
         move || {
