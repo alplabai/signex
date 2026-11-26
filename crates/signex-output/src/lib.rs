@@ -11,6 +11,7 @@ use signex_types::schematic::SchematicSheet;
 use thiserror::Error;
 
 pub mod assembly;
+pub mod block_diagram;
 pub mod board_report;
 pub mod bom;
 pub mod erc;
@@ -28,6 +29,9 @@ pub mod template;
 pub mod variant_fit;
 
 pub use assembly::{AssemblyDrawing, AssemblyInk, AssemblyMark, assembly_drawing, assembly_ink};
+pub use block_diagram::{
+    BlockDiagramDrawing, BlockDiagramFormat, BlockDiagramLook, BlockMark, block_diagram_drawing,
+};
 pub use board_report::{
     BoardReport, BoardReportKind, ReportCell, ReportColumn, ReportSide, board_report,
 };
@@ -42,6 +46,9 @@ pub use erc::{
 };
 pub use field_value::{ShownValue, ValueScope, sheet_context, shown_value};
 pub use netlist::{NetlistExporter, NetlistFormat, NetlistOptions, NetlistOutput};
+pub use pdf::block_diagram::{
+    BlockDiagramPdfOptions, BlockDiagramPdfOutput, BlockDiagramPdfText, block_diagram_pdf,
+};
 pub use pdf::board::{
     BoardLayerSet, BoardPdfError, BoardPdfOutput, BoardPdfPage, BoardPrintOptions, BoardPrintPages,
     BoardPrintScale, BoardPrintText, board_pdf,
@@ -59,6 +66,7 @@ pub use preview::{
 };
 pub use reference_display::show_board_references;
 pub use substitution::{SubstitutionContext, resolve, resolve_text};
+pub use svg::block_diagram::block_diagram_svg;
 pub use svg::board::{AssemblySvgOptions, assembly_svg};
 pub use template::{Template, TemplateError, TemplateId, TitleBlockField};
 pub use variant_fit::{

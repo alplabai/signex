@@ -151,6 +151,11 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("export_assembly_svg", output::export_assembly_svg),
     ("board_assembly_drawing", output::board_assembly_drawing),
     ("export_board_step", output::export_board_step),
+    // #2796: a block diagram's saved file as SVG or PDF.
+    (
+        "export_block_diagram",
+        crate::app::block_diagram_export::export_block_diagram,
+    ),
     ("add_board_graphic", graphic::add_board_graphic),
     ("set_board_graphic", graphic::set_board_graphic),
     ("set_footprint_text", fp_text::set_footprint_text),

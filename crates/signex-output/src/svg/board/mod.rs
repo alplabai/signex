@@ -161,13 +161,13 @@ fn path(frame: &Frame, points: &[Point], closed: bool) -> String {
 }
 
 /// `#rrggbb` of a 0..1 colour.
-fn hex((r, g, b): (f32, f32, f32)) -> String {
+pub(crate) fn hex((r, g, b): (f32, f32, f32)) -> String {
     let byte = |c: f32| (c.clamp(0.0, 1.0) * 255.0).round() as u8;
     format!("#{:02x}{:02x}{:02x}", byte(r), byte(g), byte(b))
 }
 
 /// A number to the micrometre, trailing zeros dropped, never `-0`.
-fn num(v: f64) -> String {
+pub(crate) fn num(v: f64) -> String {
     if !v.is_finite() {
         return "0".to_string();
     }

@@ -642,6 +642,7 @@ define_ids! {
         CMD_MENU_BOARD_ASSEMBLY_DRAWING = "cmd-menu-board-assembly-drawing";
         CMD_EXPORT_BOARD_STEP = "cmd-export-board-step";
         CMD_MENU_EXPORT_BOARD_STEP = "cmd-menu-export-board-step";
+        CMD_EXPORT_BLOCK_DIAGRAM = "cmd-export-block-diagram";
         CMD_SELECT_BOARD_NET = "cmd-select-board-net";
         CMD_MENU_SELECT_BOARD_NET = "cmd-menu-select-board-net";
         CMD_HIGHLIGHT_BOARD_NET = "cmd-highlight-board-net";

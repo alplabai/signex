@@ -543,6 +543,8 @@ pub enum ExportMsg {
         source: std::path::PathBuf,
         outcome: Box<ExportWriteOutcome>,
     },
+    /// A block diagram's SVG or PDF export (#2796).
+    BlockDiagram(crate::app::BlockDiagramExportMsg),
 }
 
 /// What an export's background file write produced, carried back to `update`

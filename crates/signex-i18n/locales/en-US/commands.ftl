@@ -666,6 +666,7 @@ cmd-board-assembly-drawing = Open Board Print / PDF for an assembly drawing
 cmd-menu-board-assembly-drawing = Assembly Drawing…
 cmd-export-board-step = Export the board and its parts as a STEP 3D model
 cmd-menu-export-board-step = STEP 3D Model…
+cmd-export-block-diagram = Export a block diagram as an SVG or PDF file
 cmd-select-board-net = Select every track, via and pad of a board net
 cmd-menu-select-board-net = Select Net
 cmd-highlight-board-net = Highlight a board net

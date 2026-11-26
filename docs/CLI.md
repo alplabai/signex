@@ -1117,6 +1117,33 @@ query_block_diagram document=<diagram>
 - A diagram from a newer Signex opens read-only: every edit and its save are
   refused with the reason.
 
+## Block diagram export
+
+`export_block_diagram` writes a block diagram (`.snxblk`) as an SVG or PDF
+file (#2796). It reads the diagram's saved file, so the diagram need not be
+open. It needs the `export` capability.
+
+```text
+export_block_diagram document=<diagram.snxblk> path=<file> [kind=svg|pdf] [monochrome=true] [title_block=false]
+```
+
+- `document` is the diagram: a path (relative to the project folder) or the
+  id of an open or listed document. Anything but a `.snxblk` is refused.
+- `path` is the file to write; it is replaced if it exists. The format is
+  `kind`, else the extension of `path` (`.svg` or `.pdf`); a path with
+  neither and no `kind` is refused, as is `path` naming the diagram itself.
+- `monochrome=true` draws every mark in black. `title_block=false` leaves
+  the PDF's title block off; an SVG has none.
+
+The command is answered once the file is written, with `document`, `path`,
+`kind`, `blocks`, `connections`, `groups`, `bytes` (the size written),
+`extent_mm` (`min` and `max`, diagram mm), `scale` (page mm per diagram mm
+on the PDF page; `null` for SVG, which is 1:1), `uncovered_chars`
+(characters no bundled font covers, PDF only) and `read_only` (the file is
+from a newer Signex; it still exports). A diagram that cannot be read is
+refused after the read, with nothing written. What is drawn is in
+[BLOCK_DIAGRAM_EXPORT.md](BLOCK_DIAGRAM_EXPORT.md).
+
 ## Working through a running Signex
 
 When a person has the project open in Signex with Preferences > System ›
