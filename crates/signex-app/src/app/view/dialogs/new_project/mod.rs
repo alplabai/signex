@@ -91,7 +91,8 @@ impl Signex {
             container(
                 column![
                     fields(state, i18n, tokens),
-                    cards::profiles(state, &self.ui_state.setup_profiles, i18n, tokens).map(np),
+                    cards::profiles(state, &self.document_state.setup_profiles, i18n, tokens)
+                        .map(np),
                     customize::section(state, i18n, tokens).map(np),
                 ]
                 .spacing(SP.xl + SP.s),

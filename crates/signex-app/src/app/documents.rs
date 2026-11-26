@@ -344,12 +344,6 @@ pub struct SymbolEditorView {
     /// The pin type picked in the Place Pin dropdown, stamped on every
     /// following placed pin; `None` places unclassified pins (mockup row 141).
     pub pin_type: Option<signex_types::schematic::PinDirection>,
-    /// Set to `true` on the first `Move`/`MoveAll`/`MoveGraphicHandle`
-    /// in a drag sequence so subsequent move events in the same drag do
-    /// NOT push additional snapshots (the pre-drag snapshot is already
-    /// on the undo stack). Cleared by `SymbolDragCommit` (emitted on
-    /// `ButtonReleased`).
-    pub mid_drag: bool,
     /// `(graphic, radius at drag start, radius last written)` while a grip
     /// drags a Round Rectangle, so its clamp depends only on the current
     /// size. A stored radius other than the last written one is a new start.
@@ -491,7 +485,6 @@ impl SymbolEditorView {
             active_bar_menu: None,
             placement_paused: false,
             pin_type: None,
-            mid_drag: false,
             drag_corner_radius: None,
             graphic_fill_picker: None,
             local_color_picker: None,

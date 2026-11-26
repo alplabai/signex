@@ -391,7 +391,7 @@ impl Signex {
     fn fab_profile_name(&self, id: ProjectId) -> Option<String> {
         let project = self.document_state.project_by_id(id)?;
         let token = project.data.project_defaults.profile.as_deref()?;
-        let name = match resolve_profile(token, &self.ui_state.setup_profiles)? {
+        let name = match resolve_profile(token, &self.document_state.setup_profiles)? {
             ProfileRef::BuiltIn(tier) | ProfileRef::Edited { profile: tier, .. } => {
                 t!(self.ui_state.i18n, profile_name_id(tier)).into_string()
             }

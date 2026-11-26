@@ -664,7 +664,7 @@ fn a_pending_fit_does_not_swallow_the_event_that_triggers_the_measurement() {
 
     rig.press((0.0, 0.0));
     rig.moved((0.0, 2.54));
-    assert!(rig.editor.gui.mid_drag, "the drag is under way");
+    assert!(rig.editor.draft.is_moving(), "the drag is under way");
     rig.home();
     assert!(rig.editor.gui.pending_view.is_some());
 
@@ -674,7 +674,7 @@ fn a_pending_fit_does_not_swallow_the_event_that_triggers_the_measurement() {
 
     assert_eq!(rig.editor.gui.pending_view, None, "the view was applied");
     assert!(
-        !rig.editor.gui.mid_drag,
+        !rig.editor.draft.is_moving(),
         "the release still committed the drag gesture"
     );
 }

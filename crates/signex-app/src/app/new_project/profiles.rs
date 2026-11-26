@@ -1,7 +1,7 @@
 //! Save as profile and Remove (#2232, 2026-11-12): the two setup edits that
 //! change the user's profile list, shared by the New Project, New PCB and
 //! New Schematic dialogs and the Project tab. The list lives in
-//! `UiState::setup_profiles`; each edit is merged into `prefs.json` by id off
+//! `DocumentState::setup_profiles`; each edit is merged into `prefs.json` by id off
 //! the update thread, in the order made, so entries this build cannot read
 //! are kept. A write that fails undoes the in-memory change.
 
@@ -177,7 +177,7 @@ impl Signex {
             ),
             ProfileStored::Removed { profile, at } => {
                 let note = t!(i18n, ids::SETUP_PROFILE_REMOVED, "name" => profile.name.as_str());
-                self.ui_state
+                self.document_state
                     .removed_profile_names
                     .insert(profile.id.clone(), profile.name.clone());
                 (
@@ -252,7 +252,7 @@ impl Signex {
     }
 
     fn undo_profile_change(&mut self, undo: ProfileUndo) {
-        let users = &mut self.ui_state.setup_profiles;
+        let users = &mut self.document_state.setup_profiles;
         match undo {
             ProfileUndo::Saved { id, previous } => {
                 match (users.iter().position(|p| p.id == id), previous) {
@@ -279,7 +279,7 @@ impl Signex {
 
     fn rename_profile_id(&mut self, from: &str, to: &str) {
         if let Some(profile) = self
-            .ui_state
+            .document_state
             .setup_profiles
             .iter_mut()
             .find(|p| p.id == from)
