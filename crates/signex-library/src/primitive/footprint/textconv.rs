@@ -37,17 +37,35 @@ fn value_of<'a>(line: &'a str, key: &str) -> Option<&'a str> {
     Some(rest.trim().trim_matches('"'))
 }
 
+/// True when `trimmed` is a TOML table header (`[name]`, `[[name]]`), the
+/// only line that ends a `[[models]]` entry.
+fn is_table_header(trimmed: &str) -> bool {
+    let inner = trimmed
+        .strip_prefix("[[")
+        .and_then(|t| t.strip_suffix("]]"))
+        .or_else(|| trimmed.strip_prefix('[').and_then(|t| t.strip_suffix(']')));
+    inner.is_some_and(|name| {
+        !name.trim().is_empty()
+            && name.chars().all(|c| {
+                c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.' | ' ' | '"' | '\'')
+            })
+    })
+}
+
 /// `text` with every `[[models]]` `data` value replaced by a line like
 /// `data = <deflate+base64, 482113 bytes, sha256 ab12cd34ef56…>`. Every
 /// other line is kept byte for byte; text that is not a footprint file
-/// comes back unchanged.
+/// comes back unchanged, and so does a `'''` block that is never closed.
 pub fn textconv_footprint_text(text: &str) -> String {
     let mut out = String::with_capacity(text.len().min(1 << 20));
     let mut entry: Option<Entry> = None;
+    let mut at = 0;
     let mut lines = text.split_inclusive('\n');
     while let Some(line) = lines.next() {
+        let start = at;
+        at += line.len();
         let trimmed = line.trim();
-        if trimmed.starts_with('[') {
+        if is_table_header(trimmed) {
             entry = (trimmed == "[[models]]").then(Entry::default);
             out.push_str(line);
             continue;
@@ -57,22 +75,24 @@ pub fn textconv_footprint_text(text: &str) -> String {
             continue;
         };
         if let Some(rest) = value_of(line, "data") {
-            let newline = if line.ends_with('\n') { "\n" } else { "" };
             // A `'''` block runs to the line that closes it.
             let mut closed = !rest.starts_with("'''") || (rest.len() >= 6 && rest.ends_with("'''"));
             let mut last = line;
             while !closed {
-                match lines.next() {
-                    Some(next) => {
-                        closed = next.trim_end().ends_with("'''");
-                        last = next;
-                    }
-                    None => break,
-                }
+                let Some(next) = lines.next() else { break };
+                at += next.len();
+                closed = next.trim_end().ends_with("'''");
+                last = next;
             }
-            let newline = if last.ends_with('\n') { "\n" } else { newline };
+            if !closed {
+                // Never closed: not a block this reads; print it as it is.
+                out.push_str(&text[start..]);
+                break;
+            }
             out.push_str(&fields.summary());
-            out.push_str(newline);
+            if last.ends_with('\n') {
+                out.push('\n');
+            }
             continue;
         }
         if let Some(hash) = value_of(line, "hash") {

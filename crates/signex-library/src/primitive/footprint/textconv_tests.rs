@@ -63,3 +63,21 @@ fn text_without_models_is_unchanged() {
     );
     assert_eq!(textconv_footprint_text(""), "");
 }
+
+#[test]
+fn an_unclosed_data_block_is_printed_as_it_is() {
+    let text = "[[models]]\nhash = \"ab\"\ndata = '''\nAAAA\nBBBB\n";
+    assert_eq!(textconv_footprint_text(text), text);
+}
+
+#[test]
+fn only_a_table_header_ends_a_models_entry() {
+    let text = "[[models]]\nhash = \"ab\"\n[not a header\nsize = 3\ndata = '''\nAAAA\n'''\n";
+    let shown = textconv_footprint_text(text);
+    assert!(
+        shown.ends_with("data = <?, 3 bytes, sha256 ab>\n"),
+        "{shown}"
+    );
+    let after = "[[models]]\nhash = \"ab\"\n[[footprints]]\ndata = '''\nAAAA\n'''\n";
+    assert_eq!(textconv_footprint_text(after), after);
+}
