@@ -195,7 +195,12 @@ impl Signex {
 /// as Run DRC says it (#2986). A part whose model could not be read was
 /// judged on its stored height, so the remaining count is not given as if
 /// the check were whole: `count` is null and `complete` false.
-pub(super) fn fix_answer(board: &Path, worked: &WorkedFixes, dry_run: bool, changes: bool) -> Value {
+pub(super) fn fix_answer(
+    board: &Path,
+    worked: &WorkedFixes,
+    dry_run: bool,
+    changes: bool,
+) -> Value {
     let run = &worked.run;
     let mut answer = run_json(board, run, dry_run, changes);
     answer["remaining"] = remaining_json(&run.report, &run.board);

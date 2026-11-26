@@ -251,13 +251,18 @@ pub(super) fn set_footprint_position(app: &mut Signex, args: &CommandArgs) -> Ra
         },
         None => CornerRule::default(),
     };
-    run(app, args, ids::PCB_COMPONENT_POSITION, move |_, board, ids| {
-        let corner = pcb_geom::stretch_rule(rule);
-        let places = places(board, ids, args)?;
-        let mut new_ids = signex_types::object_id::UuidV7Ids;
-        footprint_place::position_commands(board, &places, corner, &mut new_ids)
-            .map_err(|refusal| refusal.to_string())
-    })
+    run(
+        app,
+        args,
+        ids::PCB_COMPONENT_POSITION,
+        move |_, board, ids| {
+            let corner = pcb_geom::stretch_rule(rule);
+            let places = places(board, ids, args)?;
+            let mut new_ids = signex_types::object_id::UuidV7Ids;
+            footprint_place::position_commands(board, &places, corner, &mut new_ids)
+                .map_err(|refusal| refusal.to_string())
+        },
+    )
 }
 
 /// `set_footprint_rotation document=<board> id=<uuid> rotation=<deg>`: the

@@ -73,5 +73,8 @@ fn waived_counts_every_finding_of_the_report_not_the_panel_rows() {
     let drc: &Value = &answer["drc"];
     assert_eq!(drc["ran"], true, "{answer}");
     assert_eq!(drc["violations"], 600, "{answer}");
-    assert_eq!(drc["waived"], 1, "the waiver past the panel's rows counts: {answer}");
+    assert_eq!(
+        drc["waived"], 1,
+        "the waiver past the panel's rows counts: {answer}"
+    );
 }

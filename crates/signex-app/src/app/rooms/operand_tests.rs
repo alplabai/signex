@@ -418,5 +418,8 @@ fn a_room_and_a_footprint_from_operands_share_the_board_frame() {
         .expect("R1 is the room's");
     assert_eq!(r1["inside"], true, "{answer}");
     let outline = &answer["room"]["outline"];
-    assert_eq!((outline["x"].as_f64(), outline["y"].as_f64()), (Some(0.0), Some(0.0)));
+    assert_eq!(
+        (outline["x"].as_f64(), outline["y"].as_f64()),
+        (Some(0.0), Some(0.0))
+    );
 }

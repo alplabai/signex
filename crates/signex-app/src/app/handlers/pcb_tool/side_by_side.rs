@@ -125,8 +125,8 @@ impl Signex {
         }
         let defaults = &self.interaction_state.pcb_tool_defaults;
         let via_at = |anchor| defaults.via(board, Uuid::now_v7(), anchor);
-        let (members, start_vias) =
-            member_starts(board, &rules, (&nets, layer), at, via_at).map_err(|net| {
+        let (members, start_vias) = member_starts(board, &rules, (&nets, layer), at, via_at)
+            .map_err(|net| {
                 let name = net_name(board, net);
                 t!(i18n, ids::PCB_ROUTE_MEMBER_NO_COPPER, "net" => name).into_string()
             })?;

@@ -1,9 +1,5 @@
 //! The routing tools and the Via tool from their operands (#2470): what the
-//! co/// A length in mm above zero that the board file can store (#2985): a
-/// size past its range would make every later Save fail.
-fn length(operand: &'static str, value: &str) -> Result<f64, Translatable> {
-    parse_number(value)
-        .filter(|mm| *mm > 0.0 && mm_as_stored_nm(*mm).is_some())and line runs to route a board net by net through the interactive
+//! command line runs to route a board net by net through the interactive
 //! router, on the board `document` names. The points count from the board
 //! origin with Y up; a point also takes a pad as `<designator>.<pad>`. The
 //! route is planned and landed by `handlers::pcb_tool::route_order` as one
@@ -240,7 +236,10 @@ fn through(board: &PcbBoard, args: &CommandArgs) -> Result<Vec<Point>, Translata
     let origin = board.options.origin;
     let points =
         super::mm_points(list).ok_or_else(|| Translatable::new(ids::PCB_ROUTE_ORDER_POINTS))?;
-    points.into_iter().map(|p| stored(origin.from_user(p))).collect()
+    points
+        .into_iter()
+        .map(|p| stored(origin.from_user(p)))
+        .collect()
 }
 
 /// The copper layer `name` names, when the board has it.

@@ -438,7 +438,8 @@ fn a_component_rule_takes_no_net_condition() {
 #[test]
 fn a_component_rule_on_an_inner_or_outer_layer_is_refused() {
     for side in ["inner", "outer", "Inner1Copper"] {
-        let text = format!("rule h on component when layer == {side} require height <= 1mm then error");
+        let text =
+            format!("rule h on component when layer == {side} require height <= 1mm then error");
         let got = compile(&text);
         let found = messages(&got);
         assert_eq!(found.len(), 1, "{side}: {found:?}");

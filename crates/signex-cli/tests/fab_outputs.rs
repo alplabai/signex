@@ -143,8 +143,9 @@ fn fabrication_outputs_refuses_a_link_inside_its_folder() {
     assert_eq!(line["status"], "refused", "{}\n{}", out.stdout, out.stderr);
     let reason = line["reason"].as_str().unwrap_or_default();
     assert!(reason.contains("symbolic link"), "{reason}");
-    let landed: Vec<_> = std::fs::read_dir(elsewhere.path())
-        .expect("list")
-        .collect();
-    assert!(landed.is_empty(), "nothing written through the link: {landed:?}");
+    let landed: Vec<_> = std::fs::read_dir(elsewhere.path()).expect("list").collect();
+    assert!(
+        landed.is_empty(),
+        "nothing written through the link: {landed:?}"
+    );
 }

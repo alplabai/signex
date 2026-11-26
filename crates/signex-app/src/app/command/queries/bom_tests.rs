@@ -391,8 +391,7 @@ fn search_parts_finds_the_same_parts_whatever_the_window_language() {
         .expect("the table")
         .push(pic);
     app.library.touch_data();
-    app.ui_state.i18n =
-        std::sync::Arc::new(signex_i18n::I18n::with_message_locale_for_test("tr"));
+    app.ui_state.i18n = std::sync::Arc::new(signex_i18n::I18n::with_message_locale_for_test("tr"));
     let found = answer(&mut app, "search_parts", &["query=pic"]);
     assert_eq!(found["count"], 1, "{found}");
     assert_eq!(found["matches"][0]["part"], json!(pic_id.to_string()));

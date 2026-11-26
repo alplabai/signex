@@ -321,7 +321,8 @@ fn a_fix_judged_on_a_stored_height_names_the_model_and_gives_no_count() {
         &mut signex_types::object_id::UuidV7Ids,
     )
     .expect("fixes");
-    let unread = "DRC: the 3D model of lib:U1 could not be read (bad file); its stored height is used";
+    let unread =
+        "DRC: the 3D model of lib:U1 could not be read (bad file); its stored height is used";
     let worked = super::WorkedFixes {
         run,
         rule_warnings: Vec::new(),
