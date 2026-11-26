@@ -1100,6 +1100,8 @@ mod refresh;
 #[cfg(test)]
 mod refresh_tests;
 mod relocate;
+#[cfg(test)]
+mod scale_bench_tests;
 mod stock_copy;
 mod symbol_choice;
 mod table_scan;
