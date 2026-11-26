@@ -31,10 +31,12 @@ work=$(mktemp -d "${TMPDIR:-/tmp}/signex-demo-$name.XXXXXX")
 runtime=$(mktemp -d /tmp/sxd.XXXXXX)
 xvfb_pid="" app_pid="" ffmpeg_pid=""
 cleanup() {
-	[ -n "$ffmpeg_pid" ] && kill -INT "$ffmpeg_pid" 2>/dev/null && wait "$ffmpeg_pid" 2>/dev/null
+	# Each `|| true`: a process already gone fails its `kill`, and under
+	# `set -e` that would turn a finished recording into exit 1.
+	[ -n "$ffmpeg_pid" ] && kill -INT "$ffmpeg_pid" 2>/dev/null && wait "$ffmpeg_pid" 2>/dev/null || true
 	# Only the processes this script started; the user's own Signex is never touched.
-	[ -n "$app_pid" ] && kill "$app_pid" 2>/dev/null && sleep 2 && kill -9 "$app_pid" 2>/dev/null
-	[ -n "$xvfb_pid" ] && kill "$xvfb_pid" 2>/dev/null
+	[ -n "$app_pid" ] && kill "$app_pid" 2>/dev/null && sleep 2 && kill -9 "$app_pid" 2>/dev/null || true
+	[ -n "$xvfb_pid" ] && kill "$xvfb_pid" 2>/dev/null || true
 	if [ "${DEMO_KEEP_WORK:-0}" != 1 ]; then rm -rf "$work"; fi
 	rm -rf "$runtime"
 	return 0
