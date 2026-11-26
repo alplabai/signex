@@ -612,6 +612,12 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "send_drawings_backward",
                     "send_drawings_to_back",
                     "delete_selection",
+                    // #2838: the symbol editor's curve shapes, on the
+                    // symbol named.
+                    "symbol_draw_elliptical_arc",
+                    "symbol_draw_bezier",
+                    "symbol_draw_round_rectangle",
+                    "symbol_draw_pie",
                 ]
                 .contains(&name),
                 "{name} declares a document operand"

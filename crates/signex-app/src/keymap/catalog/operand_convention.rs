@@ -118,6 +118,16 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     // #2552: a move's wire handling, given by the caller, not the settings.
     ("keep_wires", OperandKind::Bool),
     ("wiring", OperandKind::Text),
+    // #1267, #2838: the curve shapes of a sheet and of a symbol body.
+    ("center", OperandKind::Point),
+    ("radius", OperandKind::Length),
+    ("radius_x", OperandKind::Length),
+    ("radius_y", OperandKind::Length),
+    ("start_angle", OperandKind::Turn),
+    ("end_angle", OperandKind::Turn),
+    ("corner_radius", OperandKind::Length),
+    ("control_1", OperandKind::Point),
+    ("control_2", OperandKind::Point),
 ];
 
 /// The commands whose `ids` is still text, not targets (#2326): a design

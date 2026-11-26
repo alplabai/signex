@@ -64,6 +64,9 @@ pub(crate) enum Needs {
     Canvas,
     FitTarget,
     FootprintEditor,
+    /// The symbol editor's shapes drawn from operands (#2838): a `.snxsym`
+    /// editor tab.
+    SymbolEditor,
     Pcb,
     /// A board edit tool (Place, Board Sketch): a board in view that is not
     /// read-only (#2405).
@@ -173,6 +176,7 @@ impl Needs {
             // The keystroke opens the footprint editor's grid picker and does
             // nothing elsewhere.
             Self::FootprintEditor => ctx.has_footprint_editor,
+            Self::SymbolEditor => ctx.has_symbol_editor,
             Self::Pcb => ctx.has_pcb,
             Self::NetClassTable => ctx.has_schematic || ctx.has_pcb,
             Self::EditablePcb => ctx.has_pcb && !ctx.pcb.read_only,
@@ -297,6 +301,7 @@ impl Needs {
             | Self::ActiveSheet
             | Self::Canvas
             | Self::FootprintEditor
+            | Self::SymbolEditor
             | Self::Pcb
             | Self::NetClassTable
             | Self::EditablePcb
@@ -340,6 +345,7 @@ impl Needs {
             Self::Sheets => ids::COMMAND_NEEDS_SHEETS,
             Self::ActiveSheet => ids::COMMAND_NEEDS_ACTIVE_SHEET,
             Self::FootprintEditor => ids::COMMAND_NEEDS_FOOTPRINT_EDITOR,
+            Self::SymbolEditor => ids::COMMAND_NEEDS_SYMBOL_EDITOR,
             Self::Pcb => ids::COMMAND_NEEDS_PCB,
             Self::EditablePcb => ids::COMMAND_NEEDS_EDITABLE_PCB,
             Self::MeasureTarget => ids::COMMAND_NEEDS_MEASURE_TARGET,
@@ -625,6 +631,11 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
             Needs::FitTarget
         }
         "cycle_snap_grid_forward" | "open_grid_picker" => Needs::FootprintEditor,
+        // #2838: the symbol editor's shapes, on the open symbol named.
+        "symbol_draw_elliptical_arc"
+        | "symbol_draw_bezier"
+        | "symbol_draw_round_rectangle"
+        | "symbol_draw_pie" => Needs::SymbolEditor,
         "toggle_ratsnest"
         // #2879: Shift+E on a board.
         | "cycle_board_snapping"

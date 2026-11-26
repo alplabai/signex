@@ -685,6 +685,37 @@ same, is `refused`. The run answers with the drawing's `id` and its `kind`
 {"id": "0192f3a4-...", "kind": "ellipse"}
 ```
 
+## Symbol shapes
+
+The symbol editor's curve tools (#2838) draw on the open symbol `document`
+names, a `.snxsym` id or path:
+
+```text
+symbol_draw_elliptical_arc document=.. center=x,y radius_x=.. radius_y=.. start_angle=.. end_angle=..
+symbol_draw_bezier document=.. start=x,y control_1=x,y control_2=x,y end=x,y
+symbol_draw_round_rectangle document=.. start=x,y end=x,y [corner_radius=..]
+symbol_draw_pie document=.. center=x,y radius=.. start_angle=.. end_angle=..
+```
+
+Points are in the symbol's own mm, as the editor's status bar reads them,
+taken as given; a pin reference is `refused`. Angles are degrees within
+±360, counter-clockwise from the start angle to the end angle, stored in
+`[0, 360)`. A left-out corner radius is the tool's 1.27 mm; any radius is
+held to half the short side. Each shape is one undo step of the symbol's
+editor, with the tool's stroke and no fill, on the part and body the editor
+shows. A shape with no visible size, an arc or pie whose angles are the same,
+or a Bezier whose four points are one is `refused`. A symbol that is not open
+in an editor is `refused`: open it first with `open_document`. The run
+answers with the graphic:
+
+```json
+{"document": "/lib/R.snxsym", "index": 3, "kind": "pie", "part": 1,
+ "body_style": 1, "stroke_width": 0.15, "shape": {"...": "..."}}
+```
+
+These commands are on the agent channel; `apply_edits` does not carry them,
+since a symbol keeps its own editor's undo stack.
+
 ## Placement extras
 
 The operand forms of three placement extras (#1667). Each is one undo step

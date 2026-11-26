@@ -465,6 +465,18 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     ),
     // The named board only (#2522): nothing implicit.
     (&["reset_board_origin", "reset_layer_colors"], Operand, &[]),
+    // #2838: the shape lands on the part and body the symbol's editor shows
+    // (`SymbolDocument::view`), as a click of the tool does.
+    (
+        &[
+            "symbol_draw_bezier",
+            "symbol_draw_elliptical_arc",
+            "symbol_draw_pie",
+            "symbol_draw_round_rectangle",
+        ],
+        Operand,
+        &[ToolState],
+    ),
     (
         &["new_pcb_document", "new_schematic_sheet"],
         HeadlessWithoutOperands,

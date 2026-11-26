@@ -388,6 +388,10 @@ stitch_vias
 swap_gates
 swap_pins
 switch_segment_posture
+symbol_draw_bezier
+symbol_draw_elliptical_arc
+symbol_draw_pie
+symbol_draw_round_rectangle
 sync_sheet_entries
 sync_sheet_pins
 tile_windows_horizontally

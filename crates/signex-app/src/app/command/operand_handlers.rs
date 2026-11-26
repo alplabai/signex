@@ -31,6 +31,7 @@ use super::repair_reset_operands as repair_reset;
 use super::selection_filter_operands as filter;
 use super::selection_operands as selection;
 use super::sheet_sync_operands as sheet_sync;
+use super::symbol_shape_operands as symbol_shape;
 use super::{CommandArgs, CommandOutcome, enablement};
 use crate::app::board_output as output;
 use crate::app::board_reuse as reuse;
@@ -158,6 +159,11 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("add_board_graphic", graphic::add_board_graphic),
     ("set_board_graphic", graphic::set_board_graphic),
     ("set_footprint_text", fp_text::set_footprint_text),
+    // #2838: the symbol editor's curve shapes on the symbol named.
+    ("symbol_draw_elliptical_arc", symbol_shape::elliptical_arc),
+    ("symbol_draw_bezier", symbol_shape::bezier),
+    ("symbol_draw_round_rectangle", symbol_shape::round_rectangle),
+    ("symbol_draw_pie", symbol_shape::pie),
     ("set_selection_filters", filter::set_selection_filters),
     (
         "apply_selection_filter_preset",
@@ -467,6 +473,14 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "set_board_graphic" => Some(
             "`set_board_graphic` needs the operands `document`, `id`, `field` and `value` — \
              select the drawing and use Properties",
+        ),
+        // #2838: a person draws with the symbol editor's Shapes tools.
+        "symbol_draw_elliptical_arc"
+        | "symbol_draw_bezier"
+        | "symbol_draw_round_rectangle"
+        | "symbol_draw_pie" => Some(
+            "this command needs the operand `document` and the shape's points — \
+             use the Shapes tools of the symbol editor",
         ),
         // #2368: a person drags the text on the board.
         "set_footprint_text" => Some(

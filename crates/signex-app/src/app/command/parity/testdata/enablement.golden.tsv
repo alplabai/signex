@@ -386,6 +386,10 @@ stitch_vias	Pcb	119d310e454dd5e4
 swap_gates	PadPair	5b3d10fb1363d7d6
 swap_pins	PadPair	5b3d10fb1363d7d6
 switch_segment_posture	-	f2929686b07ef725
+symbol_draw_bezier	SymbolEditor	17a717751f85721e
+symbol_draw_elliptical_arc	SymbolEditor	17a717751f85721e
+symbol_draw_pie	SymbolEditor	17a717751f85721e
+symbol_draw_round_rectangle	SymbolEditor	17a717751f85721e
 sync_sheet_entries	Schematic	f8bd7a5cb84e915b
 sync_sheet_pins	-	f2929686b07ef725
 tile_windows_horizontally	TileableWindows	6e7eba047edf7a70

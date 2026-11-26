@@ -527,6 +527,10 @@ signex_standard	hint	-	2	footprint_mode_pads
 signex_standard	hint	-	1	footprint_mode_sketch
 signex_standard	hint	-	3	footprint_mode_view_3d
 signex_standard	hint	-	-	footprint_recompute_courtyard_outline
+signex_standard	hint	-	-	symbol_draw_elliptical_arc
+signex_standard	hint	-	-	symbol_draw_bezier
+signex_standard	hint	-	-	symbol_draw_round_rectangle
+signex_standard	hint	-	-	symbol_draw_pie
 signex_standard	hint	-	Ctrl+Shift+P	open_command_palette
 signex_standard	hint	-	Ctrl+,	open_preferences
 signex_standard	hint	-	T P	open_schematic_preferences
@@ -1080,6 +1084,10 @@ classic	hint	-	2	footprint_mode_pads
 classic	hint	-	1	footprint_mode_sketch
 classic	hint	-	3	footprint_mode_view_3d
 classic	hint	-	-	footprint_recompute_courtyard_outline
+classic	hint	-	-	symbol_draw_elliptical_arc
+classic	hint	-	-	symbol_draw_bezier
+classic	hint	-	-	symbol_draw_round_rectangle
+classic	hint	-	-	symbol_draw_pie
 classic	hint	-	Ctrl+Shift+P	open_command_palette
 classic	hint	-	Ctrl+,	open_preferences
 classic	hint	-	-	open_schematic_preferences

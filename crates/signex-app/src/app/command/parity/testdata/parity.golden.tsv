@@ -1453,6 +1453,22 @@ swap_pins	headless_missing_operand	needs `document`	core	none	routing
 switch_segment_posture	bridge	Tool(CornerFlipRequested)	gui	tool state,in-progress edit	handler
 switch_segment_posture	in_window_rewrite	document_window	gui	window	routing
 switch_segment_posture	headless_refusal	headless_refusal	gui	none	routing
+symbol_draw_bezier	operand_handler	run_operands: named document	core	tool state,origin	handler
+symbol_draw_bezier	refusal_needs	SymbolEditor	core	active document	routing
+symbol_draw_bezier	refusal_needs_operands	needs_operands_reason	gui	none	routing
+symbol_draw_bezier	headless_missing_operand	needs `document`	core	none	routing
+symbol_draw_elliptical_arc	operand_handler	run_operands: named document	core	tool state,origin	handler
+symbol_draw_elliptical_arc	refusal_needs	SymbolEditor	core	active document	routing
+symbol_draw_elliptical_arc	refusal_needs_operands	needs_operands_reason	gui	none	routing
+symbol_draw_elliptical_arc	headless_missing_operand	needs `document`	core	none	routing
+symbol_draw_pie	operand_handler	run_operands: named document	core	tool state,origin	handler
+symbol_draw_pie	refusal_needs	SymbolEditor	core	active document	routing
+symbol_draw_pie	refusal_needs_operands	needs_operands_reason	gui	none	routing
+symbol_draw_pie	headless_missing_operand	needs `document`	core	none	routing
+symbol_draw_round_rectangle	operand_handler	run_operands: named document	core	tool state,origin	handler
+symbol_draw_round_rectangle	refusal_needs	SymbolEditor	core	active document	routing
+symbol_draw_round_rectangle	refusal_needs_operands	needs_operands_reason	gui	none	routing
+symbol_draw_round_rectangle	headless_missing_operand	needs `document`	core	none	routing
 sync_sheet_entries	bridge	Edit(SheetSync(Requested))	gui	active document	gate
 sync_sheet_entries	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,origin	handler
 sync_sheet_entries	in_window_rewrite	document_window	gui	window	routing

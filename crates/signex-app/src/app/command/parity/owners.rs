@@ -666,6 +666,11 @@ const OPERAND_DOCUMENT: &[&str] = &[
     "stitch_vias",
     "swap_gates",
     "swap_pins",
+    // #2838: a shape on the symbol named, one undo step of its editor.
+    "symbol_draw_bezier",
+    "symbol_draw_elliptical_arc",
+    "symbol_draw_pie",
+    "symbol_draw_round_rectangle",
     "sync_sheet_entries",
     "sync_sheet_pins",
     "tune_diff_pair",

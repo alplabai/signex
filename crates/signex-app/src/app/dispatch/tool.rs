@@ -455,6 +455,10 @@ impl Signex {
                     Tool::CompileMask => Some("Compile Mask".to_string()),
                     Tool::DiffPair => Some("Differential Pair".to_string()),
                     Tool::Bezier => Some("Bezier".to_string()),
+                    // #1267: the curve tools' tags are their menu labels.
+                    Tool::Ellipse | Tool::EllipticalArc | Tool::RoundRectangle => {
+                        curve_tool_tag(&self.ui_state.i18n, tool)
+                    }
                     Tool::LinearDimension => Some("Linear Dimension".to_string()),
                     Tool::AlignedDimension => Some("Aligned Dimension".to_string()),
                     Tool::Table => Some("Table".to_string()),
@@ -527,6 +531,19 @@ impl Signex {
         }
         false
     }
+}
+
+/// The cursor tag of a curve tool (#1267): its Place menu label, from the
+/// catalog. `None` for every other tool.
+fn curve_tool_tag(i18n: &signex_i18n::I18n, tool: Tool) -> Option<String> {
+    use signex_i18n::command_ids as cmd;
+    let id = match tool {
+        Tool::Ellipse => cmd::CMD_MENU_DRAW_ELLIPSE,
+        Tool::EllipticalArc => cmd::CMD_MENU_DRAW_ELLIPTICAL_ARC,
+        Tool::RoundRectangle => cmd::CMD_MENU_DRAW_ROUND_RECTANGLE,
+        _ => return None,
+    };
+    Some(signex_i18n::t!(i18n, id).into_string())
 }
 
 #[cfg(test)]
@@ -631,5 +648,29 @@ mod tests {
         assert!(app.interaction_state.pending_port.is_some(), "port armed");
         let _ = app.update(Message::Tool(ToolMessage::SelectTool(Tool::Wire)));
         assert!(app.interaction_state.pending_port.is_none());
+    }
+
+    /// #1267: an armed curve tool tags the cursor with its Place menu label,
+    /// as the other drawing tools do; Select drops the tag.
+    #[test]
+    fn the_curve_tools_tag_the_cursor_with_their_menu_label() {
+        for (tool, tag) in [
+            (Tool::Ellipse, "Ellipse"),
+            (Tool::EllipticalArc, "Elliptical Arc"),
+            (Tool::RoundRectangle, "Round Rectangle"),
+        ] {
+            let mut app = app_with_empty_sheet();
+            let _ = app.update(Message::Tool(ToolMessage::SelectTool(tool)));
+            assert_eq!(
+                app.interaction_state
+                    .active_canvas()
+                    .tool_preview
+                    .as_deref(),
+                Some(tag),
+                "{tag}"
+            );
+            let _ = app.update(Message::Tool(ToolMessage::SelectTool(Tool::Select)));
+            assert_eq!(app.interaction_state.active_canvas().tool_preview, None);
+        }
     }
 }
