@@ -87,12 +87,8 @@ fn fingerprint(app: &Signex) -> String {
     for (project, h) in &ds.rules_history {
         parts.push(format!("P {project:?} {} {}", h.can_undo(), h.can_redo()));
     }
-    for (project, tab) in &ds.project_tabs {
-        parts.push(format!(
-            "T {project:?} {} {}",
-            tab.general_history.can_undo(),
-            tab.general_history.can_redo()
-        ));
+    for (project, h) in &ds.general_history {
+        parts.push(format!("T {project:?} {} {}", h.can_undo(), h.can_redo()));
     }
     parts.join("\n")
 }

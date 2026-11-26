@@ -202,9 +202,9 @@ impl Signex {
             crate::diagnostics::log_warning(closed.into_string());
             return;
         };
-        let tab = document.project_tabs.entry(project_id).or_default();
+        let history = document.general_history.entry(project_id).or_default();
         let command = ProjectGeneralCommand::SetDiffPairClasses(classes);
-        if tab.general_history.apply(&mut project.data, command) {
+        if history.apply(&mut project.data, command) {
             // Classes feed the board, not ERC.
             document.sync_project_history_dirty(project_id, false);
             self.refresh_panel_ctx();
