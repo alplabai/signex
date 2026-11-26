@@ -6,6 +6,7 @@ use super::super::*;
 use super::window_subscriptions;
 use crate::app::view::overlay_id::OverlayId;
 use iced::Subscription;
+mod notebook_escape;
 
 /// Which overlays are open, as the Esc ladder sees them.
 ///
@@ -74,7 +75,6 @@ struct OpenOverlays {
     diff_pair_classes_open: bool,
     notebook_generate_open: bool,
     board_output_open: bool,
-    /// Export Design Notebook PDF (mockup row 202).
     notebook_pdf_open: bool,
     back_annotate_open: bool,
     compare_board_open: bool,
@@ -421,15 +421,10 @@ impl OpenOverlays {
             OverlayId::DiffPairClasses => self
                 .diff_pair_classes_open
                 .then(|| Message::from(crate::app::DiffPairClassesMsg::CancelRequested)),
-            OverlayId::NotebookGenerate => self
-                .notebook_generate_open
-                .then(|| Message::from(crate::app::NotebookGenerateMsg::DialogCancelled)),
+            OverlayId::NotebookGenerate | OverlayId::NotebookPdf => self.notebook_escape(id),
             OverlayId::BoardOutput => self
                 .board_output_open
                 .then(|| Message::from(crate::app::BoardOutputMsg::Closed)),
-            OverlayId::NotebookPdf => self
-                .notebook_pdf_open
-                .then(|| Message::from(crate::app::NotebookPdfMsg::Closed)),
             OverlayId::BackAnnotate => self
                 .back_annotate_open
                 .then(|| Message::from(crate::app::BackAnnotateMsg::CloseRequested)),

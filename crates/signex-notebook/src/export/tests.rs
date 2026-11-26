@@ -202,7 +202,15 @@ fn bookmarks_count_attachment_figures_and_only_the_pages_exported() {
     let mut sources = report_notebook(
         "= One\n#attachment(\"scope/a.csv\", caption: [Ripple])\n#pagebreak()\n= Two\nB\n",
     );
-    sources.insert("scope/a.csv", "t,v\n0,1\n1,2\n");
+    // Where the app reads it from: `notebook/attachments/scope/a.csv`.
+    sources.insert("attachments/scope/a.csv", "t,v\n0,1\n1,2\n");
+    assert!(sources.missing_attachments().is_empty(), "the CSV loads");
+    let printed = crate::compile(&sources, &crate::CompileOptions::default())
+        .notebook
+        .expect("compiles")
+        .text();
+    assert!(printed.contains("Ripple"), "{printed}");
+    assert!(!printed.contains("Missing attachment"), "{printed}");
     let all = export(&sources, &ExportOptions::default())
         .summary
         .bookmarks;

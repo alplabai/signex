@@ -83,6 +83,28 @@ fn save_writes_the_report_and_never_over_one_without_update() {
     assert_eq!(replaced, written, "two runs give the same notebook");
 }
 
+/// #3021: the checks a run made are kept as the newest of their checks
+/// even when writing the report was refused (`GenerateFinished.ran`).
+#[test]
+fn a_refused_write_keeps_the_checks_the_run_made() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = project_app(&dir);
+    std::fs::create_dir_all(report_file(dir.path()).parent().unwrap()).unwrap();
+    std::fs::write(report_file(dir.path()), "kept").unwrap();
+    let project = project_path(&app);
+    let erc = crate::app::handlers::erc::ERC_CHECK;
+    let kept = |app: &Signex| {
+        app.document_state
+            .check_runs
+            .last_report(erc, &project)
+            .is_some()
+    };
+    assert!(!kept(&app));
+    let why = refusal(run(&mut app, &["save=true"]));
+    assert!(why.contains("already exists"), "{why}");
+    assert!(kept(&app), "the ERC the run made is kept");
+}
+
 #[test]
 fn the_hand_written_notebook_is_read_and_never_changed() {
     let dir = tempfile::tempdir().unwrap();

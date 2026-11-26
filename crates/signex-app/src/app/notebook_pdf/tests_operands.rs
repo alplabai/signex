@@ -137,6 +137,24 @@ fn a_stale_reference_refuses_the_export_under_stale_fail() {
     assert!(out.exists());
 }
 
+/// #3021: Generate counts the stale references as the PDF export lists
+/// them, over the same design read from disk.
+#[test]
+fn generate_counts_the_stale_references_export_pdf_lists() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = project_with_u1(&dir, R7_AND_U1);
+    let out = dir.path().join("out.pdf");
+    let path = format!("path={}", out.display());
+    let exported = answer(run(&mut app, &[path.as_str()]));
+    let listed = exported["stale"].as_array().expect("a list").len();
+    assert_eq!(listed, 1, "R7: {exported}");
+    let id = AppCommandId::new("generate_design_notebook").expect("a catalog id");
+    let document = format!("document={}", project_path(&app).display());
+    let args = CommandArgs::parse_operands(&id, &[document.as_str()]).expect("operands");
+    let generated = answer(app.run_operands_settled(&id, &args).0);
+    assert_eq!(generated["stale_references"], listed, "{generated}");
+}
+
 #[test]
 fn a_removed_pin_is_stale() {
     let dir = tempfile::tempdir().unwrap();

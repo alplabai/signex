@@ -730,8 +730,10 @@ annotation blocks of the project's `notebook/*.snxnbk` files; see
 
 A toggle row (`toggle_notebook_badges`, mockup row 197) after AutoFocus: it
 shows or hides the Notebook badges on every sheet and is checked while they
-show, which they do by default. The menu row is greyed with no sheet in
-view, as the Design Notebook rows table above says. B in the Signex Standard
+show, which they do by default. It is greyed with no sheet in view, as the
+Design Notebook rows table above says; the catalog gives the command the
+same rule (`RequiresDocument(Schematic)`), so the command palette greys it
+too. B in the Signex Standard
 profile, on a schematic; Classic keeps B for Place Bus. See
 [NOTEBOOK_ANNOTATIONS.md](NOTEBOOK_ANNOTATIONS.md), "Notebook badges".
 
