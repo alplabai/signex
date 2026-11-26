@@ -146,8 +146,6 @@ pub struct VariantRenameDraft {
 #[derive(Debug, Clone, Default)]
 pub struct ProjectTabState {
     pub section: ProjectSection,
-    /// Undo/redo of the General section's fields (engine-owned).
-    pub general_history: signex_engine::ProjectGeneralHistory,
     /// The name typed for a new custom parameter, not yet added.
     pub new_parameter_name: String,
     /// Schematic default fields as typed, until the next undo, redo or
