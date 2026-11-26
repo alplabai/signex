@@ -158,6 +158,7 @@ define_ids! {
     DIALOG_SHORTCUTS_NO_MATCH_ALL = "dialog-shortcuts-no-match-all";
     DIALOG_SHORTCUTS_KEY_HINT = "dialog-shortcuts-key-hint";
     DIALOG_SHORTCUTS_EDIT_IN_PREFERENCES = "dialog-shortcuts-edit-in-preferences";
+    DIALOG_SHORTCUTS_KEY_SEPARATOR = "dialog-shortcuts-key-separator";
     DIALOG_TOUR_PAN = "dialog-tour-pan";
     DIALOG_TOUR_PAN_GESTURE = "dialog-tour-pan-gesture";
     DIALOG_TOUR_ZOOM = "dialog-tour-zoom";

@@ -69,6 +69,17 @@ pub(in crate::app::view) fn wrap_modal_scrim<'a>(
     iced::widget::stack![backdrop, positioned].boxed()
 }
 
+/// `card` centred in a window-filling container, claiming the pointer over
+/// its own bounds.
+fn centred<'a>(card: Element<'a, Message>) -> Element<'a, Message> {
+    container(claim_pointer(card))
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .center_x(Length::Fill)
+        .center_y(Length::Fill)
+        .boxed()
+}
+
 /// `card` claiming the pointer over its own bounds, so a press on its padding
 /// stops at it instead of reaching the click-outside layer below.
 fn claim_pointer<'a>(card: Element<'a, Message>) -> Element<'a, Message> {
@@ -160,13 +171,25 @@ impl Signex {
         on_dismiss: Message,
         card: Element<'a, Message>,
     ) -> Vec<Element<'a, Message>> {
-        let centred = container(claim_pointer(card))
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .center_x(Length::Fill)
-            .center_y(Length::Fill)
-            .boxed();
-        Self::dismiss_over(on_dismiss, centred)
+        Self::dismiss_over(on_dismiss, centred(card))
+    }
+
+    /// [`Self::dismiss_and_centre`] over the theme's dialog scrim, the dim
+    /// `wrap_dialog` draws under every other in-window dialog (#2757).
+    pub(in crate::app::view) fn dismiss_and_centre_dialog<'a>(
+        on_dismiss: Message,
+        card: Element<'a, Message>,
+        tokens: &signex_types::theme::ThemeTokens,
+    ) -> Vec<Element<'a, Message>> {
+        let scrim = super::header::dialog_scrim(tokens);
+        vec![
+            iced::widget::Stack::new()
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .push(Self::dismiss_layer_tinted(on_dismiss, scrim))
+                .push(centred(card))
+                .boxed(),
+        ]
     }
 
     /// `body` as the in-window modal `modal`: sized to `desired`, capped to

@@ -200,3 +200,62 @@ fn a_press_outside_the_shortcuts_closes_them_and_one_on_the_card_does_not() {
     );
     assert!(!on_card.iter().any(is_shortcuts_close), "{on_card:?}");
 }
+
+/// A full-window fill of `color`.
+fn fill<'a>(color: iced::Color) -> Element<'a, Message> {
+    use iced::Widget as _;
+    iced::widget::container(iced::widget::Space::new())
+        .width(iced::Length::Fill)
+        .height(iced::Length::Fill)
+        .style(move |_: &iced::Theme| iced::widget::container::Style {
+            background: Some(iced::Background::Color(color)),
+            ..iced::widget::container::Style::default()
+        })
+        .boxed()
+}
+
+/// The pixel at [`OUTSIDE`] of `layers` drawn over white.
+fn outside_over_white(layers: Vec<Element<'_, Message>>) -> [u8; 3] {
+    use iced::Widget as _;
+    let mut stack: iced::widget::Stack<Element<'_, Message>> = iced::widget::Stack::new()
+        .width(iced::Length::Fill)
+        .height(iced::Length::Fill)
+        .push(fill(iced::Color::WHITE));
+    for layer in layers {
+        stack = stack.push(layer);
+    }
+    let pixels = crate::layout_probe::draw_pixels(stack.boxed(), WINDOW);
+    let at = (OUTSIDE.y as usize * WINDOW.width as usize + OUTSIDE.x as usize) * 4;
+    [pixels[at], pixels[at + 1], pixels[at + 2]]
+}
+
+/// #2757, mockup rows 12 and 13: About and Keyboard Shortcuts dim the
+/// window behind them in the theme's dialog scrim, the dim every other
+/// in-window dialog draws, in both themes.
+#[test]
+fn about_and_the_shortcuts_dim_the_window_in_the_dialog_scrim() {
+    use signex_types::theme::{ThemeId, theme_tokens};
+    for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+        let mut app = app();
+        app.document_state.panel_ctx.tokens = theme_tokens(id);
+        let scrim = crate::app::view::dialogs::dialog_scrim(&app.document_state.panel_ctx.tokens);
+        let expected = outside_over_white(vec![fill(scrim)]);
+        assert!(
+            expected.iter().all(|&c| c < 200),
+            "{id:?}: the scrim dims white: {expected:?}"
+        );
+        app.ui_state.about_open = true;
+        assert_eq!(
+            outside_over_white(app.about_overlay()),
+            expected,
+            "{id:?}: About"
+        );
+        app.ui_state.about_open = false;
+        app.ui_state.keyboard_shortcuts_open = true;
+        assert_eq!(
+            outside_over_white(app.keyboard_shortcuts_overlay()),
+            expected,
+            "{id:?}: Keyboard Shortcuts"
+        );
+    }
+}

@@ -31,6 +31,7 @@ mod error_notice_tests;
 mod fast_grids;
 mod interaction;
 mod keymap_recorder;
+mod keymap_status;
 pub(crate) mod library_entry;
 mod link_policy;
 pub(crate) mod navigator_job;
@@ -87,6 +88,7 @@ pub use error_notice::{
 };
 pub use interaction::{ClickedPin, InteractionState};
 pub use keymap_recorder::KeymapRecorderState;
+pub use keymap_status::KeymapStatus;
 pub use omitted_page::{OmittedPage, OmittedReason};
 pub use parameter_table::{ClosedSheetCopies, ParameterCell, ParameterTableState};
 pub(crate) use pcb_drc::DrcInput;

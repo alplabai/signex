@@ -59,6 +59,7 @@ define_ids! {
         PREF_KEYMAP_EDIT = "pref-keymap-edit";
         PREF_KEYMAP_RECORDER_TITLE = "pref-keymap-recorder-title";
         PREF_KEYMAP_RECORDER_HINT = "pref-keymap-recorder-hint";
+        PREF_KEYMAP_RECORDER_WAITING = "pref-keymap-recorder-waiting";
         PREF_KEYMAP_RECORDER_HELP = "pref-keymap-recorder-help";
         PREF_KEYMAP_RECORDING = "pref-keymap-recording";
         PREF_KEYMAP_RECORDED = "pref-keymap-recorded";
@@ -69,6 +70,34 @@ define_ids! {
         PREF_KEYMAP_CLEAR = "pref-keymap-clear";
         PREF_KEYMAP_OK = "pref-keymap-ok";
         PREF_KEYMAP_CLAIMED = "pref-keymap-claimed";
+        // The status line under the profile row (#3050).
+        PREF_KEYMAP_STATUS_SWITCH_FAILED = "pref-keymap-status-switch-failed";
+        PREF_KEYMAP_STATUS_CREATED = "pref-keymap-status-created";
+        PREF_KEYMAP_STATUS_CREATE_FAILED = "pref-keymap-status-create-failed";
+        PREF_KEYMAP_STATUS_DELETED = "pref-keymap-status-deleted";
+        PREF_KEYMAP_STATUS_DELETE_FAILED = "pref-keymap-status-delete-failed";
+        PREF_KEYMAP_STATUS_IMPORTED = "pref-keymap-status-imported";
+        PREF_KEYMAP_STATUS_IMPORT_FAILED = "pref-keymap-status-import-failed";
+        PREF_KEYMAP_STATUS_EXPORTED = "pref-keymap-status-exported";
+        PREF_KEYMAP_STATUS_EXPORT_FAILED = "pref-keymap-status-export-failed";
+        PREF_KEYMAP_STATUS_RESTORE_UNREADABLE = "pref-keymap-status-restore-unreadable";
+        PREF_KEYMAP_STATUS_RESTORE_NO_CONFIG = "pref-keymap-status-restore-no-config";
+        PREF_KEYMAP_STATUS_RESTORE_WRITE_FAILED = "pref-keymap-status-restore-write-failed";
+        PREF_KEYMAP_STATUS_RESTORED = "pref-keymap-status-restored";
+        PREF_KEYMAP_STATUS_RESTORED_KEPT = "pref-keymap-status-restored-kept";
+        PREF_KEYMAP_STATUS_RESTORED_RESET = "pref-keymap-status-restored-reset";
+        PREF_KEYMAP_STATUS_BACKUP_DELETED = "pref-keymap-status-backup-deleted";
+        PREF_KEYMAP_STATUS_BACKUP_DELETE_FAILED = "pref-keymap-status-backup-delete-failed";
+        PREF_KEYMAP_STATUS_BACKUP_GONE = "pref-keymap-status-backup-gone";
+        PREF_KEYMAP_STATUS_NO_BACKUP_RESTORE = "pref-keymap-status-no-backup-restore";
+        PREF_KEYMAP_STATUS_NO_BACKUP_DISCARD = "pref-keymap-status-no-backup-discard";
+        PREF_KEYMAP_STATUS_RECORD_FIRST = "pref-keymap-status-record-first";
+        PREF_KEYMAP_STATUS_INVALID_SHORTCUT = "pref-keymap-status-invalid-shortcut";
+        PREF_KEYMAP_STATUS_FIX_INVALID = "pref-keymap-status-fix-invalid";
+        PREF_KEYMAP_STATUS_SAVED = "pref-keymap-status-saved";
+        PREF_KEYMAP_STATUS_SAVED_KEPT = "pref-keymap-status-saved-kept";
+        PREF_KEYMAP_STATUS_BACKUP_FAILED = "pref-keymap-status-backup-failed";
+        PREF_KEYMAP_STATUS_SAVE_FAILED = "pref-keymap-status-save-failed";
         // board-3d-keys-screenshot
         PREF_KEYMAP_CONTEXT_BOARD_3D = "pref-keymap-context-board-3d";
     }

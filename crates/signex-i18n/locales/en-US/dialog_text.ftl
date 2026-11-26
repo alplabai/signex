@@ -369,6 +369,8 @@ dialog-shortcuts-key-hint = { $key } opens and closes this sheet
 # Footer button: closes the sheet and opens the keyboard-shortcut page of
 # Preferences.
 dialog-shortcuts-edit-in-preferences = Edit in Preferences…
+# Between two keys of one command, as in "Place wire  Ctrl+W · P W".
+dialog-shortcuts-key-separator = ·
 
 ## First-run card (#2262)
 dialog-tour-pan = Pan

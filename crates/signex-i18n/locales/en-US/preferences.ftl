@@ -173,7 +173,10 @@ pref-keymap-overridden = Overridden by { $action }
 pref-keymap-edit = Edit
 # Chord recorder card.
 pref-keymap-recorder-title = Edit Shortcut
+# The empty recording box once recording has stopped; it names the Record button.
 pref-keymap-recorder-hint = Press Record, then type a shortcut
+# The empty recording box while it records (after Clear, for one).
+pref-keymap-recorder-waiting = Press a keystroke to record it
 pref-keymap-recorder-help = Press the exact keystroke to record it. ESC is recorded as a key; use Cancel to close.
 pref-keymap-recording = Recording
 pref-keymap-recorded = Recorded
@@ -185,6 +188,39 @@ pref-keymap-clear = Clear
 pref-keymap-ok = OK
 # { $display } is the recorded stroke, { $action } the action of the fixed key that takes it.
 pref-keymap-claimed = { $display } is claimed by { $action } and will never reach this binding.
+# The status line under the profile row (#3050). { $error } is the reason
+# the action failed, { $path } a file path.
+pref-keymap-status-switch-failed = Could not switch profile: { $error }
+pref-keymap-status-created = Created a custom profile draft.
+pref-keymap-status-create-failed = Could not create profile: { $error }
+pref-keymap-status-deleted = Deleted the custom profile draft.
+pref-keymap-status-delete-failed = Could not delete profile: { $error }
+pref-keymap-status-imported = Imported a custom keyboard shortcut profile.
+pref-keymap-status-import-failed = Could not import keyboard shortcuts: { $error }
+pref-keymap-status-exported = Exported keyboard shortcuts to { $path }.
+pref-keymap-status-export-failed = Could not export keyboard shortcuts: { $error }
+pref-keymap-status-restore-unreadable = Could not restore from the backup: { $error }. Both files were left as they are.
+pref-keymap-status-restore-no-config = Could not restore from the backup: there is no config directory to write to.
+pref-keymap-status-restore-write-failed = Could not restore from the backup: the profiles were read but could not be written ({ $error }).
+# { $kept } is pref-keymap-status-restored-kept or nothing; { $reset } is
+# pref-keymap-status-restored-reset or nothing.
+pref-keymap-status-restored = Keyboard shortcuts restored from the backup.{ $kept }{ $reset }
+pref-keymap-status-restored-kept = { " " }The shortcuts file it replaced was kept as { $path }.
+# { $profile } is the id of the profile the backup named as active.
+pref-keymap-status-restored-reset = { " " }The backup's active profile "{ $profile }" no longer exists, so a built-in one is active.
+pref-keymap-status-backup-deleted = Deleted the keyboard-shortcuts backup at { $path }.
+pref-keymap-status-backup-delete-failed = Could not delete the backup at { $path }: { $error }.
+pref-keymap-status-backup-gone = The backup at { $path } is no longer there, so nothing was changed.
+pref-keymap-status-no-backup-restore = There is no keyboard-shortcuts backup to restore from.
+pref-keymap-status-no-backup-discard = There is no keyboard-shortcuts backup to discard.
+pref-keymap-status-record-first = Record at least one keystroke before applying.
+pref-keymap-status-invalid-shortcut = Invalid shortcut: { $error }
+pref-keymap-status-fix-invalid = Fix invalid keyboard shortcuts before saving.
+# { $kept } is pref-keymap-status-saved-kept or nothing.
+pref-keymap-status-saved = Keyboard shortcuts saved.{ $kept }
+pref-keymap-status-saved-kept = { " " }The previous file was kept as { $path }.
+pref-keymap-status-backup-failed = Could not save keyboard shortcuts: the existing file could not be backed up first, so it was left untouched rather than overwritten ({ $error }).
+pref-keymap-status-save-failed = Could not save keyboard shortcuts: { $error }
 # Value beside the zoom speed slider. $percent is a whole number.
 preferences-appearance-zoom-step-value = { $percent }% per notch
 
