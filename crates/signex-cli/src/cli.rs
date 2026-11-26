@@ -1,4 +1,4 @@
-//! The command line of `signex-cli` (#1923), parsed by hand: four
+//! The command line of `signex-cli` (#1923), parsed by hand: a few
 //! subcommands and a handful of flags.
 
 use std::collections::BTreeSet;
@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use crate::capability::{self, Capability};
 use crate::input::Limits;
 
+pub mod library;
 mod notebook;
 
 pub const USAGE: &str = "\
@@ -25,6 +26,7 @@ USAGE:
                [--pages all|current|3-7] [--paper document|a4|letter] [--variant <name>]
                [--annotations <kinds>] [--stale warn|fail] [--no-title-block]
                [--no-contents] [--no-bookmarks] [--python-source] [OPTIONS]
+    signex-cli library textconv <file.snxfpt>
     signex-cli --help | --version
 
 run reads one JSON command per line from standard input
@@ -61,6 +63,9 @@ default name in Project Outputs/notebook/ without --out); it runs as
 `run <project> export_notebook_pdf --arg ... --allow export` and takes the
 run options.
 
+library textconv prints a footprint file with each embedded 3D model's data
+block as one summary line, for git's textconv diff driver. It only reads.
+
 agent-log prints the project's agent journal as a table (the edits agents made;
 with --access, who connected and with what rights). It only reads.
 
@@ -74,6 +79,8 @@ pub enum Invocation {
     Run(RunOptions),
     /// `agent-log <project> [--access]`.
     AgentLog(PathBuf, crate::agent_log::Which),
+    /// `library <verb> ...`: a library tool, no project.
+    Library(library::LibraryCommand),
 }
 
 /// Where a run may work (#1924): through a running Signex that has the
@@ -118,6 +125,7 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Invocation, Strin
         Some("run") => parse_run(args).map(Invocation::Run),
         Some("notebook") => notebook::parse(args).map(Invocation::Run),
         Some("agent-log") => parse_agent_log(args),
+        Some("library") => library::parse(args).map(Invocation::Library),
         Some(other) => Err(format!("unknown subcommand `{other}`")),
     }
 }

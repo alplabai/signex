@@ -135,7 +135,7 @@ pub use primitive::{
     PinDirection, PinOrientation, PinSymbolKind, Polygon, PrimitiveKind, PrimitiveRef, SimKind,
     SimModel, StepAttachment, Symbol, SymbolFile, SymbolGraphic, SymbolGraphicKind, SymbolPin,
     chain_into_closed_contour, normalize_arc_endpoints_deg, step_model_hash,
-    unique_copy_name,
+    textconv_footprint_text, unique_copy_name,
 };
 pub use range_filter::{
     EQUALS_RELATIVE_TOLERANCE, RangeFilter, RangeOp, RangeVerdict, column_unit,

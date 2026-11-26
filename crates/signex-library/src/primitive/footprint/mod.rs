@@ -36,6 +36,9 @@ mod serde_tsv;
 mod silk_marker;
 #[cfg(test)]
 mod tests;
+mod textconv;
+#[cfg(test)]
+mod textconv_tests;
 mod wire;
 
 #[cfg(test)]
@@ -54,6 +57,7 @@ pub use mount_style::MountStyle;
 pub use pad::*;
 pub use serde_tsv::FootprintFileError;
 pub(crate) use serde_tsv::{pads_from_tsv, pads_to_tsv};
+pub use textconv::textconv_footprint_text;
 #[cfg(test)]
 use wire::PADS_TSV_PLACEHOLDER_PREFIX;
 

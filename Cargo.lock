@@ -6586,6 +6586,7 @@ dependencies = [
  "signex-app",
  "signex-engine",
  "signex-i18n",
+ "signex-library",
  "signex-types",
  "tempfile",
  "uuid",
