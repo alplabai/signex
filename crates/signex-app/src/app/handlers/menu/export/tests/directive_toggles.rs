@@ -1,6 +1,7 @@
-//! #2656 — "Blankets" and "Parameter Sets" decide what the page draws, so
-//! ticking either one redraws the open print preview, as No-ERC Markers and
-//! Notes do. A toggle the page does not draw yet (Probes) does not.
+//! #2656 — "Net Blankets", "Net Parameters", "Compile Masks" and
+//! "Differential Pairs" decide what the page draws, so ticking any of them
+//! redraws the open print preview, as No-ERC Markers and Notes do. A toggle
+//! the page does not draw yet (Probes) does not.
 
 use super::net_text_hierarchy::placed_app;
 use crate::app::{Message, PrintPreviewMsg, Signex};
@@ -48,6 +49,27 @@ fn unticking_parameter_sets_redraws_the_preview() {
     ));
     assert!(!options(&app).include_parameter_sets);
     assert!(generation(&app) > before, "a new raster job");
+}
+
+/// Compile Masks and Differential Pairs start off (Caner, 2026-11-25) and
+/// each tick redraws the preview.
+#[test]
+fn ticking_compile_masks_or_diff_pairs_redraws_the_preview() {
+    let mut app = open_preview("/w/directive_toggles_masks_pairs");
+    assert!(!options(&app).include_compile_masks);
+    assert!(!options(&app).include_diff_pairs);
+    let before = generation(&app);
+    let _ = app.update(Message::PrintPreview(
+        PrintPreviewMsg::SetIncludeCompileMasks(true),
+    ));
+    assert!(options(&app).include_compile_masks);
+    let after_masks = generation(&app);
+    assert!(after_masks > before, "a new raster job");
+    let _ = app.update(Message::PrintPreview(PrintPreviewMsg::SetIncludeDiffPairs(
+        true,
+    )));
+    assert!(options(&app).include_diff_pairs);
+    assert!(generation(&app) > after_masks, "a new raster job");
 }
 
 #[test]

@@ -173,16 +173,69 @@ fn diff_pair() -> SchDirective {
     }
 }
 
-/// #2656 asks for Net Blankets and Net Parameters on paper only: a Compile
-/// Mask and a Differential Pair, flag included, are not printed with any
-/// option.
+fn masks_and_pairs_on() -> PdfOptions {
+    PdfOptions {
+        include_compile_masks: true,
+        include_diff_pairs: true,
+        ..PdfOptions::default()
+    }
+}
+
+/// Compile Masks and Differential Pairs print only behind their own options,
+/// off by default (decision of 2026-11-25): with the default options neither,
+/// flag included, is printed.
 #[test]
-fn a_compile_mask_and_a_diff_pair_are_not_printed() {
-    let all_on = PdfOptions::default();
-    assert!(drawn(&sheet(vec![mask(), diff_pair()]), &all_on).is_empty());
-    let with_blanket = drawn(&sheet(vec![mask(), blanket(None), diff_pair()]), &all_on);
-    let blanket_only = drawn(&sheet(vec![blanket(None)]), &all_on);
+fn a_compile_mask_and_a_diff_pair_are_not_printed_by_default() {
+    let defaults = PdfOptions::default();
+    assert!(!defaults.include_compile_masks && !defaults.include_diff_pairs);
+    assert!(drawn(&sheet(vec![mask(), diff_pair()]), &defaults).is_empty());
+    let with_blanket = drawn(&sheet(vec![mask(), blanket(None), diff_pair()]), &defaults);
+    let blanket_only = drawn(&sheet(vec![blanket(None)]), &defaults);
     assert_eq!(format!("{with_blanket:?}"), format!("{blanket_only:?}"));
+}
+
+#[test]
+fn a_compile_mask_prints_dotted_with_no_flag_when_its_option_is_on() {
+    let dotted = drawn(&sheet(vec![mask()]), &masks_and_pairs_on());
+    let dashed = drawn(&sheet(vec![blanket(None)]), &masks_and_pairs_on());
+    assert!(texts(&dotted).is_empty() && texts(&dashed).is_empty());
+    assert!(
+        strokes(&dotted) > strokes(&dashed),
+        "dots are shorter marks"
+    );
+}
+
+#[test]
+fn a_diff_pair_prints_its_two_strokes_and_its_flag_when_its_option_is_on() {
+    let out = drawn(&sheet(vec![diff_pair()]), &masks_and_pairs_on());
+    assert_eq!(texts(&out), [("Diff Pair · USB_90R", "F4")]);
+    // The two strokes, the stem and the flag box.
+    assert_eq!(strokes(&out), 7);
+}
+
+/// Each of the two options shows only its own kind.
+#[test]
+fn the_compile_masks_and_diff_pairs_options_are_apart() {
+    let s = sheet(vec![mask(), diff_pair()]);
+    let masks_only = PdfOptions {
+        include_compile_masks: true,
+        ..PdfOptions::default()
+    };
+    let pairs_only = PdfOptions {
+        include_diff_pairs: true,
+        ..PdfOptions::default()
+    };
+    assert_eq!(
+        format!("{:?}", drawn(&s, &masks_only)),
+        format!("{:?}", drawn(&sheet(vec![mask()]), &masks_and_pairs_on()))
+    );
+    assert_eq!(
+        format!("{:?}", drawn(&s, &pairs_only)),
+        format!(
+            "{:?}",
+            drawn(&sheet(vec![diff_pair()]), &masks_and_pairs_on())
+        )
+    );
 }
 
 /// A blanket without a class prints its dashed outline and no flag.
@@ -193,18 +246,20 @@ fn a_classless_blanket_prints_a_dashed_outline_only() {
     assert!(strokes(&out) > 4, "dashes, not four edges");
 }
 
-/// The PDF page is the bare page byte for byte with a mask and a pair on it.
+/// With the default options the PDF page is the bare page byte for byte with
+/// a mask and a pair on it; with their options on, it changes.
 #[test]
 fn a_pdf_page_is_unchanged_by_a_compile_mask_or_a_diff_pair() {
-    let export = |directives: Vec<SchDirective>| {
+    let export = |directives: Vec<SchDirective>, opts: &PdfOptions| {
         let mut ctx = crate::pdf::tests::sample_ctx(1);
         ctx.sheets[0].schematic.directives = directives;
-        PdfExporter
-            .export(&ctx, &PdfOptions::default())
-            .expect("export")
-            .bytes
+        PdfExporter.export(&ctx, opts).expect("export").bytes
     };
-    assert!(export(vec![mask(), diff_pair()]) == export(Vec::new()));
+    let defaults = PdfOptions::default();
+    assert!(export(vec![mask(), diff_pair()], &defaults) == export(Vec::new(), &defaults));
+    let on = masks_and_pairs_on();
+    assert!(export(vec![mask()], &on) != export(Vec::new(), &on));
+    assert!(export(vec![diff_pair()], &on) != export(Vec::new(), &on));
 }
 
 #[test]

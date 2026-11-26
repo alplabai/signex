@@ -182,6 +182,9 @@ define_ids! {
     DIALOG_PARAMETER_MANAGER_SUBTITLE_ALL = "dialog-parameter-manager-subtitle-all";
     DIALOG_PARAMETER_MANAGER_NO_MATCH_BODY_ALL = "dialog-parameter-manager-no-match-body-all";
     DIALOG_PARAMETER_MANAGER_CLOSED_SHEETS = "dialog-parameter-manager-closed-sheets";
+    DIALOG_PARAMETER_MANAGER_CLOSED_LISTED = "dialog-parameter-manager-closed-listed";
+    DIALOG_PARAMETER_MANAGER_CLOSED_READING = "dialog-parameter-manager-closed-reading";
+    DIALOG_PARAMETER_MANAGER_REFUSED_CLOSED = "dialog-parameter-manager-refused-closed";
     DIALOG_PARAMETER_MANAGER_REFUSED_BUSY = "dialog-parameter-manager-refused-busy";
     DIALOG_PARAMETER_MANAGER_REFUSED_READ_ONLY = "dialog-parameter-manager-refused-read-only";
     DIALOG_PARAMETER_MANAGER_REFUSED_FAILED = "dialog-parameter-manager-refused-failed";

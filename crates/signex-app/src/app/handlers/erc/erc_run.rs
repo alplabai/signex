@@ -286,6 +286,7 @@ impl Signex {
                 },
                 caption: self.erc_marker_caption(v),
                 harness_entry: Self::erc_marker_harness_entry(v),
+                sheet_entry: Self::erc_marker_sheet_entry(v),
             })
             .collect();
         let canvas = self.interaction_state.active_canvas_mut();

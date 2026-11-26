@@ -31,7 +31,28 @@ pub struct ParameterTableState {
     /// The focused cell: drawn as an open input, its row tinted (mockup
     /// row 70).
     pub editing: Option<ParameterCell>,
+    /// The closed project sheets All sheets lists, read from disk in a task
+    /// (Caner 2026-11-25).
+    pub closed: ClosedParameterSheets,
 }
+
+/// The closed sheets of the active sheet's project, as read for All sheets.
+/// They are listed and exported read-only; an edit that reaches one opens it
+/// first (`handlers::parameter_closed_sheets`).
+#[derive(Debug, Clone, Default)]
+pub struct ClosedParameterSheets {
+    /// Moved on with every read; a read that lands under an older one is
+    /// dropped.
+    pub generation: u64,
+    /// A read is on its way.
+    pub reading: bool,
+    /// Each sheet that was read, by path.
+    pub sheets: ClosedSheetCopies,
+}
+
+/// Closed sheets as read from disk, by path, shared with the read's message.
+pub type ClosedSheetCopies =
+    std::sync::Arc<Vec<(PathBuf, signex_types::schematic::SchematicSheet)>>;
 
 impl ParameterTableState {
     /// Whether the focused cell is in the row of `symbol` on `sheet`.

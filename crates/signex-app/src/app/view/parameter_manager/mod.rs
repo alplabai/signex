@@ -45,6 +45,8 @@ pub(crate) struct PartRow<'a> {
     pub reference: Cow<'a, str>,
     /// What the Sheet column names the sheet.
     pub sheet_name: String,
+    /// The sheet is closed: its cells are read-only, a press opens it.
+    pub is_closed: bool,
 }
 
 /// What the table area shows.
@@ -64,6 +66,7 @@ fn parts<'a>(sheets: &[ParameterSheet<'a>]) -> impl Iterator<Item = PartRow<'a>>
             symbol: part.symbol,
             reference: part.reference,
             sheet_name: sheet.name.clone(),
+            is_closed: sheet.is_closed,
         })
     })
 }
@@ -272,14 +275,8 @@ impl Signex {
             |scope| Message::ParameterManager(ParameterManagerMsg::ScopePicked(scope)),
         );
         let mut content = row![switch].spacing(SP.l).align_y(Alignment::Center);
-        let closed = self.closed_parameter_sheets();
-        if closed > 0 {
-            content = content.push(
-                text(t!(i18n, ids::DIALOG_PARAMETER_MANAGER_CLOSED_SHEETS, "count" => closed))
-                    .size(TS.caption)
-                    .color(r.ink3)
-                    .boxed(),
-            );
+        for note in self.parameter_scope_notes() {
+            content = content.push(text(note).size(TS.caption).color(r.ink3).boxed());
         }
         let bar = container(content).padding([SP.m, SP.l]).width(Length::Fill);
         column![bar, table::rule(r.line_soft, Length::Fill, true)].boxed()
@@ -588,6 +585,7 @@ mod filter_tests {
             name: sheet_file_name(path),
             placement: None,
             standard: None,
+            is_closed: false,
         }
     }
 

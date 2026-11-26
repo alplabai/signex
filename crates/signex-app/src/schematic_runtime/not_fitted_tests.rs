@@ -82,10 +82,14 @@ fn a_not_fitted_part_draws_greyed_under_a_cross_and_others_as_before() {
     assert_eq!(outline(&crossed), grey);
     let lib = &sheet.lib_symbols["L:Body"];
     let [a, b] = signex_types::schematic::not_fitted_cross(lib, &sheet.symbols[0]).expect("a body");
+    // The cross is in the theme's error ink, not greyed (decision of
+    // 2026-11-25).
+    let error = to_rgba(to_iced(&colors.erc_error));
+    assert_ne!(error, ink, "fixture: the error ink is not the body ink");
     let strokes: Vec<([f32; 2], [f32; 2])> = crossed
         .wires
         .iter()
-        .inspect(|w| assert_eq!(w.explicit_color, Some(ink), "the cross is not greyed"))
+        .inspect(|w| assert_eq!(w.explicit_color, Some(error), "the cross is the error ink"))
         .map(|w| (w.p0, w.p1))
         .collect();
     let point = |p: Point| [p.x as f32, p.y as f32];

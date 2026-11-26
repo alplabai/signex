@@ -88,7 +88,7 @@ pub use error_notice::{
 pub use interaction::{ClickedPin, InteractionState};
 pub use keymap_recorder::KeymapRecorderState;
 pub use omitted_page::{OmittedPage, OmittedReason};
-pub use parameter_table::{ParameterCell, ParameterTableState};
+pub use parameter_table::{ClosedSheetCopies, ParameterCell, ParameterTableState};
 pub(crate) use pcb_drc::DrcInput;
 pub(crate) use pcb_ratsnest::{PcbRatsnest, RatsnestKey, RouteRatsKey};
 pub use pdf_dialog::{ANGLE_PRESETS, PdfDialogState, PdfSection, WatermarkPreset};

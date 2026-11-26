@@ -780,8 +780,9 @@ of them.
 library text and its default body fill are greyed: each colour moved 60 %
 of the way to the paper colour (`signex_types::schematic::greyed_ink`). A
 cross runs corner to corner over the body box (`not_fitted_cross`: the body
-graphics, no pins, no text) in the symbol ink, not greyed, twice as wide as
-an unset symbol line. The designator, the value and the other fields keep
+graphics, no pins, no text) in the theme's error ink
+(`CanvasColors::erc_error`; decided by Caner, 2026-11-25), not greyed, twice
+as wide as an unset symbol line. The designator, the value and the other fields keep
 their colours, so the part still reads. A symbol whose library entry is
 missing keeps its crossed placeholder box, greyed and crossed on paper too.
 In Black & White the greyed ink

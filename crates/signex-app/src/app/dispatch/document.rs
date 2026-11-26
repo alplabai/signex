@@ -624,7 +624,8 @@ impl Signex {
                 Task::batch([task, self.finish_update()])
             }
             // Visual toggles (No-ERC Markers, No-Connect Markers, Notes,
-            // Parameter Sets, Blankets) — affect what the SVG renderer
+            // Net Parameters, Net Blankets, Compile Masks, Differential
+            // Pairs) — affect what the SVG renderer
             // emits, so we mutate `pdf_options` directly and trigger a
             // rerasterize so the Preview tab reflects the change
             // immediately.
@@ -659,6 +660,20 @@ impl Signex {
             PrintPreviewMsg::SetIncludeBlankets(v) => {
                 if let Some(p) = self.document_state.preview.as_mut() {
                     p.pdf_options.include_blankets = v;
+                }
+                let task = self.handle_print_preview_rerender();
+                Task::batch([task, self.finish_update()])
+            }
+            PrintPreviewMsg::SetIncludeCompileMasks(v) => {
+                if let Some(p) = self.document_state.preview.as_mut() {
+                    p.pdf_options.include_compile_masks = v;
+                }
+                let task = self.handle_print_preview_rerender();
+                Task::batch([task, self.finish_update()])
+            }
+            PrintPreviewMsg::SetIncludeDiffPairs(v) => {
+                if let Some(p) = self.document_state.preview.as_mut() {
+                    p.pdf_options.include_diff_pairs = v;
                 }
                 let task = self.handle_print_preview_rerender();
                 Task::batch([task, self.finish_update()])

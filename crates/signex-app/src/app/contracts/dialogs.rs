@@ -111,6 +111,15 @@ pub enum ParameterManagerMsg {
     /// The table's CSV export and import (#1295), routed to
     /// `app::parameter_io`.
     Io(crate::app::parameter_io::ParameterIoMsg),
+    /// The closed project sheets All sheets lists were read from disk, under
+    /// read `generation`.
+    ClosedSheetsRead {
+        generation: u64,
+        sheets: crate::app::state::ClosedSheetCopies,
+    },
+    /// A cell of a closed sheet's row was pressed: open that sheet, so its
+    /// cells can be edited.
+    ClosedSheetPressed { sheet: std::path::PathBuf },
 }
 
 /// Which sheets the Parameter Manager lists (Caner 2026-11-25).
@@ -119,7 +128,7 @@ pub enum ParameterScope {
     /// The active sheet only.
     #[default]
     ActiveSheet,
-    /// Every open sheet of the active sheet's project.
+    /// Every sheet of the active sheet's project; the closed ones read-only.
     AllSheets,
 }
 

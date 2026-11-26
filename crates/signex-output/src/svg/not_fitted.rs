@@ -68,7 +68,7 @@ pub(super) fn grey_elements(elements: &mut [SvgElement], paper: (f32, f32, f32))
 /// draws, centred on its position, in mm.
 pub(super) const MISSING_LIBRARY_BOX_HALF_MM: f64 = 5.0;
 
-/// The cross over `sym`'s body, in the symbol ink, not greyed. With no
+/// The cross over `sym`'s body, in the theme's error ink, not greyed. With no
 /// library (`lib` is `None`) it crosses the placeholder box instead, as the
 /// canvas does.
 pub(super) fn push_not_fitted_cross(
@@ -95,7 +95,7 @@ pub(super) fn push_not_fitted_cross(
             ],
             style: SvgStyle {
                 stroke_alpha: 1.0,
-                stroke_rgb: Some(palette.symbol_stroke),
+                stroke_rgb: Some(palette.error),
                 fill_rgb: None,
                 stroke_width: width as f32,
             },

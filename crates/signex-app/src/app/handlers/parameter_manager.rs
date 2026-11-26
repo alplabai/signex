@@ -75,7 +75,17 @@ impl Signex {
             ParameterManagerMsg::ColumnAdded => self.handle_parameter_column_added(),
             ParameterManagerMsg::ScopePicked(scope) => {
                 self.ui_state.parameter_table.scope = scope;
+                if scope == ParameterScope::AllSheets {
+                    return self.read_closed_parameter_sheets();
+                }
                 Task::none()
+            }
+            ParameterManagerMsg::ClosedSheetsRead { generation, sheets } => {
+                self.handle_closed_parameter_sheets_read(generation, sheets);
+                Task::none()
+            }
+            ParameterManagerMsg::ClosedSheetPressed { sheet } => {
+                self.open_closed_parameter_sheet(sheet)
             }
             ParameterManagerMsg::FilterChanged(filter) => {
                 self.ui_state.parameter_table.filter = filter;
@@ -122,7 +132,8 @@ impl Signex {
     /// The sheets the table lists, the active one first: with Active sheet
     /// only it; with All sheets also every other open sheet of its project
     /// (for a sheet outside any project, every other open sheet outside
-    /// one), by path. Empty without an active schematic.
+    /// one), by path, then the closed sheets of the project read for it, by
+    /// path. Empty without an active schematic.
     pub(crate) fn parameter_sheets(&self) -> Vec<PathBuf> {
         let docs = &self.document_state;
         let Some(active) = docs.active_path.clone() else {
@@ -143,7 +154,13 @@ impl Signex {
             .cloned()
             .collect();
         others.sort();
-        std::iter::once(active).chain(others).collect()
+        let closed: Vec<PathBuf> = (self.listed_closed_sheets().into_iter())
+            .map(|(path, _)| path.to_path_buf())
+            .collect();
+        std::iter::once(active)
+            .chain(others)
+            .chain(closed)
+            .collect()
     }
 
     /// [`Self::parameter_sheets`] with each sheet's live document, its name
@@ -152,51 +169,50 @@ impl Signex {
         self.parameter_documents_of(&self.parameter_sheets())
     }
 
-    /// The open sheets of `paths` as the table lists them, named among
+    /// The sheets of `paths` as the table lists them, named among
     /// themselves; the first one's project folder names sheets that share a
-    /// file name. A path no engine holds is left out.
+    /// file name. An open sheet's live document, else the closed copy read
+    /// for All sheets; a path with neither is left out.
     pub(crate) fn parameter_documents_of(&self, paths: &[PathBuf]) -> Vec<ParameterSheet<'_>> {
         let docs = &self.document_state;
-        let held: Vec<(&Path, &SchematicSheet)> = (paths.iter())
-            .filter_map(|path| {
-                let (path, engine) = docs.engines.get_key_value(path)?;
-                Some((path.as_path(), engine.document()))
+        let closed = self.listed_closed_sheets();
+        let held: Vec<(&Path, &SchematicSheet, bool)> = (paths.iter())
+            .filter_map(|path| match docs.engines.get_key_value(path) {
+                Some((path, engine)) => Some((path.as_path(), engine.document(), false)),
+                None => (closed.iter())
+                    .find(|(closed, _)| *closed == path.as_path())
+                    .map(|(path, doc)| (*path, *doc, true)),
             })
             .collect();
         let dir = (paths.first())
             .and_then(|first| docs.document_project(first))
             .and_then(|project| project.path.parent());
-        let paths: Vec<&Path> = held.iter().map(|(path, _)| *path).collect();
+        let paths: Vec<&Path> = held.iter().map(|(path, ..)| *path).collect();
         let names = parameter_sheet_names(&paths, dir);
         (held.into_iter().zip(names))
-            .map(|((path, doc), name)| ParameterSheet {
+            .map(|((path, doc, is_closed), name)| ParameterSheet {
                 path,
                 doc,
                 name,
                 placement: self.shown_placement(path),
                 standard: docs.designator_standard_for(path),
+                is_closed,
             })
             .collect()
     }
 
     /// With All sheets, how many sheets the active sheet's project lists
-    /// that no open document holds: the table cannot show them, and the
+    /// that no open document holds and no read of the closed sheets brought
+    /// in (not read yet, or unreadable): the table cannot show them, and the
     /// scope bar says so. 0 with Active sheet. Reads no file.
     pub(crate) fn closed_parameter_sheets(&self) -> usize {
         if self.ui_state.parameter_table.scope != ParameterScope::AllSheets {
             return 0;
         }
-        let docs = &self.document_state;
-        let Some(active) = docs.active_path.as_deref() else {
-            return 0;
-        };
-        crate::app::project_sheets::project_pages(docs.document_project(active))
+        let read = self.listed_closed_sheets();
+        self.closed_project_pages()
             .iter()
-            .filter(|page| {
-                let held = self.held_spelling(page);
-                !docs.engines.contains_key(*page)
-                    && held.is_none_or(|held| !docs.engines.contains_key(&held))
-            })
+            .filter(|page| !read.iter().any(|(path, _)| path == page))
             .count()
     }
 
@@ -211,6 +227,11 @@ impl Signex {
         let Some(sheet) = cell.sheet.clone() else {
             return Task::none();
         };
+        // A closed sheet is listed read-only: an edit opens it and writes
+        // nothing (Caner 2026-11-25).
+        if (self.listed_closed_sheets().iter()).any(|(path, _)| *path == sheet.as_path()) {
+            return self.open_closed_parameter_sheet(sheet);
+        }
         // A run belongs to one document: moving to another sheet ends the
         // previous sheet's, so coming back never folds into an old step.
         if self.ui_state.parameter_table.run_path.as_ref() != Some(&sheet) {
@@ -376,6 +397,11 @@ impl Signex {
         mut by_sheet: BTreeMap<PathBuf, Vec<Command>>,
     ) -> bool {
         by_sheet.retain(|_, commands| !commands.is_empty());
+        // A closed sheet is opened before it is edited: change nothing and
+        // name the ones to open (Caner 2026-11-25).
+        if self.refuse_closed_parameter_sheets(by_sheet.keys()) {
+            return false;
+        }
         let active = self.document_state.active_path.clone();
         let has_active = active
             .as_ref()
@@ -468,6 +494,8 @@ pub(crate) struct ParameterSheet<'a> {
     pub placement: Option<InstancePath>,
     /// The project's designator standard (#1416).
     pub standard: Option<DesignatorStandard>,
+    /// A closed sheet read from disk for All sheets: listed read-only.
+    pub is_closed: bool,
 }
 
 impl<'a> ParameterSheet<'a> {

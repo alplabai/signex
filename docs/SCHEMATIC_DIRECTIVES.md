@@ -261,15 +261,13 @@ region is picked by a click near its edge, so a click inside it still
 reaches what it covers; a point directive by its mark or its flag
 (`schematic_runtime/directives.rs`).
 
-Exports draw Net Blankets and Net Parameters directives the same way
-(#2656): SVG, PDF and print are lowered from one page model, and the flag's
-lines and box come from the one function the canvas uses
-(`signex_types::schematic::directive_flag`). The first flag line is bold, as
-on the canvas. In the export options, "Blankets" shows or hides Net Blankets
-and "Parameter Sets" Net Parameters directives (both on by default), and
-Print Preview redraws when either changes. Compile Masks and Differential
-Pairs are not printed (#2656 asks for the other two only; whether they print,
-and behind which option, is open for the maintainer).
+Exports draw all four the same way (#2656): SVG, PDF and print are lowered
+from one page model, and the flag's lines and box come from the one function
+the canvas uses (`signex_types::schematic::directive_flag`). The first flag
+line is bold, as on the canvas. Each kind has its own box under Schematics
+include in the export options: "Net Blankets" and "Net Parameters" are on by
+default, "Compile Masks" and "Differential Pairs" off (decision of
+2026-11-25). Print Preview redraws when any of them changes.
 
 ## No-ERC rule list
 
