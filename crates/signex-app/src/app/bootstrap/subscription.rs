@@ -313,6 +313,7 @@ impl OpenOverlays {
             | OverlayId::TextEdit
             | OverlayId::ActiveBarMenu
             | OverlayId::ComponentsRowContextMenu
+            | OverlayId::PartMenu
             | OverlayId::StartRowContextMenu
             | OverlayId::LayerTabContextMenu
             | OverlayId::PanelList

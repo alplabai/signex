@@ -11,7 +11,12 @@ use crate::panels::{PanelKind, PartPanelEffect, PartPanelMsg};
 
 impl Signex {
     pub(super) fn handle_dock_part_message(&mut self, msg: &PartPanelMsg) -> Task<Message> {
-        let effect = self.document_state.panel_ctx.part_panel.update(msg.clone());
+        let part_panel = &mut self.document_state.panel_ctx.part_panel;
+        let effect = part_panel.update(msg.clone());
+        // The ⋯ menu opens level with the press (#3063).
+        if matches!(msg, PartPanelMsg::MenuToggled(_)) && part_panel.menu_for.is_some() {
+            part_panel.menu_at = self.interaction_state.last_mouse_pos;
+        }
         match effect {
             PartPanelEffect::None => Task::none(),
             PartPanelEffect::Action(action) => self.dispatch_library_message(

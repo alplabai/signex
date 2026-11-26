@@ -1,5 +1,5 @@
-//! The board's Grid popover (mockup row 164): the pitch presets with the
-//! current one checked, a Custom… row whose field takes any pitch in mm on
+//! The board's Grid popover (mockup row 164): the cycle key, the pitch
+//! presets and the current pitch with it checked, a Custom… row whose field takes any pitch in mm on
 //! Enter, and the footer's Snap to grid switch and Grids…. There is no
 //! drawing: editable drawings stay in document tabs, dialogs and the Rules
 //! tab.
@@ -39,6 +39,21 @@ pub(crate) fn custom_pitch(entry: &str) -> Option<f32> {
         .filter(|mm| mm.is_finite() && *mm > 0.0)
 }
 
+/// The pitches the popover lists, smallest first: the presets, and the
+/// current pitch in its place when it is none of them, so the current grid
+/// is always a checked row (#3062).
+pub(super) fn listed_pitches(current_mm: f32) -> Vec<f32> {
+    let mut pitches = BOARD_GRID_PRESETS_MM.to_vec();
+    let listed = pitches
+        .iter()
+        .any(|mm| (current_mm - mm).abs() < SAME_PITCH_MM);
+    if !listed && current_mm.is_finite() && current_mm > 0.0 {
+        pitches.push(current_mm);
+        pitches.sort_by(f32::total_cmp);
+    }
+    pitches
+}
+
 pub(super) fn view<'a>(
     grid: &GridChoice,
     tokens: &ThemeTokens,
@@ -47,7 +62,7 @@ pub(super) fn view<'a>(
     let ink = ti(tokens.text);
     let keys = cycles(&grid.cycle_key, "", i18n).map(|keys| caption(keys, tokens));
     let mut parts = vec![header(t!(i18n, ids::BOARD_STATUS_GRID_TITLE), keys, tokens)];
-    for mm in BOARD_GRID_PRESETS_MM {
+    for mm in listed_pitches(grid.current_mm) {
         let value = t!(i18n, ids::BOARD_STATUS_GRID_PRESET, "value" => format!("{mm:.3}"));
         let mut body = row![
             text(value)

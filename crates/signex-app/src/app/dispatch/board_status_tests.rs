@@ -120,7 +120,7 @@ fn board() -> PcbBoard {
 }
 
 /// The board open in the main window, its ratsnest and counts computed.
-fn app_with_board() -> (Signex, PathBuf, iced::window::Id) {
+pub(super) fn app_with_board() -> (Signex, PathBuf, iced::window::Id) {
     let (mut app, _boot) = Signex::new();
     app.ui_state.first_run_tour_open = false;
     let main = iced::window::Id::unique();
@@ -137,7 +137,7 @@ fn app_with_board() -> (Signex, PathBuf, iced::window::Id) {
     (app, path, main)
 }
 
-fn click(app: &mut Signex, window: iced::window::Id, counter: BoardCounter) {
+pub(super) fn click(app: &mut Signex, window: iced::window::Id, counter: BoardCounter) {
     let request = StatusBarRequest::BoardCounterClicked {
         window: None,
         counter,
@@ -145,7 +145,7 @@ fn click(app: &mut Signex, window: iced::window::Id, counter: BoardCounter) {
     let _ = app.update(Signex::status_bar_message(window, None, request));
 }
 
-fn event(app: &mut Signex, event: BoardPopoverEvent) {
+pub(super) fn event(app: &mut Signex, event: BoardPopoverEvent) {
     let _ = app.update(Message::Ui(UiMsg::StatusBar(
         StatusBarRequest::BoardPopover(event),
     )));

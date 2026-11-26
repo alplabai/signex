@@ -17,6 +17,9 @@ const SP: Spacing = Spacing::DEFAULT;
 pub struct PartPanelState {
     /// The part whose ⋯ menu is open.
     pub menu_for: Option<uuid::Uuid>,
+    /// Where the ⋯ press was, window coordinates: the menu opens level
+    /// with it.
+    pub menu_at: (f32, f32),
     /// The field or callout under the pointer.
     pub hover: IllustrationHover,
     /// Which of [`PART_SECTION_KEYS`] the user had collapsed before a pin
@@ -39,6 +42,8 @@ pub(crate) const PART_SECTION_KEYS: [&str; 5] = [
 pub enum PartPanelMsg {
     /// The ⋯ button of the part was pressed.
     MenuToggled(uuid::Uuid),
+    /// A press outside the open ⋯ menu closed it.
+    MenuDismissed,
     /// A part action was picked from the ⋯ menu.
     MenuActionPicked(PlacedPartAction),
     /// "Copy Library ID" was picked; carries the id.
@@ -67,6 +72,10 @@ impl PartPanelState {
         match msg {
             PartPanelMsg::MenuToggled(part) => {
                 self.menu_for = (self.menu_for != Some(part)).then_some(part);
+                PartPanelEffect::None
+            }
+            PartPanelMsg::MenuDismissed => {
+                self.menu_for = None;
                 PartPanelEffect::None
             }
             PartPanelMsg::MenuActionPicked(action) => {
@@ -217,12 +226,32 @@ pub(super) fn illustration_box<'a>(
         .boxed()
 }
 
-/// The ⋯ button, right-aligned, and the menu under it while it is open.
+/// The open ⋯ menu of the selected part: where the press was and its rows.
+/// The app draws it over the menu scrim like every other menu (#3063).
+pub(crate) struct OpenPartMenu {
+    pub at: (f32, f32),
+    pub entries: Vec<(MessageId, PartPanelMsg)>,
+}
+
+/// The ⋯ menu `ctx` has open, while its part is still the selected one.
+pub(crate) fn open_part_menu(ctx: &PanelContext) -> Option<OpenPartMenu> {
+    let part = ctx.part_panel.menu_for?;
+    if ctx.selected_uuid != Some(part) {
+        return None;
+    }
+    let lib_id = super::rows::info_row(&ctx.selection_info, "Library ID");
+    Some(OpenPartMenu {
+        at: ctx.part_panel.menu_at,
+        entries: menu_entries(&lib_id),
+    })
+}
+
+/// The ⋯ button, right-aligned; its menu is an app overlay
+/// ([`open_part_menu`]).
 pub(super) fn push_part_menu<'a>(
     mut col: Column<Element<'a, PanelMsg>>,
     ctx: &'a PanelContext,
     part: uuid::Uuid,
-    lib_id: &str,
 ) -> Column<Element<'a, PanelMsg>> {
     let i18n = &ctx.i18n;
     let more = signex_widgets::button(
@@ -237,36 +266,12 @@ pub(super) fn push_part_menu<'a>(
             .style(crate::styles::context_menu(&ctx.tokens)),
         iced::widget::tooltip::Position::Left,
     );
-    col = col.push(
+    col.push(
         container(more)
             .padding([0.0, SP.m])
             .width(Length::Fill)
             .align_x(iced::alignment::Horizontal::Right)
             .boxed(),
-    );
-    if ctx.part_panel.menu_for != Some(part) {
-        return col;
-    }
-    let mut menu: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
-    for (label, msg) in menu_entries(lib_id) {
-        menu = menu.push(
-            signex_widgets::button(signex_widgets::text(t!(i18n, label)).size(TS.body))
-                .padding([SP.xs, SP.m])
-                .width(Length::Fill)
-                .on_press(part_msg(msg))
-                .style(crate::styles::ghost_button(&ctx.tokens))
-                .boxed(),
-        );
-    }
-    col.push(
-        container(
-            container(menu)
-                .padding(SP.xs)
-                .style(crate::styles::card(&ctx.tokens)),
-        )
-        .padding([0.0, SP.m])
-        .width(Length::Fill)
-        .boxed(),
     )
 }
 

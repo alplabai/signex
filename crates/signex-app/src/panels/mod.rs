@@ -143,7 +143,8 @@ pub use element_properties::{
     DIMENSION_TEXT_SECTION, DimensionToolForm,
 };
 pub(crate) use element_properties::{
-    BODY_ALTERNATE, BODY_ALTERNATE_MISSING, BODY_NORMAL, BODY_NORMAL_CAN_SWITCH, sheet_file_missing,
+    BODY_ALTERNATE, BODY_ALTERNATE_MISSING, BODY_NORMAL, BODY_NORMAL_CAN_SWITCH, open_part_menu,
+    sheet_file_missing,
 };
 pub use element_properties::{
     BlanketEdit, FootprintCardFacts, FootprintCardKey, FootprintCardStatus, FootprintCardView,
