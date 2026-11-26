@@ -5,6 +5,12 @@ a script or an AI agent would (#1923). It boots the same application the GUI
 runs (`signex_app::headless`), so a command id has the same effect as the menu,
 the palette and the keymap. The GUI binary (`signex`) stays argument-free.
 
+The CLI is for agents and scripts; people use the app. Its input and output
+are JSON. The stable contract is the catalog (`signex-cli commands --json`),
+the fields of a result line and the reasons it gives. Features for hand use
+are out of scope: table output, several `--arg` commands in one call, or a
+save after a one-command run. `--arg` stays for scripts and CI checks.
+
 ## Usage
 
 ```
