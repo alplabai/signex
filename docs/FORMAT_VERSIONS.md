@@ -134,13 +134,20 @@ data = '''
 '''
 ```
 
-Deflate is raw (RFC 1951) at level 6 (`MODEL_DEFLATE_LEVEL`), so the same
-model writes the same text. A model is inflated only when it is read (the
-board 3D view); its `size` and SHA-256 are checked then, and a mismatch is an
-error naming the footprint. Libraries written before 1.4 keep models in
+Deflate is raw (RFC 1951). A model Signex embeds is compressed at level 6
+(`MODEL_DEFLATE_LEVEL`) and wrapped at 76 columns, so the same model embeds
+as the same text. An entry read from a file keeps its `data` exactly as
+stored on every re-save, whatever level and line width wrote it, and so
+does one that fails to decode. The compressed bytes are not part of the
+format contract: conformance compares the inflated bytes (their SHA-256).
+`data` may hold only base64 characters and whitespace. A model is inflated
+only when it is read (the board 3D view); its `size` and SHA-256 are checked
+then, and a mismatch is an error naming the footprint. Libraries written before 1.4 keep models in
 `step/<hash>.step` beside the library: readers fall back to it, and saving a
 footprint whose model is only there embeds it, leaving the `step/` file in
-place. Boards never embed models; their footprints read the model through
+place; Save As into another library also embeds a model the origin library
+keeps only in `step/`. `attach_step` (the editor's attach helper) embeds the
+model, but the editor's attach flow is not wired yet. Boards never embed models; their footprints read the model through
 their library reference. `signex-cli library textconv` prints a file with
 each `data` block summarised, for diffs (`docs/CLI.md`).
 

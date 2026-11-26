@@ -390,6 +390,10 @@ pub enum FootprintFileError {
         users: String,
         reason: String,
     },
+    /// The writer could not find the one `data` line of embedded model
+    /// `index` (another string spells its placeholder); nothing is written.
+    #[error("embedded 3D model {index}: its data could not be placed; nothing was saved")]
+    ModelDataPlacement { index: usize },
 }
 
 impl From<signex_types::numeric::TomlFiniteError> for FootprintFileError {

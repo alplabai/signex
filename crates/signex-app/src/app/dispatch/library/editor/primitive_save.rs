@@ -91,7 +91,8 @@ impl Signex {
         mode: ContainerWrite,
         save_as: Option<SaveAsOrigin>,
     ) -> anyhow::Result<Task<Message>> {
-        let (write, generation, guard) = self.prepare_primitive_save(path, mode)?;
+        let (mut write, generation, guard) = self.prepare_primitive_save(path, mode)?;
+        write.origin = save_as.as_ref().map(|origin| origin.from.clone());
         let target = path.to_path_buf();
         Ok(Task::perform(
             async move {
@@ -224,6 +225,7 @@ impl Signex {
             snapshot,
             turn,
             others,
+            origin: None,
         };
         let guard = self
             .document_state
@@ -548,6 +550,9 @@ impl Signex {
                 .get_mut(path)
                 .map(|editor| {
                     cascade::apply_footprint_versions(&mut editor.file, versions);
+                    // #3107: models the save embedded from `step/` stay with
+                    // the editor, so a later Save As elsewhere keeps them.
+                    editor.file.models.absorb(&saved.models);
                     editor.baseline = saved;
                     editor.cascade_owed = owed.to_vec();
                     if editor.is_dirty() && !versions.is_empty() {

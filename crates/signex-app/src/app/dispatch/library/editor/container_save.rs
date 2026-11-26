@@ -35,6 +35,9 @@ pub(super) struct ContainerSave {
     pub merge: ContainerMerge,
     /// The new version of each primitive the save bumped (#832), by uuid.
     pub versions: std::collections::HashMap<uuid::Uuid, String>,
+    /// The embedded models of the written footprint file (#3107); empty for
+    /// a symbol file.
+    pub models: signex_library::EmbeddedModels,
 }
 
 fn rewrite_primitive_file(
@@ -99,7 +102,11 @@ pub(super) fn save_symbol_container(
             .map(|text| Some(text.into_bytes()))
             .map_err(|e| LibraryError::Backend(format!("serialize symbol library: {e}")))
     })?;
-    Ok(ContainerSave { merge, versions })
+    Ok(ContainerSave {
+        merge,
+        versions,
+        models: Default::default(),
+    })
 }
 
 pub(super) fn save_footprint_container(
@@ -113,6 +120,7 @@ pub(super) fn save_footprint_container(
 ) -> Result<ContainerSave, LibraryError> {
     let mut merge = ContainerMerge::default();
     let mut versions = std::collections::HashMap::new();
+    let mut models = signex_library::EmbeddedModels::default();
     rewrite_primitive_file(library, path, commit_message, &mut |current| {
         let whole = || {
             (
@@ -146,11 +154,17 @@ pub(super) fn save_footprint_container(
         if let Some(step_dir) = legacy_step_dir(library, path) {
             file.embed_models_from_step_dir(&step_dir);
         }
-        file.to_toml_string()
-            .map(|text| Some(text.into_bytes()))
-            .map_err(|e| LibraryError::Backend(format!("serialize footprint library: {e}")))
+        let text = file
+            .to_toml_string()
+            .map_err(|e| LibraryError::Backend(format!("serialize footprint library: {e}")))?;
+        models = file.models.clone();
+        Ok(Some(text.into_bytes()))
     })?;
-    Ok(ContainerSave { merge, versions })
+    Ok(ContainerSave {
+        merge,
+        versions,
+        models,
+    })
 }
 
 /// The `step/` folder of the library holding `path`, where libraries
@@ -159,6 +173,11 @@ fn legacy_step_dir(library: &SaveLibrary, path: &std::path::Path) -> Option<std:
     if let SaveLibrary::Mounted(adapter) | SaveLibrary::Opened(adapter) = library {
         return Some(adapter.step_dir());
     }
+    step_dir_of_file(path)
+}
+
+/// The `step/` folder of the library whose folder holds the file `path`.
+pub(super) fn step_dir_of_file(path: &std::path::Path) -> Option<std::path::PathBuf> {
     let library = signex_library::enclosing_library_file(path)?;
     Some(library.parent()?.join("step"))
 }

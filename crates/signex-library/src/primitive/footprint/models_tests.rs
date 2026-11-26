@@ -326,3 +326,132 @@ fn the_step_hash_is_lowercase_sha256_hex() {
         "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
     );
 }
+
+/// Two footprints, two models, the given file names.
+fn two_models(names: [&str; 2]) -> FootprintFile {
+    let mut file = file_of(&["A", "B"]);
+    file.attach_step_model(uuid_of(&file, 0), names[0], &step_bytes("one"));
+    file.attach_step_model(uuid_of(&file, 1), names[1], &step_bytes("two"));
+    file
+}
+
+#[test]
+fn a_file_name_spelling_a_placeholder_is_kept_as_a_name() {
+    let placeholder = |i: usize| format!("__SIGNEX_MODEL_DATA_a1b2c3d4_{i}__");
+    for names in [
+        [placeholder(1), placeholder(0)],
+        [
+            format!("data = \"{}\"", placeholder(1)),
+            format!("data = \"{}\"", placeholder(0)),
+        ],
+    ] {
+        let file = two_models([&names[0], &names[1]]);
+        let text = file.to_toml_string().expect("serialise");
+        let back = FootprintFile::from_toml_str(&text).expect("reads back");
+        back.verify_models().expect("both models decode");
+        let mut stored: Vec<&str> = back
+            .models
+            .iter()
+            .map(|(_, m)| m.filename.as_str())
+            .collect();
+        stored.sort_unstable();
+        let mut wanted: Vec<&str> = names.iter().map(String::as_str).collect();
+        wanted.sort_unstable();
+        assert_eq!(stored, wanted);
+        assert_eq!(back.to_toml_string().unwrap(), text);
+    }
+}
+
+#[test]
+fn a_file_name_spelling_a_whole_data_line_is_refused_or_kept() {
+    let hostile = "x\ndata = \"__SIGNEX_MODEL_DATA_a1b2c3d4_0__\"\ny";
+    let file = two_models([hostile, hostile]);
+    match file.to_toml_string() {
+        Ok(text) => {
+            let back = FootprintFile::from_toml_str(&text).expect("reads back");
+            back.verify_models().expect("both models decode");
+            assert!(
+                back.models
+                    .iter()
+                    .map(|(_, m)| m)
+                    .all(|m| m.filename == hostile)
+            );
+        }
+        Err(error) => assert!(
+            matches!(error, FootprintFileError::ModelDataPlacement { .. }),
+            "{error}"
+        ),
+    }
+}
+
+#[test]
+fn an_inflate_stops_one_byte_past_the_declared_size() {
+    let mut file = file_of(&["BIG"]);
+    let step = vec![b'0'; 4_000_000];
+    file.attach_step_model(uuid_of(&file, 0), "big.step", &step);
+    let text = file
+        .to_toml_string()
+        .unwrap()
+        .replacen("size = 4000000\n", "size = 10\n", 1);
+    let error = decode_error(&text);
+    assert_eq!(
+        error.fault,
+        ModelFault::Size {
+            declared: 10,
+            actual: 11
+        }
+    );
+}
+
+/// `text` with its one `data` block replaced by `block`.
+fn with_data_block(text: &str, block: &str) -> String {
+    let open = text.find("data = '''\n").unwrap() + "data = '''\n".len();
+    let close = open + text[open..].find("'''").unwrap();
+    format!("{}{block}{}", &text[..open], &text[close..])
+}
+
+#[test]
+fn data_written_at_another_level_and_width_is_kept_as_stored() {
+    use base64::Engine as _;
+    use std::io::Write as _;
+    let (text, _) = saved_with_model("QFN-16");
+    let mut encoder = flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::new(9));
+    encoder.write_all(&step_bytes("a")).unwrap();
+    let encoded = base64::engine::general_purpose::STANDARD.encode(encoder.finish().unwrap());
+    let block: String = encoded
+        .as_bytes()
+        .chunks(60)
+        .map(|line| format!("{}\n", std::str::from_utf8(line).unwrap()))
+        .collect();
+    let other = with_data_block(&text, &block);
+    assert_ne!(other, text);
+    let back = FootprintFile::from_toml_str(&other).unwrap();
+    assert_eq!(
+        back.step_model(&back.footprints[0]).unwrap(),
+        Some(step_bytes("a"))
+    );
+    assert_eq!(
+        back.to_toml_string().unwrap(),
+        other,
+        "the data is kept as stored"
+    );
+}
+
+#[test]
+fn a_model_that_does_not_decode_is_saved_back_unchanged() {
+    let (text, _) = saved_with_model("QFN-16");
+    let corrupted = with_data_block(&text, "AAAA\nBBBB\n");
+    let file = FootprintFile::from_toml_str(&corrupted).unwrap();
+    assert!(file.verify_models().is_err());
+    assert_eq!(file.to_toml_string().unwrap(), corrupted);
+}
+
+#[test]
+fn data_with_characters_base64_does_not_use_is_refused_on_load() {
+    let (text, _) = saved_with_model("QFN-16");
+    let corrupted = with_data_block(&text, "AAAA'' BBBB\n");
+    assert!(matches!(
+        FootprintFile::from_toml_str(&corrupted),
+        Err(FootprintFileError::InvalidModelEntry { .. })
+    ));
+}

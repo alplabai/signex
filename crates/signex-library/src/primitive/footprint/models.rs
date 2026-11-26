@@ -2,7 +2,9 @@
 //! `.snxfpt` carries its footprints' 3D bodies. One entry per distinct hash,
 //! sorted by hash, written last and only for hashes a footprint references.
 //! The bytes are inflated only when asked for ([`FootprintFile::step_model`]),
-//! never on load. Format and rules: `docs/FORMAT_VERSIONS.md`, `snxfpt/1.4`.
+//! never on load. An entry read from a file keeps its `data` text as stored,
+//! so a re-save never re-compresses it; only new entries are compressed
+//! here. Format and rules: `docs/FORMAT_VERSIONS.md`, `snxfpt/1.4`.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Read, Write};
@@ -23,8 +25,11 @@ use super::{Footprint, FootprintFile, FootprintFileError, StepAttachment};
 /// The one `encoding` value: raw deflate (RFC 1951), then base64.
 pub const MODEL_ENCODING: &str = "deflate+base64";
 
-/// Deflate level of every written model. Fixed, with flate2's default
-/// backend, so the same STEP bytes always write the same text.
+/// Deflate level of a newly embedded model. Fixed, with flate2's default
+/// backend, so the same STEP bytes embed as the same text. The compressed
+/// bytes are not part of the format contract: conformance compares the
+/// inflated bytes (their SHA-256), and an entry read from a file keeps its
+/// data as stored, whatever level and line width wrote it.
 pub const MODEL_DEFLATE_LEVEL: u32 = 6;
 
 /// Width of the wrapped base64 lines in `data`.
@@ -36,8 +41,9 @@ const MAX_MODEL_BYTES: u64 = 256 * 1024 * 1024;
 /// Stands in for each `data` value until the literal block is spliced in.
 const MODEL_DATA_PLACEHOLDER_PREFIX: &str = "__SIGNEX_MODEL_DATA_a1b2c3d4_";
 
-/// One embedded model. `data` is the base64 text with its line breaks
-/// removed; it is decoded only on demand.
+/// One embedded model. `data` is the literal block's text exactly as read
+/// (or as wrapped when embedded here), written back unchanged; it is
+/// decoded only on demand.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EmbeddedModel {
     /// Original file name, a hint for the UI.
@@ -101,18 +107,25 @@ impl EmbeddedModel {
         Self {
             filename: filename.to_string(),
             size: step.len() as u64,
-            data: Arc::from(BASE64.encode(deflated)),
+            data: Arc::from(wrap(&BASE64.encode(deflated))),
         }
     }
 
     /// The raw STEP bytes, checked against `size` and `hash`.
     fn decode(&self, hash: &str) -> Result<Vec<u8>, ModelFault> {
+        let text: Vec<u8> = self
+            .data
+            .bytes()
+            .filter(|b| !b.is_ascii_whitespace())
+            .collect();
         let deflated = BASE64
-            .decode(self.data.as_bytes())
+            .decode(&text)
             .map_err(|e| ModelFault::Base64(e.to_string()))?;
         let mut raw = Vec::new();
+        // One byte past the declared size is enough to tell it is wrong;
+        // `size` is already within MAX_MODEL_BYTES.
         DeflateDecoder::new(deflated.as_slice())
-            .take(MAX_MODEL_BYTES + 1)
+            .take(self.size + 1)
             .read_to_end(&mut raw)
             .map_err(|e| ModelFault::Inflate(e.to_string()))?;
         if raw.len() as u64 != self.size {
@@ -127,18 +140,25 @@ impl EmbeddedModel {
         }
         Ok(raw)
     }
+}
 
-    /// The base64 text wrapped at [`MODEL_DATA_WIDTH`], each line ended.
-    fn wrapped_data(&self) -> String {
-        let data = self.data.as_bytes();
-        let mut out = String::with_capacity(data.len() + data.len() / MODEL_DATA_WIDTH + 1);
-        for line in data.chunks(MODEL_DATA_WIDTH) {
-            // base64 text is ASCII, so every chunk is valid UTF-8.
-            out.push_str(std::str::from_utf8(line).unwrap_or_default());
-            out.push('\n');
-        }
-        out
+/// `base64` wrapped at [`MODEL_DATA_WIDTH`], each line ended.
+fn wrap(base64: &str) -> String {
+    let data = base64.as_bytes();
+    let mut out = String::with_capacity(data.len() + data.len() / MODEL_DATA_WIDTH + 1);
+    for line in data.chunks(MODEL_DATA_WIDTH) {
+        // base64 text is ASCII, so every chunk is valid UTF-8.
+        out.push_str(std::str::from_utf8(line).unwrap_or_default());
+        out.push('\n');
     }
+    out
+}
+
+/// Characters a `data` block may hold: base64 and whitespace. This also
+/// keeps the literal's closing quotes out, so the block is always written
+/// back as a literal.
+fn is_data_char(c: char) -> bool {
+    c.is_ascii_alphanumeric() || matches!(c, '+' | '/' | '=') || c.is_ascii_whitespace()
 }
 
 /// On-disk shape of one `[[models]]` entry, keys in written order.
@@ -162,32 +182,35 @@ fn placeholder(idx: usize) -> String {
 }
 
 impl ModelBlocks {
-    /// `out` with each placeholder replaced by its `'''` literal block. The
-    /// section is last in the file, so each placeholder is found from the
-    /// end: a footprint string that happens to spell one is never touched.
-    pub fn fill(&self, out: String) -> String {
+    /// `out` with each `data = "<placeholder>"` value replaced by its `'''`
+    /// literal block. Only a whole `data = ...` line matches, and each
+    /// placeholder must match exactly once: anything else (a string that
+    /// spells one) refuses the save rather than write a wrong file.
+    pub fn fill(&self, out: String) -> Result<String, FootprintFileError> {
         let mut spans = Vec::with_capacity(self.payloads.len());
-        let mut end = out.len();
-        for idx in (0..self.payloads.len()).rev() {
-            let needle = format!("\"{}\"", placeholder(idx));
-            if let Some(at) = out[..end].rfind(&needle) {
-                spans.push((at, at + needle.len(), idx));
-                end = at;
-            }
+        for index in 0..self.payloads.len() {
+            let value = format!("\"{}\"", placeholder(index));
+            let line = format!("\ndata = {value}\n");
+            let found: Vec<usize> = out.match_indices(&line).map(|(at, _)| at).collect();
+            let [at] = found[..] else {
+                return Err(FootprintFileError::ModelDataPlacement { index });
+            };
+            let start = at + "\ndata = ".len();
+            spans.push((start, start + value.len(), index));
         }
-        spans.reverse();
+        spans.sort_unstable();
         let extra: usize = self.payloads.iter().map(|p| p.len() + 7).sum();
         let mut filled = String::with_capacity(out.len() + extra);
         let mut from = 0;
-        for (start, stop, idx) in spans {
+        for (start, stop, index) in spans {
             filled.push_str(&out[from..start]);
             filled.push_str("'''\n");
-            filled.push_str(&self.payloads[idx]);
+            filled.push_str(&self.payloads[index]);
             filled.push_str("'''");
             from = stop;
         }
         filled.push_str(&out[from..]);
-        filled
+        Ok(filled)
     }
 }
 
@@ -214,6 +237,11 @@ impl EmbeddedModels {
         self.0.len()
     }
 
+    /// Every entry, by hash.
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &EmbeddedModel)> {
+        self.0.iter().map(|(hash, model)| (hash.as_str(), model))
+    }
+
     /// The entry stored under `hash`.
     pub fn get(&self, hash: &str) -> Option<&EmbeddedModel> {
         self.0.get(hash)
@@ -230,7 +258,7 @@ impl EmbeddedModels {
     }
 
     /// Add `other`'s entries this one lacks (a container merge).
-    pub(crate) fn absorb(&mut self, other: &EmbeddedModels) {
+    pub fn absorb(&mut self, other: &EmbeddedModels) {
         for (hash, model) in &other.0 {
             self.0.entry(hash.clone()).or_insert_with(|| model.clone());
         }
@@ -269,11 +297,12 @@ impl EmbeddedModels {
             if models.contains_key(&entry.hash) {
                 return Err(refuse("the file holds it twice".into()));
             }
-            let data: String = entry
-                .data
-                .chars()
-                .filter(|c| !c.is_ascii_whitespace())
-                .collect();
+            if !entry.data.chars().all(is_data_char) {
+                return Err(refuse(
+                    "its data holds characters base64 does not use".into(),
+                ));
+            }
+            let data = entry.data;
             models.insert(
                 entry.hash,
                 EmbeddedModel {
@@ -302,7 +331,7 @@ impl EmbeddedModels {
                 size: model.size,
                 data: placeholder(wire.len()),
             });
-            payloads.push(model.wrapped_data());
+            payloads.push(model.data.to_string());
         }
         (wire, ModelBlocks { payloads })
     }

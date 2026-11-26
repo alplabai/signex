@@ -4,6 +4,8 @@
 //! [`signex_library::StepAttachment`] (#3107): the model lands in the
 //! `.snxfpt`'s `[[models]]` section, keyed by its SHA-256, so footprints of
 //! one file sharing a body store it once. Nothing is written under `step/`.
+//! The editor's attach flow (`EditorMsg::StepAttachResult`) is not wired to
+//! [`attach_step`] yet.
 //! Also exposes the small `view()` widget for the Footprint tab's Body 3D
 //! pane.
 

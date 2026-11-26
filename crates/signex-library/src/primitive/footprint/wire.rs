@@ -219,6 +219,6 @@ impl FootprintFile {
             out = out.replace(&needle, &replacement);
         }
         // Last, so the pad pass never scans the model text.
-        Ok(model_blocks.fill(out))
+        model_blocks.fill(out)
     }
 }
