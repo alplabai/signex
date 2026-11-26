@@ -25,6 +25,11 @@ library-browser-license = License: { $license }
 # Next to it: where the content came from, a URL or a description, verbatim.
 library-browser-source = Source: { $source }
 
+# Messages line after mounting a library whose manifest requires another
+# library that is not open. $library is the library's name, $required the
+# required library's id (a UUID).
+library-requires-missing = Library { $library } needs library { $required }, which is not open; its parts that use it do not resolve
+
 # Caption in front of the lifecycle filter pills.
 library-browser-show = Show
 

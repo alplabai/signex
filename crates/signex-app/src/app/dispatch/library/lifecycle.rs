@@ -117,6 +117,18 @@ impl Signex {
         path: std::path::PathBuf,
         prepared: crate::library::mount::PreparedMountCell,
     ) -> Task<Message> {
+        let task = self.finish_one_mount(path, prepared);
+        self.report_required_libraries_once_settled();
+        task
+    }
+
+    /// [`Self::handle_mount_finished`] for one mount, before the
+    /// required-library check.
+    fn finish_one_mount(
+        &mut self,
+        path: std::path::PathBuf,
+        prepared: crate::library::mount::PreparedMountCell,
+    ) -> Task<Message> {
         let Some(intent) = self.library.take_mount_intent(&path) else {
             tracing::debug!(
                 target: "signex::library",
@@ -191,7 +203,7 @@ impl Signex {
                     return self.readmit_stock_copies(&path);
                 }
                 self.library.drift.check_pending = true;
-                self.report_missing_required_libraries(&path);
+                self.library.requires_unchecked.push(path.clone());
                 // The primitive picker's "Link without copying" binds now.
                 let link = self.picker_link_after_mount(&path);
                 self.picker_mount_settled(&path, None);
@@ -216,19 +228,16 @@ impl Signex {
         Task::batch([link, open])
     }
 
-    /// Say in Messages which libraries the library just mounted at `path`
-    /// requires and no open library is (#3112). Not fatal: its parts that
-    /// use them show as unresolved.
-    fn report_missing_required_libraries(&self, path: &std::path::Path) {
-        let missing = self.library.missing_required_libraries(path);
-        if missing.is_empty() {
+    /// Once no mount is pending, say in Messages which libraries the ones
+    /// mounted since the last check require and no open library is (#3112).
+    /// Waiting for the batch keeps a library mounted later in the same batch
+    /// from being reported. Not fatal: parts that use them stay unresolved.
+    fn report_required_libraries_once_settled(&mut self) {
+        if !self.library.pending_mounts.is_empty() {
             return;
         }
-        let name = self.library.library_label(path);
-        for id in missing {
-            crate::diagnostics::log_warning(crate::library::requires::missing_required_message(
-                &name, id,
-            ));
+        for line in self.library.missing_required_messages(&self.ui_state.i18n) {
+            crate::diagnostics::log_warning(line);
         }
     }
 

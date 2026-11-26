@@ -690,6 +690,9 @@ pub struct LibraryState {
     /// concurrent mounts of *different* libraries are both legitimate,
     /// so a single counter would cancel the wrong one.
     pub pending_mounts: HashMap<PathBuf, super::mount::MountIntent>,
+    /// Libraries mounted whose `requires` were not checked yet; checked
+    /// once no mount is pending (`library::requires`, #3112).
+    pub requires_unchecked: Vec<PathBuf>,
     /// Libraries holding saved changes that no git commit has yet (#858).
     pub uncommitted: uncommitted::UncommittedState,
     /// An external-edit `stat` pass is running off-thread (#531); a tick

@@ -95,6 +95,7 @@ impl Default for LibraryState {
             components_panel: ComponentsPanelState::default(),
             properties_footprints: Default::default(),
             pending_mounts: HashMap::new(),
+            requires_unchecked: Vec::new(),
             external_poll_in_flight: false,
             external_poll_stat_running: Default::default(),
             external_poll_stall_reported: false,

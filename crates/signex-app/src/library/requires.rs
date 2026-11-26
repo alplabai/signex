@@ -1,9 +1,11 @@
-//! Libraries a mounted library's manifest `requires` (#3112). Mounting one
-//! whose required library is not open reports it in Messages and carries on;
-//! offering to mount it is #3114's (A10) job.
+//! Libraries a mounted library's manifest `requires` (#3112). Once a batch of
+//! mounts has settled, each one whose required library is not open is
+//! reported in Messages and stays mounted; offering to mount it is #3114's
+//! (A10) job.
 
 use std::path::Path;
 
+use signex_i18n::{Arg, I18n, ids};
 use uuid::Uuid;
 
 use super::state::LibraryState;
@@ -27,13 +29,28 @@ impl LibraryState {
             })
             .collect()
     }
-}
 
-/// The Messages line for a library that needs library `missing`.
-pub fn missing_required_message(library: &str, missing: Uuid) -> String {
-    format!(
-        "Library {library} needs library {missing}, which is not open; its parts that use it will not resolve"
-    )
+    /// One Messages line per library required by a library mounted since
+    /// the last call that no open library is, naming the library that needs
+    /// it. Clears the list of libraries to check.
+    pub fn missing_required_messages(&mut self, i18n: &I18n) -> Vec<String> {
+        let roots = std::mem::take(&mut self.requires_unchecked);
+        let mut lines = Vec::new();
+        for root in roots {
+            let name = self.library_label(&root);
+            for id in self.missing_required_libraries(&root) {
+                let required = id.to_string();
+                lines.push(i18n.message_plain(
+                    ids::LIBRARY_REQUIRES_MISSING,
+                    &[
+                        ("library", Arg::from(name.as_str())),
+                        ("required", Arg::from(required.as_str())),
+                    ],
+                ));
+            }
+        }
+        lines
+    }
 }
 
 #[cfg(test)]
@@ -91,5 +108,30 @@ mod tests {
                 .missing_required_libraries(Path::new("/nowhere.snxlib"))
                 .is_empty()
         );
+    }
+
+    /// Checked once the batch settles: each library is reported once, by
+    /// name.
+    #[test]
+    fn messages_name_the_library_and_are_given_once() {
+        let mut state = LibraryState::default();
+        open(
+            &mut state,
+            "/a/Parts.snxlib",
+            1,
+            vec![Uuid::from_u128(2), Uuid::from_u128(3)],
+        );
+        open(&mut state, "/a/Footprints.snxlib", 2, Vec::new());
+        state.requires_unchecked = vec![PathBuf::from("/a/Parts.snxlib")];
+        let i18n = I18n::en_us();
+        let lines = state.missing_required_messages(&i18n);
+        assert_eq!(lines.len(), 1, "{lines:?}");
+        assert!(lines[0].contains("/a/Parts.snxlib"), "{}", lines[0]);
+        assert!(
+            lines[0].contains(&Uuid::from_u128(3).to_string()),
+            "{}",
+            lines[0]
+        );
+        assert!(state.missing_required_messages(&i18n).is_empty());
     }
 }
