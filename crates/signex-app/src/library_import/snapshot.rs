@@ -33,12 +33,17 @@ pub struct UpdateCheck {
     pub local_commits: usize,
 }
 
-/// Before `--update`: refuse when the library has uncommitted changes, and
-/// count the commits that are not imports.
+/// Before `--update`: refuse a folder with no repository or with
+/// uncommitted changes, and count the commits since the last import.
 pub fn check_update(library_dir: &Path) -> Result<UpdateCheck, ImportError> {
     let state = read_snapshot_state(library_dir).map_err(|e| ImportError::Git {
         detail: e.to_string(),
     })?;
+    if !state.has_repo {
+        return Err(ImportError::NotAnImportedLibrary {
+            dir: library_dir.to_path_buf(),
+        });
+    }
     if !state.uncommitted.is_empty() {
         return Err(ImportError::UncommittedChanges {
             paths: state.uncommitted,
@@ -75,22 +80,31 @@ pub struct ImportJobOutcome {
 }
 
 impl ImportJob {
-    /// Run the job. An update over uncommitted changes is refused before
-    /// the converter starts.
+    /// Run the job. An update is refused before the converter starts unless
+    /// the library is a clean repository; it holds the library's write lock
+    /// until its commit, and a failed update puts the tree back to its last
+    /// import.
     pub fn run(
         &self,
         cancel: &AtomicBool,
         on_event: &mut dyn FnMut(&ProgressEvent),
     ) -> Result<ImportJobOutcome, RunFailure> {
-        let local_commits = match self.request.mode {
+        let (local_commits, _write_lock) = match self.request.mode {
             RunMode::Update => {
-                check_update(&self.request.output)
-                    .map_err(RunFailure::new)?
-                    .local_commits
+                let output = &self.request.output;
+                let check = check_update(output).map_err(RunFailure::new)?;
+                let file = find_library_file(output).map_err(RunFailure::new)?;
+                let lock = signex_library::hold_library_write_lock(&file).map_err(|e| {
+                    RunFailure::new(ImportError::Git {
+                        detail: e.to_string(),
+                    })
+                })?;
+                (check.local_commits, Some(lock))
             }
-            RunMode::Import | RunMode::Preview => 0,
+            RunMode::Import | RunMode::Preview => (0, None),
         };
-        let run = run_library(&self.command, &self.request, self.limits, cancel, on_event)?;
+        let run = run_library(&self.command, &self.request, self.limits, cancel, on_event)
+            .map_err(|failure| self.restore_after_failed_update(failure))?;
         let Some(library_dir) = run.library.clone() else {
             return Ok(ImportJobOutcome {
                 run,
@@ -118,6 +132,23 @@ impl ImportJob {
             local_commits,
             library_id,
         })
+    }
+
+    /// An update failed after `check_update` found the tree clean: whatever
+    /// the converter wrote is undone. Only reached for an update.
+    fn restore_after_failed_update(&self, mut failure: RunFailure) -> RunFailure {
+        if self.request.mode == RunMode::Update {
+            let restored = signex_library::import_snapshot::restore_to_head(&self.request.output)
+                .map_err(|e| e.to_string());
+            if let Err(why) = &restored {
+                log::warn!(
+                    "library import: {} not restored: {why}",
+                    self.request.output.display()
+                );
+            }
+            failure.restored = Some(restored);
+        }
+        failure
     }
 
     fn commit_message(&self, library_file: &Path) -> String {

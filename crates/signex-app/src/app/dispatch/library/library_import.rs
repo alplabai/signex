@@ -15,8 +15,10 @@ use crate::ignore::IgnoreResult as _;
 use crate::library::messages::LibraryImportMsg;
 use crate::library::mount::{MountIntent, MountRequest, spawn_pending_mounts};
 use crate::library::refresh::{RefreshFollowUp, refresh_task};
-use crate::library_import::run_state::{ImportFinished, ImportRun, MountTarget, run_job};
-use crate::library_import::{ExitKind, ImportJob, ImportJobOutcome, MountScope, RunFailure};
+use crate::library_import::run_state::{ImportFinished, ImportRun, MountTarget};
+use crate::library_import::{
+    ExitKind, ImportError, ImportJob, ImportJobOutcome, MountScope, RunFailure, RunMode,
+};
 
 /// Progress messages queued before the oldest is dropped; progress is
 /// display only, the result is never dropped.
@@ -24,6 +26,22 @@ const PROGRESS_QUEUE: usize = 64;
 
 fn import_message(msg: LibraryImportMsg) -> Message {
     Message::Library(LibraryMessage::Import(msg))
+}
+
+/// Record `file` in `global_libraries.toml` on a worker.
+fn record_global_task(file: std::path::PathBuf) -> Task<Message> {
+    Task::perform(
+        async move {
+            let path = file.clone();
+            let result = tokio::task::spawn_blocking(move || {
+                crate::panels::components_panel::global_prefs::add_path(path).map(|_| ())
+            })
+            .await
+            .unwrap_or_else(|e| Err(e.to_string()));
+            (file, result)
+        },
+        |(file, result)| import_message(LibraryImportMsg::GlobalRecorded { file, result }),
+    )
 }
 
 impl Signex {
@@ -50,6 +68,15 @@ impl Signex {
             ));
             return Task::none();
         }
+        if job.request.mode == RunMode::Update
+            && let Some(what) = self.unsaved_in_library(&job.request.output)
+        {
+            self.document_state.error_notice = Some(ErrorNotice::new(
+                ids::LIBRARY_IMPORT_FAILED_TITLE,
+                ImportError::UnsavedInApp { what }.to_translatable(),
+            ));
+            return Task::none();
+        }
         let target = self.mount_target_for(scope);
         let cancel = Arc::new(AtomicBool::new(false));
         self.library.import.running = Some(ImportRun {
@@ -68,13 +95,14 @@ impl Signex {
             let mut progress = out.clone();
             let failed_target = target.clone();
             let worker = tokio::task::spawn_blocking(move || {
-                run_job(&job, target, &cancel, &mut |event| {
+                let result = job.run(&cancel, &mut |event| {
                     progress
                         .try_send(import_message(LibraryImportMsg::ProgressReported(
                             event.clone(),
                         )))
                         .ignore("progress is display only; a full queue skips an update");
-                })
+                });
+                ImportFinished { result, target }
             });
             let finished = worker.await.unwrap_or_else(|e| ImportFinished {
                 result: Err(RunFailure::new(
@@ -83,7 +111,6 @@ impl Signex {
                     },
                 )),
                 target: failed_target,
-                registered_global: None,
             });
             out.send(import_message(LibraryImportMsg::Finished(Box::new(
                 finished,
@@ -92,6 +119,23 @@ impl Signex {
             .ignore("the runtime stopped listening; nothing is left to tell");
         });
         Task::run(stream, |message| message)
+    }
+
+    /// The first unsaved editor or document inside the library folder
+    /// `dir`, named for the refusal; an update would overwrite it.
+    fn unsaved_in_library(&self, dir: &std::path::Path) -> Option<String> {
+        use crate::app::state::scope::{CaseFold, path_is_under};
+        let fold = CaseFold::host_default();
+        if let Some(editor) = self
+            .library
+            .dirty_editors_matching(|root| path_is_under(root, dir, fold))
+            .first()
+        {
+            return Some(self.library.editor_label(editor));
+        }
+        self.unsaved_documents(dir, fold)
+            .first()
+            .map(|p| p.display().to_string())
     }
 
     /// Settle where an import is mounted while the active project is known.
@@ -133,6 +177,19 @@ impl Signex {
                 Task::none()
             }
             LibraryImportMsg::Finished(finished) => self.finish_library_import(*finished),
+            LibraryImportMsg::GlobalRecorded { file, result } => {
+                match result {
+                    Ok(()) => crate::panels::components_panel::global_prefs::merge_path(
+                        &mut self.library.global_libraries,
+                        file,
+                    ),
+                    Err(reason) => self.report_global_libraries_save_failure(
+                        "record the imported library",
+                        &reason,
+                    ),
+                }
+                Task::none()
+            }
         }
     }
 
@@ -150,7 +207,16 @@ impl Signex {
     }
 
     fn report_library_import_failure(&mut self, failure: &RunFailure) {
-        let detail = failure.error.to_translatable();
+        let error = failure.error.to_translatable();
+        let detail = match &failure.restored {
+            None => error,
+            Some(Ok(())) => {
+                Translatable::new(ids::LIBRARY_IMPORT_UPDATE_RESTORED).arg("error", error)
+            }
+            Some(Err(reason)) => Translatable::new(ids::LIBRARY_IMPORT_UPDATE_NOT_RESTORED)
+                .arg("error", error)
+                .arg("reason", reason.as_str()),
+        };
         crate::diagnostics::log_error(
             "Library import",
             &anyhow::anyhow!("{}\n{}", failure.error, failure.stderr_tail.trim()),
@@ -160,7 +226,8 @@ impl Signex {
     }
 
     /// Record and mount a written library; refresh it when it is already
-    /// mounted (a re-import). A preview mounts nothing.
+    /// mounted (a re-import). A preview mounts nothing. A library whose id
+    /// another open library has is neither recorded nor mounted.
     fn mount_imported_library(
         &mut self,
         outcome: &ImportJobOutcome,
@@ -169,23 +236,23 @@ impl Signex {
         let Some(file) = outcome.library_file.clone() else {
             return Task::none();
         };
-        match (&finished.target, &finished.registered_global) {
-            (MountTarget::Global, Some(Ok(()))) => {
-                crate::panels::components_panel::global_prefs::merge_path(
-                    &mut self.library.global_libraries,
-                    file.clone(),
-                );
-            }
-            (MountTarget::Global, Some(Err(reason))) => {
-                self.report_global_libraries_save_failure("record the imported library", reason);
-            }
-            (MountTarget::Project(project), _) => {
+        if let Some(other) = self.library_id_clash(&file, outcome.library_id) {
+            let detail = Translatable::new(ids::LIBRARY_IMPORT_ID_CLASH)
+                .arg("path", file.display().to_string())
+                .arg("other", other.display().to_string());
+            crate::diagnostics::log_warning(detail.render_en_us());
+            self.document_state.error_notice =
+                Some(ErrorNotice::new(ids::LIBRARY_IMPORT_FAILED_TITLE, detail));
+            return Task::none();
+        }
+        let mut tasks = vec![self.mount_required_libraries(&[])];
+        match &finished.target {
+            MountTarget::Global => tasks.push(record_global_task(file.clone())),
+            MountTarget::Project(project) => {
                 self.add_imported_library_to_project(project, &file, outcome.library_id)
             }
-            (MountTarget::Global, None) => {}
         }
         self.log_import_result(outcome, &file);
-        let mut tasks = vec![self.mount_required_libraries(&[])];
         tasks.push(
             match self.library.request_mount(&file, MountIntent::Silent) {
                 MountRequest::Spawn => spawn_pending_mounts(vec![file]),
@@ -197,6 +264,21 @@ impl Signex {
         );
         self.refresh_panel_ctx();
         Task::batch(tasks)
+    }
+
+    /// Another open library with `library_id`; a re-import of the same
+    /// file is no clash.
+    fn library_id_clash(
+        &self,
+        file: &std::path::Path,
+        library_id: Option<uuid::Uuid>,
+    ) -> Option<std::path::PathBuf> {
+        let id = library_id?;
+        self.library
+            .open_libraries
+            .iter()
+            .find(|lib| lib.library_id == id && lib.root != file)
+            .map(|lib| lib.root.clone())
     }
 
     /// Put `file` on the project's library list (once), so the next save

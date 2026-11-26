@@ -84,24 +84,85 @@ pub fn read_snapshot_state(root: &Path) -> Result<SnapshotState, LibraryError> {
     })
 }
 
+/// Commits on HEAD made after its newest import commit (all of them when
+/// there is none).
 fn count_local_commits(repo: &git2::Repository) -> Result<usize, LibraryError> {
-    let Ok(head) = repo.head() else {
+    let Some(tip) = repo.head().ok().and_then(|head| head.target()) else {
         return Ok(0);
     };
-    let Some(tip) = head.target() else {
-        return Ok(0);
+    let log = |e: git2::Error| backend("git log", e);
+    let walk_from_tip = || -> Result<git2::Revwalk<'_>, LibraryError> {
+        let mut walk = repo.revwalk().map_err(log)?;
+        walk.set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::TIME)
+            .map_err(log)?;
+        walk.push(tip).map_err(log)?;
+        Ok(walk)
     };
-    let mut walk = repo.revwalk().map_err(|e| backend("git log", e))?;
-    walk.push(tip).map_err(|e| backend("git log", e))?;
-    let mut count = 0;
-    for oid in walk {
-        let oid = oid.map_err(|e| backend("git log", e))?;
-        let commit = repo.find_commit(oid).map_err(|e| backend("git log", e))?;
-        if !is_import_commit(&String::from_utf8_lossy(commit.message_bytes())) {
-            count += 1;
+    let mut newest_import = None;
+    for oid in walk_from_tip()? {
+        let oid = oid.map_err(log)?;
+        let commit = repo.find_commit(oid).map_err(log)?;
+        if is_import_commit(&String::from_utf8_lossy(commit.message_bytes())) {
+            newest_import = Some(oid);
+            break;
         }
     }
-    Ok(count)
+    let mut walk = walk_from_tip()?;
+    if let Some(import) = newest_import {
+        walk.hide(import).map_err(log)?;
+    }
+    Ok(walk.count())
+}
+
+/// Put the working tree back to HEAD after a failed update over a tree that
+/// was clean when it started: tracked files are checked out again and
+/// untracked files the run added are removed; ignored files stay. Refused
+/// for a library that uses Git LFS, whose checkout would write pointers.
+pub fn restore_to_head(root: &Path) -> Result<(), LibraryError> {
+    let attributes = std::fs::read_to_string(root.join(".gitattributes")).unwrap_or_default();
+    if attributes.contains("filter=lfs") {
+        return Err(LibraryError::Conflict(
+            "the library uses Git LFS, so it was not restored automatically".into(),
+        ));
+    }
+    let repo = git2::Repository::open(root).map_err(|e| backend("git open", e))?;
+    let head = repo
+        .head()
+        .and_then(|h| h.peel_to_commit())
+        .map_err(|e| backend("git head", e))?;
+    let mut checkout = git2::build::CheckoutBuilder::new();
+    checkout.force();
+    repo.reset(head.as_object(), git2::ResetType::Hard, Some(&mut checkout))
+        .map_err(|e| backend("git reset", e))?;
+    remove_untracked(&repo, root)
+}
+
+/// Remove the untracked, not ignored files under `root` (the reset keeps
+/// them), then the folders that emptied.
+fn remove_untracked(repo: &git2::Repository, root: &Path) -> Result<(), LibraryError> {
+    let mut options = git2::StatusOptions::new();
+    options
+        .include_untracked(true)
+        .recurse_untracked_dirs(true)
+        .include_ignored(false);
+    let statuses = repo
+        .statuses(Some(&mut options))
+        .map_err(|e| backend("git status", e))?;
+    for entry in statuses.iter().filter(|e| e.status().is_wt_new()) {
+        let Ok(rel) = entry.path() else { continue };
+        if is_write_lock_file(Path::new(rel)) {
+            continue;
+        }
+        let path = root.join(rel);
+        std::fs::remove_file(&path)
+            .map_err(|e| backend(&format!("remove {}", path.display()), e))?;
+        for dir in path.ancestors().skip(1).take_while(|d| *d != root) {
+            if std::fs::remove_dir(dir).is_err() {
+                break;
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Make `root` an import repository: `git init` when it has no `.git`
@@ -264,6 +325,44 @@ mod tests {
         assert_eq!(state.uncommitted, ["mine.snxsym"]);
         commit_snapshot(dir.path(), "my own symbol\n").unwrap();
         assert_eq!(read_snapshot_state(dir.path()).unwrap().local_commits, 1);
+    }
+
+    #[test]
+    fn only_commits_after_the_newest_import_are_local() {
+        let dir = library_dir();
+        prepare_snapshot_repo(dir.path()).unwrap();
+        commit_snapshot(dir.path(), IMPORT).unwrap();
+        std::fs::write(dir.path().join("a.snxsym"), "a\n").unwrap();
+        commit_snapshot(dir.path(), "mine\n").unwrap();
+        assert_eq!(read_snapshot_state(dir.path()).unwrap().local_commits, 1);
+        std::fs::write(dir.path().join("b.snxsym"), "b\n").unwrap();
+        commit_snapshot(dir.path(), IMPORT).unwrap();
+        assert_eq!(read_snapshot_state(dir.path()).unwrap().local_commits, 0);
+    }
+
+    #[test]
+    fn restore_puts_tracked_files_back_and_drops_new_ones() {
+        let dir = library_dir();
+        std::fs::write(dir.path().join(".gitignore"), "*.log\n").unwrap();
+        prepare_snapshot_repo(dir.path()).unwrap();
+        commit_snapshot(dir.path(), IMPORT).unwrap();
+        std::fs::write(dir.path().join("Lib.snxlib"), "half written").unwrap();
+        std::fs::create_dir_all(dir.path().join("symbols")).unwrap();
+        std::fs::write(dir.path().join("symbols/new.snxsym"), "x").unwrap();
+        std::fs::write(dir.path().join("keep.log"), "x").unwrap();
+        restore_to_head(dir.path()).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("Lib.snxlib")).unwrap(),
+            "format = \"snxlib/2\"\n"
+        );
+        assert!(!dir.path().join("symbols/new.snxsym").exists());
+        assert!(dir.path().join("keep.log").exists(), "ignored files stay");
+        assert!(
+            read_snapshot_state(dir.path())
+                .unwrap()
+                .uncommitted
+                .is_empty()
+        );
     }
 
     #[test]

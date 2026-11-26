@@ -131,6 +131,23 @@ impl LocalGitAdapter {
     }
 }
 
+/// The write lock of a library held across a long operation by a caller
+/// with no adapter open on it: an import update (#3114). Released on drop.
+#[must_use = "the lock is released as soon as this is dropped"]
+pub struct HeldWriteLock {
+    _lock: Option<WriteLock>,
+}
+
+/// Take the write lock of the library at `library_file`, waiting up to
+/// [`WRITE_LOCK_WAIT`]. A filesystem that cannot lock holds nothing, as for
+/// an edit.
+pub fn hold_library_write_lock(library_file: &Path) -> Result<HeldWriteLock, LibraryError> {
+    static WARNED: AtomicBool = AtomicBool::new(false);
+    Ok(HeldWriteLock {
+        _lock: acquire(library_file, &WARNED)?,
+    })
+}
+
 /// Rewrite `abs_path`, a file of the library at `library_file`, under that
 /// library's write lock, for a caller that has no [`LocalGitAdapter`] open on
 /// it: a primitive file opened on its own (#902). See

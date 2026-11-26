@@ -9,8 +9,13 @@ use crate::library_import::run_state::ImportFinished;
 pub enum LibraryImportMsg {
     /// The converter reported progress.
     ProgressReported(ProgressEvent),
-    /// The run, its git commit and any global registration finished.
+    /// The run and its git commit finished.
     Finished(Box<ImportFinished>),
+    /// The imported library was (or could not be) recorded as global.
+    GlobalRecorded {
+        file: std::path::PathBuf,
+        result: Result<(), String>,
+    },
     /// The user asked to stop the run; its result still arrives as
     /// [`LibraryImportMsg::Finished`].
     CancelRequested,
