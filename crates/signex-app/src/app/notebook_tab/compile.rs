@@ -215,7 +215,7 @@ impl Signex {
     /// Compile `id`'s notebook as typed, or note that one is owed when a
     /// compile is running.
     pub(super) fn request_notebook_compile(&mut self, id: ProjectId) -> Task<Message> {
-        let colours = page_colours(&self.document_state.panel_ctx.tokens);
+        let colours = page_colours(&self.document_view.panel_ctx.tokens);
         let design = self.document_state.project_by_id(id).and_then(|project| {
             crate::app::notebook_measurements::DesignInputs::of(
                 project,
@@ -295,7 +295,7 @@ impl Signex {
 
     /// Draw page `page` of the last good compile for the preview.
     pub(super) fn draw_notebook_page(&mut self, id: ProjectId, page: usize) -> Task<Message> {
-        let colours = page_colours(&self.document_state.panel_ctx.tokens);
+        let colours = page_colours(&self.document_view.panel_ctx.tokens);
         let Some(tab) = self.ui_state.notebook_tabs.get_mut(&id) else {
             return Task::none();
         };

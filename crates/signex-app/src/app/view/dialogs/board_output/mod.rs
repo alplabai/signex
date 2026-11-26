@@ -37,7 +37,7 @@ impl Signex {
     }
 
     fn view_board_output_card(&self, size: (f32, f32)) -> Element<'_, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = self.ui_state.i18n.as_ref();
         let (header, body, footer) = match self.ui_state.board_output.dialog.as_deref() {
             Some(BoardOutputDialog::Reports(state)) => {

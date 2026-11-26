@@ -14,7 +14,7 @@ impl Signex {
         &mut self,
         edit: impl FnOnce(&mut crate::app::state::PreviewState) -> bool,
     ) -> Task<Message> {
-        let changed = self.document_state.preview.as_mut().is_some_and(edit);
+        let changed = self.document_view.preview.as_mut().is_some_and(edit);
         if changed {
             self.rerasterize_print_preview()
         } else {

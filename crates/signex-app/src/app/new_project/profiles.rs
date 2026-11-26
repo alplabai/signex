@@ -302,7 +302,7 @@ impl Signex {
         if let Some(state) = self.ui_state.document_setup.as_mut() {
             edit(&mut state.draft);
         }
-        for tab in self.document_state.project_tabs.values_mut() {
+        for tab in self.document_view.project_tabs.values_mut() {
             if let Some(draft) = tab.setup_draft.as_mut() {
                 edit(draft);
             }

@@ -152,10 +152,10 @@ pub(super) fn caption<'a>(words: Localized, tokens: &ThemeTokens) -> Element<'a,
 impl Signex {
     /// The Properties sidebar: the tab switch over the active pane.
     pub(super) fn bom_sidebar(&self) -> Element<'_, Message> {
-        let Some(ref preview) = self.document_state.bom_preview else {
+        let Some(ref preview) = self.document_view.bom_preview else {
             return container(Space::new()).boxed();
         };
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = self.ui_state.i18n.as_ref();
         let tabs: [(BomSidebarTab, Label<'static>); 3] = [
             (

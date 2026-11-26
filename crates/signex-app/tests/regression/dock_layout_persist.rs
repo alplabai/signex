@@ -48,9 +48,9 @@ impl Recorder {
 fn app_with_recorder() -> (Signex, Arc<Recorder>) {
     let (mut app, _boot) = Signex::new();
     let recorder = Arc::new(Recorder::default());
-    app.document_state.dock_layout_sync = DockLayoutSync::new(
+    app.document_view.dock_layout_sync = DockLayoutSync::new(
         recorder.clone(),
-        DockLayoutSnapshot::capture(&app.document_state.dock),
+        DockLayoutSnapshot::capture(&app.document_view.dock),
     );
     (app, recorder)
 }
@@ -197,7 +197,7 @@ fn a_failed_write_is_reported_to_the_messages_panel_and_retried_on_the_next_chan
     let _ = app.update(Message::DockLayout(saved[0].clone()));
 
     assert!(
-        app.document_state
+        app.document_view
             .panel_ctx
             .diagnostics
             .iter()
@@ -245,15 +245,15 @@ fn quit_waits_for_a_write_that_is_already_running() {
         proceed: Mutex::new(proceed_rx),
         finished: std::sync::atomic::AtomicBool::new(false),
     });
-    app.document_state.dock_layout_sync = DockLayoutSync::new(
+    app.document_view.dock_layout_sync = DockLayoutSync::new(
         store.clone(),
-        DockLayoutSnapshot::capture(&app.document_state.dock),
+        DockLayoutSnapshot::capture(&app.document_view.dock),
     );
     let _timer_not_run = app.update(Message::Dock(DockMessage::ToggleCollapse(
         PanelPosition::Left,
     )));
     let running = app
-        .document_state
+        .document_view
         .dock_layout_sync
         .flush()
         .expect("the changed layout is pending");
@@ -291,9 +291,9 @@ fn the_real_store_writes_the_dock_and_keeps_other_settings() {
     )
     .unwrap();
     let (mut app, _boot) = Signex::new();
-    app.document_state.dock_layout_sync = DockLayoutSync::new(
+    app.document_view.dock_layout_sync = DockLayoutSync::new(
         Arc::new(signex_app::fonts::PrefsDockLayoutStore::at(path.clone())),
-        DockLayoutSnapshot::capture(&app.document_state.dock),
+        DockLayoutSnapshot::capture(&app.document_view.dock),
     );
 
     // Act

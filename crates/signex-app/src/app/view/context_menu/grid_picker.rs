@@ -131,7 +131,7 @@ impl Signex {
     /// `Message::Ui(UiMsg::GridPickerSelect(step_mm))` and closes the popup.
     pub(in crate::app::view) fn view_grid_picker_menu(&self) -> Element<'_, Message> {
         use iced::widget::Widget as _;
-        let panel_ctx = &self.document_state.panel_ctx;
+        let panel_ctx = &self.document_view.panel_ctx;
         let i18n = &self.ui_state.i18n;
         let ladder = super::placement::menu_card(
             grid_picker_entries(i18n, self.grid_picker_active_step()),

@@ -193,7 +193,7 @@ impl Signex {
     /// filter and the issues-only view; none while the panel context shows
     /// another symbol.
     fn pin_table_acted_rows(&self, path: &Path, table: &PinTableUi) -> BTreeSet<usize> {
-        self.document_state
+        self.document_view
             .panel_ctx
             .symbol_editor
             .as_ref()

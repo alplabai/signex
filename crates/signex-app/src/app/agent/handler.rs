@@ -760,7 +760,7 @@ impl Signex {
             if entry
                 .path
                 .as_ref()
-                .is_some_and(|path| self.document_state.drafts.has_sheet(path))
+                .is_some_and(|path| self.document_view.drafts.has_sheet(path))
             {
                 return Err(
                     "the person is editing this sheet's title block or page settings".to_string(),

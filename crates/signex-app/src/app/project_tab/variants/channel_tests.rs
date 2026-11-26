@@ -81,7 +81,7 @@ fn app() -> (Signex, ProjectId, tempfile::TempDir) {
         variants: vec!["Lite".into()],
         rows: (1..=3).map(copy).collect(),
     };
-    let tab = app.document_state.project_tabs.get_mut(&id).expect("a tab");
+    let tab = app.document_view.project_tabs.get_mut(&id).expect("a tab");
     tab.variant_parts = Some(Arc::new(Ok(read)));
     (app, id, dir)
 }
@@ -102,7 +102,7 @@ fn manage(app: &mut Signex, id: ProjectId, msg: VariantManagerMsg) {
 
 /// The read with the settings laid over it, as the views show it.
 fn shown(app: &Signex, id: ProjectId) -> VariantMatrix {
-    let read = app.document_state.project_tabs[&id]
+    let read = app.document_view.project_tabs[&id]
         .variant_parts
         .as_deref()
         .expect("the parts were read")

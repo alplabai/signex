@@ -24,10 +24,10 @@ const ISSUE_ROW_H: f32 = 34.0;
 impl Signex {
     /// Build the Rules tab pane for the active preview.
     pub(super) fn bom_rules_pane(&self) -> Element<'_, Message> {
-        let Some(ref preview) = self.document_state.bom_preview else {
+        let Some(ref preview) = self.document_view.bom_preview else {
             return container(Space::new()).boxed();
         };
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = self.ui_state.i18n.as_ref();
         let report = &preview.validation_report;
 

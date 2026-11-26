@@ -235,7 +235,7 @@ fn a_blanket_panel_runs_outline_directive_nets_then_suppressed_rules() {
         include_edge_nets: false,
     });
     let (app, _boot) = crate::app::Signex::new();
-    let mut ctx = app.document_state.panel_ctx.clone();
+    let mut ctx = app.document_view.panel_ctx.clone();
     ctx.selected_kind = Some(signex_types::schematic::SelectedKind::Directive);
     ctx.selected_uuid = Some(Uuid::from_u128(90));
     ctx.directive_panel = Some(Box::new(panel(&s)));

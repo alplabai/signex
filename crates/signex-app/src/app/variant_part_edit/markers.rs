@@ -154,7 +154,7 @@ impl Signex {
             &marks,
             camera,
             variant,
-            &self.document_state.panel_ctx.tokens,
+            &self.document_view.panel_ctx.tokens,
             &self.ui_state.i18n,
         )
     }

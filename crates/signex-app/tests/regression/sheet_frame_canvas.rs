@@ -233,7 +233,7 @@ fn a_custom_edge_outside_the_range_is_refused_with_its_text_kept() {
         type_edge(&mut app, PaperEdge::Width, bad);
         assert_eq!(stored_paper(&app), "Custom 400x210", "{bad}");
         assert_eq!(
-            app.document_state
+            app.document_view
                 .drafts
                 .paper_edge_text(&sheet, PaperEdge::Width)
                 .as_deref(),
@@ -245,7 +245,7 @@ fn a_custom_edge_outside_the_range_is_refused_with_its_text_kept() {
     type_edge(&mut app, PaperEdge::Height, "10");
     assert_eq!(stored_paper(&app), "Custom 5080x10");
     assert!(
-        app.document_state
+        app.document_view
             .drafts
             .paper_edge_text(&sheet, PaperEdge::Width)
             .is_none(),
@@ -308,7 +308,7 @@ fn page_options_zone_counts_redraw_the_zone_markers() {
 
     let settings = active_frame_settings(&app);
     assert_eq!((settings.horizontal_zones, settings.vertical_zones), (4, 2));
-    assert_eq!(app.document_state.panel_ctx.sheet_frame, settings);
+    assert_eq!(app.document_view.panel_ctx.sheet_frame, settings);
     for zone in ["1", "4", "A", "B"] {
         assert!(text_at(&app, zone).is_some(), "zone {zone}");
     }
@@ -350,7 +350,7 @@ fn a_frame_edit_applies_to_the_engine_settings_not_a_stale_panel_copy() {
 
     edit_frame(&mut app, SheetFrameEdit::HorizontalZones(4));
     // As if the panel had not been refreshed since the first edit.
-    app.document_state.panel_ctx.sheet_frame = Default::default();
+    app.document_view.panel_ctx.sheet_frame = Default::default();
     edit_frame(&mut app, SheetFrameEdit::VerticalZones(2));
 
     let settings = active_frame_settings(&app);
@@ -370,7 +370,7 @@ fn undo_and_redo_restore_the_settings_and_the_page_options_checkboxes() {
     let _ = app.update(Message::Edit(signex_app::app::EditMsg::Undo));
     assert_eq!(active_frame_settings(&app), SheetFrameSettings::default());
     assert_eq!(
-        app.document_state.panel_ctx.sheet_frame,
+        app.document_view.panel_ctx.sheet_frame,
         SheetFrameSettings::default(),
         "the checkbox follows undo"
     );
@@ -378,7 +378,7 @@ fn undo_and_redo_restore_the_settings_and_the_page_options_checkboxes() {
 
     let _ = app.update(Message::Edit(signex_app::app::EditMsg::Redo));
     assert_eq!(active_frame_settings(&app), edited);
-    assert_eq!(app.document_state.panel_ctx.sheet_frame, edited, "and redo");
+    assert_eq!(app.document_view.panel_ctx.sheet_frame, edited, "and redo");
     assert!(text_at(&app, "Power supply").is_none());
 }
 

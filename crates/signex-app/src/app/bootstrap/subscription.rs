@@ -824,7 +824,7 @@ impl Signex {
             close_library_confirm_open: self.library.close_library_confirm.is_some(),
             // The same read `symbol_delete_confirm_overlay` paints from.
             symbol_delete_open: self
-                .document_state
+                .document_view
                 .panel_ctx
                 .symbol_editor
                 .as_ref()
@@ -844,15 +844,15 @@ impl Signex {
                         RecoveryKind::BrokenBinding
                     }
                 }),
-            error_notice_open: self.document_state.error_notice.is_some(),
+            error_notice_open: self.document_view.error_notice.is_some(),
             error_notice_detached: modal_detached(crate::app::state::ModalId::ErrorNotice),
-            netlist_incomplete_prompt_open: self.document_state.netlist_incomplete_prompt.is_some(),
+            netlist_incomplete_prompt_open: self.document_view.netlist_incomplete_prompt.is_some(),
             netlist_prompt_detached: modal_detached(
                 crate::app::state::ModalId::NetlistIncompletePrompt,
             ),
-            print_preview_open: self.document_state.preview.is_some()
+            print_preview_open: self.document_view.preview.is_some()
                 && !modal_detached(crate::app::state::ModalId::PrintPreview),
-            bom_preview_open: self.document_state.bom_preview.is_some()
+            bom_preview_open: self.document_view.bom_preview.is_some()
                 && !modal_detached(crate::app::state::ModalId::BomPreview),
             net_color_custom_open: self.ui_state.net_color_custom.show
                 && !modal_detached(crate::app::state::ModalId::NetColorCustom),
@@ -912,11 +912,10 @@ impl Signex {
     pub fn is_pointer_drag_active(&self) -> bool {
         self.interaction_state.dragging.is_some()
             || self.library.components_panel.drag.is_some()
-            || self.document_state.dock.tab_drag.is_some()
+            || self.document_view.dock.tab_drag.is_some()
             || self.ui_state.modal_dragging.is_some()
             || self.ui_state.tab_dragging.is_some()
-            || self
-                .document_state
+            || self.document_view
                 .dock
                 .floating
                 .iter()
@@ -924,8 +923,7 @@ impl Signex {
             // A BOM column resize, docked or detached: its handle is 4 px
             // wide, so the release usually lands elsewhere and only the
             // global `DragEnd` can end it.
-            || self
-                .document_state
+            || self.document_view
                 .bom_preview
                 .as_ref()
                 .is_some_and(|preview| preview.column_resize.is_some())
@@ -1099,7 +1097,7 @@ impl Signex {
 
         // Net hover dwell (#1270): ticks only while a candidate waits for its
         // dwell to pass, so an idle or hover-off session costs nothing.
-        let net_hover_tick = if self.document_state.net_nav.hover.needs_ticks() {
+        let net_hover_tick = if self.document_view.net_nav.hover.needs_ticks() {
             iced::time::every(std::time::Duration::from_millis(100))
                 .map(|_| Message::Ui(UiMsg::NetNav(NetNavMsg::HoverDwellTicked)))
         } else {

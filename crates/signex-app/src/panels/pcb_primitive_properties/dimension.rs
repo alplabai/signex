@@ -307,7 +307,7 @@ mod tests {
     #[test]
     fn the_layer_row_carries_the_drawing_only_note() {
         let (app, _boot) = crate::app::Signex::new();
-        let ctx = app.document_state.panel_ctx.clone();
+        let ctx = app.document_view.panel_ctx.clone();
         let f = DimensionFacts {
             common: fixture::common(vec![ItemRef::Via(Uuid::from_u128(1))]),
             kind: Some(DimensionKind::Aligned),
@@ -349,7 +349,7 @@ mod tests {
     /// The panel context of a fresh app with the board showing `unit`.
     fn ctx_in(unit: Unit) -> PanelContext {
         let (app, _boot) = crate::app::Signex::new();
-        let mut ctx = app.document_state.panel_ctx.clone();
+        let mut ctx = app.document_view.panel_ctx.clone();
         ctx.unit = unit;
         ctx
     }

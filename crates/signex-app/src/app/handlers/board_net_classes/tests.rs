@@ -94,7 +94,7 @@ fn document(path: &Path) -> String {
 }
 
 fn notice(app: &Signex) -> Option<String> {
-    app.document_state
+    app.document_view
         .panel_ctx
         .net_classes
         .board
@@ -126,7 +126,7 @@ fn a_class_made_in_the_panel_is_the_project_table_and_drc_uses_its_clearance() {
         ("Power", 0.3, &vec!["VCC".to_string()])
     );
     let shown = app
-        .document_state
+        .document_view
         .panel_ctx
         .net_classes
         .board
@@ -313,7 +313,7 @@ fn a_board_edit_keeps_the_schematic_draft_on_its_class() {
         panel(&mut app, BoardNetClassMsg::AddRequested);
     }
     schematic_panel(&mut app, NetClassMsg::Select(1));
-    let section = |app: &Signex| app.document_state.panel_ctx.net_classes.clone();
+    let section = |app: &Signex| app.document_view.panel_ctx.net_classes.clone();
     assert_eq!(section(&app).draft.name, "Class 2");
 
     panel(
@@ -349,7 +349,7 @@ fn the_board_draft_and_notice_survive_a_refresh_without_an_active_project() {
     );
     app.refresh_panel_ctx();
     let view = app
-        .document_state
+        .document_view
         .panel_ctx
         .net_classes
         .board

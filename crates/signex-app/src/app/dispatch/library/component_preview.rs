@@ -238,7 +238,7 @@ impl Signex {
     /// worked (#110).
     pub(crate) fn report_save_row_failure(&mut self, error: &anyhow::Error) {
         crate::diagnostics::log_error("save row failed", error);
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::save(
+        self.document_view.error_notice = Some(crate::app::state::ErrorNotice::save(
             signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_ROW_NOT_SAVED)
                 .arg("error", format!("{error:#}")),
         ));

@@ -1007,7 +1007,7 @@ impl Signex {
         // from the saved preferences. Everything else the old
         // `render_config` global carried (canvas font/size/style) had no
         // reader in any draw path, so there is nothing left to seed.
-        app.document_state.panel_ctx.symbol_grid_style = app.ui_state.symbol_grid_style;
+        app.document_view.panel_ctx.symbol_grid_style = app.ui_state.symbol_grid_style;
 
         // Multi-window (Phase 1): open the main OS window here. Phase 2
         // will open additional windows on demand when the user drags a
@@ -1117,9 +1117,9 @@ mod tests {
     fn the_first_frame_uses_the_saved_themes_tokens() {
         let (app, _boot) = Signex::new();
         let saved = app.ui_state.theme_id;
-        assert_eq!(app.document_state.panel_ctx.theme_id, saved);
+        assert_eq!(app.document_view.panel_ctx.theme_id, saved);
         assert_eq!(
-            app.document_state.panel_ctx.tokens,
+            app.document_view.panel_ctx.tokens,
             signex_types::theme::theme_tokens(saved),
         );
     }
@@ -1142,9 +1142,9 @@ mod tests {
             let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
                 PrefMsg::DraftTheme(draft),
             )));
-            assert_eq!(app.document_state.panel_ctx.theme_id, draft);
+            assert_eq!(app.document_view.panel_ctx.theme_id, draft);
             assert_eq!(
-                app.document_state.panel_ctx.tokens,
+                app.document_view.panel_ctx.tokens,
                 signex_types::theme::theme_tokens(draft),
                 "{draft:?}"
             );

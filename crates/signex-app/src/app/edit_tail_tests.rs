@@ -109,7 +109,7 @@ fn drawn_page(app: &Signex) -> (f32, f32) {
 #[test]
 fn a_paper_change_and_its_undo_reach_the_panel_context_and_the_drawn_page() {
     let (mut app, _path) = colours::app_with_sheet("tail-paper.snxsch");
-    assert_eq!(app.document_state.panel_ctx.paper_size, "A4");
+    assert_eq!(app.document_view.panel_ctx.paper_size, "A4");
     let a4 = drawn_page(&app);
     assert!(app.apply_engine_command(
         Command::SetPaperSize {
@@ -118,11 +118,11 @@ fn a_paper_change_and_its_undo_reach_the_panel_context_and_the_drawn_page() {
         true,
         true,
     ));
-    assert_eq!(app.document_state.panel_ctx.paper_size, "A3");
+    assert_eq!(app.document_view.panel_ctx.paper_size, "A3");
     assert_eq!(drawn_page(&app), crate::panels::paper_dimensions("A3"));
     assert_ne!(drawn_page(&app), a4);
     assert!(app.apply_engine_undo(true));
-    assert_eq!(app.document_state.panel_ctx.paper_size, "A4");
+    assert_eq!(app.document_view.panel_ctx.paper_size, "A4");
     assert_eq!(drawn_page(&app), a4);
 }
 

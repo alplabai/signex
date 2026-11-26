@@ -29,6 +29,7 @@ impl Signex {
         window_id: iced::window::Id,
     ) -> Option<Element<'_, Message>> {
         let document = &self.document_state;
+        let document_view = &self.document_view;
         let interaction = &self.interaction_state;
         let engine = document.engine_for_window(window_id, &self.ui_state)?;
         let edit_state = interaction.editing_text.as_ref()?;
@@ -50,7 +51,7 @@ impl Signex {
         let font_px = (camera.2 * 1.8).clamp(10.0, 64.0);
         // Estimate width from the text in the canvas face to keep the input
         // snug, with two characters of room to type into.
-        let canvas_font_name = document.panel_ctx.canvas_font_name.as_str();
+        let canvas_font_name = document_view.panel_ctx.canvas_font_name.as_str();
         let canvas_family = signex_types::font::nonblank_family(canvas_font_name);
         // An empty editor shows its placeholder, so it is sized for that.
         let shown = if edit_state.text.is_empty() {
@@ -70,7 +71,7 @@ impl Signex {
         // Sit the input's baseline on the label text.
         let top = anchor_y - font_px - SP.xs - FOCUS_RING;
 
-        let tokens = &document.panel_ctx.tokens;
+        let tokens = &document_view.panel_ctx.tokens;
         let input = signex_widgets::text_input(placeholder, text)
             .id(crate::app::contracts::TEXT_EDIT_INPUT_ID.clone())
             .on_input(|t| Message::TextEdit(TextEditMsg::Changed(t)))
@@ -321,7 +322,7 @@ mod tests {
     #[test]
     fn the_hint_is_laid_out_on_one_line() {
         let (app, _boot) = crate::app::Signex::new();
-        let tokens = &app.document_state.panel_ctx.tokens;
+        let tokens = &app.document_view.panel_ctx.tokens;
         let en = signex_i18n::I18n::en_us();
         let layers = iced::widget::Stack::with_children(vec![
             positioned(0.0, 0.0, Space::new().width(20.0).height(20.0).boxed()),
@@ -369,7 +370,7 @@ mod tests {
     #[test]
     fn the_editor_has_an_accent_border_inside_a_soft_focus_ring() {
         let (app, _boot) = crate::app::Signex::new();
-        let tokens = &app.document_state.panel_ctx.tokens;
+        let tokens = &app.document_view.panel_ctx.tokens;
         let soft = crate::styles::tokens::resolve(tokens).accent_soft;
         let theme = iced::Theme::Dark;
         let input = editor_style(tokens)(&theme, iced::widget::text_input::Status::Active);
@@ -393,7 +394,7 @@ mod tests {
     #[test]
     fn the_whole_text_selection_reads_on_the_paper() {
         let (app, _boot) = crate::app::Signex::new();
-        let tokens = &app.document_state.panel_ctx.tokens;
+        let tokens = &app.document_view.panel_ctx.tokens;
         let soft = crate::styles::tokens::resolve(tokens).accent_soft;
         let input =
             editor_style(tokens)(&iced::Theme::Dark, iced::widget::text_input::Status::Active);

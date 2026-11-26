@@ -422,7 +422,7 @@ impl Signex {
             // The dialog closes below and `.git` now exists, so it cannot be
             // reopened — without this the user sees a normal close with
             // auto-commit still off.
-            self.document_state.error_notice =
+            self.document_view.error_notice =
                 Some(crate::app::state::ErrorNotice::version_control(
                     signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_VCS_AUTO_COMMIT_OFF)
                         .arg("path", project_dir.display().to_string())
@@ -457,7 +457,7 @@ impl Signex {
                          open — enable_git was not recorded",
                         project_dir.display()
                     ));
-                    self.document_state.error_notice =
+                    self.document_view.error_notice =
                         Some(crate::app::state::ErrorNotice::version_control(
                             signex_i18n::Translatable::new(
                                 signex_i18n::ids::NOTICE_VCS_PROJECT_CLOSED,

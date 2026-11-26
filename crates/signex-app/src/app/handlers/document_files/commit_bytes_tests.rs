@@ -198,7 +198,7 @@ fn a_restore_is_not_held_back_by_a_save_commit_that_carries_its_bytes() {
         app.document_state.pending_restores.contains(&path),
         "the restore started"
     );
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
     drop(task);
 }
 
@@ -372,7 +372,7 @@ fn a_restore_waits_for_a_commit_that_reads_the_file_and_runs_after_it_finishes_o
         let refused = app.click_restore_on_listed_history(&sha);
         assert_eq!(refused.units(), 0);
         assert!(!app.document_state.pending_restores.contains(&path));
-        assert!(app.document_state.error_notice.take().is_some());
+        assert!(app.document_view.error_notice.take().is_some());
 
         let _ = app.handle_project_git_commit_done(running.project_root, running.rel_path, outcome);
         assert!(app.document_state.unbound_git_commits.is_empty());
@@ -449,6 +449,6 @@ fn a_restore_in_a_nested_project_targets_the_inner_git_repo_and_starts_none_outs
         !outer_dir.path().join(".git").exists(),
         "no repository was started in the outer folder"
     );
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
     assert_eq!(std::fs::read_to_string(&path).expect("read"), old);
 }

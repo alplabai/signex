@@ -568,7 +568,7 @@ fn render_guide_screenshots() {
     // point at the unused-pin row (its actions show on hover), and fit the
     // canvas again after the run.
     let unused = app
-        .document_state
+        .document_view
         .panel_ctx
         .erc_diagnostics
         .iter()

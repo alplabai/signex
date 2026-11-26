@@ -107,7 +107,7 @@ fn a_child_placed_twice_is_refused_and_nothing_is_written() {
     );
     crate::app::handlers::menu::export::settle(&mut app, task);
     assert!(!out.exists(), "a refused export must not write a file");
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_view.error_notice.is_some());
 }
 
 /// Opens `top` (placing `children`) plus each `(name, children)` below it, and
@@ -168,7 +168,7 @@ fn a_child_holding_only_power_ports_placed_twice_is_not_refused() {
             Ok(out.clone()),
         );
         crate::app::handlers::menu::export::settle(&mut app, task);
-        assert!(app.document_state.error_notice.is_none(), "{leaf_ref}");
+        assert!(app.document_view.error_notice.is_none(), "{leaf_ref}");
         assert!(out.exists(), "{leaf_ref}: a power-only child still exports");
         std::fs::remove_file(&out).ok();
     }
@@ -220,7 +220,7 @@ fn a_child_placed_by_two_different_parents_is_refused_and_nothing_is_written() {
     );
     crate::app::handlers::menu::export::settle(&mut app, task);
     assert!(!out.exists(), "a refused export must not write a file");
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_view.error_notice.is_some());
 }
 
 fn entry_for(chain: &[u128], reference: &str) -> signex_types::schematic::SymbolInstance {
@@ -619,7 +619,7 @@ fn current_page_on_an_undeclared_child_placed_twice_resolves_a_placement() {
         &issues,
         &app.document_state,
         &child,
-        app.document_state.tab_placements.get(&child),
+        app.document_view.tab_placements.get(&child),
         &signex_output::PageRange::Current
     ));
     assert_eq!(ctx.sheets.len(), 1);
@@ -673,14 +673,14 @@ fn two_copies_of_a_child_are_two_independent_picker_rows() {
     );
     let _ = build_export_scope(&app.document_state).expect("scope");
     let _ = app.handle_print_preview_requested();
-    let preview = app.document_state.preview.as_ref().expect("preview");
+    let preview = app.document_view.preview.as_ref().expect("preview");
     let rows: Vec<_> = preview.sheet_files.iter().map(|(k, _)| k.clone()).collect();
     assert_eq!(rows.len(), 3);
     assert_eq!(rows[1].0, rows[2].0, "one file");
     assert_ne!(rows[1].1, rows[2].1, "two placements");
     let second = rows[2].clone();
     let _ = app.handle_print_preview_toggle_file(second.clone());
-    let preview = app.document_state.preview.as_ref().expect("preview");
+    let preview = app.document_view.preview.as_ref().expect("preview");
     assert!(!preview.selected_files.contains(&second));
     assert!(
         preview.selected_files.contains(&rows[1]),

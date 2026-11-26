@@ -235,7 +235,7 @@ impl Signex {
         log_foreign_column_offenders(error);
         // The first failure of a save sequence is the one that explains it;
         // a follow-up write (e.g. the project file) must not replace it.
-        if self.document_state.error_notice.is_none() {
+        if self.document_view.error_notice.is_none() {
             // `context` is the caller's English log label (#2061); the error
             // chain (path line, OS error line) is the card's system block. A
             // read-only project's refusal says so in its own sentence (#2904)
@@ -245,7 +245,7 @@ impl Signex {
                 context,
                 error,
             );
-            self.document_state.error_notice = Some(notice);
+            self.document_view.error_notice = Some(notice);
         }
     }
 

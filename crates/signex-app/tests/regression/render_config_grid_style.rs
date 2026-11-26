@@ -51,7 +51,7 @@ fn boot_seeds_the_grid_style_render_input_from_the_saved_pref() {
         "the render input must start on the saved schematic grid style"
     );
     assert_eq!(
-        app.document_state.panel_ctx.symbol_grid_style, app.ui_state.symbol_grid_style,
+        app.document_view.panel_ctx.symbol_grid_style, app.ui_state.symbol_grid_style,
         "the symbol editor must start on the saved symbol grid style"
     );
 }
@@ -165,7 +165,7 @@ fn a_panel_ctx_rebuild_keeps_the_symbol_grid_preview() {
 
     // Assert
     assert_eq!(
-        app.document_state.panel_ctx.symbol_grid_style, wanted,
+        app.document_view.panel_ctx.symbol_grid_style, wanted,
         "a panel_ctx rebuild must not drop the live preview"
     );
 }

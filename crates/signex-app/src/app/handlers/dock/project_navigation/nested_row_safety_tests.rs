@@ -56,7 +56,7 @@ fn an_unlisted_nested_sheet_cannot_be_excluded_and_keeps_its_unsaved_edits() {
     assert_eq!(confirmed.units(), 0);
     assert!(app.ui_state.remove_dialog.is_none());
     assert!(
-        app.document_state.error_notice.is_some(),
+        app.document_view.error_notice.is_some(),
         "the refusal shows"
     );
     assert!(app.document_state.engines.contains_key(&child));
@@ -101,7 +101,7 @@ fn a_sheet_placed_by_two_parents_is_not_deleted() {
     let confirmed = app.handle_remove_confirm(RemoveChoice::DeleteFile);
     assert_eq!(confirmed.units(), 0);
     assert!(leaf.exists(), "the shared sheet stays on disk");
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_view.error_notice.is_some());
     assert!(
         app.document_state.projects[0]
             .data

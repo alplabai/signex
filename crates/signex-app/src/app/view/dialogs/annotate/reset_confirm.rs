@@ -33,7 +33,7 @@ impl Signex {
     }
 
     fn view_annotate_reset_confirm_body_inner(&self, draggable: bool) -> Element<'_, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = self.ui_state.i18n.as_ref();
         let ink = crate::styles::ti(tokens.text);
         let session = &self.ui_state.annotate_session;
@@ -272,7 +272,7 @@ mod tests {
     /// The confirm on the `id` theme: its laid-out texts and its pixels.
     fn drawn(id: ThemeId) -> (Signex, Vec<LaidOutText>, Vec<u8>) {
         let (mut app, _task) = Signex::new();
-        app.document_state.panel_ctx.tokens = theme_tokens(id);
+        app.document_view.panel_ctx.tokens = theme_tokens(id);
         let texts = lay_out_texts(app.view_annotate_reset_confirm_body(), WINDOW);
         let pixels = draw_pixels(app.view_annotate_reset_confirm_body(), WINDOW);
         (app, texts, pixels)
@@ -304,7 +304,7 @@ mod tests {
             // left edge is the button's, and the label's ink starts later.
             let label = find(&texts, &words).bounds;
             let beside = pixel(&pixels, label.x + SP.s, label.center_y());
-            let danger = crate::styles::tokens::danger(&app.document_state.panel_ctx.tokens);
+            let danger = crate::styles::tokens::danger(&app.document_view.panel_ctx.tokens);
             assert!(near(beside, danger, 2), "{id:?}: {beside:?}");
         }
     }
@@ -315,7 +315,7 @@ mod tests {
     fn the_buttons_sit_on_the_footer_band() {
         for id in THEMES {
             let (app, texts, pixels) = drawn(id);
-            let tokens = &app.document_state.panel_ctx.tokens;
+            let tokens = &app.document_view.panel_ctx.tokens;
             let cancel = find(&texts, "Cancel").bounds;
             let left = pixel(&pixels, SP.xl / 2.0, cancel.center_y());
             let band = crate::styles::ti(tokens.toolbar_bg);
@@ -333,7 +333,7 @@ mod tests {
         for id in THEMES {
             let (app, texts, pixels) = drawn(id);
             let i18n = app.ui_state.i18n.as_ref();
-            let tokens = &app.document_state.panel_ctx.tokens;
+            let tokens = &app.document_view.panel_ctx.tokens;
             let question = t!(i18n, ids::DIALOG_ANNOTATE_RESET_QUESTION).to_string();
             let at = texts
                 .iter()

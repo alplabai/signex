@@ -172,7 +172,7 @@ impl Signex {
             return Task::none();
         }
         let placement = self
-            .document_state
+            .document_view
             .panel_ctx
             .navigator
             .hierarchy
@@ -213,7 +213,7 @@ impl Signex {
     /// The cached net index of the project that owns `path`, if one is built.
     fn object_list_nets(&self, path: &Path) -> Option<Arc<ProjectNetData>> {
         let project = self.document_state.document_project(path)?.id;
-        self.document_state.net_nav.index.latest(project)
+        self.document_view.net_nav.index.latest(project)
     }
 
     /// The window whose rows `slot` lists; `None` for the main window's.
@@ -254,9 +254,9 @@ impl Signex {
     /// The panel view `slot` draws.
     fn list_view_mut(&mut self, slot: ListSlot) -> Option<&mut ObjectListView> {
         match slot {
-            ListSlot::Main => Some(&mut self.document_state.panel_ctx.object_list),
+            ListSlot::Main => Some(&mut self.document_view.panel_ctx.object_list),
             ListSlot::Window(window) => self
-                .document_state
+                .document_view
                 .window_panel_ctx
                 .get_mut(&window)
                 .map(|ctx| &mut ctx.object_list),
@@ -378,7 +378,7 @@ impl Signex {
             .windows
             .retain(|window, _| ui.windows.contains_key(window));
         let windows: Vec<iced::window::Id> = self
-            .document_state
+            .document_view
             .window_panel_ctx
             .keys()
             .copied()

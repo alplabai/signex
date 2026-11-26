@@ -188,7 +188,7 @@ fn a_rename_through_the_tab_is_one_undo_step_and_dirties_the_project() {
     );
     assert!(!parameters(&app).contains_key("VIN"));
     assert!(dirty(&app));
-    let tab = &app.document_state.project_tabs[&id];
+    let tab = &app.document_view.project_tabs[&id];
     assert_eq!(tab.parameter_rename, None, "the draft is spent");
     assert!(!tab.parameter_rename_refused);
 
@@ -212,7 +212,7 @@ fn a_refused_rename_keeps_the_data_and_the_draft_and_records_nothing() {
     for text in ["", "  ", "V\nIN", "company", "VOUT"] {
         rename(&mut app, id, "VIN", text);
         assert_eq!(parameters(&app), &before, "{text:?} changes nothing");
-        let tab = &app.document_state.project_tabs[&id];
+        let tab = &app.document_view.project_tabs[&id];
         assert!(tab.parameter_rename_refused, "{text:?} is refused");
         assert_eq!(
             tab.parameter_rename,
@@ -231,7 +231,7 @@ fn a_refused_rename_keeps_the_data_and_the_draft_and_records_nothing() {
             text: "VI".into(),
         },
     );
-    assert!(!app.document_state.project_tabs[&id].parameter_rename_refused);
+    assert!(!app.document_view.project_tabs[&id].parameter_rename_refused);
 }
 
 #[test]
@@ -251,7 +251,7 @@ fn the_rename_draft_is_cleared_on_a_section_switch_and_on_undo() {
         &mut app,
         ProjectTabMsg::ParameterRenameSubmitted { project_id: id },
     );
-    assert!(app.document_state.project_tabs[&id].parameter_rename_refused);
+    assert!(app.document_view.project_tabs[&id].parameter_rename_refused);
     send(
         &mut app,
         ProjectTabMsg::SectionSelected {
@@ -259,7 +259,7 @@ fn the_rename_draft_is_cleared_on_a_section_switch_and_on_undo() {
             section: ProjectSection::Sheets,
         },
     );
-    let tab = &app.document_state.project_tabs[&id];
+    let tab = &app.document_view.project_tabs[&id];
     assert_eq!(tab.parameter_rename, None);
     assert!(!tab.parameter_rename_refused);
 
@@ -272,7 +272,7 @@ fn the_rename_draft_is_cleared_on_a_section_switch_and_on_undo() {
         },
     );
     assert!(undo(&mut app, id));
-    assert_eq!(app.document_state.project_tabs[&id].parameter_rename, None);
+    assert_eq!(app.document_view.project_tabs[&id].parameter_rename, None);
 }
 
 #[test]
@@ -294,7 +294,7 @@ fn the_filter_and_the_folded_groups_are_tab_state_only() {
             group: ParameterGroup::TitleBlock,
         },
     );
-    let tab = &app.document_state.project_tabs[&id];
+    let tab = &app.document_view.project_tabs[&id];
     assert_eq!(tab.parameter_filter, "vin");
     assert!(!tab.is_parameter_group_open(ParameterGroup::TitleBlock));
     assert!(tab.is_parameter_group_open(ParameterGroup::Variables));
@@ -307,7 +307,7 @@ fn the_filter_and_the_folded_groups_are_tab_state_only() {
             group: ParameterGroup::TitleBlock,
         },
     );
-    let tab = &app.document_state.project_tabs[&id];
+    let tab = &app.document_view.project_tabs[&id];
     assert!(tab.is_parameter_group_open(ParameterGroup::TitleBlock));
 }
 
@@ -333,7 +333,7 @@ fn a_late_message_for_a_closed_project_leaves_no_tab_state() {
     ] {
         send(&mut app, msg);
     }
-    assert!(!app.document_state.project_tabs.contains_key(&gone));
+    assert!(!app.document_view.project_tabs.contains_key(&gone));
 }
 
 #[test]
@@ -513,9 +513,9 @@ fn section_fills_height(app: &Signex, id: ProjectId) -> bool {
     use iced::advanced::Widget as _;
     use iced::advanced::widget::Tree;
     let project = &app.document_state.projects[0];
-    let tab = app.document_state.project_tabs.get(&id);
+    let tab = app.document_view.project_tabs.get(&id);
     let i18n = app.ui_state.i18n.as_ref();
-    let tokens = &app.document_state.panel_ctx.tokens;
+    let tokens = &app.document_view.panel_ctx.tokens;
     let mut element = super::view::view(project, tab, i18n, tokens);
     let mut tree = Tree::new(&element);
     tree.diff(&mut element);

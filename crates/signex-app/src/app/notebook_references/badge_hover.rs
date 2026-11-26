@@ -54,7 +54,7 @@ impl Signex {
     ) -> Option<Element<'_, Message>> {
         let target = self.ui_state.annotations.hovered_badge.as_ref()?;
         let badge = badge_of(&self.ui_state.annotations.badges, target)?;
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let card = super::views::badge_card(badge, &self.ui_state.i18n, tokens).map(msg);
         let height = LINE_H * (badge.blocks.len() as f32 + 3.0);
         let bounds = canvas_region::card_bounds(

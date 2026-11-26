@@ -431,7 +431,7 @@ fn a_layer_colour_is_saved_with_the_board_as_an_undo_step() {
     assert_eq!(options(&app, &path).layer_color(silk), Some(yellow));
     assert_eq!(app.document_state.dirty_document_count(), 1);
     assert_eq!(
-        app.document_state.panel_ctx.pcb_layers.colour(silk),
+        app.document_view.panel_ctx.pcb_layers.colour(silk),
         iced::Color::from_rgb8(255, 255, 0),
         "the panel reads the board's colour"
     );

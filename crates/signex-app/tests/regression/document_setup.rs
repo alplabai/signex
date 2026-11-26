@@ -405,7 +405,7 @@ fn tree_key(app: &mut Signex) -> signex_widgets::tree_view::TreeKey {
         app,
         Message::Ui(signex_app::app::UiMsg::GridPickerSelect(1.0)),
     );
-    signex_widgets::tree_view::key_of(&app.document_state.panel_ctx.project_tree, &[0])
+    signex_widgets::tree_view::key_of(&app.document_view.panel_ctx.project_tree, &[0])
         .expect("the project row")
 }
 

@@ -717,7 +717,7 @@ mod tests {
             kind: TabKind::FootprintEditor(path.clone()),
         });
         app.document_state.active_tab = app.document_state.tabs.len() - 1;
-        app.document_state.dock.close_panel(PanelKind::Properties);
+        app.document_view.dock.close_panel(PanelKind::Properties);
         assert!(!app.is_panel_open(PanelKind::Properties));
 
         let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
@@ -726,7 +726,7 @@ mod tests {
         }));
 
         assert!(
-            app.document_state.dock.is_frontmost(PanelKind::Properties),
+            app.document_view.dock.is_frontmost(PanelKind::Properties),
             "the card opened where it cannot be seen"
         );
     }

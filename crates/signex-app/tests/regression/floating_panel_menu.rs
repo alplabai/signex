@@ -20,14 +20,14 @@ fn app_with_a_floating_panel() -> (Signex, iced::window::Id) {
     let _ = app.update(Message::Dock(DockMessage::TabMenuActionPicked(
         DockTabAction::Float,
     )));
-    assert_eq!(app.document_state.dock.floating.len(), 1, "nothing floats");
+    assert_eq!(app.document_view.dock.floating.len(), 1, "nothing floats");
     (app, main)
 }
 
 #[test]
 fn esc_closes_a_menu_opened_over_a_floating_panel_and_keeps_the_panel() {
     let (mut app, main) = app_with_a_floating_panel();
-    let panel = &app.document_state.dock.floating[0];
+    let panel = &app.document_view.dock.floating[0];
     let (x, y) = (panel.x + 20.0, panel.y + 40.0);
     let (kind, at) = (panel.kind, (panel.x, panel.y));
 
@@ -42,7 +42,7 @@ fn esc_closes_a_menu_opened_over_a_floating_panel_and_keeps_the_panel() {
         app.interaction_state.project_tree_context_menu.is_none(),
         "Esc did not close the menu over the floating panel"
     );
-    let floating = &app.document_state.dock.floating;
+    let floating = &app.document_view.dock.floating;
     assert_eq!(floating.len(), 1, "Esc closed the floating panel");
     assert_eq!(
         (floating[0].kind, (floating[0].x, floating[0].y)),

@@ -143,7 +143,7 @@ impl Signex {
         };
         let stored = project.data.agent_journal;
         let parsed = parse_lines(&text);
-        self.document_state
+        self.document_view
             .project_tabs
             .entry(project_id)
             .or_default()

@@ -17,7 +17,7 @@ impl Signex {
         } else {
             self.interaction_state.selection_filters.insert(filter);
         }
-        self.document_state.panel_ctx.selection_filters =
+        self.document_view.panel_ctx.selection_filters =
             self.interaction_state.selection_filters.clone();
         self.save_edited_custom_filter_preset()
     }
@@ -44,7 +44,7 @@ impl Signex {
         filters: std::collections::HashSet<SelectionFilter>,
     ) -> Task<Message> {
         self.interaction_state.selection_filters = filters;
-        self.document_state.panel_ctx.selection_filters =
+        self.document_view.panel_ctx.selection_filters =
             self.interaction_state.selection_filters.clone();
         self.interaction_state.editing_custom_filter = None;
         self.mirror_edited_custom_filter();
@@ -118,8 +118,8 @@ impl Signex {
         let state = &mut self.interaction_state;
         state.selection_filters = state.custom_filter_presets[idx].as_set();
         state.active_custom_filter_tab = idx;
-        self.document_state.panel_ctx.selection_filters = state.selection_filters.clone();
-        self.document_state.panel_ctx.active_custom_filter_tab = idx;
+        self.document_view.panel_ctx.selection_filters = state.selection_filters.clone();
+        self.document_view.panel_ctx.active_custom_filter_tab = idx;
         Task::none()
     }
 
@@ -151,7 +151,7 @@ impl Signex {
             return Task::none();
         }
         self.interaction_state.active_custom_filter_tab = idx;
-        self.document_state.panel_ctx.active_custom_filter_tab = idx;
+        self.document_view.panel_ctx.active_custom_filter_tab = idx;
         Task::none()
     }
 
@@ -179,7 +179,7 @@ impl Signex {
         }
         if state.editing_custom_filter == Some(idx) {
             state.selection_filters = state.custom_filter_presets[idx].as_set();
-            self.document_state.panel_ctx.selection_filters = state.selection_filters.clone();
+            self.document_view.panel_ctx.selection_filters = state.selection_filters.clone();
         }
         self.sync_and_persist_custom_filter_presets()
     }
@@ -208,7 +208,7 @@ impl Signex {
     /// dispatch runs no `finish_update`, so its mirror sync would leave the
     /// panels a step behind (#2873).
     fn mirror_edited_custom_filter(&mut self) {
-        self.document_state.panel_ctx.selection_filter.editing = self.edited_custom_filter();
+        self.document_view.panel_ctx.selection_filter.editing = self.edited_custom_filter();
     }
 
     /// Mirror the in-memory preset list + active-tab index into the
@@ -216,8 +216,8 @@ impl Signex {
     /// to disk.
     fn sync_and_persist_custom_filter_presets(&mut self) -> Task<Message> {
         let presets = self.interaction_state.custom_filter_presets.clone();
-        self.document_state.panel_ctx.custom_filter_presets = presets.clone();
-        self.document_state.panel_ctx.active_custom_filter_tab =
+        self.document_view.panel_ctx.custom_filter_presets = presets.clone();
+        self.document_view.panel_ctx.active_custom_filter_tab =
             self.interaction_state.active_custom_filter_tab;
         self.mirror_edited_custom_filter();
         crate::fonts::background_pref_write(crate::fonts::SCHEMATIC_FILTER_PRESETS, move || {

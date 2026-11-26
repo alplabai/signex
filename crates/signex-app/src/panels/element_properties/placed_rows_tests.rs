@@ -85,7 +85,7 @@ fn sheet(part_locked: bool) -> SchematicSheet {
 fn shown(app: &mut Signex, item: SelectedItem, unit: Unit) -> Vec<String> {
     app.interaction_state.active_canvas_mut().selected = vec![item];
     app.update_selection_info();
-    let mut ctx = app.document_state.panel_ctx.clone();
+    let mut ctx = app.document_view.panel_ctx.clone();
     ctx.unit = unit;
     ctx.paper_size = "A4".into();
     let view = super::view_selected_element_properties(
@@ -268,7 +268,7 @@ fn wire_port_note_app() -> (tempfile::TempDir, Signex) {
     );
     // The rows are typed in mm: pinned, not read from the shared prefs.
     app.ui_state.unit = Unit::Mm;
-    app.document_state.panel_ctx.unit = Unit::Mm;
+    app.document_view.panel_ctx.unit = Unit::Mm;
     (dir, app)
 }
 
@@ -388,7 +388,7 @@ fn a_power_ports_locked_row_locks_it() {
     let (_dir, mut app) = wire_port_note_app();
     let port = SelectedItem::new(Uuid::from_u128(PORT), SelectedKind::Symbol);
     select(&mut app, port);
-    let ctx = app.document_state.panel_ctx.clone();
+    let ctx = app.document_view.panel_ctx.clone();
     let view = super::view_selected_element_properties(
         &ctx,
         iced::Color::WHITE,
@@ -476,7 +476,7 @@ fn leaving_a_typed_note_applies_its_text() {
 /// The messages the note's Properties view sends while the pointer moves
 /// into the Text box and out of the panel, twice.
 fn messages_moving_over_the_text_box(app: &Signex) -> Vec<crate::panels::PanelMsg> {
-    let ctx = app.document_state.panel_ctx.clone();
+    let ctx = app.document_view.panel_ctx.clone();
     let view = || {
         super::view_selected_element_properties(
             &ctx,
@@ -537,7 +537,7 @@ fn laid_out(
 ) -> Vec<crate::layout_probe::LaidOutText> {
     app.interaction_state.active_canvas_mut().selected = vec![item];
     app.update_selection_info();
-    let mut ctx = app.document_state.panel_ctx.clone();
+    let mut ctx = app.document_view.panel_ctx.clone();
     ctx.unit = Unit::Mm;
     ctx.paper_size = "A4".into();
     adjust(&mut ctx);

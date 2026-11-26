@@ -21,7 +21,7 @@ const WALK_ERROR: &str = "backend: git revwalk: corrupt object 4f21ac";
 fn history_loaded(app: &Signex, result: Result<HistoryLoad, String>) -> Message {
     Message::Ui(signex_app::app::UiMsg::HistoryLoaded {
         window: None,
-        generation: app.document_state.history.generation,
+        generation: app.document_view.history.generation,
         path: PathBuf::from("/projects/board/main.snxsch"),
         result,
     })
@@ -39,12 +39,12 @@ fn a_failed_history_walk_renders_as_an_error_not_an_empty_list() {
     // Assert — the panel gets a distinct mode carrying the diagnosis,
     // not the `Ready` + empty combination that reads as "no commits".
     assert_eq!(
-        app.document_state.panel_ctx.history.mode,
+        app.document_view.panel_ctx.history.mode,
         HistoryRenderMode::Error(WALK_ERROR.to_string()),
         "a failed walk must not be reported as a successful empty load"
     );
     assert!(
-        app.document_state.panel_ctx.history.entries.is_empty(),
+        app.document_view.panel_ctx.history.entries.is_empty(),
         "a failed walk has no entries to show"
     );
 }
@@ -60,7 +60,7 @@ fn a_successful_history_walk_is_still_ready() {
 
     // Assert — the "fresh repo, no commits yet" path is untouched.
     assert_eq!(
-        app.document_state.panel_ctx.history.mode,
+        app.document_view.panel_ctx.history.mode,
         HistoryRenderMode::Ready
     );
 }
@@ -78,7 +78,7 @@ fn a_failed_history_walk_reaches_the_messages_panel() {
     // Assert — on screen in the same frame, with the error text. The
     // panel compacts records to 160 characters, so the diagnosis has
     // to survive that budget, not just be emitted.
-    let panel = &app.document_state.panel_ctx.diagnostics;
+    let panel = &app.document_view.panel_ctx.diagnostics;
     assert!(
         panel.iter().any(
             |entry| entry.message.contains("git history could not be read")
@@ -100,7 +100,7 @@ fn a_file_outside_any_repository_renders_as_no_repo() {
 
     // Assert
     assert_eq!(
-        app.document_state.panel_ctx.history.mode,
+        app.document_view.panel_ctx.history.mode,
         HistoryRenderMode::NoRepo
     );
 }

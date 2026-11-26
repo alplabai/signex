@@ -52,7 +52,7 @@ fn the_chosen_file_gets_the_board_and_its_parts() {
     assert!(text.contains("AUTOMOTIVE_DESIGN"), "AP214 by default");
     assert_eq!(text.matches("=MANIFOLD_SOLID_BREP('Board'").count(), 1);
     assert!(text.contains("=SHELL_BASED_SURFACE_MODEL("), "the parts");
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
 }
 
 #[test]
@@ -66,7 +66,7 @@ fn a_model_that_could_not_be_made_is_reported_and_nothing_is_written() {
         built: Err("the kernel failed".to_owned()),
     });
     assert_eq!(task.units(), 0, "no write");
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_view.error_notice.is_some());
     settle(&mut app, task);
     assert!(!file.exists());
 }

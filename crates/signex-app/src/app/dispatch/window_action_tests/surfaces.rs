@@ -170,7 +170,7 @@ fn a_projects_menu_pick_that_opens_a_tab_runs_on_the_main_window() {
 fn a_projects_menu_pick_that_collapses_the_tree_changes_the_windows_tree_only() {
     let mut f = workspace_with_a_window();
     assert!(f.app.panel_ctx_for(f.window).project_tree[0].expanded);
-    assert!(f.app.document_state.panel_ctx.project_tree[0].expanded);
+    assert!(f.app.document_view.panel_ctx.project_tree[0].expanded);
     let pick = Message::ContextMenu(ContextMenuMsg::ScopedToWindow(
         f.window,
         Box::new(ContextMenuMsg::ProjectTreeAction(
@@ -179,7 +179,7 @@ fn a_projects_menu_pick_that_collapses_the_tree_changes_the_windows_tree_only() 
     ));
     let _ = f.app.update(pick);
     assert!(!f.app.panel_ctx_for(f.window).project_tree[0].expanded);
-    assert!(f.app.document_state.panel_ctx.project_tree[0].expanded);
+    assert!(f.app.document_view.panel_ctx.project_tree[0].expanded);
 }
 
 // ---- Components drag ghost ----
@@ -524,18 +524,13 @@ fn a_windows_history_panel_shows_the_windows_own_file() {
     let task = f.app.finish_update();
     settle_task(&mut f.app, task);
 
-    let window_ctx = &f.app.document_state.window_panel_ctx[&f.window];
+    let window_ctx = &f.app.document_view.window_panel_ctx[&f.window];
     assert_eq!(
         window_ctx.history.active_path.as_deref(),
         Some(f.window_path.as_path())
     );
     assert_eq!(
-        f.app
-            .document_state
-            .panel_ctx
-            .history
-            .active_path
-            .as_deref(),
+        f.app.document_view.panel_ctx.history.active_path.as_deref(),
         Some(f.main_path.as_path()),
         "main's History moved"
     );
@@ -552,7 +547,7 @@ fn dock_restore(f: &Fixture, message: crate::panels::PanelMsg) -> Message {
 fn load_window_history(f: &mut Fixture) {
     let history = f
         .app
-        .document_state
+        .document_view
         .window_history
         .get_mut(&f.window)
         .unwrap();
@@ -582,12 +577,12 @@ fn a_restore_click_in_a_window_acts_on_the_windows_file_only() {
     let task = f.app.update(sent);
     settle_task(&mut f.app, task);
     assert_eq!(
-        f.app.document_state.window_history[&f.window]
+        f.app.document_view.window_history[&f.window]
             .pending_restore
             .as_deref(),
         Some("abc")
     );
-    assert_eq!(f.app.document_state.history.pending_restore, None);
+    assert_eq!(f.app.document_view.history.pending_restore, None);
     assert_eq!(f.app.document_state.active_path, Some(f.main_path.clone()));
     assert_eq!(
         f.app.document_state.engines[&f.window_path].revision(),
@@ -611,12 +606,12 @@ fn a_window_restore_cancel_clears_the_windows_confirmation_only() {
     settle_task(&mut f.app, task);
     load_window_history(&mut f);
     f.app.document_state.mark_history_edit_dirty(&f.window_path);
-    f.app.document_state.history.pending_restore = Some("main-sha".into());
+    f.app.document_view.history.pending_restore = Some("main-sha".into());
     let click = crate::panels::PanelMsg::HistoryRestoreClicked { sha: "abc".into() };
     let task = f.app.update(dock_restore(&f, click));
     settle_task(&mut f.app, task);
     assert_eq!(
-        f.app.document_state.window_history[&f.window]
+        f.app.document_view.window_history[&f.window]
             .pending_restore
             .as_deref(),
         Some("abc"),
@@ -628,11 +623,11 @@ fn a_window_restore_cancel_clears_the_windows_confirmation_only() {
     settle_task(&mut f.app, task);
 
     assert_eq!(
-        f.app.document_state.window_history[&f.window].pending_restore,
+        f.app.document_view.window_history[&f.window].pending_restore,
         None
     );
     assert_eq!(
-        f.app.document_state.history.pending_restore.as_deref(),
+        f.app.document_view.history.pending_restore.as_deref(),
         Some("main-sha")
     );
     assert_eq!(f.app.document_state.active_path, Some(f.main_path.clone()));
@@ -646,9 +641,9 @@ fn a_restore_click_on_a_list_the_window_has_not_loaded_is_refused() {
     let mut f = fixture_in(app, dir.path());
     // Main lists a.snxsch. The window's context is built the way UndockTab
     // builds it: no finish_update, so no load for the window has run.
-    f.app.document_state.history.active_path = Some(f.main_path.clone());
-    f.app.document_state.history.mode = HistoryRenderMode::Ready;
-    f.app.document_state.panel_ctx.history = f.app.document_state.history.clone();
+    f.app.document_view.history.active_path = Some(f.main_path.clone());
+    f.app.document_view.history.mode = HistoryRenderMode::Ready;
+    f.app.document_view.panel_ctx.history = f.app.document_view.history.clone();
     f.app.refresh_window_panel_ctxs(None);
     assert_ne!(
         f.app.panel_ctx_for(f.window).history.active_path.as_deref(),
@@ -656,7 +651,7 @@ fn a_restore_click_on_a_list_the_window_has_not_loaded_is_refused() {
         "the window's History panel lists main's file"
     );
     // b.snxsch is clean, so an unguarded click restores at once.
-    f.app.document_state.window_history.insert(
+    f.app.document_view.window_history.insert(
         f.window,
         crate::panels::history::HistoryPanelState {
             active_path: Some(f.main_path.clone()),
@@ -690,7 +685,7 @@ fn a_window_without_any_history_state_refuses_a_restore_click() {
     let dir = tempfile::tempdir().unwrap();
     let (app, _boot) = Signex::new();
     let mut f = fixture_in(app, dir.path());
-    f.app.document_state.window_history.remove(&f.window);
+    f.app.document_view.window_history.remove(&f.window);
     let sent = dock_restore(
         &f,
         crate::panels::PanelMsg::HistoryRestoreClicked { sha: "abc".into() },
@@ -710,8 +705,8 @@ fn a_restore_whose_list_was_issued_for_another_file_is_refused_on_main_too() {
     let (app, _boot) = Signex::new();
     let mut f = fixture_in(app, dir.path());
     // Main shows a.snxsch, but its list was issued for b.snxsch.
-    f.app.document_state.history.active_path = Some(f.window_path.clone());
-    f.app.document_state.history.mode = HistoryRenderMode::Ready;
+    f.app.document_view.history.active_path = Some(f.window_path.clone());
+    f.app.document_view.history.mode = HistoryRenderMode::Ready;
     let click = Message::Dock(crate::dock::DockMessage::Panel(
         crate::panels::PanelMsg::HistoryRestoreClicked { sha: "abc".into() },
     ));
@@ -727,8 +722,8 @@ fn a_restore_whose_list_was_issued_for_another_file_is_refused_on_main_too() {
     )));
 
     // Not Ready is refused even for the right file.
-    f.app.document_state.history.active_path = Some(f.main_path.clone());
-    f.app.document_state.history.mode = HistoryRenderMode::Loading;
+    f.app.document_view.history.active_path = Some(f.main_path.clone());
+    f.app.document_view.history.mode = HistoryRenderMode::Loading;
     let click = Message::Dock(crate::dock::DockMessage::Panel(
         crate::panels::PanelMsg::HistoryRestoreClicked { sha: "abc".into() },
     ));
@@ -746,7 +741,7 @@ fn a_history_answer_for_a_window_lands_in_that_windows_history() {
     let mut f = fixture();
     let task = f.app.finish_update();
     settle_task(&mut f.app, task);
-    let generation = f.app.document_state.window_history[&f.window].generation;
+    let generation = f.app.document_view.window_history[&f.window].generation;
 
     let task = f.app.update(Message::Ui(UiMsg::HistoryLoaded {
         window: Some(f.window),
@@ -757,11 +752,11 @@ fn a_history_answer_for_a_window_lands_in_that_windows_history() {
     settle_task(&mut f.app, task);
 
     assert_eq!(
-        f.app.document_state.window_history[&f.window].mode,
+        f.app.document_view.window_history[&f.window].mode,
         HistoryRenderMode::Error("boom".into())
     );
     assert_ne!(
-        f.app.document_state.history.mode,
+        f.app.document_view.history.mode,
         HistoryRenderMode::Error("boom".into())
     );
 }
@@ -772,7 +767,7 @@ fn a_history_answer_for_a_closed_window_is_dropped_and_said() {
     let mut f = fixture();
     let task = f.app.finish_update();
     settle_task(&mut f.app, task);
-    let generation = f.app.document_state.window_history[&f.window].generation;
+    let generation = f.app.document_view.window_history[&f.window].generation;
     f.app.ui_state.windows.remove(&f.window);
     f.app.interaction_state.canvases.remove(&f.window);
     f.app.close_overlays_owned_by(f.window);
@@ -786,9 +781,9 @@ fn a_history_answer_for_a_closed_window_is_dropped_and_said() {
     settle_task(&mut f.app, task);
 
     assert!(said("the window that asked for it has closed"));
-    assert!(!f.app.document_state.window_history.contains_key(&f.window));
+    assert!(!f.app.document_view.window_history.contains_key(&f.window));
     assert_ne!(
-        f.app.document_state.history.mode,
+        f.app.document_view.history.mode,
         HistoryRenderMode::Error("boom".into())
     );
 }
@@ -895,7 +890,7 @@ fn a_windows_history_that_is_current_is_not_swapped_again() {
     // The window's state moves on; a current window is left alone, so its
     // context does not pick the change up.
     f.app
-        .document_state
+        .document_view
         .window_history
         .get_mut(&f.window)
         .unwrap()
@@ -903,7 +898,7 @@ fn a_windows_history_that_is_current_is_not_swapped_again() {
     let task = f.app.finish_update();
     settle_task(&mut f.app, task);
     assert!(
-        f.app.document_state.window_panel_ctx[&f.window]
+        f.app.document_view.window_panel_ctx[&f.window]
             .history
             .entries
             .is_empty(),
@@ -914,20 +909,20 @@ fn a_windows_history_that_is_current_is_not_swapped_again() {
     f.app.document_state.mark_history_edit_dirty(&f.window_path);
     let task = f.app.finish_update();
     settle_task(&mut f.app, task);
-    assert!(f.app.document_state.window_history[&f.window].dirty);
+    assert!(f.app.document_view.window_history[&f.window].dirty);
 }
 
 #[test]
 fn no_window_history_is_built_while_the_dock_shows_no_panel() {
     let mut f = fixture();
     for kind in crate::panels::ALL_PANELS {
-        f.app.document_state.dock.close_panel(*kind);
+        f.app.document_view.dock.close_panel(*kind);
     }
-    f.app.document_state.dock.floating.clear();
+    f.app.document_view.dock.floating.clear();
     let task = f.app.finish_update();
     settle_task(&mut f.app, task);
-    assert!(f.app.document_state.window_history.is_empty());
-    assert!(f.app.document_state.window_panel_ctx.is_empty());
+    assert!(f.app.document_view.window_history.is_empty());
+    assert!(f.app.document_view.window_panel_ctx.is_empty());
 }
 
 #[test]
@@ -997,7 +992,7 @@ fn a_library_window_is_dirty_through_its_library_toml_not_mains_tab() {
     let task = f.app.finish_update();
     settle_task(&mut f.app, task);
     assert!(
-        f.app.document_state.window_history[&f.window].dirty,
+        f.app.document_view.window_history[&f.window].dirty,
         "the window read main's tab for the library.toml check"
     );
 }
@@ -1005,8 +1000,8 @@ fn a_library_window_is_dirty_through_its_library_toml_not_mains_tab() {
 #[test]
 fn a_new_window_context_does_not_start_with_mains_history_rows() {
     let mut f = fixture();
-    f.app.document_state.history.active_path = Some(f.main_path.clone());
-    f.app.document_state.panel_ctx.history = f.app.document_state.history.clone();
+    f.app.document_view.history.active_path = Some(f.main_path.clone());
+    f.app.document_view.panel_ctx.history = f.app.document_view.history.clone();
     let ctx = f.app.new_window_panel_ctx(f.window);
     assert_eq!(ctx.history.active_path, None);
 }
@@ -1068,7 +1063,7 @@ fn a_restore_after_a_real_history_load_for_a_window_passes_the_guard() {
     let mut f = fixture_in(app, dir.path());
     let task = f.app.finish_update();
     settle_task(&mut f.app, task);
-    let generation = f.app.document_state.window_history[&f.window].generation;
+    let generation = f.app.document_view.window_history[&f.window].generation;
     let task = f.app.update(Message::Ui(UiMsg::HistoryLoaded {
         window: Some(f.window),
         generation,
@@ -1098,7 +1093,7 @@ fn a_restore_after_a_real_history_load_for_a_window_passes_the_guard() {
 #[test]
 fn a_history_panel_opened_after_an_undock_never_lists_mains_rows() {
     let mut f = fixture();
-    f.app.document_state.dock = crate::dock::DockArea::new();
+    f.app.document_view.dock = crate::dock::DockArea::new();
     let task = f.app.finish_update();
     settle_task(&mut f.app, task);
     let task = f

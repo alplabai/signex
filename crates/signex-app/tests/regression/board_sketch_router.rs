@@ -112,7 +112,7 @@ fn sketch_in(f: &mut Fixture, sketch: SketchData, first: SketchEntityId) {
 
 fn props(f: &Fixture) -> BoardSketchProps {
     f.app
-        .document_state
+        .document_view
         .panel_ctx
         .footprint_editor
         .as_ref()

@@ -55,7 +55,7 @@ fn app_with_dialog(vcc: Option<&str>) -> Signex {
 
 fn power_cell(app: &Signex) -> Option<ComputedCell> {
     let preview = app
-        .document_state
+        .document_view
         .bom_preview
         .as_ref()
         .expect("preview open");
@@ -73,11 +73,11 @@ fn ticking_a_computed_column_evaluates_it() {
             text: "2.5mW".into()
         })
     );
-    let preview = app.document_state.bom_preview.as_ref().unwrap();
+    let preview = app.document_view.bom_preview.as_ref().unwrap();
     assert_eq!(preview.options.columns.last(), Some(&power()));
     // Untick: the column leaves the shown and exported ones.
     let _ = app.update(Message::BomPreview(BomPreviewMsg::ToggleColumn(power())));
-    let preview = app.document_state.bom_preview.as_ref().unwrap();
+    let preview = app.document_view.bom_preview.as_ref().unwrap();
     assert!(!preview.options.columns.contains(&power()));
 }
 

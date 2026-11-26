@@ -20,7 +20,7 @@ impl Signex {
             return;
         };
         let messages =
-            self.document_state
+            self.document_view
                 .missing_fonts
                 .new_messages(path, engine.document(), catalog);
         for message in messages {
@@ -36,7 +36,7 @@ impl Signex {
 
     /// Forget what was reported for `path`, so opening it again reports again.
     pub(crate) fn forget_missing_font_reports(&mut self, path: &Path) {
-        self.document_state.missing_fonts.forget(path);
+        self.document_view.missing_fonts.forget(path);
     }
 
     /// The scan finished: text that names an installed family now draws

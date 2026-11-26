@@ -432,7 +432,7 @@ impl Signex {
             signex_i18n::I18n::en_us()
                 .message_plain(ids::COMPARE_BOARD_FAILED, &[("why", why.into())]),
         );
-        self.document_state.error_notice = Some(ErrorNotice::new(ids::COMPARE_BOARD_TITLE, id));
+        self.document_view.error_notice = Some(ErrorNotice::new(ids::COMPARE_BOARD_TITLE, id));
         Task::none()
     }
 

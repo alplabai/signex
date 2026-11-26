@@ -22,7 +22,7 @@ impl Signex {
         let Some(project) = self.document_state.project_by_id(project_id) else {
             return;
         };
-        let Some(tab) = self.document_state.project_tabs.get(&project_id) else {
+        let Some(tab) = self.document_view.project_tabs.get(&project_id) else {
             return;
         };
         let definitions = &project.data.variant_definitions;
@@ -42,7 +42,7 @@ impl Signex {
                     .find(|defined| defined.eq_ignore_ascii_case(name.trim()))
             });
         let to = selected.unwrap_or(first).clone();
-        if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
+        if let Some(tab) = self.document_view.project_tabs.get_mut(&project_id) {
             tab.variant_manager.compare = Some(CompareSides {
                 from: None,
                 to: Some(to),
@@ -76,13 +76,13 @@ impl Signex {
 
     /// Close the comparison: the cards and the matrix again.
     pub(in crate::app::project_tab) fn close_variant_compare(&mut self, project_id: ProjectId) {
-        if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
+        if let Some(tab) = self.document_view.project_tabs.get_mut(&project_id) {
             tab.variant_manager.compare = None;
         }
     }
 
     fn compare_sides_mut(&mut self, project_id: ProjectId) -> Option<&mut CompareSides> {
-        let tab = self.document_state.project_tabs.get_mut(&project_id)?;
+        let tab = self.document_view.project_tabs.get_mut(&project_id)?;
         tab.variant_manager.compare.as_mut()
     }
 

@@ -281,7 +281,7 @@ fn param_header<'a>(
     style: GridStyle,
 ) -> Element<'a, Message> {
     let i18n = &app.ui_state.i18n;
-    let tokens = &app.document_state.panel_ctx.tokens;
+    let tokens = &app.document_view.panel_ctx.tokens;
     let m = style.metrics();
     let is_hovered = app.ui_state.parameter_table.hovered_column.as_deref() == Some(key);
     let mut content = row![container(header_text(key, i18n, style)).width(Length::Fill)]
@@ -398,7 +398,7 @@ fn param_cell<'a>(
     .size(TS.body)
     .font(param_cell_font(
         shown,
-        &app.document_state.panel_ctx.ui_font_name,
+        &app.document_view.panel_ctx.ui_font_name,
     ))
     .width(Length::Fill)
     .style(inline_cell_style(style, is_open));
@@ -421,7 +421,7 @@ fn closed_param_cell<'a>(
 ) -> Element<'a, Message> {
     let shown: &str = sym.fields.get(key).map_or("", String::as_str);
     let [_, value_ink, _] = fixed_cell_inks(style);
-    let font = param_cell_font(shown, &app.document_state.panel_ctx.ui_font_name);
+    let font = param_cell_font(shown, &app.document_view.panel_ctx.ui_font_name);
     let cell = read_only_cell(shown, width, value_ink, font, style.metrics());
     mouse_area(cell)
         .on_press(Message::ParameterManager(
@@ -473,7 +473,7 @@ pub(super) fn view<'a>(
     width: f32,
     show_sheet: bool,
 ) -> Element<'a, Message> {
-    let tokens = &app.document_state.panel_ctx.tokens;
+    let tokens = &app.document_view.panel_ctx.tokens;
     let i18n = &app.ui_state.i18n;
     let style = GridStyle::from_tokens(tokens, TS.body);
     let m = style.metrics();

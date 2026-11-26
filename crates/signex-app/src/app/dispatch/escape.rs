@@ -199,7 +199,7 @@ impl Signex {
     fn panel_menu_escape(&self) -> Option<Message> {
         use crate::panels::history::{HistoryCommitMsg, HistoryPanelMsg, HistorySwitcherMsg};
         use crate::panels::{LayersPanelMsg, PanelKind, PanelMsg};
-        let docs = &self.document_state;
+        let docs = &self.document_view;
         let history = docs
             .dock
             .is_frontmost(PanelKind::History)
@@ -227,7 +227,7 @@ impl Signex {
     /// Stop a floating-panel drag in flight, leaving the panel floating.
     /// `true` when there was one.
     fn cancel_floating_drag(&mut self) -> bool {
-        let dock = &mut self.document_state.dock;
+        let dock = &mut self.document_view.dock;
         let dragging = dock.floating.iter().any(|fp| fp.dragging);
         for fp in &mut dock.floating {
             fp.dragging = false;
@@ -283,7 +283,7 @@ impl Signex {
 
     /// Esc closes an open dock tab right-click menu.
     fn dock_tab_menu_escape(&self) -> Option<Message> {
-        self.document_state
+        self.document_view
             .dock
             .tab_menu
             .is_some()
@@ -421,7 +421,7 @@ impl Signex {
                     session.reference_override = reference_override;
                 }
                 self.refresh_placement_reference();
-                self.document_state.panel_ctx.pre_placement = before.map(|form| *form);
+                self.document_view.panel_ctx.pre_placement = before.map(|form| *form);
                 self.restore_dimension_tool_pause();
                 undone
             }
@@ -445,7 +445,7 @@ impl Signex {
         at_pause: Option<&crate::panels::PrePlacementData>,
     ) -> Task<Message> {
         use crate::panels::PanelMsg;
-        let (Some(base), Some(now)) = (at_pause, &self.document_state.panel_ctx.pre_placement)
+        let (Some(base), Some(now)) = (at_pause, &self.document_view.panel_ctx.pre_placement)
         else {
             return Task::none();
         };
@@ -515,7 +515,7 @@ mod tests {
     fn history_in_front() -> Signex {
         use crate::panels::PanelKind;
         let mut app = quiet_app();
-        app.document_state.dock.show_panel(PanelKind::History);
+        app.document_view.dock.show_panel(PanelKind::History);
         app.interaction_state.current_tool = Tool::Wire;
         app
     }
@@ -523,18 +523,18 @@ mod tests {
     #[test]
     fn esc_closes_the_history_switcher_and_leaves_the_tool() {
         let mut app = history_in_front();
-        app.document_state.history.ui.switcher_open = true;
+        app.document_view.history.ui.switcher_open = true;
         let _ = app.handle_escape_pressed(None);
-        assert!(!app.document_state.history.ui.switcher_open);
+        assert!(!app.document_view.history.ui.switcher_open);
         assert_eq!(app.interaction_state.current_tool, Tool::Wire);
     }
 
     #[test]
     fn esc_closes_the_history_more_row_and_leaves_the_tool() {
         let mut app = history_in_front();
-        app.document_state.history.ui.more_open = true;
+        app.document_view.history.ui.more_open = true;
         let _ = app.handle_escape_pressed(None);
-        assert!(!app.document_state.history.ui.more_open);
+        assert!(!app.document_view.history.ui.more_open);
         assert_eq!(app.interaction_state.current_tool, Tool::Wire);
     }
 
@@ -544,10 +544,10 @@ mod tests {
     fn esc_ignores_a_menu_in_a_panel_behind_another_tab() {
         use crate::panels::PanelKind;
         let mut app = history_in_front();
-        app.document_state.history.ui.switcher_open = true;
-        let _ = app.document_state.dock.close_panel(PanelKind::History);
+        app.document_view.history.ui.switcher_open = true;
+        let _ = app.document_view.dock.close_panel(PanelKind::History);
         let _ = app.handle_escape_pressed(None);
-        assert!(app.document_state.history.ui.switcher_open);
+        assert!(app.document_view.history.ui.switcher_open);
         assert_eq!(app.interaction_state.current_tool, Tool::Select);
     }
 
@@ -1038,7 +1038,7 @@ mod tests {
     }
 
     fn wire_width(app: &Signex) -> Option<signex_types::schematic::WireWidthPreset> {
-        app.document_state
+        app.document_view
             .panel_ctx
             .pre_placement
             .as_ref()
@@ -1109,7 +1109,7 @@ mod tests {
         );
         esc(&mut app);
         assert!(
-            app.document_state.panel_ctx.pre_placement.is_none(),
+            app.document_view.panel_ctx.pre_placement.is_none(),
             "no form before the Tab, so none after the Esc: the tool defaults place"
         );
         assert_eq!(app.interaction_state.current_tool, Tool::Wire);

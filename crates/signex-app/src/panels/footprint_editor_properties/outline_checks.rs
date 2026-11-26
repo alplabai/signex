@@ -212,7 +212,7 @@ mod tests {
 
     fn texts(board: &BoardSketchProps) -> Vec<String> {
         let (app, _task) = Signex::new();
-        let ctx = &app.document_state.panel_ctx;
+        let ctx = &app.document_view.panel_ctx;
         let i18n = I18n::en_us();
         let palette = PanelPalette::from_tokens(&ctx.tokens);
         let col = view_outline_checks(

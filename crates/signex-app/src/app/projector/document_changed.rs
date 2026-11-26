@@ -75,7 +75,7 @@ impl Signex {
                 .active_render_snapshot()
                 .map(|snapshot| crate::app::projector::effective_paper_size(&snapshot.paper_size))
         {
-            self.document_state.panel_ctx.paper_size = token;
+            self.document_view.panel_ctx.paper_size = token;
             self.apply_page_dimensions_to_canvas();
         }
     }

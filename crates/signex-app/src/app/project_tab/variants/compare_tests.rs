@@ -10,7 +10,7 @@ use crate::app::Signex;
 use crate::app::state::ProjectId;
 
 fn sides(app: &Signex, id: ProjectId) -> Option<CompareSides> {
-    app.document_state.project_tabs[&id]
+    app.document_view.project_tabs[&id]
         .variant_manager
         .compare
         .clone()
@@ -54,7 +54,7 @@ fn compare_opens_on_the_selected_variant() {
         .data
         .variant_definitions
         .push("Pro".into());
-    app.document_state
+    app.document_view
         .project_tabs
         .get_mut(&id)
         .expect("the tab")
@@ -139,7 +139,7 @@ fn the_comparison_shown_lists_the_parts_that_differ() {
     let (mut app, id, _dir) = app();
     open_manager(&mut app, id);
     let _ = manage(&mut app, id, VariantManagerMsg::CompareOpened);
-    let read = app.document_state.project_tabs[&id]
+    let read = app.document_view.project_tabs[&id]
         .variant_parts
         .as_deref()
         .expect("the parts were read")
@@ -164,7 +164,7 @@ fn an_unknown_side_shows_why_it_cannot_compare() {
     let (mut app, id, _dir) = app();
     open_manager(&mut app, id);
     let _ = manage(&mut app, id, VariantManagerMsg::CompareOpened);
-    app.document_state
+    app.document_view
         .project_tabs
         .get_mut(&id)
         .and_then(|tab| tab.variant_manager.compare.as_mut())
@@ -185,7 +185,7 @@ fn open_in_bom_studio_opens_the_bom_with_the_variant_picked() {
         },
     );
     let preview = app
-        .document_state
+        .document_view
         .bom_preview
         .as_ref()
         .expect("the BOM preview opened");
@@ -200,7 +200,7 @@ fn open_in_bom_studio_opens_the_bom_with_the_variant_picked() {
         id,
         VariantManagerMsg::BomRequested { variant: None },
     );
-    let preview = app.document_state.bom_preview.as_ref().expect("reopened");
+    let preview = app.document_view.bom_preview.as_ref().expect("reopened");
     assert_eq!(preview.options.active_variant, None, "None is Base");
 }
 
@@ -216,7 +216,7 @@ fn open_in_bom_studio_without_an_open_sheet_opens_nothing() {
             variant: side(Some("Lite")),
         },
     );
-    assert!(app.document_state.bom_preview.is_none());
+    assert!(app.document_view.bom_preview.is_none());
 }
 
 /// The built top bar actions read from the catalog, and Open in BOM Studio
@@ -225,20 +225,20 @@ fn open_in_bom_studio_without_an_open_sheet_opens_nothing() {
 fn the_built_top_bar_actions_send_their_messages() {
     let (mut app, id, _dir) = app();
     open_manager(&mut app, id);
-    app.document_state
+    app.document_view
         .project_tabs
         .get_mut(&id)
         .expect("the tab")
         .variant_selected = Some("Lite".into());
     let project = app.document_state.project_by_id(id).expect("the project");
-    let tab = app.document_state.project_tabs.get(&id);
+    let tab = app.document_view.project_tabs.get(&id);
     let i18n = app.ui_state.i18n.as_ref();
     let m = super::Manager::new(
         project,
         tab,
         app.document_state.sheet_edit_epoch,
         i18n,
-        &app.document_state.panel_ctx.tokens,
+        &app.document_view.panel_ctx.tokens,
     );
     let actions = super::bar::actions(&m);
     let labels: Vec<String> = actions

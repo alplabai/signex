@@ -70,7 +70,7 @@ fn the_dialog_shows_a_computed_column_with_its_header_and_unit() {
 #[test]
 fn a_line_whose_parts_differ_reads_in_the_dialogs_words() {
     let mut app = app_with_power();
-    let preview = app.document_state.bom_preview.as_mut().unwrap();
+    let preview = app.document_view.bom_preview.as_mut().unwrap();
     preview.table.rows[0]
         .computed
         .insert("Power".into(), ComputedCell::Differs);

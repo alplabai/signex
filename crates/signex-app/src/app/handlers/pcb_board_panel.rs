@@ -135,7 +135,7 @@ impl Signex {
             PcbBoardMsg::IllustrationHovered(hover) => {
                 view.illustration_hover.update(hover.clone());
                 let hover = view.illustration_hover.clone();
-                if let Some(board) = self.document_state.panel_ctx.pcb_board.as_mut() {
+                if let Some(board) = self.document_view.panel_ctx.pcb_board.as_mut() {
                     board.view.illustration_hover = hover;
                 }
                 return task;

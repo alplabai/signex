@@ -121,14 +121,14 @@ impl Signex {
                 );
             }
             ProjectTabMsg::NewParameterNameEdited { project_id, text } => {
-                if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
+                if let Some(tab) = self.document_view.project_tabs.get_mut(&project_id) {
                     tab.new_parameter_name = text;
                 }
             }
             ProjectTabMsg::ParameterAdded { project_id } => {
                 self.close_general_run(project_id);
                 let tab = self
-                    .document_state
+                    .document_view
                     .project_tabs
                     .entry(project_id)
                     .or_default();
@@ -147,7 +147,7 @@ impl Signex {
                          and does not start with a digit."
                     ));
                     // The refused name stays typed, to be corrected.
-                    if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
+                    if let Some(tab) = self.document_view.project_tabs.get_mut(&project_id) {
                         tab.new_parameter_name = name;
                     }
                     return;
@@ -192,7 +192,7 @@ impl Signex {
                     return;
                 }
                 let input = super::schematic_defaults::parse_override(field, &text);
-                self.document_state
+                self.document_view
                     .project_tabs
                     .entry(project_id)
                     .or_default()
@@ -279,12 +279,12 @@ impl Signex {
                 self.start_variant_rename(project_id, name);
             }
             ProjectTabMsg::VariantFilterEdited { project_id, text } => {
-                if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
+                if let Some(tab) = self.document_view.project_tabs.get_mut(&project_id) {
                     tab.variant_filter = text;
                 }
             }
             ProjectTabMsg::VariantDifferingToggled { project_id } => {
-                if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
+                if let Some(tab) = self.document_view.project_tabs.get_mut(&project_id) {
                     tab.variants_only_differ = !tab.variants_only_differ;
                 }
             }
@@ -395,7 +395,7 @@ impl Signex {
         // A preview's open label and window belong to the section left.
         self.ui_state.project_preview = super::ProjectPreviewUi::default();
         self.ui_state.project_git.close_switcher();
-        if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
+        if let Some(tab) = self.document_view.project_tabs.get_mut(&project_id) {
             tab.section = section;
             tab.row_drag = None;
             // A section switch ends the typing run: the next edit is its own
@@ -461,10 +461,11 @@ impl Signex {
     /// Ctrl+Z / Ctrl+Y in a Project tab. Returns whether a step moved.
     pub(crate) fn step_project_tab_history(&mut self, project_id: ProjectId, undo: bool) -> bool {
         let document = &mut self.document_state;
+        let document_view = &mut self.document_view;
         let Some(project) = document.projects.iter_mut().find(|p| p.id == project_id) else {
             return false;
         };
-        let tab = document.project_tabs.get_mut(&project_id);
+        let tab = document_view.project_tabs.get_mut(&project_id);
         let history = document.general_history.get_mut(&project_id);
         if tab.is_none() && history.is_none() {
             return false;

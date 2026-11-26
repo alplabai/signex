@@ -412,12 +412,12 @@ fn a_check_leaves_the_erc_results_and_the_panel_alone() {
     let dir = tempfile::tempdir().unwrap();
     let mut app = project_app(&dir);
     let before = erc_state(&app);
-    let panels = crate::dock::DockLayoutSnapshot::capture(&app.document_state.dock);
+    let panels = crate::dock::DockLayoutSnapshot::capture(&app.document_view.dock);
     let checked = report(&mut app, &top(&dir), &[]);
     assert!(!checked["findings"].as_array().unwrap().is_empty());
     assert_eq!(erc_state(&app), before);
     assert_eq!(
-        crate::dock::DockLayoutSnapshot::capture(&app.document_state.dock),
+        crate::dock::DockLayoutSnapshot::capture(&app.document_view.dock),
         panels
     );
     // Run ERC on the same project fills them.

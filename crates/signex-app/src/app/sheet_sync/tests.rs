@@ -166,7 +166,7 @@ fn parent_pins(app: &Signex) -> Vec<String> {
 /// The entries of the sheet symbol the Properties panel shows as selected.
 fn properties_pins(app: &Signex) -> Vec<String> {
     let symbol = app
-        .document_state
+        .document_view
         .panel_ctx
         .selected_child_sheet
         .as_ref()
@@ -593,7 +593,7 @@ fn a_grandparent_sheet_is_refused_as_a_loop() {
         "mid.snxsch",
         vec![node(&dir, "parent.snxsch", Vec::new())],
     );
-    rig.app.document_state.panel_ctx.navigator.hierarchy = Some(SheetHierarchy {
+    rig.app.document_view.panel_ctx.navigator.hierarchy = Some(SheetHierarchy {
         root: Some(node(&dir, "top.snxsch", vec![mid])),
         ..Default::default()
     });

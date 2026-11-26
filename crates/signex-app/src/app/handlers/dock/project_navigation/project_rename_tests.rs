@@ -679,7 +679,7 @@ fn an_export_into_a_moving_project_is_refused_and_creates_nothing() {
         Vec::new(),
     );
     assert!(iced_runtime::task::into_stream(task).is_none(), "no write");
-    let notice = fx.app.document_state.error_notice.take().expect("notice");
+    let notice = fx.app.document_view.error_notice.take().expect("notice");
     assert!(
         notice.detail.render_en_us().contains("being renamed"),
         "{}",
@@ -689,7 +689,7 @@ fn an_export_into_a_moving_project_is_refused_and_creates_nothing() {
     let report = fx.folder.join("outputs").join("erc.txt");
     let task = fx.app.handle_erc_report_path_chosen(Ok(report));
     assert!(iced_runtime::task::into_stream(task).is_none(), "no write");
-    let notice = fx.app.document_state.error_notice.take().expect("notice");
+    let notice = fx.app.document_view.error_notice.take().expect("notice");
     assert!(
         notice.detail.render_en_us().contains("being renamed"),
         "{}",

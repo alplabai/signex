@@ -130,7 +130,7 @@ impl Signex {
             machine_rules_issue: self.machine_rules_issue(),
             default_profile: ui.default_rule_profile.as_deref(),
             distributor_settings: &self.library.settings,
-            panel_tokens: &self.document_state.panel_ctx.tokens,
+            panel_tokens: &self.document_view.panel_ctx.tokens,
             draft_component_classes: &ui.preferences_draft_component_classes,
             keymap_editor: &ui.preferences_keymap_editor,
             keymap_status: &ui.preferences_keymap_status,
@@ -166,7 +166,7 @@ impl Signex {
             ModalId::Preferences => self.view_preferences_body(),
             ModalId::FindReplace => crate::find_replace::window_view(
                 &self.ui_state.find_replace,
-                &self.document_state.panel_ctx.tokens,
+                &self.document_view.panel_ctx.tokens,
                 &self.ui_state.i18n,
             )
             .map(Message::FindReplaceMsg)
@@ -179,12 +179,12 @@ impl Signex {
             ModalId::NewProject => self.view_new_project_window(),
             ModalId::About => crate::about_modal::window_view(
                 &self.ui_state.i18n,
-                &self.document_state.panel_ctx.tokens,
+                &self.document_view.panel_ctx.tokens,
             ),
             ModalId::KeyboardShortcuts => self.view_keyboard_shortcuts_window(),
             ModalId::PassiveCalculator => crate::passive_calculator_modal::window_view(
                 &self.ui_state.i18n,
-                &self.document_state.panel_ctx.tokens,
+                &self.document_view.panel_ctx.tokens,
                 &self.ui_state.passive_calculator,
             ),
             ModalId::CreateChildSheet => self.view_create_child_sheet_body(),
@@ -209,7 +209,7 @@ impl Signex {
                         .center_x(Length::Fill)
                         .center_y(Length::Fill)
                         .style(crate::styles::modal_card(
-                            &self.document_state.panel_ctx.tokens,
+                            &self.document_view.panel_ctx.tokens,
                         ))
                         .boxed(),
                     None => iced::widget::Space::new().boxed(),
@@ -232,7 +232,7 @@ impl Signex {
                 );
                 crate::first_run_tour::window_view(
                     &ui.i18n,
-                    &self.document_state.panel_ctx.tokens,
+                    &self.document_view.panel_ctx.tokens,
                     &facts,
                 )
             }
@@ -333,7 +333,7 @@ impl Signex {
         size: f32,
     ) -> Element<'_, Message> {
         let panel = self
-            .document_state
+            .document_view
             .dock
             .view_region(
                 pos,
@@ -354,7 +354,7 @@ impl Signex {
             .width(width)
             .height(Length::Fill)
             .style(crate::styles::panel_region(
-                &self.document_state.panel_ctx.tokens,
+                &self.document_view.panel_ctx.tokens,
             ))
             .boxed()
     }
@@ -368,7 +368,7 @@ impl Signex {
         size: f32,
     ) -> Element<'_, Message> {
         let panel = self
-            .document_state
+            .document_view
             .dock
             .view_region(
                 pos,
@@ -389,7 +389,7 @@ impl Signex {
             .width(Length::Fill)
             .height(height)
             .style(crate::styles::panel_region(
-                &self.document_state.panel_ctx.tokens,
+                &self.document_view.panel_ctx.tokens,
             ))
             .boxed()
     }
@@ -406,7 +406,7 @@ impl Signex {
                 .width(size)
                 .height(Length::Fill)
                 .style(crate::styles::resize_handle_edge(
-                    &self.document_state.panel_ctx.tokens,
+                    &self.document_view.panel_ctx.tokens,
                     true,
                 ))
         } else {
@@ -414,7 +414,7 @@ impl Signex {
                 .width(Length::Fill)
                 .height(size)
                 .style(crate::styles::resize_handle_edge(
-                    &self.document_state.panel_ctx.tokens,
+                    &self.document_view.panel_ctx.tokens,
                     false,
                 ))
         };

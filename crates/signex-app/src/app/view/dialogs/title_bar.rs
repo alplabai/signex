@@ -86,7 +86,7 @@ impl Signex {
         window: iced::window::Id,
         modal: crate::app::state::ModalId,
     ) -> Element<'_, Message> {
-        let theme_tokens = &self.document_state.panel_ctx.tokens;
+        let theme_tokens = &self.document_view.panel_ctx.tokens;
         let body = container(self.view_detached_modal(window, modal))
             .width(Length::Fill)
             .height(Length::Fill)

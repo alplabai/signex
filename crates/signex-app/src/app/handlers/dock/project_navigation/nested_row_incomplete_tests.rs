@@ -46,7 +46,7 @@ fn delete_is_refused(app: &mut Signex, victim: &Path) {
     assert_eq!(confirmed.units(), 0);
     assert!(victim.exists(), "the file stays on disk");
     assert!(
-        app.document_state.error_notice.is_some(),
+        app.document_view.error_notice.is_some(),
         "and the user is told"
     );
 }

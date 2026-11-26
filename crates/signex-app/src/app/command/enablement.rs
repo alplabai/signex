@@ -367,8 +367,9 @@ impl Signex {
     /// draw.
     fn active_sheet_has_parent(&self) -> bool {
         let document = &self.document_state;
+        let document_view = &self.document_view;
         document.tabs.get(document.active_tab).is_some_and(|tab| {
-            document
+            document_view
                 .panel_ctx
                 .navigator
                 .is_placed_below_a_sheet(&tab.path)
@@ -1215,7 +1216,7 @@ mod tests {
             crate::app::state::scope::CaseFold::host_default(),
         );
         let (mut app, _task) = Signex::new();
-        app.document_state
+        app.document_view
             .panel_ctx
             .navigator
             .replace_hierarchy(hierarchy, None, &[]);
@@ -1268,7 +1269,7 @@ mod tests {
             let mut app = Box::new(build());
             let before = app.command_context(None);
             let fresh = Box::new(Signex::new().0);
-            app.document_state.panel_ctx = fresh.document_state.panel_ctx;
+            app.document_view.panel_ctx = fresh.document_view.panel_ctx;
             app.interaction_state = fresh.interaction_state;
             assert_eq!(app.command_context(None).core(), before.core());
         }

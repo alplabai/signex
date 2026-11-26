@@ -156,14 +156,14 @@ fn history_reload_does_not_repeat_the_repair_warning_and_keeps_the_tab_dirty() {
     // second restores and reloads the editor from disk.
     restore_clicked(&mut app, &sha);
     assert_eq!(
-        app.document_state.history.pending_restore.as_deref(),
+        app.document_view.history.pending_restore.as_deref(),
         Some(sha.as_str()),
         "the first click arms the confirmation"
     );
     restore_clicked(&mut app, &sha);
 
     assert!(
-        app.document_state.history.pending_restore.is_none(),
+        app.document_view.history.pending_restore.is_none(),
         "the restore ran"
     );
     assert_eq!(

@@ -490,7 +490,7 @@ mod tests {
     fn the_panel_shows_the_ports_font_and_size() {
         use signex_types::schematic::SelectedKind;
         let (app, _task) = crate::app::Signex::new();
-        let mut ctx = app.document_state.panel_ctx.clone();
+        let mut ctx = app.document_view.panel_ctx.clone();
         ctx.selected_kind = Some(SelectedKind::Symbol);
         ctx.selected_uuid = Some(uuid::Uuid::now_v7());
         ctx.selection_info = rows(&[
@@ -533,7 +533,7 @@ mod tests {
     #[test]
     fn the_drawing_callouts_read_the_ports_rows() {
         let (app, _task) = crate::app::Signex::new();
-        let mut ctx = app.document_state.panel_ctx.clone();
+        let mut ctx = app.document_view.panel_ctx.clone();
         ctx.placed.geometry = Some(signex_engine::PlacedGeometry {
             position: signex_types::schematic::Point::new(152.4, 50.8),
             rotation: Some(0.0),

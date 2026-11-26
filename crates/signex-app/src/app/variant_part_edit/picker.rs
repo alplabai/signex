@@ -50,7 +50,7 @@ impl Signex {
             .document_state
             .project_by_id(edit.part().project)
             .map_or(&empty, |project| &project.data.variant_settings);
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = &self.ui_state.i18n;
         Some(match edit {
             VariantPartEdit::Alternate(picker) => {

@@ -37,7 +37,7 @@ fn grid_step(app: &Signex, path: &PathBuf) -> f64 {
 }
 
 fn refusal_logged(app: &Signex) -> bool {
-    app.document_state
+    app.document_view
         .panel_ctx
         .diagnostics
         .iter()
@@ -94,7 +94,7 @@ fn a_non_finite_grid_step_in_the_properties_panel_is_refused_out_loud() {
     assert!(
         refusal_logged(&app),
         "the refusal must reach the Messages panel; got {:?}",
-        app.document_state.panel_ctx.diagnostics
+        app.document_view.panel_ctx.diagnostics
     );
 }
 
@@ -113,7 +113,7 @@ fn a_non_finite_grid_step_in_grid_properties_is_refused_out_loud() {
     assert!(
         refusal_logged(&app),
         "the refusal must reach the Messages panel; got {:?}",
-        app.document_state.panel_ctx.diagnostics
+        app.document_view.panel_ctx.diagnostics
     );
 }
 
@@ -137,7 +137,7 @@ fn apply_typed_step(app: &mut Signex, text: &str) {
 }
 
 fn refusal_with(app: &Signex, needle: &str) -> bool {
-    app.document_state
+    app.document_view
         .panel_ctx
         .diagnostics
         .iter()
@@ -161,7 +161,7 @@ fn grid_properties_apply_refuses_bad_steps_and_keeps_the_dialog_open() {
         assert!(
             refusal_with(&app, needle),
             "{text}: refusal with reason must reach the Messages panel; got {:?}",
-            app.document_state.panel_ctx.diagnostics
+            app.document_view.panel_ctx.diagnostics
         );
     }
 }

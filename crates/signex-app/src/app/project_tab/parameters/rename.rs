@@ -116,7 +116,7 @@ impl Signex {
             return;
         };
         let Some((from, text)) = self
-            .document_state
+            .document_view
             .project_tabs
             .get(&project_id)
             .and_then(|tab| tab.parameter_rename.clone())
@@ -124,7 +124,7 @@ impl Signex {
             return;
         };
         let outcome = checked_rename(&project.data.parameters, &from, &text);
-        let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) else {
+        let Some(tab) = self.document_view.project_tabs.get_mut(&project_id) else {
             return;
         };
         let to = match outcome {

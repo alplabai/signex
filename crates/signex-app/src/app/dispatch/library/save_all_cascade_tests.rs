@@ -143,7 +143,7 @@ fn save_all_saves_the_symbol_and_the_row_with_its_edit_on_the_bumped_pin() {
     settle(&mut f.app, task);
 
     assert!(
-        f.app.document_state.error_notice.is_none(),
+        f.app.document_view.error_notice.is_none(),
         "nothing refused"
     );
     assert!(!f.app.document_state.is_document_dirty(&f.symbol_path));
@@ -178,7 +178,7 @@ fn a_row_someone_else_changed_after_the_cascade_is_still_refused() {
 
     assert_eq!(stored(&f).description, "Theirs", "their change stands");
     assert!(f.app.library.editors[&f.address].dirty, "the edit is kept");
-    assert!(f.app.document_state.error_notice.is_some());
+    assert!(f.app.document_view.error_notice.is_some());
 }
 
 /// A second symbol, in a file of its own, bound to the row as an alternate:
@@ -250,7 +250,7 @@ fn save_all_of_two_symbols_of_one_row_saves_the_row_too() {
     settle(&mut f.app, task);
 
     assert!(
-        f.app.document_state.error_notice.is_none(),
+        f.app.document_view.error_notice.is_none(),
         "nothing refused"
     );
     let row = stored(&f);

@@ -749,7 +749,7 @@ pub(super) mod tests {
     pub(in crate::panels::element_properties) fn properties_texts(
         app: &crate::app::Signex,
     ) -> Vec<(String, f32)> {
-        let ctx = &app.document_state.panel_ctx;
+        let ctx = &app.document_view.panel_ctx;
         let view = super::super::selected::view_selected_element_properties(
             ctx,
             Color::WHITE,
@@ -781,7 +781,7 @@ pub(super) mod tests {
         let (sheet, id) = sheet_with_symbol("Repeat(CH, 1, 4)");
         let mut app = app_showing(sheet);
         click(&mut app, (40.0, 35.0));
-        let ctx = &app.document_state.panel_ctx;
+        let ctx = &app.document_view.panel_ctx;
         assert_eq!(ctx.selected_kind, Some(Kind::ChildSheet));
         let view = (ctx.compiled_design.sheet_symbol.as_ref()).expect("the multi-channel view");
         assert_eq!(view.sheet_symbol, id);

@@ -211,7 +211,7 @@ impl Signex {
                     let label_text = on_cursor_part
                         .map(|f| f.value.clone())
                         .or_else(|| {
-                            self.document_state
+                            self.document_view
                                 .panel_ctx
                                 .pre_placement
                                 .as_ref()
@@ -222,7 +222,7 @@ impl Signex {
                     let designator = on_cursor_part
                         .map(|f| f.designator.clone())
                         .or_else(|| {
-                            self.document_state
+                            self.document_view
                                 .panel_ctx
                                 .pre_placement
                                 .as_ref()
@@ -236,7 +236,7 @@ impl Signex {
                         String::new(),
                         (0.0, 0.0),
                     );
-                    let prev = self.document_state.panel_ctx.pre_placement.as_ref();
+                    let prev = self.document_view.panel_ctx.pre_placement.as_ref();
                     let prev_rotation = on_cursor_part
                         .map(|f| f.rotation)
                         .or_else(|| prev.map(|pp| pp.rotation))
@@ -265,8 +265,8 @@ impl Signex {
                         };
                     // The form as it stood before this Tab: what Esc while
                     // paused restores (the typed position included).
-                    let before = self.document_state.panel_ctx.pre_placement.clone();
-                    self.document_state.panel_ctx.pre_placement =
+                    let before = self.document_view.panel_ctx.pre_placement.clone();
+                    self.document_view.panel_ctx.pre_placement =
                         Some(crate::panels::PrePlacementData {
                             tool_name,
                             kind,
@@ -304,7 +304,7 @@ impl Signex {
                         Some(crate::app::state::SheetPlacementPause::Sheet {
                             before: before.map(Box::new),
                             at_pause: self
-                                .document_state
+                                .document_view
                                 .panel_ctx
                                 .pre_placement
                                 .clone()

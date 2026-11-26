@@ -26,7 +26,7 @@ impl Signex {
             Vec::new()
         };
         if let [start, c1, c2, end] = clicked[..] {
-            let (width, _) = pre_placement_shape(&self.document_state);
+            let (width, _) = pre_placement_shape(&self.document_state, &self.document_view);
             let b = bezier_from_clicks([start, c1, c2, end], width);
             self.apply_engine_command(
                 signex_engine::Command::PlaceSchDrawing {

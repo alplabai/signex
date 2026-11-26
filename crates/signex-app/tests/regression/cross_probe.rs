@@ -459,7 +459,7 @@ fn cross_probe_opens_a_closed_board() {
     );
     assert_eq!(main_board_selection(&f), vec![ItemRef::Footprint(U_R1)]);
     assert!(f.app.interaction_state.cross_select.pending.is_none());
-    assert!(f.app.document_state.error_notice.is_none());
+    assert!(f.app.document_view.error_notice.is_none());
 }
 
 /// The sheet canvas menu's Cross Probe row brings a board tab that sits
@@ -530,7 +530,7 @@ fn a_refused_probe_logs_english_under_any_language() {
         Message::Menu(MenuMessage::Command(command("cross_probe"))),
     );
     assert_eq!(logged(), before + 1, "the Messages line is English");
-    let notice = f.app.document_state.error_notice.as_ref().expect("a card");
+    let notice = f.app.document_view.error_notice.as_ref().expect("a card");
     assert_ne!(
         notice.detail_text(&f.app.ui_state.i18n),
         WHY,

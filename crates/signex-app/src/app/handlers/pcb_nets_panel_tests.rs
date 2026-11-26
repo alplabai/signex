@@ -41,12 +41,12 @@ fn a_net_click_selects_and_highlights_and_a_second_click_clears_both() {
     let mut app = app_on_board(dir.path());
     click(&mut app, "GND");
     let selected = || Some("GND".to_owned());
-    assert_eq!(app.document_state.panel_ctx.pcb_panel.selected, selected());
+    assert_eq!(app.document_view.panel_ctx.pcb_panel.selected, selected());
     assert_eq!(bright(&app), selected());
     click(&mut app, "VCC");
     assert_eq!(bright(&app).as_deref(), Some("VCC"), "the highlight moves");
     click(&mut app, "VCC");
-    assert_eq!(app.document_state.panel_ctx.pcb_panel.selected, None);
+    assert_eq!(app.document_view.panel_ctx.pcb_panel.selected, None);
     assert_eq!(bright(&app), None);
 }
 
@@ -58,7 +58,7 @@ fn the_mode_survives_a_context_rebuild() {
     let _ = app.update(Message::Dock(DockMessage::Panel(PanelMsg::PcbPanel(msg))));
     app.refresh_panel_ctx();
     assert_eq!(
-        app.document_state.panel_ctx.pcb_panel.mode,
+        app.document_view.panel_ctx.pcb_panel.mode,
         PcbPanelMode::NetClasses
     );
 }
@@ -67,19 +67,19 @@ fn the_mode_survives_a_context_rebuild() {
 fn net_classes_on_a_board_opens_the_pcb_panel_in_that_mode() {
     let dir = tempfile::tempdir().unwrap();
     let mut app = app_on_board(dir.path());
-    app.document_state.dock.close_panel(PanelKind::PcbNets);
+    app.document_view.dock.close_panel(PanelKind::PcbNets);
     let _ = app.update(Message::Overlay(OverlayMsg::OpenPanel(
         PanelKind::NetClasses,
     )));
-    assert!(app.document_state.dock.locate(PanelKind::PcbNets).is_some());
+    assert!(app.document_view.dock.locate(PanelKind::PcbNets).is_some());
     assert!(
-        app.document_state
+        app.document_view
             .dock
             .locate(PanelKind::NetClasses)
             .is_none()
     );
     assert_eq!(
-        app.document_state.panel_ctx.pcb_panel.mode,
+        app.document_view.panel_ctx.pcb_panel.mode,
         PcbPanelMode::NetClasses
     );
 }

@@ -87,7 +87,7 @@ impl Signex {
         let planned = plan_projects(&self.document_state)
             .into_iter()
             .find(|p| p.project == project)?;
-        self.document_state
+        self.document_view
             .net_nav
             .index
             .fresh(project, &planned.key)
@@ -139,7 +139,7 @@ impl Signex {
             .into_iter()
             .find(|p| p.project == project)
             .ok_or(IndexLookup::Unavailable)?;
-        let cache = &mut self.document_state.net_nav.index;
+        let cache = &mut self.document_view.net_nav.index;
         if let Some(data) = cache.fresh(project, &planned.key) {
             return Err(IndexLookup::Ready(data));
         }
@@ -158,7 +158,7 @@ impl Signex {
         let open =
             project_sheets::open_sheets_snapshot_of(&self.document_state, &planned.open_paths);
         let stitch = self
-            .document_state
+            .document_view
             .net_nav
             .stitch_share
             .claim(planned.project, &planned.key);
@@ -210,7 +210,7 @@ impl Signex {
             selected: self.interaction_state.active_canvas().selected.clone(),
             cursor: self.cursor_world_now(),
         };
-        let nav = &mut self.document_state.net_nav;
+        let nav = &mut self.document_view.net_nav;
         if action != PendingNetAction::HoverDwell || nav.pending.is_none() {
             nav.pending = Some(pending);
         }
@@ -220,8 +220,8 @@ impl Signex {
     /// Store a finished build and re-run what waited for it.
     pub(super) fn apply_net_index(&mut self, outcome: &IndexOutcome) -> Task<Message> {
         // The Net Inspector lists what the cache holds: look again.
-        self.document_state.net_nav.inspector_stamp = None;
-        match self.document_state.net_nav.index.apply(outcome) {
+        self.document_view.net_nav.inspector_stamp = None;
+        match self.document_view.net_nav.index.apply(outcome) {
             // A newer key arrived while this one ran: build it now, once.
             Stored::Stale => match self.net_index_lookup(outcome.project) {
                 IndexLookup::Building(build) => build,
@@ -232,7 +232,7 @@ impl Signex {
                 }
             },
             Stored::Failed(reason) => {
-                let nav = &mut self.document_state.net_nav;
+                let nav = &mut self.document_view.net_nav;
                 if nav
                     .pending
                     .as_ref()
@@ -257,7 +257,7 @@ impl Signex {
     /// for another project waits for that one's build, or is dropped when it
     /// is gone; it never runs against a different project.
     fn run_pending_for(&mut self, landed: ProjectId) -> Task<Message> {
-        let Some(pending) = self.document_state.net_nav.pending.take() else {
+        let Some(pending) = self.document_view.net_nav.pending.take() else {
             return Task::none();
         };
         let Pending {
@@ -270,7 +270,7 @@ impl Signex {
         let user_command = action != PendingNetAction::HoverDwell;
         if project != landed {
             if self.project_is_planned(project) {
-                self.document_state.net_nav.pending = Some(pending);
+                self.document_view.net_nav.pending = Some(pending);
             } else if user_command {
                 crate::diagnostics::log_info(messages::command_dropped_left());
             }
@@ -314,7 +314,7 @@ impl Signex {
     /// Drop the parked command of `project` and say so, unless it was only
     /// the hover's.
     fn drop_pending_of(&mut self, project: ProjectId, line: String) {
-        let nav = &mut self.document_state.net_nav;
+        let nav = &mut self.document_view.net_nav;
         if nav.pending.as_ref().is_some_and(|p| p.project == project) {
             let dropped = nav.pending.take();
             if dropped.is_some_and(|p| p.action != PendingNetAction::HoverDwell) {
@@ -327,7 +327,7 @@ impl Signex {
     /// once until it clears, whichever of this and the net-class style refresh
     /// meets it first.
     fn report_index_warnings(&mut self, outcome: &IndexOutcome) {
-        let reported = &mut self.document_state.net_nav.reported;
+        let reported = &mut self.document_view.net_nav.reported;
         for warning in &outcome.warnings {
             if reported.claim(outcome.project, warning) {
                 crate::diagnostics::log_warning(messages::index_warning(warning));
@@ -349,20 +349,20 @@ impl Signex {
 
     fn refresh_net_index(&mut self) -> Task<Message> {
         let stamp = self.net_nav_stamp();
-        if self.document_state.net_nav.refresh_stamp == Some(stamp) {
+        if self.document_view.net_nav.refresh_stamp == Some(stamp) {
             return Task::none();
         }
-        self.document_state.net_nav.refresh_stamp = Some(stamp);
+        self.document_view.net_nav.refresh_stamp = Some(stamp);
         // A project that closed releases its index and its warning claims,
         // highlight or not.
         let open: Vec<ProjectId> = plan_projects(&self.document_state)
             .iter()
             .map(|p| p.project)
             .collect();
-        self.document_state.net_nav.index.retain_projects(&open);
-        self.document_state.net_nav.reported.retain_projects(&open);
+        self.document_view.net_nav.index.retain_projects(&open);
+        self.document_view.net_nav.reported.retain_projects(&open);
         let Some(project) = self
-            .document_state
+            .document_view
             .net_nav
             .highlight
             .as_ref()
@@ -371,7 +371,7 @@ impl Signex {
             return Task::none();
         };
         if self.document_state.project_by_id(project).is_none() {
-            self.document_state.net_nav.highlight = None;
+            self.document_view.net_nav.highlight = None;
             crate::diagnostics::log_info(messages::project_closed());
             return Task::none();
         }
@@ -418,7 +418,7 @@ impl Signex {
         else {
             return;
         };
-        let cache = &mut self.document_state.net_nav.index;
+        let cache = &mut self.document_view.net_nav.index;
         if cache.fresh(project, &planned.key).is_some() {
             return;
         }

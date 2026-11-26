@@ -9,20 +9,17 @@ use crate::app::{Message, PrintPreviewMsg, Signex};
 fn open_preview(dir: &str) -> Signex {
     let mut app = placed_app(dir, &["top.snxsch"], &[], Vec::new());
     let _ = app.handle_print_preview_requested();
-    assert!(
-        app.document_state.preview.is_some(),
-        "fixture: preview open"
-    );
+    assert!(app.document_view.preview.is_some(), "fixture: preview open");
     app
 }
 
 /// The newest raster generation: it moves when a new render job starts.
 fn generation(app: &Signex) -> u64 {
-    app.document_state.raster_queue.current().0
+    app.document_view.raster_queue.current().0
 }
 
 fn options(app: &Signex) -> &signex_output::PdfOptions {
-    &app.document_state
+    &app.document_view
         .preview
         .as_ref()
         .expect("preview")

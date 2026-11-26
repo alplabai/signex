@@ -230,7 +230,7 @@ fn a_copy_that_is_not_a_readable_pcb_is_refused_and_kept() {
     let mut app = fresh_run(&recovery, &doc);
     assert!(app.document_state.autosave.current_offer().is_some());
     answer(&mut app, RecoveryChoice::Restore);
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_view.error_notice.is_some());
     assert!(sidecar::sidecar_path(&recovery, &doc).exists());
     assert_eq!(thickness_in_tab(&app, &doc), ORIGINAL_THICKNESS);
 }
@@ -349,7 +349,7 @@ fn save_all_writes_a_parked_board() {
     assert_eq!(thickness_on_disk(&f.doc), EDITED_THICKNESS);
     assert!(!is_dirty(&next, &f.doc));
     assert!(!sidecar_of(&f).exists(), "a saved board needs no copy");
-    assert!(next.document_state.error_notice.is_none());
+    assert!(next.document_view.error_notice.is_none());
 }
 
 #[test]
@@ -359,7 +359,7 @@ fn save_all_writes_a_dirty_board_in_its_tab() {
     send(&mut f.app, Message::Menu(MenuMessage::SaveAll));
     assert_eq!(thickness_on_disk(&f.doc), EDITED_THICKNESS);
     assert!(!is_dirty(&f.app, &f.doc));
-    assert!(f.app.document_state.error_notice.is_none());
+    assert!(f.app.document_view.error_notice.is_none());
 }
 
 #[test]
@@ -373,7 +373,7 @@ fn quit_save_all_writes_a_parked_board() {
     );
     assert_eq!(thickness_on_disk(&f.doc), EDITED_THICKNESS);
     assert!(!is_dirty(&next, &f.doc));
-    assert!(next.document_state.error_notice.is_none());
+    assert!(next.document_view.error_notice.is_none());
 }
 
 #[test]

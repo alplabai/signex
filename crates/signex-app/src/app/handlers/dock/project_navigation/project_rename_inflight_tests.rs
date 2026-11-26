@@ -68,7 +68,7 @@ fn add_new_schematic_is_tracked_and_refused_during_a_move() {
         .handle_add_new_schematic_picked(id, Some(new_sheet.clone()), None);
     assert!(iced_runtime::task::into_stream(task).is_none(), "no write");
     assert!(fx.app.document_state.project_writes.is_empty());
-    assert!(fx.app.document_state.error_notice.take().is_some());
+    assert!(fx.app.document_view.error_notice.take().is_some());
     fx.app.document_state.project_folder_renames.clear();
 
     let task = fx
@@ -126,7 +126,7 @@ fn a_library_browser_open_in_a_moving_project_is_refused() {
     let task = fx.app.handle_open_library_browser(lib.clone());
     assert!(iced_runtime::task::into_stream(task).is_none(), "no mount");
     assert!(!fx.app.library.pending_mounts.contains_key(&lib));
-    assert!(fx.app.document_state.error_notice.is_some());
+    assert!(fx.app.document_view.error_notice.is_some());
 }
 
 #[test]
@@ -137,7 +137,7 @@ fn history_restore_is_refused_in_a_moving_project() {
     fx.app.document_state.mark_documents_clean_where(|_| true);
     fx.app.document_state.project_folder_renames.insert(id);
     drop(fx.app.click_restore_on_listed_history("abc123"));
-    let notice = fx.app.document_state.error_notice.take().expect("notice");
+    let notice = fx.app.document_view.error_notice.take().expect("notice");
     assert!(
         notice.detail.render_en_us().contains("being renamed"),
         "{}",
@@ -156,7 +156,7 @@ fn annotate_and_reset_refuse_up_front_in_a_moving_project() {
     let _ = fx
         .app
         .handle_annotate(signex_engine::AnnotateMode::Incremental);
-    let notice = fx.app.document_state.error_notice.take().expect("notice");
+    let notice = fx.app.document_view.error_notice.take().expect("notice");
     assert!(
         notice.detail.render_en_us().contains("being renamed"),
         "{}",
@@ -165,7 +165,7 @@ fn annotate_and_reset_refuse_up_front_in_a_moving_project() {
     assert!(notice.detail.render_en_us().starts_with("Annotate"));
 
     let _ = fx.app.handle_reset_duplicate_designators();
-    let notice = fx.app.document_state.error_notice.take().expect("notice");
+    let notice = fx.app.document_view.error_notice.take().expect("notice");
     assert!(
         notice.detail.render_en_us().contains("being renamed"),
         "{}",
@@ -236,10 +236,7 @@ fn a_failed_export_write_still_releases_the_rename_guard() {
     assert_eq!(fx.app.document_state.project_writes, [out]);
     run_task(&mut fx.app, task);
     assert!(fx.app.document_state.project_writes.is_empty());
-    assert!(
-        fx.app.document_state.error_notice.is_some(),
-        "failure shown"
-    );
+    assert!(fx.app.document_view.error_notice.is_some(), "failure shown");
 }
 
 #[test]
@@ -270,7 +267,7 @@ fn the_erc_report_write_holds_the_folder_rename_until_it_lands() {
     let before = warnings_about(&refused);
     let task = fx.app.handle_erc_report_path_chosen(Ok(refused.clone()));
     assert!(iced_runtime::task::into_stream(task).is_none(), "no write");
-    assert!(fx.app.document_state.error_notice.is_some());
+    assert!(fx.app.document_view.error_notice.is_some());
     assert_eq!(warnings_about(&refused), before + 1, "logged");
 }
 
@@ -288,7 +285,7 @@ fn a_new_library_file_is_counted_by_its_path_and_refused_during_a_move() {
         .handle_add_library_symbol_file_picked(id, lib.clone());
     assert!(iced_runtime::task::into_stream(task).is_none(), "no write");
     assert!(fx.app.document_state.project_writes.is_empty());
-    assert!(fx.app.document_state.error_notice.take().is_some());
+    assert!(fx.app.document_view.error_notice.take().is_some());
     assert_eq!(warnings_about(&lib), before + 1, "logged");
     fx.app.document_state.project_folder_renames.clear();
 
@@ -334,7 +331,7 @@ fn a_write_aimed_at_the_folder_before_the_move_is_refused_after_it() {
         iced_runtime::task::into_stream(export).is_none(),
         "no write"
     );
-    let notice = fx.app.document_state.error_notice.take().expect("notice");
+    let notice = fx.app.document_view.error_notice.take().expect("notice");
     assert!(
         notice.detail.render_en_us().contains("was renamed"),
         "{}",
@@ -569,7 +566,7 @@ fn restoring_an_offered_copy_whose_move_is_owed_keeps_it_offered_and_safe() {
         run_task(&mut fx.app, task);
     };
     answer(&mut fx);
-    let notice = fx.app.document_state.error_notice.take().expect("notice");
+    let notice = fx.app.document_view.error_notice.take().expect("notice");
     assert!(
         notice.detail.render_en_us().contains("still being moved"),
         "{}",
@@ -699,7 +696,7 @@ fn a_restore_read_that_a_rename_overtook_re_offers_the_copy_at_the_new_path() {
     assert!(new_copy.is_file(), "the copy followed the sheet");
 
     run_task(&mut fx.app, restore);
-    let notice = fx.app.document_state.error_notice.take().expect("notice");
+    let notice = fx.app.document_view.error_notice.take().expect("notice");
     assert!(
         notice.detail.render_en_us().contains("renamed while"),
         "{}",

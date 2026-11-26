@@ -330,7 +330,7 @@ mod in_use_tests {
     fn a_type_in_use_without_a_definition_is_listed_with_its_counts() {
         let mut app = app_with_undefined_connector();
         open_definitions(&mut app);
-        let facts = &app.document_state.panel_ctx.harness;
+        let facts = &app.document_view.panel_ctx.harness;
         assert!(facts.definitions.is_empty());
         let names: Vec<&str> = facts
             .undefined_types
@@ -339,7 +339,7 @@ mod in_use_tests {
             .collect();
         assert_eq!(names, ["HARNESS"]);
         assert_eq!(facts.uses, [1]);
-        let ctx = &app.document_state.panel_ctx;
+        let ctx = &app.document_view.panel_ctx;
         let i18n: &signex_i18n::I18n = &ctx.i18n;
         let clean = |s: &str| s.replace(['\u{2068}', '\u{2069}'], "");
         let counts = clean(
@@ -379,7 +379,7 @@ mod in_use_tests {
     fn back_is_drawn_as_the_secondary_action() {
         let mut app = app_with_undefined_connector();
         open_definitions(&mut app);
-        let ctx = &app.document_state.panel_ctx;
+        let ctx = &app.document_view.panel_ctx;
         let new = t!(ctx.i18n, ids::PANELS_HARNESS_DEFS_NEW).into_string();
         let back = t!(ctx.i18n, ids::PANELS_HARNESS_DEFS_BACK).into_string();
         let texts = crate::layout_probe::lay_out_texts(view(ctx), DOCK);

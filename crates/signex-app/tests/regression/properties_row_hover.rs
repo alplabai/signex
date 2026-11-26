@@ -32,7 +32,7 @@ fn hover(app: &mut Signex, msg: IllustrationMsg) {
 
 /// The rows lit now, in panel order.
 fn lit(app: &Signex) -> Vec<FieldId> {
-    let state = &app.document_state.panel_ctx.document_options.hover;
+    let state = &app.document_view.panel_ctx.document_options.hover;
     ROWS.into_iter()
         .filter(|row| state.is_field_highlighted(row))
         .collect()

@@ -452,7 +452,7 @@ impl Signex {
     /// Update PCB cannot start: say why in Messages and on the notice card.
     fn refuse_update_pcb(&mut self, why: MessageId) -> Task<Message> {
         self.log_update_pcb_refused(&signex_i18n::I18n::en_us().message_plain(why, &[]));
-        self.document_state.error_notice = Some(ErrorNotice::new(ids::UPDATE_PCB_TITLE, why));
+        self.document_view.error_notice = Some(ErrorNotice::new(ids::UPDATE_PCB_TITLE, why));
         Task::none()
     }
 

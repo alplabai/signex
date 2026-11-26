@@ -105,7 +105,7 @@ pub(super) fn data(app: &Signex) -> &signex_types::project::ProjectData {
 
 /// The read with the settings laid over it, as the views show it.
 fn shown(app: &Signex, id: ProjectId) -> signex_output::VariantMatrix {
-    let read = app.document_state.project_tabs[&id]
+    let read = app.document_view.project_tabs[&id]
         .variant_parts
         .as_deref()
         .expect("the parts were read")
@@ -125,11 +125,11 @@ fn the_variants_row_opens_the_manager_tab_and_a_second_open_focuses_it() {
     assert!(active.title.ends_with("Variants"), "{}", active.title);
     assert_eq!(active.path, app.document_state.projects[0].path);
     assert_eq!(
-        app.document_state.project_tabs[&id].section,
+        app.document_view.project_tabs[&id].section,
         ProjectSection::General,
         "the Project tab stays on its section"
     );
-    assert!(app.document_state.project_tabs[&id].variant_parts.is_some());
+    assert!(app.document_view.project_tabs[&id].variant_parts.is_some());
 
     // Back to the Project tab, then the tree's Variant Manager row: the same
     // tab comes to the front.
@@ -151,7 +151,7 @@ fn a_clicked_cell_is_edited_in_the_pane_and_each_pick_is_one_undo_step() {
     let r1 = cell(Some("Lite"), "R1");
     let _ = manage(&mut app, id, VariantManagerMsg::CellSelected(r1.clone()));
     assert_eq!(
-        app.document_state.project_tabs[&id].variant_manager.cell,
+        app.document_view.project_tabs[&id].variant_manager.cell,
         Some(r1.clone())
     );
     assert!(
@@ -256,7 +256,7 @@ fn a_typed_value_is_stored_on_enter_and_the_reset_brings_back_base() {
     assert!(matrix.rows[0].is_overridden_at(1));
     assert_eq!(matrix.changes(1), 2, "R1's value and R2's fit");
     assert_eq!(
-        app.document_state.project_tabs[&id].variant_manager.draft,
+        app.document_view.project_tabs[&id].variant_manager.draft,
         None
     );
     let _ = app.view_variant_manager_tab(id);
@@ -296,7 +296,7 @@ fn duplicate_copies_the_fits_the_sheets_give_and_opens_the_copy_name() {
         .part(Some("Lite copy"), "R2")
         .expect("the sheet fit is carried");
     assert_eq!(copy.fitted, Some(false));
-    let tab = &app.document_state.project_tabs[&id];
+    let tab = &app.document_view.project_tabs[&id];
     assert_eq!(tab.variant_selected.as_deref(), Some("Lite copy"));
     assert_eq!(
         tab.variant_rename.as_ref().map(|draft| draft.from.as_str()),
@@ -483,7 +483,7 @@ fn typing_in_another_parameter_stores_the_first() {
     let both = own(&app).expect("R1's values");
     assert_eq!(both.parameters[FOOTPRINT_PARAMETER], "R_0805");
     assert_eq!(
-        app.document_state.project_tabs[&id].variant_manager.draft,
+        app.document_view.project_tabs[&id].variant_manager.draft,
         None
     );
 }

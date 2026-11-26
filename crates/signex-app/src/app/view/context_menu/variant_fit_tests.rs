@@ -153,7 +153,7 @@ fn app() -> (Signex, ProjectId, tempfile::TempDir) {
     data.active_variant = Some("Lite".to_string());
     app.interaction_state.active_canvas_mut().selected =
         vec![SelectedItem::new(R5, SelectedKind::Symbol)];
-    app.document_state.panel_ctx.compiled_design.strip = Some(strip(path, Some(2)));
+    app.document_view.panel_ctx.compiled_design.strip = Some(strip(path, Some(2)));
     (app, id, dir)
 }
 
@@ -221,7 +221,7 @@ fn all_channels_sets_every_copy_as_one_step() {
 #[test]
 fn a_plain_sheet_has_no_channel_rows() {
     let (mut app, _id, _dir) = app();
-    app.document_state.panel_ctx.compiled_design.strip = None;
+    app.document_view.panel_ctx.compiled_design.strip = None;
     let window = app.ui_state.main_window_id.expect("main window");
     assert_eq!(app.canvas_menu_channel_copies(window), None);
 }

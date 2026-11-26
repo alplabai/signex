@@ -113,7 +113,7 @@ fn place_room_draws_and_selects_the_room() {
             .any(|i| i == ItemRef::Room(id))
     );
     let summary = app
-        .document_state
+        .document_view
         .panel_ctx
         .pcb_board
         .as_ref()

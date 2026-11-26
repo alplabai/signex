@@ -15,8 +15,8 @@ impl Signex {
     /// debounce timer when the persisted layout really changed; hover and
     /// other transient messages leave it unchanged and cost nothing.
     pub(crate) fn persist_dock_layout_soon(&mut self) -> Task<Message> {
-        let current = DockLayoutSnapshot::capture(&self.document_state.dock);
-        let Some(generation) = self.document_state.dock_layout_sync.observe(current) else {
+        let current = DockLayoutSnapshot::capture(&self.document_view.dock);
+        let Some(generation) = self.document_view.dock_layout_sync.observe(current) else {
             return Task::none();
         };
         // The `async` block keeps the timer lazy: `tokio::time::sleep`
@@ -32,7 +32,7 @@ impl Signex {
         match msg {
             DockLayoutMsg::SaveDebounceElapsed(generation) => {
                 match self
-                    .document_state
+                    .document_view
                     .dock_layout_sync
                     .take_if_current(generation)
                 {
@@ -43,7 +43,7 @@ impl Signex {
             DockLayoutMsg::Saved(Ok(())) => Task::none(),
             DockLayoutMsg::Workspace(msg) => self.dispatch_workspace_layout_message(msg),
             msg @ (DockLayoutMsg::Saved(Err(_)) | DockLayoutMsg::SaveFailedLogged) => {
-                self.document_state.dock_layout_sync.write_failed();
+                self.document_view.dock_layout_sync.write_failed();
                 if let DockLayoutMsg::Saved(Err(reason)) = msg {
                     crate::diagnostics::log_error(
                         "Dock layout was not saved, it will be lost at the next launch",
@@ -59,7 +59,7 @@ impl Signex {
     /// Write any pending layout now and wait for a write that is already
     /// running, then run `next` (the quit path).
     pub(crate) fn flush_dock_layout_then(&mut self, next: Task<Message>) -> Task<Message> {
-        let sync = &mut self.document_state.dock_layout_sync;
+        let sync = &mut self.document_view.dock_layout_sync;
         let barrier = sync.barrier();
         let pending = sync.flush().map(write_dock_layout_task);
         let drained = Task::perform(

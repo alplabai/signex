@@ -70,7 +70,7 @@ fn deleting_a_used_symbol_asks_first_and_names_the_row_and_sheet() {
         2,
         "nothing deleted before the answer"
     );
-    let ctx = app.document_state.panel_ctx.symbol_editor.as_ref().unwrap();
+    let ctx = app.document_view.panel_ctx.symbol_editor.as_ref().unwrap();
     let warning = ctx.delete_warning.as_ref().expect("a warning is shown");
     let text = warning.lines.join("\n");
     assert!(text.contains("Component rows"), "{text}");
@@ -80,7 +80,7 @@ fn deleting_a_used_symbol_asks_first_and_names_the_row_and_sheet() {
     panel(&mut app, PanelMsg::SchLibraryDeleteConfirmed(0));
     assert_eq!(symbol_count(&app, &path), 1, "the user can still delete");
     assert!(
-        app.document_state
+        app.document_view
             .panel_ctx
             .symbol_editor
             .as_ref()
@@ -102,7 +102,7 @@ fn cancelling_the_warning_keeps_the_symbol() {
 
     assert_eq!(symbol_count(&app, &path), 2);
     assert!(
-        app.document_state
+        app.document_view
             .panel_ctx
             .symbol_editor
             .as_ref()
@@ -273,7 +273,7 @@ fn an_unreadable_lookup_keeps_the_symbol_missing() {
 }
 
 fn warning_shown(app: &Signex) -> bool {
-    app.document_state
+    app.document_view
         .panel_ctx
         .symbol_editor
         .as_ref()
@@ -482,7 +482,7 @@ fn a_symbol_whose_table_could_not_be_read_is_not_deleted_silently() {
         2,
         "a table that could not be read is not proof the symbol is unused"
     );
-    let ctx = app.document_state.panel_ctx.symbol_editor.as_ref().unwrap();
+    let ctx = app.document_view.panel_ctx.symbol_editor.as_ref().unwrap();
     let lines = ctx
         .delete_warning
         .as_ref()
@@ -524,7 +524,7 @@ fn restoring_the_header_and_refreshing_names_the_row_again() {
 
     panel(&mut app, PanelMsg::SchLibraryDeleteSymbol(0));
     let warning = app
-        .document_state
+        .document_view
         .panel_ctx
         .symbol_editor
         .as_ref()
@@ -542,7 +542,7 @@ fn restoring_the_header_and_refreshing_names_the_row_again() {
     panel(&mut app, PanelMsg::SchLibraryDeleteSymbol(0));
 
     let warning = app
-        .document_state
+        .document_view
         .panel_ctx
         .symbol_editor
         .as_ref()
@@ -572,7 +572,7 @@ fn a_symbol_outside_any_mounted_library_is_not_deleted_silently() {
         2,
         "no mounted library: its rows and the placed part were not checked, so usage is unknown"
     );
-    let ctx = app.document_state.panel_ctx.symbol_editor.as_ref().unwrap();
+    let ctx = app.document_view.panel_ctx.symbol_editor.as_ref().unwrap();
     let warning = ctx.delete_warning.as_ref().expect("a warning");
     let lines = warning.lines.join("\n");
     assert!(lines.contains("is not inside a mounted library"), "{lines}");

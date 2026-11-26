@@ -68,7 +68,7 @@ impl Signex {
     /// project's sheet resolves through that project, not the focused one's
     /// (#2021).
     pub(crate) fn shown_placement(&self, path: &std::path::Path) -> Option<InstancePath> {
-        let recorded = self.document_state.tab_placements.get(path);
+        let recorded = self.document_view.tab_placements.get(path);
         let Some((hierarchy, _)) = self.hierarchy_describing(path) else {
             return recorded.cloned();
         };

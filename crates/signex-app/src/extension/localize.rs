@@ -33,7 +33,7 @@ impl Signex {
         self.ui_state.i18n = next;
         self.ui_state.active_keymap =
             Arc::new(self.ui_state.active_keymap.labelled_in(&self.ui_state.i18n));
-        self.document_state.panel_ctx.i18n = Arc::clone(&self.ui_state.i18n);
+        self.document_view.panel_ctx.i18n = Arc::clone(&self.ui_state.i18n);
         self.ui_state.refresh_shortcut_sections();
     }
 }

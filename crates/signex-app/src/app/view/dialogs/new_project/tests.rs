@@ -229,9 +229,9 @@ fn the_preview_column_holds_the_drawing_and_its_caption() {
     let pane = super::preview::pane(
         state,
         signex_i18n::ids::DIALOG_NEW_PROJECT_PREVIEW_NOTE,
-        Some(&app.document_state.panel_ctx.canvas_colors),
+        Some(&app.document_view.panel_ctx.canvas_colors),
         app.ui_state.i18n.as_ref(),
-        &app.document_state.panel_ctx.tokens,
+        &app.document_view.panel_ctx.tokens,
     );
     let texts = crate::layout_probe::lay_out_texts(pane, iced::Size::new(PREVIEW_W, 3000.0));
     let hint = crate::layout_probe::find(&texts, "click a value to edit").bounds;
@@ -256,7 +256,7 @@ fn at_the_dialog_widths_each_card_blurb_stays_on_one_line() {
     ));
     let state = app.ui_state.new_project.as_ref().expect("dialog open");
     let i18n = app.ui_state.i18n.as_ref();
-    let tokens = &app.document_state.panel_ctx.tokens;
+    let tokens = &app.document_view.panel_ctx.tokens;
     let body = crate::styles::TypeScale::DEFAULT.body;
     let widths = [
         super::super::sizes::NEW_PROJECT.0,
@@ -314,9 +314,9 @@ fn a_new_project_previews_an_a3_landscape_sheet() {
     let pane = super::preview::pane(
         state,
         signex_i18n::ids::DIALOG_NEW_PROJECT_PREVIEW_NOTE,
-        Some(&app.document_state.panel_ctx.canvas_colors),
+        Some(&app.document_view.panel_ctx.canvas_colors),
         app.ui_state.i18n.as_ref(),
-        &app.document_state.panel_ctx.tokens,
+        &app.document_view.panel_ctx.tokens,
     );
     let texts: Vec<String> =
         crate::layout_probe::lay_out_texts(pane, iced::Size::new(super::PREVIEW_W, 3000.0))
@@ -404,7 +404,7 @@ fn the_folder_label_follows_the_typed_name_and_is_neutral_when_empty() {
 /// The texts of the name, location and folder block, as laid out.
 fn field_texts(app: &crate::app::Signex) -> Vec<String> {
     let state = app.ui_state.new_project.as_ref().unwrap();
-    let tokens = &app.document_state.panel_ctx.tokens;
+    let tokens = &app.document_view.panel_ctx.tokens;
     crate::layout_probe::lay_out_texts(
         super::fields(state, &app.ui_state.i18n, tokens),
         iced::Size::new(900.0, 400.0),

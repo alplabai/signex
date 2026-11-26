@@ -95,8 +95,8 @@ impl Held {
 
     fn ctx(&self, window: WindowId) -> &PanelContext {
         match window {
-            Some(id) => &self.app.document_state.window_panel_ctx[&id],
-            None => &self.app.document_state.panel_ctx,
+            Some(id) => &self.app.document_view.window_panel_ctx[&id],
+            None => &self.app.document_view.panel_ctx,
         }
     }
 }

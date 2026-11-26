@@ -86,7 +86,7 @@ fn pattern_selected() -> (Signex, tempfile::TempDir) {
 }
 
 fn properties_texts(app: &Signex) -> Vec<String> {
-    let ctx = &app.document_state.panel_ctx;
+    let ctx = &app.document_view.panel_ctx;
     let view = crate::panels::view_panel(crate::panels::PanelKind::Properties, ctx);
     layout_probe::lay_out_texts(view, Size::new(360.0, 6000.0))
         .into_iter()

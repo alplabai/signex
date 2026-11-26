@@ -52,7 +52,7 @@ fn both_surfaces_share_one_block() {
         Some(SwitchBlock::WorkRunning)
     );
     assert_eq!(
-        app.document_state.history.ui.switch_block,
+        app.document_view.history.ui.switch_block,
         Some(SwitchBlock::WorkRunning)
     );
 }
@@ -200,11 +200,7 @@ fn reopening() -> (Signex, ProjectId, PathBuf, SwitchDone) {
     std::fs::create_dir_all(&root).unwrap();
     std::fs::write(&path, "").unwrap();
     app.open_project_tab(0);
-    app.document_state
-        .project_tabs
-        .get_mut(&id)
-        .unwrap()
-        .section = ProjectSection::VersionControl;
+    app.document_view.project_tabs.get_mut(&id).unwrap().section = ProjectSection::VersionControl;
     app.document_state.branch_switch = Some(root.clone());
     let rel = PathBuf::from(path.file_name().unwrap());
     let done = SwitchDone {
@@ -235,7 +231,7 @@ fn a_changed_project_file_reopens_the_project_with_its_tab() {
             .any(|t| t.kind.as_project() == Some(new))
     );
     assert_eq!(
-        app.document_state.project_tabs[&new].section,
+        app.document_view.project_tabs[&new].section,
         ProjectSection::VersionControl
     );
     assert!(app.document_state.branch_switch.is_none());
@@ -254,7 +250,7 @@ fn a_project_edited_during_the_switch_stays_open_and_says_so() {
 
     assert!(app.document_state.project_by_id(id).is_some());
     assert!(app.document_state.is_document_dirty(&path));
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_view.error_notice.is_some());
     assert!(app.document_state.branch_switch.is_none());
     let _ = std::fs::remove_dir_all(root);
 }
@@ -295,7 +291,7 @@ fn an_unsaved_sheet_outside_the_project_folder_holds_the_reopen() {
     assert!(app.document_state.project_by_id(id).is_some());
     assert!(app.document_state.engines.contains_key(&outside));
     assert!(app.document_state.is_document_dirty(&outside));
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_view.error_notice.is_some());
     assert!(app.document_state.branch_switch.is_none());
     let _ = std::fs::remove_dir_all(top);
 }

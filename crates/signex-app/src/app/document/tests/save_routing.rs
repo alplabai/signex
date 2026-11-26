@@ -160,7 +160,7 @@ fn ctrl_s_in_the_main_window_writes_the_active_documents_file() {
     ] {
         let mut f = setup(kind, false, false);
         assert_eq!(ctrl_s(&mut f), want, "{kind:?}");
-        assert!(f.app.document_state.error_notice.is_none(), "{kind:?}");
+        assert!(f.app.document_view.error_notice.is_none(), "{kind:?}");
     }
 }
 
@@ -215,7 +215,7 @@ fn ctrl_s_on_an_unwritten_primitive_opens_a_dialog_and_writes_nothing() {
         assert_eq!(wrote, Vec::<String>::new(), "{kind:?}");
         assert!(dialog, "{kind:?}: the save-as dialog task");
         // Saving the missing file instead would start a write job for it.
-        assert!(f.app.document_state.error_notice.is_none(), "{kind:?}");
+        assert!(f.app.document_view.error_notice.is_none(), "{kind:?}");
         let saving = f.app.document_state.document_saves.is_saving(&f.tab_path);
         assert!(!saving, "{kind:?}: no write was started");
         assert!(

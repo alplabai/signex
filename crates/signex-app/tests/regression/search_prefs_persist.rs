@@ -38,7 +38,7 @@ impl Recorder {
 fn app_with_recorder() -> (Signex, Arc<Recorder>) {
     let (mut app, _boot) = Signex::new();
     let recorder = Arc::new(Recorder::default());
-    app.document_state.search_prefs = SearchPrefsSync::new(recorder.clone());
+    app.document_view.search_prefs = SearchPrefsSync::new(recorder.clone());
     (app, recorder)
 }
 
@@ -144,7 +144,7 @@ fn a_stale_timer_after_a_flush_writes_nothing_more() {
 
 fn app_with_real_store(path: &std::path::Path) -> Signex {
     let (mut app, _boot) = Signex::new();
-    app.document_state.search_prefs = SearchPrefsSync::new(Arc::new(
+    app.document_view.search_prefs = SearchPrefsSync::new(Arc::new(
         signex_app::fonts::PrefsSearchStore::at(path.to_path_buf()),
     ));
     app
@@ -260,10 +260,10 @@ fn quit_waits_for_a_search_write_that_is_already_running() {
         proceed: Mutex::new(proceed_rx),
         finished: std::sync::atomic::AtomicBool::new(false),
     });
-    app.document_state.search_prefs = SearchPrefsSync::new(store.clone());
+    app.document_view.search_prefs = SearchPrefsSync::new(store.clone());
     drop(type_search(&mut app, "tantalum"));
     let running = app
-        .document_state
+        .document_view
         .search_prefs
         .flush()
         .expect("the query is pending");
@@ -323,7 +323,7 @@ fn a_failed_search_write_is_retried_at_quit() {
         failed: std::sync::atomic::AtomicBool::new(false),
         writes: Mutex::new(Vec::new()),
     });
-    app.document_state.search_prefs = SearchPrefsSync::new(store.clone());
+    app.document_view.search_prefs = SearchPrefsSync::new(store.clone());
     let timer = type_search(&mut app, "varistor");
     let saved = settle(&mut app, vec![timer]);
     assert!(matches!(saved.as_slice(), [SearchPrefsMsg::Saved(Err(_))]));
@@ -370,7 +370,7 @@ impl DebouncedStore<SearchPrefsChange> for FailsOnce {
 fn a_search_write_failing_in_the_first_quit_flush_is_retried_by_the_second() {
     let (mut app, _boot) = Signex::new();
     let store = Arc::new(FailsOnce::default());
-    app.document_state.search_prefs = SearchPrefsSync::new(store.clone());
+    app.document_view.search_prefs = SearchPrefsSync::new(store.clone());
     let _debounce_not_run = type_search(&mut app, "zq-retried-at-quit");
 
     let quit = app.update(Message::Window(WindowMsg::CloseMainWindow));

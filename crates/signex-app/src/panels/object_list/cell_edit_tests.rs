@@ -47,7 +47,7 @@ fn context(editing: Option<CellEditing>) -> PanelContext {
     state.source.rows = Arc::new(rows());
     state.editing = editing;
     let (app, _boot) = crate::app::Signex::new();
-    let mut ctx = app.document_state.panel_ctx.clone();
+    let mut ctx = app.document_view.panel_ctx.clone();
     ctx.object_list = ObjectListView::build(
         &state,
         &state.source,
