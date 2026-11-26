@@ -647,3 +647,7 @@ pub(crate) fn sketch_glyphs(
 #[cfg(test)]
 #[path = "glyph_layout_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "glyph_layout_app_tests.rs"]
+mod app_tests;
