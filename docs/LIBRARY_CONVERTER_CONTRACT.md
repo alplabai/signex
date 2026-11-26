@@ -206,7 +206,13 @@ human-readable `import-report.md` with the same content. Schema
   (source file path, position in source), so adding an unrelated item never
   shifts a suffix. Each collision is a report item.
 - `--update` over a library this converter wrote from the same source:
-  - items no longer in the source are deleted (git history keeps them);
+  - an imported library is a **snapshot** of its source: items no longer in
+    the source are deleted, rows a user edited are overwritten, and rows or
+    primitives a user added are deleted. Git history keeps only what was
+    committed, so Signex refuses (or asks to commit first) when the library's
+    working tree has uncommitted changes, and warns when it has local commits
+    that are not imports. Users who want to edit parts copy them into their
+    own library;
   - a part whose content hash changes gets its patch version bumped and its
     `updated` time set; its lifecycle state and `created` time are kept;
   - unchanged items keep identical bytes.
