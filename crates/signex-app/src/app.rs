@@ -14,6 +14,9 @@ mod actions;
 pub(crate) mod agent;
 pub(crate) mod assign_footprints;
 pub(crate) mod back_annotate;
+// Mockup row 171: the block diagram document tab.
+pub mod block_diagram;
+pub use block_diagram::{BlockDiagramMsg, BlockDiagrams};
 pub(crate) mod board_output;
 pub(crate) mod board_panel;
 pub(crate) mod board_reannotate;

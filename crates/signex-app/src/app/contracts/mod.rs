@@ -168,6 +168,9 @@ pub enum Message {
     /// The Gerber Viewer tab and window file drops (mockup rows 193 and
     /// 193f). Routed to `dispatch_gerber_viewer_message`.
     GerberViewer(crate::app::GerberViewerMsg),
+    /// The block diagram tabs and their reads and writes (mockup row 171).
+    /// Routed to `dispatch_block_diagram_message`.
+    BlockDiagram(crate::app::BlockDiagramMsg),
 }
 
 impl Message {

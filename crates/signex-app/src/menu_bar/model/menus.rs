@@ -19,13 +19,15 @@ pub(super) fn file(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
         cmd_item(ctx, cmd("new_document", "Mod+N")),
         // A board (#1312) or a sheet (#2232) for the open project, each
-        // through its setup dialog; greyed with no project.
+        // through its setup dialog, or a block diagram (mockup row 171);
+        // greyed with no project.
         submenu(
             ctx,
             menu_ids::MENU_FILE_NEW,
             vec![
                 cmd_item_gated(ctx, cmd("new_schematic_sheet", "")),
                 cmd_item_gated(ctx, cmd("new_pcb_document", "")),
+                cmd_item_gated(ctx, cmd("new_block_diagram", "")),
             ],
         ),
         cmd_item(ctx, cmd("open_document", "Mod+O")),

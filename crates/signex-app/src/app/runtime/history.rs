@@ -312,6 +312,8 @@ fn history_target_of(active: &crate::app::TabInfo) -> Option<std::path::PathBuf>
         | crate::app::TabKind::LayerStack
         | crate::app::TabKind::PinTable
         | crate::app::TabKind::VariantManager(_) => None,
+        // Not restored from History yet (#2796): no restore reads a diagram.
+        crate::app::TabKind::BlockDiagram(_) => None,
         _ => Some(active.path.clone()),
     }
 }

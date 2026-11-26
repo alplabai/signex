@@ -10,6 +10,7 @@ pub use operands::{MAX_TARGETS, Operand, OperandKind};
 
 mod annotate;
 mod arrange;
+mod block_diagram;
 mod board;
 mod categories;
 mod clipboard;
@@ -331,6 +332,7 @@ const TABLES: &[&[CommandMetadata]] = &[
     grid::GRID,
     library::LIBRARY,
     workspace::WORKSPACE,
+    block_diagram::BLOCK_DIAGRAM,
 ];
 
 /// Flattened iterator over every command's metadata, across all groups, in
@@ -691,6 +693,7 @@ mod tests {
             ("grid.rs", include_str!("grid.rs")),
             ("library.rs", include_str!("library.rs")),
             ("workspace.rs", include_str!("workspace.rs")),
+            ("block_diagram.rs", include_str!("block_diagram.rs")),
         ];
 
         let mut missing: Vec<String> = Vec::new();

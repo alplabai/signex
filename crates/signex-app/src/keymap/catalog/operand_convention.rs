@@ -118,6 +118,17 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     // #2552: a move's wire handling, given by the caller, not the settings.
     ("keep_wires", OperandKind::Bool),
     ("wiring", OperandKind::Text),
+    // #2796: a block diagram's blocks, ports, connections and groups.
+    ("function", OperandKind::Text),
+    ("note", OperandKind::Text),
+    ("rails", OperandKind::Text),
+    ("specs", OperandKind::Text),
+    ("clear", OperandKind::Text),
+    ("block", OperandKind::Text),
+    ("from", OperandKind::Text),
+    ("to", OperandKind::Text),
+    ("interface", OperandKind::Text),
+    ("label", OperandKind::Text),
 ];
 
 /// The commands whose `ids` is still text, not targets (#2326): a design

@@ -788,7 +788,8 @@ fn restore_kind_of(kind: &crate::app::TabKind) -> Option<RestoreKind> {
         | crate::app::TabKind::Rules(_)
         | crate::app::TabKind::LayerStack
         | crate::app::TabKind::PinTable
-        | crate::app::TabKind::VariantManager(_) => None,
+        | crate::app::TabKind::VariantManager(_)
+        | crate::app::TabKind::BlockDiagram(_) => None,
     }
 }
 

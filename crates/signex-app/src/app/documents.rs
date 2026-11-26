@@ -75,9 +75,18 @@ pub enum TabKind {
     /// is the `.snxsym` path, which Save writes; it sits after the symbol's
     /// own tab (`app/pin_table_tab`).
     PinTable,
+    /// A `.snxblk` block diagram (mockup row 171). State lives in
+    /// [`crate::app::DocumentState::block_diagrams`] keyed by this path,
+    /// which `TabInfo.path` also holds; drawn in the main window only.
+    BlockDiagram(PathBuf),
 }
 
 impl TabKind {
+    /// A block diagram tab.
+    pub fn is_block_diagram(&self) -> bool {
+        matches!(self, TabKind::BlockDiagram(_))
+    }
+
     /// The Gerber Viewer tab: no document, never undocked, nothing to
     /// save or restore from History.
     pub fn is_gerber_viewer(&self) -> bool {

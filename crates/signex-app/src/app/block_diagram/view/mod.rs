@@ -1,0 +1,129 @@
+//! The block diagram tab's view (mockup row 171): the shared document-tab
+//! shell with the toolbar, the canvas and Properties side by side, and the
+//! footer counting blocks and connections with the mockup's hint.
+
+mod properties;
+mod toolbar;
+
+use std::path::PathBuf;
+
+use iced::widget::{container, row};
+use iced::{Element, Length, Widget as _};
+use signex_i18n::{I18n, Localized, MessageId, ids, t};
+use signex_types::theme::ThemeTokens;
+use signex_widgets::doc_tab_shell::{DocTabShell, DocTabShellStyle, Footer};
+
+use super::canvas::{CanvasLook, diagram_canvas};
+use super::state::BlockDiagramEditor;
+use super::{BlockDiagramMsg, TabEvent};
+use crate::app::{Message, Signex};
+use crate::styles::tokens::resolve;
+use crate::styles::{Spacing, TypeScale, ti};
+
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
+
+/// The width of Properties, in body-text ems.
+const SIDE_EMS: f32 = 22.0;
+/// The canvas's click slop, in body-text ems.
+const SLOP_EMS: f32 = 0.4;
+
+/// What every part of the view reads.
+#[derive(Clone, Copy)]
+pub(super) struct Look<'a> {
+    pub tokens: &'a ThemeTokens,
+    pub i18n: &'a I18n,
+}
+
+impl Look<'_> {
+    pub(super) fn t(&self, id: MessageId) -> Localized {
+        t!(self.i18n, id)
+    }
+}
+
+impl Signex {
+    /// The tab of the diagram at `path`.
+    pub(crate) fn view_block_diagram_tab(&self, path: PathBuf) -> Element<'_, Message> {
+        let look = Look {
+            tokens: &self.document_state.panel_ctx.tokens,
+            i18n: &self.ui_state.i18n,
+        };
+        let Some(editor) = self.document_state.block_diagrams.editors.get(&path) else {
+            return container(signex_widgets::text(look.t(ids::BLOCK_DIAGRAM_NOT_OPEN)))
+                .padding(SP.l)
+                .boxed();
+        };
+        tab(look, editor)
+            .map(move |event| {
+                Message::BlockDiagram(BlockDiagramMsg::Tab {
+                    path: path.clone(),
+                    event,
+                })
+            })
+            .boxed()
+    }
+}
+
+/// The canvas colours from the theme tokens.
+fn canvas_look(look: Look<'_>) -> CanvasLook {
+    let tokens = look.tokens;
+    CanvasLook {
+        background: ti(tokens.paper),
+        block_fill: ti(tokens.panel_bg),
+        edge: ti(tokens.border),
+        text: ti(tokens.text),
+        text_secondary: ti(tokens.text_secondary),
+        accent: ti(tokens.accent),
+        power: ti(tokens.error),
+        unlinked: ti(tokens.warning),
+        text_size: TS.body,
+        slop: TS.body * SLOP_EMS,
+    }
+}
+
+/// The whole tab.
+fn tab<'a>(look: Look<'a>, editor: &'a BlockDiagramEditor) -> Element<'a, TabEvent> {
+    let body = row![
+        container(diagram_canvas(editor, canvas_look(look)))
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .boxed(),
+        container(properties::view(look, editor))
+            .width(Length::Fixed(TS.body * SIDE_EMS))
+            .height(Length::Fill)
+            .boxed(),
+    ]
+    .height(Length::Fill);
+    DocTabShell::new(
+        body.boxed(),
+        DocTabShellStyle::from_tokens(look.tokens, TS.body),
+    )
+    .toolbar(toolbar::view(look, editor))
+    .footer(footer(look, editor))
+    .view()
+}
+
+/// "4 blocks · 4 connections", and how the canvas is used.
+fn footer<'a>(look: Look<'a>, editor: &BlockDiagramEditor) -> Footer<'a> {
+    let diagram = &editor.diagram;
+    let status = t!(
+        look.i18n,
+        ids::BLOCK_DIAGRAM_FOOTER,
+        "blocks" => diagram.blocks.len(),
+        "connections" => diagram.connections.len()
+    );
+    let note = if editor.is_read_only() {
+        look.t(ids::BLOCK_DIAGRAM_FOOTER_READ_ONLY)
+    } else {
+        look.t(ids::BLOCK_DIAGRAM_FOOTER_NOTE)
+    };
+    Footer::new(status).note(note)
+}
+
+/// A caption over a Properties section or a toolbar group.
+pub(super) fn caption<'a>(look: Look<'a>, id: MessageId) -> Element<'a, TabEvent> {
+    signex_widgets::text(look.t(id))
+        .size(TS.section)
+        .color(resolve(look.tokens).ink3)
+        .boxed()
+}

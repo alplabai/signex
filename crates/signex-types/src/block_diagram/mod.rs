@@ -21,12 +21,16 @@ use crate::theme::Color;
 mod edit;
 mod fault;
 mod file;
+mod geometry;
+mod tokens;
 mod writer;
 
 #[cfg(test)]
 mod edit_tests;
 #[cfg(test)]
 mod file_tests;
+#[cfg(test)]
+mod geometry_tests;
 
 pub use edit::{BlockDiagramError, BlockFields, BlockPatch, RemovedBlock};
 pub use fault::DiagramFault;
@@ -34,6 +38,7 @@ pub use file::{
     BlockDiagramFileError, ReadBlockDiagram, SNXBLK_FORMAT_V1, SNXBLK_VERSION, parse_block_diagram,
     read_block_diagram, write_block_diagram,
 };
+pub use geometry::{DiagramBox, GROUP_MARGIN_MM, PLACEMENT_GAP_MM, distance_to_segment};
 pub use writer::encode_block_diagram;
 
 /// The file extension of a block diagram, without the dot.

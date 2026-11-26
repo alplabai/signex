@@ -31,6 +31,7 @@ use super::selection_filter_operands as filter;
 use super::selection_operands as selection;
 use super::sheet_sync_operands as sheet_sync;
 use super::{CommandArgs, CommandOutcome, enablement};
+use crate::app::block_diagram as diagram;
 use crate::app::board_output as output;
 use crate::app::board_reuse as reuse;
 use crate::app::board_tools as tools;
@@ -280,6 +281,19 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
         "project_run_requirements",
         crate::app::project_tab::project_run_requirements,
     ),
+    // #2796: the block diagram document (mockup row 171).
+    ("new_block_diagram", diagram::new_block_diagram),
+    ("block_add", diagram::block_add),
+    ("block_set", diagram::block_set),
+    ("block_remove", diagram::block_remove),
+    ("block_port_add", diagram::block_port_add),
+    ("block_port_remove", diagram::block_port_remove),
+    ("block_link", diagram::block_link),
+    ("block_link_set", diagram::block_link_set),
+    ("block_unlink", diagram::block_unlink),
+    ("block_group", diagram::block_group),
+    ("block_group_set", diagram::block_group_set),
+    ("block_ungroup", diagram::block_ungroup),
 ];
 
 /// The turn `view_rotate` asks for: its `degrees`, else a quarter turn
@@ -366,6 +380,7 @@ pub(crate) fn runs_headless_without_operands(command: &AppCommandId) -> bool {
             | "new_schematic_sheet"
             | "create_sheet_symbol_from_sheet"
             | "repair_pin_junctions"
+            | "new_block_diagram"
     )
 }
 
@@ -534,6 +549,13 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         | "project_run_requirements" => Some(
             "the `project_*` edits need their operands — \
              use the Project tab (Project ▸ Project Options...)",
+        ),
+        // #2796: a person edits on the block diagram's tab.
+        "block_add" | "block_set" | "block_remove" | "block_port_add" | "block_port_remove"
+        | "block_link" | "block_link_set" | "block_unlink" | "block_group" | "block_group_set"
+        | "block_ungroup" => Some(
+            "the `block_*` edits need their operands, `document` first — \
+             use the toolbar, the canvas and Properties of the block diagram's tab",
         ),
         _ => None,
     }

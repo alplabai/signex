@@ -208,6 +208,7 @@ impl Signex {
             .footprint_editors
             .keys()
             .chain(d.symbol_editors.keys())
+            .chain(d.block_diagrams.editors.keys())
             .map(PathBuf::as_path);
         let libraries = self
             .library

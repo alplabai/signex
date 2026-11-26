@@ -728,6 +728,8 @@ pub struct DocumentState {
     /// The Gerber Viewer tab (mockup rows 193 and 193f): the package shown
     /// and the app-wide recent packages. Its slice owns it.
     pub gerber_viewer: crate::app::gerber_viewer::GerberViewerState,
+    /// The open block diagrams (mockup row 171); their slice owns them.
+    pub block_diagrams: crate::app::core::block_diagram_editor::BlockDiagrams,
 }
 
 /// A project folder a rename moved from `old` to `new`.
