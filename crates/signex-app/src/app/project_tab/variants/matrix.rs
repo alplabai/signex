@@ -3,18 +3,22 @@
 //! matches Base stays quiet; a difference is coloured, and a cell with a
 //! parameter value of its own shows that value (mockup row 32). A click on
 //! a cell selects it and the right pane edits it. The parts filter and Only
-//! rows that differ hide rows; every remaining row is listed.
+//! rows that differ hide rows; every remaining row is listed. The column
+//! widths are `columns.rs`'s; a matrix wider than its room scrolls sideways.
 
+use iced::widget::scrollable::{Direction, Scrollbar};
+use iced::widget::text::Wrapping;
 use iced::widget::{Column, Row, Space, column, container, mouse_area, row, scrollable};
 use iced::{Alignment, Background, Border, Color, Element, Length, Theme, Widget as _};
 use signex_i18n::{Localized, ids, t};
 use signex_output::{VariantMatrix, VariantRow};
 use signex_types::project::{FOOTPRINT_PARAMETER, VALUE_PARAMETER};
-use signex_widgets::text;
+use signex_widgets::{MinWidth, text};
 
 use super::super::ProjectTabMsg;
 use super::super::general::tab_message;
 use super::super::table::{SP, TS};
+use super::columns::Columns;
 use super::{
     GLYPH_CHECK, GLYPH_CROSS, Manager, VariantCell, VariantManagerMsg, glyph, medium, mono, pill,
     tint_over_panel,
@@ -23,10 +27,6 @@ use crate::app::Message;
 use crate::styles::tokens::resolve;
 use crate::styles::{PillTone, Radii, ti};
 
-/// Width of the Part column, in `body`-size characters.
-pub(super) const PART_EMS: f32 = 58.0 / 12.0;
-/// Width of the Value · Footprint column, in `body`-size characters.
-pub(super) const VALUE_EMS: f32 = 150.0 / 12.0;
 /// Height of a matrix row, in `body`-size characters.
 pub(super) const ROW_EMS: f32 = 30.0 / 12.0;
 /// Height of the heading row, in `body`-size characters.
@@ -59,20 +59,23 @@ pub(super) fn view<'a>(m: &Manager<'_>, matrix: &VariantMatrix) -> Element<'a, M
     let filter = m.tab.map_or("", |tab| tab.variant_filter.as_str());
     let only_differ = m.tab.is_some_and(|tab| tab.variants_only_differ);
     let shown = shown_rows(matrix, filter, only_differ);
+    let columns = Columns::of(m, matrix);
     let mut body: Column<Element<'a, Message>> = Column::new();
     // A part on a repeated sheet is one row where its first copy is listed,
     // open into the copies the filters keep (#2662).
     let mut listed: Vec<&signex_types::pcb::SymbolLink> = Vec::new();
     for part in &shown {
         let Some(channel) = part.channel.as_ref() else {
-            body = body.push(part_row(m, part));
+            body = body.push(part_row(m, &columns, part));
             continue;
         };
         if listed.contains(&&channel.part) {
             continue;
         }
         listed.push(&channel.part);
-        body = body.push(super::channel_rows::part_row(m, matrix, channel, part));
+        body = body.push(super::channel_rows::part_row(
+            m, &columns, matrix, channel, part,
+        ));
         if m.is_channel_part_open(&channel.part) {
             let is_copy = |row: &&&VariantRow| {
                 row.channel
@@ -80,7 +83,7 @@ pub(super) fn view<'a>(m: &Manager<'_>, matrix: &VariantMatrix) -> Element<'a, M
                     .is_some_and(|other| other.part == channel.part)
             };
             for copy in shown.iter().filter(is_copy) {
-                body = body.push(part_row(m, copy));
+                body = body.push(part_row(m, &columns, copy));
             }
         }
     }
@@ -103,7 +106,7 @@ pub(super) fn view<'a>(m: &Manager<'_>, matrix: &VariantMatrix) -> Element<'a, M
     }
     let edge = ti(m.tokens.border);
     let table = container(column![
-        heading(m),
+        heading(m, &columns),
         scrollable(body)
             .direction(crate::styles::thin_vertical())
             .style(crate::styles::scrollbar_style(m.tokens))
@@ -121,6 +124,15 @@ pub(super) fn view<'a>(m: &Manager<'_>, matrix: &VariantMatrix) -> Element<'a, M
         },
         ..container::Style::default()
     });
+    // At least as wide as every column needs; wider than its room, the
+    // matrix scrolls sideways instead of cutting a column (#3037).
+    let table = scrollable(MinWidth::new(table, columns.least()))
+        .direction(Direction::Horizontal(
+            Scrollbar::new().width(SP.xs).scroller_width(SP.xs),
+        ))
+        .style(crate::styles::scrollbar_style(m.tokens))
+        .width(Length::Fill)
+        .height(Length::Fill);
     let legend = row![
         cell_pill(m, false, false, true),
         cell_pill(m, false, true, true),
@@ -138,7 +150,7 @@ pub(super) fn view<'a>(m: &Manager<'_>, matrix: &VariantMatrix) -> Element<'a, M
 
 /// The columns' captions on the sunken strip; the active variant's column is
 /// marked "active" and underlined in the accent.
-fn heading<'a>(m: &Manager<'_>) -> Element<'a, Message> {
+fn heading<'a>(m: &Manager<'_>, columns: &Columns) -> Element<'a, Message> {
     let r = resolve(m.tokens);
     let caption = |id: signex_i18n::MessageId, ink: Color| {
         text(signex_i18n::UserText::new(
@@ -147,21 +159,21 @@ fn heading<'a>(m: &Manager<'_>) -> Element<'a, Message> {
         .size(TS.section)
         .font(medium())
         .color(ink)
-        .wrapping(iced::widget::text::Wrapping::None)
+        .wrapping(Wrapping::None)
     };
     let mut line: Row<Element<'a, Message>> = row![
         head_cell(
             caption(ids::PROJECT_VARIANTS_COL_PART, r.ink3).boxed(),
-            Length::Fixed(TS.body * PART_EMS),
+            Columns::part(),
             None,
         ),
         head_cell(
             caption(ids::PROJECT_VARIANTS_COL_VALUE, r.ink3).boxed(),
-            Length::Fixed(TS.body * VALUE_EMS),
+            Columns::value(),
             None,
         ),
     ];
-    for variant in m.variants() {
+    for (index, variant) in m.variants().enumerate() {
         let is_active = m.is_active(variant);
         let ink = if is_active { r.accent_soft_ink } else { r.ink3 };
         let name = text(signex_i18n::UserText::new(
@@ -170,7 +182,7 @@ fn heading<'a>(m: &Manager<'_>) -> Element<'a, Message> {
         .size(TS.section)
         .font(medium())
         .color(ink)
-        .wrapping(iced::widget::text::Wrapping::None);
+        .wrapping(Wrapping::None);
         let mut face = row![name].spacing(SP.s).align_y(Alignment::Center);
         if is_active {
             face = face.push(pill(
@@ -181,7 +193,7 @@ fn heading<'a>(m: &Manager<'_>) -> Element<'a, Message> {
         }
         line = line.push(head_cell(
             face.boxed(),
-            Length::Fill,
+            columns.variant(index),
             is_active.then_some(r.accent_text),
         ));
     }
@@ -225,7 +237,7 @@ fn head_cell<'a>(
 }
 
 /// One part: designator, value · footprint, and its cell in every column.
-fn part_row<'a>(m: &Manager<'_>, part: &VariantRow) -> Element<'a, Message> {
+fn part_row<'a>(m: &Manager<'_>, columns: &Columns, part: &VariantRow) -> Element<'a, Message> {
     let r = resolve(m.tokens);
     let designator = text(signex_i18n::UserText::new(part.designator.clone()))
         .size(TS.body)
@@ -255,11 +267,11 @@ fn part_row<'a>(m: &Manager<'_>, part: &VariantRow) -> Element<'a, Message> {
         );
     }
     let mut line: Row<Element<'a, Message>> = row![
-        body_cell(designator.boxed(), Length::Fixed(TS.body * PART_EMS), None),
-        body_cell(value.boxed(), Length::Fixed(TS.body * VALUE_EMS), None),
+        body_cell(designator.boxed(), Columns::part(), None),
+        body_cell(value.boxed(), Columns::value(), None),
     ];
-    for variant in m.variants() {
-        line = line.push(variant_cell(m, part, variant));
+    for (index, variant) in m.variants().enumerate() {
+        line = line.push(variant_cell(m, part, variant, columns.variant(index)));
     }
     let side = iced::border::Side::default().width(1.0).color(r.line_soft);
     container(line.align_y(Alignment::Center))
@@ -278,10 +290,11 @@ fn variant_cell<'a>(
     m: &Manager<'_>,
     part: &VariantRow,
     variant: Option<&str>,
+    width: Length,
 ) -> Element<'a, Message> {
     let r = resolve(m.tokens);
     let Some(column) = m.column(variant) else {
-        return body_cell(Space::new().boxed(), Length::Fill, None);
+        return body_cell(Space::new().boxed(), width, None);
     };
     let face = match own_value(m, part, variant, column) {
         Some((value, kind)) => value_pill(m, value, kind),
@@ -306,7 +319,7 @@ fn variant_cell<'a>(
         Color::TRANSPARENT
     };
     let boxed = container(body_cell(face, Length::Fill, fill))
-        .width(Length::Fill)
+        .width(width)
         .height(Length::Fill)
         .style(move |_: &Theme| container::Style {
             border: Border {
@@ -431,6 +444,7 @@ pub(super) fn cell_pill<'a>(
         text(words)
             .size(TS.caption)
             .color(ink)
+            .wrapping(Wrapping::None)
             .font(if fill.is_some() {
                 medium()
             } else {
