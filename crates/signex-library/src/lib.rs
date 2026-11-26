@@ -105,8 +105,8 @@ pub use footprint_binding::{
 pub use hash::hash_row_content;
 pub use identity::{ComponentClass, InternalPn, Mpn, RowId};
 pub use library_file::{
-    ClassEntry, FORMAT_TOKEN, LibraryFile, LibraryFileError, LibraryRow, LibrarySection,
-    LibraryTable, SnxlibManifest,
+    ClassEntry, FORMAT_TOKEN, LibraryFile, LibraryFileError, LibraryProvenance, LibraryRow,
+    LibrarySection, LibraryTable, SnxlibManifest,
 };
 pub use lifecycle::LifecycleState;
 pub use manifest::{

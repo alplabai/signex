@@ -55,6 +55,7 @@ fn full_row_round_trip_via_snxlib() {
         library: LibrarySection {
             name: "L".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),

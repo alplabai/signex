@@ -64,6 +64,7 @@ pub mod range_filter;
 pub mod recovery;
 pub mod refresh;
 pub mod reprefix_lookup;
+pub mod requires;
 pub mod resolve;
 pub mod row_documents;
 pub mod row_summaries;

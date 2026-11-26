@@ -398,6 +398,8 @@ define_ids! {
     LIBRARY_BROWSER_SEARCH = "library-browser-search";
     LIBRARY_BROWSER_ADD_COMPONENT = "library-browser-add-component";
     LIBRARY_BROWSER_SUMMARY = "library-browser-summary";
+    LIBRARY_BROWSER_LICENSE = "library-browser-license";
+    LIBRARY_BROWSER_SOURCE = "library-browser-source";
     LIBRARY_BROWSER_SHOW = "library-browser-show";
     LIBRARY_BROWSER_SHOWN = "library-browser-shown";
     LIBRARY_BROWSER_SHOWN_SORTED = "library-browser-shown-sorted";

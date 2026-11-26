@@ -110,6 +110,10 @@ library_id = "<uuid>"
 [library]
 name = "<text>"
 description = "<text>"            # omitted when absent
+license = "<SPDX id>"             # omitted when absent
+source = "<text>"                 # omitted when absent
+converted_by = "<text>"           # omitted when absent
+requires = ["<uuid>"]             # omitted when empty
 
 [mode]
 kind = "local_git"
@@ -140,12 +144,26 @@ label = "<display label>"
   save writes it, so the file would not re-save byte for byte. Note that a
   missing `[users]` table reads `default_role` as `""`, while a `[users]`
   table without the key reads it as `"Designer"` (Open points).
+- **Provenance** (#3112), for a library a converter wrote. `license` is the
+  SPDX identifier of the content's licence (`CC-BY-SA-4.0`); `source` says
+  where it came from, a URL or a description with its version;
+  `converted_by` names the converter and its version. `requires` lists the
+  `library_id`s of the libraries this one's rows reference, for example a
+  parts library over a separate footprint library. All four are optional and
+  written only when set, in this order, so a manifest without them re-saves
+  unchanged. The Library Browser shows `license` and `source`; mounting a
+  library whose required library is not open reports it in Messages and
+  mounts it anyway. A `requires` entry that is not a UUID still opens and is
+  kept, and `library check` reports it. No token change: older builds keep
+  the keys as unknown keys.
 - `[mode]` may instead be `kind = "database"` with `url` and `auth`, for a
   library served by a Signex library server; a converter writes `local_git`.
 - `[[classes]]` keys must be unique; a duplicate key opens but refuses every
   save.
 - Layout is TOML as section 5.3 describes: one blank line before each table
-  header, arrays of strings inline here (`roles = ["Librarian"]`).
+  header; an array of strings with one element inline
+  (`roles = ["Librarian"]`), with two or more one element per line as the
+  number arrays of 5.3.
 
 ### 2.2 Tables
 

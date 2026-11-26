@@ -32,6 +32,7 @@ fn mounted_library(dir: &Path) -> (PathBuf, LocalGitAdapter, Uuid) {
         library: LibrarySection {
             name: "Ext".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),
@@ -412,6 +413,7 @@ fn concurrent_writers_on_a_versioned_library_lose_no_rows() {
         library: LibrarySection {
             name: "Git".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),

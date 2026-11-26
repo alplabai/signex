@@ -33,6 +33,7 @@ fn library(dir: &Path) -> OpenLibrary {
         pricing: Default::default(),
         own_edit_stamp: None,
         display: Default::default(),
+        provenance: Default::default(),
     }
 }
 

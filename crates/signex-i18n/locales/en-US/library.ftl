@@ -19,6 +19,12 @@ library-browser-summary =
        *[other] { $tables } tables
     }
 
+# Caption under the summary of a converted library: the content's licence,
+# an SPDX identifier such as CC-BY-SA-4.0, verbatim from the library file.
+library-browser-license = License: { $license }
+# Next to it: where the content came from, a URL or a description, verbatim.
+library-browser-source = Source: { $source }
+
 # Caption in front of the lifecycle filter pills.
 library-browser-show = Show
 

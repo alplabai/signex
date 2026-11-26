@@ -25,6 +25,7 @@ fn mounted_library(dir: &Path) -> (PathBuf, LocalGitAdapter, Uuid) {
         library: LibrarySection {
             name: "Ext".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),

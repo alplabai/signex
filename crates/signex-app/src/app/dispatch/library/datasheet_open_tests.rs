@@ -105,6 +105,7 @@ fn fixture(part: &str, read_only: bool, docs: Vec<DatasheetDoc>) -> Fixture {
         pricing: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
+        provenance: Default::default(),
     });
     app.library.datasheet_opener = record;
     app.library.editors.insert(

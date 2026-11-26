@@ -70,6 +70,7 @@ fn init_library(dir: &std::path::Path, name: &str) -> (PathBuf, Uuid) {
         library: LibrarySection {
             name: name.into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),

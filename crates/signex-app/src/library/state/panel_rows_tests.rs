@@ -23,6 +23,7 @@ fn library(name: &str, tables: Vec<(&str, Vec<ComponentRow>)>) -> OpenLibrary {
         pricing: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
+        provenance: Default::default(),
     }
 }
 

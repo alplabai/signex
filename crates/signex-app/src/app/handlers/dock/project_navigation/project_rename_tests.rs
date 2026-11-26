@@ -591,6 +591,7 @@ fn a_library_under_the_folder_refuses_the_folder_move_whatever_holds_it() {
                     pricing: Default::default(),
                     own_edit_stamp: None,
                     display: Default::default(),
+                    provenance: Default::default(),
                 });
         }),
         ("stock library", |fx, p| {

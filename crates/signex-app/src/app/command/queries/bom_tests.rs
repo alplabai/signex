@@ -144,6 +144,7 @@ fn mount_library(app: &mut Signex) -> Rows {
         pricing,
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
+        provenance: Default::default(),
     });
     rows
 }

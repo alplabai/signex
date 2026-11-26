@@ -44,6 +44,7 @@ fn app_on_symbol_tab() -> (Signex, iced::window::Id, PathBuf, tempfile::TempDir)
         },
         dangling: Default::default(),
         pricing: Default::default(),
+        provenance: Default::default(),
     });
     let path = tmp.path().join("symbols").join("op.snxsym");
     let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("op"));

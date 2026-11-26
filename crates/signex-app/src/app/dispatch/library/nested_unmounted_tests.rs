@@ -16,6 +16,7 @@ fn init_library(file: &Path, name: &str) -> LocalGitAdapter {
             library: LibrarySection {
                 name: name.into(),
                 description: None,
+                ..Default::default()
             },
             mode: LibraryMode::default(),
             workflow: WorkflowConfig::default(),

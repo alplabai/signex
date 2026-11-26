@@ -509,6 +509,7 @@ impl LibraryState {
         let manifest = adapter.manifest();
         let display_name = manifest.library.name.clone();
         let library_id = manifest.library.library_id;
+        let provenance = adapter.provenance();
         self.refuse_stock_copy(&root, library_id)?;
         self.resolve_id_clash(&root, library_id, project_paths)?;
         // `LibrarySet::mount` refuses this path if it is already mounted.
@@ -535,6 +536,7 @@ impl LibraryState {
             pricing: Default::default(),
             own_edit_stamp: None,
             display: LibraryDisplaySettings::seeded(&self.new_library_defaults),
+            provenance,
         };
         if let Some(adapter) = self.set.get(library_id)
             && let Err(e) = entry.reload_tables(adapter)
@@ -787,6 +789,9 @@ pub struct OpenLibrary {
     /// [`LibraryState::refresh_components`] read them. `view` reads this;
     /// it never asks the adapter.
     pub pricing: HashMap<Uuid, signex_library::RowPricing>,
+    /// The manifest's licence, source, converter and required libraries
+    /// (#3112), read on mount.
+    pub provenance: signex_library::LibraryProvenance,
 }
 
 /// Per-library canvas + UI defaults shared across every primitive

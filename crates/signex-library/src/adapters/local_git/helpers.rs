@@ -847,6 +847,7 @@ mod tests {
                 library: crate::library_file::LibrarySection {
                     name: "poison-probe".into(),
                     description: None,
+                    ..Default::default()
                 },
                 mode: crate::manifest::LibraryMode::default(),
                 workflow: crate::manifest::WorkflowConfig::default(),

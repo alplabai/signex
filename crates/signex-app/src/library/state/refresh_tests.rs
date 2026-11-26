@@ -41,6 +41,7 @@ fn open_scripted(
         pricing: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
+        provenance: Default::default(),
     });
     symbols
 }
@@ -267,6 +268,7 @@ fn a_refresh_whose_table_listing_fails_marks_the_tables_not_listed() {
         pricing: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
+        provenance: Default::default(),
     });
 
     // Off-thread path.

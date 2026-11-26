@@ -536,12 +536,15 @@ mod index_lock;
 #[cfg(test)]
 mod index_lock_tests;
 mod reinit_tree;
+pub(crate) use adapter::check_table_name;
 pub use helpers::component_to_library_row;
+pub(crate) use helpers::{library_row_to_component, slugify};
 #[cfg(test)]
 mod ledger_hygiene_tests;
 pub(crate) mod lfs;
 mod pinned_assets;
 mod primitives;
+mod provenance;
 mod read_cache;
 mod row_edit;
 mod tree_path;
@@ -580,6 +583,7 @@ mod tests {
             library: LibrarySection {
                 name: name.into(),
                 description: None,
+                ..Default::default()
             },
             mode: LibraryMode::default(),
             workflow: WorkflowConfig::default(),

@@ -93,6 +93,7 @@ fn fixture() -> Fixture {
         pricing: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
+        provenance: Default::default(),
     });
     app.library.editors.insert(
         address.clone(),

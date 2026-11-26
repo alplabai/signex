@@ -191,6 +191,7 @@ impl Signex {
                     return self.readmit_stock_copies(&path);
                 }
                 self.library.drift.check_pending = true;
+                self.report_missing_required_libraries(&path);
                 // The primitive picker's "Link without copying" binds now.
                 let link = self.picker_link_after_mount(&path);
                 self.picker_mount_settled(&path, None);
@@ -213,6 +214,22 @@ impl Signex {
             }
         };
         Task::batch([link, open])
+    }
+
+    /// Say in Messages which libraries the library just mounted at `path`
+    /// requires and no open library is (#3112). Not fatal: its parts that
+    /// use them show as unresolved.
+    fn report_missing_required_libraries(&self, path: &std::path::Path) {
+        let missing = self.library.missing_required_libraries(path);
+        if missing.is_empty() {
+            return;
+        }
+        let name = self.library.library_label(path);
+        for id in missing {
+            crate::diagnostics::log_warning(crate::library::requires::missing_required_message(
+                &name, id,
+            ));
+        }
     }
 
     /// When `path` is the bundled stock and its mount failed, mount the
