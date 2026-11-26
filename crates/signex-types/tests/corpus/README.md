@@ -86,6 +86,19 @@ diff-pair classes `USB` and `LVDS_100R`).
 `MIN_PROJECT_FIXTURES` guards the count. These are not blessable: edit by
 hand and keep keys alphabetical (the writer sorts them).
 
+## Block diagrams (`.snxblk`)
+
+`block_diagram/*.snxblk` are walked by `../round_trip_block_diagram_corpus.rs`:
+each must read under `snxblk/1` with its stored id and re-save byte for
+byte. Coverage: `empty`; `dcdc-buck` (mockup row 171: five blocks linked to
+sheets, one of them unlinked, a hand-drawn block, a group, every shape,
+every port side and direction, power, I2C, USB and a custom `SWD`
+interface, generated and hand-drawn connections, specs, rails, colours, a
+multi-line note); `text-adversarial` (quotes, backslashes, tabs, line
+breaks, escaped control characters, non-ASCII text, a negative position, a
+1 nm width). `MIN_BLOCK_DIAGRAM_FIXTURES` guards the count. Not blessable:
+write them by hand to the layout in `docs/architecture/snxblk-format.md`.
+
 ## Realistic boards (`pcb/real/`)
 
 The single-feature `pcb/*.snxpcb` cases above test the format one column at
