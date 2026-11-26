@@ -82,7 +82,17 @@ impl Env {
         } else {
             (wire.start, wire.end)
         };
-        if self.anchored_inside(&fixed, &moving, &[index], Some(key(&new))) {
+        // The wires of this follow, and the legs already laid to the new tip,
+        // are the pin's own net: they do not hold the stretch cut away.
+        let kn = key(&new);
+        let mut own: Vec<usize> = group.to_vec();
+        own.extend(
+            (self.wires_near(kn, kn).into_iter())
+                .filter(|(_, w)| key(&w.start) == kn || key(&w.end) == kn)
+                .map(|(i, _)| i),
+        );
+        own.push(index);
+        if self.anchored_inside(&fixed, &moving, &own, Some(kn), false) {
             return false;
         }
         let (plans, far_keys) = self.follow_plans(index, fixed, moving, new);
@@ -235,7 +245,9 @@ impl Env {
         } else {
             kfar.1 == kf.1 && kfar.0 != kf.0
         };
-        if !perpendicular || self.anchored_inside(&far, &fixed, &[leg, index], Some(key(&new))) {
+        if !perpendicular
+            || self.anchored_inside(&far, &fixed, &[leg, index], Some(key(&new)), true)
+        {
             return None;
         }
         let elbow = if horizontal {

@@ -18,6 +18,8 @@ use crate::test_support::test_sheet;
 
 const UNIT_A: u128 = 0xa;
 const UNIT_B: u128 = 0xb;
+const U2_A: u128 = 0xc;
+const U2_B: u128 = 0xd;
 
 fn lib_pin(unit: u32, number: &str, x: f64) -> LibPin {
     LibPin {
@@ -38,12 +40,12 @@ fn lib_pin(unit: u32, number: &str, x: f64) -> LibPin {
     }
 }
 
-fn unit(id: u128, unit: u32, y: f64) -> Symbol {
+fn unit(id: u128, reference: &str, unit: u32, at: (f64, f64)) -> Symbol {
     let mut symbol = Symbol {
         uuid: u(id),
         lib_id: "DUAL".into(),
-        reference: "U1".into(),
-        position: Point::new(0.0, y),
+        reference: reference.into(),
+        position: Point::new(at.0, at.1),
         unit,
         ..Default::default()
     };
@@ -57,8 +59,10 @@ fn unit(id: u128, unit: u32, y: f64) -> Symbol {
 }
 
 /// U1, a dual gate: gate 1 at the origin with pins 1 and 2 at x = -5 and 5,
-/// gate 2 at y = 40 with pins 3 and 4. A wire runs up 10 mm from pins 1 and
-/// 2 to the net labels A and B.
+/// gate 2 at y = 40 with pins 3 and 4. A wire runs up 10 mm from each pin to
+/// a net label: A and B on gate 1, C and D on gate 2. U2, the same part 30 mm
+/// to the right, puts its pins on A to D too, so each net keeps a pad through
+/// a swap and Update PCB moves pad nets rather than renaming a one-pad net.
 fn sheet() -> SchematicSheet {
     let mut lib: LibSymbol = serde_json::from_value(serde_json::json!({ "id": "DUAL" })).unwrap();
     lib.pins = vec![
@@ -69,18 +73,30 @@ fn sheet() -> SchematicSheet {
     ];
     let mut sheet = test_sheet();
     sheet.lib_symbols.insert("DUAL".into(), lib);
-    sheet.symbols = vec![unit(UNIT_A, 1, 0.0), unit(UNIT_B, 2, 40.0)];
-    let stub = |n: u128, x: f64| Wire {
-        uuid: u(n),
-        start: Point::new(x, 0.0),
-        end: Point::new(x, -10.0),
-        ..Default::default()
-    };
-    sheet.wires = vec![stub(0x101, -5.0), stub(0x102, 5.0)];
-    sheet.labels = vec![
-        Label::new("A", Point::new(-5.0, -10.0), LabelType::Net),
-        Label::new("B", Point::new(5.0, -10.0), LabelType::Net),
+    sheet.symbols = vec![
+        unit(UNIT_A, "U1", 1, (0.0, 0.0)),
+        unit(UNIT_B, "U1", 2, (0.0, 40.0)),
+        unit(U2_A, "U2", 1, (30.0, 0.0)),
+        unit(U2_B, "U2", 2, (30.0, 40.0)),
     ];
+    let mut n = 0x100;
+    for (name, x, y) in [
+        ("A", -5.0, 0.0),
+        ("B", 5.0, 0.0),
+        ("C", -5.0, 40.0),
+        ("D", 5.0, 40.0),
+    ] {
+        for x in [x, x + 30.0] {
+            n += 1;
+            sheet.wires.push(Wire {
+                uuid: u(n),
+                start: Point::new(x, y),
+                end: Point::new(x, y - 10.0),
+                ..Default::default()
+            });
+            (sheet.labels).push(Label::new(name, Point::new(x, y - 10.0), LabelType::Net));
+        }
+    }
     sheet
 }
 
@@ -98,14 +114,24 @@ fn design_of(sheet: &SchematicSheet, board: PcbBoard) -> Design {
 
 /// The board after a first Update PCB from the unswapped sheet.
 fn synced_board() -> PcbBoard {
-    let placed = board(vec![board_fp(
-        0xf0,
-        "U1",
-        "",
-        &[UNIT_A, UNIT_B],
-        &dual_footprint(),
-        (20.0, 15.0),
-    )]);
+    let placed = board(vec![
+        board_fp(
+            0xf0,
+            "U1",
+            "",
+            &[UNIT_A, UNIT_B],
+            &dual_footprint(),
+            (20.0, 15.0),
+        ),
+        board_fp(
+            0xf1,
+            "U2",
+            "",
+            &[U2_A, U2_B],
+            &dual_footprint(),
+            (35.0, 15.0),
+        ),
+    ]);
     let mut design = design_of(&sheet(), placed);
     let list = design.diff();
     execute(&mut design, &list);

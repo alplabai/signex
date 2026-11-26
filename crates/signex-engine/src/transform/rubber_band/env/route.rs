@@ -52,7 +52,7 @@ impl Env {
             };
             if held(self, ks)
                 || held(self, ke)
-                || self.anchored_inside(&start, &end, &[index], None)
+                || self.anchored_inside(&start, &end, &[index], None, true)
                 || self.collides((ns, ne), &[key(&ns), key(&ne)], &[index])
             {
                 continue;

@@ -128,11 +128,14 @@ fn the_ghost_of_a_junction_drag_is_its_commit() {
 }
 
 /// A pin on a four-way dot moved off both axes has no stub that misses the
-/// four wires, so they follow it as before (the fallback).
+/// four wires, so they follow it as before (the fallback). The part lies
+/// off the follow routes, so its own other pin does not block them.
 #[test]
 fn a_junction_pin_with_no_stub_that_fits_lets_its_wires_follow() {
     let mut sheet = test_sheet();
-    let tp = add_resistor(&mut sheet, "TP", Point::new(55.0, 50.0)); // pin 1 at (50, 50)
+    // Pin 2 at (50, 50), pin 1 at (40, 50) inside the left wire: the body
+    // lies away from the routes the right and down wires follow by.
+    let tp = add_resistor(&mut sheet, "TP", Point::new(45.0, 50.0));
     for (a, b) in [
         ((30.0, 50.0), (50.0, 50.0)),
         ((50.0, 50.0), (70.0, 50.0)),

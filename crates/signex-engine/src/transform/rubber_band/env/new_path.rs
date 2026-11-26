@@ -118,6 +118,13 @@ impl Env {
     /// Lay `path`; a pin on a junction with no path that fits lets its
     /// wires follow it instead, as a free tip's do.
     fn lay(&mut self, path: NewPath, out: &mut Follow) {
+        // A junction's stub may not turn off one of its wires: that L would
+        // split a wire that stays (#2540).
+        let kept = if path.follow_back.is_some() {
+            path.skip.as_slice()
+        } else {
+            &[]
+        };
         let mut laid = true;
         for target in &path.targets {
             laid &= self.add_path(
@@ -125,7 +132,7 @@ impl Env {
                 *target,
                 path.horizontal_first,
                 path.template.as_ref(),
-                &path.skip,
+                (&path.skip, kept),
                 out,
             );
         }
@@ -173,20 +180,24 @@ impl Env {
     }
 
     /// Add the first route from `old` to `new` that touches nothing foreign
-    /// as fresh wires; the old tip stays wired.
+    /// as fresh wires; the old tip stays wired. `group` are the wires of the
+    /// same net; a route of two legs may not run along one of `kept`.
     pub(super) fn add_path(
         &mut self,
         old: Point,
         new: Point,
         horizontal_first: Option<bool>,
         template: Option<&Wire>,
-        group: &[usize],
+        (group, kept): (&[usize], &[usize]),
         out: &mut Follow,
     ) -> bool {
         let allowed = [key(&old), key(&new)];
         for mut segs in self.routes(old, new, horizontal_first) {
             segs.retain(|(a, b)| !zero_length(a, b));
-            if segs.is_empty() || segs.iter().any(|seg| self.collides(*seg, &allowed, group)) {
+            if segs.is_empty()
+                || segs.iter().any(|seg| self.collides(*seg, &allowed, group))
+                || (segs.len() > 1 && segs.iter().any(|seg| self.runs_along(*seg, kept)))
+            {
                 continue;
             }
             for (a, b) in segs {
@@ -216,5 +227,17 @@ impl Env {
             return true;
         }
         false
+    }
+
+    /// Whether `seg` shares a stretch with one of the live wires `wires`.
+    fn runs_along(&self, seg: (Point, Point), wires: &[usize]) -> bool {
+        let leg = Wire {
+            start: seg.0,
+            end: seg.1,
+            ..Default::default()
+        };
+        (wires.iter())
+            .filter(|index| !self.removed.contains(index))
+            .any(|&index| super::overlap::wires_overlap(&leg, &self.wires[index]))
     }
 }
