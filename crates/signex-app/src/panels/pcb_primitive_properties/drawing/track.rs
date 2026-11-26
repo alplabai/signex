@@ -7,7 +7,7 @@ use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_widgets::Label;
 use signex_widgets::property_illustration::{Anchor, Illustration, TextRole};
 
-use super::{at, band, callout, canvas, cross, dashed, keys, label, layer_label, layer_note};
+use super::{at, band, callout, canvas, cross, dashed, keys, label, layer_ends_note, layer_label};
 use crate::panels::pcb_primitive_properties::TrackFacts;
 use crate::panels::pcb_primitive_properties::rows::fixed_mm;
 
@@ -88,7 +88,10 @@ pub(in crate::panels::pcb_primitive_properties) fn illustration(
         .layer
         .as_ref()
         .and_then(|l| f.layers.iter().position(|c| c.layer == l.layer));
-    drawing.part(layer_note(i18n, &layer_label(i18n, layer, place, name)))
+    drawing.part(layer_ends_note(
+        i18n,
+        &layer_label(i18n, layer, place, name),
+    ))
 }
 
 #[cfg(test)]

@@ -115,3 +115,54 @@ fn a_detached_pcb_panel_follows_the_docked_panels_mode() {
         assert!(shown.iter().any(|t| t == want), "{want}: {shown:?}");
     }
 }
+
+/// #3001, mockup row 106: a net clicked in the panel shows its pads with
+/// their part's value as the descriptor, and a class clicked in Net
+/// Classes mode is the one whose detail shows, across a context rebuild.
+#[test]
+fn the_clicked_net_lists_its_pads_with_descriptors_and_a_clicked_class_stays_picked() {
+    use crate::app::state::WindowKind;
+    const WINDOW: iced::Size = iced::Size::new(640.0, 800.0);
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = app_workspace(&dir.path().to_string_lossy(), &[]);
+    let board: PcbBoard = serde_json::from_value(serde_json::json!({
+        "uuid": Uuid::from_u128(1),
+        "nets": [{"number": 1, "name": "GND"}],
+        "footprints": [{
+            "uuid": Uuid::from_u128(2), "reference": "U1", "value": "7805",
+            "position": {"x": 0.0, "y": 0.0}, "layer": "TopCopper",
+            "pads": [{"uuid": Uuid::from_u128(3), "number": "2", "pad_type": "smd",
+                      "shape": "rect", "position": {"x": 0.0, "y": 0.0},
+                      "size": {"x": 1.0, "y": 1.0}, "layers": ["TopCopper"],
+                      "net": {"number": 1, "name": "GND"}}]
+        }],
+    }))
+    .expect("a board");
+    app.open_pcb_tab(dir.path().join("board.snxpcb"), "board".into(), board);
+    app.refresh_panel_ctx();
+    let id = iced::window::Id::unique();
+    app.ui_state
+        .windows
+        .insert(id, WindowKind::DetachedPanel(PanelKind::PcbNets));
+    click(&mut app, "GND");
+    let shown: Vec<String> = crate::layout_probe::lay_out_texts(app.view(id), WINDOW)
+        .into_iter()
+        .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+        .collect();
+    for want in ["U1-2", "7805", "Tracks and vias"] {
+        assert!(shown.iter().any(|t| t == want), "{want}: {shown:?}");
+    }
+
+    for msg in [
+        PcbPanelMsg::ModePicked(PcbPanelMode::NetClasses),
+        PcbPanelMsg::ClassClicked("Power".to_owned()),
+    ] {
+        let _ = app.update(Message::Dock(DockMessage::Panel(PanelMsg::PcbPanel(msg))));
+    }
+    app.refresh_panel_ctx();
+    let ui = &app.document_state.panel_ctx.pcb_panel;
+    assert_eq!(
+        (ui.mode, ui.class.as_deref()),
+        (PcbPanelMode::NetClasses, Some("Power"))
+    );
+}

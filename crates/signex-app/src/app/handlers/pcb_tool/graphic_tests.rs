@@ -290,3 +290,32 @@ fn the_form_layer_is_the_active_layer_and_a_keep_out_is_refused() {
     click(&mut app, 4.0, 3.0);
     assert_eq!(board_of(&app, &path).graphics[0].layer, "TopFab");
 }
+
+/// #3000, mockup row 102: in Properties, the line's illustration names its
+/// layer and ends; a circle's and a text frame's, which have no Ends row,
+/// name the layer alone.
+#[test]
+fn only_the_lines_illustration_names_its_ends() {
+    use crate::panels::pcb_primitive_properties::corner_notes;
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _path) = app_with_board(dir.path());
+    pick_layer(&mut app, OVERLAY);
+    let i18n = app.ui_state.i18n.clone();
+    let mut notes_of = |command: &str| {
+        run(&mut app, command);
+        let f = graphic_form(&app);
+        escape(&mut app);
+        let layer = f
+            .layer
+            .as_ref()
+            .map(|l| l.label.clone())
+            .unwrap_or_default();
+        (layer, corner_notes(&i18n, &f))
+    };
+    let (layer, line) = notes_of("place_board_line");
+    assert_eq!(line, [format!("{layer} · round ends")]);
+    for command in ["place_board_circle", "place_board_text_frame"] {
+        let (layer, notes) = notes_of(command);
+        assert_eq!(notes, [layer], "{command}");
+    }
+}
