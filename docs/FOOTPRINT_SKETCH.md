@@ -396,9 +396,15 @@ right-click opens its menu: one Edit row per value (count, or columns and
 rows; X and Y spacing; the sweep of a circular pattern) and Delete pattern,
 which keeps the source.
 
-A selected pattern shows its values under its glyph (`count = rows · 4`,
-`spacing X · 0.65 mm`); they edit on the drawing like a dimension and
-write the pattern's expression as typed.
+The glyph sits left of and below its source. A linear pattern draws its
+spacing as dimensions on one side of its instances; the glyph then moves
+across the source, away from that side (above a row whose spacing is
+drawn below it), so it never covers a spacing pill (#3009). It keeps that
+place whether the pattern is selected or not.
+
+A selected pattern shows its values beside its glyph, stacked away from
+the source (`count = rows · 4`, `spacing X · 0.65 mm`); they edit on the
+drawing like a dimension and write the pattern's expression as typed.
 
 While a rectangular or circular pattern is selected, each of its instance
 slots draws a ring; a click suppresses that instance (one undo step) and a

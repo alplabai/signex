@@ -300,3 +300,42 @@ fn a_mirror_glyph_selects_like_a_pattern() {
         "a click on the mirror glyph hits it"
     );
 }
+
+/// #3009: a pattern glyph sits left of and below its source, and moves
+/// across the source on each axis a spacing dimension stands off on.
+#[test]
+fn a_pattern_glyph_keeps_off_the_side_its_spacing_stands_on() {
+    assert_eq!(glyph_side(&[]), Vector::new(-1.0, 1.0), "left, below");
+    let below = Vector::new(0.0, 1.0);
+    assert_eq!(glyph_side(&[below]), Vector::new(-1.0, -1.0), "left, above");
+    let left = Vector::new(-1.0, 0.0);
+    assert_eq!(glyph_side(&[left]), Vector::new(1.0, 1.0), "right, below");
+    let (right, above) = (Vector::new(1.0, 0.0), Vector::new(0.0, -1.0));
+    assert_eq!(
+        glyph_side(&[right, above]),
+        Vector::new(-1.0, 1.0),
+        "unchanged"
+    );
+    assert_eq!(
+        glyph_side(&[below, left]),
+        Vector::new(1.0, -1.0),
+        "right, above"
+    );
+}
+
+/// Without a solve the linear pattern of `patterned` has no spacing
+/// dimensions, so its glyph keeps its place left of and below the source.
+#[test]
+fn an_unsolved_pattern_glyph_sits_left_of_and_below_its_source() {
+    let (sketch, linear, _, _) = patterned();
+    let glyphs = glyphs_of(&sketch);
+    let glyph = glyphs
+        .iter()
+        .find(|g| g.target == GlyphTarget::Pattern(linear))
+        .expect("glyph");
+    let source = Point::new(50.0, 50.0);
+    assert!(
+        glyph.anchor.x < source.x && glyph.anchor.y > source.y,
+        "{glyph:?}"
+    );
+}
