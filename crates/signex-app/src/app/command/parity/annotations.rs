@@ -505,6 +505,8 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "draw_line",
             "draw_graphic_line",
             "draw_rectangle",
+            "place_linear_dimension",
+            "place_aligned_dimension",
             "place_net_label",
             "place_local_net_label",
             "place_global_label",

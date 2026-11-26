@@ -16,6 +16,7 @@ use super::board_edit_operands as board_edit;
 use super::board_graphic_operands as graphic;
 use super::board_operands as board;
 use super::board_view_operands as board_view;
+use super::dimension_operands as dimension;
 use super::directive_operands as directive;
 use super::document_operands as doc;
 use super::file_operands as file;
@@ -95,6 +96,9 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("draw_line", place::line),
     ("draw_graphic_line", place::line),
     ("draw_rectangle", place::rectangle),
+    // #2836: the dimension tools' three clicks and form.
+    ("place_linear_dimension", dimension::linear),
+    ("place_aligned_dimension", dimension::aligned),
     ("place_blanket", directive::blanket),
     ("edit_blanket", directive::edit_blanket),
     ("edit_no_erc_rules", directive::edit_no_erc_rules),
