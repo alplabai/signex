@@ -205,3 +205,74 @@ fn a_part_whose_other_unit_is_dnp_on_another_page_prints_not_fitted() {
         "the BOM drops U1, so the page crosses it"
     );
 }
+
+#[test]
+fn a_dnp_part_whose_library_is_missing_prints_its_box_crossed() {
+    let mut sheet = page(true);
+    sheet.schematic.symbols[0].lib_id = "Missing:X".into();
+    let opts = options(true, None);
+    let (refdes, nets) = (HashMap::new(), HashMap::new());
+    let inputs = SvgEvaluatorInputs {
+        special_strings: None,
+        global_refdes: &refdes,
+        net_name_by_symbol_pin: &nets,
+        cell: "",
+        variant_settings: None,
+        placed_fits: None,
+    };
+    let page = SvgRenderContext::from_sheet(&sheet, &opts, 297.0, 210.0, 1.0, Some(&inputs));
+    let palette = opts.palette;
+    let corners = |commands: &[SvgPathCommand]| -> Vec<(f32, f32)> {
+        commands
+            .iter()
+            .filter_map(|c| match c {
+                SvgPathCommand::MoveTo(p) | SvgPathCommand::LineTo(p) => Some((p.x, p.y)),
+                _ => None,
+            })
+            .collect()
+    };
+    let greyed = greyed_rgb(palette.symbol_stroke, palette.paper);
+    let boxed = page
+        .elements
+        .iter()
+        .find_map(|e| match e {
+            SvgElement::Path { commands, style }
+                if commands.len() == 5 && style.stroke_rgb == Some(greyed) =>
+            {
+                Some(corners(commands))
+            }
+            _ => None,
+        })
+        .expect("the greyed placeholder box");
+    let crosses: Vec<Vec<(f32, f32)>> = page
+        .elements
+        .iter()
+        .filter_map(|e| match e {
+            SvgElement::Path { commands, style }
+                if commands.len() == 2 && style.stroke_rgb == Some(palette.symbol_stroke) =>
+            {
+                Some(corners(commands))
+            }
+            _ => None,
+        })
+        .collect();
+    // The box runs (x0, y0), (x1, y0), (x1, y1), (x0, y1).
+    let (x0, y0, x1, y1) = (boxed[0].0, boxed[0].1, boxed[2].0, boxed[2].1);
+    let close = |a: (f32, f32), b: (f32, f32)| (a.0 - b.0).abs() < 1e-3 && (a.1 - b.1).abs() < 1e-3;
+    let corner_to_corner = |stroke: &[(f32, f32)], from: (f32, f32), to: (f32, f32)| {
+        close(stroke[0], from) && close(stroke[1], to)
+    };
+    assert_eq!(crosses.len(), 2, "two strokes over the placeholder box");
+    assert!(
+        crosses
+            .iter()
+            .any(|s| corner_to_corner(s, (x0, y0), (x1, y1))),
+        "one stroke corner to corner: {crosses:?} over {boxed:?}"
+    );
+    assert!(
+        crosses
+            .iter()
+            .any(|s| corner_to_corner(s, (x0, y1), (x1, y0))),
+        "the other stroke corner to corner: {crosses:?} over {boxed:?}"
+    );
+}

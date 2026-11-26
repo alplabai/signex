@@ -765,8 +765,10 @@ sheets' fit fields for it, else the base fit fields, else not fitted when a
 unit is marked DNP. One unit not fitted makes every unit of the part not
 fitted, on every sheet: a part's units are grouped across sheets as the BOM
 groups them, and its settings entry is found by the BOM's part link. A PDF,
-its preview and print decide across every sheet of the export; the canvas
-across the project's open sheets (a unit on a sheet that is not open is not
+its preview and print decide across the hierarchy the export walks (for a project,
+every sheet placement the BOM counts), pages left out of the printout
+included; a page the walk never reaches is decided on its own. The canvas
+decides across the project's open sheets (a unit on a sheet that is not open is not
 counted). A repeated sheet shown once for all its channels crosses a part
 out only when every channel's copy is not fitted. Power ports are never
 parts. The canvas reads the project's active variant, and so do an undocked
@@ -781,7 +783,8 @@ cross runs corner to corner over the body box (`not_fitted_cross`: the body
 graphics, no pins, no text) in the symbol ink, not greyed, twice as wide as
 an unset symbol line. The designator, the value and the other fields keep
 their colours, so the part still reads. A symbol whose library entry is
-missing keeps its crossed placeholder box. In Black & White the greyed ink
+missing keeps its crossed placeholder box, greyed and crossed on paper too.
+In Black & White the greyed ink
 prints black like every other ink; the cross still marks the part.
 
 Checks: `schematic::not_fitted_tests` (types), `variant_fit::drawn_tests`,

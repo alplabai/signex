@@ -11,7 +11,7 @@ use crate::pdf::layout::PageTransform;
 use crate::pdf::palette::SchematicPalette;
 use signex_types::project::VariantSettings;
 use signex_types::schematic::{
-    LibSymbol, NOT_FITTED_CROSS_WIDTH_SCALE, SchematicDefaults, Symbol, greyed_ink,
+    LibSymbol, NOT_FITTED_CROSS_WIDTH_SCALE, Point, SchematicDefaults, Symbol, greyed_ink,
     not_fitted_cross,
 };
 
@@ -64,16 +64,26 @@ pub(super) fn grey_elements(elements: &mut [SvgElement], paper: (f32, f32, f32))
     }
 }
 
-/// The cross over `sym`'s body, in the symbol ink, not greyed.
+/// Half the side of the placeholder box a symbol whose library is missing
+/// draws, centred on its position, in mm.
+pub(super) const MISSING_LIBRARY_BOX_HALF_MM: f64 = 5.0;
+
+/// The cross over `sym`'s body, in the symbol ink, not greyed. With no
+/// library (`lib` is `None`) it crosses the placeholder box instead, as the
+/// canvas does.
 pub(super) fn push_not_fitted_cross(
     out: &mut Vec<SvgElement>,
     sym: &Symbol,
-    lib: &LibSymbol,
+    lib: Option<&LibSymbol>,
     xform: &PageTransform,
     palette: &SchematicPalette,
     defaults: &SchematicDefaults,
 ) {
-    let Some(strokes) = not_fitted_cross(lib, sym) else {
+    let strokes = match lib {
+        Some(lib) => not_fitted_cross(lib, sym),
+        None => Some(missing_library_box_cross(sym)),
+    };
+    let Some(strokes) = strokes else {
         return;
     };
     let width = defaults.symbol_line_mm(0.0) * NOT_FITTED_CROSS_WIDTH_SCALE * xform.mm_to_unit;
@@ -91,6 +101,22 @@ pub(super) fn push_not_fitted_cross(
             },
         });
     }
+}
+
+/// The two corner-to-corner strokes of `sym`'s missing-library box.
+fn missing_library_box_cross(sym: &Symbol) -> [(Point, Point); 2] {
+    let half = MISSING_LIBRARY_BOX_HALF_MM;
+    let (x, y) = (sym.position.x, sym.position.y);
+    [
+        (
+            Point::new(x - half, y - half),
+            Point::new(x + half, y + half),
+        ),
+        (
+            Point::new(x - half, y + half),
+            Point::new(x + half, y - half),
+        ),
+    ]
 }
 
 #[cfg(test)]

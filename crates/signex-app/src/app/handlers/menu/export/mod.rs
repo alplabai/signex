@@ -411,28 +411,24 @@ fn build_export_scope(
     build_scope(document_state, document_state.active_path.as_deref()?, true)
 }
 
-/// [`build_export_scope`] without `ExportContext::netlist_sheets`, for the
-/// paths that never read it (PDF, print preview). Skips the per-sheet
-/// copy that only the `.NET` netlist needs.
+/// The scope the PDF, print preview and print draw from: the export scope,
+/// hierarchy included, so a page's not-fitted parts are decided across the
+/// project as the BOM decides them (#2962).
 fn build_page_scope(
     document_state: &crate::app::state::DocumentState,
 ) -> Option<(ExportContext, ExportIssues)> {
-    build_scope(
-        document_state,
-        document_state.active_path.as_deref()?,
-        false,
-    )
+    build_scope(document_state, document_state.active_path.as_deref()?, true)
 }
 
 /// [`build_page_scope`] for an explicit source document rather than the active
-/// tab — the BOM / PDF completion path, where the OS dialog may have outlived
-/// the tab the export was started from (#833). `None` when `source` is no
-/// longer open.
+/// tab — the PDF completion and preview raster path, where the OS dialog may
+/// have outlived the tab the export was started from (#833). `None` when
+/// `source` is no longer open.
 fn build_page_scope_for_source(
     document_state: &crate::app::state::DocumentState,
     source: &std::path::Path,
 ) -> Option<(ExportContext, ExportIssues)> {
-    build_scope(document_state, source, false)
+    build_scope(document_state, source, true)
 }
 
 /// [`build_export_scope`] for an explicit source document (#852): the netlist

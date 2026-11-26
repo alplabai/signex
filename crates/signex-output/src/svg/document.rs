@@ -440,11 +440,12 @@ impl SvgRenderContext {
                 );
             } else {
                 // Fallback if library is missing.
+                let half = super::not_fitted::MISSING_LIBRARY_BOX_HALF_MM;
                 elements.push(rect_path(
-                    xform.x(sym.position.x - 5.0),
-                    xform.px_y(sym.position.y - 5.0),
-                    (10.0 * xform.mm_to_unit) as f32,
-                    (10.0 * xform.mm_to_unit) as f32,
+                    xform.x(sym.position.x - half),
+                    xform.px_y(sym.position.y - half),
+                    (2.0 * half * xform.mm_to_unit) as f32,
+                    (2.0 * half * xform.mm_to_unit) as f32,
                     SvgStyle {
                         stroke_alpha: 1.0,
                         stroke_rgb: Some(palette.symbol_stroke),
@@ -456,16 +457,14 @@ impl SvgRenderContext {
             }
             if not_fitted.contains(&sym.uuid) {
                 super::not_fitted::grey_elements(&mut elements[symbol_start..], palette.paper);
-                if let Some(lib) = lib.as_deref() {
-                    super::not_fitted::push_not_fitted_cross(
-                        &mut elements,
-                        sym,
-                        lib,
-                        &xform,
-                        palette,
-                        &opts.schematic_defaults,
-                    );
-                }
+                super::not_fitted::push_not_fitted_cross(
+                    &mut elements,
+                    sym,
+                    lib.as_deref(),
+                    &xform,
+                    palette,
+                    &opts.schematic_defaults,
+                );
             }
 
             // Match canvas renderer parity:
