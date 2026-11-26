@@ -159,7 +159,7 @@ fn an_agent_tunes_a_named_net_and_reads_the_lengths_back() {
 
     let refused = headless(&mut app, "tune_net_length", &[&document, "net=NOPE"]);
     assert!(
-        matches!(&refused, CommandOutcome::Disabled { reason } if reason.contains("NOPE")),
+        matches!(&refused, CommandOutcome::Disabled { reason } if signex_i18n::RenderTranslatable::render_en_us(reason).contains("NOPE")),
         "{refused:?}"
     );
 }

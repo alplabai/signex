@@ -43,7 +43,7 @@ fn the_carried_footprints_drawings_move_with_the_drag_preview() {
         base.graphics.is_empty(),
         "the board leaves the carried silk out"
     );
-    canvas.begin_drag_preview(carried.clone(), Vec::new(), base);
+    canvas.begin_drag_preview(carried.clone(), false, Vec::new(), base);
     let delta = Point::new(3.0, 0.0);
     canvas.move_drag_preview(delta, || {
         PcbSnapshot::from_board_with_view(&carried_board(&board, &carried, &[], delta), &view)

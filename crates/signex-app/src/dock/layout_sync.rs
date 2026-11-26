@@ -26,6 +26,20 @@ pub struct RegionLayout {
     /// The side dock's preferred width in whole px (#2395); `None` for the
     /// bottom dock.
     pub width: Option<u32>,
+    /// Extension panel keys the stored region named that no installed
+    /// extension registered, in stored order (#2495).
+    pub kept: Vec<KeptPanelKey>,
+}
+
+/// An extension panel key (`ext.<name>.<local>`) a stored dock region named
+/// that no installed extension registered. It is kept and written back at
+/// `index`, its place among all the region's entries, so a layout saved by
+/// a binary with more extensions survives a run without them (DECISIONS
+/// 2026-11-25, #2495).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KeptPanelKey {
+    pub index: usize,
+    pub key: String,
 }
 
 /// Exactly what `prefs.json` stores about the dock. Transient state
@@ -47,6 +61,7 @@ impl DockLayoutSnapshot {
                 PanelPosition::Bottom => None,
                 side => Some(dock.preferred_width(side).round() as u32),
             },
+            kept: dock.kept_panel_keys(pos).to_vec(),
         };
         Self {
             left: region(PanelPosition::Left),
@@ -81,6 +96,8 @@ pub enum DockLayoutMsg {
     /// A quit-flush write failed and was already logged (#1932): only the
     /// retry bookkeeping is left to do.
     SaveFailedLogged,
+    /// Workspace layouts (mockup row 166): apply, save and manage named arrangements.
+    Workspace(crate::workspace_layouts::WorkspaceLayoutMsg),
 }
 
 /// Quit waits on this for the dock write that is already running.
@@ -118,6 +135,7 @@ mod tests {
             panels: vec![PanelKind::Projects],
             collapsed,
             width: None,
+            kept: Vec::new(),
         };
         DockLayoutSnapshot {
             left: region(left_collapsed),

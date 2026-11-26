@@ -313,6 +313,8 @@ fn fiducial(index: usize, at: Point, diameter: f64) -> Footprint {
         layers: vec![TOP_COPPER.to_string(), TOP_SOLDER_MASK.to_string()],
         net: None,
         roundrect_ratio: 0.0,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 0.0,
         net_locked: false,
         layer_sizes: None,

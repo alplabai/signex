@@ -16,18 +16,20 @@ use super::labels::{
     schematic_text_offset_hier, schematic_text_offset_net, spin_text_style, valign_to_svg,
 };
 use super::markers::{push_no_connect_x, push_no_erc_diamond};
-use super::symbols::{push_symbol_lib_graphics, push_symbol_pins, symbol_eval_variables};
+use super::symbols::{push_symbol_body_fills, push_symbol_lib_graphics, push_symbol_pins};
 use super::text::glyph_em_pt;
 use super::text::{TextStyle, draw_text_outline};
 use super::*;
 use crate::SheetSnapshot;
 use crate::markup_escape::escape_markup;
 use crate::pdf::layout::PageTransform;
+use crate::pdf::optional_content::{LayerSpans, PdfLayer};
 use crate::pdf::palette::SchematicPalette;
 use crate::pdf::{ColourMode, PdfOptions};
 use signex_types::markup::ExpressionEvalContext;
 use signex_types::schematic::field_effective_style;
 use signex_types::schematic::{DrawingPlacement, LabelType};
+use signex_types::variables::{Resolver, TextTable};
 use std::collections::HashMap;
 use std::fmt::Write as _;
 use tiny_skia::{Color, FillRule, Paint, Pixmap, Stroke};
@@ -41,6 +43,20 @@ impl SvgRenderContext {
         units_per_mm: f64,
         eval_inputs: Option<&SvgEvaluatorInputs<'_>>,
     ) -> Self {
+        Self::from_sheet_layered(sheet, opts, page_w_mm, page_h_mm, units_per_mm, eval_inputs).0
+    }
+
+    /// [`Self::from_sheet`] plus the PDF layer each run of elements belongs
+    /// to. Elements outside every span are in no layer.
+    pub(crate) fn from_sheet_layered(
+        sheet: &SheetSnapshot,
+        opts: &PdfOptions,
+        page_w_mm: f64,
+        page_h_mm: f64,
+        units_per_mm: f64,
+        eval_inputs: Option<&SvgEvaluatorInputs<'_>>,
+    ) -> (Self, LayerSpans) {
+        let mut layers = LayerSpans::default();
         let width = (page_w_mm * units_per_mm) as f32;
         let height = (page_h_mm * units_per_mm) as f32;
 
@@ -81,6 +97,10 @@ impl SvgRenderContext {
         // Always render the physical sheet boundary on top of the
         // page-fill so both preview and PDF clearly reference the
         // document page area.
+        layers.mark(
+            PdfLayer::TitleBlockAndBorder,
+            elements.len()..elements.len() + 1,
+        );
         elements.push(rect_path(
             0.5,
             0.5,
@@ -102,8 +122,21 @@ impl SvgRenderContext {
             palette,
             &opts.schematic_defaults,
         );
+        // The parts drawn greyed and crossed out (#1294).
+        let not_fitted = super::not_fitted::drawn_not_fitted(sheet, opts, eval_inputs);
+        // Body fills sit under the wires but belong to their parts.
+        let fills_start = elements.len();
+        push_symbol_body_fills(
+            &mut elements,
+            &sheet.schematic,
+            &xform,
+            palette,
+            &not_fitted,
+        );
+        layers.mark(PdfLayer::Parts, fills_start..elements.len());
 
         // Base primitives
+        let wires_start = elements.len();
         for wire in &sheet.schematic.wires {
             let class = opts.net_class_styles.get(&wire.uuid);
             let stroke_mm = wire_style::wire_width_mm(wire, class, &opts.schematic_defaults);
@@ -155,10 +188,11 @@ impl SvgRenderContext {
                     SvgPathCommand::LineTo(pt(xform.x(bus.end.x), xform.px_y(bus.end.y))),
                 ],
                 style: SvgStyle {
-                    stroke_alpha: 1.0,
-                    stroke_rgb: Some(palette.bus),
+                    stroke_alpha: bus.color.map_or(1.0, |c| f32::from(c.a) / 255.0),
+                    stroke_rgb: Some(bus.color.map_or(palette.bus, wire_style::rgb)),
                     fill_rgb: None,
-                    stroke_width: (opts.schematic_defaults.bus_mm() * xform.mm_to_unit) as f32,
+                    stroke_width: (opts.schematic_defaults.bus_line_mm(bus.stroke_width)
+                        * xform.mm_to_unit) as f32,
                 },
             });
         }
@@ -184,7 +218,11 @@ impl SvgRenderContext {
                 },
             });
         }
+        super::harness::push_harness(&mut elements, &sheet.schematic, &xform, palette, opts);
 
+        let from_wires = signex_types::schematic::junction_wire_colors(&sheet.schematic, |wire| {
+            wire_style::wire_color(wire, &sheet.schematic.net_colors, &opts.net_class_styles)
+        });
         for j in &sheet.schematic.junctions {
             // The canvas size, floor included (#2026).
             let radius =
@@ -193,6 +231,7 @@ impl SvgRenderContext {
             let cy = xform.px_y(j.position.y);
             let junction_rgb = wire_style::junction_rgb(
                 j,
+                &from_wires,
                 &sheet.schematic.net_colors,
                 &opts.net_class_styles,
                 palette.junction,
@@ -209,6 +248,7 @@ impl SvgRenderContext {
                 },
             ));
         }
+        layers.mark(PdfLayer::WiresAndBuses, wires_start..elements.len());
 
         if opts.include_no_connect_markers {
             for nc in &sheet.schematic.no_connects {
@@ -225,6 +265,7 @@ impl SvgRenderContext {
                 );
             }
         }
+        super::directives::push_directives(&mut elements, &sheet.schematic, &xform, palette, opts);
 
         let document_family = sheet.schematic.font_family.as_deref();
         for label in &sheet.schematic.labels {
@@ -243,6 +284,12 @@ impl SvgRenderContext {
                 LabelType::Power => (0.0, 0.0),
             };
             let (align, v_align, rot) = spin_text_style(spin);
+            let label_layer = if label.label_type == LabelType::Power {
+                PdfLayer::PowerPorts
+            } else {
+                PdfLayer::NetLabelsAndPorts
+            };
+            layers.mark(label_layer, elements.len()..elements.len() + 1);
             elements.push(SvgElement::Text {
                 x: xform.x(label.position.x + off_x),
                 y: xform.px_y(label.position.y + off_y),
@@ -275,7 +322,7 @@ impl SvgRenderContext {
                     fill_rgb: palette.note_text,
                     text: normalize_standard_text(
                         &match eval_inputs.and_then(|e| e.special_strings) {
-                            Some(special) => crate::resolve(&note.text, special),
+                            Some(special) => crate::resolve_text(&note.text, special),
                             None => note.text.clone(),
                         },
                     ),
@@ -288,6 +335,10 @@ impl SvgRenderContext {
             let y = xform.px_y(child.position.y);
             let w = (child.size.0 * xform.mm_to_unit) as f32;
             let h = (child.size.1 * xform.mm_to_unit) as f32;
+            let outline = (opts.schematic_defaults.shape_stroke_mm(child.stroke_width)
+                * xform.mm_to_unit) as f32;
+            // A repeated sheet prints as a stack with a ×N pill (#1279).
+            super::repeat_stack::push_repeat_stack(&mut elements, child, &xform, palette, outline);
             elements.push(rect_path(
                 x,
                 y,
@@ -297,8 +348,7 @@ impl SvgRenderContext {
                     stroke_alpha: 1.0,
                     stroke_rgb: Some(palette.child_sheet_stroke),
                     fill_rgb: None,
-                    stroke_width: (opts.schematic_defaults.shape_stroke_mm(child.stroke_width)
-                        * xform.mm_to_unit) as f32,
+                    stroke_width: outline,
                 },
             ));
             if !child.name.is_empty() {
@@ -330,18 +380,34 @@ impl SvgRenderContext {
         }
 
         // Full symbol body graphics from library definitions.
+        // The value reads the sheet's parts, variables and special strings
+        // through the one rule the canvas uses too (#1596, #1986).
+        let global_refdes = eval_inputs.map(|e| TextTable(e.global_refdes));
+        let value_scope = crate::ValueScope {
+            symbols: &sheet.schematic.symbols,
+            special: eval_inputs.and_then(|e| e.special_strings),
+            signed: false,
+            refdes: global_refdes.as_ref().map(|t| t as &dyn Resolver),
+            cell: eval_inputs.map(|e| e.cell),
+        };
         for sym in &sheet.schematic.symbols {
-            let symbol_vars = symbol_eval_variables(sym);
+            let symbol_start = elements.len();
+            let symbol_vars = crate::field_value::symbol_eval_variables(sym);
+            let part_table = TextTable(&symbol_vars);
             let mut refdes_vars = HashMap::new();
             if !sym.uuid.is_nil() && !sym.reference.is_empty() {
                 refdes_vars.insert(sym.uuid.to_string(), sym.reference.clone());
             }
+            let local_refdes = TextTable(&refdes_vars);
             let symbol_eval_ctx = ExpressionEvalContext {
                 current_refdes: (!sym.reference.is_empty()).then_some(sym.reference.as_str()),
                 current_value: (!sym.value.is_empty()).then_some(sym.value.as_str()),
                 cell: eval_inputs.map(|e| e.cell),
-                at_variables: Some(&symbol_vars),
-                refdes_variables: eval_inputs.map(|e| e.global_refdes).or(Some(&refdes_vars)),
+                at_variables: Some(&part_table),
+                refdes_variables: Some(match &global_refdes {
+                    Some(table) => table as &dyn Resolver,
+                    None => &local_refdes,
+                }),
                 ..ExpressionEvalContext::default()
             };
 
@@ -354,11 +420,11 @@ impl SvgRenderContext {
             });
 
             let lib = sheet.schematic.resolve_lib_symbol(sym);
-            if let Some(lib) = lib {
+            if let Some(lib) = lib.as_deref() {
                 push_symbol_lib_graphics(
                     &mut elements,
                     sym,
-                    Some(&lib),
+                    Some(lib),
                     &xform,
                     palette,
                     &opts.schematic_defaults,
@@ -366,7 +432,7 @@ impl SvgRenderContext {
                 push_symbol_pins(
                     &mut elements,
                     sym,
-                    &lib,
+                    lib,
                     &xform,
                     &symbol_eval_ctx,
                     symbol_pin_nets,
@@ -374,11 +440,12 @@ impl SvgRenderContext {
                 );
             } else {
                 // Fallback if library is missing.
+                let half = super::not_fitted::MISSING_LIBRARY_BOX_HALF_MM;
                 elements.push(rect_path(
-                    xform.x(sym.position.x - 5.0),
-                    xform.px_y(sym.position.y - 5.0),
-                    (10.0 * xform.mm_to_unit) as f32,
-                    (10.0 * xform.mm_to_unit) as f32,
+                    xform.x(sym.position.x - half),
+                    xform.px_y(sym.position.y - half),
+                    (2.0 * half * xform.mm_to_unit) as f32,
+                    (2.0 * half * xform.mm_to_unit) as f32,
                     SvgStyle {
                         stroke_alpha: 1.0,
                         stroke_rgb: Some(palette.symbol_stroke),
@@ -387,6 +454,17 @@ impl SvgRenderContext {
                             * xform.mm_to_unit) as f32,
                     },
                 ));
+            }
+            if not_fitted.contains(&sym.uuid) {
+                super::not_fitted::grey_elements(&mut elements[symbol_start..], palette.paper);
+                super::not_fitted::push_not_fitted_cross(
+                    &mut elements,
+                    sym,
+                    lib.as_deref(),
+                    &xform,
+                    palette,
+                    &opts.schematic_defaults,
+                );
             }
 
             // Match canvas renderer parity:
@@ -446,9 +524,15 @@ impl SvgRenderContext {
                     } else {
                         palette.value
                     },
-                    text: normalize_standard_text_with_ctx(&sym.value, &symbol_eval_ctx),
+                    text: crate::shown_value(&value_scope, sym).text,
                 });
             }
+            let symbol_layer = if sym.is_power {
+                PdfLayer::PowerPorts
+            } else {
+                PdfLayer::Parts
+            };
+            layers.mark(symbol_layer, symbol_start..elements.len());
         }
 
         push_placed_drawings(
@@ -460,12 +544,15 @@ impl SvgRenderContext {
             &opts.schematic_defaults,
         );
 
-        Self {
-            width,
-            height,
-            elements,
-            paper: palette.paper,
-        }
+        (
+            Self {
+                width,
+                height,
+                elements,
+                paper: palette.paper,
+            },
+            layers,
+        )
     }
 
     /// Serialize the elements to an SVG document string. Computed on

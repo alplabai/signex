@@ -79,6 +79,7 @@ fn a_bus_touching_a_wire_is_not_part_of_the_net() {
         uuid: id(20),
         start: pt(10.0, 0.0),
         end: pt(10.0, 10.0),
+        ..Default::default()
     });
 
     assert_eq!(
@@ -103,6 +104,7 @@ fn a_bus_seed_takes_the_joined_run_and_its_labels() {
             uuid: id(n),
             start: a,
             end: b,
+            ..Default::default()
         });
     }
     let mut on_bus = label("D[0..7]", pt(4.0, 0.0), LabelType::Net);
@@ -131,6 +133,7 @@ fn a_label_on_a_bus_seeds_the_bus_run() {
             uuid: id(n),
             start: a,
             end: b,
+            ..Default::default()
         });
     }
     let mut on_bus = label("D[0..7]", pt(10.0, 0.0), LabelType::Net);
@@ -159,6 +162,7 @@ fn a_t_joined_bus_is_one_run() {
             uuid: id(n),
             start: a,
             end: b,
+            ..Default::default()
         });
     }
     let got = sorted(connected_net_items(&sheet, item(20, SelectedKind::Bus)));
@@ -175,6 +179,7 @@ fn a_plain_net_label_mid_span_on_a_bus_is_not_on_the_bus() {
         uuid: id(20),
         start: pt(0.0, 0.0),
         end: pt(10.0, 0.0),
+        ..Default::default()
     });
     let mut sda = label("SDA", pt(4.0, 0.0), LabelType::Net);
     sda.uuid = id(30);
@@ -197,6 +202,7 @@ fn a_plain_net_label_at_a_bus_end_belongs_to_the_run() {
         uuid: id(20),
         start: pt(0.0, 0.0),
         end: pt(10.0, 0.0),
+        ..Default::default()
     });
     let mut sda = label("SDA", pt(10.0, 0.0), LabelType::Net);
     sda.uuid = id(30);
@@ -219,6 +225,7 @@ fn a_junction_on_a_bus_alone_seeds_the_bus_run() {
             uuid: id(n),
             start: a,
             end: b,
+            ..Default::default()
         });
     }
     sheet.junctions.push(Junction {

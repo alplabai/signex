@@ -1,0 +1,774 @@
+//! The footprint Properties body (mockup row 124): every section in one scroll with
+//! nothing selected and the pad stack check above them, the snap fields
+//! greyed while snapping is Off, the sketch solve statistics, and a role
+//! sub-form above the Entity section.
+
+use std::path::PathBuf;
+
+use iced::Widget as _;
+
+use super::{BodyState, body_state, view_body};
+use crate::app::{FootprintDocument, Message, Signex, TabInfo, TabKind};
+use crate::layout_probe::{LaidOutText, lay_out_texts, messages_on_click_at};
+use crate::library::editor::footprint::SnappingMode;
+use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
+use crate::panels::{
+    FootprintEditorPanelContext, FootprintModeKind, FootprintSketchEntitySummary,
+    FootprintSolveSummary, KeepoutSummary, PanelMsg, PanelPalette, SnapOptionFlag,
+};
+use signex_library::{Footprint, FootprintFile, Pad};
+use signex_types::pcb_layer::{CopperLayer, PcbLayer};
+
+const PATH: &str = "body-tests.snxfpt";
+const DOCK: iced::Size = iced::Size::new(300.0, 4000.0);
+
+/// An app with a footprint editor tab open on eight pads, nothing selected.
+fn app_with_eight_pads() -> Signex {
+    let path = PathBuf::from(PATH);
+    let mut footprint = Footprint::empty("SOIC-8");
+    footprint.pads = (1..=8)
+        .map(|n| Pad {
+            number: n.to_string(),
+            size: [1.0, 0.6],
+            position: [f64::from(n), 0.0],
+            ..Pad::default()
+        })
+        .collect();
+    let file = FootprintFile::from_footprint(footprint);
+    let editor = FootprintDocument::new(path.clone(), file);
+    let (mut app, _task) = Signex::new();
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), editor);
+    app.document_state.tabs.push(TabInfo {
+        title: "SOIC-8".into(),
+        path: path.clone(),
+        project_id: None,
+        kind: TabKind::FootprintEditor(path.clone()),
+    });
+    app.document_state.active_tab = 0;
+    // The Properties context is the Model's mirror, rebuilt in `update`; the
+    // tab was pushed directly, so build it as `update` would.
+    app.refresh_panel_ctx();
+    app
+}
+
+fn panel_ctx(app: &Signex) -> FootprintEditorPanelContext {
+    app.document_state
+        .panel_ctx
+        .footprint_editor
+        .as_deref()
+        .cloned()
+        .expect("the footprint editor panel context is built")
+}
+
+/// The body of `fp` as one element, at the dock width.
+fn body<'a>(app: &'a Signex, fp: &'a FootprintEditorPanelContext) -> iced::Element<'a, PanelMsg> {
+    let ctx = &app.document_state.panel_ctx;
+    let i18n = signex_i18n::I18n::en_us();
+    view_body(
+        fp,
+        PanelPalette::from_tokens(&ctx.tokens),
+        &ctx.tokens,
+        &ctx.collapsed_sections,
+        signex_types::coord::Unit::Mm,
+        &i18n,
+    )
+    .boxed()
+}
+
+/// The laid-out texts of `fp`'s body, without Fluent's isolation marks.
+fn texts(app: &Signex, fp: &FootprintEditorPanelContext) -> Vec<LaidOutText> {
+    lay_out_texts(body(app, fp), DOCK)
+        .into_iter()
+        .map(|mut t| {
+            t.text = t.text.replace(['\u{2068}', '\u{2069}'], "");
+            t
+        })
+        .collect()
+}
+
+fn has(texts: &[LaidOutText], label: &str) -> bool {
+    texts.iter().any(|t| t.text == label)
+}
+
+fn top_of(texts: &[LaidOutText], label: &str) -> f32 {
+    texts
+        .iter()
+        .find(|t| t.text == label)
+        .unwrap_or_else(|| panic!("{label:?} missing: {texts:#?}"))
+        .bounds
+        .y
+}
+
+#[test]
+fn nothing_selected_is_the_one_scroll_body() {
+    let app = app_with_eight_pads();
+    let fp = panel_ctx(&app);
+    assert!(matches!(body_state(&fp), BodyState::NothingSelected));
+}
+
+#[test]
+fn nothing_selected_shows_every_section_in_one_scroll() {
+    let app = app_with_eight_pads();
+    let mut fp = panel_ctx(&app);
+    fp.mode_kind = FootprintModeKind::Pads;
+    fp.snapping_mode = SnappingMode::AllLayers;
+    // Expansion sits under the Courtyard switch; switched off it is greyed
+    // and inert, which hides its text from the layout probe.
+    fp.auto_fit_courtyard = true;
+    let texts = texts(&app, &fp);
+    for label in [
+        "Footprint",
+        "8 pads",
+        "Name",
+        "Description",
+        "Designator",
+        "default",
+        "Type",
+        "Height (mm)",
+        "Version",
+        "Units",
+        "COURTYARD & SILKSCREEN",
+        "Expansion",
+        "0.25 mm",
+        "SNAP OPTIONS",
+        "GRID MANAGER",
+        "SKETCH SOLVE",
+    ] {
+        assert!(has(&texts, label), "{label:?} missing: {texts:#?}");
+    }
+    // No section switch, and the empty Settings header is dropped.
+    for label in ["Snap & Grid", "Settings"] {
+        assert!(!has(&texts, label), "{label:?} shown: {texts:#?}");
+    }
+    assert!(top_of(&texts, "8 pads") < top_of(&texts, "Name"));
+    assert!(top_of(&texts, "Name") < top_of(&texts, "COURTYARD & SILKSCREEN"));
+    assert!(top_of(&texts, "COURTYARD & SILKSCREEN") < top_of(&texts, "SNAP OPTIONS"));
+    assert!(top_of(&texts, "SNAP OPTIONS") < top_of(&texts, "GRID MANAGER"));
+    assert!(top_of(&texts, "GRID MANAGER") < top_of(&texts, "SKETCH SOLVE"));
+}
+
+/// Mockup row 124: numbered pads, the pin 1 dot, and the silkscreen and
+/// assembly strokes with their callouts.
+#[test]
+fn the_footprint_illustration_draws_the_numbers_outlines_and_callouts() {
+    use signex_widgets::property_illustration::Primitive;
+    let app = app_with_eight_pads();
+    let mut fp = panel_ctx(&app);
+    fp.courtyard_extent_mm = None;
+    fp.silk_segments = vec![[[0.0, -1.0], [9.0, -1.0]]];
+    fp.assembly_segments = vec![[[0.5, -0.5], [8.5, -0.5]]];
+    let drawing = super::footprint_illustration::illustration(&fp, &signex_i18n::I18n::en_us())
+        .expect("eight pads draw");
+    let count = |want: fn(&Primitive) -> bool| {
+        drawing
+            .visible_parts()
+            .filter(|part| want(&part.primitive))
+            .count()
+    };
+    assert_eq!(
+        count(|p| matches!(p, Primitive::Label(_))),
+        8,
+        "pad numbers"
+    );
+    assert_eq!(
+        count(|p| matches!(p, Primitive::Leader(_))),
+        3,
+        "silkscreen, assembly and pin 1"
+    );
+    assert_eq!(count(|p| matches!(p, Primitive::Line { .. })), 2, "strokes");
+}
+
+/// Mockup row 124: the generated silkscreen and assembly rows.
+#[test]
+fn the_generated_features_show_their_fields_and_body_size() {
+    let app = app_with_eight_pads();
+    let mut fp = panel_ctx(&app);
+    fp.generated.silk_outline = true;
+    fp.generated.assembly_outline = true;
+    fp.body_extent_mm = Some([-1.95, -2.45, 1.95, 2.45]);
+    let texts = texts(&app, &fp);
+    for label in [
+        "Silkscreen outline",
+        "clipped at pads",
+        "Line width",
+        "Pad clearance",
+        "Pin 1 marker",
+        "Dot beside pad 1",
+        "Assembly outline",
+        "body 3.90 × 4.90",
+    ] {
+        assert!(has(&texts, label), "{label:?} missing: {texts:#?}");
+    }
+    assert!(top_of(&texts, "Silkscreen outline") < top_of(&texts, "Assembly outline"));
+}
+
+/// Mockup row 124: the courtyard has Expansion and Line width. With
+/// auto-fit off the Expansion goes, but the Line width stays live: it
+/// strokes a hand-drawn courtyard too (maintainer decision 2026-11-24).
+#[test]
+fn the_courtyard_line_width_stays_live_with_auto_fit_off() {
+    let app = app_with_eight_pads();
+    let mut fp = panel_ctx(&app);
+    fp.generated.silk_outline = false;
+    fp.auto_fit_courtyard = true;
+    let on = texts(&app, &fp);
+    let widths: Vec<f32> = on
+        .iter()
+        .filter(|t| t.text == "Line width")
+        .map(|t| t.bounds.y)
+        .collect();
+    assert_eq!(widths.len(), 1, "only the courtyard's is live: {on:#?}");
+    assert!(top_of(&on, "Expansion") < widths[0]);
+    assert!(widths[0] < top_of(&on, "Silkscreen outline"));
+
+    fp.auto_fit_courtyard = false;
+    let off = texts(&app, &fp);
+    assert!(!has(&off, "Expansion"), "{off:#?}");
+    let label = crate::layout_probe::find(&off, "Line width").bounds;
+    assert!(label.y < top_of(&off, "Silkscreen outline"));
+    // Its field is laid out on the label's line, showing the stored width;
+    // `number_input` always takes typing.
+    let inputs = crate::layout_probe::lay_out_inputs(body(&app, &fp), DOCK);
+    let width = fp.generated.courtyard_line_width_mm.to_string();
+    assert!(
+        inputs.iter().any(|i| i.text == width
+            && i.bounds.y < label.y + label.height
+            && label.y < i.bounds.y + i.bounds.height),
+        "{inputs:#?}"
+    );
+}
+
+#[test]
+fn a_generated_outline_without_a_body_says_what_it_needs() {
+    let app = app_with_eight_pads();
+    let mut fp = panel_ctx(&app);
+    fp.generated.assembly_outline = true;
+    fp.body_extent_mm = None;
+    let texts = texts(&app, &fp);
+    assert!(has(&texts, "needs a 3D body or fab outline"), "{texts:#?}");
+}
+
+/// DECISIONS 2026-11-22, mockup row 124: with the marker on and no pad 1 to
+/// mark, Courtyard & Silkscreen says no dot was placed.
+#[test]
+fn a_pin_one_marker_with_no_dot_shows_a_note() {
+    const NOTE: &str = "No dot placed: needs a pad 1 with a clear side";
+    let mut app = app_with_eight_pads();
+    let editor = app
+        .document_state
+        .footprint_editors
+        .get_mut(&PathBuf::from(PATH))
+        .expect("the open editor");
+    editor.with_parts(|_, fp| fp.generated.silk_outline = true);
+    app.refresh_panel_ctx();
+    let fp = panel_ctx(&app);
+    assert!(!fp.pin_one_dot_missing, "pad 1 has a clear side");
+    assert!(!has(&texts(&app, &fp), NOTE));
+
+    let editor = app
+        .document_state
+        .footprint_editors
+        .get_mut(&PathBuf::from(PATH))
+        .expect("the open editor");
+    editor.with_parts(|_, fp| fp.pads[0].number = "A".into());
+    app.refresh_panel_ctx();
+    let fp = panel_ctx(&app);
+    assert!(fp.pin_one_dot_missing, "no pad is numbered 1");
+    let shown = texts(&app, &fp);
+    assert!(has(&shown, NOTE), "{shown:#?}");
+    assert!(top_of(&shown, "Pin 1 marker") < top_of(&shown, NOTE));
+}
+
+#[test]
+fn switching_the_pin_one_marker_off_drops_its_dot() {
+    use signex_widgets::property_illustration::Primitive;
+    let app = app_with_eight_pads();
+    let mut fp = panel_ctx(&app);
+    fp.generated.silk_outline = true;
+    fp.generated.pin_one_marker = false;
+    let drawing = super::footprint_illustration::illustration(&fp, &signex_i18n::I18n::en_us())
+        .expect("eight pads draw");
+    assert!(
+        !drawing
+            .visible_parts()
+            .any(|part| matches!(part.primitive, Primitive::Circle { .. }))
+    );
+}
+
+#[test]
+fn the_pad_stack_check_sits_above_every_section() {
+    let app = app_with_eight_pads();
+    let mut fp = panel_ctx(&app);
+    fp.legacy_pad_stack_offer = Some(3);
+    fp.paste_disabled_smd_pads = vec!["1".into(), "2".into()];
+    let texts = texts(&app, &fp);
+    let card = top_of(&texts, "Pad stack check");
+    assert!(top_of(&texts, "8 pads") < card);
+    assert!(card < top_of(&texts, "Name"), "{texts:#?}");
+    assert!(has(&texts, "Keep as is"));
+}
+
+#[test]
+fn nothing_selected_shows_the_snap_fields_and_the_grid_manager() {
+    let app = app_with_eight_pads();
+    let mut fp = panel_ctx(&app);
+    fp.snapping_mode = SnappingMode::AllLayers;
+    // Axis Snap Range is greyed and inert (hidden from the layout probe)
+    // while snapping to axes is off.
+    fp.snap_options.snap_to_axes = true;
+    let texts = texts(&app, &fp);
+    for label in [
+        "SNAP OPTIONS",
+        "All Layers",
+        "Current Layer",
+        "Off",
+        "Grids",
+        "Guides",
+        "Axes",
+        "Pad Centers",
+        "Footprint Origins",
+        "Snap Distance",
+        "Axis Snap Range",
+        "GRID MANAGER",
+        "+ Add",
+        "Step",
+        "Display",
+        "Properties…",
+    ] {
+        assert!(has(&texts, label), "{label:?} missing: {texts:#?}");
+    }
+}
+
+#[test]
+fn snapping_off_greys_the_snap_fields_and_they_take_no_clicks() {
+    let app = app_with_eight_pads();
+    let mut fp = panel_ctx(&app);
+    fp.snapping_mode = SnappingMode::AllLayers;
+    let grids = lay_out_texts(body(&app, &fp), DOCK)
+        .into_iter()
+        .find(|t| t.text == "Grids")
+        .expect("the Grids target")
+        .bounds
+        .center();
+    let on = messages_on_click_at(body(&app, &fp), DOCK, None, grids);
+    assert!(
+        on.iter().any(|m| matches!(
+            m,
+            PanelMsg::FpEditorToggleSnapOption(SnapOptionFlag::SnapToGrids)
+        )),
+        "with snapping on, Grids toggles: {on:?}"
+    );
+
+    fp.snapping_mode = SnappingMode::Off;
+    let off = messages_on_click_at(body(&app, &fp), DOCK, None, grids);
+    assert!(
+        !off.iter()
+            .any(|m| matches!(m, PanelMsg::FpEditorToggleSnapOption(_))),
+        "with snapping Off, the targets take no clicks: {off:?}"
+    );
+    // The scope switch itself stays live.
+    let texts = texts(&app, &fp);
+    assert!(has(&texts, "All Layers"));
+}
+
+#[test]
+fn the_sketch_sections_show_the_solve_statistics_and_parameters() {
+    let app = app_with_eight_pads();
+    let mut fp = panel_ctx(&app);
+    fp.last_solve = Some(FootprintSolveSummary {
+        iterations: 6,
+        elapsed_ms: 2,
+        final_residual_norm: 3.1e-11,
+        over_constraint_count: 0,
+        over_constraints: Vec::new(),
+        redundant_constraints: Vec::new(),
+        dof: 0,
+        free_motions: Vec::new(),
+    });
+    fp.sketch_parameters = vec![("pitch".into(), "1.27".into())];
+    let texts = texts(&app, &fp);
+    for label in [
+        "SKETCH SOLVE",
+        "ITERATIONS",
+        "6",
+        "RESIDUAL",
+        "3.100e-11",
+        "ELAPSED",
+        "2 ms",
+        "PARAMETERS",
+        "pitch",
+        "SOLVE WARNINGS",
+    ] {
+        assert!(has(&texts, label), "{label:?} missing: {texts:#?}");
+    }
+}
+
+/// Mockup row 179: the Sketch solve section leads with the DOF card and the
+/// free motions, each with Show, above the solve statistics.
+#[test]
+fn the_sketch_solve_section_leads_with_the_dof_card_and_the_free_motions() {
+    let app = app_with_eight_pads();
+    let mut fp = panel_ctx(&app);
+    fp.sketch_constraint_count = 46;
+    fp.last_solve = Some(FootprintSolveSummary {
+        iterations: 6,
+        elapsed_ms: 3,
+        final_residual_norm: 0.0,
+        over_constraint_count: 0,
+        over_constraints: Vec::new(),
+        redundant_constraints: Vec::new(),
+        dof: 2,
+        free_motions: vec![crate::panels::FreeMotionSummary {
+            focus_entity_id: signex_sketch::id::SketchEntityId::new(),
+            entity_count: 4,
+            kind: signex_sketch::solver::free_motion::MotionKind::Slide { dx: 1.0, dy: 0.0 },
+        }],
+    });
+    let texts = texts(&app, &fp);
+    for label in [
+        "2",
+        "Under-constrained · 2 DOF",
+        "46 constraints · solved in 3 ms",
+        "4 points slide along X",
+        "Show",
+    ] {
+        assert!(has(&texts, label), "{label:?} missing: {texts:#?}");
+    }
+    assert!(top_of(&texts, "SKETCH SOLVE") < top_of(&texts, "Under-constrained · 2 DOF"));
+    assert!(top_of(&texts, "4 points slide along X") < top_of(&texts, "ITERATIONS"));
+}
+
+/// Mockup row 179: a board sketch with nothing selected leads with the
+/// Sketch DOF section, titled with its DOF, right under the board header and
+/// above the Board, Outline checks and Snap Options sections; the solve
+/// section shows once and Parameters follows it (see
+/// a_board_sketch_shows_parameters_and_bake_as_under_the_sketch_dof_section).
+#[test]
+fn a_board_sketch_leads_with_the_sketch_dof_section() {
+    let app = app_with_eight_pads();
+    let mut fp = panel_ctx(&app);
+    fp.mode_kind = FootprintModeKind::Sketch;
+    fp.sketch_host = signex_types::sketch::SketchHost::Board;
+    fp.board = Some(crate::panels::BoardSketchProps::default());
+    fp.last_solve = Some(FootprintSolveSummary {
+        iterations: 6,
+        elapsed_ms: 3,
+        final_residual_norm: 0.0,
+        over_constraint_count: 0,
+        over_constraints: Vec::new(),
+        redundant_constraints: Vec::new(),
+        dof: 2,
+        free_motions: Vec::new(),
+    });
+    assert!(matches!(body_state(&fp), BodyState::Board(_)));
+    let texts = texts(&app, &fp);
+    let dof = top_of(&texts, "SKETCH: 2 DOF");
+    assert!(top_of(&texts, "Board Sketch") < dof, "{texts:#?}");
+    assert!(dof < top_of(&texts, "Under-constrained · 2 DOF"));
+    for below in ["Name", "Outline checks", "SNAP OPTIONS", "PARAMETERS"] {
+        assert!(dof < top_of(&texts, below), "{below:?}: {texts:#?}");
+    }
+    let solves = texts.iter().filter(|t| t.text == "SKETCH: 2 DOF").count();
+    assert_eq!(solves, 1, "{texts:#?}");
+    assert!(!has(&texts, "SKETCH SOLVE"), "{texts:#?}");
+}
+
+/// Mockup row 179d (#2818): a failing outline check and Add fillets lead
+/// the board sketch, above the Sketch DOF section, so they show without
+/// scrolling; the section shows once. Passing checks keep their place
+/// under the board summary (a_board_sketch_leads_with_the_sketch_dof_section).
+#[test]
+fn a_failing_outline_check_and_add_fillets_lead_the_board_sketch() {
+    use crate::library::editor::footprint::{CheckLine, CheckStatus};
+    use signex_i18n::{Translatable, ids};
+    let app = app_with_eight_pads();
+    let mut fp = panel_ctx(&app);
+    fp.mode_kind = FootprintModeKind::Sketch;
+    fp.sketch_host = signex_types::sketch::SketchHost::Board;
+    let corner = Translatable::new(ids::BOARD_SKETCH_CHECK_CORNER_TIGHT)
+        .arg("radius", "0.00")
+        .arg("tool", "1.00")
+        .arg("x", "25.00")
+        .arg("y", "0.00");
+    fp.board = Some(crate::panels::BoardSketchProps {
+        outline_checks: vec![CheckLine {
+            status: CheckStatus::Failed,
+            text: corner,
+            place: None,
+            close_gap: None,
+        }],
+        fillet_radius: Some(1.0),
+        ..crate::panels::BoardSketchProps::default()
+    });
+    fp.last_solve = Some(FootprintSolveSummary {
+        iterations: 6,
+        elapsed_ms: 3,
+        final_residual_norm: 0.0,
+        over_constraint_count: 0,
+        over_constraints: Vec::new(),
+        redundant_constraints: Vec::new(),
+        dof: 2,
+        free_motions: Vec::new(),
+    });
+    let texts = texts(&app, &fp);
+    let dof = top_of(&texts, "SKETCH: 2 DOF");
+    for above in [
+        "Outline checks",
+        "Inside corner R 0.00 < R 1.00 at (25.00, 0.00)",
+        "Add fillets R 1.00",
+    ] {
+        assert!(top_of(&texts, above) < dof, "{above:?}: {texts:#?}");
+    }
+    assert!(top_of(&texts, "Board Sketch") < top_of(&texts, "Outline checks"));
+    let sections = texts.iter().filter(|t| t.text == "Outline checks").count();
+    assert_eq!(sections, 1, "{texts:#?}");
+}
+
+/// Mockup row 179: on a board the DOF card carries the constraint count and
+/// the solve time, so the Sketch DOF section drops those two rows and keeps
+/// the others. The footprint host keeps them (see
+/// the_sketch_sections_show_the_solve_statistics_and_parameters).
+#[test]
+fn a_board_sketch_dof_section_does_not_repeat_the_card_counts() {
+    let app = app_with_eight_pads();
+    let mut fp = panel_ctx(&app);
+    fp.mode_kind = FootprintModeKind::Sketch;
+    fp.sketch_host = signex_types::sketch::SketchHost::Board;
+    fp.board = Some(crate::panels::BoardSketchProps::default());
+    fp.sketch_constraint_count = 46;
+    fp.last_solve = Some(FootprintSolveSummary {
+        iterations: 6,
+        elapsed_ms: 3,
+        final_residual_norm: 0.0,
+        over_constraint_count: 0,
+        over_constraints: Vec::new(),
+        redundant_constraints: Vec::new(),
+        dof: 2,
+        free_motions: Vec::new(),
+    });
+    let texts = texts(&app, &fp);
+    assert!(has(&texts, "46 constraints · solved in 3 ms"), "{texts:#?}");
+    for gone in ["CONSTRAINTS", "ELAPSED", "3 ms"] {
+        assert!(!has(&texts, gone), "{gone:?} repeats the card: {texts:#?}");
+    }
+    for kept in ["ENTITIES", "ITERATIONS", "RESIDUAL"] {
+        assert!(has(&texts, kept), "{kept:?} missing: {texts:#?}");
+    }
+}
+
+/// Mockup row 179: an over-constrained board card says "last good solve
+/// kept" with no time, so the Elapsed row stays; the count is on the card,
+/// so the Constraints row still goes.
+#[test]
+fn an_over_constrained_board_sketch_keeps_the_elapsed_row() {
+    let app = app_with_eight_pads();
+    let mut fp = panel_ctx(&app);
+    fp.mode_kind = FootprintModeKind::Sketch;
+    fp.sketch_host = signex_types::sketch::SketchHost::Board;
+    fp.board = Some(crate::panels::BoardSketchProps::default());
+    fp.sketch_constraint_count = 46;
+    fp.last_solve = Some(FootprintSolveSummary {
+        iterations: 6,
+        elapsed_ms: 3,
+        final_residual_norm: 0.0,
+        over_constraint_count: 1,
+        over_constraints: Vec::new(),
+        redundant_constraints: Vec::new(),
+        dof: 0,
+        free_motions: Vec::new(),
+    });
+    let texts = texts(&app, &fp);
+    assert!(
+        has(&texts, "46 constraints · last good solve kept"),
+        "{texts:#?}"
+    );
+    for kept in ["ELAPSED", "3 ms", "ENTITIES", "ITERATIONS", "RESIDUAL"] {
+        assert!(has(&texts, kept), "{kept:?} missing: {texts:#?}");
+    }
+    assert!(!has(&texts, "CONSTRAINTS"), "{texts:#?}");
+}
+
+/// Mockup row 179: before a first solve a board sketch has no card, so the
+/// Constraints row stays.
+#[test]
+fn an_unsolved_board_sketch_keeps_the_constraints_row() {
+    let app = app_with_eight_pads();
+    let mut fp = panel_ctx(&app);
+    fp.mode_kind = FootprintModeKind::Sketch;
+    fp.sketch_host = signex_types::sketch::SketchHost::Board;
+    fp.board = Some(crate::panels::BoardSketchProps::default());
+    fp.sketch_constraint_count = 46;
+    fp.last_solve = None;
+    let texts = texts(&app, &fp);
+    for kept in ["ENTITIES", "CONSTRAINTS", "46", "Not solved yet"] {
+        assert!(has(&texts, kept), "{kept:?} missing: {texts:#?}");
+    }
+}
+
+/// Mockup row 179e: the Parameters list stays under a selected entity's
+/// form in Sketch mode, so a pattern's spacing and the parameters it names
+/// sit together.
+#[test]
+fn the_parameters_list_follows_a_selection_in_sketch_mode() {
+    let app = app_with_eight_pads();
+    let mut fp = ctx_with_line_selected(&app);
+    fp.sketch_parameters = vec![("board_w".into(), "60mm".into())];
+    let texts = texts(&app, &fp);
+    assert!(top_of(&texts, "ENTITY") < top_of(&texts, "PARAMETERS"));
+    assert!(has(&texts, "board_w"), "{texts:#?}");
+}
+
+/// `fp` as a board sketch in Sketch mode with one parameter and the two
+/// closed profiles of the rectangle-and-slot fixture.
+fn as_board_sketch(fp: &mut FootprintEditorPanelContext) {
+    use crate::library::editor::footprint::sketch_mode::roles::{
+        board_profile_rows, fixtures::rect_and_slot,
+    };
+    let f = rect_and_slot();
+    fp.mode_kind = FootprintModeKind::Sketch;
+    fp.sketch_host = signex_types::sketch::SketchHost::Board;
+    fp.board = Some(crate::panels::BoardSketchProps::default());
+    fp.sketch_parameters = vec![("board_w".into(), "60mm".into())];
+    fp.profile_roles = board_profile_rows(&f.sketch, Some(&f.solve));
+}
+
+/// Mockup row 179: with nothing selected a board sketch shows Sketch DOF,
+/// then Parameters, then Bake as with a row per closed profile, all above
+/// the board summary and Snap Options; each section shows once.
+#[test]
+fn a_board_sketch_shows_parameters_and_bake_as_under_the_sketch_dof_section() {
+    let app = app_with_eight_pads();
+    let mut fp = panel_ctx(&app);
+    as_board_sketch(&mut fp);
+    assert!(matches!(body_state(&fp), BodyState::Board(_)));
+    let texts = texts(&app, &fp);
+    let order = ["SKETCH DOF", "PARAMETERS", "board_w", "BAKE AS"];
+    for pair in order.windows(2) {
+        let (above, below) = (top_of(&texts, pair[0]), top_of(&texts, pair[1]));
+        assert!(above < below, "{pair:?}: {texts:#?}");
+    }
+    assert!(top_of(&texts, "Profile 1 · 4 edges") > top_of(&texts, "BAKE AS"));
+    for below in ["Name", "Outline checks", "SNAP OPTIONS"] {
+        assert!(
+            top_of(&texts, "Profile 2 · 4 edges") < top_of(&texts, below),
+            "{below:?}: {texts:#?}"
+        );
+    }
+    for once in ["PARAMETERS", "BAKE AS"] {
+        let count = texts.iter().filter(|t| t.text == once).count();
+        assert_eq!(count, 1, "{once:?}: {texts:#?}");
+    }
+}
+
+/// Mockup row 179 (m179-slot): under a board selection Parameters and Bake
+/// as follow the selection's section, above the Board and Snap Options
+/// sections, and show once.
+#[test]
+fn a_board_selection_shows_parameters_and_bake_as_under_its_section() {
+    let app = app_with_eight_pads();
+    let mut fp = ctx_with_line_selected(&app);
+    as_board_sketch(&mut fp);
+    assert!(matches!(body_state(&fp), BodyState::SketchEntity(_)));
+    let texts = texts(&app, &fp);
+    let order = ["ENTITY", "PARAMETERS", "BAKE AS", "SNAP OPTIONS"];
+    for pair in order.windows(2) {
+        let (above, below) = (top_of(&texts, pair[0]), top_of(&texts, pair[1]));
+        assert!(above < below, "{pair:?}: {texts:#?}");
+    }
+    for once in ["PARAMETERS", "BAKE AS"] {
+        let count = texts.iter().filter(|t| t.text == once).count();
+        assert_eq!(count, 1, "{once:?}: {texts:#?}");
+    }
+}
+
+/// A sketch line selected in Sketch mode, with no role.
+fn ctx_with_line_selected(app: &Signex) -> FootprintEditorPanelContext {
+    let mut fp = panel_ctx(app);
+    fp.mode_kind = FootprintModeKind::Sketch;
+    fp.selected_sketch_entity = Some(FootprintSketchEntitySummary {
+        kind_label: "Line",
+        position_mm: None,
+        attached_constraint_count: 4,
+        construction: false,
+        dof_state: None,
+    });
+    fp.selected_sketch_entity_id = Some(signex_sketch::id::SketchEntityId::new());
+    fp
+}
+
+#[test]
+fn an_entity_without_a_role_form_has_its_own_header_then_the_entity_section() {
+    let app = app_with_eight_pads();
+    let fp = ctx_with_line_selected(&app);
+    assert!(matches!(body_state(&fp), BodyState::SketchEntity(_)));
+    let texts = texts(&app, &fp);
+    assert_eq!(
+        texts.first().map(|t| t.text.as_str()),
+        Some("Sketch entity · Line"),
+        "{texts:#?}"
+    );
+    assert!(has(&texts, "4 constraints attached"));
+    assert!(top_of(&texts, "Sketch entity · Line") < top_of(&texts, "ENTITY"));
+    assert!(top_of(&texts, "ENTITY") < top_of(&texts, "Role"));
+    // Snap Options stays reachable under a selection.
+    assert!(top_of(&texts, "Role") < top_of(&texts, "SNAP OPTIONS"));
+}
+
+#[test]
+fn a_role_with_a_sub_form_shows_the_sub_form_first_then_the_entity_section_with_role() {
+    let app = app_with_eight_pads();
+    let mut fp = ctx_with_line_selected(&app);
+    fp.selected_keepout = Some(KeepoutSummary {
+        no_routing: true,
+        no_components: false,
+        no_copper: false,
+        no_vias: false,
+        no_drilling: false,
+        no_pours: false,
+        layer: PcbLayer::Copper(CopperLayer::Top),
+    });
+    let texts = texts(&app, &fp);
+    assert!(
+        !has(&texts, "Sketch entity · Line"),
+        "the sub-form carries the header: {texts:#?}"
+    );
+    let entity = top_of(&texts, "ENTITY");
+    assert!(
+        texts.iter().any(|t| t.bounds.y < entity),
+        "the sub-form sits above the Entity section: {texts:#?}"
+    );
+    assert!(entity < top_of(&texts, "Role"));
+}
+
+#[test]
+fn a_selected_silk_graphic_is_the_silk_body() {
+    let mut app = app_with_eight_pads();
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: PathBuf::from(PATH),
+        msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SelectPad(None)),
+    }));
+    let mut fp = panel_ctx(&app);
+    fp.selected_silk_summary = Some(crate::panels::FootprintSelectedSilkSummary {
+        idx: 0,
+        kind_label: "Line",
+        stroke_width_mm: 0.15,
+        filled: false,
+        from_sketch: false,
+        kind: crate::panels::SilkKindGeometry::Line {
+            from_mm: [0.0, 0.0],
+            to_mm: [1.0, 0.0],
+        },
+    });
+    assert!(matches!(body_state(&fp), BodyState::Silk(_)));
+    let texts = texts(&app, &fp);
+    for label in [
+        "Silk graphic · Line",
+        "Stroke width (mm)",
+        "Filled",
+        "Delete",
+    ] {
+        assert!(has(&texts, label), "{label:?} missing: {texts:#?}");
+    }
+}

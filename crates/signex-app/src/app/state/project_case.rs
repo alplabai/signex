@@ -167,6 +167,7 @@ mod tests {
                 }],
                 variant_definitions: Vec::new(),
                 active_variant: None,
+                variant_settings: Default::default(),
                 libraries: Vec::new(),
                 enable_git: false,
                 net_classes: Vec::new(),
@@ -175,6 +176,11 @@ mod tests {
                 schematic_defaults: Default::default(),
                 project_defaults: Default::default(),
                 agent_journal: Default::default(),
+                schematic_design: Default::default(),
+                fab_outputs: None,
+                router_tool_diameter: None,
+                bom_alternates: Vec::new(),
+                requirements: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),
             },
@@ -276,7 +282,7 @@ mod tests {
         let (mut ds, _id) = state_with_project("/w/known-694", "Top.snxsch");
         let before = ds.projects[0].case_fold;
 
-        assert!(!ds.apply_case_probe(ProjectId(9999), CaseProbeOutcome::Decided(true)));
+        assert!(!ds.apply_case_probe(ProjectId::test_id(9999), CaseProbeOutcome::Decided(true)));
         assert_eq!(ds.projects[0].case_fold, before);
     }
 

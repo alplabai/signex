@@ -1,14 +1,11 @@
 //! Opening the dialog, opening the board when it is not, the read on the
 //! worker and the ticks. Validate and Execute: `apply.rs`.
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use iced::Task;
 use signex_engine::pcb::eco::BackChangeList;
 use signex_i18n::{MessageId, ids, t};
-use signex_types::schematic::InstancePath;
-use uuid::Uuid;
 
 use super::read::{BackRequest, compute};
 use super::{BackAnnotateMsg, BackAnnotateState};
@@ -53,6 +50,32 @@ impl Signex {
                 self.tick_back_annotate(|list| list.set_group_on(group, on));
                 Task::none()
             }
+            M::GroupFolded { group, folded } => {
+                if let Some(state) = self.ui_state.back_annotate.as_mut() {
+                    state.folds.insert(group, folded);
+                }
+                Task::none()
+            }
+            M::NotesFolded(folded) => {
+                if let Some(state) = self.ui_state.back_annotate.as_mut() {
+                    state.notes_folded = folded;
+                }
+                Task::none()
+            }
+            M::DuplicateShown(key) => {
+                if let Some(state) = self.ui_state.back_annotate.as_mut() {
+                    let group = state
+                        .list
+                        .as_ref()
+                        .and_then(|l| l.row(&key))
+                        .map(|r| r.group);
+                    if let Some(group) = group {
+                        state.folds.insert(group, false);
+                    }
+                    state.focused = Some(key);
+                }
+                Task::none()
+            }
             M::RefreshRequested => {
                 let previous = self
                     .ui_state
@@ -71,6 +94,7 @@ impl Signex {
                 self.ui_state.back_annotate = None;
                 Task::none()
             }
+            M::OperandRead(read) => self.back_annotate_operand_read(*read),
         }
     }
 
@@ -138,35 +162,12 @@ impl Signex {
         };
         // A Refresh after the project or its board closed says why there
         // is no list, rather than keep the old one.
-        let Some(project) = self.document_state.project_by_id(project_id) else {
-            let why = t!(self.ui_state.i18n, ids::BACK_ANNOTATE_PROJECT_CLOSED).into_string();
-            self.fail_back_annotate(why);
-            return Task::none();
-        };
-        let Some(engine) = self.document_state.board_engine(&board_path) else {
-            let why = self.back_annotate_board_missing(&file_name(&board_path));
-            self.fail_back_annotate(why);
-            return Task::none();
-        };
-        let (board, revision) = (engine.board().clone(), engine.revision());
-        let Some(root) = project_root_sheet_path(project) else {
-            let why = t!(self.ui_state.i18n, ids::UPDATE_PCB_NO_SCHEMATIC).into_string();
-            self.fail_back_annotate(why);
-            return Task::none();
-        };
-        let request = BackRequest {
-            plan: plan_project_sheets_for(&self.document_state, &root),
-            project_dir: project.dir().to_path_buf(),
-            board,
-            revision,
-            libraries: self.library_rows(),
-            open_revisions: self
-                .document_state
-                .engines
-                .iter()
-                .map(|(path, engine)| (path.clone(), engine.revision()))
-                .collect(),
-            previous,
+        let request = match self.back_annotate_request(project_id, &board_path, previous) {
+            Ok(request) => request,
+            Err(why) => {
+                self.fail_back_annotate(why);
+                return Task::none();
+            }
         };
         let Some(state) = self.ui_state.back_annotate.as_mut() else {
             return Task::none();
@@ -192,6 +193,42 @@ impl Signex {
         )
     }
 
+    /// What the worker reads to diff `project`'s design against the open
+    /// board `board_path`, or why there is no list. The dialog and the
+    /// operand form (#2470) share it.
+    pub(super) fn back_annotate_request(
+        &self,
+        project_id: crate::app::state::ProjectId,
+        board_path: &std::path::Path,
+        previous: Option<BackChangeList>,
+    ) -> Result<BackRequest, String> {
+        let Some(project) = self.document_state.project_by_id(project_id) else {
+            return Err(t!(self.ui_state.i18n, ids::BACK_ANNOTATE_PROJECT_CLOSED).into_string());
+        };
+        let Some(engine) = self.document_state.board_engine(board_path) else {
+            return Err(self.back_annotate_board_missing(&file_name(board_path)));
+        };
+        let (board, revision) = (engine.board().clone(), engine.revision());
+        let Some(root) = project_root_sheet_path(project) else {
+            return Err(t!(self.ui_state.i18n, ids::UPDATE_PCB_NO_SCHEMATIC).into_string());
+        };
+        Ok(BackRequest {
+            naming: crate::app::saved_channel_naming::SavedChannelNaming::of(&project.data),
+            plan: plan_project_sheets_for(&self.document_state, &root),
+            project_dir: project.dir().to_path_buf(),
+            board,
+            revision,
+            libraries: self.library_rows(),
+            open_revisions: self
+                .document_state
+                .engines
+                .iter()
+                .map(|(path, engine)| (path.clone(), engine.revision()))
+                .collect(),
+            previous,
+        })
+    }
+
     fn back_annotate_read(&mut self, job: u64, result: Result<Arc<super::BackRead>, String>) {
         let Some(owner) = self
             .ui_state
@@ -212,19 +249,14 @@ impl Signex {
                 }
                 // A sheet file another open project reaches holds that
                 // project's part too: its values are not carried (#1224).
-                let shared: HashSet<(InstancePath, Vec<Uuid>)> = read
-                    .files
-                    .iter()
-                    .filter(|(_, part)| self.shared_with_project_other_than(owner, &part.file))
-                    .map(|(key, _)| key.clone())
-                    .collect();
                 let mut list = read.list.clone();
-                list.block_shared_values(|sheet, units| {
-                    shared.contains(&(sheet.clone(), units.to_vec()))
-                });
+                self.block_values_shared_elsewhere(owner, &read, &mut list);
                 let Some(state) = self.ui_state.back_annotate.as_mut() else {
                     return;
                 };
+                // AV-11: a rename the user has not chosen yet that would put a
+                // designator on two parts starts unticked.
+                super::duplicates::untick_duplicate_renames(&mut list, state.list.as_ref());
                 state.list = Some(list);
                 state.read = Some(read);
                 state.phase = Phase::Ready;

@@ -141,7 +141,12 @@ fn wire_glyph_is_one_routed_jog_not_a_pulse() {
 fn power_glyph_follows_the_port_family() {
     use ActiveBarAction::*;
     assert_eq!(PowerGlyph::of(None), PowerGlyph::Ground);
-    for a in [PlacePowerGND, PlacePowerSignalGND, PlacePowerEarth] {
+    for a in [
+        PlacePowerGND,
+        PlacePowerSignalGND,
+        PlacePowerEarth,
+        PlacePowerChassis,
+    ] {
         assert_eq!(PowerGlyph::of(Some(&a)), PowerGlyph::Ground, "{a:?}");
     }
     for a in [
@@ -166,16 +171,15 @@ fn graphite_power_icon(last: Option<ActiveBarAction>) -> iced::widget::svg::Hand
     if let Some(a) = last {
         last_tool.insert("power".to_string(), a);
     }
-    let items = bar_items(
-        crate::app::Tool::Select,
-        signex_types::corner::CornerMode::Ortho90,
-        &last_tool,
-        &tokens,
+    let state = super::bar::BarState {
+        current_tool: crate::app::Tool::Select,
+        corner_mode: signex_types::corner::CornerMode::Ortho90,
+        last_tool: &last_tool,
         tid,
-        false,
-        false,
-        &signex_i18n::I18n::en_us(),
-    );
+        has_selection: false,
+        has_net_colors: false,
+    };
+    let items = bar_items(&state, &tokens, &signex_i18n::I18n::en_us());
     items
         .into_iter()
         .find_map(|item| match item {

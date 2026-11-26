@@ -100,6 +100,9 @@ fn main() {
         comments: [comment(1), comment(2), comment(3), comment(4)],
         custom_fields: std::collections::BTreeMap::new(),
         project_parameters: None,
+        document_facts: Default::default(),
+        sheet_variables: std::collections::BTreeMap::new(),
+        variant_settings: Default::default(),
     };
     let ctx = ExportContext {
         sheets: snapshots,

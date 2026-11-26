@@ -2,7 +2,7 @@
 //!
 //! Builds iced's own wgpu renderer headlessly and runs the actual `stack!`
 //! through `UserInterface::build` / `draw` / `Renderer::screenshot`. Never
-//! tiny-skia: it swaps red and blue and cannot run shader primitives, so it
+//! the software renderer (vello_cpu): it cannot run shader primitives, so it
 //! would pass falsely.
 //!
 //! The checks are coverage and parity measurements that hold on any adapter.

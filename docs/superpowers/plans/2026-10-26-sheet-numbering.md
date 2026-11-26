@@ -667,7 +667,7 @@ git commit -m "feat(output): the sheet cell prints the page's sheet number (#108
 - Create: `changelog.d/1081.added.md`
 
 **Interfaces:**
-- Consumes: `signex_net::{sheet_numbering, SheetNumbering, SheetPage, NumberingIssue}` (Task 1); `crate::app::project_sheets::sheet_key_with(path: &Path, base: Option<&Path>, fold: CaseFold) -> SheetKey`; `placements::page_copies`; fixtures `super::protel_hierarchy::placed_app(dir, listed, places, entries)`, `super::{open_with, sheet_with_net}`, `crate::app::handlers::menu::export::build_export_scope`.
+- Consumes: `signex_net::{sheet_numbering, SheetNumbering, SheetPage, NumberingIssue}` (Task 1); `crate::app::project_sheets::sheet_key_with(path: &Path, base: Option<&Path>, fold: CaseFold) -> SheetKey`; `placements::page_copies`; fixtures `super::net_text_hierarchy::placed_app(dir, listed, places, entries)`, `super::{open_with, sheet_with_net}`, `crate::app::handlers::menu::export::build_export_scope`.
 - Produces:
   - `pub(super) fn numbered_pages(pages: Vec<SheetSnapshot>, numbering: &SheetNumbering, base_dir: Option<&Path>, fold: CaseFold) -> Vec<SheetSnapshot>`
   - `pub(super) fn numbering_messages(numbering: &SheetNumbering, issues: &[NumberingIssue]) -> Vec<String>`
@@ -685,7 +685,7 @@ use std::path::PathBuf;
 
 use signex_types::schematic::SheetInstance;
 
-use super::protel_hierarchy::placed_app;
+use super::net_text_hierarchy::placed_app;
 use super::{open_with, sheet_with_net};
 use crate::app::handlers::menu::export::build_export_scope;
 
@@ -973,7 +973,7 @@ In `placements.rs`, in the doc comment of `page_copies`, replace the last senten
 - [ ] **Step 5: Run the tests to see them pass**
 
 Run: `cargo test -p signex-app --lib export`
-Expected: PASS, including the 5 `sheet_numbering` tests and every existing export test (`current_page_tests`, `protel_hierarchy`, `bom_hierarchy`, `source_tests`).
+Expected: PASS, including the 5 `sheet_numbering` tests and every existing export test (`current_page_tests`, `net_text_hierarchy`, `bom_hierarchy`, `source_tests`).
 
 If an existing test asserted export-order numbers for a project page, read it before changing it: a project page's number now comes from the hierarchy, so the expectation changes only where a page's hierarchy position differs from its list position, or where the project has placements that are not printed pages. Name each such change in the commit message.
 

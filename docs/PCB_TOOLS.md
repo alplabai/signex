@@ -1,23 +1,30 @@
 # Board placement tools
 
-How the PCB editor's placement tools behave (#2373). The table of tools,
-live and greyed, is `crates/signex-app/src/app/pcb_tools.rs`
-(`BoardPlaceTool::state`); the Place menu on a board and the PCB Active Bar
-are both built from it (see `MENU_BAR.md`, "Place on a board").
+How the PCB editor's placement tools behave (#2373). The table of tools is
+`crates/signex-app/src/app/pcb_tools.rs` (`BoardPlaceTool::command`); the
+Place menu on a board and the PCB Active Bar are both built from it (see
+`MENU_BAR.md`, "Place on a board"). Every tool runs on a board: Component,
+the last one greyed "not available on boards yet", runs since #2505.
 
 ## Common behaviour
 
-- **Arming.** Each live tool has a catalog command (`place_board_*`). Its
+- **Arming.** Each tool has a catalog command (`place_board_*`). Its
   Place row, its PCB Active Bar button, a key bound to it and the command
   palette all run that command, which arms the tool on the board in view of
   the window it ran in. Arming ends a Move, a paste or a part on the cursor
-  and a Properties net pick; starting any of those ends the tool.
+  and a Properties net pick; starting any of those ends the tool. Component
+  arms no click tool: it opens the part picker (see "Component").
 - **Points.** A clicked point lands on an object point within the snap
   distance (the Snap Options), else on the board's grid
   (`PcbSetup::grid_size`, else the PCB default) when grid snapping is on.
 - **Preview.** What the next click adds follows the pointer, drawn by the
   board renderer in its layer's colour and dimmed, like a part on the
-  cursor. Nothing reaches the board until a click.
+  cursor. Nothing reaches the board until a click. A tool of several
+  corners or points (Solid Region, Polygon Pour, Keepout, Fill, Pour
+  Cutout, Slice Pour, Arc) shows its outline from the first click: while
+  the points placed and the pointer enclose no area yet, thin lines join
+  them to the pointer (`pcb_tool/outline_preview.rs`), then the closing
+  area as before (Caner, 2026-11-21).
 - **Undo.** Each click that adds something is one board undo step
   (`BoardCommand::AddItems`, built by `signex_engine::pcb::draw`).
 - **Ending.** Esc or a right-click drops the shape being drawn; with no
@@ -26,11 +33,64 @@ are both built from it (see `MENU_BAR.md`, "Place on a board").
 - **Nets.** A via or track takes the net of the copper it starts on
   (`pcb_geom::net_at`, integer nm), or no net over bare board.
 
+## Component {#component}
+
+`place_board_component` (#2505; no key in the shipped profiles) is Place ▸
+Component... on a board, the Component... row of the board canvas menu's
+Place flyout (both read "Component..." as on a sheet, since the row opens a
+picker) and the first row of the PCB Active Bar's Components group, which
+reads "Component". It is greyed on a read-only board (`Needs::EditablePcb`).
+Decided by Caner on 2026-11-25 (`docs/DECISIONS.md`).
+
+- **Pick.** It opens the part picker, the one Place ▸ Component... opens on
+  a sheet (`LibraryMessage::OpenPicker`). Its Place button reads the row and
+  its default footprint off the update thread (`resolve_board_part`) and
+  puts the footprint on the cursor of the board the pick was made for, the
+  same Place carry as a part placed from the Components panel (#2364,
+  `handlers/pcb_part_place.rs`). A row with no footprint, or one the board
+  cannot hold, is refused with why in Messages and nothing goes on the
+  cursor.
+- **Placing.** The footprint follows the pointer on the components grid,
+  drawn by the board renderer and dimmed. Space turns it a quarter
+  counter-clockwise, Shift+Space clockwise; L (Flip Selection) moves it to
+  the other side, pads and graphics with it, and so do `mirror_x` and
+  `mirror_y` (the latter with a half turn). Each click places a copy as one board undo step
+  (`BoardCommand::AddItems`) with the next designator of its prefix on the
+  board, and the part stays on the cursor for the next copy. Esc, a
+  right-click, a tab switch or a newer pick ends it.
+- **Schematic link.** The placed footprint has no schematic part
+  (`Footprint::schematic_link` is none) and keeps its library link
+  (`library_ref`). The next Update PCB lists it as kept unlinked
+  (`EcoNote::KeptUnlinked`) and never ticks its removal; a part later
+  given the same designator on the sheet is linked to it by that
+  designator, as for any unlinked footprint (`docs/UPDATE_PCB.md`).
+- **Bar group.** The Components group's button shows Component until
+  Change Footprint is run from its dropdown; the group remembers the row
+  its dropdown ran last. Place ▸ Component... itself does not change it,
+  since it arms no tool.
+
 ## Via
 
 `place_board_via` (default profile: `P V` on a board). Each click places a
 through via (top to bottom copper) with the board's via size
 (`PcbSetup::via_diameter` and `via_drill`, else 0.6 mm and 0.3 mm).
+
+A selected via's Properties panel picks a via type (mockup row 96): the type
+sets the span, drill pair, stack and sizes, and its tenting, in one undo
+step. The types are derived from the board's vias until the Layer Stack
+Manager stores them (`docs/PCB_LAYER_STACK.md#via-types`). The stack tiles,
+Diameter and Drill are greyed with a "from type" tag until Override is on.
+A via whose diameter or drill already differs from its type shows Override
+on, its own values in bold with a reset arrow each; a reset arrow puts one
+back, and Override off puts both back in one undo step. A small
+illustration shows the via on the chosen layer and a cross-section of L1
+(Top) to Ln (Bottom); Protection names its IPC-4761 type on a chip in its
+header and keeps Tented Top and Bottom editable per via. The closed Via
+Type field shows the type's span glyph (the copper layers, with a bar over
+the ones it spans), its name and diameter / drill; Position, Diameter,
+Drill and Finished Hole read in mm. A microvia type lists Stacked / Staggered
+greyed under "Not stored yet". The form of the via about to be placed keeps
+Diameter and Drill editable.
 
 ## Track
 
@@ -38,6 +98,30 @@ through via (top to bottom copper) with the board's via size
 the active copper layer; with a non-copper layer active the tool says so and
 draws nothing.
 
+Board tools draw on the active layer (maintainer 2026-11-18). While one is
+armed the status bar says how to use it, that Tab paused it, that it needs
+another kind of layer, or why the last click added nothing; Messages keeps
+the same lines. Arming a tool with a form brings Properties to the front on
+what the next click places; the canvas keeps the keyboard, so a Properties
+window of its own is left where it is.
+
+Tab pauses every board tool with a form the way it pauses a sheet placement
+(Caner, 2026-11-21). While paused, what the next click adds (the route or
+run on the pointer, the via, pad, area, drawing, string or dimension) stays
+where it was: pointer moves and canvas clicks do nothing
+(`board_tool_followed` and `board_tool_clicked` skip a paused session), and
+the sheet's Placement Paused banner shows over the board
+(`view/overlays/placement_paused.rs`, `board_tool_paused_in_window`). Tab,
+Enter or the banner's Resume goes on with the edited values; Esc puts back
+the values, the active layer and the width and net of a run being drawn as
+they were when Tab was pressed, and goes on placing.
+
+- A run started on netted copper that does not reach the active copper
+  layer (a surface pad on Top with an inner layer active) takes that
+  copper's net and starts with a via there (the via of a layer change, in
+  the same undo step as the first legs). A pad that reaches the active
+  layer (through-hole) starts directly. A leg ending on such a pad ends
+  with a via there, in the same step.
 - The first click starts the run on the net of the copper under it. A run
   started over bare board takes the net of the copper its next point lands
   on.
@@ -57,15 +141,65 @@ draws nothing.
 - Track goes where the clicks are, through anything; Interactive Routing
   (below) keeps the clearance.
 
+The Track panel (#2523) opens with the shared primitive header: the kind,
+a count pill ("3 Tracks", "Next to place" while placing), the lock icon
+(filled while the tracks are locked, a dash with "1 of 2 locked" for a
+selection partly locked; a press locks or unlocks them as one step), then
+the search, or while placing the placing callout. A locked track shows a
+warn callout with Unlock under the search. A small line-art illustration
+follows: the track with its Width callout, its net and a "layer · round
+ends" note (an inner copper layer is named by its place, L2 and on);
+hovering a row lights its callout and the other way round. Net Information
+is open: the net (with the layer's colour) and class as links, a Selected /
+Total table of Length and Delay (greyed: the board records no dielectric),
+and Show More, which adds the net's track, via and pad counts on one line.
+Properties holds Net (with the pick button), Layer, Width, Ends (Round;
+Square and Flat greyed until square and flat ends are decided for copper,
+for DRC and Gerber; the board stores no cap), Position (the selection's
+corner as one X / Y row: typing it moves every selected track), Start and
+End as one X / Y row each, Length (read-only) and Tune Net To (read-only
+"select one track to tune" while several are selected). The paste and
+solder mask sections follow. Lock is the header icon. While placing, Net
+Information and the
+geometry rows are left out. A value the selected tracks do not share reads
+"Mixed".
+
 ## Interactive Routing
 
 `place_board_route` (no default key; Place, the PCB Active Bar). A route is
 drawn on the active copper layer like a Track run, but each leg keeps the
 clearance the design rules ask from other nets' copper (#2389).
 
+The routing tools and Via also run from operands on a named board, from
+the command line (#2470): the start, the corners and the end are given as
+points or pads, each one a click, and the whole route is one undo step. The
+same rules below apply; the board's defaults take the place of the tool's
+form, corner rule and mode. Operands and answer: `docs/CLI.md`, "Routing a
+board".
+
 - **Start.** The first click starts the route on the net of the copper under
   it (a pad or a track end), or no net over bare board, which then takes the
-  net of the copper its next point lands on.
+  net of the copper its next point lands on. Copper that does not reach the
+  active layer (a surface pad on Top with an inner layer active) gives the
+  route its net and a via there with the first leg, as for a Track run
+  (`signex_engine::pcb::route::copper_under`). Quick Route starts the same
+  way.
+- **Ratsnest.** While a route or Track run of a net is drawn, that net's
+  ratsnest line leaves from the route's end, not from the pad it started
+  on, and points to the nearest pad of the net the start's copper does not
+  reach; other nets keep their lines. When the route lands or is dropped
+  the ratsnest is the board's again (Caner, 2026-11-21;
+  `docs/architecture/pcb-ratsnest.md`, "While a route is drawn").
+- **Ends.** A leg aimed at a pad of another net is refused; the status bar
+  and Messages name the pad and both nets ("U1.1 is on net B, the route is
+  on net A"). A route that ends on a pad of no net connects: when it lands
+  the pad joins the route's net, locked as a connection made on the board,
+  in the same undo step; the status bar says "U1.1 joined net A", and
+  Update PCB lists the pad as keeping a net set on the board
+  (`signex_engine::pcb::route::pad_end`, `join_pads`). A leg ending on a
+  pad that does not reach its layer (a Top pad while routing on an inner
+  layer) ends with a via there, checked like a layer change's via. Track
+  runs end on such a pad with a via too.
 - **Rules.** The route reads the rules the Design Rule Check of this board
   reads (`DrcRules`, the same project layers and net classes, compiled once
   when the route starts): the clearance between each pair of items
@@ -83,12 +217,22 @@ clearance the design rules ask from other nets' copper (#2389).
   (90°: axis-aligned; 45°: axis and diagonal, each corner turning 45° at
   most; any angle: pulled taut) and joins the point with the rule's legs.
   With no way within the search budget the click adds nothing and the
-  Messages panel says so.
+  Messages panel says so. The route's own net is no obstacle, so a leg can
+  run along a track of its net on its layer (one already on the board, or
+  an earlier leg doubling back): the leg lays only the stretches that track
+  does not cover, ending on its ends, never a second track over it. Only a
+  track at least as wide as the leg covers it; the route keeps the board
+  tracks it was trimmed against, and one gone or changed when the route
+  ends refuses it rather than land a gap (#2492,
+  `route/cover.rs`).
 - **Preview.** The leg on the pointer is routed once per change of what it
   depends on (the pointer's grid point, a leg, the board revision, the
   corner rule, the mode, the layer), not per repaint, with a smaller search
   budget than a click (`PREVIEW_BUDGET`); a leg the preview gives up on
-  still routes on the click.
+  still routes on the click. A leg with no way, or aimed at a pad it may
+  not end on, is drawn straight to the pointer in the DRC error colour
+  instead of vanishing, and the status bar says why. The route on the cursor is drawn at the full
+  colour of its layer, never dimmed.
 - **Push and shove.** `cycle_route_mode` (the palette; no default key)
   switches between walking around (the default) and pushing. In push mode
   the rule's legs go straight to the point and other nets' tracks in the
@@ -100,6 +244,7 @@ clearance the design rules ask from other nets' copper (#2389).
   link), one the leg crosses, a pad or via in the way, or a move that would
   break a clearance (the leg's via included) or enter a keepout is not
   pushed: the leg walks around instead.
+  A track of no net is never pushed; the leg walks around it (Caner, 2026-11-25, #2515).
 - **Vias.** Making another copper layer active mid-route puts a through via
   (the board's via size, grown to the written rules' minimum diameter and
   drill for the net) at the route's end with the next leg; a via that would
@@ -129,6 +274,83 @@ clearance the design rules ask from other nets' copper (#2389).
   several layers in one search, and a route kept when its board's tab
   closes mid-route.
 
+### Router soak and bench
+
+`signex-engine`'s `tests/routing/` measures the router against its quality
+bar (#2482, #2483) on a synthetic board, the realistic corpus boards
+(`signex-types/tests/corpus/pcb/real/`) and the routing corpus
+(`testdata/routing-corpus/*.snxpcb`, net classes from the `.snxprj` beside
+each board). The routing corpus (#2481) is 50 third-party boards under
+their own licences, listed in `testdata/routing-corpus/MANIFEST.tsv` and
+checked by `scripts/check_routing_corpus.sh`; its README says what the
+licences allow. The boards are stored in Git LFS: in a clone without the
+LFS objects each board is a pointer file, and the tests skip it with a
+message (`git lfs pull` fetches them). With
+`SIGNEX_REQUIRE_ROUTING_CORPUS=1` the load check and the long runs fail on
+a pointer or an empty corpus instead.
+
+- **Soak.** A seeded driver applies random actions through `BoardEngine`:
+  routes and shoves (one or two legs from a ratsnest line or a pad, landed
+  as one step as the tool lands them), track and footprint moves, deletes,
+  undo and redo. After every action: nothing panicked, the engine's history
+  matches the steps taken, undo and redo give back the board exactly as it
+  was, ids are unique, tracks are finite, on copper and on known nets, no
+  zero-length track appeared, a refused route changed nothing, and a
+  just-routed draft fits the board it was routed on. The board states the
+  history is compared against are digests of the board's JSON, so 100 steps
+  of history on a large corpus board hold no copies of it. Every so often,
+  two costlier checks: the DRC delta of a route (as in the bench below; by
+  default every 25th route of the long soak) and the file round trip (by
+  default every 1 000 actions and after the last; per PR after the last):
+  the board written as `.snxpcb` and read back keeps every track and via and
+  writes the same file again. A board that does not round-trip as loaded is
+  reported and not round-trip checked. A failure prints its
+  seed, action index and the command that replays it. A routed track laid
+  over a same-net track already there and at least as wide (same layer, on
+  one line, sharing a
+  stretch) fails the soak (#2492). Not checked yet (#2482):
+  dangling track ends and connectivity against the net list. The soak's own
+  edits make both on purpose (a stub routed into open board, a track moved
+  off its pads or across another net), so these checks must first tell an
+  edit's effect from a defect.
+- **Bench.** One-leg routes, half of them shoves: the rounds each shove
+  took (`pcb_geom::route::shove_run`). A shove converged when it settled
+  within 8 rounds: it cleared the way, or found a push that cannot be made
+  (a pad in the way, a crossing track), after which the router walks
+  around. One that ran out of rounds did not; the report also counts the
+  shoves that cleared the way. Then the time from click to
+  landed step, and the DRC delta: every design rule check finding a route
+  adds, other than an unrouted link, names the route's own tracks or vias.
+- **Runs.** `cargo test -p signex-engine --test routing` runs a short soak
+  and bench with every test run (DRC delta and convergence asserted) on the
+  fixed boards only: routing a corpus board in the debug test profile takes
+  too long for per-PR CI. Per PR the routing corpus is checked by loading
+  alone (`tests/routing/corpus_check.rs`): every board parses, names only
+  layers this build knows (copper items on copper), and no track end lands
+  on another net's pad once the pads are placed. The `routing-soak`
+  workflow runs weekly and on demand (`workflow_dispatch`, with seed,
+  length and board inputs), never on a PR, and is not a required check. In
+  release it runs the ignored `soak_long` (10 000 actions on every board,
+  the boards side by side, one per core) and then, alone on the runner,
+  `bench_thresholds` (shoves converged within 8 rounds on 95% of actions;
+  median latency at most 16 ms and p95 at most 33 ms on the median board by
+  copper count). Every board fails or passes on its own and gets a report
+  line; the lines go to the run summary and the uploaded artifact
+  `routing-report-<run number>` (format: `docs/PERFORMANCE.md`, "Router
+  soak and bench"). Latency is asserted only where
+  `SIGNEX_ROUTING_ASSERT_LATENCY=1`, which only the scheduled job sets;
+  elsewhere it is measured and reported. A failed scheduled run opens or
+  comments on the issue "Scheduled routing soak is failing".
+  `SIGNEX_SOAK_SEED`, `SIGNEX_SOAK_ACTIONS` and `SIGNEX_SOAK_BOARD` pick the
+  seed, the length and one board (looked up in the whole corpus, also by
+  the short runs); the rest are listed in `docs/PERFORMANCE.md`.
+  `routing-soak` checks out the LFS objects and sets
+  `SIGNEX_REQUIRE_ROUTING_CORPUS=1`, so a board left as a pointer fails the
+  long runs too. `test · workspace` fetches
+  them from a `.git/lfs` cache keyed on the boards' object ids, and sets
+  `SIGNEX_REQUIRE_ROUTING_CORPUS=1`, on pushes, the merge queue and on a PR
+  that changes the corpus, `signex-types`, `pcb-geom` or the routing tests.
+
 ## Differential Pair Routing and Multi-Route
 
 `place_board_diff_pair` and `place_board_multi_route` (no default key;
@@ -141,11 +363,13 @@ the active copper layer as one route (#2389).
   when the net's class sets a differential-pair gap and holds exactly two
   of the board's nets, the other one (the first by name is the positive).
   Multi-Route takes the nets of the selected tracks, pads and vias, two or
-  more. A net in no pair, no selection or a net with no copper on the layer
-  starts nothing, and the Messages panel says why.
+  more. A net in no pair, no selection or a net with no copper on any
+  layer starts nothing, and the Messages panel says why.
 - **Start.** Each net starts at its own copper nearest the first click (a
   pad centre, a track end or a via); the route's centre line starts in the
-  middle of those points.
+  middle of those points. A net with no copper on the active layer starts
+  from its copper on the topmost layer that has some, with a via there
+  (maintainer 2026-11-18); the vias land with the tracks.
 - **Width and gap.** The width is the first net's route width (as
   Interactive Routing's). A pair takes its class's differential-pair width
   and gap where they are set; the gap between neighbours is never under the
@@ -159,7 +383,9 @@ the active copper layer as one route (#2389).
   (`RouteWorld::with_kin`). Every member then follows the centre line at
   its offset (`pcb_geom::route::parallel_paths`, corners mitred), the
   member whose start lies leftmost of the first leg on the left, joined
-  straight from its start. The member tracks are checked one by one against
+  straight from its start. A member lays only the stretches a track of its
+  net on its layer does not already cover, as a single route's leg does
+  (#2492). The member tracks are checked one by one against
   the board, their gaps to each other included (`draft_fits`); a leg that
   breaks a clearance, or a corner too sharp to follow side by side, adds
   nothing and Messages says why.
@@ -214,19 +440,30 @@ Coupled (both nets at once) pair meanders are not done yet.
 
 `place_board_fill` (`P F`) and `place_board_region` (`P R`). Both add solid
 copper on the active copper layer, stored as a zone (`fill_type = "solid"`)
-on the net of the copper under its first point, or no net. With a
-non-copper layer active the tool says so and draws nothing.
+on the net set in Properties (Tab), else the net of the copper under its
+first corner on copper, or no net. With a non-copper layer active the tool
+says so and draws nothing.
 
 - **Fill:** the first click is one corner, the second the opposite corner of
   the rectangle.
-- **Solid Region:** each click adds a corner. A click on the first corner,
-  or a right-click once there are three, closes it; Esc drops it.
+- **Solid Region:** each click adds a corner. A click on the first corner
+  (or within half a grid step of it), a double-click, or a right-click once
+  there are three, closes it; Esc drops it. Polygon Pour and Keepout close
+  the same way.
 - A shape whose corners are on one line has no area (checked in integer nm)
   and is not added; the Messages panel says so.
+- **Without a window** (#2470): Fill, Solid Region, Polygon Pour, Keepout
+  and Pour Cutout take the board (`document`), the `layer`, the outline
+  (`start` and `end` for a Fill, `corners` for the others, from the board
+  origin with Y up) and, for copper, the `net`. The click and the operand
+  form build the zone in one place (`signex_engine::pcb::area`); the
+  operand form reads no Properties form. One undo step each, answered with
+  the area as JSON: [CLI.md](CLI.md), "Board areas".
 
 ## Keepout
 
-`place_board_keepout` (no default key). Drawn like a Solid Region, on the
+`place_board_keepout` (`P K` in the default profile, `K` in Classic, on a
+board). Drawn like a Solid Region, on the
 active layer when it is a copper layer or a keep-out layer (Top or Bottom
 Keep-Out Layer); on any other layer the tool says so and draws nothing.
 
@@ -238,11 +475,26 @@ The design rule check reads it through `Zone::as_keepout` exactly as it reads
 a board-sketch keepout forbidding all copper, so a violation names the
 keepout zone's id.
 
+## Room
+
+`place_board_room` (#2457), the row after Keepout; no key in the shipped
+profiles. The first click is a corner, the room follows the pointer, and the
+second click places it as one undo step, named `Room N` in the next palette
+colour. Two corners on one line place nothing. The tool then ends and the new
+room is selected, so Properties shows it. Esc drops the first corner, then
+ends the tool. Rooms: [PCB_ROOMS.md](PCB_ROOMS.md).
+
 ## Polygon Pour
 
 `place_board_polygon_pour` (`P G`, #2216). Drawn like a Solid Region, on the
-active copper layer, on the net of the copper under its first corner, or no
-net. With a non-copper layer active the tool says so and draws nothing. It is
+active copper layer, on the net set in Properties (Tab), else the net of the
+copper under its first corner on copper, or no net; a pour placed with no
+net says so in the status bar and Messages. A pour with no fill (on no
+copper layer, an outline or clearance the geometry cannot hold) says why in
+Messages when placed and in the Copper card of its Properties
+(`pcb_geom::Unfilled`; a shelved pour is not one of these, an unfilled one
+is). With a
+non-copper layer active the tool says so and draws nothing. It is
 stored as a zone with `fill_type = "pour"` and `clearance = 0`, which follows
 the board's clearance (`Zone::pour_clearance_mm`: the zone's own clearance
 when above 0, else `PcbSetup::clearance`, else 0.2 mm).
@@ -279,33 +531,106 @@ of different nets, the higher priority keeps the overlap.
 Copper of the pour's own net is filled over: a pad joins the pour solidly, with
 no thermal relief spokes (`thermal_relief`, `thermal_gap` and `thermal_width`
 are kept but not read yet). Not modelled yet: copper text and footprint copper
-graphics are not cleared.
+graphics are not cleared, hatched fill, and rounded or chamfered corners.
+
+A shelved pour (`Zone::shelved`, #2523) keeps its outline and every setting
+but holds no copper: `pcb_geom::zone_fills` gives it no fill, so it clears no
+other pour, and the canvas, the fabrication and PDF outputs, the ratsnest
+and via stitching read no copper for it, since each takes a pour's copper
+from the fills. The design rule check reads no pour copper either way. The
+canvas draws a shelved pour's outline dashed. The flag is the zone key
+`shelved = true`, written only when on, so a board with no shelved pour
+saves as before. A board with one writes `snxpcb/1.9` (#2738, DECISIONS
+2026-11-23), so a build that does not know the key opens it read-only
+instead of flooding the pour. Fabrication Outputs does not count a shelved
+pour as a zone left unfilled.
+
+An unfilled pour (`Zone::unfilled`, #2506, DECISIONS 2026-11-25) also keeps
+its outline and settings and holds no copper, until the next Repour.
+`pcb_geom::zone_fills` gives it no fill, so it clears no other pour and the
+canvas, fabrication and PDF outputs, ratsnest and stitching see no copper
+for it, as for a shelved pour. Unlike a shelved pour it counts as not
+filled: `ZoneFills::unfilled` lists it as `Unfilled::UntilRepour`, the
+Copper card says "not filled: it was unfilled; Repour fills it again", the
+Polygon Manager shows it Not filled, and Fabrication Outputs counts it as a
+zone left unfilled even when the other pours' fills are supplied. The
+canvas keeps its outline solid. `unfill_selected` (Unfill Selected: Tools,
+the Copper Areas group of the Active Bar, a pour's right-click, the
+palette; no default key) and the Copper card's Unfill set it on the
+selected pours, one undo step (`ZoneEdit::Unfilled`); on a shelved pour it
+changes nothing. The flag is the zone key `unfilled = true`, written only
+when on; a board with one writes `snxpcb/1.11`, so a build that knows only
+1.10 opens it read-only.
 
 ### Picking and editing a pour
 
 A placed pour is picked inside its outline (`PickKind::Polygons`, the
-Polygons chip of the selection filter) and opens the area panel: net, layer,
-clearance, minimum width, Priority (a whole number from 0), Remove Islands
-Below (mm²), Remove Dead Copper, and the copper its fill holds (area and
-pieces), read from the fills the app holds. Each edit is one undo step.
-`min_island_area` and `remove_dead_islands` are written to the file only when
-set.
+Polygons chip of the selection filter) and opens the area panel (#2523): its
+illustration, Net Information, then Net, Layer and the Pour section: Fill
+Mode (Solid; Hatched is greyed, not supported yet), Clearance, Minimum
+Width, Thermal Relief (the stored switch with Spoke / Gap, read only and
+greyed, since the fill draws no spokes), Corners and Corner Size (Sharp,
+size 0; greyed, not stored yet), Priority (a whole number from 0), Remove
+Islands (below an area in mm²), Remove Dead Copper, and the Copper card.
+Each edit is one undo step. `min_island_area` and `remove_dead_islands` are
+written to the file only when set. Fill Mode has no None: the outline-only
+state is Shelve.
+
+The Copper card shows the copper the fill holds (area and pieces, read from
+the fills the app holds), or "shelved · no copper". Its buttons:
+
+- **Repour** fills the board again and reports the pours the panel shows,
+  as Repour Selected does; greyed while the pour is shelved.
+- **Unfill** (#2506) sets `unfilled` on the selected pours, one undo step;
+  greyed while the pour is shelved, once it is unfilled and on a board that
+  cannot be edited.
+- **Shelve** / **Unshelve** sets `shelved` on the selected pours, one undo
+  step (`ZoneEdit::Shelved`). The fields stay editable while shelved.
+- **⋯** opens Repour all, Shelve all and Unshelve all, which act on every
+  pour of the board; Shelve all and Unshelve all are one undo step each
+  (`pour_edit::shelve_all_pours`). A pick closes the menu.
+
+Every button acts on the board the panel shows, which need not be the tab
+in view: the message carries that board.
+
+A fill, region or keepout has no Copper card. The area lock is not a row:
+the panel header shows it greyed, with the reason as its tooltip.
 
 ### Pour Cutout and Slice Pour
 
-Both work on the polygon pours of the active copper layer and are one undo
-step each (`signex_engine::pcb::pour_edit`, geometry in
-`pcb_geom::{cut_area, slice_area}`):
+Both work on the active copper layer and are one undo step each.
 
 - **Pour Cutout** (`place_board_pour_cutout`) is drawn like a Solid Region.
-  Closed, its area is cut out of every pour it overlaps: a hole when inside,
-  a notch at an edge, or several pieces.
+  Closed, it places a pour cutout (#2871, DECISIONS 2026-11-24): a region
+  of its own on the layer (`draw::new_pour_cutout`, a zone with the
+  `pour_cutout` fill type and no net, `signex_types::zone_cutout`). It
+  edits no pour. Every polygon pour on the layer leaves the region empty
+  when it fills (`pcb_geom` zone fill obstacles), exactly as drawn, with no
+  clearance round it. It is placed whether or not it overlaps a pour.
+  The region is picked by a click inside it, over the pour under it, and
+  shows in the selection filter as a Region. It moves by dragging or Move,
+  is deleted like any object, and its layer is set in Properties, each one
+  undo step; the pour's fill follows. Its Properties panel shows the layer,
+  its vertices and its area; the board has no area vertex editing yet, so
+  its corners are changed by drawing it again. It holds no copper, so DRC, the copper list,
+  Gerber, PDF and the 3D view read only the pours' fills around it. In the
+  board file it is an entry of `[[pour_cutouts]]` (below).
 - **Slice Pour** (`place_board_slice_pour`) takes two clicks; every pour the
-  segment between them meets is cut in two along the line through them.
+  segment between them meets is cut in two along the line through them
+  (`signex_engine::pcb::pour_edit::slice_pours`, geometry in
+  `pcb_geom::slice_area`). The largest piece keeps the pour (its uuid and
+  settings); every other piece becomes a new pour with the same settings.
+  When nothing is cut, Messages says so and the board is unchanged.
 
-The largest piece keeps the pour (its uuid and settings); every other piece
-becomes a new pour with the same settings, and a pour the cutout covers whole
-is removed. When nothing is cut, Messages says so and the board is unchanged.
+#### Pour cutouts in the board file
+
+A `.snxpcb` keeps its pour cutouts in a `[[pour_cutouts]]` array of zone
+tables, after `[[zones]]` (`format::pour_cutouts`). Each entry is read as a
+cutout whatever its `fill_type` says, and the cutouts are loaded after the
+zones. The array is written only when the board has a cutout, so a board
+without one saves byte for byte as before. A build that does not know the
+array keeps it as an unknown key and writes it back, and never reads a
+cutout as copper.
 
 ### Repour
 
@@ -314,9 +639,17 @@ Active Bar, the palette) fill the board in view again at once and say in
 Messages how many pours, pieces of copper and removed islands they came to;
 Repour Selected reports the selected pours. Fills depend on each other, so
 the whole board is filled either way. Nothing in the document changes, so
-there is no undo step. `repour_all document=<board>` answers an agent or the
-CLI with each pour's `zone`, `net`, `net_name`, `layer`, `priority`,
-`filled`, `pieces`, `area_mm2` and `islands_removed`.
+there is no undo step, unless a pour it acts on is unfilled (#2506): Repour
+first clears `unfilled` on those pours as one undo step
+(`pour_edit::refill_pours`), which marks the board changed; Repour All does
+so for every unfilled pour, from an agent or the CLI too, so `repour_all`
+is an edit (the CLI's `edit` capability, and the agent journal records
+it) and runs as its own command, not in an edit list. `repour_all
+document=<board>` answers an agent or the CLI with each pour's `zone`,
+`net`, `net_name`, `layer`, `priority`, `shelved`, `unfilled`, `filled`,
+`pieces`, `area_mm2` and `islands_removed`; a shelved pour is not filled.
+The area panel's Copper card has the same Repour, and Repour all in its ⋯
+menu.
 
 A round part of a grown obstacle is cut as a polygon whose chords lie on or
 outside the true arc, so the fill never comes closer than the clearance. The
@@ -338,12 +671,23 @@ cursor) is drawn as its outline alone.
 (`PCB_DEFAULT_TEXT_SIZE_MM`) and unturned, reading the catalog's new-string
 text (`pcb-tool-string-text`, "String"), or the text, height and turn set in
 its placement form; the string carries no net. A layer takes a string when
-`PcbLayer::takes_text` holds: the two overlay layers, the mechanical layers
-and the documentation layers (Dimensions among them). On any other layer a
-click places nothing and the Messages panel names the layers that do.
-Copper text would be copper that the copper list, the design rule check and
-the ratsnest never read. The canvas draws it (#2387); a click or box picks
-it (`pcb_geom::ItemRef::Text`, the selection filter's Texts kind).
+`PcbLayer::takes_text` holds: the copper layers, the two overlay layers, the
+mechanical layers and the documentation layers (Dimensions among them). On
+any other layer a click places nothing and the Messages panel and the
+status bar name the layers that do. A string on copper is real copper text
+with no net (Caner, 2026-11-24, #2883): see "Copper of no net" under
+[Graphics](#graphics). The canvas draws it (#2387); a click or box picks it
+(`pcb_geom::ItemRef::Text`, the selection filter's Texts kind).
+
+The String panel (#2523) shows the illustration (the text box with its
+Text Height and its Position X/Y origin; the rotation is not drawn), then
+the text across the full width, Layer, Position (X and Y on one row), Text
+Height, Rotation, and the quick rotation steps 0°, 90°, 180° and 270°. A
+step is on while the rotation equals it; a pick sets the rotation as one
+undo step, like a typed one. A string on a bottom-side layer reads mirrored
+on the board, and a read-only "Mirrored (bottom side)" row under Layer says
+so (Caner, 2026-11-24, mockup row 100; `TextFacts::is_mirrored`, the
+same side rule the board renderer mirrors by).
 
 ## Arc
 
@@ -370,28 +714,145 @@ copper: the ratsnest joins them, and DRC reports one finding per pair of
 items, the worst of their chords'. On any other layer it is a drawing
 with no net. Width follows `PcbSetup::trace_width` unless the form sets it.
 
-The Arc panel shows Net Information and Net (copper only), Layer (any board
-layer; moving off copper drops the net), Width, Centre, Radius, Start and End
-Angle (read from the board origin with Y up, counter-clockwise from start to
-end) and the length; each edit is one undo step
-(`primitive_edit::ArcEdit`, `BoardCommand::ReplaceItems`).
+The Arc panel (#2523) opens with the shared header (its lock greyed: the
+board stores no lock for an arc) and an illustration of the arc with its
+Radius and Width callouts and its Start and End rays, no rotation arrow.
+Net Information (copper only) is closed, its header naming the net and its
+class. Properties holds Net (copper only), Layer (any board layer; moving
+off copper drops the net), Width, Ends (Round; Square and Flat greyed, as
+for tracks), Centre as one X / Y row, Radius, Angles as one Start / End row
+(read from the board origin with Y up, counter-clockwise from start to end)
+and the length; each edit is one undo step (`primitive_edit::ArcEdit`,
+`BoardCommand::ReplaceItems`). While the Arc tool is armed, a Placement row
+picks Centre, Edge or Any angle, the same setting `cycle_arc_mode` steps,
+and the shape rows and Net Information are left out.
 
 ## Dimension
 
-`place_board_dimension` (no default key) places a linear dimension: two
+`place_board_dimension` (no default key) places an aligned dimension: two
 clicks for the points it measures, a third for where its line stands (the
-offset is how far the third point stands off the measured line). It goes on
-the active layer when that takes text, else on the Dimensions layer. The
-model is `signex_types::pcb_dimension::LinearDimension`, kept in
+offset is how far the third point stands off the measured line). The other
+kinds are in [Dimension kinds](#dimension-kinds). It goes on
+the active layer, whichever layer it is, copper included (Caner,
+2026-11-21; this replaced "the active layer when that takes text, else the
+Dimensions layer"). A dimension on copper is a drawing only: the copper
+list, ratsnest, design rule check and the Gerber, drill and IPC-356 outputs
+do not read dimensions on any layer, so it is drawn by the board renderer
+but never fabricated. The model is `signex_types::pcb_dimension::LinearDimension`, kept in
 `PcbBoard::free.dimensions`: two extension lines, the dimension line, an
 arrow at each end and the value (`value_text`, to `precision` decimals, at
 most 6), drawn by the board renderer and picked by its strokes and the box
 of its value. Two equal points add nothing and say so.
 
-The Dimension panel shows Start, End, Offset, Line Width, Text Height,
-Precision, the value and Layer (layers that take text); each edit is one
-undo step. Angular, radial, diameter, leader, baseline and centre-mark
-dimensions have no model yet and are not offered.
+The Dimension panel (#2523) shows the measured Value on a headline card
+under the header, above the search (mockup row 101), then the illustration
+(the two points, the extension lines, the Offset and the value), then Start
+and End (X and Y on one row each), Offset, and under a Style subhead:
+Line Width, Text Height, Precision and Layer (every board layer,
+copper included; a caption under the row says a dimension on copper is a
+drawing only).
+Precision is a 0 to 6 segmented control, so a precision outside that range
+cannot be entered from the panel. Each edit is one undo step. There is no
+Type row: a dimension keeps the kind it was placed with. Angular,
+diameter, leader, datum, baseline and centre-mark dimensions have no model
+yet and are not offered (#2906).
+
+### Dimension kinds {#dimension-kinds}
+
+A dimension has a kind (`signex_types::pcb_dimension_kind::DimensionKind`,
+#2507). Place ▸ Dimension on a board and the PCB Active Bar's Dimensions
+dropdown list them, Aligned first; the bar's button runs the kind used
+last. Each kind takes the dimension look settings below.
+
+- **Aligned** (`place_board_dimension`): the distance along the two
+  points, its line parallel to them. Every dimension from before the kinds
+  is aligned.
+- **Linear Horizontal** (`place_board_dimension_horizontal`) and **Linear
+  Vertical** (`place_board_dimension_vertical`): the same three clicks; the
+  value is the distance across (or up or down) between the points, the
+  line horizontal (or vertical) through the third click, and the second
+  point's extension line runs from it to that line. Two points level with
+  each other add nothing and say so.
+- **Radial** (`place_board_dimension_radial`): one click on or within 1 mm
+  of the edge of an arc or circle (`draw::RADIAL_PICK_REACH_MM`): a free
+  arc, copper or not, or a board drawing that is an arc or a full circle;
+  the nearest edge wins. The dimension is a leader from the centre toward
+  the click with one arrow on the circle and no extension lines; the value
+  reads `R` before the radius (after any prefix). A click on no arc or
+  circle adds nothing and says so. Start is the centre and End the leader's
+  point on the circle. The Dimension panel's illustration draws it as the
+  leader, with no extension lines and no Offset callout.
+
+In mils the Value card reads the length each kind measures (across, up or
+down, or the radius after `R`); a selection of different kinds shows the
+drawn text. These choices are Caner's (2026-11-25).
+
+The values stay live: a dimension's value is measured from its points
+whenever it is drawn, so editing Start or End changes it, and a radial
+dimension names the arc or circle it measures (`measures`). After every
+board edit the board engine puts each radial dimension that is off its
+circle back on it, keeping its leader's direction, in the same undo step
+(`signex_engine::pcb` `dimension_refit`), so moving, resizing or editing
+the arc or circle moves the dimension and its value with it, and undo takes
+both back. While the arc or circle is dragged, the drag preview draws the
+dimension following it. A radial dimension moved on its own goes back onto
+its circle; one whose arc or circle is deleted stays where it is.
+
+The lengths (Start, End, Offset, Line Width, Text Height) and the Value
+card follow the board's Units, mm or mils (Caner, 2026-11-24, mockup row
+101); in mils the Value is the measured length to the dimension's
+precision, and the illustration's value and text height match. A bare
+number typed in mils is read as mils; a number ending in mm, mil or mils
+keeps its unit. The model and the file stay in mm and the value drawn on
+the board stays mm text, so there is no new file column. A Units switch
+drops lengths typed and not yet entered.
+
+### Dimension settings {#dimension-settings}
+
+Each dimension carries its own look (`signex_types::pcb_dimension_style::DimensionStyle`,
+#2868, Caner 2026-11-24), shown in four more sections of the Dimension
+panel, each pick or Enter one undo step:
+
+- **Arrows**: Arrow Style (Filled, a closed triangle; Open, two strokes;
+  None), Arrow Length (from the tip back along the line) and Arrow Width
+  (across the line at the open end).
+- **Text**: Font (Mono, the board's monospace face; Sans, the interface
+  face), Bold, Italic, Text Width (the width of one character; the canvas
+  stretches the glyphs to it), Text Position (Above: beside the line on
+  the side it stands off, Text Gap from it; Inline: on the line, which
+  breaks Text Gap before and after the value, and is left out when the
+  value does not fit between the arrows; Manual: at Text Point) and Text
+  Gap. Text Point shows only for Manual: Along is mm from the middle of
+  the line along it, Across mm from the line on the side the Offset is
+  measured on, so the value moves and turns with the dimension. Picking
+  Manual starts the point where the value was drawn.
+- **Extension Lines**: Extension Offset (the gap between a measured point
+  and the start of its extension line), Overshoot (how far it runs past
+  the dimension line) and Extension Width.
+- **Units and Format**: Unit (mm, mil, in), Show unit, Prefix and Suffix
+  (written before and after the number) and Trailing zeros (off: `10.50`
+  reads `10.5`, `10.00` reads `10`).
+
+Lengths are mm and not below zero; Text Width is above zero. The canvas,
+the pick index (the value's box is Text Width per character) and the PDF
+and SVG assembly drawings draw the arrows, widths and positions. The
+assembly drawings print the value in their one face: Font, Bold, Italic
+and Text Width are drawn on the canvas only.
+
+A new dimension starts from its project's dimension defaults (line
+width, text height, precision and every setting above, stored in the
+`.snxprj` as `project_defaults.dimension`; Caner 2026-11-24). A new
+project is seeded with Preferences ▸ PCB ▸ PCB Defaults (`prefs.json`,
+`pcb_dimension_defaults`) and keeps its own copy from then on; a project
+from before, which stores none, and a board in no project follow
+Preferences. The Dimension tool's form changes them for the next
+dimensions of the session; a placed dimension's Properties change it
+alone. With no saved defaults a new dimension has the look dimensions had
+before these settings: open arrows one text height long and 0.6 wide, the
+value Above, half a text height off the line, extension lines from the
+measured points half a text height past the line at the line width, mm
+with the unit and trailing zeros. Those lengths no longer follow a later
+Text Height edit.
 
 ## Graphics {#graphics}
 
@@ -402,10 +863,41 @@ draws a board drawing (`PcbBoard::graphics`, kinds in
 `signex_types::pcb_graphic`) on the active layer, built by
 `signex_engine::pcb::graphic`, one undo step each.
 
-- **Layer.** Any non-copper layer but the two keep-out layers, whose areas
-  the design rule check reads as rules: overlay, solder mask, paste, fab,
-  assembly, courtyard, mechanical, documentation, the board outline. On
-  another layer a click adds nothing and the Messages panel says so.
+- **Layer.** Any layer but the two keep-out layers, whose areas the design
+  rule check reads as rules: copper, overlay, solder mask, paste, fab,
+  assembly, courtyard, mechanical, documentation, the board outline. On a
+  keep-out a click adds nothing and the Messages panel and the status bar
+  say so. On copper (Caner, 2026-11-24, #2869) Line and Arc place copper:
+  Line a run of straight tracks, any angle, on the net of the pad, via or
+  track under its first click; Arc a track arc on the net under its start.
+  They are tracks for the copper list, DRC and Gerber, and take the Track
+  and Arc tools' width and net, which Properties shows while copper is
+  active. Full Circle, Rectangle and Text Frame on copper (Caner,
+  2026-11-24, #2883) place a drawing whose stroked outline is copper with
+  no net (a text frame's text too); Properties shows the drawing.
+- **Copper of no net (#2883, #2515).** A drawing on copper (along its
+  stroke, a text frame's lines included) and a string on copper (along its
+  glyph strokes, in the board stroke font) are copper of no net, listed by
+  `pcb_geom::drawn_copper` (curves within `ARC_CHORD_ERROR_MM`). With the
+  pads, free pads, tracks, copper arcs and vias of net 0 they make
+  `pcb_geom::no_net_copper` (an unplated pad of no net only on the copper
+  layers it lists, as the Gerber flashes it). The design rule check
+  measures that list against every net's copper (a short or a clearance
+  finding naming the item, net 0) and against the board edge; two pieces
+  of no net are never a pair. A pour keeps its clearance from them, unless
+  the pour has no net, as for any other net. The interactive router keeps
+  clear of all of it, and a push never moves a track of no net (the route
+  walks round it); via stitching, teardrops and gloss keep clear of it too.
+  The one exception is a pad of no net a leg ends on or starts from: it
+  joins the route's net (Caner, 2026-11-18), so the router routes onto it
+  as that net's copper (`route::ends::with_joined_ends`).
+  The Gerber writes drawings and strings on the copper image as `Conductor`
+  with no net (was `NonConductor`). Copper of no net joins no net: the
+  ratsnest, the unrouted check and a new track's net (`net_at`) do not read
+  it, so a track of no net across two pads of one net is a short to each
+  and leaves them unrouted. A footprint's own drawings on a copper layer
+  are written on the copper image as `NonConductor`, and the check and the
+  router do not read them.
 - **Line.** The first click starts a run; each later click adds a line from
   the run's end, any angle. A click on the run's end, Esc or a right-click
   ends the run.
@@ -429,12 +921,22 @@ draws a board drawing (`PcbBoard::graphics`, kinds in
   frame) or centre and radius (arc, circle), and a text frame's text, where
   `\n` is a line break, and text height, one undo step per field
   (`signex_engine::pcb::primitive_edit::GraphicEdit`). Delete removes it.
+- **Panel (#2523).** The header names the kind (Line, Arc, Full Circle,
+  Rectangle, Text Frame; "Drawings" for a mix) with a "1 Drawing" pill and a
+  greyed lock (the board stores none). An illustration follows for one
+  kind: a line with its Width and ends, a circle or arc with its Radius and
+  Width, a rectangle or text frame with its Width and Height (and a frame's
+  Text Height); hovering a row lights its callout. Properties holds Layer,
+  Width and, for a line, Ends (Round; Square and Flat greyed: the board
+  stores no cap for a drawing). Location holds Start and End (lines,
+  rectangles, text frames) or Centre and Radius (arcs, circles), each point
+  one X / Y row. A text frame's Text section has the text across the row,
+  the hint and Text Height.
 - **Output.** Saved in `.snxpcb` (`[[extras.board.graphics]]`, each with its
   `uuid`; a text frame's `text` and `font_size`), drawn by the board
   renderer, printed by Board Print (#2402), and drawn into the fabrication
-  layer's Gerber (#2388) when the layer is one (overlay, mask, paste, the
-  board outline); a text frame's text waits there for the stroke font, as
-  board texts do.
+  layer's Gerber (#2388) when the layer is one (copper, overlay, mask,
+  paste, the board outline), with its text frame's text in the stroke font.
 - **Agents.** `add_board_graphic` (`document`, `kind`: `line`, `arc`,
   `circle`, `rectangle` or `text_frame`; `start` and `end`, an arc's or
   circle's centre `at`; optional `layer` and `text`) and `set_board_graphic`
@@ -445,14 +947,31 @@ draws a board drawing (`PcbBoard::graphics`, kinds in
 ## Pad
 
 `place_board_pad` (no default key) places a free pad, one per click: a pad
-with no footprint, kept in `PcbBoard::free.pads` at its board position. By
-default it is a round through-hole pad 1.5 mm across with a 0.8 mm hole on
-the top and bottom copper, numbered `1`, on the net of the copper under it.
+with no footprint, kept in `PcbBoard::free.pads` at its board position. It
+goes on the active layer (Caner, 2026-11-21): with Top Layer or Bottom Layer
+active it is a round surface pad 1.5 mm across on that copper, with that
+side's solder mask and paste and no hole, on the net of that layer's copper
+under it (`signex_engine::pcb::draw::new_free_pad_on`). With any other layer
+active (a mid-layer, or a layer that is not copper, the Multi-Layer case) it
+is the round through-hole pad 1.5 mm across with a 0.8 mm hole on the top and
+bottom copper, on the net of the copper under it. It is numbered `1`. The
+pad form has no pad type or layer row: the active layer is its starting
+value, and making another layer active while Tab pauses the tool changes it
+(Esc puts the layer back).
 Code that reads footprint pads reads a free pad in the board's own frame
 (`signex_types::pcb_free::free_pad_frame`: a footprint at the origin, not
 turned), so the copper list, ratsnest, design rule check, pick index,
 renderer, drill file and netlist test points treat it as any pad. A click
 selects it and the pad panel edits it, each edit one undo step.
+
+The pad panel (mockup row 97) shows the copper as a Layer × (X-Size, Y-Size,
+Shape) table typed in place. A surface pad has one row, its own layer: no stack
+tiles, no Middle or Bottom rows and no hole. A through-hole pad keeps the
+Simple / Top-Middle-Bottom / Full Stack tiles and shows "All layers", Top /
+Middle / Bottom or a row per copper layer, then its Hole and Plated (read
+from the pad type). The board stores one shape per pad, so a shape picked
+in any row sets every layer. Paste and Solder mask are headed by their
+switch and stay greyed until the board stores pad masks.
 
 ## Placement form (Tab) {#placement-form}
 
@@ -480,6 +999,27 @@ A board without any has no section and re-saves byte-identical. Each item
 has its own uuid in the board's one id space; a duplicate is repaired on
 load like any other board object.
 
+A `[[free.dimensions]]` row writes its look keys (#2868,
+`signex_types::format::board_dimension`) only where they differ from the
+look of its own text height and line width (`DimensionStyle::for_text_height`):
+`arrow_style` (`filled`, `open`, `none`), `arrow_length`, `arrow_width`,
+`font` (`mono`, `sans`), `bold`, `italic`, `text_width`, `text_position`
+(`above`, `inline`, `manual`), `text_gap`, `text_along`, `text_across`
+(the Text Point, written only for a Manual value; any other value reads
+its point where Above puts it, as the Dimension tool places it),
+`extension_offset`, `extension_overshoot`, `extension_width`, `unit`
+(`mm`, `mil`, `in`), `show_unit`, `prefix`, `suffix`, `trailing_zeros`;
+lengths in integer nm. A dimension of that look writes none of them, so an
+older board reads and re-saves byte-identical; an older reader skips the
+keys (and drops them if it saves).
+The kind (#2507) follows the same rule: `kind` (`horizontal`, `vertical`,
+`radial`) is written only for a kind other than aligned, and a radial row
+also writes `measures`, the uuid of its arc or circle; a row without
+`kind` reads as aligned.
+`signex_types::format::board_uses_dimension_style` says whether a save
+writes any of these keys; only such a board (or one with a pour cutout or
+drawn copper) writes `snxpcb/1.11` (`docs/FORMAT_VERSIONS.md`).
+
 ## Selection Filter
 
 The PCB Active Bar's first button. A click (or right-click) opens a
@@ -490,6 +1030,13 @@ through the same `PcbBoardMsg` messages, so the two always show the same
 state. Kinds the board editor cannot pick yet are greyed with why, as their
 chips are. Since #2373 Arcs picks free arcs, Texts strings, Pads free pads
 as well as footprint pads, and Other dimensions (`PickKind::of`).
+
+While any kind is off, the button carries a small accent badge at its
+top-right corner with the number of kinds that are off (mockup row 108); there is no
+badge while every kind is on. Only kinds the board editor can pick count, so
+turning off a greyed kind (Rooms, 3D Bodies) does not change it. The badge is
+a layer over the bar that takes no clicks
+(`app/view/pcb_active_bar/badge.rs`).
 
 ## Align
 
@@ -514,33 +1061,58 @@ group (#2392), from the table in `crates/signex-app/src/app/pcb_bar_groups.rs`:
 | Route | Interactive Routing, Differential Pair Routing, Quick Route, Multi-Route |
 | Tune | Length Tuning, Differential Pair Length Tuning |
 | Via / Pad | Via, Pad |
-| Copper areas | Polygon Pour, Pour Cutout, Slice Pour, Solid Region, Fill, Keepout, Repour Selected, Repour All |
+| Copper areas | Polygon Pour, Pour Cutout, Slice Pour, Solid Region, Fill, Keepout, Repour Selected, Repour All, Unfill Selected |
 | Copper drawing | Track, Arc |
-| Dimensions | Dimension |
+| Dimensions | Aligned, Linear Horizontal, Linear Vertical, Radial (#2507) |
 | Text | String |
 | Graphics | Line, Arc, Full Circle, Rectangle, Text Frame |
 
 Every board placement tool is a row of exactly one group, so the bar and
-Place on a board (its Graphics submenu for the Graphics group) list the same
+Place on a board (its Dimension submenu for the Dimensions group, its
+Graphics submenu for the Graphics group) list the same
 tools; Change Footprint is the Edit and board canvas menu row of #2366, and
 the Tune rows are the length tuning commands of #2389 (palette, no menu row).
 
 - **Button.** It shows and runs the row its group ran last; until then, the
-  first row that can run. A click runs it as its menu row does. It is drawn
+  first row (Component for Components since #2505). A click runs it as its
+  menu row does. It is drawn
   selected while one of its group's tools is armed on the board in the main
   window, as a schematic bar button is, and while its dropdown is open.
-- **Dropdown.** A right-click on a group with more than one row opens its
-  rows. A live row runs its command and is greyed by the same gate as its
-  menu row; a tool the board editor cannot run yet is greyed and its tooltip
-  is the reason Place gives ("Place Component: not available on boards
-  yet").
-- **No live row.** A group whose rows are all greyed is one greyed button
-  with that reason as its tooltip and no dropdown.
+- **Dropdown.** A right-click on a group with more than one row, or a
+  click on the corner triangle, opens its rows under a heading with the group's name in capitals (mockup row 108). The tools
+  come first; a group's commands (Repour Selected, Repour All and Unfill
+  Selected, Change
+  Footprint) sit below a separator after them. The row the button shows is
+  drawn current, with the accent-soft fill. A row runs its command and is
+  greyed by the same gate as its menu row. A button with a dropdown has the
+  corner triangle; a group of one row (Text) has neither. A
+  click on the triangle opens the dropdown and a click elsewhere on the
+  button still runs the row it shows (Caner, 2026-11-24, mockup row 108);
+  Move and View work the same way. The triangle is its own button inside
+  the bar button (`ActiveBarButton::on_chevron_press`); a greyed button
+  ignores a click on it.
+- **Glyphs.** Every button is an SVG glyph drawn in the bar's ink: Via, Pad,
+  Dimension and Keepout use the board tool glyphs of their dropdown rows
+  (`assets/icons/pcb/`), the via a ring around its drill hole and the pad a
+  rounded SMD pad with its centre (mockup row 108). In Copper Areas, Polygon
+  Pour, Pour Cutout, Slice Pour, Solid Region and Fill share one hatched-area
+  glyph (`pcb/copper_area.svg`), on their rows and on the group button while
+  it shows one of them; Keepout keeps `pcb/keepout.svg` and Room
+  keeps its own glyphs (mockup row 108). The View button and the
+  View dropdown draw each turn with an arrow that turns the same way; the
+  half turn uses the clockwise arrow and Reset View Rotation has no icon.
+  The clockwise arrow's direction comes from the #2503 icon fix.
+- **Separators.** Components stands alone; Route, Tune, Via / Pad and
+  Copper Areas form one run; Dimensions, Text and Graphics the next (mockup
+  row 108). There is no Copper Drawing group (#2869): the Graphics Line and
+  Arc draw a track and a track arc on copper, and Track and the copper Arc
+  tool stay in Place on a board.
 - **Last used.** A tool armed from the group's dropdown, Place, a key or the
-  palette becomes the group's button. Each group's last row is kept in
+  palette becomes the group's button; Component, which arms no tool, does
+  so only from the dropdown. Each group's last row is kept in
   `prefs.json` under `pcb_bar_last_tools` (group key to command id), written
   off the update thread, so it outlives the session. A stored command that is
-  not a live row of its group reads as never used.
+  not a row of its group reads as never used.
 
 ## Moving a component with its tracks
 
@@ -549,7 +1121,8 @@ along (#2379). A track end follows when it lies on a moved pad's copper, on a
 copper layer the pad reaches, and the track is on the pad's net: the contact
 the ratsnest counts as connected (`pcb_geom::tracks_on_pads`). Only that end
 moves; the other end stays, so the track stays joined to whatever it meets
-there. The drop runs the footprint moves and the track edits as one batch
+there, and the track bends at one 45° corner when it has to (#2513, "Dragging
+a track or via" below). The drop runs the footprint moves and the track edits as one batch
 (`signex_engine::pcb::placement::move_commands`), one undo step. During the
 drag the preview draws the carried footprints with those tracks at the
 offset, and the ratsnest is read off the board as the drop would leave it,
@@ -563,48 +1136,165 @@ move the footprint alone and leave its tracks where they were. Turn and Mirror
 need the track ends turned about the footprint, not shifted, so they need more
 than the shift a move applies.
 
+## Dragging a track or via
+
+With no tool armed, a press on a track or via and a drag move it in one
+gesture, selected or not (#2513); there is no click to select it first. A
+press on a selected one carries the whole selection (#2870).
+
+The tracks joined to a dragged track stretch: a track whose end lies exactly
+on an end of the dragged track, to the nanometre, on its layer and net, moves
+that end by the offset (`pcb_geom::tracks_on_tracks`). Its other end stays,
+on a pad, a via or wherever it is, so it stays joined there. A joined end
+that also lies on a pad or via that does not move stays: that track keeps
+the pad or via and only the dragged track leaves it. A dragged via
+takes the track and copper arc ends on it along the same way
+(`pcb_geom::tracks_on_vias`, `arcs_on_vias`). A track carried whole, because
+it is in the dragged selection, moves whole and is not stretched by an end. A
+locked track is not stretched and stays where it is. With Ctrl held the
+dragged track or via moves alone and nothing stretches.
+
+The preview draws the dragged track with the stretched tracks where the drop
+puts them, and the drop moves them all as one undo step
+(`handlers::pcb_item_move`). A locked track or via does not move: the press
+carries nothing and Messages says it is locked
+(`Move: track <id> is locked; nothing changed`).
+
+A stretched track stays at 0°, 45° or 90°, as a routed one does (Caner,
+2026-11-25). When its moved end is still on one of those lines from its
+fixed end, it stays one track. Otherwise it bends at one 45° corner: the
+track keeps the leg at its fixed end and a new track, with its width, layer
+and net, runs from the corner to the moved end (`TrackEnds::stretch`). The
+corner follows the router's corner rule when that bends at 45° (45° start or
+45° end, with its flip). With the 90° or any-angle rule, the track leaves its
+fixed end straight and turns 45° into the moved end
+(`pcb_geom::stretch_rule`). The rule is read when the drag or Edit ▸ Move
+starts. The dragged track's own ends move with it, so an end of it on a pad
+or via leaves that pad or via.
+
+The same corner applies to every track a move takes along by one end: the
+tracks on a dragged or moved part's pads and on a dragged via bend as a
+track stretched by a dragged track does (Caner, 2026-11-25). The drop builds
+them with `signex_engine::pcb::placement::stretch_commands`
+(`move_commands`, `move_vias`): a `ReplaceItems` of the tracks and an
+`AddItems` of the new legs, one undo step. A track with both ends on what
+moves moves whole, with no corner. The Command Log keeps the offset and the
+corner rule of every drop (part, via, track, object or mixed selection), so
+a Replay rebuilds it with the drop's own builder
+(`handlers::pcb_item_move::drag_commands`) and bends the tracks as the drop
+did, whatever the router's rule is by then (`docs/COMMAND_LOG.md`).
+
+## Moving a designator or comment on its own
+
+A press on a component's designator or comment drags that text alone
+(#2368); the component and its tracks stay. The text follows the pointer
+without snapping and the release is one undo step. A locked component, or
+one that locks its strings, keeps its text where it is and Messages says
+why. A click selects the text; a box or Select All takes the component, not
+its text. The text keeps its place relative to the component, so it still
+follows a later move, turn or flip. Agents use `set_footprint_text
+document=<board> designator=<ref> text=designator|comment field=<field>
+value=<v>` with `field` one of `x`, `y` (from the board origin, Y up),
+`rotation`, `height` and `justify` (`left`, `center`, `right`). Rules:
+`docs/RENDERING_RULES.md`, "pcb-footprint-text".
+
+## Layer tabs
+
+The strip under the board has a tab for every layer the Layers panel shows
+that is not hidden, in the panel's order: the copper top to bottom, each
+component pair's top then bottom layer, Board Outline, Margin, Dimensions,
+Notes, ECO 1 and 2, Drill Drawing, the board's mechanical layers, then
+Multi-Layer while it is shown (2026-11-18). Hiding a layer, by its eye in the
+panel or its tab's Hide row, takes its tab away; Show layers ▸ or the eye
+brings it back. The strip scrolls sideways when the tabs do not fit. A tab's
+swatch is the layer's colour on this board.
+
 ## Layer tab menu
 
-A right-click on a layer tab under the board opens its menu (#2379, #2394):
+A right-click on a layer tab under the board opens its menu (#2379, #2394,
+mockup row 104). Every row has one 16 px icon column, so the labels line up
+whether or not a row has an icon:
 
-- Hide <layer>, Highlight <layer> (every other layer is drawn dimmed;
-  picking it again ends the highlight), Show only this layer and Show all
-  layers. Show only this layer makes the layer active and hides every other
-  layer the Layers panel lists; the board outline and the Multi-Layer row
-  keep their state, as in single-layer mode.
-- Hide layers ▸ and Show layers ▸, one row per kind: signal, plane, overlay,
-  mask (solder mask and adhesive), paste, mechanical (board outline,
-  documentation and mechanical layers) and all.
-- Layer stack... runs `board_layer_stack` (#2401) from the window the menu
-  was opened in and is greyed exactly when that command is. Drill symbols...
-  and Layer drawing order... are greyed with the reason as their hover text:
-  neither editor exists yet.
-- Short, Medium and Long tab names and Show layer numbers. Short names are
-  `TL`, `BL`, `M1` (Mid-Layer 1), `TO`, `BS` and so on; Medium names are
-  `Top`, `Bottom`, `Mid 1`, and a technical layer keeps its long name. A
-  number goes in front: a copper layer's place in the stack (1 is the top),
-  a mechanical layer's index; technical layers have none.
-- Flip board view: the board seen from below. The view is mirrored left to
+- Hide <layer> (eye crossed out) and Highlight <layer> (every other layer is
+  drawn dimmed; picking it again ends the highlight).
+- Layer color..., Reset layer color and Reset all layer colors
+  (2026-11-18), with the net colour menu's glyphs. Layer color... opens the
+  Layers panel on Layers & Colors with that layer's colour card open under
+  its row; it is greyed for the keep-out and mechanical layers, which have no
+  colour row yet. A colour is saved with the board
+  (`[board_options.layer_colors]`, `docs/PCB_BOARD_OPTIONS.md`), one undo
+  step; the resets are greyed while there is nothing to reset.
+- Show only this layer (eye) and Show all layers (no icon). Show only this
+  layer makes the layer active and hides every other layer the Layers panel
+  lists; the board outline and the Multi-Layer row keep their state, as in
+  single-layer mode.
+- Hide layers ▸ and Show layers ▸, no icon; the launcher of the open flyout
+  keeps the current-row look, and pointing at the other one switches the
+  flyout. A flyout has a HIDE or SHOW header, then All layers; then per kind
+  (signal, plane, silkscreen, mask (solder mask and adhesive), paste,
+  mechanical (board outline, documentation and mechanical layers)), after a
+  line, a row for the whole kind and the layers of that kind the row would
+  change, one by one: the shown ones under Hide, the hidden ones under Show.
+- Layer stack... (layers icon) runs `board_layer_stack` (#2401) from the
+  window the menu was opened in and is greyed exactly when that command is.
+  Drill symbols... and Layer drawing order... are greyed with the reason as
+  their hover text: neither editor exists yet.
+- A TAB NAMES header over one switch, Short | Medium | Long, lined up with
+  the labels; a click on a cell sets the style and closes the menu. Short
+  names are `TL`, `BL`, `M1` (Mid-Layer 1), `TO` (Top Silkscreen), `TS` (Top
+  Solder) and so on; Medium names are `Top`, `Bottom`, `Mid 1`, and a
+  technical layer keeps its long name.
+- Show layer numbers, a checkbox in the icon column; a click anywhere on the
+  row turns the numbers on or off and closes the menu. A number goes in
+  front: a copper layer's place in the stack (1 is the top), a mechanical
+  layer's index; technical layers have none.
+- Flip board view (mirror icon), straight after Show layer numbers with no
+  line between them: the board seen from below. The view is mirrored left to
   right (the turn of the view, #2316, still applies on top), board text
   reads mirrored, a box selection keeps its left-to-right and right-to-left
   meaning on screen, and within one emphasis the copper nearer the bottom is
   drawn over the copper nearer the top. The active or highlighted layer still
   draws last.
 
-The rows change the view of the board in the window the menu was opened in,
-never the board file. The tab names are per user (`prefs.json`,
-`pcb_layer_strip`); the flip is the board view's, for the session.
+The rows change the view of the board in the window the menu was opened in;
+only the colour rows change the board file. The tab names are per user
+(`prefs.json`, `pcb_layer_strip`); the flip is the board view's, for the
+session.
+
+## Board canvas menu
+
+A right-click on the board opens a menu that follows what is under the
+pointer (2026-11-18). On an empty area with nothing selected: Find, Place ▸,
+Undo, Redo, Paste, Paste Special, Select All, Board Sketch, the reuse block
+Place rows and Toggle Ratsnest. On an object, or with a selection, Find
+Similar Objects and the rows that act on it follow: with a selection Align ▸,
+Cut, Copy, Duplicate, Move Selection, the turns and mirrors, Save as Reuse
+Block, Delete, Board Shape and Keepout from Selection; Change Footprint, Swap
+Pins, Swap Gates and Arrange in Box only with a footprint selected; Lock,
+Unlock, Gloss Selected Routes and Add Teardrops only with a track or via
+selected; Select Net and Highlight Net only when the selection or the object
+under the pointer has a net; Cross Probe and Properties. Each row runs its
+catalog command and is live by that command's own rule.
 
 ## Layer sets
 
+The strip under the board is 28 px tall and lists the tabs of "Layer tabs"
+above. The active layer's tab is filled with the soft accent and has the
+accent bar along its top. When the tabs are wider than the window the strip
+scrolls sideways with the thin scrollbar instead of widening the window
+(mockup row 104). A layer token this build does not know has no tab, as it
+has no row in the Layers panel (Caner, 2026-11-20).
+
 The button at the left end of the layer tabs names the set the tabs list and
-opens the set menu (#2394): All Layers, Signal Layers, Plane Layers,
+opens the set menu (#2394); it is drawn pressed while its menu is open. The
+menu has a LAYER SETS header, then All Layers, Signal Layers, Plane Layers,
 Non-signal Layers (every layer but copper), Mechanical Layers, then the sets
-the user saved, then Save current as set... and Manage sets.... Picking a set
-shows its layers and hides every other listed layer (the board outline keeps
-its state), and the tabs list only the set's layers. An active layer the set
-hides moves into the set. All Layers and Show all layers list and show every
-layer again.
+the user saved, each with a muted "saved" at the right, then Save current as
+set... (plus icon) and Manage sets.... The set the view shows has its check
+in the icon column. Picking a set shows its layers and hides every other
+listed layer (the board outline keeps its state), and the tabs list only the
+set's layers. An active layer the set hides moves into the set. All Layers
+and Show all layers list and show every layer again.
 
 Save current as set... turns the card into a name field; Enter or Save saves
 the layers the view shows under that name (a set of the same name is
@@ -618,7 +1308,163 @@ Every row is also a catalog command with typed operands: `show_layer_set`,
 `show_layer_group` name their board with `document` and are on the agent
 channel; `delete_layer_set` and `set_layer_tab_names` change per-user
 settings and name no board; `toggle_layer_numbers` and `flip_board_view` are
-View menu rows. See `docs/COMMANDS.md`.
+View menu rows; `edit_layer_color` opens the colour picker of the active
+layer and `reset_layer_colors` gives every layer the palette colour again
+(`set_layer_color` sets one, saved with the board). See `docs/COMMANDS.md`.
+
+## Board view configuration
+
+The Layers panel configures the board view (#2363, #2480, mockup row 103). The dock's title
+bar names it; its body starts with two tabs.
+
+**Layers & Colors**, top to bottom:
+
+- The search row: the search field, which keeps the rows whose name holds
+  the text; Used On, a toggle chip that lists only the layers the board has
+  objects on; and the more button. When the search lists no row, the panel
+  says "No layers match" with the text, and Clear empties the field.
+- The more menu, opened in place under the more button; a click outside it
+  closes it. Layer Sets: Save current as set... (a name row with Save and a
+  close button opens under the search row; Enter saves too) and Delete
+  current set... (live while the view shows a saved set; greyed, its
+  tooltip says to show one first). Import... and
+  Export... are greyed until a view can be saved to a file. View From
+  Bottom Side, ticked while the board is seen from below, is the flip of
+  the layer tab menu; a click flips the view and closes the menu, as the
+  menu's other live rows do. Layer Stack... runs the Layer Stack command and opens
+  the Layer Stack panel; it is greyed when that command cannot run, with
+  the command's reason in its tooltip.
+- The Active | Set row: the active layer's dot and name, a dropdown with
+  the same choice as the layer tabs; and the set the view shows ("Set:
+  All"), a dropdown of the built-in sets, then the saved ones. This is the
+  one place a set is picked in the panel.
+- All Layers: its eye hides every layer, or shows them all while one is
+  hidden.
+- The sections. Each header has a chevron that opens or closes it and a
+  count of the rows it lists. The four layer sections also have an eye
+  over the layers of the rows they list (a row the search or Used On
+  leaves out is left alone): it is shut while every one is hidden, and a
+  click shows them all while one is hidden, else hides them all.
+- Signal and Plane Layers: the copper layers, each with its number in the
+  stack and its type. The active layer's row has an accent bar, a soft
+  accent fill and an Active pill.
+- Component Layer Pairs: Top | Layer | Bottom, an eye and a colour dot per
+  side, the bottom side mirrored. The rows map onto the named technical
+  layers: 3D Body, Assembly, Component Outline (the fabrication layers),
+  Courtyard, Designator, Silkscreen, Paste, Solder (solder mask), Adhesive,
+  Fiducial and Keep-Out. Coating, Component Center, Tenting and Value have
+  no layer yet and are not listed; they show once the board has a layer for
+  them.
+- Other Technical Layers: Board Outline, Margin, Dimensions, Notes, ECO 1
+  and ECO 2. Other Layers: Drill Drawing and Multi-Layer (vias and
+  through-hole pads); the section eye covers Drill Drawing, and the
+  Multi-Layer row keeps its own eye.
+  Drill Guide has no layer yet and is not listed.
+- System Colors, closed until opened: the eyes of Connection Lines (the
+  ratsnest) and the Origin Marker work; the other rows and the system
+  colours are greyed.
+
+A click on a layer's name makes it the active layer. A click on a colour
+dot opens the colour card under the row, and the open dot gets an accent
+ring: the 24 colours of the board palette (the open layer's colour is
+ringed), a hex field (`#RRGGBB`) that recolours the layer as soon as it reads
+as a colour, and, while the layer has its own colour, Palette color, which
+gives it the palette's again. A swatch or Palette color closes the card, as
+does the card's close button, a second click on the dot or a switch to
+another board. An undo, a redo or a reset while the card is open puts the
+layer's colour back in the hex field; a half-typed colour stays. The colour is an
+override on top of the one board palette, saved with the board
+(`[board_options.layer_colors]`), one undo step; the canvas (the Board
+Outline colour draws the board edge too), the dot, the layer tab and the
+board texts draw it. The Keep-Out dots are greyed: the board's keepout
+regions keep the palette colour.
+
+**View Options**: above the sections, Configuration is one labelled field
+reading Default, greyed until presets exist. General Settings holds 3D
+Off/On, Single Layer Off/On (Mono is greyed; the tooltip gives the full
+name, Single Layer Mode), the Show Grid switch (a click on its caption
+toggles the grid too) and the Orientation eye, which hides or shows the
+orientation tile over the canvas (see "Orientation tile and Home View"
+below). Object Visibility is a
+grid of four columns under a header: eye, Object, Draft and Transparency (a
+slider and its percent). All Objects comes first, in medium weight; while
+the rows differ its eye is faded and Transparency reads Mixed. Then one row
+per kind of object, each with an eye, Draft (greyed) and a Transparency
+slider. Pads, Vias, Arcs, Tracks, Polygons, Regions, Fills, Texts,
+Dimensions and Keepouts can be hidden; a hidden kind is neither drawn nor
+picked. Texts covers footprint texts, board strings and text frames, box and
+all. Pads, Vias, Arcs (copper arcs; Tracks never fades them), Tracks,
+Polygons, Regions and Fills can be drawn transparent; the other kinds show a
+greyed slider. Mask and Dim Settings uses the same columns, so its percents
+line up with the object rows; its sliders show what the view draws today
+and are greyed. Additional Options is closed by default and its header
+counts the options that are on; its eleven checkboxes are greyed until the
+view can draw them.
+
+Apart from the layer colours, all of this is the board view's state; nothing
+else touches the board file. The view is kept per board, by its path, in the
+user's `prefs.json` (`pcb_board_views`, #2480): the hidden layers, the active
+layer, the Connection Lines, Multi-Layer, Origin Marker and Orientation Tile
+eyes (#2508), Single Layer, View From Bottom Side, Used On, the layer set the
+strip lists, the hidden kinds of object and their transparencies. A change is written after a
+short quiet period and at quit; a board that opens again takes its kept
+view. The layer highlight and Show only unrouted end with the board and are
+not kept. Every greyed control, in the panel and in the more menu, says why
+in its tooltip; the not-yet ones and presets are tracked in #2480. Every control has a catalog command that names its board with
+`document`: `set_layer_visible`, `set_active_layer`, `set_layer_color`
+(without `color`, the palette colour again), `show_used_layers_only`,
+`set_object_visible` (`kind=all` for All Objects) and
+`set_object_transparency` (`value` in percent), next to the layer strip's
+commands above.
+
+## Orientation tile and Home View
+
+Mockup row 194 (#2508), decided by Caner on 2026-11-25. The bottom-right
+corner of the main window's canvas holds a small cluster:
+
+- The zoom pill (`- 100% + | Fit`) where it always sits, one body line in
+  from the canvas edges. On a board the pill's percentage is a plain
+  read-out: the zoom presets act on a sheet.
+- Home, a one-button pill with the house glyph, a small gap (`Spacing::s`)
+  left of the zoom pill and as tall as it. Its hover hint reads "Home View ·
+  rotation 0°, Flip off, fit" ("Home View · rotation 0°, fit" on a sheet).
+  While the board view is turned or flipped it carries an accent dot in its
+  top-right corner.
+- The orientation tile, right-aligned with the zoom pill one medium gap
+  (`Spacing::m`) above it, in the pill's shell (raised fill, hairline
+  border, button radius). It is three rows square (`ChromeMetrics::row` x
+  3), so it scales with the UI font. Two arrows start at an origin dot: +X
+  in the theme's error tone, +Y in its ok tone, each labelled, so colour is
+  not the only cue. The arrows turn with View Rotation and Flip Board View
+  mirrors +X; the labels stay upright. The tile reads the same transform the
+  board canvas draws with (`signex_gfx::view_rotation::ViewRotation`), and
+  +Y points up at 0° because the board counts Y up from its origin.
+- Under the arrows, a caption row names a view away from home: "90°" when
+  turned, "Bottom" when flipped, "Bottom · 90°" with both. The angle reads as
+  the status bar's View readout does (tenths of a degree, a whole number
+  without its fraction). At rotation 0° with Flip off there is no caption
+  row.
+
+Home (the button, View ▸ Home View, or the `home_view` command, which has no
+default key) sets View Rotation to 0°, turns Flip Board View off and runs Fit
+All, in one step. Fit alone keeps the turn and the flip; Home always returns
+to the top view. Like the turn, it is view state: no undo step and no dirty
+mark. It acts on the main window's canvas.
+
+A click on the tile does nothing; Home is the only way back. The View
+Options tab's Orientation eye (General Settings) hides the tile and leaves
+Home and the pill; the choice is kept with the board view, like the origin
+marker, for the session.
+
+The schematic canvas shows the same tile and Home button by its zoom pill.
+A sheet has no Flip and does not turn, so the tile has no caption row and
+Home fits the sheet. Its +Y follows the sheet's page origin: up from a
+lower-left origin, down from an upper-left one.
+
+The cluster is laid out against the canvas rectangle of the size the window
+is drawn at (`Signex::canvas_bounds_sized`), so it stays inside the canvas
+beside an open right dock at any dock width (#2911). The tile and Home show
+in the main window only, not on a board shown in 3D or in Board Sketch.
 
 ## Reading a board
 
@@ -645,14 +1491,33 @@ as on a sheet (#2403). The numbers and matches come from the domain crates
 - **Find Similar Objects** (`find_similar_objects`): the seed is the object
   under the cursor, else the one selected; the dialog lists its properties
   (kind, value, footprint, designator prefix, layer, width, size, drill, pad
-  shape, net) and OK selects every object of the board that matches the ones
-  set to Same.
+  shape, net) and Select N selects every object of the board that matches
+  the ones set to Same; the button counts them.
 - **Select Net** and **Highlight Net** (`select_board_net`,
   `highlight_board_net`): the net `net=<name>` names, else the net of the
   selection or of what is under the cursor. Select puts its tracks, vias,
   pads and areas in the selection; Highlight draws its copper bright until
   it is run again for that net or Esc is pressed. Neither changes the
   board. A name the board does not have is refused.
+- **Dim other nets** (#2514, DECISIONS 2026-11-25): the board keeps some
+  nets bright and draws the tracks, arcs, vias, pads and zones of every
+  other net, net-less copper included, dimmer by Preferences ▸ PCB ▸
+  Display ▸ Dim other nets (0–100 %, default 50 %, `pcb_dim_others_percent`
+  in `prefs.json`). The nets in focus (`Signex::board_focus_nets`), first
+  that applies: the highlighted net; the net of a track run or route being
+  drawn (every member of a pair or bus route); the nets of what a drag,
+  Move, paste or part carries (`pcb_geom::nets_of`; a footprint brings its
+  pads' nets); the net set in the form of an armed Via, Pad, Arc, Track,
+  Fill, Solid Region or Polygon Pour tool. No net (0) is never in focus.
+  `refresh_pcb_highlight` draws the board scene again whenever that set or
+  the amount differs from the drawn one, so a tool or carry starting or
+  ending, Esc included, and Save of a new amount repaint it; the board
+  under a drag preview keeps the focus, the ghost on the cursor is never
+  dimmed. A highlight is board-wide; a tool or carry counts only in the
+  window it runs in (`board_focus_nets(path, window)`), so the same board
+  shown in the main window and an undocked window dims each for its own
+  tool. Copper is dimmed by its net (`BoardPaint::net_opacity`), on top
+  of the View Options transparency of its kind.
 - **Net Inspector**: lists the board's nets (see `MENU_BAR.md`, "Tools ▸ Net
   Inspector").
 
@@ -779,10 +1644,16 @@ Swap Pins and Swap Gates (#2410) trade connections inside one component. On
 the board menu they are live with two pads of one unlocked component
 selected: Swap Pins trades the nets of those two pads, Swap Gates trades the
 gates they belong to. As commands with operands, `swap_pins document=<board>
-designator=<ref> pins=<a>,<b>` and `swap_gates document=<board>
-designator=<ref> units=<a>,<b>` do the same, are on the agent channel, and
-answer with the pads whose nets changed (`pads`: pad, from, to) and the sheet
-that followed.
+ids=<uuid> pins=<a>,<b>` and `swap_gates document=<board> ids=<uuid>
+units=<a>,<b>` do the same, are on the agent channel, and answer with the
+pads whose nets changed (`pads`: pad, from, to) and the sheet that followed.
+
+The component is named by `ids`, its uuid, or by `designator=<ref>`, exactly
+one of the two (#2326). Both, or neither, is refused; so is an `ids` naming
+more than one item, or a uuid that is no component of the board
+(`board-target-unknown`). A blank `designator` counts as not given. The board
+menu names the clicked component by uuid, so it acts on that component even
+where another one shares its designator.
 
 Which pins and gates may trade is the part's own rule, read from two
 parameters of its placed units: `Pin Swap Groups` lists groups of pin
@@ -849,11 +1720,16 @@ again on another channel of the same circuit, with its tracks and vias.
 - **Place**: the board menu lists one Place Reuse Block "<name>" row per
   block of the project, live with one unlocked component selected: the
   anchor. The project's blocks are read once, when a board menu first opens.
-  The row closes the menu and acts on the board of the window it was in.
-  `place_board_reuse_block document=<board> name=<name> designator=<ref>
-  [degrees=<turn>]` does the same; while the project's blocks are not read
-  yet it reads them first and answers when they land. Without operands from
-  the palette or a key it does nothing and says what it needs.
+  The row closes the menu and acts on the board of the window it was in,
+  around the clicked anchor by its uuid. It reads no blocks: the block kept
+  in memory is placed at once, and a missing one, or a failed read, is
+  refused at once.
+  `place_board_reuse_block document=<board> name=<name> ids=<uuid>
+  [degrees=<turn>]` does the same; the anchor is named by `ids` or by
+  `designator=<ref>`, exactly one, as for a pin swap. While the project's
+  blocks are not read yet it reads them first and answers when they land.
+  Without operands from the palette or a key it does nothing and says what
+  it needs.
 
 Placing finds each block footprint's counterpart through the schematic: a
 part of a sheet placed more than once keeps its unit ids in every placement,

@@ -18,7 +18,7 @@ use signex_types::schematic::{ChildSheet, FillType, Point, SchematicSheet, Sheet
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 
-const COMMAND: &str = "number_schematic_sheets";
+pub(crate) const COMMAND: &str = "number_schematic_sheets";
 const A: u128 = 0xA;
 const C: u128 = 0xC;
 const L: u128 = 0x1;
@@ -67,15 +67,15 @@ fn entry(filename: &str) -> signex_types::project::SheetEntry {
     }
 }
 
-struct Rig {
-    app: Signex,
-    root: PathBuf,
+pub(crate) struct Rig {
+    pub(crate) app: Signex,
+    pub(crate) root: PathBuf,
     power: PathBuf,
     _tmp: TempDir,
 }
 
 /// The project on disk, with only the root sheet open.
-fn rig() -> Rig {
+pub(crate) fn rig() -> Rig {
     let tmp = TempDir::new().expect("tempdir");
     let dir = tmp.path().to_path_buf();
     let root_sheet = sheet(vec![
@@ -104,6 +104,7 @@ fn rig() -> Rig {
         sheets: files.iter().map(|(name, _)| entry(name)).collect(),
         variant_definitions: Vec::new(),
         active_variant: None,
+        variant_settings: Default::default(),
         libraries: Vec::new(),
         enable_git: false,
         rules: Default::default(),
@@ -112,6 +113,11 @@ fn rig() -> Rig {
         schematic_defaults: Default::default(),
         project_defaults: Default::default(),
         agent_journal: Default::default(),
+        schematic_design: Default::default(),
+        fab_outputs: None,
+        router_tool_diameter: None,
+        bom_alternates: Vec::new(),
+        requirements: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
     };
@@ -139,7 +145,6 @@ fn rig() -> Rig {
     app.document_state.tabs.push(TabInfo {
         title: "root".to_string(),
         path: root.clone(),
-        cached_document: None,
         project_id: Some(project),
         kind: TabKind::Schematic,
     });
@@ -165,11 +170,11 @@ fn entries(app: &Signex, path: &Path, symbol: u128) -> Vec<SheetInstance> {
         .clone()
 }
 
-fn send(app: &mut Signex, msg: SheetNumberingMsg) {
+pub(crate) fn send(app: &mut Signex, msg: SheetNumberingMsg) {
     crate::settle_support::settle(app, Message::from(msg));
 }
 
-fn type_number(app: &mut Signex, row: usize, text: &str) {
+pub(crate) fn type_number(app: &mut Signex, row: usize, text: &str) {
     send(
         app,
         SheetNumberingMsg::NumberEdited {
@@ -193,8 +198,8 @@ fn the_menu_row_opens_the_dialog_and_apply_writes_one_undo_step_in_memory() {
     assert_dialog_read(&rig.app);
 
     // `/A/L` (stored in the closed power.snxsch) and `/C` (in the open root).
-    type_number(&mut rig.app, 2, "6");
-    type_number(&mut rig.app, 3, "7");
+    type_number(&mut rig.app, 2, "4");
+    type_number(&mut rig.app, 3, "3");
     send(&mut rig.app, SheetNumberingMsg::ApplyRequested);
 
     assert!(
@@ -204,13 +209,13 @@ fn the_menu_row_opens_the_dialog_and_apply_writes_one_undo_step_in_memory() {
     let root_entry = SheetInstance {
         project: "Proj".to_string(),
         path: "/".to_string(),
-        page: "7".to_string(),
+        page: "3".to_string(),
     };
     assert_eq!(entries(&rig.app, &rig.root, C), vec![root_entry]);
     assert!(entries(&rig.app, &rig.root, A).is_empty(), "A unchanged");
     let ldo = entries(&rig.app, &rig.power, L);
     assert_eq!(ldo.len(), 1);
-    assert_eq!(ldo[0].page, "6");
+    assert_eq!(ldo[0].page, "4");
     assert_eq!(ldo[0].path, format!("/{}", uuid::Uuid::from_u128(A)));
     assert_eq!(
         std::fs::read(&rig.power).expect("power on disk"),
@@ -250,7 +255,8 @@ fn cancel_closes_the_dialog_and_changes_nothing() {
 fn auto_number_clears_a_hand_number() {
     let mut rig = rig();
     crate::settle_support::settle(&mut rig.app, crate::menu_support::menu_row(COMMAND));
-    type_number(&mut rig.app, 3, "9");
+    type_number(&mut rig.app, 2, "4");
+    type_number(&mut rig.app, 3, "3");
     send(&mut rig.app, SheetNumberingMsg::ApplyRequested);
     assert_eq!(entries(&rig.app, &rig.root, C).len(), 1);
 
@@ -317,8 +323,8 @@ fn a_loose_sheet_without_a_project_opens_nothing() {
 fn typed(rig: &mut Rig) {
     crate::settle_support::settle(&mut rig.app, crate::menu_support::menu_row(COMMAND));
     assert_dialog_read(&rig.app);
-    type_number(&mut rig.app, 2, "6");
-    type_number(&mut rig.app, 3, "7");
+    type_number(&mut rig.app, 2, "4");
+    type_number(&mut rig.app, 3, "3");
 }
 
 /// Apply was refused with `problem`: the dialog is still open and says so,

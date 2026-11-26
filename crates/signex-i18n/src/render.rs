@@ -59,6 +59,32 @@ mod tests {
         assert_eq!(text.render_en_us(), "Save Failed");
     }
 
+    /// #2059: `t!`, `message` and `message_plain` render a nested message
+    /// argument too, in their own language, never as its id.
+    #[test]
+    fn every_render_path_renders_a_nested_message() {
+        let en = I18n::en_us();
+        let project = || Translatable::new(crate::menu_ids::MENU_PROJECT);
+        let shown = crate::t!(en, ids::NOTICE_MENU_PATH, "menu" => project(), "row" => "Run")
+            .into_string()
+            .replace(['\u{2068}', '\u{2069}'], "");
+        assert_eq!(shown, "Project \u{25B8} Run");
+        let args = [("menu", Arg::from(project())), ("row", Arg::from("Run"))];
+        assert_eq!(
+            en.message_plain(ids::NOTICE_MENU_PATH, &args),
+            "Project \u{25B8} Run"
+        );
+        let xa = pseudo().message_plain(ids::NOTICE_MENU_PATH, &args);
+        assert!(!xa.contains("menu-project"), "{xa}");
+        // Mockup row 144a: the path and its nested menu are each bracketed.
+        let menu = pseudo().message_plain(crate::menu_ids::MENU_PROJECT, &[]);
+        assert!(
+            xa.strip_prefix('[')
+                .is_some_and(|inner| inner.starts_with(&menu)),
+            "{xa}"
+        );
+    }
+
     #[test]
     fn verbatim_text_passes_through_in_every_language() {
         let line = "Permission denied (os error 13): C:\\Projekt\\ü.snxsch";

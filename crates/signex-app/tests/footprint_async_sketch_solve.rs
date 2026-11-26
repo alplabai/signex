@@ -139,7 +139,6 @@ fn fixture(stem: &str) -> Fixture {
     app.document_state.tabs.push(TabInfo {
         title: stem.into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });
@@ -792,7 +791,6 @@ fn install(
     app.document_state.tabs.push(TabInfo {
         title: stem.into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });

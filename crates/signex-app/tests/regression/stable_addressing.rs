@@ -17,7 +17,6 @@ fn push_tab(app: &mut Signex, path: &Path, project_id: Option<signex_app::app::P
     app.document_state.tabs.push(TabInfo {
         title: path.display().to_string(),
         path: path.to_path_buf(),
-        cached_document: None,
         project_id,
         kind: TabKind::FootprintEditor(path.to_path_buf()),
     });
@@ -115,6 +114,7 @@ fn close_project_with_interleaved_tabs_keeps_the_active_document() {
                 sheets: Vec::new(),
                 variant_definitions: Vec::new(),
                 active_variant: None,
+                variant_settings: Default::default(),
                 libraries: Vec::new(),
                 enable_git: false,
                 net_classes: Vec::new(),
@@ -123,6 +123,11 @@ fn close_project_with_interleaved_tabs_keeps_the_active_document() {
                 schematic_defaults: Default::default(),
                 project_defaults: Default::default(),
                 agent_journal: Default::default(),
+                schematic_design: Default::default(),
+                fab_outputs: None,
+                router_tool_diameter: None,
+                bom_alternates: Vec::new(),
+                requirements: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),
             },
@@ -161,7 +166,6 @@ fn deleting_a_footprint_before_the_active_one_keeps_the_active_primitive() {
     app.document_state.tabs.push(TabInfo {
         title: "lib".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });
@@ -190,14 +194,13 @@ fn deleting_a_symbol_before_the_active_one_keeps_the_active_primitive() {
     }
     let active_uuid = file.symbols[2].uuid;
     let mut editor = SymbolDocument::new(path.clone(), file);
-    editor.active_idx = 2;
+    editor.draft.active_idx = 2;
     app.document_state
         .symbol_editors
         .insert(path.clone(), editor);
     app.document_state.tabs.push(TabInfo {
         title: "lib".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::SymbolEditor(path.clone()),
     });
@@ -208,5 +211,8 @@ fn deleting_a_symbol_before_the_active_one_keeps_the_active_primitive() {
     )));
 
     let editor = &app.document_state.symbol_editors[&path];
-    assert_eq!(editor.file.symbols[editor.active_idx].uuid, active_uuid);
+    assert_eq!(
+        editor.draft.file.symbols[editor.draft.active_idx].uuid,
+        active_uuid
+    );
 }

@@ -52,6 +52,9 @@ impl Signex {
             ActiveBarAction::PlacePowerEarth => {
                 follow = self.set_pending_power_port("Earth", "power:Earth");
             }
+            ActiveBarAction::PlacePowerChassis => {
+                follow = self.set_pending_power_port("Chassis", "power:Chassis");
+            }
             ActiveBarAction::PlacePort => {
                 follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Label)));
                 self.interaction_state.pending_port = Some((
@@ -107,6 +110,22 @@ impl Signex {
             ActiveBarAction::PlaceDiffPair => {
                 follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::DiffPair)));
             }
+            // #1280: the harness tools, each its own tool.
+            ActiveBarAction::PlaceSignalHarness => {
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::HarnessWire)));
+            }
+            ActiveBarAction::PlaceHarnessConnector => {
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(
+                    Tool::HarnessConnector,
+                )));
+            }
+            ActiveBarAction::PlaceHarnessEntry => {
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::HarnessEntry)));
+            }
+            // #1489: one click on a wire places the Net Parameters flag.
+            ActiveBarAction::PlaceParameterSet => {
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::NetParameters)));
+            }
             // Sheet symbol has its own tool: a hierarchical sheet, not a
             // plain rectangle.
             ActiveBarAction::PlaceSheetSymbol => {
@@ -124,6 +143,23 @@ impl Signex {
             // Polygon — click-by-click freeform.
             ActiveBarAction::DrawPolygon => {
                 follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Polyline)));
+            }
+            // #1267, #1300: their own tools.
+            ActiveBarAction::DrawBezier => {
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Bezier)));
+            }
+            ActiveBarAction::DrawTable => {
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Table)));
+            }
+            ActiveBarAction::PlaceLinearDimension => {
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(
+                    Tool::LinearDimension,
+                )));
+            }
+            ActiveBarAction::PlaceAlignedDimension => {
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(
+                    Tool::AlignedDimension,
+                )));
             }
             // Net-color palette — arms pending_net_color so the next
             // canvas click on a wire floods its whole net with the
@@ -171,6 +207,10 @@ impl Signex {
                     .map(|c| iced::Color::from_rgb8(c.r, c.g, c.b))
                     .unwrap_or(iced::Color::from_rgb(0.40, 0.40, 0.93));
                 self.ui_state.net_color_custom.draft = seed;
+                // The pen, not a palette row's net.
+                self.ui_state.net_color_custom.net = None;
+                self.ui_state.net_color_custom.sheet = None;
+                self.ui_state.net_color_custom.hex = None;
                 self.ui_state.net_color_custom.show = true;
             }
             ActiveBarAction::ClearNetColor => {

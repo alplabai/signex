@@ -8,14 +8,16 @@ mod command_id;
 mod document_target;
 #[cfg(test)]
 mod modifier_tests;
+mod outcome;
 mod pcb_targets;
 mod platform;
 mod shortcut;
 #[cfg(test)]
 mod spelling_tests;
 
-pub use command_id::AppCommandId;
+pub use command_id::{AppCommandId, EXTENSION_ID_PREFIX, is_extension_id, is_extension_name};
 pub use document_target::DocumentTarget;
+pub use outcome::CommandOutcome;
 pub use pcb_targets::PcbTargets;
 pub use platform::Platform;
 pub use shortcut::{Modifiers, ShortcutContext};

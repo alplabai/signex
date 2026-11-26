@@ -5,12 +5,16 @@
 //! point into a rotated pad's frame, and the foot of a perpendicular on a
 //! track. The error is under 1 nm, below what the file stores.
 
+use std::sync::Arc;
+
 use crate::rect::RectNm;
+use crate::shape_overlap::point_in_polygon;
+use crate::shape_polygon::polygon_covering_ring;
 use crate::transform::{rotate, sin_cos_deg};
 use crate::units::{GeomError, MAX_ABS_NM, PointNm};
 
 /// One item's copper on the board.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Shape {
     /// A round pad or a via.
     Disc { center: PointNm, radius: i64 },
@@ -33,6 +37,10 @@ pub enum Shape {
         radius: i64,
         rotation_deg: f64,
     },
+    /// A pad drawn from its own corners, a trapezoid or a custom outline
+    /// (#2242): a simple polygon, counter-clockwise, convex or not, grown by
+    /// `radius` on every side (0 for the pad itself).
+    Polygon { ring: Arc<[PointNm]>, radius: i64 },
 }
 
 impl Shape {
@@ -56,6 +64,7 @@ impl Shape {
                 half_h,
                 ..
             } => point(center) && ok(half_w) && ok(half_h),
+            Shape::Polygon { ref ring, radius } => ring.iter().all(|&p| point(p)) && ok(radius),
         };
         if within {
             Ok(())
@@ -100,6 +109,10 @@ impl Shape {
                 radius,
                 rotation_deg,
             },
+            Shape::Polygon { ring, radius } => Shape::Polygon {
+                ring: ring.iter().map(|p| p.plus(by)).collect(),
+                radius,
+            },
         }
     }
 
@@ -128,6 +141,9 @@ impl Shape {
             }
             .aabb()
             .inflate(radius),
+            Shape::Polygon { ref ring, radius } => RectNm::bounding(ring.iter().copied())
+                .unwrap_or(RectNm::point(PointNm::ORIGIN))
+                .inflate(radius.max(0)),
         }
     }
 
@@ -170,6 +186,16 @@ impl Shape {
                     local.x.abs() <= half_w + tol && local.y.abs() <= half_h + tol
                 }
             }
+            Shape::Polygon { ref ring, radius } => {
+                let reach = radius.max(0) + tol;
+                let n = ring.len();
+                point_in_polygon(ring, p)
+                    || (reach > 0
+                        && (0..n).any(|i| {
+                            let foot = closest_on_segment(ring[i], ring[(i + 1) % n], p);
+                            within(p.distance_sq(foot), reach)
+                        }))
+            }
         }
     }
 
@@ -182,13 +208,16 @@ impl Shape {
             }
             Shape::Capsule { a, b, radius } => capsule_touches_rect(a, b, radius, rect),
             Shape::Rect { .. } => polygons_overlap(&self.box_corners(), &rect.corners()),
-            Shape::RoundRect { .. } => self.overlaps_polygon(&rect.corners()),
+            Shape::RoundRect { .. } | Shape::Polygon { .. } => {
+                self.overlaps_polygon(&rect.corners())
+            }
         }
     }
 
     /// The outline of a rectangle (4 corners) or a rounded rectangle
-    /// (`steps + 1` points per corner arc), counter-clockwise; empty for a
-    /// disc or a track. Drawing a pad uses [`ring`](Self::ring), which
+    /// (`steps + 1` points per corner arc) or a polygon (its corners; once
+    /// grown, its covering ring), counter-clockwise; empty for a disc or a
+    /// track. Drawing a pad uses [`ring`](Self::ring), which
     /// covers every shape.
     pub fn outline(&self, steps: usize) -> Vec<PointNm> {
         match *self {
@@ -223,6 +252,8 @@ impl Shape {
                 }
                 pts
             }
+            Shape::Polygon { ref ring, radius } if radius <= 0 => ring.to_vec(),
+            Shape::Polygon { .. } => self.covering_ring(steps),
             Shape::Disc { .. } | Shape::Capsule { .. } => Vec::new(),
         }
     }
@@ -241,7 +272,9 @@ impl Shape {
             })
         };
         match *self {
-            Shape::Rect { .. } | Shape::RoundRect { .. } => self.outline(steps),
+            Shape::Rect { .. } | Shape::RoundRect { .. } | Shape::Polygon { .. } => {
+                self.outline(steps)
+            }
             Shape::Disc { center, radius } => arc(center, radius, 0.0, 2 * steps)
                 .take(2 * steps)
                 .chain(arc(center, radius, std::f64::consts::PI, 2 * steps).take(2 * steps))
@@ -297,6 +330,10 @@ impl Shape {
                 radius: radius + by,
                 rotation_deg,
             },
+            Shape::Polygon { ring, radius } => Shape::Polygon {
+                ring,
+                radius: radius.max(0) + by,
+            },
         }
     }
 
@@ -311,11 +348,12 @@ impl Shape {
             | Shape::Capsule { radius, .. }
             | Shape::RoundRect { radius, .. } => radius.max(0),
             Shape::Rect { .. } => return self.ring(steps),
+            Shape::Polygon { ref ring, radius } => return polygon_covering_ring(ring, radius),
         };
         // `ring` puts 4 * steps points on a full turn of a round part.
         let half_step = std::f64::consts::PI / (4 * steps) as f64;
         let sag = (radius as f64 * (1.0 / half_step.cos() - 1.0)).ceil() as i64;
-        self.inflated(sag + 2).ring(steps)
+        self.clone().inflated(sag + 2).ring(steps)
     }
 
     /// The corners of a rectangle or of a rounded rectangle's frame box,
@@ -340,7 +378,9 @@ impl Shape {
                     rotate(PointNm::new(sx * half_w, sy * half_h), sin, cos).plus(center)
                 })
             }
-            Shape::Disc { .. } | Shape::Capsule { .. } => self.aabb().corners(),
+            Shape::Disc { .. } | Shape::Capsule { .. } | Shape::Polygon { .. } => {
+                self.aabb().corners()
+            }
         }
     }
 }

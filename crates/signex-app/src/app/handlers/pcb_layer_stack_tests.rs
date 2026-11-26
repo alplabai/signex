@@ -4,8 +4,9 @@
 
 use std::path::{Path, PathBuf};
 
+use signex_types::material_library::{Material, MaterialKind};
 use signex_types::pcb::PcbBoard;
-use signex_types::pcb_stack::{LayerStack, StackLayerKind};
+use signex_types::pcb_stack::{BoardFinish, LayerStack, StackLayerKind};
 use uuid::Uuid;
 
 use crate::app::command::{CommandArgs, CommandOutcome};
@@ -14,6 +15,10 @@ use crate::app::{EditMsg, Message, Signex};
 use crate::dock::DockMessage;
 use crate::keymap::AppCommandId;
 use crate::menu_bar::MenuMessage;
+use crate::panels::layer_stack::{
+    CopperUse, FinishMsg, MaterialDraft, MaterialField, MaterialPick, MaterialSource, MaterialsMsg,
+    StackSubTab, StackUnit, UserLibrary,
+};
 use crate::panels::{LayerStackFacts, LayerStackMsg, PanelKind, PanelMsg, StackField};
 
 /// Top copper, the top overlay and bottom copper, 1.6 mm, and a track on
@@ -100,8 +105,10 @@ fn two_inner_layers_join_the_layer_tabs_and_the_total() {
     let command = AppCommandId::new("board_layer_stack").unwrap();
     let _ = app.update(Message::Menu(MenuMessage::Command(command)));
     assert!(
-        app.is_panel_open(PanelKind::LayerStack),
-        "the command opens it"
+        app.document_state.tabs[app.document_state.active_tab]
+            .kind
+            .is_layer_stack(),
+        "the command opens its tab"
     );
 
     let shown = facts(&app);
@@ -185,6 +192,49 @@ fn a_typed_thickness_applies_on_enter_as_one_step() {
     assert!(facts(&app).drafts.is_empty());
     undo(&mut app);
     assert!(board_of(&app, &path).stackup.is_none());
+}
+
+/// Mockup row 177: a layer's Df is typed in the Stack table and applied on
+/// Enter as one undo step; 0 clears it again.
+#[test]
+fn a_typed_loss_tangent_applies_on_enter_and_zero_clears_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with(dir.path(), false);
+    let row = row_of(&facts(&app), StackLayerKind::Dielectric, 0);
+    let type_df = |app: &mut Signex, text: &str| {
+        send(
+            app,
+            LayerStackMsg::FieldTyped {
+                board: path.clone(),
+                row,
+                field: StackField::LossTangent,
+                text: text.into(),
+            },
+        );
+        send(
+            app,
+            LayerStackMsg::FieldSubmitted {
+                board: path.clone(),
+                row,
+                field: StackField::LossTangent,
+            },
+        );
+    };
+    type_df(&mut app, "0.018");
+    let df = |app: &Signex| {
+        board_of(app, &path)
+            .stackup
+            .as_ref()
+            .expect("stored")
+            .layers[row]
+            .loss_tangent
+    };
+    assert_eq!(df(&app), 0.018);
+    assert_eq!(facts(&app).stack.layers[row].loss_tangent, 0.018);
+    type_df(&mut app, "0");
+    assert_eq!(df(&app), 0.0, "0 clears the Df");
+    undo(&mut app);
+    assert_eq!(df(&app), 0.018, "one undo per edit");
 }
 
 #[test]
@@ -338,6 +388,219 @@ fn removing_an_inner_layer_drops_its_via_sizes_saves_and_undoes_exactly() {
     );
 }
 
+/// #2776: a board edit and its undo reach the net table and the Layer Stack
+/// with no other panel refresh.
+#[test]
+fn the_net_table_and_the_stack_follow_an_edit_and_its_undo() {
+    use signex_engine::pcb::{BoardCommand, BoardItemId};
+    let dir = tempfile::tempdir().unwrap();
+    let mut with_net = board(true);
+    with_net.nets = serde_json::from_value(serde_json::json!([{"number": 1, "name": "GND"}]))
+        .expect("a net list");
+    with_net.segments[0].net = 1;
+    let segment = with_net.segments[0].uuid;
+    let mut app = app_workspace(&dir.path().to_string_lossy(), &[]);
+    let path = dir.path().join("board.snxpcb");
+    app.open_pcb_tab(path.clone(), "board".into(), with_net);
+    app.refresh_panel_ctx();
+    let length = |app: &Signex| {
+        let nets = app.document_state.panel_ctx.pcb_nets.as_ref();
+        nets.expect("the net table").nets[0].length_mm
+    };
+    assert_eq!(length(&app), 5.0);
+    let delete = BoardCommand::DeleteItems {
+        items: vec![BoardItemId::Segment(segment)],
+    };
+    app.execute_board_commands(&path, vec![delete], None)
+        .expect("the command runs");
+    assert_eq!(length(&app), 0.0, "the edit");
+    undo(&mut app);
+    assert_eq!(length(&app), 5.0, "its undo");
+
+    let row = row_of(&facts(&app), StackLayerKind::Dielectric, 0);
+    let was = facts(&app).stack.layers[row].thickness_mm;
+    let mut stack = facts(&app).stack;
+    stack.layers[row].thickness_mm = was + 0.1;
+    app.apply_layer_stack(&path, stack).expect("stored");
+    assert!(facts(&app).stored);
+    undo(&mut app);
+    assert_eq!(facts(&app).stack.layers[row].thickness_mm, was);
+    assert!(!facts(&app).stored, "undo shows the derived stack again");
+}
+
+/// #2776: an undocked window keeps its own panel context, so an edit and an
+/// undo made while the main window shows another tab reach its net table
+/// and Layer Stack too.
+#[test]
+fn an_undocked_windows_net_table_and_stack_follow_an_edit_and_its_undo() {
+    use crate::app::state::WindowKind;
+    use crate::dock::PanelPosition;
+    use signex_engine::pcb::{BoardCommand, BoardItemId};
+    let dir = tempfile::tempdir().unwrap();
+    let mut with_net = board(true);
+    with_net.nets = serde_json::from_value(serde_json::json!([{"number": 1, "name": "GND"}]))
+        .expect("a net list");
+    with_net.segments[0].net = 1;
+    let segment = with_net.segments[0].uuid;
+    let mut app = app_workspace(&dir.path().to_string_lossy(), &[]);
+    let path = dir.path().join("board.snxpcb");
+    app.open_pcb_tab(path.clone(), "board".into(), with_net);
+    app.document_state
+        .dock
+        .add_panel(PanelPosition::Right, PanelKind::PcbNets);
+
+    let window = iced::window::Id::unique();
+    app.ui_state.windows.insert(
+        window,
+        WindowKind::UndockedTab {
+            path: path.clone(),
+            title: "board".into(),
+        },
+    );
+    app.interaction_state
+        .canvases
+        .insert(window, crate::canvas::CanvasSlot::new());
+    let canvas = app.new_pcb_canvas_for(&path).expect("board canvas");
+    app.interaction_state.pcb_canvases.insert(window, canvas);
+    app.document_state.tabs.push(crate::app::TabInfo {
+        title: "sheet".into(),
+        path: dir.path().join("sheet.snxsch"),
+        project_id: None,
+        kind: crate::app::TabKind::Schematic,
+    });
+    app.document_state.active_tab = app.document_state.tabs.len() - 1;
+    app.refresh_window_panel_ctxs(None);
+
+    let length = |app: &Signex| {
+        let nets = app.panel_ctx_for(window).pcb_nets.as_ref();
+        nets.expect("the window's net table").nets[0].length_mm
+    };
+    assert_eq!(length(&app), 5.0);
+    let delete = BoardCommand::DeleteItems {
+        items: vec![BoardItemId::Segment(segment)],
+    };
+    app.execute_board_commands(&path, vec![delete], None)
+        .expect("the command runs");
+    assert_eq!(length(&app), 0.0, "the edit");
+    assert!(app.step_board_history(&path, true));
+    assert_eq!(length(&app), 5.0, "its undo");
+
+    let stack = |app: &Signex| {
+        let facts = app.panel_ctx_for(window).layer_stack.clone();
+        facts.expect("the window's stack")
+    };
+    let row = row_of(&stack(&app), StackLayerKind::Dielectric, 0);
+    let was = stack(&app).stack.layers[row].thickness_mm;
+    let mut thicker = stack(&app).stack;
+    thicker.layers[row].thickness_mm = was + 0.1;
+    app.apply_layer_stack(&path, thicker).expect("stored");
+    assert_eq!(stack(&app).stack.layers[row].thickness_mm, was + 0.1);
+    assert!(app.step_board_history(&path, true));
+    assert_eq!(stack(&app).stack.layers[row].thickness_mm, was);
+}
+
+fn type_stackup_name(app: &mut Signex, path: &Path, text: &str) {
+    send(
+        app,
+        LayerStackMsg::StackupNameTyped {
+            board: path.to_path_buf(),
+            text: text.into(),
+        },
+    );
+}
+
+fn submit_stackup_name(app: &mut Signex, path: &Path) {
+    send(
+        app,
+        LayerStackMsg::StackupNameSubmitted {
+            board: path.to_path_buf(),
+        },
+    );
+}
+
+/// Decision 2026-11-22 (mockup row 105): the toolbar's name keeps a draft
+/// until Enter, is one undo step, reaches the file, and an unchanged Enter
+/// is no step.
+#[test]
+fn the_toolbar_stackup_name_is_one_undo_step_and_reaches_the_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with(dir.path(), false);
+
+    type_stackup_name(&mut app, &path, "  sensor-node 4L ");
+    assert_eq!(facts(&app).name_draft.as_deref(), Some("  sensor-node 4L "));
+    assert!(
+        board_of(&app, &path).stackup.is_none(),
+        "a draft is no edit"
+    );
+
+    submit_stackup_name(&mut app, &path);
+    let shown = facts(&app);
+    assert_eq!(shown.name_draft, None);
+    assert_eq!(shown.stack.name.as_deref(), Some("sensor-node 4L"));
+    let text = signex_types::format::SnxPcb::new(board_of(&app, &path).clone())
+        .write_string()
+        .unwrap();
+    assert!(text.contains("stack_name = \"sensor-node 4L\""), "{text}");
+
+    type_stackup_name(&mut app, &path, "sensor-node 4L");
+    submit_stackup_name(&mut app, &path);
+    assert!(app.step_board_history(&path, true));
+    assert!(
+        board_of(&app, &path).stackup.is_none(),
+        "one undo takes the name back: the same name again made no step"
+    );
+}
+
+#[test]
+fn the_facts_count_items_name_pour_nets_and_the_projects_fab_profile() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = app_workspace(&dir.path().to_string_lossy(), &[]);
+    let path = dir.path().join("board.snxpcb");
+    let zone = |net: &str, id: u128| -> signex_types::pcb::Zone {
+        serde_json::from_value(serde_json::json!({
+            "uuid": Uuid::from_u128(id), "net_name": net, "layer": "Inner1Copper"
+        }))
+        .unwrap()
+    };
+    let mut pcb = board(true);
+    pcb.zones = vec![zone("GND", 8), zone("GND", 9), zone("AGND", 10)];
+    app.open_pcb_tab(path, "board".into(), pcb);
+    let project = app.document_state.projects[0].id;
+    app.document_state.projects[0].data.project_defaults.profile = Some("advanced".into());
+    let at = app.document_state.active_tab;
+    app.document_state.tabs[at].project_id = Some(project);
+
+    let shown = app.layer_stack_facts().expect("the manager's facts");
+    let row = |token: &str| {
+        shown
+            .stack
+            .layers
+            .iter()
+            .position(|l| l.layer == token)
+            .expect("a copper row")
+    };
+    assert_eq!(
+        shown.copper_use[row("Inner1Copper")],
+        Some(CopperUse {
+            items: 4,
+            nets: vec!["AGND".into(), "GND".into()],
+        }),
+        "the track and three pours; each net once, sorted"
+    );
+    assert_eq!(
+        shown.copper_use[row("TopCopper")],
+        Some(CopperUse::default())
+    );
+    let dielectric = row_of(&shown, StackLayerKind::Dielectric, 0);
+    assert_eq!(shown.copper_use[dielectric], None, "only copper rows");
+    assert_eq!(shown.copper_use.len(), shown.stack.layers.len());
+    assert_eq!(shown.fab_profile.as_deref(), Some("Advanced"));
+
+    app.document_state.projects[0].data.project_defaults.profile = None;
+    let shown = app.layer_stack_facts().expect("the manager's facts");
+    assert_eq!(shown.fab_profile, None, "a project that names no profile");
+}
+
 #[test]
 fn a_thickness_edit_keeps_the_layer_tab_order() {
     let dir = tempfile::tempdir().unwrap();
@@ -368,4 +631,350 @@ fn a_thickness_edit_keeps_the_layer_tab_order() {
         layers,
         "the tabs keep their order"
     );
+}
+
+// Mockup rows 176 and 177: the Materials and Finish sub-tabs.
+
+fn materials(app: &mut Signex, msg: MaterialsMsg) {
+    send(app, LayerStackMsg::Materials(msg));
+}
+
+fn finish(app: &mut Signex, msg: FinishMsg) {
+    send(app, LayerStackMsg::Finish(msg));
+}
+
+fn sub_tab(app: &mut Signex, path: &Path, tab: StackSubTab) {
+    send(
+        app,
+        LayerStackMsg::SubTabPicked {
+            board: path.to_path_buf(),
+            tab,
+        },
+    );
+}
+
+fn built_in(app: &Signex, name: &str) -> MaterialPick {
+    let index = facts(app)
+        .materials
+        .built_in
+        .iter()
+        .position(|m| m.name == name)
+        .expect("a built-in material");
+    MaterialPick {
+        source: MaterialSource::BuiltIn,
+        index,
+    }
+}
+
+#[test]
+fn the_user_library_is_read_once_when_materials_first_shows() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with(dir.path(), false);
+    assert_eq!(facts(&app).materials.library, UserLibrary::NotRead);
+    sub_tab(&mut app, &path, StackSubTab::Drills);
+    assert_eq!(
+        facts(&app).materials.library,
+        UserLibrary::NotRead,
+        "only the Materials sub-tab reads it"
+    );
+    sub_tab(&mut app, &path, StackSubTab::Materials);
+    assert_eq!(facts(&app).materials.library, UserLibrary::Reading);
+    let mine = Material {
+        name: "Mine".into(),
+        kind: MaterialKind::Core,
+        dielectric_constant: 3.6,
+        loss_tangent: 0.004,
+        thickness_mm: 0.2,
+    };
+    materials(
+        &mut app,
+        MaterialsMsg::UserLibraryRead(Ok(vec![mine.clone()])),
+    );
+    assert_eq!(
+        facts(&app).materials.library,
+        UserLibrary::Read(vec![mine.clone()])
+    );
+    sub_tab(&mut app, &path, StackSubTab::Stack);
+    sub_tab(&mut app, &path, StackSubTab::Materials);
+    assert_eq!(
+        facts(&app).materials.library,
+        UserLibrary::Read(vec![mine]),
+        "not read again"
+    );
+}
+
+#[test]
+fn a_failed_read_keeps_the_library_unwritable() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with(dir.path(), false);
+    sub_tab(&mut app, &path, StackSubTab::Materials);
+    materials(
+        &mut app,
+        MaterialsMsg::UserLibraryRead(Err("garbled".into())),
+    );
+    assert_eq!(
+        facts(&app).materials.library,
+        UserLibrary::Failed("garbled".into())
+    );
+    materials(
+        &mut app,
+        MaterialsMsg::DraftTyped {
+            board: path.clone(),
+            field: MaterialField::Name,
+            text: "Mine".into(),
+        },
+    );
+    materials(&mut app, MaterialsMsg::Added { board: path });
+    let panel = &app.interaction_state.pcb_layer_stack;
+    assert_eq!(panel.library, UserLibrary::Failed("garbled".into()));
+    assert!(!panel.library_write.running, "nothing is written over it");
+}
+
+/// The accepted answer of 2026-11-24: the board stores a copy of the values
+/// it uses. One undo step, and undo takes the copy back.
+#[test]
+fn using_a_material_copies_its_values_into_the_selected_layer_as_one_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with(dir.path(), false);
+    let row = row_of(&facts(&app), StackLayerKind::Dielectric, 0);
+    send(
+        &mut app,
+        LayerStackMsg::RowSelected {
+            board: path.clone(),
+            row,
+        },
+    );
+    sub_tab(&mut app, &path, StackSubTab::Materials);
+    let pick = built_in(&app, "HF hydrocarbon-ceramic core");
+    materials(
+        &mut app,
+        MaterialsMsg::Selected {
+            board: path.clone(),
+            pick,
+        },
+    );
+    assert_eq!(facts(&app).materials.selected, Some(pick));
+    materials(
+        &mut app,
+        MaterialsMsg::Used {
+            board: path.clone(),
+        },
+    );
+    let stored = board_of(&app, &path).stackup.clone().expect("stored");
+    let layer = &stored.layers[row];
+    assert_eq!(layer.material, "HF hydrocarbon-ceramic core");
+    assert_eq!(layer.thickness_mm, 0.508);
+    assert_eq!(layer.dielectric_constant, 3.48);
+    assert_eq!(layer.loss_tangent, 0.0037);
+    assert!(stored.has_materials_data(), "the board keeps the Df");
+    undo(&mut app);
+    assert!(board_of(&app, &path).stackup.is_none(), "one undo step");
+}
+
+#[test]
+fn a_material_that_does_not_fit_the_layer_changes_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with(dir.path(), false);
+    let copper = row_of(&facts(&app), StackLayerKind::Signal, 0);
+    send(
+        &mut app,
+        LayerStackMsg::RowSelected {
+            board: path.clone(),
+            row: copper,
+        },
+    );
+    let pick = built_in(&app, "Prepreg 1080");
+    materials(
+        &mut app,
+        MaterialsMsg::Selected {
+            board: path.clone(),
+            pick,
+        },
+    );
+    materials(
+        &mut app,
+        MaterialsMsg::Used {
+            board: path.clone(),
+        },
+    );
+    assert!(board_of(&app, &path).stackup.is_none());
+}
+
+#[test]
+fn an_added_material_joins_the_user_library_and_is_written() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with(dir.path(), false);
+    sub_tab(&mut app, &path, StackSubTab::Materials);
+    materials(&mut app, MaterialsMsg::UserLibraryRead(Ok(Vec::new())));
+    for (field, text) in [
+        (MaterialField::Name, "My prepreg"),
+        (MaterialField::Thickness, "0.1"),
+        (MaterialField::DielectricConstant, "3.9"),
+        (MaterialField::LossTangent, "0.02"),
+    ] {
+        materials(
+            &mut app,
+            MaterialsMsg::DraftTyped {
+                board: path.clone(),
+                field,
+                text: text.into(),
+            },
+        );
+    }
+    materials(
+        &mut app,
+        MaterialsMsg::Added {
+            board: path.clone(),
+        },
+    );
+    let shown = facts(&app).materials;
+    let UserLibrary::Read(entries) = &shown.library else {
+        panic!("{:?}", shown.library);
+    };
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].name, "My prepreg");
+    assert_eq!(entries[0].kind, MaterialKind::Prepreg, "the draft's kind");
+    assert_eq!(entries[0].thickness_mm, 0.1);
+    assert_eq!(shown.draft, MaterialDraft::default(), "the row is cleared");
+    assert!(app.interaction_state.pcb_layer_stack.library_write.running);
+
+    // A second edit while the write runs is owed, then written.
+    materials(
+        &mut app,
+        MaterialsMsg::Removed {
+            board: path.clone(),
+        },
+    );
+    let write = &app.interaction_state.pcb_layer_stack.library_write;
+    assert!(write.running && write.owed);
+    materials(&mut app, MaterialsMsg::UserLibraryWritten(Ok(())));
+    let write = &app.interaction_state.pcb_layer_stack.library_write;
+    assert!(write.running && !write.owed, "the owed write started");
+    materials(
+        &mut app,
+        MaterialsMsg::UserLibraryWritten(Err("disk full".into())),
+    );
+    assert_eq!(
+        facts(&app).materials.write_error.as_deref(),
+        Some("disk full")
+    );
+    assert!(board_of(&app, &path).stackup.is_none(), "no board step");
+}
+
+#[test]
+fn a_draft_that_is_not_a_number_or_a_taken_name_is_not_added() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with(dir.path(), false);
+    sub_tab(&mut app, &path, StackSubTab::Materials);
+    materials(&mut app, MaterialsMsg::UserLibraryRead(Ok(Vec::new())));
+    let draft = |app: &mut Signex, field, text: &str| {
+        materials(
+            app,
+            MaterialsMsg::DraftTyped {
+                board: path.clone(),
+                field,
+                text: text.into(),
+            },
+        );
+    };
+    draft(&mut app, MaterialField::Name, "Prepreg 1080");
+    draft(&mut app, MaterialField::Thickness, "thin");
+    materials(
+        &mut app,
+        MaterialsMsg::Added {
+            board: path.clone(),
+        },
+    );
+    assert_eq!(facts(&app).materials.library, UserLibrary::Read(Vec::new()));
+    draft(&mut app, MaterialField::Thickness, "0.08");
+    materials(
+        &mut app,
+        MaterialsMsg::Added {
+            board: path.clone(),
+        },
+    );
+    assert_eq!(
+        facts(&app).materials.library,
+        UserLibrary::Read(Vec::new()),
+        "a built-in name is taken"
+    );
+    assert!(!app.interaction_state.pcb_layer_stack.library_write.running);
+}
+
+/// Mockup row 176: a finish pick is one step that stores the finish with
+/// the board; undo takes it back.
+#[test]
+fn a_finish_pick_is_stored_with_the_board_as_one_step() {
+    use signex_types::pcb_stack::{FinishColor, SurfaceFinish};
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with(dir.path(), false);
+    let shown = facts(&app).finish;
+    assert!(!shown.stored);
+    assert_eq!(shown.finish, BoardFinish::default());
+
+    let same = BoardFinish::default();
+    finish(
+        &mut app,
+        FinishMsg::Picked {
+            board: path.clone(),
+            finish: same,
+        },
+    );
+    assert!(
+        board_of(&app, &path).stackup.is_none(),
+        "picking what shows stores nothing"
+    );
+
+    let mut black = BoardFinish {
+        surface: SurfaceFinish::Osp,
+        ..BoardFinish::default()
+    };
+    black.mask.color = FinishColor::Black;
+    finish(
+        &mut app,
+        FinishMsg::Picked {
+            board: path.clone(),
+            finish: black.clone(),
+        },
+    );
+    let stored = board_of(&app, &path).stackup.clone().expect("stored");
+    assert_eq!(stored.finish, Some(black));
+    assert!(facts(&app).finish.stored);
+    undo(&mut app);
+    assert!(board_of(&app, &path).stackup.is_none());
+}
+
+#[test]
+fn the_mask_thickness_over_laminate_applies_on_enter_in_the_tab_unit() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with(dir.path(), false);
+    send(
+        &mut app,
+        LayerStackMsg::UnitPicked {
+            board: path.clone(),
+            unit: StackUnit::Um,
+        },
+    );
+    finish(
+        &mut app,
+        FinishMsg::OverLaminateTyped {
+            board: path.clone(),
+            text: "30".into(),
+        },
+    );
+    assert_eq!(facts(&app).finish.draft.as_deref(), Some("30"));
+    assert!(
+        board_of(&app, &path).stackup.is_none(),
+        "typing applies nothing"
+    );
+    finish(
+        &mut app,
+        FinishMsg::OverLaminateSubmitted {
+            board: path.clone(),
+        },
+    );
+    let stored = board_of(&app, &path).stackup.clone().expect("stored");
+    let mm = stored.finish.expect("finish").mask.over_laminate_mm;
+    assert!((mm - 0.03).abs() < 1e-12, "{mm}");
+    assert_eq!(facts(&app).finish.draft, None);
 }

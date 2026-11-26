@@ -6,12 +6,13 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use iced::Task;
-use signex_engine::{SimilarValue, find_similar};
+use signex_engine::{SimilarValue, describe, find_similar};
+use signex_i18n::{ids, t};
 
 use super::super::super::*;
 use crate::app::project_sheets::{self, OpenSheets};
 use crate::app::state::scope::CaseFold;
-use crate::find_similar::{FindSimilarMsg, ProjectMatches};
+use crate::find_similar::{FindSimilarMsg, ProjectMatches, SimilarMatch, shown_seed};
 
 pub(super) struct SearchInputs {
     pub(super) criteria: Vec<SimilarValue>,
@@ -41,10 +42,18 @@ pub(super) fn run_search(inputs: SearchInputs) -> ProjectMatches {
         if inputs.active.as_deref() == Some(path.as_path()) {
             continue;
         }
-        let count = find_similar(sheet, &inputs.criteria).len();
-        if count > 0 {
-            found.elsewhere.push((path, count));
+        let items = find_similar(sheet, &inputs.criteria);
+        if items.is_empty() {
+            continue;
         }
+        found.elsewhere.push((path.clone(), items.len()));
+        found
+            .listed
+            .extend(items.into_iter().map(|item| SimilarMatch {
+                sheet: path.clone(),
+                described: describe(sheet, &item),
+                item,
+            }));
     }
     found
 }
@@ -87,31 +96,36 @@ impl Signex {
         ))
     }
 
-    /// A finished search: applied unless the dialog was closed or searched
-    /// again in the meantime.
+    /// Whether the active document is in a project a search can reach.
+    pub(super) fn in_a_project(&self) -> bool {
+        let ds = &self.document_state;
+        project_sheets::resolve_netlist_root(ds).is_some() && ds.active_document_project().is_some()
+    }
+
+    /// A finished count: shown in the dialog unless the dialog was closed,
+    /// or its criteria changed, in the meantime. Select N reports it.
     pub(super) fn apply_project_search(
         &mut self,
         generation: u64,
         result: &Result<ProjectMatches, String>,
     ) {
         self.close_find_similar_if_sheet_changed();
-        let current = generation == self.ui_state.find_similar_generation
-            && self.ui_state.find_similar.is_some();
-        if !current {
+        if generation != self.ui_state.find_similar_generation {
             return;
         }
+        let Some(state) = self.ui_state.find_similar.as_mut() else {
+            return;
+        };
+        state.running = false;
         match result {
-            Ok(found) => self.select_similar_on_this_sheet(Some(found)),
-            Err(why) => {
-                crate::diagnostics::log_warning(why);
-                if let Some(state) = self.ui_state.find_similar.as_mut() {
-                    state.running = false;
-                }
-            }
+            Ok(found) => state.other_sheets = Some(found.clone()),
+            Err(why) => crate::diagnostics::log_warning(why),
         }
     }
 
-    /// The per-sheet counts of a project search, one line each in the log.
+    /// What a project search found elsewhere: the total, then the matches,
+    /// each on its own Messages row, which names its sheet and object so the
+    /// row's Show opens it (mockup row 68).
     pub(super) fn report_other_sheets(&self, found: &ProjectMatches) {
         let dir = self
             .document_state
@@ -129,13 +143,7 @@ impl Signex {
                 found.elsewhere.len()
             ));
         }
-        for (path, count) in &found.elsewhere {
-            let shown = dir
-                .as_deref()
-                .and_then(|d| path.strip_prefix(d).ok())
-                .unwrap_or(path);
-            crate::diagnostics::log_info(format!("Find Similar: {count} on {}", shown.display()));
-        }
+        self.list_other_sheet_matches(found, dir.as_deref());
         for (path, why) in &found.unreadable {
             crate::diagnostics::log_warning(format!(
                 "Find Similar: not searched, {why}: {}",
@@ -143,4 +151,37 @@ impl Signex {
             ));
         }
     }
+
+    /// One Messages row per match, up to [`LISTED_MATCHES_CAP`], then one
+    /// line with the count left out, so a large search cannot push the
+    /// summary and older lines (ERC results) out of the ring.
+    fn list_other_sheet_matches(&self, found: &ProjectMatches, dir: Option<&std::path::Path>) {
+        let i18n = &self.ui_state.i18n;
+        for listed in found.listed.iter().take(LISTED_MATCHES_CAP) {
+            let shown = dir
+                .and_then(|d| listed.sheet.strip_prefix(d).ok())
+                .unwrap_or(&listed.sheet);
+            let line = t!(
+                i18n,
+                ids::FIND_SIMILAR_LISTED,
+                "what" => shown_seed(&listed.described, i18n),
+                "sheet" => shown.display().to_string()
+            );
+            crate::diagnostics::log_info_at(
+                module_path!(),
+                line.into_string(),
+                listed.sheet.clone(),
+                Some(listed.item),
+            );
+        }
+        let left_out = found.listed.len().saturating_sub(LISTED_MATCHES_CAP);
+        if left_out > 0 {
+            let line = t!(i18n, ids::FIND_SIMILAR_NOT_LISTED, "count" => left_out);
+            crate::diagnostics::log_info(line.into_string());
+        }
+    }
 }
+
+/// The most matches on other sheets listed in Messages: a quarter of the
+/// Messages ring, so a listing never evicts the rest of the panel.
+pub(super) const LISTED_MATCHES_CAP: usize = crate::diagnostics::MAX_DIAGNOSTIC_ENTRIES / 4;

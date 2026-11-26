@@ -51,7 +51,7 @@ const ALSO_JOURNALED: [&str; 5] = [
 
 /// Does `command` change a document, or what is on disk or open? Only those
 /// are journaled; a selection step or a copy is not.
-fn changes_documents(command: &AppCommandId) -> bool {
+pub(super) fn changes_documents(command: &AppCommandId) -> bool {
     ALSO_JOURNALED.contains(&command.as_str())
         || crate::keymap::metadata_for(command).is_some_and(|meta| meta.flags.mutates_doc)
 }
@@ -292,7 +292,10 @@ impl Signex {
         };
         let (outcome, reason) = match outcome {
             CommandOutcome::Ran | CommandOutcome::Answered(_) => ("ran", None),
-            CommandOutcome::Disabled { reason } => ("refused", Some(reason.clone())),
+            CommandOutcome::Disabled { reason } => (
+                "refused",
+                Some(signex_i18n::RenderTranslatable::render_en_us(reason)),
+            ),
             other => ("failed", Some(format!("{other:?}"))),
         };
         // A Save As moves the sheet: its revision now is under the new path.

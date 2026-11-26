@@ -24,6 +24,9 @@ pub struct InteractionState {
     /// swaps an undocked window's entry from `pcb_canvases` into this slot
     /// while it handles that window's event.
     pub pcb_canvas: PcbCanvas,
+    /// The edge pan link of the main window's symbol editor canvas (#2872):
+    /// view state, kept out of the symbol draft.
+    pub symbol_edge_pan: crate::canvas::EdgePanLink,
     /// PCB canvases owned by undocked PCB tab windows, so each window keeps
     /// its own camera, viewport and caches (#494). Populated and drained
     /// alongside `canvases`. Reads go through `pcb_canvas_for_window`.
@@ -47,6 +50,9 @@ pub struct InteractionState {
     /// A guide armed by the board panel's Place, waiting for the click on
     /// the main window's board that sets it (#2374): the board and the kind.
     pub pcb_guide_place: Option<(std::path::PathBuf, signex_types::pcb_options::GuideKind)>,
+    /// Edit ▸ Origin ▸ Set armed (2026-11-18): the board whose next click on
+    /// the main window sets its origin.
+    pub pcb_origin_place: Option<std::path::PathBuf>,
     /// The board Measure tool and the highlighted board net (#2403).
     pub pcb_query: super::pcb_query::PcbQueryState,
     /// Arrange in Box armed on a board (#2409): the components it moves
@@ -63,6 +69,9 @@ pub struct InteractionState {
     /// The board in sketch mode and its working copy (#2234); `None` when
     /// no board is in sketch mode.
     pub board_sketch: Option<super::BoardSketchSession>,
+    /// Whether Messages has had the board sketch mode hint this session:
+    /// it is said once, not on every entry (mockup row 187).
+    pub board_sketch_hint_said: bool,
     /// The board shown in 3D in the main window (#2390); `None` when the
     /// main window shows boards flat.
     pub board_3d: Option<super::Board3dSession>,
@@ -82,12 +91,20 @@ pub struct InteractionState {
     pub tab_drag_origin: Option<(f32, f32)>,
     pub wire_points: Vec<signex_types::schematic::Point>,
     pub wire_drawing: bool,
+    /// The undocked window the wire being drawn started in; `None`: main.
+    pub wire_window: Option<iced::window::Id>,
+    /// Width and colour of the wire the route being drawn started on, which
+    /// its wires take; `None` when it started on no wire.
+    pub(crate) wire_start_style: Option<(f64, Option<signex_types::theme::Color>)>,
     /// 3-click arc placement buffer. Holds the first two clicks
     /// (start, mid); the third click commits as SchDrawing::Arc.
     pub arc_points: Vec<signex_types::schematic::Point>,
     /// Freehand polygon placement buffer. Accumulates clicks until
     /// the user presses Enter / double-clicks / right-clicks.
     pub polyline_points: Vec<signex_types::schematic::Point>,
+    /// The Bezier and dimension tools' clicked points and the text the next
+    /// dimension takes (#1267).
+    pub(crate) annotation_tool: crate::app::handlers::canvas::AnnotationTool,
     /// Two-click shape placement: first click sets the anchor, second
     /// click commits. Used by Tool::Line, Tool::Rectangle, Tool::Circle.
     pub shape_anchor: Option<signex_types::schematic::Point>,
@@ -105,6 +122,9 @@ pub struct InteractionState {
     /// How a wire or bus run bends at its corner. Kept across segments and
     /// tools until the user flips it or changes the mode (#2372).
     pub corner_rule: signex_types::corner::CornerRule,
+    /// How the wires that follow a dragged pin bend (`cycle_wiring_mode`,
+    /// #1669). Kept across drags; a move commit carries it as an operand.
+    pub drag_wiring: signex_types::corner::DragWiringMode,
     /// How Interactive Routing treats other nets in its way (#2389): walk
     /// around them or push their tracks aside. Kept across routes.
     pub route_mode: signex_engine::pcb::route::RouteMode,
@@ -167,6 +187,9 @@ pub struct InteractionState {
     pub active_bar_menu_window: Option<iced::window::Id>,
     /// The open dropdown of the main window's PCB Active Bar (#2352).
     pub pcb_bar_menu: Option<crate::app::PcbBarMenu>,
+    /// An Active Bar took the last right press, so the canvas ignores its
+    /// release. Cleared by that release or the next right press on a canvas.
+    pub swallow_right_release: bool,
     /// The open right-click menu of a layer tab under a board canvas (#2379).
     pub pcb_layer_tab_menu: Option<crate::app::LayerTabMenu>,
     /// The open menu of the layer set button under a board canvas (#2394).
@@ -182,12 +205,18 @@ pub struct InteractionState {
     /// User-defined custom filter presets (capped at
     /// `crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT`). Loaded from
     /// `~/.config/signex/prefs.json` on launch and written back when
-    /// edited from the Properties panel.
+    /// edited from the Filter panel.
     pub custom_filter_presets: Vec<crate::active_bar::CustomFilterPreset>,
-    /// Index of the active preset tab in the Properties-panel editor.
+    /// Index of the preset the Filter panel's Presets section edits.
     /// Clamped to `0..custom_filter_presets.len()` whenever the list
     /// changes; ignored entirely when the list is empty.
     pub active_custom_filter_tab: usize,
+    /// The Filter panel's inline preset rename: the preset and the name typed so
+    /// far. Mirrored into each panel context after every update.
+    pub filter_preset_rename: Option<(usize, String)>,
+    /// The schematic preset selected for editing: chip clicks change it in
+    /// place (#2873). `None`: chips change only the filter.
+    pub editing_custom_filter: Option<usize>,
     /// User-defined footprint-editor filter presets (capped at
     /// `crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT`). Loaded from
     /// `~/.config/signex/prefs.json` on launch; parallel to
@@ -200,11 +229,20 @@ pub struct InteractionState {
     pub pending_power: Option<(String, String)>,
     /// A library part attached to the cursor, waiting for its click.
     pub placement: Option<super::PlacementSession>,
+    /// The values the current Tab pause began with; `None` when not paused.
+    pub placement_pause: Option<super::SheetPlacementPause>,
     /// The last label or text note placed, for "Repeat last item" (#1253).
     pub last_placement: Option<super::LastPlacement>,
     /// Designator numbers for pasted parts (Next free), seeded when a paste
     /// starts.
     pub paste_counters: Option<super::PasteCounters>,
+    /// The sheet the last numbering read was for and the project sheets it
+    /// could not read; Smart Paste stops on them (#2744).
+    pub paste_unread_sheets: Option<(std::path::PathBuf, Vec<std::path::PathBuf>)>,
+    /// The designator rule of the Smart Paste on the cursor (mockup row 155): its
+    /// dialog's choice, used instead of the preference until the next paste
+    /// starts.
+    pub paste_designators_override: Option<crate::paste_prefs::PasteDesignators>,
     /// Token for library reads. Every pick takes a new value and carries it,
     /// so only the LATEST pick may arm a session; Esc, a right-click and any
     /// tool change bump it too, so a read that finishes after a cancel arms
@@ -215,6 +253,9 @@ pub struct InteractionState {
     /// while the Bus Entry tool is armed). The signs are the orientation; see
     /// `signex_types::schematic::BusEntry`.
     pub bus_entry_size: (f64, f64),
+    /// The harness type the last Harness Connector click placed; the next
+    /// connector takes it (#1280).
+    pub last_harness_type: Option<String>,
     /// Uuid of the placed symbol the cursor is currently hovering over,
     /// if any. Set/cleared by the canvas `CursorAt` handler. Drives the
     /// hover tooltip overlay (designator + value + footprint + lib_id).
@@ -234,9 +275,33 @@ pub struct InteractionState {
     /// card tracks the cursor (offset to bottom-right by ~16 px so it
     /// doesn't obscure the symbol).
     pub hover_screen_pos: Option<(f32, f32)>,
+    /// The zoom pill's preset menu is up (Graphite mockup #64): opened by a click on the
+    /// pill's percentage, closed by a pick, Esc or a click outside it.
+    pub zoom_presets_open: bool,
 }
 
 impl InteractionState {
+    /// Forget a sheet Tab pause once placement is no longer paused, so a
+    /// later Esc never restores its stale values. A footprint pause stays.
+    pub fn end_sheet_placement_pause(&mut self) {
+        if matches!(
+            self.placement_pause,
+            Some(super::SheetPlacementPause::Sheet { .. })
+        ) {
+            self.placement_pause = None;
+        }
+    }
+
+    /// Whether a sheet Tab pause belongs to a window other than the one
+    /// acting now, so a change to the acting sheet must leave it alone.
+    pub fn is_sheet_pause_elsewhere(&self) -> bool {
+        matches!(
+            self.placement_pause,
+            Some(super::SheetPlacementPause::Sheet { window, .. })
+                if window != self.acting_window
+        )
+    }
+
     pub fn active_canvas(&self) -> &CanvasSlot {
         &self.canvas
     }

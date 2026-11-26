@@ -3,6 +3,7 @@
 
 use super::super::*;
 use crate::styles::{Spacing, TypeScale};
+use signex_i18n::{I18n, MessageId, ids, t};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -15,6 +16,7 @@ pub(super) fn push_symbol_choice_row<'a>(
     id: uuid::Uuid,
     choices: &[SymbolChoiceItem],
     muted: Color,
+    i18n: &I18n,
 ) -> Column<Element<'a, PanelMsg>> {
     let Some(current) = choices.iter().find(|i| i.selected) else {
         return c;
@@ -22,10 +24,12 @@ pub(super) fn push_symbol_choice_row<'a>(
     if choices.len() < 2 {
         return c;
     }
+    // Drawing names, plus "Default" and "(no longer offered)".
+    // raw: (#2061: handler-worded state text)
     let labels: Vec<String> = choices.iter().map(|i| i.label.clone()).collect();
     let items = choices.to_vec();
     c.push(form_pick_row(
-        "Symbol",
+        t!(i18n, ids::PROPERTIES_SYMBOL),
         labels,
         current.label.clone(),
         move |label| {
@@ -57,11 +61,11 @@ impl std::fmt::Display for FootprintEntry {
 /// Label of the free-text footprint field. Under the pick list it is an
 /// override: a name typed there is held over the picked binding (shown in
 /// the list as "(edited)"); alone it is the part's only footprint field.
-pub(super) fn footprint_text_label(has_pick_list: bool) -> &'static str {
+pub(super) fn footprint_text_label(has_pick_list: bool) -> MessageId {
     if has_pick_list {
-        "Footprint override"
+        ids::PROPERTIES_OVERRIDE
     } else {
-        "Footprint"
+        ids::PROPERTIES_FOOTPRINT
     }
 }
 
@@ -74,9 +78,12 @@ pub(super) fn push_footprint_row<'a>(
     footprint: &str,
     choices: &[FootprintChoiceItem],
     muted: Color,
+    i18n: &I18n,
 ) -> Column<Element<'a, PanelMsg>> {
     let current = choices.iter().position(|i| i.selected);
     if let Some(current) = current {
+        // Footprint names, plus "(no longer offered)" and "(edited)".
+        // raw: (#2061: handler-worded state text)
         let entry = |index: usize| FootprintEntry {
             index,
             label: choices[index].label.clone(),
@@ -84,7 +91,7 @@ pub(super) fn push_footprint_row<'a>(
         let options: Vec<FootprintEntry> = (0..choices.len()).map(entry).collect();
         let bindings: Vec<String> = choices.iter().map(|i| i.binding.clone()).collect();
         c = c.push(form_pick_row(
-            "Footprint",
+            t!(i18n, ids::PROPERTIES_FOOTPRINT),
             options,
             entry(current),
             move |picked: FootprintEntry| {
@@ -94,62 +101,91 @@ pub(super) fn push_footprint_row<'a>(
             muted,
         ));
     }
-    c.push(form_edit_row(
-        footprint_text_label(current.is_some()),
+    c = c.push(form_edit_row(
+        t!(i18n, footprint_text_label(current.is_some())),
         footprint,
         muted,
         move |s| PanelMsg::EditSymbolFootprint(id, s),
-    ))
+    ));
+    if current.is_some() {
+        c = c.push(
+            container(
+                signex_widgets::text(t!(i18n, ids::PROPERTIES_OVERRIDE_NOTE))
+                    .size(TS.caption)
+                    .color(muted),
+            )
+            .padding([0, PROPERTY_ROW_PAD_X])
+            .boxed(),
+        );
+    }
+    c
 }
 
-/// The Library ID row: the id in mono on one line, cut with an ellipsis
-/// when the column is narrow, the whole id in a tooltip.
-pub(super) fn library_id_row<'a>(
+/// The Library row: the library's name, a dot and the part's id in mono,
+/// read-only on one line, cut with an ellipsis when the column is narrow;
+/// the whole id in a tooltip.
+pub(super) fn library_and_id_row<'a>(
+    library_name: &str,
     lib_id: &str,
     label: Color,
     input_bg: Color,
     tokens: &ThemeTokens,
+    i18n: &I18n,
 ) -> Element<'a, PanelMsg> {
     let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
-    let value = container(
+    let ink = crate::styles::tokens::readable_on(input_bg);
+    let faint = crate::styles::tokens::resolve(tokens).ink4;
+    let mut line = iced::widget::Row::<Element<'a, PanelMsg>>::new()
+        .spacing(SP.xs)
+        .align_y(iced::Alignment::Center);
+    if !library_name.is_empty() {
+        line = line
+            .push(
+                signex_widgets::text(signex_i18n::UserText::new(library_name))
+                    .size(TS.body)
+                    .color(ink)
+                    .wrapping(iced::widget::text::Wrapping::None)
+                    .boxed(),
+            )
+            .push(
+                signex_widgets::text(t!(i18n, ids::PROPERTIES_LIBRARY_SEPARATOR))
+                    .size(TS.body)
+                    .color(faint)
+                    .boxed(),
+            );
+    }
+    line = line.push(
         signex_widgets::text(signex_i18n::UserText::new(lib_id))
-            .size(TS.body)
+            .size(TS.caption)
             .font(mono)
-            .color(crate::styles::tokens::readable_on(input_bg))
+            .color(ink)
             .wrapping(iced::widget::text::Wrapping::None)
             .ellipsis(iced::widget::text::Ellipsis::End)
-            .width(Length::Fill),
-    )
-    .padding([3, 6])
-    .width(Length::Fill)
-    .clip(true)
-    .style(move |theme: &Theme| {
-        let (bg, bdr, radius) = super::super::form_look::value_box(theme);
-        container::Style {
-            background: Some(Background::Color(bg)),
-            border: Border {
-                width: 1.0,
-                radius: radius.into(),
-                color: bdr,
-                ..Border::default()
-            },
-            ..container::Style::default()
-        }
-    });
+            .width(Length::Fill)
+            .boxed(),
+    );
+    let value = container(line)
+        .padding([3, 6])
+        .width(Length::Fill)
+        .clip(true)
+        .style(super::super::form_look::read_only_value);
     let tip = signex_widgets::tooltip(
         value,
-        container(
-            signex_widgets::text(signex_i18n::UserText::new(lib_id))
-                .size(TS.body)
-                .font(mono),
+        iced::widget::container(
+            container(
+                signex_widgets::text(signex_i18n::UserText::new(lib_id))
+                    .size(TS.body)
+                    .font(mono),
+            )
+            .padding([SP.xs, 6.0]),
         )
-        .padding([SP.xs, 6.0]),
+        .padding([SP.xs, 6.0])
+        .style(crate::styles::context_menu(tokens)),
         iced::widget::tooltip::Position::Bottom,
-    )
-    .style(crate::styles::context_menu(tokens));
+    );
     container(
         iced::widget::row![
-            property_label("Library ID", label),
+            property_label(t!(i18n, ids::PROPERTIES_LIBRARY), label),
             container(tip).width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
         ]
         .spacing(SP.m)
@@ -189,10 +225,6 @@ pub(super) fn push_library_rows<'a>(
     input_bg: Color,
     tokens: &ThemeTokens,
 ) -> Column<Element<'a, PanelMsg>> {
-    use signex_i18n::{ids, t};
-    if !library_name.is_empty() {
-        c = c.push(form_input_row("Library", library_name, muted, input_bg));
-    }
     let LibraryStatus {
         drifted,
         older_instances,
@@ -200,6 +232,14 @@ pub(super) fn push_library_rows<'a>(
         missing,
         i18n,
     } = status;
+    if !library_name.is_empty() {
+        c = c.push(form_input_row(
+            t!(i18n, ids::PROPERTIES_LIBRARY),
+            library_name,
+            muted,
+            input_bg,
+        ));
+    }
     if missing {
         c = c.push(
             signex_widgets::text(t!(i18n, ids::PROPERTIES_LIBRARY_SYMBOL_MISSING))
@@ -229,7 +269,6 @@ fn out_of_date_row<'a>(
     i18n: &signex_i18n::I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, PanelMsg> {
-    use signex_i18n::{ids, t};
     let update = signex_widgets::button(
         signex_widgets::text(t!(i18n, ids::PROPERTIES_LIBRARY_UPDATE)).size(TS.body),
     )
@@ -276,13 +315,119 @@ fn out_of_date_row<'a>(
         .boxed()
 }
 
+/// The tone of the library banner at the top of a placed part's Properties:
+/// warn while the sheet copy differs from the library, err when the library
+/// symbol is gone, no banner otherwise (mockup row 42).
+pub(super) fn banner_tone(status: &LibraryStatus<'_>) -> Option<crate::styles::PillTone> {
+    if status.missing {
+        Some(crate::styles::PillTone::Err)
+    } else if status.drifted {
+        Some(crate::styles::PillTone::Warn)
+    } else {
+        None
+    }
+}
+
+/// The library banner of a placed part: what differs and, when the library
+/// still has the symbol, "Update from library" and "Only this one".
+pub(super) fn library_banner<'a>(
+    id: uuid::Uuid,
+    status: LibraryStatus<'_>,
+    tokens: &ThemeTokens,
+) -> Option<Element<'a, PanelMsg>> {
+    let tone = banner_tone(&status)?;
+    let i18n = status.i18n;
+    let (fill, ink) = crate::styles::pill_colors(tokens, tone);
+    let title = if status.missing {
+        t!(i18n, ids::PROPERTIES_LIBRARY_SYMBOL_MISSING)
+    } else {
+        match status.older_instances {
+            0 => t!(i18n, ids::PROPERTIES_LIBRARY_OUT_OF_DATE),
+            n => t!(i18n, ids::PROPERTIES_LIBRARY_OLDER_INSTANCES, "count" => n),
+        }
+    };
+    let mut body: Column<Element<'a, PanelMsg>> = Column::new().spacing(SP.s).push(
+        signex_widgets::text(title)
+            .size(TS.body)
+            .color(ink)
+            .font(iced::Font {
+                weight: iced::font::Weight::Semibold,
+                ..signex_widgets::ui_font::regular()
+            })
+            .boxed(),
+    );
+    if !status.missing {
+        body = body.push(banner_actions(id, status.this_one_current, i18n, tokens));
+    }
+    let banner = container(body)
+        .padding([SP.s, SP.m])
+        .width(Length::Fill)
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(fill)),
+            text_color: Some(ink),
+            border: Border {
+                radius: crate::styles::Radii::GRAPHITE.button.into(),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        });
+    Some(
+        container(banner)
+            .padding([SP.xs, SP.m])
+            .width(Length::Fill)
+            .boxed(),
+    )
+}
+
+/// The banner's two buttons, each with the tooltip that says what it reaches.
+fn banner_actions<'a>(
+    id: uuid::Uuid,
+    this_one_current: bool,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, PanelMsg> {
+    let action = |label, tip, msg: PanelMsg, quiet: bool| -> Element<'a, PanelMsg> {
+        let pressable =
+            signex_widgets::button(signex_widgets::text(t!(i18n, label)).size(TS.caption))
+                .padding([SP.xs, SP.m])
+                .on_press(msg);
+        let pressable = if quiet {
+            pressable.style(crate::styles::ghost_button(tokens))
+        } else {
+            pressable.style(super::super::form_look::ghost_button)
+        };
+        signex_widgets::tooltip(
+            pressable,
+            container(signex_widgets::text(t!(i18n, tip)).size(TS.body))
+                .style(crate::styles::context_menu(tokens)),
+            iced::widget::tooltip::Position::Bottom,
+        )
+        .boxed()
+    };
+    let mut actions = iced::widget::Row::<Element<'a, PanelMsg>>::new().push(action(
+        ids::PROPERTIES_LIBRARY_UPDATE,
+        ids::PROPERTIES_LIBRARY_UPDATE_TIP,
+        PanelMsg::UpdateSymbolFromLibrary(id),
+        false,
+    ));
+    if !this_one_current {
+        actions = actions.push(action(
+            ids::PROPERTIES_LIBRARY_ONLY_THIS_ONE,
+            ids::PROPERTIES_LIBRARY_ONLY_THIS_ONE_TIP,
+            PanelMsg::UpdateSymbolFromLibraryOnly(id),
+            true,
+        ));
+    }
+    actions.spacing(SP.s).wrap().vertical_spacing(SP.s).boxed()
+}
+
 /// The placed-part actions of the Properties panel, label first.
-fn part_action_buttons() -> Vec<(&'static str, PanelMsg)> {
+fn part_action_buttons() -> Vec<(MessageId, PanelMsg)> {
     use crate::library::PlacedPartAction as A;
     [
-        ("Open Datasheet", A::OpenDatasheet),
-        ("Edit Symbol", A::EditSymbol),
-        ("Change Component\u{2026}", A::ChangeComponent),
+        (ids::PROPERTIES_ACTION_OPEN_DATASHEET, A::OpenDatasheet),
+        (ids::PROPERTIES_ACTION_EDIT_SYMBOL, A::EditSymbol),
+        (ids::PROPERTIES_ACTION_CHANGE_COMPONENT, A::ChangeComponent),
     ]
     .into_iter()
     .map(|(label, action)| (label, PanelMsg::PlacedPartAction(action)))
@@ -293,12 +438,13 @@ fn part_action_buttons() -> Vec<(&'static str, PanelMsg)> {
 /// part into its library (#1301, #1262, #1260).
 pub(super) fn push_part_actions<'a>(
     c: Column<Element<'a, PanelMsg>>,
+    i18n: &I18n,
 ) -> Column<Element<'a, PanelMsg>> {
     // Wrapping row: at a narrow dock width the last button drops to the
     // next line instead of being clipped (#1747).
     let buttons = iced::widget::Row::with_children(part_action_buttons().into_iter().map(
         |(label, message)| -> Element<'a, PanelMsg> {
-            signex_widgets::button(signex_widgets::text(signex_widgets::raw(label)).size(TS.body))
+            signex_widgets::button(signex_widgets::text(t!(i18n, label)).size(TS.body))
                 .padding([SP.xs, SP.m])
                 .on_press(message)
                 .style(super::super::form_look::ghost_button)
@@ -324,7 +470,11 @@ mod tests {
     #[test]
     fn the_part_actions_carry_the_issue_labels_and_their_actions() {
         let buttons = part_action_buttons();
-        let labels: Vec<&str> = buttons.iter().map(|(label, _)| *label).collect();
+        let en = I18n::en_us();
+        let labels: Vec<String> = buttons
+            .iter()
+            .map(|(label, _)| en.message_plain(*label, &[]))
+            .collect();
         assert_eq!(
             labels,
             ["Open Datasheet", "Edit Symbol", "Change Component\u{2026}"]
@@ -344,7 +494,33 @@ mod tests {
 
     #[test]
     fn the_text_field_under_a_footprint_pick_list_is_the_override() {
-        assert_eq!(footprint_text_label(true), "Footprint override");
-        assert_eq!(footprint_text_label(false), "Footprint");
+        let en =
+            |has_pick_list| I18n::en_us().message_plain(footprint_text_label(has_pick_list), &[]);
+        assert_eq!(en(true), "Override");
+        assert_eq!(en(false), "Footprint");
+    }
+
+    fn status(i18n: &I18n, drifted: bool, missing: bool) -> LibraryStatus<'_> {
+        LibraryStatus {
+            drifted,
+            older_instances: 3,
+            this_one_current: false,
+            missing,
+            i18n,
+        }
+    }
+
+    #[test]
+    fn the_banner_shows_only_when_the_sheet_copy_differs() {
+        use crate::styles::PillTone;
+        let en = I18n::en_us();
+        assert_eq!(banner_tone(&status(&en, false, false)), None);
+        assert_eq!(banner_tone(&status(&en, true, false)), Some(PillTone::Warn));
+        assert_eq!(banner_tone(&status(&en, false, true)), Some(PillTone::Err));
+        assert_eq!(banner_tone(&status(&en, true, true)), Some(PillTone::Err));
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::DEFAULT);
+        let id = uuid::Uuid::now_v7();
+        assert!(library_banner(id, status(&en, false, false), &tokens).is_none());
+        assert!(library_banner(id, status(&en, true, false), &tokens).is_some());
     }
 }

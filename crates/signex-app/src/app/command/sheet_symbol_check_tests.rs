@@ -5,6 +5,8 @@
 
 use std::path::Path;
 
+use signex_i18n::RenderTranslatable;
+
 use serde_json::{Value, json};
 use signex_types::schematic::{ChildSheet, Label, LabelType, Point, SchematicSheet, Wire};
 use uuid::Uuid;
@@ -60,7 +62,7 @@ fn run(app: &mut Signex, id: &str, operands: &[&str]) -> CommandOutcome {
 
 fn refusal(outcome: CommandOutcome) -> String {
     match outcome {
-        CommandOutcome::Disabled { reason } => reason,
+        CommandOutcome::Disabled { reason } => reason.render_en_us(),
         other => panic!("not refused: {other:?}"),
     }
 }

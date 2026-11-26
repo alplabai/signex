@@ -27,9 +27,14 @@
 //! - A part that cannot be read back is never removed or changed.
 //! - A placed part whose footprint cannot be resolved gets a note, and the
 //!   pads of it and of an unread part are left out of net sync.
+//!
+//! [`compare`] joins this list and Back Annotate's into one report of
+//! differences with a direction per row (Compare Board with Schematic,
+//! #2462).
 
 mod back;
 mod change;
+mod compare;
 mod diff;
 mod lower;
 mod nets;
@@ -42,11 +47,16 @@ pub use back::{
 pub use change::{
     ChangeReason, EcoBlock, EcoChange, EcoChangeList, EcoGroup, EcoKey, EcoNote, EcoRow, GroupTicks,
 };
+pub use compare::{
+    ChooseRefusal, CompareAction, CompareCounts, CompareJump, CompareKind, CompareObject,
+    CompareReport, CompareRow, CompareRowId, CompareValue, Compared, Direction, Unavailable,
+    compare, unavailable_text,
+};
 pub use diff::diff_board;
 pub(crate) use diff::remint_pads;
 pub use lower::{EcoRefusal, check, lower};
 pub use nets::refresh_nets;
-pub use report::report_text;
+pub use report::{blocked_text, note_text, report_text};
 
 #[cfg(test)]
 mod fixture;
@@ -128,9 +138,31 @@ pub struct EcoInput<'a> {
 /// never dropped: dropping it would list its footprint for removal.
 pub fn design_eco_parts(
     sheets: &[(InstancePath, &SchematicSheet)],
+    resolve: impl FnMut(&DesignPart, &Symbol) -> Result<ResolvedFootprint, FootprintResolveError>,
+) -> Vec<EcoPart> {
+    eco_parts_of(signex_net::design_parts(sheets), sheets, resolve)
+}
+
+/// [`design_eco_parts`] with a part in a channel of a repeated sheet under
+/// its channel designator, so it matches the netlist's terminals.
+pub fn design_eco_parts_named(
+    sheets: &[(InstancePath, &SchematicSheet)],
+    channels: &signex_net::ChannelDesignators,
+    resolve: impl FnMut(&DesignPart, &Symbol) -> Result<ResolvedFootprint, FootprintResolveError>,
+) -> Vec<EcoPart> {
+    eco_parts_of(
+        signex_net::design_parts_named(sheets, channels),
+        sheets,
+        resolve,
+    )
+}
+
+fn eco_parts_of(
+    parts: Vec<DesignPart>,
+    sheets: &[(InstancePath, &SchematicSheet)],
     mut resolve: impl FnMut(&DesignPart, &Symbol) -> Result<ResolvedFootprint, FootprintResolveError>,
 ) -> Vec<EcoPart> {
-    signex_net::design_parts(sheets)
+    parts
         .into_iter()
         .map(|part| {
             let first = sheets
@@ -184,4 +216,20 @@ pub(crate) fn stable_uuid(parts: &[&[u8]]) -> Uuid {
 /// Whether `path` is `sheet` or a sheet below it.
 pub(crate) fn is_under(path: &InstancePath, sheet: &InstancePath) -> bool {
     path.chain().starts_with(sheet.chain())
+}
+
+/// Designators carried by more than one annotated part: Update PCB and Back
+/// Annotate block a row on one of these alike.
+pub(crate) fn duplicate_designators<'a>(
+    parts: impl IntoIterator<Item = &'a EcoPart>,
+) -> std::collections::HashSet<String> {
+    let mut count: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+    for p in parts.into_iter().filter(|p| !p.part.needs_annotation) {
+        *count.entry(p.part.designator.as_str()).or_default() += 1;
+    }
+    count
+        .into_iter()
+        .filter(|(_, n)| *n > 1)
+        .map(|(d, _)| d.to_string())
+        .collect()
 }

@@ -23,6 +23,8 @@ fn pad(n: u128, x: f64, y: f64, net: u32) -> Pad {
             name: format!("N{net}"),
         }),
         roundrect_ratio: 0.0,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 0.0,
         net_locked: false,
         layer_sizes: None,
@@ -85,6 +87,7 @@ fn via(n: u128, at: (f64, f64), net: u32) -> Via {
 fn board(footprints: Vec<Footprint>, segments: Vec<Segment>, vias: Vec<Via>) -> PcbBoard {
     PcbBoard {
         stackup: None,
+        rooms: Vec::new(),
         free: Default::default(),
         sketch: None,
         options: Default::default(),

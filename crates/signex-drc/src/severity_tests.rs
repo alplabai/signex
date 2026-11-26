@@ -25,7 +25,21 @@ fn every_kind_has_a_stable_builtin_rule_id() {
             "builtin::keepout",
             "builtin::track_width",
             "builtin::via_diameter",
-            "builtin::via_drill"
+            "builtin::via_drill",
+            "builtin::hole_size",
+            "builtin::annular_ring",
+            "builtin::hole_to_hole",
+            "builtin::edge_clearance",
+            "builtin::via_in_pad",
+            "builtin::silk_to_pad",
+            "builtin::silk_to_silk",
+            "builtin::mask_sliver",
+            "builtin::mask_expansion",
+            "builtin::paste_expansion",
+            "builtin::courtyard_overlap",
+            "builtin::part_outside_room",
+            "builtin::component_height",
+            "builtin::body_clearance",
         ]
     );
     for kind in ViolationKind::ALL {

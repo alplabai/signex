@@ -1,0 +1,19 @@
+M48
+; #@! TF.GenerationSoftware,Example Vendor,Example CAM,1.0
+; #@! TF.FileFunction,NonPlated,1,4,NPTH
+METRIC,TZ
+T01C3.200
+T02C
+%
+G90
+G05
+T01
+X2.500Y2.500
+X29.500Y2.500
+X2.500Y21.500
+X29.500Y21.500
+T02
+X6.200Y11.500
+X26.400Y6.000
+T00
+M30

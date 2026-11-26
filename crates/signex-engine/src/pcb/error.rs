@@ -84,15 +84,15 @@ pub enum BoardCommandError {
     NotPositive { field: &'static str },
     #[error("{0} is not a copper layer")]
     NotCopperLayer(String),
-    /// A string or dimension moved to a layer that takes no text (#2373).
+    /// A string moved to a layer that takes no text (#2373).
     #[error("{0} takes no board text")]
     NotTextLayer(String),
-    /// An arc moved to a layer this build does not know (#2373).
+    /// An arc or dimension moved to a layer this build does not know (#2373).
     #[error("{0} is not a board layer")]
     UnknownLayer(String),
     #[error("{field} must not be below zero")]
     Negative { field: &'static str },
-    #[error("{0} cannot hold a board drawing: drawings go on non-copper layers, not keep-outs")]
+    #[error("{0} cannot hold a board drawing: drawings go on any layer but a keep-out")]
     NotGraphicLayer(String),
     #[error("net {0} is not in the board's net table")]
     UnknownNet(u32),
@@ -147,4 +147,15 @@ pub enum BoardCommandError {
     GraphicsMismatch,
     #[error("a failed command could not be rolled back: {0}")]
     RollbackFailed(String),
+    /// Rooms (#2457).
+    #[error("no room {0} on the board")]
+    RoomNotFound(Uuid),
+    #[error("room {0} is already on the board")]
+    RoomAlreadyPresent(Uuid),
+    #[error("room {0} is locked; unlock it first")]
+    RoomLocked(Uuid),
+    #[error("room {0} holds no parts to fit")]
+    RoomHasNoParts(Uuid),
+    #[error("the room's {field} is not valid")]
+    RoomInvalid { field: &'static str },
 }

@@ -82,6 +82,32 @@ enum ListKind {
 }
 
 impl BoardItemId {
+    /// The item's uuid, whatever its kind.
+    pub fn uuid(self) -> Uuid {
+        self.split().1
+    }
+
+    /// The item of `board` that `uuid` names, whatever its kind: what a
+    /// command naming board items by uuid acts on (#2326).
+    #[must_use]
+    pub fn on_board(board: &PcbBoard, uuid: Uuid) -> Option<Self> {
+        let kinds: [fn(Uuid) -> Self; 9] = [
+            Self::Footprint,
+            Self::Segment,
+            Self::Via,
+            Self::Zone,
+            Self::Text,
+            Self::Arc,
+            Self::FreePad,
+            Self::Dimension,
+            Self::Graphic,
+        ];
+        kinds
+            .into_iter()
+            .map(|kind| kind(uuid))
+            .find(|id| position(board, *id).is_some())
+    }
+
     fn split(self) -> (ListKind, Uuid) {
         match self {
             Self::Footprint(u) => (ListKind::Footprints, u),

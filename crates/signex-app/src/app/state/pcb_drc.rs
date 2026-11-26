@@ -6,6 +6,7 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 use signex_drc::DrcReport;
 use signex_types::net_class::NetClass;
@@ -31,6 +32,9 @@ pub struct DrcDone {
     pub report: DrcReport,
     /// Net names of that board, by number, for the rows.
     pub net_names: BTreeMap<u32, String>,
+    /// When the result landed, read once in `update` (#2460): the status
+    /// bar's "N min ago" and the DRC popover's "last run" time.
+    pub finished_at: SystemTime,
 }
 
 impl DrcDone {
@@ -38,6 +42,14 @@ impl DrcDone {
     /// changed since the run.
     pub fn is_stale(&self, revision: u64, net_classes: &[NetClass]) -> bool {
         self.revision != revision || self.net_classes.as_slice() != net_classes
+    }
+
+    /// How many edits the board at `revision` had since the run. A board
+    /// engine takes one revision per edit, undo or redo, so the difference
+    /// counts those steps; a board read again from disk starts a new engine
+    /// at a fresh revision, which counts as more edits than were made.
+    pub fn edits_since(&self, revision: u64) -> u64 {
+        revision.saturating_sub(self.revision)
     }
 }
 
@@ -51,7 +63,7 @@ pub struct PcbDrc {
     /// What the DRC results panel shows of the report (#2399): view state,
     /// never board data.
     pub filter: crate::panels::DrcFilter,
-    /// The waiver note being written in the panel.
+    /// The waiver being written in the panel (reason and author, AV-13).
     pub waive_draft: Option<crate::panels::DrcWaiveDraft>,
 }
 
@@ -65,13 +77,14 @@ impl PcbDrc {
         self.generation
     }
 
-    /// Keep the result of run `generation`. False when a newer run was
-    /// begun since, in which case nothing changes.
+    /// Keep the result of run `generation`, landed at `finished_at`. False
+    /// when a newer run was begun since, in which case nothing changes.
     pub fn finish(
         &mut self,
         generation: u64,
         report: DrcReport,
         net_names: BTreeMap<u32, String>,
+        finished_at: SystemTime,
     ) -> bool {
         let Some(input) = self
             .target
@@ -87,6 +100,7 @@ impl PcbDrc {
             net_classes: input.net_classes,
             report,
             net_names,
+            finished_at,
         });
         true
     }
@@ -109,6 +123,11 @@ impl PcbDrc {
     /// The last report, if it is for the board at `path`.
     pub fn done_for(&self, path: &Path) -> Option<&DrcDone> {
         self.done.as_ref().filter(|d| d.path == path)
+    }
+
+    /// The last report, whichever board it is for.
+    pub fn last(&self) -> Option<&DrcDone> {
+        self.done.as_ref()
     }
 
     /// The number of the last run begun; with [`Self::is_running_for`] it
@@ -163,9 +182,27 @@ mod tests {
         assert!(done.is_stale(1, &[NetClass::named("Power".to_string())]));
     }
 
+    /// When the test runs land.
+    const LANDED: SystemTime = SystemTime::UNIX_EPOCH;
+
     fn run(drc: &mut PcbDrc, path: &str) -> bool {
         let generation = drc.begin(input(path, 1));
-        drc.finish(generation, report(), BTreeMap::new())
+        drc.finish(generation, report(), BTreeMap::new(), LANDED)
+    }
+
+    /// #2460: the run keeps when it landed, and counts the board's edits
+    /// since by its revision.
+    #[test]
+    fn a_finished_run_keeps_its_time_and_counts_the_edits_since() {
+        let mut drc = PcbDrc::default();
+        let generation = drc.begin(input("a.snxpcb", 4));
+        let at = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(90);
+        assert!(drc.finish(generation, report(), BTreeMap::new(), at));
+        let done = drc.done_for(Path::new("a.snxpcb")).unwrap();
+        assert_eq!(done.finished_at, at);
+        assert_eq!(done.edits_since(4), 0);
+        assert_eq!(done.edits_since(6), 2);
+        assert_eq!(done.edits_since(3), 0, "never below zero");
     }
 
     #[test]
@@ -173,11 +210,11 @@ mod tests {
         let mut drc = PcbDrc::default();
         let first = drc.begin(input("a.snxpcb", 1));
         let second = drc.begin(input("a.snxpcb", 2));
-        assert!(!drc.finish(first, report(), BTreeMap::new()));
+        assert!(!drc.finish(first, report(), BTreeMap::new(), LANDED));
         let a = Path::new("a.snxpcb");
         assert!(drc.is_running_for(a) && drc.done_for(a).is_none());
         assert!(!drc.is_running_for(Path::new("b.snxpcb")));
-        assert!(drc.finish(second, report(), BTreeMap::new()));
+        assert!(drc.finish(second, report(), BTreeMap::new(), LANDED));
         assert!(!drc.is_running_for(a));
         assert_eq!(
             drc.done_for(Path::new("a.snxpcb")).map(|d| d.revision),

@@ -23,7 +23,7 @@ pub(super) fn apply_symbol_join(editor: &mut SymEditor, msg: SymbolEditorMsg) {
     }
 
     let mut indices =
-        state::join_source_indices(editor.primitive(), editor.view(), &editor.selected);
+        state::join_source_indices(editor.primitive(), editor.view(), &editor.gui.selected);
     if indices.is_empty() {
         return;
     }
@@ -32,7 +32,7 @@ pub(super) fn apply_symbol_join(editor: &mut SymEditor, msg: SymbolEditorMsg) {
 
     // One shared predicate gates both the context-menu row's `enabled`
     // flag and this op, so they can never drift apart.
-    if !state::selection_is_join_eligible(editor.primitive(), editor.view(), &editor.selected) {
+    if !state::selection_is_join_eligible(editor.primitive(), editor.view(), &editor.gui.selected) {
         // Distinguish the mixed-part-number case (surfaced) from
         // every other ineligibility reason — non-Line/Arc graphic,
         // stale index, or too few sources (a lone Line can never
@@ -42,7 +42,7 @@ pub(super) fn apply_symbol_join(editor: &mut SymEditor, msg: SymbolEditorMsg) {
         let kinds_ok = state::selection_kinds_are_line_or_arc(editor.primitive(), &indices);
         let enough_sources = state::selection_has_enough_join_sources(editor.primitive(), &indices);
         if kinds_ok && enough_sources {
-            editor.status_message = Some(MIXED_PARTS_MESSAGE.to_string());
+            editor.gui.status_message = Some(MIXED_PARTS_MESSAGE.to_string());
         }
         return;
     }
@@ -60,7 +60,7 @@ pub(super) fn apply_symbol_join(editor: &mut SymEditor, msg: SymbolEditorMsg) {
     let (ring, auto_closed_gap_mm) = match resolve_ring_with_auto_close(&segments) {
         Ok(result) => result,
         Err(err) => {
-            editor.status_message = Some(chain_error_message(err));
+            editor.gui.status_message = Some(chain_error_message(err));
             return;
         }
     };
@@ -79,7 +79,7 @@ pub(super) fn apply_symbol_join(editor: &mut SymEditor, msg: SymbolEditorMsg) {
     // selection. A selection that was already a closed chain leaves
     // the status line untouched (cleared, per the "next successful
     // action" contract — see `clear_stale_status_message`).
-    editor.status_message = auto_closed_gap_mm
+    editor.gui.status_message = auto_closed_gap_mm
         .map(|gap_mm| format!("Closed the outline with a new {gap_mm:.2} mm edge."));
 }
 
@@ -137,7 +137,7 @@ fn splice_selection_into_polygon(
         part_number,
     });
     let new_idx = editor.primitive().graphics.len() - 1;
-    editor.selected = Some(SymbolSelection::Graphic(new_idx));
+    editor.gui.selected = Some(SymbolSelection::Graphic(new_idx));
     close_pickers(editor);
     mark_dirty(editor);
 }
@@ -229,7 +229,7 @@ mod tests {
         push_line(&mut editor, [4.0, 0.0], [4.0, 4.0]);
         push_line(&mut editor, [4.0, 4.0], [0.0, 4.0]);
         push_line(&mut editor, [0.0, 4.0], [0.0, 0.0]);
-        editor.selected = Some(SymbolSelection::Multiple {
+        editor.gui.selected = Some(SymbolSelection::Multiple {
             pin_indices: Vec::new(),
             graphic_indices: vec![0, 1, 2, 3],
         });
@@ -251,12 +251,12 @@ mod tests {
             other => panic!("expected Polygon, got {other:?}"),
         }
         assert_eq!(
-            editor.selected,
+            editor.gui.selected,
             Some(SymbolSelection::Graphic(0)),
             "new polygon is selected"
         );
         assert_eq!(
-            editor.history.undo_len(),
+            editor.draft.history.undo_len(),
             1,
             "exactly one undo snapshot for the whole composite op"
         );
@@ -288,7 +288,7 @@ mod tests {
         push_line(&mut editor, [0.0, 0.0], [4.0, 0.0]);
         push_line(&mut editor, [4.0, 0.0], [4.0, 4.0]);
         push_line(&mut editor, [4.0, 4.0], [0.0, 4.0]);
-        editor.selected = Some(SymbolSelection::Multiple {
+        editor.gui.selected = Some(SymbolSelection::Multiple {
             pin_indices: Vec::new(),
             graphic_indices: vec![0, 1, 2],
         });
@@ -300,9 +300,9 @@ mod tests {
             SymbolGraphicKind::Polygon { vertices } => assert_eq!(vertices.len(), 4),
             other => panic!("expected Polygon, got {other:?}"),
         }
-        assert_eq!(editor.history.undo_len(), 1);
+        assert_eq!(editor.draft.history.undo_len(), 1);
         assert_eq!(
-            editor.status_message.as_deref(),
+            editor.gui.status_message.as_deref(),
             Some("Closed the outline with a new 4.00 mm edge.")
         );
     }
@@ -317,7 +317,7 @@ mod tests {
         apply_symbol_join(&mut editor, SymbolEditorMsg::JoinSelectionIntoPolygon);
 
         assert_eq!(editor.primitive().graphics.len(), 1);
-        assert!(editor.status_message.is_none());
+        assert!(editor.gui.status_message.is_none());
     }
 
     /// A triangle built from two lines and one arc side joins fine.
@@ -341,7 +341,7 @@ mod tests {
             fill: None,
             part_number: 0,
         });
-        editor.selected = Some(SymbolSelection::Multiple {
+        editor.gui.selected = Some(SymbolSelection::Multiple {
             pin_indices: Vec::new(),
             graphic_indices: vec![0, 1, 2],
         });
@@ -363,7 +363,7 @@ mod tests {
         push_line(&mut editor, [0.0, 0.0], [2.0, 0.0]);
         push_line(&mut editor, [0.0, 0.0], [0.0, 2.0]);
         push_line(&mut editor, [0.0, 0.0], [-2.0, 0.0]);
-        editor.selected = Some(SymbolSelection::Multiple {
+        editor.gui.selected = Some(SymbolSelection::Multiple {
             pin_indices: Vec::new(),
             graphic_indices: vec![0, 1, 2],
         });
@@ -383,9 +383,16 @@ mod tests {
                 .any(|g| matches!(g.kind, SymbolGraphicKind::Polygon { .. })),
             "no polygon appended on error"
         );
-        assert_eq!(editor.history.undo_len(), 0, "no undo entry on error");
-        assert!(editor.status_message.is_some());
-        assert!(editor.status_message.as_deref().unwrap().contains("branch"));
+        assert_eq!(editor.draft.history.undo_len(), 0, "no undo entry on error");
+        assert!(editor.gui.status_message.is_some());
+        assert!(
+            editor
+                .gui
+                .status_message
+                .as_deref()
+                .unwrap()
+                .contains("branch")
+        );
     }
 
     /// A selection containing a non-Line/Arc graphic (Rectangle) is a
@@ -406,7 +413,7 @@ mod tests {
             fill: None,
             part_number: 0,
         });
-        editor.selected = Some(SymbolSelection::Multiple {
+        editor.gui.selected = Some(SymbolSelection::Multiple {
             pin_indices: Vec::new(),
             graphic_indices: vec![0, 1],
         });
@@ -414,8 +421,8 @@ mod tests {
         apply_symbol_join(&mut editor, SymbolEditorMsg::JoinSelectionIntoPolygon);
 
         assert_eq!(editor.primitive().graphics.len(), 2, "nothing mutated");
-        assert_eq!(editor.history.undo_len(), 0);
-        assert!(editor.status_message.is_none());
+        assert_eq!(editor.draft.history.undo_len(), 0);
+        assert!(editor.gui.status_message.is_none());
     }
 
     /// The joined polygon's stroke width is the max of the source
@@ -453,7 +460,7 @@ mod tests {
             fill: None,
             part_number: 0,
         });
-        editor.selected = Some(SymbolSelection::Multiple {
+        editor.gui.selected = Some(SymbolSelection::Multiple {
             pin_indices: Vec::new(),
             graphic_indices: vec![0, 1, 2],
         });
@@ -469,7 +476,7 @@ mod tests {
         let mut editor = new_editor();
         apply_symbol_join(&mut editor, SymbolEditorMsg::JoinSelectionIntoPolygon);
         assert!(editor.primitive().graphics.is_empty());
-        assert_eq!(editor.history.undo_len(), 0);
+        assert_eq!(editor.draft.history.undo_len(), 0);
     }
 
     /// A selection whose sources are all shared (part 0) keeps the
@@ -480,7 +487,7 @@ mod tests {
     #[test]
     fn all_part0_selection_keeps_part_zero_on_the_result() {
         let mut editor = square_editor();
-        assert_eq!(editor.active_part, 1, "default active part");
+        assert_eq!(editor.draft.active_part, 1, "default active part");
 
         apply_symbol_join(&mut editor, SymbolEditorMsg::JoinSelectionIntoPolygon);
 
@@ -506,7 +513,7 @@ mod tests {
             fill: None,
             part_number: 1, // active unit
         });
-        editor.selected = Some(SymbolSelection::Multiple {
+        editor.gui.selected = Some(SymbolSelection::Multiple {
             pin_indices: Vec::new(),
             graphic_indices: vec![0, 1],
         });
@@ -514,9 +521,9 @@ mod tests {
         apply_symbol_join(&mut editor, SymbolEditorMsg::JoinSelectionIntoPolygon);
 
         assert_eq!(editor.primitive().graphics.len(), 2, "nothing mutated");
-        assert_eq!(editor.history.undo_len(), 0, "no undo entry");
+        assert_eq!(editor.draft.history.undo_len(), 0, "no undo entry");
         assert_eq!(
-            editor.status_message.as_deref(),
+            editor.gui.status_message.as_deref(),
             Some("Selection mixes shared and unit-specific shapes")
         );
     }
@@ -533,7 +540,7 @@ mod tests {
         push_line(&mut editor, [4.0, 0.0], [4.0, 4.0]);
         push_line(&mut editor, [4.0, 4.0], [0.0, 4.0]);
         push_line(&mut editor, [0.0, 4.0], [0.0, 0.0]);
-        editor.selected = Some(SymbolSelection::All);
+        editor.gui.selected = Some(SymbolSelection::All);
 
         apply_symbol_join(&mut editor, SymbolEditorMsg::JoinSelectionIntoPolygon);
 
@@ -552,14 +559,14 @@ mod tests {
     fn single_line_selection_is_ineligible_and_silent() {
         let mut editor = new_editor();
         push_line(&mut editor, [0.0, 0.0], [4.0, 0.0]);
-        editor.selected = Some(SymbolSelection::Graphic(0));
+        editor.gui.selected = Some(SymbolSelection::Graphic(0));
 
         apply_symbol_join(&mut editor, SymbolEditorMsg::JoinSelectionIntoPolygon);
 
         assert_eq!(editor.primitive().graphics.len(), 1, "nothing mutated");
-        assert_eq!(editor.history.undo_len(), 0);
+        assert_eq!(editor.draft.history.undo_len(), 0);
         assert!(
-            editor.status_message.is_none(),
+            editor.gui.status_message.is_none(),
             "silent no-op, matching the disabled menu row"
         );
     }
@@ -582,7 +589,7 @@ mod tests {
             fill: None,
             part_number: 0,
         });
-        editor.selected = Some(SymbolSelection::Graphic(0));
+        editor.gui.selected = Some(SymbolSelection::Graphic(0));
 
         apply_symbol_join(&mut editor, SymbolEditorMsg::JoinSelectionIntoPolygon);
 

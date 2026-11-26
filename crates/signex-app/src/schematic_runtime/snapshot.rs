@@ -54,16 +54,17 @@ pub fn build_renderer_snapshot(
             continue;
         }
 
+        let base_color = bus
+            .color
+            .as_ref()
+            .map(to_iced)
+            .unwrap_or_else(|| to_iced(&colors.bus));
         wires.push(WireInput {
             id: renderer_id(bus.uuid),
             p0: [bus.start.x as f32, bus.start.y as f32],
             p1: [bus.end.x as f32, bus.end.y as f32],
-            width_mm: overrides.defaults.bus_mm() as f32,
-            explicit_color: Some(to_rgba(focus_color(
-                to_iced(&colors.bus),
-                focus_set,
-                bus.uuid,
-            ))),
+            width_mm: overrides.defaults.bus_line_mm(bus.stroke_width) as f32,
+            explicit_color: Some(to_rgba(focus_color(base_color, focus_set, bus.uuid))),
         });
     }
 
@@ -164,7 +165,32 @@ pub fn build_renderer_snapshot(
         &mut wires,
         &mut wire_line_styles,
     );
+    harness::push(
+        snapshot,
+        transform,
+        colors,
+        bounds,
+        focus_set,
+        harness::HarnessOut {
+            wires: &mut wires,
+            polygons: &mut polygons,
+            texts: &mut labels,
+        },
+    );
+    directives::push_flag_texts(
+        snapshot,
+        transform,
+        colors,
+        bounds,
+        focus_set,
+        document_family,
+        &mut parameter_texts,
+    );
 
+    // A dot takes the colour most of its wires share, else its own rule.
+    let from_wires = signex_types::schematic::junction_wire_colors(snapshot, |wire| {
+        wire_color(overrides.wire_styling, wire)
+    });
     for junction in &snapshot.junctions {
         let center = transform.world_to_screen((junction.position.x, junction.position.y));
         if !point_visible(center, bounds, 6.0) {
@@ -175,7 +201,8 @@ pub fn build_renderer_snapshot(
             center: [junction.position.x as f32, junction.position.y as f32],
             radius_mm: overrides.defaults.junction_radius_mm(junction.diameter) as f32,
             color: to_rgba(focus_color(
-                junction_color(overrides.wire_styling, junction.uuid)
+                (from_wires.get(&junction.uuid).copied())
+                    .or_else(|| junction_color(overrides.wire_styling, junction.uuid))
                     .as_ref()
                     .map(to_iced)
                     .unwrap_or_else(|| to_iced(&colors.junction)),
@@ -203,16 +230,49 @@ pub fn build_renderer_snapshot(
         } else {
             (&colors.body, &colors.pin, &colors.value)
         };
+        // A part that is not fitted draws greyed, under a cross (#1294); its
+        // designator and value keep their colours.
+        let not_fitted = overrides
+            .not_fitted
+            .is_some_and(|set| set.contains(&symbol.uuid));
+        let paper = to_iced(&colors.paper);
+        let ink = |color: Color| {
+            if not_fitted {
+                symbol::not_fitted_ink(color, paper)
+            } else {
+                color
+            }
+        };
         let style = symbol::SymbolStyle {
             id: renderer_id(symbol.uuid),
-            stroke: focus_color(to_iced(body_rgb), focus_set, symbol.uuid),
-            fill: focus_color(to_iced(&colors.body_fill), focus_set, symbol.uuid),
-            pin: focus_color(to_iced(pin_rgb), focus_set, symbol.uuid),
-            missing: focus_color(to_iced(&colors.no_connect), focus_set, symbol.uuid),
+            stroke: ink(focus_color(to_iced(body_rgb), focus_set, symbol.uuid)),
+            fill: ink(focus_color(
+                to_iced(&colors.body_fill),
+                focus_set,
+                symbol.uuid,
+            )),
+            pin: ink(focus_color(to_iced(pin_rgb), focus_set, symbol.uuid)),
+            missing: ink(focus_color(
+                to_iced(&colors.no_connect),
+                focus_set,
+                symbol.uuid,
+            )),
             scale: transform.scale,
             family: resolve_family(None, document_family),
             defaults: overrides.defaults,
         };
+        // "Fill symbol bodies": the theme tint or the user's colour, `None`
+        // when the preference is off.
+        if let Some(tint) = colors.body_tint {
+            symbol::push_body_fills(
+                &signex_types::schematic::default_body_fill_shapes(
+                    snapshot.body_of(symbol),
+                    symbol,
+                ),
+                ink(focus_color(to_iced(&tint), focus_set, symbol.uuid)),
+                &mut polygons,
+            );
+        }
         let mut sink = symbol::SymbolSink {
             wires: &mut wires,
             arcs: &mut arcs,
@@ -223,13 +283,28 @@ pub fn build_renderer_snapshot(
             symbol::push_fallback_box(&bbox, &symbol.lib_id, &style, &mut sink);
         } else {
             symbol::push_primitives(&primitives, &style, &mut sink);
+            if not_fitted {
+                // The cross is in the theme's error ink (decision of
+                // 2026-11-25), as SVG and PDF draw it.
+                symbol::push_not_fitted_cross(
+                    snapshot.body_of(symbol),
+                    symbol,
+                    focus_color(to_iced(&colors.erc_error), focus_set, symbol.uuid),
+                    &style,
+                    &mut sink,
+                );
+            }
         }
         pin_texts.extend(symbol::pin_text_inputs(
             snapshot.body_of(symbol),
             symbol,
             &symbol::PinTextStyle {
                 name: style.pin,
-                number: focus_color(to_iced(&colors.reference), focus_set, symbol.uuid),
+                number: ink(focus_color(
+                    to_iced(&colors.reference),
+                    focus_set,
+                    symbol.uuid,
+                )),
                 family: style.family.clone(),
             },
         ));
@@ -239,10 +314,12 @@ pub fn build_renderer_snapshot(
             .designators
             .and_then(|d| d.get(&symbol.uuid))
             .unwrap_or(&symbol.reference);
+        let reference =
+            signex_types::designator::display_reference(overrides.designator_standard, reference);
         if !reference.is_empty()
             && let Some(text) = field_text_input(
                 symbol,
-                reference,
+                &reference,
                 symbol.ref_text.as_ref(),
                 FieldSlot::Reference,
                 to_rgba(stroke_color),
@@ -251,10 +328,19 @@ pub fn build_renderer_snapshot(
         {
             reference_value_texts.push(text);
         }
+        // The value shows its special strings resolved and an `=` expression
+        // evaluated; the stored value, which the editor shows, keeps the
+        // source (#1596, #1986).
+        let value = super::drawn_value::drawn_value(
+            &snapshot.symbols,
+            symbol,
+            overrides.special_strings,
+            overrides.designator_standard,
+        );
         if !symbol.value.is_empty()
             && let Some(text) = field_text_input(
                 symbol,
-                &symbol.value,
+                &value,
                 snapshot.drawn_value_text(symbol).as_deref(),
                 FieldSlot::Value,
                 to_rgba(value_color),
@@ -283,6 +369,20 @@ pub fn build_renderer_snapshot(
         let min_y = y0.min(y1) as f32;
         let max_x = x0.max(x1) as f32;
         let max_y = y0.max(y1) as f32;
+        // A repeated sheet draws as a stack with a ×N pill (#1279).
+        let accent = focus_color(to_iced(&colors.selection), focus_set, sheet.uuid);
+        let is_repeated = super::repeat_stack::push_repeat_stack(
+            sheet,
+            &super::repeat_stack::StackLook {
+                outline: to_rgba(color),
+                accent: to_rgba(accent),
+                badge_ink: to_rgba(to_iced(&colors.paper)),
+                stroke_mm: overrides.defaults.shape_stroke_mm(sheet.stroke_width) as f32,
+                family: resolve_family(None, document_family),
+            },
+            &mut polygons,
+            &mut parameter_texts,
+        );
         polygons.push(PolygonInput {
             vertices: vec![
                 [min_x, min_y],
@@ -302,7 +402,7 @@ pub fn build_renderer_snapshot(
                 min_y + screen_px_to_world_mm(6.0, transform.scale) as f32,
             ],
             size_mm: 1.05,
-            color: to_rgba(color),
+            color: to_rgba(if is_repeated { accent } else { color }),
             bold: false,
             italic: false,
             family: resolve_family(None, document_family),
@@ -325,6 +425,7 @@ pub fn build_renderer_snapshot(
 
     let mut drawings = Vec::with_capacity(snapshot.drawings.len());
     let mut drawings_front = Vec::new();
+    let power_nets = drawings::power_nets_if_tables(snapshot);
     for drawing in &snapshot.drawings {
         let bbox = drawing_aabb(drawing);
         let min = transform.world_to_screen((bbox.min_x, bbox.min_y));
@@ -345,6 +446,13 @@ pub fn build_renderer_snapshot(
             transform.scale,
             &overrides.defaults,
             out,
+        );
+        drawings::push_drawing_texts(
+            drawing,
+            colors,
+            focus_set,
+            &power_nets,
+            &mut parameter_texts,
         );
     }
 
@@ -385,7 +493,7 @@ pub fn build_renderer_snapshot(
         }
 
         let content = match overrides.special_strings {
-            Some(special) => special.resolve(&note.text),
+            Some(special) => special.resolve_text(&note.text),
             None => note.text.clone(),
         };
         let color = focus_color(to_iced(&colors.value), focus_set, note.uuid);

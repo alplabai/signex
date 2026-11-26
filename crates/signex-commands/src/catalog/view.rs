@@ -150,6 +150,18 @@ pub(super) const VIEW: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
+    // Mockup row 194: rotation 0°, Flip off and Fit, on a board or a sheet
+    // (the Home button by the zoom pill). No default key.
+    CommandMetadata {
+        id: "home_view",
+        category: "view",
+        label: command_ids::CMD_HOME_VIEW,
+        menu_label: Some(command_ids::CMD_MENU_HOME_VIEW),
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
     // #2351: the board origin marker, shown by default. No default key.
     CommandMetadata {
         id: "toggle_origin_marker",
@@ -159,6 +171,40 @@ pub(super) const VIEW: &[CommandMetadata] = &[
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    // 2026-11-18: Edit ▸ Origin, where the board counts from. Each is one
+    // undo step on the board's options; greyed on a read-only board.
+    CommandMetadata {
+        id: "set_board_origin",
+        category: "edit",
+        label: command_ids::CMD_SET_BOARD_ORIGIN,
+        menu_label: Some(command_ids::CMD_MENU_SET_BOARD_ORIGIN),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "reset_board_origin",
+        category: "edit",
+        label: command_ids::CMD_RESET_BOARD_ORIGIN,
+        menu_label: Some(command_ids::CMD_MENU_RESET_BOARD_ORIGIN),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        // A CLI or an agent names the board.
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::DOCUMENT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "snap_board_origin_to_corner",
+        category: "edit",
+        label: command_ids::CMD_SNAP_BOARD_ORIGIN_TO_CORNER,
+        menu_label: Some(command_ids::CMD_MENU_SNAP_BOARD_ORIGIN_TO_CORNER),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -222,6 +268,41 @@ pub(super) const VIEW: &[CommandMetadata] = &[
         category: "view",
         label: command_ids::CMD_FLIP_BOARD_VIEW,
         menu_label: Some(command_ids::CMD_MENU_FLIP_BOARD_VIEW),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    // Mockup row 175: the 3D view toolbar's Flip, lighting and screenshot
+    // buttons as commands. View state only; each does nothing while the
+    // board is flat, where the app greys lighting and copy. `H` and
+    // `Mod+Shift+C` on a board in both built-in profiles; Flip is `F` in the
+    // `board_3d` context, so `F` stays Change Footprint on a flat board.
+    CommandMetadata {
+        id: "flip_board_3d",
+        category: "view",
+        label: command_ids::CMD_FLIP_BOARD_3D,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "cycle_board_3d_lighting",
+        category: "view",
+        label: command_ids::CMD_CYCLE_BOARD_3D_LIGHTING,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "copy_board_3d_screenshot",
+        category: "view",
+        label: command_ids::CMD_COPY_BOARD_3D_SCREENSHOT,
+        menu_label: None,
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::GUI_ONLY,

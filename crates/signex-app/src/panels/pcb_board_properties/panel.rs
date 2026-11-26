@@ -1,5 +1,5 @@
-//! Panel (#2410): the board's manufacturing panel. Without one, a line that
-//! says what a panel is and Panelize Board; with one, its settings (copies,
+//! Panel (#2410): the board's manufacturing panel. Without one the section
+//! is not shown; with one, its settings (copies,
 //! gaps, rails, marks, the separation and the tabs), what it comes to, and
 //! Remove Panel. Each edit is one undo step through `set_board_panel`'s
 //! path. Rules: `docs/PANELISATION.md`.
@@ -10,8 +10,16 @@ use signex_i18n::{Localized, MessageId, ids, t};
 use signex_types::pcb::PcbBoard;
 use signex_types::pcb_panel::{BoardPanel, PanelField, PanelFieldKind, PanelSeparation};
 
-use super::chrome::{Form, Segment, Shown};
+use super::chrome::{Form, Head, Segment, Shown};
 use super::{BoardField, PanelMsg, PcbBoardMsg, PcbBoardSummary, fields};
+
+/// The Panel section's key in the collapsed-sections set.
+pub(super) const SECTION_KEY: &str = "pcb_board_panel";
+
+/// The entry that opens the Panel section, which starts closed.
+pub fn section_open_key() -> String {
+    super::chrome::toggle_key(SECTION_KEY, true)
+}
 
 fn msg(m: PcbBoardMsg) -> Option<PanelMsg> {
     Some(PanelMsg::PcbBoard(m))
@@ -101,14 +109,8 @@ pub(super) fn section<'a>(
     let why = board.read_only.then(|| form.t(ids::BOARD_PANEL_READ_ONLY));
     let live = |m: PcbBoardMsg| (!board.read_only).then_some(m).and_then(msg);
     let mut rows: Vec<Shown<'a>> = Vec::new();
-    let Some(panel) = board.options.panel.as_ref() else {
-        let none = form.t(ids::BOARD_PANEL_NONE);
-        rows.push(form.row(&[&title, &none], form.note(none.clone())));
-        let add = form.t(ids::BOARD_PANEL_ADD);
-        let button = form.action(add.clone(), live(PcbBoardMsg::PanelizeClicked), why);
-        rows.push(form.row(&[&title, &add], button));
-        return form.section("pcb_board_panel", ids::BOARD_PANEL_SECTION, rows);
-    };
+    // A board without a panel has no section: Tools > Panelize Board makes one.
+    let panel = board.options.panel.as_ref()?;
     for field in ARRAY {
         rows.push(setting(form, board, panel, field));
     }
@@ -132,7 +134,8 @@ pub(super) fn section<'a>(
     let remove = form.t(ids::BOARD_PANEL_REMOVE);
     let button = form.action(remove.clone(), live(PcbBoardMsg::PanelRemoveClicked), why);
     rows.push(form.row(&[&title, &remove], button));
-    form.section("pcb_board_panel", ids::BOARD_PANEL_SECTION, rows)
+    // Closed by default (#2523); Tools > Panelize Board opens it (#2902).
+    form.section_with(SECTION_KEY, ids::BOARD_PANEL_SECTION, Head::closed(), rows)
 }
 
 /// Label | the setting's field, or its value when the board is read-only.

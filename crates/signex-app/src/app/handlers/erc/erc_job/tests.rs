@@ -98,6 +98,7 @@ impl Fixture {
             Some(&self.dir),
             CaseFold::host_default(),
             overrides,
+            &Default::default(),
         );
     }
 }
@@ -232,9 +233,10 @@ fn a_per_sheet_finding_no_emitted_project_finding_covers_is_kept() {
         .get_mut(&key)
         .unwrap()
         .no_erc_directives
-        .push(signex_types::schematic::NoConnect {
+        .push(signex_types::schematic::NoErcDirective {
             uuid: Uuid::now_v7(),
             position: pt(0.0, 0.0),
+            rules: Vec::new(),
         });
     f.run(&["root.snxsch"], &HashMap::new());
 
@@ -285,9 +287,122 @@ fn colliding_job() -> (ErcRunInputs, PathBuf, PathBuf, PathBuf) {
         config: signex_erc::ErcConfig::default(),
         net_waivers: Default::default(),
         violation_waivers: Vec::new(),
+        channel_naming: Default::default(),
         fold: CaseFold::FOLD,
     };
     (inputs, root_path, child_path, loose_path)
+}
+
+/// A one-pin part `R1` at the origin, for a net the netlist exports.
+fn with_one_pin_part(mut sheet: SchematicSheet) -> SchematicSheet {
+    use signex_types::schematic::{LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Symbol};
+    let lib: LibSymbol = serde_json::from_value(serde_json::json!({"id": "P"})).expect("lib");
+    let pin = Pin {
+        direction: PinDirection::Passive,
+        shape_style: PinShapeStyle::Plain,
+        position: pt(0.0, 0.0),
+        rotation: 0.0,
+        length: 0.0,
+        name: String::new(),
+        number: "1".to_string(),
+        visible: true,
+        name_visible: true,
+        number_visible: true,
+    };
+    let pins = vec![LibPin {
+        unit: 0,
+        body_style: 1,
+        pin,
+    }];
+    sheet
+        .lib_symbols
+        .insert("P".to_string(), LibSymbol { pins, ..lib });
+    sheet.symbols.push(Symbol {
+        uuid: Uuid::now_v7(),
+        lib_id: "P".to_string(),
+        reference: "R1".to_string(),
+        position: pt(0.0, 0.0),
+        ..Default::default()
+    });
+    sheet
+}
+
+/// A root placing `child.snxsch` as `Repeat(CH, 1, 2)`; the child's one wire
+/// has a part and the Hierarchical names `FB` and `SENSE`.
+fn repeated_job() -> (ErcRunInputs, PathBuf) {
+    let (mut inputs, ..) = colliding_job();
+    let dir = Path::new("/proj");
+    let (root_path, child_path) = (dir.join("root.snxsch"), dir.join("child.snxsch"));
+    let mut placement = child_with_pin("child.snxsch", "UNUSED");
+    placement.name = "Repeat(CH, 1, 2)".to_string();
+    placement.uuid = Uuid::from_u128(0x2740);
+    placement.pins.clear();
+    let root = SchematicSheet {
+        child_sheets: vec![placement],
+        ..Default::default()
+    };
+    let child = with_one_pin_part(named_wire(
+        ("FB", LabelType::Hierarchical),
+        ("SENSE", LabelType::Hierarchical),
+    ));
+    let open: crate::app::project_sheets::OpenSheets =
+        [(root_path.clone(), root), (child_path.clone(), child)]
+            .into_iter()
+            .collect();
+    inputs.tab_paths = open.keys().cloned().collect();
+    inputs.open = open;
+    inputs.root = Some(root_path);
+    (inputs, child_path)
+}
+
+/// #2740: the run reads the project's saved channel naming. The net count
+/// does not depend on a name; it is pinned so the named stitch counts each
+/// channel's net.
+#[test]
+fn the_job_reports_channel_nets_by_the_saved_naming() {
+    let (mut inputs, child_path) = repeated_job();
+    inputs.channel_naming = signex_types::project::ChannelNaming {
+        net_format: "${Channel}_${Net}".to_string(),
+        ..Default::default()
+    }
+    .into();
+
+    let outcome = run_erc_job(inputs);
+
+    let filed = multi_names(&outcome.by_path[&child_path]);
+    assert_eq!(filed.len(), 1, "{filed:?}");
+    assert!(
+        filed[0].message.contains("the netlist uses 'CH1_FB'"),
+        "{}",
+        filed[0].message
+    );
+    assert_eq!(outcome.checked[2], 2, "one net per channel");
+}
+
+/// #2740: with the saved naming unreadable the run still checks the sheets,
+/// says why, and names no exported channel net it cannot know.
+#[test]
+fn an_unreadable_naming_claims_no_exported_channel_net_name() {
+    let (mut inputs, child_path) = repeated_job();
+    inputs.channel_naming = crate::app::saved_channel_naming::SavedChannelNaming::unreadable();
+
+    let outcome = run_erc_job(inputs);
+
+    let filed = multi_names(&outcome.by_path[&child_path]);
+    assert_eq!(filed.len(), 1, "{filed:?}");
+    assert!(
+        !filed[0].message.contains("the netlist uses"),
+        "{}",
+        filed[0].message
+    );
+    let banner = signex_i18n::I18n::en_us_ref()
+        .message_plain(signex_i18n::ids::DIALOG_SCHEMATIC_DESIGN_UNREADABLE, &[]);
+    assert!(
+        outcome.warnings.iter().any(|w| w.contains(&banner)),
+        "{:?}",
+        outcome.warnings
+    );
+    assert_eq!(outcome.checked[2], 2, "the count needs no name");
 }
 
 #[test]
@@ -378,4 +493,183 @@ fn the_units_pass_spans_the_project_only_not_loose_tabs() {
     assert!(units(&root_path)[0].ends_with("unit 2"));
     assert_eq!(units(&loose_path).len(), 1);
     assert!(units(&loose_path)[0].ends_with("unit 1"));
+}
+
+/// A wire `(0,0)-(10,0)` with uuid `wire`, Global `VBUS` and a one-pin part,
+/// carrying `directives`.
+fn vbus_sheet(
+    wire: u128,
+    directives: Vec<signex_types::schematic::SchDirective>,
+) -> SchematicSheet {
+    let mut sheet = with_one_pin_part(named_wire(
+        ("VBUS", LabelType::Global),
+        ("VBUS", LabelType::Global),
+    ));
+    sheet.wires[0].uuid = Uuid::from_u128(wire);
+    sheet.directives = directives;
+    sheet
+}
+
+fn parameters(n: u128, class: &str) -> signex_types::schematic::SchDirective {
+    signex_types::schematic::SchDirective::NetParameters {
+        uuid: Uuid::from_u128(n),
+        position: pt(5.0, 0.0),
+        net_class: Some(class.into()),
+        diff_pair_class: None,
+        rules: Default::default(),
+        show_on_flag: false,
+    }
+}
+
+fn class_conflicts(list: &[Violation]) -> Vec<&Violation> {
+    list.iter()
+        .filter(|v| v.builtin_kind() == Some(RuleKind::NetClassConflict))
+        .collect()
+}
+
+/// #2656: the child gives global `VBUS` class POWER, the root SIGNAL, with a
+/// SW_NODE Blanket under its flag. The netlist reads the sheets in key order,
+/// so the child's POWER wins. The job reports both root directives as
+/// overridden by it, the Blanket once (the root's own finding against its
+/// SIGNAL flag is replaced, not doubled), and nothing on the child.
+#[test]
+fn the_job_reports_a_class_conflict_between_two_sheets() {
+    let (mut inputs, ..) = colliding_job();
+    let dir = Path::new("/proj");
+    let (root_path, child_path) = (dir.join("root.snxsch"), dir.join("child.snxsch"));
+    let blanket = signex_types::schematic::SchDirective::Blanket {
+        uuid: Uuid::from_u128(0x265611),
+        start: pt(-1.0, -1.0),
+        end: pt(11.0, 1.0),
+        net_class: Some("SW_NODE".into()),
+        erc_exclusions: Vec::new(),
+        track_width: None,
+        pour: Default::default(),
+        include_edge_nets: false,
+    };
+    let mut root = vbus_sheet(0x265601, vec![parameters(0x265612, "SIGNAL"), blanket]);
+    let mut placement = child_with_pin("child.snxsch", "UNUSED");
+    placement.pins.clear();
+    root.child_sheets.push(placement);
+    let child = vbus_sheet(0x265602, vec![parameters(0x265613, "POWER")]);
+    let open: crate::app::project_sheets::OpenSheets =
+        [(root_path.clone(), root), (child_path.clone(), child)]
+            .into_iter()
+            .collect();
+    inputs.tab_paths = open.keys().cloned().collect();
+    inputs.open = open;
+    inputs.root = Some(root_path.clone());
+
+    let outcome = run_erc_job(inputs);
+
+    let on_child = class_conflicts(&outcome.by_path[&child_path]);
+    assert!(
+        on_child.is_empty(),
+        "the winner is not overridden: {on_child:?}"
+    );
+    let on_root = class_conflicts(&outcome.by_path[&root_path]);
+    let mut primaries: Vec<Uuid> = on_root
+        .iter()
+        .filter_map(|v| v.primary.map(|p| p.uuid))
+        .collect();
+    primaries.sort();
+    assert_eq!(
+        primaries,
+        [Uuid::from_u128(0x265611), Uuid::from_u128(0x265612)],
+        "{on_root:?}"
+    );
+    for v in &on_root {
+        assert!(
+            v.message
+                .contains("takes class POWER from a Net Parameters directive on sheet"),
+            "{}",
+            v.message
+        );
+        assert_eq!(v.peer, None, "the winner is on the child's canvas");
+    }
+}
+
+/// #2961: a root page with local nets `N1` (y = 0) and `N2` (y = 5), each
+/// with a part, under two overlapping Blankets: HS (0x296111) ranked before
+/// PWR (0x296112).
+fn two_blankets_page() -> SchematicSheet {
+    let mut sheet = with_one_pin_part(named_wire(("N1", LabelType::Net), ("N1", LabelType::Net)));
+    sheet.wires[0].uuid = Uuid::now_v7();
+    let y = 5.0;
+    let mut n2 = named_wire(("N2", LabelType::Net), ("N2", LabelType::Net));
+    for w in &mut n2.wires {
+        w.uuid = Uuid::now_v7();
+        w.start.y = y;
+        w.end.y = y;
+    }
+    for l in &mut n2.labels {
+        l.position.y = y;
+    }
+    sheet.wires.append(&mut n2.wires);
+    sheet.labels.append(&mut n2.labels);
+    let r2 = signex_types::schematic::Symbol {
+        uuid: Uuid::now_v7(),
+        reference: "R2".to_string(),
+        position: pt(0.0, y),
+        ..sheet.symbols[0].clone()
+    };
+    sheet.symbols.push(r2);
+    let blanket =
+        |n: u128, inset: f64, class: &str| signex_types::schematic::SchDirective::Blanket {
+            uuid: Uuid::from_u128(n),
+            start: pt(-1.0 - inset, -1.0 - inset),
+            end: pt(11.0 + inset, y + 1.0 + inset),
+            net_class: Some(class.into()),
+            erc_exclusions: Vec::new(),
+            track_width: None,
+            pour: Default::default(),
+            include_edge_nets: false,
+        };
+    sheet.directives = vec![blanket(0x296111, 0.0, "HS"), blanket(0x296112, 1.0, "PWR")];
+    sheet
+}
+
+/// A class conflict finding's primary, peer and message.
+type Conflict = (Uuid, Uuid, String);
+
+/// The `NetClassConflict` findings of `sheet` checked on its own, and of the
+/// job run over it as the project's only root page, as (primary, peer,
+/// message), sorted.
+fn class_conflicts_alone_and_in_the_job(sheet: SchematicSheet) -> (Vec<Conflict>, Vec<Conflict>) {
+    let key = |v: &&Violation| {
+        let id = |s: Option<signex_types::schematic::SelectedItem>| s.map(|s| s.uuid);
+        (
+            id(v.primary).unwrap_or_default(),
+            id(v.peer).unwrap_or_default(),
+            v.message.clone(),
+        )
+    };
+    let alone = signex_erc::run(&sheet);
+    let mut alone: Vec<_> = class_conflicts(&alone).iter().map(key).collect();
+    alone.sort();
+    let (mut inputs, ..) = colliding_job();
+    let root_path = Path::new("/proj").join("root.snxsch");
+    let open: crate::app::project_sheets::OpenSheets =
+        [(root_path.clone(), sheet)].into_iter().collect();
+    inputs.tab_paths = open.keys().cloned().collect();
+    inputs.open = open;
+    inputs.root = Some(root_path.clone());
+    let outcome = run_erc_job(inputs);
+    let mut in_job: Vec<_> = class_conflicts(&outcome.by_path[&root_path])
+        .iter()
+        .map(key)
+        .collect();
+    in_job.sort();
+    (alone, in_job)
+}
+
+#[test]
+fn two_nets_under_the_same_two_blankets_give_two_findings_in_both_runs() {
+    let (alone, in_job) = class_conflicts_alone_and_in_the_job(two_blankets_page());
+    assert_eq!(alone.len(), 2, "{alone:?}");
+    assert_eq!(in_job, alone, "the project run agrees with the sheet's own");
+    for (primary, peer, _) in &alone {
+        assert_eq!(*primary, Uuid::from_u128(0x296112));
+        assert_eq!(*peer, Uuid::from_u128(0x296111));
+    }
 }

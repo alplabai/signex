@@ -127,10 +127,12 @@ fn an_implausible_or_zero_limit_is_said() {
         "rule big on clearance require clearance >= 20mm then error\n\
          rule huge on clearance require clearance >= 200mm then error\n\
          rule none on track require width >= 0mm then error\n\
-         rule all on track require width <= 0mm then error",
+         rule all on track require width <= 0mm then error\n\
+         rule holes on hole require diameter <= 0mm then error\n\
+         rule bare on mask require expansion <= 0mm then warning",
     );
     let names: Vec<_> = got.rules.iter().map(|r| r.name.as_str()).collect();
-    assert_eq!(names, ["big", "none", "all"]);
+    assert_eq!(names, ["big", "none", "all", "holes", "bare"]);
     let said: Vec<_> = got
         .diagnostics
         .iter()
@@ -154,6 +156,10 @@ fn an_implausible_or_zero_limit_is_said() {
             (
                 Level::Warning,
                 "a maximum of 0 reports every track in this rule's scope"
+            ),
+            (
+                Level::Warning,
+                "a maximum of 0 reports every hole in this rule's scope"
             ),
         ]
     );
@@ -190,7 +196,7 @@ fn what_was_not_applied_is_counted() {
 #[test]
 fn an_unknown_target_field_or_condition_drops_only_that_rule() {
     let src = r#"
-rule a on silk require width >= 1mm then error
+rule a on glue require width >= 1mm then error
 rule b on track require gap >= 1mm then error
 rule c on track when colour == "red" require width >= 1mm then error
 rule d on via require drill <= 1mm then error
@@ -202,7 +208,8 @@ rule ok on via require drill >= 0.2mm then error
     assert_eq!(
         messages(&got),
         [
-            "unknown target 'silk' (clearance, track or via)",
+            "unknown target 'glue' (clearance, track, via, hole, edge, silk, mask, paste, \
+             courtyard or component)",
             "unknown field 'gap' for this target (width)",
             "unknown condition 'colour' (net, class, other_class or layer)",
             "'drill' takes only '>=' (a minimum)",
@@ -212,7 +219,7 @@ rule ok on via require drill >= 0.2mm then error
     let at = |i: usize| &src[got.diagnostics[i].span.clone()];
     assert_eq!(
         [at(0), at(1), at(2), at(3)],
-        ["silk", "gap", "colour", "drill"]
+        ["glue", "gap", "colour", "drill"]
     );
 }
 
@@ -369,4 +376,76 @@ fn a_minimum_above_its_maximum_is_reported_as_not_applied() {
             "DRC DSL (project): line 1, column 25: rule 'w': width >= 0.3mm is above width <= 0.2mm; the rule is skipped"
         ]
     );
+}
+
+/// #2530: the grid reads a written length with the compiler's units.
+#[test]
+fn a_length_reads_every_unit_the_compiler_takes() {
+    for (text, nm) in [
+        ("0.2mm", 200_000),
+        ("8mil", 203_200),
+        ("8 mil", 203_200),
+        ("50um", 50_000),
+        ("50\u{b5}m", 50_000),
+        ("50\u{3bc}m", 50_000),
+        ("1500nm", 1_500),
+    ] {
+        assert_eq!(crate::length_nm(text), Some(nm), "{text}");
+    }
+    for text in ["", "0.2", "wide", "0.2xx", "mm"] {
+        assert_eq!(crate::length_nm(text), None, "{text}");
+    }
+}
+
+/// #2939: a component rule limits the height and the 3D clearance of the
+/// parts' bodies, board-wide or for one side.
+#[test]
+fn a_component_rule_sets_height_and_body_clearance_for_a_side() {
+    let got = one("rule tall on component when layer == BottomCopper \
+         require height <= 6mm and clearance >= 0.25mm then error");
+    assert!(got.diagnostics.is_empty(), "{:?}", got.diagnostics);
+    let rule = &got.rules[0];
+    assert_eq!(rule.nets, NetScope::Board);
+    assert_eq!(rule.layers, Some(1 << 31));
+    assert_eq!(
+        rule.limits,
+        [
+            Limit::MaxComponentHeight(6_000_000),
+            Limit::MinBodyClearance(250_000)
+        ]
+    );
+    let wide = one("rule tall on component require height <= 6mm then error");
+    assert!(wide.diagnostics.is_empty(), "{:?}", wide.diagnostics);
+    assert_eq!(wide.rules[0].layers, None);
+}
+
+#[test]
+fn a_component_rule_takes_no_net_condition() {
+    let got =
+        compile(r#"rule tall on component when net == "GND" require height <= 6mm then error"#);
+    assert!(
+        messages(&got)
+            .iter()
+            .any(|m| m.contains("takes only a 'layer' condition")),
+        "{:?}",
+        messages(&got)
+    );
+}
+
+/// #2986: a component rule's side is TopCopper or BottomCopper; `inner`,
+/// `outer` or an inner layer is refused rather than compiled into a rule
+/// that never matches.
+#[test]
+fn a_component_rule_on_an_inner_or_outer_layer_is_refused() {
+    for side in ["inner", "outer", "Inner1Copper"] {
+        let text =
+            format!("rule h on component when layer == {side} require height <= 1mm then error");
+        let got = compile(&text);
+        let found = messages(&got);
+        assert_eq!(found.len(), 1, "{side}: {found:?}");
+        assert!(
+            found[0].contains("takes only a 'layer' condition"),
+            "{side}: {found:?}"
+        );
+    }
 }

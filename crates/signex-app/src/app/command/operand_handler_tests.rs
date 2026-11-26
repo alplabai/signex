@@ -3,6 +3,8 @@
 //! and a command that declares operands without a handler is refused.
 
 use std::collections::HashMap;
+
+use signex_i18n::RenderTranslatable;
 use std::path::PathBuf;
 
 use signex_types::schematic::{Point, SchematicSheet, Wire};
@@ -184,7 +186,7 @@ fn color_net_refuses_what_it_cannot_do_and_says_why() {
     let refuse = |app: &mut Signex, args: &[&str]| {
         let (outcome, _) = app.run_operands(&command, &parse("color_net", args));
         match outcome {
-            CommandOutcome::Disabled { reason } => reason,
+            CommandOutcome::Disabled { reason } => reason.render_en_us(),
             other => panic!("expected a refusal, got {other:?}"),
         }
     };
@@ -335,7 +337,7 @@ fn clear_all_net_colors_with_nothing_painted_says_so() {
         &parse("clear_all_net_colors", &[&given]),
     );
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("no net colours")),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.render_en_us().contains("no net colours")),
         "{outcome:?}"
     );
 }
@@ -354,6 +356,7 @@ fn sample_operands(id: &str) -> Vec<String> {
                 OperandKind::Bool => "true".to_string(),
                 OperandKind::Color => "#336699".to_string(),
                 OperandKind::Length => "1.5".to_string(),
+                OperandKind::Targets => uuid::Uuid::nil().to_string(),
                 OperandKind::Document => {
                     std::env::temp_dir().join("x.snxsch").display().to_string()
                 }
@@ -376,7 +379,7 @@ fn run_operands_refuses_a_command_with_operands_and_no_handler() {
 
     assert!(
         matches!(&outcome, CommandOutcome::Disabled { reason }
-            if reason == "operands are declared but not run yet (#1934)"),
+            if reason.render_en_us() == "operands are declared but not run yet (#1934)"),
         "{outcome:?}"
     );
 }
@@ -411,7 +414,7 @@ fn every_operand_command_has_a_handler_or_is_refused() {
         let (mut app, _task) = Signex::new();
         let (outcome, _) = app.run_operands(&command, &parsed);
         assert!(
-            matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("not run yet")),
+            matches!(&outcome, CommandOutcome::Disabled { reason } if reason.render_en_us().contains("not run yet")),
             "{name} declares operands, has no handler, and was not refused: {outcome:?}"
         );
     }
@@ -453,10 +456,7 @@ fn view_rotate_by_operands_is_the_view_row() {
     assert_eq!(outcome, CommandOutcome::Ran);
     assert_eq!(angle(&by_operands), 323.0);
     let docs = &by_operands.document_state;
-    let board = docs.tabs[docs.active_tab]
-        .cached_document
-        .as_ref()
-        .and_then(crate::app::TabDocument::as_pcb_engine);
+    let board = docs.tab_board_engine(docs.active_tab);
     assert!(!board.expect("a board").can_undo());
 }
 

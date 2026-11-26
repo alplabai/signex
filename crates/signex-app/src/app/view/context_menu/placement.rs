@@ -51,6 +51,28 @@ pub(in crate::app::view) fn submenu_origin(
     (x, y)
 }
 
+/// The dim every open menu lays over the window behind it: right-click
+/// menus, Active Bar menus and menus inside dialogs alike (mockup rows 53
+/// and 61). The one place that look is decided.
+pub(crate) fn menu_scrim() -> iced::Color {
+    crate::styles::tokens::scrim(crate::styles::tokens::BACKDROP_ALPHA)
+}
+
+/// A layer filling its space in [`menu_scrim`], for a click-outside layer
+/// built from a `mouse_area` rather than [`super::backdrop::MenuBackdrop`].
+pub(crate) fn menu_scrim_fill<'a, M: 'a>() -> Element<'a, M> {
+    use iced::Widget as _;
+    let scrim = menu_scrim();
+    iced::widget::container(iced::widget::Space::new())
+        .width(iced::Length::Fill)
+        .height(iced::Length::Fill)
+        .style(move |_: &iced::Theme| iced::widget::container::Style {
+            background: Some(iced::Background::Color(scrim)),
+            ..iced::widget::container::Style::default()
+        })
+        .boxed()
+}
+
 /// A menu card built from its rows, with where its flyout goes.
 pub(in crate::app::view) struct MenuCard<'a> {
     pub element: Element<'a, Message>,
@@ -90,17 +112,17 @@ impl Signex {
         Self::anchored_layers(close, super::anchored::AnchoredMenu::new(menu, anchor))
     }
 
-    /// The click-outside layer for `close`, then the placed `menu`. The
-    /// backdrop guards the wheel itself, so `collect_overlays` leaves these
-    /// layers unwrapped (`overlay_id::has_menu_backdrop`, #2349).
+    /// The click-outside layer for `close`, painted in [`menu_scrim`], then
+    /// the placed `menu`. The backdrop guards the wheel itself, so
+    /// `collect_overlays` leaves these layers unwrapped
+    /// (`overlay_id::has_menu_backdrop`, #2349).
     pub(in crate::app::view) fn anchored_layers<'a>(
         close: Message,
         menu: super::anchored::AnchoredMenu<'a, Message>,
     ) -> Vec<Element<'a, Message>> {
         use iced::Widget as _;
-        let scrim = crate::styles::tokens::scrim(crate::styles::tokens::BACKDROP_ALPHA);
         vec![
-            super::backdrop::MenuBackdrop::new(close, scrim).boxed(),
+            super::backdrop::MenuBackdrop::new(close, menu_scrim()).boxed(),
             menu.boxed(),
         ]
     }

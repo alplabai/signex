@@ -226,10 +226,6 @@ fn open_sample(app: &mut Signex, r: &mut iced::Renderer, fx: &Fixture) {
     let _ = draw(r, app);
 }
 
-fn select_signal(app: &mut Signex) {
-    select_panel(app, PanelKind::SignexAi);
-}
-
 fn select_panel(app: &mut Signex, kind: PanelKind) {
     for pos in [
         PanelPosition::Left,
@@ -261,9 +257,27 @@ fn screens() -> Vec<(&'static str, Build)> {
         }),
         ("schematic", |app, r, fx| {
             open_sample(app, r, fx);
-            // Two real log entries, so the Messages tab shows rows and its count.
-            signex_app::diagnostics::log_warning("Unconnected input pin TS on U1 (BQ24072)");
-            signex_app::diagnostics::log_warning("Unconnected output pin PGOOD on U1 (BQ24072)");
+            // Two real log entries about U1, so the Messages tab shows rows,
+            // its count, the sheet in Document and Show (mockup row 86).
+            let sheet = app.document_state.active_path.clone();
+            let u1 = app.document_state.active_engine().and_then(|engine| {
+                let doc = engine.document();
+                doc.symbols
+                    .iter()
+                    .find(|s| s.reference == "U1")
+                    .map(|s| s.uuid)
+            });
+            for line in [
+                "Unconnected input pin TS on U1 (BQ24072)",
+                "Unconnected output pin PGOOD on U1 (BQ24072)",
+            ] {
+                match (&sheet, u1) {
+                    (Some(sheet), Some(u1)) => {
+                        signex_app::diagnostics::log_part_warning(line, sheet, u1);
+                    }
+                    _ => signex_app::diagnostics::log_warning(line),
+                }
+            }
             let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
                 PrefMsg::DraftTheme(app.ui_state.theme_id),
             )));
@@ -283,11 +297,6 @@ fn screens() -> Vec<(&'static str, Build)> {
             open_sample(app, r, fx);
             mount_stock(app, fx);
             select_panel(app, PanelKind::Components);
-            Ok(())
-        }),
-        ("schematic-signal", |app, r, fx| {
-            open_sample(app, r, fx);
-            select_signal(app);
             Ok(())
         }),
         ("pcb", |app, r, fx| {

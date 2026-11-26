@@ -31,7 +31,6 @@ fn app_with_sheet() -> (Signex, uuid::Uuid) {
     app.document_state.tabs.push(TabInfo {
         title: "a_root.snxsch".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -47,6 +46,7 @@ fn move_symbol(app: &mut Signex, symbol: uuid::Uuid) {
             dx: 10.0,
             dy: 0.0,
             keep_wires: false,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         },
         true,
         true,
@@ -175,7 +175,6 @@ fn open_second_sheet(app: &mut Signex) -> std::path::PathBuf {
     app.document_state.tabs.push(TabInfo {
         title: "b_sheet.snxsch".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -275,6 +274,32 @@ fn sheet_dirty(app: &Signex) -> bool {
 fn project_dirty(app: &Signex) -> bool {
     app.document_state
         .is_document_dirty(&app.document_state.projects[0].path)
+}
+
+/// #2445: a pick stepped through the sheet's path (as an agent's `undo`
+/// does) is display-only for the sheet: ERC's epoch stays, the sheet's dirty
+/// mark is re-read and stays clean, and the project follows the pick.
+#[test]
+fn a_pick_stepped_by_path_leaves_the_erc_epoch_and_keeps_the_sheet_clean() {
+    let (mut app, _symbol) = app_with_sheet();
+    let path = app.document_state.active_path.clone().unwrap();
+    app.document_state
+        .engines
+        .get_mut(&path)
+        .unwrap()
+        .mark_saved();
+    app.document_state.mark_document_clean(&path);
+    pick(&mut app, "GND", Some("Power"));
+    let epoch = app.document_state.sheet_edit_epoch;
+
+    assert_eq!(app.step_sheet_on(&path, true), Ok(true));
+    assert!(nets(&app).is_empty(), "the pick is reverted");
+    assert_eq!(app.document_state.sheet_edit_epoch, epoch);
+    assert!(!sheet_dirty(&app) && !project_dirty(&app));
+    assert_eq!(app.step_sheet_on(&path, false), Ok(true));
+    assert_eq!(nets(&app), ["GND"]);
+    assert_eq!(app.document_state.sheet_edit_epoch, epoch);
+    assert!(!sheet_dirty(&app) && project_dirty(&app));
 }
 
 /// A pick changes the project, never the sheet: the sheet stays clean, the
@@ -741,10 +766,10 @@ fn a_marker_pass_that_drops_the_save_point_updates_the_tab_mark() {
     assert_eq!(sheet_dirty(&app), !at_save, "the tab says so too");
 }
 
-/// A group step that passes a dead marker on a member sheet's full stack and
-/// is then refused still leaves that sheet's tab mark equal to its engine.
+/// A refused group step passes no dead marker on a member sheet's full stack,
+/// so that sheet keeps its save point and its tab mark equals its engine.
 #[test]
-fn a_group_pass_that_drops_a_sheets_save_point_updates_its_tab_mark() {
+fn a_refused_group_step_keeps_a_sheets_save_point_and_tab_mark() {
     let _ = crate::diagnostics::init_logging();
     let (mut app, _symbol) = app_with_sheet();
     let a = app.document_state.active_path.clone().unwrap();
@@ -785,10 +810,10 @@ fn a_group_pass_that_drops_a_sheets_save_point_updates_its_tab_mark() {
     assert!(!sheet_dirty(&app));
 
     activate(&mut app, &a);
-    app.redo_active_sheet(); // passes B's dead marker onto its full stack
+    app.redo_active_sheet(); // refused: B's dead marker stays where it is
 
     activate(&mut app, &b);
     let at_save = app.document_state.engines[&b].is_at_save_point();
-    assert!(!at_save, "fixture: the pass drops B's save point");
+    assert!(at_save, "a refused step leaves B at its save point");
     assert_eq!(sheet_dirty(&app), !at_save, "B's tab says so too");
 }

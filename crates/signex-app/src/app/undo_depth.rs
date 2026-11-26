@@ -34,7 +34,7 @@ impl Signex {
             engine.set_undo_depth(depth);
         }
         for editor in docs.symbol_editors.values_mut() {
-            editor.history.set_cap(depth);
+            editor.draft.history.set_cap(depth);
         }
         for editor in docs.footprint_editors.values_mut() {
             editor.history.set_cap(depth);
@@ -45,8 +45,8 @@ impl Signex {
         for history in docs.rules_history.values_mut() {
             history.set_undo_depth(depth);
         }
-        for tab in docs.project_tabs.values_mut() {
-            tab.general_history.set_undo_depth(depth);
+        for history in docs.general_history.values_mut() {
+            history.set_undo_depth(depth);
         }
         for preview in self.library.editors.values_mut() {
             preview.history.set_undo_depth(depth);
@@ -76,15 +76,12 @@ mod tests {
             PathBuf::from("/p/parked.snxpcb"),
             signex_engine::pcb::BoardEngine::new(board.clone(), 1),
         );
-        docs.tabs.push(crate::app::TabInfo {
-            title: "board".into(),
-            path: PathBuf::from("/p/open.snxpcb"),
-            cached_document: Some(crate::app::TabDocument::Pcb(
-                signex_engine::pcb::BoardEngine::new(board, 1),
-            )),
-            project_id: None,
-            kind: crate::app::TabKind::Pcb,
-        });
+        docs.push_pcb_tab(
+            "board".into(),
+            PathBuf::from("/p/open.snxpcb"),
+            None,
+            signex_engine::pcb::BoardEngine::new(board, 1),
+        );
         let symbol = PathBuf::from("/p/a.snxsym");
         let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("S"));
         docs.symbol_editors
@@ -97,7 +94,7 @@ mod tests {
         let project = crate::app::state::ProjectId::test_id(1);
         docs.net_class_history.insert(project, Default::default());
         docs.rules_history.insert(project, Default::default());
-        docs.project_tabs.insert(project, Default::default());
+        docs.general_history.insert(project, Default::default());
         let address = crate::library::state::EditorAddress::new(
             PathBuf::from("/p/t.snxlib"),
             "t".into(),
@@ -118,21 +115,15 @@ mod tests {
         all.extend(d.engines.values().map(|e| e.undo_depth()));
         all.extend(d.parked_pcb_boards.values().map(|e| e.undo_depth()));
         all.extend(
-            d.tabs
-                .iter()
-                .filter_map(|tab| tab.cached_document.as_ref())
-                .filter_map(crate::app::TabDocument::as_pcb_engine)
+            (0..d.tabs.len())
+                .filter_map(|idx| d.tab_board_engine(idx))
                 .map(|e| e.undo_depth()),
         );
-        all.extend(d.symbol_editors.values().map(|e| e.history.cap()));
+        all.extend(d.symbol_editors.values().map(|e| e.draft.history.cap()));
         all.extend(d.footprint_editors.values().map(|e| e.history.cap()));
         all.extend(d.net_class_history.values().map(|h| h.undo_depth()));
         all.extend(d.rules_history.values().map(|h| h.undo_depth()));
-        all.extend(
-            d.project_tabs
-                .values()
-                .map(|t| t.general_history.undo_depth()),
-        );
+        all.extend(d.general_history.values().map(|h| h.undo_depth()));
         all.extend(app.library.editors.values().map(|p| p.history.undo_depth()));
         all
     }

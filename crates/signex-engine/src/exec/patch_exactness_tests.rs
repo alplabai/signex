@@ -15,9 +15,9 @@ use crate::{
 use signex_types::schematic::LinkStamp;
 use signex_types::schematic::{
     AnnotateOrder, BodyStyle, Bus, BusEntry, ChildSheet, FillType, HAlign, Junction, Label,
-    LabelType, LibPin, LibSymbol, NoConnect, Pin, PinDirection, PinShapeStyle, Point, SchDirective,
-    SchDrawing, SchematicSheet, SelectedItem, SelectedKind, SheetPin, StrokeColor, Symbol,
-    SymbolTransform, TextNote, TextProp, VAlign, Wire,
+    LabelType, LibPin, LibSymbol, NoConnect, NoErcDirective, Pin, PinDirection, PinShapeStyle,
+    Point, SchDirective, SchDrawing, SchematicSheet, SelectedItem, SelectedKind, SheetPin,
+    StrokeColor, Symbol, SymbolTransform, TextNote, TextProp, VAlign, Wire,
 };
 use std::collections::BTreeMap;
 use uuid::Uuid;
@@ -40,6 +40,9 @@ const CHILD: u128 = 10;
 const SHEET_PIN: u128 = 11;
 const DRAWING: u128 = 12;
 const DIRECTIVE: u128 = 13;
+const HARNESS_CONNECTOR: u128 = 20;
+const HARNESS_ENTRY: u128 = 21;
+const HARNESS_WIRE: u128 = 22;
 const NEW: u128 = 90;
 
 fn pt(x: f64, y: f64) -> Point {
@@ -187,6 +190,39 @@ fn blanket(n: u128, class: &str) -> SchDirective {
         end: pt(140.0, 5.0 * n as f64 + 3.0),
         net_class: Some(class.to_string()),
         erc_exclusions: Vec::new(),
+        track_width: None,
+        pour: signex_types::schematic::BlanketPour::Normal,
+        include_edge_nets: false,
+    }
+}
+
+/// Harness connector `n` with entries `uid(HARNESS_ENTRY, n)` and
+/// `uid(HARNESS_ENTRY, n + 10)` (#1280).
+fn harness_connector(n: u128) -> signex_types::schematic::HarnessConnector {
+    signex_types::schematic::HarnessConnector {
+        uuid: uid(HARNESS_CONNECTOR, n),
+        harness_type: "SPI_BUS".into(),
+        position: pt(150.0, 20.0 * n as f64),
+        width: 10.16,
+        entry_pitch: 2.54,
+        rotation: 0.0,
+        entries: [(n, "SCK"), (n + 10, "MOSI")]
+            .into_iter()
+            .map(|(k, name)| signex_types::schematic::HarnessEntry {
+                uuid: uid(HARNESS_ENTRY, k),
+                name: name.into(),
+            })
+            .collect(),
+        locked: false,
+    }
+}
+
+fn harness_wire(n: u128) -> signex_types::schematic::HarnessWire {
+    signex_types::schematic::HarnessWire {
+        uuid: uid(HARNESS_WIRE, n),
+        start: pt(170.0, 20.0 * n as f64),
+        end: pt(180.0, 20.0 * n as f64),
+        locked: false,
     }
 }
 
@@ -251,6 +287,7 @@ fn fixture() -> SchematicSheet {
             uuid: uid(BUS, n),
             start: pt(80.0, 5.0 * n as f64),
             end: pt(90.0, 5.0 * n as f64),
+            ..Default::default()
         });
         s.bus_entries.push(BusEntry {
             uuid: uid(BUS_ENTRY, n),
@@ -261,17 +298,31 @@ fn fixture() -> SchematicSheet {
             uuid: uid(NO_CONNECT, n),
             position: pt(110.0, 5.0 * n as f64),
         });
-        s.no_erc_directives.push(NoConnect {
+        s.no_erc_directives.push(NoErcDirective {
             uuid: uid(NO_ERC, n),
             position: pt(120.0, 5.0 * n as f64),
+            rules: Vec::new(),
         });
         s.child_sheets.push(child_sheet(n));
         s.drawings.push(drawing(n, 65.0));
         s.directives.push(blanket(n, "Power"));
+        s.harness.connectors.push(harness_connector(n));
+        s.harness.wires.push(harness_wire(n));
     }
     connected_pins(&mut s);
+    // Deleting either member drops it from the union in the same step (mockup row 158).
+    s.unions.push(signex_types::schematic::SchUnion {
+        uuid: uid(UNION, 1),
+        name: "Input filter".into(),
+        tags: vec!["emc".into()],
+        members: vec![uid(TEXT_NOTE, 1), uid(LABEL, 1)],
+        locked: false,
+    });
     s
 }
+
+/// Id group of the fixture's union.
+const UNION: u128 = 14;
 
 /// The patch bits for the collections that differ between `a` and `b`.
 /// Destructuring every field forces a decision when `SchematicSheet` grows.
@@ -312,7 +363,10 @@ fn changed_collections(a: &SchematicSheet, b: &SchematicSheet) -> DocumentPatch 
         drawings,
         no_erc_directives,
         directives,
+        harness,
+        unions,
         title_block,
+        variables,
         lib_symbols,
         frame,
         page,
@@ -350,6 +404,8 @@ fn changed_collections(a: &SchematicSheet, b: &SchematicSheet) -> DocumentPatch 
         DocumentPatch::NO_ERC_DIRECTIVES,
     );
     flag(differ(directives, &b.directives), DocumentPatch::DIRECTIVES);
+    flag(differ(harness, &b.harness), DocumentPatch::HARNESS);
+    flag(differ(unions, &b.unions), DocumentPatch::UNIONS);
     flag(
         differ(&sorted(lib_symbols), &sorted(&b.lib_symbols)),
         DocumentPatch::LIB_SYMBOLS,
@@ -366,6 +422,7 @@ fn changed_collections(a: &SchematicSheet, b: &SchematicSheet) -> DocumentPatch 
         differ(paper_size, &b.paper_size)
             || differ(root_sheet_page, &b.root_sheet_page)
             || differ(&sorted(title_block), &sorted(&b.title_block))
+            || differ(variables, &b.variables)
             || differ(page, &b.page)
             || differ(frame, &b.frame),
         DocumentPatch::PAPER,
@@ -386,7 +443,9 @@ fn assert_covers(
     );
 }
 
-const ALL_KINDS: [CommandKind; 63] = [
+const ALL_KINDS: [CommandKind; 79] = [
+    CommandKind::SetRunEnd,
+    CommandKind::UpdateTextNoteProps,
     CommandKind::ReplaceDocument,
     CommandKind::MoveSelection,
     CommandKind::RotateSelection,
@@ -402,6 +461,8 @@ const ALL_KINDS: [CommandKind; 63] = [
     CommandKind::SetSymbolFlag,
     CommandKind::SetWireWidth,
     CommandKind::SetWireColor,
+    CommandKind::SetBusWidth,
+    CommandKind::SetBusColor,
     CommandKind::SetSymbolBodyStyle,
     CommandKind::UpdateSymbolTextSize,
     CommandKind::UpdateSymbolLibId,
@@ -410,6 +471,7 @@ const ALL_KINDS: [CommandKind; 63] = [
     CommandKind::UpdateSymbolFields,
     CommandKind::PlaceWireSegment,
     CommandKind::BreakWire,
+    CommandKind::MoveWireEnd,
     CommandKind::PlaceWireSegmentAsIs,
     CommandKind::PlaceBus,
     CommandKind::PlaceLabel,
@@ -440,6 +502,7 @@ const ALL_KINDS: [CommandKind; 63] = [
     CommandKind::SetSheetColor,
     CommandKind::SetPageOrigin,
     CommandKind::SetTitleBlockField,
+    CommandKind::SetSheetVariable,
     CommandKind::SetTextFontFamily,
     CommandKind::SetSymbolDesignatorIn,
     CommandKind::SetDocumentFontFamily,
@@ -448,8 +511,18 @@ const ALL_KINDS: [CommandKind; 63] = [
     CommandKind::SetDrawingPlacement,
     CommandKind::PlaceDirective,
     CommandKind::UpdateDirective,
+    CommandKind::SetNoErcRules,
     CommandKind::AutoplaceFields,
     CommandKind::MoveEach,
+    CommandKind::PlaceHarnessConnector,
+    CommandKind::UpdateHarnessConnector,
+    CommandKind::PlaceHarnessEntry,
+    CommandKind::PlaceHarnessWire,
+    CommandKind::SetHarnessEntryType,
+    CommandKind::CreateUnion,
+    CommandKind::UpdateUnion,
+    CommandKind::SetUnionMembers,
+    CommandKind::BreakUnion,
 ];
 
 /// Adding a `CommandKind` breaks this match: add a sample below and list the
@@ -472,6 +545,8 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::SetSymbolFlag
         | CommandKind::SetWireWidth
         | CommandKind::SetWireColor
+        | CommandKind::SetBusWidth
+        | CommandKind::SetBusColor
         | CommandKind::SetSymbolBodyStyle
         | CommandKind::UpdateSymbolTextSize
         | CommandKind::UpdateSymbolLibId
@@ -480,6 +555,9 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::UpdateSymbolFields
         | CommandKind::PlaceWireSegment
         | CommandKind::BreakWire
+        | CommandKind::MoveWireEnd
+        | CommandKind::SetRunEnd
+        | CommandKind::UpdateTextNoteProps
         | CommandKind::PlaceWireSegmentAsIs
         | CommandKind::PlaceBus
         | CommandKind::PlaceLabel
@@ -510,6 +588,7 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::SetSheetColor
         | CommandKind::SetPageOrigin
         | CommandKind::SetTitleBlockField
+        | CommandKind::SetSheetVariable
         | CommandKind::SetTextFontFamily
         | CommandKind::SetSymbolDesignatorIn
         | CommandKind::SetDocumentFontFamily
@@ -518,13 +597,23 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::SetDrawingPlacement
         | CommandKind::PlaceDirective
         | CommandKind::UpdateDirective
+        | CommandKind::SetNoErcRules
         | CommandKind::AutoplaceFields
-        | CommandKind::MoveEach => {}
+        | CommandKind::MoveEach
+        | CommandKind::PlaceHarnessConnector
+        | CommandKind::UpdateHarnessConnector
+        | CommandKind::PlaceHarnessEntry
+        | CommandKind::PlaceHarnessWire
+        | CommandKind::SetHarnessEntryType
+        | CommandKind::CreateUnion
+        | CommandKind::UpdateUnion
+        | CommandKind::SetUnionMembers
+        | CommandKind::BreakUnion => {}
     }
 }
 
 /// `(selected kind, id group)` for each selectable thing in the fixture.
-const SELECTABLE: [(SelectedKind, u128); 15] = [
+const SELECTABLE: [(SelectedKind, u128); 18] = [
     (SelectedKind::Symbol, SYMBOL),
     (SelectedKind::SymbolRefField, SYMBOL),
     (SelectedKind::SymbolValField, SYMBOL),
@@ -540,6 +629,9 @@ const SELECTABLE: [(SelectedKind, u128); 15] = [
     (SelectedKind::ChildSheet, CHILD),
     (SelectedKind::Drawing, DRAWING),
     (SelectedKind::Directive, DIRECTIVE),
+    (SelectedKind::HarnessConnector, HARNESS_CONNECTOR),
+    (SelectedKind::HarnessEntry, HARNESS_ENTRY),
+    (SelectedKind::HarnessWire, HARNESS_WIRE),
 ];
 
 fn samples() -> Vec<(String, Command)> {
@@ -555,6 +647,7 @@ fn samples() -> Vec<(String, Command)> {
                 dx: 2.54,
                 dy: 2.54,
                 keep_wires: false,
+                wiring: signex_types::corner::DragWiringMode::Auto,
             },
         );
         add(
@@ -564,6 +657,7 @@ fn samples() -> Vec<(String, Command)> {
                 dx: 2.54,
                 dy: 2.54,
                 keep_wires: true,
+                wiring: signex_types::corner::DragWiringMode::Auto,
             },
         );
         add(
@@ -571,6 +665,7 @@ fn samples() -> Vec<(String, Command)> {
             Command::MoveEach {
                 moves: vec![(item, 2.54, -2.54)],
                 keep_wires: true,
+                wiring: signex_types::corner::DragWiringMode::Auto,
             },
         );
         add(
@@ -653,6 +748,7 @@ fn samples() -> Vec<(String, Command)> {
             dx: 2.54,
             dy: 2.54,
             keep_wires: true,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         },
     );
     add(
@@ -671,6 +767,7 @@ fn samples() -> Vec<(String, Command)> {
                 ),
             ],
             keep_wires: true,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         },
     );
 
@@ -766,6 +863,20 @@ fn samples() -> Vec<(String, Command)> {
         },
     );
     add(
+        "SetBusColor",
+        Command::SetBusColor {
+            bus_id: uid(BUS, 1),
+            color: Some(signex_types::theme::Color::new(255, 0, 0, 255)),
+        },
+    );
+    add(
+        "SetBusWidth",
+        Command::SetBusWidth {
+            bus_id: uid(BUS, 1),
+            width_mm: 0.5,
+        },
+    );
+    add(
         "SetSymbolBodyStyle",
         Command::SetSymbolBodyStyle {
             symbol_id: sym,
@@ -845,6 +956,45 @@ fn samples() -> Vec<(String, Command)> {
             new_wire: uuid::Uuid::now_v7(),
         },
     );
+    for keep_wires in [false, true] {
+        add(
+            &format!("MoveWireEnd keep_wires {keep_wires}"),
+            Command::MoveWireEnd {
+                wire: uid(WIRE, 1),
+                start: false,
+                to: pt(7.5, 20.0),
+                keep_wires,
+            },
+        );
+    }
+    add(
+        "SetRunEnd wire start",
+        Command::SetRunEnd {
+            run: SelectedItem::new(uid(WIRE, 1), SelectedKind::Wire),
+            start: true,
+            to: pt(3.0, 27.0),
+        },
+    );
+    add(
+        "SetRunEnd bus end",
+        Command::SetRunEnd {
+            run: SelectedItem::new(uid(BUS, 1), SelectedKind::Bus),
+            start: false,
+            to: pt(95.0, 12.0),
+        },
+    );
+    add(
+        "UpdateTextNoteProps",
+        Command::UpdateTextNoteProps {
+            note_id: uid(TEXT_NOTE, 1),
+            props: crate::TextNoteProps {
+                justify_h: Some(HAlign::Right),
+                rotation_degrees: Some(90.0),
+                font_size_mm: Some(2.0),
+                ..Default::default()
+            },
+        },
+    );
     add(
         "PlaceBus",
         Command::PlaceBus {
@@ -852,6 +1002,7 @@ fn samples() -> Vec<(String, Command)> {
                 uuid: uid(BUS, NEW),
                 start: pt(0.0, 200.0),
                 end: pt(9.0, 200.0),
+                ..Default::default()
             },
         },
     );
@@ -936,10 +1087,7 @@ fn samples() -> Vec<(String, Command)> {
     add(
         "PlaceNoErcDirective",
         Command::PlaceNoErcDirective {
-            directive: NoConnect {
-                uuid: uid(NO_ERC, NEW),
-                position: pt(5.0, 5.0),
-            },
+            directive: NoErcDirective::new(uid(NO_ERC, NEW), pt(5.0, 5.0)),
         },
     );
     add(
@@ -1013,6 +1161,7 @@ fn samples() -> Vec<(String, Command)> {
                 name: "SDA".into(),
                 direction: "input".into(),
             }],
+            renames: None,
         },
     );
     add(
@@ -1085,6 +1234,13 @@ fn samples() -> Vec<(String, Command)> {
         },
     );
     add(
+        "SetSheetVariable",
+        Command::SetSheetVariable {
+            name: "VCC".into(),
+            value: Some("= 3.3V".into()),
+        },
+    );
+    add(
         "SetSymbolDesignatorIn",
         Command::SetSymbolDesignatorIn {
             symbol: uid(SYMBOL, 1),
@@ -1126,6 +1282,13 @@ fn samples() -> Vec<(String, Command)> {
         },
     );
     add(
+        "SetNoErcRules",
+        Command::SetNoErcRules {
+            id: uid(NO_ERC, 1),
+            rules: vec!["builtin::unused_pin".into()],
+        },
+    );
+    add(
         "SetDocumentFontFamily",
         Command::SetDocumentFontFamily {
             font_family: Some("Fira Mono".into()),
@@ -1138,6 +1301,50 @@ fn samples() -> Vec<(String, Command)> {
         },
     );
     add(
+        "PlaceHarnessConnector",
+        Command::PlaceHarnessConnector {
+            connector: signex_types::schematic::HarnessConnector {
+                uuid: uid(HARNESS_CONNECTOR, NEW),
+                entries: Vec::new(),
+                ..harness_connector(3)
+            },
+        },
+    );
+    add(
+        "UpdateHarnessConnector",
+        Command::UpdateHarnessConnector {
+            uuid: uid(HARNESS_CONNECTOR, 1),
+            connector: signex_types::schematic::HarnessConnector {
+                width: 12.7,
+                ..harness_connector(1)
+            },
+        },
+    );
+    add(
+        "PlaceHarnessEntry",
+        Command::PlaceHarnessEntry {
+            connector_id: uid(HARNESS_CONNECTOR, 1),
+            entry: signex_types::schematic::HarnessEntry {
+                uuid: uid(HARNESS_ENTRY, NEW),
+                name: "CS".into(),
+            },
+            index: 1,
+        },
+    );
+    add(
+        "PlaceHarnessWire",
+        Command::PlaceHarnessWire {
+            wire: harness_wire(NEW),
+        },
+    );
+    add(
+        "SetHarnessEntryType",
+        Command::SetHarnessEntryType {
+            sheet_pin_id: uid(SHEET_PIN, 1),
+            harness_type: Some("SPI_BUS".into()),
+        },
+    );
+    add(
         "SetNetColors",
         Command::SetNetColors {
             colors: [(
@@ -1146,6 +1353,40 @@ fn samples() -> Vec<(String, Command)> {
             )]
             .into_iter()
             .collect(),
+        },
+    );
+    add(
+        "CreateUnion",
+        Command::CreateUnion {
+            union: signex_types::schematic::SchUnion {
+                uuid: uid(NEW, 30),
+                name: "Divider".into(),
+                tags: Vec::new(),
+                members: vec![uid(LABEL, 2), uid(TEXT_NOTE, 2)],
+                locked: false,
+            },
+        },
+    );
+    add(
+        "UpdateUnion",
+        Command::UpdateUnion {
+            uuid: uid(UNION, 1),
+            name: "Input filter".into(),
+            tags: vec!["emc".into()],
+            locked: true,
+        },
+    );
+    add(
+        "SetUnionMembers",
+        Command::SetUnionMembers {
+            uuid: uid(UNION, 1),
+            members: vec![uid(TEXT_NOTE, 1)],
+        },
+    );
+    add(
+        "BreakUnion",
+        Command::BreakUnion {
+            uuid: uid(UNION, 1),
         },
     );
     out
@@ -1233,6 +1474,7 @@ fn keep_wires_edits_wires_for_the_kinds_that_carry_pins() {
                     dx: 2.54,
                     dy: 2.54,
                     keep_wires,
+                    wiring: signex_types::corner::DragWiringMode::Auto,
                 })
                 .expect("move");
             format!("{:?}", engine.document().wires)
@@ -1254,9 +1496,13 @@ fn the_fallback_sample_really_falls_back_with_a_notice() {
             dx: 2.54,
             dy: 2.54,
             keep_wires: true,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         })
         .expect("move");
     let notices = engine.take_warnings();
     assert_eq!(notices.len(), 1, "{notices:?}");
-    assert!(notices[0].contains("U? pin 1"), "{notices:?}");
+    assert!(
+        notices[0].pins_not_kept().iter().any(|p| p == "U? pin 1"),
+        "{notices:?}"
+    );
 }

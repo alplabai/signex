@@ -1,6 +1,8 @@
 //! The board view's layers and ratsnest (#2223). The view of each open board
-//! lives in `UiState::pcb_layer_views`, for the session; nothing here touches
-//! the board or its file.
+//! lives in `UiState::pcb_layer_views` and is kept per board in the user's
+//! preferences (#2480, `pcb_view_persist`). The one exception
+//! is a layer colour: it is saved with the board (2026-11-18), so a colour
+//! event is a `SetBoardOptions` undo step on the board.
 //!
 //! A view event acts on the board of the window it came from: the main
 //! window's active board, or the board an undocked window shows.
@@ -9,11 +11,13 @@ use std::path::{Path, PathBuf};
 
 use signex_i18n::{Localized, ids, t};
 use signex_renderer::pcb::{
-    BuiltinLayerSet, LayerSetId, PcbLayerView, PcbSnapshot, ShownLayerSet, board_copper_layers,
-    board_layers, builtin_set_layers, kind_layers, listed_layers, signal_layers,
+    BoardObject, BuiltinLayerSet, LayerSetId, PcbLayerView, PcbSnapshot, ShownLayerSet,
+    board_copper_layers, board_layers, builtin_set_layers, kind_layers, listed_layers,
+    signal_layers,
 };
 use signex_types::pcb::{LayerDef, PcbBoard};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
+use signex_types::theme::Color;
 
 use crate::app::state::WindowKind;
 use crate::app::{PcbViewMsg, Signex};
@@ -27,7 +31,32 @@ impl Signex {
         window: Option<iced::window::Id>,
         event: PcbViewMsg,
     ) {
+        if is_colour_event(event) {
+            if let Some(path) = self.pcb_view_target(window).map(|(path, _)| path) {
+                self.set_board_layer_colours(&path, event);
+            }
+            return;
+        }
         self.edit_pcb_view(window, |view, copper| apply_event(view, copper, event));
+    }
+
+    /// A layer colour event on the board at `path`: one `SetBoardOptions`
+    /// undo step, which marks the board dirty and redraws it. Nothing when
+    /// the colours already stand so.
+    fn set_board_layer_colours(&mut self, path: &Path, event: PcbViewMsg) {
+        self.edit_pcb_board_options_at(path, |options| match event {
+            PcbViewMsg::LayerColourSet { layer, colour } => {
+                let colour = colour.map(|[r, g, b]| Color::new(r, g, b, 0xFF));
+                options.set_layer_color(layer, colour)
+            }
+            PcbViewMsg::LayerColoursReset => {
+                let had = !options.layer_colors.is_empty();
+                options.layer_colors.clear();
+                had
+            }
+            _ => false,
+        });
+        self.refresh_panel_ctx();
     }
 
     /// What the view of the board at `path` shows of its layers; the default
@@ -52,8 +81,7 @@ impl Signex {
     }
 
     /// The active copper layer of the board in view; the top layer without
-    /// one, or while a non-copper layer is active. Object snapping on the
-    /// current layer reads it (#2353).
+    /// one, or while a non-copper layer is active.
     pub(crate) fn pcb_active_layer(&self) -> CopperLayer {
         self.active_tab_path()
             .and_then(|path| self.pcb_layer_view(&path).active().copper())
@@ -61,17 +89,56 @@ impl Signex {
     }
 
     /// The snapshot of `board` as the view of `path` shows it, without the
-    /// ratsnest.
+    /// ratsnest. Designators draw as the project's standard shows them
+    /// (#1416). Copper off the nets in focus in the acting window
+    /// (`board_focus_nets`) dims by the Preferences ▸ PCB ▸ Display amount
+    /// (#2514).
     pub(crate) fn pcb_snapshot_for(&self, path: &Path, board: &PcbBoard) -> PcbSnapshot {
+        let window = self.interaction_state.acting_window;
+        let nets = self.board_focus_nets(path, window);
+        self.with_focus_on(self.pcb_unfocused_snapshot_for(path, board), &nets)
+    }
+
+    fn pcb_unfocused_snapshot_for(&self, path: &Path, board: &PcbBoard) -> PcbSnapshot {
         PcbSnapshot::from_board_with_view(board, &self.pcb_layer_view(path))
+            .with_designator_standard(self.document_state.designator_standard_for(path))
+    }
+
+    /// [`Self::pcb_snapshot_for`] for what is on the cursor: a ghost is never
+    /// faded by Show only unrouted or by nets in focus, or the tool in hand
+    /// could not be seen.
+    pub(crate) fn pcb_ghost_snapshot_for(&self, path: &Path, board: &PcbBoard) -> PcbSnapshot {
+        let mut snapshot = self.pcb_unfocused_snapshot_for(path, board);
+        snapshot.paint = snapshot.paint.with_board_dimmed(false);
+        snapshot
+    }
+
+    /// Show only unrouted ends with its board (#2821).
+    pub(crate) fn end_only_unrouted_of(&mut self, path: &Path) {
+        if let Some(view) = self.ui_state.pcb_layer_views.get_mut(path) {
+            view.set_only_unrouted(false);
+        }
+    }
+
+    /// A renamed board keeps Show only unrouted, and its old path does not.
+    pub(crate) fn rekey_only_unrouted(&mut self, old_path: &Path, new_path: &Path) {
+        let views = &mut self.ui_state.pcb_layer_views;
+        let Some(view) = views.get_mut(old_path).filter(|v| v.only_unrouted()) else {
+            return;
+        };
+        view.set_only_unrouted(false);
+        views
+            .entry(new_path.to_path_buf())
+            .or_default()
+            .set_only_unrouted(true);
     }
 
     /// The snapshot an undocked window draws of the board at `path`: its
-    /// view, with the ratsnest unless that view hides it.
+    /// view, with the ratsnest whenever that view draws it.
     pub(crate) fn undocked_pcb_snapshot(&self, path: &Path, board: &PcbBoard) -> PcbSnapshot {
         let fills = pcb_geom::zone_fills(board);
         let snapshot = self.pcb_snapshot_for(path, board).with_zone_fills(&fills);
-        if !self.pcb_layer_view(path).ratsnest_visible() {
+        if !self.pcb_layer_view(path).ratsnest_drawn() {
             return snapshot;
         }
         self.interaction_state
@@ -92,7 +159,10 @@ impl Signex {
 
     /// The board a view event from `window` acts on: an undocked window's
     /// own board, else the main window's active one.
-    fn pcb_view_target(&self, window: Option<iced::window::Id>) -> Option<(PathBuf, &PcbBoard)> {
+    pub(crate) fn pcb_view_target(
+        &self,
+        window: Option<iced::window::Id>,
+    ) -> Option<(PathBuf, &PcbBoard)> {
         if let Some(path) = window.and_then(|id| self.undocked_pcb_path(id)) {
             let board = self.document_state.pcb_board(&path)?;
             return Some((path, board));
@@ -170,6 +240,13 @@ impl Signex {
 
     /// Apply a board-view event to the open board at `path` (#2394).
     pub(crate) fn apply_pcb_view_event_at(&mut self, path: &Path, event: PcbViewMsg) -> bool {
+        if is_colour_event(event) {
+            if self.document_state.pcb_board(path).is_none() {
+                return false;
+            }
+            self.set_board_layer_colours(path, event);
+            return true;
+        }
         self.edit_pcb_view_at(path, |view, layers| apply_event(view, layers, event))
     }
 
@@ -210,11 +287,20 @@ fn copper_layers(layers: &[LayerDef]) -> Vec<PcbLayer> {
         .collect()
 }
 
+/// Whether `event` sets layer colours, which are board data.
+fn is_colour_event(event: PcbViewMsg) -> bool {
+    matches!(
+        event,
+        PcbViewMsg::LayerColourSet { .. } | PcbViewMsg::LayerColoursReset
+    )
+}
+
 /// What `event` changes in `view`; `layers` is the board's stackup.
 fn apply_event(view: &mut PcbLayerView, layers: &[LayerDef], event: PcbViewMsg) {
     match event {
         PcbViewMsg::RatsnestVisibilityToggled => view.toggle_ratsnest(),
         PcbViewMsg::OriginMarkerVisibilityToggled => view.toggle_origin_marker(),
+        PcbViewMsg::OrientationTileVisibilityToggled => view.toggle_orientation_tile(),
         PcbViewMsg::ActiveLayerStepped { forward } => {
             view.step_active(&board_layers(layers), forward);
         }
@@ -223,9 +309,6 @@ fn apply_event(view: &mut PcbLayerView, layers: &[LayerDef], event: PcbViewMsg) 
         }
         PcbViewMsg::ActiveLayerPicked(layer) => view.set_active(layer),
         PcbViewMsg::SingleLayerModeToggled => view.toggle_single_layer(),
-        PcbViewMsg::LayerGroupVisibilitySet { group, visible } => {
-            view.set_group_visible(layers, group, visible);
-        }
         PcbViewMsg::LayerVisibilityToggled(layer) => view.toggle_visibility(layer),
         PcbViewMsg::ActiveLayerVisibilityToggled => view.toggle_visibility(view.active()),
         PcbViewMsg::MultiLayerVisibilityToggled => view.toggle_multi_layer(),
@@ -245,6 +328,28 @@ fn apply_event(view: &mut PcbLayerView, layers: &[LayerDef], event: PcbViewMsg) 
             view.show_set(&listed_layers(layers), shown);
         }
         PcbViewMsg::BoardFlipToggled => view.toggle_flipped(),
+        PcbViewMsg::LayerVisibilitySet { layer, visible } => {
+            view.set_layers_visible(&[layer], visible);
+        }
+        // Board data: `set_board_layer_colours` runs them before a view edit.
+        PcbViewMsg::LayerColourSet { .. } | PcbViewMsg::LayerColoursReset => {}
+        PcbViewMsg::UsedLayersOnlySet(on) => view.set_used_only(on),
+        PcbViewMsg::OnlyUnroutedToggled => view.set_only_unrouted(!view.only_unrouted()),
+        PcbViewMsg::ObjectVisibilitySet { kind, visible } => {
+            let kinds = match kind {
+                Some(kind) => vec![kind],
+                None => BoardObject::ALL
+                    .into_iter()
+                    .filter(|k| k.can_hide())
+                    .collect(),
+            };
+            for kind in kinds {
+                view.set_object_visible(kind, visible);
+            }
+        }
+        PcbViewMsg::ObjectTransparencySet { kind, percent } => {
+            view.set_object_transparency(kind, percent);
+        }
     }
 }
 

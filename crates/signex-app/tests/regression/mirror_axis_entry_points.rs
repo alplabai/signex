@@ -10,7 +10,7 @@ use signex_app::keymap::{AppCommandId, KeyStroke, KeyToken, Modifiers};
 use signex_types::schematic::{Point, SchematicSheet, SelectedItem, SelectedKind, Symbol};
 use std::path::PathBuf;
 
-/// A fresh app with one unmirrored symbol, selected, on the Altium keymap.
+/// A fresh app with one unmirrored symbol, selected, on the Signex Standard keymap.
 fn app_with_selected_symbol() -> Signex {
     let symbol = Symbol {
         uuid: uuid::Uuid::now_v7(),
@@ -33,8 +33,8 @@ fn app_with_selected_symbol() -> Signex {
     app.ui_state.grid_size_mm = 1.0;
     app.ui_state
         .keymap_profiles
-        .set_active_profile("altium")
-        .expect("altium profile");
+        .set_active_profile("signex_standard")
+        .expect("signex_standard profile");
     app.ui_state.active_keymap = app.ui_state.keymap_profiles.compile_active().into();
     app.document_state.engines.insert(
         path.clone(),
@@ -43,7 +43,6 @@ fn app_with_selected_symbol() -> Signex {
     app.document_state.tabs.push(TabInfo {
         title: "mirror-axis-entry-points".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

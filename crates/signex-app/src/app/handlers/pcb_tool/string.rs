@@ -1,6 +1,7 @@
 //! The String tool (#2373): each click places a board string on the active
-//! overlay, mechanical or documentation layer (`PcbLayer::takes_text`), as
-//! one undo step, with the text, height and turn set in Properties (#2393),
+//! copper, overlay, mechanical or documentation layer
+//! (`PcbLayer::takes_text`; on copper, copper of no net, #2883), as one
+//! undo step, with the text, height and turn set in Properties (#2393),
 //! else the catalog's new-string text at the default size.
 
 use signex_i18n::{ids, t};
@@ -26,7 +27,7 @@ impl Signex {
     pub(super) fn string_clicked(&mut self, at: Point) {
         let Some(text) = self.string_at(Uuid::now_v7(), at) else {
             let note = t!(self.ui_state.i18n, ids::PCB_TOOL_STRING_NEEDS_TEXT_LAYER);
-            crate::diagnostics::log_warning(note.into_string());
+            self.note_board_tool(note.into_string());
             return;
         };
         let name = t!(self.ui_state.i18n, ids::PCB_TOOL_STRING).into_string();

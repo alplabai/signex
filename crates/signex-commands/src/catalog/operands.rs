@@ -1,7 +1,7 @@
-//! The operands a command takes besides its id (#1934): what a CLI or an agent
-//! can pass in place of a pointer click or a dialog answer. One naming
-//! convention, kept by a test over every catalog row (the app's
-//! `OPERAND_CONVENTION`).
+//! A command's operands besides its id (#1934), for a CLI or an agent, in one
+//! naming convention (`OPERAND_CONVENTION`); the notebook's are in `notebook`.
+mod notebook;
+pub use notebook::*;
 
 /// The shape of one operand's value, as written in text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -27,7 +27,15 @@ pub enum OperandKind {
     Document,
     /// A length in mm, above zero: a grid step (#2408).
     Length,
+    /// The items a command acts on, by uuid, comma separated (#2326): at
+    /// least one and at most [`MAX_TARGETS`]; a repeated uuid counts once.
+    Targets,
 }
+
+/// The most uuids one [`OperandKind::Targets`] operand names. A handler finds
+/// each by a scan of the document's items, so this bounds one call's work
+/// (and its text, about 370 kB); a person's selection is far smaller.
+pub const MAX_TARGETS: usize = 10_000;
 
 impl OperandKind {
     pub const fn name(self) -> &'static str {
@@ -41,6 +49,7 @@ impl OperandKind {
             Self::Color => "color",
             Self::Document => "document",
             Self::Length => "length",
+            Self::Targets => "targets",
         }
     }
 
@@ -49,7 +58,9 @@ impl OperandKind {
         match self {
             Self::Point | Self::Length => Some("mm"),
             Self::Angle | Self::Turn => Some("deg"),
-            Self::Text | Self::Path | Self::Bool | Self::Color | Self::Document => None,
+            Self::Text | Self::Path | Self::Bool | Self::Color | Self::Document | Self::Targets => {
+                None
+            }
         }
     }
 }
@@ -66,7 +77,7 @@ pub struct Operand {
     pub required: bool,
 }
 
-const fn required(name: &'static str, kind: OperandKind) -> Operand {
+pub(super) const fn required(name: &'static str, kind: OperandKind) -> Operand {
     Operand {
         name,
         kind,
@@ -74,7 +85,7 @@ const fn required(name: &'static str, kind: OperandKind) -> Operand {
     }
 }
 
-const fn optional(name: &'static str, kind: OperandKind) -> Operand {
+pub(super) const fn optional(name: &'static str, kind: OperandKind) -> Operand {
     Operand {
         name,
         kind,
@@ -96,6 +107,21 @@ pub const SEGMENT: &[Operand] = &[
     required("end", OperandKind::Point),
     optional("document", OperandKind::Document),
 ];
+/// A No-ERC directive (#1699): its point and, comma separated, the ERC rule
+/// ids it silences there; left out or empty silences every rule.
+pub const NO_ERC: &[Operand] = &[
+    required("at", OperandKind::Point),
+    optional("rules", OperandKind::Text),
+    optional("document", OperandKind::Document),
+];
+/// A No-ERC rule list edit (#1699): the directive `id` and the rule ids it
+/// silences, comma separated; left out or empty (a required text operand
+/// cannot be empty) silences every rule.
+pub const EDIT_NO_ERC_RULES: &[Operand] = &[
+    required("id", OperandKind::Text),
+    optional("rules", OperandKind::Text),
+    optional("document", OperandKind::Document),
+];
 /// A Blanket (#2420): its two corners, the net class it gives the nets
 /// inside it and the ERC rule ids, comma separated, it does not report there.
 pub const BLANKET: &[Operand] = &[
@@ -113,6 +139,20 @@ pub const EDIT_BLANKET: &[Operand] = &[
     optional("end", OperandKind::Point),
     optional("class", OperandKind::Text),
     optional("exclude", OperandKind::Text),
+    optional("document", OperandKind::Document),
+];
+/// A Net Parameters directive (#1489): the point on a wire it sits on, the
+/// net class and diff-pair class it gives that net, and its routing rules
+/// (lengths in mm, `current` in A, information only).
+pub const NET_PARAMETERS: &[Operand] = &[
+    required("at", OperandKind::Point),
+    optional("class", OperandKind::Text),
+    optional("diff_pair_class", OperandKind::Text),
+    optional("width", OperandKind::Text),
+    optional("clearance", OperandKind::Text),
+    optional("via_diameter", OperandKind::Text),
+    optional("via_hole", OperandKind::Text),
+    optional("current", OperandKind::Text),
     optional("document", OperandKind::Document),
 ];
 /// A wire run, checked against the sheet before it lands (#2199): `allow_merge`
@@ -204,17 +244,38 @@ pub const SYNC_SHEET: &[Operand] = &[
     required("sheet", OperandKind::Text),
     optional("document", OperandKind::Document),
 ];
+/// A sheet symbol for the sheet file `path` with an entry for every port
+/// (#1276): its top-left corner at `at`, else under the sheet's content.
+pub const SHEET_SYMBOL_FROM_SHEET: &[Operand] = &[
+    required("path", OperandKind::Path),
+    optional("at", OperandKind::Point),
+    optional("allow_merge", OperandKind::Bool),
+    optional("document", OperandKind::Document),
+];
+/// The sync of the sheet symbol `symbol` (an id or a name) and its sheet,
+/// `direction` `to_symbol` or `to_sheet` (#1276).
+pub const SYNC_SHEET_ENTRIES: &[Operand] = &[
+    required("symbol", OperandKind::Text),
+    required("direction", OperandKind::Text),
+    optional("document", OperandKind::Document),
+];
 /// An absolute move of the placed object `id` (#2418): `at` is where its
 /// position goes (a part's origin, a wire's start, a sheet symbol's top-left).
+/// `keep_wires` (default true) and `wiring` (`auto`, `horizontal_first`,
+/// `vertical_first`, `straight`; default `auto`) say how wires follow (#2552).
 pub const OBJECT_POSITION: &[Operand] = &[
     required("id", OperandKind::Text),
     required("at", OperandKind::Point),
+    optional("keep_wires", OperandKind::Bool),
+    optional("wiring", OperandKind::Text),
     optional("document", OperandKind::Document),
 ];
-/// An absolute turn of the part or label `id`.
+/// An absolute turn of the part or label `id`. `keep_wires` (default true)
+/// says whether a part's wires follow, as for `OBJECT_POSITION`.
 pub const OBJECT_ROTATION: &[Operand] = &[
     required("id", OperandKind::Text),
     required("rotation", OperandKind::Angle),
+    optional("keep_wires", OperandKind::Bool),
     optional("document", OperandKind::Document),
 ];
 /// The width and height of the sheet symbol `id`, written `w,h` in mm.
@@ -229,6 +290,14 @@ pub const SYMBOL_PARAMETER: &[Operand] = &[
     required("id", OperandKind::Text),
     required("name", OperandKind::Text),
     optional("value", OperandKind::Text),
+    optional("document", OperandKind::Document),
+];
+/// One sheet variable: its `name` and `value` (left out or empty: the
+/// variable stays, with no value), or `remove=true` to delete it.
+pub const SHEET_VARIABLE: &[Operand] = &[
+    required("name", OperandKind::Text),
+    optional("value", OperandKind::Text),
+    optional("remove", OperandKind::Bool),
     optional("document", OperandKind::Document),
 ];
 /// The placed part `id` on the sheet `document` (#1667): named, since an
@@ -261,14 +330,6 @@ pub const NEW_PROJECT: &[Operand] = &[
     optional("profile", OperandKind::Text),
     optional("overrides", OperandKind::Text),
 ];
-
-/// Update PCB without the dialog (#1312): `apply=true` executes the rows
-/// ticked by default.
-pub const APPLY: &[Operand] = &[required("apply", OperandKind::Bool)];
-
-/// New PCB without the dialog (#2232): `profile` is `project` (the default,
-/// the project's own setup), a built-in token or a saved user profile.
-pub const NEW_PCB: &[Operand] = &[optional("profile", OperandKind::Text)];
 
 /// New Schematic without the dialog (#2232): `profile` as for `NEW_PCB`;
 /// `name` is the file stem in the project folder (default `Sheet<n>`).
@@ -309,6 +370,45 @@ pub const LAYER_SET_NAME: &[Operand] = &[required("name", OperandKind::Text)];
 /// (#2394).
 pub const LAYER_TAB_NAMES: &[Operand] = &[required("style", OperandKind::Text)];
 
+/// One layer of the named board's view shown (`on=true`) or hidden (#2363).
+pub const LAYER_VISIBLE: &[Operand] = &[
+    required("layer", OperandKind::Text),
+    required("on", OperandKind::Bool),
+    required("document", OperandKind::Document),
+];
+
+/// One layer's colour in the named board's view (#2363); without `color`
+/// the board palette's again.
+pub const LAYER_COLOR: &[Operand] = &[
+    required("layer", OperandKind::Text),
+    optional("color", OperandKind::Color),
+    required("document", OperandKind::Document),
+];
+
+/// A switch of the named board's view (#2363).
+pub const ON_BOARD: &[Operand] = &[
+    required("on", OperandKind::Bool),
+    required("document", OperandKind::Document),
+];
+
+/// A kind of object of the named board's view shown or hidden (#2363):
+/// `pads`, `vias`, `arcs`, `tracks`, `polygons`, `regions`, `fills`,
+/// `texts`, `dimensions`, `keepouts`, or `all`.
+pub const OBJECT_VISIBLE: &[Operand] = &[
+    required("kind", OperandKind::Text),
+    required("on", OperandKind::Bool),
+    required("document", OperandKind::Document),
+];
+
+/// How transparent a kind of object of the named board's view is drawn
+/// (#2363): `value` in percent, 0 to 100; `kind` is `pads`, `vias`, `arcs`,
+/// `tracks`, `polygons`, `regions` or `fills`.
+pub const OBJECT_TRANSPARENCY: &[Operand] = &[
+    required("kind", OperandKind::Text),
+    required("value", OperandKind::Text),
+    required("document", OperandKind::Document),
+];
+
 /// DXF import onto a layer (#2410): the file, the layer token (the active
 /// layer when left out) and the board.
 pub const IMPORT_DXF: &[Operand] = &[
@@ -346,6 +446,9 @@ pub const COLOR_NET: &[Operand] = &[
 /// The document a command acts on, by id or path. A headless or CLI run names
 /// it every time and never falls back to the active one (#2172).
 pub const DOCUMENT: &[Operand] = &[required("document", OperandKind::Document)];
+/// A sheet edit that takes nothing but the sheet: the one in view, or the one
+/// `document` names (a CLI or an agent's edit list).
+pub const OPTIONAL_DOCUMENT: &[Operand] = &[optional("document", OperandKind::Document)];
 /// A board report written as CSV (#2404): which board, which report
 /// (`bom`, `netlist`, `net_length`, `components`) and the file.
 pub const BOARD_REPORT_EXPORT: &[Operand] = &[
@@ -355,8 +458,8 @@ pub const BOARD_REPORT_EXPORT: &[Operand] = &[
 ];
 /// A board printed to PDF (#2402): which board and the file; the rest
 /// defaults as the dialog opens. `layers` lists sets by id (`top`,
-/// `bottom`, `inner`, `mechanical`), `pages` is `per_set` or `composite`,
-/// `scale` is `fit` or `one_to_one`.
+/// `bottom`, `inner`, `mechanical`, `assembly_top`, `assembly_bottom`),
+/// `pages` is `per_set` or `composite`, `scale` is `fit` or `one_to_one`.
 pub const BOARD_PDF: &[Operand] = &[
     required("document", OperandKind::Document),
     required("path", OperandKind::Path),
@@ -368,6 +471,30 @@ pub const BOARD_PDF: &[Operand] = &[
     optional("outline", OperandKind::Bool),
     optional("drill_marks", OperandKind::Bool),
     optional("title_block", OperandKind::Bool),
+];
+/// The assembly drawings as SVG files (#2486): which board and the folder
+/// they go in. `sides` lists `top` and `bottom` (both when left out).
+pub const ASSEMBLY_SVG_EXPORT: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("path", OperandKind::Path),
+    optional("sides", OperandKind::Text),
+    optional("mirror_bottom", OperandKind::Bool),
+    optional("monochrome", OperandKind::Bool),
+];
+/// One assembly drawing as SVG text (#2486): which board and `side`
+/// (`top` or `bottom`).
+pub const ASSEMBLY_DRAWING: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("side", OperandKind::Text),
+    optional("mirror_bottom", OperandKind::Bool),
+    optional("monochrome", OperandKind::Bool),
+];
+/// A board written as a STEP model (#2488): which board and the file;
+/// `schema` is `ap214` (the default) or `ap242`.
+pub const BOARD_STEP: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("path", OperandKind::Path),
+    optional("schema", OperandKind::Text),
 ];
 /// `add_board_graphic` (#2424): a drawing of `kind` (`line`, `arc`,
 /// `circle`, `rectangle`, `text_frame`) on the board `document` names. A
@@ -394,18 +521,33 @@ pub const BOARD_GRAPHIC_SET: &[Operand] = &[
     required("field", OperandKind::Text),
     required("value", OperandKind::Text),
 ];
-/// `swap_pins` (#2410): two pins of the component `designator` on the board
-/// `document`, as `pins` = `a,b` (pad numbers).
+/// `set_footprint_text` (#2368): one `field` (`x`, `y`, `rotation`,
+/// `height`, `justify`) of the `text` (`designator` or `comment`) of the
+/// component `designator` set to `value`; X and Y in mm from the board origin
+/// with Y up, as Properties shows them, `justify` one of `left`, `center`,
+/// `right`.
+pub const FOOTPRINT_TEXT_SET: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("designator", OperandKind::Text),
+    required("text", OperandKind::Text),
+    required("field", OperandKind::Text),
+    required("value", OperandKind::Text),
+];
+/// `swap_pins` (#2410): two pins of one component on the board `document`,
+/// as `pins` = `a,b` (pad numbers). The component is named by `ids` (its
+/// uuid) or by `designator`, exactly one of them (#2326).
 pub const SWAP_PINS: &[Operand] = &[
     required("document", OperandKind::Document),
-    required("designator", OperandKind::Text),
+    optional("ids", OperandKind::Targets),
+    optional("designator", OperandKind::Text),
     required("pins", OperandKind::Text),
 ];
-/// `swap_gates` (#2410): two gates of the component `designator`, as
-/// `units` = `a,b` (unit numbers).
+/// `swap_gates` (#2410): two gates of one component, named as for
+/// `swap_pins`, as `units` = `a,b` (unit numbers).
 pub const SWAP_GATES: &[Operand] = &[
     required("document", OperandKind::Document),
-    required("designator", OperandKind::Text),
+    optional("ids", OperandKind::Targets),
+    optional("designator", OperandKind::Text),
     required("units", OperandKind::Text),
 ];
 /// `save_board_reuse_block` (#2410): the block `name` made of `ids`
@@ -415,12 +557,14 @@ pub const SAVE_REUSE_BLOCK: &[Operand] = &[
     required("name", OperandKind::Text),
     required("ids", OperandKind::Text),
 ];
-/// `place_board_reuse_block` (#2410): the block `name` around the component
-/// `designator`, turned by `degrees`.
+/// `place_board_reuse_block` (#2410): the block `name` around one component,
+/// named by `ids` (its uuid) or by `designator` (exactly one, #2326), turned
+/// by `degrees`.
 pub const PLACE_REUSE_BLOCK: &[Operand] = &[
     required("document", OperandKind::Document),
     required("name", OperandKind::Text),
-    required("designator", OperandKind::Text),
+    optional("ids", OperandKind::Targets),
+    optional("designator", OperandKind::Text),
     optional("degrees", OperandKind::Turn),
 ];
 /// A save dialog's answer for the named document.
@@ -479,6 +623,13 @@ pub const CHECK_DRC: &[Operand] = &[
     required("document", OperandKind::Document),
     optional("baseline", OperandKind::Text),
 ];
+/// `check_requirements` (#2339): the requirements of the project the named
+/// document is (or belongs to), answered as a check report; `baseline` is an
+/// earlier answer's `run` on the same project.
+pub const CHECK_REQUIREMENTS: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("baseline", OperandKind::Text),
+];
 /// Select Net and Highlight Net on a board (#2403): the net by name; without
 /// it, the net of the selection or of what is under the cursor.
 pub const BOARD_NET: &[Operand] = &[optional("net", OperandKind::Text)];
@@ -488,7 +639,7 @@ pub const MEASURE_BOARD: &[Operand] = &[
     required("document", OperandKind::Document),
     optional("start", OperandKind::Point),
     optional("end", OperandKind::Point),
-    optional("ids", OperandKind::Text),
+    optional("ids", OperandKind::Targets),
 ];
 /// `query_board_nets` (#2403): every net of the named board, or one.
 pub const QUERY_BOARD_NETS: &[Operand] = &[
@@ -515,17 +666,37 @@ pub const SELECTION_FILTER_KINDS: &[Operand] = &[required("kinds", OperandKind::
 /// `apply_selection_filter_preset` (#2417): a saved preset, by its name.
 pub const SELECTION_FILTER_PRESET: &[Operand] = &[required("name", OperandKind::Text)];
 
+/// `keymap_assign` (#2495): give the command `command` (a catalog or an
+/// installed extension id) the key sequence `keys` in the custom keyboard
+/// profile `profile`; `context` is where it applies, by default the one
+/// editor the command acts in, else `global`.
+pub const KEYMAP_ASSIGN: &[Operand] = &[
+    required("command", OperandKind::Text),
+    required("keys", OperandKind::Text),
+    required("profile", OperandKind::Text),
+    optional("context", OperandKind::Text),
+];
+/// `keymap_clear` (#2495): take the key sequence `keys`, or every key, from
+/// `command` in the custom keyboard profile `profile`.
+pub const KEYMAP_CLEAR: &[Operand] = &[
+    required("command", OperandKind::Text),
+    required("profile", OperandKind::Text),
+    optional("keys", OperandKind::Text),
+];
+
 /// One finding of the named board's last DRC run, by its waiver key `id`
 /// (#2399).
 pub const DRC_VIOLATION: &[Operand] = &[
     required("document", OperandKind::Document),
     required("id", OperandKind::Text),
 ];
-/// Waive a finding of the named board's last run; `text` is the note.
+/// Waive a finding of the named board's last run; `text` is the note and
+/// `author` who accepted it (AV-13).
 pub const WAIVE_DRC_VIOLATION: &[Operand] = &[
     required("document", OperandKind::Document),
     required("id", OperandKind::Text),
     optional("text", OperandKind::Text),
+    optional("author", OperandKind::Text),
 ];
 /// What the DRC results show: one rule id, one copper layer token, one
 /// severity (`error`, `warning`, `info`), and whether waived findings show.
@@ -609,7 +780,8 @@ pub const RULES_ONE: &[Operand] = &[
     required("document", OperandKind::Document),
     required("id", OperandKind::Text),
 ];
-/// `rules_add`: a rule of `kind` (clearance, track, via) with its limits.
+/// `rules_add`: a rule of `kind` (a rule target: clearance, track, via, hole,
+/// edge, silk, mask, paste, courtyard, component) with its limits.
 pub const RULES_ADD: &[Operand] = &[
     required("document", OperandKind::Document),
     required("kind", OperandKind::Text),
@@ -664,7 +836,7 @@ pub const TEARDROPS: &[Operand] = &[
 /// `arrange_in_box` (#2409): the components and the box's two corners.
 pub const ARRANGE_BOX: &[Operand] = &[
     required("document", OperandKind::Document),
-    required("ids", OperandKind::Text),
+    required("ids", OperandKind::Targets),
     required("start", OperandKind::Point),
     required("end", OperandKind::Point),
 ];
@@ -710,7 +882,6 @@ pub const SET_BOARD_PANEL: &[Operand] = &[
     required("field", OperandKind::Text),
     required("value", OperandKind::Text),
 ];
-
 // The `project_*` commands (#1689-#1693): `document` is the project or any
 // of its documents.
 
@@ -754,7 +925,32 @@ pub const PROJECT_VERSION_CONTROL: &[Operand] = &[
     required("document", OperandKind::Document),
     required("on", OperandKind::Bool),
 ];
-
+/// `project_add_requirement` (#2339): a requirement `kind`, and its `id`
+/// (the kind's name made unique when none is given).
+pub const PROJECT_ADD_REQUIREMENT: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("kind", OperandKind::Text),
+    optional("id", OperandKind::Text),
+];
+/// `project_set_requirement`: one `field` of the requirement with id
+/// `requirement`, as typed in `value`; empty clears an optional field.
+pub const PROJECT_SET_REQUIREMENT: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("requirement", OperandKind::Text),
+    required("field", OperandKind::Text),
+    required("value", OperandKind::Text),
+];
+/// `project_remove_requirement`: the requirement by id.
+pub const PROJECT_REQUIREMENT: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("requirement", OperandKind::Text),
+];
+/// `project_enable_requirement`: the requirement by id, on or off.
+pub const PROJECT_ENABLE_REQUIREMENT: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("requirement", OperandKind::Text),
+    required("on", OperandKind::Bool),
+];
 /// `set_layer_stack` (#2401): the named board's whole stack, top to bottom,
 /// as JSON rows (`{"layers": [...]}` or the list); a copper row names the
 /// board layer it was, or none for a new layer.
@@ -768,13 +964,21 @@ pub const SET_LAYER_STACK: &[Operand] = &[
 /// separated.
 pub const BOARD_ITEMS: &[Operand] = &[
     required("document", OperandKind::Document),
-    required("ids", OperandKind::Text),
+    required("ids", OperandKind::Targets),
+];
+/// The drawing order commands (#1583) and `delete_selection` (#2326): items
+/// of the named sheet (for a delete, of the sheet or board) by uuid, comma
+/// separated. The person's menu row, key and palette fill both in from the
+/// document in view and its selection.
+pub const DOCUMENT_ITEMS: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("ids", OperandKind::Targets),
 ];
 /// `set_via_span` (#2407): vias by uuid and the two copper layers they join,
 /// `TopCopper,Inner2Copper`.
 pub const SET_VIA_SPAN: &[Operand] = &[
     required("document", OperandKind::Document),
-    required("ids", OperandKind::Text),
+    required("ids", OperandKind::Targets),
     required("layers", OperandKind::Text),
 ];
 /// `set_layer_sizes` (#2401): vias or pads by uuid and their per-layer sizes
@@ -782,6 +986,26 @@ pub const SET_VIA_SPAN: &[Operand] = &[
 /// a via size one number, a pad size `<x>x<y>`.
 pub const SET_LAYER_SIZES: &[Operand] = &[
     required("document", OperandKind::Document),
-    required("ids", OperandKind::Text),
+    required("ids", OperandKind::Targets),
     required("sizes", OperandKind::Text),
 ];
+/// `set_pad_shape` (#2242): pads by uuid and their `shape` (`circle`, `rect`,
+/// `oval`, `roundrect`, `trapezoid` or `custom`); a trapezoid's `delta`
+/// `<x>,<y>` and a custom pad's `corners` `<x>,<y>;<x>,<y>;..`, in mm in the
+/// pad's own frame.
+pub const SET_PAD_SHAPE: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("ids", OperandKind::Targets),
+    required("shape", OperandKind::Text),
+    optional("delta", OperandKind::Text),
+    optional("corners", OperandKind::Text),
+];
+
+mod board;
+mod pcb_sync;
+mod project;
+mod rooms;
+pub use board::*;
+pub use pcb_sync::*;
+pub use project::PROJECT_SET_RAIL;
+pub use rooms::{ARRANGE_ROOM, AUTO_PLACE, CREATE_ROOMS, PLACE_ROOM};

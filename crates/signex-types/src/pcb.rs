@@ -11,6 +11,9 @@ use crate::schematic::InstancePath;
 pub use crate::pcb_component::{ComponentAttributes, ComponentType};
 pub use crate::pcb_route_attrs::{MaskExpansion, TrackAttributes, ViaAttributes, ViaMaskSide};
 pub use crate::schematic::Point;
+pub use room::{Room, RoomBounds, RoomLayer, RoomOutline, RoomShape, RoomSource};
+
+pub mod room;
 
 // ---------------------------------------------------------------------------
 // PCB domain constants
@@ -87,6 +90,11 @@ pub enum PadShape {
     Rect,
     Oval,
     RoundRect,
+    /// A rectangle with one pair of opposite edges of different lengths,
+    /// set by [`Pad::trapezoid_delta`] (#2242).
+    Trapezoid,
+    /// A polygon of the pad's own, [`Pad::custom_outline`] (#2242).
+    Custom,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -204,6 +212,19 @@ pub struct Pad {
     /// `rotation` pad column (`snxpcb/1.3`).
     #[serde(default)]
     pub rotation: f64,
+    /// How much longer, in mm, the pad's +y edge is than its −y edge
+    /// (`x`), or its +x edge than its −x edge (`y`); at most one is
+    /// non-zero. Read only for [`PadShape::Trapezoid`]; see
+    /// [`crate::pcb_pad_shape`]. Saved in the optional `trapezoid_delta`
+    /// pad column (`snxpcb/1.4`).
+    #[serde(default)]
+    pub trapezoid_delta: Point,
+    /// The copper outline in the pad's own frame, mm, about
+    /// [`Self::position`]: a simple polygon that turns with the pad. Read
+    /// only for [`PadShape::Custom`]. Saved in the optional
+    /// `custom_outline` pad column (`snxpcb/1.4`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub custom_outline: Vec<Point>,
     /// The net was set by hand and the schematic never changes it.
     /// Saved in the optional `net_locked` pad column.
     #[serde(default)]
@@ -493,6 +514,16 @@ pub struct Zone {
     /// net. Not written when off.
     #[serde(default, skip_serializing_if = "crate::zone_pour::is_off")]
     pub remove_dead_islands: bool,
+    /// A shelved pour keeps its outline and settings but holds no copper:
+    /// it is not filled and clears nothing (#2523). Not written when off.
+    #[serde(default, skip_serializing_if = "crate::zone_pour::is_off")]
+    pub shelved: bool,
+    /// An unfilled pour keeps its outline and settings but holds no copper
+    /// and clears nothing until the next Repour, which clears the flag
+    /// (#2506). Unlike a shelved pour it counts as not filled. Not written
+    /// when off.
+    #[serde(default, skip_serializing_if = "crate::zone_pour::is_off")]
+    pub unfilled: bool,
     /// Keys in this zone's `[[zones]]` table that this build does not
     /// recognise, kept so a save re-emits them: a zone field added by a
     /// later build (as `holes` was in #818) survives a re-save here (#883).
@@ -614,6 +645,10 @@ pub struct PcbBoard {
     /// through the board engine's `SetLayerStack` command.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stackup: Option<LayerStack>,
+    /// Rooms (#2457): named areas holding the parts of a sheet placement.
+    /// Written only through the board engine's room commands.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub rooms: Vec<Room>,
     /// Keys in the `.snxpcb` manifest, `[stackup]`, `[nets]` and
     /// `[extras.board]` that this build does not recognise, kept per
     /// section so a save re-emits each where it was found. Empty for

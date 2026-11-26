@@ -58,6 +58,8 @@ nanometres, so a save and reopen gives the same board back).
 
 The exit criterion "10k-track board at 60 fps", measured on a real GPU. The
 emit and cull numbers above are CPU only; this bench times whole frames.
+The same board timed in the running app, with vsync and present, is the
+pan/zoom bench in `docs/PERFORMANCE.md`.
 
 ```text
 cargo test -p signex-app --release --lib pcb_frame_bench -- --ignored --nocapture --test-threads=1
@@ -78,7 +80,7 @@ generator above by `#[path]`, so both benches draw the same board.
   second build when there were events (the app's `view` runs again after the
   canvas's message), `draw`, then `iced_wgpu::Renderer::screenshot`, which
   uploads, renders and reads back. GPU time is inside the frame; vsync and
-  surface present are not. Never tiny-skia.
+  surface present are not. Never the software renderer (vello_cpu).
 - **Window.** 1600 x 1300 logical, dpr 1 (`SIGNEX_BENCH_DPR` overrides).
 - **Snapshot.** `PcbSnapshot::from_board_with_view` with the default layer
   view, no ratsnest and no DRC markers.
@@ -175,6 +177,7 @@ small boards (a linear regulator, a USB-C power input, a TQFP-32 breakout, a
 four-layer sensor board with inner planes, a mixed through-hole board with a
 board sketch) live in `crates/signex-types/tests/corpus/pcb/real/`.
 `crates/signex-renderer/tests/integration/pcb_real_boards.rs` renders each and
-pins its drawn counts and a geometry hash; DRC and the ratsnest run on them in
+checks it against its render golden in
+`crates/signex-renderer/tests/golden/pcb_real_boards/`; DRC and the ratsnest run on them in
 `crates/signex-drc/tests/real_boards.rs`. What each board covers: the corpus
 README, "Realistic boards".

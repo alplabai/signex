@@ -41,7 +41,7 @@ pub(crate) fn sheet_frame_elements(
         ),
     };
 
-    let metadata = ctx.metadata.for_sheet(&sheet.schematic.title_block);
+    let metadata = ctx.metadata.for_schematic(&sheet.schematic);
     let sub_ctx = sheet_substitution(sheet, opts, &metadata);
     let (paper_w_mm, paper_h_mm) = super::layout::sheet_paper_mm(sheet);
     let settings = &sheet.schematic.frame;
@@ -66,6 +66,7 @@ pub(crate) fn sheet_substitution<'a>(
 ) -> SubstitutionContext<'a> {
     SubstitutionContext {
         metadata,
+        document_path: sheet.path.clone(),
         filename: sheet
             .path
             .file_name()
@@ -398,7 +399,7 @@ mod special_string_tests {
             include_notes: true,
             ..PdfOptions::default()
         };
-        let sheet_metadata = metadata.for_sheet(&sheet.schematic.title_block);
+        let sheet_metadata = metadata.for_schematic(&sheet.schematic);
         let special = sheet_substitution(&sheet, &opts, &sheet_metadata);
         let wanted = "Oscar: Power by A. Engineer (2/3)";
         assert_eq!(crate::resolve(NOTE, &special), wanted);
@@ -409,6 +410,8 @@ mod special_string_tests {
             global_refdes: &refdes,
             net_name_by_symbol_pin: &nets,
             cell: "",
+            variant_settings: None,
+            placed_fits: None,
         };
         let page = SvgRenderContext::from_sheet(&sheet, &opts, 297.0, 210.0, 1.0, Some(&inputs));
         assert!(

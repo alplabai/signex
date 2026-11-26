@@ -20,6 +20,7 @@ use signex_library::footprint_binding::FootprintBinding;
 use signex_library::identity::{ComponentClass, InternalPn};
 use signex_library::lifecycle::LifecycleState;
 use signex_library::manufacturer::ManufacturerPart;
+use signex_library::param::{ParamMap, ParamValue};
 use signex_library::primitive::PrimitiveRef;
 use signex_sketch::entity::EntityKind;
 use uuid::Uuid;
@@ -51,8 +52,10 @@ pub fn pinned_row_ids() -> Vec<Uuid> {
 /// Rows in panel order. The `Chip-0805` footprint is the generic symmetric
 /// two-pad 0805 land shared by R, C, L, Ferrite and Fuse; the diodes and
 /// the LED (pin 1 = cathode) pair with `Chip-0805-Polarised`, whose pad 1
-/// is the cathode and carries the silkscreen mark; `SOIC-8` pairs with the
-/// 8-pin generic IC.
+/// is the cathode and carries the silkscreen mark; so does the polarised
+/// capacitor, whose pin 1 is the positive plate (the band a polarised chip
+/// capacitor carries); the four transistors pair with `SOT-23` (#2468);
+/// `SOIC-8` pairs with the 8-pin generic IC.
 const STOCK_ROWS: &[StockRow] = &[
     StockRow {
         symbol: "R",
@@ -70,7 +73,7 @@ const STOCK_ROWS: &[StockRow] = &[
         symbol: "C_Polarized",
         row_id: "01a18461-b561-7339-8ca8-366a1e75f029",
         class: "capacitor",
-        footprint: None,
+        footprint: Some(StockKind::Chip0805Polarised),
     },
     StockRow {
         symbol: "L",
@@ -118,25 +121,25 @@ const STOCK_ROWS: &[StockRow] = &[
         symbol: "Q_NPN",
         row_id: "01a18461-b57a-7507-a154-3cd59262073f",
         class: "transistor",
-        footprint: None,
+        footprint: Some(StockKind::Sot23),
     },
     StockRow {
         symbol: "Q_PNP",
         row_id: "01a18461-b57d-77f5-b360-9710bf084215",
         class: "transistor",
-        footprint: None,
+        footprint: Some(StockKind::Sot23),
     },
     StockRow {
         symbol: "Q_NMOS",
         row_id: "01a18461-b580-72ec-a9cd-54fc454f7377",
         class: "transistor",
-        footprint: None,
+        footprint: Some(StockKind::Sot23),
     },
     StockRow {
         symbol: "Q_PMOS",
         row_id: "01a18461-b583-7754-a605-75b147818921",
         class: "transistor",
-        footprint: None,
+        footprint: Some(StockKind::Sot23),
     },
     StockRow {
         symbol: "Crystal",
@@ -287,6 +290,17 @@ fn alternate_kinds(default: StockKind) -> &'static [StockKind] {
     }
 }
 
+/// The row's `value` parameter where the part fixes it: a logic part is
+/// its own value. A generic part (a resistor, a transistor, a header) has
+/// none until the designer picks one, so its Value stays empty (#2468).
+fn stock_value(symbol: &str) -> ParamMap {
+    let mut params = ParamMap::new();
+    if symbol.starts_with("74HC") {
+        params.insert("value".into(), ParamValue::Text(symbol.into()));
+    }
+    params
+}
+
 /// Pad numbers a footprint authors in its sketch.
 fn pad_numbers(kind: StockKind) -> BTreeSet<String> {
     build(ids_for(kind))
@@ -368,7 +382,7 @@ pub fn stock_rows() -> Result<Vec<ComponentRow>, Box<dyn Error>> {
             primary_mpn: ManufacturerPart::draft("", ""),
             alternates: Vec::new(),
             supply: Vec::new(),
-            parameters: Default::default(),
+            parameters: stock_value(spec.symbol),
             plm: PlmReserved::default(),
             version: row_version,
             released: true,

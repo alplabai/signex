@@ -56,11 +56,14 @@ impl Signex {
             net_classes: classes.clone(),
         });
         self.refresh_panel_ctx();
+        let libraries = self.open_library_roots();
         Task::perform(
             async move {
-                tokio::task::spawn_blocking(move || run_check(&board, &classes, &layers))
-                    .await
-                    .unwrap_or_else(|e| Err(format!("DRC worker failed: {e}")))
+                tokio::task::spawn_blocking(move || {
+                    run_check_with(&board, &classes, &layers, &libraries)
+                })
+                .await
+                .unwrap_or_else(|e| Err(format!("DRC worker failed: {e}")))
             },
             move |result| {
                 Message::Pcb(PcbMsg::DrcFinished {
@@ -122,36 +125,97 @@ impl Signex {
                 }
             }
             Ok((report, net_names)) => {
+                // The clock is read here, once: the status bar and its DRC
+                // popover say how long ago this was (#2460).
+                let now = std::time::SystemTime::now();
                 if self.interaction_state.pcb_drc.finish(
                     generation,
                     report.clone(),
                     net_names.clone(),
+                    now,
                 ) {
+                    self.ui_state.board_status.now = Some(now);
                     if loose {
                         // As `check_drc` words it in its report's warnings.
                         crate::diagnostics::log_warning(super::LOOSE_BOARD_WARNING);
                     }
                     log_report(report, net_names);
+                    self.log_lapsed_drc_waivers();
                 }
             }
         }
         self.refresh_panel_ctx();
     }
 
+    /// One Messages line when the last run found waivers whose objects
+    /// changed since they were waived (#2307): those findings are back.
+    fn log_lapsed_drc_waivers(&self) {
+        let Some(done) = self.interaction_state.pcb_drc.last() else {
+            return;
+        };
+        let Some(board) = self.document_state.pcb_board(&done.path) else {
+            return;
+        };
+        let revision = self
+            .document_state
+            .pcb_revisions
+            .get(&done.path)
+            .copied()
+            .unwrap_or(0);
+        if done.is_stale(revision, self.board_net_classes(&done.path)) {
+            // Edited during the run: the report is not of the geometry now.
+            return;
+        }
+        let waivers = &board.options.drc_waivers;
+        if waivers.is_empty() {
+            return;
+        }
+        let lapsed = done
+            .report
+            .violations
+            .iter()
+            .filter(|v| {
+                matches!(
+                    signex_drc::waiver_state(waivers, v, board),
+                    signex_drc::WaiverState::Lapsed(_)
+                )
+            })
+            .count();
+        if lapsed > 0 {
+            crate::diagnostics::log_warning(format!(
+                "DRC: {lapsed} waived finding(s) are back: their objects changed since they were waived"
+            ));
+        }
+    }
+
     /// What the Messages panel and the DRC results panel (#2399) show of the
     /// active board's check; `None` with no PCB in view.
     pub(crate) fn pcb_drc_panel(&self) -> Option<crate::panels::DrcPanel> {
         let path = self.active_tab_path()?;
-        let waivers = &self.active_pcb()?.options.drc_waivers;
+        let pcb = self.active_pcb()?;
+        Some(self.pcb_drc_panel_for(&path, pcb))
+    }
+
+    /// [`Self::pcb_drc_panel`] of the open board at `path`, wherever it is
+    /// shown: the DRC popover of an undocked board window reads it (#2460).
+    pub(crate) fn pcb_drc_panel_for(
+        &self,
+        path: &std::path::Path,
+        pcb: &signex_types::pcb::PcbBoard,
+    ) -> crate::panels::DrcPanel {
+        let path = path.to_path_buf();
+        let waivers = &pcb.options.drc_waivers;
         let drc = &self.interaction_state.pcb_drc;
         let mut panel = crate::panels::DrcPanel {
             running: drc.is_running_for(&path),
             filter: drc.filter.clone(),
+            view: self.ui_state.validation_panels.drc.clone(),
             waive_draft: drc.waive_draft.clone(),
             ..Default::default()
         };
         let Some(done) = drc.done_for(&path) else {
-            return Some(panel);
+            self.fill_drc_idle(&mut panel, pcb);
+            return panel;
         };
         let revision = self
             .document_state
@@ -166,6 +230,7 @@ impl Signex {
             panel.default_clearance_mm =
                 Some(format!("{:.1}", pcb_geom::nm_to_mm(report.rules.clearance)));
         }
+        panel.checked_clearance_mm = Some(findings::mm(report.rules.clearance).to_string());
         panel.written_clearance = report.rules.sets_written_clearance();
         panel.rules_not_applied = report.rules.rules_not_applied;
         panel.rule_text_unparsed = report.rules.texts_not_applied > 0;
@@ -179,11 +244,14 @@ impl Signex {
             .violations
             .len()
             .saturating_sub(crate::panels::DRC_MAX_ROWS);
-        let name = |net: u32| {
-            done.net_names
+        // Net 0 is no net: left empty for the panel to word.
+        let name = |net: u32| match net {
+            0 => String::new(),
+            _ => done
+                .net_names
                 .get(&net)
                 .cloned()
-                .unwrap_or_else(|| format!("#{net}"))
+                .unwrap_or_else(|| format!("#{net}")),
         };
         let mm = |nm: i64| format!("{:.3}", pcb_geom::nm_to_mm(nm));
         panel.rows = report
@@ -200,7 +268,8 @@ impl Signex {
                     b: name(v.nets.1),
                     measured_mm: mm(v.measured_nm),
                     required_mm: mm(v.required_nm),
-                    over_maximum: v.kind == ViolationKind::TrackWidth
+                    // A kind with a maximum broke it when over the limit.
+                    over_maximum: v.kind.limits().iter().any(|k| k.is_maximum())
                         && v.measured_nm > v.required_nm,
                     x_mm: mm(v.at.x),
                     y_mm: mm(v.at.y),
@@ -210,11 +279,15 @@ impl Signex {
                     rule: signex_drc::rule_id(v).to_string(),
                     severity: report.severity_of(v),
                     objects: v.items.len(),
-                    waiver: signex_drc::waiver_of(waivers, v).map(|w| w.note.clone()),
+                    // A lapsed waiver leaves the row open (#2307).
+                    waiver: match signex_drc::waiver_state(waivers, v, pcb) {
+                        signex_drc::WaiverState::Waived(w) => Some(w.note.clone()),
+                        _ => None,
+                    },
                 }
             })
             .collect();
-        Some(panel)
+        panel
     }
 
     /// A violation row was clicked: select its items on the canvas.
@@ -266,13 +339,34 @@ pub(super) struct Layers {
 }
 
 /// The run itself, off the UI thread: the rule text is compiled here too.
+/// No library model is read: a part's 3D body is its stored height.
+#[cfg(test)]
 pub(super) fn run_check(
     board: &signex_types::pcb::PcbBoard,
     classes: &[signex_types::net_class::NetClass],
     layers: &Layers,
 ) -> DrcRunResult {
-    let rules = compile_rules(board, classes, layers)?;
-    let report = signex_drc::run(board, &rules);
+    run_check_with(board, classes, layers, &[])
+}
+
+/// [`run_check`], the parts' 3D bodies read from the open `libraries` when
+/// a rule measures them (#2939); a model that cannot be read is a note,
+/// and that part's stored height is used.
+pub(super) fn run_check_with(
+    board: &signex_types::pcb::PcbBoard,
+    classes: &[signex_types::net_class::NetClass],
+    layers: &Layers,
+    libraries: &[(uuid::Uuid, std::path::PathBuf)],
+) -> DrcRunResult {
+    let mut rules = compile_rules(board, classes, layers)?;
+    let models = if rules.measures_bodies() {
+        let (models, unread) = super::pcb_drc_bodies::body_models(board, libraries);
+        rules.notes.extend(unread);
+        models
+    } else {
+        signex_drc::BodyModels::new()
+    };
+    let report = signex_drc::run_with_bodies(board, &rules, &models);
     let names = board
         .nets
         .iter()
@@ -367,6 +461,22 @@ fn log_rule_text(report: &signex_drc::DrcReport) {
             "DRC: {} track width, {} via diameter, {} via drill",
             sizes[0], sizes[1], sizes[2]
         ));
+    }
+    // The other base rules (#2435): only the kinds with findings.
+    let others: Vec<String> = ViolationKind::ALL
+        .into_iter()
+        .filter(|&k| k > ViolationKind::ViaDrill)
+        .filter_map(|k| {
+            let n = report.count(k);
+            let name = k
+                .rule_id()
+                .trim_start_matches("builtin::")
+                .replace('_', " ");
+            (n > 0).then(|| format!("{n} {name}"))
+        })
+        .collect();
+    if !others.is_empty() {
+        crate::diagnostics::log_warning(format!("DRC: {}", others.join(", ")));
     }
 }
 

@@ -403,6 +403,11 @@ impl Signex {
                     .to_string(),
             );
         }
+        // No writes while it is open read-only for want of its Git history
+        // (mockup row 138): moving its files is one.
+        if let Some(library) = self.library.history_missing_library_under(old_path) {
+            return Some(self.history_missing_reason(&library));
+        }
         if self.library.writes.pending(old_path) > 0 {
             return Some(
                 "A library edit is still being written; rename the library once it has finished."
@@ -534,9 +539,13 @@ impl Signex {
             .file_stem()
             .and_then(|s| s.to_str())
             .map(str::to_string);
+        let mut moved_boards = Vec::new();
         for tab in self.document_state.tabs.iter_mut() {
             if let Some(moved) = rebase_path(&tab.path, old_path, new_path) {
                 let is_library_tab = tab.path == old_path;
+                if matches!(tab.kind, crate::app::TabKind::Pcb) {
+                    moved_boards.push((tab.path.clone(), moved.clone()));
+                }
                 tab.path = moved;
                 if let (true, Some(title)) = (is_library_tab, &new_title) {
                     tab.title = title.clone();
@@ -555,6 +564,10 @@ impl Signex {
                 }
                 _ => {}
             }
+        }
+        // A PCB tab under the library moved above; its board follows it.
+        for (from, to) in moved_boards {
+            self.document_state.rekey_open_pcb_board(&from, &to);
         }
         let moved_dirty: Vec<(PathBuf, PathBuf)> = self
             .document_state

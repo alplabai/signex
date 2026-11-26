@@ -38,6 +38,9 @@ pub struct TraceInput {
     pub dimmed: bool,
     /// Whose colour it is drawn in.
     pub ink: CopperInk,
+    /// The View Options row it belongs to, Tracks or Arcs: its
+    /// transparency (#2363).
+    pub object: BoardObject,
 }
 
 #[derive(Clone, Debug)]
@@ -49,6 +52,10 @@ pub struct ViaInput {
     /// Copper off the active layer, drawn faint.
     pub dimmed: bool,
     pub ink: CopperInk,
+    /// The active copper layer when the via has copper there: its ring is
+    /// painted in that layer's colour. View-time only; `ink` stays the
+    /// via's own (the draw order and the 3D view read it).
+    pub shown_on: Option<CopperLayer>,
 }
 
 #[derive(Clone, Debug)]
@@ -61,9 +68,14 @@ pub struct PadInput {
     /// The drilled hole's diameter, drawn as an opening at `center`; 0 for
     /// a pad with no hole.
     pub drill_mm: f32,
+    /// The pad's net, 0 for none: a net in focus dims the others (#2514).
+    pub net: u32,
     /// Copper off the active layer, drawn faint.
     pub dimmed: bool,
     pub ink: CopperInk,
+    /// The active copper layer for a plated through-hole pad: its copper is
+    /// painted in that layer's colour. View-time only, as on [`ViaInput`].
+    pub shown_on: Option<CopperLayer>,
 }
 
 #[derive(Clone, Debug)]
@@ -84,6 +96,10 @@ pub struct ZonePolygonInput {
     /// (which is then only stroked); `None` for a zone whose copper is its
     /// outline. Set by [`PcbSnapshot::with_zone_fills`].
     pub fill: Option<Vec<ZoneFillPiece>>,
+    /// A shelved pour (#2523): drawn as its dashed outline alone.
+    pub shelved: bool,
+    /// The View Options row it belongs to: its transparency (#2363).
+    pub object: BoardObject,
 }
 
 /// Whose colour copper is drawn in: the colour the Layers panel lists that
@@ -107,6 +123,11 @@ impl CopperInk {
             Self::MultiLayer => ColorSlot::MultiLayer,
             Self::Unknown => fallback,
         }
+    }
+
+    /// The ink to paint with: the copper of `shown_on`, else this one.
+    pub fn painted(self, shown_on: Option<CopperLayer>) -> Self {
+        shown_on.map_or(self, Self::Layer)
     }
 }
 
@@ -154,6 +175,9 @@ pub struct PcbSnapshot {
     /// Footprint silkscreen, fab, assembly and courtyard drawings and the
     /// board's own drawings (#2387), drawn in the overlay buckets.
     pub graphics: Vec<GraphicInput>,
+    /// The view's own layer colours and transparencies (#2363); the board
+    /// text layer reads its colours too.
+    pub paint: BoardPaint,
 }
 
 impl PcbSnapshot {
@@ -173,29 +197,39 @@ impl PcbSnapshot {
 }
 
 mod board_features;
+mod board_paint;
 mod emit;
 mod footprint_text;
 mod graphics;
 mod layer_colour;
+mod layer_pairs;
 mod layer_rows;
 mod layer_sets;
 mod layer_view;
+mod only_unrouted;
 mod ratsnest;
+mod used_layers;
 mod zone_fill;
 pub use board_features::{BoardFeaturesInput, HoleInput};
+pub use board_paint::{BoardObject, BoardPaint, NetFocus};
 use emit::*;
-pub use footprint_text::FootprintTextInput;
+pub use footprint_text::{FootprintTextInput, TextFace};
+pub(crate) use graphics::arc_points;
 pub use graphics::{GraphicInput, GraphicShapeInput};
+pub use layer_pairs::{LayerPair, SINGLE_TECHNICAL_LAYERS, panel_order_layers};
 pub use layer_rows::{
     LayerGroup, LayerRow, board_copper_layers, board_layers, group_layers, layer_rows,
-    signal_layers,
+    plane_layers, signal_layers,
 };
 pub use layer_sets::{
     BuiltinLayerSet, LayerKind, LayerSetId, ShownLayerSet, builtin_set_layers, kind_layers,
     listed_layers,
 };
-pub use layer_view::{BOARD_OUTLINE, DIMMED_ALPHA, Emphasis, PcbLayerView};
+pub use layer_view::{
+    BOARD_OUTLINE, DIMMED_ALPHA, Emphasis, PcbLayerView, board_paint, zone_object,
+};
 pub use ratsnest::ratsnest_inputs;
+pub use used_layers::used_layers;
 pub use zone_fill::ZoneFillPiece;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -309,6 +343,14 @@ impl ViewRenderer for PcbRenderer {
         dirty: DirtyFlags,
         scene: &mut Scene,
     ) {
+        // The view's own colours and transparencies over the palette.
+        let painted;
+        let theme = if snapshot.paint.is_default() {
+            theme
+        } else {
+            painted = theme.clone().with_paint(snapshot.paint.clone());
+            &painted
+        };
         if dirty.contains(DirtyFlags::LINES) {
             emit_traces(snapshot, theme, scene);
         }
@@ -325,6 +367,10 @@ impl ViewRenderer for PcbRenderer {
             emit_overlays(snapshot, theme, scene);
         }
 
+        if snapshot.paint.is_board_dimmed() {
+            only_unrouted::dim_board(theme, dirty, scene);
+        }
+
         scene.dirty |= dirty;
     }
 }
@@ -334,6 +380,9 @@ mod holes_tests;
 
 #[cfg(test)]
 mod copper_ink_tests;
+
+#[cfg(test)]
+mod net_focus_tests;
 
 #[cfg(test)]
 mod tests {
@@ -533,6 +582,7 @@ mod tests {
                     net,
                     dimmed: false,
                     ink: CopperInk::Unknown,
+                    object: super::BoardObject::Tracks,
                 })
                 .collect(),
             ..PcbSnapshot::default()
@@ -560,6 +610,7 @@ mod tests {
                     net: 1,
                     dimmed: false,
                     ink: CopperInk::Unknown,
+                    shown_on: None,
                 }],
                 ..PcbSnapshot::default()
             };
@@ -595,6 +646,7 @@ mod tests {
                     net: 1,
                     dimmed: false,
                     ink: CopperInk::Unknown,
+                    shown_on: None,
                 }],
                 ..PcbSnapshot::default()
             };
@@ -707,6 +759,8 @@ mod tests {
                 dimmed: false,
                 ink: CopperInk::Unknown,
                 fill: None,
+                shelved: false,
+                object: super::BoardObject::Polygons,
             },
             ZonePolygonInput {
                 holes: Vec::new(),
@@ -720,6 +774,8 @@ mod tests {
                 dimmed: false,
                 ink: CopperInk::Unknown,
                 fill: None,
+                shelved: false,
+                object: super::BoardObject::Polygons,
             },
             ZonePolygonInput {
                 holes: Vec::new(),
@@ -733,6 +789,8 @@ mod tests {
                 dimmed: false,
                 ink: CopperInk::Unknown,
                 fill: None,
+                shelved: false,
+                object: super::BoardObject::Polygons,
             },
         ];
 

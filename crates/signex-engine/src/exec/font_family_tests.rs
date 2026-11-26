@@ -184,6 +184,7 @@ fn moving_a_label_keeps_its_font_family() {
         .execute(Command::MoveEach {
             moves: vec![(SelectedItem::new(id, SelectedKind::Label), 2.54, 0.0)],
             keep_wires: true,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         })
         .unwrap();
 

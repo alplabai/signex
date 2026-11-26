@@ -9,7 +9,7 @@ mod translatable;
 mod types;
 
 pub use translatable::{MessageRenderer, Translatable};
-pub use types::{Arg, ArgValue, LocalNumber, MessageId, UserText};
+pub use types::{Arg, ArgValue, EXTENSION_MESSAGE_PREFIX, LocalNumber, MessageId, UserText};
 
 /// Every message id, defined together with a list of them so a new id cannot
 /// be left out of the consistency tests. This is the only non-test place
@@ -57,9 +57,7 @@ mod area_ids;
 define_ids! {
     BOARD_SKETCH_TITLE = "board-sketch-title";
     BOARD_SKETCH_TOOLTIP = "board-sketch-tooltip";
-    BOARD_SKETCH_APPLY = "board-sketch-apply";
-    BOARD_SKETCH_LEAVE = "board-sketch-leave";
-    BOARD_SKETCH_DISCARD = "board-sketch-discard";
+    BOARD_SKETCH_BAKE_TOOLTIP = "board-sketch-bake-tooltip";
     BOARD_SKETCH_ENTERED = "board-sketch-entered";
     BOARD_SKETCH_REFUSED = "board-sketch-refused";
     BOARD_SKETCH_DROPPED = "board-sketch-dropped";
@@ -88,17 +86,11 @@ define_ids! {
     DIALOG_AUTOSAVE_RECOVERY_AUTOSAVED_AGE = "dialog-autosave-recovery-autosaved-age";
     DRC_RUN = "drc-run";
     DRC_HEADING = "drc-heading";
-    DRC_DEFAULT_CLEARANCE = "drc-default-clearance";
     DRC_IDLE = "drc-idle";
     DRC_RUNNING = "drc-running";
     DRC_CLEAN = "drc-clean";
     DRC_STALE = "drc-stale";
-    DRC_DEFAULT_CLEARANCE_WRITTEN = "drc-default-clearance-written";
-    DRC_RULES_NOT_APPLIED = "drc-rules-not-applied";
-    DRC_RULE_TEXT_UNPARSED = "drc-rule-text-unparsed";
-    DRC_SUMMARY = "drc-summary";
     DRC_SKIPPED = "drc-skipped";
-    DRC_KEEPOUTS_SKIPPED = "drc-keepouts-skipped";
     DRC_MORE = "drc-more";
     DRC_PICK_HIDDEN = "drc-pick-hidden";
     DRC_KIND_CLEARANCE = "drc-kind-clearance";
@@ -123,26 +115,29 @@ define_ids! {
     DIALOG_NEW_PROJECT_MAKE_FOLDER_UNNAMED = "dialog-new-project-make-folder-unnamed";
     DIALOG_NEW_PROJECT_PROFILE_HEADING = "dialog-new-project-profile-heading";
     DIALOG_NEW_PROJECT_PROFILE_HINT = "dialog-new-project-profile-hint";
-    DIALOG_NEW_PROJECT_PROFILE_HOBBY_NAME = "dialog-new-project-profile-hobby-name";
-    DIALOG_NEW_PROJECT_PROFILE_HOBBY_BLURB = "dialog-new-project-profile-hobby-blurb";
     DIALOG_NEW_PROJECT_PROFILE_STANDARD_NAME = "dialog-new-project-profile-standard-name";
     DIALOG_NEW_PROJECT_PROFILE_STANDARD_BLURB = "dialog-new-project-profile-standard-blurb";
+    DIALOG_NEW_PROJECT_PROFILE_ADVANCED_NAME = "dialog-new-project-profile-advanced-name";
+    DIALOG_NEW_PROJECT_PROFILE_ADVANCED_BLURB = "dialog-new-project-profile-advanced-blurb";
     DIALOG_NEW_PROJECT_PROFILE_HDI_NAME = "dialog-new-project-profile-hdi-name";
     DIALOG_NEW_PROJECT_PROFILE_HDI_BLURB = "dialog-new-project-profile-hdi-blurb";
     DIALOG_NEW_PROJECT_PROFILE_CUSTOM_NAME = "dialog-new-project-profile-custom-name";
     DIALOG_NEW_PROJECT_PROFILE_CUSTOM_BLURB = "dialog-new-project-profile-custom-blurb";
-    DIALOG_NEW_PROJECT_SUMMARY_CLEARANCE = "dialog-new-project-summary-clearance";
-    DIALOG_NEW_PROJECT_SUMMARY_TRACKS = "dialog-new-project-summary-tracks";
-    DIALOG_NEW_PROJECT_SUMMARY_CUSTOM_LAYERS = "dialog-new-project-summary-custom-layers";
+    DIALOG_NEW_PROJECT_CARD_SPECS = "dialog-new-project-card-specs";
     DIALOG_NEW_PROJECT_SUMMARY_CUSTOM_NOTE = "dialog-new-project-summary-custom-note";
+    DIALOG_NEW_PROJECT_CARD_EDITED = "dialog-new-project-card-edited";
+    DIALOG_NEW_PROJECT_CARD_EDIT = "dialog-new-project-card-edit";
+    DIALOG_NEW_PROJECT_CARD_MENU_HEADER = "dialog-new-project-card-menu-header";
+    DIALOG_NEW_PROJECT_CARD_DUPLICATE = "dialog-new-project-card-duplicate";
+    DIALOG_NEW_PROJECT_CARD_RESET = "dialog-new-project-card-reset";
+    DIALOG_NEW_PROJECT_CARD_OVERRIDE_NOTE = "dialog-new-project-card-override-note";
+    DIALOG_NEW_PROJECT_EDIT_BAR = "dialog-new-project-edit-bar";
+    DIALOG_NEW_PROJECT_EDIT_SAVE = "dialog-new-project-edit-save";
     DIALOG_NEW_PROJECT_CUSTOMIZE = "dialog-new-project-customize";
     DIALOG_NEW_PROJECT_CUSTOMIZE_OPTIONAL = "dialog-new-project-customize-optional";
     DIALOG_NEW_PROJECT_PCB_HEADING = "dialog-new-project-pcb-heading";
     DIALOG_NEW_PROJECT_SHEET_HEADING = "dialog-new-project-sheet-heading";
     DIALOG_NEW_PROJECT_FAB_LABEL = "dialog-new-project-fab-label";
-    DIALOG_NEW_PROJECT_FAB_STANDARD = "dialog-new-project-fab-standard";
-    DIALOG_NEW_PROJECT_FAB_ADVANCED = "dialog-new-project-fab-advanced";
-    DIALOG_NEW_PROJECT_FAB_HDI = "dialog-new-project-fab-hdi";
     DIALOG_NEW_PROJECT_FAB_IMPORT = "dialog-new-project-fab-import";
     DIALOG_NEW_PROJECT_FAB_NOTE = "dialog-new-project-fab-note";
     DIALOG_NEW_PROJECT_FAB_NOTE_IMPORTED = "dialog-new-project-fab-note-imported";
@@ -158,12 +153,22 @@ define_ids! {
     DIALOG_NEW_PROJECT_SCH_TITLE_BLOCK_DEFAULT = "dialog-new-project-sch-title-block-default";
     DIALOG_NEW_PROJECT_SCH_TITLE_BLOCK_NONE = "dialog-new-project-sch-title-block-none";
     DIALOG_NEW_PROJECT_SCH_DESIGNATORS = "dialog-new-project-sch-designators";
-    DIALOG_NEW_PROJECT_SHEET_LANDSCAPE = "dialog-new-project-sheet-landscape";
     DIALOG_NEW_PROJECT_PREVIEW_HEADING = "dialog-new-project-preview-heading";
     DIALOG_NEW_PROJECT_PREVIEW_LAYERS = "dialog-new-project-preview-layers";
     DIALOG_NEW_PROJECT_PREVIEW_BOARD = "dialog-new-project-preview-board";
     DIALOG_NEW_PROJECT_PREVIEW_SHEET = "dialog-new-project-preview-sheet";
     DIALOG_NEW_PROJECT_PREVIEW_NOTE = "dialog-new-project-preview-note";
+    DIALOG_NEW_PROJECT_PREVIEW_RULES = "dialog-new-project-preview-rules";
+    DIALOG_NEW_PROJECT_PREVIEW_RULES_HINT = "dialog-new-project-preview-rules-hint";
+    DIALOG_NEW_PROJECT_PREVIEW_RULES_LINE = "dialog-new-project-preview-rules-line";
+    DIALOG_NEW_PROJECT_PREVIEW_SHEET_HEADING = "dialog-new-project-preview-sheet-heading";
+    DIALOG_NEW_PROJECT_PREVIEW_EXPAND = "dialog-new-project-preview-expand";
+    DIALOG_NEW_PROJECT_PREVIEW_CLOSE = "dialog-new-project-preview-close";
+    DIALOG_NEW_PROJECT_PREVIEW_DRILL_ERROR = "dialog-new-project-preview-drill-error";
+    DIALOG_NEW_PROJECT_RULE_CAP_WIDTH = "dialog-new-project-rule-cap-width";
+    DIALOG_NEW_PROJECT_RULE_CAP_CLEARANCE = "dialog-new-project-rule-cap-clearance";
+    DIALOG_NEW_PROJECT_RULE_CAP_DRILL = "dialog-new-project-rule-cap-drill";
+    DIALOG_NEW_PROJECT_RULE_CAP_VIA = "dialog-new-project-rule-cap-via";
     DIALOG_NEW_PROJECT_STACK_SILK_TOP = "dialog-new-project-stack-silk-top";
     DIALOG_NEW_PROJECT_STACK_MASK_TOP = "dialog-new-project-stack-mask-top";
     DIALOG_NEW_PROJECT_STACK_COPPER_TOP = "dialog-new-project-stack-copper-top";
@@ -224,8 +229,18 @@ define_ids! {
     DIALOG_NEW_PROJECT_ERR_CREATE_PENDING = "dialog-new-project-err-create-pending";
     DIALOG_NEW_PROJECT_QUIT_HELD = "dialog-new-project-quit-held";
     DIALOG_NEW_PROJECT_SETUP_UNREADABLE = "dialog-new-project-setup-unreadable";
+    DIALOG_SCHEMATIC_DESIGN_UNREADABLE = "dialog-schematic-design-unreadable";
     DIALOG_NEW_PROJECT_NAME_PLACEHOLDER = "dialog-new-project-name-placeholder";
     DIALOG_NEW_PROJECT_LOCATION_PLACEHOLDER = "dialog-new-project-location-placeholder";
+    DIALOG_SAVE_PROJECT_AS_TITLE = "dialog-save-project-as-title";
+    DIALOG_SAVE_PROJECT_AS_SUBTITLE = "dialog-save-project-as-subtitle";
+    DIALOG_SAVE_PROJECT_AS_DEFAULT_NAME = "dialog-save-project-as-default-name";
+    DIALOG_SAVE_PROJECT_AS_SAVE = "dialog-save-project-as-save";
+    DIALOG_SAVE_PROJECT_AS_SAVING = "dialog-save-project-as-saving";
+    DIALOG_SAVE_PROJECT_AS_NOTE = "dialog-save-project-as-note";
+    DIALOG_SAVE_PROJECT_AS_READ_ONLY = "dialog-save-project-as-read-only";
+    DIALOG_SAVE_PROJECT_AS_UNSAVED = "dialog-save-project-as-unsaved";
+    DIALOG_SAVE_PROJECT_AS_FAILED = "dialog-save-project-as-failed";
     LANGUAGE_SYSTEM_DEFAULT = "language-system-default";
     MENU_FILE = "menu-file";
     OVERLAY_PLACEMENT_PAUSED_ESC_HINT = "overlay-placement-paused-esc-hint";
@@ -241,16 +256,6 @@ define_ids! {
     PCB_LAYERS_TITLE = "pcb-layers-title";
     PCB_LAYERS_EMPTY = "pcb-layers-empty";
     PCB_LAYERS_SHOW_ALL = "pcb-layers-show-all";
-    PCB_LAYERS_SIGNAL = "pcb-layers-signal";
-    PCB_LAYERS_PLANE = "pcb-layers-plane";
-    PCB_LAYERS_OVERLAY = "pcb-layers-overlay";
-    PCB_LAYERS_MASK = "pcb-layers-mask";
-    PCB_LAYERS_DRILL = "pcb-layers-drill";
-    PCB_LAYERS_GROUP_SHOW_ALL = "pcb-layers-group-show-all";
-    PCB_LAYERS_GROUP_HIDE_ALL = "pcb-layers-group-hide-all";
-    PCB_LAYERS_SINGLE_LAYER = "pcb-layers-single-layer";
-    PCB_LAYERS_SINGLE_LAYER_TIP = "pcb-layers-single-layer-tip";
-    PCB_LAYERS_MECHANICAL = "pcb-layers-mechanical";
     PCB_STATUS_LAYER = "pcb-status-layer";
     PCB_STATUS_VIEW_ANGLE = "pcb-status-view-angle";
     PCB_STATUS_VIEW_ANGLE_TIP = "pcb-status-view-angle-tip";
@@ -351,6 +356,7 @@ define_ids! {
     BACK_ANNOTATE_BLOCK_DUPLICATE = "back-annotate-block-duplicate";
     BACK_ANNOTATE_BLOCK_BOARD_NOT_ANNOTATED = "back-annotate-block-board-not-annotated";
     BACK_ANNOTATE_BLOCK_SHARED_SHEET = "back-annotate-block-shared-sheet";
+    BACK_ANNOTATE_BLOCK_CHANNEL = "back-annotate-block-channel";
     BACK_ANNOTATE_BLOCK_FOOTPRINT = "back-annotate-block-footprint";
     BACK_ANNOTATE_NOTES_HEADING = "back-annotate-notes-heading";
     BACK_ANNOTATE_NOTE_UNREADABLE = "back-annotate-note-unreadable";
@@ -363,6 +369,7 @@ define_ids! {
     BACK_ANNOTATE_FAILED_LINE = "back-annotate-failed-line";
     BACK_ANNOTATE_SHARED_WARNING = "back-annotate-shared-warning";
     BACK_ANNOTATE_STALE = "back-annotate-stale";
+    BACK_ANNOTATE_COMMAND_REFUSED = "back-annotate-command-refused";
     BACK_ANNOTATE_REFRESH = "back-annotate-refresh";
     BACK_ANNOTATE_VALID = "back-annotate-valid";
     BACK_ANNOTATE_CHECKING = "back-annotate-checking";
@@ -497,7 +504,6 @@ define_ids! {
     EDITORS_COMPONENT_READ_ONLY_FOOTER = "editors-component-read-only-footer";
     EDITORS_COMPONENT_UNSAVED_MARKER = "editors-component-unsaved-marker";
     EDITORS_COMPONENT_RELOAD_CONFIRM = "editors-component-reload-confirm";
-    DIALOG_ANNOTATE_CURRENT_SHEET = "dialog-annotate-current-sheet";
     DIALOG_ANNOTATE_ORDER_HEADING = "dialog-annotate-order-heading";
     DIALOG_ANNOTATE_ORDER_UP_THEN_ACROSS = "dialog-annotate-order-up-then-across";
     DIALOG_ANNOTATE_ORDER_ACROSS_THEN_DOWN = "dialog-annotate-order-across-then-down";
@@ -507,7 +513,6 @@ define_ids! {
     DIALOG_ANNOTATE_PROCESS_LOCATION_DESIGNATOR = "dialog-annotate-process-location-designator";
     DIALOG_ANNOTATE_REPLACE_SUB_PARTS = "dialog-annotate-replace-sub-parts";
     DIALOG_ANNOTATE_REPLACE_SUB_PARTS_OFF = "dialog-annotate-replace-sub-parts-off";
-    DIALOG_ANNOTATE_NO_CUSTOM_PARAMETERS = "dialog-annotate-no-custom-parameters";
     DIALOG_ANNOTATE_MATCHING_HEADING = "dialog-annotate-matching-heading";
     DIALOG_ANNOTATE_COMPLETE_PACKAGES = "dialog-annotate-complete-packages";
     DIALOG_ANNOTATE_COMPLETE_PACKAGES_NONE = "dialog-annotate-complete-packages-none";
@@ -515,7 +520,6 @@ define_ids! {
     DIALOG_ANNOTATE_SHEETS_EMPTY = "dialog-annotate-sheets-empty";
     DIALOG_ANNOTATE_SHEETS_COL_SHEET = "dialog-annotate-sheets-col-sheet";
     DIALOG_ANNOTATE_SHEETS_COL_START = "dialog-annotate-sheets-col-start";
-    DIALOG_ANNOTATE_SHEETS_COL_SUFFIX = "dialog-annotate-sheets-col-suffix";
     DIALOG_ANNOTATE_CHANGES_HEADING = "dialog-annotate-changes-heading";
     DIALOG_ANNOTATE_COL_LOCK = "dialog-annotate-col-lock";
     DIALOG_ANNOTATE_COL_CURRENT = "dialog-annotate-col-current";
@@ -525,9 +529,7 @@ define_ids! {
     DIALOG_ANNOTATE_LOAD_FAILED = "dialog-annotate-load-failed";
     DIALOG_ANNOTATE_NOTHING_TO_NUMBER = "dialog-annotate-nothing-to-number";
     DIALOG_ANNOTATE_SUMMARY_NOTHING = "dialog-annotate-summary-nothing";
-    DIALOG_ANNOTATE_SUMMARY_CHANGES = "dialog-annotate-summary-changes";
     DIALOG_ANNOTATE_CHANGE_COUNT = "dialog-annotate-change-count";
-    DIALOG_ANNOTATE_SUMMARY_HEADING = "dialog-annotate-summary-heading";
     DIALOG_ANNOTATE_REPREFIX_UNAVAILABLE = "dialog-annotate-reprefix-unavailable";
     DIALOG_ANNOTATE_REPREFIX_NOTE = "dialog-annotate-reprefix-note";
     DIALOG_ANNOTATE_RUNNING = "dialog-annotate-running";
@@ -543,7 +545,6 @@ define_ids! {
     DIALOG_GRID_DOTS = "dialog-grid-dots";
     DIALOG_GRID_HIDDEN = "dialog-grid-hidden";
     DIALOG_GRID_MULTIPLIER = "dialog-grid-multiplier";
-    DIALOG_GRID_HELP = "dialog-grid-help";
     DIALOG_SELECTION_FILTER_HELP = "dialog-selection-filter-help";
     DIALOG_SELECTION_FILTER_PADS = "dialog-selection-filter-pads";
     DIALOG_SELECTION_FILTER_TRACKS = "dialog-selection-filter-tracks";
@@ -558,23 +559,18 @@ define_ids! {
     MENU_BAR_SEARCH_PLACEHOLDER = "menu-bar-search-placeholder";
     MENU_BAR_LIGHT_THEME = "menu-bar-light-theme";
     MENU_BAR_DARK_THEME = "menu-bar-dark-theme";
-    PANELS_ERC_RUN = "panels-erc-run";
-    PANELS_ERC_CLEAR = "panels-erc-clear";
+    MENU_BAR_SEARCH_BUTTON = "menu-bar-search-button";
+    MENU_BAR_SEARCH_BUTTON_KEY = "menu-bar-search-button-key";
     PANELS_ERC_RUNNING = "panels-erc-running";
-    PANELS_ERC_STALE = "panels-erc-stale";
     PANELS_ERC_NO_FINDINGS_LEFT = "panels-erc-no-findings-left";
-    PANELS_ERC_NO_DIAGNOSTICS = "panels-erc-no-diagnostics";
     PANELS_ERC_EMPTY_HINT = "panels-erc-empty-hint";
-    PANELS_ERC_RESULTS_TITLE = "panels-erc-results-title";
     PANELS_ERC_ADD_NO_CONNECT = "panels-erc-add-no-connect";
-    PANELS_ERC_SHOW_ON_CANVAS = "panels-erc-show-on-canvas";
     PANELS_ERC_WAIVE_NET = "panels-erc-waive-net";
     PANELS_ERC_RESTORE = "panels-erc-restore";
     PANELS_PROPERTIES_NEEDS_SCHEMATIC = "panels-properties-needs-schematic";
     PANELS_PROPERTIES_OPEN_PROJECT = "panels-properties-open-project";
     PANELS_PROPERTIES_NOTHING_SELECTED = "panels-properties-nothing-selected";
     PANELS_PROPERTIES_ONE_OBJECT_SELECTED = "panels-properties-one-object-selected";
-    PANELS_PROPERTIES_NO_PLACEMENT_OPTIONS = "panels-properties-no-placement-options";
     PANELS_PROPERTIES_TAB_GENERAL = "panels-properties-tab-general";
     PANELS_PROPERTIES_TAB_PARAMETERS = "panels-properties-tab-parameters";
     PANELS_PROPERTIES_TEMPLATE_DEFAULTS = "panels-properties-template-defaults";
@@ -600,13 +596,11 @@ define_ids! {
     PANELS_NET_CLASSES_PATTERNS_HINT = "panels-net-classes-patterns-hint";
     PANELS_CHILD_SHEET_NAME = "panels-child-sheet-name";
     PANELS_CHILD_SHEET_FILE = "panels-child-sheet-file";
-    PANELS_CHILD_SHEET_LINE_WIDTH = "panels-child-sheet-line-width";
     EDITORS_COMPONENT_HEADER_VERSION = "editors-component-header-version";
     EDITORS_COMPONENT_HEADER_LOCATION = "editors-component-header-location";
     EDITORS_COMPONENT_HEADER_UNPARSED = "editors-component-header-unparsed";
     EDITORS_FOOTPRINT_STATUS_PAD_SELECTED = "editors-footprint-status-pad-selected";
     EDITORS_FOOTPRINT_STATUS_PAD_COUNT = "editors-footprint-status-pad-count";
-    EDITORS_PINS_NO_SYMBOL = "editors-pins-no-symbol";
     EDITORS_PINS_SUMMARY = "editors-pins-summary";
     EDITORS_PINS_COLUMN_NUMBER = "editors-pins-column-number";
     EDITORS_PINS_COLUMN_NAME = "editors-pins-column-name";
@@ -774,9 +768,6 @@ define_ids! {
     PANELS_FILTER_OTHER = "panels-filter-other";
     PANELS_PROPERTIES_DOCUMENT_OPTIONS = "panels-properties-document-options";
     PANELS_PROPERTIES_UNITS = "panels-properties-units";
-    PANELS_PROPERTIES_FORMATTING = "panels-properties-formatting";
-    PANELS_PROPERTIES_BORDER_ZONES = "panels-properties-border-zones";
-    PANELS_PROPERTIES_TEXT = "panels-properties-text";
     PANELS_PROPERTIES_JUSTIFICATION = "panels-properties-justification";
     PREFERENCES_WHEEL_MODE_LABEL = "preferences-wheel-mode-label";
     PREFERENCES_WHEEL_MODE_HELP = "preferences-wheel-mode-help";
@@ -816,13 +807,12 @@ define_ids! {
     PANELS_KIND_FILTER = "panels-kind-filter";
     PANELS_KIND_ERC = "panels-kind-erc";
     PANELS_KIND_MESSAGES = "panels-kind-messages";
-    PANELS_KIND_SIGNEX_AI = "panels-kind-signex-ai";
     PANELS_KIND_DRC = "panels-kind-drc";
     PANELS_KIND_LAYER_STACK = "panels-kind-layer-stack";
     PANELS_KIND_NET_CLASSES = "panels-kind-net-classes";
     PANELS_KIND_VARIANTS = "panels-kind-variants";
     PANELS_KIND_SCH_FILTER = "panels-kind-sch-filter";
-    PANELS_KIND_SCH_LIST = "panels-kind-sch-list";
+    PANELS_KIND_OBJECT_LIST = "panels-kind-object-list";
     PANELS_KIND_BOM_STUDIO = "panels-kind-bom-studio";
     PANELS_KIND_FAVORITES = "panels-kind-favorites";
     PANELS_KIND_SNIPPETS = "panels-kind-snippets";
@@ -832,7 +822,6 @@ define_ids! {
     PANELS_KIND_LIBRARY = "panels-kind-library";
     PANELS_KIND_SCH_LIBRARY = "panels-kind-sch-library";
     PANELS_KIND_FOOTPRINT_LIBRARY = "panels-kind-footprint-library";
-    PANELS_KIND_SYMBOL_PINS = "panels-kind-symbol-pins";
     PANELS_KIND_PCB_NETS = "panels-kind-pcb-nets";
     PANELS_KIND_LAYERS = "panels-kind-layers";
     PANELS_KIND_HISTORY = "panels-kind-history";
@@ -848,12 +837,6 @@ define_ids! {
     PANELS_SELECTION_FILTER_TITLE = "panels-selection-filter-title";
     PANELS_SELECTION_FILTER_BODY = "panels-selection-filter-body";
     PANELS_COMING_SOON = "panels-coming-soon";
-    PANELS_SIGNAL_ASSISTANT_TITLE = "panels-signal-assistant-title";
-    PANELS_SIGNAL_ASSISTANT_BODY = "panels-signal-assistant-body";
-    PANELS_SIGNAL_GENERATOR_TITLE = "panels-signal-generator-title";
-    PANELS_SIGNAL_GENERATOR_BODY = "panels-signal-generator-body";
-    PANELS_SIGNAL_ASK = "panels-signal-ask";
-    PANELS_SIGNAL_SEND = "panels-signal-send";
     START_NEW_PROJECT = "start-new-project";
     START_OPEN = "start-open";
     START_HOME = "start-home";
@@ -866,14 +849,6 @@ define_ids! {
     START_LIBRARIES_SUMMARY = "start-libraries-summary";
     START_HERO_TITLE = "start-hero-title";
     START_HERO_BODY = "start-hero-body";
-    START_SPEC_PLACEHOLDER = "start-spec-placeholder";
-    START_SPEC_ATTACH = "start-spec-attach";
-    START_SPEC_IMPORT = "start-spec-import";
-    START_SPEC_CONSTRAINTS = "start-spec-constraints";
-    START_SPEC_GENERATE = "start-spec-generate";
-    START_SPEC_GENERATOR = "start-spec-generator";
-    START_SPEC_ASSISTANT = "start-spec-assistant";
-    START_SPEC_LIBRARIES_FIRST = "start-spec-libraries-first";
     START_REFERENCE_DESIGN = "start-reference-design";
     START_RECENT_PROJECTS = "start-recent-projects";
     START_SAMPLE_TITLE = "start-sample-title";
@@ -893,7 +868,6 @@ define_ids! {
     PANELS_PROJECTS_LIBRARIES = "panels-projects-libraries";
     PANELS_PROJECTS_GIT = "panels-projects-git";
     PANELS_PROJECTS_FILTER = "panels-projects-filter";
-    PANELS_PROJECTS_NO_MATCH = "panels-projects-no-match";
     PANELS_NET_CLASSES_ADD = "panels-net-classes-add";
     PANELS_NET_CLASSES_UNDO = "panels-net-classes-undo";
     PANELS_NET_CLASSES_REDO = "panels-net-classes-redo";
@@ -1036,6 +1010,9 @@ define_ids! {
     UPDATE_PCB_EXECUTE = "update-pcb-execute";
     UPDATE_PCB_DONE = "update-pcb-done";
     UPDATE_PCB_REFUSED = "update-pcb-refused";
+    UPDATE_PCB_COMMAND_MODE = "update-pcb-command-mode";
+    UPDATE_PCB_BUSY = "update-pcb-busy";
+    UPDATE_PCB_WHICH_BOARD = "update-pcb-which-board";
     UPDATE_PCB_LIBRARY_NOT_OPENED = "update-pcb-library-not-opened";
     UPDATE_PCB_REPORT_SAVED = "update-pcb-report-saved";
     UPDATE_PCB_REPORT_FAILED = "update-pcb-report-failed";
@@ -1063,6 +1040,7 @@ define_ids! {
     SETUP_SHEET_NO_PROJECT = "setup-sheet-no-project";
     SETUP_SHEET_TITLE = "setup-sheet-title";
     SETUP_PCB_INTRO = "setup-pcb-intro";
+    SETUP_PCB_INTRO_NO_SETUP = "setup-pcb-intro-no-setup";
     SETUP_SHEET_INTRO = "setup-sheet-intro";
     SETUP_CREATE_PCB = "setup-create-pcb";
     SETUP_CREATE_SHEET = "setup-create-sheet";
@@ -1075,6 +1053,24 @@ define_ids! {
     SETUP_PROFILE_MISSING_UNKNOWN = "setup-profile-missing-unknown";
     SETUP_PROJECT_CLOSED = "setup-project-closed";
     SETUP_SHEET_NAME_FAILED = "setup-sheet-name-failed";
+    SETUP_PROFILE_EDITED = "setup-profile-edited";
+    SETUP_PROFILE_RESET = "setup-profile-reset";
+    SETUP_PROFILE_RENAMED = "setup-profile-renamed";
+    SETUP_PROFILE_DUPLICATED = "setup-profile-duplicated";
+    SETUP_PROFILE_RENAME = "setup-profile-rename";
+    SETUP_PROFILE_DUPLICATE = "setup-profile-duplicate";
+    SETUP_PROFILE_DELETE = "setup-profile-delete";
+    SETUP_PROFILE_COPY_NAME = "setup-profile-copy-name";
+    SETUP_PROFILE_ERR_NAME_TAKEN = "setup-profile-err-name-taken";
+    SETUP_PROFILE_UCARD_PCB = "setup-profile-ucard-pcb";
+    SETUP_PROFILE_UCARD_SHEET = "setup-profile-ucard-sheet";
+    SETUP_SUMMARY_HEADING = "setup-summary-heading";
+    SETUP_SUMMARY_PCB = "setup-summary-pcb";
+    SETUP_SUMMARY_SHEET = "setup-summary-sheet";
+    SETUP_SUMMARY_BLOCK_DEFAULT = "setup-summary-block-default";
+    SETUP_SUMMARY_BLOCK_NONE = "setup-summary-block-none";
+    SETUP_SUMMARY_OTHER = "setup-summary-other";
+    SETUP_SUMMARY_KEEP = "setup-summary-keep";
     OVERLAY_PALETTE_GROUP_COMMANDS = "overlay-palette-group-commands";
     OVERLAY_PALETTE_GROUP_COMPONENTS = "overlay-palette-group-components";
     OVERLAY_PALETTE_GROUP_NETS = "overlay-palette-group-nets";
@@ -1083,6 +1079,7 @@ define_ids! {
     OVERLAY_PALETTE_NO_RESULTS = "overlay-palette-no-results";
     OVERLAY_PALETTE_WINDOW_SEARCH = "overlay-palette-window-search";
     OVERLAY_PALETTE_MORE_RESULTS = "overlay-palette-more-results";
+    OVERLAY_PALETTE_RESULT_COUNT = "overlay-palette-result-count";
     OVERLAY_PALETTE_NAVIGATE = "overlay-palette-navigate";
     OVERLAY_PALETTE_RUN = "overlay-palette-run";
     DIALOG_ERC_SCOPE_PROJECT = "dialog-erc-scope-project";
@@ -1098,9 +1095,6 @@ define_ids! {
     DIALOG_ERC_PROFILE_HASH_ONLY = "dialog-erc-profile-hash-only";
     DIALOG_ERC_PROFILE_UPDATE_HEADING = "dialog-erc-profile-update-heading";
     PANELS_ERC_COUNT_ERRORS = "panels-erc-count-errors";
-    PANELS_ERC_COUNT_WARNINGS = "panels-erc-count-warnings";
-    PANELS_ERC_COUNT_INFO = "panels-erc-count-info";
-    PANELS_ERC_WAIVED = "panels-erc-waived";
     PANELS_ERC_WAIVER_ROW = "panels-erc-waiver-row";
     PANELS_COMPONENTS_DISMISS = "panels-components-dismiss";
     PANELS_COMPONENTS_MORE_ROWS = "panels-components-more-rows";
@@ -1148,7 +1142,7 @@ define_ids! {
     EDITORS_FOOTPRINT_DOF = "editors-footprint-dof";
     EDITORS_FOOTPRINT_DOF_FULLY_CONSTRAINED = "editors-footprint-dof-fully-constrained";
     EDITORS_FOOTPRINT_UNLINK_CORNER_RADIUS = "editors-footprint-unlink-corner-radius";
-    EDITORS_FOOTPRINT_ROLE_POINTS_ONLY = "editors-footprint-role-points-only";
+    EDITORS_FOOTPRINT_ROLE_PAD_HINT = "editors-footprint-role-pad-hint";
     EDITORS_FOOTPRINT_SILK_FROM_SKETCH = "editors-footprint-silk-from-sketch";
     EDITORS_PAD_PLACEMENT_PAUSED = "editors-pad-placement-paused";
     EDITORS_PAD_PLACEMENT_PAUSE_HINT = "editors-pad-placement-pause-hint";
@@ -1181,4 +1175,30 @@ pub fn all_ids() -> Vec<MessageId> {
         .copied()
         .chain(area_ids::area_lists())
         .collect()
+}
+
+#[cfg(test)]
+mod extension_id_tests {
+    use super::*;
+
+    /// #2495: the `ext-` namespace is the extensions' own, so an extension's
+    /// `.ftl` file can never shadow a built-in message.
+    #[test]
+    fn no_built_in_message_id_is_in_the_extension_namespace() {
+        for id in all_ids() {
+            assert!(!id.is_extension(), "{}", id.as_str());
+        }
+    }
+
+    #[test]
+    fn an_extension_message_id_is_ext_then_an_identifier() {
+        for id in ["ext-example-notes-title", "ext-a1-b_c"] {
+            let made = MessageId::extension(id).expect("an extension id");
+            assert_eq!(made.as_str(), id);
+            assert!(made.is_extension());
+        }
+        for id in ["", "ext-", "menu-file", "ext-Example", "ext-a.b", "ext a"] {
+            assert!(MessageId::extension(id).is_none(), "{id:?}");
+        }
+    }
 }

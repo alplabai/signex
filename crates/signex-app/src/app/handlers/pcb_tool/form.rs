@@ -17,6 +17,7 @@ use signex_engine::pcb::primitive_edit::{
 use signex_i18n::{MessageId, ids, t};
 use signex_types::format::pcb_layer_token;
 use signex_types::pcb::{PadShape, PcbBoard, Point, Segment, Via, Zone};
+use signex_types::pcb_dimension_style::DimensionStyle;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_types::zone_keepout::KEEPOUT_FILL;
 use uuid::Uuid;
@@ -67,6 +68,10 @@ pub struct BoardToolDefaults {
     pub dimension_line_width_mm: Option<f64>,
     pub dimension_text_height_mm: Option<f64>,
     pub dimension_precision: Option<u8>,
+    /// A dimension's arrows, text, extension lines and number format, and
+    /// its Manual text point (#2868); `None` follows Preferences.
+    pub dimension_style: Option<DimensionStyle>,
+    pub dimension_text_at: Option<Point>,
     /// A pour's priority and island rules (#2216).
     pub pour_priority: Option<f64>,
     pub pour_min_island_mm2: Option<f64>,
@@ -127,11 +132,15 @@ impl BoardToolDefaults {
 }
 
 /// A pause for editing: the values and active layer it began with, which
-/// Esc puts back.
+/// Esc puts back. The sheet and footprint twin is
+/// `state::SheetPlacementPause`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlacementPause {
     pub defaults: BoardToolDefaults,
     pub active_layer: PcbLayer,
+    /// The width and net of the run being drawn, which a width or net
+    /// edit while paused changes too.
+    pub route: Option<TrackStyle>,
 }
 
 /// Whether Properties shows a form for `tool` while it is armed: every tool
@@ -161,7 +170,7 @@ pub(super) fn is_free(tool: BoardPlaceTool) -> bool {
         BoardPlaceTool::Pad
             | BoardPlaceTool::Arc
             | BoardPlaceTool::TextString
-            | BoardPlaceTool::Dimension
+            | BoardPlaceTool::Dimension(_)
     )
 }
 
@@ -207,6 +216,19 @@ impl Signex {
             .unwrap_or(Point::new(0.0, 0.0))
     }
 
+    /// A tool with a form was armed: Properties comes to the front on what
+    /// the next click places, as on a sheet. The canvas keeps the keyboard,
+    /// so a Properties window of its own is left where it is.
+    pub(crate) fn raise_board_tool_form(&mut self) -> Task<Message> {
+        let armed = self.own_board_tool().is_some_and(|s| has_form(s.tool));
+        let kind = crate::panels::PanelKind::Properties;
+        let docked = self.document_state.dock.locate(kind).is_some();
+        if !armed || (!docked && self.is_panel_open(kind)) {
+            return Task::none();
+        }
+        self.show_panel(kind)
+    }
+
     /// Tab while a tool is armed on the board in view: pause it for its
     /// values to be edited, or go on placing when paused. `None` when no
     /// tool with a form is armed there.
@@ -222,6 +244,7 @@ impl Signex {
         let pause = PlacementPause {
             defaults: self.interaction_state.pcb_tool_defaults.clone(),
             active_layer: self.pcb_layer_view(&session.path).active(),
+            route: session.route,
         };
         if let Some(session) = self.own_board_tool_mut() {
             session.paused = Some(pause);
@@ -253,6 +276,7 @@ impl Signex {
         }
         if let Some(session) = self.own_board_tool_mut() {
             session.paused = None;
+            forget_routed_leg(session);
         }
         self.refresh_pcb_highlight();
     }
@@ -266,6 +290,8 @@ impl Signex {
         let Some(pause) = session.paused.take() else {
             return false;
         };
+        session.route = pause.route;
+        forget_routed_leg(session);
         let window = session.window;
         let path = session.path.clone();
         self.interaction_state.pcb_tool_defaults = pause.defaults;
@@ -282,6 +308,20 @@ impl Signex {
         self.own_board_tool().is_some_and(|s| s.paused.is_some())
     }
 
+    /// Whether a paused tool is armed on the board `window_id` shows: the
+    /// Placement Paused banner is drawn over that canvas.
+    pub(crate) fn board_tool_paused_in_window(&self, window_id: iced::window::Id) -> bool {
+        let Some(session) = self.interaction_state.pcb_tool.as_ref() else {
+            return false;
+        };
+        let window = (self.ui_state.main_window_id != Some(window_id)).then_some(window_id);
+        let shown = self
+            .document_state
+            .tab_shown_in_window(window_id, &self.ui_state)
+            .map(|tab| tab.path.as_path());
+        session.paused.is_some() && session.is_for(shown, window)
+    }
+
     /// An edit in the panel of the object about to be placed: it sets the
     /// armed tool's value. A refused value changes nothing and says why.
     pub(crate) fn edit_board_tool_value(&mut self, edit: &PrimitiveEdit, what: MessageId) {
@@ -289,6 +329,8 @@ impl Signex {
             return;
         };
         let (tool, window) = (session.tool, session.window);
+        // A Graphics Line or Arc on copper sets the Track or Arc values.
+        let tool = self.placing_tool(tool);
         if tool.graphic_kind().is_some() {
             self.edit_graphic_tool_value(edit, what);
             return;
@@ -301,7 +343,8 @@ impl Signex {
         if let Some(layer) = layer {
             // What the tool draws goes on the active layer.
             let area = self.active_pcb().and_then(|b| self.next_board_area(b));
-            let text_tool = matches!(tool, BoardPlaceTool::TextString | BoardPlaceTool::Dimension);
+            // A dimension takes any layer, copper included (Caner, 2026-11-21).
+            let text_tool = tool == BoardPlaceTool::TextString;
             if area.is_some_and(|zone| !zone_layer_allowed(&zone, layer))
                 || (text_tool && !layer.takes_text())
             {
@@ -391,6 +434,14 @@ impl Signex {
             _ => return,
         }
         self.refresh_pcb_highlight();
+    }
+}
+
+/// Drop the leg routed for the pointer, so it is routed again with the
+/// values the pause left: its key holds no width or net.
+fn forget_routed_leg(session: &mut super::BoardToolSession) {
+    if let Some(router) = session.router.as_mut() {
+        router.preview = None;
     }
 }
 

@@ -1,0 +1,388 @@
+//! #1259: the Object List's row builder, filter, counts and selection marks;
+//! #2630: rows read as the canvas draws them.
+
+use std::path::{Path, PathBuf};
+
+use signex_types::schematic::{
+    ChildSheet, InstancePath, Junction, Label, LabelType, Point, SchDirective, SchematicSheet,
+    SelectedItem, SelectedKind, SheetPin, Symbol, SymbolInstance, TextNote, Wire,
+};
+use signex_widgets::chips::FilterSet;
+use uuid::Uuid;
+
+use super::model::*;
+
+fn en() -> &'static signex_i18n::I18n {
+    signex_i18n::I18n::en_us_ref()
+}
+
+fn id(n: u128) -> Uuid {
+    Uuid::from_u128(n)
+}
+
+fn part(n: u128, reference: &str, value: &str) -> Symbol {
+    Symbol {
+        uuid: id(n),
+        reference: reference.into(),
+        value: value.into(),
+        position: Point::new(n as f64, 0.0),
+        ..Symbol::default()
+    }
+}
+
+/// A sheet with two parts, a power port, a net label, a port, a sheet
+/// symbol with one entry, a wire, a text note, a junction and a directive.
+pub(super) fn power_sheet() -> SchematicSheet {
+    let mut s = SchematicSheet::default();
+    s.symbols.push(part(1, "U3", "INA226"));
+    s.symbols.push(part(2, "R3", "100k"));
+    s.symbols.push(Symbol {
+        is_power: true,
+        ..part(3, "#PWR1", "GND")
+    });
+    s.labels.push(Label {
+        uuid: id(4),
+        ..Label::new("VOUT_3V3", Point::new(1.0, 1.0), LabelType::Net)
+    });
+    s.labels.push(Label {
+        uuid: id(5),
+        ..Label::new("SDA", Point::new(2.0, 1.0), LabelType::Global)
+    });
+    s.child_sheets.push(ChildSheet {
+        uuid: id(6),
+        name: "Input".into(),
+        filename: "input.snxsch".into(),
+        position: Point::new(10.0, 10.0),
+        size: (20.0, 10.0),
+        stroke_width: 0.0,
+        fill: Default::default(),
+        stroke_color: None,
+        fill_color: None,
+        fields_autoplaced: false,
+        pins: vec![SheetPin {
+            uuid: id(7),
+            name: "VIN".into(),
+            direction: String::new(),
+            position: Point::new(10.0, 12.0),
+            rotation: 0.0,
+            auto_generated: false,
+            user_moved: false,
+        }],
+        instances: Vec::new(),
+    });
+    s.wires.push(Wire {
+        uuid: id(8),
+        start: Point::new(0.0, 0.0),
+        end: Point::new(12.7, 0.0),
+        ..Default::default()
+    });
+    s.text_notes.push(TextNote {
+        uuid: id(9),
+        text: "Place C4 within 3 mm of U1".into(),
+        position: Point::new(5.0, 5.0),
+        rotation: 0.0,
+        font_size: 0.0,
+        font_family: None,
+        justify_h: Default::default(),
+        justify_v: Default::default(),
+        locked: false,
+    });
+    s.junctions.push(Junction {
+        uuid: id(10),
+        position: Point::new(0.0, 0.0),
+        ..Default::default()
+    });
+    s.directives.push(SchDirective::DiffPair {
+        uuid: id(11),
+        position: Point::new(3.0, 3.0),
+        class: None,
+    });
+    s
+}
+
+fn power_path() -> PathBuf {
+    PathBuf::from("proj").join("Power.snxsch")
+}
+
+fn rows_with_nets() -> Vec<ObjectRow> {
+    let look = SheetLook::default();
+    sheet_rows(&power_sheet(), &power_path(), &look, &|wire: Uuid| {
+        (wire == id(8)).then(|| "SW".to_string())
+    })
+}
+
+fn row(rows: &[ObjectRow], uuid: u128) -> &ObjectRow {
+    rows.iter()
+        .find(|r| r.target.item.uuid == id(uuid))
+        .expect("the object is listed")
+}
+
+#[test]
+fn every_object_gets_its_kind_name_value_and_sheet() {
+    let rows = rows_with_nets();
+    assert_eq!(rows.len(), 11);
+    assert!(rows.iter().all(|r| r.sheet == "Power"));
+    assert!(rows.iter().all(|r| r.target.sheet == power_path()));
+
+    let u3 = row(&rows, 1);
+    assert_eq!(u3.kind, ObjectKind::Part);
+    assert_eq!(u3.name, RowName::Text("U3".into()));
+    assert_eq!(u3.value, RowValue::Text("INA226".into()));
+    assert_eq!(
+        u3.target.item,
+        SelectedItem::new(id(1), SelectedKind::Symbol)
+    );
+
+    let gnd = row(&rows, 3);
+    assert_eq!(gnd.kind, ObjectKind::PowerPort);
+    assert_eq!(gnd.name, RowName::Text("GND".into()));
+    assert_eq!(gnd.value, RowValue::Word(ValueWord::PowerPort));
+
+    let label = row(&rows, 4);
+    assert_eq!(label.kind, ObjectKind::Label);
+    assert_eq!(label.value, RowValue::Word(ValueWord::NetLabel));
+    assert_eq!(label.target.item.kind, SelectedKind::Label);
+    assert_eq!(row(&rows, 5).kind, ObjectKind::Port);
+
+    let sheet = row(&rows, 6);
+    assert_eq!(sheet.kind, ObjectKind::SheetSymbol);
+    assert_eq!(sheet.name, RowName::Text("Input".into()));
+    assert_eq!(sheet.value, RowValue::Text("input.snxsch".into()));
+    assert_eq!(sheet.target.item.kind, SelectedKind::ChildSheet);
+    let entry = row(&rows, 7);
+    assert_eq!(entry.kind, ObjectKind::SheetEntry);
+    assert_eq!(entry.target.item.kind, SelectedKind::SheetPin);
+
+    let text = row(&rows, 9);
+    assert_eq!(text.name, RowName::Noun(ObjectNoun::Text));
+    assert_eq!(
+        text.value,
+        RowValue::Text("Place C4 within 3 mm of U1".into())
+    );
+    assert_eq!(row(&rows, 10).kind, ObjectKind::Junction);
+    assert_eq!(row(&rows, 11).name, RowName::Noun(ObjectNoun::DiffPair));
+}
+
+#[test]
+fn a_wire_reads_its_net_from_the_index_and_its_length() {
+    let rows = rows_with_nets();
+    let wire = row(&rows, 8);
+    assert_eq!(wire.kind, ObjectKind::Wire);
+    assert_eq!(wire.name, RowName::Noun(ObjectNoun::Wire));
+    let RowValue::Length { net, mm } = &wire.value else {
+        panic!("a wire shows its length: {:?}", wire.value);
+    };
+    assert_eq!(net.as_deref(), Some("SW"));
+    assert!((mm - 12.7).abs() < 1e-9);
+    assert_eq!(wire.target.at, Point::new(6.35, 0.0));
+
+    // No index: the net is left out, not derived here.
+    let look = SheetLook::default();
+    let bare = sheet_rows(&power_sheet(), &power_path(), &look, &|_: Uuid| None);
+    assert!(matches!(
+        row(&bare, 8).value,
+        RowValue::Length { net: None, .. }
+    ));
+}
+
+#[test]
+fn kind_counts_follow_the_filter_but_not_the_chips() {
+    let rows = rows_with_nets();
+    let counts = kind_counts(&rows, "", en());
+    assert_eq!(counts.total(), 11);
+    assert_eq!(counts.of(ObjectKind::Part), 2);
+    assert_eq!(counts.of(ObjectKind::Label), 1);
+    assert_eq!(counts.of(ObjectKind::Wire), 1);
+    assert_eq!(counts.more(), 7);
+
+    let counts = kind_counts(&rows, "u3", en());
+    assert_eq!(counts.of(ObjectKind::Part), 1);
+    assert_eq!(counts.total(), 1);
+}
+
+#[test]
+fn the_filter_matches_name_value_text_and_net_without_case() {
+    let rows = rows_with_nets();
+    let all = FilterSet::default();
+    let names = |filter: &str| -> Vec<Uuid> {
+        filtered(&rows, filter, &all, en())
+            .iter()
+            .map(|r| r.target.item.uuid)
+            .collect()
+    };
+    assert_eq!(names("r3"), vec![id(2)], "a designator");
+    assert_eq!(names("ina"), vec![id(1)], "a value");
+    assert_eq!(names("WITHIN 3"), vec![id(9)], "a text note");
+    assert_eq!(names("sw"), vec![id(8)], "a wire's net");
+    assert_eq!(names("  vout  "), vec![id(4)], "trimmed");
+    assert_eq!(filtered(&rows, "", &all, en()).len(), 11);
+}
+
+#[test]
+fn kind_chips_keep_their_kinds_and_none_on_is_all() {
+    let rows = rows_with_nets();
+    let parts = FilterSet::new([ObjectKind::Part]);
+    assert!(
+        filtered(&rows, "", &parts, en())
+            .iter()
+            .all(|r| r.kind == ObjectKind::Part)
+    );
+    assert_eq!(filtered(&rows, "", &parts, en()).len(), 2);
+    let two = FilterSet::new([ObjectKind::Part, ObjectKind::Wire]);
+    assert_eq!(filtered(&rows, "", &two, en()).len(), 3);
+}
+
+fn state_with(rows: Vec<ObjectRow>) -> ObjectListState {
+    let mut state = ObjectListState::default();
+    state.source.rows = std::sync::Arc::new(rows);
+    state
+}
+
+#[test]
+fn the_view_marks_the_rows_selected_on_the_sheet_in_view() {
+    let state = state_with(rows_with_nets());
+    let selected = [
+        SelectedItem::new(id(1), SelectedKind::Symbol),
+        SelectedItem::new(id(2), SelectedKind::SymbolRefField),
+    ];
+    let view = ObjectListView::build(
+        &state,
+        &state.source,
+        ObjectListStatus::Ready,
+        Some(power_path()),
+        &selected,
+        en(),
+    );
+    assert!(view.is_selected(row(&view.rows, 1)));
+    assert!(
+        view.is_selected(row(&view.rows, 2)),
+        "a field selects its part"
+    );
+    assert!(!view.is_selected(row(&view.rows, 3)));
+    assert_eq!(view.selected_count, 2);
+
+    // The same uuids on another sheet are not this sheet's selection.
+    let elsewhere = ObjectListView::build(
+        &state,
+        &state.source,
+        ObjectListStatus::Ready,
+        Some(Path::new("proj").join("Input.snxsch")),
+        &selected,
+        en(),
+    );
+    assert_eq!(elsewhere.selected_count, 0);
+}
+
+#[test]
+fn the_view_draws_a_page_of_rows_and_counts_before_the_chips() {
+    let mut state = state_with(rows_with_nets());
+    state.kinds = FilterSet::new([ObjectKind::Wire]);
+    let view = ObjectListView::build(
+        &state,
+        &state.source,
+        ObjectListStatus::Ready,
+        Some(power_path()),
+        &[],
+        en(),
+    );
+    assert_eq!(view.rows.len(), 1);
+    assert_eq!(
+        view.counts.total(),
+        11,
+        "the chips do not narrow the counts"
+    );
+    assert_eq!(view.row_limit, ROW_PAGE);
+}
+
+/// What the sheet's `${TOKEN}`s resolve to: the sheet variable `VCC`.
+fn vcc_special() -> crate::canvas::SpecialStrings {
+    let mut metadata = signex_output::ProjectMetadata::default();
+    metadata
+        .sheet_variables
+        .insert("VCC".to_string(), "3.3V".to_string());
+    crate::canvas::SpecialStrings {
+        metadata,
+        path: power_path(),
+        filename: "Power.snxsch".to_string(),
+        sheet_name: "Power".to_string(),
+        sheet_number: Some(1),
+        sheet_count: 1,
+    }
+}
+
+/// A sheet whose part has a designator of its own at `placement`, a value
+/// expression, and a text note with a token.
+fn drawn_sheet(placement: &InstancePath) -> SchematicSheet {
+    let mut s = SchematicSheet::default();
+    s.symbols.push(Symbol {
+        instances: vec![SymbolInstance {
+            project: "p".into(),
+            path: placement.to_string(),
+            reference: "QAC7".into(),
+            unit: 1,
+        }],
+        ..part(1, "QAC1", "= VCC / 10mA")
+    });
+    s.symbols.push(Symbol {
+        is_power: true,
+        ..part(2, "#PWR1", "GND")
+    });
+    s.text_notes.push(TextNote {
+        uuid: id(3),
+        text: "VCC is ${VCC}".into(),
+        position: Point::new(5.0, 5.0),
+        rotation: 0.0,
+        font_size: 0.0,
+        font_family: None,
+        justify_h: Default::default(),
+        justify_v: Default::default(),
+        locked: false,
+    });
+    s
+}
+
+/// #2630: a row's name and value are the text the canvas draws: the
+/// designator of the shown placement under the project's standard, the
+/// evaluated value and the resolved note, not the stored text.
+#[test]
+fn names_and_values_read_as_the_canvas_draws_them() {
+    let placement = InstancePath::from_chain(vec![id(100)]);
+    let sheet = drawn_sheet(&placement);
+    let look = SheetLook {
+        placement: Some(placement.clone()),
+        special: Some(vcc_special()),
+        standard: Some(signex_types::designator::DesignatorStandard::Iec81346_2Full),
+    };
+    let rows = sheet_rows(&sheet, &power_path(), &look, &|_: Uuid| None);
+    let part = row(&rows, 1);
+    assert_eq!(part.name, RowName::Text("-QAC7".into()));
+    assert_eq!(part.value, RowValue::Text("330Ω".into()));
+    assert_eq!(row(&rows, 2).name, RowName::Text("GND".into()));
+    assert_eq!(row(&rows, 3).value, RowValue::Text("VCC is 3.3V".into()));
+    // The filter finds what is shown.
+    let all = FilterSet::default();
+    assert_eq!(filtered(&rows, "qac7", &all, en()).len(), 1);
+    assert!(filtered(&rows, "qac1", &all, en()).is_empty());
+
+    // As stored when the canvas draws as stored.
+    let stored = SheetLook::default();
+    let plain = sheet_rows(&sheet, &power_path(), &stored, &|_: Uuid| None);
+    assert_eq!(row(&plain, 1).name, RowName::Text("QAC1".into()));
+    assert_eq!(row(&plain, 3).value, RowValue::Text("VCC is ${VCC}".into()));
+}
+
+/// #2630: forgetting the rows moves the read generation on, never back to
+/// zero, so a read still on its way cannot match a later one.
+#[test]
+fn a_reset_moves_the_read_generation_on() {
+    let mut source = ObjectRowsSource {
+        stamp: Some(9),
+        generation: 4,
+        reading: true,
+        ..ObjectRowsSource::default()
+    };
+    source.reset();
+    assert_eq!(source.generation, 5);
+    assert_eq!(source.stamp, None);
+    assert!(!source.reading && source.rows.is_empty());
+}

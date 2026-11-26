@@ -5,6 +5,7 @@
 //! one undo step. Each builder returns `None` when every item already reads
 //! so. Targets are absolute per item, as for every board command.
 
+mod dimension_style;
 mod free;
 mod graphic;
 mod pad;
@@ -12,6 +13,8 @@ mod track;
 mod via;
 mod zone;
 
+#[cfg(test)]
+mod dimension_style_tests;
 #[cfg(test)]
 mod free_tests;
 #[cfg(test)]
@@ -21,6 +24,7 @@ mod tests;
 #[cfg(test)]
 mod zone_tests;
 
+pub use dimension_style::{DimensionStyleEdit, apply_style};
 pub use free::{
     ArcEdit, ArcSpan, DIMENSION_MAX_PRECISION, DimensionEdit, TextEdit, apply_arc, apply_dimension,
     apply_free_pad, apply_text, arc_edit_command, dimension_edit_command, free_pad_edit_command,
@@ -29,7 +33,7 @@ pub use free::{
 pub use graphic::{GraphicEdit, apply_graphic_edit, graphic_edit_command};
 pub use pad::{PadEdit, pad_edit_command};
 pub use track::{TrackEdit, track_edit_command, track_location};
-pub use via::{ViaEdit, via_edit_command};
+pub use via::{ViaEdit, edit_vias, via_edit_command};
 pub use zone::{ZoneEdit, apply_zone_edit, zone_edit_command, zone_layer_allowed};
 
 use signex_types::pcb::MaskExpansion;
@@ -68,8 +72,11 @@ pub enum PrimitiveEditRefusal {
     NoLength,
     #[error("the value must be above zero")]
     NotPositive,
-    #[error("a drawing goes on a non-copper layer other than a keep-out")]
+    #[error("a drawing goes on any layer but a keep-out")]
     GraphicLayerNotAllowed,
+    /// A trapezoid or custom pad the edit would leave with no copper (#2242).
+    #[error("{0}")]
+    PadShape(signex_types::pcb_pad_shape::PadShapeFault),
 }
 
 fn finite(value: f64) -> Result<f64, PrimitiveEditRefusal> {

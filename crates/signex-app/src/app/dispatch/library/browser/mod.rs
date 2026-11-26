@@ -13,6 +13,7 @@ mod cell_commit;
 mod grid;
 mod modal_reload;
 mod param_commit;
+mod preview_load;
 mod row_delete;
 mod row_save;
 mod slot_param;
@@ -183,7 +184,6 @@ impl Signex {
         self.document_state.tabs.push(crate::app::TabInfo {
             title,
             path: path.clone(),
-            cached_document: None,
             project_id,
             kind: crate::app::TabKind::LibraryBrowser(path),
         });
@@ -311,6 +311,8 @@ impl Signex {
             .map(|r| r.internal_pn.as_str().to_string())
             .unwrap_or_else(|| format!("row {row_id}"));
         if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
+            // Delete Selected is an item of the preview's ⋯ menu (mockup row 118).
+            state.more_menu_open = false;
             state.delete_confirm = Some(DeleteConfirmState {
                 table,
                 row_id,
@@ -386,6 +388,23 @@ impl Signex {
             })
             .cloned();
         let template = template.as_ref();
+        // Save is held while another row holds the draft's Internal PN
+        // (lib-07): the view disables the button, and update refuses too.
+        let pn_conflict = if matches!(msg, BrowserEditMsg::Save) {
+            self.library
+                .library_browsers
+                .get(&library_path)
+                .and_then(|b| b.edit_modal.as_ref())
+                .and_then(|m| {
+                    crate::library::edit_row_modal::pn_conflict(
+                        self.library.library_at(&library_path)?,
+                        m.draft.internal_pn.as_str(),
+                        m.address.row_id,
+                    )
+                })
+        } else {
+            None
+        };
         if let Some(state) = self.library.library_browsers.get_mut(&library_path)
             && let Some(modal) = state.edit_modal.as_mut()
         {
@@ -462,10 +481,15 @@ impl Signex {
                     }
                 }
                 BrowserEditMsg::SetParamUnit { key, unit } => {
+                    modal.unit_menu_open = None;
                     param_commit::pick_unit(modal, &key, unit, template);
                 }
+                BrowserEditMsg::UnitMenuOpened { key } => modal.unit_menu_open = Some(key),
+                BrowserEditMsg::UnitMenuDismissed => modal.unit_menu_open = None,
                 BrowserEditMsg::ParamPrefixPicked { key, prefix } => {
+                    modal.unit_menu_open = None;
                     modal.param_prefix.insert(key.clone(), prefix);
+                    param_commit::drop_pending_prefix_letter(modal, &key, template);
                     param_commit::commit_param_buffer(modal, &key, template);
                 }
                 BrowserEditMsg::CommitParam { key } => {
@@ -524,6 +548,9 @@ impl Signex {
                         "This row is being saved; try again once the save has finished.",
                     );
                 }
+                // The modal already shows the clash under the field and in
+                // its footer; nothing is written.
+                BrowserEditMsg::Save if pn_conflict.is_some() => {}
                 BrowserEditMsg::Save => {
                     // Typed-but-not-Entered parameter edits live only in
                     // `param_buf`; commit them before the draft snapshot,
@@ -661,7 +688,6 @@ impl Signex {
         self.document_state.tabs.push(crate::app::TabInfo {
             title,
             path: synthetic_path,
-            cached_document: None,
             project_id,
             kind: crate::app::TabKind::ComponentEditor(crate::app::ComponentEditorTab {
                 library_path: address.library_path.clone(),
@@ -673,6 +699,33 @@ impl Signex {
         self.document_state.active_path = None;
         self.refresh_panel_ctx();
         self.resolve_open_preview_tab(&address)
+    }
+
+    /// Esc closes an Edit Component unit menu open in `window` and goes no
+    /// further, so the dialog and its draft stay. A dialog in its own window
+    /// answers only there; one in the main window only to the main window's
+    /// Esc, never to one typed in another secondary window.
+    pub(crate) fn close_unit_menu_in(&mut self, window: Option<iced::window::Id>) -> bool {
+        let owners = &self.ui_state.library_modal_owners;
+        let owner = window.and_then(|id| owners.get(&id));
+        let is_other_window = window.is_some_and(|id| self.ui_state.windows.contains_key(&id));
+        if owner.is_none() && is_other_window {
+            return false;
+        }
+        let open = self
+            .library
+            .library_browsers
+            .iter_mut()
+            .find_map(|(path, b)| {
+                let here = match owner {
+                    Some(owner) => owner == path,
+                    None => !owners.values().any(|o| o == path),
+                };
+                b.edit_modal
+                    .as_mut()
+                    .filter(|m| here && m.unit_menu_open.is_some())
+            });
+        open.map(|modal| modal.unit_menu_open = None).is_some()
     }
 
     /// Look up, off the UI thread, what the preview's shown tab needs that

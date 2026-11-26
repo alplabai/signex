@@ -14,9 +14,13 @@
 //! (`save_primitive_tab_at`); the editor view only owns the widget
 //! tree.
 
+mod bake_legend;
 mod board_sketch;
-mod dof_chip;
+pub(crate) mod dof_chip;
 mod footprint;
+mod pad_link;
+pub(crate) mod sketch_exit;
+mod sketch_info_bar;
 pub(crate) mod symbol;
 
 pub use board_sketch::view_board_sketch;

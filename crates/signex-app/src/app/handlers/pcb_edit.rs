@@ -8,6 +8,7 @@
 use std::path::Path;
 
 use signex_engine::pcb::{BoardCommand, BoardPatch};
+use signex_renderer::pcb::PcbSnapshot;
 
 use crate::app::Signex;
 use crate::app::state::pcb_edit::{BoardEditError, CheckedStep};
@@ -22,9 +23,21 @@ impl Signex {
         commands: Vec<BoardCommand>,
         checked: Option<CheckedStep<'_>>,
     ) -> Result<Vec<BoardPatch>, BoardEditError> {
-        let patches = self.document_state.execute_board(path, commands, checked)?;
-        if !patches.is_empty() {
+        let recorded = self.board_edit_to_record(path, &commands);
+        let patches = match self.document_state.execute_board(path, commands, checked) {
+            Ok(patches) => patches,
+            Err(error) => {
+                self.ui_state.command_replay.forget_board_marks();
+                return Err(error);
+            }
+        };
+        if patches.is_empty() {
+            self.ui_state.command_replay.forget_board_marks();
+        } else {
             self.after_board_change(path);
+            if let Some(record) = recorded {
+                self.note_board_edit(path, record);
+            }
         }
         Ok(patches)
     }
@@ -93,6 +106,8 @@ impl Signex {
     /// repaints its own selection. This repaints only: it does not touch the
     /// tool or the placement in progress.
     fn after_board_change(&mut self, path: &Path) {
+        let polygons = &mut self.document_state.panel_ctx.pcb_panel.polygons;
+        polygons.drop_drafts_of(path);
         let active = self.active_tab_path().as_deref() == Some(path);
         if active {
             // Also repaints the undocked windows that show the active tab.
@@ -101,6 +116,10 @@ impl Signex {
             canvas.clear_bg_cache();
             canvas.clear_content_cache();
             self.sync_panel_ctx_from_visible_document();
+            self.refresh_pcb_layers_panel();
+            self.document_state.panel_ctx.pcb_nets = self.pcb_nets_summary();
+            self.document_state.panel_ctx.layer_stack = self.layer_stack_facts();
+            self.refresh_polygon_facts();
         } else {
             self.repaint_undocked_boards(path);
         }
@@ -109,6 +128,10 @@ impl Signex {
         self.document_state.panel_ctx.pcb_drc = self.pcb_drc_panel();
         // The undocked windows' selections follow the new geometry too (#2240).
         self.refresh_undocked_pcb_highlights(path);
+        // So do the panels of a window showing this board (net table, Layer
+        // Stack): each keeps its own context. No-op inside a window's swap,
+        // where the branch above already refreshed that window's context.
+        self.refresh_window_panel_ctxs(None);
     }
 
     /// Give each undocked window, and the unfocused tile pane (#2249), that
@@ -122,6 +145,20 @@ impl Signex {
         let view = self.pcb_layer_view(path);
         let (origin_marker, flipped) = (view.origin_marker_visible(), view.flipped());
         let marks = crate::pcb_canvas::BoardMarks::of(board);
+        // Each window dims for its own tool or carry (#2514); the tile pane
+        // sits in the main window.
+        let ids = self
+            .interaction_state
+            .pcb_canvases
+            .keys()
+            .map(|id| Some(*id));
+        let focused: std::collections::HashMap<Option<iced::window::Id>, PcbSnapshot> = ids
+            .chain([None])
+            .map(|window| {
+                let nets = self.board_focus_nets(path, window);
+                (window, self.with_focus_on(snapshot.clone(), &nets))
+            })
+            .collect();
         let windows = &self.ui_state.windows;
         let pane = self.interaction_state.tile_panes.board.get_mut(path);
         let canvases = self
@@ -135,10 +172,10 @@ impl Signex {
                         if shown == path
                 )
             })
-            .map(|(_, canvas)| canvas)
-            .chain(pane);
-        for canvas in canvases {
-            canvas.set_renderer_snapshot(Some(snapshot.clone()));
+            .map(|(id, canvas)| (Some(*id), canvas))
+            .chain(pane.map(|canvas| (None, canvas)));
+        for (window, canvas) in canvases {
+            canvas.set_renderer_snapshot(focused.get(&window).cloned());
             canvas.set_board_grid(board_grid);
             canvas.set_board_marks(marks.clone());
             canvas.set_origin_marker_visible(origin_marker);

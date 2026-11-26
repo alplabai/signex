@@ -20,11 +20,35 @@ pub enum NetColorMsg {
     CustomShow(bool),
     /// Live-update the draft colour as the user drags the picker.
     CustomDraft(iced::Color),
-    /// Commit the draft colour and arm net-colour flood mode.
+    /// Commit the draft colour: colour the picker's net when it was opened
+    /// from a palette row, else arm net-colour flood mode.
     CustomSubmit(iced::Color),
     /// Edit one R/G/B channel of the custom-picker draft via text
     /// input. Parsed as 0-255; invalid values ignored.
     CustomChannel(Channel, String),
+    /// The palette's filter text changed.
+    FilterChanged(String),
+    /// A palette row was clicked: its chooser opens, or closes when it was
+    /// the open one.
+    RowOpened(String),
+    /// A press landed outside the open chooser, or on its own row: it closes.
+    ChooserDismissed,
+    /// A press landed in `window`: the chooser closes unless that is the
+    /// palette's own window, whose presses the card sorts out itself.
+    PressedInWindow(iced::window::Id),
+    /// The chooser's Custom… was pressed: the custom picker opens for that
+    /// net.
+    CustomOpenedFor(String),
+    /// The custom picker's Hex field changed; applied when it parses.
+    CustomHexChanged(String),
+    /// The palette footer's "Clear all colours" was pressed: the active
+    /// sheet's net colours go in one undo step.
+    ClearedAll,
+    /// The Clear toast's Undo was pressed: the clear is undone while it is
+    /// still the sheet's newest edit.
+    ToastUndone,
+    /// The Clear toast made at this engine revision timed out.
+    ToastExpired(u64),
 }
 
 /// Parameter Manager dialog message family (ADR-0001 D3). Namespaced
@@ -36,24 +60,89 @@ pub enum ParameterManagerMsg {
     Open,
     /// Close the dialog.
     Close,
-    /// A cell's text changed: write it to the document now. Keystrokes in
-    /// one cell share one undo step; an empty value keeps the parameter and
+    /// A cell's text changed: write it to `sheet` now. Keystrokes in one
+    /// cell share one undo step; an empty value keeps the parameter and
     /// empties it.
     Edit {
+        sheet: std::path::PathBuf,
         symbol_uuid: uuid::Uuid,
         key: String,
         value: String,
     },
     /// Enter in a cell: the next edit of that cell is a new undo step.
     CellSubmitted,
-    /// Delete the parameter `key` from every symbol, as one undo step.
+    /// Delete the parameter `key` from every listed symbol, as one undo
+    /// step across the listed sheets.
     ParameterRemoved { key: String },
     /// The "new parameter" name box changed.
     NewKeyChanged(String),
-    /// Add the typed parameter as a column on every symbol, empty.
+    /// Add the typed parameter as a column on every listed symbol, empty,
+    /// as one undo step across the listed sheets.
     ColumnAdded,
+    /// The header's Active sheet / All sheets switch was set.
+    ScopePicked(ParameterScope),
     /// The row filter changed.
     FilterChanged(String),
+    /// Clear filter on the no-match card: every row shows again.
+    FilterCleared,
+    /// Revert changes: every cell edited since the dialog opened goes back
+    /// to its value from before, as one undo step.
+    SessionReverted,
+    /// The pointer entered (`is_hovered`) or left the header of parameter
+    /// column `key`. A leave names its column, so it never clears the
+    /// hover of the header just entered.
+    ColumnHeaderHovered { key: String, is_hovered: bool },
+    /// The cell `key` of `symbol_uuid` on `sheet` took (`is_focused`) or
+    /// lost the focus. A loss names its cell, so it never clears the cell
+    /// just focused.
+    CellFocused {
+        sheet: std::path::PathBuf,
+        symbol_uuid: uuid::Uuid,
+        key: String,
+        is_focused: bool,
+    },
+    /// One pane of the table scrolled to `x`, `y`; the others follow, so the
+    /// header row and the Reference column stay in view.
+    TableScrolled {
+        pane: ParameterTablePane,
+        x: f32,
+        y: f32,
+    },
+    /// The table's CSV export and import (#1295), routed to
+    /// `app::parameter_io`.
+    Io(crate::app::parameter_io::ParameterIoMsg),
+    /// The closed project sheets All sheets lists were read from disk, under
+    /// read `generation`; `unread` names each sheet that could not be read,
+    /// with why.
+    ClosedSheetsRead {
+        generation: u64,
+        sheets: crate::app::state::ClosedSheetCopies,
+        unread: Vec<(std::path::PathBuf, String)>,
+    },
+    /// A cell of a closed sheet's row was pressed: open that sheet, so its
+    /// cells can be edited.
+    ClosedSheetPressed { sheet: std::path::PathBuf },
+}
+
+/// Which sheets the Parameter Manager lists (Caner 2026-11-25).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ParameterScope {
+    /// The active sheet only.
+    #[default]
+    ActiveSheet,
+    /// Every sheet of the active sheet's project; the closed ones read-only.
+    AllSheets,
+}
+
+/// The scrolling panes of the Parameter Manager table.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ParameterTablePane {
+    /// The header row right of Reference: scrolls sideways with the body.
+    Header,
+    /// The Reference column: scrolls up and down with the body.
+    References,
+    /// The parameter cells: scroll both ways.
+    Body,
 }
 
 /// Annotate dialog message family (ADR-0001 D3). Namespaced under
@@ -114,13 +203,21 @@ pub enum AnnotateMsg {
         generation: u64,
         result: std::sync::Arc<Result<crate::app::handlers::erc::SheetsRead, String>>,
     },
-    /// The worker wrote the unopened sheets the run renumbered. `hold` keeps
-    /// quit waiting until the completion has registered what it owes.
-    PassSheetsWritten {
-        generation: u64,
-        result: std::sync::Arc<Result<Vec<crate::app::handlers::erc::SheetWrite>, String>>,
-        hold: crate::autosave::SaveHold,
-    },
+    /// The change list's Changes / All switch was picked (#75).
+    ListViewPicked(crate::app::handlers::erc::AnnotateListView),
+    /// The change list's filter text was edited (#75).
+    ListFilterEdited(String),
+    /// A sheet row's tick was clicked: the sheet file (every placement row
+    /// of it) joins or leaves the run (#75).
+    SheetTickToggled(std::path::PathBuf),
+    /// The sheets table's header tick was clicked: tick (`true`) or untick
+    /// every sheet.
+    AllSheetsTicked(bool),
+    /// The "Fixed options" group was opened or closed.
+    FixedOptionsToggled,
+    /// Reset All (`ResetOnly`) or Reset & Renumber (`ResetAndRenumber`) was
+    /// pressed in the dialog footer: open the confirm for that reset (#76).
+    ResetPressed(signex_engine::AnnotateMode),
 }
 
 /// ERC dialog message family (ADR-0001 D3). Namespaced under
@@ -139,9 +236,17 @@ pub enum ErcMsg {
     /// Click on a pin-connection matrix cell: cycle its severity
     /// Error → Warning → Info → Off → (back to baseline default).
     PinMatrixCellCycled { row: u8, col: u8 },
+    /// The rule editor's "Changed only" chip was switched; carries the new
+    /// state.
+    RulesChangedOnlyToggled(bool),
+    /// The rule editor's "Filter rules" field changed.
+    RuleFilterChanged(String),
     /// Copy this machine's ERC preferences into the active project's
     /// `.snxprj` rule set (written on the next explicit save, #1085).
     StoreRulesInProject,
+    /// Repair Pin Junctions: a dot on every pin end of the active sheet that
+    /// lies inside a wire with none, as one undo step (2026-11-18).
+    PinJunctionRepairRequested,
     /// "Save as profile": open the dialog that asks for a name and version
     /// (#1608). Writes nothing.
     ProfileSaveDialogOpened,
@@ -202,6 +307,45 @@ pub enum ErcMsg {
         generation: u64,
         result: std::sync::Arc<Result<crate::app::handlers::erc::ErcRunOutcome, String>>,
     },
+    /// The footer's "Profile" menu button was pressed: the menu opened, or
+    /// closed when it was open.
+    ProfileMenuToggled,
+    /// A row of the "Profile" menu was chosen. The menu closes and the row's
+    /// action runs as its own message ([`ErcProfileAction::message`]).
+    ProfileMenuRowChosen(ErcProfileAction),
+}
+
+/// The rows of the ERC dialog's "Profile" menu (#2413). Each runs the
+/// message the dialog's footer button of the same name sent before.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ErcProfileAction {
+    /// "Store ERC rules in this project".
+    StoreInProject,
+    /// "Save as profile".
+    SaveAsProfile,
+    /// "Update from profile".
+    UpdateFromProfile,
+}
+
+impl ErcProfileAction {
+    /// The message the row runs.
+    pub fn message(self) -> ErcMsg {
+        match self {
+            Self::StoreInProject => ErcMsg::StoreRulesInProject,
+            Self::SaveAsProfile => ErcMsg::ProfileSaveDialogOpened,
+            Self::UpdateFromProfile => ErcMsg::ProfileUpdateRequested,
+        }
+    }
+
+    /// The row's label.
+    pub fn label(self) -> signex_i18n::MessageId {
+        use signex_i18n::ids;
+        match self {
+            Self::StoreInProject => ids::DIALOG_ERC_STORE_RULES,
+            Self::SaveAsProfile => ids::DIALOG_ERC_SAVE_AS_PROFILE,
+            Self::UpdateFromProfile => ids::DIALOG_ERC_UPDATE_FROM_PROFILE,
+        }
+    }
 }
 
 /// Preferences modal message family (ADR-0001 D3). Namespaced under
@@ -248,6 +392,23 @@ pub enum EnableVersionControlMsg {
         project_dir: std::path::PathBuf,
         outcome: EnableVersionControlOutcome,
     },
+    /// "Select all" was clicked: every row is ticked.
+    AllTicked,
+    /// The first commit message field was edited.
+    CommitMessageChanged(String),
+    /// The "Commit every save" switch was flipped.
+    CommitEverySaveToggled,
+    /// The worker asking git for a commit author answered (mockup row 26):
+    /// `has_identity` is false when git resolves none. Applied only while
+    /// the dialog still shows `project_dir`.
+    AuthorProbed {
+        project_dir: std::path::PathBuf,
+        has_identity: bool,
+    },
+    /// The author name field (shown only when git has none) was edited.
+    AuthorNameChanged(String),
+    /// The author email field was edited.
+    AuthorEmailChanged(String),
 }
 
 /// What an Enable Version Control run did on disk.
@@ -301,6 +462,9 @@ pub enum RemoveMsg {
     /// The delete worker finished: forget the documents of what it removed
     /// (#859).
     Deleted(Box<crate::app::path_ops::DeleteDone>),
+    /// A card of the Remove modal was clicked: it is selected, and nothing
+    /// is removed until the footer action sends `Confirm` (#2262).
+    ChoicePicked(RemoveChoice),
 }
 
 /// Context-menu subsystem message family (ADR-0001 D3). Namespaced
@@ -404,6 +568,15 @@ pub enum ExportMsg {
     NetlistCancelIncomplete,
     /// An export deliverable's off-thread write finished (#859).
     FileWritten(Box<ExportWriteOutcome>),
+    /// A BOM's off-thread write finished; `source` is the document its dialog
+    /// was opened for, which closes when the file was written.
+    BomWritten {
+        source: std::path::PathBuf,
+        outcome: Box<ExportWriteOutcome>,
+    },
+    /// Export Design Notebook PDF (mockup row 202), routed to
+    /// `dispatch_notebook_pdf_message`.
+    NotebookPdf(crate::app::NotebookPdfMsg),
 }
 
 /// What an export's background file write produced, carried back to `update`
@@ -445,412 +618,10 @@ pub enum SelectionFilterMsg {
     /// Writes the draft into the active footprint editor's
     /// `state.selection_filter` then closes.
     ApplyCustom,
-}
-
-/// File / save message family (ADR-0001 D3). Namespaced under
-/// `Message::File` and routed to `dispatch_file_message`.
-#[derive(Debug, Clone)]
-pub enum FileMsg {
-    Opened(Option<PathBuf>),
-    /// File ▸ New Project — destination picked by the Save-As dialog.
-    /// `None` when the user cancelled the picker; on `Some(path)` the
-    /// handler creates the project folder `<parent>/<stem>/` and writes a
-    /// fresh `<stem>.snxprj` (empty marker file — the parser is
-    /// directory-driven) plus a blank `<stem>.snxsch` inside it, then loads
-    /// the project + opens the schematic tab (#1205).
-    NewProject(Option<PathBuf>),
-    /// Completion of the off-thread New Project file writes (#859): the
-    /// project is loaded and its schematic opened only after they succeed.
-    NewProjectWritten {
-        path: PathBuf,
-        /// The `.snxprj` actually written (inside the project folder).
-        result: Result<PathBuf, String>,
-    },
-    /// Completion of the off-thread sample-project unpack kicked off by
-    /// Help > Open Sample Project. Carries the directory the sample
-    /// lives in, or the stringified `anyhow` chain on failure.
-    SampleProjectUnpacked(Result<PathBuf, String>),
-    /// File ▸ Import ▸ Altium Project — the Altium file picked, or `None`
-    /// when the picker was cancelled.
-    AltiumImportPicked(Option<PathBuf>),
-    /// Completion of the off-thread `signex-altium-import` run.
-    AltiumImportFinished(Result<crate::altium_import::ImportOutcome, String>),
-    /// Completion of the async schematic read+parse kicked off by
-    /// `open_schematic_file` — the `fs::read_to_string` +
-    /// `SnxSchematic::parse` run in `spawn_blocking` so `update()`
-    /// never blocks on disk IO (mirrors the `HistoryLoaded` pattern).
-    /// Carries the original path/title so the handler can open the
-    /// tab exactly as the old synchronous path did; the error is the
-    /// stringified `anyhow` context chain (`Message` is `Clone`,
-    /// `anyhow::Error` is not).
-    SchematicOpenFinished {
-        path: PathBuf,
-        title: String,
-        result: Result<Box<SchematicSheet>, String>,
-        /// What the read learned about the file (#1826, #1827).
-        disk: Option<crate::persist::DiskRead>,
-    },
-    /// The per-placement-designator load note, computed off the UI thread
-    /// after a schematic opened (`Ok(None)`: nothing to say; `Err`: the
-    /// worker died, carrying the join error).
-    InstanceNoteReady(Result<Option<String>, String>),
-    /// Completion of the async PCB read+parse kicked off by
-    /// `open_pcb_file`. Same shape as `SchematicOpenFinished`.
-    PcbOpenFinished {
-        path: PathBuf,
-        title: String,
-        result: Result<Box<signex_types::pcb::PcbBoard>, String>,
-        /// What the read learned about the file (#1863).
-        disk: Option<crate::persist::DiskRead>,
-    },
-    /// Completion of an off-thread schematic / PCB / primitive read started
-    /// from the project tree or a primitive open (#859). Applied only while
-    /// `request` is still the read tracked for its path; otherwise dropped.
-    DocumentReadFinished {
-        request: crate::app::document_read::ReadRequest,
-        result: Result<
-            Box<crate::app::document_read::LoadedDocument>,
-            crate::app::document_read::OpenFailure,
-        >,
-    },
-    /// Completion of an off-thread History restore (#859): the git restore
-    /// and the re-read of the restored file. Applied only while `request` is
-    /// still the restore tracked for its document.
-    HistoryRestoreFinished {
-        request: crate::app::document_read::ReadRequest,
-        sha: String,
-        edit_stamp: crate::app::restore_job::EditStamp,
-        result: Result<
-            Box<crate::app::restore_job::RestoredFile>,
-            crate::app::restore_job::RestoreFailure,
-        >,
-    },
-    Save,
-    /// The read behind "Reload from disk" finished (#1826): the sheet read
-    /// back from the file that changed under an open document.
-    DiskReloadFinished {
-        path: PathBuf,
-        /// The document's edit stamp when Reload was chosen; a later one means
-        /// the user edited during the read.
-        edit_stamp: crate::app::restore_job::EditStamp,
-        result: Result<Box<crate::app::handlers::document_files::ReloadedFile>, String>,
-    },
-    /// An idle poll re-read the files of open documents (#1877).
-    DocumentDiskPolled(Vec<crate::app::handlers::document_files::DiskRead>),
-    /// Completion of an off-thread document write (Save / Save As). The
-    /// dirty marker clears only if the document has not changed since the
-    /// snapshot; see `handlers/document_files/save_async.rs`.
-    DocumentSaved(crate::persist::DocumentSaveDone),
-    /// Completion of an off-thread symbol / footprint container write
-    /// (Save / Save As). The draft stays dirty if it was edited meanwhile;
-    /// see `app/dispatch/library/editor/primitive_save.rs`.
-    PrimitiveSaved(Box<crate::persist::PrimitiveSaveDone>),
-    /// The off-thread volume probes of a Save All finished; its writes
-    /// start now (#1216).
-    SaveAllProbed(Box<SaveAllPlan>),
-    /// The off-thread identity probe of a loose document's directory finished
-    /// (#1447): the case rule open and Ctrl+S use to tell whether two
-    /// spellings are one file.
-    DirCaseProbed {
-        dir: PathBuf,
-        answer: crate::app::state::project_case::CaseProbeOutcome,
-    },
-    /// Every write a Save All started has completed; carries what to do
-    /// next (close the project, quit) and the failures already known.
-    SaveAllSettled(Box<SaveAllSettle>),
-    /// Quit could not confirm that in-flight document writes finished.
-    DocumentSaveWaitFailed(String),
-    /// User picked a destination from the schematic Save As dialog.
-    /// `from_path` is the tab the dialog was opened for; the dialog is
-    /// not modal, so the active tab may have changed by the time it
-    /// returns and the handler refuses rather than write the wrong
-    /// document to `to_path`.
-    SaveAs {
-        from_path: PathBuf,
-        to_path: PathBuf,
-    },
-    /// User picked a destination from the Save-As dialog spawned the
-    /// first time a freshly-minted `.snxsym` / `.snxfpt` editor tab is
-    /// saved (the in-memory tab opened by `Add New ▸ Symbol` /
-    /// `Add New ▸ Footprint`). Re-keys the editor + tab from the
-    /// suggested path to the user's choice, then writes the file.
-    /// `from_path` is the suggested in-memory path the editor is
-    /// currently keyed under; `to_path` is the rfd result.
-    SavePrimitiveAs {
-        from_path: PathBuf,
-        to_path: PathBuf,
-    },
-    /// The off-thread patch of the saved `.snxprj` after a sheet Save As
-    /// finished (#1824).
-    SaveAsProjectPatched(Box<SaveAsProjectPatched>),
-}
-
-/// What a sheet Save As did to the saved project file.
-#[derive(Debug, Clone)]
-pub struct SaveAsProjectPatched {
-    pub project_id: crate::app::state::ProjectId,
-    pub from: PathBuf,
-    pub to: PathBuf,
-    pub result: Result<crate::app::project_entry_disk::EntryPatch, String>,
-    /// The parent references planned for the new file, and what the worker
-    /// did to the saved parents (#1849).
-    pub plan: crate::app::path_ops::ReferencePlan,
-    pub parent_disk: crate::app::parent_reference_disk::ParentDiskOutcomes,
-}
-
-/// Project lifecycle message family (ADR-0001 D3). Namespaced under
-/// `Message::Project` and routed to `dispatch_project_message`.
-#[derive(Debug, Clone)]
-pub enum ProjectMsg {
-    /// The New Project setup dialog (#2232); routed to
-    /// `dispatch_new_project_message`.
-    Setup(crate::app::NewProjectMsg),
-    /// The New PCB or New Schematic setup dialog (#2232); routed to
-    /// `dispatch_document_setup_message`.
-    DocumentSetup(crate::app::DocumentSetupMsg),
-    /// A Save as profile or Remove was merged into `prefs.json` (or not):
-    /// `note` is said in Messages on success (#2232).
-    SetupProfilesWritten {
-        note: String,
-        /// How to take the in-memory change back if the write failed.
-        undo: Box<crate::app::ProfileUndo>,
-        /// The id the profile is stored under (`None` for a removal).
-        result: Result<Option<String>, String>,
-    },
-    /// Start screen project rows: pin, unpin, open a pinned project, the
-    /// row menu (#2305); routed to `dispatch_start_screen_message`.
-    StartScreen(crate::start_screen::StartScreenMsg),
-    /// The Number Schematic Sheets dialog (#2247); routed to
-    /// `dispatch_sheet_numbering_message`.
-    SheetNumbering(crate::app::SheetNumberingMsg),
-    /// User picked an option in the project-close confirmation modal
-    /// (Save All / Discard All / Cancel) shown when closing a
-    /// project that still has dirty documents.
-    CloseConfirm(ProjectCloseChoice),
-    /// The Tools ▸ Assign Footprints dialog (#2248); routed to
-    /// `dispatch_assign_footprints_message`.
-    AssignFootprints(crate::app::AssignFootprintsMsg),
-    /// The off-thread child-sheet resolution that Close Project starts
-    /// finished (#741). Carries the project by id, not index, because the
-    /// project list can shift while the worker reads; `Err` is a worker that
-    /// died, which refuses the close rather than guessing ownership.
-    CloseRefsResolved {
-        project_id: crate::app::ProjectId,
-        result: Result<Box<crate::app::state::sheet_refs::SheetRefs>, String>,
-    },
-    /// The off-thread probe of a freshly loaded project's volume finished
-    /// (#694): the volume ignores case, is case-sensitive, could not be
-    /// decided, or the worker failed.
-    CaseProbed {
-        project_id: crate::app::ProjectId,
-        outcome: crate::app::state::project_case::CaseProbeOutcome,
-    },
-    /// The off-thread read of the ids at the head of the files a project
-    /// references finished (#2172). Dropped when the project closed meanwhile.
-    DocumentHeadersRead {
-        project_id: crate::app::ProjectId,
-        reads: Vec<crate::app::document_ids::HeaderRead>,
-    },
-    /// The off-thread filesystem probe behind the project tree's
-    /// `(missing)` marks and library listings finished (#111); `Err` is a
-    /// worker that died, with the reason (#1091).
-    FsFactsProbed(
-        u64,
-        Result<Box<crate::app::state::project_fs::ProjectFsFacts>, String>,
-    ),
-    /// The off-thread Navigator hierarchy assembly finished (#1470); `Err`
-    /// is a worker that died. Applied only while its generation is the latest.
-    NavigatorAssembled(
-        u64,
-        Result<Box<crate::app::state::navigator_job::NavigatorAssembly>, String>,
-    ),
-    /// A descent through a sheet symbol that an undocked window started: the
-    /// window cannot switch sheets inside its swap, so the open runs here, on
-    /// the main window, for the child the window's sheet references (#1966).
-    /// It names the window and the sheet the descent started on; it is
-    /// refused when it lands if either no longer holds (#2037).
-    DescendRequested {
-        window: iced::window::Id,
-        from: std::path::PathBuf,
-        symbol: uuid::Uuid,
-        path: std::path::PathBuf,
-        placement: Option<signex_types::schematic::InstancePath>,
-    },
-    /// Edit Symbol from an undocked window: the window cannot open or switch
-    /// tabs inside its swap, so the symbol file it resolved is opened here, on
-    /// the main window (#1966).
-    PrimitiveOpenRequested(std::path::PathBuf),
-    /// A Find hit on another sheet, reached from an undocked window: the
-    /// window cannot switch sheets inside its swap, so the sheet opens here,
-    /// on the main window, and the jump lands there (#2037).
-    SheetOpenRequested {
-        path: std::path::PathBuf,
-        open: Box<crate::app::handlers::canvas::SheetOpen>,
-    },
-    /// The off-thread assembly of the hierarchy of the project (by root sheet)
-    /// an undocked window shows finished (#2021).
-    WindowHierarchyAssembled(
-        std::path::PathBuf,
-        u64,
-        Result<Box<crate::app::state::navigator_job::NavigatorAssembly>, String>,
-    ),
-    /// User choice (Save All / Discard All / Cancel) on the app-quit
-    /// confirmation modal, shown when the user tries to exit Signex
-    /// while any document is dirty. Reuses `ProjectCloseChoice`.
-    AppQuitConfirm(ProjectCloseChoice),
-    /// A Project tab message (#1202), routed to the `project_tab` slice.
-    Tab(crate::app::ProjectTabMsg),
-    /// A Rules tab message (#2398), routed to the `rules_tab` slice.
-    Rules(crate::app::RulesTabMsg),
-    /// The off-thread `.snxprj` write a Project tab Ctrl+S started finished.
-    FileSaved(Box<crate::persist::ProjectSaveDone>),
-    /// Result of the `Add Existing to Project…` file picker. Carries
-    /// the owning project's id plus the user's picks (`None` on
-    /// cancel, otherwise one or more paths from `pick_files`) so the
-    /// handler can copy each into the project directory in turn.
-    AddExistingFilePicked {
-        project_id: crate::app::state::ProjectId,
-        paths: Option<Vec<std::path::PathBuf>>,
-    },
-    /// Result of the `Add New ▸ Schematic` Save-As dialog. `None`
-    /// when the user cancelled; on `Some(path)` the handler writes
-    /// a blank `.snxsch`, registers it on the project, and marks
-    /// the .snxprj dirty.
-    AddNewSchematicPicked {
-        project_id: crate::app::state::ProjectId,
-        path: Option<std::path::PathBuf>,
-        /// The New Schematic setup dialog's values (#2232); `None`: the
-        /// project's sheet defaults.
-        choice: Option<crate::app::SheetChoice>,
-    },
-    /// The off-thread copies behind `AddExistingFilePicked` finished: one
-    /// entry per pick, `Ok` the path to register, `Err` a message for the
-    /// Messages panel. The outer `Err` is a worker that died.
-    AddExistingFilesCopied {
-        project_id: crate::app::state::ProjectId,
-        /// The folder the copies went into, released from the rename
-        /// guard (`DocumentState::project_writes`).
-        project_dir: std::path::PathBuf,
-        results: Result<Vec<Result<std::path::PathBuf, String>>, String>,
-    },
-    /// The off-thread blank-schematic write behind `AddNewSchematicPicked`
-    /// finished.
-    AddNewSchematicWritten {
-        project_id: crate::app::state::ProjectId,
-        path: std::path::PathBuf,
-        result: Result<crate::app::project_entry_disk::EntryPatch, String>,
-        /// The setup dialog's designator standard, applied only when the
-        /// write succeeded (#2232).
-        designators: Option<signex_types::designator::DesignatorStandard>,
-    },
-    /// The Create Sheet dialog's path field was edited.
-    CreateChildSheetPathChanged(String),
-    /// "Browse..." in the Create Sheet dialog.
-    CreateChildSheetBrowse,
-    /// The native save dialog of "Browse..." answered (`None`: cancelled).
-    CreateChildSheetBrowsed(Option<std::path::PathBuf>),
-    /// The Create Sheet dialog was answered: Create, or Later (`create:
-    /// false`, which also closes the window).
-    CreateChildSheetAnswered { create: bool },
-    /// "Open it" in the Create Sheet dialog, for a path that already exists.
-    CreateChildSheetOpenExisting,
-    /// The off-thread write of a child sheet created from a symbol finished.
-    /// `project_id` is the project owning the parent sheet, if any.
-    ChildSheetCreated {
-        project_id: Option<crate::app::state::ProjectId>,
-        parent: std::path::PathBuf,
-        symbol: uuid::Uuid,
-        path: std::path::PathBuf,
-        result: Result<(), crate::app::contracts::ChildSheetWriteError>,
-    },
-    /// v0.23 — Async project-git commit completed. The dispatcher
-    /// removes the `(project_root, rel_path)` entry from
-    /// `inflight_git_commits` and logs success/failure. `result.Ok`
-    /// carries the formatted commit OID, or `None` when the staged tree
-    /// matched HEAD's and no commit was made (#149); `result.Err` carries the
-    /// error string. Best-effort — a failure here doesn't roll back
-    /// the on-disk save (data is already on disk; this just means git
-    /// didn't capture it).
-    GitCommitDone {
-        project_root: std::path::PathBuf,
-        rel_path: std::path::PathBuf,
-        result: Result<Option<String>, GitCommitFailure>,
-    },
-    /// The off-thread project move behind a Rename Project that also
-    /// renames the project folder (#1221) finished. The in-memory
-    /// project, its open documents, the recent-projects list and the
-    /// version-control root follow only when `result` is `Ok`; on `Err`
-    /// the disk was restored and the dialog shows the reason.
-    ProjectFolderRenamed {
-        job: ProjectRenameJob,
-        result: Result<(), String>,
-    },
-    /// The off-thread move of the `.snxprj` alone (the folder keeps its name)
-    /// finished (#859). The in-memory project follows only when `result` is
-    /// `Ok`; on `Err` the file was not moved and the dialog says why.
-    ProjectFileRenamed {
-        job: ProjectFileRenameJob,
-        result: Result<(), String>,
-    },
-    /// The worker that lists the `.snxsch` files beside the active sheet
-    /// finished (#859): the Place Sheet tool's second click picks its default
-    /// name from them. `ticket` names the click; a result for any other
-    /// ticket is dropped.
-    SheetFilesListed {
-        ticket: u64,
-        result: Result<Vec<String>, String>,
-    },
-}
-
-/// One Rename Project that moves only the `.snxprj`: `from` becomes `to`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProjectFileRenameJob {
-    /// The registration in `pending_path_ops` that refuses saves, opens and
-    /// other moves of the two paths until the move is reported.
-    pub guard: crate::app::path_ops::PathOpId,
-    pub project_id: crate::app::state::ProjectId,
-    pub from: std::path::PathBuf,
-    pub to: std::path::PathBuf,
-    pub new_stem: String,
-    /// The recent-projects spelling of `from`, read before the move.
-    pub recent_key: std::path::PathBuf,
-}
-
-/// One Rename Project that moves the `.snxprj` and its folder together
-/// (#1221): `<old_dir>/<old_stem>.snxprj` becomes
-/// `<new_dir>/<new_stem>.snxprj`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProjectRenameJob {
-    pub project_id: crate::app::state::ProjectId,
-    pub old_dir: std::path::PathBuf,
-    pub new_dir: std::path::PathBuf,
-    pub old_stem: String,
-    pub new_stem: String,
-    /// The recent-projects spelling of the old `.snxprj`, read before the
-    /// move (the file no longer exists afterwards to canonicalise).
-    pub recent_key: std::path::PathBuf,
-}
-
-impl ProjectRenameJob {
-    /// The `.snxprj` before the move.
-    pub fn old_project_file(&self) -> std::path::PathBuf {
-        self.old_dir.join(format!("{}.snxprj", self.old_stem))
-    }
-
-    /// The `.snxprj` after the move.
-    pub fn new_project_file(&self) -> std::path::PathBuf {
-        self.new_dir.join(format!("{}.snxprj", self.new_stem))
-    }
-}
-
-/// Why a project-git commit did not happen.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum GitCommitFailure {
-    /// The version-control guard refused to start a repository in the
-    /// project's folder (#1205); auto-commit is paused for it.
-    Refused(String),
-    /// git itself failed.
-    Failed(String),
+    /// All (`true`) or None (`false`) was pressed: every shown kind follows.
+    CustomKindsAllSet(bool),
+    /// The Preset name field was edited.
+    CustomPresetNameEdited(String),
 }
 
 /// What a paste request does once the system clipboard has answered.
@@ -881,6 +652,9 @@ pub struct PasteRequest {
     pub path: Option<PathBuf>,
     /// The Paste Array dialog an `ArraySeed` read is for; 0 otherwise.
     pub dialog: u64,
+    /// An agent asked (`Origin::Agent` when the request was made): Paste
+    /// Special pastes at once rather than opening a dialog no one answers.
+    pub from_agent: bool,
 }
 
 /// Edit-command message family (ADR-0001 D3). Namespaced under
@@ -945,6 +719,18 @@ pub enum EditMsg {
     ArrangeDrawings(signex_engine::DrawingArrange),
     /// A placement extra on a sheet (#1667).
     Extras(super::PlacementExtrasMsg),
+    /// Bottom-up hierarchy (#1276): a sheet symbol from a sheet, and the
+    /// sheet entry sync with its preview.
+    SheetSync(crate::app::SheetSyncMsg),
+    /// A power rail rename's sheet reads finished (mockup row 45).
+    RailRename(crate::app::RailRenameMsg),
+    /// Schematic tables (#1300): contents sheet, CSV, cell edits.
+    Tables(crate::app::TablesMsg),
+    /// Named unions (mockup row 158): the canvas menu rows, the keymap and the Create
+    /// Union popover.
+    Unions(crate::app::unions::UnionsMsg),
+    /// A Smart Paste dialog event (mockup row 155).
+    SmartPasteDialog(crate::smart_paste::SmartPasteMsg),
 }
 
 /// Per-shape edit descriptor. The Properties panel dispatches one of
@@ -976,4 +762,31 @@ pub enum DrawingFieldEdit {
     /// Put the drawing behind or above the circuit (#1583). Not a field of
     /// the drawing itself: it is stored per sheet.
     Placement(signex_types::schematic::DrawingPlacement),
+}
+
+impl DrawingFieldEdit {
+    /// Whether the value can be stored (#2767): a size or radius is above
+    /// zero, a stroke is zero or more, and every number is finite.
+    pub fn is_valid(self) -> bool {
+        match self {
+            Self::Width(v) => v.is_finite() && v >= 0.0,
+            Self::RectWidthMm(v)
+            | Self::RectHeightMm(v)
+            | Self::CircleRadius(v)
+            | Self::ArcRadius(v) => v.is_finite() && v > 0.0,
+            Self::LineStartX(v)
+            | Self::LineStartY(v)
+            | Self::LineEndX(v)
+            | Self::LineEndY(v)
+            | Self::RectStartX(v)
+            | Self::RectStartY(v)
+            | Self::CircleCenterX(v)
+            | Self::CircleCenterY(v)
+            | Self::ArcCenterX(v)
+            | Self::ArcCenterY(v)
+            | Self::ArcStartAngle(v)
+            | Self::ArcEndAngle(v) => v.is_finite(),
+            Self::Fill(_) | Self::StrokeColor(_) | Self::Placement(_) => true,
+        }
+    }
 }

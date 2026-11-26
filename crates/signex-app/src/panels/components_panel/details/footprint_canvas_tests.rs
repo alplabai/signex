@@ -3,12 +3,15 @@
 
 use iced::widget::canvas::Program;
 use iced::{Event, Point, Rectangle, mouse};
+use signex_library::primitive::footprint::ChamferedCorners;
 use signex_library::primitive::{
     Drill, Footprint, FpGraphic, FpGraphicKind, Pad, PadKind, PadShape, Polygon,
 };
 
-use super::footprint_scale::{length_label, round_length_mm, scale_bar, size_label};
-use super::{FootprintPreview, PreviewState};
+use super::footprint_scale::{
+    drawing_area, length_label, round_length_mm, scale_bar, size_label, size_label_bounds,
+};
+use super::{FIT_PAD, FootprintPreview, PreviewState};
 use crate::layout_probe::headless_renderer;
 use crate::library::editor::footprint::canvas::{FootprintCanvas, FootprintCanvasState};
 use crate::library::editor::footprint::state::FootprintEditorState;
@@ -168,9 +171,11 @@ fn draw_editor(fp: &Footprint, at: &PreviewState) -> Painted {
         sketch: None,
         silk_f: &fp.silk_f,
         silk_b: &fp.silk_b,
+        generated_silk: &fp.generated.silk,
         zoom_step: 1.1,
         trackpad_pan: false,
         wheel_mode: Default::default(),
+        mirror_card: None,
     };
     let camera = FootprintCanvasState::with_view(at.scale(), at.offset());
     let renderer = headless_renderer();
@@ -186,8 +191,9 @@ fn draw_editor(fp: &Footprint, at: &PreviewState) -> Painted {
 
 /// The pads are drawn as the PCB canvas draws them (#2348): a top-copper pad
 /// in the colour the Layers panel lists Top Copper with, a through-hole pad
-/// in the Multi-Layer colour with its drill as an opening. A pad the board
-/// cannot hold (the custom outline) is left to the editor's renderer.
+/// in the Multi-Layer colour with its drill as an opening. The custom outline
+/// is board copper too since #2242; a pad the board cannot hold (a chamfered
+/// rectangle) is left to the editor's renderer.
 #[test]
 fn preview_pads_are_the_board_lowering_in_the_board_palette() {
     use crate::pcb_canvas::layer_style::{board_layer_colour, multi_layer_colour};
@@ -202,21 +208,37 @@ fn preview_pads_are_the_board_lowering_in_the_board_palette() {
     };
     let model = preview_of(&fixture());
     let pads = &model.board_pads().top_polygons;
-    assert_eq!(pads.len(), 3, "pad 1, pad 2 and pad 2's drill");
+    assert_eq!(pads.len(), 4, "pads 1, 2 and 3 and pad 2's drill");
     let top_copper = board_layer_colour(PcbLayer::Copper(CopperLayer::Top));
     assert_eq!(rgba(pads[0].fill_color), top_copper);
     assert_eq!(rgba(pads[1].fill_color), multi_layer_colour());
     assert_ne!(top_copper, multi_layer_colour());
+    let top_count = pads
+        .iter()
+        .filter(|p| rgba(p.fill_color) == top_copper)
+        .count();
+    assert_eq!(top_count, 2, "pad 1 and the custom pad 3");
 
     let board = ResolvedTheme::from_canvas_colors(crate::styles::board_canvas_colors());
-    let drill = &pads[2];
-    assert_eq!(drill.fill_color, board.color(ColorSlot::BoardOpening));
+    let opening = board.color(ColorSlot::BoardOpening);
+    let drill = pads
+        .iter()
+        .find(|p| p.fill_color == opening)
+        .expect("pad 2's drill");
     assert!(drill.vertices.len() >= 8);
     for v in &drill.vertices {
         let r = ((v[0] - 1.5).powi(2) + v[1].powi(2)).sqrt();
         assert!((r - 0.3).abs() < 1e-4, "{v:?} on the 0.6 mm drill");
     }
 
+    assert!(model.unheld_pads().is_empty());
+
+    let mut chamfered = fixture();
+    chamfered.pads[2].shape = PadShape::Chamfered {
+        chamfer_ratio: 0.25,
+        corners: ChamferedCorners::default(),
+    };
+    let model = preview_of(&chamfered);
     let unheld: Vec<&str> = model
         .unheld_pads()
         .iter()
@@ -335,7 +357,8 @@ fn the_fit_centres_the_footprint_inside_a_narrow_and_a_wide_box() {
     let model = preview_of(&fixture());
     let (min_x, min_y, max_x, max_y) = model.bbox_mm().expect("pads give a bbox");
     for size in [iced::Size::new(120.0, 156.0), iced::Size::new(700.0, 156.0)] {
-        let camera = super::fitted_camera(&model, Rectangle::with_size(size));
+        let area = Rectangle::with_size(size);
+        let camera = super::fitted_camera(&model, area);
         let (scale, off) = (camera.scale, camera.offset);
         let low = (min_x as f32 * scale + off.x, min_y as f32 * scale + off.y);
         let high = (max_x as f32 * scale + off.x, max_y as f32 * scale + off.y);
@@ -344,8 +367,45 @@ fn the_fit_centres_the_footprint_inside_a_narrow_and_a_wide_box() {
             high.0 <= size.width && high.1 <= size.height,
             "{size:?} {high:?}"
         );
+        // Centred across the box, and down the part above the readouts.
+        let drawing = drawing_area(area, (min_x, min_y, max_x, max_y), FIT_PAD);
         assert!((low.0 + high.0 - size.width).abs() < 1e-2, "{size:?}");
-        assert!((low.1 + high.1 - size.height).abs() < 1e-2, "{size:?}");
+        assert!((low.1 + high.1 - drawing.height).abs() < 1e-2, "{size:?}");
+    }
+}
+
+/// Caner's report of 2026-11-21: the size sits under the drawing, clear of
+/// the footprint and courtyard and of the scale bar, in a wide and a narrow
+/// preview.
+#[test]
+fn the_size_label_sits_at_the_bottom_clear_of_the_drawing_and_the_bar() {
+    let model = preview_of(&fixture());
+    let bbox = model.bbox_mm().expect("bbox");
+    let label = size_label(bbox);
+    let text = crate::styles::TypeScale::DEFAULT.caption;
+    for size in [
+        iced::Size::new(320.0, 200.0),
+        iced::Size::new(150.0, 132.0),
+        iced::Size::new(120.0, 156.0),
+    ] {
+        let area = Rectangle::with_size(size);
+        let camera = super::fitted_camera(&model, area);
+        let bounds = size_label_bounds(area, &label);
+        assert!(bounds.y >= size.height / 2.0, "{size:?} {bounds:?}");
+        assert!(
+            bounds.y + bounds.height <= size.height,
+            "{size:?} {bounds:?}"
+        );
+        let drawing_bottom = bbox.3 as f32 * camera.scale + camera.offset.y;
+        assert!(
+            drawing_bottom <= bounds.y + 1e-2,
+            "{size:?}: drawing ends at {drawing_bottom}, label starts at {}",
+            bounds.y
+        );
+        let (_, bar) = scale_bar(camera.scale, size.width).expect("bar");
+        let beside_bar = bounds.x >= text + bar;
+        let above_bar = bounds.y + bounds.height <= size.height - text * 3.0 + 1e-2;
+        assert!(beside_bar || above_bar, "{size:?} {bounds:?} bar {bar}");
     }
 }
 
@@ -607,15 +667,16 @@ fn a_drag_in_a_scrolled_pane_pans_one_to_one() {
     }
 }
 
-/// The previews paint silk, fab and courtyard in the colours the PCB canvas
-/// lists those layers with, the courtyard solid and the pads opaque, as on
-/// the board (#2348); the editor canvases keep their palettes.
+/// The previews and the footprint editor paint every layer, and the
+/// courtyard, in the colour the PCB canvas gives that layer (#2348, #2375).
+/// Only the drawing style differs: the previews draw a solid courtyard and
+/// opaque pads as on the board, the editor a dashed courtyard and
+/// see-through pads.
 #[test]
 fn board_previews_take_the_pcb_layer_colours() {
     use crate::library::editor::footprint::layers::{FpLayer, LayerPalette};
     use crate::pcb_canvas::layer_style::board_layer_colour;
     use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer as T};
-    let board = LayerPalette::Board;
     let cases = [
         (FpLayer::FCu, PcbLayer::Copper(CopperLayer::Top)),
         (FpLayer::BCu, PcbLayer::Copper(CopperLayer::Bottom)),
@@ -623,30 +684,25 @@ fn board_previews_take_the_pcb_layer_colours() {
         (FpLayer::BSilks, PcbLayer::Technical(T::SilkscreenBottom)),
         (FpLayer::FFab, PcbLayer::Technical(T::FabTop)),
         (FpLayer::BFab, PcbLayer::Technical(T::FabBottom)),
+        (FpLayer::EdgeCuts, PcbLayer::Technical(T::EdgeCuts)),
     ];
+    assert_eq!(cases.len(), FpLayer::ORDER.len(), "every footprint layer");
     for (layer, on_board) in cases {
+        assert_eq!(layer.color(), board_layer_colour(on_board), "{layer:?}");
+    }
+    for palette in [LayerPalette::Board, LayerPalette::Editor] {
         assert_eq!(
-            layer.color_in(board),
-            board_layer_colour(on_board),
-            "{layer:?}"
+            palette.courtyard_colour(),
+            board_layer_colour(PcbLayer::Technical(T::CourtyardTop)),
+            "{palette:?}"
         );
     }
-    assert_eq!(
-        board.courtyard_colour(),
-        board_layer_colour(PcbLayer::Technical(T::CourtyardTop))
-    );
+    let board = LayerPalette::Board;
     assert!(!board.dashes_courtyard(), "the courtyard is solid");
     assert_eq!(board.pad_fill_alpha(), 1.0, "pads are opaque");
-    // The editor canvases are unchanged.
-    let canvas = LayerPalette::CanvasDark;
-    assert!(canvas.dashes_courtyard());
-    assert_eq!(canvas.pad_fill_alpha(), 0.85);
-    assert_eq!(
-        canvas.courtyard_colour(),
-        FpLayer::EdgeCuts.color_in(canvas)
-    );
-    assert!(!LayerPalette::Legacy.dashes_courtyard());
-    assert!(!LayerPalette::Graphite.dashes_courtyard());
+    let editor = LayerPalette::Editor;
+    assert!(editor.dashes_courtyard());
+    assert_eq!(editor.pad_fill_alpha(), 0.85);
 }
 
 /// `with_theme_tokens` picks the board palette in every theme.

@@ -15,7 +15,7 @@ use crate::library::place::lib_id_of;
 
 /// Why a linked part kept its footprint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum NotUpdated {
+pub(crate) enum NotUpdated {
     /// No open sheet holds the part.
     SheetNotOpen,
     /// Its sheet opened read-only.
@@ -34,7 +34,7 @@ pub(super) struct LinkedPlan {
 /// A sheet edited by the swap, and the redraw it needs when it is in view.
 pub(super) struct ChangedSheet {
     pub path: PathBuf,
-    pub invalidation: Option<crate::schematic_runtime::RenderInvalidation>,
+    pub patch: Option<signex_engine::DocumentPatch>,
 }
 
 impl Signex {
@@ -130,15 +130,11 @@ impl Signex {
                 continue;
             };
             let outcome = engine.execute_batch_grouped(commands, Some(group));
-            for warning in engine.take_warnings() {
-                crate::diagnostics::log_warning(warning);
-            }
+            crate::app::Signex::report_engine_warnings(engine);
             match outcome {
                 Ok(result) if result.changed => changed.push(ChangedSheet {
                     path,
-                    invalidation: result
-                        .patch_pair
-                        .map(|pair| Self::render_invalidation_for_patch(pair.document)),
+                    patch: result.patch_pair.map(|pair| pair.document),
                 }),
                 Ok(_) => {}
                 Err(error) => crate::diagnostics::log_error(
@@ -186,21 +182,22 @@ impl Signex {
             boards: vec![board],
             ..Default::default()
         };
-        let mut in_view = None;
+        let (mut in_view, mut members) = (None, Vec::new());
         for sheet in changed {
             if active.as_ref() == Some(&sheet.path) {
-                in_view = sheet.invalidation;
+                in_view = sheet.patch;
             } else {
-                self.document_state.mark_history_edit_dirty(&sheet.path);
+                let patch = sheet.patch.unwrap_or(signex_engine::DocumentPatch::FULL);
+                members.push((sheet.path.clone(), patch));
             }
             recorded.live.push(sheet.path);
         }
-        self.set_undo_group_sheets(group, recorded);
-        match in_view {
-            Some(invalidation) => {
-                self.finish_schematic_mutation(invalidation, true, true);
-            }
-            None => self.document_state.note_sheet_edit(),
-        }
+        let run = crate::app::state::sheet_change::SheetRun {
+            group,
+            recorded,
+            members,
+            notes_edit: true,
+        };
+        self.finish_schematic_mutation(in_view, Some(run), true, true);
     }
 }

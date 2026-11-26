@@ -1,13 +1,11 @@
 //! Graphite look of the footprint canvas: the dark board ground (the same
-//! in Graphite Light and Dark), a dot grid like the schematic's, and the canvas layer palette.
+//! in Graphite Light and Dark) and a dot grid like the schematic's.
 //! The look travels as the canvas background colour, so the shared
 //! backdrop and layer renderers need no extra field and every other theme
 //! keeps the black Altium-style board.
 
 use iced::Color;
 use signex_types::theme::ThemeTokens;
-
-use super::super::super::layers::LayerPalette;
 
 /// Spacing the dot grid aims for on screen, in px.
 const DOT_STEP_PX: f32 = 16.0;
@@ -43,13 +41,6 @@ pub(crate) fn look_for(_tokens: &ThemeTokens) -> GraphiteLook {
 /// The look whose ground is exactly `bg`, if any.
 pub(crate) fn look_from_bg(bg: Color) -> Option<GraphiteLook> {
     Some(board_look()).filter(|l| l.bg == bg)
-}
-
-impl GraphiteLook {
-    /// Layer colours that read on the dark board ground.
-    pub(crate) fn palette(self) -> LayerPalette {
-        LayerPalette::CanvasDark
-    }
 }
 
 /// Dot-grid spacing in px: the grid step, widened by x5 until dots are

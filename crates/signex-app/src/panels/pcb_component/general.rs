@@ -1,25 +1,34 @@
-//! The Location and Properties sections of the General tab.
+//! The Location and Properties sections of the General tab (Graphite mockup row 94):
+//! Location carries the lock in its header, then Position (X and Y on one
+//! row) and Rotation; Properties holds the side as a Top / Bottom segmented
+//! control, Designator, Comment, Description (the Description parameter)
+//! and the read-only Area.
 
-use iced::widget::{Column, Row, Space, container};
-use iced::{Background, Border, Color, Element, Length, Theme, Widget as _};
+use iced::widget::{Column, Row, Space, container, svg};
+use iced::{Background, Border, Element, Length, Theme, Widget as _};
 use signex_engine::pcb::component::LocationField;
 use signex_engine::pcb::designators::FootprintTextField;
-use signex_i18n::{MessageId, ids, t};
-use signex_types::format::parse_pcb_layer;
-use signex_types::pcb_layer::BoardSide;
-use signex_widgets::{button, text};
+use signex_i18n::{Localized, MessageId, ids, t};
+use signex_types::pcb_layer::{BoardSide, CopperLayer, PcbLayer};
+use signex_widgets::{button, text, text_input};
 
-use super::rows::{self, Form};
-use super::{ComponentField, PcbComponentFacts, PcbComponentMsg, PcbFootprintFacts, Shared};
+use super::rows::{self, Form, InputEdit, SectionSpec};
+use super::{
+    ComponentField, LAYER_FIELD, PcbComponentFacts, PcbComponentMsg, PcbFootprintFacts, Shared,
+};
 use crate::panels::{PanelContext, PanelMsg, form_look};
-use crate::pcb_canvas::layer_style;
-use crate::styles::{PillTone, Radii, Spacing, TypeScale, tokens::resolve};
+use crate::styles::board_palette::BoardPalette;
+use crate::styles::tokens::resolve;
+use crate::styles::{PillTone, Spacing, TypeScale};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
 /// The key of the parameter the Description row edits.
-pub(super) const DESCRIPTION_KEY: &str = "Description";
+const DESCRIPTION_KEY: &str = "Description";
+
+/// The lock glyph of the Location header (the mockup's `i-lock`).
+const LOCK_ICON: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M5.5 7V5a2.5 2.5 0 015 0v2" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>"#;
 
 /// Push Location and Properties onto `col`, then the notes of a single
 /// component's text.
@@ -31,12 +40,7 @@ pub(super) fn push_sections<'a>(
 ) -> Column<Element<'a, PanelMsg>> {
     let form = Form::new(ctx, facts);
     let sections = [
-        rows::section(
-            &form,
-            "pcb_component_location",
-            ids::PCB_COMPONENT_SECTION_LOCATION,
-            location(&form, facts),
-        ),
+        location_section(&form, facts),
         rows::section(
             &form,
             "pcb_component_properties",
@@ -68,44 +72,131 @@ pub(super) fn push_sections<'a>(
     col
 }
 
+/// Location, its header carrying the lock.
+fn location_section<'a>(
+    form: &Form<'a>,
+    facts: &'a PcbComponentFacts,
+) -> Option<Element<'a, PanelMsg>> {
+    let lock_shown = form.shows(&form.text(ids::PCB_COMPONENT_LOCKED));
+    let spec = SectionSpec {
+        trailing: lock_shown.then(|| lock_control(form, facts)),
+        keep_empty: lock_shown,
+        ..SectionSpec::new(
+            "pcb_component_location",
+            ids::PCB_COMPONENT_SECTION_LOCATION,
+        )
+    };
+    rows::section_with(form, spec, location(form, facts))
+}
+
+/// The lock glyph, "Locked" and its checkbox, with the tooltip that says
+/// what a lock stops.
+fn lock_control<'a>(form: &Form<'a>, facts: &'a PcbComponentFacts) -> Element<'a, PanelMsg> {
+    let ink = resolve(&form.ctx.tokens).ink4;
+    let toggled = (!facts.read_only).then(|| {
+        PanelMsg::PcbComponent(PcbComponentMsg::LockToggled {
+            board: facts.board.clone(),
+            footprints: facts.footprints.clone(),
+            locked: facts.locked != Shared::Same(true),
+        })
+    });
+    let icon = svg(crate::icons::static_glyph(LOCK_ICON))
+        .width(TS.caption)
+        .height(TS.caption)
+        .style(move |_: &Theme, _| svg::Style {
+            color: Some(ink),
+            ..Default::default()
+        });
+    let control = Row::new()
+        .push_boxed(icon)
+        .push_boxed(
+            text(t!(form.ctx.i18n, ids::PCB_COMPONENT_LOCKED))
+                .size(TS.caption)
+                .color(ink),
+        )
+        .push(rows::check(&facts.locked, toggled))
+        .spacing(SP.xs)
+        .align_y(iced::Alignment::Center)
+        .boxed();
+    form.with_tip(control, ids::PCB_COMPONENT_LOCKED_TIP)
+}
+
+/// Position (X and Y with their prefixes and one unit) and Rotation.
 fn location<'a>(form: &Form<'a>, facts: &'a PcbComponentFacts) -> Vec<Element<'a, PanelMsg>> {
     let mut rows = Vec::new();
-    for (field, label, value) in [
-        (LocationField::X, ids::PCB_COMPONENT_X, &facts.x),
-        (LocationField::Y, ids::PCB_COMPONENT_Y, &facts.y),
-        (
-            LocationField::Rotation,
-            ids::PCB_COMPONENT_ROTATION,
-            &facts.rotation,
-        ),
-    ] {
-        let label = form.text(label);
-        if form.shows(&label) {
-            let field = ComponentField::Location(field);
-            let control = draft_input(facts, field, value.same().map(|v| rows::number_text(*v)));
-            rows.push(rows::row(form, label, control));
-        }
-    }
-    let label = form.text(ids::PCB_COMPONENT_LOCKED);
+    let label = form.text(ids::PCB_COMPONENT_POSITION);
     if form.shows(&label) {
-        let toggled = (!facts.read_only).then(|| {
-            PanelMsg::PcbComponent(PcbComponentMsg::LockToggled {
-                board: facts.board.clone(),
-                footprints: facts.footprints.clone(),
-                locked: facts.locked != Shared::Same(true),
-            })
-        });
-        let control = form.with_tip(
-            rows::check(&facts.locked, toggled),
-            ids::PCB_COMPONENT_LOCKED_TIP,
-        );
+        let coordinate = |field: LocationField, prefix: MessageId, value: &Shared<f64>| {
+            let field = ComponentField::Location(field);
+            let shown = shown_value(facts, &field, value.same().map(|v| rows::number_text(*v)));
+            prefixed(
+                form,
+                t!(form.ctx.i18n, prefix),
+                shown,
+                draft_edit(facts, field),
+            )
+        };
+        let control = Row::new()
+            .push(coordinate(
+                LocationField::X,
+                ids::PCB_COMPONENT_X_PREFIX,
+                &facts.x,
+            ))
+            .push(coordinate(
+                LocationField::Y,
+                ids::PCB_COMPONENT_Y_PREFIX,
+                &facts.y,
+            ))
+            .push(rows::unit(form, ids::PCB_COMPONENT_UNIT_MM))
+            .spacing(SP.xs)
+            .align_y(iced::Alignment::Center)
+            .boxed();
         rows.push(rows::row(form, label, control));
+    }
+    let label = form.text(ids::PCB_COMPONENT_ROTATION);
+    if form.shows(&label) {
+        let field = ComponentField::Location(LocationField::Rotation);
+        let stored = facts.rotation.same().map(|v| rows::number_text(*v));
+        let mixed =
+            (facts.rotation == Shared::Mixed).then(|| t!(form.ctx.i18n, ids::PCB_COMPONENT_MIXED));
+        let control = draft_input_with(facts, field, stored, mixed);
+        rows.push(rows::row(
+            form,
+            label,
+            rows::with_unit(form, control, ids::PCB_COMPONENT_UNIT_DEGREES),
+        ));
     }
     rows
 }
 
-/// An input whose text is `field`'s draft, else `stored` (blank when the
-/// components differ); editable while placement edits run.
+/// A bare input after its catalog prefix ("X", "Y"), in one field frame.
+fn prefixed<'a>(
+    form: &Form<'a>,
+    prefix: Localized,
+    shown: String,
+    edit: Option<InputEdit<'a>>,
+) -> Element<'a, PanelMsg> {
+    let mut input = text_input(signex_i18n::UserText::new(String::new()), shown)
+        .size(TS.body)
+        .padding([SP.s, SP.xs])
+        .style(rows::bare_input_style)
+        .width(Length::Fill);
+    if let Some((on_input, on_submit)) = edit {
+        input = input.on_input(on_input).on_submit(on_submit);
+    }
+    let content = Row::new()
+        .push_boxed(
+            text(prefix)
+                .size(TS.caption)
+                .color(resolve(&form.ctx.tokens).ink4),
+        )
+        .push_boxed(input)
+        .spacing(SP.xs)
+        .align_y(iced::Alignment::Center)
+        .boxed();
+    rows::framed(form, content)
+}
+
 /// The text a field's input shows: the user's unsubmitted draft, else the
 /// stored value, else empty.
 pub(super) fn shown_value(
@@ -116,14 +207,14 @@ pub(super) fn shown_value(
     facts.draft(field).cloned().or(stored).unwrap_or_default()
 }
 
-pub(super) fn draft_input<'a>(
+/// What typing into `field` sends while placement edits run: the draft per
+/// keystroke, the edit on Enter. `None` while they do not.
+pub(super) fn draft_edit<'a>(
     facts: &'a PcbComponentFacts,
     field: ComponentField,
-    stored: Option<String>,
-) -> Element<'a, PanelMsg> {
-    let shown = shown_value(facts, &field, stored);
+) -> Option<InputEdit<'a>> {
     if !facts.is_editable() {
-        return rows::input(shown, None);
+        return None;
     }
     let (board, footprints) = (facts.board.clone(), facts.footprints.clone());
     let submitted = PanelMsg::PcbComponent(PcbComponentMsg::FieldSubmitted {
@@ -139,7 +230,28 @@ pub(super) fn draft_input<'a>(
             text,
         })
     };
-    rows::input(shown, Some((Box::new(typed), submitted)))
+    Some((Box::new(typed), submitted))
+}
+
+/// An input whose text is `field`'s draft, else `stored` (blank when the
+/// components differ); editable while placement edits run.
+pub(super) fn draft_input<'a>(
+    facts: &'a PcbComponentFacts,
+    field: ComponentField,
+    stored: Option<String>,
+) -> Element<'a, PanelMsg> {
+    draft_input_with(facts, field, stored, None)
+}
+
+/// [`draft_input`] showing `mixed` in italics while it is empty.
+pub(super) fn draft_input_with<'a>(
+    facts: &'a PcbComponentFacts,
+    field: ComponentField,
+    stored: Option<String>,
+    mixed: Option<Localized>,
+) -> Element<'a, PanelMsg> {
+    let shown = shown_value(facts, &field, stored);
+    rows::input_with(shown, mixed, draft_edit(facts, field))
 }
 
 fn properties<'a>(
@@ -150,12 +262,18 @@ fn properties<'a>(
     let mut rows = Vec::new();
     let label = form.text(ids::PCB_COMPONENT_LAYER);
     if form.shows(&label) {
-        rows.push(rows::row(form, label, layer_picker(form, facts)));
+        rows.push(rows::linked_row(
+            form,
+            label,
+            LAYER_FIELD,
+            layer_picker(form, facts),
+        ));
     }
     for field in [FootprintTextField::Designator, FootprintTextField::Value] {
         rows.extend(super::text::text_row(form, facts, single, field));
     }
     rows.extend(super::text::comment_note(form, facts, single));
+    rows.extend(description(form, facts));
     let label = form.text(ids::PCB_COMPONENT_AREA);
     if form.shows(&label) {
         let area = match facts.area_mm2 {
@@ -166,87 +284,91 @@ fn properties<'a>(
             .into_string(),
             Shared::Same(None) | Shared::Mixed => String::new(),
         };
-        rows.push(rows::row(form, label, rows::value(area)));
+        rows.push(rows::row(form, label, rows::read_only(form, area)));
     }
-    rows.extend(description(form, facts));
-    rows.extend(super::settings::type_row(form, facts));
-    rows.extend(super::identity::library_rows(form, facts));
-    rows.extend(super::settings::property_rows(form, facts));
     rows
 }
 
 /// The Description row edits the components' Description parameter; without
-/// one there is nothing to edit.
+/// one there is nothing to edit and the row says so. The footprint's own
+/// description is its own row in the Footprint section.
 fn description<'a>(form: &Form<'a>, facts: &'a PcbComponentFacts) -> Option<Element<'a, PanelMsg>> {
     let label = form.text(ids::PCB_COMPONENT_DESCRIPTION);
     if !form.shows(&label) {
         return None;
     }
-    let Some(value) = facts.parameter(DESCRIPTION_KEY) else {
-        return rows::unsupported(
-            form,
-            ids::PCB_COMPONENT_DESCRIPTION,
-            ids::PCB_COMPONENT_NO_DESCRIPTION,
-        );
+    let control = match facts.parameter(DESCRIPTION_KEY) {
+        Some(value) => draft_input(
+            facts,
+            ComponentField::Parameter(DESCRIPTION_KEY.to_string()),
+            value.same().cloned(),
+        ),
+        None => rows::read_only_caption(form, t!(form.ctx.i18n, ids::PCB_COMPONENT_NO_DESCRIPTION)),
     };
-    let field = ComponentField::Parameter(DESCRIPTION_KEY.to_string());
-    let control = draft_input(facts, field, value.same().cloned());
     Some(rows::row(form, label, control))
 }
 
-/// Top Layer and Bottom Layer as two tiles, each with its copper colour; the
-/// tile the components sit on is lit, neither when they differ. Picking the
-/// other side flips them.
+/// Top Layer and Bottom Layer as a segmented control; the side the
+/// components sit on is raised with its copper colour, neither when they
+/// differ. Picking the other side flips them.
 fn layer_picker<'a>(form: &Form<'a>, facts: &'a PcbComponentFacts) -> Element<'a, PanelMsg> {
-    let tile = |side: BoardSide, token: &str, label: MessageId| {
-        let swatch = parse_pcb_layer(token)
-            .map(|layer| layer_style::layer_colour(layer, &form.ctx.tokens))
-            .unwrap_or(Color::TRANSPARENT);
+    let palette = BoardPalette::new();
+    let cell = |side: BoardSide, copper: CopperLayer, label: MessageId| {
         let active = facts.side == Shared::Same(side);
-        let content = Row::<Element<'a, PanelMsg>>::new()
-            .push(chip(swatch))
-            .push_boxed(text(t!(form.ctx.i18n, label)).size(TS.body))
-            .spacing(SP.s)
+        let mut content = Row::<Element<'a, PanelMsg>>::new()
+            .spacing(SP.xs)
             .align_y(iced::Alignment::Center);
-        let mut tile = button(content)
-            .padding([SP.s, SP.m])
-            .width(Length::Fill)
-            .style(form_look::option_tile(active));
-        if facts.is_editable() && !active {
-            tile = tile.on_press(PanelMsg::PcbComponent(PcbComponentMsg::SidePicked {
+        if active {
+            content = content.push(dot(palette.layer(PcbLayer::Copper(copper))));
+        }
+        content = content.push_boxed(text(t!(form.ctx.i18n, label)).size(TS.caption));
+        let picked = (facts.is_editable() && !active).then(|| {
+            PanelMsg::PcbComponent(PcbComponentMsg::SidePicked {
                 board: facts.board.clone(),
                 footprints: facts.footprints.clone(),
                 side,
-            }));
-        }
-        tile.boxed()
+            })
+        });
+        button(container(content).align_x(iced::alignment::Horizontal::Center))
+            .padding([SP.xs, SP.s])
+            .on_press_maybe(picked)
+            .style(move |theme: &Theme, status| {
+                let hovered = matches!(status, iced::widget::button::Status::Hovered);
+                form_look::segment_cell(theme, active, hovered && !active)
+            })
+            .boxed()
     };
-    Row::new()
-        .push(tile(
-            BoardSide::Top,
-            "TopCopper",
-            ids::PCB_COMPONENT_LAYER_TOP,
-        ))
-        .push(tile(
-            BoardSide::Bottom,
-            "BottomCopper",
-            ids::PCB_COMPONENT_LAYER_BOTTOM,
-        ))
+    container(
+        signex_widgets::FitRow::new(vec![
+            cell(
+                BoardSide::Top,
+                CopperLayer::Top,
+                ids::PCB_COMPONENT_LAYER_TOP,
+            ),
+            cell(
+                BoardSide::Bottom,
+                CopperLayer::Bottom,
+                ids::PCB_COMPONENT_LAYER_BOTTOM,
+            ),
+        ])
         .spacing(SP.xs)
-        .boxed()
+        .fill(true),
+    )
+    .padding(SP.xs)
+    .width(Length::Fill)
+    .style(form_look::segmented_frame)
+    .boxed()
 }
 
-/// A small square of the layer's colour.
-fn chip<'a>(colour: Color) -> Element<'a, PanelMsg> {
+/// A small round swatch of a layer's colour.
+fn dot<'a>(colour: iced::Color) -> Element<'a, PanelMsg> {
     container(Space::new())
-        .width(TS.body)
-        .height(TS.body)
+        .width(SP.m)
+        .height(SP.m)
         .style(move |_: &Theme| container::Style {
             background: Some(Background::Color(colour)),
             border: Border {
-                width: 1.0,
-                color: Color { a: 0.5, ..colour },
-                radius: Radii::GRAPHITE.small.into(),
+                radius: SP.m.into(),
                 ..Border::default()
             },
             ..container::Style::default()

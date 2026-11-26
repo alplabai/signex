@@ -149,6 +149,7 @@ fn project_data(
         sheets: sheets.iter().map(|name| entry(name)).collect(),
         variant_definitions: Vec::new(),
         active_variant: None,
+        variant_settings: Default::default(),
         libraries: Vec::new(),
         enable_git: false,
         rules: Default::default(),
@@ -157,6 +158,11 @@ fn project_data(
         schematic_defaults: Default::default(),
         project_defaults: Default::default(),
         agent_journal: Default::default(),
+        schematic_design: Default::default(),
+        fab_outputs: None,
+        router_tool_diameter: None,
+        bom_alternates: Vec::new(),
+        requirements: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
     }
@@ -245,7 +251,6 @@ fn rig_with(board: PcbBoard, other_project: bool) -> Rig {
     app.document_state.tabs.push(TabInfo {
         title: "root".to_string(),
         path: root.clone(),
-        cached_document: None,
         project_id: Some(project),
         kind: TabKind::Schematic,
     });

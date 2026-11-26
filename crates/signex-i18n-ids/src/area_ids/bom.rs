@@ -1,4 +1,4 @@
-//! Ids of `locales/en-US/bom.ftl`: the BOM preview (#2058).
+//! Ids of `locales/en-US/bom.ftl`: the BOM export dialog (#2058).
 
 define_ids! {
     BOM;
@@ -8,10 +8,8 @@ define_ids! {
     BOM_TAB_RULES = "bom-tab-rules";
     BOM_SECTION_ITEMS = "bom-section-items";
     BOM_SECTION_EXPORT = "bom-section-export";
-    BOM_SECTION_COLUMNS = "bom-section-columns";
     BOM_SECTION_RULES = "bom-section-rules";
     BOM_SECTION_ISSUES = "bom-section-issues";
-    BOM_GROUPING = "bom-grouping";
     BOM_GROUPING_GROUPED = "bom-grouping-grouped";
     BOM_GROUPING_UNGROUPED = "bom-grouping-ungrouped";
     BOM_GROUPING_FLAT = "bom-grouping-flat";
@@ -19,18 +17,25 @@ define_ids! {
     BOM_FORMAT_CSV = "bom-format-csv";
     BOM_FORMAT_XLSX = "bom-format-xlsx";
     BOM_FORMAT_HTML = "bom-format-html";
-    BOM_INCLUDE_DNP = "bom-include-dnp";
     BOM_INCLUDE_NOT_FITTED = "bom-include-not-fitted";
     BOM_VARIANT = "bom-variant";
     BOM_VARIANT_BASE = "bom-variant-base";
-    BOM_VARIANT_IS = "bom-variant-is";
-    BOM_CURRENT_VARIANT = "bom-current-variant";
+    BOM_FILTER_PLACEHOLDER = "bom-filter-placeholder";
+    BOM_CHIP_WARNINGS = "bom-chip-warnings";
+    BOM_CHIP_ERRORS = "bom-chip-errors";
+    BOM_COLUMNS_HINT = "bom-columns-hint";
+    BOM_ISSUES_HINT = "bom-issues-hint";
+    BOM_ISSUE_LINE = "bom-issue-line";
+    BOM_EXPORT_CSV = "bom-export-csv";
+    BOM_EXPORT_XLSX = "bom-export-xlsx";
+    BOM_EXPORT_HTML = "bom-export-html";
     BOM_COLUMN_NAME = "bom-column-name";
     BOM_COLUMN_DESCRIPTION = "bom-column-description";
     BOM_COLUMN_DESIGNATOR = "bom-column-designator";
     BOM_COLUMN_VALUE = "bom-column-value";
     BOM_COLUMN_FOOTPRINT = "bom-column-footprint";
     BOM_COLUMN_LIB_REF = "bom-column-lib-ref";
+    BOM_COLUMN_REFERENCE = "bom-column-reference";
     BOM_COLUMN_QTY = "bom-column-qty";
     BOM_COLUMN_UNIT_PRICE = "bom-column-unit-price";
     BOM_COLUMN_BUY_QTY = "bom-column-buy-qty";
@@ -39,7 +44,7 @@ define_ids! {
     BOM_COLUMN_STOCK = "bom-column-stock";
     BOM_COLUMN_DISTRIBUTOR = "bom-column-distributor";
     BOM_COLUMN_PRICE_AGE = "bom-column-price-age";
-    BOM_NO_ISSUES = "bom-no-issues";
+    BOM_COLUMN_ALTERNATES = "bom-column-alternates";
     BOM_NO_ISSUES_FOUND = "bom-no-issues-found";
     BOM_ISSUES_ERRORS = "bom-issues-errors";
     BOM_ISSUES_WARNINGS = "bom-issues-warnings";
@@ -49,4 +54,11 @@ define_ids! {
     BOM_PRICE_NONE = "bom-price-none";
     BOM_PRICE_TOTAL = "bom-price-total";
     BOM_PRICE_TOTAL_UNPRICED = "bom-price-total-unpriced";
+    BOM_RULE_MISSING_FOOTPRINT = "bom-rule-missing-footprint";
+    BOM_RULE_MISSING_MPN = "bom-rule-missing-mpn";
+    BOM_RULE_DUPLICATE_DESIGNATOR = "bom-rule-duplicate-designator";
+    BOM_RULE_EMPTY_OR_ZERO_QTY = "bom-rule-empty-or-zero-qty";
+    BOM_RULE_UNIT_FIELD_CONFLICT = "bom-rule-unit-field-conflict";
+    BOM_QUERY_REFUSED = "bom-query-refused";
+    BOM_ALTERNATE_REFUSED = "bom-alternate-refused";
 }

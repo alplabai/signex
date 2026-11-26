@@ -33,6 +33,7 @@ pub fn fixture() -> Fixture {
         sheets: Vec::new(),
         variant_definitions: Vec::new(),
         active_variant: None,
+        variant_settings: Default::default(),
         libraries: vec![signex_types::project::LibraryEntry {
             path: PathBuf::from("parts.snxlib"),
             kind: signex_types::project::LibraryEntryKind::ProjectLocal,
@@ -46,6 +47,11 @@ pub fn fixture() -> Fixture {
         schematic_defaults: Default::default(),
         project_defaults: Default::default(),
         agent_journal: Default::default(),
+        schematic_design: Default::default(),
+        fab_outputs: None,
+        router_tool_diameter: None,
+        bom_alternates: Vec::new(),
+        requirements: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
     };
@@ -121,7 +127,6 @@ pub fn open_dirty_root_sheet(f: &mut Fixture) -> PathBuf {
     document.tabs.push(TabInfo {
         title: "Oscar".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: Some(project_id),
         kind: TabKind::Schematic,
     });

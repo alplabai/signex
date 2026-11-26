@@ -22,6 +22,7 @@
 
 mod draw;
 mod geometry;
+mod glyph_layout;
 mod hit_test;
 mod input;
 mod preview_model;
@@ -29,9 +30,15 @@ mod preview_model;
 #[cfg(test)]
 mod chrome_fit_tests;
 #[cfg(test)]
+mod held_flip_tests;
+#[cfg(test)]
 mod layout_keys_tests;
 #[cfg(test)]
+mod middle_zoom_tests;
+#[cfg(test)]
 mod resize_tests;
+#[cfg(test)]
+mod snap_path_tests;
 #[cfg(test)]
 mod tests;
 
@@ -42,8 +49,9 @@ mod tests;
 // `silk_f_hit_at` below.
 use draw::draw_pads_tool_preview;
 pub(crate) use draw::{
-    BACKDROP_BG, BACKDROP_GRID, BackdropLook, draw_back_layers, draw_backdrop, draw_courtyard,
-    draw_fab, draw_origin, draw_pad_bodies, draw_pad_numbers, draw_silk, graphite_look_for,
+    BACKDROP_BG, BACKDROP_GRID, BackdropLook, SketchInk, draw_back_layers, draw_backdrop,
+    draw_courtyard, draw_fab, draw_origin, draw_pad_bodies, draw_pad_numbers, draw_silk,
+    graphite_look_for,
 };
 #[cfg(test)]
 pub(crate) use draw::{LayerInput, PadLabels, draw_pads};
@@ -69,6 +77,8 @@ const DRAG_THRESHOLD_PX: f32 = 3.0;
 
 const MIN_SCALE: f32 = 5.0;
 const MAX_SCALE: f32 = 400.0;
+/// Free space a fit keeps on every side of the footprint, px.
+pub(crate) const FIT_PAD: f32 = 12.0;
 
 /// Canvas-only state owned by `iced::widget::Canvas`. The editor's
 /// model lives in `FootprintEditorState`; this struct only holds
@@ -100,6 +110,8 @@ pub struct FootprintCanvasState {
     /// stay quiet" (motion crossed the threshold). Reset on every
     /// right-press.
     pan_moved: bool,
+    /// The middle-button drag zooming the view, while it is held.
+    middle_zoom: Option<crate::canvas::middle_zoom::MiddleZoom>,
     /// v0.26-I — rubber-band selection state. `Some` while the user
     /// is left-dragging on empty canvas with the Select tool active.
     /// Stores the press position (screen-space) so the draw pass can
@@ -177,6 +189,7 @@ impl Default for FootprintCanvasState {
             panning: false,
             last_pan_pos: None,
             pan_moved: false,
+            middle_zoom: None,
             box_select_anchor_screen: None,
             box_select_current_screen: None,
             drag: None,
@@ -218,7 +231,7 @@ impl FootprintCanvasState {
         let (min_x, min_y, max_x, max_y) = world_bbox;
         let w = (max_x - min_x).max(1e-3);
         let h = (max_y - min_y).max(1e-3);
-        let pad = 12.0_f32;
+        let pad = FIT_PAD;
         let avail_w = (viewport.width - pad * 2.0).max(1.0);
         let avail_h = (viewport.height - pad * 2.0).max(1.0);
         let scale_x = avail_w / w as f32;
@@ -283,6 +296,8 @@ pub struct FootprintCanvas<'a> {
     pub silk_f: &'a [signex_library::primitive::footprint::FpGraphic],
     /// v0.18.16 — silk-back graphics (mirror layer for B.SilkS).
     pub silk_b: &'a [signex_library::primitive::footprint::FpGraphic],
+    /// The generated front silkscreen: drawn, never hit-tested or edited.
+    pub generated_silk: &'a [signex_library::primitive::footprint::FpGraphic],
     /// Per-wheel-notch zoom factor — the Preferences "Zoom speed", shared
     /// with the schematic, PCB and symbol canvases.
     pub zoom_step: f32,
@@ -290,6 +305,10 @@ pub struct FootprintCanvas<'a> {
     pub trackpad_pan: bool,
     /// Preferences "Mouse wheel", synced with `trackpad_pan`.
     pub wheel_mode: crate::canvas::WheelMode,
+    /// The Mirror card the Mirror ghost draws (mockup row 191); `None`
+    /// while Mirror is not armed.
+    pub mirror_card:
+        Option<crate::library::editor::footprint::sketch_mode::mirror_card::MirrorCard>,
 }
 
 impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
@@ -302,6 +321,20 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<LibraryMessage>> {
+        // The camera lives here, so an edge pan is owed to it; the redraw
+        // after it replays the pointer (#2872).
+        let link = &self.state.edge_pan;
+        if let Some((dx, dy)) = link.take_owed_pan() {
+            cstate.pan_by(iced::Vector::new(dx, dy));
+            self.cache.clear();
+        }
+        let replayed = link.replayed(event, cursor);
+        let event = replayed.as_ref().unwrap_or(event);
+        link.observe_event(event, cursor, bounds);
+        link.set_dragging(cstate.drag.is_some_and(|drag| drag.moved));
+        if let Some(action) = self.end_middle_zoom_on(cstate, event) {
+            return Some(action);
+        }
         // A resize refit, first-draw camera placement + one-shot Fit-to-Window (see
         // `input::camera`). Both mutate the camera and publish the scale
         // they settled on, consuming the event tick. That is the canvas's
@@ -349,12 +382,14 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 physical_key,
                 modifiers,
                 text,
+                repeat,
                 ..
             }) => self.on_key_pressed(
                 key,
                 *physical_key,
                 modifiers,
                 text.as_ref().and_then(|s| s.chars().next()),
+                *repeat,
             ),
             _ => None,
         }
@@ -408,6 +443,9 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
     ) -> mouse::Interaction {
         if cstate.panning {
             return mouse::Interaction::Grabbing;
+        }
+        if cstate.middle_zoom.is_some() {
+            return mouse::Interaction::ResizingVertically;
         }
         if cstate.drag.is_some() {
             return mouse::Interaction::Grab;
@@ -542,15 +580,16 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         }
                     }
                 }
-                // Sketch mode hides the OS cursor in BOTH Select
-                // and Placement tools. Select draws its own dark
-                // "+" at the raw cursor position (see draw); the
-                // OS Crosshair was rendering as a pale "ghost" on
-                // the white canvas with the user's cursor scheme
-                // and breaking the dark-on-white expectation.
-                mouse::Interaction::Hidden
+                // An idle Select shows the OS arrow; a drawing tool hides
+                // the OS cursor, its reticle is the crosshair (draw).
+                if self.state.active_tool == super::state::SketchTool::Select {
+                    mouse::Interaction::Idle
+                } else {
+                    mouse::Interaction::Hidden
+                }
             } else {
-                mouse::Interaction::Crosshair
+                let placing = self.state.pads_tool != super::state::PadsTool::Select;
+                crate::canvas::cursor::tool_cursor(placing)
             }
         } else {
             mouse::Interaction::default()

@@ -1,12 +1,12 @@
 //! #2373 — the String tool through the app: `place_board_string` arms it;
-//! each click places a board string on the active overlay, mechanical or
-//! documentation layer, one undo step each, and a click on any other layer
-//! places nothing.
+//! each click places a board string on the active copper (#2883), overlay,
+//! mechanical or documentation layer, one undo step each, and a click on
+//! any other layer places nothing.
 
 use std::path::Path;
 
 use signex_types::pcb::{PCB_DEFAULT_TEXT_SIZE_MM, Point};
-use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
+use signex_types::pcb_layer::{PcbLayer, TechnicalLayer};
 
 use super::BoardToolSession;
 use super::tests::{app_with_board, board_of, click, escape, hover, live, run, undo};
@@ -19,10 +19,12 @@ fn arm_string(app: &mut Signex, path: &Path) {
         path: path.to_path_buf(),
         window: app.interaction_state.acting_window,
         points: Vec::new(),
+        points_on_copper: false,
         cursor: None,
         route: None,
         router: None,
         paused: None,
+        note: None,
     });
 }
 
@@ -36,10 +38,7 @@ fn pick_layer(app: &mut Signex, layer: PcbLayer) {
 fn place_board_string_arms_the_string_tool_and_a_mechanical_layer_takes_it() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_with_board(dir.path());
-    assert_eq!(
-        BoardPlaceTool::TextString.command(),
-        Some("place_board_string")
-    );
+    assert_eq!(BoardPlaceTool::TextString.command(), "place_board_string");
     run(&mut app, "place_board_string");
     let armed = app.interaction_state.pcb_tool.as_ref().map(|s| s.tool);
     assert_eq!(armed, Some(BoardPlaceTool::TextString));
@@ -101,8 +100,10 @@ fn a_string_click_on_a_layer_that_takes_no_text_places_nothing() {
     let (mut app, path) = app_with_board(dir.path());
     let before = live(&app, &path);
     arm_string(&mut app, &path);
+    // Top copper was in this list; it takes a string since Caner's
+    // 2026-11-24 decision (#2883), so a solder mask stands in for it.
     for layer in [
-        PcbLayer::Copper(CopperLayer::Top),
+        PcbLayer::Technical(TechnicalLayer::SolderMaskTop),
         PcbLayer::Technical(TechnicalLayer::EdgeCuts),
     ] {
         pick_layer(&mut app, layer);

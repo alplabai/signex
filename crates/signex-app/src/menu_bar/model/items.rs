@@ -1,6 +1,6 @@
 //! Row constructors the menu builders share.
 
-use super::{ItemState, Menu, MenuEntry, MenuItem, Shortcut};
+use super::{ItemState, Menu, MenuEntry, MenuIcon, MenuItem, Shortcut};
 use crate::keymap::AppCommandId;
 use crate::menu_bar::{MenuContext, MenuMessage, cmd_label, enabled, shortcut_for};
 use signex_i18n::MessageId;
@@ -29,6 +29,7 @@ fn plain(label: String, state: ItemState) -> MenuEntry {
         shortcut: None,
         state,
         checked: None,
+        icon: None,
     })
 }
 
@@ -60,6 +61,7 @@ pub(super) fn panel_item(
         shortcut: None,
         state: live(action, true),
         checked: Some(ctx.open_panels.contains(&kind)),
+        icon: None,
     })
 }
 
@@ -86,19 +88,15 @@ pub(super) fn item_if_command(
     )
 }
 
-/// A greyed row for a feature with no command yet; `reason` is its tooltip.
-pub(super) fn placeholder(ctx: &MenuContext, label: MessageId, reason: MessageId) -> MenuEntry {
-    plain(
-        text(ctx, label),
-        ItemState::Placeholder {
-            reason: Some(text(ctx, reason)),
-        },
-    )
-}
-
 /// A greyed informational row that is not a missing feature (no tooltip).
 pub(super) fn unavailable(ctx: &MenuContext, label: MessageId) -> MenuEntry {
     plain(text(ctx, label), ItemState::Unavailable)
+}
+
+/// A section caption over the rows below it: no command, no hover, no
+/// click (2026-11-20 decision).
+pub(super) fn header(ctx: &MenuContext, label: MessageId) -> MenuEntry {
+    plain(text(ctx, label), ItemState::Header)
 }
 
 /// A placement tool row (#2415): gated by its command like
@@ -127,6 +125,7 @@ fn command_row(ctx: &MenuContext, cmd: Cmd, label: String, state: ItemState) -> 
         shortcut,
         state,
         checked: None,
+        icon: None,
     })
 }
 
@@ -134,6 +133,27 @@ fn command_row(ctx: &MenuContext, cmd: Cmd, label: String, state: ItemState) -> 
 fn command_state(cmd: Cmd, is_enabled: bool) -> ItemState {
     AppCommandId::new(cmd.id).map_or(ItemState::Unavailable, |id| {
         live(MenuMessage::Command(id), is_enabled)
+    })
+}
+
+/// A row an extension added (#2495): its catalog label, the shortcut the
+/// active keymap binds to its command, and the command run through
+/// `dispatch_command`, greyed by the same gate as a built-in row.
+pub(super) fn extension_item(
+    ctx: &MenuContext,
+    row: &crate::extension::points::MenuRow,
+) -> MenuEntry {
+    let id = row.command.as_str();
+    let shortcut = shortcut_for(ctx, id, "").map(|text| Shortcut {
+        command_id: row.command.clone(),
+        text,
+    });
+    MenuEntry::Item(MenuItem {
+        label: text(ctx, row.label),
+        shortcut,
+        state: live(MenuMessage::Command(row.command.clone()), enabled(ctx, id)),
+        checked: None,
+        icon: None,
     })
 }
 
@@ -167,9 +187,30 @@ pub(super) fn cmd_item_gated_as(ctx: &MenuContext, cmd: Cmd, label: String) -> M
 /// A keymap-backed toggle row, always enabled, with its check mark shown
 /// while `checked` (a mode the command switches).
 pub(super) fn cmd_toggle(ctx: &MenuContext, cmd: Cmd, checked: bool) -> MenuEntry {
-    match cmd_item(ctx, cmd) {
+    checked_entry(cmd_item(ctx, cmd), checked)
+}
+
+/// [`cmd_toggle`] enabled exactly when its command is, like
+/// [`cmd_item_gated`].
+pub(super) fn cmd_toggle_gated(ctx: &MenuContext, cmd: Cmd, checked: bool) -> MenuEntry {
+    checked_entry(cmd_item_gated(ctx, cmd), checked)
+}
+
+fn checked_entry(entry: MenuEntry, checked: bool) -> MenuEntry {
+    match entry {
         MenuEntry::Item(item) => MenuEntry::Item(MenuItem {
             checked: Some(checked),
+            ..item
+        }),
+        other => other,
+    }
+}
+
+/// `entry` with `icon` in its check column.
+pub(super) fn with_icon(entry: MenuEntry, icon: MenuIcon) -> MenuEntry {
+    match entry {
+        MenuEntry::Item(item) => MenuEntry::Item(MenuItem {
+            icon: Some(icon),
             ..item
         }),
         other => other,

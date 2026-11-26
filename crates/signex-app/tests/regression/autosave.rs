@@ -52,7 +52,6 @@ fn fixture(autosave_on: bool) -> Fixture {
     app.document_state.tabs.push(TabInfo {
         title: "autosave".to_string(),
         path: doc.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -256,6 +255,7 @@ fn project_close_discard_all_removes_the_sidecar() {
             }],
             variant_definitions: Vec::new(),
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: Vec::new(),
             enable_git: false,
             net_classes: Vec::new(),
@@ -264,6 +264,11 @@ fn project_close_discard_all_removes_the_sidecar() {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
+            fab_outputs: None,
+            router_tool_diameter: None,
+            bom_alternates: Vec::new(),
+            requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },

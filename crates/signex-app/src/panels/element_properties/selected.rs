@@ -3,12 +3,16 @@
 //! Draws the header, dispatches to the per-kind builder (`symbol`,
 //! `symbol_field`, `label`, `text_note`, `power_port`, `placed_kinds`, plus the
 //! `drawing` and `child_sheet` surfaces), then the shared wire Style and
-//! Lock sections and the status bar.
+//! State sections and the status bar. Every placed object keeps one section
+//! order: Location, Properties, (Net, Net Parameters), Style, State last.
 
 use super::super::*;
 use super::rows::PanelStyle;
+use crate::styles::tokens::resolve;
 use crate::styles::{Spacing, TypeScale};
 use iced::Widget;
+use signex_i18n::{MessageId, ids, t};
+use signex_types::schematic::{SelectedItem, SelectedKind, WireWidthPreset};
 
 #[cfg(test)]
 use super::rows::{h_align_from_row, justify_h_row, justify_v_row, rotation_degrees};
@@ -24,7 +28,6 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
     border_c: Color,
 ) -> Element<'a, PanelMsg> {
     let palette = PanelPalette::from_tokens(&ctx.tokens);
-    let PanelPalette { panel_bg, .. } = palette;
     let st = PanelStyle {
         muted,
         primary,
@@ -51,87 +54,137 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
     };
 
     // ── Editable properties based on element type ──
-    // Power ports get their own Altium-style panel; regular symbols keep the
-    // existing designator/value/footprint layout.
+    // Power ports get their own panel; regular symbols keep the existing
+    // designator/value/footprint layout.
     let is_power_port = elem_type == "Power Port";
-    let is_placed_part =
-        !is_power_port && selected_kind == Some(signex_types::schematic::SelectedKind::Symbol);
+    let is_placed_part = !is_power_port && selected_kind == Some(SelectedKind::Symbol);
+
+    // A Bezier, dimension or table has its own panel and header (#1267, #1300).
+    let mut annotation = super::annotation::view_annotation_properties(ctx);
 
     // ── Header ──
-    col = col.push(super::header::selection_header(
-        ctx,
-        elem_type,
-        is_placed_part,
-        &get("Description"),
-        primary,
-    ));
-    col = col.push(thin_sep(border_c));
+    if annotation.is_none() {
+        let header = match kind_title(elem_type, selected_kind, is_power_port) {
+            Some(title) => {
+                let line = match selected_kind {
+                    _ if is_power_port => get("Value"),
+                    Some(SelectedKind::Label) => get("Text"),
+                    Some(SelectedKind::ChildSheet) => ctx
+                        .selected_child_sheet
+                        .as_ref()
+                        .map_or_else(String::new, |sheet| sheet.name.clone()),
+                    Some(SelectedKind::Wire) => run_net_line(ctx),
+                    Some(SelectedKind::Bus) => ctx
+                        .placed
+                        .run_net
+                        .as_ref()
+                        .map_or_else(String::new, |net| net.name.clone()),
+                    _ => String::new(),
+                };
+                titled_header(ctx, title, line, primary)
+            }
+            None => super::header::selection_header(
+                ctx,
+                elem_type,
+                is_placed_part,
+                &get("Description"),
+                primary,
+            ),
+        };
+        col = col.push(header);
+        col = col.push(thin_sep(border_c));
+    }
 
     if is_power_port && let Some(id) = uuid {
         col = super::power_port::push_power_port_sections(col, ctx, id, st);
+        col = push_status_bar(col, ctx, muted, border_c);
         return scrollable(col).width(Length::Fill).boxed();
     }
 
     match selected_kind {
-        Some(signex_types::schematic::SelectedKind::Symbol) => {
+        Some(SelectedKind::Symbol) => {
             col = super::symbol::push_symbol_sections(col, ctx, uuid, st);
         }
-        Some(signex_types::schematic::SelectedKind::SymbolRefField)
-        | Some(signex_types::schematic::SelectedKind::SymbolValField) => {
+        Some(SelectedKind::SymbolRefField) | Some(SelectedKind::SymbolValField) => {
             col = super::symbol_field::push_symbol_field_sections(col, ctx, uuid, st);
         }
-        Some(signex_types::schematic::SelectedKind::Label) => {
+        Some(SelectedKind::Label) => {
             col = super::label::push_label_sections(col, ctx, uuid, st);
         }
-        Some(signex_types::schematic::SelectedKind::TextNote) => {
+        Some(SelectedKind::TextNote) => {
             col = super::text_note::push_text_note_sections(col, ctx, uuid, st);
         }
-        Some(signex_types::schematic::SelectedKind::Drawing) => {
-            col = col.push(view_drawing_properties(ctx, muted, primary, border_c));
+        Some(SelectedKind::Drawing) => {
+            col = col.push(
+                annotation
+                    .take()
+                    .unwrap_or_else(|| view_drawing_properties(ctx, muted, primary, border_c)),
+            );
         }
-        Some(signex_types::schematic::SelectedKind::ChildSheet) => {
+        Some(SelectedKind::ChildSheet) => {
             col = col.push(view_child_sheet_properties(ctx, muted, primary, border_c));
         }
         Some(
-            signex_types::schematic::SelectedKind::Wire
-            | signex_types::schematic::SelectedKind::Bus
-            | signex_types::schematic::SelectedKind::BusEntry
-            | signex_types::schematic::SelectedKind::Junction
-            | signex_types::schematic::SelectedKind::NoConnect
-            | signex_types::schematic::SelectedKind::NoErcDirective
-            | signex_types::schematic::SelectedKind::SheetPin,
+            SelectedKind::Wire
+            | SelectedKind::Bus
+            | SelectedKind::BusEntry
+            | SelectedKind::Junction
+            | SelectedKind::NoConnect
+            | SelectedKind::SheetPin,
         )
         | None => {
             col = super::placed_kinds::push_placed_kind_sections(col, ctx, st);
         }
-        Some(signex_types::schematic::SelectedKind::Directive) => {
+        Some(SelectedKind::Directive) => {
             col = super::directive::push_directive_sections(col, ctx, uuid, st);
         }
+        Some(signex_types::schematic::SelectedKind::NoErcDirective) => {
+            col = super::no_erc::push_no_erc_sections(col, ctx, uuid, st);
+        }
+        // #1280: an entry shows its connector.
+        Some(
+            signex_types::schematic::SelectedKind::HarnessConnector
+            | signex_types::schematic::SelectedKind::HarnessEntry,
+        ) => {
+            col = super::harness_connector::push_harness_connector_sections(col, ctx, st);
+        }
+        Some(signex_types::schematic::SelectedKind::HarnessWire) => {
+            col = super::harness_wire::push_harness_wire_sections(col, ctx, st);
+        }
+    }
+    // #1280: a sheet entry can carry a harness.
+    if let (Some(pin), Some(signex_types::schematic::SelectedKind::SheetPin)) =
+        (uuid, selected_kind)
+    {
+        col = super::harness_wire::push_sheet_entry_harness_type(col, ctx, pin, st);
     }
 
-    // ── Wire style ──: width preset and own colour, undoable.
+    // ── Style ──: width preset and own colour, undoable.
     if let (Some(id), Some((width, color))) = (uuid, ctx.selected_wire_style) {
         let picker = ctx.wire_color_picker;
+        let is_bus = selected_kind == Some(SelectedKind::Bus);
+        let hex = crate::panels::HexEntry::of(
+            crate::panels::ColorRowKey::Run(id),
+            ctx.color_hex_draft.as_ref(),
+        );
         col = col.push(
             ctx.collapsible(
                 "sel_wire_style",
-                "Style",
+                ids::PROPERTIES_SECTION_STYLE,
                 &ctx.collapsed_sections,
                 move || {
                     Column::new()
                         .spacing(0)
                         .width(Length::Fill)
-                        .push(crate::panels::wire_width_row(
-                            width,
-                            move |preset| PanelMsg::EditWireWidth(id, preset),
-                            muted,
-                        ))
+                        .push(run_width_grid(id, is_bus, width, st, &ctx.i18n))
                         .push(crate::panels::wire_color_row(
                             color,
                             picker,
-                            std::rc::Rc::new(move |c| PanelMsg::EditWireColor(id, c)),
+                            std::rc::Rc::new(move |c| color_picked(id, is_bus, c)),
+                            hex.clone(),
                             muted,
                             border_c,
+                            &ctx.i18n,
                         ))
                 },
             )
@@ -139,52 +192,195 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
         );
     }
 
-    // ── Lock ── (#1573): wires, labels, text notes and drawings.
+    // ── State ── (#1573): wires, labels, text notes and drawings. A bus has
+    // no lock in the model.
     if let (Some(id), Some(kind)) = (uuid, selected_kind)
         && matches!(
             kind,
-            signex_types::schematic::SelectedKind::Wire
-                | signex_types::schematic::SelectedKind::Label
-                | signex_types::schematic::SelectedKind::TextNote
-                | signex_types::schematic::SelectedKind::Drawing
+            SelectedKind::Wire
+                | SelectedKind::Label
+                | SelectedKind::TextNote
+                | SelectedKind::Drawing
         )
     {
         let locked = get("Locked") == "Yes";
-        let item = signex_types::schematic::SelectedItem::new(id, kind);
-        col = col.push(
-            ctx.collapsible("sel_state", "State", &ctx.collapsed_sections, move || {
-                Column::new()
-                    .spacing(0)
-                    .width(Length::Fill)
-                    .push(form_check_row(
-                        "Locked",
-                        locked,
-                        PanelMsg::ToggleItemLocked(item),
-                        muted,
-                        panel_bg,
-                    ))
-            })
-            .boxed(),
-        );
+        let item = SelectedItem::new(id, kind);
+        // The row kit's State section: the Locked box before its label.
+        col = super::rows::push_state_section(col, ctx, locked, PanelMsg::ToggleItemLocked(item));
     }
 
-    // ── Status bar ──
-    col = col.push(Space::new().height(8.0).boxed());
+    col = push_status_bar(col, ctx, muted, border_c);
+    scrollable(col).width(Length::Fill).boxed()
+}
+
+/// The muted header line of a wire (mockup row 43): `net /SPI_CLK`, empty
+/// until the project's net index has answered.
+fn run_net_line(ctx: &PanelContext) -> String {
+    ctx.placed.run_net.as_ref().map_or_else(String::new, |net| {
+        ctx.i18n.message_plain(
+            ids::PROPERTIES_WIRE_NET_LINE,
+            &[("net", net.name.as_str().into())],
+        )
+    })
+}
+
+/// The header title of the kinds that name themselves from the catalog: a
+/// wire, a bus, a label or port, a power port, a text note and a sheet
+/// symbol. `None` keeps the shared header (a part, a drawing, …).
+fn kind_title(
+    elem_type: &str,
+    kind: Option<SelectedKind>,
+    is_power_port: bool,
+) -> Option<MessageId> {
+    if is_power_port {
+        return Some(ids::PROPERTIES_KIND_POWER_PORT);
+    }
+    match kind? {
+        SelectedKind::Wire => Some(ids::PROPERTIES_KIND_WIRE),
+        SelectedKind::Bus => Some(ids::PROPERTIES_KIND_BUS),
+        SelectedKind::TextNote => Some(ids::PROPERTIES_KIND_TEXT_NOTE),
+        SelectedKind::ChildSheet => Some(ids::PROPERTIES_SHEET_SYMBOL_TITLE),
+        // The engine names a label by its type (`Global Label`, …).
+        SelectedKind::Label => Some(match elem_type {
+            "Global Label" => ids::PROPERTIES_KIND_GLOBAL_PORT,
+            "Hierarchical Label" => ids::PROPERTIES_KIND_HIERARCHICAL_PORT,
+            _ => ids::PROPERTIES_KIND_NET_LABEL,
+        }),
+        _ => None,
+    }
+}
+
+/// The header row: the kind's title and, muted beside it, what names this
+/// one (a label's net, a power port's name).
+fn titled_header<'a>(
+    ctx: &PanelContext,
+    title: MessageId,
+    line: String,
+    primary: Color,
+) -> Element<'a, PanelMsg> {
+    let ink3 = resolve(&ctx.tokens).ink3;
+    let mut header = iced::widget::Row::<Element<'a, PanelMsg>>::new()
+        .spacing(SP.m)
+        .align_y(iced::Alignment::Center)
+        .push(
+            text(t!(ctx.i18n, title))
+                .size(TS.body)
+                .color(primary)
+                .font(iced::Font {
+                    weight: iced::font::Weight::Semibold,
+                    ..signex_widgets::ui_font::regular()
+                })
+                .wrapping(iced::widget::text::Wrapping::None)
+                .boxed(),
+        );
+    if !line.trim().is_empty() {
+        header = header.push(
+            text(signex_i18n::UserText::new(line))
+                .size(TS.dense)
+                .color(ink3)
+                .wrapping(iced::widget::text::Wrapping::None)
+                .ellipsis(iced::widget::text::Ellipsis::End)
+                .width(Length::Fill)
+                .boxed(),
+        );
+    }
+    container(header)
+        .padding([SP.m, SP.l])
+        .width(Length::Fill)
+        .boxed()
+}
+
+/// The footer: "1 object selected".
+fn push_status_bar<'a>(
+    mut col: Column<Element<'a, PanelMsg>>,
+    ctx: &'a PanelContext,
+    muted: Color,
+    border_c: Color,
+) -> Column<Element<'a, PanelMsg>> {
+    col = col.push(Space::new().height(SP.m).boxed());
     col = col.push(thin_sep(border_c));
-    col = col.push(
+    col.push(
         container(
-            text(signex_i18n::t!(
-                ctx.i18n,
-                signex_i18n::ids::PANELS_PROPERTIES_ONE_OBJECT_SELECTED
-            ))
-            .size(TS.caption)
-            .color(muted),
+            text(t!(ctx.i18n, ids::PANELS_PROPERTIES_ONE_OBJECT_SELECTED))
+                .size(TS.caption)
+                .color(muted),
         )
         .padding([SP.s, SP.m])
         .boxed(),
-    );
+    )
+}
 
-    scrollable(col).width(Length::Fill).boxed()
+/// The Width presets in their 2 x 2 order, each with whether it is the
+/// wire's: the data the segmented grid draws.
+pub(super) fn wire_width_cells(current: WireWidthPreset) -> [[(WireWidthPreset, bool); 2]; 2] {
+    let [a, b, c, d] = WireWidthPreset::ALL;
+    let cell = |preset| (preset, preset == current);
+    [[cell(a), cell(b)], [cell(c), cell(d)]]
+}
+
+/// The edit a Width pick sends for the selected wire or bus.
+fn width_picked(id: uuid::Uuid, is_bus: bool, preset: WireWidthPreset) -> PanelMsg {
+    if is_bus {
+        PanelMsg::EditBusWidth(id, preset)
+    } else {
+        PanelMsg::EditWireWidth(id, preset)
+    }
+}
+
+/// The edit a Color pick sends for the selected wire or bus.
+fn color_picked(
+    id: uuid::Uuid,
+    is_bus: bool,
+    color: Option<signex_types::theme::Color>,
+) -> PanelMsg {
+    if is_bus {
+        PanelMsg::EditBusColor(id, color)
+    } else {
+        PanelMsg::EditWireColor(id, color)
+    }
+}
+
+/// The Width row of a selected wire or bus: the four presets as a 2 x 2
+/// segmented control, so no label is cut off.
+fn run_width_grid<'a>(
+    id: uuid::Uuid,
+    is_bus: bool,
+    current: WireWidthPreset,
+    st: PanelStyle,
+    i18n: &signex_i18n::I18n,
+) -> Element<'a, PanelMsg> {
+    let cells: Vec<Element<'a, PanelMsg>> = wire_width_cells(current)
+        .into_iter()
+        .flatten()
+        .map(|(preset, active)| {
+            seg_btn(
+                t!(i18n, super::super::wire_style_rows::preset_label(preset)),
+                active,
+                width_picked(id, is_bus, preset),
+                st.palette.input_bg,
+                st.primary,
+                st.muted,
+            )
+        })
+        .collect();
+    let grid = signex_widgets::FitRow::new(cells)
+        .spacing(SP.xs)
+        .fill(true)
+        .max_columns(2);
+    container(
+        row![
+            property_label(t!(i18n, ids::PROPERTIES_WIRE_WIDTH), st.muted),
+            container(grid)
+                .padding(SP.xs)
+                .style(crate::panels::form_look::segmented_frame)
+                .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
+        ]
+        .spacing(SP.m)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([2, PROPERTY_ROW_PAD_X])
+    .width(Length::Fill)
+    .boxed()
 }
 
 #[cfg(test)]
@@ -285,9 +481,14 @@ mod tests {
             .collect()
     }
 
+    /// The Label view's window: 400 x 1200 px.
+    const LABEL_WINDOW: (usize, usize) = (400, 1200);
+
     /// What the Label view looks like drawn, with its justification row set
-    /// to `row`: the anchor picker highlights the cell the row selects.
-    fn label_pixels(row: &str) -> Vec<u8> {
+    /// to `row`, and the band of pixel rows (top, bottom) its Justification
+    /// row takes: the 3x3 grid's height from the name, a body of slack on
+    /// either side.
+    fn label_pixels(row: &str) -> (Vec<u8>, (usize, usize)) {
         use super::view_selected_element_properties;
         let (app, _task) = crate::app::Signex::new();
         let mut ctx = app.document_state.panel_ctx.clone();
@@ -300,109 +501,68 @@ mod tests {
                 row.to_string(),
             ),
         ];
-        let view = view_selected_element_properties(
-            &ctx,
-            iced::Color::WHITE,
-            iced::Color::WHITE,
-            iced::Color::BLACK,
+        let view = || {
+            view_selected_element_properties(
+                &ctx,
+                iced::Color::WHITE,
+                iced::Color::WHITE,
+                iced::Color::BLACK,
+            )
+        };
+        let size = iced::Size::new(LABEL_WINDOW.0 as f32, LABEL_WINDOW.1 as f32);
+        let name = crate::layout_probe::lay_out_texts(view(), size)
+            .into_iter()
+            .rev()
+            .find(|t| t.text.replace(['\u{2068}', '\u{2069}'], "") == "Justification")
+            .expect("a Justification row")
+            .bounds;
+        let body = crate::styles::TypeScale::DEFAULT.body;
+        let gap = crate::styles::Spacing::DEFAULT.xs / 2.0;
+        let grid_h = body * crate::panels::form_look::ANCHOR_CELL_EM * 3.0 + gap * 4.0;
+        let band = (
+            (name.y - body).max(0.0) as usize,
+            (name.y + grid_h + body) as usize,
         );
-        crate::layout_probe::draw_pixels(view, iced::Size::new(400.0, 1200.0))
+        (crate::layout_probe::draw_pixels(view(), size), band)
+    }
+
+    /// The mean x of the accent pixels `frame` draws inside the pixel rows
+    /// `band` where `other` draws something else. For two views of one
+    /// label with different anchors that is the grid's accent dot.
+    fn accent_dot_x(frame: &[u8], other: &[u8], band: (usize, usize)) -> f32 {
+        let accent = crate::panels::form_look::FormLook::of(&iced::Theme::Dark).accent;
+        let [r, g, b, _] = accent.into_rgba8();
+        let width = LABEL_WINDOW.0;
+        let xs: Vec<usize> = (band.0 * width..(band.1 * width).min(frame.len() / 4))
+            .filter(|&i| {
+                let (got, theirs) = (&frame[i * 4..i * 4 + 3], &other[i * 4..i * 4 + 3]);
+                got != theirs && got.iter().zip([r, g, b]).all(|(&c, w)| c.abs_diff(w) <= 1)
+            })
+            .map(|i| i % width)
+            .collect();
+        assert!(!xs.is_empty(), "no accent dot where the two views differ");
+        xs.iter().sum::<usize>() as f32 / xs.len() as f32
     }
 
     /// #2024 - the label view selects the anchor cell its justification row
-    /// names: a Left row and a Right row draw differently. A view that read
-    /// the row under another key would see neither and draw both the same.
+    /// names. A Left row puts the grid's accent dot in the left column, a
+    /// Right row in the right one (mockup row 44). A view that read the row
+    /// under another key draws both the same; a swapped reading puts the
+    /// dots the other way round.
     #[test]
     fn the_label_view_selects_the_cell_its_justification_row_names() {
-        use signex_types::schematic::HAlign;
-        let window = (400_usize, 1200_usize);
-        let (left, right) = (label_pixels("Left"), label_pixels("Right"));
-        let (left_grid, right_grid) = (anchor_grid(HAlign::Left), anchor_grid(HAlign::Right));
-        assert_ne!(left_grid.pixels, right_grid.pixels, "the references differ");
-        // Each row's view holds the picker drawn for its own alignment far
-        // better than the other one's: a swapped row reading fails both.
-        let score = |block: &Block, frame: &[u8]| block.best_match(frame, window.0);
-        let (ll, lr) = (score(&left_grid, &left), score(&right_grid, &left));
-        let (rr, rl) = (score(&right_grid, &right), score(&left_grid, &right));
-        // The picker is laid out in a column with other controls, so the match
-        // is partial; the two pickers differ by two cells, a gap of about 0.17.
-        assert!(ll > lr + 0.1, "Left row: Left {ll}, Right {lr}");
-        assert!(rr > rl + 0.1, "Right row: Right {rr}, Left {rl}");
-    }
-
-    /// The anchor picker drawn alone for one alignment, cropped to its
-    /// non-background pixels.
-    struct Block {
-        pixels: Vec<u8>,
-        width: usize,
-        height: usize,
-    }
-
-    fn anchor_grid(h: signex_types::schematic::HAlign) -> Block {
-        let (app, _task) = crate::app::Signex::new();
-        let ctx = &app.document_state.panel_ctx;
-        let palette = crate::panels::palette::PanelPalette::from_tokens(&ctx.tokens);
-        let grid =
-            crate::panels::justification_grid(uuid::Uuid::nil(), 0.0, h, palette, ctx.theme_id);
-        let (w, hgt) = (120_usize, 120_usize);
-        let data = crate::layout_probe::draw_pixels(grid, iced::Size::new(w as f32, hgt as f32));
-        let lit = |x: usize, y: usize| data[(y * w + x) * 4..(y * w + x) * 4 + 3] != [0, 0, 0];
-        let xs: Vec<usize> = (0..w).filter(|&x| (0..hgt).any(|y| lit(x, y))).collect();
-        let ys: Vec<usize> = (0..hgt).filter(|&y| (0..w).any(|x| lit(x, y))).collect();
-        let (x0, x1) = (xs[0], xs[xs.len() - 1]);
-        let (y0, y1) = (ys[0], ys[ys.len() - 1]);
-        let mut pixels = Vec::new();
-        for y in y0..=y1 {
-            pixels.extend_from_slice(&data[(y * w + x0) * 4..(y * w + x1 + 1) * 4]);
-        }
-        Block {
-            pixels,
-            width: x1 - x0 + 1,
-            height: y1 - y0 + 1,
-        }
-    }
-
-    impl Block {
-        /// The best fraction of this block's pixels that equal (within a few
-        /// levels) those of `frame`, `frame_width` px wide, over every
-        /// position. Edges are anti-aliased, so an exact match is too strict.
-        fn best_match(&self, frame: &[u8], frame_width: usize) -> f32 {
-            let rows = frame.len() / 4 / frame_width;
-            // The fraction of every `step`-th pixel of the block equal at (x, y).
-            let at = |x: usize, y: usize, step: usize| {
-                let (mut same, mut seen) = (0usize, 0usize);
-                for r in (0..self.height).step_by(step) {
-                    for c in (0..self.width).step_by(step) {
-                        let a = ((y + r) * frame_width + x + c) * 4;
-                        let b = (r * self.width + c) * 4;
-                        seen += 1;
-                        same += usize::from(
-                            (0..3).all(|k| frame[a + k].abs_diff(self.pixels[b + k]) <= 6),
-                        );
-                    }
-                }
-                same as f32 / seen as f32
-            };
-            // Coarse over every 4th position on a sampled block, then the
-            // full block around the best of them.
-            let (mut best_at, mut best) = ((0, 0), -1.0_f32);
-            for y in (0..=rows - self.height).step_by(4) {
-                for x in (0..=frame_width - self.width).step_by(4) {
-                    let score = at(x, y, 4);
-                    if score > best {
-                        (best_at, best) = ((x, y), score);
-                    }
-                }
-            }
-            let mut refined = 0.0_f32;
-            for y in best_at.1.saturating_sub(4)..=(best_at.1 + 4).min(rows - self.height) {
-                for x in best_at.0.saturating_sub(4)..=(best_at.0 + 4).min(frame_width - self.width)
-                {
-                    refined = refined.max(at(x, y, 1));
-                }
-            }
-            refined
-        }
+        let ((left, left_band), (right, right_band)) =
+            (label_pixels("Left"), label_pixels("Right"));
+        assert_eq!(left_band, right_band, "the row sits in the same place");
+        let left_x = accent_dot_x(&left, &right, left_band);
+        let right_x = accent_dot_x(&right, &left, right_band);
+        // Two columns apart: more than one cell.
+        let body = crate::styles::TypeScale::DEFAULT.body;
+        let cell = body * crate::panels::form_look::ANCHOR_CELL_EM;
+        assert!(
+            right_x - left_x > cell,
+            "Left row dot at x {left_x}, Right row dot at x {right_x}, cell {cell}"
+        );
     }
 
     fn justify_info() -> Vec<(String, String)> {
@@ -418,16 +578,126 @@ mod tests {
         ]
     }
 
-    /// #2024 - the symbol-field and text-note views show the justification
-    /// rows under the keys the engine writes.
+    /// #2024 - the symbol-field view shows the justification rows under the
+    /// keys the engine writes. A text note picks its justification on
+    /// segmented rows instead (mockup row 47); `text_note::tests` reads them.
     #[test]
-    fn the_field_and_note_views_show_the_justification_rows() {
+    fn the_field_view_shows_the_justification_rows() {
         use signex_types::schematic::SelectedKind;
-        for kind in [SelectedKind::SymbolRefField, SelectedKind::TextNote] {
-            let texts = shown_texts(kind, justify_info());
-            for want in ["Lefty", "Topsy"] {
-                assert!(texts.iter().any(|t| t == want), "{kind:?} lacks {want}");
-            }
+        let texts = shown_texts(SelectedKind::SymbolRefField, justify_info());
+        for want in ["Lefty", "Topsy"] {
+            assert!(texts.iter().any(|t| t == want), "lacks {want}");
         }
+    }
+
+    /// Mockup row 46: a sheet symbol's header is the catalog's Sheet Symbol,
+    /// not the engine's type word.
+    #[test]
+    fn a_sheet_symbol_header_reads_sheet_symbol() {
+        use signex_types::schematic::SelectedKind;
+        let texts = shown_texts(
+            SelectedKind::ChildSheet,
+            vec![("Type".to_string(), "Hierarchical Sheet".to_string())],
+        );
+        assert!(texts.iter().any(|t| t == "Sheet Symbol"), "{texts:?}");
+        assert!(
+            !texts.iter().any(|t| t == "Hierarchical Sheet"),
+            "{texts:?}"
+        );
+    }
+
+    /// The Width grid marks exactly the wire's preset, in the 2 x 2 order.
+    #[test]
+    fn the_width_grid_marks_the_wires_preset() {
+        use signex_types::schematic::WireWidthPreset;
+        let cells = super::wire_width_cells(WireWidthPreset::Medium);
+        let order: Vec<WireWidthPreset> = cells.iter().flatten().map(|(p, _)| *p).collect();
+        assert_eq!(order, WireWidthPreset::ALL);
+        let active: Vec<WireWidthPreset> = (cells.iter().flatten())
+            .filter(|(_, on)| *on)
+            .map(|(p, _)| *p)
+            .collect();
+        assert_eq!(active, [WireWidthPreset::Medium]);
+    }
+
+    /// Mockup row 43: a bus's Style picks send the bus edits, a wire's the
+    /// wire edits.
+    #[test]
+    fn style_picks_send_the_edit_of_the_selected_kind() {
+        use crate::panels::PanelMsg;
+        use signex_types::schematic::WireWidthPreset::Large;
+        let id = uuid::Uuid::from_u128(1);
+        assert!(matches!(
+            super::width_picked(id, true, Large),
+            PanelMsg::EditBusWidth(got, Large) if got == id
+        ));
+        assert!(matches!(
+            super::width_picked(id, false, Large),
+            PanelMsg::EditWireWidth(got, Large) if got == id
+        ));
+        assert!(matches!(
+            super::color_picked(id, true, None),
+            PanelMsg::EditBusColor(got, None) if got == id
+        ));
+        assert!(matches!(
+            super::color_picked(id, false, None),
+            PanelMsg::EditWireColor(got, None) if got == id
+        ));
+    }
+
+    /// Mockup row 43: a selected bus shows the Style section.
+    #[test]
+    fn a_selected_bus_shows_the_style_section() {
+        use signex_types::schematic::{SelectedKind, WireWidthPreset};
+        let (app, _task) = crate::app::Signex::new();
+        let mut ctx = app.document_state.panel_ctx.clone();
+        ctx.selected_kind = Some(SelectedKind::Bus);
+        ctx.selected_uuid = Some(uuid::Uuid::now_v7());
+        ctx.selected_wire_style = Some((WireWidthPreset::Large, None));
+        let view = super::view_selected_element_properties(
+            &ctx,
+            iced::Color::WHITE,
+            iced::Color::WHITE,
+            iced::Color::BLACK,
+        );
+        let texts: Vec<String> =
+            crate::layout_probe::lay_out_texts(view, iced::Size::new(400.0, 4000.0))
+                .into_iter()
+                .map(|t| t.text)
+                .collect();
+        for want in ["STYLE", "Smallest", "Small", "Medium", "Large"] {
+            assert!(texts.iter().any(|t| t == want), "lacks {want}: {texts:?}");
+        }
+    }
+
+    /// The single-object views end in the "1 object selected" footer, a
+    /// power port too, and a power port shows the State ▸ Locked row.
+    #[test]
+    fn a_power_port_ends_in_state_and_the_footer() {
+        use signex_types::schematic::SelectedKind;
+        let texts = shown_texts(
+            SelectedKind::Symbol,
+            vec![
+                ("Type".to_string(), "Power Port".to_string()),
+                ("Value".to_string(), "+3V3".to_string()),
+                ("Library ID".to_string(), "power:bar".to_string()),
+                ("Locked".to_string(), "No".to_string()),
+            ],
+        );
+        let texts: Vec<String> = (texts.into_iter())
+            .map(|t| t.replace(['\u{2068}', '\u{2069}'], ""))
+            .collect();
+        let at = |want: &str| texts.iter().position(|t| t == want);
+        assert!(
+            at("Power Port").is_some() && at("+3V3").is_some(),
+            "{texts:?}"
+        );
+        let (state, locked, footer) = (at("STATE"), at("Locked"), at("1 object selected"));
+        assert!(
+            state.is_some() && state < locked && locked < footer,
+            "{texts:?}"
+        );
+        let net_parameters = at("NET PARAMETERS");
+        assert!(net_parameters.is_some_and(|n| Some(n) < state), "{texts:?}");
     }
 }

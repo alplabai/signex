@@ -81,11 +81,19 @@ pub(crate) fn resolve_new_project(
     resolve_new_project_with(chosen, &KnownFolders::from_system(), layout)
 }
 
-fn resolve_in_place(
-    parent: &Path,
-    marker: String,
-    known: &KnownFolders,
-) -> Result<NewProjectTarget> {
+/// The `.snxprj` of project `stem` under `parent`: `<parent>/<stem>/<stem>.snxprj`
+/// in its own folder, else `<parent>/<stem>.snxprj`. Reads no disk, so the
+/// New Project dialog shows the path the resolver below lands on.
+pub(crate) fn project_file_in(parent: &Path, stem: &str, own_folder: bool) -> PathBuf {
+    let file = format!("{stem}.snxprj");
+    if own_folder {
+        parent.join(stem).join(file)
+    } else {
+        parent.join(file)
+    }
+}
+
+fn resolve_in_place(parent: &Path, stem: &str, known: &KnownFolders) -> Result<NewProjectTarget> {
     if !parent.is_dir() {
         anyhow::bail!("{} is not a folder", parent.display());
     }
@@ -104,7 +112,7 @@ fn resolve_in_place(
             parent.display()
         );
     }
-    let project_path = parent.join(marker);
+    let project_path = project_file_in(parent, stem, false);
     if project_path.exists() {
         anyhow::bail!("{} already exists", project_path.display());
     }
@@ -122,9 +130,8 @@ fn resolve_new_project_with(
     layout: NewProjectLayout,
 ) -> Result<NewProjectTarget> {
     let (parent, stem) = new_project_parts(chosen)?;
-    let marker = format!("{stem}.snxprj");
     if layout == NewProjectLayout::InPlace {
-        return resolve_in_place(parent, marker, known);
+        return resolve_in_place(parent, &stem, known);
     }
     // ASCII case-insensitive on every volume: on a case-sensitive one this
     // only reuses a `foo` folder for project `Foo`, which is harmless.
@@ -142,11 +149,8 @@ fn resolve_new_project_with(
         );
     }
     let reuse_parent = parent_is_the_project_folder && is_unused(parent)?;
-    let folder = if reuse_parent {
-        parent.to_path_buf()
-    } else {
-        parent.join(&stem)
-    };
+    let project_path = project_file_in(parent, &stem, !reuse_parent);
+    let folder = project_path.parent().unwrap_or(parent).to_path_buf();
     if let Some(outer) = enclosing_project(&folder, known) {
         anyhow::bail!(
             "{} would be inside the project in {} — pick a location outside it",
@@ -172,7 +176,6 @@ fn resolve_new_project_with(
             );
         }
     }
-    let project_path = folder.join(marker);
     Ok(NewProjectTarget {
         folder,
         project_path,
@@ -265,7 +268,8 @@ pub(crate) fn write_new_project_files_with(
         created.roll_back(&target.folder);
     }
     if result.is_ok() {
-        seed_project_rules(&target.project_path, seed);
+        let tier = plan.setup.as_ref().and_then(|setup| setup.fab);
+        seed_project_rules(&target.project_path, seed, tier);
     }
     if result.is_ok() && target.nested_in_same_named_parent {
         crate::diagnostics::log_info(format!(
@@ -295,13 +299,21 @@ pub(crate) struct RuleSeed {
     /// This machine's Annotate undo preference, stored in the new project as
     /// its own choice (#1692); `None` stores none.
     pub annotate_undo: Option<crate::annotate_undo::AnnotateUndo>,
+    /// Preferences ▸ PCB Defaults, stored in the new project as its own
+    /// dimension defaults (#2868); `None` stores none.
+    pub dimension: Option<signex_types::pcb_dimension_style::DimensionDefaults>,
 }
 
 /// Store a copy of the default rule profile in the new `.snxprj`, with its
 /// provenance. The project already exists, so a failure here is reported and
 /// the project is left as created: it then uses the machine's rules until
-/// the user stores some.
-fn seed_project_rules(project_path: &Path, seed: &RuleSeed) {
+/// the user stores some. A fab tier picked in the setup adds its `fab_*`
+/// rules (#2311) and its min slot (mockup row 179d) to the copy.
+fn seed_project_rules(
+    project_path: &Path,
+    seed: &RuleSeed,
+    tier: Option<signex_types::project::FabTemplate>,
+) {
     if let Some(dir) = seed.dir.as_deref()
         && let Err(why) = crate::app::rule_profile_ui::run_all(dir, &seed.pending)
     {
@@ -309,8 +321,18 @@ fn seed_project_rules(project_path: &Path, seed: &RuleSeed) {
             "[new project] a queued profile change was not saved first: {why}"
         ));
     }
-    let (rules, notes) =
+    let (mut rules, mut notes) =
         crate::rule_profiles::rules_for_new_project(seed.dir.as_deref(), seed.selected.as_deref());
+    if let Some(tier) = tier {
+        rules.set_min_slot(Some(tier.capabilities().min_slot));
+        match signex_drc_dsl::table::presets::with_tier(&rules.drc, tier) {
+            Ok(drc) => rules.drc = drc,
+            Err(why) => notes.push(format!(
+                "the {} fab tier rules were not added, the profile's rule text has an error: {why}",
+                tier.token()
+            )),
+        }
+    }
     for note in notes {
         crate::diagnostics::log_warning(format!("[new project] {note}"));
     }
@@ -318,6 +340,9 @@ fn seed_project_rules(project_path: &Path, seed: &RuleSeed) {
         data.rules = Some(rules);
         if let Some(choice) = seed.annotate_undo {
             data.set_annotate_undo(Some(choice));
+        }
+        if let Some(dimension) = &seed.dimension {
+            data.project_defaults.dimension = Some(dimension.clone());
         }
         data.document_id
             .get_or_insert_with(signex_types::document_id::DocumentId::new);
@@ -332,12 +357,16 @@ fn seed_project_rules(project_path: &Path, seed: &RuleSeed) {
 }
 
 /// The first content of a dialog-made `.snxprj`: the project as the folder
-/// shows it, with the chosen defaults and designator standard and its id.
-/// Part of the creation: a failure takes the project back.
+/// shows it, with the chosen defaults and designator standard and its id,
+/// and the picked fab tier's router tool (mockup row 179d). Part of the creation: a
+/// failure takes the project back.
 fn write_setup(project_path: &Path, setup: &signex_types::project::ProjectSetup) -> Result<()> {
     let mut data = signex_types::project::parse_project_bytes(project_path, b"")
         .with_context(|| format!("read the new project {}", project_path.display()))?;
     data.project_defaults = setup.defaults();
+    if let Some(tier) = setup.fab {
+        data.set_router_tool_diameter(Some(tier.capabilities().router_tool_diameter));
+    }
     data.annotation = Some(signex_types::project::AnnotationSettings {
         designator_standard: Some(setup.designators),
         ..Default::default()
@@ -452,6 +481,7 @@ mod tests {
             selected: Some("Company".into()),
             pending: Vec::new(),
             annotate_undo: None,
+            dimension: None,
         };
 
         let written = write_new_project_files(&tmp.path().join("Seeded.snxprj"), &seed).unwrap();
@@ -490,6 +520,7 @@ mod tests {
             selected: None,
             pending: Vec::new(),
             annotate_undo: None,
+            dimension: None,
         };
         let written = write_new_project_files(&tmp.path().join("Plain.snxprj"), &seed).unwrap();
         let rules = signex_types::project::parse_project(&written)
@@ -517,6 +548,7 @@ mod tests {
             selected: Some("Missing".into()),
             pending: Vec::new(),
             annotate_undo: None,
+            dimension: None,
         };
         let written = write_new_project_files(&tmp.path().join("Fallback.snxprj"), &seed).unwrap();
         let rules = signex_types::project::parse_project(&written)
@@ -555,6 +587,7 @@ mod tests {
             selected: None,
             pending: queue.pending(),
             annotate_undo: None,
+            dimension: None,
         };
 
         let written = write_new_project_files(&tmp.path().join("Queued.snxprj"), &seed).unwrap();
@@ -702,6 +735,7 @@ mod tests {
             selected: None,
             pending: Vec::new(),
             annotate_undo: Some(crate::annotate_undo::AnnotateUndo::PerSheet),
+            dimension: None,
         };
         let written = write_new_project_files(&tmp.path().join("Seeded.snxprj"), &seed).unwrap();
         let data = signex_types::project::parse_project(&written).unwrap();
@@ -709,5 +743,162 @@ mod tests {
             data.annotate_undo(),
             Some(crate::annotate_undo::AnnotateUndo::PerSheet)
         );
+    }
+
+    /// #2868 (Caner 2026-11-24): a new project stores the Preferences
+    /// dimension defaults as its own, with or without a dialog setup.
+    #[test]
+    fn a_new_project_stores_the_preferences_dimension_defaults() {
+        use signex_types::pcb_dimension_style::{ArrowStyle, DimensionDefaults};
+        use signex_types::project::ProjectSetup;
+        let tmp = tempfile::tempdir().unwrap();
+        let mut dimension = DimensionDefaults::default();
+        dimension.style.arrow_style = ArrowStyle::Filled;
+        dimension.precision = 3;
+        let seed = RuleSeed {
+            dir: Some(tmp.path().join("no-library-yet")),
+            dimension: Some(dimension.clone()),
+            ..RuleSeed::default()
+        };
+        let plain = write_new_project_files(&tmp.path().join("Plain.snxprj"), &seed).unwrap();
+        let data = signex_types::project::parse_project(&plain).unwrap();
+        assert_eq!(data.project_defaults.dimension, Some(dimension.clone()));
+
+        let plan = NewProjectPlan {
+            layout: NewProjectLayout::NamedFolder,
+            setup: Some(ProjectSetup::default()),
+        };
+        let other = tempfile::tempdir().unwrap();
+        let chosen = other.path().join("Setup.snxprj");
+        let written = write_new_project_files_with(&chosen, &seed, &plan).unwrap();
+        let data = signex_types::project::parse_project(&written).unwrap();
+        assert_eq!(data.project_defaults.dimension, Some(dimension));
+        assert!(data.project_defaults.pcb.is_some(), "the setup is kept");
+    }
+
+    /// #2311: a fab tier picked in the setup adds its `fab_*` rules to the
+    /// stored rules, beside the profile's, and they read back as written.
+    #[test]
+    fn a_new_project_with_a_fab_tier_stores_its_fab_rules() {
+        use signex_types::project::{FabTemplate, ProjectSetup};
+        let tmp = tempfile::tempdir().unwrap();
+        let seed = RuleSeed {
+            dir: Some(tmp.path().join("no-library-yet")),
+            ..RuleSeed::default()
+        };
+        let mut setup = ProjectSetup::default();
+        setup.apply_fab(FabTemplate::Advanced);
+        let plan = NewProjectPlan {
+            layout: NewProjectLayout::NamedFolder,
+            setup: Some(setup),
+        };
+        let written =
+            write_new_project_files_with(&tmp.path().join("Fab.snxprj"), &seed, &plan).unwrap();
+        let data = signex_types::project::parse_project(&written).unwrap();
+        let rules = data.rules.clone().expect("rules stored");
+        let shipped = signex_erc::project_rules::profile::builtin_profile();
+        assert_eq!(rules.erc, shipped.erc, "the profile's rules are kept");
+        let expected =
+            signex_drc_dsl::table::presets::with_tier(&shipped.drc, FabTemplate::Advanced).unwrap();
+        assert_eq!(rules.drc, expected);
+        let dsl = rules.drc.dsl.unwrap_or_default();
+        assert!(
+            dsl.contains("rule fab_clearance on clearance require clearance >= 0.1mm then error"),
+            "{dsl}"
+        );
+        // Saved again, the project reads back the same.
+        signex_types::project::write_project(&written, &data).unwrap();
+        let again = signex_types::project::parse_project(&written).unwrap();
+        assert_eq!(again.rules, data.rules);
+
+        // No tier picked: no fab rule.
+        let plain = NewProjectPlan {
+            layout: NewProjectLayout::NamedFolder,
+            setup: Some(ProjectSetup::default()),
+        };
+        let written =
+            write_new_project_files_with(&tmp.path().join("Plain.snxprj"), &seed, &plain).unwrap();
+        let rules = signex_types::project::parse_project(&written)
+            .unwrap()
+            .rules;
+        let dsl = rules.and_then(|r| r.drc.dsl).unwrap_or_default();
+        assert!(!dsl.contains("fab_"), "{dsl}");
+    }
+
+    /// mockup row 179d: a fab tier picked in the setup stores its router tool in the
+    /// project; no tier stores none.
+    #[test]
+    fn a_new_project_with_a_fab_tier_stores_its_router_tool() {
+        use signex_types::project::{FabTemplate, ProjectSetup};
+        let tmp = tempfile::tempdir().unwrap();
+        let seed = RuleSeed {
+            dir: Some(tmp.path().join("no-library-yet")),
+            ..RuleSeed::default()
+        };
+        for (tier, diameter) in [
+            (FabTemplate::Standard, 2.0),
+            (FabTemplate::Advanced, 1.6),
+            (FabTemplate::Hdi, 1.0),
+        ] {
+            let mut setup = ProjectSetup::default();
+            setup.apply_fab(tier);
+            let plan = NewProjectPlan {
+                layout: NewProjectLayout::NamedFolder,
+                setup: Some(setup),
+            };
+            let name = format!("{tier:?}.snxprj");
+            let written =
+                write_new_project_files_with(&tmp.path().join(name), &seed, &plan).unwrap();
+            let data = signex_types::project::parse_project(&written).unwrap();
+            assert_eq!(data.router_tool_diameter(), Some(diameter), "{tier:?}");
+        }
+        let plain = NewProjectPlan {
+            layout: NewProjectLayout::NamedFolder,
+            setup: Some(ProjectSetup::default()),
+        };
+        let written =
+            write_new_project_files_with(&tmp.path().join("Plain.snxprj"), &seed, &plain).unwrap();
+        let data = signex_types::project::parse_project(&written).unwrap();
+        assert_eq!(data.router_tool_diameter(), None);
+    }
+
+    /// mockup row 179d: a fab tier picked in the setup stores its min slot
+    /// with the rules, at rules schema 2; no tier stores none.
+    #[test]
+    fn a_new_project_with_a_fab_tier_stores_its_min_slot_with_the_rules() {
+        use signex_types::project::{FabTemplate, ProjectSetup, RULES_SCHEMA_V2};
+        let tmp = tempfile::tempdir().unwrap();
+        let seed = RuleSeed {
+            dir: Some(tmp.path().join("no-library-yet")),
+            ..RuleSeed::default()
+        };
+        for (tier, min_slot) in [
+            (FabTemplate::Standard, 0.8),
+            (FabTemplate::Advanced, 0.6),
+            (FabTemplate::Hdi, 0.5),
+        ] {
+            let mut setup = ProjectSetup::default();
+            setup.apply_fab(tier);
+            let plan = NewProjectPlan {
+                layout: NewProjectLayout::NamedFolder,
+                setup: Some(setup),
+            };
+            let name = format!("Slot{tier:?}.snxprj");
+            let written =
+                write_new_project_files_with(&tmp.path().join(name), &seed, &plan).unwrap();
+            let data = signex_types::project::parse_project(&written).unwrap();
+            let rules = data.rules.expect("rules stored");
+            assert_eq!(rules.min_slot(), Some(min_slot), "{tier:?}");
+            assert_eq!(rules.schema, Some(RULES_SCHEMA_V2), "{tier:?}");
+        }
+        let plain = NewProjectPlan {
+            layout: NewProjectLayout::NamedFolder,
+            setup: Some(ProjectSetup::default()),
+        };
+        let written =
+            write_new_project_files_with(&tmp.path().join("SlotPlain.snxprj"), &seed, &plain)
+                .unwrap();
+        let data = signex_types::project::parse_project(&written).unwrap();
+        assert_eq!(data.rules.and_then(|rules| rules.min_slot()), None);
     }
 }

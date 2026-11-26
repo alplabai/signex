@@ -204,6 +204,15 @@ impl Signex {
         self.document_state.error_notice = Some(ErrorNotice::export(reason));
     }
 
+    /// Refuse an output of `issues`' scope when its channel names are not the
+    /// project's, with the unreadable-settings banner; nothing is written.
+    pub(super) fn refused_for_channel_naming(&mut self, issues: &super::ExportIssues) -> bool {
+        if issues.channel_naming_unreadable {
+            self.refuse_export(signex_i18n::ids::DIALOG_SCHEMATIC_DESIGN_UNREADABLE);
+        }
+        issues.channel_naming_unreadable
+    }
+
     pub(crate) fn handle_export_written(&mut self, outcome: ExportWriteOutcome) -> Task<Message> {
         self.end_project_write(&outcome.path);
         if let Some(preview) = self.document_state.preview.as_mut()

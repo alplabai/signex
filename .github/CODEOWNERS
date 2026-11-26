@@ -21,3 +21,17 @@
 # The accepted command ids (#2447): removing a line removes a command, so
 # both maintainers own it, whatever overrides are added above.
 /scripts/catalog-ids.txt                         @hkngln @alpCaner
+
+# The UI-free state ratchet (ADR-0006, #2494): listing a module as UI-free or
+# raising the baseline needs a maintainer's approval.
+/scripts/uifree-state.txt                        @hkngln @alpCaner
+/scripts/uifree-state-baseline.txt               @hkngln @alpCaner
+
+# The edit-tail wrapper exception (#2704): the list may only shrink, and its
+# cap and name checksum live in the guard, so both need a maintainer.
+/scripts/check_sheet_change_seam.sh              @hkngln @alpCaner
+/scripts/sheet-change-wrappers.txt               @hkngln @alpCaner
+
+# The load wrapper exception (#2704, #2326 slice 3): same rule as above.
+/scripts/check_document_load_seam.sh             @hkngln @alpCaner
+/scripts/document-load-wrappers.txt              @hkngln @alpCaner

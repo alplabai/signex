@@ -34,9 +34,100 @@ use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
 
 mod grid;
+mod instance_at;
 mod linear;
+mod links;
+#[cfg(test)]
+mod links_tests;
 mod numbering;
+mod overrides;
+mod placements;
 mod polar;
+#[cfg(test)]
+mod polar_tests;
+mod preview;
+mod slots;
+mod walk;
+
+pub use instance_at::instance_at;
+pub use numbering::{
+    NumberMaskRefusal, instances_numbered, number_mask_entries, suppressed_numbers,
+};
+pub(crate) use placements::{
+    InstanceBudget, PlacesRefused, SourcePlace, is_patterned, source_places,
+};
+pub use preview::{ArrayPreview, InstancePreview, preview_array};
+pub use slots::{PatternSlot, pattern_slots};
+
+/// Bake one kept instance of an array: the source pad moved by the
+/// instance offset and given its number.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "one instance needs the source pad, its context and the bake outputs"
+)]
+fn bake_instance(
+    source: signex_sketch::id::SketchEntityId,
+    pad_attr: &signex_sketch::attr::PadAttr,
+    instance: walk::Instance,
+    ctx: &signex_sketch::expr::eval::EvalContext,
+    sketch: &SketchData,
+    solve: &FullSolveOutput,
+    out: &mut Vec<LibPad>,
+    warnings: &mut Vec<String>,
+) -> Result<(), SketchError> {
+    // A kept instance always has an offset; only a dropped one may not.
+    let [dx, dy] = instance.offset_mm.unwrap_or_default();
+    let pad = crate::pad::bake_one_pad(
+        source,
+        pad_attr,
+        ctx,
+        dx,
+        dy,
+        Some(instance.number),
+        sketch,
+        solve,
+        warnings,
+    )?;
+    out.push(pad);
+    Ok(())
+}
+
+/// How a bake warning names a pattern source: its kind and where it sits,
+/// not its id (mockup row 179e, #2772).
+fn source_name(
+    sketch: &SketchData,
+    solve: &FullSolveOutput,
+    source: signex_sketch::id::SketchEntityId,
+) -> String {
+    use signex_sketch::entity::EntityKind;
+    use signex_sketch::solver::state::point_xy;
+    let Some(entity) = sketch.entities.iter().find(|e| e.id == source) else {
+        return format!("entity {source}");
+    };
+    let (kind, at) = match entity.kind {
+        EntityKind::Point { .. } => ("point", source),
+        EntityKind::Line { start, .. } => ("line", start),
+        EntityKind::Arc { center, .. } => ("arc", center),
+        EntityKind::Circle { center, .. } => ("circle", center),
+    };
+    match point_xy(at, &solve.result.state, &solve.result.index, sketch) {
+        Some((x, y)) => format!("the {kind} at ({x:.3}, {y:.3}) mm"),
+        None => format!("a {kind}"),
+    }
+}
+
+/// The warning for a pattern whose source carries no pad: a footprint
+/// pattern repeats pads only. `what` is "linear array", "pattern", ….
+fn not_a_pad(
+    what: &str,
+    sketch: &SketchData,
+    solve: &FullSolveOutput,
+    source: signex_sketch::id::SketchEntityId,
+) -> String {
+    let name = source_name(sketch, solve, source);
+    let skipped = what.rsplit(' ').next().unwrap_or(what);
+    format!("{what} of {name}: the source is not a pad — {skipped} skipped")
+}
 
 /// Most pad instances one array may expand to. Array counts come from
 /// user / file expressions and the bake runs on the editor's update
@@ -81,12 +172,12 @@ fn eval_count(
     label: &str,
     field: &str,
     source: signex_sketch::id::SketchEntityId,
-    ast: &signex_sketch::expr::ast::ExprNode,
+    ast: &signex_expr::ExprNode,
     ctx: &signex_sketch::expr::eval::EvalContext,
     warnings: &mut Vec<String>,
 ) -> Result<Option<i64>, signex_sketch::SketchError> {
     let q = signex_sketch::expr::eval::eval(ast, ctx).map_err(signex_sketch::SketchError::Expr)?;
-    if q.unit.family() != signex_sketch::unit::UnitFamily::Count {
+    if q.unit.family() != signex_expr::UnitFamily::Count {
         warnings.push(format!(
             "{label} array source {source}: {field} did not resolve to a plain number — array skipped"
         ));
@@ -111,8 +202,14 @@ pub fn bake_arrays(
     let params_ast = crate::params::params_ast(sketch, params_canonical);
 
     for array in &sketch.arrays {
+        // A pattern link or an override bakes through the instance walk.
+        if links::bakes_through_links(sketch, array.id) {
+            links::bake_pattern(array.id, sketch, solve, &params_ast, out, warnings)?;
+            continue;
+        }
         bake_one_array(array, &params_ast, sketch, solve, out, warnings)?;
     }
+    links::bake_mirrors(sketch, solve, &params_ast, out, warnings)?;
 
     Ok(())
 }
@@ -120,7 +217,7 @@ pub fn bake_arrays(
 /// Bake one array's instances into `out`.
 pub(crate) fn bake_one_array(
     array: &signex_sketch::array::Array,
-    params_ast: &std::collections::BTreeMap<String, signex_sketch::expr::ast::ExprNode>,
+    params_ast: &std::collections::BTreeMap<String, signex_expr::ExprNode>,
     sketch: &SketchData,
     solve: &FullSolveOutput,
     out: &mut Vec<LibPad>,

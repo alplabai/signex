@@ -96,6 +96,27 @@ fn build_tinted_handle(canonical: &'static [u8], theme: ThemeId) -> svg::Handle 
     svg::Handle::from_memory(tinted.into_bytes())
 }
 
+thread_local! {
+    /// Handles of untinted glyph assets, keyed by the address and length of
+    /// their `'static` bytes. Bounded by the number of glyph assets.
+    static GLYPH_CACHE: std::cell::RefCell<
+        std::collections::HashMap<(usize, usize), svg::Handle>,
+    > = std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+/// The handle of a monochrome glyph asset that its caller tints with an
+/// ink (`svg::Style::color`), built once. `Handle::from_memory` hashes the
+/// bytes on every call, which a view would otherwise pay on every frame.
+pub fn static_glyph(bytes: &'static [u8]) -> svg::Handle {
+    let key = (bytes.as_ptr() as usize, bytes.len());
+    if let Some(handle) = GLYPH_CACHE.with(|cache| cache.borrow().get(&key).cloned()) {
+        return handle;
+    }
+    let handle = svg::Handle::from_memory(bytes);
+    GLYPH_CACHE.with(|cache| cache.borrow_mut().insert(key, handle.clone()));
+    handle
+}
+
 #[cfg(test)]
 fn handle_cache_len() -> usize {
     HANDLE_CACHE.with(|cache| cache.borrow().len())
@@ -177,18 +198,6 @@ bar_icon!(
     "active_bar/graphite/power_rail.svg"
 );
 bar_icon!(icon_select, "select.svg", "active_bar/graphite/select.svg");
-// Fabrication Outputs (#2388): board layers going out; Graphite glyph only.
-bar_icon!(
-    icon_fab_outputs,
-    "active_bar/graphite/fab_outputs.svg",
-    "active_bar/graphite/fab_outputs.svg"
-);
-// The board view's quarter turn (#2316); Graphite has the only glyph.
-bar_icon!(
-    icon_view_rotate,
-    "active_bar/graphite/view_rotate.svg",
-    "active_bar/graphite/view_rotate.svg"
-);
 canonical_icon!(icon_shape_arc, "shape_arc.svg");
 canonical_icon!(icon_shape_circle, "shape_circle.svg");
 canonical_icon!(icon_shape_line, "shape_line.svg");
@@ -203,12 +212,35 @@ bar_icon!(
 bar_icon!(icon_text, "text.svg", "active_bar/graphite/text.svg");
 bar_icon!(icon_wire, "wire.svg", "active_bar/graphite/wire.svg");
 
-// ─── Chrome (window controls, search) ──────────────────────────────
+// ─── Chrome (window controls, search, the Help cards) ──────────────
 
+canonical_icon!(icon_chrome_sliders, "chrome/sliders.svg");
+canonical_icon!(icon_chrome_info, "chrome/info.svg");
+canonical_icon!(icon_chrome_lock, "chrome/lock.svg");
+canonical_icon!(icon_chrome_lock_mixed, "chrome/lock_mixed.svg");
+canonical_icon!(icon_chrome_more, "chrome/more.svg");
+canonical_icon!(icon_chrome_copy, "chrome/copy.svg");
+canonical_icon!(icon_chrome_external_link, "chrome/external_link.svg");
+canonical_icon!(icon_chrome_hand, "chrome/hand.svg");
+canonical_icon!(icon_chrome_keyboard, "chrome/keyboard.svg");
+canonical_icon!(icon_chrome_mouse, "chrome/mouse.svg");
 canonical_icon!(icon_chrome_search, "chrome/search.svg");
 canonical_icon!(icon_chrome_window_close, "chrome/window_close.svg");
 canonical_icon!(icon_chrome_window_max, "chrome/window_max.svg");
 canonical_icon!(icon_chrome_window_min, "chrome/window_min.svg");
+// The status bar's Panels button and the open mark in its panel list.
+canonical_icon!(icon_chrome_check, "chrome/check.svg");
+canonical_icon!(icon_chrome_panels, "chrome/panels.svg");
+// The net colour chooser's Custom… button (mockup row 71).
+canonical_icon!(icon_chrome_palette, "chrome/palette.svg");
+// Library Browser header, uncommitted banner, ⋯ menu (`icon_chrome_more`,
+// above); component editor footer (mockup rows 118 and 128). Monochrome; the
+// view tints them with an ink token.
+canonical_icon!(icon_chrome_git, "chrome/git.svg");
+canonical_icon!(icon_chrome_library, "chrome/library.svg");
+canonical_icon!(icon_chrome_refresh, "chrome/refresh.svg");
+// The canvas Home View button (mockup row 194); tinted with an ink token.
+canonical_icon!(icon_chrome_home, "chrome/home.svg");
 
 // ─── Dropdown (active-bar group menus) ─────────────────────────────
 
@@ -222,6 +254,7 @@ canonical_icon!(icon_dd_align_menu, "dropdown/align_menu.svg");
 canonical_icon!(icon_dd_align_vcenter, "dropdown/align_vcenter.svg");
 canonical_icon!(icon_dd_arc, "dropdown/arc.svg");
 canonical_icon!(icon_dd_bezier, "dropdown/bezier.svg");
+canonical_icon!(icon_dd_table, "dropdown/table.svg");
 canonical_icon!(icon_dd_blanket, "dropdown/blanket.svg");
 canonical_icon!(icon_dd_bring_front, "dropdown/bring_front.svg");
 canonical_icon!(icon_dd_bring_front_of, "dropdown/bring_front_of.svg");
@@ -274,10 +307,10 @@ canonical_icon!(icon_dd_place_menu, "dropdown/place.svg");
 canonical_icon!(icon_dd_polygon, "dropdown/polygon.svg");
 canonical_icon!(icon_dd_port, "dropdown/port.svg");
 canonical_icon!(icon_dd_preferences, "dropdown/preferences.svg");
-canonical_icon!(icon_dd_project_options, "dropdown/project_options.svg");
 canonical_icon!(icon_dd_properties, "dropdown/properties.svg");
 canonical_icon!(icon_dd_pwr_arrow, "dropdown/pwr_arrow.svg");
 canonical_icon!(icon_dd_pwr_bar, "dropdown/pwr_bar.svg");
+canonical_icon!(icon_dd_pwr_chassis, "dropdown/pwr_chassis.svg");
 canonical_icon!(icon_dd_pwr_circle, "dropdown/pwr_circle.svg");
 canonical_icon!(icon_dd_pwr_earth, "dropdown/pwr_earth.svg");
 canonical_icon!(icon_dd_pwr_minus5, "dropdown/pwr_minus5.svg");
@@ -318,6 +351,29 @@ canonical_icon!(icon_dd_text_string, "dropdown/text_string.svg");
 canonical_icon!(icon_dd_unions, "dropdown/unions.svg");
 canonical_icon!(icon_dd_vcc, "dropdown/vcc.svg");
 canonical_icon!(icon_dd_wire, "dropdown/wire.svg");
+// The layer tab menu under the board canvas (mockup row 104).
+canonical_icon!(icon_dd_draw_order, "dropdown/draw_order.svg");
+canonical_icon!(icon_dd_drill, "dropdown/drill.svg");
+canonical_icon!(icon_dd_eye, "dropdown/eye.svg");
+canonical_icon!(icon_dd_eye_off, "dropdown/eye_off.svg");
+canonical_icon!(icon_dd_highlight, "dropdown/highlight.svg");
+canonical_icon!(icon_dd_layers, "dropdown/layers.svg");
+// Document and dock tab menus (mockup row 5): Close, Undock / Float, Reveal in Projects.
+canonical_icon!(icon_dd_close, "dropdown/close.svg");
+canonical_icon!(icon_dd_undock, "undock.svg");
+canonical_icon!(icon_dd_folder, "dropdown/folder.svg");
+// Tab strip overflow button and the detached panel window's Dock back
+// (mockup rows 5 and 8).
+canonical_icon!(icon_chrome_chevron_down, "chrome/chevron_down.svg");
+// Manage Layouts and Save Layout (mockup row 166): currentColor strokes, tinted per use.
+canonical_icon!(icon_layouts_lock, "layouts/lock.svg");
+canonical_icon!(icon_layouts_grip, "layouts/grip.svg");
+canonical_icon!(icon_layouts_edit, "layouts/edit.svg");
+canonical_icon!(icon_layouts_trash, "layouts/trash.svg");
+canonical_icon!(icon_layouts_info, "layouts/info.svg");
+canonical_icon!(icon_chrome_dock_back, "chrome/dock_back.svg");
+// Convert to reference on a Properties conflict row (mockup row 187).
+canonical_icon!(icon_dd_reference, "dropdown/reference.svg");
 
 // ─── Board tools (PCB Active Bar dropdown rows, #2392) ─────────────
 //
@@ -334,6 +390,8 @@ canonical_icon!(icon_pcb_quick_route, "pcb/quick_route.svg");
 canonical_icon!(icon_pcb_multi_route, "pcb/multi_route.svg");
 canonical_icon!(icon_pcb_length_tune, "pcb/length_tune.svg");
 canonical_icon!(icon_pcb_diff_pair_tune, "pcb/diff_pair_tune.svg");
+// Mockup row 108: the hatched area the copper-area tool rows share.
+canonical_icon!(icon_pcb_copper_area, "pcb/copper_area.svg");
 
 // ─── Sketch mode (footprint editor sketch active bar) ──────────────
 //
@@ -355,6 +413,11 @@ canonical_icon!(icon_sk_offset, "sketch/offset.svg");
 canonical_icon!(icon_sk_rect_pattern, "sketch/rect_pattern.svg");
 canonical_icon!(icon_sk_rounded_rect, "sketch/rounded_rect.svg");
 canonical_icon!(icon_sk_trim, "sketch/trim.svg");
+canonical_icon!(icon_sk_chamfer, "sketch/chamfer.svg");
+canonical_icon!(icon_sk_extend, "sketch/extend.svg");
+canonical_icon!(icon_sk_linear_pattern, "sketch/linear_pattern.svg");
+canonical_icon!(icon_sk_slot, "sketch/slot.svg");
+canonical_icon!(icon_sk_polygon, "sketch/polygon.svg");
 
 canonical_icon!(icon_sk_c_angle, "sketch/c_angle.svg");
 canonical_icon!(icon_sk_c_coincident, "sketch/c_coincident.svg");
@@ -390,6 +453,64 @@ canonical_icon!(icon_justify_r, "justify/r.svg");
 canonical_icon!(icon_justify_t, "justify/t.svg");
 canonical_icon!(icon_justify_tl, "justify/tl.svg");
 canonical_icon!(icon_justify_tr, "justify/tr.svg");
+
+// ─── Menu glyphs (project tree menu, mockup row 20) ──────────────────────────
+//
+// 24×24 single-ink strokes (2 px, round caps); the menu card tints them, so
+// they carry no accent sentinel.
+
+canonical_icon!(icon_menu_board, "menu/board.svg");
+canonical_icon!(icon_menu_close, "menu/close.svg");
+canonical_icon!(icon_menu_cloud, "menu/cloud.svg");
+canonical_icon!(icon_menu_diff, "menu/diff.svg");
+canonical_icon!(icon_menu_export, "menu/export.svg");
+canonical_icon!(icon_menu_file, "menu/file.svg");
+canonical_icon!(icon_menu_folder, "menu/folder.svg");
+canonical_icon!(icon_menu_git, "menu/git.svg");
+canonical_icon!(icon_menu_history, "menu/history.svg");
+canonical_icon!(icon_menu_layers, "menu/layers.svg");
+canonical_icon!(icon_menu_library, "menu/library.svg");
+canonical_icon!(icon_menu_more, "menu/more.svg");
+canonical_icon!(icon_menu_notebook, "menu/notebook.svg");
+canonical_icon!(icon_menu_open, "menu/open.svg");
+canonical_icon!(icon_menu_package, "menu/package.svg");
+canonical_icon!(icon_menu_pen, "menu/pen.svg");
+canonical_icon!(icon_menu_plus, "menu/plus.svg");
+canonical_icon!(icon_menu_printer, "menu/printer.svg");
+canonical_icon!(icon_menu_refresh, "menu/refresh.svg");
+canonical_icon!(icon_menu_save, "menu/save.svg");
+canonical_icon!(icon_menu_share, "menu/share.svg");
+canonical_icon!(icon_menu_sheet, "menu/sheet.svg");
+canonical_icon!(icon_menu_shield, "menu/shield.svg");
+canonical_icon!(icon_menu_sliders, "menu/sliders.svg");
+canonical_icon!(icon_menu_sync, "menu/sync.svg");
+canonical_icon!(icon_menu_trash, "menu/trash.svg");
+
+// ─── Start screen (navigation rows, project rows and their menu) ───
+
+canonical_icon!(icon_start_book, "start/book.svg");
+canonical_icon!(icon_start_folder, "start/folder.svg");
+canonical_icon!(icon_start_home, "start/home.svg");
+canonical_icon!(icon_start_key, "start/key.svg");
+canonical_icon!(icon_start_pin, "start/pin.svg");
+canonical_icon!(icon_start_remove, "start/remove.svg");
+
+// ─── Command Log (actions, sources, results; #2458) ────────────────
+
+canonical_icon!(icon_log_check, "command_log/check.svg");
+canonical_icon!(icon_log_copy, "command_log/copy.svg");
+canonical_icon!(icon_log_error, "command_log/error.svg");
+canonical_icon!(icon_log_jump, "command_log/jump.svg");
+canonical_icon!(icon_log_more, "command_log/more.svg");
+canonical_icon!(icon_log_mouse, "command_log/mouse.svg");
+canonical_icon!(icon_log_ok, "command_log/ok.svg");
+canonical_icon!(icon_log_pause, "command_log/pause.svg");
+canonical_icon!(icon_log_play, "command_log/play.svg");
+canonical_icon!(icon_log_plug, "command_log/plug.svg");
+canonical_icon!(icon_log_save, "command_log/save.svg");
+canonical_icon!(icon_log_terminal, "command_log/terminal.svg");
+canonical_icon!(icon_log_trash, "command_log/trash.svg");
+canonical_icon!(icon_log_warn, "command_log/warn.svg");
 
 #[cfg(test)]
 mod tests {
@@ -428,7 +549,8 @@ mod tests {
     /// and are distinct drawings; #2389's routing and tuning glyphs too.
     #[test]
     fn board_tool_glyphs_follow_the_dropdown_rules() {
-        let glyphs: [&str; 9] = [
+        let glyphs: [&str; 10] = [
+            include_str!("../assets/icons/pcb/copper_area.svg"),
             include_str!("../assets/icons/pcb/dimension.svg"),
             include_str!("../assets/icons/pcb/keepout.svg"),
             include_str!("../assets/icons/pcb/pad.svg"),
@@ -452,6 +574,51 @@ mod tests {
         assert_ne!(icon_pcb_via(theme), icon_pcb_pad(theme));
     }
 
+    /// #2262: the Help cards' glyphs are 16 px monochrome strokes (no fill,
+    /// no accent sentinel: the card tints them with an ink token), each a
+    /// distinct drawing.
+    #[test]
+    fn help_card_glyphs_are_distinct_monochrome_strokes() {
+        let glyphs: [&str; 5] = [
+            include_str!("../assets/icons/chrome/copy.svg"),
+            include_str!("../assets/icons/chrome/external_link.svg"),
+            include_str!("../assets/icons/chrome/hand.svg"),
+            include_str!("../assets/icons/chrome/keyboard.svg"),
+            include_str!("../assets/icons/chrome/mouse.svg"),
+        ];
+        for svg in glyphs {
+            assert!(svg.starts_with("<svg "), "{svg}");
+            assert!(svg.contains(r#"viewBox="0 0 16 16""#), "{svg}");
+            assert!(svg.contains(r#"fill="none""#), "{svg}");
+            assert!(svg.contains(r#"stroke="currentColor""#), "{svg}");
+            assert!(!svg.contains(ACCENT_SENTINEL), "{svg}");
+            assert!(svg.trim_end().ends_with("</svg>"), "{svg}");
+        }
+        let distinct: std::collections::HashSet<_> = glyphs.iter().collect();
+        assert_eq!(distinct.len(), glyphs.len());
+        let theme = ThemeId::GraphiteLight;
+        assert_ne!(icon_chrome_hand(theme), icon_chrome_mouse(theme));
+        assert_ne!(icon_chrome_keyboard(theme), icon_chrome_copy(theme));
+        assert_ne!(icon_chrome_external_link(theme), icon_chrome_search(theme));
+    }
+
+    /// Project Options shows one glyph, a sliders mark, wherever it appears:
+    /// a 16 px monochrome stroke in the chrome, its 24 px twin in the menus.
+    #[test]
+    fn project_options_is_a_sliders_glyph_in_chrome_and_menus() {
+        let chrome = include_str!("../assets/icons/chrome/sliders.svg");
+        assert!(chrome.contains(r#"viewBox="0 0 16 16""#), "{chrome}");
+        assert!(chrome.contains(r#"stroke="currentColor""#), "{chrome}");
+        assert!(chrome.contains(r#"fill="none""#), "{chrome}");
+        let menu = include_str!("../assets/icons/menu/sliders.svg");
+        for svg in [chrome, menu] {
+            assert!(!svg.contains(ACCENT_SENTINEL), "{svg}");
+            assert_eq!(svg.matches("<circle").count(), 3, "three knobs: {svg}");
+        }
+        let theme = ThemeId::GraphiteLight;
+        assert_ne!(icon_chrome_sliders(theme), icon_menu_sliders(theme));
+    }
+
     /// Two paths with identical bytes (merged by the compiler) still get
     /// separate, correct entries because the key is the path.
     #[test]
@@ -463,5 +630,48 @@ mod tests {
         let b = tinted_handle("test/identical_b.svg", BYTES, theme);
         assert_eq!(handle_cache_len(), before + 2);
         assert_eq!(a, b);
+    }
+
+    /// Mockup row 20: the menu glyphs are 24×24 single-ink strokes, each its own
+    /// drawing.
+    #[test]
+    fn menu_glyphs_are_distinct_24px_strokes() {
+        let glyphs: [&str; 26] = [
+            include_str!("../assets/icons/menu/board.svg"),
+            include_str!("../assets/icons/menu/close.svg"),
+            include_str!("../assets/icons/menu/cloud.svg"),
+            include_str!("../assets/icons/menu/diff.svg"),
+            include_str!("../assets/icons/menu/export.svg"),
+            include_str!("../assets/icons/menu/file.svg"),
+            include_str!("../assets/icons/menu/folder.svg"),
+            include_str!("../assets/icons/menu/git.svg"),
+            include_str!("../assets/icons/menu/history.svg"),
+            include_str!("../assets/icons/menu/layers.svg"),
+            include_str!("../assets/icons/menu/library.svg"),
+            include_str!("../assets/icons/menu/more.svg"),
+            include_str!("../assets/icons/menu/notebook.svg"),
+            include_str!("../assets/icons/menu/open.svg"),
+            include_str!("../assets/icons/menu/package.svg"),
+            include_str!("../assets/icons/menu/pen.svg"),
+            include_str!("../assets/icons/menu/plus.svg"),
+            include_str!("../assets/icons/menu/printer.svg"),
+            include_str!("../assets/icons/menu/refresh.svg"),
+            include_str!("../assets/icons/menu/save.svg"),
+            include_str!("../assets/icons/menu/share.svg"),
+            include_str!("../assets/icons/menu/sheet.svg"),
+            include_str!("../assets/icons/menu/shield.svg"),
+            include_str!("../assets/icons/menu/sliders.svg"),
+            include_str!("../assets/icons/menu/sync.svg"),
+            include_str!("../assets/icons/menu/trash.svg"),
+        ];
+        for svg in glyphs {
+            assert!(svg.starts_with("<svg "), "{svg}");
+            assert!(svg.contains(r#"viewBox="0 0 24 24""#), "{svg}");
+            assert!(svg.contains(r#"stroke-width="2""#), "{svg}");
+            assert!(!svg.contains(ACCENT_SENTINEL), "{svg}");
+            assert!(svg.trim_end().ends_with("</svg>"), "{svg}");
+        }
+        let distinct: std::collections::HashSet<_> = glyphs.iter().collect();
+        assert_eq!(distinct.len(), glyphs.len());
     }
 }

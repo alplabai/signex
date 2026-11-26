@@ -13,6 +13,9 @@ use crate::library::part_sync::PartSync;
 use signex_types::schematic::{LibSymbol, LinkStamp};
 
 mod scan;
+mod selection;
+#[cfg(test)]
+mod skip_all_tests;
 use scan::{
     Instance, InstanceRow, PersonalUpdates, PlacedLibrarySymbol, blocker, bound_instances,
     modal_entry, personal_link,
@@ -23,34 +26,12 @@ use scan::{
 // ─────────────────────────────────────────────────────────────────────
 
 impl Signex {
-    /// Toggle one row's checkbox in the Library Updates modal.
-    pub(super) fn handle_library_updates_toggle_selection(
-        &mut self,
-        symbol_uuid: uuid::Uuid,
-    ) -> Task<Message> {
-        if let Some(state) = self.library.library_updates.as_mut() {
-            state.toggle(symbol_uuid);
-        }
-        Task::none()
-    }
-
-    /// The user answered one conflict of a part in the Library Updates modal.
-    pub(super) fn handle_library_updates_conflict_answered(
-        &mut self,
-        symbol_uuid: uuid::Uuid,
-        field: signex_types::schematic::StampField,
-        choice: crate::library::part_sync::Choice,
-    ) -> Task<Message> {
-        if let Some(state) = self.library.library_updates.as_mut() {
-            state.answer_conflict(symbol_uuid, field, choice);
-        }
-        Task::none()
-    }
-
-    /// User clicked Skip All — close the modal and record the path on
-    /// `skipped_updates_for` (nothing renders that set yet).
+    /// User clicked Skip All — close the modal, remember the offered
+    /// versions for the sheet so a later scan does not offer them again
+    /// (mockup row 135), and record the path on `skipped_updates_for`.
     pub(super) fn handle_library_updates_skip_all(&mut self) -> Task<Message> {
         if let Some(state) = self.library.library_updates.take() {
+            self.library.skipped_versions.remember(&state);
             self.library
                 .skipped_updates_for
                 .insert(state.schematic_path);
@@ -195,7 +176,7 @@ impl Signex {
         let mut team_entries = Vec::new();
         let mut personal_apply: PersonalUpdates = std::collections::BTreeMap::new();
         for (lib_id, group) in by_lib {
-            let bound = bound_instances(&group, &lib_id, &mut any_failed);
+            let bound = bound_instances(&group, &lib_id, &schematic_path, &mut any_failed);
             if bound.is_empty() {
                 continue;
             }
@@ -214,8 +195,8 @@ impl Signex {
                         .find_map(|(s, r)| blocker(s, r.as_ref(), &lib_id))
                 })
                 .flatten();
-            if let Some(why) = blocked {
-                crate::diagnostics::log_warning(why);
+            if let Some((part, why)) = blocked {
+                crate::diagnostics::log_part_warning(why, &schematic_path, part);
                 any_failed = true;
                 continue;
             }
@@ -277,6 +258,14 @@ impl Signex {
         any_failed: bool,
         partial: bool,
     ) {
+        // Versions Skip All dismissed on this sheet are not offered again;
+        // they stay pending, like an unchecked entry.
+        let offered = team_entries.len();
+        let team_entries: Vec<_> = team_entries
+            .into_iter()
+            .filter(|e| !self.library.skipped_versions.is_skipped(&schematic_path, e))
+            .collect();
+        let any_failed = any_failed || team_entries.len() < offered;
         if !team_entries.is_empty() {
             // A partial (one-library) scan adds to the sheet's pending
             // modal rather than replacing the other libraries' entries;
@@ -767,7 +756,7 @@ impl Signex {
                 }
                 _ => self.apply_engine_commands_reporting(commands, true, true),
             };
-            outcome == crate::app::mutation_gateway::CommandOutcome::Failed
+            outcome == crate::app::mutation_gateway::MutationOutcome::Failed
         } else {
             self.replace_on_parked_sheet(sheet, commands, record_history)
         };

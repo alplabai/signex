@@ -25,15 +25,15 @@ use tempfile::TempDir;
 use crate::library_footprint_pick::{alternates, binding_key, key_of, place_selected, select};
 use crate::settle_support::{settle, settle_task};
 
-const COMMAND: &str = "assign_footprints";
+pub(crate) const COMMAND: &str = "assign_footprints";
 
-struct Rig {
-    app: Signex,
-    a: PathBuf,
+pub(crate) struct Rig {
+    pub(crate) app: Signex,
+    pub(crate) a: PathBuf,
     b: PathBuf,
     c: PathBuf,
     /// The first alternate footprint of the Stock resistor row, and its name.
-    alt: (PrimitiveRef, String),
+    pub(crate) alt: (PrimitiveRef, String),
     _tmp: TempDir,
 }
 
@@ -86,13 +86,12 @@ fn open_tab(
     app.document_state.tabs.push(TabInfo {
         title: path.file_stem().unwrap().to_string_lossy().into_owned(),
         path: path.to_path_buf(),
-        cached_document: None,
         project_id: Some(project),
         kind: TabKind::Schematic,
     });
 }
 
-fn rig() -> Rig {
+pub(crate) fn rig() -> Rig {
     let tmp = TempDir::new().expect("tempdir");
     let dir = tmp.path().to_path_buf();
     let (a, b, c) = (
@@ -116,6 +115,7 @@ fn rig() -> Rig {
             .collect(),
         variant_definitions: Vec::new(),
         active_variant: None,
+        variant_settings: Default::default(),
         libraries: Vec::new(),
         enable_git: false,
         rules: Default::default(),
@@ -125,6 +125,11 @@ fn rig() -> Rig {
         project_defaults: Default::default(),
         parameters: Default::default(),
         agent_journal: Default::default(),
+        schematic_design: Default::default(),
+        fab_outputs: None,
+        router_tool_diameter: None,
+        bom_alternates: Vec::new(),
+        requirements: Default::default(),
         unknown: Default::default(),
     };
     let prj = dir.join("P.snxprj");
@@ -174,7 +179,7 @@ fn rig() -> Rig {
     }
 }
 
-fn send(app: &mut Signex, msg: AssignFootprintsMsg) {
+pub(crate) fn send(app: &mut Signex, msg: AssignFootprintsMsg) {
     settle(app, Message::from(msg));
 }
 
@@ -185,7 +190,7 @@ fn footprint_on(app: &Signex, path: &Path) -> String {
 }
 
 /// The dialog has read the three parts: two on open sheets, one closed.
-fn assert_dialog_read(app: &Signex) {
+pub(crate) fn assert_dialog_read(app: &Signex) {
     let state = app
         .ui_state
         .assign_footprints
@@ -262,6 +267,48 @@ fn the_menu_row_sets_ticked_parts_on_two_sheets_as_one_undo_step_in_memory() {
         rig.alt.1,
         "one redo brings both back"
     );
+}
+
+/// What the tile pane on `path` draws as the first part's footprint.
+fn drawn_footprint(app: &Signex, path: &Path) -> String {
+    let slot = &app.interaction_state.tile_panes.schematic[path];
+    slot.active_snapshot().expect("a render cache").symbols[0]
+        .footprint
+        .clone()
+}
+
+/// Epic #2326 M3: a tile pane on `b`, open but not active, draws the
+/// assigned footprint after Apply and the old one after the grouped undo.
+#[test]
+fn apply_and_its_undo_repaint_a_tile_pane_on_another_open_sheet() {
+    let mut rig = rig();
+    let before = footprint_on(&rig.app, &rig.b);
+    let engine = &rig.app.document_state.engines[&rig.b];
+    let mut pane = signex_app::canvas::CanvasSlot::default();
+    pane.set_render_cache(Some(
+        signex_app::schematic_runtime::SchematicRenderCache::from_sheet_at(
+            engine.document(),
+            engine.revision(),
+        ),
+    ));
+    rig.app
+        .interaction_state
+        .tile_panes
+        .schematic
+        .insert(rig.b.clone(), pane);
+    settle(&mut rig.app, crate::menu_support::menu_row(COMMAND));
+    send(&mut rig.app, AssignFootprintsMsg::AllToggled(true));
+    send(
+        &mut rig.app,
+        AssignFootprintsMsg::TickedPicked(binding_key(&rig.alt.0)),
+    );
+    send(&mut rig.app, AssignFootprintsMsg::ApplyRequested);
+    assert_eq!(footprint_on(&rig.app, &rig.b), rig.alt.1);
+    assert_eq!(drawn_footprint(&rig.app, &rig.b), rig.alt.1, "after Apply");
+
+    let _ = rig.app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(footprint_on(&rig.app, &rig.b), before);
+    assert_eq!(drawn_footprint(&rig.app, &rig.b), before, "after the undo");
 }
 
 #[test]

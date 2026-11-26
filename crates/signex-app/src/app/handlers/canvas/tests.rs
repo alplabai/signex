@@ -45,6 +45,7 @@ fn app_focused_on(focused: &str) -> Signex {
                 .collect(),
             variant_definitions: Vec::new(),
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: Vec::new(),
             enable_git: false,
             net_classes: Vec::new(),
@@ -53,6 +54,11 @@ fn app_focused_on(focused: &str) -> Signex {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
+            fab_outputs: None,
+            router_tool_diameter: None,
+            bom_alternates: Vec::new(),
+            requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },
@@ -66,7 +72,6 @@ fn app_focused_on(focused: &str) -> Signex {
     app.document_state.tabs.push(TabInfo {
         title: "sheet".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: Some(id),
         kind: TabKind::Schematic,
     });
@@ -131,6 +136,51 @@ fn an_empty_child_reference_resolves_to_nothing() {
     assert_eq!(app.resolve_child_sheet_path("   "), None);
 }
 
+/// #2742: a contents row may climb to a sheet elsewhere in its project.
+#[test]
+fn a_table_link_climbs_to_a_sheet_inside_the_project() {
+    let app = app_focused_on("/w/a/sub/mid.snxsch");
+    assert_eq!(
+        app.table_link_path("../power/buck.snxsch"),
+        Some(PathBuf::from("/w/a/power/buck.snxsch"))
+    );
+}
+
+/// #2742: climbing out of the project stays refused (#463).
+#[test]
+fn a_table_link_out_of_the_project_is_refused() {
+    let app = app_focused_on("/w/a/sub/mid.snxsch");
+    assert_eq!(app.table_link_path("../../../etc/passwd"), None);
+    assert_eq!(app.table_link_path("/elsewhere/leaf.snxsch"), None);
+    assert_eq!(app.table_link_path("   "), None);
+}
+
+/// #2742: in an undocked window the link resolves from that window's sheet,
+/// not from the tab active in the main window.
+#[test]
+fn a_table_link_in_an_undocked_window_resolves_from_that_windows_sheet() {
+    let mut app = app_focused_on("/w/a/power/buck.snxsch");
+    let window = iced::window::Id::unique();
+    app.ui_state.windows.insert(
+        window,
+        crate::app::state::WindowKind::UndockedTab {
+            path: PathBuf::from("/w/a/contents.snxsch"),
+            title: "contents".into(),
+        },
+    );
+    app.interaction_state
+        .canvases
+        .insert(window, crate::canvas::CanvasSlot::new());
+    let mut resolved = None;
+
+    let _ = app.run_in_window(window, false, |app| {
+        resolved = app.table_link_path("power/buck.snxsch");
+        iced::Task::none()
+    });
+
+    assert_eq!(resolved, Some(PathBuf::from("/w/a/power/buck.snxsch")));
+}
+
 /// Double-clicking a child sheet whose tab was closed with unsaved edits
 /// must reattach the parked engine, not replace it with the disk copy (#1135).
 #[test]
@@ -187,6 +237,7 @@ fn dragging_a_bus_on_the_canvas_carries_entry_and_wire() {
             uuid: bus_id,
             start: Point::new(0.0, 0.0),
             end: Point::new(0.0, 20.0),
+            ..Default::default()
         }],
         bus_entries: vec![BusEntry {
             uuid: entry_id,
@@ -212,7 +263,6 @@ fn dragging_a_bus_on_the_canvas_carries_entry_and_wire() {
     app.document_state.tabs.push(TabInfo {
         title: "bus-drag".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

@@ -84,8 +84,9 @@ fn panel_shortcut_focuses_an_open_panel_in_a_collapsed_region() {
 fn every_panel_shortcut_toggles_its_own_panel() {
     for (id, kind) in [
         ("toggle_properties_panel", PanelKind::Properties),
-        ("toggle_schematic_filter_panel", PanelKind::SchFilter),
-        ("toggle_schematic_list_panel", PanelKind::SchList),
+        // SCH Filter is retired into Filter (mockup rows 40 and 55).
+        ("toggle_schematic_filter_panel", PanelKind::Filter),
+        ("toggle_schematic_list_panel", PanelKind::ObjectList),
     ] {
         let (mut app, _task) = Signex::new();
         app.document_state.dock.close_panel(kind);
@@ -115,13 +116,13 @@ fn both_search_panel_shortcuts_open_and_close_find() {
 fn app_with_tabs(kinds: Vec<TabKind>) -> Signex {
     let (mut app, _task) = Signex::new();
     for (i, kind) in kinds.into_iter().enumerate() {
-        app.document_state.tabs.push(crate::app::TabInfo {
-            title: format!("t{i}"),
-            path: PathBuf::from(format!("t{i}.snxsch")),
-            cached_document: None,
-            project_id: None,
-            kind,
-        });
+        app.document_state
+            .tabs
+            .push(crate::test_adapter::boardless_tab(
+                format!("t{i}"),
+                format!("t{i}.snxsch"),
+                kind,
+            ));
     }
     app.document_state.active_tab = 0;
     app

@@ -8,13 +8,21 @@
 //! in every filename (ADR-0001 §5 — group by folder, no redundant prefix).
 
 mod board;
+mod generated;
 mod grid;
 mod library;
 mod pad;
+mod pad_input;
+mod pad_library;
 mod pad_stack;
+mod pad_trapezoid;
+mod pattern_mask;
+mod properties_view;
 mod props;
+mod role;
 mod shape;
 mod silk;
 mod sketch;
 
+pub(in crate::app::handlers::dock::sch_library) use pad_input::PadMm;
 pub(in crate::app::handlers::dock::sch_library) use silk::{SilkLineEndpoint, SilkTextField};

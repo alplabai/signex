@@ -71,9 +71,12 @@ fn sheet_with(symbols: Vec<Symbol>) -> SchematicSheet {
         drawings: Vec::new(),
         no_erc_directives: Vec::new(),
         directives: Vec::new(),
+        harness: Default::default(),
+        unions: Vec::new(),
         title_block: HashMap::new(),
         text_widths: Default::default(),
         text_extents: Default::default(),
+        variables: Default::default(),
         lib_symbols: Default::default(),
         net_colors: HashMap::new(),
         drawing_placements: Default::default(),
@@ -102,7 +105,6 @@ fn dragging_the_reference_field_moves_drawn_text_and_hit_box() {
     app.document_state.tabs.push(TabInfo {
         title: "field-drag".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -180,7 +182,6 @@ fn moved_tall_symbol_is_hit_on_its_library_body() {
     app.document_state.tabs.push(TabInfo {
         title: "tall-symbol".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

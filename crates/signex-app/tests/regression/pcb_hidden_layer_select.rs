@@ -14,6 +14,7 @@ use signex_app::keymap::{AppCommandId, KeyStroke, KeyToken, Modifiers};
 use signex_app::menu_bar::MenuMessage;
 use signex_app::pcb_canvas::PcbCanvasMsg;
 use signex_app::tab_bar::TabMessage;
+use signex_app::test_adapter::BoardEngines;
 use signex_types::format::{SnxPcb, SnxSchematic};
 use signex_types::pcb::{
     Footprint, LayerDef, Pad, PadShape, PadType, PcbBoard, Point, Segment, SymbolLink,
@@ -61,6 +62,7 @@ fn empty_board() -> PcbBoard {
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
@@ -88,8 +90,8 @@ fn new_app() -> Signex {
     app.ui_state.main_window_id = Some(iced::window::Id::unique());
     app.ui_state
         .keymap_profiles
-        .set_active_profile("altium")
-        .expect("altium profile");
+        .set_active_profile("signex_standard")
+        .expect("signex_standard profile");
     app.ui_state.active_keymap = app.ui_state.keymap_profiles.compile_active().into();
     app
 }
@@ -176,7 +178,7 @@ fn click(app: &mut Signex, window: Option<iced::window::Id>, y: f64, mode: Click
 
 fn board_dump(app: &Signex) -> String {
     let docs = &app.document_state;
-    format!("{:?}", docs.tabs[docs.active_tab].cached_document)
+    format!("{:?}", docs.tab_board_engine(docs.active_tab))
 }
 
 fn delete_key() -> Message {
@@ -280,6 +282,8 @@ fn linked() -> Linked {
         layers: vec!["BottomCopper".into()],
         net: None,
         roundrect_ratio: 0.0,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 0.0,
         layer_sizes: None,
         net_locked: false,
@@ -343,6 +347,7 @@ fn add_project(app: &mut Signex, dir: &Path) {
             }],
             variant_definitions: Vec::new(),
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: Vec::new(),
             enable_git: false,
             net_classes: Vec::new(),
@@ -351,6 +356,11 @@ fn add_project(app: &mut Signex, dir: &Path) {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
+            fab_outputs: None,
+            router_tool_diameter: None,
+            bom_alternates: Vec::new(),
+            requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },

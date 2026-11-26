@@ -1,10 +1,8 @@
 //! Ink of the cursor marks sketch mode draws in place of the hidden OS
-//! cursor (#2356): light on the dark board ground, dark on the white
-//! sketch canvas, so the mark reads on the ground under it.
+//! cursor (#2356): light marks on the dark board ground, which sketch mode
+//! paints on every theme (decision 7, Caner 2026-11-20).
 
 use iced::Color;
-
-use super::graphite::look_from_bg;
 
 /// Colours of the sketch cursor marks.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -17,14 +15,7 @@ pub(in crate::library::editor::footprint::canvas) struct CursorInk {
     pub halo: Color,
 }
 
-/// Marks for a light ground.
-const DARK_INK: CursorInk = CursorInk {
-    mark: Color::from_rgba(0.10, 0.10, 0.10, 0.90),
-    frame: Color::from_rgba(0.04, 0.18, 0.36, 1.0),
-    halo: Color::from_rgba(1.0, 1.0, 1.0, 0.85),
-};
-
-/// Marks for a dark ground.
+/// Marks for the dark board ground.
 const LIGHT_INK: CursorInk = CursorInk {
     mark: Color::from_rgba(0.94, 0.94, 0.94, 0.95),
     frame: Color::from_rgba(0.55, 0.76, 1.0, 1.0),
@@ -32,32 +23,23 @@ const LIGHT_INK: CursorInk = CursorInk {
 };
 
 impl CursorInk {
-    /// The ink for a canvas whose background colour is `bg`, in sketch
-    /// mode: the Graphite board keeps its own ground, any other canvas
-    /// turns white (see `background::draw_backdrop`).
-    pub(in crate::library::editor::footprint::canvas) fn for_sketch_on(bg: Color) -> Self {
-        let ground = if look_from_bg(bg).is_some() {
-            bg
-        } else {
-            Color::WHITE
-        };
-        if luminance(ground) < 0.5 {
-            LIGHT_INK
-        } else {
-            DARK_INK
-        }
+    /// The ink of sketch mode: it paints the board ground whatever the
+    /// canvas colour (see `background::draw_backdrop`), so the ink is the
+    /// board's.
+    pub(in crate::library::editor::footprint::canvas) fn sketch() -> Self {
+        LIGHT_INK
     }
-}
-
-/// Perceived brightness of `c`, 0 (black) to 1 (white).
-fn luminance(c: Color) -> f32 {
-    0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
 }
 
 #[cfg(test)]
 mod tests {
     use super::super::graphite::board_look;
     use super::*;
+
+    /// Perceived brightness of `c`, 0 (black) to 1 (white).
+    fn luminance(c: Color) -> f32 {
+        0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
+    }
 
     /// How far apart two colours read, ignoring alpha.
     fn contrast(a: Color, b: Color) -> f32 {
@@ -69,17 +51,18 @@ mod tests {
     #[test]
     fn the_cursor_marks_read_on_the_board_ground() {
         let ground = board_look().bg;
-        let ink = CursorInk::for_sketch_on(ground);
+        let ink = CursorInk::sketch();
         assert!(contrast(ink.mark, ground) > 0.6, "{ink:?} on {ground:?}");
         assert!(contrast(ink.frame, ground) > 0.4, "{ink:?} on {ground:?}");
         assert!(contrast(ink.halo, ink.mark) > 0.6, "{ink:?}");
     }
 
-    /// Any other canvas paints sketch mode white: the marks stay dark.
+    /// Every theme paints sketch mode on the board ground (Caner
+    /// 2026-11-20, decision 7): the marks stay light.
     #[test]
-    fn the_cursor_marks_read_on_the_white_sketch_canvas() {
-        let ink = CursorInk::for_sketch_on(Color::BLACK);
-        assert_eq!(ink, DARK_INK);
-        assert!(contrast(ink.mark, Color::WHITE) > 0.6);
+    fn the_cursor_marks_read_on_the_board_ground_on_every_theme() {
+        let ink = CursorInk::sketch();
+        assert_eq!(ink, LIGHT_INK);
+        assert!(contrast(ink.mark, board_look().bg) > 0.6);
     }
 }

@@ -236,6 +236,7 @@ fn rows_built_by_view(state: &LibraryState, root: &PathBuf) -> usize {
         &state.library_browsers[root],
         &tokens,
         &signex_i18n::I18n::en_us(),
+        crate::library::browser::PreviewLook::for_tests(),
     ));
     ROWS_BUILT.with(|c| c.get())
 }
@@ -390,6 +391,7 @@ fn grid_element<'a>(
             dangling: &lib.dangling,
             prices: &prices,
             names: crate::library::browser::names::PrimitiveNames::of(lib),
+            thumbs: None,
         },
         tokens,
         &signex_i18n::I18n::en_us(),
@@ -674,4 +676,70 @@ fn a_grid_whose_height_the_state_already_knows_publishes_nothing() {
     let (again, _) = resize_reports(&state, &root, &mut browser, cache);
 
     assert!(again.is_empty(), "{again:?}");
+}
+
+// ── thumbnail rows (mockup rows 118 and 119) ─────────────────────
+
+use crate::library::state::LibraryRowStyle;
+
+/// Thumbnail rows are taller, so the same viewport builds fewer of them,
+/// and the spacers still add up to the full height.
+#[test]
+fn thumbnail_rows_are_taller_and_build_a_smaller_window() {
+    let thumb = row_height(LibraryRowStyle::Thumbnail);
+    assert_eq!(row_height(LibraryRowStyle::Compact), H);
+    assert!(thumb > H);
+    let scroll = scrolled(4_000.0, 700.0);
+    let compact = visible_rows(scroll, 10_000);
+    let tall = visible_rows_at(scroll, 10_000, thumb);
+    assert!(tall.len() < compact.len(), "{tall:?} {compact:?}");
+    let total =
+        tall.start as f32 * thumb + tall.len() as f32 * thumb + (10_000 - tall.end) as f32 * thumb;
+    assert_eq!(total, 10_000.0 * thumb);
+    // A row is revealed against the taller rows.
+    let off = reveal_row_offset_at(9_000, scroll, thumb).expect("scrolls");
+    assert_eq!(
+        reveal_row_offset_at(9_000, scrolled(off, 700.0), thumb),
+        None
+    );
+}
+
+/// The grid in thumbnail rows builds only its (smaller) window too.
+#[test]
+fn the_thumbnail_grid_builds_only_its_window() {
+    let (mut state, root, _) = library_of(10_000);
+    state.library_panel.row_style = LibraryRowStyle::Thumbnail;
+    state.library_browsers.get_mut(&root).unwrap().grid_scroll = scrolled(0.0, 700.0);
+    let thumb = row_height(LibraryRowStyle::Thumbnail);
+    let built = rows_built_by_view(&state, &root);
+    assert!(built > 0);
+    assert!(
+        built <= (700.0 / thumb).ceil() as usize + 1 + 2 * OVERSCAN_ROWS,
+        "built {built}"
+    );
+}
+
+/// The shown browser asks for the symbols of the rows it builds, and only
+/// while the shared row style is thumbnail rows.
+#[test]
+fn the_shown_browser_asks_for_its_window_symbols_in_thumbnail_rows_only() {
+    let (mut state, root, _) = library_of(1_000);
+    state.library_browsers.get_mut(&root).unwrap().grid_scroll = scrolled(0.0, 700.0);
+    state.note_shown_browser(Some(root.as_path()));
+    assert!(state.browser_wanted_thumbnails().is_empty(), "compact rows");
+
+    state.library_panel.row_style = LibraryRowStyle::Thumbnail;
+    let wanted = state.browser_wanted_thumbnails();
+    let window = visible_rows_at(
+        state.library_browsers[&root].grid_scroll,
+        1_000,
+        row_height(LibraryRowStyle::Thumbnail),
+    );
+    assert_eq!(wanted.len(), window.len());
+
+    state.note_shown_browser(None);
+    assert!(
+        state.browser_wanted_thumbnails().is_empty(),
+        "no browser shown"
+    );
 }

@@ -42,6 +42,7 @@ impl RuleId {
             RuleKind::PartWithoutFootprint => "builtin::part_without_footprint",
             RuleKind::PartWithoutValue => "builtin::part_without_value",
             RuleKind::PartWithoutMpn => "builtin::part_without_mpn",
+            RuleKind::PartWithoutLibraryBody => "builtin::part_without_library_body",
             RuleKind::UnannotatedDesignator => "builtin::unannotated_designator",
             RuleKind::SinglePinNet => "builtin::single_pin_net",
             RuleKind::NetWithNoDriver => "builtin::net_with_no_driver",
@@ -51,6 +52,10 @@ impl RuleId {
             RuleKind::LabelsOnlyNet => "builtin::net_carries_only_labels",
             RuleKind::SheetPinUnconnected => "builtin::sheet_pin_not_connected",
             RuleKind::SheetPinDirectionConflict => "builtin::sheet_pin_direction_conflict",
+            RuleKind::RepeatEntryNeedsBus => "builtin::repeat_entry_needs_bus",
+            RuleKind::HarnessEntryMismatch => "builtin::harness_entry_mismatch",
+            RuleKind::HarnessTypeConflict => "builtin::harness_type_conflict",
+            RuleKind::NetClassConflict => "builtin::net_class_conflict",
         };
         RuleId(id.to_string())
     }
@@ -168,7 +173,7 @@ mod tests {
 
     /// Every built-in id string is persisted in saved profiles and project
     /// rule sets, so it must never follow a label rewording.
-    const PINNED_IDS: [(RuleKind, &str); 33] = [
+    const PINNED_IDS: [(RuleKind, &str); 38] = [
         (RuleKind::UnusedPin, "builtin::unused_pin"),
         (
             RuleKind::DuplicateRefDesignator,
@@ -230,6 +235,10 @@ mod tests {
         (RuleKind::PartWithoutValue, "builtin::part_without_value"),
         (RuleKind::PartWithoutMpn, "builtin::part_without_mpn"),
         (
+            RuleKind::PartWithoutLibraryBody,
+            "builtin::part_without_library_body",
+        ),
+        (
             RuleKind::UnannotatedDesignator,
             "builtin::unannotated_designator",
         ),
@@ -250,6 +259,19 @@ mod tests {
             RuleKind::SheetPinDirectionConflict,
             "builtin::sheet_pin_direction_conflict",
         ),
+        (
+            RuleKind::RepeatEntryNeedsBus,
+            "builtin::repeat_entry_needs_bus",
+        ),
+        (
+            RuleKind::HarnessEntryMismatch,
+            "builtin::harness_entry_mismatch",
+        ),
+        (
+            RuleKind::HarnessTypeConflict,
+            "builtin::harness_type_conflict",
+        ),
+        (RuleKind::NetClassConflict, "builtin::net_class_conflict"),
     ];
 
     #[test]

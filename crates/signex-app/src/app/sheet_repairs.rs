@@ -51,14 +51,14 @@ pub(crate) fn log_sheet_repairs(path: &Path, repairs: &[SheetLoadRepair]) -> boo
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use signex_types::format::{RepairedObject, SheetLoadRepair};
     use signex_types::schematic::SchematicSheet;
 
     use crate::app::handlers::menu::export::tests::app_workspace;
     use crate::app::restore_job::RestoreJobDocument;
 
-    fn repaired_sheet(read_only: bool) -> SchematicSheet {
+    pub(crate) fn repaired_sheet(read_only: bool) -> SchematicSheet {
         let mut sheet = SchematicSheet {
             uuid: uuid::Uuid::now_v7(),
             paper_size: "A4".into(),
@@ -160,12 +160,9 @@ mod tests {
         app.open_pcb_tab(path.clone(), "board_repair".into(), repaired_board(false));
         assert!(app.document_state.is_document_dirty(&path));
         assert_eq!(crate::diagnostics::logged_count(needle), before + 1);
-        let Some(crate::app::TabDocument::Pcb(engine)) = app
-            .document_state
-            .tabs
-            .last()
-            .and_then(|tab| tab.cached_document.as_ref())
-        else {
+        let docs = &app.document_state;
+        let last = docs.tabs.len().checked_sub(1);
+        let Some(engine) = last.and_then(|idx| docs.tab_board_engine(idx)) else {
             panic!("a board tab");
         };
         assert!(engine.board().unknown.load_repairs.is_empty());

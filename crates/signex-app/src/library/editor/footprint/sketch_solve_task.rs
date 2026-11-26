@@ -24,7 +24,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use iced::Task;
-use signex_sketch::expr::ExprError;
+use signex_expr::ExprError;
 use signex_sketch::solver::{FullSolveOutput, Solver};
 use signex_sketch::{SketchData, SolveError, parameter};
 use uuid::Uuid;
@@ -45,6 +45,17 @@ pub struct SketchSolveRequest {
     footprint_idx: usize,
     sketch: SketchData,
     solver: Solver,
+    purpose: SolvePurpose,
+}
+
+/// What a solve answer is for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SolvePurpose {
+    /// An edit's solve: the answer is baked into the footprint.
+    Edit,
+    /// The solve a footprint is opened with (#2468): shown, never baked,
+    /// and dropped if anything solved or edited the sketch first.
+    Display,
 }
 
 impl SketchSolveRequest {
@@ -120,6 +131,7 @@ pub(super) fn run_solve_with(
         footprint_idx,
         sketch,
         solver,
+        purpose,
     } = request;
     let outcome =
         std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| solve(&sketch, &solver)))
@@ -133,35 +145,47 @@ pub(super) fn run_solve_with(
                     "the solver panicked: {reason}"
                 )))
             });
-    solved_message(instance, generation, footprint_idx, outcome)
+    solved_message(instance, generation, footprint_idx, purpose, outcome)
 }
 
 fn solved_message(
     instance: Uuid,
     generation: u64,
     footprint_idx: usize,
+    purpose: SolvePurpose,
     outcome: SolveOutcome,
 ) -> FootprintEditorMsg {
     FootprintEditorMsg::SketchSolved {
         instance,
         generation,
         footprint_idx,
+        purpose,
         outcome: Arc::new(outcome),
     }
 }
 
 /// [`run_solve`] on tokio's blocking pool, so a CPU-bound solve does not
 /// occupy an async worker. Lives in the `Task`'s future; the runtime is
-/// iced's tokio executor.
+/// iced's tokio executor. A display solve leaves the redundancy pass out,
+/// as the inline path does, and owes it once it is shown.
 async fn run_solve_blocking(request: SketchSolveRequest) -> FootprintEditorMsg {
-    let (instance, generation, footprint_idx) =
-        (request.instance, request.generation, request.footprint_idx);
-    match tokio::task::spawn_blocking(move || run_solve(request)).await {
+    let (instance, generation, footprint_idx, purpose) = (
+        request.instance,
+        request.generation,
+        request.footprint_idx,
+        request.purpose,
+    );
+    let solve = move || match purpose {
+        SolvePurpose::Edit => run_solve(request),
+        SolvePurpose::Display => run_solve_inline(request),
+    };
+    match tokio::task::spawn_blocking(solve).await {
         Ok(msg) => msg,
         Err(e) => solved_message(
             instance,
             generation,
             footprint_idx,
+            purpose,
             SolveOutcome::SolveFailed(SolveError::Internal(format!("the solve task failed: {e}"))),
         ),
     }
@@ -236,6 +260,9 @@ pub struct SketchSolveSlot {
     redundancy_owed: bool,
     /// A redundancy pass is running off-thread. At most one at a time.
     redundancy_running: bool,
+    /// The footprint was just opened and its display solve has not been
+    /// started (#2468).
+    open_solve_owed: bool,
 }
 
 impl Default for SketchSolveSlot {
@@ -249,6 +276,7 @@ impl Default for SketchSolveSlot {
             after_revert: false,
             redundancy_owed: false,
             redundancy_running: false,
+            open_solve_owed: false,
         }
     }
 }
@@ -285,6 +313,16 @@ impl SketchSolveSlot {
 
     pub(crate) fn finish_redundancy(&mut self) {
         self.redundancy_running = false;
+    }
+
+    /// The footprint was opened: its sketch is owed a display solve.
+    pub(crate) fn owe_open_solve(&mut self) {
+        self.open_solve_owed = true;
+    }
+
+    /// Whether the open solve is owed, clearing it.
+    pub(crate) fn take_open_solve(&mut self) -> bool {
+        std::mem::take(&mut self.open_solve_owed)
     }
 
     pub fn is_in_flight(&self) -> bool {
@@ -428,6 +466,50 @@ pub fn snapshot_request(editor: &crate::app::FootprintDocument) -> Option<Sketch
         footprint_idx: editor.active_idx,
         sketch: editor.primitive().sketch.clone()?,
         solver: editor.state.sketch_solver.clone(),
+        purpose: SolvePurpose::Edit,
+    })
+}
+
+/// [`snapshot_request`] for the display solve a footprint opens with.
+pub fn snapshot_display_request(
+    editor: &crate::app::FootprintDocument,
+) -> Option<SketchSolveRequest> {
+    snapshot_request(editor).map(|request| SketchSolveRequest {
+        purpose: SolvePurpose::Display,
+        ..request
+    })
+}
+
+/// Start the display solve of every footprint editor opened since the last
+/// call (#2468).
+pub(crate) fn dispatch_open_solves(
+    editors: &mut HashMap<std::path::PathBuf, crate::app::FootprintDocument>,
+) -> Task<LibraryMessage> {
+    Task::batch(
+        editors
+            .iter_mut()
+            .map(|(path, editor)| dispatch_open_solve(editor, path)),
+    )
+}
+
+/// Start the display solve of a footprint just opened (#2468), off the UI
+/// thread. Until it lands the editor shows "Sketch not solved".
+pub(crate) fn dispatch_open_solve(
+    editor: &mut crate::app::FootprintDocument,
+    path: &Path,
+) -> Task<LibraryMessage> {
+    if !editor.state.sketch_solve.take_open_solve() {
+        return Task::none();
+    }
+    let Some(request) = snapshot_display_request(editor) else {
+        return Task::none();
+    };
+    let path = path.to_path_buf();
+    Task::perform(run_solve_blocking(request), move |msg| {
+        LibraryMessage::PrimitiveEditorEvent {
+            path: path.clone(),
+            msg: PrimitiveEdit::Footprint(msg),
+        }
     })
 }
 

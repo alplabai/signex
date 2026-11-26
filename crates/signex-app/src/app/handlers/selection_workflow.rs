@@ -12,20 +12,26 @@ pub(crate) fn passes_filter(
     filters: &std::collections::HashSet<SelectionFilter>,
 ) -> bool {
     use signex_types::schematic::SelectedKind;
-    let required = match item.kind {
-        SelectedKind::Symbol => {
-            let is_power = snapshot
-                .symbols
-                .iter()
-                .find(|s| s.uuid == item.uuid)
-                .map(|s| s.is_power)
-                .unwrap_or(false);
-            if is_power {
-                SelectionFilter::PowerPorts
-            } else {
-                SelectionFilter::Components
-            }
-        }
+    let is_power = matches!(item.kind, SelectedKind::Symbol)
+        && snapshot
+            .symbols
+            .iter()
+            .find(|s| s.uuid == item.uuid)
+            .is_some_and(|s| s.is_power);
+    filters.contains(&selection_filter_of(item.kind, is_power))
+}
+
+/// The Selection Filter kind of a pick: the one rule a click, a box, the
+/// hover pick and the filter panels' counts share. `is_power` says whether
+/// a symbol is a power port.
+pub(crate) fn selection_filter_of(
+    kind: signex_types::schematic::SelectedKind,
+    is_power: bool,
+) -> SelectionFilter {
+    use signex_types::schematic::SelectedKind;
+    match kind {
+        SelectedKind::Symbol if is_power => SelectionFilter::PowerPorts,
+        SelectedKind::Symbol => SelectionFilter::Components,
         SelectedKind::Wire => SelectionFilter::Wires,
         SelectedKind::Bus | SelectedKind::BusEntry => SelectionFilter::Buses,
         SelectedKind::ChildSheet | SelectedKind::SheetPin => SelectionFilter::SheetSymbols,
@@ -36,9 +42,36 @@ pub(crate) fn passes_filter(
         SelectedKind::Junction
         | SelectedKind::NoConnect
         | SelectedKind::NoErcDirective
-        | SelectedKind::Directive => SelectionFilter::Other,
-    };
-    filters.contains(&required)
+        | SelectedKind::Directive
+        | SelectedKind::HarnessConnector
+        | SelectedKind::HarnessEntry
+        | SelectedKind::HarnessWire => SelectionFilter::Other,
+    }
+}
+
+/// How many objects of each Selection Filter kind the sheet holds: every
+/// selectable item, each symbol's designator and value fields with them,
+/// as a recalled selection counts them (`valid_selection_items`).
+pub(crate) fn selection_filter_counts(
+    snapshot: &crate::schematic_runtime::SchematicRenderSnapshot,
+) -> crate::panels::KindCounts<SelectionFilter> {
+    use signex_types::schematic::SelectedKind;
+    let power: std::collections::HashSet<uuid::Uuid> = snapshot
+        .symbols
+        .iter()
+        .filter(|s| s.is_power)
+        .map(|s| s.uuid)
+        .collect();
+    let kinds = all_selectable_items(snapshot).into_iter().flat_map(|item| {
+        let fields = if matches!(item.kind, SelectedKind::Symbol) {
+            2
+        } else {
+            0
+        };
+        let kind = selection_filter_of(item.kind, power.contains(&item.uuid));
+        std::iter::once(kind).chain(std::iter::repeat_n(SelectionFilter::Parameters, fields))
+    });
+    crate::panels::KindCounts::of(kinds)
 }
 
 fn all_selectable_items(
@@ -92,6 +125,19 @@ fn all_selectable_items(
     for drawing in &snapshot.drawings {
         let uuid = drawing.uuid();
         items.push(SelectedItem::new(uuid, SelectedKind::Drawing));
+    }
+    // #1280: harness connectors, their entries and harness wires.
+    for connector in &snapshot.harness.connectors {
+        items.push(SelectedItem::new(
+            connector.uuid,
+            SelectedKind::HarnessConnector,
+        ));
+        for entry in &connector.entries {
+            items.push(SelectedItem::new(entry.uuid, SelectedKind::HarnessEntry));
+        }
+    }
+    for wire in &snapshot.harness.wires {
+        items.push(SelectedItem::new(wire.uuid, SelectedKind::HarnessWire));
     }
 
     items
@@ -159,6 +205,10 @@ impl Signex {
                 }
             }
             selection_request::SelectionRequest::HitAt { world_x, world_y } => {
+                // A union's name tab selects the union (mockup row 158).
+                if self.select_union_at_tab(world_x, world_y) {
+                    return Task::none();
+                }
                 if let Some(snapshot) = self.active_render_snapshot() {
                     let hit = crate::schematic_runtime::hit_test::hit_test_styled(
                         snapshot,
@@ -191,15 +241,17 @@ impl Signex {
                     }
                     self.interaction_state.clicked_pin = clicked_pin;
                     self.interaction_state.active_canvas_mut().selected = hit.into_iter().collect();
+                    // A member brings its whole union along (mockup row 158).
+                    self.expand_selection_to_unions();
                     self.interaction_state
                         .active_canvas_mut()
                         .clear_overlay_cache();
                     self.update_selection_info();
-                    // The Pins rows read their nets from the project net index.
-                    // A cold index is built now, and the rows refresh when it
-                    // lands (`refresh_pin_rows`).
-                    if hit.is_some_and(|h| h.kind == signex_types::schematic::SelectedKind::Symbol)
-                    {
+                    // The Pins rows and a wire's Net Name read the project net
+                    // index. A cold index is built now, and the rows refresh
+                    // when it lands (`refresh_pin_rows`).
+                    use signex_types::schematic::SelectedKind as K;
+                    if hit.is_some_and(|h| matches!(h.kind, K::Symbol | K::Wire | K::Bus)) {
                         return self.warm_net_index_for_pin_rows();
                     }
                 }

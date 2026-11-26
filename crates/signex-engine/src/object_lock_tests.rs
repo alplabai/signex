@@ -112,6 +112,7 @@ fn every_edit_of_a_locked_object_is_refused_and_leaves_the_sheet_alone() {
                 dx: 5.0,
                 dy: 0.0,
                 keep_wires: true,
+                wiring: signex_types::corner::DragWiringMode::Auto,
             },
             &format!("move {kind}"),
         );
@@ -120,6 +121,7 @@ fn every_edit_of_a_locked_object_is_refused_and_leaves_the_sheet_alone() {
             Command::MoveEach {
                 moves: vec![(locked, 5.0, 0.0)],
                 keep_wires: false,
+                wiring: signex_types::corner::DragWiringMode::Auto,
             },
             &format!("move each {kind}"),
         );
@@ -225,6 +227,7 @@ fn the_free_twins_still_edit() {
             dx: 1.0,
             dy: 0.0,
             keep_wires: false,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         });
         assert!(result.is_ok_and(|r| r.changed), "{:?}", free.kind);
     }
@@ -255,6 +258,7 @@ fn a_command_of_nothing_but_locked_objects_prunes_to_none() {
         dx: 1.0,
         dy: 1.0,
         keep_wires: true,
+        wiring: signex_types::corner::DragWiringMode::Auto,
     });
     assert!(pruned.is_none());
     assert_eq!(skipped.len(), 4);
@@ -356,6 +360,7 @@ fn a_symbol_whose_pin_carries_a_locked_wire_does_not_drag_it() {
         dx: 0.0,
         dy: 5.0,
         keep_wires: true,
+        wiring: signex_types::corner::DragWiringMode::Auto,
     });
     match result {
         Err(EngineError::ItemLocked { references, .. }) => {
@@ -370,6 +375,7 @@ fn a_symbol_whose_pin_carries_a_locked_wire_does_not_drag_it() {
         dx: 0.0,
         dy: 5.0,
         keep_wires: true,
+        wiring: signex_types::corner::DragWiringMode::Auto,
     });
     assert!(pruned.is_none());
     assert_eq!(skipped.len(), 1);
@@ -384,6 +390,7 @@ fn a_plain_move_leaves_a_locked_wire_alone_and_is_allowed() {
         dx: 0.0,
         dy: 5.0,
         keep_wires: false,
+        wiring: signex_types::corner::DragWiringMode::Auto,
     });
     assert!(result.is_ok_and(|r| r.changed));
     assert_eq!(engine.document().wires[0], wire_before);
@@ -397,6 +404,7 @@ fn an_unlocked_wire_is_still_followed_by_the_rubber_band() {
         dx: 0.0,
         dy: 5.0,
         keep_wires: true,
+        wiring: signex_types::corner::DragWiringMode::Auto,
     });
     assert!(result.is_ok_and(|r| r.changed));
 }
@@ -437,6 +445,7 @@ fn a_sheet_pin_whose_wire_is_locked_does_not_drag_it() {
         dx: 0.0,
         dy: 8.0,
         keep_wires: true,
+        wiring: signex_types::corner::DragWiringMode::Auto,
     };
     assert!(matches!(
         engine.execute(slide.clone()),
@@ -488,6 +497,7 @@ fn a_keep_wires_move_does_not_slide_a_locked_elbow_leg() {
         dx: 0.0,
         dy: 5.0,
         keep_wires: true,
+        wiring: signex_types::corner::DragWiringMode::Auto,
     });
     assert!(result.is_ok_and(|r| r.changed));
     let leg = engine
@@ -509,6 +519,7 @@ fn the_skip_and_refuse_paths_agree_on_a_locked_elbow_leg() {
         dx: 0.0,
         dy: 5.0,
         keep_wires: true,
+        wiring: signex_types::corner::DragWiringMode::Auto,
     };
     // Neither path objects: the leg is simply not slid.
     let (pruned, skipped) = engine.without_locked(command);
@@ -541,13 +552,14 @@ fn overlapping_pairs(engine: &Engine) -> usize {
     n
 }
 
-/// A route along a locked wire is not a route, so the pass cannot keep R1's
-/// pin on W1 here: it falls back to a plain move for that pin and says so.
-/// Nothing is stacked on L, no dot is added, and L is untouched. The
-/// trimmed-remainder control is in `overlap::tests`.
+/// A route along a locked wire is not a route, so W1 cannot follow R1's pin
+/// here. The pin lands inside L, and a pin end inside a wire joins it through
+/// a dot (2026-11-18), so R1 stays on its net: nothing is stacked on L, L is
+/// untouched, and the one new dot is the pin's. The trimmed-remainder
+/// control is in `overlap::tests`.
 #[test]
-fn a_wire_dragged_onto_a_locked_one_falls_back_to_a_plain_move() {
-    let (mut engine, r1, _) = wire_lands_on_a_locked_one(70.0);
+fn a_pin_dragged_onto_a_locked_wire_joins_it_through_a_dot() {
+    let (mut engine, r1, before) = wire_lands_on_a_locked_one(70.0);
     let wires_before = engine.document().wires.clone();
     engine
         .execute(Command::MoveSelection {
@@ -555,18 +567,17 @@ fn a_wire_dragged_onto_a_locked_one_falls_back_to_a_plain_move() {
             dx: -15.0,
             dy: 5.0,
             keep_wires: true,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         })
         .unwrap();
     let doc = engine.document();
     assert_eq!(doc.wires, wires_before, "no wire was rerouted or trimmed");
-    assert!(doc.junctions.is_empty(), "no dot was added");
+    let dots: Vec<Point> = doc.junctions.iter().map(|j| j.position).collect();
+    assert_eq!(dots, vec![Point::new(30.0, 55.0)], "the pin's dot on L");
     assert_eq!(overlapping_pairs(&engine), 0);
     assert_eq!(doc.symbols[0].position, Point::new(35.0, 55.0), "R1 moved");
-    let warnings = engine.take_warnings();
-    assert!(
-        warnings.iter().any(|w| w.contains("could not keep")),
-        "the detached pin is reported: {warnings:?}"
-    );
+    let shape = crate::rubber_band_tests::net_shape(doc);
+    assert_eq!(shape, before, "R1 keeps its net");
 }
 
 /// A dot left at the pin would outlive it: after R1 moved on, a wire crossing
@@ -588,6 +599,7 @@ fn moving_off_a_locked_wire_leaves_nothing_that_joins_nets_later() {
         dx,
         dy,
         keep_wires,
+        wiring: signex_types::corner::DragWiringMode::Auto,
     };
     engine.execute(mv(-15.0, 5.0, true)).unwrap();
     engine.execute(mv(40.0, 40.0, false)).unwrap();
@@ -617,6 +629,7 @@ fn bus_with_a_locked_wire_on_an_entry() -> (Engine, SelectedItem) {
         uuid: bus,
         start: Point::new(0.0, 0.0),
         end: Point::new(0.0, 50.0),
+        ..Default::default()
     });
     sheet.bus_entries.push(BusEntry {
         uuid: Uuid::now_v7(),
@@ -640,6 +653,7 @@ fn a_bus_whose_entry_far_end_holds_a_locked_wire_does_not_drag_it() {
         dx: 5.0,
         dy: 0.0,
         keep_wires: true,
+        wiring: signex_types::corner::DragWiringMode::Auto,
     };
 
     assert!(matches!(
@@ -658,6 +672,7 @@ fn a_bus_whose_entry_far_end_holds_a_locked_wire_does_not_drag_it() {
         dx: 5.0,
         dy: 0.0,
         keep_wires: false,
+        wiring: signex_types::corner::DragWiringMode::Auto,
     };
     assert!(engine.execute(plain).is_ok_and(|r| r.changed));
     assert_eq!(engine.document().wires[0], wire_before);

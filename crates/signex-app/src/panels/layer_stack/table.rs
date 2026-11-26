@@ -1,8 +1,11 @@
-//! The stack table: a header row, then one row per layer. A row's number
-//! selects it; its cells are typed in place and applied with Enter. A cell
-//! that does not apply to the row's kind shows a dash.
+//! The stack table (mockup row 105): a header row, then one row per layer.
+//! The # tile selects a row and shows its copper place; the other cells are
+//! typed in place and applied with Enter. A cell that does not apply to the
+//! row's kind shows a dash. Net, Items and Drill pairs are read from the
+//! board; Cu % has nothing to read yet and shows a dash with a hint.
 
 use iced::widget::scrollable::{Direction, Scrollbar};
+use iced::widget::tooltip::Position;
 use iced::widget::{Column, Row, container, row, scrollable};
 use iced::{Background, Border, Element, Length, Theme, Widget as _};
 use signex_i18n::{MessageId, UserText, ids, t};
@@ -10,30 +13,74 @@ use signex_types::pcb_stack::{StackLayer, StackLayerKind};
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::{button, text, text_input};
 
-use super::{KindChoice, LayerStackFacts, LayerStackMsg, SP, StackField, TS, kind_label, msg};
-use crate::panels::graphite::selection_fill;
+use super::{
+    KindChoice, LayerStackFacts, LayerStackMsg, SP, StackField, TS, copper_places, kind_label, msg,
+    spans_at,
+};
+use crate::panels::graphite::{hint_tooltip, selection_fill};
 use crate::panels::pcb_primitive_properties::format_number;
 use crate::panels::{PanelContext, PanelMsg, form_look};
 use crate::styles::{ti, tokens::resolve};
 
-/// The columns and their share of the row, after the row number.
-const COLUMNS: [(MessageId, u16); 6] = [
-    (ids::PCB_STACK_COL_NAME, 4),
-    (ids::PCB_STACK_COL_TYPE, 3),
-    (ids::PCB_STACK_COL_MATERIAL, 3),
-    (ids::PCB_STACK_COL_THICKNESS, 3),
-    (ids::PCB_STACK_COL_ER, 2),
-    (ids::PCB_STACK_COL_WEIGHT, 2),
+/// A column after the # tile: its title, its share of the row and the hint
+/// its title carries.
+struct TableColumn {
+    title: MessageId,
+    portion: u16,
+    tip: Option<MessageId>,
+}
+
+const fn col(title: MessageId, portion: u16, tip: Option<MessageId>) -> TableColumn {
+    TableColumn {
+        title,
+        portion,
+        tip,
+    }
+}
+
+/// The columns in mockup order, after the # tile. A row's cells come in the
+/// same order (`cells`).
+const COLUMNS: [TableColumn; 11] = [
+    col(ids::PCB_STACK_COL_NAME, 4, None),
+    col(ids::PCB_STACK_COL_TYPE, 3, None),
+    col(ids::PCB_STACK_COL_MATERIAL, 3, None),
+    col(ids::PCB_STACK_COL_THICKNESS, 3, None),
+    col(ids::PCB_STACK_COL_WEIGHT, 2, None),
+    col(ids::PCB_STACK_COL_DK, 2, Some(ids::PCB_STACK_COL_DK_TIP)),
+    col(
+        ids::PCB_STACK_COL_DF,
+        2,
+        Some(ids::PCB_STACK_COL_DF_STORED_TIP),
+    ),
+    col(ids::PCB_STACK_COL_NET, 3, Some(ids::PCB_STACK_COL_NET_TIP)),
+    col(
+        ids::PCB_STACK_COL_COPPER,
+        2,
+        Some(ids::PCB_STACK_COL_COPPER_TIP),
+    ),
+    col(
+        ids::PCB_STACK_COL_ITEMS,
+        2,
+        Some(ids::PCB_STACK_COL_ITEMS_TIP),
+    ),
+    col(
+        ids::PCB_STACK_COL_DRILL_PAIRS,
+        3,
+        Some(ids::PCB_STACK_COL_DRILL_PAIRS_TIP),
+    ),
 ];
 
 /// The table width in body-text ems: wide enough for every column, scrolled
-/// sideways in a narrow dock.
-const TABLE_EMS: f32 = 44.0;
+/// sideways in a narrow tab.
+const TABLE_EMS: f32 = 72.0;
 
 pub(super) fn view<'a>(ctx: &'a PanelContext, facts: &'a LayerStackFacts) -> Element<'a, PanelMsg> {
-    let mut rows: Column<Element<'a, PanelMsg>> = Column::new().spacing(SP.xs).push(header(ctx));
+    let places = copper_places(&facts.stack);
+    let mut rows: Column<Element<'a, PanelMsg>> =
+        Column::new().spacing(SP.xs).push(header(ctx, facts));
     for (index, layer) in facts.stack.layers.iter().enumerate() {
-        rows = rows.push(layer_row(ctx, facts, index, layer));
+        let place = places.get(index).copied().flatten();
+        rows = rows.push(layer_row(ctx, facts, index, place, layer));
     }
     let table = container(rows).width(Length::Fixed(TS.body * TABLE_EMS));
     container(
@@ -53,20 +100,31 @@ fn cell<'a>(content: Element<'a, PanelMsg>, portion: u16) -> Element<'a, PanelMs
         .boxed()
 }
 
-/// The row-number column's width, in body-text ems.
+/// The # column's width, in body-text ems.
 fn number_width() -> Length {
     Length::Fixed(TS.body * 2.0)
 }
 
-fn header<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
+fn header<'a>(ctx: &'a PanelContext, facts: &LayerStackFacts) -> Element<'a, PanelMsg> {
     let muted = resolve(&ctx.tokens).ink3;
+    let number = text(t!(ctx.i18n, ids::PCB_STACK_COL_NUMBER))
+        .size(TS.dense)
+        .color(muted);
     let mut line: Row<Element<'a, PanelMsg>> =
-        row![container(iced::widget::Space::new()).width(number_width())].spacing(SP.xs);
-    for (id, portion) in COLUMNS {
-        line = line.push(cell(
-            text(t!(ctx.i18n, id)).size(TS.dense).color(muted).boxed(),
-            portion,
-        ));
+        row![container(number).width(number_width())].spacing(SP.xs);
+    let unit = facts.unit.label(&ctx.i18n).into_string();
+    for column in &COLUMNS {
+        let title = if column.title == ids::PCB_STACK_COL_THICKNESS {
+            t!(ctx.i18n, column.title, "unit" => unit.clone())
+        } else {
+            t!(ctx.i18n, column.title)
+        };
+        let title = text(title).size(TS.dense).color(muted).boxed();
+        let title = match column.tip {
+            Some(tip) => hint_tooltip(title, t!(ctx.i18n, tip), &ctx.tokens, Position::Bottom),
+            None => title,
+        };
+        line = line.push(cell(title, column.portion));
     }
     line.boxed()
 }
@@ -75,11 +133,16 @@ fn layer_row<'a>(
     ctx: &'a PanelContext,
     facts: &'a LayerStackFacts,
     index: usize,
+    place: Option<usize>,
     layer: &'a StackLayer,
 ) -> Element<'a, PanelMsg> {
     let selected = facts.selected == Some(index);
+    let number = place.map_or_else(
+        || t!(ctx.i18n, ids::PCB_STACK_NONE).into_string(),
+        |place| place.to_string(),
+    );
     let number = button(
-        text(UserText::new((index + 1).to_string()))
+        text(UserText::new(number))
             .size(TS.dense)
             .color(ti(ctx.tokens.text)),
     )
@@ -90,63 +153,14 @@ fn layer_row<'a>(
         board: facts.board.clone(),
         row: index,
     }));
-    let copper = layer.kind.is_copper();
-    let insulator = matches!(
-        layer.kind,
-        StackLayerKind::Dielectric | StackLayerKind::SolderMask
-    );
-    let name = facts.names.get(index).cloned().unwrap_or_default();
-    let line = row![
-        number,
-        cell(field(facts, index, StackField::Name, Some(name)), 4),
-        cell(kind_cell(ctx, facts, index, layer), 3),
-        cell(
-            field(
-                facts,
-                index,
-                StackField::Material,
-                Some(layer.material.clone())
-            ),
-            3
-        ),
-        cell(
-            field(
-                facts,
-                index,
-                StackField::Thickness,
-                Some(format_number(layer.thickness_mm))
-            ),
-            3
-        ),
-        cell(
-            if insulator {
-                field(
-                    facts,
-                    index,
-                    StackField::DielectricConstant,
-                    Some(format_number(layer.dielectric_constant)),
-                )
-            } else {
-                dash(ctx)
-            },
-            2
-        ),
-        cell(
-            if copper {
-                field(
-                    facts,
-                    index,
-                    StackField::CopperWeight,
-                    Some(format_number(layer.copper_weight_oz)),
-                )
-            } else {
-                dash(ctx)
-            },
-            2
-        ),
-    ]
-    .spacing(SP.xs)
-    .align_y(iced::Alignment::Center);
+    let mut line: Row<Element<'a, PanelMsg>> =
+        row![number].spacing(SP.xs).align_y(iced::Alignment::Center);
+    for (content, column) in cells(ctx, facts, index, place, layer)
+        .into_iter()
+        .zip(&COLUMNS)
+    {
+        line = line.push(cell(content, column.portion));
+    }
     let fill = selected.then(|| selection_fill(&ctx.tokens));
     container(line)
         .width(Length::Fill)
@@ -158,6 +172,106 @@ fn layer_row<'a>(
             },
             ..container::Style::default()
         })
+        .boxed()
+}
+
+/// The cells of one row after its # tile, in [`COLUMNS`] order.
+fn cells<'a>(
+    ctx: &'a PanelContext,
+    facts: &'a LayerStackFacts,
+    index: usize,
+    place: Option<usize>,
+    layer: &'a StackLayer,
+) -> [Element<'a, PanelMsg>; 11] {
+    let name = facts.names.get(index).cloned().unwrap_or_default();
+    let thickness = facts.unit.show(layer.thickness_mm);
+    let copper = layer.kind.is_copper();
+    let insulator = matches!(
+        layer.kind,
+        StackLayerKind::Dielectric | StackLayerKind::SolderMask
+    );
+    let weight = if copper {
+        field(
+            facts,
+            index,
+            StackField::CopperWeight,
+            Some(format_number(layer.copper_weight_oz)),
+        )
+    } else {
+        dash(ctx)
+    };
+    let insulator_field = |field_kind, number: f64| {
+        if insulator {
+            field(facts, index, field_kind, Some(format_number(number)))
+        } else {
+            dash(ctx)
+        }
+    };
+    let dk = insulator_field(StackField::DielectricConstant, layer.dielectric_constant);
+    let df = insulator_field(StackField::LossTangent, layer.loss_tangent);
+    let used = facts.copper_use.get(index).and_then(Option::as_ref);
+    let items = used.map_or_else(|| dash(ctx), |u| value(ctx, u.items.to_string()));
+    let pairs = place.map_or_else(|| dash(ctx), |place| drill_pairs_cell(ctx, facts, place));
+    [
+        field(facts, index, StackField::Name, Some(name)),
+        kind_cell(ctx, facts, index, layer),
+        field(
+            facts,
+            index,
+            StackField::Material,
+            Some(layer.material.clone()),
+        ),
+        field(facts, index, StackField::Thickness, Some(thickness)),
+        weight,
+        dk,
+        df,
+        net_cell(ctx, layer.kind, used.map(|u| u.nets.as_slice())),
+        // Cu %: copper coverage is not measured.
+        dash(ctx),
+        items,
+        pairs,
+    ]
+}
+
+/// A plane row names the nets poured on it; a signal row says signal.
+fn net_cell<'a>(
+    ctx: &'a PanelContext,
+    kind: StackLayerKind,
+    nets: Option<&[String]>,
+) -> Element<'a, PanelMsg> {
+    match (kind, nets) {
+        (StackLayerKind::Signal, _) => text(t!(ctx.i18n, ids::PCB_STACK_NET_SIGNAL))
+            .size(TS.dense)
+            .color(resolve(&ctx.tokens).ink3)
+            .boxed(),
+        (StackLayerKind::Plane, Some(nets)) if !nets.is_empty() => value(ctx, nets.join(", ")),
+        _ => dash(ctx),
+    }
+}
+
+/// The drill pairs that start or end at the copper `place`, "1–4, 1–2".
+fn drill_pairs_cell<'a>(
+    ctx: &'a PanelContext,
+    facts: &LayerStackFacts,
+    place: usize,
+) -> Element<'a, PanelMsg> {
+    let spans: Vec<String> = spans_at(&facts.drill_pairs, place)
+        .into_iter()
+        .map(|(from, to)| {
+            t!(ctx.i18n, ids::PCB_STACK_SPAN, "from" => from, "to" => to).into_string()
+        })
+        .collect();
+    if spans.is_empty() {
+        return dash(ctx);
+    }
+    value(ctx, spans.join(", "))
+}
+
+/// A cell read from the board, not typed.
+fn value<'a>(ctx: &'a PanelContext, shown: String) -> Element<'a, PanelMsg> {
+    text(UserText::new(shown))
+        .size(TS.dense)
+        .color(ti(ctx.tokens.text))
         .boxed()
 }
 

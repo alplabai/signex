@@ -13,22 +13,11 @@ use super::{
     Point, SCHEMATIC_TEXT_MM, SchematicSheet, Symbol, TextProp, VAlign,
 };
 
-/// Length of the stem from the connection point to the symbol head, mm: the
-/// stock library's pin stub (two 1.27 mm grid steps). The connection point
-/// is the pin tip at the origin and never moves; only the far end does.
-const STEM_MM: f64 = 2.54;
-/// Stem of the hanging ground styles, mm: one grid step, so the bars sit
-/// close under the wire (maintainer decision, #2091).
-const GROUND_STEM_MM: f64 = 1.27;
-
-/// Stem length of `style`, mm.
-fn stem_mm(style: PowerPortStyle) -> f64 {
-    if style.hangs_down() {
-        GROUND_STEM_MM
-    } else {
-        STEM_MM
-    }
-}
+/// Length of the stem from the connection point to the symbol head, mm, for
+/// every style: one 1.27 mm grid step (Caner 2026-11-21, `docs/DECISIONS.md`).
+/// The connection point is the pin tip at the origin and never moves; only
+/// the far end does.
+const STEM_MM: f64 = 1.27;
 /// Half width of a bar, arrow or circle head, mm.
 const HEAD_HALF_MM: f64 = 1.016;
 /// Half widths of the three ground bars, widest first, mm (the stock GND).
@@ -37,10 +26,13 @@ const GROUND_BAR_HALVES_MM: [f64; 3] = [1.27, 0.762, 0.254];
 const GROUND_BAR_STEP_MM: f64 = 0.508;
 /// Depth of an arrow or signal-ground triangle, mm.
 const TRIANGLE_DEPTH_MM: f64 = 1.27;
-/// Half width of the signal-ground triangle and the earth bar, mm.
+/// Half width of the signal-ground triangle and the chassis bar, mm.
 const GROUND_HALF_MM: f64 = 1.27;
-/// Depth of the earth hatch, mm.
-const EARTH_HATCH_MM: f64 = 0.762;
+/// Depth of the chassis tines, mm.
+const CHASSIS_TINE_MM: f64 = 0.762;
+/// Half widths of the three earth bars (IEC 60417-5017), widest first, mm:
+/// even thirds, so the earth reads apart from the GND bars.
+const EARTH_BAR_HALVES_MM: [f64; 3] = [1.27, 0.847, 0.423];
 /// Height of the wave head's offset and swing, mm.
 const WAVE_OFFSET_MM: f64 = 0.508;
 const WAVE_SWING_MM: f64 = 0.4;
@@ -57,11 +49,12 @@ pub enum PowerPortStyle {
     PowerGround,
     SignalGround,
     Earth,
+    Chassis,
 }
 
 impl PowerPortStyle {
     /// Every style, in the order the Properties panel lists them.
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::Bar,
         Self::Arrow,
         Self::Wave,
@@ -69,6 +62,7 @@ impl PowerPortStyle {
         Self::PowerGround,
         Self::SignalGround,
         Self::Earth,
+        Self::Chassis,
     ];
 
     /// The style a `lib_id` names. Anything unrecognised, such as
@@ -76,7 +70,10 @@ impl PowerPortStyle {
     #[must_use]
     pub fn of(lib_id: &str) -> Self {
         let lid = lib_id.to_lowercase();
-        if lid.contains("gndref") {
+        // Chassis first: `power:GND_Chassis` is a chassis port, not a GND.
+        if lid.contains("chassis") {
+            Self::Chassis
+        } else if lid.contains("gndref") {
             Self::SignalGround
         } else if lid.contains("earth") {
             Self::Earth
@@ -104,10 +101,12 @@ impl PowerPortStyle {
             Self::PowerGround => "Power Ground",
             Self::SignalGround => "Signal Ground",
             Self::Earth => "Earth",
+            Self::Chassis => "Chassis",
         }
     }
 
-    /// The `power:<tag>` keyword that selects this style.
+    /// The `power:<tag>` keyword that selects this style. Saved sheets carry
+    /// `power:<tag>` as the port's `lib_id`, so a tag never changes.
     #[must_use]
     pub fn lib_tag(self) -> &'static str {
         match self {
@@ -118,6 +117,7 @@ impl PowerPortStyle {
             Self::PowerGround => "GND",
             Self::SignalGround => "GNDREF",
             Self::Earth => "Earth",
+            Self::Chassis => "Chassis",
         }
     }
 
@@ -125,7 +125,10 @@ impl PowerPortStyle {
     /// rather than rising above it.
     #[must_use]
     pub fn hangs_down(self) -> bool {
-        matches!(self, Self::PowerGround | Self::SignalGround | Self::Earth)
+        matches!(
+            self,
+            Self::PowerGround | Self::SignalGround | Self::Earth | Self::Chassis
+        )
     }
 }
 
@@ -143,14 +146,14 @@ fn line(a: (f64, f64), b: (f64, f64)) -> Graphic {
 pub fn power_port_graphics(lib_id: &str) -> Vec<Graphic> {
     let style = PowerPortStyle::of(lib_id);
     let dir = if style.hangs_down() { -1.0 } else { 1.0 };
-    let mut out = vec![line((0.0, 0.0), (0.0, dir * stem_mm(style)))];
+    let mut out = vec![line((0.0, 0.0), (0.0, dir * STEM_MM))];
     out.extend(power_port_head(style));
     out
 }
 
 /// The head of a style, without the stem (the stem is the library pin).
 fn power_port_head(style: PowerPortStyle) -> Vec<Graphic> {
-    let top = stem_mm(style);
+    let top = STEM_MM;
     match style {
         PowerPortStyle::PowerGround => {
             let mut out = Vec::new();
@@ -187,12 +190,22 @@ fn power_port_head(style: PowerPortStyle) -> Vec<Graphic> {
             width: 0.0,
             fill: FillType::None,
         }],
+        // IEC 60417-5017 earth: three bars, shorter downward, centred.
         PowerPortStyle::Earth => {
+            let mut out = Vec::new();
+            for (i, half) in EARTH_BAR_HALVES_MM.into_iter().enumerate() {
+                let y = -top - GROUND_BAR_STEP_MM * i as f64;
+                out.push(line((-half, y), (half, y)));
+            }
+            out
+        }
+        // IEC 60417-5020 frame/chassis: a bar with three slanted tines.
+        PowerPortStyle::Chassis => {
             let mut out = vec![line((-GROUND_HALF_MM, -top), (GROUND_HALF_MM, -top))];
             for x in [-GROUND_HALF_MM, 0.0, GROUND_HALF_MM] {
                 out.push(line(
                     (x, -top),
-                    (x - 0.6 * EARTH_HATCH_MM, -top - EARTH_HATCH_MM),
+                    (x - 0.6 * CHASSIS_TINE_MM, -top - CHASSIS_TINE_MM),
                 ));
             }
             out
@@ -221,14 +234,14 @@ pub(super) const VALUE_GAP_MM: f64 = 0.254;
 
 /// How far the head of `style` reaches past the connection point, mm.
 fn head_reach_mm(style: PowerPortStyle) -> f64 {
-    let stem = stem_mm(style);
+    let stem = STEM_MM;
     match style {
         PowerPortStyle::Bar => stem,
         PowerPortStyle::Arrow | PowerPortStyle::SignalGround => stem + TRIANGLE_DEPTH_MM,
-        PowerPortStyle::PowerGround => stem + GROUND_BAR_STEP_MM * 2.0,
+        PowerPortStyle::PowerGround | PowerPortStyle::Earth => stem + GROUND_BAR_STEP_MM * 2.0,
         PowerPortStyle::Circle => stem + 2.0 * HEAD_HALF_MM,
         PowerPortStyle::Wave => stem + WAVE_OFFSET_MM + WAVE_SWING_MM,
-        PowerPortStyle::Earth => stem + EARTH_HATCH_MM,
+        PowerPortStyle::Chassis => stem + CHASSIS_TINE_MM,
     }
 }
 
@@ -341,7 +354,7 @@ pub fn power_port_lib_symbol(lib_id: &str) -> LibSymbol {
                 position: Point::new(0.0, 0.0),
                 // Library space is Y-up: 90 degrees points the stub up.
                 rotation: if style.hangs_down() { 270.0 } else { 90.0 },
-                length: stem_mm(style),
+                length: STEM_MM,
                 name: String::new(),
                 number: "1".to_owned(),
                 visible: true,
@@ -390,6 +403,109 @@ mod tests {
         assert_eq!(PowerPortStyle::of("power:arrow"), PowerPortStyle::Arrow);
         assert_eq!(PowerPortStyle::of("power:wave"), PowerPortStyle::Wave);
         assert_eq!(PowerPortStyle::of("power:circle"), PowerPortStyle::Circle);
+        for lib_id in ["power:Chassis", "power:GND_Chassis", "power:chassis"] {
+            assert_eq!(
+                PowerPortStyle::of(lib_id),
+                PowerPortStyle::Chassis,
+                "{lib_id}"
+            );
+        }
+    }
+
+    /// #1284 - saved sheets carry `power:Chassis`; the tag is pinned.
+    #[test]
+    fn the_chassis_tag_is_pinned() {
+        assert_eq!(PowerPortStyle::Chassis.lib_tag(), "Chassis");
+        assert_eq!(PowerPortStyle::Chassis.label(), "Chassis");
+        assert!(PowerPortStyle::Chassis.hangs_down());
+    }
+
+    type Segment = ((f64, f64), (f64, f64));
+
+    /// The head of `style` as two-point line segments.
+    fn head_segments(style: PowerPortStyle) -> Vec<Segment> {
+        power_port_head(style)
+            .iter()
+            .map(|g| match g {
+                Graphic::Polyline { points, .. } => {
+                    assert_eq!(points.len(), 2, "{style:?}");
+                    ((points[0].x, points[0].y), (points[1].x, points[1].y))
+                }
+                other => panic!("{style:?}: unexpected {other:?}"),
+            })
+            .collect()
+    }
+
+    /// #1284 - chassis is the IEC 60417-5020 rake: a bar with three tines
+    /// slanted the same way.
+    #[test]
+    fn the_chassis_head_is_a_bar_with_slanted_tines() {
+        let top = -STEM_MM;
+        let tip = top - CHASSIS_TINE_MM;
+        let half = GROUND_HALF_MM;
+        let slant = 0.6 * CHASSIS_TINE_MM;
+        let want = [
+            ((-half, top), (half, top)),
+            ((-half, top), (-half - slant, tip)),
+            ((0.0, top), (-slant, tip)),
+            ((half, top), (half - slant, tip)),
+        ];
+        assert_eq!(head_segments(PowerPortStyle::Chassis), want);
+        let reach = head_reach_mm(PowerPortStyle::Chassis);
+        assert!((reach - STEM_MM - CHASSIS_TINE_MM).abs() < 1e-12);
+    }
+
+    /// #1284 - earth is the IEC 60417-5017 symbol: three bars getting
+    /// shorter downward, centred under the stem.
+    #[test]
+    fn the_earth_head_is_three_shrinking_bars() {
+        let top = -STEM_MM;
+        let step = GROUND_BAR_STEP_MM;
+        let want = [
+            ((-1.27, top), (1.27, top)),
+            ((-0.847, top - step), (0.847, top - step)),
+            ((-0.423, top - 2.0 * step), (0.423, top - 2.0 * step)),
+        ];
+        assert_eq!(head_segments(PowerPortStyle::Earth), want);
+        let reach = head_reach_mm(PowerPortStyle::Earth);
+        assert!((reach - STEM_MM - 2.0 * step).abs() < 1e-12);
+    }
+
+    /// #1284 - earth, chassis and power ground each draw their own head.
+    #[test]
+    fn earth_chassis_and_power_ground_differ() {
+        let earth = head_segments(PowerPortStyle::Earth);
+        let chassis = head_segments(PowerPortStyle::Chassis);
+        let ground = head_segments(PowerPortStyle::PowerGround);
+        assert_ne!(earth, chassis);
+        assert_ne!(earth, ground);
+        assert_ne!(chassis, ground);
+    }
+
+    /// #1284 - a chassis port saves as `power:Chassis` and reloads as the
+    /// chassis style, byte-identical on re-save.
+    #[test]
+    fn a_chassis_port_round_trips_through_the_file() {
+        use crate::format::SnxSchematic;
+        let sheet = SchematicSheet {
+            symbols: vec![Symbol {
+                uuid: uuid::Uuid::from_u128(1284),
+                lib_id: "power:Chassis".into(),
+                value: "Chassis".into(),
+                is_power: true,
+                unit: 1,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let text = SnxSchematic::new(sheet).write_string().unwrap();
+        let back = SnxSchematic::parse(&text).unwrap().sheet;
+        assert_eq!(back.symbols[0].lib_id, "power:Chassis");
+        assert_eq!(
+            PowerPortStyle::of(&back.symbols[0].lib_id),
+            PowerPortStyle::Chassis
+        );
+        assert_eq!(SnxSchematic::new(back).write_string().unwrap(), text);
     }
 
     #[test]
@@ -424,17 +540,17 @@ mod tests {
         }
     }
 
-    /// #2091 - the stem is a stock pin long and the connection point is the
+    /// Every style has the one-grid-step stem (1.27 mm, 2026-11-21; was 2.54 mm
+    /// for the rising styles, #2091) and the connection point is the
     /// pin tip at the symbol origin for every style and both directions: a
     /// saved wire ends on that point, so it must never move.
     #[test]
-    fn the_stem_is_a_stock_pin_or_one_step_for_a_ground_and_the_tip_stays_on_the_origin() {
+    fn every_style_has_the_one_step_stem_and_the_tip_stays_on_the_origin() {
         for style in PowerPortStyle::ALL {
             let lib = power_port_lib_symbol(&format!("power:{}", style.lib_tag()));
             let pin = &lib.pins[0].pin;
             assert_eq!((pin.position.x, pin.position.y), (0.0, 0.0));
-            let want = if style.hangs_down() { 1.27 } else { 2.54 };
-            assert_eq!(pin.length, want, "{style:?}");
+            assert_eq!(pin.length, 1.27, "{style:?}");
             let stem = power_port_graphics(&format!("power:{}", style.lib_tag()));
             let Graphic::Polyline { points, .. } = &stem[0] else {
                 panic!("the first graphic is the stem");
@@ -473,7 +589,7 @@ mod tests {
                 .collect();
             assert_eq!(pins.len(), 1, "{lib_id}");
             assert_eq!((pins[0].0.x, pins[0].0.y), (0.0, 0.0), "{lib_id}");
-            let stem = stem_mm(PowerPortStyle::of(&lib_id));
+            let stem = STEM_MM;
             assert!((pins[0].1.x).abs() < 1e-9, "{lib_id}");
             assert!((pins[0].1.y.abs() - stem).abs() < 1e-9, "{lib_id}");
             // Same extent as the entry-less fallback.

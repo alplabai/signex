@@ -34,6 +34,14 @@ pub fn element_net_names(netlist: &Netlist, classes: &[NetClass]) -> HashMap<Uui
     out
 }
 
+/// `true` when `netlist` has a net named `name`: a net a class can hold. Every
+/// net counts, a label's net that owns no wire included, and each net of an
+/// element on several nets, not only the one [`element_net_names`] keeps.
+#[must_use]
+pub fn netlist_has_net(netlist: &Netlist, name: &str) -> bool {
+    netlist.nets.iter().any(|net| net.name == name)
+}
+
 /// The wire a label (or any floating point) at `at` is attached to, by the
 /// netlist's own anchoring: a wire that has `at` as an endpoint, else the one
 /// interior tap chosen by the same total order the netlist uses. `None` when

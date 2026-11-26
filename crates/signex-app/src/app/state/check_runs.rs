@@ -7,6 +7,8 @@
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 
+use signex_types::check::CheckReport;
+
 /// How many runs are kept; an older one is forgotten.
 pub(crate) const KEPT_CHECK_RUNS: usize = 8;
 
@@ -25,6 +27,10 @@ pub struct CheckRuns {
     /// The id of the newest run; run ids start at 1.
     last: u64,
     runs: VecDeque<KeptRun>,
+    /// The newest whole report of each check (`CheckReport::check`) over
+    /// each scope, for a design report built from the last results (#2945,
+    /// mockup row 201).
+    reports: Vec<(PathBuf, CheckReport)>,
 }
 
 impl CheckRuns {
@@ -41,6 +47,31 @@ impl CheckRuns {
             keys,
         });
         self.last
+    }
+
+    /// Keep `report` as the newest of its check over `scope`, in place of
+    /// the one kept before.
+    pub(crate) fn keep_report(&mut self, scope: &Path, report: CheckReport) {
+        self.reports
+            .retain(|(kept, old)| !(old.check == report.check && kept == scope));
+        self.reports.push((scope.to_path_buf(), report));
+    }
+
+    /// A project closed: drop the reports of its file `project` and of what
+    /// is in its folder `dir` (a board), so they do not outlive it.
+    pub(crate) fn forget_reports_of(&mut self, project: &Path, dir: &Path) {
+        let under = |scope: &Path| {
+            scope == project || (!dir.as_os_str().is_empty() && scope.starts_with(dir))
+        };
+        self.reports.retain(|(scope, _)| !under(scope));
+    }
+
+    /// The newest report of `check` over `scope`, when one is kept.
+    pub(crate) fn last_report(&self, check: &str, scope: &Path) -> Option<&CheckReport> {
+        self.reports
+            .iter()
+            .find(|(kept, report)| report.check == check && kept == scope)
+            .map(|(_, report)| report)
     }
 
     /// The finding keys of run `run`, when it is kept and was a run of the
@@ -117,5 +148,40 @@ mod tests {
             .unwrap_err();
         assert!(why.contains("/p/a.snxprj"), "{why}");
         assert!(runs.keys_of(1, "drc", Path::new("/p/a.snxprj")).is_err());
+    }
+
+    fn report(check: &str, run: u64) -> CheckReport {
+        let report = CheckReport::new(check, Vec::new(), Vec::new(), Vec::new(), Vec::new());
+        CheckReport { run, ..report }
+    }
+
+    #[test]
+    fn the_newest_report_of_each_check_and_scope_is_kept() {
+        let mut runs = CheckRuns::default();
+        let (a, b) = (Path::new("/p/a.snxprj"), Path::new("/p/b.snxprj"));
+        assert!(runs.last_report("erc", a).is_none());
+        runs.keep_report(a, report("erc", 1));
+        runs.keep_report(a, report("drc", 2));
+        runs.keep_report(a, report("erc", 3));
+        runs.keep_report(b, report("erc", 4));
+        assert_eq!(runs.last_report("erc", a).map(|r| r.run), Some(3));
+        assert_eq!(runs.last_report("drc", a).map(|r| r.run), Some(2));
+        assert_eq!(runs.last_report("erc", b).map(|r| r.run), Some(4));
+        assert!(runs.last_report("requirements", a).is_none());
+    }
+
+    #[test]
+    fn a_closed_projects_reports_are_dropped_and_the_others_kept() {
+        let mut runs = CheckRuns::default();
+        let a = Path::new("/p/a/a.snxprj");
+        let board = Path::new("/p/a/board.snxpcb");
+        let b = Path::new("/p/b/b.snxprj");
+        runs.keep_report(a, report("erc", 1));
+        runs.keep_report(board, report("drc", 2));
+        runs.keep_report(b, report("erc", 3));
+        runs.forget_reports_of(a, Path::new("/p/a"));
+        assert!(runs.last_report("erc", a).is_none());
+        assert!(runs.last_report("drc", board).is_none());
+        assert_eq!(runs.last_report("erc", b).map(|r| r.run), Some(3));
     }
 }

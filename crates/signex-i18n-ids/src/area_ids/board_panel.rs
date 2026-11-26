@@ -3,8 +3,6 @@
 define_ids! {
     BOARD_PANEL;
     BOARD_PANEL_SECTION = "board-panel-section";
-    BOARD_PANEL_NONE = "board-panel-none";
-    BOARD_PANEL_ADD = "board-panel-add";
     BOARD_PANEL_REMOVE = "board-panel-remove";
     BOARD_PANEL_COLUMNS = "board-panel-columns";
     BOARD_PANEL_ROWS = "board-panel-rows";

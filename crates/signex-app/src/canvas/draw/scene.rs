@@ -297,6 +297,13 @@ impl SchematicCanvas<'_> {
                                         push_pt(p.x, p.y, 1.0);
                                     }
                                 }
+                                SchDrawing::Bezier(_)
+                                | SchDrawing::Dimension(_)
+                                | SchDrawing::Table(_) => {
+                                    let b = crate::schematic_runtime::annotation_aabb(d);
+                                    push_pt(b.min_x, b.min_y, 1.0);
+                                    push_pt(b.max_x, b.max_y, 1.0);
+                                }
                             }
                         }
                     }
@@ -313,6 +320,18 @@ impl SchematicCanvas<'_> {
                                     push_pt(at.x, at.y, 1.0);
                                 }
                             }
+                        }
+                    }
+                    SelectedKind::HarnessConnector => {
+                        if let Some(c) = snapshot.harness.connector(item.uuid) {
+                            let b = c.bounds();
+                            push_pt(b.min_x, b.min_y, 1.0);
+                            push_pt(b.max_x, b.max_y, 1.0);
+                        }
+                    }
+                    SelectedKind::HarnessEntry | SelectedKind::HarnessWire => {
+                        if let Some(at) = snapshot.harness.item_anchor(item) {
+                            push_pt(at.x, at.y, 2.0);
                         }
                     }
                     _ => {}
@@ -387,10 +406,13 @@ impl SchematicCanvas<'_> {
         // travels with the dragged items instead of staying behind.
         // ERC markers live on this layer too, so it must draw whenever there
         // is a marker, not only while something is selected (#1333).
-        // Locked objects carry a padlock, so they need the layer too (#1250, #1573).
+        // Locked objects carry a padlock, so they need the layer too (#1250, #1573),
+        // and so do the Notebook badges (mockup row 197).
         if let Some(snapshot) = effective_snapshot
             && (self.selection_layer_needed()
-                || crate::schematic_runtime::lock_indicator::has_locked_item(snapshot))
+                || crate::schematic_runtime::lock_indicator::has_locked_item(snapshot)
+                || crate::schematic_runtime::unions::has_unions(snapshot)
+                || self.prefs.notebook_badges.has_badges())
         {
             // During a drag we can't rely on overlay_cache — it must redraw
             // with the shifted positions every frame.
@@ -412,7 +434,7 @@ impl SchematicCanvas<'_> {
                     &self.prefs.canvas_colors,
                     &self.prefs.graphite,
                     &self.designators,
-                    self.prefs.wire_widths(),
+                    self.wire_widths(),
                 );
                 self.draw_selection_extras(frame, snapshot, bounds, &transform);
             };
@@ -461,8 +483,9 @@ impl SchematicCanvas<'_> {
             .collect()
     }
 
-    /// What the selection layer draws over the halos: the clicked pin, the
-    /// padlocks of locked items and the ERC markers.
+    /// What the selection layer draws over the halos: the clicked pin, the end
+    /// grips of selected wires, the padlocks of locked items, the annotation
+    /// flags and the ERC markers.
     pub(in crate::canvas) fn draw_selection_extras(
         &self,
         frame: &mut canvas::Frame,
@@ -470,14 +493,33 @@ impl SchematicCanvas<'_> {
         bounds: Rectangle,
         transform: &crate::schematic_runtime::ScreenTransform,
     ) {
+        // Unions first: a hidden union's veil lies under the grips and pads.
+        crate::schematic_runtime::unions::draw_unions(
+            frame,
+            snapshot,
+            &self.selected,
+            self.prefs.unions,
+            transform,
+            &self.designators,
+            self.wire_widths(),
+        );
         self.draw_focused_pin(frame, snapshot, bounds);
+        self.draw_wire_grips(frame, snapshot, bounds);
         crate::schematic_runtime::lock_indicator::draw_lock_indicators(
             frame,
             snapshot,
             transform,
             &self.prefs.canvas_colors,
             &self.designators,
-            self.prefs.wire_widths(),
+            self.wire_widths(),
+        );
+        crate::schematic_runtime::notebook_badges::draw_notebook_badges(
+            frame,
+            snapshot,
+            &self.prefs.notebook_badges,
+            transform,
+            &self.prefs.canvas_colors,
+            &self.designators,
         );
         let erc_overlay: Vec<crate::schematic_runtime::overlay::ErcMarker> = self
             .erc_markers
@@ -497,9 +539,64 @@ impl SchematicCanvas<'_> {
                 },
             })
             .collect();
+        use crate::schematic_runtime::overlay::{BadgedSheetEntry, MismatchedEntry};
+        let mismatched: Vec<MismatchedEntry> = self
+            .erc_markers
+            .iter()
+            .zip(&erc_overlay)
+            .filter_map(|(marker, drawn)| {
+                MismatchedEntry::on(snapshot, marker.harness_entry?, drawn.severity)
+            })
+            .collect();
+        crate::schematic_runtime::overlay::draw_mismatched_entries(
+            frame,
+            &mismatched,
+            transform,
+            &self.prefs.canvas_colors,
+            &self.prefs.graphite,
+        );
+        let mut badges: Vec<BadgedSheetEntry> = Vec::new();
+        for (marker, drawn) in self.erc_markers.iter().zip(&erc_overlay) {
+            let Some(pin) = marker.sheet_entry else {
+                continue;
+            };
+            // One badge per entry, in the ink of its first finding.
+            if let Some(badge) = BadgedSheetEntry::on(snapshot, pin, drawn.severity)
+                && !badges.iter().any(|b| b.at == badge.at)
+            {
+                badges.push(badge);
+            }
+        }
+        crate::schematic_runtime::overlay::draw_sheet_entry_badges(
+            frame,
+            &badges,
+            transform,
+            &self.prefs.canvas_colors,
+            &self.prefs.graphite,
+        );
         crate::schematic_runtime::overlay::draw_erc_markers(
             frame,
             &erc_overlay,
+            transform,
+            &self.prefs.canvas_colors,
+            &self.prefs.graphite,
+        );
+        let captions: Vec<crate::schematic_runtime::overlay::ErcCaption<'_>> = self
+            .erc_markers
+            .iter()
+            .zip(&erc_overlay)
+            .filter(|(_, drawn)| !drawn.net_level)
+            .filter_map(|(marker, drawn)| {
+                let text = marker.caption.as_deref()?;
+                Some(crate::schematic_runtime::overlay::ErcCaption {
+                    marker: *drawn,
+                    text,
+                })
+            })
+            .collect();
+        crate::schematic_runtime::overlay::draw_erc_captions(
+            frame,
+            &captions,
             transform,
             &self.prefs.canvas_colors,
             &self.prefs.graphite,

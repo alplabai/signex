@@ -1,14 +1,18 @@
 //! Footprint property texts (designator, comment) as the board draws them
-//! (#2368): placed by `pcb-geom`, on the property's own layer.
+//! (#2368): placed, layered, sized and justified by `pcb-geom` (#2434); this
+//! module only keeps the ones the view shows.
 
-use signex_types::format::parse_pcb_layer;
-use signex_types::pcb::{Footprint, PCB_DEFAULT_TEXT_SIZE_MM};
-use signex_types::pcb_layer::{BoardSide, PcbLayer, TechnicalLayer};
-use signex_types::property::PcbProperty;
+use pcb_geom::BoardTextField;
+use signex_types::designator::{DesignatorStandard, display_reference};
+use signex_types::pcb::Footprint;
+use signex_types::pcb_dimension_style::BoardFont;
+use signex_types::pcb_layer::PcbLayer;
+use signex_types::schematic::HAlign;
 
+use super::PcbSnapshot;
 use super::layer_view::PcbLayerView;
 
-/// One footprint text to draw, centred on its anchor.
+/// One footprint text to draw.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FootprintTextInput {
     pub content: String,
@@ -23,6 +27,42 @@ pub struct FootprintTextInput {
     pub mirrored: bool,
     /// The layer it is drawn on, and in the colour of.
     pub layer: PcbLayer,
+    /// Where the anchor sits along the line: its left end, middle or right
+    /// end, in the text's own (mirrored) frame.
+    pub justify: HAlign,
+    /// A footprint's designator, which the project's designator standard
+    /// may show differently from the stored text (#1416).
+    pub designator: bool,
+    /// The face, weight, slant and width of its glyphs.
+    pub face: TextFace,
+}
+
+/// How a text's glyphs are drawn (#2868): a dimension's value picks these,
+/// every other board text is drawn plain.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TextFace {
+    pub font: BoardFont,
+    pub bold: bool,
+    pub italic: bool,
+    /// The glyphs' width over the face's own at the text's height: 1 draws
+    /// them as designed.
+    pub stretch: f32,
+}
+
+impl TextFace {
+    /// The monospace face, upright, regular, as designed.
+    pub const PLAIN: Self = Self {
+        font: BoardFont::Mono,
+        bold: false,
+        italic: false,
+        stretch: 1.0,
+    };
+}
+
+impl Default for TextFace {
+    fn default() -> Self {
+        Self::PLAIN
+    }
 }
 
 /// The designator and comment texts of `footprint` that `view` shows: not
@@ -31,53 +71,35 @@ pub(super) fn footprint_texts(
     footprint: &Footprint,
     view: Option<&PcbLayerView>,
 ) -> Vec<FootprintTextInput> {
-    footprint
-        .properties
-        .iter()
-        .filter(|property| pcb_geom::is_board_text_key(&property.key))
-        .filter(|property| !property.hidden && !property.value.trim().is_empty())
-        .filter_map(|property| {
-            let layer = text_layer(footprint, property);
-            if view.is_some_and(|v| !v.is_visible(layer)) {
-                return None;
+    pcb_geom::footprint_texts(footprint)
+        .into_iter()
+        .filter(|text| view.is_none_or(|v| v.is_visible(text.layer)))
+        .map(|text| {
+            let anchor = text.placement.anchor.to_mm();
+            FootprintTextInput {
+                content: text.content,
+                position: [anchor.x as f32, anchor.y as f32],
+                rotation_deg: text.placement.rotation_deg as f32,
+                size_mm: text.size_mm as f32,
+                mirrored: text.placement.mirrored,
+                layer: text.layer,
+                justify: text.justify,
+                designator: text.field == BoardTextField::Designator,
+                face: TextFace::PLAIN,
             }
-            text_input(footprint, property, layer)
         })
         .collect()
 }
 
-/// The layer `property` is drawn on: its own, else the overlay of the
-/// footprint's side.
-fn text_layer(footprint: &Footprint, property: &PcbProperty) -> PcbLayer {
-    if let Some(layer) = property.layer.as_deref().and_then(parse_pcb_layer) {
-        return layer;
+impl PcbSnapshot {
+    /// The designators drawn as `standard` shows them (`-QAC1` under EN IEC
+    /// 81346-2 full class codes, #1416); the board keeps the stored text.
+    pub fn with_designator_standard(mut self, standard: Option<DesignatorStandard>) -> Self {
+        for text in self.texts.iter_mut().filter(|text| text.designator) {
+            text.content = display_reference(standard, &text.content).into_owned();
+        }
+        self
     }
-    let side = parse_pcb_layer(&footprint.layer).and_then(PcbLayer::side);
-    PcbLayer::Technical(match side {
-        Some(BoardSide::Bottom) => TechnicalLayer::SilkscreenBottom,
-        _ => TechnicalLayer::SilkscreenTop,
-    })
-}
-
-fn text_input(
-    footprint: &Footprint,
-    property: &PcbProperty,
-    layer: PcbLayer,
-) -> Option<FootprintTextInput> {
-    let placed = pcb_geom::property_text_placement(footprint, property).ok()?;
-    let anchor = placed.anchor.to_mm();
-    let size_mm = property
-        .font_size
-        .filter(|size| size.is_finite() && *size > 0.0)
-        .unwrap_or(PCB_DEFAULT_TEXT_SIZE_MM);
-    Some(FootprintTextInput {
-        content: property.value.clone(),
-        position: [anchor.x as f32, anchor.y as f32],
-        rotation_deg: placed.rotation_deg as f32,
-        size_mm: size_mm as f32,
-        mirrored: placed.mirrored,
-        layer,
-    })
 }
 
 #[cfg(test)]

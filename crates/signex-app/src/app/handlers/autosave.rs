@@ -110,6 +110,9 @@ impl Signex {
             .projects
             .iter()
             .filter(|project| self.is_dirty_project(&project.path))
+            // Read-only (newer minor): it cannot be encoded, and its banner
+            // already says so; autosave stays quiet (#2904).
+            .filter(|project| !project.data.is_from_newer_minor())
             .map(|project| DocumentKey::Project(project.id));
         let rows = self
             .library
@@ -295,6 +298,18 @@ impl Signex {
 
     fn autosave_snapshot_task(&mut self, dir: &Path, path: &Path) -> Option<Task<Message>> {
         let engine = self.document_state.engines.get(path)?;
+        // A value still being typed is not an edit yet: the copy holds the
+        // sheet without it, stamped by content because the revision moves
+        // with each keystroke and does not move again on the commit (#2768).
+        if engine.live_edit_drawing().is_some() {
+            let bytes = engine
+                .serialize_committed_with_extents(
+                    crate::schematic_runtime::text_width::live_extent_measure(),
+                )
+                .map(String::into_bytes)
+                .map_err(|error| error.to_string());
+            return self.autosave_bytes_task(dir, path, bytes);
+        }
         let stamp = DocStamp {
             revision: engine.revision(),
         };
@@ -383,8 +398,8 @@ impl Signex {
     }
 
     /// The file at `path` was rewritten without going through a document
-    /// save (Annotate and Reset Duplicate Designators on a sheet with no
-    /// open tab). Only a copy this run wrote is removed. A copy an earlier
+    /// save (a History restore, or a change from outside Signex). Only a
+    /// copy this run wrote is removed. A copy an earlier
     /// run left may hold unsaved edits to a sheet nobody has opened yet, so
     /// it stays for the reconcile at the next open to compare bytes and
     /// offer it.

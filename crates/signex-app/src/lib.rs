@@ -8,9 +8,10 @@
 //! API for a non-GUI caller (#1933): [`headless`] (boot without a window,
 //! run commands by id), with [`config_root`]'s override,
 //! [`fonts::catalog::install_before_boot`], [`task_driver`] and
-//! [`io_ports`]. Everything else is `pub` only so integration tests in
-//! `tests/` can reach engine state, dispatch handlers, dirty bits and panel
-//! context: that is test harness, not API.
+//! [`io_ports`]. API for a binary built on this crate (#2495): [`launch`]
+//! and [`extension`] (docs/EXTENSION_API.md). Everything else is `pub` only
+//! so integration tests in `tests/` can reach engine state, dispatch
+//! handlers, dirty bits and panel context: that is test harness, not API.
 
 // `clippy::let_underscore_must_use` (Cargo.toml `[lints.clippy]`, GH #99
 // part 1) is warn-level in production code on purpose — it flags the 13
@@ -31,6 +32,7 @@ pub mod annotate_undo;
 pub mod app;
 pub mod autosave;
 pub mod board_3d_shader;
+pub mod board_view_prefs;
 pub mod canvas;
 pub(crate) mod choice;
 pub mod chrome;
@@ -38,22 +40,28 @@ pub mod config_root;
 pub mod diagnostics;
 pub mod dock;
 pub mod double_click;
+pub mod extension;
 pub mod feature_flags;
 pub mod find_replace;
 pub mod find_similar;
 pub mod first_run_tour;
 pub mod fonts;
 pub mod frame_probe;
+pub mod gpu_backend;
 pub mod headless;
 pub mod icons;
 pub mod io_ports;
+pub mod pan_zoom_bench;
 pub mod paste_array;
 pub mod paste_prefs;
+pub mod pcb_defaults_prefs;
+pub mod smart_paste;
 // Crate-internal: `IgnoreResult` is an in-tree convention, not part of
 // this crate's API surface, so the module stays private.
 mod ignore;
 pub mod keyboard_shortcuts_modal;
 pub mod keymap;
+pub mod launch;
 pub mod layer_strip_prefs;
 #[cfg(test)]
 pub(crate) mod layout_probe;
@@ -70,6 +78,7 @@ pub mod persist;
 pub mod pinned_projects;
 pub(crate) mod polygon_path;
 pub mod preferences;
+pub mod project_thumbnail;
 pub mod recent_projects;
 pub mod render_config;
 pub mod renderer_scene_canvas;
@@ -84,11 +93,15 @@ pub mod start_screen;
 pub mod startup_args;
 pub mod status_bar;
 pub mod styles;
+pub mod symbol_fill_prefs;
 pub mod tab_bar;
 pub mod task_driver;
+#[cfg(any(test, feature = "test-prefs-redirect"))]
+pub mod test_adapter;
 #[cfg(test)]
 pub(crate) mod test_support;
 pub(crate) mod text_trunc;
 pub mod toolbar;
 pub mod ui_scale;
 pub mod undo_depth;
+pub mod workspace_layouts;

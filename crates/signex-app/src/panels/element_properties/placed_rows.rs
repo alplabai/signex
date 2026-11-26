@@ -1,17 +1,21 @@
 //! The row builders of a placed object's Properties (#2418): Position,
 //! Rotation, Size, the lock note and the Parameters rows. Every per-kind view
 //! builds its Location section from these, so a part, a label, a sheet
-//! symbol and a junction edit their geometry the same way. A box shows the
-//! panel's unit and the page origin's Y; a locked object's boxes are
-//! read-only and the lock's reason is shown above them.
+//! symbol and a junction edit their geometry the same way. Position and Size
+//! are one row each, an X / Y (W / H) pair with the panel's unit inside the
+//! fields and Y from the page origin; Rotation is the 4-step control
+//! (#2523). A locked object shows sunken read-only values under the lock's
+//! reason.
 
 use super::super::*;
+use super::rows::{pair_row, rotation_row, sunken_value, unit_input, unit_suffix};
 use crate::panels::{PlacedEditMsg, PlacedField, PlacedPanel};
 use crate::styles::{Spacing, TypeScale};
 use iced::Widget;
-use signex_i18n::{ids, t};
+use signex_i18n::{MessageId, Translatable, UserText, ids, t};
 use signex_types::measure::length_field_text;
 use signex_types::schematic::{SelectedItem, SelectedKind};
+use signex_widgets::Label;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -26,8 +30,8 @@ pub(super) struct RowLook {
 
 /// One editable box: the draft while typed, else the shown value. Enter
 /// commits it; a locked object gets the read-only value box instead.
-fn edit_box<'a>(
-    label: String,
+pub(super) fn edit_box<'a>(
+    label: Label<'a>,
     item: SelectedItem,
     field: PlacedField,
     shown: String,
@@ -35,7 +39,7 @@ fn edit_box<'a>(
     look: RowLook,
 ) -> Element<'a, PanelMsg> {
     if placed.locked.is_some() {
-        return form_input_row(&label, &shown, look.muted, look.input_bg);
+        return form_input_row(label, &shown, look.muted, look.input_bg);
     }
     let value = placed.text(item, &field, shown);
     let submitted = PanelMsg::PlacedEdit(PlacedEditMsg::Submitted {
@@ -83,114 +87,169 @@ pub(super) fn push_lock_note<'a>(
     c
 }
 
-/// The X and Y rows of the selected object (Start X / Start Y for a wire or
-/// a bus, whose position is its start).
-pub(super) fn push_position_rows<'a>(
-    mut c: Column<Element<'a, PanelMsg>>,
+/// One field of a Position or Size pair: the draft while typed, else the
+/// shown value; Enter commits it. A locked object shows the sunken value.
+fn pair_field<'a>(
+    axis: Label<'a>,
+    item: SelectedItem,
+    field: PlacedField,
+    shown: String,
+    unit: Label<'a>,
+    placed: &PlacedPanel,
+) -> Element<'a, PanelMsg> {
+    if placed.locked.is_some() {
+        return sunken_value(Some(axis), shown, Some(unit));
+    }
+    let value = placed.text(item, &field, shown);
+    let submitted = PanelMsg::PlacedEdit(PlacedEditMsg::Submitted {
+        item,
+        field: field.clone(),
+    });
+    unit_input(
+        Some(axis),
+        value,
+        Some(unit),
+        move |text| {
+            PanelMsg::PlacedEdit(PlacedEditMsg::Typed {
+                item,
+                field: field.clone(),
+                text,
+            })
+        },
+        submitted,
+    )
+}
+
+/// A row of two length fields of `item`, each `(axis, field, shown)`.
+fn length_pair_row<'a>(
     ctx: &'a PanelContext,
-    look: RowLook,
+    label: MessageId,
+    item: SelectedItem,
+    [
+        (first_axis, first, first_shown),
+        (second_axis, second, second_shown),
+    ]: [(MessageId, PlacedField, String); 2],
+) -> Element<'a, PanelMsg> {
+    let i18n = &ctx.i18n;
+    let unit = || Label::from(unit_suffix(i18n, ctx.unit));
+    let axis = |id| Label::from(t!(i18n, id));
+    pair_row(
+        t!(i18n, label),
+        pair_field(
+            axis(first_axis),
+            item,
+            first,
+            first_shown,
+            unit(),
+            &ctx.placed,
+        ),
+        pair_field(
+            axis(second_axis),
+            item,
+            second,
+            second_shown,
+            unit(),
+            &ctx.placed,
+        ),
+    )
+}
+
+/// The Position row of the selected object: X and Y in one row (Start for
+/// a wire or a bus, whose position is its start).
+pub(super) fn push_position_rows<'a>(
+    c: Column<Element<'a, PanelMsg>>,
+    ctx: &'a PanelContext,
+    _look: RowLook,
 ) -> Column<Element<'a, PanelMsg>> {
     let placed = &ctx.placed;
     let (Some(item), Some(geometry)) = (placed.item, placed.geometry) else {
         return c;
     };
     let unit = ctx.unit;
-    let unit_name = unit.to_string();
-    let run = matches!(item.kind, SelectedKind::Wire | SelectedKind::Bus);
-    let (x_id, y_id) = if run {
-        (ids::PANELS_PLACED_START_X, ids::PANELS_PLACED_START_Y)
+    let label = if matches!(item.kind, SelectedKind::Wire | SelectedKind::Bus) {
+        ids::PROPERTIES_START
     } else {
-        (ids::PANELS_PLACED_X, ids::PANELS_PLACED_Y)
+        ids::PROPERTIES_POSITION
     };
     let at = geometry.position;
-    let x_label = t!(ctx.i18n, x_id, "unit" => unit_name.as_str()).to_string();
-    let y_label = t!(ctx.i18n, y_id, "unit" => unit_name.as_str()).to_string();
     let x = length_field_text(at.x, unit);
     let y = length_field_text(ctx.shown_y(at.y), unit);
-    c = c.push(edit_box(x_label, item, PlacedField::X, x, placed, look));
-    c.push(edit_box(y_label, item, PlacedField::Y, y, placed, look))
+    c.push(length_pair_row(
+        ctx,
+        label,
+        item,
+        [
+            (ids::PROPERTIES_AXIS_X, PlacedField::X, x),
+            (ids::PROPERTIES_AXIS_Y, PlacedField::Y, y),
+        ],
+    ))
 }
 
-/// The Width and Height rows of a sheet symbol.
-pub(super) fn push_size_rows<'a>(
-    mut c: Column<Element<'a, PanelMsg>>,
+/// The End row of a wire or bus: X and Y in one row, as Start is. Each
+/// stretches the end only.
+pub(super) fn push_run_end_row<'a>(
+    c: Column<Element<'a, PanelMsg>>,
     ctx: &'a PanelContext,
-    look: RowLook,
+    end: signex_types::schematic::Point,
+) -> Column<Element<'a, PanelMsg>> {
+    let Some(item) = ctx.placed.item else {
+        return c;
+    };
+    let unit = ctx.unit;
+    let x = length_field_text(end.x, unit);
+    let y = length_field_text(ctx.shown_y(end.y), unit);
+    c.push(length_pair_row(
+        ctx,
+        ids::PROPERTIES_END,
+        item,
+        [
+            (ids::PROPERTIES_AXIS_X, PlacedField::EndX, x),
+            (ids::PROPERTIES_AXIS_Y, PlacedField::EndY, y),
+        ],
+    ))
+}
+
+/// The Size row of a sheet symbol: W and H in one row.
+pub(super) fn push_size_rows<'a>(
+    c: Column<Element<'a, PanelMsg>>,
+    ctx: &'a PanelContext,
+    _look: RowLook,
 ) -> Column<Element<'a, PanelMsg>> {
     let placed = &ctx.placed;
     let (Some(item), Some((w, h))) = (placed.item, placed.geometry.and_then(|g| g.size)) else {
         return c;
     };
     let unit = ctx.unit;
-    let unit_name = unit.to_string();
-    let w_label = t!(ctx.i18n, ids::PANELS_PLACED_WIDTH, "unit" => unit_name.as_str()).to_string();
-    let h_label = t!(ctx.i18n, ids::PANELS_PLACED_HEIGHT, "unit" => unit_name.as_str()).to_string();
     let (w, h) = (length_field_text(w, unit), length_field_text(h, unit));
-    c = c.push(edit_box(w_label, item, PlacedField::Width, w, placed, look));
-    c.push(edit_box(
-        h_label,
+    c.push(length_pair_row(
+        ctx,
+        ids::PROPERTIES_SIZE,
         item,
-        PlacedField::Height,
-        h,
-        placed,
-        look,
+        [
+            (ids::PROPERTIES_AXIS_WIDTH, PlacedField::Width, w),
+            (ids::PROPERTIES_AXIS_HEIGHT, PlacedField::Height, h),
+        ],
     ))
 }
 
-/// A Rotation choice: a right angle and how it reads.
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct RotationChoice {
-    degrees: u32,
-    label: String,
-}
-
-impl std::fmt::Display for RotationChoice {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.label)
-    }
-}
-
-/// The Rotation row of a part or a label: 0, 90, 180 or 270 degrees, the
-/// stored angle shown as the nearest of them.
+/// The Rotation row of a part or a label: the 4-step control, the stored
+/// angle shown as its nearest step; read-only while the object is locked.
 pub(super) fn push_rotation_row<'a>(
     c: Column<Element<'a, PanelMsg>>,
     ctx: &'a PanelContext,
-    look: RowLook,
+    _look: RowLook,
 ) -> Column<Element<'a, PanelMsg>> {
     let placed = &ctx.placed;
     let (Some(item), Some(rotation)) = (placed.item, placed.geometry.and_then(|g| g.rotation))
     else {
         return c;
     };
-    let choices: Vec<RotationChoice> = [0_u32, 90, 180, 270]
-        .into_iter()
-        .map(|degrees| RotationChoice {
-            degrees,
-            label: t!(ctx.i18n, ids::PANELS_PLACED_DEGREES, "degrees" => degrees).to_string(),
-        })
-        .collect();
-    let nearest = ((rotation.rem_euclid(360.0) / 90.0).round() as usize) % 4;
-    let current = choices[nearest].clone();
-    let label = t!(ctx.i18n, ids::PANELS_PLACED_ROTATION).to_string();
-    if placed.locked.is_some() {
-        return c.push(form_input_row(
-            &label,
-            &current.label,
-            look.muted,
-            look.input_bg,
-        ));
-    }
-    c.push(form_pick_row(
-        &label,
-        choices,
-        current,
-        move |choice: RotationChoice| {
-            PanelMsg::PlacedEdit(PlacedEditMsg::RotationPicked {
-                item,
-                degrees: f64::from(choice.degrees),
-            })
-        },
-        look.muted,
+    c.push(rotation_row(
+        &ctx.i18n,
+        &ctx.tokens,
+        rotation,
+        placed.locked.is_some(),
+        move |degrees| PanelMsg::PlacedEdit(PlacedEditMsg::RotationPicked { item, degrees }),
     ))
 }
 
@@ -203,15 +262,15 @@ pub(super) fn push_parameters_section<'a>(
     look: RowLook,
 ) -> Column<Element<'a, PanelMsg>> {
     let header = if params.is_empty() {
-        t!(ctx.i18n, ids::PANELS_PLACED_PARAMETERS_NONE).to_string()
+        Translatable::new(ids::PANELS_PLACED_PARAMETERS_NONE)
     } else {
-        t!(ctx.i18n, ids::PANELS_PLACED_PARAMETERS, "count" => params.len()).to_string()
+        Translatable::new(ids::PANELS_PLACED_PARAMETERS).arg("count", params.len())
     };
     let placed = &ctx.placed;
     col.push(
         ctx.collapsible(
             "sel_parameters",
-            &header,
+            header,
             &ctx.collapsed_sections,
             move || {
                 let mut c = Column::new().spacing(0).width(Length::Fill);
@@ -225,13 +284,15 @@ pub(super) fn push_parameters_section<'a>(
                 }
                 let Some(item) = placed.item.filter(|i| i.kind == SelectedKind::Symbol) else {
                     for (name, value) in &params {
+                        let name = UserText::new(name.clone());
                         c = c.push(form_input_row(name, value, look.muted, look.input_bg));
                     }
                     return c;
                 };
                 for (name, value) in params {
                     let field = PlacedField::Parameter(name.clone());
-                    c = c.push(edit_box(name, item, field, value, placed, look));
+                    let label = UserText::new(name).into();
+                    c = c.push(edit_box(label, item, field, value, placed, look));
                 }
                 c
             },
@@ -250,15 +311,19 @@ pub(super) fn push_location_section<'a>(
     if ctx.placed.item.is_none() {
         return col;
     }
-    let title = t!(ctx.i18n, ids::PANELS_PLACED_LOCATION).to_string();
     col.push(
-        ctx.collapsible("sel_location", &title, &ctx.collapsed_sections, move || {
-            let mut c = Column::new().spacing(0).width(Length::Fill);
-            c = push_lock_note(c, ctx, look);
-            c = push_position_rows(c, ctx, look);
-            c = push_rotation_row(c, ctx, look);
-            push_size_rows(c, ctx, look)
-        })
+        ctx.collapsible(
+            "sel_location",
+            ids::PANELS_PLACED_LOCATION,
+            &ctx.collapsed_sections,
+            move || {
+                let mut c = Column::new().spacing(0).width(Length::Fill);
+                c = push_lock_note(c, ctx, look);
+                c = push_position_rows(c, ctx, look);
+                c = push_rotation_row(c, ctx, look);
+                push_size_rows(c, ctx, look)
+            },
+        )
         .boxed(),
     )
 }

@@ -9,10 +9,12 @@ use std::collections::BTreeMap;
 use pcb_geom::{ItemRef, NM_PER_MM, Rejected, copper_layers};
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
-use signex_types::check::{CheckReport, Finding};
+use signex_types::check::{CheckReport, Finding, WaivedFinding};
 use signex_types::format::pcb_layer_token;
+use signex_types::pcb::PcbBoard;
 use signex_types::pcb_layer::PcbLayer;
 
+use crate::waiver::{WaiverState, waiver_json, waiver_key, waiver_state};
 use crate::{DrcReport, DrcRules, SkippedKeepout, Violation, ViolationKind};
 
 /// The id a report names its check by.
@@ -21,24 +23,45 @@ pub const DRC_CHECK: &str = "drc";
 /// Hex digits of the key: 128 bits of the hash, as ERC's.
 const KEY_HEX_DIGITS: usize = 32;
 
-/// `report`, a run over the board file `board`, as a check report.
+/// `report`, a run over `pcb`, the board file `board`, as a check report.
 /// `net_names` names the board's nets by number. The warnings are
 /// `warnings`, then what the rule text and the setup said, then one per item
 /// the run could not check (keepouts, then items). `rule_set` gets the clearance the run used.
-/// DRC has no waivers, so `waived` and `lapsed` are empty; a finding of a
-/// rule switched off is not listed.
+/// The board's own waivers (`options.drc_waivers`, #2307) move a waived
+/// finding to `waived`; a lapsed one stays a finding and its waiver goes to
+/// `lapsed`. A finding of a rule switched off is not listed, and its waiver
+/// is neither.
 pub fn check_report(
     report: &DrcReport,
+    pcb: &PcbBoard,
     net_names: &BTreeMap<u32, String>,
     board: &str,
     warnings: Vec<String>,
     rule_set: Map<String, Value>,
 ) -> CheckReport {
-    let findings = report
-        .violations
-        .iter()
-        .filter_map(|v| finding(report, v, net_names, board))
-        .collect();
+    let waivers = &pcb.options.drc_waivers;
+    let mut findings = Vec::new();
+    let mut waived = Vec::new();
+    let mut lapsed: Vec<Value> = Vec::new();
+    for v in &report.violations {
+        let Some(finding) = finding(report, v, pcb, net_names, board) else {
+            continue;
+        };
+        match waiver_state(waivers, v, pcb) {
+            WaiverState::Waived(w) => waived.push(WaivedFinding {
+                finding,
+                waiver: waiver_json(w),
+            }),
+            WaiverState::Lapsed(w) => {
+                let json = waiver_json(w);
+                if !lapsed.contains(&json) {
+                    lapsed.push(json);
+                }
+                findings.push(finding);
+            }
+            WaiverState::Open => findings.push(finding),
+        }
+    }
     let warnings = warnings
         .into_iter()
         .chain(rule_warnings(&report.rules))
@@ -48,7 +71,7 @@ pub fn check_report(
     let mut rule_set = rule_set;
     rule_set.insert("clearance_nm".into(), json!(report.rules.clearance));
     rule_set.insert("from_default".into(), json!(report.rules.from_default));
-    CheckReport::new(DRC_CHECK, findings, Vec::new(), Vec::new(), warnings)
+    CheckReport::new(DRC_CHECK, findings, waived, lapsed, warnings)
         .with_rule_set(Value::Object(rule_set))
 }
 
@@ -56,18 +79,32 @@ pub fn check_report(
 fn finding(
     report: &DrcReport,
     v: &Violation,
+    pcb: &PcbBoard,
     net_names: &BTreeMap<u32, String>,
     board: &str,
 ) -> Option<Finding> {
     let severity = report.severity_of(v)?;
     let (a, b) = (net_name(net_names, v.nets.0), net_name(net_names, v.nets.1));
-    let message = format!("{}, {a} / {b}", describe(v));
+    // A part outside its room is named with its room, not by nets (#2457);
+    // a height or 3D clearance finding by its parts (#2939).
+    let message = crate::rooms::describe_on(pcb, v)
+        .or_else(|| crate::bodies::describe_on(pcb, v))
+        .unwrap_or_else(|| format!("{}, {a} / {b}", describe(v)));
+    let mut evidence = evidence(&report.rules, v, &a, &b);
+    if matches!(
+        v.kind,
+        ViolationKind::ComponentHeight | ViolationKind::BodyClearance
+    ) && let Value::Object(map) = &mut evidence
+    {
+        let names = crate::bodies::designators(pcb, v);
+        map.insert("designators".into(), json!(names));
+    }
     Some(Finding {
         rule: rule_of(v).to_string(),
         severity,
         key: key(v, board, &message),
         message,
-        evidence: evidence(&report.rules, v, &a, &b),
+        evidence,
         items: v.items.iter().map(item_id).collect(),
         sheet: board.to_string(),
     })
@@ -103,7 +140,38 @@ pub fn describe(v: &Violation) -> String {
         ViolationKind::TrackWidth => size_text("track width", v),
         ViolationKind::ViaDiameter => size_text("via diameter", v),
         ViolationKind::ViaDrill => size_text("via drill", v),
+        ViolationKind::HoleSize => size_text("hole", v),
+        ViolationKind::AnnularRing => size_text("annular ring", v),
+        ViolationKind::HoleToHole => gap_text("hole to hole", v),
+        ViolationKind::EdgeClearance => gap_text("board edge clearance", v),
+        ViolationKind::ViaInPad if v.measured_nm == 0 => "via in a pad".to_string(),
+        ViolationKind::ViaInPad => gap_text("via to pad", v),
+        ViolationKind::SilkToPad => gap_text("silkscreen to pad", v),
+        ViolationKind::SilkToSilk => gap_text("silkscreen to silkscreen", v),
+        ViolationKind::MaskSliver => size_text("solder mask sliver", v),
+        ViolationKind::MaskExpansion => size_text("solder mask expansion", v),
+        ViolationKind::PasteExpansion => size_text("paste expansion", v),
+        ViolationKind::CourtyardOverlap if v.measured_nm == 0 => "courtyards overlap".to_string(),
+        ViolationKind::CourtyardOverlap => gap_text("courtyard gap", v),
+        // With the board at hand, `rooms::describe_on` names the part and
+        // the room.
+        ViolationKind::PartOutsideRoom => {
+            format!("part {} mm outside its room", mm(v.measured_nm))
+        }
+        // With the board at hand, `bodies::describe_on` names the parts.
+        ViolationKind::ComponentHeight => size_text("component height", v),
+        ViolationKind::BodyClearance if v.measured_nm == 0 => "3D bodies touch".to_string(),
+        ViolationKind::BodyClearance => gap_text("3D body clearance", v),
     }
+}
+
+/// A gap under its minimum: `<what> 0.1 mm, needs 0.2 mm`.
+fn gap_text(what: &str, v: &Violation) -> String {
+    format!(
+        "{what} {} mm, needs {} mm",
+        mm(v.measured_nm),
+        mm(v.required_nm)
+    )
 }
 
 /// Run DRC's Messages line for `v`: what broke, the written rule, the nets
@@ -154,6 +222,8 @@ fn evidence(rules: &DrcRules, v: &Violation, a: &str, b: &str) -> Value {
     out.insert("at".into(), json!([mm(v.at.x), mm(v.at.y)]));
     out.insert("measured_nm".into(), json!(v.measured_nm));
     out.insert("required_nm".into(), json!(v.required_nm));
+    // What `waive_drc_violation id=` takes (#2307).
+    out.insert("waiver_key".into(), json!(waiver_key(v)));
     if let Some(keepout) = v.keepout {
         out.insert("keepout".into(), json!(keepout.to_string()));
     }
@@ -194,7 +264,9 @@ pub fn item_id(item: &ItemRef) -> String {
         | ItemRef::Arc(id)
         | ItemRef::FreePad(id)
         | ItemRef::Dimension(id)
-        | ItemRef::Graphic { graphic: id, .. } => id.to_string(),
+        | ItemRef::Graphic { graphic: id, .. }
+        | ItemRef::Room(id) => id.to_string(),
+        ItemRef::FootprintText { footprint, field } => format!("{footprint}/{}", field.id()),
     }
 }
 
@@ -209,6 +281,8 @@ pub(crate) fn item_label(item: &ItemRef) -> String {
         ItemRef::Arc(_) => "arc",
         ItemRef::Dimension(_) => "dimension",
         ItemRef::Graphic { .. } => "drawing",
+        ItemRef::FootprintText { .. } => "text",
+        ItemRef::Room(_) => "room",
     };
     format!("{kind} {}", item_id(item))
 }
@@ -250,7 +324,7 @@ fn key(v: &Violation, board: &str, message: &str) -> String {
 /// What Run DRC says in Messages about the rules, in its words (numbers in
 /// [`mm`]), in its order: unrecognised entries, the rule text's notes and
 /// remarks, what was not applied, and a clearance taken from the default.
-fn rule_warnings(rules: &DrcRules) -> Vec<String> {
+pub fn rule_warnings(rules: &DrcRules) -> Vec<String> {
     let mut out: Vec<String> = rules
         .severities
         .unrecognised

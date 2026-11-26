@@ -5,6 +5,7 @@ use std::collections::BTreeSet;
 
 use signex_types::pcb::{Point, SOLID_FILL, Zone};
 use signex_types::pcb_graphic::BoardGraphicKind;
+use signex_types::zone_cutout::POUR_CUTOUT_FILL;
 use signex_types::zone_keepout::KEEPOUT_FILL;
 use signex_types::zone_pour::POUR_FILL;
 
@@ -57,11 +58,12 @@ impl PickKind {
             ItemRef::Track(_) => PickKind::Tracks,
             ItemRef::Via(_) => PickKind::Vias,
             ItemRef::Zone { kind, .. } | ItemRef::Graphic { kind, .. } => kind,
-            ItemRef::Text(_) => PickKind::Texts,
+            ItemRef::Text(_) | ItemRef::FootprintText { .. } => PickKind::Texts,
             ItemRef::Arc(_) => PickKind::Arcs,
             ItemRef::FreePad(_) => PickKind::Pads,
             // A dimension has no kind of its own in the filter (#2373).
             ItemRef::Dimension(_) => PickKind::Other,
+            ItemRef::Room(_) => PickKind::Rooms,
         }
     }
 
@@ -76,12 +78,13 @@ impl PickKind {
 
     /// The kind a drawn area is (#2383): a keepout, a Fill (solid copper on
     /// an upright rectangle, as the Fill tool draws it), a Solid Region or a
-    /// polygon pour (#2216). `None` for a zone of a kind no tool draws.
+    /// pour cutout (#2871, a region holding no copper), or a polygon pour
+    /// (#2216). `None` for a zone of a kind no tool draws.
     pub fn of_zone(zone: &Zone) -> Option<Self> {
         match zone.fill_type.as_str() {
             KEEPOUT_FILL => Some(PickKind::Keepouts),
             SOLID_FILL if is_upright_rectangle(&zone.outline) => Some(PickKind::Fills),
-            SOLID_FILL => Some(PickKind::Regions),
+            SOLID_FILL | POUR_CUTOUT_FILL => Some(PickKind::Regions),
             POUR_FILL => Some(PickKind::Polygons),
             _ => None,
         }
@@ -103,6 +106,7 @@ impl PickKind {
                 | PickKind::Texts
                 | PickKind::Other
                 | PickKind::Polygons
+                | PickKind::Rooms
         )
     }
 }
@@ -224,6 +228,8 @@ mod tests {
             min_thickness: 0.0,
             min_island_area: 0.0,
             remove_dead_islands: false,
+            shelved: false,
+            unfilled: false,
             unknown: Default::default(),
         }
     }
@@ -262,10 +268,12 @@ mod tests {
             PickKind::Fills,
             PickKind::Regions,
             PickKind::Polygons,
+            // #2457: rooms are held by the selection index.
+            PickKind::Rooms,
         ] {
             assert!(kind.is_pickable(), "{kind:?}");
         }
-        assert!(!PickKind::Rooms.is_pickable());
+        assert!(!PickKind::Bodies3d.is_pickable());
     }
 
     #[test]

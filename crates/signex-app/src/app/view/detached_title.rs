@@ -22,15 +22,21 @@ impl Signex {
             ModalId::LibraryPicker => library
                 .picker
                 .as_ref()
-                .map(|p| crate::library::picker::title(&p.mode).to_owned()),
+                .map(|p| crate::library::picker::title(&p.mode, &self.ui_state.i18n)),
             ModalId::LibraryPrimitivePicker => library
                 .primitive_picker
                 .as_ref()
-                .map(|p| crate::library::primitive_picker::title(p.kind).to_owned()),
+                .map(|p| crate::library::primitive_picker::title(p.kind, &self.ui_state.i18n)),
             ModalId::LibraryRecovery => library
                 .recovery
                 .as_ref()
-                .map(crate::library::recovery::title),
+                .map(|dialog| crate::library::recovery::title(dialog, &self.ui_state.i18n)),
+            // The reset confirm is titled after the reset asked for (#76).
+            ModalId::AnnotateResetConfirm => Some(
+                self.ui_state
+                    .i18n
+                    .message_plain(self.ui_state.annotate_session.reset_title(), &[]),
+            ),
             _ => None,
         }
         .unwrap_or_else(|| {
@@ -51,6 +57,16 @@ impl Signex {
                 |p| p.data.name.clone(),
             )),
             ModalId::BomPreview => Some(i18n.message_plain(ids::DIALOG_SUBTITLE_BOM, &[])),
+            ModalId::ParameterManager => self.parameter_manager_subtitle(),
+            ModalId::ParameterImport => self.parameter_import_subtitle(),
+            ModalId::MoveSelection => Some(self.move_selection_subtitle()),
+            ModalId::NetColorPalette => Some(self.net_color_palette_subtitle()),
+            ModalId::NetColorCustom => self.ui_state.net_color_custom.net.clone(),
+            ModalId::PrintPreview => self
+                .document_state
+                .preview
+                .as_ref()
+                .map(|preview| self.pdf_dialog_subtitle(preview)),
             _ => None,
         }
     }
@@ -68,6 +84,7 @@ pub(crate) fn detached_modal_title(modal: ModalId) -> MessageId {
         ModalId::MoveSelection => ids::DIALOG_TITLE_MOVE_SELECTION,
         ModalId::NetColorPalette => ids::DIALOG_TITLE_NET_COLORS,
         ModalId::ParameterManager => ids::DIALOG_TITLE_PARAMETERS,
+        ModalId::ParameterImport => ids::PARAMETER_IO_IMPORT_TITLE,
         ModalId::Preferences => ids::DIALOG_TITLE_PREFERENCES,
         ModalId::FindReplace => ids::DIALOG_TITLE_FIND_REPLACE,
         ModalId::RenameDialog => ids::DIALOG_TITLE_RENAME,

@@ -1,0 +1,133 @@
+# SPDX-License-Identifier: FSL-1.1-ALv2
+#
+# Router soak and bench (#2482, #2483). Non-required and scheduled weekly,
+# never on a PR or a push (CI is a shared budget of concurrent jobs): 10 000
+# random routing and editing actions on every board, then the shove
+# convergence, latency and DRC-delta thresholds, in release. Per-PR CI runs
+# the short versions with the workspace tests. The seed is the run number,
+# so each run soaks a new sequence; a failure prints the command that
+# replays it. The per-board report lines are uploaded as the artifact
+# `routing-report-<run number>` and shown in the run summary. What it
+# checks and the report format: docs/PCB_TOOLS.md and docs/PERFORMANCE.md,
+# "Router soak and bench". A failed scheduled run opens (or comments on) the
+# issue "Scheduled routing soak is failing" with the replay lines.
+
+name: routing-soak
+
+on:
+  schedule:
+    - cron: "17 2 * * 0"
+  workflow_dispatch:
+    inputs:
+      seed:
+        description: "Soak seed (decimal or 0x hex); empty uses the run number"
+        required: false
+        default: ""
+      actions:
+        description: "Soak actions per board; empty is 10 000"
+        required: false
+        default: ""
+      board:
+        description: "One board by name; empty runs every board"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+# One run at a time; a second dispatch waits instead of cancelling a soak.
+concurrency:
+  group: routing-soak
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  SIGNEX_SOAK_SEED: ${{ inputs.seed || github.run_number }}
+  SIGNEX_SOAK_ACTIONS: ${{ inputs.actions }}
+  SIGNEX_SOAK_BOARD: ${{ inputs.board }}
+  # A board left as a Git LFS pointer fails the run instead of being skipped.
+  SIGNEX_REQUIRE_ROUTING_CORPUS: "1"
+  SIGNEX_ROUTING_REPORT: ${{ github.workspace }}/routing-report.txt
+
+jobs:
+  soak:
+    name: routing · soak + bench
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      # lfs: the routing corpus boards are stored in Git LFS (#2481).
+      - uses: actions/checkout@v5
+        with:
+          submodules: false
+          lfs: true
+
+      - uses: dtolnay/rust-toolchain@1.97.0 # keep in lockstep with rust-toolchain.toml
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build the routing tests (release)
+        run: cargo test --release -p signex-engine --test routing --no-run
+
+      # The boards are soaked side by side, one per core (SIGNEX_SOAK_JOBS).
+      - name: Soak
+        run: |
+          set -o pipefail
+          cargo test --release -p signex-engine --test routing soak_long -- --ignored --nocapture \
+            2>&1 | tee soak.log
+
+      # Alone on the runner, one test thread, so the timings are not shared.
+      - name: Bench and thresholds
+        if: ${{ !cancelled() }}
+        env:
+          SIGNEX_ROUTING_ASSERT_LATENCY: "1"
+        run: |
+          set -o pipefail
+          cargo test --release -p signex-engine --test routing bench_thresholds -- --ignored --nocapture --test-threads 1 \
+            2>&1 | tee bench.log
+
+      - name: Report in the run summary
+        if: ${{ !cancelled() }}
+        run: |
+          {
+            printf '### Routing soak and bench, seed %s\n\n```text\n' "$SIGNEX_SOAK_SEED"
+            cat routing-report.txt 2>/dev/null || echo "no report written"
+            printf '```\n'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: routing-report-${{ github.run_number }}
+          path: |
+            routing-report.txt
+            soak.log
+            bench.log
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Report a failed run
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="Scheduled routing soak is failing"
+          {
+            printf 'The scheduled routing soak failed: %s (seed %s).\n\n' "$RUN_URL" "$SIGNEX_SOAK_SEED"
+            printf 'Failures and the lines that replay them:\n\n```\n'
+            cat soak.log bench.log 2>/dev/null |
+              grep -E "panicked at|routing soak on|replay:|result=FAILED|latency_budget=over|FAILED" |
+              head -n 60 || true
+            printf '```\n'
+          } > body.md
+          number=$(gh issue list --state open --search "in:title \"$title\"" --json number,title \
+            --jq ".[] | select(.title == \"$title\") | .number" | head -n 1)
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body-file body.md
+          else
+            gh issue create --title "$title" --label "type: bug" --label "area: pcb" --body-file body.md
+          fi

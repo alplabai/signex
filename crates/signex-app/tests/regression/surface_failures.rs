@@ -102,7 +102,6 @@ fn closing_a_dirty_component_preview_tab_keeps_the_draft() {
     app.document_state.tabs.push(TabInfo {
         title: "row".into(),
         path: address.synthetic_tab_path(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::ComponentEditor(ComponentEditorTab {
             library_path: address.library_path.clone(),
@@ -206,7 +205,6 @@ fn open_symbol_tab(app: &mut Signex, path: &Path) {
     app.document_state.tabs.push(TabInfo {
         title: "sym".into(),
         path: path.to_path_buf(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::SymbolEditor(path.to_path_buf()),
     });
@@ -301,7 +299,7 @@ fn closing_a_symbol_tab_dirtied_by_undo_after_a_save_parks_the_draft() {
     open_symbol_tab(&mut app, &path);
     let editor = app.document_state.symbol_editors.get_mut(&path).unwrap();
     let snapshot = editor.snapshot();
-    editor.history.undo_steps_mut().push(snapshot);
+    editor.draft.history.undo_steps_mut().push(snapshot);
     editor.primitive_mut().name = "edited".into();
     editor.mark_dirty();
     app.document_state.mark_document_dirty(&path);

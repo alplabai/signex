@@ -33,7 +33,9 @@ use signex_app::app::{
     ErcMsg, FileMsg, LoadedProject, Message, PreferencesMsg, Signex, TabInfo, TabKind,
 };
 use signex_app::canvas::{BoxDirection, CanvasEvent};
+use signex_app::dock::DockMessage;
 use signex_app::library::LibraryMessage;
+use signex_app::panels::{ErcPanelMsg, PanelMsg};
 use signex_app::preferences::PrefMsg;
 use signex_types::project::{ProjectData, SheetEntry};
 use signex_types::schematic::{
@@ -253,7 +255,6 @@ fn placed_parts() -> SchematicSheet {
     app.document_state.tabs.push(TabInfo {
         title: "scratch".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -452,6 +453,7 @@ fn open_readme_project(app: &mut Signex, dir: &std::path::Path) -> PathBuf {
             .collect(),
         variant_definitions: Vec::new(),
         active_variant: None,
+        variant_settings: Default::default(),
         libraries: Vec::new(),
         enable_git: false,
         net_classes: Vec::new(),
@@ -460,6 +462,11 @@ fn open_readme_project(app: &mut Signex, dir: &std::path::Path) -> PathBuf {
         schematic_defaults: Default::default(),
         project_defaults: Default::default(),
         agent_journal: Default::default(),
+        schematic_design: Default::default(),
+        fab_outputs: None,
+        router_tool_diameter: None,
+        bom_alternates: Vec::new(),
+        requirements: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
     };
@@ -488,6 +495,8 @@ fn render_readme_screenshots() {
     let tmp = tempfile::TempDir::new().expect("tempdir");
     let (mut app, _task) = Signex::new();
     app.ui_state.first_run_tour_open = false;
+    // The model's size is the one overlays place against (#2911).
+    app.ui_state.window_size = (WIDTH as f32, HEIGHT as f32);
     let sheet_path = open_readme_project(&mut app, tmp.path());
     let _ = app.update(Message::File(FileMsg::SchematicOpenFinished {
         path: sheet_path,
@@ -537,6 +546,8 @@ fn render_guide_screenshots() {
         return;
     };
     let (mut app, _task) = Signex::new();
+    // The model's size is the one overlays place against (#2911).
+    app.ui_state.window_size = (WIDTH as f32, HEIGHT as f32);
     shoot(&mut renderer, &app, "guide-first-run.png");
 
     app.ui_state.first_run_tour_open = false;
@@ -552,5 +563,27 @@ fn render_guide_screenshots() {
     shoot(&mut renderer, &app, "guide-wired-symbol.png");
 
     settle_support::settle(&mut app, Message::Erc(ErcMsg::Run));
+    // As the guide's caption says: the "Unused pin" group in view with its
+    // row's Add No-Connect, and R1 readable. Fold the other warning group,
+    // point at the unused-pin row (its actions show on hover), and fit the
+    // canvas again after the run.
+    let unused = app
+        .document_state
+        .panel_ctx
+        .erc_diagnostics
+        .iter()
+        .find(|d| d.rule_kind == Some(signex_erc::RuleKind::UnusedPin))
+        .expect("ERC reports R1's unused pin")
+        .global_index;
+    let erc_view = |msg: ErcPanelMsg| Message::Dock(DockMessage::Panel(PanelMsg::ErcView(msg)));
+    let _ = app.update(erc_view(ErcPanelMsg::GroupToggled(
+        signex_erc::RuleKind::SinglePinNet.label().to_string(),
+    )));
+    let _ = app.update(erc_view(ErcPanelMsg::RowEntered(unused)));
+    // The row's actions sit on a third line under its message: give the
+    // bottom dock the room a user would drag it to.
+    app.ui_state.bottom_height = 300.0;
+    let _ = draw(&mut renderer, &app);
+    let _ = app.update(Message::CanvasEvent(CanvasEvent::FitAll));
     shoot(&mut renderer, &app, "guide-erc.png");
 }

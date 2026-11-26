@@ -21,6 +21,7 @@ members = [
     "crates/chrome-catalog",
     "crates/signex-library",
     "crates/signex-library-server",
+    "crates/signex-expr",
     "crates/signex-sketch",
     "crates/signex-bake",
     "crates/signex-3d-model-importer",
@@ -29,6 +30,10 @@ members = [
     "crates/pcb-geom",
     "crates/signex-drc",
     "crates/signex-drc-dsl",
+    "crates/signex-req",
+    "crates/signex-mcad",
+    "crates/signex-gerber",
+    "crates/signex-notebook",
 ]
 # A bare `cargo build` / `cargo test` at the root only builds the daily-
 # driver crates. The library server and the chrome-catalog dev sandbox are
@@ -44,6 +49,7 @@ default-members = [
     "crates/signex-commands",
     "crates/signex-output",
     "crates/signex-library",
+    "crates/signex-expr",
     "crates/signex-sketch",
     "crates/signex-bake",
     "crates/signex-3d-model-importer",
@@ -56,10 +62,14 @@ default-members = [
     "crates/pcb-geom",
     "crates/signex-drc",
     "crates/signex-drc-dsl",
+    "crates/signex-req",
+    "crates/signex-mcad",
+    "crates/signex-gerber",
+    "crates/signex-notebook",
 ]
 
 [workspace.package]
-version = "26.11.0"
+version = "26.11.1"
 edition = "2024"
 # MSRV tracks the pinned toolchain (`rust-toolchain.toml` channel). We build,
 # test, and support exactly one toolchain — the pinned stable — so the declared
@@ -73,7 +83,7 @@ repository = "https://github.com/alplabai/signex"
 
 [workspace.dependencies]
 # UI framework
-iced = { version = "0.15.0-dev", features = ["wgpu", "canvas", "advanced", "svg", "image", "tokio"] }
+iced = { version = "0.15.0-dev", features = ["wgpu", "canvas", "advanced", "svg", "image", "tokio", "vello-cpu-multithreading"] }
 iced_aw = { path = "vendor/iced_aw", version = "0.13.1", default-features = false, features = [
     "tabs", "tab_bar", "card", "context_menu", "number_input",
     "color_picker", "menu", "drop_down", "selection_list",
@@ -121,11 +131,25 @@ signex-erc = { path = "crates/signex-erc" }
 signex-erc-dsl = { path = "crates/signex-erc-dsl" }
 signex-drc = { path = "crates/signex-drc" }
 signex-drc-dsl = { path = "crates/signex-drc-dsl" }
+signex-req = { path = "crates/signex-req" }
 signex-net = { path = "crates/signex-net" }
 signex-history = { path = "crates/signex-history" }
 signex-commands = { path = "crates/signex-commands" }
 signex-output = { path = "crates/signex-output" }
 signex-3d-model-importer = { path = "crates/signex-3d-model-importer" }
+signex-mcad = { path = "crates/signex-mcad" }
+signex-gerber = { path = "crates/signex-gerber" }
+signex-notebook = { path = "crates/signex-notebook" }
+
+# Design Notebook: the Typst compiler, its paged layout, PDF and raster
+# exporters (Apache-2.0; DECISIONS, Typst row) and typst-assets' fonts, which
+# carry their own licences (OFL-1.1, GUST, Bitstream Vera), shipped from
+# crates/signex-notebook/fonts and listed in THIRD_PARTY_NOTICES.md (#3023).
+typst = "0.15.1"
+typst-layout = "0.15.1"
+typst-pdf = "0.15.1"
+typst-render = "0.15.1"
+typst-assets = { version = "0.15.1", features = ["fonts"] }
 
 # Library subsystem (v0.9 plan, restored at v0.11)
 chrono = { version = "0.4", features = ["serde"] }
@@ -158,6 +182,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Internal — library
 signex-library = { path = "crates/signex-library" }
+
+# Internal — expression engine shared by sketch parameters and fields (#1984)
+signex-expr = { path = "crates/signex-expr" }
 
 # Internal — sketcher (v0.13)
 signex-sketch = { path = "crates/signex-sketch" }
@@ -195,21 +222,21 @@ unused_must_use = "deny"
 # level, which scripts/check_lint_lockstep.sh now fails CI over (#570).
 
 # Signex fork of iced (upstream master + cherry-picked PRs, see FORK.md in alplabai/iced).
-# Tag iced-signex-v0.15.0-alpha.7 = fork commit 78e6f8c7a (the signex release branch). Pinned by rev, not tag: a tag can be moved. It includes MonitorData::size() dividing by the scale factor (alplabai/iced#49), which the window placement code relies on, the canvas glyph mesh cache (alplabai/iced#79) for rotated text (#2128), and the native menu API (`iced::menu`, quit requests, `system::menu_failures`; failure report alplabai/iced#93).
+# Tag iced-signex-v0.15.0-alpha.9 = fork commit cc3924c4c (the signex release branch). Pinned by rev, not tag: a tag can be moved. It includes MonitorData::size() dividing by the scale factor (alplabai/iced#49), which the window placement code relies on, the canvas glyph mesh cache (alplabai/iced#79) for rotated text (#2128), and the native menu API (`iced::menu`, quit requests, `system::menu_failures`; failure report alplabai/iced#93).
 [patch.crates-io]
 iced_fonts = { path = "vendor/iced_fonts" }
-iced = { git = "https://github.com/alplabai/iced", rev = "78e6f8c7ad67830e061b77084679cdb45a49d3fd" }
-iced_core = { git = "https://github.com/alplabai/iced", rev = "78e6f8c7ad67830e061b77084679cdb45a49d3fd" }
-iced_futures = { git = "https://github.com/alplabai/iced", rev = "78e6f8c7ad67830e061b77084679cdb45a49d3fd" }
-iced_graphics = { git = "https://github.com/alplabai/iced", rev = "78e6f8c7ad67830e061b77084679cdb45a49d3fd" }
-iced_program = { git = "https://github.com/alplabai/iced", rev = "78e6f8c7ad67830e061b77084679cdb45a49d3fd" }
-iced_renderer = { git = "https://github.com/alplabai/iced", rev = "78e6f8c7ad67830e061b77084679cdb45a49d3fd" }
-iced_runtime = { git = "https://github.com/alplabai/iced", rev = "78e6f8c7ad67830e061b77084679cdb45a49d3fd" }
-iced_tiny_skia = { git = "https://github.com/alplabai/iced", rev = "78e6f8c7ad67830e061b77084679cdb45a49d3fd" }
-iced_wgpu = { git = "https://github.com/alplabai/iced", rev = "78e6f8c7ad67830e061b77084679cdb45a49d3fd" }
-iced_widget = { git = "https://github.com/alplabai/iced", rev = "78e6f8c7ad67830e061b77084679cdb45a49d3fd" }
-iced_winit = { git = "https://github.com/alplabai/iced", rev = "78e6f8c7ad67830e061b77084679cdb45a49d3fd" }
-iced_debug = { git = "https://github.com/alplabai/iced", rev = "78e6f8c7ad67830e061b77084679cdb45a49d3fd" }
+iced = { git = "https://github.com/alplabai/iced", rev = "cc3924c4c0c210e14380915510d7aa9b3ddc0e53" }
+iced_core = { git = "https://github.com/alplabai/iced", rev = "cc3924c4c0c210e14380915510d7aa9b3ddc0e53" }
+iced_futures = { git = "https://github.com/alplabai/iced", rev = "cc3924c4c0c210e14380915510d7aa9b3ddc0e53" }
+iced_graphics = { git = "https://github.com/alplabai/iced", rev = "cc3924c4c0c210e14380915510d7aa9b3ddc0e53" }
+iced_program = { git = "https://github.com/alplabai/iced", rev = "cc3924c4c0c210e14380915510d7aa9b3ddc0e53" }
+iced_renderer = { git = "https://github.com/alplabai/iced", rev = "cc3924c4c0c210e14380915510d7aa9b3ddc0e53" }
+iced_runtime = { git = "https://github.com/alplabai/iced", rev = "cc3924c4c0c210e14380915510d7aa9b3ddc0e53" }
+iced_vello_cpu = { git = "https://github.com/alplabai/iced", rev = "cc3924c4c0c210e14380915510d7aa9b3ddc0e53" }
+iced_wgpu = { git = "https://github.com/alplabai/iced", rev = "cc3924c4c0c210e14380915510d7aa9b3ddc0e53" }
+iced_widget = { git = "https://github.com/alplabai/iced", rev = "cc3924c4c0c210e14380915510d7aa9b3ddc0e53" }
+iced_winit = { git = "https://github.com/alplabai/iced", rev = "cc3924c4c0c210e14380915510d7aa9b3ddc0e53" }
+iced_debug = { git = "https://github.com/alplabai/iced", rev = "cc3924c4c0c210e14380915510d7aa9b3ddc0e53" }
 
 # Local release builds keep cargo's parallel codegen defaults; shipped binaries
 # get lto = "thin" + codegen-units = 1 from env in .github/workflows/release.yml.

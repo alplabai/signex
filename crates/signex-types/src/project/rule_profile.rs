@@ -13,9 +13,10 @@
 //! An optional `drc` section (#2307) has the shape of the project's
 //! `rules.drc`. Keys this build does not know (a section from a newer build,
 //! an unknown rule id) are kept verbatim and written back, as everywhere
-//! else. A `schema` newer than [`RULE_PROFILE_SCHEMA_V1`] is refused rather
+//! else. A `schema` newer than [`RULE_PROFILE_SCHEMA_V3`] is refused rather
 //! than half-read, because applying part of a rule set silently changes
-//! results.
+//! results. The schema is content-driven ([`RuleProfile::written_schema`],
+//! `docs/architecture/snxrules-format.md`).
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -25,6 +26,15 @@ use super::{DrcRuleSet, ErcRules, UnknownJson};
 /// Current version of the profile file, independent of the project's
 /// `rules.schema`.
 pub const RULE_PROFILE_SCHEMA_V1: u32 = 1;
+
+/// The schema of a profile whose `fab` section names a router tool
+/// diameter (mockup row 179d). `fab` keeps no unknown keys, so an older build would
+/// drop the value on re-save; it refuses this schema by name instead.
+pub const RULE_PROFILE_SCHEMA_V2: u32 = 2;
+
+/// The schema of a profile whose `fab` section names a min slot (mockup
+/// row 179d), for the same reason as [`RULE_PROFILE_SCHEMA_V2`].
+pub const RULE_PROFILE_SCHEMA_V3: u32 = 3;
 
 /// File extension of a profile, without the dot.
 pub const RULE_PROFILE_EXTENSION: &str = "snxrules";
@@ -46,9 +56,43 @@ pub struct RuleProfile {
     /// DRC settings (#2307); not written when empty.
     #[serde(default, skip_serializing_if = "DrcRuleSet::is_empty")]
     pub drc: DrcRuleSet,
+    /// For a fab profile (#2311): whose limits its `drc` rules copy and
+    /// from where; not written when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fab: Option<FabProfileInfo>,
     /// Keys written by a newer build; kept so a save does not drop them.
     #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
     pub unknown: UnknownJson,
+}
+
+/// What a fab profile's limits are (#2311), so they can be audited and
+/// updated: the maker, its process or service tier, and the published
+/// source and date the numbers were copied from. Every field is free text;
+/// an empty one is not known.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct FabProfileInfo {
+    /// Empty for a generic tier that names no maker.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub manufacturer: String,
+    /// The process or service tier: layer count, copper weight, class.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub process: String,
+    /// Where the limits were published.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub source: String,
+    /// When the limits were published or last checked, `YYYY-MM-DD`.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub published: String,
+    /// The router bit that cuts the outline, in mm (mockup row 179d); absent when the
+    /// profile names none. Present, the file is written at
+    /// [`RULE_PROFILE_SCHEMA_V2`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub router_tool_diameter: Option<f64>,
+    /// The narrowest slot the maker routes, across, in mm (mockup row
+    /// 179d); absent when the profile names none. Present, the file is
+    /// written at [`RULE_PROFILE_SCHEMA_V3`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min_slot: Option<f64>,
 }
 
 /// Why a profile file could not be used.
@@ -69,6 +113,7 @@ impl RuleProfile {
             version: version.into(),
             erc,
             drc: DrcRuleSet::default(),
+            fab: None,
             unknown: UnknownJson::default(),
         }
     }
@@ -78,16 +123,51 @@ impl RuleProfile {
         let profile: Self =
             serde_json::from_slice(bytes).map_err(|e| RuleProfileError::Parse(e.to_string()))?;
         match profile.schema {
-            Some(v) if v > RULE_PROFILE_SCHEMA_V1 => Err(RuleProfileError::UnsupportedSchema(v)),
+            Some(v) if v > RULE_PROFILE_SCHEMA_V3 => Err(RuleProfileError::UnsupportedSchema(v)),
             _ => Ok(profile),
         }
     }
 
+    /// The router tool diameter the `fab` section names, if any.
+    pub fn router_tool_diameter(&self) -> Option<f64> {
+        self.fab.as_ref().and_then(|fab| fab.router_tool_diameter)
+    }
+
+    /// The min slot the `fab` section names, if any.
+    pub fn min_slot(&self) -> Option<f64> {
+        self.fab.as_ref().and_then(|fab| fab.min_slot)
+    }
+
+    /// The schema the file is written at: 3 while the `fab` section names a
+    /// min slot, else 2 while it names a router tool diameter, else as read
+    /// (a 2 or 3 with nothing that needs it goes back to 1), so a file
+    /// without either value re-saves as today.
+    pub fn written_schema(&self) -> Option<u32> {
+        if self.min_slot().is_some() {
+            return Some(RULE_PROFILE_SCHEMA_V3);
+        }
+        if self.router_tool_diameter().is_some() {
+            return Some(RULE_PROFILE_SCHEMA_V2);
+        }
+        match self.schema {
+            Some(RULE_PROFILE_SCHEMA_V2 | RULE_PROFILE_SCHEMA_V3) => Some(RULE_PROFILE_SCHEMA_V1),
+            other => other,
+        }
+    }
+
     /// The bytes of the `.snxrules` file: pretty JSON, ordered keys, one
-    /// trailing newline, so a rule change is a small git diff.
+    /// trailing newline, so a rule change is a small git diff. The schema
+    /// is [`Self::written_schema`].
     pub fn to_json_bytes(&self) -> Vec<u8> {
+        let written = self.written_schema();
         // Strings and JSON values always serialise.
-        let mut bytes = serde_json::to_vec_pretty(self).unwrap_or_default();
+        let mut bytes = if written == self.schema {
+            serde_json::to_vec_pretty(self).unwrap_or_default()
+        } else {
+            let mut copy = self.clone();
+            copy.schema = written;
+            serde_json::to_vec_pretty(&copy).unwrap_or_default()
+        };
         bytes.push(b'\n');
         bytes
     }
@@ -103,3 +183,9 @@ impl RuleProfile {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod router_tests;
+
+#[cfg(test)]
+mod min_slot_tests;

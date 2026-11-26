@@ -5,8 +5,8 @@ use iced::widget::operation;
 
 use super::super::*;
 use crate::app::command_palette::{
-    COMMAND_PALETTE_INPUT_ID, COMMAND_PALETTE_WINDOW_INPUT_ID, CommandAction, MAX_RESULTS,
-    build_catalog, catalog_stamp, rank_results_in,
+    COMMAND_PALETTE_INPUT_ID, COMMAND_PALETTE_WINDOW_INPUT_ID, CommandAction, CommandEntry,
+    MAX_RESULTS, build_catalog, catalog_stamp, group_for_display, rank_results_in,
 };
 use crate::app::handlers::canvas::{AfterOpen, SheetOpen};
 
@@ -58,6 +58,14 @@ impl Signex {
                 self.execute_command_palette_selected()
             }
             CommandPaletteMsg::ExecuteSelected => self.execute_command_palette_selected(),
+            CommandPaletteMsg::FieldClicked => {
+                if !self.ui_state.command_palette.open
+                    || self.ui_state.command_palette.window.is_some()
+                {
+                    return Task::none();
+                }
+                operation::focus(COMMAND_PALETTE_INPUT_ID.clone())
+            }
         }
     }
 
@@ -99,14 +107,16 @@ impl Signex {
         );
         let stamp = catalog_stamp(self);
         let palette = &mut self.ui_state.command_palette;
+        let typed = !palette.query.trim().is_empty();
         palette.catalog_stamp = stamp;
         palette.total_matches = ranked.len();
-        palette.results = ranked
+        let mut shown: Vec<(CommandEntry, i32)> = ranked
             .iter()
             .take(MAX_RESULTS)
-            .map(|&(catalog_idx, _)| catalog[catalog_idx].clone())
+            .map(|&(catalog_idx, score)| (catalog[catalog_idx].clone(), score))
             .collect();
-        crate::app::command_palette::group_for_display(&mut palette.results);
+        group_for_display(&mut shown, typed);
+        palette.results = shown.into_iter().map(|(entry, _)| entry).collect();
     }
 
     /// Re-rank the open palette when the symbols or files behind its rows
@@ -215,14 +225,12 @@ impl Signex {
         let Some(item) = select else {
             return Task::none();
         };
-        let position = self.document_state.active_engine().and_then(|engine| {
-            engine
-                .document()
-                .symbols
-                .iter()
-                .find(|s| s.uuid == item.uuid)
-                .map(|s| s.position)
-        });
+        // Any kind with a point (a Messages row's Show names labels and
+        // wires too, mockup row 86); a symbol's point is its position.
+        let position = self
+            .document_state
+            .active_engine()
+            .and_then(|engine| engine.document().item_anchor(&item));
         let Some(position) = position else {
             crate::diagnostics::log_info(format!(
                 "Search: that item is no longer on {}.",
@@ -357,6 +365,7 @@ mod tests {
         palette.results = vec![crate::app::command_palette::CommandEntry {
             source: crate::app::command_palette::CommandSource::Command,
             label: "Open Panel: ERC".into(),
+            value: String::new(),
             detail: String::new(),
             action: CommandAction::Panel(crate::panels::PanelKind::Erc),
         }];
@@ -419,6 +428,18 @@ mod tests {
         assert!(rows.iter().all(|row| row.label != before), "{rows:?}");
     }
 
+    /// Mockup row 9: the title-bar field is the query input, so a click on it
+    /// while the palette is open keeps the palette and the query.
+    #[test]
+    fn a_click_on_the_title_bar_field_keeps_the_open_palette() {
+        let (mut app, _task) = Signex::new();
+        let _focus = app.open_command_palette();
+        app.ui_state.command_palette.query = "wire".into();
+        let _focus = app.dispatch_command_palette_message(CommandPaletteMsg::FieldClicked);
+        assert!(app.ui_state.command_palette.open);
+        assert_eq!(app.ui_state.command_palette.query, "wire");
+    }
+
     /// #1351 - a palette row goes through the same funnel as a keystroke,
     /// so a command with nothing to act on is dropped, not run.
     #[test]
@@ -432,6 +453,7 @@ mod tests {
         palette.results = vec![CommandEntry {
             source: CommandSource::Command,
             label: "Place Wire".into(),
+            value: String::new(),
             detail: String::new(),
             action: CommandAction::Command(crate::keymap::AppCommandId::new("place_wire").unwrap()),
         }];

@@ -11,130 +11,50 @@ use iced::Task;
 use crate::app::state::WindowKind;
 use crate::app::{Message, Signex};
 
-/// Whether a dock message edits the sheet an undocked window shows, so it
-/// runs in the window's swap. This is an allow-list: everything else (the
-/// dock layout, Projects, Navigator, ERC focus and quick fixes, library rows,
-/// anything that opens or activates a document, and any variant added later)
-/// runs on the main window, where the swap cannot load one sheet into
-/// another's canvas or write one sheet's history over another sheet. The
-/// Components row press is scoped to stamp its window; History restore is
-/// scoped so it restores the file the window's own History panel shows.
-fn dock_message_edits_shown_sheet(message: &crate::dock::DockMessage) -> bool {
-    use crate::dock::DockMessage;
+/// Whether a dock message runs in the document of the undocked window it
+/// came from. Every panel message does unless [`PanelMsg::runs_in_window`]
+/// names it app-wide; the dock's own layout never does. No wildcard: a new
+/// variant must be classified to compile.
+///
+/// [`PanelMsg::runs_in_window`]: crate::panels::PanelMsg::runs_in_window
+fn dock_message_runs_in_window(message: &crate::dock::DockMessage) -> bool {
+    use crate::dock::DockMessage as D;
     use crate::library::LibraryMessage;
-    use crate::panels::PanelMsg as P;
-    use signex_widgets::tree_view::TreeMsg;
     match message {
-        DockMessage::Library(
+        D::Panel(panel) => panel.runs_in_window(),
+        D::Library(library) => matches!(
+            library,
             LibraryMessage::ComponentsPanelRowPressed(_)
-            | LibraryMessage::ComponentsPanelRowRightClicked(_)
-            | LibraryMessage::ComponentsPanelRowMenuPicked(_),
-        ) => true,
-        // Expanding a row only changes the window's own tree. A Navigator
-        // row click opens a sheet, so it stays on the main window.
-        DockMessage::Panel(P::Tree(TreeMsg::Toggle(_)) | P::Navigator(TreeMsg::Toggle(_))) => true,
-        // The Projects menu opens owned by the window it was right-clicked
-        // in; its picks are split by `ContextMenuMsg::ProjectTreeAction`.
-        DockMessage::Panel(P::Tree(TreeMsg::ContextMenu(_) | TreeMsg::BackgroundContextMenu)) => {
-            true
-        }
-        DockMessage::Panel(panel) => matches!(
-            panel,
-            P::PropertiesTab(_)
-                | P::ToggleSection(_)
-                | P::EditSymbolDesignator(..)
-                // A board window's footprint fields edit that window's board (#1312).
-                | P::PcbFootprintText(..)
-                // And its Component view's edits (#2354).
-                | P::PcbComponent(..)
-                | P::PcbPrimitive(..)
-                | P::EditSymbolValue(..)
-                | P::EditSymbolFootprint(..)
-                | P::SwitchSymbolChoice(..)
-                | P::SwitchFootprintChoice(..)
-                | P::ToggleSymbolMirrorX(_)
-                | P::ToggleSymbolMirrorY(_)
-                | P::ToggleSymbolLocked(_)
-                | P::ToggleItemLocked(..)
-                | P::ToggleSymbolDnp(_)
-                | P::SymbolBodyStylePicked(..)
-                | P::EditSymbolValueFontSizePt(..)
-                | P::EditPowerPortStyle { .. }
-                | P::EditLabelText(..)
-                | P::EditLabelJustifyH(..)
-                | P::EditLabelDirection(..)
-                | P::EditLabelFontSizePt(..)
-                | P::EditTextNoteText(..)
-                | P::EditBlanket(..)
-                | P::EditTextFontFamily(..)
-                | P::SetDocumentFontFamily(_)
-                | P::SetPageFormatMode(_)
-                | P::SetPaperSize(_)
-                | P::SetSheetOrientation(_)
-                | P::SetPageOrigin(_)
-                | P::SetSheetColor(_)
-                | P::EditSheetFrame(..)
-                | P::CustomPaperEdgeTyping(..)
-                | P::CommitCustomPaperEdge(..)
-                | P::TitleBlockTyping(..)
-                | P::CommitTitleBlockField(..)
-                | P::NumericFieldTyped(..)
-                | P::NumericFieldSubmitted(..)
-                | P::UpdateDrawingEdit(..)
-                | P::DrawingFieldTyping(..)
-                | P::MultiEdit(..)
-                | P::PlacedEdit(..)
-                | P::UpdateSymbolFromLibrary(_)
-                | P::UpdateSymbolFromLibraryOnly(_)
-                | P::PlacedPartAction(_)
-                | P::HistoryRestoreClicked { .. }
-                | P::HistoryRestoreCancelled
-                | P::ToggleChildSheetBorderPicker(_)
-                | P::ToggleChildSheetFillPicker(_)
-                | P::OpenChildSheetAdvancedPicker(..)
-                | P::CancelChildSheetColorPicker
-                | P::EditChildSheetBorderColor(..)
-                | P::EditChildSheetFillColor(..)
-                | P::ChildSheetStrokeWidthTyping(..)
-                | P::CommitChildSheetStrokeWidth(_)
-                | P::ChildSheetNameTyping(..)
-                | P::ChildSheetFileTyping(..)
-                | P::CommitChildSheetName(_)
-                | P::CommitChildSheetFile(_)
-                | P::ResetChildSheetStyle(_)
-                | P::SetPrePlacementText(_)
-                | P::SetPrePlacementDesignator(_)
-                | P::SetPrePlacementRotation(_)
-                | P::SetPrePlacementFont(_)
-                | P::SetPrePlacementFontSize(_)
-                | P::SetPrePlacementJustifyH(_)
-                | P::SetPrePlacementJustifyV(_)
-                | P::TogglePrePlacementBold
-                | P::TogglePrePlacementItalic
-                | P::TogglePrePlacementUnderline
-                | P::SetPrePlacementShapeWidth(_)
-                | P::SetPrePlacementWireWidth(_)
-                | P::SetPrePlacementWireColor(_)
-                | P::EditWireWidth(..)
-                | P::EditWireColor(..)
-                | P::ToggleWireColorPicker
-                | P::OpenWireColorAdvancedPicker
-                | P::CancelWireColorPicker
-                | P::SetPrePlacementShapeFill(_)
-                | P::ConfirmPrePlacement
+                | LibraryMessage::ComponentsPanelRowRightClicked(_)
+                | LibraryMessage::ComponentsPanelRowMenuPicked(_)
         ),
-        _ => false,
+        D::SelectTab(..)
+        | D::ToggleCollapse(..)
+        | D::ClosePanel(..)
+        | D::UndockPanel(..)
+        | D::TabDragStart(..)
+        | D::TabClick(..)
+        | D::TabHoverEnter(..)
+        | D::TabHoverExit(..)
+        | D::MoveFloating(..)
+        | D::StartDragFloating(..)
+        | D::FloatingDragEnd(..)
+        | D::DockFloating(..)
+        | D::DockFloatingTo(..)
+        | D::TabContextMenuRequested(..)
+        | D::TabMenuDismissed
+        | D::TabMenuActionPicked(..)
+        // An extension's own message: it acts on no sheet.
+        | D::Extension(..)
+        | D::ScopedToWindow(..) => false,
     }
 }
 
 /// Whether the message a command resolved to edits the sheet an undocked
-/// window shows, so it runs in the window's swap. An explicit allow-list of
-/// variants (never a whole enum): sheet edits, selection, tools, in-place text
-/// edits, Active Bar actions, the view zoom and opening Find (the dialog then
-/// searches that window's sheet). Everything else (sheet stepping, project
-/// opens, net jumps, Find next / previous, Annotate, ERC, export, app-wide
-/// toggles, and any message added later) runs on the main window, where it
-/// cannot load one sheet into another's canvas.
+/// window shows. An explicit allow-list of variants (never a whole enum):
+/// sheet edits, selection, tools, in-place text edits, Active Bar actions,
+/// the view zoom and opening Find or Find Similar (the dialog then works on
+/// that window's sheet).
 fn command_edits_shown_sheet(message: &Message) -> bool {
     use crate::active_bar::ActiveBarMsg;
     use crate::app::selection_request::SelectionRequest as Sel;
@@ -174,6 +94,7 @@ fn command_edits_shown_sheet(message: &Message) -> bool {
                 | Sel::ConnectionItemAtCursorRequested
                 | Sel::CycleMode
                 | Sel::LassoCommit
+                | Sel::FindSimilar(crate::find_similar::FindSimilarMsg::OpenRequested { .. })
         ),
         Message::Tool(tool) => matches!(
             tool,
@@ -182,6 +103,7 @@ fn command_edits_shown_sheet(message: &Message) -> bool {
                 | ToolMessage::ResumePlacement
                 | ToolMessage::CycleDrawMode
                 | ToolMessage::CornerFlipRequested
+                | ToolMessage::DragWiringCycleRequested
                 | ToolMessage::CancelDrawing
                 | ToolMessage::RemoveLastVertex
                 | ToolMessage::LastSegmentUndoRequested
@@ -200,6 +122,117 @@ fn command_edits_shown_sheet(message: &Message) -> bool {
         Message::Input(InputMsg::EscapePressed { .. }) => true,
         Message::TextEdit(TextEditMsg::Requested(_)) => true,
         Message::Menu(menu) => matches!(menu, MenuMessage::ZoomIn | MenuMessage::ZoomOut),
+        _ => false,
+    }
+}
+
+/// Whether a command's message acts on the sheet or board an undocked
+/// window shows, so it runs in the window's swap: it edits that sheet, reads
+/// it, or edits that board. A canvas menu row picked in the window resolves
+/// to one of these (#2267), as do the window's keys and menu bar. Everything
+/// else (sheet stepping, project opens, net jumps, Find next / previous,
+/// Annotate, ERC, sheet export, app-wide toggles, and any message added
+/// later) runs on the main window, where it cannot load one sheet into
+/// another's canvas.
+fn command_runs_in_shown_document(message: &Message) -> bool {
+    command_edits_shown_sheet(message)
+        || command_reads_shown_sheet(message)
+        || command_edits_shown_board(message)
+        || command_steps_shown_grid(message)
+        || command_outputs_shown_board(message)
+}
+
+/// The grid-step commands: on a board they edit that board's own grid. The
+/// picker and Grid Properties bind to the footprint the window shows.
+fn command_steps_shown_grid(message: &Message) -> bool {
+    use crate::app::{GridPropertiesMsg, UiMsg};
+    matches!(
+        message,
+        Message::Ui(
+            UiMsg::GridCycle
+                | UiMsg::GridCycleBackward
+                | UiMsg::FastGridPicked(_)
+                | UiMsg::FastGridCycled
+                | UiMsg::GridPickerOpen
+        ) | Message::GridProperties(GridPropertiesMsg::Open)
+    )
+}
+
+/// The board outputs that start from the board in view: each dialog or
+/// file request then carries that board's path.
+fn command_outputs_shown_board(message: &Message) -> bool {
+    use crate::app::{BoardOutputMsg as Output, PcbMsg};
+    matches!(
+        message,
+        Message::Pcb(PcbMsg::Output(
+            Output::ReportRequested(_)
+                | Output::CsvExportRequested
+                | Output::PrintRequested
+                | Output::AssemblyPrintRequested(_)
+                | Output::SvgExportRequested
+                | Output::StepExportRequested
+        ))
+    )
+}
+
+/// Commands that start from what the shown sheet holds: its net at the menu
+/// point or the selection, the selection's cross probe, the selected sheet
+/// symbol's child sheet and its entry sync, the sheet a new sheet symbol
+/// lands on, and the sheet's project for Number Sheets.
+fn command_reads_shown_sheet(message: &Message) -> bool {
+    use crate::app::{
+        ContextAction, ContextMenuMsg, CrossProbeMsg, EditMsg, NetNavMsg, ProjectMsg,
+        SheetNumberingMsg, SheetSyncMsg, UiMsg,
+    };
+    match message {
+        Message::Ui(UiMsg::NetNav(nav)) => matches!(
+            nav,
+            NetNavMsg::NetHighlightAtRequested { .. } | NetNavMsg::NetHighlightRequested
+        ),
+        Message::CrossProbe(CrossProbeMsg::ProbeRequested) => true,
+        Message::ContextMenu(ContextMenuMsg::Action(action)) => matches!(
+            action,
+            ContextAction::OpenChildSheet
+                | ContextAction::CreateChildSheet
+                | ContextAction::SyncSheetPins
+        ),
+        Message::Project(ProjectMsg::SheetNumbering(SheetNumberingMsg::Requested)) => true,
+        Message::Edit(EditMsg::SheetSync(
+            SheetSyncMsg::Requested | SheetSyncMsg::CreateSymbolRequested,
+        )) => true,
+        _ => false,
+    }
+}
+
+/// The board menu's edits and net rows, on the board the window shows.
+fn command_edits_shown_board(message: &Message) -> bool {
+    use crate::app::{
+        BoardNetMsg, BoardSketchMsg, BoardToolsMsg, FootprintSwapMsg, PartSwapMsg, PcbMsg,
+        ReuseBlockMsg,
+    };
+    let Message::Pcb(pcb) = message else {
+        return false;
+    };
+    match pcb {
+        PcbMsg::Tools(tool) => matches!(
+            tool,
+            BoardToolsMsg::TeardropsAddRequested
+                | BoardToolsMsg::GlossRequested
+                | BoardToolsMsg::BoardShapeRequested
+                | BoardToolsMsg::KeepoutRequested
+                | BoardToolsMsg::ArrangeRequested
+        ),
+        PcbMsg::Net(net) => matches!(
+            net,
+            BoardNetMsg::SelectRequested(_) | BoardNetMsg::HighlightRequested(_)
+        ),
+        PcbMsg::PlaceToolPicked(_)
+        | PcbMsg::LockRequested { .. }
+        | PcbMsg::UnfillRequested
+        | PcbMsg::FootprintSwap(FootprintSwapMsg::Requested)
+        | PcbMsg::PartSwap(PartSwapMsg::Requested(_))
+        | PcbMsg::ReuseBlock(ReuseBlockMsg::SaveRequested)
+        | PcbMsg::Sketch(BoardSketchMsg::ModeToggled) => true,
         _ => false,
     }
 }
@@ -250,13 +283,13 @@ impl Signex {
             && self.interaction_state.canvases.contains_key(&window)
     }
 
-    /// `message` as the dock of `window` sends it: wrapped when it edits the
-    /// sheet that undocked window shows, unchanged otherwise (and for the
-    /// main window).
+    /// `message` as the dock of `window` sends it: wrapped when it runs in
+    /// the document that undocked window shows, unchanged otherwise (and for
+    /// the main window).
     pub fn scope_dock_message(&self, window: iced::window::Id, message: Message) -> Message {
         match message {
             Message::Dock(dock)
-                if self.is_document_window(window) && dock_message_edits_shown_sheet(&dock) =>
+                if self.is_document_window(window) && dock_message_runs_in_window(&dock) =>
             {
                 Message::Dock(crate::dock::DockMessage::ScopedToWindow(
                     window,
@@ -330,7 +363,7 @@ impl Signex {
         ) {
             return self.step_find_in_window(window, message);
         }
-        if !command_edits_shown_sheet(&message) {
+        if !command_runs_in_shown_document(&message) {
             return self.dispatch_update(message);
         }
         self.run_in_window_document(window, |app| app.dispatch_update(message))

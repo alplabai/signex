@@ -13,6 +13,9 @@ use signex_widgets::{button, raw, text};
 use crate::app::FootprintDocument;
 use crate::library::editor::footprint::canvas::FootprintCanvas;
 use crate::library::editor::footprint::layers::FpLayer;
+use crate::library::editor::footprint::sketch_mode::mirror_card::{
+    MirrorCard, overlay as mirror_overlay, shown as shown_mirror_card,
+};
 use crate::library::messages::{EditorMsg, FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -28,12 +31,15 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 /// Footprint primitive's `body_3d` and `step_attachment` slots and the
 /// view tree for them is reused via the Component Editor surface.
 /// Pure pad-layout standalone editing is what `.snxfpt` needs first.
+/// `mirror_card` is the editor's open Mirror card (mockup row 191).
 pub fn view_footprint<'a>(
     editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
     _theme_id: signex_types::theme::ThemeId,
     i18n: &signex_i18n::I18n,
     show_layer_strip: bool,
+    ui_family: &str,
+    mirror_card: Option<&MirrorCard>,
 ) -> Element<'a, LibraryMessage> {
     use crate::library::editor::footprint::state::EditorMode;
     // v0.16.2.2 — footprint canvas uses Altium PCB-editor colours
@@ -45,27 +51,32 @@ pub fn view_footprint<'a>(
     // Symbol (schematic) canvas stays theme-driven — Altium's
     // schematic editor uses a different (cream-ish) palette.
     // The paper / charcoal ground is painted instead.
-    let graphite = crate::library::editor::footprint::canvas::graphite_look_for(tokens);
+    let graphite = crate::library::editor::footprint::graphite_look_for(tokens);
     let (bg, grid) = (graphite.bg, graphite.dot);
 
     // The canvas fills the tab: layer visibility lives in the Layers dock
     // panel, and the cursor and pad summary in the global status bar
     // (`footprint::status`), so nothing sits under the canvas (#2262).
-    let canvas_area = view_footprint_canvas(editor, tokens, bg, grid);
+    let canvas_area = view_footprint_canvas(editor, tokens, (bg, grid), mirror_card);
 
     // Active bar floats OVER the canvas via Stack so the canvas
     // drawing area extends edge-to-edge behind it instead of being
     // clipped under the bar's bottom. Mirrors Fusion 360 / Altium.
-    // v0.14.2 — mode switcher is its own floating widget at the
-    // canvas's top-LEFT, separate from the centered active bar.
-    let mode_switcher =
-        crate::library::editor::footprint::pads_active_bar::mode_switcher_overlay(editor, tokens);
+    // The editor bar (mockup row 187): Footprint / Sketch switch, 3D toggle and, in
+    // sketch mode, the sketch info caption and Parameters. Beside the DOF
+    // chips it shares their row under the Active Bar (#2882).
+    use crate::library::editor::footprint::pads_active_bar;
+    let trailing = super::sketch_info_bar::editor_bar_items(editor, tokens, i18n);
+    let chrome = move || {
+        let bar = pads_active_bar::mode_switcher_bar(editor, tokens, i18n, trailing);
+        super::dof_chip::chrome_row(editor, tokens, i18n, bar)
+    };
     // v0.18.11.1 — canvas-overlay multi-footprint tab strip removed.
     // The Footprint Library left-dock panel (v0.18.8) renders the
     // same list (internal `file.footprints[i]`) with proper
     // Place/Add/Delete/Edit buttons, so the redundant on-canvas
-    // chip was just visual noise. Keep `mode_switcher` (Sketch /
-    // Pads / 3D) at top-right since it has no panel equivalent.
+    // chip was just visual noise. Keep the editor bar at top-right
+    // since it has no panel equivalent.
 
     // v0.18.14 — single unified active bar carries mode-keyed
     // tools (left half) + the eight Selection Filter pills (right
@@ -83,12 +94,45 @@ pub fn view_footprint<'a>(
         .height(Length::Fill)
         .push(canvas_area);
     let body = match editor.state.mode {
-        EditorMode::Sketch | EditorMode::Normal => stack
-            .push(super::dof_chip::overlay(editor, tokens, i18n))
+        // The sketch mode bar: Bake preview · Discard changes · Bake (#2518).
+        EditorMode::Sketch => stack
             .push(super::dof_chip::zoom_pill_overlay(editor, tokens))
-            .push(mode_switcher)
+            // The parameters table panel sits under the mode bar, an open
+            // bake preview card and its legend, so they stay in sight.
+            .push(
+                crate::library::editor::footprint::parameters_table::view::overlay(
+                    editor, tokens, i18n,
+                ),
+            )
+            .push(super::sketch_exit::footprint_overlay(editor, tokens, i18n))
+            .push(super::bake_legend::overlay(editor, tokens, i18n))
+            .push(chrome())
+            // The constraint / pattern menu at the right-click (mockup row 188).
+            .push(
+                crate::library::editor::footprint::sketch_mode::constraint_menu::overlay(
+                    editor, tokens, i18n, ui_family,
+                ),
+            )
+            // The Mirror options card while Mirror is armed (mockup row 191).
+            .push(mirror_overlay(editor, mirror_card, tokens, i18n))
             .boxed(),
-        EditorMode::View3d => stack.push(mode_switcher).boxed(),
+        EditorMode::Normal => stack
+            .push(super::dof_chip::zoom_pill_overlay(editor, tokens))
+            // Edit in Sketch on a selected pad (mockup row 192).
+            .push(super::pad_link::edit_in_sketch_overlay(
+                editor, tokens, i18n,
+            ))
+            .push(chrome())
+            .push(
+                crate::library::editor::footprint::pad_scope_prompt::overlay(editor, tokens, i18n),
+            )
+            .boxed(),
+        // No chips in 3D: the editor bar alone, with no sketch items.
+        EditorMode::View3d => stack
+            .push(pads_active_bar::mode_switcher_overlay(
+                editor, tokens, i18n, None,
+            ))
+            .boxed(),
     };
     // The strip stands in for the Layers panel where the panel cannot
     // reach this editor (see the caller).
@@ -131,7 +175,7 @@ fn view_footprint_layers_strip<'a>(
 
     for layer in FpLayer::ORDER {
         let on = layers.get(*layer);
-        let swatch = layer.color_in(editor.state.layer_palette);
+        let swatch = layer.color();
         let label_color = if on { text_c } else { muted };
         let toggle_path = editor.path.clone();
         let layer_standard = layer.standard_name().to_string();
@@ -649,8 +693,8 @@ fn view_footprint_toolbar<'a>(
 pub(super) fn view_footprint_canvas<'a>(
     editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
-    bg: iced::Color,
-    grid: iced::Color,
+    (bg, grid): (iced::Color, iced::Color),
+    mirror_card: Option<&MirrorCard>,
 ) -> Element<'a, LibraryMessage> {
     let border = theme_ext::border_color(tokens);
 
@@ -675,9 +719,12 @@ pub(super) fn view_footprint_canvas<'a>(
         sketch: editor.primitive().sketch.as_ref(),
         silk_f: editor.primitive().silk_f.as_slice(),
         silk_b: editor.primitive().silk_b.as_slice(),
+        generated_silk: editor.primitive().generated.silk.as_slice(),
         zoom_step: editor.zoom_step,
         trackpad_pan: editor.trackpad_pan,
         wheel_mode: editor.wheel_mode,
+        // The Mirror ghost draws what the card's OK writes (mockup row 191).
+        mirror_card: shown_mirror_card(editor, mirror_card),
     };
     let canvas_widget: Element<'a, LibraryMessage> = iced::widget::canvas(prog)
         .width(Length::Fill)
@@ -794,6 +841,26 @@ mod tests {
                 ..
             } => {}
             other => panic!("expected uniform Footprint passthrough, got {other:?}"),
+        }
+    }
+
+    // The footprint canvas is built only here, for a tab or a board sketch;
+    // a Mirror click from it reaches the Mirror card's route under the
+    // editor's path (mockup row 191).
+    #[test]
+    fn a_mirror_click_reaches_the_editor_path_where_the_card_takes_it() {
+        let path = PathBuf::from("t.snxfpt");
+        let click = FootprintEditorMsg::SketchToolClick {
+            x_mm: 1.0,
+            y_mm: 2.0,
+            snap_id: None,
+        };
+        match translate_footprint_canvas_msg(wrap(click), &path) {
+            LibraryMessage::PrimitiveEditorEvent {
+                path: to,
+                msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchToolClick { .. }),
+            } => assert_eq!(to, path),
+            other => panic!("expected the tab's primitive editor, got {other:?}"),
         }
     }
 }

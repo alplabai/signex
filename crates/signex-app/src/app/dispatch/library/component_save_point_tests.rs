@@ -121,7 +121,6 @@ fn open_component_tab(app: &mut Signex, address: &EditorAddress) {
     app.document_state.tabs.push(crate::app::TabInfo {
         title: "row".into(),
         path: address.synthetic_tab_path(),
-        cached_document: None,
         project_id: None,
         kind: crate::app::TabKind::ComponentEditor(crate::app::ComponentEditorTab {
             library_path: address.library_path.clone(),
@@ -175,7 +174,6 @@ fn ctrl_z_in_a_component_window_steps_that_window_not_the_main_tab() {
     app.document_state.tabs.push(crate::app::TabInfo {
         title: "other".into(),
         path: std::path::PathBuf::from("other.snxsch"),
-        cached_document: None,
         project_id: None,
         kind: crate::app::TabKind::Schematic,
     });
@@ -210,4 +208,23 @@ fn an_edit_typed_before_an_outside_write_reload_lands_cannot_undo_clean() {
     let preview = editor(&mut app, &address);
     assert!(preview.step_history(true));
     assert!(preview.dirty, "the library was written behind this editor");
+}
+
+/// Mockup row 128: the header's "N fields do not parse" pill shows the
+/// Parameters tab, where the field that does not parse lives; with no such
+/// field it does nothing.
+#[test]
+fn the_parse_pill_switches_to_the_tab_of_the_bad_field() {
+    use crate::library::state::PreviewTab;
+    let (mut app, address) = app_with_clean_editor();
+    let _ = app.handle_editor_event(address.clone(), EditorMsg::UnparsedFieldsPillPressed);
+    assert_eq!(editor(&mut app, &address).active_tab, PreviewTab::Preview);
+
+    editor(&mut app, &address)
+        .params_error
+        .insert("value".into(), "not a number".into());
+    let _ = app.handle_editor_event(address.clone(), EditorMsg::UnparsedFieldsPillPressed);
+    let preview = editor(&mut app, &address);
+    assert_eq!(preview.active_tab, PreviewTab::Parameters);
+    assert!(!preview.dirty, "showing the field edits nothing");
 }

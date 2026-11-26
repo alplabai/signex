@@ -28,7 +28,6 @@ fn app_with_symbol() -> (Signex, uuid::Uuid) {
     app.document_state.tabs.push(crate::app::TabInfo {
         title: NAME.to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: crate::app::TabKind::Schematic,
     });
@@ -44,6 +43,7 @@ fn move_symbol(app: &mut Signex, id: uuid::Uuid) {
             dx: 10.0,
             dy: 0.0,
             keep_wires: false,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         },
         true,
         true,
@@ -52,7 +52,12 @@ fn move_symbol(app: &mut Signex, id: uuid::Uuid) {
 }
 
 fn set_field(app: &mut Signex, id: uuid::Uuid, value: &str) {
-    let _task = app.handle_parameter_manager_edit(id, "MPN".to_string(), value.to_string());
+    let cell = crate::app::state::ParameterCell {
+        sheet: Some(path()),
+        symbol: id,
+        key: "MPN".to_string(),
+    };
+    let _task = app.handle_parameter_manager_edit(cell, value.to_string());
 }
 
 fn path() -> std::path::PathBuf {
@@ -379,7 +384,6 @@ fn a_restore_nothing_applied_to_leaves_a_parked_sheet_dirty_through_undo() {
     d.app.document_state.tabs.push(crate::app::TabInfo {
         title: "flow".to_string(),
         path: d.file.clone(),
-        cached_document: None,
         project_id: None,
         kind: crate::app::TabKind::Schematic,
     });

@@ -10,8 +10,8 @@ use serde_json::Value;
 use signex_app::app::Signex;
 use signex_app::diagnostics;
 use signex_app::headless::{
-    ChangeSnapshot as Snapshot, CommandArgs, changed_between, messages_since,
-    outcome_verdict as verdict,
+    ChangeSnapshot as Snapshot, CommandArgs, CommandRequest, RequestSurface, changed_between,
+    messages_since,
 };
 use signex_app::io_ports::HeadlessAnswers;
 use signex_app::task_driver::TaskDriver;
@@ -58,7 +58,7 @@ impl Session {
                 // CLI output stays en-US whatever the UI language.
                 .map_or_else(
                     || "nothing was loaded".to_string(),
-                    |n| n.detail.render_en_us(),
+                    |n| n.detail_line_en_us(),
                 );
             return Err(format!("could not open {}: {detail}", project.display()));
         }
@@ -84,6 +84,12 @@ impl Session {
             project_dir,
             roots,
         })
+    }
+
+    /// Let the keymap commands edit the user's own shortcuts file at `path`
+    /// (the carve-out in `docs/CLI.md`, #2495).
+    pub fn edit_user_shortcuts_at(&mut self, path: PathBuf) {
+        self.app.edit_user_shortcuts_at(path);
     }
 
     /// A line that is not a command (too long, not UTF-8, malformed, over the
@@ -193,17 +199,20 @@ impl Session {
         };
         // No command is answered through a dialog: drop what an earlier one left.
         dialogs.replace_all([]);
-        let (outcome, task) = self.app.dispatch_command_headless(&approved.command, args);
+        let request = CommandRequest::new(approved.command.clone(), args);
+        let (outcome, task) = self
+            .app
+            .run_command_request(RequestSurface::Headless, request);
         let settled = self.driver.settle(&mut self.app, task);
         let notice = self.app.document_state.error_notice.take();
         if let Err(error) = settled {
             return (Status::Failed, Some(error.to_string()), None);
         }
-        let (status, reason, mut data) = verdict(
-            approved.command.as_str(),
-            outcome,
-            notice.map(|n| format!("{}: {}", n.title.render_en_us(), n.detail.render_en_us())),
-        );
+        let (status, reason, mut data) = outcome
+            .after_notice(
+                notice.map(|n| format!("{}: {}", n.title.render_en_us(), n.detail_line_en_us())),
+            )
+            .into_verdict();
         if let Some(data) = data.as_mut() {
             scrub_sheets(data, &named_by_call);
         }

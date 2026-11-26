@@ -381,14 +381,16 @@ fn writers_of_the_project_file_are_refused_while_add_new_rewrites_it() {
         .handle_add_new_schematic_picked(id, Some(other.clone()), None);
     assert!(iced_runtime::task::into_stream(second).is_none());
     // A sheet rename.
-    fx.app.ui_state.rename_dialog = Some(RenameDialogState {
+    fx.app.ui_state.rename_dialog = Some(Box::new(RenameDialogState {
         project_id: None,
         target_path: fx.sheet.clone(),
         tree_path: vec![0],
         buffer: "Renamed.snxsch".to_string(),
         error: None,
         is_project_rename: false,
-    });
+        placing_symbols: Vec::new(),
+        name_clash: None,
+    }));
     let _rename = fx.app.update(Message::Rename(RenameMsg::Submit));
     assert!(rename_error(&fx).contains("updates the project's files"));
     assert!(fx.sheet.exists(), "the refused rename moved nothing");

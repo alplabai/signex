@@ -4,7 +4,10 @@ use signex_output::fab::{FabError, FabOptions};
 use signex_types::pcb::{PcbBoard, Point};
 use uuid::Uuid;
 
-use super::{FabOutput, FabOutputsState, FabProblem, write_fab_outputs};
+use super::{
+    BoardNote, FabOutput, FabOutputKinds, FabOutputsState, FabProblem, fab_options,
+    write_fab_outputs,
+};
 
 fn board(outline: &[(f64, f64)]) -> PcbBoard {
     let mut board: PcbBoard =
@@ -17,33 +20,48 @@ fn board(outline: &[(f64, f64)]) -> PcbBoard {
 fn a_new_dialog_writes_everything_named_after_the_board_beside_it() {
     let path = PathBuf::from("projects").join("main.snxpcb");
     let state = FabOutputsState::new(path, "main.snxpcb".into());
-    assert_eq!(state.options, FabOptions::all("main"));
+    assert_eq!(state.name, "main");
+    assert_eq!(state.kinds, FabOutputKinds::default());
+    assert_eq!(
+        fab_options(&state.kinds, &state.name),
+        FabOptions::all("main")
+    );
+    assert!(state.kinds.assembly_pdf, "the assembly PDF by default");
+    assert!(!state.kinds.assembly_svg && !state.kinds.step, "asked for");
     assert_eq!(
         PathBuf::from(&state.folder),
         PathBuf::from("projects").join("fabrication")
     );
-    assert!(state.can_generate());
+    assert!(state.can_generate(&state.kinds));
     assert!(state.notes().is_empty());
 }
 
 #[test]
 fn generate_needs_a_kind_a_name_and_a_folder_and_no_write_in_flight() {
     let mut state = FabOutputsState::new(PathBuf::from("b.snxpcb"), "b".into());
+    let mut kinds = FabOutputKinds::default();
     for kind in FabOutput::ALL {
-        kind.toggle(&mut state.options);
-        assert!(!kind.is_on(&state.options));
+        if kind.is_on(&kinds) {
+            kind.toggle(&mut kinds);
+        }
+        assert!(!kind.is_on(&kinds));
     }
-    assert!(!state.can_generate(), "no kind chosen");
-    FabOutput::Drill.toggle(&mut state.options);
-    assert!(state.can_generate());
+    assert!(!state.can_generate(&kinds), "no kind chosen");
+    for kind in FabOutput::ALL {
+        kind.toggle(&mut kinds);
+        assert!(state.can_generate(&kinds), "{kind:?} alone is enough");
+        kind.toggle(&mut kinds);
+    }
+    FabOutput::Drill.toggle(&mut kinds);
+    assert!(state.can_generate(&kinds));
     state.folder = "  ".into();
-    assert!(!state.can_generate(), "no folder");
+    assert!(!state.can_generate(&kinds), "no folder");
     state.folder = "out".into();
-    state.options.name = String::new();
-    assert!(!state.can_generate(), "no name");
-    state.options.name = "b".into();
+    state.name = String::new();
+    assert!(!state.can_generate(&kinds), "no name");
+    state.name = "b".into();
     state.writing = Some(1);
-    assert!(!state.can_generate(), "a write in flight");
+    assert!(!state.can_generate(&kinds), "a write in flight");
 }
 
 #[test]
@@ -117,10 +135,20 @@ fn older_files_of_the_same_stem_are_reported_and_left_in_place() {
     std::fs::write(folder.join("other-pth.drl"), "another stem").unwrap();
     let options = FabOptions {
         centroid: false,
+        ipc2581: false,
+        odb: None,
         ..FabOptions::all("b")
     };
     let second = write_fab_outputs(&board, &options, &folder).expect("written");
-    assert_eq!(second.stale, ["b-centroid.csv", "b-copper-l3-inner2.gbr"]);
+    assert_eq!(
+        second.stale,
+        [
+            "b-centroid.csv",
+            "b-copper-l3-inner2.gbr",
+            "b-ipc2581.xml",
+            "b-odb.tar"
+        ]
+    );
     assert!(
         folder.join("b-copper-l3-inner2.gbr").is_file(),
         "never deleted"
@@ -134,10 +162,21 @@ fn a_set_with_notes_or_stale_files_is_a_warning_in_messages() {
         files: vec!["b-job.gbrjob".into()],
         folder: PathBuf::from("out"),
         notes: Vec::new(),
+        board_notes: Vec::new(),
         stale: Vec::new(),
     };
     let (line, is_warning) = super::written_message(&clean, &i18n);
     assert!(!is_warning, "{line}");
+    let model = super::FabWritten {
+        board_notes: vec![BoardNote::ModelUnread {
+            source: "lib:fp@1".into(),
+            why: "not found".into(),
+        }],
+        ..clean.clone()
+    };
+    let (line, is_warning) = super::written_message(&model, &i18n);
+    assert!(is_warning, "{line}");
+    assert!(line.contains("lib:fp@1"), "{line}");
     let zones = super::FabWritten {
         notes: vec![signex_output::fab::FabNote::ZonesNotFilled { count: 2 }],
         ..clean.clone()
@@ -152,4 +191,88 @@ fn a_set_with_notes_or_stale_files_is_a_warning_in_messages() {
     let (line, is_warning) = super::written_message(&stale, &i18n);
     assert!(is_warning);
     assert!(line.contains("b-npth.drl"), "{line}");
+}
+
+#[test]
+fn the_odb_box_picks_the_folder_or_the_archive_and_unticked_writes_none() {
+    let mut kinds = FabOutputKinds::default();
+    let form = |k: &FabOutputKinds| fab_options(k, "b").odb;
+    assert_eq!(form(&kinds), Some(signex_output::fab::OdbForm::Archive));
+    kinds.odb_folder = true;
+    assert_eq!(form(&kinds), Some(signex_output::fab::OdbForm::Directory));
+    FabOutput::Odb.toggle(&mut kinds);
+    assert_eq!(form(&kinds), None);
+}
+
+#[test]
+fn only_the_documents_ticked_is_not_a_fabrication_set() {
+    let mut kinds = FabOutputKinds::default();
+    for kind in FabOutput::ALL {
+        if kind.is_on(&kinds) {
+            kind.toggle(&mut kinds);
+        }
+    }
+    FabOutput::Step.toggle(&mut kinds);
+    assert!(!kinds.has_fab_files());
+    FabOutput::Ipc2581.toggle(&mut kinds);
+    assert!(kinds.has_fab_files());
+}
+
+/// #2883: a copper drawing the conversion refuses is left out of the
+/// Gerber, and the Messages line names it, its layer and why.
+#[test]
+fn a_copper_drawing_left_out_of_the_gerber_is_named_in_messages() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut board = board(&[(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)]);
+    let drawing = |id: u128, kind: &str, rim_x: f64| signex_types::pcb::BoardGraphic {
+        uuid: Uuid::from_u128(id),
+        graphic_type: kind.into(),
+        layer: "TopCopper".into(),
+        width: 0.2,
+        start: Some(Point::new(2.0, 2.0)),
+        end: Some(Point::new(rim_x, 2.0)),
+        center: Some(Point::new(5.0, 5.0)),
+        radius: 1.0,
+        points: Vec::new(),
+        text: String::new(),
+        font_size: 0.0,
+    };
+    board.graphics.push(drawing(0x90, "line", 8.0));
+    board.graphics.push(drawing(0x91, "circle", f64::NAN));
+    let options = FabOptions {
+        drill: false,
+        centroid: false,
+        test_netlist: false,
+        ipc2581: false,
+        odb: None,
+        ..FabOptions::all("b")
+    };
+    let written = write_fab_outputs(&board, &options, tmp.path()).expect("written");
+    let top = std::fs::read_to_string(tmp.path().join("b-copper-l1-top.gbr")).unwrap();
+    assert!(
+        top.contains("X8000000Y-2000000D01*"),
+        "the good line: {top}"
+    );
+    assert!(
+        !top.lines().any(|l| l.contains('I') && l.ends_with("D01*")),
+        "no circle: {top}"
+    );
+    let i18n = signex_i18n::I18n::new(&signex_i18n::LanguagePref::Locale("en-US".into()));
+    let (line, is_warning) = super::written_message(&written, &i18n);
+    assert!(is_warning, "{line}");
+    let id = Uuid::from_u128(0x91).to_string();
+    let layer = crate::pcb_canvas::layer_style::copper_name(
+        &i18n,
+        signex_types::pcb_layer::CopperLayer::Top,
+    )
+    .into_string();
+    for part in [
+        "The copper circle",
+        id.as_str(),
+        layer.as_str(),
+        "graphic.radius",
+    ] {
+        assert!(line.contains(part), "{part} in {line}");
+    }
+    assert!(!line.contains(&Uuid::from_u128(0x90).to_string()), "{line}");
 }

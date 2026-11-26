@@ -127,16 +127,15 @@ library's path.
 
 ## Annotate and Reset Duplicate Designators (`handlers/erc/annotate_job.rs`)
 
-Neither pass reads or writes a file in `update` (#859). A run has three steps:
-a worker reads the project's sheets (`plan_project_sheets_for(..).assemble()`,
-the same reader ERC uses); ONE `update` numbers them, open sheets in place
-through their engines and unopened sheets in memory, then encodes each
-unopened sheet; a second worker writes those through the document-save
-ledger (`document_saves.begin`), so quit waits for it and an open of the file
-is refused while it runs. `PassSheetsRead` and `PassSheetsWritten` (under
-`AnnotateMsg`) carry the results back. The shared counters, the part grouping
-and the sheet order are untouched, so the designators are the ones the
-synchronous pass produced (`annotate_golden_tests.rs` pins them).
+Neither pass reads a file in `update` (#859), and neither writes one at all
+(#2760). A run has two steps: a worker reads the project's sheets
+(`plan_project_sheets_for(..).assemble()`, the same reader ERC uses); ONE
+`update` numbers them, open sheets in place through their engines and each
+unopened sheet in a parked, unsaved engine, so undo restores it and its file
+changes only on the user's save. `PassSheetsRead` (under `AnnotateMsg`) carries
+the result back. The shared counters, the part grouping and the sheet order are
+untouched, so the designators are the ones the synchronous pass produced
+(`annotate_golden_tests.rs` pins them).
 
 **Stale results are all or nothing.** A partly applied run could give two
 sheets the same designator, so when the read result arrives the run is dropped,
@@ -149,25 +148,39 @@ snapshot the worker read, so a symbol typed meanwhile is counted and kept. A
 sheet whose file a History restore, a read or a save still owns is skipped, as
 before.
 
-**Guards.** The run is registered in `pending_path_ops` (`ProjectRewrite`) from
-`begin` until its last write completes: the declared pages and root while the
-sheets are read (`ProjectRead`), the unopened sheets while they are written
-(`ProjectRewrite`). A rename, delete or open of them is refused meanwhile, and
-so is a save of the written ones. Saving an open sheet during the read is
-allowed (a History restore or Replace write is not): the save moves
-`documents_epoch` and the run is dropped (#1753). The Annotate dialog disables
-Run, Reset and Re-prefix while a run is going. A Reset & Renumber that would
-skip a sheet (read-only, or owned by a save, restore or read) refuses the whole
-run; Incremental still skips it. One run at a time: a second request is refused
-with a notice rather than queued, because a queued run would number the project
-as it was when the first started.
+**Guards.** The run is registered in `pending_path_ops` (`ProjectRead`) while
+its sheets are read: the declared pages and root. A rename, delete or open of
+them is refused meanwhile. Saving an open sheet during the read is allowed (a
+History restore or Replace write is not): the save moves `documents_epoch` and
+the run is dropped (#1753). The Annotate dialog disables Run, Reset and
+Re-prefix while a run is going. A Reset & Renumber that would skip a sheet
+(read-only, unreadable, or owned by a save, restore or read) refuses the whole
+run. Reset All and Reset Duplicates refuse for an unreadable or owned sheet, and
+leave a read-only one unchanged and named. Incremental still skips such a sheet.
+One run at a time: a second request is refused with a notice rather than queued,
+because a queued run would number the project as it was when the first started.
 
-**Failures.** A sheet that cannot be written keeps its old bytes (the write is
-atomic), is not marked clean, and is named in the Messages panel and a notice;
-the open sheets stay numbered and modified, and the other sheets still land.
-Run it again once the cause is fixed. A dead worker releases the guards and
-reports the same way. Reset marks an unopened sheet clean only after its bytes
-landed.
+**Parked sheets** (`app/parked_sheets.rs`). Every run that loads a sheet into a
+tabless engine records the hash of the bytes its read parsed as the save
+baseline, so a save and the idle poll show the changed-on-disk card, and runs the
+open-time recovery check before autosave may write for it. A rename carries an
+unsaved parked sheet's undo groups with it.
+
+**Undo until you save** (Caner, 2026-11-22). One undo restores every sheet of a
+run while each is still in memory. A clean save of a tabless sheet releases its
+engine, including the blocking save of Exclude from Project. A later undo or redo of the group is then refused whole, before any sheet
+moves, with one Messages line naming the sheets; the same holds for a sheet
+reopened since (a fresh history) or trimmed past the undo depth. A sheet with an
+open tab keeps its engine through the save, so it keeps its undo. If only the
+open sheet was saved, the undo still reaches both: the saved sheet becomes unsaved
+and the parked one goes back to its untouched file. A refused group stays on top
+of the open sheets' undo stacks, so older steps there wait behind it.
+
+**Failures.** A reset or re-prefix whose sheet fails while numbering rolls every
+sheet back, and the parked engines it loaded are dropped. Incremental logs the
+sheet and numbers the rest. A dead read worker changes nothing and releases the
+guard. Reset Duplicates goes through `write_sheets_as_group`, one undo group
+whatever the Annotate undo setting says; a refusal there changes nothing.
 
 ## Re-prefix to standard (`handlers/erc/reprefix_job.rs`)
 
@@ -176,14 +189,14 @@ Duplicate Designators (#1756); no sheet is read in `update`. Both halves ask a
 worker for the project's sheets first. The plan half
 (`start_reprefix_plan_read`) reads them to build the confirm. The apply half is
 an Annotate-style run (`begin_run(PassKind::Reprefix, ..)`, registered as
-`ProjectRead` then `ProjectRewrite` like any other run): the worker reads, then
+`ProjectRead` like any other run): the worker reads, then
 ONE `update` re-plans over those sheets (open ones from their live engines),
 compares the plan with what the user was shown, and numbers it.
 
 **All or nothing.** A sheet that exists but cannot be read stops the run before
 anything is changed (it would be left out of the plan and split its parts
 across two prefixes); the Messages panel and a notice name it. A sheet that
-fails while numbering is rolled back whole by `roll_back_reprefix`. Re-prefix
+fails while numbering is rolled back whole by `roll_back_run`. Re-prefix
 writes no file (unopened sheets are parked dirty, #669), so there is no
 half-written disk state to restore.
 

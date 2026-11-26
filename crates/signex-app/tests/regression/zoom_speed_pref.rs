@@ -33,7 +33,6 @@ fn symbol_app() -> (Signex, PathBuf) {
     app.document_state.tabs.push(TabInfo {
         title: "zoom".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::SymbolEditor(path.clone()),
     });
@@ -51,7 +50,7 @@ fn app_on_default_speed() -> Signex {
 }
 
 fn wheel_in(app: &mut Signex, path: &PathBuf, delta: f32) -> f32 {
-    let before = app.document_state.symbol_editors[path].camera.scale;
+    let before = app.document_state.symbol_editors[path].gui.camera.scale;
     let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
         path: path.clone(),
         msg: PrimitiveEdit::Symbol(SymbolEditorMsg::Zoom {
@@ -60,7 +59,7 @@ fn wheel_in(app: &mut Signex, path: &PathBuf, delta: f32) -> f32 {
             delta,
         }),
     }));
-    app.document_state.symbol_editors[path].camera.scale / before
+    app.document_state.symbol_editors[path].gui.camera.scale / before
 }
 
 /// Without touching the preference a notch is still x1.10.

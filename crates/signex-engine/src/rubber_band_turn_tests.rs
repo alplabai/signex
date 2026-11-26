@@ -137,7 +137,7 @@ fn a_mirror_that_would_cross_nets_falls_back_to_the_plain_turn_and_warns() {
     assert!(
         warnings
             .iter()
-            .any(|w| w.contains("could not keep") && w.contains("R1")),
+            .any(|w| w.pins_not_kept().iter().any(|p| p.contains("R1"))),
         "{warnings:?}"
     );
     assert_eq!(engine.document().wires.len(), plain_wires);
@@ -217,6 +217,7 @@ fn random_turns_never_change_the_netlist_beyond_the_plain_turn() {
                 engine.document(),
                 &warned_items(&sheet, &unkept),
                 &moved_pin_items(&tips),
+                &[],
             ) {
                 panic!(
                     "seed {seed:#x} case {index} kind {kind}: {why}\nBEFORE {}\nAFTER {}",

@@ -21,7 +21,9 @@
 
 use signex_library::{
     ParamKind, ParamSlot, ParamValue, ParameterTemplate, commit_measurement,
-    commit_slot_measurement, slot_unit,
+    commit_slot_measurement,
+    param_edit::{split_typed_prefix, typed_number_and_prefix},
+    slot_unit,
 };
 use signex_types::numeric::parse_finite_f64;
 use signex_types::quantity::{MantissaError, SiPrefix, Unit, parse_mantissa};
@@ -124,7 +126,8 @@ pub(super) fn is_measurement_slot(template: Option<&ParameterTemplate>, key: &st
 /// refused, and the draft must stay as it is.
 ///
 /// A known unit makes the value a measurement: `value` is a plain number
-/// (no prefix or unit typed into it) in `prefix`, stored canonical as
+/// in `prefix`, or a number ending in a typed `k` / `M` / `u` that picks
+/// its own prefix (mockup row 139), stored canonical as
 /// `{base, unit token}`, and an unchanged number keeps `existing` as it
 /// is. A class-template `slot` fixes the unit (`unit` is ignored) and
 /// refuses a value that breaks it. A unit string that is not a known unit
@@ -138,12 +141,17 @@ pub(super) fn modal_param_value(
     slot: Option<&ParamSlot>,
 ) -> Result<ParamValue, String> {
     if let Some(slot) = slot {
+        let (value, prefix) = match slot_unit(slot) {
+            Some(known) => typed_number_and_prefix(&value, prefix, &known),
+            None => (value, prefix),
+        };
         return commit_slot_measurement(existing, &value, prefix, slot);
     }
     use crate::numeric_field::{FieldNumber, parse_field_number};
     let unit_text = unit.trim();
     if let Some(known) = Unit::from_alias(unit_text) {
-        let prefix = effective_prefix(&known, prefix);
+        let picked = effective_prefix(&known, prefix);
+        let (value, prefix) = typed_number_and_prefix(&value, picked, &known);
         return commit_measurement(existing, &value, prefix, &known).map_err(|e| e.to_string());
     }
     let number = match parse_field_number(&value) {
@@ -223,6 +231,9 @@ pub(super) fn pick_unit(
         .entry(key.to_string())
         .or_insert_with(|| (String::new(), String::new()));
     entry.1 = unit;
+    if let Some(prefix) = modal.param_prefix.get_mut(key) {
+        *prefix = prefix_shown_with(&entry.1, *prefix);
+    }
     let before = modal
         .draft
         .parameters
@@ -242,19 +253,52 @@ pub(super) fn pick_unit(
     }
 }
 
+/// The prefix a row keeps after a pick of `unit`. One the unit cannot show
+/// is dropped, so it cannot scale the number on a later pick.
+fn prefix_shown_with(unit: &str, prefix: SiPrefix) -> SiPrefix {
+    Unit::from_alias(unit.trim()).map_or(SiPrefix::One, |known| effective_prefix(&known, prefix))
+}
+
+/// The known unit `key`'s number field edits in: the slot's, which applies
+/// even when the buffer holds none (a slot that stores a plain number or
+/// text), else the buffer's own.
+fn field_unit(template: Option<&ParameterTemplate>, key: &str, unit: &str) -> Option<Unit> {
+    match measurement_slot(template, key) {
+        Some(slot) => slot_unit(slot),
+        None => Unit::from_alias(unit.trim()),
+    }
+}
+
+/// A prefix picked while a typed `k` / `M` / `u` is still pending at the
+/// end of `key`'s number wins: the letter leaves the buffer.
+pub(super) fn drop_pending_prefix_letter(
+    modal: &mut crate::library::state::EditRowModalState,
+    key: &str,
+    template: Option<&ParameterTemplate>,
+) {
+    let Some((value, unit)) = modal.param_buf.get_mut(key) else {
+        return;
+    };
+    if let Some(known) = field_unit(template, key, unit)
+        && let Some((number, _)) = split_typed_prefix(value, &known)
+    {
+        *value = number;
+    }
+}
+
 /// What is wrong with the number the user has typed so far, if it is
-/// already clear: a prefix or unit typed into it (`4k7`, `10 k`). `None`
-/// for a number, and for text that may still become one (`1.`, `-`).
+/// already clear: a prefix or unit typed into it (`4k7`, `4.7uF`). `None`
+/// for a number, for one ending in a prefix letter the unit takes (`4.7k`,
+/// resolved on commit), and for text that may still become one (`1.`, `-`).
 pub(super) fn number_field_problem(
     modal: &crate::library::state::EditRowModalState,
     key: &str,
     template: Option<&ParameterTemplate>,
 ) -> Option<String> {
     let (value, unit) = modal.param_buf.get(key)?;
-    // The slot's unit applies even when the buffer holds none (a slot
-    // that stores a plain number or text).
-    if measurement_slot(template, key).is_none() {
-        Unit::from_alias(unit.trim())?;
+    let known = field_unit(template, key, unit)?;
+    if split_typed_prefix(value, &known).is_some() {
+        return None;
     }
     match parse_mantissa(value) {
         Err(e @ (MantissaError::HasLetters(_) | MantissaError::Comma(_))) => {
@@ -495,12 +539,53 @@ mod tests {
     /// The number field takes a number, not `4k7` or `abc`, in a known unit.
     #[test]
     fn the_modal_refuses_letters_in_a_known_unit() {
-        for typed in ["4k7", "10k", "4.7uF", "abc"] {
+        for typed in ["4k7", "4.7uF", "abc"] {
             assert!(
                 modal_param_value(typed.into(), "ohm", SiPrefix::One, None, None).is_err(),
                 "{typed}"
             );
         }
+    }
+
+    /// Mockup row 139: a `k` / `M` / `u` typed at the end of the number
+    /// picks the prefix on commit, when the unit (or the slot's) takes it.
+    #[test]
+    fn the_modal_reads_a_trailing_prefix_letter_on_commit() {
+        let one = SiPrefix::One;
+        let ohms = |value: f64| ParamValue::Measurement {
+            value,
+            unit: "ohm".into(),
+        };
+        assert_eq!(
+            modal_param_value("10k".into(), "ohm", one, None, None),
+            Ok(ohms(10_000.0))
+        );
+        let cap = slot("value", "F");
+        assert_eq!(
+            modal_param_value("100u".into(), "", one, None, Some(&cap)),
+            Ok(ParamValue::Measurement {
+                value: 100e-6,
+                unit: "F".into(),
+            })
+        );
+        assert!(modal_param_value("4.7k".into(), "", one, None, Some(&cap)).is_err());
+    }
+
+    /// A pending `4.7k` is not flagged while typed; `4k7` still is. A
+    /// prefix picked over the pending letter drops it from the buffer.
+    #[test]
+    fn a_pending_prefix_letter_is_not_flagged_and_a_pick_drops_it() {
+        let mut modal = modal_with(canonical_kilo_ohms());
+        modal
+            .param_buf
+            .insert("value".into(), ("4.7k".into(), "ohm".into()));
+        assert!(number_field_problem(&modal, "value", None).is_none());
+        drop_pending_prefix_letter(&mut modal, "value", None);
+        assert_eq!(modal.param_buf["value"].0, "4.7");
+        modal
+            .param_buf
+            .insert("value".into(), ("4k7".into(), "ohm".into()));
+        assert!(number_field_problem(&modal, "value", None).is_some());
     }
 
     /// 4.7 with the k picked stores 4700 ohm, whatever was stored before.

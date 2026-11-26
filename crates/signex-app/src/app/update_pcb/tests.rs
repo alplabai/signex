@@ -46,7 +46,7 @@ fn a_headless_run_that_cannot_read_ends_without_a_dialog() {
     assert!(app.ui_state.update_pcb.is_none());
 }
 
-fn project(app: &mut Signex, dir: &std::path::Path) {
+pub(super) fn project(app: &mut Signex, dir: &std::path::Path) {
     use signex_types::project::ProjectData;
     let id = app.document_state.mint_project_id();
     app.document_state.projects.push(crate::app::LoadedProject {
@@ -62,6 +62,7 @@ fn project(app: &mut Signex, dir: &std::path::Path) {
             sheets: Vec::new(),
             variant_definitions: Vec::new(),
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: Vec::new(),
             enable_git: false,
             net_classes: Vec::new(),
@@ -70,6 +71,11 @@ fn project(app: &mut Signex, dir: &std::path::Path) {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
+            fab_outputs: None,
+            router_tool_diameter: None,
+            bom_alternates: Vec::new(),
+            requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },
@@ -84,11 +90,18 @@ fn project(app: &mut Signex, dir: &std::path::Path) {
     }
 }
 
-fn run(app: &mut Signex, operand: &str) -> crate::app::command::CommandOutcome {
+/// The `document` operand naming the fixture's project in `dir`.
+pub(super) fn document(dir: &std::path::Path) -> String {
+    format!("document={}", dir.join("demo.snxprj").display())
+}
+
+/// Run the command from `operands`, waited for to its answer as a headless
+/// run waits (#2470).
+pub(super) fn run(app: &mut Signex, operands: &[&str]) -> crate::app::command::CommandOutcome {
     use crate::app::command::CommandArgs;
     let id = crate::keymap::AppCommandId::new("update_pcb_from_schematic").expect("id");
-    let args = CommandArgs::parse_operands(&id, &[operand]).expect("operands");
-    let (outcome, task) = app.run_operands(&id, &args);
+    let args = CommandArgs::parse_operands(&id, operands).expect("operands");
+    let (outcome, task) = app.run_operands_settled(&id, &args);
     crate::task_driver::TaskDriver::new()
         .settle(app, task)
         .expect("settled");
@@ -96,16 +109,26 @@ fn run(app: &mut Signex, operand: &str) -> crate::app::command::CommandOutcome {
 }
 
 /// A project's sheet in front and its (empty) board open behind it.
-fn headless_project(dir: &std::path::Path) -> Signex {
-    let (mut app, _t) = Signex::new();
-    let board_path = dir.join("demo.snxpcb");
+pub(super) fn headless_project(dir: &std::path::Path) -> Signex {
     let board = signex_types::project::SetupProfile::Standard
         .pcb(4)
         .new_board();
+    headless_project_with(dir, board, Vec::new())
+}
+
+/// [`headless_project`] with `board` and the sheet's `symbols`.
+pub(super) fn headless_project_with(
+    dir: &std::path::Path,
+    board: signex_types::pcb::PcbBoard,
+    symbols: Vec<signex_types::schematic::Symbol>,
+) -> Signex {
+    let (mut app, _t) = Signex::new();
+    let board_path = dir.join("demo.snxpcb");
     app.open_pcb_tab(board_path, "demo.snxpcb".to_string(), board);
     let sheet = signex_types::schematic::SchematicSheet {
         uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
+        symbols,
         ..Default::default()
     };
     crate::app::handlers::editing_commands::net_color_driver::add_sheet_with(
@@ -117,28 +140,37 @@ fn headless_project(dir: &std::path::Path) -> Signex {
     app
 }
 
-/// The headless form needs `apply=true`; `apply=false` is refused and opens
-/// nothing.
+/// The headless form needs `apply=true` (or `dry_run=true`); `apply=false`
+/// is refused and opens nothing.
 #[test]
 fn the_headless_form_refuses_apply_false() {
     let tmp = tempfile::tempdir().expect("tmp");
     let mut app = headless_project(tmp.path());
-    let outcome = run(&mut app, "apply=false");
+    let outcome = run(&mut app, &["apply=false"]);
     assert!(
-        matches!(&outcome, crate::app::command::CommandOutcome::Disabled { reason } if reason.contains("apply=true")),
+        matches!(&outcome, crate::app::command::CommandOutcome::Disabled { reason } if signex_i18n::RenderTranslatable::render_en_us(reason).contains("apply=true")),
         "{outcome:?}"
     );
     assert!(app.ui_state.update_pcb.is_none());
 }
 
 /// `apply=true` reads the design, executes the default ticks and leaves no
-/// dialog behind.
+/// dialog behind; it answers with the list of what it did (#2470). With no
+/// `document` it acts on the active project's board (Caner, 2026-11-25).
 #[test]
 fn the_headless_form_executes_without_a_dialog() {
     let tmp = tempfile::tempdir().expect("tmp");
     let mut app = headless_project(tmp.path());
-    let outcome = run(&mut app, "apply=true");
-    assert_eq!(outcome, crate::app::command::CommandOutcome::Ran);
+    let outcome = run(&mut app, &["apply=true"]);
+    let crate::app::command::CommandOutcome::Answered(answer) = &outcome else {
+        panic!("answered with the change list: {outcome:?}");
+    };
+    assert_eq!(answer["dry_run"], false, "{answer}");
+    let board = tmp.path().join("demo.snxpcb").display().to_string();
+    assert_eq!(
+        answer["board"], board,
+        "the active project's board: {answer}"
+    );
     assert!(app.ui_state.update_pcb.is_none(), "no dialog is left open");
 }
 

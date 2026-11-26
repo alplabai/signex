@@ -9,11 +9,11 @@
 
 use iced::Task;
 use serde_json::{Value, json};
-use signex_types::schematic::{Point, SelectedItem, SelectedKind};
+use signex_types::schematic::{Point, SchematicSheet, SelectedItem, SelectedKind};
 
 use super::placement_operands::{run_edit, text};
 use super::{CommandArgs, CommandOutcome, OperandValue};
-use crate::app::mutation_gateway::CommandOutcome as Applied;
+use crate::app::mutation_gateway::MutationOutcome as Applied;
 use crate::app::{Message, Signex};
 
 type Ran = (CommandOutcome, Task<Message>);
@@ -37,23 +37,26 @@ impl PlacedRefusal {
 
 type Placed = Result<Value, PlacedRefusal>;
 
-/// `set_object_position id=.. at=x,y [document=..]`.
+/// `set_object_position id=.. at=x,y [keep_wires=..] [wiring=..] [document=..]`.
 pub(super) fn set_object_position(app: &mut Signex, args: &CommandArgs) -> Ran {
     run_edit(app, args, |app| {
         let item = app.placed_item_operand(args)?;
         let at = coordinate(args, "at")?;
-        answered(app.set_placed_position(item, at))
+        let wiring = super::placed_move::wiring(args)?;
+        let keep_wires = super::placed_move::keep_wires(args);
+        answered(app.move_placed(item, at, keep_wires, wiring))
     })
 }
 
-/// `set_object_rotation id=.. rotation=deg [document=..]`.
+/// `set_object_rotation id=.. rotation=deg [keep_wires=..] [document=..]`.
 pub(super) fn set_object_rotation(app: &mut Signex, args: &CommandArgs) -> Ran {
     run_edit(app, args, |app| {
         let item = app.placed_item_operand(args)?;
         let Some(OperandValue::Angle(degrees)) = args.operand("rotation") else {
             return Err("operand `rotation` is missing".to_string());
         };
-        answered(app.set_placed_rotation(item, *degrees))
+        let keep_wires = super::placed_move::keep_wires(args);
+        answered(app.set_placed_rotation(item, *degrees, keep_wires))
     })
 }
 
@@ -73,6 +76,32 @@ pub(super) fn set_symbol_parameter(app: &mut Signex, args: &CommandArgs) -> Ran 
         let name = text(args, "name")?;
         let value = text(args, "value").unwrap_or_default();
         answered(app.set_symbol_parameter(item, &name, &value))
+    })
+}
+
+/// `set_sheet_variable name=.. [value=..] [remove=true] [document=..]`: the
+/// Sheet Variables rows' [`Signex::set_sheet_variable`]. Answers with the
+/// variable as stored and the sheet's variables.
+pub(super) fn set_sheet_variable(app: &mut Signex, args: &CommandArgs) -> Ran {
+    run_edit(app, args, |app| {
+        let name = text(args, "name")?.trim().to_string();
+        let remove = matches!(args.operand("remove"), Some(OperandValue::Bool(true)));
+        let value = match (remove, args.operand("value")) {
+            (true, Some(_)) => return Err("`remove=true` takes no `value`".to_string()),
+            (true, None) => None,
+            (false, _) => Some(text(args, "value").unwrap_or_default().trim().to_string()),
+        };
+        app.set_sheet_variable(&name, value)?;
+        let variables = app
+            .document_state
+            .edit_engine()
+            .map(|engine| engine.document().variables.clone())
+            .unwrap_or_default();
+        Ok(CommandOutcome::Answered(json!({
+            "name": name,
+            "value": variables.get(&name),
+            "variables": variables,
+        })))
     })
 }
 
@@ -108,6 +137,9 @@ fn kind_word(item: &SelectedItem, power: bool) -> &'static str {
         SelectedKind::NoConnect => "no_connect",
         SelectedKind::NoErcDirective => "no_erc",
         SelectedKind::Directive => "directive",
+        SelectedKind::HarnessConnector => "harness_connector",
+        SelectedKind::HarnessEntry => "harness_entry",
+        SelectedKind::HarnessWire => "harness_wire",
         SelectedKind::TextNote => "text",
         SelectedKind::SymbolRefField | SelectedKind::SymbolValField | SelectedKind::Drawing => {
             "other"
@@ -157,7 +189,7 @@ impl Signex {
     }
 
     /// The object's id, kind and geometry after an edit, as the answer.
-    fn placed_answer(&self, item: SelectedItem) -> Placed {
+    pub(super) fn placed_answer(&self, item: SelectedItem) -> Placed {
         let engine = self
             .document_state
             .edit_engine()
@@ -184,21 +216,79 @@ impl Signex {
     }
 
     /// Put `item`'s position at `at` (stored mm), its wires following as a
-    /// drag's do when "keep wires" is on.
-    pub(crate) fn set_placed_position(&mut self, item: SelectedItem, at: Point) -> Placed {
-        let keep_wires = self.ui_state.move_keeps_wires;
+    /// drag's do when `keep_wires`: the Properties row's move, which passes
+    /// the person's "keep wires" preference.
+    pub(crate) fn set_placed_position(
+        &mut self,
+        item: SelectedItem,
+        at: Point,
+        keep_wires: bool,
+    ) -> Placed {
+        let wiring = signex_types::corner::DragWiringMode::Auto;
         let command = self
             .document_state
             .edit_engine()
-            .and_then(|e| signex_engine::move_to_command(e.document(), &item, at, keep_wires))
+            .and_then(|e| {
+                signex_engine::move_to_command(e.document(), &item, at, keep_wires, wiring)
+            })
             .ok_or_else(|| PlacedRefusal::new("this object has no position to set"))?;
         self.apply_placed_edit(command)?;
         self.placed_answer(item)
     }
 
-    /// Turn the part or label `item` to `degrees` (stored, counter-clockwise).
-    pub(crate) fn set_placed_rotation(&mut self, item: SelectedItem, degrees: f64) -> Placed {
-        let keep_wires = self.ui_state.move_keeps_wires;
+    /// The end of the wire or bus `item` on `sheet` (stored mm); `None` for
+    /// any other kind. Its start is the `placed_geometry` position.
+    pub(crate) fn run_end(sheet: &SchematicSheet, item: &SelectedItem) -> Option<Point> {
+        signex_engine::run_ends(sheet, item).map(|(_, end)| end)
+    }
+
+    /// Put one end of the wire or bus `item` (its start when `start`) at
+    /// `to` (stored mm), the other end kept: one engine edit, one undo step.
+    /// Refused while a lock holds the run, and when the two ends would meet.
+    pub(crate) fn set_run_end(&mut self, item: SelectedItem, start: bool, to: Point) -> Placed {
+        let engine = self
+            .document_state
+            .edit_engine()
+            .ok_or_else(|| PlacedRefusal::new("no schematic is open"))?;
+        let sheet = engine.document();
+        let (from, end) = signex_engine::run_ends(sheet, &item)
+            .ok_or_else(|| PlacedRefusal::new("only a wire or a bus has ends to set"))?;
+        let kept = if start { end } else { from };
+        if signex_net::pt_key(&to) == signex_net::pt_key(&kept) {
+            return Err(PlacedRefusal::new("the two ends would meet"));
+        }
+        let command = signex_engine::run_end_command(sheet, &item, start, to)
+            .ok_or_else(|| PlacedRefusal::new("only a wire or a bus has ends to set"))?;
+        self.apply_placed_edit(command)?;
+        self.placed_answer(item)
+    }
+
+    /// Set `props` on the text note `item` (its justification, turn or text
+    /// size): one engine edit, one undo step, none when nothing changes.
+    /// Refused while a lock holds the note.
+    pub(crate) fn set_text_note_props(
+        &mut self,
+        item: SelectedItem,
+        props: signex_engine::TextNoteProps,
+    ) -> Placed {
+        let command = self
+            .document_state
+            .edit_engine()
+            .and_then(|e| signex_engine::text_note_props_command(e.document(), &item, props))
+            .ok_or_else(|| PlacedRefusal::new("only a text note has this row"))?;
+        self.apply_placed_edit(command)?;
+        self.placed_answer(item)
+    }
+
+    /// Turn the part or label `item` to `degrees` (stored, counter-clockwise),
+    /// a part's wires following when `keep_wires`: the Rotation row passes the
+    /// person's "keep wires" preference, an operand run its `keep_wires`.
+    pub(crate) fn set_placed_rotation(
+        &mut self,
+        item: SelectedItem,
+        degrees: f64,
+        keep_wires: bool,
+    ) -> Placed {
         let command = self
             .document_state
             .edit_engine()

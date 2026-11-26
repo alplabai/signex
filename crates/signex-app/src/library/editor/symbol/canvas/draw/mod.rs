@@ -14,5 +14,6 @@
 //!   line / circle / arc multi-click placement previews.
 
 mod background;
+mod curves;
 mod overlays;
 mod scene;

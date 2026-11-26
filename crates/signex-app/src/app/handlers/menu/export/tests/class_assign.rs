@@ -1,6 +1,7 @@
 //! #661, #1934: `assign_net_class` runs the label picker's path from operands,
 //! so the pick lands on the active sheet's timeline like a click on the picker.
 
+use signex_i18n::RenderTranslatable;
 use signex_types::net_class::NetClass;
 
 use super::class_picker::{assign, child_label_selected};
@@ -88,7 +89,7 @@ fn no_class_takes_the_net_out_of_its_listed_class() {
 fn the_command_refuses_what_it_cannot_do_and_changes_nothing() {
     let (mut app, ..) = child_label_selected(&dir("assign-refuse"));
     let reason = |outcome: CommandOutcome| match outcome {
-        CommandOutcome::Disabled { reason } => reason,
+        CommandOutcome::Disabled { reason } => reason.render_en_us(),
         other => panic!("expected a refusal, got {other:?}"),
     };
     let before = classes(&app);
@@ -209,6 +210,7 @@ fn without_operands_the_command_is_refused_and_changes_nothing_else() {
     let CommandOutcome::Disabled { reason } = outcome else {
         panic!("expected a refusal, got {outcome:?}");
     };
+    let reason = reason.render_en_us();
     assert!(
         reason.contains("net_name") && reason.contains("Properties"),
         "{reason}"
@@ -259,6 +261,7 @@ fn only_the_operand_refusal_is_logged_by_a_key_or_palette_dispatch() {
     else {
         panic!("expected the operand refusal");
     };
+    let reason = reason.render_en_us();
     let refusal = format!("Command: assign_net_class did nothing: {reason}");
 
     let mark = crate::diagnostics::newest_entry_id();

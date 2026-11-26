@@ -94,7 +94,7 @@ impl DrillFile {
         }
     }
 
-    fn holds(self, hole: &Hole) -> bool {
+    pub(crate) fn holds(self, hole: &Hole) -> bool {
         hole.plated == self.plated && hole.span == self.span
     }
 }

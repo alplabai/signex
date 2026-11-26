@@ -7,12 +7,14 @@ impl Signex {
         match message {
             OverlayMsg::TogglePanelList => {
                 self.ui_state.panel_list_open = !self.ui_state.panel_list_open;
+                // The two status-bar popovers never stand together.
+                self.ui_state.grid_snap_popover = None;
                 Task::none()
             }
             OverlayMsg::OpenPanel(kind) => {
                 // The generic panel-list entry point. It used to send
                 // *every* kind to the right column, so picking a panel
-                // whose home is elsewhere — Projects, Signex AI, ERC —
+                // whose home is elsewhere — Projects, Components, ERC —
                 // grew a second copy on the right (#641).
                 self.ui_state.panel_list_open = false;
                 let shown = self.show_panel(kind);
@@ -79,6 +81,13 @@ impl Signex {
             }
             OverlayMsg::DiskConflictOverwriteChosen => self.handle_disk_conflict_overwrite(),
             OverlayMsg::DiskConflictReloadChosen => self.handle_disk_conflict_reload(),
+            OverlayMsg::DiskConflictSaveAsChosen => self.handle_disk_conflict_save_as(),
+            OverlayMsg::ErrorNoticeCopyPressed => match &self.document_state.error_notice {
+                Some(notice) => {
+                    iced::clipboard::write(notice.copy_text(&self.ui_state.i18n)).discard()
+                }
+                None => Task::none(),
+            },
             OverlayMsg::DismissFirstRunTour => self.dismiss_first_run_tour(),
             OverlayMsg::ModalDragStart { modal, x, y } => self.handle_modal_drag_start(modal, x, y),
             OverlayMsg::ModalDragEnd => self.handle_modal_drag_end(),
@@ -88,6 +97,47 @@ impl Signex {
                 select,
             } => self.handle_focus_at(world_x, world_y, select),
             OverlayMsg::ToggleAutoFocus => self.handle_toggle_auto_focus(),
+            OverlayMsg::GridSnapPopoverToggled(window) => {
+                let open_here = self
+                    .ui_state
+                    .grid_snap_popover
+                    .as_ref()
+                    .is_some_and(|popover| popover.window == window);
+                self.ui_state.grid_snap_popover =
+                    (!open_here).then(|| Box::new(crate::status_bar::GridSnapPopover::new(window)));
+                self.ui_state.panel_list_open = false;
+                Task::none()
+            }
+            OverlayMsg::GridSnapPopoverDismissed => {
+                self.ui_state.grid_snap_popover = None;
+                Task::none()
+            }
+            OverlayMsg::GridSnapPreviewHovered(msg) => {
+                if let Some(popover) = self.ui_state.grid_snap_popover.as_mut() {
+                    popover.hover.update(msg);
+                }
+                Task::none()
+            }
+            // Help cards (#2262).
+            OverlayMsg::ShortcutsFilterChanged(filter) => {
+                self.ui_state.shortcut_sheet.filter = filter;
+                Task::none()
+            }
+            OverlayMsg::ShortcutsFilterCleared => {
+                self.ui_state.shortcut_sheet.filter.clear();
+                Task::none()
+            }
+            OverlayMsg::ShortcutsScopePicked(scope) => {
+                self.ui_state.shortcut_sheet.scope = scope;
+                Task::none()
+            }
+            OverlayMsg::ShortcutsPreferencesPressed => {
+                self.ui_state.keyboard_shortcuts_open = false;
+                self.open_preferences_on(crate::preferences::PrefNav::Keyboard)
+            }
+            OverlayMsg::FirstRunTourWheelChangePressed => {
+                self.open_preferences_on(crate::preferences::PrefNav::Appearance)
+            }
         }
     }
 
@@ -99,14 +149,17 @@ impl Signex {
         match msg {
             ProjectMsg::Setup(msg) => self.dispatch_new_project_message(msg),
             ProjectMsg::DocumentSetup(msg) => self.dispatch_document_setup_message(msg),
+            ProjectMsg::SaveAs(msg) => self.dispatch_save_project_as_message(msg),
             ProjectMsg::SetupProfilesWritten { note, undo, result } => {
                 self.setup_profiles_written(note, *undo, result);
                 Task::none()
             }
             ProjectMsg::StartScreen(msg) => self.dispatch_start_screen_message(msg),
+            ProjectMsg::Thumbnail(msg) => self.dispatch_project_thumbnail_message(msg),
             ProjectMsg::SheetNumbering(msg) => self.dispatch_sheet_numbering_message(msg),
-            ProjectMsg::CloseConfirm(choice) => self.handle_project_close_confirm(choice),
+            ProjectMsg::CloseConfirm(choice) => self.handle_project_close_choice(choice),
             ProjectMsg::AssignFootprints(msg) => self.dispatch_assign_footprints_message(msg),
+            ProjectMsg::CompiledDesign(msg) => self.dispatch_compiled_design_message(msg),
             ProjectMsg::CloseRefsResolved { project_id, result } => {
                 self.handle_close_refs_resolved(project_id, result)
             }
@@ -144,9 +197,11 @@ impl Signex {
             ProjectMsg::WindowHierarchyAssembled(root, generation, assembly) => {
                 self.handle_window_hierarchy_assembled(&root, generation, assembly)
             }
-            ProjectMsg::AppQuitConfirm(choice) => self.handle_app_quit_confirm(choice),
+            ProjectMsg::AppQuitConfirm(choice) => self.handle_app_quit_choice(choice),
             ProjectMsg::Tab(msg) => self.dispatch_project_tab_message(msg),
             ProjectMsg::Rules(msg) => self.dispatch_rules_tab_message(msg),
+            ProjectMsg::Notebook(msg) => self.dispatch_notebook_message(msg),
+            ProjectMsg::Git(msg) => self.dispatch_project_git_message(msg),
             ProjectMsg::FileSaved(done) => self.handle_project_file_saved(*done),
             ProjectMsg::AddExistingFilePicked { project_id, paths } => {
                 self.handle_add_existing_file_picked(project_id, paths)
@@ -239,13 +294,10 @@ impl Signex {
         y: f32,
         window: Option<iced::window::Id>,
     ) -> Task<Message> {
-        // Altium convention: right-click during placement terminates
-        // the placement flow (tool-stuck OR ghost-armed OR pending
-        // power/port OR paused preview OR net-colour pen armed)
-        // instead of opening the context menu. On a board that is a
-        // footprint Move in progress (#2240).
-        // A Move left on a board this window no longer shows is forgotten,
-        // so it cannot swallow a right-click on a sheet.
+        // Right-click during placement ends it (armed tool, ghost, pending
+        // power/port, paused preview, net-colour pen) instead of opening the
+        // menu; on a board, a footprint Move (#2240). A Move left on a board
+        // this window no longer shows is forgotten, so it cannot swallow this.
         self.drop_stale_pcb_carry();
         if self.has_own_pcb_carry() {
             self.end_pcb_carry();
@@ -254,6 +306,9 @@ impl Signex {
         // A board placement tool closes a Solid Region, or ends its shape and
         // then itself (#2373).
         if self.close_board_region() || self.step_back_board_tool() {
+            return Task::none();
+        }
+        if self.is_annotation_pause_of_another(window) {
             return Task::none();
         }
         let canvas = self.interaction_state.active_canvas();
@@ -277,6 +332,7 @@ impl Signex {
             self.interaction_state.active_canvas_mut().pending_net_color = None;
             self.ui_state.reorder_picker = None;
             self.ui_state.move_pick = None;
+            self.ui_state.command_replay.drop_pending_move();
             self.interaction_state
                 .active_canvas_mut()
                 .clear_overlay_cache();
@@ -316,6 +372,14 @@ impl Signex {
                 ContextMenuMsg::Show(x, y) => self.run_in_window_document(window, |app| {
                     app.show_canvas_context_menu(x, y, app.overlay_owner(window))
                 }),
+                // A canvas menu's command row is gated and run against the
+                // window the menu opened in, which the dispatch enters
+                // itself (#2267).
+                pick @ ContextMenuMsg::Action(ContextAction::Command { .. })
+                    if self.interaction_state.context_menu.is_some() =>
+                {
+                    self.dispatch_context_menu_message(pick)
+                }
                 // Expanding or rebuilding the tree edits the window's own
                 // tree; opening a tab, a dialog or a file is queued to the
                 // main window like Edit Symbol (#2037).
@@ -324,6 +388,10 @@ impl Signex {
                 {
                     self.handle_project_tree_action(action)
                 }
+                // The Variant Manager is a tab of the main window.
+                pick @ ContextMenuMsg::Action(
+                    ContextAction::ShowInVariantManager(_) | ContextAction::NewVariant(_),
+                ) => self.dispatch_context_menu_message(pick),
                 other => self
                     .run_in_window_document(window, |app| app.dispatch_context_menu_message(other)),
             },
@@ -355,6 +423,7 @@ impl Signex {
                         x,
                         y,
                         key,
+                        add_new_only: false,
                         window: self.interaction_state.acting_window,
                     });
                 Task::none()
@@ -387,6 +456,8 @@ impl Signex {
                 self.interaction_state.submenu_launcher_hovered = None;
                 self.interaction_state.submenu_panel_hovered = false;
                 self.interaction_state.submenu_unhovered_since = None;
+                // The tab strip's "+N" menu shares the tab menu's Esc rung.
+                self.ui_state.tab_overflow_menu_open = false;
                 Task::none()
             }
             ContextMenuMsg::TabAction(action) => self.handle_tab_context_action(action),
@@ -448,11 +519,10 @@ impl Signex {
                 Task::none()
             }
             ContextMenuMsg::Action(action) => {
-                let opened_at = self
-                    .interaction_state
-                    .context_menu
-                    .take()
-                    .and_then(|menu| menu.world);
+                let menu = self.interaction_state.context_menu.take();
+                let opened_at = menu.as_ref().and_then(|menu| menu.world);
+                // The window the canvas menu opened in; `None` is the main one.
+                let menu_window = menu.and_then(|menu| menu.window);
                 // The project tree's menu closes with the canvas one: a row of
                 // either runs a command, and neither may outlive the pick.
                 self.interaction_state.project_tree_context_menu = None;
@@ -469,7 +539,9 @@ impl Signex {
                                 project,
                             },
                         );
-                        self.dispatch_command(&id, args, None)
+                        // Gated and run in the menu's window, as a key or the
+                        // undocked menu bar's `UiMsg::MenuInWindow` is.
+                        self.dispatch_command(&id, args, menu_window)
                     }
                     ContextAction::OpenChildSheet => {
                         self.open_selected_child_sheet().unwrap_or_else(Task::none)
@@ -489,6 +561,12 @@ impl Signex {
                         self.handle_active_bar_action(active_bar_action)
                     }
                     ContextAction::ReuseBlock(event) => self.handle_reuse_block(event),
+                    ContextAction::ShowInVariantManager(project_id) => {
+                        self.open_variant_manager_of(project_id, false)
+                    }
+                    ContextAction::NewVariant(project_id) => {
+                        self.open_variant_manager_of(project_id, true)
+                    }
                 }
             }
         }
@@ -532,22 +610,10 @@ impl Signex {
                 self.sync_diagnostics_panel_ctx();
                 task
             }
-            // The preview reloads when the run ends: only then has the disk
-            // (the unopened sheets it rewrote) and memory settled.
+            // The preview reloads when the run ends.
             AnnotateMsg::Run(mode) => self.handle_annotate(mode),
             AnnotateMsg::PassSheetsRead { generation, result } => {
                 let task = self.handle_annotate_sheets_read(generation, &result);
-                self.sync_diagnostics_panel_ctx();
-                task
-            }
-            AnnotateMsg::PassSheetsWritten {
-                generation,
-                result,
-                // Held to the end of this arm, after the copy removals the
-                // handler registered; dropping it releases quit.
-                hold: _hold,
-            } => {
-                let task = self.handle_annotate_sheets_written(generation, &result);
                 self.sync_diagnostics_panel_ctx();
                 task
             }
@@ -563,7 +629,32 @@ impl Signex {
             }
             AnnotateMsg::CloseDialog => self.handle_close_annotate_dialog(),
             AnnotateMsg::OrderChanged(order) => self.handle_annotate_order_changed(order),
-            AnnotateMsg::OpenResetConfirm => self.handle_open_annotate_reset_confirm(),
+            // The menu's Reset Schematic Designators is Reset & Renumber.
+            AnnotateMsg::OpenResetConfirm => {
+                self.handle_annotate_reset_pressed(signex_engine::AnnotateMode::ResetAndRenumber)
+            }
+            AnnotateMsg::ResetPressed(mode) => self.handle_annotate_reset_pressed(mode),
+            AnnotateMsg::ListViewPicked(view) => {
+                self.ui_state.annotate_session.list_view = view;
+                Task::none()
+            }
+            AnnotateMsg::ListFilterEdited(filter) => {
+                self.ui_state.annotate_session.filter = filter;
+                Task::none()
+            }
+            AnnotateMsg::SheetTickToggled(path) => {
+                self.handle_annotate_sheet_tick_toggled(path);
+                Task::none()
+            }
+            AnnotateMsg::AllSheetsTicked(on) => {
+                self.handle_annotate_all_sheets_ticked(on);
+                Task::none()
+            }
+            AnnotateMsg::FixedOptionsToggled => {
+                let session = &mut self.ui_state.annotate_session;
+                session.fixed_options_open = !session.fixed_options_open;
+                Task::none()
+            }
             AnnotateMsg::CloseResetConfirm => self.handle_close_annotate_reset_confirm(),
             AnnotateMsg::ToggleLock(uuid) => {
                 if self.ui_state.annotate_locked.contains(&uuid) {
@@ -591,11 +682,7 @@ impl Signex {
     pub(crate) fn dispatch_erc_message(&mut self, msg: ErcMsg) -> Task<Message> {
         match msg {
             ErcMsg::Run => {
-                let close_task = if self.ui_state.erc_dialog_open {
-                    self.handle_close_erc_dialog()
-                } else {
-                    Task::none()
-                };
+                let close_task = self.close_erc_dialog_for_run();
                 let task = self.handle_run_erc();
                 let finish = self.finish_update();
                 Task::batch([close_task, finish, task])
@@ -607,6 +694,10 @@ impl Signex {
                 self.handle_erc_run_finished(generation, &result)
             }
             ErcMsg::StoreRulesInProject => self.handle_store_erc_rules_in_project(),
+            ErcMsg::PinJunctionRepairRequested => {
+                self.repair_pin_junctions();
+                Task::none()
+            }
             ErcMsg::ProfileSaveDialogOpened => self.handle_profile_save_dialog_opened(),
             ErcMsg::ProfileSaveNameChanged(name) => self.handle_profile_save_name_changed(name),
             ErcMsg::ProfileSaveVersionChanged(version) => {
@@ -639,6 +730,19 @@ impl Signex {
             }
             ErcMsg::PinMatrixCellCycled { row, col } => {
                 self.handle_pin_matrix_cell_cycled(row, col)
+            }
+            ErcMsg::RulesChangedOnlyToggled(on) => {
+                self.ui_state.erc_rule_list.changed_only = on;
+                Task::none()
+            }
+            ErcMsg::RuleFilterChanged(query) => {
+                self.ui_state.erc_rule_list.query = query;
+                Task::none()
+            }
+            ErcMsg::ProfileMenuToggled => self.handle_erc_profile_menu_toggled(),
+            ErcMsg::ProfileMenuRowChosen(action) => {
+                self.ui_state.erc_profile_menu_open = false;
+                self.dispatch_erc_message(action.message())
             }
         }
     }
@@ -673,6 +777,8 @@ impl Signex {
         // Same reason: the draft, discard and Save paths change the zoom
         // speed the PCB / symbol / footprint canvases hold a copy of.
         self.sync_zoom_step();
+        // Same reason: undocked windows hold their own copy of the tokens.
+        self.sync_window_panel_ctx_shared();
         task
     }
 
@@ -682,24 +788,21 @@ impl Signex {
         msg: EnableVersionControlMsg,
     ) -> Task<Message> {
         match msg {
-            // A run in flight has already read the choices; edits are ignored.
-            EnableVersionControlMsg::ToggleLfs => {
-                if let Some(s) = self.ui_state.enable_version_control.as_mut()
-                    && !s.working
-                    && !s.scanning
-                {
-                    s.use_lfs = !s.use_lfs;
-                }
+            edit @ (EnableVersionControlMsg::ToggleLfs
+            | EnableVersionControlMsg::ToggleItem(_)
+            | EnableVersionControlMsg::AllTicked
+            | EnableVersionControlMsg::CommitMessageChanged(_)
+            | EnableVersionControlMsg::CommitEverySaveToggled
+            | EnableVersionControlMsg::AuthorNameChanged(_)
+            | EnableVersionControlMsg::AuthorEmailChanged(_)) => {
+                self.edit_enable_version_control(edit);
                 Task::none()
             }
-            EnableVersionControlMsg::ToggleItem(idx) => {
-                if let Some(s) = self.ui_state.enable_version_control.as_mut()
-                    && !s.working
-                    && !s.scanning
-                    && let Some(item) = s.items.get_mut(idx)
-                {
-                    item.tracked = !item.tracked;
-                }
+            EnableVersionControlMsg::AuthorProbed {
+                project_dir,
+                has_identity,
+            } => {
+                self.handle_enable_version_control_author_probed(&project_dir, has_identity);
                 Task::none()
             }
             EnableVersionControlMsg::Confirm => self.handle_enable_version_control_confirm(),
@@ -729,10 +832,7 @@ impl Signex {
     pub(crate) fn dispatch_rename_message(&mut self, msg: RenameMsg) -> Task<Message> {
         match msg {
             RenameMsg::BufferChanged(s) => {
-                if let Some(d) = self.ui_state.rename_dialog.as_mut() {
-                    d.buffer = s;
-                    d.error = None;
-                }
+                self.handle_rename_buffer_changed(s);
                 Task::none()
             }
             RenameMsg::Submit => self.handle_rename_submit(),
@@ -763,6 +863,47 @@ impl Signex {
                 Task::none()
             }
             RemoveMsg::Deleted(done) => self.handle_path_deleted(*done),
+            // Selecting a card removes nothing; the footer action does.
+            RemoveMsg::ChoicePicked(choice) => {
+                if let Some(dialog) = self.ui_state.remove_dialog.as_mut() {
+                    dialog.choice = Some(choice);
+                }
+                Task::none()
+            }
+        }
+    }
+
+    /// The Remove or Close Project confirm when its card is in front of the
+    /// main window: the overlay Esc would answer (#2262).
+    pub(crate) fn confirm_in_front(&self) -> Option<crate::app::state::ModalId> {
+        use crate::app::state::ModalId;
+        match self.escape_overlay_message()? {
+            Message::Remove(RemoveMsg::Close) => Some(ModalId::RemoveDialog),
+            Message::Project(ProjectMsg::CloseConfirm(crate::app::ProjectCloseChoice::Cancel)) => {
+                Some(ModalId::ProjectCloseConfirm)
+            }
+            _ => None,
+        }
+    }
+
+    /// What Enter does in `modal`'s card: Close Project saves all. `None`:
+    /// Enter does nothing there, as in Remove, where only a click confirms.
+    pub(crate) fn confirm_enter_message(
+        &self,
+        modal: crate::app::state::ModalId,
+    ) -> Option<Message> {
+        use crate::app::state::ModalId;
+        match modal {
+            // Not while Save All is withheld: only a read-only project's
+            // settings are unsaved (#2904).
+            ModalId::ProjectCloseConfirm => (self.ui_state.project_close_confirm.as_ref())
+                .filter(|c| self.save_all_offered(&c.dirty_paths, c.dirty_rows.len()))
+                .map(|_| {
+                    Message::Project(ProjectMsg::CloseConfirm(
+                        crate::app::ProjectCloseChoice::SaveAll,
+                    ))
+                }),
+            _ => None,
         }
     }
 
@@ -836,5 +977,10 @@ impl Signex {
         interaction.submenu_unhovered_since = None;
         self.document_state.dock.tab_menu = None;
         self.library.components_panel.row_menu = None;
+        self.ui_state.tab_overflow_menu_open = false;
     }
 }
+
+#[cfg(test)]
+#[path = "context_menu_window_tests.rs"]
+mod context_menu_window_tests;

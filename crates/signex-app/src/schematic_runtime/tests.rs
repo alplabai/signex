@@ -21,9 +21,12 @@ pub(super) fn empty_snapshot() -> SchematicRenderSnapshot {
         drawings: Vec::new(),
         no_erc_directives: Vec::new(),
         directives: Vec::new(),
+        harness: Default::default(),
+        unions: Vec::new(),
         title_block: HashMap::new(),
         text_widths: Default::default(),
         text_extents: Default::default(),
+        variables: Default::default(),
         lib_symbols: Default::default(),
         net_colors: HashMap::new(),
         drawing_placements: Default::default(),
@@ -68,6 +71,7 @@ fn hit_test_picks_the_right_wire_and_bus_among_many() {
         uuid: bus_uuid,
         start: Point::new(50.0, 0.0),
         end: Point::new(60.0, 0.0),
+        ..Default::default()
     });
 
     for (i, uuid) in wires.iter().enumerate() {
@@ -287,6 +291,7 @@ fn dragged_reference_field_draw_and_hit_test_follow_new_position() {
             dx: 10.0,
             dy: 5.0,
             keep_wires: false,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         })
         .unwrap();
     let moved = engine.document();
@@ -648,6 +653,59 @@ fn document_edit_refreshes_only_the_edited_collection() {
     cache.update_from_sheet(&doc, RenderInvalidation::PAPER, 2, 3);
     assert_eq!(cache.snapshot().paper_size, "A3");
     assert_eq!(cache.snapshot().frame.vertical_zones, 2);
+}
+
+/// #2444 — the sheet default font is a scalar in the snapshot; a font-family
+/// change invalidates the four text collections, so the partial copy has to
+/// refresh the font with them instead of keeping the old family.
+#[test]
+fn font_family_change_refreshes_the_cached_sheet_default_font() {
+    let mut doc = empty_snapshot();
+    doc.font_family = Some("Iosevka".into());
+    let mut cache = SchematicRenderCache::from_sheet_at(&doc, 1);
+
+    let invalidation = RenderInvalidation::from(signex_engine::DocumentPatch::FONT_FAMILY);
+
+    doc.font_family = Some("Roboto".into());
+    cache.update_from_sheet(&doc, invalidation, 1, 2);
+    assert_eq!(
+        cache.snapshot().font_family.as_deref(),
+        Some("Roboto"),
+        "the cache must follow the engine's sheet default font"
+    );
+
+    // Undo and redo are the same FONT_FAMILY patch, so the cache follows them too.
+    doc.font_family = Some("Iosevka".into());
+    cache.update_from_sheet(&doc, invalidation, 2, 3);
+    assert_eq!(cache.snapshot().font_family.as_deref(), Some("Iosevka"));
+
+    doc.font_family = Some("Roboto".into());
+    cache.update_from_sheet(&doc, invalidation, 3, 4);
+    assert_eq!(cache.snapshot().font_family.as_deref(), Some("Roboto"));
+}
+
+/// A sheet-variable edit rides the PAPER patch (engine `SetSheetVariable`), so
+/// the partial copy must refresh the variables with the title block, or special
+/// strings keep resolving to the old value.
+#[test]
+fn a_sheet_variable_edit_refreshes_the_cached_variables() {
+    let mut doc = empty_snapshot();
+    doc.variables.insert("REV".into(), "A".into());
+    let mut cache = SchematicRenderCache::from_sheet_at(&doc, 1);
+
+    let invalidation = RenderInvalidation::from(signex_engine::DocumentPatch::PAPER);
+
+    doc.variables.insert("REV".into(), "B".into());
+    cache.update_from_sheet(&doc, invalidation, 1, 2);
+    assert_eq!(
+        cache.snapshot().variables.get("REV").map(String::as_str),
+        Some("B"),
+        "the cache must follow the engine's sheet variables"
+    );
+
+    doc.variables.remove("REV");
+    cache.update_from_sheet(&doc, invalidation, 2, 3);
+    assert!(cache.snapshot().variables.is_empty());
 }
 
 #[test]

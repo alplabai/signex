@@ -12,9 +12,9 @@ use std::collections::HashMap;
 use signex_types::document_id::DocumentId;
 
 use super::entries::DocumentEntry;
+use crate::app::Signex;
 use crate::app::document::DocumentKey;
 use crate::app::state::scope::path_key_with;
-use crate::app::{Signex, TabDocument};
 
 impl Signex {
     /// Make every loaded document's id present and unique. Returns the
@@ -134,8 +134,12 @@ impl Signex {
                 }
             }
             DocumentKey::Pcb(path) => {
-                for tab in docs.tabs.iter_mut().filter(|tab| &tab.path == path) {
-                    if let Some(TabDocument::Pcb(engine)) = &mut tab.cached_document {
+                let at_path: Vec<usize> = (docs.tabs.iter().enumerate())
+                    .filter(|(_, tab)| &tab.path == path)
+                    .map(|(idx, _)| idx)
+                    .collect();
+                for idx in at_path {
+                    if let Some(engine) = docs.tab_board_engine_mut(idx) {
                         engine.reassign_document_id(id.as_uuid());
                     }
                 }
@@ -145,8 +149,8 @@ impl Signex {
             }
             DocumentKey::Symbol(path) => {
                 if let Some(editor) = docs.symbol_editors.get_mut(path) {
-                    editor.file.file_uuid = id.as_uuid();
-                    editor.baseline.file_uuid = id.as_uuid();
+                    editor.draft.file.file_uuid = id.as_uuid();
+                    editor.draft.baseline.file_uuid = id.as_uuid();
                 }
             }
             DocumentKey::Footprint(path) => {

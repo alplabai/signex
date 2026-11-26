@@ -93,6 +93,8 @@ fn pad(number: &str) -> Pad {
         layers: Vec::new(),
         net: None,
         roundrect_ratio: 0.0,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 0.0,
         layer_sizes: None,
         net_locked: false,
@@ -151,6 +153,7 @@ fn board(footprints: Vec<Footprint>) -> PcbBoard {
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         uuid: Uuid::now_v7(),
         version: 0,
@@ -541,6 +544,8 @@ fn copper_on(pcb: &mut PcbBoard, number: u32, name: &str) {
         min_thickness: 0.0,
         min_island_area: 0.0,
         remove_dead_islands: false,
+        shelved: false,
+        unfilled: false,
         unknown: Default::default(),
     });
 }

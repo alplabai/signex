@@ -5,7 +5,8 @@
 //! A part is matched by its sheet occurrence and a unit UUID against the
 //! footprint's stored [`SymbolLink`](signex_types::pcb::SymbolLink), never by
 //! designator. A net is matched by name. Footprints with no link match
-//! nothing.
+//! nothing. A copper zone (pour, fill or solid region) stands for its net; a
+//! rule area (keepout, pour cutout) stands for none (#2907).
 
 use std::collections::BTreeSet;
 
@@ -91,15 +92,20 @@ pub struct BoardNetMembers {
     pub pads: Vec<(Uuid, Uuid)>,
     pub tracks: Vec<Uuid>,
     pub vias: Vec<Uuid>,
+    /// The copper zones on the nets; never a rule area.
+    pub zones: Vec<Uuid>,
 }
 
 impl BoardNetMembers {
     pub fn is_empty(&self) -> bool {
-        self.pads.is_empty() && self.tracks.is_empty() && self.vias.is_empty()
+        self.pads.is_empty()
+            && self.tracks.is_empty()
+            && self.vias.is_empty()
+            && self.zones.is_empty()
     }
 }
 
-/// The pads, tracks and vias on `nets`, in board order.
+/// The pads, tracks, vias and copper zones on `nets`, in board order.
 pub fn board_net_members(board: &PcbBoard, nets: &BTreeSet<u32>) -> BoardNetMembers {
     if nets.is_empty() {
         return BoardNetMembers::default();
@@ -125,7 +131,25 @@ pub fn board_net_members(board: &PcbBoard, nets: &BTreeSet<u32>) -> BoardNetMemb
             .filter(|v| nets.contains(&v.net))
             .map(|v| v.uuid)
             .collect(),
+        zones: board
+            .zones
+            .iter()
+            .filter(|z| !z.is_rule_area() && nets.contains(&z.net))
+            .map(|z| z.uuid)
+            .collect(),
     }
+}
+
+/// The net of the copper zone `zone`; `None` for a rule area, a zone on no
+/// net or one not on the board.
+pub fn zone_net(board: &PcbBoard, zone: Uuid) -> Option<u32> {
+    board
+        .zones
+        .iter()
+        .find(|z| z.uuid == zone)
+        .filter(|z| !z.is_rule_area())
+        .map(|z| z.net)
+        .filter(|&n| n != 0)
 }
 
 /// The net of the pad `pad` of footprint `footprint`, when it has one.

@@ -32,6 +32,8 @@ pub(crate) fn pad_at(n: u128, x: f64, y: f64, size: f64, net: u32) -> Footprint 
             name: format!("N{net}"),
         }),
         roundrect_ratio: 0.0,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 0.0,
         net_locked: false,
         layer_sizes: None,
@@ -76,6 +78,7 @@ pub(crate) fn track_at(n: u128, a: (f64, f64), b: (f64, f64), net: u32) -> Segme
 pub(crate) fn board(footprints: Vec<Footprint>, segments: Vec<Segment>) -> PcbBoard {
     PcbBoard {
         stackup: None,
+        rooms: Vec::new(),
         sketch: None,
         options: Default::default(),
         uuid: Uuid::nil(),

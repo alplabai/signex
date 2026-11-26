@@ -36,9 +36,12 @@ fn empty_sheet() -> SchematicSheet {
         drawings: Vec::new(),
         no_erc_directives: Vec::new(),
         directives: Vec::new(),
+        harness: Default::default(),
+        unions: Vec::new(),
         title_block: HashMap::new(),
         text_widths: Default::default(),
         text_extents: Default::default(),
+        variables: Default::default(),
         lib_symbols: Default::default(),
         net_colors: HashMap::new(),
         drawing_placements: Default::default(),
@@ -136,7 +139,6 @@ fn fixture_with(child: Option<SchematicSheet>, symbols: Vec<ChildSheet>) -> Fixt
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "parent".to_string(),
         path: parent_path.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });

@@ -75,7 +75,7 @@ impl Signex {
             UndoTarget::Document(key) => match key {
                 DocumentKey::Symbol(path) => {
                     docs.symbol_editors.get(path).map_or((false, false), |e| {
-                        (e.history.can_undo(), e.history.can_redo())
+                        (e.draft.history.can_undo(), e.draft.history.can_redo())
                     })
                 }
                 DocumentKey::Footprint(path) => docs
@@ -85,7 +85,7 @@ impl Signex {
                         (e.history.can_undo(), e.history.can_redo())
                     }),
                 DocumentKey::Row(address) => self.component_history_of(address),
-                DocumentKey::Project(id) => self.project_tab_history_available(*id),
+                DocumentKey::Project(id) => self.project_history_available(*id),
                 DocumentKey::Schematic(path) => self.sheet_history_available(path),
                 // In sketch mode Undo steps the sketch, not the board (#2234).
                 DocumentKey::Pcb(path) => self
@@ -93,6 +93,35 @@ impl Signex {
                     .unwrap_or_else(|| docs.board_history_available(path)),
             },
         }
+    }
+
+    /// `(can_undo, can_redo)` of a project: its General and rule histories
+    /// are one timeline to the person in its Project tab.
+    fn project_history_available(&self, id: ProjectId) -> (bool, bool) {
+        let (general_undo, general_redo) = self.project_tab_history_available(id);
+        let (rules_undo, rules_redo) = self.undo_availability(&UndoTarget::RulesTab(id));
+        (general_undo || rules_undo, general_redo || rules_redo)
+    }
+
+    /// Whether project `id`'s next step (`undo`, else redo) is on its rule
+    /// history: the one holding the nearer edit, or the only one that can
+    /// step.
+    pub(crate) fn project_step_is_rules(&self, id: ProjectId, undo: bool) -> bool {
+        let docs = &self.document_state;
+        let Some(rules) = docs.rules_history.get(&id) else {
+            return false;
+        };
+        let (general_undo, general_redo) = self.project_tab_history_available(id);
+        let (can_rules, can_general) = if undo {
+            (rules.can_undo(), general_undo)
+        } else {
+            (rules.can_redo(), general_redo)
+        };
+        let position = docs
+            .general_history
+            .get(&id)
+            .map_or(0, |history| history.position());
+        can_rules && (!can_general || rules.steps_before_general(undo, position))
     }
 
     /// `(can_undo, can_redo)` of the sheet at `path`: its one timeline, whose
@@ -116,6 +145,9 @@ impl Signex {
             return false;
         };
         match key {
+            DocumentKey::Project(id) if self.project_step_is_rules(*id, undo) => {
+                self.step_rules_history(*id, undo)
+            }
             DocumentKey::Project(id) => self.step_project_tab_history(*id, undo),
             DocumentKey::Row(address) => self.step_component_editor_at(address, undo),
             DocumentKey::Symbol(path) => {

@@ -2,13 +2,17 @@
 //! and the rules that decide whether Create is available. Pure data; the
 //! disk check of the target lives in `target.rs`.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-use signex_types::project::{PcbField, PcbValueError, ProjectSetup, SetupProfile, UserProfile};
+use signex_types::project::{
+    PcbField, PcbValueError, ProfileNameProblem, ProjectSetup, SetupProfile, UserProfile,
+};
 use signex_types::schematic::SheetSize;
 
-use super::NewProjectMsg;
+pub(crate) use crate::app::handlers::document_files::new_project::project_file_in;
+
 use super::target::{TargetProblem, TargetStatus};
+use super::{NewProjectMsg, ProfileTarget};
 
 /// Characters a project name cannot hold: they are separators or reserved on
 /// some platform's file systems.
@@ -145,6 +149,25 @@ pub struct NewProjectState {
     pub(crate) save_profile_problem: Option<SaveProfileProblem>,
     /// The saved profile whose Remove asks to confirm, by id.
     pub(crate) remove_confirm: Option<String>,
+    /// The built-in card under the pointer: its pencil shows.
+    pub(crate) hovered_card: Option<SetupProfile>,
+    /// The profile whose menu is open.
+    pub(crate) profile_menu: Option<ProfileTarget>,
+    /// The profile whose values the fields are editing (Edit profile...).
+    pub(crate) editing: Option<ProfileTarget>,
+    /// The saved profile being renamed, with the name as typed.
+    pub(crate) renaming: Option<Renaming>,
+    /// The previews' open value, held handle and larger view.
+    pub(crate) preview: super::SetupPreview,
+}
+
+/// A Rename in progress: the saved profile and the name as typed, with
+/// why the last confirm was refused.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Renaming {
+    pub id: String,
+    pub name: String,
+    pub problem: Option<ProfileNameProblem>,
 }
 
 impl NewProjectState {
@@ -167,6 +190,11 @@ impl NewProjectState {
             save_profile_name: None,
             save_profile_problem: None,
             remove_confirm: None,
+            hovered_card: None,
+            profile_menu: None,
+            editing: None,
+            renaming: None,
+            preview: super::SetupPreview::default(),
         }
     }
 
@@ -181,8 +209,8 @@ impl NewProjectState {
     }
 
     /// The `.snxprj` Create would write: with the folder,
-    /// `<loc>/<name>/<name>.snxprj`, without it `<loc>/<name>.snxprj`.
-    #[cfg(test)]
+    /// `<loc>/<name>/<name>.snxprj`, without it `<loc>/<name>.snxprj`. `None`
+    /// while the name is unusable or the location is empty.
     pub(crate) fn project_file(&self) -> Option<PathBuf> {
         let name = check_name(&self.name).ok()?;
         let location = self.location_path()?;
@@ -251,8 +279,8 @@ impl NewProjectState {
         self.drafts = RuleDrafts::of(&self.setup);
     }
 
-    pub(crate) fn pick_profile(&mut self, profile: SetupProfile) {
-        self.setup.pick_profile(profile);
+    pub(crate) fn pick_profile(&mut self, profile: SetupProfile, users: &[UserProfile]) {
+        self.setup.pick_profile(profile, users);
         self.import_error = None;
         self.refresh_drafts();
         if profile == SetupProfile::Custom {
@@ -260,13 +288,26 @@ impl NewProjectState {
         }
     }
 
-    /// Step the copper layer count; the profile becomes Custom and the
-    /// customize section opens, as the stepper is in it.
+    /// Step the copper layer count of the picked card by `delta` layers
+    /// (even counts, 2 to 32); the card keeps its tier (#2537). The
+    /// customize section opens, as this stepper is in it.
     pub(crate) fn step_layers(&mut self, delta: i8) {
-        let next = i16::from(self.setup.pcb.copper_layers) + i16::from(delta);
-        let next = u8::try_from(next.clamp(1, 32)).unwrap_or(1);
-        self.setup.set_layers(next);
+        self.setup.step_layers(delta);
         self.customize_open = true;
+    }
+
+    /// Load `target`'s values into the fields: the card it names is picked.
+    pub(crate) fn load_profile(&mut self, target: &ProfileTarget, users: &[UserProfile]) {
+        match target {
+            ProfileTarget::BuiltIn(profile) => self.pick_profile(*profile, users),
+            ProfileTarget::Saved(id) => {
+                if let Some(profile) = users.iter().find(|p| p.is_user() && p.id == *id) {
+                    self.setup.pick_user_profile(profile);
+                    self.import_error = None;
+                    self.refresh_drafts();
+                }
+            }
+        }
     }
 }
 
@@ -277,9 +318,58 @@ impl NewProjectState {
     pub(crate) fn apply_setup(&mut self, msg: NewProjectMsg, users: &[UserProfile]) -> bool {
         use NewProjectMsg as M;
         match msg {
-            M::ProfilePicked(p) => self.pick_profile(p),
+            M::ProfilePicked(p) => self.pick_profile(p, users),
+            M::CardLayersStepped(p, delta) => {
+                self.setup.step_card_layers(p, delta, users);
+                self.import_error = None;
+                self.refresh_drafts();
+            }
+            M::CardHovered { card, inside: true } => self.hovered_card = Some(card),
+            // Leaving a card clears only its own hover: the next card's enter
+            // may land first.
+            M::CardHovered {
+                card,
+                inside: false,
+            } => {
+                if self.hovered_card == Some(card) {
+                    self.hovered_card = None;
+                }
+            }
+            M::ProfileMenuToggled(menu) => self.profile_menu = menu,
+            M::ProfileEditRequested(target) => {
+                self.profile_menu = None;
+                self.load_profile(&target, users);
+                self.editing = Some(target);
+                self.customize_open = true;
+            }
+            M::ProfileEditCancelled => {
+                // The fields go back to the profile's stored values.
+                if let Some(target) = self.editing.take() {
+                    self.load_profile(&target, users);
+                }
+            }
+            M::ProfileRenameRequested(id) => {
+                self.profile_menu = None;
+                let name = users
+                    .iter()
+                    .find(|p| p.id == id)
+                    .map(|p| p.name.clone())
+                    .unwrap_or_default();
+                self.renaming = Some(Renaming {
+                    id,
+                    name,
+                    problem: None,
+                });
+            }
+            M::ProfileRenameEdited(name) => {
+                if let Some(renaming) = self.renaming.as_mut() {
+                    renaming.name = name;
+                    renaming.problem = None;
+                }
+            }
+            M::ProfileRenameCancelled => self.renaming = None,
             M::UserProfilePicked(id) => {
-                let Some(profile) = users.iter().find(|p| p.id == id) else {
+                let Some(profile) = users.iter().find(|p| p.is_user() && p.id == id) else {
                     return true;
                 };
                 self.setup.pick_user_profile(profile);
@@ -305,7 +395,10 @@ impl NewProjectState {
                 self.save_profile_name = None;
                 self.save_profile_problem = None;
             }
-            M::UserProfileRemoveRequested(id) => self.remove_confirm = Some(id),
+            M::UserProfileRemoveRequested(id) => {
+                self.profile_menu = None;
+                self.remove_confirm = Some(id);
+            }
             M::UserProfileRemoveCancelled => self.remove_confirm = None,
             M::SheetOrientationPicked(orientation) => {
                 let (size, _) = SheetSize::parse(&self.setup.sheet.paper_size);
@@ -317,6 +410,7 @@ impl NewProjectState {
                 self.setup.apply_fab(fab);
                 self.import_error = None;
                 self.refresh_drafts();
+                self.dropdown_open = false;
             }
             M::RulesFileRead(Some(Ok(template))) => {
                 self.setup.apply_template(&template);
@@ -355,10 +449,10 @@ impl NewProjectState {
         data: &signex_types::project::ProjectData,
         users: &[UserProfile],
     ) -> Self {
-        let mut state = Self::of_setup(
-            ProjectSetup::for_project(&data.project_defaults, data.designator_standard(), users)
-                .setup,
-        );
+        // What a new sheet really starts from (mockup row 31), so the card
+        // and New Schematic never show two sizes.
+        let setup = crate::app::document_setup::new_document_setup(data, users).setup;
+        let mut state = Self::of_setup(setup);
         state.customize_open = true;
         state
     }
@@ -369,16 +463,6 @@ impl NewProjectState {
         state.setup = setup;
         state.refresh_drafts();
         state
-    }
-}
-
-/// `<loc>/<name>/<name>.snxprj` or `<loc>/<name>.snxprj`.
-pub(crate) fn project_file_in(location: &Path, name: &str, make_folder: bool) -> PathBuf {
-    let file = format!("{name}.snxprj");
-    if make_folder {
-        location.join(name).join(file)
-    } else {
-        location.join(file)
     }
 }
 

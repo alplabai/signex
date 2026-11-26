@@ -1,4 +1,4 @@
-//! #2247 - Window ▸ Tile Horizontally / Tile Vertically arrange the main
+//! #2247 - View ▸ Window ▸ Tile Horizontally / Tile Vertically arrange the main
 //! window and the undocked document windows on the main window's monitor.
 //! The window moves are iced tasks a test cannot run, so the plan they are
 //! built from is checked, and each entry point is checked to reach it (its
@@ -30,7 +30,6 @@ fn app_with_an_undocked_tab(monitor: (f32, f32)) -> Signex {
         app.document_state.tabs.push(TabInfo {
             title: title.to_string(),
             path: tab_path,
-            cached_document: None,
             project_id: None,
             kind: TabKind::Schematic,
         });

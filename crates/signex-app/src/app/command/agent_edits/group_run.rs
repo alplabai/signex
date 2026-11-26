@@ -8,11 +8,10 @@ use std::path::{Path, PathBuf};
 
 use iced::Task;
 use serde_json::{Value, json};
-use signex_engine::{CommandResult, Engine, EngineError, UndoGroupId};
+use signex_engine::{CommandResult, DocumentPatch, Engine, EngineError, UndoGroupId};
 
 use super::apply::{Prepared, Ran, file_name, refused};
 use crate::app::{Message, Signex, UndoGroupKind, UndoGroupSheets};
-use crate::schematic_runtime::RenderInvalidation;
 
 use super::super::CommandOutcome;
 
@@ -65,7 +64,7 @@ struct Executed {
     tasks: Vec<Task<Message>>,
     /// What each edit answered, by index; `null` for one that only ran.
     results: Vec<Value>,
-    owed: HashMap<PathBuf, RenderInvalidation>,
+    owed: HashMap<PathBuf, DocumentPatch>,
     failure: Option<String>,
 }
 
@@ -83,7 +82,7 @@ fn run_edits(app: &mut Signex, sheets: &[PathBuf], edits: &[Prepared]) -> Execut
     for (index, edit) in edits.iter().enumerate() {
         let state = &mut app.document_state.agent_edits;
         state.target = Some(edit.path.clone());
-        state.owed = RenderInvalidation::NONE;
+        state.owed = DocumentPatch::NONE;
         let done = (edit.handler)(app, &edit.args);
         let taken = std::mem::take(&mut app.document_state.agent_edits.owed);
         *ran.owed.entry(edit.path.clone()).or_default() |= taken;
@@ -98,9 +97,10 @@ fn run_edits(app: &mut Signex, sheets: &[PathBuf], edits: &[Prepared]) -> Execut
             }
             (CommandOutcome::Disabled { reason }, _) => {
                 ran.failure = Some(format!(
-                    "edit {} (`{}`): {reason}",
+                    "edit {} (`{}`): {}",
                     index + 1,
-                    edit.id.as_str()
+                    edit.id.as_str(),
+                    signex_i18n::RenderTranslatable::render_en_us(&reason)
                 ));
                 break;
             }
@@ -168,7 +168,8 @@ fn undo_landed(app: &mut Signex, landed: &[(PathBuf, bool)], group: UndoGroupId)
             );
         }
         // The revision moved with the take-back: dirtiness and the screen follow.
-        app.after_sheet_change(path, RenderInvalidation::FULL);
+        // No library drift check: a take-back of the same call is not a Step.
+        app.after_sheet_change(path, DocumentPatch::FULL);
     }
 }
 
@@ -266,12 +267,12 @@ fn finish(
         }
         for path in &changed {
             let owed = ran.owed.get(path).copied().unwrap_or_default();
-            let invalidation = if owed == RenderInvalidation::NONE {
-                RenderInvalidation::FULL
+            let patch = if owed == DocumentPatch::NONE {
+                DocumentPatch::FULL
             } else {
                 owed
             };
-            app.after_sheet_change(path, invalidation);
+            app.after_sheet_change(path, patch);
         }
         let names: Vec<String> = changed.iter().map(|path| file_name(path)).collect();
         crate::diagnostics::log_info(format!(

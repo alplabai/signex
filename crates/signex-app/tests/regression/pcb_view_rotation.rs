@@ -8,14 +8,14 @@ use iced::widget::canvas::Program;
 use iced::{Event, Point as ScreenPoint, Rectangle, mouse};
 use pcb_geom::{ClickMode, ItemRef};
 use signex_app::app::{
-    CommandPaletteMsg, FileMsg, InputMsg, Message, Signex, StatusBarRequest, TabDocument, UiMsg,
-    WindowMsg,
+    CommandPaletteMsg, FileMsg, InputMsg, Message, Signex, StatusBarRequest, UiMsg, WindowMsg,
 };
 use signex_app::canvas::CanvasEvent;
 use signex_app::keymap::AppCommandId;
 use signex_app::menu_bar::MenuMessage;
 use signex_app::pcb_canvas::{PcbCanvasMsg, PcbCanvasState};
 use signex_app::tab_bar::TabMessage;
+use signex_app::test_adapter::BoardEngines;
 use signex_types::format::SnxPcb;
 use signex_types::pcb::{
     Footprint, Pad, PadShape, PadType, PcbBoard, Point, Segment, Via, ViaType,
@@ -54,6 +54,8 @@ fn board() -> PcbBoard {
         layers: vec!["TopCopper".into()],
         net: None,
         roundrect_ratio: 0.0,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 0.0,
         layer_sizes: None,
         net_locked: false,
@@ -105,6 +107,7 @@ fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
@@ -226,20 +229,15 @@ impl Fixture {
 
     fn live(&self) -> PcbBoard {
         let docs = &self.app.document_state;
-        docs.tabs[docs.active_tab]
-            .cached_document
-            .as_ref()
-            .and_then(TabDocument::as_pcb)
+        docs.tab_board_engine(docs.active_tab)
+            .map(|engine| engine.board())
             .expect("a board is open")
             .clone()
     }
 
     fn can_undo(&self) -> bool {
         let docs = &self.app.document_state;
-        docs.tabs[docs.active_tab]
-            .cached_document
-            .as_ref()
-            .and_then(TabDocument::as_pcb_engine)
+        docs.tab_board_engine(docs.active_tab)
             .expect("a board engine")
             .can_undo()
     }

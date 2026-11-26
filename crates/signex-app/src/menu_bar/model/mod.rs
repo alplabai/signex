@@ -41,12 +41,23 @@ pub struct MenuItem {
     pub state: ItemState,
     /// `Some` for a toggle row (a panel): whether its check mark shows.
     pub checked: Option<bool>,
+    /// A glyph in the check column, drawn while no check mark shows there.
+    pub icon: Option<MenuIcon>,
+}
+
+/// The glyph a row draws in its check column (mockup row 166). Plain data;
+/// the renderer picks the image, a native menu draws none.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MenuIcon {
+    Save,
+    Reset,
 }
 
 /// A placeholder is a feature with no handler yet (greyed, its `reason` as
 /// the tooltip, else "planned"); an unavailable row is greyed informational
 /// text; a live row has one and is greyed out unless enabled in the current
-/// context.
+/// context; a header is a small caption over the rows below it, not a
+/// command at all: docs/MENU_BAR.md#header-entries
 #[derive(Debug, Clone)]
 pub enum ItemState {
     Placeholder {
@@ -57,6 +68,7 @@ pub enum ItemState {
         action: MenuMessage,
         is_enabled: bool,
     },
+    Header,
 }
 
 /// A row's shortcut: the display text, plus the command id it belongs to so a
@@ -83,17 +95,23 @@ impl MenuItem {
     pub fn is_enabled(&self) -> bool {
         self.dispatches().is_some()
     }
+
+    /// Whether the row is a section caption rather than a command row.
+    pub fn is_header(&self) -> bool {
+        matches!(self.state, ItemState::Header)
+    }
 }
 
 /// The English titles of the root menus, left to right, which the tests pin;
-/// the bar reads [`ROOT_TITLE_IDS`].
+/// the bar reads [`ROOT_TITLE_IDS`]. Reports and Window are submenus of Tools
+/// and View: docs/MENU_BAR.md#root-menus
 #[cfg(test)]
-pub const ROOT_TITLES: [&str; 10] = [
-    "File", "Edit", "View", "Project", "Place", "Design", "Tools", "Reports", "Window", "Help",
+pub const ROOT_TITLES: [&str; 8] = [
+    "File", "Edit", "View", "Project", "Place", "Design", "Tools", "Help",
 ];
 
 /// The catalog message of each root title, left to right.
-const ROOT_TITLE_IDS: [signex_i18n::MessageId; 10] = [
+const ROOT_TITLE_IDS: [signex_i18n::MessageId; 8] = [
     signex_i18n::ids::MENU_FILE,
     signex_i18n::menu_ids::MENU_EDIT,
     signex_i18n::menu_ids::MENU_VIEW,
@@ -101,8 +119,6 @@ const ROOT_TITLE_IDS: [signex_i18n::MessageId; 10] = [
     signex_i18n::menu_ids::MENU_PLACE,
     signex_i18n::menu_ids::MENU_DESIGN,
     signex_i18n::menu_ids::MENU_TOOLS,
-    signex_i18n::menu_ids::MENU_REPORTS,
-    signex_i18n::menu_ids::MENU_WINDOW,
     signex_i18n::menu_ids::MENU_HELP,
 ];
 
@@ -115,8 +131,10 @@ pub fn root_titles(i18n: &signex_i18n::I18n) -> Vec<String> {
 }
 
 /// Build the menu bar for `ctx`. Pure: the same context gives the same model.
+/// The rows extensions add come after every built-in row of their root
+/// menu, below one separator (#2495); with none, the bar is the built-in one.
 pub fn menu_bar_model(ctx: &MenuContext) -> MenuBarModel {
-    let entries = [
+    let mut entries = [
         menus::file(ctx),
         menus::edit(ctx),
         menus::view(ctx),
@@ -124,10 +142,19 @@ pub fn menu_bar_model(ctx: &MenuContext) -> MenuBarModel {
         menus::place(ctx),
         menus::design(ctx),
         menus::tools(ctx),
-        menus::reports(ctx),
-        menus::window(ctx),
         menus::help(ctx),
     ];
+    for (index, root) in entries.iter_mut().enumerate() {
+        let mut rows = ctx
+            .extension_rows
+            .iter()
+            .filter(|row| row.root.index() == index)
+            .peekable();
+        if rows.peek().is_some() {
+            root.push(MenuEntry::Separator);
+            root.extend(rows.map(|row| items::extension_item(ctx, row)));
+        }
+    }
     MenuBarModel {
         menus: root_titles(&ctx.i18n)
             .into_iter()

@@ -36,7 +36,6 @@ pub(crate) fn open_container_editor(
     app.document_state.tabs.push(TabInfo {
         title: "two-unit".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::SymbolEditor(path.clone()),
     });
@@ -49,7 +48,11 @@ pub(crate) fn panel(app: &mut Signex, msg: PanelMsg) {
 }
 
 pub(crate) fn symbol_count(app: &Signex, path: &PathBuf) -> usize {
-    app.document_state.symbol_editors[path].file.symbols.len()
+    app.document_state.symbol_editors[path]
+        .draft
+        .file
+        .symbols
+        .len()
 }
 
 #[test]
@@ -322,7 +325,12 @@ fn an_edit_at_full_history_depth_makes_the_warning_stale() {
     for _ in 0..SymbolDocument::HISTORY_DEPTH + 5 {
         add_pin(&mut app, &path);
     }
-    let depth = |app: &Signex| app.document_state.symbol_editors[&path].history.undo_len();
+    let depth = |app: &Signex| {
+        app.document_state.symbol_editors[&path]
+            .draft
+            .history
+            .undo_len()
+    };
     assert_eq!(depth(&app), SymbolDocument::HISTORY_DEPTH);
     panel(&mut app, PanelMsg::SchLibraryDeleteSymbol(0));
     assert!(warning_shown(&app));

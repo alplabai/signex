@@ -113,3 +113,82 @@ fn back_to_back_captures_leave_the_later_one_on_disk_whatever_the_run_order() {
 
     assert_eq!(names(&on_disk()), ["Filter 1", "Filter 2"]);
 }
+
+/// `app_with_footprint_tab` with the footprint's tab active.
+fn app_with_active_footprint_tab() -> Signex {
+    let (mut app, path) = app_with_footprint_tab();
+    app.document_state.tabs.push(crate::app::TabInfo {
+        title: "part".to_string(),
+        path: path.clone(),
+        project_id: None,
+        kind: crate::app::TabKind::FootprintEditor(path),
+    });
+    app.document_state.active_tab = app.document_state.tabs.len() - 1;
+    app
+}
+
+/// The Custom Selection Filter dialog's Apply, with `name` typed and only
+/// Pads ticked when `pads_only`.
+fn apply_custom(app: &mut Signex, name: &str, pads_only: bool) {
+    use crate::app::SelectionFilterMsg;
+    let _ = app.update(Message::SelectionFilter(SelectionFilterMsg::OpenCustom));
+    let draft = app
+        .ui_state
+        .selection_filter_custom
+        .as_mut()
+        .expect("the dialog opens on the footprint editor");
+    draft.preset_name = name.to_string();
+    if pads_only {
+        draft.set_all_shown(false);
+        draft.pads = true;
+    }
+    let _ = app.update(Message::SelectionFilter(SelectionFilterMsg::ApplyCustom));
+}
+
+/// Messages lines holding `needle`; installs the logger first, since each
+/// test may run in its own process.
+fn logged(needle: &str) -> usize {
+    crate::diagnostics::logged_count(needle)
+}
+
+#[test]
+fn applying_the_same_filter_again_adds_no_preset() {
+    let mut app = app_with_active_footprint_tab();
+    apply_custom(&mut app, "", false);
+    apply_custom(&mut app, "", false);
+    apply_custom(&mut app, "", false);
+    assert_eq!(
+        names(&app.interaction_state.footprint_filter_presets),
+        ["Filter 1"],
+        "no endless Filter N"
+    );
+    apply_custom(&mut app, "", true);
+    assert_eq!(
+        names(&app.interaction_state.footprint_filter_presets),
+        ["Filter 1", "Filter 2"],
+        "other kinds are a new preset"
+    );
+}
+
+#[test]
+fn a_typed_name_at_the_preset_limit_is_said_in_messages() {
+    let mut app = app_with_active_footprint_tab();
+    app.interaction_state.footprint_filter_presets = (0
+        ..crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT)
+        .map(|n| FootprintFilterPreset {
+            name: format!("Full {n}"),
+            kinds: Vec::new(),
+        })
+        .collect();
+    let before = logged("Dropped at the limit");
+    apply_custom(&mut app, "Dropped at the limit", true);
+    assert_eq!(
+        app.interaction_state.footprint_filter_presets.len(),
+        crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT
+    );
+    assert_eq!(
+        logged("Dropped at the limit"),
+        before + 1,
+        "the dropped name is named"
+    );
+}

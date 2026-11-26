@@ -12,6 +12,18 @@ use iced::{Element, Length};
 /// Space kept between the content and the embedded scrollbar, in pixels.
 const SCROLLBAR_GAP: f32 = 2.0;
 
+/// The Properties panel's scroller, so a task can scroll it.
+pub(crate) const PROPERTIES_SCROLL_ID: &str = "signex.properties.scroll";
+
+/// Scrolls the Properties panel to its end, where a board's last sections
+/// sit.
+pub(crate) fn snap_properties_to_end<M: Send + 'static>() -> iced::Task<M> {
+    iced::widget::operation::scrollable::snap_to_end(
+        PROPERTIES_SCROLL_ID,
+        iced::widget::operation::Animation::Instant,
+    )
+}
+
 /// A panel body in a full-width vertical scroller with a scrollbar gutter.
 pub(crate) fn panel_scrollable<'a, M: 'a>(content: impl Into<Element<'a, M>>) -> Scrollable<'a, M> {
     scrollable(content.into())

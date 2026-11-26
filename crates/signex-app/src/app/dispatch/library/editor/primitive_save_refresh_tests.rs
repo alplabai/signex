@@ -93,7 +93,6 @@ fn fixture() -> Fixture {
     app.document_state.tabs.push(TabInfo {
         title: "Sym".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::SymbolEditor(path.clone()),
     });

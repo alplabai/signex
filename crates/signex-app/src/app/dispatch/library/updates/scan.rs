@@ -38,7 +38,8 @@ pub(super) type PersonalUpdates =
 pub(super) type Instance = (PlacedLibrarySymbol, Option<InstanceRow>);
 
 /// The instances of `lib_id` whose row still binds it. A stale row re-bound
-/// to another symbol is logged and counted in `any_failed`.
+/// to another symbol is logged against the part on `sheet` and counted in
+/// `any_failed`.
 ///
 /// A part whose version has not moved is in the list too: its value and its
 /// row's can still disagree (a row edited outside the version bump, a
@@ -47,6 +48,7 @@ pub(super) type Instance = (PlacedLibrarySymbol, Option<InstanceRow>);
 pub(super) fn bound_instances<'a>(
     group: &'a [Instance],
     lib_id: &str,
+    sheet: &std::path::Path,
     any_failed: &mut bool,
 ) -> Vec<(&'a PlacedLibrarySymbol, &'a InstanceRow)> {
     let mut bound = Vec::new();
@@ -57,12 +59,13 @@ pub(super) fn bound_instances<'a>(
         if row_binds_lib_id(&row.row, lib_id) {
             bound.push((symbol, row));
         } else if row.stale {
-            crate::diagnostics::log_warning(rebound_row_warning(
+            let line = rebound_row_warning(
                 &symbol.reference,
                 symbol.row_id,
                 lib_id,
                 VERSION_NOT_STAMPED,
-            ));
+            );
+            crate::diagnostics::log_part_warning(line, sheet, symbol.uuid);
             *any_failed = true;
         }
     }
@@ -71,22 +74,24 @@ pub(super) fn bound_instances<'a>(
 
 /// Why `symbol` stops its `lib_id` from being auto-applied: the shared copy
 /// moves only when every instance has a readable Personal-mode row that
-/// still binds it. The Messages line names the instance.
+/// still binds it. The Messages line names the instance, returned with its
+/// uuid for the row's Show.
 pub(super) fn blocker(
     symbol: &PlacedLibrarySymbol,
     row: Option<&InstanceRow>,
     lib_id: &str,
-) -> Option<String> {
+) -> Option<(uuid::Uuid, String)> {
     let reason = match row {
         None => "its library row is unreadable",
         Some(r) if !row_binds_lib_id(&r.row, lib_id) => "its row binds a different symbol",
         Some(r) if r.mode != signex_library::WorkflowMode::Personal => "its library is Team-mode",
         Some(_) => return None,
     };
-    Some(format!(
+    let line = format!(
         "{}: {reason}, so the shared copy was not auto-updated ({lib_id}).",
         symbol.reference
-    ))
+    );
+    Some((symbol.uuid, line))
 }
 
 /// The silent Personal restamp of a stale part, `None` when it is left alone.
@@ -123,6 +128,8 @@ pub(super) fn modal_entry(
     LibraryUpdateEntry {
         symbol_uuid: symbol.uuid,
         ref_des: symbol.reference,
+        // From the row the version came from, so the two always agree.
+        internal_pn: row.row.internal_pn.as_str().to_string(),
         lib_id: symbol.lib_id,
         library_id: symbol.library_id,
         library_name: row.library_name.clone(),

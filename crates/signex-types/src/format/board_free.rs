@@ -10,13 +10,16 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::FormatError;
+use super::board_dimension::{self, DimensionRaw};
 use super::finite_toml;
+use super::pad_shape_cells::{
+    check_shape, delta_cell, outline_cell, read_delta, read_outline, refuse_unreadable_shape,
+};
 use super::pcb_cells::{LAYER_SIZES_COLUMN, layer_sizes_cell, read_layer_sizes};
 use super::pcb_rows::row_field_error;
 use super::units::{NonFiniteField, mm_to_nm, nm_to_mm};
 use crate::pcb::{DrillDef, Pad, PadNet, PadShape, PadType, PcbBoard, Point};
 use crate::pcb_arc::TrackArc;
-use crate::pcb_dimension::LinearDimension;
 use crate::pcb_free::FreePrimitives;
 
 const ARCS: &str = "free.arcs";
@@ -81,20 +84,12 @@ struct PadRaw {
     /// cell form; absent for one size on every layer.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     layer_sizes: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct DimensionRaw {
-    uuid: Uuid,
-    start_x: i64,
-    start_y: i64,
-    end_x: i64,
-    end_y: i64,
-    offset: i64,
-    layer: String,
-    line_width: i64,
-    text_height: i64,
-    precision: u8,
+    /// A trapezoid's delta and a custom pad's outline (#2242), in the
+    /// `pads` rows' cell forms; absent when the pad has none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    trapezoid_delta: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    custom_outline: Option<String>,
 }
 
 fn point(x: i64, y: i64) -> Point {
@@ -128,16 +123,7 @@ pub(in crate::format) fn read(raw: Option<FreeRaw>) -> Result<FreePrimitives, Fo
     let dimensions = raw
         .dimensions
         .into_iter()
-        .map(|d| LinearDimension {
-            uuid: d.uuid,
-            start: point(d.start_x, d.start_y),
-            end: point(d.end_x, d.end_y),
-            offset: nm_to_mm(d.offset),
-            layer: d.layer,
-            line_width: nm_to_mm(d.line_width),
-            text_height: nm_to_mm(d.text_height),
-            precision: d.precision,
-        })
+        .map(board_dimension::read)
         .collect();
     Ok(FreePrimitives {
         arcs,
@@ -162,7 +148,7 @@ fn read_pad(row: usize, p: PadRaw) -> Result<Pad, FormatError> {
             )
         })?),
     };
-    Ok(Pad {
+    let pad = Pad {
         uuid: p.uuid,
         number: p.number,
         pad_type: p.pad_type,
@@ -180,11 +166,15 @@ fn read_pad(row: usize, p: PadRaw) -> Result<Pad, FormatError> {
         }),
         roundrect_ratio: p.roundrect_ratio,
         rotation: p.rotation,
+        trapezoid_delta: read_delta(p.trapezoid_delta.as_deref(), PADS, row)?,
+        custom_outline: read_outline(p.custom_outline.as_deref(), PADS, row)?,
         net_locked: p.net_locked,
         layer_sizes,
         unknown: Default::default(),
         unknown_columns: Default::default(),
-    })
+    };
+    check_shape(&pad, PADS, row)?;
+    Ok(pad)
 }
 
 /// Append `[free]` to `out`; nothing for a board without free primitives.
@@ -214,7 +204,7 @@ pub(in crate::format) fn write(out: &mut String, board: &PcbBoard) -> Result<(),
         .dimensions
         .iter()
         .enumerate()
-        .map(|(row, d)| write_dimension(d).map_err(|e| refuse(DIMENSIONS, row, e)))
+        .map(|(row, d)| board_dimension::write(d).map_err(|e| refuse(DIMENSIONS, row, e)))
         .collect::<Result<_, _>>()?;
     #[derive(Serialize)]
     struct Wrapper {
@@ -250,6 +240,7 @@ fn write_arc(a: &TrackArc) -> Result<ArcRaw, NonFiniteField> {
 }
 
 fn write_pad(p: &Pad) -> Result<PadRaw, NonFiniteField> {
+    refuse_unreadable_shape(p)?;
     let drill = p
         .drill
         .as_ref()
@@ -277,20 +268,7 @@ fn write_pad(p: &Pad) -> Result<PadRaw, NonFiniteField> {
         rotation: p.rotation,
         net_locked: p.net_locked,
         layer_sizes: p.layer_sizes.as_ref().map(layer_sizes_cell).transpose()?,
-    })
-}
-
-fn write_dimension(d: &LinearDimension) -> Result<DimensionRaw, NonFiniteField> {
-    Ok(DimensionRaw {
-        uuid: d.uuid,
-        start_x: mm_to_nm(d.start.x, "start_x")?,
-        start_y: mm_to_nm(d.start.y, "start_y")?,
-        end_x: mm_to_nm(d.end.x, "end_x")?,
-        end_y: mm_to_nm(d.end.y, "end_y")?,
-        offset: mm_to_nm(d.offset, "offset")?,
-        layer: d.layer.clone(),
-        line_width: mm_to_nm(d.line_width, "line_width")?,
-        text_height: mm_to_nm(d.text_height, "text_height")?,
-        precision: d.precision,
+        trapezoid_delta: delta_cell(p)?,
+        custom_outline: outline_cell(p)?,
     })
 }

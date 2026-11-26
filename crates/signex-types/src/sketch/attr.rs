@@ -368,6 +368,13 @@ pub enum PadShape {
         chamfer_ratio_expr: String,
         corners: ChamferedCorners,
     },
+    /// Trapezoid (#2242): how much longer the +y edge is than the −y edge
+    /// (`delta_x_expr`) or the +x edge than the −x edge (`delta_y_expr`),
+    /// as lengths; at most one is non-zero.
+    Trapezoid {
+        delta_x_expr: String,
+        delta_y_expr: String,
+    },
     /// Arbitrary polygon outline.
     Custom(CustomPadShape),
 }
@@ -643,6 +650,17 @@ pub struct VScoreHintAttr {
 
 fn default_v_depth() -> String {
     "0.333".into()
+}
+
+/// The serde defaults: a third of the board each side, no minimum web.
+impl Default for VScoreHintAttr {
+    fn default() -> Self {
+        Self {
+            depth_fraction_expr: default_v_depth(),
+            min_web_expr: None,
+            side: VScoreSide::default(),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

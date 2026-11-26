@@ -1,24 +1,36 @@
-//! The Board Print / PDF dialog: the layer sets, the page layout, the scale,
-//! the ink and what each page shows, then Export PDF.
+//! The Board Print / PDF dialog (mockup row 116): the options on the left (the layer
+//! sets, the Layout group of segmented controls, what each page shows), the
+//! page plan on the right, then Export Assembly SVG… on the left of the
+//! footer and Cancel and Export PDF… on the right.
 
-use iced::widget::{Column, container, scrollable};
-use iced::{Element, Length, Widget as _};
-use signex_i18n::{I18n, MessageId, ids, t};
-use signex_output::{BoardLayerSet, BoardPrintPages, BoardPrintScale};
+use iced::widget::{Column, Row, container, row, scrollable};
+use iced::{Background, Element, Length, Theme, Widget as _};
+use signex_i18n::{I18n, Localized, MessageId, ids, t};
+use signex_output::{BoardLayerSet, BoardPrintOptions, BoardPrintPages, BoardPrintScale};
+use signex_types::pcb::PcbBoard;
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{CheckboxLabel as _, checkbox, text};
+use signex_widgets::segmented::SegmentedMetrics;
+use signex_widgets::{Label, MeasuredWidth, SegmentedStyle, segmented, text, tooltip};
 
-use super::{SP, TS, captioned, out, pills};
+use super::{SP, TS, kit, out};
 use crate::app::board_output::set_label;
 use crate::app::{BoardOutputMsg, BoardPrintFlag, BoardPrintState, Message};
-use crate::panels::form_look::checkbox_style;
-use crate::styles::{DialogButtonKind, dialog_button, dialog_footer_split, tokens};
+use crate::styles::{
+    DialogButtonKind, HAIRLINE, chrome_px, dialog_button, dialog_footer_split, tokens,
+};
 
 type Parts<'a> = (
     Element<'a, Message>,
     Element<'a, Message>,
     Element<'a, Message>,
 );
+
+/// The options column's least width (340 px, mockup row 116). It is wider
+/// when the Layout lines need more to keep each control on one line.
+const OPTIONS_MIN: f32 = chrome_px(340.0 * 11.0 / 12.0);
+
+/// The options column's side padding.
+const OPTIONS_SIDE: f32 = SP.xl + SP.xs;
 
 fn flag_label(flag: BoardPrintFlag) -> MessageId {
     match flag {
@@ -29,20 +41,10 @@ fn flag_label(flag: BoardPrintFlag) -> MessageId {
     }
 }
 
-/// A labelled checkbox that sends `msg` when clicked.
-fn tick<'a>(label: MessageId, on: bool, msg: BoardOutputMsg, i18n: &I18n) -> Element<'a, Message> {
-    checkbox(on)
-        .size(TS.title)
-        .labelled(t!(i18n, label))
-        .text_size(TS.body)
-        .style(checkbox_style)
-        .on_toggle(move |_| out(msg.clone()))
-        .boxed()
-}
-
-/// Header, the options and the footer with Export PDF and Close.
+/// Header, the options beside the page plan, and the footer.
 pub(super) fn parts<'a>(
     state: &'a BoardPrintState,
+    board: Option<&PcbBoard>,
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Parts<'a> {
@@ -58,103 +60,56 @@ pub(super) fn parts<'a>(
         tokens,
     );
     let options = &state.options;
-    let mut sets: Column<Element<'a, Message>> = Column::new().spacing(SP.s);
-    for set in BoardLayerSet::ALL {
-        sets = sets.push(tick(
-            set_label(set),
-            options.sets.contains(&set),
-            BoardOutputMsg::PrintSetToggled(set),
-            i18n,
-        ));
-    }
-    let pages = pills(
-        vec![
-            (
-                t!(i18n, ids::BOARD_PRINT_PAGES_PER_SET),
-                options.pages == BoardPrintPages::PerSet,
-                BoardOutputMsg::PrintPagesPicked(BoardPrintPages::PerSet),
-            ),
-            (
-                t!(i18n, ids::BOARD_PRINT_PAGES_COMPOSITE),
-                options.pages == BoardPrintPages::Composite,
-                BoardOutputMsg::PrintPagesPicked(BoardPrintPages::Composite),
-            ),
-        ],
+    let left = scrollable(container(options_column(options, i18n, tokens)).padding(
+        iced::Padding {
+            top: SP.xs * 2.0,
+            right: OPTIONS_SIDE,
+            bottom: SP.l,
+            left: OPTIONS_SIDE,
+        },
+    ))
+    .direction(crate::styles::thin_vertical())
+    .height(Length::Fill);
+    // The column is as wide as the Layout lines laid out on their own, so
+    // the Pages segments keep one line in whatever the UI font measures.
+    let style = layout_style(tokens);
+    let measure = container(layout_grid(
+        layout_lines(options, style, i18n),
+        style,
         tokens,
-    );
-    let scale = pills(
-        vec![
-            (
-                t!(i18n, ids::BOARD_PRINT_SCALE_FIT),
-                options.scale == BoardPrintScale::Fit,
-                BoardOutputMsg::PrintScalePicked(BoardPrintScale::Fit),
-            ),
-            (
-                t!(i18n, ids::BOARD_PRINT_SCALE_ONE),
-                options.scale == BoardPrintScale::OneToOne,
-                BoardOutputMsg::PrintScalePicked(BoardPrintScale::OneToOne),
-            ),
-        ],
-        tokens,
-    );
-    let ink = pills(
-        vec![
-            (
-                t!(i18n, ids::BOARD_PRINT_INK_COLOUR),
-                !options.monochrome,
-                BoardOutputMsg::PrintMonochromePicked(false),
-            ),
-            (
-                t!(i18n, ids::BOARD_PRINT_INK_MONO),
-                options.monochrome,
-                BoardOutputMsg::PrintMonochromePicked(true),
-            ),
-        ],
-        tokens,
-    );
-    let mut show: Column<Element<'a, Message>> = Column::new().spacing(SP.s);
-    for flag in BoardPrintFlag::ALL {
-        show = show.push(tick(
-            flag_label(flag),
-            flag.get(options),
-            BoardOutputMsg::PrintFlagToggled(flag),
-            i18n,
-        ));
-    }
-    let plan = options.page_plan();
-    let summary = if plan.is_empty() {
-        text(t!(i18n, ids::BOARD_PRINT_NO_SETS))
-            .size(TS.body)
-            .color(tokens::danger(tokens))
-    } else {
-        text(t!(i18n, ids::BOARD_PRINT_PAGE_COUNT, "count" => plan.len()))
-            .size(TS.body)
-            .color(tokens::muted_text(tokens))
-    };
-    let form = Column::new()
-        .spacing(SP.l)
-        .push(captioned(
-            t!(i18n, ids::BOARD_PRINT_SETS),
-            sets.boxed(),
-            tokens,
-        ))
-        .push(captioned(t!(i18n, ids::BOARD_PRINT_PAGES), pages, tokens))
-        .push(captioned(t!(i18n, ids::BOARD_PRINT_SCALE), scale, tokens))
-        .push(captioned(t!(i18n, ids::BOARD_PRINT_INK), ink, tokens))
-        .push(captioned(
-            t!(i18n, ids::BOARD_PRINT_SHOW),
-            show.boxed(),
-            tokens,
-        ))
-        .push(summary.boxed());
-    let body = scrollable(container(form).padding([SP.l, SP.xl]))
+    ))
+    .padding([0.0, OPTIONS_SIDE]);
+    let left: Element<'a, Message> = MeasuredWidth::new(left.boxed(), measure.boxed())
+        .min_width(OPTIONS_MIN)
+        .into();
+    let sunken = tokens::resolve(tokens).sunken;
+    let right = container(
+        scrollable(
+            container(super::print_plan::plan(options, board, i18n, tokens)).padding(SP.l + SP.xs),
+        )
+        .direction(crate::styles::thin_vertical())
+        .height(Length::Fill),
+    )
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .style(move |_: &Theme| container::Style {
+        background: Some(Background::Color(sunken)),
+        ..container::Style::default()
+    });
+    let body = row![left, vertical_rule(tokens), right]
         .height(Length::Fill)
         .boxed();
+    let can_export = !options.page_plan().is_empty();
     let footer = dialog_footer_split(
-        Vec::new(),
+        vec![dialog_button(
+            t!(i18n, ids::BOARD_PRINT_EXPORT_SVG),
+            DialogButtonKind::Secondary,
+            Some(out(BoardOutputMsg::SvgExportRequested)),
+            tokens,
+        )],
         vec![
             dialog_button(
-                t!(i18n, ids::BOARD_PRINT_CLOSE),
+                t!(i18n, ids::BOARD_PRINT_CANCEL),
                 DialogButtonKind::Cancel,
                 close,
                 tokens,
@@ -162,10 +117,204 @@ pub(super) fn parts<'a>(
             dialog_button(
                 t!(i18n, ids::BOARD_PRINT_EXPORT),
                 super::super::graphite::call_to_action(tokens),
-                (!plan.is_empty()).then(|| out(BoardOutputMsg::PdfExportRequested)),
+                can_export.then(|| out(BoardOutputMsg::PdfExportRequested)),
                 tokens,
             ),
         ],
     );
     (header, body, footer)
+}
+
+/// The soft line between the options and the page plan.
+fn vertical_rule<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
+    let ink = tokens::resolve(tokens).line_soft;
+    container(iced::widget::Space::new())
+        .width(Length::Fixed(HAIRLINE))
+        .height(Length::Fill)
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(ink)),
+            ..container::Style::default()
+        })
+        .boxed()
+}
+
+/// The three option groups: Layer Sets, Layout and Show.
+fn options_column<'a>(
+    options: &BoardPrintOptions,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let ticked = BoardLayerSet::ALL
+        .iter()
+        .filter(|set| options.sets.contains(set))
+        .count();
+    let count = t!(
+        i18n,
+        ids::BOARD_PRINT_SETS_COUNT,
+        "ticked" => ticked,
+        "total" => BoardLayerSet::ALL.len()
+    );
+    let mut sets: Column<Element<'a, Message>> = Column::new().spacing(SP.s).push(
+        kit::section_head(t!(i18n, ids::BOARD_PRINT_SETS), Some(count), i18n, tokens),
+    );
+    for set in BoardLayerSet::ALL {
+        sets = sets.push(kit::tick(
+            options.sets.contains(&set),
+            t!(i18n, set_label(set)),
+            Some(out(BoardOutputMsg::PrintSetToggled(set))),
+        ));
+    }
+    Column::new()
+        .spacing(SP.xl)
+        .push(sets.boxed())
+        .push(layout_group(options, i18n, tokens))
+        .push(show_group(options, i18n, tokens))
+        .boxed()
+}
+
+/// Pages, Scale and Ink as aligned segmented controls.
+fn layout_group<'a>(
+    options: &BoardPrintOptions,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let style = layout_style(tokens);
+    Column::new()
+        .spacing(SP.s + SP.xs)
+        .push(kit::section_head(
+            t!(i18n, ids::BOARD_PRINT_LAYOUT),
+            None,
+            i18n,
+            tokens,
+        ))
+        .push(layout_grid(
+            layout_lines(options, style, i18n),
+            style,
+            tokens,
+        ))
+        .boxed()
+}
+
+/// The look of the Layout group's segmented controls.
+fn layout_style(tokens: &ThemeTokens) -> SegmentedStyle {
+    kit::segmented_style(tokens).fill_width(true).compact(true)
+}
+
+/// The Layout group's labelled lines: Pages, Scale and Ink.
+fn layout_lines<'a>(
+    options: &BoardPrintOptions,
+    style: SegmentedStyle,
+    i18n: &I18n,
+) -> [(Localized, Element<'a, Message>); 3] {
+    let pages = segmented(
+        [
+            (
+                BoardPrintPages::PerSet,
+                Label::from(t!(i18n, ids::BOARD_PRINT_PAGES_PER_SET)),
+            ),
+            (
+                BoardPrintPages::Composite,
+                Label::from(t!(i18n, ids::BOARD_PRINT_PAGES_COMPOSITE)),
+            ),
+        ],
+        options.pages,
+        style,
+        |pages| out(BoardOutputMsg::PrintPagesPicked(pages)),
+    );
+    let scale = segmented(
+        [
+            (
+                BoardPrintScale::Fit,
+                Label::from(t!(i18n, ids::BOARD_PRINT_SCALE_FIT)),
+            ),
+            (
+                BoardPrintScale::OneToOne,
+                Label::from(t!(i18n, ids::BOARD_PRINT_SCALE_ONE)),
+            ),
+        ],
+        options.scale,
+        style,
+        |scale| out(BoardOutputMsg::PrintScalePicked(scale)),
+    );
+    let ink = segmented(
+        [
+            (false, Label::from(t!(i18n, ids::BOARD_PRINT_INK_COLOUR))),
+            (true, Label::from(t!(i18n, ids::BOARD_PRINT_INK_MONO))),
+        ],
+        options.monochrome,
+        style,
+        |mono| out(BoardOutputMsg::PrintMonochromePicked(mono)),
+    );
+    [
+        (t!(i18n, ids::BOARD_PRINT_PAGES), pages),
+        (t!(i18n, ids::BOARD_PRINT_SCALE), scale),
+        (t!(i18n, ids::BOARD_PRINT_INK), ink),
+    ]
+}
+
+/// The Layout group's labelled lines: the labels in a column as wide as
+/// the widest of them, the controls taking the rest. The options column is
+/// measured from this grid, so the two-segment Pages control keeps one
+/// line (mockup row 116).
+fn layout_grid<'a>(
+    lines: [(Localized, Element<'a, Message>); 3],
+    style: SegmentedStyle,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let ink = tokens::resolve(tokens).ink3;
+    let line_h = SegmentedMetrics::from_text_size(style.text_size).track_height;
+    let gap = SP.s + SP.xs;
+    let mut labels: Column<Element<'a, Message>> = Column::new().spacing(gap);
+    let mut controls: Column<Element<'a, Message>> = Column::new().spacing(gap).width(Length::Fill);
+    for (label, control) in lines {
+        labels = labels.push(
+            container(text(label).size(TS.body).color(ink))
+                .height(Length::Fixed(line_h))
+                .align_y(iced::alignment::Vertical::Center)
+                .boxed(),
+        );
+        controls = controls.push(control);
+    }
+    let grid: Row<Element<'a, Message>> = Row::new()
+        .spacing(SP.l - SP.xs)
+        .push(labels.boxed())
+        .push(controls.boxed());
+    grid.boxed()
+}
+
+/// What each page shows. Mirror the Bottom Side is greyed and deaf while
+/// no bottom set is ticked, with a hover note that says why.
+fn show_group<'a>(
+    options: &BoardPrintOptions,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let mut col: Column<Element<'a, Message>> = Column::new().spacing(SP.s).push(
+        kit::section_head(t!(i18n, ids::BOARD_PRINT_SHOW), None, i18n, tokens),
+    );
+    let has_bottom = options.has_bottom_set();
+    for flag in BoardPrintFlag::ALL {
+        let live = flag != BoardPrintFlag::MirrorBottom || has_bottom;
+        let tick = kit::tick(
+            flag.get(options),
+            t!(i18n, flag_label(flag)),
+            live.then(|| out(BoardOutputMsg::PrintFlagToggled(flag))),
+        );
+        let control = if live {
+            tick
+        } else {
+            let note =
+                container(text(t!(i18n, ids::BOARD_PRINT_MIRROR_NEEDS_BOTTOM)).size(TS.body))
+                    .padding([SP.xs, SP.s])
+                    .style(crate::styles::context_menu(tokens));
+            tooltip(
+                kit::dependent(false, tick, tokens),
+                iced::widget::container(note).style(crate::styles::context_menu(tokens)),
+                tooltip::Position::Bottom,
+            )
+            .boxed()
+        };
+        col = col.push(control);
+    }
+    col.boxed()
 }

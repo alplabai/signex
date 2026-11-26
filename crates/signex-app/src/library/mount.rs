@@ -77,6 +77,9 @@ impl MountIntent {
 pub struct PreparedMount {
     pub(crate) adapter: Box<dyn LibraryAdapter>,
     pub(crate) entry: OpenLibrary,
+    /// Opened without its Git history (Skip for now on Git Repository
+    /// Missing): mounted read-only until the history is restored.
+    pub(crate) history_missing: bool,
 }
 
 impl PreparedMount {
@@ -144,7 +147,21 @@ impl std::fmt::Debug for PreparedMountCell {
 /// Always prepared writable; [`LibraryState::mount_prepared`] mounts the
 /// bundled stock library read-only whatever prepared it.
 pub fn prepare_mount(path: &Path) -> Result<PreparedMount, LibraryError> {
-    let adapter = LocalGitAdapter::open(path)?;
+    Ok(prepare_opened(path, LocalGitAdapter::open(path)?, false))
+}
+
+/// [`prepare_mount`] for a library whose Git history does not open: the
+/// mount it prepares is read-only (Skip for now, mockup row 138).
+pub fn prepare_mount_without_history(path: &Path) -> Result<PreparedMount, LibraryError> {
+    Ok(prepare_opened(
+        path,
+        LocalGitAdapter::open_to_read(path)?,
+        true,
+    ))
+}
+
+/// Prime the caches of an opened adapter into a [`PreparedMount`].
+fn prepare_opened(path: &Path, adapter: LocalGitAdapter, history_missing: bool) -> PreparedMount {
     let manifest = adapter.manifest();
     let mut entry = OpenLibrary {
         root: path.to_path_buf(),
@@ -173,10 +190,11 @@ pub fn prepare_mount(path: &Path) -> Result<PreparedMount, LibraryError> {
             "prepare_mount: reload_tables failed; library will mount with an empty cache"
         );
     }
-    Ok(PreparedMount {
+    PreparedMount {
         adapter: Box::new(adapter),
         entry,
-    })
+        history_missing,
+    }
 }
 
 /// Widen a concrete adapter to the trait object `reload_tables` takes.
@@ -281,8 +299,10 @@ impl LibraryState {
         // The bundled stock library is read-only, whichever request
         // (global entry, project library, Add Library) mounts it first;
         // only the maintainer mode of #1892 mounts it writable.
+        // A library opened without its Git history is read-only too.
         let stock = self.is_stock_root(&prepared.entry.root);
-        if self.is_locked_stock_root(&prepared.entry.root) {
+        let history_missing = prepared.history_missing;
+        if history_missing || self.is_locked_stock_root(&prepared.entry.root) {
             self.set.mount_read_only(prepared.adapter)?;
         } else {
             self.set.mount(prepared.adapter)?;
@@ -290,6 +310,11 @@ impl LibraryState {
         let mut entry = prepared.entry;
         if stock {
             self.stock_library = Some(entry.root.clone());
+        }
+        if history_missing {
+            self.history_missing.insert(entry.root.clone());
+        } else {
+            self.history_missing.remove(&entry.root);
         }
         // Prepared off-thread, possibly before a Save Preferences landed on
         // disk: take the model's values, not the worker's placeholder.
@@ -307,6 +332,15 @@ impl LibraryState {
 /// auto-mount fan-out — share one mechanism instead of growing two.
 pub async fn prepare_mount_off_thread(path: PathBuf) -> PreparedMountCell {
     let result = tokio::task::spawn_blocking(move || prepare_mount(&path))
+        .await
+        .unwrap_or_else(|e| Err(LibraryError::Backend(format!("spawn_blocking: {e}"))));
+    PreparedMountCell::new(result)
+}
+
+/// [`prepare_mount_off_thread`] for a read-only mount of a library whose
+/// Git history is missing.
+pub async fn prepare_mount_without_history_off_thread(path: PathBuf) -> PreparedMountCell {
+    let result = tokio::task::spawn_blocking(move || prepare_mount_without_history(&path))
         .await
         .unwrap_or_else(|e| Err(LibraryError::Backend(format!("spawn_blocking: {e}"))));
     PreparedMountCell::new(result)

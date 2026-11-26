@@ -1,525 +1,572 @@
-//! The rules table: a heading row, then one row per rule of the sub-tab
-//! that passes the search and the filter. A cell opens for typing on a
-//! click; Enter writes it back into its rule.
+//! The constraint grid (#2530): two header rows (column groups with their
+//! findings, then columns with their units) over the row hierarchy (All,
+//! net classes and nets, layers, scoped rules). The grid's view state is
+//! the `ConstraintGrid` the tab holds; every press is a `GridActed`.
 
-use iced::widget::{Column, Row, column, container, mouse_area, row, scrollable};
-use iced::{Alignment, Element, Length, Widget as _};
-use signex_drc::RuleFlag;
-use signex_drc_dsl::table::{LimitField, RuleField, RuleKind, RuleRow, scope_text};
-use signex_i18n::{MessageId, ids, t};
-use signex_types::net_class::glob_matches;
-use signex_widgets::{button, checkbox, text, text_input};
+use iced::alignment::Vertical;
+use iced::widget::{Column, Row, Space, container, mouse_area, scrollable};
+use iced::{Background, Border, Element, Length, Padding, Theme, Widget as _};
+use signex_drc_dsl::table::catalog::{CatalogGroup, ColumnUnit};
+use signex_drc_dsl::table::scope_text;
+use signex_i18n::{Localized, MessageId, ids, t};
+use signex_widgets::chevron::chevron;
+use signex_widgets::constraint_grid::{
+    CellRef, ColumnId, GridMessage, GridMetrics, GridStyle, GroupId, RowId, VisibleRow,
+};
+use signex_widgets::{Label, button, text, tooltip};
 
-use super::{Checked, Frame, SP, TS, up, user};
+use super::grid_icons::{Icon, icon};
+use super::{Frame, SP, TS, up, user};
 use crate::app::Message;
-use crate::app::rules_tab::{RulesDomain, RulesFilter, RulesTabMsg};
-use crate::panels::form_look::{checkbox_style, ghost_button};
-use crate::styles::tokens;
+use crate::app::rules_tab::RulesTabMsg;
+use crate::app::rules_tab::grid::{RowGroup, RowRef, RulesGrid, sets_on};
+use crate::app::rules_tab::search::{column_label, group_label, type_label};
+use crate::styles::tokens::resolve;
+use crate::styles::{HAIRLINE, Radii, ti};
 
-/// A table column.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Col {
-    On,
-    Name,
-    Kind,
-    Scope,
-    Layer,
-    Objects,
-    Limit(LimitField),
-    Severity,
-    Actual,
-    Margin,
-    Violations,
-    Flags,
+/// The object column is this much wider than the widget's name column:
+/// it carries kind tags and set chips.
+const NAME_SCALE: f32 = 1.4;
+
+pub(super) fn act(frame: &Frame, msg: GridMessage) -> Message {
+    up(RulesTabMsg::GridActed {
+        project_id: frame.id,
+        msg,
+    })
 }
 
-impl Col {
-    fn of(domain: RulesDomain) -> Vec<Col> {
-        let mut cols = vec![Col::On, Col::Name];
-        if domain == RulesDomain::Routing {
-            cols.push(Col::Kind);
-        }
-        cols.extend([Col::Scope, Col::Layer]);
-        if domain == RulesDomain::Clearance {
-            cols.push(Col::Objects);
-        }
-        for kind in domain.kinds() {
-            cols.extend(kind.fields().iter().map(|&f| Col::Limit(f)));
-        }
-        cols.extend([
-            Col::Severity,
-            Col::Actual,
-            Col::Margin,
-            Col::Violations,
-            Col::Flags,
-        ]);
-        cols
-    }
-
-    fn heading(self) -> MessageId {
-        match self {
-            Col::On => ids::RULES_COL_ON,
-            Col::Name => ids::RULES_COL_NAME,
-            Col::Kind => ids::RULES_COL_KIND,
-            Col::Scope => ids::RULES_COL_SCOPE,
-            Col::Layer => ids::RULES_COL_LAYER,
-            Col::Objects => ids::RULES_COL_OBJECTS,
-            Col::Limit(LimitField::MinClearance) => ids::RULES_COL_MIN_CLEARANCE,
-            Col::Limit(LimitField::MinWidth) => ids::RULES_COL_MIN_WIDTH,
-            Col::Limit(LimitField::MaxWidth) => ids::RULES_COL_MAX_WIDTH,
-            Col::Limit(LimitField::MinDiameter) => ids::RULES_COL_MIN_DIAMETER,
-            Col::Limit(LimitField::MinDrill) => ids::RULES_COL_MIN_DRILL,
-            Col::Severity => ids::RULES_COL_SEVERITY,
-            Col::Actual => ids::RULES_COL_ACTUAL,
-            Col::Margin => ids::RULES_COL_MARGIN,
-            Col::Violations => ids::RULES_COL_VIOLATIONS,
-            Col::Flags => ids::RULES_COL_FLAGS,
-        }
-    }
-
-    fn width(self) -> Length {
-        match self {
-            Col::On => Length::Fixed(TS.body * 3.0),
-            Col::Scope | Col::Flags => Length::FillPortion(4),
-            Col::Name => Length::FillPortion(3),
-            _ => Length::FillPortion(2),
-        }
-    }
-
-    /// The rule field the cell edits.
-    fn field(self) -> Option<RuleField> {
-        match self {
-            Col::Name => Some(RuleField::Name),
-            Col::Scope => Some(RuleField::Scope),
-            Col::Layer => Some(RuleField::Layer),
-            Col::Objects => Some(RuleField::Pair),
-            Col::Limit(field) => Some(RuleField::Limit(field)),
-            Col::Severity => Some(RuleField::Severity),
-            _ => None,
-        }
-    }
+fn name_width(m: GridMetrics) -> f32 {
+    m.name_width * NAME_SCALE
 }
 
-/// The rows of the sub-tab that pass the search and the filter. A rule
-/// whose kind this build does not know shows in every sub-tab.
-fn shown<'f>(frame: &'f Frame) -> Vec<&'f RuleRow> {
-    let state = frame.state;
-    let needle = super::super::search::needle(&state.search);
-    frame
-        .table
-        .rows
-        .iter()
-        .filter(|row| row.kind.is_none_or(|k| RulesDomain::of(k) == state.domain))
-        .filter(|row| {
-            needle.is_empty()
-                || [
-                    row.name.clone(),
-                    scope_text(&row.scope),
-                    row.layer.clone().unwrap_or_default(),
-                    row.message.clone().unwrap_or_default(),
-                ]
-                .iter()
-                .any(|hay| super::super::search::holds(hay, &needle))
-        })
-        .filter(|row| match state.filter {
-            RulesFilter::All => true,
-            RulesFilter::Violations => frame.result(row).is_some_and(|r| r.violations > 0),
-            RulesFilter::Flagged => {
-                row.text_only || !row.problems.is_empty() || flags_of(frame, row).next().is_some()
+fn group_width(grid: &RulesGrid, group: GroupId, m: GridMetrics) -> f32 {
+    if grid.view.is_group_collapsed(group) {
+        return m.collapsed_width;
+    }
+    let columns = grid.group(group).map_or(0, |g| g.columns.len());
+    m.cell_width * columns as f32
+}
+
+fn grid_width(grid: &RulesGrid, m: GridMetrics) -> f32 {
+    name_width(m)
+        + (0..grid.groups().len())
+            .map(|g| group_width(grid, GroupId(g as u32), m))
+            .sum::<f32>()
+}
+
+/// Where `column` starts, from the grid's left edge.
+pub(super) fn column_left(grid: &RulesGrid, column: ColumnId, m: GridMetrics) -> f32 {
+    let mut x = name_width(m);
+    let mut first = 0u32;
+    for (g, group) in grid.groups().iter().enumerate() {
+        let id = GroupId(g as u32);
+        let end = first + group.columns.len() as u32;
+        if (first..end).contains(&column.0) {
+            if grid.view.is_group_collapsed(id) {
+                return x;
             }
-            RulesFilter::Disabled => !frame.is_on(row),
-        })
-        .collect()
-}
-
-fn flags_of<'f>(frame: &'f Frame, row: &'f RuleRow) -> impl Iterator<Item = &'f RuleFlag> + 'f {
-    frame
-        .state
-        .analysis
-        .iter()
-        .flat_map(move |a| a.flags_of(&row.name).map(|f| &f.flag))
+            return x + m.cell_width * (column.0 - first) as f32;
+        }
+        x += group_width(grid, id, m);
+        first = end;
+    }
+    x
 }
 
 pub(super) fn view<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
-    let (i18n, tokens) = (frame.i18n, frame.tokens);
-    let cols = Col::of(frame.state.domain);
-    let mut head: Row<Element<'a, Message>> = Row::new().spacing(SP.s).padding([SP.xs, SP.m]);
-    for &col in &cols {
-        head = head.push(
-            text(t!(i18n, col.heading()))
-                .size(TS.caption)
-                .color(tokens::muted_text(tokens))
-                .width(col.width())
-                .boxed(),
-        );
-    }
-    let rows = shown(frame);
-    let mut body: Column<Element<'a, Message>> = Column::new().spacing(SP.xs);
-    if rows.is_empty() && !frame.table.is_unparsed() {
-        body = body.push(
-            container(
-                text(t!(i18n, ids::RULES_EMPTY))
-                    .size(TS.body)
-                    .color(tokens::muted_text(tokens)),
-            )
-            .padding([SP.m, SP.m])
-            .boxed(),
-        );
-    }
-    for row in rows {
-        body = body.push(row_view(frame, row, &cols));
-        let editing_scope = frame
-            .state
-            .edit
-            .as_ref()
-            .is_some_and(|e| e.rule == row.name && e.field == RuleField::Scope);
-        if editing_scope {
-            body = body.push(scope_help(frame));
-        }
-    }
-    column![head, scrollable(body).height(Length::FillPortion(3))]
-        .spacing(SP.xs)
-        .height(Length::FillPortion(3))
-        .boxed()
-}
-
-fn row_view<'a>(frame: &Frame<'a>, row: &RuleRow, cols: &[Col]) -> Element<'a, Message> {
-    let (id, tokens) = (frame.id, frame.tokens);
-    let mut line: Row<Element<'a, Message>> = Row::new()
-        .spacing(SP.s)
-        .padding([SP.xs, SP.m])
-        .align_y(Alignment::Center);
-    for &col in cols {
-        line = line.push(container(cell(frame, row, col)).width(col.width()).boxed());
-    }
-    let selected = frame.state.selected.as_deref() == Some(row.name.as_str());
-    let tint = tokens::selection_tint(tokens);
-    let boxed =
-        container(line)
-            .width(Length::Fill)
-            .style(move |_| iced::widget::container::Style {
-                background: selected.then_some(iced::Background::Color(tint)),
-                ..Default::default()
-            });
-    mouse_area(boxed)
-        .on_press(up(RulesTabMsg::RowSelected {
-            project_id: id,
-            rule: row.name.clone(),
-        }))
-        .boxed()
-}
-
-fn plain<'a>(frame: &Frame<'a>, value: String, muted: bool) -> Element<'a, Message> {
-    let ink = if muted {
-        tokens::muted_text(frame.tokens)
-    } else {
-        crate::styles::ti(frame.tokens.text)
-    };
-    text(user(value)).size(TS.body).color(ink).boxed()
-}
-
-fn cell<'a>(frame: &Frame<'a>, row: &RuleRow, col: Col) -> Element<'a, Message> {
-    let (i18n, id) = (frame.i18n, frame.id);
-    match col {
-        Col::On => {
-            let rule = row.name.clone();
-            checkbox(frame.is_on(row))
-                .size(TS.body)
-                .style(checkbox_style)
-                .on_toggle(move |on| {
-                    up(RulesTabMsg::EnabledToggled {
-                        project_id: id,
-                        rule: rule.clone(),
-                        on,
-                    })
-                })
-                .boxed()
-        }
-        Col::Kind => {
-            let kind = match row.kind {
-                Some(RuleKind::Clearance) => ids::RULES_KIND_CLEARANCE,
-                Some(RuleKind::Track) => ids::RULES_KIND_TRACK,
-                Some(RuleKind::Via) => ids::RULES_KIND_VIA,
-                None => ids::RULES_BADGE_TEXT_ONLY,
-            };
-            text(t!(i18n, kind)).size(TS.body).boxed()
-        }
-        Col::Actual | Col::Margin | Col::Violations => outcome(frame, row, col),
-        Col::Flags => flags(frame, row),
-        _ => field_cell(frame, row, col),
-    }
-}
-
-/// What an editable cell shows when it is not being typed in.
-fn shown_value(frame: &Frame, row: &RuleRow, col: Col) -> Option<String> {
-    let i18n = frame.i18n;
-    let value = match col {
-        Col::Name => row.name.clone(),
-        Col::Scope if row.scope == signex_drc::NetScope::Board => {
-            t!(i18n, ids::RULES_SCOPE_ALL).into_string()
-        }
-        Col::Scope => scope_text(&row.scope),
-        Col::Layer => row
-            .layer
-            .clone()
-            .unwrap_or_else(|| t!(i18n, ids::RULES_LAYER_ALL).into_string()),
-        Col::Objects => row
-            .pair
-            .as_ref()
-            .map(|[a, b]| format!("{a}-{b}"))
-            .unwrap_or_else(|| t!(i18n, ids::RULES_OBJECTS_ANY).into_string()),
-        Col::Limit(field) => {
-            if row.kind != Some(field.kind()) {
-                return None;
-            }
-            row.limit(field)
-                .map(|l| l.value.clone())
-                .unwrap_or_else(|| t!(i18n, ids::RULES_CELL_EMPTY).into_string())
-        }
-        Col::Severity => {
-            let id = match frame.severity(row) {
-                signex_types::violation::Severity::Error => ids::RULES_SEVERITY_ERROR,
-                signex_types::violation::Severity::Warning => ids::RULES_SEVERITY_WARNING,
-                signex_types::violation::Severity::Info => ids::RULES_SEVERITY_INFO,
-            };
-            t!(i18n, id).into_string()
-        }
-        _ => return None,
-    };
-    Some(value)
-}
-
-fn field_cell<'a>(frame: &Frame<'a>, row: &RuleRow, col: Col) -> Element<'a, Message> {
-    let (id, i18n) = (frame.id, frame.i18n);
-    let Some(field) = col.field() else {
-        return plain(frame, String::new(), true);
-    };
-    let editing = frame
-        .state
-        .edit
-        .as_ref()
-        .filter(|e| e.rule == row.name && e.field == field);
-    if let Some(edit) = editing {
-        let input = text_input(t!(i18n, ids::RULES_CELL_EMPTY), edit.text.as_str())
-            .on_input(move |text| {
-                up(RulesTabMsg::CellEdited {
-                    project_id: id,
-                    text,
-                })
-            })
-            .on_submit(up(RulesTabMsg::CellCommitted { project_id: id }))
-            .size(TS.body)
-            .padding(SP.xs)
-            .width(Length::Fill)
-            .style(crate::panels::form_look::text_input_style);
-        let cancel = button(text(t!(i18n, ids::RULES_CELL_CANCEL)).size(TS.caption))
-            .padding([0.0, SP.xs])
-            .style(ghost_button)
-            .on_press(up(RulesTabMsg::CellCancelled { project_id: id }));
-        return row![input, cancel]
-            .spacing(SP.xs)
-            .align_y(Alignment::Center)
-            .boxed();
-    }
-    let Some(value) = shown_value(frame, row, col) else {
-        return plain(frame, t!(i18n, ids::RULES_CELL_EMPTY).into_string(), true);
-    };
-    if row.text_only {
-        return plain(frame, value, false);
-    }
-    button(text(user(value)).size(TS.body))
-        .padding([0.0, SP.xs])
-        .style(ghost_button)
-        .on_press(up(RulesTabMsg::CellOpened {
-            project_id: id,
-            rule: row.name.clone(),
-            field,
-        }))
-        .boxed()
-}
-
-/// Actual, Margin and Violations: from the last run, or why they are
-/// blank.
-fn outcome<'a>(frame: &Frame<'a>, row: &RuleRow, col: Col) -> Element<'a, Message> {
-    let i18n = frame.i18n;
-    if let Some(blank) = blank_reason(frame, row) {
-        let shown = match col {
-            Col::Actual => t!(i18n, blank).into_string(),
-            _ => t!(i18n, ids::RULES_CELL_EMPTY).into_string(),
+    let style = frame.grid_style();
+    let m = frame.metrics();
+    let grid = frame.grid();
+    let mut table: Column<Element<'a, Message>> = Column::new()
+        .push(group_headers(frame, style, m))
+        .push(column_headers(frame, style, m));
+    for visible in grid.view.visible_rows() {
+        let line = match grid.row(visible.id) {
+            Some(RowRef::Heading(group)) => heading_row(frame, visible, *group, style, m),
+            Some(row) => body_row(frame, visible, row, style, m),
+            None => continue,
         };
-        return plain(frame, shown, true);
+        table = table.push(line);
     }
-    let result = frame.result(row).unwrap_or_default();
-    let mm = |nm: i64| format!("{:.3}", pcb_geom::nm_to_mm(nm));
-    let value = match (col, result.worst) {
-        (Col::Violations, _) => result.violations.to_string(),
-        (Col::Actual, Some((measured, _))) => mm(measured),
-        (Col::Margin, Some(_)) => result.margin_nm().map(mm).unwrap_or_default(),
-        (Col::Actual, None) => t!(i18n, ids::RULES_BLANK_PASSES).into_string(),
-        _ => t!(i18n, ids::RULES_CELL_EMPTY).into_string(),
-    };
-    if result.violations > 0 {
-        return text(user(value))
-            .size(TS.body)
-            .color(tokens::danger(frame.tokens))
-            .boxed();
-    }
-    plain(frame, value, result.worst.is_none())
-}
-
-/// Why a rule's Actual and Margin are blank; `None` when the last run
-/// speaks for it.
-pub(super) fn blank_reason(frame: &Frame, row: &RuleRow) -> Option<MessageId> {
-    if !frame.is_on(row) {
-        return Some(ids::RULES_BLANK_OFF);
-    }
-    match &*frame.checked {
-        Checked::NoBoard => Some(ids::RULES_BLANK_NO_BOARD),
-        Checked::NotRun => Some(ids::RULES_BLANK_NOT_CHECKED),
-        Checked::Ran { stale, used, .. } => {
-            if *stale || used.get(&row.name) != row.compiled.as_ref() {
-                return Some(ids::RULES_BLANK_STALE);
-            }
-            let scope = frame
-                .state
-                .analysis
-                .as_ref()
-                .and_then(|a| a.scope.get(&row.name));
-            (scope == Some(&0)).then_some(ids::RULES_BLANK_NO_OBJECTS)
-        }
-    }
-}
-
-/// A flag, problem or text-only badge, worded.
-pub(super) fn flag_text(frame: &Frame, flag: &RuleFlag) -> String {
-    let i18n = frame.i18n;
-    let mm = |nm: i64| format!("{}", pcb_geom::nm_to_mm(nm));
-    match flag {
-        RuleFlag::Shadowed { by } => t!(i18n, ids::RULES_FLAG_SHADOWED, "by" => by.as_str()),
-        RuleFlag::Conflict { with } => t!(i18n, ids::RULES_FLAG_CONFLICT, "with" => with.as_str()),
-        RuleFlag::LowersClass {
-            class,
-            from_nm,
-            to_nm,
-        } => t!(
-            i18n,
-            ids::RULES_FLAG_LOWERS,
-            "class" => class.as_str(),
-            "from" => mm(*from_nm),
-            "to" => mm(*to_nm)
-        ),
-        RuleFlag::NoNets => t!(i18n, ids::RULES_FLAG_NO_NETS),
-    }
-    .into_string()
-}
-
-fn flags<'a>(frame: &Frame<'a>, row: &RuleRow) -> Element<'a, Message> {
-    let i18n = frame.i18n;
-    let mut words: Vec<String> = flags_of(frame, row).map(|f| flag_text(frame, f)).collect();
-    if row.text_only {
-        words.push(t!(i18n, ids::RULES_BADGE_TEXT_ONLY).into_string());
-    }
-    if !row.problems.is_empty() {
-        let count = row.problems.len();
-        words.push(t!(i18n, ids::RULES_BADGE_PROBLEMS, "count" => count).into_string());
-    }
-    let ink = if words.is_empty() {
-        tokens::muted_text(frame.tokens)
-    } else {
-        tokens::danger(frame.tokens)
-    };
-    text(user(words.join("; ")))
-        .size(TS.caption)
-        .color(ink)
+    let body = scrollable(table.width(Length::Fixed(grid_width(grid, m))))
+        .id(super::grid_scroll_id())
+        .direction(crate::styles::thin_both())
+        .style(crate::styles::scrollbar_style(frame.tokens))
+        .width(Length::Fill)
+        .height(Length::Fill);
+    container(body)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(crate::styles::card(frame.tokens))
         .boxed()
 }
 
-/// Under the scope cell being typed in: what it can say, picks from the
-/// board's nets and the project's classes, and what is wrong with it.
-fn scope_help<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
-    let (i18n, tokens, id) = (frame.i18n, frame.tokens, frame.id);
-    let typed = frame
-        .state
-        .edit
-        .as_ref()
-        .map(|e| e.text.clone())
-        .unwrap_or_default();
-    let mut help = Column::new().spacing(SP.xs).padding([SP.xs, SP.xl]);
-    help = help.push(
-        text(t!(i18n, ids::RULES_SCOPE_HINT))
-            .size(TS.caption)
-            .color(tokens::muted_text(tokens))
+/// Signal integrity: planned with the simulation band.
+pub(super) fn later<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
+    let (i18n, tokens) = (frame.i18n, frame.tokens);
+    let r = resolve(tokens);
+    let warn = ti(tokens.warning);
+    container(
+        iced::widget::row![
+            icon(Icon::Info, TS.body, warn),
+            text(t!(i18n, ids::RULES_GRID_SIGNAL_INTEGRITY_LATER))
+                .size(TS.body)
+                .width(Length::Fill),
+        ]
+        .spacing(SP.s)
+        .align_y(Vertical::Center),
+    )
+    .padding([SP.s, SP.m])
+    .width(Length::Fill)
+    .style(move |_: &Theme| container::Style {
+        background: Some(Background::Color(r.warn_soft)),
+        border: Border {
+            radius: Radii::GRAPHITE.button.into(),
+            ..Border::default()
+        },
+        ..container::Style::default()
+    })
+    .boxed()
+}
+
+fn header_box(style: GridStyle, is_marked: bool) -> impl Fn(&Theme) -> container::Style {
+    move |_: &Theme| container::Style {
+        background: Some(Background::Color(if is_marked {
+            style.accent_soft
+        } else {
+            style.header_fill
+        })),
+        border: Border {
+            color: style.line,
+            width: HAIRLINE,
+            ..Border::default()
+        },
+        ..container::Style::default()
+    }
+}
+
+/// The group header row: a collapse chevron, the group's name and its
+/// findings in the last run.
+fn group_headers<'a>(frame: &Frame<'a>, style: GridStyle, m: GridMetrics) -> Element<'a, Message> {
+    let grid = frame.grid();
+    let mut line: Row<Element<'a, Message>> = Row::new().push(
+        Space::new()
+            .width(name_width(m))
+            .height(m.row_height)
             .boxed(),
     );
-    let nets: Vec<String> = frame
-        .board
-        .map(|b| b.nets.iter().map(|n| n.name.clone()).collect())
-        .unwrap_or_default();
-    match signex_drc_dsl::table::parse_scope(&typed) {
-        Err(reason) => {
-            help = help.push(
-                text(user(reason))
-                    .size(TS.caption)
-                    .color(tokens::danger(tokens))
-                    .boxed(),
-            );
+    for (g, group) in grid.groups().iter().enumerate() {
+        line = line.push(group_header(frame, GroupId(g as u32), group, style, m));
+    }
+    line.boxed()
+}
+
+fn group_header<'a>(
+    frame: &Frame<'a>,
+    id: GroupId,
+    group: &'static CatalogGroup,
+    style: GridStyle,
+    m: GridMetrics,
+) -> Element<'a, Message> {
+    let (i18n, tokens) = (frame.i18n, frame.tokens);
+    let is_open = !frame.grid().view.is_group_collapsed(id);
+    let mut face: Row<Element<'a, Message>> = Row::new()
+        .spacing(m.pad / 2.0)
+        .align_y(Vertical::Center)
+        .push(chevron(is_open, TS.body, style.muted_ink).boxed());
+    if is_open {
+        face = face.push(
+            text(t!(i18n, group_label(group.id)))
+                .size(TS.body)
+                .color(style.ink)
+                .wrapping(iced::widget::text::Wrapping::None)
+                .boxed(),
+        );
+        let findings = frame.group_findings(group).unwrap_or(0);
+        if findings > 0 {
+            face = face.push(badge(findings, ti(tokens.error), ti(tokens.paper)));
         }
-        Ok(scope) => {
-            if let Some(problem) = scope_problem(frame, &scope, &nets) {
-                help = help.push(
-                    text(problem)
+    }
+    let press = button(face)
+        .padding(Padding::from([0.0, m.pad / 2.0]))
+        .width(group_width(frame.grid(), id, m))
+        .height(m.row_height)
+        .on_press(act(frame, GridMessage::GroupToggled(id)))
+        .style(move |_: &Theme, _| button::Style {
+            background: Some(Background::Color(style.header_fill)),
+            text_color: style.ink,
+            border: Border {
+                color: style.line,
+                width: HAIRLINE,
+                ..Border::default()
+            },
+            ..button::Style::default()
+        });
+    let tip = if is_open {
+        ids::RULES_GROUP_COLLAPSE
+    } else {
+        ids::RULES_GROUP_EXPAND
+    };
+    tooltip(
+        press,
+        container(
+            text(t!(
+                i18n,
+                tip,
+                "type" => t!(i18n, type_label(group.id)).into_string()
+            ))
+            .size(TS.caption),
+        )
+        .style(crate::styles::card(tokens)),
+        tooltip::Position::Bottom,
+    )
+    .boxed()
+}
+
+/// A count pill in `fill`.
+pub(super) fn badge<'a>(count: usize, fill: iced::Color, ink: iced::Color) -> Element<'a, Message> {
+    let m = signex_widgets::chips::ChipMetrics::from_text_size(TS.body);
+    container(text(user(count.to_string())).size(m.badge_text).color(ink))
+        .height(m.badge_height)
+        .padding(Padding::from([0.0, m.badge_pad_h]))
+        .align_y(Vertical::Center)
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(fill)),
+            border: Border {
+                radius: Radii::GRAPHITE.pill.into(),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        })
+        .boxed()
+}
+
+fn unit_label(unit: ColumnUnit) -> Option<MessageId> {
+    match unit {
+        ColumnUnit::Mm => Some(ids::RULES_GRID_UNIT_MM),
+        ColumnUnit::Percent => Some(ids::RULES_GRID_UNIT_PERCENT),
+        ColumnUnit::Degrees => Some(ids::RULES_GRID_UNIT_DEGREES),
+        ColumnUnit::Count | ColumnUnit::Choice => None,
+    }
+}
+
+/// The column header row: Object, then each column with its unit. The
+/// column the find box landed on is marked.
+fn column_headers<'a>(frame: &Frame<'a>, style: GridStyle, m: GridMetrics) -> Element<'a, Message> {
+    let (i18n, grid) = (frame.i18n, frame.grid());
+    let found = frame.state.find.current().map(|hit| hit.column.id);
+    let mut line: Row<Element<'a, Message>> = Row::new().push(
+        container(
+            text(t!(i18n, ids::RULES_GRID_OBJECT))
+                .size(TS.body)
+                .color(style.muted_ink),
+        )
+        .padding(Padding::from([0.0, m.pad]))
+        .width(name_width(m))
+        .height(m.row_height)
+        .align_y(Vertical::Center)
+        .style(header_box(style, false))
+        .boxed(),
+    );
+    for (g, group) in grid.groups().iter().enumerate() {
+        if grid.view.is_group_collapsed(GroupId(g as u32)) {
+            line = line.push(
+                container(
+                    text(t!(i18n, ids::RULES_GRID_COLLAPSED))
                         .size(TS.caption)
-                        .color(tokens::danger(tokens))
+                        .color(style.muted_ink),
+                )
+                .padding(Padding::from([0.0, m.pad / 2.0]))
+                .width(m.collapsed_width)
+                .height(m.row_height)
+                .align_y(Vertical::Center)
+                .style(header_box(style, false))
+                .boxed(),
+            );
+            continue;
+        }
+        for column in group.columns {
+            let is_found = found == Some(column.id);
+            let ink = if is_found { style.accent } else { style.ink };
+            let mut face: Row<Element<'a, Message>> =
+                Row::new().spacing(SP.xs).align_y(Vertical::Center).push(
+                    text(t!(i18n, column_label(column.id)))
+                        .size(TS.body)
+                        .color(ink)
+                        .wrapping(iced::widget::text::Wrapping::None)
+                        .boxed(),
+                );
+            if let Some(unit) = unit_label(column.unit) {
+                face = face.push(
+                    text(t!(i18n, unit))
+                        .size(TS.caption)
+                        .color(style.muted_ink)
                         .boxed(),
                 );
             }
+            line = line.push(
+                container(face)
+                    .padding(Padding::from([0.0, m.pad]))
+                    .width(m.cell_width)
+                    .height(m.row_height)
+                    .align_y(Vertical::Center)
+                    .clip(true)
+                    .style(header_box(style, is_found))
+                    .boxed(),
+            );
         }
     }
-    let needle = super::super::search::needle(&typed);
-    let candidates = frame
-        .classes
-        .iter()
-        .map(|c| format!("class == \"{c}\""))
-        .chain(nets.iter().map(|n| format!("net == \"{n}\"")))
-        .filter(|c| super::super::search::holds(c, &needle))
-        .take(8);
-    let mut picks: Row<Element<'a, Message>> = Row::new().spacing(SP.xs);
-    for candidate in candidates {
-        picks = picks.push(
-            button(text(user(candidate.clone())).size(TS.caption))
-                .padding([0.0, SP.xs])
-                .style(crate::styles::outline_button(tokens))
-                .on_press(up(RulesTabMsg::CellEdited {
-                    project_id: id,
-                    text: candidate,
-                }))
+    line.boxed()
+}
+
+/// A heading over a group of rows: Net Classes, Layers, Scoped rules.
+fn heading_row<'a>(
+    frame: &Frame<'a>,
+    visible: VisibleRow,
+    group: RowGroup,
+    style: GridStyle,
+    m: GridMetrics,
+) -> Element<'a, Message> {
+    let label = match group {
+        RowGroup::NetClasses => ids::RULES_GRID_ROWS_NET_CLASSES,
+        RowGroup::Layers => ids::RULES_GRID_ROWS_LAYERS,
+        RowGroup::Scoped => ids::RULES_GRID_ROWS_SCOPED,
+    };
+    let face = Row::new()
+        .spacing(m.pad / 2.0)
+        .align_y(Vertical::Center)
+        .push(chevron(visible.is_open, TS.body, style.muted_ink).boxed())
+        .push(
+            text(t!(frame.i18n, label))
+                .size(TS.body)
+                .color(style.muted_ink)
+                .boxed(),
+        );
+    mouse_area(
+        container(face)
+            .padding(Padding::from([0.0, m.pad]))
+            .width(Length::Fill)
+            .height(m.row_height)
+            .align_y(Vertical::Center)
+            .style(header_box(style, false)),
+    )
+    .on_press(act(frame, GridMessage::RowToggled(visible.id)))
+    .interaction(iced::mouse::Interaction::Pointer)
+    .boxed()
+}
+
+fn body_row<'a>(
+    frame: &Frame<'a>,
+    visible: VisibleRow,
+    row: &RowRef,
+    style: GridStyle,
+    m: GridMetrics,
+) -> Element<'a, Message> {
+    let grid = frame.grid();
+    let mut line: Row<Element<'a, Message>> =
+        Row::new().push(name_cell(frame, visible, row, style, m));
+    let mut first = 0u32;
+    for (g, group) in grid.groups().iter().enumerate() {
+        let count = group.columns.len() as u32;
+        if grid.view.is_group_collapsed(GroupId(g as u32)) {
+            line = line.push(
+                container(Space::new())
+                    .width(m.collapsed_width)
+                    .height(m.row_height)
+                    .style(header_box(style, false))
+                    .boxed(),
+            );
+        } else {
+            for c in first..first + count {
+                let at = CellRef::new(visible.id, ColumnId(c));
+                line = line.push(super::grid_cell::view(frame, at, style, m));
+            }
+        }
+        first += count;
+    }
+    line.boxed()
+}
+
+/// The cell a click on a row's name selects: the selected column when it
+/// can be set on the row, else the first column that can.
+fn name_target(frame: &Frame, row: RowId) -> Option<CellRef> {
+    let grid = frame.grid();
+    let cells = frame.cells();
+    let editable = |c: ColumnId| cells.show(CellRef::new(row, c)).is_editable();
+    let selected = grid
+        .view
+        .selected()
+        .map(|c| c.column)
+        .filter(|c| editable(*c));
+    let total = grid.groups().iter().map(|g| g.columns.len()).sum::<usize>() as u32;
+    selected
+        .or_else(|| (0..total).map(ColumnId).find(|c| editable(*c)))
+        .map(|c| CellRef::new(row, c))
+}
+
+/// The row's name cell: indent, chevron, kind tag, name and what it
+/// carries (net count, scope, constraint sets).
+fn name_cell<'a>(
+    frame: &Frame<'a>,
+    visible: VisibleRow,
+    row: &RowRef,
+    style: GridStyle,
+    m: GridMetrics,
+) -> Element<'a, Message> {
+    let (i18n, tokens) = (frame.i18n, frame.tokens);
+    let toggle: Element<'a, Message> = if visible.has_children {
+        mouse_area(chevron(visible.is_open, TS.body, style.muted_ink))
+            .on_press(act(frame, GridMessage::RowToggled(visible.id)))
+            .interaction(iced::mouse::Interaction::Pointer)
+            .boxed()
+    } else {
+        Space::new().width(m.glyph).boxed()
+    };
+    let mut face: Row<Element<'a, Message>> = Row::new()
+        .spacing(m.pad / 2.0)
+        .align_y(Vertical::Center)
+        .push(Space::new().width(m.indent * visible.depth as f32).boxed())
+        .push(toggle)
+        .push(kind_tag(frame, row));
+    let mut name = text(row_name(frame, row))
+        .size(TS.body)
+        .color(style.ink)
+        .wrapping(iced::widget::text::Wrapping::None);
+    if matches!(row, RowRef::Net(_) | RowRef::Scoped(_)) {
+        name = name.font(crate::fonts::iced_font_for_family(
+            crate::fonts::CHROME_MONO_FONT,
+        ));
+    }
+    face = face.push(name.boxed());
+    if let Some(extra) = row_extra(frame, visible.id, row) {
+        face = face.push(
+            text(extra)
+                .size(TS.caption)
+                .color(style.muted_ink)
+                .wrapping(iced::widget::text::Wrapping::None)
                 .boxed(),
         );
     }
-    help.push(picks.boxed()).boxed()
+    let r = resolve(tokens);
+    for set in sets_on(row, &frame.sets) {
+        face = face.push(
+            container(
+                text(t!(i18n, ids::RULES_GRID_SET_CHIP, "set" => set.as_str()))
+                    .size(TS.caption)
+                    .color(r.accent_text),
+            )
+            .padding(Padding::from([0.0, SP.xs]))
+            .style(move |_: &Theme| container::Style {
+                background: Some(Background::Color(r.accent_soft)),
+                border: Border {
+                    radius: Radii::GRAPHITE.small.into(),
+                    ..Border::default()
+                },
+                ..container::Style::default()
+            })
+            .boxed(),
+        );
+    }
+    let is_selected = frame
+        .grid()
+        .view
+        .selected()
+        .is_some_and(|c| c.row == visible.id);
+    let cell = container(face)
+        .padding(Padding::from([0.0, m.pad]))
+        .width(name_width(m))
+        .height(m.row_height)
+        .align_y(Vertical::Center)
+        .clip(true)
+        .style(move |_: &Theme| container::Style {
+            background: is_selected.then_some(Background::Color(style.accent_soft)),
+            border: Border {
+                color: style.line,
+                width: HAIRLINE,
+                ..Border::default()
+            },
+            ..container::Style::default()
+        });
+    match name_target(frame, visible.id) {
+        Some(target) => mouse_area(cell)
+            .on_press(act(frame, GridMessage::CellPressed(target)))
+            .boxed(),
+        None => cell.boxed(),
+    }
 }
 
-/// A scope that parses but takes in no net of the board, worded.
-fn scope_problem(
-    frame: &Frame,
-    scope: &signex_drc::NetScope,
-    nets: &[String],
-) -> Option<signex_i18n::Localized> {
+/// The small kind tag before a row's name.
+fn kind_tag<'a>(frame: &Frame<'a>, row: &RowRef) -> Element<'a, Message> {
+    let r = resolve(frame.tokens);
+    let label = match row {
+        RowRef::All | RowRef::Heading(_) => ids::RULES_GRID_KIND_ALL,
+        RowRef::Class(_) => ids::RULES_GRID_KIND_CLASS,
+        RowRef::Net(_) => ids::RULES_GRID_KIND_NET,
+        RowRef::Layer { .. } => ids::RULES_GRID_KIND_LAYER,
+        RowRef::Scoped(_) => ids::RULES_GRID_KIND_RULE,
+    };
+    container(text(t!(frame.i18n, label)).size(TS.caption).color(r.ink3))
+        .padding(Padding::from([0.0, SP.xs]))
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(r.sunken)),
+            border: Border {
+                radius: Radii::GRAPHITE.small.into(),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        })
+        .boxed()
+}
+
+/// A row's name: user content, or the worded All row and the layer by
+/// its position (L1 is Top, the last is Bottom); a layer the board lacks
+/// by the token the rules name it with.
+pub(super) fn row_name(frame: &Frame, row: &RowRef) -> Label<'static> {
     let i18n = frame.i18n;
-    frame.board?;
-    match scope {
-        signex_drc::NetScope::Net(net) if !nets.contains(net) => {
-            Some(t!(i18n, ids::RULES_SCOPE_NO_NET, "net" => net.as_str()))
+    match row {
+        RowRef::All | RowRef::Heading(_) => t!(i18n, ids::RULES_GRID_ROW_ALL).into(),
+        RowRef::Layer {
+            number: 0, token, ..
+        } => user(token.clone()).into(),
+        RowRef::Layer { number: 1, .. } => t!(i18n, ids::RULES_GRID_LAYER_TOP, "n" => 1).into(),
+        RowRef::Layer { number, count, .. } if number == count => {
+            t!(i18n, ids::RULES_GRID_LAYER_BOTTOM, "n" => *number).into()
         }
-        signex_drc::NetScope::Class(class) if !frame.classes.contains(class) => {
-            Some(t!(i18n, ids::RULES_SCOPE_NO_CLASS, "class" => class.as_str()))
+        RowRef::Layer { number, .. } => {
+            t!(i18n, ids::RULES_GRID_LAYER_INNER, "n" => *number).into()
         }
-        signex_drc::NetScope::ClassPair(a, b) => [a, b]
-            .into_iter()
-            .find(|class| !frame.classes.contains(*class))
-            .map(|class| t!(i18n, ids::RULES_SCOPE_NO_CLASS, "class" => class.as_str())),
-        signex_drc::NetScope::Pattern(glob) if !nets.iter().any(|n| glob_matches(glob, n)) => {
-            Some(t!(i18n, ids::RULES_SCOPE_NO_MATCH, "pattern" => glob.as_str()))
+        other => user(other.name().to_string()).into(),
+    }
+}
+
+/// What a row carries after its name: a class's net count, a scoped
+/// rule's scope.
+fn row_extra(frame: &Frame, id: RowId, row: &RowRef) -> Option<Localized> {
+    let i18n = frame.i18n;
+    match row {
+        RowRef::Class(_) => {
+            let nets = frame
+                .grid()
+                .view
+                .rows()
+                .iter()
+                .filter(|r| r.parent == Some(id))
+                .count();
+            Some(t!(i18n, ids::RULES_GRID_ROW_NETS, "count" => nets))
+        }
+        RowRef::Scoped(name) => {
+            let rule = frame.table.row(name)?;
+            let mut scope = scope_text(&rule.scope);
+            if let Some(layer) = &rule.layer {
+                scope = format!("{scope} {layer}").trim().to_string();
+            }
+            if let Some([a, b]) = &rule.pair {
+                scope = format!("{scope} {a}-{b}").trim().to_string();
+            }
+            if scope.is_empty() {
+                return Some(t!(i18n, ids::RULES_SCOPE_ALL));
+            }
+            Some(t!(i18n, ids::RULES_GRID_ROW_SCOPE, "scope" => scope))
         }
         _ => None,
     }

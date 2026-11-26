@@ -19,6 +19,11 @@ impl Signex {
             BoardReannotateMsg::BottomPicked(bottom) => {
                 self.replan_board_reannotate(|o| o.bottom = bottom);
             }
+            BoardReannotateMsg::InOrderShown(show) => {
+                if let Some(state) = self.ui_state.board_reannotate.as_mut() {
+                    state.show_in_order = show;
+                }
+            }
             BoardReannotateMsg::ExecuteRequested => self.execute_board_reannotate(),
             BoardReannotateMsg::CancelRequested => self.ui_state.board_reannotate = None,
         }
@@ -55,13 +60,16 @@ impl Signex {
     ) -> Option<BoardReannotateState> {
         let engine = self.document_state.board_engine(&board)?;
         let read_only = engine.board().unknown.newer_minor_source.is_some();
+        let plan = plan_reannotate(engine.board(), options);
         Some(BoardReannotateState {
-            plan: plan_reannotate(engine.board(), options),
+            in_order: super::preview::in_order(engine.board(), &plan),
+            plan,
             revision: engine.revision(),
             problem: read_only.then_some(ReannotateProblem::ReadOnly),
             board,
             board_name,
             options,
+            show_in_order: false,
         })
     }
 
@@ -73,8 +81,13 @@ impl Signex {
         let mut options = state.options;
         change(&mut options);
         self.ui_state.board_reannotate_options = options;
-        self.ui_state.board_reannotate =
-            self.board_reannotate_state(state.board, state.board_name, options);
+        let show_in_order = state.show_in_order;
+        self.ui_state.board_reannotate = self
+            .board_reannotate_state(state.board, state.board_name, options)
+            .map(|fresh| BoardReannotateState {
+                show_in_order,
+                ..fresh
+            });
     }
 
     /// Run the plan as one labelled step at the revision it was made from.
@@ -95,45 +108,56 @@ impl Signex {
             return;
         };
         if engine.revision() != state.revision {
+            let show_in_order = state.show_in_order;
             let fresh = self.board_reannotate_state(state.board, state.board_name, state.options);
             self.ui_state.board_reannotate = fresh.map(|s| BoardReannotateState {
                 problem: s.problem.clone().or(Some(ReannotateProblem::Stale)),
+                show_in_order,
                 ..s
             });
             return;
         }
-        let commands = match state.plan.commands(engine.board()) {
-            Ok(commands) => commands,
-            Err(error) => {
-                self.ui_state.board_reannotate = Some(BoardReannotateState {
-                    problem: Some(ReannotateProblem::Refused(error.to_string())),
-                    ..state
-                });
-                return;
-            }
-        };
+        let ran =
+            self.run_reannotate_step(&state.board, &state.board_name, &state.plan, state.revision);
+        if let Err(why) = ran {
+            self.ui_state.board_reannotate = Some(BoardReannotateState {
+                problem: Some(ReannotateProblem::Refused(why)),
+                ..state
+            });
+        }
+    }
+
+    /// Run `plan`'s renames on `board` as one labelled step at `revision`:
+    /// the dialog's Execute and the operand form (#2470) share it.
+    pub(super) fn run_reannotate_step(
+        &mut self,
+        board: &std::path::Path,
+        board_name: &str,
+        plan: &signex_engine::pcb::designators::ReannotatePlan,
+        revision: u64,
+    ) -> Result<(), String> {
+        let engine = self
+            .document_state
+            .board_engine(board)
+            .ok_or_else(|| t!(self.ui_state.i18n, ids::PCB_REANNOTATE_BOARD_GONE).into_string())?;
+        let commands = plan
+            .commands(engine.board())
+            .map_err(|error| error.to_string())?;
         let label = t!(self.ui_state.i18n, ids::PCB_REANNOTATE_TITLE).into_string();
         let step = CheckedStep {
             label: &label,
-            expected_revision: state.revision,
+            expected_revision: revision,
         };
-        match self.execute_board_commands(&state.board, commands, Some(step)) {
-            Ok(_) => {
-                let line = t!(
-                    self.ui_state.i18n,
-                    ids::PCB_REANNOTATE_DONE,
-                    "count" => state.plan.renames.len(),
-                    "board" => state.board_name.as_str()
-                );
-                crate::diagnostics::log_info(line.into_string());
-                self.refresh_pcb_highlight();
-            }
-            Err(error) => {
-                self.ui_state.board_reannotate = Some(BoardReannotateState {
-                    problem: Some(ReannotateProblem::Refused(error.to_string())),
-                    ..state
-                });
-            }
-        }
+        self.execute_board_commands(board, commands, Some(step))
+            .map_err(|error| error.to_string())?;
+        let line = t!(
+            self.ui_state.i18n,
+            ids::PCB_REANNOTATE_DONE,
+            "count" => plan.renames.len(),
+            "board" => board_name
+        );
+        crate::diagnostics::log_info(line.into_string());
+        self.refresh_pcb_highlight();
+        Ok(())
     }
 }

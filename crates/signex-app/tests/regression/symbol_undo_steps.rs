@@ -24,7 +24,6 @@ fn symbol_app() -> (Signex, PathBuf) {
     app.document_state.tabs.push(TabInfo {
         title: "lib".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::SymbolEditor(path.clone()),
     });
@@ -53,6 +52,7 @@ fn editor<'a>(app: &'a Signex, path: &Path) -> &'a SymbolDocument {
 
 fn summary(app: &Signex, path: &Path) -> Vec<(String, usize)> {
     editor(app, path)
+        .draft
         .file
         .symbols
         .iter()
@@ -96,7 +96,9 @@ fn symbol_rename_undoes_alone() {
 fn typing_in_one_field_is_one_undo_step() {
     let (mut app, path) = symbol_app();
     canvas(&mut app, &path, SymbolEditorMsg::AddPin { x: 0.0, y: 0.0 });
-    let original_pin_name = editor(&app, &path).file.symbols[0].pins[0].name.clone();
+    let original_pin_name = editor(&app, &path).draft.file.symbols[0].pins[0]
+        .name
+        .clone();
     for text in ["R", "Re", "Res"] {
         panel(&mut app, PanelMsg::SymEditorSetSymbolName(text.into()));
     }
@@ -112,18 +114,18 @@ fn typing_in_one_field_is_one_undo_step() {
 
     undo(&mut app);
     assert_eq!(
-        editor(&app, &path).file.symbols[0].pins[0].name,
+        editor(&app, &path).draft.file.symbols[0].pins[0].name,
         original_pin_name,
         "one undo reverts the whole pin-name burst"
     );
-    assert_eq!(editor(&app, &path).file.symbols[0].name, "Res");
+    assert_eq!(editor(&app, &path).draft.file.symbols[0].name, "Res");
     undo(&mut app);
     assert_eq!(
-        editor(&app, &path).file.symbols[0].name,
+        editor(&app, &path).draft.file.symbols[0].name,
         "A",
         "one undo reverts the whole rename burst"
     );
-    assert_eq!(editor(&app, &path).file.symbols[0].pins.len(), 1);
+    assert_eq!(editor(&app, &path).draft.file.symbols[0].pins.len(), 1);
 }
 
 #[test]
@@ -213,10 +215,10 @@ fn every_properties_edit_records_exactly_one_step() {
         ),
     ];
     for (label, msg) in edits {
-        let before = editor(&app, &path).history.undo_len();
+        let before = editor(&app, &path).draft.history.undo_len();
         panel(&mut app, msg);
         assert_eq!(
-            editor(&app, &path).history.undo_len(),
+            editor(&app, &path).draft.history.undo_len(),
             before + 1,
             "{label} must record exactly one undo step"
         );
@@ -228,22 +230,22 @@ fn undo_that_switches_symbol_resets_part_and_viewport() {
     let (mut app, path) = symbol_app();
     {
         let ed = app.document_state.symbol_editors.get_mut(&path).unwrap();
-        ed.file.symbols[0].part_count = 3;
-        ed.file.symbols[1].part_count = 3;
+        ed.draft.file.symbols[0].part_count = 3;
+        ed.draft.file.symbols[1].part_count = 3;
         let snap = ed.snapshot();
         ed.commit_history(snap);
-        ed.active_idx = 1;
-        ed.active_part = 3;
-        ed.pending_view = None;
-        ed.cursor_mm = Some((9.0, 9.0));
+        ed.draft.active_idx = 1;
+        ed.draft.active_part = 3;
+        ed.gui.pending_view = None;
+        ed.gui.cursor_mm = Some((9.0, 9.0));
     }
     undo(&mut app);
 
     let ed = editor(&app, &path);
-    assert_eq!(ed.active_idx, 0);
-    assert_eq!(ed.active_part, 1, "switching symbol starts on unit 1");
-    assert_eq!(ed.pending_view, Some(SymbolViewRequest::CenterOrigin));
-    assert_eq!(ed.cursor_mm, None);
+    assert_eq!(ed.draft.active_idx, 0);
+    assert_eq!(ed.draft.active_part, 1, "switching symbol starts on unit 1");
+    assert_eq!(ed.gui.pending_view, Some(SymbolViewRequest::CenterOrigin));
+    assert_eq!(ed.gui.cursor_mm, None);
 }
 
 #[test]
@@ -300,10 +302,10 @@ fn history_shares_unchanged_symbols_between_snapshots() {
     let mut ed = SymbolDocument::new(PathBuf::from("t.snxsym"), file);
     let first = ed.snapshot();
     ed.commit_history(first);
-    ed.file.symbols[1].name = "B2".into();
+    ed.draft.file.symbols[1].name = "B2".into();
     let second = ed.snapshot();
 
-    let first = &ed.history.undo_steps()[0];
+    let first = &ed.draft.history.undo_steps()[0];
     assert!(Arc::ptr_eq(&first.symbols[0], &second.symbols[0]));
     assert!(!Arc::ptr_eq(&first.symbols[1], &second.symbols[1]));
     assert!(Arc::ptr_eq(&first.symbols[2], &second.symbols[2]));

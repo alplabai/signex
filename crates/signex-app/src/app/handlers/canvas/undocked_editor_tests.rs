@@ -12,7 +12,6 @@ fn tab(path: &std::path::Path, kind: TabKind) -> TabInfo {
     TabInfo {
         title: "t".into(),
         path: path.to_path_buf(),
-        cached_document: None,
         project_id: None,
         kind,
     }
@@ -56,8 +55,8 @@ fn an_undocked_symbol_window_shows_the_symbol_editor() {
     let (mut app, window) = undocked(TabKind::SymbolEditor(path.clone()), &path);
     let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("s"));
     let mut editor = SymbolDocument::new(path.clone(), file);
-    editor.camera.scale *= 2.5;
-    editor.cursor_mm = Some((1.5, -2.5));
+    editor.gui.camera.scale *= 2.5;
+    editor.gui.cursor_mm = Some((1.5, -2.5));
     app.document_state.symbol_editors.insert(path, editor);
 
     assert!(shows(&app, window, "Part 1 / 1"), "the symbol toolbar");
@@ -177,7 +176,7 @@ fn an_undocked_symbols_own_align_menu_shows_in_its_window() {
     let a = PathBuf::from("a.snxsym");
     let (mut app, window) = undocked(TabKind::SymbolEditor(a.clone()), &a);
     let mut own = symbol(&a);
-    own.active_bar_menu = Some(crate::library::editor::symbol::state::SymActiveBarMenu::Align);
+    own.gui.active_bar_menu = Some(crate::library::editor::symbol::state::SymActiveBarMenu::Align);
     app.document_state.symbol_editors.insert(a, own);
     assert!(shows(&app, window, "Align Left"));
 }
@@ -191,7 +190,8 @@ fn an_undocked_symbol_window_does_not_draw_another_symbols_active_bar() {
         .symbol_editors
         .insert(a.clone(), symbol(&a));
     let mut other = symbol(&b);
-    other.active_bar_menu = Some(crate::library::editor::symbol::state::SymActiveBarMenu::Align);
+    other.gui.active_bar_menu =
+        Some(crate::library::editor::symbol::state::SymActiveBarMenu::Align);
     app.document_state.symbol_editors.insert(b.clone(), other);
     app.document_state
         .tabs
@@ -222,7 +222,7 @@ fn an_undocked_symbols_own_context_menu_shows_in_its_window_not_the_main_ones() 
         .symbol_editors
         .insert(a.clone(), symbol(&a));
     let mut other = symbol(&b);
-    other.context_menu = Some(menu());
+    other.gui.context_menu = Some(menu());
     app.document_state.symbol_editors.insert(b.clone(), other);
     app.document_state
         .tabs
@@ -234,7 +234,7 @@ fn an_undocked_symbols_own_context_menu_shows_in_its_window_not_the_main_ones() 
     );
 
     let own = app.document_state.symbol_editors.get_mut(&a).unwrap();
-    own.context_menu = Some(menu());
+    own.gui.context_menu = Some(menu());
     assert!(
         shows(&app, window, "Select All"),
         "A's own context menu shows"

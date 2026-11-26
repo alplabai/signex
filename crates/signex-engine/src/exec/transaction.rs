@@ -20,6 +20,7 @@ pub(crate) struct Transaction {
     failed: bool,
     /// Notices already raised when it began: a rollback drops the rest.
     warnings: usize,
+    notices: usize,
     unkept_pins: usize,
 }
 
@@ -49,6 +50,7 @@ impl Engine {
         if self.history_suppressed || self.transaction.is_some() {
             return Err(EngineError::TransactionOpen);
         }
+        self.commit_live_edit();
         // A run of typing in one cell ends here: the transaction is its own entry.
         self.field_edit_run = None;
         self.transaction = Some(Transaction {
@@ -57,10 +59,29 @@ impl Engine {
             patch: None,
             failed: false,
             warnings: self.warnings.len(),
+            notices: self.notices.len(),
             unkept_pins: self.unkept_pins.len(),
         });
         self.history_suppressed = true;
         Ok(())
+    }
+
+    /// Where the held notices end now, for [`Self::notices_since`].
+    pub fn notice_mark(&self) -> NoticeMark {
+        NoticeMark {
+            warnings: self.warnings.len(),
+            notices: self.notices.len(),
+        }
+    }
+
+    /// The notices raised since `mark` and still held, in the order the
+    /// `take_*` pair drains them (pin notices first), left in place: inside
+    /// a transaction they reach Messages only after the commit, but a caller
+    /// answering one edit of it needs them now (#2552).
+    pub fn notices_since(&self, mark: NoticeMark) -> Vec<EngineNotice> {
+        let pins = self.warnings.get(mark.warnings..).unwrap_or_default();
+        let typed = self.notices.get(mark.notices..).unwrap_or_default();
+        pins.iter().chain(typed).cloned().collect()
     }
 
     /// Whether a transaction is open.
@@ -128,6 +149,7 @@ impl Engine {
         self.bump_connectivity_revision();
         // Notices about edits that never happened are not shown.
         self.warnings.truncate(tx.warnings);
+        self.notices.truncate(tx.notices);
         self.unkept_pins.truncate(tx.unkept_pins);
     }
 

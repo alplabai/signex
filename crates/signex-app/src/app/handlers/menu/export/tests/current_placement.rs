@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use super::{app_workspace, sheet_with_net};
 use crate::app::Signex;
-use crate::app::handlers::menu::export::{build_page_scope, isolate_undeclared_current};
+use crate::app::handlers::menu::export::{build_export_scope, isolate_undeclared_current};
 
 /// Sheet symbol "A" and "B" in `top.snxsch`, both placing `child.snxsch`.
 pub(crate) const PLACEMENT_A: u128 = 1;
@@ -89,7 +89,7 @@ pub(crate) fn descend_by_canvas(app: &mut Signex, placement: u128) {
 /// What "Current page" prints for the focused `child`: its first symbol's
 /// designator and the placement the page is labelled with.
 pub(crate) fn current_page(app: &Signex, child: &Path) -> (String, String) {
-    let (mut ctx, issues) = build_page_scope(&app.document_state).expect("scope");
+    let (mut ctx, issues) = build_export_scope(&app.document_state).expect("scope");
     assert!(isolate_undeclared_current(
         &mut ctx,
         &issues,
@@ -331,14 +331,16 @@ fn renaming_the_child_file_drops_its_placement_without_a_warning() {
     let checks = app.start_due_recovery_checks();
     crate::app::handlers::menu::export::write::settle(&mut app, checks);
     let renamed = dir.path().join("renamed.snxsch");
-    app.ui_state.rename_dialog = Some(RenameDialogState {
+    app.ui_state.rename_dialog = Some(Box::new(RenameDialogState {
         project_id: None,
         target_path: child.clone(),
         tree_path: vec![0],
         buffer: "renamed.snxsch".to_string(),
         error: None,
         is_project_rename: false,
-    });
+        placing_symbols: Vec::new(),
+        name_clash: None,
+    }));
 
     crate::app::path_ops::settle(&mut app, Message::Rename(RenameMsg::Submit));
 
@@ -508,7 +510,7 @@ fn a_declared_child_placed_twice_prints_the_copy_descended_through() {
     let (mut app, _top, child) = placed_twice_listing(&dir, &["top.snxsch", "child.snxsch"]);
     descend_by_canvas(&mut app, PLACEMENT_B);
 
-    let (mut ctx, issues) = build_page_scope(&app.document_state).expect("scope");
+    let (mut ctx, issues) = build_export_scope(&app.document_state).expect("scope");
     assert!(
         !isolate_undeclared_current(
             &mut ctx,

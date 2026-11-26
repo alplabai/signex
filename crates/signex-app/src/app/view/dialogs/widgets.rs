@@ -1,18 +1,13 @@
 //! Shared modal-chrome primitives — backdrop wrapper, draggable / detached
-//! headers, the close-X button, and the common button / section builders
-//! every dialog family reaches for.
+//! headers, the close-X button, and the common button builders every
+//! dialog family reaches for.
 //!
 //! Extracted verbatim from `view/dialogs.rs` (ADR-0001, issue #164) as pure
 //! code motion — no behaviour change.
 
 use super::*;
-use iced::widget::{Space, container, row};
+use iced::widget::{Space, container};
 use iced::{Background, Color, Element, Length, Theme};
-use signex_widgets::{raw, text};
-
-/// Default type / spacing scales; equal to the old literals at the default size.
-const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
-const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 /// Gap kept between a modal and the window edge, in logical px.
 pub(in crate::app::view) const MODAL_WINDOW_MARGIN: f32 = 24.0;
@@ -130,6 +125,36 @@ impl Signex {
         )
     }
 
+    /// An Active Bar flyout `card` at the absolute `at`, pulled in only as far
+    /// as needed to stay inside the window (mockup row 61), as one overlay
+    /// layer over [`Self::flyout_dismiss_layer`]. A right press on the card
+    /// sends `on_card_right_press` and leaves the flyout open. The layer dims
+    /// the window in the shared menu scrim, as every menu does.
+    pub(in crate::app::view) fn flyout_and_place<'a>(
+        on_dismiss: Message,
+        on_right_press: Message,
+        on_card_right_press: Message,
+        card: Element<'a, Message>,
+        at: (f32, f32),
+    ) -> Vec<Element<'a, Message>> {
+        let scrim = crate::app::view::menu_scrim();
+        let card = iced::widget::mouse_area(claim_pointer(card))
+            .on_right_press(on_card_right_press)
+            .boxed();
+        vec![
+            iced::widget::Stack::new()
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .push(Self::flyout_dismiss_layer(
+                    on_dismiss,
+                    on_right_press,
+                    scrim,
+                ))
+                .push(crate::app::view::AnchoredMenu::new(card, at).boxed())
+                .boxed(),
+        ]
+    }
+
     /// [`Self::dismiss_over`] with `card` centred in the window.
     pub(in crate::app::view) fn dismiss_and_centre<'a>(
         on_dismiss: Message,
@@ -237,31 +262,6 @@ pub(crate) fn modal_title_header<'a, M: Clone + 'a>(
         super::header::DIALOG_HEADER_H,
         tokens,
     )
-}
-
-/// Subtle section divider used inside the BOM modal's properties
-/// sidebar. Rendered as a 1-line label on a slightly tinted strip
-/// so the panel reads as a stack of named sections.
-pub(super) fn section_header<'a>(
-    title: signex_i18n::Localized,
-    muted: Color,
-) -> Element<'a, Message> {
-    container(
-        row![
-            // raw: a disclosure glyph, not language.
-            text(raw("\u{25BE}")).size(TS.caption).color(muted),
-            Space::new().width(6),
-            text(title).size(TS.body).color(muted),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([6.0, SP.l])
-    .width(Length::Fill)
-    .style(move |_: &Theme| container::Style {
-        background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.025))),
-        ..container::Style::default()
-    })
-    .boxed()
 }
 
 #[cfg(test)]

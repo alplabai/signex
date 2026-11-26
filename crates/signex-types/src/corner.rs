@@ -1,6 +1,7 @@
 //! The corner rule for a run drawn from an anchor to the cursor: how it
 //! bends into two legs. Schematic wires and buses use it now; interactive
-//! track routing on a board is meant to use the same rule (#2372).
+//! track routing on a board is meant to use the same rule (#2372). Also the
+//! drag wiring mode: how wires that follow a dragged pin bend (#1669).
 
 use crate::schematic::Point;
 
@@ -125,9 +126,59 @@ impl CornerRule {
     }
 }
 
+/// How a drag bends the wires that follow a moved pin. Only an inserted
+/// corner is affected; a wire that can stay straight stays straight.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DragWiringMode {
+    /// The rubber band picks the corner: it keeps each wire's direction at
+    /// its fixed end, and slides a plain elbow when it can.
+    #[default]
+    Auto,
+    /// An inserted corner leaves the fixed end horizontally.
+    HorizontalFirst,
+    /// An inserted corner leaves the fixed end vertically.
+    VerticalFirst,
+    /// No corner: the wire end goes straight to the pin, at any slope.
+    Straight,
+}
+
+impl DragWiringMode {
+    /// The mode after this one: auto, horizontal first, vertical first,
+    /// straight, auto.
+    #[must_use]
+    pub fn next(self) -> Self {
+        match self {
+            Self::Auto => Self::HorizontalFirst,
+            Self::HorizontalFirst => Self::VerticalFirst,
+            Self::VerticalFirst => Self::Straight,
+            Self::Straight => Self::Auto,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn drag_wiring_modes_cycle_back_to_auto() {
+        let mut mode = DragWiringMode::default();
+        assert_eq!(mode, DragWiringMode::Auto);
+        let mut seen = Vec::new();
+        for _ in 0..4 {
+            mode = mode.next();
+            seen.push(mode);
+        }
+        assert_eq!(
+            seen,
+            [
+                DragWiringMode::HorizontalFirst,
+                DragWiringMode::VerticalFirst,
+                DragWiringMode::Straight,
+                DragWiringMode::Auto
+            ]
+        );
+    }
 
     fn rule(mode: CornerMode, is_flipped: bool) -> CornerRule {
         CornerRule { mode, is_flipped }

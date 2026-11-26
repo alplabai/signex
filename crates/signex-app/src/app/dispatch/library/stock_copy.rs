@@ -52,18 +52,33 @@ impl Signex {
         let label = self
             .library
             .stock_primitive_label(&path, kind, self.identity_fold_for(&path));
+        // The preselect is fixed now, so a copy finishing while the dialog
+        // is open cannot move the radio (mockup row 134).
+        let selected = self
+            .library
+            .stock_copy_choice(None)
+            .map(|(root, _)| root.to_path_buf());
         self.library.stock_copy = Some(StockCopyState {
             source: path,
             kind,
             label,
             previous_unavailable: self.library.stock_copy_target.clone(),
             error: None,
+            selected,
         });
         Task::none()
     }
 
     pub(super) fn handle_stock_copy(&mut self, msg: StockCopyMsg) -> Task<Message> {
         match msg {
+            // Selecting only moves the radio; the copy waits for the
+            // footer's Copy to <library> (mockup row 134).
+            StockCopyMsg::TargetSelected(root) => {
+                if let Some(state) = self.library.stock_copy.as_mut() {
+                    state.selected = Some(root);
+                }
+                Task::none()
+            }
             StockCopyMsg::TargetPicked(root) => self.handle_stock_copy_target_picked(root),
             StockCopyMsg::NewLibraryRequested => {
                 new_library_dialog(self.ui_state.io.picker.clone(), &self.ui_state.i18n)
@@ -85,11 +100,14 @@ impl Signex {
 
     fn handle_stock_copy_target_picked(&mut self, root: PathBuf) -> Task<Message> {
         if !self.library.can_receive_stock_copy(&root) {
+            let reason = signex_i18n::t!(
+                &self.ui_state.i18n,
+                signex_i18n::ids::LIBRARY_STOCK_COPY_NOT_WRITABLE,
+                "path" => root.display().to_string()
+            )
+            .into_string();
             if let Some(state) = self.library.stock_copy.as_mut() {
-                state.error = Some(format!(
-                    "{} is not open and writable; pick another library.",
-                    root.display()
-                ));
+                state.error = Some(reason);
             }
             return Task::none();
         }
@@ -121,7 +139,7 @@ impl Signex {
                 .document_state
                 .symbol_editors
                 .get(&copy_path)
-                .and_then(|editor| editor.file.copied_from),
+                .and_then(|editor| editor.draft.file.copied_from),
             StockPrimitiveKind::Footprint => self
                 .document_state
                 .footprint_editors

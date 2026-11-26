@@ -21,6 +21,55 @@ pub enum ShortcutContext {
     TextInput,
     CommandPalette,
     Placement,
+    /// The board 3D view of the main window (mockup row 175): live with
+    /// `Pcb` while the view is shown, and it outranks it.
+    #[serde(rename = "board_3d")]
+    Board3d,
+}
+
+impl ShortcutContext {
+    /// Every context, in declaration order.
+    pub const ALL: [Self; 10] = [
+        Self::Global,
+        Self::Schematic,
+        Self::Footprint,
+        Self::Pcb,
+        Self::Library,
+        Self::Modal,
+        Self::TextInput,
+        Self::CommandPalette,
+        Self::Placement,
+        Self::Board3d,
+    ];
+}
+
+#[cfg(test)]
+mod context_list_tests {
+    use super::ShortcutContext;
+
+    /// Index in `ALL`; the exhaustive match makes a new context a compile
+    /// error here until it is listed.
+    fn index(context: ShortcutContext) -> usize {
+        match context {
+            ShortcutContext::Global => 0,
+            ShortcutContext::Schematic => 1,
+            ShortcutContext::Footprint => 2,
+            ShortcutContext::Pcb => 3,
+            ShortcutContext::Library => 4,
+            ShortcutContext::Modal => 5,
+            ShortcutContext::TextInput => 6,
+            ShortcutContext::CommandPalette => 7,
+            ShortcutContext::Placement => 8,
+            ShortcutContext::Board3d => 9,
+        }
+    }
+
+    #[test]
+    fn every_context_is_listed_once_at_its_index() {
+        for (at, context) in ShortcutContext::ALL.into_iter().enumerate() {
+            assert_eq!(index(context), at, "{context:?}");
+        }
+    }
 }
 
 #[derive(

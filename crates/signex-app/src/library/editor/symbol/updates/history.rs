@@ -9,18 +9,18 @@ pub(super) fn apply_symbol_history(editor: &mut SymEditor, msg: SymbolEditorMsg)
             if editor.undo() {
                 close_pickers(editor);
                 // `undo()`/`redo()` own the dirty flag and the save point.
-                editor.canvas_cache.clear();
+                editor.gui.canvas_cache.clear();
             }
         }
         SymbolEditorMsg::Redo => {
             if editor.redo() {
                 close_pickers(editor);
                 // `undo()`/`redo()` own the dirty flag and the save point.
-                editor.canvas_cache.clear();
+                editor.gui.canvas_cache.clear();
             }
         }
         SymbolEditorMsg::DragCommit => {
-            editor.mid_drag = false;
+            editor.gui.mid_drag = false;
         }
         _ => {}
     }

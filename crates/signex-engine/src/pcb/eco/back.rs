@@ -27,7 +27,7 @@ use signex_types::schematic::{InstancePath, SchematicSheet};
 use uuid::Uuid;
 
 use super::change::GroupTicks;
-use super::{EcoPart, is_under};
+use super::{EcoPart, duplicate_designators, is_under};
 use crate::{Command, TextTarget, designator_commands};
 
 /// One part of the design, as Back Annotate needs it.
@@ -106,6 +106,10 @@ pub enum BackBlock {
     /// The sheet is placed more than once, so a value would change every
     /// placement.
     SharedSheet,
+    /// The part is in a channel of a repeated sheet: its designator is
+    /// derived from the sheet and the channel naming, so it has no value of
+    /// its own to write.
+    ChannelDesignator,
     /// Changing a part's footprint from the board waits for #2248.
     FootprintFromBoard,
 }
@@ -207,6 +211,20 @@ impl BackChangeList {
                 && shared(sheet, units)
             {
                 row.blocked = Some(BackBlock::SharedSheet);
+                row.on = false;
+            }
+        }
+        self.refresh_shared_notes();
+    }
+
+    /// Block the designator rows of the placements `is_channel` names: a
+    /// written entry would sit on a compiled channel and change nothing.
+    pub fn block_channel_designators(&mut self, is_channel: impl Fn(&InstancePath) -> bool) {
+        for row in &mut self.rows {
+            if let BackChange::Designator { sheet, .. } = &row.change
+                && is_channel(sheet)
+            {
+                row.blocked = Some(BackBlock::ChannelDesignator);
                 row.on = false;
             }
         }
@@ -333,7 +351,7 @@ pub fn diff_schematic(input: &BackInput) -> BackChangeList {
             })
             .collect(),
     };
-    let duplicates = schematic_duplicates(input.parts);
+    let duplicates = duplicate_designators(input.parts.iter().map(|p| &p.eco));
     // A part carried back once: a second footprint linked to it is a note.
     let mut matched: HashSet<usize> = HashSet::new();
     for fp in &input.board.footprints {
@@ -370,19 +388,6 @@ pub fn diff_schematic(input: &BackInput) -> BackChangeList {
     list.rows.sort_by_key(|r| r.group);
     list.refresh_shared_notes();
     list
-}
-
-/// Designators carried by more than one annotated part.
-fn schematic_duplicates(parts: &[BackPart]) -> HashSet<String> {
-    let mut count: HashMap<&str, usize> = HashMap::new();
-    for p in parts.iter().filter(|p| !p.eco.part.needs_annotation) {
-        *count.entry(p.eco.part.designator.as_str()).or_default() += 1;
-    }
-    count
-        .into_iter()
-        .filter(|(_, n)| *n > 1)
-        .map(|(d, _)| d.to_string())
-        .collect()
 }
 
 fn not_annotated(designator: &str) -> bool {

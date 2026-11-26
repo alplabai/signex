@@ -1,11 +1,11 @@
 # Canvas overlays.
 
-# Placement Paused card: the key that ends the paused placement.
-overlay-placement-paused-esc-hint = Esc cancels placement.
+# Placement Paused banner: Esc resumes placing without the panel edits.
+overlay-placement-paused-esc-hint = Esc back to placing
 
 ## Graphite views (#2225)
 overlay-placement-paused-title = Placement Paused
-overlay-placement-paused-body = Editing properties in the panel. Click Resume to keep placing.
+overlay-placement-paused-body = Editing properties in the panel.
 
 ## Command palette (#2057)
 # Key caps of the palette's hint line.
@@ -13,6 +13,13 @@ palette-key-esc = Esc
 palette-key-enter = Enter
 # Row that opens a panel. { $panel } is the panel's name.
 palette-open-panel = Open Panel: { $panel }
+# An installed extension's command in the palette and the keyboard
+# shortcuts: { $extension } is the extension's name, { $command } the
+# command's own label.
+extension-command-label = { $extension }: { $command }
+# A shortcut kept for an extension command no installed extension adds:
+# { $command } is the command id. The binding stays and does nothing.
+extension-command-unavailable = { $command } (unavailable: extension not installed)
 
 ## Command palette. The group headings are shown in capitals, so they are
 ## written in capitals here.
@@ -27,12 +34,17 @@ overlay-palette-no-results = No results
 overlay-palette-window-search = Search files, symbols, commands…
 # Footer note: matches beyond the rows shown. $count is a whole number.
 overlay-palette-more-results = { $count } more results — refine query
+# Footer note when every match is shown: how many rows matched. $count is a
+# whole number.
+overlay-palette-result-count = { $count ->
+    [one] 1 result
+   *[other] { $count } results
+}
 # Footer key hints: the arrow keys move the selection, Enter runs it.
 overlay-palette-navigate = Navigate
 overlay-palette-run = Run
 
-## Hover card of a placed symbol: the field names
-overlay-symbol-card-designator = Designator
+## Hover card of a placed symbol: the field names under its designator
 overlay-symbol-card-value = Value
 overlay-symbol-card-footprint = Footprint
 overlay-symbol-card-library = Library
@@ -44,6 +56,13 @@ overlay-net-card-class = Class: { $class }
 # The card lists a few pins; $count is how many more it leaves out, a whole
 # number.
 overlay-net-card-more = +{ $count } more
+# Pill beside the net's name: how many pins the net has; $count is a whole
+# number.
+overlay-net-card-pin-count =
+    { $count ->
+        [one] { $count } pin
+       *[other] { $count } pins
+    }
 
 # Badge over the canvas of a sheet written by a newer Signex, which opens
 # read-only.
@@ -51,3 +70,11 @@ overlay-read-only-badge = Read-only: written by a newer { -brand-name }
 
 # Over a window that a dialog in its own window has locked.
 overlay-locked-window-hint = A dialog is open: click to show it, Esc to cancel
+
+# Tooltip of the read-only badge: why the sheet cannot be edited and what to
+# do about it.
+overlay-read-only-badge-tooltip = This sheet was saved by a newer { -brand-name }. Edits are off so nothing it wrote is lost. Update { -brand-name } to edit it.
+# Key hint above the in-place text editor, shown for its first few uses.
+overlay-text-edit-hint = Enter apply · Esc cancel
+# The same hint on a part's field that has a next field to Tab to.
+overlay-text-edit-hint-next-field = Enter apply · Esc cancel · Tab next field

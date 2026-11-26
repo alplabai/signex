@@ -35,7 +35,18 @@ pub(crate) enum BoardStatus {
     ReadOnly,
 }
 
-/// The Update PCB dialog, while open (or a headless `apply=true` run).
+/// A run of `update_pcb_from_schematic` from operands, waiting for its list
+/// (#2470). The job, with the ticket its caller waits on, is held with the
+/// agent's deferred work (`AgentState::update_pcb_job`), not in the dialog's
+/// state (#2987).
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct UpdatePcbJob {
+    pub(crate) waiting: crate::app::agent::WaitingCommand,
+    /// `dry_run=true`: answer the list and change nothing.
+    pub(crate) dry_run: bool,
+}
+
+/// The Update PCB dialog, while open (or a run from operands).
 #[derive(Debug, Clone)]
 pub struct UpdatePcbState {
     pub(crate) project: ProjectId,
@@ -46,7 +57,9 @@ pub struct UpdatePcbState {
     pub(crate) phase: Phase,
     /// The newest worker job; a result of another job is dropped.
     pub(crate) job: u64,
-    /// Execute the default ticks as soon as the list is ready (headless).
+    /// No dialog: the run of `update_pcb_from_schematic` from operands. It
+    /// executes the default ticks once the list is ready, or answers the
+    /// list (its [`UpdatePcbJob`] says which).
     pub(crate) apply: bool,
     /// The design as read and the list built from it.
     pub(crate) snapshot: Option<Arc<DesignSnapshot>>,
@@ -58,6 +71,9 @@ pub struct UpdatePcbState {
     /// Libraries whose open failure was already logged: a recompute logs
     /// each once per dialog.
     pub(crate) logged_library_errors: std::collections::HashSet<PathBuf>,
+    /// Schematic rules left out that were already logged, likewise once.
+    pub(crate) logged_rule_problems:
+        std::collections::HashSet<super::rules_from_schematic::RuleProblem>,
 }
 
 impl UpdatePcbState {
@@ -80,6 +96,7 @@ impl UpdatePcbState {
             apply,
             snapshot: None,
             logged_library_errors: std::collections::HashSet::new(),
+            logged_rule_problems: std::collections::HashSet::new(),
             list: None,
             validation: None,
             table: TableState::default(),
@@ -138,6 +155,15 @@ impl UpdatePcbState {
             .flat_map(|list| &list.rows)
             .filter(|row| self.table.shows(row))
             .collect()
+    }
+
+    /// The rows the Problems card lifts above the list: every blocked row,
+    /// in list order.
+    pub fn problem_rows(&self) -> Vec<&EcoRow> {
+        self.list
+            .as_ref()
+            .map(super::table::problems)
+            .unwrap_or_default()
     }
 
     /// The tick state of a table group.

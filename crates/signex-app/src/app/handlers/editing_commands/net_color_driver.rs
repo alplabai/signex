@@ -28,7 +28,6 @@ pub(crate) fn add_sheet_with(app: &mut Signex, path: &Path, sheet: SchematicShee
     app.document_state.tabs.push(crate::app::TabInfo {
         title: path.display().to_string(),
         path: path.to_path_buf(),
-        cached_document: None,
         project_id: None,
         kind: crate::app::TabKind::Schematic,
     });
@@ -71,7 +70,7 @@ pub(crate) fn paint(app: &mut Signex, ids: &[uuid::Uuid], color: Color) {
     let (outcome, why) = app.commit_net_colors(ids, color);
     assert_eq!(
         outcome,
-        crate::app::mutation_gateway::CommandOutcome::Changed,
+        crate::app::mutation_gateway::MutationOutcome::Changed,
         "the sheet must take a colour: {why:?}"
     );
 }

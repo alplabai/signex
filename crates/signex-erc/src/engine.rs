@@ -51,25 +51,31 @@ pub fn run_all_with_config(ctx: &ErcContext, config: &ErcConfig) -> Vec<Diagnost
     rules::part_without_footprint(ctx, &mut out);
     rules::part_without_value(ctx, &mut out);
     rules::part_without_mpn(ctx, &mut out);
+    rules::part_without_library_body(ctx, &mut out);
     rules::unannotated_designator(ctx, &mut out);
     rules::net_completeness(ctx, &mut out);
     rules::units_not_placed(ctx, &mut out);
     rules::off_grid(ctx, &mut out);
     rules::sheet_pin_unconnected(ctx, &mut out);
     rules::sheet_pin_direction_conflict(ctx, &mut out);
+    rules::repeat_entry_needs_bus(ctx, &mut out);
+    rules::harness_entry_mismatch(ctx, &config.harness_definitions, &mut out);
+    rules::harness_type_conflict(ctx, &mut out);
+    rules::net_class_conflict(ctx, &mut out);
     drop_suppressed(ctx, &mut out);
     out
 }
 
-/// Drop every diagnostic located on a No-ERC directive. Positional only: the
-/// directive silences all rules at its point. Diagnostics whose location is a
-/// placeholder or lives in another sheet's coordinates are never matched.
+/// Drop every diagnostic located on a No-ERC directive that silences its rule
+/// (every rule when the directive names none, #1699). Diagnostics whose
+/// location is a placeholder or lives in another sheet's coordinates are
+/// never matched.
 /// Then drop what [`directive_suppressed`] drops (#2420).
 fn drop_suppressed(ctx: &ErcContext, diagnostics: &mut Vec<Diagnostic>) {
     if !ctx.no_erc_directives.is_empty() {
         diagnostics.retain(|d| {
             d.location_space != LocationSpace::ThisSheet
-                || !ctx.has_no_erc_directive_at(&d.location)
+                || !ctx.has_no_erc_directive_at(&d.location, d.rule_id.as_str())
         });
     }
     if !ctx.directives.is_empty() {
@@ -86,12 +92,23 @@ fn directive_suppressed(ctx: &ErcContext, d: &Diagnostic) -> bool {
     ) {
         return false;
     }
-    ctx.directives.iter().any(|directive| {
-        directive.region_contains(d.location)
+    directives_suppress(&ctx.directives, d.location, d.rule_id.as_str())
+}
+
+/// Whether one of `directives` covering `at` silences `rule_id`: a Compile
+/// Mask silences every rule, a Blanket the rules it excludes. A point
+/// directive covers nothing.
+pub(crate) fn directives_suppress(
+    directives: &[signex_types::schematic::SchDirective],
+    at: signex_types::schematic::Point,
+    rule_id: &str,
+) -> bool {
+    directives.iter().any(|directive| {
+        directive.region_contains(at)
             && (matches!(
                 directive,
                 signex_types::schematic::SchDirective::CompileMask { .. }
-            ) || directive.excludes_rule(d.rule_id.as_str()))
+            ) || directive.excludes_rule(rule_id))
     })
 }
 

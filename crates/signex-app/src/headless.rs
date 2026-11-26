@@ -11,8 +11,9 @@
 //!    run the returned task;
 //! 4. per command, [`crate::io_ports::HeadlessAnswers::replace_all`] on
 //!    [`Signex::headless_answers`] with that command's dialog answers (none
-//!    when it has none), then [`Signex::dispatch_command_headless`], driving
-//!    each task;
+//!    when it has none), then [`Signex::run_command_request`] with
+//!    [`RequestSurface::Headless`] (or [`Signex::dispatch_command_headless`],
+//!    the runner behind it), driving each task;
 //! 5. [`Signex::end_headless_session`] to flush and exit.
 
 use std::path::PathBuf;
@@ -28,8 +29,9 @@ pub use crate::app::agent::{
 };
 pub use crate::app::command::queries::is_query;
 pub use crate::app::command::{
-    CommandArgs, CommandOutcome, EditSpec, MAX_EDITS, OperandError, OperandValue, edit_list_text,
-    edit_refusal, operand_text, parse_documents, parse_edit_list, parse_expect_revisions,
+    CommandArgs, CommandOutcome, CommandRequest, EditSpec, MAX_EDITS, OperandError, OperandValue,
+    RefusalCause, RequestOutcome, RequestSurface, edit_list_text, edit_refusal, operand_text,
+    parse_documents, parse_edit_list, parse_expect_revisions,
 };
 pub use crate::app::document_ids::DocumentTarget;
 use crate::app::{Message, Signex};
@@ -96,15 +98,6 @@ impl Signex {
         undo_depth: &str,
     ) -> Result<(Box<Self>, Task<Message>), HeadlessBootError> {
         Self::boot_headless_inner(paths, rules, Some(undo_depth))
-    }
-
-    /// [`Self::new`] moved to the heap in a frame of its own: only `new` and
-    /// this function hold the app by value, never the headless boot or its
-    /// caller (#2325: the copies overflowed the 1 MB Windows main stack).
-    #[inline(never)]
-    fn new_boxed() -> (Box<Self>, Task<Message>) {
-        let (app, boot) = Self::new();
-        (Box::new(app), boot)
     }
 
     fn boot_headless_inner(
@@ -223,6 +216,14 @@ impl Signex {
 
     /// The dialog answers of an app from [`Self::boot_headless`]; `None`
     /// for an app with native dialogs.
+    /// Let `keymap_assign` and `keymap_clear` read and write the user's own
+    /// shortcuts file at `path` (from `keymap::user_config_path`) in this
+    /// headless run, past its throwaway config root: the one carve-out,
+    /// `docs/CLI.md` (#2495). Nothing else reads it.
+    pub fn edit_user_shortcuts_at(&mut self, path: std::path::PathBuf) {
+        self.ui_state.keymap_command_file = Some(Box::new(path));
+    }
+
     pub fn headless_answers(&self) -> Option<&HeadlessAnswers> {
         match &self.ui_state.io.picker {
             Picker::Headless(answers) => Some(answers),
@@ -249,8 +250,9 @@ impl Signex {
         self.run_headless_command(command, args)
     }
 
-    /// A test's way past the headless check, for an app made by `Signex::new`.
-    #[cfg(test)]
+    /// A test's way past the headless check, for an app made by `Signex::new`
+    /// (and the test adapter's agent calls, `crate::test_adapter`).
+    #[cfg(any(test, feature = "test-prefs-redirect"))]
     pub(crate) fn run_headless_command_in_test(
         &mut self,
         command: &AppCommandId,
@@ -267,11 +269,13 @@ impl Signex {
         args: CommandArgs,
     ) -> (CommandOutcome, Task<Message>) {
         // A command whose whole effect is window UI is refused, never `Ran`
-        // (#2170). The GUI dispatch never reads this.
-        if let Some(reason) =
-            crate::keymap::metadata_for(command).and_then(|meta| meta.headless_refusal())
+        // (#2170), an installed extension's as well (#2495). The GUI dispatch
+        // never reads this.
+        if let Some(reason) = self
+            .command_metadata(command)
+            .and_then(|meta| meta.headless_refusal())
         {
-            return (CommandOutcome::Disabled { reason }, Task::none());
+            return (CommandOutcome::disabled(reason), Task::none());
         }
         // Operands run only through the command's own operand handler; one
         // without a handler is refused, never run as if it had none (#2155).
@@ -287,15 +291,16 @@ impl Signex {
                 answered
             } else if let Some(name) = missing {
                 (
-                    CommandOutcome::Disabled {
-                        reason: format!("`{}` needs the operand `{name}`", command.as_str()),
-                    },
+                    CommandOutcome::disabled(format!(
+                        "`{}` needs the operand `{name}`",
+                        command.as_str()
+                    )),
                     Task::none(),
                 )
             } else if args.has_operands()
                 || crate::app::command::runs_headless_without_operands(command)
             {
-                app.journaled(command, &args, |app| app.run_operands(command, &args))
+                app.run_headless_operands(command, &args)
             } else {
                 let by_id = args.clone();
                 app.journaled(command, &by_id, |app| {

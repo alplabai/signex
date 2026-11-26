@@ -82,6 +82,16 @@ impl Point {
     pub const fn new(x: f64, y: f64) -> Self {
         Point { x, y }
     }
+
+    /// The point in the netlist's 1 µm integer key space: the one definition
+    /// of "the same point" (`signex_net::pt_key` reads it; #388).
+    #[must_use]
+    pub fn um_key(&self) -> (i64, i64) {
+        (
+            (self.x * 1000.0).round() as i64,
+            (self.y * 1000.0).round() as i64,
+        )
+    }
 }
 
 impl Default for Point {
@@ -791,12 +801,15 @@ impl Default for Symbol {
 
 // ---------------------------------------------------------------------------
 // Wiring primitives
+mod body_fill;
+pub use body_fill::{BodyFillShape, default_body_fill_shapes};
 mod body_style;
 pub use body_style::{BODY_ALTERNATE, BODY_COMMON, BODY_NORMAL, BodyStyle, item_shown, shown_on};
 mod bus_entry;
 pub use bus_entry::*;
 mod bus_name;
 pub use bus_name::*;
+mod bus_style;
 mod field_style;
 mod instance_path;
 pub use field_style::{field_effective_style, readable_text_style};
@@ -826,6 +839,20 @@ pub use directive::{
     ALL_ERC_RULES, DIFF_PAIR_SUFFIXES, DirectiveKind, SchDirective, diff_pair_base,
     parse_erc_exclusions,
 };
+pub use directive::{
+    BlanketPour, DIFF_PAIR_SUFFIX_PAIRS, DiffPairHalves, NetRules, diff_pair_halves,
+};
+mod directive_flag;
+pub use directive_flag::{
+    DIRECTIVE_FLAG_LINE_MM, DIRECTIVE_FLAG_PAD_MM, DIRECTIVE_FLAG_TEXT_MM, DirectiveFlag,
+    directive_flag, directive_flag_line_origin, directive_flag_lines,
+};
+mod no_erc;
+pub use no_erc::{NoErcDirective, canonical_no_erc_rules, no_erc_rules_suppress};
+mod not_fitted;
+pub use not_fitted::{
+    NOT_FITTED_CROSS_WIDTH_SCALE, NOT_FITTED_PAPER_SHARE, greyed_ink, not_fitted_cross,
+};
 mod sheet;
 pub use sheet::*;
 mod sheet_frame;
@@ -847,6 +874,8 @@ pub use hotspot::{
     MoveHotspots, SCHEMATIC_HOTSPOT_RADIUS_MM, hotspot_capture_radius, snap_move_to_hotspot,
     snap_to_hotspot,
 };
+mod junction_color;
+pub use junction_color::junction_wire_colors;
 mod power_port_symbol;
 pub use power_port_symbol::{
     PowerPortStyle, power_port_graphics, power_port_lib_symbol, power_port_value_field,
@@ -876,6 +905,43 @@ pub use text_extents::{
     StoredTextExtent, TextExtents, TextProbe, decide_width_mm, face_is_available, probes, text_hash,
 };
 pub use text_widths::{MeasuredText, TextField, TextWidths};
+mod harness;
+#[cfg(test)]
+mod harness_tests;
+pub use harness::{
+    DEFAULT_HARNESS_ENTRY_PITCH_MM, HARNESS_TIP_MM, HarnessConnector, HarnessDefinition,
+    HarnessDefinitionEntry, HarnessEntry, HarnessWire, SheetHarness,
+};
+mod union;
+pub use union::{SchUnion, union_member_kinds};
+mod drawing_bezier;
+mod drawing_dimension;
+mod sch_table;
+pub use drawing_bezier::{
+    BEZIER_FLATTEN_SEGMENTS, LINE_END_ARROW_HALF_WIDTH_MM, LINE_END_ARROW_LENGTH_MM, LineEnds,
+    SchBezier,
+};
+pub use drawing_dimension::{
+    DIMENSION_MAX_PRECISION, DIMENSION_TEXT_MM, DimensionArrows, DimensionDirection,
+    DimensionGeometry, DimensionUnits, SchDimension,
+};
+pub use sch_table::{
+    PinSort, SchTable, TABLE_ADVANCE_EM, TABLE_HEADER_TINT_SHARE, TABLE_TITLE_GAP_EM, TableBorders,
+    TableCell, TableColumn, TableLayout, TableRefresh, TableSource, TableStyle, pin_columns,
+    power_net_names, sheet_columns, table_header_fill,
+};
+#[cfg(test)]
+mod drawing_kinds_tests;
+mod repeat;
+#[cfg(test)]
+mod repeat_tests;
+pub use repeat::{
+    ChannelFormatError, ChannelOccurrence, ChannelRepeat, MAX_CHANNELS, RepeatStack, StackLayer,
+    channel_alpha, check_format, entry_port_name, renamed_entry, repeated_entry_name,
+    sheet_entry_port, sheet_entry_renamed,
+};
+mod harness_ops;
+pub use harness_ops::*;
 
 #[cfg(test)]
 mod default_tests;

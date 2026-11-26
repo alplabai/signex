@@ -2,7 +2,7 @@
 //! document or project, plus the project options and report dialogs.
 
 use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, operands};
-use signex_i18n_ids::command_ids;
+use signex_i18n_ids::{command_ids, menu_ids};
 
 pub(super) const DOCUMENTS: &[CommandMetadata] = &[
     CommandMetadata {
@@ -88,6 +88,30 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         operands: operands::SAVE_DOCUMENT_AS,
         ..CommandMetadata::DEFAULT
     },
+    // #2844: File > Save All, on a key. It writes every unsaved document of
+    // the session, so it stays a person's command.
+    CommandMetadata {
+        id: "save_all",
+        category: "file",
+        label: command_ids::CMD_SAVE_ALL,
+        menu_label: Some(menu_ids::MENU_FILE_SAVE_ALL),
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2908: File > Save Project As…, a copy of the project in a new folder
+    // through its dialog.
+    CommandMetadata {
+        id: "save_project_as",
+        category: "file",
+        label: command_ids::CMD_SAVE_PROJECT_AS,
+        menu_label: Some(command_ids::CMD_MENU_SAVE_PROJECT_AS),
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "revert",
         category: "edit",
@@ -152,6 +176,8 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
     },
     // #2388: open the Fabrication Outputs dialog on the board in view.
     // Nothing is written until the dialog's Generate. No default key.
+    // #2470: named a board (`document`) and a folder (`path`), it writes what
+    // Generate writes there and answers with the files.
     CommandMetadata {
         id: "fabrication_outputs",
         category: "file",
@@ -159,7 +185,8 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_FABRICATION_OUTPUTS),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
-        flags: CommandFlags::GUI_ONLY,
+        flags: CommandFlags::NONE,
+        operands: super::operands::FABRICATION_OUTPUTS,
         ..CommandMetadata::DEFAULT
     },
     // #2404: the board reports. In a window each opens Board Reports on its
@@ -233,6 +260,46 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::NONE,
         operands: super::operands::BOARD_PDF,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2486: the assembly drawings as SVG files in a folder the person
+    // picks; headless it writes `document`'s drawings into `path`.
+    CommandMetadata {
+        id: "export_assembly_svg",
+        category: "reports",
+        label: command_ids::CMD_EXPORT_ASSEMBLY_SVG,
+        menu_label: Some(command_ids::CMD_MENU_EXPORT_ASSEMBLY_SVG),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::ASSEMBLY_SVG_EXPORT,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2486: one assembly drawing of the named board, answered as SVG text;
+    // in a window it opens Board Print / PDF. Read-only, no default key.
+    CommandMetadata {
+        id: "board_assembly_drawing",
+        category: "pcb",
+        label: command_ids::CMD_BOARD_ASSEMBLY_DRAWING,
+        menu_label: Some(command_ids::CMD_MENU_BOARD_ASSEMBLY_DRAWING),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::ASSEMBLY_DRAWING,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2488: File > Export > STEP on a board asks where to save the board
+    // and its parts as a STEP model; headless it writes `document` to
+    // `path`.
+    CommandMetadata {
+        id: "export_board_step",
+        category: "reports",
+        label: command_ids::CMD_EXPORT_BOARD_STEP,
+        menu_label: Some(command_ids::CMD_MENU_EXPORT_BOARD_STEP),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::BOARD_STEP,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -332,6 +399,76 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         enable: Enablement::Always,
         flags: CommandFlags::MUTATES,
         operands: operands::PROJECT_VERSION_CONTROL,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2339: the Project tab's Requirements section. An edit is one General
+    // step; the run shows its results in the tab (`check_requirements` is the
+    // query that answers with the report).
+    CommandMetadata {
+        id: "project_add_requirement",
+        category: "design",
+        label: command_ids::CMD_PROJECT_ADD_REQUIREMENT,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::PROJECT_ADD_REQUIREMENT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "project_set_requirement",
+        category: "design",
+        label: command_ids::CMD_PROJECT_SET_REQUIREMENT,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::PROJECT_SET_REQUIREMENT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "project_remove_requirement",
+        category: "design",
+        label: command_ids::CMD_PROJECT_REMOVE_REQUIREMENT,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::PROJECT_REQUIREMENT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "project_enable_requirement",
+        category: "design",
+        label: command_ids::CMD_PROJECT_ENABLE_REQUIREMENT,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::PROJECT_ENABLE_REQUIREMENT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "project_run_requirements",
+        category: "validation",
+        label: command_ids::CMD_PROJECT_RUN_REQUIREMENTS,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::DOCUMENT,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2943: a power rail's voltage and tolerance, one General step.
+    CommandMetadata {
+        id: "project_set_rail",
+        category: "design",
+        label: command_ids::CMD_PROJECT_SET_RAIL,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::PROJECT_SET_RAIL,
         ..CommandMetadata::DEFAULT
     },
 ];

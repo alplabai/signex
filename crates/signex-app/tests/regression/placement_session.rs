@@ -224,7 +224,6 @@ pub(crate) fn second_sheet(app: &mut Signex) -> PathBuf {
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "other".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });
@@ -535,7 +534,6 @@ fn sheet_in(f: &Fixture, dir: &std::path::Path, name: &str) -> (Signex, PathBuf)
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: name.to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });
@@ -591,6 +589,7 @@ fn closing_the_project_mid_session_drops_it() {
             }],
             variant_definitions: Vec::new(),
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: Vec::new(),
             enable_git: false,
             net_classes: Vec::new(),
@@ -599,6 +598,11 @@ fn closing_the_project_mid_session_drops_it() {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
+            fab_outputs: None,
+            router_tool_diameter: None,
+            bom_alternates: Vec::new(),
+            requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },

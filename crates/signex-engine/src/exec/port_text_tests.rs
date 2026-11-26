@@ -43,6 +43,7 @@ fn moving_a_power_ports_text_moves_the_port() {
             dx: 2.54,
             dy: 5.08,
             keep_wires: false,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         })
         .unwrap();
     let moved = port(&engine);
@@ -64,6 +65,7 @@ fn a_port_and_its_text_selected_together_move_once() {
             dx: 2.54,
             dy: 0.0,
             keep_wires: false,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         })
         .unwrap();
     assert_eq!(port(&engine).position, Point::new(AT.0 + 2.54, AT.1));
@@ -100,6 +102,7 @@ fn a_parts_value_text_still_moves_on_its_own() {
             dx: 2.54,
             dy: 0.0,
             keep_wires: false,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         })
         .unwrap();
     let part = port(&engine);

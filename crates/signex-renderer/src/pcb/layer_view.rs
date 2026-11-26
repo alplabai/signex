@@ -2,23 +2,24 @@
 //! hidden, which layer is active, single-layer mode, and whether the
 //! ratsnest is drawn.
 //!
-//! Session state only. It decides what is drawn and what a pointer can hit,
-//! and is never written to the `.snxpcb`. Names and colours of the layers are
-//! the app's: this module only says which layers there are.
+//! It decides what is drawn and what a pointer can hit, and is never written
+//! to the `.snxpcb`; the app keeps it per board in the user's preferences
+//! (#2480, [`PcbLayerView::kept`]). Names and colours of the layers are the
+//! app's: this module only says which layers there are.
 
 use std::collections::HashSet;
 
 use signex_types::format::parse_pcb_layer;
-use signex_types::pcb::{Footprint, LayerDef, Pad, PcbBoard};
+use signex_types::pcb::{Footprint, Pad, PadType, PcbBoard};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
 
+use super::board_paint::{BoardObject, BoardPaint};
 use super::emit::{
     arc_traces, is_through_pad, layer_rank_index, pad_from_footprint, sort_zone_stack,
     trace_from_segment, via_from_board_via, zone_from_board_zone,
 };
 use super::footprint_text::footprint_texts;
 use super::graphics::{Drawings, board_drawings, footprint_drawings};
-use super::layer_rows::{LayerGroup, group_layers};
 use super::layer_sets::ShownLayerSet;
 use super::{CopperInk, PadInput, PcbSnapshot};
 
@@ -52,6 +53,8 @@ pub struct PcbLayerView {
     multi_layer_visible: bool,
     /// The board origin marker (#2351).
     origin_marker_visible: bool,
+    /// The orientation tile over the canvas (mockup row 194).
+    orientation_tile_visible: bool,
     /// Single-layer mode: only the active layer is drawn and hit, with the
     /// board outline and the vias and through-hole pads that reach it.
     single_layer: bool,
@@ -62,6 +65,15 @@ pub struct PcbLayerView {
     highlighted: Option<PcbLayer>,
     /// The board seen from below: mirrored, bottom layers on top (#2394).
     flipped: bool,
+    /// The view's own layer colours and transparencies (#2363).
+    paint: BoardPaint,
+    /// The kinds of object the user hid (View Options, #2363).
+    hidden_objects: HashSet<BoardObject>,
+    /// The Layers panel lists only the layers the board uses (#2363).
+    used_only: bool,
+    /// Show only unrouted (mockup row 164): the board is dimmed except its
+    /// ratsnest lines, until the board closes.
+    only_unrouted: bool,
 }
 
 impl Default for PcbLayerView {
@@ -72,10 +84,15 @@ impl Default for PcbLayerView {
             ratsnest_visible: true,
             multi_layer_visible: true,
             origin_marker_visible: true,
+            orientation_tile_visible: true,
             single_layer: false,
             layer_set: None,
             highlighted: None,
             flipped: false,
+            paint: BoardPaint::default(),
+            hidden_objects: HashSet::new(),
+            used_only: false,
+            only_unrouted: false,
         }
     }
 }
@@ -120,6 +137,21 @@ fn classify(view: Option<&PcbLayerView>, names: &[String], through: bool) -> (Em
     (emphasis, ink)
 }
 
+/// The active copper layer when a via on `names` has copper there.
+fn active_in_span(view: Option<&PcbLayerView>, names: &[String]) -> Option<CopperLayer> {
+    let active = view?.active_copper()?;
+    let (top, bottom) = copper_span(names)?;
+    (top..=bottom).contains(&active).then_some(active)
+}
+
+/// The active copper layer for a plated through-hole pad, which has copper on
+/// every layer; a non-plated pad has none to paint.
+fn active_on_through_pad(view: Option<&PcbLayerView>, pad: &Pad) -> Option<CopperLayer> {
+    (pad.pad_type == PadType::Thru)
+        .then(|| view.and_then(PcbLayerView::active_copper))
+        .flatten()
+}
+
 impl PcbLayerView {
     /// The active layer. It is hidden only while every layer it could move
     /// to is (see [`Self::settle_active`]).
@@ -147,6 +179,21 @@ impl PcbLayerView {
     /// draws.
     pub fn is_hidden(&self, layer: PcbLayer) -> bool {
         self.hidden.contains(&layer)
+    }
+
+    /// The layers the user hid, in no order.
+    pub fn hidden_layers(&self) -> impl Iterator<Item = PcbLayer> + '_ {
+        self.hidden.iter().copied()
+    }
+
+    /// This view as it is kept across launches (#2480): the highlight and
+    /// Show only unrouted end with the board, so they are left out.
+    pub fn kept(&self) -> Self {
+        Self {
+            highlighted: None,
+            only_unrouted: false,
+            ..self.clone()
+        }
     }
 
     /// Whether `layer` is drawn and hit: not hidden, and in single-layer
@@ -224,6 +271,12 @@ impl PcbLayerView {
         self.layer_set = None;
     }
 
+    /// List `set` in the strip as it was kept (#2480), hiding nothing: the
+    /// layers it hid are kept as hidden layers of their own.
+    pub fn set_layer_set(&mut self, set: Option<ShownLayerSet>) {
+        self.layer_set = set;
+    }
+
     /// Whether the strip lists `layer`: every layer without a set.
     pub fn lists_in_strip(&self, layer: PcbLayer) -> bool {
         self.layer_set
@@ -251,23 +304,54 @@ impl PcbLayerView {
         self.flipped = !self.flipped;
     }
 
-    pub fn has_hidden(&self) -> bool {
-        !self.hidden.is_empty() || !self.multi_layer_visible
+    /// The view's own transparencies (#2363); its layer colours are the
+    /// board's, see [`Self::paint_of`].
+    pub fn paint(&self) -> &BoardPaint {
+        &self.paint
     }
 
-    /// Show or hide every layer of one Layers panel group of a board; the
-    /// Drill group carries the Multi-Layer row too.
-    pub fn set_group_visible(&mut self, layers: &[LayerDef], group: LayerGroup, visible: bool) {
-        for layer in group_layers(layers, group) {
-            if visible {
-                self.hidden.remove(&layer);
-            } else {
-                self.hidden.insert(layer);
-            }
+    /// What this view draws `board` with: its transparencies and the
+    /// colours the board gives its layers (saved with the board,
+    /// 2026-11-18).
+    pub fn paint_of(&self, board: &PcbBoard) -> BoardPaint {
+        board_paint(Some(self), board)
+    }
+
+    /// Draw `kind` this transparent, percent.
+    pub fn set_object_transparency(&mut self, kind: BoardObject, percent: u8) {
+        self.paint.set_transparency(kind, percent);
+    }
+
+    /// Whether objects of `kind` are drawn and hit.
+    pub fn shows_object(&self, kind: BoardObject) -> bool {
+        !self.hidden_objects.contains(&kind)
+    }
+
+    /// Whether some kind of object is hidden.
+    pub fn hides_objects(&self) -> bool {
+        !self.hidden_objects.is_empty()
+    }
+
+    /// Show or hide every object of `kind`.
+    pub fn set_object_visible(&mut self, kind: BoardObject, visible: bool) {
+        if visible {
+            self.hidden_objects.remove(&kind);
+        } else {
+            self.hidden_objects.insert(kind);
         }
-        if group == LayerGroup::Drill {
-            self.multi_layer_visible = visible;
-        }
+    }
+
+    /// Whether the Layers panel lists only the layers the board uses.
+    pub fn used_only(&self) -> bool {
+        self.used_only
+    }
+
+    pub fn set_used_only(&mut self, on: bool) {
+        self.used_only = on;
+    }
+
+    pub fn has_hidden(&self) -> bool {
+        !self.hidden.is_empty() || !self.multi_layer_visible
     }
 
     /// Whether only the active layer is drawn.
@@ -313,6 +397,21 @@ impl PcbLayerView {
         self.ratsnest_visible = !self.ratsnest_visible;
     }
 
+    /// Whether the ratsnest is drawn: Show only unrouted draws it whatever
+    /// the stored visibility, which it leaves alone.
+    pub fn ratsnest_drawn(&self) -> bool {
+        self.ratsnest_visible || self.only_unrouted
+    }
+
+    /// Whether the board is dimmed except its unrouted ratsnest lines.
+    pub fn only_unrouted(&self) -> bool {
+        self.only_unrouted
+    }
+
+    pub fn set_only_unrouted(&mut self, on: bool) {
+        self.only_unrouted = on;
+    }
+
     pub fn origin_marker_visible(&self) -> bool {
         self.origin_marker_visible
     }
@@ -323,6 +422,16 @@ impl PcbLayerView {
 
     pub fn toggle_origin_marker(&mut self) {
         self.origin_marker_visible = !self.origin_marker_visible;
+    }
+
+    /// Whether the orientation tile shows over the board canvas (mockup
+    /// row 194); its eye is in View Options.
+    pub fn orientation_tile_visible(&self) -> bool {
+        self.orientation_tile_visible
+    }
+
+    pub fn toggle_orientation_tile(&mut self) {
+        self.orientation_tile_visible = !self.orientation_tile_visible;
     }
 
     /// Whether an item on `names` is drawn and hit. A name this build does
@@ -462,12 +571,13 @@ impl PcbSnapshot {
 
     pub(super) fn from_board_filtered(board: &PcbBoard, view: Option<&PcbLayerView>) -> Self {
         let shown = |names: &[String]| view.is_none_or(|v| v.shows_any(names));
+        let object = |kind| view.is_none_or(|v| v.shows_object(kind));
         let flipped = view.is_some_and(PcbLayerView::flipped);
 
         let mut traces = Vec::new();
         for segment in &board.segments {
             let names = std::slice::from_ref(&segment.layer);
-            if shown(names) {
+            if object(BoardObject::Tracks) && shown(names) {
                 let (how, ink) = classify(view, names, false);
                 let mut trace = trace_from_segment(segment);
                 trace.dimmed = how == Emphasis::Dimmed;
@@ -483,7 +593,7 @@ impl PcbSnapshot {
             .filter(|a| pcb_geom::arc_is_copper(a))
         {
             let names = std::slice::from_ref(&arc.layer);
-            if shown(names) {
+            if object(BoardObject::Arcs) && shown(names) {
                 let (how, ink) = classify(view, names, false);
                 for mut trace in arc_traces(arc) {
                     trace.dimmed = how == Emphasis::Dimmed;
@@ -494,21 +604,24 @@ impl PcbSnapshot {
         }
         let mut vias = Vec::new();
         for via in &board.vias {
-            if view.is_none_or(|v| v.shows_via(&via.layers)) {
+            if view.is_none_or(|v| v.shows_object(BoardObject::Vias) && v.shows_via(&via.layers)) {
                 let (how, ink) = classify(view, &via.layers, true);
-                let mut input = via_from_board_via(via, view.and_then(PcbLayerView::active_copper));
+                let reached = active_in_span(view, &via.layers);
+                let mut input = via_from_board_via(via, reached);
                 input.dimmed = how == Emphasis::Dimmed;
                 input.ink = ink;
+                input.shown_on = reached;
                 vias.push((how, input));
             }
         }
         let mut pads: Vec<_> = board
             .footprints
             .iter()
+            .filter(|_| object(BoardObject::Pads))
             .flat_map(|footprint| footprint_pads(footprint, view))
             .collect();
         // Free pads are drawn as pads of the board's own frame (#2373).
-        if !board.free.pads.is_empty() {
+        if object(BoardObject::Pads) && !board.free.pads.is_empty() {
             let frame = Footprint {
                 pads: board.free.pads.clone(),
                 ..signex_types::pcb_free::free_pad_frame()
@@ -519,6 +632,7 @@ impl PcbSnapshot {
             texts: board
                 .footprints
                 .iter()
+                .filter(|_| object(BoardObject::Texts))
                 .flat_map(|footprint| footprint_texts(footprint, view))
                 .collect(),
             ..Drawings::default()
@@ -534,12 +648,14 @@ impl PcbSnapshot {
         let mut zone_emphasis = vec![Emphasis::Normal; board.zones.len()];
         for (source_order, zone) in board.zones.iter().enumerate() {
             let names = std::slice::from_ref(&zone.layer);
-            if !shown(names) {
+            let kind = zone_object(zone);
+            if !object(kind) || !shown(names) {
                 continue;
             }
             let Some(mut input) = zone_from_board_zone(zone, source_order, &layer_ranks) else {
                 continue;
             };
+            input.object = kind;
             if input.rule_area {
                 rule_areas.push(input);
             } else {
@@ -559,6 +675,14 @@ impl PcbSnapshot {
             .map(|zone| (zone_emphasis[zone.source_order], zone))
             .collect();
 
+        let mut board_features = super::BoardFeaturesInput {
+            edge_hidden: view.is_some_and(|v| !v.is_visible(BOARD_OUTLINE)),
+            ..super::BoardFeaturesInput::from_board(board)
+        };
+        if !object(BoardObject::Keepouts) {
+            board_features.keepouts.clear();
+        }
+
         Self {
             traces: strip(in_draw_order(traces, flipped, |t| t.ink)),
             vias: strip(in_draw_order(vias, flipped, |v| v.ink)),
@@ -567,13 +691,23 @@ impl PcbSnapshot {
             rule_areas,
             ratsnest_lines: Vec::new(),
             drc_markers: Vec::new(),
-            board_features: super::BoardFeaturesInput {
-                edge_hidden: view.is_some_and(|v| !v.is_visible(BOARD_OUTLINE)),
-                ..super::BoardFeaturesInput::from_board(board)
-            },
+            board_features,
             texts: drawings.texts,
             graphics: drawings.graphics,
+            paint: board_paint(view, board)
+                .with_board_dimmed(view.is_some_and(PcbLayerView::only_unrouted)),
         }
+    }
+}
+
+/// The View Options row a zone belongs to (#2363): a keepout, a fill, a
+/// region or a pour, as the selection filter sorts them.
+pub fn zone_object(zone: &signex_types::pcb::Zone) -> BoardObject {
+    match pcb_geom::PickKind::of_zone(zone) {
+        Some(pcb_geom::PickKind::Keepouts) => BoardObject::Keepouts,
+        Some(pcb_geom::PickKind::Fills) => BoardObject::Fills,
+        Some(pcb_geom::PickKind::Regions) => BoardObject::Regions,
+        _ => BoardObject::Polygons,
     }
 }
 
@@ -598,16 +732,29 @@ fn footprint_pads(footprint: &Footprint, view: Option<&PcbLayerView>) -> Vec<(Em
         if view.is_some_and(|v| !v.shows_pad(footprint, pad)) {
             continue;
         }
-        let (how, ink) = classify(view, pad_layer_names(footprint, pad), is_through_pad(pad));
-        if let Some(mut input) =
-            pad_from_footprint(footprint, pad, view.and_then(PcbLayerView::active_copper))
-        {
+        let names = pad_layer_names(footprint, pad);
+        let (how, ink) = classify(view, names, is_through_pad(pad));
+        let shown_on = active_on_through_pad(view, pad);
+        // Another pad shows a per-layer size only on a layer it reaches.
+        let size_layer = shown_on.or_else(|| active_in_span(view, names));
+        if let Some(mut input) = pad_from_footprint(footprint, pad, size_layer) {
             input.dimmed = how == Emphasis::Dimmed;
             input.ink = ink;
+            input.shown_on = shown_on;
             pads.push((how, input));
         }
     }
     pads
+}
+
+/// The paint `board` is drawn with under `view`: the view's transparencies
+/// (none without a view) and the colours the board gives its layers.
+pub fn board_paint(view: Option<&PcbLayerView>, board: &PcbBoard) -> BoardPaint {
+    let mut paint = view.map(|v| v.paint.clone()).unwrap_or_default();
+    for c in &board.options.layer_colors {
+        paint.set_colour(c.layer, Some([c.color.r, c.color.g, c.color.b]));
+    }
+    paint
 }
 
 fn strip<T>(items: Vec<(Emphasis, T)>) -> Vec<T> {

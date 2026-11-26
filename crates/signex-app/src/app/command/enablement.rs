@@ -32,6 +32,9 @@ pub(crate) struct CommandContext {
     pub has_pcb: bool,
     /// The board view of the window is turned on screen (#2316).
     pub pcb_view_turned: bool,
+    /// The window shows the board in 3D (mockup row 175): the main window,
+    /// the only one that draws the 3D view.
+    pub board_3d_shown: bool,
     /// The undocked tab window the command came from shows a schematic or
     /// a PCB. Fit All acts on that window's own canvas; the per-window
     /// document commands read [`Self::document_is_schematic`] and
@@ -105,10 +108,10 @@ pub(crate) struct CommandContext {
     pub has_project_sheet: bool,
     /// Two documents can share the main window in tile panes (#2249), or a
     /// document tab is undocked into its own window and the main window's
-    /// screen is known, so Window ▸ Tile has a plan.
+    /// screen is known, so View ▸ Window ▸ Tile has a plan.
     pub can_tile_windows: bool,
-    /// The main window shows its documents in tile panes, so Window ▸
-    /// Untile has something to undo (#2249).
+    /// The main window shows its documents in tile panes, so View ▸ Window
+    /// ▸ Untile has something to undo (#2249).
     pub is_tiled: bool,
     /// The active symbol editor's current part can be removed: a symbol
     /// keeps its first part, so Remove Part refuses part 1.
@@ -131,7 +134,7 @@ pub(crate) fn is_enabled(command: &AppCommandId, ctx: &CommandContext) -> bool {
 pub(crate) fn disabled_reason(
     command: &AppCommandId,
     ctx: &CommandContext,
-) -> Option<&'static str> {
+) -> Option<signex_i18n::MessageId> {
     super::needs::needs(command)
         .filter(|needs| !needs.is_met(ctx))
         .map(super::needs::Needs::reason)
@@ -260,19 +263,32 @@ impl Signex {
         } else {
             main_has_schematic
         };
+        // So is an undocked editor window, by the document it shows.
+        let shown_kind = match window
+            .filter(|id| self.is_document_window(*id))
+            .and_then(|id| self.ui_state.windows.get(&id))
+        {
+            Some(crate::app::state::WindowKind::UndockedTab { path, .. }) => document
+                .tabs
+                .iter()
+                .find(|t| t.path == *path)
+                .map(|t| &t.kind),
+            _ => active_kind,
+        };
         CommandContext {
             has_schematic,
             // An undocked PCB window is enabled by the board it shows (#2223).
             has_pcb: self.has_active_pcb()
                 || window.is_some_and(|id| self.undocked_pcb_path(id).is_some()),
             pcb_view_turned: self.pcb_view_turned_in(window),
+            board_3d_shown: self.board_3d_shown_in(window),
             undocked_has_canvas: self.undocked_tab_has_canvas(window),
             document_is_schematic: own.is_schematic,
             document_is_editor: own.is_editor,
             document_is_dirty_board: own.is_dirty_board,
             has_sheets: document.active_project.is_some() || !document.engines.is_empty(),
-            has_symbol_editor,
-            has_footprint_editor,
+            has_symbol_editor: matches!(shown_kind, Some(TabKind::SymbolEditor(_))),
+            has_footprint_editor: matches!(shown_kind, Some(TabKind::FootprintEditor(_))),
             has_selection: !shown_canvas.selected.is_empty(),
             selection_all_locked: shown_engine
                 .is_some_and(|engine| engine.all_locked(&shown_canvas.selected)),
@@ -370,7 +386,7 @@ impl Signex {
         };
         document.symbol_editors.get(path).is_some_and(|editor| {
             crate::library::editor::symbol::state::max_part_number(editor.primitive()) > 1
-                && editor.active_part > 1
+                && editor.draft.active_part > 1
         })
     }
 
@@ -428,13 +444,9 @@ mod tests {
     }
 
     fn push_tab(app: &mut Signex, path: &std::path::Path, kind: TabKind) {
-        app.document_state.tabs.push(TabInfo {
-            title: "doc".into(),
-            path: path.to_path_buf(),
-            cached_document: None,
-            project_id: None,
-            kind,
-        });
+        app.document_state
+            .tabs
+            .push(crate::test_adapter::boardless_tab("doc", path, kind));
         app.document_state.active_tab = app.document_state.tabs.len() - 1;
     }
 
@@ -573,6 +585,7 @@ mod tests {
                 sheets: Vec::new(),
                 variant_definitions: Vec::new(),
                 active_variant: None,
+                variant_settings: Default::default(),
                 libraries: Vec::new(),
                 enable_git: false,
                 net_classes: Vec::new(),
@@ -581,6 +594,11 @@ mod tests {
                 schematic_defaults: Default::default(),
                 project_defaults: Default::default(),
                 agent_journal: Default::default(),
+                schematic_design: Default::default(),
+                fab_outputs: None,
+                router_tool_diameter: None,
+                bom_alternates: Vec::new(),
+                requirements: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),
             },
@@ -761,6 +779,11 @@ mod tests {
             // #2416: the sheet's selection filter and the Net Classes panel.
             "open_selection_filter",
             "open_net_classes",
+            // #1280: the harness tools and the definitions view.
+            "place_signal_harness",
+            "place_harness_connector",
+            "place_harness_entry",
+            "open_harness_definitions",
         ] {
             assert!(!is_enabled(&id(name), &off), "{name} without a schematic");
             assert!(is_enabled(&id(name), &on), "{name} with a schematic");
@@ -903,7 +926,11 @@ mod tests {
                     is_enabled(&command, ctx),
                     "{name} in {ctx:?}"
                 );
-                assert!(reason.is_none_or(|r| !r.is_empty()), "{name}");
+                let en = signex_i18n::I18n::en_us();
+                assert!(
+                    reason.is_none_or(|r| !en.message_plain(r, &[]).is_empty()),
+                    "{name}"
+                );
             }
         }
     }
@@ -973,7 +1000,6 @@ mod tests {
             TabInfo {
                 title: "undocked".into(),
                 path: path.clone(),
-                cached_document: None,
                 project_id: None,
                 kind: TabKind::Schematic,
             },
@@ -1107,7 +1133,9 @@ mod tests {
     #[test]
     fn planned_tool_commands_are_never_enabled_but_always_explain() {
         let ids = planned_ids();
-        assert!(ids.contains(&"place_signal_harness"), "{ids:?}");
+        assert!(ids.contains(&"place_device_sheet_symbol"), "{ids:?}");
+        // #1280: the harness tools are built.
+        assert!(!ids.contains(&"place_signal_harness"), "{ids:?}");
         let with_command = crate::active_bar::PLANNED_TOOLS
             .iter()
             .filter(|(planned, _)| {
@@ -1148,11 +1176,15 @@ mod tests {
     fn a_planned_tool_keystroke_still_logs_the_refusal() {
         let _ = crate::diagnostics::init_logging();
         let (mut app, _t) = Signex::new();
-        let _ = app.dispatch_command(&id("place_signal_harness"), CommandArgs::default(), None);
+        let _ = app.dispatch_command(
+            &id("place_device_sheet_symbol"),
+            CommandArgs::default(),
+            None,
+        );
         assert!(
             crate::diagnostics::recent_entries().iter().any(|e| e
                 .message
-                .starts_with("Planned, not available yet: Signal Harness")),
+                .starts_with("Planned, not available yet: Device Sheet Symbol")),
             "the refusal must reach the Messages panel, not be dropped"
         );
     }
@@ -1220,6 +1252,66 @@ mod tests {
         }
     }
 
+    /// ADR-0006 slice 7: no `CoreContext` fact is read from a panel or from
+    /// the interaction state; resetting both leaves the core half as it was.
+    /// The one exception is the board sketch session (decision 8), pinned by
+    /// the next test.
+    #[test]
+    fn core_facts_ignore_panel_and_interaction_state() {
+        let fixtures: [fn() -> Signex; 4] = [
+            || with_hierarchy(true),
+            with_schematic,
+            with_board,
+            || with_footprint_editor().0,
+        ];
+        for build in fixtures {
+            let mut app = Box::new(build());
+            let before = app.command_context(None);
+            let fresh = Box::new(Signex::new().0);
+            app.document_state.panel_ctx = fresh.document_state.panel_ctx;
+            app.interaction_state = fresh.interaction_state;
+            assert_eq!(app.command_context(None).core(), before.core());
+        }
+        assert!(
+            with_hierarchy(true).command_context(None).has_parent_sheet,
+            "the hierarchy fixture reads a panel fact, so the check has teeth"
+        );
+    }
+
+    /// Decision 8 pending: the board sketch session sits in the interaction
+    /// state and still feeds `document_is_dirty_board`. When the session
+    /// moves to document state this goes red: drop the exception from
+    /// `need_context.rs` and this test.
+    #[test]
+    fn a_board_sketch_session_is_the_known_interaction_read_of_the_core_facts() {
+        let mut app = Box::new(with_board());
+        let board: signex_types::pcb::PcbBoard =
+            serde_json::from_str(r#"{"uuid":"00000000-0000-0000-0000-000000000000","setup":null}"#)
+                .expect("a minimal board parses");
+        let mut session = crate::app::state::BoardSketchSession::open(
+            std::path::Path::new("enablement.snxpcb"),
+            &board,
+        );
+        session.editor.primitive_mut().sketch = None;
+        app.interaction_state.board_sketch = Some(session);
+        let before = app.command_context(None).core();
+        app.interaction_state = Box::new(Signex::new().0).interaction_state;
+        let after = app.command_context(None).core();
+
+        assert!(before.document_is_dirty_board && !after.document_is_dirty_board);
+        assert!(before.has_dirty_documents && !after.has_dirty_documents);
+        assert_eq!(
+            super::super::need_context::CoreContext {
+                document_is_dirty_board: true,
+                has_dirty_documents: true,
+                ..after
+            },
+            before,
+            "in this fixture the session moves only the two dirty facts; its \
+             fresh history leaves can_undo / can_redo as the board has them"
+        );
+    }
+
     #[test]
     fn up_hierarchy_is_off_without_a_hierarchy() {
         let app = with_schematic();
@@ -1250,6 +1342,7 @@ mod tests {
             .symbol_editors
             .get_mut(&path)
             .unwrap()
+            .draft
             .active_part = 2;
         assert!(remove_part_menu_enabled(&app.command_context(None)));
     }

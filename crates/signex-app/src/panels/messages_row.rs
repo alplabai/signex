@@ -1,13 +1,17 @@
 //! What a Messages row shows in its Source and Time cells: a short source
 //! name for the log target a diagnostic came from, and the wall-clock time
-//! it was logged.
+//! it was logged; and the sheet a row names in its Document cell.
+
+use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, TimeZone, Utc};
-use signex_i18n::{MessageId, ids};
+use signex_i18n::{MessageId, command_ids, ids};
+
+use crate::diagnostics::{DiagnosticEntry, MessageLink};
 
 /// The short Source name of a Messages row.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum MessageSource {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum MessageSource {
     App,
     Tasks,
     Erc,
@@ -94,9 +98,44 @@ impl MessageSource {
     }
 }
 
+/// The log target of the line that reports bare pin touches on open.
+pub(crate) const PIN_JUNCTIONS_TARGET: &str = "signex::pin_junctions";
+
+/// The link a Messages row offers, with its catalog label: the row's own
+/// [`MessageLink`], which names the document it acts on.
+pub(crate) fn row_action(entry: &DiagnosticEntry) -> Option<(MessageLink, MessageId)> {
+    let link = entry.link.clone()?;
+    let label = match &link {
+        MessageLink::RepairPinJunctions(_) => command_ids::CMD_MENU_REPAIR_PIN_JUNCTIONS,
+    };
+    Some((link, label))
+}
+
+/// What a row's Document cell shows: the file name of the sheet it names.
+pub(crate) fn document_name(document: &Path) -> String {
+    document.file_name().map_or_else(
+        || document.display().to_string(),
+        |name| name.to_string_lossy().into_owned(),
+    )
+}
+
+/// The documents `rows` name, each once, by shown name: the Document
+/// dropdown's entries.
+pub(crate) fn named_documents(rows: &[&DiagnosticEntry]) -> Vec<PathBuf> {
+    let mut documents: Vec<PathBuf> = rows.iter().filter_map(|e| e.document.clone()).collect();
+    documents.sort_by_cached_key(|d| (document_name(d), d.clone()));
+    documents.dedup();
+    documents
+}
+
 /// `at` on the operating system's local clock as `HH:MM:SS`. Display only.
 pub(crate) fn clock_time(at: DateTime<Utc>) -> String {
     clock_time_in(at, &chrono::Local)
+}
+
+/// `at` on the operating system's local clock as `HH:MM`. Display only.
+pub(crate) fn clock_minutes(at: DateTime<Utc>) -> String {
+    at.with_timezone(&chrono::Local).format("%H:%M").to_string()
 }
 
 fn clock_time_in<Z: TimeZone>(at: DateTime<Utc>, zone: &Z) -> String
@@ -148,6 +187,30 @@ mod tests {
         assert_eq!(source("iced_wgpu::window"), MessageSource::Graphics);
         assert_eq!(source("reqwest::connect"), MessageSource::System);
         assert_eq!(MessageSource::of_code("APP-EVENT"), MessageSource::App);
+    }
+
+    /// The bare-touch report links to Repair Pin Junctions on its own sheet
+    /// (2026-11-19); a row without a link offers none, whatever its target.
+    #[test]
+    fn the_bare_touch_line_links_to_the_repair() {
+        let path = std::path::PathBuf::from("/w/a.snxsch");
+        let entry = |link| DiagnosticEntry {
+            id: 1,
+            level: crate::diagnostics::DiagnosticLevel::Warning,
+            code: diagnostic_code_from_target(PIN_JUNCTIONS_TARGET),
+            message: "a.snxsch: 1 pin touches a wire without a junction".to_string(),
+            at: Utc::now(),
+            link,
+            document: None,
+            object: None,
+        };
+        let linked = entry(Some(MessageLink::RepairPinJunctions(path.clone())));
+        let (link, label) = row_action(&linked).expect("a link");
+        assert_eq!(link, MessageLink::RepairPinJunctions(path));
+        assert_eq!(label, command_ids::CMD_MENU_REPAIR_PIN_JUNCTIONS);
+        let id = crate::keymap::AppCommandId::new("repair_pin_junctions").expect("a catalog id");
+        assert!(crate::app::command::bridge::is_dispatchable(&id));
+        assert!(row_action(&entry(None)).is_none());
     }
 
     #[test]

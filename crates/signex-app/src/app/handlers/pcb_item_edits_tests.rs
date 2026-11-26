@@ -344,3 +344,117 @@ fn an_empty_size_list_from_an_agent_is_refused_and_the_board_still_saves() {
         .write_string()
         .expect("the board saves");
 }
+
+const FOOTPRINT: Uuid = Uuid::from_u128(0x301);
+const PAD: Uuid = Uuid::from_u128(0x302);
+
+/// The board with one footprint holding one 2 x 1 mm rectangular pad.
+fn board_with_pad() -> PcbBoard {
+    use signex_types::pcb::{Footprint, Pad, PadShape, PadType, Point};
+    let mut b = board();
+    b.footprints.push(Footprint {
+        uuid: FOOTPRINT,
+        reference: "U1".into(),
+        value: String::new(),
+        footprint_id: String::new(),
+        position: Point::new(30.0, 10.0),
+        rotation: 0.0,
+        layer: "TopCopper".into(),
+        locked: false,
+        schematic_link: None,
+        library_ref: None,
+        component: Default::default(),
+        pads: vec![Pad {
+            uuid: PAD,
+            number: "1".into(),
+            pad_type: PadType::Smd,
+            shape: PadShape::Rect,
+            position: Point::new(0.0, 0.0),
+            size: Point::new(2.0, 1.0),
+            drill: None,
+            layers: vec!["TopCopper".into()],
+            net: None,
+            roundrect_ratio: 0.0,
+            trapezoid_delta: Point::ZERO,
+            custom_outline: Vec::new(),
+            rotation: 0.0,
+            layer_sizes: None,
+            net_locked: false,
+            unknown: Default::default(),
+            unknown_columns: Default::default(),
+        }],
+        graphics: Vec::new(),
+        properties: Vec::new(),
+        unknown: Default::default(),
+        unknown_columns: Default::default(),
+    });
+    b
+}
+
+#[test]
+fn an_agent_makes_a_pad_a_trapezoid_then_a_custom_pad_in_one_step_each() {
+    // #2242: `set_pad_shape` sets the shape with the parameters it reads.
+    use signex_types::pcb::{PadShape, Point};
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = app_workspace(&dir.path().to_string_lossy(), &[]);
+    let path = dir.path().join("board.snxpcb");
+    app.open_pcb_tab(path.clone(), "board".into(), board_with_pad());
+    let ids = format!("ids={PAD}");
+    let pad = |app: &Signex| board_of(app, &path).footprints[0].pads[0].clone();
+
+    agent(
+        &mut app,
+        &path,
+        "set_pad_shape",
+        &[ids.as_str(), "shape=trapezoid", "delta=1,0"],
+    );
+    let held = pad(&app);
+    assert_eq!(
+        (held.shape, held.trapezoid_delta),
+        (PadShape::Trapezoid, Point::new(1.0, 0.0))
+    );
+
+    agent(
+        &mut app,
+        &path,
+        "set_pad_shape",
+        &[
+            ids.as_str(),
+            "shape=custom",
+            "corners=0,0;1,0;1,0.4;0.4,0.4;0.4,1;0,1",
+        ],
+    );
+    assert_eq!(pad(&app).shape, PadShape::Custom);
+    assert_eq!(pad(&app).custom_outline.len(), 6);
+    let text = SnxPcb::new(board_of(&app, &path).clone())
+        .write_string()
+        .expect("the board saves");
+    assert!(text.contains("custom_outline"), "{text}");
+    undo(&mut app);
+    assert_eq!(pad(&app).shape, PadShape::Trapezoid, "one step");
+
+    // A custom pad with no outline makes no copper: refused, nothing moves.
+    let command = AppCommandId::new("set_pad_shape").unwrap();
+    let document = format!("document={}", path.display());
+    let args =
+        CommandArgs::parse_operands(&command, &[document.as_str(), ids.as_str(), "shape=custom"])
+            .expect("operands");
+    let (outcome, _) = app.run_operands(&command, &args);
+    assert!(
+        matches!(outcome, CommandOutcome::Disabled { .. }),
+        "{outcome:?}"
+    );
+    assert_eq!(pad(&app).shape, PadShape::Trapezoid);
+}
+
+/// #2326: an item named twice is locked once and answered once, in the
+/// order first given.
+#[test]
+fn a_lock_naming_an_item_twice_acts_on_it_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    let ids = format!("ids={VIA},{TRACK},{VIA}");
+    let answer = agent(&mut app, &path, "lock_board_items", &[ids.as_str()]);
+    assert_eq!(answer["ids"], serde_json::json!([VIA, TRACK]));
+    assert!(board_of(&app, &path).vias[0].locked);
+}

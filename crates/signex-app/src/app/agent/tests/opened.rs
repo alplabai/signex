@@ -8,7 +8,9 @@ use serde_json::json;
 use signex_types::net_class::NetClass;
 use signex_types::schematic::{SelectedItem, SelectedKind};
 
-use super::{app_at_work, app_in, ask_with_task, call, line, path, revision, snapshot};
+use super::{
+    app_at_work, app_in, ask_with_task, call, line, open_the_child, path, revision, snapshot,
+};
 use crate::app::Signex;
 use crate::app::path_ops::settle_task;
 
@@ -198,6 +200,7 @@ fn save_writes_the_named_document_only_and_the_person_is_as_they_were() {
 #[test]
 fn assigning_a_net_class_changes_it_and_the_persons_undo_is_in_order() {
     let mut app = app_at_work();
+    open_the_child(&mut app);
     app.document_state.projects[0].data.net_classes = vec![NetClass::named("Power")];
     app.settle_net_class_styles_blocking();
     // The person's own edit on the sheet they are on.
@@ -224,6 +227,7 @@ fn assigning_a_net_class_changes_it_and_the_persons_undo_is_in_order() {
             dx: 10.0,
             dy: 0.0,
             keep_wires: false,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         },
         true,
         true,
@@ -263,6 +267,7 @@ fn assigning_a_net_class_changes_it_and_the_persons_undo_is_in_order() {
 #[test]
 fn assigning_a_net_class_on_a_background_sheet_leaves_the_person_as_they_were() {
     let mut app = app_at_work();
+    open_the_child(&mut app);
     app.document_state.projects[0].data.net_classes = vec![NetClass::named("Power")];
     app.settle_net_class_styles_blocking();
     let person = snapshot(&app);

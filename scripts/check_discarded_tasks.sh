@@ -89,6 +89,15 @@
 # excluded by `list_files`. To consume a Task in a test, assert on it
 # (`task.units()`), don't drop it. Same `path:line` allowlist applies.
 #
+# `translator::run` (#2988) — the GUI translator answers `(outcome, task)`;
+# taking the outcome alone drops the task its handler left (a sheet read, a
+# deferred answer). The gate flags, in production lines, a tuple binding
+# that discards the second half (`let (x, _) = translator::run(...)`, `_x`
+# too) and a `.0` taken from a call on one line
+# (`translator::run(...).0`). Blind spots: a `.0` on a later line of a
+# wrapped call, and a `task` bound and then dropped (`let _ = task;` is the
+# first check's business only when the call is a `handle_*`).
+#
 # Test exemption (for the `let _ =` check only): production line count is what matters here, same
 # convention as scripts/check_file_size.sh — everything up to a trailing
 # INLINE `#[cfg(test)] mod tests { … }` block (running to EOF) is skipped,
@@ -156,6 +165,17 @@ prod_cutoff() {
 # `$1` (lines 1..cutoff) — both `let _ = <recv>.handle_...(...)` on a single
 # line, and rustfmt's wrapped `let _ =` / `<recv>.handle_...(...)` two-line
 # form, reporting the line the `self.handle_` call itself sits on.
+# Emits one line number per `translator::run` whose task is discarded, in
+# the production-only prefix of `$1` — see the translator paragraph above.
+find_translator_discards() {
+  local f="$1" cutoff="$2"
+  awk -v cutoff="$cutoff" '
+    NR > cutoff { exit }
+    /\([ \t]*[A-Za-z_][A-Za-z0-9_]*[ \t]*,[ \t]*_[A-Za-z0-9_]*[ \t]*\)[ \t]*=[ \t]*translator::run/ { print NR; next }
+    /translator::run\(.*\)\.0([^0-9]|$)/ { print NR }
+  ' "$f"
+}
+
 find_discards() {
   local f="$1" cutoff="$2"
   awk -v cutoff="$cutoff" '
@@ -259,6 +279,16 @@ while IFS= read -r f; do
     echo "      \"$entry\" to ${ALLOWLIST#"$ROOT"/} with a comment saying why."
     fail=1
   done < <(find_task_drops "$f")
+  while IFS= read -r lineno; do
+    [[ -z "${lineno:-}" ]] && continue
+    entry="$f:$lineno"
+    if is_allowlisted "$entry"; then
+      continue
+    fi
+    echo "FAIL  $entry — drops the Task \`translator::run\` answers with."
+    echo "      Return it with the outcome (see GH #2988)."
+    fail=1
+  done < <(find_translator_discards "$f" "$cutoff")
 done < <(list_files)
 
 if (( fail )); then

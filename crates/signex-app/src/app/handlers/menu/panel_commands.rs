@@ -18,6 +18,9 @@ impl Signex {
             MenuMessage::OpenNavigatorPanel => {
                 Some(self.show_panel(crate::panels::PanelKind::Navigator))
             }
+            MenuMessage::OpenAnnotationsPanel => {
+                Some(self.show_panel(crate::panels::PanelKind::Annotations))
+            }
             MenuMessage::OpenPropertiesPanel => {
                 let task = self.show_panel(crate::panels::PanelKind::Properties);
                 self.interaction_state.context_menu = None;
@@ -41,10 +44,14 @@ impl Signex {
             MenuMessage::OpenMessagesPanel => {
                 Some(self.show_panel(crate::panels::PanelKind::Messages))
             }
-            MenuMessage::OpenSignexAiPanel => {
-                Some(self.show_panel(crate::panels::PanelKind::SignexAi))
+            MenuMessage::OpenCommandLogPanel => {
+                Some(self.show_panel(crate::panels::PanelKind::CommandLog))
             }
             MenuMessage::OpenLayersPanel => Some(self.show_panel(crate::panels::PanelKind::Layers)),
+            MenuMessage::OpenUnionsPanel => Some(self.show_panel(crate::panels::PanelKind::Unions)),
+            MenuMessage::OpenExtensionPanel(kind) => {
+                Some(self.show_panel(crate::panels::PanelKind::Extension(*kind)))
+            }
             MenuMessage::AscendToParentSheet => Some(self.ascend_to_parent_sheet()),
             MenuMessage::NextSheet => Some(self.step_schematic_sheet(true)),
             MenuMessage::NextDocumentTab => Some(self.step_document_tab(true)),
@@ -57,8 +64,33 @@ impl Signex {
                 // Single-flag toggle — opening the modal is enough; the
                 // close path goes through
                 // `Message::Overlay(OverlayMsg::CloseKeyboardShortcuts)`.
+                // It opens with no filter, on the active editor's scope.
+                use crate::keyboard_shortcuts_modal::{ShortcutScope, ShortcutSheet};
+                use crate::keymap::ShortcutContext;
+                // The editor in front, as the main window's live shortcut
+                // contexts say; a footprint or library editor wins, since
+                // neither scope lists its rows.
+                let live = self.shortcut_contexts(None);
+                let editor = [
+                    ShortcutContext::Footprint,
+                    ShortcutContext::Library,
+                    ShortcutContext::Pcb,
+                    ShortcutContext::Schematic,
+                ]
+                .into_iter()
+                .find(|context| live.contains(context));
                 self.ui_state.keyboard_shortcuts_open = true;
+                self.ui_state.shortcut_sheet =
+                    ShortcutSheet::opened(ShortcutScope::for_active_editor(editor));
                 self.ui_state.refresh_shortcut_sections();
+                self.interaction_state.context_menu = None;
+                self.ui_state.panel_list_open = false;
+                Some(Task::none())
+            }
+            MenuMessage::OpenWelcomeTips => {
+                // The one first-run card again (mockup row 14); its close,
+                // Got it, Esc and a canvas gesture close it as on first launch.
+                self.ui_state.first_run_tour_open = true;
                 self.interaction_state.context_menu = None;
                 self.ui_state.panel_list_open = false;
                 Some(Task::none())
@@ -81,5 +113,17 @@ impl Signex {
             )),
             _ => None,
         }
+    }
+
+    /// Open Preferences on `nav`: the Keyboard Shortcuts sheet's "Edit in
+    /// Preferences…" and the first-run card's "change" link. An open
+    /// Preferences keeps its drafts and only turns the page.
+    pub(crate) fn open_preferences_on(
+        &mut self,
+        nav: crate::preferences::PrefNav,
+    ) -> Task<Message> {
+        let open = self.dispatch_preferences_message(PreferencesMsg::Open);
+        let page = self.dispatch_preferences_message(PreferencesMsg::Nav(nav));
+        Task::batch([open, page])
     }
 }

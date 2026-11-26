@@ -47,6 +47,7 @@ byte-identically. Filenames name the feature:
 | Sheet metadata | `title-block`, `lib-symbols-cache` (every `Graphic` variant, several pin shapes) |
 | Text hostility | `text-adversarial-label`, `text-adversarial-fields`, `hostile_label_text` (backslash, quote, bare `-`, tab, newline) |
 | Numeric | `coordinates-nanometre-rounding`, `regulator_stage` (sorted map keys) |
+| Schematic Refinement (`snxsch/1.3`) | `refinement-objects` (two harness connectors with entries, one locked; a harness wire; a harness-typed sheet entry on a sheet symbol; two unions; a locked Bezier with line style, end arrow and colour; a dimension; a table bound to a part's pins with a hidden column; a Net Parameters directive with every rule; a Blanket with track width, keep-short pour and edge nets; a Differential Pair with a class). Written by hand to the writer's layout, see `docs/architecture/snxsch-refinement-objects.md` |
 
 Hierarchy: `hierarchy-root-two-children` (two child-sheet symbols with
 pins), `hierarchy-nested-middle` (a child that is itself a parent) and
@@ -78,7 +79,10 @@ placeholder before comparing. Coverage: `minimal-empty`,
 `two-flat-sheets`, `hierarchical-three-sheets` (the sheet list for the
 hierarchy fixtures: root -> middle -> leaf all resolve in the corpus),
 `full-with-libraries-and-variants`, `unknown-keys-preserved` (unknown keys
-at top level, per sheet and per library, plus the `format` token).
+at top level, per sheet and per library, plus the `format` token),
+`schematic-design` (the `schematic_design` key: changed channel naming,
+harness definitions `SPI_BUS`, `UART` and `DEBUG` with a nested `UART`,
+diff-pair classes `USB` and `LVDS_100R`).
 `MIN_PROJECT_FIXTURES` guards the count. These are not blessable: edit by
 hand and keep keys alphabetical (the writer sorts them).
 
@@ -96,7 +100,19 @@ criterion "five real `.snxpcb` fixtures render". Each is a `.snxpcb` plus a
 | `usb-c-power-input` | USB-C power-only receptacle, 1206 polyfuse, SOD-123 TVS, bulk cap, power LED, output header. 2 layers, 30 x 22 mm, rounded corners | plated shell slots (oval drills); CC escapes through vias to bottom-side 5.1 k pull-downs; a footprint turned 270 degrees |
 | `mcu-breakout-tqfp32` | ATmega328P-AU pin-out on a TQFP-32, each side fanned out to its own 1x8 header; decoupling, AVCC / AREF caps, 16 MHz crystal and load caps on the bottom. 2 layers, 40 x 44 mm | 0.8 mm pitch fan-out (96 track segments), seven bottom-side parts, a net per pin |
 | `sensor-4layer` | BME280-style LGA-8 sensor, SOT-23-5 LDO, I2C pull-ups, 1x4 header. 4 layers, 26 x 18 mm, chamfered | inner GND and +3V3 planes as zones with 22 antipad holes; plane layer types and display names in the stackup; supply vias |
-| `mixed-tht-smd` | 12 V to 5 V supply: barrel jack, SOD-123 diode, TO-220 7805, radial electrolytics, screw terminal, 45-degree LED and resistor, bottom-side 0805 decoupling. 2 layers, 50 x 40 mm | outline with a 10 mm arc corner (an `arc` on `EdgeCuts`); oval slot drills; `[board_sketch]` with four M3 mounting holes (two plated to GND) and a top-copper keepout |
+| `mixed-tht-smd` | 12 V to 5 V supply: barrel jack, SOD-123 diode, TO-220 7805, radial electrolytics, screw terminal, 45-degree LED and resistor, bottom-side 0805 decoupling. 2 layers, 50 x 40 mm | outline with a 10 mm arc corner (an `arc` on `EdgeCuts`); oval slot drills; `[board_sketch]` with four M3 mounting holes (two plated to GND), a top-copper keepout and a routed 8 x 3 mm cable-tie slot (a through cutout) |
+
+Between them the five cover two- and four-layer stack-ups, SMD and
+through-hole parts, vias, pours with thermal relief (every zone is written
+with `thermal_relief = true`), a keepout, a cutout, top and bottom
+placement, footprint silkscreen and board text on both silkscreen layers.
+
+Origin and licence: all five are original work of the Signex project,
+designed for this corpus with Signex's own types and writer (the builders
+in `../integration/real_boards/`). No third-party board file, footprint
+or layout was imported or copied; the part outlines follow the generic
+package dimensions their names give. They are covered by the repository
+licence, like the rest of the tree.
 
 The files are generated, never hand-edited: `../integration/real_boards/`
 builds them deterministically, and `real_boards_match_their_generator`
@@ -109,12 +125,18 @@ What is checked, and where:
 - Format (`signex-types`, `real_boards`): each file reloads and re-saves
   byte-identical, a save and reload leaves the board unchanged, the item
   counts are pinned, every pad, track end, via, zone corner and text sits
-  inside the outline, courtyards on one side do not overlap, each `.snxprj`
+  inside the outline and outside every cutout, no courtyard reaches into a
+  cutout, courtyards on one side do not overlap, each `.snxprj`
   round-trips, and the regulator's links resolve to the sample schematic.
 - Render (`signex-renderer`, `pcb_real_boards`): each board builds a
   `PcbSnapshot` and a scene without panic, with every copper layer as the
-  active one too; drawn item counts, fill triangles and a hash of the drawn
-  geometry (colours excluded) are pinned.
+  active one too. Each board's render golden,
+  `crates/signex-renderer/tests/golden/pcb_real_boards/<board>.json`, is
+  drawn in the board palette and pins the drawn item counts, fill
+  triangles, cutouts, keepouts, holes and texts, and hashes of the copper
+  geometry, the overlay geometry (outline, openings, keepouts, silkscreen
+  and other drawings), the texts and the colours. Regenerate with
+  `UPDATE_GOLDEN=1 cargo test -p signex-renderer --test integration real_boards`.
 - DRC (`signex-drc`, `real_boards`): run against each board's own net
   classes, every board has zero violations of any kind; a positive control
   shows a track moved to another net shorts on each board. Ratsnest
@@ -125,6 +147,32 @@ shape token, so a slot is as long as its oval pad says) and the zone fill
 (a zone stores its outline and holes, not a filled polygon). The board
 sketch on `mixed-tht-smd` is written as a bake would store it; it is not
 re-baked in this test.
+
+## Design Notebooks (`.snxnbk`)
+
+`notebook/**/*.snxnbk` are walked by the `signex-notebook` crate tests
+(`src/tests_file.rs`, `src/tests_compile.rs`), not by this crate. Each file
+reads with `NotebookFile::parse` and saves back byte for byte; every file
+with a header is in the canonical form `Header::to_toml` writes, and every
+reference a header stores is one its text makes. `MIN_NOTEBOOK_FIXTURES`
+guards the count. Written by hand; keep headers canonical (format token,
+unknown keys sorted, then one `[[references]]` table per reference).
+
+| Fixture | Covers |
+|---|---|
+| `minimal` | a header with only the format token |
+| `no-header` | plain Typst with no header, read as `snxnbk/1` and kept without one; an `#annotation` block |
+| `kept-unknown-keys` | unknown keys at the top of the header and in a reference entry, a net with no id, a pin with one |
+| `with-chapters/design` | the notebook file: the package import, the report layout, an `#include` of a chapter file |
+| `with-chapters/chapters/power` | a chapter with its own header; references in markup and in block targets, both pin forms; one block of each kind with a typed id; the earlier `#annotation` form |
+| `power-stage` | the "Power stage" page of mockup row 60b as review records: the page block, a Calculation with its target band and result, a Measurement table of three rails (pass, pass, warn), an Issue raised from it, a Decision and a Note naming a removed part (`src/tests_records.rs`) |
+| `with-measurements/design` | measurements (mockup row 199): a `#measurement` block of four readings (nominal and tolerance, max and min limits), a reading on its own that stores the part values it was taken with, and an `#attachment` of the scope capture in `with-measurements/attachments/scope/` (a CSV, not walked as a notebook) |
+
+`with-chapters` is also the compile fixture: it compiles with no
+diagnostic, and two PDF exports of it are the same bytes. `power-stage`
+compiles with no diagnostic too. `with-measurements` compiles with its
+capture read the way the app reads it
+(`NotebookSources::missing_attachments`).
 
 ## Intentional format change
 

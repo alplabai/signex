@@ -265,6 +265,58 @@ around the KiCad incident and cannot detect a port of an arbitrary
 project; the advisory `port-smell` job added for #305 is a heuristic and
 is honest about being one. The written policy above is the control.
 
+## Third-party test data
+
+Files under `testdata/` are third-party data that the tests read. They are
+not code and the repository licence does not cover them. The routing
+corpus (`testdata/routing-corpus/`, #2481) is the case in point: 50 real
+boards converted to `.snxpcb`, each under its own open-hardware licence:
+permissive (MIT, CERN-OHL-P), attribution (CC-BY-3.0, CC-BY-4.0) or
+reciprocal (CERN-OHL-S-2.0, CERN-OHL-W-2.0, CERN-OHL-1.2). `MANIFEST.tsv`
+records each board's source, pinned commit and licence, and `LICENSES/`
+holds the licence texts and notices. The reciprocal boards are accepted as
+test data, approved by Hakan, owner of this document, 2026-11-19
+(`docs/DECISIONS.md`, the 2026-11-18 routing corpus row).
+
+What this means (our reading, not legal advice):
+
+1. **It does not affect Signex code.** The boards are used only as test
+   inputs. They do not go into the binary, and they do not go into Pro. The
+   router does not become a derivative of a board by processing it:
+   CERN-OHL-S covers the board design itself, not code that reads it.
+2. **The boards themselves stay reciprocal.** A converted `.snxpcb` counts
+   as a modified design, and we distribute it in a public repository. So
+   the CERN-OHL-S terms apply: the licence text and the source must be
+   available. `LICENSES/` and the manifest provide both.
+3. **The picture changes if a board reaches the product.** Examples are a
+   shipped example project, a Pro cloud demo, or a routed board published
+   as output. That board and its modified form must then go out under the
+   same licence. This is easy to lose track of, which is why a gate
+   enforces the use rule below.
+4. **One rule stands.** The 2026-11-18 routing corpus row in
+   `docs/DECISIONS.md` supersedes the 2026-11-17 permissive-only row, and
+   this section is where the rule for test data is written down.
+
+The rules:
+
+- Files under `testdata/` are inputs to tests only. They are not part of
+  any Signex build, binary, installer or Pro artifact, and the repository
+  licence does not cover them.
+- A board under CERN-OHL-S, CERN-OHL-W or CERN-OHL-1.2 stays under its own
+  licence in its converted form. Anyone who modifies and shares it must
+  follow that licence.
+- These boards must not be used as shipped examples, sample projects,
+  templates, documentation figures or demo content, in Community or in
+  Pro. A routed or otherwise modified copy must not be published unless it
+  goes out under the board's own licence with its source.
+- CC-BY boards need their attribution kept wherever they are shown.
+
+`scripts/check_routing_corpus.sh` enforces the use rule: it fails when a
+file outside `testdata/` and the routing tests
+(`crates/signex-engine/tests/routing/`) names `testdata/routing-corpus/`.
+Prose, the LFS rule in `.gitattributes`, the workflows that fetch the
+corpus and the gate itself may name it.
+
 ## Acknowledgements
 
 Thanks to Seth Hillbrand ([@sethhillbrand](https://github.com/sethhillbrand))

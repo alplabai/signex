@@ -1,6 +1,7 @@
 use super::*;
 use crate::pcb::{PcbLayerView, PcbSnapshot};
-use signex_types::pcb::{PcbBoard, Point};
+use signex_types::pcb::{PCB_DEFAULT_TEXT_SIZE_MM, PcbBoard, Point};
+use signex_types::pcb_layer::TechnicalLayer;
 
 const TOP_OVERLAY: PcbLayer = PcbLayer::Technical(TechnicalLayer::SilkscreenTop);
 const BOTTOM_OVERLAY: PcbLayer = PcbLayer::Technical(TechnicalLayer::SilkscreenBottom);
@@ -128,4 +129,34 @@ fn the_text_moves_with_its_footprint() {
     board.footprints[0].position = Point::new(30.0, 5.0);
     let shown = texts(&board, &PcbLayerView::default());
     assert_eq!(designator(&shown).map(|t| t.position), Some([30.0, 6.0]));
+}
+
+#[test]
+fn the_text_keeps_its_justification() {
+    let mut board = board();
+    assert_eq!(
+        designator(&texts(&board, &PcbLayerView::default())).map(|t| t.justify),
+        Some(HAlign::Center)
+    );
+    board.footprints[0].properties[0].justify = HAlign::Left;
+    assert_eq!(
+        designator(&texts(&board, &PcbLayerView::default())).map(|t| t.justify),
+        Some(HAlign::Left)
+    );
+}
+
+/// #1416: under EN IEC 81346-2 full class codes the designator draws as
+/// `-R1`; the comment and the board stay as they are.
+#[test]
+fn the_designator_draws_as_the_designator_standard_shows_it() {
+    let board = board();
+    let snapshot = PcbSnapshot::from_board_with_view(&board, &PcbLayerView::default())
+        .with_designator_standard(Some(DesignatorStandard::Iec81346_2Full));
+    let mut contents: Vec<&str> = snapshot.texts.iter().map(|t| t.content.as_str()).collect();
+    contents.sort_unstable();
+    assert_eq!(contents, ["-R1", "10k"]);
+    assert_eq!(board.footprints[0].reference, "R1");
+    let plain = PcbSnapshot::from_board_with_view(&board, &PcbLayerView::default())
+        .with_designator_standard(Some(DesignatorStandard::Iec81346_2));
+    assert!(designator(&plain.texts).is_some_and(|t| t.designator));
 }

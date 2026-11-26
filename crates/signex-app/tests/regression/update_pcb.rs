@@ -7,11 +7,12 @@ use std::path::{Path, PathBuf};
 
 use signex_app::app::{
     CommandPaletteMsg, ContextMenuMsg, FileMsg, LoadedProject, Message, ProjectTreeAction, Signex,
-    TabDocument, UiMsg, UpdatePcbMsg, UpdatePcbState, WindowMsg,
+    UiMsg, UpdatePcbMsg, UpdatePcbState, WindowMsg,
 };
 use signex_app::keymap::{
     AppCommandId, ShortcutBinding, ShortcutBindingAction, ShortcutContext, ShortcutTrigger,
 };
+use signex_app::test_adapter::BoardEngines;
 use signex_engine::pcb::BoardEngine;
 use signex_engine::pcb::eco::{EcoBlock, EcoChange, EcoChangeList, EcoKey, EcoRow};
 use signex_library::adapter::LibraryAdapter;
@@ -186,6 +187,7 @@ fn add_project(
             }],
             variant_definitions: Vec::new(),
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: Vec::new(),
             enable_git: false,
             net_classes: Vec::new(),
@@ -194,6 +196,11 @@ fn add_project(
             schematic_defaults: Default::default(),
             project_defaults: defaults,
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
+            fab_outputs: None,
+            router_tool_diameter: None,
+            bom_alternates: Vec::new(),
+            requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },
@@ -255,7 +262,7 @@ fn fixture_preparing(
     if let Some((board, newer)) = board {
         let mut text = SnxPcb::new(board).write_string().unwrap();
         if newer {
-            text = text.replacen("snxpcb/1.3", "snxpcb/1.9", 1);
+            text = text.replacen(signex_types::format::SNXPCB_FORMAT_V1, "snxpcb/1.13", 1);
         }
         std::fs::write(&board_path, text).unwrap();
     }
@@ -314,11 +321,7 @@ fn add_row(f: &Fixture, part: Uuid) -> &EcoRow {
 fn engine(f: &Fixture) -> &BoardEngine {
     f.app
         .document_state
-        .tabs
-        .iter()
-        .find(|t| t.path == f.board)
-        .and_then(|t| t.cached_document.as_ref())
-        .and_then(TabDocument::as_pcb_engine)
+        .first_tab_board_engine(&f.board)
         .expect("the board is open")
 }
 
@@ -380,6 +383,7 @@ fn board_of(footprints: Vec<signex_types::pcb::Footprint>) -> PcbBoard {
         outline: Vec::new(),
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         layers: Vec::new(),
         setup: None,
@@ -412,6 +416,8 @@ fn board_footprint(
         layers: vec!["TopCopper".into()],
         net: None,
         roundrect_ratio: 0.0,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 0.0,
         layer_sizes: None,
         net_locked: locked,
@@ -746,6 +752,7 @@ fn a_new_pcb_takes_the_project_defaults_and_is_not_written() {
         }),
         sheet: None,
         profile: None,
+        dimension: None,
     };
     let mut f = fixture_with(|_| Vec::new(), None, defaults);
     send(&mut f.app, menu_row("new_pcb_document"));
@@ -918,3 +925,9 @@ mod dialog;
 
 #[path = "update_pcb_swap.rs"]
 mod swap;
+
+#[path = "update_pcb_e2e.rs"]
+mod e2e;
+
+#[path = "update_pcb_placed_component.rs"]
+mod placed_component;

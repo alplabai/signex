@@ -6,7 +6,10 @@
 //! `text_only`, and is edited in the text. See `docs/DRC_RULES.md`,
 //! "Rules manager".
 
+pub mod catalog;
 mod edit;
+pub mod grid;
+mod kinds;
 pub mod matrix;
 pub mod presets;
 mod render;
@@ -16,124 +19,14 @@ pub use edit::{
     EditError, RuleField, add_rule, enable_rule, parse_bool, parse_scope, remove_rule,
     replace_rule, scope_text, set_field,
 };
+pub use kinds::{LimitField, RuleKind};
 pub use render::{RuleDraft, render};
 
-use signex_drc::{LimitKind, NetScope, UserRule};
+use signex_drc::{NetScope, UserRule};
 use signex_types::violation::Severity;
 
-use crate::ast::{Bound, CondOp, LimitAst, RuleAst, SeverityAst, Span};
+use crate::ast::{CondOp, LimitAst, RuleAst, SeverityAst, Span};
 use crate::{Diagnostic, Judged, Level};
-
-/// What a rule limits: its `on` target. Only what Run DRC checks today.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum RuleKind {
-    Clearance,
-    Track,
-    Via,
-}
-
-impl RuleKind {
-    pub const ALL: [RuleKind; 3] = [RuleKind::Clearance, RuleKind::Track, RuleKind::Via];
-
-    /// The word after `on`.
-    pub const fn keyword(self) -> &'static str {
-        match self {
-            RuleKind::Clearance => "clearance",
-            RuleKind::Track => "track",
-            RuleKind::Via => "via",
-        }
-    }
-
-    pub fn from_keyword(word: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|k| k.keyword() == word)
-    }
-
-    /// The limits a rule of this kind can set, in column order.
-    pub const fn fields(self) -> &'static [LimitField] {
-        match self {
-            RuleKind::Clearance => &[LimitField::MinClearance],
-            RuleKind::Track => &[LimitField::MinWidth, LimitField::MaxWidth],
-            RuleKind::Via => &[LimitField::MinDiameter, LimitField::MinDrill],
-        }
-    }
-}
-
-/// One limit column.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum LimitField {
-    MinClearance,
-    MinWidth,
-    MaxWidth,
-    MinDiameter,
-    MinDrill,
-}
-
-impl LimitField {
-    pub const ALL: [LimitField; 5] = [
-        LimitField::MinClearance,
-        LimitField::MinWidth,
-        LimitField::MaxWidth,
-        LimitField::MinDiameter,
-        LimitField::MinDrill,
-    ];
-
-    pub const fn kind(self) -> RuleKind {
-        match self {
-            LimitField::MinClearance => RuleKind::Clearance,
-            LimitField::MinWidth | LimitField::MaxWidth => RuleKind::Track,
-            LimitField::MinDiameter | LimitField::MinDrill => RuleKind::Via,
-        }
-    }
-
-    /// The field word in the rule text.
-    pub const fn word(self) -> &'static str {
-        match self {
-            LimitField::MinClearance => "clearance",
-            LimitField::MinWidth | LimitField::MaxWidth => "width",
-            LimitField::MinDiameter => "diameter",
-            LimitField::MinDrill => "drill",
-        }
-    }
-
-    pub const fn bound(self) -> Bound {
-        match self {
-            LimitField::MaxWidth => Bound::AtMost,
-            _ => Bound::AtLeast,
-        }
-    }
-
-    /// Stable operand and JSON name.
-    pub const fn id(self) -> &'static str {
-        match self {
-            LimitField::MinClearance => "min_clearance",
-            LimitField::MinWidth => "min_width",
-            LimitField::MaxWidth => "max_width",
-            LimitField::MinDiameter => "min_diameter",
-            LimitField::MinDrill => "min_drill",
-        }
-    }
-
-    pub fn from_id(id: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|f| f.id() == id)
-    }
-
-    /// The limit the check resolves for this column.
-    pub const fn limit_kind(self) -> LimitKind {
-        match self {
-            LimitField::MinClearance => LimitKind::MinClearance,
-            LimitField::MinWidth => LimitKind::MinTrackWidth,
-            LimitField::MaxWidth => LimitKind::MaxTrackWidth,
-            LimitField::MinDiameter => LimitKind::MinViaDiameter,
-            LimitField::MinDrill => LimitKind::MinViaDrill,
-        }
-    }
-
-    fn of(kind: RuleKind, word: &str, bound: Bound) -> Option<Self> {
-        Self::ALL
-            .into_iter()
-            .find(|f| f.kind() == kind && f.word() == word && f.bound() == bound)
-    }
-}
 
 /// A limit with its length as written (`0.2mm`, `8 mil`).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -366,6 +259,10 @@ pub(crate) fn tight(src: &str, span: &Span) -> Span {
 }
 
 #[cfg(test)]
+mod grid_tests;
+#[cfg(test)]
 mod matrix_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tier_tests;

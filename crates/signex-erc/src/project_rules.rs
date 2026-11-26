@@ -42,6 +42,7 @@ impl RuleKind {
             RuleKind::PartWithoutFootprint => "part_without_footprint",
             RuleKind::PartWithoutValue => "part_without_value",
             RuleKind::PartWithoutMpn => "part_without_mpn",
+            RuleKind::PartWithoutLibraryBody => "part_without_library_body",
             RuleKind::UnannotatedDesignator => "unannotated_designator",
             RuleKind::SinglePinNet => "single_pin_net",
             RuleKind::NetWithNoDriver => "net_with_no_driver",
@@ -51,6 +52,10 @@ impl RuleKind {
             RuleKind::LabelsOnlyNet => "labels_only_net",
             RuleKind::SheetPinUnconnected => "sheet_pin_unconnected",
             RuleKind::SheetPinDirectionConflict => "sheet_pin_direction_conflict",
+            RuleKind::RepeatEntryNeedsBus => "repeat_entry_needs_bus",
+            RuleKind::HarnessEntryMismatch => "harness_entry_mismatch",
+            RuleKind::HarnessTypeConflict => "harness_type_conflict",
+            RuleKind::NetClassConflict => "net_class_conflict",
         }
     }
 

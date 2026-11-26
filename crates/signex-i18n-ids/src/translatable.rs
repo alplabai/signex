@@ -34,6 +34,7 @@ enum Inner {
         args: Vec<(&'static str, Arg)>,
     },
     Verbatim(UserText),
+    LegacyEnglish(String),
 }
 
 impl Translatable {
@@ -53,7 +54,7 @@ impl Translatable {
                 args.push((name, value.into()));
                 Self(Inner::Catalog { id, args })
             }
-            verbatim @ Inner::Verbatim(_) => Self(verbatim),
+            other => Self(other),
         }
     }
 
@@ -62,11 +63,18 @@ impl Translatable {
         Self(Inner::Verbatim(text))
     }
 
-    /// The catalog id, `None` for verbatim text.
+    /// App-authored English that has no catalog id yet (#2326 M2): shown as
+    /// it is in every language until its area moves to catalog ids (#2644).
+    /// Not for user text, which is [`Self::verbatim`].
+    pub fn legacy_english(text: impl Into<String>) -> Self {
+        Self(Inner::LegacyEnglish(text.into()))
+    }
+
+    /// The catalog id, `None` for verbatim or legacy English text.
     pub fn id(&self) -> Option<MessageId> {
         match &self.0 {
             Inner::Catalog { id, .. } => Some(*id),
-            Inner::Verbatim(_) => None,
+            Inner::Verbatim(_) | Inner::LegacyEnglish(_) => None,
         }
     }
 
@@ -74,14 +82,28 @@ impl Translatable {
     /// marks ([`MessageRenderer::message_plain`]): the same string goes to
     /// the screen, to window titles and to en-US logs, which must stay
     /// byte-identical with the English the code built before the catalog.
+    /// A nested message argument is rendered first, with the same `i18n`.
     pub fn render<R: MessageRenderer + ?Sized>(&self, i18n: &R) -> String {
         match &self.0 {
             Inner::Catalog { id, args } => {
-                let args: Vec<(&str, Arg)> =
-                    args.iter().map(|(name, a)| (*name, a.clone())).collect();
+                let args: Vec<(&str, Arg)> = args
+                    .iter()
+                    .map(|(name, a)| (*name, a.rendered_with(i18n)))
+                    .collect();
                 i18n.message_plain(*id, &args)
             }
             Inner::Verbatim(text) => text.as_str().to_owned(),
+            Inner::LegacyEnglish(text) => text.clone(),
+        }
+    }
+
+    /// The id, or the verbatim text, for a nested message that reached the
+    /// formatter without being rendered.
+    pub(crate) fn unrendered(&self) -> &str {
+        match &self.0 {
+            Inner::Catalog { id, .. } => id.as_str(),
+            Inner::Verbatim(text) => text.as_str(),
+            Inner::LegacyEnglish(text) => text,
         }
     }
 }
@@ -97,3 +119,7 @@ impl From<UserText> for Translatable {
         Self::verbatim(text)
     }
 }
+
+#[cfg(test)]
+#[path = "translatable_tests.rs"]
+mod tests;

@@ -8,9 +8,10 @@
 use iced::widget::canvas::Program;
 use iced::{Event, Point as ScreenPoint, Rectangle, mouse};
 use pcb_geom::ItemRef;
-use signex_app::app::{EditMsg, FileMsg, InputMsg, Message, Signex, TabDocument};
+use signex_app::app::{EditMsg, FileMsg, InputMsg, Message, Signex};
 use signex_app::diagnostics;
 use signex_app::pcb_canvas::PcbCanvasState;
+use signex_app::test_adapter::BoardEngines;
 use signex_types::format::SnxPcb;
 use signex_types::pcb::{Footprint, Pad, PadShape, PadType, PcbBoard, Point};
 use uuid::Uuid;
@@ -42,6 +43,8 @@ fn footprint(uuid: Uuid, reference: &str, x: f64, locked: bool) -> Footprint {
         layers: vec!["TopCopper".into()],
         net: None,
         roundrect_ratio: 0.0,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 0.0,
         layer_sizes: None,
         net_locked: false,
@@ -73,6 +76,7 @@ fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
@@ -176,10 +180,8 @@ impl Fixture {
 
     fn live(&self) -> PcbBoard {
         let docs = &self.app.document_state;
-        docs.tabs[docs.active_tab]
-            .cached_document
-            .as_ref()
-            .and_then(TabDocument::as_pcb)
+        docs.tab_board_engine(docs.active_tab)
+            .map(|engine| engine.board())
             .expect("a board is open")
             .clone()
     }
@@ -200,10 +202,7 @@ impl Fixture {
 
     fn can_undo(&self) -> bool {
         let docs = &self.app.document_state;
-        docs.tabs[docs.active_tab]
-            .cached_document
-            .as_ref()
-            .and_then(TabDocument::as_pcb_engine)
+        docs.tab_board_engine(docs.active_tab)
             .expect("a board engine")
             .can_undo()
     }
@@ -355,7 +354,7 @@ fn during_a_drag_the_footprint_is_drawn_only_where_it_is_going() {
     // The selection outline goes with it, not left behind.
     let highlight = canvas.highlight();
     assert!(highlight.selected.is_empty() && highlight.bodies.is_empty());
-    assert!(!highlight.ghost.is_empty());
+    assert!(highlight.ghost.is_empty(), "the part itself moves");
 
     f.pointer(mouse::Event::ButtonReleased(mouse::Button::Left), to);
     assert!(

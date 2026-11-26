@@ -123,7 +123,8 @@ byte-identical to before.
 the `snxprj/1` token: the key is optional with a default, a file without it
 loads as `None` and is written back without a `rules` key, and an older build
 that sees the key keeps it in its unknown-key bag. The section has its own
-`schema` number (currently 1), independent of the file token.
+`schema` number (1, or 2 while it holds a `min_slot`), independent of the
+file token.
 
 ```json
 "rules": {
@@ -189,8 +190,21 @@ that sees the key keeps it in its unknown-key bag. The section has its own
     "dsl": "..."
   }
   ```
+- `min_slot` (mockup row 179d) is the narrowest slot the project's fab tier
+  or profile routes, across, in mm; the board sketch's min slot check reads
+  it (`docs/PCB_SKETCH.md`, "Outline checks"). It is set with the rules by a
+  fab tier (New Project, a tier seeded for a new board, the tier preset) or
+  a fab profile naming one, in the same undo step. It is not part of the
+  rule-set hash. While it is present the section is written at `schema` 2
+  (`ProjectRules::written_schema`), and clearing it writes 1 again, so a
+  section without it re-saves byte-identical. A build that reads only
+  schema 1 keeps a schema 2 section verbatim and unapplied, so it never
+  drops the value. A value that is not a positive number reads as absent.
+  ```json
+  "rules": { "schema": 2, "min_slot": 0.8 }
+  ```
 - A section this build cannot interpret never stops the project from opening
-  (#1180). A `schema` above 1, or a value whose shape changed (a severity that
+  (#1180). A `schema` above 2, or a value whose shape changed (a severity that
   is an object, say), makes the whole section opaque: it is kept verbatim in
   the project's unknown-key bag, written back untouched, and not applied; ERC
   uses the machine preferences and says so once per open. A later build may
@@ -218,8 +232,12 @@ without bumping the `snxprj/1` token. It is deliberately not a child of
 "annotation": { "designator_standard": "din40719_2" }
 ```
 
-- `designator_standard` is one of `ieee315`, `din40719_2`, `iec81346_2`; absent
-  means the library symbol's own designator letters decide. The section is
+- `designator_standard` is one of `ieee315`, `din40719_2`, `iec81346_2`,
+  `iec81346_2_full` (#1416); absent means the library symbol's own designator
+  letters decide. Under `iec81346_2_full` a reference is stored without the
+  product-aspect sign (`QAC1`); display and export add it (`-QAC1`). A build
+  that does not know a value keeps the section unchanged and applies none. The
+  section is
   omitted entirely when nothing is set, so an untouched project re-saves
   byte-identical.
 - Placement derives the reference prefix from the part's component class under
@@ -299,6 +317,55 @@ the Project tab's Schematic defaults section, added without bumping the
   (`selection_workflow.rs`), so it follows a later default change while other
   shapes keep the value they were placed with.
 
+## Schematic Refinement settings (`schematic_design`)
+
+`ProjectData.schematic_design` (`SchematicDesignSettings`) is an optional
+top-level object holding the project-wide Schematic Refinement settings,
+added without bumping the `snxprj/1` token.
+
+```json
+"schematic_design": {
+  "channel_naming": { "designator_format": "${Designator}_${Channel}", "net_format": "${Channel}_${Net}" },
+  "diff_pair_classes": [
+    { "gap_mm": 0.175, "impedance_ohm": 90.0, "impedance_tolerance_pct": 10.0, "name": "USB", "width_mm": 0.265 }
+  ],
+  "harness_definitions": [
+    { "entries": [ { "name": "TX" }, { "name": "RX" } ], "name": "UART" },
+    { "entries": [ { "name": "SWDIO" }, { "name": "SWCLK" }, { "harness": "UART", "name": "UART" } ], "name": "DEBUG" }
+  ]
+}
+```
+
+- `channel_naming` (#1267): how a repeated channel names its parts and nets.
+  `${Channel}`, `${Designator}` and `${Net}` stand for the channel name and the
+  name on the channel sheet. Defaults `${Channel}_${Designator}` and
+  `${Net}_${Channel}`; omitted at the defaults.
+- `harness_definitions` (#1279): each harness type (`name`, an optional
+  `description`) and its `entries` in order. An entry with `harness` is a
+  nested harness of that type; without it, a signal.
+- `diff_pair_classes` (#1282): `name` plus optional `impedance_ohm`,
+  `impedance_tolerance_pct`, `width_mm` and `gap_mm`; `pair_by_suffix` is
+  written only when `false`. Keys a newer build wrote inside a class are kept
+  (`unknown`, as for net classes). A Differential Pair or Net Parameters
+  directive on a sheet names a class by `name`.
+- Each list is omitted when empty, and the whole key when every setting is
+  at its default, so a project that never set one re-saves byte-identical.
+- Why no new token: the key is additive. A build that predates it keeps it in
+  the unknown-key bag and writes it back unchanged
+  (`project::schematic_design_tests`).
+- A section this build cannot read (another shape, a wrong-typed value) opens
+  the project, is not applied, and is written back verbatim. It is never
+  replaced: channel naming, harness definitions and differential pair classes
+  cannot be edited while it is unreadable, and those surfaces show a banner
+  saying why (DECISIONS 2026-11-23, #2750, superseding replace-on-Set). A
+  missing `channel_naming` field takes its default rather than making the
+  section unreadable.
+- Known gap: keys a newer build adds directly under `schematic_design`,
+  inside `channel_naming` or inside a harness definition are not kept (only a
+  diff-pair class has an unknown-key bag); a newer build that adds such keys
+  should treat it as a format change.
+- Corpus: `crates/signex-types/tests/corpus/project/schematic-design.snxprj`.
+
 ## Description (`description`) and the name (#1202)
 
 `ProjectData.description` is an optional free-text string, edited in the
@@ -312,6 +379,82 @@ renames the file, through the same flow as the project tree's Rename; saving
 never renames anything
 (`docs/superpowers/specs/2026-10-26-project-tab-shell-design.md`).
 
+## Router tool diameter (`router_tool_diameter`)
+
+`ProjectData.router_tool_diameter` is an optional top-level number, the
+diameter in mm of the bit that cuts the board outline (mockup row 179d; see
+`docs/DRC_RULES.md`, "Fab profiles"). It is a declared field, not a key kept
+in the unknown-key bag. It is omitted when absent, so a project without one
+saves byte-identical; a value that is not a positive number reads as absent
+and is dropped on the next save. No format token changes: a build that
+predates the field keeps the key as an unknown key.
+
+## Power rails (`rails`, #2943)
+
+An optional top-level object, a power rail by net name with its nominal
+`voltage` (volts, not 0) and an optional `tolerance_percent` (0 to below
+100): `"rails": {"+3V3": {"voltage": 3.3, "tolerance_percent": 5}}`. Unlike
+`router_tool_diameter` it is not a declared field of `ProjectData`: the value
+stays in the unknown-key bag as stored and is read through
+`ProjectData::rails()` and written through `ProjectData::set_rail`, so every
+rail nobody edited saves in the form it was written (`5` stays `5`), and a
+project that sets none saves byte-identical. A value this build cannot read
+is kept as written and not edited over. No format token changes: a build
+that predates the key keeps it as an unknown key. Rules: `docs/CLI.md`,
+"Rail budgets".
+
+## Variant settings (`variant_settings`)
+
+`ProjectData.variant_settings` (`VariantSettings`) is an optional top-level
+object the Variant Manager tab edits (mockup row 32), added without bumping
+the `snxprj/1` token. It sits beside `variant_definitions` and
+`active_variant`, which keep their shape.
+
+```json
+"variant_settings": {
+  "default": "Lite",
+  "parts": [
+    {
+      "designator": "J3", "fitted": false, "variant": "Lite",
+      "part": { "sheet": [], "units": ["0190a6f2-…"] }
+    },
+    { "designator": "R5", "parameters": { "Value": "47k" }, "variant": "Lite" }
+  ]
+}
+```
+
+- `default`: the default variant's name; absent is Base. It is not the
+  active variant (what the editors show).
+- `parts`: what one variant changes on one part. `fitted` (absent: as the
+  sheets say) and `parameters`, by name: `Value`, `Footprint` or a field
+  name. An entry that changes nothing is dropped. A variant's own fit and
+  values decide over the part's fields on the sheets (`Fitted@V`,
+  `DNP@V`, ...); Base is always the sheets.
+- `part`: the placed part the entry was set on, in the board link's shape
+  (`SymbolLink`: the sheet placement's uuid chain and the unit uuids). It
+  decides over `designator`, so an entry stays on its part through a
+  re-annotation or a designator edit and never lands on the part that takes
+  the old designator. `designator` is the name the part had when the entry
+  was last set; an entry without `part` (written by hand) names the part by
+  it. The Variant Manager writes `part` on every cell edit.
+- A channel's copy of a part on a repeated sheet is a part of its own: its
+  `part.sheet` ends in the channel's placement uuid, so an entry is per
+  channel (#2662, `docs/MULTI_CHANNEL.md`, "Per-channel variant state"). Its
+  `designator` is the channel designator (`CH2_R5`). No key is added for it.
+- A rename of a variant renames its entries and the default; a removal drops
+  them (and the default falls back to Base). Both are refused, like every
+  settings edit, while the section is unreadable.
+- Keys a newer build writes inside the section or inside an entry are kept
+  and written back (#788); an entry that holds such a key is not dropped
+  when this build clears what it knows of it.
+- Each list and the whole key are omitted when empty, so a project that
+  never set one re-saves byte-identical.
+- Why no new token: the key is additive. A build that predates it keeps it
+  in the unknown-key bag and writes it back unchanged
+  (`project::variant_settings_tests`).
+- A section this build cannot read opens the project, is not applied, is
+  written back verbatim and refuses every variant settings edit.
+
 ## Known gaps (open questions)
 
 - **Unknown keys and the version token (#788, fixed).** `ProjectData`,
@@ -320,7 +463,8 @@ never renames anything
   is written back on save. Every save stamps `"format": "snxprj/1"`. A file
   with no token predates it and loads as version 1. A file with any other
   token (a newer `snxprj/2`, or garbage) is refused with
-  `ProjectError::UnsupportedFormat` and is never rewritten: a newer version may
+  `ProjectError::UnsupportedFormat` (the shared policy in
+  `docs/FORMAT_VERSIONS.md`) and is never rewritten: a newer version may
   change the meaning of existing keys, which the bag cannot preserve, so
   opening read-write would risk silent degradation. This matches the
   `.snxsch` / `.snxpcb` behaviour on a mismatched `format` token.

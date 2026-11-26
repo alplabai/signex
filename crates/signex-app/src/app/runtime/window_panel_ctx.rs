@@ -33,6 +33,13 @@ impl PanelContext {
         self.erc_running = main.erc_running;
         self.erc_results_stale = main.erc_results_stale;
         self.erc_ran = main.erc_ran;
+        self.erc_focus_index = main.erc_focus_index;
+        if self.validation != main.validation {
+            self.validation.clone_from(&main.validation);
+        }
+        if self.erc_waive_draft != main.erc_waive_draft {
+            self.erc_waive_draft.clone_from(&main.erc_waive_draft);
+        }
         self.project_tree_selected
             .clone_from(&main.project_tree_selected);
         if self.ui_font_name != main.ui_font_name {
@@ -52,6 +59,9 @@ impl PanelContext {
         }
         if self.net_inspector != main.net_inspector {
             self.net_inspector.clone_from(&main.net_inspector);
+        }
+        if !std::sync::Arc::ptr_eq(&self.annotations, &main.annotations) {
+            self.annotations = std::sync::Arc::clone(&main.annotations);
         }
         if self.component_classes != main.component_classes {
             self.component_classes.clone_from(&main.component_classes);
@@ -105,7 +115,7 @@ impl PanelContext {
 
 /// What a window's context was built from; unchanged means it is current.
 ///
-/// The window's sheet revision; a stamp of what its panels read from the
+/// The window's sheet or board revision; a stamp of what its panels read from the
 /// app (the open tabs, the projects' names, sheets, parameters and net
 /// classes, which documents are dirty); the library data version; and
 /// whether ERC is running. Not the global edit epochs: an edit to another
@@ -132,6 +142,8 @@ impl Signex {
         // Main's History rows belong to main's file; the window lists its own
         // once its first load lands (see `refresh_window_histories`).
         ctx.history = Default::default();
+        // Main's typed boxes stay main's: a copy would apply them twice.
+        ctx.placed = Default::default();
         if !self.window_shares_main_navigator(window) {
             ctx.navigator = Default::default();
         }
@@ -164,7 +176,8 @@ impl Signex {
                 .document_state
                 .engines
                 .get(path)
-                .map(signex_engine::Engine::revision),
+                .map(signex_engine::Engine::revision)
+                .or_else(|| self.document_state.pcb_revisions.get(path).copied()),
             _ => None,
         };
         (
@@ -270,11 +283,22 @@ impl Signex {
     }
 
     /// Drop the context of `window`, which has closed or been reattached.
-    /// Drafts live in the app's one store, so none go with it.
+    /// Its typed note boxes are owed to their sheets first (#2649).
     pub(crate) fn retire_window_panel_ctx(&mut self, window: iced::window::Id) {
         self.document_state.window_panel_ctx_keys.remove(&window);
         self.document_state.window_history.remove(&window);
-        self.document_state.window_panel_ctx.remove(&window);
+        if let Some(ctx) = self.document_state.window_panel_ctx.remove(&window) {
+            self.owe_note_drafts_of(ctx);
+        }
+    }
+
+    /// Move the typed note boxes of a context that is going away into the
+    /// main Properties' owed set, which the update loop applies to their
+    /// sheets (`settle_owed_note_drafts`).
+    pub(crate) fn owe_note_drafts_of(&mut self, mut ctx: PanelContext) {
+        let typed = ctx.placed.take_typed_notes(&|_| true);
+        let owed = &mut self.document_state.panel_ctx.placed.notes_owed;
+        owed.extend(typed);
     }
 
     /// The project the main window's Navigator is built for.
@@ -307,18 +331,23 @@ impl Signex {
         if self.interaction_state.acting_window.is_some() {
             return;
         }
+        self.sync_paused_tool_forms();
         let shares: Vec<(iced::window::Id, bool)> = self
             .document_state
             .window_panel_ctx
             .keys()
             .map(|w| (*w, self.window_shares_main_navigator(*w)))
             .collect();
+        let rename = self.filter_preset_rename();
+        let editing = self.edited_custom_filter();
         let document = &mut self.document_state;
         for (window, shares_navigator) in shares {
             let Some(ctx) = document.window_panel_ctx.get_mut(&window) else {
                 continue;
             };
             ctx.adopt_shared_from(&document.panel_ctx);
+            ctx.selection_filter.rename = rename.clone();
+            ctx.selection_filter.editing = editing;
             if !shares_navigator {
                 if ctx.navigator.hierarchy.is_some() {
                     ctx.navigator = Default::default();

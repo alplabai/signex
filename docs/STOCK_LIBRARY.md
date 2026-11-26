@@ -68,11 +68,13 @@ cargo run --example build_stock_library -p signex-app -- --force
 
 The four power ports (GND, VCC, +3V3, +5V) take their stem and head
 geometry from `power_port_lib_symbol` in `signex-types`, so a stock port
-and a built-in one are the same size (2.54 mm stem, 1.27 mm for GND; #2091,
-#2101). Their committed files were edited in place to match the generator,
-which keeps any other edit made in Signex. GND already had the 1.27 mm stem
-and is byte-identical to before. The resistor (R) and inductor (L) were
-reshaped in #2101, with their pins kept at ±3.81 mm.
+and a built-in one are the same size (#2091, #2101). Their committed files
+were edited in place to match the generator, which keeps any other edit
+made in Signex. Since 2026-11-21 every port has the 1.27 mm stem GND always
+had: VCC, +3V3 and +5V went from 2.54 mm to 1.27 mm (pin length and head
+moved one grid step closer to the pin tip), edited in place the same way,
+and GND is byte-identical. The resistor (R) and inductor (L) were reshaped
+in #2101, with their pins kept at ±3.81 mm.
 
 No symbol version was bumped for it, for the reason given under Chip
 passives below: drift is decided by content hash, not by version. A sheet
@@ -114,3 +116,24 @@ footprint loads by name get the new 0805 land, but a part already placed
 keeps its footprint and an existing PCB keeps its copper, and Library
 Updates shows no entry. (Stock is Personal mode, so a version bump would
 be applied silently on open and dirty every design using a stock part.)
+
+## Polarised capacitor, transistors and Values (#2468)
+
+`C_Polarized` defaults to `Chip-0805-Polarised` with the polarised sizes as
+alternates: its pin 1 is the positive plate, which the land's pad 1 marks
+(the band a polarised chip capacitor carries). Q_NPN, Q_PNP, Q_NMOS and
+Q_PMOS pair with the new `SOT-23` land, whose pins 1, 2, 3 are the B, E, C
+and G, S, D of the stock symbols. The land is from the onsemi SOT-23 (Case
+318-08) package drawing's mounting footprint: 0.8 x 0.9 mm pads, 0.95 mm
+pitch, 2.0 mm row to row; body 2.9 x 1.3 mm, 1.11 mm high; the courtyard
+holds body and land plus 0.25 per side. Numbers in
+`crates/signex-app/examples/build_stock_library/sot23.rs`.
+
+Every stock footprint carries a Description, and the single-use ones a
+Default Designator (SOIC-8 and QFN-16 `U?`, SOT-23 `Q?`, the mounting hole
+`H?`, the fiducial `FID?`); a chip land serves several kinds of part and
+names none. The 74HC rows carry their part number as `value`; the generic
+parts leave Value, Manufacturer and MPN empty for the designer.
+
+The other symbol-only rows (Crystal, the connectors and screw terminals,
+the 74HC parts) still have no footprint.

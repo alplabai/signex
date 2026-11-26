@@ -222,6 +222,7 @@ mod follow_tests {
             uuid: bus_id,
             start: Point::new(0.0, 0.0),
             end: Point::new(0.0, 20.0),
+            ..Default::default()
         });
         s.bus_entries.push(BusEntry {
             uuid: entry_id,
@@ -256,6 +257,7 @@ mod follow_tests {
                 dx: 5.0,
                 dy: 0.0,
                 keep_wires,
+                wiring: signex_types::corner::DragWiringMode::Auto,
             })
             .expect("move");
     }
@@ -309,6 +311,7 @@ mod follow_tests {
             uuid: bus_id,
             start: Point::new(30.0, 40.0),
             end: Point::new(30.0, 60.0),
+            ..Default::default()
         });
         sheet.bus_entries.push(BusEntry {
             uuid: Uuid::now_v7(),
@@ -329,6 +332,7 @@ mod follow_tests {
                 dx: 5.0,
                 dy: 0.0,
                 keep_wires: true,
+                wiring: signex_types::corner::DragWiringMode::Auto,
             })
             .expect("move");
 
@@ -351,6 +355,7 @@ mod follow_tests {
                 dx: 5.0,
                 dy: 0.0,
                 keep_wires: false,
+                wiring: signex_types::corner::DragWiringMode::Auto,
             })
             .expect("move");
         assert_eq!(

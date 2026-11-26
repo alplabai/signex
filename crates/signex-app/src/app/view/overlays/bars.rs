@@ -1,7 +1,8 @@
 //! Editor-surface overlay builders — the blocking-modal gate, the
 //! export/preview/net-colour top-of-stack overlays, the schematic /
-//! footprint / symbol active bars, the in-canvas text-edit input, and
-//! the status-bar panel list.
+//! footprint / symbol active bars. The in-canvas text-edit input lives in
+//! `text_edit.rs`, the Placement Paused card in `placement_paused.rs` and
+//! the status-bar panel list in `panel_list.rs`.
 //!
 //! Extracted from the former 1223-line `collect_overlays` god-function
 //! in `view/mod.rs` (behaviour-preserving decomposition). Each builder
@@ -10,21 +11,7 @@
 //! the same `Signex` view impl, split across sibling files.
 
 use super::*;
-use iced::widget::{column, container, row};
-
-/// Default type / spacing scales; equal to the old literals at the default size.
-const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
-const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
-
-/// Pause glyph (two bars) of the Placement Paused card, tinted at draw time.
-static PAUSE_GLYPH: std::sync::LazyLock<iced::widget::svg::Handle> = std::sync::LazyLock::new(
-    || {
-        iced::widget::svg::Handle::from_memory(
-        br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#000"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>"##
-            .as_slice(),
-    )
-    },
-);
+use iced::widget::{column, container};
 
 impl Signex {
     /// True when a modal that must own the entire overlay stack is up —
@@ -138,92 +125,8 @@ impl Signex {
         )
     }
 
-    /// Altium-style pause overlay: big centered "Placement Paused" card
-    /// with a Resume button. Clicking Resume clears `pre_placement`,
-    /// un-pauses the canvas, and drops back to the active placement tool
-    /// so the user can keep dropping objects with the edited properties.
-    /// v0.13 — Also fires when a footprint editor's placement is paused
-    /// so TAB during pad/via/string placement surfaces the same overlay.
-    pub(in crate::app::view) fn placement_paused_overlay(
-        &self,
-        window_id: iced::window::Id,
-    ) -> Option<Element<'_, Message>> {
-        let document = &self.document_state;
-        let interaction = &self.interaction_state;
-        let footprint_paused = self
-            .footprint_editor_in_window(window_id)
-            .is_some_and(|(_, ed)| ed.state.placement_paused);
-        if !(interaction.canvas_for_window(window_id).placement_paused || footprint_paused) {
-            return None;
-        }
-        let tokens = &document.panel_ctx.tokens;
-        let ink = crate::styles::ti(tokens.text);
-        let muted = crate::styles::ti(tokens.text_secondary);
-        let title_font = iced::Font {
-            weight: iced::font::Weight::Semibold,
-            ..crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT)
-        };
-        let glyph = iced::widget::svg(PAUSE_GLYPH.clone())
-            .width(Length::Fixed(TS.title))
-            .height(Length::Fixed(TS.title))
-            .style(move |_: &iced::Theme, _| iced::widget::svg::Style {
-                color: Some(muted),
-                ..Default::default()
-            });
-        let card = container(
-            column![
-                row![
-                    glyph,
-                    signex_widgets::text(signex_i18n::t!(
-                        self.ui_state.i18n,
-                        signex_i18n::ids::OVERLAY_PLACEMENT_PAUSED_TITLE
-                    ))
-                    .size(TS.title)
-                    .font(title_font)
-                    .color(ink),
-                ]
-                .spacing(SP.s)
-                .align_y(iced::Alignment::Center),
-                signex_widgets::text(signex_i18n::t!(
-                    self.ui_state.i18n,
-                    signex_i18n::ids::OVERLAY_PLACEMENT_PAUSED_BODY
-                ))
-                .size(TS.body)
-                .color(muted),
-                signex_widgets::text(signex_i18n::t!(
-                    self.ui_state.i18n,
-                    signex_i18n::ids::OVERLAY_PLACEMENT_PAUSED_ESC_HINT
-                ))
-                .size(TS.caption)
-                .color(muted),
-                iced::widget::Space::new().height(SP.xs),
-                crate::styles::dialog_button(
-                    signex_i18n::t!(
-                        self.ui_state.i18n,
-                        signex_i18n::ids::OVERLAY_PLACEMENT_PAUSED_RESUME
-                    ),
-                    crate::styles::DialogButtonKind::Primary,
-                    Some(Message::Tool(ToolMessage::ResumePlacement)),
-                    tokens,
-                ),
-            ]
-            .spacing(SP.s)
-            .align_x(iced::Alignment::Start),
-        )
-        .padding(SP.l + SP.s)
-        .style(crate::styles::modal_card(tokens));
-        Some(
-            container(card)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .center_x(Length::Fill)
-                .center_y(Length::Fill)
-                .boxed(),
-        )
-    }
-
     /// The footprint editor `window_id` shows, with its path.
-    fn footprint_editor_in_window(
+    pub(super) fn footprint_editor_in_window(
         &self,
         window_id: iced::window::Id,
     ) -> Option<(&std::path::Path, &crate::app::FootprintDocument)> {
@@ -313,19 +216,28 @@ impl Signex {
         // not the schematic `custom_filter_presets`.
         let footprint_presets = &interaction.footprint_filter_presets;
         let bar_items = crate::library::editor::footprint::unified_active_bar::bar_items(
-            editor, theme_id, tokens,
+            editor,
+            theme_id,
+            tokens,
+            &self.ui_state.i18n,
         );
-        let bar = signex_widgets::active_bar::view(bar_items, tokens)
-            .map(Message::Library)
-            .boxed();
+        use crate::library::editor::footprint::unified_active_bar as footprint_bar;
+        let span = self.footprint_bar_span(window_id);
+        let run = footprint_bar::scrolling_slots(editor);
+        let left = footprint_bar::bar_left_in(&bar_items, run.clone(), span);
+        let bar = signex_widgets::active_bar::view_within(
+            bar_items,
+            run,
+            footprint_bar::bar_max_width(span.width),
+            tokens,
+        )
+        .map(Message::Library)
+        .boxed();
+        // Translated, not padded: padding would limit a bar wider than the
+        // canvas and squeeze its last slots to nothing.
         out.push(
-            column![
-                iced::widget::Space::new().height(y_offset + bar_margin),
-                container(super::scroll_guard(bar))
-                    .width(Length::Fill)
-                    .align_x(iced::alignment::Horizontal::Center),
-            ]
-            .boxed(),
+            signex_widgets::Translate::new(super::scroll_guard(bar), (left, y_offset + bar_margin))
+                .boxed(),
         );
         // Position the dropdown panel directly below the bar's bottom
         // edge (see the schematic mount for the 42 px derivation).
@@ -337,12 +249,29 @@ impl Signex {
                 tokens,
                 footprint_presets,
                 dropdown_top,
-                self.ui_state.window_size.0,
+                span,
+                &self.ui_state.i18n,
             )
         {
             out.push(super::scroll_guard(overlay.map(Message::Library).boxed()));
         }
         out
+    }
+
+    /// The canvas between the docks of `window_id`, where the footprint
+    /// Active Bar fits and centres: the window's own layout when undocked,
+    /// the focused pane when the main window is tiled.
+    pub(in crate::app::view) fn footprint_bar_span(
+        &self,
+        window_id: iced::window::Id,
+    ) -> crate::library::editor::footprint::unified_active_bar::BarSpan {
+        let undocked = (self.ui_state.main_window_id != Some(window_id)).then_some(window_id);
+        let canvas = self.canvas_bounds_in(undocked);
+        crate::library::editor::footprint::unified_active_bar::BarSpan {
+            x: canvas.x,
+            width: canvas.width,
+            window_width: self.ui_state.size_of_window(window_id).0,
+        }
     }
 
     /// v0.26 — right-click context menu overlay for the footprint
@@ -466,7 +395,9 @@ impl Signex {
             + crate::active_bar::symbol_editor_bar_drop(&document.panel_ctx.tokens);
         let theme_id = self.ui_state.effective_theme_id();
         let tokens = &document.panel_ctx.tokens;
-        let bar_items = crate::library::editor::symbol::active_bar::bar_items(editor, theme_id);
+        let i18n = &self.ui_state.i18n;
+        let bar_items =
+            crate::library::editor::symbol::active_bar::bar_items(editor, theme_id, i18n);
         let bar = signex_widgets::active_bar::view(bar_items, tokens)
             .map(Message::Library)
             .boxed();
@@ -485,6 +416,7 @@ impl Signex {
             theme_id,
             tokens,
             dropdown_top,
+            i18n,
         ) {
             out.push(super::scroll_guard(overlay.map(Message::Library).boxed()));
         }
@@ -503,13 +435,14 @@ impl Signex {
             return Vec::new();
         };
         let tokens = &document.panel_ctx.tokens;
-        let Some(menu_state) = editor.context_menu.as_ref() else {
+        let Some(menu_state) = editor.gui.context_menu.as_ref() else {
             return Vec::new();
         };
         let Some(card) = crate::library::editor::symbol::context_menu::view_context_menu(
             editor,
             tokens,
             path,
+            &self.ui_state.active_keymap,
             &self.ui_state.i18n,
         ) else {
             return Vec::new();
@@ -526,165 +459,6 @@ impl Signex {
         // An expanded Place ▸ grows the card in place (accordion, not a
         // flyout); the placement measures the card it really lays out.
         Self::menu_overlay(close_msg, card_msg, (menu_state.x, menu_state.y))
-    }
-
-    /// In-canvas text-edit input — the floating `text_input` anchored on
-    /// top of the label being edited. Converts the object's world
-    /// position through the live camera into a window-absolute screen
-    /// position each frame.
-    pub(in crate::app::view) fn text_edit_overlay(
-        &self,
-        window_id: iced::window::Id,
-    ) -> Option<Element<'_, Message>> {
-        let document = &self.document_state;
-        let interaction = &self.interaction_state;
-        document.engine_for_window(window_id, &self.ui_state)?;
-        let edit_state = interaction.editing_text.as_ref()?;
-        let text = edit_state.text.clone();
-        let placeholder: signex_widgets::Label<'static> =
-            match crate::app::handlers::canvas::editor_placeholder(edit_state.kind) {
-                Some(id) => self.ui_state.i18n.message(id, &[]).into(),
-                None => signex_i18n::UserText::new(String::new()).into(),
-            };
-        // Object world position -> window position through the live camera
-        // and the canvas rectangle, so the editor opens on the label.
-        let camera = interaction.canvas_for_window(window_id).live_camera();
-        let (abs_x, abs_y) = canvas_region::world_to_window(
-            (edit_state.world_x, edit_state.world_y),
-            camera,
-            self.canvas_bounds(),
-        );
-        // Font size in pixels matches the rendered label (10 pt ≈ 1.8 mm).
-        let font_px = (camera.2 * 1.8).clamp(10.0, 64.0);
-        // Estimate width from the text in the canvas face to keep the input
-        // snug, with two characters of room to type into.
-        let canvas_font_name = document.panel_ctx.canvas_font_name.as_str();
-        let canvas_family = signex_types::font::nonblank_family(canvas_font_name);
-        let approx_w =
-            (signex_types::font::estimate_text_width_px(&edit_state.text, font_px, canvas_family)
-                + 2.0 * font_px * signex_types::font::ESTIMATE_FALLBACK_ADVANCE_EM)
-                .max(60.0);
-        // Sit the input's baseline on the label text.
-        let abs_x = abs_x - 2.0;
-        let abs_y = abs_y - font_px - 2.0;
-        let paper_c = crate::styles::ti(document.panel_ctx.tokens.paper);
-        let text_c = crate::styles::ti(document.panel_ctx.tokens.text);
-        let accent_c = crate::styles::ti(document.panel_ctx.tokens.accent);
-        Some(
-            column![
-                iced::widget::Space::new().height(abs_y.max(0.0)).boxed(),
-                row![
-                    iced::widget::Space::new().width(abs_x.max(0.0)).boxed(),
-                    container(
-                        signex_widgets::text_input(placeholder, text)
-                            .id(crate::app::contracts::TEXT_EDIT_INPUT_ID.clone())
-                            .on_input(|t| Message::TextEdit(TextEditMsg::Changed(t)))
-                            .on_submit(Message::TextEdit(TextEditMsg::Submit))
-                            .font(crate::fonts::canvas_iced_font(canvas_font_name))
-                            .size(font_px)
-                            .padding([1.0, SP.xs])
-                            .width(approx_w)
-                            .style(move |_: &iced::Theme, _status: iced::widget::text_input::Status| {
-                                iced::widget::text_input::Style {
-                                    background: iced::Background::Color(paper_c),
-                                    border: iced::Border {
-                                        color: accent_c,
-                                        width: 1.0,
-                                        radius: 0.0.into(),
-                                        ..iced::Border::default()
-                                    },
-                                    placeholder: text_c,
-                                    value: text_c,
-                                    selection: accent_c,
-                                }
-                            }),
-                    )
-                    .boxed(),
-                ]
-                .boxed(),
-            ]
-            .boxed(),
-        )
-    }
-
-    /// v0.18.10 status-bar panel list popup. Anchored above the "Panels"
-    /// button in the bottom-right of the status bar; each row shows a ✓
-    /// when the panel is open somewhere (docked, floating, or detached).
-    /// Pushes the dismiss layer then the popup.
-    pub(in crate::app::view) fn panel_list_overlay(&self) -> Vec<Element<'_, Message>> {
-        let ui = &self.ui_state;
-        let document = &self.document_state;
-        if !ui.panel_list_open {
-            return Vec::new();
-        }
-        let tokens = &document.panel_ctx.tokens;
-        let text_c = crate::styles::ti(tokens.text);
-        let has_sch = document.panel_ctx.has_schematic;
-        let has_pcb = document.panel_ctx.has_pcb;
-        // A panel counts as "open" if it lives in any dock region,
-        // floats on top, or owns a detached OS window.
-        let is_open = |k: crate::panels::PanelKind| self.is_panel_open(k);
-        let panel_items: Vec<Element<'_, Message>> = crate::panels::ALL_PANELS
-            .iter()
-            .filter(|&&kind| (!kind.needs_schematic() || has_sch) && (!kind.needs_pcb() || has_pcb))
-            .map(|&kind| {
-                // Altium parity: a leading ✓ column marks open panels
-                // so the user can see at a glance which ones are
-                // already somewhere on screen. Clicking an open panel
-                // still fires OpenPanel — the dock brings it forward.
-                let check = if is_open(kind) { "\u{2713}" } else { "" };
-                let check_c = crate::status_bar::check_ink(tokens);
-                let row_btn = signex_widgets::button(
-                    iced::widget::row![
-                        iced::widget::container(
-                            signex_widgets::text(signex_widgets::raw(check.to_string()))
-                                .size(TS.body)
-                                .color(check_c),
-                        )
-                        .width(Length::Fixed(16.0)),
-                        signex_widgets::text(signex_i18n::t!(ui.i18n, kind.message()))
-                            .size(TS.body)
-                            .color(text_c),
-                    ]
-                    .align_y(iced::Alignment::Center),
-                )
-                .width(Length::Fill)
-                .on_press(Message::Overlay(OverlayMsg::OpenPanel(kind)));
-                row_btn
-                    .padding([0.0, SP.m])
-                    .height(crate::status_bar::popup_row_height())
-                    .style(crate::status_bar::popup_row(tokens))
-                    .boxed()
-            })
-            .collect();
-
-        // Drop the scrollable wrapper — the list fits the window at
-        // full height (15-ish panels × 21 px each = ~315 px) and a
-        // menu-style popup reads cleaner without a scrollbar.
-        let (ww, wh) = ui.window_size;
-        let visible_rows = crate::panels::ALL_PANELS
-            .iter()
-            .filter(|&&k| (!k.needs_schematic() || has_sch) && (!k.needs_pcb() || has_pcb))
-            .count();
-        // Anchor the popup directly above the "Panels" button in the
-        // bottom-right of the status bar, its bottom edge just above the bar.
-        let popup = container(
-            column(panel_items)
-                .spacing(0)
-                .width(crate::status_bar::POPUP_WIDTH - 2.0 * crate::status_bar::POPUP_PADDING),
-        )
-        .padding(crate::status_bar::POPUP_PADDING)
-        .style(crate::status_bar::popup(tokens));
-        let popup_w = crate::status_bar::POPUP_WIDTH;
-        let popup_h = crate::status_bar::popup_height(visible_rows);
-        let status_h = crate::status_bar::status_bar_height(tokens);
-        let left = (ww - popup_w - crate::status_bar::POPUP_RIGHT_MARGIN).max(0.0);
-        let top = (wh - popup_h - status_h - crate::status_bar::POPUP_GAP).max(0.0);
-        Self::dismiss_and_place(
-            Message::Overlay(OverlayMsg::TogglePanelList),
-            popup.boxed(),
-            (left, top),
-        )
     }
 }
 
@@ -708,7 +482,7 @@ mod tests {
             specific_page_input: "1".to_string(),
             range_note: None,
             zoom: 1.0,
-            active_tab: crate::app::state::PdfPreviewTab::Preview,
+            dialog: Default::default(),
             pan: (0.0, 0.0),
             panning: None,
             sheet_files: Vec::new(),

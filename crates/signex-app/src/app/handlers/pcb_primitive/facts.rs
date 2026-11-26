@@ -9,7 +9,7 @@ use signex_engine::pcb::primitive_edit::track_location;
 use signex_i18n::{I18n, ids, t};
 use signex_types::format::parse_pcb_layer;
 use signex_types::net_class::first_matching_class;
-use signex_types::pcb::{Pad, PadShape, PadType, PcbBoard, Segment, Via, ViaType};
+use signex_types::pcb::{Pad, PadShape, PadType, PcbBoard, Segment, Via};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 
 use crate::app::Signex;
@@ -58,7 +58,8 @@ impl Signex {
                     })
                     .collect();
                 let lock = item_lock(tracks.iter().any(|s| s.locked));
-                let common = self.primitive_common(board, target, lock)?;
+                let mut common = self.primitive_common(board, target, lock)?;
+                common.locked_count = mixed_lock(tracks.iter().map(|s| s.locked));
                 PcbPrimitiveFacts::Track(track_facts(board, common, &tracks, i18n))
             }
             ItemRef::Via(_) => {
@@ -71,8 +72,15 @@ impl Signex {
                     })
                     .collect();
                 let lock = item_lock(vias.iter().any(|v| v.locked));
-                let common = self.primitive_common(board, target, lock)?;
-                PcbPrimitiveFacts::Via(via_facts(board, common, &vias, i18n))
+                let mut common = self.primitive_common(board, target, lock)?;
+                common.locked_count = mixed_lock(vias.iter().map(|v| v.locked));
+                let mut facts = via_facts(board, common, &vias, i18n);
+                // The shown layer is the panel's state (mockup row 96).
+                let panel = &self.interaction_state.pcb_primitive;
+                facts.view_layer = panel
+                    .via_view_layer
+                    .filter(|_| panel.is_showing(&facts.common.target));
+                PcbPrimitiveFacts::Via(facts)
             }
             ItemRef::Pad { .. } => {
                 let pads: Vec<(&signex_types::pcb::Footprint, &Pad)> = target
@@ -120,7 +128,10 @@ impl Signex {
                 let net = shared(zones.iter().map(|z| z.net));
                 let fills = self.current_pour_fills(&target.board);
                 let common = self.primitive_common_on(board, target, Editability::Editable, net);
-                PcbPrimitiveFacts::Zone(super::zone::zone_facts(board, common, &zones, fills, i18n))
+                let mut facts = super::zone::zone_facts(board, common, &zones, fills, i18n);
+                let panel = &self.interaction_state.pcb_primitive;
+                facts.menu_open = panel.pour_menu_open && panel.is_showing(&facts.common.target);
+                PcbPrimitiveFacts::Zone(facts)
             }
             ItemRef::Text(_) | ItemRef::Arc(_) | ItemRef::FreePad(_) | ItemRef::Dimension(_) => {
                 return self.free_primitive_facts(board, target);
@@ -145,7 +156,10 @@ impl Signex {
                     board, common, &graphics, i18n,
                 ))
             }
-            ItemRef::Footprint(_) => return None,
+            // A room shows Room Properties (#2457).
+            ItemRef::Footprint(_) | ItemRef::FootprintText { .. } | ItemRef::Room(_) => {
+                return None;
+            }
         })
     }
 
@@ -248,6 +262,13 @@ impl Signex {
             },
             picking_net: panel.net_pick.as_ref() == Some(&target),
             placement_paused: false,
+            hover: if panel.is_showing(&target) {
+                panel.hover.clone()
+            } else {
+                Default::default()
+            },
+            unstored_open: panel.unstored_open,
+            locked_count: None,
             show_more: panel.show_more,
             search: panel.search.clone(),
             target,
@@ -279,7 +300,11 @@ fn item_on_board(board: &PcbBoard, item: ItemRef) -> bool {
         ItemRef::Arc(id) => board.free.arcs.iter().any(|a| a.uuid == id),
         ItemRef::FreePad(id) => board.free.pads.iter().any(|p| p.uuid == id),
         ItemRef::Dimension(id) => board.free.dimensions.iter().any(|d| d.uuid == id),
-        ItemRef::Footprint(_) | ItemRef::Zone { .. } | ItemRef::Graphic { .. } => false,
+        ItemRef::Footprint(_)
+        | ItemRef::Zone { .. }
+        | ItemRef::Graphic { .. }
+        | ItemRef::FootprintText { .. }
+        | ItemRef::Room(_) => false,
     }
 }
 
@@ -341,15 +366,7 @@ pub(super) fn via_facts(
         vias.iter()
             .map(|v| (v.via_type, pcb_geom::via_span(&stack, v))),
     )
-    .and_then(|(kind, span)| {
-        let (from, to) = span?;
-        let id = match kind {
-            ViaType::Through => ids::PCB_PRIM_VIA_SPAN_THROUGH,
-            ViaType::Blind => ids::PCB_PRIM_VIA_SPAN_BLIND,
-            ViaType::Micro => ids::PCB_PRIM_VIA_SPAN_MICRO,
-        };
-        Some(t!(i18n, id, "from" => from, "to" => to).into_string())
-    });
+    .and_then(|(kind, span)| Some(stack_facts::span_label(i18n, kind, span?)));
     let ends = shared(vias.iter().map(|v| pcb_geom::via_span(&stack, v)))
         .flatten()
         .map(|(from, to)| (stack.get(from - 1).copied(), stack.get(to - 1).copied()));
@@ -358,7 +375,7 @@ pub(super) fn via_facts(
         vias.iter()
             .map(|v| stack_facts::mode_of(v.layer_sizes.as_ref())),
     );
-    ViaFacts {
+    let mut facts = ViaFacts {
         x: shared(vias.iter().map(|v| origin.user_x(v.position.x))),
         y: shared(vias.iter().map(|v| origin.user_y(v.position.y))),
         diameter: shared(vias.iter().map(|v| v.diameter)),
@@ -382,7 +399,19 @@ pub(super) fn via_facts(
         },
         from_hole_edge: shared(vias.iter().map(|v| v.attributes.from_hole_edge)),
         common,
-    }
+        types: Vec::new(),
+        via_type: None,
+        type_size: None,
+        overridden: None,
+        protection: None,
+        drill_pair: None,
+        finished_hole: None,
+        min_drill: None,
+        reaches: (true, true),
+        view_layer: None,
+    };
+    stack_facts::fill_via_type_facts(&mut facts, board, &stack, vias, i18n);
+    facts
 }
 
 pub(super) fn pad_facts(
@@ -408,6 +437,8 @@ pub(super) fn pad_facts(
             PadShape::Rect => ids::PCB_PRIM_SHAPE_RECT,
             PadShape::RoundRect => ids::PCB_PRIM_SHAPE_ROUNDRECT,
             PadShape::Oval => ids::PCB_PRIM_SHAPE_OVAL,
+            PadShape::Trapezoid => ids::PCB_PRIM_SHAPE_TRAPEZOID,
+            PadShape::Custom => ids::PCB_PRIM_SHAPE_CUSTOM,
         };
         ShapeChoice {
             shape,
@@ -453,6 +484,15 @@ pub(super) fn pad_facts(
         layer_sizes: stack_facts::pad_size_rows(i18n, mode, copper, &only_pads),
         mode,
         common,
+        // A free pad's stand-in footprint has no designator (mockup row 97,
+        // header pill).
+        component_designator: shared(pads.iter().map(|(fp, _)| fp.reference.clone()))
+            .filter(|r| !r.is_empty()),
+        plated: shared(
+            pads.iter()
+                .map(|(_, p)| p.drill.as_ref().map(|_| p.pad_type != PadType::NpThru)),
+        )
+        .flatten(),
     }
 }
 
@@ -466,6 +506,13 @@ fn pad_layer(fp: &signex_types::pcb::Footprint, pad: &Pad) -> Option<PcbLayer> {
     pcb_geom::copper_layers(mask)
         .first()
         .map(|c| PcbLayer::Copper(*c))
+}
+
+/// Locked and total items when only some of `locks` are set; `None` when
+/// all or none are (#2523, the header lock's tooltip).
+fn mixed_lock(locks: impl Iterator<Item = bool>) -> Option<(usize, usize)> {
+    let (locked, total) = locks.fold((0, 0), |(l, t), on| (l + usize::from(on), t + 1));
+    (locked > 0 && locked < total).then_some((locked, total))
 }
 
 /// A selection with a locked track or via takes no edit but its unlock

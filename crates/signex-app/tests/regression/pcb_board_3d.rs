@@ -10,12 +10,13 @@ use iced::{Event, Point as ScreenPoint, Rectangle, mouse, window};
 use pcb_geom::ItemRef;
 use signex_app::app::{
     Board3dGesture, Board3dMsg, CommandPaletteMsg, ContextMenuMsg, FileMsg, Message, PcbMsg,
-    RenameDialogState, RenameMsg, Signex, TabContextAction, TabDocument,
+    RenameDialogState, RenameMsg, Signex, TabContextAction,
 };
 use signex_app::board_3d_shader::{Board3dPointer, Board3dProgram};
 use signex_app::canvas::CanvasEvent;
 use signex_app::keymap::AppCommandId;
 use signex_app::menu_bar::MenuMessage;
+use signex_app::test_adapter::BoardEngines;
 use signex_gfx::camera3d::{OrbitCamera, ViewPreset};
 use signex_renderer::board3d::BoardScene3d;
 use signex_types::format::SnxPcb;
@@ -23,16 +24,16 @@ use signex_types::part::FootprintSourceRef;
 use signex_types::pcb::{Footprint, Pad, PadShape, PadType, PcbBoard, Point};
 use uuid::Uuid;
 
-const U1: Uuid = Uuid::from_u128(1);
-const U2: Uuid = Uuid::from_u128(5);
-const BOUNDS: Rectangle = Rectangle {
+pub(crate) const U1: Uuid = Uuid::from_u128(1);
+pub(crate) const U2: Uuid = Uuid::from_u128(5);
+pub(crate) const BOUNDS: Rectangle = Rectangle {
     x: 0.0,
     y: 0.0,
     width: 800.0,
     height: 600.0,
 };
 /// The board is 1.6 mm thick and a part with no height stands 1 mm tall.
-const PART_TOP_MM: f32 = 2.6;
+pub(crate) const PART_TOP_MM: f32 = 2.6;
 
 fn footprint(uuid: Uuid, at: (f64, f64)) -> Footprint {
     let pad = Pad {
@@ -46,6 +47,8 @@ fn footprint(uuid: Uuid, at: (f64, f64)) -> Footprint {
         layers: vec!["TopCopper".into()],
         net: None,
         roundrect_ratio: 0.0,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 0.0,
         layer_sizes: None,
         net_locked: false,
@@ -85,6 +88,7 @@ fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
@@ -105,14 +109,14 @@ fn board() -> PcbBoard {
     }
 }
 
-struct Fixture {
-    app: Signex,
-    path: std::path::PathBuf,
+pub(crate) struct Fixture {
+    pub(crate) app: Signex,
+    pub(crate) path: std::path::PathBuf,
     pointer: Board3dPointer,
     _tmp: tempfile::TempDir,
 }
 
-fn open_board() -> Fixture {
+pub(crate) fn open_board() -> Fixture {
     let tmp = tempfile::tempdir().unwrap();
     let path = tmp.path().join("board.snxpcb");
     std::fs::write(&path, SnxPcb::new(board()).write_string().unwrap()).unwrap();
@@ -130,21 +134,21 @@ fn open_board() -> Fixture {
 }
 
 impl Fixture {
-    fn send(&mut self, message: Message) {
+    pub(crate) fn send(&mut self, message: Message) {
         let task = self.app.update(message);
         crate::drive::drive(&mut self.app, task);
     }
 
-    fn menu(&mut self, id: &str) {
+    pub(crate) fn menu(&mut self, id: &str) {
         let id = AppCommandId::new(id).expect("a catalog id");
         self.send(Message::Menu(MenuMessage::Command(id)));
     }
 
-    fn view_3d(&mut self, event: Board3dMsg) {
+    pub(crate) fn view_3d(&mut self, event: Board3dMsg) {
         self.send(Message::Pcb(PcbMsg::Board3d(event)));
     }
 
-    fn in_3d(&self) -> bool {
+    pub(crate) fn in_3d(&self) -> bool {
         self.app
             .interaction_state
             .board_3d
@@ -152,7 +156,7 @@ impl Fixture {
             .is_some_and(|session| session.board_path == self.path)
     }
 
-    fn camera(&self) -> OrbitCamera {
+    pub(crate) fn camera(&self) -> OrbitCamera {
         self.app
             .interaction_state
             .board_3d
@@ -163,12 +167,12 @@ impl Fixture {
 
     /// One pointer event through the view's shader program at `at`; what it
     /// publishes goes to the app.
-    fn pointer(&mut self, event: mouse::Event, at: ScreenPoint) -> Option<Message> {
+    pub(crate) fn pointer(&mut self, event: mouse::Event, at: ScreenPoint) -> Option<Message> {
         self.through_program(&Event::Mouse(event), BOUNDS, at)
     }
 
     /// One redraw of the view at `bounds`; what it publishes goes to the app.
-    fn redraw(&mut self, bounds: Rectangle) -> Option<Message> {
+    pub(crate) fn redraw(&mut self, bounds: Rectangle) -> Option<Message> {
         let event = Event::Window(window::Event::RedrawRequested(std::time::Instant::now()));
         self.through_program(&event, bounds, ScreenPoint::ORIGIN)
     }
@@ -187,6 +191,8 @@ impl Fixture {
             highlights: Vec::new(),
             highlight: [0.0; 4],
             viewport: session.viewport,
+            origin: session.origin,
+            lighting: session.lighting,
         };
         let action = program.update(
             &mut self.pointer,
@@ -199,13 +205,13 @@ impl Fixture {
         Some(message)
     }
 
-    fn click(&mut self, at: ScreenPoint) -> Option<Message> {
+    pub(crate) fn click(&mut self, at: ScreenPoint) -> Option<Message> {
         self.pointer(mouse::Event::ButtonPressed(mouse::Button::Left), at);
         self.pointer(mouse::Event::ButtonReleased(mouse::Button::Left), at)
     }
 
     /// Where board point `(x, y)` at height `z` shows in the view.
-    fn screen(&self, x: f32, y: f32, z: f32) -> ScreenPoint {
+    pub(crate) fn screen(&self, x: f32, y: f32, z: f32) -> ScreenPoint {
         let at = self
             .camera()
             .project([x, -y, z], BOUNDS.width, BOUNDS.height)
@@ -213,7 +219,7 @@ impl Fixture {
         ScreenPoint::new(at[0], at[1])
     }
 
-    fn selected(&self) -> Vec<ItemRef> {
+    pub(crate) fn selected(&self) -> Vec<ItemRef> {
         self.app
             .interaction_state
             .pcb_selection
@@ -222,22 +228,17 @@ impl Fixture {
             .collect()
     }
 
-    fn live(&self) -> PcbBoard {
+    pub(crate) fn live(&self) -> PcbBoard {
         let docs = &self.app.document_state;
-        docs.tabs[docs.active_tab]
-            .cached_document
-            .as_ref()
-            .and_then(TabDocument::as_pcb)
+        docs.tab_board_engine(docs.active_tab)
+            .map(|engine| engine.board())
             .expect("a board is open")
             .clone()
     }
 
-    fn can_undo(&self) -> bool {
+    pub(crate) fn can_undo(&self) -> bool {
         let docs = &self.app.document_state;
-        docs.tabs[docs.active_tab]
-            .cached_document
-            .as_ref()
-            .and_then(TabDocument::as_pcb_engine)
+        docs.tab_board_engine(docs.active_tab)
             .expect("a board engine")
             .can_undo()
     }
@@ -245,7 +246,7 @@ impl Fixture {
 
 /// Size the view the way its first redraw does, so the frame the test
 /// projects with is the one a click is read with.
-fn sized(f: &mut Fixture) {
+pub(crate) fn sized(f: &mut Fixture) {
     f.redraw(BOUNDS);
     let session = f.app.interaction_state.board_3d.as_ref().expect("in 3D");
     assert_eq!(session.viewport, [BOUNDS.width, BOUNDS.height]);
@@ -277,14 +278,20 @@ fn the_palette_runs_the_view_and_the_bar_leaves_it() {
     assert!(!f.in_3d());
 }
 
-/// The view opens looking straight down at the board, framed on it.
+/// The view opens looking from Iso at the board, framed on it (mockup
+/// row 175).
 #[test]
-fn the_view_opens_from_above_framed_on_the_board() {
+fn the_view_opens_on_iso_framed_on_the_board() {
     let mut f = open_board();
     f.menu("view_board_3d");
     sized(&mut f);
     let camera = f.camera();
-    assert_eq!(camera.pitch_deg, 90.0);
+    let mut iso = OrbitCamera::default();
+    iso.set_preset(ViewPreset::Iso);
+    assert_eq!(
+        (camera.yaw_deg, camera.pitch_deg),
+        (iso.yaw_deg, iso.pitch_deg)
+    );
     for (x, y) in [(0.0, 0.0), (40.0, 30.0)] {
         let at = f.screen(x, y, 1.6);
         assert!(BOUNDS.contains(at), "corner ({x}, {y}) at {at:?}");
@@ -430,14 +437,16 @@ fn a_renamed_board_keeps_its_3d_view() {
     let mut f = open_board();
     f.menu("view_board_3d");
     let renamed = f.path.with_file_name("renamed.snxpcb");
-    f.app.ui_state.rename_dialog = Some(RenameDialogState {
+    f.app.ui_state.rename_dialog = Some(Box::new(RenameDialogState {
         project_id: None,
         target_path: f.path.clone(),
         tree_path: vec![0],
         buffer: "renamed.snxpcb".to_string(),
         error: None,
         is_project_rename: false,
-    });
+        placing_symbols: Vec::new(),
+        name_clash: None,
+    }));
     crate::settle_support::settle(&mut f.app, Message::Rename(RenameMsg::Submit));
     assert!(renamed.exists(), "the file moved");
     f.path = renamed;

@@ -27,14 +27,14 @@ pub(super) fn loose_bom_scope(
     let unowned = document_state.unowned_engine_paths();
     let tops = loose_tops(document_state, &unowned, fold);
 
-    let (mut ctx, mut issues) = build_scope(document_state, source, false)?;
+    let (mut ctx, mut issues) = build_scope(document_state, source)?;
     let mut sheets = Vec::new();
     for top in &tops {
         let closure = closure_keys(document_state, top, &unowned, fold);
         let (run, run_issues) = if top.as_path() == source {
             (ctx.clone(), None)
         } else {
-            let (run, run_issues) = build_scope(document_state, top, false)?;
+            let (run, run_issues) = build_scope(document_state, top)?;
             (run, Some(run_issues))
         };
         sheets.extend(
@@ -46,6 +46,7 @@ pub(super) fn loose_bom_scope(
             issues.stitch.extend(extra.stitch);
             issues.missing_pages.extend(extra.missing_pages);
             issues.unreadable.extend(extra.unreadable);
+            issues.unreadable_causes.extend(extra.unreadable_causes);
         }
     }
     let count = sheets.len();

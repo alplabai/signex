@@ -34,7 +34,6 @@ fn app_with_two_findings() -> (Signex, PathBuf, SelectedItem) {
     app.document_state.tabs.push(TabInfo {
         title: "top".to_owned(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -158,6 +157,20 @@ fn an_edit_while_a_run_is_in_flight_keeps_the_notice() {
 }
 
 #[test]
+fn a_finished_run_leaves_no_finding_selected() {
+    let (mut app, _path, _part) = app_with_two_findings();
+    let _ = app.handle_focus_erc_diagnostic_index(1);
+    assert_eq!(app.ui_state.erc_focus_global_index, Some(1));
+    let (generation, inputs) = app.begin_erc_run();
+    let outcome = Ok(super::erc_job::run_erc_job(inputs));
+    app.apply_erc_run_result(generation, &outcome);
+    assert_eq!(
+        app.ui_state.erc_focus_global_index, None,
+        "the old index would name a different finding"
+    );
+}
+
+#[test]
 fn a_failed_run_restores_the_flag_it_found() {
     let (mut app, _path, part) = app_with_two_findings();
     delete_part(&mut app, part);
@@ -186,7 +199,10 @@ fn navigation_and_quick_fix_use_the_right_row_when_an_earlier_one_is_hidden() {
         "stays the finding's place in the cache"
     );
 
-    let _ = app.handle_focus_erc_diagnostic_offset(1);
+    // Showing the hidden finding lands on the shown row, not the hidden one.
+    let _ = app.handle_focus_erc_diagnostic_index(0);
+    assert_eq!(app.ui_state.erc_focus_global_index, Some(1));
+    let _ = app.handle_focus_erc_diagnostic_index(1);
     assert_eq!(app.ui_state.erc_focus_global_index, Some(1));
 
     let no_connects = |app: &Signex| {

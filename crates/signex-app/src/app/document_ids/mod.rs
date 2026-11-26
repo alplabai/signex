@@ -10,6 +10,7 @@
 mod confine;
 mod entries;
 mod headers;
+mod project_named;
 mod reconcile;
 mod target;
 #[cfg(test)]
@@ -26,6 +27,7 @@ pub(crate) use confine::confined_read;
 pub(crate) use entries::referenced_files;
 pub(crate) use entries::{DocumentEntry, DocumentKind};
 pub use headers::HeaderRead;
+pub(crate) use project_named::NoProjectNamed;
 pub use target::DocumentTarget;
 
 use crate::app::document::DocumentKey;

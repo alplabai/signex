@@ -23,7 +23,7 @@ use super::LoadedProject;
 pub(crate) use super::ownership_index::OwnershipIndex;
 use crate::app::project_sheets::{normalize_clamped, ownership_reference};
 
-pub(crate) use super::case_fold::CaseFold;
+pub(crate) use super::CaseFold;
 
 /// Comparison key for a filesystem path under an explicit [`CaseFold`].
 ///
@@ -483,7 +483,7 @@ mod tests {
 
     fn project(id: u32, dir: &str, filenames: &[&str]) -> LoadedProject {
         LoadedProject {
-            id: ProjectId(id),
+            id: ProjectId::test_id(id),
             path: PathBuf::from(dir).join("proj.snxprj"),
             data: ProjectData {
                 document_id: None,
@@ -505,6 +505,7 @@ mod tests {
                     .collect(),
                 variant_definitions: Vec::new(),
                 active_variant: None,
+                variant_settings: Default::default(),
                 libraries: Vec::new(),
                 enable_git: false,
                 net_classes: Vec::new(),
@@ -513,6 +514,11 @@ mod tests {
                 schematic_defaults: Default::default(),
                 project_defaults: Default::default(),
                 agent_journal: Default::default(),
+                schematic_design: Default::default(),
+                fab_outputs: None,
+                router_tool_diameter: None,
+                bom_alternates: Vec::new(),
+                requirements: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),
             },
@@ -554,7 +560,7 @@ mod tests {
             &HashMap::new(),
             &PathBuf::from("/w/a").join("power.snxsch"),
         );
-        assert_eq!(found.map(|p| p.id), Some(ProjectId(1)));
+        assert_eq!(found.map(|p| p.id), Some(ProjectId::test_id(1)));
     }
 
     #[test]
@@ -599,7 +605,7 @@ mod tests {
             ("/w/a/child.snxsch", &[]),
         ]);
         let found = project_owning_sheet(&projects, &open, &PathBuf::from("/w/a/child.snxsch"));
-        assert_eq!(found.map(|p| p.id), Some(ProjectId(1)));
+        assert_eq!(found.map(|p| p.id), Some(ProjectId::test_id(1)));
     }
 
     #[test]
@@ -611,7 +617,7 @@ mod tests {
             ("/w/a/sub/leaf.snxsch", &[]),
         ]);
         let found = project_owning_sheet(&projects, &open, &PathBuf::from("/w/a/sub/leaf.snxsch"));
-        assert_eq!(found.map(|p| p.id), Some(ProjectId(1)));
+        assert_eq!(found.map(|p| p.id), Some(ProjectId::test_id(1)));
     }
 
     #[test]
@@ -668,7 +674,7 @@ mod tests {
             let found = project_owning_sheet(&projects, &open, &child).map(|p| p.id);
             assert_eq!(
                 found,
-                Some(ProjectId(1)),
+                Some(ProjectId::test_id(1)),
                 "owner must be the lexicographically-smallest parent path (iter {i})",
             );
         }
@@ -717,7 +723,7 @@ mod tests {
             &PathBuf::from("/w/a/top.snxsch"),
             CaseFold::FOLD,
         );
-        assert_eq!(found.map(|p| p.id), Some(ProjectId(1)));
+        assert_eq!(found.map(|p| p.id), Some(ProjectId::test_id(1)));
     }
 
     #[test]
@@ -739,7 +745,7 @@ mod tests {
         let child = PathBuf::from("/w/a/child.snxsch");
         let fold = project_owning_sheet_with(&projects, &open, &child, CaseFold::FOLD);
         let keep = project_owning_sheet_with(&projects, &open, &child, CaseFold::PRESERVE);
-        assert_eq!(fold.map(|p| p.id), Some(ProjectId(1)));
+        assert_eq!(fold.map(|p| p.id), Some(ProjectId::test_id(1)));
         assert!(keep.is_none());
     }
 

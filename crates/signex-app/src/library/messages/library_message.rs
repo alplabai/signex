@@ -5,11 +5,13 @@ use std::path::PathBuf;
 
 use signex_library::{PrimitiveKind, RowId, UseSite};
 
-use super::super::state::{EditorAddress, PrimitivePickerTarget};
+use super::super::state::PrimitivePickerTarget;
 use super::{
     BrowserEditMsg, CloseLibraryChoice, EditorMsg, PickerMsg, PrimitiveEdit, PrimitivePickerMsg,
     SettingsMsg,
 };
+use crate::app::core::editor_address::EditorAddress;
+use crate::app::core::resolved_placement::ResolvedPlacement;
 
 /// Top-level library message — folded into [`Message::Library`](crate::app::Message::Library).
 #[derive(Debug, Clone)]
@@ -52,7 +54,7 @@ pub enum LibraryMessage {
     /// `project_path` is the project the library should attach to
     /// (the same file the original `CreateLibraryAt` carried);
     /// `lib_path` is the user's chosen `.snxlib/` directory path.
-    /// Opens the "Library Options" modal seeded with `(project_path,
+    /// Opens the New Library dialog seeded with `(project_path,
     /// lib_path, use_lfs = false)` so the user can opt into Git LFS
     /// for binary 3D models. Confirming the modal calls
     /// `crate::library::commands::register_pending_library` —
@@ -61,15 +63,15 @@ pub enum LibraryMessage {
         project_path: std::path::PathBuf,
         lib_path: std::path::PathBuf,
     },
-    /// "Library Options" modal — toggle the "Use Git LFS for binary
-    /// 3D models" checkbox. Default is off.
+    /// New Library dialog — toggle the "Use Git LFS for binary
+    /// 3D models" switch. Default is off.
     LibraryCreateOptionsToggleLfs,
-    /// Toggle the "Enable version control" checkbox on the New
-    /// Library Options modal. Off by default — fresh libraries land
+    /// Toggle the "Enable version control" switch on the New
+    /// Library dialog. Off by default — fresh libraries land
     /// as plain files; flipping this on triggers `git init` at
     /// create time.
     LibraryCreateOptionsToggleGit,
-    /// "Library Options" modal — Create Library button. Registers
+    /// New Library dialog — Create Library button. Registers
     /// a pending library via
     /// `commands::register_pending_library` and stashes the spec on
     /// `LoadedProject.pending_libraries`. The actual `.snxlib/`
@@ -77,9 +79,16 @@ pub enum LibraryMessage {
     /// (`commands::create_pending_library`), per the
     /// "wait for explicit user save" invariant.
     LibraryCreateOptionsConfirm,
-    /// "Library Options" modal — Cancel button (or Esc). Drops the
+    /// New Library dialog — Cancel button (or Esc). Drops the
     /// modal state without creating anything.
     LibraryCreateOptionsCancel,
+    /// New Library dialog — "Choose another location…" on the refusal
+    /// banner. Closes the dialog and reopens the New Library save-as
+    /// picker for the same project; nothing is written.
+    LibraryCreateOptionsRelocateRequested,
+    /// New Library dialog — "Open existing library" on the banner shown when
+    /// a library is already at the path. Closes the dialog and opens it.
+    LibraryCreateOptionsOpenExistingRequested,
     /// F34 — Save-As dialog confirmed for a new symbol library file
     /// (`.snxsym`). Writes an empty `SymbolFile` to the picked path,
     /// refreshes the cached library file enumeration so the project
@@ -485,12 +494,13 @@ pub enum LibraryMessage {
     },
     /// Modal — pick a new sheet color preset.
     DocumentOptionsSetSheetColor(crate::panels::SheetColor),
-    /// Modal — toggle the visible-grid checkbox.
+    /// Modal — toggle the visible-grid switch.
     DocumentOptionsToggleGrid,
-    /// Modal — cycle the visible grid spacing.
-    DocumentOptionsCycleGridSize,
-    /// Modal — cycle the coordinate display unit.
-    DocumentOptionsCycleUnit,
+    /// Modal — a grid spacing preset (mm, one of
+    /// `crate::canvas::grid::GRID_SIZES_MM`) was picked.
+    DocumentOptionsGridSpacingPicked(f32),
+    /// Modal — a coordinate display unit was picked.
+    DocumentOptionsUnitPicked(signex_types::coord::Unit),
     /// Modal — apply the draft to the library and close.
     DocumentOptionsApply,
     /// Modal — drop the draft and close.
@@ -528,12 +538,16 @@ pub enum LibraryMessage {
     /// User clicked Update Selected Components — apply the picked
     /// updates to the schematic engine + dirty-mark + close modal.
     LibraryUpdatesApply,
-    /// User clicked Skip All — close the modal and record the path on
-    /// `skipped_updates_for` (not rendered anywhere yet).
+    /// User clicked Skip All — close the modal and remember the offered
+    /// versions for the sheet (`skipped_versions`) so they are not offered
+    /// again.
     LibraryUpdatesSkipAll,
     /// User dismissed the modal (Cancel / Esc / X). No state mutates;
     /// drift is left pinned and the schematic stays clean.
     LibraryUpdatesCancel,
+    /// The table's header checkbox was clicked: every row is cleared when
+    /// all are ticked, else every row is ticked.
+    LibraryUpdatesSelectAllToggled,
 
     // ── Components Panel (Stage 9 of v0.9-snxlib-as-file) ───────────
     /// Expand or collapse the library mounted at this root in the list.
@@ -561,6 +575,13 @@ pub enum LibraryMessage {
     /// The divider above the details section was pressed; the pointer now
     /// drives the list height until release.
     ComponentsPanelSplitDragStarted,
+    /// The pointer entered (`true`) or left the divider above the details.
+    ComponentsPanelSplitHovered(bool),
+    /// A zoom, pan or fit gesture landed on one preview of the details card.
+    ComponentsPanelPreviewMoved(
+        crate::panels::components_panel::details::preview_view::PreviewPane,
+        crate::panels::components_panel::details::preview_view::PreviewGesture,
+    ),
     /// The off-thread read of a row's details finished. A result for a row
     /// that is no longer the selected one is dropped.
     ComponentsPanelDetailsLoaded {
@@ -637,46 +658,45 @@ pub enum LibraryMessage {
     },
     /// The Copy to Library dialog, or the copy it started (#813).
     StockCopy(crate::library::stock_copy::StockCopyMsg),
-}
-
-/// What the off-thread read of a library row hands back to `update`:
-/// everything needed to register the `LibSymbol` and place the part,
-/// with no further IO.
-#[derive(Debug, Clone)]
-pub struct ResolvedPlacement {
-    /// `"<library uuid>:<symbol uuid>"` — `LibSymbol.id` and `Symbol.lib_id`.
-    pub lib_id: String,
-    pub lib_symbol: signex_types::schematic::LibSymbol,
-    pub library_id: uuid::Uuid,
-    pub row_id: uuid::Uuid,
-    pub library_version: String,
-    /// The row values the placed part starts in agreement with; it travels
-    /// with `library_version` so the two are stamped together (#2004).
-    pub stamp: signex_types::schematic::RowStamp,
-    pub internal_pn: String,
-    pub value: String,
-    /// The symbol is a power port: the placed instance is `is_power` and
-    /// `value` is its net name.
-    pub is_power: bool,
-    /// Reference prefix from the library symbol's designator (`U?` -> `U`):
-    /// the legacy prefix, used when the owning project follows no designator
-    /// standard or does not cover `class`.
-    pub prefix: String,
-    /// The row's component class key (`"diode"`, `"generic"`), for the
-    /// project's designator standard (#1232).
-    pub class: String,
-    /// The row's raw `designator_prefix` parameter, not yet validated: it
-    /// beats the standard's table entry for `class` (#1315).
-    pub prefix_override: Option<String>,
-    /// The bound footprint's name (empty when none): a placement stamps it
-    /// on the symbol, where ERC, the netlist and the BOM read it (#1842).
-    pub footprint: String,
-    /// The part's primary datasheet link and identity fields (Manufacturer,
-    /// MPN and the row's parameters). A placement stamps the
-    /// Manufacturer and MPN (#1867); Change Component replaces the old
-    /// part's with all of them.
-    pub datasheet: String,
-    pub fields: Vec<(String, String)>,
+    /// The Components panel's "Previews" switch was flipped (#2535): the
+    /// row style picked, remembered as a preference.
+    ComponentsPanelRowStylePicked(super::super::state::ComponentsRowStyle),
+    /// The off-thread read of row symbol thumbnails finished (#2535); `None`
+    /// marks a symbol that could not be read, so it is not asked for again.
+    ComponentsPanelThumbnailsLoaded(
+        Vec<(
+            signex_library::primitive::PrimitiveRef,
+            Option<std::sync::Arc<signex_types::schematic::LibSymbol>>,
+        )>,
+    ),
+    /// The empty Components panel's "Open Project…" was pressed (#2535).
+    ComponentsPanelOpenProjectClicked,
+    /// The off-thread read behind a Library Browser preview pane finished
+    /// (mockup row 118). A result for a row that is no longer selected, or
+    /// from an older read, is dropped.
+    BrowserPreviewLoaded {
+        key: super::super::state::ComponentsPanelRowKey,
+        /// Which read of the row this is; an older one is dropped.
+        generation: u64,
+        result: Result<
+            Box<crate::panels::components_panel::details::ComponentDetails>,
+            super::super::state::BrowserPreviewError,
+        >,
+    },
+    /// The preview pane's ⋯ button was pressed: its menu opened or closed.
+    BrowserMoreMenuToggled {
+        library_path: PathBuf,
+    },
+    /// The column button at the right of the count line was pressed: the
+    /// column chooser opened or closed (mockup row 118).
+    BrowserColumnsMenuToggled {
+        library_path: PathBuf,
+    },
+    /// A column was turned on or off in the chooser, by its sort key.
+    BrowserColumnToggled {
+        library_path: PathBuf,
+        column_key: String,
+    },
 }
 
 /// The drawing a placed symbol is switched to, read off-thread: the

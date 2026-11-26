@@ -25,7 +25,6 @@ fn open_symbol_editor(app: &mut Signex, path: &Path) {
     app.document_state.tabs.push(TabInfo {
         title: "sym".into(),
         path: path.to_path_buf(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::SymbolEditor(path.to_path_buf()),
     });
@@ -36,6 +35,7 @@ fn open_symbol_editor(app: &mut Signex, path: &Path) {
 /// draft with no file behind it asks where to save instead.
 fn write_symbol_file(app: &Signex, path: &Path) {
     let text = app.document_state.symbol_editors[path]
+        .draft
         .file
         .to_toml_string()
         .expect("serialise");

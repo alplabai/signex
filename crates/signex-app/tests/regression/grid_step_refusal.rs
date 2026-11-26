@@ -22,7 +22,6 @@ fn footprint_app() -> (Signex, PathBuf) {
     app.document_state.tabs.push(TabInfo {
         title: "grid".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });
@@ -43,6 +42,43 @@ fn refusal_logged(app: &Signex) -> bool {
         .diagnostics
         .iter()
         .any(|entry| entry.message.contains("refused") && entry.message.contains(NON_FINITE))
+}
+
+/// #2792: Snap Distance and Axis Snap Range take 0.001 to 100 mm. Anything
+/// else changes nothing and stays in the box; a good value clears it.
+#[test]
+fn a_snap_reach_outside_its_range_is_refused_with_its_text_kept() {
+    use signex_app::library::editor::footprint::SnapOptions;
+    type Msg = fn(String) -> PanelMsg;
+    type Stored = fn(&SnapOptions) -> f64;
+    let fields: [(Msg, &str, Stored); 2] = [
+        (
+            PanelMsg::FpEditorSetSnapDistance,
+            SnapOptions::DISTANCE_BUFFER,
+            |o| o.snap_distance_mm,
+        ),
+        (
+            PanelMsg::FpEditorSetAxisSnapRange,
+            SnapOptions::AXIS_RANGE_BUFFER,
+            |o| o.axis_snap_range_mm,
+        ),
+    ];
+    let (mut app, path) = footprint_app();
+    for (msg, buffer, stored) in fields {
+        let state = |app: &Signex| app.document_state.footprint_editors[&path].state.clone();
+        let before = stored(&state(&app).snap_options);
+        for bad in ["0", "-1", "100.5", "abc"] {
+            let _ = app.update(Message::Dock(DockMessage::Panel(msg(bad.into()))));
+            assert_eq!(stored(&state(&app).snap_options), before, "{bad}");
+            assert_eq!(
+                state(&app).numeric_buffers.get(buffer).map(String::as_str),
+                Some(bad)
+            );
+        }
+        let _ = app.update(Message::Dock(DockMessage::Panel(msg("100".into()))));
+        assert_eq!(stored(&state(&app).snap_options), 100.0);
+        assert!(!state(&app).numeric_buffers.contains_key(buffer));
+    }
 }
 
 #[test]

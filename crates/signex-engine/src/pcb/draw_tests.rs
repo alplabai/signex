@@ -222,8 +222,11 @@ fn a_board_string_lands_on_its_layer_at_the_default_size_in_one_step() {
     assert_eq!(serde_json::to_string(engine.board()).unwrap(), before);
 }
 
+/// Was `a_board_string_lands_on_an_overlay_mechanical_or_documentation_layer_only`,
+/// with copper refused; a string lands on copper too since Caner's
+/// 2026-11-24 decision (#2883).
 #[test]
-fn a_board_string_lands_on_an_overlay_mechanical_or_documentation_layer_only() {
+fn a_board_string_lands_on_a_copper_overlay_mechanical_or_documentation_layer_only() {
     use signex_types::pcb_layer::{CopperLayer, MechanicalLayer, PcbLayer, TechnicalLayer};
 
     let at = Point::new(2.0, 3.0);
@@ -238,9 +241,13 @@ fn a_board_string_lands_on_an_overlay_mechanical_or_documentation_layer_only() {
     );
     let dims = PcbLayer::Technical(TechnicalLayer::Dimensions);
     assert!(new_text(id, at, dims, "J1".into()).is_some(), "#2373");
+    for (layer, token) in [
+        (PcbLayer::Copper(CopperLayer::Top), "TopCopper"),
+        (PcbLayer::Copper(CopperLayer::Bottom), "BottomCopper"),
+    ] {
+        assert_eq!(new_text(id, at, layer, "J1".into()).unwrap().layer, token);
+    }
     for layer in [
-        PcbLayer::Copper(CopperLayer::Top),
-        PcbLayer::Copper(CopperLayer::Bottom),
         PcbLayer::Technical(TechnicalLayer::EdgeCuts),
         PcbLayer::Technical(TechnicalLayer::SolderMaskTop),
     ] {
@@ -281,4 +288,20 @@ fn a_track_takes_the_width_of_its_net_class() {
     };
     assert_eq!(style(&[other]).width_mm, 0.3, "GND is in no class");
     assert_eq!(class_track_width(&board, 0, &[power]), None, "no net");
+}
+
+#[test]
+fn a_pour_takes_the_net_of_a_later_corner_when_the_first_is_off_copper() {
+    use signex_types::pcb_layer::CopperLayer;
+
+    let engine = BoardEngine::new(board(), 1);
+    // (1, 5) and (4, 5) are off copper; (4, 0) lies on GND's track.
+    let outline = vec![
+        Point::new(1.0, 5.0),
+        Point::new(4.0, 5.0),
+        Point::new(4.0, 0.0),
+    ];
+    let id = Uuid::from_u128(0x91);
+    let zone = new_pour(engine.board(), id, outline, CopperLayer::Top).unwrap();
+    assert_eq!(zone.net, 3);
 }

@@ -1,12 +1,15 @@
 //! The optional `[board_options]` section of a `.snxpcb` (#2374): guides,
 //! extra snap grids, the sheet, the polygon naming scheme, the
-//! designator display, the board origin (#2384) and the panel (#2410,
-//! `board_panel`).
+//! designator display, the board origin (#2384), the panel (#2410,
+//! `board_panel`), the layer colours (2026-11-18) and the layout plan
+//! (#2942, `board_layout_plan`).
 //!
 //! Written only when the options differ from the default, so a board
 //! without any re-saves byte-identical and a file from before the section
 //! loads unchanged. Lengths are integer nm like every other on-disk
 //! geometry; colours are `#rrggbbaa`. See `docs/PCB_BOARD_OPTIONS.md`.
+
+use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -16,7 +19,7 @@ use super::units::{NonFiniteField, mm_to_nm, nm_to_mm};
 use crate::pcb::{PcbBoard, Point};
 use crate::pcb_options::{
     BoardGrid, BoardGuide, BoardOptions, BoardOrigin, BoardSheet, DesignatorDisplay, DrcWaiver,
-    GuideKind, PolygonNaming,
+    GuideKind, LayerColor, PolygonNaming,
 };
 use crate::theme::Color;
 
@@ -24,6 +27,7 @@ const GUIDES: &str = "board_options.guides";
 const GRIDS: &str = "board_options.grids";
 const SHEET: &str = "board_options.sheet";
 const ORIGIN: &str = "board_options.origin";
+const LAYER_COLORS: &str = "board_options.layer_colors";
 
 /// `[board_options]` as stored.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -40,12 +44,43 @@ pub(in crate::format) struct BoardOptionsRaw {
     grids: Vec<GridRaw>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     origin: Option<OriginRaw>,
-    /// Waived design-rule findings (#2399): no geometry, stored as held.
+    /// Waived design-rule findings (#2399), stored as held: the fingerprint
+    /// is a hash, not geometry (#2307).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     drc_waivers: Vec<DrcWaiver>,
     /// The panel (#2410), `format::board_panel`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     panel: Option<super::board_panel::PanelRaw>,
+    /// `[board_options.layer_colors]`: a layer token to `#rrggbbaa` (only in
+    /// `snxpcb/1.5`, `format::snxpcb_token`).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    layer_colors: BTreeMap<String, String>,
+    /// The layout plan (#2942), `format::board_layout_plan` (only in
+    /// `snxpcb/1.12`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    layout_plan: Option<super::board_layout_plan::LayoutPlanRaw>,
+}
+
+/// The layer colours of `raw`, in token order; a token this build does not
+/// know or a colour it cannot read refuses the file, as a guide's colour
+/// does.
+fn layer_colors(raw: BTreeMap<String, String>) -> Result<Vec<LayerColor>, FormatError> {
+    raw.into_iter()
+        .enumerate()
+        .map(|(row, (token, cell))| {
+            let layer =
+                super::parse_pcb_layer(&token).ok_or_else(|| FormatError::TsvFieldParse {
+                    block: LAYER_COLORS.to_string(),
+                    row,
+                    field: "layer".to_string(),
+                    message: format!("`{token}` is not a board layer"),
+                })?;
+            Ok(LayerColor {
+                layer,
+                color: color(&cell, LAYER_COLORS, row)?,
+            })
+        })
+        .collect()
 }
 
 /// The board origin (#2384), nm.
@@ -143,6 +178,8 @@ pub(in crate::format) fn read(raw: Option<BoardOptionsRaw>) -> Result<BoardOptio
             .unwrap_or_default(),
         drc_waivers: raw.drc_waivers,
         panel: raw.panel.map(super::board_panel::read).transpose()?,
+        layer_colors: layer_colors(raw.layer_colors)?,
+        layout_plan: super::board_layout_plan::read(raw.layout_plan)?,
     })
 }
 
@@ -241,6 +278,12 @@ pub(in crate::format) fn write(out: &mut String, board: &PcbBoard) -> Result<(),
             origin,
             drc_waivers: options.drc_waivers.clone(),
             panel,
+            layer_colors: options
+                .layer_colors
+                .iter()
+                .map(|c| (super::pcb_layer_token(c.layer), c.color.to_hex()))
+                .collect(),
+            layout_plan: super::board_layout_plan::write(&options.layout_plan)?,
         },
     };
     out.push('\n');

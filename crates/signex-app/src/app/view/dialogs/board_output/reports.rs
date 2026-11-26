@@ -1,18 +1,20 @@
-//! The Board Reports dialog: a tab per report, the table in view and Export
-//! CSV.
+//! The Board Reports dialog (mockup row 117): the kind switch, the filter field and
+//! the row count over the table (`reports_table.rs`), then the unit caption
+//! with Cancel and Export CSV…. The filter and the sort are view only;
+//! Export CSV writes the report as the board makes it.
 
-use iced::widget::{Column, Row, column, container, scrollable};
-use iced::{Element, Length, Widget as _};
-use signex_i18n::{I18n, LocalNumber, MessageId, UserText, ids, t};
-use signex_output::{BoardReportKind, ReportCell, ReportColumn, ReportSide};
+use iced::widget::{column, container, row};
+use iced::{Alignment, Element, Length, Widget as _};
+use signex_i18n::{I18n, LocalNumber, Localized, MessageId, UserText, ids, t};
+use signex_output::{BoardReportKind, ReportCell, ReportSide};
 use signex_types::coord::Unit;
-use signex_types::measure::format_length_mm;
-use signex_types::theme::ThemeTokens;
-use signex_widgets::{Label, text};
+use signex_types::measure::length_field_text;
+use signex_types::theme::{ThemeId, ThemeTokens};
+use signex_widgets::{Label, segmented, text, text_input};
 
-use super::{SP, TS, out, pills};
+use super::{SP, TS, kit, out};
 use crate::app::{BoardOutputMsg, BoardReportsState, Message};
-use crate::styles::{DialogButtonKind, dialog_button, dialog_footer_split, ti, tokens};
+use crate::styles::{DialogButtonKind, chrome_px, dialog_button, dialog_footer_split, tokens};
 
 type Parts<'a> = (
     Element<'a, Message>,
@@ -20,7 +22,10 @@ type Parts<'a> = (
     Element<'a, Message>,
 );
 
-fn kind_label(kind: BoardReportKind) -> MessageId {
+/// Width of the kind switch (440 px).
+const SWITCH_W: f32 = chrome_px(440.0 * 11.0 / 12.0);
+
+pub(super) fn kind_label(kind: BoardReportKind) -> MessageId {
     match kind {
         BoardReportKind::Bom => ids::BOARD_REPORT_KIND_BOM,
         BoardReportKind::Netlist => ids::BOARD_REPORT_KIND_NETLIST,
@@ -29,48 +34,37 @@ fn kind_label(kind: BoardReportKind) -> MessageId {
     }
 }
 
-fn column_label(column: ReportColumn) -> MessageId {
-    use ReportColumn as C;
-    match column {
-        C::Designators => ids::BOARD_REPORT_COL_DESIGNATORS,
-        C::Quantity => ids::BOARD_REPORT_COL_QUANTITY,
-        C::Value => ids::BOARD_REPORT_COL_VALUE,
-        C::Footprint => ids::BOARD_REPORT_COL_FOOTPRINT,
-        C::Description => ids::BOARD_REPORT_COL_DESCRIPTION,
-        C::Type => ids::BOARD_REPORT_COL_TYPE,
-        C::Net => ids::BOARD_REPORT_COL_NET,
-        C::NodeCount => ids::BOARD_REPORT_COL_NODE_COUNT,
-        C::Nodes => ids::BOARD_REPORT_COL_NODES,
-        C::Length => ids::BOARD_REPORT_COL_LENGTH,
-        C::Tracks => ids::BOARD_REPORT_COL_TRACKS,
-        C::Vias => ids::BOARD_REPORT_COL_VIAS,
-        C::Designator => ids::BOARD_REPORT_COL_DESIGNATOR,
-        C::X => ids::BOARD_REPORT_COL_X,
-        C::Y => ids::BOARD_REPORT_COL_Y,
-        C::Rotation => ids::BOARD_REPORT_COL_ROTATION,
-        C::Side => ids::BOARD_REPORT_COL_SIDE,
+/// The unit id a caption selects on: `mil`, else `mm`.
+fn unit_key(unit: Unit) -> &'static str {
+    match unit {
+        Unit::Mil => "mil",
+        _ => "mm",
     }
 }
 
-/// How wide a column is, in parts of the table's width: lists of
-/// designators and pads take the most.
-fn column_part(column: ReportColumn) -> u16 {
-    match column {
-        ReportColumn::Designators | ReportColumn::Nodes => 5,
-        ReportColumn::Description | ReportColumn::Footprint => 3,
-        ReportColumn::Value | ReportColumn::Net | ReportColumn::Designator => 2,
-        _ => 1,
+/// The footer caption of report `kind`: what its rows are and the unit.
+pub(super) fn kind_caption(kind: BoardReportKind, unit: Unit, i18n: &I18n) -> Localized {
+    let unit = unit_key(unit);
+    match kind {
+        BoardReportKind::Bom => t!(i18n, ids::BOARD_REPORTS_CAPTION_BOM),
+        BoardReportKind::Netlist => t!(i18n, ids::BOARD_REPORTS_CAPTION_NETLIST),
+        BoardReportKind::NetLength => {
+            t!(i18n, ids::BOARD_REPORTS_CAPTION_NET_LENGTH, "unit" => unit)
+        }
+        BoardReportKind::Components => {
+            t!(i18n, ids::BOARD_REPORTS_CAPTION_COMPONENTS, "unit" => unit)
+        }
     }
 }
 
-/// A cell as the dialog shows it: lengths in the user's unit, sides and
-/// types in words.
-fn cell_text(cell: &ReportCell, unit: Unit, i18n: &I18n) -> Label<'static> {
+/// A cell as the dialog shows it: lengths as bare numbers in the user's
+/// unit (the footer caption names it), sides and types in words.
+pub(super) fn cell_text(cell: &ReportCell, unit: Unit, i18n: &I18n) -> Label<'static> {
     match cell {
         ReportCell::Text(text) => UserText::new(text.clone()).into(),
         ReportCell::Count(n) => t!(i18n, ids::BOARD_REPORT_VALUE, "value" => *n).into(),
         ReportCell::Millimetres(mm) => {
-            t!(i18n, ids::BOARD_REPORT_VALUE, "value" => format_length_mm(*mm, unit)).into()
+            t!(i18n, ids::BOARD_REPORT_VALUE, "value" => length_field_text(*mm, unit)).into()
         }
         ReportCell::Degrees(deg) => {
             let rounded = (deg * 100.0).round() / 100.0;
@@ -87,10 +81,11 @@ fn cell_text(cell: &ReportCell, unit: Unit, i18n: &I18n) -> Label<'static> {
     }
 }
 
-/// Header, tabs and table, and the footer with Export CSV and Close.
+/// Header, the toolbar over the table, and the footer.
 pub(super) fn parts<'a>(
     state: &'a BoardReportsState,
     unit: Unit,
+    theme: ThemeId,
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Parts<'a> {
@@ -106,36 +101,23 @@ pub(super) fn parts<'a>(
         super::super::header::DIALOG_HEADER_H,
         tokens,
     );
-    let report = &state.report;
-    let tabs = pills(
-        BoardReportKind::ALL
-            .into_iter()
-            .map(|kind| {
-                (
-                    t!(i18n, kind_label(kind)),
-                    kind == report.kind,
-                    BoardOutputMsg::ReportPicked(kind),
-                )
-            })
-            .collect(),
-        tokens,
-    );
-    let count = text(t!(i18n, ids::BOARD_REPORTS_ROWS, "count" => report.rows.len()))
-        .size(TS.body)
-        .color(tokens::muted_text(tokens));
+    let shown = &state.shown;
     let body = column![
-        container(tabs).padding([SP.l, SP.xl]),
-        headings(&report.columns, i18n, tokens),
-        scrollable(table(state, unit, i18n, tokens)).height(Length::Fill),
-        container(count).padding([SP.s, SP.xl]),
+        toolbar(state, shown.len(), theme, i18n, tokens),
+        kit::rule(tokens::resolve(tokens).line_soft),
+        super::reports_table::table(state, shown, unit, i18n, tokens),
     ]
     .height(Length::Fill)
     .boxed();
+    let caption = text(kind_caption(state.report.kind, unit, i18n))
+        .size(TS.body)
+        .color(tokens::resolve(tokens).ink3)
+        .boxed();
     let footer = dialog_footer_split(
-        Vec::new(),
+        vec![caption],
         vec![
             dialog_button(
-                t!(i18n, ids::BOARD_REPORTS_CLOSE),
+                t!(i18n, ids::BOARD_REPORTS_CANCEL),
                 DialogButtonKind::Cancel,
                 close,
                 tokens,
@@ -151,86 +133,54 @@ pub(super) fn parts<'a>(
     (header, body, footer)
 }
 
-/// The column headings, fixed above the scrolling rows.
-fn headings<'a>(
-    columns: &[ReportColumn],
-    i18n: &I18n,
-    tokens: &ThemeTokens,
-) -> Element<'a, Message> {
-    let muted = tokens::muted_text(tokens);
-    let mut line: Row<Element<'a, Message>> = Row::new().spacing(SP.m).padding([SP.xs, SP.xl]);
-    for column in columns {
-        line = line.push(
-            text(t!(i18n, column_label(*column)))
-                .size(TS.caption)
-                .color(muted)
-                .width(Length::FillPortion(column_part(*column)))
-                .boxed(),
-        );
-    }
-    line.boxed()
-}
-
-/// One line a row, or a muted note when the report has none.
-fn table<'a>(
+/// The kind switch, the filter field and the row count.
+fn toolbar<'a>(
     state: &'a BoardReportsState,
-    unit: Unit,
+    shown: usize,
+    theme: ThemeId,
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
-    let report = &state.report;
-    if report.rows.is_empty() {
-        return container(
-            text(t!(i18n, ids::BOARD_REPORTS_EMPTY))
-                .size(TS.body)
-                .color(tokens::muted_text(tokens)),
-        )
-        .padding([SP.m, SP.xl])
-        .boxed();
-    }
-    let ink = ti(tokens.text);
-    let mut rows: Column<Element<'a, Message>> = Column::new().spacing(SP.xs);
-    for cells in &report.rows {
-        let mut line: Row<Element<'a, Message>> = Row::new().spacing(SP.m).padding([SP.xs, SP.xl]);
-        for (column, cell) in report.columns.iter().zip(cells) {
-            line = line.push(
-                text(cell_text(cell, unit, i18n))
-                    .size(TS.body)
-                    .color(ink)
-                    .width(Length::FillPortion(column_part(*column)))
-                    .boxed(),
-            );
-        }
-        rows = rows.push(line.boxed());
-    }
-    rows.boxed()
+    let kinds = segmented(
+        BoardReportKind::ALL.map(|kind| (kind, Label::from(t!(i18n, kind_label(kind))))),
+        state.report.kind,
+        kit::segmented_style(tokens).fill_width(true),
+        |kind| out(BoardOutputMsg::ReportPicked(kind)),
+    );
+    let filter = filter_field(state, theme, i18n, tokens);
+    let total = state.report.rows.len();
+    let count = if shown == total {
+        t!(i18n, ids::BOARD_REPORTS_ROWS, "count" => total)
+    } else {
+        t!(i18n, ids::BOARD_REPORTS_ROWS_FILTERED, "shown" => shown, "count" => total)
+    };
+    let count = text(count)
+        .size(TS.caption)
+        .font(super::super::graphite::mono())
+        .color(tokens::resolve(tokens).ink4);
+    container(
+        row![
+            container(kinds).width(Length::Fixed(SWITCH_W)),
+            filter,
+            count
+        ]
+        .spacing(SP.l - SP.xs)
+        .align_y(Alignment::Center),
+    )
+    .padding([SP.l - SP.xs, SP.l + SP.xs])
+    .width(Length::Fill)
+    .boxed()
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Every column has a heading and every kind a tab name in the catalog.
-    #[test]
-    fn every_column_and_kind_has_a_catalog_name() {
-        let i18n = I18n::en_us();
-        for kind in BoardReportKind::ALL {
-            assert!(!t!(i18n, kind_label(kind)).into_string().is_empty());
-            for column in kind.columns() {
-                let label = t!(i18n, column_label(*column)).into_string();
-                assert!(!label.is_empty(), "{column:?}");
-            }
-        }
-    }
-
-    #[test]
-    fn lengths_show_in_the_users_unit_and_sides_in_words() {
-        let i18n = I18n::en_us();
-        let mm = cell_text(&ReportCell::Millimetres(2.54), Unit::Mm, &i18n);
-        assert!(mm.as_str().contains("2.54"), "{}", mm.as_str());
-        let mil = cell_text(&ReportCell::Millimetres(2.54), Unit::Mil, &i18n);
-        assert!(mil.as_str().contains("100"), "{}", mil.as_str());
-        let side = cell_text(&ReportCell::Side(ReportSide::Bottom), Unit::Mm, &i18n);
-        assert_eq!(side.as_str(), "Bottom");
-    }
+/// The Filter rows field, led by a magnifier inside it (mockup row 117).
+pub(super) fn filter_field<'a>(
+    state: &'a BoardReportsState,
+    theme: ThemeId,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let input = text_input(t!(i18n, ids::BOARD_REPORTS_FILTER), &state.filter)
+        .on_input(|v| out(BoardOutputMsg::ReportFilterEdited(v)))
+        .size(TS.body);
+    kit::glyph_field(kit::FieldGlyph::Search, input, theme, tokens)
 }

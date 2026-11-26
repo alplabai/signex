@@ -36,7 +36,7 @@ fn pair(x: f64, pitch: f64) -> PcbBoard {
 }
 
 fn checked_with(b: &PcbBoard, rules: &DrcRules) -> CheckReport {
-    check_report(&run(b, rules), &names(), BOARD, Vec::new(), Map::new())
+    check_report(&run(b, rules), b, &names(), BOARD, Vec::new(), Map::new())
 }
 
 fn checked(b: &PcbBoard) -> CheckReport {
@@ -45,7 +45,9 @@ fn checked(b: &PcbBoard) -> CheckReport {
 
 #[test]
 fn a_clearance_finding_carries_the_shared_fields_and_drc_evidence() {
-    let report = checked(&pair(0.0, 0.4));
+    let b = pair(0.0, 0.4);
+    let report = checked(&b);
+    let waiver_key = crate::waiver_key(&run(&b, &DrcRules::new(RULE)).violations[0]);
     assert_eq!(report.check, DRC_CHECK);
     assert_eq!(report.findings.len(), 1, "{report:?}");
     let f = &report.findings[0];
@@ -66,6 +68,7 @@ fn a_clearance_finding_carries_the_shared_fields_and_drc_evidence() {
             "at": [0.0, 0.2],
             "measured_nm": 150_000,
             "required_nm": 200_000,
+            "waiver_key": waiver_key,
             "rule_source": "board_setup",
         })
     );
@@ -203,6 +206,7 @@ fn a_finding_keeps_its_key_when_its_items_move() {
     // Another board file, another key.
     let elsewhere = check_report(
         &run(&pair(0.0, 0.4), &DrcRules::new(RULE)),
+        &pair(0.0, 0.4),
         &names(),
         "/p/other.snxpcb",
         Vec::new(),
@@ -326,7 +330,8 @@ fn findings_that_name_no_item_are_keyed_by_their_message() {
         skipped: Vec::new(),
         skipped_keepouts: Vec::new(),
     };
-    let checked = check_report(&report, &names(), BOARD, Vec::new(), Map::new());
+    let empty = board(vec![], vec![], vec![]);
+    let checked = check_report(&report, &empty, &names(), BOARD, Vec::new(), Map::new());
     let keys = checked.keys();
     assert_eq!(keys.len(), 2, "{checked:?}");
     assert!(keys.iter().all(|k| is_own_key(k)), "{keys:?}");
@@ -337,8 +342,10 @@ fn findings_that_name_no_item_are_keyed_by_their_message() {
 fn an_item_that_could_not_be_checked_is_a_warning() {
     let mut bad = track(1, (0.0, 0.0), (1.0, 0.0), 1, "TopCopper");
     bad.start = Point::new(f64::NAN, 0.0);
+    let b = board(vec![], vec![bad], vec![]);
     let report = check_report(
-        &run(&board(vec![], vec![bad], vec![]), &DrcRules::new(RULE)),
+        &run(&b, &DrcRules::new(RULE)),
+        &b,
         &names(),
         BOARD,
         vec!["first".into()],
@@ -398,7 +405,7 @@ fn the_rule_set_says_the_clearance_the_run_used() {
     let rules = DrcRules::for_board(&b, &[]).unwrap();
     let mut given = Map::new();
     given.insert("source".into(), json!("machine"));
-    let report = check_report(&run(&b, &rules), &names(), BOARD, Vec::new(), given);
+    let report = check_report(&run(&b, &rules), &b, &names(), BOARD, Vec::new(), given);
     assert_eq!(
         report.rule_set,
         Some(json!({"source": "machine", "clearance_nm": 300_000, "from_default": false}))
@@ -469,4 +476,61 @@ fn the_messages_line_shares_the_finding_wording() {
         report.findings[0].message,
         "clearance 0.15 mm, needs 0.2 mm, GND / VCC"
     );
+}
+
+/// `b` with its one finding waived as it stands now (#2307).
+fn waived_now(b: &PcbBoard) -> PcbBoard {
+    let v = run(b, &DrcRules::new(RULE)).violations[0].clone();
+    let mut b = b.clone();
+    b.options
+        .drc_waivers
+        .push(signex_types::pcb_options::DrcWaiver {
+            key: waiver_key(&v),
+            rule: rule_id(&v).into(),
+            note: "accepted".into(),
+            fingerprint: fingerprint(&v, &b),
+            author: String::new(),
+        });
+    b
+}
+
+#[test]
+fn a_board_file_waiver_moves_its_finding_to_waived() {
+    let plain = checked(&pair(0.0, 0.4));
+    let b = waived_now(&pair(0.0, 0.4));
+    let report = checked(&b);
+    assert!(report.findings.is_empty(), "{report:?}");
+    assert!(report.lapsed.is_empty());
+    assert_eq!(report.waived.len(), 1);
+    assert_eq!(report.waived[0].finding, plain.findings[0]);
+    assert_eq!(
+        report.waived[0].waiver,
+        waiver_json(&b.options.drc_waivers[0])
+    );
+}
+
+#[test]
+fn a_lapsed_waiver_is_listed_and_its_finding_is_back() {
+    let mut b = waived_now(&pair(0.0, 0.4));
+    b.segments[1].start.y -= 0.05;
+    b.segments[1].end.y -= 0.05;
+    let report = checked(&b);
+    assert_eq!(report.findings.len(), 1, "{report:?}");
+    assert!(report.waived.is_empty());
+    assert_eq!(report.lapsed, [waiver_json(&b.options.drc_waivers[0])]);
+}
+
+#[test]
+fn a_waiver_of_a_rule_switched_off_neither_hides_nor_lapses() {
+    let mut b = waived_now(&pair(0.0, 0.4));
+    b.options.drc_waivers[0].fingerprint = "stale".into();
+    let mut rules = DrcRules::new(RULE);
+    let off = DrcRuleSet {
+        severity: BTreeMap::from([("builtin::clearance".to_string(), "off".to_string())]),
+        ..Default::default()
+    };
+    rules.severities = crate::resolve_severities(None, Some(&off));
+    let report = checked_with(&b, &rules);
+    assert!(report.findings.is_empty() && report.waived.is_empty());
+    assert!(report.lapsed.is_empty(), "{report:?}");
 }

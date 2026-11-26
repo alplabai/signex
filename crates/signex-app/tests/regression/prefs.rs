@@ -400,6 +400,52 @@ fn prefs_zoom_step_percent_round_trip_and_defaults() {
     }
 }
 
+/// #2514: how much other copper dims while a board net is highlighted.
+#[test]
+fn prefs_pcb_dim_others_round_trips_and_defaults_to_50() {
+    let (_tmp, path) = temp_prefs_path();
+    assert_eq!(signex_app::fonts::PCB_DIM_OTHERS_DEFAULT_PERCENT, 50);
+    assert_eq!(
+        signex_app::fonts::read_pcb_dim_others_pref_at(&path),
+        50,
+        "no prefs file"
+    );
+    signex_app::fonts::write_zoom_step_percent_pref_at(&path, 25);
+    assert_eq!(
+        signex_app::fonts::read_pcb_dim_others_pref_at(&path),
+        50,
+        "file without the key"
+    );
+
+    for percent in [0, 37, 100] {
+        signex_app::fonts::write_pcb_dim_others_pref_at(&path, percent);
+        assert_eq!(
+            signex_app::fonts::read_pcb_dim_others_pref_at(&path),
+            percent
+        );
+    }
+    assert_eq!(
+        signex_app::fonts::read_zoom_step_percent_pref_at(&path),
+        25,
+        "the other keys stay"
+    );
+
+    for (raw, expected) in [
+        ("250", 100),
+        ("-4", 0),
+        ("12.6", 13),
+        ("\"half\"", 50),
+        ("null", 50),
+    ] {
+        fs::write(&path, format!(r#"{{"pcb_dim_others_percent": {raw}}}"#)).unwrap();
+        assert_eq!(
+            signex_app::fonts::read_pcb_dim_others_pref_at(&path),
+            expected,
+            "pcb_dim_others_percent {raw}"
+        );
+    }
+}
+
 #[test]
 fn prefs_move_keeps_wires_round_trips_and_missing_key_is_on() {
     let (_tmp, path) = temp_prefs_path();
@@ -422,6 +468,32 @@ fn prefs_move_keeps_wires_round_trips_and_missing_key_is_on() {
     assert!(
         signex_app::fonts::read_move_keeps_wires_pref_at(&path),
         "a non-boolean value falls back to on"
+    );
+}
+
+#[test]
+fn prefs_symbol_body_fill_round_trips_and_missing_key_is_on_in_the_theme_tint() {
+    use signex_app::symbol_fill_prefs::SymbolBodyFill;
+    use signex_types::theme::Color;
+    let (_tmp, path) = temp_prefs_path();
+    assert_eq!(
+        signex_app::fonts::read_symbol_body_fill_pref_at(&path),
+        SymbolBodyFill::default(),
+        "no prefs file: on, theme tint"
+    );
+    let custom = SymbolBodyFill {
+        enabled: false,
+        color: Some(Color::new(0xAB, 0xCD, 0xEF, 0xFF)),
+    };
+    signex_app::fonts::write_symbol_body_fill_pref_at(&path, custom);
+    assert_eq!(
+        signex_app::fonts::read_symbol_body_fill_pref_at(&path),
+        custom
+    );
+    signex_app::fonts::write_symbol_body_fill_pref_at(&path, SymbolBodyFill::default());
+    assert_eq!(
+        signex_app::fonts::read_symbol_body_fill_pref_at(&path),
+        SymbolBodyFill::default()
     );
 }
 

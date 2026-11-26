@@ -63,6 +63,8 @@ fn zone(n: u128, name: &str) -> Zone {
         min_thickness: 0.2,
         min_island_area: 0.0,
         remove_dead_islands: false,
+        shelved: false,
+        unfilled: false,
         unknown: Default::default(),
     }
 }
@@ -92,6 +94,8 @@ fn pad(n: u128, number: &str) -> Pad {
         layers: vec!["TopCopper".into()],
         net: None,
         roundrect_ratio: 0.0,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 0.0,
         layer_sizes: None,
         net_locked: false,

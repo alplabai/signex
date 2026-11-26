@@ -235,6 +235,7 @@ fn write_project(dir: &Path, name: &str, libs: &[PathBuf]) -> PathBuf {
         sheets: Vec::new(),
         variant_definitions: Vec::new(),
         active_variant: None,
+        variant_settings: Default::default(),
         libraries: libs
             .iter()
             .map(|p| LibraryEntry {
@@ -251,6 +252,11 @@ fn write_project(dir: &Path, name: &str, libs: &[PathBuf]) -> PathBuf {
         schematic_defaults: Default::default(),
         project_defaults: Default::default(),
         agent_journal: Default::default(),
+        schematic_design: Default::default(),
+        fab_outputs: None,
+        router_tool_diameter: None,
+        bom_alternates: Vec::new(),
+        requirements: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
     };

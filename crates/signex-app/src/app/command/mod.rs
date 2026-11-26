@@ -15,12 +15,23 @@ mod agent_edit_cross_sheet_tests;
 mod agent_edit_tests;
 mod agent_edits;
 mod args;
+#[cfg(test)]
+mod board_area_operand_tests;
+mod board_area_operands;
 mod board_edit_operands;
 #[cfg(test)]
 mod board_graphic_operand_tests;
 mod board_graphic_operands;
 mod board_operands;
+mod board_route_operands;
+#[cfg(test)]
+mod board_view_operand_tests;
+mod board_view_operands;
 pub(crate) mod bridge;
+#[cfg(test)]
+mod change_component_operand_tests;
+mod change_component_operands;
+mod component_operand;
 #[cfg(test)]
 mod directive_operand_tests;
 mod directive_operands;
@@ -37,26 +48,60 @@ pub(crate) mod enablement;
 mod file_operand_tests;
 mod file_operands;
 #[cfg(test)]
+mod footprint_assign_operand_tests;
+mod footprint_assign_operands;
+#[cfg(test)]
+mod footprint_place_operand_tests;
+mod footprint_place_operands;
+#[cfg(test)]
+mod footprint_text_operand_tests;
+mod footprint_text_operands;
+#[cfg(test)]
 mod headless_gui_only_tests;
 #[cfg(test)]
 mod hierarchy_operand_tests;
 mod hierarchy_operands;
 #[cfg(test)]
 pub(in crate::app) mod interaction_snapshot_tests;
+#[cfg(test)]
+mod keymap_operand_tests;
+mod keymap_operands;
 mod layer_strip_operands;
+mod need_context;
 mod needs;
+#[cfg(test)]
+mod needs_reason_tests;
+/// The enablement gate, for the hostile-operand test's not-reached set.
+#[cfg(test)]
+pub(crate) use needs::needs as enablement_gate;
+#[cfg(test)]
+mod no_erc_operand_tests;
+#[cfg(test)]
+mod notebook_generate_tests;
 mod opened;
 #[cfg(test)]
 mod operand_handler_tests;
 mod operand_handlers;
 mod operands;
-mod outcome;
+#[cfg(test)]
+mod parity;
+#[cfg(test)]
+mod part_height_operand_tests;
+mod part_height_operands;
 #[cfg(test)]
 mod part_operand_tests;
+pub(crate) use part_height_operands::PartHeightsRead;
 mod part_operands;
+mod placed_move;
+#[cfg(test)]
+pub(crate) mod placed_move_tests;
 #[cfg(test)]
 mod placed_operand_tests;
 mod placed_operands;
+#[cfg(test)]
+mod placed_rotation_tests;
+#[cfg(test)]
+mod placement_defaults_tests;
 #[cfg(test)]
 mod placement_extras_operand_tests;
 mod placement_extras_operands;
@@ -68,19 +113,36 @@ mod project_name_tests;
 mod project_names;
 pub(crate) mod queries;
 #[cfg(test)]
+mod repair_reset_operand_tests;
+mod repair_reset_operands;
+mod replay;
+pub mod request;
+mod routing;
+#[cfg(test)]
 mod selection_filter_operand_tests;
 mod selection_filter_operands;
+#[cfg(test)]
+mod selection_operand_tests;
+mod selection_operands;
 #[cfg(test)]
 mod sheet_entry_ref_tests;
 #[cfg(test)]
 mod sheet_symbol_check_tests;
 mod sheet_symbol_checks;
 #[cfg(test)]
+mod sheet_sync_operand_tests;
+mod sheet_sync_operands;
+#[cfg(test)]
+mod sheet_variable_operand_tests;
+pub(crate) mod translator;
+#[cfg(test)]
 mod undo_agreement_tests;
 mod window_document;
 #[cfg(test)]
 mod wire_run_tests;
 mod wire_runs;
+#[cfg(test)]
+mod wire_snap_sheet_tests;
 
 pub use agent_edits::{
     EditSpec, MAX_EDITS, edit_list_text, edit_refusal, operand_text, parse_documents,
@@ -88,20 +150,25 @@ pub use agent_edits::{
 };
 pub use args::CommandArgs;
 pub(crate) use args::InvocationContext;
+pub(crate) use board_edit_operands::mm_points;
 use bridge::core_to_message;
+pub(crate) use component_operand::component_by_uuid;
 pub use edit_reads::{EditReads, ReadsLoaded};
 pub(crate) use enablement::CommandContext;
-pub(crate) use enablement::is_enabled;
+pub(crate) use enablement::{disabled_reason, is_enabled};
 pub(crate) use opened::answers_with_the_new_document;
 pub(crate) use operand_handlers::runs_headless_without_operands;
-pub(crate) use operands::missing_headless_operand;
 pub use operands::{OperandError, OperandValue};
-pub use outcome::CommandOutcome;
+pub(crate) use operands::{missing_headless_operand, operand_str, parse_targets};
+pub(crate) use part_operands::library_row;
 pub(crate) use placed_operands::PlacedRefusal;
+pub use request::{AgentGatePassed, CommandRequest, RefusalCause, RequestOutcome, RequestSurface};
+pub use signex_commands::CommandOutcome;
 
 use iced::Task;
-
-use super::document::{DocumentKey, UndoTarget};
+// The tests under this module read an outcome's reason through it.
+#[cfg(test)]
+use signex_i18n::RenderTranslatable;
 
 use super::*;
 
@@ -123,10 +190,14 @@ impl Signex {
         args: CommandArgs,
         window: Option<iced::window::Id>,
     ) -> Task<Message> {
-        let (outcome, task) = self.dispatch_command_reporting(command, args, window);
+        let request = CommandRequest::new(command.clone(), args);
+        let (outcome, task) = self.run_command_request(RequestSurface::Gui { window }, request);
         // Only the missing-operand refusal is said here; every other command
         // reports (or stays silent) exactly as before.
-        if let CommandOutcome::Disabled { reason } = outcome
+        if let RequestOutcome::Refused {
+            reason,
+            cause: RefusalCause::NotAvailable,
+        } = outcome
             && operand_handlers::needs_operands_reason(command) == Some(reason.as_str())
         {
             crate::diagnostics::log_info(format!(
@@ -146,8 +217,13 @@ impl Signex {
         command: &crate::keymap::AppCommandId,
         window: Option<iced::window::Id>,
     ) -> Task<Message> {
-        let (outcome, task) = self.dispatch_command_reporting(command, CommandArgs::none(), window);
-        if let CommandOutcome::Disabled { reason } = outcome {
+        let request = CommandRequest::new(command.clone(), CommandArgs::none());
+        let (outcome, task) = self.run_command_request(RequestSurface::Gui { window }, request);
+        if let RequestOutcome::Refused {
+            reason,
+            cause: RefusalCause::NotAvailable,
+        } = outcome
+        {
             crate::diagnostics::log_info(format!(
                 "Menu: {} did nothing: {reason}",
                 command.as_str()
@@ -179,12 +255,42 @@ impl Signex {
     /// ([`enablement::explains_when_unavailable`]): that one still runs, and
     /// is reported as `Disabled` too, so a caller is never told `Ran` for a
     /// command that had nothing to act on.
+    ///
+    /// Every call adds one Command Log row (#2458); a call made while
+    /// another runs (an undocked window's undo, an agent request) does not.
     pub(crate) fn dispatch_command_reporting(
         &mut self,
         command: &crate::keymap::AppCommandId,
         args: CommandArgs,
         window: Option<iced::window::Id>,
     ) -> (CommandOutcome, Task<Message>) {
+        let mut operands = crate::app::handlers::command_log::operands_of(&args);
+        let targets = self.command_targets(command, args.has_operands(), window);
+        if let Some(targets) = &targets {
+            operands.insert(
+                crate::app::core::command_log::RECORDED_TARGETS.to_string(),
+                targets.to_operand(),
+            );
+        }
+        self.logged_command_on(command, operands, targets, window, |app| {
+            app.dispatch_command_unlogged(command, args, window)
+        })
+    }
+
+    /// [`Self::dispatch_command_reporting`] without the Command Log row.
+    fn dispatch_command_unlogged(
+        &mut self,
+        command: &crate::keymap::AppCommandId,
+        args: CommandArgs,
+        window: Option<iced::window::Id>,
+    ) -> (CommandOutcome, Task<Message>) {
+        // An installed extension's command runs its own handler (#2495); no
+        // built-in route below names an `ext.` id.
+        if command.is_extension()
+            && let Some(result) = self.dispatch_extension_command(command, &args)
+        {
+            return result;
+        }
         // A query answers an agent or the CLI with data; no GUI surface shows
         // that answer, so a palette, key or menu call is refused rather than
         // reported as run (#2172).
@@ -201,12 +307,9 @@ impl Signex {
         // and are gated by its history, not the main window's active tab
         // (#1546).
         if let Some(window_id) = window
-            && matches!(command.as_str(), "undo" | "redo")
+            && routing::is_history_step(command)
             && self.undocked_tab_has_canvas(window)
-            && !matches!(
-                self.undo_target(window),
-                UndoTarget::None | UndoTarget::Document(DocumentKey::Pcb(_))
-            )
+            && routing::steps_through_window_swap(&self.undo_target(window))
         {
             let mut outcome = CommandOutcome::Ran;
             let task = self.run_in_window(window_id, true, |app| {
@@ -220,13 +323,10 @@ impl Signex {
         // (a Component Preview, an undocked editor) step that document, gated
         // by its history, never the main window's tab (#1854). A sheet is
         // stepped through the swap above; the ERC dialog through its message.
-        if matches!(command.as_str(), "undo" | "redo")
+        if routing::is_history_step(command)
             && self.undo_window_is_own(window)
             && let target = self.undo_target(window)
-            && !matches!(
-                target,
-                UndoTarget::ProjectRules(_) | UndoTarget::Document(DocumentKey::Schematic(_))
-            )
+            && routing::steps_own_document(&target)
         {
             let undo = command.as_str() == "undo";
             let (can_undo, can_redo) = self.undo_availability(&target);
@@ -249,7 +349,7 @@ impl Signex {
             return (CommandOutcome::disabled(reason), Task::none());
         }
         // Close Document follows the window the stroke came from (#1787).
-        if command.as_str() == "close_active_document"
+        if routing::closes_in_its_window(command)
             && let Some(result) = self.close_document_in_window(window)
         {
             return result;
@@ -261,12 +361,14 @@ impl Signex {
         }
         let context = self.command_context(window);
         let unmet = enablement::disabled_reason(command, &context);
-        if unmet.is_some()
+        if let Some(reason) = unmet
             && !enablement::explains_when_unavailable(command)
             && !enablement::explains_refusal_in(command, &context)
         {
             return (
-                CommandOutcome::disabled(unmet.unwrap_or_default()),
+                CommandOutcome::Disabled {
+                    reason: reason.into(),
+                },
                 Task::none(),
             );
         }
@@ -274,78 +376,57 @@ impl Signex {
         // dialog they step the project's rule history and never reach the
         // sheet, whatever that history holds.
         let resolved = if self.erc_dialog_takes_input(window) {
-            match command.as_str() {
-                "undo" => Some(Message::Erc(ErcMsg::RulesUndone)),
-                "redo" => Some(Message::Erc(ErcMsg::RulesRedone)),
-                _ => core_to_message(command, &args),
-            }
+            routing::erc_dialog_step(command).or_else(|| core_to_message(command, &args))
         } else {
             core_to_message(command, &args)
         };
         let outcome = match (unmet, &resolved) {
-            (Some(reason), _) => CommandOutcome::disabled(reason),
+            (Some(reason), _) => CommandOutcome::Disabled {
+                reason: reason.into(),
+            },
             (None, Some(_)) => CommandOutcome::Ran,
             (None, None) if crate::keymap::metadata_for(command).is_some() => {
                 CommandOutcome::NoBridgeArm
             }
             (None, None) => CommandOutcome::UnknownId,
         };
-        let task = match (resolved, window) {
-            (Some(Message::CanvasEvent(event)), Some(window_id))
-                if self.interaction_state.canvases.contains_key(&window_id) =>
-            {
-                self.dispatch_update(Message::CanvasEventInWindow { window_id, event })
-            }
-            // A board-view command typed in an undocked PCB window acts on
-            // the board that window shows (#2223).
-            (Some(Message::Pcb(PcbMsg::View(event))), Some(window_id))
-                if self.undocked_pcb_path(window_id).is_some() =>
-            {
-                self.dispatch_update(Message::Pcb(PcbMsg::ViewInWindow {
-                    window: window_id,
-                    event,
-                }))
-            }
-            // A view turn typed in an undocked PCB window turns that window's
-            // board, the one its enablement read (#2316).
-            (Some(Message::Pcb(PcbMsg::ViewRotation(event))), Some(window_id))
-                if self.undocked_pcb_path(window_id).is_some() =>
-            {
-                self.dispatch_update(Message::Pcb(PcbMsg::ViewRotationInWindow {
-                    window: window_id,
-                    event,
-                }))
-            }
-            // Any other command typed in an undocked document window acts on
-            // the sheet that window shows (#1966).
-            (Some(message), Some(window_id)) if self.is_document_window(window_id) => {
-                self.run_command_in_window(window_id, message)
-            }
-            // Find Next / Previous from main (F3, menu, palette: `None` is
-            // main) take a Sheet-scope Find owned by an undocked window over.
-            (Some(message), w)
-                if is_find_step(&message)
-                    && w.is_none_or(|w| self.ui_state.main_window_id == Some(w)) =>
-            {
-                match self.ui_state.main_window_id {
-                    Some(main_id) => self.step_find_in_window(main_id, message),
-                    None => self.dispatch_update(message),
-                }
-            }
-            (Some(message), _) => self.dispatch_update(message),
-            (None, _) => Task::none(),
+        let task = match resolved {
+            Some(message) => self.run_resolved(message, window),
+            None => Task::none(),
         };
         (outcome, task)
     }
-}
 
-/// F3 / Shift+F3 resolved to a Find step.
-fn is_find_step(message: &Message) -> bool {
-    use crate::find_replace::FindReplaceMsg::{NextRequested, PreviousRequested};
-    matches!(
-        message,
-        Message::FindReplaceMsg(NextRequested | PreviousRequested)
-    )
+    /// Run a resolved command message where [`routing::in_window_route`]
+    /// sends it for the window it was typed in.
+    fn run_resolved(
+        &mut self,
+        message: Message,
+        window: Option<iced::window::Id>,
+    ) -> Task<Message> {
+        use routing::InWindowRoute as Route;
+        let facts = self.window_facts(window);
+        match routing::in_window_route(message, window, facts) {
+            Route::CanvasInWindow(window_id, event) => {
+                self.dispatch_update(Message::CanvasEventInWindow { window_id, event })
+            }
+            Route::BoardViewInWindow(window, event) => {
+                self.dispatch_update(Message::Pcb(PcbMsg::ViewInWindow { window, event }))
+            }
+            Route::BoardTurnInWindow(window, event) => {
+                self.dispatch_update(Message::Pcb(PcbMsg::ViewRotationInWindow { window, event }))
+            }
+            Route::DocumentWindow(window_id, message) => {
+                self.run_command_in_window(window_id, message)
+            }
+            // `None` is main: F3, the menu and the palette.
+            Route::FindFromMain(message) => match self.ui_state.main_window_id {
+                Some(main_id) => self.step_find_in_window(main_id, message),
+                None => self.dispatch_update(message),
+            },
+            Route::Plain(message) => self.dispatch_update(message),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -447,11 +528,10 @@ mod tests {
         let command = AppCommandId::new("place_wire").unwrap();
         let (outcome, task) = app.dispatch_command_reporting(&command, CommandArgs::none(), None);
 
-        assert_eq!(
-            outcome,
-            CommandOutcome::Disabled {
-                reason: "No schematic is open".to_string()
-            }
+        assert!(
+            matches!(&outcome, CommandOutcome::Disabled { reason }
+                if reason.render_en_us() == "No schematic is open"),
+            "{outcome:?}"
         );
         assert_eq!(task.units(), 0);
         assert_eq!(app.interaction_state.current_tool, Tool::Select);
@@ -464,19 +544,18 @@ mod tests {
         let _ = crate::diagnostics::init_logging();
         let (mut app, _task) = Signex::new();
 
-        let command = AppCommandId::new("place_signal_harness").unwrap();
+        let command = AppCommandId::new("place_device_sheet_symbol").unwrap();
         let (outcome, _task) = app.dispatch_command_reporting(&command, CommandArgs::none(), None);
 
-        assert_eq!(
-            outcome,
-            CommandOutcome::Disabled {
-                reason: "Planned, not available yet".to_string()
-            }
+        assert!(
+            matches!(&outcome, CommandOutcome::Disabled { reason }
+                if reason.render_en_us() == "Planned, not available yet"),
+            "{outcome:?}"
         );
         assert!(
             crate::diagnostics::recent_entries().iter().any(|e| e
                 .message
-                .starts_with("Planned, not available yet: Signal Harness")),
+                .starts_with("Planned, not available yet: Device Sheet Symbol")),
             "the handler ran and explained"
         );
     }
@@ -566,13 +645,13 @@ mod tests {
     fn app_with_tabs(kinds: Vec<TabKind>) -> Signex {
         let (mut app, _task) = Signex::new();
         for (i, kind) in kinds.into_iter().enumerate() {
-            app.document_state.tabs.push(crate::app::TabInfo {
-                title: format!("t{i}"),
-                path: std::path::PathBuf::from(format!("t{i}.snxsch")),
-                cached_document: None,
-                project_id: None,
-                kind,
-            });
+            app.document_state
+                .tabs
+                .push(crate::test_adapter::boardless_tab(
+                    format!("t{i}"),
+                    format!("t{i}.snxsch"),
+                    kind,
+                ));
         }
         app.document_state.active_tab = 0;
         app

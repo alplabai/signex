@@ -1,12 +1,14 @@
 //! Graphite title and menu bar: 38 px strip with the mark and menus, a
-//! centred search field, the Signex AI button, a light/dark toggle and the
-//! window controls. Legacy themes keep `view_main_window_chrome`.
+//! centred search field (a square search button on a narrow window), a
+//! light/dark toggle and the window controls. While the command palette is
+//! open in the main window the field is its query input. Legacy themes keep
+//! `view_main_window_chrome`.
 
 use std::sync::LazyLock;
 
 use iced::widget::{Space, container, mouse_area, row, svg};
 use iced::{Alignment, Background, Border, Color, Element, Length, Widget as _};
-use signex_i18n::{I18n, ids, t};
+use signex_i18n::{I18n, ids, shortcut_ids, t};
 use signex_widgets::{button, raw, text, text_input, tooltip};
 
 use super::{SP, TS, buttons};
@@ -14,23 +16,44 @@ use crate::app::view::{
     CHROME_SEARCH_BAR_MIN_WIDTH, CHROME_SEARCH_LEFT_GAP, CHROME_SEARCH_RIGHT_GAP,
 };
 use crate::app::{CommandPaletteMsg, Message, Signex, UiMsg, WindowMsg};
-use crate::menu_bar::MenuMessage;
 use crate::styles::{self, ChromeMetrics, Radii, ti, tokens::resolve};
 
-/// Width of the Signex AI button, in px.
-const SIGNAL_W: f32 = 96.0;
 /// Side of the square theme toggle.
 const THEME_W: f32 = 28.0;
-/// Gap between the two buttons and padding after them.
-const CLUSTER_GAP: f32 = 4.0;
+/// Padding after the theme toggle.
 const CLUSTER_PAD: f32 = 6.0;
-/// Widest the search field gets (the mock's 380 px).
-const SEARCH_MAX_W: f32 = 380.0;
+/// Widest the search field gets (mockup row 4: 400 px with eight menu roots).
+const SEARCH_MAX_W: f32 = 400.0;
 /// Height of the "Ctrl K" key cap.
 const KEY_CAP_H: f32 = 18.0;
+/// Side of the square search button that replaces the field on a narrow
+/// window: the theme toggle's height.
+const SEARCH_BUTTON_W: f32 = ChromeMetrics::DEFAULT.field;
+/// Gap between the search button and the theme toggle.
+const SEARCH_BUTTON_GAP: f32 = SP.s;
 
-/// Room the Signex AI and theme buttons take left of the window controls.
-pub(super) const RIGHT_CLUSTER_W: f32 = SIGNAL_W + CLUSTER_GAP + THEME_W + CLUSTER_PAD;
+/// Room the theme toggle takes left of the window controls.
+pub(super) const RIGHT_CLUSTER_W: f32 = THEME_W + CLUSTER_PAD;
+
+/// Where the title bar offers the command palette's search.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(in crate::app::view) enum SearchSlot {
+    /// The search field, its left edge at `x`, `w` wide.
+    Field { x: f32, w: f32 },
+    /// Too little room between the menu roots and the right cluster for the
+    /// field: a square search button at `x`, first in the right cluster.
+    Button { x: f32 },
+}
+
+impl SearchSlot {
+    /// `(x, width)` of what the palette card centres under.
+    pub(in crate::app::view) fn anchor(self) -> (f32, f32) {
+        match self {
+            Self::Field { x, w } => (x, w),
+            Self::Button { x } => (x, SEARCH_BUTTON_W),
+        }
+    }
+}
 
 static MOON: LazyLock<svg::Handle> = LazyLock::new(|| {
     svg::Handle::from_memory(
@@ -43,22 +66,29 @@ static SUN: LazyLock<svg::Handle> = LazyLock::new(|| {
     )
 });
 
-/// `(x, width)` of the Graphite search field: at most [`SEARCH_MAX_W`],
+/// Where the Graphite search goes. The field is at most [`SEARCH_MAX_W`],
 /// centred on the window when that clears the menu row, otherwise flush
-/// right of the menu. The field only shrinks when the room between the menu
-/// row and the right cluster plus window controls is really short.
+/// right of the menu; it only shrinks when the room between the menu row and
+/// the right cluster plus window controls is really short. Below
+/// [`CHROME_SEARCH_BAR_MIN_WIDTH`] of room it becomes the search button, so
+/// it never squeezes further or runs under the roots.
 pub(super) fn search_geometry(
     window_w: f32,
     leading_w: f32,
     trailing_w: f32,
     menu_w: f32,
-) -> (f32, f32) {
+) -> SearchSlot {
     let menu_end = leading_w + menu_w + CHROME_SEARCH_LEFT_GAP;
     let right_limit = window_w - (trailing_w + RIGHT_CLUSTER_W + CHROME_SEARCH_RIGHT_GAP);
-    let width = (right_limit - menu_end).clamp(CHROME_SEARCH_BAR_MIN_WIDTH, SEARCH_MAX_W);
-    let centred = (window_w - width) / 2.0;
-    let x = centred.min(right_limit - width).max(menu_end);
-    (x, width)
+    let room = right_limit - menu_end;
+    if room < CHROME_SEARCH_BAR_MIN_WIDTH {
+        let x = window_w - trailing_w - RIGHT_CLUSTER_W - SEARCH_BUTTON_GAP - SEARCH_BUTTON_W;
+        return SearchSlot::Button { x };
+    }
+    let w = room.min(SEARCH_MAX_W);
+    let centred = (window_w - w) / 2.0;
+    let x = centred.min(right_limit - w).max(menu_end);
+    SearchSlot::Field { x, w }
 }
 
 /// Whether a theme-bar colour is dark (picks the sun or moon glyph).
@@ -75,7 +105,7 @@ impl Signex {
     ) -> Element<'a, Message> {
         let theme_id = self.ui_state.effective_theme_id();
         let r = resolve(tokens);
-        let (ink, ink3, line) = (ti(tokens.text), r.ink3, ti(tokens.border));
+        let ink3 = r.ink3;
         let palette = buttons::Palette {
             theme_id,
             text: ink3,
@@ -94,8 +124,10 @@ impl Signex {
                 ..iced::Padding::ZERO
             })
         });
-        let (search_x, search_w) = self.chrome_search_bar_geometry();
-        let search = self.graphite_search_field(tokens, search_w);
+        let hint = self.palette_key_hint();
+        let slot = self.chrome_search_slot();
+        let search_btn = matches!(slot, SearchSlot::Button { .. })
+            .then(|| search_button(tokens, &self.ui_state.i18n, theme_id, &hint, ink3));
 
         let drag_zone = || -> Element<'static, Message> {
             mouse_area(
@@ -108,25 +140,26 @@ impl Signex {
             .boxed()
         };
         let dark = is_dark(tokens.toolbar_bg);
-        let cluster = container(
-            row![
-                signal_button(tokens, &self.ui_state.i18n, ink, line),
-                theme_toggle(
-                    tokens,
-                    &self.ui_state.i18n,
-                    theme_id.light_dark_counterpart(),
-                    dark,
-                    ink3,
-                ),
-            ]
-            .spacing(CLUSTER_GAP)
-            .align_y(Alignment::Center),
-        )
-        .padding(iced::Padding {
+        let toggle = theme_toggle(
+            tokens,
+            &self.ui_state.i18n,
+            theme_id.light_dark_counterpart(),
+            dark,
+            ink3,
+        );
+        let mut cluster_row = row![].align_y(Alignment::Center);
+        if let Some(search_btn) = search_btn {
+            cluster_row = cluster_row
+                .push(search_btn)
+                .push(Space::new().width(SEARCH_BUTTON_GAP).boxed());
+        }
+        let cluster = container(cluster_row.push(toggle)).padding(iced::Padding {
             right: CLUSTER_PAD,
             ..iced::Padding::ZERO
         });
 
+        // The roots sit in the row, so the search button can never overlap
+        // them; the field floats over the drag zones at its own x.
         let strip = row![leading_controls]
             .push(menu_padded.boxed())
             .push(drag_zone())
@@ -135,17 +168,18 @@ impl Signex {
             .push(trailing_controls)
             .width(Length::Fill)
             .align_y(Alignment::Center);
-        let centered_search = container(search)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .padding(iced::Padding {
-                left: search_x,
-                ..iced::Padding::ZERO
-            })
-            .align_y(iced::alignment::Vertical::Center);
-        let inner = iced::widget::Stack::new()
-            .push(strip.boxed())
-            .push(centered_search.boxed());
+        let mut inner = iced::widget::Stack::new().push(strip.boxed());
+        if let SearchSlot::Field { x, w } = slot {
+            let field = container(self.graphite_search_field(tokens, w, hint))
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .padding(iced::Padding {
+                    left: x,
+                    ..iced::Padding::ZERO
+                })
+                .align_y(iced::alignment::Vertical::Center);
+            inner = inner.push(field.boxed());
+        }
         container(inner)
             .width(Length::Fill)
             .height(crate::menu_bar::MENU_BAR_HEIGHT)
@@ -153,26 +187,43 @@ impl Signex {
             .boxed()
     }
 
-    /// The command-palette field: icon, input and the palette's key cap, on
-    /// the `field` fill with a radius-7 hairline.
+    /// The palette's key binding as the live keymap writes it, empty when
+    /// nothing binds it. The key cap and the search button's tooltip name it,
+    /// so they never promise a chord the keymap does not have.
+    fn palette_key_hint(&self) -> String {
+        self.ui_state.active_keymap.shortcut_label_preferring(
+            "open_command_palette",
+            "Ctrl+K",
+            &self.ui_state.i18n,
+        )
+    }
+
+    /// The command-palette field: icon, input and a key cap, on the `field`
+    /// fill with a radius-7 hairline. While the palette is open in the main
+    /// window the field is its query input: an accent focus border and an
+    /// Esc cap in place of the palette's binding `hint`.
     fn graphite_search_field<'a>(
         &'a self,
         tokens: &signex_types::theme::ThemeTokens,
         width: f32,
+        hint: String,
     ) -> Element<'a, Message> {
         let r = resolve(tokens);
         let (ink, ink4) = (ti(tokens.text), r.ink4);
         let icon = svg(crate::icons::icon_chrome_search(
             self.ui_state.effective_theme_id(),
         ))
-        .width(13)
-        .height(13)
+        // The glyph is as tall as title text (13 px at the default base).
+        .width(TS.title)
+        .height(TS.title)
         .style(move |_: &iced::Theme, _| svg::Style {
             color: Some(ink4),
             ..Default::default()
         });
-        let query: &'a str = if self.ui_state.command_palette.window.is_none() {
-            &self.ui_state.command_palette.query
+        let palette = &self.ui_state.command_palette;
+        let open_here = palette.open && palette.window.is_none();
+        let query: &'a str = if palette.window.is_none() {
+            &palette.query
         } else {
             ""
         };
@@ -193,17 +244,20 @@ impl Signex {
             value: ink,
             selection: Color { a: 0.4, ..ink },
         });
-        // The key cap names the real binding, so it never promises a chord
-        // the keymap does not have.
-        let hint = self.ui_state.active_keymap.shortcut_label_preferring(
-            "open_command_palette",
-            "Ctrl+K",
-            &self.ui_state.i18n,
-        );
         let mut content = row![icon, input].spacing(SP.l).align_y(Alignment::Center);
-        if !hint.is_empty() {
+        let cap_label = if open_here {
+            Some(signex_widgets::Label::from(t!(
+                self.ui_state.i18n,
+                shortcut_ids::PALETTE_KEY_ESC
+            )))
+        } else if hint.is_empty() {
+            None
+        } else {
             // raw: the key chord, already rendered for the locale by the keymap.
-            let cap = container(text(raw(hint)).size(TS.caption).font(
+            Some(raw(hint))
+        };
+        if let Some(label) = cap_label {
+            let cap = container(text(label).size(TS.caption).font(
                 crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT),
             ))
             .padding([0.0, SP.m])
@@ -222,61 +276,76 @@ impl Signex {
             .width(width)
             .height(ChromeMetrics::DEFAULT.field)
             .align_y(iced::alignment::Vertical::Center)
-            .style(styles::field(tokens, false))
+            .style(styles::field(tokens, open_here))
             .boxed()
     }
 }
 
-/// "Signex AI": copper dot and label; opens the Signex AI panel like View ▸ Signex AI.
-fn signal_button(
+/// The square search button a narrow window shows instead of the field:
+/// a hairline square at the theme toggle's height that opens the palette,
+/// as the field does, with a "Search (Ctrl+K)" tooltip from the live keymap.
+fn search_button(
     tokens: &signex_types::theme::ThemeTokens,
     i18n: &I18n,
+    theme_id: signex_types::theme::ThemeId,
+    hint: &str,
     ink: Color,
-    line: Color,
 ) -> Element<'static, Message> {
-    let r = resolve(tokens);
-    let (raised, hover, accent) = (r.raised, ti(tokens.hover), ti(tokens.accent));
-    let dot = container(Space::new())
-        .width(7)
-        .height(7)
-        .style(move |_: &iced::Theme| container::Style {
-            background: Some(Background::Color(accent)),
-            border: Border {
-                radius: Radii::GRAPHITE.pill.into(),
-                ..Border::default()
-            },
-            ..container::Style::default()
+    let hover = ti(tokens.hover);
+    let border = ti(tokens.border);
+    let label = if hint.is_empty() {
+        t!(i18n, ids::MENU_BAR_SEARCH_BUTTON)
+    } else {
+        t!(i18n, ids::MENU_BAR_SEARCH_BUTTON_KEY, "key" => hint)
+    };
+    // The same glyph size as the field's search icon.
+    let glyph = svg(crate::icons::icon_chrome_search(theme_id))
+        .width(TS.title)
+        .height(TS.title)
+        .style(move |_: &iced::Theme, _| svg::Style {
+            color: Some(ink),
+            ..Default::default()
         });
-    button(
-        row![
-            dot,
-            text(t!(i18n, ids::PANELS_KIND_SIGNEX_AI)).size(TS.dense)
-        ]
-        .spacing(SP.l)
-        .align_y(Alignment::Center),
+    let btn = button(
+        container(glyph)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .center_x(Length::Fill)
+            .center_y(Length::Fill),
     )
-    .width(SIGNAL_W)
-    .height(ChromeMetrics::DEFAULT.field)
-    .padding([0.0, 10.0])
-    .on_press(Message::Menu(MenuMessage::OpenSignexAiPanel))
+    .width(SEARCH_BUTTON_W)
+    .height(SEARCH_BUTTON_W)
+    .padding(0)
+    .on_press(Message::CommandPalette(CommandPaletteMsg::Open))
     .style(move |_: &iced::Theme, status| button::Style {
-        background: Some(Background::Color(
-            if matches!(status, button::Status::Hovered | button::Status::Pressed) {
-                hover
-            } else {
-                raised
-            },
-        )),
+        background: matches!(status, button::Status::Hovered | button::Status::Pressed)
+            .then_some(Background::Color(hover)),
         text_color: ink,
         border: Border {
             width: 1.0,
-            color: line,
+            color: border,
             radius: Radii::GRAPHITE.control.into(),
             ..Border::default()
         },
         ..button::Style::default()
-    })
-    .boxed()
+    });
+    chrome_tooltip(btn.boxed(), label, hover, border, ink)
+}
+
+/// A title-bar button with its tooltip below it.
+fn chrome_tooltip(
+    btn: Element<'static, Message>,
+    label: signex_i18n::Localized,
+    hover: Color,
+    border: Color,
+    ink: Color,
+) -> Element<'static, Message> {
+    let hint = container(text(label).size(TS.caption).color(ink))
+        .padding([3, 8])
+        .style(signex_widgets::active_bar_dropdown::tooltip_style(
+            hover, border,
+        ));
+    tooltip(btn, hint, tooltip::Position::Bottom).gap(4).boxed()
 }
 
 /// Light/dark toggle: sends the existing `ThemeChanged` with the Graphite
@@ -326,47 +395,91 @@ fn theme_toggle(
         },
         ..button::Style::default()
     });
-    let hint = container(text(label).size(TS.caption).color(ink))
-        .padding([3, 8])
-        .style(signex_widgets::active_bar_dropdown::tooltip_style(
-            hover, border,
-        ));
-    tooltip(btn, hint, tooltip::Position::Bottom).gap(4).boxed()
+    chrome_tooltip(btn.boxed(), label, hover, border, ink)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn the_field_is_at_most_380_and_centred_on_a_wide_window() {
-        let (x, w) = search_geometry(1600.0, 0.0, 132.0, 440.0);
-        assert_eq!(w, 380.0);
-        assert_eq!(x, (1600.0 - 380.0) / 2.0);
+    /// `(x, w)` of a slot that must be the field.
+    fn field(slot: SearchSlot) -> (f32, f32) {
+        match slot {
+            SearchSlot::Field { x, w } => (x, w),
+            SearchSlot::Button { .. } => panic!("expected the field, got {slot:?}"),
+        }
+    }
+
+    /// The en-US in-window menu row (eight roots once Reports and Window
+    /// fold into Tools and View).
+    fn menu_row_w() -> f32 {
+        crate::menu_bar::approx_graphite_menu_bar_width(&signex_i18n::I18n::en_us())
     }
 
     #[test]
-    fn ten_menu_roots_do_not_shrink_the_field_on_a_laptop_window() {
-        let (x, w) = search_geometry(1440.0, 0.0, 138.0, 586.0);
-        assert_eq!(w, 380.0);
-        assert!(x >= 586.0);
+    fn the_field_is_at_most_400_and_centred_on_a_wide_window() {
+        let (x, w) = field(search_geometry(1600.0, 0.0, 132.0, 440.0));
+        assert_eq!(w, 400.0);
+        assert_eq!(x, (1600.0 - 400.0) / 2.0);
+    }
+
+    #[test]
+    fn eight_menu_roots_do_not_shrink_the_field_on_a_laptop_window() {
+        let menu_w = menu_row_w();
+        let (x, w) = field(search_geometry(1440.0, 0.0, 138.0, menu_w));
+        assert_eq!(w, 400.0);
+        assert!(x >= menu_w);
         assert!(x + w <= 1440.0 - 138.0 - RIGHT_CLUSTER_W);
     }
 
     #[test]
     fn the_field_clears_the_right_cluster_on_a_narrow_window() {
-        let (x, w) = search_geometry(900.0, 0.0, 132.0, 440.0);
+        let (x, w) = field(search_geometry(900.0, 0.0, 132.0, 440.0));
         assert!(x + w <= 900.0 - 132.0 - RIGHT_CLUSTER_W);
         assert!(x >= 440.0);
     }
 
+    /// Mockup row 4, narrow window: below the field's minimum the title bar shows
+    /// the square search button first in the right cluster, left of the
+    /// theme toggle, and draws no field.
+    #[test]
+    fn a_window_too_narrow_for_the_field_shows_the_search_button() {
+        let trailing_w = 138.0;
+        let window_w = 700.0;
+        let slot = search_geometry(window_w, 0.0, trailing_w, menu_row_w());
+        let SearchSlot::Button { x } = slot else {
+            panic!("expected the search button, got {slot:?}");
+        };
+        let toggle_x = window_w - trailing_w - RIGHT_CLUSTER_W;
+        assert!(
+            (x + SEARCH_BUTTON_W + SEARCH_BUTTON_GAP - toggle_x).abs() < 0.01,
+            "the button does not sit just left of the theme toggle: x={x}"
+        );
+        assert_eq!(slot.anchor(), (x, SEARCH_BUTTON_W));
+    }
+
+    /// The field shows down to exactly its minimum width; one pixel less of
+    /// room and it becomes the button.
+    #[test]
+    fn the_field_collapses_to_the_button_just_below_its_minimum() {
+        // No controls: the right limit is the window less the cluster and gap.
+        let right_limit = 1000.0 - RIGHT_CLUSTER_W - CHROME_SEARCH_RIGHT_GAP;
+        let menu_w = right_limit - CHROME_SEARCH_LEFT_GAP - CHROME_SEARCH_BAR_MIN_WIDTH;
+        let (_, w) = field(search_geometry(1000.0, 0.0, 0.0, menu_w));
+        assert_eq!(w, CHROME_SEARCH_BAR_MIN_WIDTH);
+        assert!(matches!(
+            search_geometry(1000.0, 0.0, 0.0, menu_w + 1.0),
+            SearchSlot::Button { .. }
+        ));
+    }
+
     /// The field is centred on the window, shrinks monotonically as the
     /// window narrows, and never runs under the menu items or the right
-    /// cluster, for every window-control layout.
+    /// cluster, for every window-control layout; where it would have to, the
+    /// button stands in.
     #[test]
     fn search_bar_stays_centred_and_clamped() {
-        let in_window =
-            crate::menu_bar::approx_graphite_menu_bar_width(&signex_i18n::I18n::en_us());
+        let in_window = menu_row_w();
         // Windows-style: nothing leading, 138 px of controls trailing.
         search_bar_invariants(0.0, 138.0, in_window);
         // Native macOS lights: room leading, nothing trailing.
@@ -379,9 +492,18 @@ mod tests {
 
     fn search_bar_invariants(leading_w: f32, trailing_w: f32, menu_w: f32) {
         let menu_end = leading_w + menu_w + CHROME_SEARCH_LEFT_GAP;
-        for window_w in [1000.0_f32, 1280.0, 1440.0, 1920.0, 3840.0] {
-            let (x, w) = search_geometry(window_w, leading_w, trailing_w, menu_w);
+        for window_w in [700.0_f32, 1000.0, 1280.0, 1440.0, 1920.0, 3840.0] {
             let right_limit = window_w - (trailing_w + RIGHT_CLUSTER_W + CHROME_SEARCH_RIGHT_GAP);
+            let (x, w) = match search_geometry(window_w, leading_w, trailing_w, menu_w) {
+                SearchSlot::Field { x, w } => (x, w),
+                SearchSlot::Button { .. } => {
+                    assert!(
+                        right_limit - menu_end < CHROME_SEARCH_BAR_MIN_WIDTH,
+                        "the button replaced a field that had room at {window_w}"
+                    );
+                    continue;
+                }
+            };
             assert!(
                 (CHROME_SEARCH_BAR_MIN_WIDTH..=SEARCH_MAX_W).contains(&w),
                 "bar width {w} out of range at {window_w}"
@@ -404,10 +526,16 @@ mod tests {
                 );
             }
         }
-        // Narrowing the window never widens the bar.
-        let (_, wide) = search_geometry(1920.0, leading_w, trailing_w, menu_w);
-        let (_, narrow) = search_geometry(1100.0, leading_w, trailing_w, menu_w);
-        assert!(narrow <= wide, "bar grew as the window shrank");
+        // Narrowing the window never widens the bar (the button is narrower
+        // than any field).
+        let width = |window_w| match search_geometry(window_w, leading_w, trailing_w, menu_w) {
+            SearchSlot::Field { w, .. } => w,
+            SearchSlot::Button { .. } => 0.0,
+        };
+        assert!(
+            width(1100.0) <= width(1920.0),
+            "bar grew as the window shrank"
+        );
     }
 
     #[test]

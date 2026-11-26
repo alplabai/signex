@@ -27,9 +27,16 @@ use crate::app::command::{CommandArgs, CommandContext, InvocationContext, bridge
 use crate::keymap::{AppCommandId, CatalogTextExt};
 use std::collections::BTreeSet;
 
-use super::menus::{CanvasSelection, CanvasShortcuts, canvas_menu_entries};
+use super::menus::{
+    CanvasSelection, CanvasShortcuts, MenuVariant, canvas_menu_entries, canvas_menu_with_variant,
+    unions_entries,
+};
+use super::project_tree::kind_inks::KindInks;
+use super::project_tree::library::library_add_new_entries;
+use super::project_tree::planned::planned_entries as project_planned_entries;
 use super::submenu::{
-    align_entries, arrange_entries, part_actions_entries, place_entries, sheet_actions_entries,
+    add_new_entries, align_entries, arrange_entries, in_variant_entries, part_actions_entries,
+    place_entries, planned_entries, sheet_actions_entries,
 };
 use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::DropdownEntry;
@@ -41,34 +48,34 @@ const TID: ThemeId = ThemeId::GraphiteDark;
 /// A row not listed here and carrying no command id fails the walk.
 const SURFACE_LOCAL: &[(&str, &str)] = &[
     // Place flyout power ports: the PlacePower* family becomes one
-    // `place_power_port(style)` command (audit §4), so no per-row ids.
-    (
-        "GND Power Port",
-        "power-port family, awaiting place_power_port(style)",
-    ),
-    (
-        "VCC Power Port",
-        "power-port family, awaiting place_power_port(style)",
-    ),
-    (
-        "+5 Power Port",
-        "power-port family, awaiting place_power_port(style)",
-    ),
-    (
-        "+12 Power Port",
-        "power-port family, awaiting place_power_port(style)",
-    ),
+    // `place_power_port(style)` command (audit §4), so no per-row ids. The
+    // rows show the short port name (Graphite mockup #62).
+    ("GND", "power-port family, awaiting place_power_port(style)"),
+    ("VCC", "power-port family, awaiting place_power_port(style)"),
+    ("+5", "power-port family, awaiting place_power_port(style)"),
+    ("+12", "power-port family, awaiting place_power_port(style)"),
+    // Place flyout: the greyed row standing for the planned tools (mockup row
+    // 62); Device Sheet Symbol is the one left.
+    ("1 planned tool…", "planned tools, no behaviour"),
     // Project tree: the Print row keeps its own wording (menu text per
     // surface is a later concern).
     ("Print...", "tree-addressed wording, no per-surface id"),
-    // Canvas: planned rows that run nothing yet (docs/MENU_BAR.md,
-    // "Sheet right-click menu").
+    // Canvas: planned rows that run nothing yet, in the "Planned (N)"
+    // flyout (docs/MENU_BAR.md, "Sheet right-click menu").
     ("References", "planned submenu stub"),
-    ("Unions", "planned submenu stub"),
     ("Snippets", "planned submenu stub"),
     ("Comment...", "planned, no behaviour"),
     ("Pin Mapping...", "planned, no behaviour"),
     ("Supplier Links...", "planned, no behaviour"),
+    // Canvas: the In variant flyout (mockup row 62). The per-variant edits
+    // are not built; the last two open the project's Variant Manager, which
+    // the palette cannot name.
+    ("Fitted", "planned, no behaviour"),
+    ("Not fitted", "planned, no behaviour"),
+    ("Alternate part…", "planned, no behaviour"),
+    ("Edit value for this variant…", "planned, no behaviour"),
+    ("Show in Variant Manager", "project-addressed"),
+    ("New variant…", "project-addressed"),
     // Project tree: every action is addressed by a tree key or path the
     // palette cannot supply.
     (
@@ -83,19 +90,29 @@ const SURFACE_LOCAL: &[(&str, &str)] = &[
     ("Close Project Documents", "tree-addressed"),
     ("Close Project", "tree-addressed"),
     ("Explore", "tree-addressed"),
-    ("Variants...", "planned, tree-addressed"),
+    ("Variant Manager", "tree-addressed"),
     ("Project Packager...", "planned, tree-addressed"),
     ("Project Releaser...", "planned, tree-addressed"),
     ("Share...", "planned, tree-addressed"),
     ("Enable Version Control...", "tree-addressed"),
-    ("Add New ▸ Component", "library-node action"),
-    ("Add New ▸ Symbol Library", "library-node action"),
-    ("Add New ▸ Footprint Library", "library-node action"),
+    // The library node's Add New flyout (mockup row 20).
+    ("Component", "library-node action"),
+    ("Symbol Library", "library-node or project action"),
+    ("Footprint Library", "library-node action"),
     ("Refresh All Pricing", "library-node action"),
     ("Remove from Project...", "tree-addressed"),
-    ("Remove from Project", "tree-addressed"),
     ("Open", "tree-addressed"),
+    // The project root's Add New to Project flyout.
+    ("Schematic", "tree-addressed"),
+    ("PCB", "tree-addressed"),
+    ("Component Library", "project action"),
+    ("PCB Library", "tree-addressed"),
+    ("Design Notebook", "tree-addressed"),
+    ("Export Job", "planned, tree-addressed"),
+    ("Constraint File", "planned, tree-addressed"),
+    ("VHDL File", "planned, tree-addressed"),
     ("Show Differences...", "planned, tree-addressed"),
+    ("Show History", "tree-addressed"),
     ("Collapse", "tree-addressed"),
     ("Expand", "tree-addressed"),
     ("Expand All", "tree-addressed"),
@@ -138,7 +155,6 @@ fn app_in_selection(profile: &str, bits: u8) -> (Signex, CanvasSelection, Option
     app.document_state.tabs.push(crate::app::TabInfo {
         title: "catalog-agreement".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: crate::app::TabKind::Schematic,
     });
@@ -293,7 +309,7 @@ fn check_live_row(
 #[test]
 fn command_rows_read_label_and_shortcut_from_the_catalog() {
     let mut walk = Walk::default();
-    for profile in ["altium", "classic"] {
+    for profile in ["signex_standard", "classic"] {
         let app = app_with_keymap(profile);
         let hint = |id: &str| app.keymap_shortcut_label(id);
         let sc = CanvasShortcuts::resolve(hint);
@@ -301,22 +317,52 @@ fn command_rows_read_label_and_shortcut_from_the_catalog() {
         for bits in 0..16u8 {
             let (app, selection, derived_key) = app_in_selection(profile, bits);
             let ctx = app.command_context(None);
-            for project_key in [derived_key, Some(vec!["proj".to_string()])] {
-                let rows = canvas_menu_entries(
-                    signex_i18n::I18n::en_us_ref(),
-                    TID,
-                    selection,
-                    None,
-                    project_key,
-                    &sc,
-                );
-                check_rows(
-                    &format!("canvas {profile} {selection:?}"),
-                    &rows,
-                    &app,
-                    &ctx,
-                    &mut walk,
-                );
+            // Mockup row 62: a project with a variant adds In variant ›.
+            let variant = MenuVariant {
+                project_id: app.document_state.projects[0].id,
+                name: "Lite".to_string(),
+            };
+            let rows = canvas_menu_with_variant(
+                signex_i18n::I18n::en_us_ref(),
+                TID,
+                selection,
+                None,
+                derived_key.clone(),
+                &sc,
+                Some(&variant),
+            );
+            check_rows(
+                &format!("canvas with a variant {profile} {selection:?}"),
+                &rows,
+                &app,
+                &ctx,
+                &mut walk,
+            );
+            // A right-click on an object adds Find Similar and Highlight
+            // Net; a net highlight adds Clear Filter (Graphite mockup #62).
+            for (hit_object, net_highlighted) in [(false, false), (true, true)] {
+                let selection = CanvasSelection {
+                    hit_object,
+                    net_highlighted,
+                    ..selection
+                };
+                for project_key in [derived_key.clone(), Some(vec!["proj".to_string()])] {
+                    let rows = canvas_menu_entries(
+                        signex_i18n::I18n::en_us_ref(),
+                        TID,
+                        selection,
+                        None,
+                        project_key,
+                        &sc,
+                    );
+                    check_rows(
+                        &format!("canvas {profile} {selection:?}"),
+                        &rows,
+                        &app,
+                        &ctx,
+                        &mut walk,
+                    );
+                }
             }
             // The Part Actions and Sheet Actions flyouts (#2419).
             let i18n = signex_i18n::I18n::en_us_ref();
@@ -327,6 +373,10 @@ fn command_rows_read_label_and_shortcut_from_the_catalog() {
                     "sheet actions",
                     sheet_actions_entries(i18n, TID, selection, &hint),
                 ),
+                // Mockup row 158: the Unions flyout.
+                ("unions", unions_entries(i18n, selection, &hint)),
+                // Mockup row 62: the In variant flyout.
+                ("in variant", in_variant_entries(i18n, &variant, Some("R1"))),
             ];
             for (name, rows) in flyouts {
                 check_rows(
@@ -367,6 +417,30 @@ fn command_rows_read_label_and_shortcut_from_the_catalog() {
             &flyout_ctx,
             &mut walk,
         );
+        check_rows(
+            "planned flyout",
+            &planned_entries(signex_i18n::I18n::en_us_ref(), TID),
+            &app,
+            &flyout_ctx,
+            &mut walk,
+        );
+        // The project tree's flyouts (mockup row 20).
+        let i18n = signex_i18n::I18n::en_us_ref();
+        let inks = KindInks::of(&app.document_state.panel_ctx.tokens);
+        let tree_flyouts = [
+            (
+                "add new to project flyout",
+                add_new_entries(i18n, TID, inks, vec!["proj".to_string()]),
+            ),
+            ("project planned flyout", project_planned_entries(i18n, TID)),
+            (
+                "library add new flyout",
+                library_add_new_entries(i18n, TID, inks),
+            ),
+        ];
+        for (name, rows) in tree_flyouts {
+            check_rows(name, &rows, &app, &app.command_context(None), &mut walk);
+        }
 
         for has_schematic in [false, true] {
             let mut app = app_with_keymap(profile);
@@ -379,6 +453,7 @@ fn command_rows_read_label_and_shortcut_from_the_catalog() {
                     x: 0.0,
                     y: 0.0,
                     key: Some(key),
+                    add_new_only: false,
                     window: None,
                 };
                 let rows = app

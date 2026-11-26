@@ -21,6 +21,10 @@
 </p>
 
 <p align="center">
+  English &middot; <a href="README.zh-CN.md">简体中文</a>
+</p>
+
+<p align="center">
   <a href="#features">Features</a> &middot;
   <a href="#screenshots">Screenshots</a> &middot;
   <a href="#download">Download</a> &middot;
@@ -157,13 +161,13 @@ prompts. Pro is planned separately; this repository holds Community only.
   ([docs/CLI.md](docs/CLI.md), [docs/AGENT_SOCKET.md](docs/AGENT_SOCKET.md));
   each agent edit is one labelled undo step, recorded in the project's journal
 - ERC and DRC on demand for scripts and agents (`check_erc`, `check_drc`)
-- Signex AI (assistant, agent and generator) ships in Pro; in this build its
-  panel is a placeholder
+- Signex AI (assistant, agent and generator) ships in Pro; this build has no
+  Signex AI panel
 
 **Interface**
 
 - Graphite Light (the default) and Graphite Dark, with Inter as the UI font,
-  switchable from Preferences ▸ Theme or the title-bar light/dark toggle
+  switchable from Preferences ▸ Appearance or the title-bar light/dark toggle
 - Dockable panels; undock any document tab into its own window, or tile
   documents in the main window
 - Project tab for sheets, variants, libraries, ERC and annotation settings, and

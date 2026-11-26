@@ -1,5 +1,6 @@
-//! The board commands of the DRC results panel (#2399) and the board Net
-//! Classes panel (#2400), run from their operands. Each names its board with
+//! The board commands of the DRC results panel (#2399), the DRC fixes
+//! (#2940) and the board Net Classes panel (#2400), run from their
+//! operands. Each names its board with
 //! `document` and runs the same app path as the panel's button, so a person,
 //! the CLI and an agent get one behaviour; each answers with what it did as
 //! JSON (`CommandOutcome::Answered`).
@@ -9,6 +10,7 @@ use std::path::PathBuf;
 use iced::Task;
 use serde_json::Value;
 use signex_engine::NetClassCommand;
+use signex_engine::pcb::drc_fix::{FixRule, FixScope};
 use signex_types::format::parse_pcb_layer;
 use signex_types::net_class::NetClassStyle;
 use signex_types::pcb_layer::PcbLayer;
@@ -72,14 +74,18 @@ fn show_drc_violation_answer(app: &mut Signex, args: &CommandArgs) -> Result<Val
     app.show_drc_violation(&board, &key)
 }
 
-/// `waive_drc_violation document=.. id=K [text=note]`: waive it with the
-/// note, as the panel's Waive does; one board undo step.
+/// `waive_drc_violation document=.. id=K [text=note] [author=name]`: waive
+/// it with the note and author, as the panel's Waive does; one board undo
+/// step.
 fn waive_drc_violation_answer(app: &mut Signex, args: &CommandArgs) -> Result<Value, String> {
     let what = "`waive_drc_violation`";
     let board = named_board(app, args, what)?;
     let key = required_text(args, "id", what)?.to_string();
-    let note = text(args, "text").unwrap_or_default().to_string();
-    app.set_drc_waiver(&board, &key, Some(note))
+    let waiver = crate::app::handlers::DrcWaiverText {
+        note: text(args, "text").unwrap_or_default().to_string(),
+        author: text(args, "author").unwrap_or_default().to_string(),
+    };
+    app.set_drc_waiver(&board, &key, Some(waiver))
 }
 
 /// `unwaive_drc_violation document=.. id=K`: take its waiver back.
@@ -88,6 +94,54 @@ fn unwaive_drc_violation_answer(app: &mut Signex, args: &CommandArgs) -> Result<
     let board = named_board(app, args, what)?;
     let key = required_text(args, "id", what)?.to_string();
     app.set_drc_waiver(&board, &key, None)
+}
+
+/// `dry_run=true`: answer with the planned change and change nothing.
+fn dry_run(args: &CommandArgs) -> bool {
+    matches!(args.operand("dry_run"), Some(OperandValue::Bool(true)))
+}
+
+/// A DRC fix run started off the UI thread, or why it could not start.
+fn fix_started(result: Result<Ran, String>) -> Ran {
+    result.unwrap_or_else(|why| {
+        (
+            crate::app::handlers::pcb_drc_fix::fix_refused(why),
+            Task::none(),
+        )
+    })
+}
+
+/// `fix_drc_violation document=.. violation=K [dry_run=]` (#2940): fix the
+/// finding with waiver key `K`, never by waiving it; one board undo step,
+/// answered once the fixes worked out off the UI thread land.
+pub(super) fn fix_drc_violation(app: &mut Signex, args: &CommandArgs) -> Ran {
+    fix_started((|| {
+        let what = "fix_drc_violation";
+        let board = named_board(app, args, &format!("`{what}`"))?;
+        let key = required_text(args, "violation", &format!("`{what}`"))?
+            .trim()
+            .to_string();
+        app.start_fix_drc(what, args, board, FixScope::One(key), dry_run(args))
+    })())
+}
+
+/// `fix_drc document=.. [rule=<kind>] [dry_run=]` (#2940): fix every
+/// finding of one rule kind, or of every kind with a fix (`all` or left out).
+pub(super) fn fix_drc(app: &mut Signex, args: &CommandArgs) -> Ran {
+    fix_started((|| {
+        let board = named_board(app, args, "`fix_drc`")?;
+        let rule = match filter_text(args, "rule") {
+            None => None,
+            Some(token) => Some(FixRule::parse(token).ok_or_else(|| {
+                let kinds: Vec<&str> = FixRule::ALL.iter().map(|r| r.token()).collect();
+                format!(
+                    "`{token}` is not a rule with a fix; one of {}",
+                    kinds.join(", ")
+                )
+            })?),
+        };
+        app.start_fix_drc("fix_drc", args, board, FixScope::Every(rule), dry_run(args))
+    })())
 }
 
 /// A filter operand: left out or `all` is every value.

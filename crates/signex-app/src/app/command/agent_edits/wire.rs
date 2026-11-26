@@ -19,8 +19,8 @@ pub struct EditSpec {
 }
 
 /// The text of an operand given as JSON: a string, a number, a boolean,
-/// `[x, y]` for a point, or a list of objects (the `edits` of `apply_edits`)
-/// as compact JSON.
+/// `[x, y]` for a point, a list of uuid strings for `ids`, or a list of
+/// objects (the `edits` of `apply_edits`) as compact JSON.
 pub fn operand_text(name: &str, value: &Value) -> Result<String, String> {
     if name.contains('=') {
         return Err(format!("operand name `{name}` must not contain `=`"));
@@ -35,6 +35,12 @@ pub fn operand_text(name: &str, value: &Value) -> Result<String, String> {
         Value::Array(items) if name == "documents" && items.iter().all(Value::is_string) => {
             Ok(value.to_string())
         }
+        // The targets `ids` (#2326) as a JSON list reads as its comma form.
+        Value::Array(items) if name == "ids" && items.iter().all(Value::is_string) => Ok(items
+            .iter()
+            .filter_map(Value::as_str)
+            .collect::<Vec<_>>()
+            .join(",")),
         Value::Array(point) => match point.as_slice() {
             [Value::Number(x), Value::Number(y)] => Ok(format!("{x},{y}")),
             _ => Err(format!("operand `{name}` must be [x, y] when it is a list")),
@@ -152,6 +158,25 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "update_pcb_from_schematic",
         "it edits the project's board, which no sheet's undo step covers; run it as its own command",
     ),
+    // #2470: numbering runs over the whole project or its board.
+    (
+        "annotate_schematic_quietly",
+        "it numbers the whole project, which no sheet's undo step covers; run it as its own command",
+    ),
+    (
+        "force_annotate_all_schematics",
+        "it numbers the whole project, which no sheet's undo step covers; run it as its own command",
+    ),
+    (
+        "back_annotate_schematics",
+        "it edits the project's sheets from its board, which no sheet's undo step covers; run it as its own command",
+    ),
+    ("reannotate_board", BOARD_EDIT),
+    // #2462: one board step and one schematic undo group of its own.
+    (
+        "apply_board_schematic_differences",
+        "it edits the project's board and sheets, which no sheet's undo step covers; run it as its own command",
+    ),
     (
         "rules_add",
         "it writes the project's rule set, which no sheet's undo step covers",
@@ -198,20 +223,43 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "unwaive_drc_violation",
         "it edits the board, which no sheet's undo step covers; run it as its own command",
     ),
+    // #2940: the DRC fixes are one step of their own on the board.
+    ("fix_drc_violation", BOARD_EDIT),
+    ("fix_drc", BOARD_EDIT),
     // #2401, #2407: board edits, each its own step on the board it names.
     ("set_layer_stack", BOARD_EDIT),
     ("lock_board_items", BOARD_EDIT),
     ("unlock_board_items", BOARD_EDIT),
     ("set_via_span", BOARD_EDIT),
     ("set_layer_sizes", BOARD_EDIT),
+    ("set_pad_shape", BOARD_EDIT),
     // #2408, #2409: the board Tools edits are board steps of their own.
     ("stitch_vias", BOARD_EDIT),
     ("add_teardrops", BOARD_EDIT),
     ("remove_teardrops", BOARD_EDIT),
     ("gloss_selected_routes", BOARD_EDIT),
+    // Layer colours are saved with the board (2026-11-18): a board step.
+    ("set_layer_color", BOARD_EDIT),
+    ("reset_layer_colors", BOARD_EDIT),
+    ("reset_board_origin", BOARD_EDIT),
     ("board_shape_from_selection", BOARD_EDIT),
     ("keepout_from_selection", BOARD_EDIT),
     ("arrange_in_box", BOARD_EDIT),
+    // #2506: it refills the board's unfilled pours as one board step.
+    ("repour_all", BOARD_EDIT),
+    // #2470: each route or via from operands is one step on the board.
+    ("place_board_via", BOARD_EDIT),
+    ("place_board_track", BOARD_EDIT),
+    ("place_board_route", BOARD_EDIT),
+    ("place_board_diff_pair", BOARD_EDIT),
+    ("place_board_quick_route", BOARD_EDIT),
+    ("place_board_multi_route", BOARD_EDIT),
+    // #2470: each area tool adds one zone as a board step of its own.
+    ("place_board_fill", BOARD_EDIT),
+    ("place_board_region", BOARD_EDIT),
+    ("place_board_polygon_pour", BOARD_EDIT),
+    ("place_board_keepout", BOARD_EDIT),
+    ("place_board_pour_cutout", BOARD_EDIT),
     (
         "rules_matrix_set",
         "it writes the project's rule set, which no sheet's undo step covers",
@@ -240,6 +288,38 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "set_board_graphic",
         "it edits a board, which no sheet's undo step covers; run it as its own command",
     ),
+    (
+        "set_footprint_text",
+        "it edits a board, which no sheet's undo step covers; run it as its own command",
+    ),
+    // #2936: a footprint placed by id; a list form (`ids`) is one board step.
+    (
+        "set_footprint_position",
+        "it edits a board, which no sheet's undo step covers; run it as its own command",
+    ),
+    (
+        "set_footprint_rotation",
+        "it edits a board, which no sheet's undo step covers; run it as its own command",
+    ),
+    (
+        "set_footprint_side",
+        "it edits a board, which no sheet's undo step covers; run it as its own command",
+    ),
+    // #2937: the swap edits the board and its linked sheets together; an
+    // assignment reads the footprint's pads from its library first.
+    (
+        "change_footprint",
+        "it edits the board and its sheet together; run it as its own command",
+    ),
+    (
+        "assign_footprint",
+        "it reads the footprint from its library first; run it as its own command",
+    ),
+    // #2457, #2941: each rooms command is one step on the board.
+    ("place_board_room", BOARD_EDIT),
+    ("create_rooms_from_sheets", BOARD_EDIT),
+    ("arrange_in_room", BOARD_EDIT),
+    ("auto_place", BOARD_EDIT),
     // #2389: length tuning lands on the named board's own undo stack.
     (
         "tune_net_length",
@@ -261,6 +341,8 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "set_board_panel",
         "it edits a board, which no sheet's undo step covers; run it as its own command",
     ),
+    // #2942: the layout plan is board data, a board step of its own.
+    ("layout_plan_set", BOARD_EDIT),
     (
         "swap_pins",
         "it edits the board and its sheet together; run it as its own command",
@@ -305,15 +387,81 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "project_set_version_control",
         "it writes the project's settings, which no sheet's undo step covers",
     ),
+    (
+        "project_add_requirement",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_set_requirement",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_remove_requirement",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_enable_requirement",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    // #2795: the insert lands in the notebook tab's text, not on a sheet.
+    (
+        "notebook_insert",
+        "it edits the project's Design Notebook, which no sheet's undo step covers; run it as its own command",
+    ),
+    // Mockup row 196: a reference fix edits the notebook tab's text too.
+    (
+        "notebook_fix_reference",
+        "it edits the project's Design Notebook, which no sheet's undo step covers; run it as its own command",
+    ),
+    (
+        "project_set_rail",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    // #2938: a BOM line's alternates are project settings.
+    (
+        "bom_add_alternate",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "bom_remove_alternate",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "bom_set_alternate_order",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
 ];
 
 const BOARD_EDIT: &str =
     "it edits a board, which no sheet's undo step covers; run it as its own command";
 
+/// Commands an agent runs as their own labelled step but an edit list does
+/// not carry yet: whether a list may carry them is not decided (#2326 slice
+/// 6.P2b, docs/DECISIONS.md).
+const NOT_YET_IN_LISTS: &[&str] = &[
+    "bring_drawings_forward",
+    "bring_drawings_to_front",
+    "send_drawings_backward",
+    "send_drawings_to_back",
+    "delete_selection",
+];
+
 /// Why `command` may not be one of the edits, or `None` when it may: it must
 /// be an undoable edit of a document that runs headless through an operand
 /// handler, and touch nothing outside that one sheet's engine.
 pub fn edit_refusal(command: &AppCommandId) -> Option<String> {
+    let id = command.as_str();
+    step_refusal(command).or_else(|| {
+        NOT_YET_IN_LISTS
+            .contains(&id)
+            .then(|| format!("`{id}` runs as its own command; an edit list does not carry it yet"))
+    })
+}
+
+/// Why an agent's run of `command` is not one labelled undo step, or `None`
+/// when it is: [`edit_refusal`] without the commands a list does not carry
+/// yet.
+pub(super) fn step_refusal(command: &AppCommandId) -> Option<String> {
     let id = command.as_str();
     let Some(meta) = metadata_for(command) else {
         return Some(format!("`{id}` is not a command"));
@@ -404,6 +552,17 @@ mod tests {
         assert!(parse_documents("{}").is_err());
     }
 
+    /// `ids` as a JSON list of uuids is the comma text the targets parser
+    /// reads; a list holding anything else keeps the point rule's reason.
+    #[test]
+    fn ids_as_a_list_of_strings_reads_as_comma_text() {
+        let list = json!(["a", "b"]);
+        assert_eq!(operand_text("ids", &list).unwrap(), "a,b");
+        assert_eq!(operand_text("ids", &json!([])).unwrap(), "");
+        assert!(operand_text("ids", &json!(["a", 1])).is_err());
+        assert!(operand_text("summary", &list).is_err());
+    }
+
     #[test]
     fn a_list_round_trips_with_every_operand_as_text() {
         let list = r##"[{"id":"place_junction","args":{"at":[5.08,0]}},{"id":"color_net","args":{"color":"#336699","at":"5,0"}},{"id":"clear_all_net_colors"}]"##;
@@ -459,6 +618,9 @@ mod tests {
     fn the_editable_commands_are_the_sheet_placements_and_net_colours() {
         let expected = [
             "autoplace_fields",
+            // #1297: its library row is read with the list, as for
+            // `place_component`.
+            "change_component",
             "clear_all_net_colors",
             "color_net",
             "draw_bus",
@@ -467,6 +629,7 @@ mod tests {
             "draw_rectangle",
             "draw_wire",
             "edit_blanket",
+            "edit_no_erc_rules",
             "place_blanket",
             "place_bus",
             "place_compile_mask",
@@ -479,21 +642,37 @@ mod tests {
             "place_net_label",
             "place_no_connect",
             "place_no_erc",
+            "place_parameter_set",
             "place_power_symbol",
             "place_sheet_entry",
             "place_sheet_symbol",
             "place_text",
             "place_text_string",
             "place_wire",
+            // The sheet's bare pin touches get their dots.
+            "repair_pin_junctions",
             "set_object_position",
             "set_object_rotation",
             "set_sheet_symbol_size",
+            "set_sheet_variable",
             "set_symbol_parameter",
+            // #1276: `to_sheet` is refused inside a list (it edits the child).
+            "sync_sheet_entries",
             "sync_sheet_pins",
         ];
         let mut found = editable_ids();
         found.sort_unstable();
         assert_eq!(found, expected);
+    }
+
+    /// #2326 slice 6.P2b: an agent's own run of the drawing order or Delete
+    /// is one labelled undo step, though a list does not carry them yet.
+    #[test]
+    fn the_drawing_order_and_delete_run_as_one_step_outside_a_list() {
+        for command in NOT_YET_IN_LISTS {
+            assert!(super::super::runs_as_one_step(&id(command)), "{command}");
+            assert!(edit_refusal(&id(command)).is_some(), "{command}");
+        }
     }
 
     #[test]
@@ -514,6 +693,20 @@ mod tests {
             ("toggle_properties_panel", "not runnable headless"),
             ("place_design_block", "takes a file path"),
             ("import_graphics", "takes a file path"),
+            ("create_sheet_symbol_from_sheet", "takes a file path"),
+            ("set_layer_color", "edits a board"),
+            ("reset_layer_colors", "edits a board"),
+            ("reset_board_origin", "edits a board"),
+            ("repour_all", "edits a board"),
+            ("place_board_route", "edits a board"),
+            ("place_board_via", "edits a board"),
+            ("set_board_origin", "not runnable headless"),
+            // #2326 slice 6.P2b: run by uuid on their own, not in a list yet.
+            ("bring_drawings_forward", "does not carry it yet"),
+            ("bring_drawings_to_front", "does not carry it yet"),
+            ("send_drawings_backward", "does not carry it yet"),
+            ("send_drawings_to_back", "does not carry it yet"),
+            ("delete_selection", "does not carry it yet"),
         ] {
             let reason = edit_refusal(&id(command)).unwrap_or_else(|| panic!("{command}"));
             assert!(reason.contains(needle), "{command}: {reason}");

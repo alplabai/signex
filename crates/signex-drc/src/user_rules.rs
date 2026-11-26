@@ -12,6 +12,8 @@ use signex_types::violation::Severity;
 
 use pcb_geom::ItemRef;
 
+pub use crate::limit_kind::{Limit, LimitKind};
+
 /// Which nets a rule is for, least specific first.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NetScope {
@@ -50,9 +52,10 @@ pub enum CopperObject {
 }
 
 impl CopperObject {
-    /// The kind of `item`; `None` for a footprint, a drawn area, a string or
-    /// a dimension, which the copper rules do not measure. A copper arc is
-    /// measured as a track and a free pad as a pad (#2373).
+    /// The kind of `item`; `None` for a footprint, a drawn area, a string,
+    /// a drawing or a dimension, which no object rule names. A copper arc is
+    /// measured as a track and a free pad as a pad (#2373); a string or
+    /// drawing on copper (#2883) by the rules that name no object kind.
     pub fn of(item: &ItemRef) -> Option<CopperObject> {
         match item {
             ItemRef::Track(_) | ItemRef::Arc(_) => Some(CopperObject::Track),
@@ -62,78 +65,10 @@ impl CopperObject {
             | ItemRef::Zone { .. }
             | ItemRef::Text(_)
             | ItemRef::Dimension(_)
-            | ItemRef::Graphic { .. } => None,
+            | ItemRef::Graphic { .. }
+            | ItemRef::FootprintText { .. }
+            | ItemRef::Room(_) => None,
         }
-    }
-}
-
-/// One limit a rule sets, in nm.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Limit {
-    MinClearance(i64),
-    MinTrackWidth(i64),
-    MaxTrackWidth(i64),
-    MinViaDiameter(i64),
-    MinViaDrill(i64),
-}
-
-/// Which limit, without its value.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum LimitKind {
-    MinClearance,
-    MinTrackWidth,
-    MaxTrackWidth,
-    MinViaDiameter,
-    MinViaDrill,
-}
-
-impl Limit {
-    pub(crate) fn split(self) -> (LimitKind, i64) {
-        match self {
-            Limit::MinClearance(nm) => (LimitKind::MinClearance, nm),
-            Limit::MinTrackWidth(nm) => (LimitKind::MinTrackWidth, nm),
-            Limit::MaxTrackWidth(nm) => (LimitKind::MaxTrackWidth, nm),
-            Limit::MinViaDiameter(nm) => (LimitKind::MinViaDiameter, nm),
-            Limit::MinViaDrill(nm) => (LimitKind::MinViaDrill, nm),
-        }
-    }
-}
-
-impl LimitKind {
-    pub const ALL: [LimitKind; 5] = [
-        LimitKind::MinClearance,
-        LimitKind::MinTrackWidth,
-        LimitKind::MaxTrackWidth,
-        LimitKind::MinViaDiameter,
-        LimitKind::MinViaDrill,
-    ];
-
-    /// For a maximum the smaller value is the stricter one.
-    pub fn stricter(self, a: i64, b: i64) -> bool {
-        match self {
-            LimitKind::MaxTrackWidth => a < b,
-            _ => a > b,
-        }
-    }
-
-    /// Stable name in answers (`min_clearance`, `max_track_width`, ...).
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            LimitKind::MinClearance => "min_clearance",
-            LimitKind::MinTrackWidth => "min_track_width",
-            LimitKind::MaxTrackWidth => "max_track_width",
-            LimitKind::MinViaDiameter => "min_via_diameter",
-            LimitKind::MinViaDrill => "min_via_drill",
-        }
-    }
-
-    pub fn from_str_id(id: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|k| k.as_str() == id)
-    }
-
-    /// Whether it is a maximum (the item must stay at or under it).
-    pub const fn is_maximum(self) -> bool {
-        matches!(self, LimitKind::MaxTrackWidth)
     }
 }
 
@@ -185,6 +120,16 @@ impl UserRule {
             + u8::from(self.pair.is_some())
             + u8::from(matches!(self.nets, NetScope::ClassPair(..)));
         (scope, narrowing)
+    }
+
+    /// Whether its `value` of `kind` takes over from a value `held` at
+    /// `(rank, value)` by another rule covering the same object: more
+    /// specific wins, the stricter between equals, the first written
+    /// between identical ones. The one precedence order: the check and
+    /// the rules grid (`signex-drc-dsl`, `table::grid`) both read it.
+    pub fn wins_over(&self, kind: LimitKind, value: i64, held: Option<((u8, u8), i64)>) -> bool {
+        let rank = self.rank();
+        held.is_none_or(|(r, v)| rank > r || (rank == r && kind.stricter(value, v)))
     }
 }
 
@@ -284,6 +229,24 @@ impl ScopedRule {
         };
         (a, b) == (x, y) || (a, b) == (y, x)
     }
+
+    /// Whether some object could fall under both rules: they share a net
+    /// and a layer, and any object pairs they name are the same.
+    pub(crate) fn overlaps(&self, other: &ScopedRule) -> bool {
+        let nets = match (&self.nets, &other.nets) {
+            (Some(a), Some(b)) => !a.is_disjoint(b),
+            _ => true,
+        };
+        let layers = match (self.rule.layers, other.rule.layers) {
+            (Some(a), Some(b)) => a & b != 0,
+            _ => true,
+        };
+        let pair = match (self.rule.pair, other.rule.pair) {
+            (Some(p), Some(_)) => other.pairs_with(p.map(Some)),
+            _ => true,
+        };
+        nets && layers && pair
+    }
 }
 
 /// The limit of `kind` the written rules set for an object of `net` on
@@ -325,9 +288,10 @@ pub(crate) fn pick_between(
             if k != kind {
                 continue;
             }
-            let better =
-                best.is_none_or(|(r, v, _)| rank > r || (rank == r && kind.stricter(value, v)));
-            if better {
+            if scoped
+                .rule
+                .wins_over(kind, value, best.map(|(r, v, _)| (r, v)))
+            {
                 best = Some((rank, value, scoped));
             }
         }

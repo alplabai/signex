@@ -89,7 +89,11 @@ impl Signex {
     /// * an open **symbol/footprint primitive editor** → an off-thread
     ///   container save;
     /// * the project's own **`.snxprj`** → an off-thread project save, which
-    ///   creates pending libraries first.
+    ///   creates pending libraries first;
+    /// * a project's **Design Notebook** (`.snxnbk`), held with or without
+    ///   its tab → an off-thread notebook save;
+    /// * a **design report** Generate made in the app → an off-thread write
+    ///   of it.
     ///
     /// A dirty `.snxsym`/`.snxfpt` draft or `.snxprj` has no engine, so a
     /// loop that only knew engines would fail on them (#104). `Ok(None)`
@@ -101,6 +105,12 @@ impl Signex {
     ) -> anyhow::Result<Option<Task<Message>>> {
         // Reported as this file's failure; the rest of the batch still saves.
         self.refuse_save_while_restoring(path)?;
+        if self.notebook_at_path(path).is_some() {
+            return self.begin_notebook_save_at(path).map(Some);
+        }
+        if self.generated_report_at(path).is_some() {
+            return self.begin_generated_report_save_at(path).map(Some);
+        }
         match self.document_state.document_key_for_path(path) {
             Some(DocumentKey::Schematic(_)) => self
                 .begin_schematic_save(path.to_path_buf(), None)
@@ -127,6 +137,11 @@ impl Signex {
         rows: &[crate::library::state::EditorAddress],
         next: SaveAllNext,
     ) -> Task<Message> {
+        // Save All and every save before a close: part fields that do not
+        // evaluate are named in Messages, as Ctrl+S names them (#1986).
+        for path in paths {
+            self.report_part_field_issues(path);
+        }
         let dirs = self.loose_parent_dirs(paths);
         let plan = SaveAllPlan {
             context: context.to_string(),
@@ -362,6 +377,9 @@ impl Signex {
                 // The UI stayed live during the writes, so anything edited
                 // meanwhile is dirty now; the quit gate prompts for it.
                 SaveAllNext::Quit => Task::batch([sweep, self.handle_app_quit_requested()]),
+                SaveAllNext::SwitchBranch(request) => {
+                    Task::batch([sweep, self.resume_branch_switch(*request)])
+                }
                 SaveAllNext::Nothing => {
                     crate::diagnostics::log_info(format!("Save All: saved {} item(s)", items));
                     sweep
@@ -385,7 +403,9 @@ impl Signex {
         let id = match next {
             SaveAllNext::CloseProject { .. } => signex_i18n::ids::NOTICE_SAVE_ALL_PROJECT_KEPT,
             SaveAllNext::CloseLibrary { .. } => signex_i18n::ids::NOTICE_SAVE_ALL_LIBRARY_KEPT,
-            SaveAllNext::Nothing => signex_i18n::ids::NOTICE_SAVE_ALL_FAILED,
+            SaveAllNext::Nothing | SaveAllNext::SwitchBranch(_) => {
+                signex_i18n::ids::NOTICE_SAVE_ALL_FAILED
+            }
             SaveAllNext::Quit => signex_i18n::ids::NOTICE_SAVE_ALL_QUIT_HELD,
         };
         let message = signex_i18n::Translatable::new(id)
@@ -513,6 +533,7 @@ impl Signex {
                 .collect();
             for pinned in unchanged {
                 self.document_state.mark_document_clean(&pinned.path);
+                self.release_saved_sheet(&pinned.path);
             }
         }
     }
@@ -542,9 +563,18 @@ impl Signex {
         if unchanged {
             return self.execute_close_project(project_id, &sheet_refs, kept_paths);
         }
-        crate::diagnostics::log_warning(
-            "Close Project: documents changed while Save All ran; review the list and confirm again",
-        );
+        // Save All left a read-only project's settings unsaved (#2904).
+        let read_only_left = self
+            .document_state
+            .project_by_id(project_id)
+            .is_some_and(|p| {
+                p.data.is_from_newer_minor() && self.document_state.is_document_dirty(&p.path)
+            });
+        crate::diagnostics::log_warning(if read_only_left {
+            "Close Project: the read-only project's settings are still unsaved; review the list and confirm again"
+        } else {
+            "Close Project: documents changed while Save All ran; review the list and confirm again"
+        });
         // The gate re-reads stale references, prompts for unsaved work, and
         // closes only when nothing of the project is left unsaved.
         self.handle_close_refs_resolved(project_id, Ok(Box::new(sheet_refs)))

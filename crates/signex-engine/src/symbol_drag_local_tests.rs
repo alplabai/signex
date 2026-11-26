@@ -34,7 +34,7 @@ struct Outcome {
     sheet: String,
     held: Vec<String>,
     result: Option<Result<CommandResult, String>>,
-    warnings: Vec<String>,
+    warnings: Vec<crate::EngineNotice>,
     unkept_pins: Vec<String>,
     /// Each guard check's answer, in order: whether the nets were as asked,
     /// and the tips blamed when not.
@@ -111,7 +111,7 @@ fn step_both_ways(
     floors.full_checks += counts.full_checks;
     floors.blamed += usize::from(counts.blames > 0 && counts.local_checks > 0);
     floors.nets_changed += usize::from(changed && counts.local_checks > 0);
-    floors.warned += usize::from(!a.warnings.is_empty());
+    floors.warned += usize::from(!a.unkept_pins.is_empty());
     floors.rewired += usize::from(rewired && counts.local_checks > 0);
     floors.rewinds += counts.rewinds;
     floors.fallbacks += counts.fallbacks;

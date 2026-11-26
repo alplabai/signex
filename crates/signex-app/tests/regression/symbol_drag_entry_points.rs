@@ -120,7 +120,6 @@ fn rig() -> (Signex, Vec<SelectedItem>) {
     app.document_state.tabs.push(TabInfo {
         title: "entry-points".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -303,7 +302,7 @@ fn the_move_selection_dialog_commits_what_the_ghost_shows() {
             "5".to_string(),
         )));
         let _ = app.update(Message::MoveSelection(MoveSelectionMsg::DyChanged(
-            "-10".to_string(),
+            "10".to_string(),
         )));
         let _ = app.update(Message::MoveSelection(MoveSelectionMsg::Apply));
         (5.0, -10.0)

@@ -3,7 +3,10 @@
 //! one rule per kind it limits for that scope; changing the set rewrites
 //! every rule it wrote, so the rule text stays the format Run DRC reads.
 //! The set itself (`NamedRuleSet`) lives beside the text in `rules.drc`.
-//! See `docs/DRC_RULES.md`, "Rule sets".
+//! The Rules grid shows them as constraint sets and reads which set wrote a
+//! rule ([`writer_of`]). See `docs/DRC_RULES.md`, "Constraint sets".
+
+use std::collections::BTreeMap;
 
 use signex_drc::NetScope;
 use signex_types::project::{NamedRuleSet, RuleSetUse};
@@ -13,7 +16,7 @@ use super::edit::{
 };
 use super::matrix::{free_name, slug};
 use super::render::severity_word;
-use super::{LimitField, RowLimit, RuleDraft, RuleKind, table};
+use super::{LimitField, RULE_ID_PREFIX, RowLimit, RuleDraft, RuleKind, table};
 
 /// Whether `name` can name a set: letters, digits and `_`, not starting
 /// with a digit (it starts the names of the rules the set writes).
@@ -22,7 +25,9 @@ pub fn is_set_name(name: &str) -> bool {
 }
 
 /// A set from `values` (`min_clearance=0.8mm, min_width=0.3mm`) and an
-/// optional severity (`error`, `warning`, `info`).
+/// optional severity (`error`, `warning`, `info`). Only limits of a kind
+/// that takes a net scope: a set is applied to net classes or nets, and a
+/// board-wide limit (silkscreen, mask, paste, courtyard) cannot be.
 pub fn new_set(values: &str, severity: Option<&str>) -> Result<NamedRuleSet, EditError> {
     let mut set = NamedRuleSet::default();
     for item in values
@@ -38,10 +43,21 @@ pub fn new_set(values: &str, severity: Option<&str>) -> Result<NamedRuleSet, Edi
             .split_once('=')
             .ok_or_else(|| bad(format!("'{item}' is not <limit>=<length>")))?;
         let (id, length) = (id.trim(), length.trim());
-        let field = LimitField::from_id(id).ok_or_else(|| {
-            let known: Vec<&str> = LimitField::ALL.iter().map(|f| f.id()).collect();
-            bad(format!("unknown limit '{id}' ({})", known.join(", ")))
-        })?;
+        let field = LimitField::from_id(id)
+            .filter(|f| f.kind().is_scoped())
+            .ok_or_else(|| {
+                let known: Vec<&str> = LimitField::ALL
+                    .iter()
+                    .filter(|f| f.kind().is_scoped())
+                    .map(|f| f.id())
+                    .collect();
+                let what = if LimitField::from_id(id).is_some() {
+                    "board-wide limit, not for a set"
+                } else {
+                    "unknown limit"
+                };
+                bad(format!("{what} '{id}' ({})", known.join(", ")))
+            })?;
         if !edit::is_length(length) {
             return Err(bad(format!(
                 "{}: a length with its unit, such as 0.2mm or 8mil",
@@ -77,7 +93,8 @@ pub fn redefined(set: &NamedRuleSet, with: NamedRuleSet) -> NamedRuleSet {
 }
 
 /// One draft per rule kind `set` limits, for `scope`; unnamed. A class
-/// pair takes only the clearance (`other_class` is for a clearance rule).
+/// pair takes only the clearance (`other_class` is for a clearance rule);
+/// a board-wide kind (silkscreen, mask, paste, courtyard) takes no scope.
 fn drafts(set: &NamedRuleSet, scope: &NetScope) -> Vec<RuleDraft> {
     let severity = set
         .severity
@@ -87,6 +104,7 @@ fn drafts(set: &NamedRuleSet, scope: &NetScope) -> Vec<RuleDraft> {
     let pair = matches!(scope, NetScope::ClassPair(..));
     RuleKind::ALL
         .into_iter()
+        .filter(|kind| kind.is_scoped())
         .filter(|kind| !pair || *kind == RuleKind::Clearance)
         .filter_map(|kind| {
             let limits: Vec<RowLimit> = kind
@@ -239,4 +257,29 @@ pub fn values_text(set: &NamedRuleSet) -> String {
         .map(|(id, value)| format!("{id}={value}"))
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+/// The set that wrote rule `rule` (`name` or `user::name`) and the use it
+/// wrote it for, from the project's sets by name; `None` for a rule no
+/// set wrote. The rules grid shows such a value as the set's.
+pub fn writer_of<'s>(
+    sets: &'s BTreeMap<String, NamedRuleSet>,
+    rule: &str,
+) -> Option<(&'s str, &'s RuleSetUse)> {
+    let rule = rule.strip_prefix(RULE_ID_PREFIX).unwrap_or(rule);
+    sets.iter().find_map(|(name, set)| {
+        set.uses
+            .iter()
+            .find(|u| u.rules.iter().any(|r| r == rule))
+            .map(|u| (name.as_str(), u))
+    })
+}
+
+/// The scopes `set` is applied to, in the order applied. A use whose scope
+/// no longer reads (edited by hand in `rules.drc`) is left out.
+pub fn applied_scopes(set: &NamedRuleSet) -> Vec<NetScope> {
+    set.uses
+        .iter()
+        .filter_map(|u| parse_scope(&u.scope).ok())
+        .collect()
 }

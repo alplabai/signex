@@ -41,14 +41,16 @@ pub(super) fn submit_rename(
     project_file: &Path,
     new_stem: &str,
 ) -> iced::Task<Message> {
-    app.ui_state.rename_dialog = Some(RenameDialogState {
+    app.ui_state.rename_dialog = Some(Box::new(RenameDialogState {
         project_id: None,
         target_path: project_file.to_path_buf(),
         tree_path: vec![0],
         buffer: new_stem.to_string(),
         error: None,
         is_project_rename: true,
-    });
+        placing_symbols: Vec::new(),
+        name_clash: None,
+    }));
     app.update(Message::Rename(RenameMsg::Submit))
 }
 
@@ -95,7 +97,6 @@ pub(super) fn fixture(root: &Path, stem: &str, git: bool) -> Fixture {
     app.document_state.tabs.push(TabInfo {
         title: "main".into(),
         path: sheet.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -161,6 +162,28 @@ fn the_folder_follows_only_a_name_matching_the_old_stem() {
         "ASCII-case-insensitive"
     );
     assert_eq!(folder_target(&root.join("work"), "Foo", "Bar"), None);
+}
+
+/// Mockup row 23: the Rename dialog's "the project folder is not renamed"
+/// note follows Submit's own checks: a folder named after the project moves,
+/// one with another name stays, and so does one holding another project.
+#[test]
+fn the_dialog_says_the_folder_stays_exactly_when_submit_keeps_it() {
+    let follows = app_workspace("/w/ProjectA", &["top.snxsch"]);
+    assert!(!follows.project_rename_keeps_folder(0, Path::new("/w/ProjectA/ProjectA.snxprj")));
+
+    let other_name = app_workspace("/w/a", &["top.snxsch"]);
+    assert!(other_name.project_rename_keeps_folder(0, Path::new("/w/a/ProjectA.snxprj")));
+
+    let mut nested = app_workspace("/w/ProjectA", &["top.snxsch"]);
+    let mut inner = nested.document_state.projects[0].clone();
+    inner.id = nested.document_state.mint_project_id();
+    inner.path = PathBuf::from("/w/ProjectA/sub/Inner.snxprj");
+    nested.document_state.projects.push(inner);
+    assert!(
+        nested.project_rename_keeps_folder(0, Path::new("/w/ProjectA/ProjectA.snxprj")),
+        "another project inside keeps the folder where it is"
+    );
 }
 
 #[test]
@@ -601,7 +624,6 @@ fn a_library_under_the_folder_refuses_the_folder_move_whatever_holds_it() {
             fx.app.document_state.tabs.push(TabInfo {
                 title: "p".into(),
                 path: p.clone(),
-                cached_document: None,
                 project_id: None,
                 kind: TabKind::LibraryBrowser(p),
             });
@@ -769,7 +791,7 @@ fn a_double_failure_updates_open_recent_and_queues_the_rename_commit() {
 }
 
 #[test]
-fn a_folder_rename_keeps_the_project_tab_titled_by_its_snxprj_file_name() {
+fn a_folder_rename_retitles_the_project_tab_by_the_new_project_name() {
     let root = tempfile::tempdir().expect("tempdir");
     let mut fx = fixture(root.path(), "Oscar", false);
     fx.app.open_project_tab(0);
@@ -786,5 +808,5 @@ fn a_folder_rename_keeps_the_project_tab_titled_by_its_snxprj_file_name() {
         .find(|t| t.kind.as_project().is_some())
         .expect("project tab");
     assert_eq!(tab.path, new_file);
-    assert_eq!(tab.title, "Motor.snxprj");
+    assert_eq!(tab.title, "Motor — Project");
 }

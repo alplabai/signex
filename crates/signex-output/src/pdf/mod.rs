@@ -12,6 +12,9 @@
 //! the document actually shows, plus a `/ToUnicode` CMap so the text stays
 //! selectable and searchable. Content streams address fonts through the
 //! aliases `/F1`-`/F4` and show text as 2-byte glyph ids.
+//!
+//! The options, their defaults, the watermark rule, the PDF layers and the
+//! bookmark rules are described in docs/PDF_EXPORT.md.
 
 use pdf_writer::{Finish, Name, Pdf, Rect, Ref};
 use signex_types::markup::{
@@ -31,19 +34,23 @@ mod embed;
 mod font;
 pub(crate) mod frame;
 pub(crate) mod layout;
+pub(crate) mod optional_content;
 mod page;
 mod page_setup;
 pub mod palette;
 mod subset;
 mod surface;
 pub(crate) mod text_document;
+mod watermark;
 
+pub use optional_content::{PdfLayer, PdfLayerVisibility};
 pub use page_setup::{
     MAX_PAGE_EDGE_MM, MAX_SCALE_PERCENT, MIN_CUSTOM_EDGE_MM, MIN_PRINTABLE_MM, MarginEdge,
     MarginUpdate, PageSetupError, PageSizeKind, PdfScaleMode, parse_custom_edge_mm, parse_mm,
     parse_percent,
 };
 pub use palette::SchematicPalette;
+pub use watermark::{Watermark, WatermarkPages, WatermarkPlacement, WatermarkText};
 
 use crate::svg::{
     SvgElement, SvgEvaluatorInputs, SvgPathCommand, SvgRenderContext, SvgTextAlign, SvgTextVAlign,
@@ -51,7 +58,7 @@ use crate::svg::{
 use colour::ColourMap;
 use embed::{FontUsage, REFS_PER_FONT, write_fonts};
 use font::{PdfFont, best_alias_for_text, normalize_pdf_text, text_advance_pt};
-use surface::{PdfSurface, write_stroke_alpha_states};
+use surface::{PdfSurface, write_alpha_states};
 
 /// 1 mm in PDF points (1 pt = 1/72 inch).
 const MM_TO_PT: f64 = 72.0 / 25.4;
@@ -78,8 +85,8 @@ pub struct PdfOptions {
     /// embedded image content do; the value seeds `PreviewOptions.dpi`
     /// when set up by the unified preview modal.
     pub dpi: f32,
-    /// Variant override for sheet rendering — `None` means use the
-    /// project's active variant (or Base when none is set). The
+    /// The printed variant's name for `${VARIANT}` and the sheet bookmark
+    /// tag. `None` is Base, which prints no variant name. The
     /// preview/export modal can pin this to a specific variant
     /// without mutating the project's active variant.
     pub variant: Option<String>,
@@ -104,23 +111,21 @@ pub struct PdfOptions {
     pub physical_sheet_number: bool,
     pub physical_document_number: bool,
     /// Render schematic chrome elements when set. False hides each
-    /// element from the exported PDF. Mirrors Altium's "Schematics
-    /// include" checklist verbatim.
+    /// element from the exported PDF: the "Schematics include" checklist.
     ///
     /// Live toggles (renderer honours the value):
     ///   `include_no_erc_markers` (No-ERC directives),
     ///   `include_no_connect_markers` (no-connect X marks),
-    ///   `include_notes`.
+    ///   `include_notes`,
+    ///   `include_parameter_sets` (Net Parameters directives, #2656),
+    ///   `include_blankets` (Net Blankets, #2656),
+    ///   `include_compile_masks` and `include_diff_pairs` (off by default).
     ///
-    /// Dormant toggles — Standard's schema has no equivalent concept,
-    /// so these are stored for Altium-import parity but produce no
-    /// observable difference today: `include_parameter_sets` (Altium
-    /// parameter-set objects), `include_probes` (Altium probe
-    /// markers), `include_blankets` (Altium blanket regions),
-    /// `include_collapsed_notes` (Altium collapsed-note placards).
-    /// Toggle them ahead of time so that round-tripping an Altium
-    /// project keeps the user's intent — when the corresponding
-    /// signex-types feature lands the gating is one-line.
+    /// Dormant toggles — the schematic model has no such object yet, so
+    /// these are stored but produce no observable difference today:
+    /// `include_probes` (probe markers), `include_collapsed_notes`
+    /// (collapsed-note placards). They keep the user's choice until the
+    /// object lands; the gating is then one line.
     pub include_no_erc_markers: bool,
     /// Draws the no-connect X marks. Separate from the No-ERC
     /// directive toggle above: they are different schematic objects.
@@ -128,6 +133,11 @@ pub struct PdfOptions {
     pub include_parameter_sets: bool,
     pub include_probes: bool,
     pub include_blankets: bool,
+    /// Compile Masks, as a dotted outline. Off by default.
+    pub include_compile_masks: bool,
+    /// Differential Pair directives, as two short strokes and their flag.
+    /// Off by default.
+    pub include_diff_pairs: bool,
     pub include_notes: bool,
     pub include_collapsed_notes: bool,
     /// Bookmark target zoom level for component / net jumps inside the
@@ -140,11 +150,22 @@ pub struct PdfOptions {
     pub bookmark_pins: bool,
     pub bookmark_net_labels: bool,
     pub bookmark_ports: bool,
-    /// Add component-parameter rows to bookmarks for components.
-    pub include_component_parameters: bool,
-    /// Emit a top-level "Components & Nets" pair of bookmarks instead
-    /// of nesting them under the sheet they appear on.
+    /// Pull the Components and Nets groups out from under each sheet to
+    /// the top level. With `PartBookmarkOrder::Alphabetical` it governs
+    /// the Nets group only (docs/PDF_EXPORT.md, "Bookmarks").
     pub global_bookmarks: bool,
+    /// One bookmark per exported sheet. Off, the Components and Nets
+    /// groups sit at the top level.
+    pub bookmark_sheets: bool,
+    /// One bookmark per part, in a Components group.
+    pub bookmark_parts: bool,
+    /// How the part bookmarks are grouped and ordered.
+    pub part_bookmark_order: PartBookmarkOrder,
+    /// A text watermark over the chosen pages. `None` draws none.
+    pub watermark: Option<Watermark>,
+    /// Write PDF layers (optional content groups). `None` writes a flat
+    /// PDF.
+    pub layers: Option<PdfLayerVisibility>,
     /// Schematic-element colour palette. The unified Print Preview
     /// passes the active theme's `CanvasColors` here so PDF wires /
     /// symbols / labels match the on-screen schematic. Default is
@@ -160,6 +181,21 @@ pub struct PdfOptions {
     /// The project's resolved defaults for unset widths and sizes (#2026),
     /// the same value the canvas draws with. Built-in by default.
     pub schematic_defaults: signex_types::schematic::SchematicDefaults,
+    /// Draw a part that is not fitted in `variant` (or marked DNP) greyed
+    /// and crossed out, as the canvas does (#1294). The user's "Cross out
+    /// not-fitted parts" preference; on by default.
+    pub draw_not_fitted: bool,
+}
+
+/// How the part bookmarks are grouped.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PartBookmarkOrder {
+    /// Under the sheet each part is on, in drawing order.
+    #[default]
+    BySheet,
+    /// One top-level Components group in natural designator order
+    /// (R2 before R10).
+    Alphabetical,
 }
 
 #[derive(Debug, Clone)]
@@ -251,6 +287,8 @@ impl Default for PdfOptions {
             include_parameter_sets: true,
             include_probes: true,
             include_blankets: true,
+            include_compile_masks: false,
+            include_diff_pairs: false,
             include_notes: true,
             include_collapsed_notes: false,
             bookmark_zoom: 0.5,
@@ -258,11 +296,16 @@ impl Default for PdfOptions {
             bookmark_pins: true,
             bookmark_net_labels: true,
             bookmark_ports: true,
-            include_component_parameters: true,
             global_bookmarks: false,
+            bookmark_sheets: true,
+            bookmark_parts: true,
+            part_bookmark_order: PartBookmarkOrder::BySheet,
+            watermark: None,
+            layers: None,
             palette: SchematicPalette::classic(),
             net_class_styles: std::collections::HashMap::new(),
             schematic_defaults: Default::default(),
+            draw_not_fitted: true,
         }
     }
 }
@@ -306,7 +349,8 @@ impl Exporter for PdfExporter {
 
         let sheet_indices =
             resolve_page_range(&opts.page_range, &ctx.sheets, ctx.current_sheet_index())?;
-        let expr_tables = build_expression_tables(&ctx.sheets, ctx.netlist.as_ref());
+        let expr_tables = build_expression_tables(&ctx.sheets, ctx.netlist.as_ref())
+            .with_placed_fits(ctx, opts.variant.as_deref(), opts.draw_not_fitted);
         let (page_w_mm, page_h_mm) = opts.page_size.dimensions_mm(opts.orientation);
         let page_w_pt = (page_w_mm * MM_TO_PT) as f32;
         let page_h_pt = (page_h_mm * MM_TO_PT) as f32;
@@ -350,12 +394,25 @@ impl Exporter for PdfExporter {
         let outline_root_id = Ref::new(font_base + font_ref_count);
         let bookmark_id_base = outline_root_id.get() + 1;
 
+        // One `/OCG` object per written PDF layer, after the outline items.
+        let layer_groups = match &opts.layers {
+            Some(_) => optional_content::assign_refs(
+                &optional_content::written_layers(opts.watermark.is_some()),
+                bookmark_id_base + pending_bookmarks.len() as i32,
+            ),
+            None => Vec::new(),
+        };
+
         let mut catalog = pdf.catalog(catalog_id);
         catalog.pages(page_tree_id);
         if bookmarks_active {
             catalog.outlines(outline_root_id);
         }
+        if let Some(visibility) = &opts.layers {
+            optional_content::write_oc_properties(&mut catalog, &layer_groups, visibility);
+        }
         catalog.finish();
+        optional_content::write_groups(&mut pdf, &layer_groups);
 
         pdf.pages(page_tree_id)
             .kids(page_refs.iter().copied())
@@ -366,9 +423,11 @@ impl Exporter for PdfExporter {
         let mut fonts = FontUsage::new();
         let contents = sheet_indices
             .iter()
-            .map(|&sheet_idx| {
+            .enumerate()
+            .map(|(page_idx, &sheet_idx)| {
                 build_page_content(
                     &ctx.sheets[sheet_idx],
+                    page_idx,
                     opts,
                     ctx,
                     page_h_pt,
@@ -397,7 +456,8 @@ impl Exporter for PdfExporter {
                 font_dict.pair(Name(f.font.alias().as_bytes()), f.type0);
             }
             font_dict.finish();
-            write_stroke_alpha_states(&mut resources, &content.stroke_alphas);
+            write_alpha_states(&mut resources, content);
+            optional_content::write_page_properties(&mut resources, &layer_groups);
             resources.finish();
 
             page.finish();
@@ -429,6 +489,8 @@ impl Exporter for PdfExporter {
 mod content;
 #[cfg(test)]
 mod glyph_height_tests;
+#[cfg(test)]
+mod optional_content_tests;
 pub(crate) mod page_range;
 #[cfg(test)]
 mod page_range_tests;
@@ -436,6 +498,8 @@ mod page_range_tests;
 pub(crate) mod tests;
 #[cfg(test)]
 mod unicode_tests;
+#[cfg(test)]
+mod watermark_tests;
 
 use content::build_page_content;
 pub use page_range::check_page_range;

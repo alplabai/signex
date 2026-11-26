@@ -11,9 +11,9 @@ use std::path::{Path, PathBuf};
 
 use signex_app::app::{
     CaseProbeOutcome, ContextMenuMsg, FileMsg, Message, OverlayMsg, Signex, TabContextAction,
-    TabDocument,
 };
 use signex_app::diagnostics;
+use signex_app::test_adapter::BoardEngines;
 use signex_engine::pcb::BoardEngine;
 use signex_types::pcb::PcbBoard;
 use tempfile::TempDir;
@@ -36,6 +36,7 @@ fn board(thickness: f64) -> PcbBoard {
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         unknown: Default::default(),
         uuid: uuid::Uuid::nil(),
@@ -89,13 +90,8 @@ fn edit(app: &mut Signex, path: &Path, paper: &str) {
 }
 
 fn edit_board(app: &mut Signex, path: &Path, thickness: f64) {
-    let tab = app
-        .document_state
-        .tabs
-        .iter_mut()
-        .find(|tab| tab.path == path)
-        .expect("pcb tab");
-    tab.cached_document = Some(TabDocument::Pcb(BoardEngine::new(board(thickness), 1)));
+    *app.document_state.board_engine_mut(path).expect("pcb tab") =
+        BoardEngine::new(board(thickness), 1);
     app.document_state.mark_document_dirty(path);
 }
 
@@ -132,6 +128,7 @@ fn add_git_project(app: &mut Signex, dir: &Path) {
                 sheets: Vec::new(),
                 variant_definitions: Vec::new(),
                 active_variant: None,
+                variant_settings: Default::default(),
                 libraries: Vec::new(),
                 enable_git: true,
                 net_classes: Vec::new(),
@@ -140,6 +137,11 @@ fn add_git_project(app: &mut Signex, dir: &Path) {
                 schematic_defaults: Default::default(),
                 project_defaults: Default::default(),
                 agent_journal: Default::default(),
+                schematic_design: Default::default(),
+                fab_outputs: None,
+                router_tool_diameter: None,
+                bom_alternates: Vec::new(),
+                requirements: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),
             },
@@ -218,11 +220,8 @@ fn reloading_a_changed_board_loads_the_file_and_drops_the_edits() {
 
     let shown = app
         .document_state
-        .tabs
-        .iter()
-        .find(|tab| tab.path == path)
-        .and_then(|tab| tab.cached_document.as_ref())
-        .and_then(TabDocument::as_pcb)
+        .first_tab_board_engine(&path)
+        .map(|engine| engine.board())
         .map(|b| b.thickness);
     assert_eq!(shown, Some(3.2));
     assert!(!app.document_state.is_document_dirty(&path));

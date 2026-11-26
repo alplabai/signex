@@ -21,15 +21,25 @@ use signex_types::schematic::{
 use signex_types::theme::{CanvasColors, Color as ThemeColor};
 use std::collections::{HashMap, HashSet};
 
+mod bezier;
+mod cache_copy;
+mod dimension;
 mod directives;
 mod drawings;
+pub(crate) use drawings::annotation_aabb;
+pub(crate) mod drawn_value;
+mod harness;
 pub mod hit_index;
 pub mod hit_test;
 mod invalidation;
+pub(crate) use cache_copy::copy_invalidated;
+mod sch_table;
 pub use invalidation::RenderInvalidation;
 pub mod label;
 pub mod lock_indicator;
+pub mod notebook_badges;
 pub mod overlay;
+mod repeat_stack;
 mod scene_cache;
 pub mod selection;
 mod snapshot;
@@ -38,6 +48,7 @@ pub(crate) mod text_width;
 pub(crate) use symbol::{symbol_bounds, symbols_without_geometry};
 use text_width::{WidthSlot, WidthSources};
 pub mod text;
+pub mod unions;
 mod wire_style;
 
 pub use scene_cache::ContentSceneCache;
@@ -177,67 +188,6 @@ impl SchematicRenderCache {
     }
 }
 
-/// Copy the sheet collections selected by `invalidation` from `src` into `dst`.
-/// `unknown`, `version`, `generator` and `generator_version` are skipped: they are not drawn.
-fn copy_invalidated(
-    dst: &mut SchematicSheet,
-    src: &SchematicSheet,
-    invalidation: RenderInvalidation,
-) {
-    use RenderInvalidation as R;
-    if invalidation.intersects(R::SYMBOLS) {
-        dst.symbols.clone_from(&src.symbols);
-    }
-    if invalidation.intersects(R::WIRES) {
-        dst.wires.clone_from(&src.wires);
-    }
-    if invalidation.intersects(R::LABELS) {
-        dst.labels.clone_from(&src.labels);
-    }
-    if invalidation.intersects(R::TEXT_NOTES) {
-        dst.text_notes.clone_from(&src.text_notes);
-    }
-    if invalidation.intersects(R::BUSES) {
-        dst.buses.clone_from(&src.buses);
-    }
-    if invalidation.intersects(R::BUS_ENTRIES) {
-        dst.bus_entries.clone_from(&src.bus_entries);
-    }
-    if invalidation.intersects(R::JUNCTIONS) {
-        dst.junctions.clone_from(&src.junctions);
-    }
-    if invalidation.intersects(R::NO_CONNECTS) {
-        dst.no_connects.clone_from(&src.no_connects);
-    }
-    if invalidation.intersects(R::NO_ERC_DIRECTIVES) {
-        dst.no_erc_directives.clone_from(&src.no_erc_directives);
-    }
-    if invalidation.intersects(R::DIRECTIVES) {
-        dst.directives.clone_from(&src.directives);
-    }
-    if invalidation.intersects(R::CHILD_SHEETS) {
-        dst.child_sheets.clone_from(&src.child_sheets);
-    }
-    if invalidation.intersects(R::DRAWINGS) {
-        dst.drawings.clone_from(&src.drawings);
-        // Placements are edited under the same patch (#1583).
-        dst.drawing_placements.clone_from(&src.drawing_placements);
-    }
-    if invalidation.intersects(R::LIB_SYMBOLS) {
-        dst.lib_symbols.clone_from(&src.lib_symbols);
-    }
-    if invalidation.intersects(R::NET_COLORS) {
-        dst.net_colors.clone_from(&src.net_colors);
-    }
-    if invalidation.intersects(R::PAPER) {
-        dst.paper_size.clone_from(&src.paper_size);
-        dst.title_block.clone_from(&src.title_block);
-        dst.root_sheet_page.clone_from(&src.root_sheet_page);
-        dst.frame = src.frame;
-        dst.page = src.page;
-    }
-}
-
 /// Draw a power-port placement ghost lowered by
 /// [`power_port_preview_snapshot`].
 pub fn draw_power_port_preview(
@@ -371,6 +321,11 @@ pub struct SceneOverrides<'a> {
     /// The project's widths and sizes for unset items (#2026); built-in by
     /// default.
     pub defaults: signex_types::schematic::SchematicDefaults,
+    /// The project's designator standard: a reference draws as
+    /// `signex_types::designator::display_reference` shows it (#1416).
+    pub designator_standard: Option<signex_types::designator::DesignatorStandard>,
+    /// Symbols drawn greyed and crossed out, not fitted (#1294).
+    pub not_fitted: Option<&'a HashSet<uuid::Uuid>>,
 }
 
 pub fn render_schematic(
@@ -614,12 +569,17 @@ fn collect_item_bounds_with(
             .as_ref()
             .filter(|p| !p.hidden && symbol.draws_reference())
         {
+            // Boxed on the text the canvas draws (#1200, #1416).
+            let drawn = signex_types::designator::display_reference(
+                widths.designator_standard,
+                designators.get(&symbol.uuid).unwrap_or(&symbol.reference),
+            );
             out.push(ItemBound {
                 item: SelectedItem::new(symbol.uuid, SelectedKind::SymbolRefField),
                 bbox: text_prop_aabb_with(
                     Some(WidthSources::of(snapshot)),
                     TextField::SymbolReference,
-                    designators.get(&symbol.uuid).unwrap_or(&symbol.reference),
+                    &drawn,
                     ref_text,
                     symbol,
                     document_family,
@@ -633,12 +593,16 @@ fn collect_item_bounds_with(
             .as_ref()
             .filter(|p| !p.hidden && !symbol.is_power)
         {
+            // Boxed on the drawn text too (#1986): `20kΩ`, not `= 2 * R1.Value`.
+            let special = widths.special_strings;
+            let standard = widths.designator_standard;
+            let drawn = drawn_value::drawn_value(&snapshot.symbols, symbol, special, standard);
             out.push(ItemBound {
                 item: SelectedItem::new(symbol.uuid, SelectedKind::SymbolValField),
                 bbox: text_prop_aabb_with(
                     Some(WidthSources::of(snapshot)),
                     TextField::SymbolValue,
-                    &symbol.value,
+                    &drawn,
                     val_text,
                     symbol,
                     document_family,
@@ -663,7 +627,8 @@ fn collect_item_bounds_with(
     for bus in &snapshot.buses {
         out.push(ItemBound {
             item: SelectedItem::new(bus.uuid, SelectedKind::Bus),
-            bbox: Aabb::new(bus.start.x, bus.start.y, bus.end.x, bus.end.y).expand(widths.bus_mm()),
+            bbox: Aabb::new(bus.start.x, bus.start.y, bus.end.x, bus.end.y)
+                .expand(widths.bus_mm(bus)),
             anchor: Point::new(
                 (bus.start.x + bus.end.x) * 0.5,
                 (bus.start.y + bus.end.y) * 0.5,
@@ -783,6 +748,7 @@ fn collect_item_bounds_with(
         });
     }
     directives::push_item_bounds(snapshot, &mut out);
+    harness::push_item_bounds(snapshot, &mut out);
     out
 }
 
@@ -1038,6 +1004,9 @@ fn drawing_aabb(drawing: &SchDrawing) -> Aabb {
                 Aabb::new(0.0, 0.0, 0.0, 0.0)
             }
         }
+        SchDrawing::Bezier(_) | SchDrawing::Dimension(_) | SchDrawing::Table(_) => {
+            annotation_aabb(drawing)
+        }
     }
 }
 
@@ -1150,6 +1119,10 @@ mod drawings_tests;
 mod font_geometry_tests;
 #[cfg(test)]
 mod multiline_note_tests;
+#[cfg(test)]
+mod not_fitted_tests;
+#[cfg(test)]
+mod reference_sign_tests;
 #[cfg(test)]
 mod sample_layout_tests;
 #[cfg(test)]

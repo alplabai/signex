@@ -3,9 +3,14 @@ use std::collections::{BTreeMap, HashMap};
 use serde::{Deserialize, Serialize};
 use signex_types::designator::compare_references;
 
+mod priced;
 mod pricing;
+pub use priced::{
+    BuildOrder, PricedAlternate, PricedBom, PricedLine, ServedBy, Shortfall, apply_alternates,
+    line_key, priced_bom,
+};
 pub use pricing::{
-    BomPrice, MPN_FIELDS, PriceBook, PriceQuote, apply_prices, library_row_key, mpn_key,
+    BomPrice, MPN_FIELDS, PriceBook, PriceQuote, apply_prices, library_row_key, mpn_key, price_of,
     price_totals, round_cents,
 };
 
@@ -59,12 +64,7 @@ impl BomComponent {
     /// else "fitted unless the part is marked DNP". It is only a quantity;
     /// which parts are listed is decided by [`BomEngineOptions::admits`].
     pub fn is_fitted(&self) -> bool {
-        self.in_bom
-            && self.on_board
-            && self
-                .variant_fitted
-                .or(self.base_fitted)
-                .unwrap_or(!self.dnp)
+        self.in_bom && self.on_board && fit_of(self.variant_fitted, self.base_fitted, self.dnp)
     }
 
     /// Whether a variant override or base field explicitly marks the part as
@@ -73,6 +73,13 @@ impl BomComponent {
     fn is_explicitly_not_fitted(&self) -> bool {
         self.variant_fitted.or(self.base_fitted) == Some(false)
     }
+}
+
+/// The fit rule before the BOM's in-BOM and on-board gates: the variant's
+/// override, else the base fields, else fitted unless the part is DNP. The
+/// one place it is decided, for the BOM and the variant matrix.
+pub fn fit_of(variant_fitted: Option<bool>, base_fitted: Option<bool>, dnp: bool) -> bool {
+    variant_fitted.or(base_fitted).unwrap_or(!dnp)
 }
 
 /// Metadata propagated to BOM outputs.
@@ -298,6 +305,10 @@ pub struct BomRow {
     /// The cached price, once [`apply_prices`] has run and found one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub price: Option<BomPrice>,
+    /// The line's alternate parts (library row keys, most preferred first),
+    /// once [`apply_alternates`] has run (#2938).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub alternates: Vec<String>,
 }
 
 /// Generated BOM table.
@@ -410,6 +421,7 @@ pub fn build_table(ctx: &BomContext, opts: &BomEngineOptions) -> BomTable {
                         custom,
                         library_row: shared_library_row(&grouped_components),
                         price: None,
+                        alternates: Vec::new(),
                     }
                 })
                 .collect::<Vec<_>>();
@@ -433,6 +445,7 @@ pub fn build_table(ctx: &BomContext, opts: &BomEngineOptions) -> BomTable {
                     custom: component.custom.clone(),
                     library_row: component.library_row.clone(),
                     price: None,
+                    alternates: Vec::new(),
                 })
                 .collect::<Vec<_>>();
 

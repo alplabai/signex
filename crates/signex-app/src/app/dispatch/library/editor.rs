@@ -122,7 +122,6 @@ impl Signex {
                 self.document_state.tabs.push(crate::app::TabInfo {
                     title,
                     path: path.clone(),
-                    cached_document: None,
                     project_id,
                     kind,
                 });
@@ -262,6 +261,7 @@ impl Signex {
         }
 
         // Symbol-only mutations.
+        let replay_probe = self.probe_symbol_edit(&path, &msg);
         if let Some(editor) = self.document_state.symbol_editors.get_mut(&path) {
             crate::library::editor::symbol::updates::apply_symbol_primitive_edit(editor, msg);
             // v0.20 — primitive editor edits (designator/size/etc, and
@@ -271,6 +271,7 @@ impl Signex {
             // `FootprintEditorPanelContext` and TAB-pause-driven UI
             // changes (Pad form vs no Pad form) silently miss.
             self.refresh_panel_ctx();
+            self.finish_editor_edit(&path, replay_probe);
             return Task::none();
         }
 
@@ -292,7 +293,28 @@ impl Signex {
         msg: FootprintEditorMsg,
     ) -> Task<Message> {
         // A board in sketch mode hosts the same sketch editor (#2234).
-        if self.board_sketch_takes(&path, &msg) {
+        let on_board = self.board_sketch_takes(&path, &msg);
+        // The Mirror card answers its own messages and Mirror's picks beside
+        // the editor, on either host (mockup row 191).
+        let editor = if on_board {
+            self.interaction_state
+                .board_sketch
+                .as_ref()
+                .map(|session| &*session.editor)
+        } else {
+            self.document_state.footprint_editors.get(&path)
+        };
+        let msg = match editor {
+            Some(editor) => {
+                use crate::library::editor::footprint::sketch_mode::mirror_card;
+                match mirror_card::route(editor, &mut self.library.mirror_cards, msg) {
+                    Some(msg) => msg,
+                    None => return Task::none(),
+                }
+            }
+            None => msg,
+        };
+        if on_board {
             return self.apply_board_sketch_edit(msg);
         }
         // v0.26-E — clipboard ops need both `pad_clipboard` and the
@@ -348,15 +370,24 @@ impl Signex {
         };
 
         // Footprint-only mutations.
+        let replay_probe = self.probe_footprint_edit(&path, &msg);
         if let Some(editor) = self.document_state.footprint_editors.get_mut(&path) {
+            let move_by_was_open = editor.state.move_by_modal.is_some();
             apply_footprint_primitive_edit(editor, msg);
+            // The Move Selection By dialog opens with its X field focused.
+            let focus = if !move_by_was_open && editor.state.move_by_modal.is_some() {
+                crate::library::editor::footprint::move_by_modal::focus_x_field()
+            } else {
+                Task::none()
+            };
             // A drag tick owes a solve, and a finished one may owe the
             // follow-up for the ticks that arrived while it ran (#1047).
             let solve = dispatch_pending(editor, &path).map(Message::Library);
             // A solve run in `update` owes the redundancy pass (#1685).
             let redundancy = dispatch_redundancy(editor, &path).map(Message::Library);
             self.refresh_panel_ctx();
-            return Task::batch([solve, redundancy]);
+            self.finish_editor_edit(&path, replay_probe);
+            return Task::batch([solve, redundancy, focus]);
         }
 
         // A solve that lands after its tab's editor is gone has nothing to
@@ -412,7 +443,7 @@ impl Signex {
     /// grid / etc.
     fn invalidate_primitive_canvas_cache(&mut self, path: &std::path::Path) {
         if let Some(editor) = self.document_state.symbol_editors.get_mut(path) {
-            editor.canvas_cache.clear();
+            editor.gui.canvas_cache.clear();
         }
         if let Some(editor) = self.document_state.footprint_editors.get_mut(path) {
             editor.canvas_cache.clear();

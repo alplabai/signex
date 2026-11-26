@@ -66,6 +66,7 @@ fn fixture_project_with_companions(stem: &str) -> (Signex, TempDir, PathBuf) {
         sheets: Vec::new(),
         variant_definitions: Vec::new(),
         active_variant: None,
+        variant_settings: Default::default(),
         libraries: Vec::new(),
         enable_git: false,
         net_classes: Vec::new(),
@@ -74,6 +75,11 @@ fn fixture_project_with_companions(stem: &str) -> (Signex, TempDir, PathBuf) {
         schematic_defaults: Default::default(),
         project_defaults: Default::default(),
         agent_journal: Default::default(),
+        schematic_design: Default::default(),
+        fab_outputs: None,
+        router_tool_diameter: None,
+        bom_alternates: Vec::new(),
+        requirements: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
     };
@@ -93,14 +99,16 @@ fn fixture_project_with_companions(stem: &str) -> (Signex, TempDir, PathBuf) {
 
 /// Open the rename modal targeting a project root.
 fn arm_project_rename(app: &mut Signex, target: &Path, new_stem: &str) {
-    app.ui_state.rename_dialog = Some(RenameDialogState {
+    app.ui_state.rename_dialog = Some(Box::new(RenameDialogState {
         project_id: None,
         target_path: target.to_path_buf(),
         tree_path: vec![0],
         buffer: new_stem.to_string(),
         error: None,
         is_project_rename: true,
-    });
+        placing_symbols: Vec::new(),
+        name_clash: None,
+    }));
 }
 
 /// Open the remove modal for a tree leaf.
@@ -117,6 +125,7 @@ fn arm_remove_dialog(app: &mut Signex, target: &Path) {
         is_outside_project: false,
         unsaved_prompt: false,
         is_directory_package: false,
+        choice: None,
     });
 }
 
@@ -838,6 +847,7 @@ fn loaded_project_data_round_trips_via_write_then_parse() {
         sheets: Vec::new(),
         variant_definitions: vec!["Production".into(), "Prototype".into()],
         active_variant: Some("Production".into()),
+        variant_settings: Default::default(),
         libraries: Vec::new(),
         enable_git: false,
         net_classes: Vec::new(),
@@ -846,6 +856,11 @@ fn loaded_project_data_round_trips_via_write_then_parse() {
         schematic_defaults: Default::default(),
         project_defaults: Default::default(),
         agent_journal: Default::default(),
+        schematic_design: Default::default(),
+        fab_outputs: None,
+        router_tool_diameter: None,
+        bom_alternates: Vec::new(),
+        requirements: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
     };
@@ -1450,15 +1465,12 @@ fn fixture_schematic_with_symbol_and_child_sheet()
     let (mut app, _initial_task) = Signex::new();
     app.document_state.engines.insert(path.clone(), engine);
     app.document_state.active_path = Some(path.clone());
-    // `finish_schematic_mutation` (the tail of every engine-command
-    // apply, including Delete inside Cut) round-trips through
-    // `with_active_schematic_session_mut`, which requires a `TabInfo`
-    // at `active_tab` whose path matches — without one it silently
-    // no-ops and the post-delete `selected.clear()` never runs.
+    // A `TabInfo` at `active_tab` whose path matches, so the fixture is a
+    // real open sheet for `finish_schematic_mutation` (the tail of every
+    // engine-command apply, including Delete inside Cut).
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "cut-gating".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });
@@ -1583,6 +1595,7 @@ fn insert_other_project(app: &mut Signex, index: usize) -> (TempDir, PathBuf) {
                 sheets: Vec::new(),
                 variant_definitions: Vec::new(),
                 active_variant: None,
+                variant_settings: Default::default(),
                 libraries: Vec::new(),
                 enable_git: false,
                 net_classes: Vec::new(),
@@ -1591,6 +1604,11 @@ fn insert_other_project(app: &mut Signex, index: usize) -> (TempDir, PathBuf) {
                 schematic_defaults: Default::default(),
                 project_defaults: Default::default(),
                 agent_journal: Default::default(),
+                schematic_design: Default::default(),
+                fab_outputs: None,
+                router_tool_diameter: None,
+                bom_alternates: Vec::new(),
+                requirements: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),
             },
@@ -1843,7 +1861,6 @@ fn project_git_commit_done_reloads_history_of_the_shown_file() {
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "Golf".to_string(),
         path: tab_path.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });

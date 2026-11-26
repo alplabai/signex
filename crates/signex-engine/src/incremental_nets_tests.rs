@@ -25,6 +25,7 @@ fn ghost_equals_commit(sheet: &SchematicSheet, moves: &Moves) {
         .execute(Command::MoveEach {
             moves: moves.to_vec(),
             keep_wires: true,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         })
         .expect("move");
     let shown = describe(sheet);
@@ -167,6 +168,7 @@ fn bus_entries_do_not_disturb_the_ghost() {
         uuid: Uuid::now_v7(),
         start: Point::new(20.0, 30.0),
         end: Point::new(20.0, 70.0),
+        ..Default::default()
     });
     sheet.bus_entries.push(BusEntry {
         uuid: Uuid::now_v7(),

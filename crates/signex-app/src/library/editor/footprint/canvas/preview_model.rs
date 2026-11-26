@@ -68,6 +68,8 @@ impl PreviewFootprint {
             .chain(&fp.fab_f)
             .chain(&fp.silk_b)
             .chain(&fp.fab_b)
+            .chain(&fp.generated.silk)
+            .chain(&fp.generated.assembly)
         {
             let mut pts = Vec::new();
             graphic_points(g, &mut pts);
@@ -90,9 +92,9 @@ impl PreviewFootprint {
             board_pads: board_pad_scene(&drawn.footprint),
             unheld_pads,
             pads: state.pads,
-            silk_f: fp.silk_f.clone(),
+            silk_f: [fp.silk_f.as_slice(), fp.generated.silk.as_slice()].concat(),
             silk_b: fp.silk_b.clone(),
-            fab_f: fp.fab_f.clone(),
+            fab_f: [fp.fab_f.as_slice(), fp.generated.assembly.as_slice()].concat(),
             fab_b: fp.fab_b.clone(),
         }
     }
@@ -151,7 +153,7 @@ impl PreviewFootprint {
             selected_pads_extra: &[],
             selected_silk_f: None,
             pad_labels: PadLabels::MinPadPx(MIN_LABELLED_PAD_PX),
-            palette: LayerPalette::Legacy,
+            palette: LayerPalette::Board,
         }
     }
 }

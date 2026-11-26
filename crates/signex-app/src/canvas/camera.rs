@@ -121,11 +121,16 @@ impl Camera {
     /// the world point under `screen_pos` fixed. Returns whether the camera
     /// changed; a non-finite or non-positive factor is ignored.
     pub fn zoom_by_factor(&mut self, screen_pos: Point, factor: f32) -> bool {
+        self.zoom_by_factor_up_to(screen_pos, factor, Self::MAX_SCALE)
+    }
+
+    /// [`Self::zoom_by_factor`] with `max_scale` as the upper limit.
+    pub fn zoom_by_factor_up_to(&mut self, screen_pos: Point, factor: f32, max_scale: f32) -> bool {
         if !factor.is_finite() || factor <= 0.0 || factor == 1.0 {
             return false;
         }
 
-        let new_scale = (self.scale * factor).clamp(Self::MIN_SCALE, Self::MAX_SCALE);
+        let new_scale = (self.scale * factor).clamp(Self::MIN_SCALE, max_scale);
         if (new_scale - self.scale).abs() < f32::EPSILON {
             return false;
         }

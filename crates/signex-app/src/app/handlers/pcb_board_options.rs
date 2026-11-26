@@ -4,7 +4,7 @@
 //! Axis Snap Range is an editor setting for the session (`UiState`).
 
 use signex_engine::pcb::BoardCommand;
-use signex_engine::pcb::placement::{grid_for, grid_step_mm};
+use signex_engine::pcb::placement::grid_step_mm;
 use signex_i18n::{ids, t};
 use signex_types::measure::parse_length_field_mm;
 use signex_types::pcb::Point;
@@ -28,7 +28,16 @@ impl Signex {
         let Some(path) = self.active_tab_path() else {
             return false;
         };
-        let Some(engine) = self.document_state.board_engine(&path) else {
+        self.edit_pcb_board_options_at(&path, edit)
+    }
+
+    /// [`Self::edit_pcb_board_options`] on the open board at `path`.
+    pub(crate) fn edit_pcb_board_options_at(
+        &mut self,
+        path: &std::path::Path,
+        edit: impl FnOnce(&mut BoardOptions) -> bool,
+    ) -> bool {
+        let Some(engine) = self.document_state.board_engine(path) else {
             return false;
         };
         let mut options = engine.board().options.clone();
@@ -44,7 +53,7 @@ impl Signex {
         let command = BoardCommand::SetBoardOptions {
             options: Box::new(options),
         };
-        match self.execute_board_commands(&path, vec![command], Some(step)) {
+        match self.execute_board_commands(path, vec![command], Some(step)) {
             Ok(_) => true,
             Err(error) => {
                 self.say_pcb_options_refused(error.to_string());
@@ -90,8 +99,9 @@ impl Signex {
             return;
         };
         match field {
+            BoardField::SnapDistance if mm > 0.0 => self.ui_state.pcb_snap.distance_mm = mm,
             BoardField::AxisRange if mm > 0.0 => self.ui_state.pcb_snap.axis_range_mm = mm,
-            BoardField::AxisRange => {
+            BoardField::SnapDistance | BoardField::AxisRange => {
                 let why = t!(self.ui_state.i18n, ids::PCB_BOARD_GRID_INVALID).into_string();
                 self.say_pcb_options_refused(why);
             }
@@ -160,7 +170,7 @@ impl Signex {
         });
     }
 
-    /// Place: the next click on the main window's board sets a guide.
+    /// Place: the next click on this window's board sets a guide.
     pub(crate) fn arm_pcb_guide_place(&mut self, kind: GuideKind) {
         let Some(path) = self.active_tab_path().filter(|_| self.has_active_pcb()) else {
             return;
@@ -179,15 +189,14 @@ impl Signex {
         let Some((path, kind)) = armed else {
             return false;
         };
-        let main_window = self.interaction_state.acting_window.is_none();
-        if !main_window || self.active_tab_path().as_deref() != Some(path.as_path()) {
+        if self.active_tab_path().as_deref() != Some(path.as_path()) {
             return false;
         }
         self.interaction_state.pcb_guide_place = None;
         let Some(board) = self.active_pcb() else {
             return true;
         };
-        let at = grid_for(board, GridUse::NonComponents).snap(at);
+        let at = self.board_grid_point(board, GridUse::NonComponents, at);
         self.add_pcb_guide_at(kind, at);
         true
     }

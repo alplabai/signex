@@ -78,6 +78,8 @@ fn footprint(uuid: Uuid, symbol: Uuid, reference: &str, x: f64) -> Footprint {
         layers: vec!["TopCopper".into()],
         net: None,
         roundrect_ratio: 0.0,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 0.0,
         layer_sizes: None,
         net_locked: false,
@@ -125,6 +127,7 @@ fn board() -> PcbBoard {
         graphics: Vec::new(),
         texts: Vec::new(),
         stackup: None,
+        rooms: Vec::new(),
         free: Default::default(),
         options: Default::default(),
         unknown: Default::default(),
@@ -205,6 +208,7 @@ fn add_project(app: &mut Signex, dir: &Path) {
             }],
             variant_definitions: Vec::new(),
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: Vec::new(),
             enable_git: false,
             net_classes: Vec::new(),
@@ -213,6 +217,11 @@ fn add_project(app: &mut Signex, dir: &Path) {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
+            fab_outputs: None,
+            router_tool_diameter: None,
+            bom_alternates: Vec::new(),
+            requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },
@@ -362,6 +371,53 @@ fn a_renamed_board_designator_shows_the_mismatch() {
     let shown = facts(&f.app);
     assert_eq!(shown.designator, Shared::Same("R5".to_string()));
     assert_eq!(shown.designator_mismatches, 1);
+}
+
+/// The mismatch note's Update PCB button (Graphite mockup row 94) runs Design ▸
+/// Update PCB Document: the Update PCB dialog opens for the project, and
+/// nothing changes on the board until it is executed.
+#[test]
+fn the_update_pcb_button_of_a_mismatch_opens_update_pcb() {
+    let mut f = fixture(true);
+    select(&mut f.app, 10.0);
+    for message in [
+        PcbFootprintTextMsg::Typed {
+            board: f.board.clone(),
+            footprint: FP_R1,
+            field: FootprintTextField::Designator,
+            text: "R5".into(),
+        },
+        PcbFootprintTextMsg::Submitted {
+            board: f.board.clone(),
+            footprint: FP_R1,
+            field: FootprintTextField::Designator,
+        },
+    ] {
+        send(
+            &mut f.app,
+            Message::Dock(DockMessage::Panel(PanelMsg::PcbFootprintText(message))),
+        );
+    }
+    assert_eq!(facts(&f.app).designator_mismatches, 1);
+    assert!(f.app.ui_state.update_pcb.is_none());
+    // Update PCB runs for the open project; the fixture adds the project
+    // without opening it, so make it the open one as opening it would.
+    f.app.document_state.active_project = Some(f.app.document_state.projects[0].id);
+    send(
+        &mut f.app,
+        Message::Dock(DockMessage::Panel(PanelMsg::PcbComponent(
+            PcbComponentMsg::UpdatePcbPressed,
+        ))),
+    );
+    assert!(
+        f.app.ui_state.update_pcb.is_some(),
+        "the Update PCB dialog is open"
+    );
+    assert_eq!(
+        facts(&f.app).designator,
+        Shared::Same("R5".to_string()),
+        "the board keeps its designator until Update PCB runs"
+    );
 }
 
 #[test]

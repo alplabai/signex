@@ -32,7 +32,7 @@ impl Signex {
             })
             .collect();
         for path in paths {
-            let Some((root, pages, fold)) = self
+            let Some((root, pages, fold, project_name)) = self
                 .document_state
                 .document_project(&path)
                 .and_then(Self::project_scope_of)
@@ -42,12 +42,13 @@ impl Signex {
             if Some(&root) == navigator_root.as_ref() || requests.iter().any(|r| r.root == root) {
                 continue;
             }
-            let fingerprint = self.navigator_fingerprint(&root, &pages, fold);
+            let fingerprint = self.navigator_fingerprint(&root, &pages, fold, &project_name);
             requests.push(NavigatorRequest {
                 fingerprint,
                 root,
                 pages,
                 fold,
+                project_name,
             });
         }
         self.document_state
@@ -104,6 +105,7 @@ impl Signex {
             .finish(root, generation, assembly);
         if applied {
             self.refresh_window_designators();
+            self.refresh_window_not_fitted();
         }
         // `update` starts any follow-up assembly once this message is handled.
         Task::none()
@@ -132,6 +134,7 @@ impl Signex {
             }
         }
         self.refresh_window_designators();
+        self.refresh_window_not_fitted();
     }
 
     /// The hierarchy that describes the project owning the sheet at `path`,

@@ -13,11 +13,11 @@ use signex_types::project::ProjectData;
 use uuid::Uuid;
 
 use super::{DocumentSaveJob, SaveOutcome};
-use crate::app::CaseFold;
+use crate::app::core::case_fold::CaseFold;
+use crate::app::core::new_library_defaults::NewLibraryDefaults;
 use crate::library::commands::{
     PendingLibrarySpec, create_pending_library, register_library_entry,
 };
-use crate::library::state::NewLibraryDefaults;
 
 /// Everything the worker needs, captured by `update` before it starts.
 pub struct ProjectWritePlan {

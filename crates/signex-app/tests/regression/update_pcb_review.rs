@@ -43,6 +43,72 @@ fn close_tab(f: &mut Fixture, path: &Path) {
     );
 }
 
+/// A Net Parameters directive on the R1 to R2 wire, asking for `Width_PWR`.
+fn fixture_with_a_schematic_rule() -> Fixture {
+    fixture_editing(
+        |_, sheet| {
+            sheet
+                .directives
+                .push(signex_types::schematic::SchDirective::NetParameters {
+                    uuid: Uuid::from_u128(0x2734_0001),
+                    position: Point::new(15.0, 0.0),
+                    net_class: Some("PWR".to_string()),
+                    diff_pair_class: None,
+                    rules: signex_types::schematic::NetRules {
+                        width_mm: Some(0.5),
+                        ..Default::default()
+                    },
+                    show_on_flag: false,
+                });
+        },
+        Some((board_of(Vec::new()), false)),
+        ProjectDefaults::default(),
+    )
+}
+
+/// #2734: rules this build cannot read refuse Execute before the board step.
+#[test]
+fn unreadable_rules_refuse_execute_with_nothing_applied() {
+    let mut f = fixture_with_a_schematic_rule();
+    let stored = serde_json::json!({ "schema": 999, "drc": { "dsl": "from a newer build" } });
+    f.app.document_state.projects[0].data.unknown =
+        serde_json::from_value(serde_json::json!({ "rules": stored })).expect("unknown keys");
+    assert!(f.app.document_state.projects[0].data.has_unreadable_rules());
+    send(&mut f.app, menu_row("update_pcb_from_schematic"));
+    assert!(add_row(&f, R1).on, "one part is ticked");
+    let revision = engine(&f).revision();
+
+    up(&mut f.app, UpdatePcbMsg::ExecuteRequested);
+
+    let Some(Err(why)) = state(&f).validation() else {
+        panic!("the dialog stays open with the reason");
+    };
+    assert!(why.contains("newer Signex"), "{why}");
+    assert_eq!(engine(&f).revision(), revision, "the board did not move");
+    assert_eq!(engine(&f).undo_len(), 0, "nothing in the board history");
+    assert!(references(&f).is_empty(), "no part was placed");
+    let data = &f.app.document_state.projects[0].data;
+    assert_eq!(
+        data.unknown.get("rules"),
+        Some(&stored),
+        "the rules are kept"
+    );
+}
+
+/// #2734: readable rules still land with the board step.
+#[test]
+fn execute_writes_the_schematic_rule_with_the_board_step() {
+    let mut f = fixture_with_a_schematic_rule();
+    send(&mut f.app, menu_row("update_pcb_from_schematic"));
+    up(&mut f.app, UpdatePcbMsg::ExecuteRequested);
+    assert!(f.app.ui_state.update_pcb.is_none(), "Execute closes it");
+    assert_eq!(references(&f), ["R1", "R2"]);
+    let rules = f.app.document_state.projects[0].data.rules.as_ref();
+    let drc = &rules.expect("the rules are stored").drc;
+    assert!(drc.dsl.as_deref().is_some_and(|t| t.contains("Width_PWR")));
+    assert!(drc.from_schematic.iter().any(|name| name == "Width_PWR"));
+}
+
 /// S3: a failure in dialog mode is in Messages, not only on the dialog.
 #[test]
 fn a_failed_read_in_the_dialog_reaches_messages() {
@@ -97,6 +163,7 @@ fn a_failed_disk_check_refuses_new_pcb_with_why() {
             path: f.board.clone(),
             exists: Err("s4-denied-2271".to_string()),
             rules: None,
+            fab: None,
         },
     );
     assert!(f.app.document_state.tabs.iter().all(|t| t.path != f.board));
@@ -106,6 +173,38 @@ fn a_failed_disk_check_refuses_new_pcb_with_why() {
         "demo.snxpcb",
         "s4-denied-2271"
     ]));
+}
+
+/// #2311: a fab tier picked for a new board writes its `fab_*` rules into
+/// the project's rules, one undo step, nothing on disk until Save.
+#[test]
+fn a_new_board_with_a_fab_tier_seeds_its_fab_rules() {
+    use signex_types::project::FabTemplate;
+    let mut f = fixture();
+    let project = f.app.document_state.projects[0].id;
+    let on_disk = std::fs::read(&f.app.document_state.projects[0].path).ok();
+    up(
+        &mut f.app,
+        UpdatePcbMsg::NewPcbPathChecked {
+            project,
+            path: f.board.clone(),
+            exists: Ok(false),
+            rules: None,
+            fab: Some(FabTemplate::Hdi),
+        },
+    );
+    let rules = f.app.document_state.projects[0].data.rules.clone();
+    let dsl = rules.and_then(|r| r.drc.dsl).unwrap_or_default();
+    assert!(
+        dsl.contains("rule fab_track on track require width >= 0.075mm then error"),
+        "{dsl}"
+    );
+    assert_eq!(dsl.matches("rule fab_").count(), 7, "{dsl}");
+    assert_eq!(
+        std::fs::read(&f.app.document_state.projects[0].path).ok(),
+        on_disk,
+        "nothing is written before Save"
+    );
 }
 
 /// S5: a sheet edited after the read makes the list stale; Validate and

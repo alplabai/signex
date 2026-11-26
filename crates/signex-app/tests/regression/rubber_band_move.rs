@@ -91,7 +91,6 @@ fn app_with_resistor() -> (Signex, PathBuf, Uuid) {
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "rubber-band-move".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });
@@ -165,7 +164,7 @@ fn click_click_move_selection_drags_the_attached_wires() {
 fn move_by_dialog_drags_the_attached_wires() {
     let (mut app, path, _) = app_with_resistor();
     app.ui_state.move_selection.dx = "0".to_string();
-    app.ui_state.move_selection.dy = "10".to_string();
+    app.ui_state.move_selection.dy = "-10".to_string();
     let _ = app.update(Message::MoveSelection(MoveSelectionMsg::Apply));
     assert_eq!(symbol_y(&app, &path), 60.0);
     assert_connected_after_dy(&segments(&app, &path), 10.0);
@@ -192,7 +191,7 @@ fn with_the_preference_off_wires_stay_behind_as_before() {
     assert_eq!(segments(&app, &path), before, "plain translate");
 
     app.ui_state.move_selection.dx = "0".to_string();
-    app.ui_state.move_selection.dy = "5".to_string();
+    app.ui_state.move_selection.dy = "-5".to_string();
     let _ = app.update(Message::MoveSelection(MoveSelectionMsg::Apply));
     assert_eq!(symbol_y(&app, &path), 65.0);
     assert_eq!(segments(&app, &path), before, "Move By is plain too");
@@ -395,4 +394,55 @@ fn g_arms_a_drag_that_keeps_connections_and_esc_disarms_it() {
     }));
     let canvas = app.interaction_state.active_canvas();
     assert!(!canvas.keep_connections_next && canvas.move_pick.is_none());
+}
+
+/// #1669 - the drag wiring mode cycled during a drag reaches the commit:
+/// in Straight the wire ends go to the moved pins at a slope.
+#[test]
+fn the_drag_commit_carries_the_cycled_wiring_mode() {
+    let (mut app, path, _) = app_with_resistor();
+    for _ in 0..3 {
+        let _ = app.update(Message::Tool(
+            signex_app::toolbar::ToolMessage::DragWiringCycleRequested,
+        ));
+    }
+    assert_eq!(
+        app.interaction_state.drag_wiring,
+        signex_types::corner::DragWiringMode::Straight
+    );
+    drop_by(&mut app, 0.0, 10.0);
+    let segs = segments(&app, &path);
+    assert_eq!(segs.len(), 2, "no corner inserted: {segs:?}");
+    let has = |a, b| segs.contains(&(a, b)) || segs.contains(&(b, a));
+    assert!(has((30.0, 50.0), (45.0, 60.0)), "{segs:?}");
+    assert!(has((55.0, 60.0), (75.0, 50.0)), "{segs:?}");
+}
+
+/// #1669 - click-click Move commits through the same `MoveSelected` as a
+/// drag, so it carries the mode too.
+#[test]
+fn a_click_click_move_commit_carries_the_wiring_mode() {
+    let (mut app, path, _) = app_with_resistor();
+    app.interaction_state.drag_wiring = signex_types::corner::DragWiringMode::Straight;
+    let _ = app.update(Message::ActiveBar(ActiveBarMsg::Action(
+        ActiveBarAction::MoveSelection,
+    )));
+    assert!(app.ui_state.move_pick.is_some(), "the lift must arm");
+    drop_by(&mut app, 0.0, 10.0);
+    let segs = segments(&app, &path);
+    let has = |a, b| segs.contains(&(a, b)) || segs.contains(&(b, a));
+    assert_eq!(segs.len(), 2, "no corner inserted: {segs:?}");
+    assert!(has((30.0, 50.0), (45.0, 60.0)), "{segs:?}");
+    assert!(has((55.0, 60.0), (75.0, 50.0)), "{segs:?}");
+}
+
+/// #1669 - the mode belongs to a drag: Move By keeps today's corners.
+#[test]
+fn move_by_ignores_the_drag_wiring_mode() {
+    let (mut app, path, _) = app_with_resistor();
+    app.interaction_state.drag_wiring = signex_types::corner::DragWiringMode::Straight;
+    app.ui_state.move_selection.dx = "0".to_string();
+    app.ui_state.move_selection.dy = "-10".to_string();
+    let _ = app.update(Message::MoveSelection(MoveSelectionMsg::Apply));
+    assert_connected_after_dy(&segments(&app, &path), 10.0);
 }

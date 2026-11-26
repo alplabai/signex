@@ -3,7 +3,9 @@
 //! block), through the same lowering, scene and replay. Fitted to the box on
 //! first show, with its own zoom/pan camera: left-drag pans, Ctrl/Cmd+wheel zooms
 //! (a plain wheel scrolls the panel around it). Shared by the Components
-//! panel and the Component Preview dialog's Symbol pane.
+//! panel and the Component Preview dialog's Symbol pane. The Components panel
+//! card wraps it in [`viewed_symbol`], whose view lives in the model and
+//! follows the Mouse wheel preference.
 
 use std::cell::RefCell;
 
@@ -13,8 +15,9 @@ use iced::{Element, Length, Point, Rectangle, Size, Theme, Vector, Widget, mouse
 use signex_types::schematic::{Aabb, LibSymbol, SchematicSheet, Symbol};
 use signex_types::theme::CanvasColors;
 
-use crate::canvas::Camera;
+use super::preview_view::{GestureInput, PreviewGesture, PreviewView};
 use crate::canvas::paper::{PaperLook, paint_paper_and_grid};
+use crate::canvas::{Camera, WheelMode};
 use crate::render_config::{GridStyle, to_iced};
 use crate::schematic_runtime::{
     SceneOverrides, ScreenTransform, build_schematic_scene, schematic_draw_options_with,
@@ -35,7 +38,7 @@ const PREVIEW_TEXT_SIZE: signex_gfx::primitive::text::TextSizePolicy =
     signex_gfx::primitive::text::TextSizePolicy::new(6.0, 64.0);
 /// The replay options of the preview: the sheet's, with the thumbnail's text
 /// clamp.
-fn preview_draw_options(
+pub(in crate::panels::components_panel) fn preview_draw_options(
     transform: &ScreenTransform,
 ) -> crate::renderer_scene_canvas::SceneDrawOptions {
     schematic_draw_options_with(transform, PREVIEW_TEXT_SIZE)
@@ -72,6 +75,8 @@ struct PreviewState {
     ctrl_held: bool,
     cache: canvas::Cache,
     shown: RefCell<Option<Shown>>,
+    /// The view the cached drawing was built through.
+    shown_view: std::cell::Cell<PreviewView>,
 }
 
 /// A symbol id plus its body extent in micrometres (min x, min y, max x,
@@ -105,7 +110,9 @@ fn take_rebuild(shown: &mut Option<Shown>, current: &Shown) -> bool {
 
 /// A sheet holding `lib` placed once near the paper's centre, unit 1, normal
 /// body.
-fn preview_sheet(lib: &LibSymbol) -> (SchematicSheet, Symbol) {
+pub(in crate::panels::components_panel) fn preview_sheet(
+    lib: &LibSymbol,
+) -> (SchematicSheet, Symbol) {
     let mut sheet = SchematicSheet::default();
     let (width, height) = sheet.paper_mm();
     let on_grid = |mid: f64| (mid / PLACEMENT_GRID_MM).round() * PLACEMENT_GRID_MM;
@@ -252,16 +259,7 @@ impl canvas::Program<()> for SymbolSheetPreview {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<Action<()>> {
-        let size_ok = bounds.width > 0.0 && bounds.height > 0.0;
-        let key = self.fit_key();
-        if size_ok && !state.is_fitted_for(&key, bounds.size()) {
-            state.camera = self.fitted_camera(bounds.size());
-            state.fitted_for = Some(key);
-            state.fitted_size = Some(bounds.size());
-            state.user_moved = false;
-            state.pan_from = None;
-            state.cache.clear();
-        }
+        self.refit(state, bounds.size());
         if let iced::Event::Keyboard(iced::keyboard::Event::ModifiersChanged(mods)) = event {
             state.ctrl_held = mods.command();
             return None;
@@ -341,27 +339,7 @@ impl canvas::Program<()> for SymbolSheetPreview {
         bounds: Rectangle,
         _cursor: mouse::Cursor,
     ) -> Vec<Geometry> {
-        // Until `update` has fitted this symbol at this size, draw the
-        // fitted view without caching it against the stale camera.
-        let fitted = state.is_fitted_for(&self.fit_key(), bounds.size());
-        if !fitted {
-            state.cache.clear();
-        }
-        let current = (self.lib.clone(), self.colors, self.grid);
-        if take_rebuild(&mut state.shown.borrow_mut(), &current) {
-            state.cache.clear();
-        }
-        let camera = if fitted {
-            state.camera.clone()
-        } else {
-            self.fitted_camera(bounds.size())
-        };
-        let geometry = state.cache.draw(renderer, bounds.size(), |frame| {
-            if bounds.width > 0.0 && bounds.height > 0.0 {
-                self.paint(frame, &camera, bounds.size());
-            }
-        });
-        vec![geometry]
+        self.draw_through(state, renderer, bounds, PreviewView::default())
     }
 
     fn mouse_interaction(
@@ -378,6 +356,144 @@ impl canvas::Program<()> for SymbolSheetPreview {
             mouse::Interaction::None
         }
     }
+}
+
+impl SymbolSheetPreview {
+    /// Fit the camera in `state` to a box of `size` unless it already is.
+    fn refit(&self, state: &mut PreviewState, size: Size) {
+        if size.width <= 0.0 || size.height <= 0.0 {
+            return;
+        }
+        let key = self.fit_key();
+        if state.is_fitted_for(&key, size) {
+            return;
+        }
+        state.camera = self.fitted_camera(size);
+        state.fitted_for = Some(key);
+        state.fitted_size = Some(size);
+        state.user_moved = false;
+        state.pan_from = None;
+        state.cache.clear();
+    }
+
+    /// Draw through `view`, on top of the camera in `state`.
+    fn draw_through(
+        &self,
+        state: &PreviewState,
+        renderer: &iced::Renderer,
+        bounds: Rectangle,
+        view: PreviewView,
+    ) -> Vec<Geometry> {
+        // Until `update` has fitted this symbol at this size, draw the
+        // fitted view without caching it against the stale camera.
+        let fitted = state.is_fitted_for(&self.fit_key(), bounds.size());
+        if !fitted {
+            state.cache.clear();
+        }
+        let current = (self.lib.clone(), self.colors, self.grid);
+        if take_rebuild(&mut state.shown.borrow_mut(), &current) {
+            state.cache.clear();
+        }
+        if state.shown_view.replace(view) != view {
+            state.cache.clear();
+        }
+        let base = if fitted {
+            state.camera.clone()
+        } else {
+            self.fitted_camera(bounds.size())
+        };
+        let (scale, offset) = view.place(base.scale, base.offset);
+        let camera = Camera { offset, scale };
+        let geometry = state.cache.draw(renderer, bounds.size(), |frame| {
+            if bounds.width > 0.0 && bounds.height > 0.0 {
+                self.paint(frame, &camera, bounds.size());
+            }
+        });
+        vec![geometry]
+    }
+}
+
+/// The preview with its view held in the model: gestures are published, the
+/// widget keeps only the fit, the cache and the pointer.
+struct ViewedSymbol {
+    preview: SymbolSheetPreview,
+    view: PreviewView,
+    wheel_mode: WheelMode,
+}
+
+#[derive(Default)]
+struct ViewedState {
+    inner: PreviewState,
+    input: GestureInput,
+}
+
+impl canvas::Program<PreviewGesture> for ViewedSymbol {
+    type State = ViewedState;
+
+    fn update(
+        &self,
+        state: &mut ViewedState,
+        event: &iced::Event,
+        bounds: Rectangle,
+        cursor: mouse::Cursor,
+    ) -> Option<Action<PreviewGesture>> {
+        self.preview.refit(&mut state.inner, bounds.size());
+        state.input.read(event, bounds, cursor, self.wheel_mode)
+    }
+
+    fn draw(
+        &self,
+        state: &ViewedState,
+        renderer: &iced::Renderer,
+        _theme: &Theme,
+        bounds: Rectangle,
+        _cursor: mouse::Cursor,
+    ) -> Vec<Geometry> {
+        self.preview
+            .draw_through(&state.inner, renderer, bounds, self.view)
+    }
+
+    fn mouse_interaction(
+        &self,
+        state: &ViewedState,
+        bounds: Rectangle,
+        cursor: mouse::Cursor,
+    ) -> mouse::Interaction {
+        state.input.interaction(bounds, cursor)
+    }
+}
+
+/// What the details card's Symbol preview shows and how it is viewed.
+pub(super) struct ViewedSymbolSpec {
+    pub lib: LibSymbol,
+    pub colors: CanvasColors,
+    pub grid: SheetGrid,
+    pub height: f32,
+    pub device_px_per_logical_px: f32,
+    pub view: PreviewView,
+    pub wheel_mode: WheelMode,
+}
+
+/// The Symbol preview of the details card, clipped to its box.
+pub(super) fn viewed_symbol(spec: ViewedSymbolSpec) -> Element<'static, PreviewGesture> {
+    let canvas = canvas::Canvas::new(ViewedSymbol {
+        preview: SymbolSheetPreview {
+            lib: spec.lib,
+            colors: spec.colors,
+            grid: spec.grid,
+            device_px_per_logical_px: spec.device_px_per_logical_px,
+            zoom_step: Camera::zoom_step_factor(Camera::ZOOM_STEP_PERCENT_DEFAULT),
+        },
+        view: spec.view,
+        wheel_mode: spec.wheel_mode,
+    })
+    .width(Length::Fill)
+    .height(spec.height);
+    container::<_, Theme>(canvas)
+        .width(Length::Fill)
+        .height(spec.height)
+        .clip(true)
+        .boxed()
 }
 
 /// The Symbol preview of `lib`, `height` tall and as wide as its parent,

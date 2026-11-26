@@ -34,6 +34,20 @@ impl Signex {
         );
     }
 
+    /// Apply one Page Options frame change (border, title block, zone
+    /// counts) to the engine's settings, not the panel's copy, so two edits
+    /// in one frame both land. One undo step.
+    fn apply_sheet_frame_edit(&mut self, edit: crate::panels::SheetFrameEdit) {
+        if let Some(engine) = self.document_state.active_engine() {
+            let settings = edit.apply(engine.document().frame);
+            self.apply_engine_command(
+                signex_engine::Command::SetSheetFrame { settings },
+                false,
+                false,
+            );
+        }
+    }
+
     /// Write the active sheet's draft for `field` as one undoable edit
     /// (#1080). Other fields' drafts, and other sheets', stay as they are;
     /// surrounding whitespace is trimmed, and an empty value clears the field.
@@ -68,16 +82,22 @@ impl Signex {
         &mut self,
         matches: impl Fn(&std::path::Path) -> bool,
     ) {
-        let picked = self.document_state.drafts.take_title_blocks_where(matches);
+        // A drawing value still being typed is written with the sheet (#2768).
+        if (self.document_state.live_drawing_edit.as_ref()).is_some_and(|l| matches(&l.path)) {
+            self.commit_live_drawing_edit();
+        }
+        let picked = self.document_state.drafts.take_title_blocks_where(&matches);
         let active = self.document_state.active_path.clone();
         let (mine, others): (Vec<_>, Vec<_>) = picked
             .into_iter()
             .partition(|d| Some(&d.sheet) == active.as_ref());
         for draft in others {
-            self.apply_title_block_field_to_sheet(
+            self.apply_command_to_sheet(
                 &draft.sheet,
-                draft.field.key(),
-                draft.text.trim(),
+                signex_engine::Command::SetTitleBlockField {
+                    key: draft.field.key().to_string(),
+                    value: draft.text.trim().to_string(),
+                },
             );
         }
         for draft in mine {
@@ -90,11 +110,16 @@ impl Signex {
                 false,
             );
         }
+        // Sheet-variable values typed but not entered commit with them (#1987).
+        self.commit_sheet_variable_drafts_where(&matches);
+        // So is text typed into a note's Text box.
+        self.commit_note_drafts_where(&matches);
     }
 
-    /// Commit the pending title-block drafts of the document `anchor` and of
-    /// the other sheets of its project: the scope of an export or a project
-    /// close. Another project's drafts stay pending.
+    /// Commit the pending drafts (title-block fields, sheet variables, typed
+    /// note text) of the document `anchor` and of the other sheets of its
+    /// project: the scope of an export or a project close. Another project's
+    /// drafts stay pending.
     pub(crate) fn commit_drafts_in_scope_of(&mut self, anchor: Option<&std::path::Path>) {
         let Some(anchor) = anchor else {
             return;
@@ -105,6 +130,9 @@ impl Signex {
             .drafts
             .title_block_sheets()
             .into_iter()
+            .chain(self.document_state.drafts.sheet_variable_sheets())
+            .chain(self.typed_note_sheets())
+            .chain((self.document_state.live_drawing_edit.iter()).map(|live| live.path.clone()))
             .filter(|sheet| {
                 sheet == anchor
                     || project.is_some_and(|id| {
@@ -117,29 +145,25 @@ impl Signex {
         self.commit_title_block_drafts_where(|sheet| owned.iter().any(|p| p == sheet));
     }
 
-    /// One title-block edit on an open sheet that is not the active one,
-    /// through the same guards as the mutation gateway: a read-only sheet
-    /// refuses it (and says so in Messages), engine warnings are reported,
-    /// and the sheet is marked modified with its parked view dropped.
-    fn apply_title_block_field_to_sheet(
+    /// One pending sheet edit (a title-block field, a sheet variable) on an
+    /// open sheet that is not the active one, through the same guards as the
+    /// mutation gateway: a read-only sheet refuses it (and says so in
+    /// Messages), engine warnings are reported, and the sheet is marked
+    /// modified with its parked view dropped.
+    pub(super) fn apply_command_to_sheet(
         &mut self,
         sheet: &std::path::Path,
-        key: &str,
-        value: &str,
+        command: signex_engine::Command,
     ) {
         if self.refuse_if_read_only_at(sheet).is_some() {
             return;
         }
         let Some(engine) = self.document_state.engines.get_mut(sheet) else {
             crate::diagnostics::log_warning(format!(
-                "A pending title-block edit of {} was dropped: the sheet is no longer open.",
+                "A pending edit of {} was dropped: the sheet is no longer open.",
                 sheet.display()
             ));
             return;
-        };
-        let command = signex_engine::Command::SetTitleBlockField {
-            key: key.to_string(),
-            value: value.to_string(),
         };
         let result = engine.execute(command);
         Self::report_engine_warnings(engine);
@@ -148,38 +172,39 @@ impl Signex {
                 // Recorded in the sheet's history: undo back to the save
                 // point clears the mark.
                 self.document_state.mark_history_edit_dirty(sheet);
-                if let Some(tab) = self
-                    .document_state
-                    .tabs
-                    .iter_mut()
-                    .find(|t| t.path == sheet)
-                {
-                    tab.cached_document = None;
+                let docs = &mut self.document_state;
+                if let Some(idx) = docs.tabs.iter().position(|t| t.path == sheet) {
+                    docs.take_tab_board_engine(idx);
                 }
             }
             Ok(_) => {}
             Err(error) => crate::diagnostics::log_warning(format!(
-                "A title-block edit on {} could not be applied: {error}",
+                "A pending edit on {} could not be applied: {error}",
                 sheet.display()
             )),
         }
     }
 
     /// Write the active sheet's custom width/height draft as one undoable
-    /// `SetPaperSize`. Text that is not a number keeps the current edge.
+    /// `SetPaperSize`. Refused text changes nothing and stays in the box
+    /// (#2792); an empty box or a lone `-` shows the stored edge again.
     pub(crate) fn commit_custom_paper_edge(&mut self, edge: crate::panels::PaperEdge) {
         let Some(sheet) = self.document_state.active_path.clone() else {
             return;
         };
-        let Some(draft) = self.document_state.drafts.take_paper_edge(&sheet, edge) else {
+        let Some(text) = self.document_state.drafts.paper_edge_text(&sheet, edge) else {
             return;
         };
-        let (w, h) = crate::panels::paper_dimensions(&self.document_state.panel_ctx.paper_size);
-        let current = match edge {
-            crate::panels::PaperEdge::Width => w,
-            crate::panels::PaperEdge::Height => h,
+        // `parse_field_f64` reports a `nan` / `inf` to Messages.
+        let typed =
+            crate::numeric_field::parse_field_f64(&text).and(crate::panels::typed_mm(&text));
+        if crate::numeric_field::text_refused(&text, typed.is_some()) {
+            return;
+        }
+        let _ = self.document_state.drafts.take_paper_edge(&sheet, edge);
+        let Some(mm) = typed else {
+            return;
         };
-        let mm = f64::from(crate::panels::typed_mm(&draft.text, current));
         let (width, height) = match edge {
             crate::panels::PaperEdge::Width => (Some(mm), None),
             crate::panels::PaperEdge::Height => (None, Some(mm)),
@@ -201,6 +226,10 @@ impl Signex {
         match panel_msg {
             crate::panels::PanelMsg::SetUnit(unit) => {
                 self.ui_state.unit = *unit;
+                // Typed pitches and lengths were read in the old unit.
+                self.document_state.panel_ctx.visible_grid_draft = None;
+                self.document_state.panel_ctx.snap_grid_draft = None;
+                self.interaction_state.pcb_primitive.drop_drafts();
             }
             crate::panels::PanelMsg::RunErc => {
                 follow = self.handle_run_erc();
@@ -226,6 +255,19 @@ impl Signex {
             crate::panels::PanelMsg::RunDrc => {
                 follow = self.update(Message::Pcb(PcbMsg::DrcRequested));
             }
+            // A Messages link acts on the document its row names.
+            crate::panels::PanelMsg::MessageLinkPressed(link) => match link {
+                crate::diagnostics::MessageLink::RepairPinJunctions(path) => {
+                    self.repair_pin_junctions_at(path);
+                }
+            },
+            // A Properties action button runs its catalog command.
+            crate::panels::PanelMsg::CommandButtonPressed(command) => {
+                if let Ok(id) = crate::keymap::AppCommandId::new(*command) {
+                    let run = crate::menu_bar::MenuMessage::Command(id);
+                    follow = self.update(Message::Menu(run));
+                }
+            }
             crate::panels::PanelMsg::OpenRules => {
                 follow = self.update(Message::Project(ProjectMsg::Rules(
                     crate::app::RulesTabMsg::OpenRequested { project: None },
@@ -250,11 +292,14 @@ impl Signex {
             crate::panels::PanelMsg::ErcWaiver(msg) => {
                 follow = self.handle_erc_waiver(msg);
             }
-            crate::panels::PanelMsg::FocusPrevErcDiagnostic => {
-                follow = self.handle_focus_erc_diagnostic_offset(-1);
+            crate::panels::PanelMsg::ErcView(msg) => {
+                self.handle_erc_panel_view(msg.clone());
             }
-            crate::panels::PanelMsg::FocusNextErcDiagnostic => {
-                follow = self.handle_focus_erc_diagnostic_offset(1);
+            crate::panels::PanelMsg::MessagesView(msg) => {
+                follow = self.handle_messages_panel(msg.clone());
+            }
+            crate::panels::PanelMsg::WaiverIdentityResolved(name) => {
+                self.handle_waiver_identity_resolved(name.clone());
             }
             crate::panels::PanelMsg::ToggleGrid => {
                 self.ui_state.grid_visible = !self.ui_state.grid_visible;
@@ -265,17 +310,55 @@ impl Signex {
                 self.ui_state.snap_enabled = !self.ui_state.snap_enabled;
             }
             crate::panels::PanelMsg::PcbLayers(msg) => {
+                // A picked colour closes the chip's colours.
+                if matches!(msg, crate::app::PcbViewMsg::LayerColourSet { .. }) {
+                    self.document_state.panel_ctx.pcb_layers_ui.picker = None;
+                }
                 self.apply_pcb_view_event(None, *msg);
+            }
+            crate::panels::PanelMsg::LayersPanel(msg) => {
+                follow = self.handle_layers_panel(msg);
             }
             crate::panels::PanelMsg::NetClass(msg) => {
                 self.handle_net_class_message(msg);
             }
-            crate::panels::PanelMsg::Signal(msg) => {
-                let ctx = &mut self.document_state.panel_ctx;
-                ctx.signal_mode = ctx.signal_mode.after(*msg);
-            }
             crate::panels::PanelMsg::Projects(msg) => {
-                self.document_state.panel_ctx.projects_view.apply(msg);
+                use crate::menu_bar::MenuMessage;
+                use crate::panels::ProjectsMsg;
+                follow = match msg {
+                    // The card's gear runs the tree menu's Project Options
+                    // row for that project: the same command, same context.
+                    ProjectsMsg::OptionsPressed(id) => {
+                        match crate::keymap::AppCommandId::new("open_project_options") {
+                            Ok(command) => {
+                                let context = crate::app::command::InvocationContext {
+                                    origin: None,
+                                    project: Some(id.to_string()),
+                                };
+                                let args = crate::app::command::CommandArgs::in_context(context);
+                                self.dispatch_command(&command, args, None)
+                            }
+                            Err(_) => Task::none(),
+                        }
+                    }
+                    ProjectsMsg::AddNewPressed => self.open_project_add_new_menu(),
+                    ProjectsMsg::NewProjectPressed => {
+                        self.update(Message::Menu(MenuMessage::NewProject))
+                    }
+                    ProjectsMsg::OpenPressed => {
+                        self.update(Message::Menu(MenuMessage::OpenProject))
+                    }
+                    ProjectsMsg::RecentProjectPressed(path) => {
+                        self.update(crate::start_screen::recent_message(path))
+                    }
+                    ProjectsMsg::FilterChanged(_)
+                    | ProjectsMsg::FilterCleared
+                    | ProjectsMsg::GroupToggled(_)
+                    | ProjectsMsg::RecentToggled => {
+                        self.document_state.panel_ctx.projects_view.apply(msg);
+                        Task::none()
+                    }
+                };
             }
             crate::panels::PanelMsg::PropertiesTab(index) => {
                 self.document_state.panel_ctx.properties_tab = *index;
@@ -346,22 +429,6 @@ impl Signex {
                     g.font_size = fs_mm;
                 }
             }
-            crate::panels::PanelMsg::SetPrePlacementJustifyH(h) => {
-                if let Some(pp) = &mut self.document_state.panel_ctx.pre_placement {
-                    pp.justify_h = *h;
-                }
-                if let Some(g) = &mut self.interaction_state.active_canvas_mut().ghost_label {
-                    g.justify = *h;
-                }
-                if let Some(g) = &mut self.interaction_state.active_canvas_mut().ghost_text {
-                    g.justify_h = *h;
-                }
-            }
-            crate::panels::PanelMsg::SetPrePlacementJustifyV(v) => {
-                if let Some(pp) = &mut self.document_state.panel_ctx.pre_placement {
-                    pp.justify_v = *v;
-                }
-            }
             crate::panels::PanelMsg::TogglePrePlacementBold => {
                 if let Some(pp) = &mut self.document_state.panel_ctx.pre_placement {
                     pp.bold = !pp.bold;
@@ -378,8 +445,10 @@ impl Signex {
                 }
             }
             crate::panels::PanelMsg::SetPrePlacementShapeWidth(w) => {
-                if let Some(pp) = &mut self.document_state.panel_ctx.pre_placement {
-                    pp.shape_width_mm = (*w).max(0.0);
+                if crate::panels::NumericFieldKey::ShapeWidth.accepts(*w)
+                    && let Some(pp) = &mut self.document_state.panel_ctx.pre_placement
+                {
+                    pp.shape_width_mm = *w;
                 }
             }
             crate::panels::PanelMsg::SetPrePlacementWireWidth(preset) => {
@@ -416,6 +485,28 @@ impl Signex {
                     true,
                 );
             }
+            crate::panels::PanelMsg::EditBusWidth(bus_id, preset) => {
+                self.apply_engine_command(
+                    signex_engine::Command::SetBusWidth {
+                        bus_id: *bus_id,
+                        width_mm: preset.stroke_mm(),
+                    },
+                    true,
+                    true,
+                );
+            }
+            crate::panels::PanelMsg::EditBusColor(bus_id, color) => {
+                self.document_state.panel_ctx.wire_color_picker =
+                    crate::panels::WireColorPicker::Closed;
+                self.apply_engine_command(
+                    signex_engine::Command::SetBusColor {
+                        bus_id: *bus_id,
+                        color: *color,
+                    },
+                    true,
+                    true,
+                );
+            }
             crate::panels::PanelMsg::ToggleWireColorPicker => {
                 use crate::panels::WireColorPicker as Picker;
                 let ctx = &mut self.document_state.panel_ctx;
@@ -428,21 +519,29 @@ impl Signex {
                 self.document_state.panel_ctx.wire_color_picker =
                     crate::panels::WireColorPicker::Advanced;
             }
+            crate::panels::PanelMsg::Illustration(msg) => {
+                let subject = crate::panels::HoverSubject::of(&self.document_state.panel_ctx);
+                let hover = &mut self.document_state.panel_ctx.illustration_hover;
+                hover.update(subject, msg.clone());
+            }
             crate::panels::PanelMsg::CancelWireColorPicker => {
                 self.document_state.panel_ctx.wire_color_picker =
                     crate::panels::WireColorPicker::Closed;
             }
             crate::panels::PanelMsg::NumericFieldTyped(key, text) => {
-                // Text that is mid-edit (`-`, `1.`, empty) or refused leaves
-                // the stored value alone; the draft keeps what was typed.
-                if let Some(value) = crate::numeric_field::parse_field_f64(text) {
+                // Text that is mid-edit (`-`, `1.`, empty) or that the field
+                // refuses leaves the stored value alone; the draft keeps
+                // what was typed.
+                if let Some(value) =
+                    crate::numeric_field::parse_field_f64(text).filter(|v| key.accepts(*v))
+                {
                     follow = self.update(Message::Dock(crate::dock::DockMessage::Panel(
                         key.committing(value),
                     )));
                 }
                 // The draft is bound after the commit, to the value the
-                // model holds now: a clamped setter (pin length `max(0.1)`,
-                // arc angle wrap) must not read as an outside change.
+                // model holds now: a setter's arc angle wrap must not read
+                // as an outside change.
                 self.document_state.panel_ctx.numeric_draft =
                     self.numeric_field_state(*key).map(|(owner, applied)| {
                         crate::panels::NumericDraft {
@@ -454,13 +553,14 @@ impl Signex {
                     });
             }
             crate::panels::PanelMsg::NumericFieldSubmitted(key) => {
-                let owns_draft = self
+                // Refused text stays in the box, marked, to be fixed.
+                let ends_draft = self
                     .document_state
                     .panel_ctx
                     .numeric_draft
                     .as_ref()
-                    .is_some_and(|d| d.key == *key);
-                if owns_draft {
+                    .is_some_and(|d| d.key == *key && !key.refuses(&d.text));
+                if ends_draft {
                     self.document_state.panel_ctx.numeric_draft = None;
                 }
             }
@@ -470,65 +570,20 @@ impl Signex {
                 }
             }
             crate::panels::PanelMsg::DrawingFieldTyping(field_id, text) => {
-                // Rebind the buffer ownership when selection changes
-                // so a prior drawing's half-typed text doesn't bleed
-                // into the newly selected one.
-                let current_uuid = self.document_state.panel_ctx.selected_uuid;
-                if self.document_state.panel_ctx.drawing_edit_buf_for != current_uuid {
-                    self.document_state.panel_ctx.drawing_edit_buf.clear();
-                    self.document_state.panel_ctx.drawing_edit_buf_for = current_uuid;
-                }
-                self.document_state
-                    .panel_ctx
-                    .drawing_edit_buf
-                    .insert(*field_id, text.clone());
-                // Emit the engine update only when the string parses
-                // cleanly — empty / partial input stays in the buffer
-                // so the user can keep typing.
-                if let Some(typed) = crate::numeric_field::parse_field_f64(text) {
-                    // A typed Y is read from the sheet's page origin (#2034).
-                    let v = match self.document_state.active_engine() {
-                        Some(engine) if field_id.is_page_y() => engine.document().page_y(typed),
-                        _ => typed,
-                    };
-                    use crate::app::contracts::DrawingFieldEdit as E;
-                    use crate::panels::DrawingFieldId as F;
-                    let edit = match field_id {
-                        F::LineStartX => E::LineStartX(v),
-                        F::LineStartY => E::LineStartY(v),
-                        F::LineEndX => E::LineEndX(v),
-                        F::LineEndY => E::LineEndY(v),
-                        F::LineWidth => E::Width(v),
-                        F::RectStartX => E::RectStartX(v),
-                        F::RectStartY => E::RectStartY(v),
-                        F::RectWidth => E::RectWidthMm(v),
-                        F::RectHeight => E::RectHeightMm(v),
-                        F::RectBorder => E::Width(v),
-                        F::CircleCenterX => E::CircleCenterX(v),
-                        F::CircleCenterY => E::CircleCenterY(v),
-                        F::CircleRadius => E::CircleRadius(v),
-                        F::CircleBorder => E::Width(v),
-                        F::ArcCenterX => E::ArcCenterX(v),
-                        F::ArcCenterY => E::ArcCenterY(v),
-                        F::ArcRadius => E::ArcRadius(v),
-                        F::ArcStartAngle => E::ArcStartAngle(v),
-                        F::ArcEndAngle => E::ArcEndAngle(v),
-                        F::ArcWidth => E::Width(v),
-                        F::PolyBorder => E::Width(v),
-                    };
-                    if let Some(uuid) = current_uuid.filter(|_| {
-                        matches!(
-                            self.document_state.panel_ctx.selected_kind,
-                            Some(signex_types::schematic::SelectedKind::Drawing)
-                        )
-                    }) {
-                        follow = self.update(crate::app::Message::Edit(
-                            EditMsg::UpdateDrawingField(uuid, edit),
-                        ));
-                    }
-                }
+                self.type_drawing_field(*field_id, text);
+            }
+            crate::panels::PanelMsg::DrawingFieldLeft(field_id) => {
+                self.leave_drawing_field(*field_id);
             }
             crate::panels::PanelMsg::UpdateDrawingEdit(edit) => {
+                // A colour pick closes the popover it came from.
+                if matches!(
+                    edit,
+                    crate::app::contracts::DrawingFieldEdit::StrokeColor(_)
+                ) {
+                    self.document_state.panel_ctx.wire_color_picker =
+                        crate::panels::WireColorPicker::Closed;
+                }
                 // Fire the engine-side update only if exactly one
                 // drawing is selected — the panel shows post-placement
                 // fields only in that case.
@@ -544,13 +599,27 @@ impl Signex {
                 }
             }
             crate::panels::PanelMsg::ConfirmPrePlacement => {
-                // OK button: resume placement but keep pre_placement so the
-                // next click uses the values the user just edited.
-                self.interaction_state.active_canvas_mut().placement_paused = false;
+                // OK / Enter: resume placement and keep pre_placement so the
+                // next click uses the values the user just edited; a typed
+                // position places the next object there at once (#2532). A
+                // Location field that does not read refuses OK: the form
+                // stays up with the field marked, and the pause (what Esc
+                // restores) stays too.
+                let refused = (self.document_state.panel_ctx.pre_placement.as_ref())
+                    .is_some_and(|pp| pp.position.has_invalid());
+                if !refused {
+                    self.interaction_state.active_canvas_mut().placement_paused = false;
+                    self.interaction_state.end_sheet_placement_pause();
+                }
+                follow = self.place_at_typed_position();
+            }
+            crate::panels::PanelMsg::PrePlacementPosition(msg) => {
+                self.handle_pre_placement_position(msg);
             }
             crate::panels::PanelMsg::SetGridSize(size) => {
                 self.ui_state.grid_size_mm = *size;
                 self.document_state.panel_ctx.grid_size_mm = *size;
+                self.document_state.panel_ctx.snap_grid_draft = None;
                 self.interaction_state.active_canvas_mut().clear_bg_cache();
                 self.interaction_state.pcb_canvas.clear_bg_cache();
                 let size = *size;
@@ -561,6 +630,7 @@ impl Signex {
             crate::panels::PanelMsg::SetVisibleGridSize(size) => {
                 self.ui_state.visible_grid_mm = *size;
                 self.document_state.panel_ctx.visible_grid_mm = *size;
+                self.document_state.panel_ctx.visible_grid_draft = None;
                 self.interaction_state.active_canvas_mut().clear_bg_cache();
                 self.interaction_state.pcb_canvas.clear_bg_cache();
             }
@@ -623,15 +693,14 @@ impl Signex {
                 self.document_state.panel_ctx.canvas_font_popup_open = false;
             }
             crate::panels::PanelMsg::EditSheetFrame(edit) => {
-                // Applied to the engine's settings, not the panel's copy, so
-                // two edits in one frame both land.
-                if let Some(engine) = self.document_state.active_engine() {
-                    let settings = edit.apply(engine.document().frame);
-                    self.apply_engine_command(
-                        signex_engine::Command::SetSheetFrame { settings },
-                        false,
-                        false,
-                    );
+                self.apply_sheet_frame_edit(*edit);
+            }
+            crate::panels::PanelMsg::DocumentOptions(msg) => {
+                // View state only; a submitted zone count is a frame edit.
+                let sheet = self.document_state.active_path.clone();
+                let ui = &mut self.document_state.panel_ctx.document_options;
+                if let Some(edit) = ui.apply(msg.clone(), sheet) {
+                    self.apply_sheet_frame_edit(edit);
                 }
             }
             crate::panels::PanelMsg::SetPageFormatMode(mode) => {
@@ -660,6 +729,9 @@ impl Signex {
             }
             crate::panels::PanelMsg::CommitTitleBlockField(field) => {
                 self.commit_title_block_field(*field);
+            }
+            crate::panels::PanelMsg::SheetVariables(edit) => {
+                self.edit_sheet_variables(edit.clone());
             }
             crate::panels::PanelMsg::SetPageOrigin(origin) => {
                 // The Position rows read from the origin: refresh them.
@@ -712,8 +784,11 @@ impl Signex {
             crate::panels::PanelMsg::SelectCustomFilterTab(idx) => {
                 follow = self.handle_select_custom_filter_tab(*idx);
             }
+            crate::panels::PanelMsg::Annotation(msg) => {
+                follow = self.handle_annotation_panel(msg.clone());
+            }
             crate::panels::PanelMsg::SchFilter(msg) => {
-                follow = self.handle_sch_filter(*msg);
+                follow = self.handle_sch_filter(msg.clone());
             }
             _ => return None,
         }

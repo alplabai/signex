@@ -117,6 +117,17 @@ pub(super) const NETS: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
+    // View ▸ Compiled Design (#1308).
+    CommandMetadata {
+        id: "open_compiled_design",
+        category: "panels",
+        label: command_ids::CMD_OPEN_COMPILED_DESIGN,
+        menu_label: Some(command_ids::CMD_MENU_OPEN_COMPILED_DESIGN),
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "assign_net_class",
         category: "design",
@@ -150,6 +161,30 @@ pub(super) const NETS: &[CommandMetadata] = &[
         category: "design",
         label: command_ids::CMD_OPEN_NET_CLASSES_PANEL,
         menu_label: Some(command_ids::CMD_MENU_OPEN_NET_CLASSES_PANEL),
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    // #1280: the project's harness definitions, in Properties. Palette only,
+    // no default key.
+    CommandMetadata {
+        id: "open_harness_definitions",
+        category: "design",
+        label: command_ids::CMD_OPEN_HARNESS_DEFINITIONS,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    // #1282: Design ▸ Differential Pair Classes… opens the project's class
+    // dialog; OK applies it as one step of the project history. No key.
+    CommandMetadata {
+        id: "open_diff_pair_classes",
+        category: "design",
+        label: command_ids::CMD_OPEN_DIFF_PAIR_CLASSES,
+        menu_label: Some(command_ids::CMD_MENU_OPEN_DIFF_PAIR_CLASSES),
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,

@@ -28,6 +28,7 @@ use signex_types::designator::{
 use signex_types::schematic::{AnnotateOrder, LibSymbol, ProjectParts, Symbol};
 use uuid::Uuid;
 
+use crate::library::drift::split_lib_id;
 use crate::library::reprefix_lookup::{ReprefixLookup, RowFacts};
 
 /// One sheet of the project, in the order the annotate pass walks them.
@@ -313,13 +314,7 @@ fn linked_row<'a>(
 
 /// The rows binding the symbol a `lib_id` names, when they agree.
 fn row_by_symbol<'a>(input: &'a PlanInput<'_>, lib_id: &str) -> Result<&'a RowFacts, SkipReason> {
-    let parsed = lib_id.trim().split_once(':').and_then(|(library, symbol)| {
-        Some((
-            Uuid::parse_str(library).ok()?,
-            Uuid::parse_str(symbol).ok()?,
-        ))
-    });
-    let Some(symbol) = parsed else {
+    let Some(symbol) = split_lib_id(lib_id) else {
         return Err(SkipReason::NoRowLink);
     };
     let binds = |facts: &&RowFacts| facts.symbol == symbol;
@@ -479,6 +474,28 @@ mod tests {
             true,
         );
         assert_eq!(only_change(&p).new_prefix, "D");
+    }
+
+    /// #1416: Re-prefix moves a part onto its three-letter class code and
+    /// back, since a code the table issues counts as issued.
+    #[test]
+    fn full_class_codes_are_issued_and_rewritten_both_ways() {
+        let lookup = lookup_of(facts("diode", None));
+        for (reference, standard, old, new) in [
+            ("D1", DesignatorStandard::Iec81346_2Full, "D", "RAA"),
+            ("R4", DesignatorStandard::Iec81346_2Full, "R", "RAA"),
+            ("RAA2", DesignatorStandard::Ieee315, "RAA", "D"),
+            ("RAA2", DesignatorStandard::Iec81346_2, "RAA", "R"),
+        ] {
+            let symbols = [linked(reference, 1)];
+            let p = plan(standard, &lookup, &[(&symbols, false)], true);
+            let change = only_change(&p);
+            assert_eq!(
+                (change.old_prefix.as_str(), change.new_prefix.as_str()),
+                (old, new),
+                "{reference} under {standard}"
+            );
+        }
     }
 
     #[test]

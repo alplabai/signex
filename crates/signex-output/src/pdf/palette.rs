@@ -27,6 +27,9 @@ pub struct SchematicPalette {
     pub no_connect: (f32, f32, f32),
     pub symbol_stroke: (f32, f32, f32),
     pub symbol_fill: (f32, f32, f32),
+    /// Default fill of the body shapes a symbol leaves unfilled
+    /// (`CanvasColors::body_tint`); `None` leaves them unfilled.
+    pub symbol_body_tint: Option<(f32, f32, f32)>,
     pub pin: (f32, f32, f32),
     pub reference: (f32, f32, f32),
     pub value: (f32, f32, f32),
@@ -48,6 +51,13 @@ pub struct SchematicPalette {
     /// no more-specific palette entry applies. Matches what the
     /// canvas paints in pin-name and ref-text colours.
     pub field_text: (f32, f32, f32),
+    /// Signal harness wires, outlines and names (#1280).
+    pub harness: (f32, f32, f32),
+    /// Harness connector and entry fill.
+    pub harness_soft: (f32, f32, f32),
+    /// The theme's error ink (`CanvasColors::erc_error`): the not-fitted
+    /// cross (#1294, decision of 2026-11-25).
+    pub error: (f32, f32, f32),
 }
 
 impl SchematicPalette {
@@ -65,6 +75,7 @@ impl SchematicPalette {
             no_connect: (0.78, 0.18, 0.18),
             symbol_stroke: (0.53, 0.41, 0.04),
             symbol_fill: (0.93, 0.93, 0.56),
+            symbol_body_tint: None,
             pin: (0.53, 0.41, 0.04),
             reference: (0.53, 0.41, 0.04),
             value: (0.0, 0.4, 0.4),
@@ -77,6 +88,9 @@ impl SchematicPalette {
             child_sheet_stroke: (0.25, 0.25, 0.25),
             child_sheet_text: (0.18, 0.18, 0.18),
             field_text: (0.1, 0.1, 0.1),
+            harness: (0.42, 0.31, 0.63),
+            harness_soft: (0.94, 0.92, 0.97),
+            error: (0.66, 0.19, 0.12),
         }
     }
 }
@@ -100,6 +114,7 @@ impl From<&CanvasColors> for SchematicPalette {
             no_connect: rgb(c.no_connect),
             symbol_stroke: rgb(c.body),
             symbol_fill: rgb(c.body_fill),
+            symbol_body_tint: c.body_tint.map(rgb),
             pin: rgb(c.pin),
             reference: rgb(c.reference),
             value: rgb(c.value),
@@ -120,6 +135,9 @@ impl From<&CanvasColors> for SchematicPalette {
             child_sheet_stroke: rgb(c.body),
             child_sheet_text: rgb(c.reference),
             field_text: rgb(c.reference),
+            harness: rgb(c.harness_color()),
+            harness_soft: rgb(c.harness_soft_color()),
+            error: rgb(c.erc_error),
         }
     }
 }
@@ -168,6 +186,16 @@ mod tests {
         let pal = SchematicPalette::from(&graphite);
         assert_ne!(pal.bus, pal.wire, "fixture needs distinct wire and bus");
         assert_ne!(pal.bus_entry, pal.bus);
+    }
+
+    #[test]
+    fn the_error_ink_is_the_themes_error_token() {
+        for id in ThemeId::BUILTINS {
+            let colors = canvas_colors(*id);
+            let pal = SchematicPalette::from(&colors);
+            assert_eq!(pal.error, rgb(colors.erc_error), "{id:?}");
+            assert_ne!(pal.error, pal.symbol_stroke, "{id:?}");
+        }
     }
 
     #[test]

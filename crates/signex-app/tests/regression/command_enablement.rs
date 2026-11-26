@@ -34,7 +34,6 @@ fn ctrl_z_still_undoes_in_a_footprint_editor_tab() {
     app.document_state.tabs.push(TabInfo {
         title: "f".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });

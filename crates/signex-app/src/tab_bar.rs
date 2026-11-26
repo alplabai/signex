@@ -7,10 +7,11 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::tab_pill::TabPill;
 use signex_widgets::{Label, text, tooltip};
 
-use crate::app::{Document, DocumentKey, TabInfo};
+use crate::app::{Document, DocumentKey, LoadedProject, TabInfo};
 use crate::styles::{self, Spacing, TypeScale};
 
 mod graphite;
+pub(crate) mod overflow;
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
@@ -27,12 +28,29 @@ pub enum TabMessage {
     /// position from `interaction_state.last_mouse_pos` instead.
     StartDrag(usize),
     /// Right-click on this tab — the app opens the per-tab context
-    /// menu (Close \[filename\] / Close All Others / Close All / Open
-    /// In New Window).
+    /// menu (`tab_menu_entries`).
     ContextMenu(usize),
     /// The × on this tab was clicked: close it through the same path as
     /// the context menu's "Close \[filename\]".
     CloseClicked(usize),
+    /// The "+N" overflow button was pressed: its menu opens, or closes when
+    /// it is open.
+    OverflowMenuToggled,
+    /// A row of the overflow menu was picked: the tab at this index
+    /// becomes active (and so shows in the strip).
+    OverflowTabPicked(usize),
+    /// The overflow menu was dismissed (click outside, Esc).
+    OverflowMenuDismissed,
+}
+
+/// The file a tab stands for, or `None` for a tab that names no file (a
+/// Component Preview row).
+pub(crate) fn tab_file_path(tab: &TabInfo) -> Option<&std::path::Path> {
+    let path = tab.path.as_path();
+    let names_file = !tab.kind.is_component_editor()
+        && !path.as_os_str().is_empty()
+        && !crate::library::state::EditorAddress::is_synthetic_tab_path(path);
+    names_file.then_some(path)
 }
 
 /// Stable id of the tab strip's scrollable, so the active tab can be
@@ -92,6 +110,39 @@ pub struct TabMarks<'p> {
     pub project_name: Option<&'p str>,
     /// The language the tab marks read in.
     pub i18n: &'p signex_i18n::I18n,
+    /// The open projects, which title the page tabs.
+    pub projects: &'p [LoadedProject],
+    /// The UI font the tab titles are measured in.
+    pub ui_font: iced::Font,
+    /// The theme, for the overflow button's glyph.
+    pub theme_id: signex_types::theme::ThemeId,
+    /// Width of the strip (the window's width): the tabs past it hide
+    /// behind the "+N" button.
+    pub strip_width: f32,
+    /// The "+N" menu is open.
+    pub overflow_open: bool,
+}
+
+/// The tabs `tabs` shows in a window whose `visible_paths` they are in, in
+/// strip order. A document page tab (Layer Stack, Polygon Manager, Pin
+/// table) shares its owner's path but lives on the main strip only,
+/// wherever its owner is.
+pub(crate) fn visible_tab_indices(
+    tabs: &[TabInfo],
+    visible_paths: &std::collections::HashSet<std::path::PathBuf>,
+    is_main: bool,
+) -> Vec<usize> {
+    tabs.iter()
+        .enumerate()
+        .filter_map(|(i, tab)| {
+            let shown = if tab.kind.is_document_page() {
+                is_main
+            } else {
+                visible_paths.contains(&tab.path)
+            };
+            shown.then_some(i)
+        })
+        .collect()
 }
 
 pub fn view<'a>(
@@ -99,6 +150,7 @@ pub fn view<'a>(
     active: usize,
     dragging: Option<usize>,
     visible_paths: &std::collections::HashSet<std::path::PathBuf>,
+    is_main: bool,
     marks: &TabMarks<'_>,
     tokens: &ThemeTokens,
 ) -> Element<'a, TabMessage> {
@@ -108,36 +160,27 @@ pub fn view<'a>(
         tooltips_enabled,
         project_name,
         i18n,
+        projects,
+        ..
     } = *marks;
-    // Tabs sit flush against each other — Altium parity. The active
-    // pill's accent underline distinguishes it from neighbours; no
-    // gap or vertical divider needed.
+    // Tabs sit flush against each other. The active pill's accent line
+    // distinguishes it from neighbours; no gap or vertical divider needed.
     let mut bar = Row::new().spacing(0.0);
 
-    // Collect the indices of tabs that should render in this window —
-    // we need the count up front so each pill knows whether it's the
-    // last one (which draws the right edge; the rest skip it so
-    // adjacent tabs share their L/R divider as a single 1 px line).
-    let visible_indices: Vec<usize> = tabs
-        .iter()
-        .enumerate()
-        .filter_map(|(i, tab)| visible_paths.contains(&tab.path).then_some(i))
-        .collect();
-    let last_idx = visible_indices.last().copied();
+    // The tabs that render in this window, and of those the ones that fit
+    // the strip; the rest go behind the "+N" button (mockup row 5). The last shown
+    // tab draws the right edge; the others share their L/R divider as a
+    // single 1 px line.
+    let visible_indices = visible_tab_indices(tabs, visible_paths, is_main);
+    let fit = overflow::strip_split(tabs, &visible_indices, active, marks);
+    let last_idx = fit.shown.last().copied();
 
-    for &i in &visible_indices {
+    for &i in &fit.shown {
         let tab = &tabs[i];
         // Tab title. A document with unsaved changes also gets a dot
         // (the Projects tree row keeps its own), before the title; the
         // close × sits after it.
-        // A Rules tab's title is a catalog message, read in the current
-        // language rather than the one it was opened in.
-        let catalog_title = matches!(tab.kind, crate::app::TabKind::Rules(_))
-            .then(|| signex_i18n::t!(i18n, signex_i18n::ids::RULES_TAB_TITLE).into_string());
-        let label = ellipsize_title(
-            catalog_title.as_deref().unwrap_or(&tab.title),
-            MAX_TAB_TITLE_CHARS,
-        );
+        let label = overflow::tab_label(tab, projects, i18n);
 
         let is_active = i == active;
         let is_dragging = dragging == Some(i);
@@ -188,10 +231,11 @@ pub fn view<'a>(
             match tab_tooltip(&tab.path, is_read_only, tooltips_enabled, i18n) {
                 Some(tip) => tooltip(
                     tab_el,
-                    container(text(tip).size(TAB_FONT_SIZE)).padding([SP.xs, 6.0]),
+                    container(text(tip).size(TAB_FONT_SIZE))
+                        .padding([SP.xs, 6.0])
+                        .style(styles::context_menu(tokens)),
                     tooltip::Position::Bottom,
                 )
-                .style(styles::context_menu(tokens))
                 .boxed(),
                 None => tab_el,
             };
@@ -204,7 +248,16 @@ pub fn view<'a>(
             Scrollbar::new().width(3).scroller_width(3),
         ))
         .width(Length::Fill);
-    graphite::strip(tabs.boxed(), project_name, tokens)
+    let more = (!fit.hidden.is_empty()).then(|| {
+        overflow::overflow_button(
+            fit.hidden.len(),
+            marks.overflow_open,
+            marks.theme_id,
+            tokens,
+            i18n,
+        )
+    });
+    graphite::strip(tabs.boxed(), more, project_name, tokens)
 }
 
 /// Height of the document tab strip: the 34 px band from
@@ -232,8 +285,9 @@ pub fn placeholder<'a, M: 'a>(tokens: &ThemeTokens) -> Element<'a, M> {
 /// Tab label font size; the dirty dot is sized from it.
 const TAB_FONT_SIZE: f32 = TS.body;
 
-/// Whether `tab` has unsaved changes: its path is in `dirty`, the set from
-/// [`dirty_tab_paths`] (Component Preview tabs have a synthetic path).
+/// Whether `tab` has unsaved changes: the file it saves into is in `dirty`,
+/// the set from [`dirty_tab_paths`] (Component Preview tabs have a
+/// synthetic path). A page tab follows its owner file (#661).
 pub(crate) fn tab_is_dirty(
     tab: &TabInfo,
     dirty: &std::collections::HashSet<std::path::PathBuf>,
@@ -241,7 +295,7 @@ pub(crate) fn tab_is_dirty(
     dirty.contains(&tab.path)
 }
 
-/// The paths of `tabs` whose document has unsaved work, asked of each
+/// The owner paths of `tabs` whose document has unsaved work, asked of each
 /// document through [`Document`]. A tab with no document owner (a Library
 /// Browser, a project tab whose project closed) falls back to the dirty
 /// path set.
@@ -315,16 +369,36 @@ mod tests {
             tooltips_enabled: true,
             project_name: Some("Sensor node rev B"),
             i18n: &signex_i18n::I18n::en_us(),
+            projects: &[],
+            ui_font: iced::Font::DEFAULT,
+            theme_id: signex_types::theme::ThemeId::GraphiteLight,
+            strip_width: 1200.0,
+            overflow_open: false,
         };
-        let strip = super::view(&[], 0, None, &none, &marks, &tokens);
+        let strip = super::view(&[], 0, None, &none, true, &marks, &tokens);
         assert_eq!(strip.size().height, fixed);
+    }
+
+    /// Copy Path has a file to copy for a sheet, and none for a Component
+    /// Preview tab, whose path is synthetic.
+    #[test]
+    fn a_component_preview_tab_names_no_file() {
+        assert_eq!(
+            super::tab_file_path(&tab("/p/power.snxsch")),
+            Some(std::path::Path::new("/p/power.snxsch"))
+        );
+        let preview = TabInfo {
+            path: PathBuf::from("/lib/tables/resistors.tsv#3"),
+            ..tab("x")
+        };
+        assert_eq!(super::tab_file_path(&preview), None);
+        assert_eq!(super::tab_file_path(&tab("")), None);
     }
 
     fn tab(path: &str) -> TabInfo {
         TabInfo {
             title: path.to_owned(),
             path: PathBuf::from(path),
-            cached_document: None,
             project_id: None,
             kind: TabKind::Schematic,
         }
@@ -356,7 +430,6 @@ mod tests {
         assert!(tab_is_dirty(&tab("a.snxsch"), &dirty));
         assert!(!tab_is_dirty(&tab("b.snxsch"), &dirty));
     }
-
     #[test]
     fn reveal_offset_is_exact_at_both_ends_and_proportional_between() {
         assert_eq!(reveal_offset(0, 1).x, 0.0);

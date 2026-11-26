@@ -98,11 +98,11 @@ fn rotate_key(window: Option<iced::window::Id>) -> Message {
     })
 }
 
-fn altium(app: &mut Signex) {
+fn signex_standard(app: &mut Signex) {
     app.ui_state
         .keymap_profiles
-        .set_active_profile("altium")
-        .expect("altium profile");
+        .set_active_profile("signex_standard")
+        .expect("signex_standard profile");
     app.ui_state.active_keymap = app.ui_state.keymap_profiles.compile_active().into();
 }
 
@@ -122,8 +122,12 @@ fn edit_move_picks_a_footprint_then_drops_it_on_the_grid_as_one_step() {
         tolerance_mm: 0.05,
     };
     let _ = app.update(Message::PcbCanvas(over));
-    let ghost = app.interaction_state.pcb_canvas.highlight().ghost.len();
-    assert_eq!(ghost, 3, "the body and both pads follow the pointer");
+    let canvas = &app.interaction_state.pcb_canvas;
+    assert!(canvas.highlight().ghost.is_empty(), "a move has no ghost");
+    assert!(
+        canvas.drag_preview_scene().is_some(),
+        "the part moves itself"
+    );
     click(&mut app, 14.0, 12.4);
     assert!(app.interaction_state.pcb_carry.is_none());
     let moved = position(&app, &path, U1);
@@ -172,7 +176,7 @@ fn with_no_board_rotate_greys_without_a_target_and_flip_selection_always() {
 fn a_parked_board_is_not_reached_by_its_old_selection() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_with_board(dir.path());
-    altium(&mut app);
+    signex_standard(&mut app);
     click(&mut app, 10.0, 10.0);
     let _ = app.update(rotate_key(None));
     let edited = live(&app, &path);
@@ -201,7 +205,7 @@ fn a_parked_board_is_not_reached_by_its_old_selection() {
 fn an_undocked_window_selects_and_edits_its_own_board() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, a) = app_with_board(dir.path());
-    altium(&mut app);
+    signex_standard(&mut app);
     let b = dir.path().join("other.snxpcb");
     app.open_pcb_tab(b.clone(), "other".into(), board());
     let active = app

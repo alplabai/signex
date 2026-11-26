@@ -39,6 +39,8 @@ fi
 
 # Licenses of the fonts compiled into the binary (#1179).
 bash "$SCRIPT_DIR/../copy-font-licenses.sh" "$APP_DIR/usr/share/doc/signex/fonts"
+# Licence, NOTICE and third-party notices (Apache-2.0 §4(d), #2487).
+bash "$SCRIPT_DIR/../copy-notices.sh" "$APP_DIR/usr/share/doc/signex"
 
 # AppRun — the entry point AppImage calls.
 cat > "$APP_DIR/AppRun" <<'APPRUN_EOF'

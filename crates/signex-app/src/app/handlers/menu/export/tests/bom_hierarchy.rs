@@ -195,21 +195,21 @@ fn a_project_whose_hierarchy_cannot_be_derived_says_so_in_bom_terms() {
 
 #[test]
 fn a_child_placed_twice_with_entries_lists_each_placements_designator() {
-    use super::protel_hierarchy::twice_placed_app;
+    use super::net_text_hierarchy::twice_placed_app;
     let app = twice_placed_app("/w/bom-a", true);
     assert_eq!(listed(&bom_of(&app)), ["R1", "R101", "R_TOP"]);
 }
 
 #[test]
 fn a_child_placed_twice_without_entries_still_lists_its_designator_twice() {
-    use super::protel_hierarchy::twice_placed_app;
+    use super::net_text_hierarchy::twice_placed_app;
     let app = twice_placed_app("/w/bom-n", false);
     assert_eq!(listed(&bom_of(&app)), ["R1", "R1", "R_TOP"]);
 }
 
 #[test]
 fn a_child_placed_once_lists_the_placement_designator() {
-    use super::protel_hierarchy::once_placed_app;
+    use super::net_text_hierarchy::once_placed_app;
     let app = once_placed_app("/w/bom-b");
     assert_eq!(listed(&bom_of(&app)), ["R101", "R_TOP"]);
 }

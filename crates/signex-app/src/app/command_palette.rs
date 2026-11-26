@@ -39,9 +39,10 @@ pub const MAX_RESULTS: usize = 10;
 
 #[derive(Debug, Clone, Default)]
 pub struct CommandPaletteState {
-    /// Dropdown open flag. The text_input is always rendered (it's the
-    /// chrome-strip search bar); this gates whether the result list
-    /// shows. Open implies the input is also focused.
+    /// Dropdown open flag. The text_input is the title-bar search field, or,
+    /// on a window too narrow for the field, a row at the top of the card;
+    /// this gates whether the result list shows. Open implies the input is
+    /// also focused.
     pub open: bool,
     /// Live query text — echoed on every text_input change.
     pub query: String,
@@ -144,19 +145,47 @@ impl CommandSource {
     }
 }
 
-/// Order `results` group by group (stable, so rank order holds inside a
-/// group). The Graphite palette draws group headers, so the flat order that
-/// `selected_index` and the arrow keys walk must be the order drawn.
-pub fn group_for_display(results: &mut [CommandEntry]) {
-    results.sort_by_key(|e| e.source.group_rank());
+/// Order ranked `(entry, score)` rows group by group. The Graphite palette
+/// draws group headers, so the flat order that `selected_index` and the
+/// arrow keys walk must be the order drawn.
+///
+/// With a typed query (`by_relevance`) the group holding the best-scoring
+/// row comes first, ties broken by [`CommandSource::group_rank`]; with an
+/// empty query the groups keep the fixed `group_rank` order. The sort is
+/// stable, so rows inside a group keep their rank order.
+pub fn group_for_display(rows: &mut [(CommandEntry, i32)], by_relevance: bool) {
+    let mut best: Vec<(CommandSource, i32)> = Vec::new();
+    for (entry, score) in rows.iter() {
+        match best.iter_mut().find(|(source, _)| *source == entry.source) {
+            Some((_, top)) => *top = (*top).max(*score),
+            None => best.push((entry.source, *score)),
+        }
+    }
+    let group_best = |source: CommandSource| -> i32 {
+        if !by_relevance {
+            return 0;
+        }
+        best.iter()
+            .find(|(s, _)| *s == source)
+            .map_or(i32::MIN, |(_, top)| *top)
+    };
+    rows.sort_by_key(|(entry, _)| {
+        (
+            std::cmp::Reverse(group_best(entry.source)),
+            entry.source.group_rank(),
+        )
+    });
 }
 
 #[derive(Debug, Clone)]
 pub struct CommandEntry {
     pub source: CommandSource,
     pub label: String,
-    /// Secondary text shown in muted style after the label (file path,
-    /// symbol value, etc.). Empty when not applicable.
+    /// A component's value, drawn after its designator in the label cell.
+    /// Empty on every other row.
+    pub value: String,
+    /// The row's context, right-aligned (sheet, terminal count, project); a
+    /// command's is its binding. Empty when not applicable.
     pub detail: String,
     pub action: CommandAction,
 }
@@ -243,6 +272,7 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
             // not "Wire"). That split is exactly why #281 added the
             // second field.
             label: metadata.label_in(&app.ui_state.i18n),
+            value: String::new(),
             // #374 — the binding from the ACTIVE profile, not the
             // catalog's suggested `keybind`, because a profile always
             // overrides the default.
@@ -255,8 +285,39 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
         });
     }
 
-    // 1b. Commands — panel opens.
-    for &panel in ALL_PANELS {
+    // 1a. The installed extensions' commands (#2495), named with their
+    //     extension, run by id like a built-in row.
+    for command in app.extensions().commands() {
+        let Ok(id) = AppCommandId::new(command.metadata().id) else {
+            continue;
+        };
+        let Some(label) = app
+            .ui_state
+            .extension_commands
+            .label_in(&app.ui_state.i18n, &id)
+        else {
+            continue;
+        };
+        out.push(CommandEntry {
+            source: CommandSource::Command,
+            label,
+            value: String::new(),
+            detail: app
+                .ui_state
+                .active_keymap
+                .shortcut_label(&id)
+                .unwrap_or_default(),
+            action: CommandAction::Command(id),
+        });
+    }
+
+    // 1b. Commands — panel opens, the installed extensions' panels last.
+    let extension_panels = app.extensions().panels();
+    let panels = ALL_PANELS
+        .iter()
+        .copied()
+        .chain(extension_panels.into_iter().map(PanelKind::Extension));
+    for panel in panels {
         out.push(CommandEntry {
             source: CommandSource::Command,
             label: app.ui_state.i18n.message_plain(
@@ -266,6 +327,7 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
                     app.ui_state.i18n.message_plain(panel.message(), &[]).into(),
                 )],
             ),
+            value: String::new(),
             detail: String::new(),
             action: CommandAction::Panel(panel),
         });
@@ -299,15 +361,13 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
     if let Some(index) = index {
         for d in &index.designators {
             let mut detail = vec![shown(&d.path)];
-            if !d.value.is_empty() {
-                detail.insert(0, d.value.clone());
-            }
             if let Some(label) = &d.placement_label {
                 detail.push(label.clone());
             }
             out.push(CommandEntry {
                 source: CommandSource::Symbol,
                 label: d.designator.clone(),
+                value: d.value.clone(),
                 detail: detail.join(" · "),
                 action: CommandAction::Reveal {
                     path: d.path.clone(),
@@ -327,7 +387,8 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
             out.push(CommandEntry {
                 source: CommandSource::Symbol,
                 label: reference.clone(),
-                detail: value.clone(),
+                value: value.clone(),
+                detail: String::new(),
                 action: CommandAction::FocusSymbol {
                     reference: reference.clone(),
                 },
@@ -348,6 +409,7 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
             out.push(CommandEntry {
                 source: CommandSource::Net,
                 label: net.name.clone(),
+                value: String::new(),
                 detail: format!(
                     "{} terminal{}",
                     net.terminals,
@@ -390,6 +452,7 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
             out.push(CommandEntry {
                 source: CommandSource::Sheet,
                 label: sheet.name.clone(),
+                value: String::new(),
                 detail: shown(&sheet.path),
                 action: CommandAction::Reveal {
                     path: sheet.path.clone(),
@@ -408,6 +471,7 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
             out.push(CommandEntry {
                 source: CommandSource::File,
                 label: root.clone(),
+                value: String::new(),
                 detail: project.data.name.clone(),
                 action: CommandAction::OpenFile(abs),
             });
@@ -417,6 +481,7 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
             out.push(CommandEntry {
                 source: CommandSource::File,
                 label: sheet.filename.clone(),
+                value: String::new(),
                 detail: project.data.name.clone(),
                 action: CommandAction::OpenFile(abs),
             });
@@ -426,6 +491,7 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
             out.push(CommandEntry {
                 source: CommandSource::File,
                 label: pcb.clone(),
+                value: String::new(),
                 detail: project.data.name.clone(),
                 action: CommandAction::OpenFile(abs),
             });
@@ -441,6 +507,7 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
             out.push(CommandEntry {
                 source: CommandSource::File,
                 label,
+                value: String::new(),
                 detail: project.data.name.clone(),
                 action: CommandAction::OpenFile(abs),
             });
@@ -448,6 +515,42 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
     }
 
     out
+}
+
+/// Added to a row whose own name is the query, above any fuzzy score: typing
+/// `GND` leads with the net `GND`, not a component whose value is GND.
+const EXACT_LABEL_BONUS: i32 = 1 << 20;
+
+/// Added to a row holding a query's words in the order they were typed.
+const WORDS_IN_ORDER_BONUS: i32 = 25;
+
+/// What a query is matched against: the label, then value and detail.
+fn search_text(entry: &CommandEntry) -> String {
+    [
+        entry.label.as_str(),
+        entry.value.as_str(),
+        entry.detail.as_str(),
+    ]
+    .into_iter()
+    .filter(|part| !part.is_empty())
+    .collect::<Vec<_>>()
+    .join(" ")
+}
+
+/// Whether `label` is the query, under the search fold.
+fn is_exact_label(i18n: &I18n, query: &str, label: &str) -> bool {
+    let fold = |c: char| i18n.fold_char_for_search(c);
+    query.trim().chars().map(fold).eq(label.chars().map(fold))
+}
+
+/// Whether `text` holds every word of `query`, under the search fold: every
+/// result the palette draws contains what was typed (mockup row 9).
+fn contains_query(i18n: &I18n, query: &str, text: &str) -> bool {
+    let fold = |c: char| i18n.fold_char_for_search(c);
+    let text: String = text.chars().map(fold).collect();
+    query
+        .split_whitespace()
+        .all(|word| text.contains(&word.chars().map(fold).collect::<String>()))
 }
 
 /// Filter the catalog by query and rank the survivors. Returns indices
@@ -477,29 +580,48 @@ pub fn rank_results_in(i18n: &I18n, catalog: &[CommandEntry], query: &str) -> Ve
         return ranked;
     }
 
+    let query = query.split_whitespace().collect::<Vec<_>>().join(" ");
     let mut ranked: Vec<(usize, i32)> = catalog
         .iter()
         .enumerate()
-        .filter_map(|(idx, entry)| {
-            let target = if entry.detail.is_empty() {
-                entry.label.clone()
-            } else {
-                format!("{} {}", entry.label, entry.detail)
-            };
-            fuzzy_score_in(i18n, query, &target).map(|score| {
-                let source_bonus = match entry.source {
-                    CommandSource::Command => 5,
-                    CommandSource::Symbol => 3,
-                    CommandSource::Net => 2,
-                    CommandSource::Sheet => 2,
-                    CommandSource::File => 1,
-                };
-                (idx, score + source_bonus)
-            })
-        })
+        .filter_map(|(idx, entry)| Some((idx, entry_score(i18n, &query, entry)?)))
         .collect();
     ranked.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
     ranked
+}
+
+/// The rank of `entry` for `query`; `None` when it is not a result.
+fn entry_score(i18n: &I18n, query: &str, entry: &CommandEntry) -> Option<i32> {
+    let text = search_text(entry);
+    if !contains_query(i18n, query, &text) {
+        return None;
+    }
+    let source_bonus = match entry.source {
+        CommandSource::Command => 5,
+        CommandSource::Symbol => 3,
+        CommandSource::Net => 2,
+        CommandSource::Sheet => 2,
+        CommandSource::File => 1,
+    };
+    let exact = if is_exact_label(i18n, query, &entry.label) {
+        EXACT_LABEL_BONUS
+    } else {
+        0
+    };
+    Some(query_score(i18n, query, &text)? + source_bonus + exact)
+}
+
+/// Each word scored on its own, so any word order is a match; a row holding
+/// the words as typed ranks above one holding them reordered.
+fn query_score(i18n: &I18n, query: &str, text: &str) -> Option<i32> {
+    let words = query
+        .split_whitespace()
+        .map(|word| fuzzy_score_in(i18n, word, text))
+        .sum::<Option<i32>>()?;
+    let fold = |c: char| i18n.fold_char_for_search(c);
+    let folded = |s: &str| s.chars().map(fold).collect::<String>();
+    let in_order = query.contains(' ') && folded(text).contains(&folded(query));
+    Some(words + if in_order { WORDS_IN_ORDER_BONUS } else { 0 })
 }
 
 /// Sublime-text-style fuzzy score. Returns `None` if any query
@@ -595,23 +717,186 @@ pub fn rank_results(catalog: &[CommandEntry], query: &str) -> Vec<(usize, i32)> 
 mod tests {
     use super::*;
 
-    #[test]
-    fn grouping_is_stable_and_follows_group_rank() {
-        let entry = |source, label: &str| CommandEntry {
+    fn entry(source: CommandSource, label: &str, detail: &str) -> CommandEntry {
+        CommandEntry {
             source,
             label: label.to_string(),
-            detail: String::new(),
+            value: String::new(),
+            detail: detail.to_string(),
             action: CommandAction::OpenFile(PathBuf::new()),
-        };
+        }
+    }
+
+    fn labels(rows: &[(CommandEntry, i32)]) -> Vec<&str> {
+        rows.iter().map(|(e, _)| e.label.as_str()).collect()
+    }
+
+    /// An empty query keeps the fixed group order (COMMANDS first), whatever
+    /// the scores, and rows inside a group keep their order.
+    #[test]
+    fn an_empty_query_keeps_the_fixed_group_order() {
         let mut rows = vec![
-            entry(CommandSource::Sheet, "s1"),
-            entry(CommandSource::Command, "c1"),
-            entry(CommandSource::Net, "n1"),
-            entry(CommandSource::Command, "c2"),
+            (entry(CommandSource::Sheet, "s1", ""), 90),
+            (entry(CommandSource::Command, "c1", ""), 10),
+            (entry(CommandSource::Net, "n1", ""), 80),
+            (entry(CommandSource::Command, "c2", ""), 5),
         ];
-        group_for_display(&mut rows);
-        let labels: Vec<_> = rows.iter().map(|e| e.label.as_str()).collect();
-        assert_eq!(labels, ["c1", "c2", "n1", "s1"]);
+        group_for_display(&mut rows, false);
+        assert_eq!(labels(&rows), ["c1", "c2", "n1", "s1"]);
+    }
+
+    /// Mockup row 9: for a typed query whose best hit is a net, NETS is the first
+    /// group, then the groups follow their best row; rows inside a group stay
+    /// in score order. This is the order the arrow keys walk.
+    #[test]
+    fn a_query_whose_best_hit_is_a_net_puts_nets_first() {
+        let catalog = vec![
+            entry(
+                CommandSource::Command,
+                "Run the VBUS wiring check on every sheet of the project",
+                "",
+            ),
+            entry(CommandSource::Net, "VBUS", "9 terminals"),
+            entry(CommandSource::Net, "VBUS_SENSE", "2 terminals"),
+            entry(
+                CommandSource::Symbol,
+                "D3",
+                "ESD5Z5.0 · VBUS clamp · usb-c.snxsch",
+            ),
+        ];
+        let mut rows: Vec<(CommandEntry, i32)> = rank_results(&catalog, "vbu")
+            .into_iter()
+            .map(|(idx, score)| (catalog[idx].clone(), score))
+            .collect();
+        assert_eq!(rows.len(), 4, "every row matches 'vbu'");
+        group_for_display(&mut rows, true);
+        assert_eq!(
+            labels(&rows),
+            [
+                "VBUS",
+                "VBUS_SENSE",
+                "D3",
+                "Run the VBUS wiring check on every sheet of the project"
+            ]
+        );
+        // The fixed order would have put the command first.
+        group_for_display(&mut rows, false);
+        assert_eq!(
+            labels(&rows)[0],
+            "Run the VBUS wiring check on every sheet of the project"
+        );
+    }
+
+    /// Mockup row 9: a row whose text only holds the query's letters apart
+    /// is not a result; a row holding it in its value or detail is.
+    #[test]
+    fn every_result_contains_the_query_as_typed() {
+        let mut component = entry(CommandSource::Symbol, "#P1", "a.snxsch");
+        component.value = "GND".into();
+        let catalog = vec![
+            entry(CommandSource::Command, "Align to grid", ""),
+            entry(CommandSource::Command, "Place aligned dimension", ""),
+            entry(CommandSource::Net, "GND", "12 terminals"),
+            component,
+            entry(CommandSource::Sheet, "power", "AGND plane"),
+        ];
+        let kept: Vec<&str> = rank_results(&catalog, " gnd ")
+            .into_iter()
+            .map(|(idx, _)| catalog[idx].label.as_str())
+            .collect();
+        assert_eq!(kept.len(), 3, "{kept:?}");
+        for label in ["GND", "#P1", "power"] {
+            assert!(kept.contains(&label), "{label}: {kept:?}");
+        }
+    }
+
+    /// Mockup row 9: a result holds every typed word, in any order and with
+    /// any spacing; a row missing a word is not a result.
+    #[test]
+    fn every_typed_word_matches_in_any_order_and_spacing() {
+        let catalog = vec![
+            entry(CommandSource::Command, "Place Wire", ""),
+            entry(CommandSource::Command, "Place Bus", ""),
+            entry(CommandSource::Command, "Align to grid", ""),
+        ];
+        let hits = |query: &str| -> Vec<String> {
+            rank_results(&catalog, query)
+                .into_iter()
+                .map(|(idx, _)| catalog[idx].label.clone())
+                .collect()
+        };
+        for query in ["place wire", "wire place", "place  wire", "  WIRE   place "] {
+            assert_eq!(hits(query), ["Place Wire"], "{query:?}");
+        }
+        assert_eq!(hits("grid align"), ["Align to grid"]);
+        assert!(hits("wire grid").is_empty());
+    }
+
+    /// Of two rows holding the same words, the one in the typed order leads.
+    #[test]
+    fn the_typed_word_order_ranks_first() {
+        let catalog = vec![
+            entry(CommandSource::Command, "Wire Place", ""),
+            entry(CommandSource::Command, "Place Wire", ""),
+        ];
+        let ranked = rank_results(&catalog, "place wire");
+        assert_eq!(ranked.len(), 2);
+        assert_eq!(catalog[ranked[0].0].label, "Place Wire");
+    }
+
+    /// Mockup row 9: the row named exactly what was typed leads, so NETS comes
+    /// first for `GND` even over a short component row whose value is GND.
+    #[test]
+    fn an_exact_net_name_leads_a_component_with_that_value() {
+        let mut component = entry(CommandSource::Symbol, "#P1", "a.snxsch");
+        component.value = "GND".into();
+        let catalog = vec![
+            component,
+            entry(CommandSource::Command, "Align to grid", ""),
+            entry(CommandSource::Net, "GND", "12 terminals"),
+        ];
+        let mut rows: Vec<(CommandEntry, i32)> = rank_results(&catalog, "gnd")
+            .into_iter()
+            .map(|(idx, score)| (catalog[idx].clone(), score))
+            .collect();
+        group_for_display(&mut rows, true);
+        assert_eq!(labels(&rows)[0], "GND");
+        assert_eq!(rows[0].0.source, CommandSource::Net);
+    }
+
+    /// A component is still found by its value, now a field of its own.
+    #[test]
+    fn a_component_is_found_by_its_value() {
+        let mut component = entry(CommandSource::Symbol, "R1", "");
+        component.value = "10k".into();
+        assert_eq!(rank_results(&[component], "10k").len(), 1);
+    }
+
+    /// Before the index arrives a placed symbol's value is the row's value,
+    /// not its right-aligned context.
+    #[test]
+    fn a_placed_symbol_row_carries_its_value_apart_from_its_context() {
+        let (mut app, _task) = crate::app::Signex::new();
+        app.document_state.panel_ctx.placed_symbols =
+            vec![("R1".into(), "10k".into(), String::new(), String::new())];
+        let catalog = build_catalog(&app);
+        let row = catalog
+            .iter()
+            .find(|e| e.source == CommandSource::Symbol)
+            .expect("the placed symbol's row");
+        assert_eq!((row.value.as_str(), row.detail.as_str()), ("10k", ""));
+    }
+
+    /// Two groups whose best rows score the same keep the fixed order.
+    #[test]
+    fn groups_with_equal_best_scores_follow_group_rank() {
+        let mut rows = vec![
+            (entry(CommandSource::File, "f1", ""), 40),
+            (entry(CommandSource::Symbol, "u1", ""), 40),
+            (entry(CommandSource::Net, "n1", ""), 20),
+        ];
+        group_for_display(&mut rows, true);
+        assert_eq!(labels(&rows), ["u1", "f1", "n1"]);
     }
 
     #[test]
@@ -626,6 +911,7 @@ mod tests {
         let entries = vec![CommandEntry {
             source: CommandSource::Command,
             label: "Open Preferences".into(),
+            value: String::new(),
             detail: String::new(),
             action: CommandAction::Command(AppCommandId::new("open_preferences").unwrap()),
         }];
@@ -737,18 +1023,21 @@ mod tests {
             CommandEntry {
                 source: CommandSource::Command,
                 label: "Preferences".into(),
+                value: String::new(),
                 detail: String::new(),
                 action: CommandAction::Command(AppCommandId::new("open_preferences").unwrap()),
             },
             CommandEntry {
                 source: CommandSource::Command,
                 label: "Save".into(),
+                value: String::new(),
                 detail: String::new(),
                 action: CommandAction::Command(AppCommandId::new("save_document").unwrap()),
             },
             CommandEntry {
                 source: CommandSource::File,
                 label: "preferences.bak".into(),
+                value: String::new(),
                 detail: String::new(),
                 action: CommandAction::OpenFile(std::path::PathBuf::from("preferences.bak")),
             },
@@ -766,6 +1055,7 @@ mod tests {
         let row = |label: &str| CommandEntry {
             source: CommandSource::Net,
             label: label.into(),
+            value: String::new(),
             detail: String::new(),
             action: CommandAction::OpenFile(PathBuf::new()),
         };

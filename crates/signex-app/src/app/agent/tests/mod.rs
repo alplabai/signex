@@ -4,20 +4,29 @@
 
 mod check_drc;
 mod check_erc;
+mod check_requirements;
 #[cfg(unix)]
 mod client;
 mod deferred;
 #[cfg(unix)]
 mod hold;
 mod journal;
+mod layout_plan;
 #[cfg(unix)]
 mod live;
+mod net_class_membership;
 mod opened;
+mod opened_deferred;
 mod origin;
+mod owed_repaint;
+mod placed_move;
 #[cfg(unix)]
 mod presence;
+mod query_surfaces;
 mod refusals;
+mod request_path;
 mod round_trip;
+mod update_pcb;
 mod window_layout;
 
 use serde_json::{Value, json};
@@ -35,7 +44,7 @@ use crate::app::{Message, Signex};
 pub(super) const SHEET_A: u128 = 100;
 pub(super) const SHEET_B: u128 = 101;
 
-fn sheet_entry(name: &str) -> SheetEntry {
+pub(super) fn sheet_entry(name: &str) -> SheetEntry {
     SheetEntry {
         name: name.into(),
         filename: format!("{name}.snxsch"),
@@ -49,7 +58,7 @@ fn sheet_entry(name: &str) -> SheetEntry {
 /// An app with the project `P` (sheets `a` and `b`) open, the person on
 /// `b` with a wire selected, the wire tool, a wire in progress and a
 /// command-palette query typed; agent connections on and listening.
-pub(super) fn app_at_work() -> Signex {
+pub(in crate::app) fn app_at_work() -> Signex {
     app_in(path("a.snxsch").parent().unwrap())
 }
 
@@ -77,6 +86,7 @@ pub(super) fn app_in(dir: &std::path::Path) -> Signex {
             sheets: vec![sheet_entry("a"), sheet_entry("b")],
             variant_definitions: Vec::new(),
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: Vec::new(),
             enable_git: false,
             net_classes: Vec::new(),
@@ -85,6 +95,11 @@ pub(super) fn app_in(dir: &std::path::Path) -> Signex {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
+            fab_outputs: None,
+            router_tool_diameter: None,
+            bom_alternates: Vec::new(),
+            requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },
@@ -158,6 +173,62 @@ pub(super) fn ask(app: &mut Signex, text: String) -> Value {
 pub(super) fn call(app: &mut Signex, id: &str, args: Value) -> Value {
     let text = line(app, id, args);
     ask(app, text)
+}
+
+/// Open the child `power.snxsch` the fixture's sheets place, so the whole
+/// project is in memory and a check that reads the project runs at once
+/// instead of waiting for its closed sheets (#2549). The person stays on the
+/// tab they were on.
+pub(super) fn open_the_child(app: &mut Signex) {
+    let person = app.document_state.active_path.clone().expect("a sheet");
+    let child = path("power.snxsch");
+    let sheet = signex_types::schematic::SchematicSheet {
+        uuid: uid(SHEET_B + 50),
+        ..Default::default()
+    };
+    fixture::add_sheet_with(app, &child, sheet);
+    app.document_state.mark_document_clean(&child);
+    fixture::activate(app, &person);
+}
+
+/// [`call`] for a command that may wait for its reads (#2199): the task it
+/// leaves is driven to its end, then the reply is read.
+pub(super) fn call_settled(app: &mut Signex, id: &str, args: Value) -> Value {
+    let pending = call_pending(app, id, args);
+    settle_pending(app, pending)
+}
+
+/// A request sent but not driven yet: what the app left to run, and where its
+/// reply arrives.
+pub(super) struct Pending {
+    task: iced::Task<Message>,
+    answer: iced::futures::channel::oneshot::Receiver<String>,
+}
+
+/// Send `id` as process 4242 and stop before its task runs, so a test can act
+/// as the person while the request's reads are in flight.
+pub(super) fn call_pending(app: &mut Signex, id: &str, args: Value) -> Pending {
+    let (reply, answer) = AgentReply::channel();
+    let call = AgentCall {
+        pid: Some(4242),
+        input: Input::Line(line(app, id, args)),
+        reply,
+    };
+    let task = app.update(Message::Agent(AgentMsg::Request(call)));
+    Pending { task, answer }
+}
+
+/// Drive `pending` to its end and read the reply.
+pub(super) fn settle_pending(app: &mut Signex, pending: Pending) -> Value {
+    let Pending { task, mut answer } = pending;
+    crate::task_driver::TaskDriver::new()
+        .settle(app, task)
+        .expect("the request settled");
+    let line = answer
+        .try_recv()
+        .expect("the app did not drop the reply")
+        .expect("the app answered");
+    serde_json::from_str(&line).expect("a reply is JSON")
 }
 
 /// [`call`] from process `pid`.

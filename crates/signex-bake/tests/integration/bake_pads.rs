@@ -535,6 +535,7 @@ fn bake_linear_array_3_pads_along_x() {
         numbering: NumberingScheme::LinearIncrement {
             start_expr: "1".into(),
             step_expr: "1".into(),
+            sweep: Default::default(),
         },
     });
 
@@ -574,6 +575,7 @@ fn a_numbered_grid_pad_size_follows_its_own_row_and_column() {
         numbering: NumberingScheme::LinearIncrement {
             start_expr: "1".into(),
             step_expr: "1".into(),
+            sweep: Default::default(),
         },
     });
 
@@ -897,4 +899,39 @@ fn unitless_parameter_stays_a_count_as_a_ratio() {
         out[0].shape,
         LibPadShape::RoundRect { radius_ratio } if approx_eq(radius_ratio, 0.25, 1e-9)
     ));
+}
+
+/// #2242: a trapezoid bakes its delta, and one too wide for the pad's size
+/// (which a board refuses) is named in a warning.
+#[test]
+fn bake_trapezoid_warns_when_its_delta_makes_no_copper() {
+    let bake = |delta_x: &str| {
+        let mut s = Sketch::new();
+        let p = s.add_point(0.0, 0.0);
+        let mut pad = smd_rect_pad("1", "1.0mm", "0.5mm");
+        pad.shape = PadShape::Trapezoid {
+            delta_x_expr: delta_x.into(),
+            delta_y_expr: "0mm".into(),
+        };
+        s.attach_pad(p, pad);
+        let solve = solve(&s.data);
+        let mut out = Vec::new();
+        let mut warnings = Vec::new();
+        bake_pads(&s.data, &solve, &HashMap::new(), &mut out, &mut warnings).expect("bake ok");
+        (out, warnings)
+    };
+    let (out, warnings) = bake("0.5mm");
+    match out[0].shape {
+        LibPadShape::Trapezoid { delta } => assert!(approx_eq(delta[0], 0.5, 1e-9)),
+        ref other => panic!("expected Trapezoid, got {other:?}"),
+    }
+    assert!(warnings.is_empty(), "{warnings:?}");
+
+    let (_, warnings) = bake("2.5mm");
+    assert!(
+        warnings
+            .iter()
+            .any(|w| w.starts_with("pad 1:") && w.contains("twice the side")),
+        "{warnings:?}"
+    );
 }

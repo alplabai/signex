@@ -207,7 +207,8 @@ fn editor_msg_is_view_only(msg: &EditorMsg) -> bool {
         | E::PinMapCancelOverrideEdit
         | E::ParamSetNumberBuf { .. }
         | E::ParamSetMeasurementBuf { .. }
-        | E::ParamNewNameChanged(_) => true,
+        | E::ParamNewNameChanged(_)
+        | E::UnparsedFieldsPillPressed => true,
         E::Datasheet(d) => matches!(
             d,
             DatasheetMsg::Open(_)
@@ -242,6 +243,21 @@ fn footprint_msg_is_view_only(msg: &FootprintEditorMsg) -> bool {
             | F::SelectPad(_)
             | F::SelectPads(_)
             | F::SelectSilkF(_)
+            | F::SetSelectionMode2d(_)
+            | F::SelectAllOnLayer
+            | F::LassoArm
+            | F::LassoAddVertex { .. }
+            | F::LassoCancel
+            | F::LassoCommit
+            | F::TouchingLineArm
+            | F::TouchingLineFirst { .. }
+            | F::TouchingLineCancel
+            | F::TouchingLineCommit { .. }
+            | F::SelectOverlapped
+            | F::SelectNextOverlapped
+            | F::SelectOffGridPads
+            | F::SketchSelect { .. }
+            | F::SketchSelectMany(_)
             | F::ToggleLayer(_)
             | F::LayersShowAllClicked
             | F::LayersTopSideOnlyClicked
@@ -481,6 +497,7 @@ mod tests {
                 instance: uuid::Uuid::nil(),
                 generation: 1,
                 footprint_idx: 0,
+                purpose: crate::library::editor::footprint::sketch_solve_task::SolvePurpose::Edit,
                 outcome: std::sync::Arc::new(
                     crate::library::editor::footprint::sketch_solve_task::SolveOutcome::SolveFailed(
                         signex_sketch::SolveError::DidNotConverge {
@@ -510,7 +527,6 @@ mod tests {
         app.document_state.tabs.push(crate::app::TabInfo {
             title: "r".into(),
             path: path.clone(),
-            cached_document: None,
             project_id: None,
             kind: crate::app::TabKind::SymbolEditor(path.clone()),
         });
@@ -565,6 +581,39 @@ mod tests {
             before,
             "the edit works unguarded"
         );
+    }
+
+    /// #2774: everything the footprint editor's undo classifier treats as
+    /// selection is view-only here too, so a library delete does not hold it;
+    /// an edit is still refused.
+    #[test]
+    fn footprint_selection_is_view_only_and_an_edit_is_not() {
+        use FootprintEditorMsg as F;
+        let (x_mm, y_mm) = (1.0, 0.0);
+        for msg in [
+            F::SelectPads(vec![0]),
+            F::SetSelectionMode2d(Default::default()),
+            F::SelectAllOnLayer,
+            F::LassoArm,
+            F::LassoAddVertex { x_mm, y_mm },
+            F::LassoCancel,
+            F::LassoCommit,
+            F::TouchingLineArm,
+            F::TouchingLineFirst { x_mm, y_mm },
+            F::TouchingLineCancel,
+            F::TouchingLineCommit { x_mm, y_mm },
+            F::SelectOverlapped,
+            F::SelectNextOverlapped,
+            F::SelectOffGridPads,
+            F::SketchSelect {
+                id: None,
+                shift: false,
+            },
+            F::SketchSelectMany(Vec::new()),
+        ] {
+            assert!(footprint_msg_is_view_only(&msg), "{msg:?}");
+        }
+        assert!(!footprint_msg_is_view_only(&F::AddPad { x_mm, y_mm }));
     }
 
     #[test]

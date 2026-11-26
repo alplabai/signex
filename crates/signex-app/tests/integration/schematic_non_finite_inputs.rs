@@ -36,7 +36,6 @@ fn fixture() -> (Signex, PathBuf, uuid::Uuid) {
     app.document_state.tabs.push(TabInfo {
         title: "non-finite-inputs".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

@@ -7,7 +7,7 @@
 use pcb_geom::{ClickMode, ItemRef};
 use signex_app::app::{
     BoardReannotateMsg, CommandPaletteMsg, ContextAction, ContextMenuMsg, EditMsg, FileMsg,
-    Message, PcbMsg, ReannotateProblem, Signex, TabDocument, WindowMsg,
+    Message, PcbMsg, ReannotateProblem, Signex, WindowMsg,
 };
 use signex_app::diagnostics;
 use signex_app::dock::DockMessage;
@@ -15,6 +15,7 @@ use signex_app::keymap::AppCommandId;
 use signex_app::menu_bar::MenuMessage;
 use signex_app::panels::{FootprintEditability, PanelKind, PanelMsg, PcbFootprintTextMsg};
 use signex_app::pcb_canvas::PcbCanvasMsg;
+use signex_app::test_adapter::BoardEngines;
 use signex_engine::pcb::designators::{
     BottomSideOrder, FootprintTextField, ReannotateOptions, ReannotateOrder, plan_reannotate,
 };
@@ -42,6 +43,8 @@ fn pad(n: u128, x: f64) -> Pad {
         layers: vec!["TopCopper".into()],
         net: None,
         roundrect_ratio: 0.25,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 0.0,
         layer_sizes: None,
         net_locked: false,
@@ -89,6 +92,7 @@ fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
@@ -132,7 +136,7 @@ fn open_board_as(newer: bool) -> Fixture {
     let path = tmp.path().join("board.snxpcb");
     let mut text = SnxPcb::new(board()).write_string().unwrap();
     if newer {
-        text = text.replacen("snxpcb/1.3", "snxpcb/1.9", 1);
+        text = text.replacen(signex_types::format::SNXPCB_FORMAT_V1, "snxpcb/1.13", 1);
     }
     std::fs::write(&path, text).unwrap();
     let (mut app, _boot) = Signex::new();
@@ -153,10 +157,8 @@ fn send(app: &mut Signex, message: Message) {
 
 fn live(app: &Signex) -> PcbBoard {
     let docs = &app.document_state;
-    docs.tabs[docs.active_tab]
-        .cached_document
-        .as_ref()
-        .and_then(TabDocument::as_pcb)
+    docs.tab_board_engine(docs.active_tab)
+        .map(|engine| engine.board())
         .expect("a board is open")
         .clone()
 }
@@ -720,11 +722,8 @@ struct Windows {
 
 fn board_of(app: &Signex, path: &std::path::Path) -> PcbBoard {
     app.document_state
-        .tabs
-        .iter()
-        .find(|t| t.path == path)
-        .and_then(|t| t.cached_document.as_ref())
-        .and_then(TabDocument::as_pcb)
+        .first_tab_board_engine(path)
+        .map(|engine| engine.board())
         .expect("board")
         .clone()
 }

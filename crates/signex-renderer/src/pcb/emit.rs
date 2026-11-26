@@ -10,6 +10,7 @@ pub(super) fn trace_from_segment(segment: &Segment) -> TraceInput {
         net: segment.net,
         dimmed: false,
         ink: CopperInk::Unknown,
+        object: BoardObject::Tracks,
     }
 }
 
@@ -26,6 +27,7 @@ pub(super) fn arc_traces(arc: &signex_types::pcb_arc::TrackArc) -> Vec<TraceInpu
             net: arc.net,
             dimmed: false,
             ink: CopperInk::Unknown,
+            object: BoardObject::Arcs,
         })
         .collect()
 }
@@ -47,6 +49,7 @@ pub(super) fn via_from_board_via(
         net: via.net,
         dimmed: false,
         ink: CopperInk::Unknown,
+        shown_on: None,
     }
 }
 
@@ -84,8 +87,10 @@ pub(super) fn pad_from_footprint(
             .collect(),
         pad_type: pad.pad_type,
         drill_mm: pad_drill_mm(pad),
+        net: pad.net.as_ref().map_or(0, |net| net.number),
         dimmed: false,
         ink: CopperInk::Unknown,
+        shown_on: None,
     })
 }
 
@@ -131,6 +136,8 @@ pub(super) fn zone_from_board_zone(
         dimmed: false,
         ink: CopperInk::Unknown,
         fill: zone.is_pour().then(Vec::new),
+        shelved: zone.is_shelved_pour(),
+        object: super::layer_view::zone_object(zone),
     })
 }
 
@@ -233,7 +240,18 @@ fn pad_drill_mm(pad: &Pad) -> f32 {
 /// The colour of copper drawn in `ink`; `fallback` for copper on no layer
 /// this build knows.
 pub(super) fn copper_color(theme: &ResolvedTheme, ink: CopperInk, fallback: ColorSlot) -> [f32; 4] {
-    theme.color(ink.slot(fallback))
+    theme.copper_ink_color(ink, fallback)
+}
+
+/// `color` faded by the view's transparency of `kind` (#2363).
+fn faded(theme: &ResolvedTheme, kind: BoardObject, color: [f32; 4]) -> [f32; 4] {
+    with_alpha_mul(color, theme.paint().opacity(kind))
+}
+
+/// Copper `color` on `net`, faded by the view's transparency of `kind` and
+/// dimmed when another net is in focus (#2514).
+fn net_faded(theme: &ResolvedTheme, kind: BoardObject, net: u32, color: [f32; 4]) -> [f32; 4] {
+    with_alpha_mul(faded(theme, kind, color), theme.paint().net_opacity(net))
 }
 
 pub(super) fn emit_traces(snapshot: &PcbSnapshot, theme: &ResolvedTheme, scene: &mut Scene) {
@@ -241,7 +259,12 @@ pub(super) fn emit_traces(snapshot: &PcbSnapshot, theme: &ResolvedTheme, scene: 
     scene.lines.reserve(snapshot.traces.len());
 
     for trace in &snapshot.traces {
-        let color = copper_color(theme, trace.ink, ColorSlot::Wire);
+        let color = net_faded(
+            theme,
+            trace.object,
+            trace.net,
+            copper_color(theme, trace.ink, ColorSlot::Wire),
+        );
         scene.lines.push(LineSegment {
             p0: trace.p0,
             p1: trace.p1,
@@ -264,7 +287,12 @@ pub(super) fn emit_vias(snapshot: &PcbSnapshot, theme: &ResolvedTheme, scene: &m
     for via in &snapshot.vias {
         let outer = (via.diameter_mm * 0.5).max(0.01);
         let hole = (via.drill_mm * 0.5).clamp(0.0, outer);
-        let color = copper_color(theme, via.ink, ColorSlot::Junction);
+        let color = net_faded(
+            theme,
+            BoardObject::Vias,
+            via.net,
+            copper_color(theme, via.ink.painted(via.shown_on), ColorSlot::Junction),
+        );
 
         // A drill as wide as the via leaves no copper: all of it is hole.
         if hole > 0.0 && hole >= outer {
@@ -348,7 +376,12 @@ pub(super) fn emit_static_polygons(
             });
             continue;
         }
-        let copper = copper_color(theme, pad.ink, ColorSlot::Pin);
+        let copper = net_faded(
+            theme,
+            BoardObject::Pads,
+            pad.net,
+            copper_color(theme, pad.ink.painted(pad.shown_on), ColorSlot::Pin),
+        );
         let fill_color = dim_if(
             with_alpha_mul(copper, pad_alpha_mul(pad.pad_type)),
             pad.dimmed,
@@ -375,13 +408,31 @@ pub(super) fn emit_static_polygons(
 
     for zone in &snapshot.zones {
         let fill = dim_if(
-            with_alpha_mul(copper_color(theme, zone.ink, ColorSlot::Ghost), 0.38),
+            net_faded(
+                theme,
+                zone.object,
+                zone.net,
+                with_alpha_mul(copper_color(theme, zone.ink, ColorSlot::Ghost), 0.38),
+            ),
             zone.dimmed,
         );
-        let stroke = Some(dim_if(
-            copper_color(theme, zone.ink, ColorSlot::Bus),
+        let edge = dim_if(
+            net_faded(
+                theme,
+                zone.object,
+                zone.net,
+                copper_color(theme, zone.ink, ColorSlot::Bus),
+            ),
             zone.dimmed,
-        ));
+        );
+        // A shelved pour (#2523): its outline dashed, nothing filled.
+        if zone.shelved {
+            scene
+                .polygons
+                .extend(dashed_outline(&zone.vertices, ZONE_EDGE_MM, edge));
+            continue;
+        }
+        let stroke = Some(edge);
         // A pour: its fill pieces as copper, then its outline stroked only.
         for piece in zone.fill.iter().flatten() {
             scene.polygons.push(GpuPolygon {
@@ -401,7 +452,7 @@ pub(super) fn emit_static_polygons(
             holes,
             fill_color,
             stroke_color: stroke,
-            stroke_width: 0.06,
+            stroke_width: ZONE_EDGE_MM,
         });
     }
 
@@ -414,6 +465,65 @@ pub(super) fn emit_static_polygons(
             stroke_width: 0.08,
         });
     }
+}
+
+/// Width of a zone's outline stroke, in board mm.
+const ZONE_EDGE_MM: f32 = 0.06;
+/// Dash and gap of a shelved pour's outline, in board mm.
+const SHELVED_DASH_MM: f32 = 0.6;
+const SHELVED_GAP_MM: f32 = 0.4;
+/// The most dashes one outline draws; a longer outline spaces them wider.
+const SHELVED_MAX_DASHES: f32 = 2000.0;
+
+/// The closed ring `vertices` as dashes `width` wide in `color`: one thin
+/// quad per dash, so both render paths draw it from `polygons` like any
+/// fill. Each edge starts with a dash, so every corner shows.
+pub(super) fn dashed_outline(
+    vertices: &[[f32; 2]],
+    width: f32,
+    color: [f32; 4],
+) -> Vec<GpuPolygon> {
+    let n = vertices.len();
+    if n < 2 {
+        return Vec::new();
+    }
+    let edges = || (0..n).map(|i| (vertices[i], vertices[(i + 1) % n]));
+    let perimeter: f32 = edges().map(|(a, b)| (b[0] - a[0]).hypot(b[1] - a[1])).sum();
+    if !perimeter.is_finite() {
+        return Vec::new();
+    }
+    let pitch = (SHELVED_DASH_MM + SHELVED_GAP_MM).max(perimeter / SHELVED_MAX_DASHES);
+    let dash = pitch * SHELVED_DASH_MM / (SHELVED_DASH_MM + SHELVED_GAP_MM);
+    let half = width * 0.5;
+    let mut dashes = Vec::new();
+    for (a, b) in edges() {
+        let len = (b[0] - a[0]).hypot(b[1] - a[1]);
+        if len <= 0.0 {
+            continue;
+        }
+        let (ux, uy) = ((b[0] - a[0]) / len, (b[1] - a[1]) / len);
+        let (nx, ny) = (-uy * half, ux * half);
+        let mut from = 0.0;
+        while from < len {
+            let to = (from + dash).min(len);
+            let p = [a[0] + ux * from, a[1] + uy * from];
+            let q = [a[0] + ux * to, a[1] + uy * to];
+            dashes.push(GpuPolygon {
+                vertices: vec![
+                    [p[0] + nx, p[1] + ny],
+                    [q[0] + nx, q[1] + ny],
+                    [q[0] - nx, q[1] - ny],
+                    [p[0] - nx, p[1] - ny],
+                ],
+                holes: Vec::new(),
+                fill_color: color,
+                stroke_color: None,
+                stroke_width: 0.0,
+            });
+            from += pitch;
+        }
+    }
+    dashes
 }
 
 pub(super) fn drc_slot(severity: Severity) -> ColorSlot {

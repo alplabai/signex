@@ -32,8 +32,17 @@ pub(crate) struct MenuInputs {
     i18n: Arc<signex_i18n::I18n>,
     /// Cross Select Mode is on: its Tools row shows a check mark (#1312).
     cross_select: bool,
+    /// The Notebook badges are shown: their View row shows a check mark
+    /// (mockup row 197).
+    notebook_badges: bool,
     /// What Design ▸ Update PCB Document names (#1312).
     pcb_sync: Option<crate::app::update_pcb::PcbSyncLabel>,
+    /// What View ▸ Window ▸ Layouts lists (mockup row 166).
+    layouts: crate::workspace_layouts::LayoutsMenu,
+    /// The rows the installed extensions add (#2495).
+    extension_rows: Vec<crate::extension::points::MenuRow>,
+    /// The installed extensions' panels, under View ▸ Extensions (#2495).
+    extension_panels: Vec<crate::extension::points::ExtensionPanelKind>,
 }
 
 impl PartialEq for MenuInputs {
@@ -43,7 +52,11 @@ impl PartialEq for MenuInputs {
             && self.locked == other.locked
             && self.open_panels == other.open_panels
             && self.cross_select == other.cross_select
+            && self.notebook_badges == other.notebook_badges
             && self.pcb_sync == other.pcb_sync
+            && self.layouts == other.layouts
+            && self.extension_rows == other.extension_rows
+            && self.extension_panels == other.extension_panels
             && match (&self.keymap, &other.keymap) {
                 (Some(a), Some(b)) => Arc::ptr_eq(a, b),
                 (None, None) => true,
@@ -71,8 +84,54 @@ impl MenuInputs {
             keymap: None,
             i18n,
             cross_select: true,
+            notebook_badges: true,
             pcb_sync: None,
+            layouts: Default::default(),
+            extension_rows: Vec::new(),
+            extension_panels: Vec::new(),
         }
+    }
+
+    pub(crate) fn with_notebook_badges(mut self, shown: bool) -> Self {
+        self.notebook_badges = shown;
+        self
+    }
+
+    pub(crate) fn notebook_badges(&self) -> bool {
+        self.notebook_badges
+    }
+
+    pub(crate) fn with_layouts(mut self, layouts: crate::workspace_layouts::LayoutsMenu) -> Self {
+        self.layouts = layouts;
+        self
+    }
+
+    pub(crate) fn with_extension_rows(
+        mut self,
+        rows: Vec<crate::extension::points::MenuRow>,
+    ) -> Self {
+        self.extension_rows = rows;
+        self
+    }
+
+    pub(super) fn extension_rows(&self) -> &[crate::extension::points::MenuRow] {
+        &self.extension_rows
+    }
+
+    pub(crate) fn with_extension_panels(
+        mut self,
+        panels: Vec<crate::extension::points::ExtensionPanelKind>,
+    ) -> Self {
+        self.extension_panels = panels;
+        self
+    }
+
+    pub(super) fn extension_panels(&self) -> &[crate::extension::points::ExtensionPanelKind] {
+        &self.extension_panels
+    }
+
+    pub(super) fn layouts(&self) -> &crate::workspace_layouts::LayoutsMenu {
+        &self.layouts
     }
 
     pub(crate) fn with_pcb_sync(

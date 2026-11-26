@@ -128,8 +128,8 @@ fn seed_margin(slot: &mut Option<f64>, expr: &Option<String>) {
 }
 
 fn literal_mm(expr: &str) -> Option<f64> {
+    use signex_expr::parse;
     use signex_sketch::expr::eval::{EvalContext, eval};
-    use signex_sketch::expr::parse::parse;
     if !is_numeric_literal(expr) {
         return None;
     }
@@ -374,6 +374,10 @@ pub(super) fn map_shape(s: &LibPadShape) -> SkPadShape {
                 points: poly.points.clone(),
             })
         }
+        LibPadShape::Trapezoid { delta } => SkPadShape::Trapezoid {
+            delta_x_expr: mm_expr(delta[0]),
+            delta_y_expr: mm_expr(delta[1]),
+        },
     }
 }
 

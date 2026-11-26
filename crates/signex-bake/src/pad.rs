@@ -38,6 +38,9 @@
 
 use std::collections::{BTreeMap, HashMap};
 
+use signex_expr::ExprNode;
+use signex_expr::UnitFamily;
+use signex_expr::parse;
 use signex_library::primitive::footprint::{
     ChamferedCorners as LibChamferedCorners, Drill as LibDrill, LayerId, Pad as LibPad,
     PadKind as LibPadKind, PadShape as LibPadShape, Polygon as LibPolygon,
@@ -47,15 +50,14 @@ use signex_sketch::attr::{
     ChamferedCorners as SkChamferedCorners, CustomPadShape, PadAttr, PadKind, PadShape, PadSide,
     PasteAperturePattern,
 };
-use signex_sketch::expr::ast::ExprNode;
 use signex_sketch::expr::eval::{EvalContext, eval};
-use signex_sketch::expr::parse::parse;
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
 use signex_sketch::solver::state::point_xy;
-use signex_sketch::unit::UnitFamily;
+use signex_types::pcb::Point;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
+use signex_types::pcb_pad_shape::trapezoid_corners;
 
 use crate::eval_util::{eval_length, opt_eval_length, strip_eq_prefix};
 use crate::layer_label::layer_id;
@@ -233,6 +235,7 @@ pub(crate) fn bake_one_pad(
             position,
         )?
     };
+    warn_trapezoid_without_copper(&shape, [size_x, size_y], &pad_number, warnings);
 
     // Warn on paste-aperture patterns we don't bake yet.
     match &pad_attr.paste_apertures {
@@ -293,6 +296,24 @@ pub(crate) fn bake_one_pad(
         copper_offset_x_mm: pad_attr.copper_offset_x_mm,
         copper_offset_y_mm: pad_attr.copper_offset_y_mm,
     })
+}
+
+/// Warn when a baked trapezoid's delta makes no copper with the pad's size
+/// (the board's rule, `signex_types::pcb_pad_shape`): such a footprint is
+/// refused when placed on a board.
+fn warn_trapezoid_without_copper(
+    shape: &LibPadShape,
+    size: [f64; 2],
+    pad_number: &str,
+    warnings: &mut Vec<String>,
+) {
+    let LibPadShape::Trapezoid { delta } = shape else {
+        return;
+    };
+    let size = Point::new(size[0], size[1]);
+    if let Err(fault) = trapezoid_corners(size, Point::new(delta[0], delta[1])) {
+        warnings.push(format!("pad {pad_number}: {fault}"));
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -446,6 +467,15 @@ fn bake_shape(
                 corners: map_corners(corners),
             }
         }
+        PadShape::Trapezoid {
+            delta_x_expr,
+            delta_y_expr,
+        } => LibPadShape::Trapezoid {
+            delta: [
+                eval_length(delta_x_expr, ctx)?,
+                eval_length(delta_y_expr, ctx)?,
+            ],
+        },
         PadShape::Custom(CustomPadShape::StaticPoints { points }) => {
             LibPadShape::Custom(LibPolygon {
                 points: points.clone(),

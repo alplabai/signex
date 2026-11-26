@@ -30,9 +30,10 @@ mod datasheet;
 mod library_message;
 mod placed_part;
 mod range_filter;
+pub use crate::app::core::resolved_placement::ResolvedPlacement;
 pub use datasheet::{DatasheetMsg, PickedFile, PickedPdf};
 pub use library_message::{
-    BoardPartError, LibraryMessage, ResolvedBoardPart, ResolvedPlacement, ResolvedSymbolChoice,
+    BoardPartError, LibraryMessage, ResolvedBoardPart, ResolvedSymbolChoice,
 };
 pub use placed_part::{PlacedPartAction, PlacedPartMsg, PlacedPartTarget};
 pub use range_filter::{RangeBound, RangeFilterMsg};
@@ -315,6 +316,9 @@ pub enum EditorMsg {
     },
     /// Fire-and-forget save of the active SimModel primitive.
     SaveSim(uuid::Uuid, Box<SimModel>),
+    /// The header's "N fields do not parse" pill was pressed: show the tab
+    /// holding the first field that does not parse and focus it.
+    UnparsedFieldsPillPressed,
 }
 
 /// Pure-data alias for `ParamKind` so messages don't depend on
@@ -341,6 +345,10 @@ pub enum SymbolToolMsg {
     PlaceArc,
     PlaceText,
     PlacePolygon,
+    PlaceBezier,
+    PlacePie,
+    PlaceEllipticalArc,
+    PlaceRoundRectangle,
 }
 
 /// v0.13.3 — selection-aware constraint kind tag. The dispatcher
@@ -395,97 +403,11 @@ pub enum SketchConstraintTag {
     SymmetricAboutPoint,
 }
 
-/// v0.16.2 — role tag attached to a sketch entity. The Sketch-mode
-/// inspector emits one of these via
-/// [`FootprintEditorMsg::SketchSetRole`]; the dispatcher
-/// clears every `*Attr` slot on the target entity and writes the
-/// matching one with sensible defaults. Bake auto-emits whatever
-/// geometry the role implies (pad / silk segment / courtyard
-/// polygon / mask opening / pour / paste aperture / keepout / board
-/// cutout). `Pad` is only valid on a Point — non-Point entities
-/// fall through as a silent no-op.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RoleTag {
-    /// Clear every `*Attr` slot on the entity.
-    Unassigned,
-    /// `PadAttr` — bakes as an SMD pad. Point-only.
-    Pad,
-    /// `SilkAttr { layer: TopSilk }` — top-side silkscreen line/arc.
-    SilkTop,
-    /// `SilkAttr { layer: BottomSilk }`.
-    SilkBottom,
-    /// `CourtyardAttr` — closed loop becomes the courtyard polygon.
-    Courtyard,
-    /// `KeepoutAttr` with `NO_ROUTING` defaults on TopCopper.
-    Keepout,
-    /// `BoardCutoutAttr { through: true }` — board cutout polygon.
-    Cutout,
-    /// `MaskOpeningAttr { layer: TopSolderMask }`.
-    MaskOpeningTop,
-    /// `MaskOpeningAttr { layer: BottomSolderMask }`.
-    MaskOpeningBottom,
-    /// `MaskExcludeAttr { layer: TopSolderMask }`.
-    MaskExcludeTop,
-    /// `MaskExcludeAttr { layer: BottomSolderMask }`.
-    MaskExcludeBottom,
-    /// `PourAttr { layer: TopCopper, .. }` with thermal-relief defaults.
-    PourTop,
-    /// `PourAttr { layer: BottomCopper, .. }`.
-    PourBottom,
-    /// `PasteApertureAttr { layer: TopPaste }`.
-    PasteApertureTop,
-    /// `PasteApertureAttr { layer: BottomPaste }`.
-    PasteApertureBottom,
-}
-
-impl RoleTag {
-    /// Display order for the inspector's pick_list. Mirrors the
-    /// docstring order on the enum.
-    pub const ALL: &'static [RoleTag] = &[
-        RoleTag::Unassigned,
-        RoleTag::Pad,
-        RoleTag::SilkTop,
-        RoleTag::SilkBottom,
-        RoleTag::Courtyard,
-        RoleTag::Keepout,
-        RoleTag::Cutout,
-        RoleTag::MaskOpeningTop,
-        RoleTag::MaskOpeningBottom,
-        RoleTag::MaskExcludeTop,
-        RoleTag::MaskExcludeBottom,
-        RoleTag::PourTop,
-        RoleTag::PourBottom,
-        RoleTag::PasteApertureTop,
-        RoleTag::PasteApertureBottom,
-    ];
-
-    /// Human-readable label rendered in the inspector dropdown.
-    pub fn label(self) -> &'static str {
-        match self {
-            RoleTag::Unassigned => "Unassigned",
-            RoleTag::Pad => "Pad",
-            RoleTag::SilkTop => "Silk · Top",
-            RoleTag::SilkBottom => "Silk · Bottom",
-            RoleTag::Courtyard => "Courtyard",
-            RoleTag::Keepout => "Keepout",
-            RoleTag::Cutout => "Board Cutout",
-            RoleTag::MaskOpeningTop => "Mask Opening · Top",
-            RoleTag::MaskOpeningBottom => "Mask Opening · Bottom",
-            RoleTag::MaskExcludeTop => "Mask Exclude · Top",
-            RoleTag::MaskExcludeBottom => "Mask Exclude · Bottom",
-            RoleTag::PourTop => "Pour · Top",
-            RoleTag::PourBottom => "Pour · Bottom",
-            RoleTag::PasteApertureTop => "Paste · Top",
-            RoleTag::PasteApertureBottom => "Paste · Bottom",
-        }
-    }
-}
-
-impl std::fmt::Display for RoleTag {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.label())
-    }
-}
+/// The role picked for a sketch entity: what it bakes into. The domain
+/// type, so the host-aware lists (`SketchHost::roles`) and the editor
+/// speak one vocabulary (#2518). The Properties panel emits it through
+/// [`FootprintEditorMsg::SketchSetRole`].
+pub use signex_types::sketch::SketchRole as RoleTag;
 
 /// Selection target on the Symbol canvas — pure-data version of
 /// `editor::symbol::state::SymbolSelection`.
@@ -538,6 +460,10 @@ pub enum GraphicHandleMsg {
     /// Polygon vertex at the given index — pure-data alias of
     /// `editor::symbol::state::GraphicHandle::PolygonVertex`.
     PolygonVertex(u32),
+    /// Bezier point — `0=start, 1=C1, 2=C2, 3=end`.
+    BezierPoint(u8),
+    /// Elliptical arc radius grip — `0=X, 1=Y`.
+    EllipseRadius(u8),
 }
 
 /// Pivot mode for Symbol-graphic rotate operations.
@@ -565,6 +491,7 @@ pub enum SymbolContextTargetMsg {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SymbolContextSubmenuMsg {
     Place,
+    Align,
 }
 
 mod footprint;
@@ -601,9 +528,24 @@ pub enum PickerMsg {
     PanelComponentClicked(super::state::ComponentsPanelRowKey),
     FilterChanged(String),
     SelectComponent(uuid::Uuid),
+    /// ↑ (-1) or ↓ (+1) was pressed over the picker's list (mockup row
+    /// 129): the selection moves that many listed rows.
+    SelectionStepped(isize),
     PlaceSelected,
     /// A range filter on a parameter column of the picker's list.
     RangeFilter(RangeFilterMsg),
+    /// A kind chip of the Library panel was pressed (mockup row 119).
+    PanelKindPicked(super::state::LibraryPanelKind),
+    /// The selected row's symbol and footprint read for the preview
+    /// column finished (mockup row 129); an older read is dropped.
+    PreviewLoaded {
+        key: super::state::ComponentsPanelRowKey,
+        generation: u64,
+        result: Result<Box<crate::panels::components_panel::details::ComponentDetails>, String>,
+    },
+    /// A button of the Library panel's row-style switch was pressed
+    /// (mockup row 119).
+    PanelRowStylePicked(super::state::LibraryRowStyle),
 }
 
 /// Edit Component Details modal sub-message tree — keeps
@@ -631,6 +573,12 @@ pub enum BrowserEditMsg {
         key: String,
         unit: String,
     },
+    /// The closed face of a parameter's unit menu was pressed.
+    UnitMenuOpened {
+        key: String,
+    },
+    /// A press landed outside the open unit menu.
+    UnitMenuDismissed,
     /// The user picked an SI prefix for a measurement row's number.
     ParamPrefixPicked {
         key: String,
@@ -697,13 +645,22 @@ pub enum PrimitivePickerMsg {
         read: std::sync::Arc<crate::library::loose_symbols::LooseRead>,
         from_browse: bool,
     },
-    /// A loose symbol was chosen: ask whether to copy it into the library.
+    /// A row was clicked: highlight it and preview it (mockup row 131).
+    RowHighlighted(crate::library::state::PrimitiveChoice),
+    /// The highlighted row's drawing was read; `Ok(None)` for a kind with
+    /// no drawing. `generation` drops a read of an earlier highlight.
+    PreviewLoaded {
+        generation: u64,
+        result: Result<Option<std::sync::Arc<crate::library::state::PrimitiveDrawing>>, String>,
+    },
+    /// A loose symbol was chosen: ask whether to copy (or link) it.
     PickLoose(crate::library::loose_symbols::LooseSymbol),
-    /// "Copy" was answered yes.
+    /// "Copy into <library>" was chosen.
     CopyConfirmed,
-    /// "Open library" was answered yes for a symbol of an unmounted `.snxlib`.
+    /// "Link without copying" was chosen for a symbol of an unmounted
+    /// `.snxlib`: open it, then bind the row to its symbol.
     OpenLibraryConfirmed,
-    /// "Copy" was answered no: nothing changes.
+    /// Cancel (or ✕) on the copy question: back to the list, nothing changes.
     CopyDeclined,
     /// The copy finished on its worker: the reference to bind, or why not,
     /// with the pick it was made for. The bind happens only if that same
@@ -732,9 +689,22 @@ pub enum SettingsMsg {
     /// Outcome of the background keyring delete of a token that a
     /// cancelled DigiKey flow stored before the cancel landed.
     DigiKeyStaleTokenRemoved(Result<(), String>),
+    /// Disconnect was pressed on the connected DigiKey card.
+    DigiKeyDisconnectRequested,
+    /// The keyring delete Disconnect started has finished.
+    DigiKeyDisconnected(Result<(), String>),
     MouserApiKeyChanged(String),
     MouserTest,
     MouserTestResult(Result<(), String>),
     PreferenceUp(DistributorSource),
     PreferenceDown(DistributorSource),
+    /// The grip of a row in the order list was pressed: a drag began.
+    PreferenceDragStarted(DistributorSource),
+    /// The pointer entered a row of the order list while a drag is on.
+    PreferenceDragHovered(DistributorSource),
+    /// The drag was released over a row: the dragged distributor takes
+    /// that row's place, and the order is saved like Up / Down.
+    PreferenceDropped(DistributorSource),
+    /// The mouse button was released anywhere on the page: the drag ends.
+    PreferenceDragEnded,
 }

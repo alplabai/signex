@@ -51,6 +51,7 @@ fn project_at(app: &mut Signex, dir: &Path) {
             sheets: Vec::new(),
             variant_definitions: Vec::new(),
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: Vec::new(),
             enable_git: false,
             net_classes: Vec::new(),
@@ -59,6 +60,11 @@ fn project_at(app: &mut Signex, dir: &Path) {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
+            fab_outputs: None,
+            router_tool_diameter: None,
+            bom_alternates: Vec::new(),
+            requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },
@@ -70,13 +76,7 @@ fn project_at(app: &mut Signex, dir: &Path) {
 }
 
 fn tab(path: &Path, kind: TabKind) -> TabInfo {
-    TabInfo {
-        title: "t".into(),
-        path: path.to_path_buf(),
-        cached_document: None,
-        project_id: None,
-        kind,
-    }
+    crate::test_adapter::boardless_tab("t", path, kind)
 }
 
 /// An app with one open project at `dir` and one document of `kind`, dirty

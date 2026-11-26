@@ -133,7 +133,7 @@ pub fn compute_drift(
             let entry = current.entry(lib_id.clone()).or_insert_with(|| {
                 let read = adapters
                     .entry(lib.id)
-                    .or_insert_with(|| LocalGitAdapter::open(&lib.path))
+                    .or_insert_with(|| LocalGitAdapter::open_to_read(&lib.path))
                     .as_ref()
                     .map_err(|e| LibraryError::Backend(e.to_string()))
                     .and_then(|a| a.get_symbol(symbol_id));
@@ -314,11 +314,7 @@ impl ApplyStamp {
     /// The alternate footprint the part was built with, from its stamp;
     /// `None` for the row's default (#1234).
     pub(crate) fn chosen_footprint(&self) -> Option<signex_library::primitive::PrimitiveRef> {
-        let key = self.stamp.as_ref()?.footprint_ref.as_deref()?;
-        let (library, footprint) = split_lib_id(key)?;
-        Some(signex_library::primitive::PrimitiveRef::new(
-            library, footprint,
-        ))
+        signex_library::part_footprint::stamped_footprint(self.stamp.as_ref()?)
     }
 }
 
@@ -507,7 +503,7 @@ fn open_library(libs: &[MountedLibrary], id: Uuid) -> Opened {
         .iter()
         .find(|l| l.id == id)
         .ok_or_else(|| "its library is not open".to_string())?;
-    let adapter = signex_library::adapters::local_git::LocalGitAdapter::open(&lib.path)
+    let adapter = signex_library::adapters::local_git::LocalGitAdapter::open_to_read(&lib.path)
         .map_err(|e| e.to_string())?;
     let tables = adapter.list_tables().map_err(|e| e.to_string());
     Ok(OpenedLibrary { adapter, tables })
@@ -785,9 +781,10 @@ pub fn read_symbols(input: ApplyInput, libs: &[MountedLibrary]) -> SymbolsRead {
     }
 }
 
+/// The `(library, primitive)` uuids of a `<library uuid>:<primitive uuid>`
+/// key, read by the one parser (`PrimitiveRef::parse_key`).
 pub(crate) fn split_lib_id(lib_id: &str) -> Option<(Uuid, Uuid)> {
-    let (lib, sym) = lib_id.split_once(':')?;
-    Some((Uuid::parse_str(lib).ok()?, Uuid::parse_str(sym).ok()?))
+    signex_library::primitive::PrimitiveRef::parse_key(lib_id).map(|r| (r.library_id, r.uuid))
 }
 
 /// The library uuid a `"<library uuid>:<symbol uuid>"` key belongs to.
@@ -1018,6 +1015,7 @@ mod tests {
         let entry = |s: &Symbol, selected: bool| LibraryUpdateEntry {
             symbol_uuid: s.uuid,
             ref_des: s.reference.clone(),
+            internal_pn: String::new(),
             lib_id: "L:S".into(),
             library_id: library,
             library_name: "Lib".into(),

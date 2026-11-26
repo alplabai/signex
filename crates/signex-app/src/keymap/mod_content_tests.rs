@@ -10,7 +10,10 @@ use std::str::FromStr;
 type Row = (ShortcutContext, String, String);
 
 /// The approved platform-standard set: `(key, shift)` chords that are `Mod`.
-const STANDARD: [(&str, bool); 25] = [
+/// `Mod+Shift+C` (copy a board 3D screenshot, both profiles) is approved in
+/// the 2026-11-24 board 3D keys row of docs/DECISIONS.md.
+const STANDARD: [(&str, bool); 28] = [
+    ("alt+s", false),
     ("n", false),
     ("o", false),
     ("s", false),
@@ -36,6 +39,8 @@ const STANDARD: [(&str, bool); 25] = [
     ("e", true),
     ("f", true),
     ("a", true),
+    ("g", false),
+    ("c", true),
 ];
 
 fn compiled(platform: Platform, id: &str) -> CompiledKeymap {
@@ -56,11 +61,17 @@ fn rows(platform: Platform, id: &str) -> Vec<Row> {
 fn macos_moves_exactly_the_approved_standard_set() {
     for (id, moved, extra) in [
         (
-            "altium",
-            18,
-            vec!["\u{2325}\u{2318}F", "\u{21e7}\u{2318}Z", "\u{2318}W"],
+            "signex_standard",
+            21,
+            vec![
+                "\u{2325}I",
+                "\u{2325}\u{2318}F",
+                "\u{21e7}\u{2318}Z",
+                "\u{2318}W",
+                "\u{21e7}TAB",
+            ],
         ),
-        ("classic", 22, vec!["\u{21e7}\u{2318}Z"]),
+        ("classic", 24, vec!["\u{21e7}\u{2318}Z"]),
     ] {
         let win = rows(Platform::Windows, id);
         let mac = rows(Platform::MacOs, id);
@@ -92,7 +103,7 @@ fn macos_moves_exactly_the_approved_standard_set() {
 fn collisions_stay_on_physical_control_on_every_platform() {
     for (id, chords) in [
         (
-            "altium",
+            "signex_standard",
             vec![
                 "Ctrl+Q",
                 "Ctrl+W",
@@ -140,7 +151,7 @@ fn collisions_stay_on_physical_control_on_every_platform() {
 fn multi_binding_hints_keep_the_order_they_had_on_trunk() {
     let want: [(&str, &[(&str, &str)]); 2] = [
         (
-            "altium",
+            "signex_standard",
             &[
                 ("redo", "Ctrl+Y"),
                 ("place_wire", "P W"),
@@ -193,4 +204,60 @@ fn multi_binding_hints_keep_the_order_they_had_on_trunk() {
         // `Q` on a board gave cycle_unit its second (#2406).
         assert_eq!(multi.len(), 5, "{id}: {multi:?}");
     }
+}
+
+/// A Mac keyboard has no Insert key: on macOS the Signex Standard profile also binds
+/// ⌥I to add vertex, after Insert, so the menu hint there is ⌥I. Windows and
+/// Linux keep Insert alone (`docs/DECISIONS.md`, the 2026-11-19 row on the
+/// Signex Standard profile's macOS bindings).
+#[test]
+fn signex_standard_on_macos_adds_a_vertex_on_option_i() {
+    let option_i = [KeyStroke::from_str("Alt+I").unwrap()];
+    let insert = [KeyStroke::from_str("INS").unwrap()];
+    let command = |platform, strokes: &[KeyStroke]| {
+        compiled(platform, "signex_standard")
+            .lookup(strokes, &[ShortcutContext::Global])
+            .command
+            .map(|c| c.as_str().to_string())
+    };
+    let add_vertex = Some("copy_attributes_or_add_vertex".to_string());
+    assert_eq!(command(Platform::MacOs, &option_i), add_vertex);
+    assert_eq!(command(Platform::MacOs, &insert), add_vertex);
+    for platform in [Platform::Windows, Platform::Linux] {
+        assert_eq!(command(platform, &option_i), None, "{platform:?}");
+        assert_eq!(command(platform, &insert), add_vertex, "{platform:?}");
+    }
+    assert_eq!(
+        compiled(Platform::MacOs, "signex_standard")
+            .shortcut_label_for_id("copy_attributes_or_add_vertex"),
+        "\u{2325}I"
+    );
+}
+
+/// macOS takes ⌃Space for the input source once two exist, so on macOS the
+/// Signex Standard profile also cycles the drag wiring mode on ⇧Tab, after ⌃Space, so
+/// the menu hint there is ⇧Tab. Windows and Linux keep Ctrl+Space alone
+/// (`docs/DECISIONS.md`, the 2026-11-19 row on the Signex Standard profile's macOS
+/// bindings).
+#[test]
+fn signex_standard_on_macos_cycles_the_wiring_mode_on_shift_tab() {
+    let shift_tab = [KeyStroke::from_str("Shift+TAB").unwrap()];
+    let ctrl_space = [KeyStroke::from_str("Ctrl+SPACE").unwrap()];
+    let command = |platform, strokes: &[KeyStroke]| {
+        compiled(platform, "signex_standard")
+            .lookup(strokes, &[ShortcutContext::Global])
+            .command
+            .map(|c| c.as_str().to_string())
+    };
+    let cycle = Some("cycle_wiring_mode".to_string());
+    assert_eq!(command(Platform::MacOs, &shift_tab), cycle);
+    assert_eq!(command(Platform::MacOs, &ctrl_space), cycle);
+    for platform in [Platform::Windows, Platform::Linux] {
+        assert_eq!(command(platform, &shift_tab), None, "{platform:?}");
+        assert_eq!(command(platform, &ctrl_space), cycle, "{platform:?}");
+    }
+    assert_eq!(
+        compiled(Platform::MacOs, "signex_standard").shortcut_label_for_id("cycle_wiring_mode"),
+        shift_tab[0].display_for(Platform::MacOs)
+    );
 }

@@ -37,7 +37,6 @@ fn app_with_first_leg() -> Signex {
     app.document_state.tabs.push(TabInfo {
         title: "wire-merge".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -155,7 +154,7 @@ fn moving_a_red_wire_into_line_with_an_uncoloured_one_does_not_fold_them() {
     app.interaction_state.active_canvas_mut().selected =
         vec![SelectedItem::new(id(2), SelectedKind::Wire)];
     app.ui_state.move_selection.dx = "0".to_string();
-    app.ui_state.move_selection.dy = "-5.08".to_string();
+    app.ui_state.move_selection.dy = "5.08".to_string();
 
     let _ = app.update(Message::MoveSelection(MoveSelectionMsg::Apply));
 
@@ -181,7 +180,7 @@ fn the_same_move_folds_when_neither_wire_is_coloured() {
     app.interaction_state.active_canvas_mut().selected =
         vec![SelectedItem::new(id(2), SelectedKind::Wire)];
     app.ui_state.move_selection.dx = "0".to_string();
-    app.ui_state.move_selection.dy = "-5.08".to_string();
+    app.ui_state.move_selection.dy = "5.08".to_string();
 
     let _ = app.update(Message::MoveSelection(MoveSelectionMsg::Apply));
 

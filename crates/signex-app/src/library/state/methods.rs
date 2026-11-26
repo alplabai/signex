@@ -69,6 +69,7 @@ impl Default for LibraryState {
             panel_expanded: Default::default(),
             panel_selected: None,
             panel_last_click: Default::default(),
+            library_panel: Default::default(),
             close_library_confirm: None,
             batch_row_failures: HashMap::new(),
             batch_rows_in_flight: HashMap::new(),
@@ -83,6 +84,7 @@ impl Default for LibraryState {
             library_updates: None,
             queued_library_updates: Vec::new(),
             skipped_updates_for: std::collections::HashSet::new(),
+            skipped_versions: Default::default(),
             installed_libraries: Vec::new(),
             global_libraries: Vec::new(),
             stock_library: None,
@@ -101,6 +103,7 @@ impl Default for LibraryState {
             writes: Default::default(),
             owed_cascades: Default::default(),
             closing: Default::default(),
+            history_missing: Default::default(),
             unmounted: Vec::new(),
             clock: chrono::Utc::now(),
             refresh_generations: HashMap::new(),
@@ -117,6 +120,8 @@ impl Default for LibraryState {
             stock_copy: None,
             stock_copy_target: None,
             stock_copies_in_flight: Default::default(),
+            symbol_props: HashMap::new(),
+            mirror_cards: HashMap::new(),
         }
     }
 }
@@ -396,6 +401,37 @@ impl LibraryState {
         self.set.is_read_only_path(root)
     }
 
+    /// True when the library at `root` is mounted read-only because its
+    /// Git history is missing (Skip for now, mockup row 138).
+    pub fn is_history_missing(&self, root: &Path) -> bool {
+        self.history_missing.contains(root) && self.is_read_only(root)
+    }
+
+    /// True when `path` is, or lies inside, a library mounted read-only
+    /// because its Git history is missing.
+    pub fn is_history_missing_target(&self, path: &Path) -> bool {
+        let path = resolved_path(path);
+        self.open_libraries.iter().any(|lib| {
+            self.is_history_missing(&lib.root)
+                && lib
+                    .root_dir()
+                    .is_some_and(|dir| path.starts_with(resolved_path(dir)))
+        })
+    }
+
+    /// Display name of a library mounted read-only because its Git history
+    /// is missing whose `.snxlib` is `path` or lies under the folder `path`,
+    /// so deleting `path` would remove it.
+    pub fn history_missing_library_under(&self, path: &Path) -> Option<String> {
+        let path = resolved_path(path);
+        self.open_libraries
+            .iter()
+            .find(|lib| {
+                self.is_history_missing(&lib.root) && resolved_path(&lib.root).starts_with(&path)
+            })
+            .map(|lib| lib.display_name.clone())
+    }
+
     /// Display name of the read-only library whose directory contains
     /// `path`, or `None` when `path` is outside every read-only mount.
     pub fn read_only_library_name_containing(&self, path: &Path) -> Option<String> {
@@ -482,6 +518,8 @@ impl LibraryState {
         } else {
             self.set.mount(Box::new(adapter))?;
         }
+        // Opened with its history: no longer read-only for want of it.
+        self.history_missing.remove(&root);
         let mut entry = OpenLibrary {
             root,
             display_name,

@@ -18,7 +18,6 @@ fn open_tab(app: &mut Signex, path: &Path, kind: TabKind) {
     app.document_state.tabs.push(TabInfo {
         title: "lib".into(),
         path: path.to_path_buf(),
-        cached_document: None,
         project_id: None,
         kind,
     });
@@ -62,6 +61,7 @@ fn fp_names(app: &Signex, path: &Path) -> Vec<String> {
 fn sym_summary(app: &Signex, path: &Path) -> Vec<(String, usize)> {
     let editor = &app.document_state.symbol_editors[path];
     editor
+        .draft
         .file
         .symbols
         .iter()

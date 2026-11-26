@@ -340,28 +340,31 @@ fn ctrl_s_on_a_newer_minor_board_writes_nothing() {
     app.document_state.projects[0].data.enable_git = true;
     let path = dir.path().join("board.snxpcb");
     let mut board = empty_board();
-    board.unknown.newer_minor_source = Some("snxpcb/1.9".into());
+    board.unknown.newer_minor_source = Some("snxpcb/1.13".into());
     app.open_pcb_tab(path.clone(), "board".into(), board);
     mark_dirty(&mut app, &path);
     press_save(&mut app);
     assert!(!path.exists());
     assert!(no_commit_requested(&app));
     let notice = app.document_state.error_notice.as_ref().expect("notice");
+    // The sentence names the operation; the reason is the error chain, shown
+    // in the card's system block (mockup row 11).
+    assert_eq!(notice.detail.render_en_us(), "Failed to save PCB");
     assert!(
         notice
-            .detail
-            .render_en_us()
-            .contains("read-only (newer format)")
+            .system
+            .as_ref()
+            .is_some_and(|system| system.as_str().contains("read-only (newer format)")),
+        "{notice:?}"
     );
 }
 
 /// The board the first tab holds, as `begin_pcb_save` encodes it.
 fn empty_board_with(app: &Signex) -> signex_types::pcb::PcbBoard {
-    app.document_state.tabs[0]
-        .cached_document
-        .as_ref()
-        .and_then(|doc| doc.as_pcb())
+    app.document_state
+        .tab_board_engine(0)
         .expect("pcb tab")
+        .board()
         .clone()
 }
 
@@ -547,6 +550,7 @@ pub(crate) fn empty_board() -> signex_types::pcb::PcbBoard {
     signex_types::pcb::PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         unknown: Default::default(),
         uuid: uuid::Uuid::now_v7(),

@@ -29,6 +29,9 @@ pub enum VariantProblem {
     Taken(String),
     /// No variant has the name.
     Unknown(String),
+    /// The file's `variant_settings` section could not be read, so no
+    /// variant setting can be changed (mockup row 32).
+    SettingsUnreadable,
 }
 
 impl std::fmt::Display for VariantProblem {
@@ -45,6 +48,9 @@ impl std::fmt::Display for VariantProblem {
             Self::Reserved => write!(f, "`{BASE_VARIANT}` is the variant every project has"),
             Self::Taken(name) => write!(f, "the project already has a variant named `{name}`"),
             Self::Unknown(name) => write!(f, "the project has no variant named `{name}`"),
+            Self::SettingsUnreadable => {
+                f.write_str("the project's variant settings could not be read")
+            }
         }
     }
 }
@@ -99,13 +105,17 @@ impl ProjectData {
         Ok(())
     }
 
-    /// Rename a variant; the active variant follows its new name.
+    /// Rename a variant; the active variant follows its new name. Refused
+    /// while the variant settings are unreadable: the kept section would
+    /// still name the old variant.
     pub fn rename_variant(&mut self, from: &str, to: &str) -> Result<(), VariantProblem> {
+        self.check_settings_readable()?;
         let index = self
             .variant_index(from)
             .ok_or_else(|| VariantProblem::Unknown(from.trim().to_string()))?;
         let to = self.check_variant_name(to, Some(from))?;
         let old = std::mem::replace(&mut self.variant_definitions[index], to.clone());
+        self.rename_variant_settings(&old, &to);
         if self
             .active_variant
             .as_deref()
@@ -117,11 +127,14 @@ impl ProjectData {
     }
 
     /// Remove a variant; when it was the active one, Base becomes active.
+    /// Refused while the variant settings are unreadable, as a rename is.
     pub fn remove_variant(&mut self, name: &str) -> Result<(), VariantProblem> {
+        self.check_settings_readable()?;
         let index = self
             .variant_index(name)
             .ok_or_else(|| VariantProblem::Unknown(name.trim().to_string()))?;
         let removed = self.variant_definitions.remove(index);
+        self.remove_variant_settings(&removed);
         if self
             .active_variant
             .as_deref()

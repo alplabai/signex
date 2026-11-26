@@ -33,13 +33,9 @@ fn set_role(
         LayerId, PadKind as LibPadKind, PadShape as LibPadShape,
     };
 
-    // v0.27 — the Role=Pad-on-a-Line case is rewritten to
-    // MakePadFromProfile at the top of
-    // `apply_footprint_primitive_edit`, so this arm only
-    // sees Point-targeted Pad assignments + every other
-    // role. PadAttr is Point-only on the schema side, so
-    // dispatching to `apply_sketch_role_with_warnings` is
-    // always meaningful from here on.
+    // Role=Pad on a line or arc is rewritten to MakePadFromProfile by
+    // `profile_roles::route_role_pick`, so this arm only sees Point-targeted
+    // Pad assignments + every other role.
     editor.with_parts(|state, primitive| {
         apply_sketch_role_with_warnings(state, primitive, id, role);
     });
@@ -149,8 +145,16 @@ fn set_role(
 // - `last_solve` is None (no solve has run yet) → ask user to interact
 //   briefly so a solve fires, then retry. (Auto-mint paths on entry to
 //   Sketch mode already trigger a solve, so this is rare.)
-fn make_pad_from_profile(editor: &mut crate::app::FootprintDocument) {
+pub(super) fn make_pad_from_profile(editor: &mut crate::app::FootprintDocument) {
     editor.state.active_bar_menu = None;
+    // A board has no pads (#2518): the menu greys the row there.
+    if !editor
+        .state
+        .sketch_host()
+        .offers(signex_types::sketch::SketchAction::MakePadFromProfile)
+    {
+        return;
+    }
     use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
     use crate::library::editor::footprint::sketch_mode::SketchEdit;
     use signex_sketch::attr::{
@@ -182,10 +186,15 @@ fn make_pad_from_profile(editor: &mut crate::app::FootprintDocument) {
             .chain(editor.state.selected_sketch_extra.iter().copied())
             .collect();
 
-        // First pass — Line directly in the selection.
+        // First pass — a Line or Arc directly in the selection.
         let direct_line = selection
             .iter()
-            .find(|id| matches!(kind_of(**id), Some(EntityKind::Line { .. })))
+            .find(|id| {
+                matches!(
+                    kind_of(**id),
+                    Some(EntityKind::Line { .. } | EntityKind::Arc { .. })
+                )
+            })
             .copied();
         // Second pass — a selected Point's incident Line.
         let incident_line = selection.iter().find_map(|id| {
@@ -242,7 +251,24 @@ fn make_pad_from_profile(editor: &mut crate::app::FootprintDocument) {
         None => return,
     };
 
-    let trace = signex_bake::profile::trace_closed_profile(sketch_for_walk, solve, line_id);
+    // A loop that already is a pad stays one pad: select it.
+    let owning_pad =
+        signex_bake::closed_profiles::profile_of(sketch_for_walk, line_id).and_then(|profile| {
+            signex_bake::closed_profiles::profile_pad(sketch_for_walk, &profile).map(|e| e.id)
+        });
+    if let Some(pad) = owning_pad {
+        editor.state.selected_sketch = Some(pad);
+        editor.state.selected_sketch_secondary = None;
+        editor.state.selected_sketch_extra.clear();
+        editor.canvas_cache.clear();
+        return;
+    }
+
+    let trace = if signex_bake::closed_profiles::closes_at_a_fork(sketch_for_walk, line_id) {
+        Err(signex_bake::profile::TraceError::Branching)
+    } else {
+        signex_bake::profile::trace_closed_profile(sketch_for_walk, solve, line_id)
+    };
     let vertices = match trace {
         Ok(v) if v.len() >= 3 => v,
         Ok(_) => {

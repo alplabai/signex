@@ -70,7 +70,10 @@ fn answer(path: &std::path::Path, graphic: &BoardGraphic, revision: u64) -> Valu
 
 impl Signex {
     /// The board `document` names, when it is open and can be edited.
-    fn editable_named_board(&self, args: &CommandArgs) -> Result<std::path::PathBuf, String> {
+    pub(super) fn editable_named_board(
+        &self,
+        args: &CommandArgs,
+    ) -> Result<std::path::PathBuf, String> {
         let path = self.named_output_board(args)?;
         let engine = self
             .document_state
@@ -127,8 +130,7 @@ fn new_graphic(app: &Signex, board: &PcbBoard, args: &CommandArgs) -> Result<Boa
     };
     if !takes_board_graphics(layer) {
         return Err(
-            "a drawing goes on a non-copper layer other than a keep-out; name one with `layer`"
-                .to_string(),
+            "a drawing goes on any layer but a keep-out; name one with `layer`".to_string(),
         );
     }
     let origin = board.options.origin;

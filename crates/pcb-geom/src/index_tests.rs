@@ -19,6 +19,8 @@ fn pad(uuid: Uuid, x: f64, y: f64, w: f64, h: f64) -> Pad {
         layers: vec!["TopCopper".into()],
         net: None,
         roundrect_ratio: 0.0,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 0.0,
         layer_sizes: None,
         net_locked: false,
@@ -82,6 +84,7 @@ fn board(footprints: Vec<Footprint>, segments: Vec<Segment>, vias: Vec<Via>) -> 
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
@@ -380,6 +383,8 @@ fn area(uuid: Uuid, fill: &str, outline: &[(f64, f64)]) -> Zone {
         min_thickness: 0.0,
         min_island_area: 0.0,
         remove_dead_islands: false,
+        shelved: false,
+        unfilled: false,
         unknown: Default::default(),
     }
 }
@@ -475,4 +480,203 @@ fn an_item_is_found_by_its_uuid() {
         })
     );
     assert_eq!(item_by_uuid(&b, id(9)), None);
+}
+
+/// #899: a click or box inside a zone's hole does not pick the zone, while
+/// the copper around the hole and the hole's edge do. A hole the fill cannot
+/// use (one crossing the outline) is copper and does not cut the pick.
+#[test]
+fn a_zone_is_not_picked_inside_its_holes() {
+    let mut b = board(Vec::new(), Vec::new(), Vec::new());
+    let square = |x: f64, y: f64, side: f64| {
+        vec![
+            Point::new(x, y),
+            Point::new(x + side, y),
+            Point::new(x + side, y + side),
+            Point::new(x, y + side),
+        ]
+    };
+    let mut pour = area(
+        id(7),
+        "pour",
+        &[(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)],
+    );
+    pour.holes = vec![square(4.0, 4.0, 2.0), square(-1.0, 7.0, 2.0)];
+    assert_eq!(
+        pour.usable_holes(),
+        vec![0],
+        "the second hole crosses the outline"
+    );
+    b.zones = vec![pour];
+    let index = BoardIndex::build_selectable(&b);
+    let zone = ItemRef::Zone {
+        zone: id(7),
+        kind: PickKind::Polygons,
+    };
+    let at = |x: f64, y: f64| PointNm::new((x * MM as f64) as i64, (y * MM as f64) as i64);
+    assert_eq!(index.hit_point(at(2.0, 2.0), 0), vec![zone], "the copper");
+    assert!(
+        index.hit_point(at(5.0, 5.0), 0).is_empty(),
+        "inside the hole"
+    );
+    assert!(
+        index.hit_point(at(5.0, 5.0), MM / 10).is_empty(),
+        "inside the hole, the edge out of reach"
+    );
+    assert_eq!(
+        index.hit_point(at(4.0, 5.0), 0),
+        vec![zone],
+        "the hole's edge"
+    );
+    assert_eq!(
+        index.hit_point(at(4.05, 5.0), MM / 10),
+        vec![zone],
+        "within reach of the hole's edge"
+    );
+    assert_eq!(
+        index.hit_point(at(0.5, 8.0), 0),
+        vec![zone],
+        "an unusable hole is copper"
+    );
+
+    let in_hole = RectNm::new(at(4.5, 4.5), at(5.5, 5.5));
+    assert!(index.hit_rect(&in_hole, RectSelect::Touching).is_empty());
+    let out_of_hole = RectNm::new(at(4.5, 4.5), at(7.0, 5.5));
+    assert_eq!(
+        index.hit_rect(&out_of_hole, RectSelect::Touching),
+        vec![zone],
+        "a box from the hole onto the copper"
+    );
+    let on_copper = RectNm::new(at(1.0, 1.0), at(2.0, 2.0));
+    assert_eq!(index.hit_rect(&on_copper, RectSelect::Touching), vec![zone]);
+    let whole = RectNm::new(at(-2.0, -1.0), at(11.0, 11.0));
+    assert_eq!(index.hit_rect(&whole, RectSelect::Inside), vec![zone]);
+    let outline_only = RectNm::new(at(-1.0, -1.0), at(11.0, 3.0));
+    assert!(index.hit_rect(&outline_only, RectSelect::Inside).is_empty());
+}
+
+#[test]
+fn a_box_never_takes_a_footprint_text_and_a_point_does() {
+    let mut part = footprint(id(1), 10.0, 10.0, 0.0, "TopCopper", Vec::new());
+    part.properties.push(signex_types::property::PcbProperty {
+        key: "Reference".into(),
+        value: "R1".into(),
+        position: Some(Point::new(0.0, -2.0)),
+        ..Default::default()
+    });
+    let index = BoardIndex::build_selectable(&board(vec![part], Vec::new(), Vec::new()));
+    let text = ItemRef::FootprintText {
+        footprint: id(1),
+        field: BoardTextField::Designator,
+    };
+    assert!(
+        index
+            .hit_point(PointNm::new(10 * MM, 8 * MM), 0)
+            .contains(&text)
+    );
+    let rect = RectNm::new(PointNm::new(0, 0), PointNm::new(20 * MM, 20 * MM));
+    let square = [
+        PointNm::new(0, 0),
+        PointNm::new(20 * MM, 0),
+        PointNm::new(20 * MM, 20 * MM),
+        PointNm::new(0, 20 * MM),
+    ];
+    for mode in [RectSelect::Inside, RectSelect::Touching] {
+        let boxed = index.hit_rect(&rect, mode);
+        assert!(boxed.contains(&ItemRef::Footprint(id(1))), "{boxed:?}");
+        assert!(!boxed.contains(&text), "{boxed:?}");
+        let lassoed = index.hit_polygon(&square, mode);
+        assert!(lassoed.contains(&ItemRef::Footprint(id(1))), "{lassoed:?}");
+        assert!(!lassoed.contains(&text), "{lassoed:?}");
+    }
+}
+
+/// #2457: a room is picked on its edges and its name, and inside it only
+/// when nothing else is there; the copper index never holds it.
+#[test]
+fn a_room_is_picked_on_its_edges_and_under_everything_inside() {
+    use signex_types::pcb::{Room, RoomOutline};
+    let mut b = sample();
+    b.rooms.push(Room::drawn(
+        id(900),
+        "dcdc".into(),
+        "#A058C8",
+        RoomOutline::Rect {
+            x_mm: -5.0,
+            y_mm: -5.0,
+            w_mm: 50.0,
+            h_mm: 30.0,
+        },
+    ));
+    let room = ItemRef::Room(id(900));
+    let index = BoardIndex::build_selectable(&b);
+    let at = |x: f64, y: f64| PointNm::new((x * MM as f64) as i64, (y * MM as f64) as i64);
+    // On its left edge.
+    let edge = crate::selection::pick(&index, at(-5.0, 10.0), MM / 10).map(|i| i.item);
+    assert_eq!(edge, Some(room));
+    // On the box of its name.
+    let (lo, hi) = room_label_box(&b.rooms[0]).expect("a label box");
+    let label = at((lo.x + hi.x) / 2.0, (lo.y + hi.y) / 2.0);
+    assert_eq!(
+        crate::selection::pick(&index, label, 0).map(|i| i.item),
+        Some(room)
+    );
+    // Inside, clear of everything else.
+    assert_eq!(
+        crate::selection::pick(&index, at(35.0, 15.0), 0).map(|i| i.item),
+        Some(room)
+    );
+    // Inside, on the track: the track wins.
+    let on_track = crate::selection::pick(&index, at(5.0, 0.0), 0).map(|i| i.item);
+    assert!(matches!(on_track, Some(ItemRef::Track(_))), "{on_track:?}");
+    assert!(
+        !BoardIndex::build(&b).items().any(|i| i.item == room),
+        "connectivity holds no rooms"
+    );
+}
+
+/// DECISIONS 2026-11-25: a click on a keepout, a Fill, a Solid Region or a
+/// pour cutout drawn over a polygon pour picks the area, not the pour. The
+/// pour has the lowest uuid, so the tie-break alone would pick it.
+#[test]
+fn an_area_over_a_pour_is_picked_before_the_pour() {
+    let mut b = board(Vec::new(), Vec::new(), Vec::new());
+    let tri = |x: f64| [(x, 1.0), (x + 3.0, 1.0), (x, 4.0)];
+    b.zones = vec![
+        area(
+            id(10),
+            "pour",
+            &[(0.0, 0.0), (20.0, 0.0), (20.0, 10.0), (0.0, 10.0)],
+        ),
+        area(id(11), "keepout", &tri(1.0)),
+        area(
+            id(12),
+            "solid",
+            &[(6.0, 1.0), (9.0, 1.0), (9.0, 4.0), (6.0, 4.0)],
+        ),
+        area(id(13), "solid", &tri(11.0)),
+        area(id(14), "pour_cutout", &tri(16.0)),
+    ];
+    let index = BoardIndex::build_selectable(&b);
+    let at = |x: f64, y: f64| PointNm::new((x * MM as f64) as i64, (y * MM as f64) as i64);
+    let zone = |n: u128, kind: PickKind| ItemRef::Zone { zone: id(n), kind };
+    let pour = zone(10, PickKind::Polygons);
+    for (point, expected) in [
+        (at(1.5, 1.5), zone(11, PickKind::Keepouts)),
+        (at(7.5, 2.5), zone(12, PickKind::Fills)),
+        (at(11.5, 1.5), zone(13, PickKind::Regions)),
+        (at(16.5, 1.5), zone(14, PickKind::Regions)),
+    ] {
+        let hits = index.hit_point(point, 0);
+        assert!(hits.contains(&pour) && hits.contains(&expected), "{hits:?}");
+        assert_eq!(
+            crate::selection::pick(&index, point, 0).map(|i| i.item),
+            Some(expected)
+        );
+    }
+    assert_eq!(
+        crate::selection::pick(&index, at(10.0, 8.0), 0).map(|i| i.item),
+        Some(pour),
+        "the pour alone"
+    );
 }

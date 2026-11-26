@@ -3,7 +3,8 @@
 //! headless or agent edit does no file IO inside `update` (epic #665). What
 //! its checks read from disk (the project's closed sheets for the name check,
 //! the designators and the hierarchy-loop check; a library row for
-//! `place_component`; the child file of `sync_sheet_pins`; whether a child
+//! `place_component`; a library footprint for `assign_footprint` and
+//! `change_footprint`, #2937; the child file of `sync_sheet_pins`; whether a child
 //! reference leaves the project through a link) is read by a `Task` off the
 //! UI thread, and the edit runs when the reads land, with its outcome reported
 //! then. An `apply_edits` list plans the union of its edits once; a closed
@@ -19,6 +20,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use iced::Task;
+use signex_library::PrimitiveRef;
+use signex_types::pcb::Footprint;
 use signex_types::schematic::SchematicSheet;
 use uuid::Uuid;
 
@@ -34,6 +37,7 @@ use crate::app::state::scope::{CaseFold, path_key_with};
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
 use crate::library::messages::ResolvedPlacement;
+use crate::library::place::resolve_library_footprint;
 
 type Ran = (CommandOutcome, Task<Message>);
 
@@ -56,6 +60,11 @@ pub struct EditReads {
     pub(crate) escapes: HashMap<PathBuf, bool>,
     /// Text files an edit imports (`import_graphics`, #1667), by path.
     pub(crate) texts: HashMap<PathBuf, Result<String, String>>,
+    /// Library footprints in their board form, by address (#2937).
+    pub(crate) footprints: HashMap<PrimitiveRef, Result<Footprint, String>>,
+    /// The sheets Create Rooms from Sheets makes rooms for, as its dialog
+    /// read them (#2987): the handler takes them rather than the dialog.
+    pub(crate) room_sheets: Option<Vec<signex_engine::pcb::rooms::SheetMembers>>,
     /// For a loose target, the files its sheet symbols refer to and what they
     /// place, as read.
     pub(crate) subtree: Option<ProjectSheetSet>,
@@ -101,6 +110,7 @@ struct ReadPlan {
     /// `(project folder, path)` to check for a link out of the folder.
     links: Vec<(PathBuf, PathBuf)>,
     texts: Vec<PathBuf>,
+    footprints: Vec<PrimitiveRef>,
 }
 
 impl ReadPlan {
@@ -111,6 +121,7 @@ impl ReadPlan {
             && self.children.is_empty()
             && self.links.is_empty()
             && self.texts.is_empty()
+            && self.footprints.is_empty()
     }
 
     /// Read everything. Blocking: run it off the UI thread.
@@ -158,6 +169,14 @@ impl ReadPlan {
                 (path, read)
             })
             .collect();
+        let footprints = self
+            .footprints
+            .into_iter()
+            .map(|address| {
+                let read = resolve_library_footprint(&address, &self.open_libraries);
+                (address, read)
+            })
+            .collect();
         EditReads {
             project,
             subtree,
@@ -165,6 +184,8 @@ impl ReadPlan {
             children,
             escapes,
             texts,
+            footprints,
+            room_sheets: None,
             failed: None,
         }
     }
@@ -302,6 +323,16 @@ impl Signex {
         }
     }
 
+    /// The library footprint at `address` an edit swaps in or assigns, as
+    /// read (#2937).
+    pub(super) fn prefetched_footprint(&self, address: &PrimitiveRef) -> Result<Footprint, String> {
+        let reads = self.document_state.agent_edits.reads.as_ref();
+        match reads.and_then(|r| r.footprints.get(address)) {
+            Some(read) => read.clone(),
+            None => Err(NOT_READ.to_string()),
+        }
+    }
+
     /// The text file at `path` an edit imports, as read.
     pub(super) fn prefetched_text(&self, path: &Path) -> Result<String, String> {
         let reads = self.document_state.agent_edits.reads.as_ref();
@@ -355,6 +386,11 @@ impl Signex {
             return None;
         }
         let target = match args.operand("document") {
+            // `change_footprint` (#2937) names a board: its footprint is read
+            // first, and no sheet of the project.
+            Some(_) if command.as_str() == "change_footprint" => {
+                self.editable_named_board(args).ok()?
+            }
             Some(_) => named_sheet(self, args, "the edit").ok()?,
             None => self.document_state.edit_path()?.to_path_buf(),
         };
@@ -372,7 +408,8 @@ impl Signex {
             self.plan_reads(id.as_str(), edit, &edits, sheet, &mut plan);
         }
         self.document_state.agent_edits.target = previous;
-        if wants_project || !plan.is_empty() {
+        let on_board = self.document_state.board_engine(&target).is_some();
+        if !on_board && (wants_project || !plan.is_empty()) {
             self.plan_project_read(&target, &mut plan);
         }
         (!plan.is_empty()).then_some((target, plan))
@@ -474,7 +511,8 @@ impl Signex {
         plan: &mut ReadPlan,
     ) {
         match id {
-            "place_component" => self.plan_part_read(args, plan),
+            // #1297: the row `change_component` swaps a part for.
+            "place_component" | "change_component" => self.plan_part_read(args, plan),
             "place_sheet_symbol" => {
                 if let Ok((dir, path, _)) =
                     text(args, "file").and_then(|f| self.child_file_target(&f))
@@ -484,6 +522,14 @@ impl Signex {
                 }
             }
             "sync_sheet_pins" => self.plan_child_read(args, list, target, plan),
+            // #1276: the sheet a symbol is made from is read for its ports,
+            // and checked as a `place_sheet_symbol` file is.
+            "create_sheet_symbol_from_sheet" => {
+                if let Ok(file) = super::sheet_sync_operands::sheet_file_operand(args) {
+                    self.plan_symbol_sheet_read(&file, plan);
+                }
+            }
+            "sync_sheet_entries" => self.plan_entry_sync_read(args, list, target, plan),
             // The file a design block or a graphics import places (#1667).
             "place_design_block" => {
                 if let Ok(path) = super::placement_extras_operands::path_operand(args)
@@ -497,8 +543,75 @@ impl Signex {
                     plan.texts.push(path);
                 }
             }
+            // #2937: the library footprint a swap or an assignment names.
+            "change_footprint" | "assign_footprint" => {
+                if let Ok(address) = self.footprint_operand(args) {
+                    plan.footprints.push(address);
+                    plan.open_libraries = self.open_library_roots();
+                }
+            }
             _ => {}
         }
+    }
+
+    /// The sheet file `file` a sheet symbol is made from: read for its ports,
+    /// and checked as a `place_sheet_symbol` file is.
+    fn plan_symbol_sheet_read(&self, file: &str, plan: &mut ReadPlan) {
+        if let Ok((dir, path, _)) = self.child_file_target(file) {
+            plan.seeds.push(path.clone());
+            plan.links.push((dir, path.clone()));
+            if !self.document_state.engines.contains_key(&path) {
+                plan.children.push(path);
+            }
+        }
+    }
+
+    /// The GUI's Create Sheet Symbol From Sheet (#1276): the same reads the
+    /// operand form makes for `file` on the active sheet `target`, so both run
+    /// [`Self::place_symbol_from_sheet_file`] on the same facts. The future
+    /// yields the reads; the revisions are what they depend on.
+    pub(crate) fn symbol_sheet_reads(
+        &self,
+        target: &Path,
+        file: &Path,
+    ) -> (
+        BTreeMap<PathBuf, u64>,
+        impl std::future::Future<Output = EditReads> + use<>,
+    ) {
+        let mut plan = ReadPlan::default();
+        self.plan_symbol_sheet_read(&file.to_string_lossy(), &mut plan);
+        self.plan_project_read(target, &mut plan);
+        let revisions = self.watched_revisions(target);
+        let read = async move { landed(tokio::task::spawn_blocking(move || plan.read()).await) };
+        (revisions, read)
+    }
+
+    /// Run `place` on the reads a GUI edit of `target` waited for, as
+    /// [`Self::run_with_reads`] runs an operand edit: refused when the reads
+    /// failed or the sheets changed meanwhile.
+    pub(crate) fn with_gui_reads<T>(
+        &mut self,
+        target: &Path,
+        revisions: &BTreeMap<PathBuf, u64>,
+        reads: Arc<EditReads>,
+        place: impl FnOnce(&mut Self) -> Result<T, String>,
+    ) -> Result<T, String> {
+        if let Some(why) = &reads.failed {
+            return Err(format!(
+                "reading the files this edit needs failed ({why}); nothing was applied"
+            ));
+        }
+        if self.watched_revisions(target) != *revisions {
+            return Err(
+                "the document changed while its project and files were read; nothing was applied"
+                    .to_string(),
+            );
+        }
+        self.document_state.agent_edits.reads = Some(reads);
+        let placed = place(self);
+        self.document_state.agent_edits.reads = None;
+        self.document_state.agent_edits.project_wanted.set(false);
+        placed
     }
 
     /// The library row a `place_component` names, when it names one.
@@ -534,8 +647,37 @@ impl Signex {
         let Some(file) = self.planned_child_file(&name, list, target) else {
             return;
         };
+        self.plan_child_file(&file, target, plan);
+    }
+
+    /// The closed child file of the sheet symbol a `sync_sheet_entries` names
+    /// (#1276): by id on the target sheet, else by name as `sync_sheet_pins`.
+    fn plan_entry_sync_read(
+        &self,
+        args: &CommandArgs,
+        list: &[ListedEdit],
+        target: &Path,
+        plan: &mut ReadPlan,
+    ) {
+        let Ok(key) = text(args, "symbol") else {
+            return;
+        };
+        let file = match Uuid::parse_str(key.trim()) {
+            Ok(id) => self.document_state.edit_engine().and_then(|engine| {
+                let found = engine.document().child_sheets.iter().find(|c| c.uuid == id);
+                found.map(|c| c.filename.clone())
+            }),
+            Err(_) => self.planned_child_file(&key, list, target),
+        };
+        if let Some(file) = file {
+            self.plan_child_file(&file, target, plan);
+        }
+    }
+
+    /// Read the child file `file` of `target` unless an engine holds it.
+    fn plan_child_file(&self, file: &str, target: &Path, plan: &mut ReadPlan) {
         let dir = target.parent().unwrap_or_else(|| Path::new(""));
-        if let Ok(path) = resolve_child_reference_quiet(dir, &file)
+        if let Ok(path) = resolve_child_reference_quiet(dir, file)
             && !self.document_state.engines.contains_key(&path)
         {
             plan.children.push(path);

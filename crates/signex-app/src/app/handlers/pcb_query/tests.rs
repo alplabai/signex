@@ -260,7 +260,11 @@ fn find_similar_on_a_board_selects_the_footprints_of_the_same_value() {
         .as_ref()
         .expect("the dialog opened");
     assert!(state.board);
-    assert_eq!(state.seed_label, "Footprint R1");
+    let en = signex_i18n::I18n::en_us();
+    assert_eq!(
+        crate::find_similar::shown_seed(&state.seed_label, &en),
+        "Footprint R1"
+    );
     let similar = |msg| Message::Selection(SelectionRequest::FindSimilar(msg));
     let _ = app.update(similar(FindSimilarMsg::PropertySet(
         signex_engine::SimilarProperty::Value,
@@ -301,6 +305,51 @@ fn select_and_highlight_net_act_on_the_net_of_the_selection() {
         app.document_state.pcb_board(&path).unwrap().segments.len(),
         1
     );
+}
+
+/// The nets in focus the board scene is drawn with, and the dim amount.
+fn drawn_focus(app: &Signex) -> Option<(Vec<u32>, u8)> {
+    app.interaction_state
+        .pcb_canvas
+        .active_renderer_snapshot()
+        .and_then(|snapshot| snapshot.paint.net_focus())
+        .map(|focus| (focus.nets.clone(), focus.dim_percent))
+}
+
+/// #2514: a highlighted net redraws the board with every other net dimmed
+/// by the Preferences amount; a saved new amount redraws it, and Esc
+/// brings the other nets back.
+#[test]
+fn a_highlighted_net_dims_the_other_nets_by_the_preference() {
+    use crate::app::PreferencesMsg;
+    use crate::preferences::PrefMsg;
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _path) = app_with(dir.path(), board());
+    // The prefs file is shared by the tests of this process: pin the
+    // default rather than read it.
+    app.ui_state.pcb_dim_others_percent = 50;
+    app.ui_state.preferences_draft_pcb_dim_others_percent = 50;
+    assert_eq!(drawn_focus(&app), None);
+
+    app.select_pcb_items(&[ItemRef::Track(GND_TRACK)]);
+    run(&mut app, "highlight_board_net");
+    assert_eq!(drawn_focus(&app), Some((vec![1], 50)));
+
+    let prefs = |msg| Message::Preferences(PreferencesMsg::Inner(msg));
+    let _ = app.update(Message::Preferences(PreferencesMsg::Open));
+    let _ = app.update(prefs(PrefMsg::DraftPcbDimOthersPercent(80)));
+    assert_eq!(
+        drawn_focus(&app),
+        Some((vec![1], 50)),
+        "a draft does not redraw"
+    );
+    let _ = app.update(prefs(PrefMsg::Save));
+    assert_eq!(app.ui_state.pcb_dim_others_percent, 80);
+    assert_eq!(drawn_focus(&app), Some((vec![1], 80)));
+
+    app.clear_pcb_selection();
+    assert!(app.interaction_state.pcb_query.net_highlight.is_none());
+    assert_eq!(drawn_focus(&app), None);
 }
 
 const GND_ARC: Uuid = Uuid::from_u128(0x60);
@@ -454,6 +503,10 @@ fn a_read_only_board_greys_its_editing_commands() {
         "delete_selection",
         "cut",
         "change_footprint",
+        // Layer colours are saved with the board.
+        "set_layer_color",
+        "edit_layer_color",
+        "reset_layer_colors",
     ] {
         assert!(!is_enabled(&command(id), &ctx), "{id} on a read-only board");
     }
@@ -462,6 +515,7 @@ fn a_read_only_board_greys_its_editing_commands() {
         "select_board_net",
         "measure_distance",
         "toggle_ratsnest",
+        "set_layer_visible",
     ] {
         assert!(is_enabled(&command(id), &ctx), "{id} only reads the board");
     }
@@ -469,25 +523,40 @@ fn a_read_only_board_greys_its_editing_commands() {
 
 /// #2406: every binding a shipped profile gives the board context names a
 /// command that is enabled on a board with an unlocked footprint selected.
+/// Mockup row 175 (Caner, 2026-11-24): the 3D view's lighting and copy keys
+/// are greyed on a flat board, as they need the 3D view; every board and
+/// 3D view binding is enabled while the board is shown in 3D.
 #[test]
 fn every_board_context_binding_resolves_to_a_command_enabled_on_a_board() {
     let dir = tempfile::tempdir().unwrap();
-    let (mut app, _path) = app_with(dir.path(), board());
+    let (mut app, path) = app_with(dir.path(), board());
     app.select_pcb_items(&[ItemRef::Footprint(R1)]);
     let ctx = app.command_context(None);
+    app.interaction_state.board_3d = Some(crate::app::state::Board3dSession::open(&path));
+    let in_3d = app.command_context(None);
     let set = crate::keymap::ShortcutProfileSet::built_ins().expect("built-ins");
     let mut checked = 0;
     for profile in set.profiles() {
         for binding in &profile.bindings {
-            if binding.context != ShortcutContext::Pcb {
+            if !matches!(
+                binding.context,
+                ShortcutContext::Pcb | ShortcutContext::Board3d
+            ) {
                 continue;
             }
             let ShortcutBindingAction::Command(id) = &binding.action else {
                 continue;
             };
+            let needs_the_3d_view = crate::app::command::enablement::disabled_reason(id, &ctx)
+                == Some(signex_i18n::ids::COMMAND_NEEDS_BOARD_3D_VIEW);
             assert!(
-                is_enabled(id, &ctx),
+                is_enabled(id, &ctx) || needs_the_3d_view,
                 "{} binds {id} on a board, where it is greyed",
+                profile.id
+            );
+            assert!(
+                is_enabled(id, &in_3d),
+                "{} binds {id} on a board, greyed in its 3D view",
                 profile.id
             );
             checked += 1;
@@ -579,9 +648,7 @@ fn select_and_highlight_net_take_a_net_by_name() {
     );
     assert_eq!(
         outcome,
-        CommandOutcome::Disabled {
-            reason: "the board has no net named `NOPE`".into()
-        }
+        CommandOutcome::disabled("the board has no net named `NOPE`")
     );
     assert_eq!(selected(&app).len(), 2, "the selection is kept");
 }
@@ -616,4 +683,19 @@ fn find_results_of_a_board_out_of_view_are_searched_again() {
     let _ = app.update(find(FindReplaceMsg::ReplaceAll));
     assert_eq!(footprint(&app, &second, R1).value, "4k7");
     assert_eq!(footprint(&app, &first, R1).value, "10k");
+}
+
+/// #2326: `ids` is a targets list, so an item named twice is one item, and
+/// edge to edge needs two.
+#[test]
+fn measuring_one_item_named_twice_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with(dir.path(), board());
+    let ids = format!("ids={V1},{V1}");
+    let reason = crate::app::command::queries::tests::refusal(
+        &mut app,
+        "measure_board",
+        &[document(&path).as_str(), ids.as_str()],
+    );
+    assert_eq!(reason, "`ids` names two items, comma separated");
 }

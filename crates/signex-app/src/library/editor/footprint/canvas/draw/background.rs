@@ -7,11 +7,12 @@ use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point, Rectangle};
 
 use super::super::{FootprintCanvas, FootprintCanvasState};
-use super::graphite::{dot_step_px, look_from_bg};
+use super::graphite::{board_look, dot_step_px, look_from_bg};
 use super::grid::{draw_grid, draw_grid_dots};
 use crate::library::editor::footprint::state::{
     EditorMode, GridDisplay as Gd, GuideAxis, SnapOptions,
 };
+use crate::pcb_canvas::{layer_style, stroke_origin_marker};
 
 /// Footprint canvas background: Altium-PCB black regardless of app theme.
 pub(crate) const BACKDROP_BG: Color = Color::BLACK;
@@ -28,9 +29,17 @@ pub(crate) const BACKDROP_GRID: Color = Color {
 pub(crate) struct BackdropLook<'a> {
     pub bg: Color,
     pub grid: Color,
-    /// Sketch mode flips to a white canvas + single mid-grey grid.
+    /// Sketch mode paints the board ground on every theme (decision 7,
+    /// Caner 2026-11-20).
     pub sketch: bool,
     pub snap: &'a SnapOptions,
+    /// The model point the grid steps from; `None` is (0, 0).
+    pub grid_origin: Option<(f64, f64)>,
+}
+
+/// The canvas pixel the grid's lattice is laid from.
+fn grid_screen_origin(cam: &FootprintCanvasState, grid_origin: Option<(f64, f64)>) -> Point {
+    grid_origin.map_or(cam.offset, |at| cam.world_to_screen(at))
 }
 
 /// Background fill + fine/coarse grid.
@@ -40,25 +49,17 @@ pub(crate) fn draw_backdrop(
     bounds: Rectangle,
     look: BackdropLook<'_>,
 ) {
-    if let Some(g) = look_from_bg(look.bg) {
-        draw_graphite_backdrop(frame, cam, bounds, g, look.snap);
+    let origin = grid_screen_origin(cam, look.grid_origin);
+    if let Some(g) = look_from_bg(look.bg).or_else(|| look.sketch.then(board_look)) {
+        draw_graphite_backdrop(frame, cam, bounds, origin, g, look.snap);
         return;
     }
-    let bg = if look.sketch { Color::WHITE } else { look.bg };
-    let grid = if look.sketch {
-        Color::from_rgba(0.55, 0.55, 0.55, 1.0)
-    } else {
-        look.grid
-    };
-    frame.fill_rectangle(Point::ORIGIN, bounds.size(), bg);
+    let grid = look.grid;
+    frame.fill_rectangle(Point::ORIGIN, bounds.size(), look.bg);
 
     let fine_step = (look.snap.grid_step_mm as f32) * cam.scale;
     let coarse_step = fine_step * look.snap.coarse_multiplier.max(1) as f32;
-    let (fine_alpha, coarse_alpha) = if look.sketch {
-        (0.50, 0.55)
-    } else {
-        (0.10, 0.30)
-    };
+    let (fine_alpha, coarse_alpha) = (0.10, 0.30);
     // Fine pass only when each cell is at least 6 px wide.
     if fine_step >= 6.0 {
         let color = Color {
@@ -66,16 +67,15 @@ pub(crate) fn draw_backdrop(
             ..grid
         };
         let style = look.snap.fine_grid_display;
-        paint_grid(frame, bounds, cam.offset, fine_step, color, style);
+        paint_grid(frame, bounds, origin, fine_step, color, style);
     }
-    // Sketch mode shows only the fine grid.
-    if !look.sketch && coarse_step >= 8.0 {
+    if coarse_step >= 8.0 {
         let color = Color {
             a: coarse_alpha,
             ..grid
         };
         let style = look.snap.coarse_grid_display;
-        paint_grid(frame, bounds, cam.offset, coarse_step, color, style);
+        paint_grid(frame, bounds, origin, coarse_step, color, style);
     }
 }
 
@@ -85,6 +85,7 @@ fn draw_graphite_backdrop(
     frame: &mut canvas::Frame,
     cam: &FootprintCanvasState,
     bounds: Rectangle,
+    origin: Point,
     look: super::graphite::GraphiteLook,
     snap: &SnapOptions,
 ) {
@@ -95,7 +96,7 @@ fn draw_graphite_backdrop(
         return;
     }
     if let Some(step) = dot_step_px((snap.grid_step_mm as f32) * cam.scale) {
-        draw_grid_dots(frame, bounds, cam.offset, step, look.dot);
+        draw_grid_dots(frame, bounds, origin, step, look.dot);
     }
 }
 
@@ -114,14 +115,9 @@ fn paint_grid(
     }
 }
 
-/// Origin crosshair: yellow on the dark canvas, slate on the sketch canvas.
-pub(crate) fn draw_origin(frame: &mut canvas::Frame, cam: &FootprintCanvasState, sketch: bool) {
-    let color = if sketch {
-        Color::from_rgba(0.20, 0.25, 0.32, 0.85)
-    } else {
-        Color::from_rgba(1.0, 0.95, 0.30, 0.85)
-    };
-    draw_origin_in(frame, cam, color);
+/// Origin crosshair: yellow on the black pads canvas.
+pub(crate) fn draw_origin(frame: &mut canvas::Frame, cam: &FootprintCanvasState) {
+    draw_origin_in(frame, cam, Color::from_rgba(1.0, 0.95, 0.30, 0.85));
 }
 
 /// Origin crosshair in an explicit colour.
@@ -158,6 +154,7 @@ impl FootprintCanvas<'_> {
             grid: self.grid_color,
             sketch: matches!(self.state.mode, EditorMode::Sketch),
             snap: &self.state.snap_options,
+            grid_origin: self.state.grid_origin_mm(),
         };
         draw_backdrop(frame, cstate, bounds, look);
     }
@@ -209,7 +206,19 @@ impl FootprintCanvas<'_> {
         frame: &mut canvas::Frame,
         cstate: &FootprintCanvasState,
     ) {
-        if let Some(g) = look_from_bg(self.bg_color) {
+        // A board sketch marks the board's origin, as the PCB view draws it.
+        if self.state.board_backdrop.is_some() {
+            if let Some(at) = self.state.origin_marker_mm() {
+                stroke_origin_marker(
+                    frame,
+                    cstate.world_to_screen(at),
+                    layer_style::origin_marker_colour(),
+                );
+            }
+            return;
+        }
+        let sketch = matches!(self.state.mode, EditorMode::Sketch);
+        if let Some(g) = look_from_bg(self.bg_color).or_else(|| sketch.then(board_look)) {
             draw_origin_in(
                 frame,
                 cstate,
@@ -220,6 +229,24 @@ impl FootprintCanvas<'_> {
             );
             return;
         }
-        draw_origin(frame, cstate, matches!(self.state.mode, EditorMode::Sketch));
+        draw_origin(frame, cstate);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The lattice's line 0 is laid at this pixel: a board's origin, or the
+    /// camera offset (model zero) for a footprint.
+    #[test]
+    fn the_grid_is_laid_from_the_board_origin_on_a_board() {
+        let cam = FootprintCanvasState::with_view(12.0, Point::new(40.0, 25.0));
+        let origin = (5.3, 30.7);
+        assert_eq!(
+            grid_screen_origin(&cam, Some(origin)),
+            cam.world_to_screen(origin)
+        );
+        assert_eq!(grid_screen_origin(&cam, None), cam.offset);
     }
 }

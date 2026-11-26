@@ -13,8 +13,8 @@ use super::frame::{MARGIN_MM, TITLE_BLOCK_MM};
 use super::{BoardLayerSet, BoardPrintOptions, PageFrame};
 use crate::pdf::MM_TO_PT;
 
-type Rgb = (f32, f32, f32);
-type Pt = (f32, f32);
+pub(super) type Rgb = (f32, f32, f32);
+pub(super) type Pt = (f32, f32);
 
 const BLACK: Rgb = (0.0, 0.0, 0.0);
 const PAPER: Rgb = (1.0, 1.0, 1.0);
@@ -42,6 +42,8 @@ fn ink(set: BoardLayerSet, monochrome: bool) -> Rgb {
         BoardLayerSet::Bottom => (0.12, 0.27, 0.78),
         BoardLayerSet::Inner => (0.10, 0.52, 0.22),
         BoardLayerSet::Mechanical => (0.50, 0.10, 0.55),
+        // Drawn by `assembly::page` in the drawing's own inks; never here.
+        BoardLayerSet::AssemblyTop | BoardLayerSet::AssemblyBottom => (0.35, 0.35, 0.35),
     }
 }
 
@@ -122,6 +124,12 @@ fn draw_set(
             if let Ok(Some(placed)) = pcb_geom::footprint_graphic_placement(fp, graphic) {
                 let text = (graphic.text.as_str(), graphic.font_size);
                 draw_graphic(s, frame, &placed, rgb, text);
+            }
+        }
+        // The designator and comment (#2368), placed as the board draws them.
+        for text in pcb_geom::footprint_texts(fp) {
+            if set.contains(text.layer) {
+                justified_label(s, frame, &text, rgb);
             }
         }
     }
@@ -319,7 +327,7 @@ fn disc(s: &mut PdfSurface<'_>, frame: &PageFrame, at: (f64, f64), radius_mm: f6
 }
 
 /// Fill `rings` as one even-odd area: an outline and its holes.
-fn fill(s: &mut PdfSurface<'_>, rings: &[Vec<Pt>], rgb: Rgb) {
+pub(super) fn fill(s: &mut PdfSurface<'_>, rings: &[Vec<Pt>], rgb: Rgb) {
     let rings: Vec<&Vec<Pt>> = rings.iter().filter(|r| r.len() >= 3).collect();
     if rings.is_empty() {
         return;
@@ -331,7 +339,7 @@ fn fill(s: &mut PdfSurface<'_>, rings: &[Vec<Pt>], rgb: Rgb) {
     s.raw_operator("f*\n");
 }
 
-fn stroke(s: &mut PdfSurface<'_>, points: &[Pt], closed: bool, width_pt: f32, rgb: Rgb) {
+pub(super) fn stroke(s: &mut PdfSurface<'_>, points: &[Pt], closed: bool, width_pt: f32, rgb: Rgb) {
     if points.len() < 2 {
         return;
     }
@@ -351,9 +359,39 @@ fn path(s: &mut PdfSurface<'_>, points: &[Pt], closed: bool) {
     }
 }
 
+/// A footprint text, its line laid in the page font and justified on its
+/// anchor as `pcb_geom` places it.
+fn justified_label(
+    s: &mut PdfSurface<'_>,
+    frame: &PageFrame,
+    text: &pcb_geom::FootprintText,
+    rgb: Rgb,
+) {
+    let content = normalize_pdf_text(&text.content);
+    let alias = best_alias_for_text(PdfFont::RobotoRegular.alias(), &content);
+    let size_pt = frame.length_pt(text.size_mm);
+    let pt_per_mm = frame.length_pt(1.0);
+    if !(pt_per_mm.is_finite() && pt_per_mm > 0.0) {
+        return;
+    }
+    let width_mm = f64::from(text_advance_pt(alias, &content, size_pt) / pt_per_mm);
+    let Ok(centre) = pcb_geom::justified_centre(&text.placement, text.justify, width_mm) else {
+        return;
+    };
+    label(
+        s,
+        frame,
+        (nm_to_mm(centre.x), nm_to_mm(centre.y)),
+        text.placement.rotation_deg,
+        &text.content,
+        text.size_mm,
+        rgb,
+    );
+}
+
 /// A text centred on `at` (model mm), `size_mm` high, turned by
 /// `rotation_deg`. Too small to read, it is left out.
-fn label(
+pub(super) fn label(
     s: &mut PdfSurface<'_>,
     frame: &PageFrame,
     at: (f64, f64),

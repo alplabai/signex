@@ -375,7 +375,7 @@ impl SheetRefInputs {
             let saved = read_child_refs(&path, limits.max_sheet_bytes).unwrap_or_else(|reason| {
                 unreadable.push(UnreadableSheet {
                     path: path.clone(),
-                    reason,
+                    reason: reason.to_string(),
                     whole_path: false,
                 });
                 Vec::new()
@@ -644,7 +644,18 @@ impl DocumentState {
             if !associated {
                 continue;
             }
-            if (reached || is_project_file) && !reach.reached_by_other(closing, path) {
+            // The project's Design Notebook and its held design report are
+            // its own, though no sheet reaches them (#3019).
+            let notebook_of_it = self
+                .notebooks
+                .get(&project.id)
+                .is_some_and(|d| d.path == *path)
+                || self
+                    .generated_reports
+                    .get(&project.id)
+                    .is_some_and(|r| project.dir().join(&r.path) == *path);
+            let ours = (reached || is_project_file) && !reach.reached_by_other(closing, path);
+            if notebook_of_it || ours {
                 scan.mine.push(path.clone());
             } else {
                 scan.kept.push(path.clone());
@@ -773,9 +784,12 @@ mod tests {
             drawings: Vec::new(),
             no_erc_directives: Vec::new(),
             directives: Vec::new(),
+            harness: Default::default(),
+            unions: Vec::new(),
             title_block: HashMap::new(),
             text_widths: Default::default(),
             text_extents: Default::default(),
+            variables: Default::default(),
             lib_symbols: Default::default(),
             net_colors: HashMap::new(),
             drawing_placements: Default::default(),
@@ -990,7 +1004,7 @@ mod tests {
 
     fn loaded_project(id: u32, dir: &Path, sheet: &str) -> crate::app::state::LoadedProject {
         crate::app::state::LoadedProject {
-            id: ProjectId(id),
+            id: ProjectId::test_id(id),
             path: dir.join("p.snxprj"),
             data: signex_types::project::ProjectData {
                 document_id: None,
@@ -1009,6 +1023,7 @@ mod tests {
                 }],
                 variant_definitions: Vec::new(),
                 active_variant: None,
+                variant_settings: Default::default(),
                 libraries: Vec::new(),
                 enable_git: false,
                 net_classes: Vec::new(),
@@ -1017,6 +1032,11 @@ mod tests {
                 schematic_defaults: Default::default(),
                 project_defaults: Default::default(),
                 agent_journal: Default::default(),
+                schematic_design: Default::default(),
+                fab_outputs: None,
+                router_tool_diameter: None,
+                bom_alternates: Vec::new(),
+                requirements: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),
             },

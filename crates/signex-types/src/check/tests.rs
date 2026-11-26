@@ -145,3 +145,26 @@ fn a_report_names_its_rule_set_only_when_given_one() {
     let back: CheckReport = serde_json::from_value(value).expect("reads back");
     assert_eq!(back, named);
 }
+
+/// #2307: one waiver shape for every check, with the check's own fields.
+#[test]
+fn a_finding_waiver_has_the_shared_fields_and_the_check_s_own() {
+    let mut extra = Map::new();
+    extra.insert("key".into(), json!("k1"));
+    assert_eq!(
+        finding_waiver_json("builtin::clearance", "f1", "checked", extra),
+        json!({"kind": "finding", "rule_id": "builtin::clearance", "fingerprint": "f1",
+            "reason": "checked", "key": "k1"})
+    );
+}
+
+#[test]
+fn a_report_lists_passed_rules_only_when_given_some() {
+    let plain = serde_json::to_value(report(&["k1"])).unwrap();
+    assert!(plain.get("passed").is_none(), "{plain}");
+    let listed = report(&["k1"]).with_passed(vec!["req::size".into()]);
+    let value = serde_json::to_value(&listed).unwrap();
+    assert_eq!(value["passed"], json!(["req::size"]));
+    let back: CheckReport = serde_json::from_value(value).expect("reads back");
+    assert_eq!(back, listed);
+}

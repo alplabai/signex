@@ -25,6 +25,9 @@ pub const TEXT_FRAME_MARGIN_EM: f64 = 0.25;
 pub struct FrameLine {
     pub text: String,
     pub placement: TextPlacement,
+    /// The room across the box inside its margins, mm: a font wider than
+    /// [`TEXT_FRAME_ADVANCE_EM`] condenses the line to it.
+    pub width_mm: f64,
 }
 
 /// The text height of a text frame in mm: its own, else the PCB default.
@@ -77,6 +80,7 @@ pub fn text_frame_lines(graphic: &BoardGraphic) -> Result<Vec<FrameLine>, GeomEr
                 rotation_deg: 0.0,
                 mirrored,
             },
+            width_mm: (right - left - 2.0 * margin).max(0.0),
         });
     }
     Ok(lines)

@@ -72,9 +72,12 @@ fn sheet_with(symbols: Vec<Symbol>) -> SchematicSheet {
         drawings: Vec::new(),
         no_erc_directives: Vec::new(),
         directives: Vec::new(),
+        harness: Default::default(),
+        unions: Vec::new(),
         title_block: HashMap::new(),
         text_widths: Default::default(),
         text_extents: Default::default(),
+        variables: Default::default(),
         lib_symbols: Default::default(),
         net_colors: HashMap::new(),
         drawing_placements: Default::default(),
@@ -97,7 +100,6 @@ fn app_with(symbols: Vec<Symbol>) -> (Signex, PathBuf) {
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "dead-controls".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });
@@ -312,7 +314,6 @@ fn add_second_sheet(app: &mut Signex) -> PathBuf {
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "dead-controls-other".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });
@@ -649,6 +650,7 @@ fn empty_pcb_board() -> signex_types::pcb::PcbBoard {
     signex_types::pcb::PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         unknown: Default::default(),
         uuid: uuid::Uuid::now_v7(),

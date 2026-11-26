@@ -1,96 +1,87 @@
-//! PDF preview / settings tab and section builders for the print-
-//! preview modal shell in `print_preview.rs`.
-//!
-//! Extracted verbatim from `view/print_preview.rs` (ADR-0001, issue
-//! #164) as pure code motion — no behaviour change. These are methods
-//! of the same `Signex` view impl, split across sibling files.
+//! The one-screen Export PDF dialog (#2430, mockup rows 111 and 168): the
+//! page list on the left, the page in the middle, the settings column on
+//! the right. The modal shell (header, footer) is in `print_preview.rs`.
+//! Rules: docs/MENU_BAR.md, "File ▸ Export ▸ PDF".
+
+use iced::Widget as _;
+use iced::widget::row;
+use signex_i18n::{ids, t};
 
 use super::*;
+use crate::app::state::PreviewState;
 
-/// Default type / spacing scales; equal to the old literals at the default size.
-const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
-
+mod bookmarks;
+#[cfg(test)]
+mod controls_tests;
+mod form;
+mod layers;
 mod page_setup;
-mod preview;
+mod rail;
 mod settings;
+mod sheets;
 #[cfg(test)]
 mod tests;
+mod viewer;
+mod watermark;
+mod watermark_overlay;
 
 impl Signex {
-    /// Two-tab strip — Preview | Settings — sitting just under the
-    /// modal header. Uses the same `TabPill` widget the document tab
-    /// bar paints with: 3-sided border (top + L/R), accent stripe on
-    /// the active tab, fill that fades for inactive. `is_last=true`
-    /// on the rightmost so the trailing border doesn't double up
-    /// against an adjacent tab's left edge.
-    pub(super) fn view_pdf_tab_strip(
-        &self,
-        active: crate::app::state::PdfPreviewTab,
-    ) -> Element<'_, Message> {
-        use crate::app::state::PdfPreviewTab;
-        use iced::Widget;
-        use iced::widget::{Space, container, mouse_area, row};
-        use signex_widgets::tab_pill::{AccentPosition, TabPill, TabPillStyle};
-        use signex_widgets::text;
-        let tokens = &self.document_state.panel_ctx.tokens;
-        let text_c = crate::styles::ti(tokens.text);
-        let text_muted = crate::styles::ti(tokens.text_secondary);
-        let border_c = crate::styles::ti(tokens.border);
-        let accent_c = crate::styles::ti(tokens.accent);
-        let hover_c = crate::styles::ti(tokens.hover);
-
-        let pill_fill = |is_active: bool| -> iced::Color {
-            if is_active {
-                hover_c
-            } else {
-                iced::Color {
-                    a: hover_c.a * 0.35,
-                    ..hover_c
-                }
-            }
-        };
-
-        let tab = |label: signex_i18n::MessageId, this: PdfPreviewTab, is_last: bool| {
-            let is_active = this == active;
-            let label_color = if is_active { text_c } else { text_muted };
-            let style = TabPillStyle {
-                fill: pill_fill(is_active),
-                border: border_c,
-                accent: accent_c,
-                is_active,
-                is_last,
-                accent_position: AccentPosition::Bottom,
-            };
-            let inner = container(
-                text(signex_i18n::t!(self.ui_state.i18n, label))
-                    .size(TS.label)
-                    .color(label_color),
-            )
-            .padding([6, 18])
-            .boxed();
-            mouse_area(TabPill::new(inner, style))
-                .on_press(Message::PrintPreview(PrintPreviewMsg::SetTab(this)))
-                .interaction(iced::mouse::Interaction::Pointer)
-        };
-
-        container(
-            row![
-                tab(
-                    signex_i18n::ids::PDF_TAB_PREVIEW,
-                    PdfPreviewTab::Preview,
-                    false
-                ),
-                tab(
-                    signex_i18n::ids::PDF_TAB_SETTINGS,
-                    PdfPreviewTab::Settings,
-                    true
-                ),
-                Space::new().width(Length::Fill),
-            ]
-            .spacing(0)
-            .align_y(iced::Alignment::Center),
-        )
-        .padding([0, 14])
+    /// The dialog body between header and footer.
+    pub(in crate::app::view) fn view_pdf_dialog_body<'a>(
+        &'a self,
+        preview: &'a PreviewState,
+    ) -> Element<'a, Message> {
+        let look = form::Look::of(&self.document_state.panel_ctx.tokens);
+        row![
+            self.view_pdf_rail(preview),
+            form::rule(look.line_soft, true),
+            self.view_pdf_viewer(preview),
+            form::rule(look.line_soft, true),
+            self.view_pdf_settings_column(preview),
+        ]
+        .width(Length::Fill)
+        .height(Length::Fill)
         .boxed()
+    }
+
+    /// The header's second line: the project (or document) file and how
+    /// many sheets it has.
+    pub(in crate::app::view) fn pdf_dialog_subtitle(&self, preview: &PreviewState) -> String {
+        let file = self
+            .document_state
+            .document_project(&preview.source)
+            .map_or(preview.source.as_path(), |project| project.path.as_path())
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        self.ui_state.i18n.message_plain(
+            ids::PDF_DIALOG_SUBTITLE,
+            &[
+                ("file", file.into()),
+                ("count", preview.sheet_files.len().into()),
+            ],
+        )
+    }
+
+    /// The footer caption: the last export's outcome while it is current,
+    /// else the pages, the paper and the quality.
+    pub(in crate::app::view) fn pdf_footer_caption<'a>(
+        &self,
+        preview: &'a PreviewState,
+    ) -> signex_widgets::Label<'a> {
+        let i18n = self.ui_state.i18n.as_ref();
+        match (&preview.export_status, preview.pages.is_empty()) {
+            // raw: the export status is worded by the export handler (#2061).
+            (Some(status), _) => signex_widgets::raw(status.clone()),
+            (None, true) => t!(i18n, ids::DIALOG_PRINT_PREVIEW_NO_FILES).into(),
+            (None, false) => t!(
+                i18n,
+                ids::PDF_FOOTER_STATUS,
+                "count" => preview.pages.len(),
+                "paper" => viewer::paper_name(&preview.pdf_options, i18n),
+                "quality" => signex_i18n::Translatable::new(preview.quality.label())
+            )
+            .into(),
+        }
     }
 }

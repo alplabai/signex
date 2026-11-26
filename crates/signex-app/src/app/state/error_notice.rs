@@ -1,6 +1,7 @@
-//! The user-visible error card: a short heading plus the detail line.
+//! The user-visible error card: a short heading, the readable sentence and,
+//! apart from it, the system part (path and OS error).
 
-use signex_i18n::{I18n, Translatable, UserText, ids};
+use signex_i18n::{I18n, MessageId, Translatable, UserText, ids};
 
 /// A user-visible error card: a short heading plus the detail line.
 ///
@@ -16,9 +17,55 @@ pub struct ErrorNotice {
     pub title: Translatable,
     /// What went wrong, in the user's terms. May span several lines.
     pub detail: Translatable,
+    /// The system's own words (a path, an OS or library error chain), shown
+    /// as they are in a mono block under the sentence; `None` when the
+    /// sentence says it all.
+    pub system: Option<UserText>,
     /// A choice the card offers beside dismissing it; `None` for a plain
     /// notice, whose only button is OK.
     pub action: Option<NoticeAction>,
+    /// A sentence of the card's own after the detail, e.g. that the edits
+    /// are still open and unsaved (mockup row 11); `None` for most cards.
+    /// Kept out of [`Self::detail_line_en_us`].
+    pub note: Option<MessageId>,
+}
+
+/// How bad what the card reports is; picks its heading glyph.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NoticeSeverity {
+    /// The operation failed or was refused (red).
+    Error,
+    /// The operation stopped to ask, or finished with something to review
+    /// (amber).
+    Warn,
+}
+
+/// The headings whose card is a warning; every other heading is an error.
+const WARNING_TITLES: [MessageId; 5] = [
+    ids::NOTICE_DISK_CHANGED_TITLE,
+    ids::NOTICE_DISK_MISSING_TITLE,
+    ids::NOTICE_DISK_FOLDER_MISSING_TITLE,
+    ids::NOTICE_IMPORTED_WITH_APPROXIMATIONS,
+    ids::NOTICE_BOM_EXPORTED_WITH_ISSUES,
+];
+
+/// The choices of a File Changed on Disk card with what each does, as
+/// `(button label, effect)`, in the order the card lists them. Save As is
+/// left out where it cannot run (a board has no Save As).
+pub fn disk_changed_choices(save_as: bool) -> Vec<(MessageId, MessageId)> {
+    let mut choices = Vec::with_capacity(3);
+    if save_as {
+        choices.push((
+            ids::DIALOG_DISK_CONFLICT_SAVE_AS,
+            ids::NOTICE_DISK_CHANGED_SAVE_AS,
+        ));
+    }
+    choices.push((ids::DIALOG_OVERWRITE, ids::NOTICE_DISK_CHANGED_OVERWRITE));
+    choices.push((
+        ids::DIALOG_DISK_CONFLICT_RELOAD,
+        ids::NOTICE_DISK_CHANGED_RELOAD,
+    ));
+    choices
 }
 
 /// The choice a notice card offers. Dismissing the card is always "Cancel".
@@ -30,6 +77,9 @@ pub enum NoticeAction {
         path: std::path::PathBuf,
         drift: crate::persist::DiskDrift,
     },
+    /// A save of a project read from a newer minor was refused (#2904): the
+    /// card offers Save Project As… for it (#2908).
+    SaveProjectAs { project: super::ProjectId },
 }
 
 impl ErrorNotice {
@@ -37,8 +87,29 @@ impl ErrorNotice {
         Self {
             title: title.into(),
             detail: detail.into(),
+            system: None,
             action: None,
+            note: None,
         }
+    }
+
+    /// `self` with `text` as its system part: the path and the OS or library
+    /// error, kept apart from the readable sentence.
+    #[must_use]
+    pub fn with_system(mut self, text: impl Into<String>) -> Self {
+        let text = text.into();
+        self.system = (!text.trim().is_empty()).then(|| UserText::new(text));
+        self
+    }
+
+    /// `self` with `error`'s chain as its system part, one cause per line:
+    /// the path line over the OS error line (mockup row 11). A middle
+    /// context (a rename step) keeps its own line: it says where the save
+    /// broke.
+    #[must_use]
+    pub fn with_error_chain(self, error: &anyhow::Error) -> Self {
+        let lines: Vec<String> = error.chain().map(ToString::to_string).collect();
+        self.with_system(lines.join("\n"))
     }
 
     /// The heading in `i18n`'s language.
@@ -49,6 +120,68 @@ impl ErrorNotice {
     /// The detail in `i18n`'s language.
     pub fn detail_text(&self, i18n: &I18n) -> String {
         self.detail.render(i18n)
+    }
+
+    /// The detail and the card's note after it, one space apart: the
+    /// readable sentence as the card shows it.
+    pub fn sentence_text(&self, i18n: &I18n) -> String {
+        let detail = self.detail_text(i18n);
+        match self.note {
+            Some(note) => format!("{detail} {}", i18n.message_plain(note, &[])),
+            None => detail,
+        }
+    }
+
+    /// The sentence and, after a colon, the system part, as one en-US line:
+    /// the text that leaves the screen (a CLI reason), as the card read
+    /// before the system part had its own block.
+    pub fn detail_line_en_us(&self) -> String {
+        let detail = self.detail.render(&I18n::en_us());
+        match &self.system {
+            Some(system) => {
+                let system: Vec<&str> = system.as_str().lines().collect();
+                format!("{detail}: {}", system.join(": "))
+            }
+            None => detail,
+        }
+    }
+
+    /// Red for a failure or refusal, amber for a card that asks or warns,
+    /// keyed on the heading.
+    pub fn severity(&self) -> NoticeSeverity {
+        match self.title.id() {
+            Some(id) if WARNING_TITLES.contains(&id) => NoticeSeverity::Warn,
+            _ => NoticeSeverity::Error,
+        }
+    }
+
+    /// What the card's Copy button puts on the clipboard for a bug report:
+    /// the heading, the sentence (with its note) and the system part, a
+    /// blank line apart.
+    pub fn copy_text(&self, i18n: &I18n) -> String {
+        let mut parts = vec![self.title_text(i18n), self.sentence_text(i18n)];
+        if let Some(system) = &self.system {
+            parts.push(system.as_str().to_owned());
+        }
+        parts.retain(|part| !part.trim().is_empty());
+        parts.join("\n\n")
+    }
+
+    /// Whether the card offers Save As…: a File Changed on Disk card of a
+    /// document that has a Save As (a sheet, symbol or footprint). Named
+    /// kinds only: a board, or any kind added later, offers none until its
+    /// Save As exists.
+    pub fn offers_save_as(&self) -> bool {
+        use crate::app::file_extension::has_extension;
+        matches!(
+            &self.action,
+            Some(NoticeAction::DiskChanged {
+                path,
+                drift: crate::persist::DiskDrift::Changed,
+            }) if ["snxsch", "snxsym", "snxfpt"]
+                .iter()
+                .any(|ext| has_extension(path, ext))
+        )
     }
 
     /// A save would overwrite a change made outside Signex (or re-create a
@@ -78,7 +211,9 @@ impl ErrorNotice {
         Self {
             title: title.into(),
             detail: detail.arg("name", name),
+            system: None,
             action: Some(NoticeAction::DiskChanged { path, drift }),
+            note: None,
         }
     }
 
@@ -87,8 +222,20 @@ impl ErrorNotice {
         Self::new(ids::NOTICE_EXPORT_FAILED, detail)
     }
 
-    /// A write failed, and the operation that needed it did not proceed.
+    /// A write of open edits failed, and the operation that needed it did
+    /// not proceed. The card says the edits are still open and unsaved
+    /// (mockup row 11).
     pub fn save(detail: impl Into<Translatable>) -> Self {
+        Self {
+            note: Some(ids::NOTICE_SAVE_FAILED_EDITS_KEPT),
+            ..Self::new(ids::NOTICE_SAVE_FAILED, detail)
+        }
+    }
+
+    /// A write failed that leaves no open edits behind, such as the global
+    /// library list, whose change is dropped. Same heading as
+    /// [`Self::save`], without its note.
+    pub fn save_with_no_open_edits(detail: impl Into<Translatable>) -> Self {
         Self::new(ids::NOTICE_SAVE_FAILED, detail)
     }
 
@@ -190,6 +337,15 @@ impl ErrorNotice {
         Self::new(
             ids::NOTICE_LIBRARY_READ_ONLY,
             Translatable::new(ids::NOTICE_LIBRARY_READ_ONLY_DETAIL).arg("library", library),
+        )
+    }
+
+    /// An edit was refused because the library is open read-only: its Git
+    /// history is missing (Skip for now, mockup row 138).
+    pub fn history_missing(library: &str) -> Self {
+        Self::new(
+            ids::NOTICE_LIBRARY_READ_ONLY,
+            Translatable::new(ids::NOTICE_LIBRARY_HISTORY_MISSING_DETAIL).arg("library", library),
         )
     }
 

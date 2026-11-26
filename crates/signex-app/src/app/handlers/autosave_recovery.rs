@@ -134,11 +134,9 @@ impl Signex {
                 // A parked engine (tab closed while dirty) is still open here.
                 let still_open = self.is_open_document(&path);
                 if still_open {
-                    self.document_state.autosave.offer(RecoveryOffer {
-                        path,
-                        age_secs: copy.age_secs,
-                        older_than_file: copy.older_than_file,
-                    });
+                    self.document_state
+                        .autosave
+                        .offer(RecoveryOffer::new(path, &copy));
                 }
             }
             Ok(None) => {}
@@ -309,7 +307,9 @@ impl Signex {
             );
             return Task::none();
         }
-        self.keep_live_document_id(&path, &mut restored);
+        // Reads the open document, so before the copy is installed.
+        self.document_state
+            .keep_live_document_id(&path, &mut restored);
         match restored {
             RestoredDocument::Schematic(mut sheet) => {
                 crate::app::sheet_repairs::log_sheet_repairs(&path, &sheet.take_load_repairs());
@@ -343,42 +343,6 @@ impl Signex {
 }
 
 impl Signex {
-    /// A recovery copy brings back content, not identity: the restored
-    /// document keeps the id the open one holds (#2172), so the copy's own
-    /// id (the file's, as autosave last saw it) never reaches a second
-    /// document or goes unreported.
-    fn keep_live_document_id(&self, path: &Path, restored: &mut RestoredDocument) {
-        let docs = &self.document_state;
-        match restored {
-            RestoredDocument::Schematic(sheet) => {
-                if let Some(engine) = docs.engines.get(path) {
-                    sheet.uuid = engine.document().uuid;
-                }
-            }
-            RestoredDocument::Symbol(file) => {
-                if let Some(editor) = docs.symbol_editors.get(path) {
-                    file.file_uuid = editor.file.file_uuid;
-                }
-            }
-            RestoredDocument::Footprint(file) => {
-                if let Some(editor) = docs.footprint_editors.get(path) {
-                    file.file_uuid = editor.file.file_uuid;
-                }
-            }
-            RestoredDocument::Pcb(board) => {
-                if let Some(live) = docs.pcb_board(path) {
-                    board.uuid = live.uuid;
-                }
-            }
-            RestoredDocument::Project(data) => {
-                if let Some(project) = docs.projects.iter().find(|p| p.path == path) {
-                    data.document_id = project.data.document_id;
-                }
-            }
-            RestoredDocument::Row(_) => {}
-        }
-    }
-
     /// A schematic engine (possibly parked), a symbol editor or a footprint
     /// editor holds `path`.
     fn is_open_document(&self, path: &Path) -> bool {
@@ -500,6 +464,8 @@ mod tests {
                 path: PathBuf::from("a.snxsch"),
                 age_secs: 0,
                 older_than_file: false,
+                saved_age_secs: Some(0),
+                checked_at: SystemTime::UNIX_EPOCH,
             },
             result: Err(LoadError::Invalid(format!(
                 "{needle}: could not read recovery copy a.recovery"
@@ -532,6 +498,7 @@ mod tests {
         let mut board = signex_types::pcb::PcbBoard {
             sketch: None,
             stackup: None,
+            rooms: Vec::new(),
             options: Default::default(),
             unknown: Default::default(),
             uuid: uuid::Uuid::now_v7(),
@@ -574,16 +541,15 @@ mod tests {
                 path: path.clone(),
                 age_secs: 0,
                 older_than_file: false,
+                saved_age_secs: Some(0),
+                checked_at: SystemTime::UNIX_EPOCH,
             },
             result: Ok(RestoredDocument::Pcb(Box::new(board))),
         });
         assert_eq!(crate::diagnostics::logged_count(needle), before + 1);
-        let Some(crate::app::TabDocument::Pcb(restored)) = app
-            .document_state
-            .tabs
-            .last()
-            .and_then(|tab| tab.cached_document.as_ref())
-        else {
+        let docs = &app.document_state;
+        let last = docs.tabs.len().checked_sub(1);
+        let Some(restored) = last.and_then(|idx| docs.tab_board_engine(idx)) else {
             panic!("pcb tab holds the restored board");
         };
         assert!(restored.board().unknown.load_repairs.is_empty());

@@ -1,7 +1,8 @@
-//! Change Component (#1260), in three steps inside the component picker:
-//! pick the replacement part, review what it does to the pins, confirm.
-//! The read of the picked row is a `Task`; nothing touches the sheet until
-//! the confirm, which is one engine command and so one undo step.
+//! Change Component (#1260) as one dialog (mockup row 155): the part list
+//! on the left, and beside it the comparison of the placed part with the
+//! picked one, the Keep now boxes and Apply to. The read of a picked row is
+//! a `Task`; nothing touches the sheet until Change, which is one engine
+//! batch and so one undo step.
 
 use iced::Task;
 use signex_engine::{
@@ -11,6 +12,7 @@ use signex_engine::{
 use signex_types::schematic::{Symbol, normalized_lib_id};
 use uuid::Uuid;
 
+use super::change_session::compare_rows;
 use super::{PlacedPart, part_name};
 use crate::app::contracts::Message;
 use crate::app::project_sheets::{project_pages, resolve_child_reference_quiet};
@@ -21,7 +23,7 @@ use crate::library::messages::{
     LibraryMessage, PlacedPartMsg, PlacedPartTarget, ResolvedPlacement,
 };
 use crate::library::place::resolve_placement;
-use crate::library::state::{ChangePreview, PickerMode};
+use crate::library::state::{ChangePreview, ChangeScope, ChangeSession, PickerMode};
 
 impl Signex {
     pub(super) fn start_change_component(&mut self, part: PlacedPart) -> Task<Message> {
@@ -36,25 +38,37 @@ impl Signex {
             ));
             return Task::none();
         }
+        let (session, read_pins) = match self.target_document(&part.target) {
+            Some(doc) => self.change_session(part.target.clone(), name, doc, &part.symbol),
+            None => (ChangeSession::new(part.target, name), Task::none()),
+        };
         self.library.picker = Some(PickerState {
-            mode: PickerMode::ChangeComponent(part.target),
+            mode: PickerMode::ChangeComponent(Box::new(session)),
             ..PickerState::default()
         });
         self.library.sync_view_caches_in(&self.ui_state.i18n);
-        Task::none()
+        read_pins
     }
 
-    /// The picked row's read, off the update thread.
+    /// The picked row's read, off the update thread. A comparison already
+    /// shown is put away until the new read lands, so Change never applies
+    /// a part other than the one picked.
     pub(super) fn resolve_change_part(&mut self) -> Task<Message> {
-        let Some(picker) = self.library.picker.as_ref() else {
+        let Some(picker) = self.library.picker.as_mut() else {
             return Task::none();
         };
-        let (PickerMode::ChangeComponent(target), Some((path, summary))) =
-            (&picker.mode, picker.selected.clone())
-        else {
+        let Some((path, summary)) = picker.shown_selection().cloned() else {
             return Task::none();
         };
-        let target = target.clone();
+        let target = match &picker.mode {
+            PickerMode::ChangeComponent(session) => session.target.clone(),
+            PickerMode::ChangePreview(change) => {
+                let target = change.session.target.clone();
+                picker.mode = PickerMode::ChangeComponent(Box::new(change.session.clone()));
+                target
+            }
+            PickerMode::Place | PickerMode::Datasheets(_) => return Task::none(),
+        };
         let Some(table) = self.library.table_of_row(&path, summary.row_id) else {
             crate::diagnostics::log_warning(format!(
                 "Refresh the library and pick again: {} is no longer in it.",
@@ -103,17 +117,22 @@ impl Signex {
                 app.show_change_preview(target, row_id, result)
             });
         }
-        let still_asked = matches!(
-            self.library.picker.as_ref().map(|p| &p.mode),
-            Some(PickerMode::ChangeComponent(t)) if *t == target
-        );
+        let session = match self.library.picker.as_ref().map(|p| &p.mode) {
+            Some(PickerMode::ChangeComponent(session)) if session.target == target => {
+                Some((**session).clone())
+            }
+            _ => None,
+        };
+        let Some(session) = session else {
+            return Task::none();
+        };
         let still_picked = self
             .library
             .picker
             .as_ref()
             .and_then(|p| p.selected.as_ref())
             .is_some_and(|(_, summary)| summary.row_id == row_id);
-        if !still_asked || !still_picked {
+        if !still_picked {
             return Task::none();
         }
         let name = self.target_reference(&target);
@@ -144,7 +163,13 @@ impl Signex {
             ));
             return Task::none();
         }
-        self.show_preview(target, name, resolved, preview);
+        self.show_preview(
+            session,
+            resolved,
+            preview,
+            Vec::new(),
+            ChangeScope::default(),
+        );
         Task::none()
     }
 
@@ -152,14 +177,16 @@ impl Signex {
         if let Some(picker) = self.library.picker.as_mut()
             && let PickerMode::ChangePreview(preview) = &picker.mode
         {
-            picker.mode = PickerMode::ChangeComponent(preview.target.clone());
+            picker.mode = PickerMode::ChangeComponent(Box::new(preview.session.clone()));
         }
         Task::none()
     }
 
-    /// Apply the reviewed change as one engine command (one undo step), if
-    /// the sheet still gives the preview the user saw; otherwise show the
-    /// fresh preview instead of committing something unreviewed.
+    /// Apply the reviewed change to every part of the Apply to choice as one
+    /// engine batch (one undo step), if the sheet still gives the preview
+    /// the user saw; otherwise show the fresh preview instead of committing
+    /// something unreviewed. A user parameter whose Keep now box is cleared
+    /// is cleared by the swap.
     pub(super) fn confirm_change_component(&mut self) -> Task<Message> {
         let Some(PickerState {
             mode: PickerMode::ChangePreview(change),
@@ -168,15 +195,18 @@ impl Signex {
         else {
             return Task::none();
         };
-        if let Some(window) = self.undocked_window_of_change(&change.target) {
+        if let Some(window) = self.undocked_window_of_change(&change.session.target) {
             return self.run_in_window_document(window, |app| app.confirm_change_component());
         }
         let ChangePreview {
-            target,
-            reference,
+            session,
             resolved,
             preview: shown,
+            dropped,
+            scope,
+            ..
         } = *change;
+        let (target, reference) = (session.target.clone(), session.reference.clone());
         let replacement = replacement_of(&resolved);
         let Some(doc) = self.target_document(&target) else {
             self.drop_change(&reference, "the sheet or part changed meanwhile");
@@ -197,49 +227,119 @@ impl Signex {
             crate::diagnostics::log_warning(format!(
                 "Review the changed pins and confirm again: the sheet changed since the preview of {reference}."
             ));
-            self.show_preview(target, reference, resolved, fresh);
+            self.show_preview(session, resolved, fresh, dropped, scope);
             return Task::none();
         }
-        if let Some(unit) = fresh.missing_unit {
-            self.library.picker = None;
-            crate::diagnostics::log_warning(format!(
-                "Pick a part that has unit {unit}: the new part has no drawing for it, so {reference} was not changed."
-            ));
-            return Task::none();
-        }
+        let parts = match scope {
+            ChangeScope::ThisPart => [target.symbol_id],
+        };
+        let plan = match self.change_plan(&target, &parts, &replacement, &dropped) {
+            Ok(plan) => plan,
+            Err(advice) => {
+                self.library.picker = None;
+                crate::diagnostics::log_warning(advice);
+                return Task::none();
+            }
+        };
         self.library.picker = None;
-        let part = resolved.internal_pn.clone();
+        let (commands, checks): (Vec<Command>, Vec<(String, ComponentChangePreview)>) = plan
+            .into_iter()
+            .map(|(command, name, preview)| (command, (name, preview)))
+            .unzip();
         // A refusal (a locked part) is logged by the gateway.
-        let changed = self.apply_engine_command(
-            Command::ChangeComponent {
-                symbol_id: target.symbol_id,
-                replacement,
-            },
-            true,
-            true,
-        );
-        if changed {
-            crate::diagnostics::log_info(format!("{reference} now uses {part}."));
-            if let Some(line) = lost_connections_line(&reference, &fresh) {
+        if !self.apply_engine_commands(commands, true, true) {
+            return Task::none();
+        }
+        crate::diagnostics::log_info(format!(
+            "{reference} now uses {}.",
+            resolved.internal_pn.as_str()
+        ));
+        for (name, preview) in &checks {
+            if let Some(line) = lost_connections_line(name, preview) {
                 crate::diagnostics::log_warning(line);
             }
         }
         Task::none()
     }
 
+    /// One `ChangeComponent` per part of `parts` (first units), each with
+    /// its name and pin preview, or the advice that refuses the whole
+    /// change: a part that is locked, spread over sheets, or lacks a unit.
+    fn change_plan(
+        &self,
+        target: &PlacedPartTarget,
+        parts: &[Uuid],
+        replacement: &ComponentReplacement,
+        dropped: &[String],
+    ) -> Result<Vec<(Command, String, ComponentChangePreview)>, String> {
+        let Some(doc) = self.target_document(target) else {
+            return Ok(Vec::new());
+        };
+        let mut plan = Vec::new();
+        for &symbol_id in parts {
+            let Some(symbol) = doc.symbols.iter().find(|s| s.uuid == symbol_id) else {
+                continue;
+            };
+            let one = PlacedPartTarget {
+                symbol_id,
+                ..target.clone()
+            };
+            if let Some(advice) = self.change_blocker(&one, symbol) {
+                return Err(advice);
+            }
+            let name = part_name(symbol);
+            let preview = change_component_preview(doc, symbol_id, replacement);
+            if let Some(unit) = preview.missing_unit {
+                return Err(format!(
+                    "Pick a part that has unit {unit}: the new part has no drawing for it, so {name} was not changed."
+                ));
+            }
+            let kept: Vec<String> = replacement
+                .user_parameters(doc, symbol_id)
+                .into_iter()
+                .filter(|p| !dropped.contains(p))
+                .collect();
+            let command = Command::ChangeComponent {
+                symbol_id,
+                replacement: replacement
+                    .clone()
+                    .keeping_parameters(doc, symbol_id, &kept),
+            };
+            plan.push((command, name, preview));
+        }
+        Ok(plan)
+    }
+
+    /// Show the comparison of the placed part with `resolved`: the Now /
+    /// After table, the user parameters' Keep now boxes (`dropped` cleared)
+    /// and the Apply to choice.
     fn show_preview(
         &mut self,
-        target: PlacedPartTarget,
-        reference: String,
+        session: ChangeSession,
         resolved: ResolvedPlacement,
         preview: ComponentChangePreview,
+        dropped: Vec<String>,
+        scope: ChangeScope,
     ) {
+        let symbol_id = session.target.symbol_id;
+        let Some(doc) = self.target_document(&session.target) else {
+            return;
+        };
+        let Some(symbol) = doc.symbols.iter().find(|s| s.uuid == symbol_id) else {
+            return;
+        };
+        let replacement = replacement_of(&resolved);
+        let user = replacement.user_parameters(doc, symbol_id);
+        let rows = compare_rows(symbol, &replacement, &user);
+        let dropped = dropped.into_iter().filter(|d| user.contains(d)).collect();
         if let Some(picker) = self.library.picker.as_mut() {
             picker.mode = PickerMode::ChangePreview(Box::new(ChangePreview {
-                target,
-                reference,
+                session,
                 resolved,
                 preview,
+                rows,
+                dropped,
+                scope,
             }));
         }
     }
@@ -260,10 +360,23 @@ impl Signex {
         target: &PlacedPartTarget,
         symbol: &Symbol,
     ) -> Option<String> {
+        let doc = self.target_document(target)?;
+        self.change_blocker_on(&target.sheet, doc, target.symbol_id, symbol)
+    }
+
+    /// [`Self::change_blocker`] for the part `symbol_id` of `doc`, the sheet
+    /// at `sheet`, whether or not it is the active one (`change_component`
+    /// from operands, #1297).
+    pub(crate) fn change_blocker_on(
+        &self,
+        sheet: &std::path::Path,
+        doc: &signex_types::schematic::SchematicSheet,
+        symbol_id: Uuid,
+        symbol: &Symbol,
+    ) -> Option<String> {
         let name = part_name(symbol);
         let docs = &self.document_state;
-        let doc = self.target_document(target)?;
-        let units = placed_unit_ids(doc, target.symbol_id);
+        let units = placed_unit_ids(doc, symbol_id);
         if units
             .iter()
             .any(|id| doc.symbols.iter().any(|s| s.uuid == *id && s.locked))
@@ -286,7 +399,7 @@ impl Signex {
             .filter(|s| units.contains(&s.uuid))
             .map(|s| s.unit)
             .collect();
-        let project = docs.document_project(&target.sheet);
+        let project = docs.document_project(sheet);
         let fold = crate::app::state::project_case::fold_of(project);
         let key = |p: &std::path::Path| path_key_with(p, fold);
         let engines: std::collections::HashMap<
@@ -294,7 +407,7 @@ impl Signex {
             (&std::path::PathBuf, &signex_engine::Engine),
         > = docs.engines.iter().map(|(p, e)| (key(p), (p, e))).collect();
         let owner = project.map(|p| p.path.clone());
-        let mut reached = vec![target.sheet.clone()];
+        let mut reached = vec![sheet.to_path_buf()];
         reached.extend(project_pages(project));
         reached.extend(
             docs.engines
@@ -334,7 +447,7 @@ impl Signex {
                 .map_or_else(String::new, |n| n.to_string_lossy().into_owned())
         };
         let (mut also_on, mut not_open) = (Vec::new(), Vec::new());
-        for path in reached.iter().filter(|p| key(p) != key(&target.sheet)) {
+        for path in reached.iter().filter(|p| key(p) != key(sheet)) {
             match engines.get(&key(path)) {
                 Some((_, engine)) => {
                     let holds_a_unit = engine.document().symbols.iter().any(|s| {
@@ -411,7 +524,7 @@ impl Signex {
 }
 
 /// The replacement the engine applies for a read part.
-fn replacement_of(resolved: &ResolvedPlacement) -> ComponentReplacement {
+pub(crate) fn replacement_of(resolved: &ResolvedPlacement) -> ComponentReplacement {
     ComponentReplacement {
         lib_symbol: resolved.lib_symbol.clone(),
         library_id: Some(resolved.library_id),

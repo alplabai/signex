@@ -40,7 +40,7 @@ impl Signex {
     /// the leaf label against the project dir; otherwise the assembled
     /// path doesn't exist and downstream remove / open paths bail
     /// silently.
-    pub(super) fn tree_path_to_file_path(&self, tree_path: &[usize]) -> Option<std::path::PathBuf> {
+    pub(crate) fn tree_path_to_file_path(&self, tree_path: &[usize]) -> Option<std::path::PathBuf> {
         let node = signex_widgets::tree_view::get_node(
             self.document_state.panel_ctx.project_tree.as_slice(),
             tree_path,
@@ -225,8 +225,8 @@ impl Signex {
 /// Returns the original `&str` when no suffix is present (zero-copy).
 fn canonical_tree_label(label: &str) -> &str {
     label
-        .trim_end_matches("  (missing)")
-        .trim_end_matches("  (unreadable)")
+        .trim_end_matches(crate::panels::MISSING_MARK)
+        .trim_end_matches(crate::panels::UNREADABLE_MARK)
 }
 
 #[cfg(test)]
@@ -292,14 +292,12 @@ mod tests {
         app.document_state.tabs.push(crate::app::TabInfo {
             title: "Top".to_string(),
             path: held.clone(),
-            cached_document: None,
             project_id: None,
             kind: crate::app::TabKind::Schematic,
         });
         app.document_state.tabs.push(crate::app::TabInfo {
             title: "Other".to_string(),
             path: dir.path().join("Other.snxsch"),
-            cached_document: None,
             project_id: None,
             kind: crate::app::TabKind::Schematic,
         });

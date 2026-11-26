@@ -25,9 +25,21 @@ pub(crate) enum ProfileStored {
     Saved {
         profile: UserProfile,
         previous: Option<UserProfile>,
+        note: StoreNote,
     },
     /// `at`: where it was in the list.
     Removed { profile: UserProfile, at: usize },
+}
+
+/// What a stored change says in Messages.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum StoreNote {
+    /// Save as profile, or a saved profile's Edit profile....
+    Saved,
+    /// A built-in's Edit profile...: its override.
+    Edited,
+    Renamed,
+    Duplicated,
 }
 
 /// How to take an in-memory profile change back when its write failed.
@@ -68,7 +80,7 @@ pub(crate) fn store_profile(
             }
             let previous = users
                 .iter()
-                .find(|p| p.name.trim().eq_ignore_ascii_case(&name))
+                .find(|p| p.is_user() && p.name.trim().eq_ignore_ascii_case(&name))
                 .cloned();
             let setup = &draft.setup;
             let id = save_user_profile(
@@ -84,7 +96,11 @@ pub(crate) fn store_profile(
             draft.setup.user_profile = Some(id);
             draft.save_profile_name = None;
             draft.save_profile_problem = None;
-            ProfileStored::Saved { profile, previous }
+            ProfileStored::Saved {
+                profile,
+                previous,
+                note: StoreNote::Saved,
+            }
         }
         NewProjectMsg::UserProfileRemoveConfirmed => {
             let Some(id) = draft.remove_confirm.take() else {
@@ -99,7 +115,7 @@ pub(crate) fn store_profile(
             }
             ProfileStored::Removed { profile, at }
         }
-        _ => ProfileStored::NotAStore,
+        other => super::card_edits::store_card_edit(draft, users, other),
     }
 }
 
@@ -108,6 +124,11 @@ impl Signex {
     /// project's own default profile, the project stops naming it, as one
     /// undoable project edit.
     pub(crate) fn clear_removed_default_profile(&mut self, project: ProjectId, removed: &str) {
+        // A built-in tier stays named after Reset to default: only its
+        // override went, and the project keeps the values it copied.
+        if signex_types::project::SetupProfile::from_token(removed).is_some() {
+            return;
+        }
         let Some(loaded) = self.document_state.project_by_id(project) else {
             return;
         };
@@ -133,16 +154,26 @@ impl Signex {
         let i18n = &self.ui_state.i18n;
         let (note, edit, undo) = match stored {
             ProfileStored::NotAStore | ProfileStored::Unchanged => return Task::none(),
-            ProfileStored::Saved { profile, previous } => (
-                t!(i18n, ids::SETUP_PROFILE_SAVED, "name" => profile.name.as_str()),
+            ProfileStored::Saved {
+                profile,
+                previous,
+                note,
+            } => (
+                super::card_edits::saved_note(i18n, note, &profile, previous.as_ref()),
+                // An override always replaces the entry of its tier's id.
                 SetupProfileEdit::Upsert {
-                    resaved: previous.is_some(),
+                    resaved: previous.is_some() || profile.edited,
                     profile: profile.clone(),
                 },
                 ProfileUndo::Saved {
                     id: profile.id,
                     previous,
                 },
+            ),
+            ProfileStored::Removed { profile, at } if profile.edited => (
+                super::card_edits::reset_note(i18n, &profile),
+                SetupProfileEdit::Remove(profile.id.clone()),
+                ProfileUndo::Removed { profile, at },
             ),
             ProfileStored::Removed { profile, at } => {
                 let note = t!(i18n, ids::SETUP_PROFILE_REMOVED, "name" => profile.name.as_str());

@@ -14,6 +14,7 @@
 //!   - [`footprint::grid`] — grid / guide managers + snap sub-tab / mode.
 //!   - [`footprint::silk`] — selected silk-graphic edits.
 //!   - [`footprint::sketch`] — sketch-entity jumps + parameter forwards.
+//!   - [`sketch_fixes`] — conflict Remove / Convert and Close gap.
 //!
 //! Mutations mark the tab dirty and clear the canvas cache; the actual
 //! save to disk happens through the existing Save flow
@@ -29,12 +30,15 @@ use iced::Task;
 use super::super::super::*;
 use crate::panels::PanelMsg;
 
+mod curve_fields;
 mod footprint;
 mod numeric_input;
+mod sketch_fixes;
 mod symbol;
 mod symbol_delete;
+mod symbol_props;
 
-use footprint::{SilkLineEndpoint, SilkTextField};
+use footprint::{PadMm, SilkLineEndpoint, SilkTextField};
 use numeric_input::{
     CORNER_RADIUS_PCT_MAX, CORNER_RADIUS_PCT_MIN, fp_parse_optional_number,
     fp_parse_optional_number_in, fp_resolve_optional_number,
@@ -60,6 +64,9 @@ impl Signex {
         &mut self,
         panel_msg: &PanelMsg,
     ) -> Option<Task<Message>> {
+        if let Some(task) = self.handle_sketch_fix_message(panel_msg) {
+            return Some(task);
+        }
         let mut follow = Task::none();
         let handled = match panel_msg {
             PanelMsg::FpLibraryOpenSibling(sibling_path) => {
@@ -76,15 +83,8 @@ impl Signex {
                 follow = self.handle_fp_library_edit_internal(idx);
                 true
             }
-            // v0.18.8 — `Place` button. PCB Component placement is
-            // not wired yet; log a warn so the action is observable
-            // without a visible no-op.
             PanelMsg::FpLibraryPlaceInternal(idx) => {
-                tracing::warn!(
-                    target: "signex::library",
-                    idx = idx,
-                    "Footprint Library: Place is not yet wired (PCB integration pending)",
-                );
+                follow = self.place_library_footprint(*idx);
                 true
             }
             PanelMsg::FpEditorToggleAutoFitCourtyard => {
@@ -147,11 +147,14 @@ impl Signex {
             PanelMsg::FpEditorSetNextPadCornerRadiusPct(v) => {
                 self.fp_editor_set_next_pad_corner_radius_pct(v.clone())
             }
+            PanelMsg::FpEditorSetNextPadTrapezoidDeltaX(v) => {
+                self.fp_editor_set_next_pad_trapezoid_delta(0, v.clone())
+            }
+            PanelMsg::FpEditorSetNextPadTrapezoidDeltaY(v) => {
+                self.fp_editor_set_next_pad_trapezoid_delta(1, v.clone())
+            }
             PanelMsg::FpEditorSetNextPadTemplate(v) => {
                 self.fp_editor_set_next_pad_template(v.clone())
-            }
-            PanelMsg::FpEditorSetNextPadTemplateLibrary(v) => {
-                self.fp_editor_set_next_pad_template_library(v.clone())
             }
             PanelMsg::FpEditorSetNextPadPasteMarginTop(v) => {
                 self.fp_editor_set_next_pad_paste_margin_top(v.clone())
@@ -228,11 +231,14 @@ impl Signex {
             PanelMsg::FpEditorSetSelectedPadCornerRadiusPct { idx, value } => {
                 self.fp_editor_set_selected_pad_corner_radius_pct(*idx, value.clone())
             }
+            PanelMsg::FpEditorSetSelectedPadTrapezoidDeltaX { idx, value } => {
+                self.fp_editor_set_selected_pad_trapezoid_delta(*idx, 0, value.clone())
+            }
+            PanelMsg::FpEditorSetSelectedPadTrapezoidDeltaY { idx, value } => {
+                self.fp_editor_set_selected_pad_trapezoid_delta(*idx, 1, value.clone())
+            }
             PanelMsg::FpEditorSetSelectedPadTemplate { idx, value } => {
                 self.fp_editor_set_selected_pad_template(*idx, value.clone())
-            }
-            PanelMsg::FpEditorSetSelectedPadTemplateLibrary { idx, value } => {
-                self.fp_editor_set_selected_pad_template_library(*idx, value.clone())
             }
             PanelMsg::FpEditorSetSelectedPadPasteMarginTop { idx, value } => {
                 self.fp_editor_set_selected_pad_paste_margin_top(*idx, value.clone())
@@ -308,6 +314,9 @@ impl Signex {
             PanelMsg::FpEditorSetFootprintHeight(v) => {
                 self.handle_fp_editor_set_footprint_height(v)
             }
+            PanelMsg::FpEditorGeneratedFeature(edit) => {
+                self.handle_fp_editor_generated_feature(edit)
+            }
             PanelMsg::FpEditorSetSilkLineFromX(v) => {
                 self.fp_editor_set_silk_line_endpoint(SilkLineEndpoint::FromX, v.clone())
             }
@@ -333,31 +342,29 @@ impl Signex {
                 self.handle_fp_editor_set_silk_stroke_width(v)
             }
             PanelMsg::FpEditorSetNextPadHoleTolerancePlus(v) => {
-                self.handle_fp_editor_set_next_pad_hole_tolerance_plus(v)
+                self.fp_pad_mm_edited(None, PadMm::TolerancePlus, v)
             }
             PanelMsg::FpEditorSetNextPadHoleToleranceMinus(v) => {
-                self.handle_fp_editor_set_next_pad_hole_tolerance_minus(v)
+                self.fp_pad_mm_edited(None, PadMm::ToleranceMinus, v)
             }
             PanelMsg::FpEditorSetNextPadHoleRotation(v) => {
                 self.handle_fp_editor_set_next_pad_hole_rotation(v)
             }
             PanelMsg::FpEditorSetNextPadCopperOffsetX(v) => {
-                self.handle_fp_editor_set_next_pad_copper_offset_x(v)
+                self.fp_pad_mm_edited(None, PadMm::OffsetX, v)
             }
             PanelMsg::FpEditorSetNextPadCopperOffsetY(v) => {
-                self.handle_fp_editor_set_next_pad_copper_offset_y(v)
+                self.fp_pad_mm_edited(None, PadMm::OffsetY, v)
             }
             PanelMsg::FpEditorToggleNextPadPlated(plated) => {
                 self.handle_fp_editor_toggle_next_pad_plated(plated)
             }
-            PanelMsg::FpEditorSetSelectedPadHoleTolerancePlus { idx, value } => self
-                .with_selected_pad(*idx, |pad| {
-                    pad.hole_tolerance_plus_mm = fp_parse_optional_mm(value)
-                }),
-            PanelMsg::FpEditorSetSelectedPadHoleToleranceMinus { idx, value } => self
-                .with_selected_pad(*idx, |pad| {
-                    pad.hole_tolerance_minus_mm = fp_parse_optional_mm(value)
-                }),
+            PanelMsg::FpEditorSetSelectedPadHoleTolerancePlus { idx, value } => {
+                self.fp_pad_mm_edited(Some(*idx), PadMm::TolerancePlus, value)
+            }
+            PanelMsg::FpEditorSetSelectedPadHoleToleranceMinus { idx, value } => {
+                self.fp_pad_mm_edited(Some(*idx), PadMm::ToleranceMinus, value)
+            }
             // #599 — an unreadable rotation must not overwrite the
             // stored one; `Some(stored)` is the only path that writes.
             PanelMsg::FpEditorSetSelectedPadHoleRotation { idx, value } => {
@@ -375,14 +382,12 @@ impl Signex {
                     }
                 }
             }
-            PanelMsg::FpEditorSetSelectedPadCopperOffsetX { idx, value } => self
-                .with_selected_pad(*idx, |pad| {
-                    pad.copper_offset_x_mm = fp_parse_optional_mm(value)
-                }),
-            PanelMsg::FpEditorSetSelectedPadCopperOffsetY { idx, value } => self
-                .with_selected_pad(*idx, |pad| {
-                    pad.copper_offset_y_mm = fp_parse_optional_mm(value)
-                }),
+            PanelMsg::FpEditorSetSelectedPadCopperOffsetX { idx, value } => {
+                self.fp_pad_mm_edited(Some(*idx), PadMm::OffsetX, value)
+            }
+            PanelMsg::FpEditorSetSelectedPadCopperOffsetY { idx, value } => {
+                self.fp_pad_mm_edited(Some(*idx), PadMm::OffsetY, value)
+            }
             PanelMsg::FpEditorToggleSelectedPadPlated { idx, value } => {
                 self.with_selected_pad(*idx, |pad| {
                     pad.kind = if *value {
@@ -444,14 +449,12 @@ impl Signex {
             PanelMsg::FpEditorToggleSketchPadPasteEnabledBottom { id, value } => {
                 self.with_selected_sketch_pad(*id, |attr| attr.stack.paste_bottom_enabled = *value)
             }
-            PanelMsg::FpEditorSetSketchPadHoleTolerancePlus { id, value } => self
-                .with_selected_sketch_pad(*id, |attr| {
-                    attr.hole_tolerance_plus_mm = fp_parse_optional_mm(value)
-                }),
-            PanelMsg::FpEditorSetSketchPadHoleToleranceMinus { id, value } => self
-                .with_selected_sketch_pad(*id, |attr| {
-                    attr.hole_tolerance_minus_mm = fp_parse_optional_mm(value)
-                }),
+            PanelMsg::FpEditorSetSketchPadHoleTolerancePlus { id, value } => {
+                self.fp_sketch_pad_mm_edited(*id, PadMm::TolerancePlus, value)
+            }
+            PanelMsg::FpEditorSetSketchPadHoleToleranceMinus { id, value } => {
+                self.fp_sketch_pad_mm_edited(*id, PadMm::ToleranceMinus, value)
+            }
             // #599 — same refusal for the sketch-mode pad attribute.
             PanelMsg::FpEditorSetSketchPadHoleRotation { id, value } => {
                 match fp_resolve_optional_number(
@@ -468,18 +471,16 @@ impl Signex {
                     }
                 }
             }
-            PanelMsg::FpEditorSetSketchPadCopperOffsetX { id, value } => self
-                .with_selected_sketch_pad(*id, |attr| {
-                    attr.copper_offset_x_mm = fp_parse_optional_mm(value)
-                }),
-            PanelMsg::FpEditorSetSketchPadCopperOffsetY { id, value } => self
-                .with_selected_sketch_pad(*id, |attr| {
-                    attr.copper_offset_y_mm = fp_parse_optional_mm(value)
-                }),
-            // #599 — out of range clamps to the nearest bound, an
-            // unreadable buffer is refused; neither clears the value.
+            PanelMsg::FpEditorSetSketchPadCopperOffsetX { id, value } => {
+                self.fp_sketch_pad_mm_edited(*id, PadMm::OffsetX, value)
+            }
+            PanelMsg::FpEditorSetSketchPadCopperOffsetY { id, value } => {
+                self.fp_sketch_pad_mm_edited(*id, PadMm::OffsetY, value)
+            }
+            // #599, #2792 — out of range or unreadable text is refused and
+            // stays in the box; neither clears the value.
             PanelMsg::FpEditorSetSketchPadCornerRadiusPct { id, value } => {
-                match fp_resolve_optional_number(
+                let stored = fp_resolve_optional_number(
                     "Corner radius %, sketch pad",
                     value,
                     fp_parse_optional_number_in(
@@ -487,7 +488,13 @@ impl Signex {
                         CORNER_RADIUS_PCT_MIN,
                         CORNER_RADIUS_PCT_MAX,
                     ),
-                ) {
+                );
+                self.sketch_pad_field_typed(
+                    *id,
+                    crate::library::editor::footprint::pad_field::CORNER_RADIUS,
+                    stored.is_none().then_some(value.as_str()),
+                );
+                match stored {
                     Some(stored) => self.with_selected_sketch_pad(*id, |attr| {
                         attr.stack.corner_radius_pct = stored
                     }),
@@ -560,6 +567,7 @@ impl Signex {
             PanelMsg::FpEditorSetCutoutThrough { id, value } => {
                 self.fp_editor_set_cutout_through(*id, *value)
             }
+            PanelMsg::FpSubform(msg) => self.fp_subform_edited(msg),
             PanelMsg::BoardSketch(edit) => self.board_sketch_attr_edited(edit),
             PanelMsg::FpEditorEditArrayParam {
                 array_id,
@@ -569,6 +577,23 @@ impl Signex {
             PanelMsg::FpEditorSetArrayNumberingScheme { array_id, scheme } => {
                 self.fp_editor_set_array_numbering_scheme(*array_id, *scheme)
             }
+            PanelMsg::FpEditorSetArraySweep { array_id, sweep } => {
+                self.fp_editor_set_array_sweep(*array_id, *sweep)
+            }
+            PanelMsg::FpEditorSetNextPadTemplateLibrary(v) => {
+                self.fp_editor_set_next_pad_template_library(v.clone())
+            }
+            PanelMsg::FpEditorSetSelectedPadTemplateLibrary { idx, value } => {
+                self.fp_editor_set_selected_pad_template_library(*idx, value.clone())
+            }
+            PanelMsg::FpEditorPickNextPadTemplate { template, library } => {
+                self.fp_editor_pick_next_pad_template(template.clone(), library.clone())
+            }
+            PanelMsg::FpEditorPickSelectedPadTemplate {
+                idx,
+                template,
+                library,
+            } => self.fp_editor_pick_selected_pad_template(*idx, template.clone(), library.clone()),
             PanelMsg::FpEditorSetBgaSkipLetters { array_id, value } => {
                 self.fp_editor_set_bga_skip_letters(*array_id, *value)
             }
@@ -718,6 +743,10 @@ impl Signex {
             }
             PanelMsg::SymEditorSelectGraphic(idx) => self.sym_editor_select_graphic(*idx),
             PanelMsg::SymEditorSelectPart(part) => self.sym_editor_select_part(*part),
+            PanelMsg::SymbolProps(msg) => {
+                follow = self.handle_symbol_props(msg);
+                true
+            }
             PanelMsg::SymEditorSetGraphicField { idx, field, value } => {
                 self.sym_editor_set_graphic_field(*idx, *field, *value)
             }
@@ -795,22 +824,11 @@ impl Signex {
                     Unit::Micrometer => Unit::Mm,
                 };
             }),
+            PanelMsg::FpProperties(msg) => self.fp_properties_view_changed(msg),
             _ => false,
         };
         if handled { Some(follow) } else { None }
     }
-}
-
-/// v0.20 — parse a Properties-panel mm input as `Option<f64>`.
-/// Empty / whitespace = `None` (means "use rule"); non-numeric =
-/// `None` (the form re-displays the previous value, so the user
-/// can keep typing). Used by every per-side mask / paste row.
-pub(super) fn fp_parse_optional_mm(value: &str) -> Option<f64> {
-    let s = value.trim();
-    if s.is_empty() {
-        return None;
-    }
-    crate::numeric_field::parse_field_f64(s)
 }
 
 fn apply_graphic_field(
@@ -818,10 +836,14 @@ fn apply_graphic_field(
     field: crate::panels::GraphicFieldId,
     value: f64,
 ) {
+    use crate::library::editor::symbol::rect_end_for_extent;
     use crate::panels::GraphicFieldId;
     use signex_library::SymbolGraphicKind;
     if matches!(field, GraphicFieldId::StrokeWidth) {
-        g.stroke_width = value.max(0.0);
+        g.stroke_width = value;
+        return;
+    }
+    if curve_fields::apply(&mut g.kind, field, value) {
         return;
     }
     match (&mut g.kind, field) {
@@ -841,18 +863,40 @@ fn apply_graphic_field(
             SymbolGraphicKind::Rectangle { to, .. } | SymbolGraphicKind::Line { to, .. },
             GraphicFieldId::ToY,
         ) => to[1] = value,
+        (SymbolGraphicKind::Rectangle { from, to }, GraphicFieldId::Width) => {
+            to[0] = rect_end_for_extent(from[0], to[0], value)
+        }
+        (SymbolGraphicKind::Rectangle { from, to }, GraphicFieldId::Height) => {
+            to[1] = rect_end_for_extent(from[1], to[1], value)
+        }
         (
-            SymbolGraphicKind::Circle { center, .. } | SymbolGraphicKind::Arc { center, .. },
+            SymbolGraphicKind::Circle { center, .. }
+            | SymbolGraphicKind::Arc { center, .. }
+            | SymbolGraphicKind::Pie { center, .. },
             GraphicFieldId::CenterX,
         ) => center[0] = value,
         (
-            SymbolGraphicKind::Circle { center, .. } | SymbolGraphicKind::Arc { center, .. },
+            SymbolGraphicKind::Circle { center, .. }
+            | SymbolGraphicKind::Arc { center, .. }
+            | SymbolGraphicKind::Pie { center, .. },
             GraphicFieldId::CenterY,
         ) => center[1] = value,
         (
-            SymbolGraphicKind::Circle { radius, .. } | SymbolGraphicKind::Arc { radius, .. },
+            SymbolGraphicKind::Circle { radius, .. }
+            | SymbolGraphicKind::Arc { radius, .. }
+            | SymbolGraphicKind::Pie { radius, .. },
             GraphicFieldId::Radius,
-        ) => *radius = value.max(0.1),
+        ) => *radius = value,
+        (SymbolGraphicKind::Bezier { points }, GraphicFieldId::BezierX(i)) => {
+            if let Some(p) = points.get_mut(usize::from(i)) {
+                p[0] = value;
+            }
+        }
+        (SymbolGraphicKind::Bezier { points }, GraphicFieldId::BezierY(i)) => {
+            if let Some(p) = points.get_mut(usize::from(i)) {
+                p[1] = value;
+            }
+        }
         // Reduce each endpoint into `[0, 360)` on write. The Properties
         // `text_input` accepts any `f64` including negatives, and the CCW-
         // wraparound render/hit-test `rem_euclid` both endpoints anyway, so
@@ -866,19 +910,21 @@ fn apply_graphic_field(
         // it can't tell apart from a Properties edit. NOT
         // `normalize_arc_endpoints_deg`: its swap would collapse the visible
         // 270° to the 90° complement, the same round-trip loss in reverse.
-        (SymbolGraphicKind::Arc { start_deg, .. }, GraphicFieldId::StartDeg) => {
-            *start_deg = value.rem_euclid(360.0)
-        }
-        (SymbolGraphicKind::Arc { end_deg, .. }, GraphicFieldId::EndDeg) => {
-            *end_deg = value.rem_euclid(360.0)
-        }
+        (
+            SymbolGraphicKind::Arc { start_deg, .. } | SymbolGraphicKind::Pie { start_deg, .. },
+            GraphicFieldId::StartDeg,
+        ) => *start_deg = value.rem_euclid(360.0),
+        (
+            SymbolGraphicKind::Arc { end_deg, .. } | SymbolGraphicKind::Pie { end_deg, .. },
+            GraphicFieldId::EndDeg,
+        ) => *end_deg = value.rem_euclid(360.0),
         (SymbolGraphicKind::Text { position, .. }, GraphicFieldId::PositionX) => {
             position[0] = value
         }
         (SymbolGraphicKind::Text { position, .. }, GraphicFieldId::PositionY) => {
             position[1] = value
         }
-        (SymbolGraphicKind::Text { size, .. }, GraphicFieldId::TextSize) => *size = value.max(0.1),
+        (SymbolGraphicKind::Text { size, .. }, GraphicFieldId::TextSize) => *size = value,
         _ => {}
     }
 }
@@ -888,6 +934,53 @@ mod arc_field_edit_tests {
     use super::apply_graphic_field;
     use crate::panels::GraphicFieldId;
     use signex_library::{SymbolGraphic, SymbolGraphicKind};
+
+    fn curve(kind: SymbolGraphicKind) -> SymbolGraphic {
+        SymbolGraphic {
+            kind,
+            stroke_width: 0.15,
+            fill: None,
+            part_number: 1,
+            body_style: 1,
+        }
+    }
+
+    /// #2838: a pie's Properties angles persist in `[0, 360)`, like an arc's.
+    #[test]
+    fn a_pie_angle_field_is_reduced_into_one_turn() {
+        let mut g = curve(SymbolGraphicKind::Pie {
+            center: [0.0, 0.0],
+            radius: 2.54,
+            start_deg: 0.0,
+            end_deg: 90.0,
+        });
+        apply_graphic_field(&mut g, GraphicFieldId::EndDeg, -60.0);
+        apply_graphic_field(&mut g, GraphicFieldId::Radius, 5.08);
+        let SymbolGraphicKind::Pie {
+            radius, end_deg, ..
+        } = g.kind
+        else {
+            panic!("expected a Pie");
+        };
+        assert_eq!(end_deg, 300.0);
+        assert_eq!(radius, 5.08);
+    }
+
+    /// #2838: each Bezier point row writes only its own point.
+    #[test]
+    fn a_bezier_point_field_writes_its_own_point() {
+        let mut g = curve(SymbolGraphicKind::Bezier {
+            points: [[0.0, 0.0], [1.0, 1.0], [2.0, 1.0], [3.0, 0.0]],
+        });
+        apply_graphic_field(&mut g, GraphicFieldId::BezierX(2), 9.0);
+        apply_graphic_field(&mut g, GraphicFieldId::BezierY(2), 8.0);
+        assert_eq!(
+            g.kind,
+            SymbolGraphicKind::Bezier {
+                points: [[0.0, 0.0], [1.0, 1.0], [9.0, 8.0], [3.0, 0.0]],
+            }
+        );
+    }
 
     // Regression: a Properties-panel arc-degree edit must persist endpoints
     // already reduced into [0, 360). A raw negative endpoint reaching disk
@@ -923,5 +1016,47 @@ mod arc_field_edit_tests {
         // (30, -60) is a 270° CCW arc in-session; it must persist as the same
         // 270° (30, 300), not collapse to the 90° complement (300, 30).
         assert_eq!((start_deg, end_deg), (30.0, 300.0));
+    }
+
+    /// Mockup row 123: a rectangle's Width and Height are written as its End corner,
+    /// on the side the corner is on, so End X / Y follow.
+    #[test]
+    fn rectangle_width_and_height_move_the_end_corner() {
+        let mut g = SymbolGraphic {
+            body_style: 1,
+            kind: SymbolGraphicKind::Rectangle {
+                from: [2.0, 1.0],
+                to: [-3.0, 4.0],
+            },
+            stroke_width: 0.0,
+            fill: None,
+            part_number: 0,
+        };
+        apply_graphic_field(&mut g, GraphicFieldId::Width, 10.0);
+        apply_graphic_field(&mut g, GraphicFieldId::Height, 6.0);
+        let SymbolGraphicKind::Rectangle { from, to } = g.kind else {
+            panic!("expected Rectangle");
+        };
+        assert_eq!(from, [2.0, 1.0], "the Start corner stays");
+        assert_eq!(to, [-8.0, 7.0]);
+    }
+
+    #[test]
+    fn width_and_height_leave_a_line_alone() {
+        let mut g = SymbolGraphic {
+            body_style: 1,
+            kind: SymbolGraphicKind::Line {
+                from: [0.0, 0.0],
+                to: [1.0, 1.0],
+            },
+            stroke_width: 0.0,
+            fill: None,
+            part_number: 0,
+        };
+        apply_graphic_field(&mut g, GraphicFieldId::Width, 10.0);
+        let SymbolGraphicKind::Line { to, .. } = g.kind else {
+            panic!("expected Line");
+        };
+        assert_eq!(to, [1.0, 1.0]);
     }
 }

@@ -24,10 +24,30 @@ struct Pick {
 /// One sheet Apply changed, before the whole run is committed.
 struct Changed {
     path: PathBuf,
-    invalidation: Option<crate::schematic_runtime::RenderInvalidation>,
+    patch: Option<signex_engine::DocumentPatch>,
 }
 
 impl Signex {
+    /// `assign_footprint` (#2937): `binding` for each `(part, designator)`
+    /// of the open sheet `sheet`, through Apply's own checks and undo group,
+    /// all or nothing.
+    pub(crate) fn assign_footprint_on_sheet(
+        &mut self,
+        sheet: &std::path::Path,
+        parts: &[(uuid::Uuid, String)],
+        binding: &str,
+    ) -> Result<(), AssignProblem> {
+        let picks = parts
+            .iter()
+            .map(|(symbol_id, designator)| Pick {
+                symbol_id: *symbol_id,
+                binding: binding.to_string(),
+                designator: designator.clone(),
+            })
+            .collect();
+        self.assign_across_sheets(BTreeMap::from([(sheet.to_path_buf(), picks)]), parts.len())
+    }
+
     /// Apply the dialog's picks. On success the dialog closes; on a refusal
     /// it stays open with the reason, and no sheet is changed.
     pub(super) fn apply_footprint_assignments(&mut self) {
@@ -136,15 +156,11 @@ impl Signex {
                 continue;
             };
             let outcome = engine.execute_batch_grouped(commands, Some(group));
-            for warning in engine.take_warnings() {
-                crate::diagnostics::log_warning(warning);
-            }
+            crate::app::Signex::report_engine_warnings(engine);
             match outcome {
                 Ok(result) if result.changed => changed.push(Changed {
                     path,
-                    invalidation: result
-                        .patch_pair
-                        .map(|pair| Self::render_invalidation_for_patch(pair.document)),
+                    patch: result.patch_pair.map(|pair| pair.document),
                 }),
                 Ok(_) => {}
                 Err(error) => {
@@ -191,29 +207,30 @@ impl Signex {
             kind: crate::app::UndoGroupKind::Footprints,
             ..Default::default()
         };
-        let mut active_invalidation = None;
+        let (mut active_patch, mut members) = (None, Vec::new());
         for done in &changed {
             recorded.live.push(done.path.clone());
             if active.as_deref() == Some(done.path.as_path()) {
-                active_invalidation = done.invalidation;
+                active_patch = done.patch;
             } else {
-                self.document_state.mark_history_edit_dirty(&done.path);
+                let patch = done.patch.unwrap_or(signex_engine::DocumentPatch::FULL);
+                members.push((done.path.clone(), patch));
             }
         }
         let sheets = changed.len();
-        self.set_undo_group_sheets(group, recorded);
+        // The active sheet's change notes the sheet edit for ERC itself.
+        let run = crate::app::state::sheet_change::SheetRun {
+            group,
+            recorded,
+            members,
+            notes_edit: sheets > 0,
+        };
+        self.finish_schematic_mutation(active_patch, Some(run), true, true);
         if sheets == 0 {
             crate::diagnostics::log_info(
                 "Assign Footprints: nothing changed; every part already had its footprint.",
             );
             return;
-        }
-        match active_invalidation {
-            // Notes the sheet edit for ERC itself.
-            Some(invalidation) => {
-                self.finish_schematic_mutation(invalidation, true, true);
-            }
-            None => self.document_state.note_sheet_edit(),
         }
         self.refresh_panel_ctx();
         crate::diagnostics::log_info(format!(

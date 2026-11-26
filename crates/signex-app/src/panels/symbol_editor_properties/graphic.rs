@@ -1,211 +1,346 @@
-//! Graphic-selection Properties rows for the symbol editor.
+//! Graphic properties: the header, the illustration, Geometry (the shape's
+//! own coordinates; a rectangle adds Width / Height, written as its End
+//! corner) and Style (stroke, and the fill colour of a closed shape).
 
-use iced::widget::{Column, Widget, container, row};
-use iced::{Color, Element, Length};
-use signex_widgets::{raw, text};
+use iced::{Color, Element};
+use signex_i18n::{MessageId, UserText, ids, t};
 
 use super::super::{
-    ColorFieldProps, GraphicFieldId, GraphicKindSummary, GraphicSummary, NumericDraft,
-    NumericFieldKey, PanelMsg, color_field, numeric_input,
+    ColorFieldProps, GraphicFieldId, GraphicKindSummary, GraphicSummary, NumericFieldKey, PanelMsg,
+    SymbolEditorPanelContext, color_field,
 };
-use crate::styles::{Spacing, TypeScale};
+use super::illustration::{self, field};
+use super::object_context;
+use super::rows::Form;
+use crate::library::editor::symbol::rect_extent;
 
-/// Default type / spacing scales; equal to the old literals at the default size.
-const TS: TypeScale = TypeScale::DEFAULT;
-const SP: Spacing = Spacing::DEFAULT;
+const GEOMETRY: &str = "symprops.geometry";
+const STYLE: &str = "symprops.style";
+/// A Bezier's four point rows, named as on the schematic's Bezier.
+const BEZIER_ROWS: [(MessageId, &str); 4] = [
+    (ids::PROPERTIES_BEZIER_START, field::G_START),
+    (ids::PROPERTIES_BEZIER_CONTROL_1, field::G_CONTROL_1),
+    (ids::PROPERTIES_BEZIER_CONTROL_2, field::G_CONTROL_2),
+    (ids::PROPERTIES_BEZIER_END, field::G_END),
+];
 
-/// Per-shape numeric Properties rows for a placed graphic (corners /
-/// endpoints / centre + radius / arc angles / text + stroke).
-pub(super) fn view_graphic_selection<'a>(
-    mut col: Column<Element<'a, PanelMsg>>,
+pub(super) fn view<'a>(
+    sym: &'a SymbolEditorPanelContext,
     g: &'a GraphicSummary,
-    draft: Option<&NumericDraft>,
-    muted: Color,
+    form: &Form<'_>,
     border_c: Color,
-    fill_picker: Option<crate::app::GraphicFillPicker>,
-    i18n: &signex_i18n::I18n,
-) -> Column<Element<'a, PanelMsg>> {
-    let g_idx = g.idx;
-    // Per-shape numeric fields.
-    let num_field =
-        |label: &'static str, field: GraphicFieldId, value: f64| -> Element<'a, PanelMsg> {
-            container(
-                row![
-                    text(raw(label.to_string()))
-                        .size(TS.body)
-                        .color(muted)
-                        .width(Length::FillPortion(2)),
-                    numeric_input(
-                        "mm",
-                        NumericFieldKey::Graphic { idx: g_idx, field },
-                        value,
-                        draft,
-                    )
-                    .padding([SP.xs, SP.s])
-                    .size(TS.body),
-                ]
-                .spacing(SP.s)
-                .align_y(iced::Alignment::Center),
-            )
-            .padding([3.0, SP.m])
-            .width(Length::Fill)
-            .boxed()
-        };
+) -> Vec<Element<'a, PanelMsg>> {
+    let i18n = form.i18n;
+    let mut col = vec![form.header(
+        t!(i18n, kind_title(&g.kind)).into(),
+        None,
+        Some((object_context(sym, sym.active_part, i18n).into(), false)),
+    )];
+    if let Some(ill) = illustration::graphic(g, &sym.part_drawing.shapes, i18n) {
+        col.push(illustration::view(ill, form));
+    }
+    col.push(form.section(
+        GEOMETRY,
+        t!(i18n, ids::EDITORS_SYMPROPS_SECTION_GEOMETRY),
+        true,
+        None,
+        || geometry_rows(g, form),
+    ));
+    col.push(form.section(
+        STYLE,
+        t!(i18n, ids::EDITORS_SYMPROPS_SECTION_STYLE),
+        true,
+        None,
+        || style_rows(sym, g, form, border_c),
+    ));
+    col
+}
 
+fn kind_title(kind: &GraphicKindSummary) -> MessageId {
+    match kind {
+        GraphicKindSummary::Rectangle { .. } => ids::EDITORS_SYMPROPS_RECTANGLE,
+        GraphicKindSummary::Line { .. } => ids::EDITORS_SYMPROPS_LINE,
+        GraphicKindSummary::Circle { .. } => ids::EDITORS_SYMPROPS_CIRCLE,
+        GraphicKindSummary::Arc { .. } => ids::EDITORS_SYMPROPS_ARC,
+        GraphicKindSummary::Text { .. } => ids::EDITORS_SYMPROPS_TEXT,
+        GraphicKindSummary::Polygon { .. } => ids::EDITORS_SYMPROPS_POLYGON,
+        GraphicKindSummary::Bezier { .. } => ids::PROPERTIES_BEZIER_TITLE,
+        GraphicKindSummary::Pie { .. } => ids::EDITORS_SYMPROPS_PIE,
+        GraphicKindSummary::EllipticalArc { .. } => ids::EDITORS_SYMPROPS_ELLIPTICAL_ARC,
+        GraphicKindSummary::RoundRectangle { .. } => ids::EDITORS_SYMPROPS_ROUND_RECTANGLE,
+    }
+}
+
+fn geometry_rows<'a>(g: &GraphicSummary, form: &Form<'_>) -> Vec<Element<'a, PanelMsg>> {
+    let i18n = form.i18n;
+    let idx = g.idx;
+    let num = |field: GraphicFieldId, value: f64| {
+        form.number(NumericFieldKey::Graphic { idx, field }, value, None)
+    };
+    let pair = |label: MessageId,
+                (a, av): (GraphicFieldId, f64),
+                (b, bv): (GraphicFieldId, f64),
+                id: &'static str| {
+        form.field(t!(i18n, label), form.pair(num(a, av), num(b, bv)), Some(id))
+    };
+    let single = |label: MessageId, (f, v): (GraphicFieldId, f64), id: &'static str| {
+        form.field(t!(i18n, label), num(f, v), Some(id))
+    };
+    use GraphicFieldId as F;
     match &g.kind {
-        GraphicKindSummary::Rectangle { from, to } => {
-            col = col.push(num_field("From X", GraphicFieldId::FromX, from[0]));
-            col = col.push(num_field("From Y", GraphicFieldId::FromY, from[1]));
-            col = col.push(num_field("To X", GraphicFieldId::ToX, to[0]));
-            col = col.push(num_field("To Y", GraphicFieldId::ToY, to[1]));
-            col = col.push(graphic_fill_field(
-                g_idx,
-                g.fill,
-                muted,
-                border_c,
-                fill_picker,
-            ));
-        }
-        GraphicKindSummary::Line { from, to } => {
-            col = col.push(num_field("Start X", GraphicFieldId::FromX, from[0]));
-            col = col.push(num_field("Start Y", GraphicFieldId::FromY, from[1]));
-            col = col.push(num_field("End X", GraphicFieldId::ToX, to[0]));
-            col = col.push(num_field("End Y", GraphicFieldId::ToY, to[1]));
-        }
-        GraphicKindSummary::Circle { center, radius } => {
-            col = col.push(num_field("Center X", GraphicFieldId::CenterX, center[0]));
-            col = col.push(num_field("Center Y", GraphicFieldId::CenterY, center[1]));
-            col = col.push(num_field("Radius", GraphicFieldId::Radius, *radius));
-            col = col.push(graphic_fill_field(
-                g_idx,
-                g.fill,
-                muted,
-                border_c,
-                fill_picker,
-            ));
-        }
+        GraphicKindSummary::Rectangle { from, to } => vec![
+            pair(
+                ids::EDITORS_SYMPROPS_START_X_Y,
+                (F::FromX, from[0]),
+                (F::FromY, from[1]),
+                field::G_START,
+            ),
+            pair(
+                ids::EDITORS_SYMPROPS_END_X_Y,
+                (F::ToX, to[0]),
+                (F::ToY, to[1]),
+                field::G_END,
+            ),
+            pair(
+                ids::EDITORS_SYMPROPS_WIDTH_HEIGHT,
+                (F::Width, rect_extent(from[0], to[0])),
+                (F::Height, rect_extent(from[1], to[1])),
+                field::G_SIZE,
+            ),
+        ],
+        GraphicKindSummary::Line { from, to } => vec![
+            pair(
+                ids::EDITORS_SYMPROPS_START_X_Y,
+                (F::FromX, from[0]),
+                (F::FromY, from[1]),
+                field::G_START,
+            ),
+            pair(
+                ids::EDITORS_SYMPROPS_END_X_Y,
+                (F::ToX, to[0]),
+                (F::ToY, to[1]),
+                field::G_END,
+            ),
+        ],
+        GraphicKindSummary::Circle { center, radius } => vec![
+            pair(
+                ids::EDITORS_SYMPROPS_CENTER_X_Y,
+                (F::CenterX, center[0]),
+                (F::CenterY, center[1]),
+                field::G_CENTER,
+            ),
+            single(
+                ids::EDITORS_SYMPROPS_RADIUS,
+                (F::Radius, *radius),
+                field::G_RADIUS,
+            ),
+        ],
+        GraphicKindSummary::EllipticalArc {
+            center,
+            radius_x,
+            radius_y,
+            start_deg,
+            end_deg,
+        } => vec![
+            pair(
+                ids::EDITORS_SYMPROPS_CENTER_X_Y,
+                (F::CenterX, center[0]),
+                (F::CenterY, center[1]),
+                field::G_CENTER,
+            ),
+            pair(
+                ids::EDITORS_SYMPROPS_RADIUS_X_Y,
+                (F::RadiusX, *radius_x),
+                (F::RadiusY, *radius_y),
+                field::G_RADIUS,
+            ),
+            single(
+                ids::EDITORS_SYMPROPS_START_ANGLE,
+                (F::StartDeg, *start_deg),
+                field::G_START_ANGLE,
+            ),
+            single(
+                ids::EDITORS_SYMPROPS_END_ANGLE,
+                (F::EndDeg, *end_deg),
+                field::G_END_ANGLE,
+            ),
+        ],
+        GraphicKindSummary::RoundRectangle {
+            from,
+            to,
+            corner_radius,
+        } => vec![
+            pair(
+                ids::EDITORS_SYMPROPS_START_X_Y,
+                (F::FromX, from[0]),
+                (F::FromY, from[1]),
+                field::G_START,
+            ),
+            pair(
+                ids::EDITORS_SYMPROPS_END_X_Y,
+                (F::ToX, to[0]),
+                (F::ToY, to[1]),
+                field::G_END,
+            ),
+            pair(
+                ids::EDITORS_SYMPROPS_WIDTH_HEIGHT,
+                (F::Width, rect_extent(from[0], to[0])),
+                (F::Height, rect_extent(from[1], to[1])),
+                field::G_SIZE,
+            ),
+            single(
+                ids::EDITORS_SYMPROPS_CORNER_RADIUS,
+                (F::CornerRadius, *corner_radius),
+                field::G_RADIUS,
+            ),
+        ],
+        GraphicKindSummary::Bezier { points } => (0u8..)
+            .zip(points)
+            .zip(BEZIER_ROWS)
+            .map(|((i, p), (label, id))| {
+                pair(label, (F::BezierX(i), p[0]), (F::BezierY(i), p[1]), id)
+            })
+            .collect(),
         GraphicKindSummary::Arc {
             center,
             radius,
             start_deg,
             end_deg,
-        } => {
-            col = col.push(num_field("Center X", GraphicFieldId::CenterX, center[0]));
-            col = col.push(num_field("Center Y", GraphicFieldId::CenterY, center[1]));
-            col = col.push(num_field("Radius", GraphicFieldId::Radius, *radius));
-            col = col.push(num_field(
-                "Start \u{00B0}",
-                GraphicFieldId::StartDeg,
-                *start_deg,
-            ));
-            col = col.push(num_field("End \u{00B0}", GraphicFieldId::EndDeg, *end_deg));
         }
+        | GraphicKindSummary::Pie {
+            center,
+            radius,
+            start_deg,
+            end_deg,
+        } => vec![
+            pair(
+                ids::EDITORS_SYMPROPS_CENTER_X_Y,
+                (F::CenterX, center[0]),
+                (F::CenterY, center[1]),
+                field::G_CENTER,
+            ),
+            single(
+                ids::EDITORS_SYMPROPS_RADIUS,
+                (F::Radius, *radius),
+                field::G_RADIUS,
+            ),
+            single(
+                ids::EDITORS_SYMPROPS_START_ANGLE,
+                (F::StartDeg, *start_deg),
+                field::G_START_ANGLE,
+            ),
+            single(
+                ids::EDITORS_SYMPROPS_END_ANGLE,
+                (F::EndDeg, *end_deg),
+                field::G_END_ANGLE,
+            ),
+        ],
         GraphicKindSummary::Text {
             position,
             content,
-            size: text_size,
-        } => {
-            col = col.push(num_field("X", GraphicFieldId::PositionX, position[0]));
-            col = col.push(num_field("Y", GraphicFieldId::PositionY, position[1]));
-            col = col.push(num_field("Size", GraphicFieldId::TextSize, *text_size));
-            let content_row: Element<'a, PanelMsg> = container(
-                row![
-                    text(raw("Content"))
-                        .size(TS.body)
-                        .color(muted)
-                        .width(Length::FillPortion(2)),
-                    signex_widgets::text_input(signex_widgets::raw("text"), content.as_str())
-                        .padding([SP.xs, SP.s])
-                        .size(TS.body)
-                        .on_input(move |s| PanelMsg::SymEditorSetGraphicText {
-                            idx: g_idx,
-                            value: s,
-                        })
-                        .width(Length::FillPortion(3)),
-                ]
-                .spacing(SP.s)
-                .align_y(iced::Alignment::Center),
-            )
-            .padding([3.0, SP.m])
-            .width(Length::Fill)
-            .boxed();
-            col = col.push(content_row);
-        }
-        GraphicKindSummary::Polygon { vertex_count } => {
-            // Read-only vertex count — no per-vertex numeric
-            // editor in this slice; the canvas's per-vertex
-            // drag handles cover editing.
-            let vertices_row: Element<'a, PanelMsg> = container(
-                row![
-                    text(raw("Vertices"))
-                        .size(TS.body)
-                        .color(muted)
-                        .width(Length::FillPortion(2)),
-                    text(raw(i18n.count(*vertex_count as i64)))
-                        .size(TS.body)
-                        .color(muted)
-                        .width(Length::FillPortion(3)),
-                ]
-                .spacing(SP.s)
-                .align_y(iced::Alignment::Center),
-            )
-            .padding([3.0, SP.m])
-            .width(Length::Fill)
-            .boxed();
-            col = col.push(vertices_row);
-            col = col.push(graphic_fill_field(
-                g_idx,
-                g.fill,
-                muted,
-                border_c,
-                fill_picker,
-            ));
-        }
+            size,
+        } => vec![
+            pair(
+                ids::EDITORS_SYMPROPS_X_Y,
+                (F::PositionX, position[0]),
+                (F::PositionY, position[1]),
+                field::G_POSITION,
+            ),
+            single(
+                ids::EDITORS_SYMPROPS_SIZE,
+                (F::TextSize, *size),
+                field::G_TEXT_SIZE,
+            ),
+            form.field(
+                t!(i18n, ids::EDITORS_SYMPROPS_CONTENT),
+                form.input(
+                    t!(i18n, ids::EDITORS_SYMPROPS_CONTENT_PLACEHOLDER),
+                    content.clone(),
+                    false,
+                    move |value| PanelMsg::SymEditorSetGraphicText { idx, value },
+                ),
+                Some(field::G_CONTENT),
+            ),
+        ],
+        // Read-only: the canvas's vertex handles edit a polygon.
+        GraphicKindSummary::Polygon { vertex_count } => vec![form.field(
+            t!(i18n, ids::EDITORS_SYMPROPS_VERTICES),
+            form.read_only(UserText::new(i18n.count(*vertex_count as i64)).into(), true),
+            None,
+        )],
     }
-    // Stroke width — common to every variant.
-    col = col.push(num_field(
-        "Stroke (mm)",
-        GraphicFieldId::StrokeWidth,
-        g.stroke_width,
-    ));
-    col
 }
 
-/// Fill colour row for a closed graphic (Rectangle / Circle) — the
-/// shared [`color_field`] widget wired to the graphic-fill messages.
-/// `picker` carries the transient open-state; the palette / HSV overlay
-/// only expands when the picker targets this graphic's index.
-fn graphic_fill_field<'a>(
-    idx: usize,
-    fill: Option<[u8; 4]>,
-    muted: Color,
+fn style_rows<'a>(
+    sym: &SymbolEditorPanelContext,
+    g: &GraphicSummary,
+    form: &Form<'_>,
     border_c: Color,
-    picker: Option<crate::app::GraphicFillPicker>,
+) -> Vec<Element<'a, PanelMsg>> {
+    let i18n = form.i18n;
+    let mut rows = vec![form.field(
+        t!(i18n, ids::EDITORS_SYMPROPS_STROKE),
+        form.number(
+            NumericFieldKey::Graphic {
+                idx: g.idx,
+                field: GraphicFieldId::StrokeWidth,
+            },
+            g.stroke_width,
+            None,
+        ),
+        Some(field::G_STROKE),
+    )];
+    let closed = matches!(
+        g.kind,
+        GraphicKindSummary::Rectangle { .. }
+            | GraphicKindSummary::Circle { .. }
+            | GraphicKindSummary::Polygon { .. }
+            | GraphicKindSummary::Pie { .. }
+            | GraphicKindSummary::RoundRectangle { .. }
+    );
+    if closed {
+        rows.push(form.linked(
+            fill_field(sym, g, form, border_c),
+            Some(field::G_FILL),
+            [0.0, 0.0],
+        ));
+    }
+    rows
+}
+
+/// The fill colour of a closed shape on the shared colour field: a swatch,
+/// or "None" for an outline. The palette opens while the editor's fill
+/// picker targets this graphic.
+fn fill_field<'a>(
+    sym: &SymbolEditorPanelContext,
+    g: &GraphicSummary,
+    form: &Form<'_>,
+    border_c: Color,
 ) -> Element<'a, PanelMsg> {
     use std::rc::Rc;
-
-    let this = picker.filter(|p| p.idx == idx);
-    let show_palette = this.is_some();
-    let show_advanced = this.map(|p| p.advanced).unwrap_or(false);
-
+    let i18n = form.i18n;
+    let idx = g.idx;
+    let this = sym.graphic_fill_picker.filter(|p| p.idx == idx);
     let on_pick: Rc<dyn Fn([u8; 4]) -> PanelMsg + 'static> =
         Rc::new(move |rgba| PanelMsg::SymEditorSetGraphicFill { idx, color: rgba });
-    let on_clear = fill
-        .is_some()
-        .then_some(PanelMsg::SymEditorClearGraphicFill { idx });
-
-    color_field(ColorFieldProps {
-        label: "Fill",
-        current: fill,
-        none_label: "None",
-        show_palette,
-        show_advanced,
-        muted,
-        border_c,
-        on_toggle: PanelMsg::SymEditorToggleGraphicFillPicker { idx },
-        on_advanced: PanelMsg::SymEditorOpenGraphicFillAdvanced { idx },
-        on_cancel: PanelMsg::SymEditorCancelGraphicFillPicker,
-        on_pick,
-        on_clear,
-    })
+    color_field(
+        ColorFieldProps {
+            label: t!(i18n, ids::EDITORS_SYMPROPS_FILL).into(),
+            current: g.fill,
+            none_label: t!(i18n, ids::EDITORS_SYMPROPS_FILL_NONE).into(),
+            show_palette: this.is_some(),
+            show_advanced: this.is_some_and(|p| p.advanced),
+            muted: form.look.ink3,
+            border_c,
+            on_toggle: PanelMsg::SymEditorToggleGraphicFillPicker { idx },
+            on_advanced: PanelMsg::SymEditorOpenGraphicFillAdvanced { idx },
+            on_cancel: PanelMsg::SymEditorCancelGraphicFillPicker,
+            on_pick,
+            on_clear: g
+                .fill
+                .is_some()
+                .then_some(PanelMsg::SymEditorClearGraphicFill { idx }),
+        },
+        i18n,
+    )
 }

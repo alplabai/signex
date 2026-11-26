@@ -1,16 +1,35 @@
 //! Graphite canvas zoom pill over the schematic canvas's bottom-right corner.
-//! It sends the messages View > Zoom In, Zoom Out and Fit All send, so it adds
-//! no behaviour of its own. The widget is `crate::canvas::zoom_pill`.
+//! `-`, `+` and Fit send the messages View > Zoom In, Zoom Out and Fit All
+//! send; each control names its action and shortcut on hover, and the
+//! percentage opens the zoom presets (`zoom_presets.rs`). The widget is
+//! `crate::canvas::zoom_pill`. The board's pill is the same one, drawn by
+//! the orientation layer (`orientation/mod.rs`) without the presets.
 
 use iced::Element;
 use iced::widget::Widget;
+use signex_i18n::{menu_ids, t};
+use signex_widgets::Label;
 
 use super::*;
-use crate::canvas::zoom_pill::{pill_size, view as pill};
+use crate::canvas::zoom_pill::{PillMessages, PillText, pill_size, view_with as pill};
 use crate::menu_bar::MenuMessage;
 
-/// Gap between the pill and the canvas edges.
-const EDGE_GAP: f32 = 12.0;
+/// Gap between the pill and the canvas edges: one body line (12 px at the
+/// default size).
+const EDGE_GAP: f32 = TS.body;
+
+/// Commands behind `-`, `+` and Fit, whose menu text and shortcut the hints name.
+const ZOOM_OUT_COMMAND: &str = "zoom_out_at_cursor";
+const ZOOM_IN_COMMAND: &str = "zoom_in_at_cursor";
+const FIT_ALL_COMMAND: &str = "zoom_to_fit";
+
+/// The canvas a zoom pill sits on: the sheet's layer draws its own, the
+/// orientation layer draws the board's (#2508).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::app::view) enum ZoomPillCanvas {
+    Sheet,
+    Board,
+}
 
 /// Top-left of the pill for a canvas at `canvas`.
 pub(in crate::app::view) fn pill_origin(canvas: iced::Rectangle) -> (f32, f32) {
@@ -25,30 +44,94 @@ impl Signex {
     /// The zoom pill over the main window's schematic canvas. An undocked
     /// window has no known canvas rectangle and the zoom messages act on
     /// the main canvas, so it gets none.
+    ///
+    /// The layer spans the window, so it places the pill against the canvas
+    /// of the size it is laid out at, not `window_size`: that one only moves
+    /// on a resize event, and a stale value put the pill over the right dock
+    /// (#2911).
     pub(in crate::app::view) fn canvas_zoom_pill_overlay(
         &self,
         window_id: iced::window::Id,
     ) -> Option<Element<'_, Message>> {
-        let tokens = &self.document_state.panel_ctx.tokens;
         if self.ui_state.main_window_id != Some(window_id) {
             return None;
         }
         self.document_state
             .engine_for_window(window_id, &self.ui_state)?;
+        let layer = iced::widget::responsive(move |size: iced::Size| {
+            let canvas = self.canvas_bounds_sized(None, (size.width, size.height));
+            let at = pill_origin(canvas);
+            // The `Translate` spans the window; only the pill may take the wheel.
+            signex_widgets::Translate::new(super::scroll_guard(self.zoom_pill(window_id)), at)
+                .boxed()
+        });
+        Some(layer.boxed())
+    }
+
+    /// The sheet's pill, for the canvas of `window_id`.
+    fn zoom_pill(&self, window_id: iced::window::Id) -> Element<'_, Message> {
         let zoom = self
             .interaction_state
             .canvas_for_window(window_id)
             .zoom_percent();
-        let at = pill_origin(self.canvas_bounds());
-        let pill = pill(
+        self.zoom_pill_at(zoom, ZoomPillCanvas::Sheet)
+    }
+
+    /// The pill reading `zoom` percent on `canvas`. A board's has a plain
+    /// read-out: the zoom presets act on a sheet (#2508).
+    pub(in crate::app::view) fn zoom_pill_at(
+        &self,
+        zoom: f64,
+        canvas: ZoomPillCanvas,
+    ) -> Element<'_, Message> {
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let i18n = &self.ui_state.i18n;
+        let on_sheet = canvas == ZoomPillCanvas::Sheet;
+        pill(
             tokens,
-            zoom,
-            Message::Menu(MenuMessage::ZoomOut),
-            Message::Menu(MenuMessage::ZoomIn),
-            Message::CanvasEvent(crate::canvas::CanvasEvent::FitAll),
+            PillMessages {
+                zoom_out: Message::Menu(MenuMessage::ZoomOut),
+                zoom_in: Message::Menu(MenuMessage::ZoomIn),
+                fit_all: Message::CanvasEvent(crate::canvas::CanvasEvent::FitAll),
+                presets: on_sheet.then_some(Message::Ui(UiMsg::ZoomPresetsToggled)),
+            },
+            PillText {
+                readout: t!(i18n, menu_ids::ZOOM_PILL_PERCENT, "percent" => format!("{zoom:.0}"))
+                    .into(),
+                fit: t!(i18n, menu_ids::ZOOM_PILL_FIT).into(),
+                hints: [
+                    self.zoom_pill_hint(ZOOM_OUT_COMMAND),
+                    self.zoom_pill_hint(ZOOM_IN_COMMAND),
+                    on_sheet.then(|| t!(i18n, menu_ids::ZOOM_PILL_PRESETS).into()),
+                    self.zoom_pill_hint(FIT_ALL_COMMAND),
+                ],
+            },
+            on_sheet && self.interaction_state.zoom_presets_open,
+        )
+    }
+
+    /// Hover hint of a pill control: the command's menu text and, when the
+    /// active shortcut profile binds it, its key ("Zoom In · Ctrl+=").
+    /// `None` for an id missing from the catalog.
+    pub(in crate::app::view) fn zoom_pill_hint(&self, command_id: &str) -> Option<Label<'static>> {
+        let i18n = &self.ui_state.i18n;
+        let action = t!(
+            i18n,
+            crate::keymap::metadata_for_str(command_id)?.menu_label_id()
         );
-        // The `Translate` spans the window; only the pill may take the wheel.
-        Some(signex_widgets::Translate::new(super::scroll_guard(pill), at).boxed())
+        let shortcut = self.keymap_shortcut_label(command_id);
+        if shortcut.is_empty() {
+            return Some(action.into());
+        }
+        Some(
+            t!(
+                i18n,
+                menu_ids::ZOOM_PILL_HINT,
+                "action" => action.into_string(),
+                "shortcut" => shortcut,
+            )
+            .into(),
+        )
     }
 }
 

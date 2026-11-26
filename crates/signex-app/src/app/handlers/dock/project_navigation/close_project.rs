@@ -10,14 +10,17 @@ use crate::app::state::volume_case::directory_ignores_case;
 use signex_i18n::RenderTranslatable;
 
 impl Signex {
-    /// Commit the pending title-block drafts of the sheets that belong to
-    /// `project_id`, before a gate reads which of them are unsaved (#2027).
+    /// Commit the pending drafts (title-block fields, sheet variables, typed
+    /// note text) of the sheets that belong to `project_id`, before a gate
+    /// reads which of them are unsaved (#2027).
     pub(crate) fn commit_drafts_of_project(&mut self, project_id: ProjectId) {
         let owned: Vec<std::path::PathBuf> = self
             .document_state
             .drafts
             .title_block_sheets()
             .into_iter()
+            .chain(self.document_state.drafts.sheet_variable_sheets())
+            .chain(self.typed_note_sheets())
             .filter(|sheet| {
                 self.document_state
                     .document_project(sheet)
@@ -91,7 +94,9 @@ impl Signex {
     /// Start the off-thread child-sheet read for closing `project_id`. Used by
     /// the click and again when the open-project set changed under a result
     /// already in hand (a project opened meanwhile has unresolved children).
-    fn spawn_close_refs_resolve(&self, project_id: ProjectId) -> Task<Message> {
+    /// The project's notebook is not read while the close resolves.
+    fn spawn_close_refs_resolve(&mut self, project_id: ProjectId) -> Task<Message> {
+        self.ui_state.annotations.closing = Some(project_id);
         let inputs = self.document_state.sheet_ref_inputs();
         Task::perform(
             async move {
@@ -130,6 +135,9 @@ impl Signex {
         project_id: ProjectId,
         result: Result<Box<SheetRefs>, String>,
     ) -> Task<Message> {
+        if self.ui_state.annotations.closing == Some(project_id) {
+            self.ui_state.annotations.closing = None;
+        }
         // The gate below reads the dirty marks: a draft typed while the read
         // ran is an edit of its sheet like any other.
         self.commit_drafts_of_project(project_id);
@@ -222,7 +230,7 @@ impl Signex {
     ///
     /// `kept` are dirty documents another open project claims: their tabs
     /// stay open (re-homed to no project) and their engines are never swept.
-    pub(super) fn execute_close_project(
+    pub(crate) fn execute_close_project(
         &mut self,
         project_id: ProjectId,
         sheet_refs: &SheetRefs,
@@ -343,10 +351,15 @@ impl Signex {
                 .into_iter()
                 .map(|(path, _)| path)
                 .collect();
+            let closed_dir = closed.dir().to_path_buf();
             self.document_state.forget_project_saved_state(&closed_path);
             self.document_state
                 .document_ids
                 .forget_headers_of(own.iter().map(|p| p.as_path()));
+            // The design report's last check results (#2945) go with it.
+            self.document_state
+                .check_runs
+                .forget_reports_of(&closed_path, &closed_dir);
         }
 
         // A pricing walk keeps running: closing a project does not unmount its
@@ -357,6 +370,7 @@ impl Signex {
         // else None when the workspace is empty.
         self.document_state.note_documents_changed();
         self.cancel_replace_job("the project was closed");
+        self.forget_switch_requests_of(target_id);
         self.document_state.projects.retain(|p| p.id != target_id);
         let projects = &self.document_state.projects;
         self.library.forget_missing_libraries_of(target_id, |path| {
@@ -372,7 +386,9 @@ impl Signex {
         });
         self.document_state.net_class_history.remove(&target_id);
         self.document_state.project_tabs.remove(&target_id);
+        self.forget_notebook(target_id);
         self.document_state.rules_history.remove(&target_id);
+        self.document_state.general_history.remove(&target_id);
         self.document_state.profile_drift_noted.remove(&target_id);
         self.document_state.active_project = self
             .document_state
@@ -456,7 +472,9 @@ impl Signex {
         self.save_held_path(&target)?;
         if !decided {
             // The spellings may be two files: the others were not written.
-            return match self.unsaved_spellings(&held, &target) {
+            let kept = self.unsaved_spellings(&held, &target);
+            self.release_saved_sheet(&target);
+            return match kept {
                 Some((_, message)) => Err(anyhow::Error::new(SpellingsKept(message))),
                 None => Ok(()),
             };
@@ -464,6 +482,9 @@ impl Signex {
         let key = path_key_with(path, fold);
         self.document_state
             .mark_documents_clean_where(|p| path_key_with(p, fold) == key);
+        for spelling in &held {
+            self.release_saved_sheet(spelling);
+        }
         Ok(())
     }
 
@@ -589,6 +610,12 @@ impl Signex {
         {
             return self.save_primitive_tab_blocking(path);
         }
+        if self.notebook_at_path(path).is_some() {
+            return self.save_notebook_blocking(path);
+        }
+        if self.generated_report_at(path).is_some() {
+            return self.save_generated_report_blocking(path);
+        }
         anyhow::bail!("no open editor or engine backs this file — it can't be saved automatically")
     }
 
@@ -603,7 +630,12 @@ impl Signex {
         let Some(state) = self.ui_state.project_close_confirm.take() else {
             return Task::none();
         };
-        if choice == ProjectCloseChoice::Cancel {
+        // Save Project As is answered by `handle_project_close_choice`; here
+        // it closes the prompt like Cancel.
+        if matches!(
+            choice,
+            ProjectCloseChoice::Cancel | ProjectCloseChoice::SaveProjectAs
+        ) {
             return Task::none();
         }
         // Look the project up again by id: the list may have shifted while
@@ -677,15 +709,17 @@ impl Signex {
             return Task::none();
         }
         match choice {
-            ProjectCloseChoice::Cancel => Task::none(),
+            ProjectCloseChoice::Cancel | ProjectCloseChoice::SaveProjectAs => Task::none(),
             ProjectCloseChoice::SaveAll => {
                 // Start every dirty file's write off the UI thread; the
                 // project closes once all of them completed, or stays open
                 // with an error modal naming each file AND why it did not
-                // save (`handle_save_all_settled`).
+                // save (`handle_save_all_settled`). A read-only project is
+                // left out and prompted for again (#2904).
+                let paths = self.saveable_paths("Close Project", &state.dirty_paths);
                 self.begin_save_all(
                     "Save All",
-                    &state.dirty_paths,
+                    &paths,
                     &state.dirty_rows,
                     crate::app::contracts::SaveAllNext::CloseProject {
                         project_id: state.project_id,
@@ -718,6 +752,7 @@ impl Signex {
                 ));
                 Task::batch(tasks)
             }
+            ProjectCloseChoice::DiscardReadOnly => self.discard_read_only_then_close(*state),
         }
     }
 
@@ -732,7 +767,9 @@ impl Signex {
         self.document_state.document_saves.forget_disk_records(path);
         self.document_state.remove_engine(path);
         self.document_state.clear_document_dirty(path);
-        self.discard_primitive_editor(path)
+        self.discard_generated_report_at(path);
+        let notebook = self.discard_notebook_at(path);
+        Task::batch([notebook, self.discard_primitive_editor(path)])
     }
 
     /// Drop the symbol/footprint editor behind `path`, and its tab, so a
@@ -891,14 +928,20 @@ impl Signex {
         use crate::app::ProjectCloseChoice;
         // A move may have started behind a prompt that was already open; the
         // prompt stays up so the choice can be made again.
-        if !matches!(choice, ProjectCloseChoice::Cancel) && self.hold_quit_while_path_op() {
+        let declines = matches!(
+            choice,
+            ProjectCloseChoice::Cancel | ProjectCloseChoice::SaveProjectAs
+        );
+        if !declines && self.hold_quit_while_path_op() {
             return Task::none();
         }
         let Some(state) = self.ui_state.app_quit_confirm.take() else {
             return Task::none();
         };
         match choice {
-            ProjectCloseChoice::Cancel => Self::decline_quit(),
+            // Save Project As is answered by `handle_app_quit_choice`; here it
+            // declines the quit like Cancel.
+            ProjectCloseChoice::Cancel | ProjectCloseChoice::SaveProjectAs => Self::decline_quit(),
             ProjectCloseChoice::DiscardAll => {
                 // Discard only what the user was shown. An edit made since
                 // (a window that was not locked, a route nobody thought of)
@@ -935,13 +978,17 @@ impl Signex {
                     self.ui_state.app_quit_confirm = Some(state);
                     return Task::none();
                 }
+                // A read-only project is left out; the quit gate prompts for
+                // it again (#2904).
+                let paths = self.saveable_paths("Exit", &state.dirty_paths);
                 self.begin_save_all(
                     "Save All (exit)",
-                    &state.dirty_paths,
+                    &paths,
                     &state.dirty_rows,
                     crate::app::contracts::SaveAllNext::Quit,
                 )
             }
+            ProjectCloseChoice::DiscardReadOnly => self.discard_read_only_then_quit(&state),
         }
     }
 }
@@ -1129,6 +1176,7 @@ mod tests {
                 sheets: Vec::new(),
                 variant_definitions: Vec::new(),
                 active_variant: None,
+                variant_settings: Default::default(),
                 libraries: Vec::new(),
                 enable_git: false,
                 net_classes: Vec::new(),
@@ -1137,6 +1185,11 @@ mod tests {
                 schematic_defaults: Default::default(),
                 project_defaults: Default::default(),
                 agent_journal: Default::default(),
+                schematic_design: Default::default(),
+                fab_outputs: None,
+                router_tool_diameter: None,
+                bom_alternates: Vec::new(),
+                requirements: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),
             },

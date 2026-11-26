@@ -15,17 +15,17 @@ use std::path::{Path, PathBuf};
 
 use iced::Task;
 use signex_engine::pcb::part_place::PartToPlace;
-use signex_engine::pcb::placement::grid_for;
 use signex_i18n::{ids, t};
 use signex_library::RowId;
 use signex_library::primitive::PrimitiveRef;
 use signex_renderer::pcb::PcbSnapshot;
-use signex_types::pcb::{PcbBoard, Point};
+use signex_types::pcb::Point;
+use signex_types::pcb_options::GridUse;
 
 use crate::app::{Message, Signex};
 use crate::library::messages::{BoardPartError, LibraryMessage, ResolvedBoardPart};
 use crate::library::place::resolve_board_part;
-use crate::pcb_canvas::{CarryKind, PcbCarry};
+use crate::pcb_canvas::{CarryKind, PcbCarry, snap_point_on};
 
 impl Signex {
     /// Start placing the row on the board in view: read it off the update
@@ -127,11 +127,18 @@ impl Signex {
         let prefix = self.placement_prefix_for(board, &resolved.placement);
         let part = PartToPlace::new(resolved.footprint, prefix, resolved.placement.value)
             .map_err(|why| refused(&pn, &why.to_string()))?;
+        self.put_part_on_cursor(board, &pn, part);
+        Ok(())
+    }
+
+    /// Put `part`, called `label` in the hint, on the cursor of `board`, the
+    /// board in view in the acting window.
+    pub(super) fn put_part_on_cursor(&mut self, board: &Path, label: &str, part: PartToPlace) {
         crate::diagnostics::log_info(
             t!(
                 self.ui_state.i18n,
                 ids::PCB_PLACE_PART_HINT,
-                "part" => pn.as_str(),
+                "part" => label,
                 "footprint" => part.footprint_name()
             )
             .into_string(),
@@ -142,7 +149,6 @@ impl Signex {
         self.interaction_state.pcb_query.measure = None;
         self.interaction_state.pcb_carry = Some(PcbCarry::place(board.to_path_buf(), window, part));
         self.refresh_pcb_highlight();
-        Ok(())
     }
 
     /// The Place carry of the board this window shows.
@@ -163,7 +169,8 @@ impl Signex {
         let (Some(_), Some(board)) = (self.own_place_carry(), self.active_pcb()) else {
             return;
         };
-        let at = on_grid(board, at);
+        let view = self.pcb_snap_view().without_objects();
+        let at = snap_point_on(board, at, GridUse::Components, view);
         if let Some(carry) = self.interaction_state.pcb_carry.as_mut()
             && carry.anchor != Some(at)
         {
@@ -182,7 +189,8 @@ impl Signex {
         let Some(part) = carry.part.as_deref() else {
             return false;
         };
-        let at = on_grid(board, at);
+        let view = self.pcb_snap_view().without_objects();
+        let at = snap_point_on(board, at, GridUse::Components, view);
         let command = part.place_command(board, uuid::Uuid::now_v7(), at);
         self.run_placement("Place", Ok(vec![command]));
         if let Some(carry) = self.interaction_state.pcb_carry.as_mut() {
@@ -249,13 +257,8 @@ impl Signex {
         let part = carry.part.as_deref()?;
         let at = carry.anchor?;
         let board = self.document_state.pcb_board(&carry.path)?;
-        Some(self.pcb_snapshot_for(&carry.path, &part.preview_board(board, at)))
+        Some(self.pcb_ghost_snapshot_for(&carry.path, &part.preview_board(board, at)))
     }
-}
-
-/// `at` moved to the nearest point of `board`'s grid.
-fn on_grid(board: &PcbBoard, at: Point) -> Point {
-    grid_for(board, signex_types::pcb_options::GridUse::Components).snap(at)
 }
 
 #[cfg(test)]

@@ -14,12 +14,13 @@ placeholder-profile-name = Profile name
 
 ## Project tab
 placeholder-project-parameter-name = Name
+placeholder-sheet-variable-name = New variable name
 placeholder-project-description = Description
 
 ## Parameter Manager
 placeholder-parameter-manager-filter = Filter rows
 # The name of a parameter column to add.
-placeholder-parameter-manager-new-key = New parameter
+placeholder-parameter-manager-new-key = New parameter name
 
 ## Dialogs
 # Move Selection: an offset in millimetres.
@@ -27,11 +28,9 @@ placeholder-move-offset = 0.00
 # Custom net colour: one red, green or blue channel, 0 to 255.
 placeholder-color-channel = 0
 # Print preview: the one page to print.
-placeholder-pdf-page = 1
+placeholder-pdf-page = e.g. 1-2, 4
 # Rename: an example project name, written without spaces.
 placeholder-rename-project = new-project-name
-# Rename: an example sheet file name.
-placeholder-rename-file = new-name.snxsch
 # Grid Properties: the grid step in millimetres.
 placeholder-grid-step = 0.127
 # New child sheet: an example file name.
@@ -41,7 +40,6 @@ placeholder-child-sheet-path = sheet.snxsch
 # Child sheet Properties: the line width in millimetres.
 placeholder-child-sheet-line-width = 0.1524
 placeholder-erc-waiver-reason = Reason (required)
-placeholder-erc-waiver-author = Author (required)
 # A field of a multi-selection whose objects hold different values.
 placeholder-mixed = <mixed>
 

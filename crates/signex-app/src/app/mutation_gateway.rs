@@ -1,121 +1,26 @@
+//! The schematic edit gateway. Each edit tail here is a wrapper (#2704,
+//! until slice 6): its core half in `state::sheet_change`, then the
+//! projection in `app::projector`, inside the same call.
+
+use super::core::event::ChangeCause;
+use super::projector::RefreshScope;
+use super::state::sheet_change;
 use super::undo_groups::StepDirection;
 use super::*;
+use signex_i18n_ids::ids;
 
-/// What an engine command did to the active document.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum CommandOutcome {
-    /// The document changed.
-    Changed,
-    /// The command ran and found nothing to change.
-    Unchanged,
-    /// The engine rejected the command (already logged) or there was no
-    /// active schematic to run it on.
-    Failed,
-}
+pub(crate) use super::core::mutation_outcome::MutationOutcome;
 
 impl Signex {
-    pub(super) fn render_invalidation_for_patch(
-        patch: signex_engine::DocumentPatch,
-    ) -> crate::schematic_runtime::RenderInvalidation {
-        use crate::schematic_runtime::RenderInvalidation;
-
-        if patch.contains(signex_engine::DocumentPatch::FULL) {
-            return RenderInvalidation::FULL;
-        }
-
-        let mut invalidation = RenderInvalidation::NONE;
-        if patch.contains(signex_engine::DocumentPatch::SYMBOLS) {
-            invalidation |= RenderInvalidation::SYMBOLS;
-        }
-        if patch.contains(signex_engine::DocumentPatch::WIRES) {
-            invalidation |= RenderInvalidation::WIRES;
-        }
-        if patch.contains(signex_engine::DocumentPatch::LABELS) {
-            invalidation |= RenderInvalidation::LABELS;
-        }
-        if patch.contains(signex_engine::DocumentPatch::TEXT_NOTES) {
-            invalidation |= RenderInvalidation::TEXT_NOTES;
-        }
-        if patch.contains(signex_engine::DocumentPatch::BUSES) {
-            invalidation |= RenderInvalidation::BUSES;
-        }
-        if patch.contains(signex_engine::DocumentPatch::BUS_ENTRIES) {
-            invalidation |= RenderInvalidation::BUS_ENTRIES;
-        }
-        if patch.contains(signex_engine::DocumentPatch::JUNCTIONS) {
-            invalidation |= RenderInvalidation::JUNCTIONS;
-        }
-        if patch.contains(signex_engine::DocumentPatch::NO_CONNECTS) {
-            invalidation |= RenderInvalidation::NO_CONNECTS;
-        }
-        if patch.contains(signex_engine::DocumentPatch::NO_ERC_DIRECTIVES) {
-            invalidation |= RenderInvalidation::NO_ERC_DIRECTIVES;
-        }
-        if patch.contains(signex_engine::DocumentPatch::DIRECTIVES) {
-            invalidation |= RenderInvalidation::DIRECTIVES;
-        }
-        if patch.contains(signex_engine::DocumentPatch::CHILD_SHEETS) {
-            invalidation |= RenderInvalidation::CHILD_SHEETS;
-        }
-        if patch.contains(signex_engine::DocumentPatch::DRAWINGS) {
-            invalidation |= RenderInvalidation::DRAWINGS;
-        }
-        if patch.contains(signex_engine::DocumentPatch::LIB_SYMBOLS) {
-            invalidation |= RenderInvalidation::LIB_SYMBOLS;
-        }
-        if patch.contains(signex_engine::DocumentPatch::PAPER) {
-            invalidation |= RenderInvalidation::PAPER;
-        }
-        if patch.contains(signex_engine::DocumentPatch::NET_COLORS) {
-            invalidation |= RenderInvalidation::NET_COLORS;
-        }
-        // The sheet default font is inherited by every kind of text.
-        if patch.contains(signex_engine::DocumentPatch::FONT_FAMILY) {
-            invalidation |= RenderInvalidation::SYMBOLS
-                | RenderInvalidation::LABELS
-                | RenderInvalidation::TEXT_NOTES
-                | RenderInvalidation::CHILD_SHEETS;
-        }
-
-        invalidation
-    }
-
     /// Surface the notices a command raised (a rubber-band pin that could
-    /// not be kept connected) in the Messages panel.
+    /// not be kept connected) in the Messages panel: the engine's older
+    /// English lines as they are, its typed notices worded through the
+    /// catalog (`app::engine_notices`). A GUI log helper for engine calls
+    /// outside the edit tails, not a tail wrapper.
     pub(crate) fn report_engine_warnings(engine: &mut signex_engine::Engine) {
-        for warning in engine.take_warnings() {
-            crate::diagnostics::log_warning(warning);
+        for notice in core::event::engine_notices(engine) {
+            super::projector::log_notice(&notice);
         }
-    }
-
-    /// `commands` without what the lock would refuse (see
-    /// `Engine::without_locked`), and the references skipped.
-    pub(crate) fn without_locked_items(
-        engine: &signex_engine::Engine,
-        commands: Vec<signex_engine::Command>,
-    ) -> (Vec<signex_engine::Command>, Vec<String>) {
-        let mut kept = Vec::with_capacity(commands.len());
-        let mut skipped = Vec::new();
-        for command in commands {
-            let (command, references) = engine.without_locked(command);
-            kept.extend(command);
-            skipped.extend(references);
-        }
-        skipped.sort();
-        skipped.dedup();
-        (kept, skipped)
-    }
-
-    /// The engine an edit acts on, ready for it: the active one, or the sheet
-    /// an agent's edit list targets (#2178). Refused when the sheet is
-    /// read-only or there is none.
-    fn prepare_active_engine(&mut self) -> Result<&mut signex_engine::Engine, String> {
-        if let Some(reason) = self.refuse_if_active_read_only() {
-            return Err(reason);
-        }
-        self.document_state
-            .edit_engine_mut()
-            .ok_or_else(|| "There is no active schematic.".to_string())
     }
 
     pub(crate) fn apply_engine_commands(
@@ -125,7 +30,7 @@ impl Signex {
         update_selection_info: bool,
     ) -> bool {
         self.apply_engine_commands_checked(commands, clear_overlay_cache, update_selection_info)
-            == CommandOutcome::Changed
+            == MutationOutcome::Changed
     }
 
     /// [`Self::apply_engine_commands`] that says whether the batch changed
@@ -136,7 +41,7 @@ impl Signex {
         commands: Vec<signex_engine::Command>,
         clear_overlay_cache: bool,
         update_selection_info: bool,
-    ) -> CommandOutcome {
+    ) -> MutationOutcome {
         self.apply_engine_commands_reporting(commands, clear_overlay_cache, update_selection_info)
             .0
     }
@@ -149,51 +54,37 @@ impl Signex {
         commands: Vec<signex_engine::Command>,
         clear_overlay_cache: bool,
         update_selection_info: bool,
-    ) -> (CommandOutcome, Option<String>) {
-        if commands.is_empty() {
-            return (CommandOutcome::Unchanged, None);
+    ) -> (MutationOutcome, Option<String>) {
+        // A channel tab of a repeated sheet is a compiled view (#1279).
+        if !commands.is_empty()
+            && let Some(reason) = self.refuse_if_channel_view()
+        {
+            return (MutationOutcome::Failed, Some(reason));
         }
-
-        let engine = match self.prepare_active_engine() {
-            Ok(engine) => engine,
-            Err(reason) => return (CommandOutcome::Failed, Some(reason)),
-        };
-
-        // A locked symbol is skipped, not allowed to cancel the batch.
-        let (commands, skipped) = Self::without_locked_items(engine, commands);
-        crate::diagnostics::log_locked_skips(&skipped);
-        if commands.is_empty() {
-            return (CommandOutcome::Unchanged, None);
+        let recorded = self.sheet_edit_to_record(&commands);
+        let edit = self.document_state.execute_batch_on_edit_path(commands);
+        let done = self.project_sheet_edit(edit, clear_overlay_cache, update_selection_info);
+        if done.0 == MutationOutcome::Changed
+            && let Some(commands) = recorded
+        {
+            self.note_sheet_edit(commands);
         }
+        done
+    }
 
-        // One engine history entry for the whole batch, with the patches
-        // OR-ed together - the grouping the app's marker stack used to
-        // encode, now owned by the engine that holds the history.
-        let batch = engine.execute_batch(commands);
-        Self::report_engine_warnings(engine);
-        let invalidation = match batch {
-            Ok(result) => result
-                .patch_pair
-                .map(|patch_pair| Self::render_invalidation_for_patch(patch_pair.document))
-                .unwrap_or(crate::schematic_runtime::RenderInvalidation::NONE),
-            Err(error) => {
-                let reason = error.to_string();
-                let error = anyhow::Error::new(error);
-                crate::diagnostics::log_error("Engine command execution failed", &error);
-                return (CommandOutcome::Failed, Some(reason));
-            }
-        };
-
-        let changed = self.finish_schematic_mutation(
-            invalidation,
-            clear_overlay_cache,
+    /// Project an edit's events on the active canvas; its outcome and refusal.
+    fn project_sheet_edit(
+        &mut self,
+        edit: sheet_change::SheetEdit,
+        clear_overlay: bool,
+        update_selection_info: bool,
+    ) -> (MutationOutcome, Option<String>) {
+        let scope = RefreshScope::ActiveCanvas {
+            clear_overlay,
             update_selection_info,
-        );
-        if changed {
-            (CommandOutcome::Changed, None)
-        } else {
-            (CommandOutcome::Unchanged, None)
-        }
+        };
+        self.project_events(edit.events, scope);
+        (edit.outcome, edit.refusal)
     }
 
     pub(crate) fn apply_engine_command(
@@ -203,7 +94,7 @@ impl Signex {
         update_selection_info: bool,
     ) -> bool {
         self.apply_engine_command_checked(command, clear_overlay_cache, update_selection_info)
-            == CommandOutcome::Changed
+            == MutationOutcome::Changed
     }
 
     /// [`Self::apply_engine_command`] that says whether the command changed
@@ -214,7 +105,7 @@ impl Signex {
         command: signex_engine::Command,
         clear_overlay_cache: bool,
         update_selection_info: bool,
-    ) -> CommandOutcome {
+    ) -> MutationOutcome {
         self.apply_engine_command_reporting(command, clear_overlay_cache, update_selection_info)
             .0
     }
@@ -227,13 +118,15 @@ impl Signex {
         command: signex_engine::Command,
         clear_overlay_cache: bool,
         update_selection_info: bool,
-    ) -> (CommandOutcome, Option<String>) {
-        self.apply_engine_command_recording(
+    ) -> (MutationOutcome, Option<String>) {
+        let (outcome, refusal, _) = self.apply_engine_command_recording(
             command,
             true,
             clear_overlay_cache,
             update_selection_info,
-        )
+            ids::NOTICE_EDIT_COMMAND_FAILED,
+        );
+        (outcome, refusal)
     }
 
     /// [`Self::apply_engine_command_reporting`] for load-time maintenance:
@@ -242,8 +135,40 @@ impl Signex {
     pub(crate) fn apply_engine_command_unrecorded(
         &mut self,
         command: signex_engine::Command,
-    ) -> (CommandOutcome, Option<String>) {
-        self.apply_engine_command_recording(command, false, true, true)
+    ) -> (MutationOutcome, Option<String>) {
+        let (outcome, refusal, _) = self.apply_engine_command_recording(
+            command,
+            false,
+            true,
+            true,
+            ids::NOTICE_EDIT_COMMAND_FAILED,
+        );
+        (outcome, refusal)
+    }
+
+    /// [`Self::apply_engine_command_reporting`] that also hands back the
+    /// engine notices the command raised (a pin the rubber band could not
+    /// keep), for a caller that answers with them (#2552). They still reach
+    /// Messages, after the commit inside an agent's edit list. A non-lock
+    /// refusal keeps the batch tail's Messages line, the operand move's on
+    /// trunk (Hakan, 2026-11-25, #2326 comment 7164045899).
+    pub(crate) fn apply_engine_command_noticing(
+        &mut self,
+        command: signex_engine::Command,
+        clear_overlay_cache: bool,
+        update_selection_info: bool,
+    ) -> (
+        MutationOutcome,
+        Option<String>,
+        Vec<signex_engine::EngineNotice>,
+    ) {
+        self.apply_engine_command_recording(
+            command,
+            true,
+            clear_overlay_cache,
+            update_selection_info,
+            ids::NOTICE_EDIT_COMMAND_EXECUTION_FAILED,
+        )
     }
 
     fn apply_engine_command_recording(
@@ -252,75 +177,35 @@ impl Signex {
         record_history: bool,
         clear_overlay_cache: bool,
         update_selection_info: bool,
-    ) -> (CommandOutcome, Option<String>) {
-        let engine = match self.prepare_active_engine() {
-            Ok(engine) => engine,
-            Err(reason) => return (CommandOutcome::Failed, Some(reason)),
+        failure: signex_i18n_ids::MessageId,
+    ) -> (
+        MutationOutcome,
+        Option<String>,
+        Vec<signex_engine::EngineNotice>,
+    ) {
+        if let Some(reason) = self.refuse_if_channel_view() {
+            return (MutationOutcome::Failed, Some(reason), Vec::new());
+        }
+        let recorded = record_history
+            .then(|| self.sheet_edit_to_record(std::slice::from_ref(&command)))
+            .flatten();
+        let mark = self.document_state.edit_engine().map(|e| e.notice_mark());
+        let edit = self
+            .document_state
+            .execute_on_edit_path(command, record_history, failure);
+        // An open transaction holds the notices until its commit (no event).
+        let notices = match (self.document_state.edit_engine(), mark) {
+            (Some(engine), Some(mark)) if engine.in_transaction() => engine.notices_since(mark),
+            _ => engine_notices_of(&edit.events),
         };
-        let mut failed = None;
-
-        // The same rule as a batch: held items are skipped and named, a
-        // wire on a locked pin included. A command that is nothing but locked
-        // items still reaches the engine, so the user is told why nothing
-        // happened; one that is only held items the engine would not refuse
-        // (a wire on a locked pin) does nothing, and says so. Other commands
-        // pass untouched, without a copy.
-        let names_locked = engine.names_locked_item(&command);
-        let command = if names_locked || command.is_selection_command() {
-            let (mut kept, skipped) = Self::without_locked_items(engine, vec![command.clone()]);
-            match kept.pop() {
-                Some(pruned) => {
-                    crate::diagnostics::log_locked_skips(&skipped);
-                    pruned
-                }
-                None if names_locked => command,
-                None => {
-                    crate::diagnostics::log_locked_skips(&skipped);
-                    return (CommandOutcome::Unchanged, None);
-                }
-            }
-        } else {
-            command
-        };
-
-        let executed = if record_history {
-            engine.execute(command)
-        } else {
-            engine.execute_unrecorded(command)
-        };
-        Self::report_engine_warnings(engine);
-        let invalidation = match executed {
-            Ok(result) if result.changed => result
-                .patch_pair
-                .map(|patch_pair| Self::render_invalidation_for_patch(patch_pair.document))
-                .unwrap_or(crate::schematic_runtime::RenderInvalidation::NONE),
-            Ok(_) => crate::schematic_runtime::RenderInvalidation::NONE,
-            Err(error) => {
-                failed = Some(error.to_string());
-                if matches!(error, signex_engine::EngineError::ItemLocked { .. }) {
-                    // Same level as the skip notice a batch raises.
-                    crate::diagnostics::log_warning(error.to_string());
-                } else {
-                    let error = anyhow::Error::new(error);
-                    crate::diagnostics::log_error("Engine command failed", &error);
-                }
-                crate::schematic_runtime::RenderInvalidation::NONE
-            }
-        };
-
-        let changed = self.finish_schematic_mutation(
-            invalidation,
-            clear_overlay_cache,
-            update_selection_info,
-        );
-        let outcome = if failed.is_some() {
-            CommandOutcome::Failed
-        } else if changed {
-            CommandOutcome::Changed
-        } else {
-            CommandOutcome::Unchanged
-        };
-        (outcome, failed)
+        let (outcome, refusal) =
+            self.project_sheet_edit(edit, clear_overlay_cache, update_selection_info);
+        if outcome == MutationOutcome::Changed
+            && let Some(commands) = recorded
+        {
+            self.note_sheet_edit(commands);
+        }
+        (outcome, refusal, notices)
     }
 
     /// Mark the active document as having unsaved edits, without running a
@@ -331,26 +216,11 @@ impl Signex {
     /// records its own history entry — so it cannot go through
     /// [`Signex::apply_engine_command`] but still has to be
     /// marked dirty (#585). Everything else should use the gateway, which
-    /// calls this as part of `finish_schematic_mutation`.
+    /// does the same as part of `finish_schematic_mutation`.
     ///
     /// Returns `false` when there is no active schematic session to mark.
     pub(crate) fn mark_active_document_dirty(&mut self) -> bool {
-        self.document_state.note_sheet_edit();
-        self.sync_active_history_dirty()
-    }
-
-    /// Re-derive the active sheet's dirty mark from its engine history after
-    /// a step (edit, undo, redo). `false` when no engine backs the active
-    /// document.
-    fn sync_active_history_dirty(&mut self) -> bool {
-        let Some(path) = self.document_state.active_path.clone() else {
-            return false;
-        };
-        if !self.document_state.engines.contains_key(&path) {
-            return false;
-        }
-        self.document_state.sync_history_dirty(&path);
-        true
+        self.document_state.note_active_edit()
     }
 
     /// Undo one step of the **active** engine's own history.
@@ -376,12 +246,23 @@ impl Signex {
     }
 
     fn apply_engine_step(&mut self, direction: StepDirection, update_selection_info: bool) -> bool {
+        // Undo and redo do not reach past a channel tab either (#1279).
+        if self.refuse_if_channel_view().is_some() {
+            return false;
+        }
         if let Some(group) = self
             .document_state
             .active_engine()
             .and_then(|engine| direction.top(engine))
         {
-            let stepped = self.apply_grouped_step(group, direction, update_selection_info);
+            let undo = direction == StepDirection::Undo;
+            let stepped = if self.undo_group_has_boards(group) {
+                self.step_board_undo_group(group, undo)
+            } else {
+                let undocked = self.undocked_sheet_paths();
+                let step = self.document_state.step_undo_group(group, undo, &undocked);
+                self.project_group_step(step, update_selection_info)
+            };
             // An agent's step says what it was (docs/AGENT_EDITS.md, "Undo").
             if stepped && let Some(label) = self.document_state.agent_edits.step_text(group) {
                 let verb = if direction == StepDirection::Undo {
@@ -393,27 +274,25 @@ impl Signex {
             }
             return stepped;
         }
-        let invalidation = if let Some(engine) = self.document_state.active_engine_mut() {
-            let (stepped, failure) = match direction {
-                StepDirection::Undo => (engine.undo(), "Engine undo failed"),
-                StepDirection::Redo => (engine.redo(), "Engine redo failed"),
-            };
-            match stepped {
-                Ok(Some(patch_pair)) => Self::render_invalidation_for_patch(patch_pair.document),
-                Ok(None) => return false,
-                Err(error) => {
-                    let error = anyhow::Error::new(error);
-                    crate::diagnostics::log_error(failure, &error);
-                    return false;
-                }
-            }
-        } else {
-            crate::schematic_runtime::RenderInvalidation::NONE
+        let Some(step) = self
+            .document_state
+            .step_active_history(direction == StepDirection::Undo)
+        else {
+            // No engine behind the active document: nothing moved, but the
+            // drift check is asked for as it always was (pinned by
+            // `state/sheet_change/tests.rs`).
+            self.library.drift.check_pending = true;
+            return false;
         };
-
-        // Undo/redo can bring back an older embedded library symbol.
-        self.library.drift.check_pending = true;
-        self.finish_schematic_mutation(invalidation, true, update_selection_info)
+        let scope = RefreshScope::ActiveCanvas {
+            clear_overlay: true,
+            update_selection_info,
+        };
+        if step.stepped {
+            self.debug_assert_owed_to_agent_target();
+        }
+        self.project_events(step.events, scope);
+        step.stepped
     }
 
     /// Drop selected wires the edit removed (a merge folds one wire into its
@@ -433,64 +312,61 @@ impl Signex {
             });
     }
 
+    /// The tail of an edit made outside the engine's commands: a multi-sheet
+    /// `run`'s other members and its group first, then the active sheet's
+    /// `patch`. `false` when the active sheet took no change.
     pub(super) fn finish_schematic_mutation(
         &mut self,
-        invalidation: crate::schematic_runtime::RenderInvalidation,
+        patch: Option<signex_engine::DocumentPatch>,
+        run: Option<sheet_change::SheetRun>,
         clear_overlay_cache: bool,
         update_selection_info: bool,
     ) -> bool {
-        if invalidation == crate::schematic_runtime::RenderInvalidation::NONE {
+        if let Some(run) = run {
+            let members = self.document_state.settle_run(run, patch.is_some());
+            self.project_events(members, RefreshScope::Member);
+        }
+        let Some(patch) = patch else {
             return false;
+        };
+        if patch != signex_engine::DocumentPatch::NONE {
+            self.debug_assert_owed_to_agent_target();
         }
-        // An agent's edit list refreshes the sheet once, when it ends, and
-        // never through the person's canvas (docs/AGENT_EDITS.md).
-        if self.document_state.agent_edit_running() {
-            self.document_state.agent_edits.owed |= invalidation;
-            return true;
-        }
-
-        // A colour changes how the sheet is shown, never what ERC finds.
-        let display_only = invalidation == crate::schematic_runtime::RenderInvalidation::NET_COLORS;
-        if !display_only {
-            self.document_state.note_sheet_edit();
-        }
-        if !self.sync_active_history_dirty() {
-            return false;
-        }
-        self.sync_canvas_from_visible_schematic(invalidation);
-        // The sheet's paper changed (a Page Options edit, or its undo or
-        // redo): the panel context and the drawn page follow the document.
-        if invalidation.intersects(crate::schematic_runtime::RenderInvalidation::PAPER)
-            && let Some(token) = self
-                .active_render_snapshot()
-                .map(|snapshot| super::load_gateway::effective_paper_size(&snapshot.paper_size))
-        {
-            self.document_state.panel_ctx.paper_size = token;
-            self.apply_page_dimensions_to_canvas();
-        }
-        self.interaction_state
-            .active_canvas_mut()
-            .clear_content_cache();
-        if clear_overlay_cache {
-            self.interaction_state
-                .active_canvas_mut()
-                .clear_overlay_cache();
-        }
-        self.prune_selected_wires();
-        if !display_only {
-            self.refresh_erc_after_edit();
-        }
-        if update_selection_info {
-            self.update_selection_info();
-        }
-        // Re-derive panel context — the document's dirty mark has just been
-        // set (or stayed set), and `panel_ctx.projects[*].sheets[*]
-        // .is_dirty` is what drives the red dot on the project-tree row.
-        // Without this refresh, the dot only appears after the next
-        // unrelated event that happens to call `refresh_panel_ctx`.
-        self.refresh_panel_ctx();
-        true
+        let edit = self
+            .document_state
+            .settle_active_sheet(patch, ChangeCause::Edit);
+        let (outcome, _) =
+            self.project_sheet_edit(edit, clear_overlay_cache, update_selection_info);
+        outcome == MutationOutcome::Changed
     }
+
+    /// #2645: these tails settle on the active sheet, and an agent's run is
+    /// owed only a change of its own target; no flow may change the active
+    /// sheet while a run on another sheet is going.
+    fn debug_assert_owed_to_agent_target(&self) {
+        let docs = &self.document_state;
+        debug_assert!(
+            !docs.agent_edit_running() || docs.agent_edits.target == docs.active_path,
+            "#2645: an agent run on {:?} was owed a change of the active sheet {:?}",
+            docs.agent_edits.target,
+            docs.active_path,
+        );
+    }
+}
+
+/// The engine's own notices among an edit's events, in order.
+fn engine_notices_of(events: &[super::core::event::CoreEvent]) -> Vec<signex_engine::EngineNotice> {
+    use super::core::event::{CoreEvent, NoticeBody};
+    events
+        .iter()
+        .filter_map(|event| match event {
+            CoreEvent::Notice(notice) => match &notice.body {
+                NoticeBody::Engine(engine) => Some(engine.clone()),
+                NoticeBody::Text(_) => None,
+            },
+            CoreEvent::DocumentChanged(_) => None,
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -504,6 +380,7 @@ mod tests {
                 name: port.to_string(),
                 direction: "input".to_string(),
             }],
+            renames: None,
         }
     }
 
@@ -514,7 +391,7 @@ mod tests {
         let (mut bare, _task) = Signex::new();
         assert_eq!(
             bare.apply_engine_command_checked(reconcile("child.snxsch", "A"), true, true),
-            CommandOutcome::Failed
+            MutationOutcome::Failed
         );
 
         let top = std::path::PathBuf::from("/w/gw/top.snxsch");
@@ -529,7 +406,6 @@ mod tests {
         app.document_state.tabs.push(crate::app::TabInfo {
             title: "top".to_string(),
             path: top.clone(),
-            cached_document: None,
             project_id: None,
             kind: crate::app::TabKind::Schematic,
         });
@@ -539,16 +415,16 @@ mod tests {
         // A file no sheet symbol references: nothing to reconcile.
         assert_eq!(
             app.apply_engine_command_checked(reconcile("other.snxsch", "A"), true, true),
-            CommandOutcome::Unchanged
+            MutationOutcome::Unchanged
         );
         assert_eq!(
             app.apply_engine_command_checked(reconcile("child.snxsch", "A"), true, true),
-            CommandOutcome::Changed
+            MutationOutcome::Changed
         );
         // The same port again is already in place.
         assert_eq!(
             app.apply_engine_command_checked(reconcile("child.snxsch", "A"), true, true),
-            CommandOutcome::Unchanged
+            MutationOutcome::Unchanged
         );
     }
 
@@ -565,7 +441,6 @@ mod tests {
         app.document_state.tabs.push(crate::app::TabInfo {
             title: "top".to_string(),
             path: top.clone(),
-            cached_document: None,
             project_id: None,
             kind: crate::app::TabKind::Schematic,
         });
@@ -794,12 +669,19 @@ mod tests {
         let task = app.handle_reset_duplicate_designators();
         crate::app::path_ops::settle_task(&mut app, task);
 
-        let written = std::fs::read_to_string(&child_path).expect("read child back");
+        // The run parks the child unsaved: the file waits for the user's save.
+        let on_disk = std::fs::read_to_string(&child_path).expect("read child back");
+        let parked = signex_types::format::SnxSchematic::new(
+            app.document_state.engines[&child_path].document().clone(),
+        )
+        .write_string()
+        .expect("serialize parked child");
         std::fs::remove_dir_all(&dir).ok();
         assert!(
-            written.contains("R?"),
-            "the on-disk child's duplicate R1 must have been reset: {written}"
+            parked.contains("R?"),
+            "the unopened child's duplicate R1 must have been reset: {parked}"
         );
+        assert!(!on_disk.contains("R?"), "no file is written before a save");
     }
 
     /// Project `top` -> `child`, both open, `child` focused.

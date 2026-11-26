@@ -46,6 +46,22 @@ is therefore not drift, whatever order the jobs run in.
 On `DiskChanged` the sheet stays modified, the failure goes to Messages and into
 the save ledger (Save All lists it), and the notice card offers:
 
+- **Save As…** (Changed only, the default; only for a sheet, symbol or
+  footprint, the kinds with a Save As, so not on a board): the conflicted
+  document is made the active tab and the regular Save As runs for it, so the
+  changed file is left as it is. The document stays modified until that Save
+  As lands; when the document is not a tab of the main window the card stays
+  and Messages says why, and the card also stays when Save As does not start.
+  A pick that names the changed file itself (in any spelling the volume treats
+  as that file, or once links resolve) writes nothing: Messages says why and
+  the card comes back, since replacing their version is what Overwrite is for.
+  The links are followed in the dialog's Task, not in `update`. When the Save
+  As to a new file lands (a sheet, symbol or footprint), the refused save's
+  failure record goes with the old file. A File ▸ Save As of a sheet onto its
+  own file name, exactly as it is open, is a plain save compared like Ctrl+S:
+  after the card was cancelled, the changed file raises the card again instead
+  of being replaced. A file deleted or moved away is written; a gone folder
+  raises Folder Missing on Disk, as Ctrl+S does.
 - **Overwrite** (Missing: Re-create): one save that is not compared; a failed
   write leaves the baseline, so the next save asks again.
 - **Reload from disk**: read and parse the file on a worker, then replace the

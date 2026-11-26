@@ -33,6 +33,10 @@ impl Signex {
         {
             panel.footprint_pick = None;
         }
+        // Another part opens fitted.
+        if panel.selected.as_ref() != Some(&key) {
+            panel.preview_views = Default::default();
+        }
         panel.selected = Some(key.clone());
         // The row already shown is read again only when it was saved since
         // or its last read failed, and not while a read is running.
@@ -67,7 +71,10 @@ impl Signex {
             return Task::none();
         }
         let is_default = row.footprint_ref == Some(reference);
-        self.library.components_panel.footprint_pick = (!is_default).then_some((key, reference));
+        let panel = &mut self.library.components_panel;
+        panel.footprint_pick = (!is_default).then_some((key, reference));
+        // The newly shown footprint opens fitted.
+        panel.preview_views.footprint = Default::default();
         Task::none()
     }
 
@@ -100,8 +107,9 @@ impl Signex {
             .find(|r| r.row_id == key.row_id.0)
     }
 
-    /// The saved state of the row `key` names, for the staleness check.
-    fn components_row_stamp(
+    /// The saved state of the row `key` names, for the staleness check
+    /// (also the Library Browser preview's, mockup row 118).
+    pub(super) fn components_row_stamp(
         &self,
         key: &crate::library::state::ComponentsPanelRowKey,
     ) -> Option<crate::panels::components_panel::details::RowStamp> {
@@ -138,27 +146,13 @@ impl Signex {
             .components_panel
             .details
             .begin(key.clone(), stamp);
-        let read_key = key.clone();
-        Task::perform(
-            async move {
-                tokio::task::spawn_blocking(move || {
-                    crate::panels::components_panel::details::load::load_details(
-                        &read_key,
-                        own.as_ref(),
-                        &libraries,
-                    )
-                })
-                .await
-                .unwrap_or_else(|e| Err(format!("details worker failed: {e}")))
-            },
-            move |result| {
-                Message::Library(LibraryMessage::ComponentsPanelDetailsLoaded {
-                    key: key.clone(),
-                    generation,
-                    result: result.map(Box::new),
-                })
-            },
-        )
+        details_read_task(key, own, libraries, "details worker", move |key, result| {
+            Message::Library(LibraryMessage::ComponentsPanelDetailsLoaded {
+                key,
+                generation,
+                result,
+            })
+        })
     }
 
     /// Reload the details when the row they show was saved since they were
@@ -232,7 +226,25 @@ impl Signex {
                     row_id: k.row_id,
                 }))
             }
+            ComponentsRowAction::CopyPartNumber => match self.components_row_part_number(&k) {
+                Some(part_number) => iced::clipboard::write(part_number).discard(),
+                None => Task::none(),
+            },
         }
+    }
+
+    /// The internal part number of the row `key` names, while it is listed.
+    fn components_row_part_number(
+        &self,
+        key: &crate::library::state::ComponentsPanelRowKey,
+    ) -> Option<String> {
+        self.library
+            .library_at(&key.library_path)?
+            .tables
+            .get(&key.table)?
+            .iter()
+            .find(|row| row.row_id == key.row_id.0)
+            .map(|row| row.internal_pn.to_string())
     }
 
     /// The pointer moved while a row is pressed: past the threshold the
@@ -385,6 +397,7 @@ impl Signex {
             }
             return Task::none();
         }
+        self.record_components_placement(drag.key.clone());
         if self.has_active_pcb() {
             // The footprint on the cursor lands where it shows (#2364).
             if drag.armed {
@@ -540,11 +553,13 @@ impl Signex {
             error = %err,
             "global_libraries.toml save failed ({action})"
         );
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::save(
+        let detail =
             signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_GLOBAL_LIBRARIES_NOT_SAVED)
                 .arg("action", action)
-                .arg("error", err.to_string()),
-        ));
+                .arg("error", err.to_string());
+        self.document_state.error_notice = Some(
+            crate::app::state::ErrorNotice::save_with_no_open_edits(detail),
+        );
     }
 
     /// Promote an Installed library to Global.
@@ -584,13 +599,48 @@ impl Signex {
     ) -> Task<Message> {
         // Same flow as the picker: the part attaches to the cursor.
         self.library.components_panel.row_menu = None;
-        let footprint = self.picked_footprint_for(&crate::library::state::ComponentsPanelRowKey {
+        let key = crate::library::state::ComponentsPanelRowKey {
             library_path: library_path.clone(),
             table: table.clone(),
             row_id,
-        });
+        };
+        let footprint = self.picked_footprint_for(&key);
+        self.record_components_placement(key);
         self.handle_place_library_component_with(library_path, table, row_id, footprint)
     }
+}
+
+/// Read `key`'s details on a worker (the Components panel's and the
+/// component picker's preview read); the result lands as `wrap(key,
+/// result)`. `worker` names the read when the worker itself fails.
+pub(super) fn details_read_task(
+    key: crate::library::state::ComponentsPanelRowKey,
+    own: std::sync::Arc<dyn signex_library::LibraryAdapter>,
+    libraries: crate::panels::components_panel::details::load::MountedAdapters,
+    worker: &'static str,
+    wrap: impl Fn(
+        crate::library::state::ComponentsPanelRowKey,
+        Result<Box<crate::panels::components_panel::details::ComponentDetails>, String>,
+    ) -> Message
+    + Send
+    + 'static,
+) -> Task<Message> {
+    let read_key = key.clone();
+    Task::perform(
+        async move {
+            tokio::task::spawn_blocking(move || {
+                crate::panels::components_panel::details::load::load_details(
+                    &read_key,
+                    own.as_ref(),
+                    &libraries,
+                )
+                .map_err(|e| e.to_string())
+            })
+            .await
+            .unwrap_or_else(|e| Err(format!("{worker} failed: {e}")))
+        },
+        move |result| wrap(key.clone(), result.map(Box::new)),
+    )
 }
 
 #[cfg(test)]

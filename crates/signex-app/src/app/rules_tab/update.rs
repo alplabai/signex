@@ -21,7 +21,16 @@ impl Signex {
                 }
                 Task::none()
             }
+            RulesTabMsg::OpenedAt {
+                project_id,
+                domain,
+                rule,
+            } => self.open_rules_on(project_id, domain, rule),
             RulesTabMsg::DrcRequested { project_id } => self.run_rules_drc(project_id),
+            RulesTabMsg::GridActed { project_id, msg } => self.act_on_rules_grid(project_id, msg),
+            RulesTabMsg::PreviewActed { project_id, msg } => {
+                self.act_on_rules_drawing(project_id, msg)
+            }
             RulesTabMsg::ScopeShown { project_id, rule } => {
                 self.show_rule_scope(project_id, &rule);
                 Task::none()
@@ -48,18 +57,15 @@ impl Signex {
     fn apply_rules_tab_message(&mut self, msg: RulesTabMsg) {
         match msg {
             RulesTabMsg::DomainPicked { project_id, domain } => {
+                self.pick_rules_domain(project_id, domain);
+            }
+            RulesTabMsg::SetsToggled { project_id } => self.toggle_rules_sets(project_id),
+            RulesTabMsg::InheritedToggled { project_id } => {
                 let tab = self.rules_tab_mut(project_id);
-                tab.domain = domain;
-                tab.edit = None;
+                tab.hide_inherited = !tab.hide_inherited;
             }
-            RulesTabMsg::FilterPicked { project_id, filter } => {
-                self.rules_tab_mut(project_id).filter = filter;
-            }
-            RulesTabMsg::SearchEdited { project_id, text } => {
-                self.rules_tab_mut(project_id).search = text;
-            }
-            RulesTabMsg::RowSelected { project_id, rule } => {
-                self.rules_tab_mut(project_id).selected = Some(rule);
+            RulesTabMsg::OverriddenOnlyToggled { project_id } => {
+                self.toggle_rules_overridden_only(project_id);
             }
             RulesTabMsg::CellOpened {
                 project_id,
@@ -130,11 +136,17 @@ impl Signex {
                 }
             }
             RulesTabMsg::TextApplied { project_id } => self.apply_rules_text(project_id),
+            // These rewrite the stored text, which Apply of the typed text
+            // would then replace.
+            RulesTabMsg::SetRedefined { project_id, .. }
+            | RulesTabMsg::SetApplied { project_id, .. }
+            | RulesTabMsg::PresetApplied { project_id }
+                if self.rules_text_unapplied(project_id) =>
+            {
+                self.rules_tab_mut(project_id).refused = Some(TEXT_UNAPPLIED.to_string());
+            }
             msg @ (RulesTabMsg::ClearanceViewPicked { .. }
-            | RulesTabMsg::MatrixCellOpened { .. }
-            | RulesTabMsg::MatrixCellEdited { .. }
             | RulesTabMsg::MatrixCellCommitted { .. }
-            | RulesTabMsg::MatrixCellCancelled { .. }
             | RulesTabMsg::MatrixCellCleared { .. }
             | RulesTabMsg::MatrixCollapsed { .. }
             | RulesTabMsg::PanelPicked { .. }
@@ -144,10 +156,17 @@ impl Signex {
             | RulesTabMsg::SetApplied { .. }
             | RulesTabMsg::PresetPicked { .. }
             | RulesTabMsg::PresetApplied { .. }
-            | RulesTabMsg::PresetDismissed { .. }) => self.apply_rules_panel_message(msg),
+            | RulesTabMsg::PresetDismissed { .. }
+            | RulesTabMsg::MatrixActed { .. }
+            | RulesTabMsg::MatrixHovered { .. }
+            | RulesTabMsg::MatrixPairPinned { .. }
+            | RulesTabMsg::MatrixPairTyped { .. }) => self.apply_rules_panel_message(msg),
             RulesTabMsg::OpenRequested { .. }
+            | RulesTabMsg::OpenedAt { .. }
             | RulesTabMsg::PresetsListRequested { .. }
             | RulesTabMsg::DrcRequested { .. }
+            | RulesTabMsg::GridActed { .. }
+            | RulesTabMsg::PreviewActed { .. }
             | RulesTabMsg::ScopeShown { .. } => {}
         }
     }
@@ -219,6 +238,13 @@ impl Signex {
             RuleKind::Clearance => "0.2mm",
             RuleKind::Track => "0.15mm",
             RuleKind::Via => "0.45mm",
+            RuleKind::Hole => "0.2mm",
+            RuleKind::Edge => "0.3mm",
+            RuleKind::Silk => "0.15mm",
+            RuleKind::Mask => "0.1mm",
+            RuleKind::Paste => "0mm",
+            RuleKind::Courtyard => "0mm",
+            RuleKind::Component => "6mm",
         };
         if draft.set_values(first).is_err() {
             return;
@@ -267,7 +293,7 @@ impl Signex {
     /// Run `edit` on the rule text and store the result, with the severity
     /// entries following `follows`, as one undo step; a refusal is kept for
     /// the tab to show. Whether it was stored.
-    fn edit_rules(
+    pub(super) fn edit_rules(
         &mut self,
         id: ProjectId,
         follows: &[WrittenRuleEdit<'_>],

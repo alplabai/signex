@@ -72,6 +72,7 @@ fn footprint_json_roundtrip_with_body3d() {
         default_designator: String::new(),
         component_type: ComponentType::Standard,
         height_mm: None,
+        generated: GeneratedFeatures::default(),
     };
     let json = serde_json::to_string(&fp).unwrap();
     let back: Footprint = serde_json::from_str(&json).unwrap();
@@ -160,7 +161,7 @@ fn footprint_file_toml_round_trip_empty() {
     let back = FootprintFile::from_toml_str(&toml_text).expect("parse");
     assert_eq!(back.footprints.len(), 1);
     assert_eq!(back.footprints[0].name, "SOIC-8");
-    assert_eq!(back.format, "snxfpt/1");
+    assert_eq!(back.format, "snxfpt/1.1");
     assert_eq!(back.file_uuid, original.file_uuid);
 }
 
@@ -244,6 +245,9 @@ fn pad_shape_token_round_trip_each_variant() {
         },
         PadShape::Custom(Polygon::new(vec![[0.0, 0.0], [1.5, 0.0], [0.75, 1.0]])),
         PadShape::Custom(Polygon::new(Vec::new())),
+        PadShape::Trapezoid {
+            delta: [0.0, -0.35],
+        },
     ];
     for s in cases {
         let token = pad_shape_to_token(&s, "t").unwrap();
@@ -385,7 +389,7 @@ fn footprint_file_to_toml_emits_pads_as_literal_multiline() {
 
 #[test]
 fn footprint_file_unsupported_format_token_is_rejected() {
-    // Any token other than "snxfpt/1" must surface
+    // A token newer than "snxfpt/1.1" must surface
     // FootprintFileError::UnsupportedFormat.
     let bad = r#"
 format = "snxfpt/99"
@@ -396,8 +400,8 @@ updated = "2026-05-04T00:00:00Z"
 footprints = []
 "#;
     match FootprintFile::from_toml_str(bad) {
-        Err(FootprintFileError::UnsupportedFormat { got }) => {
-            assert_eq!(got, "snxfpt/99");
+        Err(FootprintFileError::UnsupportedFormat(reason)) => {
+            assert_eq!(reason.found(), Some("snxfpt/99"));
         }
         other => panic!("expected UnsupportedFormat, got {other:?}"),
     }
@@ -556,6 +560,8 @@ fn pad_shape_from_token_refuses_a_non_finite_number() {
         "custom:inf,0|1,1",
         "custom:0,0|1,nan|1,1",
         "custom:0,0|1,-inf",
+        "trapezoid:nan,0",
+        "trapezoid:0.5",
     ] {
         assert!(
             matches!(

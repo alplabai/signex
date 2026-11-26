@@ -29,20 +29,29 @@ pub enum RuleField {
 }
 
 impl RuleField {
-    pub const ALL: [RuleField; 12] = [
-        RuleField::Enabled,
-        RuleField::Name,
-        RuleField::Scope,
-        RuleField::Layer,
-        RuleField::Pair,
-        RuleField::Severity,
-        RuleField::Message,
-        RuleField::Limit(LimitField::MinClearance),
-        RuleField::Limit(LimitField::MinWidth),
-        RuleField::Limit(LimitField::MaxWidth),
-        RuleField::Limit(LimitField::MinDiameter),
-        RuleField::Limit(LimitField::MinDrill),
-    ];
+    pub const ALL: [RuleField; 7 + LimitField::ALL.len()] = {
+        let mut out = [RuleField::Enabled; 7 + LimitField::ALL.len()];
+        let named = [
+            RuleField::Enabled,
+            RuleField::Name,
+            RuleField::Scope,
+            RuleField::Layer,
+            RuleField::Pair,
+            RuleField::Severity,
+            RuleField::Message,
+        ];
+        let mut i = 0;
+        while i < named.len() {
+            out[i] = named[i];
+            i += 1;
+        }
+        let mut j = 0;
+        while j < LimitField::ALL.len() {
+            out[named.len() + j] = RuleField::Limit(LimitField::ALL[j]);
+            j += 1;
+        }
+        out
+    };
 
     /// Stable operand and JSON name.
     pub const fn id(self) -> &'static str {
@@ -78,6 +87,12 @@ pub enum EditError {
     },
     /// The rewritten rule would not compile; what the compiler said.
     Invalid(Vec<String>),
+    /// A grid cell would not show the written value: rule `by` still
+    /// governs it (`None`: `rule` is off).
+    Overruled {
+        rule: String,
+        by: Option<String>,
+    },
 }
 
 impl fmt::Display for EditError {
@@ -96,6 +111,15 @@ impl fmt::Display for EditError {
             EditError::NameTaken(name) => write!(f, "a rule called '{name}' already exists"),
             EditError::BadValue { field, reason } => write!(f, "{field}: {reason}"),
             EditError::Invalid(said) => write!(f, "the rule would not apply: {}", said.join("; ")),
+            EditError::Overruled { rule, by: Some(by) } => write!(
+                f,
+                "rule '{by}' is stricter and still governs this cell; change or remove \
+                 '{by}' rather than '{rule}'"
+            ),
+            EditError::Overruled { rule, by: None } => write!(
+                f,
+                "rule '{rule}' is off, so the cell would not show the value; switch it on first"
+            ),
         }
     }
 }

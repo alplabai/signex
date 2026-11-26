@@ -36,6 +36,14 @@ pub(crate) struct AgentState {
     /// True while an agent request runs, so the code under it can tell an
     /// agent's call from a click.
     pub(crate) serving: bool,
+    /// True while a GUI translator runs a person's command
+    /// (`command::translator`): its operands come from what is in view, so
+    /// a handler does not read again what the view already holds.
+    pub(crate) from_view: bool,
+    /// The run of `update_pcb_from_schematic` from operands waiting for its
+    /// change list, with its caller's ticket (#2470, #2987). The dialog's
+    /// state drives the read; the job is not part of it.
+    pub(crate) update_pcb_job: Option<crate::app::update_pcb::UpdatePcbJob>,
     /// Who the command running now comes from; the person outside
     /// [`Signex::with_origin`].
     pub(crate) origin: super::Origin,
@@ -87,11 +95,18 @@ pub(crate) struct AgentState {
     pub(super) registry_in_flight: bool,
     /// How many times a failed listener was restarted since it last started.
     pub(super) restarts: u32,
-    /// The ticket of the request just run when it waits for its reads
-    /// (#2199): its reply is sent when they land, not now.
-    pub(crate) deferred: Option<u64>,
+    /// The ticket and `if_revision` of the request just run when it waits
+    /// for its reads (#2199): its reply is sent when they land, not now.
+    pub(crate) deferred: Option<super::deferred::DeferredRequest>,
     /// The replies of requests waiting for their reads, by ticket.
     pub(super) waiting: std::collections::HashMap<u64, super::deferred::WaitingReply>,
+    /// The notebook read a waiting reference command runs again on: the
+    /// project it read and the read, `None` when it failed. Set only for
+    /// the length of that run (#3022, `notebook_references`).
+    pub(crate) notebook_read: Option<(
+        crate::app::ProjectId,
+        Option<Arc<crate::panels::annotations::NotebookScan>>,
+    )>,
 }
 
 impl AgentState {
@@ -111,6 +126,8 @@ impl AgentState {
             endpoint: None,
             registered: None,
             serving: false,
+            from_view: false,
+            update_pcb_job: None,
             origin: super::Origin::Person,
             journals_on: false,
             run_client: None,
@@ -131,6 +148,7 @@ impl AgentState {
             restarts: 0,
             deferred: None,
             waiting: std::collections::HashMap::new(),
+            notebook_read: None,
         }
     }
 

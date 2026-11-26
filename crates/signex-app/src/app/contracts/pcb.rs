@@ -32,6 +32,12 @@ pub enum PcbMsg {
     },
     /// A violation row (by its position in the report) was clicked.
     DrcViolationPicked(usize),
+    /// The library models a `query_part_heights` waited for were read
+    /// (#2939): answer it.
+    PartHeightsRead(Box<crate::app::command::PartHeightsRead>),
+    /// The DRC fixes a `fix_drc` or `fix_drc_violation` worked out off the
+    /// UI thread (#2940): land them and answer.
+    DrcFixComputed(Box<crate::app::handlers::pcb_drc_fix::DrcFixComputed>),
     /// The PCB canvas of the undocked window `window` reported `msg`: it
     /// acts on that window's board and selection (#2240).
     CanvasInWindow {
@@ -54,6 +60,9 @@ pub enum PcbMsg {
         window: iced::window::Id,
         event: ViewRotationMsg,
     },
+    /// The board views' save loop (#2480): a quiet period ran out or a
+    /// write finished.
+    ViewSave(crate::board_view_prefs::BoardViewSaveMsg),
     /// The board 3D view of the main window (#2390).
     Board3d(Board3dMsg),
     /// Board sketch mode of the main window's board (#2234).
@@ -66,6 +75,8 @@ pub enum PcbMsg {
     Panel(crate::app::BoardPanelMsg),
     /// Back Annotate and its dialog (#1312).
     BackAnnotate(crate::app::BackAnnotateMsg),
+    /// Compare Board with Schematic and its dialog (#2462).
+    CompareBoard(crate::app::CompareBoardMsg),
     /// Board Reports (#2404) and Board Print / PDF (#2402).
     Output(crate::app::BoardOutputMsg),
     /// The PCB Active Bar's dropdowns (#2352).
@@ -83,6 +94,9 @@ pub enum PcbMsg {
     /// board in view are computed again and Messages says what the selected
     /// pours (`selected`) or all of them came to.
     RepourRequested { selected: bool },
+    /// `unfill_selected` ran (#2506): the selected pours of the board in
+    /// view hold no copper until the next Repour, as one undo step.
+    UnfillRequested,
     /// Swapping the footprint of placed components (#2366).
     FootprintSwap(FootprintSwapMsg),
     /// The right-click menu of a layer tab (#2379).
@@ -108,6 +122,30 @@ pub enum PcbMsg {
     PartSwap(PartSwapMsg),
     /// Design reuse blocks of the project (#2410).
     ReuseBlock(crate::app::board_reuse::ReuseBlockMsg),
+    /// A room of the board in view was edited in Room Properties (#2457).
+    Room(crate::app::rooms::RoomMsg),
+    /// Create Rooms from Sheets and its dialog (#2457).
+    CreateRooms(crate::app::rooms::CreateRoomsMsg),
+    /// Arrange in Room or Auto Place in Rooms on the board in view (#2457,
+    /// #2941).
+    RoomTool(crate::app::rooms::RoomToolMsg),
+    /// Edit ▸ Origin on the board in view (2026-11-18).
+    Origin(BoardOriginMsg),
+}
+
+/// Edit ▸ Origin (2026-11-18): where the board in view counts from. Each
+/// change is one `SetBoardOptions` undo step on `BoardOptions::origin`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BoardOriginMsg {
+    /// Set (`set_board_origin`): the next click on the board sets the
+    /// origin there.
+    SetPicked,
+    /// Reset (`reset_board_origin`): the origin goes to the bottom-left of
+    /// the board outline, or of the board area without one.
+    ResetPicked,
+    /// Snap to Outline Corner (`snap_board_origin_to_corner`): the origin
+    /// goes to the outline corner nearest the pointer.
+    SnapToCornerPicked,
 }
 
 /// Net actions on the board in view (#2403, #2405): the board menu's and the
@@ -216,6 +254,15 @@ pub enum PcbBarMsg {
     MenuToggled(PcbBarMenu),
     /// The user clicked outside the open dropdown.
     MenuDismissed,
+    /// A bar button took a right press and toggles `menu`; the release of
+    /// that press stays off the canvas.
+    MenuRightPressed(PcbBarMenu),
+    /// A right press outside the open dropdown closed it; its release stays
+    /// off the canvas.
+    FlyoutRightPressed,
+    /// A part of the bar or of its open dropdown that opens no menu took a
+    /// right press: nothing changes, and its release stays off the canvas.
+    RightPressTaken,
     /// A dropdown row was picked: the dropdown closes and the command runs
     /// as its menu row runs it.
     CommandPicked(crate::keymap::AppCommandId),
@@ -225,15 +272,22 @@ pub enum PcbBarMsg {
 /// arrives as the sketch editor's own messages.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BoardSketchMsg {
-    /// `board_sketch` ran: enter sketch mode, or leave it when on.
+    /// `board_sketch` ran: enter sketch mode, or leave it when on (as
+    /// Bake does).
     ModeToggled,
-    /// Leave (the bar's button or Esc): commit any change, then leave. A
-    /// refused commit keeps the mode on.
-    LeaveRequested,
-    /// Apply: commit the changes and stay in the mode.
-    ApplyRequested,
-    /// Discard: leave without committing; the board keeps what it had.
+    /// Bake (the mode bar's primary button): commit any change to the
+    /// board as one board command, then leave. A refused commit keeps the
+    /// mode on (#2518).
+    BakeRequested,
+    /// Bake preview, or Back to sketch: show or hide what a bake writes.
+    BakePreviewToggled,
+    /// Discard changes (or Esc): leave without committing, asking first
+    /// when the sketch has changes the board has not taken.
     DiscardRequested,
+    /// The discard was confirmed: leave; the board keeps what it had.
+    DiscardConfirmed,
+    /// The discard was cancelled: keep editing.
+    DiscardCancelled,
 }
 
 /// What the user changed about what a board view shows (#2223): never the
@@ -244,23 +298,21 @@ pub enum PcbViewMsg {
     RatsnestVisibilityToggled,
     /// The user asked to show or hide the board origin marker (#2351).
     OriginMarkerVisibilityToggled,
+    /// The user showed or hid the orientation tile over the canvas (its eye
+    /// in View Options, mockup row 194).
+    OrientationTileVisibilityToggled,
     /// The user stepped the active layer to the next or previous one of the
-    /// board's layers (`+`, `-`, the status bar pill).
+    /// board's layers (`+`, `-`, View ▸ Next / Previous Layer).
     ActiveLayerStepped { forward: bool },
     /// The user stepped the active layer to the next or previous signal
     /// layer (`*`).
     SignalLayerStepped { forward: bool },
-    /// The user made one layer the active one (a tab under the canvas or a
-    /// Layers panel row).
+    /// The user made one layer the active one (a tab under the canvas, a
+    /// Layers panel row or a row of the status bar's Active layer popover).
     ActiveLayerPicked(PcbLayer),
-    /// The user turned single-layer mode on or off (Shift+S, the Layers
-    /// panel button).
+    /// The user turned single-layer mode on or off (Shift+S, the View
+    /// Options switch).
     SingleLayerModeToggled,
-    /// The user showed or hid every layer of one Layers panel group.
-    LayerGroupVisibilitySet {
-        group: signex_renderer::pcb::LayerGroup,
-        visible: bool,
-    },
     /// The user asked to show or hide one layer (its eye in the Layers panel).
     LayerVisibilityToggled(PcbLayer),
     /// The user asked to show or hide the active layer.
@@ -289,6 +341,38 @@ pub enum PcbViewMsg {
     /// The user flipped the board view: seen from below or above again
     /// (#2394).
     BoardFlipToggled,
+    /// The user showed or hid one layer (an eye of the Layers panel,
+    /// `set_layer_visible`, #2363).
+    LayerVisibilitySet { layer: PcbLayer, visible: bool },
+    /// The user gave a layer its own colour, or (`None`) the board
+    /// palette's again (a colour chip, Layer colour... and Reset layer
+    /// colour on a tab, `set_layer_color`). Saved with the board as one undo
+    /// step (2026-11-18).
+    LayerColourSet {
+        layer: PcbLayer,
+        colour: Option<[u8; 3]>,
+    },
+    /// Reset all layer colours on a tab (`reset_layer_colors`): every layer
+    /// takes the board palette's colour again, as one undo step.
+    LayerColoursReset,
+    /// The Layers panel lists only the layers the board uses, or every
+    /// layer again (Used On, #2363).
+    UsedLayersOnlySet(bool),
+    /// The user turned Show only unrouted on or off (the Unrouted popover,
+    /// mockup row 164): view state, never a board edit or an undo step.
+    OnlyUnroutedToggled,
+    /// The user showed or hid one kind of object; `None`: every kind the
+    /// view can hide (View Options, #2363).
+    ObjectVisibilitySet {
+        kind: Option<signex_renderer::pcb::BoardObject>,
+        visible: bool,
+    },
+    /// The user set how transparent one kind of object is drawn, percent
+    /// (View Options, #2363).
+    ObjectTransparencySet {
+        kind: signex_renderer::pcb::BoardObject,
+        percent: u8,
+    },
 }
 
 /// What the user did about the turn of a board view on screen (#2316). View
@@ -324,12 +408,66 @@ pub enum Board3dMsg {
     /// `view_board_3d` ran (View ▸ 3D View, its key, the palette): the
     /// board in view shows in 3D, or flat again.
     Toggled,
-    /// The 3D view's 2D button: the board shows flat again.
+    /// The toolbar's 2D segment: the board shows flat again.
     LeaveRequested,
-    /// A viewpoint button was picked: the view looks from there, framed.
+    /// A viewpoint button was picked: the view looks from there on the side
+    /// shown, framed.
     PresetPicked(signex_gfx::camera3d::ViewPreset),
     /// The Fit button: the board is framed from where it is seen now.
     FitRequested,
+    /// The Reset button: Iso on the side shown, framed. Flip, explode and
+    /// lighting stay.
+    ResetRequested,
+    /// The Flip button: the board turns over in one animated step.
+    FlipRequested,
+    /// A frame was drawn while the flip turns or a screenshot waits for a
+    /// frame without the toolbar.
+    AnimationTicked(std::time::Instant),
+    /// The Explode button: its popover opens, or closes.
+    ExplodePopoverToggled,
+    /// The explode slider moved to this percent (0 assembled, 100 apart).
+    ExplodeAmountChanged(u8),
+    /// "Separate copper and mask" was ticked or cleared.
+    ExplodeLayersToggled(bool),
+    /// "Lift components" was ticked or cleared.
+    ExplodePartsToggled(bool),
+    /// The lighting button: the next lighting preset, and its toast.
+    LightingCycled,
+    /// The lighting toast of this generation timed out.
+    LightingToastExpired(u64),
+    /// The screenshot button's chevron: its menu opens, or closes.
+    ScreenshotMenuToggled,
+    /// Esc closed the open Explode popover or screenshot menu.
+    PopoverDismissed,
+    /// The screenshot button, or Copy to clipboard in its menu.
+    ScreenshotCopyRequested,
+    /// Save PNG… in the screenshot menu: ask where.
+    ScreenshotSaveRequested,
+    /// The save dialog answered; `None` is a cancel.
+    ScreenshotSavePicked(Option<std::path::PathBuf>),
+    /// Save with transparent backdrop… in the screenshot menu: ask where.
+    ScreenshotTransparentSaveRequested,
+    /// The transparent save's dialog answered; `None` is a cancel.
+    ScreenshotTransparentSavePicked(Option<std::path::PathBuf>),
+    /// The view was captured, cropped to the view; `None` when the window
+    /// had nothing to show. `save_to` is the PNG to write; `None` copies it
+    /// to the clipboard.
+    ScreenshotTaken {
+        save_to: Option<std::path::PathBuf>,
+        shot: Option<Arc<Board3dShot>>,
+    },
+    /// The clipboard took the screenshot, or refused it and why.
+    ScreenshotCopied(Result<(), iced::clipboard::Error>),
+    /// The PNG at `path` was written, or why it was not.
+    ScreenshotSaved {
+        path: std::path::PathBuf,
+        error: Option<String>,
+    },
+    /// The model-unread toast was dismissed; its Messages lines stay.
+    UnreadNoticeDismissed,
+    /// A redraw found the view at another window position, in logical
+    /// pixels: where a screenshot is cropped.
+    ViewportPlaced([f32; 2]),
     /// A redraw found the view at a size it had not reported, in logical
     /// pixels; the first one frames the view for its real shape.
     ViewportSized([f32; 2]),
@@ -357,6 +495,23 @@ pub enum Board3dGesture {
     Zoomed(f32),
     /// A left click at this point of the view.
     Clicked([f32; 2]),
+}
+
+/// A screenshot of the board 3D view: RGBA pixels, `size` wide and tall in
+/// physical pixels.
+#[derive(Clone, PartialEq)]
+pub struct Board3dShot {
+    pub rgba: Vec<u8>,
+    pub size: [u32; 2],
+}
+
+impl std::fmt::Debug for Board3dShot {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Board3dShot")
+            .field("bytes", &self.rgba.len())
+            .field("size", &self.size)
+            .finish()
+    }
 }
 
 /// The models read for a board's parts, and why the others could not be.
@@ -395,4 +550,18 @@ pub enum DxfImportMsg {
         text: Result<String, String>,
         waiting: Option<crate::app::agent::WaitingCommand>,
     },
+    /// The file dialog of a board sketch's Import DXF answered (mockup row
+    /// 179c); `None` is a cancel.
+    SketchPicked {
+        board: std::path::PathBuf,
+        path: Option<std::path::PathBuf>,
+    },
+    /// That file was read off the UI thread, or why it could not be.
+    SketchRead {
+        board: std::path::PathBuf,
+        path: std::path::PathBuf,
+        source: Result<std::sync::Arc<signex_engine::pcb::dxf::DxfSource>, String>,
+    },
+    /// A choice, Import or Cancel in the sketch's Import DXF dialog.
+    SketchDialog(crate::app::state::SketchDxfMsg),
 }

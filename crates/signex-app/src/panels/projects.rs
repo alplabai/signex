@@ -1,13 +1,6 @@
 //! Projects and Navigator panel views plus the project-tree model.
 
 use super::*;
-use crate::styles::{Spacing, TypeScale};
-use iced::Widget;
-use iced::widget::column;
-
-/// Default type / spacing scales; equal to the old literals at the default size.
-const TS: TypeScale = TypeScale::DEFAULT;
-const SP: Spacing = Spacing::DEFAULT;
 
 /// Per-sheet info for the project tree.
 #[derive(Debug, Clone, PartialEq)]
@@ -18,14 +11,14 @@ pub struct SheetInfo {
     pub wire_count: usize,
     pub label_count: usize,
     /// True when this sheet is currently in `document_state.tabs`.
-    /// Drives the small accent-coloured dot on the tree row (Altium parity).
+    /// Drives the small open dot on the tree row.
     pub is_open: bool,
     /// True when the open tab for this sheet has unsaved edits.
     /// Drives the bright red dot on the tree row.
     pub is_dirty: bool,
     /// True when this sheet is the document the user is currently
     /// viewing (`document_state.tabs[active_tab].path == sheet path`).
-    /// Drives the highlighted row background — Altium parity.
+    /// Drives the highlighted row background and the accent edge.
     pub is_active: bool,
     /// F24 (2026-05-03) — `true` when the file backing this entry
     /// is registered on the project but no longer exists on disk
@@ -38,6 +31,9 @@ pub struct SheetInfo {
     /// its parent references (#1618). With `missing` it is a symbol whose
     /// file does not exist: activating it offers to create the sheet.
     pub is_child_reference: bool,
+    /// The comparison key of a child reference's resolved file, under its
+    /// project's case rule; empty on a top-level page row.
+    pub file_key: String,
     /// True when the sheet is one of the `.snxprj` pages. A nested row that is
     /// not has no project entry to exclude or rename.
     pub in_project_list: bool,
@@ -53,6 +49,8 @@ pub struct SheetInfo {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProjectPanelInfo {
     pub id: crate::app::ProjectId,
+    /// The project's case rule, which the rows' `file_key` was folded by.
+    pub case_fold: crate::app::CaseFold,
     /// Display name (project stem — "MyBoard" from "MyBoard.snxprj").
     pub name: String,
     /// Root schematic filename shown as the "project file" under each
@@ -73,6 +71,9 @@ pub struct ProjectPanelInfo {
     pub pcb_file_active: bool,
     /// F24 — `(missing)` indicator for the companion PCB file.
     pub pcb_file_missing: bool,
+    /// The project's Design Notebook file is on disk: the tree lists it
+    /// under Notebook (mockup row 19).
+    pub has_notebook: bool,
     pub sheets: Vec<SheetInfo>,
     /// Component libraries attached to this project. One entry per
     /// `Project::libraries[]`. Drives the `Libraries` branch under
@@ -155,17 +156,27 @@ pub fn build_project_tree(ctx: &PanelContext) -> Vec<TreeNode> {
 /// having to double-click and read an error.
 fn missing_label(filename: &str, is_missing: bool) -> String {
     if is_missing {
-        format!("{filename}  (missing)")
+        format!("{filename}{MISSING_MARK}")
     } else {
         filename.to_string()
     }
 }
 
+/// The mark the cached tree appends to a missing file's row. Navigation
+/// strips it to find the file; the view shows it from the catalog.
+pub(crate) const MISSING_MARK: &str = "  (missing)";
+/// The mark of a sheet the walk could not read.
+pub(crate) const UNREADABLE_MARK: &str = "  (unreadable)";
+/// Keys (and cached labels) of the Libraries and Settings branches; the
+/// view names them from the catalog.
+pub(super) const LIBRARIES_KEY: &str = "Libraries";
+pub(super) const SETTINGS_KEY: &str = "Settings";
+
 /// [`missing_label`], plus the `(unreadable)` mark of a sheet the walk could
 /// not read.
 fn sheet_label(sheet: &SheetInfo) -> String {
     if sheet.unreadable {
-        format!("{}  (unreadable)", sheet.filename)
+        format!("{}{UNREADABLE_MARK}", sheet.filename)
     } else {
         missing_label(&sheet.filename, sheet.missing)
     }
@@ -193,6 +204,16 @@ fn sheet_node(sheet: &SheetInfo) -> TreeNode {
         .with_open(sheet.is_open)
         .with_dirty(sheet.is_dirty)
         .with_active(sheet.is_active)
+}
+
+/// Key of the Design Notebook row: its path in the project folder, which no
+/// sheet or board row can have.
+pub(crate) const NOTEBOOK_ROW_KEY: &str = "notebook/design.snxnbk";
+
+/// The Design Notebook row: the file name, keyed by its project path.
+fn notebook_node() -> TreeNode {
+    TreeNode::leaf(signex_notebook::DEFAULT_NOTEBOOK_FILE, TreeIcon::File)
+        .with_key(NOTEBOOK_ROW_KEY)
 }
 
 /// One project root — "Source Documents" / "Libraries" / "Settings".
@@ -227,6 +248,10 @@ fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
         );
     }
 
+    if project.has_notebook {
+        source_docs.push(notebook_node());
+    }
+
     // Render each `Project::libraries[i]` entry as a single `.snxlib`
     // leaf — no children, no chevron. Under the v0.9 `.snxlib`-as-file
     // model a library is one thing the user opens, not a folder they
@@ -247,8 +272,7 @@ fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
     // Libraries branch: every entry renders as a single leaf with the
     // file's full filename (incl. extension). `.snxlib` (Component
     // Libraries), `.snxsym` (Symbol Libraries), and `.snxfpt` (PCB
-    // Libraries) all live as siblings under this branch — Altium
-    // parity. No nested Symbols / Footprints subbranches: a `.snxlib`
+    // Libraries) all live as siblings under this branch. No nested Symbols / Footprints subbranches: a `.snxlib`
     // can hold thousands of primitives and surfacing them in the tree
     // would explode the panel; opening the `.snxlib` shows the
     // browser instead.
@@ -262,11 +286,7 @@ fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
                 .and_then(|s| s.to_str())
                 .map(str::to_string)
                 .unwrap_or_else(|| format!("{}.snxlib", lib.display_name));
-            let display = if lib.missing {
-                format!("{filename}  (missing)")
-            } else {
-                filename.clone()
-            };
+            let display = missing_label(&filename, lib.missing);
             let icon = TreeIcon::for_path(&filename);
             // v0.13 — surface the white open-dot / red dirty-dot
             // indicators on `.snxlib` leaves so library files match
@@ -297,14 +317,14 @@ fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
     }
     if !lib_children.is_empty() {
         children.push(TreeNode::branch(
-            "Libraries".to_string(),
+            LIBRARIES_KEY.to_string(),
             TreeIcon::Library,
             lib_children,
         ));
     }
     if !settings_children.is_empty() {
         let mut settings =
-            TreeNode::branch("Settings".to_string(), TreeIcon::File, settings_children);
+            TreeNode::branch(SETTINGS_KEY.to_string(), TreeIcon::File, settings_children);
         settings.expanded = false;
         children.push(settings);
     }
@@ -315,66 +335,12 @@ fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
         .with_dirty(project.is_dirty)
 }
 
+/// The Projects panel: the tree of every open project, or, with none open,
+/// the empty card and the recent projects.
 pub fn view_projects<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     if ctx.project_tree.is_empty() {
-        let muted = theme_ext::text_secondary(&ctx.tokens);
-        column![
-            text(signex_i18n::t!(
-                ctx.i18n,
-                signex_i18n::ids::PANELS_PROJECTS_NONE_OPEN
-            ))
-            .size(TS.body)
-            .color(muted),
-            // raw: blank spacer between the two lines, no text.
-            text(raw("")).size(TS.micro),
-            text(signex_i18n::t!(
-                ctx.i18n,
-                signex_i18n::ids::PANELS_PROJECTS_OPEN_HINT
-            ))
-            .size(TS.caption)
-            .color(muted),
-        ]
-        .spacing(SP.xs)
-        .padding(6)
-        .width(Length::Fill)
-        .boxed()
+        super::projects_graphite::empty_view(ctx)
     } else {
         super::projects_graphite::view(ctx)
     }
-}
-
-// ─── Navigator Panel ──────────────────────────────────────────
-
-pub fn view_navigator<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
-    let mut col: Column<Element<'a, PanelMsg>> =
-        Column::new().spacing(SP.xs).padding(6).width(Length::Fill);
-    let sheets = signex_i18n::t!(ctx.i18n, signex_i18n::ids::PANELS_NAVIGATOR_SHEETS);
-    col = col.push(section_title(&sheets.into_string(), &ctx.tokens, &ctx.i18n).boxed());
-    col = col.push(separator(&ctx.tokens).boxed());
-
-    // The tree is the whole project hierarchy, built from the project's root
-    // sheet — it does not depend on which sheet is focused.
-    if ctx.navigator.tree.is_empty() {
-        col = col.push(
-            text(signex_i18n::t!(
-                ctx.i18n,
-                signex_i18n::ids::PANELS_NAVIGATOR_NO_PROJECT
-            ))
-            .size(TS.caption)
-            .color(theme_ext::text_secondary(&ctx.tokens))
-            .boxed(),
-        );
-    } else {
-        let mut tree = TreeView::new(&ctx.navigator.tree, &ctx.tokens).text_size(TS.body);
-        let selected_key = ctx
-            .navigator
-            .selected
-            .as_deref()
-            .and_then(|path| signex_widgets::tree_view::key_of(&ctx.navigator.tree, path));
-        if let Some(sel) = selected_key.as_deref() {
-            tree = tree.selected(sel);
-        }
-        col = col.push(tree.view().map(PanelMsg::Navigator).boxed());
-    }
-    container(col).width(Length::Fill).boxed()
 }

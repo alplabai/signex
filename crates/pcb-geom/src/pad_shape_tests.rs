@@ -5,7 +5,7 @@ use crate::{BoardIndex, ItemRef, ratsnest};
 use signex_types::pcb::{PadNet, PadType, PcbBoard, Point};
 use uuid::Uuid;
 
-fn pad(n: u128, x: f64, size: (f64, f64), shape: PadShape, rotation: f64) -> Pad {
+pub(super) fn pad(n: u128, x: f64, size: (f64, f64), shape: PadShape, rotation: f64) -> Pad {
     Pad {
         uuid: Uuid::from_u128(n),
         number: n.to_string(),
@@ -20,6 +20,8 @@ fn pad(n: u128, x: f64, size: (f64, f64), shape: PadShape, rotation: f64) -> Pad
             name: "N1".into(),
         }),
         roundrect_ratio: 0.25,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation,
         layer_sizes: None,
         net_locked: false,
@@ -28,7 +30,7 @@ fn pad(n: u128, x: f64, size: (f64, f64), shape: PadShape, rotation: f64) -> Pad
     }
 }
 
-fn fp(rotation: f64, layer: &str, pads: Vec<Pad>) -> Footprint {
+pub(super) fn fp(rotation: f64, layer: &str, pads: Vec<Pad>) -> Footprint {
     Footprint {
         uuid: Uuid::from_u128(99),
         reference: "U1".into(),
@@ -53,7 +55,7 @@ fn corners(f: &Footprint) -> Vec<PointNm> {
     pad_shape(f, &f.pads[0]).unwrap().outline(8)
 }
 
-fn p(x: i64, y: i64) -> PointNm {
+pub(super) fn p(x: i64, y: i64) -> PointNm {
     PointNm::new(x, y)
 }
 
@@ -227,10 +229,11 @@ fn hit_testing_reads_the_rotated_rect_not_its_axis_aligned_box() {
     assert!(index.hit_point(p(900_000, -100_000), 0).is_empty());
 }
 
-fn board_of(footprints: Vec<Footprint>) -> PcbBoard {
+pub(super) fn board_of(footprints: Vec<Footprint>) -> PcbBoard {
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,

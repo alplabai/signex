@@ -16,8 +16,13 @@
 //!
 //! The Sheets, Variants, Libraries, ERC and annotation and Version control
 //! sections (#1689-#1693) edit through the same history; their commands are
-//! in `sections` and each is a step of its own.
+//! in `sections` and each is a step of its own. So do the Requirements
+//! section's edits (#2339, `requirements`), the rails edit (#2943,
+//! `rails`) and a BOM line's alternates (#2938, `bom_alternates`).
 
+mod bom_alternates;
+mod rails;
+mod requirements;
 mod sections;
 
 use std::collections::BTreeMap;
@@ -27,10 +32,13 @@ use signex_history::{DEFAULT_UNDO_DEPTH, History};
 use signex_types::agent_journal::AgentJournalSettings;
 use signex_types::designator::DesignatorStandard;
 use signex_types::project::{
-    AnnotationState, PcbField, ProjectData, ProjectDefaults, SchematicDefaultField,
-    SchematicDefaultOverrides,
+    AnnotationState, FabOutputKinds, PcbField, ProjectData, ProjectDefaults, ProjectRules,
+    SchematicDefaultField, SchematicDefaultOverrides,
 };
 
+pub use bom_alternates::ProjectBomCommand;
+pub use rails::ProjectRailCommand;
+pub use requirements::ProjectRequirementCommand;
 pub use sections::ProjectSectionCommand;
 use sections::SectionsSnapshot;
 
@@ -50,6 +58,11 @@ pub enum ProjectGeneralCommand {
     SetParameter { name: String, value: String },
     /// Delete a parameter.
     RemoveParameter(String),
+    /// Rename a parameter, keeping its value. Always a step of its own.
+    /// Changes nothing when `from` is missing, `to` is empty or already
+    /// used, or the two are equal; the Project tab refuses those names
+    /// before they get here.
+    RenameParameter { from: String, to: String },
     /// Pick the designator standard (#1421); `None` is "Library designator".
     /// Always its own undo step, and it closes the description typing run.
     /// An unreadable section from a newer Signex is replaced only by a real
@@ -83,6 +96,20 @@ pub enum ProjectGeneralCommand {
         settings: AgentJournalSettings,
         typing: bool,
     },
+    /// A fab tier picked in the Project setup section (#2311): the defaults
+    /// it fills and the project's rules with its `fab_*` rules merged in,
+    /// as one step. Only this kind of step puts the rules back on undo, so
+    /// undoing a description never reverts a Rules tab edit.
+    SetFabTier {
+        defaults: ProjectDefaults,
+        rules: Box<ProjectRules>,
+    },
+    /// The kinds of file Fabrication Outputs writes (#2489); `None` is the
+    /// defaults. Always a step of its own.
+    SetFabOutputs(Option<FabOutputKinds>),
+    /// The project's differential pair classes as the Differential Pair
+    /// Classes dialog's OK leaves them (#1282). Always a step of its own.
+    SetDiffPairClasses(Vec<signex_types::diff_pair_class::DiffPairClass>),
 }
 
 /// The `title_block` keys a project parameter shares with a sheet: empty
@@ -111,7 +138,12 @@ struct GeneralSnapshot {
     schematic_defaults: SchematicDefaultOverrides,
     project_defaults: ProjectDefaults,
     agent_journal: AgentJournalSettings,
+    fab_outputs: Option<FabOutputKinds>,
+    diff_pair_classes: Vec<signex_types::diff_pair_class::DiffPairClass>,
     sections: SectionsSnapshot,
+    /// The project's rules, held only by the two sides of a
+    /// [`ProjectGeneralCommand::SetFabTier`] step.
+    rules: Option<Option<ProjectRules>>,
 }
 
 impl GeneralSnapshot {
@@ -123,18 +155,35 @@ impl GeneralSnapshot {
             schematic_defaults: data.schematic_defaults.clone(),
             project_defaults: data.project_defaults.clone(),
             agent_journal: data.agent_journal,
+            fab_outputs: data.fab_outputs,
+            diff_pair_classes: data.schematic_design.diff_pair_classes.clone(),
             sections: SectionsSnapshot::of(data),
+            rules: None,
         }
+    }
+
+    /// The snapshot of `data`, holding its rules when `with_rules`.
+    fn of_step(data: &ProjectData, with_rules: bool) -> Self {
+        let mut snapshot = Self::of(data);
+        if with_rules {
+            snapshot.rules = Some(data.rules.clone());
+        }
+        snapshot
     }
 
     /// Put these fields back, leaving every other field as it is now.
     fn restore(self, data: &mut ProjectData) {
+        if let Some(rules) = self.rules {
+            data.rules = rules;
+        }
         data.description = self.description;
         data.parameters = self.parameters;
         data.restore_annotation_state(self.annotation);
         data.schematic_defaults = self.schematic_defaults;
         data.project_defaults = self.project_defaults;
         data.agent_journal = self.agent_journal;
+        data.fab_outputs = self.fab_outputs;
+        data.schematic_design.diff_pair_classes = self.diff_pair_classes;
         self.sections.restore(data);
     }
 }
@@ -208,14 +257,19 @@ impl ProjectGeneralHistory {
     /// change opens a new undo step unless it continues the open run; a
     /// no-op records nothing.
     pub fn apply(&mut self, data: &mut ProjectData, command: ProjectGeneralCommand) -> bool {
-        let before = GeneralSnapshot::of(data);
+        let owns_rules = matches!(command, ProjectGeneralCommand::SetFabTier { .. });
+        let before = GeneralSnapshot::of_step(data, owns_rules);
         let is_pick = matches!(
             command,
             ProjectGeneralCommand::SetDesignatorStandard(_)
+                | ProjectGeneralCommand::RenameParameter { .. }
                 | ProjectGeneralCommand::SetSchematicDefaultLineStyle(_)
                 | ProjectGeneralCommand::SetSchematicDefaultShapeFill(_)
                 | ProjectGeneralCommand::SetProjectDefaults { typing: None, .. }
                 | ProjectGeneralCommand::SetAgentJournal { typing: false, .. }
+                | ProjectGeneralCommand::SetFabTier { .. }
+                | ProjectGeneralCommand::SetFabOutputs(_)
+                | ProjectGeneralCommand::SetDiffPairClasses(_)
         );
         let field = RunField::of(&command);
         if is_pick || self.run_field != Some(field) {
@@ -237,6 +291,15 @@ impl ProjectGeneralHistory {
             }
             ProjectGeneralCommand::RemoveParameter(name) => {
                 data.parameters.remove(&name);
+            }
+            ProjectGeneralCommand::RenameParameter { from, to } => {
+                if !to.is_empty()
+                    && from != to
+                    && !data.parameters.contains_key(&to)
+                    && let Some(value) = data.parameters.remove(&from)
+                {
+                    data.parameters.insert(to, value);
+                }
             }
             ProjectGeneralCommand::SetDesignatorStandard(standard) => {
                 if !(standard.is_none() && data.has_unreadable_annotation()) {
@@ -268,8 +331,19 @@ impl ProjectGeneralHistory {
             ProjectGeneralCommand::SetAgentJournal { settings, .. } => {
                 data.set_agent_journal(settings);
             }
+            ProjectGeneralCommand::SetFabTier { defaults, rules } => {
+                data.project_defaults = defaults;
+                data.rules = Some(*rules);
+            }
+            ProjectGeneralCommand::SetFabOutputs(kinds) => data.fab_outputs = kinds,
+            ProjectGeneralCommand::SetDiffPairClasses(classes) => {
+                // An unreadable section is never replaced (DECISIONS 2026-11-23).
+                if !data.has_unreadable_schematic_design() {
+                    data.schematic_design.diff_pair_classes = classes;
+                }
+            }
         }
-        if GeneralSnapshot::of(data) == before {
+        if GeneralSnapshot::of_step(data, owns_rules) == before {
             return false;
         }
         // An open run follows a recorded step, so no redo step exists to cut.
@@ -290,10 +364,50 @@ impl ProjectGeneralHistory {
         data: &mut ProjectData,
         command: &ProjectSectionCommand,
     ) -> Result<bool, signex_types::project::VariantProblem> {
+        self.apply_step(data, |data| command.apply(data))
+    }
+
+    /// Apply one Requirements edit (#2339) as an undo step of its own, like
+    /// [`Self::apply_section`].
+    pub fn apply_requirement(
+        &mut self,
+        data: &mut ProjectData,
+        command: &ProjectRequirementCommand,
+    ) -> Result<bool, signex_types::project::RequirementProblem> {
+        self.apply_step(data, |data| command.apply(data))
+    }
+
+    /// Apply one rails edit (#2943) as an undo step of its own, like
+    /// [`Self::apply_section`].
+    pub fn apply_rail(
+        &mut self,
+        data: &mut ProjectData,
+        command: &ProjectRailCommand,
+    ) -> Result<bool, signex_types::project::RailProblem> {
+        self.apply_step(data, |data| command.apply(data))
+    }
+
+    /// Apply one BOM alternates edit (#2938) as an undo step of its own,
+    /// like [`Self::apply_section`].
+    pub fn apply_bom_alternate(
+        &mut self,
+        data: &mut ProjectData,
+        command: &ProjectBomCommand,
+    ) -> Result<bool, signex_types::project::BomAlternateProblem> {
+        self.apply_step(data, |data| command.apply(data))
+    }
+
+    /// Run `edit` as a step of its own: recorded when a field changed,
+    /// nothing recorded when it changed nothing or was refused.
+    fn apply_step<E>(
+        &mut self,
+        data: &mut ProjectData,
+        edit: impl FnOnce(&mut ProjectData) -> Result<(), E>,
+    ) -> Result<bool, E> {
         let before = GeneralSnapshot::of(data);
         self.run_open = false;
         self.run_field = None;
-        command.apply(data)?;
+        edit(data)?;
         if GeneralSnapshot::of(data) == before {
             return Ok(false);
         }
@@ -312,7 +426,8 @@ impl ProjectGeneralHistory {
         let Some(previous) = self.history.begin_step(true) else {
             return false;
         };
-        self.history.finish_step(GeneralSnapshot::of(data), true);
+        let current = GeneralSnapshot::of_step(data, previous.rules.is_some());
+        self.history.finish_step(current, true);
         previous.restore(data);
         true
     }
@@ -323,7 +438,8 @@ impl ProjectGeneralHistory {
         let Some(next) = self.history.begin_step(false) else {
             return false;
         };
-        self.history.finish_step(GeneralSnapshot::of(data), false);
+        let current = GeneralSnapshot::of_step(data, next.rules.is_some());
+        self.history.finish_step(current, false);
         next.restore(data);
         true
     }
@@ -335,9 +451,19 @@ impl ProjectGeneralHistory {
     pub fn can_redo(&self) -> bool {
         self.history.can_redo()
     }
+
+    /// Position in the edit timeline, counting steps the depth cap dropped:
+    /// an edit or a redo raises it, an undo lowers it.
+    pub fn position(&self) -> usize {
+        self.history.position()
+    }
 }
 
+#[cfg(test)]
+mod bom_alternate_tests;
 #[cfg(test)]
 mod section_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod variant_tests;

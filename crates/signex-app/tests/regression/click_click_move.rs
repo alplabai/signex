@@ -43,9 +43,12 @@ pub(super) fn app_with_wires(wires: Vec<Wire>) -> (Signex, PathBuf) {
         drawings: Vec::new(),
         no_erc_directives: Vec::new(),
         directives: Vec::new(),
+        harness: Default::default(),
+        unions: Vec::new(),
         title_block: HashMap::new(),
         text_widths: Default::default(),
         text_extents: Default::default(),
+        variables: Default::default(),
         lib_symbols: Default::default(),
         net_colors: HashMap::new(),
         drawing_placements: Default::default(),
@@ -64,7 +67,6 @@ pub(super) fn app_with_wires(wires: Vec<Wire>) -> (Signex, PathBuf) {
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "click-click-move".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });
@@ -284,7 +286,6 @@ fn switching_tabs_cancels_an_armed_or_floating_move() {
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "b".to_string(),
         path: other,
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });
@@ -431,17 +432,27 @@ fn deliver(
             trackpad_pan: false,
             wheel_mode: Default::default(),
             corner_rule: Default::default(),
+            drag_wiring: Default::default(),
             current_tool: signex_app::app::Tool::Select,
             window_width: 1400.0,
             wire_color_overrides: &overrides,
             wire_class_styles: &class_styles,
             wire_class_revision: 0,
             schematic_defaults: Default::default(),
+            designator_standard: None,
             selection_filters: &app.interaction_state.selection_filters,
             placement: with_ghost
                 .then(|| app.interaction_state.placement.as_ref().map(|s| &s.ghost))
                 .flatten(),
             power_port_pending: false,
+            swallow_right_release: false,
+            unions: signex_app::schematic_runtime::unions::UnionView {
+                hidden: &[],
+                ink: signex_app::schematic_runtime::unions::UnionInk::from_tokens(
+                    &signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight),
+                ),
+            },
+            notebook_badges: Default::default(),
             device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
         };
         let view = SchematicCanvas::new(app.interaction_state.active_canvas(), prefs);

@@ -203,11 +203,19 @@ fn a_guide_pulls_a_move_while_guides_are_on() {
     assert!(near(moved, 15.24, 20.32), "{moved:?}");
 }
 
+/// Caner, 2026-11-24 (#2879): Axes starts on, and every supported object
+/// does; Pad Centers alone is kept here so the pad's centre, not one of its
+/// corners, is what lines up.
 #[test]
 fn axes_line_a_move_up_with_a_pad_in_range() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_with_board(dir.path());
-    panel(&mut app, PcbBoardMsg::SnapToAxesToggled);
+    assert!(app.ui_state.pcb_snap.to_axes, "Axes starts on");
+    for object in signex_engine::pcb::snap::SnapObject::DEFAULT_ON {
+        if object != signex_engine::pcb::snap::SnapObject::PadCenters {
+            panel(&mut app, PcbBoardMsg::SnapObjectToggled(object));
+        }
+    }
     type_in(&mut app, BoardField::AxisRange, "15");
     assert_eq!(app.ui_state.pcb_snap.axis_range_mm, 15.0);
     // U2's pad is at (30, 30): 0.4 mm off its column, 10 mm away.
@@ -218,6 +226,23 @@ fn axes_line_a_move_up_with_a_pad_in_range() {
     panel(&mut app, PcbBoardMsg::SnapToAxesToggled);
     let moved = move_u1_to(&mut app, &path, 30.4, 20.0);
     assert!(near(moved, 30.48, 20.32), "{moved:?}");
+}
+
+/// Caner, 2026-11-24 (#2879): Snap Distance is a length typed in the
+/// board's unit, 1 mm by default; a value not above zero is refused.
+#[test]
+fn snap_distance_is_a_length_field() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _path) = app_with_board(dir.path());
+    assert_eq!(app.ui_state.pcb_snap.distance_mm, 1.0);
+    assert_eq!(app.ui_state.pcb_snap.axis_range_mm, 2.0);
+    type_in(&mut app, BoardField::SnapDistance, "0.25");
+    assert_eq!(app.ui_state.pcb_snap.distance_mm, 0.25);
+    type_in(&mut app, BoardField::SnapDistance, "0");
+    assert_eq!(app.ui_state.pcb_snap.distance_mm, 0.25, "refused");
+    app.ui_state.unit = signex_types::coord::Unit::Mil;
+    type_in(&mut app, BoardField::SnapDistance, "20");
+    assert!((app.ui_state.pcb_snap.distance_mm - 0.508).abs() < 1e-9);
 }
 
 #[test]
@@ -384,4 +409,40 @@ fn grid_cards_add_move_and_edit_as_undo_steps() {
     panel(&mut app, PcbBoardMsg::GridDeleted(first));
     assert_eq!(options(&app, &path).grids.len(), 1);
     assert_eq!(app.ui_state.pcb_board_panel.grid_menu, None);
+}
+
+/// 2026-11-18: a layer colour is board data: set from the Layers panel's
+/// chip, it is one undo step that marks the board changed; Reset all layer
+/// colours is another; undo brings each back.
+#[test]
+fn a_layer_colour_is_saved_with_the_board_as_an_undo_step() {
+    use crate::app::PcbViewMsg;
+    use signex_types::pcb_layer::{PcbLayer, TechnicalLayer};
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    let silk = PcbLayer::Technical(TechnicalLayer::SilkscreenTop);
+    assert_eq!(app.document_state.dirty_document_count(), 0);
+    let set = PcbViewMsg::LayerColourSet {
+        layer: silk,
+        colour: Some([255, 255, 0]),
+    };
+    let _ = app.update(Message::Dock(DockMessage::Panel(PanelMsg::PcbLayers(set))));
+    let yellow = signex_types::theme::Color::new(255, 255, 0, 0xFF);
+    assert_eq!(options(&app, &path).layer_color(silk), Some(yellow));
+    assert_eq!(app.document_state.dirty_document_count(), 1);
+    assert_eq!(
+        app.document_state.panel_ctx.pcb_layers.colour(silk),
+        iced::Color::from_rgb8(255, 255, 0),
+        "the panel reads the board's colour"
+    );
+
+    let reset = PcbViewMsg::LayerColoursReset;
+    let _ = app.update(Message::Dock(DockMessage::Panel(PanelMsg::PcbLayers(
+        reset,
+    ))));
+    assert!(options(&app, &path).layer_colors.is_empty());
+    undo(&mut app);
+    assert_eq!(options(&app, &path).layer_color(silk), Some(yellow));
+    undo(&mut app);
+    assert!(options(&app, &path).layer_colors.is_empty());
 }

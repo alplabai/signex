@@ -237,3 +237,311 @@ impl Signex {
         Some((payload, target, copied.origin))
     }
 }
+
+/// The paste-numbering rule of a Smart Paste choice.
+fn designator_rule(
+    choice: crate::smart_paste::DesignatorChoice,
+) -> crate::paste_prefs::PasteDesignators {
+    match choice {
+        crate::smart_paste::DesignatorChoice::NextFree => {
+            crate::paste_prefs::PasteDesignators::NextFree
+        }
+        crate::smart_paste::DesignatorChoice::KeepIfFree => {
+            crate::paste_prefs::PasteDesignators::KeepIfFree
+        }
+    }
+}
+
+/// A drawing's box in mm: its minimum and maximum corners.
+type PreviewBox = ((f64, f64), (f64, f64));
+
+/// The drawables of a copied fragment for the Smart Paste drawing, and
+/// their box.
+fn preview_shapes(
+    fragment: &signex_types::schematic::SchematicSheet,
+) -> (Vec<crate::smart_paste::PreviewShape>, PreviewBox) {
+    use crate::smart_paste::PreviewShape;
+    use signex_types::schematic::{SelectedItem, SelectedKind};
+    let mut shapes = Vec::new();
+    for w in &fragment.wires {
+        shapes.push(PreviewShape::Line {
+            from: (w.start.x, w.start.y),
+            to: (w.end.x, w.end.y),
+        });
+    }
+    let parts: Vec<SelectedItem> = fragment
+        .symbols
+        .iter()
+        .map(|s| SelectedItem::new(s.uuid, SelectedKind::Symbol))
+        .collect();
+    let boxes = crate::schematic_runtime::selection::selection_boxes(
+        fragment,
+        &parts,
+        &crate::schematic_runtime::Designators::new(),
+        crate::schematic_runtime::WireWidths::default(),
+    );
+    for (symbol, b) in fragment.symbols.iter().zip(boxes) {
+        let Some(b) = b else { continue };
+        let reference = if symbol.is_power {
+            symbol.value.clone()
+        } else {
+            symbol.reference.clone()
+        };
+        shapes.push(PreviewShape::Part {
+            min: (b.min_x, b.min_y),
+            max: (b.max_x, b.max_y),
+            reference,
+        });
+    }
+    for l in &fragment.labels {
+        shapes.push(PreviewShape::Label {
+            at: (l.position.x, l.position.y),
+            net: l.text.clone(),
+            power: crate::smart_paste::plan::is_power_label(l.label_type),
+        });
+    }
+    let mut lo = (f64::MAX, f64::MAX);
+    let mut hi = (f64::MIN, f64::MIN);
+    let mut grow = |x: f64, y: f64| {
+        lo = (lo.0.min(x), lo.1.min(y));
+        hi = (hi.0.max(x), hi.1.max(y));
+    };
+    for shape in &shapes {
+        match shape {
+            PreviewShape::Line { from, to } => {
+                grow(from.0, from.1);
+                grow(to.0, to.1);
+            }
+            PreviewShape::Part { min, max, .. } => {
+                grow(min.0, min.1);
+                grow(max.0, max.1);
+            }
+            PreviewShape::Label { at, .. } => grow(at.0, at.1),
+        }
+    }
+    if shapes.is_empty() {
+        return (shapes, ((0.0, 0.0), (0.0, 0.0)));
+    }
+    (shapes, (lo, hi))
+}
+
+impl Signex {
+    /// Whether Paste Special opens the Smart Paste dialog: for a person in a
+    /// window yes; for an agent (even in a window) or a headless run no, it
+    /// pastes at once, since nobody would answer the dialog.
+    pub(crate) fn smart_paste_opens_dialog(&self, request: &crate::app::PasteRequest) -> bool {
+        !request.from_agent && self.headless_answers().is_none()
+    }
+
+    /// Open the Smart Paste dialog for the copy (mockup row 155).
+    pub(crate) fn open_smart_paste(&mut self) {
+        if !self.has_active_schematic() {
+            return;
+        }
+        let Some(copied) = self.interaction_state.clipboard.as_ref() else {
+            crate::diagnostics::log_info(
+                signex_i18n::t!(
+                    self.ui_state.i18n,
+                    signex_i18n::ids::SMART_PASTE_NOTHING_COPIED
+                )
+                .into_string(),
+            );
+            return;
+        };
+        let Some(target) = self.document_state.active_path.clone() else {
+            return;
+        };
+        let grid = crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm.max(1.27));
+        let (_, ((x0, _), (x1, _))) = preview_shapes(copied.payload.fragment());
+        let step = ((x1 - x0) / grid).ceil() * grid + grid;
+        let step = if step.is_finite() && step > 0.0 {
+            step
+        } else {
+            DEFAULT_PASTE_OFFSET_MM
+        };
+        self.ui_state.smart_paste = Some(Box::new(crate::smart_paste::SmartPasteState::new(
+            target, step,
+        )));
+        self.refresh_smart_paste();
+    }
+
+    /// The dialog's derived text and drawing: the clipboard summary, the
+    /// copied nets, what Next free calls each copy, the shapes.
+    fn refresh_smart_paste(&mut self) {
+        let Some(state) = self.ui_state.smart_paste.as_deref() else {
+            return;
+        };
+        let Some(copied) = self.interaction_state.clipboard.as_ref() else {
+            return;
+        };
+        let source = copied.payload.fragment().clone();
+        let mut input = state.input().ok();
+        if let Some(input) = input.as_mut() {
+            // The mapping always shows the Next free numbers.
+            input.rewrite = None;
+        }
+        let next_free_text = input.map_or_else(String::new, |input| {
+            let combined = crate::smart_paste::plan::copies_payload(&copied.payload, &input);
+            let numbered = self
+                .paste_numbering_with(
+                    &state.target,
+                    crate::paste_prefs::PasteDesignators::NextFree,
+                )
+                .apply(&combined);
+            let mapping = crate::smart_paste::plan::designator_mapping(
+                &source,
+                numbered.fragment(),
+                input.copies,
+            );
+            crate::smart_paste::plan::mapping_text(&mapping, input.copies)
+        });
+        let summary = crate::smart_paste::ClipboardSummary {
+            parts: source
+                .symbols
+                .iter()
+                .filter(|s| !s.is_power && !s.reference.starts_with('#'))
+                .map(|s| s.reference.clone())
+                .collect(),
+            wires: source.wires.len(),
+            labels: source.labels.len(),
+        };
+        let copied_nets = crate::smart_paste::plan::copied_nets(&source);
+        // The project's names from the read made when the dialog opened, and
+        // the target sheet's as they are now.
+        let mut names_in_use = self
+            .interaction_state
+            .paste_counters
+            .as_ref()
+            .filter(|c| c.target == state.target)
+            .map(|c| c.net_names.clone())
+            .unwrap_or_default();
+        if let Some(live) = self.document_state.engines.get(&state.target) {
+            names_in_use.extend(signex_net::sheet_net_names(live.document()).map(str::to_owned));
+        }
+        let unread_sheets = self
+            .interaction_state
+            .paste_unread_sheets
+            .as_ref()
+            .filter(|(target, _)| *target == state.target)
+            .map(|(_, sheets)| sheets.clone())
+            .unwrap_or_default();
+        let (shapes, bounds) = preview_shapes(&source);
+        if let Some(state) = self.ui_state.smart_paste.as_deref_mut() {
+            state.summary = summary;
+            state.copied_nets = copied_nets;
+            state.names_in_use = names_in_use;
+            state.unread_sheets = unread_sheets;
+            state.next_free_text = next_free_text;
+            state.shapes = shapes;
+            state.bounds = bounds;
+        }
+    }
+
+    pub(crate) fn handle_smart_paste_message(
+        &mut self,
+        msg: crate::smart_paste::SmartPasteMsg,
+    ) -> Task<Message> {
+        use crate::smart_paste::SmartPasteMsg as M;
+        let target = self.ui_state.smart_paste.as_ref().map(|s| s.target.clone());
+        let moved = target
+            .as_ref()
+            .is_some_and(|t| Some(t) != self.document_state.active_path.as_ref());
+        // The dialog paints in the main window; asked from an undocked
+        // window, its events act on that window's sheet (#1910).
+        if moved
+            && let Some(window) = target
+                .as_deref()
+                .and_then(|t| self.undocked_canvas_window(t))
+        {
+            return self.run_in_window_document(window, |app| app.handle_smart_paste_message(msg));
+        }
+        if moved {
+            self.ui_state.smart_paste = None;
+            crate::diagnostics::log_info(
+                signex_i18n::t!(
+                    self.ui_state.i18n,
+                    signex_i18n::ids::SMART_PASTE_SHEET_CHANGED
+                )
+                .into_string(),
+            );
+            return self.finish_update();
+        }
+        let Some(state) = self.ui_state.smart_paste.as_deref_mut() else {
+            return self.finish_update();
+        };
+        match msg {
+            M::ModePicked(mode) => state.mode = mode,
+            M::OffsetXEdited(text) => state.offset_x = text,
+            M::OffsetYEdited(text) => state.offset_y = text,
+            M::CopiesEdited(text) => state.copies = text,
+            M::StepXEdited(text) => state.step_x = text,
+            M::StepYEdited(text) => state.step_y = text,
+            M::DesignatorsPicked(choice) => state.designators = choice,
+            M::NetsPicked(choice) => state.nets = choice,
+            M::PatternEdited(text) => state.pattern = text,
+            M::StartEdited(text) => state.start = text,
+            M::FirstCopyDragged { dx, dy } => state.set_first_offset(dx, dy),
+            M::Cancelled => {
+                self.ui_state.smart_paste = None;
+                return self.finish_update();
+            }
+            M::PasteConfirmed => {
+                self.put_smart_paste_on_cursor();
+                return self.finish_update();
+            }
+        }
+        self.refresh_smart_paste();
+        self.finish_update()
+    }
+
+    /// Paste: the copies attach to the cursor; one click places them all as
+    /// ONE undo step (the paste session's click), Esc cancels. Designators
+    /// follow the dialog's choice at that click.
+    fn put_smart_paste_on_cursor(&mut self) {
+        // The sheet may have changed since the last edit of the dialog.
+        self.refresh_smart_paste();
+        let Some(state) = self.ui_state.smart_paste.as_deref() else {
+            return;
+        };
+        let input = match state.input() {
+            Ok(input) => input,
+            Err(_) => return,
+        };
+        let taken = state.taken_names();
+        if !taken.is_empty() {
+            crate::diagnostics::log_warning(
+                signex_i18n::t!(
+                    self.ui_state.i18n,
+                    signex_i18n::ids::SMART_PASTE_NAMES_TAKEN,
+                    "names" => taken.join(", ")
+                )
+                .into_string(),
+            );
+            return;
+        }
+        let unread = state.unread_sheets_text();
+        if !unread.is_empty() {
+            crate::diagnostics::log_warning(
+                signex_i18n::t!(
+                    self.ui_state.i18n,
+                    signex_i18n::ids::SMART_PASTE_SHEET_UNREAD,
+                    "sheets" => unread
+                )
+                .into_string(),
+            );
+            return;
+        }
+        let Some((payload, target, _origin)) = self.prepared_paste() else {
+            return;
+        };
+        let copies = crate::smart_paste::plan::copies_payload(&payload, &input);
+        self.ui_state.smart_paste = None;
+        // A library read still in flight must not replace the paste on the
+        // cursor when it finishes: a paste is the newest gesture.
+        self.interaction_state.placement_epoch += 1;
+        self.arm_placement_session(copies, &target, crate::app::state::PlacementKind::Paste);
+        self.interaction_state.paste_designators_override =
+            Some(designator_rule(input.designators));
+        self.refresh_paste_ghost();
+    }
+}

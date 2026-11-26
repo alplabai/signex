@@ -122,6 +122,7 @@ fn run_erc(root: SchematicSheet, child: SchematicSheet, active: Active) -> Vec<V
         sheets: vec![entry("root.snxsch"), entry("child.snxsch")],
         variant_definitions: Vec::new(),
         active_variant: None,
+        variant_settings: Default::default(),
         libraries: Vec::new(),
         enable_git: false,
         rules: Default::default(),
@@ -130,6 +131,11 @@ fn run_erc(root: SchematicSheet, child: SchematicSheet, active: Active) -> Vec<V
         schematic_defaults: Default::default(),
         project_defaults: Default::default(),
         agent_journal: Default::default(),
+        schematic_design: Default::default(),
+        fab_outputs: None,
+        router_tool_diameter: None,
+        bom_alternates: Vec::new(),
+        requirements: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
     };
@@ -157,7 +163,6 @@ fn run_erc(root: SchematicSheet, child: SchematicSheet, active: Active) -> Vec<V
         app.document_state.tabs.push(signex_app::app::TabInfo {
             title: title.to_string(),
             path: path.clone(),
-            cached_document: None,
             project_id: Some(project),
             kind: signex_app::app::TabKind::Schematic,
         });

@@ -1,7 +1,8 @@
-//! Footprints drawn where a drag or Move is taking them (#2358). While the
+//! Objects drawn where a drag or Move is taking them (#2358): footprints,
+//! vias and a footprint's text, in their real look, with no ghost. While the
 //! carry is anchored, the board content (CPU layer and GPU scene alike) is
-//! a snapshot without the carried footprints, built once when the carry
-//! starts, and the carried footprints are a small scene of their own at the
+//! a snapshot without what is carried, built once when the carry
+//! starts, and what is carried is a small scene of its own at the
 //! carry's offset, painted by the highlight layer above both mounts. The
 //! offset moves in grid steps, so only that small scene is rebuilt, and only
 //! when a step is crossed. Their texts move with them, painted by the same
@@ -12,9 +13,9 @@ use std::collections::BTreeSet;
 
 use iced::widget::canvas;
 use iced::{Rectangle, Renderer};
-use pcb_geom::TrackEnds;
+use pcb_geom::{BoardTextField, TrackEnds};
 use signex_gfx::scene::Scene;
-use signex_renderer::pcb::{FootprintTextInput, PcbSnapshot};
+use signex_renderer::pcb::{BoardPaint, FootprintTextInput, PcbSnapshot};
 use signex_types::pcb::Point;
 use uuid::Uuid;
 
@@ -27,8 +28,12 @@ use super::{BoardCamera, PcbCanvas};
 /// A drag preview in progress on one canvas.
 #[derive(Debug, Default)]
 pub(super) struct DragPreview {
-    /// The footprints the base snapshot leaves out.
+    /// The footprints and vias the base snapshot leaves out.
     footprints: BTreeSet<Uuid>,
+    /// The one footprint text the base snapshot leaves out, for a text drag.
+    text: Option<(Uuid, BoardTextField)>,
+    /// Ctrl was held when it began: the tracks stay and `following` is empty.
+    leaves_tracks: bool,
     /// The tracks with an end on their pads, read once when the carry
     /// starts so a grid step does not search the board again (#2379).
     following: Vec<TrackEnds>,
@@ -48,11 +53,28 @@ struct MovingScene {
 }
 
 impl PcbCanvas {
-    /// Whether the board content leaves out `footprints` for a drag preview.
-    pub fn previews_drag_of(&self, footprints: &BTreeSet<Uuid>) -> bool {
+    /// Whether the board content leaves out `footprints` for a drag preview
+    /// that leaves the tracks in place or not, as `leaves_tracks` says.
+    pub fn previews_drag_of(&self, footprints: &BTreeSet<Uuid>, leaves_tracks: bool) -> bool {
+        self.drag_preview.as_ref().is_some_and(|p| {
+            p.text.is_none() && p.footprints == *footprints && p.leaves_tracks == leaves_tracks
+        })
+    }
+
+    /// Whether the board content leaves out the footprint text `text`.
+    pub fn previews_text_drag_of(&self, text: (Uuid, BoardTextField)) -> bool {
         self.drag_preview
             .as_ref()
-            .is_some_and(|p| p.footprints == *footprints)
+            .is_some_and(|p| p.text == Some(text))
+    }
+
+    /// Start a drag preview of one footprint text: the board content
+    /// becomes `base`, the board without it.
+    pub fn begin_text_drag_preview(&mut self, text: (Uuid, BoardTextField), base: PcbSnapshot) {
+        self.begin_drag_preview(BTreeSet::new(), false, Vec::new(), base);
+        if let Some(preview) = self.drag_preview.as_mut() {
+            preview.text = Some(text);
+        }
     }
 
     /// Whether a drag preview is in progress.
@@ -63,9 +85,11 @@ impl PcbCanvas {
     /// Start a drag preview of `footprints` and the `following` tracks on
     /// their pads: the board content becomes `base`, the board without
     /// them. The snapshot in place is kept for [`Self::end_drag_preview`].
+    /// `leaves_tracks`: a Ctrl drag, `following` is then empty.
     pub fn begin_drag_preview(
         &mut self,
         footprints: BTreeSet<Uuid>,
+        leaves_tracks: bool,
         following: Vec<TrackEnds>,
         base: PcbSnapshot,
     ) {
@@ -74,6 +98,8 @@ impl PcbCanvas {
         self.replace_snapshot(Some(base));
         self.drag_preview = Some(DragPreview {
             footprints,
+            text: None,
+            leaves_tracks,
             following,
             held,
             moving: None,
@@ -143,7 +169,18 @@ impl PcbCanvas {
         viewport: Rectangle,
         camera: &BoardCamera,
     ) {
-        paint_texts(frame, self.drag_preview_texts(), camera, viewport);
+        let paint = self.drag_preview_text_paint();
+        paint_texts(frame, self.drag_preview_texts(), &paint, camera, viewport);
+    }
+
+    /// The board's paint for the carried texts: the board under them may be
+    /// dimmed by Show only unrouted, what is carried never is.
+    pub(crate) fn drag_preview_text_paint(&self) -> BoardPaint {
+        self.renderer_snapshot
+            .as_ref()
+            .map(|s| s.paint.clone())
+            .unwrap_or_default()
+            .with_board_dimmed(false)
     }
 
     /// The carried footprints tessellated for a `viewport` of the highlight

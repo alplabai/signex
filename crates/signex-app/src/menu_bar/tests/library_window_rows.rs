@@ -1,4 +1,4 @@
-//! Tools ▸ Library Editor and Window ▸ Close All Documents, the rows #2247
+//! Tools ▸ Library Editor and View ▸ Window ▸ Close All Documents, the rows #2247
 //! wired from stubs.
 
 use super::*;
@@ -166,7 +166,6 @@ fn library_editor_opens_the_library_of_the_active_editor_tab() {
     app.document_state.tabs.push(TabInfo {
         title: "part".into(),
         path: symbol.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::SymbolEditor(symbol),
     });
@@ -187,14 +186,14 @@ fn library_editor_opens_the_library_of_the_active_editor_tab() {
 
 #[test]
 fn close_all_documents_is_greyed_with_no_tab() {
-    assert!(!row_is_live(&bare_app(), "Window/Close All Documents"));
+    assert!(!row_is_live(&bare_app(), "View/Window/Close All Documents"));
     assert!(row_is_live(
         &symbol_editor_app(),
-        "Window/Close All Documents"
+        "View/Window/Close All Documents"
     ));
     assert!(row_is_live(
         &loaded_board_app(),
-        "Window/Close All Documents"
+        "View/Window/Close All Documents"
     ));
 }
 
@@ -210,12 +209,11 @@ fn close_all_documents_closes_every_tab() {
     app.document_state.tabs.push(TabInfo {
         title: "symbol".into(),
         path: extra.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::SymbolEditor(extra),
     });
     assert_eq!(app.document_state.tabs.len(), 2);
-    let task = click(&mut app, "Window/Close All Documents");
+    let task = click(&mut app, "View/Window/Close All Documents");
     settle(&mut app, task);
     assert!(app.document_state.tabs.is_empty(), "every tab closed");
     assert!(app.document_state.active_engine().is_none());
@@ -230,7 +228,7 @@ fn close_all_documents_parks_a_dirty_sheet_like_the_tab_menu() {
         let path = app.document_state.active_path.clone().expect("path");
         app.document_state.mark_document_dirty(&path);
         let task = if via_menu {
-            click(&mut app, "Window/Close All Documents")
+            click(&mut app, "View/Window/Close All Documents")
         } else {
             app.update(Message::ContextMenu(crate::app::ContextMenuMsg::TabAction(
                 crate::app::TabContextAction::CloseAll,
@@ -245,4 +243,252 @@ fn close_all_documents_parks_a_dirty_sheet_like_the_tab_menu() {
     assert_eq!(menu_unsaved, tab_unsaved);
     assert_eq!(menu.tabs, 0);
     assert!(menu.dirty, "the dirty sheet is kept as a parked draft");
+}
+
+// ─── View ▸ Window ▸ Layouts (mockup row 166) ────────────────────────────────────
+
+/// The workspace-layout store of these tests: nothing reaches `prefs.json`.
+struct NoLayoutWrites;
+
+impl crate::workspace_layouts::WorkspaceLayoutsStore for NoLayoutWrites {
+    fn write(&self, _: &serde_json::Value) -> Result<(), String> {
+        Ok(())
+    }
+}
+
+/// A schematic app with no layouts of its own and no edited built-in.
+fn layouts_app() -> Signex {
+    let mut app = one_symbol_selected();
+    let layouts = &mut app.ui_state.workspace_layouts;
+    layouts.layouts = Default::default();
+    layouts.store = std::sync::Arc::new(NoLayoutWrites);
+    app
+}
+
+/// Save the arrangement on screen as `name`.
+fn save_layout_as(app: &mut Signex, name: &str) {
+    use crate::workspace_layouts::SaveLayoutMsg;
+    let _ = click(app, "View/Window/Layouts/Save Layout…");
+    let _ = app.update(SaveLayoutMsg::NameEdited(name.into()).into());
+    let _ = app.update(SaveLayoutMsg::Confirmed.into());
+}
+
+/// The labels of View ▸ Window ▸ Layouts.
+fn layouts_rows(app: &Signex) -> Vec<String> {
+    let model = menu_bar_model(&menu_context(app));
+    let submenu = |menu: &Menu, title: &str| {
+        menu.entries.iter().find_map(|entry| match entry {
+            MenuEntry::Submenu(sub) if sub.title == title => Some(sub.clone()),
+            _ => None,
+        })
+    };
+    let view = model
+        .menus
+        .iter()
+        .find(|m| m.title == "View")
+        .expect("View");
+    let window = submenu(view, "Window").expect("Window");
+    let layouts = submenu(&window, "Layouts").expect("Layouts");
+    layouts
+        .entries
+        .iter()
+        .map(|entry| match entry {
+            MenuEntry::Item(item) => item.label.clone(),
+            MenuEntry::Submenu(sub) => format!("{}>", sub.title),
+            MenuEntry::Separator => "---".to_owned(),
+        })
+        .collect()
+}
+
+#[test]
+fn a_built_in_row_arranges_the_panels_and_takes_the_check_mark() {
+    use crate::dock::PanelPosition;
+    use crate::panels::PanelKind;
+    let mut app = layouts_app();
+    assert_eq!(
+        with_row(&app, "View/Window/Layouts/Review", |row| row.checked),
+        Some(false)
+    );
+    let _ = click(&mut app, "View/Window/Layouts/Review");
+    let dock = &app.document_state.dock;
+    assert_eq!(dock.panel_kinds(PanelPosition::Right), [PanelKind::History]);
+    assert_eq!(
+        dock.panel_kinds(PanelPosition::Bottom),
+        [PanelKind::Messages, PanelKind::CommandLog]
+    );
+    assert_eq!(
+        with_row(&app, "View/Window/Layouts/Review", |row| row.checked),
+        Some(true)
+    );
+    assert_eq!(
+        with_row(&app, "View/Window/Layouts/Schematic", |row| row.checked),
+        Some(false)
+    );
+}
+
+#[test]
+fn save_and_manage_rows_open_their_dialogs() {
+    let mut app = layouts_app();
+    let _ = click(&mut app, "View/Window/Layouts/Save Layout…");
+    assert!(probe(&app).save_layout);
+    let mut app = layouts_app();
+    let _ = click(&mut app, "View/Window/Layouts/Manage Layouts…");
+    assert!(probe(&app).manage_layouts);
+}
+
+#[test]
+fn your_layouts_are_listed_and_a_row_applies_its_layout() {
+    let mut app = layouts_app();
+    save_layout_as(&mut app, "Bench");
+    // Something else on screen, then back through the row.
+    let _ = click(&mut app, "View/Window/Layouts/Notebook");
+    assert_eq!(
+        layouts_rows(&app),
+        [
+            "BUILT-IN",
+            "Schematic",
+            "Layout",
+            "Review",
+            "Notebook",
+            "YOUR LAYOUTS",
+            "Bench",
+            "---",
+            "Save Layout…",
+            "Manage Layouts…",
+        ]
+    );
+    assert_eq!(
+        with_row(&app, "View/Window/Layouts/Bench", |row| row.checked),
+        Some(false)
+    );
+    let saved = app.ui_state.workspace_layouts.layouts.user()[0]
+        .dock
+        .clone()
+        .expect("panels");
+    let _ = click(&mut app, "View/Window/Layouts/Bench");
+    assert_eq!(
+        crate::dock::DockLayoutSnapshot::capture(&app.document_state.dock),
+        saved
+    );
+    assert_eq!(
+        with_row(&app, "View/Window/Layouts/Bench", |row| row.checked),
+        Some(true)
+    );
+}
+
+#[test]
+fn the_reset_row_shows_only_while_the_active_built_in_is_edited() {
+    use crate::workspace_layouts::{BuiltinLayout, LayoutId, ManageLayoutsMsg};
+    let reset = "Reset \u{201c}Schematic\u{201d}";
+    let mut app = layouts_app();
+    let _ = click(&mut app, "View/Window/Layouts/Schematic");
+    assert!(!layouts_rows(&app).iter().any(|row| row == reset));
+    let _ = app.update(ManageLayoutsMsg::Requested.into());
+    let _ = app
+        .update(ManageLayoutsMsg::RowSelected(LayoutId::Builtin(BuiltinLayout::Schematic)).into());
+    let _ = app.update(ManageLayoutsMsg::UpdateFromCurrentRequested.into());
+    assert_eq!(layouts_rows(&app).last().map(String::as_str), Some(reset));
+    let _ = click(&mut app, &format!("View/Window/Layouts/{reset}"));
+    assert!(!layouts_rows(&app).iter().any(|row| row == reset));
+    assert!(
+        !app.ui_state
+            .workspace_layouts
+            .layouts
+            .is_edited(BuiltinLayout::Schematic)
+    );
+}
+
+/// 2026-11-20 decision: BUILT-IN and YOUR LAYOUTS are header captions, not
+/// greyed rows. A header is neither a live row nor a disabled one, carries no
+/// command or check mark, and a click on it has no message to send.
+#[test]
+fn the_layout_group_captions_are_headers() {
+    let mut app = layouts_app();
+    save_layout_as(&mut app, "Bench");
+    for caption in ["BUILT-IN", "YOUR LAYOUTS"] {
+        let path = format!("View/Window/Layouts/{caption}");
+        with_row(&app, &path, |row| {
+            assert!(row.is_header(), "{path}");
+            assert!(matches!(row.state, ItemState::Header), "{path}");
+            assert!(!row.is_enabled(), "{path}");
+            assert!(row.dispatches().is_none(), "{path}");
+            assert!(row.shortcut.is_none(), "{path}");
+            assert_eq!(row.checked, None, "{path}");
+        });
+    }
+}
+
+/// The two captions are the only headers in the bar, so every other row,
+/// live or greyed, stays a command row.
+#[test]
+fn only_the_layout_captions_are_headers() {
+    fn headers(menu: &Menu, parent: &str, out: &mut Vec<String>) {
+        for entry in &menu.entries {
+            match entry {
+                MenuEntry::Item(item) if item.is_header() => {
+                    out.push(format!("{parent}/{}", item.label));
+                }
+                MenuEntry::Submenu(sub) => headers(sub, &format!("{parent}/{}", sub.title), out),
+                MenuEntry::Item(_) | MenuEntry::Separator => {}
+            }
+        }
+    }
+    let mut app = layouts_app();
+    save_layout_as(&mut app, "Bench");
+    let mut found = Vec::new();
+    for menu in &menu_bar_model(&menu_context(&app)).menus {
+        headers(menu, &menu.title, &mut found);
+    }
+    assert_eq!(
+        found,
+        [
+            "View/Window/Layouts/BUILT-IN",
+            "View/Window/Layouts/YOUR LAYOUTS"
+        ]
+    );
+}
+
+/// Mockup row 166: Save Layout… draws the save glyph and Reset the undo glyph in
+/// the check column; every other row of the bar keeps that column for its
+/// check mark alone.
+#[test]
+fn save_layout_and_reset_are_the_rows_with_an_icon() {
+    use crate::menu_bar::model::MenuIcon;
+    use crate::workspace_layouts::{BuiltinLayout, LayoutId, ManageLayoutsMsg};
+    fn icons(menu: &Menu, parent: &str, out: &mut Vec<(String, MenuIcon)>) {
+        for entry in &menu.entries {
+            match entry {
+                MenuEntry::Item(item) => {
+                    if let Some(icon) = item.icon {
+                        out.push((format!("{parent}/{}", item.label), icon));
+                    }
+                }
+                MenuEntry::Submenu(sub) => icons(sub, &format!("{parent}/{}", sub.title), out),
+                MenuEntry::Separator => {}
+            }
+        }
+    }
+    let mut app = layouts_app();
+    let _ = click(&mut app, "View/Window/Layouts/Schematic");
+    let _ = app.update(ManageLayoutsMsg::Requested.into());
+    let _ = app
+        .update(ManageLayoutsMsg::RowSelected(LayoutId::Builtin(BuiltinLayout::Schematic)).into());
+    let _ = app.update(ManageLayoutsMsg::UpdateFromCurrentRequested.into());
+    let mut found = Vec::new();
+    for menu in &menu_bar_model(&menu_context(&app)).menus {
+        icons(menu, &menu.title, &mut found);
+    }
+    assert_eq!(
+        found,
+        [
+            (
+                "View/Window/Layouts/Save Layout…".to_owned(),
+                MenuIcon::Save
+            ),
+            (
+                "View/Window/Layouts/Reset \u{201c}Schematic\u{201d}".to_owned(),
+                MenuIcon::Reset
+            ),
+        ]
+    );
 }

@@ -5,8 +5,8 @@
 use super::snapshot::{ArcStroke, push_arc};
 use super::*;
 use signex_types::schematic::{
-    LibSymbol, PinLabelKind, SCHEMATIC_TEXT_MM, SchematicDefaults, SymbolPrimitive, arc_polyline,
-    lower_pin_labels, lower_placed_symbol, primitives_bounds, primitives_bounds_in,
+    BodyFillShape, LibSymbol, PinLabelKind, SCHEMATIC_TEXT_MM, SchematicDefaults, SymbolPrimitive,
+    arc_polyline, lower_pin_labels, lower_placed_symbol, primitives_bounds, primitives_bounds_in,
 };
 
 /// Half extents of the box a symbol gets when its library graphics are
@@ -202,6 +202,42 @@ pub(super) fn push_fallback_box(
     });
 }
 
+/// `color` greyed toward `paper`, as a not-fitted part draws (#1294); the
+/// rule is `signex_types::schematic::greyed_ink`, the export's too.
+pub(super) fn not_fitted_ink(color: Color, paper: Color) -> Color {
+    let [r, g, b] = signex_types::schematic::greyed_ink(
+        [color.r, color.g, color.b],
+        [paper.r, paper.g, paper.b],
+    );
+    Color { r, g, b, ..color }
+}
+
+/// The cross over a not-fitted part's body (#1294), in `color`, at the
+/// export's width. Nothing for a symbol that draws no body.
+pub(super) fn push_not_fitted_cross(
+    lib: Option<&LibSymbol>,
+    symbol: &Symbol,
+    color: Color,
+    style: &SymbolStyle,
+    sink: &mut SymbolSink<'_>,
+) {
+    let Some(strokes) = lib.and_then(|lib| signex_types::schematic::not_fitted_cross(lib, symbol))
+    else {
+        return;
+    };
+    let width_mm =
+        style.stroke_mm(0.0) * signex_types::schematic::NOT_FITTED_CROSS_WIDTH_SCALE as f32;
+    for (i, (p0, p1)) in strokes.into_iter().enumerate() {
+        sink.wires.push(WireInput {
+            id: style.id.wrapping_add(i as u64),
+            p0: [p0.x as f32, p0.y as f32],
+            p1: [p1.x as f32, p1.y as f32],
+            width_mm,
+            explicit_color: Some(to_rgba(color)),
+        });
+    }
+}
+
 /// Colours the pin text of one symbol draws in.
 pub(super) struct PinTextStyle {
     pub name: Color,
@@ -238,6 +274,30 @@ pub(super) fn pin_text_inputs(
             v_align: label.v_align,
         })
         .collect()
+}
+
+/// The default body fill of one symbol (`signex_types::schematic::
+/// default_body_fill_shapes`), fill only. Pushed before the symbol's
+/// primitives, so the fill sits under its outline, pins and text.
+pub(super) fn push_body_fills(
+    shapes: &[BodyFillShape],
+    color: Color,
+    polygons: &mut Vec<PolygonInput>,
+) {
+    let fill_color = to_rgba(color);
+    polygons.extend(shapes.iter().map(|shape| PolygonInput {
+        vertices: match shape {
+            BodyFillShape::Polygon(points) => {
+                points.iter().map(|p| [p.x as f32, p.y as f32]).collect()
+            }
+            BodyFillShape::Circle { center, radius } => {
+                circle_vertices([center.x, center.y], *radius as f32, 40)
+            }
+        },
+        fill_color,
+        stroke_color: None,
+        stroke_width_mm: 0.0,
+    }));
 }
 
 pub(super) fn push_primitives(

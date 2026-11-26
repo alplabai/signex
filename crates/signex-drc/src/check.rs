@@ -8,24 +8,57 @@ use signex_types::pcb::PcbBoard;
 use signex_types::pcb_free::free_pad_frame;
 
 use pcb_geom::{
-    BoardIndex, CopperItem, IndexedItem, ItemRef, PointNm, collect_copper, pad_pieces, ratsnest,
-    via_pieces,
+    BoardIndex, CopperItem, IndexedItem, ItemRef, PointNm, collect_copper, no_net_copper,
+    pad_pieces, ratsnest, via_pieces,
 };
 
 use super::{DrcReport, DrcRules, Violation, ViolationKind};
 
-/// Check `board` against `rules`.
+/// Check `board` against `rules`, each part's 3D body taken from its stored
+/// height alone (no library model).
 pub fn run(board: &PcbBoard, rules: &DrcRules) -> DrcReport {
+    run_with_bodies(board, rules, &crate::BodyModels::new())
+}
+
+/// Check `board` against `rules`, the parts' 3D bodies read from `models`
+/// (the library models of the footprints they came from, #2939).
+pub fn run_with_bodies(
+    board: &PcbBoard,
+    rules: &DrcRules,
+    models: &crate::BodyModels,
+) -> DrcReport {
     let items = per_layer_sizes(board, collect_copper(board));
+    let no_net = per_layer_sizes(board, no_net_copper(board));
     let index = BoardIndex::build(board);
-    let mut violations = copper_pairs(&items, &index, rules);
+    let mut violations = copper_pairs(&items, &no_net, &index, rules);
     violations.extend(unconnected(board, &items));
     let keepouts = super::keepout::check(board);
     violations.extend(keepouts.violations);
     violations.extend(super::limits::violations(board, rules));
+    violations.extend(super::holes::violations(board, rules));
+    violations.extend(super::edge::violations(board, rules));
+    violations.extend(super::silk::violations(board, rules));
+    violations.extend(super::mask::violations(board, rules));
+    violations.extend(super::courtyard::violations(board, rules));
+    let (outside_rooms, unmeasured) = super::rooms::violations(board);
+    violations.extend(outside_rooms);
+    let bodies = super::bodies::violations(board, rules, models);
+    violations.extend(bodies.violations);
     violations.sort_unstable();
     let mut skipped = index.rejected().to_vec();
     skipped.extend(keepouts.bodies);
+    // A body the keepout check could not convert either is listed once.
+    let unlisted: Vec<_> = unmeasured
+        .into_iter()
+        .filter(|r| !skipped.iter().any(|s| s.item == r.item))
+        .collect();
+    skipped.extend(unlisted);
+    // So is a part whose 3D body did not convert (#2939).
+    for rejected in bodies.rejected {
+        if !skipped.iter().any(|s| s.item == rejected.item) {
+            skipped.push(rejected);
+        }
+    }
     DrcReport {
         rules: rules.clone(),
         violations,
@@ -76,8 +109,17 @@ fn per_layer_sizes(board: &PcbBoard, items: Vec<CopperItem>) -> Vec<CopperItem> 
     out
 }
 
-/// Shorts and clearance violations between copper of different nets.
-fn copper_pairs(items: &[CopperItem], index: &BoardIndex, rules: &DrcRules) -> Vec<Violation> {
+/// Shorts and clearance violations between copper of different nets:
+/// between the netted `items`, and between each piece of `no_net` copper
+/// (pads, tracks, arcs and vias of net 0, drawings and strings on copper;
+/// #2883, #2515) and the netted items. Two pieces of no net are never a
+/// pair.
+fn copper_pairs(
+    items: &[CopperItem],
+    no_net: &[CopperItem],
+    index: &BoardIndex,
+    rules: &DrcRules,
+) -> Vec<Violation> {
     // Every copy of an identity, in list order: an arc's chords share one
     // (#2373), and the index holds each of them.
     let mut slots: HashMap<ItemRef, Vec<usize>> = HashMap::new();
@@ -85,9 +127,7 @@ fn copper_pairs(items: &[CopperItem], index: &BoardIndex, rules: &DrcRules) -> V
         slots.entry(c.item).or_default().push(i);
     }
     let mut seen: HashSet<(usize, usize)> = HashSet::new();
-    // One finding per pair of items, the worst of their parts' findings.
-    let mut found: Vec<Violation> = Vec::new();
-    let mut by_items: HashMap<Vec<ItemRef>, usize> = HashMap::new();
+    let mut found = Findings::default();
     for (i, a) in items.iter().enumerate() {
         let near = a.shape.aabb().inflate(rules.reach_of(a.net));
         for hit in index.bounds_meeting(&near) {
@@ -98,20 +138,74 @@ fn copper_pairs(items: &[CopperItem], index: &BoardIndex, rules: &DrcRules) -> V
             if !seen.insert((i.min(j), i.max(j))) {
                 continue;
             }
-            let Some(v) = check_pair(a, &items[j], rules) else {
-                continue;
-            };
-            match by_items.get(&v.items) {
-                Some(&k) if is_worse(&v, &found[k]) => found[k] = v,
-                Some(_) => {}
-                None => {
-                    by_items.insert(v.items.clone(), found.len());
-                    found.push(v);
-                }
+            found.keep(check_pair(a, &items[j], rules));
+        }
+    }
+    // Each piece of no net looks for the netted copper as far as any net's
+    // rule reaches, and takes every per-layer copy of what it finds; index
+    // hits on copper of no net have no slot and are passed over.
+    let reach = items
+        .iter()
+        .map(|c| c.net)
+        .chain([0])
+        .collect::<HashSet<u32>>()
+        .into_iter()
+        .map(|net| rules.reach_of(net))
+        .max()
+        .unwrap_or(0);
+    for a in no_net {
+        let near = a.shape.aabb().inflate(reach);
+        for hit in index.bounds_meeting(&near) {
+            for j in copies_of(&slots, items, hit) {
+                found.keep(check_pair(a, &items[j], rules));
             }
         }
     }
-    found
+    found.found
+}
+
+/// One finding per pair of items, the worst of their parts' findings.
+#[derive(Default)]
+struct Findings {
+    found: Vec<Violation>,
+    by_items: HashMap<Vec<ItemRef>, usize>,
+}
+
+impl Findings {
+    fn keep(&mut self, v: Option<Violation>) {
+        let Some(v) = v else {
+            return;
+        };
+        match self.by_items.get(&v.items) {
+            Some(&k) if is_worse(&v, &self.found[k]) => self.found[k] = v,
+            Some(_) => {}
+            None => {
+                self.by_items.insert(v.items.clone(), self.found.len());
+                self.found.push(v);
+            }
+        }
+    }
+}
+
+/// Every copper list entry the index entry `hit` stands for: for an item
+/// held as several parts, the part of its shape; else every per-layer copy.
+fn copies_of(
+    slots: &HashMap<ItemRef, Vec<usize>>,
+    items: &[CopperItem],
+    hit: &IndexedItem,
+) -> Vec<usize> {
+    let Some(copies) = slots.get(&hit.item) else {
+        return Vec::new();
+    };
+    if hit.item.is_multi_part() {
+        copies
+            .iter()
+            .copied()
+            .filter(|&j| items[j].shape == hit.shape)
+            .collect()
+    } else {
+        copies.clone()
+    }
 }
 
 /// The copper list entry the index entry `hit` is: the first copy of its

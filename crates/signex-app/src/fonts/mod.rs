@@ -27,7 +27,7 @@ use signex_types::coord::Unit;
 use signex_types::theme::ThemeId;
 
 /// Default UI font family name. Used when no preference file is found.
-pub const DEFAULT_UI_FONT: &str = "Inter";
+pub const DEFAULT_UI_FONT: &str = signex_widgets::ui_font::DEFAULT_FAMILY;
 
 /// Bundled monospace family for chrome-only mono text (shortcuts, values).
 /// Not a canvas font: `signex_types::font::BUNDLED_DEFAULT_FAMILY` stays Iosevka.
@@ -103,16 +103,7 @@ pub const DEFAULT_COMPONENT_CLASSES: &[(&str, &str)] = &[
     ("generic", "Generic"),
 ];
 
-/// One entry in the user's component-class list. Persisted as a JSON
-/// object `{ "key": "...", "label": "..." }` inside the
-/// `component_classes` array in `prefs.json`. `key` is the canonical
-/// machine identifier stored on `ComponentRow.class`; `label` is the
-/// human-readable name surfaced in pickers.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct ComponentClassEntry {
-    pub key: String,
-    pub label: String,
-}
+pub use crate::app::core::component_class::ComponentClassEntry;
 
 /// Materialise the seed list as owned `ComponentClassEntry` values.
 pub fn default_component_classes() -> Vec<ComponentClassEntry> {
@@ -758,11 +749,13 @@ pub fn write_symbol_pin_selection_pref(mode: PinSelectionMode) {
     })
 }
 
+mod board_views;
 pub mod bundled;
 pub mod catalog;
 mod dock_layout;
 pub mod document_report;
 mod erc;
+mod extension_prefs;
 mod fast_grids;
 mod language;
 mod layer_strip;
@@ -797,8 +790,10 @@ pub use prefs_file::{
     move_prefs_file_aside_at, prefs_file_path,
 };
 
+pub use board_views::*;
 pub use dock_layout::*;
 pub use erc::*;
+pub use extension_prefs::*;
 pub use fast_grids::*;
 pub use language::*;
 pub use layer_strip::*;
@@ -944,8 +939,11 @@ mod designator_standard_tests {
         for (key, _) in DEFAULT_COMPONENT_CLASSES {
             for standard in DesignatorStandard::ALL {
                 let letters = class_prefix(standard, key);
-                let unnamed = *key == "generic"
-                    || (standard == DesignatorStandard::Iec81346_2 && IEC_UNNAMED.contains(key));
+                let iec = matches!(
+                    standard,
+                    DesignatorStandard::Iec81346_2 | DesignatorStandard::Iec81346_2Full
+                );
+                let unnamed = *key == "generic" || (iec && IEC_UNNAMED.contains(key));
                 if unnamed {
                     assert_eq!(letters, None, "{key} under {standard}");
                 } else {

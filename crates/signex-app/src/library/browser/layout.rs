@@ -4,7 +4,7 @@
 //! width per slot. The header and every body row read the same width from
 //! here, so the cells line up and never overlap.
 
-use super::columns::{ColumnKind, GridColumn};
+use super::columns::{ColumnKind, GridColumn, same_key};
 use super::look::LIFECYCLE_PILL_W;
 
 /// Horizontal padding inside a text cell, each side.
@@ -32,39 +32,54 @@ impl Slot<'_> {
     }
 }
 
-/// Position of a column in the Graphite order (Internal PN, Description,
-/// Value, Footprint, Manufacturer, MPN, Rev, Symbol, ..., Lifecycle, Updated).
+/// Position of a column in the Graphite order (mockup row 118): Internal
+/// PN, the Sym and Fpt status columns, Value, MPN, Manufacturer,
+/// Description, Lifecycle, Price, Updated, then the other parameters and
+/// Tags.
 fn graphite_rank(kind: &ColumnKind) -> u8 {
     match kind {
         ColumnKind::InternalPn => 0,
-        ColumnKind::Description => 1,
-        ColumnKind::Parameter(k) if k == "value" => 2,
-        ColumnKind::Footprint => 3,
-        ColumnKind::Manufacturer => 4,
-        ColumnKind::Mpn => 5,
-        ColumnKind::Rev => 6,
-        ColumnKind::Symbol => 7,
-        ColumnKind::Price => 8,
+        ColumnKind::Symbol => 1,
+        ColumnKind::Footprint => 2,
+        ColumnKind::Parameter(k) if same_key(k, "value") => 3,
+        ColumnKind::Mpn => 4,
+        ColumnKind::Manufacturer => 5,
+        ColumnKind::Description => 6,
+        ColumnKind::Rev => 7,
+        ColumnKind::Price => 9,
+        ColumnKind::Updated => 10,
         // Other parametric columns and tags follow Updated: the pill and the
         // date stay in view.
-        ColumnKind::Parameter(_) => 13,
-        ColumnKind::Tags => 14,
-        ColumnKind::Updated => 12,
+        ColumnKind::Parameter(_) => 11,
+        ColumnKind::Tags => 12,
     }
 }
 
-/// The mock's column set and widths: Rev and Symbol are shown in the preview
-/// pane instead, and the rest are compact so the pill and Updated are in view.
-pub(super) fn graphite_columns(columns: &[GridColumn]) -> Vec<GridColumn> {
+/// Width of the narrow Sym and Fpt status columns: room for the header and
+/// the amber dot.
+pub(super) const STATUS_COL_W: f32 = 40.0;
+
+/// Widest the Description column gets; a longer text ends in an ellipsis
+/// and shows whole in its tooltip.
+pub(super) const DESCRIPTION_MAX_W: f32 = 200.0;
+
+/// The mock's column set and widths: the columns `shown` keeps (the column
+/// chooser's choice; Rev and Tags start off, mockup row 118) and always the
+/// Internal PN. Symbol and Footprint are narrow status columns, and the
+/// rest are compact so the pill and Updated are in view.
+pub(super) fn graphite_columns(
+    columns: &[GridColumn],
+    shown: impl Fn(&ColumnKind) -> bool,
+) -> Vec<GridColumn> {
     columns
         .iter()
-        .filter(|c| !matches!(c.kind, ColumnKind::Rev | ColumnKind::Symbol))
+        .filter(|c| matches!(c.kind, ColumnKind::InternalPn) || shown(&c.kind))
         .map(|c| {
             let width = match &c.kind {
                 ColumnKind::InternalPn => 140.0,
-                ColumnKind::Description => 150.0,
-                ColumnKind::Parameter(k) if k == "value" => 64.0,
-                ColumnKind::Footprint => 124.0,
+                ColumnKind::Symbol | ColumnKind::Footprint => STATUS_COL_W,
+                ColumnKind::Description => DESCRIPTION_MAX_W,
+                ColumnKind::Parameter(k) if same_key(k, "value") => 64.0,
                 ColumnKind::Manufacturer | ColumnKind::Mpn => 96.0,
                 ColumnKind::Updated => 84.0,
                 _ => c.width.min(96.0),
@@ -74,8 +89,8 @@ pub(super) fn graphite_columns(columns: &[GridColumn]) -> Vec<GridColumn> {
         .collect()
 }
 
-/// Rank of the Lifecycle pill: just before Updated.
-const LIFECYCLE_RANK: u8 = 11;
+/// Rank of the Lifecycle pill: after Description, before Price.
+const LIFECYCLE_RANK: u8 = 8;
 
 /// The slots to draw. Legacy themes keep the derived order and no pill
 /// column; Graphite reorders to the mock and adds the Lifecycle pill.
@@ -126,6 +141,12 @@ pub(super) fn ellipsize(text: String, width: f32, size: f32) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::library::state::LibraryBrowserState;
+
+    /// The chooser's default: every column but Rev and Tags.
+    fn by_default(kind: &ColumnKind) -> bool {
+        LibraryBrowserState::new("lib.snxlib".into()).column_shown(&kind.sort_key())
+    }
 
     fn col(kind: ColumnKind, width: f32) -> GridColumn {
         GridColumn {
@@ -178,8 +199,48 @@ mod tests {
         sorted.sort_unstable();
         assert_eq!(order, sorted);
         assert_eq!(order.first(), Some(&0));
-        assert_eq!(order.last(), Some(&12));
+        assert_eq!(order.last(), Some(&graphite_rank(&ColumnKind::Updated)));
         assert!(order.contains(&LIFECYCLE_RANK));
+        assert!(LIFECYCLE_RANK < graphite_rank(&ColumnKind::Updated));
+    }
+
+    /// Mockup row 118: Internal PN, then the narrow Sym and Fpt status columns, then
+    /// Value, MPN, Manufacturer, Description, Lifecycle and Updated; Rev
+    /// stays out of the Graphite grid by default (the preview pane shows it).
+    #[test]
+    fn the_status_columns_follow_the_internal_pn() {
+        let compact = graphite_columns(&sample(), by_default);
+        let names: Vec<String> = slots(&compact, true)
+            .iter()
+            .map(|s| match s {
+                Slot::Column(c) => match &c.kind {
+                    ColumnKind::Parameter(k) => k.clone(),
+                    other => format!("{other:?}"),
+                },
+                Slot::Lifecycle => "Lifecycle".into(),
+            })
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "InternalPn",
+                "Symbol",
+                "Footprint",
+                "value",
+                "Mpn",
+                "Manufacturer",
+                "Description",
+                "Lifecycle",
+                "Updated",
+            ]
+        );
+        for c in &compact {
+            match c.kind {
+                ColumnKind::Symbol | ColumnKind::Footprint => assert_eq!(c.width, STATUS_COL_W),
+                ColumnKind::Description => assert_eq!(c.width, DESCRIPTION_MAX_W),
+                _ => {}
+            }
+        }
     }
 
     #[test]
@@ -209,11 +270,67 @@ mod tests {
         const MONO_ADVANCE_EM: f32 = 0.6;
         let sp = crate::styles::Spacing::DEFAULT;
         let size = crate::styles::TypeScale::DEFAULT.body;
-        let pn = graphite_columns(&sample())
+        let pn = graphite_columns(&sample(), by_default)
             .into_iter()
             .find(|c| matches!(c.kind, ColumnKind::InternalPn))
             .expect("Internal PN column");
         let need = 17.0 * MONO_ADVANCE_EM * size + 2.0 * (sp.xs + CELL_PAD_X);
         assert!(pn.width >= need, "{} < {need}", pn.width);
+    }
+
+    fn kinds(columns: &[GridColumn]) -> Vec<String> {
+        columns.iter().map(|c| c.kind.sort_key()).collect()
+    }
+
+    /// Mockup row 118 (decided 2026-11-23): Rev and Tags start hidden, the
+    /// chooser turns them on, and any other column off; the Internal PN
+    /// always stays.
+    #[test]
+    fn rev_and_tags_start_hidden_and_the_chooser_turns_columns_on_and_off() {
+        let mut cols = sample();
+        cols.push(col(ColumnKind::Tags, 160.0));
+        let mut browser = LibraryBrowserState::new("lib.snxlib".into());
+        let shown = |b: &LibraryBrowserState| {
+            kinds(&graphite_columns(&cols, |k| b.column_shown(&k.sort_key())))
+        };
+        let start = shown(&browser);
+        assert!(!start.contains(&"version".to_string()), "{start:?}");
+        assert!(!start.contains(&"parameters.tags".to_string()), "{start:?}");
+        assert!(start.contains(&"mpn".to_string()), "{start:?}");
+
+        browser.toggle_column("version".into());
+        browser.toggle_column("parameters.tags".into());
+        browser.toggle_column("mpn".into());
+        browser.toggle_column("internal_pn".into());
+        let after = shown(&browser);
+        assert!(after.contains(&"version".to_string()), "{after:?}");
+        assert!(after.contains(&"parameters.tags".to_string()), "{after:?}");
+        assert!(!after.contains(&"mpn".to_string()), "{after:?}");
+        assert_eq!(after.first().map(String::as_str), Some("internal_pn"));
+
+        browser.toggle_column("version".into());
+        assert!(!shown(&browser).contains(&"version".to_string()));
+    }
+
+    /// The row spelling "Value" ranks and sizes as the Value column.
+    #[test]
+    fn a_capital_value_column_takes_the_value_place() {
+        let cols = vec![
+            col(ColumnKind::Mpn, 130.0),
+            col(ColumnKind::Parameter("Value".into()), 110.0),
+            col(ColumnKind::InternalPn, 130.0),
+        ];
+        let compact = graphite_columns(&cols, by_default);
+        let order = kinds(
+            &slots(&compact, true)
+                .iter()
+                .filter_map(|s| match s {
+                    Slot::Column(c) => Some((*c).clone()),
+                    Slot::Lifecycle => None,
+                })
+                .collect::<Vec<_>>(),
+        );
+        assert_eq!(order, ["internal_pn", "parameters.Value", "mpn"]);
+        assert!(compact.iter().any(|c| c.width == 64.0));
     }
 }

@@ -9,6 +9,11 @@ use super::*;
 use crate::app::{TabInfo, TabKind};
 use crate::find_similar::{FindSimilarMsg, SimilarScope};
 
+/// The seed line as the dialog shows it in en-US.
+fn shown(seed_label: &str) -> String {
+    crate::find_similar::shown_seed(seed_label, &signex_i18n::I18n::en_us())
+}
+
 fn part(reference: &str, value: &str, x: f64) -> Symbol {
     Symbol {
         uuid: Uuid::now_v7(),
@@ -54,7 +59,6 @@ fn app_showing(sheet: SchematicSheet) -> Signex {
     app.document_state.tabs.push(TabInfo {
         title: "find-similar".to_owned(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -109,14 +113,20 @@ fn ok_selects_every_match_on_the_sheet_and_closes_the_dialog() {
 
     let _ = app.update(find_similar_msg(FindSimilarMsg::OpenRequested { at: None }));
     let state = app.ui_state.find_similar.as_ref().expect("dialog opened");
-    assert_eq!(state.seed_label, "Symbol R1");
+    assert_eq!(shown(&state.seed_label), "Part R1");
     assert_eq!(state.scope, SimilarScope::Sheet);
+    // Kind is Same by default: every part matches, the wire does not.
+    assert_eq!(state.sheet_matches, 3, "Select 3");
 
-    // Kind is Same by default: every symbol matches.
     let _ = app.update(find_similar_msg(FindSimilarMsg::PropertySet(
         SimilarProperty::Value,
         true,
     )));
+    assert_eq!(
+        app.ui_state.find_similar.as_ref().unwrap().sheet_matches,
+        2,
+        "Select N follows the criteria"
+    );
     let _ = app.update(find_similar_msg(FindSimilarMsg::ApplyPressed));
 
     assert_eq!(selected_ids(&app), vec![ids[0], ids[1]]);
@@ -194,7 +204,7 @@ fn the_object_under_the_cursor_seeds_the_dialog() {
         at: Some((5.0, 20.0)),
     }));
     let state = app.ui_state.find_similar.as_ref().expect("dialog opened");
-    assert_eq!(state.seed_label, "Wire");
+    assert_eq!(shown(&state.seed_label), "Wire");
     let _ = app.update(find_similar_msg(FindSimilarMsg::ApplyPressed));
     assert_eq!(selected_ids(&app).len(), 2, "both wires match on kind");
     assert!(selected_ids(&app).contains(&hovered.uuid));
@@ -341,6 +351,7 @@ fn app_in_a_project(sheet: SchematicSheet) -> Signex {
             }],
             variant_definitions: Vec::new(),
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: Vec::new(),
             enable_git: false,
             net_classes: Vec::new(),
@@ -349,6 +360,11 @@ fn app_in_a_project(sheet: SchematicSheet) -> Signex {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
+            fab_outputs: None,
+            router_tool_diameter: None,
+            bom_alternates: Vec::new(),
+            requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },
@@ -387,15 +403,19 @@ fn a_search_from_a_closed_dialog_cannot_answer_the_reopened_one() {
     let mut app = app_in_a_project(sheet_of(parts, vec![]));
     let _ = crate::diagnostics::init_logging();
 
+    // Choosing Whole project starts the count; Select waits for it.
     open_project_dialog(&mut app, seed);
-    let _ = app.update(find_similar_msg(FindSimilarMsg::ApplyPressed));
     let first = app.ui_state.find_similar_generation;
     assert!(app.ui_state.find_similar.as_ref().unwrap().running);
+    let _ = app.update(find_similar_msg(FindSimilarMsg::ApplyPressed));
+    assert!(
+        app.ui_state.find_similar.is_some(),
+        "Select does nothing while counting"
+    );
 
-    // Close, reopen, search again: the new search has a new token.
+    // Close, reopen, count again: the new count has a new token.
     let _ = app.update(find_similar_msg(FindSimilarMsg::Closed));
     open_project_dialog(&mut app, seed);
-    let _ = app.update(find_similar_msg(FindSimilarMsg::ApplyPressed));
     let second = app.ui_state.find_similar_generation;
     assert_ne!(first, second);
 
@@ -404,16 +424,29 @@ fn a_search_from_a_closed_dialog_cannot_answer_the_reopened_one() {
         generation: first,
         result: project_result(7),
     }));
-    assert!(app.ui_state.find_similar.as_ref().unwrap().running);
+    let state = app.ui_state.find_similar.as_ref().unwrap();
+    assert!(state.running);
+    assert_eq!(state.other_sheet_total(), None);
     assert!(selected_ids(&app).len() <= 1, "nothing was applied");
 
-    // The new one lands.
+    // The new one lands in the dialog as a count, selecting nothing yet.
     let _ = app.update(find_similar_msg(FindSimilarMsg::ProjectSearched {
         generation: second,
         result: project_result(3),
     }));
+    let state = app.ui_state.find_similar.as_ref().expect("still open");
+    assert!(!state.running);
+    assert_eq!(state.other_sheet_total(), Some(3), "3 more on other sheets");
+    assert_eq!(state.sheet_matches, 2, "2 on this sheet");
+
+    // Select N selects this sheet's matches and reports the others.
+    let _ = app.update(find_similar_msg(FindSimilarMsg::ApplyPressed));
     assert!(app.ui_state.find_similar.is_none());
     assert_eq!(selected_ids(&app).len(), 2);
+    assert!(crate::diagnostics::recent_entries().iter().any(|e| {
+        e.message
+            .contains("Find Similar: 3 more on 1 other sheet(s)")
+    }));
 }
 
 #[test]
@@ -441,24 +474,59 @@ fn clicking_same_twice_keeps_the_property_same() {
 }
 
 #[test]
-fn edits_are_ignored_while_a_project_search_runs() {
-    let parts = vec![part("R1", "10k", 0.0)];
+fn an_edit_during_a_count_restarts_it_for_the_new_criteria() {
+    let parts = vec![part("R1", "10k", 0.0), part("R2", "1k", 10.0)];
     let seed = symbol_item(&parts[0]);
     let mut app = app_in_a_project(sheet_of(parts, vec![]));
     open_project_dialog(&mut app, seed);
-    let _ = app.update(find_similar_msg(FindSimilarMsg::ApplyPressed));
+    let old = app.ui_state.find_similar_generation;
     assert!(app.ui_state.find_similar.as_ref().unwrap().running);
 
     let _ = app.update(find_similar_msg(FindSimilarMsg::PropertySet(
         SimilarProperty::Value,
         true,
     )));
+    let state = app.ui_state.find_similar.as_ref().unwrap();
+    assert!(state.same.contains(&SimilarProperty::Value));
+    assert_eq!(state.sheet_matches, 1, "only R1 is 10k");
+    assert!(state.running, "a new count started");
+    let new = app.ui_state.find_similar_generation;
+    assert_ne!(old, new);
+
+    // The count made for the old criteria cannot land.
+    let _ = app.update(find_similar_msg(FindSimilarMsg::ProjectSearched {
+        generation: old,
+        result: project_result(9),
+    }));
+    assert_eq!(
+        app.ui_state
+            .find_similar
+            .as_ref()
+            .unwrap()
+            .other_sheet_total(),
+        None
+    );
+
+    // Back to the current sheet: the count is dropped, Select is live.
     let _ = app.update(find_similar_msg(FindSimilarMsg::ScopeChosen(
         SimilarScope::Sheet,
     )));
     let state = app.ui_state.find_similar.as_ref().unwrap();
-    assert!(!state.same.contains(&SimilarProperty::Value));
-    assert_eq!(state.scope, SimilarScope::Project);
+    assert_eq!(state.scope, SimilarScope::Sheet);
+    assert!(!state.running);
+    let _ = app.update(find_similar_msg(FindSimilarMsg::ProjectSearched {
+        generation: new,
+        result: project_result(4),
+    }));
+    assert_eq!(
+        app.ui_state
+            .find_similar
+            .as_ref()
+            .unwrap()
+            .other_sheet_total(),
+        None,
+        "a count for the project scope does not land on the sheet scope"
+    );
 }
 
 #[test]
@@ -498,4 +566,127 @@ fn a_project_scope_outside_any_project_says_it_searched_the_sheet() {
             .any(|e| e.message.contains("Find Similar: not in a project"))
     );
     assert_eq!(selected_ids(&app).len(), 1, "the sheet was searched");
+}
+
+/// Mockup row 68: the search keeps every match on another sheet with its
+/// object, in the order the counts are kept.
+#[test]
+fn the_project_search_keeps_each_match_with_its_sheet() {
+    let other = part("R7", "10k", 0.0);
+    let id = other.uuid;
+    let pa = PathBuf::from("/p/a.snxsch");
+    let pb = PathBuf::from("/p/b.snxsch");
+    let found = run_search(SearchInputs {
+        criteria: vec![
+            SimilarValue {
+                property: SimilarProperty::Kind,
+                value: "Symbol".into(),
+            },
+            SimilarValue {
+                property: SimilarProperty::Value,
+                value: "10k".into(),
+            },
+        ],
+        open: [
+            (pa.clone(), sheet_of(vec![part("R1", "10k", 0.0)], vec![])),
+            (pb.clone(), sheet_of(vec![other], vec![])),
+        ]
+        .into_iter()
+        .collect(),
+        pages: vec![pa.clone(), pb.clone()],
+        root: pa.clone(),
+        active: Some(pa),
+        fold: crate::app::state::scope::CaseFold::host_default(),
+    });
+    assert_eq!(found.elsewhere, vec![(pb.clone(), 1)]);
+    assert_eq!(
+        found.listed,
+        vec![crate::find_similar::SimilarMatch {
+            sheet: pb,
+            item: SelectedItem::new(id, SelectedKind::Symbol),
+            described: "Symbol R7".into(),
+        }]
+    );
+}
+
+/// Mockup row 68: with Whole project, Select lists every match on another
+/// sheet in Messages, each row naming its sheet and object so Show opens it.
+#[test]
+fn select_lists_the_matches_on_other_sheets_in_messages() {
+    let parts = vec![part("R1", "10k", 0.0)];
+    let seed = symbol_item(&parts[0]);
+    let mut app = app_in_a_project(sheet_of(parts, vec![]));
+    let _ = crate::diagnostics::init_logging();
+    open_project_dialog(&mut app, seed);
+    let generation = app.ui_state.find_similar_generation;
+    let other = PathBuf::from("/w/p/other.snxsch");
+    let item = SelectedItem::new(Uuid::now_v7(), SelectedKind::Symbol);
+    let found = crate::find_similar::ProjectMatches {
+        elsewhere: vec![(other.clone(), 1)],
+        listed: vec![crate::find_similar::SimilarMatch {
+            sheet: other.clone(),
+            item,
+            described: "Symbol R9".into(),
+        }],
+        sheets_searched: 2,
+        ..Default::default()
+    };
+    let _ = app.update(find_similar_msg(FindSimilarMsg::ProjectSearched {
+        generation,
+        result: std::sync::Arc::new(Ok(found)),
+    }));
+    let _ = app.update(find_similar_msg(FindSimilarMsg::ApplyPressed));
+    let rows: Vec<_> = crate::diagnostics::recent_entries()
+        .into_iter()
+        .filter(|e| e.object == Some(item))
+        .collect();
+    assert_eq!(rows.len(), 1, "one row per match");
+    assert_eq!(rows[0].document.as_deref(), Some(other.as_path()));
+    let text = rows[0].message.replace(['\u{2068}', '\u{2069}'], "");
+    assert_eq!(text, "Find Similar: Part R9 on other.snxsch");
+}
+
+/// Mockup row 68: past the cap, the rest of the matches are one count line,
+/// so a large search does not push older lines out of Messages.
+#[test]
+fn select_lists_at_most_the_cap_and_counts_the_rest() {
+    use super::project_search::LISTED_MATCHES_CAP;
+    let parts = vec![part("R1", "10k", 0.0)];
+    let seed = symbol_item(&parts[0]);
+    let mut app = app_in_a_project(sheet_of(parts, vec![]));
+    let _ = crate::diagnostics::init_logging();
+    open_project_dialog(&mut app, seed);
+    let generation = app.ui_state.find_similar_generation;
+    let other = PathBuf::from("/w/p/other.snxsch");
+    let total = LISTED_MATCHES_CAP + 7;
+    let listed: Vec<_> = (0..total)
+        .map(|n| crate::find_similar::SimilarMatch {
+            sheet: other.clone(),
+            item: SelectedItem::new(Uuid::now_v7(), SelectedKind::Symbol),
+            described: format!("Symbol R{n}"),
+        })
+        .collect();
+    let items: Vec<_> = listed.iter().map(|m| m.item).collect();
+    let found = crate::find_similar::ProjectMatches {
+        elsewhere: vec![(other.clone(), total)],
+        listed,
+        sheets_searched: 2,
+        ..Default::default()
+    };
+    let _ = app.update(find_similar_msg(FindSimilarMsg::ProjectSearched {
+        generation,
+        result: std::sync::Arc::new(Ok(found)),
+    }));
+    let _ = app.update(find_similar_msg(FindSimilarMsg::ApplyPressed));
+    let entries = crate::diagnostics::recent_entries();
+    let rows = entries
+        .iter()
+        .filter(|e| e.object.is_some_and(|o| items.contains(&o)))
+        .count();
+    assert_eq!(rows, LISTED_MATCHES_CAP, "only the first matches get a row");
+    let left_out = entries.iter().any(|e| {
+        e.message.replace(['\u{2068}', '\u{2069}'], "")
+            == "Find Similar: 7 more on other sheets, not listed"
+    });
+    assert!(left_out, "the rest are counted on one line");
 }

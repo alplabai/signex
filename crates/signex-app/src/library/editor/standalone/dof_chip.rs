@@ -5,35 +5,45 @@
 use iced::widget::{Space, column, container, row};
 use iced::{Border, Element, Length, Widget};
 use signex_i18n::{I18n, MessageId, UserText, ids, t};
-use signex_sketch::solver::dof::DofColor;
+use signex_types::sketch::SketchHost;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 use signex_widgets::{Label, text};
 
 use crate::app::FootprintDocument;
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
+use crate::panels::SketchDof;
 use crate::styles::{PillTone, Radii, pill_colors};
 
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
+/// The last solve's DOF state, which the chip, the Sketch DOF section and
+/// its card all read (mockup row 179): its conflicts, a rejected edit, then
+/// the free motions' count. These are the row-reduction reading of the
+/// solve; the QR entity colours stay with the canvas (#2855). `None` with
+/// no sketch or no solve yet.
+pub(crate) fn sketch_dof(editor: &FootprintDocument) -> Option<SketchDof> {
+    editor.primitive().sketch.as_ref()?;
+    let solve = editor.state.last_solve.as_ref()?;
+    Some(SketchDof::of(
+        solve.over_constraints.len(),
+        !editor.state.conflict.is_empty(),
+        solve.free_motions.dof,
+    ))
+}
+
 /// What the last solve says about the sketch, or why there is nothing to say.
-fn dof_state(editor: &FootprintDocument) -> (PillTone, MessageId) {
+pub(crate) fn dof_state(editor: &FootprintDocument) -> (PillTone, MessageId) {
     if editor.primitive().sketch.is_none() {
         return (PillTone::Neutral, ids::EDITORS_SKETCH_NONE);
     }
-    let Some(solve) = editor.state.last_solve.as_ref() else {
-        return (PillTone::Neutral, ids::EDITORS_SKETCH_NOT_SOLVED);
-    };
-    let over =
-        !solve.over_constraints.is_empty() || solve.colours.values().any(|c| *c == DofColor::Over);
-    if over {
-        return (PillTone::Err, ids::EDITORS_SKETCH_OVER_CONSTRAINED);
+    match sketch_dof(editor) {
+        None => (PillTone::Neutral, ids::EDITORS_SKETCH_NOT_SOLVED),
+        Some(SketchDof::Over { .. }) => (PillTone::Err, ids::EDITORS_SKETCH_OVER_CONSTRAINED),
+        Some(SketchDof::Under { .. }) => (PillTone::Info, ids::EDITORS_SKETCH_UNDER_CONSTRAINED),
+        Some(SketchDof::Full) => (PillTone::Ok, ids::EDITORS_SKETCH_FULLY_CONSTRAINED),
     }
-    if solve.colours.values().any(|c| *c == DofColor::Under) {
-        return (PillTone::Info, ids::EDITORS_SKETCH_UNDER_CONSTRAINED);
-    }
-    (PillTone::Ok, ids::EDITORS_SKETCH_FULLY_CONSTRAINED)
 }
 
 fn pill<'a>(
@@ -77,8 +87,35 @@ fn pill<'a>(
         .boxed()
 }
 
-/// The chips floating at the canvas's top-left.
-pub fn overlay<'a>(
+/// The chips of `editor` at the left and `bar` (the footprint editor bar or
+/// a board's sketch info bar) at the right of one row under the Active
+/// Bar's band (mockup rows 179 and 187, #2882). The Active Bar can be as
+/// wide as the canvas, so nothing of this row starts inside its band, and
+/// one row cannot lay the chips and the bar over each other.
+pub fn chrome_row<'a>(
+    editor: &'a FootprintDocument,
+    tokens: &'a ThemeTokens,
+    i18n: &I18n,
+    bar: Element<'a, LibraryMessage>,
+) -> Element<'a, LibraryMessage> {
+    let line = row![
+        chips(editor, tokens, i18n),
+        Space::new().width(Length::Fill),
+        bar
+    ]
+    .spacing(SP.m);
+    container(column![
+        Space::new().height(crate::active_bar::bar_band_bottom()),
+        line
+    ])
+    .padding([0.0, SP.m])
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .boxed()
+}
+
+/// The solve-state pill above the name chip, unplaced.
+fn chips<'a>(
     editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
     i18n: &I18n,
@@ -90,7 +127,7 @@ pub fn overlay<'a>(
     let dof = pill(t!(i18n, label).into(), dot, fill, ink, line);
 
     // A board sketch has no pads: its pill names the board only (#2234).
-    let info: Label<'static> = if editor.state.board_backdrop.is_some() {
+    let info: Label<'static> = if editor.state.sketch_host() == SketchHost::Board {
         UserText::new(editor.primitive().name.as_str()).into()
     } else {
         t!(
@@ -108,11 +145,7 @@ pub fn overlay<'a>(
         theme_ext::text_secondary(tokens),
         line,
     );
-    container(column![dof, info].spacing(SP.m))
-        .padding(SP.xl)
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .boxed()
+    column![dof, info].spacing(SP.m).boxed()
 }
 
 /// Scale factor of one zoom-pill click, the symbol editor's step.
@@ -148,3 +181,7 @@ pub fn zoom_pill_overlay<'a>(
         .align_y(iced::alignment::Vertical::Bottom)
         .boxed()
 }
+
+#[cfg(test)]
+#[path = "footprint_chrome_tests.rs"]
+mod tests;

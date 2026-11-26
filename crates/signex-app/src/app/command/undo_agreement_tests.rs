@@ -54,7 +54,7 @@ fn fingerprint(app: &Signex) -> String {
     let mut symbols: Vec<_> = ds.symbol_editors.iter().collect();
     symbols.sort_by_key(|(p, _)| (*p).clone());
     for (path, e) in symbols {
-        let h = &e.history;
+        let h = &e.draft.history;
         parts.push(format!(
             "S {} {} {}",
             path.display(),
@@ -87,12 +87,8 @@ fn fingerprint(app: &Signex) -> String {
     for (project, h) in &ds.rules_history {
         parts.push(format!("P {project:?} {} {}", h.can_undo(), h.can_redo()));
     }
-    for (project, tab) in &ds.project_tabs {
-        parts.push(format!(
-            "T {project:?} {} {}",
-            tab.general_history.can_undo(),
-            tab.general_history.can_redo()
-        ));
+    for (project, h) in &ds.general_history {
+        parts.push(format!("T {project:?} {} {}", h.can_undo(), h.can_redo()));
     }
     parts.join("\n")
 }
@@ -107,13 +103,9 @@ fn ran(app: &mut Signex, window: Window, command: &str) -> (bool, CommandOutcome
 }
 
 fn push_tab(app: &mut Signex, path: &std::path::Path, kind: TabKind) {
-    app.document_state.tabs.push(TabInfo {
-        title: "doc".into(),
-        path: path.to_path_buf(),
-        cached_document: None,
-        project_id: None,
-        kind,
-    });
+    app.document_state
+        .tabs
+        .push(crate::test_adapter::boardless_tab("doc", path, kind));
     app.document_state.active_tab = app.document_state.tabs.len() - 1;
 }
 
@@ -265,7 +257,6 @@ fn undocked(stage: Stage) -> (Signex, Window) {
         TabInfo {
             title: "undocked".into(),
             path: path.clone(),
-            cached_document: None,
             project_id: None,
             kind: TabKind::Schematic,
         },
@@ -384,7 +375,6 @@ fn undocked_editor(stage: Stage, symbol_editor: bool) -> (Signex, Window) {
         TabInfo {
             title: "undocked".into(),
             path: path.clone(),
-            cached_document: None,
             project_id: None,
             kind,
         },

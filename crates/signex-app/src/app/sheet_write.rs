@@ -47,7 +47,9 @@ pub(crate) struct SheetWrite<'a> {
 struct Changed {
     path: PathBuf,
     tabless: bool,
-    invalidation: Option<crate::schematic_runtime::RenderInvalidation>,
+    /// No unsaved edits before this run.
+    clean_before: bool,
+    patch: Option<signex_engine::DocumentPatch>,
 }
 
 impl Signex {
@@ -93,6 +95,7 @@ impl Signex {
                 self.roll_back_sheet_write(write.label, group, &changed);
                 return Err(SheetWriteRefusal::NotLoaded(path));
             }
+            let clean_before = !self.document_state.is_document_dirty(&path);
             let Some(engine) = self.document_state.engines.get_mut(&path) else {
                 continue;
             };
@@ -101,9 +104,8 @@ impl Signex {
                 Ok(result) if result.changed => changed.push(Changed {
                     path,
                     tabless,
-                    invalidation: result
-                        .patch_pair
-                        .map(|pair| Self::render_invalidation_for_patch(pair.document)),
+                    clean_before,
+                    patch: result.patch_pair.map(|pair| pair.document),
                 }),
                 Ok(_) => self.drop_unchanged_tabless(&path, tabless),
                 Err(error) => {
@@ -156,22 +158,29 @@ impl Signex {
             kind,
             ..Default::default()
         };
-        let mut active_invalidation = None;
+        let (mut active_patch, mut members) = (None, Vec::new());
         for done in &changed {
             recorded.live.push(done.path.clone());
             if done.tabless {
                 recorded.parked.push(done.path.clone());
             }
+            if done.clean_before {
+                recorded.clean_before.push(done.path.clone());
+            }
             if active.as_deref() == Some(done.path.as_path()) {
-                active_invalidation = done.invalidation;
+                active_patch = done.patch;
             } else {
-                self.document_state.mark_history_edit_dirty(&done.path);
+                let patch = done.patch.unwrap_or(signex_engine::DocumentPatch::FULL);
+                members.push((done.path.clone(), patch));
             }
         }
-        self.set_undo_group_sheets(group, recorded);
-        if let Some(invalidation) = active_invalidation {
-            self.finish_schematic_mutation(invalidation, true, true);
-        }
+        let run = crate::app::state::sheet_change::SheetRun {
+            group,
+            recorded,
+            members,
+            notes_edit: false,
+        };
+        self.finish_schematic_mutation(active_patch, Some(run), true, true);
         self.refresh_panel_ctx();
     }
 }

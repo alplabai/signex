@@ -34,24 +34,24 @@ impl BarSlot {
     }
 }
 
-/// Declared width of the draw-mode pill; fits the widest label
-/// ("90°" / "45°" / "Any") at size 12 plus the 7 px side padding.
-pub(crate) const DRAW_MODE_PILL_WIDTH_PX: f32 = 42.0;
+/// Declared width of the corner-mode pill: three cells ("90°" / "45°" /
+/// "Any") at the body size inside a 2 px inset frame.
+pub(crate) const DRAW_MODE_PILL_WIDTH_PX: f32 = 96.0;
 
-/// [Filter][Move] | [Select][Align] | [Wire][Power] | [Harness][Sheet][Port][Dir] | [Text][Shapes][NetColor]
+/// Select: [Filter] | [Move][Select][Align] | Place: [Wire][Power][Harness]
+/// [Sheet][Port][Dir] | Annotate: [Text][Shapes][NetColor]
 ///
 /// "Move" opens the `Select` menu and "Select" opens `SelectMode`; the
 /// menu ids predate the button names.
-pub(crate) const SCHEMATIC_BAR_SLOTS: [BarSlot; 17] = [
+pub(crate) const SCHEMATIC_BAR_SLOTS: [BarSlot; 16] = [
     BarSlot::Trigger(ActiveBarMenu::Filter),
-    BarSlot::Trigger(ActiveBarMenu::Select),
     BarSlot::Separator,
+    BarSlot::Trigger(ActiveBarMenu::Select),
     BarSlot::Trigger(ActiveBarMenu::SelectMode),
     BarSlot::Trigger(ActiveBarMenu::Align),
     BarSlot::Separator,
     BarSlot::Trigger(ActiveBarMenu::Wiring),
     BarSlot::Trigger(ActiveBarMenu::Power),
-    BarSlot::Separator,
     BarSlot::Trigger(ActiveBarMenu::Harness),
     BarSlot::Trigger(ActiveBarMenu::SheetSymbol),
     BarSlot::Trigger(ActiveBarMenu::Port),
@@ -105,6 +105,12 @@ const BAR_TOP_MARGIN_PX: f32 = 10.0;
 /// hit-test all read this, so they cannot disagree.
 pub(crate) fn bar_top_margin() -> f32 {
     BAR_TOP_MARGIN_PX
+}
+
+/// Canvas-local y where the Graphite bar's band ends: its top margin plus
+/// its height. Canvas chrome that must never sit under the bar starts here.
+pub(crate) fn bar_band_bottom() -> f32 {
+    BAR_TOP_MARGIN_PX + bar_height_for(&Metrics::GRAPHITE)
 }
 
 /// Extra drop of the symbol editor's floating bar so it sits below the

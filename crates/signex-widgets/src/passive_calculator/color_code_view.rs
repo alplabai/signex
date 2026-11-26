@@ -1,60 +1,77 @@
-use crate::{raw, text};
-use iced::widget::{column, container, row};
-use iced::{Alignment, Background, Border, Element, Length, Widget};
-use signex_types::theme::ThemeTokens;
+//! The colour-band representations of a value: one line of bands per
+//! convention, each with its spoken description under it.
+
+use iced::widget::{Column, Row, Space, container};
+use iced::{Alignment, Background, Border, Element, Length, Theme, Widget};
+use signex_i18n::{I18n, ids, t};
 
 use super::color_code::ComponentColorCode;
 use super::domain::ComponentKind;
-use super::widgets::token_color;
+use super::look::CalculatorPalette;
+use super::widgets::{RADII, SP, TS, data};
+use crate::text;
+use crate::theme_ext::HAIRLINE;
+
+/// Size of one band, in em of the body size.
+const BAND_W_EM: f32 = 1.25;
+const BAND_H_EM: f32 = 2.0;
 
 pub fn color_code_representations<'a, Message: 'a>(
+    i18n: &I18n,
     representations: Vec<ComponentColorCode>,
     kind: ComponentKind,
-    tokens: &'a ThemeTokens,
+    palette: CalculatorPalette,
 ) -> Element<'a, Message> {
-    let representation_label = if representations.len() > 1 {
-        "Color code alternatives"
+    let heading = if representations.len() > 1 {
+        ids::PASSIVE_CALCULATOR_COLOR_CODE_ALTERNATIVES
     } else {
-        "Color code"
+        ids::PASSIVE_CALCULATOR_COLOR_CODE
     };
-    let mut color_codes = column![
-        text(raw(representation_label))
-            .size(10)
-            .color(token_color(tokens.text_secondary))
-    ]
-    .spacing(8);
+    let mut color_codes: Column<Element<'a, Message>> = Column::new()
+        .push(
+            text(t!(i18n, heading))
+                .size(TS.caption)
+                .color(palette.ink4)
+                .boxed(),
+        )
+        .spacing(SP.s);
     if representations.is_empty() {
+        let unavailable = match kind {
+            ComponentKind::Resistor => ids::PASSIVE_CALCULATOR_NO_BANDS_RESISTOR,
+            ComponentKind::Capacitor => ids::PASSIVE_CALCULATOR_NO_BANDS_CAPACITOR,
+            ComponentKind::Inductor => ids::PASSIVE_CALCULATOR_NO_BANDS_INDUCTOR,
+        };
         color_codes = color_codes.push(
-            text(raw(color_code_unavailable_label(kind)))
-                .size(11)
-                .color(token_color(tokens.text_secondary))
+            text(t!(i18n, unavailable))
+                .size(TS.caption)
+                .color(palette.ink3)
                 .boxed(),
         );
     } else {
         for representation in representations {
-            color_codes = color_codes.push(color_code_line(representation, tokens));
+            color_codes = color_codes.push(color_code_line(representation, palette));
         }
     }
-    color_codes.boxed()
+    color_codes.width(Length::Fill).boxed()
 }
 
 fn color_code_line<'a, Message: 'a>(
     code: ComponentColorCode,
-    tokens: &'a ThemeTokens,
+    palette: CalculatorPalette,
 ) -> Element<'a, Message> {
-    let accessible_label = code.accessible_label();
-    let mut bands = row![].spacing(5).align_y(Alignment::Center);
+    let description = code.accessible_label();
+    let mut bands: Row<Element<'a, Message>> = Row::new().spacing(SP.xs).align_y(Alignment::Center);
     for band in code.bands {
         bands = bands.push(
-            container(text(raw(" ")))
-                .width(20)
-                .height(30)
-                .style(move |_theme: &iced::Theme| container::Style {
+            container(Space::new())
+                .width(TS.body * BAND_W_EM)
+                .height(TS.body * BAND_H_EM)
+                .style(move |_: &Theme| container::Style {
                     background: Some(Background::Color(band.color())),
                     border: Border {
-                        width: 1.0,
-                        radius: 2.0.into(),
-                        color: iced::Color::BLACK,
+                        width: HAIRLINE,
+                        radius: (RADII.small / 3.0).into(),
+                        color: palette.ink3,
                         ..Border::default()
                     },
                     ..container::Style::default()
@@ -62,23 +79,17 @@ fn color_code_line<'a, Message: 'a>(
                 .boxed(),
         );
     }
-    bands
+    Column::new()
+        .push(bands.boxed())
+        // The band names and convention come from `color_code.rs`, which
+        // words them in English (not migrated yet).
         .push(
-            container(
-                text(raw(accessible_label))
-                    .size(11)
-                    .color(token_color(tokens.text)),
-            )
-            .width(Length::Fill)
-            .boxed(),
+            text(data(description))
+                .size(TS.caption)
+                .color(palette.ink)
+                .boxed(),
         )
+        .spacing(SP.xs)
+        .width(Length::Fill)
         .boxed()
-}
-
-fn color_code_unavailable_label(kind: ComponentKind) -> &'static str {
-    match kind {
-        ComponentKind::Resistor => "Not representable with IEC 60062 bands",
-        ComponentKind::Capacitor => "Not representable with capacitor color bands",
-        ComponentKind::Inductor => "Not representable with common µH color bands",
-    }
 }

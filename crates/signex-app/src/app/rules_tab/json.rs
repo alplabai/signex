@@ -10,7 +10,7 @@ use signex_types::pcb::PcbBoard;
 use signex_types::project::DrcRuleSet;
 use signex_types::violation::Severity;
 
-use super::RulesDomain;
+use super::grid::domain_of;
 
 /// `nm` as mm, without float noise.
 pub(crate) fn mm(nm: i64) -> f64 {
@@ -62,7 +62,7 @@ pub(crate) fn row_json(row: &RuleRow, src: &str, layer: Option<&DrcRuleSet>) -> 
         "enabled": row.enabled,
         "applied": row.applied,
         "kind": row.kind.map(|k| k.keyword()),
-        "domain": row.kind.map(|k| RulesDomain::of(k).as_str()),
+        "domain": domain_of(row).map(|d| d.as_str()),
         "scope": scope_text(&row.scope),
         "layer": row.layer,
         "pair": row.pair.as_ref().map(|[a, b]| format!("{a}-{b}")),
@@ -88,6 +88,17 @@ pub(crate) fn flag_json(flagged: &FlaggedRule) -> Value {
             to_nm,
         } => json!({ "class": class, "from_mm": mm(*from_nm), "to_mm": mm(*to_nm) }),
         RuleFlag::NoNets => json!({}),
+        RuleFlag::BelowFabFloor {
+            floor,
+            limit,
+            from_nm,
+            to_nm,
+        } => json!({
+            "floor": floor,
+            "limit": limit.as_str(),
+            "from_mm": mm(*from_nm),
+            "to_mm": mm(*to_nm),
+        }),
     };
     if let (Some(out), Value::Object(extra)) = (out.as_object_mut(), extra) {
         out.extend(extra);

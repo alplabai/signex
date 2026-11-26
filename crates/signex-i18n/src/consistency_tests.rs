@@ -377,16 +377,7 @@ fn moved_graphite_strings_of_the_third_wave_keep_their_english() {
             .replace(['\u{2068}', '\u{2069}'], "")
     };
     for (id, english) in [
-        (ids::PANELS_DRAWING_START_X, "Start X"),
-        (ids::PANELS_DRAWING_END_Y, "End Y"),
-        (ids::PANELS_DRAWING_POSITION_X, "Position X"),
-        (ids::PANELS_DRAWING_CENTER_Y, "Center Y"),
-        (ids::PANELS_DRAWING_WIDTH, "Width"),
-        (ids::PANELS_DRAWING_WIDTH_MM, "Width (mm)"),
-        (ids::PANELS_DRAWING_HEIGHT_MM, "Height (mm)"),
         (ids::PANELS_DRAWING_BORDER, "Border"),
-        (ids::PANELS_DRAWING_RADIUS, "Radius"),
-        (ids::PANELS_DRAWING_START_ANGLE, "Start Angle"),
         (ids::PANELS_DRAWING_COLOR_AUTO, "Auto"),
         (ids::EDITORS_PAD_ROTATION, "Rotation (\u{B0})"),
         (ids::EDITORS_PAD_TEMPLATE_LIBRARY, "Library"),
@@ -422,16 +413,7 @@ fn moved_graphite_strings_of_the_third_wave_keep_their_english() {
             "This symbol has no pins yet. Open the Symbol Editor to add some.",
         ),
         (ids::EDITORS_COMPONENT_PARTS_EMPTY, "No alternates yet."),
-        (ids::OVERLAY_SYMBOL_CARD_DESIGNATOR, "Designator"),
         (ids::OVERLAY_SYMBOL_CARD_LIBRARY, "Library"),
-        (
-            ids::PREFERENCES_SECTION_ANNOTATION,
-            "Schematic \u{2014} Annotation",
-        ),
-        (
-            ids::PREFERENCES_SECTION_DISTRIBUTORS,
-            "Library \u{2014} Distributor APIs",
-        ),
         (ids::LIBRARY_ROW_NO_SYMBOL, "No symbol bound"),
         (
             ids::LIBRARY_ROW_SYMBOL_ABSENT,
@@ -504,9 +486,11 @@ fn moved_dialog_button_labels_keep_their_english() {
         (ids::DIALOG_ANNOTATE_ACCEPT, "Accept Changes"),
         (ids::DIALOG_AUTOSAVE_RECOVERY_RESTORE, "Restore"),
         (ids::DIALOG_AUTOSAVE_RECOVERY_LATER, "Decide later"),
-        (ids::DIALOG_BOM_EXPORT, "Export\u{2026}"),
         (ids::DIALOG_UNSAVED_DISCARD_ALL, "Discard All"),
-        (ids::DIALOG_CREATE_CHILD_SHEET_OPEN_EXISTING, "Open it"),
+        (
+            ids::DIALOG_CREATE_CHILD_SHEET_OPEN_EXISTING,
+            "Use existing file",
+        ),
         (ids::DIALOG_CREATE_CHILD_SHEET_BROWSE, "Browse..."),
         (ids::DIALOG_CREATE_CHILD_SHEET_LATER, "Later"),
         (
@@ -531,7 +515,6 @@ fn moved_dialog_button_labels_keep_their_english() {
         ),
         (ids::DIALOG_PRINT_PREVIEW_EXPORT_PDF, "Export PDF"),
         (ids::OVERLAY_PLACEMENT_PAUSED_RESUME, "Resume Placement"),
-        (ids::PREFERENCES_RESTORE_DEFAULTS, "Restore defaults"),
         (ids::LIBRARY_CREATE_OPTIONS_CREATE, "Create Library"),
         (ids::LIBRARY_EDIT_ROW_RELOAD, "Reload"),
         (ids::LIBRARY_EDIT_ROW_KEEP_EDITING, "Keep editing"),
@@ -542,14 +525,12 @@ fn moved_dialog_button_labels_keep_their_english() {
             "Browse filesystem\u{2026}",
         ),
         (ids::LIBRARY_PRIMITIVE_PICKER_OPEN_LIBRARY, "Open library"),
-        (ids::LIBRARY_PRIMITIVE_PICKER_DONT_COPY, "Don't copy"),
         (
             ids::LIBRARY_RECOVERY_REMOVE_FROM_PROJECT,
             "Remove from project",
         ),
         (ids::LIBRARY_RECOVERY_LOCATE, "Locate\u{2026}"),
         (ids::LIBRARY_RECOVERY_RESTORE_REMOTE, "Restore from remote"),
-        (ids::LIBRARY_RECOVERY_SKIP_READ_ONLY, "Skip (read-only)"),
         (ids::LIBRARY_RECOVERY_REINIT, "Re-init (lose history)"),
         (ids::LIBRARY_RECOVERY_REMOVE_ROW, "Remove row"),
         (ids::LIBRARY_RECOVERY_REBIND, "Re-bind\u{2026}"),
@@ -595,11 +576,11 @@ fn moved_dialog_button_labels_keep_their_english() {
             english
         );
     }
-    // The re-prefix count keeps "part(s)" for one part and many.
+    // #77: the re-prefix count takes a real plural.
     for (count, english) in [
-        (1_usize, "Re-prefix 1 part(s)"),
-        (4, "Re-prefix 4 part(s)"),
-        (1156, "Re-prefix 1,156 part(s)"),
+        (1_usize, "Re-prefix 1 part"),
+        (4, "Re-prefix 4 parts"),
+        (1156, "Re-prefix 1,156 parts"),
     ] {
         assert_eq!(
             shown(

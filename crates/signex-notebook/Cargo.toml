@@ -1,0 +1,31 @@
+[package]
+name = "signex-notebook"
+description = "Design Notebook: the .snxnbk file (Typst source with a TOML header), its references, annotation blocks and typed block ids, chapter includes, Python cells (model, cache, scheduler, sandbox rules, runner trait), and the Typst compile pipeline to pages and reproducible PDF"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+# UI-free and IO-free: the caller reads the files (or hands a reader
+# closure) and passes bytes, so the panel, the notebook tab, the CLI and the
+# tests read and compile the same way (docs/NOTEBOOK_ANNOTATIONS.md).
+[dependencies]
+serde = { workspace = true }
+# The attachment manifest the bundled package reads (src/derived.rs), the
+# cell result cache file and the cell results the page reads.
+serde_json = { workspace = true }
+# The source hash a cached cell result keeps, and the PDF export's checksum
+# shown on its done card (mockup row 202).
+sha2 = { workspace = true }
+signex-types = { workspace = true }
+thiserror = { workspace = true }
+toml = { workspace = true }
+typst = { workspace = true }
+typst-assets = { workspace = true }
+typst-layout = { workspace = true }
+typst-pdf = { workspace = true }
+typst-render = { workspace = true }
+uuid = { workspace = true }
+
+[lints]
+workspace = true

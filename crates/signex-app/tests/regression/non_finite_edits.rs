@@ -41,7 +41,6 @@ fn move_app() -> Signex {
     app.document_state.tabs.push(TabInfo {
         title: "non-finite-move".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -113,7 +112,7 @@ fn a_refused_move_is_logged_to_the_messages_panel_naming_the_axis() {
 #[test]
 fn a_finite_move_still_applies_and_closes_the_dialog() {
     let mut app = move_app();
-    apply_move(&mut app, "10", "-5");
+    apply_move(&mut app, "10", "5");
     assert_eq!(position(&app), (60.0, 15.0));
     assert!(!app.ui_state.move_selection.open);
 }
@@ -216,7 +215,6 @@ fn symbol_app() -> (Signex, PathBuf) {
     app.document_state.tabs.push(TabInfo {
         title: "nf".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::SymbolEditor(path.clone()),
     });

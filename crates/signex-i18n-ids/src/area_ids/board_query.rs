@@ -28,4 +28,13 @@ define_ids! {
     BOARD_NETS_HIGHLIGHT = "board-nets-highlight";
     BOARD_NETS_SUMMARY = "board-nets-summary";
     BOARD_NETS_EMPTY = "board-nets-empty";
+    BOARD_TARGET_UNKNOWN = "board-target-unknown";
+    BOARD_KEEPOUT_MIXED = "board-keepout-mixed";
+    BOARD_COMPONENT_BOTH = "board-component-both";
+    BOARD_COMPONENT_NONE = "board-component-none";
+    BOARD_COMPONENT_MANY = "board-component-many";
+    SHEET_TARGET_UNKNOWN = "sheet-target-unknown";
+    DELETE_DOCUMENT_NOT_OPEN = "delete-document-not-open";
+    PART_HEIGHTS_NOT_A_BOARD = "part-heights-not-a-board";
+    PART_HEIGHTS_NOT_OPEN = "part-heights-not-open";
 }

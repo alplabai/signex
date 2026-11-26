@@ -50,19 +50,19 @@ fn push_undo(editor: &mut SymEditor) {
 /// Record the first event of a drag gesture.
 /// Subsequent events in the same drag are no-ops (mid_drag stays true).
 fn begin_drag_if_needed(editor: &mut SymEditor) {
-    if !editor.mid_drag {
+    if !editor.gui.mid_drag {
         push_undo(editor);
-        editor.mid_drag = true;
+        editor.gui.mid_drag = true;
     }
 }
 
 /// Mark the symbol as dirty and invalidate the canvas cache.
 fn mark_dirty(editor: &mut SymEditor) {
     editor.mark_dirty();
-    editor.canvas_cache.clear();
+    editor.gui.canvas_cache.clear();
 }
 
-/// `SymbolDocument::status_message`'s contract is "cleared on the
+/// `SymbolEditorView::status_message`'s contract is "cleared on the
 /// next successful action" — enforced centrally here, once, rather
 /// than at every individual mutation's success point. Clears for
 /// every message that represents an attempted document/selection
@@ -91,7 +91,7 @@ fn clear_stale_status_message(editor: &mut SymEditor, msg: &SymbolEditorMsg) {
             | SymbolEditorMsg::ToggleGrid
             | SymbolEditorMsg::CycleUnit
     ) {
-        editor.status_message = None;
+        editor.gui.status_message = None;
     }
 }
 
@@ -101,8 +101,8 @@ fn clear_stale_status_message(editor: &mut SymEditor, msg: &SymbolEditorMsg) {
 /// picker keyed by a now-stale graphic index can't silently reopen on
 /// an unrelated shape that happens to reuse that index.
 pub(super) fn close_pickers(editor: &mut SymEditor) {
-    editor.graphic_fill_picker = None;
-    editor.local_color_picker = None;
+    editor.gui.graphic_fill_picker = None;
+    editor.gui.local_color_picker = None;
 }
 
 /// Push a graphic onto the symbol, recording an undo snapshot first.
@@ -138,7 +138,13 @@ fn push_graphic(
 /// `apply_symbol_ui`'s `SetTool` arm for why that flush has to be
 /// synchronous rather than deferred to a later event.
 pub(super) fn commit_or_discard_polygon(editor: &mut SymEditor) {
-    let vertices = normalize_polygon_ring(std::mem::take(&mut editor.polygon_vertices));
+    // The Bezier gesture shares the stash; its clicks are never a polygon.
+    if editor.gui.tool == crate::library::editor::symbol::canvas::SymbolTool::PlaceBezier {
+        editor.gui.polygon_vertices.clear();
+        editor.gui.canvas_cache.clear();
+        return;
+    }
+    let vertices = normalize_polygon_ring(std::mem::take(&mut editor.gui.polygon_vertices));
     if vertices.len() >= 3 {
         push_graphic(
             editor,
@@ -148,8 +154,35 @@ pub(super) fn commit_or_discard_polygon(editor: &mut SymEditor) {
     } else {
         // No graphic pushed — no undo snapshot, no dirty flag; just
         // repaint so the ghost preview disappears.
-        editor.canvas_cache.clear();
+        editor.gui.canvas_cache.clear();
     }
+}
+
+/// Two arc angles this close (degrees) sweep nothing.
+const ARC_SAME_ANGLE_DEG: f64 = 1e-6;
+
+/// One click of the Bezier gesture. The fourth takes the stash and places
+/// the curve as a single undo step; four clicks on one point place nothing,
+/// as a degenerate polygon does.
+fn bezier_click(editor: &mut SymEditor, x: f64, y: f64) {
+    editor.gui.polygon_vertices.push((x, y));
+    let &[a, b, c, d] = editor.gui.polygon_vertices.as_slice() else {
+        editor.gui.canvas_cache.clear();
+        return;
+    };
+    editor.gui.polygon_vertices.clear();
+    let points = [a, b, c, d].map(|(x, y)| [x, y]);
+    let eps_sq =
+        signex_library::CHAIN_ENDPOINT_EPSILON_MM * signex_library::CHAIN_ENDPOINT_EPSILON_MM;
+    if points.iter().all(|&p| dist_sq(p, points[0]) <= eps_sq) {
+        editor.gui.canvas_cache.clear();
+        return;
+    }
+    push_graphic(
+        editor,
+        signex_library::SymbolGraphicKind::Bezier { points },
+        0.15,
+    );
 }
 
 /// Perpendicular-distance threshold (mm) below which a click-collected
@@ -317,15 +350,20 @@ pub(crate) fn apply_symbol_primitive_edit(
         | SymbolEditorMsg::ToggleActiveBarMenu(_)
         | SymbolEditorMsg::CloseActiveBarMenu
         | SymbolEditorMsg::ActiveBarStub(_)
-        | SymbolEditorMsg::ToggleSelectionFilter(_) => apply_symbol_ui(editor, msg),
+        | SymbolEditorMsg::ToggleSelectionFilter(_)
+        | SymbolEditorMsg::PinTypePicked(_) => apply_symbol_ui(editor, msg),
 
         // ── Graphics placement ───────────────────────────────────
         SymbolEditorMsg::AddPin { x, y } => {
             push_undo(editor);
             let view = editor.view();
-            let idx =
-                crate::library::editor::symbol::state::add_pin(editor.primitive_mut(), x, y, view);
-            editor.selected = Some(SymbolSelection::Pin(idx));
+            let pin_type = editor.gui.pin_type;
+            let sym = editor.primitive_mut();
+            let idx = crate::library::editor::symbol::state::add_pin(sym, x, y, view);
+            if let Some(pin_type) = pin_type {
+                sym.pins[idx].electrical = pin_type;
+            }
+            editor.gui.selected = Some(SymbolSelection::Pin(idx));
             mark_dirty(editor);
         }
         SymbolEditorMsg::AddRectangle {
@@ -384,8 +422,69 @@ pub(crate) fn apply_symbol_primitive_edit(
         // `arc_sweep_exceeds_full_turn`) rather than committed — no
         // graphic, no undo snapshot; just surface why.
         SymbolEditorMsg::ArcSweepRejected => {
-            editor.status_message = Some("Arc sweep must be less than a full turn.".to_string());
+            editor.gui.status_message =
+                Some("Arc sweep must be less than a full turn.".to_string());
         }
+        SymbolEditorMsg::AddPie {
+            cx,
+            cy,
+            radius,
+            start_deg,
+            end_deg,
+        } => {
+            let (start_deg, end_deg) = normalize_arc_commit_deg(start_deg, end_deg);
+            push_graphic(
+                editor,
+                signex_library::SymbolGraphicKind::Pie {
+                    center: [cx, cy],
+                    radius,
+                    start_deg,
+                    end_deg,
+                },
+                0.15,
+            );
+        }
+        SymbolEditorMsg::AddEllipticalArc {
+            cx,
+            cy,
+            radius_x,
+            radius_y,
+            start_deg,
+            end_deg,
+        } => {
+            let (start_deg, end_deg) = normalize_arc_commit_deg(start_deg, end_deg);
+            // An end click on the start angle sweeps nothing: place nothing.
+            if (end_deg - start_deg).abs() > ARC_SAME_ANGLE_DEG {
+                push_graphic(
+                    editor,
+                    signex_library::SymbolGraphicKind::EllipticalArc {
+                        center: [cx, cy],
+                        radius_x,
+                        radius_y,
+                        start_deg,
+                        end_deg,
+                    },
+                    0.15,
+                );
+            }
+        }
+        SymbolEditorMsg::AddRoundRectangle {
+            from_x,
+            from_y,
+            to_x,
+            to_y,
+        } => {
+            // Two clicks on one point have no shape to place.
+            let (from, to) = ([from_x, from_y], [to_x, to_y]);
+            if dist_sq(from, to).sqrt() > signex_library::CHAIN_ENDPOINT_EPSILON_MM {
+                push_graphic(
+                    editor,
+                    signex_library::SymbolGraphicKind::round_rectangle(from, to),
+                    0.15,
+                );
+            }
+        }
+        SymbolEditorMsg::BezierClick { x, y } => bezier_click(editor, x, y),
         SymbolEditorMsg::AddText { x, y } => {
             push_graphic(
                 editor,
@@ -408,13 +507,13 @@ pub(crate) fn apply_symbol_primitive_edit(
             );
         }
         SymbolEditorMsg::PolygonClick { x, y } => {
-            editor.polygon_vertices.push((x, y));
-            editor.canvas_cache.clear();
+            editor.gui.polygon_vertices.push((x, y));
+            editor.gui.canvas_cache.clear();
         }
         SymbolEditorMsg::PolygonCommit => commit_or_discard_polygon(editor),
         SymbolEditorMsg::PolygonCancel => {
-            editor.polygon_vertices.clear();
-            editor.canvas_cache.clear();
+            editor.gui.polygon_vertices.clear();
+            editor.gui.canvas_cache.clear();
         }
         SymbolEditorMsg::JoinSelectionIntoPolygon => apply_symbol_join(editor, msg),
 
@@ -474,7 +573,7 @@ pub(crate) fn apply_symbol_primitive_edit(
         // a real action closes the menu" behaviour every row wants,
         // expressed once instead of per-row.
         SymbolEditorMsg::ContextMenuAction(inner) => {
-            editor.context_menu = None;
+            editor.gui.context_menu = None;
             apply_symbol_primitive_edit(editor, *inner);
         }
     }
@@ -502,6 +601,7 @@ fn context_submenu_msg_to_state(
     use crate::library::editor::symbol::state::SymbolContextSubmenu;
     match msg {
         SymbolContextSubmenuMsg::Place => SymbolContextSubmenu::Place,
+        SymbolContextSubmenuMsg::Align => SymbolContextSubmenu::Align,
     }
 }
 
@@ -581,6 +681,14 @@ fn symbol_bbox(sym: &signex_library::Symbol) -> (f64, f64, f64, f64) {
                     include_rect(&mut bounds, v[0], v[1], v[0], v[1]);
                 }
             }
+            kind @ (SymbolGraphicKind::Bezier { .. }
+            | SymbolGraphicKind::Pie { .. }
+            | SymbolGraphicKind::EllipticalArc { .. }
+            | SymbolGraphicKind::RoundRectangle { .. }) => {
+                for v in kind.flattened_outline() {
+                    include_rect(&mut bounds, v[0], v[1], v[0], v[1]);
+                }
+            }
         }
     }
 
@@ -602,6 +710,8 @@ fn graphic_handle_msg_to_state(
         GraphicHandleMsg::ArcEnd => GraphicHandle::ArcEnd,
         GraphicHandleMsg::TextAnchor => GraphicHandle::TextAnchor,
         GraphicHandleMsg::PolygonVertex(i) => GraphicHandle::PolygonVertex(i),
+        GraphicHandleMsg::BezierPoint(i) => GraphicHandle::BezierPoint(i),
+        GraphicHandleMsg::EllipseRadius(i) => GraphicHandle::EllipseRadius(i),
     }
 }
 
@@ -615,6 +725,9 @@ fn rotate_pivot_msg_to_state(
         SymbolRotatePivotMsg::GeometryCenter => GraphicRotationPivotMode::GeometryCenter,
     }
 }
+
+#[cfg(test)]
+mod curve_tool_tests;
 
 #[cfg(test)]
 mod tests {
@@ -634,15 +747,15 @@ mod tests {
     /// mutating message — here `DeleteSelected` on an empty
     /// selection, itself a no-op — so it never lingers past the
     /// action it described. Contract lives on
-    /// `SymbolDocument::status_message`'s doc comment.
+    /// `SymbolEditorView::status_message`'s doc comment.
     #[test]
     fn stale_status_message_clears_on_next_mutating_message() {
         let mut editor = new_editor();
-        editor.status_message = Some("stale".to_string());
+        editor.gui.status_message = Some("stale".to_string());
 
         apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::DeleteSelected);
 
-        assert!(editor.status_message.is_none());
+        assert!(editor.gui.status_message.is_none());
     }
 
     /// Continuous/chrome-only messages (camera pan here) must NOT
@@ -650,11 +763,11 @@ mod tests {
     #[test]
     fn status_message_survives_camera_pan() {
         let mut editor = new_editor();
-        editor.status_message = Some("keep me".to_string());
+        editor.gui.status_message = Some("keep me".to_string());
 
         apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::Pan { dx: 1.0, dy: 1.0 });
 
-        assert_eq!(editor.status_message.as_deref(), Some("keep me"));
+        assert_eq!(editor.gui.status_message.as_deref(), Some("keep me"));
     }
 
     /// Three `PolygonClick`s then `PolygonCommit` push exactly one
@@ -676,18 +789,22 @@ mod tests {
             &mut editor,
             SymbolEditorMsg::PolygonClick { x: 2.0, y: 3.0 },
         );
-        assert_eq!(editor.history.undo_len(), 0, "clicks alone don't push undo");
+        assert_eq!(
+            editor.draft.history.undo_len(),
+            0,
+            "clicks alone don't push undo"
+        );
 
         apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::PolygonCommit);
 
         assert_eq!(editor.primitive().graphics.len(), 1);
         assert_eq!(
-            editor.history.undo_len(),
+            editor.draft.history.undo_len(),
             1,
             "commit pushes exactly one undo snapshot"
         );
         assert!(
-            editor.polygon_vertices.is_empty(),
+            editor.gui.polygon_vertices.is_empty(),
             "stash is emptied on commit"
         );
         match &editor.primitive().graphics[0].kind {
@@ -714,8 +831,8 @@ mod tests {
         apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::PolygonCommit);
 
         assert!(editor.primitive().graphics.is_empty());
-        assert_eq!(editor.history.undo_len(), 0);
-        assert!(editor.polygon_vertices.is_empty());
+        assert_eq!(editor.draft.history.undo_len(), 0);
+        assert!(editor.gui.polygon_vertices.is_empty());
     }
 
     /// A degenerate (collinear, zero-area) ring is discarded even
@@ -738,7 +855,7 @@ mod tests {
         apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::PolygonCommit);
 
         assert!(editor.primitive().graphics.is_empty());
-        assert_eq!(editor.history.undo_len(), 0);
+        assert_eq!(editor.draft.history.undo_len(), 0);
     }
 
     /// A trailing vertex equal to the first (a plain click landed
@@ -833,8 +950,8 @@ mod tests {
         apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::PolygonCancel);
 
         assert!(editor.primitive().graphics.is_empty());
-        assert_eq!(editor.history.undo_len(), 0);
-        assert!(editor.polygon_vertices.is_empty());
+        assert_eq!(editor.draft.history.undo_len(), 0);
+        assert!(editor.gui.polygon_vertices.is_empty());
     }
 
     /// `normalize_arc_commit_deg` swaps a CW-dragged pair (`end <
@@ -901,10 +1018,10 @@ mod tests {
         apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::ArcSweepRejected);
 
         assert_eq!(
-            editor.status_message.as_deref(),
+            editor.gui.status_message.as_deref(),
             Some("Arc sweep must be less than a full turn.")
         );
         assert!(editor.primitive().graphics.is_empty());
-        assert_eq!(editor.history.undo_len(), 0);
+        assert_eq!(editor.draft.history.undo_len(), 0);
     }
 }

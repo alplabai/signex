@@ -107,14 +107,22 @@ pub enum MenuMessage {
     OpenProjectsPanel,
     OpenComponentsPanel,
     OpenNavigatorPanel,
+    /// View ▸ Annotations: show the Annotations panel (mockup row 165).
+    OpenAnnotationsPanel,
     OpenPropertiesPanel,
     /// Open the active project's options tab.
     OpenProjectOptions,
     OpenErcPanel,
     OpenMessagesPanel,
-    OpenSignexAiPanel,
+    /// View ▸ Command Log: show the Command Log panel (#2458).
+    OpenCommandLogPanel,
     /// View ▸ Layers: show the Layers panel (#2223).
     OpenLayersPanel,
+    /// View ▸ Unions: show the Unions panel (mockup row 158).
+    OpenUnionsPanel,
+    /// View ▸ Extensions ▸ `<panel>`: show an installed extension's panel
+    /// (#2495).
+    OpenExtensionPanel(crate::extension::points::ExtensionPanelKind),
     /// Place ▸ Text — the text-note tool.
     PlaceText,
     // Project ▸ Annotation
@@ -132,6 +140,10 @@ pub enum MenuMessage {
     /// listing every binding from the active keymap profile, callable from
     /// Help ▸ Keyboard Shortcuts and from F1.
     OpenKeyboardShortcuts,
+    /// Help ▸ Show Welcome Tips (mockup row 14): opens the first-run card
+    /// again. The card is the same one, and its close persists as on first
+    /// launch.
+    OpenWelcomeTips,
     /// Tools ▸ New Part — bumps the active `.snxsym` symbol's max
     /// `part_number` by one and switches the editor's active_part to
     /// the new value. No-op when no Symbol editor is the active tab.
@@ -154,6 +166,9 @@ pub enum MenuMessage {
     NextDocumentTab,
     PreviousDocumentTab,
     PreviousSheet,
+    /// View ▸ Window ▸ Layouts ▸ `<your layout>` (mockup row 166): apply the user
+    /// layout with this stored id.
+    WorkspaceLayoutChosen(String),
 }
 
 impl MenuMessage {
@@ -184,11 +199,14 @@ impl MenuMessage {
             Self::OpenProjectsPanel
                 | Self::OpenComponentsPanel
                 | Self::OpenNavigatorPanel
+                | Self::OpenAnnotationsPanel
                 | Self::OpenPropertiesPanel
                 | Self::OpenErcPanel
                 | Self::OpenMessagesPanel
-                | Self::OpenSignexAiPanel
+                | Self::OpenCommandLogPanel
                 | Self::OpenLayersPanel
+                | Self::OpenUnionsPanel
+                | Self::OpenExtensionPanel(_)
         )
     }
 }
@@ -219,9 +237,21 @@ pub struct MenuContext<'a> {
     /// Cross Select Mode is on: Tools ▸ Cross Select Mode shows a check
     /// mark (#1312). On by default, like the mode.
     pub cross_select: bool,
+    /// The Notebook badges are shown: View ▸ Notebook Badges shows a check
+    /// mark (mockup row 197). On by default, like the badges.
+    pub notebook_badges: bool,
     /// What Design ▸ Update PCB Document names: the board a schematic in
     /// view updates, or the project a board imports from (#1312).
     pub(crate) pcb_sync: Option<crate::app::update_pcb::PcbSyncLabel>,
+    /// What View ▸ Window ▸ Layouts lists: the active layout, your layouts
+    /// and the Reset row (mockup row 166).
+    pub(crate) layouts: crate::workspace_layouts::LayoutsMenu,
+    /// The rows the installed extensions add, each at the end of its root
+    /// menu (#2495). Empty in the Community binary.
+    pub(crate) extension_rows: Vec<crate::extension::points::MenuRow>,
+    /// The installed extensions' panels, under View ▸ Extensions (#2495).
+    /// Empty in the Community binary, where the submenu is not drawn.
+    pub(crate) extension_panels: Vec<crate::extension::points::ExtensionPanelKind>,
 }
 
 impl Default for MenuContext<'_> {
@@ -234,8 +264,33 @@ impl Default for MenuContext<'_> {
             open_panels: Vec::new(),
             i18n: signex_i18n::I18n::en_us(),
             cross_select: true,
+            notebook_badges: true,
             pcb_sync: None,
+            layouts: Default::default(),
+            extension_rows: Vec::new(),
+            extension_panels: Vec::new(),
         }
+    }
+}
+
+impl MenuContext<'_> {
+    /// This context with the extension rows `rows`, as the window builds it
+    /// from [`crate::extension::ExtensionHost::menu_rows`].
+    #[must_use]
+    pub fn with_extension_rows(mut self, rows: Vec<crate::extension::points::MenuRow>) -> Self {
+        self.extension_rows = rows;
+        self
+    }
+
+    /// This context with the extension panels `panels`, as the window builds
+    /// it from [`crate::extension::ExtensionHost::panels`].
+    #[must_use]
+    pub fn with_extension_panels(
+        mut self,
+        panels: Vec<crate::extension::points::ExtensionPanelKind>,
+    ) -> Self {
+        self.extension_panels = panels;
+        self
     }
 }
 
@@ -340,13 +395,21 @@ pub(crate) fn cmd_label(i18n: &signex_i18n::I18n, command_id: &str, fallback: &s
 }
 
 /// Menu path of the Electrical Rules Check row, built from the label and menu
-/// the Project menu uses, so a message naming it cannot drift.
-pub(crate) fn erc_menu_path(i18n: &signex_i18n::I18n) -> String {
-    format!(
-        "{} ▸ {}",
-        i18n.message(signex_i18n::menu_ids::MENU_PROJECT, &[]),
-        cmd_label(i18n, "open_erc_dialog", "open_erc_dialog")
-    )
+/// the Project menu uses, so a message naming it cannot drift. It is a
+/// message, so a notice that names it renders it in the view's language.
+pub(crate) fn erc_menu_path() -> signex_i18n::Translatable {
+    use signex_i18n::{Translatable, UserText};
+    const COMMAND: &str = "open_erc_dialog";
+    let row = crate::keymap::metadata_for_str(COMMAND).map_or_else(
+        || Translatable::verbatim(UserText::new(COMMAND)),
+        |meta| Translatable::new(meta.menu_label_id()),
+    );
+    Translatable::new(signex_i18n::ids::NOTICE_MENU_PATH)
+        .arg(
+            "menu",
+            Translatable::new(signex_i18n::menu_ids::MENU_PROJECT),
+        )
+        .arg("row", row)
 }
 
 /// Whether the row for `command_id` is enabled: the same predicate the

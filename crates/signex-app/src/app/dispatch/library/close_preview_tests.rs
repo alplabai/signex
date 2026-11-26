@@ -34,7 +34,6 @@ fn open_preview(dirty: bool) -> (Signex, EditorAddress) {
     app.document_state.tabs.push(TabInfo {
         title: "R1".into(),
         path: address.synthetic_tab_path(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::ComponentEditor(ComponentEditorTab {
             library_path,

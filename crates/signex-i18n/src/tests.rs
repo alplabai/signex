@@ -105,6 +105,29 @@ fn the_pseudolocale_transforms_text_and_en_us_is_untouched() {
     assert_eq!(t!(i18n("en-US"), ids::MENU_FILE).to_string(), "File");
 }
 
+/// Mockup row 144a (#2064): the pseudolocale brackets each whole message once,
+/// arguments inside, so text without brackets is not from the catalog.
+#[test]
+fn the_pseudolocale_brackets_the_whole_message() {
+    let xa = t!(i18n("en-XA"), ids::MENU_FILE).to_string();
+    assert!(xa.starts_with('[') && xa.ends_with(']'), "{xa}");
+    let sources = ["hello = Hello { $name }, again\n"];
+    let args = [("name", Arg::from("R1"))];
+    let pseudo = render(&build_from(EN_XA, &sources), "hello", &args)
+        .unwrap()
+        .text;
+    assert!(
+        pseudo.starts_with("[Ħ") && pseudo.ends_with(']'),
+        "{pseudo}"
+    );
+    assert_eq!(pseudo.matches('[').count(), 1, "{pseudo}");
+    assert!(pseudo.contains(&format!("{FSI}R1{PDI}")), "{pseudo}");
+    let plain = render(&build_from(EN_US, &sources), "hello", &args)
+        .unwrap()
+        .text;
+    assert_eq!(plain, format!("Hello {FSI}R1{PDI}, again"));
+}
+
 #[test]
 fn numbers_follow_the_locale_through_icu() {
     let source = "count = { $n } items\n";
@@ -129,6 +152,36 @@ fn isolation_marks_wrap_only_placeables() {
         .text;
     assert!(!plain.contains(FSI) && !plain.contains(PDI), "{plain:?}");
     assert_eq!(hello, format!("Hello {FSI}R1{PDI}"));
+}
+
+/// A message splits around an argument's value where the argument is, not
+/// where the same word occurs in the sentence, and the isolation marks are
+/// dropped with the split (the reset confirm's key cap, mockup row 76). A value the
+/// message does not hold, or an empty one, does not split it.
+#[test]
+fn a_message_splits_around_an_argument_value() {
+    let en = i18n("en-US");
+    let undo = en.message(
+        ids::DIALOG_ANNOTATE_RESET_ONE_STEP,
+        &[("undo", Arg::from("Ctrl+Z"))],
+    );
+    let (before, value, after) = undo
+        .split_around("Ctrl+Z")
+        .expect("the shortcut is in the sentence");
+    assert_eq!(before.into_string(), "One undo step: ");
+    assert_eq!(value.into_string(), "Ctrl+Z");
+    assert_eq!(after.into_string(), " restores every sheet until you save.");
+
+    let word = en.message(
+        ids::DIALOG_ANNOTATE_RESET_ONE_STEP,
+        &[("undo", Arg::from("step"))],
+    );
+    let (before, _, after) = word.split_around("step").expect("the argument");
+    assert_eq!(before.into_string(), "One undo step: ");
+    assert_eq!(after.into_string(), " restores every sheet until you save.");
+
+    assert!(undo.split_around("Ctrl+Y").is_none());
+    assert!(undo.split_around("").is_none());
 }
 
 #[test]

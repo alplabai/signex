@@ -51,16 +51,27 @@ pub(crate) enum OverlayId {
     SchematicActiveBar,
     /// The Graphite zoom pill over the schematic canvas.
     CanvasZoomPill,
+    /// The orientation tile and the Home button by the zoom pill, and the
+    /// board's zoom pill (mockup row 194).
+    CanvasOrientation,
     FootprintActiveBar,
-    FootprintContextMenu,
     FootprintMoveBy,
     FootprintAlign,
     SymbolEditorActiveBar,
-    SymbolContextMenu,
     TextEdit,
 
-    // Right-click menus, pickers, dock drag zones, floating panels.
+    // The Active Bar dropdown, dock drag zones, floating panels.
     ActiveBarMenu,
+    DockDragZone,
+    ComponentsRowDragLabel,
+    FloatingPanels,
+    /// The dock drop target's name, above the dragged panel (mockup row 8).
+    DockDropTargetLabel,
+
+    // Right-click menus and pickers: above the floating panels, so a menu
+    // opened from one is not drawn under it (#2376).
+    FootprintContextMenu,
+    SymbolContextMenu,
     ContextMenu,
     TabContextMenu,
     ProjectTreeContextMenu,
@@ -71,15 +82,22 @@ pub(crate) enum OverlayId {
     LayerTabContextMenu,
     GridPicker,
     PanelList,
-    DockDragZone,
-    ComponentsRowDragLabel,
-    FloatingPanels,
+    /// The zoom pill's preset menu (Graphite mockup #64).
+    ZoomPresets,
+    /// The status bar's Grid & Snap popover (mockup row 6).
+    GridSnapPopover,
+    /// The popover a board counter of the status bar opened (#2460).
+    BoardStatusPopover,
 
     // Dialogs.
     Preferences,
     FindReplace,
     FindSimilar,
     PasteArray,
+    /// The Create Union popover (mockup row 158).
+    UnionPopover,
+    /// Edit ▸ Paste Special (mockup row 155).
+    SmartPaste,
     KeyboardShortcuts,
     About,
     PassiveCalculator,
@@ -95,18 +113,34 @@ pub(crate) enum OverlayId {
     SelectionFilterCustom,
     /// File > New Project (#2232): the setup dialog.
     NewProject,
+    /// File ▸ Save Project As… (#2908).
+    SaveProjectAs,
     /// Tools ▸ Assign Footprints (#2248).
     AssignFootprints,
     /// Tools ▸ Annotation ▸ Number Schematic Sheets (#2247).
     SheetNumbering,
+    /// Design ▸ Synchronize Sheet Entries and Ports (#1276).
+    SheetSync,
     /// Tools ▸ Re-Annotate Board (#1312).
     BoardReannotate,
+    /// Design ▸ Rooms ▸ Create Rooms from Sheets (#2457).
+    CreateRooms,
     /// File ▸ Fabrication Outputs (#2388).
     FabOutputs,
+    /// Design ▸ Differential Pair Classes… (#1282).
+    DiffPairClasses,
+    /// Generate design notebook (#2945, mockup row 201).
+    NotebookGenerate,
     /// Board Reports and Board Print / PDF (#2404, #2402).
     BoardOutput,
+    /// Export Design Notebook PDF (mockup row 202).
+    NotebookPdf,
     /// Tools ▸ Annotation ▸ Back Annotate Schematics (#1312).
     BackAnnotate,
+    /// Project ▸ Compare Board with Schematic… (#2462).
+    CompareBoard,
+    /// Its confirmation listing the board deletions, above it.
+    CompareBoardConfirm,
     AnnotateDialog,
     AnnotateResetConfirm,
     ReprefixConfirm,
@@ -115,6 +149,10 @@ pub(crate) enum OverlayId {
     UpdatePcb,
     /// New PCB / New Schematic setup (#2232).
     DocumentSetup,
+    /// View ▸ Window ▸ Layouts ▸ Manage Layouts (mockup row 166).
+    ManageLayouts,
+    /// View ▸ Window ▸ Layouts ▸ Save Layout (mockup row 166).
+    SaveLayout,
 
     // Library modals.
     LibraryPicker,
@@ -126,6 +164,8 @@ pub(crate) enum OverlayId {
     StockCopy,
     CloseLibraryConfirm,
     LibraryRecovery,
+    /// The SCH Library panel's Delete of a symbol still in use (mockup row 137).
+    SymbolDeleteConfirm,
 
     // Painted last, above everything else.
     CommandPalette,
@@ -148,7 +188,7 @@ const PRE_BLOCKING: usize = 5;
 /// behaviour change to both the paint stack and the Esc precedence, and
 /// `paint_order_is_exhaustive_and_unique` keeps it honest about covering
 /// every [`OverlayId`] exactly once.
-pub(crate) const PAINT_ORDER: [OverlayId; 69] = [
+pub(crate) const PAINT_ORDER: [OverlayId; 87] = [
     OverlayId::ErrorNotice,
     OverlayId::NetlistIncompletePrompt,
     OverlayId::PrintPreview,
@@ -157,14 +197,21 @@ pub(crate) const PAINT_ORDER: [OverlayId; 69] = [
     OverlayId::PlacementPaused,
     OverlayId::SchematicActiveBar,
     OverlayId::CanvasZoomPill,
+    OverlayId::CanvasOrientation,
     OverlayId::FootprintActiveBar,
-    OverlayId::FootprintContextMenu,
     OverlayId::FootprintMoveBy,
     OverlayId::FootprintAlign,
     OverlayId::SymbolEditorActiveBar,
-    OverlayId::SymbolContextMenu,
     OverlayId::TextEdit,
     OverlayId::ActiveBarMenu,
+    OverlayId::DockDragZone,
+    OverlayId::ComponentsRowDragLabel,
+    OverlayId::FloatingPanels,
+    OverlayId::DockDropTargetLabel,
+    // Every right-click menu and picker paints above the floating panels, so
+    // one opened from a floating panel is on top and takes the clicks (#2376).
+    OverlayId::FootprintContextMenu,
+    OverlayId::SymbolContextMenu,
     OverlayId::ContextMenu,
     OverlayId::TabContextMenu,
     OverlayId::ProjectTreeContextMenu,
@@ -173,13 +220,15 @@ pub(crate) const PAINT_ORDER: [OverlayId; 69] = [
     OverlayId::LayerTabContextMenu,
     OverlayId::GridPicker,
     OverlayId::PanelList,
-    OverlayId::DockDragZone,
-    OverlayId::ComponentsRowDragLabel,
-    OverlayId::FloatingPanels,
+    OverlayId::ZoomPresets,
+    OverlayId::GridSnapPopover,
+    OverlayId::BoardStatusPopover,
     OverlayId::Preferences,
     OverlayId::FindReplace,
     OverlayId::FindSimilar,
     OverlayId::PasteArray,
+    OverlayId::UnionPopover,
+    OverlayId::SmartPaste,
     OverlayId::KeyboardShortcuts,
     OverlayId::About,
     OverlayId::PassiveCalculator,
@@ -189,6 +238,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 69] = [
     OverlayId::RemoveDialog,
     // Below the close and quit confirms: they must outrank it for Esc and the lock.
     OverlayId::NewProject,
+    OverlayId::SaveProjectAs,
     OverlayId::ProjectCloseConfirm,
     OverlayId::CreateChildSheetConfirm,
     OverlayId::AppQuitConfirm,
@@ -197,10 +247,18 @@ pub(crate) const PAINT_ORDER: [OverlayId; 69] = [
     OverlayId::SelectionFilterCustom,
     OverlayId::AssignFootprints,
     OverlayId::SheetNumbering,
+    OverlayId::SheetSync,
     OverlayId::BoardReannotate,
+    OverlayId::CreateRooms,
     OverlayId::FabOutputs,
+    OverlayId::DiffPairClasses,
+    OverlayId::NotebookGenerate,
     OverlayId::BoardOutput,
+    OverlayId::NotebookPdf,
     OverlayId::BackAnnotate,
+    OverlayId::CompareBoard,
+    // Above its dialog: Esc closes the confirmation first.
+    OverlayId::CompareBoardConfirm,
     OverlayId::AnnotateDialog,
     OverlayId::AnnotateResetConfirm,
     OverlayId::ReprefixConfirm,
@@ -208,6 +266,8 @@ pub(crate) const PAINT_ORDER: [OverlayId; 69] = [
     OverlayId::UpdatePcb,
     // Above Update PCB: its Create PCB opens this dialog on top.
     OverlayId::DocumentSetup,
+    OverlayId::ManageLayouts,
+    OverlayId::SaveLayout,
     OverlayId::LibraryPicker,
     OverlayId::EditRowModal,
     OverlayId::DeleteConfirm,
@@ -217,6 +277,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 69] = [
     OverlayId::StockCopy,
     OverlayId::CloseLibraryConfirm,
     OverlayId::LibraryRecovery,
+    OverlayId::SymbolDeleteConfirm,
     OverlayId::CommandPalette,
     OverlayId::HoverTooltip,
     OverlayId::LibraryUpdates,
@@ -265,17 +326,20 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         // The hover tooltip follows the cursor and paints nothing the
         // user aims at. Capturing there would kill wheel-zoom over the
         // canvas whenever a tooltip happened to be showing.
-        OverlayId::HoverTooltip | OverlayId::ComponentsRowDragLabel => false,
+        OverlayId::HoverTooltip
+        | OverlayId::ComponentsRowDragLabel
+        | OverlayId::DockDropTargetLabel => false,
         // Its layer is window-sized (the pill is placed by `Translate`), so a
         // guard around the layer would swallow every wheel in the window:
         // no panel would scroll. The pill guards its own bounds instead.
-        OverlayId::CanvasZoomPill => false,
+        OverlayId::CanvasZoomPill | OverlayId::CanvasOrientation => false,
 
         // Their layers are window-sized positioners (a `Fill` column, the zoom
         // pill's `Translate`): a guard there took the wheel over the whole
         // canvas. The builders guard the bar, pill and dropdown themselves
         // (`overlays::scroll_guard`).
-        OverlayId::SchematicActiveBar
+        OverlayId::PlacementPaused
+        | OverlayId::SchematicActiveBar
         | OverlayId::FootprintActiveBar
         | OverlayId::SymbolEditorActiveBar => false,
 
@@ -287,7 +351,6 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::PrintPreview
         | OverlayId::BomPreview
         | OverlayId::NetColorCustom
-        | OverlayId::PlacementPaused
         | OverlayId::FootprintContextMenu
         | OverlayId::FootprintMoveBy
         | OverlayId::FootprintAlign
@@ -302,12 +365,17 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::LayerTabContextMenu
         | OverlayId::GridPicker
         | OverlayId::PanelList
+        | OverlayId::ZoomPresets
+        | OverlayId::GridSnapPopover
+        | OverlayId::BoardStatusPopover
         | OverlayId::DockDragZone
         | OverlayId::FloatingPanels
         | OverlayId::Preferences
         | OverlayId::FindReplace
         | OverlayId::FindSimilar
         | OverlayId::PasteArray
+        | OverlayId::UnionPopover
+        | OverlayId::SmartPaste
         | OverlayId::KeyboardShortcuts
         | OverlayId::About
         | OverlayId::PassiveCalculator
@@ -322,18 +390,28 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::GridProperties
         | OverlayId::SelectionFilterCustom
         | OverlayId::NewProject
+        | OverlayId::SaveProjectAs
         | OverlayId::AssignFootprints
         | OverlayId::SheetNumbering
+        | OverlayId::SheetSync
         | OverlayId::BoardReannotate
+        | OverlayId::CreateRooms
         | OverlayId::FabOutputs
+        | OverlayId::DiffPairClasses
+        | OverlayId::NotebookGenerate
         | OverlayId::BoardOutput
+        | OverlayId::NotebookPdf
         | OverlayId::BackAnnotate
+        | OverlayId::CompareBoard
+        | OverlayId::CompareBoardConfirm
         | OverlayId::AnnotateDialog
         | OverlayId::AnnotateResetConfirm
         | OverlayId::ReprefixConfirm
         | OverlayId::ErcDialog
         | OverlayId::UpdatePcb
         | OverlayId::DocumentSetup
+        | OverlayId::ManageLayouts
+        | OverlayId::SaveLayout
         | OverlayId::LibraryPicker
         | OverlayId::EditRowModal
         | OverlayId::DeleteConfirm
@@ -343,6 +421,7 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::StockCopy
         | OverlayId::CloseLibraryConfirm
         | OverlayId::LibraryRecovery
+        | OverlayId::SymbolDeleteConfirm
         | OverlayId::CommandPalette
         | OverlayId::LibraryUpdates => true,
     }
@@ -365,6 +444,8 @@ pub(crate) fn has_menu_backdrop(id: OverlayId) -> bool {
             | OverlayId::StartRowContextMenu
             | OverlayId::LayerTabContextMenu
             | OverlayId::GridPicker
+            | OverlayId::UnionPopover
+            | OverlayId::ZoomPresets
     )
 }
 
@@ -375,10 +456,7 @@ pub(crate) fn covers_canvas_hover(id: OverlayId) -> bool {
     swallows_scroll(id)
         && !matches!(
             id,
-            OverlayId::PlacementPaused
-                | OverlayId::TextEdit
-                | OverlayId::DockDragZone
-                | OverlayId::FloatingPanels
+            OverlayId::TextEdit | OverlayId::DockDragZone | OverlayId::FloatingPanels
         )
 }
 
@@ -482,6 +560,9 @@ impl Signex {
                 self.canvas_zoom_pill_overlay(window_id),
                 self.overlay_owner(window_id),
             )),
+            OverlayId::CanvasOrientation => {
+                layers.extend(self.canvas_orientation_overlay(window_id))
+            }
             OverlayId::FootprintActiveBar => {
                 layers.extend(self.footprint_active_bar_overlay(window_id))
             }
@@ -517,17 +598,25 @@ impl Signex {
                 layers.extend(self.start_row_context_menu_overlay(window_id))
             }
             OverlayId::LayerTabContextMenu => layers.extend(self.layer_tab_menu_overlay(window_id)),
-            OverlayId::GridPicker => layers.extend(self.grid_picker_overlay()),
+            OverlayId::GridPicker => layers.extend(self.grid_picker_overlay(window_id)),
             OverlayId::PanelList => layers.extend(self.panel_list_overlay()),
+            OverlayId::ZoomPresets => layers.extend(self.zoom_presets_overlay(window_id)),
+            OverlayId::GridSnapPopover => layers.extend(self.grid_snap_popover_overlay(window_id)),
+            OverlayId::BoardStatusPopover => {
+                layers.extend(self.board_status_popover_overlay(window_id))
+            }
             OverlayId::DockDragZone => layers.extend(self.dock_drag_zone_overlay()),
             OverlayId::ComponentsRowDragLabel => {
                 layers.extend(self.components_row_drag_label_overlay(window_id))
             }
             OverlayId::FloatingPanels => layers.extend(self.floating_panels_overlay(window_id)),
+            OverlayId::DockDropTargetLabel => layers.extend(self.dock_drop_target_label_overlay()),
             OverlayId::Preferences => layers.extend(self.preferences_overlay()),
             OverlayId::FindReplace => layers.extend(self.find_replace_overlay(window_id)),
             OverlayId::FindSimilar => layers.extend(self.find_similar_overlay()),
             OverlayId::PasteArray => layers.extend(self.paste_array_overlay()),
+            OverlayId::UnionPopover => layers.extend(self.union_popover_overlay()),
+            OverlayId::SmartPaste => layers.extend(self.smart_paste_overlay()),
             OverlayId::KeyboardShortcuts => layers.extend(self.keyboard_shortcuts_overlay()),
             OverlayId::About => layers.extend(self.about_overlay()),
             OverlayId::PassiveCalculator => layers.extend(self.passive_calculator_overlay()),
@@ -546,18 +635,30 @@ impl Signex {
                 layers.extend(self.selection_filter_custom_overlay())
             }
             OverlayId::NewProject => layers.extend(self.new_project_overlay()),
+            OverlayId::SaveProjectAs => layers.extend(self.save_project_as_overlay()),
             OverlayId::AssignFootprints => layers.extend(self.assign_footprints_overlay()),
             OverlayId::SheetNumbering => layers.extend(self.sheet_numbering_overlay()),
+            OverlayId::SheetSync => layers.extend(self.sheet_sync_overlay()),
             OverlayId::BoardReannotate => layers.extend(self.board_reannotate_overlay()),
+            OverlayId::CreateRooms => layers.extend(self.create_rooms_overlay()),
             OverlayId::FabOutputs => layers.extend(self.fab_outputs_overlay()),
+            OverlayId::DiffPairClasses => layers.extend(self.diff_pair_classes_overlay()),
+            OverlayId::NotebookGenerate => layers.extend(self.notebook_generate_overlay()),
             OverlayId::BoardOutput => layers.extend(self.board_output_overlay()),
+            OverlayId::NotebookPdf => layers.extend(self.notebook_pdf_overlay()),
             OverlayId::BackAnnotate => layers.extend(self.back_annotate_overlay()),
+            OverlayId::CompareBoard => layers.extend(self.compare_board_overlay()),
+            OverlayId::CompareBoardConfirm => {
+                layers.extend(self.compare_board_confirm_overlay());
+            }
             OverlayId::AnnotateDialog => layers.extend(self.annotate_dialog_overlay()),
             OverlayId::AnnotateResetConfirm => layers.extend(self.annotate_reset_confirm_overlay()),
             OverlayId::ReprefixConfirm => layers.extend(self.reprefix_confirm_overlay()),
             OverlayId::ErcDialog => layers.extend(self.erc_dialog_overlay()),
             OverlayId::UpdatePcb => layers.extend(self.update_pcb_overlay()),
             OverlayId::DocumentSetup => layers.extend(self.document_setup_overlay()),
+            OverlayId::ManageLayouts => layers.extend(self.manage_layouts_overlay()),
+            OverlayId::SaveLayout => layers.extend(self.save_layout_overlay()),
             OverlayId::LibraryPicker => layers.extend(self.library_picker_overlay()),
             OverlayId::EditRowModal => layers.extend(self.edit_row_modal_overlay()),
             OverlayId::DeleteConfirm => layers.extend(self.delete_confirm_overlay()),
@@ -567,10 +668,32 @@ impl Signex {
             OverlayId::StockCopy => layers.extend(self.stock_copy_overlay()),
             OverlayId::CloseLibraryConfirm => layers.extend(self.close_library_confirm_overlay()),
             OverlayId::LibraryRecovery => layers.extend(self.library_recovery_overlay()),
+            OverlayId::SymbolDeleteConfirm => layers.extend(self.symbol_delete_confirm_overlay()),
             OverlayId::CommandPalette => layers.extend(self.command_palette_overlay(window_id)),
             OverlayId::HoverTooltip => layers.extend(self.view_hover_tooltip(window_id)),
             OverlayId::LibraryUpdates => layers.extend(self.library_updates_overlay()),
         }
+    }
+
+    /// The open board status popover over a clear click-outside layer:
+    /// mockup row 164 draws no scrim behind it.
+    fn board_status_popover_overlay(
+        &self,
+        window_id: iced::window::Id,
+    ) -> Option<Element<'_, Message>> {
+        let card = self.board_popover_card(window_id)?;
+        let dismissed = Message::Ui(UiMsg::StatusBar(StatusBarRequest::BoardPopover(
+            crate::status_bar::BoardPopoverEvent::Dismissed,
+        )));
+        let outside = Self::dismiss_layer_tinted(dismissed, iced::Color::TRANSPARENT);
+        Some(
+            iced::widget::Stack::new()
+                .width(iced::Length::Fill)
+                .height(iced::Length::Fill)
+                .push(outside)
+                .push(card)
+                .boxed(),
+        )
     }
 }
 
@@ -591,6 +714,18 @@ mod tests {
             PAINT_ORDER.len(),
             "PAINT_ORDER lists an overlay more than once"
         );
+    }
+
+    /// The Grid & Snap popover (mockup row 6) paints above the floating
+    /// panels and the dock drop zones, and below every dialog.
+    #[test]
+    fn the_grid_snap_popover_paints_above_the_floating_panels() {
+        let slot = |id| PAINT_ORDER.iter().position(|o| *o == id).expect("listed");
+        let popover = slot(OverlayId::GridSnapPopover);
+        for under in [OverlayId::FloatingPanels, OverlayId::DockDragZone] {
+            assert!(slot(under) < popover, "{under:?} paints over the popover");
+        }
+        assert!(popover < slot(OverlayId::Preferences));
     }
 
     #[test]
@@ -614,6 +749,164 @@ mod tests {
                 OverlayId::BomPreview,
                 OverlayId::NetColorCustom,
             ]
+        );
+    }
+
+    fn paint_slot(id: OverlayId) -> usize {
+        PAINT_ORDER
+            .iter()
+            .position(|o| *o == id)
+            .unwrap_or_else(|| panic!("{id:?} is not in PAINT_ORDER"))
+    }
+
+    /// #2376: every right-click menu and picker paints above the floating
+    /// panels, so one opened from a floating panel is not drawn under it;
+    /// the Esc ladder, walking the same list backwards, closes it first.
+    #[test]
+    fn every_menu_paints_above_the_floating_panels() {
+        let floating = paint_slot(OverlayId::FloatingPanels);
+        let menus = [
+            OverlayId::FootprintContextMenu,
+            OverlayId::SymbolContextMenu,
+            OverlayId::ContextMenu,
+            OverlayId::TabContextMenu,
+            OverlayId::ProjectTreeContextMenu,
+            OverlayId::ComponentsRowContextMenu,
+            OverlayId::StartRowContextMenu,
+            OverlayId::LayerTabContextMenu,
+            OverlayId::GridPicker,
+            OverlayId::PanelList,
+            OverlayId::ZoomPresets,
+            OverlayId::GridSnapPopover,
+            OverlayId::BoardStatusPopover,
+        ];
+        for id in menus {
+            assert!(
+                paint_slot(id) > floating,
+                "{id:?} paints under the floating panels"
+            );
+        }
+        for id in PAINT_ORDER
+            .iter()
+            .copied()
+            .filter(|id| has_menu_backdrop(*id))
+        {
+            assert!(
+                paint_slot(id) > floating,
+                "{id:?} paints under the floating panels"
+            );
+        }
+    }
+
+    /// Mockup row 164: a board status popover paints no scrim, so the window
+    /// behind it keeps its colours, and a press outside it still closes it.
+    #[test]
+    fn a_board_status_popover_leaves_the_window_undimmed() {
+        use crate::layout_probe::{draw_pixels, messages_on_click_at};
+        const WINDOW: iced::Size = iced::Size::new(1400.0, 900.0);
+
+        let (mut app, _boot) = Signex::new();
+        app.ui_state.first_run_tour_open = false;
+        let main = iced::window::Id::unique();
+        app.ui_state.main_window_id = Some(main);
+        app.ui_state.window_size = (WINDOW.width, WINDOW.height);
+        let _ = app.update(Message::File(crate::app::FileMsg::PcbOpenFinished {
+            disk: None,
+            path: std::path::PathBuf::from("/w/popover.snxpcb"),
+            title: "popover".to_string(),
+            result: Ok(Box::new(
+                crate::app::handlers::document_files::save_async_tests::empty_board(),
+            )),
+        }));
+        app.sync_pcb_canvas_from_visible_board();
+        let request = StatusBarRequest::BoardCounterClicked {
+            window: None,
+            counter: crate::status_bar::BoardCounter::Grid,
+        };
+        let _ = app.update(Signex::status_bar_message(main, None, request));
+        let layers = || {
+            let mut layers = Vec::new();
+            app.extend_overlay(&mut layers, OverlayId::BoardStatusPopover, main);
+            assert!(!layers.is_empty(), "the Grid popover is open");
+            let white = iced::widget::container(iced::widget::Space::new())
+                .width(iced::Length::Fill)
+                .height(iced::Length::Fill)
+                .style(|_: &iced::Theme| iced::widget::container::Style {
+                    background: Some(iced::Background::Color(iced::Color::WHITE)),
+                    ..iced::widget::container::Style::default()
+                });
+            layers
+                .into_iter()
+                .fold(
+                    iced::widget::Stack::new()
+                        .width(iced::Length::Fill)
+                        .height(iced::Length::Fill)
+                        .push(white.boxed()),
+                    |stack, layer| stack.push(layer),
+                )
+                .boxed()
+        };
+        // The top-left corner: far from the card, which sits above the bar.
+        let corner = iced::Point::new(4.0, 4.0);
+        let pixels = draw_pixels(layers(), WINDOW);
+        let at = (corner.y as usize * WINDOW.width as usize + corner.x as usize) * 4;
+        assert_eq!(pixels[at..at + 3], [255, 255, 255], "the window is dimmed");
+        let messages = messages_on_click_at(layers(), WINDOW, None, corner);
+        assert!(
+            messages.iter().any(|m| matches!(
+                m,
+                Message::Ui(UiMsg::StatusBar(StatusBarRequest::BoardPopover(
+                    crate::status_bar::BoardPopoverEvent::Dismissed
+                )))
+            )),
+            "a press outside sent {messages:?}"
+        );
+    }
+
+    /// #2376, through the whole main-window view: a right-click menu open over
+    /// a floating panel is the topmost layer there, so its row takes the click.
+    #[test]
+    fn a_menu_over_a_floating_panel_takes_the_click() {
+        use crate::layout_probe::{lay_out_texts, messages_on_click_at};
+        const WINDOW: iced::Size = iced::Size::new(1400.0, 900.0);
+
+        let (mut app, main) = crate::canvas::overlay_camera_tests::graphite_app_showing(|_| {});
+        app.ui_state.window_size = (WINDOW.width, WINDOW.height);
+        let panel = crate::dock::FloatingPanel {
+            kind: crate::panels::PanelKind::Properties,
+            x: 500.0,
+            y: 200.0,
+            width: 320.0,
+            height: 420.0,
+            dragging: false,
+        };
+        let panel_rect = iced::Rectangle::new(
+            iced::Point::new(panel.x, panel.y),
+            iced::Size::new(panel.width, panel.height),
+        );
+        app.document_state.dock.floating.push(panel);
+        app.interaction_state.last_mouse_pos = (panel_rect.x + 40.0, panel_rect.y + 60.0);
+        let _ = app.update(Message::ContextMenu(ContextMenuMsg::ShowProjectTree(None)));
+        assert!(app.interaction_state.project_tree_context_menu.is_some());
+
+        let row = signex_i18n::t!(
+            app.ui_state.i18n,
+            signex_i18n::ids::DIALOG_NEW_PROJECT_ENTRY_ROW
+        )
+        .into_string();
+        let texts = lay_out_texts(app.view(main), WINDOW);
+        let at = texts
+            .iter()
+            .find(|t| t.text == row && panel_rect.contains(t.bounds.center()))
+            .unwrap_or_else(|| panic!("no menu row over the floating panel: {texts:#?}"))
+            .bounds
+            .center();
+        let messages = messages_on_click_at(app.view(main), WINDOW, None, at);
+        assert!(
+            messages
+                .iter()
+                .any(|m| matches!(m, Message::Menu(crate::menu_bar::MenuMessage::NewProject))),
+            "the click did not reach the menu row: {messages:?}"
         );
     }
 }

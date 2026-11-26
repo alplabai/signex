@@ -2,7 +2,7 @@
 
 use crate::panels::{PanelKind, PanelMsg};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PanelPosition {
     Left,
     Right,
@@ -56,6 +56,9 @@ pub enum DockMessage {
     /// when the Library panel is active inside a dock region. The
     /// dispatcher unwraps this back into `Message::Library(_)`.
     Library(crate::library::LibraryMessage),
+    /// A message an extension panel's view sent (#2495). The dispatcher
+    /// unwraps it into `Message::Extension(_)`.
+    Extension(crate::extension::ExtensionMsg),
 }
 
 /// What a dock tab's right-click menu can do to its panel.
@@ -110,6 +113,10 @@ pub(super) struct DockRegion {
     pub(super) collapsed: bool,
     /// First visible tab index (for overflow scrolling).
     pub(super) tab_offset: usize,
+    /// Extension panel keys the saved layout named that no installed
+    /// extension registered: kept, and written back where they stood
+    /// (DECISIONS 2026-11-25, #2495).
+    pub(super) kept: Vec<super::KeptPanelKey>,
 }
 
 pub struct DockArea {

@@ -4,7 +4,7 @@
 //! `docs/DRC_RULES.md`, "Which rule applies".
 
 use crate::user_rules::{self, CopperObject, LimitKind, ScopedRule};
-use crate::{DrcRules, Violation, ViolationKind};
+use crate::{DrcRules, Violation};
 
 /// How one written rule fared for one net, layer and object pair.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -198,15 +198,15 @@ impl DrcRules {
     /// clearance or short, the item's side for a width or via limit;
     /// `None` for an unconnected link or a keepout.
     pub fn explain(&self, violation: &Violation) -> Option<Explanation> {
-        let kind = match violation.kind {
-            ViolationKind::Short | ViolationKind::Clearance => LimitKind::MinClearance,
-            ViolationKind::TrackWidth if violation.measured_nm > violation.required_nm => {
-                LimitKind::MaxTrackWidth
+        // A kind with a minimum and a maximum broke the maximum when the
+        // value measured is over the limit.
+        let kind = match violation.kind.limits() {
+            [] => return None,
+            [min, max] if violation.measured_nm > violation.required_nm => {
+                debug_assert!(max.is_maximum() && !min.is_maximum());
+                *max
             }
-            ViolationKind::TrackWidth => LimitKind::MinTrackWidth,
-            ViolationKind::ViaDiameter => LimitKind::MinViaDiameter,
-            ViolationKind::ViaDrill => LimitKind::MinViaDrill,
-            ViolationKind::Unconnected | ViolationKind::Keepout => return None,
+            [first, ..] => *first,
         };
         let sides = if kind == LimitKind::MinClearance {
             let objects = [
@@ -221,8 +221,18 @@ impl DrcRules {
             }
             sides
         } else {
-            let net = violation.nets.0;
-            vec![self.effective(kind, net, violation.layers, [None, None])]
+            // A finding off copper (silkscreen, mask, courtyard) has no
+            // layers; its board-wide rule is read on every layer.
+            let layers = match violation.layers {
+                0 => u32::MAX,
+                layers => layers,
+            };
+            let (a, b) = violation.nets;
+            let mut sides = vec![self.effective(kind, a, layers, [None, None])];
+            if kind == LimitKind::MinHoleToHole && b != a {
+                sides.push(self.effective(kind, b, layers, [None, None]));
+            }
+            sides
         };
         Some(Explanation {
             kind,

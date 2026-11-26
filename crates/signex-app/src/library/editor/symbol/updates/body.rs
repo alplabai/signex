@@ -7,22 +7,22 @@ use crate::library::messages::SymbolEditorMsg;
 pub(super) fn apply_symbol_body(editor: &mut SymEditor, msg: SymbolEditorMsg) {
     match msg {
         SymbolEditorMsg::BodyStyleSelected(body) => {
-            if editor.active_body == body {
+            if editor.draft.active_body == body {
                 return;
             }
             // Same synchronous flush as a part switch: a staged polygon
             // belongs to the body it was drawn on.
             commit_or_discard_polygon(editor);
-            editor.active_body = body;
+            editor.draft.active_body = body;
             // Drop any selection so it can't dangle on an item the other
             // body hides.
-            editor.selected = None;
+            editor.gui.selected = None;
             close_pickers(editor);
-            editor.canvas_cache.clear();
+            editor.gui.canvas_cache.clear();
         }
         SymbolEditorMsg::SelectionBodyAssigned(tag) => {
             let view = editor.view();
-            let targets = body_assign_targets(editor.primitive(), &editor.selected, view);
+            let targets = body_assign_targets(editor.primitive(), &editor.gui.selected, view);
             // Dry-run on a copy so a no-op pushes no undo entry.
             if !assign_body(&mut editor.primitive().clone(), &targets, tag) {
                 return;
@@ -32,7 +32,7 @@ pub(super) fn apply_symbol_body(editor: &mut SymEditor, msg: SymbolEditorMsg) {
             // Items moved to the other body leave the view, so a selection
             // naming them would dangle.
             if tag != view.body_tag() && tag != signex_library::BODY_COMMON {
-                editor.selected = None;
+                editor.gui.selected = None;
             }
             close_pickers(editor);
             mark_dirty(editor);
@@ -75,13 +75,13 @@ mod tests {
     #[test]
     fn marking_the_selection_common_shows_it_on_both_bodies_and_undoes() {
         let mut editor = editor_with_pin();
-        editor.selected = Some(SymbolSelection::Pin(0));
+        editor.gui.selected = Some(SymbolSelection::Pin(0));
         apply_symbol_body(
             &mut editor,
             SymbolEditorMsg::SelectionBodyAssigned(BODY_COMMON),
         );
         assert_eq!(editor.primitive().pins[0].body_style, BODY_COMMON);
-        assert!(editor.selected.is_some(), "common items stay in view");
+        assert!(editor.gui.selected.is_some(), "common items stay in view");
         apply_symbol_body(
             &mut editor,
             SymbolEditorMsg::BodyStyleSelected(BodyStyle::Alternate),
@@ -90,7 +90,7 @@ mod tests {
             &editor.primitive().pins[0],
             editor.view()
         ));
-        editor.selected = Some(SymbolSelection::Pin(0));
+        editor.gui.selected = Some(SymbolSelection::Pin(0));
         crate::library::editor::symbol::updates::apply_symbol_primitive_edit(
             &mut editor,
             SymbolEditorMsg::Undo,
@@ -101,7 +101,7 @@ mod tests {
     #[test]
     fn assigning_what_is_already_assigned_records_nothing() {
         let mut editor = editor_with_pin();
-        editor.selected = Some(SymbolSelection::Pin(0));
+        editor.gui.selected = Some(SymbolSelection::Pin(0));
         apply_symbol_body(
             &mut editor,
             SymbolEditorMsg::SelectionBodyAssigned(BODY_NORMAL),
@@ -112,13 +112,13 @@ mod tests {
     #[test]
     fn moving_the_selection_to_the_other_body_clears_the_selection() {
         let mut editor = editor_with_pin();
-        editor.selected = Some(SymbolSelection::Pin(0));
+        editor.gui.selected = Some(SymbolSelection::Pin(0));
         apply_symbol_body(
             &mut editor,
             SymbolEditorMsg::SelectionBodyAssigned(BODY_ALTERNATE),
         );
         assert_eq!(editor.primitive().pins[0].body_style, BODY_ALTERNATE);
-        assert!(editor.selected.is_none());
+        assert!(editor.gui.selected.is_none());
     }
 
     #[test]

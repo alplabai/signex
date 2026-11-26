@@ -1,6 +1,6 @@
 //! Board and footprint graphics (lines, rectangles, circles, arcs and
-//! polygons) as Gerber marks. Text is not drawn here: it needs the stroke
-//! font that board text drawing (#2387) brings, and is counted instead.
+//! polygons) as Gerber marks. Text is written by `fab::text` in the board
+//! stroke font (#2368).
 
 use pcb_geom::{GeomError, PointNm, mm_to_nm};
 use signex_types::pcb::{BoardGraphic, FpGraphic, Point};
@@ -56,7 +56,7 @@ impl<'a> From<&'a BoardGraphic> for Drawing<'a> {
 /// What drawing a graphic gave.
 pub(crate) enum Drawn {
     Marks(Vec<Mark>),
-    /// A text, left for the stroke font (#2387).
+    /// A text: `fab::text` writes it.
     Text,
     /// A kind this build does not know, or one missing its points.
     Skipped,
@@ -106,10 +106,13 @@ pub(crate) fn draw(drawing: &Drawing, pen: &Pen) -> Result<Drawn, GeomError> {
             polygon(&corners, drawing.filled, width, pen.function)
         }
         "circle" => {
-            let Some(center) = at(drawing.center)? else {
+            let Some(model_center) = drawing.center else {
                 return Ok(Drawn::Skipped);
             };
-            let radius = mm_to_nm(drawing.radius, "graphic.radius")?.abs();
+            let center = (pen.to_fab)(model_center)?;
+            // The radius the design rule check's copper has (`pcb_geom`).
+            let radius =
+                pcb_geom::circle_radius(model_center, drawing.radius, drawing.start, drawing.end)?;
             if drawing.filled {
                 vec![Mark::Flash {
                     shape: ApertureShape::Circle {
@@ -135,7 +138,7 @@ pub(crate) fn draw(drawing: &Drawing, pen: &Pen) -> Result<Drawn, GeomError> {
             };
             vec![stroke(a, vec![Step::Arc { to: b, center, ccw }])]
         }
-        "poly" | "polygon" => {
+        kind if pcb_geom::is_polygon_token(kind) => {
             let points = drawing
                 .points
                 .iter()
@@ -198,7 +201,7 @@ mod tests {
     }
 
     /// #2424: a text frame's box is a closed outline, like a rectangle; its
-    /// text is left to the stroke font.
+    /// text is written by `fab::text`.
     #[test]
     fn a_text_frames_box_is_drawn_as_its_rectangle() {
         let mut frame = graphic("text_frame");

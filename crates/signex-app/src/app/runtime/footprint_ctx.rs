@@ -1,8 +1,10 @@
 use super::footprint_summaries::{
-    build_over_constraint_summaries, build_redundant_constraint_summaries,
-    build_rejected_conflict_summaries, build_sketch_entity_summary, footprint_pad_kind_label,
-    footprint_pad_shape_label,
+    build_conflict_suggestion, build_free_motion_summaries, build_over_constraint_summaries,
+    build_redundant_constraint_summaries, build_rejected_conflict_summaries,
+    build_sketch_entity_summary, footprint_pad_kind_label, footprint_pad_shape_label,
 };
+use crate::library::editor::footprint::sketch_mode::exit::shown_outcome;
+use crate::library::editor::standalone::sketch_exit::FootprintBakeCard;
 
 /// v0.14.2 — project the active `.snxfpt` editor's data into a
 /// panel-side snapshot. Mirrors `build_symbol_editor_panel_ctx`.
@@ -41,6 +43,8 @@ pub(super) fn build_footprint_editor_panel_ctx(
             over_constraint_count: out.over_constraints.len(),
             over_constraints,
             redundant_constraints: build_redundant_constraint_summaries(editor.primitive(), out),
+            dof: out.free_motions.dof,
+            free_motions: build_free_motion_summaries(&out.free_motions),
         }
     });
 
@@ -49,7 +53,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
     // surfacing while they're authoring sketch entities.
     let selected_pad = if mode_kind == FootprintModeKind::Pads {
         editor.state.selected_pad.and_then(|idx| {
-            editor.state.pads.get(idx).map(|pad| {
+            editor.state.shown_pad(idx).map(|pad| {
                 use crate::library::editor::footprint::state::PadSide;
                 // Side derived from the first layer's prefix. THT/NPT
                 // pads carry both copper sides → All. Otherwise Top
@@ -95,6 +99,9 @@ pub(super) fn build_footprint_editor_panel_ctx(
                     hole_rotation_deg: pad.hole_rotation_deg,
                     copper_offset_x_mm: pad.copper_offset_x_mm,
                     copper_offset_y_mm: pad.copper_offset_y_mm,
+                    sketch_source: editor
+                        .state
+                        .pad_sketch_source(editor.primitive().sketch.as_ref(), idx),
                 }
             })
         })
@@ -124,7 +131,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
             editor
                 .state
                 .selected_pad
-                .and_then(|idx| editor.state.pads.get(idx))
+                .and_then(|idx| editor.state.shown_pad(idx))
                 .map(|pad| {
                     let parameters = editor.primitive().sketch.as_ref().map(|s| &s.parameters);
                     let mut entries: Vec<crate::panels::PadShapeParamSummary> = pad
@@ -302,17 +309,17 @@ pub(super) fn build_footprint_editor_panel_ctx(
     let selected_sketch_entity_id = editor.state.selected_sketch;
     let (selected_sketch_role, selected_sketch_is_point) = match selected_sketch_entity_id {
         Some(id) => {
-            use crate::library::editor::footprint::sketch_dispatch::current_role_of;
+            use crate::library::editor::footprint::sketch_mode::roles::shown_role;
             use crate::library::messages::RoleTag;
             use signex_sketch::entity::EntityKind;
             editor
                 .primitive()
                 .sketch
                 .as_ref()
-                .and_then(|s| s.entities.iter().find(|e| e.id == id))
-                .map(|e| {
+                .and_then(|s| Some((s, s.entities.iter().find(|e| e.id == id)?)))
+                .map(|(s, e)| {
                     (
-                        current_role_of(e),
+                        shown_role(s, e, editor.state.sketch_host()),
                         matches!(e.kind, EntityKind::Point { .. }),
                     )
                 })
@@ -320,6 +327,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
         }
         None => (crate::library::messages::RoleTag::Unassigned, false),
     };
+    let (profile_roles, centerline_count) = super::board_sketch_ctx::sketch_role_rows(editor);
 
     // v0.16.3 — pad-placement defaults exposed for the Properties
     // panel form. Form is visible whenever Pads mode + PlacePad tool
@@ -354,6 +362,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
                         net: p.net.clone(),
                         fill_type: p.fill_type,
                         priority: p.priority,
+                        layer: p.layer,
                     });
                     let keepout = e.keepout.as_ref().map(|k| crate::panels::KeepoutSummary {
                         no_routing: k.kinds.no_routing,
@@ -362,6 +371,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
                         no_vias: k.kinds.no_vias,
                         no_drilling: k.kinds.no_drilling,
                         no_pours: k.kinds.no_pours,
+                        layer: k.layer,
                     });
                     let cutout = e
                         .board_cutout
@@ -392,6 +402,14 @@ pub(super) fn build_footprint_editor_panel_ctx(
                         copper_offset_x_mm: p.copper_offset_x_mm,
                         copper_offset_y_mm: p.copper_offset_y_mm,
                         has_drill: p.drill.is_some(),
+                        number: p.number.clone(),
+                        kind: p.kind,
+                        side: p.side,
+                        paste_top_expr: p.stack.paste_top_expr.clone(),
+                        paste_bottom_expr: p.stack.paste_bottom_expr.clone(),
+                        mask_top_expr: p.stack.mask_top_expr.clone(),
+                        mask_bottom_expr: p.stack.mask_bottom_expr.clone(),
+                        size_mm: editor_pad_size_mm(editor, e.id),
                     });
                     (pour, keepout, cutout, sketch_pad)
                 })
@@ -404,6 +422,9 @@ pub(super) fn build_footprint_editor_panel_ctx(
     // parity). The `is_active` flag mirrors `editor.active_idx`;
     // panel rendering uses it to highlight the currently-edited
     // sibling.
+    // Thumbnail rows of the Library panel draw each footprint's pads.
+    let tiles =
+        app.library.library_panel.row_style == crate::library::state::LibraryRowStyle::Thumbnail;
     let internal_footprints: Vec<crate::panels::FootprintLibInternalRow> = editor
         .file
         .footprints
@@ -413,6 +434,8 @@ pub(super) fn build_footprint_editor_panel_ctx(
             name: fp.name.clone(),
             pad_count: fp.pads.len(),
             is_active: i == editor.active_idx,
+            place_block: app.footprint_place_block(i),
+            tile: tiles.then(|| std::sync::Arc::new(crate::library::panel::FootprintTile::of(fp))),
         })
         .collect();
     let internal_selected_idx = editor.panel_selected_idx;
@@ -430,11 +453,13 @@ pub(super) fn build_footprint_editor_panel_ctx(
         let sketch = editor.primitive().sketch.as_ref()?;
         use crate::library::editor::footprint::state::ToolPending;
         use signex_sketch::array::{ArrayKind, NumberingScheme};
-        let array = sketch.arrays.iter().find(|a| match &a.kind {
-            ArrayKind::Linear { source, .. }
-            | ArrayKind::Grid { source, .. }
-            | ArrayKind::Polar { source, .. } => *source == sel_id,
-        })?;
+        // The pattern whose glyph was clicked wins among those of this
+        // source (mockup row 179e), else the first.
+        let picked = editor.state.sketch_overlay.selected_pattern;
+        let of_source = || sketch.arrays.iter().filter(|a| a.kind.source() == sel_id);
+        let array = of_source()
+            .find(|a| Some(a.id) == picked)
+            .or_else(|| of_source().next())?;
         let kind = match &array.kind {
             ArrayKind::Linear {
                 count_expr,
@@ -534,12 +559,42 @@ pub(super) fn build_footprint_editor_panel_ctx(
             editor.state.tool_pending,
             ToolPending::RepickPolarCenter { array_id } if array_id == array.id
         );
+        let source = sketch.entities.iter().find(|e| e.id == sel_id);
+        let source_position_mm = source.and_then(|e| match e.kind {
+            signex_sketch::entity::EntityKind::Point { x, y } => Some([x, y]),
+            _ => None,
+        });
+        let center_position_mm = match &kind {
+            crate::panels::ArrayKindSummary::Polar {
+                center_position_mm, ..
+            } => *center_position_mm,
+            _ => None,
+        };
+        let preview = signex_bake::array::preview_array(
+            array,
+            sketch,
+            source_position_mm,
+            center_position_mm,
+            crate::panels::PATTERN_PREVIEW_MAX_INSTANCES,
+        );
         Some(crate::panels::ArraySummary {
             array_id: array.id,
             kind,
             numbering,
             repicking_polar_center,
             bga_config,
+            sweep: match &array.numbering {
+                NumberingScheme::LinearIncrement { sweep, .. } => Some(*sweep),
+                _ => None,
+            },
+            preview,
+            source_number: source
+                .and_then(|e| e.pad.as_ref())
+                .map(|p| p.number.clone())
+                .unwrap_or_default(),
+            source_position_mm,
+            center_shown_mm: center_position_mm.map(|centre| editor.state.shown_mm(centre)),
+            source_size_mm: editor_pad_size_mm(editor, sel_id),
         })
     });
 
@@ -597,6 +652,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
             editor.primitive(),
             &editor.state.conflict,
         ),
+        conflict_suggestion: build_conflict_suggestion(editor),
         selected_pad,
         selected_pad_count: editor
             .state
@@ -616,7 +672,12 @@ pub(super) fn build_footprint_editor_panel_ctx(
         paste_disabled_smd_pads,
         selected_sketch_entity_id,
         selected_sketch_role,
+        sketch_host: editor.state.sketch_host(),
         selected_sketch_is_point,
+        bake_outcome: shown_outcome(editor).cloned(),
+        footprint_bake: FootprintBakeCard::of(editor),
+        profile_roles,
+        centerline_count,
         placement_active,
         placement_paused,
         next_pad_designator_override,
@@ -651,17 +712,98 @@ pub(super) fn build_footprint_editor_panel_ctx(
         selected_keepout,
         selected_cutout,
         selected_sketch_pad,
-        board: super::board_sketch_ctx::board_sketch_props(editor),
+        board: app.board_sketch_panel_props(editor),
         snap_options: editor.state.snap_options,
         selection_filter: editor.state.selection_filter,
         snap_subtab: editor.state.snap_subtab,
         snapping_mode: editor.state.snapping_mode,
-        guides: editor.state.guides.clone(),
+        // As the user reads them; the state keeps model coordinates.
+        guides: editor
+            .state
+            .guides
+            .iter()
+            .map(|guide| crate::library::editor::footprint::state::Guide {
+                position_mm: editor.state.guide_shown_mm(guide.axis, guide.position_mm),
+                ..*guide
+            })
+            .collect(),
         grids: editor.state.grids.clone(),
         active_grid_idx: editor.state.active_grid_idx,
         selected_silk_summary,
         selected_array,
         selected_pad_shape_params,
         numeric_buffers: editor.state.numeric_buffers.clone(),
+        illustration_hover: editor.state.properties_hover.clone(),
+        courtyard_extent_mm: courtyard_extent_mm(&editor.state),
+        courtyard_expansion_mm: crate::library::editor::footprint::COURTYARD_SLACK_MM,
+        pad_outlines: editor
+            .state
+            .pads
+            .iter()
+            .map(|pad| crate::panels::PadOutlineSummary {
+                position_mm: [pad.position_mm.0, pad.position_mm.1],
+                size_mm: [pad.size_mm.0, pad.size_mm.1],
+                rotation_deg: pad.rotation_deg,
+                corners_mm: pad.rotated_corners_mm().map(|(x, y)| [x, y]),
+                shape: pad.shape.clone(),
+                has_drill: pad.drill_diameter_mm.is_some(),
+                number: pad.number.clone(),
+                template: pad.template.clone(),
+                template_library: pad.template_library.clone(),
+            })
+            .collect(),
+        silk_segments: crate::panels::outline_segments(
+            &[
+                editor.primitive().silk_f.as_slice(),
+                editor.primitive().generated.silk.as_slice(),
+            ]
+            .concat(),
+        ),
+        assembly_segments: crate::panels::outline_segments(
+            &[
+                editor.primitive().fab_f.as_slice(),
+                editor.primitive().generated.assembly.as_slice(),
+            ]
+            .concat(),
+        ),
+        generated: editor.primitive().generated.clone(),
+        body_extent_mm: signex_bake::body_extent(editor.primitive()),
+        pin_one_dot_missing: signex_bake::pin_one_dot_is_missing(editor.primitive()),
+        sketch_state: {
+            use crate::library::editor::standalone::dof_chip;
+            let (tone, label) = dof_chip::dof_state(editor);
+            let dof = dof_chip::sketch_dof(editor);
+            crate::panels::SketchStateSummary { tone, label, dof }
+        },
     })
+}
+
+/// The courtyard's extent: the generated rectangle, else the extent of the
+/// outline-following polygon.
+fn courtyard_extent_mm(
+    state: &crate::library::editor::footprint::FootprintEditorState,
+) -> Option<[f64; 4]> {
+    if let Some(c) = state.courtyard_mm {
+        return Some([c.min_x, c.min_y, c.max_x, c.max_y]);
+    }
+    let outline = state.courtyard_outline()?;
+    outline.iter().fold(None, |extent, &(x, y)| {
+        Some(match extent {
+            Some([x0, y0, x1, y1]) => [f64::min(x0, x), f64::min(y0, y), x1.max(x), y1.max(y)],
+            None => [x, y, x, y],
+        })
+    })
+}
+
+/// Copper size in mm of the editor pad bound to sketch entity `id`.
+fn editor_pad_size_mm(
+    editor: &crate::app::FootprintDocument,
+    id: signex_sketch::id::SketchEntityId,
+) -> Option<[f64; 2]> {
+    editor
+        .state
+        .pads
+        .iter()
+        .find(|pad| pad.sketch_entity_id == Some(id))
+        .map(|pad| [pad.size_mm.0, pad.size_mm.1])
 }

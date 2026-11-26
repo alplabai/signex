@@ -8,6 +8,8 @@ use iced::{Color, Point};
 use super::super::{FootprintCanvas, FootprintCanvasState};
 use super::layers::{LayerInput, draw_courtyard, draw_pads, draw_silk};
 use super::pad::PadLabels;
+use super::silk::draw_silk_graphics;
+use crate::library::editor::footprint::layers::FpLayer;
 
 impl FootprintCanvas<'_> {
     /// The read-only view of the model the shared content layers draw.
@@ -23,8 +25,7 @@ impl FootprintCanvas<'_> {
             selected_pads_extra: &self.state.selected_pads_extra,
             selected_silk_f: self.state.selected_silk_f,
             pad_labels: PadLabels::Editor,
-            palette: super::graphite::look_from_bg(self.bg_color)
-                .map_or(self.state.layer_palette, |l| l.palette()),
+            palette: super::super::super::layers::LayerPalette::Editor,
         }
     }
 
@@ -34,7 +35,18 @@ impl FootprintCanvas<'_> {
         frame: &mut canvas::Frame,
         cstate: &FootprintCanvasState,
     ) {
-        draw_silk(frame, cstate, &self.layer_input());
+        let input = self.layer_input();
+        draw_silk(frame, cstate, &input);
+        if input.visibility.get(FpLayer::FSilks) {
+            draw_silk_graphics(
+                frame,
+                cstate,
+                self.generated_silk,
+                FpLayer::FSilks,
+                None,
+                input.palette,
+            );
+        }
     }
 
     /// Courtyard outline (or bbox fallback).

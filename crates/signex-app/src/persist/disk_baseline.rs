@@ -17,6 +17,15 @@ impl ContentHash {
     pub fn of(bytes: &[u8]) -> Self {
         Self(Sha256::digest(bytes).into())
     }
+
+    /// The digest as a sheet read carries it across the crate boundary.
+    pub fn to_raw(self) -> [u8; 32] {
+        self.0
+    }
+
+    pub fn from_raw(raw: [u8; 32]) -> Self {
+        Self(raw)
+    }
 }
 
 /// What one read of a document's file learned: its fingerprint, and the file
@@ -25,6 +34,9 @@ impl ContentHash {
 pub struct DiskRead {
     pub hash: ContentHash,
     pub real_path: Option<PathBuf>,
+    /// The file's modified time, for `${ModifiedDate}`; `None` when the
+    /// file system has none.
+    pub modified: Option<std::time::SystemTime>,
 }
 
 impl DiskRead {
@@ -33,6 +45,7 @@ impl DiskRead {
         Self {
             hash: ContentHash::of(text.as_bytes()),
             real_path: std::fs::canonicalize(path).ok(),
+            modified: std::fs::metadata(path).and_then(|m| m.modified()).ok(),
         }
     }
 
@@ -42,6 +55,7 @@ impl DiskRead {
         Self {
             hash: ContentHash::of(bytes),
             real_path: None,
+            modified: None,
         }
     }
 }

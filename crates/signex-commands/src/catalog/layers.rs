@@ -228,4 +228,111 @@ pub(super) const LAYERS: &[CommandMetadata] = &[
         operands: super::operands::SET_LAYER_SIZES,
         ..CommandMetadata::DEFAULT
     },
+    // #2242: a pad's copper shape with its trapezoid delta or custom
+    // outline, the Pad panel's Shape row in agent form. One undo step.
+    CommandMetadata {
+        id: "set_pad_shape",
+        category: "modify",
+        label: command_ids::CMD_SET_PAD_SHAPE,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::SET_PAD_SHAPE,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2363: the Layers panel's board view configuration, on the named
+    // board's view: never the board, no undo step.
+    CommandMetadata {
+        id: "set_layer_visible",
+        category: "view",
+        label: command_ids::CMD_SET_LAYER_VISIBLE,
+        menu_label: Some(command_ids::CMD_MENU_SET_LAYER_VISIBLE),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::LAYER_VISIBLE,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "set_active_layer",
+        category: "view",
+        label: command_ids::CMD_SET_ACTIVE_LAYER,
+        menu_label: Some(command_ids::CMD_MENU_SET_ACTIVE_LAYER),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::LAYER,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "set_layer_color",
+        category: "view",
+        label: command_ids::CMD_SET_LAYER_COLOR,
+        menu_label: Some(command_ids::CMD_MENU_SET_LAYER_COLOR),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        // Layer colours are saved with the board (2026-11-18).
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::LAYER_COLOR,
+        ..CommandMetadata::DEFAULT
+    },
+    // 2026-11-18: Layer colour... on a layer tab; the palette opens it for
+    // the active layer. It opens the Layers panel's colour picker.
+    CommandMetadata {
+        id: "edit_layer_color",
+        category: "view",
+        label: command_ids::CMD_EDIT_LAYER_COLOR,
+        menu_label: Some(command_ids::CMD_MENU_EDIT_LAYER_COLOR),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    // 2026-11-18: Reset all layer colours on a layer tab, one undo step.
+    CommandMetadata {
+        id: "reset_layer_colors",
+        category: "view",
+        label: command_ids::CMD_RESET_LAYER_COLORS,
+        menu_label: Some(command_ids::CMD_MENU_RESET_LAYER_COLORS),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        // A CLI or an agent names the board.
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::DOCUMENT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "show_used_layers_only",
+        category: "view",
+        label: command_ids::CMD_SHOW_USED_LAYERS_ONLY,
+        menu_label: Some(command_ids::CMD_MENU_SHOW_USED_LAYERS_ONLY),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::ON_BOARD,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "set_object_visible",
+        category: "view",
+        label: command_ids::CMD_SET_OBJECT_VISIBLE,
+        menu_label: Some(command_ids::CMD_MENU_SET_OBJECT_VISIBLE),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::OBJECT_VISIBLE,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "set_object_transparency",
+        category: "view",
+        label: command_ids::CMD_SET_OBJECT_TRANSPARENCY,
+        menu_label: Some(command_ids::CMD_MENU_SET_OBJECT_TRANSPARENCY),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::OBJECT_TRANSPARENCY,
+        ..CommandMetadata::DEFAULT
+    },
 ];

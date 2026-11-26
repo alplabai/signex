@@ -108,6 +108,38 @@ pub(super) const DRAWING: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_MUTATES,
         ..CommandMetadata::DEFAULT
     },
+    // #1300: a typed table, one click.
+    CommandMetadata {
+        id: "place_table",
+        category: "place",
+        label: command_ids::CMD_PLACE_TABLE,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_TABLE),
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    // #1267: dimensions; Linear is horizontal or vertical by the drag.
+    CommandMetadata {
+        id: "place_linear_dimension",
+        category: "place",
+        label: command_ids::CMD_PLACE_LINEAR_DIMENSION,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_LINEAR_DIMENSION),
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "place_aligned_dimension",
+        category: "place",
+        label: command_ids::CMD_PLACE_ALIGNED_DIMENSION,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_ALIGNED_DIMENSION),
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "import_graphics",
         category: "place",
@@ -128,6 +160,17 @@ pub(super) const DRAWING: &[CommandMetadata] = &[
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
         flags: CommandFlags::MUTATES,
         operands: operands::EDIT_BLANKET,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "edit_no_erc_rules",
+        category: "place",
+        label: command_ids::CMD_EDIT_NO_ERC_RULES,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::MUTATES,
+        operands: operands::EDIT_NO_ERC_RULES,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -155,6 +198,38 @@ pub(super) const DRAWING: &[CommandMetadata] = &[
         category: "place",
         label: command_ids::CMD_PLACE_BOARD_DIMENSION,
         menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_DIMENSION),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2507: the other dimension kinds, in Place ▸ Dimension and the PCB
+    // Active Bar's Dimensions dropdown. No default keys.
+    CommandMetadata {
+        id: "place_board_dimension_horizontal",
+        category: "place",
+        label: command_ids::CMD_PLACE_BOARD_DIMENSION_HORIZONTAL,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_DIMENSION_HORIZONTAL),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "place_board_dimension_vertical",
+        category: "place",
+        label: command_ids::CMD_PLACE_BOARD_DIMENSION_VERTICAL,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_DIMENSION_VERTICAL),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "place_board_dimension_radial",
+        category: "place",
+        label: command_ids::CMD_PLACE_BOARD_DIMENSION_RADIAL,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_DIMENSION_RADIAL),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::GUI_MUTATES,
@@ -234,6 +309,18 @@ pub(super) const DRAWING: &[CommandMetadata] = &[
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::MUTATES,
         operands: super::operands::BOARD_GRAPHIC_SET,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2368: a footprint's designator or comment placed on its own, as a
+    // drag on the board moves it. No default key.
+    CommandMetadata {
+        id: "set_footprint_text",
+        category: "edit",
+        label: command_ids::CMD_SET_FOOTPRINT_TEXT,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::FOOTPRINT_TEXT_SET,
         ..CommandMetadata::DEFAULT
     },
     // #2410: DXF import. Without operands it asks for the file; the import

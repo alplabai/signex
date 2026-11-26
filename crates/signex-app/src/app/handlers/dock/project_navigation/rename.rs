@@ -10,15 +10,19 @@ use crate::app::state::scope::CaseFold;
 use signex_i18n::RenderTranslatable;
 
 impl Signex {
-    pub(super) fn open_rename_dialog(&mut self, tree_path: Vec<usize>) {
+    /// Open the rename modal for a tree row. The returned task focuses its
+    /// name field with the stem selected (mockup row 23) when the dialog
+    /// shows in the main window; an own window does it once it opens
+    /// ([`Self::focus_rename_field_once_open`]).
+    pub(super) fn open_rename_dialog(&mut self, tree_path: Vec<usize>) -> iced::Task<Message> {
         if self.refuse_on_missing_child(&tree_path, "Rename", false) {
-            return;
+            return iced::Task::none();
         }
         let Some(target_path) = self.tree_path_to_file_path(&tree_path) else {
             crate::diagnostics::log_warning(
                 "Rename cancelled: the selected project-tree row no longer resolves to a file.",
             );
-            return;
+            return iced::Task::none();
         };
         let filename = target_path
             .file_name()
@@ -26,25 +30,137 @@ impl Signex {
             .unwrap_or("")
             .to_string();
         let project_id = self.project_id_at_tree_path(&tree_path);
-        self.ui_state.rename_dialog = Some(crate::app::RenameDialogState {
+        let placing_symbols = self.own_project_placing_symbols(&target_path, project_id);
+        self.ui_state.rename_dialog = Some(Box::new(crate::app::RenameDialogState {
             target_path,
             tree_path,
             project_id,
             buffer: filename,
             error: None,
             is_project_rename: false,
-        });
+            placing_symbols,
+            name_clash: None,
+        }));
+        rename_field_focus()
+    }
+
+    /// The Rename field has focus and its text selected once the dialog's
+    /// own window exists; a focus asked for at open time has no window yet.
+    pub(crate) fn focus_rename_field_once_open(
+        &self,
+        modal: crate::app::state::ModalId,
+    ) -> iced::Task<Message> {
+        if modal != crate::app::state::ModalId::RenameDialog
+            || self.ui_state.rename_dialog.is_none()
+        {
+            return iced::Task::none();
+        }
+        rename_field_focus()
+    }
+
+    /// The sheet symbols of `owner`'s own project that place `target`: the
+    /// ones a file rename re-points (`sheet_references`). Read from the Model
+    /// (the walked hierarchies and the open sheets), no disk. Only a
+    /// schematic sheet can be placed.
+    pub(crate) fn own_project_placing_symbols(
+        &self,
+        target: &std::path::Path,
+        owner: Option<crate::app::state::ProjectId>,
+    ) -> Vec<crate::app::path_ops::PlacingSymbol> {
+        let Some(owner) = owner else {
+            return Vec::new();
+        };
+        if !crate::app::file_extension::has_extension(target, "snxsch") {
+            return Vec::new();
+        }
+        let elsewhere = self.sheet_users(target, Some(owner)).symbols;
+        self.sheet_users(target, None)
+            .symbols
+            .into_iter()
+            .filter(|s| !elsewhere.contains(s))
+            .collect()
+    }
+
+    /// The Rename field changed: keep the text, clear the last refusal and
+    /// check the new name against the files the Model knows.
+    pub(crate) fn handle_rename_buffer_changed(&mut self, buffer: String) {
+        let Some(dialog) = self.ui_state.rename_dialog.as_mut() else {
+            return;
+        };
+        dialog.buffer = buffer;
+        dialog.error = None;
+        let clash = self
+            .ui_state
+            .rename_dialog
+            .as_ref()
+            .and_then(|d| self.rename_name_clash(d));
+        if let Some(dialog) = self.ui_state.rename_dialog.as_mut() {
+            dialog.name_clash = clash;
+        }
+    }
+
+    /// The new name of a file rename, when another file the Model knows sits
+    /// in the same folder under it: a project's file, sheet, board or
+    /// library, or an open tab. Compared under the project's case rules; the
+    /// file itself (a case-only rename) is no clash. A file only on disk is
+    /// left to the worker, which refuses to overwrite it.
+    pub(crate) fn rename_name_clash(
+        &self,
+        dialog: &crate::app::RenameDialogState,
+    ) -> Option<String> {
+        use crate::app::project_sheets::lexically_normalize;
+        use crate::app::state::scope::path_key_with;
+        if dialog.is_project_rename {
+            return None;
+        }
+        let name = dialog.buffer.trim();
+        if name.is_empty() || name.contains(['/', '\\']) {
+            return None;
+        }
+        let candidate = dialog.target_path.parent()?.join(name);
+        let ds = &self.document_state;
+        let owner = dialog
+            .project_id
+            .and_then(|id| ds.project_by_id(id))
+            .or_else(|| ds.projects.get(*dialog.tree_path.first()?));
+        let fold = crate::app::state::project_case::fold_of(owner);
+        let key = |p: &std::path::Path| path_key_with(&lexically_normalize(p), fold);
+        let wanted = key(&candidate);
+        if wanted == key(&dialog.target_path) {
+            return None;
+        }
+        let mut known: Vec<std::path::PathBuf> = Vec::new();
+        for project in &ds.projects {
+            let dir = project.dir();
+            known.push(project.path.clone());
+            known.extend(project.data.sheets.iter().map(|s| dir.join(&s.filename)));
+            known.extend(project.data.pcb_file.iter().map(|pcb| dir.join(pcb)));
+            for entry in &project.data.libraries {
+                let library = project.data.resolve_library_path(entry);
+                known.extend(library.parent().map(std::path::Path::to_path_buf));
+                known.push(library);
+            }
+        }
+        known.extend(ds.tabs.iter().map(|tab| tab.path.clone()));
+        known
+            .iter()
+            .any(|p| key(p) == wanted)
+            .then(|| name.to_string())
     }
 
     /// Open the rename modal seeded with the project name (the `.snxprj`
     /// file stem). On submit, [`handle_rename_submit`] sees
     /// `is_project_rename = true` and renames the project (see `project_rename`).
-    pub(crate) fn open_project_rename_dialog(&mut self, tree_path: Vec<usize>) {
+    /// Returns the field focus of [`Self::open_rename_dialog`].
+    pub(crate) fn open_project_rename_dialog(
+        &mut self,
+        tree_path: Vec<usize>,
+    ) -> iced::Task<Message> {
         let Some(&project_idx) = tree_path.first() else {
-            return;
+            return iced::Task::none();
         };
         let Some(project) = self.document_state.projects.get(project_idx) else {
-            return;
+            return iced::Task::none();
         };
         let target_path = project.path.clone();
         let stem = target_path
@@ -52,20 +168,28 @@ impl Signex {
             .and_then(|s| s.to_str())
             .unwrap_or("")
             .to_string();
-        self.ui_state.rename_dialog = Some(crate::app::RenameDialogState {
+        self.ui_state.rename_dialog = Some(Box::new(crate::app::RenameDialogState {
             target_path,
             tree_path,
             project_id: Some(project.id),
             buffer: stem,
             error: None,
             is_project_rename: true,
-        });
+            placing_symbols: Vec::new(),
+            name_clash: None,
+        }));
+        rename_field_focus()
     }
 
     pub(crate) fn handle_rename_submit(&mut self) -> iced::Task<Message> {
         let Some(mut state) = self.ui_state.rename_dialog.clone() else {
             return iced::Task::none();
         };
+        // The name is taken by a file the Model knows: the dialog already says
+        // so and withholds Rename; Enter in the field is refused the same way.
+        if state.name_clash.is_some() {
+            return iced::Task::none();
+        }
         if !self.repoint_dialog_tree_path(state.project_id, &mut state.tree_path) {
             crate::diagnostics::log_warning(format!(
                 "Rename of {} cancelled: its project was closed while the dialog was open.",
@@ -162,6 +286,14 @@ impl Signex {
         // together once the file rename lands (#739).
         if self.project_library_kind(&state).is_some() {
             return self.begin_library_rename(&state, new_path);
+        }
+        // The move also rewrites the saved `.snxprj`: a read-only project
+        // refuses it before the file moves (#2904).
+        if let Some(refusal) =
+            self.read_only_project_rename_refusal(state.tree_path.first().copied())
+        {
+            self.set_rename_error(&refusal);
+            return iced::Task::none();
         }
 
         // Find every parent sheet that references this file BEFORE it
@@ -395,3 +527,18 @@ impl Signex {
         crate::diagnostics::log_warning(format!("[rename] refused: {REASON}"));
     }
 }
+
+/// Focus the Rename name field and select its text. The field holds only
+/// the stem (the extension is a fixed suffix), so the stem is selected.
+pub(super) fn rename_field_focus() -> iced::Task<Message> {
+    use iced::widget::operation;
+    let id: &iced::widget::Id = &crate::app::contracts::RENAME_INPUT_ID;
+    iced::Task::batch([
+        operation::focus(id.clone()),
+        operation::text_input::select_all(id.clone()),
+    ])
+}
+
+#[cfg(test)]
+#[path = "rename_dialog_tests.rs"]
+mod rename_dialog_tests;

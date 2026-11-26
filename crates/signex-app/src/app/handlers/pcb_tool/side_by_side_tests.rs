@@ -173,6 +173,45 @@ fn multi_route_runs_the_selected_nets_side_by_side() {
     assert_eq!(live(&app, &path), before, "one undo removes the bus");
 }
 
+/// With track vertices snapping, a click between two stubs still starts the
+/// centre line between them, and its next point is not pulled onto a pad.
+#[test]
+fn a_bus_centre_line_is_not_yanked_onto_an_object() {
+    use signex_engine::pcb::snap::SnapObject;
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _path) = app_with(dir.path(), ["D0", "D1"]);
+    app.ui_state
+        .pcb_snap
+        .objects
+        .insert(SnapObject::TrackVertices);
+    run(&mut app, "place_board_multi_route");
+    let stubs = [21, 22].map(|n| ItemRef::Track(Uuid::from_u128(n)));
+    app.with_pcb_selection(|state, board| state.select_items(board, &stubs))
+        .expect("a board in view");
+    click(&mut app, 1.0, 0.0);
+    let session = app.interaction_state.pcb_tool.as_ref().expect("armed");
+    assert_eq!(session.points, vec![Point::new(1.0, 0.0)]);
+    // 2 mm from net C's pad at (6, 0), inside 8 px at the default 3 px/mm.
+    click(&mut app, 4.0, 0.0);
+    let session = app.interaction_state.pcb_tool.as_ref().expect("armed");
+    assert_eq!(session.points.last(), Some(&Point::new(4.0, 0.0)));
+}
+
+/// A coarse view grid does not coarsen the walkaround's search.
+#[test]
+fn the_route_search_step_does_not_grow_with_a_coarse_grid() {
+    use super::router::search_grid_mm;
+    let on = |grid: f64| {
+        let board: PcbBoard = serde_json::from_value(json!({
+            "uuid": Uuid::from_u128(1), "setup": {"grid_size": grid}
+        }))
+        .unwrap();
+        search_grid_mm(&board)
+    };
+    assert_eq!(on(5.08), signex_types::pcb::PCB_GRID_MM);
+    assert_eq!(on(0.1), 0.1);
+}
+
 #[test]
 fn quick_route_goes_straight_to_the_target_in_one_step() {
     let dir = tempfile::tempdir().unwrap();
@@ -203,4 +242,38 @@ fn quick_route_goes_straight_to_the_target_in_one_step() {
     );
     undo(&mut app);
     assert_eq!(live(&app, &path), before, "one undo removes it");
+}
+
+/// Maintainer 2026-11-18: with an inner layer active, a pair whose copper
+/// is on Top starts each net with a via and runs on the inner layer, as
+/// one undo step.
+#[test]
+fn a_pair_from_top_copper_on_an_inner_layer_starts_with_a_via_per_net() {
+    use crate::app::{Message, PcbMsg, PcbViewMsg};
+    use signex_types::pcb_layer::{CopperLayer, InnerCopper, PcbLayer};
+
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with(dir.path(), ["USB_P", "USB_N"]);
+    let before = live(&app, &path);
+    let inner = CopperLayer::Inner(InnerCopper::new(1).expect("inner 1"));
+    let picked = PcbViewMsg::ActiveLayerPicked(PcbLayer::Copper(inner));
+    let _ = app.update(Message::Pcb(PcbMsg::View(picked)));
+    run(&mut app, "place_board_diff_pair");
+    click(&mut app, 1.0, 0.5);
+    click(&mut app, 11.0, 0.0);
+    escape(&mut app);
+
+    let board = board_of(&app, &path);
+    let mut nets: Vec<u32> = board.vias.iter().map(|v| v.net).collect();
+    nets.sort_unstable();
+    assert_eq!(nets, vec![1, 2], "one via per net: {:?}", board.vias);
+    // The two stubs come first; the pair's tracks follow them.
+    let routed = &board.segments[2..];
+    assert!(!routed.is_empty());
+    assert!(
+        routed.iter().all(|s| s.layer == "Inner1Copper"),
+        "{routed:?}"
+    );
+    undo(&mut app);
+    assert_eq!(live(&app, &path), before, "vias and tracks are one step");
 }

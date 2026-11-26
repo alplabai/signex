@@ -1,7 +1,7 @@
 //! #2383 — the board Selection Filter's presets and its live area chips,
 //! through `Signex::update`: a preset saved from the chips applies after the
 //! chips change and survives a restart; a Keepout chip turned off stops a
-//! click picking the keepout.
+//! click picking the keepout. #2873: presets are edited in place.
 
 use std::path::Path;
 
@@ -95,6 +95,8 @@ fn a_keepout_chip_turned_off_stops_the_keepout_being_picked() {
     assert_eq!(click(&mut app, 15.0, 15.0), vec![keepout()]);
 }
 
+/// The one test of this file that runs the prefs writes: the others share
+/// the per-process prefs file, so they leave their write tasks unrun.
 #[test]
 fn a_saved_preset_applies_after_the_chips_change_and_outlives_a_restart() {
     let dir = tempfile::tempdir().unwrap();
@@ -137,17 +139,163 @@ fn a_saved_preset_applies_after_the_chips_change_and_outlives_a_restart() {
     assert_eq!(presets[0].name, "Routing");
     assert_eq!(presets[0].filters, vec![PickKind::Tracks, PickKind::Vias]);
 
-    // Updated from the chips, then removed.
-    run(panel(&mut app, PcbBoardMsg::FilterAllToggled));
-    run(panel(&mut app, PcbBoardMsg::FilterPresetUpdated(0)));
-    assert_eq!(
-        app.ui_state.pcb_filter_presets[0].filters.len(),
-        PickKind::ALL.len()
-    );
+    // #2873 (Caner, 2026-11-24) supersedes Save Chips: the applied preset
+    // is selected for editing, so a chip click changes it at once and the
+    // change is saved; it was All - On then Save Chips
+    // (`FilterPresetUpdated`), which is gone.
+    let task = panel(&mut app, PcbBoardMsg::FilterKindToggled(PickKind::Pads));
+    assert!(task.units() >= 1, "the save is a task, not inline IO");
+    run(task);
+    let edited = vec![PickKind::Tracks, PickKind::Pads, PickKind::Vias];
+    assert_eq!(app.ui_state.pcb_filter_presets[0].filters, edited);
+    let restarted = app_workspace(&dir.path().to_string_lossy(), &[]);
+    assert_eq!(restarted.ui_state.pcb_filter_presets[0].filters, edited);
     run(panel(&mut app, PcbBoardMsg::FilterPresetRemoved(0)));
     assert!(app.ui_state.pcb_filter_presets.is_empty());
     let restarted = app_workspace(&dir.path().to_string_lossy(), &[]);
     assert!(restarted.ui_state.pcb_filter_presets.is_empty());
+}
+
+/// A panel message, its prefs write left unrun (see the restart test).
+fn send(app: &mut Signex, msg: PcbBoardMsg) -> Task<Message> {
+    panel(app, msg)
+}
+
+/// The kinds the board filter has on.
+fn on(app: &Signex) -> Vec<PickKind> {
+    app.ui_state.pcb_pick_filter.on_kinds().collect()
+}
+
+/// The kinds of the board's preset `idx`.
+fn kinds(app: &Signex, idx: usize) -> Vec<PickKind> {
+    app.ui_state.pcb_filter_presets[idx].filters.clone()
+}
+
+/// The preset the board panel shows as selected for editing.
+fn shown_editing(app: &Signex) -> Option<usize> {
+    let summary = app.document_state.panel_ctx.pcb_board.as_ref();
+    summary.expect("board panel").preset_editing
+}
+
+/// An app on the board with two saved presets, Vias (0) and Tracks (1),
+/// none selected, every chip on.
+fn app_with_two_presets(dir: &Path) -> Signex {
+    let mut app = app_with_board(dir);
+    for kind in [PickKind::Vias, PickKind::Tracks] {
+        let _ = send(&mut app, PcbBoardMsg::FilterAllSet(false));
+        let _ = send(&mut app, PcbBoardMsg::FilterKindToggled(kind));
+        let _ = send(&mut app, PcbBoardMsg::FilterPresetAdded);
+    }
+    let _ = send(&mut app, PcbBoardMsg::FilterAllSet(true));
+    app
+}
+
+/// #2873: a click on a preset applies it and selects it for editing.
+#[test]
+fn a_preset_click_applies_it_and_selects_it_for_editing() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = app_with_two_presets(dir.path());
+    assert_eq!(app.ui_state.pcb_filter_preset_editing, None);
+    let _ = send(&mut app, PcbBoardMsg::FilterPresetApplied(1));
+    assert_eq!(on(&app), vec![PickKind::Tracks]);
+    assert_eq!(app.ui_state.pcb_filter_preset_editing, Some(1));
+    assert_eq!(shown_editing(&app), Some(1), "the panel shows it");
+    let _ = send(&mut app, PcbBoardMsg::FilterPresetApplied(7));
+    assert_eq!(shown_editing(&app), Some(1), "past the end: no change");
+}
+
+/// #2873: while a preset is selected, each chip click changes it at once,
+/// with a prefs write, and the filter with it.
+#[test]
+fn a_chip_click_changes_the_selected_preset_and_the_filter() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = app_with_two_presets(dir.path());
+    let _ = send(&mut app, PcbBoardMsg::FilterPresetApplied(0));
+    let task = send(&mut app, PcbBoardMsg::FilterKindToggled(PickKind::Pads));
+    assert!(task.units() >= 1, "the preset is saved");
+    assert_eq!(on(&app), vec![PickKind::Pads, PickKind::Vias]);
+    assert_eq!(kinds(&app, 0), vec![PickKind::Pads, PickKind::Vias]);
+    assert_eq!(kinds(&app, 1), vec![PickKind::Tracks], "the other is kept");
+    let _ = send(&mut app, PcbBoardMsg::FilterKindToggled(PickKind::Vias));
+    assert_eq!(kinds(&app, 0), vec![PickKind::Pads]);
+    assert_eq!(on(&app), vec![PickKind::Pads]);
+}
+
+/// #2873: All - On, All, None and a second click on the selected preset
+/// leave editing; a chip then changes only the filter.
+#[test]
+fn all_on_none_or_a_second_click_leave_editing() {
+    let leave = [
+        PcbBoardMsg::FilterAllToggled,
+        PcbBoardMsg::FilterAllSet(true),
+        PcbBoardMsg::FilterAllSet(false),
+        PcbBoardMsg::FilterPresetApplied(0),
+    ];
+    for left in leave {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = app_with_two_presets(dir.path());
+        let _ = send(&mut app, PcbBoardMsg::FilterPresetApplied(0));
+        let before = on(&app);
+        let _ = send(&mut app, left.clone());
+        assert_eq!(app.ui_state.pcb_filter_preset_editing, None, "{left:?}");
+        assert_eq!(shown_editing(&app), None, "{left:?}");
+        assert_eq!(kinds(&app, 0), vec![PickKind::Vias], "{left:?} keeps it");
+        if left == PcbBoardMsg::FilterPresetApplied(0) {
+            assert_eq!(on(&app), before, "a second click keeps the filter");
+        }
+        let had_pads = app.ui_state.pcb_pick_filter.is_on(PickKind::Pads);
+        let _ = send(&mut app, PcbBoardMsg::FilterKindToggled(PickKind::Pads));
+        let has_pads = app.ui_state.pcb_pick_filter.is_on(PickKind::Pads);
+        assert_ne!(had_pads, has_pads, "{left:?}: the chip changes the filter");
+        assert_eq!(
+            kinds(&app, 0),
+            vec![PickKind::Vias],
+            "{left:?}: not the preset"
+        );
+    }
+}
+
+/// #2873: the name field renames the selected preset and Delete removes it;
+/// deleting an earlier preset keeps the selection on its preset.
+#[test]
+fn the_name_field_renames_and_delete_removes_the_selected_preset() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = app_with_two_presets(dir.path());
+    let _ = send(&mut app, PcbBoardMsg::FilterPresetApplied(1));
+    let _ = send(
+        &mut app,
+        PcbBoardMsg::FilterPresetRenamed(1, "Routing".into()),
+    );
+    assert_eq!(app.ui_state.pcb_filter_presets[1].name, "Routing");
+    let _ = send(&mut app, PcbBoardMsg::FilterPresetRemoved(0));
+    assert_eq!(shown_editing(&app), Some(0));
+    assert_eq!(app.ui_state.pcb_filter_presets[0].name, "Routing");
+    let _ = send(&mut app, PcbBoardMsg::FilterPresetRemoved(0));
+    assert!(app.ui_state.pcb_filter_presets.is_empty());
+    assert_eq!(shown_editing(&app), None);
+}
+
+/// #2873: Add Preset saves the chips that are on as a new preset and
+/// selects it; the four-preset cap stays.
+#[test]
+fn add_preset_saves_the_chips_and_selects_the_new_preset() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = app_with_two_presets(dir.path());
+    let _ = send(&mut app, PcbBoardMsg::FilterAllSet(false));
+    let _ = send(&mut app, PcbBoardMsg::FilterKindToggled(PickKind::Keepouts));
+    let _ = send(&mut app, PcbBoardMsg::FilterPresetAdded);
+    assert_eq!(kinds(&app, 2), vec![PickKind::Keepouts]);
+    assert_eq!(shown_editing(&app), Some(2));
+    let _ = send(&mut app, PcbBoardMsg::FilterPresetAdded);
+    assert_eq!(shown_editing(&app), Some(3));
+    let _ = send(&mut app, PcbBoardMsg::FilterPresetAdded);
+    let cap = crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT;
+    assert_eq!(app.ui_state.pcb_filter_presets.len(), cap, "the cap holds");
+    assert_eq!(
+        shown_editing(&app),
+        Some(3),
+        "a refused add selects nothing"
+    );
 }
 
 /// #2383: the board panel header's filter button opens and closes the

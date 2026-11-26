@@ -1,0 +1,34 @@
+# ast-grep rules for scripts/check_sheet_change_seam.sh, run on the core half
+# of the edit tails only. Code nodes only, so a comment never matches. Kept out
+# of ast-grep/rules on purpose, like scripts/app-catch-unwind.yml.
+#
+# #2326 M6: no GUI state and not the diagnostics log, neither directly nor
+# through the projector (`log_notice`) or `tracing`.
+id: sheet-change-gui-name
+language: rust
+rule:
+  any:
+    - kind: identifier
+      regex: '^(diagnostics|projector|log_notice|tracing|ui_state|interaction_state|panel_ctx|window_panel_ctx)$'
+    - kind: field_identifier
+      regex: '^(ui_state|interaction_state|panel_ctx|window_panel_ctx)$'
+---
+# #2704: no trait and no trait impl, whose methods would reach the core half
+# under a name the wrapper list does not see.
+id: sheet-change-trait
+language: rust
+rule:
+  any:
+    - kind: trait_item
+    - kind: impl_item
+      has:
+        field: trait
+        kind: type_identifier
+    - kind: impl_item
+      has:
+        field: trait
+        kind: scoped_type_identifier
+    - kind: impl_item
+      has:
+        field: trait
+        kind: generic_type

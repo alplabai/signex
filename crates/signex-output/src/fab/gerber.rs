@@ -74,11 +74,11 @@ impl Apertures {
     fn define(&self, out: &mut String) {
         for (index, (shape, function)) in self.list.iter().enumerate() {
             let code = FIRST_APERTURE + index;
-            if let Some(body) = macro_body(*shape) {
+            if let Some(body) = macro_body(shape) {
                 out.push_str(&format!("%AMM{code}*\n{body}%\n"));
             }
             out.push_str(&format!("%TA.AperFunction,{}*%\n", function.x2()));
-            out.push_str(&format!("%ADD{code}{}*%\n", template(*shape, code)));
+            out.push_str(&format!("%ADD{code}{}*%\n", template(shape, code)));
         }
         if !self.list.is_empty() {
             out.push_str("%TD*%\n");
@@ -90,7 +90,7 @@ fn aperture_of(mark: &Mark) -> Option<(ApertureShape, Function)> {
     match mark {
         Mark::Flash {
             shape, function, ..
-        } => Some((*shape, *function)),
+        } => Some((shape.clone(), *function)),
         Mark::Stroke {
             width, function, ..
         } => Some((ApertureShape::Circle { diameter: *width }, *function)),
@@ -98,27 +98,28 @@ fn aperture_of(mark: &Mark) -> Option<(ApertureShape, Function)> {
     }
 }
 
-fn template(shape: ApertureShape, code: usize) -> String {
+fn template(shape: &ApertureShape, code: usize) -> String {
     let mm = millionths;
-    match shape {
+    match *shape {
         ApertureShape::Circle { diameter } => format!("C,{}", mm(diameter)),
         ApertureShape::Rect { w, h } => format!("R,{}X{}", mm(w), mm(h)),
         ApertureShape::Obround { w, h } => format!("O,{}X{}", mm(w), mm(h)),
         ApertureShape::TurnedRect { .. }
         | ApertureShape::TurnedObround { .. }
-        | ApertureShape::RoundRect { .. } => format!("M{code}"),
+        | ApertureShape::RoundRect { .. }
+        | ApertureShape::Outline { .. } => format!("M{code}"),
     }
 }
 
 /// The primitives of a macro aperture, one per line, each ending in `*`;
 /// `None` for a standard aperture. Primitive 21 is a centred rectangle and
 /// 1 a circle, each turned about the aperture's origin.
-fn macro_body(shape: ApertureShape) -> Option<String> {
+fn macro_body(shape: &ApertureShape) -> Option<String> {
     let mm = millionths;
     let rect = |w: i64, h: i64, a: i64| format!("21,1,{},{},0,0,{}*\n", mm(w), mm(h), mm(a));
     let disc =
         |d: i64, x: i64, y: i64, a: i64| format!("1,1,{},{},{},{}*\n", mm(d), mm(x), mm(y), mm(a));
-    match shape {
+    match *shape {
         ApertureShape::TurnedRect { w, h, udeg } => Some(rect(w, h, udeg)),
         ApertureShape::TurnedObround { w, h, udeg } => {
             let short = w.min(h);
@@ -147,6 +148,17 @@ fn macro_body(shape: ApertureShape) -> Option<String> {
                 disc(2 * r, -x, -y, udeg),
                 disc(2 * r, x, -y, udeg)
             ))
+        }
+        // Primitive 4, an outline: the corner count, then every corner and
+        // the first again to close it.
+        ApertureShape::Outline { ref corners } => {
+            let first = corners.first()?;
+            let points: Vec<String> = corners
+                .iter()
+                .chain(std::iter::once(first))
+                .map(|p| format!("{},{}", mm(p.x), mm(p.y)))
+                .collect();
+            Some(format!("4,1,{},{},0*\n", corners.len(), points.join(",")))
         }
         ApertureShape::Circle { .. }
         | ApertureShape::Rect { .. }
@@ -304,7 +316,7 @@ mod tests {
 
     #[test]
     fn a_turned_obround_is_a_rectangle_between_two_discs() {
-        let body = macro_body(ApertureShape::TurnedObround {
+        let body = macro_body(&ApertureShape::TurnedObround {
             w: 2_000_000,
             h: 1_000_000,
             udeg: 45_000_000,
@@ -318,7 +330,7 @@ mod tests {
 
     #[test]
     fn a_round_rect_is_two_bars_and_four_corner_discs() {
-        let body = macro_body(ApertureShape::RoundRect {
+        let body = macro_body(&ApertureShape::RoundRect {
             w: 2_000_000,
             h: 1_000_000,
             r: 250_000,
@@ -331,6 +343,19 @@ mod tests {
              1,1,0.5,0.75,0.25,0*\n1,1,0.5,-0.75,0.25,0*\n\
              1,1,0.5,-0.75,-0.25,0*\n1,1,0.5,0.75,-0.25,0*\n"
         );
-        assert_eq!(macro_body(ApertureShape::Circle { diameter: 1 }), None);
+        assert_eq!(macro_body(&ApertureShape::Circle { diameter: 1 }), None);
+    }
+
+    #[test]
+    fn a_polygon_pad_is_one_closed_outline() {
+        let corners = [
+            (-750_000, -500_000),
+            (750_000, -500_000),
+            (1_250_000, 500_000),
+        ]
+        .map(|(x, y)| PointNm::new(x, y))
+        .to_vec();
+        let body = macro_body(&ApertureShape::Outline { corners }).unwrap();
+        assert_eq!(body, "4,1,3,-0.75,-0.5,0.75,-0.5,1.25,0.5,-0.75,-0.5,0*\n");
     }
 }

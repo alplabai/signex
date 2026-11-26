@@ -70,6 +70,7 @@ context = "global"
 
 [keyboard_shortcuts.sections.bindings]
 "Ctrl+Q" = "cycle_unit"
+"Mod+Alt+S" = "save_all"
 "Mod+S" = "save_document"
 "Mod+Shift+A" = "unselect_all"
 "Mod+Shift+E" = "edit_library_symbol"
@@ -166,7 +167,7 @@ context = "global"
 "Shift+F" = "find_similar_objects"
 "Shift+I" = "open_net_inspector"
 
-# #2249: Window > Tile Horizontally, Tile Vertically and Untile.
+# #2249: View > Window > Tile Horizontally, Tile Vertically and Untile.
 [[keyboard_shortcuts.sections]]
 context = "global"
 
@@ -183,7 +184,15 @@ context = "global"
 # leaves the board sketch, `L` flips the selection or the part on the cursor
 # to the other side, `C` shows or hides the ratsnest, `F` changes the
 # footprint, `K` draws a keepout, `F7` runs the design rule check and
-# `Ctrl+M` measures.
+# `Ctrl+M` measures. `Shift+O` sets the board origin (Edit ▸ Origin ▸ Set,
+# 2026-11-18; `E` alone is taken, so `E O S` cannot be a sequence here).
+# Mockup row 175: in the 3D view `H` steps to the next lighting preset and
+# `Mod+Shift+C` copies a screenshot of the view; both are greyed on a flat
+# board. On a board `H` is no longer the sheet's off-sheet connector key,
+# which needs a sheet. `Shift+E` steps the board's Snapping (#2879).
+# #2509: the board Place tools take the default profile's letter: `Shift+T`
+# Track, `Shift+V` Via, `Shift+G` Polygon Pour, and `Shift+Alt+F` Fill and
+# `Shift+Alt+R` Solid Region, as `Shift+F` and `Shift+R` are global keys.
 [[keyboard_shortcuts.sections]]
 context = "pcb"
 
@@ -199,9 +208,27 @@ context = "pcb"
 "Ctrl+M" = "measure_distance"
 "F" = "change_footprint"
 "F7" = "run_drc"
+"H" = "cycle_board_3d_lighting"
 "K" = "place_board_keepout"
 "L" = "flip_selection"
+"Mod+Shift+C" = "copy_board_3d_screenshot"
+"Shift+Alt+F" = "place_board_fill"
+"Shift+Alt+R" = "place_board_region"
+"Shift+E" = "cycle_board_snapping"
+"Shift+G" = "place_board_polygon_pour"
+"Shift+O" = "set_board_origin"
 "Shift+S" = "toggle_single_layer_mode"
+"Shift+T" = "place_board_track"
+"Shift+V" = "place_board_via"
+
+# The board 3D view (mockup row 175): live only while the board is shown in
+# 3D, where it outranks the board's own keys, so `F` turns the board over
+# there and stays Change Footprint on a flat board.
+[[keyboard_shortcuts.sections]]
+context = "board_3d"
+
+[keyboard_shortcuts.sections.bindings]
+"F" = "flip_board_3d"
 
 [[keyboard_shortcuts.sections]]
 context = "footprint"

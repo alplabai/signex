@@ -10,6 +10,9 @@
 //! the container `SnxPcb` can reach them.
 
 use super::extras::{FootprintExtras, PadExtras};
+use super::pad_shape_cells::{
+    check_shape, refuse_unreadable_shape, take_shape_cells, with_shape_cells,
+};
 use super::pcb_cells::{
     take_layer_sizes_cell, take_locked_cell, take_net_locked_cell, take_rotation_cell,
     with_layer_sizes_cell, with_locked_cell, with_net_locked_cell, with_rotation_cell,
@@ -306,6 +309,8 @@ fn pad_shape_str(shape: PadShape) -> &'static str {
         PadShape::Rect => "rect",
         PadShape::Oval => "oval",
         PadShape::RoundRect => "roundrect",
+        PadShape::Trapezoid => "trapezoid",
+        PadShape::Custom => "custom",
     }
 }
 
@@ -317,13 +322,15 @@ fn parse_pad_shape(text: &str, block: &str, row: usize) -> Result<PadShape, Form
         "rect" => PadShape::Rect,
         "oval" => PadShape::Oval,
         "roundrect" => PadShape::RoundRect,
+        "trapezoid" => PadShape::Trapezoid,
+        "custom" => PadShape::Custom,
         other => {
             return Err(row_field_error(
                 block,
                 row,
                 "shape",
                 other,
-                "not a pad shape (circle, rect, oval, roundrect)",
+                "not a pad shape (circle, rect, oval, roundrect, trapezoid, custom)",
             ));
         }
     })
@@ -655,6 +662,7 @@ pub(in crate::format) fn pad_to_row(
     if !roundrect_ratio_fits(pad.shape, pad.roundrect_ratio) {
         return Err(NonFiniteField("roundrect_ratio"));
     }
+    refuse_unreadable_shape(pad)?;
     Ok(PcbPadRow {
         uuid: pad.uuid,
         footprint_ref: footprint_ref.to_string(),
@@ -670,12 +678,15 @@ pub(in crate::format) fn pad_to_row(
         net_number,
         net_name,
         roundrect_ratio: pad.roundrect_ratio,
-        unknown_columns: with_layer_sizes_cell(
-            with_rotation_cell(
-                with_net_locked_cell(pad.unknown_columns.clone(), pad.net_locked),
-                pad.rotation,
+        unknown_columns: with_shape_cells(
+            with_layer_sizes_cell(
+                with_rotation_cell(
+                    with_net_locked_cell(pad.unknown_columns.clone(), pad.net_locked),
+                    pad.rotation,
+                )?,
+                pad.layer_sizes.as_ref(),
             )?,
-            pad.layer_sizes.as_ref(),
+            pad,
         )?,
     })
 }
@@ -700,6 +711,8 @@ pub(in crate::format) fn row_to_pad(
     let rotation = take_rotation_cell(&mut row.unknown_columns, block, index)?;
     let net_locked = take_net_locked_cell(&mut row.unknown_columns);
     let layer_sizes = take_layer_sizes_cell(&mut row.unknown_columns, block, index)?;
+    let (trapezoid_delta, custom_outline) =
+        take_shape_cells(&mut row.unknown_columns, block, index)?;
     let drill = if row.drill > 0 {
         Some(DrillDef {
             diameter: nm_to_mm(row.drill),
@@ -716,7 +729,7 @@ pub(in crate::format) fn row_to_pad(
     } else {
         None
     };
-    Ok(Pad {
+    let pad = Pad {
         uuid: row.uuid,
         number: row.pin,
         pad_type: parse_pad_type(&row.pad_type),
@@ -734,11 +747,15 @@ pub(in crate::format) fn row_to_pad(
         net,
         roundrect_ratio: row.roundrect_ratio,
         rotation,
+        trapezoid_delta,
+        custom_outline,
         net_locked,
         layer_sizes,
         unknown: extras.unknown,
         unknown_columns: row.unknown_columns,
-    })
+    };
+    check_shape(&pad, block, index)?;
+    Ok(pad)
 }
 
 pub(in crate::format) fn track_to_row(s: &Segment) -> Result<PcbTrackRow, NonFiniteField> {

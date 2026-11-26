@@ -147,6 +147,7 @@ pub fn board_10k_tracks() -> PcbBoard {
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         uuid: Uuid::from_u128(UUID_BOARD),
         version: 1,
@@ -234,6 +235,8 @@ fn two_pad_part(
                 name: net_name(net),
             }),
             roundrect_ratio: 0.0,
+            trapezoid_delta: Default::default(),
+            custom_outline: Vec::new(),
             rotation: 0.0,
             layer_sizes: None,
             net_locked: false,
@@ -285,6 +288,8 @@ fn ground_pour(index: u128, layer: &str) -> Zone {
         min_thickness: 0.2,
         min_island_area: 0.0,
         remove_dead_islands: false,
+        shelved: false,
+        unfilled: false,
         unknown: Default::default(),
     }
 }

@@ -11,11 +11,12 @@ use crate::app::restore_job::{
     EditStamp, RestoreFailure, RestoreJob, RestoreJobDocument, RestoreKind, RestoredFile,
 };
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-prefs-redirect"))]
 impl Signex {
     /// Test seam: show the active tab's history as a finished load leaves it,
     /// then click Restore, so a test of the restore itself need not load a
-    /// repository first. The guard has its own tests.
+    /// repository first. The guard has its own tests. The test adapter's
+    /// `restore` gesture clicks through it (`crate::test_adapter`).
     pub(crate) fn click_restore_on_listed_history(&mut self, sha: &str) -> Task<Message> {
         let target = self.history_target_path();
         self.document_state.history.active_path = target;
@@ -64,7 +65,10 @@ impl Signex {
             return Task::none();
         }
         // Rewriting a file that is being renamed or deleted would recreate it.
-        if let Err(refusal) = self.refuse_while_path_op(&full_path, "restored") {
+        if let Err(refusal) = self
+            .refuse_while_path_op(&full_path, "restored")
+            .and_then(|()| self.refuse_during_branch_switch(&full_path))
+        {
             self.report_restore_failure(refusal.to_string());
             return Task::none();
         }
@@ -208,6 +212,7 @@ impl Signex {
     /// the write would race the restore's rewrite and re-read, and the
     /// loser's bytes would be installed or committed as the other's.
     pub(crate) fn refuse_save_while_restoring(&self, path: &std::path::Path) -> anyhow::Result<()> {
+        self.refuse_during_branch_switch(path)?;
         if !self.document_state.pending_restores.contains(path) {
             return Ok(());
         }
@@ -440,7 +445,7 @@ impl Signex {
     /// installed (`commit` false installs without a "Restore" commit: a
     /// disk-conflict Reload restores nothing): false when a failure card replaced it or a schematic's new
     /// engine could not start and the older one was kept.
-    pub(crate) fn apply_reloaded_reporting(
+    pub(super) fn install_reload_outcome(
         &mut self,
         idx: usize,
         outcome: Result<RestoreJobDocument, RestoreFailure>,
@@ -482,7 +487,7 @@ impl Signex {
                 self.document_state.set_pcb_board(idx, *board);
                 if idx == self.document_state.active_tab {
                     // Refresh canvas; preserve camera (don't fit-to-board).
-                    self.apply_loaded_pcb_document(false, false);
+                    self.show_loaded_board(false, false);
                 }
                 // The tab now matches disk. Leaving it dirty would let Ctrl+S
                 // re-encode the board and drop the restored file's comments
@@ -523,8 +528,8 @@ impl Signex {
                     .document_state
                     .symbol_editors
                     .get(&path)
-                    .map(|old| old.history_generation + 1);
-                state.history_generation =
+                    .map(|old| old.draft.history_generation + 1);
+                state.draft.history_generation =
                     carried.unwrap_or_else(|| self.document_state.next_symbol_history_base());
                 self.warn_if_cascade_owed(&path);
                 self.document_state
@@ -667,7 +672,7 @@ impl Signex {
         self.document_state.drop_pcb_board(active_idx);
         self.set_reloaded_dirty(path, false);
         if active_idx == self.document_state.active_tab {
-            self.apply_loaded_empty_document(false);
+            self.show_empty_document(false);
         }
         self.report_restore_failure(restore_reload_card(path, why, unreadable));
     }
@@ -701,7 +706,9 @@ impl Signex {
             );
             installed
         } else {
-            self.install_schematic_at(path, sheet)
+            let result = self.engine_for_sheet_behind_tab(path, sheet);
+            let install = self.document_state.replace_engine_at(path, result);
+            self.project_replaced_engine(path, install)
         };
         self.settle_restored_schematic(path, installed, commit, restored_bytes);
         // The file still holds what was repaired: not what the engine holds.
@@ -769,12 +776,20 @@ fn restore_kind_of(kind: &crate::app::TabKind) -> Option<RestoreKind> {
     match kind {
         crate::app::TabKind::Schematic => Some(RestoreKind::Schematic),
         crate::app::TabKind::Pcb => Some(RestoreKind::Pcb),
+        crate::app::TabKind::PolygonManager => None,
         crate::app::TabKind::FootprintEditor(_) => Some(RestoreKind::Footprint),
         crate::app::TabKind::SymbolEditor(_) => Some(RestoreKind::Symbol),
+        // Fabrication files are read, never written: nothing to restore.
+        crate::app::TabKind::GerberViewer => None,
         crate::app::TabKind::LibraryBrowser(_) | crate::app::TabKind::ComponentEditor(_) => {
             Some(RestoreKind::Library)
         }
-        crate::app::TabKind::Project(_) | crate::app::TabKind::Rules(_) => None,
+        crate::app::TabKind::Project(_)
+        | crate::app::TabKind::Rules(_)
+        | crate::app::TabKind::LayerStack
+        | crate::app::TabKind::PinTable
+        | crate::app::TabKind::VariantManager(_)
+        | crate::app::TabKind::Notebook(_) => None,
     }
 }
 

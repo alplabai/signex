@@ -11,19 +11,28 @@ use tiny_skia::Color;
 
 use crate::pdf::ColourMode;
 
+pub mod board;
 #[cfg(test)]
 mod bus_entry_tests;
+mod directives;
 mod document;
 mod drawings;
 mod family;
 mod geometry;
 #[cfg(test)]
 mod glyph_height_tests;
+mod harness;
 mod labels;
 mod markers;
+mod not_fitted;
+mod repeat_stack;
+mod sch_table;
 mod symbols;
 mod text;
 mod wire_style;
+pub(crate) use drawings::annotation_extent;
+#[cfg(test)]
+mod annotation_drawing_tests;
 
 #[derive(Debug, Clone, Copy)]
 pub enum SvgTextAlign {
@@ -98,6 +107,13 @@ pub struct SvgEvaluatorInputs<'a> {
     /// Resolves `${TOKEN}` special strings in text notes, the same context
     /// the title block resolves with. `None` leaves the text as stored.
     pub special_strings: Option<&'a crate::SubstitutionContext<'a>>,
+    /// The project's variant settings, which decide over the sheets which
+    /// parts draw as not fitted (#1294). `None` reads the sheets alone.
+    pub variant_settings: Option<&'a signex_types::project::VariantSettings>,
+    /// The fit of every part of the export, decided across its sheets as
+    /// the BOM decides it (`ExpressionTables::placed_fits`). `None` decides
+    /// each page on its own.
+    pub placed_fits: Option<&'a crate::PlacedFits>,
 }
 
 fn fill_to_rgb(
@@ -190,6 +206,8 @@ mod drawing_placement_tests;
 mod net_class_tests;
 #[cfg(test)]
 mod sheet_color_tests;
+#[cfg(test)]
+mod special_string_field_tests;
 #[cfg(test)]
 mod stroke_rule_tests;
 
@@ -287,6 +305,12 @@ mod tests {
                 map_black_and_white(palette.symbol_fill, palette.paper),
                 (1.0, 1.0, 1.0),
                 "{id:?} body_fill would print black"
+            );
+            let tint = palette.symbol_body_tint.expect("a body tint");
+            assert_eq!(
+                map_black_and_white(tint, palette.paper),
+                (1.0, 1.0, 1.0),
+                "{id:?} body_tint would print black"
             );
         }
     }

@@ -77,8 +77,8 @@ fn dashed_class(name: &str, net: &str) -> NetClass {
     class
 }
 
-const PROJECT: ProjectId = ProjectId(1);
-const OTHER: ProjectId = ProjectId(2);
+const PROJECT: ProjectId = ProjectId::test_id(1);
+const OTHER: ProjectId = ProjectId::test_id(2);
 
 fn key(connectivity: u64, classes: &[NetClass]) -> ProjectKey {
     ProjectKey {
@@ -508,6 +508,7 @@ fn project_with(classes: Vec<NetClass>) -> LoadedProject {
             sheets: Vec::new(),
             variant_definitions: Vec::new(),
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: Vec::new(),
             enable_git: false,
             net_classes: classes,
@@ -516,6 +517,11 @@ fn project_with(classes: Vec<NetClass>) -> LoadedProject {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
+            fab_outputs: None,
+            router_tool_diameter: None,
+            bom_alternates: Vec::new(),
+            requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },

@@ -77,9 +77,14 @@ fn shapes_the_board_cannot_hold_are_refused() {
             "chamfered",
         ),
         (
-            PadShape::Custom(Polygon::new(vec![[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]])),
-            "pad shape",
-            "custom",
+            PadShape::Custom(Polygon::new(vec![[0.0, 0.0], [1.0, 0.0]])),
+            "custom_outline",
+            "pad 1: a custom pad outline needs at least 3 corners",
+        ),
+        (
+            PadShape::Trapezoid { delta: [3.0, 0.0] },
+            "trapezoid_delta",
+            "pad 1: a trapezoid delta must be less than twice the side it narrows",
         ),
         (
             PadShape::RoundRect { radius_ratio: 0.7 },
@@ -96,6 +101,38 @@ fn shapes_the_board_cannot_hold_are_refused() {
             })
         );
     }
+}
+
+#[test]
+fn a_trapezoid_and_a_custom_pad_keep_their_parameters() {
+    let trapezoid = convert_one(pad(
+        "1",
+        PadKind::Smd,
+        PadShape::Trapezoid { delta: [0.0, 0.4] },
+        &["F.Cu"],
+    ))
+    .unwrap();
+    assert_eq!(
+        (trapezoid.shape, trapezoid.trapezoid_delta),
+        (pcb::PadShape::Trapezoid, Point { x: 0.0, y: 0.4 })
+    );
+    let outline = vec![[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]];
+    let custom = convert_one(pad(
+        "2",
+        PadKind::Smd,
+        PadShape::Custom(Polygon::new(outline)),
+        &["F.Cu"],
+    ))
+    .unwrap();
+    assert_eq!(custom.shape, pcb::PadShape::Custom);
+    assert_eq!(
+        custom.custom_outline,
+        [
+            Point { x: 0.0, y: 0.0 },
+            Point { x: 1.0, y: 0.0 },
+            Point { x: 0.0, y: 1.0 }
+        ]
+    );
 }
 
 #[test]
@@ -301,6 +338,19 @@ fn silk_fab_and_courtyard_land_on_their_board_layers() {
     assert_eq!(board.graphics[4].points.len(), 3);
 }
 
+/// Mockup row 124: the courtyard is stroked at the footprint's courtyard
+/// line width, its default when the footprint names none.
+#[test]
+fn the_courtyard_takes_the_footprint_courtyard_line_width() {
+    use crate::primitive::footprint::DEFAULT_COURTYARD_LINE_WIDTH_MM;
+    let mut fp = library(Vec::new());
+    fp.courtyard = Polygon::new(vec![[-2.0, -2.0], [2.0, -2.0], [2.0, 2.0]]);
+    let width = |fp: &Footprint| board_footprint(fp).unwrap().graphics[0].width;
+    assert_eq!(width(&fp), DEFAULT_COURTYARD_LINE_WIDTH_MM);
+    fp.generated.courtyard_line_width_mm = 0.1524;
+    assert_eq!(width(&fp), 0.1524);
+}
+
 #[test]
 fn an_arc_keeps_its_sweep_through_the_middle_point() {
     let mut fp = library(Vec::new());
@@ -487,10 +537,13 @@ fn a_3d_body_and_a_step_model_convert_without_being_copied() {
 fn a_drawn_footprint_keeps_every_pad_the_board_can_hold() {
     let mut tented = pad("1", PadKind::Smd, PadShape::Rect, &["F.Cu"]);
     tented.mask_tented_top = true;
-    let custom = PadShape::Custom(Polygon::new(vec![[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]]));
+    let chamfered = PadShape::Chamfered {
+        chamfer_ratio: 0.2,
+        corners: ChamferedCorners::all(),
+    };
     let mut fp = library(vec![
         tented.clone(),
-        pad("2", PadKind::Smd, custom, &["F.Cu"]),
+        pad("2", PadKind::Smd, chamfered, &["F.Cu"]),
         pad("3", PadKind::Tht, PadShape::Round, &["*.Cu"]),
     ]);
     fp.cutouts.push(FpCutout {
@@ -553,4 +606,27 @@ fn a_negative_library_height_is_left_unset() {
     let mut fp = library(vec![pad("1", PadKind::Smd, PadShape::Rect, &["F.Cu"])]);
     fp.height_mm = Some(-2.0);
     assert_eq!(board_footprint(&fp).unwrap().component.height_mm, 0.0);
+}
+
+/// Mockup row 124: the generated strokes reach the board's top layers.
+#[test]
+fn generated_strokes_are_placed_on_the_top_silk_and_fab() {
+    let stroke = |width| {
+        let kind = FpGraphicKind::Line {
+            from: [0.0, 0.0],
+            to: [1.0, 0.0],
+        };
+        FpGraphic::drawn(kind, width, false)
+    };
+    let mut fp = library(vec![pad("1", PadKind::Smd, PadShape::Rect, &["F.Cu"])]);
+    fp.generated.silk = vec![stroke(0.12)];
+    fp.generated.assembly = vec![stroke(0.1)];
+    let board = board_footprint(&fp).unwrap();
+    let layer_of = |width: f64| {
+        let graphic = board.graphics.iter().find(|g| g.width == width).unwrap();
+        graphic.layer.clone()
+    };
+    let token = |layer| pcb_layer_token(PcbLayer::Technical(layer));
+    assert_eq!(layer_of(0.12), token(TechnicalLayer::SilkscreenTop));
+    assert_eq!(layer_of(0.1), token(TechnicalLayer::FabTop));
 }

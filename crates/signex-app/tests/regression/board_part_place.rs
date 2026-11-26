@@ -11,12 +11,13 @@
 use std::path::PathBuf;
 
 use pcb_geom::ClickMode;
-use signex_app::app::{ContextMenuMsg, EditMsg, FileMsg, InputMsg, Message, Signex, TabDocument};
+use signex_app::app::{ContextMenuMsg, EditMsg, FileMsg, InputMsg, Message, Signex};
 use signex_app::diagnostics;
 use signex_app::library::LibraryMessage;
 use signex_app::library::messages::BoardPartError;
 use signex_app::library::state::{ComponentsPanelRowKey, ComponentsRowAction};
 use signex_app::pcb_canvas::{CarryKind, PcbCanvasMsg};
+use signex_app::test_adapter::BoardEngines;
 use signex_types::format::SnxPcb;
 use signex_types::pcb::{Footprint, PCB_GRID_MM, PcbBoard, Point};
 use uuid::Uuid;
@@ -41,13 +42,13 @@ fn board() -> PcbBoard {
     .unwrap()
 }
 
-struct Fixture {
-    app: Signex,
-    _tmp: tempfile::TempDir,
+pub(crate) struct Fixture {
+    pub(crate) app: Signex,
+    pub(crate) _tmp: tempfile::TempDir,
 }
 
 /// The board open in the active tab, with Stock mounted.
-fn open() -> Fixture {
+pub(crate) fn open() -> Fixture {
     let _ = diagnostics::init_logging();
     let tmp = tempfile::tempdir().unwrap();
     let path = tmp.path().join("board.snxpcb");
@@ -66,20 +67,18 @@ fn open() -> Fixture {
 
 fn live(app: &Signex) -> PcbBoard {
     let docs = &app.document_state;
-    docs.tabs[docs.active_tab]
-        .cached_document
-        .as_ref()
-        .and_then(TabDocument::as_pcb)
+    docs.tab_board_engine(docs.active_tab)
+        .map(|engine| engine.board())
         .expect("a board is open")
         .clone()
 }
 
-fn text(app: &Signex) -> String {
+pub(crate) fn text(app: &Signex) -> String {
     serde_json::to_string(&live(app)).unwrap()
 }
 
 /// What the board holds besides D3.
-fn placed(app: &Signex) -> Vec<Footprint> {
+pub(crate) fn placed(app: &Signex) -> Vec<Footprint> {
     live(app)
         .footprints
         .into_iter()
@@ -101,11 +100,11 @@ fn place(app: &mut Signex, key: &ComponentsPanelRowKey) {
     );
 }
 
-fn carry(app: &Signex) -> Option<CarryKind> {
+pub(crate) fn carry(app: &Signex) -> Option<CarryKind> {
     app.interaction_state.pcb_carry.as_ref().map(|c| c.kind)
 }
 
-fn point_at(app: &mut Signex, x: f64, y: f64) {
+pub(crate) fn point_at(app: &mut Signex, x: f64, y: f64) {
     settle(
         app,
         Message::PcbCanvas(PcbCanvasMsg::PointerMoved {
@@ -116,7 +115,7 @@ fn point_at(app: &mut Signex, x: f64, y: f64) {
     );
 }
 
-fn click(app: &mut Signex, x: f64, y: f64) {
+pub(crate) fn click(app: &mut Signex, x: f64, y: f64) {
     settle(
         app,
         Message::PcbCanvas(PcbCanvasMsg::Clicked {
@@ -127,7 +126,7 @@ fn click(app: &mut Signex, x: f64, y: f64) {
     );
 }
 
-fn on_grid(v: f64) -> f64 {
+pub(crate) fn on_grid(v: f64) -> f64 {
     (v / PCB_GRID_MM).round() * PCB_GRID_MM
 }
 

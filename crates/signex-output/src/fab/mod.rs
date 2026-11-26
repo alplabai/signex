@@ -1,40 +1,51 @@
 //! Fabrication outputs (#2388): Gerber RS-274X images with X2 attributes,
 //! Excellon drill files and their table, the pick-and-place CSV, the
-//! IPC-D-356 test netlist and a job file listing them.
+//! IPC-D-356 test netlist, the IPC-2581 file (#2484), the ODB++ job
+//! (#2485) and a job file listing them.
 //!
 //! [`generate`] is pure: it reads the board and returns the files' bytes,
 //! and the app writes them only when the user presses Generate. One board
 //! gives the same bytes every time. Frame, units and formats:
 //! `docs/FABRICATION_OUTPUTS.md`.
 //!
-//! Two inputs the board does not hold as items come through [`FabExtras`]:
-//! the zones' copper ([`FabExtras::of_board`] computes the pour fills,
-//! #2216) and stroked board text (#2387, not drawn yet). Without them the
-//! files leave zones and texts out and [`FabSet::notes`] says so.
+//! Inputs the board does not hold as items come through [`FabExtras`]: the
+//! zones' copper ([`FabExtras::of_board`] computes the pour fills, #2216)
+//! and extra strokes. Without the fills the files leave zones out and
+//! [`FabSet::notes`] says so. Text is written in the board stroke font
+//! (#2368).
 
 mod centroid;
 mod collect;
+mod documents;
 mod draw;
 mod drill;
 mod extras;
 mod frame;
 mod gerber;
+mod ipc2581;
 mod ipc356;
 mod job;
 mod layers;
 mod marks;
+mod naming;
 mod notes;
+mod odb;
+mod parts;
+mod roles;
+mod text;
 
 #[cfg(test)]
 mod tests;
 
 use pcb_geom::PointNm;
-use signex_types::pcb::{PCB_DEFAULT_THICKNESS_MM, PcbBoard, Point};
+use signex_types::pcb::{PCB_DEFAULT_THICKNESS_MM, PcbBoard, Point, Zone};
 use signex_types::pcb_layer::PcbLayer;
 use signex_types::zone_keepout::KEEPOUT_FILL;
 use thiserror::Error;
 
-pub use notes::FabNote;
+pub use frame::FabFrame;
+pub use notes::{DrawnCopperItem, FabNote};
+pub use pcb_geom::DrawnCopperFault;
 
 use layers::{CopperStack, FabLayer, file_function, file_polarity, file_suffix};
 use notes::Tally;
@@ -48,10 +59,30 @@ pub struct FabOptions {
     pub drill: bool,
     pub centroid: bool,
     pub test_netlist: bool,
+    /// The IPC-2581 file: the whole job in one file (#2484).
+    pub ipc2581: bool,
+    /// The ODB++ job (#2485), and whether it is a folder or one archive;
+    /// `None` writes none.
+    pub odb: Option<OdbForm>,
+    /// The designator standard the board's designators are shown under
+    /// (`show_board_references`, #1416); the test netlist writes them
+    /// stored. `None`: as they are.
+    pub designator_standard: Option<signex_types::designator::DesignatorStandard>,
+}
+
+/// How the ODB++ job is written.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OdbForm {
+    /// A folder `<name>-odb/` holding the archive's tree, the job folder
+    /// named by the job name; each file's name is its path under the
+    /// output folder, `/` separated.
+    Directory,
+    /// One uncompressed tar archive, `<name>-odb.tar`.
+    Archive,
 }
 
 impl FabOptions {
-    /// Every output, named `name`.
+    /// Every output, named `name`; the ODB++ job as one archive.
     pub fn all(name: impl Into<String>) -> Self {
         Self {
             name: name.into(),
@@ -59,11 +90,19 @@ impl FabOptions {
             drill: true,
             centroid: true,
             test_netlist: true,
+            ipc2581: true,
+            odb: Some(OdbForm::Archive),
+            designator_standard: None,
         }
     }
 
     fn any(&self) -> bool {
-        self.gerber || self.drill || self.centroid || self.test_netlist
+        self.gerber
+            || self.drill
+            || self.centroid
+            || self.test_netlist
+            || self.ipc2581
+            || self.odb.is_some()
     }
 }
 
@@ -109,6 +148,10 @@ pub enum FabFileKind {
     DrillTable,
     Centroid,
     TestNetlist,
+    /// The IPC-2581 file (#2484).
+    Ipc2581,
+    /// The ODB++ archive, or one file of the ODB++ folder (#2485).
+    Odb,
     Job,
 }
 
@@ -119,6 +162,8 @@ impl FabFileKind {
             FabFileKind::DrillTable => "DrillTable",
             FabFileKind::Centroid => "PickAndPlace",
             FabFileKind::TestNetlist => "TestNetlist",
+            FabFileKind::Ipc2581 => "IPC2581",
+            FabFileKind::Odb => "ODB++",
             FabFileKind::Gerber { .. } | FabFileKind::Drill { .. } | FabFileKind::Job => "",
         }
     }
@@ -135,7 +180,8 @@ pub struct FabFile {
 /// Everything one generation produced.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FabSet {
-    /// Images top to bottom, then drill, table, centroid, test netlist, job.
+    /// Images top to bottom, then drill, table, centroid, test netlist,
+    /// IPC-2581, ODB++, job.
     pub files: Vec<FabFile>,
     pub notes: Vec<FabNote>,
 }
@@ -153,6 +199,19 @@ pub enum FabError {
 /// Characters a file-name stem may not hold on any platform.
 const NAME_FORBIDDEN: [char; 9] = ['/', '\\', ':', '*', '?', '"', '<', '>', '|'];
 
+/// The file-name stem `name` trimmed, when it can name files and `board`
+/// has an outline: the checks every output of a generation shares.
+pub fn check_job<'a>(board: &PcbBoard, name: &'a str) -> Result<&'a str, FabError> {
+    let name = name.trim();
+    if name.is_empty() || name.contains(NAME_FORBIDDEN) || name.chars().any(char::is_control) {
+        return Err(FabError::BadName);
+    }
+    if board.outline.len() < 3 {
+        return Err(FabError::NoOutline);
+    }
+    Ok(name)
+}
+
 /// The fabrication files of `board`.
 pub fn generate(
     board: &PcbBoard,
@@ -162,13 +221,7 @@ pub fn generate(
     if !options.any() {
         return Err(FabError::NothingSelected);
     }
-    let name = options.name.trim();
-    if name.is_empty() || name.contains(NAME_FORBIDDEN) || name.chars().any(char::is_control) {
-        return Err(FabError::BadName);
-    }
-    if board.outline.len() < 3 {
-        return Err(FabError::NoOutline);
-    }
+    let name = check_job(board, &options.name)?;
     let stack = CopperStack::of(board, collect::used_copper(board, extras).into_iter());
     let mut tally = Tally::default();
     let mut skipped = 0;
@@ -200,9 +253,32 @@ pub fn generate(
         files.push(FabFile {
             name: format!("{name}-netlist.ipc"),
             kind: FabFileKind::TestNetlist,
-            contents: ipc356::write_ipc356(board, &stack, name, &mut ipc_skipped),
+            contents: ipc356::write_ipc356(
+                board,
+                &stack,
+                name,
+                options.designator_standard,
+                &mut ipc_skipped,
+            ),
         });
         skipped = skipped.max(ipc_skipped);
+    }
+    if options.ipc2581 {
+        let mut own = Tally::default();
+        files.push(FabFile {
+            name: format!("{name}-ipc2581.xml"),
+            kind: FabFileKind::Ipc2581,
+            contents: ipc2581::write_ipc2581(board, extras, &stack, name, &mut own),
+        });
+        skipped = skipped.max(own.skipped);
+        tally.merge_drawn_copper(&own);
+    }
+    if let Some(form) = options.odb {
+        let mut own = Tally::default();
+        let job = odb::write_odb(board, extras, &stack, name, &mut own);
+        odb_files(form, name, job, &mut files);
+        skipped = skipped.max(own.skipped);
+        tally.merge_drawn_copper(&own);
     }
     let facts = job::JobFacts {
         name: name.to_string(),
@@ -221,17 +297,28 @@ pub fn generate(
         contents: job,
     });
     tally.skipped = skipped;
-    // A keepout (#2373) is a zone on a copper layer with no copper to fill.
+    // A keepout (#2373) is a zone on a copper layer with no copper to fill,
+    // as is a pour cutout (#2871), and a shelved pour (#2523) holds none by
+    // choice. An unfilled pour (#2506) holds none until Repour and is
+    // counted as not filled even when the fills are supplied.
+    let on_copper = |z: &&Zone| z.pcb_layer().is_some_and(PcbLayer::is_copper);
     let copper_zones = board
         .zones
         .iter()
-        .filter(|z| z.fill_type != KEEPOUT_FILL)
-        .filter(|z| z.pcb_layer().is_some_and(PcbLayer::is_copper))
+        .filter(|z| z.fill_type != KEEPOUT_FILL && !z.is_pour_cutout() && !z.is_shelved_pour())
+        .filter(on_copper)
         .count();
-    let zones_not_filled = if options.gerber && extras.zone_fills.is_empty() {
-        copper_zones
-    } else {
-        0
+    let unfilled_pours = board
+        .zones
+        .iter()
+        .filter(|z| z.is_unfilled_pour())
+        .filter(on_copper)
+        .count();
+    let pours = options.gerber || options.ipc2581 || options.odb.is_some();
+    let zones_not_filled = match (pours, extras.zone_fills.is_empty()) {
+        (true, true) => copper_zones,
+        (true, false) => unfilled_pours,
+        (false, _) => 0,
     };
     Ok(FabSet {
         files,
@@ -289,6 +376,25 @@ fn drill_files(
             kind: FabFileKind::DrillTable,
             contents: drill::write_table(&holes, &drill_files, layers),
         });
+    }
+}
+
+/// The ODB++ job as one archive, or as one file per job file under
+/// `<name>-odb/<job>/`: the archive's tree, whose job folder is the job
+/// name a reader takes, an entity name.
+fn odb_files(form: OdbForm, name: &str, job: Vec<odb::JobFile>, files: &mut Vec<FabFile>) {
+    let job_name = odb::job_name(name);
+    match form {
+        OdbForm::Archive => files.push(FabFile {
+            name: format!("{name}-odb.tar"),
+            kind: FabFileKind::Odb,
+            contents: odb::archive(&job_name, &job),
+        }),
+        OdbForm::Directory => files.extend(job.into_iter().map(|(path, contents)| FabFile {
+            name: format!("{name}-odb/{job_name}/{path}"),
+            kind: FabFileKind::Odb,
+            contents,
+        })),
     }
 }
 

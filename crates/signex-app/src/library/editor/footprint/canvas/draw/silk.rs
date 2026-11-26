@@ -19,7 +19,7 @@ pub(super) fn draw_silk_graphics(
     selected_idx: Option<usize>,
     palette: LayerPalette,
 ) {
-    let base_colour = layer.color_in(palette);
+    let base_colour = layer.color();
     let highlight = palette.selection_ink();
     let stroke_default_px: f32 = 1.0;
     // Shapes first, text last: a Frame draws in call order (fork #18), so

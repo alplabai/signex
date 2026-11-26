@@ -164,6 +164,7 @@ pub(in crate::format) fn repair_duplicate_uuids(
     let mut ids = IdSpace::new(sheet.uuid);
     repair_objects(&mut ids, sheet);
     repair_sheet_pins(&mut ids, sheet);
+    repair_refinement_objects(&mut ids, sheet);
     for symbol in &mut sheet.symbols {
         repair_pin_uuids(symbol, &mut ids);
     }
@@ -251,8 +252,42 @@ fn repair_sheet_pins(ids: &mut IdSpace, sheet: &mut SchematicSheet) {
     }
 }
 
+/// Harness connectors with their entries, harness wires and unions
+/// (`snxsch/1.3`). Checked after every older kind, so a file without them
+/// repairs exactly as before.
+fn repair_refinement_objects(ids: &mut IdSpace, sheet: &mut SchematicSheet) {
+    ids.check(
+        &mut sheet.harness.connectors,
+        kind::HARNESS_CONNECTOR,
+        None,
+        by_field!(|c| c.harness_type.clone()),
+    );
+    for connector in &mut sheet.harness.connectors {
+        let owner = connector.harness_type.clone();
+        ids.check(
+            &mut connector.entries,
+            kind::HARNESS_ENTRY,
+            Some(&owner),
+            by_field!(|e| e.name.clone()),
+        );
+    }
+    ids.check(
+        &mut sheet.harness.wires,
+        kind::HARNESS_WIRE,
+        None,
+        by_field!(no_name),
+    );
+    ids.check(
+        &mut sheet.unions,
+        kind::UNION,
+        None,
+        by_field!(|u| u.name.clone()),
+    );
+}
+
 /// Maps keyed by object uuid (`net_colors` for wires and junctions,
-/// `drawing_placements` for drawings). Every re-minted object takes a copy of
+/// `drawing_placements` for drawings, harness `entry_types` for sheet
+/// pins). Every re-minted object takes a copy of
 /// its old id's entry (several can be re-minted off one id). When the first
 /// holder is another kind the entry was never the holder's and must not stay
 /// behind to be written back, so those old keys go once all copies are made.
@@ -260,6 +295,7 @@ fn move_side_map_entries(sheet: &mut SchematicSheet, repairs: &[SheetLoadRepair]
     let colored = |k: &str| k == kind::WIRE || k == kind::JUNCTION;
     let mut stale_colors = Vec::new();
     let mut stale_placements = Vec::new();
+    let mut stale_entry_types = Vec::new();
     for repair in repairs {
         let SheetLoadRepair::UuidReminted {
             object,
@@ -287,12 +323,23 @@ fn move_side_map_entries(sheet: &mut SchematicSheet, repairs: &[SheetLoadRepair]
                 stale_placements.push(*old);
             }
         }
+        if object.kind == kind::SHEET_PIN
+            && let Some(harness_type) = sheet.harness.entry_types.get(old).cloned()
+        {
+            sheet.harness.entry_types.insert(*new, harness_type);
+            if *holder != kind::SHEET_PIN {
+                stale_entry_types.push(*old);
+            }
+        }
     }
     for old in stale_colors {
         sheet.net_colors.remove(&old);
     }
     for old in stale_placements {
         sheet.drawing_placements.remove(&old);
+    }
+    for old in stale_entry_types {
+        sheet.harness.entry_types.remove(&old);
     }
 }
 

@@ -46,6 +46,8 @@ pub struct BoardMarks {
     pub origin: [f32; 2],
     /// The panel round the board (#2410); `None` without one.
     pub panel: Option<super::panel_preview::PanelPreview>,
+    /// The board's rooms (#2457, `rooms`).
+    pub rooms: Vec<super::rooms::RoomMark>,
 }
 
 impl BoardMarks {
@@ -87,6 +89,7 @@ impl BoardMarks {
             sheet,
             origin: [origin.x as f32, origin.y as f32],
             panel: super::panel_preview::PanelPreview::of(board),
+            rooms: super::rooms::RoomMark::of(board),
         }
     }
 }
@@ -155,17 +158,18 @@ pub(super) fn draw_grids(
             continue;
         };
         // Lines sit on multiples of the step from the grid's own origin.
-        let [ox, oy] = mark.origin;
-        let shifted: Vec<[f32; 2]> = region.iter().map(|p| [p[0] - ox, p[1] - oy]).collect();
-        let view = (
-            [view.0[0] - ox, view.0[1] - oy],
-            [view.1[0] - ox, view.1[1] - oy],
-        );
         let mut path = Builder::new();
-        grid::each_segment(&shifted, view, level.pitch_mm, &mut scratch, |_, a, b| {
-            path.move_to(camera.world_to_screen(Point::new(a.x + ox, a.y + oy)));
-            path.line_to(camera.world_to_screen(Point::new(b.x + ox, b.y + oy)));
-        });
+        grid::each_segment_from(
+            mark.origin,
+            region,
+            view,
+            level.pitch_mm,
+            &mut scratch,
+            |_, a, b| {
+                path.move_to(camera.world_to_screen(a));
+                path.line_to(camera.world_to_screen(b));
+            },
+        );
         let color = Color {
             a: mark.color.a * level.fade.max(0.35),
             ..mark.color

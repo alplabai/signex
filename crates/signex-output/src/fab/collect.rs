@@ -1,5 +1,5 @@
 //! The board as Gerber images: every item on the image of its layer, in a
-//! fixed order (zone fills, footprints, tracks, vias, board graphics,
+//! fixed order (zone fills, footprints, tracks, vias, board graphics, texts,
 //! extra strokes, the profile, then the V-score lines), so one board gives
 //! the same bytes.
 
@@ -7,17 +7,16 @@ use std::collections::BTreeMap;
 
 use pcb_geom::{
     GeomError, Placement, PointNm, Polygon, Side, layer_bit, layer_mask, mm_to_nm, pad_layers,
-    pad_world_center, pad_world_rotation_deg, via_layers,
+    pad_shape, pad_world_center, pad_world_rotation_deg, via_layers,
 };
 use signex_types::pcb::{Footprint, Pad, PadShape, PadType, PcbBoard, Point, Segment, Via};
-use signex_types::pcb_graphic::BoardGraphicKind;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 
 use super::draw::{Drawing, Drawn, Pen, draw};
 use super::frame::{FabFrame, fab_angle_udeg, is_quarter_turn, swaps_axes};
 use super::layers::{CopperStack, FabLayer, Face};
-use super::marks::{ApertureShape, Attributes, Function, Mark, Step, doubled_area};
-use super::notes::Tally;
+use super::marks::{ApertureShape, Attributes, Function, Mark, PadKey, Step, doubled_area};
+use super::notes::{DrawnCopperItem, Tally};
 use super::{FabExtras, FabStroke};
 
 /// The pen the board profile is drawn with: 0.1 mm.
@@ -35,8 +34,16 @@ pub(crate) fn collect(
     let mut images = Images::new();
     let frame = FabFrame::of(board);
     zone_fills(&mut images, extras, frame, tally);
-    for footprint in &board.footprints {
-        footprint_marks(&mut images, board, footprint, stack, frame, tally);
+    for (index, footprint) in board.footprints.iter().enumerate() {
+        footprint_marks(
+            &mut images,
+            board,
+            footprint,
+            Some(index),
+            stack,
+            frame,
+            tally,
+        );
     }
     // Free pads (#2373) are marked as pads of the board's own frame.
     if !board.free.pads.is_empty() {
@@ -44,12 +51,13 @@ pub(crate) fn collect(
             pads: board.free.pads.clone(),
             ..signex_types::pcb_free::free_pad_frame()
         };
-        footprint_marks(&mut images, board, &free, stack, frame, tally);
+        footprint_marks(&mut images, board, &free, None, stack, frame, tally);
     }
     tracks(&mut images, board, frame, tally);
     arcs(&mut images, board, frame, tally);
     vias(&mut images, board, stack, frame, tally);
     board_graphics(&mut images, board, frame, tally);
+    super::text::texts(&mut images, board, frame, tally);
     extra_strokes(&mut images, extras, frame, tally);
     profile(&mut images, board, frame, tally);
     v_scores(&mut images, board, frame, tally);
@@ -193,16 +201,20 @@ fn zone_polygons(
     regions
 }
 
+/// A footprint's pads and drawings; `index` is its place in the board's
+/// footprints, `None` for the free pads' frame.
 fn footprint_marks(
     images: &mut Images,
     board: &PcbBoard,
     footprint: &Footprint,
+    index: Option<usize>,
     stack: &CopperStack,
     frame: FabFrame,
     tally: &mut Tally,
 ) {
-    for pad in &footprint.pads {
-        if pad_marks(images, board, footprint, pad, stack, frame).is_err() {
+    for (pad_index, pad) in footprint.pads.iter().enumerate() {
+        let key = index.map(|index| (index, pad_index));
+        if pad_marks(images, board, footprint, (pad, key), stack, frame).is_err() {
             tally.skipped += 1;
         }
     }
@@ -225,12 +237,6 @@ fn footprint_marks(
         };
         place_drawing(images, layer, draw(&Drawing::from(graphic), &pen), tally);
     }
-    tally.texts += footprint
-        .properties
-        .iter()
-        .filter(|p| !p.hidden && !p.value.is_empty())
-        .filter(|p| p.layer.as_deref().and_then(FabLayer::of_token).is_some())
-        .count();
 }
 
 fn place_drawing(
@@ -241,16 +247,26 @@ fn place_drawing(
 ) {
     match drawn {
         Ok(Drawn::Marks(marks)) => marks.into_iter().for_each(|m| push(images, layer, m)),
-        Ok(Drawn::Text) => tally.texts += 1,
+        // `fab::text` writes it.
+        Ok(Drawn::Text) => {}
         Ok(Drawn::Skipped) | Err(_) => tally.skipped += 1,
     }
 }
 
-fn graphic_function(layer: FabLayer) -> Function {
+pub(super) fn graphic_function(layer: FabLayer) -> Function {
     match layer {
         FabLayer::Profile => Function::Profile,
         FabLayer::Copper(_) => Function::NonConductor,
         _ => Function::Graphic,
+    }
+}
+
+/// What a board drawing or string marks on `layer`: conductor of no net on
+/// copper (#2883), as the design rule check reads it; else a drawing.
+pub(super) fn board_drawing_function(layer: FabLayer) -> Function {
+    match layer {
+        FabLayer::Copper(_) => Function::Conductor,
+        _ => graphic_function(layer),
     }
 }
 
@@ -331,6 +347,19 @@ pub(crate) fn pad_aperture(
             ApertureShape::Rect { w, h }
         }
         PadShape::Rect | PadShape::RoundRect => ApertureShape::TurnedRect { w, h, udeg },
+        // The outline `pad_shape` places, about the flash point (#2242).
+        PadShape::Trapezoid | PadShape::Custom => {
+            let sized = Pad {
+                size,
+                ..pad.clone()
+            };
+            let corners = pad_shape(footprint, &sized)?
+                .outline(0)
+                .into_iter()
+                .map(|p| frame.point(p).minus(at))
+                .collect();
+            ApertureShape::Outline { corners }
+        }
     };
     Ok((shape, at))
 }
@@ -350,11 +379,13 @@ fn round_radius(pad: &Pad, w: i64, h: i64) -> i64 {
     ((pad.roundrect_ratio * short as f64).round() as i64).clamp(0, short / 2)
 }
 
+/// A pad's copper flashes and mask and paste openings; `key` names the
+/// pad on its copper flashes.
 fn pad_marks(
     images: &mut Images,
     board: &PcbBoard,
     footprint: &Footprint,
-    pad: &Pad,
+    (pad, key): (&Pad, Option<PadKey>),
     stack: &CopperStack,
     frame: FabFrame,
 ) -> Result<(), GeomError> {
@@ -387,6 +418,7 @@ fn pad_marks(
         let attributes = Attributes {
             net: net.clone(),
             pin: pin.clone(),
+            pad: key,
         };
         push(
             images,
@@ -537,24 +569,33 @@ fn board_graphics(images: &mut Images, board: &PcbBoard, frame: FabFrame, tally:
         let Some(layer) = FabLayer::of_token(&graphic.layer) else {
             continue;
         };
+        // On copper, the item the design rule check sees no copper of
+        // (#2883) is left out whole and named.
+        if let FabLayer::Copper(copper) = layer
+            && let Err(fault) = pcb_geom::board_graphic_copper(graphic)
+        {
+            let item = DrawnCopperItem::Drawing {
+                id: graphic.uuid,
+                kind: graphic.kind(),
+            };
+            tally.skip_drawn_copper(item, copper, fault);
+            continue;
+        }
         let pen = Pen {
             to_fab: &board_to_fab,
             arc_ccw_without_mid: false,
-            function: graphic_function(layer),
+            function: board_drawing_function(layer),
             width_override: (layer == FabLayer::Profile).then_some(PROFILE_WIDTH_NM),
         };
-        place_drawing(images, layer, draw(&Drawing::from(graphic), &pen), tally);
-        // A text frame's box is drawn; its text waits for the stroke font,
-        // as a board text does (#2424).
-        if graphic.kind() == Some(BoardGraphicKind::TextFrame) && !graphic.text.trim().is_empty() {
-            tally.texts += 1;
-        }
+        // A text frame's box; its lines are written by `fab::text`. A board
+        // drawing of kind `text` is not one the board draws, and `fab::text`
+        // does not write it: it is counted as skipped, never dropped.
+        let drawn = match draw(&Drawing::from(graphic), &pen) {
+            Ok(Drawn::Text) => Ok(Drawn::Skipped),
+            other => other,
+        };
+        place_drawing(images, layer, drawn, tally);
     }
-    tally.texts += board
-        .texts
-        .iter()
-        .filter(|t| !t.text.is_empty() && FabLayer::of_token(&t.layer).is_some())
-        .count();
 }
 
 fn extra_strokes(images: &mut Images, extras: &FabExtras, frame: FabFrame, tally: &mut Tally) {

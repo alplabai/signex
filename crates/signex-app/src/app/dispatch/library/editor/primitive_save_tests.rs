@@ -27,7 +27,6 @@ fn app_with_symbol_named(dir: &Path, stem: &str) -> (Signex, PathBuf) {
     app.document_state.tabs.push(TabInfo {
         title: "Lib".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::SymbolEditor(path.clone()),
     });
@@ -273,7 +272,10 @@ fn replace_editor(app: &mut Signex, path: &Path, name: &str) {
 
 fn assert_replaced_editor_untouched(app: &Signex, path: &Path, name: &str) {
     let editor = &app.document_state.symbol_editors[path];
-    assert_eq!(editor.baseline.symbols[0].name, name, "baseline untouched");
+    assert_eq!(
+        editor.draft.baseline.symbols[0].name, name,
+        "baseline untouched"
+    );
     assert!(
         app.document_state.is_document_dirty(path),
         "its dirty marker stays"
@@ -295,7 +297,6 @@ fn a_late_completion_leaves_a_discarded_and_reopened_draft_alone() {
     app.document_state.tabs.push(TabInfo {
         title: "Lib".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::SymbolEditor(path.clone()),
     });
@@ -330,7 +331,6 @@ fn a_failed_save_as_keeps_the_draft_when_the_original_was_reopened() {
     app.document_state.tabs.push(TabInfo {
         title: "Lib".into(),
         path: from.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::SymbolEditor(from.clone()),
     });
@@ -358,8 +358,14 @@ fn a_failed_save_as_keeps_the_draft_when_the_original_was_reopened() {
         assert_eq!(tabs.count(), 1, "one tab on {}", path.display());
     }
     let notice = app.document_state.error_notice.as_ref().expect("notice");
+    // The sentence names the operation; the reason is the error chain, shown
+    // in the card's system block (mockup row 11).
+    assert_eq!(notice.detail.render_en_us(), "Save As failed");
     assert!(
-        notice.detail.render_en_us().contains("stays unsaved"),
+        notice
+            .system
+            .as_ref()
+            .is_some_and(|system| system.as_str().contains("stays unsaved")),
         "{notice:?}"
     );
     assert!(app.document_state.document_saves.failure(&to).is_some());
@@ -607,7 +613,6 @@ fn app_with_dirty_footprint(dir: &Path) -> (Signex, PathBuf) {
     app.document_state.tabs.push(TabInfo {
         title: "Lib".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });
@@ -717,6 +722,7 @@ fn owing(dir: &Path, stem: &str) -> (Signex, PathBuf) {
         .symbol_editors
         .get_mut(&path)
         .unwrap()
+        .draft
         .cascade_owed = vec![uuid::Uuid::now_v7()];
     (app, path)
 }

@@ -12,7 +12,7 @@ pub enum LayerNameStyle {
     Short,
     /// `Top`, `Bottom`, `Mid 1`.
     Medium,
-    /// The Layers panel's names: `Top Layer`, `Top Overlay`.
+    /// The Layers panel's names: `Top Layer`, `Top Silkscreen`.
     #[default]
     Long,
 }
@@ -34,6 +34,35 @@ impl LayerNameStyle {
         Self::ALL
             .into_iter()
             .find(|style| token.trim().eq_ignore_ascii_case(style.token()))
+    }
+}
+
+/// How a board picks its active layer: Preferences ▸ Appearance ▸ Layer
+/// switcher, saved in `prefs.json` as `pcb_layer_switcher`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LayerSwitcher {
+    /// The layer tabs under the board; the status-bar pill is a label.
+    #[default]
+    Strip,
+    /// No tabs; the status-bar pill opens a list of the visible layers.
+    Dropdown,
+}
+
+impl LayerSwitcher {
+    /// The value stored in `prefs.json`.
+    pub fn as_pref(self) -> &'static str {
+        match self {
+            Self::Strip => "strip",
+            Self::Dropdown => "dropdown",
+        }
+    }
+
+    /// Parse a stored value; anything unknown is [`Self::Strip`].
+    pub fn from_pref(value: &str) -> Self {
+        match value {
+            "dropdown" => Self::Dropdown,
+            _ => Self::Strip,
+        }
     }
 }
 

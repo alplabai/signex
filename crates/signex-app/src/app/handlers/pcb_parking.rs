@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use crate::app::{Signex, TabDocument, TabInfo, TabKind};
+use crate::app::Signex;
 
 impl Signex {
     /// The PCB tab at `idx` is closing. A close the user asked for keeps a
@@ -19,11 +19,11 @@ impl Signex {
         // for applied the sketch already (`close_tab`); a discard drops it.
         self.end_board_sketch_of(&path);
         self.end_board_3d_of(&path);
+        self.end_only_unrouted_of(&path);
         let keep = park_dirty && self.document_state.is_document_dirty(&path);
-        if keep
-            && let Some(TabDocument::Pcb(engine)) =
-                self.document_state.tabs[idx].cached_document.take()
-        {
+        // The board leaves the store with its tab: parked, or dropped here.
+        let engine = self.document_state.take_tab_board_engine(idx);
+        if keep && let Some(engine) = engine {
             self.document_state.park_pcb_board(path, engine);
             return;
         }
@@ -40,13 +40,8 @@ impl Signex {
         };
         self.park_active_schematic_session();
         let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
-        self.document_state.tabs.push(TabInfo {
-            title,
-            path,
-            cached_document: Some(TabDocument::Pcb(engine)),
-            project_id,
-            kind: TabKind::Pcb,
-        });
+        self.document_state
+            .push_pcb_tab(title, path, project_id, engine);
         self.document_state.active_tab = self.document_state.tabs.len() - 1;
         self.apply_loaded_pcb_document(true, true);
         true

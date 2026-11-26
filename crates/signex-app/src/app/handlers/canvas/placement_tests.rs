@@ -33,7 +33,6 @@ pub(crate) fn app_with_tool(tool: Tool) -> Signex {
     app.document_state.tabs.push(TabInfo {
         title: "placement".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -60,6 +59,11 @@ pub(crate) fn doc(app: &Signex) -> &SchematicSheet {
 /// The sheet as a value with every uuid removed, so placements made in two
 /// apps compare equal when they placed the same things.
 pub(crate) fn sheet_shape(app: &Signex) -> serde_json::Value {
+    shape_of(doc(app))
+}
+
+/// [`sheet_shape`] of a sheet held outside an app.
+pub(crate) fn shape_of(sheet: &SchematicSheet) -> serde_json::Value {
     fn strip(value: &mut serde_json::Value) {
         match value {
             serde_json::Value::Object(map) => {
@@ -70,7 +74,7 @@ pub(crate) fn sheet_shape(app: &Signex) -> serde_json::Value {
             _ => {}
         }
     }
-    let mut value = serde_json::to_value(doc(app)).expect("sheet serialises");
+    let mut value = serde_json::to_value(sheet).expect("sheet serialises");
     strip(&mut value);
     value
 }

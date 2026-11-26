@@ -109,6 +109,15 @@ impl Signex {
     }
 
     pub fn new() -> (Self, Task<Message>) {
+        let (app, boot) = Self::new_boxed();
+        (*app, boot)
+    }
+
+    /// [`Self::new`] built straight into a `Box`: the headless boot holds
+    /// only the box, never a copy of the app (#2325). Its own frame, so the
+    /// caller's frame stays small.
+    #[inline(never)]
+    pub(crate) fn new_boxed() -> (Box<Self>, Task<Message>) {
         // One parse of `prefs.json` feeds every startup reader below; a
         // missing or malformed file reads as `None`, i.e. every default.
         let prefs_json = crate::fonts::load_prefs_json();
@@ -135,6 +144,15 @@ impl Signex {
         let search_prefs = crate::persist::SearchPrefsSync::new(std::sync::Arc::new(
             crate::fonts::PrefsSearchStore::user_prefs(),
         ));
+        // Workspace layouts (mockup row 166): a skipped entry is said in Messages once
+        // the language is known.
+        let (workspace_layouts, layout_problems) =
+            crate::workspace_layouts::WorkspaceLayoutsState::boot(
+                prefs,
+                std::sync::Arc::new(
+                    crate::workspace_layouts::PrefsWorkspaceLayoutsStore::user_prefs(),
+                ),
+            );
 
         let sch_canvas = CanvasSlot::new();
         let mut pcb_canvas = crate::pcb_canvas::PcbCanvas::new();
@@ -156,6 +174,7 @@ impl Signex {
         let symbol_grid_style = crate::fonts::read_symbol_grid_style_pref_from(prefs);
         let symbol_pin_selection = crate::fonts::read_symbol_pin_selection_pref_from(prefs);
         let zoom_step_percent = crate::fonts::read_zoom_step_percent_pref_from(prefs);
+        let pcb_dim_others_percent = crate::fonts::read_pcb_dim_others_pref_from(prefs);
         let ui_scale =
             crate::fonts::read_ui_scale_pref_from(prefs, &crate::fonts::prefs_file_path());
         let undo_depth =
@@ -163,12 +182,23 @@ impl Signex {
         let annotate_undo = crate::fonts::read_annotate_undo_pref_from(prefs);
         let move_keeps_wires = crate::fonts::read_move_keeps_wires_pref_from(prefs);
         let net_hover_enabled = crate::fonts::read_net_hover_pref_from(prefs);
+        let edge_pan = crate::fonts::read_edge_pan_pref_from(prefs);
+        let symbol_body_fill = crate::symbol_fill_prefs::SymbolBodyFill::from_prefs(prefs);
+        let cross_out_not_fitted = crate::fonts::read_cross_out_not_fitted_pref_from(prefs);
+        let pcb_dimension_defaults = crate::pcb_defaults_prefs::from_prefs(prefs);
         let trackpad_pan = crate::fonts::read_trackpad_pan_pref_from(prefs);
         let wheel_mode = crate::fonts::read_wheel_mode_pref_from(prefs);
+        let layer_switcher = crate::fonts::read_layer_switcher_pref_from(prefs);
+        let selected_segment = crate::fonts::read_selected_segment_pref_from(prefs);
         let i18n = std::sync::Arc::new(signex_i18n::I18n::new(
             &crate::fonts::read_language_pref_from(prefs),
         ));
         crate::app::handlers::preferences::language::log_dropped_language(&i18n);
+        for problem in &layout_problems {
+            crate::diagnostics::log_warning(crate::workspace_layouts::problems::problem_line(
+                &i18n, problem,
+            ));
+        }
         let remember_window_geometry = crate::fonts::read_remember_window_geometry_pref_from(prefs);
         let drag_direction_select = crate::fonts::read_drag_direction_select_pref_from(prefs);
         let increment_step = crate::fonts::read_increment_step_pref_from(prefs);
@@ -200,7 +230,7 @@ impl Signex {
         let grid_size_mm = crate::fonts::read_grid_size_mm_pref_from(prefs)
             .unwrap_or(crate::canvas::grid::GRID_SIZES_MM[1]);
         // Keyboard shortcut profiles: prefer the user's saved set from
-        // the OS config dir, else fall back to the bundled Altium /
+        // the OS config dir, else fall back to the bundled Signex Standard /
         // Classic built-ins (which must always parse). The active
         // profile is compiled once here into a fast lookup table.
         //
@@ -278,7 +308,7 @@ impl Signex {
         let restored_geometry = remember_window_geometry
             .then(crate::app::window_geometry::load)
             .flatten();
-        let mut app = Self {
+        let mut app = Box::new(Self {
             ui_state: UiState {
                 io: crate::io_ports::IoPorts::default(),
                 // Persisted user-toggleable state (UX §1.5). Reads
@@ -300,6 +330,13 @@ impl Signex {
                 keymap_profiles,
                 active_keymap,
                 pcb_layer_views: Default::default(),
+                saved_pcb_layer_views: Box::new(crate::board_view_prefs::read_board_views_from(
+                    prefs,
+                )),
+                pcb_layer_view_sync: Box::new(crate::board_view_prefs::BoardViewSync::new(
+                    std::sync::Arc::new(crate::fonts::PrefsBoardViewStore::user_prefs()),
+                    Default::default(),
+                )),
                 layer_strip: crate::fonts::read_layer_strip_pref_from(prefs),
                 pcb_view_angle_entry: None,
                 pcb_pick_filter: Default::default(),
@@ -307,7 +344,7 @@ impl Signex {
                     prefs,
                     crate::fonts::BOARD_FILTER_PRESETS,
                 ),
-                pcb_filter_preset_tab: 0,
+                pcb_filter_preset_editing: None,
                 pcb_snap: Default::default(),
                 pcb_bar_last_tools: crate::fonts::read_pcb_bar_last_tools_from(prefs),
                 pcb_board_panel: Default::default(),
@@ -330,9 +367,13 @@ impl Signex {
                 window_os_scales: std::collections::HashMap::new(),
                 undocked_window_sizes: std::collections::HashMap::new(),
                 panel_list_open: false,
+                grid_snap_popover: None,
+                board_status: Box::default(),
                 preferences_open: false,
                 keyboard_shortcuts_open: false,
                 shortcut_sections: None,
+                extension_commands: Default::default(),
+                shortcut_sheet: Default::default(),
                 about_open: false,
                 recent_projects: crate::recent_projects::RecentProjects::from_paths(
                     crate::fonts::read_recent_projects_from(prefs),
@@ -340,6 +381,7 @@ impl Signex {
                 pinned_projects: crate::pinned_projects::PinnedProjects::from_paths(
                     crate::fonts::read_pinned_projects_from(prefs),
                 ),
+                project_thumbnails: Box::default(),
                 first_run_tour_open,
                 find_replace: crate::find_replace::FindReplaceState::default(),
                 preferences_nav: crate::preferences::PrefNav::Appearance,
@@ -361,17 +403,42 @@ impl Signex {
                 preferences_draft_ui_scale_percent: crate::ui_scale::scale_to_percent(ui_scale),
                 zoom_step_percent,
                 preferences_draft_zoom_step_percent: zoom_step_percent,
+                pcb_dim_others_percent,
+                preferences_draft_pcb_dim_others_percent: pcb_dim_others_percent,
                 annotate_undo,
                 preferences_draft_annotate_undo: annotate_undo,
                 move_keeps_wires,
                 preferences_draft_move_keeps_wires: move_keeps_wires,
                 net_hover_enabled,
                 preferences_draft_net_hover_enabled: net_hover_enabled,
+                edge_pan,
+                preferences_draft_edge_pan: edge_pan,
+                symbol_body_fill,
+                preferences_draft_symbol_body_fill: symbol_body_fill,
+                cross_out_not_fitted,
+                preferences_draft_cross_out_not_fitted: cross_out_not_fitted,
+                preferences_pcb_defaults: Box::new(
+                    crate::pcb_defaults_prefs::PcbDefaultsDraft::of(&pcb_dimension_defaults),
+                ),
+                pcb_dimension_defaults,
+                preferences_body_fill_palette_open: false,
+                preferences_body_fill_picker_open: false,
                 trackpad_pan,
                 preferences_draft_trackpad_pan: trackpad_pan,
                 wheel_mode,
                 preferences_draft_wheel_mode: wheel_mode,
+                layer_switcher,
+                preferences_draft_layer_switcher: layer_switcher,
+                selected_segment,
+                preferences_draft_selected_segment: selected_segment,
                 i18n: std::sync::Arc::clone(&i18n),
+                project_preview: Default::default(),
+                project_git: Default::default(),
+                // Mockup row 144a — seeded again (with its preview and the system
+                // language name) each time Preferences opens.
+                preferences_pages: Box::new(crate::preferences::PreferencesPagesState::new(
+                    i18n.pref().clone(),
+                )),
                 remember_window_geometry,
                 preferences_draft_remember_window_geometry: remember_window_geometry,
                 drag_direction_select,
@@ -412,6 +479,7 @@ impl Signex {
                 preferences_keymap_editor: keymap_editor,
                 preferences_keymap_status: String::new(),
                 keymap_load_error,
+                keymap_command_file: None,
                 // #603 — probed independently of `keymap_load_error`,
                 // because the backup outlives the failure that produced
                 // it and must stay reachable after a successful save
@@ -429,10 +497,12 @@ impl Signex {
                 project_close_confirm: None,
                 create_child_sheet_confirm: None,
                 pending_create_sheet: None,
+                pending_tree_history: None,
                 app_quit_confirm: None,
                 enable_version_control: None,
                 grid_properties: None,
                 new_project: None,
+                save_project_as: None,
                 document_setup: None,
                 setup_profiles: crate::fonts::read_setup_profiles_from(prefs),
                 removed_profile_names: Default::default(),
@@ -440,19 +510,33 @@ impl Signex {
                 update_pcb: None,
                 sheet_numbering: None,
                 sheet_numbering_reads: 0,
+                sheet_sync: None,
+                sheet_sync_reads: 0,
                 board_reannotate: None,
                 board_reannotate_options: Default::default(),
+                rooms: Default::default(),
                 fab_outputs: None,
+                diff_pair_classes: None,
+                notebook_generate: Default::default(),
                 fab_outputs_writes: 0,
                 board_output: Default::default(),
+                notebook_pdf: Default::default(),
+                notebook_tabs: Default::default(),
                 back_annotate: None,
+                compare_board: None,
                 find_similar: None,
                 find_similar_generation: 0,
                 assign_footprints: None,
                 assign_footprints_reads: 0,
                 net_inspector: Default::default(),
+                compiled_design: Default::default(),
+                unions: Default::default(),
+                smart_paste: None,
+                object_list: Default::default(),
+                annotations: Default::default(),
                 paste_array: None,
                 paste_array_opens: 0,
+                text_edit_opens: 0,
                 selection_filter_custom: None,
                 erc_violations: Vec::new(),
                 erc_violations_by_path: std::collections::HashMap::new(),
@@ -461,6 +545,7 @@ impl Signex {
                 erc_lapsed_waivers: std::collections::BTreeSet::new(),
                 erc_page_frames: Default::default(),
                 erc_waive_draft: None,
+                validation_panels: Default::default(),
                 erc_focus_global_index: None,
                 erc_epoch: 0,
                 erc_run_epoch: 0,
@@ -484,7 +569,9 @@ impl Signex {
                 annotate_dialog_open: false,
                 annotate_order: crate::app::state::AnnotateOrder::default(),
                 erc_dialog_open: false,
+                erc_profile_menu_open: false,
                 annotate_reset_confirm: false,
+                annotate_session: Box::default(),
                 modal_offsets: std::collections::HashMap::new(),
                 modal_dragging: None,
                 tab_dragging: None,
@@ -500,11 +587,14 @@ impl Signex {
                 passive_calculator_open: false,
                 move_selection: crate::app::state::MoveSelectionState::default(),
                 net_color_palette_open: false,
+                net_color_palette: Default::default(),
                 parameter_manager_open: false,
-                parameter_table: crate::app::state::ParameterTableState::default(),
+                parameter_table: Box::default(),
+                parameter_import: None,
                 reorder_picker: None,
                 move_pick: None,
                 pin_matrix_overrides: std::collections::HashMap::new(),
+                erc_rule_list: Default::default(),
                 annotate_locked: std::collections::HashSet::new(),
                 annotate_preview: Default::default(),
                 annotate_runs: Default::default(),
@@ -520,9 +610,18 @@ impl Signex {
                 lasso_polygon: None,
                 net_color_custom: crate::app::state::NetColorCustomState::default(),
                 command_palette: crate::app::command_palette::CommandPaletteState::default(),
+                start_screen: Box::new(crate::start_screen::StartScreenState::at_boot(
+                    chrono::Utc::now(),
+                )),
+                tab_overflow_menu_open: false,
+                command_log: Default::default(),
+                command_replay: Default::default(),
+                workspace_layouts: Box::new(workspace_layouts),
             },
             document_state: DocumentState {
                 drafts: drafts.clone(),
+                live_drawing_edit: None,
+                line_width_draft_selection: None,
                 dock,
                 dock_layout_sync,
                 search_prefs,
@@ -541,10 +640,12 @@ impl Signex {
                 profile_drift_noted: Default::default(),
                 read_only_refusal_noted: Default::default(),
                 rules_history: Default::default(),
+                general_history: Default::default(),
                 missing_fonts: Default::default(),
                 tabs: vec![],
                 active_tab: 0,
                 engines: std::collections::HashMap::new(),
+                times: crate::app::state::DocumentTimes::at(chrono::Local::now()),
                 symbol_editors: std::collections::HashMap::new(),
                 footprint_editors: std::collections::HashMap::new(),
                 pad_clipboard: None,
@@ -566,8 +667,10 @@ impl Signex {
                 designator_cache: Default::default(),
                 next_pcb_revision: 0,
                 pcb_revisions: std::collections::HashMap::new(),
+                boards: std::collections::HashMap::new(),
                 parked_pcb_boards: std::collections::HashMap::new(),
                 undo_groups: std::collections::HashMap::new(),
+                rail_rename: Default::default(),
                 agent_edits: Default::default(),
                 check_runs: Default::default(),
                 reuse_blocks: Default::default(),
@@ -610,10 +713,13 @@ impl Signex {
                     canvas_font_popup_open: false,
 
                     properties_tab: 0,
-                    signal_mode: Default::default(),
+                    document_options: Default::default(),
                     projects_view: Default::default(),
+                    // Filled from `ui_state` by every `finish_update`.
+                    recent_projects: Vec::new(),
                     net_classes: Default::default(),
                     pcb_layers: Default::default(),
+                    pcb_layers_ui: Default::default(),
                     project_tree: vec![],
                     project_tree_builds: 0,
                     project_tree_selected: None,
@@ -621,9 +727,17 @@ impl Signex {
                     library_row_detail: None,
                     component_sheet: None,
                     pcb_nets: None,
+                    pcb_panel: Default::default(),
                     net_inspector: Default::default(),
+                    compiled_design: Default::default(),
+                    unions: Default::default(),
+                    object_list: Default::default(),
+                    command_log: Default::default(),
+                    annotations: Default::default(),
+                    notebook_badges: Default::default(),
                     pcb_board: None,
                     layer_stack: None,
+                    polygons: None,
                     selection_count: 0,
                     selected_uuid: None,
                     selected_kind: None,
@@ -631,6 +745,9 @@ impl Signex {
                     multi_groups: Default::default(),
                     placed: Default::default(),
                     multi_draft: None,
+                    multi_footprint_choices: vec![],
+                    visible_grid_draft: None,
+                    snap_grid_draft: None,
                     symbol_choices: vec![],
                     footprint_choices: vec![],
                     footprint_card: None,
@@ -639,9 +756,13 @@ impl Signex {
                     drawing_edit_buf_page: None,
                     selected_drawing: None,
                     selected_drawing_placement: Default::default(),
+                    annotation: Default::default(),
                     selected_child_sheet: None,
+                    selected_child_sheet_file: None,
+                    directive_panel: None,
                     child_sheet_border_picker_open: false,
                     wire_color_picker: Default::default(),
+                    harness: Default::default(),
                     selected_wire_style: None,
                     child_sheet_fill_picker_open: false,
                     child_sheet_border_advanced_open: false,
@@ -651,10 +772,14 @@ impl Signex {
                     child_sheet_file_buf: None,
                     title_block: std::collections::BTreeMap::new(),
                     project_parameters: std::collections::BTreeMap::new(),
+                    sheet_variables: std::collections::BTreeMap::new(),
+                    builtin_parameters: Vec::new(),
                     drafts: drafts.clone(),
                     numeric_draft: None,
+                    color_hex_draft: None,
                     title_block_sheet: None,
                     collapsed_sections: std::collections::HashSet::new(),
+                    part_panel: Default::default(),
                     pre_placement: None,
                     erc_diagnostics: Vec::new(),
                     erc_waivers: Vec::new(),
@@ -664,6 +789,7 @@ impl Signex {
                     erc_running: false,
                     erc_results_stale: false,
                     erc_ran: false,
+                    validation: Default::default(),
                     diagnostics_level: crate::diagnostics::configured_level_label().to_string(),
                     diagnostics: crate::diagnostics::recent_entries(),
                     pcb_drc: None,
@@ -683,7 +809,10 @@ impl Signex {
                     symbol_editor: None,
                     footprint_editor: None,
                     history: crate::panels::history::HistoryPanelState::default(),
+                    illustration_hover: Default::default(),
                     document_font_family: None,
+                    selection_filter: Default::default(),
+                    selection_form: Default::default(),
                 },
                 history: crate::panels::history::HistoryPanelState::default(),
                 window_history: std::collections::HashMap::new(),
@@ -691,6 +820,7 @@ impl Signex {
                 page_setup_memory: Default::default(),
                 tab_placements: Default::default(),
                 net_nav: Default::default(),
+                compiled_design: Default::default(),
                 raster_queue: Default::default(),
                 error_notice: None,
                 netlist_incomplete_prompt: None,
@@ -703,6 +833,7 @@ impl Signex {
                 paused_git_projects: std::collections::HashSet::new(),
                 pending_opens: Default::default(),
                 pending_restores: Default::default(),
+                branch_switch: None,
                 pending_path_ops: crate::app::path_ops::PendingPathOps::default(),
                 new_project_writes: std::collections::HashSet::new(),
                 dir_case: Default::default(),
@@ -711,12 +842,16 @@ impl Signex {
                 project_writes: Vec::new(),
                 moved_project_dirs: Vec::new(),
                 deferred_git_commits: Vec::new(),
+                gerber_viewer: Default::default(),
+                notebooks: std::collections::HashMap::new(),
+                generated_reports: std::collections::HashMap::new(),
             },
             interaction_state: InteractionState {
                 current_tool: Tool::Select,
                 canvas: sch_canvas,
                 canvases: std::collections::HashMap::new(),
                 pcb_canvas,
+                symbol_edge_pan: Default::default(),
                 pcb_canvases: std::collections::HashMap::new(),
                 tile_panes: Default::default(),
                 pcb_selection: Default::default(),
@@ -725,6 +860,7 @@ impl Signex {
                 pcb_tool: None,
                 pcb_tool_defaults: Default::default(),
                 pcb_guide_place: None,
+                pcb_origin_place: None,
                 pcb_query: Default::default(),
                 pcb_arrange_box: None,
                 pcb_ratsnest: Default::default(),
@@ -732,6 +868,7 @@ impl Signex {
                 board_net_classes: Default::default(),
                 cross_select: Default::default(),
                 board_sketch: None,
+                board_sketch_hint_said: false,
                 board_3d: None,
                 pcb_footprint_draft: None,
                 pcb_component: Default::default(),
@@ -743,18 +880,23 @@ impl Signex {
                 tab_drag_origin: None,
                 wire_points: Vec::new(),
                 wire_drawing: false,
+                wire_window: None,
+                wire_start_style: None,
                 arc_points: Vec::new(),
                 polyline_points: Vec::new(),
+                annotation_tool: Default::default(),
                 shape_anchor: None,
                 clipboard: None,
                 clipboard_text: None,
                 pcb_clipboard: None,
                 corner_rule: Default::default(),
+                drag_wiring: Default::default(),
                 route_mode: Default::default(),
                 editing_text: None,
                 context_menu: None,
                 project_tree_context_menu: None,
                 grid_picker: None,
+                zoom_presets_open: false,
                 tab_context_menu: None,
                 start_row_menu: None,
                 context_submenu: None,
@@ -766,6 +908,7 @@ impl Signex {
                 last_tree_click: Default::default(),
                 active_bar_menu: None,
                 active_bar_menu_window: None,
+                swallow_right_release: false,
                 pcb_bar_menu: None,
                 pcb_layer_tab_menu: None,
                 pcb_layer_set_menu: None,
@@ -777,16 +920,22 @@ impl Signex {
                     .collect(),
                 custom_filter_presets: crate::fonts::read_custom_filter_presets_from(prefs),
                 active_custom_filter_tab: 0,
+                filter_preset_rename: None,
+                editing_custom_filter: None,
                 footprint_filter_presets: crate::fonts::read_footprint_filter_presets_from(prefs),
                 selection_slots: std::array::from_fn(|_| Vec::new()),
                 last_tool: std::collections::HashMap::new(),
                 pending_power: None,
                 placement: None,
+                placement_pause: None,
                 last_placement: None,
                 paste_counters: None,
+                paste_unread_sheets: None,
+                paste_designators_override: None,
                 placement_epoch: 0,
                 pending_port: None,
                 bus_entry_size: signex_types::schematic::SCHEMATIC_BUS_ENTRY_DEFAULT_SIZE,
+                last_harness_type: None,
                 hover_symbol_uuid: None,
                 clicked_pin: None,
                 hover_started_at: None,
@@ -800,16 +949,27 @@ impl Signex {
                     component_classes,
                 },
                 stock_copy_target: crate::fonts::read_stock_copy_target_pref_from(prefs),
+                components_panel: crate::library::state::ComponentsPanelState {
+                    row_style: crate::fonts::read_components_row_style_pref_from(prefs),
+                    ..Default::default()
+                },
                 ..Default::default()
             },
             native_menu: Default::default(),
             agent: crate::app::agent::AgentState::new(),
-        };
+            pan_zoom_bench: None,
+            extensions: Default::default(),
+        });
         // The PCB canvas starts from the loaded grid state, not its own
         // defaults, so the first frame honours a saved "grid off" (#682).
         app.interaction_state.pcb_canvas.set_grid(
             app.ui_state.grid_visible,
             app.ui_state.visible_grid_mm as f64,
+        );
+        // Read once here, not in `DistributorSettings::default` or a view.
+        app.library.settings.set_start_environment(
+            crate::library::settings::digikey_oauth::client_configured(),
+            crate::library::settings::persistence::config_path().as_deref(),
         );
         // v0.9 Stage 9: the globally-configured libraries and the bundled
         // stock library (#328) are mounted off the UI thread (#1470): the
@@ -863,11 +1023,15 @@ impl Signex {
         let (main_id, open_task) = iced::window::open(main_settings);
         app.ui_state.main_window_id = Some(main_id);
         app.note_unusable_setup_profiles(crate::fonts::unusable_setup_profiles(prefs));
+        app.ui_state
+            .recent_projects
+            .restore_opened(crate::fonts::read_recent_opened_from(prefs));
         let boot_task = iced::Task::batch([
             open_task.map(|id| Message::Window(WindowMsg::MainWindowOpened(id))),
             mount_task,
             tour_boot,
             app.check_pinned_projects(),
+            app.load_project_thumbnails(),
         ]);
         // The panel context above was seeded with Signex tokens; point it at the
         // saved theme before the first frame, so a Graphite first launch does not

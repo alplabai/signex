@@ -1,6 +1,6 @@
 //! The status bar's cursor X/Y and zoom readouts: each window asks the
 //! canvas it is showing, never a stored copy that another canvas wrote
-//! (#1789).
+//! (#1789). The board counters' readout lives in `board_status` (#2460).
 
 use std::path::{Path, PathBuf};
 
@@ -9,12 +9,16 @@ use signex_types::coord::Unit;
 use super::super::super::*;
 use crate::library::state::LibraryDisplaySettings;
 
+mod board_status;
+
 /// The grid and unit a window's status bar shows.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct StatusGrid {
     pub visible: bool,
     pub size_mm: f32,
     pub unit: Unit,
+    /// On a board: the grid in effect is one of its extra grids.
+    pub extra: bool,
 }
 
 /// The surface a window's canvas area is showing.
@@ -41,6 +45,7 @@ impl Signex {
             if tab.kind.as_component_editor().is_some()
                 || tab.kind.as_library_browser().is_some()
                 || tab.kind.is_project_page()
+                || tab.kind.is_gerber_viewer()
             {
                 return Surface::NoCamera;
             }
@@ -107,6 +112,25 @@ impl Signex {
             .map(|editor| editor.path.clone())
     }
 
+    /// Whether `window_id` shows a footprint tab: its Grid read-out opens
+    /// the grid step list (mockup row 63).
+    pub(crate) fn status_shows_footprint(&self, window_id: iced::window::Id) -> bool {
+        matches!(self.status_surface(window_id), Surface::FootprintEditor(_))
+    }
+
+    /// Where the step list opened from the Grid caret of `window`'s bar
+    /// goes (the main window's when `None`): its left edge at the Grid
+    /// read-out, its bottom just above the status bar (mockup row 63).
+    pub(crate) fn grid_caret_anchor(&self, window: Option<iced::window::Id>) -> (f32, f32) {
+        let ui = &self.ui_state;
+        let (_, height) = window.map_or(ui.window_size, |window| ui.size_of_window(window));
+        let status_h = crate::status_bar::status_bar_height(&self.document_state.panel_ctx.tokens);
+        (
+            crate::status_bar::grid_readout_x(),
+            height - status_h - crate::status_bar::POPUP_GAP,
+        )
+    }
+
     /// The Document Options of the library holding the symbol at `path`;
     /// a lone file, outside any open library, gets the defaults.
     pub(crate) fn symbol_display(&self, path: &Path) -> LibraryDisplaySettings {
@@ -117,28 +141,53 @@ impl Signex {
     }
 
     /// The grid and unit the status bar of `window_id` shows: a symbol
-    /// tab's library settings, or the app-wide ones.
+    /// tab's library settings, a footprint tab's step (the one its grid
+    /// picker marks, mockup row 63), the grid in effect on a board, or the
+    /// app-wide ones.
     pub fn status_grid(&self, window_id: iced::window::Id) -> StatusGrid {
-        if let Surface::SymbolEditor(editor) = self.status_surface(window_id) {
-            let display = self.symbol_display(&editor.path);
-            return StatusGrid {
-                visible: display.grid_visible,
-                size_mm: display.grid_size_mm,
-                unit: display.unit,
-            };
-        }
         let ui = &self.ui_state;
+        match self.status_surface(window_id) {
+            Surface::SymbolEditor(editor) => {
+                let display = self.symbol_display(&editor.path);
+                return StatusGrid {
+                    visible: display.grid_visible,
+                    size_mm: display.grid_size_mm,
+                    unit: display.unit,
+                    extra: false,
+                };
+            }
+            Surface::FootprintEditor(editor) => {
+                return StatusGrid {
+                    visible: ui.grid_visible,
+                    size_mm: editor.state.snap_options.grid_step_mm as f32,
+                    unit: ui.unit,
+                    extra: false,
+                };
+            }
+            Surface::NoCamera | Surface::Pcb | Surface::Schematic => {}
+        }
+        let owner = (ui.main_window_id != Some(window_id)).then_some(window_id);
+        let (size_mm, extra) = self.status_board_target(window_id).map_or(
+            (ui.grid_size_mm, false),
+            |(path, board)| {
+                let what = self.pcb_grid_use(&path, owner);
+                let extra = board.options.grids.iter().any(|g| g.applies_to(what));
+                let step = signex_engine::pcb::placement::grid_for(board, what).step_mm;
+                (step as f32, extra)
+            },
+        );
         StatusGrid {
             visible: ui.grid_visible,
-            size_mm: ui.grid_size_mm,
+            size_mm,
             unit: ui.unit,
+            extra,
         }
     }
 
     /// The tool the status bar of `window_id` names.
     pub fn status_tool(&self, window_id: iced::window::Id) -> String {
         match self.status_surface(window_id) {
-            Surface::SymbolEditor(editor) => editor.tool.label().to_string(),
+            Surface::SymbolEditor(editor) => editor.gui.tool.label().to_string(),
             _ => self.interaction_state.current_tool.to_string(),
         }
     }
@@ -146,7 +195,7 @@ impl Signex {
     /// The zoom, in percent, of the canvas `window_id` is showing.
     pub(crate) fn status_zoom(&self, window_id: iced::window::Id) -> f64 {
         match self.status_surface(window_id) {
-            Surface::SymbolEditor(editor) => editor.camera.zoom_percent(),
+            Surface::SymbolEditor(editor) => editor.gui.camera.zoom_percent(),
             Surface::FootprintEditor(editor) => editor.state.zoom_percent(),
             Surface::NoCamera => NO_CAMERA_ZOOM_PERCENT,
             Surface::Pcb => self
@@ -168,11 +217,17 @@ impl Signex {
     pub(crate) fn status_cursor(&self, window_id: iced::window::Id) -> (f64, f64) {
         let (x, y) = (self.ui_state.cursor_x, self.ui_state.cursor_y);
         match self.status_surface(window_id) {
-            Surface::SymbolEditor(editor) => editor.cursor_mm.unwrap_or_default(),
+            Surface::SymbolEditor(editor) => editor.gui.cursor_mm.unwrap_or_default(),
             Surface::FootprintEditor(editor) => editor.state.cursor_mm.unwrap_or_default(),
             Surface::NoCamera => (0.0, 0.0),
             // On a board, from its origin with Y up (#2384).
             Surface::Pcb => self.pcb_for_window(window_id).map_or((x, y), |board| {
+                // The sketch canvas keeps its own cursor (main window only).
+                let (x, y) = self
+                    .board_sketch_in_view()
+                    .filter(|_| self.ui_state.main_window_id == Some(window_id))
+                    .and_then(|session| session.editor.state.cursor_mm)
+                    .unwrap_or((x, y));
                 let shown = board
                     .options
                     .origin
@@ -211,7 +266,6 @@ mod tests {
         app.document_state.tabs.push(crate::app::TabInfo {
             title: "e".into(),
             path: path.clone(),
-            cached_document: None,
             project_id: None,
             kind: kind(path.clone()),
         });
@@ -224,8 +278,8 @@ mod tests {
         let (mut app, window, path) = app_showing(TabKind::SymbolEditor);
         let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("s"));
         let mut editor = SymbolDocument::new(path.clone(), file);
-        editor.camera.scale *= 2.5;
-        editor.cursor_mm = Some((1.5, -2.5));
+        editor.gui.camera.scale *= 2.5;
+        editor.gui.cursor_mm = Some((1.5, -2.5));
         app.document_state.symbol_editors.insert(path, editor);
 
         assert_eq!(app.status_zoom(window), SCHEMATIC_ZOOM * 2.5);
@@ -279,7 +333,6 @@ mod tests {
         app.document_state.tabs.push(crate::app::TabInfo {
             title: "R1".into(),
             path: PathBuf::from("parts.snxlib/Resistors.tsv#1"),
-            cached_document: None,
             project_id: None,
             kind: TabKind::ComponentEditor(crate::app::ComponentEditorTab {
                 library_path: PathBuf::from("parts.snxlib"),

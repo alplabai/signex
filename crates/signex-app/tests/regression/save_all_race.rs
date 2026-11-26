@@ -42,6 +42,7 @@ fn project_with_two_sheets(dir: &Path) -> Signex {
             sheets: vec![sheet_entry("X.snxsch"), sheet_entry("Y.snxsch")],
             variant_definitions: Vec::new(),
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: Vec::new(),
             enable_git: false,
             net_classes: Vec::new(),
@@ -50,6 +51,11 @@ fn project_with_two_sheets(dir: &Path) -> Signex {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
+            fab_outputs: None,
+            router_tool_diameter: None,
+            bom_alternates: Vec::new(),
+            requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },
@@ -71,7 +77,6 @@ fn project_with_two_sheets(dir: &Path) -> Signex {
         app.document_state.tabs.push(TabInfo {
             title: name.to_string(),
             path: path.clone(),
-            cached_document: None,
             project_id: Some(id),
             kind: TabKind::Schematic,
         });

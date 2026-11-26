@@ -6,6 +6,8 @@ define_ids! {
         PALETTE_KEY_ESC = "palette-key-esc";
         PALETTE_KEY_ENTER = "palette-key-enter";
         PALETTE_OPEN_PANEL = "palette-open-panel";
+        EXTENSION_COMMAND_LABEL = "extension-command-label";
+        EXTENSION_COMMAND_UNAVAILABLE = "extension-command-unavailable";
         KEYMAP_COL_ACTION = "keymap-col-action";
         KEYMAP_COL_SHORTCUT = "keymap-col-shortcut";
         KEYMAP_GROUP_GENERAL = "keymap-group-general";
@@ -67,5 +69,7 @@ define_ids! {
         PREF_KEYMAP_CLEAR = "pref-keymap-clear";
         PREF_KEYMAP_OK = "pref-keymap-ok";
         PREF_KEYMAP_CLAIMED = "pref-keymap-claimed";
+        // board-3d-keys-screenshot
+        PREF_KEYMAP_CONTEXT_BOARD_3D = "pref-keymap-context-board-3d";
     }
 }

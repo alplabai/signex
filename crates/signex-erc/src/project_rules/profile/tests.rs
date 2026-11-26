@@ -10,13 +10,20 @@ fn builtin_profile_lists_every_rule_and_hashes_stably() {
 }
 
 /// The shipped profile's hash is recorded in existing projects, so a DRC
-/// section (#2307) must not move it: pinned at the value trunk shipped.
+/// section (#2307) must not move it: pinned at the value trunk shipped. The
+/// repeat entry rule (#1279) and the two harness rules (#1280), profile 1.2,
+/// moved it once, from
+/// `89b152e97b10f513191914dc00133755a6fd3a57271b43193ac062f95aebdd76`. The
+/// missing library body rule (#2781), profile 1.3, moved it again, from
+/// `70e9a6b0e4e58df5604b78547c89a610a1a350392232af9013b2b032af7d0171`. The
+/// net class conflict rule (#2656), profile 1.4, moved it again, from
+/// `8d8a0a838d8ebcffe929e2c7f88b5f51c80ed5a091c208b05a87ba84bb4d9c7d`.
 #[test]
 fn builtin_profile_hash_and_bytes_are_unchanged_by_the_drc_section() {
     let p = builtin_profile();
     assert_eq!(
         p.content_sha256(),
-        "89b152e97b10f513191914dc00133755a6fd3a57271b43193ac062f95aebdd76"
+        "9cf4b1e7ab547b10273923a79db43363a2beff64841271f8511fb35bf378f3f2"
     );
     assert!(
         !String::from_utf8(p.to_json_bytes())

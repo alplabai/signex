@@ -3,6 +3,7 @@
 
 use signex_app::app::{FileMsg, Message, Signex, TabInfo, TabKind};
 use signex_app::diagnostics;
+use signex_app::keymap::AppCommandId;
 use signex_app::menu_bar::MenuMessage;
 use tempfile::TempDir;
 
@@ -39,6 +40,30 @@ fn save_all_writes_every_dirty_document_and_closes_nothing() {
         "no quit is started"
     );
     assert!(logged("Save All: saved 2 item(s)"), "the outcome is logged");
+}
+
+/// #2844: the `save_all` command, which `Mod+Alt+S` runs, writes nothing with
+/// nothing unsaved and writes through the same flow as the menu row.
+#[test]
+fn the_save_all_command_writes_only_unsaved_work() {
+    let tmp = TempDir::new().unwrap();
+    let path = tmp.path().join("a.snxfpt");
+    let (mut app, _t) = Signex::new();
+    let save_all = || {
+        Message::Menu(MenuMessage::Command(
+            AppCommandId::new("save_all").expect("catalog id"),
+        ))
+    };
+    open_footprint_editor(&mut app, &path);
+    crate::settle_support::settle(&mut app, save_all());
+    assert!(!path.exists(), "nothing unsaved, nothing written");
+
+    edit_description_via_panel(&mut app);
+    crate::settle_support::settle(&mut app, save_all());
+
+    let written = std::fs::read_to_string(&path).expect("Save All must write the file");
+    assert!(written.contains("edited"));
+    assert!(!app.document_state.has_dirty_documents());
 }
 
 #[test]
@@ -93,7 +118,6 @@ fn save_all_also_writes_a_dirty_schematic_and_project() {
     app.document_state.tabs.push(TabInfo {
         title: "one".into(),
         path: sch.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

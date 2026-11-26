@@ -1,22 +1,34 @@
-//! What the sheet's directives (#2420) mean for connectivity, derived once
-//! here so the netlist, ERC and the board read the same answer:
+//! What the sheet's directives (#2420, #1281, #1489) mean for connectivity, derived
+//! once here so the netlist, ERC and the board read the same answer:
 //!
 //! - a Compile Mask takes what it covers out of the netlist and ERC
 //!   ([`compile_masked`]);
-//! - a Blanket gives every net inside it its net class
-//!   ([`blanket_net_classes`]);
+//! - a Net Blanket gives every net it catches its net class
+//!   ([`blanket_nets`], [`blanket_net_classes`]);
+//! - a Net Parameters directive gives the net it sits on a class, a
+//!   diff-pair class and routing rules ([`net_parameters`]);
 //! - a Differential Pair directive pairs the net it sits on with its
-//!   `_P` / `_N` partner ([`diff_pairs`]).
+//!   partner ([`diff_pairs`], `diff_pair_classes.rs`).
 //!
+//! Class order: Net Parameters, then Net Blanket, then the project's class
+//! patterns ([`directive_net_classes`], [`fill_pattern_classes`]). Directives
+//! that disagree on a net's class are listed by [`net_class_conflicts`] (#2656);
+//! across a project's sheets, by `project_classes.rs`.
 //! Design note: `docs/SCHEMATIC_DIRECTIVES.md`.
 
 use std::borrow::Cow;
+use std::collections::{HashMap, HashSet};
 
-use signex_types::net::{NetId, Netlist};
-use signex_types::schematic::{Point, SchDirective, SchematicSheet, diff_pair_base};
+use signex_types::net::{Net, NetClassId, NetId, Netlist};
+use signex_types::net_class::{NetClass, first_matching_class};
+use signex_types::schematic::{
+    Aabb, DirectiveKind, LabelType, NetRules, Point, SchDirective, SchematicSheet,
+};
 use uuid::Uuid;
 
 use crate::net_class::wire_at_point;
+
+pub use crate::diff_pair_classes::DiffPair;
 
 /// `sheet` without what its Compile Masks cover; borrowed unchanged when it
 /// has none. An object is covered when its anchor is inside a mask: a
@@ -49,100 +61,382 @@ pub fn compile_masked(sheet: &SchematicSheet) -> Cow<'_, SchematicSheet> {
     Cow::Owned(out)
 }
 
-/// The class each Blanket gives a net of `netlist` (built from `sheet`): a
-/// net is inside a Blanket when one of its wires lies wholly inside it or one
-/// of its junctions does. The first Blanket in sheet order wins.
+/// How a Net Blanket holds a net.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BlanketCatch {
+    /// A wire lies wholly inside, or a junction does: caught.
+    Inside,
+    /// Its wires only cross the edge, and the blanket leaves such nets out.
+    EdgeOnly,
+    /// Its wires only cross the edge, and the blanket includes such nets.
+    EdgeIncluded,
+}
+
+impl BlanketCatch {
+    /// Whether the blanket's parameters reach the net.
+    pub fn is_caught(self) -> bool {
+        !matches!(self, Self::EdgeOnly)
+    }
+}
+
+/// One net under a Net Blanket, for its Properties list.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlanketNet {
+    pub net: NetId,
+    pub name: String,
+    pub catch: BlanketCatch,
+}
+
+/// The power net names of `sheet`: the value of each power port and the
+/// text of each power label. A Net Blanket never catches these nets.
+pub(crate) fn power_names(sheet: &SchematicSheet) -> HashSet<&str> {
+    crate::build::name_carrying_ports(sheet)
+        .into_iter()
+        .map(|(_, name)| name)
+        .chain(
+            sheet
+                .labels
+                .iter()
+                .filter(|l| l.label_type == LabelType::Power)
+                .map(|l| l.text.as_str()),
+        )
+        .filter(|name| !name.is_empty())
+        .collect()
+}
+
+/// Whether the segment `a`..`b` touches `r` (Liang-Barsky clip).
+fn segment_touches(r: &Aabb, a: Point, b: Point) -> bool {
+    let (dx, dy) = (b.x - a.x, b.y - a.y);
+    let mut t0 = 0.0_f64;
+    let mut t1 = 1.0_f64;
+    for (p, q) in [
+        (-dx, a.x - r.min_x),
+        (dx, r.max_x - a.x),
+        (-dy, a.y - r.min_y),
+        (dy, r.max_y - a.y),
+    ] {
+        if p == 0.0 {
+            if q < 0.0 {
+                return false;
+            }
+            continue;
+        }
+        let t = q / p;
+        if p < 0.0 {
+            t0 = t0.max(t);
+        } else {
+            t1 = t1.min(t);
+        }
+        if t0 > t1 {
+            return false;
+        }
+    }
+    true
+}
+
+/// How `blanket` holds the net made of `wires` and `junctions` on `sheet`;
+/// `None` when it does not reach it at all.
+pub(crate) fn catch_of(
+    sheet: &SchematicSheet,
+    blanket: &SchDirective,
+    wires: &[Uuid],
+    junctions: &[Uuid],
+) -> Option<BlanketCatch> {
+    let SchDirective::Blanket {
+        include_edge_nets, ..
+    } = blanket
+    else {
+        return None;
+    };
+    let region = blanket.region()?;
+    let on_sheet = |id: &Uuid| sheet.wires.iter().find(|w| w.uuid == *id);
+    let inside = wires
+        .iter()
+        .filter_map(on_sheet)
+        .any(|w| blanket.region_contains(w.start) && blanket.region_contains(w.end))
+        || junctions.iter().any(|id| {
+            sheet
+                .junctions
+                .iter()
+                .find(|j| j.uuid == *id)
+                .is_some_and(|j| blanket.region_contains(j.position))
+        });
+    if inside {
+        return Some(BlanketCatch::Inside);
+    }
+    let crosses = wires
+        .iter()
+        .filter_map(on_sheet)
+        .any(|w| segment_touches(&region, w.start, w.end));
+    match (crosses, include_edge_nets) {
+        (false, _) => None,
+        (true, true) => Some(BlanketCatch::EdgeIncluded),
+        (true, false) => Some(BlanketCatch::EdgeOnly),
+    }
+}
+
+/// Every net of `netlist` (built from `sheet`) that `blanket` reaches, in
+/// netlist order: caught inside, or only crossing its edge. Power nets are
+/// left out: a blanket never catches them.
+pub fn blanket_nets(
+    sheet: &SchematicSheet,
+    netlist: &Netlist,
+    blanket: &SchDirective,
+) -> Vec<BlanketNet> {
+    let power = power_names(sheet);
+    netlist
+        .nets
+        .iter()
+        .filter(|net| !power.contains(net.name.as_str()))
+        .filter_map(|net| {
+            let catch = catch_of(sheet, blanket, &net.wires, &net.junctions)?;
+            Some(BlanketNet {
+                net: net.id,
+                name: net.name.clone(),
+                catch,
+            })
+        })
+        .collect()
+}
+
+/// The class a Net Blanket of `sheet` gives the net made of `wires` and
+/// `junctions`: the first Blanket in sheet order that catches it and sets a
+/// class. Never a power net's.
+fn blanket_class<'s>(
+    sheet: &'s SchematicSheet,
+    power: &HashSet<&str>,
+    name: &str,
+    wires: &[Uuid],
+    junctions: &[Uuid],
+) -> Option<&'s str> {
+    if power.contains(name) {
+        return None;
+    }
+    sheet.directives.iter().find_map(|d| {
+        let class = d.net_class().filter(|_| d.region().is_some())?;
+        catch_of(sheet, d, wires, junctions)
+            .filter(|c| c.is_caught())
+            .map(|_| class)
+    })
+}
+
+/// The class each Net Blanket gives a net of `netlist` (built from
+/// `sheet`): see [`blanket_nets`] for what a blanket catches. The first
+/// Blanket in sheet order wins.
 pub fn blanket_net_classes(sheet: &SchematicSheet, netlist: &Netlist) -> Vec<(NetId, String)> {
+    let power = power_names(sheet);
+    netlist
+        .nets
+        .iter()
+        .filter_map(|net| {
+            let class = blanket_class(sheet, &power, &net.name, &net.wires, &net.junctions)?;
+            Some((net.id, class.to_string()))
+        })
+        .collect()
+}
+
+/// One Net Parameters directive resolved against the netlist.
+#[derive(Debug, Clone, PartialEq)]
+pub struct NetParametersOn {
+    pub directive: Uuid,
+    pub net: NetId,
+    pub net_name: String,
+    pub net_class: Option<String>,
+    pub diff_pair_class: Option<String>,
+    pub rules: NetRules,
+}
+
+/// The net of `netlist` (built from `sheet`) the wire under `at` is on.
+pub(crate) fn net_at<'n>(
+    sheet: &SchematicSheet,
+    netlist: &'n Netlist,
+    at: &Point,
+) -> Option<&'n Net> {
+    let wire = wire_at_point(sheet, at)?;
+    netlist.nets.iter().find(|n| n.wires.contains(&wire))
+}
+
+/// Every Net Parameters directive of `sheet` that sits on a wire, with the
+/// net it names, in sheet order. A directive on no wire is left out.
+pub fn net_parameters(sheet: &SchematicSheet, netlist: &Netlist) -> Vec<NetParametersOn> {
+    sheet
+        .directives
+        .iter()
+        .filter_map(|d| {
+            let SchDirective::NetParameters {
+                uuid,
+                position,
+                rules,
+                ..
+            } = d
+            else {
+                return None;
+            };
+            let net = net_at(sheet, netlist, position)?;
+            Some(NetParametersOn {
+                directive: *uuid,
+                net: net.id,
+                net_name: net.name.clone(),
+                net_class: d.net_class().map(str::to_string),
+                diff_pair_class: d.diff_pair_class().map(str::to_string),
+                rules: rules.clone(),
+            })
+        })
+        .collect()
+}
+
+/// One directive giving a net a class.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClassAssignment {
+    pub directive: Uuid,
+    /// [`DirectiveKind::NetParameters`] or [`DirectiveKind::Blanket`].
+    pub kind: DirectiveKind,
+    pub class: String,
+    /// The directive's anchor: a Net Parameters flag's position, a Net
+    /// Blanket's centre.
+    pub at: Point,
+}
+
+impl ClassAssignment {
+    pub(crate) fn of(directive: &SchDirective, class: &str) -> Self {
+        Self {
+            directive: directive.uuid(),
+            kind: directive.kind(),
+            class: class.to_string(),
+            at: directive.anchor(),
+        }
+    }
+}
+
+/// Every class assignment the directives of `sheet` make to each net of
+/// `netlist`, in rank order: the Net Parameters directives on the net in
+/// sheet order, then the Net Blankets catching it in sheet order. The first
+/// one is the class the net takes. Nets in id order; a net no directive
+/// classes is left out.
+pub fn class_assignments(
+    sheet: &SchematicSheet,
+    netlist: &Netlist,
+) -> Vec<(NetId, Vec<ClassAssignment>)> {
+    let mut by_net: Vec<(NetId, Vec<ClassAssignment>)> = Vec::new();
+    let mut push = |net: NetId, assignment: ClassAssignment| match by_net
+        .iter_mut()
+        .find(|(id, _)| *id == net)
+    {
+        Some((_, list)) => list.push(assignment),
+        None => by_net.push((net, vec![assignment])),
+    };
+    for d in &sheet.directives {
+        let SchDirective::NetParameters { position, .. } = d else {
+            continue;
+        };
+        if let (Some(class), Some(net)) = (d.net_class(), net_at(sheet, netlist, position)) {
+            push(net.id, ClassAssignment::of(d, class));
+        }
+    }
+    let power = power_names(sheet);
     let blankets: Vec<(&SchDirective, &str)> = sheet
         .directives
         .iter()
+        .filter(|d| d.region().is_some())
         .filter_map(|d| Some((d, d.net_class()?)))
         .collect();
-    if blankets.is_empty() {
-        return Vec::new();
-    }
-    let mut out = Vec::new();
-    for net in &netlist.nets {
-        let inside = |blanket: &SchDirective| {
-            let wire_in = net.wires.iter().any(|id| {
-                sheet.wires.iter().find(|w| w.uuid == *id).is_some_and(|w| {
-                    blanket.region_contains(w.start) && blanket.region_contains(w.end)
-                })
-            });
-            wire_in
-                || net.junctions.iter().any(|id| {
-                    sheet
-                        .junctions
-                        .iter()
-                        .find(|j| j.uuid == *id)
-                        .is_some_and(|j| blanket.region_contains(j.position))
-                })
-        };
-        if let Some((_, class)) = blankets.iter().find(|entry| inside(entry.0)) {
-            out.push((net.id, (*class).to_string()));
+    for net in netlist
+        .nets
+        .iter()
+        .filter(|n| !power.contains(n.name.as_str()))
+    {
+        for &(d, class) in &blankets {
+            if catch_of(sheet, d, &net.wires, &net.junctions).is_some_and(BlanketCatch::is_caught) {
+                push(net.id, ClassAssignment::of(d, class));
+            }
         }
     }
-    out
+    by_net.sort_by_key(|(id, _)| id.0);
+    by_net
 }
 
-/// One Differential Pair directive resolved against the netlist.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DiffPair {
-    /// The directive that marks the pair.
-    pub directive: Uuid,
-    /// The pair's name: the shared base of its nets (`USB_D`).
-    pub name: String,
-    /// The `<name>_P` net, when the sheet has one.
-    pub positive: Option<String>,
-    /// The `<name>_N` net, when the sheet has one.
-    pub negative: Option<String>,
+/// A net two directives give different classes (#2656). The net takes the
+/// `winner`'s class ([`class_assignments`] order); `overridden` lists every
+/// later assignment naming another class, in rank order.
+#[derive(Debug, Clone, PartialEq)]
+pub struct NetClassConflict {
+    pub net: NetId,
+    pub net_name: String,
+    pub winner: ClassAssignment,
+    pub overridden: Vec<ClassAssignment>,
 }
 
-impl DiffPair {
-    /// Whether both halves were found.
-    pub fn is_complete(&self) -> bool {
-        self.positive.is_some() && self.negative.is_some()
+/// A net's assignments in rank order split into the winner and the later
+/// ones naming another class; `None` when there are none or all agree. The
+/// one conflict rule of the sheet and the project checks.
+pub(crate) fn split_overridden<T>(list: Vec<T>, class: impl Fn(&T) -> &str) -> Option<(T, Vec<T>)> {
+    let mut list = list.into_iter();
+    let winner = list.next()?;
+    let overridden: Vec<T> = list.filter(|a| class(a) != class(&winner)).collect();
+    (!overridden.is_empty()).then_some((winner, overridden))
+}
+
+/// Every net of `netlist` (built from `sheet`) whose directives disagree on
+/// its class, in net id order. Two directives naming the same class agree.
+/// The sheet is read with its Compile Masks applied, as [`build_netlist`]
+/// reads it, so a conflict is judged on the wires the netlist classed.
+///
+/// [`build_netlist`]: crate::build_netlist
+pub fn net_class_conflicts(sheet: &SchematicSheet, netlist: &Netlist) -> Vec<NetClassConflict> {
+    let compiled = compile_masked(sheet);
+    class_assignments(&compiled, netlist)
+        .into_iter()
+        .filter_map(|(net, list)| {
+            let (winner, overridden) = split_overridden(list, |a| a.class.as_str())?;
+            let net_name = netlist
+                .nets
+                .iter()
+                .find(|n| n.id == net)
+                .map(|n| n.name.clone())
+                .unwrap_or_default();
+            Some(NetClassConflict {
+                net,
+                net_name,
+                winner,
+                overridden,
+            })
+        })
+        .collect()
+}
+
+/// The class the directives of `sheet` give each net of `netlist`: the first
+/// of its [`class_assignments`], so a Net Parameters directive on the net
+/// (the first in sheet order that sets a class) outranks a Net Blanket.
+pub fn directive_net_classes(sheet: &SchematicSheet, netlist: &Netlist) -> Vec<(NetId, String)> {
+    class_assignments(sheet, netlist)
+        .into_iter()
+        .filter_map(|(id, list)| Some((id, list.into_iter().next()?.class)))
+        .collect()
+}
+
+/// Give every net without a class the first project class whose names or
+/// patterns match it; a class a directive set is kept, so the order is
+/// Net Parameters, Net Blanket, then the project's patterns.
+pub fn fill_pattern_classes(netlist: &mut Netlist, classes: &[NetClass]) {
+    for net in netlist.nets.iter_mut().filter(|n| n.class.is_none()) {
+        net.class = first_matching_class(classes, &net.name).map(|c| NetClassId(c.name.clone()));
     }
 }
 
 /// Every Differential Pair directive of `sheet` that sits on a wire whose
-/// net (in `netlist`, built from `sheet`) ends in `_P` or `_N`, with both
-/// halves looked up by name. A directive on no wire, or on a net without
-/// the suffix, pairs nothing and is left out.
+/// net (in `netlist`, built from `sheet`) carries a pair suffix, with both
+/// halves looked up by name. No class is known here, so every suffix style
+/// pairs (`diff_pair_classes::diff_pairs_with_classes`).
 pub fn diff_pairs(sheet: &SchematicSheet, netlist: &Netlist) -> Vec<DiffPair> {
-    let mut out = Vec::new();
-    for directive in &sheet.directives {
-        let SchDirective::DiffPair { uuid, position } = directive else {
-            continue;
-        };
-        let Some(wire) = wire_at_point(sheet, position) else {
-            continue;
-        };
-        let Some(net) = netlist.nets.iter().find(|n| n.wires.contains(&wire)) else {
-            continue;
-        };
-        let Some(base) = diff_pair_base(&net.name) else {
-            continue;
-        };
-        let named = |suffix: &str| {
-            let want = format!("{base}{suffix}");
-            netlist.nets.iter().any(|n| n.name == want).then_some(want)
-        };
-        out.push(DiffPair {
-            directive: *uuid,
-            name: base.to_string(),
-            positive: named("_P"),
-            negative: named("_N"),
-        });
-    }
-    out
+    crate::diff_pair_classes::diff_pairs_with_classes(sheet, netlist, &[])
 }
 
-/// Set each net's class from the Blankets of `sheet` ([`blanket_net_classes`]).
-pub(crate) fn apply_blanket_classes(sheet: &SchematicSheet, netlist: &mut Netlist) {
-    for (id, class) in blanket_net_classes(sheet, netlist) {
+/// Set each net's class from the directives of `sheet`
+/// ([`directive_net_classes`]).
+pub(crate) fn apply_directive_classes(sheet: &SchematicSheet, netlist: &mut Netlist) {
+    for (id, class) in directive_net_classes(sheet, netlist) {
         if let Some(net) = netlist.nets.iter_mut().find(|n| n.id == id) {
-            net.class = Some(signex_types::net::NetClassId(class));
+            net.class = Some(NetClassId(class));
         }
     }
 }
@@ -151,8 +445,8 @@ pub(crate) fn apply_blanket_classes(sheet: &SchematicSheet, netlist: &mut Netlis
 /// the stitched netlist; `None` when no sheet has a mask, so the stitch reads
 /// the sheets as they are.
 pub(crate) fn masked_sheets(
-    sheets: &std::collections::HashMap<crate::SheetKey, SchematicSheet>,
-) -> Option<std::collections::HashMap<crate::SheetKey, SchematicSheet>> {
+    sheets: &HashMap<crate::SheetKey, SchematicSheet>,
+) -> Option<HashMap<crate::SheetKey, SchematicSheet>> {
     let has_mask = |s: &SchematicSheet| {
         s.directives
             .iter()

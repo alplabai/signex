@@ -1,294 +1,549 @@
-//! Sketch-mode Pad Attributes sub-form. Split from `subforms.rs`.
+//! Sketch pad sub-form (mockup row 126): a pad whose copper is a sketch profile. The
+//! header names the pad and jumps to it in Pads mode; Pad Attributes, the
+//! paste and mask of the pad's own side as enable sections with Rule /
+//! Manual expansions (both sides and the hole for a drilled pad), and the
+//! pad features in a closed section.
 
-use iced::widget::{Column, container};
-use iced::{Color, Element, Length, Widget as _};
-use signex_i18n::{I18n, ids, t};
-use signex_widgets::{raw, text};
+use iced::widget::{Row, container};
+use iced::{Element, Length, Theme, Widget as _};
+use signex_i18n::{I18n, MessageId, UserText, ids, t};
+use signex_sketch::attr::{ElectricalType, PadFeature, PadKind, PadSide};
+use signex_sketch::id::SketchEntityId;
+use signex_types::pcb_layer::{BoardSide, CopperLayer, PcbLayer, TechnicalLayer};
+use signex_types::theme::ThemeTokens;
+use signex_widgets::property_illustration::FieldId;
+use signex_widgets::{Label, button, text};
 
-use super::super::super::{CollapsedSections, FootprintEditorPanelContext, PanelMsg};
-use super::super::pad::{pad_check_row, pad_input_row, pad_pick_row};
-use crate::panels::{collapsible_section_header, is_section_collapsed};
-use crate::styles::{Spacing, TypeScale};
+use super::super::super::{
+    CollapsedSections, FootprintEditorPanelContext, FpSubformMsg, PanelMsg, PanelPalette,
+    SketchPadAttrSummary, expansion_buffer_key,
+};
+use super::super::pad::{Shown, layer_title, number_input, rule_or_manual_row, with_refusals};
+use super::expansion::literal_mm;
+use super::helpers::{
+    SP, TS, caption, check, check_grid, enable_section, example_input, field_row, form, header,
+    illustration, input, is_open, pair, pick, section_header, value_box,
+};
+use super::sketch_pad_drawing::{MASK_BOTTOM, MASK_TOP, PASTE_BOTTOM, PASTE_TOP, drawing};
+use crate::library::editor::footprint::{pad_field, sketch_pad_field_buffer_key};
+use crate::pcb_canvas::layer_style::layer_name;
+use crate::styles::tokens::resolve;
 
-/// Default type / spacing scales; equal to the old literals at the default size.
-const TS: TypeScale = TypeScale::DEFAULT;
-const SP: Spacing = Spacing::DEFAULT;
+const ATTRIBUTES: &str = "fp_role_sketch_pad_attributes";
+const TOP_SIDE: &str = "fp_role_sketch_pad_top";
+const BOTTOM_SIDE: &str = "fp_role_sketch_pad_bottom";
+const HOLE: &str = "fp_role_sketch_pad_hole";
+/// Closed by default: the key is in the collapsed set while it is open.
+const FEATURES: &str = "fp_role_sketch_pad_features";
 
-/// v0.21 — Sketch-mode Pad Attributes sub-form. Renders when the
-/// selected sketch entity carries a `PadAttr`. Mirrors the
-/// Altium-parity Pad Properties / Pad Stack / Pad Features fields
-/// surfaced for Pads-mode placement, but bound to the sketch
-/// entity's PadAttr rather than the flat-pad list. Geometry-shaping
-/// fields (size_x_expr / size_y_expr / mask_margin_expr / etc.)
-/// stay sketch-parameterised — those are authored via the Sketch
-/// parameter editor, not this form.
-pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<'a>(
-    mut col: Column<Element<'a, PanelMsg>>,
+/// The catalog name of a sketch pad kind.
+fn kind_message(kind: PadKind) -> MessageId {
+    match kind {
+        PadKind::Smd => ids::EDITORS_PAD_KIND_SMD,
+        PadKind::Tht => ids::EDITORS_PAD_KIND_THROUGH_HOLE,
+        PadKind::NptHole => ids::EDITORS_PAD_KIND_NPT_HOLE,
+        PadKind::ConnectorPad => ids::EDITORS_PAD_KIND_CONNECTOR,
+        PadKind::Fiducial => ids::EDITORS_PAD_KIND_FIDUCIAL,
+        PadKind::Castellated => ids::EDITORS_PAD_KIND_CASTELLATED,
+    }
+}
+
+/// The sides whose paste and mask the form shows: both for a drilled pad,
+/// else the pad's own side (`PadAttr::side`; both for a surface pad on
+/// every side). The hole details show for a drilled pad only.
+pub(super) fn shown_sides(pad: &SketchPadAttrSummary) -> &'static [BoardSide] {
+    if pad.has_drill {
+        return &[BoardSide::Top, BoardSide::Bottom];
+    }
+    match pad.side {
+        PadSide::Top => &[BoardSide::Top],
+        PadSide::Bottom => &[BoardSide::Bottom],
+        PadSide::All => &[BoardSide::Top, BoardSide::Bottom],
+    }
+}
+
+/// The state word beside a solder mask header.
+pub(super) fn mask_state(is_open: bool) -> MessageId {
+    if is_open {
+        ids::EDITORS_ROLE_SKETCH_PAD_OPENING
+    } else {
+        ids::EDITORS_ROLE_SKETCH_PAD_TENTED
+    }
+}
+
+pub(super) fn view<'a>(
     fp: &'a FootprintEditorPanelContext,
-    muted: Color,
-    primary: Color,
-    border_c: Color,
-    collapsed_sections: &'a CollapsedSections,
+    pad: &'a SketchPadAttrSummary,
+    palette: PanelPalette,
+    tokens: &'a ThemeTokens,
+    collapsed: &'a CollapsedSections,
     i18n: &I18n,
-) -> Column<Element<'a, PanelMsg>> {
-    let Some(p) = fp.selected_sketch_pad.as_ref() else {
-        return col;
+) -> Element<'a, PanelMsg> {
+    let mut parts = vec![
+        header(
+            t!(i18n, ids::EDITORS_ROLE_SKETCH_PAD_TITLE),
+            None,
+            header_caption(pad, tokens, i18n),
+            tokens,
+        ),
+        illustration(drawing(pad, i18n), fp, tokens),
+    ];
+    let open = is_open(ATTRIBUTES, collapsed, true);
+    parts.push(section_header(
+        ATTRIBUTES,
+        t!(i18n, ids::EDITORS_ROLE_SKETCH_PAD_ATTRIBUTES),
+        open,
+        tokens,
+        i18n,
+    ));
+    if open {
+        parts.extend(attribute_rows(pad, tokens, i18n));
+    }
+    for (index, &side) in shown_sides(pad).iter().enumerate() {
+        let (key, layer) = match side {
+            BoardSide::Top => (TOP_SIDE, CopperLayer::Top),
+            BoardSide::Bottom => (BOTTOM_SIDE, CopperLayer::Bottom),
+        };
+        let open = is_open(key, collapsed, true);
+        parts.push(section_header(
+            key,
+            side_title(i18n, PcbLayer::Copper(layer)),
+            open,
+            tokens,
+            i18n,
+        ));
+        if !open {
+            continue;
+        }
+        parts.extend(side_rows(fp, pad, side, palette, tokens, i18n));
+        // The copper rows sit under the first side shown.
+        if index == 0 {
+            parts.extend(copper_rows(fp, pad, tokens, i18n));
+        }
+    }
+    if pad.has_drill {
+        let open = is_open(HOLE, collapsed, true);
+        parts.push(section_header(
+            HOLE,
+            t!(i18n, ids::EDITORS_PAD_HOLE_DETAILS),
+            open,
+            tokens,
+            i18n,
+        ));
+        if open {
+            parts.extend(hole_rows(fp, pad, tokens, i18n));
+        }
+    }
+    let open = is_open(FEATURES, collapsed, false);
+    parts.push(section_header(
+        FEATURES,
+        t!(i18n, ids::EDITORS_ROLE_SKETCH_PAD_FEATURES),
+        open,
+        tokens,
+        i18n,
+    ));
+    if open {
+        parts.extend(feature_rows(pad, tokens, i18n));
+    }
+    form(parts)
+}
+
+/// Corner radius and thermal relief, under the pad's first side.
+fn copper_rows<'a>(
+    fp: &FootprintEditorPanelContext,
+    pad: &'a SketchPadAttrSummary,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Vec<Element<'a, PanelMsg>> {
+    let id = pad.id;
+    let corner = Shown::corner_radius(
+        fp.numeric_buffers
+            .get(&sketch_pad_field_buffer_key(id, pad_field::CORNER_RADIUS)),
+        pad.corner_radius_pct
+            .map(|v| format!("{v:.0}"))
+            .unwrap_or_default(),
+    );
+    vec![
+        refusable_row(
+            t!(i18n, ids::EDITORS_PAD_CORNER_RADIUS),
+            corner,
+            move |value| PanelMsg::FpEditorSetSketchPadCornerRadiusPct { id, value },
+            tokens,
+            i18n,
+        ),
+        field_row(
+            UserText::new(String::new()),
+            check(
+                t!(i18n, ids::EDITORS_PAD_THERMAL_RELIEF),
+                pad.thermal_relief,
+                move |value| PanelMsg::FpEditorToggleSketchPadThermalRelief { id, value },
+                tokens,
+            ),
+            tokens,
+        ),
+    ]
+}
+
+fn side_title(i18n: &I18n, layer: PcbLayer) -> signex_i18n::Localized {
+    t!(
+        i18n,
+        ids::EDITORS_ROLE_SKETCH_PAD_SIDE_SECTION,
+        "layer" => layer_name(i18n, layer).into_string()
+    )
+}
+
+/// "Pad 3 · SMD · from sketch profile ·" and the jump to the pad in Pads
+/// mode.
+fn header_caption<'a>(
+    pad: &SketchPadAttrSummary,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, PanelMsg> {
+    let line = t!(
+        i18n,
+        ids::EDITORS_ROLE_SKETCH_PAD_CAPTION,
+        "number" => pad.number.as_str(),
+        "kind" => t!(i18n, kind_message(pad.kind)).into_string()
+    );
+    let accent = resolve(tokens).accent_text;
+    let link = button(
+        text(t!(i18n, ids::EDITORS_ROLE_SKETCH_PAD_EDIT_IN_PADS))
+            .size(TS.caption)
+            .color(accent),
+    )
+    .padding([0.0, SP.xs])
+    .on_press(PanelMsg::FpEditorEditSketchPadInPads { id: pad.id })
+    .style(|_: &Theme, _| button::Style::default());
+    Row::<Element<'a, PanelMsg>>::new()
+        .spacing(SP.xs)
+        .align_y(iced::Alignment::Center)
+        .push(caption(line, tokens))
+        .push(link.boxed())
+        .boxed()
+}
+
+fn attribute_rows<'a>(
+    pad: &'a SketchPadAttrSummary,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Vec<Element<'a, PanelMsg>> {
+    let id = pad.id;
+    vec![
+        field_row(
+            t!(i18n, ids::EDITORS_PAD_DESIGNATOR),
+            pair(
+                value_box(UserText::new(pad.number.as_str())),
+                check(
+                    t!(i18n, ids::EDITORS_PAD_LOCKED),
+                    pad.locked,
+                    move |value| PanelMsg::FpEditorToggleSketchPadLocked { id, value },
+                    tokens,
+                ),
+            ),
+            tokens,
+        ),
+        field_row(
+            t!(i18n, ids::EDITORS_PAD_NET),
+            input(
+                t!(i18n, ids::EDITORS_ROLE_POUR_NO_NET),
+                pad.net.clone(),
+                move |value| PanelMsg::FpEditorSetSketchPadNet { id, value },
+            ),
+            tokens,
+        ),
+        field_row(
+            t!(i18n, ids::EDITORS_PAD_TEMPLATE),
+            input(
+                UserText::new(String::new()),
+                pad.template.clone(),
+                move |value| PanelMsg::FpEditorSetSketchPadTemplate { id, value },
+            ),
+            tokens,
+        ),
+        field_row(
+            t!(i18n, ids::EDITORS_PAD_TEMPLATE_LIBRARY),
+            input(
+                UserText::new(String::new()),
+                pad.template_library.clone(),
+                move |value| PanelMsg::FpEditorSetSketchPadTemplateLibrary { id, value },
+            ),
+            tokens,
+        ),
+        field_row(
+            t!(i18n, ids::EDITORS_PAD_ELECTRICAL_TYPE),
+            pick(ElectricalType::ALL, pad.electrical_type, move |value| {
+                PanelMsg::FpEditorSetSketchPadElectricalType { id, value }
+            }),
+            tokens,
+        ),
+    ]
+}
+
+/// The paste and solder mask enable sections of one side, each with its
+/// Rule / Manual expansion.
+fn side_rows<'a>(
+    fp: &'a FootprintEditorPanelContext,
+    pad: &'a SketchPadAttrSummary,
+    side: BoardSide,
+    palette: PanelPalette,
+    tokens: &'a ThemeTokens,
+    i18n: &I18n,
+) -> Vec<Element<'a, PanelMsg>> {
+    let id = pad.id;
+    let (paste_on, mask_tented, paste_expr, mask_expr) = match side {
+        BoardSide::Top => (
+            pad.paste_top_enabled,
+            pad.mask_top_tented,
+            &pad.paste_top_expr,
+            &pad.mask_top_expr,
+        ),
+        BoardSide::Bottom => (
+            pad.paste_bottom_enabled,
+            pad.mask_bottom_tented,
+            &pad.paste_bottom_expr,
+            &pad.mask_bottom_expr,
+        ),
     };
-    let id = p.id;
-
-    col = col.push(
-        collapsible_section_header(
-            "fp_sketch_pad_attrs",
-            "Pad Attributes",
-            collapsed_sections,
-            primary,
-            border_c,
-        )
-        .boxed(),
+    let (paste_layer, mask_layer, paste_field, mask_field) = match side {
+        BoardSide::Top => (
+            TechnicalLayer::PasteTop,
+            TechnicalLayer::SolderMaskTop,
+            PASTE_TOP,
+            MASK_TOP,
+        ),
+        BoardSide::Bottom => (
+            TechnicalLayer::PasteBottom,
+            TechnicalLayer::SolderMaskBottom,
+            PASTE_BOTTOM,
+            MASK_BOTTOM,
+        ),
+    };
+    let paste_row = expansion_row(
+        fp,
+        id,
+        paste_field,
+        paste_expr,
+        false,
+        side,
+        palette,
+        tokens,
+        i18n,
     );
-    if is_section_collapsed("fp_sketch_pad_attrs", collapsed_sections) {
-        return col;
+    let mask_row = expansion_row(
+        fp, id, mask_field, mask_expr, true, side, palette, tokens, i18n,
+    );
+    let mask_open = !mask_tented;
+    vec![
+        enable_section(
+            layer_title(i18n, paste_layer),
+            paste_on,
+            move |value| paste_toggled(id, side, value),
+            (!paste_on).then(|| t!(i18n, ids::EDITORS_ROLE_SKETCH_PAD_OFF)),
+            paste_row,
+            tokens,
+        ),
+        enable_section(
+            layer_title(i18n, mask_layer),
+            mask_open,
+            move |open| mask_toggled(id, side, open),
+            Some(t!(i18n, mask_state(mask_open))),
+            mask_row,
+            tokens,
+        ),
+    ]
+}
+
+fn paste_toggled(id: SketchEntityId, side: BoardSide, value: bool) -> PanelMsg {
+    match side {
+        BoardSide::Top => PanelMsg::FpEditorToggleSketchPadPasteEnabledTop { id, value },
+        BoardSide::Bottom => PanelMsg::FpEditorToggleSketchPadPasteEnabledBottom { id, value },
     }
+}
 
-    // Properties group.
-    col = col.push(pad_pick_row(
-        t!(i18n, ids::EDITORS_PAD_ELECTRICAL_TYPE),
-        signex_sketch::attr::ElectricalType::ALL,
-        p.electrical_type,
-        move |v: signex_sketch::attr::ElectricalType| {
-            PanelMsg::FpEditorSetSketchPadElectricalType { id, value: v }
+/// The mask header is ticked while the mask opens over the pad; unticked
+/// tents it.
+pub(super) fn mask_toggled(id: SketchEntityId, side: BoardSide, is_open: bool) -> PanelMsg {
+    let value = !is_open;
+    match side {
+        BoardSide::Top => PanelMsg::FpEditorToggleSketchPadMaskTentedTop { id, value },
+        BoardSide::Bottom => PanelMsg::FpEditorToggleSketchPadMaskTentedBottom { id, value },
+    }
+}
+
+/// One expansion as a Rule / Manual row. An expression that names a
+/// parameter is Manual and shows its text.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the row needs the panel look, the hover and the catalog"
+)]
+fn expansion_row<'a>(
+    fp: &'a FootprintEditorPanelContext,
+    id: SketchEntityId,
+    field: FieldId,
+    expr: &Option<String>,
+    is_mask: bool,
+    side: BoardSide,
+    palette: PanelPalette,
+    tokens: &'a ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, PanelMsg> {
+    let typed = fp
+        .numeric_buffers
+        .get(&expansion_buffer_key(id, is_mask, side))
+        .cloned();
+    let (value_mm, buffer) = match expr.as_deref() {
+        None => (None, typed),
+        Some(e) => match literal_mm(e) {
+            Some(mm) => (Some(mm), typed),
+            None => (Some(0.0), typed.or_else(|| Some(e.to_owned()))),
         },
-        muted,
-    ));
-    col = col.push(pad_input_row(
-        t!(i18n, ids::EDITORS_PAD_NET),
-        "(unassigned)",
-        p.net.clone(),
-        move |v| PanelMsg::FpEditorSetSketchPadNet { id, value: v },
-        muted,
-    ));
-    col = col.push(pad_check_row(
-        t!(i18n, ids::EDITORS_PAD_LOCKED),
-        p.locked,
-        move |v| PanelMsg::FpEditorToggleSketchPadLocked { id, value: v },
-        muted,
-        primary,
-    ));
-    col = col.push(pad_input_row(
-        t!(i18n, ids::EDITORS_PAD_TEMPLATE),
-        "",
-        p.template.clone(),
-        move |v| PanelMsg::FpEditorSetSketchPadTemplate { id, value: v },
-        muted,
-    ));
-    col = col.push(pad_input_row(
-        t!(i18n, ids::EDITORS_PAD_TEMPLATE_LIBRARY),
-        "",
-        p.template_library.clone(),
-        move |v| PanelMsg::FpEditorSetSketchPadTemplateLibrary { id, value: v },
-        muted,
-    ));
+    };
+    let on_input = move |value: String| {
+        PanelMsg::FpSubform(if is_mask {
+            FpSubformMsg::SketchPadMaskExpansionEdited { id, side, value }
+        } else {
+            FpSubformMsg::SketchPadPasteExpansionEdited { id, side, value }
+        })
+    };
+    rule_or_manual_row(
+        t!(i18n, ids::EDITORS_ROLE_SKETCH_PAD_EXPANSION),
+        field,
+        value_mm,
+        buffer,
+        on_input,
+        palette,
+        tokens,
+        &fp.illustration_hover,
+        i18n,
+    )
+}
 
-    // Pad Features.
-    col = col.push(
-        container(text(raw("Pad Features")).size(TS.caption).color(muted))
-            .padding([6.0, SP.m])
-            .width(Length::Fill)
-            .boxed(),
-    );
-    col = col.push(pad_pick_row(
-        t!(i18n, ids::EDITORS_PAD_TOP_SIDE),
-        signex_sketch::attr::PadFeature::ALL,
-        p.feature_top,
-        move |v: signex_sketch::attr::PadFeature| PanelMsg::FpEditorSetSketchPadFeatureTop {
-            id,
-            value: v,
-        },
-        muted,
-    ));
-    col = col.push(pad_pick_row(
-        t!(i18n, ids::EDITORS_PAD_BOTTOM_SIDE),
-        signex_sketch::attr::PadFeature::ALL,
-        p.feature_bottom,
-        move |v: signex_sketch::attr::PadFeature| PanelMsg::FpEditorSetSketchPadFeatureBottom {
-            id,
-            value: v,
-        },
-        muted,
-    ));
+/// A sketch pad field that refuses text that is not a number: the stored
+/// value, or the refused text with a red outline and the reason under the
+/// row, as the pad form shows it.
+fn refusable_row<'a>(
+    label: impl Into<Label<'a>>,
+    shown: Shown,
+    on_input: impl Fn(String) -> PanelMsg + 'a,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, PanelMsg> {
+    let row = field_row(label, number_input(&shown, on_input, tokens), tokens);
+    with_refusals(row, &[shown.refusal], tokens, i18n)
+}
 
-    // Testpoint flags.
-    col = col.push(
-        container(text(raw("Testpoint")).size(TS.caption).color(muted))
-            .padding([6.0, SP.m])
-            .width(Length::Fill)
-            .boxed(),
-    );
-    col = col.push(pad_check_row(
-        t!(i18n, ids::EDITORS_PAD_TOP_ASSEMBLY),
-        p.testpoint.top_assembly,
-        move |v| PanelMsg::FpEditorToggleSketchPadTestpointTopAssembly { id, value: v },
-        muted,
-        primary,
-    ));
-    col = col.push(pad_check_row(
-        t!(i18n, ids::EDITORS_PAD_TOP_FAB),
-        p.testpoint.top_fab,
-        move |v| PanelMsg::FpEditorToggleSketchPadTestpointTopFab { id, value: v },
-        muted,
-        primary,
-    ));
-    col = col.push(pad_check_row(
-        t!(i18n, ids::EDITORS_PAD_BOTTOM_ASSEMBLY),
-        p.testpoint.bottom_assembly,
-        move |v| PanelMsg::FpEditorToggleSketchPadTestpointBottomAssembly { id, value: v },
-        muted,
-        primary,
-    ));
-    col = col.push(pad_check_row(
-        t!(i18n, ids::EDITORS_PAD_BOTTOM_FAB),
-        p.testpoint.bottom_fab,
-        move |v| PanelMsg::FpEditorToggleSketchPadTestpointBottomFab { id, value: v },
-        muted,
-        primary,
-    ));
-
-    // Pad Stack overrides (the bool-typed subset; expression-typed
-    // mask/paste margins stay sketch-parameterised).
-    col = col.push(
-        container(text(raw("Pad Stack")).size(TS.caption).color(muted))
-            .padding([6.0, SP.m])
-            .width(Length::Fill)
-            .boxed(),
-    );
-    col = col.push(pad_check_row(
-        t!(i18n, ids::EDITORS_PAD_TOP_PASTE_ENABLED),
-        p.paste_top_enabled,
-        move |v| PanelMsg::FpEditorToggleSketchPadPasteEnabledTop { id, value: v },
-        muted,
-        primary,
-    ));
-    col = col.push(pad_check_row(
-        t!(i18n, ids::EDITORS_PAD_BOTTOM_PASTE_ENABLED),
-        p.paste_bottom_enabled,
-        move |v| PanelMsg::FpEditorToggleSketchPadPasteEnabledBottom { id, value: v },
-        muted,
-        primary,
-    ));
-    col = col.push(pad_check_row(
-        t!(i18n, ids::EDITORS_PAD_TOP_MASK_TENTED),
-        p.mask_top_tented,
-        move |v| PanelMsg::FpEditorToggleSketchPadMaskTentedTop { id, value: v },
-        muted,
-        primary,
-    ));
-    col = col.push(pad_check_row(
-        t!(i18n, ids::EDITORS_PAD_BOTTOM_MASK_TENTED),
-        p.mask_bottom_tented,
-        move |v| PanelMsg::FpEditorToggleSketchPadMaskTentedBottom { id, value: v },
-        muted,
-        primary,
-    ));
-    col = col.push(pad_check_row(
-        t!(i18n, ids::EDITORS_PAD_THERMAL_RELIEF),
-        p.thermal_relief,
-        move |v| PanelMsg::FpEditorToggleSketchPadThermalRelief { id, value: v },
-        muted,
-        primary,
-    ));
-    let corner_buf = p
-        .corner_radius_pct
-        .map(|v| format!("{v:.0}"))
-        .unwrap_or_default();
-    col = col.push(pad_input_row(
-        t!(i18n, ids::EDITORS_PAD_CORNER_RADIUS),
-        "25",
-        corner_buf,
-        move |v| PanelMsg::FpEditorSetSketchPadCornerRadiusPct { id, value: v },
-        muted,
-    ));
-
-    // Hole Details (THT pads only).
-    if p.has_drill {
-        col = col.push(
-            container(text(raw("Hole Details")).size(TS.caption).color(muted))
-                .padding([6.0, SP.m])
-                .width(Length::Fill)
-                .boxed(),
-        );
-        let tol_p_buf = p
-            .hole_tolerance_plus_mm
-            .map(|v| format!("{v:.3}"))
-            .unwrap_or_default();
-        col = col.push(pad_input_row(
+/// The shipped hole rows of a drilled pad. A tolerance or offset the pad
+/// did not take shows its typed text and the reason until it is taken.
+fn hole_rows<'a>(
+    fp: &FootprintEditorPanelContext,
+    pad: &'a SketchPadAttrSummary,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Vec<Element<'a, PanelMsg>> {
+    let id = pad.id;
+    let mm = |field: &str, v: Option<f64>| {
+        let buffer = fp
+            .numeric_buffers
+            .get(&sketch_pad_field_buffer_key(id, field));
+        let stored = v.map(|v| format!("{v:.3}")).unwrap_or_default();
+        Shown::from_buffer(buffer, stored, false, |_| true)
+    };
+    vec![
+        refusable_row(
             t!(i18n, ids::EDITORS_PAD_HOLE_TOLERANCE_PLUS),
-            "0",
-            tol_p_buf,
-            move |v| PanelMsg::FpEditorSetSketchPadHoleTolerancePlus { id, value: v },
-            muted,
-        ));
-        let tol_m_buf = p
-            .hole_tolerance_minus_mm
-            .map(|v| format!("{v:.3}"))
-            .unwrap_or_default();
-        col = col.push(pad_input_row(
+            mm(pad_field::HOLE_TOLERANCE_PLUS, pad.hole_tolerance_plus_mm),
+            move |value| PanelMsg::FpEditorSetSketchPadHoleTolerancePlus { id, value },
+            tokens,
+            i18n,
+        ),
+        refusable_row(
             t!(i18n, ids::EDITORS_PAD_HOLE_TOLERANCE_MINUS),
-            "0",
-            tol_m_buf,
-            move |v| PanelMsg::FpEditorSetSketchPadHoleToleranceMinus { id, value: v },
-            muted,
-        ));
-        let rot_buf = p
-            .hole_rotation_deg
-            .map(|v| format!("{v:.1}"))
-            .unwrap_or_default();
-        col = col.push(pad_input_row(
+            mm(pad_field::HOLE_TOLERANCE_MINUS, pad.hole_tolerance_minus_mm),
+            move |value| PanelMsg::FpEditorSetSketchPadHoleToleranceMinus { id, value },
+            tokens,
+            i18n,
+        ),
+        field_row(
             t!(i18n, ids::EDITORS_PAD_HOLE_ROTATION),
-            "0",
-            rot_buf,
-            move |v| PanelMsg::FpEditorSetSketchPadHoleRotation { id, value: v },
-            muted,
-        ));
-        let cox_buf = p
-            .copper_offset_x_mm
-            .map(|v| format!("{v:.3}"))
-            .unwrap_or_default();
-        col = col.push(pad_input_row(
+            example_input(
+                "0",
+                pad.hole_rotation_deg
+                    .map(|v| format!("{v:.1}"))
+                    .unwrap_or_default(),
+                move |value| PanelMsg::FpEditorSetSketchPadHoleRotation { id, value },
+            ),
+            tokens,
+        ),
+        refusable_row(
             t!(i18n, ids::EDITORS_PAD_COPPER_OFFSET_X),
-            "0",
-            cox_buf,
-            move |v| PanelMsg::FpEditorSetSketchPadCopperOffsetX { id, value: v },
-            muted,
-        ));
-        let coy_buf = p
-            .copper_offset_y_mm
-            .map(|v| format!("{v:.3}"))
-            .unwrap_or_default();
-        col = col.push(pad_input_row(
+            mm(pad_field::COPPER_OFFSET_X, pad.copper_offset_x_mm),
+            move |value| PanelMsg::FpEditorSetSketchPadCopperOffsetX { id, value },
+            tokens,
+            i18n,
+        ),
+        refusable_row(
             t!(i18n, ids::EDITORS_PAD_COPPER_OFFSET_Y),
-            "0",
-            coy_buf,
-            move |v| PanelMsg::FpEditorSetSketchPadCopperOffsetY { id, value: v },
-            muted,
-        ));
-    }
+            mm(pad_field::COPPER_OFFSET_Y, pad.copper_offset_y_mm),
+            move |value| PanelMsg::FpEditorSetSketchPadCopperOffsetY { id, value },
+            tokens,
+            i18n,
+        ),
+    ]
+}
 
-    // v0.22 Phase D6 — "Edit in Pads ▸" jump button. Mirror of the
-    // v0.21 "Edit in Sketch ▸" button on the Pads-mode pad form. Flips
-    // the editor to Pads mode and selects the pad whose
-    // `sketch_entity_id` matches this entity. The dispatcher resolves
-    // the EditorPad index from the entity ID.
-    col = col.push(
-        container(
-            signex_widgets::button(text(raw("Edit in Pads ▸")).size(TS.caption).color(primary))
-                .padding([SP.s, 10.0])
-                .on_press(PanelMsg::FpEditorEditSketchPadInPads { id })
-                .style(iced::widget::button::primary),
-        )
-        .padding([6.0, SP.m])
-        .width(Length::Fill)
-        .boxed(),
-    );
-
-    col
+/// The shipped pad features: the surface feature of each side and the
+/// four testpoint flags.
+fn feature_rows<'a>(
+    pad: &'a SketchPadAttrSummary,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Vec<Element<'a, PanelMsg>> {
+    let id = pad.id;
+    let tp = pad.testpoint;
+    vec![
+        field_row(
+            t!(i18n, ids::EDITORS_PAD_TOP_SIDE),
+            pick(PadFeature::ALL, pad.feature_top, move |value| {
+                PanelMsg::FpEditorSetSketchPadFeatureTop { id, value }
+            }),
+            tokens,
+        ),
+        field_row(
+            t!(i18n, ids::EDITORS_PAD_BOTTOM_SIDE),
+            pick(PadFeature::ALL, pad.feature_bottom, move |value| {
+                PanelMsg::FpEditorSetSketchPadFeatureBottom { id, value }
+            }),
+            tokens,
+        ),
+        container(caption(t!(i18n, ids::EDITORS_PAD_TESTPOINT), tokens))
+            .padding([SP.xs, SP.m])
+            .width(Length::Fill)
+            .boxed(),
+        check_grid(vec![
+            check(
+                t!(i18n, ids::EDITORS_PAD_TOP_ASSEMBLY),
+                tp.top_assembly,
+                move |value| PanelMsg::FpEditorToggleSketchPadTestpointTopAssembly { id, value },
+                tokens,
+            ),
+            check(
+                t!(i18n, ids::EDITORS_PAD_TOP_FAB),
+                tp.top_fab,
+                move |value| PanelMsg::FpEditorToggleSketchPadTestpointTopFab { id, value },
+                tokens,
+            ),
+            check(
+                t!(i18n, ids::EDITORS_PAD_BOTTOM_ASSEMBLY),
+                tp.bottom_assembly,
+                move |value| PanelMsg::FpEditorToggleSketchPadTestpointBottomAssembly { id, value },
+                tokens,
+            ),
+            check(
+                t!(i18n, ids::EDITORS_PAD_BOTTOM_FAB),
+                tp.bottom_fab,
+                move |value| PanelMsg::FpEditorToggleSketchPadTestpointBottomFab { id, value },
+                tokens,
+            ),
+        ]),
+    ]
 }

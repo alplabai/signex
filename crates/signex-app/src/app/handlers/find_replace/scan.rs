@@ -61,12 +61,15 @@ impl Signex {
     }
 
     fn refresh_active_sheet_matches(&mut self) {
-        let query = self.ui_state.find_replace.query.trim().to_string();
-        if query.is_empty() {
-            self.ui_state.find_replace.matches.clear();
-            self.ui_state.find_replace.selected_index = None;
-            return;
-        }
+        // An invalid regex finds nothing; the field shows why (#2525).
+        let query = match self.ui_state.find_replace.find_query() {
+            Ok(query) if !query.is_empty() => query,
+            _ => {
+                self.ui_state.find_replace.matches.clear();
+                self.ui_state.find_replace.selected_index = None;
+                return;
+            }
+        };
 
         let scope = self.active_designator_scope();
         let path = self.document_state.active_path.clone();
@@ -98,10 +101,15 @@ impl Signex {
         }
         let matches: Vec<FindMatch> = hits
             .into_iter()
-            .map(|hit| FindMatch {
-                sheet: path.clone(),
-                hit,
-                placement_label: None,
+            .map(|hit| {
+                let placement_label = self.document_state.active_engine().and_then(|engine| {
+                    signex_engine::value_part_name(engine.document(), &hit, &scope)
+                });
+                FindMatch {
+                    sheet: path.clone(),
+                    hit,
+                    placement_label,
+                }
             })
             .collect();
 

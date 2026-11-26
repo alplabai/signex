@@ -20,31 +20,51 @@ dialog-new-project-profile-heading = Start from a profile
 
 dialog-new-project-profile-hint = Sets board rules and sheet defaults. You can change everything later.
 
-dialog-new-project-profile-hobby-name = Hobby 2-layer
+# Fab tier cards (#2537): the tier sets the rules; the copper layer count is
+# its own stepper on each card.
+dialog-new-project-profile-standard-name = Standard
 
-dialog-new-project-profile-hobby-blurb = Cheap prototypes from any fab.
+dialog-new-project-profile-standard-blurb = Most fabs at standard pricing.
 
-dialog-new-project-profile-standard-name = Standard 4-layer
+dialog-new-project-profile-advanced-name = Advanced
 
-dialog-new-project-profile-standard-blurb = Mixed-signal boards, solid ground plane.
+dialog-new-project-profile-advanced-blurb = Tighter rules for denser boards.
 
-dialog-new-project-profile-hdi-name = HDI 6-layer
+dialog-new-project-profile-hdi-name = HDI
 
-dialog-new-project-profile-hdi-blurb = Fine-pitch BGAs, tight routing.
+dialog-new-project-profile-hdi-blurb = Fine-pitch BGAs, laser microvias.
 
 dialog-new-project-profile-custom-name = Custom
 
-dialog-new-project-profile-custom-blurb = Any layer count and your own rules.
+dialog-new-project-profile-custom-blurb = Your own rules from scratch.
 
-# First line of a profile card; values in mm.
-dialog-new-project-summary-clearance = { $clearance } mm clearance
+# The rule line of a tier card; values in mm.
+dialog-new-project-card-specs = { $clearance } mm clearance · { $track } mm tracks · { $via }/{ $drill } vias
 
-# Second line of a profile card.
-dialog-new-project-summary-tracks = { $track } mm tracks · { $via }/{ $drill } vias
-
-dialog-new-project-summary-custom-layers = { $layers } copper layers
-
+# The rule line of the Custom card.
 dialog-new-project-summary-custom-note = set every value yourself
+
+# Tag on a built-in card the user edited (#2536).
+dialog-new-project-card-edited = edited
+
+# A card's pencil button and the menu row that opens the profile editor.
+dialog-new-project-card-edit = Edit profile…
+
+# Header of an edited built-in's menu; $name is the card name.
+dialog-new-project-card-menu-header = { $name } (built-in, edited)
+
+dialog-new-project-card-duplicate = Duplicate as my profile
+
+dialog-new-project-card-reset = Reset to default
+
+# Caption at the foot of an edited built-in's menu.
+dialog-new-project-card-override-note = Your edits are kept as an override with the same id. Reset to default drops them.
+
+# Bar over the fields while a profile is edited; $name is the profile name.
+dialog-new-project-edit-bar = Editing { $name }. Change the values below, then save the profile.
+
+# The edit bar's button that stores the values as the profile.
+dialog-new-project-edit-save = Save profile
 
 dialog-new-project-customize = Customize settings
 
@@ -56,13 +76,8 @@ dialog-new-project-pcb-heading = PCB RULES
 # Section label.
 dialog-new-project-sheet-heading = SCHEMATIC
 
-dialog-new-project-fab-label = Manufacturer rule template
-
-dialog-new-project-fab-standard = Standard fab
-
-dialog-new-project-fab-advanced = Advanced fab
-
-dialog-new-project-fab-hdi = HDI fab
+# The field that mirrors the picked card (#2537).
+dialog-new-project-fab-label = Fab tier
 
 dialog-new-project-fab-import = Import rules…
 
@@ -95,9 +110,6 @@ dialog-new-project-sch-title-block-none = None
 
 dialog-new-project-sch-designators = Designators
 
-# A sheet size in the picker.
-dialog-new-project-sheet-landscape = { $size } landscape
-
 dialog-new-project-preview-heading = PREVIEW
 
 # Bold start of the board line.
@@ -111,7 +123,23 @@ dialog-new-project-preview-sheet = { $paper } sheet
 
 dialog-new-project-preview-note = New schematics and PCBs in this project start from these settings. Edit them any time in Project Options.
 
-dialog-new-project-stack-silk-top = Top Overlay
+# The board rules drawing (mockup rows 21 and 22).
+dialog-new-project-preview-rules = BOARD RULES
+dialog-new-project-preview-rules-hint = click a value to edit
+# Under the drawing; both values such as 0.15.
+dialog-new-project-preview-rules-line = { $clearance } mm clearance · { $track } mm tracks
+dialog-new-project-preview-sheet-heading = SHEET
+dialog-new-project-preview-expand = Larger view
+dialog-new-project-preview-close = Close
+# On the drawing while the drill is not smaller than the via.
+dialog-new-project-preview-drill-error = drill ≥ via size
+# Captions of the values on the drawing. Engineering shorthand.
+dialog-new-project-rule-cap-width = w
+dialog-new-project-rule-cap-clearance = clr
+dialog-new-project-rule-cap-drill = drill
+dialog-new-project-rule-cap-via = ⌀
+
+dialog-new-project-stack-silk-top = Top Silkscreen
 
 dialog-new-project-stack-mask-top = Top Solder
 
@@ -190,3 +218,51 @@ dialog-new-project-setup-unreadable = The project's setup defaults are not reada
 # Placeholders of the name and location fields, shown while they are empty.
 dialog-new-project-name-placeholder = Project name
 dialog-new-project-location-placeholder = Folder the project goes in
+
+# File ▸ Save Project As… (#2908), a copy of an open project in a new
+# folder: the dialog title.
+dialog-save-project-as-title = Save Project As
+
+# Under the title; $project is the open project's name.
+dialog-save-project-as-subtitle = A copy of '{ $project }' in a new folder
+
+# The name the dialog suggests; $name is the open project's name.
+dialog-save-project-as-default-name = { $name } copy
+
+# The dialog's primary button, and its label while the copy is written.
+dialog-save-project-as-save = Save copy
+dialog-save-project-as-saving = Saving…
+
+# What the copy takes.
+dialog-save-project-as-note = The copy takes the project's settings and every sheet, board and project library as they are now. The open project is not changed, and the copy opens beside it.
+
+# The open project was written by a newer version and is read-only here.
+# $project is its name; $format is the file version it was written as.
+dialog-save-project-as-read-only = '{ $project }' was written by a newer { -brand-name } ({ $format }). The copy is written in this version's format and can be edited here.
+
+# Documents of the project with unsaved edits when the dialog opened, which
+# the copy includes while the originals stay unsaved; $count is how many (a
+# whole number).
+dialog-save-project-as-unsaved =
+    { $count ->
+        [one] The copy includes the unsaved edits of one document.
+       *[other] The copy includes the unsaved edits of { $count } documents.
+    }
+
+# The copy could not be written; $why is the reason the writer gave. Nothing
+# of the copy is left behind and the open project is unchanged.
+dialog-save-project-as-failed = The copy was not saved: { $why }
+
+# The project was written by a newer version, and this version cannot keep
+# some of its settings as they are in the file: the copy would leave them out
+# or change them. Nothing was written. $keys lists them by their place in the
+# project file, separated by commas; $count is how many (a whole number).
+dialog-save-project-as-not-kept =
+    { $count ->
+        [one] This version cannot keep one setting of the project file as it is written: { $keys }. The copy would leave it out or change it. Nothing has been written yet.
+       *[other] This version cannot keep { $count } settings of the project file as they are written: { $keys }. The copy would leave them out or change them. Nothing has been written yet.
+    }
+
+# The primary button once the dialog names the settings the copy cannot keep:
+# it writes the copy without them.
+dialog-save-project-as-save-without = Save copy without them

@@ -47,6 +47,16 @@ pub struct Recoverable {
     /// The copy was last written before the saved file was: restoring it
     /// replaces newer saved work.
     pub older_than_file: bool,
+    /// How long ago the saved file was written, in seconds; `None` when it
+    /// has no readable time, or no file at all (a Component Preview row).
+    pub saved_age_secs: Option<u64>,
+    /// The instant both ages are measured from.
+    pub checked_at: SystemTime,
+}
+
+/// Seconds from `then` to `now`; 0 for a time in the future.
+fn age_at(now: SystemTime, then: SystemTime) -> u64 {
+    now.duration_since(then).map_or(0, |age| age.as_secs())
 }
 
 /// Decide what the sidecar of `document` means, and drop it when it means
@@ -117,15 +127,16 @@ pub fn reconcile_with(
         sidecar::remove(recovery_dir, document)?;
         return Ok(None);
     }
+    let file_modified = file_meta.modified().ok();
     Ok(Some(Recoverable {
-        age_secs: now
-            .duration_since(sidecar_modified)
-            .map_or(0, |age| age.as_secs()),
-        older_than_file: file_meta.modified().is_ok_and(|file_modified| {
+        age_secs: age_at(now, sidecar_modified),
+        older_than_file: file_modified.is_some_and(|file_modified| {
             file_modified
                 .checked_add(SAME_TIME_MARGIN)
                 .is_none_or(|limit| sidecar_modified <= limit)
         }),
+        saved_age_secs: file_modified.map(|file_modified| age_at(now, file_modified)),
+        checked_at: now,
     }))
 }
 
@@ -161,8 +172,10 @@ pub fn reconcile_snapshot(
         return Ok(None);
     }
     Ok(Some(Recoverable {
-        age_secs: now.duration_since(modified).map_or(0, |age| age.as_secs()),
+        age_secs: age_at(now, modified),
         older_than_file: snapshot_revision(&copy) != snapshot_revision(baseline),
+        saved_age_secs: None,
+        checked_at: now,
     }))
 }
 
@@ -366,9 +379,39 @@ mod tests {
         let f = fixture(b"saved", b"unsaved edits");
         set_age(&f.doc, 600);
         set_age(&sidecar::sidecar_path(&f.rec, &f.doc), 60);
-        let offer = reconcile(&f.rec, &f.doc, SystemTime::now()).unwrap();
-        assert!(offer.is_some_and(|o| (59..=70).contains(&o.age_secs) && !o.older_than_file));
+        let now = SystemTime::now();
+        let offer = reconcile(&f.rec, &f.doc, now).unwrap();
+        assert!(
+            offer
+                .as_ref()
+                .is_some_and(|o| (59..=70).contains(&o.age_secs) && !o.older_than_file)
+        );
+        // The prompt shows both versions' times, measured from the check.
+        assert!(
+            offer.as_ref().is_some_and(|o| o
+                .saved_age_secs
+                .is_some_and(|age| (599..=610).contains(&age))
+                && o.checked_at == now),
+            "{offer:?}"
+        );
         assert!(sidecar::sidecar_path(&f.rec, &f.doc).exists());
+    }
+
+    /// A Component Preview row has no file: its offer carries no saved time.
+    #[test]
+    fn a_row_copy_is_offered_without_a_saved_file_time() {
+        let tmp = tempfile::tempdir().unwrap();
+        let rec = tmp.path().join("recovery");
+        let row = tmp.path().join("row");
+        sidecar::write(&rec, &row, br#"{"server_revision":1,"edited":true}"#).unwrap();
+        let now = SystemTime::now();
+        let offer = reconcile_snapshot(&rec, &row, br#"{"server_revision":1}"#, now).unwrap();
+        assert!(
+            offer
+                .as_ref()
+                .is_some_and(|o| o.saved_age_secs.is_none() && !o.older_than_file),
+            "{offer:?}"
+        );
     }
 
     #[test]
@@ -378,8 +421,12 @@ mod tests {
         set_age(&sidecar::sidecar_path(&f.rec, &f.doc), 600);
         let offer = reconcile(&f.rec, &f.doc, SystemTime::now()).unwrap();
         assert!(
-            offer.is_some_and(|o| o.older_than_file),
+            offer.as_ref().is_some_and(|o| o.older_than_file),
             "a touched mtime must not delete a copy, and the offer says the file is newer"
+        );
+        assert!(
+            offer.is_some_and(|o| o.saved_age_secs.is_some_and(|age| age < o.age_secs)),
+            "the saved file's time is the newer one"
         );
         assert!(sidecar::sidecar_path(&f.rec, &f.doc).exists());
     }

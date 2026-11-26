@@ -115,6 +115,11 @@ pub enum GraphicHandle {
     /// handle id (see `graphic_handles`'s cast, which is `debug_assert`-
     /// guarded against ever needing to saturate).
     PolygonVertex(u32),
+    /// Bezier point — `0=start, 1=C1, 2=C2, 3=end`.
+    BezierPoint(u8),
+    /// Elliptical arc radius grip — `0=X` at `center + (rx, 0)`, `1=Y` at
+    /// `center + (0, ry)`.
+    EllipseRadius(u8),
 }
 
 /// Map a [`GraphicHandle`] to the mouse cursor that should be shown
@@ -581,18 +586,29 @@ fn next_pin_number(sym: &Symbol) -> String {
 
 mod body;
 mod context_menu;
+mod curve_grips;
 mod fields;
 mod hit_test;
 mod movement;
 mod part_view;
+mod pin_table_edit;
+mod pin_table_ui;
+mod props_ui;
+mod rect_extent;
 mod rotation;
 #[cfg(test)]
 mod tests;
 
-pub use body::{assign_body, body_assign_targets};
+pub use body::{BodyScope, BodyScopeRow, assign_body, body_assign_targets, body_scope_row};
 pub use context_menu::*;
 pub use fields::*;
 pub use hit_test::*;
 pub use movement::*;
 pub use part_view::PartView;
+pub use pin_table_edit::{add_table_pin, apply_bulk, apply_paste, remove_pins};
+pub use pin_table_ui::{
+    PasteDraft, PasteField, PasteMode, PinTableMsg, PinTableUi, parse_mm, paste_preview,
+};
+pub use props_ui::{PartChip, PartStep, SymbolPropsMsg, SymbolPropsTab, SymbolPropsUi};
+pub use rect_extent::{rect_end_for_extent, rect_extent};
 pub use rotation::*;

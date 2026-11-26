@@ -1,43 +1,184 @@
 //! Enable Version Control flow for the project-navigation dock.
 
 use super::*;
+use crate::app::contracts::{CommitAuthor, TrackKind};
+
+/// The generated-outputs folder; its row starts unticked (mockup row 26).
+const OUTPUTS_FOLDER: &str = "outputs";
+
+impl CommitAuthor {
+    /// Whether a run may start: git has an author, or both fields are filled.
+    pub(crate) fn is_ready(&self) -> bool {
+        match self {
+            Self::Probing => false,
+            Self::Resolved => true,
+            Self::Missing { .. } => self.typed().is_some(),
+        }
+    }
+
+    /// The typed name and email, trimmed; `None` unless both are filled and
+    /// git would accept them. Checked by the repo-config writer's own
+    /// `parse_author`, so the dialog and the History panel agree.
+    pub(crate) fn typed(&self) -> Option<(String, String)> {
+        let Self::Missing { name, email } = self else {
+            return None;
+        };
+        let (name, email) = (name.trim(), email.trim());
+        signex_library::adapters::local_git::project_repo::parse_author(&format!(
+            "{name} <{email}>"
+        ))
+        .filter(|(n, e)| n == name && e == email)
+    }
+}
+
+/// Ask git, off the UI thread, whether it resolves a commit author; the
+/// dialog asks for one only when it does not (mockup row 26). A probe that
+/// fails asks too.
+fn probe_commit_author(project_dir: std::path::PathBuf) -> Task<Message> {
+    Task::perform(
+        crate::app::path_op_jobs::run_blocking(|| {
+            signex_library::git_identity::identity_for_default_config().is_ok()
+        }),
+        move |joined| {
+            Message::EnableVersionControl(crate::app::EnableVersionControlMsg::AuthorProbed {
+                project_dir: project_dir.clone(),
+                has_identity: joined.unwrap_or(false),
+            })
+        },
+    )
+}
+
+/// Read which entries the library folder holds, off the UI thread; see
+/// `ItemsScanned`.
+fn scan_library_items(project_dir: std::path::PathBuf) -> Task<Message> {
+    let scan_dir = project_dir.clone();
+    Task::perform(
+        crate::app::path_op_jobs::run_blocking(move || collect_track_items_for_library(&scan_dir)),
+        move |joined| {
+            Message::EnableVersionControl(crate::app::EnableVersionControlMsg::ItemsScanned {
+                project_dir: project_dir.clone(),
+                result: joined,
+            })
+        },
+    )
+}
 
 impl Signex {
-    pub(crate) fn open_enable_version_control_dialog(&mut self, tree_path: Vec<usize>) {
+    pub(crate) fn open_enable_version_control_dialog(
+        &mut self,
+        tree_path: Vec<usize>,
+    ) -> Task<Message> {
         let Some(&project_idx) = tree_path.first() else {
-            return;
+            return Task::none();
         };
         let Some(project) = self.document_state.projects.get(project_idx) else {
-            return;
+            return Task::none();
         };
-        let Some(project_dir) = project.path.parent() else {
-            return;
+        let Some(project_dir) = project.path.parent().map(std::path::Path::to_path_buf) else {
+            return Task::none();
         };
-        if !self.document_state.project_fs.facts.lacks_git(project_dir) {
+        if !self.document_state.project_fs.facts.lacks_git(&project_dir) {
             // Already version-controlled (or not probed yet) — nothing to enable.
-            return;
+            return Task::none();
         }
-        let items = collect_track_items(project, project_dir);
-        let intro_text = format!(
-            "Initialise a Git repository at {} and stage every \
-             ticked entry in the project as the first commit. \
-             From then on, every save commits through libgit2 — \
-             including library mutations inside the project's \
-             `.snxlib` directories.",
-            project_dir.display()
-        );
+        let items = collect_track_items(project, &project_dir);
+        let commit_message = self.first_commit_message(&project.data.name);
         self.ui_state.enable_version_control = Some(crate::app::EnableVersionControlState {
             scope: crate::app::VersionControlScope::Project,
             project_path: project.path.clone(),
-            project_dir: project_dir.to_path_buf(),
+            project_dir: project_dir.clone(),
             project_name: project.data.name.clone(),
             items,
             use_lfs: false,
-            intro_text,
+            commit_message,
+            commit_every_save: true,
             error: None,
             working: false,
             scanning: false,
+            author: CommitAuthor::Probing,
         });
+        probe_commit_author(project_dir)
+    }
+
+    /// Git answered whether it has a commit author. Without one the dialog
+    /// shows the name and email fields. Dropped when the dialog was closed or
+    /// reopened for another directory meanwhile.
+    pub(crate) fn handle_enable_version_control_author_probed(
+        &mut self,
+        project_dir: &std::path::Path,
+        has_identity: bool,
+    ) {
+        let Some(state) = self
+            .ui_state
+            .enable_version_control
+            .as_mut()
+            .filter(|s| s.author == CommitAuthor::Probing && s.project_dir == project_dir)
+        else {
+            return;
+        };
+        state.author = if has_identity {
+            CommitAuthor::Resolved
+        } else {
+            CommitAuthor::Missing {
+                name: String::new(),
+                email: String::new(),
+            }
+        };
+    }
+
+    /// The first commit message the dialog offers for `name`, in the UI
+    /// language. The isolation marks around the name are dropped: the text
+    /// becomes a commit subject, not a label.
+    fn first_commit_message(&self, name: &str) -> String {
+        signex_i18n::t!(
+            self.ui_state.i18n.as_ref(),
+            signex_i18n::ids::DIALOG_VERSION_CONTROL_COMMIT_MESSAGE_DEFAULT,
+            "name" => name
+        )
+        .into_string()
+        .replace(['\u{2068}', '\u{2069}'], "")
+    }
+
+    /// An edit in the dialog: a row, Select all, the LFS box, the first
+    /// commit message or the Commit every save switch. A run in flight or a
+    /// scan still reading the rows has the choices; edits are ignored then.
+    pub(crate) fn edit_enable_version_control(
+        &mut self,
+        edit: crate::app::EnableVersionControlMsg,
+    ) {
+        use crate::app::EnableVersionControlMsg as Msg;
+        let Some(s) = self.ui_state.enable_version_control.as_mut() else {
+            return;
+        };
+        if s.working || s.scanning {
+            return;
+        }
+        match edit {
+            Msg::ToggleLfs => s.use_lfs = !s.use_lfs,
+            Msg::ToggleItem(idx) => {
+                if let Some(item) = s.items.get_mut(idx) {
+                    item.tracked = !item.tracked;
+                }
+            }
+            Msg::AllTicked => s.items.iter_mut().for_each(|item| item.tracked = true),
+            Msg::CommitMessageChanged(text) => s.commit_message = text,
+            Msg::CommitEverySaveToggled => s.commit_every_save = !s.commit_every_save,
+            Msg::AuthorNameChanged(text) => {
+                if let CommitAuthor::Missing { name, .. } = &mut s.author {
+                    *name = text;
+                }
+            }
+            Msg::AuthorEmailChanged(text) => {
+                if let CommitAuthor::Missing { email, .. } = &mut s.author {
+                    *email = text;
+                }
+            }
+            Msg::Confirm
+            | Msg::Close
+            | Msg::ItemsScanned { .. }
+            | Msg::Finished { .. }
+            | Msg::AuthorProbed { .. } => {}
+        }
     }
 
     /// v0.11 library-node: open the same Enable Version Control modal
@@ -79,14 +220,8 @@ impl Signex {
             .and_then(|s| s.to_str())
             .unwrap_or("library")
             .to_string();
-        let intro_text = format!(
-            "Initialise a Git repository at {} and stage the \
-             ticked entries as the first commit. The library \
-             adapter will pick up `.git/` on the next save and \
-             route subsequent edits through libgit2.",
-            root_dir.display()
-        );
-        let (scan_dir, project_dir) = (root_dir.clone(), root_dir.clone());
+        let commit_message = self.first_commit_message(&library_name);
+        let project_dir = root_dir.clone();
         // `project_path` is purely informational; point it at a
         // `library.toml` (whether it exists yet or not) inside the
         // library so the modal can mirror the project-scope pattern.
@@ -98,22 +233,18 @@ impl Signex {
             // Which entries exist is read on a worker; see `ItemsScanned`.
             items: Vec::new(),
             use_lfs: false,
-            intro_text,
+            commit_message,
+            // A project setting; the library dialog does not show it.
+            commit_every_save: true,
             error: None,
             working: false,
             scanning: true,
+            author: CommitAuthor::Probing,
         });
-        Task::perform(
-            crate::app::path_op_jobs::run_blocking(move || {
-                collect_track_items_for_library(&scan_dir)
-            }),
-            move |joined| {
-                Message::EnableVersionControl(crate::app::EnableVersionControlMsg::ItemsScanned {
-                    project_dir: project_dir.clone(),
-                    result: joined,
-                })
-            },
-        )
+        Task::batch([
+            scan_library_items(project_dir.clone()),
+            probe_commit_author(project_dir),
+        ])
     }
 
     /// The row list of a library-scope dialog arrived. Dropped when the dialog
@@ -158,6 +289,13 @@ impl Signex {
         if state.working || state.scanning {
             return Task::none();
         }
+        // A blank subject is refused: the dialog withholds Enable meanwhile.
+        let message = state.commit_message.trim().to_string();
+        // So is a run before git answered, or with an author field blank.
+        if message.is_empty() || !state.author.is_ready() {
+            return Task::none();
+        }
+        let author = state.author.typed();
         state.working = true;
         state.error = None;
         // Build the `.gitignore` body from unticked rows. An empty
@@ -185,33 +323,20 @@ impl Signex {
             .then(|| state.project_path.file_stem())
             .flatten()
             .map(|s| s.to_string_lossy().into_owned());
-        Task::perform(
-            async move {
-                tokio::task::spawn_blocking(move || {
-                    enable_version_control_blocking(
-                        scope,
-                        &dir,
-                        project_stem.as_deref(),
-                        use_lfs,
-                        gitignore.as_deref(),
-                        keep_journals,
-                    )
-                })
-                .await
-                .unwrap_or_else(|e| {
-                    crate::app::EnableVersionControlOutcome::InitFailed(format!(
-                        "the version-control worker stopped: {e}"
-                    ))
-                })
-            },
-            move |outcome| {
-                Message::EnableVersionControl(crate::app::EnableVersionControlMsg::Finished {
-                    scope,
-                    project_dir: project_dir.clone(),
-                    outcome,
-                })
-            },
-        )
+        run_off_thread(scope, project_dir, move || {
+            enable_version_control_blocking(
+                scope,
+                &dir,
+                project_stem.as_deref(),
+                use_lfs,
+                gitignore.as_deref(),
+                keep_journals,
+                FirstCommit {
+                    message: &message,
+                    author: author.as_ref().map(|(n, e)| (n.as_str(), e.as_str())),
+                },
+            )
+        })
     }
 
     /// `.git` now exists under `dir`: record it at once so the menu and the
@@ -255,6 +380,15 @@ impl Signex {
             .enable_version_control
             .as_ref()
             .is_some_and(|s| s.project_dir == project_dir);
+        // The dialog cannot change or close while its run is in flight, so
+        // its switch is the one the run started with; with no dialog for this
+        // run the switch is on, as it opens.
+        let commit_every_save = self
+            .ui_state
+            .enable_version_control
+            .as_ref()
+            .filter(|_| dialog_is_this_run)
+            .is_none_or(|s| s.commit_every_save);
         let (adapter_error, commit_warning) = match outcome {
             Outcome::InitFailed(error) => {
                 crate::diagnostics::log_warning(format!(
@@ -294,11 +428,12 @@ impl Signex {
                         .arg("path", project_dir.display().to_string())
                         .arg("reason", reason.to_string()),
                 ));
-        } else if matches!(scope, crate::app::VersionControlScope::Project) {
+        } else if matches!(scope, crate::app::VersionControlScope::Project) && commit_every_save {
             // Turn `enable_git` on for the matching project as a step of its
             // Project tab history (#1693), so the .snxprj save captures the
             // flag and an undo of an older step cannot turn it off. Match by
-            // `data.dir`; only when the adapter setup succeeded (v0.23).
+            // `data.dir`; only when the adapter setup succeeded (v0.23) and
+            // the dialog's "Commit every save" was left on.
             let project_id = self
                 .document_state
                 .projects
@@ -352,6 +487,39 @@ impl Signex {
     }
 }
 
+/// Run `job` on the blocking pool and report its outcome as `Finished` for
+/// `project_dir`.
+fn run_off_thread(
+    scope: crate::app::VersionControlScope,
+    project_dir: std::path::PathBuf,
+    job: impl FnOnce() -> crate::app::EnableVersionControlOutcome + Send + 'static,
+) -> Task<Message> {
+    Task::perform(
+        async move {
+            tokio::task::spawn_blocking(job).await.unwrap_or_else(|e| {
+                crate::app::EnableVersionControlOutcome::InitFailed(format!(
+                    "the version-control worker stopped: {e}"
+                ))
+            })
+        },
+        move |outcome| {
+            Message::EnableVersionControl(crate::app::EnableVersionControlMsg::Finished {
+                scope,
+                project_dir: project_dir.clone(),
+                outcome,
+            })
+        },
+    )
+}
+
+/// The first commit: its subject, and the author the dialog asked for when
+/// git had none (`None` uses git's own).
+#[derive(Debug, Clone, Copy)]
+struct FirstCommit<'a> {
+    message: &'a str,
+    author: Option<(&'a str, &'a str)>,
+}
+
 /// Blocking: everything Enable Version Control does on disk. Run from
 /// `spawn_blocking`.
 fn enable_version_control_blocking(
@@ -361,6 +529,7 @@ fn enable_version_control_blocking(
     use_lfs: bool,
     gitignore: Option<&str>,
     keep_journals: bool,
+    commit: FirstCommit<'_>,
 ) -> crate::app::EnableVersionControlOutcome {
     use crate::app::EnableVersionControlOutcome as Outcome;
     // Refuse a folder that holds other projects or personal files (#1205)
@@ -376,6 +545,7 @@ fn enable_version_control_blocking(
         matches!(scope, crate::app::VersionControlScope::Project),
         gitignore,
         keep_journals,
+        commit,
     ) {
         return Outcome::InitFailed(error.to_string());
     }
@@ -393,20 +563,25 @@ fn enable_version_control_blocking(
 /// surface the `LibraryError` as a user-facing string.
 /// `project_scope` adds the managed `.gitattributes` block; both scopes
 /// get the managed `.gitignore` block. `gitignore` is the picker's unticked
-/// rows, merged in outside the block, or `None` for none.
+/// rows, merged in outside the block, or `None` for none. `commit` is the
+/// first commit's subject and the author the dialog asked for, which the
+/// library writes into the new repository's config (mockup row 26).
 fn try_init_project_repo(
     project_dir: &std::path::Path,
     use_lfs: bool,
     project_scope: bool,
     gitignore: Option<&str>,
     keep_journals: bool,
+    commit: FirstCommit<'_>,
 ) -> Result<(), signex_library::LibraryError> {
-    signex_library::enable_project_version_control_with(
+    signex_library::enable_project_version_control_as(
         project_dir,
         use_lfs,
         project_scope,
         gitignore,
         keep_journals,
+        commit.message,
+        commit.author,
     )
 }
 
@@ -425,7 +600,7 @@ pub(crate) fn collect_track_items(
         items.push(crate::app::TrackItem {
             absolute: project.path.clone(),
             relative: name.to_string(),
-            label: "Project".to_string(),
+            kind: TrackKind::Project,
             is_directory: false,
             tracked: true,
         });
@@ -436,7 +611,7 @@ pub(crate) fn collect_track_items(
         items.push(crate::app::TrackItem {
             absolute: abs,
             relative: sheet.filename.clone(),
-            label: "Schematic".to_string(),
+            kind: TrackKind::Schematic,
             is_directory: false,
             tracked: true,
         });
@@ -446,7 +621,7 @@ pub(crate) fn collect_track_items(
         items.push(crate::app::TrackItem {
             absolute: project_dir.join(pcb),
             relative: pcb.clone(),
-            label: "PCB".to_string(),
+            kind: TrackKind::Pcb,
             is_directory: false,
             tracked: true,
         });
@@ -478,12 +653,26 @@ pub(crate) fn collect_track_items(
         items.push(crate::app::TrackItem {
             absolute: lib_root.to_path_buf(),
             relative,
-            label: "Library".to_string(),
+            kind: TrackKind::Library,
             is_directory: true,
             tracked: true,
         });
     }
+    items.push(outputs_item(project_dir));
     items
+}
+
+/// The generated-outputs folder, unticked: its files churn with every export,
+/// so they stay out of the first commit unless the user ticks it (mockup row
+/// 26). Listed whether or not it exists yet, so later outputs stay out too.
+fn outputs_item(project_dir: &std::path::Path) -> crate::app::TrackItem {
+    crate::app::TrackItem {
+        absolute: project_dir.join(OUTPUTS_FOLDER),
+        relative: OUTPUTS_FOLDER.to_string(),
+        kind: TrackKind::Folder,
+        is_directory: true,
+        tracked: false,
+    }
 }
 
 /// Build the per-row pick-list for the library-scope Enable Version
@@ -500,8 +689,11 @@ pub(crate) fn collect_track_items_for_library(
     // Manifest-shaped files at the library root. Only surface them
     // when present — bare-bones libraries may carry only the
     // `.snxlib` file without a sidecar config.
-    let files: &[(&str, &str)] = &[("library.toml", "Config"), ("components.tsv", "Components")];
-    for (name, label) in files {
+    let files: &[(&str, TrackKind)] = &[
+        ("library.toml", TrackKind::Config),
+        ("components.tsv", TrackKind::Components),
+    ];
+    for (name, kind) in files {
         let abs = root_dir.join(name);
         if !abs.exists() {
             continue;
@@ -509,7 +701,7 @@ pub(crate) fn collect_track_items_for_library(
         items.push(crate::app::TrackItem {
             absolute: abs,
             relative: (*name).to_string(),
-            label: (*label).to_string(),
+            kind: *kind,
             is_directory: false,
             tracked: true,
         });
@@ -524,7 +716,7 @@ pub(crate) fn collect_track_items_for_library(
         items.push(crate::app::TrackItem {
             absolute: abs,
             relative: name.to_string(),
-            label: "Folder".to_string(),
+            kind: TrackKind::Folder,
             is_directory: true,
             tracked: true,
         });

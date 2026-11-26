@@ -3,10 +3,15 @@
 //! validated and compiled into `signex_drc::UserRule`s. The same family as
 //! `signex-erc-dsl`. Reference: `docs/DRC_RULES.md`; design and
 //! precedence: `docs/architecture/pcb-drc.md`, "Rule language".
+//! `schematic_rules` builds the rules a schematic's Net Parameters
+//! directives ask for (#1489) and merges them into rule text.
 
 pub mod ast;
 mod compile;
+#[cfg(any(test, feature = "test-support"))]
+pub mod fixture;
 pub mod parser;
+pub mod schematic_rules;
 pub mod table;
 
 use std::collections::BTreeSet;
@@ -15,6 +20,7 @@ use signex_drc::UserRule;
 use signex_types::project::DrcRuleSet;
 
 pub use ast::Span;
+pub use compile::length_nm;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Level {
@@ -220,5 +226,7 @@ pub fn compile_layers(profile: Option<&DrcRuleSet>, project: Option<&DrcRuleSet>
     out
 }
 
+#[cfg(test)]
+mod base_rules_tests;
 #[cfg(test)]
 mod tests;

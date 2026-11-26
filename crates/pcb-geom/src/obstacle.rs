@@ -1,7 +1,8 @@
 //! What new copper must keep clear of (#2408): every pad (footprint or
 //! free), track, copper arc and via of the board, at its size on each
-//! layer, and every copper area that is not a pour (Fill, Solid Region,
-//! teardrop), each with its net and copper layers, no net included, and
+//! layer, every drawing and string on copper (#2883), and every copper area
+//! that is not a pour (Fill, Solid Region, teardrop), each with its net and
+//! copper layers, no net included, and
 //! the keepouts that forbid it. Via stitching, teardrops and glossing read
 //! this one list, so they agree on what "clear" means: the clearance a
 //! caller's rule gives between two nets, measured between pads, tracks
@@ -16,6 +17,7 @@ use signex_types::pcb_free::free_pad_frame;
 use signex_types::pcb_sketch::PcbKeepout;
 
 use crate::copper::{layer_bit, layer_mask, pad_pieces, via_pieces};
+use crate::drawn_copper::drawn_copper;
 use crate::free::arc_shapes;
 use crate::index::{ItemRef, track_shape};
 use crate::pick_filter::PickKind;
@@ -73,7 +75,7 @@ impl Obstacle {
         }
         match &self.copper {
             Copper::Shape(own) => shape.overlaps(own) || shape.separation(own).is_under(gap),
-            Copper::Area(area) => area_meets(area, &shape.inflated(gap)),
+            Copper::Area(area) => area_meets(area, &shape.clone().inflated(gap)),
         }
     }
 
@@ -82,7 +84,7 @@ impl Obstacle {
     fn near_ring(&self, ring: &[PointNm], gap: i64) -> bool {
         let gap = gap.max(0);
         match &self.copper {
-            Copper::Shape(own) => own.inflated(gap).overlaps_polygon(ring),
+            Copper::Shape(own) => own.clone().inflated(gap).overlaps_polygon(ring),
             Copper::Area(area) => {
                 area.outer.len() >= 3
                     && (polygons_meet(ring, &area.outer)
@@ -129,8 +131,9 @@ fn inside_ring(shape: &Shape, ring: &[PointNm]) -> bool {
         })
 }
 
-/// Every pad (footprint and free), track, copper arc and via whose geometry
-/// converts, and every copper zone that is neither a pour nor a rule area.
+/// Every pad (footprint and free), track, copper arc, via and drawing or
+/// string on copper whose geometry converts, and every copper zone that is
+/// neither a pour nor a rule area.
 /// A track, arc or zone on no copper layer is not copper and is left out.
 pub(crate) fn copper_obstacles(board: &PcbBoard) -> Vec<Obstacle> {
     let mut out = Vec::new();
@@ -183,6 +186,13 @@ pub(crate) fn copper_obstacles(board: &PcbBoard) -> Vec<Obstacle> {
     for via in &board.vias {
         push_pieces(&mut out, ItemRef::Via(via.uuid), via.net, via_pieces(via));
     }
+    // Drawings and strings on copper (#2883), of no net.
+    out.extend(drawn_copper(board).into_iter().map(|drawn| Obstacle {
+        item: drawn.item,
+        net: drawn.net,
+        layers: drawn.layers,
+        copper: Copper::Shape(drawn.shape),
+    }));
     for zone in &board.zones {
         let layers = layer_mask(std::iter::once(zone.layer.as_str()));
         if zone.is_pour() || zone.is_rule_area() || layers == 0 {
@@ -341,14 +351,7 @@ pub(crate) fn keepout_areas(board: &PcbBoard) -> Vec<KeepoutArea> {
 /// Whether the disc of `radius` about `center` lies inside `area`, clear of
 /// its outer ring and of every hole by at least `margin`.
 pub(crate) fn disc_inside(area: &Polygon, center: PointNm, radius: i64, margin: i64) -> bool {
-    if area.outer.len() < 3 || !point_in_polygon(&area.outer, center) {
-        return false;
-    }
-    if area
-        .holes
-        .iter()
-        .any(|hole| hole.len() >= 3 && point_in_polygon(hole, center))
-    {
+    if !area.contains_point(center) {
         return false;
     }
     let disc = Shape::Disc {

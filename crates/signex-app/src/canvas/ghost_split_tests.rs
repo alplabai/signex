@@ -73,6 +73,7 @@ fn base_sheet(rng: &mut Lcg) -> SchematicSheet {
             uuid: Uuid::now_v7(),
             start: point(rng),
             end: point(rng),
+            ..Default::default()
         });
     }
     sheet

@@ -11,16 +11,92 @@ use uuid::Uuid;
 use super::super::super::*;
 use super::sheet_open::SheetOpen;
 
+/// What a descent does when the sheet symbol's file is not on disk.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OnMissingFile {
+    /// Offer Create Sheet for it (#1275).
+    OfferCreate,
+    /// Log why and open nothing (#2847).
+    Refuse,
+}
+
+/// Say why a sheet symbol's file cannot be opened, in the words Properties
+/// and the context menu use.
+pub(super) fn log_missing_sheet_refused(path: &std::path::Path) {
+    let reason = signex_i18n::I18n::en_us()
+        .message_plain(signex_i18n::ids::PROPERTIES_SHEET_OPEN_MISSING, &[]);
+    crate::diagnostics::log_warning(format!("{reason} ({})", path.display()));
+}
+
 impl Signex {
-    /// The canvas route (double-click, context menu, Enter on a selection):
-    /// open the file `sheet_symbol` references and record that placement. A
-    /// sheet already open is focused at once; otherwise the file is read on a
-    /// worker and the tab is installed, and the placement recorded, when it
-    /// arrives. A missing file offers to create it (#1275).
+    /// The file a sheet symbol on the sheet at `parent` resolves to. Lexical
+    /// only: it reads no disk, and a refused reference has none.
+    pub(crate) fn child_sheet_file(
+        parent: &std::path::Path,
+        filename: &str,
+    ) -> Option<std::path::PathBuf> {
+        crate::app::project_sheets::resolve_child_reference_quiet(parent.parent()?, filename).ok()
+    }
+
+    /// Open Sheet (double-click, context menu, Enter on a selection, the
+    /// harness panel's Go to): open the file `sheet_symbol` references and
+    /// record that placement. A missing file is refused with its reason;
+    /// Create Sheet is its own action.
+    pub(crate) fn open_sheet_through_symbol(
+        &mut self,
+        sheet_symbol: Uuid,
+        filename: &str,
+    ) -> Task<Message> {
+        self.descend(sheet_symbol, filename, OnMissingFile::Refuse)
+    }
+
+    /// The Create Sheet route: open the file `sheet_symbol` references, or
+    /// offer to create it when it is missing (#1275).
     pub(crate) fn descend_through_sheet_symbol(
         &mut self,
         sheet_symbol: Uuid,
         filename: &str,
+    ) -> Task<Message> {
+        self.descend(sheet_symbol, filename, OnMissingFile::OfferCreate)
+    }
+
+    /// Whether the file of the first selected sheet symbol in `window` is one
+    /// the project tree marks as missing. Reads only the probed facts, never
+    /// the disk.
+    pub(crate) fn selected_sheet_file_missing(&self, window: iced::window::Id) -> bool {
+        let canvas = self.interaction_state.canvas_for_window(window);
+        let Some(item) = canvas
+            .selected
+            .iter()
+            .find(|item| item.kind == signex_types::schematic::SelectedKind::ChildSheet)
+        else {
+            return false;
+        };
+        let Some(parent) = self
+            .document_state
+            .sheet_path_for_window(window, &self.ui_state)
+        else {
+            return false;
+        };
+        let Some(engine) = self.document_state.engines.get(parent) else {
+            return false;
+        };
+        let projects = &self.panel_ctx_for(window).projects;
+        (engine.document().child_sheets.iter())
+            .find(|sheet| sheet.uuid == item.uuid)
+            .and_then(|sheet| Self::child_sheet_file(parent, &sheet.filename))
+            .is_some_and(|file| crate::panels::sheet_file_missing(projects, &file))
+    }
+
+    /// Show the file `sheet_symbol` references and record that placement. A
+    /// sheet already open is focused at once; otherwise the file is read on a
+    /// worker and the tab is installed, and the placement recorded, when it
+    /// arrives. `on_missing` says what a file not on disk does.
+    fn descend(
+        &mut self,
+        sheet_symbol: Uuid,
+        filename: &str,
+        on_missing: OnMissingFile,
     ) -> Task<Message> {
         let Some(path) = self.resolve_child_sheet_path(filename) else {
             return Task::none();
@@ -37,10 +113,13 @@ impl Signex {
             let open = self.document_state.engines.contains_key(&path)
                 || self.document_state.tabs.iter().any(|tab| tab.path == path);
             if !open && !path.exists() {
-                crate::diagnostics::log_warning(format!(
-                    "The sheet {} is missing; open its parent sheet in the main window to create it.",
-                    path.display()
-                ));
+                match on_missing {
+                    OnMissingFile::Refuse => log_missing_sheet_refused(&path),
+                    OnMissingFile::OfferCreate => crate::diagnostics::log_warning(format!(
+                        "The sheet {} is missing; open its parent sheet in the main window to create it.",
+                        path.display()
+                    )),
+                }
                 return Task::none();
             }
             let (Some(window), Some(from)) = (
@@ -61,7 +140,16 @@ impl Signex {
                 placement,
             }));
         }
-        self.descend_to_child_sheet(sheet_symbol, path, placement)
+        match on_missing {
+            OnMissingFile::OfferCreate => {
+                self.descend_to_child_sheet(sheet_symbol, path, placement)
+            }
+            OnMissingFile::Refuse => {
+                let mut open = SheetOpen::at(placement);
+                open.refuse_missing = true;
+                self.open_sheet(path, open)
+            }
+        }
     }
 
     /// A descent an undocked window queued, landing on the main window. The
@@ -78,10 +166,7 @@ impl Signex {
         placement: Option<InstancePath>,
     ) -> Task<Message> {
         if let Some(why) = self.descent_no_longer_applies(window, from, symbol, &path, &placement) {
-            crate::diagnostics::log_warning(format!(
-                "The descent into {} was not done: {why}. Repeat it in the window that shows the sheet.",
-                path.display()
-            ));
+            crate::diagnostics::log_warning(refused_descent_line(why, &path));
             return Task::none();
         }
         self.descend_to_child_sheet(symbol, path, placement)
@@ -159,6 +244,7 @@ impl Signex {
         }
         // The canvas draws the designators of the placement just recorded.
         self.refresh_canvas_designators();
+        self.refresh_canvas_not_fitted();
         // The net highlight is per placement: show it for this one.
         self.sync_net_highlight_to_canvases();
     }
@@ -193,5 +279,27 @@ impl Signex {
         }
         let hierarchy = ctx.navigator.hierarchy.as_ref()?;
         hierarchy.starts_a_walk(active).then(InstancePath::root)
+    }
+}
+
+/// The Messages line for a queued descent that no longer applies. The reason
+/// comes before the path because the Messages panel cuts a line at 160 bytes.
+pub(crate) fn refused_descent_line(why: &str, path: &std::path::Path) -> String {
+    format!(
+        "The descent was not done: {why}. Repeat it in the window that shows the sheet. Sheet: {}",
+        path.display()
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn a_refused_descent_line_keeps_its_reason_after_compaction() {
+        let why = "the sheet is entered through another placement now";
+        let path = std::path::PathBuf::from(format!("/{}/child.snxsch", "d".repeat(200)));
+        let line = super::refused_descent_line(why, &path);
+        let out = crate::diagnostics::compact_message(&line);
+        assert_ne!(out, line, "the line must need compacting");
+        assert!(out.contains(why), "{out}");
     }
 }

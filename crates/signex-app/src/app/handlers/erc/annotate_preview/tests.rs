@@ -77,7 +77,6 @@ fn tab(title: &str, path: PathBuf) -> TabInfo {
     TabInfo {
         title: title.to_string(),
         path,
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     }
@@ -101,10 +100,8 @@ fn the_preview_promises_what_the_action_assigns() {
     let task = app.handle_annotate(signex_engine::AnnotateMode::Incremental);
     crate::app::path_ops::settle_task(&mut app, task);
 
-    let written = std::fs::read_to_string(dir.join("z_child.snxsch")).expect("child still on disk");
-    let child_after: Vec<String> = SnxSchematic::parse(&written)
-        .expect("child parses")
-        .sheet
+    let child_after: Vec<String> = app.document_state.engines[&dir.join("z_child.snxsch")]
+        .document()
         .symbols
         .iter()
         .map(|s| s.reference.clone())

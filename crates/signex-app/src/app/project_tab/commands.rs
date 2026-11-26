@@ -20,12 +20,7 @@ use crate::app::{Message, Signex};
 type Ran = (CommandOutcome, Task<Message>);
 
 fn refused(reason: impl Into<String>) -> Ran {
-    (
-        CommandOutcome::Disabled {
-            reason: reason.into(),
-        },
-        Task::none(),
-    )
+    (CommandOutcome::disabled(reason), Task::none())
 }
 
 fn text<'a>(args: &'a CommandArgs, name: &str) -> Option<&'a str> {
@@ -234,6 +229,12 @@ impl Signex {
             {
                 all.extend(part);
             }
+        }
+        // #2339: the Requirements section.
+        if let (Value::Object(all), Value::Object(part)) =
+            (&mut answer, self.project_requirements_json(id))
+        {
+            all.extend(part);
         }
         Ok(answer)
     }

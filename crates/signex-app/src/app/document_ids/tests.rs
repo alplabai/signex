@@ -47,6 +47,7 @@ fn app_with_project(dir: &Path) -> Signex {
             sheets: vec![sheet_entry("Top"), sheet_entry("Sub")],
             variant_definitions: Vec::new(),
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: Vec::new(),
             enable_git: false,
             net_classes: Vec::new(),
@@ -55,6 +56,11 @@ fn app_with_project(dir: &Path) -> Signex {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
+            fab_outputs: None,
+            router_tool_diameter: None,
+            bom_alternates: Vec::new(),
+            requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },
@@ -319,6 +325,7 @@ fn a_board_and_a_project_with_no_id_are_given_one() {
     let board = signex_types::pcb::PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         unknown: Default::default(),
         uuid: uuid::Uuid::nil(),
@@ -450,7 +457,7 @@ fn an_unreadable_sheet_is_named_and_the_read_is_refused() {
     .unwrap();
     let outcome = app.run_query_headless(&command, &args).unwrap().0;
     assert!(
-        matches!(&outcome, crate::app::command::CommandOutcome::Disabled { reason } if reason.contains("could not be read")),
+        matches!(&outcome, crate::app::command::CommandOutcome::Disabled { reason } if signex_i18n::RenderTranslatable::render_en_us(reason).contains("could not be read")),
         "{outcome:?}"
     );
     assert!(
@@ -467,6 +474,7 @@ fn an_unloaded_board_is_read_from_its_file() {
     let board = signex_types::pcb::PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         unknown: Default::default(),
         uuid: uid(77),
@@ -532,7 +540,6 @@ fn a_repeated_file_uuid_of_a_symbol_or_footprint_file_is_repaired() {
         app.document_state.tabs.push(crate::app::TabInfo {
             title: name.into(),
             path: path.clone(),
-            cached_document: None,
             project_id: None,
             kind: crate::app::TabKind::SymbolEditor(path),
         });
@@ -546,7 +553,6 @@ fn a_repeated_file_uuid_of_a_symbol_or_footprint_file_is_repaired() {
         app.document_state.tabs.push(crate::app::TabInfo {
             title: name.into(),
             path: path.clone(),
-            cached_document: None,
             project_id: None,
             kind: crate::app::TabKind::FootprintEditor(path),
         });
@@ -555,7 +561,12 @@ fn a_repeated_file_uuid_of_a_symbol_or_footprint_file_is_repaired() {
     // The board was repaired as it opened; the project is left for now.
     assert_eq!(repaired.len(), 2, "{repaired:?}");
     let docs = &app.document_state;
-    let sym = |n: &str| docs.symbol_editors[&dir.path().join(n)].file.file_uuid;
+    let sym = |n: &str| {
+        docs.symbol_editors[&dir.path().join(n)]
+            .draft
+            .file
+            .file_uuid
+    };
     let fpt = |n: &str| docs.footprint_editors[&dir.path().join(n)].file.file_uuid;
     assert_eq!(sym("a.snxsym"), symbol.file_uuid, "the first keeps it");
     assert_ne!(sym("b.snxsym"), symbol.file_uuid);
@@ -563,7 +574,7 @@ fn a_repeated_file_uuid_of_a_symbol_or_footprint_file_is_repaired() {
     assert_ne!(fpt("b.snxfpt"), footprint.file_uuid);
     let b = &docs.symbol_editors[&dir.path().join("b.snxsym")];
     assert_eq!(
-        b.file.file_uuid, b.baseline.file_uuid,
+        b.draft.file.file_uuid, b.draft.baseline.file_uuid,
         "the repair is not an edit"
     );
     assert!(!b.is_dirty());
@@ -845,7 +856,7 @@ fn a_query_is_refused_in_the_gui_and_not_a_palette_row() {
             None,
         );
         assert!(
-            matches!(&outcome, crate::app::command::CommandOutcome::Disabled { reason } if reason.contains("agents and the CLI")),
+            matches!(&outcome, crate::app::command::CommandOutcome::Disabled { reason } if signex_i18n::RenderTranslatable::render_en_us(reason).contains("agents and the CLI")),
             "{name}: {outcome:?}"
         );
         assert_eq!(task.units(), 0);
@@ -910,15 +921,15 @@ fn undo_and_redo_keep_a_symbol_files_live_id() {
         signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("A")),
     );
     assert!(doc.record_edit(None, |d| {
-        d.file.symbols[0].name.push('x');
+        d.draft.file.symbols[0].name.push('x');
         true
     }));
-    doc.file.file_uuid = uid(9);
+    doc.draft.file.file_uuid = uid(9);
     assert!(doc.undo());
-    assert_eq!(doc.file.file_uuid, uid(9), "undo");
-    doc.file.file_uuid = uid(10);
+    assert_eq!(doc.draft.file.file_uuid, uid(9), "undo");
+    doc.draft.file.file_uuid = uid(10);
     assert!(doc.redo());
-    assert_eq!(doc.file.file_uuid, uid(10), "redo");
+    assert_eq!(doc.draft.file.file_uuid, uid(10), "redo");
 }
 
 #[test]
@@ -999,6 +1010,7 @@ fn board_with(id: uuid::Uuid, thickness: f64) -> signex_types::pcb::PcbBoard {
     signex_types::pcb::PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         unknown: Default::default(),
         uuid: id,
@@ -1023,22 +1035,15 @@ fn board_with(id: uuid::Uuid, thickness: f64) -> signex_types::pcb::PcbBoard {
 /// dirty tab (#2149).
 fn parked_board(app: &mut Signex, path: &Path, id: uuid::Uuid) {
     app.open_pcb_tab(path.to_path_buf(), "Board".into(), board_with(id, 1.6));
-    let tab = app
-        .document_state
-        .tabs
-        .iter_mut()
-        .find(|t| t.path == path)
-        .unwrap();
-    tab.cached_document = Some(crate::app::TabDocument::Pcb(
-        signex_engine::pcb::BoardEngine::new(board_with(id, 2.4), 1),
-    ));
-    app.document_state.mark_document_dirty(path);
     let index = app
         .document_state
         .tabs
         .iter()
         .position(|t| t.path == path)
         .unwrap();
+    *app.document_state.tab_board_engine_mut(index).unwrap() =
+        signex_engine::pcb::BoardEngine::new(board_with(id, 2.4), 1);
+    app.document_state.mark_document_dirty(path);
     let _ = app.close_tab_parking_dirty(index);
     assert!(app.document_state.parked_pcb_boards.contains_key(path));
 }

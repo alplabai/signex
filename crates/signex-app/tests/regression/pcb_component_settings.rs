@@ -1,10 +1,11 @@
 //! #2365 and #2369: the board Component view's stored settings and its
 //! parameter and Comment edits, driven through `Signex::update` with the
-//! messages the panel sends. Every edit is one board undo step; Lock
-//! Primitives stops a pad edit.
+//! messages the panel sends (the 3D Opacity slider and the Lock row's
+//! checkboxes of Graphite mockup row 94 send the same edits). Every edit is one board
+//! undo step; Lock Primitives stops a pad edit.
 
 use pcb_geom::{ClickMode, ItemRef};
-use signex_app::app::{EditMsg, FileMsg, Message, Signex, TabDocument};
+use signex_app::app::{EditMsg, FileMsg, Message, Signex};
 use signex_app::diagnostics;
 use signex_app::dock::DockMessage;
 use signex_app::panels::pcb_primitive_properties::{PrimitiveField, PrimitiveTarget};
@@ -12,6 +13,7 @@ use signex_app::panels::{
     ComponentField, PanelMsg, PcbComponentFacts, PcbComponentMsg, PcbPrimitiveMsg, Shared,
 };
 use signex_app::pcb_canvas::PcbCanvasMsg;
+use signex_app::test_adapter::BoardEngines;
 use signex_engine::pcb::component_edit::{ComponentSetting, TypedSetting};
 use signex_types::format::SnxPcb;
 use signex_types::pcb::{ComponentType, Footprint, Pad, PadShape, PadType, PcbBoard, Point};
@@ -34,6 +36,8 @@ fn pad(n: u128, x: f64) -> Pad {
         layers: vec!["TopCopper".into()],
         net: None,
         roundrect_ratio: 0.25,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 0.0,
         layer_sizes: None,
         net_locked: false,
@@ -98,6 +102,7 @@ fn board() -> PcbBoard {
         graphics: Vec::new(),
         texts: Vec::new(),
         stackup: None,
+        rooms: Vec::new(),
         free: Default::default(),
         options: Default::default(),
         unknown: Default::default(),
@@ -133,10 +138,8 @@ fn send(app: &mut Signex, message: Message) {
 
 fn live(app: &Signex) -> PcbBoard {
     let docs = &app.document_state;
-    docs.tabs[docs.active_tab]
-        .cached_document
-        .as_ref()
-        .and_then(TabDocument::as_pcb)
+    docs.tab_board_engine(docs.active_tab)
+        .map(|engine| engine.board())
         .expect("a board is open")
         .clone()
 }
@@ -328,6 +331,34 @@ fn every_typed_setting_is_one_step() {
         );
     });
     assert_eq!(fp(&edited, R2).component.description, "Thick film");
+}
+
+/// The 3D Opacity slider (Graphite mockup row 94): each drag step is the field's draft
+/// in two decimals and changes nothing; letting go applies the last one as
+/// one step, the edit the typed field made.
+#[test]
+fn a_dragged_opacity_applies_once_on_release() {
+    let mut f = open_board();
+    select_both(&mut f.app);
+    let field = ComponentField::Setting(TypedSetting::BodyOpacity);
+    let edited = assert_one_step(&mut f, |f| {
+        let before = snapshot(&f.app);
+        for step in ["0.90", "0.62", "0.25"] {
+            type_in(f, field.clone(), step);
+        }
+        assert_eq!(snapshot(&f.app), before, "a drag edits nothing yet");
+        let footprints = facts(&f.app).footprints;
+        send(
+            &mut f.app,
+            panel(PcbComponentMsg::FieldSubmitted {
+                board: f.path.clone(),
+                footprints,
+                field: field.clone(),
+            }),
+        );
+    });
+    assert_eq!(fp(&edited, R2).component.body_opacity, 0.25);
+    assert_eq!(fp(&edited, C7).component.body_opacity, 0.25);
 }
 
 #[test]

@@ -23,7 +23,11 @@ const MENU_SOURCES: &[&str] = &[
     "src/menu_bar/model/menus.rs",
     "src/menu_bar/model/sheet_place.rs",
     "src/app/view/context_menu/menus.rs",
-    "src/app/view/context_menu/project_tree.rs",
+    "src/app/view/context_menu/project_tree/mod.rs",
+    "src/app/view/context_menu/project_tree/root.rs",
+    "src/app/view/context_menu/project_tree/leaf.rs",
+    "src/app/view/context_menu/project_tree/library.rs",
+    "src/app/view/context_menu/project_tree/planned.rs",
     "src/app/view/context_menu/submenu.rs",
     "src/app/view/context_menu/items.rs",
 ];

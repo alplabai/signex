@@ -104,7 +104,8 @@ fn paste_array_places_counted_spaced_copies_as_one_undo_step() {
     app.ui_state.paste_designators = PasteDesignators::NextFree;
     open_array(&mut app);
     assert!(app.ui_state.paste_array.is_some(), "the dialog is open");
-    type_into_dialog(&mut app, "3", "10", "5", "2");
+    // Copies counts the original: 4 positions, 3 new copies.
+    type_into_dialog(&mut app, "4", "10", "5", "2");
     let _ = app.update(Message::Edit(EditMsg::PasteArray(
         PasteArrayMsg::ApplyPressed,
     )));
@@ -132,7 +133,7 @@ fn paste_array_reads_the_spacing_in_the_active_unit() {
     let mut app = app_with_copied_part_and_label();
     app.ui_state.unit = Unit::Mil;
     open_array(&mut app);
-    type_into_dialog(&mut app, "1", "100", "0", "1");
+    type_into_dialog(&mut app, "2", "100", "0", "1");
     let _ = app.update(Message::Edit(EditMsg::PasteArray(
         PasteArrayMsg::ApplyPressed,
     )));
@@ -145,6 +146,7 @@ fn invalid_paste_array_input_places_nothing_and_says_why() {
     let _ = signex_app::diagnostics::init_logging();
     for (count, dx, reason) in [
         ("0", "10", "Copies must be a whole number"),
+        ("1", "10", "1 places nothing"),
         ("1001", "10", "Copies must be a whole number"),
         ("3", "nan", "X spacing must be a number"),
         ("3", "inf", "X spacing must be a number"),

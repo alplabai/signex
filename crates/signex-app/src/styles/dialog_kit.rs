@@ -9,7 +9,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::{Label, button, raw, text};
 
 use super::dialog_buttons::{dialog_border, dialog_button_style, dialog_label_color};
-use super::{ChromeMetrics, RADIUS, Spacing, TypeScale, ti, tokens};
+use super::{ChromeMetrics, RADIUS, Spacing, TypeScale, chrome_px, ti, tokens};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
@@ -24,18 +24,26 @@ const GLYPH_ADVANCE_EM: f32 = 0.62;
 /// see `dialog_buttons`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DialogButtonKind {
-    /// The affirmative action; one per dialog (accent fill).
+    /// The affirmative action; one per dialog (the theme's primary fill: the
+    /// ink on Graphite, the accent fill on a theme that sets none).
     Primary,
     /// Cancel, Close and other non-committal actions: a subtle fill and the
     /// standard border.
     Secondary,
     /// Destructive actions: a subtle `error` tint, border and label.
     Danger,
+    /// The one destructive action a dialog exists for (Delete): the solid
+    /// `error` fill with a label that reads on it.
+    DangerSolid,
     /// The accent fill, for a call to action beside a `Primary`.
     Accent,
     /// A quiet action with no fill or visible border at rest ("Decide
-    /// later").
+    /// later"), its label drawn in the accent text, as every mockup's
+    /// `.btn.ghost`.
     Ghost,
+    /// A text action in the accent ink with no fill or border at rest, nor
+    /// when it has no action ("Clear all colors", mockup row 71).
+    Link,
     /// The dismissing action of a footer (Cancel, Close, Later): drawn as
     /// Secondary, it sits first in the right-aligned row.
     Cancel,
@@ -142,10 +150,87 @@ pub fn dialog_button<'a, M: Clone + 'a>(
         .height(Length::Fixed(height))
         .on_press_maybe(on_press);
     if disabled {
-        btn.style(disabled_button(tokens)).boxed()
+        btn.style(disabled_button(kind, tokens)).boxed()
     } else {
         btn.style(dialog_button_style(kind, tokens)).boxed()
     }
+}
+
+/// Side of the glyph in front of a [`dialog_icon_button`] label (14 px at
+/// the default base).
+const BUTTON_GLYPH: f32 = chrome_px(14.0 * 11.0 / 12.0);
+/// Gap between that glyph and the label (5 px at the default base).
+const BUTTON_GLYPH_GAP: f32 = chrome_px(5.0 * 11.0 / 12.0);
+
+/// [`dialog_button`] with `glyph` (a monochrome SVG, drawn in the label's
+/// colour) in front of its label, the button widened by the glyph.
+pub fn dialog_icon_button<'a, M: Clone + 'a>(
+    glyph: iced::widget::svg::Handle,
+    label: impl Into<Label<'a>>,
+    kind: DialogButtonKind,
+    on_press: Option<M>,
+    tokens: &ThemeTokens,
+) -> Element<'a, M> {
+    let kind = kind.resolved();
+    let disabled = on_press.is_none();
+    let color = label_color(kind, disabled, tokens);
+    let label: Label<'a> = label.into();
+    let (height, size, width) = button_metrics(label.as_str());
+    let icon = super::tinted_glyph(glyph, BUTTON_GLYPH, color);
+    let face = container(
+        row![
+            icon,
+            text(label)
+                .size(size)
+                .color(color)
+                .wrapping(iced::widget::text::Wrapping::None),
+        ]
+        .spacing(BUTTON_GLYPH_GAP)
+        .align_y(Alignment::Center),
+    )
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .align_x(iced::alignment::Horizontal::Center)
+    .align_y(iced::alignment::Vertical::Center);
+    let btn = button(face)
+        .padding(0)
+        .width(Length::Fixed(width + BUTTON_GLYPH + BUTTON_GLYPH_GAP))
+        .height(Length::Fixed(height))
+        .on_press_maybe(on_press);
+    if disabled {
+        btn.style(disabled_button(kind, tokens)).boxed()
+    } else {
+        btn.style(dialog_button_style(kind, tokens)).boxed()
+    }
+}
+
+/// Alpha of a [`primary_dialog_button`]'s ink while it has no action.
+const PRIMARY_DISABLED_INK_ALPHA: f32 = 0.7;
+
+/// A dialog's call to action on the theme's primary fill (dark ink in the
+/// light theme), as Annotate's Accept (mockup row 75) and Assign
+/// Footprints' Apply (mockup row 80) draw it. `face` builds the content in
+/// the ink it is given; `on_press: None` fades that ink and the fill.
+pub fn primary_dialog_button<'a, M: Clone + 'a>(
+    face: impl FnOnce(iced::Color) -> Element<'a, M>,
+    on_press: Option<M>,
+    tokens: &ThemeTokens,
+) -> Element<'a, M> {
+    let ink = tokens::resolve(tokens).primary_ink;
+    let ink = if on_press.is_some() {
+        ink
+    } else {
+        iced::Color {
+            a: PRIMARY_DISABLED_INK_ALPHA,
+            ..ink
+        }
+    };
+    button(face(ink))
+        .padding([0.0, SP.l])
+        .height(Length::Fixed(ChromeMetrics::DEFAULT.button))
+        .on_press_maybe(on_press)
+        .style(super::primary_button(tokens))
+        .boxed()
 }
 
 /// Horizontal label padding of a dialog button, the same for every role.
@@ -176,13 +261,18 @@ fn label_color(kind: DialogButtonKind, disabled: bool, tokens: &ThemeTokens) -> 
 
 /// A button without an action: no fill, a half-strength border, the muted
 /// label set by [`dialog_button`]. The same for every role, so none reads as
-/// clickable.
+/// clickable, except that a [`DialogButtonKind::Link`] stays borderless text.
 fn disabled_button(
+    kind: DialogButtonKind,
     tokens: &ThemeTokens,
 ) -> impl Fn(&Theme, button::Status) -> button::Style + 'static {
-    let border = iced::Color {
-        a: 0.5,
-        ..ti(tokens.border)
+    let border = if kind == DialogButtonKind::Link {
+        iced::Color::TRANSPARENT
+    } else {
+        iced::Color {
+            a: 0.5,
+            ..ti(tokens.border)
+        }
     };
     let text = ti(tokens.text_secondary);
     move |_: &Theme, _: button::Status| button::Style {
@@ -203,11 +293,62 @@ pub fn dialog_footer_split<'a, M: 'a>(
     extras: Vec<Element<'a, M>>,
     buttons: Vec<Element<'a, M>>,
 ) -> Element<'a, M> {
-    let extras = row(extras).spacing(SP.s).align_y(Alignment::Center);
-    let buttons = row(buttons).spacing(SP.s).align_y(Alignment::Center);
-    container(row![extras, Space::new().width(Length::Fill), buttons].align_y(Alignment::Center))
+    container(footer_line(extras, buttons, SP.s))
         .padding(SP.l)
         .width(Length::Fill)
+        .boxed()
+}
+
+/// Gap between the items of a [`dialog_footer_band`] (8 px at the default
+/// base).
+const BAND_GAP: f32 = chrome_px(8.0 * 11.0 / 12.0);
+
+/// `extras` at the left end, `buttons` at the right, `gap` between items.
+fn footer_line<'a, M: 'a>(
+    extras: Vec<Element<'a, M>>,
+    buttons: Vec<Element<'a, M>>,
+    gap: f32,
+) -> iced::widget::Row<Element<'a, M>> {
+    let extras = row(extras).spacing(gap).align_y(Alignment::Center);
+    let buttons = row(buttons).spacing(gap).align_y(Alignment::Center);
+    row![extras, Space::new().width(Length::Fill), buttons].align_y(Alignment::Center)
+}
+
+/// [`dialog_footer_split`] on a band: the chrome fill under a hairline,
+/// padded by `padding` (the Help cards). In the main window its lower
+/// corners follow the card's; in a dialog window it is flat.
+pub fn dialog_footer_band<'a, M: 'a>(
+    extras: Vec<Element<'a, M>>,
+    buttons: Vec<Element<'a, M>>,
+    padding: iced::Padding,
+    theme_tokens: &ThemeTokens,
+) -> Element<'a, M> {
+    let fill = ti(theme_tokens.toolbar_bg);
+    let rule = tokens::resolve(theme_tokens).line_soft;
+    let corner = super::Radii::GRAPHITE.dialog;
+    container(footer_line(extras, buttons, BAND_GAP))
+        .padding(padding)
+        .width(Length::Fill)
+        .style(move |theme: &Theme| {
+            let radius = if super::is_dialog_window(theme) {
+                iced::border::Radius::default()
+            } else {
+                iced::border::Radius::default()
+                    .bottom_left(corner)
+                    .bottom_right(corner)
+            };
+            let mut border = Border {
+                color: rule,
+                radius,
+                ..Border::default()
+            };
+            border.top = iced::border::Side::default().width(1.0);
+            container::Style {
+                background: Some(iced::Background::Color(fill)),
+                border,
+                ..container::Style::default()
+            }
+        })
         .boxed()
 }
 
@@ -221,6 +362,22 @@ pub const fn dialog_footer_height() -> f32 {
 /// padding.
 pub const fn dense_footer_height() -> f32 {
     ChromeMetrics::DEFAULT.button + 2.0 * SP.l
+}
+
+/// Vertical padding of a dialog's footer band (10 px at the default base).
+const BAND_PAD_Y: f32 = SP.m + SP.xs;
+
+/// Padding of a [`dialog_footer_band`] under a [`dialog_section`] body:
+/// the band's own vertical padding, the body's side padding.
+pub fn dialog_band_padding() -> iced::Padding {
+    iced::Padding::from([BAND_PAD_Y, SP.l])
+}
+
+/// Height of a [`dialog_footer_band`] padded by [`dialog_band_padding`]:
+/// the dense button and the padding. The hairline is the container's top
+/// border, drawn inside the padded bounds, so it takes no layout room.
+pub const fn dense_band_footer_height() -> f32 {
+    ChromeMetrics::DEFAULT.button + 2.0 * BAND_PAD_Y
 }
 
 #[cfg(test)]
@@ -239,8 +396,10 @@ mod tests {
                 DialogButtonKind::Primary,
                 DialogButtonKind::Secondary,
                 DialogButtonKind::Danger,
+                DialogButtonKind::DangerSolid,
                 DialogButtonKind::Accent,
                 DialogButtonKind::Ghost,
+                DialogButtonKind::Link,
                 DialogButtonKind::Cancel,
             ] {
                 let ok = || signex_i18n::t!(i18n, signex_i18n::ids::DIALOG_BUTTON_OK);
@@ -264,6 +423,20 @@ mod tests {
         );
     }
 
+    /// The band footer is the dense button and its own padding (its
+    /// hairline border takes no layout room), and its sides line up with
+    /// the body's (mockup row 23).
+    #[test]
+    fn the_band_footer_height_follows_its_padding() {
+        let pad = dialog_band_padding();
+        assert_eq!(pad.left, SP.l);
+        assert_eq!(pad.right, SP.l);
+        assert_eq!(
+            dense_band_footer_height(),
+            ChromeMetrics::DEFAULT.button + pad.top + pad.bottom
+        );
+    }
+
     /// Cancel is drawn as a Secondary (#2397); no other role changes.
     #[test]
     fn cancel_is_secondary() {
@@ -275,10 +448,28 @@ mod tests {
             DialogButtonKind::Primary,
             DialogButtonKind::Secondary,
             DialogButtonKind::Danger,
+            DialogButtonKind::DangerSolid,
             DialogButtonKind::Accent,
             DialogButtonKind::Ghost,
+            DialogButtonKind::Link,
         ] {
             assert_eq!(kind.resolved(), kind);
+        }
+    }
+
+    /// Mockup row 71: a Link with no action is muted text with no border;
+    /// every other role keeps the half-strength border that says "not now".
+    #[test]
+    fn a_disabled_link_draws_no_border() {
+        for id in ThemeId::BUILTINS {
+            let tokens = signex_types::theme::theme_tokens(*id);
+            let style = |kind| disabled_button(kind, &tokens)(&Theme::Dark, button::Status::Active);
+            let link = style(DialogButtonKind::Link);
+            assert_eq!(link.border.color, iced::Color::TRANSPARENT, "{id:?}");
+            assert_eq!(link.background, None, "{id:?}");
+            assert_eq!(link.text_color, ti(tokens.text_secondary), "{id:?}");
+            let ghost = style(DialogButtonKind::Ghost);
+            assert!(ghost.border.color.a > 0.0, "{id:?}: the Ghost is unchanged");
         }
     }
 
@@ -349,6 +540,7 @@ mod tests {
             DialogButtonKind::Primary,
             DialogButtonKind::Secondary,
             DialogButtonKind::Danger,
+            DialogButtonKind::DangerSolid,
             DialogButtonKind::Accent,
             DialogButtonKind::Ghost,
             DialogButtonKind::Cancel,
@@ -388,14 +580,30 @@ mod tests {
                 button::Status::Hovered,
                 button::Status::Pressed,
             ] {
-                let style = disabled_button(&tokens)(&Theme::Dark, status);
-                assert!(style.background.is_none(), "{id:?} {status:?}");
-                assert_eq!(style.text_color, ti(tokens.text_secondary), "{id:?}");
+                for kind in [
+                    DialogButtonKind::Primary,
+                    DialogButtonKind::Secondary,
+                    DialogButtonKind::Danger,
+                    DialogButtonKind::DangerSolid,
+                    DialogButtonKind::Accent,
+                    DialogButtonKind::Ghost,
+                    DialogButtonKind::Link,
+                    DialogButtonKind::Cancel,
+                ] {
+                    let style = disabled_button(kind, &tokens)(&Theme::Dark, status);
+                    assert!(style.background.is_none(), "{id:?} {status:?} {kind:?}");
+                    assert_eq!(
+                        style.text_color,
+                        ti(tokens.text_secondary),
+                        "{id:?} {kind:?}"
+                    );
+                }
             }
             for kind in [
                 DialogButtonKind::Primary,
                 DialogButtonKind::Secondary,
                 DialogButtonKind::Danger,
+                DialogButtonKind::DangerSolid,
                 DialogButtonKind::Accent,
                 DialogButtonKind::Ghost,
             ] {

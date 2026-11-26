@@ -19,7 +19,18 @@ fn send_opening(app: &mut Signex, msg: FindReplaceMsg) {
     crate::app::handlers::canvas::sheet_open_tests::finish_read(app, task);
 }
 
+/// Match as Find did before #2525, a substring in any case: these tests
+/// pin the scan and replace mechanics (`net` in `TOP_NET`), not the options.
+fn substring_search(app: &mut Signex) {
+    app.ui_state.find_replace.options = signex_engine::MatchOptions::SUBSTRING;
+}
+
+fn substring(needle: &str) -> signex_engine::FindQuery {
+    signex_engine::FindQuery::new(needle, signex_engine::MatchOptions::SUBSTRING).unwrap()
+}
+
 fn project_search(app: &mut Signex, query: &str) {
+    substring_search(app);
     send(app, FindReplaceMsg::ScopeChanged(FindScope::Project));
     send(app, FindReplaceMsg::QueryChanged(query.into()));
     app.run_project_scan_blocking();
@@ -218,7 +229,7 @@ fn project_replace_never_shadows_an_open_tab_under_another_spelling() {
     let label = app.document_state.engines[&child].document().labels[0].uuid;
     let hit = signex_engine::scan_sheet(
         app.document_state.engines[&child].document(),
-        "child_net",
+        &substring("child_net"),
         &signex_engine::DesignatorScope::default(),
     )
     .remove(0);
@@ -647,6 +658,7 @@ fn a_singly_placed_sheet_designator_replace_writes_reference_and_drops_the_entry
 fn sheet_scope_replace_only_touches_the_active_sheet() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, top, child) = placed_twice_on_disk(&dir);
+    substring_search(&mut app);
     send(&mut app, FindReplaceMsg::QueryChanged("net".into()));
     send(&mut app, FindReplaceMsg::ReplacementChanged("X".into()));
     assert_eq!(
@@ -776,41 +788,8 @@ fn open_edit_save_close_mid_flight_refuses_the_replace_and_keeps_the_saved_edit(
     );
 }
 
-#[test]
-fn an_unopened_annotate_write_mid_flight_refuses_the_replace() {
-    let dir = tempfile::tempdir().unwrap();
-    let (mut app, _root, child) = placed_twice_on_disk(&dir);
-    // A child with an unannotated symbol, so Annotate rewrites its file.
-    let mut sheet =
-        crate::app::handlers::menu::export::tests::sheet_with_net("R?", "CHILD_NET", &[]);
-    sheet.labels[0].label_type = signex_types::schematic::LabelType::Net;
-    let text = signex_types::format::SnxSchematic::new(sheet)
-        .write_string()
-        .unwrap();
-    std::fs::write(&child, &text).unwrap();
-    let (generation, prep) = prepared_child_replace(&mut app);
-
-    let task = app.handle_annotate(signex_engine::AnnotateMode::Incremental);
-    crate::app::path_ops::settle_task(&mut app, task);
-    let annotated = std::fs::read(&child).unwrap();
-    assert_ne!(
-        annotated,
-        text.as_bytes(),
-        "Annotate wrote the unopened child"
-    );
-    deliver(&mut app, generation, prep);
-
-    assert!(logged("Replace cancelled: a document changed"));
-    assert!(!app.document_state.engines.contains_key(&child));
-    assert_eq!(
-        std::fs::read(&child).unwrap(),
-        annotated,
-        "the annotated bytes stay"
-    );
-}
-
-/// The child with an unannotated symbol, so Annotate rewrites its file.
-fn child_annotate_will_rewrite(child: &Path) -> String {
+/// The child with an unannotated symbol, so Annotate parks it numbered.
+fn child_annotate_will_number(child: &Path) -> String {
     let mut sheet =
         crate::app::handlers::menu::export::tests::sheet_with_net("R?", "CHILD_NET", &[]);
     sheet.labels[0].label_type = signex_types::schematic::LabelType::Net;
@@ -821,59 +800,64 @@ fn child_annotate_will_rewrite(child: &Path) -> String {
     text
 }
 
-/// Annotate with its sheets read and numbered, its write handed out and not
-/// yet run: the window between `PassSheetsRead` and `PassSheetsWritten`.
-fn annotate_write_in_flight(app: &mut Signex) -> iced::Task<crate::app::Message> {
-    let read = app.handle_annotate(signex_engine::AnnotateMode::Incremental);
-    let message = crate::persist::run_task::outputs(read).remove(0);
-    app.update(message)
+fn child_reference(app: &Signex, child: &Path) -> String {
+    app.document_state.engines[child].document().symbols[0]
+        .reference
+        .clone()
 }
 
 #[test]
-fn an_annotate_write_in_flight_refuses_a_replace_prepared_before_it() {
+fn an_annotate_that_parks_the_sheet_refuses_a_replace_prepared_before_it() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _root, child) = placed_twice_on_disk(&dir);
-    let text = child_annotate_will_rewrite(&child);
+    let text = child_annotate_will_number(&child);
     let (generation, prep) = prepared_child_replace(&mut app);
-    let write = annotate_write_in_flight(&mut app);
 
+    let task = app.handle_annotate(signex_engine::AnnotateMode::Incremental);
+    crate::app::path_ops::settle_task(&mut app, task);
+    let numbered = child_reference(&app, &child);
     deliver(&mut app, generation, prep);
 
     assert!(logged("Replace cancelled: a document changed"));
-    assert!(!app.document_state.engines.contains_key(&child));
-    crate::app::path_ops::settle_task(&mut app, write);
-    let annotated = std::fs::read(&child).unwrap();
-    assert_ne!(annotated, text.as_bytes(), "Annotate wrote the child");
-    assert!(
-        !app.document_state.engines.contains_key(&child),
-        "no stale engine can save over the annotated bytes"
+    assert!(!numbered.ends_with('?'), "{numbered}");
+    assert_eq!(
+        child_reference(&app, &child),
+        numbered,
+        "the parked numbering stays"
+    );
+    assert_eq!(
+        std::fs::read(&child).unwrap(),
+        text.as_bytes(),
+        "Annotate leaves the file for the user's save"
     );
 }
 
 #[test]
-fn handing_out_an_annotate_write_moves_the_epoch() {
+fn parking_an_annotated_sheet_moves_the_epoch() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _root, child) = placed_twice_on_disk(&dir);
-    child_annotate_will_rewrite(&child);
+    child_annotate_will_number(&child);
     let read = app.handle_annotate(signex_engine::AnnotateMode::Incremental);
     let message = crate::persist::run_task::outputs(read).remove(0);
     let before = app.document_state.documents_epoch;
 
-    let _write = app.update(message);
+    let _refresh = app.update(message);
 
     assert_ne!(
         app.document_state.documents_epoch, before,
-        "a read in flight must be out of date once the write is handed out"
+        "a read in flight must be out of date once the sheet is parked"
     );
 }
 
 #[test]
-fn a_replace_never_installs_an_engine_for_a_sheet_annotate_is_writing() {
+fn a_replace_never_overwrites_a_sheet_annotate_parked() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _root, child) = placed_twice_on_disk(&dir);
-    child_annotate_will_rewrite(&child);
+    child_annotate_will_number(&child);
     let (generation, prep) = prepared_child_replace(&mut app);
-    let write = annotate_write_in_flight(&mut app);
+    let task = app.handle_annotate(signex_engine::AnnotateMode::Incremental);
+    crate::app::path_ops::settle_task(&mut app, task);
+    let numbered = child_reference(&app, &child);
     // Leave only the sheet-held check standing: the epoch alone would cancel.
     let epoch = app.document_state.documents_epoch;
     app.ui_state
@@ -885,11 +869,11 @@ fn a_replace_never_installs_an_engine_for_a_sheet_annotate_is_writing() {
 
     deliver(&mut app, generation, prep);
 
-    assert!(
-        !app.document_state.engines.contains_key(&child),
-        "an engine from pre-Annotate bytes would save over the numbering"
+    assert_eq!(
+        child_reference(&app, &child),
+        numbered,
+        "an engine from pre-Annotate bytes would replace the numbering"
     );
-    crate::app::path_ops::settle_task(&mut app, write);
 }
 
 #[test]
@@ -923,14 +907,16 @@ fn renaming_a_closed_sheet_mid_flight_refuses_the_replace() {
     let (mut app, _root, child) = placed_twice_on_disk(&dir);
     let (generation, prep) = prepared_child_replace(&mut app);
 
-    app.ui_state.rename_dialog = Some(crate::app::RenameDialogState {
+    app.ui_state.rename_dialog = Some(Box::new(crate::app::RenameDialogState {
         project_id: None,
         target_path: child.clone(),
         tree_path: vec![0, 0],
         buffer: "power.snxsch".into(),
         error: None,
         is_project_rename: false,
-    });
+        placing_symbols: Vec::new(),
+        name_clash: None,
+    }));
     let before = app.document_state.documents_epoch;
     let rename = app.update(crate::app::Message::Rename(crate::app::RenameMsg::Submit));
     assert_ne!(
@@ -986,13 +972,13 @@ fn a_rolled_back_replace_restores_both_sheets_and_leaves_no_redo() {
             path: root_sheet.clone(),
             tabless: false,
             hits: 1,
-            invalidation: None,
+            patch: None,
         },
         Applied {
             path: child.clone(),
             tabless: true,
             hits: 1,
-            invalidation: None,
+            patch: None,
         },
     ];
 
@@ -1242,4 +1228,359 @@ fn undoing_a_replace_on_a_cached_sheet_makes_it_clean_again() {
         !app.document_state.is_document_dirty(&child),
         "back at the save point"
     );
+}
+
+// ---- #2525: match options and the include boxes ----
+
+/// `placed_twice_on_disk` with net labels `texts` added to the open top
+/// sheet; returns their ids in order.
+fn top_with_labels(texts: &[&str]) -> (Signex, tempfile::TempDir, PathBuf, Vec<uuid::Uuid>) {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, top, _child) = placed_twice_on_disk(&dir);
+    let engine = app.document_state.engines.get_mut(&top).unwrap();
+    let mut sheet = engine.document().clone();
+    let mut ids = Vec::new();
+    for (n, text) in texts.iter().enumerate() {
+        let label = signex_types::schematic::Label::new(
+            *text,
+            signex_types::schematic::Point::new(10.0 * (n as f64 + 1.0), 40.0),
+            signex_types::schematic::LabelType::Net,
+        );
+        ids.push(label.uuid);
+        sheet.labels.push(label);
+    }
+    engine.set_document(sheet);
+    (app, dir, top, ids)
+}
+
+fn label_text(app: &Signex, path: &Path, id: uuid::Uuid) -> String {
+    app.document_state.engines[path]
+        .document()
+        .labels
+        .iter()
+        .find(|l| l.uuid == id)
+        .map(|l| l.text.clone())
+        .unwrap()
+}
+
+/// The include-box click on result `index`, as the view sends it.
+fn include_toggled(app: &Signex, index: usize) -> FindReplaceMsg {
+    FindReplaceMsg::ResultIncludeToggled(app.ui_state.find_replace.matches[index].key())
+}
+
+/// The index of the result on label `id`.
+fn result_of(app: &Signex, id: uuid::Uuid) -> usize {
+    app.ui_state
+        .find_replace
+        .matches
+        .iter()
+        .position(|m| m.hit.item.uuid == id)
+        .expect("the label is a result")
+}
+
+#[test]
+fn whole_word_is_on_when_the_dialog_opens() {
+    let (mut app, _dir, _top, ids) = top_with_labels(&["VOUT", "VOUT_3V3", "VOUT_SENSE"]);
+    assert!(app.ui_state.find_replace.options.whole_word);
+    send(&mut app, FindReplaceMsg::QueryChanged("VOUT".into()));
+    let found: Vec<_> = app
+        .ui_state
+        .find_replace
+        .matches
+        .iter()
+        .map(|m| m.hit.item.uuid)
+        .collect();
+    assert_eq!(found, [ids[0]]);
+
+    send(&mut app, FindReplaceMsg::WholeWordToggled);
+    assert_eq!(app.ui_state.find_replace.matches.len(), 3);
+    send(&mut app, FindReplaceMsg::MatchCaseToggled);
+    send(&mut app, FindReplaceMsg::QueryChanged("vout".into()));
+    assert!(app.ui_state.find_replace.matches.is_empty(), "case matters");
+}
+
+#[test]
+fn an_invalid_regex_lists_nothing_and_replaces_nothing() {
+    let (mut app, _dir, top, ids) = top_with_labels(&["VOUT"]);
+    send(&mut app, FindReplaceMsg::RegexToggled);
+    send(&mut app, FindReplaceMsg::QueryChanged("VOUT(".into()));
+    assert!(app.ui_state.find_replace.find_query().is_err());
+    assert!(app.ui_state.find_replace.matches.is_empty());
+    send(&mut app, FindReplaceMsg::ReplacementChanged("X".into()));
+    send(&mut app, FindReplaceMsg::ReplaceAll);
+    assert_eq!(label_text(&app, &top, ids[0]), "VOUT");
+}
+
+#[test]
+fn an_excluded_row_survives_replace_all() {
+    let (mut app, _dir, top, ids) = top_with_labels(&["VOUT", "VOUT", "VOUT_3V3"]);
+    send(&mut app, FindReplaceMsg::QueryChanged("VOUT".into()));
+    send(
+        &mut app,
+        FindReplaceMsg::ReplacementChanged("VOUT_A".into()),
+    );
+    assert_eq!(app.ui_state.find_replace.matches.len(), 2);
+    let kept = result_of(&app, ids[1]);
+    let toggled = include_toggled(&app, kept);
+    send(&mut app, toggled);
+    assert!(!app.ui_state.find_replace.is_included(kept));
+    assert_eq!(app.ui_state.find_replace.included_count(), 1);
+
+    send(&mut app, FindReplaceMsg::ReplaceAll);
+
+    assert_eq!(label_text(&app, &top, ids[0]), "VOUT_A");
+    assert_eq!(label_text(&app, &top, ids[1]), "VOUT", "the excluded row");
+    assert_eq!(
+        label_text(&app, &top, ids[2]),
+        "VOUT_3V3",
+        "not a whole word"
+    );
+    // The refreshed list still holds the excluded row, still cleared.
+    let kept = result_of(&app, ids[1]);
+    assert!(!app.ui_state.find_replace.is_included(kept));
+}
+
+/// A rescan between the draw and the click moves the rows; the click still
+/// clears the row the user saw, and Replace All leaves that row alone.
+#[test]
+fn an_include_click_after_a_rescan_clears_the_row_it_was_drawn_for() {
+    let (mut app, _dir, top, ids) = top_with_labels(&["VOUT", "VOUT", "VOUT"]);
+    send(&mut app, FindReplaceMsg::QueryChanged("VOUT".into()));
+    send(
+        &mut app,
+        FindReplaceMsg::ReplacementChanged("VOUT_A".into()),
+    );
+    let drawn_at = result_of(&app, ids[1]);
+    // The view built the box's message from the list it drew.
+    let click = include_toggled(&app, drawn_at);
+
+    // A new hit lands ahead of it and the list is read again.
+    let engine = app.document_state.engines.get_mut(&top).unwrap();
+    let mut sheet = engine.document().clone();
+    let added = signex_types::schematic::Label::new(
+        "VOUT",
+        signex_types::schematic::Point::new(1.0, 1.0),
+        signex_types::schematic::LabelType::Net,
+    );
+    let added_id = added.uuid;
+    sheet.labels.insert(0, added);
+    engine.set_document(sheet);
+    app.refresh_find_matches_now();
+    assert_ne!(
+        result_of(&app, ids[1]),
+        drawn_at,
+        "the rescan moved the row the box was drawn for"
+    );
+
+    send(&mut app, click);
+    assert!(
+        !app.ui_state
+            .find_replace
+            .is_included(result_of(&app, ids[1]))
+    );
+    assert_eq!(app.ui_state.find_replace.included_count(), 3);
+
+    send(&mut app, FindReplaceMsg::ReplaceAll);
+
+    assert_eq!(label_text(&app, &top, ids[1]), "VOUT", "the cleared row");
+    for id in [added_id, ids[0], ids[2]] {
+        assert_eq!(label_text(&app, &top, id), "VOUT_A");
+    }
+}
+
+#[test]
+fn replace_all_with_exclusions_is_one_undo_step() {
+    let (mut app, _dir, top, ids) = top_with_labels(&["VOUT", "VOUT", "VOUT", "VOUT_3V3"]);
+    send(&mut app, FindReplaceMsg::QueryChanged("VOUT".into()));
+    send(
+        &mut app,
+        FindReplaceMsg::ReplacementChanged("VOUT_A".into()),
+    );
+    let kept = result_of(&app, ids[1]);
+    let toggled = include_toggled(&app, kept);
+    send(&mut app, toggled);
+    send(&mut app, FindReplaceMsg::ReplaceAll);
+    let texts =
+        |app: &Signex| -> Vec<String> { ids.iter().map(|id| label_text(app, &top, *id)).collect() };
+    assert_eq!(texts(&app), ["VOUT_A", "VOUT", "VOUT_A", "VOUT_3V3"]);
+
+    undo(&mut app);
+
+    assert_eq!(
+        texts(&app),
+        ["VOUT", "VOUT", "VOUT", "VOUT_3V3"],
+        "one undo puts back every replaced row"
+    );
+}
+
+#[test]
+fn the_include_set_resets_when_the_query_options_or_scope_change() {
+    let (mut app, _dir, _top, ids) = top_with_labels(&["VOUT", "VOUT"]);
+    let clear_first = |app: &mut Signex| {
+        send(app, FindReplaceMsg::QueryChanged("VOUT".into()));
+        let index = result_of(app, ids[0]);
+        let toggled = include_toggled(app, index);
+        send(app, toggled);
+        assert_eq!(app.ui_state.find_replace.included_count(), 1);
+    };
+
+    clear_first(&mut app);
+    send(&mut app, FindReplaceMsg::QueryChanged("VOUT ".into()));
+    assert!(app.ui_state.find_replace.excluded.is_empty(), "query");
+    assert_eq!(app.ui_state.find_replace.included_count(), 2);
+
+    for change in [
+        FindReplaceMsg::MatchCaseToggled,
+        FindReplaceMsg::WholeWordToggled,
+        FindReplaceMsg::RegexToggled,
+    ] {
+        clear_first(&mut app);
+        send(&mut app, change.clone());
+        assert!(app.ui_state.find_replace.excluded.is_empty(), "{change:?}");
+        send(&mut app, change);
+    }
+
+    clear_first(&mut app);
+    send(&mut app, FindReplaceMsg::ScopeChanged(FindScope::Project));
+    assert!(app.ui_state.find_replace.excluded.is_empty(), "scope");
+
+    // A second click on the box puts the row back.
+    send(&mut app, FindReplaceMsg::ScopeChanged(FindScope::Sheet));
+    clear_first(&mut app);
+    let index = result_of(&app, ids[0]);
+    let toggled = include_toggled(&app, index);
+    send(&mut app, toggled);
+    assert_eq!(app.ui_state.find_replace.included_count(), 2);
+}
+
+#[test]
+fn a_project_replace_job_holds_only_the_included_rows() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, top, child) = placed_twice_on_disk(&dir);
+    project_search(&mut app, "net");
+    send(&mut app, FindReplaceMsg::ReplacementChanged("X".into()));
+    let on_child = app
+        .ui_state
+        .find_replace
+        .matches
+        .iter()
+        .position(|m| m.sheet.as_deref() == Some(child.as_path()))
+        .expect("a child result");
+    let toggled = include_toggled(&app, on_child);
+    send(&mut app, toggled);
+
+    send(&mut app, FindReplaceMsg::ReplaceAll);
+
+    let job = app
+        .ui_state
+        .find_replace
+        .replace_job
+        .clone()
+        .expect("the replace waits on the disk");
+    assert!(
+        job.matches
+            .iter()
+            .all(|m| m.sheet.as_deref() != Some(child.as_path())),
+        "the excluded child row is not in the job"
+    );
+    let included = app.ui_state.find_replace.included_matches();
+    app.ui_state.find_replace.replace_job = None;
+    app.run_project_replace_blocking(included);
+    assert_eq!(first_label(&app, &top), "TOP_X");
+    assert!(
+        !app.document_state.engines.contains_key(&child),
+        "the excluded closed sheet is not touched"
+    );
+}
+
+#[test]
+fn the_mode_switch_changes_the_mode_in_place() {
+    let (mut app, _dir, _top, _ids) = top_with_labels(&["VOUT"]);
+    send(&mut app, FindReplaceMsg::QueryChanged("VOUT".into()));
+    send(&mut app, FindReplaceMsg::ModeChanged(true));
+    assert!(app.ui_state.find_replace.replace_mode);
+    assert_eq!(app.ui_state.find_replace.matches.len(), 1, "results kept");
+    send(&mut app, FindReplaceMsg::ModeChanged(false));
+    assert!(!app.ui_state.find_replace.replace_mode);
+}
+
+fn enter(modifiers: iced::keyboard::Modifiers) -> iced::keyboard::Event {
+    let key = iced::keyboard::Key::Named(iced::keyboard::key::Named::Enter);
+    iced::keyboard::Event::KeyPressed {
+        key: key.clone(),
+        modified_key: key,
+        physical_key: iced::keyboard::key::Physical::Unidentified(
+            iced::keyboard::key::NativeCode::Unidentified,
+        ),
+        location: iced::keyboard::Location::Standard,
+        modifiers,
+        text: None,
+        repeat: false,
+    }
+}
+
+/// Mockup row 67: in Find mode Enter is Next and Shift+Enter is Previous,
+/// the footer's two buttons; in Replace mode, or with the dialog closed,
+/// Enter steps nothing.
+#[test]
+fn enter_and_shift_enter_step_the_find_results() {
+    use iced::keyboard::Modifiers;
+    let (mut app, _boot) = Signex::new();
+    app.ui_state.first_run_tour_open = false;
+    let main = app.ui_state.main_window_id.expect("the main window");
+    let step = |app: &Signex, modifiers| match app.route_key_for_test(main, &enter(modifiers)) {
+        Some(crate::app::Message::FindReplaceMsg(FindReplaceMsg::NextRequested)) => Some(true),
+        Some(crate::app::Message::FindReplaceMsg(FindReplaceMsg::PreviousRequested)) => Some(false),
+        _ => None,
+    };
+    assert_eq!(step(&app, Modifiers::empty()), None, "closed: no step");
+    app.ui_state.find_replace.open = true;
+    assert_eq!(step(&app, Modifiers::empty()), Some(true), "Enter: Next");
+    assert_eq!(
+        step(&app, Modifiers::SHIFT),
+        Some(false),
+        "Shift+Enter: Previous"
+    );
+    assert_eq!(step(&app, Modifiers::CTRL), None);
+    app.ui_state.find_replace.replace_mode = true;
+    assert_eq!(
+        step(&app, Modifiers::empty()),
+        None,
+        "Replace mode keeps Enter"
+    );
+}
+
+/// Mockup row 67: Enter steps Find only in the window that paints the
+/// dialog, and not while another dialog is painted above it there.
+#[test]
+fn enter_steps_find_only_where_the_dialog_is_in_front() {
+    use iced::keyboard::Modifiers;
+    let (mut app, _boot) = Signex::new();
+    app.ui_state.first_run_tour_open = false;
+    let main = app.ui_state.main_window_id.expect("the main window");
+    let tab = iced::window::Id::unique();
+    app.ui_state.windows.insert(
+        tab,
+        crate::app::state::WindowKind::UndockedTab {
+            path: PathBuf::from("/tmp/sheet.snxsch"),
+            title: "sheet".to_string(),
+        },
+    );
+    let steps = |app: &Signex, window| {
+        matches!(
+            app.route_key_for_test(window, &enter(Modifiers::empty())),
+            Some(crate::app::Message::FindReplaceMsg(
+                FindReplaceMsg::NextRequested
+            ))
+        )
+    };
+    app.ui_state.find_replace.open = true;
+    assert!(steps(&app, main), "opened in the main window: steps there");
+    assert!(!steps(&app, tab), "a tab window that shows no Find");
+    app.ui_state.find_replace.window = Some(tab);
+    assert!(steps(&app, tab), "opened in the tab window: steps there");
+    assert!(!steps(&app, main), "the main window shows no Find now");
+    app.ui_state.find_replace.window = None;
+    app.ui_state.passive_calculator_open = true;
+    assert!(!steps(&app, main), "a dialog above Find keeps Enter");
 }

@@ -1,8 +1,6 @@
 //! Open or focus a project's Rules tab. One tab per project; its path is
 //! the `.snxprj` the rules are stored in, so Save writes them.
 
-use signex_i18n::{ids, t};
-
 use crate::app::state::ProjectId;
 use crate::app::{Signex, TabInfo, TabKind};
 
@@ -35,14 +33,16 @@ impl Signex {
         let idx = match existing {
             Some(idx) => idx,
             None => {
-                let title = t!(self.ui_state.i18n, ids::RULES_TAB_TITLE).into_string();
+                let kind = TabKind::Rules(id);
+                // A page tab: "<project> — Rules" (docs/PROJECT_TAB.md,
+                // "Page tabs").
+                let title = self.page_tab_title(&kind).unwrap_or_default();
                 self.document_state.project_tabs.entry(id).or_default();
                 self.document_state.tabs.push(TabInfo {
                     title,
                     path,
-                    cached_document: None,
                     project_id: Some(id),
-                    kind: TabKind::Rules(id),
+                    kind,
                 });
                 self.document_state.tabs.len() - 1
             }

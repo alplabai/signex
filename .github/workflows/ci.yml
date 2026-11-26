@@ -56,6 +56,7 @@ jobs:
     outputs:
       build: ${{ steps.decide.outputs.build }}
       library_server: ${{ steps.decide.outputs.library_server }}
+      routing_corpus: ${{ steps.decide.outputs.routing_corpus }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -102,6 +103,20 @@ jobs:
             fi
           fi
           echo "library_server=$library_server" >> "$GITHUB_OUTPUT"
+          # The routing corpus (#2481) is fetched from Git LFS and load-checked
+          # on a PR only when its inputs change: the boards, the format and
+          # geometry crates that read them, the routing tests, and the files
+          # that fetch it. Pushes, the merge queue and manual runs always do.
+          routing_corpus=true
+          if [ -n "$BASE_SHA" ]; then
+            if git diff --no-renames --name-only "$BASE_SHA"...HEAD | grep -qE '^(testdata/routing-corpus/|crates/signex-types/|crates/pcb-geom/|crates/signex-engine/tests/routing/|scripts/check_routing_corpus\.sh$|\.gitattributes$|Cargo\.lock$|rust-toolchain\.toml$|\.github/workflows/ci\.yml$)'; then
+              routing_corpus=true
+            else
+              routing_corpus=false
+            fi
+          fi
+          echo "routing_corpus=$routing_corpus" >> "$GITHUB_OUTPUT"
+          echo "Routing corpus fetched and load-checked: $routing_corpus"
           echo "Postgres job needed: $library_server"
 
   check:
@@ -133,6 +148,15 @@ jobs:
 
       - name: Check
         run: cargo check --workspace
+
+      # signex-mcad does no IO and must build for a web front end (#2487,
+      # docs/ROADMAP.md "MCAD (P3)"). `rustup` inside the repo adds the
+      # target to the toolchain rust-toolchain.toml pins.
+      - name: Build signex-mcad for wasm32
+        if: runner.os == 'Linux'
+        run: |
+          rustup target add wasm32-unknown-unknown
+          cargo build -p signex-mcad --target wasm32-unknown-unknown
 
       # No `-W clippy::all`. `clippy::all` is already the default lint set, so
       # the flag bought nothing — but a *group-level* `-W` sets every lint in
@@ -180,9 +204,40 @@ jobs:
     if: needs.changes.outputs.build == 'true'
     runs-on: ubuntu-latest
     steps:
+      # No lfs here: the routing corpus (#2481, ~90 MiB in Git LFS) is fetched
+      # below only when `changes` says its inputs moved, and from a cache of
+      # .git/lfs keyed on the boards' LFS object ids, so an unchanged corpus
+      # costs no LFS bandwidth.
       - uses: actions/checkout@v5
         with:
           submodules: false
+
+      # The key is a hash of the boards' LFS object ids (read from the pointer
+      # files in the checkout), so it changes exactly when a board does.
+      - name: Hash the routing corpus LFS objects
+        id: corpus_lfs
+        if: needs.changes.outputs.routing_corpus == 'true'
+        run: |
+          set -o pipefail
+          hash=$(git lfs ls-files --long --include 'testdata/routing-corpus/**' | cut -d ' ' -f1 | sort | sha256sum | cut -d ' ' -f1)
+          echo "hash=$hash" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the routing corpus LFS cache
+        if: needs.changes.outputs.routing_corpus == 'true'
+        uses: actions/cache@v4
+        with:
+          path: .git/lfs
+          key: routing-corpus-lfs-${{ steps.corpus_lfs.outputs.hash }}
+
+      # With the cache warm this only checks the objects out; with it cold
+      # it downloads them once for the key. SIGNEX_REQUIRE_ROUTING_CORPUS
+      # makes the load check fail on a pointer left unfetched or an empty
+      # corpus instead of skipping it.
+      - name: Fetch the routing corpus
+        if: needs.changes.outputs.routing_corpus == 'true'
+        run: |
+          git lfs pull --include 'testdata/routing-corpus/**'
+          echo "SIGNEX_REQUIRE_ROUTING_CORPUS=1" >> "$GITHUB_ENV"
 
       - uses: dtolnay/rust-toolchain@1.97.0 # keep in lockstep with rust-toolchain.toml
 
@@ -509,6 +564,85 @@ jobs:
         if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
         run: bash scripts/test_check_catalog_ids.sh
 
+      # Core-bound state stays UI-free (#2494, ADR-0006): fields of the structs in
+      # scripts/uifree-state.txt with a UI or unlisted signex-app type may only
+      # get fewer, and a listed UI-free module imports nothing outside the
+      # allowlist. Rules and blind spots live in the script. Hard gate.
+      - name: UI-free state ratchet
+        if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
+        run: bash scripts/check_uifree_state.sh
+
+      - name: UI-free state ratchet controls
+        if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
+        run: bash scripts/test_check_uifree_state.sh
+
+      # App-authored English with no catalog id (#2326 M2, #2644): calls of
+      # `CommandOutcome::disabled` and `Translatable::legacy_english` may only
+      # get fewer. Rules and blind spots live in the script. Hard gate.
+      - name: Legacy-English ratchet
+        if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
+        run: bash scripts/check_legacy_english.sh
+
+      - name: Legacy-English ratchet controls
+        if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
+        run: bash scripts/test_check_legacy_english.sh
+
+      # The edit-tail seam (#2326 M5, M6): only the tail wrappers call the core
+      # half in app/state/sheet_change/, and it names no GUI state and not the
+      # diagnostics log. Rules and blind spots live in the script. Hard gate.
+      - name: Sheet-change seam guard
+        if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
+        run: bash scripts/check_sheet_change_seam.sh
+
+      - name: Sheet-change seam guard controls
+        if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
+        run: bash scripts/test_check_sheet_change_seam.sh
+
+      # The load seam (#2326 slice 3, #2704): only the load wrappers call the
+      # core half in app/state/document_load/, which names no GUI state, takes
+      # no closure and removes an engine in one place. Rules and blind spots
+      # live in the script. Hard gate.
+      - name: Load seam guard
+        if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
+        run: bash scripts/check_document_load_seam.sh
+
+      - name: Load seam guard controls
+        if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
+        run: bash scripts/test_check_document_load_seam.sh
+
+      # Command operands run only through the entries in app/command and the
+      # agent route (#2731): zero production calls elsewhere in signex-app.
+      # Rules and blind spots live in the script. Hard gate.
+      - name: Command entry ratchet
+        if: ${{ !cancelled() }}
+        run: bash scripts/check_command_entry.sh
+
+      - name: Command entry ratchet controls
+        if: ${{ !cancelled() }}
+        run: bash scripts/test_check_command_entry.sh
+
+      # A panic in the app must not leave a value taken out (#2651, ADR-0006):
+      # production catch_unwind calls under crates/signex-app/src/app may only
+      # get fewer. Rules and blind spots live in the script. Hard gate.
+      - name: catch_unwind ratchet
+        if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
+        run: bash scripts/check_app_catch_unwind.sh
+
+      - name: catch_unwind ratchet controls
+        if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
+        run: bash scripts/test_check_app_catch_unwind.sh
+
+      # The projector draws documents and writes none (#2326 slice 3, #2705):
+      # no core-state write and no wrapper call under app/projector.
+      # Rules and blind spots live in the script. Hard gate.
+      - name: Projector write guard
+        if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
+        run: bash scripts/check_projector_writes.sh
+
+      - name: Projector write guard controls
+        if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
+        run: bash scripts/test_check_projector_writes.sh
+
       # `signex-app` cannot say `[lints] workspace = true` — cargo rejects
       # mixing inheritance with per-lint overrides, and that crate carries its
       # own `[lints.clippy] let_underscore_must_use` that the workspace
@@ -522,6 +656,17 @@ jobs:
       - name: Lint-lockstep gate
         if: ${{ !cancelled() }}
         run: bash scripts/check_lint_lockstep.sh
+
+      # The routing corpus (#2481) holds third-party boards: every board has
+      # a manifest row with an allowed licence and its licence text, and
+      # every row a board. Rules: testdata/routing-corpus/README.md.
+      - name: Routing corpus gate
+        if: ${{ !cancelled() }}
+        run: bash scripts/check_routing_corpus.sh
+
+      - name: Routing corpus gate controls
+        if: ${{ !cancelled() }}
+        run: bash scripts/test_check_routing_corpus.sh
 
       # Fragment names/bodies are validated on every event (PR, merge queue,
       # push). Rule + rationale: changelog.d/README.md (GH #748).

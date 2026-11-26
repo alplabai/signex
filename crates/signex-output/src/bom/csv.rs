@@ -53,7 +53,7 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
 }
 
 /// Whether a spreadsheet would read `s` as a formula (see the module docs).
-fn is_formula_lead(s: &str) -> bool {
+pub(crate) fn is_formula_lead(s: &str) -> bool {
     match s.chars().next() {
         Some('=' | '@' | '\t' | '\r') => true,
         Some('+' | '-') => !is_signed_number_with_unit(s),

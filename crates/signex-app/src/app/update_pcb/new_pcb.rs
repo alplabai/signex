@@ -9,12 +9,12 @@ use iced::Task;
 use signex_engine::pcb::BoardEngine;
 use signex_i18n::{Translatable, ids, t};
 use signex_types::pcb::PcbBoard;
-use signex_types::project::{PcbDefaults, SetupProfile};
+use signex_types::project::{FabTemplate, PcbDefaults, SetupProfile};
 
 use super::UpdatePcbMsg;
 use super::state::{Phase, file_name};
 use crate::app::state::{ErrorNotice, ProjectId};
-use crate::app::{Message, Signex, TabDocument, TabInfo, TabKind};
+use crate::app::{Message, Signex};
 
 /// Copper layers of a new board in a project with no PCB defaults: the
 /// Standard profile's.
@@ -28,6 +28,19 @@ impl Signex {
         &mut self,
         project: Option<ProjectId>,
         rules: Option<PcbDefaults>,
+        fab: Option<FabTemplate>,
+    ) -> Task<Message> {
+        self.request_new_pcb_at(project, None, rules, fab)
+    }
+
+    /// [`Self::request_new_pcb`] at `asked` (the `name` operand, #2470) when
+    /// the project names no board yet; the board it names wins.
+    pub(crate) fn request_new_pcb_at(
+        &mut self,
+        project: Option<ProjectId>,
+        asked: Option<PathBuf>,
+        rules: Option<PcbDefaults>,
+        fab: Option<FabTemplate>,
     ) -> Task<Message> {
         let Some(project) = project.or_else(|| self.project_in_view()) else {
             self.refuse_new_pcb(ids::NEW_PCB_NO_PROJECT.into());
@@ -39,6 +52,7 @@ impl Signex {
         let named = Self::project_board(loaded);
         let path = named
             .clone()
+            .or(asked)
             .unwrap_or_else(|| new_board_path(&loaded.path));
         if self.document_state.holds_pcb(&path) || self.is_board_opening(&path) {
             self.refuse_new_pcb_taken(&path, named.is_some());
@@ -57,6 +71,7 @@ impl Signex {
                     path,
                     exists,
                     rules,
+                    fab,
                 })
             },
         )
@@ -70,6 +85,7 @@ impl Signex {
         path: PathBuf,
         exists: Result<bool, String>,
         rules: Option<PcbDefaults>,
+        fab: Option<FabTemplate>,
     ) {
         let Some(loaded) = self.document_state.project_by_id(project) else {
             return;
@@ -117,6 +133,9 @@ impl Signex {
             self.document_state.mark_document_dirty(&project_path);
         }
         self.open_new_pcb_tab(path.clone(), board);
+        if let Some(tier) = fab {
+            self.seed_tier_rules(project, tier);
+        }
         crate::diagnostics::log_info(
             t!(
                 self.ui_state.i18n,
@@ -145,13 +164,12 @@ impl Signex {
         self.park_active_schematic_session();
         let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
         let revision = self.document_state.stamp_pcb_revision(&path);
-        self.document_state.tabs.push(TabInfo {
-            title: file_name(&path),
-            path: path.clone(),
-            cached_document: Some(TabDocument::Pcb(BoardEngine::unsaved(board, revision))),
+        self.document_state.push_pcb_tab(
+            file_name(&path),
+            path.clone(),
             project_id,
-            kind: TabKind::Pcb,
-        });
+            BoardEngine::unsaved(board, revision),
+        );
         self.document_state.active_tab = self.document_state.tabs.len() - 1;
         self.apply_loaded_pcb_document(true, true);
         self.document_state.mark_document_dirty(&path);

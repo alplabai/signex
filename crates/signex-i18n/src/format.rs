@@ -11,9 +11,9 @@
 use std::sync::PoisonError;
 
 use chrono::{DateTime, Datelike, Local, NaiveDateTime, TimeZone, Timelike, Utc};
-use icu_datetime::DateTimeFormatter;
-use icu_datetime::fieldsets::YMD;
+use icu_datetime::fieldsets::{T, YMD};
 use icu_datetime::input::{Date, DateTime as IcuDateTime, Time};
+use icu_datetime::{DateTimeFormatter, NoCalendarFormatter};
 use icu_decimal::input::Decimal;
 use icu_list::ListFormatter;
 use icu_list::options::{ListFormatterOptions, ListLength};
@@ -108,6 +108,40 @@ impl I18n {
     /// Display only, like [`Self::date_time`]: never persist or export it.
     pub fn date(&self, utc: DateTime<Utc>, length: DateLength) -> String {
         self.show(wall_clock(utc, &Local), length, false)
+    }
+
+    /// `utc` as a time of day (hours and minutes) on the operating system's
+    /// local clock: `4:09 PM` in `en-US`, `16:09` in `tr`.
+    ///
+    /// Display only, like [`Self::date_time`]: never persist or export it.
+    pub fn time(&self, utc: DateTime<Utc>) -> String {
+        self.show_time(wall_clock(utc, &Local))
+    }
+
+    /// The hours and minutes of `local` (a wall clock) in the formatting
+    /// locale. Falls back to `HH:MM` when ICU has no pattern.
+    pub(crate) fn show_time(&self, local: NaiveDateTime) -> String {
+        let fallback = || local.format("%H:%M").to_string();
+        let Ok(time) = Time::try_new(
+            local.hour() as u8,
+            local.minute() as u8,
+            local.second() as u8,
+            local.nanosecond(),
+        ) else {
+            return fallback();
+        };
+        match NoCalendarFormatter::try_new(self.format_locale().into(), T::hm()) {
+            Ok(formatter) => formatter.format(&time).to_string(),
+            Err(error) => {
+                self.warn_format_once("time", || {
+                    log::warn!(
+                        "No time pattern for {}: {error}; showing HH:MM",
+                        self.format_locale()
+                    );
+                });
+                fallback()
+            }
+        }
     }
 
     /// Run `log` the first time `what` fails: a view formats every frame.

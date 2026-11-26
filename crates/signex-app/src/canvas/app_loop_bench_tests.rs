@@ -50,7 +50,6 @@ fn app_with(g: &Generated, keep_wires: bool) -> (Signex, iced::window::Id) {
     app.document_state.tabs.push(TabInfo {
         title: "bench".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -298,14 +297,14 @@ fn app_loop_bench() {
     }
     report("hover", &frames, &app);
 
-    // Pan: middle button held, 4 and 2 px a move.
+    // Pan: right button held, 4 and 2 px a move.
     let mut frames = Vec::new();
     let _ = frame(
         &mut app,
         window,
         &mut rig,
         &mut cache,
-        &[press(iced::mouse::Button::Middle)],
+        &[press(iced::mouse::Button::Right)],
         at(center),
     );
     for i in 0..steps {
@@ -328,11 +327,11 @@ fn app_loop_bench() {
         &mut rig,
         &mut cache,
         &[Event::Mouse(iced::mouse::Event::ButtonReleased(
-            iced::mouse::Button::Middle,
+            iced::mouse::Button::Right,
         ))],
         at(center),
     );
-    report("pan-mid", &frames, &app);
+    report("pan-right", &frames, &app);
 
     // Touchpad scroll in Scroll wheel mode: pixel deltas.
     let mut frames = Vec::new();

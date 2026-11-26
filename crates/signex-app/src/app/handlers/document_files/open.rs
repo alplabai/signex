@@ -49,6 +49,21 @@ impl Signex {
             .map_err(|error| self.report_refused_open(&error))
     }
 
+    /// Open the board at `path` behind the person's tab (#2984): a run from
+    /// operands that needs a closed board leaves the tab in front and the
+    /// text being typed alone. A refusal is reported as
+    /// [`Self::open_path_reported`] does.
+    pub(crate) fn open_board_behind(
+        &mut self,
+        path: PathBuf,
+    ) -> Result<iced::Task<Message>, String> {
+        let task = self
+            .open_document_path(path.clone())
+            .map_err(|error| self.report_refused_open(&error))?;
+        self.document_state.pending_opens.mark_behind(&path);
+        Ok(task)
+    }
+
     /// Log a refused open and raise it as the Open Failed notice; returns
     /// the reason.
     pub(crate) fn report_refused_open(&mut self, error: &anyhow::Error) -> String {
@@ -97,6 +112,8 @@ impl Signex {
                     selected: self.ui_state.default_rule_profile.clone(),
                     pending: self.pending_profile_writes(),
                     annotate_undo: Some(self.ui_state.annotate_undo),
+                    // #2868: the project keeps its own copy from now on.
+                    dimension: Some(self.ui_state.pcb_dimension_defaults.clone()),
                 };
                 Ok(iced::Task::perform(
                     super::super::dock::project_navigation::add_io::on_blocking_pool({
@@ -400,6 +417,12 @@ impl Signex {
         }
         let mut data = signex_types::project::parse_project(project_path)
             .with_context(|| format!("parse project {}", project_path.display()))?;
+        if let Some(token) = &data.unknown.newer_minor_source {
+            crate::diagnostics::log_warning(format!(
+                "{} was written by a newer Signex ({token}); it is read-only in this build -- saving is refused",
+                project_path.display()
+            ));
+        }
         // A project an older build wrote has no id yet: it gets one now and
         // the next save writes it (#2172). Not an edit, so not dirty.
         data.document_id

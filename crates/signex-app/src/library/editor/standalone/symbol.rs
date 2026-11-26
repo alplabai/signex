@@ -35,6 +35,7 @@ pub fn view_symbol<'a>(
     display: LibraryDisplaySettings,
     path: &'a std::path::Path,
     device_px_per_logical_px: f32,
+    edge_pan: Option<&'a crate::canvas::EdgePanLink>,
 ) -> Element<'a, LibraryMessage> {
     let tokens = &panel_ctx.tokens;
     // Active bar moved to the app-view layer (view_main_for) so it
@@ -42,7 +43,13 @@ pub fn view_symbol<'a>(
     // symbol::active_bar::{bar_items, dropdown_overlay}. The body here
     // renders just toolbar + canvas; the bar is layered on top there,
     // which is also where the theme id for its icons is resolved.
-    let canvas_widget = view_symbol_canvas(editor, panel_ctx, display, device_px_per_logical_px);
+    let canvas_widget = view_symbol_canvas(
+        editor,
+        panel_ctx,
+        display,
+        device_px_per_logical_px,
+        edge_pan,
+    );
 
     // No header strip and no footer: the global status bar carries X / Y,
     // zoom, grid and the editor's part / pins / hint segment
@@ -196,7 +203,7 @@ fn graphite_toolbar<'a>(
         text(t!(
             i18n,
             ids::EDITORS_SYMBOL_PART_OF,
-            "part" => u32::from(editor.active_part),
+            "part" => u32::from(editor.draft.active_part),
             "parts" => u32::from(max_part)
         ))
         .size(TS.body)
@@ -217,7 +224,7 @@ fn graphite_toolbar<'a>(
     .spacing(SP.s)
     .align_y(iced::Alignment::Center);
     // A copy of a stock symbol can be made again from the editor (#813).
-    let part_row = match &editor.file.copied_from {
+    let part_row = match &editor.draft.file.copied_from {
         Some(_) => part_row.push(
             ghost(
                 t!(i18n, ids::EDITORS_SYMBOL_COPY_AGAIN),
@@ -255,7 +262,7 @@ fn graphite_zoom_pill<'a>(
     path: &std::path::Path,
     tokens: &signex_types::theme::ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
-    let anchor = editor.camera.offset;
+    let anchor = editor.gui.camera.offset;
     let sym = |m: SymbolEditorMsg| LibraryMessage::PrimitiveEditorEvent {
         path: path.to_path_buf(),
         msg: PrimitiveEdit::Symbol(m),
@@ -269,7 +276,7 @@ fn graphite_zoom_pill<'a>(
     };
     crate::canvas::zoom_pill::view(
         tokens,
-        editor.camera.zoom_percent(),
+        editor.gui.camera.zoom_percent(),
         zoom(1.0 / ZOOM_BUTTON_STEP),
         zoom(ZOOM_BUTTON_STEP),
         sym(SymbolEditorMsg::Fit),
@@ -290,12 +297,12 @@ pub(crate) fn symbol_canvas<'a>(
     let tokens = &panel_ctx.tokens;
     SymbolCanvas::new(
         editor.primitive(),
-        editor.selected.clone(),
-        editor.tool,
-        &editor.polygon_vertices,
+        editor.gui.selected.clone(),
+        editor.gui.tool,
+        &editor.gui.polygon_vertices,
         editor.view(),
-        editor.context_menu.is_some(),
-        &editor.camera,
+        editor.gui.context_menu.is_some(),
+        &editor.gui.camera,
         crate::canvas::grid::pitch_mm_exact(display.grid_size_mm),
         display.grid_visible,
         panel_ctx.symbol_grid_style,
@@ -310,11 +317,13 @@ pub(crate) fn symbol_canvas<'a>(
         },
     )
     .with_graphite(tokens)
-    .with_selection_filter(editor.selection_filter)
-    .with_view_pending(editor.pending_view.is_some())
-    .with_measured_size(editor.viewport)
-    .with_trackpad_pan(editor.trackpad_pan)
-    .with_wheel_mode(editor.wheel_mode)
+    .with_selection_filter(editor.gui.selection_filter)
+    .with_view_pending(editor.gui.pending_view.is_some())
+    .with_tool_epoch(editor.gui.tool_epoch)
+    .with_measured_size(editor.gui.viewport)
+    .with_trackpad_pan(editor.gui.trackpad_pan)
+    .with_wheel_mode(editor.gui.wheel_mode)
+    .with_zoom_step(editor.gui.zoom_step)
     .with_device_px_per_logical_px(device_px_per_logical_px)
 }
 
@@ -323,8 +332,12 @@ fn view_symbol_canvas<'a>(
     panel_ctx: &'a PanelContext,
     display: LibraryDisplaySettings,
     device_px_per_logical_px: f32,
+    edge_pan: Option<&'a crate::canvas::EdgePanLink>,
 ) -> Element<'a, LibraryMessage> {
-    let program = symbol_canvas(editor, panel_ctx, display, device_px_per_logical_px);
+    let mut program = symbol_canvas(editor, panel_ctx, display, device_px_per_logical_px);
+    if let Some(link) = edge_pan {
+        program = program.with_edge_pan(link);
+    }
     let path = editor.path.clone();
     iced::widget::Canvas::<_, sym_canvas::CanvasAction>::new(program)
         .width(Length::Fill)
@@ -377,6 +390,46 @@ pub(crate) fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -
             end_deg,
         },
         CanvasAction::ArcSweepRejected => SymbolEditorMsg::ArcSweepRejected,
+        CanvasAction::AddPie {
+            cx,
+            cy,
+            radius,
+            start_deg,
+            end_deg,
+        } => SymbolEditorMsg::AddPie {
+            cx,
+            cy,
+            radius,
+            start_deg,
+            end_deg,
+        },
+        CanvasAction::AddEllipticalArc {
+            cx,
+            cy,
+            radius_x,
+            radius_y,
+            start_deg,
+            end_deg,
+        } => SymbolEditorMsg::AddEllipticalArc {
+            cx,
+            cy,
+            radius_x,
+            radius_y,
+            start_deg,
+            end_deg,
+        },
+        CanvasAction::AddRoundRectangle {
+            from_x,
+            from_y,
+            to_x,
+            to_y,
+        } => SymbolEditorMsg::AddRoundRectangle {
+            from_x,
+            from_y,
+            to_x,
+            to_y,
+        },
+        CanvasAction::BezierClick { x, y } => SymbolEditorMsg::BezierClick { x, y },
         CanvasAction::AddText { x, y } => SymbolEditorMsg::AddText { x, y },
         CanvasAction::PolygonClick { x, y } => SymbolEditorMsg::PolygonClick { x, y },
         CanvasAction::PolygonCommit => SymbolEditorMsg::PolygonCommit,
@@ -454,6 +507,8 @@ fn graphic_handle_to_msg(handle: sym_state::GraphicHandle) -> GraphicHandleMsg {
         GraphicHandle::ArcEnd => GraphicHandleMsg::ArcEnd,
         GraphicHandle::TextAnchor => GraphicHandleMsg::TextAnchor,
         GraphicHandle::PolygonVertex(i) => GraphicHandleMsg::PolygonVertex(i),
+        GraphicHandle::BezierPoint(i) => GraphicHandleMsg::BezierPoint(i),
+        GraphicHandle::EllipseRadius(i) => GraphicHandleMsg::EllipseRadius(i),
     }
 }
 

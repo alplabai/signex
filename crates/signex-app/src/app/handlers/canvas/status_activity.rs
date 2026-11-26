@@ -4,6 +4,8 @@
 use super::super::super::*;
 use crate::canvas::FLIP_WIRES_MODIFIER;
 use crate::status_bar::Activity;
+use signex_i18n::ids;
+use signex_types::corner::DragWiringMode;
 
 impl Signex {
     /// How the drag in flight in `window` treats wires, `None` outside a drag.
@@ -13,11 +15,23 @@ impl Signex {
             .canvas_for_window(window_id)
             .move_behaviour
             .get()?;
-        Some(if keeps {
-            format!("Dragging with wires ({FLIP_WIRES_MODIFIER}: plain move)")
-        } else {
-            format!("Moving without wires ({FLIP_WIRES_MODIFIER}: drag with wires)")
-        })
+        // The drag wiring mode is named once it is not Auto (#1669).
+        let id = match (keeps, self.interaction_state.drag_wiring) {
+            (false, _) => ids::PANELS_STATUS_BAR_MOVE_WITHOUT_WIRES,
+            (true, DragWiringMode::Auto) => ids::PANELS_STATUS_BAR_DRAG_WITH_WIRES,
+            (true, DragWiringMode::HorizontalFirst) => {
+                ids::PANELS_STATUS_BAR_DRAG_WIRES_HORIZONTAL_FIRST
+            }
+            (true, DragWiringMode::VerticalFirst) => {
+                ids::PANELS_STATUS_BAR_DRAG_WIRES_VERTICAL_FIRST
+            }
+            (true, DragWiringMode::Straight) => ids::PANELS_STATUS_BAR_DRAG_WIRES_STRAIGHT,
+        };
+        Some(
+            self.ui_state
+                .i18n
+                .message_plain(id, &[("key", FLIP_WIRES_MODIFIER.into())]),
+        )
     }
 
     /// The one activity segment the status bar shows.
@@ -45,7 +59,9 @@ impl Signex {
             return Some(Activity::note(text));
         }
         self.move_status(window_id)
+            .or_else(|| self.board_drag_status())
             .or_else(|| self.measure_status(window_id))
+            .or_else(|| self.board_tool_status())
             .or_else(|| self.corner_status())
             .map(Activity::note)
     }
@@ -67,7 +83,6 @@ mod tests {
         app.document_state.tabs.push(crate::app::TabInfo {
             title: "s".into(),
             path: path.clone(),
-            cached_document: None,
             project_id: None,
             kind: crate::app::TabKind::SymbolEditor(path.clone()),
         });
@@ -96,7 +111,6 @@ mod tests {
         app.document_state.tabs.push(crate::app::TabInfo {
             title: "f".into(),
             path: path.clone(),
-            cached_document: None,
             project_id: None,
             kind: crate::app::TabKind::FootprintEditor(path.clone()),
         });
@@ -140,5 +154,25 @@ mod tests {
             app.status_activity(window).map(|a| a.text).as_deref(),
             Some("Moving without wires (Alt: drag with wires)")
         );
+    }
+
+    /// #2059: the drag notes follow the interface language.
+    #[test]
+    fn the_drag_notes_follow_the_language() {
+        let (mut app, _task) = Signex::new();
+        app.ui_state.i18n = std::sync::Arc::new(signex_i18n::I18n::new(
+            &signex_i18n::LanguagePref::Locale("en-XA".into()),
+        ));
+        let window = iced::window::Id::unique();
+        let slot = app.interaction_state.canvas_for_window(window);
+        for (keeps, english) in [
+            (true, "Dragging with wires (Alt: plain move)"),
+            (false, "Moving without wires (Alt: drag with wires)"),
+        ] {
+            slot.move_behaviour.set(Some(keeps));
+            let shown = app.status_activity(window).map(|a| a.text).expect("a note");
+            assert_ne!(shown, english);
+            assert!(shown.contains("Alt"), "{shown}");
+        }
     }
 }

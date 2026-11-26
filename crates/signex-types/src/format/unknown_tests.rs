@@ -224,6 +224,8 @@ pub(super) fn plain_board() -> PcbBoard {
             name: "VCC".into(),
         }),
         roundrect_ratio: 0.25,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 0.0,
         layer_sizes: None,
         net_locked: false,
@@ -441,6 +443,8 @@ fn unknown_zone_keys_survive_a_round_trip() {
         min_thickness: 0.0,
         min_island_area: 0.0,
         remove_dead_islands: false,
+        shelved: false,
+        unfilled: false,
         unknown: Default::default(),
     });
     let text = save_pcb(&board);

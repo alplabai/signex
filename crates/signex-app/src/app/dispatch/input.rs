@@ -66,9 +66,13 @@
 //! and [`Claim`] are the shape it would migrate to, so please extend
 //! this module rather than inventing a parallel one.
 
+mod key_repeat;
+mod text_edit_tab;
+
 use super::*;
 use crate::keymap::{KeyStroke, ModifiersExt as _};
 use iced::keyboard;
+use key_repeat::{HeldKeyContext, runs_on_key_repeat};
 
 /// Where an input event landed, and therefore what the user can see
 /// while pressing the key.
@@ -147,6 +151,10 @@ enum InputConsumer {
     /// Preferences ▸ Keyboard Shortcuts, while recording a chord.
     KeymapRecorder,
     CommandPalette,
+    /// Tab, Shift+Tab and Esc on a Rules tab or Project tab drawing's open
+    /// value label or held handle (#2530, #2685), and Esc on the Project
+    /// tab's larger preview window; passes when none is open.
+    RulePreview,
     /// The Esc ladder (#535 / #547 / #554), resolved in `escape.rs`.
     Escape,
     /// Enter creates the project while the New Project dialog is open (#2232).
@@ -156,8 +164,18 @@ enum InputConsumer {
     UpdatePcb,
     /// Enter creates the board or sheet while New PCB / New Schematic is open.
     DocumentSetup,
+    /// Enter picks Place while a Components row menu is open (#2535).
+    ComponentsRowMenu,
+    /// ↑ and ↓ move the Place Component picker's selection (mockup row 129).
+    LibraryPicker,
+    /// Enter saves all in Close Project and is swallowed in Remove (#2262).
+    ConfirmDefault,
+    /// Enter / Shift+Enter step through the Find results (mockup row 67).
+    FindStep,
     /// F1 toggles the keyboard-shortcuts sheet.
     ShortcutsSheet,
+    /// Tab moves the in-place editor along a part's fields (mockup row 65).
+    TextEditTab,
     /// Ctrl/Alt+1-8 — the digit is data the keymap profile cannot
     /// express, which is why these stay hardcoded.
     SelectionSlots,
@@ -171,14 +189,20 @@ enum InputConsumer {
 /// Order is behaviour. It is ported verbatim from the `if` chain this
 /// module replaced, and it is NOT derived from `PAINT_ORDER` — see the
 /// module docs for the counterexample that rules that out.
-const CLAIM_ORDER: [InputConsumer; 9] = [
+const CLAIM_ORDER: [InputConsumer; 15] = [
     InputConsumer::KeymapRecorder,
     InputConsumer::CommandPalette,
+    InputConsumer::RulePreview,
     InputConsumer::Escape,
     InputConsumer::NewProject,
     InputConsumer::UpdatePcb,
     InputConsumer::DocumentSetup,
+    InputConsumer::ComponentsRowMenu,
+    InputConsumer::LibraryPicker,
+    InputConsumer::ConfirmDefault,
+    InputConsumer::FindStep,
     InputConsumer::ShortcutsSheet,
+    InputConsumer::TextEditTab,
     InputConsumer::SelectionSlots,
     InputConsumer::Keymap,
 ];
@@ -193,12 +217,12 @@ pub(crate) struct FixedKey {
 }
 
 impl FixedKey {
-    fn matches(&self, key: &keyboard::Key) -> bool {
+    pub(crate) fn matches(&self, key: &keyboard::Key) -> bool {
         matches!(key.as_ref(), keyboard::Key::Named(named) if named == self.named)
     }
 }
 
-const ESCAPE_KEY: FixedKey = FixedKey {
+pub(crate) const ESCAPE_KEY: FixedKey = FixedKey {
     named: keyboard::key::Named::Escape,
     action: "Esc (cancel / close)",
 };
@@ -264,15 +288,23 @@ impl Signex {
         window: iced::window::Id,
         event: keyboard::Event,
     ) -> Task<Message> {
-        let message = self.route_key(window, &event);
+        if self.is_repeat_of_resuming_esc(&event) {
+            return Task::none();
+        }
+        let (message, swallowed_by) = self.route_key_by(window, &event);
         // #1378 - a key press that is not a keymap stroke (Esc, F1, a
         // selection slot, a palette or recorder key) abandons the pending
         // chord instead of leaving it armed behind the user's back.
         //
         // A bare modifier or lock key is the exception: it is never a
         // stroke, but it is how the user reaches `Shift+G` mid-chord, and
-        // on Windows a held one auto-repeats `KeyPressed`.
+        // on Windows a held one auto-repeats `KeyPressed`. So is the
+        // auto-repeat of a run-once command, the only key the keymap
+        // swallows: the same key is still down, so the chord wait runs out
+        // and fires once. A repeat any other consumer drops still cancels.
+        let run_once_repeat = swallowed_by == Some(InputConsumer::Keymap);
         if matches!(&event, keyboard::Event::KeyPressed { key, .. } if !is_modifier_key(key))
+            && !run_once_repeat
             && !matches!(message, Some(Message::Ui(UiMsg::KeymapStroke { .. })))
         {
             self.cancel_pending_chord();
@@ -293,13 +325,25 @@ impl Signex {
         self.route_key(window, event)
     }
 
+    /// The message [`Self::route_key_by`] returns, for the tests.
+    #[cfg(test)]
+    fn route_key(&self, window: iced::window::Id, event: &keyboard::Event) -> Option<Message> {
+        self.route_key_by(window, event).0
+    }
+
     /// Walk [`CLAIM_ORDER`] and return the one message this event earns,
-    /// or `None` when it was swallowed or nobody wanted it.
+    /// or `None` when it was swallowed or nobody wanted it, with the
+    /// consumer that swallowed it when one did (`None` for a claimed,
+    /// locked-out or unwanted event).
     ///
     /// `&self` on purpose: this is the testable heart. Build a `Signex`,
     /// set state, feed an event, assert the message — none of which was
     /// possible while these branches lived in a subscription closure.
-    fn route_key(&self, window: iced::window::Id, event: &keyboard::Event) -> Option<Message> {
+    fn route_key_by(
+        &self,
+        window: iced::window::Id,
+        event: &keyboard::Event,
+    ) -> (Option<Message>, Option<InputConsumer>) {
         let target = self.input_target(Some(window));
         // A confirm dialog in its own window locks the main window and the
         // undocked tabs: no stroke reaches the keymap or a tool there.
@@ -308,16 +352,16 @@ impl Signex {
             && self.locking_confirm_window().is_some()
             && !matches!(event, keyboard::Event::KeyPressed { key, .. } if ESCAPE_KEY.matches(key))
         {
-            return None;
+            return (None, None);
         }
         for consumer in CLAIM_ORDER {
             match self.claim(consumer, target, window, event) {
-                Claim::Consume(message) => return Some(*message),
-                Claim::Swallow => return None,
+                Claim::Consume(message) => return (Some(*message), None),
+                Claim::Swallow => return (None, Some(consumer)),
                 Claim::Pass => continue,
             }
         }
-        None
+        (None, None)
     }
 
     /// What `consumer` makes of this event.
@@ -334,11 +378,43 @@ impl Signex {
         match consumer {
             InputConsumer::KeymapRecorder => self.claim_keymap_recorder(target, event),
             InputConsumer::CommandPalette => self.claim_command_palette(target, event),
+            InputConsumer::RulePreview => {
+                use crate::app::new_project::preview::SetupPreviewKey;
+                let own_window =
+                    target == InputTarget::DetachedModal(crate::app::state::ModalId::NewProject);
+                match self.setup_preview_key(own_window, target.paints_overlay_stack(), event) {
+                    Some(SetupPreviewKey::Consume(message)) => return Claim::consume(*message),
+                    Some(SetupPreviewKey::Swallow) => return Claim::Swallow,
+                    None => {}
+                }
+                // The Differential Pair Classes dialog sits above the tabs.
+                let key = self
+                    .diff_pair_preview_key(event)
+                    .or_else(|| self.rules_drawing_key(window, event))
+                    .or_else(|| self.project_preview_key(window, event))
+                    .or_else(|| self.gerber_viewer_key(window, event))
+                    .or_else(|| self.notebook_key(window, event));
+                match (target, key) {
+                    (InputTarget::Main | InputTarget::UndockedTab, Some(message)) => {
+                        Claim::consume(message)
+                    }
+                    _ => Claim::Pass,
+                }
+            }
             InputConsumer::Escape => Self::claim_escape(window, event),
             InputConsumer::NewProject => self.claim_new_project(target, event),
             InputConsumer::UpdatePcb => self.claim_update_pcb(target, event),
             InputConsumer::DocumentSetup => self.claim_document_setup(target, event),
+            InputConsumer::ComponentsRowMenu => {
+                self.claim_components_row_menu(target, window, event)
+            }
+            InputConsumer::LibraryPicker => self
+                .picker_arrow_message(target, event)
+                .map_or(Claim::Pass, Claim::consume),
+            InputConsumer::ConfirmDefault => self.claim_confirm_default(target, event),
+            InputConsumer::FindStep => self.claim_find_step(target, window, event),
             InputConsumer::ShortcutsSheet => self.claim_shortcuts_sheet(target, event),
+            InputConsumer::TextEditTab => self.claim_text_edit_tab(target, window, event),
             InputConsumer::SelectionSlots => Self::claim_selection_slots(event),
             InputConsumer::Keymap => self.claim_keymap(target, window, event),
         }
@@ -540,6 +616,44 @@ impl Signex {
         }
     }
 
+    /// Enter picks Place, the menu's first row, while a Components row menu
+    /// is open in this window (#2535).
+    fn claim_components_row_menu(
+        &self,
+        target: InputTarget,
+        window: iced::window::Id,
+        event: &keyboard::Event,
+    ) -> Claim {
+        let Some(menu) = self.library.components_panel.row_menu.as_ref() else {
+            return Claim::Pass;
+        };
+        let here = match menu.window {
+            None => target == InputTarget::Main,
+            Some(owner) => owner == window,
+        };
+        let keyboard::Event::KeyPressed { key, modifiers, .. } = event else {
+            return Claim::Pass;
+        };
+        let enter = matches!(
+            key.as_ref(),
+            keyboard::Key::Named(keyboard::key::Named::Enter)
+        );
+        if !here || !enter || !modifiers.is_empty() {
+            return Claim::Pass;
+        }
+        let place = Message::Library(
+            crate::library::LibraryMessage::ComponentsPanelRowMenuPicked(
+                crate::library::state::ComponentsRowAction::Place,
+            ),
+        );
+        Claim::consume(match menu.window {
+            None => place,
+            Some(owner) => {
+                crate::app::dispatch::window_action::scope_row_menu_message(owner, place)
+            }
+        })
+    }
+
     /// Enter in the New PCB / New Schematic dialog (main window only): an
     /// open list keeps it, the profile name field saves, else Create.
     fn claim_document_setup(&self, target: InputTarget, event: &keyboard::Event) -> Claim {
@@ -564,6 +678,64 @@ impl Signex {
         } else {
             Claim::consume(Message::from(D::SubmitRequested))
         }
+    }
+
+    /// Enter in the Remove or Close Project confirm, in the window that shows
+    /// its card: Close Project saves all; Remove swallows it, so Enter never
+    /// removes or deletes (`confirm_enter_message`).
+    fn claim_confirm_default(&self, target: InputTarget, event: &keyboard::Event) -> Claim {
+        use crate::app::state::ModalId;
+        let keyboard::Event::KeyPressed {
+            key: keyboard::Key::Named(keyboard::key::Named::Enter),
+            modifiers,
+            ..
+        } = event
+        else {
+            return Claim::Pass;
+        };
+        if !modifiers.is_empty() {
+            return Claim::Pass;
+        }
+        let front = match target {
+            InputTarget::DetachedModal(modal) => Some(modal),
+            _ if target.paints_overlay_stack() => self.confirm_in_front(),
+            _ => None,
+        };
+        match front {
+            Some(modal @ (ModalId::RemoveDialog | ModalId::ProjectCloseConfirm)) => self
+                .confirm_enter_message(modal)
+                .map_or(Claim::Swallow, Claim::consume),
+            _ => Claim::Pass,
+        }
+    }
+
+    /// Enter / Shift+Enter step the Find results (mockup row 67) in the
+    /// window that shows the dialog: its own window, or the window it was
+    /// opened in while nothing is painted above it there.
+    fn claim_find_step(
+        &self,
+        target: InputTarget,
+        window: iced::window::Id,
+        event: &keyboard::Event,
+    ) -> Claim {
+        use crate::app::state::ModalId;
+        let in_dialog = target == InputTarget::DetachedModal(ModalId::FindReplace)
+            || (target.paints_overlay_stack()
+                && self.detached_window_of(ModalId::FindReplace).is_none()
+                && self.overlay_belongs_to(self.ui_state.find_replace.window, window)
+                && self.find_in_front());
+        self.find_step_key(in_dialog, event)
+            .map_or(Claim::Pass, Claim::consume)
+    }
+
+    /// Whether Find is the frontmost open overlay: the one Esc would close.
+    fn find_in_front(&self) -> bool {
+        matches!(
+            self.escape_overlay_message(),
+            Some(Message::FindReplaceMsg(
+                crate::find_replace::FindReplaceMsg::Close
+            ))
+        )
     }
 
     /// F1 toggles the keyboard-shortcuts sheet: open if closed, close if
@@ -636,8 +808,9 @@ impl Signex {
     /// multi-stroke chord buffer lives in `UiState`.
     ///
     /// A stroke iced cannot express as a `KeyStroke` (a bare modifier
-    /// press) is ignored. Being last, `Pass` and `Swallow` are equivalent
-    /// here — `Pass` says the honest thing: nobody wanted it.
+    /// press) is passed: nobody wanted it. The auto-repeat of a stroke that
+    /// runs a held-key-once command is swallowed: the keymap saw the
+    /// key, and `handle_key_input` keeps the pending chord for it.
     fn claim_keymap(
         &self,
         target: InputTarget,
@@ -648,6 +821,7 @@ impl Signex {
             key,
             physical_key,
             modifiers,
+            repeat,
             ..
         } = event
         else {
@@ -659,6 +833,10 @@ impl Signex {
         let stroke = KeyStroke::physical_fallback(key, *physical_key, *modifiers)
             .filter(|_| !self.stroke_matches_anything(window, target, &logical))
             .unwrap_or(logical);
+        // Some commands run once on a held key: docs/DECISIONS.md, "Held keys".
+        if *repeat && self.repeat_is_ignored(window, target, &stroke) {
+            return Claim::Swallow;
+        }
         Claim::consume(Message::Ui(UiMsg::KeymapStroke {
             window: Some(window),
             stroke,
@@ -676,16 +854,57 @@ impl Signex {
     ) -> bool {
         let contexts = self.shortcut_contexts(Some(window));
         let keymap = &self.ui_state.active_keymap;
-        let mut with_prefix = if self.ui_state.keymap_pending_target == Some(target) {
+        [
+            self.after_pending_chord(target, stroke),
+            vec![stroke.clone()],
+        ]
+        .iter()
+        .any(|sequence| {
+            let lookup = keymap.lookup(sequence, &contexts);
+            lookup.command.is_some() || lookup.matched || lookup.pending
+        })
+    }
+
+    /// Whether `stroke` would run a command a held key runs only once
+    /// ([`runs_on_key_repeat`]): the command after the pending chord prefix,
+    /// or, when that sequence is no binding and no prefix, the stroke's own
+    /// command.
+    fn repeat_is_ignored(
+        &self,
+        window: iced::window::Id,
+        target: InputTarget,
+        stroke: &KeyStroke,
+    ) -> bool {
+        let contexts = self.shortcut_contexts(Some(window));
+        let keymap = &self.ui_state.active_keymap;
+        let chord = keymap.lookup(&self.after_pending_chord(target, stroke), &contexts);
+        let command = match chord.command {
+            Some(command) => Some(command),
+            None if chord.matched || chord.pending => None,
+            None => {
+                keymap
+                    .lookup(std::slice::from_ref(stroke), &contexts)
+                    .command
+            }
+        };
+        // The run the command would bend is the one in the key's window: an
+        // undocked tab acts in its own window, every other window in the main.
+        let acting = (target == InputTarget::UndockedTab).then_some(window);
+        let ctx = HeldKeyContext {
+            run_open: self.has_open_run_in(acting),
+        };
+        command.is_some_and(|command| !runs_on_key_repeat(&command, ctx))
+    }
+
+    /// The pending chord prefix of `target`, if any, followed by `stroke`.
+    fn after_pending_chord(&self, target: InputTarget, stroke: &KeyStroke) -> Vec<KeyStroke> {
+        let mut sequence = if self.ui_state.keymap_pending_target == Some(target) {
             self.ui_state.keymap_pending_sequence.clone()
         } else {
             Vec::new()
         };
-        with_prefix.push(stroke.clone());
-        [with_prefix, vec![stroke.clone()]].iter().any(|sequence| {
-            let lookup = keymap.lookup(sequence, &contexts);
-            lookup.command.is_some() || lookup.matched || lookup.pending
-        })
+        sequence.push(stroke.clone());
+        sequence
     }
 }
 
@@ -732,6 +951,9 @@ fn selection_slot_from_key(key: &str) -> Option<usize> {
         _ => None,
     }
 }
+
+#[cfg(test)]
+mod key_repeat_tests;
 
 #[cfg(test)]
 mod physical_key_tests;
@@ -816,11 +1038,17 @@ mod tests {
         for consumer in [
             InputConsumer::KeymapRecorder,
             InputConsumer::CommandPalette,
+            InputConsumer::RulePreview,
             InputConsumer::Escape,
             InputConsumer::NewProject,
             InputConsumer::UpdatePcb,
             InputConsumer::DocumentSetup,
+            InputConsumer::ComponentsRowMenu,
+            InputConsumer::LibraryPicker,
+            InputConsumer::ConfirmDefault,
+            InputConsumer::FindStep,
             InputConsumer::ShortcutsSheet,
+            InputConsumer::TextEditTab,
             InputConsumer::SelectionSlots,
             InputConsumer::Keymap,
         ] {
@@ -830,6 +1058,47 @@ mod tests {
                 "{consumer:?} must appear in CLAIM_ORDER exactly once"
             );
         }
+    }
+
+    /// Enter places the row while its menu is open, and is the keymap's
+    /// again once the menu has closed (#2535).
+    #[test]
+    fn enter_places_the_row_whose_menu_is_open() {
+        let mut app = quiet_app();
+        let main = main_window(&app);
+        app.library.components_panel.row_menu = Some(crate::library::state::ComponentsRowMenu {
+            key: crate::library::state::ComponentsPanelRowKey {
+                library_path: "lib.snxlib".into(),
+                table: "t".into(),
+                row_id: signex_library::RowId::from_uuid(uuid::Uuid::from_u128(1)),
+            },
+            x: 0.0,
+            y: 0.0,
+            window: None,
+        });
+        let routed = app.route_key(main, &named(keyboard::key::Named::Enter));
+        assert!(
+            matches!(
+                routed,
+                Some(Message::Library(
+                    crate::library::LibraryMessage::ComponentsPanelRowMenuPicked(
+                        crate::library::state::ComponentsRowAction::Place
+                    )
+                ))
+            ),
+            "{routed:?}"
+        );
+        app.library.components_panel.row_menu = None;
+        let routed = app.route_key(main, &named(keyboard::key::Named::Enter));
+        assert!(
+            !matches!(
+                routed,
+                Some(Message::Library(
+                    crate::library::LibraryMessage::ComponentsPanelRowMenuPicked(_)
+                ))
+            ),
+            "{routed:?}"
+        );
     }
 
     #[test]

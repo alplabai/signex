@@ -89,6 +89,75 @@ fn panel(app: &mut Signex, msg: DrcPanelMsg) {
     let _ = app.update(Message::Dock(DockMessage::Panel(PanelMsg::Drc(msg))));
 }
 
+/// The git identity lands as "A. Designer" and `reason` is typed into the
+/// open form (mockup row 88: the reason is the one field).
+fn write_waiver(app: &mut Signex, reason: &str) {
+    app.handle_waiver_identity_resolved(Some("A. Designer".into()));
+    type_reason(app, reason);
+}
+
+fn type_reason(app: &mut Signex, reason: &str) {
+    panel(
+        app,
+        DrcPanelMsg::ReasonActed(iced::widget::text_editor::Action::Edit(
+            iced::widget::text_editor::Edit::Paste(std::sync::Arc::new(reason.to_string())),
+        )),
+    );
+}
+
+/// Mockup row 88: Waive selects its row, waits for the git identity, needs
+/// only a reason, and a second press on the open row keeps what was typed.
+#[test]
+fn the_waive_form_needs_one_reason_and_takes_the_git_author() {
+    let _serial = drc_serial();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = board_app(&dir);
+    run_drc(&mut app);
+    let clearance = key_of(&app, "builtin::clearance");
+    panel(&mut app, DrcPanelMsg::WaiveStarted(clearance.clone()));
+    assert_eq!(
+        app.ui_state.validation_panels.drc.selected.as_deref(),
+        Some(clearance.as_str())
+    );
+    type_reason(&mut app, "by design");
+    panel(&mut app, DrcPanelMsg::WaiveStarted(clearance.clone()));
+    let draft = app.pcb_drc_panel().unwrap().waive_draft.expect("open");
+    assert_eq!(draft.reason.text(), "by design", "the second press");
+    assert!(draft.awaits_identity);
+    panel(&mut app, DrcPanelMsg::WaiveConfirmed);
+    assert!(
+        board_waivers(&app, &path).is_empty(),
+        "waits for the author"
+    );
+
+    app.handle_waiver_identity_resolved(Some("C. Alp".into()));
+    panel(&mut app, DrcPanelMsg::WaiveConfirmed);
+    let stored = board_waivers(&app, &path);
+    assert_eq!(stored.len(), 1);
+    assert_eq!(stored[0].note, "by design");
+    assert_eq!(stored[0].author, "C. Alp");
+}
+
+/// Mockup row 88: with the identity known, an empty reason is refused.
+#[test]
+fn an_empty_reason_is_refused() {
+    let _serial = drc_serial();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = board_app(&dir);
+    run_drc(&mut app);
+    app.handle_waiver_identity_resolved(Some("C. Alp".into()));
+    let clearance = key_of(&app, "builtin::clearance");
+    panel(&mut app, DrcPanelMsg::WaiveStarted(clearance));
+    panel(&mut app, DrcPanelMsg::WaiveConfirmed);
+    assert!(board_waivers(&app, &path).is_empty());
+    let draft = app
+        .pcb_drc_panel()
+        .unwrap()
+        .waive_draft
+        .expect("still open");
+    assert!(draft.blank);
+}
+
 fn rows(app: &Signex) -> Vec<crate::panels::DrcRow> {
     app.pcb_drc_panel().expect("a board in view").rows
 }
@@ -214,7 +283,7 @@ fn show_drc_violation_selects_through_the_command_and_answers() {
         &[&document(&path), "id=nope"],
     );
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("nope")),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if signex_i18n::RenderTranslatable::render_en_us(reason).contains("nope")),
         "{outcome:?}"
     );
 }
@@ -274,10 +343,7 @@ fn a_waiver_is_stored_with_its_note_as_one_undo_step() {
     let clearance = key_of(&app, "builtin::clearance");
 
     panel(&mut app, DrcPanelMsg::WaiveStarted(clearance.clone()));
-    panel(
-        &mut app,
-        DrcPanelMsg::NoteEdited("checked on the prototype".into()),
-    );
+    write_waiver(&mut app, "checked on the prototype");
     panel(&mut app, DrcPanelMsg::WaiveConfirmed);
     let waivers = &app
         .document_state
@@ -289,6 +355,7 @@ fn a_waiver_is_stored_with_its_note_as_one_undo_step() {
     assert_eq!(waivers[0].key, clearance);
     assert_eq!(waivers[0].rule, "builtin::clearance");
     assert_eq!(waivers[0].note, "checked on the prototype");
+    assert_eq!(waivers[0].author, "A. Designer");
     let drc = app.pcb_drc_panel().unwrap();
     assert!(!drc.stale, "a waiver changes nothing the check reads");
     assert!(drc.waive_draft.is_none());
@@ -392,7 +459,7 @@ fn undoing_a_waiver_keeps_the_results_current() {
     run_drc(&mut app);
     let clearance = key_of(&app, "builtin::clearance");
     panel(&mut app, DrcPanelMsg::WaiveStarted(clearance));
-    panel(&mut app, DrcPanelMsg::NoteEdited("on purpose".into()));
+    write_waiver(&mut app, "on purpose");
     panel(&mut app, DrcPanelMsg::WaiveConfirmed);
     assert!(!app.pcb_drc_panel().unwrap().stale);
     let _ = app.update(Message::Edit(EditMsg::Undo));
@@ -430,7 +497,7 @@ fn a_refused_waiver_keeps_its_note() {
         &mut app,
         DrcPanelMsg::WaiveStarted("not-a-violation".into()),
     );
-    panel(&mut app, DrcPanelMsg::NoteEdited("typed with care".into()));
+    write_waiver(&mut app, "typed with care");
     panel(&mut app, DrcPanelMsg::WaiveConfirmed);
     assert!(
         app.document_state
@@ -442,7 +509,7 @@ fn a_refused_waiver_keeps_its_note() {
     );
     let draft = app.pcb_drc_panel().unwrap().waive_draft;
     assert_eq!(
-        draft.map(|d| d.note).as_deref(),
+        draft.map(|d| d.reason.text()).as_deref(),
         Some("typed with care"),
         "the note stays for another try"
     );
@@ -471,4 +538,232 @@ fn a_refused_show_is_logged_as_a_show() {
         !said.iter().any(|m| m.contains("waiver was not saved")),
         "{said:?}"
     );
+}
+
+/// Waive the last run's clearance row with `note` through the panel.
+fn waive_clearance(app: &mut Signex, note: &str) -> String {
+    let clearance = key_of(app, "builtin::clearance");
+    panel(app, DrcPanelMsg::WaiveStarted(clearance.clone()));
+    write_waiver(app, note);
+    panel(app, DrcPanelMsg::WaiveConfirmed);
+    clearance
+}
+
+/// The VCC track 0.05 mm closer to GND: still a clearance finding, of
+/// changed geometry.
+fn nudge_vcc(app: &mut Signex, path: &Path) {
+    let moved = track(VCC_TRACK, 2, (0.0, 0.30), (10.0, 0.30));
+    let command = signex_engine::pcb::BoardCommand::ReplaceItems {
+        items: vec![signex_engine::pcb::BoardItem::Segment(moved)],
+    };
+    app.execute_board_commands(path, vec![command], None)
+        .expect("the track moves");
+}
+
+fn board_waivers(app: &Signex, path: &Path) -> Vec<signex_types::pcb_options::DrcWaiver> {
+    app.document_state
+        .pcb_board(path)
+        .unwrap()
+        .options
+        .drc_waivers
+        .clone()
+}
+
+/// #2307: a waiver stores the fingerprint of its objects as they are.
+#[test]
+fn a_waiver_stores_the_fingerprint_of_its_objects() {
+    let _serial = drc_serial();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = board_app(&dir);
+    run_drc(&mut app);
+    let key = waive_clearance(&mut app, "ok");
+    let board = app.document_state.pcb_board(&path).unwrap();
+    let violation = app
+        .interaction_state
+        .pcb_drc
+        .done_for(&path)
+        .unwrap()
+        .report
+        .violations
+        .iter()
+        .find(|v| signex_drc::waiver_key(v) == key)
+        .unwrap();
+    let waivers = board_waivers(&app, &path);
+    assert_eq!(
+        waivers[0].fingerprint,
+        signex_drc::fingerprint(violation, board)
+    );
+    assert_eq!(waivers[0].fingerprint.len(), 32);
+}
+
+/// #2307: moving a waived object lapses the waiver: the row is open again
+/// and the run says so in Messages. Waiving it again replaces the old one.
+#[test]
+fn a_moved_object_lapses_its_waiver_and_a_new_waiver_replaces_it() {
+    let _serial = drc_serial();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = board_app(&dir);
+    let _ = crate::diagnostics::init_logging();
+    run_drc(&mut app);
+    let key = waive_clearance(&mut app, "first");
+    let first = board_waivers(&app, &path)[0].fingerprint.clone();
+    nudge_vcc(&mut app, &path);
+    run_drc(&mut app);
+    let row = rows(&app).into_iter().find(|r| r.key == key).unwrap();
+    assert_eq!(row.waiver, None, "a lapsed waiver leaves the row open");
+    let said: Vec<String> = crate::diagnostics::recent_entries()
+        .into_iter()
+        .map(|e| e.message)
+        .collect();
+    assert!(
+        said.iter()
+            .any(|m| m.contains("1 waived finding(s) are back")),
+        "{said:?}"
+    );
+
+    waive_clearance(&mut app, "second");
+    let waivers = board_waivers(&app, &path);
+    assert_eq!(waivers.len(), 1, "{waivers:?}");
+    assert_eq!(waivers[0].note, "second");
+    assert_ne!(waivers[0].fingerprint, first);
+    let row = rows(&app).into_iter().find(|r| r.key == key).unwrap();
+    assert_eq!(row.waiver.as_deref(), Some("second"));
+}
+
+/// #2307: a waiver on results the board has moved past is refused and
+/// nothing is written: it would fingerprint geometry the run never checked.
+/// Unwaiving stays allowed.
+#[test]
+fn a_waiver_on_stale_results_is_refused() {
+    let _serial = drc_serial();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = board_app(&dir);
+    run_drc(&mut app);
+    let key = waive_clearance(&mut app, "fresh");
+    assert_eq!(board_waivers(&app, &path).len(), 1);
+    nudge_vcc(&mut app, &path);
+    let refused = app.set_drc_waiver(&path, &key, Some("stale".into()));
+    let why = refused.expect_err("a stale waive is refused");
+    assert!(why.contains("run DRC again"), "{why}");
+    let waivers = board_waivers(&app, &path);
+    assert_eq!(waivers.len(), 1);
+    assert_eq!(waivers[0].note, "fresh");
+    app.set_drc_waiver(&path, &key, None)
+        .expect("unwaive on stale results");
+    assert!(board_waivers(&app, &path).is_empty());
+}
+
+/// #2307: a change of the project's net classes after the run makes the
+/// results stale too, so Waive is refused until DRC runs again.
+#[test]
+fn a_waiver_after_a_net_class_change_is_refused() {
+    let _serial = drc_serial();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = board_app(&dir);
+    run_drc(&mut app);
+    let key = key_of(&app, "builtin::clearance");
+    app.document_state.projects[0].data.net_classes =
+        vec![signex_types::net_class::NetClass::named("Power")];
+    let why = app
+        .set_drc_waiver(&path, &key, Some("after classes".into()))
+        .expect_err("a waive on stale results is refused");
+    assert!(why.contains("run DRC again"), "{why}");
+    assert!(board_waivers(&app, &path).is_empty());
+}
+
+/// #2307: a run the board was edited during says nothing of lapsed
+/// waivers: its findings are not of the geometry now.
+#[test]
+fn a_run_edited_during_its_check_logs_no_lapsed_waivers() {
+    let _serial = drc_serial();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = board_app(&dir);
+    let _ = crate::diagnostics::init_logging();
+    run_drc(&mut app);
+    waive_clearance(&mut app, "ok");
+    let mark = "a_run_edited_during_its_check_logs_no_lapsed_waivers";
+    crate::diagnostics::log_info(mark);
+    let task = app.handle_pcb_drc_requested();
+    nudge_vcc(&mut app, &path);
+    crate::task_driver::TaskDriver::new()
+        .settle(&mut app, task)
+        .expect("the run lands");
+    assert!(app.pcb_drc_panel().unwrap().stale);
+    let said: Vec<String> = crate::diagnostics::recent_entries()
+        .into_iter()
+        .map(|e| e.message)
+        .skip_while(|m| m != mark)
+        .collect();
+    assert!(!said.is_empty(), "the mark is logged");
+    assert!(
+        !said
+            .iter()
+            .any(|m| m.contains("waived finding(s) are back")),
+        "{said:?}"
+    );
+}
+
+/// A Rules link opens the catalog domain holding most of the limits its
+/// rule checks (a tie goes to the first limit's), for every violation kind
+/// and base rule; one with no limit opens Clearance (Caner, 2026-11-20).
+#[test]
+fn rule_links_open_the_catalog_domain_of_the_limit_they_check() {
+    use signex_drc::ViolationKind as K;
+    use signex_drc_dsl::table::LimitField;
+    use signex_drc_dsl::table::catalog::{Domain, group_of};
+
+    use super::pcb_drc_results::rules_domain_of;
+    use crate::panels::BaseRule;
+
+    // Most often first; the earliest of equals.
+    let majority = |domains: Vec<Domain>| {
+        let count = |d: &Domain| domains.iter().filter(|x| *x == d).count();
+        let mut best: Option<Domain> = None;
+        for d in &domains {
+            if best.is_none_or(|b| count(d) > count(&b)) {
+                best = Some(*d);
+            }
+        }
+        best.unwrap_or(Domain::Clearance)
+    };
+    let field_of = |kind: &signex_drc::LimitKind| {
+        LimitField::ALL
+            .into_iter()
+            .find(|f| f.limit_kind() == *kind)
+    };
+    // A part outside its room has no Rules-tab limit; it opens Placement
+    // (`domain_tests::a_part_outside_its_room_opens_the_rules_at_placement`).
+    for kind in K::ALL.into_iter().filter(|k| *k != K::PartOutsideRoom) {
+        let domains = kind
+            .limits()
+            .iter()
+            .filter_map(field_of)
+            .filter_map(group_of)
+            .map(|g| g.domain)
+            .collect();
+        assert_eq!(rules_domain_of(kind), majority(domains), "{kind:?}");
+    }
+    for rule in BaseRule::ALL {
+        let domains = rule
+            .fields()
+            .iter()
+            .filter_map(|f| group_of(*f))
+            .map(|g| g.domain)
+            .collect();
+        assert_eq!(rule.domain(), majority(domains), "{rule:?}");
+    }
+    // The Mask base rule opens Mask, where two of its three limits are,
+    // as the mask expansion finding's link does.
+    assert_eq!(BaseRule::Mask.domain(), Domain::Mask);
+    assert_eq!(BaseRule::Paste.domain(), Domain::Mask);
+    assert_eq!(BaseRule::TrackWidth.domain(), Domain::Physical);
+    assert_eq!(BaseRule::HoleSize.domain(), Domain::Manufacturing);
+    assert_eq!(rules_domain_of(K::TrackWidth), Domain::Physical);
+    assert_eq!(rules_domain_of(K::EdgeClearance), Domain::Manufacturing);
+    assert_eq!(rules_domain_of(K::MaskSliver), Domain::Manufacturing);
+    assert_eq!(rules_domain_of(K::MaskExpansion), Domain::Mask);
+    assert_eq!(rules_domain_of(K::CourtyardOverlap), Domain::Placement);
+    assert_eq!(rules_domain_of(K::Unconnected), Domain::Clearance);
+    assert_eq!(BaseRule::Edge.domain(), Domain::Manufacturing);
+    assert_eq!(BaseRule::Courtyard.domain(), Domain::Placement);
 }

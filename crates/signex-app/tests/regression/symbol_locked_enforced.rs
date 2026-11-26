@@ -32,7 +32,6 @@ fn locked_symbol_app(reference: &str) -> (Signex, uuid::Uuid) {
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "symbol-locked".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });
@@ -133,6 +132,9 @@ fn find_replace_app(reference: &str) -> (Signex, uuid::Uuid, uuid::Uuid, uuid::U
 fn replace_all(app: &mut Signex, query: &str, replacement: &str) {
     use signex_app::find_replace::FindReplaceMsg;
     for msg in [
+        // Substring matching, so `GND` reaches `GND_RAIL` (Whole word is on
+        // by default since #2525).
+        FindReplaceMsg::WholeWordToggled,
         FindReplaceMsg::QueryChanged(query.into()),
         FindReplaceMsg::ReplacementChanged(replacement.into()),
         FindReplaceMsg::ReplaceAll,

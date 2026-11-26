@@ -31,7 +31,11 @@ define_ids! {
     NOTICE_DISK_MISSING_TITLE = "notice-disk-missing-title";
     NOTICE_DISK_FOLDER_MISSING_TITLE = "notice-disk-folder-missing-title";
     NOTICE_LIBRARY_READ_ONLY_DETAIL = "notice-library-read-only-detail";
+    NOTICE_LIBRARY_HISTORY_MISSING_DETAIL = "notice-library-history-missing-detail";
     NOTICE_DISK_CHANGED = "notice-disk-changed";
+    NOTICE_DISK_CHANGED_SAVE_AS = "notice-disk-changed-save-as";
+    NOTICE_DISK_CHANGED_OVERWRITE = "notice-disk-changed-overwrite";
+    NOTICE_DISK_CHANGED_RELOAD = "notice-disk-changed-reload";
     NOTICE_DISK_MISSING = "notice-disk-missing";
     NOTICE_DISK_FOLDER_MISSING = "notice-disk-folder-missing";
     NOTICE_ROW_NOT_SAVED = "notice-row-not-saved";
@@ -89,7 +93,6 @@ define_ids! {
     NOTICE_NEW_PROJECT_FAILED = "notice-new-project-failed";
     NOTICE_RECENT_GONE = "notice-recent-gone";
     NOTICE_RUN_REFUSED = "notice-run-refused";
-    NOTICE_RUN_WRITE_FAILED = "notice-run-write-failed";
     NOTICE_RUN_WOULD_SKIP = "notice-run-would-skip";
     NOTICE_RUN_SKIPPED_READ_ONLY = "notice-run-skipped-read-only";
     NOTICE_RUN_PROJECT_MOVING = "notice-run-project-moving";
@@ -106,6 +109,7 @@ define_ids! {
     NOTICE_BOM_SOURCE_CLOSED = "notice-bom-source-closed";
     NOTICE_BOM_EXPORT_FAILED = "notice-bom-export-failed";
     NOTICE_ERC_REPORT_NOT_RUN = "notice-erc-report-not-run";
+    NOTICE_MENU_PATH = "notice-menu-path";
     NOTICE_PDF_SOURCE_CLOSED = "notice-pdf-source-closed";
     NOTICE_PDF_NO_FILES = "notice-pdf-no-files";
     NOTICE_NETLIST_EXPORT_FAILED = "notice-netlist-export-failed";
@@ -113,4 +117,28 @@ define_ids! {
     NOTICE_PREVIEW_RENDER_FAILED = "notice-preview-render-failed";
     NOTICE_LINK_NOT_OPENED = "notice-link-not-opened";
     NOTICE_LINK_LAUNCH_INCOMPLETE = "notice-link-launch-incomplete";
+    NOTICE_EDIT_LOCKED_SKIPPED = "notice-edit-locked-skipped";
+    NOTICE_EDIT_READ_ONLY = "notice-edit-read-only";
+    NOTICE_EDIT_THIS_SHEET = "notice-edit-this-sheet";
+    NOTICE_EDIT_ITEM_LOCKED_ONE = "notice-edit-item-locked-one";
+    NOTICE_EDIT_ITEM_LOCKED_MANY = "notice-edit-item-locked-many";
+    NOTICE_EDIT_COMMAND_EXECUTION_FAILED = "notice-edit-command-execution-failed";
+    NOTICE_EDIT_COMMAND_FAILED = "notice-edit-command-failed";
+    NOTICE_EDIT_UNDO_FAILED = "notice-edit-undo-failed";
+    NOTICE_EDIT_REDO_FAILED = "notice-edit-redo-failed";
+    NOTICE_EDIT_GROUP_STEP_FAILED = "notice-edit-group-step-failed";
+    NOTICE_EDIT_GROUP_REDO_DROPPED = "notice-edit-group-redo-dropped";
+    NOTICE_EDIT_GROUP_UNDO_BLOCKED = "notice-edit-group-undo-blocked";
+    NOTICE_EDIT_GROUP_REDO_BLOCKED = "notice-edit-group-redo-blocked";
+    NOTICE_EDIT_GROUP_UNDO_OUT_OF_REACH = "notice-edit-group-undo-out-of-reach";
+    NOTICE_EDIT_GROUP_REDO_OUT_OF_REACH = "notice-edit-group-redo-out-of-reach";
+    NOTICE_LOAD_NOT_INSTALLED = "notice-load-not-installed";
+    NOTICE_LOAD_RESTORE_ENGINE_FAILED = "notice-load-restore-engine-failed";
+    // chrome-copy-help
+    NOTICE_SAVE_FAILED_EDITS_KEPT = "notice-save-failed-edits-kept";
+    NOTICE_PROJECT_READ_ONLY_SAVE = "notice-project-read-only-save";
+    NOTICE_PROJECT_READ_ONLY_RENAME = "notice-project-read-only-rename";
+    NOTICE_PROJECT_READ_ONLY_ADD = "notice-project-read-only-add";
+    NOTICE_PROJECT_READ_ONLY_ADD_EXISTING = "notice-project-read-only-add-existing";
+    NOTICE_PROJECT_READ_ONLY_REMOVE = "notice-project-read-only-remove";
 }

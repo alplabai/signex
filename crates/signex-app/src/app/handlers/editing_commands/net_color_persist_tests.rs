@@ -39,7 +39,6 @@ fn app_with(sheet: SchematicSheet) -> Signex {
     app.document_state.tabs.push(crate::app::TabInfo {
         title: NAME.to_string(),
         path: path(),
-        cached_document: None,
         project_id: None,
         kind: crate::app::TabKind::Schematic,
     });

@@ -79,6 +79,95 @@ fn the_picker_place_is_one_undo_step() {
     assert!(doc(&app).lib_symbols.is_empty());
 }
 
+/// A filter that hides the selected row drops the selection, and Enter
+/// (the search field's Place) then places nothing. A selection the list
+/// does not show is never placed either.
+#[test]
+fn enter_after_the_filter_hid_the_selected_row_places_nothing() {
+    let f = fixture();
+    let mut app = app_with_library(&f);
+    select_in_picker(&mut app, &f);
+    let selected = app.library.picker.as_ref().and_then(|p| p.selected.clone());
+    assert!(selected.is_some(), "the fixture row is selected");
+
+    dispatch_to_completion(
+        &mut app,
+        Message::Library(LibraryMessage::Picker(PickerMsg::FilterChanged(
+            "zzzz-no-such-part".into(),
+        ))),
+    );
+    let picker = app.library.picker.as_ref().expect("the picker stays open");
+    assert!(picker.selected.is_none(), "the hidden row is not selected");
+
+    place_selected(&mut app);
+    click(&mut app, PLACE_AT);
+    assert!(doc(&app).symbols.is_empty(), "nothing is placed");
+    assert!(app.library.picker.is_some(), "the picker stays open");
+
+    // The same row held as selected while the filter hides it.
+    app.library.picker.as_mut().expect("picker").selected = selected;
+    place_selected(&mut app);
+    click(&mut app, PLACE_AT);
+    assert!(doc(&app).symbols.is_empty(), "a hidden row is not placed");
+    assert!(app.library.picker.is_some(), "the picker stays open");
+}
+
+/// A library opened read-only by Skip for now on Git Repository Missing
+/// (mockup row 138) still places: placing reads the library and never
+/// needs its Git history.
+#[test]
+fn a_library_skipped_to_read_only_still_places() {
+    use signex_app::library::recovery::{GitMissingChoice, RecoveryDialog};
+
+    let f = fixture();
+    let dir = f.snxlib.parent().expect("library folder");
+    // An empty `.git/` does not open: the library's history is missing.
+    std::fs::remove_dir_all(dir.join(".git")).expect("drop the history");
+    std::fs::create_dir(dir.join(".git")).expect("an empty .git/");
+
+    let mut app = crate::library_place_symbol::app_with_empty_sheet();
+    let main = iced::window::Id::unique();
+    app.ui_state.main_window_id = Some(main);
+    dispatch_to_completion(
+        &mut app,
+        Message::Library(LibraryMessage::OpenLibraryAt(Some(f.snxlib.clone()))),
+    );
+    assert!(
+        matches!(
+            app.library.recovery,
+            Some(RecoveryDialog::GitMissing { .. })
+        ),
+        "the open raises Git Repository Missing, got {:?}",
+        app.library.recovery
+    );
+    dispatch_to_completion(
+        &mut app,
+        Message::Library(LibraryMessage::RecoveryGitMissing(GitMissingChoice::Skip)),
+    );
+    assert!(app.library.is_read_only(&f.snxlib), "mounted read-only");
+
+    // Back to the sheet from the library's browser tab.
+    dispatch_to_completion(
+        &mut app,
+        Message::Tab {
+            window_id: main,
+            msg: signex_app::tab_bar::TabMessage::Select(0),
+        },
+    );
+    select_in_picker(&mut app, &f);
+    place_selected(&mut app);
+    click(&mut app, PLACE_AT);
+
+    assert_eq!(
+        doc(&app).symbols.len(),
+        1,
+        "the part lands, notice: {:?}",
+        app.document_state.error_notice
+    );
+    assert_eq!(doc(&app).symbols[0].row_id, Some(f.row_id));
+    assert!(app.document_state.error_notice.is_none());
+}
+
 #[test]
 fn a_components_panel_row_place_action_places_on_the_active_schematic() {
     let f = fixture();

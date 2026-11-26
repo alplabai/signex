@@ -170,6 +170,12 @@ impl Signex {
                 if self.has_active_pcb() {
                     contexts.push(ShortcutContext::Pcb);
                 }
+                // Mockup row 175: while the board is shown in 3D its view
+                // has the keys, so its bindings (F, Flip) outrank the
+                // board's.
+                if self.board_3d_shown_in(window) {
+                    contexts.push(ShortcutContext::Board3d);
+                }
                 match self
                     .document_state
                     .tabs
@@ -234,7 +240,6 @@ mod tests {
         app.document_state.tabs.push(TabInfo {
             title: "part".to_string(),
             path: path.clone(),
-            cached_document: None,
             project_id: None,
             kind: TabKind::FootprintEditor(path),
         });

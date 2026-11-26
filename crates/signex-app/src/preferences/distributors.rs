@@ -1,50 +1,32 @@
-//! Library ▸ Distributor APIs section — mounts the live
-//! `library::settings::distributor_apis` panel inside the Preferences
-//! modal, wrapping its `LibraryMessage::Settings(_)` in
-//! `PrefMsg::LibrarySettings(_)`. Moved verbatim from the former
-//! single-file `preferences` module.
+//! Library ▸ Distributor APIs page — mounts the live
+//! `library::settings::distributor_apis` view under the page heading,
+//! wrapping its `LibraryMessage::Settings(_)` in `PrefMsg::LibrarySettings(_)`.
 
-use super::*;
-use iced::widget::{Space, column, container};
-use iced::{Element, Length};
+use super::setting_row;
+use super::{PrefMsg, PrefsView};
+use iced::{Element, Widget as _};
+use signex_i18n::{ids, t};
 
-/// Default type / spacing scales; equal to the old literals at the default size.
-const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
-
-/// Mount the live Distributor APIs panel inside the Preferences modal.
+/// The Distributor APIs page: heading, intro, then the cards beside the
+/// order of preference.
 ///
-/// The panel emits `LibraryMessage::Settings(_)`; we wrap every
-/// message in `PrefMsg::LibrarySettings(_)` so the modal's outer
-/// `Message::Preferences(PreferencesMsg::Inner(_))` map stays a single layer. The
-/// `app/handlers/preferences.rs` handler unwraps and re-dispatches
-/// via `Message::Library` so the canonical state writeback runs
-/// through the same dispatcher the Tools-menu surface uses.
-pub(super) fn content_library_distributors<'a>(
-    settings: &'a crate::library::state::DistributorSettings,
-    tokens: &'a signex_types::theme::ThemeTokens,
-    i18n: &signex_i18n::I18n,
-) -> Element<'a, PrefMsg> {
-    let header: Element<'a, PrefMsg> = column![
-        section_title(signex_i18n::t!(
-            i18n,
-            signex_i18n::ids::PREFERENCES_SECTION_DISTRIBUTORS
-        )),
-        Space::new().height(8),
-    ]
-    .padding([SP.xl, 20.0])
-    .boxed();
-
-    // The library panel returns `Element<'a, LibraryMessage>`. We
-    // map to `PrefMsg::LibrarySettings` for every Settings sub-
-    // variant; non-Settings library messages are ignored (they're
-    // never produced by `distributor_apis::view`).
-    let pane = crate::library::settings::distributor_apis::view(settings, tokens, i18n)
-        .map(wrap_library_message)
-        .boxed();
-
-    column![header, container(pane).padding([0, 20]).width(Length::Fill)]
-        .spacing(0)
-        .boxed()
+/// The library view emits `LibraryMessage::Settings(_)`; every message is
+/// wrapped in `PrefMsg::LibrarySettings(_)` so the modal's outer
+/// `Message::Preferences(PreferencesMsg::Inner(_))` map stays one layer. The
+/// handler re-dispatches it through `Message::Library`, so the state lives on
+/// `LibraryState.settings` and the async flows run in one place.
+pub(super) fn content_library_distributors<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
+    let (i18n, tokens) = (v.i18n, v.panel_tokens);
+    let heading = setting_row::page_heading(
+        t!(i18n, ids::PREFERENCES_PAGE_DISTRIBUTORS),
+        t!(i18n, ids::LIBRARY_DISTRIBUTORS_INTRO),
+        tokens,
+    );
+    let pane =
+        crate::library::settings::distributor_apis::view(v.distributor_settings, tokens, i18n)
+            .map(wrap_library_message)
+            .boxed();
+    setting_row::page(vec![heading, pane])
 }
 
 /// Wrap a library-panel message for the Preferences modal. Anything that

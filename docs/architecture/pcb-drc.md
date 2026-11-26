@@ -28,6 +28,12 @@ Each violation carries its items (sorted), the two nets, the shared layer
 mask (`copper_layers` lists them), a location and the two distances. The
 report is sorted, so a run is the same on every machine.
 
+Copper of no net (`pcb_geom::no_net_copper`, #2515: pads, tracks, arcs and
+vias of net 0, drawings and strings on copper) is measured against every
+net's copper for `Clearance` and `Short` (net 0 on its side) and against the
+board edge; two items of no net are never a pair. `Unconnected` reads the
+netted copper only, so copper of no net never closes a link.
+
 A gap equal to the rule passes; one nm under fails. The comparison is exact
 (`Separation::is_under` compares squared nm) for every pad shape:
 
@@ -159,7 +165,10 @@ severity := "error" | "warning" | "info"
 |---|---|---|---|
 | `clearance` | `clearance >=` | `between` two of `track`, `pad`, `via`, `hole`, `edge` | checked between copper items (track, pad, via); a pair with `hole` or `edge` is valid but not checked yet: a warning says so and the rule is not applied |
 | `track` | `width >=`, `width <=` | none | checked |
-| `via` | `diameter >=`, `drill >=` | none | checked |
+| `via` | `diameter >=`, `drill >=`, `pad_gap >=` | none | checked |
+| `hole` | `diameter >=`, `diameter <=`, `annular >=`, `spacing >=` | none | checked (#2435): every via and pad hole |
+| `edge` | `clearance >=` | none | checked: copper against the saved outline, copper of no net included (#2515) |
+| `silk`, `mask`, `paste`, `courtyard` | see `DRC_RULES.md`, "The base rules" | none | checked; board-wide only (no `when`) |
 
 | Condition | Scope | Net-scope rank |
 |---|---|---|
@@ -180,7 +189,8 @@ Units are `mm`, `mil`, `um` (or `µm`) and `nm`, converted to integer nm with
 `pcb_geom::mm_to_nm`. A unit may follow the number directly (`0.2mm`) or after
 spaces (`0.2 mm`); after a space only these unit words count, so `0.2 and`
 is a missing unit, not a unit called `and`. There is no expression
-arithmetic (#1984, #1989). A limit of 0 is a warning (it checks nothing); a
+arithmetic (#1984, #1989). A limit of 0 is a warning where it checks nothing
+(a gap or a minimum expansion of 0 still checks, `DRC_RULES.md`); a
 clearance over 10 mm is a warning and one over 100 mm is refused, since a
 clearance widens the search around every copper item it covers.
 
@@ -323,6 +333,70 @@ what a headless run reports. A logged violation is worded by
 round (`0.2`, #2334). A report is marked stale when the board's revision
 moved after it.
 
+## Waivers
+
+Decision: https://github.com/alplabai/signex/pull/2455#issuecomment-6955039336
+(`docs/DECISIONS.md`, 2026-11-17). Code: `crates/signex-drc/src/waiver.rs`.
+
+- **One store, the board file.** A waiver is a `DrcWaiver` in
+  `BoardOptions::drc_waivers` (`[board_options] drc_waivers` in the
+  `.snxpcb`, `docs/PCB_BOARD_OPTIONS.md`). The DRC panel's Waive and
+  `waive_drc_violation` write it, as one `SetBoardOptions` undo step; Run
+  DRC, the DRC panel, `get_drc_results` and `check_drc` read it.
+- **Identity: `waiver_key`.** A hash of the rule id (and, for a written
+  rule, the kind of limit broken), the items and the keepout; not the board
+  path, the nets, the layers or the place. A finding with no item and no
+  keepout is named by where it is. It is the key the panel rows, the waive
+  commands and `check_drc`'s `evidence.waiver_key` use.
+- **Fingerprint: `fingerprint(v, board)`.** A hash of the geometry of every
+  item the finding names and of its keepout, taken when the finding is
+  waived and compared on every run. Every length, angle and ratio is
+  quantised to stored nm (`mm_as_stored_nm`), so a save and a load never
+  change it, and objects are written with sorted keys. Per item kind:
+  - track: layer, net, ends, width;
+  - via: position, diameter, drill, per-layer diameters (`layer_sizes`, as
+    DRC measures with `diameter_on`) and the resolved copper span
+    (`via_layers`: a through via reaches every layer);
+  - footprint pad: the footprint's placement (id, position, stored turn,
+    side) and the pad in its footprint's frame: type, shape, position, size,
+    turn, corner ratio, drill, layers, per-layer sizes (`size_on`) and net;
+  - footprint: its placement, footprint id, and, in its own frame, its pads
+    and its copper and courtyard graphics (the courtyard is what
+    `footprint_body` reads); silkscreen, fabrication and other graphics are
+    left out, so a silk edit keeps the waiver. Nothing that went through
+    sin/cos (such as the placed body of `footprint_body`) is hashed, so
+    another platform's libm never lapses a waiver;
+  - free pad: as a footprint pad, on the board;
+  - zone, string, arc, dimension, drawing: the stored object;
+  - keepout: its boundary, layers and what it forbids.
+
+  Nets are hashed by name, so renumbering the board's nets keeps a waiver.
+  An item or keepout the board no longer has hashes as a fixed
+  `missing:<id>` marker.
+- **Matching (`waiver_state`).** Of the waivers with the finding's key, one
+  whose fingerprint matches the current geometry wins (waived). Otherwise
+  the last waiver with that key has lapsed: the finding is open again. So a
+  newer waiver of the same finding is never shadowed by an older stale one,
+  in either order. A waiver without a fingerprint (made before this change,
+  by #2451, which 26.11.0 shipped) never matches: after the update it
+  lapses once and is waived again. The fingerprint is only computed for a finding some waiver
+  names.
+- **Waiving needs current results.** Waive and `waive_drc_violation` are
+  refused when the board or its net classes changed since the last run
+  ("run DRC again before waiving"), so a waiver never fingerprints geometry
+  the run did not check. Unwaiving is allowed on stale results. A run the
+  board was edited during logs no lapsed-waiver line.
+- **Lapsed.** The panel shows a lapsed finding as an open row, and a run
+  logs one Messages line with the number of waived findings that are back.
+  `check_drc` lists the lapsed waiver under `lapsed` and the finding in
+  `findings`. Waiving it again replaces the old waiver: the writer keeps
+  one waiver per key.
+- **Report shape.** One adapter serves ERC and DRC:
+  `signex_types::check::finding_waiver_json` writes `kind` (`finding`),
+  `rule_id`, `fingerprint` and `reason`, plus each check's own fields. DRC's
+  `waiver_json` adds `key`; ERC's `finding_waiver` adds `objects`, `author`,
+  `date` and `message`.
+
 ## Zones
 
 `Unconnected` is the ratsnest, so it joins copper through zones the way the
@@ -361,13 +435,13 @@ many keepouts make it slow.
 
 ## Not checked yet
 
-Hole-to-hole, silk-to-pad, courtyard overlap, zone clearance (#2216), annular
-ring, copper with no net (net 0 is skipped, like in the ratsnest), clearance
-to holes and the board edge (the rule language parses them), region-scoped
-rules (v2) and the board setup's minimum width and via sizes. Each is its own
-follow-up.
+Zone clearance (#2216), clearance between copper and holes
+(the rule language parses it), region-scoped rules (v2) and the board
+setup's minimum width and via sizes. The base rules of #2435 measure
+approximately where `DRC_RULES.md` says so (a part's silkscreen texts, a
+courtyard as a box). Each is its own follow-up.
 
 From the board sketch (#2234): `no_pours` keepouts (zones are not tested
 against keepouts), board mounting holes in a `no_drilling` keepout, and
-copper-to-board-edge and copper-to-cutout clearance: the rules hold no edge
-clearance yet, so the baked outline and cutouts are not checked.
+copper-to-cutout clearance: an edge rule (`on edge`) measures the saved
+outline only.

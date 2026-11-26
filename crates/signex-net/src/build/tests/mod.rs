@@ -11,6 +11,7 @@ mod multiple_names;
 mod pin_contact_and_power;
 mod placement_contacts;
 mod placement_intent;
+mod project_classes;
 mod versioned_bodies;
 mod wire_intent;
 mod wire_order;
@@ -125,6 +126,7 @@ fn pin_on_a_bare_bus_endpoint_forms_no_phantom_net() {
         uuid: Uuid::nil(),
         start: pt(0.0, 0.0),
         end: pt(10.0, 0.0),
+        ..Default::default()
     });
     add_lib(
         &mut sheet,

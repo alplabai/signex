@@ -1,19 +1,22 @@
 //! Board sketch mode in the main window (#2234): while the mode is on, the
-//! sketch canvas over the board with the mode's bar (Apply, Leave, Discard).
+//! sketch canvas over the board with the sketch mode bar, the same one the
+//! footprint editor shows (#2518): Bake preview · Discard changes · Bake.
 //! The PCB Active Bar's Board Sketch button lives in `pcb_active_bar`.
 
 use iced::alignment::{Horizontal, Vertical};
-use iced::widget::{container, row, stack};
+use iced::widget::{container, stack};
 use iced::{Element, Length, Widget as _};
 use signex_i18n::{ids, t};
 use signex_widgets::{text, theme_ext};
 
 use crate::app::state::BoardSketchSession;
 use crate::app::{BoardSketchMsg, Message, PcbMsg, Signex};
-use crate::styles::{DialogButtonKind, Spacing, TypeScale, dialog_button};
+use crate::library::editor::standalone::sketch_exit::{
+    MODE_BAR_INSET, ModeBarLook, ModeBarMessages, mode_bar,
+};
+use crate::styles::TypeScale;
 
 const TS: TypeScale = TypeScale::DEFAULT;
-const SP: Spacing = Spacing::DEFAULT;
 
 impl Signex {
     /// The main window's body while its board is in sketch mode; `None`
@@ -31,65 +34,68 @@ impl Signex {
             &session.editor,
             tokens,
             &self.ui_state.i18n,
+            self.library.mirror_cards.get(&session.board_path),
         )
         .map(Message::Library);
-        Some(stack![canvas, self.board_sketch_bar(session)].boxed())
+        // The constraint / pattern menu at the right-click (mockup row 188), measured
+        // in the UI font and kept inside the canvas, under the mode bar.
+        let menu = crate::library::editor::footprint::sketch_mode::constraint_menu::overlay(
+            &session.editor,
+            tokens,
+            &self.ui_state.i18n,
+            &self.document_state.panel_ctx.ui_font_name,
+        )
+        .map(Message::Library);
+        let mut layers = stack![canvas, menu, self.board_sketch_bar(session)];
+        // Over everything: the sketch waits for Import or Cancel (mockup row 179c).
+        if let Some(dialog) = session.dxf_dialog.as_deref() {
+            layers = layers.push(super::board_sketch_dxf::overlay(
+                dialog,
+                tokens,
+                &self.ui_state.i18n,
+            ));
+        }
+        Some(layers.boxed())
     }
 
-    /// The mode's bar: its name, the last refusal, Apply, Leave and Discard.
+    /// The mode bar: the mode's name, the last refusal, then Bake preview,
+    /// Discard changes and Bake ("Apply to board"), which commits one board
+    /// command and leaves.
     fn board_sketch_bar<'a>(&'a self, session: &'a BoardSketchSession) -> Element<'a, Message> {
         let i18n = &self.ui_state.i18n;
         let tokens = &self.document_state.panel_ctx.tokens;
-        let sketch = |event| Some(Message::Pcb(PcbMsg::Sketch(event)));
-        let mut bar = row![
-            text(t!(i18n, ids::BOARD_SKETCH_TITLE))
-                .size(TS.body)
-                .color(theme_ext::text_primary(tokens)),
-        ]
-        .spacing(SP.m)
-        .align_y(iced::Alignment::Center);
-        if let Some(refusal) = session.refusal.as_ref() {
+        let sketch = |event| Message::Pcb(PcbMsg::Sketch(event));
+        let status = session.refusal.as_ref().map(|refusal| {
             use signex_i18n::RenderTranslatable as _;
-            bar = bar.push(
-                text(refusal.localized(i18n))
-                    .size(TS.caption)
-                    .color(theme_ext::error_color(tokens))
-                    .boxed(),
-            );
-        }
-        let apply = session
-            .has_changes()
-            .then_some(BoardSketchMsg::ApplyRequested)
-            .and_then(sketch);
-        bar = bar
-            .push(dialog_button(
-                t!(i18n, ids::BOARD_SKETCH_APPLY),
-                DialogButtonKind::Primary,
-                apply,
-                tokens,
-            ))
-            .push(dialog_button(
-                t!(i18n, ids::BOARD_SKETCH_LEAVE),
-                DialogButtonKind::Secondary,
-                sketch(BoardSketchMsg::LeaveRequested),
-                tokens,
-            ))
-            .push(dialog_button(
-                t!(i18n, ids::BOARD_SKETCH_DISCARD),
-                DialogButtonKind::Danger,
-                sketch(BoardSketchMsg::DiscardRequested),
-                tokens,
-            ));
-        container(
-            container(bar)
-                .padding([SP.s, SP.m])
-                .style(crate::styles::modal_card(tokens)),
-        )
-        .padding(SP.xl)
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .align_x(Horizontal::Left)
-        .align_y(Vertical::Bottom)
-        .boxed()
+            text(refusal.localized(i18n))
+                .size(TS.caption)
+                .color(theme_ext::error_color(tokens))
+                .boxed()
+        });
+        let look = ModeBarLook {
+            title: t!(i18n, ids::BOARD_SKETCH_TITLE),
+            status,
+            bake_tooltip: t!(i18n, ids::BOARD_SKETCH_BAKE_TOOLTIP),
+        };
+        let msgs = ModeBarMessages {
+            preview: sketch(BoardSketchMsg::BakePreviewToggled),
+            discard: sketch(BoardSketchMsg::DiscardRequested),
+            confirm_discard: sketch(BoardSketchMsg::DiscardConfirmed),
+            keep_editing: sketch(BoardSketchMsg::DiscardCancelled),
+            bake: Some(sketch(BoardSketchMsg::BakeRequested)),
+        };
+        // The bake preview is the Properties Bake panel (mockup row 179), not
+        // a card over the canvas; this bar's Bake preview button closes it.
+        let exit = &session.editor.state.sketch_exit;
+        container(mode_bar(look, exit, msgs, tokens, i18n))
+            .padding(MODE_BAR_INSET)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .align_x(Horizontal::Left)
+            .align_y(Vertical::Bottom)
+            .boxed()
     }
 }
+
+#[cfg(test)]
+mod bake_panel_tests;

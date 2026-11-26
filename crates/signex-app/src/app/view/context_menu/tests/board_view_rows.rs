@@ -30,6 +30,7 @@ fn the_board_menu_swaps_pins_and_saves_and_places_reuse_blocks() {
         copyable: true,
         pad_pair: true,
         one_footprint: true,
+        footprints: 1,
         ..PcbTargets::default()
     };
     let blocks = vec!["amp".to_string()];
@@ -63,12 +64,104 @@ fn the_board_menu_swaps_pins_and_saves_and_places_reuse_blocks() {
         ..PcbTargets::default()
     };
     let rows = pcb_canvas_menu_with_blocks(i18n, TID, &board_ctx(empty), None, &sc, &[]);
-    assert!(row_message(&rows, "Swap Pins").is_none());
-    assert!(row_message(&rows, "Save as Reuse Block").is_none());
+    // 2026-11-18: the empty-area menu has no selection rows.
+    assert!(absent(&rows, "Swap Pins"));
+    assert!(absent(&rows, "Save as Reuse Block"));
     assert!(
         row_message(&rows, "Place Reuse Block").is_none(),
         "greyed with no block"
     );
+}
+
+/// Whether the menu has no row `label` at all.
+fn absent(rows: &[DropdownEntry<Message>], label: &str) -> bool {
+    !rows
+        .iter()
+        .any(|row| matches!(row, DropdownEntry::Item(it) if it.label == label))
+}
+
+/// The labels of the menu's rows, in order.
+fn labels(rows: &[DropdownEntry<Message>]) -> Vec<String> {
+    rows.iter()
+        .filter_map(|row| match row {
+            DropdownEntry::Item(it) => Some(it.label.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// 2026-11-18 (maintainer request): a right-click on an empty area with
+/// nothing selected shows the short menu, no selection or object row.
+#[test]
+fn the_empty_area_menu_is_short() {
+    let empty = rows(PcbTargets {
+        shown: true,
+        ..PcbTargets::default()
+    });
+    assert_eq!(
+        labels(&empty),
+        [
+            "Find",
+            "Place",
+            "Undo",
+            "Redo",
+            "Paste",
+            "Paste Special",
+            "Select All",
+            "Board Sketch",
+            "Place Reuse Block",
+            "Toggle Ratsnest",
+        ]
+    );
+}
+
+/// 2026-11-18: with a footprint selected the footprint rows show and the
+/// route rows do not; with a track the route rows show and the footprint
+/// rows do not; the net rows need an object with a net.
+#[test]
+fn the_object_menu_shows_the_rows_of_the_selected_kind() {
+    let footprint = rows(PcbTargets {
+        net: true,
+        ..footprint_picked()
+    });
+    for label in [
+        "Find Similar Objects...",
+        "Change Footprint...",
+        "Swap Pins",
+        "Swap Gates",
+        "Arrange in Box",
+        "Select Net",
+        "Delete",
+    ] {
+        assert!(!absent(&footprint, label), "{label} on a footprint");
+    }
+    for label in ["Gloss Selected Routes", "Add Teardrops", "Lock", "Unlock"] {
+        assert!(absent(&footprint, label), "{label} is a route row");
+    }
+    let track = rows(PcbTargets {
+        shown: true,
+        any: true,
+        routes: true,
+        lockable: true,
+        copyable: true,
+        ..PcbTargets::default()
+    });
+    for label in ["Gloss Selected Routes", "Add Teardrops", "Lock", "Unlock"] {
+        assert!(!absent(&track, label), "{label} on a track");
+    }
+    for label in ["Change Footprint...", "Swap Pins", "Select Net"] {
+        assert!(absent(&track, label), "{label} on a track without a net");
+    }
+    // Only the pointer over an object: the object rows, no selection rows.
+    let hovered = rows(PcbTargets {
+        shown: true,
+        hovered: true,
+        net: true,
+        ..PcbTargets::default()
+    });
+    assert!(!absent(&hovered, "Find Similar Objects..."));
+    assert!(!absent(&hovered, "Select Net"));
+    assert!(absent(&hovered, "Delete"));
 }
 
 fn rows(board: PcbTargets) -> Vec<DropdownEntry<Message>> {
@@ -140,7 +233,7 @@ fn the_board_menu_properties_row_is_live_with_a_selection() {
         shown: true,
         ..PcbTargets::default()
     };
-    assert!(row_message(&rows(empty), "Properties...").is_none());
+    assert!(absent(&rows(empty), "Properties..."));
 }
 
 /// #2366: Change Footprint... runs `change_footprint` with an unlocked
@@ -151,6 +244,7 @@ fn the_board_menu_change_footprint_row_needs_an_unlocked_footprint() {
         shown: true,
         any: true,
         placeable: true,
+        footprints: 1,
         ..PcbTargets::default()
     };
     assert!(runs(
@@ -160,6 +254,7 @@ fn the_board_menu_change_footprint_row_needs_an_unlocked_footprint() {
     let locked = PcbTargets {
         shown: true,
         any: true,
+        footprints: 1,
         ..PcbTargets::default()
     };
     let rows = rows(locked);
@@ -180,6 +275,7 @@ fn the_board_menu_lock_rows_follow_the_selected_tracks_and_vias() {
         shown: true,
         any: true,
         lockable: true,
+        routes: true,
         ..PcbTargets::default()
     });
     assert!(runs(
@@ -191,6 +287,7 @@ fn the_board_menu_lock_rows_follow_the_selected_tracks_and_vias() {
         shown: true,
         any: true,
         unlockable: true,
+        routes: true,
         ..PcbTargets::default()
     });
     assert!(runs(
@@ -204,7 +301,10 @@ fn the_board_menu_lock_rows_follow_the_selected_tracks_and_vias() {
 /// selected.
 #[test]
 fn the_board_menu_has_find_similar_net_and_mirror_rows_that_run_their_commands() {
-    let rows = rows(footprint_picked());
+    let rows = rows(PcbTargets {
+        net: true,
+        ..footprint_picked()
+    });
     for (label, command) in [
         ("Find Similar Objects...", "find_similar_objects"),
         ("Find", "find"),
@@ -276,6 +376,7 @@ fn a_read_only_board_greys_every_editing_row() {
         copyable: true,
         read_only: true,
         footprints: 1,
+        net: true,
         ..PcbTargets::default()
     };
     let rows = rows(read_only);
@@ -323,30 +424,35 @@ fn the_board_place_flyout_runs_the_tools_and_greys_them_when_read_only() {
     assert!(runs(row_message(&place, "Via"), "place_board_via"));
     assert!(runs(row_message(&place, "Keepout"), "place_board_keepout"));
     assert!(runs(row_message(&place, "Board Sketch"), "board_sketch"));
-    // A tool the board editor cannot run yet is greyed, with its reason.
-    // Pad is live since #2373; Component is still greyed.
+    // Pad is live since #2373; Component, greyed "not available on boards
+    // yet" before, opens the part picker since #2505.
     assert!(runs(row_message(&place, "Pad"), "place_board_pad"));
-    assert!(row_message(&place, "Component").is_none());
+    assert!(runs(
+        row_message(&place, "Component..."),
+        "place_board_component"
+    ));
     let read_only = board_ctx(PcbTargets {
         shown: true,
         read_only: true,
         ..PcbTargets::default()
     });
     let place = board_place_entries(i18n, &read_only, &hint);
-    for label in ["Via", "Track", "Keepout", "Board Sketch"] {
+    for label in ["Component...", "Via", "Track", "Keepout", "Board Sketch"] {
         assert!(disabled_of(&place, label), "{label}");
     }
 }
 
 /// #2408, #2409: the board menu offers the selection tools, each running
 /// its command: live with a selection (Arrange in Box with unlocked
-/// components), greyed without; Add Teardrops acts on every net then.
+/// components); an empty-area menu has none of them (2026-11-18).
 #[test]
 fn the_board_menu_offers_the_selection_tools() {
     let picked = rows(PcbTargets {
         shown: true,
         any: true,
         placeable: true,
+        routes: true,
+        footprints: 1,
         ..PcbTargets::default()
     });
     for (label, command) in [
@@ -362,13 +468,81 @@ fn the_board_menu_offers_the_selection_tools() {
         shown: true,
         ..PcbTargets::default()
     });
-    assert!(runs(row_message(&empty, "Add Teardrops"), "add_teardrops"));
+    assert!(absent(&empty, "Add Teardrops"), "a route row needs a route");
     for label in [
         "Gloss Selected Routes",
         "Board Shape from Selection",
         "Keepout from Selection",
         "Arrange in Box",
     ] {
-        assert!(row_message(&empty, label).is_none(), "{label} greyed");
+        assert!(
+            absent(&empty, label),
+            "{label} is not on the empty-area menu"
+        );
     }
+}
+
+/// #2462: Compare with Schematic sits after Properties, above the View
+/// group, and runs `compare_board_with_schematic` when the board is part
+/// of an open project; it is greyed otherwise, like Update PCB. It is an
+/// object-menu row: the empty-area menu stays short (2026-11-18).
+#[test]
+fn the_board_menu_compares_with_the_schematic_in_a_project() {
+    let board = PcbTargets {
+        shown: true,
+        hovered: true,
+        ..PcbTargets::default()
+    };
+    let loose = rows(board);
+    assert!(row_message(&loose, "Compare with Schematic").is_none());
+    let mut ctx = board_ctx(board);
+    ctx.has_open_project = true;
+    let in_project = pcb_canvas_menu_entries(
+        signex_i18n::I18n::en_us_ref(),
+        TID,
+        &ctx,
+        None,
+        &shortcuts(),
+    );
+    assert!(runs(
+        row_message(&in_project, "Compare with Schematic"),
+        "compare_board_with_schematic"
+    ));
+    let at = |label: &str| {
+        in_project
+            .iter()
+            .position(|row| matches!(row, DropdownEntry::Item(it) if it.label == label))
+            .unwrap_or_else(|| panic!("missing row {label:?}"))
+    };
+    let compare = at("Compare with Schematic");
+    assert_eq!(compare, at("Properties...") + 1);
+    assert!(matches!(in_project[compare + 1], DropdownEntry::Separator));
+    assert_eq!(compare + 2, at("Toggle Ratsnest"));
+}
+
+/// #2506: a right-click on a polygon pour offers Unfill Selected, which
+/// runs `unfill_selected`, right before Polygon Manager; off a pour the row
+/// is not there.
+#[test]
+fn the_pour_menu_has_a_live_unfill_row_before_polygon_manager() {
+    let picked = PcbTargets {
+        shown: true,
+        any: true,
+        ..PcbTargets::default()
+    };
+    let on_pour = crate::app::view::context_menu::board_menu::pcb_pour_menu(
+        signex_i18n::I18n::en_us_ref(),
+        TID,
+        &board_ctx(picked),
+        &shortcuts(),
+    );
+    assert!(runs(
+        row_message(&on_pour, "Unfill Selected"),
+        "unfill_selected"
+    ));
+    let names = labels(&on_pour);
+    let unfill = names.iter().position(|l| l == "Unfill Selected");
+    let manager = names.iter().position(|l| l == "Polygon Manager...");
+    assert_eq!(unfill.map(|at| at + 1), manager, "{names:?}");
+    assert!(absent(&rows(picked), "Unfill Selected"));
 }

@@ -1,627 +1,810 @@
-//! Drawing (Line / Rectangle / Circle / Arc / Polygon) properties
-//! surface plus its per-field row builders (numeric row, stroke-colour
-//! swatch row, fill-type row). Moved verbatim from the former
-//! single-file `element_properties` module.
+//! Properties of a drawing shape (mockup row 48): the line-art illustration at the
+//! top (a rectangle's with the caption naming its sample wire), then
+//! Location (Position and Size; Center for an arc or a circle; Start and
+//! End for a line) → Properties (Border; Radius, Angles, Width) →
+//! Appearance (Color, Fill, Placement). The panel header names the kind;
+//! the State ▸ Locked section is the shared one `selected` adds. Paired
+//! values share a row, every field carries its axis and unit inside it,
+//! and every kind keeps its own fields.
 
 use super::super::*;
-use super::drawing_preview::DrawingPreview;
+use super::illustrations::drawing_shape::{
+    DRAW_ANGLES, DRAW_BORDER, DRAW_CENTER, DRAW_ENDS, DRAW_FILL, DRAW_PLACEMENT, DRAW_POSITION,
+    DRAW_RADIUS, DRAW_SIZE, DRAW_WIDTH, ShapeFacts, shape_illustration, value_text,
+};
+use super::rows::{PAIR_FIELD_MIN, field_insets, field_tags, mono, pair_line};
+use crate::app::contracts::DrawingFieldEdit as E;
+use crate::panels::form_look;
+use crate::panels::multi_selection::{
+    Cell, control_row, hover_linked, illustration_view, inset_caption, segmented_cells,
+};
 use crate::styles::{Spacing, TypeScale};
 use iced::Widget;
-use signex_i18n::{ids, t};
+use signex_i18n::{I18n, MessageId, ids, t};
+use signex_types::schematic::{DrawingPlacement, FillType, SchDrawing, StrokeColor};
+use signex_widgets::Label;
+use signex_widgets::property_illustration::FieldId;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
+/// Average advance of an axis-tag letter, in captions.
+const AXIS_ADVANCE_EM: f32 = 0.6;
+
+/// The selection-info rows of the selected drawing, parsed.
+struct Rows<'a> {
+    info: &'a [(String, String)],
+}
+
+impl Rows<'_> {
+    fn get(&self, key: &str) -> String {
+        self.info
+            .iter()
+            .find(|(k, _)| k == key)
+            .map(|(_, v)| v.clone())
+            .unwrap_or_default()
+    }
+
+    fn number(&self, key: &str) -> f64 {
+        crate::numeric_field::parse_field_f64(&self.get(key)).unwrap_or(0.0)
+    }
+
+    fn pair(&self, key: &str) -> (f64, f64) {
+        let text = self.get(key);
+        let mut parts = text.split(',');
+        let mut next = || {
+            parts
+                .next()
+                .and_then(crate::numeric_field::parse_field_f64)
+                .unwrap_or(0.0)
+        };
+        let x = next();
+        (x, next())
+    }
+
+    fn fill(&self) -> FillType {
+        match self.get("Fill").as_str() {
+            "Outline" => FillType::Outline,
+            "Background" => FillType::Background,
+            _ => FillType::None,
+        }
+    }
+}
+
+/// What the illustration of the selected kind needs.
+fn shape_facts(
+    kind: &str,
+    rows: &Rows<'_>,
+    drawing: Option<&SchDrawing>,
+    placement: DrawingPlacement,
+) -> Option<ShapeFacts> {
+    Some(match kind {
+        "Line" => ShapeFacts::Line {
+            start: rows.pair("Start"),
+            end: rows.pair("End"),
+        },
+        "Rectangle" => ShapeFacts::Rect {
+            position: rows.pair("Position"),
+            size: (rows.number("Width"), rows.number("Height")),
+            border: rows.number("Border"),
+            fill: rows.fill(),
+            placement,
+        },
+        "Circle" => ShapeFacts::Circle { fill: rows.fill() },
+        "Arc" => ShapeFacts::Arc {
+            start_deg: rows.number("Start Angle"),
+            end_deg: rows.number("End Angle"),
+        },
+        "Polygon" => ShapeFacts::Polygon {
+            points: match drawing {
+                Some(SchDrawing::Polyline { points, .. }) => {
+                    points.iter().map(|p| (p.x, p.y)).collect()
+                }
+                _ => Vec::new(),
+            },
+            fill: rows.fill(),
+        },
+        _ => return None,
+    })
+}
+
+/// The text a numeric box shows: the draft while typed, else the value.
+fn shown(field: DrawingFieldId, stored: f64, ctx: &PanelContext) -> String {
+    ctx.drawing_edit_buf
+        .get(&field)
+        .cloned()
+        .unwrap_or_else(|| value_text(stored))
+}
+
+/// The error colour while `field` holds text it cannot store (#2767).
+fn refused_ink(field: DrawingFieldId, ctx: &PanelContext) -> Option<Color> {
+    ctx.drawing_edit_buf
+        .get(&field)
+        .filter(|typed| field.refuses(typed))
+        .map(|_| crate::styles::ti(ctx.tokens.error))
+}
+
+/// The width a tag longer than one letter (Start, End) adds to its field's
+/// left inset, past the one letter `field_insets` leaves room for.
+fn long_tag_extra(axis: &Label<'_>) -> f32 {
+    let extra = axis.as_str().chars().count().saturating_sub(1);
+    extra as f32 * AXIS_ADVANCE_EM * TS.caption
+}
+
+/// The narrowest field of a pair tagged `a` and `b`: `PAIR_FIELD_MIN` plus
+/// the room the longer tag takes past one letter, so a pair that cannot fit
+/// its value past a Start or End tag stacks instead of clipping the value.
+fn pair_floor(i18n: &I18n, a: MessageId, b: MessageId) -> f32 {
+    let extra = |id: MessageId| long_tag_extra(&Label::from(t!(i18n, id)));
+    PAIR_FIELD_MIN + extra(a).max(extra(b))
+}
+
+/// One drawing field: the box with its axis tag (when it has one) at the
+/// left and its unit at the right, inside it (mockup row 48). A value the
+/// box can store previews while typed and commits on Enter or on leaving
+/// the box.
+fn field_box<'a>(
+    ctx: &PanelContext,
+    axis: Option<MessageId>,
+    field: DrawingFieldId,
+    stored: f64,
+    unit: MessageId,
+) -> Element<'a, PanelMsg> {
+    let axis = axis.map(|id| Label::from(t!(ctx.i18n, id)));
+    let unit = Label::from(t!(ctx.i18n, unit));
+    let (left, right) = field_insets(axis.is_some(), true);
+    let left = left + axis.as_ref().map_or(0.0, long_tag_extra);
+    let input = signex_widgets::text_input(
+        signex_i18n::UserText::new(String::new()),
+        shown(field, stored, ctx),
+    )
+    .size(TS.body)
+    .font(mono())
+    .padding(iced::Padding {
+        top: SP.s,
+        bottom: SP.s,
+        left,
+        right,
+    })
+    .width(Length::Fill)
+    .on_input(move |s| PanelMsg::DrawingFieldTyping(field, s))
+    .on_submit(PanelMsg::DrawingFieldLeft(field))
+    .on_blur(PanelMsg::DrawingFieldLeft(field))
+    .style(form_look::refusable_input_style(refused_ink(field, ctx)));
+    iced::widget::stack![input, field_tags(axis, Some(unit))]
+        .width(Length::Fill)
+        .boxed()
+}
+
+/// A label | field row of one drawing field.
+fn num_row<'a>(
+    ctx: &PanelContext,
+    label: MessageId,
+    field: DrawingFieldId,
+    stored: f64,
+    unit: MessageId,
+    muted: Color,
+) -> Element<'a, PanelMsg> {
+    let control = field_box(ctx, None, field, stored, unit);
+    control_row(t!(ctx.i18n, label), control, muted)
+}
+
+/// A paired row: `label` | first | second, linked to `link`.
+fn pair<'a>(
+    ctx: &'a PanelContext,
+    link: FieldId,
+    label: MessageId,
+    (ax_a, field_a, a): (MessageId, DrawingFieldId, f64),
+    (ax_b, field_b, b): (MessageId, DrawingFieldId, f64),
+    unit: MessageId,
+    muted: Color,
+) -> Element<'a, PanelMsg> {
+    let both = pair_line(
+        field_box(ctx, Some(ax_a), field_a, a, unit),
+        field_box(ctx, Some(ax_b), field_b, b, unit),
+        pair_floor(&ctx.i18n, ax_a, ax_b),
+    );
+    hover_linked(ctx, link, control_row(t!(ctx.i18n, label), both, muted))
+}
+
+/// One Properties section's rows, top to bottom.
+type SectionRows<'a> = Vec<Element<'a, PanelMsg>>;
+
+/// Location and Properties of one kind, as `(location, properties)` rows.
+fn kind_rows<'a>(
+    ctx: &'a PanelContext,
+    kind: &str,
+    rows: &Rows<'_>,
+    muted: Color,
+) -> Option<(SectionRows<'a>, SectionRows<'a>)> {
+    use DrawingFieldId as F;
+    let (x, y, w, h, mm, deg) = (
+        ids::PROPERTIES_AXIS_X,
+        ids::PROPERTIES_AXIS_Y,
+        ids::PROPERTIES_AXIS_W,
+        ids::PROPERTIES_AXIS_H,
+        ids::PROPERTIES_UNIT_MM,
+        ids::PROPERTIES_UNIT_DEGREES,
+    );
+    let linked = |link: FieldId, row: Element<'a, PanelMsg>| hover_linked(ctx, link, row);
+    Some(match kind {
+        "Line" => {
+            let ((sx, sy), (ex, ey)) = (rows.pair("Start"), rows.pair("End"));
+            let start = (x, F::LineStartX, sx);
+            let end = (x, F::LineEndX, ex);
+            (
+                vec![
+                    pair(
+                        ctx,
+                        DRAW_ENDS,
+                        ids::PROPERTIES_DRAWING_START,
+                        start,
+                        (y, F::LineStartY, sy),
+                        mm,
+                        muted,
+                    ),
+                    pair(
+                        ctx,
+                        DRAW_ENDS,
+                        ids::PROPERTIES_DRAWING_END,
+                        end,
+                        (y, F::LineEndY, ey),
+                        mm,
+                        muted,
+                    ),
+                ],
+                vec![linked(
+                    DRAW_WIDTH,
+                    num_row(
+                        ctx,
+                        ids::PROPERTIES_DRAWING_WIDTH,
+                        F::LineWidth,
+                        rows.number("Width"),
+                        mm,
+                        muted,
+                    ),
+                )],
+            )
+        }
+        "Rectangle" => {
+            let (px, py) = rows.pair("Position");
+            let (rw, rh) = (rows.number("Width"), rows.number("Height"));
+            (
+                vec![
+                    pair(
+                        ctx,
+                        DRAW_POSITION,
+                        ids::PROPERTIES_DRAWING_POSITION,
+                        (x, F::RectStartX, px),
+                        (y, F::RectStartY, py),
+                        mm,
+                        muted,
+                    ),
+                    pair(
+                        ctx,
+                        DRAW_SIZE,
+                        ids::PROPERTIES_DRAWING_SIZE,
+                        (w, F::RectWidth, rw),
+                        (h, F::RectHeight, rh),
+                        mm,
+                        muted,
+                    ),
+                ],
+                vec![linked(
+                    DRAW_BORDER,
+                    num_row(
+                        ctx,
+                        ids::PANELS_DRAWING_BORDER,
+                        F::RectBorder,
+                        rows.number("Border"),
+                        mm,
+                        muted,
+                    ),
+                )],
+            )
+        }
+        "Circle" => {
+            let (cx, cy) = rows.pair("Center");
+            (
+                vec![pair(
+                    ctx,
+                    DRAW_CENTER,
+                    ids::PROPERTIES_DRAWING_CENTER,
+                    (x, F::CircleCenterX, cx),
+                    (y, F::CircleCenterY, cy),
+                    mm,
+                    muted,
+                )],
+                vec![
+                    linked(
+                        DRAW_RADIUS,
+                        num_row(
+                            ctx,
+                            ids::PROPERTIES_DRAWING_RADIUS,
+                            F::CircleRadius,
+                            rows.number("Radius"),
+                            mm,
+                            muted,
+                        ),
+                    ),
+                    linked(
+                        DRAW_BORDER,
+                        num_row(
+                            ctx,
+                            ids::PANELS_DRAWING_BORDER,
+                            F::CircleBorder,
+                            rows.number("Border"),
+                            mm,
+                            muted,
+                        ),
+                    ),
+                ],
+            )
+        }
+        "Arc" => {
+            let (cx, cy) = rows.pair("Center");
+            let angles = (
+                (
+                    ids::PROPERTIES_ANGLE_START,
+                    F::ArcStartAngle,
+                    rows.number("Start Angle"),
+                ),
+                (
+                    ids::PROPERTIES_ANGLE_END,
+                    F::ArcEndAngle,
+                    rows.number("End Angle"),
+                ),
+            );
+            (
+                vec![pair(
+                    ctx,
+                    DRAW_CENTER,
+                    ids::PROPERTIES_DRAWING_CENTER,
+                    (x, F::ArcCenterX, cx),
+                    (y, F::ArcCenterY, cy),
+                    mm,
+                    muted,
+                )],
+                vec![
+                    linked(
+                        DRAW_RADIUS,
+                        num_row(
+                            ctx,
+                            ids::PROPERTIES_DRAWING_RADIUS,
+                            F::ArcRadius,
+                            rows.number("Radius"),
+                            mm,
+                            muted,
+                        ),
+                    ),
+                    pair(
+                        ctx,
+                        DRAW_ANGLES,
+                        ids::PROPERTIES_DRAWING_ANGLES,
+                        angles.0,
+                        angles.1,
+                        deg,
+                        muted,
+                    ),
+                    linked(
+                        DRAW_WIDTH,
+                        num_row(
+                            ctx,
+                            ids::PROPERTIES_DRAWING_WIDTH,
+                            F::ArcWidth,
+                            rows.number("Width"),
+                            mm,
+                            muted,
+                        ),
+                    ),
+                ],
+            )
+        }
+        "Polygon" => {
+            let vertices = rows.number("Vertices") as i64;
+            let ink = crate::styles::ti(ctx.tokens.text);
+            (
+                Vec::new(),
+                vec![
+                    prop_kv_row(
+                        t!(ctx.i18n, ids::PROPERTIES_VERTICES),
+                        &ctx.i18n.count(vertices),
+                        muted,
+                        ink,
+                    ),
+                    linked(
+                        DRAW_BORDER,
+                        num_row(
+                            ctx,
+                            ids::PANELS_DRAWING_BORDER,
+                            F::PolyBorder,
+                            rows.number("Border"),
+                            mm,
+                            muted,
+                        ),
+                    ),
+                ],
+            )
+        }
+        _ => return None,
+    })
+}
+
+/// A collapsible section holding `rows`; nothing when there are none.
+fn section<'a>(
+    ctx: &'a PanelContext,
+    key: &str,
+    title: MessageId,
+    rows: Vec<Element<'a, PanelMsg>>,
+) -> Option<Element<'a, PanelMsg>> {
+    if rows.is_empty() {
+        return None;
+    }
+    Some(
+        ctx.collapsible(key, title, &ctx.collapsed_sections, move || {
+            Column::with_children(rows).spacing(0).width(Length::Fill)
+        })
+        .boxed(),
+    )
+}
 
 pub(in crate::panels) fn view_drawing_properties<'a>(
     ctx: &'a PanelContext,
     muted: Color,
     _primary: Color,
-    border_c: Color,
+    _border_c: Color,
 ) -> Element<'a, PanelMsg> {
-    use signex_types::schematic::FillType;
-    let get = |key: &str| -> String {
-        ctx.selection_info
-            .iter()
-            .find(|(k, _)| k == key)
-            .map(|(_, v)| v.clone())
-            .unwrap_or_default()
+    let rows = Rows {
+        info: &ctx.selection_info,
     };
-    let parse_pair = |s: &str| -> (f64, f64) {
-        let parts: Vec<&str> = s.split(',').collect();
-        let x = parts
-            .first()
-            .and_then(|p| crate::numeric_field::parse_field_f64(p))
-            .unwrap_or(0.0);
-        let y = parts
-            .get(1)
-            .and_then(|p| crate::numeric_field::parse_field_f64(p))
-            .unwrap_or(0.0);
-        (x, y)
-    };
-    let parse_f64 = |s: &str| -> f64 { crate::numeric_field::parse_field_f64(s).unwrap_or(0.0) };
-    let parse_fill = |s: &str| -> FillType {
-        match s {
-            "Outline" => FillType::Outline,
-            "Background" => FillType::Background,
-            _ => FillType::None,
-        }
-    };
-
-    let elem_type = get("Type");
-    // Line + Arc store their stroke in the `Width` key; Rect / Circle
-    // / Polygon put stroke under `Border` and use `Width` for the
-    // X-dimension (Rect) or nothing (Circle / Polygon). Picking the
-    // wrong one here pre-fills the input with the X-dim or 0.
-    let stroke_w = match elem_type.as_str() {
-        "Line" | "Arc" => parse_f64(&get("Width")),
-        _ => parse_f64(&get("Border")),
-    };
-    let fill = parse_fill(&get("Fill"));
-    let show_fill = matches!(elem_type.as_str(), "Rectangle" | "Circle" | "Polygon");
-
+    let kind = rows.get("Type");
     let ink = crate::styles::ti(ctx.tokens.text);
-    let preview_ground = crate::styles::tokens::resolve(&ctx.tokens).sunken;
-    let mut col = Column::new().spacing(0).width(Length::Fill);
-    // Header: shape icon + type label. Draft SVGs live at
-    // assets/icons/shape_*.svg and can be swapped out for final art
-    // without touching the panel code.
-    let header_row: Element<'a, PanelMsg> =
-        if let Some(icon) = shape_icon_handle(&elem_type, ctx.theme_id) {
-            row![
-                iced::widget::svg(icon).width(16).height(16),
-                text(raw(elem_type.clone())).size(TS.body).color(ink),
-            ]
-            .spacing(SP.m)
-            .align_y(iced::Alignment::Center)
-            .boxed()
-        } else {
-            text(raw(elem_type.clone()))
-                .size(TS.body)
-                .color(ink)
-                .boxed()
-        };
-    col = col.push(
-        container(header_row)
-            .padding([6.0, SP.m])
-            .width(Length::Fill)
-            .boxed(),
-    );
-    col = col.push(thin_sep(border_c));
-
-    // Live preview canvas — shows the selected shape at panel scale
-    // with optional radius/angle annotations so edits to the rows
-    // below re-render the preview immediately.
-    if let Some(drawing) = &ctx.selected_drawing {
-        let preview = DrawingPreview {
-            drawing: drawing.clone(),
-            stroke: Color::from_rgb(0.94, 0.74, 0.28),
-            fill: Color::from_rgb(0.94, 0.74, 0.28),
-            muted,
-            accent: Color::from_rgb(0.24, 0.62, 0.97),
-        };
-        let canvas_w: Element<'a, PanelMsg> = iced::widget::canvas(preview)
-            .width(Length::Fill)
-            .height(Length::Fixed(160.0))
-            .boxed();
-        col = col.push(
-            container(canvas_w)
-                .padding([SP.m, SP.l])
-                .width(Length::Fill)
-                .style(move |_: &Theme| container::Style {
-                    background: Some(Background::Color(preview_ground)),
-                    border: Border {
-                        width: 1.0,
-                        color: border_c,
-                        radius: 0.0.into(),
-                        ..Border::default()
-                    },
-                    ..container::Style::default()
-                })
-                .boxed(),
-        );
+    // The panel header names the kind; the illustration comes first.
+    let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
+    let placement = ctx.selected_drawing_placement;
+    if let Some(facts) = shape_facts(&kind, &rows, ctx.selected_drawing.as_ref(), placement) {
+        let has_sample_wire = matches!(facts, ShapeFacts::Rect { .. });
+        col = col.push(illustration_view(
+            ctx,
+            shape_illustration(&facts, &ctx.i18n),
+        ));
+        if has_sample_wire {
+            let caption = t!(ctx.i18n, ids::PROPERTIES_DRAWING_SAMPLE_WIRE);
+            col = col.push(inset_caption(caption, muted));
+        }
     }
 
-    let buf = &ctx.drawing_edit_buf;
-    match elem_type.as_str() {
-        "Line" => {
-            let (sx, sy) = parse_pair(&get("Start"));
-            let (ex, ey) = parse_pair(&get("End"));
-            col = col.push(
-                ctx.collapsible(
-                    "draw_line",
-                    "Properties",
-                    &ctx.collapsed_sections,
-                    move || {
-                        let mut c = Column::new().spacing(0).width(Length::Fill);
-                        c = c.push(drawing_num_row(
-                            t!(ctx.i18n, ids::PANELS_DRAWING_START_X),
-                            DrawingFieldId::LineStartX,
-                            sx,
-                            buf,
-                            muted,
-                        ));
-                        c = c.push(drawing_num_row(
-                            t!(ctx.i18n, ids::PANELS_DRAWING_START_Y),
-                            DrawingFieldId::LineStartY,
-                            sy,
-                            buf,
-                            muted,
-                        ));
-                        c = c.push(drawing_num_row(
-                            t!(ctx.i18n, ids::PANELS_DRAWING_END_X),
-                            DrawingFieldId::LineEndX,
-                            ex,
-                            buf,
-                            muted,
-                        ));
-                        c = c.push(drawing_num_row(
-                            t!(ctx.i18n, ids::PANELS_DRAWING_END_Y),
-                            DrawingFieldId::LineEndY,
-                            ey,
-                            buf,
-                            muted,
-                        ));
-                        c = c.push(drawing_num_row(
-                            t!(ctx.i18n, ids::PANELS_DRAWING_WIDTH_MM),
-                            DrawingFieldId::LineWidth,
-                            stroke_w,
-                            buf,
-                            muted,
-                        ));
-                        c
-                    },
-                )
-                .boxed(),
-            );
-        }
-        "Rectangle" => {
-            let (px, py) = parse_pair(&get("Position"));
-            let w_mm = parse_f64(&get("Width"));
-            let h_mm = parse_f64(&get("Height"));
-            col = col.push(
-                ctx.collapsible(
-                    "draw_rect",
-                    "Properties",
-                    &ctx.collapsed_sections,
-                    move || {
-                        let mut c = Column::new().spacing(0).width(Length::Fill);
-                        c = c.push(drawing_num_row(
-                            t!(ctx.i18n, ids::PANELS_DRAWING_POSITION_X),
-                            DrawingFieldId::RectStartX,
-                            px,
-                            buf,
-                            muted,
-                        ));
-                        c = c.push(drawing_num_row(
-                            t!(ctx.i18n, ids::PANELS_DRAWING_POSITION_Y),
-                            DrawingFieldId::RectStartY,
-                            py,
-                            buf,
-                            muted,
-                        ));
-                        c = c.push(drawing_num_row(
-                            t!(ctx.i18n, ids::PANELS_DRAWING_WIDTH_MM),
-                            DrawingFieldId::RectWidth,
-                            w_mm,
-                            buf,
-                            muted,
-                        ));
-                        c = c.push(drawing_num_row(
-                            t!(ctx.i18n, ids::PANELS_DRAWING_HEIGHT_MM),
-                            DrawingFieldId::RectHeight,
-                            h_mm,
-                            buf,
-                            muted,
-                        ));
-                        c = c.push(drawing_num_row(
-                            t!(ctx.i18n, ids::PANELS_DRAWING_BORDER),
-                            DrawingFieldId::RectBorder,
-                            stroke_w,
-                            buf,
-                            muted,
-                        ));
-                        if show_fill {
-                            c = c.push(drawing_fill_row(fill, muted, border_c, &ctx.i18n));
-                        }
-                        c
-                    },
-                )
-                .boxed(),
-            );
-        }
-        "Circle" => {
-            let (cx, cy) = parse_pair(&get("Center"));
-            let radius = parse_f64(&get("Radius"));
-            col = col.push(
-                ctx.collapsible(
-                    "draw_circle",
-                    "Properties",
-                    &ctx.collapsed_sections,
-                    move || {
-                        let mut c = Column::new().spacing(0).width(Length::Fill);
-                        c = c.push(drawing_num_row(
-                            t!(ctx.i18n, ids::PANELS_DRAWING_CENTER_X),
-                            DrawingFieldId::CircleCenterX,
-                            cx,
-                            buf,
-                            muted,
-                        ));
-                        c = c.push(drawing_num_row(
-                            t!(ctx.i18n, ids::PANELS_DRAWING_CENTER_Y),
-                            DrawingFieldId::CircleCenterY,
-                            cy,
-                            buf,
-                            muted,
-                        ));
-                        c = c.push(drawing_num_row(
-                            t!(ctx.i18n, ids::PANELS_DRAWING_RADIUS),
-                            DrawingFieldId::CircleRadius,
-                            radius,
-                            buf,
-                            muted,
-                        ));
-                        c = c.push(drawing_num_row(
-                            t!(ctx.i18n, ids::PANELS_DRAWING_BORDER),
-                            DrawingFieldId::CircleBorder,
-                            stroke_w,
-                            buf,
-                            muted,
-                        ));
-                        if show_fill {
-                            c = c.push(drawing_fill_row(fill, muted, border_c, &ctx.i18n));
-                        }
-                        c
-                    },
-                )
-                .boxed(),
-            );
-        }
-        "Arc" => {
-            let (cx, cy) = parse_pair(&get("Center"));
-            let radius = parse_f64(&get("Radius"));
-            let start_angle = parse_f64(&get("Start Angle"));
-            let end_angle = parse_f64(&get("End Angle"));
-            col = col.push(
-                ctx.collapsible(
-                    "draw_arc",
-                    "Properties",
-                    &ctx.collapsed_sections,
-                    move || {
-                        let mut c = Column::new().spacing(0).width(Length::Fill);
-                        c = c.push(drawing_num_row(
-                            t!(ctx.i18n, ids::PANELS_DRAWING_CENTER_X),
-                            DrawingFieldId::ArcCenterX,
-                            cx,
-                            buf,
-                            muted,
-                        ));
-                        c = c.push(drawing_num_row(
-                            t!(ctx.i18n, ids::PANELS_DRAWING_CENTER_Y),
-                            DrawingFieldId::ArcCenterY,
-                            cy,
-                            buf,
-                            muted,
-                        ));
-                        c = c.push(drawing_num_row(
-                            t!(ctx.i18n, ids::PANELS_DRAWING_RADIUS),
-                            DrawingFieldId::ArcRadius,
-                            radius,
-                            buf,
-                            muted,
-                        ));
-                        c = c.push(drawing_num_row(
-                            t!(ctx.i18n, ids::PANELS_DRAWING_START_ANGLE),
-                            DrawingFieldId::ArcStartAngle,
-                            start_angle,
-                            buf,
-                            muted,
-                        ));
-                        c = c.push(drawing_num_row(
-                            t!(ctx.i18n, ids::PANELS_DRAWING_END_ANGLE),
-                            DrawingFieldId::ArcEndAngle,
-                            end_angle,
-                            buf,
-                            muted,
-                        ));
-                        c = c.push(drawing_num_row(
-                            t!(ctx.i18n, ids::PANELS_DRAWING_WIDTH),
-                            DrawingFieldId::ArcWidth,
-                            stroke_w,
-                            buf,
-                            muted,
-                        ));
-                        c
-                    },
-                )
-                .boxed(),
-            );
-        }
-        "Polygon" => {
-            let vert_count = parse_f64(&get("Vertices")) as i32;
-            col = col.push(
-                ctx.collapsible(
-                    "draw_poly",
-                    "Properties",
-                    &ctx.collapsed_sections,
-                    move || {
-                        let mut c = Column::new().spacing(0).width(Length::Fill);
-                        c = c.push(prop_kv_row(
-                            "Vertices",
-                            &ctx.i18n.count(vert_count as i64),
-                            muted,
-                            ink,
-                        ));
-                        c = c.push(drawing_num_row(
-                            t!(ctx.i18n, ids::PANELS_DRAWING_BORDER),
-                            DrawingFieldId::PolyBorder,
-                            stroke_w,
-                            buf,
-                            muted,
-                        ));
-                        if show_fill {
-                            c = c.push(drawing_fill_row(fill, muted, border_c, &ctx.i18n));
-                        }
-                        c
-                    },
-                )
-                .boxed(),
-            );
-        }
-        _ => {
-            for (key, value) in &ctx.selection_info {
-                if key != "Type" {
-                    col = col.push(prop_kv_row(key, value, muted, ink));
-                }
+    let Some((location, properties)) = kind_rows(ctx, &kind, &rows, muted) else {
+        for (key, value) in &ctx.selection_info {
+            if key != "Type" {
+                // raw: the key is worded by signex-engine's selection info (#2060).
+                col = col.push(prop_kv_row(raw(key.clone()), value, muted, ink));
             }
         }
+        return col.boxed();
+    };
+    if let Some(s) = section(ctx, "draw_location", ids::PANELS_PLACED_LOCATION, location) {
+        col = col.push(s);
     }
-    // Stroke colour swatch row — applies to every drawing kind that
-    // matched a known variant above. Reads the current stored colour
-    // from the live SchDrawing so the active tile highlights correctly.
-    if matches!(
-        elem_type.as_str(),
-        "Line" | "Rectangle" | "Circle" | "Arc" | "Polygon"
+    if let Some(s) = section(
+        ctx,
+        "draw_properties",
+        ids::PANELS_PLACED_PROPERTIES,
+        properties,
     ) {
-        let current_color = ctx.selected_drawing.as_ref().and_then(|d| match d {
-            signex_types::schematic::SchDrawing::Line { stroke_color, .. }
-            | signex_types::schematic::SchDrawing::Rect { stroke_color, .. }
-            | signex_types::schematic::SchDrawing::Circle { stroke_color, .. }
-            | signex_types::schematic::SchDrawing::Arc { stroke_color, .. }
-            | signex_types::schematic::SchDrawing::Polyline { stroke_color, .. } => *stroke_color,
-        });
-        col = col.push(drawing_stroke_color_row(current_color, muted, &ctx.i18n));
-        col = col.push(drawing_placement_row(
-            ctx.selected_drawing_placement,
-            muted,
-            &ctx.i18n,
+        col = col.push(s);
+    }
+    let has_fill = matches!(kind.as_str(), "Rectangle" | "Circle" | "Polygon");
+    let mut appearance = vec![drawing_stroke_color_row(
+        current_color(ctx.selected_drawing.as_ref()),
+        ctx.wire_color_picker,
+        drawing_hex(ctx),
+        &ctx.i18n,
+    )];
+    if has_fill {
+        appearance.push(hover_linked(
+            ctx,
+            DRAW_FILL,
+            fill_row(rows.fill(), muted, &ctx.i18n),
         ));
+    }
+    appearance.push(hover_linked(
+        ctx,
+        DRAW_PLACEMENT,
+        placement_row(placement, muted, &ctx.i18n),
+    ));
+    if let Some(s) = section(
+        ctx,
+        "draw_appearance",
+        ids::PROPERTIES_SECTION_APPEARANCE,
+        appearance,
+    ) {
+        col = col.push(s);
     }
     col.boxed()
 }
 
-/// Buffer-backed numeric row — survives empty / partial input so the
-/// user can erase and retype the whole value. Emits DrawingFieldTyping
-/// on every keystroke; the handler commits to the engine when the
-/// string parses as f64.
-fn drawing_num_row<'a>(
-    label: signex_i18n::Localized,
-    field: DrawingFieldId,
-    stored_value: f64,
-    buf: &std::collections::HashMap<DrawingFieldId, String>,
-    muted: Color,
-) -> Element<'a, PanelMsg> {
-    use iced::widget::row;
-    use signex_widgets::{text, text_input};
-    let display = buf
-        .get(&field)
-        .cloned()
-        .unwrap_or_else(|| format!("{stored_value:.3}"));
-    row![
-        text(label)
-            .size(TS.body)
-            .color(muted)
-            .width(PROPERTY_LABEL_COLUMN),
-        text_input(signex_i18n::UserText::new(String::new()), display)
-            .size(TS.body)
-            .on_input(move |s| PanelMsg::DrawingFieldTyping(field, s))
-            .width(Length::Fill),
-    ]
-    .padding([4, PROPERTY_ROW_PAD_X])
-    .spacing(PROPERTY_ROW_GAP)
-    .align_y(iced::Alignment::Center)
-    .boxed()
+/// The stored stroke colour of the selected drawing.
+fn current_color(drawing: Option<&SchDrawing>) -> Option<StrokeColor> {
+    drawing.and_then(|d| match d {
+        SchDrawing::Line { stroke_color, .. }
+        | SchDrawing::Rect { stroke_color, .. }
+        | SchDrawing::Circle { stroke_color, .. }
+        | SchDrawing::Arc { stroke_color, .. }
+        | SchDrawing::Polyline { stroke_color, .. } => *stroke_color,
+        SchDrawing::Bezier(b) => b.stroke_color,
+        SchDrawing::Dimension(d) => d.stroke_color,
+        SchDrawing::Table(_) => None,
+    })
 }
 
-/// Altium-style stroke colour swatch row. A small preset palette
-/// (Theme/Red/Green/Blue/Yellow/Orange/White/Black) lets the user
-/// recolour a placed shape without committing to a full colour
-/// picker. Each tile dispatches UpdateDrawingEdit::StrokeColor.
+/// The hex box of the selected drawing's Color row. With no drawing id the
+/// nil id stands in: the row then edits nothing anyway.
+fn drawing_hex(ctx: &PanelContext) -> crate::panels::HexEntry {
+    let id = ctx.selected_uuid.unwrap_or_else(uuid::Uuid::nil);
+    crate::panels::HexEntry::of(
+        crate::panels::ColorRowKey::DrawingStroke(id),
+        ctx.color_hex_draft.as_ref(),
+    )
+}
+
+/// The stroke colour field (mockup row 48): a swatch, the code or Auto (the
+/// theme's drawing colour) in a hex box that takes a typed code, and the
+/// chevron opening the shared preset popover. Each pick is one undoable
+/// edit.
 fn drawing_stroke_color_row<'a>(
-    current: Option<signex_types::schematic::StrokeColor>,
-    muted: Color,
-    i18n: &signex_i18n::I18n,
+    current: Option<StrokeColor>,
+    picker: crate::panels::WireColorPicker,
+    hex: crate::panels::HexEntry,
+    i18n: &I18n,
 ) -> Element<'a, PanelMsg> {
-    use crate::app::contracts::DrawingFieldEdit as E;
-    use iced::widget::row;
-    use signex_types::schematic::StrokeColor;
-    use signex_widgets::{button, raw, text};
-    let rgb = |r: u8, g: u8, b: u8| -> StrokeColor { StrokeColor { r, g, b, a: 255 } };
-    // Only the Auto tile has a label; a colour tile is its swatch.
-    let tile = |label: Option<signex_i18n::MessageId>,
-                stored: Option<StrokeColor>,
-                active: bool,
-                fill_color: Color|
-     -> Element<'a, PanelMsg> {
-        let face = match label {
-            Some(id) => text(t!(i18n, id)),
-            None => text(raw("")),
-        };
-        button(face.size(TS.body))
-            .padding([3, 6])
-            .on_press(PanelMsg::UpdateDrawingEdit(E::StrokeColor(stored)))
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(Background::Color(fill_color)),
-                border: Border {
-                    width: if active { 2.0 } else { 1.0 },
-                    radius: 3.0.into(),
-                    color: if active {
-                        Color::from_rgb(1.0, 1.0, 1.0)
-                    } else {
-                        Color::from_rgb(0.28, 0.28, 0.32)
-                    },
-                    ..Border::default()
-                },
-                text_color: Color::WHITE,
-                ..iced::widget::button::Style::default()
+    use crate::panels::wire_style_rows::{PopoverColorRow, popover_color_row_named};
+    let on_pick: std::rc::Rc<dyn Fn([u8; 4]) -> PanelMsg + 'static> =
+        std::rc::Rc::new(|[r, g, b, a]: [u8; 4]| {
+            PanelMsg::UpdateDrawingEdit(E::StrokeColor(Some(StrokeColor { r, g, b, a })))
+        });
+    popover_color_row_named(
+        PopoverColorRow {
+            label: t!(i18n, ids::PANELS_DRAWING_COLOR),
+            current: current.map(|c| [c.r, c.g, c.b, c.a]),
+            picker,
+            hex,
+            on_toggle: PanelMsg::ToggleWireColorPicker,
+            on_advanced: PanelMsg::OpenWireColorAdvancedPicker,
+            on_cancel: PanelMsg::CancelWireColorPicker,
+            on_pick,
+            on_clear: current
+                .is_some()
+                .then_some(PanelMsg::UpdateDrawingEdit(E::StrokeColor(None))),
+        },
+        ids::PANELS_DRAWING_COLOR_AUTO,
+        i18n,
+    )
+}
+
+/// Placement: Behind circuit / Above circuit. Drawings default to behind,
+/// so a highlight or callout laid over symbols and wires is the one that
+/// needs choosing (#1583).
+fn placement_row<'a>(
+    current: DrawingPlacement,
+    muted: Color,
+    i18n: &I18n,
+) -> Element<'a, PanelMsg> {
+    let cells = vec![
+        Cell::new(
+            DrawingPlacement::Behind,
+            t!(i18n, ids::PANELS_DRAWING_PLACEMENT_BEHIND),
+        ),
+        Cell::new(
+            DrawingPlacement::Above,
+            t!(i18n, ids::PANELS_DRAWING_PLACEMENT_ABOVE),
+        ),
+    ];
+    control_row(
+        t!(i18n, ids::PANELS_DRAWING_PLACEMENT),
+        segmented_cells(cells, Some(current), 2, |p| {
+            PanelMsg::UpdateDrawingEdit(E::Placement(p))
+        }),
+        muted,
+    )
+}
+
+/// Fill: None / Outline / Solid, each with a tooltip; Solid fills with the
+/// sheet background.
+fn fill_row<'a>(current: FillType, muted: Color, i18n: &I18n) -> Element<'a, PanelMsg> {
+    let cells = vec![
+        Cell::new(FillType::None, t!(i18n, ids::PANELS_SHAPE_FILL_NONE))
+            .tip(t!(i18n, ids::PROPERTIES_FILL_NONE_TIP)),
+        Cell::new(FillType::Outline, t!(i18n, ids::PANELS_SHAPE_FILL_OUTLINE))
+            .tip(t!(i18n, ids::PROPERTIES_FILL_OUTLINE_TIP)),
+        Cell::new(FillType::Background, t!(i18n, ids::PROPERTIES_FILL_SOLID))
+            .tip(t!(i18n, ids::PROPERTIES_FILL_SOLID_TIP)),
+    ];
+    control_row(
+        t!(i18n, ids::PANELS_SHAPE_FILL),
+        segmented_cells(cells, Some(current), 3, |f| {
+            PanelMsg::UpdateDrawingEdit(E::Fill(f))
+        }),
+        muted,
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn texts(kind: &str, info: &[(&str, &str)]) -> Vec<String> {
+        let (app, _boot) = crate::app::Signex::new();
+        let mut ctx = app.document_state.panel_ctx.clone();
+        ctx.selection_info = std::iter::once(("Type".to_string(), kind.to_string()))
+            .chain(info.iter().map(|(k, v)| (k.to_string(), v.to_string())))
+            .collect();
+        let view = view_drawing_properties(&ctx, Color::WHITE, Color::WHITE, Color::BLACK);
+        crate::layout_probe::lay_out_texts(view, iced::Size::new(400.0, 3000.0))
+            .into_iter()
+            .map(|t| t.text)
+            .collect()
+    }
+
+    fn order(texts: &[String], wanted: &[&str]) -> Vec<usize> {
+        wanted
+            .iter()
+            .map(|w| {
+                texts
+                    .iter()
+                    .position(|t| t == w)
+                    .unwrap_or_else(|| panic!("{w:?} not in {texts:?}"))
             })
-            .boxed()
-    };
-    let is_active = |c: Option<StrokeColor>| -> bool {
-        match (current, c) {
-            (None, None) => true,
-            (Some(a), Some(b)) => a == b,
-            _ => false,
+            .collect()
+    }
+
+    /// Mockup row 48: Location → Properties → Appearance, paired rows, the Fill
+    /// segment reads Solid.
+    #[test]
+    fn a_rectangle_shows_its_sections_in_order() {
+        let shown = texts(
+            "Rectangle",
+            &[
+                ("Position", "1, 2"),
+                ("Width", "10"),
+                ("Height", "5"),
+                ("Border", "0.2"),
+            ],
+        );
+        let at = order(
+            &shown,
+            &[
+                "LOCATION",
+                "Position",
+                "Size",
+                "PROPERTIES",
+                "Border",
+                "APPEARANCE",
+                "Fill",
+                "Solid",
+            ],
+        );
+        assert!(at.windows(2).all(|w| w[0] < w[1]), "{shown:?}");
+    }
+
+    /// Mockup rows 46 and 48: Color is one field whose hex box reads Auto,
+    /// beside its label; its presets stay in the popover until it is opened.
+    #[test]
+    fn the_color_row_is_one_field_reading_auto() {
+        let info = [
+            ("Type", "Rectangle"),
+            ("Position", "1, 2"),
+            ("Border", "0.2"),
+        ];
+        let (app, _boot) = crate::app::Signex::new();
+        let mut ctx = app.document_state.panel_ctx.clone();
+        ctx.selection_info = (info.iter())
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+        let size = iced::Size::new(400.0, 3000.0);
+        let view = || view_drawing_properties(&ctx, Color::WHITE, Color::WHITE, Color::BLACK);
+        let texts = crate::layout_probe::lay_out_texts(view(), size);
+        let boxes = crate::layout_probe::lay_out_inputs(view(), size);
+        let label = crate::layout_probe::find(&texts, "Color").bounds;
+        let auto = crate::layout_probe::find(&boxes, "Auto").bounds;
+        assert!(auto.x > label.x, "{label:?} {auto:?}");
+        assert!(
+            (auto.center_y() - label.center_y()).abs() < label.height,
+            "the box sits beside its label: {label:?} {auto:?}"
+        );
+        assert!(
+            !texts.iter().any(|t| t.text == "Preset Colors"),
+            "{texts:?}"
+        );
+    }
+
+    /// Mockup row 48: an arc keeps Center, Radius, Angles (Start / End on one row)
+    /// and Width, and has no Fill.
+    #[test]
+    fn an_arc_keeps_its_own_fields() {
+        let shown = texts(
+            "Arc",
+            &[
+                ("Center", "0, 0"),
+                ("Radius", "5"),
+                ("Start Angle", "0"),
+                ("End Angle", "90"),
+                ("Width", "0.2"),
+            ],
+        );
+        let at = order(
+            &shown,
+            &["Center", "Radius", "Angles", "Start", "End", "Width"],
+        );
+        assert!(at.windows(2).all(|w| w[0] < w[1]), "{shown:?}");
+        assert!(!shown.iter().any(|t| t == "Fill"), "{shown:?}");
+    }
+
+    const RECTANGLE: [(&str, &str); 4] = [
+        ("Position", "1, 2"),
+        ("Width", "10"),
+        ("Height", "5"),
+        ("Border", "0.2"),
+    ];
+
+    /// Mockup row 48: the panel header names the kind, so the drawing's
+    /// rows start with the illustration, no second icon-and-name line;
+    /// under a rectangle's illustration a caption says what its sample wire
+    /// shows. An arc has no sample wire and no caption.
+    #[test]
+    fn the_rectangle_has_its_caption_and_no_second_name_line() {
+        let caption = "The sample wire shows Behind / Above";
+        let shown = texts("Rectangle", &RECTANGLE);
+        assert!(!shown.iter().any(|t| t == "Rectangle"), "{shown:?}");
+        assert!(shown.iter().any(|t| t == caption), "{shown:?}");
+        let arc = texts("Arc", &[("Center", "0, 0"), ("Radius", "5")]);
+        assert!(!arc.iter().any(|t| t == "Arc" || t == caption), "{arc:?}");
+    }
+
+    /// Mockup row 48: the X / W axis tags and the mm unit sit inside their
+    /// fields, as on every placed object's Position and Size.
+    #[test]
+    fn the_axis_and_unit_sit_inside_each_field() {
+        let (app, _boot) = crate::app::Signex::new();
+        let mut ctx = app.document_state.panel_ctx.clone();
+        ctx.selection_info = std::iter::once(("Type", "Rectangle"))
+            .chain(RECTANGLE)
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+        let size = iced::Size::new(400.0, 3000.0);
+        let view = || view_drawing_properties(&ctx, Color::WHITE, Color::WHITE, Color::BLACK);
+        let texts = crate::layout_probe::lay_out_texts(view(), size);
+        let boxes = crate::layout_probe::lay_out_inputs(view(), size);
+        let inside = |tag: &str, value: &str| {
+            let field = crate::layout_probe::find(&boxes, value).bounds;
+            texts.iter().any(|t| {
+                t.text == tag
+                    && t.bounds.x >= field.x
+                    && t.bounds.x + t.bounds.width <= field.x + field.width
+                    && (t.bounds.center_y() - field.center_y()).abs() < field.height / 2.0
+            })
+        };
+        for (tag, value) in [("X", "1.000"), ("W", "10.000"), ("mm", "10.000")] {
+            assert!(inside(tag, value), "{tag} outside {value}: {texts:?}");
         }
-    };
-    let theme_active = current.is_none();
-    row![
-        text(signex_i18n::t!(
-            i18n,
-            signex_i18n::ids::PANELS_DRAWING_COLOR
-        ))
-        .size(TS.body)
-        .color(muted)
-        .width(PROPERTY_LABEL_COLUMN),
-        row![
-            tile(
-                Some(ids::PANELS_DRAWING_COLOR_AUTO),
-                None,
-                theme_active,
-                Color::from_rgba(0.28, 0.28, 0.32, 0.6),
-            ),
-            tile(
-                None,
-                Some(rgb(0xE5, 0x3E, 0x3E)),
-                is_active(Some(rgb(0xE5, 0x3E, 0x3E))),
-                Color::from_rgb(0.90, 0.24, 0.24),
-            ),
-            tile(
-                None,
-                Some(rgb(0x3E, 0xA5, 0x44)),
-                is_active(Some(rgb(0x3E, 0xA5, 0x44))),
-                Color::from_rgb(0.24, 0.65, 0.27),
-            ),
-            tile(
-                None,
-                Some(rgb(0x3C, 0x85, 0xD6)),
-                is_active(Some(rgb(0x3C, 0x85, 0xD6))),
-                Color::from_rgb(0.24, 0.52, 0.84),
-            ),
-            tile(
-                None,
-                Some(rgb(0xE6, 0xB7, 0x1E)),
-                is_active(Some(rgb(0xE6, 0xB7, 0x1E))),
-                Color::from_rgb(0.90, 0.72, 0.12),
-            ),
-            tile(
-                None,
-                Some(rgb(0xE0, 0xE0, 0xE0)),
-                is_active(Some(rgb(0xE0, 0xE0, 0xE0))),
-                Color::from_rgb(0.88, 0.88, 0.88),
-            ),
-        ]
-        .spacing(SP.s)
-        .width(Length::Fill),
-    ]
-    .padding([4, PROPERTY_ROW_PAD_X])
-    .spacing(PROPERTY_ROW_GAP)
-    .align_y(iced::Alignment::Center)
-    .boxed()
-}
+        assert!(inside("mm", "0.200"), "the Border unit: {texts:?}");
+    }
 
-/// Behind / Above the circuit. Drawings default to behind, so a highlight or
-/// callout laid over symbols and wires is the one that needs choosing (#1583).
-fn drawing_placement_row<'a>(
-    current: signex_types::schematic::DrawingPlacement,
-    muted: Color,
-    i18n: &signex_i18n::I18n,
-) -> Element<'a, PanelMsg> {
-    use crate::app::contracts::DrawingFieldEdit as E;
-    use signex_i18n::MessageId;
-    use signex_types::schematic::DrawingPlacement;
-    let tile = |label: MessageId, placement: DrawingPlacement| -> Element<'a, PanelMsg> {
-        let active = current == placement;
-        signex_widgets::button(text(t!(i18n, label)).size(TS.body))
-            .padding([3.0, SP.m])
-            .on_press(PanelMsg::UpdateDrawingEdit(E::Placement(placement)))
-            .style(crate::panels::form_look::option_tile(active))
-            .boxed()
-    };
-    row![
-        text(t!(i18n, ids::PANELS_DRAWING_PLACEMENT))
-            .size(TS.body)
-            .color(muted)
-            .width(PROPERTY_LABEL_COLUMN),
-        row![
-            tile(
-                ids::PANELS_DRAWING_PLACEMENT_BEHIND,
-                DrawingPlacement::Behind
-            ),
-            tile(ids::PANELS_DRAWING_PLACEMENT_ABOVE, DrawingPlacement::Above),
-        ]
-        .spacing(SP.s)
-        .width(Length::Fill),
-    ]
-    .padding([4, PROPERTY_ROW_PAD_X])
-    .spacing(PROPERTY_ROW_GAP)
-    .align_y(iced::Alignment::Center)
-    .boxed()
-}
-
-fn drawing_fill_row<'a>(
-    current: signex_types::schematic::FillType,
-    muted: Color,
-    _border_c: Color,
-    i18n: &signex_i18n::I18n,
-) -> Element<'a, PanelMsg> {
-    use crate::app::contracts::DrawingFieldEdit as E;
-    use signex_i18n::MessageId;
-    use signex_types::schematic::FillType;
-    let tile = |label: MessageId, ft: FillType, active: bool| -> Element<'a, PanelMsg> {
-        signex_widgets::button(text(t!(i18n, label)).size(TS.body))
-            .padding([3.0, SP.m])
-            .on_press(PanelMsg::UpdateDrawingEdit(E::Fill(ft)))
-            .style(crate::panels::form_look::option_tile(active))
-            .boxed()
-    };
-    row![
-        text(t!(i18n, ids::PANELS_SHAPE_FILL))
-            .size(TS.body)
-            .color(muted)
-            .width(PROPERTY_LABEL_COLUMN),
-        row![
-            tile(
-                ids::PANELS_SHAPE_FILL_NONE,
-                FillType::None,
-                current == FillType::None
-            ),
-            tile(
-                ids::PANELS_SHAPE_FILL_OUTLINE,
-                FillType::Outline,
-                current == FillType::Outline
-            ),
-            tile(
-                ids::PANELS_SHAPE_FILL_BACKGROUND,
-                FillType::Background,
-                current == FillType::Background,
-            ),
-        ]
-        .spacing(SP.s)
-        .width(Length::Fill),
-    ]
-    .padding([4, PROPERTY_ROW_PAD_X])
-    .spacing(PROPERTY_ROW_GAP)
-    .align_y(iced::Alignment::Center)
-    .boxed()
+    /// Mockup row 48: a pair tagged Start / End keeps the value's room past
+    /// its longer tag, so it stacks where an X / Y pair still fits; an X / Y
+    /// pair keeps the one-letter floor.
+    #[test]
+    fn a_long_tagged_pair_keeps_room_for_its_value() {
+        let i18n = I18n::en_us();
+        let xy = pair_floor(&i18n, ids::PROPERTIES_AXIS_X, ids::PROPERTIES_AXIS_Y);
+        assert_eq!(xy, PAIR_FIELD_MIN);
+        let angles = pair_floor(
+            &i18n,
+            ids::PROPERTIES_ANGLE_START,
+            ids::PROPERTIES_ANGLE_END,
+        );
+        let start = long_tag_extra(&Label::from(t!(i18n, ids::PROPERTIES_ANGLE_START)));
+        assert!(start > 0.0, "Start is longer than one letter");
+        assert_eq!(angles, PAIR_FIELD_MIN + start);
+    }
 }

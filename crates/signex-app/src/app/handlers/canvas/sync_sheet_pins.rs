@@ -7,7 +7,7 @@
 //! command through the mutation gateway so undo and netlist invalidation work
 //! like any other edit.
 
-use crate::app::mutation_gateway::CommandOutcome;
+use crate::app::mutation_gateway::MutationOutcome;
 
 /// One child file validated and ready to reconcile, with the state needed to
 /// report its result after the batch runs.
@@ -25,6 +25,7 @@ impl PendingFileSync {
         signex_engine::Command::ReconcileChildSheetPins {
             child_filename: self.filename.clone(),
             ports: self.ports.clone(),
+            renames: None,
         }
     }
 }
@@ -58,7 +59,7 @@ impl crate::app::Signex {
         }
         let commands = syncs.iter().map(PendingFileSync::command).collect();
         let (outcome, reason) = self.apply_engine_commands_reporting(commands, true, true);
-        if outcome == CommandOutcome::Failed {
+        if outcome == MutationOutcome::Failed {
             let reason = reason.unwrap_or_else(|| "the engine refused the batch".to_string());
             for sync in &syncs {
                 crate::diagnostics::log_warning(format!(

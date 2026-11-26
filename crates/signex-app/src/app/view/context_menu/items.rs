@@ -15,7 +15,7 @@ use super::*;
 
 use crate::keymap::CatalogTextExt;
 use iced::widget::svg::Handle;
-use signex_i18n::menu_ids::MENU_PLANNED_TOOLTIP;
+use signex_i18n::menu_ids::{MENU_PLANNED_BADGE, MENU_PLANNED_TOOLTIP};
 use signex_i18n::{I18n, MessageId};
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
 
@@ -209,27 +209,76 @@ pub(super) fn dd_planned(
     }
 }
 
-/// A greyed launcher for a submenu that does not exist yet: a planned row
-/// with the chevron in the chevron column.
-pub(super) fn dd_planned_submenu(
+/// Save row for the project-root menu — active only when a schematic tab
+/// is open or the project metadata is dirty. Label and `shortcut` come from
+/// the `save_document` command like every other surface.
+pub(super) fn save_entry(
+    i18n: &I18n,
+    icon: Option<Handle>,
+    enabled: bool,
+    shortcut: &str,
+) -> DropdownEntry<Message> {
+    if enabled {
+        dd_command(i18n, icon, "save_document", shortcut, None)
+    } else {
+        dd_cmd_disabled(i18n, icon, "save_document", shortcut)
+    }
+}
+
+/// A planned row (greyed, the shared "planned" tooltip) that also carries
+/// the "planned" pill.
+pub(super) fn dd_planned_pill(
     i18n: &I18n,
     icon: Option<Handle>,
     label: &str,
 ) -> DropdownEntry<Message> {
-    match dd_planned(i18n, icon, label, None) {
-        DropdownEntry::Item(item) => DropdownEntry::Item(item.submenu()),
-        other => other,
-    }
+    map_item(dd_planned(i18n, icon, label, None), |item| {
+        item.badge(i18n.message(MENU_PLANNED_BADGE, &[]))
+    })
 }
 
-/// Save row for the project-root menu — active only when a schematic tab
-/// is open or the project metadata is dirty. Label and `shortcut` come from
-/// the `save_document` command like every other surface.
-pub(super) fn save_entry(i18n: &I18n, enabled: bool, shortcut: &str) -> DropdownEntry<Message> {
-    if enabled {
-        dd_command(i18n, None, "save_document", shortcut, None)
-    } else {
-        dd_cmd_disabled(i18n, None, "save_document", shortcut)
+/// A launcher whose flyout lists planned rows: it reads muted like them and
+/// carries the "planned" tooltip, yet still opens its flyout on hover or
+/// click like any [`submenu_launcher`].
+pub(super) fn planned_launcher(
+    i18n: &I18n,
+    icon: Option<Handle>,
+    label: &str,
+    kind: ContextSubmenu,
+    active: bool,
+) -> DropdownEntry<Message> {
+    map_item(submenu_launcher(icon, label, kind, active), |item| {
+        let mut item = item.tooltip(text(i18n, MENU_PLANNED_TOOLTIP));
+        // Greyed ink only: the row keeps its open message, which
+        // `DropdownItem::disabled` would drop.
+        item.disabled = true;
+        item
+    })
+}
+
+/// `entry` with `icon` in the icon column.
+pub(super) fn with_icon(entry: DropdownEntry<Message>, icon: Handle) -> DropdownEntry<Message> {
+    map_item(entry, |item| item.icon(icon))
+}
+
+/// `entry` with its label (and icon) in the danger ink.
+pub(super) fn danger(entry: DropdownEntry<Message>) -> DropdownEntry<Message> {
+    map_item(entry, |item| item.danger())
+}
+
+/// `entry` with its label in the strong weight (the double-click row).
+pub(super) fn strong(entry: DropdownEntry<Message>) -> DropdownEntry<Message> {
+    map_item(entry, |item| item.strong())
+}
+
+/// Apply `f` to the item of `entry`; other entries pass through.
+fn map_item(
+    entry: DropdownEntry<Message>,
+    f: impl FnOnce(DropdownItem<Message>) -> DropdownItem<Message>,
+) -> DropdownEntry<Message> {
+    match entry {
+        DropdownEntry::Item(item) => DropdownEntry::Item(f(item)),
+        other => other,
     }
 }
 

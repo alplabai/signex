@@ -10,7 +10,7 @@ use serde::Serialize;
 use serde_json::Value;
 
 use crate::app::Signex;
-use crate::app::command::CommandOutcome;
+use crate::app::command::{CommandOutcome, RequestOutcome};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -39,43 +39,16 @@ pub struct MessageLine {
 }
 
 /// What a dispatch outcome means for the result line. A `Ran` that left an
-/// error notice failed; nothing unknown is ever reported as ran.
+/// error notice failed; nothing unknown is ever reported as ran. This is the
+/// one reading, [`RequestOutcome`], as a reply's status, reason and data.
 pub fn outcome_verdict(
     id: &str,
     outcome: CommandOutcome,
     notice: Option<String>,
 ) -> (Status, Option<String>, Option<Value>) {
-    match outcome {
-        CommandOutcome::Ran => match notice {
-            Some(why) => (Status::Failed, Some(why), None),
-            None => (Status::Ran, None, None),
-        },
-        CommandOutcome::UnknownId => (
-            Status::Refused,
-            Some(format!("unknown command `{id}`")),
-            None,
-        ),
-        CommandOutcome::NoBridgeArm => (
-            Status::Refused,
-            Some(format!(
-                "not runnable headless: `{id}` has no dispatch arm yet"
-            )),
-            None,
-        ),
-        // A command that made nothing because the app said why in an error
-        // notice (an open of a missing file) failed; it was not refused.
-        CommandOutcome::Disabled { reason } => match notice {
-            Some(why) => (Status::Failed, Some(why), None),
-            None => (Status::Refused, Some(reason), None),
-        },
-        // A query ran: what it found is the result, never a bare `ran`.
-        CommandOutcome::Answered(value) => (Status::Answered, None, Some(value)),
-        other => (
-            Status::Failed,
-            Some(format!("unexpected outcome {other:?}")),
-            None,
-        ),
-    }
+    RequestOutcome::of(id, outcome)
+        .after_notice(notice)
+        .into_verdict()
 }
 
 /// The state a command can change, per document: engine revision and unsaved
@@ -167,13 +140,7 @@ mod tests {
         assert_eq!(unknown.0, Status::Refused);
         let arm = outcome_verdict("x", CommandOutcome::NoBridgeArm, None);
         assert!(arm.1.unwrap().contains("no dispatch arm"));
-        let disabled = outcome_verdict(
-            "x",
-            CommandOutcome::Disabled {
-                reason: "why".into(),
-            },
-            None,
-        );
+        let disabled = outcome_verdict("x", CommandOutcome::disabled("why"), None);
         assert_eq!(
             (disabled.0, disabled.1.as_deref()),
             (Status::Refused, Some("why"))
@@ -182,9 +149,7 @@ mod tests {
         // that is not there) is a failure with that notice.
         let noticed = outcome_verdict(
             "x",
-            CommandOutcome::Disabled {
-                reason: "made no document".into(),
-            },
+            CommandOutcome::disabled("made no document"),
             Some("Open failed: no file".into()),
         );
         assert_eq!(
@@ -197,5 +162,20 @@ mod tests {
         assert_eq!(answered, (Status::Answered, None, Some(answer)));
         let not_headless = outcome_verdict("x", CommandOutcome::NotHeadless, None);
         assert_eq!(not_headless.0, Status::Failed);
+    }
+
+    /// ADR-0006 slice 7: an unknown id is answered with the close catalog
+    /// ids; one with none close keeps the old text.
+    #[test]
+    fn an_unknown_command_says_which_ids_are_close() {
+        let (status, why, _) = outcome_verdict("plce_wire", CommandOutcome::UnknownId, None);
+        assert_eq!(status, Status::Refused);
+        let why = why.expect("a reason");
+        assert!(
+            why.starts_with("unknown command `plce_wire`; did you mean `place_wire`"),
+            "{why}"
+        );
+        let far = outcome_verdict("zzzzzzzzzzzzzzzz", CommandOutcome::UnknownId, None);
+        assert_eq!(far.1.as_deref(), Some("unknown command `zzzzzzzzzzzzzzzz`"));
     }
 }

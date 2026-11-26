@@ -250,6 +250,29 @@ impl Signex {
             })
     }
 
+    /// Whether renaming the project file `target` (project `idx`) leaves its
+    /// folder as it is: the folder is not named after the project, or it
+    /// cannot move. The same two checks Submit makes; the Rename dialog says
+    /// so (mockup row 23). The new name does not change the answer.
+    pub(crate) fn project_rename_keeps_folder(&self, idx: usize, target: &Path) -> bool {
+        let (Some(dir), Some(stem)) =
+            (target.parent(), target.file_stem().and_then(|s| s.to_str()))
+        else {
+            return true;
+        };
+        folder_target(dir, stem, stem).is_none() || !self.project_folder_can_move(idx)
+    }
+
+    /// Whether the Rename dialog `d` says the project folder is not renamed:
+    /// a project rename whose folder keeps its name. Its view and its window
+    /// height both ask this.
+    pub(crate) fn rename_keeps_folder(&self, d: &crate::app::RenameDialogState) -> bool {
+        d.is_project_rename
+            && d.tree_path
+                .first()
+                .is_some_and(|&idx| self.project_rename_keeps_folder(idx, &d.target_path))
+    }
+
     /// A library the app holds (mounted, Global, Installed, browser tab or
     /// mount in flight) that lies under the folder of the project at `idx`.
     /// The move does not re-key libraries, so one in there would be left
@@ -581,17 +604,13 @@ impl Signex {
         for tab in self.document_state.tabs.iter_mut() {
             if tab.path == from {
                 tab.path = to.to_path_buf();
-                // A Rules tab keeps its own title (#2398).
-                if tab.kind.as_rules().is_some() {
-                    continue;
+                // Page tabs are retitled from the project's new name below.
+                if !tab.kind.is_project_page() {
+                    tab.title = new_stem.to_string();
                 }
-                tab.title = if tab.kind.as_project().is_some() {
-                    crate::app::project_tab::project_tab_title(to)
-                } else {
-                    new_stem.to_string()
-                };
             }
         }
+        self.refresh_page_tab_titles();
         if let Some(engine) = self.document_state.remove_engine(from) {
             self.document_state.insert_engine(to.to_path_buf(), engine);
         }

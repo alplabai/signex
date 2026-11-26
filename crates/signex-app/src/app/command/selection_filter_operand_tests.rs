@@ -1,4 +1,5 @@
-//! #2417: the SCH Filter panel is the schematic Selection Filter, and the two
+//! #2417: the Filter panel on a schematic tab (SCH Filter retired into it,
+//! mockup rows 40 and 55) is the schematic Selection Filter, and the two
 //! filter commands set the same filter from operands, in the window and
 //! headless. The Net Classes panel is the net-class editor as a table.
 
@@ -9,7 +10,14 @@ use crate::active_bar::{CustomFilterPreset, SelectionFilter};
 use crate::app::{Message, Signex};
 use crate::dock::DockMessage;
 use crate::keymap::AppCommandId;
-use crate::panels::{NetClassMsg, PanelKind, PanelMsg, SchFilterMsg};
+use crate::panels::{FilterEditor, NetClassMsg, PanelContext, PanelKind, PanelMsg, SchFilterMsg};
+
+/// The panel context with the Filter panel following a schematic tab.
+fn on_sheet(app: &Signex) -> PanelContext {
+    let mut ctx = app.document_state.panel_ctx.clone();
+    ctx.selection_filter.editor = FilterEditor::Schematic;
+    ctx
+}
 
 const WINDOW: iced::Size = iced::Size::new(320.0, 1200.0);
 
@@ -64,12 +72,10 @@ fn texts<M>(element: iced::Element<'_, M>) -> Vec<String> {
 }
 
 #[test]
-fn the_sch_filter_panel_is_no_longer_planned() {
+fn the_filter_panel_on_a_sheet_is_no_longer_planned() {
     let app = app();
-    let shown = texts(crate::panels::view_panel(
-        PanelKind::SchFilter,
-        &app.document_state.panel_ctx,
-    ));
+    let ctx = on_sheet(&app);
+    let shown = texts(crate::panels::view_panel(PanelKind::Filter, &ctx));
     for label in [
         "All",
         "None",
@@ -86,10 +92,11 @@ fn the_sch_filter_panel_is_no_longer_planned() {
 
 /// The chips wrap to the panel's width instead of running off its edge.
 #[test]
-fn the_sch_filter_chips_wrap_inside_a_narrow_panel() {
+fn the_filter_chips_wrap_inside_a_narrow_panel() {
     let app = app();
+    let ctx = on_sheet(&app);
     let laid = crate::layout_probe::lay_out_texts(
-        crate::panels::view_panel(PanelKind::SchFilter, &app.document_state.panel_ctx),
+        crate::panels::view_panel(PanelKind::Filter, &ctx),
         WINDOW,
     );
     for filter in SelectionFilter::ALL {
@@ -106,8 +113,9 @@ fn the_sch_filter_chips_wrap_inside_a_narrow_panel() {
 #[test]
 fn a_chip_click_in_the_panel_toggles_the_canvas_filter() {
     let mut app = app();
+    let ctx = on_sheet(&app);
     let clicked = crate::layout_probe::messages_on_click(
-        crate::panels::view_panel(PanelKind::SchFilter, &app.document_state.panel_ctx),
+        crate::panels::view_panel(PanelKind::Filter, &ctx),
         WINDOW,
         "Wires",
     );
@@ -203,6 +211,7 @@ fn an_unknown_kind_is_refused_and_changes_nothing() {
     let CommandOutcome::Disabled { reason } = outcome else {
         panic!("not refused: {outcome:?}");
     };
+    let reason = signex_i18n::RenderTranslatable::render_en_us(&reason);
     assert!(
         reason.contains("`rooms`") && reason.contains("net_labels"),
         "{reason}"
@@ -247,7 +256,7 @@ fn an_unknown_preset_is_refused_and_changes_nothing() {
     let given = args("apply_selection_filter_preset", &["name=Power"]);
     let (outcome, _) = app.run_operands(&id("apply_selection_filter_preset"), &given);
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("`Power`")),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if signex_i18n::RenderTranslatable::render_en_us(reason).contains("`Power`")),
         "{outcome:?}"
     );
     assert_eq!(filters(&app), before);
@@ -262,13 +271,7 @@ fn without_operands_the_filter_commands_say_what_they_need() {
         let before = filters(&app);
         let (outcome, _) = app.dispatch_command_reporting(&id(name), CommandArgs::none(), None);
         let reason = super::operand_handlers::needs_operands_reason(&id(name)).expect("a reason");
-        assert_eq!(
-            outcome,
-            CommandOutcome::Disabled {
-                reason: reason.to_string()
-            },
-            "{name}"
-        );
+        assert_eq!(outcome, CommandOutcome::disabled(reason), "{name}");
         assert_eq!(filters(&app), before, "{name}");
     }
 }
@@ -301,7 +304,7 @@ fn the_net_classes_panel_shows_the_class_table() {
     ));
     for label in [
         "Name",
-        "Colour",
+        "Color",
         "Width",
         "Members",
         "Power",

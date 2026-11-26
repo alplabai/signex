@@ -211,7 +211,9 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
                 0.0
             };
             let eff_len = typed_len.unwrap_or(cursor_len);
-            let eff_ang = typed_ang.map(f64::to_radians).unwrap_or(cursor_ang);
+            let eff_ang = typed_ang
+                .map(|deg| state.angle_deg_mirrored(deg).to_radians())
+                .unwrap_or(cursor_ang);
             // Effective endpoint = first + (eff_len @ eff_ang). Draw the
             // ghost to THIS point (not the raw cursor) so a typed
             // length/angle visibly snaps the rubber-band into place.
@@ -242,7 +244,7 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
             };
             let ang_text = match ang_buf {
                 Some(b) if !b.is_empty() => format!("{b} deg"),
-                _ => format!("{:.1} deg", eff_ang.to_degrees()),
+                _ => format!("{:.1} deg", state.angle_deg_mirrored(eff_ang.to_degrees())),
             };
             draw_dim_pill_styled(
                 frame,
@@ -547,6 +549,7 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
             // what changes as the cursor moves.
             let sweep_deg = (delta.to_degrees().rem_euclid(360.0)) as f64;
             let label = Point::new(cursor_screen.x + 24.0, cursor_screen.y + 24.0);
+            let sweep_deg = state.angle_deg_mirrored(sweep_deg);
             draw_dim_pill(frame, label, &format!("{:.1} deg", sweep_deg));
         }
         // #467 — Edge Arc, start placed. Cursor previews where `end`
@@ -734,7 +737,12 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
         // v0.27 — Fillet, first Line picked. The tool is waiting for
         // the user's second-line click; no shape preview to draw,
         // the cursor reticle is the sole visual cue.
-        ToolPending::FilletFirst { .. } => {}
+        // Chamfer's ghost lives in `tool_ghosts`.
+        ToolPending::FilletFirst { .. } | ToolPending::ChamferFirst { .. } => {}
+        // The Slot and Polygon ghosts live in `tool_ghosts`.
+        ToolPending::SlotFirst { .. }
+        | ToolPending::SlotSecond { .. }
+        | ToolPending::PolygonCentre { .. } => {}
     }
 
     // v0.24 Track D — modeless live numeric placement-input overlay.

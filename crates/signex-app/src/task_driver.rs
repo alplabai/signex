@@ -7,7 +7,8 @@
 //! app sees `MainWindowOpened`), `window::close` reports the close the way the
 //! close-events subscription does, window size and scale queries get fixed
 //! answers, and `iced::exit()` ends the session. Anything else is dropped with
-//! a warning.
+//! a debug line: it is a fact about the headless runner, not something the
+//! user should read in Messages (#2468).
 //!
 //! Messages are fed back through `update` in a deterministic first-in,
 //! first-out order: each task's messages in turn, then their follow-ups.
@@ -18,7 +19,7 @@ use std::time::{Duration, Instant};
 use iced::Task;
 use iced::futures::StreamExt as _;
 use iced_runtime::Action;
-use iced_runtime::core::clipboard::{Content, Error as ClipboardError, Kind};
+use iced_runtime::core::clipboard::{ClipboardKind, Content, Error as ClipboardError, Kind};
 
 use crate::app::{Message, Signex, WindowMsg};
 use crate::ignore::IgnoreResult as _;
@@ -243,11 +244,33 @@ impl Effects {
 
     fn clipboard(&mut self, action: iced_runtime::clipboard::Action) {
         use iced_runtime::clipboard::Action as Clip;
+        // The primary selection is unavailable, as the runtime answers it
+        // outside X11 and Wayland.
         match action {
-            Clip::Read { kind, channel } => {
+            Clip::Read {
+                clipboard_kind: ClipboardKind::Primary,
+                channel,
+                ..
+            } => {
+                channel
+                    .send(Err(ClipboardError::ClipboardUnavailable))
+                    .ignore(UNANSWERED);
+            }
+            Clip::Write {
+                clipboard_kind: ClipboardKind::Primary,
+                channel,
+                ..
+            } => {
+                channel
+                    .send(Err(ClipboardError::ClipboardUnavailable))
+                    .ignore(UNANSWERED);
+            }
+            Clip::Read { kind, channel, .. } => {
                 channel.send(self.read(kind)).ignore(UNANSWERED);
             }
-            Clip::Write { content, channel } => {
+            Clip::Write {
+                content, channel, ..
+            } => {
                 self.clipboard = Some(content);
                 channel.send(Ok(())).ignore(UNANSWERED);
             }
@@ -284,7 +307,7 @@ impl Effects {
 }
 
 fn dropped(kind: &'static str) {
-    tracing::warn!(
+    tracing::debug!(
         target: "signex::task_driver",
         kind,
         "dropped an iced action a headless run does not perform"
@@ -345,6 +368,23 @@ mod tests {
             app.ui_state.window_size,
             (HEADLESS_WINDOW_SIZE.width, HEADLESS_WINDOW_SIZE.height)
         );
+    }
+
+    /// A widget operation a headless run drops is a debug line, never a
+    /// warning in the user's Messages panel (#2468).
+    #[test]
+    fn a_dropped_widget_operation_says_nothing_at_the_default_level() {
+        let before = crate::diagnostics::said_on_this_thread();
+        let mut driver = TaskDriver::new();
+        let focus = iced::widget::operation::focus::<Message>(iced::widget::Id::new("probe"));
+        assert!(driver.outputs(focus).expect("focus").is_empty());
+        if crate::diagnostics::configured_level() < log::LevelFilter::Debug {
+            assert_eq!(
+                crate::diagnostics::said_on_this_thread(),
+                before,
+                "the dropped operation reached the Messages panel"
+            );
+        }
     }
 
     #[test]

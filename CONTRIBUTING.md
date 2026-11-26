@@ -126,6 +126,9 @@ bash scripts/check_discarded_tasks.sh   # no `let _ =` on an iced::Task
 bash scripts/check_lint_lockstep.sh     # workspace lints present in every member
 bash scripts/check_layer_ratchet.sh   # layer-crossing counts vs scripts/layer-ratchet-baseline.txt
 bash scripts/check_engine_ids.sh      # engine id minting only at scripts/engine-ids-allowlist.txt
+bash scripts/check_app_catch_unwind.sh # app catch_unwind count may only fall (needs ast-grep, jq)
+bash scripts/check_projector_writes.sh # app/projector writes no core state and calls no wrapper (needs ast-grep, jq)
+bash scripts/check_document_load_seam.sh # only the load wrappers call app/state/document_load (needs ast-grep, jq)
 bash scripts/changelog_assemble.sh --check   # changelog.d fragments
 ```
 
@@ -291,6 +294,15 @@ release PR then still adds by hand the headline, the install block and the
 closing `[Full changelog](…compare/v<prev>...v<this>)` line that the Format
 section of `CHANGELOG.md` requires.
 
+### Translations
+
+`README.zh-CN.md` is the Simplified Chinese translation of `README.md`. A change
+that edits `README.md` — the version, the status note, the download section or
+the licence — also updates `README.zh-CN.md` in the same PR. If you cannot
+translate the change, add a line at the top of `README.zh-CN.md` saying
+`> 本译文落后于英文 README，自 <version> 起。` so readers know how current it is;
+nobody is blocked on Chinese.
+
 ### Commit Messages
 
 We use conventional-ish commits:
@@ -436,6 +448,19 @@ them, so the rest is on the author.
 - **Decided behaviour** ([docs/DECISIONS.md](docs/DECISIONS.md)): golden tests
   pin the menus, command catalog and built-in shortcuts; changing one needs a
   maintainer decision that names it.
+- **Command parity table** ([ADR-0006](docs/architecture/adr-0006-application-core.md),
+  slice C): `crates/signex-app/src/app/command/parity/testdata/parity.golden.tsv`
+  lists every route by which a command id reaches its handler, with the
+  route's owner, the implicit inputs it reads, and whether those come from
+  reading the handler or only its gate (`basis`). It is generated from the
+  routing code and changes with every slice that moves a route, so it is not a
+  decided-behaviour golden: review the diff, then regenerate it with
+  `UPDATE_GOLDEN=1 cargo test -p signex-app golden_parity_table`. Hand
+  annotations of implicit inputs live in `parity/annotations.rs`, which a
+  regenerate keeps. The owner comes from what the route writes (#2551):
+  document state is `core`, session state or machine settings `gui`, a
+  router over what is in hand `split` with a `split_core_command` row; the
+  hand annotations of those writes live in `parity/owners.rs`.
 - **Deferred work**
   ([ADR-0003](docs/architecture/adr-0003-deferred-work-and-consistent-history.md)):
   owed work is explicit model state. Every boundary (save, undo, redo,

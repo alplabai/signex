@@ -9,6 +9,7 @@ mod binding;
 mod catalog;
 mod display;
 mod editor;
+mod extension_names;
 mod mod_migration;
 mod physical;
 mod profile;
@@ -35,16 +36,19 @@ pub fn shown_in(spelling: &str, i18n: &signex_i18n::I18n) -> String {
         .unwrap_or_else(|_| spelling.to_string())
 }
 
-#[cfg(test)]
-pub(crate) use catalog::OPERAND_CONVENTION;
+pub(crate) use catalog::did_you_mean;
 pub use catalog::{
     CatalogTextExt, CommandGroup, CommandMetadata, HeadlessUse, Operand, OperandKind,
     all_command_ids, category_title, command_menu_message, command_menu_text, fallback_label,
     metadata_for, metadata_for_str, offered_in,
 };
+#[cfg(test)]
+pub(crate) use catalog::{IDS_STILL_TEXT, OPERAND_CONVENTION};
 pub use editor::{
     BindingSlot, KeymapEditorModel, KeymapEditorProfile, KeymapEditorRow, KeymapEditorSource,
+    default_context,
 };
+pub use extension_names::{ExtensionCommandName, ExtensionCommandNames};
 pub use mod_migration::{
     ModMigration, ModMove, migrate_active_to_mod, offers_mod_migration, standard_ctrl_rows,
     with_standard_set_on_mod,
@@ -54,13 +58,19 @@ pub use profile::{
     BindingConflict, BuiltInProfile, CompiledKeymap, KeyLookup, ProfileLoadError, RestoredProfiles,
     ShortcutProfile, ShortcutProfileKind, ShortcutProfileSet, TomlShortcutProfile, config_path,
     config_path_for_dir, export_custom_profile, export_custom_profiles, import_custom_profile,
-    load_profile_set, load_profile_set_at, read_backup_profiles_at, save_profile_set,
-    save_profile_set_at,
+    load_profile_set, load_profile_set_at, read_backup_profiles_at, read_profile_file,
+    save_profile_set, save_profile_set_at, user_config_path, write_profile_file,
 };
 pub use signex_commands::{AppCommandId, Platform};
 
 #[cfg(test)]
+mod assign_tests;
+#[cfg(test)]
 mod binding_tests;
+#[cfg(test)]
+mod board_place_binding_tests;
+#[cfg(test)]
+mod board_prefix_tests;
 #[cfg(test)]
 mod catalog_golden_tests;
 #[cfg(test)]

@@ -110,7 +110,8 @@ impl PreviewRasterizer {
         if wanted.is_empty() {
             return Vec::new();
         }
-        let expr_tables = build_expression_tables(&ctx.sheets, ctx.netlist.as_ref());
+        let expr_tables = build_expression_tables(&ctx.sheets, ctx.netlist.as_ref())
+            .with_placed_fits(ctx, opts.pdf.variant.as_deref(), opts.pdf.draw_not_fitted);
         wanted
             .into_iter()
             .filter_map(|(pos, sheet)| {

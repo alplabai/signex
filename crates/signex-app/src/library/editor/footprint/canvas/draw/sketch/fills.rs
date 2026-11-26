@@ -1,14 +1,23 @@
 //! Filled closed loops — walks the line/arc graph, finds simple closed
-//! cycles, and fills each polygon with a role-tinted plate. Also
+//! cycles, and fills each polygon with a role-tinted plate under its role
+//! tag (`role_tags`). Also
 //! exposes the `ClosedLoop` records so the click handler can select an
 //! entire loop from a single fill click.
 
 use iced::Color;
 use iced::widget::canvas::{self, Path};
 
+use super::role_tags::{draw_loop_tag, loop_tag};
 use crate::library::editor::footprint::canvas::FootprintCanvasState;
-use crate::library::editor::footprint::layers::FpLayer;
+use crate::library::editor::footprint::layers::{FpLayer, LayerPalette};
 use crate::library::editor::footprint::state::FootprintEditorState;
+
+/// The plate of a selected and of an idle loop without a role, and the
+/// alpha a role's colour fills an idle and a selected loop at.
+const SELECTED_PLATE: Color = Color::from_rgba(0.30, 0.55, 0.92, 0.45);
+const IDLE_PLATE: Color = Color::from_rgba(0.55, 0.75, 0.98, 0.18);
+const ROLE_ALPHA: f32 = 0.20;
+const SELECTED_ROLE_ALPHA: f32 = 0.45;
 
 /// v0.16.1 — Walk the sketch's line graph, find simple closed
 /// cycles, and render each as a filled polygon. Skips cycles where
@@ -18,12 +27,11 @@ use crate::library::editor::footprint::state::FootprintEditorState;
 /// pad). Arc-bounded loops are deferred to v0.16.2.
 ///
 /// v0.16.2 — Looks up the role attr on every entity in the loop.
-/// The first hit picks the fill colour from the matching layer in
-/// [`super::super::super::layers::FpLayer`]. Loops with no role assignment fall
-/// back to neutral grey.
+/// The first hit picks the fill colour (`role_tags::role_colour`). Loops
+/// with no role assignment fall back to neutral grey.
 /// v0.27 — closed-loop record exposed to the click handler so a
 /// single click on the polygon fill can select every entity in the
-/// loop. Mirrors what `draw_filled_closed_loops` walks internally.
+/// loop; `draw_filled_closed_loops` fills and tags the same records.
 pub(in crate::library::editor::footprint::canvas) struct ClosedLoop {
     pub lines: Vec<signex_sketch::id::SketchEntityId>,
     pub points: Vec<signex_sketch::id::SketchEntityId>,
@@ -164,250 +172,241 @@ pub(super) fn draw_filled_closed_loops(
     sketch: &signex_sketch::SketchData,
     state: &FootprintEditorState,
 ) {
-    use signex_sketch::entity::{Entity, EntityKind};
     use signex_sketch::id::SketchEntityId;
-    use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
-    use std::collections::{HashMap, HashSet};
+    use std::collections::HashSet;
 
-    // v0.16.2 — pick a fill colour for a loop by inspecting each
-    // entity's role attr. Returns `None` when no entity in the loop
-    // carries a role; the caller falls back to neutral grey.
-    fn role_color(entity: &Entity) -> Option<FpLayer> {
-        if entity.pad.is_some() {
-            return Some(FpLayer::FCu);
-        }
-        if let Some(s) = entity.silk.as_ref() {
-            return Some(
-                if matches!(s.layer, PcbLayer::Technical(TechnicalLayer::SilkscreenTop)) {
-                    FpLayer::FSilks
-                } else {
-                    FpLayer::BSilks
-                },
-            );
-        }
-        if entity.courtyard.is_some() {
-            return Some(FpLayer::EdgeCuts);
-        }
-        if let Some(m) = entity.mask_opening.as_ref() {
-            return Some(
-                if matches!(m.layer, PcbLayer::Technical(TechnicalLayer::SolderMaskTop)) {
-                    FpLayer::FFab
-                } else {
-                    FpLayer::BFab
-                },
-            );
-        }
-        if let Some(m) = entity.mask_exclude.as_ref() {
-            return Some(
-                if matches!(m.layer, PcbLayer::Technical(TechnicalLayer::SolderMaskTop)) {
-                    FpLayer::FFab
-                } else {
-                    FpLayer::BFab
-                },
-            );
-        }
-        if let Some(p) = entity.paste_aperture.as_ref() {
-            return Some(
-                if matches!(p.layer, PcbLayer::Technical(TechnicalLayer::PasteTop)) {
-                    FpLayer::FFab
-                } else {
-                    FpLayer::BFab
-                },
-            );
-        }
-        if let Some(p) = entity.pour.as_ref() {
-            return Some(if matches!(p.layer, PcbLayer::Copper(CopperLayer::Top)) {
-                FpLayer::FCu
-            } else {
-                FpLayer::BCu
-            });
-        }
-        if entity.keepout.is_some() {
-            return Some(FpLayer::EdgeCuts);
-        }
-        if entity.board_cutout.is_some() {
-            return Some(FpLayer::EdgeCuts);
-        }
-        None
-    }
-
-    fn point_pos(
-        id: SketchEntityId,
-        sketch: &signex_sketch::SketchData,
-        state: &FootprintEditorState,
-    ) -> Option<(f64, f64)> {
-        if let Some(solve) = state.last_solve.as_ref()
-            && let Some(p) = signex_sketch::solver::state::point_xy(
-                id,
-                &solve.result.state,
-                &solve.result.index,
-                sketch,
-            )
-        {
-            return Some(p);
-        }
-        sketch
-            .entities
+    // A loop with any line or point selected draws the selected plate.
+    let selected: HashSet<SketchEntityId> = state
+        .selected_sketch
+        .into_iter()
+        .chain(state.selected_sketch_secondary)
+        .chain(state.selected_sketch_extra.iter().copied())
+        .collect();
+    let loops = find_closed_loops(sketch, state);
+    for closed in &loops {
+        let loop_selected = closed
+            .lines
             .iter()
-            .find(|e| e.id == id)
-            .and_then(|e| match e.kind {
-                EntityKind::Point { x, y } => Some((x, y)),
-                _ => None,
-            })
-    }
-
-    // Build adjacency: Point ID -> Vec<(other_endpoint, edge_id, construction)>.
-    // v0.27 — Arcs are now full participants alongside Lines so the
-    // rounded-rectangle (line + arc + line + arc + ...) reads as
-    // one closed loop and the fill paints across the whole shape.
-    let mut adj: HashMap<SketchEntityId, Vec<(SketchEntityId, SketchEntityId, bool)>> =
-        HashMap::new();
-    for e in &sketch.entities {
-        match e.kind {
-            EntityKind::Line { start, end } => {
-                adj.entry(start)
-                    .or_default()
-                    // v0.22 Phase A5 — Treat centerline lines the same
-                    // as construction for closed-loop fill detection: a
-                    // loop made entirely of skipped lines must not paint
-                    // a profile fill (Altium / Fusion convention).
-                    .push((end, e.id, e.bake_skipped()));
-                adj.entry(end)
-                    .or_default()
-                    .push((start, e.id, e.bake_skipped()));
-            }
-            EntityKind::Arc { start, end, .. } => {
-                adj.entry(start)
-                    .or_default()
-                    .push((end, e.id, e.bake_skipped()));
-                adj.entry(end)
-                    .or_default()
-                    .push((start, e.id, e.bake_skipped()));
-            }
-            _ => {}
-        }
-    }
-
-    let mut visited_lines: HashSet<SketchEntityId> = HashSet::new();
-    for seed in &sketch.entities {
-        let (seed_start, seed_end) = match seed.kind {
-            EntityKind::Line { start, end } => (start, end),
-            EntityKind::Arc { start, end, .. } => (start, end),
-            _ => continue,
-        };
-        if visited_lines.contains(&seed.id) {
-            continue;
-        }
-        // Walk: start at seed_start, follow seed → seed_end → next →
-        // ... until we return to seed_start or fail.
-        let mut points: Vec<SketchEntityId> = vec![seed_start];
-        let mut lines: Vec<SketchEntityId> = vec![seed.id];
-        let mut all_construction = seed.bake_skipped();
-        let mut current = seed_end;
-        let mut prev_line = seed.id;
-        let mut closed = false;
-        for _ in 0..256 {
-            if current == seed_start {
-                closed = true;
-                break;
-            }
-            let neighbors = match adj.get(&current) {
-                Some(n) if n.len() == 2 => n,
-                _ => break,
-            };
-            let next = neighbors.iter().find(|(_, lid, _)| *lid != prev_line);
-            match next {
-                Some((other, lid, construction)) => {
-                    points.push(current);
-                    lines.push(*lid);
-                    all_construction &= *construction;
-                    prev_line = *lid;
-                    current = *other;
-                }
-                None => break,
-            }
-        }
-        if !closed || points.len() < 3 || all_construction {
-            // Mark seed line visited so we don't re-walk it; but
-            // don't fill.
-            visited_lines.insert(seed.id);
-            continue;
-        }
-        for lid in &lines {
-            visited_lines.insert(*lid);
-        }
-        // Resolve to world positions, drop loops with missing data.
-        let positions: Vec<(f64, f64)> = points
-            .iter()
-            .filter_map(|id| point_pos(*id, sketch, state))
-            .collect();
-        if positions.len() < 3 {
-            continue;
-        }
-        // v0.16.2 — find the first role attr in the loop's lines or
-        // points; use its layer colour for the fill. Falls back to
-        // neutral grey when nothing in the loop carries a role.
-        let loop_role: Option<FpLayer> = lines
-            .iter()
-            .chain(points.iter())
-            .filter_map(|id| sketch.entities.iter().find(|e| e.id == *id))
-            .find_map(role_color);
-        // v0.27 — Fusion-style two-tone fill. The fill is the
-        // primary visual cue of "this is a closed shape" — Fusion
-        // shows pale-blue when idle and saturated-blue when the
-        // whole loop is selected. We mirror that here: detect a
-        // loop-wide selection by checking whether any line / point
-        // ID is in the user's selection set, then pick the
-        // saturated-blue plate; otherwise stay pale.
-        //
-        // Role-tagged loops (Pad / Silk / Courtyard / etc.)
-        // override the pale fill with the layer colour at higher
-        // alpha so the user can still distinguish role assignments
-        // at a glance. Selection still wins to make the active
-        // shape pop.
-        let mut selected_set: std::collections::HashSet<SketchEntityId> =
-            std::collections::HashSet::new();
-        if let Some(id) = state.selected_sketch {
-            selected_set.insert(id);
-        }
-        if let Some(id) = state.selected_sketch_secondary {
-            selected_set.insert(id);
-        }
-        for id in &state.selected_sketch_extra {
-            selected_set.insert(*id);
-        }
-        let loop_selected = !selected_set.is_empty()
-            && (lines.iter().any(|l| selected_set.contains(l))
-                || points.iter().any(|p| selected_set.contains(p)));
-        let fill = if loop_selected {
-            // Fusion saturated-blue selected fill.
-            Color::from_rgba(0.30, 0.55, 0.92, 0.45)
-        } else {
-            match loop_role {
-                Some(layer) => {
-                    let c = layer.color_in(state.layer_palette);
-                    Color {
-                        r: c.r,
-                        g: c.g,
-                        b: c.b,
-                        a: 0.20,
-                    }
-                }
-                None => {
-                    // Fusion idle pale-blue.
-                    Color::from_rgba(0.55, 0.75, 0.98, 0.18)
-                }
-            }
-        };
+            .chain(closed.points.iter())
+            .any(|id| selected.contains(id));
+        let fill = loop_fill(sketch, closed, loop_selected);
         let path = Path::new(|builder| {
-            let p0 = cstate.world_to_screen(positions[0]);
+            let p0 = cstate.world_to_screen((closed.polygon[0][0], closed.polygon[0][1]));
             builder.move_to(p0);
-            for pos in positions.iter().skip(1) {
-                let p = cstate.world_to_screen(*pos);
-                builder.line_to(p);
+            for pos in closed.polygon.iter().skip(1) {
+                builder.line_to(cstate.world_to_screen((pos[0], pos[1])));
             }
             builder.close();
         });
         frame.fill(&path, fill);
+    }
+    // The role tags draw over every fill, selected or not (mockup row 190).
+    for closed in &loops {
+        if let Some(tag) = loop_tag(sketch, closed, state, cstate) {
+            draw_loop_tag(frame, &tag);
+        }
+    }
+}
+
+/// The plate a loop is filled with: the colour of the first of its edges,
+/// then corners, that has a fill colour, stronger while the loop is
+/// selected, so a selected loop still shows its role (mockup row 190); else
+/// the selected or the idle pale plate.
+fn loop_fill(sketch: &signex_sketch::SketchData, closed: &ClosedLoop, selected: bool) -> Color {
+    let role = closed
+        .lines
+        .iter()
+        .chain(closed.points.iter())
+        .filter_map(|id| sketch.entities.iter().find(|e| e.id == *id))
+        .find_map(fill_colour);
+    match (role, selected) {
+        (Some(c), true) => Color {
+            a: SELECTED_ROLE_ALPHA,
+            ..c
+        },
+        (Some(c), false) => Color { a: ROLE_ALPHA, ..c },
+        (None, true) => SELECTED_PLATE,
+        (None, false) => IDLE_PLATE,
+    }
+}
+
+/// The fill colour of one entity's role attributes, in the fill's own
+/// priority (pad, silk, courtyard, mask opening, mask exclude, paste, pour,
+/// keepout, cutout); `None` when none of them is set, so the next entity of
+/// the loop decides. Only courtyard has its own colour (mockup row 190); the
+/// rest keep their layer's.
+fn fill_colour(entity: &signex_sketch::entity::Entity) -> Option<Color> {
+    use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
+    let sided = |top: bool, front: FpLayer, back: FpLayer| if top { front } else { back };
+    let layer = if entity.pad.is_some() {
+        FpLayer::FCu
+    } else if let Some(s) = entity.silk.as_ref() {
+        let top = matches!(s.layer, PcbLayer::Technical(TechnicalLayer::SilkscreenTop));
+        sided(top, FpLayer::FSilks, FpLayer::BSilks)
+    } else if entity.courtyard.is_some() {
+        return Some(LayerPalette::Editor.courtyard_colour());
+    } else if let Some(m) = entity.mask_opening.as_ref() {
+        let top = matches!(m.layer, PcbLayer::Technical(TechnicalLayer::SolderMaskTop));
+        sided(top, FpLayer::FFab, FpLayer::BFab)
+    } else if let Some(m) = entity.mask_exclude.as_ref() {
+        let top = matches!(m.layer, PcbLayer::Technical(TechnicalLayer::SolderMaskTop));
+        sided(top, FpLayer::FFab, FpLayer::BFab)
+    } else if let Some(p) = entity.paste_aperture.as_ref() {
+        let top = matches!(p.layer, PcbLayer::Technical(TechnicalLayer::PasteTop));
+        sided(top, FpLayer::FFab, FpLayer::BFab)
+    } else if let Some(p) = entity.pour.as_ref() {
+        let top = matches!(p.layer, PcbLayer::Copper(CopperLayer::Top));
+        sided(top, FpLayer::FCu, FpLayer::BCu)
+    } else if entity.keepout.is_some() || entity.board_cutout.is_some() {
+        FpLayer::EdgeCuts
+    } else {
+        return None;
+    };
+    Some(layer.color())
+}
+
+#[cfg(test)]
+mod tests {
+    use signex_library::Footprint;
+    use signex_sketch::SketchData;
+    use signex_sketch::entity::{Entity, EntityKind};
+    use signex_sketch::id::SketchEntityId;
+    use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
+    use signex_types::sketch::SketchRole;
+
+    use super::*;
+    use crate::library::editor::footprint::sketch_dispatch::set_entity_role;
+
+    /// A 4 x 2 mm rectangle of four lines, and its lines.
+    fn rectangle() -> (Footprint, Vec<SketchEntityId>) {
+        let plane = PlaneId::new();
+        let mut sketch = SketchData::default();
+        sketch.planes.push(Plane {
+            id: plane,
+            kind: PlaneKind::BoardTop,
+        });
+        let corners = [(1.0, 1.0), (5.0, 1.0), (5.0, 3.0), (1.0, 3.0)].map(|(x, y)| {
+            let id = SketchEntityId::new();
+            sketch
+                .entities
+                .push(Entity::new(id, plane, EntityKind::Point { x, y }));
+            id
+        });
+        let lines = (0..4)
+            .map(|k| {
+                let id = SketchEntityId::new();
+                let kind = EntityKind::Line {
+                    start: corners[k],
+                    end: corners[(k + 1) % 4],
+                };
+                sketch.entities.push(Entity::new(id, plane, kind));
+                id
+            })
+            .collect();
+        let mut fp = Footprint::empty("fills");
+        fp.sketch = Some(sketch);
+        (fp, lines)
+    }
+
+    /// The idle fill of the rectangle's one loop.
+    fn fill_of(fp: &Footprint) -> Color {
+        let sketch = fp.sketch.as_ref().expect("a sketch");
+        let state = FootprintEditorState::from_footprint(fp);
+        let loops = find_closed_loops(sketch, &state);
+        assert_eq!(loops.len(), 1);
+        loop_fill(sketch, &loops[0], false)
+    }
+
+    fn tinted(layer: FpLayer) -> Color {
+        Color {
+            a: ROLE_ALPHA,
+            ..layer.color()
+        }
+    }
+
+    /// An entity with several roles fills in the fill's own priority: a
+    /// mask opening beats the keepout on the same edge.
+    #[test]
+    fn a_multi_role_loop_keeps_its_fill_priority() {
+        let (mut fp, lines) = rectangle();
+        set_entity_role(&mut fp, lines[0], SketchRole::Keepout);
+        let keepout = fill_of(&fp);
+        assert_eq!(keepout, tinted(FpLayer::EdgeCuts));
+        let edge = fp
+            .sketch
+            .as_mut()
+            .and_then(|s| s.entities.iter_mut().find(|e| e.id == lines[0]))
+            .expect("the edge");
+        edge.mask_opening = Some(signex_sketch::attr::MaskOpeningAttr {
+            layer: signex_types::pcb_layer::PcbLayer::Technical(
+                signex_types::pcb_layer::TechnicalLayer::SolderMaskTop,
+            ),
+        });
+        assert_eq!(fill_of(&fp), tinted(FpLayer::FFab));
+    }
+
+    /// A first edge whose role has no fill colour (Mechanical, Component
+    /// Anchor) leaves the fill to the next edge that has one.
+    #[test]
+    fn a_role_without_a_fill_colour_defers_to_the_next_edge() {
+        for first in [SketchRole::MechanicalLayer, SketchRole::ComponentAnchor] {
+            let (mut fp, lines) = rectangle();
+            set_entity_role(&mut fp, lines[0], first);
+            if first == SketchRole::ComponentAnchor {
+                // An anchor takes only a point: set it on the edge directly.
+                let edge = fp
+                    .sketch
+                    .as_mut()
+                    .and_then(|s| s.entities.iter_mut().find(|e| e.id == lines[0]))
+                    .expect("the edge");
+                edge.component_anchor = Some(Default::default());
+            }
+            set_entity_role(&mut fp, lines[1], SketchRole::SilkTop);
+            assert_eq!(fill_of(&fp), tinted(FpLayer::FSilks), "{first:?}");
+        }
+    }
+
+    /// Courtyard is the one fill that changed: its own colour, not the
+    /// Keep-Out one (mockup row 190).
+    #[test]
+    fn a_courtyard_loop_fills_in_the_courtyard_colour() {
+        let (mut fp, lines) = rectangle();
+        set_entity_role(&mut fp, lines[0], SketchRole::Courtyard);
+        let want = Color {
+            a: ROLE_ALPHA,
+            ..LayerPalette::Editor.courtyard_colour()
+        };
+        assert_eq!(fill_of(&fp), want);
+        assert_ne!(fill_of(&fp), tinted(FpLayer::EdgeCuts));
+    }
+
+    /// Mockup row 190: a selected courtyard loop stays in the courtyard
+    /// colour, stronger than idle, not the selected plate that hid its role.
+    #[test]
+    fn a_selected_role_loop_keeps_its_role_colour() {
+        let (mut fp, lines) = rectangle();
+        set_entity_role(&mut fp, lines[0], SketchRole::Courtyard);
+        let sketch = fp.sketch.as_ref().expect("a sketch");
+        let state = FootprintEditorState::from_footprint(&fp);
+        let loops = find_closed_loops(sketch, &state);
+        let selected = loop_fill(sketch, &loops[0], true);
+        assert_ne!(selected, SELECTED_PLATE);
+        let courtyard = LayerPalette::Editor.courtyard_colour();
+        assert_eq!(
+            (selected.r, selected.g, selected.b),
+            (courtyard.r, courtyard.g, courtyard.b)
+        );
+        assert!(selected.a > loop_fill(sketch, &loops[0], false).a);
+    }
+
+    /// No role: the idle plate; selected: the selected plate.
+    #[test]
+    fn unassigned_and_selected_loops_keep_their_plates() {
+        let (fp, _) = rectangle();
+        assert_eq!(fill_of(&fp), IDLE_PLATE);
+        let sketch = fp.sketch.as_ref().expect("a sketch");
+        let state = FootprintEditorState::from_footprint(&fp);
+        let loops = find_closed_loops(sketch, &state);
+        assert_eq!(loop_fill(sketch, &loops[0], true), SELECTED_PLATE);
     }
 }

@@ -52,7 +52,6 @@ fn open_active(app: &mut Signex, path: &Path, symbol_uuid: uuid::Uuid) -> uuid::
     app.document_state.tabs.push(TabInfo {
         title: "A".to_string(),
         path: path.to_path_buf(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -243,6 +242,7 @@ fn empty_pcb_board() -> signex_types::pcb::PcbBoard {
     signex_types::pcb::PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         unknown: Default::default(),
         uuid: uuid::Uuid::now_v7(),
@@ -440,7 +440,6 @@ fn second_tab(app: &mut Signex, path: &Path) {
     app.document_state.tabs.push(TabInfo {
         title: "B".to_string(),
         path: path.to_path_buf(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -638,6 +637,7 @@ fn push_waiver_project(app: &mut Signex, dir: &Path, old: uuid::Uuid, other: uui
                 }],
                 variant_definitions: Vec::new(),
                 active_variant: None,
+                variant_settings: Default::default(),
                 libraries: Vec::new(),
                 enable_git: false,
                 net_classes: Vec::new(),
@@ -649,6 +649,11 @@ fn push_waiver_project(app: &mut Signex, dir: &Path, old: uuid::Uuid, other: uui
                 schematic_defaults: Default::default(),
                 project_defaults: Default::default(),
                 agent_journal: Default::default(),
+                schematic_design: Default::default(),
+                fab_outputs: None,
+                router_tool_diameter: None,
+                bom_alternates: Vec::new(),
+                requirements: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),
             },

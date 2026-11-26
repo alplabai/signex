@@ -1,581 +1,807 @@
-//! Floating detached-modal body builders — move-selection, net-colour
-//! palette, parameter manager, and custom colour picker — plus the shared
-//! modal close button.
-//!
-//! Extracted verbatim from `view/mod.rs` (ADR-0001, issue #164) as pure
-//! code motion — no behaviour change. These are methods of the same
-//! `Signex` view impl, split across sibling files.
+//! The Move Selection dialog body (#66): ΔX / ΔY with the unit as a suffix,
+//! a read-only line-art preview of the move and a grid-step help line. The
+//! dialog lives in its own window, whose title bar carries the title and the
+//! selection count. The net colour bodies are in `view/net_color/`.
 
 use super::*;
-use crate::styles::{DialogButtonKind, dialog_body, dialog_button, dialog_footer, dialog_message};
-use signex_i18n::{ids, t};
+use crate::app::handlers::editing_commands::move_selection_dialog::{
+    MOVE_DX_INPUT_ID, PREVIEW_EM, grid_steps, offset_mm, stored_dy,
+};
+use crate::styles::{DialogButtonKind, dialog_body, dialog_button, dialog_footer};
+use iced::{Point, Rectangle, Size};
+use signex_i18n::{Arg, UserText, ids, t};
+use signex_types::coord::Unit;
+use signex_types::schematic::{
+    Point as SheetPoint, SchematicDefaults, SchematicSheet, SelectedItem, SelectedKind, Symbol,
+    SymbolPrimitive, arc_polyline, lower_placed_symbol,
+};
+use signex_widgets::LengthFormat;
+use signex_widgets::property_illustration::{
+    Anchor, Callout, Illustration, IllustrationHover, Ink, Paint, Part, Primitive, Style,
+    TextLabel, TextRole, Tint, Weight,
+};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
-/// Width of the custom net-colour picker card in the main window, in px.
-const NET_COLOR_CUSTOM_W: f32 = 430.0;
+/// Preview geometry, in the illustration's own view units: the span the
+/// selection and its move are fitted to, the room kept for the callouts,
+/// how far a name sits above its object and the moved selection's frame pad.
+const SPAN: f32 = 140.0;
+const MARGIN: f32 = 26.0;
+const CALLOUT_GAP: f32 = 12.0;
+const NAME_LIFT: f32 = 6.0;
+const FRAME_PAD: f32 = 4.0;
+/// How long a drawn name is at most.
+const NAME_MAX_CHARS: usize = 8;
+/// Sheet sizes, in mm, of the marks with no body to lower: a junction dot,
+/// half a no-connect cross, half the stand-in box of a part with no library
+/// body. The fitted span covers at least this many grid steps.
+const JUNCTION_RADIUS_MM: f64 = 0.5;
+const NO_CONNECT_HALF_MM: f64 = 0.635;
+const MISSING_BODY_HALF_MM: f64 = 1.27;
+const MIN_SPAN_STEPS: f64 = 4.0;
 
 impl Signex {
-    /// Altium-style Move Selection dialog. Two numeric inputs plus
-    /// OK / Cancel. No header on the body: the dialog opens in its own
-    /// OS window, whose native title bar carries the title and close.
+    /// The Move Selection dialog: the two offsets, the preview, the help
+    /// line, and Cancel / Move. Enter in either field moves.
     pub(super) fn view_move_selection_body(&self) -> Element<'_, Message> {
-        use iced::widget::{Space, Widget, column, container, row};
-        use signex_widgets::{text, text_input};
+        use iced::widget::{Widget, column, container, row};
         let tokens = &self.document_state.panel_ctx.tokens;
         let i18n = &self.ui_state.i18n;
-        let text_muted = crate::styles::ti(tokens.text_secondary);
         let ms = &self.ui_state.move_selection;
-        let selection_count = self.interaction_state.active_canvas().selected.len();
+        let unit = self.ui_state.unit;
+        let has_selection = !self.interaction_state.active_canvas().selected.is_empty();
+        let preview = |text: &str| offset_mm(text, unit).unwrap_or(0.0);
+        let (dx_mm, dy_mm) = (preview(&ms.dx), preview(&ms.dy));
 
-        let field = |label: signex_i18n::MessageId,
-                     value: &str,
-                     msg: fn(String) -> Message|
-         -> Element<'static, Message> {
-            let value = value.to_owned();
-            column![
-                text(t!(i18n, label)).size(TS.caption).color(text_muted),
-                text_input(t!(self.ui_state.i18n, ids::PLACEHOLDER_MOVE_OFFSET), value)
-                    .style(crate::panels::form_look::text_input_style)
-                    .on_input(msg)
-                    .padding([SP.s, SP.m])
-                    .size(TS.label),
-            ]
-            .spacing(SP.s)
-            .boxed()
-        };
+        let fields = row![
+            offset_field(
+                t!(i18n, ids::DIALOG_MOVE_SELECTION_DX),
+                &ms.dx,
+                Some(MOVE_DX_INPUT_ID.clone()),
+                unit,
+                |s| Message::MoveSelection(MoveSelectionMsg::DxChanged(s)),
+                self,
+            ),
+            offset_field(
+                t!(i18n, ids::DIALOG_MOVE_SELECTION_DY),
+                &ms.dy,
+                None,
+                unit,
+                |s| Message::MoveSelection(MoveSelectionMsg::DyChanged(s)),
+                self,
+            ),
+        ]
+        .spacing(SP.l);
 
-        let body = dialog_body(
-            column![
-                dialog_message(
-                    t!(i18n, ids::DIALOG_MOVE_SELECTION_COUNT, "count" => selection_count.to_string()),
-                    tokens
-                ),
-                row![
-                    field(ids::DIALOG_MOVE_SELECTION_DX, &ms.dx, |s| {
-                        Message::MoveSelection(MoveSelectionMsg::DxChanged(s))
-                    }),
-                    Space::new().width(SP.l),
-                    field(ids::DIALOG_MOVE_SELECTION_DY, &ms.dy, |s| {
-                        Message::MoveSelection(MoveSelectionMsg::DyChanged(s))
-                    }),
-                ]
-                .align_y(iced::Alignment::Start),
-            ]
-            .spacing(SP.m),
-        );
+        let preview = self.move_selection_preview(dx_mm, dy_mm);
+        let help = signex_widgets::text(UserText::new(self.move_selection_help(dx_mm, dy_mm)))
+            .size(TS.caption)
+            .color(crate::styles::tokens::resolve(tokens).ink3);
 
+        let body = dialog_body(column![fields, preview, help].spacing(SP.m));
         let footer = dialog_footer(vec![
             dialog_button(
-                t!(self.ui_state.i18n, ids::DIALOG_BUTTON_CANCEL),
+                t!(i18n, ids::DIALOG_BUTTON_CANCEL),
                 DialogButtonKind::Cancel,
                 Some(Message::MoveSelection(MoveSelectionMsg::Close)),
                 tokens,
             ),
             dialog_button(
-                t!(self.ui_state.i18n, ids::DIALOG_BUTTON_APPLY),
+                t!(i18n, ids::DIALOG_MOVE_SELECTION_MOVE),
                 DialogButtonKind::Primary,
-                (selection_count > 0).then_some(Message::MoveSelection(MoveSelectionMsg::Apply)),
+                has_selection.then_some(Message::MoveSelection(MoveSelectionMsg::Apply)),
                 tokens,
             ),
         ]);
 
-        container(
-            column![body, footer]
-                .width(iced::Length::Fixed(420.0))
-                .height(iced::Length::Fixed(240.0)),
-        )
-        .style(crate::styles::modal_card(tokens))
-        .clip(true)
-        .boxed()
+        container(column![body, footer].width(iced::Length::Fill))
+            .style(crate::styles::modal_card(tokens))
+            .clip(true)
+            .boxed()
     }
 
-    /// Header of the custom net colour card: the in-window strip with its
-    /// close button, the empty slot once the dialog has its own OS window.
-    fn net_color_custom_header(&self) -> Element<'_, Message> {
-        use iced::widget::{Space, Widget, container, row};
-        use signex_widgets::text;
+    /// The framed preview of the move, on the sheet grid (mockup row 66).
+    fn move_selection_preview(&self, dx_mm: f64, dy_mm: f64) -> Element<'_, Message> {
         let tokens = &self.document_state.panel_ctx.tokens;
-        if self.modal_detached(crate::app::state::ModalId::NetColorCustom) {
-            return super::dialogs::os_title_bar_slot();
-        }
-        container(
-            row![
-                text(t!(self.ui_state.i18n, ids::DIALOG_NET_COLOR_PICK_TITLE))
-                    .size(TS.title)
-                    .color(crate::styles::ti(tokens.text)),
-                Space::new().width(iced::Length::Fill),
-                self.view_close_x(Message::NetColor(NetColorMsg::CustomShow(false))),
-            ]
-            .align_y(iced::Alignment::Center),
-        )
-        .padding([10, 14])
-        .style(crate::styles::toolbar_strip(tokens))
-        .boxed()
-    }
-
-    /// Compact X close button shared by the detached-modal bodies.
-    fn view_close_x(&self, message: Message) -> Element<'_, Message> {
-        use iced::widget::{Widget, container};
-        use signex_widgets::{button, raw, text};
-        let tokens = &self.document_state.panel_ctx.tokens;
-        let text_c = crate::styles::ti(tokens.text_secondary);
-        let border = crate::styles::ti(tokens.border);
-        button(
-            container(
-                // raw: a close glyph, not language.
-                text(raw("\u{00D7}".to_string()))
-                    .size(TS.heading)
-                    .color(text_c),
-            )
-            .padding([0, 6]),
-        )
-        .on_press(message)
-        .style(
-            move |_: &iced::Theme, status: iced::widget::button::Status| {
-                let bg = match status {
-                    iced::widget::button::Status::Hovered => Some(iced::Background::Color(
-                        iced::Color::from_rgba(1.0, 1.0, 1.0, 0.1),
-                    )),
-                    _ => Some(iced::Background::Color(iced::Color::from_rgba(
-                        1.0, 1.0, 1.0, 0.03,
-                    ))),
-                };
-                iced::widget::button::Style {
-                    background: bg,
-                    border: iced::Border {
-                        width: 1.0,
-                        radius: 3.0.into(),
-                        color: border,
-                        ..iced::Border::default()
-                    },
-                    text_color: text_c,
-                    ..iced::widget::button::Style::default()
-                }
-            },
-        )
-        .boxed()
-    }
-
-    /// Altium F5 Net Color palette — list of net labels with a per-net
-    /// color picker. Ships with a 10-swatch palette; a full ColorPicker
-    /// widget can replace it later without changing the message contract.
-    pub(super) fn view_net_color_palette_body(&self) -> Element<'_, Message> {
-        use iced::widget::{Space, Widget, column, container, row, scrollable};
-        use signex_widgets::{button, raw, text};
-        let tokens = &self.document_state.panel_ctx.tokens;
-        let text_c = crate::styles::ti(tokens.text);
-        let text_muted = crate::styles::ti(tokens.text_secondary);
-        let border_c = crate::styles::ti(tokens.border);
-
-        // Gather unique net labels from the active snapshot.
-        let mut nets: Vec<String> = self
-            .interaction_state
-            .canvas
-            .active_snapshot()
-            .map(|s| {
-                s.labels
-                    .iter()
-                    .filter(|l| {
-                        matches!(
-                            l.label_type,
-                            signex_types::schematic::LabelType::Net
-                                | signex_types::schematic::LabelType::Global
-                                | signex_types::schematic::LabelType::Hierarchical
-                        )
-                    })
-                    .map(|l| l.text.clone())
-                    .collect::<std::collections::HashSet<_>>()
-                    .into_iter()
-                    .collect()
+        let i18n = &self.ui_state.i18n;
+        let fmt = LengthFormat::new(i18n, self.ui_state.unit);
+        let grid_mm = crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm);
+        let art = self
+            .document_state
+            .active_engine()
+            .map(|engine| {
+                selection_art(
+                    engine.document(),
+                    &self.interaction_state.active_canvas().selected,
+                    |symbol| self.shown_designator(symbol).to_owned(),
+                )
             })
             .unwrap_or_default();
-        nets.sort();
-
-        const PALETTE: &[(u8, u8, u8)] = &[
-            (0xE0, 0x54, 0x54),
-            (0xE0, 0xB0, 0x4A),
-            (0x78, 0xC2, 0x6A),
-            (0x42, 0xB8, 0xE0),
-            (0x6F, 0x77, 0xE0),
-            (0xB0, 0x6F, 0xE0),
-            (0xE0, 0x6F, 0xB0),
-            (0xC2, 0xA0, 0x78),
-            (0x78, 0xC2, 0xA0),
-            (0xA0, 0xA0, 0xA0),
-        ];
-
-        let mut rows_col = column![].spacing(SP.s);
-        if nets.is_empty() {
-            rows_col = rows_col.push(
-                text(t!(self.ui_state.i18n, ids::DIALOG_NET_COLOR_NO_NETS))
-                    .size(TS.body)
-                    .color(text_muted)
-                    .boxed(),
-            );
-        } else {
-            for net in nets {
-                let current = self.ui_state.net_colors.get(&net).copied();
-                let mut swatches = row![].spacing(SP.s).align_y(iced::Alignment::Center);
-                for (r, g, b) in PALETTE {
-                    let is_current = current.is_some_and(|c| c.r == *r && c.g == *g && c.b == *b);
-                    let swatch_color = iced::Color::from_rgb8(*r, *g, *b);
-                    let border_w = if is_current { 2.0_f32 } else { 1.0_f32 };
-                    let net_copy = net.clone();
-                    let r_c = *r;
-                    let g_c = *g;
-                    let b_c = *b;
-                    swatches = swatches.push(
-                        button(container(Space::new().width(14).height(14)).style(
-                            move |_: &iced::Theme| container::Style {
-                                background: Some(iced::Background::Color(swatch_color)),
-                                border: iced::Border {
-                                    width: border_w,
-                                    radius: 2.0.into(),
-                                    color: text_c,
-                                    ..iced::Border::default()
-                                },
-                                ..container::Style::default()
-                            },
-                        ))
-                        .on_press(Message::NetColor(NetColorMsg::Set {
-                            net: net_copy.clone(),
-                            color: Some(signex_types::theme::Color {
-                                r: r_c,
-                                g: g_c,
-                                b: b_c,
-                                a: 255,
-                            }),
-                        }))
-                        .style(move |_: &iced::Theme, _| iced::widget::button::Style {
-                            background: Some(iced::Background::Color(iced::Color::TRANSPARENT)),
-                            border: iced::Border::default(),
-                            ..iced::widget::button::Style::default()
-                        })
-                        .boxed(),
-                    );
-                }
-                // Clear-override button
-                let net_clear = net.clone();
-                swatches = swatches.push(
-                    button(
-                        // raw: a clear glyph, not language.
-                        container(text(raw("×")).size(TS.caption).color(text_c)).padding([0, 6]),
-                    )
-                    .on_press(Message::NetColor(NetColorMsg::Set {
-                        net: net_clear,
-                        color: None,
-                    }))
-                    .style(move |_: &iced::Theme, _| iced::widget::button::Style {
-                        background: Some(iced::Background::Color(iced::Color::from_rgba(
-                            1.0, 1.0, 1.0, 0.04,
-                        ))),
-                        border: iced::Border {
-                            width: 1.0,
-                            radius: 2.0.into(),
-                            color: border_c,
-                            ..iced::Border::default()
-                        },
-                        text_color: text_c,
-                        ..iced::widget::button::Style::default()
-                    })
-                    .boxed(),
-                );
-
-                rows_col = rows_col.push(
-                    row![
-                        text(signex_i18n::UserText::new(net))
-                            .size(TS.body)
-                            .color(text_c)
-                            .width(iced::Length::FillPortion(2)),
-                        swatches,
-                    ]
-                    .align_y(iced::Alignment::Center)
-                    .padding([SP.xs, SP.m])
-                    .boxed(),
-                );
-            }
-        }
-
-        container(
-            column![
-                container(scrollable(rows_col).height(iced::Length::Fill))
-                    .padding([14, 14])
-                    .height(iced::Length::Fill),
-            ]
-            .width(iced::Length::Fixed(520.0))
-            .height(iced::Length::Fixed(480.0)),
+        let drawing = signex_widgets::property_illustration::property_illustration(
+            move_preview(dx_mm, dy_mm, grid_mm, &art, &fmt),
+            &IllustrationHover::default(),
+            tokens,
+            TS.caption,
         )
-        .style(crate::styles::modal_card(tokens))
-        .clip(true)
-        .boxed()
+        .map(|_| Message::noop())
+        .boxed();
+        crate::app::view::dialogs::preview_frame(
+            t!(i18n, ids::DIALOG_MOVE_SELECTION_PREVIEW),
+            drawing,
+            None,
+            tokens,
+        )
     }
 
-    /// Custom net-colour picker card. Grid of quick-pick swatches on
-    /// the left, precise R / G / B / hex on the right, live preview
-    /// and OK / Cancel at the bottom. Unpositioned: the in-window overlay
-    /// places it at [`Self::net_color_custom_anchor`].
-    pub(super) fn view_net_color_custom_picker(&self) -> Element<'_, Message> {
-        use super::contracts::Channel;
-        use iced::widget::{Space, Widget, column, container, row};
-        use signex_widgets::{button, raw, text, text_input};
-        let tokens = &self.document_state.panel_ctx.tokens;
-        let text_c = crate::styles::ti(tokens.text);
-        let text_muted = crate::styles::ti(tokens.text_secondary);
-        let border_c = crate::styles::ti(tokens.border);
-        let draft = self.ui_state.net_color_custom.draft;
+    /// The dialog's subtitle: how many items the move takes.
+    pub(crate) fn move_selection_subtitle(&self) -> String {
+        let count = self.interaction_state.active_canvas().selected.len();
+        self.ui_state.i18n.message_plain(
+            ids::DIALOG_MOVE_SELECTION_COUNT,
+            &[("count", Arg::from(count))],
+        )
+    }
 
-        // Expanded 48-swatch palette arranged as 6 cols × 8 rows so
-        // the Quick Pick grid fills the modal's left column. First
-        // three rows are "standard" hues, next three rows are shade
-        // variants, and the last two rows hold greys / light pastels /
-        // schematic-specific high-contrast hues.
-        const PALETTE: &[(u8, u8, u8)] = &[
-            // Row 1 — primaries (bright)
-            (0xEF, 0x44, 0x44), // Red
-            (0xF9, 0x73, 0x16), // Orange
-            (0xEA, 0xB3, 0x08), // Yellow
-            (0x22, 0xC5, 0x5E), // Green
-            (0x06, 0xB6, 0xD4), // Cyan
-            (0x3B, 0x82, 0xF6), // Blue
-            // Row 2 — pinks + magentas + purples
-            (0xF4, 0x72, 0xB6), // Pink 400
-            (0xE1, 0x14, 0x8C), // Hot Pink
-            (0xD9, 0x46, 0xEF), // Fuchsia
-            (0xA8, 0x55, 0xF7), // Purple
-            (0x8B, 0x5C, 0xF6), // Violet
-            (0x6D, 0x28, 0xD9), // Indigo
-            // Row 3 — greens + teals + lime
-            (0x84, 0xCC, 0x16), // Lime
-            (0x10, 0xB9, 0x81), // Emerald
-            (0x14, 0xB8, 0xA6), // Teal
-            (0x0E, 0xA5, 0xE9), // Sky
-            (0x60, 0xA5, 0xFA), // Light Blue
-            (0x2D, 0xD4, 0xBF), // Turquoise
-            // Row 4 — dark variants
-            (0x9F, 0x12, 0x39), // Wine
-            (0xB4, 0x53, 0x09), // Rust
-            (0xA1, 0x6A, 0x3C), // Brown
-            (0x16, 0xA3, 0x4A), // Dark Green
-            (0x15, 0x5E, 0x75), // Deep Cyan
-            (0x1E, 0x40, 0xAF), // Deep Blue
-            // Row 5 — extra dark / night hues
-            (0x7F, 0x1D, 0x1D), // Deep Red
-            (0x78, 0x35, 0x0F), // Auburn
-            (0x5B, 0x21, 0xB6), // Royal Purple
-            (0x3B, 0x0A, 0x45), // Eggplant
-            (0x1E, 0x3A, 0x8A), // Navy
-            (0x0F, 0x17, 0x2A), // Midnight
-            // Row 6 — pastels
-            (0xFE, 0xCA, 0xCA), // Pastel Red
-            (0xFE, 0xD7, 0xAA), // Pastel Orange
-            (0xFE, 0xF0, 0x8A), // Pastel Yellow
-            (0xBB, 0xF7, 0xD0), // Pastel Green
-            (0xA5, 0xF3, 0xFC), // Pastel Cyan
-            (0xBF, 0xDB, 0xFE), // Pastel Blue
-            // Row 7 — muted + desaturated
-            (0x64, 0x74, 0x8B), // Slate
-            (0x78, 0x71, 0x6C), // Stone
-            (0x4B, 0x55, 0x63), // Dark Slate
-            (0x9C, 0xA3, 0xAF), // Gray
-            (0xD1, 0xD5, 0xDB), // Light Gray
-            (0xFF, 0xFF, 0xFF), // White
-            // Row 8 — schematic diagnostic colors
-            (0xFF, 0x00, 0xFF), // Bright Magenta
-            (0x00, 0xFF, 0xFF), // Bright Cyan
-            (0xFF, 0xFF, 0x00), // Bright Yellow
-            (0x00, 0xFF, 0x00), // Bright Green
-            (0xFF, 0xA5, 0x00), // Bright Orange
-            (0x1F, 0x23, 0x2A), // Ink
-        ];
+    /// The help line: the axis directions and the move in whole grid steps,
+    /// or "off grid" for a part step.
+    pub(crate) fn move_selection_help(&self, dx_mm: f64, dy_mm: f64) -> String {
+        let i18n = &self.ui_state.i18n;
+        let unit = self.ui_state.unit;
+        let grid_mm = crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm);
+        let grid = LengthFormat::new(i18n, unit).number(grid_mm);
+        let unit = unit.to_string();
+        match (grid_steps(dx_mm, grid_mm), grid_steps(dy_mm, grid_mm)) {
+            (Some(x), Some(y)) => i18n.message_plain(
+                ids::DIALOG_MOVE_SELECTION_HELP,
+                &[
+                    ("grid", Arg::from(grid)),
+                    ("unit", Arg::from(unit)),
+                    ("x", Arg::from(x)),
+                    ("y", Arg::from(y)),
+                ],
+            ),
+            _ => i18n.message_plain(
+                ids::DIALOG_MOVE_SELECTION_HELP_OFF_GRID,
+                &[("grid", Arg::from(grid)), ("unit", Arg::from(unit))],
+            ),
+        }
+    }
+}
 
-        let swatch_btn =
-            |r: u8, g: u8, b: u8| -> Element<'_, Message> {
-                let col = iced::Color::from_rgb8(r, g, b);
-                let is_current = (draft.r - col.r).abs() < 0.01
-                    && (draft.g - col.g).abs() < 0.01
-                    && (draft.b - col.b).abs() < 0.01;
-                let sw = iced::Color::from_rgb8(r, g, b);
-                let border_w = if is_current { 2.0 } else { 1.0 };
-                let border_col = if is_current {
-                    iced::Color::WHITE
-                } else {
-                    iced::Color::from_rgba(0.2, 0.2, 0.22, 0.9)
-                };
-                button(container(Space::new().width(24).height(20)).style(
-                    move |_: &iced::Theme| container::Style {
-                        background: Some(iced::Background::Color(sw)),
-                        border: iced::Border {
-                            width: border_w,
-                            radius: 3.0.into(),
-                            color: border_col,
-                            ..iced::Border::default()
-                        },
-                        ..container::Style::default()
-                    },
-                ))
-                .padding(0)
-                .on_press(Message::NetColor(NetColorMsg::CustomDraft(col)))
-                .style(move |_: &iced::Theme, _| iced::widget::button::Style {
-                    background: Some(iced::Background::Color(iced::Color::TRANSPARENT)),
-                    border: iced::Border::default(),
-                    ..iced::widget::button::Style::default()
-                })
-                .boxed()
-            };
+/// One offset field: its caption over the input, the unit as a suffix
+/// inside the field. Enter moves.
+fn offset_field<'a>(
+    label: signex_i18n::Localized,
+    value: &str,
+    id: Option<iced::widget::Id>,
+    unit: Unit,
+    on_input: fn(String) -> Message,
+    app: &Signex,
+) -> Element<'a, Message> {
+    use iced::widget::{Widget, column, container, stack};
+    use signex_widgets::{text, text_input};
+    let tokens = &app.document_state.panel_ctx.tokens;
+    let muted = crate::styles::ti(tokens.text_secondary);
+    let ink3 = crate::styles::tokens::resolve(tokens).ink3;
+    let suffix = UserText::new(unit.to_string());
+    let refused = offset_mm(value, unit).is_err();
+    let mut input = text_input(
+        t!(app.ui_state.i18n, ids::PLACEHOLDER_MOVE_OFFSET),
+        value.to_owned(),
+    )
+    .style(crate::panels::form_look::refusable_input_style(
+        refused.then(|| crate::styles::ti(tokens.error)),
+    ))
+    .on_input(on_input)
+    .on_submit(Message::MoveSelection(MoveSelectionMsg::Apply))
+    .padding(iced::Padding {
+        top: SP.s,
+        bottom: SP.s,
+        left: SP.m,
+        // Room for the suffix: about three characters.
+        right: SP.m + 3.0 * TS.caption,
+    })
+    .size(TS.label);
+    if let Some(id) = id {
+        input = input.id(id);
+    }
+    // The suffix sits on the field and takes no input, so presses reach it.
+    let unit_suffix = container(text(suffix).size(TS.caption).color(ink3))
+        .width(iced::Length::Fill)
+        .height(iced::Length::Fill)
+        .padding([0.0, SP.m])
+        .align_x(iced::alignment::Horizontal::Right)
+        .align_y(iced::alignment::Vertical::Center);
+    column![
+        text(label).size(TS.caption).color(muted),
+        stack![input, unit_suffix],
+    ]
+    .spacing(SP.s)
+    .width(iced::Length::Fill)
+    .boxed()
+}
 
-        // Build the 6 × 4 palette grid row by row.
-        let mut palette_col = column![].spacing(6);
-        for chunk in PALETTE.chunks(6) {
-            let mut r_el = row![].spacing(6);
-            for (r, g, b) in chunk {
-                r_el = r_el.push(swatch_btn(*r, *g, *b));
+/// One piece of the selection's line art, in sheet mm (y down).
+#[derive(Debug, Clone, PartialEq)]
+enum Art {
+    /// A part outline or pin, or a wire or bus (`is_wire`), through `points`.
+    Path {
+        points: Vec<SheetPoint>,
+        is_closed: bool,
+        is_wire: bool,
+    },
+    /// A part's circle or a junction dot.
+    Circle { center: SheetPoint, radius: f64 },
+    /// A part's designator over its body, or a net label's text (`is_net`).
+    Name {
+        at: SheetPoint,
+        text: String,
+        is_net: bool,
+    },
+}
+
+/// The line art of each selected object, once per object (mockup row 66):
+/// parts with their designators, wires, buses, junctions, no-connects and
+/// net labels. Other kinds draw nothing.
+fn selection_art(
+    sheet: &SchematicSheet,
+    selected: &[SelectedItem],
+    designator: impl Fn(&Symbol) -> String,
+) -> Vec<Art> {
+    let mut seen = std::collections::HashSet::new();
+    let mut art = Vec::new();
+    for item in selected.iter().filter(|item| seen.insert(item.uuid)) {
+        item_art(sheet, item, &designator, &mut art);
+    }
+    art
+}
+
+/// The art of one selected object, appended to `out`.
+fn item_art(
+    sheet: &SchematicSheet,
+    item: &SelectedItem,
+    designator: &impl Fn(&Symbol) -> String,
+    out: &mut Vec<Art>,
+) {
+    let wire = |a: SheetPoint, b: SheetPoint| Art::Path {
+        points: vec![a, b],
+        is_closed: false,
+        is_wire: true,
+    };
+    let id = item.uuid;
+    match item.kind {
+        SelectedKind::Symbol | SelectedKind::SymbolRefField | SelectedKind::SymbolValField => {
+            if let Some(symbol) = sheet.symbols.iter().find(|s| s.uuid == id) {
+                let name = item_name(sheet, item, designator);
+                symbol_art(sheet, symbol, name, out);
             }
-            palette_col = palette_col.push(r_el.boxed());
         }
+        SelectedKind::Wire => {
+            if let Some(w) = sheet.wires.iter().find(|w| w.uuid == id) {
+                out.push(wire(w.start, w.end));
+            }
+        }
+        SelectedKind::Bus => {
+            if let Some(b) = sheet.buses.iter().find(|b| b.uuid == id) {
+                out.push(wire(b.start, b.end));
+            }
+        }
+        SelectedKind::Junction => {
+            if let Some(j) = sheet.junctions.iter().find(|j| j.uuid == id) {
+                out.push(Art::Circle {
+                    center: j.position,
+                    radius: JUNCTION_RADIUS_MM,
+                });
+            }
+        }
+        SelectedKind::NoConnect => {
+            if let Some(nc) = sheet.no_connects.iter().find(|nc| nc.uuid == id) {
+                let (p, h) = (nc.position, NO_CONNECT_HALF_MM);
+                for s in [-1.0, 1.0] {
+                    out.push(Art::Path {
+                        points: vec![
+                            SheetPoint::new(p.x - h, p.y - s * h),
+                            SheetPoint::new(p.x + h, p.y + s * h),
+                        ],
+                        is_closed: false,
+                        is_wire: false,
+                    });
+                }
+            }
+        }
+        SelectedKind::Label => {
+            let label = sheet.labels.iter().find(|l| l.uuid == id);
+            if let (Some(label), Some(text)) = (label, item_name(sheet, item, designator)) {
+                out.push(Art::Name {
+                    at: label.position,
+                    text: shorten(&text),
+                    is_net: true,
+                });
+            }
+        }
+        _ => {}
+    }
+}
 
-        // RGB inputs — parse as u8, clamp on submit. Uses the
-        // `draft` colour as the current value so swatch clicks and
-        // text edits stay in sync.
-        let channel_row =
-            |label: signex_i18n::MessageId, value: f32, chan: Channel| -> Element<'_, Message> {
-                let v255 = (value * 255.0).round() as i32;
-                row![
-                    text(t!(self.ui_state.i18n, label))
-                        .size(TS.body)
-                        .color(text_muted)
-                        .width(iced::Length::Fixed(16.0)),
-                    text_input(
-                        t!(self.ui_state.i18n, ids::PLACEHOLDER_COLOR_CHANNEL),
-                        v255.to_string()
-                    )
-                    .style(crate::panels::form_look::text_input_style)
-                    .size(TS.body)
-                    .padding([3.0, SP.m])
-                    .width(iced::Length::Fixed(70.0))
-                    .on_input(move |s| Message::NetColor(NetColorMsg::CustomChannel(chan, s))),
-                ]
-                .align_y(iced::Alignment::Center)
-                .spacing(6)
-                .boxed()
-            };
-
-        let preview_hex = format!(
-            "#{:02X}{:02X}{:02X}",
-            (draft.r * 255.0).round() as u8,
-            (draft.g * 255.0).round() as u8,
-            (draft.b * 255.0).round() as u8,
-        );
-        let preview_box = container(Space::new().width(iced::Length::Fill).height(32)).style(
-            move |_: &iced::Theme| container::Style {
-                background: Some(iced::Background::Color(draft)),
-                border: iced::Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: border_c,
-                    ..iced::Border::default()
-                },
-                ..container::Style::default()
+/// A part's lowered body and pins, and its name centred over them. A part
+/// with no library body draws a small stand-in box at its place.
+fn symbol_art(sheet: &SchematicSheet, symbol: &Symbol, name: Option<String>, out: &mut Vec<Art>) {
+    let first = out.len();
+    let lowered = lower_placed_symbol(sheet.body_of(symbol), symbol, &SchematicDefaults::BUILT_IN);
+    for primitive in &lowered {
+        let path = |points: Vec<SheetPoint>, is_closed: bool| Art::Path {
+            points,
+            is_closed,
+            is_wire: false,
+        };
+        out.push(match primitive {
+            SymbolPrimitive::Path { points, closed, .. } => path(points.clone(), *closed),
+            SymbolPrimitive::Circle { center, radius, .. } => Art::Circle {
+                center: *center,
+                radius: *radius,
             },
-        );
+            SymbolPrimitive::Arc {
+                start, mid, end, ..
+            } => path(arc_polyline(*start, *mid, *end), false),
+            SymbolPrimitive::Pin { tip, body, .. } => path(vec![*tip, *body], false),
+            SymbolPrimitive::Text { .. } => continue,
+        });
+    }
+    if art_bounds(&out[first..]).is_none() {
+        let (p, h) = (symbol.position, MISSING_BODY_HALF_MM);
+        out.push(Art::Path {
+            points: vec![
+                SheetPoint::new(p.x - h, p.y - h),
+                SheetPoint::new(p.x + h, p.y - h),
+                SheetPoint::new(p.x + h, p.y + h),
+                SheetPoint::new(p.x - h, p.y + h),
+            ],
+            is_closed: true,
+            is_wire: false,
+        });
+    }
+    if let (Some(text), Some((lo, hi))) = (name, art_bounds(&out[first..])) {
+        out.push(Art::Name {
+            at: SheetPoint::new((lo.x + hi.x) / 2.0, lo.y),
+            text: shorten(&text),
+            is_net: false,
+        });
+    }
+}
 
-        let rgb_col = column![
-            text(t!(self.ui_state.i18n, ids::DIALOG_NET_COLOR_CUSTOM_RGB))
-                .size(TS.body)
-                .color(text_c),
-            Space::new().height(6),
-            channel_row(ids::DIALOG_NET_COLOR_CHANNEL_R, draft.r, Channel::R),
-            channel_row(ids::DIALOG_NET_COLOR_CHANNEL_G, draft.g, Channel::G),
-            channel_row(ids::DIALOG_NET_COLOR_CHANNEL_B, draft.b, Channel::B),
-            Space::new().height(10),
-            preview_box,
-            Space::new().height(4),
-            // raw: a hex colour code, not language.
-            text(raw(preview_hex)).size(TS.caption).color(text_muted),
-        ]
-        .spacing(SP.s)
-        .width(iced::Length::Fixed(150.0));
+/// `text` cut to the longest name the preview draws.
+fn shorten(text: &str) -> String {
+    text.chars().take(NAME_MAX_CHARS).collect()
+}
 
-        let body = row![
-            column![
-                text(t!(self.ui_state.i18n, ids::DIALOG_NET_COLOR_QUICK_PICK))
-                    .size(TS.body)
-                    .color(text_c),
-                Space::new().height(6),
-                palette_col,
-            ]
-            .spacing(0)
-            .width(iced::Length::Fill),
-            Space::new().width(16),
-            rgb_col,
-        ];
-
-        let footer = dialog_footer(vec![
-            dialog_button(
-                t!(self.ui_state.i18n, ids::DIALOG_BUTTON_CANCEL),
-                DialogButtonKind::Cancel,
-                Some(Message::NetColor(NetColorMsg::CustomShow(false))),
-                &self.document_state.panel_ctx.tokens,
-            ),
-            dialog_button(
-                t!(self.ui_state.i18n, ids::DIALOG_NET_COLOR_USE),
-                DialogButtonKind::Primary,
-                Some(Message::NetColor(NetColorMsg::CustomSubmit(draft))),
-                &self.document_state.panel_ctx.tokens,
-            ),
-        ]);
-
-        let windowed = self.modal_detached(crate::app::state::ModalId::NetColorCustom);
-        let tokens = &self.document_state.panel_ctx.tokens;
-        let card = container(
-            column![self.net_color_custom_header(), dialog_body(body), footer,]
-                .width(crate::library::card_len(windowed, NET_COLOR_CUSTOM_W)),
-        );
-        // In its own window the card is the dialog: flat surface, no anchor.
-        if windowed {
-            card.style(crate::styles::modal_card(tokens)).boxed()
-        } else {
-            card.style(crate::styles::context_menu(tokens)).boxed()
+/// The sheet box `art` covers, corners `(min, max)`; `None` for no art.
+fn art_bounds(art: &[Art]) -> Option<(SheetPoint, SheetPoint)> {
+    let mut points = Vec::new();
+    for piece in art {
+        match piece {
+            Art::Path { points: p, .. } => points.extend_from_slice(p),
+            Art::Circle { center, radius } => {
+                points.push(SheetPoint::new(center.x - radius, center.y - radius));
+                points.push(SheetPoint::new(center.x + radius, center.y + radius));
+            }
+            Art::Name { at, .. } => points.push(*at),
         }
     }
+    let first = *points.first()?;
+    Some(points.iter().fold((first, first), |(lo, hi), p| {
+        (
+            SheetPoint::new(lo.x.min(p.x), lo.y.min(p.y)),
+            SheetPoint::new(hi.x.max(p.x), hi.y.max(p.y)),
+        )
+    }))
+}
 
-    /// Where the in-window net-colour picker card sits: centred under the
-    /// Active Bar. The overlay places the unpositioned card here through the
-    /// dismiss helper, so only a press outside the card closes it (#2377).
-    pub(super) fn net_color_custom_anchor(&self) -> (f32, f32) {
-        let (ww, _wh) = self.ui_state.window_size;
-        let x = ((ww - NET_COLOR_CUSTOM_W) * 0.5).max(0.0);
-        let y = super::canvas_region::chrome_top(&self.document_state.panel_ctx.tokens) + 80.0;
-        (x, y)
+/// A part's shown designator (a power port's net name) or a label's text.
+fn item_name(
+    sheet: &SchematicSheet,
+    item: &SelectedItem,
+    designator: &impl Fn(&Symbol) -> String,
+) -> Option<String> {
+    let name = match item.kind {
+        SelectedKind::Symbol | SelectedKind::SymbolRefField | SelectedKind::SymbolValField => {
+            let symbol = sheet.symbols.iter().find(|s| s.uuid == item.uuid)?;
+            if symbol.is_power {
+                symbol.value.clone()
+            } else {
+                designator(symbol)
+            }
+        }
+        SelectedKind::Label => sheet
+            .labels
+            .iter()
+            .find(|l| l.uuid == item.uuid)?
+            .text
+            .clone(),
+        _ => return None,
+    };
+    let name = name.trim();
+    (!name.is_empty()).then(|| name.to_owned())
+}
+
+/// The preview: on the sheet grid, each selected object drawn as a dashed
+/// ghost at its place and drawn with its name at its new place, the moved
+/// copy framed, with a ΔX and a ΔY callout (mockup row 66). Read-only line
+/// art. With no art (nothing drawable selected) a stand-in box moves. A
+/// positive ΔY draws upward; the callout shows the value as typed.
+fn move_preview(
+    dx_mm: f64,
+    dy_mm: f64,
+    grid_mm: f64,
+    art: &[Art],
+    fmt: &LengthFormat<'_>,
+) -> Illustration {
+    let step = if grid_mm.is_finite() && grid_mm > 0.0 {
+        grid_mm
+    } else {
+        1.0
+    };
+    let stand_in: Vec<Art>;
+    let art = if art.is_empty() {
+        stand_in = stand_in_art(dx_mm, dy_mm, step);
+        &stand_in[..]
+    } else {
+        art
+    };
+    let shift = SheetPoint::new(dx_mm, stored_dy(dy_mm));
+    let (lo, hi) = art_bounds(art).unwrap_or((SheetPoint::ZERO, SheetPoint::ZERO));
+    let (min_x, max_x) = (lo.x.min(lo.x + shift.x), hi.x.max(hi.x + shift.x));
+    let (min_y, max_y) = (lo.y.min(lo.y + shift.y), hi.y.max(hi.y + shift.y));
+    let span = (max_x - min_x)
+        .max(max_y - min_y)
+        .max(step * MIN_SPAN_STEPS);
+    let k = f64::from(SPAN) / span;
+    let view = |p: SheetPoint| {
+        Point::new(
+            MARGIN + ((p.x - min_x) * k) as f32,
+            MARGIN + ((p.y - min_y) * k) as f32,
+        )
+    };
+    let view_w = ((max_x - min_x) * k) as f32 + 2.0 * MARGIN;
+    let view_h = ((max_y - min_y) * k) as f32 + 2.0 * MARGIN;
+    let sheet_origin = view(SheetPoint::ZERO);
+    let drawing = Illustration::new(view_w, view_h)
+        .height_em(PREVIEW_EM)
+        .parts(crate::paste_array::preview_grid(
+            step * k,
+            f64::from(sheet_origin.x),
+            f64::from(sheet_origin.y),
+            f64::from(view_w),
+            f64::from(view_h),
+        ))
+        .parts(art.iter().map(|piece| art_part(piece, &view, k, true)));
+    if dx_mm == 0.0 && dy_mm == 0.0 {
+        return drawing;
     }
+    let moved = |p: SheetPoint| view(SheetPoint::new(p.x + shift.x, p.y + shift.y));
+    let (frame_lo, frame_hi) = (moved(lo), moved(hi));
+    let frame = Primitive::RoundedRect {
+        rect: Rectangle::new(
+            Point::new(frame_lo.x - FRAME_PAD, frame_lo.y - FRAME_PAD),
+            Size::new(
+                frame_hi.x - frame_lo.x + 2.0 * FRAME_PAD,
+                frame_hi.y - frame_lo.y + 2.0 * FRAME_PAD,
+            ),
+        ),
+        radius: FRAME_PAD / 2.0,
+    };
+    let frame_style = Style::dashed()
+        .with_stroke_paint(Paint::Ink(Ink::Accent))
+        .with_fill(Paint::Ink(Ink::Accent), Tint::Wash);
+    let (dx, dy) = ((shift.x * k) as f32, (shift.y * k) as f32);
+    drawing
+        .part(Part::new(frame, frame_style))
+        .parts(art.iter().map(|piece| art_part(piece, &moved, k, false)))
+        .parts(offset_callouts(
+            view(SheetPoint::new(lo.x, hi.y)),
+            view(SheetPoint::new(hi.x, lo.y)),
+            (dx, dy),
+            (dx_mm, dy_mm),
+            (
+                view(SheetPoint::new(0.0, max_y)).y + CALLOUT_GAP,
+                view(SheetPoint::new(max_x, 0.0)).x + CALLOUT_GAP,
+            ),
+            fmt,
+        ))
+}
+
+/// What moves when nothing drawable is selected: a box sized from the
+/// offset, so the move still reads.
+fn stand_in_art(dx_mm: f64, dy_mm: f64, step: f64) -> Vec<Art> {
+    let w = (dx_mm.abs().max(dy_mm.abs()) * 0.75).max(step * 3.0);
+    let h = w * 0.55;
+    vec![Art::Path {
+        points: vec![
+            SheetPoint::new(0.0, 0.0),
+            SheetPoint::new(w, 0.0),
+            SheetPoint::new(w, h),
+            SheetPoint::new(0.0, h),
+        ],
+        is_closed: true,
+        is_wire: false,
+    }]
+}
+
+/// One piece of art as a drawn part at `at`'s place, `k` view units per mm.
+/// A ghost is dashed in the construction ink; the moved copy draws parts in
+/// the edge ink and wires and net names in the accent.
+fn art_part(piece: &Art, at: &impl Fn(SheetPoint) -> Point, k: f64, is_ghost: bool) -> Part {
+    let stroke = |is_wire: bool| match (is_ghost, is_wire) {
+        (true, _) => Style::dashed(),
+        (false, true) => Style::outline(Ink::Accent, Weight::Regular),
+        (false, false) => Style::edge(),
+    };
+    match piece {
+        Art::Path {
+            points,
+            is_closed,
+            is_wire,
+        } => Part::new(
+            Primitive::Polyline {
+                points: points.iter().map(|p| at(*p)).collect(),
+                is_closed: *is_closed,
+            },
+            stroke(*is_wire),
+        ),
+        Art::Circle { center, radius } => Part::new(
+            Primitive::Circle {
+                center: at(*center),
+                radius: (radius * k) as f32,
+            },
+            stroke(false),
+        ),
+        Art::Name {
+            at: place,
+            text,
+            is_net,
+        } => {
+            let p = at(*place);
+            let ink = match (is_ghost, is_net) {
+                (true, _) => Ink::Faint,
+                (false, true) => Ink::Accent,
+                (false, false) => Ink::Secondary,
+            };
+            Part::label(
+                TextLabel {
+                    at: Point::new(p.x, p.y - NAME_LIFT),
+                    text: UserText::new(text.clone()).into(),
+                    anchor: Anchor::Middle,
+                    role: TextRole::Mono,
+                },
+                ink,
+            )
+        }
+    }
+}
+
+/// The ΔX callout along `bottom` from the selection's lower-left corner
+/// `x_from`, and the ΔY callout along `right` from its upper-right corner
+/// `y_from`, in view units; an axis that does not move has none.
+fn offset_callouts(
+    x_from: Point,
+    y_from: Point,
+    (dx, dy): (f32, f32),
+    (dx_mm, dy_mm): (f64, f64),
+    (bottom, right): (f32, f32),
+    fmt: &LengthFormat<'_>,
+) -> Vec<Part> {
+    let label = |mm: f64| UserText::new(format!("{} {}", fmt.number(mm), fmt.unit));
+    let mut parts = Vec::new();
+    if dx != 0.0 {
+        let (from, to) = (x_from.x, x_from.x + dx);
+        parts.push(Part::callout(
+            Callout::new(Point::new(from, bottom), Point::new(to, bottom))
+                .label(label(dx_mm))
+                .extension(x_from, Point::new(from, bottom))
+                .extension(Point::new(to, x_from.y + dy), Point::new(to, bottom)),
+        ));
+    }
+    if dy != 0.0 {
+        let (from, to) = (y_from.y, y_from.y + dy);
+        parts.push(Part::callout(
+            Callout::new(Point::new(right, from), Point::new(right, to))
+                .label(label(dy_mm))
+                .extension(y_from, Point::new(right, from))
+                .extension(Point::new(y_from.x + dx, to), Point::new(right, to)),
+        ));
+    }
+    parts
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::app::state::ModalId;
     use signex_types::schematic::{SelectedItem, SelectedKind};
 
-    /// The rendered Move Selection dialog reads as the `format!` it
-    /// replaced (#2059): the count without grouping, and both field names.
-    #[test]
-    fn move_selection_names_the_count_and_the_offsets() {
+    fn app_with_selection(count: usize) -> crate::app::Signex {
         let (mut app, _boot) = crate::app::Signex::new();
-        app.interaction_state.active_canvas_mut().selected = (0..1200)
+        app.interaction_state.active_canvas_mut().selected = (0..count)
             .map(|_| SelectedItem::new(uuid::Uuid::now_v7(), SelectedKind::Wire))
             .collect();
+        app
+    }
+
+    /// The count moves to the header subtitle with a real plural (#66): the
+    /// locale groups it as `I18n::count` does. The fields name the axes
+    /// without the unit, which is their suffix.
+    #[test]
+    fn move_selection_names_the_count_and_the_offsets() {
+        let app = app_with_selection(1200);
+        assert_eq!(
+            app.detached_modal_subtitle(ModalId::MoveSelection)
+                .as_deref(),
+            Some("1,200 items selected")
+        );
+        assert_eq!(
+            app_with_selection(1).move_selection_subtitle(),
+            "1 item selected"
+        );
         let texts: Vec<String> = crate::layout_probe::lay_out_texts(
             app.view_move_selection_body(),
-            iced::Size::new(600.0, 400.0),
+            iced::Size::new(360.0, 400.0),
         )
         .into_iter()
         .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
         .collect();
-        for expected in ["1200 item(s) selected", "ΔX (mm)", "ΔY (mm)"] {
+        for expected in ["ΔX", "ΔY", "Cancel", "Move"] {
             assert!(
                 texts.iter().any(|t| t == expected),
                 "{expected:?} not in {texts:?}"
             );
         }
+    }
+
+    /// A sheet with part R3 (no library body), net label VOUT and a
+    /// no-connect, and the selection of all three plus R3's designator and a
+    /// wire the sheet no longer holds.
+    fn sheet_and_selection() -> (signex_types::schematic::SchematicSheet, Vec<SelectedItem>) {
+        use signex_types::schematic::{Label, LabelType, NoConnect, Point, SchematicSheet, Symbol};
+        let id = uuid::Uuid::from_u128;
+        let sheet = SchematicSheet {
+            symbols: vec![Symbol {
+                uuid: id(1),
+                reference: "R3".into(),
+                position: Point::new(10.16, 5.08),
+                ..Default::default()
+            }],
+            labels: vec![Label {
+                uuid: id(2),
+                ..Label::new("VOUT", Point::new(20.32, 5.08), LabelType::Net)
+            }],
+            no_connects: vec![NoConnect {
+                uuid: id(4),
+                position: Point::new(25.4, 7.62),
+            }],
+            ..Default::default()
+        };
+        let selected = vec![
+            SelectedItem::new(id(1), SelectedKind::Symbol),
+            SelectedItem::new(id(1), SelectedKind::SymbolRefField),
+            SelectedItem::new(id(2), SelectedKind::Label),
+            SelectedItem::new(id(3), SelectedKind::Wire),
+            SelectedItem::new(id(4), SelectedKind::NoConnect),
+        ];
+        (sheet, selected)
+    }
+
+    /// Mockup row 66: the preview draws each selected object, once per
+    /// object, each with its own name; no summary of the selection.
+    #[test]
+    fn the_preview_draws_each_selected_object_once_with_its_name() {
+        use super::Art;
+        let (sheet, selected) = sheet_and_selection();
+        let art = super::selection_art(&sheet, &selected, |s| s.reference.clone());
+        let names: Vec<(&str, bool)> = art
+            .iter()
+            .filter_map(|piece| match piece {
+                Art::Name { text, is_net, .. } => Some((text.as_str(), *is_net)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(names, [("R3", false), ("VOUT", true)]);
+        let paths = art
+            .iter()
+            .filter(|piece| matches!(piece, Art::Path { .. }))
+            .count();
+        assert_eq!(paths, 3, "R3's stand-in box and the two no-connect strokes");
+        let only_wire = super::selection_art(&sheet, &selected[3..4], |s| s.reference.clone());
+        assert!(only_wire.is_empty(), "a wire the sheet lost draws nothing");
+    }
+
+    /// Mockup row 66 (#2847): every object is drawn twice, a dashed ghost at
+    /// its place and a solid copy at its new place, each copy with its name;
+    /// one frame marks the moved copy. With no offset only the ghosts draw.
+    #[test]
+    fn the_preview_draws_a_ghost_and_a_moved_copy_of_each_object() {
+        use signex_widgets::property_illustration::Primitive;
+        let en = signex_i18n::I18n::en_us();
+        let fmt = signex_widgets::LengthFormat::new(&en, signex_types::coord::Unit::Mm);
+        let (sheet, selected) = sheet_and_selection();
+        let art = super::selection_art(&sheet, &selected, |s| s.reference.clone());
+        let polylines = |ill: &super::Illustration, dashed: bool| {
+            ill.visible_parts()
+                .filter(|p| matches!(p.primitive, Primitive::Polyline { .. }))
+                .filter(|p| p.style.stroke.is_some_and(|s| s.is_dashed == dashed))
+                .count()
+        };
+        let labels = |ill: &super::Illustration, text: &str| {
+            ill.visible_parts()
+                .filter(|p| matches!(&p.primitive, Primitive::Label(l) if l.text.as_str() == text))
+                .count()
+        };
+        let frames = |ill: &super::Illustration| {
+            ill.visible_parts()
+                .filter(|p| matches!(p.primitive, Primitive::RoundedRect { .. }))
+                .count()
+        };
+        let moved = super::move_preview(5.08, -2.54, 1.27, &art, &fmt);
+        assert_eq!(polylines(&moved, true), 3, "a ghost per drawn stroke");
+        assert_eq!(polylines(&moved, false), 3, "a moved copy per drawn stroke");
+        assert_eq!(labels(&moved, "R3"), 2);
+        assert_eq!(labels(&moved, "VOUT"), 2);
+        assert_eq!(frames(&moved), 1, "the moved copy is framed");
+        let still = super::move_preview(0.0, 0.0, 1.27, &art, &fmt);
+        assert_eq!(polylines(&still, true), 3);
+        assert_eq!(polylines(&still, false), 0, "nothing moves");
+        assert_eq!(labels(&still, "R3"), 1);
+        assert_eq!(frames(&still), 0);
+    }
+
+    /// Mockup row 66: the drawing has the sheet grid and the name on the
+    /// moved object, and with no offset (and nothing drawable selected)
+    /// still shows the grid and the ghost.
+    #[test]
+    fn the_preview_draws_the_grid_and_the_names() {
+        use signex_widgets::property_illustration::Primitive;
+        let en = signex_i18n::I18n::en_us();
+        let fmt = signex_widgets::LengthFormat::new(&en, signex_types::coord::Unit::Mm);
+        let lines = |ill: &super::Illustration| {
+            ill.visible_parts()
+                .filter(|p| matches!(p.primitive, Primitive::Line { .. }))
+                .count()
+        };
+        let (sheet, selected) = sheet_and_selection();
+        let art = super::selection_art(&sheet, &selected[..1], |s| s.reference.clone());
+        let moved = super::move_preview(5.08, 2.54, 1.27, &art, &fmt);
+        assert!(lines(&moved) > 0, "the sheet grid is drawn");
+        assert!(moved.visible_parts().any(|p| match &p.primitive {
+            Primitive::Label(l) => l.text.as_str() == "R3",
+            _ => false,
+        }));
+        let still = super::move_preview(0.0, 0.0, 1.27, &[], &fmt);
+        assert!(
+            lines(&still) > 0,
+            "the grid shows before an offset is typed"
+        );
+        assert!(
+            still
+                .visible_parts()
+                .any(|p| matches!(p.primitive, Primitive::Polyline { .. })),
+            "a stand-in ghost shows with nothing drawable selected"
+        );
+    }
+
+    /// The help line counts whole grid steps per axis and says "off grid"
+    /// for a part step.
+    #[test]
+    fn the_help_line_counts_grid_steps() {
+        let mut app = app_with_selection(3);
+        app.ui_state.unit = signex_types::coord::Unit::Mm;
+        app.ui_state.grid_size_mm = 1.27;
+        assert_eq!(
+            app.move_selection_help(5.08, -2.54),
+            "Positive X moves right, positive Y moves up. Grid 1.27 mm: 4 × 2 steps."
+        );
+        assert_eq!(
+            app.move_selection_help(1.0, 0.0),
+            "Positive X moves right, positive Y moves up. Grid 1.27 mm: off grid."
+        );
     }
 }

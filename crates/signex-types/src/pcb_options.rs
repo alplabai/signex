@@ -2,13 +2,15 @@
 //! polygon naming scheme and the designator display. Document data, saved
 //! in the `.snxpcb` `[board_options]` section and changed only through the
 //! board engine's `SetBoardOptions` command. The board's origin (#2384) and
-//! its waived design-rule findings (#2399) are kept here too, and the panel
-//! (#2410). See `docs/PCB_BOARD_OPTIONS.md`.
+//! its waived design-rule findings (#2399) are kept here too, the panel
+//! (#2410) and the layout plan (#2942). See `docs/PCB_BOARD_OPTIONS.md`.
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::pcb::Point;
+use crate::pcb_layer::PcbLayer;
+use crate::pcb_layout_plan::LayoutPlan;
 pub use crate::pcb_origin::BoardOrigin;
 use crate::theme::Color;
 
@@ -61,11 +63,59 @@ pub struct BoardOptions {
     /// `SetBoardPanel` command.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub panel: Option<crate::pcb_panel::BoardPanel>,
+    /// The colours the user gave layers (Layer colour..., 2026-11-18),
+    /// sorted by layer token; a layer not listed takes the palette's.
+    /// Saved as `[board_options.layer_colors]` (`snxpcb/1.5`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub layer_colors: Vec<LayerColor>,
+    /// The settings of the layout stages (#2942). Saved as
+    /// `[board_options.layout_plan]` (`snxpcb/1.12`) when it sets anything.
+    #[serde(default, skip_serializing_if = "LayoutPlan::is_empty")]
+    pub layout_plan: LayoutPlan,
+}
+
+/// A colour the user gave one board layer: the canvas, the layer tabs and
+/// the Layers panel draw the layer in it instead of the palette's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "LayerColorRaw", into = "LayerColorRaw")]
+pub struct LayerColor {
+    pub layer: PcbLayer,
+    pub color: Color,
+}
+
+/// [`LayerColor`] as serde holds it: the layer by its `.snxpcb` token.
+#[derive(Serialize, Deserialize)]
+struct LayerColorRaw {
+    layer: String,
+    color: String,
+}
+
+impl From<LayerColor> for LayerColorRaw {
+    fn from(c: LayerColor) -> Self {
+        Self {
+            layer: crate::format::pcb_layer_token(c.layer),
+            color: c.color.to_hex(),
+        }
+    }
+}
+
+impl TryFrom<LayerColorRaw> for LayerColor {
+    type Error = String;
+
+    fn try_from(raw: LayerColorRaw) -> Result<Self, String> {
+        let layer = crate::format::parse_pcb_layer(&raw.layer)
+            .ok_or_else(|| format!("`{}` is not a board layer", raw.layer))?;
+        let color = Color::parse_hex(&raw.color)
+            .ok_or_else(|| format!("{:?} is not #rrggbb or #rrggbbaa", raw.color))?;
+        Ok(Self { layer, color })
+    }
 }
 
 /// One accepted design-rule finding. `key` names the finding the same way
 /// in every run (`signex_drc::waiver_key`): its rule and the objects, not
-/// where they are, so moving an object keeps the waiver.
+/// where they are. `fingerprint` is the objects' geometry when it was
+/// waived (`signex_drc::fingerprint`, #2307): moving, resizing or re-netting
+/// one of them lapses the waiver and the finding comes back.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DrcWaiver {
     pub key: String,
@@ -74,6 +124,14 @@ pub struct DrcWaiver {
     /// Why the finding is accepted; may be empty.
     #[serde(default)]
     pub note: String,
+    /// A waiver saved before #2307 has none; it lapses once and is waived
+    /// again.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub fingerprint: String,
+    /// Who accepted it. A waiver saved before the author existed has none
+    /// and writes no `author` key.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub author: String,
 }
 
 impl BoardOptions {
@@ -81,9 +139,27 @@ impl BoardOptions {
         *self == Self::default()
     }
 
-    /// The waiver of the finding `key`, if it is waived.
-    pub fn drc_waiver(&self, key: &str) -> Option<&DrcWaiver> {
-        self.drc_waivers.iter().find(|w| w.key == key)
+    /// The colour the user gave `layer`, if any.
+    pub fn layer_color(&self, layer: PcbLayer) -> Option<Color> {
+        self.layer_colors
+            .iter()
+            .find(|c| c.layer == layer)
+            .map(|c| c.color)
+    }
+
+    /// Give `layer` its own colour, or (`None`) the palette's again. Whether
+    /// that changed anything.
+    pub fn set_layer_color(&mut self, layer: PcbLayer, color: Option<Color>) -> bool {
+        if self.layer_color(layer) == color {
+            return false;
+        }
+        self.layer_colors.retain(|c| c.layer != layer);
+        if let Some(color) = color {
+            self.layer_colors.push(LayerColor { layer, color });
+            self.layer_colors
+                .sort_by_key(|c| crate::format::pcb_layer_token(c.layer));
+        }
+        true
     }
 
     /// The grid a carry or placement of `what` snaps to: the first extra

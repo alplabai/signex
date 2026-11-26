@@ -17,7 +17,7 @@ use signex_types::document_id::DocumentId;
 use crate::app::document::{Document as _, DocumentKey};
 use crate::app::state::LoadedProject;
 use crate::app::state::scope::path_key_with;
-use crate::app::{Signex, TabDocument, TabKind};
+use crate::app::{Signex, TabKind};
 
 /// What a document is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -185,10 +185,8 @@ impl Signex {
                 sheet.is_read_only(),
             ));
         }
-        for tab in &docs.tabs {
-            if let (TabKind::Pcb, Some(TabDocument::Pcb(engine))) =
-                (&tab.kind, &tab.cached_document)
-            {
+        for (idx, tab) in docs.tabs.iter().enumerate() {
+            if let (TabKind::Pcb, Some(engine)) = (&tab.kind, docs.tab_board_engine(idx)) {
                 let board = engine.board();
                 entries.push(self.entry_of_held(
                     DocumentKey::Pcb(tab.path.clone()),
@@ -216,7 +214,7 @@ impl Signex {
         for (path, editor) in &docs.symbol_editors {
             entries.push(self.entry_of_held(
                 DocumentKey::Symbol(path.clone()),
-                DocumentId::from_uuid(editor.file.file_uuid),
+                DocumentId::from_uuid(editor.draft.file.file_uuid),
                 DocumentKind::Symbol,
                 Some(path.clone()),
                 file_stem(path),

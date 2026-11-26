@@ -113,7 +113,7 @@ fn the_stock_resistor_offers_its_default_and_six_alternates() {
         .loaded
         .as_deref()
         .expect("details loaded");
-    let choices = loaded.footprint_choices();
+    let choices = loaded.footprint_choices(&signex_i18n::I18n::en_us());
     assert_eq!(choices.len(), 7);
     assert!(choices[0].label.ends_with("(default)"), "{choices:?}");
 }
@@ -152,7 +152,13 @@ fn the_details_preview_follows_the_picker_and_a_new_row_resets_it() {
         alt_name,
         "the preview shows the picked footprint"
     );
-    assert_eq!(loaded.shown_footprint(pick_ref).unwrap().reference, alt);
+    assert_eq!(
+        loaded
+            .shown_footprint(pick_ref, &signex_i18n::I18n::en_us())
+            .unwrap()
+            .reference,
+        alt
+    );
 
     // Another row starts from its own default.
     let other = key_of(&app, "STOCK-IC_Generic");
@@ -247,6 +253,35 @@ fn switch(app: &mut Signex, symbol: uuid::Uuid, reference: &PrimitiveRef) {
     let _ = app.update(Message::Dock(DockMessage::Panel(
         PanelMsg::SwitchFootprintChoice(symbol, binding_key(reference)),
     )));
+}
+
+/// Mockup row 51: two parts of one row list that row's footprints, and a
+/// pick builds both with it as one undo step.
+#[test]
+fn a_multi_selection_picks_a_footprint_its_rows_share() {
+    use signex_app::panels::MultiEditMsg;
+    let mut app = app_with_stock();
+    let key = key_of(&app, "STOCK-R");
+    select(&mut app, &key);
+    let (alt, alt_name) = alternates(&app).remove(0);
+    place_selected(&mut app, &key);
+    place_selected(&mut app, &key);
+    let _ = app.update(Message::Input(signex_app::app::InputMsg::EscapePressed {
+        window: None,
+    }));
+    assert_eq!(doc(&app).symbols.len(), 2);
+    let before = doc(&app).symbols[0].footprint.clone();
+    crate::field_edit_support::select_everything(&mut app);
+    let choices = &app.document_state.panel_ctx.multi_footprint_choices;
+    assert_eq!(choices.len(), 7, "{choices:?}");
+    assert!(choices.iter().any(|c| c.binding == binding_key(&alt)));
+
+    let _ = app.update(Message::Dock(DockMessage::Panel(PanelMsg::MultiEdit(
+        MultiEditMsg::FootprintPicked(binding_key(&alt)),
+    ))));
+    assert!(doc(&app).symbols.iter().all(|s| s.footprint == alt_name));
+    let _ = app.update(Message::Edit(EditMsg::Undo));
+    assert!(doc(&app).symbols.iter().all(|s| s.footprint == before));
 }
 
 #[test]

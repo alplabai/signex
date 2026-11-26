@@ -121,3 +121,47 @@ fn without_an_outline_rows_start_at_the_bottom_left_and_go_up() {
     assert!(boxes[0].max.y > corner.y - staging.grid);
     assert!(boxes.last().unwrap().max.y < boxes[0].min.y);
 }
+
+/// A circle's extent reaches its rim, not a saved radius that disagrees.
+#[test]
+fn a_circle_extends_a_footprint_to_its_rim() {
+    use signex_types::pcb::FpGraphic;
+    let circle = FpGraphic {
+        graphic_type: "circle".into(),
+        layer: "TopSilkscreen".into(),
+        width: 0.0,
+        start: None,
+        end: Some(Point { x: 3.0, y: 0.0 }),
+        center: Some(Point { x: 0.0, y: 0.0 }),
+        mid: None,
+        radius: 1.0,
+        points: Vec::new(),
+        text: String::new(),
+        font_size: 0.0,
+        position: None,
+        rotation: 0.0,
+        fill: String::new(),
+    };
+    let footprint = Footprint {
+        uuid: uuid::Uuid::from_u128(1),
+        reference: "U1".into(),
+        value: String::new(),
+        footprint_id: String::new(),
+        position: Point { x: 10.0, y: 20.0 },
+        rotation: 0.0,
+        layer: "TopCopper".into(),
+        locked: false,
+        schematic_link: None,
+        library_ref: None,
+        component: Default::default(),
+        pads: Vec::new(),
+        graphics: vec![circle],
+        properties: Vec::new(),
+        unknown: Default::default(),
+        unknown_columns: Default::default(),
+    };
+    assert_eq!(
+        footprint_extent(&footprint).unwrap(),
+        rect(-3_000_000, -3_000_000, 3_000_000, 3_000_000)
+    );
+}

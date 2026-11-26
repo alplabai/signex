@@ -9,9 +9,12 @@ const HOTSPOT_RING_WIDTH_PX: f32 = 2.0;
 impl SchematicCanvas<'_> {
     /// Layer 4 — every-frame overlay: cursor HUD, in-progress previews,
     /// placement ghosts, and drag guides, composed in the original order.
+    /// `sheet` is the sheet this frame draws, shifted during a move, so the
+    /// Bezier handles travel with their curve.
     pub(in crate::canvas) fn draw_overlay(
         &self,
         state: &CanvasState,
+        sheet: Option<&crate::schematic_runtime::SchematicRenderSnapshot>,
         renderer: &Renderer,
         bounds: Rectangle,
         cursor: mouse::Cursor,
@@ -39,6 +42,7 @@ impl SchematicCanvas<'_> {
             self.draw_net_color_pen(&mut frame, cursor_pos);
             self.draw_shape_preview(&mut frame, bounds, cursor_pos);
             self.draw_polyline_preview(&mut frame, bounds, cursor_pos);
+            self.draw_annotation_preview(&mut frame, bounds, cursor_pos);
             self.draw_arc_preview(&mut frame, bounds, cursor_pos);
             self.draw_lasso_preview(&mut frame, bounds, cursor_pos);
             self.draw_wire_preview(&mut frame, bounds, cursor_pos, hotspot);
@@ -54,6 +58,8 @@ impl SchematicCanvas<'_> {
         self.draw_measure_result(&mut frame, bounds);
         self.draw_move_guides(&mut frame, state, bounds);
         self.draw_select_rect(&mut frame, state, bounds);
+        self.draw_bezier_handles(&mut frame, state, sheet, bounds);
+        self.draw_bezier_drag(&mut frame, state, bounds);
 
         frame.into_geometry()
     }

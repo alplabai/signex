@@ -7,11 +7,9 @@ use signex_output::{PageRange, PdfOptions, PreviewOptions, PreviewRasterizer};
 use signex_types::schematic::SheetInstance;
 use uuid::Uuid;
 
-use super::protel_hierarchy::placed_app;
+use super::net_text_hierarchy::placed_app;
 use super::{open_with, pdf_request_all_sheets, sheet_with_net};
-use crate::app::handlers::menu::export::{
-    build_export_scope, build_page_scope, isolate_undeclared_current,
-};
+use crate::app::handlers::menu::export::{build_export_scope, isolate_undeclared_current};
 
 /// `(page name, sheet number, sheet count)` for every printed page.
 fn printed(app: &crate::app::Signex) -> Vec<(String, usize, usize)> {
@@ -225,7 +223,7 @@ fn current_page_on_a_project_child_prints_its_project_number() {
     let mut app = placed_app("/w/cur-num", &["top.snxsch"], &["A", "B"], Vec::new());
     let child = PathBuf::from("/w/cur-num").join("child.snxsch");
     app.document_state.active_path = Some(child.clone());
-    let (mut ctx, issues) = build_page_scope(&app.document_state).expect("scope");
+    let (mut ctx, issues) = build_export_scope(&app.document_state).expect("scope");
     assert!(isolate_undeclared_current(
         &mut ctx,
         &issues,
@@ -252,7 +250,7 @@ fn current_page_on_a_child_without_terminals_prints_its_first_number() {
         signex_types::schematic::SchematicSheet::default(),
     );
     app.document_state.active_path = Some(child.clone());
-    let (mut ctx, issues) = build_page_scope(&app.document_state).expect("scope");
+    let (mut ctx, issues) = build_export_scope(&app.document_state).expect("scope");
     assert!(isolate_undeclared_current(
         &mut ctx,
         &issues,

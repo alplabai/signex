@@ -48,6 +48,7 @@ fn add_named_project(app: &mut Signex, dir: &Path, file: &str, sheet: &str) -> P
             }],
             variant_definitions: Vec::new(),
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: Vec::new(),
             enable_git: false,
             net_classes: Vec::new(),
@@ -56,6 +57,11 @@ fn add_named_project(app: &mut Signex, dir: &Path, file: &str, sheet: &str) -> P
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
+            fab_outputs: None,
+            router_tool_diameter: None,
+            bom_alternates: Vec::new(),
+            requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },
@@ -77,7 +83,6 @@ fn open_sheet(app: &mut Signex, path: &Path, project: ProjectId, dirty: bool) {
     app.document_state.tabs.push(TabInfo {
         title: path.file_stem().unwrap().to_string_lossy().into_owned(),
         path: path.to_path_buf(),
-        cached_document: None,
         project_id: Some(project),
         kind: TabKind::Schematic,
     });
@@ -110,6 +115,7 @@ fn exclude_at(app: &mut Signex, target: &Path, tree_path: Vec<usize>) {
         is_outside_project: false,
         unsaved_prompt: false,
         is_directory_package: false,
+        choice: None,
     });
     let _ = app.update(Message::Remove(RemoveMsg::Confirm(
         RemoveChoice::ExcludeFromProject,

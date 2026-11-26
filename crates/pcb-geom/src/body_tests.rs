@@ -16,6 +16,8 @@ fn pad(x: f64, y: f64, w: f64, h: f64, rotation: f64) -> Pad {
         layers: vec!["TopCopper".into()],
         net: None,
         roundrect_ratio: 0.0,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation,
         layer_sizes: None,
         net_locked: false,
@@ -110,6 +112,31 @@ fn the_courtyard_wins_over_the_pads_and_turns_with_the_footprint() {
     assert_eq!((half_w, half_h, rotation_deg), (nm(2.0), nm(1.0), 90.0));
 }
 
+/// The click body takes in half the courtyard stroke; the outline DRC
+/// measures does not.
+#[test]
+fn the_courtyard_outline_leaves_the_stroke_out() {
+    let mut drawn = courtyard_rect((1.0, -1.0), (5.0, 1.0));
+    drawn.width = 0.1;
+    let fp = footprint(Vec::new(), vec![drawn], 0.0, "TopCopper");
+    let half = |shape: Shape| match shape {
+        Shape::Rect { half_w, half_h, .. } => (half_w, half_h),
+        other => panic!("a rectangle, not {other:?}"),
+    };
+    assert_eq!(
+        half(courtyard_outline(&fp).unwrap().expect("a courtyard")),
+        (nm(2.0), nm(1.0))
+    );
+    assert_eq!(half(footprint_body(&fp).unwrap()), (nm(2.05), nm(1.05)));
+    let bare = footprint(
+        vec![pad(0.0, 0.0, 1.0, 1.0, 0.0)],
+        Vec::new(),
+        0.0,
+        "TopCopper",
+    );
+    assert!(courtyard_outline(&bare).unwrap().is_none());
+}
+
 #[test]
 fn a_bottom_footprint_mirrors_its_body() {
     let fp = footprint(
@@ -146,6 +173,7 @@ fn board(fp: Footprint) -> PcbBoard {
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
@@ -220,5 +248,28 @@ fn a_selected_pad_stands_for_its_footprint() {
     assert_eq!(
         selection.footprints().into_iter().collect::<Vec<_>>(),
         vec![footprint]
+    );
+}
+
+/// A circle courtyard reaches its rim, not a saved radius that disagrees.
+#[test]
+fn a_circle_courtyard_takes_its_radius_from_its_rim() {
+    let circle = FpGraphic {
+        graphic_type: "circle".into(),
+        center: Some(Point::new(0.0, 0.0)),
+        end: Some(Point::new(2.0, 0.0)),
+        start: None,
+        radius: 5.0,
+        ..courtyard_rect((0.0, 0.0), (0.0, 0.0))
+    };
+    let fp = footprint(Vec::new(), vec![circle], 0.0, "TopCopper");
+    assert_eq!(
+        courtyard_outline(&fp).unwrap(),
+        Some(Shape::Rect {
+            center: PointNm::new(nm(10.0), nm(20.0)),
+            half_w: nm(2.0),
+            half_h: nm(2.0),
+            rotation_deg: 0.0,
+        })
     );
 }

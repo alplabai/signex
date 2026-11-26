@@ -135,6 +135,75 @@ fn parameters_are_set_cleared_removed_and_undone() {
     assert!(!data.parameters.contains_key("rev"));
 }
 
+fn rename_parameter(from: &str, to: &str) -> ProjectGeneralCommand {
+    ProjectGeneralCommand::RenameParameter {
+        from: from.to_string(),
+        to: to.to_string(),
+    }
+}
+
+#[test]
+fn a_rename_moves_the_value_as_one_step_and_undo_restores_the_old_key() {
+    let mut data = project();
+    let mut history = ProjectGeneralHistory::default();
+    assert!(history.apply(&mut data, set_parameter("VIN", "12V")));
+    // The rename does not join the open typing run of the value.
+    assert!(history.apply(&mut data, rename_parameter("VIN", "VSUPPLY")));
+    assert_eq!(
+        data.parameters.get("VSUPPLY").map(String::as_str),
+        Some("12V")
+    );
+    assert!(!data.parameters.contains_key("VIN"));
+    // Typing after the rename is a step of its own too.
+    assert!(history.apply(&mut data, set_parameter("VSUPPLY", "24V")));
+
+    assert!(history.undo(&mut data));
+    assert_eq!(
+        data.parameters.get("VSUPPLY").map(String::as_str),
+        Some("12V")
+    );
+    assert!(history.undo(&mut data), "the rename is one step");
+    assert_eq!(data.parameters.get("VIN").map(String::as_str), Some("12V"));
+    assert!(!data.parameters.contains_key("VSUPPLY"));
+    assert!(history.undo(&mut data));
+    assert!(data.parameters.is_empty());
+    assert!(!history.can_undo());
+
+    assert!(history.redo(&mut data));
+    assert!(history.redo(&mut data));
+    assert_eq!(
+        data.parameters.get("VSUPPLY").map(String::as_str),
+        Some("12V")
+    );
+}
+
+#[test]
+fn a_rename_that_changes_nothing_records_nothing() {
+    let mut data = project();
+    let mut history = ProjectGeneralHistory::default();
+    // One typing run: one step.
+    history.apply(&mut data, set_parameter("VIN", "12V"));
+    history.apply(&mut data, set_parameter("VOUT", "3V3"));
+    let before = data.parameters.clone();
+    for (from, to) in [
+        ("VIN", "VIN"),
+        ("MISSING", "OTHER"),
+        ("VIN", ""),
+        ("VIN", "VOUT"),
+    ] {
+        assert!(
+            !history.apply(&mut data, rename_parameter(from, to)),
+            "{from} -> {to}"
+        );
+    }
+    assert_eq!(data.parameters, before, "the values are untouched");
+    let mut n = 0;
+    while history.undo(&mut data) {
+        n += 1;
+    }
+    assert_eq!(n, 1, "no step was recorded");
+}
+
 fn pick(standard: Option<DesignatorStandard>) -> ProjectGeneralCommand {
     ProjectGeneralCommand::SetDesignatorStandard(standard)
 }
@@ -380,19 +449,19 @@ fn each_project_setup_pick_is_its_own_step_and_typing_one_field_is_one() {
     };
     let mut data = project();
     let mut history = ProjectGeneralHistory::default();
-    let hobby = ProjectSetup::from_profile(SetupProfile::Hobby);
+    let advanced = ProjectSetup::from_profile(SetupProfile::Advanced);
     let hdi = ProjectSetup::from_profile(SetupProfile::Hdi);
-    assert!(history.apply(&mut data, pick(&hobby)));
+    assert!(history.apply(&mut data, pick(&advanced)));
     assert!(history.apply(&mut data, pick(&hdi)));
     assert!(history.undo(&mut data));
     assert_eq!(
         data.project_defaults,
-        hobby.defaults(),
-        "Ctrl+Z returns Hobby"
+        advanced.defaults(),
+        "Ctrl+Z returns Advanced"
     );
 
     // Typing in one rule field is one step; a pick after it is another.
-    let mut typed = hobby.clone();
+    let mut typed = advanced.clone();
     for clearance in [0.3, 0.31, 0.315] {
         typed.pcb.clearance_mm = clearance;
         history.apply(
@@ -410,7 +479,7 @@ fn each_project_setup_pick_is_its_own_step_and_typing_one_field_is_one() {
     assert!(history.undo(&mut data));
     assert_eq!(
         data.project_defaults,
-        hobby.defaults(),
+        advanced.defaults(),
         "the typing was one step"
     );
 }
@@ -464,4 +533,82 @@ fn the_agent_journal_line_cap_is_kept_in_range_and_an_unchanged_pick_records_not
     assert_eq!(data.agent_journal.max_lines, MIN_JOURNAL_MAX_LINES);
     let unchanged = data.agent_journal;
     assert!(!history.apply(&mut data, journal(unchanged, false)));
+}
+
+/// #2311: a fab tier pick is one step over the defaults and the rules; an
+/// undo of any other step leaves the rules as another writer left them.
+#[test]
+fn a_fab_tier_step_undoes_its_rules_and_no_other_step_touches_them() {
+    use signex_types::project::{DrcRuleSet, ProjectRules, ProjectSetup, SetupProfile};
+    let mut data = project();
+    let mut history = ProjectGeneralHistory::default();
+    let hdi = ProjectSetup::from_profile(SetupProfile::Hdi);
+    let seeded = ProjectRules {
+        drc: DrcRuleSet {
+            dsl: Some("rule fab_track on track require width >= 0.075mm then error\n".into()),
+            ..DrcRuleSet::default()
+        },
+        ..ProjectRules::default()
+    };
+    assert!(history.apply(
+        &mut data,
+        ProjectGeneralCommand::SetFabTier {
+            defaults: hdi.defaults(),
+            rules: Box::new(seeded.clone()),
+        },
+    ));
+    assert_eq!(data.rules.as_ref(), Some(&seeded));
+    assert!(history.apply(&mut data, set_description("after")));
+
+    // Another writer (the Rules tab) edits the rules.
+    let mut other = seeded.clone();
+    other.drc.dsl = Some("rule mine on track require width >= 0.3mm then error\n".into());
+    data.rules = Some(other.clone());
+
+    assert!(history.undo(&mut data), "the description step");
+    assert_eq!(data.rules.as_ref(), Some(&other), "untouched by that undo");
+    assert!(history.undo(&mut data), "the tier step");
+    assert_eq!(data.rules, None);
+    assert_eq!(data.project_defaults, Default::default());
+    assert!(history.redo(&mut data));
+    assert_eq!(
+        data.rules.as_ref(),
+        Some(&other),
+        "redo restores what undo found"
+    );
+    assert_eq!(data.project_defaults, hdi.defaults());
+
+    // The same tier with the same rules again is no step.
+    assert!(!history.apply(
+        &mut data,
+        ProjectGeneralCommand::SetFabTier {
+            defaults: hdi.defaults(),
+            rules: Box::new(other),
+        },
+    ));
+}
+
+/// #2489: a Fabrication Outputs tick is a step of its own that undoes, and
+/// the same kinds again record nothing.
+#[test]
+fn the_fabrication_output_kinds_are_steps_that_undo() {
+    let mut data = project();
+    let mut history = ProjectGeneralHistory::default();
+    let step = FabOutputKinds {
+        step: true,
+        ..FabOutputKinds::default()
+    };
+    let both = FabOutputKinds {
+        assembly_svg: true,
+        ..step
+    };
+    assert!(history.apply(&mut data, ProjectGeneralCommand::SetFabOutputs(Some(step))));
+    assert!(history.apply(&mut data, ProjectGeneralCommand::SetFabOutputs(Some(both))));
+    assert!(!history.apply(&mut data, ProjectGeneralCommand::SetFabOutputs(Some(both))));
+    assert!(history.undo(&mut data));
+    assert_eq!(data.fab_outputs, Some(step), "each tick is its own step");
+    assert!(history.undo(&mut data));
+    assert_eq!(data.fab_outputs, None);
+    assert!(history.redo(&mut data));
+    assert_eq!(data.fab_outputs, Some(step));
 }

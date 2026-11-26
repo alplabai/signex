@@ -5,9 +5,9 @@
 
 use super::super::*;
 use super::footprint_card::{FootprintCardStatus, FootprintCardView};
-use crate::panels::components_panel::details::footprint_canvas::FootprintPreview;
+use super::illustrations::footprint_thumb::{THUMB_HEIGHT_EM, THUMB_WIDTH_EM};
 use crate::styles::tokens::resolve;
-use crate::styles::{Radii, TypeScale, ti};
+use crate::styles::{TypeScale, ti};
 use iced::Widget;
 use iced::widget::Row;
 
@@ -15,9 +15,6 @@ const TS: TypeScale = TypeScale::DEFAULT;
 
 /// Collapse key of the Footprint section.
 pub(super) const FOOTPRINT_SECTION_KEY: &str = "sel_footprint";
-/// Thumbnail box, px.
-const THUMB_WIDTH: f32 = 116.0;
-const THUMB_HEIGHT: f32 = 88.0;
 /// Inner padding of the card, px.
 const CARD_PAD: f32 = 10.0;
 /// Gap between the thumbnail and the text column, px.
@@ -27,22 +24,24 @@ const CARD_MARGIN_X: f32 = 12.0;
 
 /// The lines of text beside the thumbnail, top to bottom: the name (mono),
 /// then the secondary lines.
-pub(super) fn card_lines(card: &FootprintCardView) -> Vec<String> {
+pub(super) fn card_lines(card: &FootprintCardView, i18n: &signex_i18n::I18n) -> Vec<String> {
+    use signex_i18n::ids;
+    let shown = |id| i18n.message_plain(id, &[]);
     let mut lines = vec![card.name.clone()];
     match &card.status {
         FootprintCardStatus::Ready(facts) => {
-            lines.push(facts.summary());
+            lines.push(facts.summary(i18n));
             if facts.has_3d_body {
-                lines.push("3D body attached".to_string());
+                lines.push(shown(ids::PROPERTIES_FOOTPRINT_3D_BODY));
             }
         }
-        FootprintCardStatus::Loading => lines.push("Reading footprint\u{2026}".to_string()),
-        FootprintCardStatus::Failed(why) => {
-            lines.push(format!("Footprint could not be read: {why}"))
-        }
-        FootprintCardStatus::Unlinked => {
-            lines.push("Not linked to a library footprint".to_string());
-        }
+        FootprintCardStatus::Loading => lines.push(shown(ids::PROPERTIES_FOOTPRINT_READING)),
+        // $reason is the library reader's English wording (#2061).
+        FootprintCardStatus::Failed(why) => lines.push(i18n.message_plain(
+            ids::PROPERTIES_FOOTPRINT_UNREADABLE,
+            &[("reason", why.as_str().into())],
+        )),
+        FootprintCardStatus::Unlinked => lines.push(shown(ids::PROPERTIES_FOOTPRINT_UNLINKED)),
     }
     lines
 }
@@ -58,22 +57,23 @@ pub(super) fn push_footprint_section<'a>(
     col.push(
         ctx.collapsible(
             FOOTPRINT_SECTION_KEY,
-            "Footprint",
+            signex_i18n::ids::PROPERTIES_SECTION_FOOTPRINT,
             &ctx.collapsed_sections,
             move || {
                 Column::new()
                     .width(Length::Fill)
-                    .push(footprint_card(card, &ctx.tokens))
+                    .push(footprint_card(card, ctx))
             },
         )
         .boxed(),
     )
 }
 
-fn footprint_card<'a>(card: &'a FootprintCardView, tokens: &ThemeTokens) -> Element<'a, PanelMsg> {
+fn footprint_card<'a>(card: &'a FootprintCardView, ctx: &PanelContext) -> Element<'a, PanelMsg> {
+    let (tokens, i18n) = (&ctx.tokens, &ctx.i18n);
     let r = resolve(tokens);
     let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
-    let mut lines = card_lines(card).into_iter();
+    let mut lines = card_lines(card, i18n).into_iter();
     let mut text_col: Column<Element<'a, PanelMsg>> = Column::new().spacing(3).width(Length::Fill);
     if let Some(name) = lines.next() {
         text_col = text_col.push(
@@ -90,12 +90,13 @@ fn footprint_card<'a>(card: &'a FootprintCardView, tokens: &ThemeTokens) -> Elem
     for (i, line) in lines.enumerate() {
         // The summary reads in ink3, any later line (the 3D note) in ink4.
         let ink = if i == 0 { r.ink3 } else { r.ink4 };
+        // raw: a card line, already rendered from the catalog by `card_lines`.
         text_col = text_col.push(text(raw(line)).size(TS.caption).color(ink).boxed());
     }
     let mut body: Row<Element<'a, PanelMsg>> = Row::new()
         .spacing(CARD_GAP)
         .align_y(iced::Alignment::Center);
-    if let Some(thumb) = thumbnail(card, tokens) {
+    if let Some(thumb) = thumbnail(card, tokens, &ctx.part_panel.hover) {
         body = body.push(thumb);
     }
     body = body.push(text_col.boxed());
@@ -110,41 +111,31 @@ fn footprint_card<'a>(card: &'a FootprintCardView, tokens: &ThemeTokens) -> Elem
     .boxed()
 }
 
-/// The footprint drawn on its canvas ground; an empty box while it is read, none
-/// for a part without a library footprint.
+/// The footprint as transparent line art; an empty box while it is read,
+/// none for a part without a library footprint.
 fn thumbnail<'a>(
     card: &'a FootprintCardView,
     tokens: &ThemeTokens,
+    hover: &signex_widgets::property_illustration::IllustrationHover,
 ) -> Option<Element<'a, PanelMsg>> {
-    use crate::library::editor::footprint::graphite_look_for;
-    // The ground the preview paints, so the box has no seam around it.
-    let ground = graphite_look_for(tokens).bg;
+    let (width, height) = (TS.caption * THUMB_WIDTH_EM, TS.caption * THUMB_HEIGHT_EM);
     let inner: Element<'a, PanelMsg> = match &card.status {
-        FootprintCardStatus::Ready(facts) => {
-            iced::widget::canvas(FootprintPreview::new(&facts.preview).with_theme_tokens(tokens))
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .boxed()
-        }
-        FootprintCardStatus::Loading | FootprintCardStatus::Failed(_) => Space::new()
-            .width(Length::Fill)
-            .height(Length::Fill)
+        FootprintCardStatus::Ready(facts) => match facts.thumb.illustration() {
+            Some(drawing) => signex_widgets::property_illustration::property_illustration(
+                drawing, hover, tokens, TS.caption,
+            )
+            .map(|m| PanelMsg::Part(super::part_panel::PartPanelMsg::IllustrationHovered(m)))
             .boxed(),
+            None => Space::new().boxed(),
+        },
+        FootprintCardStatus::Loading | FootprintCardStatus::Failed(_) => Space::new().boxed(),
         FootprintCardStatus::Unlinked => return None,
     };
     Some(
         container(inner)
-            .width(THUMB_WIDTH)
-            .height(THUMB_HEIGHT)
+            .width(width)
+            .height(height)
             .clip(true)
-            .style(move |_: &Theme| container::Style {
-                background: Some(Background::Color(ground)),
-                border: Border {
-                    radius: Radii::GRAPHITE.button.into(),
-                    ..Border::default()
-                },
-                ..container::Style::default()
-            })
             .boxed(),
     )
 }
@@ -183,6 +174,11 @@ mod tests {
             });
         }
         FootprintCardStatus::Ready(Arc::new(FootprintCardFacts::of(&fp)))
+    }
+
+    /// The card lines in en-US, as the English `format!`s read.
+    fn card_lines(card: &FootprintCardView) -> Vec<String> {
+        super::card_lines(card, &signex_i18n::I18n::en_us())
     }
 
     #[test]

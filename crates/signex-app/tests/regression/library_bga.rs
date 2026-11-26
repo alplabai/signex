@@ -56,6 +56,7 @@ fn fixture_footprint_with_bga_array(stem: &str) -> (Signex, signex_sketch::array
         arrays: vec![array],
         parameters: ParameterTable::default(),
         baked_kinds: Vec::new(),
+        ..SketchData::default()
     });
     let path = PathBuf::from(format!("{stem}.snxfpt"));
     let file = FootprintFile::from_footprint(fp);
@@ -67,7 +68,6 @@ fn fixture_footprint_with_bga_array(stem: &str) -> (Signex, signex_sketch::array
     app.document_state.tabs.push(TabInfo {
         title: stem.to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });

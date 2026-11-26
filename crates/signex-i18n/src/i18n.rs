@@ -133,6 +133,23 @@ impl I18n {
         self.locale
     }
 
+    /// Whether `id` renders from this catalog, in the active locale or its
+    /// en-US fallback, rather than as its bare id. For a message an
+    /// extension names, which its own files may lack.
+    pub fn has_message(&self, id: MessageId) -> bool {
+        self.primary.has_message(id.as_str()) || self.fallback.has_message(id.as_str())
+    }
+
+    /// The active locale's bundle, to add an extension's messages to.
+    pub(crate) fn primary_mut(&mut self) -> &mut Bundle {
+        &mut self.primary
+    }
+
+    /// The en-US fallback bundle, to add an extension's messages to.
+    pub(crate) fn fallback_mut(&mut self) -> &mut Bundle {
+        &mut self.fallback
+    }
+
     /// An instance whose message locale is `tag` although no catalog exists
     /// for it, so tests of other crates can exercise the Turkic case rules
     /// (`tr`) before a `tr` catalog lands. Messages render from en-US.
@@ -178,8 +195,20 @@ impl I18n {
     }
 
     /// Render `id`. A message the locale lacks falls back to `en-US`; one
-    /// `en-US` lacks too shows its id and is logged.
+    /// `en-US` lacks too shows its id and is logged. A nested message
+    /// argument is rendered first, in this language, as plain text.
     pub fn message(&self, id: MessageId, args: &[(&str, Arg)]) -> Localized {
+        // Copy the arguments only when one is nested; this runs every frame.
+        let rendered: Vec<(&str, Arg)>;
+        let args = if args.iter().any(|(_, arg)| arg.is_message()) {
+            rendered = args
+                .iter()
+                .map(|(name, arg)| (*name, arg.rendered_with(self)))
+                .collect();
+            rendered.as_slice()
+        } else {
+            args
+        };
         if let Some(done) = bundle::render(&self.primary, id.as_str(), args) {
             return self.finish(id, done);
         }

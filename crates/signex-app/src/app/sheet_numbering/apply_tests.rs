@@ -59,17 +59,17 @@ fn placed(position: usize, parent: PathBuf, symbol: u128) -> NumberingRow {
     }
 }
 
-struct Rig {
-    app: Signex,
-    open_parent: PathBuf,
-    closed_parent: PathBuf,
+pub(crate) struct Rig {
+    pub(crate) app: Signex,
+    pub(crate) open_parent: PathBuf,
+    pub(crate) closed_parent: PathBuf,
     _dir: tempfile::TempDir,
 }
 
 /// The open parent as an engine, the closed parent's file on disk, and the
 /// dialog showing a read with both rows renumbered. `loaded` is what the
 /// read kept of the closed parent; its stamp is the file as written now.
-fn rig(loaded: Option<SchematicSheet>) -> Rig {
+pub(crate) fn rig(loaded: Option<SchematicSheet>) -> Rig {
     let dir = tempfile::tempdir().expect("tempdir");
     let open_parent = dir.path().join("a.snxsch");
     let closed_parent = dir.path().join("z.snxsch");
@@ -104,8 +104,8 @@ fn rig(loaded: Option<SchematicSheet>) -> Rig {
         "p".into(),
     );
     state.show(Arc::new(read));
-    state.edit(0, "7".into());
-    state.edit(1, "8".into());
+    state.edit(0, "2".into());
+    state.edit(1, "1".into());
     app.ui_state.sheet_numbering = Some(state);
     Rig {
         app,
@@ -115,7 +115,7 @@ fn rig(loaded: Option<SchematicSheet>) -> Rig {
     }
 }
 
-fn closed_parent_sheet() -> SchematicSheet {
+pub(crate) fn closed_parent_sheet() -> SchematicSheet {
     SchematicSheet {
         child_sheets: vec![symbol(Y, "y.snxsch")],
         ..Default::default()
@@ -123,7 +123,7 @@ fn closed_parent_sheet() -> SchematicSheet {
 }
 
 /// Press Apply and run the re-stat it starts.
-fn apply(rig: &mut Rig) {
+pub(crate) fn apply(rig: &mut Rig) {
     crate::task_driver::TaskDriver::new()
         .send(
             &mut rig.app,
@@ -211,7 +211,7 @@ fn an_unchanged_closed_parent_is_renumbered_in_memory() {
         "Apply closed it"
     );
     let closed = &rig.app.document_state.engines[&rig.closed_parent];
-    assert_eq!(closed.document().child_sheets[0].instances[0].page, "8");
+    assert_eq!(closed.document().child_sheets[0].instances[0].page, "1");
     assert_eq!(
         std::fs::read_to_string(&rig.closed_parent).expect("file"),
         AS_READ,

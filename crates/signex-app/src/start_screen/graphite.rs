@@ -1,26 +1,30 @@
-//! Graphite start screen: a navigation column and a main column with the
-//! "What are you building?" hero, the specification box (a shell: the AI
-//! backend is not built), the bundled sample project and the project lists
-//! (`projects.rs`). When the main column would be narrower than
+//! Graphite start screen (mockup row 1): a navigation column and a main column
+//! showing the selected page. Home has the "What are you building?" hero,
+//! the bundled sample project and the project lists (`projects.rs`); the
+//! Projects and Libraries pages live in `projects_page.rs` and
+//! `libraries_page.rs`. When the main column would be narrower than
 //! [`MAIN_MIN_W`], the navigation collapses to the icon strip of
 //! `nav_strip.rs` (#2346).
-//! Every real control dispatches the same messages as the legacy screen.
 
-use std::path::PathBuf;
-
-use iced::widget::{Space, column, container, row, scrollable};
+use iced::widget::{Space, column, container, row, scrollable, svg};
 use iced::{Alignment, Background, Border, Color, Element, Length, Widget as _};
 use signex_i18n::{I18n, Localized, MessageId, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{button, text, text_input, tooltip};
+use signex_widgets::{button, text, tooltip};
 
-use super::{Action, nav_strip, project_sections};
+use super::kit::{
+    GLYPH_THEME, ICON, Look, Size, action_button, icon, mono, outline_button, pill, section_header,
+    weighted,
+};
+use super::projects::{Rows, home_sections};
+use super::{
+    Action, StartPage, StartScreenData, StartScreenMsg, libraries_page, message, nav_strip,
+    project_sections, projects_page,
+};
 use crate::app::Message;
-use crate::panels::signal::coming_soon;
-use crate::pinned_projects::PinnedProjects;
 use crate::styles::{
-    self, ChromeMetrics, LINE_HEIGHT, Radii, Spacing, TypeScale, ti,
-    tokens::{hover_overlay, resolve},
+    self, ChromeMetrics, LINE_HEIGHT, PillTone, Radii, Spacing, TypeScale, ti,
+    tokens::{composite_over, hover_overlay, resolve},
 };
 
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -32,10 +36,7 @@ pub(super) const HERO_BODY_SIZE: f32 = TS.heading;
 
 /// The semibold UI face of the hero title and the section labels.
 pub(super) fn semibold() -> iced::Font {
-    iced::Font {
-        weight: iced::font::Weight::Semibold,
-        ..crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT)
-    }
+    weighted(iced::font::Weight::Semibold)
 }
 /// Width of the navigation column (the mock's 232 px, from the body size).
 pub(super) const NAV_W: f32 = TS.body * 19.5;
@@ -44,6 +45,8 @@ pub(super) const NAV_W: f32 = TS.body * 19.5;
 pub(super) const MAIN_MIN_W: f32 = TS.body * 40.0;
 /// Vertical padding of a full navigation row.
 const NAV_ROW_PAD_Y: f32 = 6.0;
+/// Horizontal padding of a full navigation row (10 px at the default base).
+const NAV_ROW_PAD_X: f32 = SP.m + SP.xs / 2.0;
 /// Height of a navigation row: one label line and its padding. The icon
 /// strip's rows take the same height.
 pub(super) const NAV_ROW_H: f32 = TS.label * LINE_HEIGHT + 2.0 * NAV_ROW_PAD_Y;
@@ -65,54 +68,6 @@ pub(super) fn nav_width(width: f32) -> f32 {
         nav_strip::STRIP_W
     } else {
         NAV_W
-    }
-}
-
-pub(super) fn mono() -> iced::Font {
-    crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT)
-}
-
-fn rule(line: Color, right: bool) -> impl Fn(&iced::Theme) -> container::Style {
-    move |_| {
-        let side = iced::border::Side::default().width(1.0).color(line);
-        let mut border = Border::default();
-        if right {
-            border.right = side;
-        } else {
-            border.bottom = side;
-        }
-        container::Style {
-            border,
-            ..container::Style::default()
-        }
-    }
-}
-
-/// Quiet bordered button ("Open…"): raised fill, hairline border.
-pub(super) fn outline_button(
-    tokens: &ThemeTokens,
-) -> impl Fn(&iced::Theme, button::Status) -> button::Style + 'static {
-    let (raised, hover, line, ink) = (
-        resolve(tokens).raised,
-        hover_overlay(tokens),
-        ti(tokens.border),
-        ti(tokens.text),
-    );
-    move |_, status| button::Style {
-        background: Some(Background::Color(match status {
-            button::Status::Hovered | button::Status::Pressed => {
-                styles::tokens::composite_over(hover, raised)
-            }
-            _ => raised,
-        })),
-        text_color: ink,
-        border: Border {
-            width: 1.0,
-            color: line,
-            radius: Radii::GRAPHITE.button.into(),
-            ..Border::default()
-        },
-        ..button::Style::default()
     }
 }
 
@@ -150,128 +105,213 @@ pub(super) fn nav_chrome(
     tokens: &ThemeTokens,
 ) -> impl Fn(&iced::Theme) -> container::Style + 'static {
     let chrome = ti(tokens.panel_bg);
-    let line = rule(ti(tokens.border), true);
-    move |theme: &iced::Theme| container::Style {
-        background: Some(Background::Color(chrome)),
-        ..line(theme)
+    let line = ti(tokens.border);
+    move |_: &iced::Theme| {
+        let mut border = Border::default();
+        border.right = iced::border::Side::default().width(1.0).color(line);
+        container::Style {
+            background: Some(Background::Color(chrome)),
+            border,
+            ..container::Style::default()
+        }
     }
 }
 
-/// A navigation row; `active` marks the current page (not pressable).
-fn nav_row<'a>(
-    tokens: &ThemeTokens,
+/// The page a navigation row opens, and what it sends: nothing for the
+/// page already on screen.
+pub(super) fn page_action(current: StartPage, page: StartPage) -> Option<Message> {
+    (current != page).then(|| message(StartScreenMsg::PageSelected(page)))
+}
+
+/// One full navigation row: its glyph, its label, an optional right-hand
+/// cell (a count, a key, a pill) and what it sends.
+struct NavRow<'a> {
+    glyph: svg::Handle,
     label: Localized,
+    right: Option<Element<'a, Message>>,
     action: Option<Message>,
     active: bool,
-) -> Element<'a, Message> {
-    let mut b = button(text(label).size(TS.label))
+    /// Greyed: a row that opens nothing yet.
+    planned: bool,
+}
+
+fn nav_row<'a>(tokens: &ThemeTokens, row_data: NavRow<'a>) -> Element<'a, Message> {
+    let (ink, ink3, ink4) = (ti(tokens.text), resolve(tokens).ink3, resolve(tokens).ink4);
+    let mut label = text(row_data.label)
+        .size(TS.label)
+        .color(if row_data.planned { ink4 } else { ink })
+        .wrapping(iced::widget::text::Wrapping::None);
+    if row_data.active {
+        label = label.font(weighted(iced::font::Weight::Medium));
+    }
+    let glyph_ink = if row_data.planned { ink4 } else { ink3 };
+    let mut line = row![icon(row_data.glyph, ICON, glyph_ink), label.boxed()]
+        .spacing(SP.m)
+        .align_y(Alignment::Center);
+    if let Some(right) = row_data.right {
+        line = line
+            .push(Space::new().width(Length::Fill).boxed())
+            .push(right);
+    }
+    let mut b = button(line)
         .width(Length::Fill)
-        .padding([NAV_ROW_PAD_Y, 14.0])
-        .style(nav_row_style(tokens, active));
-    if let Some(message) = action {
+        .padding([NAV_ROW_PAD_Y, NAV_ROW_PAD_X])
+        .style(nav_row_style(tokens, row_data.active));
+    if let Some(message) = row_data.action {
         b = b.on_press(message);
     }
     b.boxed()
 }
 
+/// A navigation row's count or key, right-aligned in mono.
+fn nav_cell<'a>(tokens: &ThemeTokens, value: Localized) -> Element<'a, Message> {
+    text(value)
+        .size(TS.caption)
+        .font(mono())
+        .color(resolve(tokens).ink4)
+        .wrapping(iced::widget::text::Wrapping::None)
+        .boxed()
+}
+
+/// New project and Open… at the top of the navigation, stacked full width.
+fn nav_buttons<'a>(tokens: &ThemeTokens, i18n: &I18n, open_shortcut: &str) -> Element<'a, Message> {
+    let height = ChromeMetrics::DEFAULT.button;
+    let primary_ink = resolve(tokens).primary_ink;
+    let new_label = row![
+        icon(crate::icons::icon_plus(GLYPH_THEME), ICON, primary_ink),
+        text(t!(i18n, ids::START_NEW_PROJECT))
+            .size(TS.dense)
+            .height(Length::Fill)
+            .align_y(iced::alignment::Vertical::Center)
+            .wrapping(iced::widget::text::Wrapping::None)
+            .boxed(),
+    ]
+    .spacing(SP.s + SP.xs / 2.0)
+    .align_y(Alignment::Center);
+    let new = button(container(new_label).center_x(Length::Fill))
+        .padding([0.0, SP.l])
+        .width(Length::Fill)
+        .height(height)
+        .on_press(Action::NewProject.message())
+        .style(styles::primary_button(tokens));
+    let mut open_label = row![
+        text(t!(i18n, ids::START_OPEN))
+            .size(TS.dense)
+            .wrapping(iced::widget::text::Wrapping::None)
+            .boxed()
+    ]
+    .spacing(SP.m)
+    .align_y(Alignment::Center);
+    if !open_shortcut.is_empty() {
+        open_label = open_label.push(
+            container(
+                text(UserText::new(open_shortcut))
+                    .size(TS.caption)
+                    .font(mono())
+                    .wrapping(iced::widget::text::Wrapping::None),
+            )
+            .padding([1.0, SP.s + SP.xs / 2.0])
+            .style(styles::key_cap(tokens))
+            .boxed(),
+        );
+    }
+    let open = button(container(open_label).center(Length::Fill))
+        .padding([0.0, SP.l])
+        .width(Length::Fill)
+        .height(height)
+        .on_press(Action::OpenProject.message())
+        .style(outline_button(tokens));
+    column![new, open]
+        .spacing(SP.s + SP.xs)
+        .padding([0.0, SP.xs])
+        .boxed()
+}
+
 fn nav<'a>(
     tokens: &ThemeTokens,
     i18n: &I18n,
-    open_shortcut: &str,
-    recent_count: usize,
-    libraries: &[super::LoadedLibrary],
+    data: &StartScreenData<'a>,
+    listed: usize,
 ) -> Element<'a, Message> {
-    let cap_fill = resolve(tokens).sunken;
-    let cap_ink = resolve(tokens).ink3;
-    let open_label: Element<'a, Message> = {
-        let label = text(t!(i18n, ids::START_OPEN))
-            .size(TS.dense)
-            .wrapping(iced::widget::text::Wrapping::None);
-        let mut line = row![label.boxed()].spacing(8).align_y(Alignment::Center);
-        if !open_shortcut.is_empty() {
-            line = line.push(
-                container(
-                    text(UserText::new(open_shortcut))
-                        .size(TS.caption)
-                        .font(mono())
-                        .color(cap_ink)
-                        .wrapping(iced::widget::text::Wrapping::None),
-                )
-                .padding([1.0, 6.0])
-                .style(move |_: &iced::Theme| container::Style {
-                    background: Some(Background::Color(cap_fill)),
-                    border: Border {
-                        radius: Radii::GRAPHITE.small.into(),
-                        ..Border::default()
-                    },
-                    ..container::Style::default()
-                })
-                .boxed(),
-            );
-        }
-        container(line)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .center_x(Length::Fill)
-            .center_y(Length::Fill)
-            .boxed()
+    let current = data.state.page;
+    let count = |n: usize| Some(nav_cell(tokens, t!(i18n, ids::START_COUNT, "count" => n)));
+    let page = |glyph: svg::Handle,
+                label: MessageId,
+                right: Option<Element<'a, Message>>,
+                page: StartPage| NavRow {
+        glyph,
+        label: t!(i18n, label),
+        right,
+        action: page_action(current, page),
+        active: current == page,
+        planned: false,
     };
-    let top = row![
-        button(
-            text(t!(i18n, ids::START_NEW_PROJECT))
-                .size(TS.dense)
-                .height(Length::Fill)
-                .align_y(iced::alignment::Vertical::Center)
-                .wrapping(iced::widget::text::Wrapping::None)
-        )
-        .padding([0.0, 12.0])
-        .width(Length::Shrink)
-        .height(ChromeMetrics::DEFAULT.field + 2.0)
-        .on_press(Action::NewProject.message())
-        .style(styles::primary_button(tokens)),
-        button(open_label)
-            .padding([0.0, 14.0])
-            .width(Length::Fill)
-            .height(ChromeMetrics::DEFAULT.field + 2.0)
-            .on_press(Action::OpenProject.message())
-            .style(outline_button(tokens)),
-    ]
-    .spacing(8);
+    let parts = NavRow {
+        glyph: crate::icons::icon_chrome_search(GLYPH_THEME),
+        label: t!(i18n, ids::START_PARTS_SEARCH),
+        right: Some(pill(tokens, t!(i18n, ids::START_SOON), PillTone::Neutral)),
+        action: None,
+        active: false,
+        planned: true,
+    };
+    let shortcuts = NavRow {
+        glyph: crate::icons::icon_start_key(GLYPH_THEME),
+        label: t!(i18n, ids::START_KEYBOARD_SHORTCUTS),
+        right: (!data.shortcuts_shortcut.is_empty()).then(|| {
+            let key = data.shortcuts_shortcut.clone();
+            nav_cell(tokens, t!(i18n, ids::START_ROW_KEY, "key" => key))
+        }),
+        action: Some(Action::KeyboardShortcuts.message()),
+        active: false,
+        planned: false,
+    };
     let items = column![
-        nav_row(tokens, t!(i18n, ids::START_HOME), None, true),
-        nav_count_row(tokens, i18n, ids::START_PROJECTS, Some(recent_count)),
-        nav_count_row(tokens, i18n, ids::START_LIBRARIES, Some(libraries.len())),
+        nav_row(
+            tokens,
+            page(
+                crate::icons::icon_start_home(GLYPH_THEME),
+                ids::START_HOME,
+                None,
+                StartPage::Home
+            )
+        ),
+        nav_row(
+            tokens,
+            page(
+                crate::icons::icon_start_folder(GLYPH_THEME),
+                ids::START_PROJECTS,
+                count(listed),
+                StartPage::Projects
+            )
+        ),
+        nav_row(
+            tokens,
+            page(
+                crate::icons::icon_start_book(GLYPH_THEME),
+                ids::START_LIBRARIES,
+                count(data.libraries.len()),
+                StartPage::Libraries
+            )
+        ),
         coming_soon(
-            nav_count_row(tokens, i18n, ids::START_PARTS_SEARCH, None),
+            nav_row(tokens, parts),
             tokens,
             i18n,
-            tooltip::Position::Right,
+            tooltip::Position::Right
         ),
-        // The mock's divider; the two app-only rows sit under it.
-        container(nav_divider(tokens)).padding([SP.m, SP.l]),
-        nav_row(
-            tokens,
-            t!(i18n, ids::START_OPEN_SAMPLE),
-            Some(Action::OpenSampleProject.message()),
-            false
-        ),
-        nav_row(
-            tokens,
-            t!(i18n, ids::START_KEYBOARD_SHORTCUTS),
-            Some(Action::KeyboardShortcuts.message()),
-            false
-        ),
+        // The mock's divider; Keyboard Shortcuts sits under it.
+        container(nav_divider(tokens)).padding([SP.m, SP.s + SP.xs / 2.0]),
+        nav_row(tokens, shortcuts),
     ]
-    .spacing(2);
-    let loaded = libraries_card(tokens, i18n, libraries);
+    .spacing(SP.xs);
     container(column![
-        top,
-        Space::new().height(10.0),
+        nav_buttons(tokens, i18n, &data.open_shortcut),
+        Space::new().height(SP.m + SP.xs / 2.0),
         items,
         Space::new().height(Length::Fill),
-        loaded,
+        libraries_card(tokens, i18n, &data.libraries),
     ])
-    .padding([14.0, 10.0])
+    .padding([SP.l, SP.m])
     .width(NAV_W)
     .height(Length::Fill)
     .style(nav_chrome(tokens))
@@ -280,231 +320,129 @@ fn nav<'a>(
 
 /// The hairline between the page rows and the other navigation rows.
 pub(super) fn nav_divider<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
-    let line = ti(tokens.border);
-    container(Space::new().height(styles::HAIRLINE))
-        .width(Length::Fill)
-        .style(move |_: &iced::Theme| container::Style {
-            background: Some(Background::Color(line)),
-            ..container::Style::default()
-        })
-        .boxed()
+    super::kit::hairline(resolve(tokens).line_soft)
 }
 
-/// A navigation row with the real count at the right (none when unavailable).
-/// Rows that open nothing yet are wrapped by the caller in the stub tooltip.
-fn nav_count_row<'a>(
+/// Wrap a navigation row that opens nothing yet in the "Coming soon" tooltip.
+fn coming_soon<'a>(
+    content: Element<'a, Message>,
     tokens: &ThemeTokens,
     i18n: &I18n,
-    label: MessageId,
-    count: Option<usize>,
+    position: tooltip::Position,
 ) -> Element<'a, Message> {
-    let (ink, ink3) = (ti(tokens.text), resolve(tokens).ink3);
-    let mut line =
-        row![text(t!(i18n, label)).size(TS.label).color(ink).boxed()].align_y(Alignment::Center);
-    line = line.push(Space::new().width(Length::Fill).boxed());
-    if let Some(n) = count {
-        line = line.push(
-            text(t!(i18n, ids::START_COUNT, "count" => n))
-                .size(TS.caption)
-                .color(ink3)
-                .boxed(),
-        );
-    }
-    container(line)
-        .padding([NAV_ROW_PAD_Y, 14.0])
-        .width(Length::Fill)
-        .boxed()
+    let hint = container(
+        text(t!(i18n, ids::PANELS_COMING_SOON))
+            .size(TS.caption)
+            .color(ti(tokens.text)),
+    )
+    .padding([3, 8])
+    .style(signex_widgets::active_bar_dropdown::tooltip_style(
+        ti(tokens.hover),
+        ti(tokens.border),
+    ));
+    tooltip(content, hint, position).gap(4).boxed()
 }
 
-/// The loaded libraries and their component count, from the library state.
+/// The loaded libraries and their component count, from the library state;
+/// it opens the Libraries page.
 fn libraries_card<'a>(
     tokens: &ThemeTokens,
     i18n: &I18n,
     libraries: &[super::LoadedLibrary],
 ) -> Element<'a, Message> {
-    let (ink, ink2, ink3) = (
-        ti(tokens.text),
-        ti(tokens.text_secondary),
-        resolve(tokens).ink3,
-    );
-    let components: usize = libraries.iter().map(|(_, n)| n).sum();
-    let names = libraries
-        .iter()
-        .map(|(name, _)| name.as_str())
-        .collect::<Vec<_>>()
-        .join(" \u{00B7} ");
+    let (ink, ink4) = (ti(tokens.text), resolve(tokens).ink4);
+    let components: usize = libraries.iter().map(|lib| lib.components).sum();
     let summary = t!(
         i18n,
         ids::START_LIBRARIES_SUMMARY,
         "libraries" => libraries.len(),
         "components" => components
     );
-    let mut body = column![
-        text(t!(i18n, ids::START_LIBRARIES))
-            .size(TS.label)
-            .color(ink)
-            .boxed(),
-        text(summary).size(TS.dense).color(ink2).boxed(),
-    ]
-    .spacing(2);
-    if !names.is_empty() {
-        body = body.push(
-            text(signex_i18n::UserText::new(names))
-                .size(TS.caption)
-                .font(mono())
-                .color(ink3)
-                .wrapping(iced::widget::text::Wrapping::None)
-                .boxed(),
-        );
-    }
-    container(body)
-        .padding(12)
-        .width(Length::Fill)
-        .clip(true)
-        .style(styles::card(tokens))
-        .boxed()
-}
-
-/// A section heading; the catalog writes it in capitals. Semibold as in the
-/// mock; iced has no letter spacing, so the mock's tracking is not drawn.
-pub(super) fn section_header<'a>(tokens: &ThemeTokens, title: Localized) -> Element<'a, Message> {
-    text(title)
-        .size(TS.section)
-        .font(semibold())
-        .style(styles::section_label(tokens))
-        .boxed()
-}
-
-/// The specification box: a disabled shell, no sample text.
-fn spec_box<'a>(tokens: &ThemeTokens, i18n: &I18n) -> Element<'a, Message> {
-    let r = resolve(tokens);
-    let (ink4, ink) = (r.ink4, ti(tokens.text));
-    let input: iced::widget::TextInput<'a, Message> =
-        text_input(t!(i18n, ids::START_SPEC_PLACEHOLDER), "")
-            .padding(iced::Padding::ZERO)
-            .size(TS.label)
-            .width(Length::Fill)
-            .style(move |_: &iced::Theme, _| text_input::Style {
-                background: Background::Color(Color::TRANSPARENT),
-                border: Border::default(),
-                placeholder: ink4,
-                value: ink,
-                selection: Color { a: 0.4, ..ink },
-            });
-    let stub = |label: MessageId, kind: u8| -> Element<'a, Message> {
-        let b = button(
-            text(t!(i18n, label))
-                .size(TS.dense)
-                .height(Length::Fill)
-                .align_y(iced::alignment::Vertical::Center),
-        )
-        .padding([0.0, 12.0])
-        .height(ChromeMetrics::DEFAULT.field + 2.0);
-        let b: Element<'a, Message> = if kind == 0 {
-            b.style(styles::accent_button_rounded(tokens)).boxed()
-        } else {
-            b.style(outline_button(tokens)).boxed()
-        };
-        coming_soon(b, tokens, i18n, tooltip::Position::Top)
-    };
-    let actions = row![
-        stub(ids::START_SPEC_ATTACH, 1),
-        stub(ids::START_SPEC_IMPORT, 1),
-        stub(ids::START_SPEC_CONSTRAINTS, 1),
-        Space::new().width(Length::Fill).boxed(),
-        stub(ids::START_SPEC_GENERATE, 0),
-    ]
-    .spacing(6)
-    .align_y(Alignment::Center);
-    let mode = |label: MessageId, on: bool| -> Element<'a, Message> {
-        let (raised, ink, ink3) = (
-            resolve(tokens).raised,
-            ti(tokens.text),
-            resolve(tokens).ink3,
-        );
-        let pill =
-            container(
-                text(t!(i18n, label))
-                    .size(TS.dense)
-                    .color(if on { ink } else { ink3 }),
-            )
-            .padding([4.0, 14.0])
-            .style(move |_: &iced::Theme| container::Style {
-                background: on.then_some(Background::Color(raised)),
-                border: Border {
-                    radius: Radii::GRAPHITE.control.into(),
-                    ..Border::default()
-                },
-                ..container::Style::default()
-            });
-        coming_soon(pill.boxed(), tokens, i18n, tooltip::Position::Top)
-    };
-    let sunken = resolve(tokens).sunken;
-    let modes = container(
-        row![
-            mode(ids::START_SPEC_GENERATOR, true),
-            mode(ids::START_SPEC_ASSISTANT, false)
-        ]
-        .spacing(2),
-    )
-    .padding(2)
-    .style(move |_: &iced::Theme| container::Style {
-        background: Some(Background::Color(sunken)),
-        border: Border {
-            radius: Radii::GRAPHITE.control.into(),
-            ..Border::default()
-        },
-        ..container::Style::default()
-    });
-    let head = row![
-        modes,
-        Space::new().width(Length::Fill),
-        text(t!(i18n, ids::START_SPEC_LIBRARIES_FIRST))
-            .size(TS.dense)
-            .color(resolve(tokens).ink3),
-    ]
-    .align_y(Alignment::Center);
-    container(
-        column![
-            container(head).padding([10.0, 12.0]),
-            container(input).padding([6.0, 18.0]).height(96.0),
-            container(actions)
-                .padding([10.0, 12.0])
-                .width(Length::Fill)
-                .style(styles::resize_handle_edge(tokens, false)),
-        ]
-        .spacing(0),
-    )
-    .width(Length::Fill)
-    .style(styles::card(tokens))
-    .boxed()
-}
-
-/// The bundled sample project as a real card: it opens through File ▸ Open
-/// Sample Project.
-fn sample_card<'a>(tokens: &ThemeTokens, i18n: &I18n) -> Element<'a, Message> {
-    let (ink, ink2) = (ti(tokens.text), ti(tokens.text_secondary));
     let body = column![
-        text(t!(i18n, ids::START_SAMPLE_TITLE))
-            .size(TS.label)
+        text(t!(i18n, ids::START_LIBRARIES))
+            .size(TS.body)
+            .font(weighted(iced::font::Weight::Medium))
             .color(ink),
-        text(t!(i18n, ids::START_SAMPLE_BODY))
-            .size(TS.dense)
-            .color(ink2),
+        text(summary).size(TS.caption).color(ink4),
     ]
-    .spacing(4);
-    let card = styles::card(tokens);
-    let hover = hover_overlay(tokens);
+    .spacing(SP.xs);
+    let (fill, line, strong) = (
+        ti(tokens.bg),
+        ti(tokens.border),
+        resolve(tokens).line_strong,
+    );
     button(body)
         .width(Length::Fill)
-        .padding(14)
+        .padding([SP.m + SP.xs / 2.0, SP.l])
+        .on_press(message(StartScreenMsg::PageSelected(StartPage::Libraries)))
+        .style(move |_: &iced::Theme, status| button::Style {
+            background: Some(Background::Color(fill)),
+            text_color: ink,
+            border: Border {
+                width: 1.0,
+                color: if matches!(status, button::Status::Hovered | button::Status::Pressed) {
+                    strong
+                } else {
+                    line
+                },
+                radius: Radii::GRAPHITE.card.into(),
+                ..Border::default()
+            },
+            ..button::Style::default()
+        })
+        .boxed()
+}
+
+/// The bundled sample project as a real card: its thumbnail, title, line
+/// and Open; the card and Open both open it through File ▸ Open Sample
+/// Project.
+fn sample_card<'a>(
+    tokens: &'a ThemeTokens,
+    i18n: &'a I18n,
+    data: &StartScreenData<'a>,
+) -> Element<'a, Message> {
+    let (ink, ink3) = (ti(tokens.text), resolve(tokens).ink3);
+    let slot = match &data.state.sample_project {
+        Some(path) => data.thumbnails.slot(path, false),
+        None => crate::project_thumbnail::ThumbnailSlot::NoPreview,
+    };
+    let body = column![
+        text(t!(i18n, ids::START_SAMPLE_TITLE))
+            .size(TS.body)
+            .font(semibold())
+            .color(ink),
+        text(t!(i18n, ids::START_SAMPLE_BODY))
+            .size(TS.body)
+            .color(ink3),
+    ]
+    .spacing(SP.xs)
+    .width(Length::Fill);
+    let open = action_button(
+        tokens,
+        (Look::Outline, Size::Regular),
+        None,
+        t!(i18n, ids::START_OPEN_PROJECT),
+        Some(Action::OpenSampleProject.message()),
+    );
+    let content = row![
+        crate::project_thumbnail::tile(tokens, i18n, slot),
+        body.boxed(),
+        open
+    ]
+    .spacing(SP.l + SP.xs / 2.0)
+    .align_y(Alignment::Center);
+    let card = styles::card(tokens);
+    let hover = hover_overlay(tokens);
+    button(content)
+        .width(Length::Fill)
+        .padding([SP.l, SP.l + SP.xs / 2.0])
         .on_press(Action::OpenSampleProject.message())
         .style(move |theme: &iced::Theme, status| {
             let base = card(theme);
             let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
             button::Style {
                 background: if hovered {
-                    Some(Background::Color(styles::tokens::composite_over(
+                    Some(Background::Color(composite_over(
                         hover,
                         match base.background {
                             Some(Background::Color(c)) => c,
@@ -526,76 +464,98 @@ fn sample_card<'a>(tokens: &ThemeTokens, i18n: &I18n) -> Element<'a, Message> {
 pub fn view<'a>(
     tokens: &'a ThemeTokens,
     i18n: &'a I18n,
-    open_shortcut: &str,
-    recent: &'a [PathBuf],
-    pinned: &'a PinnedProjects,
-    libraries: &[super::LoadedLibrary],
+    data: StartScreenData<'a>,
 ) -> Element<'a, Message> {
-    let open_shortcut = open_shortcut.to_owned();
-    let libraries = libraries.to_vec();
     // The width decides the navigation's form, so the screen is laid out
     // per size.
-    iced::widget::responsive(move |size| {
-        view_sized(
-            tokens,
-            i18n,
-            &open_shortcut,
-            (recent, pinned),
-            &libraries,
-            size.width,
-        )
-    })
-    .boxed()
+    iced::widget::responsive(move |size| view_sized(tokens, i18n, &data, size.width)).boxed()
+}
+
+/// Home: the hero, the reference design, the project lists and the
+/// extension slot (empty in the Community binary).
+fn home<'a>(
+    rows: Rows<'a>,
+    data: &StartScreenData<'a>,
+    listed: usize,
+) -> Vec<Element<'a, Message>> {
+    let (tokens, i18n) = (rows.tokens, rows.i18n);
+    let sections = project_sections(data.recent.entries(), data.pinned);
+    let mut out = vec![
+        text(t!(i18n, ids::START_HERO_TITLE))
+            .size(HERO_TITLE_SIZE)
+            .font(semibold())
+            .color(ti(tokens.text))
+            .boxed(),
+        text(t!(i18n, ids::START_HERO_BODY))
+            .size(HERO_BODY_SIZE)
+            .color(resolve(tokens).ink3)
+            .boxed(),
+        Space::new().height(SP.m).boxed(),
+        section_header(tokens, t!(i18n, ids::START_REFERENCE_DESIGN)),
+        sample_card(tokens, i18n, data),
+        Space::new().height(SP.m).boxed(),
+    ];
+    out.extend(home_sections(rows, &sections, data.pinned, listed));
+    out.extend(super::extension_slot::home_end(
+        tokens,
+        i18n,
+        data.extensions,
+    ));
+    out
 }
 
 fn view_sized<'a>(
     tokens: &'a ThemeTokens,
-    i18n: &I18n,
-    open_shortcut: &str,
-    (recent, pinned): (&'a [PathBuf], &'a PinnedProjects),
-    libraries: &[super::LoadedLibrary],
+    i18n: &'a I18n,
+    data: &StartScreenData<'a>,
     width: f32,
 ) -> Element<'a, Message> {
     // This iced fork has no max-width; the main column takes the room left
     // beside the navigation, up to `MAIN_MAX_W`.
     let main_w = (width - nav_width(width) - 2.0 * MAIN_PAD_X).clamp(0.0, MAIN_MAX_W);
-    let sections = project_sections(recent, pinned);
-    let listed = sections.pinned.len() + sections.recent.len();
-    let mut main = column![
-        text(t!(i18n, ids::START_HERO_TITLE))
-            .size(HERO_TITLE_SIZE)
-            .font(semibold())
-            .color(ti(tokens.text)),
-        text(t!(i18n, ids::START_HERO_BODY))
-            .size(HERO_BODY_SIZE)
-            .color(ti(tokens.text_secondary)),
-        Space::new().height(8.0),
-        spec_box(tokens, i18n),
-        Space::new().height(8.0),
-        section_header(tokens, t!(i18n, ids::START_REFERENCE_DESIGN)),
-        sample_card(tokens, i18n),
-        Space::new().height(8.0),
-    ];
-    for section in super::projects::sections(tokens, i18n, &sections, pinned) {
-        main = main.push(section);
+    let rows = Rows {
+        tokens,
+        i18n,
+        recent: data.recent,
+        thumbnails: data.thumbnails,
+        now: data.now,
+    };
+    let listed = projects_page::scope_counts(data.recent.entries(), data.pinned).all;
+    let (content, spacing) = match data.state.page {
+        StartPage::Home => (home(rows, data, listed), SP.m + SP.xs / 2.0),
+        StartPage::Projects => (
+            projects_page::view(rows, data.pinned, data.state, main_w),
+            SP.l,
+        ),
+        StartPage::Libraries => (
+            libraries_page::view(tokens, i18n, &data.libraries, data.state, main_w),
+            SP.l,
+        ),
+    };
+    let mut main = column![].spacing(spacing).width(Length::Fixed(main_w));
+    for part in content {
+        main = main.push(part);
     }
-    let main = main.spacing(10).width(Length::Fixed(main_w));
     let body = scrollable(
         container(main)
             .padding([40.0, MAIN_PAD_X])
             .center_x(Length::Fill),
     );
     let navigation = if nav_collapsed(width) {
-        nav_strip::view(tokens, i18n, open_shortcut)
+        nav_strip::view(tokens, i18n, data)
     } else {
-        nav(tokens, i18n, open_shortcut, listed, libraries)
+        nav(tokens, i18n, data, listed)
     };
+    let page_fill = ti(tokens.bg);
     row![
         navigation,
         container(body)
             .width(Length::Fill)
             .height(Length::Fill)
-            .style(styles::panel_region(tokens)),
+            .style(move |_: &iced::Theme| container::Style {
+                background: Some(Background::Color(page_fill)),
+                ..container::Style::default()
+            }),
     ]
     .width(Length::Fill)
     .height(Length::Fill)

@@ -37,7 +37,6 @@ fn open_sheet(app: &mut Signex, path: &Path, dirty: bool) -> uuid::Uuid {
     app.document_state.tabs.push(TabInfo {
         title: path.file_stem().unwrap().to_string_lossy().into_owned(),
         path: path.to_path_buf(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -83,6 +82,7 @@ fn renaming_a_dirty_sheet_moves_its_dirty_marker_and_dirties_the_project() {
             }],
             variant_definitions: Vec::new(),
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: Vec::new(),
             enable_git: false,
             net_classes: Vec::new(),
@@ -91,6 +91,11 @@ fn renaming_a_dirty_sheet_moves_its_dirty_marker_and_dirties_the_project() {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
+            fab_outputs: None,
+            router_tool_diameter: None,
+            bom_alternates: Vec::new(),
+            requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },
@@ -103,14 +108,16 @@ fn renaming_a_dirty_sheet_moves_its_dirty_marker_and_dirties_the_project() {
     open_sheet(&mut app, &old, true);
     activate(&mut app, 0);
 
-    app.ui_state.rename_dialog = Some(RenameDialogState {
+    app.ui_state.rename_dialog = Some(Box::new(RenameDialogState {
         project_id: None,
         target_path: old.clone(),
         tree_path: vec![0],
         buffer: "PSU.snxsch".to_string(),
         error: None,
         is_project_rename: false,
-    });
+        placing_symbols: Vec::new(),
+        name_clash: None,
+    }));
     crate::settle_support::settle(&mut app, Message::Rename(RenameMsg::Submit));
 
     let dirty = &app.document_state;
@@ -168,6 +175,7 @@ fn renaming_a_non_sheet_file_does_not_dirty_the_project() {
             }],
             variant_definitions: Vec::new(),
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: Vec::new(),
             enable_git: false,
             net_classes: Vec::new(),
@@ -176,6 +184,11 @@ fn renaming_a_non_sheet_file_does_not_dirty_the_project() {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
+            fab_outputs: None,
+            router_tool_diameter: None,
+            bom_alternates: Vec::new(),
+            requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },
@@ -186,14 +199,16 @@ fn renaming_a_non_sheet_file_does_not_dirty_the_project() {
     });
     app.document_state.active_project = Some(id);
 
-    app.ui_state.rename_dialog = Some(RenameDialogState {
+    app.ui_state.rename_dialog = Some(Box::new(RenameDialogState {
         project_id: None,
         target_path: old.clone(),
         tree_path: vec![0],
         buffer: "R0402.snxfpt".to_string(),
         error: None,
         is_project_rename: false,
-    });
+        placing_symbols: Vec::new(),
+        name_clash: None,
+    }));
     crate::settle_support::settle(&mut app, Message::Rename(RenameMsg::Submit));
 
     assert!(

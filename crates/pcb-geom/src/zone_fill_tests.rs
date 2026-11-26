@@ -3,6 +3,7 @@ use crate::rect::RectNm;
 use crate::transform::pad_shape;
 use signex_types::pcb::{Footprint, Pad, PadNet, PadShape, PadType, Point, Segment};
 use signex_types::pcb_arc::TrackArc;
+use signex_types::zone_cutout::POUR_CUTOUT_FILL;
 use signex_types::zone_keepout::KEEPOUT_FILL;
 use signex_types::zone_pour::POUR_FILL;
 
@@ -23,6 +24,8 @@ fn pad(n: u128, x: f64, net: u32) -> Pad {
             name: format!("N{net}"),
         }),
         roundrect_ratio: 0.0,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 0.0,
         layer_sizes: None,
         net_locked: false,
@@ -54,6 +57,8 @@ fn zone(n: u128, net: u32, fill: &str, layer: &str, rect: (f64, f64, f64, f64)) 
         min_thickness: 0.0,
         min_island_area: 0.0,
         remove_dead_islands: false,
+        shelved: false,
+        unfilled: false,
         unknown: Default::default(),
     }
 }
@@ -82,6 +87,7 @@ fn board(pads: Vec<Pad>) -> PcbBoard {
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
@@ -138,7 +144,7 @@ fn copper_of_another_net_is_cut_out_with_the_clearance_and_no_closer() {
     let pad_copper = pad_shape(&b.footprints[0], &b.footprints[0].pads[0]).unwrap();
     let clearance = MM / 2;
     let (near, far) = (
-        pad_copper.inflated(clearance - 1),
+        pad_copper.clone().inflated(clearance - 1),
         pad_copper.inflated(clearance + MM / 50),
     );
     for p in &fill[0].holes[0] {
@@ -210,6 +216,53 @@ fn a_keepout_on_the_layer_and_the_pours_own_holes_are_left_empty() {
     assert_eq!(
         twice_area(&fill),
         FULL - 2 * 2 * (4 * MM as i128) * (MM as i128)
+    );
+}
+
+/// #2871: a pour cutout on the pour's layer is left empty as drawn, with no
+/// clearance round it, and the pour's outline is not touched; one on another
+/// layer is not; moved off the pour or removed, the copper comes back.
+#[test]
+fn a_pour_cutout_on_the_layer_is_left_empty_and_the_outline_kept() {
+    let mut b = board(Vec::new());
+    let outline = b.zones[0].outline.clone();
+    b.zones.push(zone(
+        2,
+        0,
+        POUR_CUTOUT_FILL,
+        "TopCopper",
+        (2.0, 2.0, 4.0, 5.0),
+    ));
+    b.zones.push(zone(
+        3,
+        0,
+        POUR_CUTOUT_FILL,
+        "BottomCopper",
+        (-8.0, -8.0, -6.0, -6.0),
+    ));
+    let fill = pieces(&b);
+    assert_eq!(fill.len(), 1);
+    assert_eq!(fill[0].holes.len(), 1, "the top cutout, not the bottom one");
+    assert_eq!(
+        twice_area(&fill),
+        FULL - 2 * (2 * MM as i128) * (3 * MM as i128)
+    );
+    assert_eq!(b.zones[0].outline, outline, "the outline is not edited");
+
+    let mut removed = b.clone();
+    removed.zones.remove(1);
+    assert_eq!(
+        twice_area(&pieces(&removed)),
+        FULL,
+        "removed, the copper is back"
+    );
+    for p in &mut b.zones[1].outline {
+        p.x += 20.0;
+    }
+    assert_eq!(
+        twice_area(&pieces(&b)),
+        FULL,
+        "moved off, the copper is back"
     );
 }
 
@@ -339,6 +392,26 @@ fn a_higher_priority_pour_fills_first_and_the_other_keeps_clear_of_it() {
     assert_eq!(fill_bounds(&b, 1).min.x, 0, "the higher one is whole");
 }
 
+/// Mockup row 178: the fill order the Polygon Manager shows is the one the
+/// fill uses: a higher priority first, then board order, no shelved pour
+/// and no zone that is not a pour.
+#[test]
+fn the_pour_fill_order_is_priority_then_board_order_without_shelved_pours() {
+    let mut b = board(Vec::new());
+    for n in 2..=4 {
+        b.zones
+            .push(zone(n, 2, POUR_FILL, "TopCopper", (0.0, 0.0, 1.0, 1.0)));
+    }
+    b.zones
+        .push(zone(5, 2, "solid", "TopCopper", (0.0, 0.0, 1.0, 1.0)));
+    assert_eq!(pour_fill_order(&b), [0, 1, 2, 3]);
+    b.zones[2].priority = 4;
+    b.zones[3].priority = 1;
+    assert_eq!(pour_fill_order(&b), [2, 3, 0, 1]);
+    b.zones[3].shelved = true;
+    assert_eq!(pour_fill_order(&b), [2, 0, 1]);
+}
+
 /// #2216: pours of one net may overlap; neither clears the other.
 #[test]
 fn pours_of_one_net_overlap() {
@@ -348,6 +421,67 @@ fn pours_of_one_net_overlap() {
     let fills = zone_fills(&b);
     assert_eq!(twice_area(&fills.of(0).expect("filled").pieces), FULL);
     assert_eq!(twice_area(&fills.of(1).expect("filled").pieces), FULL);
+}
+
+/// #2523: a shelved pour has no fill and does not clear other pours; once
+/// unshelved it fills and clears again.
+#[test]
+fn a_shelved_pour_has_no_fill_and_does_not_clear_other_pours() {
+    let mut b = board(Vec::new());
+    b.zones
+        .push(zone(2, 2, POUR_FILL, "TopCopper", (0.0, -10.0, 20.0, 10.0)));
+    b.zones[1].priority = 5;
+    b.zones[1].shelved = true;
+    let fills = zone_fills(&b);
+    assert!(fills.of(1).is_none(), "a shelved pour holds no copper");
+    assert_eq!(
+        twice_area(&fills.of(0).expect("filled").pieces),
+        FULL,
+        "the other pour fills its whole outline"
+    );
+
+    b.zones[1].shelved = false;
+    let fills = zone_fills(&b);
+    assert_eq!(fills.of(1).expect("filled again").pieces.len(), 1);
+    assert!(twice_area(&fills.of(0).expect("filled").pieces) < FULL);
+
+    // Shelving the only pour leaves nothing to fill.
+    let mut alone = board(Vec::new());
+    alone.zones[0].shelved = true;
+    assert!(zone_fills(&alone).is_empty());
+}
+
+/// #2506: an unfilled pour has no fill, clears no other pour and is listed
+/// as not filled until Repour (unlike a shelved one); once its flag is
+/// cleared it fills and clears again.
+#[test]
+fn an_unfilled_pour_has_no_fill_does_not_clear_and_is_listed_as_not_filled() {
+    let mut b = board(Vec::new());
+    b.zones
+        .push(zone(2, 2, POUR_FILL, "TopCopper", (0.0, -10.0, 20.0, 10.0)));
+    b.zones[1].priority = 5;
+    b.zones[1].unfilled = true;
+    let fills = zone_fills(&b);
+    assert!(fills.of(1).is_none(), "an unfilled pour holds no copper");
+    assert_eq!(fills.unfilled(1), Some(Unfilled::UntilRepour));
+    assert_eq!(fills.unfilled_pours().len(), 1);
+    assert_eq!(
+        twice_area(&fills.of(0).expect("filled").pieces),
+        FULL,
+        "the other pour fills its whole outline"
+    );
+    assert_eq!(pour_fill_order(&b), vec![1, 0], "it keeps its place");
+
+    b.zones[1].unfilled = false;
+    let fills = zone_fills(&b);
+    assert_eq!(fills.of(1).expect("filled again").pieces.len(), 1);
+    assert_eq!(fills.unfilled(1), None);
+    assert!(twice_area(&fills.of(0).expect("filled").pieces) < FULL);
+
+    // A shelved pour that is also flagged unfilled is shelved: not listed.
+    b.zones[1].unfilled = true;
+    b.zones[1].shelved = true;
+    assert_eq!(zone_fills(&b).unfilled(1), None);
 }
 
 /// #2216: a pour on another layer does not clear this one.
@@ -537,4 +671,56 @@ fn an_island_on_a_free_pad_or_arc_of_the_net_is_kept() {
         .arcs
         .push(free_arc(10, 1, (-3.0, 9.3), (0.0, 9.5), (3.0, 9.3)));
     assert_eq!(pieces(&b).len(), 2, "the GND free arc keeps the strip");
+}
+
+/// A pour with no fill says why (maintainer 2026-11-18).
+#[test]
+fn a_pour_with_no_fill_says_why() {
+    let mut b = board(Vec::new());
+    b.zones = vec![
+        zone(1, 1, POUR_FILL, "TopSilkscreen", (0.0, 0.0, 5.0, 5.0)),
+        zone(2, 1, POUR_FILL, "TopCopper", (0.0, 0.0, 5.0, 0.0)),
+        zone(3, 1, POUR_FILL, "TopCopper", (0.0, 0.0, 5.0, 5.0)),
+    ];
+    b.zones[1].outline.truncate(2);
+    let fills = zone_fills(&b);
+    assert_eq!(fills.unfilled(0), Some(Unfilled::NoCopperLayer));
+    assert_eq!(fills.unfilled(1), Some(Unfilled::Outline));
+    assert_eq!(fills.unfilled(2), None, "the third one fills");
+    assert!(fills.of(2).is_some());
+    assert_eq!(fills.unfilled_pours().len(), 2);
+}
+
+/// #2883: a rectangle drawn on the pour's copper layer is copper of no net;
+/// the pour keeps its clearance from the rectangle's stroke. One on another
+/// layer is not cut.
+#[test]
+fn a_pour_keeps_its_clearance_from_a_copper_rectangle() {
+    let rectangle = |layer: &str| signex_types::pcb::BoardGraphic {
+        uuid: Uuid::from_u128(60),
+        graphic_type: "rect".into(),
+        layer: layer.into(),
+        width: 0.2,
+        start: Some(Point::new(-5.0, -5.0)),
+        end: Some(Point::new(5.0, 5.0)),
+        center: None,
+        radius: 0.0,
+        points: Vec::new(),
+        text: String::new(),
+        font_size: 0.0,
+    };
+    let filled = |b: &PcbBoard, x: f64| {
+        let p = PointNm::from_mm(Point::new(x, 0.0), "p").unwrap();
+        pieces(b).iter().any(|piece| piece.contains_point(p))
+    };
+    let mut b = board(Vec::new());
+    b.graphics.push(rectangle("TopCopper"));
+    // The stroke's outer edge is at x = 5.1; the clearance is 0.5.
+    assert!(!filled(&b, 5.0), "not on the stroke");
+    assert!(!filled(&b, 5.55), "not within the clearance");
+    assert!(filled(&b, 6.0), "filled beyond it");
+    assert!(twice_area(&pieces(&b)) < FULL);
+
+    b.graphics = vec![rectangle("BottomCopper")];
+    assert_eq!(twice_area(&pieces(&b)), FULL, "another layer is not cut");
 }

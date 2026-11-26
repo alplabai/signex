@@ -313,7 +313,7 @@ pub(in crate::format) struct SheetExtras {
     #[serde(default)]
     pub(in crate::format) drawings: Vec<crate::schematic::SchDrawing>,
     #[serde(default)]
-    pub(in crate::format) no_erc_directives: Vec<crate::schematic::NoConnect>,
+    pub(in crate::format) no_erc_directives: Vec<crate::schematic::NoErcDirective>,
     /// Blankets, Compile Masks and Differential Pair directives (#2420);
     /// omitted when empty so a sheet without any re-saves byte-identical.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -372,6 +372,26 @@ pub(in crate::format) struct SheetExtras {
     /// Page settings (`[extras.sheet.page]`, #2034); omitted at the default.
     #[serde(default, skip_serializing_if = "PageExtras::is_default")]
     pub(in crate::format) page: PageExtras,
+    /// Sheet variables (`[extras.sheet.variables]`, #1987): name to source
+    /// text. Omitted when empty, so a sheet without any re-saves
+    /// byte-identical; a table, so a build that predates it keeps it as an
+    /// unknown key of `[extras.sheet]` and writes it back.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(in crate::format) variables: BTreeMap<String, String>,
+    /// Schematic Refinement content (`snxsch/1.3`): harness connectors,
+    /// harness wires, harness-typed sheet entries (sheet-pin uuid to harness
+    /// type) and unions. Each is omitted when empty, so a sheet without them
+    /// re-saves byte-identical; top-level keys of this table, so a build that
+    /// predates them keeps them as unknown keys. Format:
+    /// `docs/architecture/snxsch-refinement-objects.md`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(in crate::format) harness_connectors: Vec<crate::schematic::HarnessConnector>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(in crate::format) harness_wires: Vec<crate::schematic::HarnessWire>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(in crate::format) harness_entry_types: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(in crate::format) unions: Vec<crate::schematic::SchUnion>,
     /// Keys this build does not recognise (`[extras.sheet]`).
     #[serde(flatten)]
     pub(in crate::format) unknown: UnknownFields,
@@ -397,6 +417,11 @@ impl SheetExtras {
             && self.locked_objects.is_empty()
             && self.frame.is_default()
             && self.page.is_default()
+            && self.variables.is_empty()
+            && self.harness_connectors.is_empty()
+            && self.harness_wires.is_empty()
+            && self.harness_entry_types.is_empty()
+            && self.unions.is_empty()
             && self.unknown.is_empty()
     }
 
@@ -474,6 +499,11 @@ impl SheetExtras {
                 unknown: s.unknown.frame.clone(),
             },
             page: PageExtras::of(s.page, &s.unknown.page),
+            variables: s.variables.clone(),
+            harness_connectors: s.harness.connectors.clone(),
+            harness_wires: s.harness.wires.clone(),
+            harness_entry_types: super::refinement_extras::entry_types_for_write(s),
+            unions: s.unions.clone(),
             unknown: {
                 // A kept non-table `page` gives way to a real page table.
                 let mut extras = s.unknown.extras.clone();

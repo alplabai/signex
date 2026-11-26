@@ -4,11 +4,13 @@
 
 use std::collections::BTreeSet;
 
+use pcb_geom::PickKind;
 use signex_types::pcb::{PcbBoard, Point};
+use signex_types::pcb_layer::PcbLayer;
 use signex_types::pcb_options::{BoardGuide, GuideKind};
 use uuid::Uuid;
 
-use super::snap_points::candidates;
+use super::snap_points::{Points, candidates};
 
 /// One kind of point the pointer can snap to, in the order the Snap Options
 /// list shows them.
@@ -46,8 +48,21 @@ impl SnapObject {
         SnapObject::Texts,
     ];
 
-    /// The kinds snapped to on a new session.
-    pub const DEFAULT_ON: [SnapObject; 2] = [SnapObject::PadCenters, SnapObject::ViaCenters];
+    /// The kinds snapped to on a new session: every supported kind (#2879).
+    pub const DEFAULT_ON: [SnapObject; 12] = [
+        SnapObject::TrackVertices,
+        SnapObject::TrackLines,
+        SnapObject::ArcCenters,
+        SnapObject::Intersections,
+        SnapObject::PadCenters,
+        SnapObject::PadVertices,
+        SnapObject::PadEdges,
+        SnapObject::ViaCenters,
+        SnapObject::Regions,
+        SnapObject::BoardShape,
+        SnapObject::FootprintOrigins,
+        SnapObject::Texts,
+    ];
 
     /// Whether [`object_snap_point`] finds points of this kind. A board
     /// holds no 3D bodies yet, so it has no body points.
@@ -60,14 +75,77 @@ impl SnapObject {
 #[derive(Debug, Clone, Copy)]
 pub struct SnapQuery<'a> {
     pub objects: &'a BTreeSet<SnapObject>,
-    /// The copper layers whose objects count, as `pcb_geom::layer_bit`
-    /// bits; `u32::MAX` for every layer. Texts and graphics count only on
-    /// every layer, the board shape on any.
-    pub layers: u32,
-    /// Footprints whose pads and origins are left out: the carried ones.
+    /// Which layers' objects count. The board shape counts on any.
+    pub layers: SnapLayers,
+    /// Footprints whose pads and origins are left out, and vias, tracks and
+    /// arcs whose points are: the carried ones and those following them.
     pub skip: &'a BTreeSet<Uuid>,
     /// How far from the pointer a point may be, mm.
     pub radius_mm: f64,
+    /// The layers the view shows: a hidden layer gives no points.
+    pub shown: ShownLayers<'a>,
+    /// While a route runs, its net: copper of another net gives no points,
+    /// and no part origin does. Copper of no net (0) and objects without a
+    /// net still do.
+    pub net: Option<u32>,
+}
+
+/// Which layers' objects snapping looks at.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SnapLayers {
+    /// Every shown layer.
+    All,
+    /// Objects of any kind on this layer only (#2879); a through pad or via
+    /// is on every copper layer.
+    Current(PcbLayer),
+}
+
+impl SnapLayers {
+    /// The copper layers in scope, as `pcb_geom::layer_bit` bits.
+    pub(super) fn copper(self) -> u32 {
+        match self {
+            SnapLayers::All => u32::MAX,
+            SnapLayers::Current(PcbLayer::Copper(layer)) => 1 << pcb_geom::layer_bit(layer),
+            SnapLayers::Current(_) => 0,
+        }
+    }
+
+    /// Whether the non-copper layer `layer` (`None`: one the build does not
+    /// know) is in scope.
+    pub(super) fn has_other(self, layer: Option<PcbLayer>) -> bool {
+        match self {
+            SnapLayers::All => true,
+            SnapLayers::Current(current) => layer == Some(current),
+        }
+    }
+}
+
+/// What the board view shows, as object snapping reads it.
+#[derive(Debug, Clone, Copy)]
+pub struct ShownLayers<'a> {
+    /// The copper layers shown, as `pcb_geom::layer_bit` bits.
+    pub copper: u32,
+    /// The other layers it hides.
+    pub hidden: &'a [PcbLayer],
+    /// The Multi-Layer row is off: no vias or through-hole pads.
+    pub through_hidden: bool,
+    /// The kinds of object the view hides.
+    pub hidden_kinds: &'a [PickKind],
+}
+
+impl ShownLayers<'_> {
+    /// Every layer and kind shown.
+    pub const ALL: ShownLayers<'static> = ShownLayers {
+        copper: u32::MAX,
+        hidden: &[],
+        through_hidden: false,
+        hidden_kinds: &[],
+    };
+
+    /// Whether objects of `kind` are shown.
+    pub(super) fn shows(&self, kind: PickKind) -> bool {
+        !self.hidden_kinds.contains(&kind)
+    }
 }
 
 fn usable(radius: f64) -> bool {
@@ -84,7 +162,7 @@ pub fn object_snap_point(board: &PcbBoard, at: Point, query: &SnapQuery) -> Opti
         return None;
     }
     let reach = query.radius_mm * query.radius_mm;
-    candidates(board, query, at)
+    candidates(board, query, at, Points::All)
         .into_iter()
         .filter(|p| p.x.is_finite() && p.y.is_finite())
         .map(|p| (distance_sq(p, at), p))
@@ -93,10 +171,11 @@ pub fn object_snap_point(board: &PcbBoard, at: Point, query: &SnapQuery) -> Opti
         .map(|(_, p)| p)
 }
 
-/// The x and the y axis snapping lines `at` up with (#2374): of the snap
-/// points within `range_mm` of the pointer, the nearest one whose x is
+/// The x and the y axis snapping lines `at` up with (#2374): of the fixed
+/// snap points within `range_mm` of the pointer, the nearest one whose x is
 /// within the query's radius of the pointer's x gives the x, and the same
-/// for y. `None` on an axis nothing lines up on.
+/// for y. `None` on an axis nothing lines up on. The nearest point of a
+/// line or edge is left out: it would line the pointer up with itself.
 pub fn axis_snap(
     board: &PcbBoard,
     at: Point,
@@ -107,7 +186,7 @@ pub fn axis_snap(
         return (None, None);
     }
     let reach = range_mm * range_mm;
-    let near: Vec<(f64, Point)> = candidates(board, query, at)
+    let near: Vec<(f64, Point)> = candidates(board, query, at, Points::Fixed)
         .into_iter()
         .filter(|p| p.x.is_finite() && p.y.is_finite())
         .map(|p| (distance_sq(p, at), p))
@@ -170,3 +249,7 @@ mod tests;
 #[cfg(test)]
 #[path = "snap_more_tests.rs"]
 mod more_tests;
+
+#[cfg(test)]
+#[path = "snap_edge_tests.rs"]
+mod edge_tests;

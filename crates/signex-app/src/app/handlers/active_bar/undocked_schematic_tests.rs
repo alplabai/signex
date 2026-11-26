@@ -22,7 +22,6 @@ fn tab(path: &Path) -> TabInfo {
     TabInfo {
         title: "t".to_string(),
         path: path.to_path_buf(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     }
@@ -367,6 +366,10 @@ fn an_undocked_windows_size_places_its_overlays() {
 #[test]
 fn smart_paste_from_an_undocked_windows_menu_lands_on_its_sheet() {
     let mut f = fixture();
+    // The at-once paste of a run without a window (mockup row 155): in a window the
+    // follow-up opens the Smart Paste dialog, whose events take the same
+    // route to the undocked window's sheet.
+    f.app.ui_state.io = crate::io_ports::IoPorts::headless(Default::default());
     let _ = f
         .app
         .update(scoped_menu(f.window, ContextMenuMsg::Show(5.0, 5.0)));
@@ -382,6 +385,7 @@ fn smart_paste_from_an_undocked_windows_menu_lands_on_its_sheet() {
         epoch: f.app.interaction_state.placement_epoch,
         path: Some(f.a.clone()),
         dialog: 0,
+        from_agent: false,
     };
     let _ = f.app.update(Message::Edit(EditMsg::PasteTextRead {
         request,
@@ -412,6 +416,7 @@ fn a_paste_follow_up_for_a_window_without_a_canvas_is_cancelled_not_applied() {
         epoch: f.app.interaction_state.placement_epoch,
         path: Some(f.a.clone()),
         dialog: 0,
+        from_agent: false,
     };
     {
         use crate::ignore::IgnoreResult;
@@ -442,6 +447,7 @@ fn a_paste_numbering_read_for_an_undocked_window_is_kept_for_its_sheet() {
         epoch: f.app.interaction_state.placement_epoch,
         path: Some(f.a.clone()),
         dialog: 0,
+        from_agent: false,
     };
     let _ = f.app.update(Message::Edit(EditMsg::PasteCountersSeeded {
         request,
@@ -456,7 +462,7 @@ fn change_component_confirmed_for_an_undocked_windows_sheet_changes_that_sheet()
     use crate::library::messages::{
         LibraryMessage, PlacedPartMsg, PlacedPartTarget, ResolvedPlacement,
     };
-    use crate::library::state::{ChangePreview, PickerMode};
+    use crate::library::state::{ChangePreview, ChangeScope, ChangeSession, PickerMode};
     use signex_engine::ComponentReplacement;
 
     let mut f = fixture();
@@ -505,10 +511,12 @@ fn change_component_confirmed_for_an_undocked_windows_sheet_changes_that_sheet()
     let preview = signex_engine::change_component_preview(&doc, symbol.uuid, &replacement);
     f.app.library.picker = Some(crate::library::PickerState {
         mode: PickerMode::ChangePreview(Box::new(ChangePreview {
-            target,
-            reference: symbol.reference.clone(),
+            session: ChangeSession::new(target, symbol.reference.clone()),
             resolved,
             preview,
+            rows: Vec::new(),
+            dropped: Vec::new(),
+            scope: ChangeScope::ThisPart,
         })),
         ..Default::default()
     });

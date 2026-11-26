@@ -3,6 +3,8 @@
 //! focus, the selection, the tool, a drag, a text edit, the wire being drawn,
 //! the palette.
 
+use signex_i18n::RenderTranslatable;
+
 use super::interaction_snapshot_tests::interaction_snapshot;
 use super::queries::tests::{WIRE_A, answer, app_with, path, sheet, uid};
 use super::{CommandArgs, CommandOutcome};
@@ -26,7 +28,7 @@ fn run(app: &mut Signex, name: &str, operands: &[&str]) -> CommandOutcome {
 
 fn refusal(app: &mut Signex, name: &str, operands: &[&str]) -> String {
     match run(app, name, operands) {
-        CommandOutcome::Disabled { reason } => reason,
+        CommandOutcome::Disabled { reason } => reason.render_en_us(),
         other => panic!("{name} {operands:?} was not refused: {other:?}"),
     }
 }
@@ -96,6 +98,7 @@ fn a_command_by_id_does_not_depend_on_what_the_active_tab_can_do() {
     let board = signex_types::pcb::PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         unknown: Default::default(),
         uuid: uid(500),
@@ -311,6 +314,7 @@ fn a_document_that_cannot_take_the_command_is_refused_with_the_reason() {
     let board = signex_types::pcb::PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         unknown: Default::default(),
         uuid: uid(500),
@@ -440,16 +444,22 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
         "draw_rectangle",
         "place_blanket",
         "edit_blanket",
+        "edit_no_erc_rules",
         "place_compile_mask",
         "place_diff_pair",
+        "place_parameter_set",
         "place_component",
         "place_sheet_symbol",
         "place_sheet_entry",
         "sync_sheet_pins",
+        "create_sheet_symbol_from_sheet",
+        "sync_sheet_entries",
         "set_object_position",
         "set_object_rotation",
         "set_sheet_symbol_size",
         "set_symbol_parameter",
+        "set_sheet_variable",
+        "repair_pin_junctions",
         "place_design_block",
         "import_graphics",
     ];
@@ -480,6 +490,7 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "query_pins",
                     "check_erc",
                     "check_drc",
+                    "check_requirements",
                     "find_items",
                     "apply_edits",
                     "revert",
@@ -498,9 +509,12 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "unlock_board_items",
                     "set_via_span",
                     "set_layer_sizes",
+                    "set_pad_shape",
                     // The board queries (#2403).
                     "measure_board",
                     "query_board_nets",
+                    // #2939: each part's height on the named board.
+                    "query_part_heights",
                     "find_similar_items",
                     // #2408, #2409: the board Tools edits name their board.
                     "stitch_vias",
@@ -519,15 +533,29 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "rules_preset_apply",
                     "add_board_graphic",
                     "set_board_graphic",
+                    // #2470: the area tools on the named board.
+                    "place_board_fill",
+                    "place_board_region",
+                    "place_board_polygon_pour",
+                    "place_board_keepout",
+                    "place_board_pour_cutout",
+                    "set_footprint_text",
                     "panelize_board",
                     "remove_board_panel",
                     "set_board_panel",
                     "board_panel",
+                    // #2942: the layout plan of the board they name.
+                    "layout_plan_get",
+                    "layout_plan_set",
+                    "layout_plan_status",
                     // #2410: they act on the board they name.
                     "swap_pins",
                     "swap_gates",
                     "save_board_reuse_block",
                     "place_board_reuse_block",
+                    // Mockup row 198: the review records of the named
+                    // project's notebook.
+                    "list_annotations",
                     "project_settings",
                     "project_move_sheet",
                     "project_add_variant",
@@ -537,6 +565,14 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "project_move_library",
                     "project_set_annotate_undo",
                     "project_set_version_control",
+                    "project_add_requirement",
+                    "project_set_requirement",
+                    "project_remove_requirement",
+                    "project_enable_requirement",
+                    "project_run_requirements",
+                    // #2943: the project's rails and their budget.
+                    "project_set_rail",
+                    "query_rail_budget",
                     // #2394: the board view's layer commands.
                     "hide_layer",
                     "highlight_layer",
@@ -544,11 +580,24 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "show_layer_group",
                     "show_layer_set",
                     "save_layer_set",
+                    // #2363: the Layers panel's board view configuration.
+                    "set_layer_visible",
+                    "set_active_layer",
+                    "set_layer_color",
+                    // Headless forms of the Reset rows, on the named board.
+                    "reset_layer_colors",
+                    "reset_board_origin",
+                    "show_used_layers_only",
+                    "set_object_visible",
+                    "set_object_transparency",
                     // #2399, #2400: DRC results and the board net classes.
                     "show_drc_violation",
                     "filter_drc_results",
                     "waive_drc_violation",
                     "unwaive_drc_violation",
+                    // #2940: the DRC fixes.
+                    "fix_drc_violation",
+                    "fix_drc",
                     "add_net_class",
                     "rename_net_class",
                     "delete_net_class",
@@ -561,14 +610,91 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "board_report_components",
                     "export_board_report",
                     "export_board_pdf",
+                    // #2486: the assembly drawings.
+                    "export_assembly_svg",
+                    "board_assembly_drawing",
+                    // #2488: the board STEP model.
+                    "export_board_step",
+                    // Mockup rows 196 and 197: the named project's notebook.
+                    "notebook_references",
+                    "notebook_reference_card",
+                    "notebook_reference_picker",
+                    "notebook_badges",
+                    "notebook_fix_reference",
+                    // Mockup row 202: the notebook of the named project.
+                    "export_notebook_pdf",
+                    // #2470: the fabrication outputs into a folder.
+                    "fabrication_outputs",
                     // #2410: DXF import onto a board.
                     "import_dxf",
                     "import_dxf_outline",
+                    // #2945: the design report of the named project.
+                    "generate_design_notebook",
                     // #2216: Repour All on the named board.
                     "repour_all",
                     // #2389: length tuning on the named board.
                     "tune_net_length",
                     "tune_diff_pair",
+                    // #2470: the routing tools and the via on the named board.
+                    "place_board_via",
+                    "place_board_track",
+                    "place_board_route",
+                    "place_board_diff_pair",
+                    "place_board_quick_route",
+                    "place_board_multi_route",
+                    // #2326 slice 6.P2b: the drawing order and Delete by uuid.
+                    "bring_drawings_forward",
+                    "bring_drawings_to_front",
+                    "send_drawings_backward",
+                    "send_drawings_to_back",
+                    "delete_selection",
+                    // #2795: the Design Notebook tab of the named project.
+                    "notebook_compile",
+                    "notebook_insert",
+                    "notebook_view",
+                    // Mockup row 199: the readings, timelines and
+                    // attachments of the named project's notebook.
+                    "notebook_measurements",
+                    "notebook_timeline",
+                    "notebook_attachments",
+                    "export_notebook_timeline",
+                    "mark_notebook_attachment_valid",
+                    "attach_notebook_file",
+                    // #2470: Update PCB for the named document's project
+                    // (left out: the active project).
+                    "update_pcb_from_schematic",
+                    // #2462, #2460: the board against the schematic, its
+                    // apply form and the board status counters.
+                    "check_board_against_schematic",
+                    "apply_board_schematic_differences",
+                    "board_status",
+                    // #2470: a new board and numbering on the named
+                    // project, sheet or board (optional where a run without
+                    // operands keeps working).
+                    "new_pcb_document",
+                    "annotate_schematic_quietly",
+                    "force_annotate_all_schematics",
+                    "reannotate_board",
+                    "back_annotate_schematics",
+                    // #2936, #2937: footprints placed, assigned or swapped.
+                    "set_footprint_position",
+                    "set_footprint_rotation",
+                    "set_footprint_side",
+                    "assign_footprint",
+                    "change_footprint",
+                    "query_footprint_assignments",
+                    // #2457, #2941: rooms on the named board.
+                    "place_board_room",
+                    "create_rooms_from_sheets",
+                    "arrange_in_room",
+                    "auto_place",
+                    // #2938, #1297: a BOM line's alternates, the priced BOM
+                    // and the part swap.
+                    "bom_add_alternate",
+                    "bom_remove_alternate",
+                    "bom_set_alternate_order",
+                    "query_bom",
+                    "change_component",
                 ]
                 .contains(&name),
                 "{name} declares a document operand"
@@ -646,9 +772,77 @@ fn undo_by_id_is_refused_while_the_person_draws_on_that_sheet() {
         &["at=5,0", "color=#336699", &by_id(A)],
     );
     assert_eq!(run(&mut app, "undo", &[&by_id(A)]), CommandOutcome::Ran);
-    // Done drawing: the sheet takes its step.
+    // Done drawing: the sheet takes its step. The canvas's own wire in
+    // progress (`app_at_work`) ends too; the busy check reads it (#2548).
     app.interaction_state.wire_drawing = false;
     app.interaction_state.wire_points.clear();
+    let canvas = app.interaction_state.active_canvas_mut();
+    canvas.drawing_mode = false;
+    canvas.wire_preview.clear();
     assert_eq!(run(&mut app, "undo", &[&by_id(B)]), CommandOutcome::Ran);
     assert_eq!(colours(&app, "b.snxsch"), 0);
+}
+
+/// #2548: operand undo and redo use the person-busy check `revert` uses, so
+/// they wait while the person draws on the sheet in an undocked window (the
+/// global drawing flag is off) and while they type into an item of it.
+#[test]
+fn undo_and_redo_by_id_wait_while_the_person_draws_undocked_or_types_on_that_sheet() {
+    let mut app = app_at_work();
+    let a = path("a.snxsch");
+    run(
+        &mut app,
+        "color_net",
+        &["at=5,0", "color=#336699", &by_id(A)],
+    );
+    run(
+        &mut app,
+        "color_net",
+        &["at=5,0", "color=#112233", &by_id(A)],
+    );
+    assert_eq!(run(&mut app, "undo", &[&by_id(A)]), CommandOutcome::Ran);
+    let before = app.document_state.engines[&a].document().net_colors.clone();
+
+    let window = iced::window::Id::unique();
+    app.ui_state.windows.insert(
+        window,
+        crate::app::state::WindowKind::UndockedTab {
+            path: a.clone(),
+            title: "a".into(),
+        },
+    );
+    let mut slot = crate::canvas::CanvasSlot::new();
+    slot.drawing_mode = true;
+    slot.wire_preview = vec![signex_types::schematic::Point::new(20.0, 20.0)];
+    app.interaction_state.canvases.insert(window, slot);
+    assert!(!app.interaction_state.wire_drawing);
+    for step in ["undo", "redo"] {
+        let reason = refusal(&mut app, step, &[&by_id(A)]);
+        assert!(reason.contains("the person is drawing"), "{step}: {reason}");
+    }
+    app.interaction_state.canvases.remove(&window);
+    app.ui_state.windows.remove(&window);
+
+    let symbol = app.document_state.engines[&a].document().symbols[0].uuid;
+    app.interaction_state.editing_text = Some(crate::app::TextEditState {
+        uuid: symbol,
+        kind: signex_types::schematic::SelectedKind::SymbolRefField,
+        text: "PERSON".into(),
+        original_text: "U1".into(),
+        world_x: 0.0,
+        world_y: 0.0,
+        sheet: Some(a.clone()),
+        placement: None,
+    });
+    for step in ["undo", "redo"] {
+        let reason = refusal(&mut app, step, &[&by_id(A)]);
+        assert!(reason.contains("typing"), "{step}: {reason}");
+    }
+    assert_eq!(
+        app.document_state.engines[&a].document().net_colors,
+        before,
+        "nothing was stepped"
+    );
+    app.interaction_state.editing_text = None;
+    assert_eq!(run(&mut app, "redo", &[&by_id(A)]), CommandOutcome::Ran);
 }

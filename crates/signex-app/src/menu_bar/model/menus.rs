@@ -2,12 +2,12 @@
 //! menu contract pinned by `testdata/menu_bar.golden.tsv`.
 
 use super::items::{
-    cmd, cmd_item, cmd_item_gated, cmd_item_gated_as, cmd_toggle, item, item_if, item_if_command,
-    item_named, panel_item, placeholder, submenu, unavailable,
+    cmd, cmd_item, cmd_item_gated, cmd_item_gated_as, cmd_toggle, cmd_toggle_gated, header, item,
+    item_if, item_if_command, item_named, panel_item, submenu, unavailable, with_icon,
 };
-use super::{MenuEntry, MenuMessage};
+use super::{MenuEntry, MenuIcon, MenuMessage};
 use crate::app::command::enablement::{new_part_menu_enabled, remove_part_menu_enabled};
-use crate::app::pcb_tools::{BoardPlaceTool, ToolState};
+use crate::app::pcb_tools::BoardPlaceTool;
 use crate::app::update_pcb::PcbSyncLabel;
 use crate::menu_bar::{MenuContext, enabled};
 use crate::panels::PanelKind;
@@ -37,12 +37,9 @@ pub(super) fn file(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("save_document", "Mod+S")),
         cmd_item_gated(ctx, cmd("save_document_as", "Mod+Shift+S")),
         // Greyed when nothing is unsaved; runs the shared Save All flow.
-        item_if(
-            ctx,
-            menu_ids::MENU_FILE_SAVE_ALL,
-            MenuMessage::SaveAll,
-            ctx.commands.has_dirty_documents,
-        ),
+        cmd_item_gated(ctx, cmd("save_all", "Mod+Alt+S")),
+        // #2908: a copy of the project in a new folder; greyed with no project.
+        cmd_item_gated(ctx, cmd("save_project_as", "")),
         SEP,
         // No New Component row here: docs/MENU_BAR.md#file-library
         submenu(ctx, menu_ids::MENU_FILE_LIBRARY, library(ctx)),
@@ -127,6 +124,19 @@ fn export(ctx: &MenuContext) -> Vec<MenuEntry> {
             MenuMessage::ExportPdf,
             enabled(ctx, "print"),
         ),
+        // The BOM export dialog, the one Tools ▸ Reports ▸ Bill of Materials… opens,
+        // named by its result (mockup row 112).
+        item_if(
+            ctx,
+            menu_ids::MENU_FILE_EXPORT_BOM,
+            MenuMessage::ExportBom,
+            ctx.commands.has_schematic,
+        ),
+        // The board and its parts as a STEP model (#2488); greyed without
+        // a board in view.
+        cmd_item_gated(ctx, cmd("export_board_step", "")),
+        // The project's Design Notebook as PDF (mockup row 202).
+        cmd_item_gated(ctx, cmd("export_notebook_pdf", "")),
     ]
 }
 
@@ -149,6 +159,9 @@ pub(super) fn edit(ctx: &MenuContext) -> Vec<MenuEntry> {
     if !ctx.commands.pcb.shown {
         rows.push(submenu(ctx, menu_ids::MENU_EDIT_ARRANGE, arrange(ctx)));
     }
+    // Where the board counts from (2026-11-18); greyed without an editable
+    // board.
+    rows.push(submenu(ctx, menu_ids::MENU_EDIT_ORIGIN, origin_menu(ctx)));
     rows.extend([
         SEP,
         cmd_item_gated(ctx, cmd("select_all", "Mod+A")),
@@ -177,6 +190,17 @@ fn move_menu(ctx: &MenuContext) -> Vec<MenuEntry> {
     ]
 }
 
+/// Edit ▸ Origin (2026-11-18): set the board origin at a click, reset it to
+/// the bottom-left of the board, or snap it to the outline corner nearest
+/// the pointer.
+fn origin_menu(ctx: &MenuContext) -> Vec<MenuEntry> {
+    vec![
+        cmd_item_gated(ctx, cmd("set_board_origin", "")),
+        cmd_item_gated(ctx, cmd("reset_board_origin", "")),
+        cmd_item_gated(ctx, cmd("snap_board_origin_to_corner", "")),
+    ]
+}
+
 /// Edit ▸ Arrange: order the selected drawings. Circuit elements in the
 /// selection are ignored, and with no drawing selected the rows are greyed.
 /// No default shortcut, so these are plain rows gated by their commands; a
@@ -193,16 +217,51 @@ fn arrange(ctx: &MenuContext) -> Vec<MenuEntry> {
     ]
 }
 
+/// View with View ▸ Extensions, the installed extensions' panels, after the
+/// built-in panel rows (#2495). With no extension panel the menu is the
+/// built-in one, row for row.
 pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
+    let mut entries = view_built_in(ctx);
+    if ctx.extension_panels.is_empty() {
+        return entries;
+    }
+    let panels = ctx
+        .extension_panels
+        .iter()
+        .map(|&kind| {
+            panel_item(
+                ctx,
+                kind.title(),
+                PanelKind::Extension(kind),
+                MenuMessage::OpenExtensionPanel(kind),
+            )
+        })
+        .collect();
+    // Before the last separator, which ends the panel rows (the Window
+    // submenu follows it); found by value, not by its place from the end.
+    let at = entries
+        .iter()
+        .rposition(|entry| matches!(entry, MenuEntry::Separator))
+        .unwrap_or(entries.len());
+    entries.insert(at, submenu(ctx, ids::PANELS_LIST_GROUP_EXTENSIONS, panels));
+    entries
+}
+
+fn view_built_in(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
         cmd_item_gated(ctx, cmd("zoom_in_at_cursor", "Ctrl+=")),
         cmd_item_gated(ctx, cmd("zoom_out_at_cursor", "Ctrl+-")),
         cmd_item_gated(ctx, cmd("zoom_to_fit", "Home")),
+        // Rotation 0°, Flip off, Fit (mockup row 194); no default key.
+        cmd_item_gated(ctx, cmd("home_view", "")),
         SEP,
         // Trunk spelling kept (not `Mod+`): the fallback is never shown while a keymap is active.
         cmd_item_gated(ctx, cmd("toggle_visible_grid", "Shift+Ctrl+G")),
         cmd_item_gated(ctx, cmd("next_grid", "")),
         cmd_item_gated(ctx, cmd("toggle_auto_focus", "F9")),
+        // Mockup row 197: the sheet's Notebook badges, on by default; greyed
+        // with no sheet in view.
+        cmd_toggle_gated(ctx, cmd("toggle_notebook_badges", "B"), ctx.notebook_badges),
         SEP,
         // The board view: greyed unless a PCB is open.
         cmd_item_gated(ctx, cmd("toggle_ratsnest", "")),
@@ -245,6 +304,13 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
             PanelKind::Navigator,
             MenuMessage::OpenNavigatorPanel,
         ),
+        // Mockup row 165: docs/MENU_BAR.md#view-annotations
+        panel_item(
+            ctx,
+            ids::PANELS_KIND_ANNOTATIONS,
+            PanelKind::Annotations,
+            MenuMessage::OpenAnnotationsPanel,
+        ),
         panel_item(
             ctx,
             ids::PANELS_KIND_PROPERTIES,
@@ -263,11 +329,12 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
             PanelKind::Messages,
             MenuMessage::OpenMessagesPanel,
         ),
+        // #2458: docs/MENU_BAR.md#view-command-log
         panel_item(
             ctx,
-            ids::PANELS_KIND_SIGNEX_AI,
-            PanelKind::SignexAi,
-            MenuMessage::OpenSignexAiPanel,
+            ids::PANELS_KIND_COMMAND_LOG,
+            PanelKind::CommandLog,
+            MenuMessage::OpenCommandLogPanel,
         ),
         panel_item(
             ctx,
@@ -275,10 +342,23 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
             PanelKind::Layers,
             MenuMessage::OpenLayersPanel,
         ),
+        // Mockup row 158: the Unions panel (every dock panel is listed,
+        // DECISIONS 2026-11-19).
+        panel_item(
+            ctx,
+            ids::PANELS_KIND_UNIONS,
+            PanelKind::Unions,
+            MenuMessage::OpenUnionsPanel,
+        ),
         // #2416: the Net Inspector panel (docs/MENU_BAR.md#view-net-inspector),
         // and the Active Bar's selection filter of the sheet in view.
         cmd_item_gated(ctx, cmd("open_net_inspector", "")),
+        // The Compiled Design panel (#1308, docs/MENU_BAR.md#view-compiled-design).
+        cmd_item_gated(ctx, cmd("open_compiled_design", "")),
         cmd_item_gated(ctx, cmd("open_selection_filter", "")),
+        SEP,
+        // The old Window root, rows unchanged (#2524): docs/MENU_BAR.md#root-menus
+        submenu(ctx, menu_ids::MENU_WINDOW, window(ctx)),
     ]
 }
 
@@ -293,16 +373,23 @@ pub(super) fn place(ctx: &MenuContext) -> Vec<MenuEntry> {
 }
 
 /// Place on a board: the board placement tools, each running the command its
-/// PCB Active Bar button runs, or greyed with the reason the bar gives while
-/// the board editor cannot run it (one table, #2352, #2373), the Graphics
-/// submenu of drawings on non-copper layers (#2424), then Board Sketch,
-/// which draws the outline, cutouts and keepouts.
+/// PCB Active Bar button runs (one table, #2352, #2373, #2505), with the
+/// Dimension submenu of the dimension kinds after String (#2507), the
+/// Graphics submenu of drawings on non-copper layers (#2424), then Board
+/// Sketch, which draws the outline, cutouts and keepouts.
 fn board_place(ctx: &MenuContext) -> Vec<MenuEntry> {
-    let row = |tool: BoardPlaceTool| match tool.state() {
-        ToolState::Live(id) => cmd_item_gated(ctx, cmd(id, "")),
-        ToolState::Unavailable(reason) => placeholder(ctx, tool.name(), reason),
-    };
-    let mut rows: Vec<MenuEntry> = BoardPlaceTool::PLACE_MENU.into_iter().map(row).collect();
+    let row = |tool: BoardPlaceTool| cmd_item_gated(ctx, cmd(tool.command(), ""));
+    let mut rows: Vec<MenuEntry> = Vec::new();
+    for tool in BoardPlaceTool::PLACE_MENU {
+        rows.push(row(tool));
+        if tool == BoardPlaceTool::TextString {
+            let kinds = BoardPlaceTool::DIMENSION_MENU
+                .into_iter()
+                .map(row)
+                .collect();
+            rows.push(submenu(ctx, menu_ids::MENU_PLACE_DIMENSION, kinds));
+        }
+    }
     let graphics = BoardPlaceTool::GRAPHICS_MENU.into_iter().map(row).collect();
     rows.extend([
         submenu(ctx, menu_ids::MENU_PLACE_GRAPHICS, graphics),
@@ -362,13 +449,25 @@ pub(super) fn design(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("board_sketch", "")),
         // #2401: the layer stack manager of the board in view.
         cmd_item_gated(ctx, cmd("board_layer_stack", "")),
+        // #2457: rooms of the board in view; greyed without a project.
+        submenu(
+            ctx,
+            menu_ids::MENU_DESIGN_ROOMS,
+            vec![cmd_item_gated(ctx, cmd("create_rooms_from_sheets", ""))],
+        ),
         SEP,
         cmd_item_gated(ctx, cmd("open_parameter_manager", "")),
         // #2416: the project's net-class table, in its own panel.
         cmd_item_gated(ctx, cmd("open_net_classes", "")),
+        // #1282: the project's differential pair classes, in a dialog.
+        cmd_item_gated(ctx, cmd("open_diff_pair_classes", "")),
         // #2398: the project's design rules as a document tab; greyed with
         // no project open.
         cmd_item_gated(ctx, cmd("open_rules", "")),
+        SEP,
+        // #1276: bottom-up hierarchy; greyed with no sheet in view.
+        cmd_item_gated(ctx, cmd("create_sheet_symbol_from_sheet", "")),
+        cmd_item_gated(ctx, cmd("sync_sheet_entries", "")),
     ]
 }
 
@@ -416,6 +515,21 @@ pub(super) fn project(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
         // F8 (`run_erc`) runs ERC at once; this row opens the dialog.
         cmd_item_gated(ctx, cmd("open_erc_dialog", "")),
+        // #1300: writes contents.snxsch and adds it to the project.
+        cmd_item_gated(ctx, cmd("add_table_of_contents", "")),
+        // #2462: the report of every difference between the schematic and
+        // the board, gated like Update PCB.
+        cmd_item_gated(ctx, cmd("compare_board_with_schematic", "")),
+        SEP,
+        // Mockup rows 195 and 201: docs/MENU_BAR.md#project-design-notebook
+        submenu(
+            ctx,
+            menu_ids::MENU_PROJECT_DESIGN_NOTEBOOK,
+            vec![
+                cmd_item_gated(ctx, cmd("open_design_notebook", "")),
+                cmd_item_gated(ctx, cmd("generate_design_notebook", "")),
+            ],
+        ),
         SEP,
         // Gated like Close Project: with no project there is no tab to open.
         item_if_command(
@@ -434,10 +548,9 @@ pub(super) fn project(ctx: &MenuContext) -> Vec<MenuEntry> {
     ]
 }
 
-/// Reports: every output of the open schematic, then the board's reports.
-/// The BOM row is the one working BOM dialog (#1251); the old Design >
-/// Generate BOM duplicate row is folded in.
-pub(super) fn reports(ctx: &MenuContext) -> Vec<MenuEntry> {
+/// Tools ▸ Reports: every output of the open schematic, then the board's
+/// reports. The BOM row is the one working BOM dialog (#1251).
+fn reports(ctx: &MenuContext) -> Vec<MenuEntry> {
     let has_schematic = ctx.commands.has_schematic;
     vec![
         item_if(
@@ -465,6 +578,8 @@ pub(super) fn reports(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("board_report_net_length", "")),
         cmd_item_gated(ctx, cmd("board_report_components", "")),
         cmd_item_gated(ctx, cmd("export_board_report", "")),
+        // #2486: the assembly drawings as SVG files.
+        cmd_item_gated(ctx, cmd("export_assembly_svg", "")),
     ]
 }
 
@@ -505,10 +620,15 @@ fn annotation(ctx: &MenuContext) -> Vec<MenuEntry> {
 pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
         submenu(ctx, menu_ids::MENU_TOOLS_ANNOTATION, annotation(ctx)),
+        // The old Reports root, rows unchanged: docs/MENU_BAR.md#root-menus
+        submenu(ctx, menu_ids::MENU_REPORTS, reports(ctx)),
         SEP,
         // The project's parts and their row's footprints:
         // docs/MENU_BAR.md#tools-assign-footprints
         cmd_item_gated(ctx, cmd("assign_footprints", "")),
+        // A dot on every bare pin touch of the sheet in view:
+        // docs/MENU_BAR.md#tools-repair-pin-junctions
+        cmd_item_gated(ctx, cmd("repair_pin_junctions", "")),
         // Opens or focuses a Library Browser tab: docs/MENU_BAR.md#tools-library-editor
         cmd_item_gated(ctx, cmd("open_library_browser", "")),
         SEP,
@@ -524,6 +644,10 @@ pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
         // #2216: docs/MENU_BAR.md#tools-repour
         cmd_item_gated(ctx, cmd("repour_selected", "")),
         cmd_item_gated(ctx, cmd("repour_all", "")),
+        // #2506: docs/MENU_BAR.md#tools-repour
+        cmd_item_gated(ctx, cmd("unfill_selected", "")),
+        // Mockup row 178: docs/MENU_BAR.md#tools-repour
+        cmd_item_gated(ctx, cmd("polygon_manager", "")),
         SEP,
         // #2408, #2409: the board edits on the board in view and its
         // selection: docs/MENU_BAR.md#tools-board-edits
@@ -588,16 +712,70 @@ pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
     ]
 }
 
-pub(super) fn window(ctx: &MenuContext) -> Vec<MenuEntry> {
+/// View ▸ Window: the document panes of the main window (#2249) and the
+/// undocked document windows.
+fn window(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
-        // Document panes of the main window (#2249) and the undocked document
-        // windows; Untile is live while tiled: docs/MENU_BAR.md#window-tile
+        // Untile is live while tiled: docs/MENU_BAR.md#window-tile
         cmd_item_gated(ctx, cmd("tile_windows_horizontally", "")),
         cmd_item_gated(ctx, cmd("tile_windows_vertically", "")),
         cmd_item_gated(ctx, cmd("untile_documents", "")),
         SEP,
+        // Mockup row 166: docs/MENU_BAR.md#window-layouts
+        submenu(ctx, menu_ids::MENU_WINDOW_LAYOUTS, layouts(ctx)),
         cmd_item_gated(ctx, cmd("close_all_documents", "")),
     ]
+}
+
+/// View ▸ Window ▸ Layouts (mockup row 166): the built-ins (the active one checked),
+/// your layouts, each group under its header caption, then Save Layout…,
+/// Manage Layouts… and, while the active built-in carries your edit, its
+/// Reset row.
+fn layouts(ctx: &MenuContext) -> Vec<MenuEntry> {
+    use crate::workspace_layouts::BuiltinLayout;
+    let menu = &ctx.layouts;
+    let mut rows = vec![header(ctx, menu_ids::MENU_WINDOW_LAYOUTS_BUILTIN)];
+    for (row, builtin) in [
+        (cmd("apply_layout_schematic", ""), BuiltinLayout::Schematic),
+        (cmd("apply_layout_board", ""), BuiltinLayout::Layout),
+        (cmd("apply_layout_review", ""), BuiltinLayout::Review),
+        (cmd("apply_layout_notebook", ""), BuiltinLayout::Notebook),
+    ] {
+        rows.push(cmd_toggle(ctx, row, menu.active_builtin == Some(builtin)));
+    }
+    if !menu.user.is_empty() {
+        rows.push(header(ctx, menu_ids::MENU_WINDOW_LAYOUTS_YOURS));
+        for layout in &menu.user {
+            rows.push(MenuEntry::Item(super::MenuItem {
+                label: layout.name.clone(),
+                shortcut: None,
+                state: super::ItemState::Live {
+                    action: MenuMessage::WorkspaceLayoutChosen(layout.id.clone()),
+                    is_enabled: true,
+                },
+                checked: Some(layout.active),
+                icon: None,
+            }));
+        }
+    }
+    rows.push(SEP);
+    // Mockup row 166: the save and undo glyphs on Save Layout… and Reset.
+    rows.push(with_icon(
+        cmd_item(ctx, cmd("save_workspace_layout", "")),
+        MenuIcon::Save,
+    ));
+    rows.push(cmd_item(ctx, cmd("manage_workspace_layouts", "")));
+    if let Some(name) = &menu.resettable {
+        let label = ctx.i18n.message_plain(
+            menu_ids::MENU_WINDOW_LAYOUTS_RESET,
+            &[("name", signex_i18n::Arg::from(name.as_str()))],
+        );
+        rows.push(with_icon(
+            cmd_item_gated_as(ctx, cmd("reset_workspace_layout", ""), label),
+            MenuIcon::Reset,
+        ));
+    }
+    rows
 }
 
 pub(super) fn help(ctx: &MenuContext) -> Vec<MenuEntry> {
@@ -616,5 +794,11 @@ pub(super) fn help(ctx: &MenuContext) -> Vec<MenuEntry> {
         item(ctx, ids::START_OPEN_SAMPLE, MenuMessage::OpenSampleProject),
         SEP,
         cmd_item(ctx, cmd("show_current_command_hotkeys", "F1")),
+        // Mockup row 14: the first-run card again, from Help.
+        item(
+            ctx,
+            menu_ids::MENU_HELP_WELCOME_TIPS,
+            MenuMessage::OpenWelcomeTips,
+        ),
     ]
 }

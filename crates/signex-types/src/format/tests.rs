@@ -31,6 +31,7 @@ pub(super) fn empty_board() -> PcbBoard {
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         unknown: Default::default(),
         uuid: Uuid::nil(),
@@ -210,9 +211,9 @@ fn rejects_wrong_format_version() {
     let bad = "format = \"snxsch/99\"\nschematic_id = \"00000000-0000-0000-0000-000000000000\"\n";
     let err = SnxSchematic::parse(bad).expect_err("must reject");
     match err {
-        FormatError::UnsupportedVersion { found, expected } => {
+        FormatError::Version(FormatVersionError::Newer { found, readable }) => {
             assert_eq!(found, "snxsch/99");
-            assert_eq!(expected, SNXSCH_FORMAT_V1);
+            assert!(readable.contains(SNXSCH_FORMAT_V1), "{readable}");
         }
         other => panic!("unexpected error: {other:?}"),
     }
@@ -222,7 +223,10 @@ fn rejects_wrong_format_version() {
 fn rejects_wrong_pcb_format_version() {
     let bad = "format = \"snxpcb/99\"\npcb_id = \"00000000-0000-0000-0000-000000000000\"\n";
     let err = SnxPcb::parse(bad).expect_err("must reject");
-    assert!(matches!(err, FormatError::UnsupportedVersion { .. }));
+    assert!(matches!(
+        err,
+        FormatError::Version(FormatVersionError::Newer { .. })
+    ));
 }
 
 #[test]
@@ -444,6 +448,8 @@ fn snxpcb_round_trip_with_data() {
             name: "VCC".into(),
         }),
         roundrect_ratio: 0.25,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 0.0,
         layer_sizes: None,
         net_locked: false,
@@ -464,6 +470,8 @@ fn snxpcb_round_trip_with_data() {
             name: "GND".into(),
         }),
         roundrect_ratio: 0.25,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 0.0,
         layer_sizes: None,
         net_locked: false,
@@ -564,6 +572,8 @@ fn snxpcb_round_trip_with_data() {
         min_thickness: 0.0,
         min_island_area: 0.0,
         remove_dead_islands: false,
+        shelved: false,
+        unfilled: false,
         unknown: Default::default(),
     });
 
@@ -619,6 +629,8 @@ fn zone_without_holes_writes_no_holes_key() {
         min_thickness: 0.0,
         min_island_area: 0.0,
         remove_dead_islands: false,
+        shelved: false,
+        unfilled: false,
         unknown: Default::default(),
     });
     let text = SnxPcb::new(board).write_string().expect("serialise");

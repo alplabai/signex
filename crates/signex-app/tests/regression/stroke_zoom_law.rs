@@ -14,8 +14,8 @@ use signex_gfx::primitive::ordered::OrderedItem;
 use signex_gfx::scene::Scene;
 use signex_types::format::SnxSchematic;
 use signex_types::schematic::{
-    Bus, BusEntry, ChildSheet, FillType, Graphic, LabelType, NoConnect, Point, SchDrawing,
-    SchematicSheet,
+    Bus, BusEntry, ChildSheet, FillType, Graphic, LabelType, NoConnect, NoErcDirective, Point,
+    SchDrawing, SchematicSheet,
 };
 use signex_types::theme::{CanvasColors, Color, ThemeId, canvas_colors};
 use std::collections::BTreeMap;
@@ -80,6 +80,7 @@ fn sheet() -> SchematicSheet {
         uuid: uuid::Uuid::now_v7(),
         start: Point::new(150.0, 20.0),
         end: Point::new(150.0, 60.0),
+        ..Default::default()
     });
     sheet.bus_entries.push(BusEntry {
         uuid: uuid::Uuid::now_v7(),
@@ -90,9 +91,10 @@ fn sheet() -> SchematicSheet {
         uuid: uuid::Uuid::now_v7(),
         position: Point::new(NO_CONNECT_AT.0, NO_CONNECT_AT.1),
     });
-    sheet.no_erc_directives.push(NoConnect {
+    sheet.no_erc_directives.push(NoErcDirective {
         uuid: uuid::Uuid::now_v7(),
         position: Point::new(30.0, 20.0),
+        rules: Vec::new(),
     });
     sheet.child_sheets.push(ChildSheet {
         uuid: uuid::Uuid::now_v7(),

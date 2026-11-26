@@ -27,3 +27,25 @@ fn styled_power_ports_are_not_power_flags() {
         );
     }
 }
+
+/// #1284 - the Active Bar's chassis row arms a chassis-style port that names
+/// its own net.
+#[test]
+fn the_chassis_row_arms_a_chassis_port() {
+    let (mut app, _task) = Signex::new();
+    let _ = app.update(Message::ActiveBar(ActiveBarMsg::Action(
+        ActiveBarAction::PlacePowerChassis,
+    )));
+    let (net, lib_id) = app
+        .interaction_state
+        .pending_power
+        .clone()
+        .expect("the chassis row arms a pending power port");
+    assert_eq!(net, "Chassis");
+    assert_eq!(lib_id, "power:Chassis");
+    assert_eq!(
+        signex_types::schematic::PowerPortStyle::of(&lib_id),
+        signex_types::schematic::PowerPortStyle::Chassis
+    );
+    assert!(!signex_net::is_power_flag(&lib_id));
+}

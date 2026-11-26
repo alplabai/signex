@@ -20,24 +20,24 @@ impl Signex {
             );
             return Task::none();
         };
-        if editor.file.symbols.len() <= 1 {
+        if editor.draft.file.symbols.len() <= 1 {
             crate::diagnostics::log_warning(format!(
                 "{}: refused to delete the last symbol in the file",
                 editor.path.display()
             ));
             return Task::none();
         }
-        if idx >= editor.file.symbols.len() {
+        if idx >= editor.draft.file.symbols.len() {
             crate::diagnostics::log_warning(format!(
                 "{}: symbol delete index {idx} is out of range ({} symbols)",
                 editor.path.display(),
-                editor.file.symbols.len()
+                editor.draft.file.symbols.len()
             ));
             return Task::none();
         }
-        let (path, symbol) = (editor.path.clone(), editor.file.symbols[idx].uuid);
-        let history = editor.history_generation;
-        let name = editor.file.symbols[idx].name.clone();
+        let (path, symbol) = (editor.path.clone(), editor.draft.file.symbols[idx].uuid);
+        let history = editor.draft.history_generation;
+        let name = editor.draft.file.symbols[idx].name.clone();
         let (mut usage, target) = self.symbol_usage_lines(&path, symbol);
         let plan = self.closed_scan_plan();
         let checking = plan.has_work();
@@ -440,8 +440,8 @@ impl Signex {
         let Some(editor) = self.document_state.symbol_editors.get_mut(path) else {
             return true;
         };
-        if editor.file.symbols.len() <= 1
-            || editor.file.symbols.get(idx).map(|s| s.uuid) != Some(symbol)
+        if editor.draft.file.symbols.len() <= 1
+            || editor.draft.file.symbols.get(idx).map(|s| s.uuid) != Some(symbol)
         {
             return true;
         }
@@ -450,16 +450,16 @@ impl Signex {
         // the previous edit alone.
         let snapshot = editor.snapshot();
         editor.commit_history(snapshot);
-        editor.file.symbols.remove(idx);
-        editor.file.updated = chrono::Utc::now();
+        editor.draft.file.symbols.remove(idx);
+        editor.draft.file.updated = chrono::Utc::now();
         // A sibling before the active one shifted it down a slot: follow
         // it. Deleting the active symbol lands on the one that took its
         // slot (or the last, when the tail went).
-        let active_moved = idx <= editor.active_idx;
-        if idx < editor.active_idx {
-            editor.active_idx -= 1;
-        } else if editor.active_idx >= editor.file.symbols.len() {
-            editor.active_idx = editor.file.symbols.len() - 1;
+        let active_moved = idx <= editor.draft.active_idx;
+        if idx < editor.draft.active_idx {
+            editor.draft.active_idx -= 1;
+        } else if editor.draft.active_idx >= editor.draft.file.symbols.len() {
+            editor.draft.active_idx = editor.draft.file.symbols.len() - 1;
         }
         if active_moved {
             editor.reset_view_for_symbol_switch();
@@ -467,5 +467,157 @@ impl Signex {
         self.document_state.mark_document_dirty(path);
         self.refresh_panel_ctx();
         true
+    }
+}
+
+/// Mockup row 137: a Delete of a symbol that may still be in use asks in
+/// the "Delete Symbol?" modal; its buttons and Esc answer it.
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::{Message, Signex};
+    use crate::dock::DockMessage;
+    use crate::layout_probe::{lay_out_texts, messages_on_click};
+    use crate::panels::PanelMsg;
+    use signex_library::{Symbol, SymbolFile};
+    use std::path::PathBuf;
+
+    const WINDOW: iced::Size = iced::Size::new(900.0, 700.0);
+
+    fn panel(app: &mut Signex, msg: PanelMsg) {
+        let _ = app.update(Message::Dock(DockMessage::Panel(msg)));
+    }
+
+    /// A container outside every mounted library: its rows cannot be
+    /// checked, so its Delete always asks.
+    fn app_asking() -> (Signex, PathBuf) {
+        let (mut app, _task) = Signex::new();
+        let path = PathBuf::from("loose.snxsym");
+        let mut file = SymbolFile::from_symbol(Symbol::empty("R"));
+        file.symbols.push(Symbol::empty("C"));
+        app.open_symbol_editor_tab(path.clone(), file);
+        panel(&mut app, PanelMsg::SchLibraryDeleteSymbol(0));
+        (app, path)
+    }
+
+    fn warning(app: &Signex) -> Option<&SymbolDeleteWarning> {
+        app.document_state
+            .panel_ctx
+            .symbol_editor
+            .as_ref()?
+            .delete_warning
+            .as_ref()
+    }
+
+    fn count(app: &Signex, path: &std::path::Path) -> usize {
+        app.document_state.symbol_editors[path]
+            .draft
+            .file
+            .symbols
+            .len()
+    }
+
+    fn shown(texts: &[crate::layout_probe::LaidOutText]) -> Vec<String> {
+        texts
+            .iter()
+            .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+            .collect()
+    }
+
+    #[test]
+    fn delete_anyway_in_the_modal_deletes_the_symbol() {
+        let (mut app, path) = app_asking();
+        assert_eq!(count(&app, &path), 2, "nothing deleted before the answer");
+        let tokens = app.document_state.panel_ctx.tokens;
+        let i18n = signex_i18n::I18n::en_us();
+        let warning = warning(&app).expect("the modal is up").clone();
+
+        let texts = lay_out_texts(
+            crate::library::symbol_delete::view(&warning, &tokens, &i18n),
+            WINDOW,
+        );
+        let shown = shown(&texts);
+        assert!(shown.iter().any(|t| t == "Delete Symbol?"), "{shown:?}");
+        assert!(
+            shown
+                .iter()
+                .any(|t| t == "Symbol \"R\" may still be in use"),
+            "{shown:?}"
+        );
+        assert!(
+            shown
+                .iter()
+                .any(|t| t.contains("not inside a mounted library")),
+            "{shown:?}"
+        );
+
+        let clicked = messages_on_click(
+            crate::library::symbol_delete::view(&warning, &tokens, &i18n),
+            WINDOW,
+            "Delete anyway",
+        );
+        assert!(
+            matches!(clicked.as_slice(), [PanelMsg::SchLibraryDeleteConfirmed(0)]),
+            "{clicked:?}"
+        );
+        for msg in clicked {
+            panel(&mut app, msg);
+        }
+        assert_eq!(count(&app, &path), 1);
+        assert!(warning_gone(&app));
+    }
+
+    #[test]
+    fn cancel_in_the_modal_keeps_the_symbol() {
+        let (mut app, path) = app_asking();
+        let tokens = app.document_state.panel_ctx.tokens;
+        let i18n = signex_i18n::I18n::en_us();
+        let warning = warning(&app).expect("the modal is up").clone();
+
+        let clicked = messages_on_click(
+            crate::library::symbol_delete::view(&warning, &tokens, &i18n),
+            WINDOW,
+            "Cancel",
+        );
+        assert!(
+            matches!(clicked.as_slice(), [PanelMsg::SchLibraryDeleteCancelled]),
+            "{clicked:?}"
+        );
+        for msg in clicked {
+            panel(&mut app, msg);
+        }
+        assert_eq!(count(&app, &path), 2);
+        assert!(warning_gone(&app));
+    }
+
+    #[test]
+    fn esc_cancels_the_modal_and_keeps_the_symbol() {
+        let (mut app, path) = app_asking();
+        let esc = app.escape_overlay_message().expect("the modal claims Esc");
+        assert!(
+            matches!(
+                esc,
+                Message::Dock(DockMessage::Panel(PanelMsg::SchLibraryDeleteCancelled))
+            ),
+            "{esc:?}"
+        );
+        assert!(app.has_locking_confirm_modal(), "a confirm locks the menus");
+
+        let _ = app.update(esc);
+        assert_eq!(count(&app, &path), 2);
+        assert!(warning_gone(&app));
+        assert!(
+            !matches!(
+                app.escape_overlay_message(),
+                Some(Message::Dock(DockMessage::Panel(
+                    PanelMsg::SchLibraryDeleteCancelled
+                )))
+            ),
+            "the answered modal no longer claims Esc"
+        );
+    }
+
+    fn warning_gone(app: &Signex) -> bool {
+        app.library.pending_symbol_delete.is_none() && warning(app).is_none()
     }
 }

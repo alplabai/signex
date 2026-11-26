@@ -4,6 +4,8 @@
 
 use std::path::{Path, PathBuf};
 
+use signex_i18n::RenderTranslatable;
+
 use serde_json::{Value, json};
 use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, Wire};
 use uuid::Uuid;
@@ -44,7 +46,7 @@ fn answered(outcome: CommandOutcome) -> Value {
 
 fn refusal(outcome: CommandOutcome) -> String {
     match outcome {
-        CommandOutcome::Disabled { reason } => reason,
+        CommandOutcome::Disabled { reason } => reason.render_en_us(),
         other => panic!("not refused: {other:?}"),
     }
 }
@@ -278,6 +280,7 @@ fn a_bus_entry_on_a_bus_or_an_entry_on_a_no_connect_is_refused() {
             uuid: Uuid::now_v7(),
             start: left(2.0),
             end: left(10.0),
+            ..Default::default()
         }],
         no_connects: vec![signex_types::schematic::NoConnect {
             uuid: Uuid::now_v7(),

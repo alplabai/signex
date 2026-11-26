@@ -51,6 +51,7 @@ fn refused_commands() -> Vec<(&'static str, Command)> {
                 dx: 5.0,
                 dy: 0.0,
                 keep_wires: true,
+                wiring: signex_types::corner::DragWiringMode::Auto,
             },
         ),
         (
@@ -58,6 +59,7 @@ fn refused_commands() -> Vec<(&'static str, Command)> {
             Command::MoveEach {
                 moves: vec![(item(1), 5.0, 0.0)],
                 keep_wires: true,
+                wiring: signex_types::corner::DragWiringMode::Auto,
             },
         ),
         (
@@ -67,6 +69,7 @@ fn refused_commands() -> Vec<(&'static str, Command)> {
                 dx: 5.0,
                 dy: 0.0,
                 keep_wires: false,
+                wiring: signex_types::corner::DragWiringMode::Auto,
             },
         ),
         (
@@ -247,6 +250,7 @@ fn a_mixed_selection_is_refused_whole() {
         dx: 5.0,
         dy: 0.0,
         keep_wires: true,
+        wiring: signex_types::corner::DragWiringMode::Auto,
     });
 
     locked_error(result);
@@ -264,6 +268,7 @@ fn a_batch_with_a_refused_command_rolls_back() {
             dx: 5.0,
             dy: 0.0,
             keep_wires: true,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         },
         Command::DeleteSelection {
             items: vec![item(1)],
@@ -284,6 +289,7 @@ fn an_unlocked_symbol_still_moves_and_deletes() {
             dx: 5.0,
             dy: 0.0,
             keep_wires: true,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         })
         .expect("move");
     assert!(moved.changed);
@@ -309,6 +315,7 @@ fn unlocking_lets_the_symbol_move_and_delete_again_and_undo_relocks() {
             dx: 5.0,
             dy: 0.0,
             keep_wires: true,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         })
         .expect("move once unlocked");
     engine
@@ -353,6 +360,7 @@ fn without_locked_drops_locked_items_and_names_them() {
         dx: 5.0,
         dy: 0.0,
         keep_wires: true,
+        wiring: signex_types::corner::DragWiringMode::Auto,
     });
     assert_eq!(skipped, vec!["R1".to_string()]);
     match pruned {
@@ -384,6 +392,7 @@ fn without_locked_keeps_a_command_that_touches_no_locked_symbol() {
     let cmd = Command::MoveEach {
         moves: vec![(item(2), 5.0, 0.0)],
         keep_wires: true,
+        wiring: signex_types::corner::DragWiringMode::Auto,
     };
     let (pruned, skipped) = engine.without_locked(cmd);
     assert!(skipped.is_empty());
@@ -449,6 +458,7 @@ fn a_group_move_leaves_wires_on_a_locked_pin_where_they_are() {
         dx: 0.0,
         dy: 5.0,
         keep_wires: true,
+        wiring: signex_types::corner::DragWiringMode::Auto,
     });
     assert_eq!(skipped, vec!["R1".to_string()]);
     engine

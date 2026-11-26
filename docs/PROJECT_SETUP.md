@@ -10,8 +10,9 @@ through the `new_project_with_profile` command.
 - **Project name** and **Location**, with **Browse...**. The checkbox
   `Create "<name>" folder` sits under Location, is on by default and its label
   follows the name as it is typed; while the name is empty it reads
-  `Create a folder named after the project`. There is no path preview line
-  (maintainer, 2026-11-09: keep it simple).
+  `Create a folder named after the project`. Beside it, a line shows the
+  project file Create will write. With an empty name it asks for a project
+  name, and Create stays disabled (maintainer, 2026-11-23).
   - On: `<Location>/<name>/<name>.snxprj`, the folder created by Create.
   - Off: `<Location>/<name>.snxprj`, for a folder the user already made.
   - Create is off, with the reason shown inline, when the target `.snxprj`
@@ -21,23 +22,34 @@ through the `new_project_with_profile` command.
     is itself a project folder, or when the name cannot be a file name.
   - The dialog stays open while Create writes. If the writes fail, it stays
     open with the reason and the setup as it was.
-- **Start from a profile**: Hobby 2-layer, Standard 4-layer (the default),
-  HDI 6-layer and Custom.
+- **Start from a profile** (#2537): four cards in a 2 x 2 grid, the fab
+  tiers **Standard** (the default), **Advanced** and **HDI**, and **Custom**.
+  The tier sets the rules; the copper layer count is a separate choice, a
+  stepper on every card (2 to 32, in steps of 2). Stepping a card picks it on
+  the new count; each card keeps its own count, and its glyph draws it.
 
-  | Profile | Layers | Thickness | Clearance | Track | Via / drill |
+  | Profile | Layers (start) | Thickness | Clearance | Track | Via / drill |
   |---|---|---|---|---|---|
-  | Hobby | 2 | 1.6 mm | 0.2 mm | 0.25 mm | 0.6 / 0.3 mm |
   | Standard | 4 | 1.6 mm | 0.15 mm | 0.2 mm | 0.5 / 0.25 mm |
-  | HDI | 6 | 1.2 mm | 0.1 mm | 0.1 mm | 0.3 / 0.15 mm |
-  | Custom | 1 to 32 (starts at 8) | 1.6 mm | 0.15 mm | 0.2 mm | 0.5 / 0.25 mm |
+  | Advanced | 6 | 1.6 mm | 0.1 mm | 0.125 mm | 0.4 / 0.2 mm |
+  | HDI | 8 | 1.6 mm | 0.075 mm | 0.075 mm | 0.25 / 0.1 mm |
+  | Custom | 4 | 1.6 mm | 0.15 mm | 0.2 mm | 0.5 / 0.25 mm |
 
-- **Customize settings** (folded by default): the PCB rules (a rule template,
-  the copper-layer stepper, clearance, track width, via size, via drill, all
-  in mm and validated as you type) and the schematic defaults (sheet size,
-  title block, designator standard). Moving the layer stepper
-  switches the profile to Custom.
-- **Preview**: the stack-up on the board ground, the board line and the sheet
-  line.
+  This table is the canonical tier table of the setup cards. Custom starts
+  from Standard's rules and keeps the values shown when it is picked.
+- **Customize settings** (folded by default): the PCB rules (the **Fab tier**
+  field, Import rules..., the copper-layer stepper, clearance, track width,
+  via size, via drill, all in mm and validated as you type) and the schematic
+  defaults (sheet size, title block, designator standard). The Fab tier field
+  mirrors the picked card. The layer stepper moves the picked card's count and
+  keeps its tier.
+- **Preview**: the board rules drawing (two tracks at their width and
+  clearance, a via at its size and drill; click a value to edit it, Enter
+  commits, Tab goes to the next, Esc cancels, handles drag it, and each edit
+  is the rule field's own), the board line, the stack-up on the board ground,
+  and the sheet drawing. Each drawing has an expand button; the larger board
+  view adds the layer count and thickness. New PCB shows the same column
+  without the sheet.
 
 The dialog opens as its own native window ("New Project"), like the other
 dialogs (`docs/DETACHED_MODALS.md`), and locks the main window while it is
@@ -46,19 +58,30 @@ in view at any window size and only the body scrolls. Enter creates. Esc, the
 Cancel button and the window's close button cancel, except while Create is
 writing: then they wait (the Messages panel notes it) and the dialog stays.
 
-## Rule templates
+## Fab tier
 
-**Standard fab**, **Advanced fab** and **HDI fab** are generic capability
-classes. Each sets the minimum clearance, track and via sizes of a class of
-fabricator; none names a fabricator.
+Each tier card is a generic capability class of fabricator (Standard,
+Advanced, HDI); none names a fabricator. Picking a tier in the **Fab tier**
+field picks its card, fills the rules from the table above and keeps the layer
+count shown. A tier picked there also writes its DRC floor; a card click
+fills the rules only.
 
-| Class | Clearance | Track | Via / drill |
-|---|---|---|---|
-| Standard fab | 0.15 mm | 0.15 mm | 0.5 / 0.25 mm |
-| Advanced fab | 0.1 mm | 0.1 mm | 0.4 / 0.2 mm |
-| HDI fab | 0.075 mm | 0.075 mm | 0.3 / 0.15 mm |
+The DRC floor (#2311) is the seven `fab_*` rules of
+`docs/DRC_RULES.md`, "Fab profiles", go into the project's rules beside the
+rule profile's, and are edited afterwards like any rule. Where the class is
+picked decides when:
 
-A class does not change the layer count.
+- **New Project**: the class chosen when Create is pressed is stored with
+  the rule profile copy in the new `.snxprj`.
+- **Project tab, Project setup**: each pick writes the rules at once, one
+  undo step with the values it fills; the `.snxprj` is dirty and written by
+  Save.
+- **New PCB**: the class chosen goes into the project's rules when the board
+  is made, one step of the rule history, written by Save.
+
+Picking a class again replaces only the rules it writes, by name; every
+other rule, and its severity entry, stays. Picking the class already applied
+brings back a `fab_*` rule edited since.
 
 ## Rule file (Import rules...)
 
@@ -92,6 +115,11 @@ profile copy is added after, as for every new project):
   such as `standard`, or a saved profile's `user-...` id). Only the id is
   stored, never the saved profile itself.
 - `annotation.designator_standard`, the existing Project Options setting.
+- `project_defaults.dimension` (#2868): what a new board dimension starts
+  from (line width, text height, precision, arrows, text, extension lines,
+  number format). Every new project gets a copy of Preferences ▸ PCB ▸ PCB
+  Defaults with the rule profile, dialog or not; a setup profile pick does
+  not change it. Out-of-range values make the section unusable, as below.
 
 A PCB or sheet added to the project starts from these through its setup
 dialog (below): `project_defaults.pcb` (layers,
@@ -111,12 +139,14 @@ not stored per sheet, so a project value would do nothing.
 Project Options has a **Project setup** section with the dialog's own profile
 cards, PCB rules and schematic defaults, filled in from the
 project. An edit is a project edit like the other sections: it marks the
-`.snxprj` dirty, is written by Save, and Ctrl+Z undoes it.
+`.snxprj` dirty, is written by Save, and Ctrl+Z undoes it. The section's page
+header holds **Save as profile...**, Your profiles is one line under the
+cards, and the PCB rules and Schematic fields sit in two titled cards.
 
 - Only the part an edit changes is stored: a board pick stores
   `project_defaults.pcb`, a sheet pick `project_defaults.sheet`, a designator
   pick only the designator standard.
-- Every pick (a profile, the stepper, a template, Import rules..., a sheet
+- Every pick (a profile, a stepper, the Fab tier, Import rules..., a sheet
   size, the title block, the designator standard) is its own undo step;
   typing in one rule field is one step.
 - Clicking the card that is already selected changes nothing.
@@ -127,7 +157,7 @@ project. An edit is a project edit like the other sections: it marks the
 
 ```text
 new_project_with_profile name=<text> location=<absolute path>
-    [make_folder=true|false] [profile=hobby|standard|hdi|custom]
+    [make_folder=true|false] [profile=standard|advanced|hdi|custom]
     [overrides=key=value,key=value]
 ```
 
@@ -137,7 +167,11 @@ new_project_with_profile name=<text> location=<absolute path>
 
 `overrides` keys: `layers`, `thickness`, `clearance`, `track`, `via`, `drill`
 (mm), `sheet` (such as `A4` or `ANSI A portrait`), `title_block`
-(`true`/`false`) and `designators` (`ieee315`, `din40719_2`, `iec81346_2`).
+(`true`/`false`), `designators` (`ieee315`, `din40719_2`, `iec81346_2`,
+`iec81346_2_full`) and `fab` (`standard`, `advanced`, `hdi`: the tier's
+values and its `fab_*`
+rules). Keys apply in written order, so `fab=hdi,clearance=0.2` keeps 0.2.
+`layers` keeps the tier. A built-in the user edited takes the edited values.
 It answers with the id, path and kind of the project it made. Without
 operands, the palette entry opens the dialog. The command needs the `save`
 capability in `signex-cli` (`--save`), and the folder it creates must stay
@@ -152,9 +186,31 @@ standard) as a profile in the user's settings (`prefs.json`, key
 `setup_profiles`), not in the project. Saving under a name that exists (case
 ignored) replaces that profile's values. A rule value that is not valid
 refuses the save with the reason under the name field. Saved profiles appear
-under **Your profiles**, next to the built-ins, in every project. **Remove**
-under a card asks first (Remove "name"? Remove / Keep, in the card); the
-removal is a settings change and stays when the dialog is cancelled.
+under **Your profiles**, one compact row each (name and a caption such as
+`4L · 0.15/0.2`), in every project. A row's menu button offers **Edit
+profile...**, **Rename** (refused when another saved profile has the name),
+**Duplicate** (a new profile, `<name> copy`, with a fresh `user-` id) and
+**Delete**, which asks first (Remove "name"? Remove / Keep); each is a
+settings change and stays when the dialog is cancelled.
+
+### Editing a built-in profile
+
+The built-ins are editable too (#2536). Hovering a tier card shows a pencil,
+**Edit profile...**: the card's values load into the fields below and a bar
+says which profile is edited, with **Save profile** and **Cancel**. Save
+profile stores the values shown as the user's override of that built-in: an
+entry in `setup_profiles` with the tier's own id (`advanced`) and
+`"edited": true`, holding its board rules. The card then shows an **edited**
+tag and its values, everywhere the cards appear. The pencil of an edited
+built-in opens its menu: Edit profile..., **Duplicate as my profile**, and
+**Reset to default**, which drops the override so the shipped values come
+back. Custom has no pencil: it is the blank start.
+
+An override is never numbered: it always replaces the entry of its id.
+Projects keep the values they copied; an edit or a reset of a built-in is not
+re-applied to any project, and a project that names the tier keeps naming it.
+Saving, renaming, duplicating and resetting are written like every profile
+edit, below, and taken back in the app when the write fails.
 
 Each save or removal is merged into the list the file holds now, by id, read-
 modify-write and atomic, off the UI thread: entries this build cannot read,
@@ -188,12 +244,23 @@ no unknown keys inside `project_defaults`); the stored values stay.
 
 **New PCB** (File > New > PCB, Projects > Add New > PCB, the Update PCB
 dialog's Create PCB, the palette) opens the New PCB dialog, prefilled from
-the project: the profile cards, the PCB rules (rule template, Import rules...,
+the project: the profile cards, the PCB rules (Fab tier, Import rules...,
 copper layers, clearance, track, via, drill, thickness) and the stack-up
 preview. **Create PCB** makes the board with those values in its board setup
 (the design rule check reads its clearance) and opens it unsaved, as before;
 **Cancel** and Esc make nothing. A project holds one board: when its board is
 already open the dialog does not open and the reason is shown.
+
+When the project already saved a setup (a profile id or board rules), the
+cards are not shown (#2538). One summary row says what the project uses,
+"From project setup: Standard · 4 layers · 0.15 mm clearance · 0.2 mm
+tracks", with **Use another profile...**, which unfolds the cards and Your
+profiles under it and then reads **Keep project setup** (it folds them and
+takes the project's setup back). The Fab tier field is not shown with the
+summary row; the rule fields below stay editable. A project with no saved
+setup shows the cards and opens on valid Standard values, Create on.
+New Schematic does the same with the sheet defaults ("A4 landscape · Signex
+default title block · IEEE 315"), unfolding Your profiles.
 
 **New Schematic** (File > New > Schematic, Projects > Add New > Schematic,
 the palette) opens the New Schematic dialog: the saved profiles (the built-in
@@ -215,7 +282,7 @@ in Messages; nothing is made.
 Headless and agent runs make the document with no dialog:
 
 ```text
-new_pcb_document [profile=<project|hobby|standard|hdi|custom|saved profile>]
+new_pcb_document [profile=<project|standard|advanced|hdi|custom|saved profile>]
 new_schematic_sheet [profile=<...>] [name=<file stem>]
 ```
 
@@ -226,3 +293,73 @@ does not list. Without `profile` the project's own setup is used, as before
 the dialog existed.
 `new_schematic_sheet` writes a file and needs the `save` capability in
 `signex-cli`.
+
+## Save Project As
+
+File ▸ Save Project As… (`save_project_as`, #2908) copies an open project
+into a new folder. The dialog takes the New Project name and location fields
+(name suggested as "`<project>` copy", location the folder that holds the
+project's folder) and always writes `<location>/<name>/<name>.snxprj`; the
+target is checked on the blocking pool as New Project checks it, so a folder
+that exists and is not empty, a project folder and a place inside a project
+(the open one included) are refused before Save copy is offered, and again
+when the copy is written.
+
+What the copy holds:
+
+- **The project file**, encoded from the project as it is in memory, unsaved
+  settings included, under the new name and folder, in this build's format:
+  the lowest `.snxprj` token its content needs (`snxprj_token`). A project
+  read from a newer minor (read-only here, `docs/FORMAT_VERSIONS.md`) is
+  written current. Keys this build does not know are kept as they were read
+  where the object holding them has a bag for unknown keys (the top level,
+  sheets and libraries among them). Others are not: a value this build
+  reads leniently and cannot read (`fab_outputs`, `router_tool_diameter`)
+  reads as absent, and an object with no place for unknown keys (such as
+  `fab_outputs`) loses the fields it does not know. So before anything is
+  written, Save reads the source file again, copies it as this build reads
+  it, and compares the two key by key at the top level and inside every
+  object and same-length list. The written copy is not what is compared: it
+  holds the unsaved settings, and a key the person changed on purpose is not
+  a loss. If a key of the source is missing from the copy or has a different
+  value there (other than `format`, `name`, `dir` and `document_id`, which
+  the copy rewrites), nothing is written. The dialog lists those keys by
+  their place in the file (`fab_outputs.laser_marking`, `sheets[1].colour`),
+  and its primary button becomes **Save copy without them**. Only that
+  button writes the copy, and the writer checks again that every key it
+  would drop was the one agreed to (`project_save_as::dropped_keys`,
+  `KeysCheck`). A key the copy adds is not listed, and numbers compare by
+  value. A project with an id gets a new one: a Save As is a new document
+  (`docs/DOCUMENT_IDS.md`).
+- **Every document it lists in its folder**: the root sheet, the sheets, the
+  board, and each project library (its `.snxlib` and the files under its
+  library folders: `classes`, the symbol, footprint and simulation folders,
+  `3dmodels` and `assets/datasheets`; a library kept as a `*.snxlib/` folder
+  is copied whole, every file under it). Shared and global libraries are not
+  copied; the copy lists them where they are. An unedited document is copied
+  byte for byte. An open document with unsaved edits is encoded from memory
+  when Save copy is pressed, with the encoder its save uses (a sheet by its
+  engine, a board by the `.snxpcb` writer, a symbol or footprint document by
+  its container writer, whole as the editor holds it, without the version
+  bump and row cascade a library save adds), so the copy includes the edits
+  (Caner, 2026-11-25); the dialog notes how many documents that is. The
+  originals stay unsaved and untouched (`project_save_as::unsaved` only
+  reads). A document opened read-only from a newer minor is copied as on
+  disk. A copied sheet or board keeps its id, so with both projects open the
+  copy's is renumbered in memory (`Signex::reconcile_document_ids`).
+
+A listed file that is not on disk and not open with edits, or an entry that lies outside the project
+folder, refuses the whole copy before anything is written. Every file goes
+through `atomic_write`, the `.snxprj` last; a failure removes what the copy
+wrote, every folder below the copy's folder that this left empty (those
+`atomic_write` made included), and the copy's folder when Save made it, and
+the dialog shows why. A target folder that was there before stays, empty.
+The original folder is only read. Once written, the copy opens beside the
+project, which stays open and unchanged (its unsaved settings stay unsaved).
+A library's history (`.git`) beside its `.snxlib` is not copied; a library
+kept as a folder takes whatever that folder holds.
+
+A project written by a newer build offers the same dialog from its Save
+Failed card (`NoticeAction::SaveProjectAs`) and from the Close Project and
+Exit prompts (`ProjectCloseChoice::SaveProjectAs`: the prompt closes as on
+Cancel and the dialog opens on the first read-only project it lists).

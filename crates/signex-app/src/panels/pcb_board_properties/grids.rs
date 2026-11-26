@@ -1,44 +1,48 @@
-//! Grid Manager (#2353, #2374, #2386): one card per grid. The board's own
-//! grid (the setup's step, counted from the board origin) comes first, then
-//! the extra grids, highest priority first: the order is the priority. A
-//! card shows its swatch, name, step (typed in place) and a ⋯ menu (Edit,
-//! Move Up, Move Down, Delete; the board's own grid has Edit only), and
-//! under them its origin and the Parts and Other pills. Fast Grids set the
-//! board's step to one of the fast grid preferences (#1672).
+//! Grid Manager (#2353, #2374, #2386, #2523): Visible Grid as a switch,
+//! then one card per grid. The board's own grid (the setup's step, counted
+//! from the board origin) comes first, then the extra grids, highest
+//! priority first: the order is the priority. A card shows its swatch, name,
+//! step (typed in place) and a ⋯ menu (Edit, Move Up, Move Down, Delete; the
+//! board's own grid has Edit only), and under them its origin and the Parts
+//! and Other pills (the board's own grid: a lock and "applies to all"). Fast
+//! Grids set the board's step to one of the fast grid preferences (#1672).
+//! Each card, and Visible Grid, lights up with its part of the illustration.
 
-use iced::widget::{Column, container};
-use iced::{Element, Length, Widget as _};
+use iced::widget::text::Wrapping;
+use iced::widget::{Column, container, svg};
+use iced::{Element, Length, Theme, Widget as _};
 use iced_aw::Wrap;
 use signex_i18n::{Localized, ids, t};
 use signex_types::measure::length_field_text;
 use signex_types::pcb_options::BoardGrid;
+use signex_widgets::{ToggleSwitchStyle, button, text, toggle_switch};
 
-use super::chrome::{Form, Shown};
+use super::super::form_look;
+use super::chrome::{Form, Head, Shown};
+use super::drawing::{SNAP_STEP, VISIBLE_GRID, grid_field};
 use super::info::shown_unit;
 use super::{BoardField, GridCard, PanelMsg, PcbBoardMsg, PcbBoardSummary, SP, cards, fields};
+use crate::styles::tokens::resolve;
+use crate::styles::{PillTone, TypeScale, ti};
+
+const TS: TypeScale = TypeScale::DEFAULT;
+
+const GLYPH_LOCK: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect x="3.5" y="7" width="9" height="6.5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>"#;
 
 fn msg(m: PcbBoardMsg) -> Option<PanelMsg> {
     Some(PanelMsg::PcbBoard(m))
 }
 
-pub(super) fn grid_section<'a>(
+pub(super) fn section<'a>(
     form: &Form<'a>,
     board: &'a PcbBoardSummary,
 ) -> Option<Element<'a, PanelMsg>> {
-    let mut rows: Vec<Shown<'a>> = vec![global_card(form, board)];
+    let mut rows: Vec<Shown<'a>> = vec![visible_grid(form)];
+    rows.push(global_card(form, board));
     let count = board.options.grids.len();
     for (index, grid) in board.options.grids.iter().enumerate() {
         rows.push(grid_card(form, board, index, count, grid));
     }
-
-    let visible = form.t(ids::PCB_BOARD_GRID_VISIBLE);
-    let check = form.check(
-        &visible,
-        form.ctx.grid_visible,
-        Some(PanelMsg::ToggleGrid),
-        None,
-    );
-    rows.push(form.row(&[&visible], check));
 
     let fast = form.t(ids::PCB_BOARD_GRID_FAST);
     rows.push(form.row(&[&fast], form.field(&fast, fast_grids(form, board))));
@@ -47,11 +51,53 @@ pub(super) fn grid_section<'a>(
     let press = (!board.read_only)
         .then_some(PcbBoardMsg::GridAdded)
         .and_then(msg);
-    let button = container(form.action(add.clone(), press, None))
-        .padding([SP.s, SP.l])
-        .boxed();
-    rows.push(form.row(&[&add], button));
-    form.section("pcb_board_grids", ids::PCB_BOARD_SECTION_GRIDS, rows)
+    rows.push(form.row(&[&add], add_row(form, add.clone(), press)));
+    let grids = t!(form.i18n, ids::PCB_BOARD_COUNT, "count" => count + 1);
+    form.section_with(
+        "pcb_board_grids",
+        ids::PCB_BOARD_SECTION_GRIDS,
+        Head::open().summary(form.pill(grids, PillTone::Neutral)),
+        rows,
+    )
+}
+
+/// Visible Grid: the switch of the canvas grid; it also shows the grid
+/// lines in the illustration.
+fn visible_grid<'a>(form: &Form<'a>) -> Shown<'a> {
+    let label = form.t(ids::PCB_BOARD_GRID_VISIBLE);
+    let tokens = form.tokens();
+    let r = resolve(tokens);
+    let style = ToggleSwitchStyle::new(ti(tokens.accent), r.line_strong, r.primary_ink);
+    let switch = toggle_switch(form.ctx.grid_visible, style, Some(PanelMsg::ToggleGrid));
+    let row = form.field_lit(&label, switch, form.is_hot(&VISIBLE_GRID));
+    form.row(&[&label], form.hover_zone(VISIBLE_GRID, row))
+}
+
+/// "+ Add Grid": an accent link row the width of the section.
+fn add_row<'a>(
+    form: &Form<'a>,
+    label: Localized,
+    press: Option<PanelMsg>,
+) -> Element<'a, PanelMsg> {
+    let ink = if press.is_some() {
+        form.accent()
+    } else {
+        form.faint()
+    };
+    let row = button(
+        text(label)
+            .size(TS.body)
+            .color(ink)
+            .wrapping(Wrapping::None),
+    )
+    .padding([SP.s, SP.s])
+    .width(Length::Fill)
+    .on_press_maybe(press)
+    .style(form_look::ghost_button);
+    container(row)
+        .padding([0.0, SP.l])
+        .width(Length::Fill)
+        .boxed()
 }
 
 /// `(x, y)` in the panel's unit, as a card's origin line shows it.
@@ -65,6 +111,19 @@ fn origin_text(form: &Form<'_>, x: f64, y: f64) -> Localized {
     )
 }
 
+/// 'Origin' and the point in the mono face, as a card's second line starts.
+fn origin_line<'a>(form: &Form<'a>, at: Localized) -> Vec<Element<'a, PanelMsg>> {
+    vec![
+        cards::muted(form, form.t(ids::PCB_BOARD_GRID_ORIGIN)),
+        text(at)
+            .size(TS.caption)
+            .font(super::chrome::mono())
+            .color(form.muted())
+            .wrapping(Wrapping::None)
+            .boxed(),
+    ]
+}
+
 /// The step field and the unit after it, beside a card's name.
 fn step<'a>(form: &Form<'a>, field: Element<'a, PanelMsg>) -> Element<'a, PanelMsg> {
     let unit = t!(form.i18n, ids::PCB_BOARD_MEASURE, "value" => shown_unit(form).to_string());
@@ -73,7 +132,7 @@ fn step<'a>(form: &Form<'a>, field: Element<'a, PanelMsg>) -> Element<'a, PanelM
         .boxed()
 }
 
-/// A card's name, taking the room the step leaves.
+/// A card's name in bold, taking the room the step leaves.
 fn name<'a>(form: &Form<'a>, label: impl Into<signex_widgets::Label<'a>>) -> Element<'a, PanelMsg> {
     container(cards::name(form, label))
         .width(Length::FillPortion(3))
@@ -85,7 +144,6 @@ fn pills<'a>(
     form: &Form<'a>,
     parts: (bool, Option<PanelMsg>),
     other: (bool, Option<PanelMsg>),
-    why: Option<Localized>,
 ) -> Vec<Element<'a, PanelMsg>> {
     vec![
         cards::pill(
@@ -93,14 +151,14 @@ fn pills<'a>(
             form.t(ids::PCB_BOARD_GRID_PARTS),
             parts.0,
             parts.1,
-            why.clone(),
+            None,
         ),
         cards::pill(
             form,
             form.t(ids::PCB_BOARD_GRID_OTHER),
             other.0,
             other.1,
-            why,
+            None,
         ),
     ]
 }
@@ -119,13 +177,21 @@ fn global_card<'a>(form: &Form<'a>, board: &PcbBoardSummary) -> Shown<'a> {
         step(form, step_field(form, board)),
         cards::more(form, menu_msg),
     ]);
-    let fixed = Some(form.t(ids::PCB_BOARD_GRID_FIXED_TIP));
-    let mut second = vec![
-        container(cards::muted(form, origin_text(form, 0.0, 0.0)))
-            .width(Length::Fill)
-            .boxed(),
-    ];
-    second.extend(pills(form, (true, None), (true, None), fixed));
+    let faint = form.faint();
+    let lock = svg(crate::icons::static_glyph(GLYPH_LOCK))
+        .width(TS.caption)
+        .height(TS.caption)
+        .style(move |_: &Theme, _| svg::Style {
+            color: Some(faint),
+            ..Default::default()
+        });
+    let mut second = vec![lock.boxed()];
+    second.extend(origin_line(form, origin_text(form, 0.0, 0.0)));
+    second.push(iced::widget::Space::new().width(Length::Fill).boxed());
+    second.push(form.tip(
+        cards::muted(form, form.t(ids::PCB_BOARD_GRID_APPLIES_ALL)),
+        form.t(ids::PCB_BOARD_GRID_FIXED_TIP),
+    ));
     let mut body = Column::new()
         .spacing(SP.xs)
         .push(header)
@@ -141,7 +207,8 @@ fn global_card<'a>(form: &Form<'a>, board: &PcbBoardSummary) -> Shown<'a> {
         let step_label = form.t(ids::PCB_BOARD_GRID_STEP);
         body = body.push(cards::labelled(form, step_label, step_field(form, board)));
     }
-    form.row(&[&label], form.card(body.boxed()))
+    let shown = form.card_lit(body.boxed(), form.is_hot(&SNAP_STEP));
+    form.row(&[&label], form.hover_zone(SNAP_STEP, shown))
 }
 
 /// An extra grid's card; `index` is its place among `count` extra grids,
@@ -181,11 +248,8 @@ fn grid_card<'a>(
         origin.user_x(grid.origin.x),
         origin.user_y(grid.origin.y),
     );
-    let mut second = vec![
-        container(cards::muted(form, at))
-            .width(Length::Fill)
-            .boxed(),
-    ];
+    let mut second = origin_line(form, at);
+    second.push(iced::widget::Space::new().width(Length::Fill).boxed());
     second.extend(pills(
         form,
         (
@@ -196,7 +260,6 @@ fn grid_card<'a>(
             grid.non_components,
             live(PcbBoardMsg::GridNonComponentsToggled(id)),
         ),
-        None,
     ));
     let mut body = Column::new()
         .spacing(SP.xs)
@@ -232,7 +295,9 @@ fn grid_card<'a>(
     }
     let title = form.t(ids::PCB_BOARD_SECTION_GRIDS);
     let key = t!(form.i18n, ids::PCB_BOARD_MEASURE, "value" => grid.name.clone());
-    form.row(&[&title, &key], form.card(body.boxed()))
+    let field = grid_field(id);
+    let shown = form.card_lit(body.boxed(), form.is_hot(&field));
+    form.row(&[&title, &key], form.hover_zone(field, shown))
 }
 
 /// Edit: the grid's Name, then Origin X and Y as a pair.
@@ -318,5 +383,5 @@ fn fast_grids<'a>(form: &Form<'a>, board: &PcbBoardSummary) -> Element<'a, Panel
         let why = (!usable).then(|| form.t(ids::PCB_BOARD_GRID_NO_SETUP));
         chips = chips.push(form.chip(label, in_use, press, why));
     }
-    chips.into()
+    Element::from(chips)
 }

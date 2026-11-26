@@ -99,6 +99,13 @@ pub enum PadShape {
         /// Per-corner enable flags.
         corners: ChamferedCorners,
     },
+    /// Trapezoid (#2242): `delta[0]` is how much longer the +y edge is than
+    /// the −y edge, `delta[1]` the +x edge than the −x edge, in mm, about
+    /// the pad size measured through its middle; at most one is non-zero.
+    /// The board's rule is `signex_types::pcb_pad_shape`.
+    Trapezoid {
+        delta: [f64; 2],
+    },
     /// Custom outline polygon — points relative to pad centre, mm.
     Custom(Polygon),
 }

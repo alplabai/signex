@@ -1,6 +1,6 @@
 use signex_types::schematic::{
-    Bus, Junction, Label, NoConnect, Point, SCHEMATIC_PT_TO_MM, SchDrawing, SelectedItem,
-    SelectedKind, Symbol, TextNote, Wire, circumcircle,
+    Bus, Junction, Label, NoConnect, NoErcDirective, Point, SCHEMATIC_PT_TO_MM, SCHEMATIC_TEXT_MM,
+    SchDrawing, SelectedItem, SelectedKind, Symbol, TextNote, Wire, circumcircle,
 };
 
 use super::Engine;
@@ -22,6 +22,12 @@ pub mod info_keys {
     pub const JUSTIFY_V: &str = "Vertical Justification";
     /// Prefix of the net a pin sits on, `Pin Net: <number>`; absent when open.
     pub const PIN_NET_PREFIX: &str = "Pin Net: ";
+    /// The ERC rule ids a No-ERC directive silences, comma-separated; blank
+    /// when it silences every rule (#1699).
+    pub const NO_ERC_RULES: &str = "ERC Rules";
+    /// Prefix of a pin's geometry row, `Pin Geometry: <number>`: the length
+    /// in mm and the library rotation in whole degrees, tab-separated.
+    pub const PIN_GEOMETRY_PREFIX: &str = "Pin Geometry: ";
 }
 
 // ---------------------------------------------------------------------------
@@ -36,7 +42,10 @@ pub struct ClipboardSelection {
     pub symbols: Vec<Symbol>,
     pub junctions: Vec<Junction>,
     pub no_connects: Vec<NoConnect>,
+    pub no_erc_directives: Vec<NoErcDirective>,
     pub text_notes: Vec<TextNote>,
+    /// Selected harness connectors (with their entries) and wires (#1280).
+    pub harness: signex_types::schematic::SheetHarness,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -112,6 +121,16 @@ impl Engine {
                         clipboard.no_connects.push(nc.clone());
                     }
                 }
+                ClipboardSlot::NoErcDirective => {
+                    if let Some(d) = self
+                        .document
+                        .no_erc_directives
+                        .iter()
+                        .find(|d| d.uuid == item.uuid)
+                    {
+                        clipboard.no_erc_directives.push(d.clone());
+                    }
+                }
                 ClipboardSlot::TextNote => {
                     if let Some(tn) = self
                         .document
@@ -122,9 +141,12 @@ impl Engine {
                         clipboard.text_notes.push(tn.clone());
                     }
                 }
+                // Gathered below in one pass, in sheet order.
+                ClipboardSlot::Harness => {}
             }
         }
 
+        clipboard.harness = crate::clipboard_harness::copied_harness(&self.document.harness, items);
         clipboard
     }
 
@@ -132,7 +154,10 @@ impl Engine {
         let mut anchors = Vec::new();
 
         for item in items {
-            let position = self.document.item_anchor(item);
+            let position = self
+                .document
+                .item_anchor(item)
+                .or_else(|| self.document.harness.item_anchor(item));
 
             if let Some(Point { x, y }) = position {
                 anchors.push(SelectionAnchor {
@@ -217,6 +242,9 @@ impl Engine {
                     if symbol.locked { "Yes" } else { "No" }.into(),
                 ));
                 info.push(("DNP".into(), if symbol.dnp { "Yes" } else { "No" }.into()));
+                if symbol.is_power {
+                    push_power_port_text_rows(symbol, &mut info);
+                }
                 let mut custom: Vec<(&String, &String)> = symbol.fields.iter().collect();
                 custom.sort_by(|a, b| a.0.cmp(b.0));
                 for (name, value) in custom {
@@ -238,6 +266,22 @@ impl Engine {
                                 pin.name,
                                 pin.direction.label(),
                                 if pin.visible { "No" } else { "Yes" }
+                            ),
+                        ));
+                        let rotation = if pin.rotation.is_finite() {
+                            (pin.rotation.rem_euclid(360.0).round() as i64) % 360
+                        } else {
+                            0
+                        };
+                        info.push((
+                            format!("{}{key}", info_keys::PIN_GEOMETRY_PREFIX),
+                            format!(
+                                "{:.2}\t{rotation}",
+                                if pin.length.is_finite() {
+                                    pin.length
+                                } else {
+                                    0.0
+                                }
                             ),
                         ));
                     }
@@ -277,13 +321,7 @@ impl Engine {
                     ),
                 ));
                 info.push(("Rotation".into(), format!("{:.0}°", label.rotation)));
-                info.push((
-                    "Text Size".into(),
-                    format!(
-                        "{}",
-                        (label.font_size.max(0.0) / SCHEMATIC_PT_TO_MM).round() as i32
-                    ),
-                ));
+                info.push(("Text Size".into(), text_size_pt(label.font_size)));
                 if let Some(family) = &label.font_family {
                     info.push(("Font Family".into(), family.clone()));
                 }
@@ -339,6 +377,9 @@ impl Engine {
                         self.document.page_y(directive.position.y)
                     ),
                 ));
+                // The rules it silences; blank means every rule (#1699).
+                let rules = directive.rules.join(", ");
+                info.push((info_keys::NO_ERC_RULES.into(), rules));
             }
             SelectedKind::TextNote => {
                 let text_note = self
@@ -357,13 +398,7 @@ impl Engine {
                     ),
                 ));
                 info.push(("Rotation".into(), format!("{:.0}°", text_note.rotation)));
-                info.push((
-                    "Text Size".into(),
-                    format!(
-                        "{}",
-                        (text_note.font_size.max(0.0) / SCHEMATIC_PT_TO_MM).round() as i32
-                    ),
-                ));
+                info.push(("Text Size".into(), text_size_pt(text_note.font_size)));
                 if let Some(family) = &text_note.font_family {
                     info.push(("Font Family".into(), family.clone()));
                 }
@@ -545,6 +580,29 @@ impl Engine {
                         info.push(("Border".into(), format!("{width:.3}")));
                         info.push(("Fill".into(), fill_type_label(*fill).into()));
                     }
+                    SchDrawing::Bezier(b) => {
+                        info.push(("Type".into(), "Bezier".into()));
+                        info.push((
+                            "Start".into(),
+                            format!("{:.2}, {:.2}", b.start.x, self.document.page_y(b.start.y)),
+                        ));
+                        info.push((
+                            "End".into(),
+                            format!("{:.2}, {:.2}", b.end.x, self.document.page_y(b.end.y)),
+                        ));
+                        info.push(("Width".into(), format!("{:.3}", b.width)));
+                    }
+                    SchDrawing::Dimension(dim) => {
+                        info.push(("Type".into(), "Dimension".into()));
+                        info.push(("Length".into(), format!("{:.3}", dim.measured_mm())));
+                        info.push((info_keys::TEXT.into(), dim.label()));
+                    }
+                    SchDrawing::Table(t) => {
+                        let (rows, columns) = t.size();
+                        info.push(("Type".into(), "Table".into()));
+                        info.push(("Rows".into(), rows.to_string()));
+                        info.push(("Columns".into(), columns.to_string()));
+                    }
                 }
             }
             SelectedKind::SymbolRefField => {
@@ -563,13 +621,7 @@ impl Engine {
                 ));
                 let effective_rot = (symbol.rotation + ref_text.rotation).rem_euclid(360.0);
                 info.push(("Rotation".into(), format!("{effective_rot:.0}°")));
-                info.push((
-                    "Text Size".into(),
-                    format!(
-                        "{}",
-                        (ref_text.font_size.max(0.0) / SCHEMATIC_PT_TO_MM).round() as i32
-                    ),
-                ));
+                info.push(("Text Size".into(), text_size_pt(ref_text.font_size)));
                 if let Some(family) = &ref_text.font_family {
                     info.push(("Font Family".into(), family.clone()));
                 }
@@ -617,13 +669,7 @@ impl Engine {
                 ));
                 let effective_rot = (symbol.rotation + value_text.rotation).rem_euclid(360.0);
                 info.push(("Rotation".into(), format!("{effective_rot:.0}°")));
-                info.push((
-                    "Text Size".into(),
-                    format!(
-                        "{}",
-                        (value_text.font_size.max(0.0) / SCHEMATIC_PT_TO_MM).round() as i32
-                    ),
-                ));
+                info.push(("Text Size".into(), text_size_pt(value_text.font_size)));
                 if let Some(family) = &value_text.font_family {
                     info.push(("Font Family".into(), family.clone()));
                 }
@@ -650,6 +696,9 @@ impl Engine {
                 ));
             }
             SelectedKind::Directive => info.extend(self.directive_info(item.uuid)?),
+            SelectedKind::HarnessConnector
+            | SelectedKind::HarnessEntry
+            | SelectedKind::HarnessWire => info.extend(self.harness_info(item)?),
         }
 
         // A symbol lists its own `Locked` row above; the other lockable kinds
@@ -663,6 +712,22 @@ impl Engine {
             selected_kind: item.kind,
             info,
         })
+    }
+}
+
+/// A text height in mm as the whole points the Properties rows show.
+fn text_size_pt(mm: f64) -> String {
+    format!("{}", (mm.max(0.0) / SCHEMATIC_PT_TO_MM).round() as i32)
+}
+
+/// Mockup row 45: a power port's net-name text size and face, read as
+/// `power_port_value_text` draws them (10 pt when no value text is stored).
+fn push_power_port_text_rows(symbol: &Symbol, info: &mut Vec<(String, String)>) {
+    let value_text = symbol.val_text.as_ref();
+    let size_mm = value_text.map_or(SCHEMATIC_TEXT_MM, |t| t.font_size);
+    info.push(("Text Size".into(), text_size_pt(size_mm)));
+    if let Some(family) = value_text.and_then(|t| t.font_family.as_ref()) {
+        info.push(("Font Family".into(), family.clone()));
     }
 }
 
@@ -684,7 +749,11 @@ enum ClipboardSlot {
     Symbol,
     Junction,
     NoConnect,
+    NoErcDirective,
     TextNote,
+    /// A harness connector (entries included) or harness wire; copied by
+    /// `clipboard_harness::copied_harness` in one pass.
+    Harness,
 }
 
 fn clipboard_slot(kind: SelectedKind) -> Option<ClipboardSlot> {
@@ -695,8 +764,11 @@ fn clipboard_slot(kind: SelectedKind) -> Option<ClipboardSlot> {
         SelectedKind::Symbol => Some(ClipboardSlot::Symbol),
         SelectedKind::Junction => Some(ClipboardSlot::Junction),
         SelectedKind::NoConnect => Some(ClipboardSlot::NoConnect),
+        SelectedKind::NoErcDirective => Some(ClipboardSlot::NoErcDirective),
         SelectedKind::TextNote => Some(ClipboardSlot::TextNote),
-        SelectedKind::NoErcDirective
+        SelectedKind::HarnessConnector | SelectedKind::HarnessWire => Some(ClipboardSlot::Harness),
+        // An entry lives in its connector's slot list; copy the connector.
+        SelectedKind::HarnessEntry
         | SelectedKind::Directive
         | SelectedKind::BusEntry
         | SelectedKind::SheetPin
@@ -729,7 +801,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn clipboard_can_carry_matches_the_documented_seven_kinds() {
+    fn clipboard_can_carry_matches_the_documented_ten_kinds() {
         // #465: `clipboard_can_carry` and `collect_selection_clipboard` both
         // derive from `clipboard_slot`'s single exhaustive match, so this
         // pins down which kinds that match currently classifies as
@@ -741,6 +813,7 @@ mod tests {
             SelectedKind::BusEntry,
             SelectedKind::Junction,
             SelectedKind::NoConnect,
+            SelectedKind::NoErcDirective,
             SelectedKind::Label,
             SelectedKind::SheetPin,
             SelectedKind::TextNote,
@@ -749,6 +822,9 @@ mod tests {
             SelectedKind::Directive,
             SelectedKind::SymbolRefField,
             SelectedKind::SymbolValField,
+            SelectedKind::HarnessConnector,
+            SelectedKind::HarnessEntry,
+            SelectedKind::HarnessWire,
         ]
         .into_iter()
         .filter(|k| clipboard_can_carry(*k))
@@ -762,8 +838,12 @@ mod tests {
                 SelectedKind::Bus,
                 SelectedKind::Junction,
                 SelectedKind::NoConnect,
+                SelectedKind::NoErcDirective,
                 SelectedKind::Label,
                 SelectedKind::TextNote,
+                // #1280: a connector carries its entries.
+                SelectedKind::HarnessConnector,
+                SelectedKind::HarnessWire,
             ]
         );
     }
@@ -843,5 +923,58 @@ mod tests {
         };
         assert_eq!(get(info_keys::JUSTIFY_H), Some("Left"));
         assert_eq!(get(info_keys::JUSTIFY_V), Some("Top"));
+    }
+
+    fn power_port_rows(
+        val_text: Option<signex_types::schematic::TextProp>,
+    ) -> Vec<(String, String)> {
+        let id = uuid::Uuid::now_v7();
+        let port = Symbol {
+            uuid: id,
+            lib_id: "power:bar".into(),
+            value: "+3V3".into(),
+            is_power: true,
+            val_text,
+            ..Symbol::default()
+        };
+        let engine = Engine::new(signex_types::schematic::SchematicSheet {
+            symbols: vec![port],
+            ..Default::default()
+        })
+        .expect("engine");
+        engine
+            .describe_single_selection(&[SelectedItem::new(id, SelectedKind::Symbol)])
+            .expect("details")
+            .info
+    }
+
+    /// Mockup row 45: a power port reports its net-name text's size in
+    /// points and its own font family, the rows a net label reports.
+    #[test]
+    fn a_power_port_reports_its_text_size_and_font_family() {
+        use signex_types::schematic::{HAlign, TextProp, VAlign};
+        let rows = power_port_rows(Some(TextProp {
+            position: Point::new(0.0, 0.0),
+            rotation: 0.0,
+            font_size: 14.0 * SCHEMATIC_PT_TO_MM,
+            font_family: Some("Iosevka".into()),
+            justify_h: HAlign::Center,
+            justify_v: VAlign::Bottom,
+            hidden: false,
+        }));
+        let get = |key: &str| rows.iter().find(|(k, _)| k == key).map(|(_, v)| v.as_str());
+        assert_eq!(get("Text Size"), Some("14"));
+        assert_eq!(get("Font Family"), Some("Iosevka"));
+    }
+
+    /// A power port with no stored value text draws it at the schematic
+    /// text size and inherits the sheet's family, so it reports that size
+    /// and no family of its own.
+    #[test]
+    fn a_power_port_without_value_text_reports_the_drawn_default() {
+        let rows = power_port_rows(None);
+        let get = |key: &str| rows.iter().find(|(k, _)| k == key).map(|(_, v)| v.as_str());
+        assert_eq!(get("Text Size"), Some("10"));
+        assert_eq!(get("Font Family"), None);
     }
 }

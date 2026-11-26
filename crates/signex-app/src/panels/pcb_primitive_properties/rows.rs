@@ -49,6 +49,32 @@ pub(super) struct Section<'a> {
     look: Look<'a>,
     rows: Vec<Element<'a, PanelMsg>>,
     title: MessageId,
+    collapse: Option<Collapse<'a>>,
+    badge: Option<Element<'a, PanelMsg>>,
+}
+
+/// How a collapsible section folds: its key in the panel's collapsed set,
+/// whether it starts closed, and the summary its header shows.
+struct Collapse<'a> {
+    key: &'static str,
+    closed_by_default: bool,
+    summary: Option<Label<'a>>,
+}
+
+impl Collapse<'_> {
+    /// The entry the panel's set holds for this section
+    /// (`widgets::section_toggle_key`).
+    fn set_key(&self) -> String {
+        crate::panels::widgets::section_toggle_key(self.key, self.closed_by_default)
+    }
+
+    fn is_closed(&self, ctx: &PanelContext) -> bool {
+        !crate::panels::widgets::is_section_open(
+            self.key,
+            self.closed_by_default,
+            &ctx.collapsed_sections,
+        )
+    }
 }
 
 impl<'a> Section<'a> {
@@ -57,7 +83,33 @@ impl<'a> Section<'a> {
             look,
             rows: Vec::new(),
             title,
+            collapse: None,
+            badge: None,
         }
+    }
+
+    /// A section the chevron in its header folds; `summary` sits right in
+    /// the header (a closed Net Information names the net and its class).
+    pub fn collapsible(
+        mut self,
+        key: &'static str,
+        closed_by_default: bool,
+        summary: Option<Label<'a>>,
+    ) -> Self {
+        self.collapse = Some(Collapse {
+            key,
+            closed_by_default,
+            summary,
+        });
+        self
+    }
+
+    /// A chip after the summary in the header of a collapsible section (the
+    /// via's protection class, mockup row 96). Only a collapsible section
+    /// draws it.
+    pub fn badge(mut self, badge: Element<'a, PanelMsg>) -> Self {
+        self.badge = Some(badge);
+        self
     }
 
     /// Add `row`, labelled `label`, when the search lets it through.
@@ -77,18 +129,38 @@ impl<'a> Section<'a> {
         if self.rows.is_empty() {
             return None;
         }
-        let title = self.look.t(self.title).into_string();
-        let mut col: Column<Element<'a, PanelMsg>> = column![
-            container(crate::panels::widgets::section_title(
-                &title,
-                self.look.tokens(),
-                &self.look.ctx.i18n
-            ))
-            .padding([SP.s, PAD_X])
-        ]
-        .spacing(SP.xs);
-        for r in self.rows {
-            col = col.push(r);
+        let title = self.look.t(self.title);
+        let Some(collapse) = self.collapse else {
+            debug_assert!(self.badge.is_none(), "a badge needs a collapsible section");
+            let mut col: Column<Element<'a, PanelMsg>> = column![
+                container(crate::panels::widgets::section_title(
+                    title,
+                    self.look.tokens(),
+                    &self.look.ctx.i18n
+                ))
+                .padding([SP.s, PAD_X])
+            ]
+            .spacing(SP.xs);
+            for r in self.rows {
+                col = col.push(r);
+            }
+            return Some(col.boxed());
+        };
+        let is_closed = collapse.is_closed(self.look.ctx);
+        let set_key = collapse.set_key();
+        let header = super::linked::section_header(
+            self.look,
+            title,
+            !is_closed,
+            collapse.summary,
+            self.badge,
+            set_key,
+        );
+        let mut col: Column<Element<'a, PanelMsg>> = column![header].spacing(SP.xs);
+        if !is_closed {
+            for r in self.rows {
+                col = col.push(r);
+            }
         }
         Some(col.boxed())
     }
@@ -170,10 +242,64 @@ pub(super) fn value_box<'a>(look: Look<'a>, value: impl Into<Label<'a>>) -> Elem
     .boxed()
 }
 
-/// A length in mm, "N/A" when `None`.
+/// The ink of a value the panel only reports.
+pub(super) fn sunken_ink(look: Look<'_>) -> Color {
+    ti(look.tokens().text_secondary)
+}
+
+/// `content` on the sunken fill with no frame, so it cannot be taken for a
+/// field (mockup rows 96 and 97).
+pub(super) fn sunken_box<'a>(content: Element<'a, PanelMsg>) -> Element<'a, PanelMsg> {
+    container(content)
+        .padding([SP.xs, SP.s])
+        .width(Length::Fill)
+        .style(form_look::read_only_value)
+        .boxed()
+}
+
+/// A value the panel only reports, sunken; a long one wraps.
+pub(super) fn sunken_value<'a>(
+    look: Look<'a>,
+    value: impl Into<Label<'a>>,
+) -> Element<'a, PanelMsg> {
+    sunken_box(
+        text(value)
+            .size(TS.body)
+            .color(sunken_ink(look))
+            .wrapping(iced::widget::text::Wrapping::Word)
+            .boxed(),
+    )
+}
+
+/// Decimals a length reads with (mockup rows 95 and 98: "0.200 mm").
+const MM_DECIMALS: usize = 3;
+/// Decimals an angle reads with (mockup row 98: "Start 0.0 End 90.0").
+const DEGREE_DECIMALS: usize = 1;
+
+/// `value` to a fixed `decimals`; a value that rounds to zero never reads
+/// with a minus sign.
+fn fixed(value: f64, decimals: usize) -> String {
+    let text = format!("{value:.decimals$}");
+    match text.strip_prefix('-') {
+        Some(rest) if rest.chars().all(|c| c == '0' || c == '.') => rest.to_string(),
+        _ => text,
+    }
+}
+
+/// A length in mm as the track and arc panels show it: "0.200".
+pub(super) fn fixed_mm(value: f64) -> String {
+    fixed(value, MM_DECIMALS)
+}
+
+/// An angle in degrees as the arc panel shows it: "90.0".
+pub(super) fn fixed_degrees(value: f64) -> String {
+    fixed(value, DEGREE_DECIMALS)
+}
+
+/// A length in mm to three decimals, "N/A" when `None`.
 pub(super) fn mm_or_na(look: Look<'_>, value: Option<f64>) -> Localized {
     match value {
-        Some(v) => t!(look.ctx.i18n, signex_i18n::ids::PCB_PRIM_MM, "value" => format_number(v)),
+        Some(v) => t!(look.ctx.i18n, signex_i18n::ids::PCB_PRIM_MM, "value" => fixed_mm(v)),
         None => look.t(signex_i18n::ids::PCB_PRIM_NOT_APPLICABLE),
     }
 }
@@ -188,17 +314,54 @@ pub(super) fn field<'a>(
     unit: Option<Localized>,
     look: Look<'a>,
 ) -> Element<'a, PanelMsg> {
+    let input = input(common, field, value, look).style(form_look::text_input_style);
+    match unit {
+        Some(unit) => row![input, text(unit).size(TS.dense).color(look.muted)]
+            .spacing(SP.s)
+            .align_y(iced::Alignment::Center)
+            .boxed(),
+        None => input.boxed(),
+    }
+}
+
+/// The face a value input reads in when it is not the default: italics
+/// while it reads "Mixed".
+pub(super) fn input_font(is_mixed: bool) -> Option<iced::Font> {
+    is_mixed.then(|| iced::Font {
+        style: iced::font::Style::Italic,
+        ..crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT)
+    })
+}
+
+/// The text input of `field`, unstyled: the draft while one is typed, else
+/// `value`. A value the selected items do not share reads "Mixed" in
+/// italics. It sends what is typed and Enter while the selection is
+/// editable.
+pub(super) fn input<'a>(
+    common: &PrimitiveCommon,
+    field: PrimitiveField,
+    value: Option<String>,
+    look: Look<'a>,
+) -> iced::widget::TextInput<'a, PanelMsg> {
     let shown = common
         .drafts
         .get(&field)
         .cloned()
         .or(value)
         .unwrap_or_default();
-    let mut input = text_input(UserText::new(String::new()), shown)
+    let is_mixed = shown.is_empty() && common.target.items.len() > 1;
+    let placeholder = if is_mixed {
+        Label::from(look.t(signex_i18n::ids::PCB_PRIM_MIXED))
+    } else {
+        Label::from(UserText::new(String::new()))
+    };
+    let mut input = text_input(placeholder, shown)
         .size(TS.body)
         .padding(SP.s)
-        .style(form_look::text_input_style)
         .width(Length::Fill);
+    if let Some(font) = input_font(is_mixed) {
+        input = input.font(font);
+    }
     if common.target.is_placement() && super::is_placement_focus(field) {
         input = input.id(super::PLACEMENT_INPUT_ID.clone());
     }
@@ -218,13 +381,7 @@ pub(super) fn field<'a>(
             })
             .on_submit(PanelMsg::PcbPrimitive(submitted));
     }
-    match unit {
-        Some(unit) => row![input, text(unit).size(TS.dense).color(look.muted)]
-            .spacing(SP.s)
-            .align_y(iced::Alignment::Center)
-            .boxed(),
-        None => input.boxed(),
-    }
+    input
 }
 
 /// A length field in mm.
@@ -242,8 +399,12 @@ pub(super) fn pair<'a>(
     a: Element<'a, PanelMsg>,
     b: Element<'a, PanelMsg>,
 ) -> Element<'a, PanelMsg> {
-    row![a, b].spacing(SP.s).boxed()
+    crate::panels::element_properties::rows::pair_line(a, b, MM_FIELD_MIN)
 }
+
+/// Narrowest an mm field gets beside its partner: its padding, the unit
+/// after it and a six-character value. Below it the pair stacks.
+const MM_FIELD_MIN: f32 = 3.0 * SP.s + TS.dense * 1.6 + TS.body * 3.75;
 
 /// A dropdown over `options`; blank when the selection does not share a
 /// value, inert when it cannot be edited.
@@ -313,45 +474,12 @@ pub(super) fn with_tip<'a>(
 ) -> Element<'a, PanelMsg> {
     tooltip(
         content,
-        container(text(look.t(tip)).size(TS.body)).padding([SP.xs, SP.s]),
+        container(text(look.t(tip)).size(TS.body))
+            .padding([SP.xs, SP.s])
+            .style(crate::styles::context_menu(look.tokens())),
         iced::widget::tooltip::Position::Bottom,
     )
-    .style(crate::styles::context_menu(look.tokens()))
     .boxed()
-}
-
-/// Option tiles where `active` is chosen; inert, with `tip`, because the
-/// board stores only one of the options.
-pub(super) fn fixed_tiles<'a>(
-    look: Look<'a>,
-    options: &[MessageId],
-    active: usize,
-    tip: MessageId,
-) -> Element<'a, PanelMsg> {
-    let mut tiles = row![].spacing(SP.xs);
-    for (i, id) in options.iter().enumerate() {
-        tiles = tiles.push(
-            button(text(look.t(*id)).size(TS.body))
-                .padding([SP.xs, SP.s])
-                .style(form_look::option_tile(i == active)),
-        );
-    }
-    with_tip(look, tiles.boxed(), tip)
-}
-
-/// A disabled checkbox with its label and `tip`.
-pub(super) fn fixed_checkbox<'a>(
-    look: Look<'a>,
-    label: MessageId,
-    checked: bool,
-    tip: MessageId,
-) -> Element<'a, PanelMsg> {
-    let check = checkbox::<PanelMsg, Theme, iced::Renderer>(checked)
-        .labelled(look.t(label))
-        .size(TS.body)
-        .text_size(TS.body)
-        .style(form_look::checkbox_style);
-    with_tip(look, check.boxed(), tip)
 }
 
 /// A checkbox with its label, ticked when `checked` is `Some(true)`; it
@@ -402,57 +530,17 @@ pub(super) fn fixed_value<'a>(
     with_tip(look, boxed.boxed(), tip)
 }
 
-/// The lock toggle beside a location, disabled with `tip`.
-pub(super) fn lock<'a>(look: Look<'a>, locked: bool, tip: MessageId) -> Element<'a, PanelMsg> {
-    fixed_checkbox(look, signex_i18n::ids::PCB_PRIM_LOCK, locked, tip)
-}
-
-/// The Testpoint section: Fabrication and Assembly, top and bottom, all
-/// disabled until the board stores them.
-pub(super) fn testpoint_section<'a>(
-    look: Look<'a>,
-    common: &PrimitiveCommon,
-) -> Option<Element<'a, PanelMsg>> {
-    use signex_i18n::ids;
-    let tip = ids::PCB_PRIM_TESTPOINT_UNSUPPORTED;
-    let mut s = Section::new(look, ids::PCB_PRIM_TESTPOINT);
-    for kind in [ids::PCB_PRIM_FABRICATION, ids::PCB_PRIM_ASSEMBLY] {
-        let sides = row![
-            fixed_checkbox(look, ids::PCB_PRIM_TOP, false, tip),
-            fixed_checkbox(look, ids::PCB_PRIM_BOTTOM, false, tip),
-        ]
-        .spacing(SP.m);
-        s.push(common, kind, labelled(look, kind, sides.boxed()));
-    }
-    s.finish()
-}
-
-/// The Template and Library rows, disabled until templates exist.
-pub(super) fn template_rows<'a>(look: Look<'a>, common: &PrimitiveCommon, s: &mut Section<'a>) {
-    use signex_i18n::ids;
-    let tip = ids::PCB_PRIM_TEMPLATE_UNSUPPORTED;
-    s.push(
-        common,
-        ids::PCB_PRIM_TEMPLATE,
-        labelled(
-            look,
-            ids::PCB_PRIM_TEMPLATE,
-            fixed_value(look, look.t(ids::PCB_PRIM_NONE), tip),
-        ),
-    );
-    s.push(
-        common,
-        ids::PCB_PRIM_LIBRARY,
-        labelled(
-            look,
-            ids::PCB_PRIM_LIBRARY,
-            fixed_value(look, look.t(ids::PCB_PRIM_LIBRARY_LOCAL), tip),
-        ),
-    );
+/// The Net row: its dropdown and pick button.
+pub(super) fn net_row<'a>(look: Look<'a>, common: &'a PrimitiveCommon) -> Element<'a, PanelMsg> {
+    labelled(
+        look,
+        signex_i18n::ids::PCB_PRIM_NET,
+        net_value(look, common),
+    )
 }
 
 /// The Net dropdown and its pick button.
-pub(super) fn net_row<'a>(look: Look<'a>, common: &'a PrimitiveCommon) -> Element<'a, PanelMsg> {
+pub(super) fn net_value<'a>(look: Look<'a>, common: &'a PrimitiveCommon) -> Element<'a, PanelMsg> {
     use signex_i18n::ids;
     let target = common.target.clone();
     let list = dropdown(common, &common.nets, common.net.clone(), move |choice| {
@@ -473,19 +561,30 @@ pub(super) fn net_row<'a>(look: Look<'a>, common: &'a PrimitiveCommon) -> Elemen
         }));
     }
     let pick = with_tip(look, pick.boxed(), ids::PCB_PRIM_PICK_NET);
-    labelled(
-        look,
-        ids::PCB_PRIM_NET,
-        row![container(list).width(Length::Fill), pick]
-            .spacing(SP.s)
-            .align_y(iced::Alignment::Center)
-            .boxed(),
-    )
+    row![container(list).width(Length::Fill), pick]
+        .spacing(SP.s)
+        .align_y(iced::Alignment::Center)
+        .boxed()
 }
 
 /// The Layer row of an arc, string or dimension (#2373): its colour chip
 /// and a dropdown of the layers it can move to.
 pub(super) fn any_layer_row<'a>(
+    look: Look<'a>,
+    common: &'a PrimitiveCommon,
+    layers: &'a [super::AreaLayerChoice],
+    layer: Option<&'a super::AreaLayerChoice>,
+) -> Element<'a, PanelMsg> {
+    labelled(
+        look,
+        signex_i18n::ids::PCB_PRIM_LAYER,
+        any_layer_value(look, common, layers, layer),
+    )
+}
+
+/// The colour chip and Layer dropdown of an arc, string, dimension or
+/// drawing.
+pub(super) fn any_layer_value<'a>(
     look: Look<'a>,
     common: &'a PrimitiveCommon,
     layers: &'a [super::AreaLayerChoice],
@@ -511,22 +610,8 @@ pub(super) fn any_layer_row<'a>(
             ))
         },
     );
-    labelled(
-        look,
-        signex_i18n::ids::PCB_PRIM_LAYER,
-        row![swatch, container(list).width(Length::Fill)]
-            .spacing(SP.s)
-            .align_y(iced::Alignment::Center)
-            .boxed(),
-    )
-}
-
-/// A text field: the draft while one is typed, else `value`.
-pub(super) fn text_field<'a>(
-    common: &PrimitiveCommon,
-    id: PrimitiveField,
-    value: Option<&str>,
-    look: Look<'a>,
-) -> Element<'a, PanelMsg> {
-    field(common, id, value.map(str::to_string), None, look)
+    row![swatch, container(list).width(Length::Fill)]
+        .spacing(SP.s)
+        .align_y(iced::Alignment::Center)
+        .boxed()
 }

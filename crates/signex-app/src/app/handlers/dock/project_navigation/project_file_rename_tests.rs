@@ -126,14 +126,16 @@ fn a_project_closed_while_the_file_moves_is_reported_not_rekeyed() {
 
 /// Cancel the project rename, then open Rename on a sheet (another file).
 fn reopen_dialog_for_another_file(fx: &mut Fixture, other: &Path) {
-    fx.app.ui_state.rename_dialog = Some(crate::app::RenameDialogState {
+    fx.app.ui_state.rename_dialog = Some(Box::new(crate::app::RenameDialogState {
         project_id: None,
         target_path: other.to_path_buf(),
         tree_path: vec![0],
         buffer: "half_typed".to_string(),
         error: None,
         is_project_rename: false,
-    });
+        placing_symbols: Vec::new(),
+        name_clash: None,
+    }));
 }
 
 #[test]

@@ -1,141 +1,199 @@
-//! Page-setup controls of the PDF export modal: size / orientation / scale
-//! in a toolbar row on the Preview tab, margins in a Settings-tab section.
+//! The Page Setup section of the Export PDF dialog: Size, Orientation,
+//! Scale and the four margins as two rows of two, in mm from the page edge.
 //! Pure views — every edit is a `PrintPreviewMsg` the handlers validate.
 
+use iced::Widget as _;
+use iced::widget::{Space, column, pick_list, row};
+use signex_i18n::{ids, t};
 use signex_output::{MarginEdge, PageSize, PageSizeKind, PdfScale, PdfScaleMode};
+use signex_types::schematic::SheetOrientation;
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
-
-use iced::Widget;
+use signex_widgets::{segmented, text};
 
 use super::super::*;
+use super::form::{KEY_GAP, KEY_W, Look, NUM_W, SP, TS, caption, form_row, num_field, unit};
+use crate::app::state::PreviewState;
+use crate::choice::{Choice, chosen};
 
-/// Default type / spacing scales; equal to the old literals at the default size.
-const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
-
-/// Body text size of the modal's compact controls.
-const FIELD_TEXT: f32 = crate::styles::TypeScale::DEFAULT.body;
-/// Numeric field width, in multiples of the text size (fits `5080.00`).
-const FIELD_WIDTH_EM: f32 = 7.0;
+/// Width of a margin's edge name in the two-by-two grid.
+const EDGE_W: f32 = 40.0;
 
 impl Signex {
-    fn pdf_numeric_field(
-        &self,
-        value: &str,
-        on_input: impl Fn(String) -> PrintPreviewMsg + 'static,
-    ) -> Element<'static, Message> {
-        signex_widgets::text_input(signex_i18n::UserText::new(String::new()), value.to_owned())
-            .on_input(move |v| Message::PrintPreview(on_input(v)))
-            .padding([SP.s, SP.m])
-            .size(FIELD_TEXT + 1.0)
-            .width(FIELD_TEXT * FIELD_WIDTH_EM)
-            .boxed()
-    }
-
-    /// Preview-tab row: page size, orientation, Custom dimensions, scale.
-    pub(in crate::app::view) fn view_pdf_page_controls(
-        &self,
-        preview: &crate::app::state::PreviewState,
-    ) -> Element<'static, Message> {
-        use iced::widget::{pick_list, row};
-        use signex_i18n::{ids, t};
-        use signex_widgets::{raw, text};
+    /// The Page Setup section body.
+    pub(super) fn view_pdf_page_setup<'a>(
+        &'a self,
+        preview: &'a PreviewState,
+    ) -> Element<'a, Message> {
         let i18n = self.ui_state.i18n.as_ref();
-        let tokens = &self.document_state.panel_ctx.tokens;
-        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let look = Look::of(&self.document_state.panel_ctx.tokens);
         let options = &preview.pdf_options;
         let inputs = &preview.page_setup;
-
         let current_size = options.page_size;
         let orientation = options.orientation;
+        let is_custom = matches!(current_size, PageSize::Custom { .. });
+
+        let sizes = Choice::named(&PageSizeKind::ALL, page_size_label, i18n);
         let size_picker = pick_list(
-            Some(current_size.kind()),
-            PageSizeKind::ALL.to_vec(),
-            |kind: &PageSizeKind| kind.to_string(),
+            chosen(&sizes, &current_size.kind()),
+            sizes,
+            |c: &Choice<PageSizeKind>| c.label.clone(),
         )
         .graphite()
-        .on_select(move |kind: PageSizeKind| {
+        .text_size(TS.body)
+        .width(Length::Fill)
+        .on_select(move |c: Choice<PageSizeKind>| {
             Message::PrintPreview(PrintPreviewMsg::SetPageSize(
-                kind.select(current_size, orientation),
+                c.value.select(current_size, orientation),
             ))
         });
+
         // A Custom page is exactly the width and height entered, so its
-        // orientation is derived from them and shown, not picked.
-        let orientation_control: Element<'static, Message> =
-            if matches!(current_size, PageSize::Custom { .. }) {
-                // raw: the orientation's name comes from signex-types (#2060).
-                text(raw(orientation.to_string()))
-                    .size(FIELD_TEXT)
-                    .color(text_muted)
-                    .boxed()
-            } else {
-                pick_list(
-                    Some(orientation),
-                    vec![
-                        signex_types::schematic::SheetOrientation::Portrait,
-                        signex_types::schematic::SheetOrientation::Landscape,
-                    ],
-                    |o: &signex_types::schematic::SheetOrientation| o.to_string(),
-                )
-                .graphite()
-                .on_select(|o| Message::PrintPreview(PrintPreviewMsg::SetOrientation(o)))
+        // orientation follows from them and is shown, not picked.
+        let orientation_label = |o: SheetOrientation| match o {
+            SheetOrientation::Portrait => t!(i18n, ids::PDF_ORIENTATION_PORTRAIT),
+            SheetOrientation::Landscape => t!(i18n, ids::PDF_ORIENTATION_LANDSCAPE),
+        };
+        let orientation_control: Element<'a, Message> = if is_custom {
+            text(orientation_label(orientation))
+                .size(TS.body)
+                .color(look.ink3)
                 .boxed()
-            };
+        } else {
+            segmented(
+                [SheetOrientation::Portrait, SheetOrientation::Landscape]
+                    .map(|o| (o, signex_widgets::Label::from(orientation_label(o)))),
+                orientation,
+                look.segmented(),
+                |o| Message::PrintPreview(PrintPreviewMsg::SetOrientation(o)),
+            )
+        };
 
-        let mut controls = row![
-            text(t!(i18n, ids::PDF_PAGE))
-                .size(FIELD_TEXT)
-                .color(text_muted)
-                .boxed(),
-            size_picker.boxed(),
-            orientation_control,
-        ]
-        .spacing(SP.m)
-        .align_y(iced::Alignment::Center);
-
-        if matches!(current_size, PageSize::Custom { .. }) {
-            controls = controls.push(
-                text(t!(i18n, ids::PDF_WIDTH_SHORT))
-                    .size(FIELD_TEXT)
-                    .color(text_muted)
-                    .boxed(),
-            );
-            controls = controls.push(
-                self.pdf_numeric_field(&inputs.custom_width, PrintPreviewMsg::SetCustomWidth),
-            );
-            controls = controls.push(
-                text(t!(i18n, ids::PDF_HEIGHT_SHORT))
-                    .size(FIELD_TEXT)
-                    .color(text_muted)
-                    .boxed(),
-            );
-            controls = controls.push(
-                self.pdf_numeric_field(&inputs.custom_height, PrintPreviewMsg::SetCustomHeight),
-            );
-            // raw: a unit symbol, the same in every language.
-            controls = controls.push(text(raw("mm")).size(FIELD_TEXT).color(text_muted).boxed());
-        }
-
+        let modes = Choice::named(&PdfScaleMode::ALL, scale_mode_label, i18n);
         let scale_picker = pick_list(
-            Some(options.scale.mode()),
-            PdfScaleMode::ALL.to_vec(),
-            |m: &PdfScaleMode| m.to_string(),
+            chosen(&modes, &options.scale.mode()),
+            modes,
+            |c: &Choice<PdfScaleMode>| c.label.clone(),
         )
         .graphite()
-        .on_select(|m| Message::PrintPreview(PrintPreviewMsg::SetScaleMode(m)));
-        controls = controls.push(
-            text(t!(i18n, ids::PDF_SCALE))
-                .size(FIELD_TEXT)
-                .color(text_muted)
-                .boxed(),
-        );
-        controls = controls.push(scale_picker.boxed());
-        if matches!(options.scale, PdfScale::Percent(_)) {
-            controls = controls
-                .push(self.pdf_numeric_field(&inputs.percent, PrintPreviewMsg::SetScalePercent));
-            // raw: the percent sign, a symbol.
-            controls = controls.push(text(raw("%")).size(FIELD_TEXT).color(text_muted).boxed());
+        .text_size(TS.body)
+        .width(Length::Fill)
+        .on_select(|c: Choice<PdfScaleMode>| {
+            Message::PrintPreview(PrintPreviewMsg::SetScaleMode(c.value))
+        });
+        // The percent field takes input only for a Percent scale.
+        let percent_input: Option<fn(String) -> PrintPreviewMsg> =
+            matches!(options.scale, PdfScale::Percent(_))
+                .then_some(PrintPreviewMsg::SetScalePercent);
+        let scale = row![
+            scale_picker,
+            num_field(&inputs.percent, Length::Fixed(NUM_W), percent_input),
+            unit(t!(i18n, ids::PDF_UNIT_PERCENT), &look),
+        ]
+        .spacing(SP.s)
+        .align_y(iced::Alignment::Center);
+
+        let mut rows = column![form_row(
+            t!(i18n, ids::PDF_SIZE),
+            &look,
+            size_picker.boxed()
+        )]
+        .spacing(SP.s + SP.xs)
+        .width(Length::Fill);
+        if is_custom {
+            let custom = row![
+                text(t!(i18n, ids::PDF_WIDTH_SHORT))
+                    .size(TS.body)
+                    .color(look.ink3),
+                num_field(
+                    &inputs.custom_width,
+                    Length::Fill,
+                    Some(PrintPreviewMsg::SetCustomWidth)
+                ),
+                text(t!(i18n, ids::PDF_HEIGHT_SHORT))
+                    .size(TS.body)
+                    .color(look.ink3),
+                num_field(
+                    &inputs.custom_height,
+                    Length::Fill,
+                    Some(PrintPreviewMsg::SetCustomHeight)
+                ),
+                unit(t!(i18n, ids::PDF_UNIT_MM), &look),
+            ]
+            .spacing(SP.s)
+            .align_y(iced::Alignment::Center);
+            rows = rows.push(form_row(
+                t!(i18n, ids::PDF_CUSTOM_SIZE),
+                &look,
+                custom.boxed(),
+            ));
         }
-        controls.boxed()
+        // The margins caption sits under the fields, past the label column.
+        let margins_help = row![
+            Space::new().width(KEY_W),
+            caption(t!(i18n, ids::PDF_MARGINS_HELP), &look),
+        ]
+        .spacing(KEY_GAP);
+        rows = rows
+            .push(form_row(
+                t!(i18n, ids::PDF_ORIENTATION),
+                &look,
+                orientation_control,
+            ))
+            .push(form_row(t!(i18n, ids::PDF_SCALE), &look, scale.boxed()))
+            .push(form_row(
+                t!(i18n, ids::PDF_MARGINS),
+                &look,
+                self.view_pdf_margins(preview, &look),
+            ))
+            .push(margins_help.boxed())
+            .push(self.view_pdf_page_setup_notice(preview));
+        rows.boxed()
+    }
+
+    /// The margins as two rows of two: Top / Bottom, Left / Right.
+    fn view_pdf_margins<'a>(
+        &'a self,
+        preview: &'a PreviewState,
+        look: &Look,
+    ) -> Element<'a, Message> {
+        let i18n = self.ui_state.i18n.as_ref();
+        let ink4 = look.ink4;
+        let edge = |edge: MarginEdge| -> Element<'a, Message> {
+            let name = match edge {
+                MarginEdge::Top => ids::PDF_MARGIN_TOP,
+                MarginEdge::Bottom => ids::PDF_MARGIN_BOTTOM,
+                MarginEdge::Left => ids::PDF_MARGIN_LEFT,
+                MarginEdge::Right => ids::PDF_MARGIN_RIGHT,
+            };
+            let field = signex_widgets::text_input(
+                signex_i18n::UserText::new(String::new()),
+                preview.page_setup.margin_text(edge).to_owned(),
+            )
+            .padding([SP.s, SP.m])
+            .size(TS.body)
+            .width(Length::Fill)
+            .style(crate::panels::form_look::text_input_style)
+            .on_input(move |v| Message::PrintPreview(PrintPreviewMsg::SetMargin(edge, v)));
+            row![
+                text(t!(i18n, name))
+                    .size(TS.caption)
+                    .color(ink4)
+                    .width(EDGE_W)
+                    .wrapping(iced::widget::text::Wrapping::None)
+                    .ellipsis(iced::widget::text::Ellipsis::End),
+                field,
+            ]
+            .spacing(SP.xs)
+            .align_y(iced::Alignment::Center)
+            .width(Length::FillPortion(1))
+            .boxed()
+        };
+        column![
+            row![edge(MarginEdge::Top), edge(MarginEdge::Bottom)].spacing(SP.m),
+            row![edge(MarginEdge::Left), edge(MarginEdge::Right)].spacing(SP.m),
+        ]
+        .spacing(SP.xs)
+        .boxed()
     }
 
     /// Why the last page-setup edit was rejected (theme error colour) or
@@ -143,7 +201,7 @@ impl Signex {
     /// last edit applied cleanly.
     pub(in crate::app::view) fn view_pdf_page_setup_notice(
         &self,
-        preview: &crate::app::state::PreviewState,
+        preview: &PreviewState,
     ) -> Element<'static, Message> {
         match preview.page_setup.notice() {
             Some(message) => {
@@ -154,64 +212,44 @@ impl Signex {
                     tokens.error
                 };
                 // raw: the page-setup notice is worded by its validator (#2061).
-                signex_widgets::text(signex_widgets::raw(message.to_string()))
-                    .size(FIELD_TEXT)
+                text(signex_widgets::raw(message.to_string()))
+                    .size(TS.body)
                     .color(crate::styles::ti(colour))
                     .boxed()
             }
-            None => iced::widget::Space::new().height(0).boxed(),
+            None => Space::new().height(0).boxed(),
         }
     }
+}
 
-    /// Settings-tab "Page Setup" section: the four margins in mm.
-    pub(in crate::app::view) fn view_pdf_page_setup_section(
-        &self,
-        preview: &crate::app::state::PreviewState,
-    ) -> Element<'_, Message> {
-        use iced::widget::{Space, column, container, row};
-        use signex_i18n::{ids, t};
-        use signex_widgets::{raw, text};
-        let i18n = self.ui_state.i18n.as_ref();
-        let tokens = &self.document_state.panel_ctx.tokens;
-        let text_muted = crate::styles::ti(tokens.text_secondary);
+/// The catalog name of a page-size picker entry. The ISO sizes go by their
+/// bare names ("A4"), as mockup row 111 shows them.
+pub(super) fn page_size_label(kind: PageSizeKind) -> signex_i18n::MessageId {
+    match kind {
+        PageSizeKind::IsoA0 => ids::PDF_PAPER_SIZE_A0,
+        PageSizeKind::IsoA1 => ids::PDF_PAPER_SIZE_A1,
+        PageSizeKind::IsoA2 => ids::PDF_PAPER_SIZE_A2,
+        PageSizeKind::IsoA3 => ids::PDF_PAPER_SIZE_A3,
+        PageSizeKind::IsoA4 => ids::PDF_PAPER_SIZE_A4,
+        PageSizeKind::IsoA5 => ids::PDF_PAPER_SIZE_A5,
+        PageSizeKind::IsoB5 => ids::PDF_PAPER_SIZE_B5,
+        PageSizeKind::AnsiA => ids::PDF_PAGE_SIZE_ANSI_A,
+        PageSizeKind::AnsiB => ids::PDF_PAGE_SIZE_ANSI_B,
+        PageSizeKind::AnsiC => ids::PDF_PAGE_SIZE_ANSI_C,
+        PageSizeKind::AnsiD => ids::PDF_PAGE_SIZE_ANSI_D,
+        PageSizeKind::AnsiE => ids::PDF_PAGE_SIZE_ANSI_E,
+        PageSizeKind::UsLetter => ids::PDF_PAGE_SIZE_US_LETTER,
+        PageSizeKind::UsLegal => ids::PDF_PAGE_SIZE_US_LEGAL,
+        PageSizeKind::Tabloid => ids::PDF_PAGE_SIZE_TABLOID,
+        PageSizeKind::Custom => ids::PROPERTIES_FORMAT_CUSTOM,
+    }
+}
 
-        let mut margins = row![].spacing(SP.m).align_y(iced::Alignment::Center);
-        for edge in MarginEdge::ALL {
-            margins = margins.push(
-                // raw: the edge's name comes from signex-output (#2060).
-                text(raw(edge.to_string()))
-                    .size(FIELD_TEXT)
-                    .color(text_muted)
-                    .boxed(),
-            );
-            margins = margins.push(
-                self.pdf_numeric_field(preview.page_setup.margin_text(edge), move |v| {
-                    PrintPreviewMsg::SetMargin(edge, v)
-                }),
-            );
-        }
-        // raw: a unit symbol, the same in every language.
-        margins = margins.push(text(raw("mm")).size(FIELD_TEXT).color(text_muted).boxed());
-
-        column![
-            self.pdf_section_title(ids::PDF_SECTION_PAGE_SETUP),
-            container(
-                column![
-                    text(t!(i18n, ids::PDF_MARGINS_HELP))
-                        .size(FIELD_TEXT)
-                        .color(text_muted)
-                        .boxed(),
-                    Space::new().height(6).boxed(),
-                    margins.boxed(),
-                    Space::new().height(6).boxed(),
-                    self.view_pdf_page_setup_notice(preview),
-                ]
-                .spacing(SP.xs)
-                .boxed(),
-            )
-            .padding([SP.m, SP.l])
-            .boxed(),
-        ]
-        .boxed()
+/// The catalog name of a scale picker entry.
+pub(super) fn scale_mode_label(mode: PdfScaleMode) -> signex_i18n::MessageId {
+    match mode {
+        PdfScaleMode::FitToPage => ids::PDF_SCALE_FIT,
+        PdfScaleMode::OneToOne => ids::PDF_SCALE_ONE_TO_ONE,
+        PdfScaleMode::Percent => ids::PDF_SCALE_MODE_PERCENT,
     }
 }

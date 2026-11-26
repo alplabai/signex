@@ -26,7 +26,6 @@ fn app_with_sheet() -> (Signex, iced::window::Id) {
     app.document_state.tabs.push(TabInfo {
         title: "dock_layout".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -107,5 +106,53 @@ fn a_crowded_side_dock_shows_every_tab_inside_the_dock() {
             "the {name} tab runs past the dock edge: {:?}",
             tab.bounds
         );
+    }
+}
+
+/// Mockup row 119: the Library panel in the left dock draws its kind chips inside the
+/// dock; Open Library… is the title bar's folder button, not a footer row.
+#[test]
+fn the_library_panel_draws_its_chips_and_no_open_library_footer() {
+    let (mut app, main) = app_with_sheet();
+    app.document_state
+        .dock
+        .show_panel_at(PanelPosition::Left, PanelKind::Library);
+    assert!(app.document_state.dock.is_frontmost(PanelKind::Library));
+    let texts = crate::layout_probe::lay_out_texts(app.view(main), WINDOW);
+    for chip in ["Symbols", "Footprints", "Parts"] {
+        assert!(
+            texts
+                .iter()
+                .any(|t| t.text == chip && t.bounds.x + t.bounds.width <= LEFT_W + 0.5),
+            "no {chip} chip inside the left dock"
+        );
+    }
+    assert!(
+        !texts.iter().any(|t| t.text == "+ Open Library…"),
+        "the footer row is gone"
+    );
+}
+
+/// A detached Library panel window (and its SCH Library / Footprint Library
+/// aliases) draws the real panel with its kind chips, not the planned card.
+#[test]
+fn a_detached_library_window_draws_the_kind_chips() {
+    for kind in [
+        PanelKind::Library,
+        PanelKind::SchLibrary,
+        PanelKind::FootprintLibrary,
+    ] {
+        let (mut app, _main) = app_with_sheet();
+        let detached = iced::window::Id::unique();
+        app.ui_state
+            .windows
+            .insert(detached, crate::app::state::WindowKind::DetachedPanel(kind));
+        let texts = crate::layout_probe::lay_out_texts(app.view(detached), WINDOW);
+        for chip in ["Symbols", "Footprints", "Parts"] {
+            assert!(
+                texts.iter().any(|t| t.text == chip),
+                "no {chip} chip in the detached {kind:?} window"
+            );
+        }
     }
 }

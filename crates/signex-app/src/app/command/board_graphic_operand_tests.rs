@@ -93,10 +93,12 @@ fn an_agent_is_told_why_a_drawing_is_refused() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_with_board(dir.path());
     let document = format!("document={}", path.display());
+    // Copper was refused here; since Caner's 2026-11-24 decision (#2883) a
+    // drawing goes on copper and only a keep-out refuses it.
     for (operands, why) in [
         (
-            vec!["kind=line", "start=1,1", "end=5,1", "layer=TopCopper"],
-            "non-copper",
+            vec!["kind=line", "start=1,1", "end=5,1", "layer=TopKeepout"],
+            "but a keep-out",
         ),
         (
             vec!["kind=spline", "start=1,1", "end=5,1"],
@@ -112,7 +114,7 @@ fn an_agent_is_told_why_a_drawing_is_refused() {
         all.extend(operands);
         let outcome = headless(&mut app, "add_board_graphic", &all);
         assert!(
-            matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains(why)),
+            matches!(&outcome, CommandOutcome::Disabled { reason } if signex_i18n::RenderTranslatable::render_en_us(reason).contains(why)),
             "{why}: {outcome:?}"
         );
     }
@@ -151,13 +153,14 @@ fn an_agent_sets_one_field_of_a_drawing_in_one_step() {
     assert_eq!(board.graphics[0].layer, "BottomFab");
 
     for (field, value, why) in [
-        ("layer", "TopCopper", "non-copper"),
+        // Was TopCopper; copper takes a drawing since #2883.
+        ("layer", "TopKeepout", "but a keep-out"),
         ("radius", "0", "above zero"),
         ("colour", "red", "not a drawing field"),
     ] {
         let outcome = set(&mut app, field, value);
         assert!(
-            matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains(why)),
+            matches!(&outcome, CommandOutcome::Disabled { reason } if signex_i18n::RenderTranslatable::render_en_us(reason).contains(why)),
             "{field}: {outcome:?}"
         );
     }

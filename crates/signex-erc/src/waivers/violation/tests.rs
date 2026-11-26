@@ -102,7 +102,7 @@ fn the_fingerprint_does_not_depend_on_field_map_order() {
 }
 
 #[test]
-fn reason_and_author_are_required_and_incomplete_waivers_hide_nothing() {
+fn the_reason_is_required_and_incomplete_waivers_hide_nothing() {
     let id = Uuid::now_v7();
     let sheet = sheet_with(part(id));
     let v = finding_on(id, RuleKind::UnusedPin);
@@ -112,12 +112,27 @@ fn reason_and_author_are_required_and_incomplete_waivers_hide_nothing() {
         Err(WaiverError::MissingReason)
     );
     assert_eq!(
-        new_waiver(&key, "", "why", " ", ""),
-        Err(WaiverError::MissingAuthor)
+        new_waiver(&key, "", "why", " ", "").map(|w| w.author),
+        Ok(String::new())
     );
     let mut hand_edited = waive(&v, &sheet);
     hand_edited.reason.clear();
     assert_eq!(split(v, &sheet, &[hand_edited]).kept.len(), 1);
+}
+
+/// Mockup row 88: with no git identity the author is stored empty, and the
+/// waiver still hides its finding.
+#[test]
+fn a_waiver_without_an_author_is_complete_and_hides_its_finding() {
+    let id = Uuid::now_v7();
+    let sheet = sheet_with(part(id));
+    let v = finding_on(id, RuleKind::UnusedPin);
+    let key = waiver_key(&v, &sheet).expect("key");
+    let waiver = new_waiver(&key, &v.message, "test point", "", "2026-11-22").expect("valid");
+    assert_eq!(waiver.author, "");
+    assert!(waiver.is_complete());
+    let out = split(v, &sheet, &[waiver]);
+    assert_eq!((out.kept.len(), out.waived.len()), (0, 1));
 }
 
 #[test]
@@ -464,4 +479,27 @@ fn a_repaired_duplicate_keeps_the_old_waivers_and_gains_copies_under_its_new_id(
         let out = split(net_finding(&[(r1, "R1"), (c1, "C1")]), &sheet(id), &waivers);
         assert_eq!(out.waived.len(), 1, "waived on both sheets");
     }
+}
+
+/// #2656: a net class conflict names two directives; it can be waived, and
+/// the waiver lapses when the overridden directive's class changes.
+#[test]
+fn a_class_conflict_is_waivable_and_lapses_with_the_class() {
+    let sheet = crate::fixtures::class_conflict_sheet();
+    let found: Vec<Violation> = crate::engine::run_all(&crate::ErcContext::from_snapshot(&sheet))
+        .into_iter()
+        .filter(|d| d.rule_kind == RuleKind::NetClassConflict)
+        .map(Violation::from)
+        .collect();
+    assert_eq!(found.len(), 1);
+    let v = found[0].clone();
+    let waivers = vec![waive(&v, &sheet)];
+    assert_eq!(split(v.clone(), &sheet, &waivers).waived.len(), 1);
+
+    let mut reclassed = sheet.clone();
+    reclassed.directives[0] =
+        crate::fixtures::net_blanket(11, Point::new(-1.0, -1.0), Point::new(11.0, 1.0), "OTHER");
+    let out = split(v, &reclassed, &waivers);
+    assert_eq!(out.kept.len(), 1, "the finding is back");
+    assert!(out.lapsed.contains(&0));
 }

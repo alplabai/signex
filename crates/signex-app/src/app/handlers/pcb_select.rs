@@ -8,11 +8,12 @@ use signex_renderer::pcb::{PcbLayerView, PcbSnapshot};
 use signex_types::pcb::PcbBoard;
 
 use crate::app::state::PcbRatsnest;
-use crate::app::{ContextMenuMsg, Message, Signex, TabDocument};
+use crate::app::{ContextMenuMsg, Message, Signex};
 use crate::canvas::CanvasEvent;
 use crate::pcb_canvas::{
     PcbCanvas, PcbCanvasMsg, PcbCarry, PcbSelectionState, board_after_move, board_without,
-    carried_board,
+    board_without_text, carried_board, carried_text_board, followed_arcs, with_arcs_replaced,
+    with_stretched_tracks,
 };
 
 impl Signex {
@@ -45,11 +46,19 @@ impl Signex {
                 tolerance_mm,
                 mode,
             } => {
-                if self.board_measure_clicked(at, tolerance_mm)
-                    || self.pcb_arrange_box_clicked(at)
-                    || self.pcb_guide_place_clicked(at)
-                    || self.board_tool_clicked(at)
-                    || self.pcb_place_clicked(at)
+                if self.board_measure_clicked(at, tolerance_mm) {
+                    return self.close_context_menu_on_press();
+                }
+                if let Some(arranged) = self.pcb_arrange_box_clicked(at) {
+                    return Task::batch([arranged, self.close_context_menu_on_press()]);
+                }
+                if self.pcb_guide_place_clicked(at) || self.pcb_origin_place_clicked(at) {
+                    return self.close_context_menu_on_press();
+                }
+                if let Some(placed) = self.board_tool_click(at) {
+                    return Task::batch([placed, self.close_context_menu_on_press()]);
+                }
+                if self.pcb_place_clicked(at)
                     || self.pcb_paste_clicked(at)
                     || self.pcb_move_clicked(at, tolerance_mm)
                     || self.pcb_net_pick_clicked(at, tolerance_mm)
@@ -62,6 +71,20 @@ impl Signex {
                     self.refresh_pcb_highlight();
                 }
                 self.close_context_menu_on_press()
+            }
+            PcbCanvasMsg::DoubleClicked { at, tolerance_mm } => {
+                // The second click lands as a click; a shape with three
+                // corners then closes, as a right-click closes it.
+                let click = PcbCanvasMsg::Clicked {
+                    at,
+                    tolerance_mm,
+                    mode: pcb_geom::ClickMode::Replace,
+                };
+                let task = self.dispatch_pcb_canvas_message(click);
+                if self.close_board_region() {
+                    self.refresh_pcb_highlight();
+                }
+                task
             }
             PcbCanvasMsg::BoxSelected {
                 from,
@@ -81,8 +104,9 @@ impl Signex {
                 from,
                 to,
                 tolerance_mm,
+                leaves_tracks,
             } => {
-                self.pcb_footprints_dragged(from, to, tolerance_mm);
+                self.pcb_footprints_dragged(from, to, tolerance_mm, leaves_tracks);
                 Task::none()
             }
             PcbCanvasMsg::FootprintDropped { from, to } => {
@@ -118,11 +142,14 @@ impl Signex {
         self.interaction_state.pcb_primitive.net_pick = None;
         // And a guide armed by the panel's Place (#2374).
         self.interaction_state.pcb_guide_place = None;
+        // And Edit ▸ Origin ▸ Set waiting for its click (2026-11-18).
+        self.interaction_state.pcb_origin_place = None;
         // And Arrange in Box waiting for its corners (#2409).
         self.interaction_state.pcb_arrange_box = None;
         let carried = self.has_own_pcb_carry();
         if carried {
             self.interaction_state.pcb_carry = None;
+            self.ui_state.command_replay.drop_pending_move();
         }
         if self.interaction_state.pcb_selection.clear() || carried || unlit {
             self.refresh_pcb_highlight();
@@ -150,7 +177,7 @@ impl Signex {
     ) -> Option<R> {
         let docs = &self.document_state;
         let tab = docs.tabs.get(docs.active_tab)?;
-        let board = tab.cached_document.as_ref().and_then(TabDocument::as_pcb)?;
+        let board = docs.tab_board_engine(docs.active_tab)?.board();
         let revision = docs.pcb_revisions.get(&tab.path).copied().unwrap_or(0);
         let selection = &mut self.interaction_state.pcb_selection;
         selection.sync(Some(tab.path.as_path()), revision);
@@ -189,6 +216,12 @@ impl Signex {
     /// Hand the canvas the copper to paint for the current selection, the
     /// preview of a drag or Move, and what a press grabs to drag (#2240).
     pub(crate) fn refresh_pcb_highlight(&mut self) {
+        // A highlight, route, drag or placement that starts or ends changes
+        // the nets the board keeps bright (#2514): the board is drawn again,
+        // and that comes back here with the scene in step.
+        if self.sync_board_net_focus() {
+            return;
+        }
         // The leg on the pointer is routed here, once per change, not per
         // repaint (#2389).
         self.update_router_preview();
@@ -202,32 +235,43 @@ impl Signex {
         // The highlighted net and the Measure ruler (#2403).
         highlight.net = self.board_net_shapes();
         highlight.measure = self.board_measure_line();
-        let ghost = self
-            .pcb_part_ghost(carry.as_ref())
-            .or_else(|| self.board_tool_ghost());
+        highlight.blocked = self.router_blocked_shapes();
+        let part = self.pcb_part_ghost(carry.as_ref());
+        // A route or track run being drawn is drawn whole, never dimmed.
+        let whole = part.is_none() && self.is_routing_board_track();
+        let ghost = part.or_else(|| self.board_tool_ghost());
         // A tool, or a Move, paste or part waiting on the cursor, takes
         // every press as a click: never a drag or a box (#2396).
         let tool_armed = self.own_board_tool().is_some() || self.own_board_measure().is_some();
         let clicks_only = tool_armed || carry.as_ref().is_some_and(PcbCarry::waits_for_clicks);
+        // #2457: the selected rooms, and the one Place ▸ Room is drawing,
+        // stand out on the backdrop.
+        let rooms = self.rooms_overlay();
+        self.interaction_state.pcb_canvas.set_rooms_overlay(rooms);
         let path = self.active_tab_path().unwrap_or_default();
         let view = self.pcb_layer_view(&path);
+        let standard = self.document_state.designator_standard_for(&path);
         let docs = &self.document_state;
         let board = docs
-            .tabs
-            .get(docs.active_tab)
-            .and_then(|tab| tab.cached_document.as_ref())
-            .and_then(TabDocument::as_pcb);
+            .tab_board_engine(docs.active_tab)
+            .map(|engine| engine.board());
         let interaction = &mut self.interaction_state;
         let canvas = &mut interaction.pcb_canvas;
         canvas.set_highlight(highlight);
-        canvas.set_grab(if tool_armed { Vec::new() } else { grab });
+        canvas.set_grab(if tool_armed { Vec::new().into() } else { grab });
         canvas.set_clicks_only(clicks_only);
-        canvas.set_part_ghost(ghost.as_ref());
+        if whole {
+            canvas.set_route_ghost(ghost.as_ref());
+        } else {
+            canvas.set_part_ghost(ghost.as_ref());
+        }
         let ratsnest = view
-            .ratsnest_visible()
+            .ratsnest_drawn()
             .then_some((&interaction.pcb_ratsnest, path.as_path()));
         match board {
-            Some(board) => sync_drag_preview(canvas, board, &view, ratsnest, carry.as_ref()),
+            Some(board) => {
+                sync_drag_preview(canvas, board, &view, standard, ratsnest, carry.as_ref())
+            }
             None => canvas.end_drag_preview(),
         }
         // The Properties panel switches between the board and the selection.
@@ -262,6 +306,7 @@ impl Signex {
             .copied()
             .unwrap_or(0);
         let view = self.pcb_layer_view(path);
+        let standard = self.document_state.designator_standard_for(path);
         let ghost = self
             .interaction_state
             .pcb_carry
@@ -287,58 +332,124 @@ impl Signex {
             let clicks_only = tool_armed || carry.is_some_and(PcbCarry::waits_for_clicks);
             if let Some(canvas) = interaction.pcb_canvases.get_mut(&id) {
                 canvas.set_highlight(highlight);
-                canvas.set_grab(if tool_armed { Vec::new() } else { grab });
+                canvas.set_grab(if tool_armed { Vec::new().into() } else { grab });
                 canvas.set_clicks_only(clicks_only);
                 let own = ghost.as_ref().filter(|(owner, _)| *owner == id);
                 canvas.set_part_ghost(own.map(|(_, snapshot)| snapshot));
                 let ratsnest = view
-                    .ratsnest_visible()
+                    .ratsnest_drawn()
                     .then_some((&interaction.pcb_ratsnest, path));
-                sync_drag_preview(canvas, board, &view, ratsnest, carry);
+                sync_drag_preview(canvas, board, &view, standard, ratsnest, carry);
             }
         }
     }
 }
 
 /// Bring `canvas`'s drag preview in line with `carry` on `board` (#2358):
-/// while the carry is anchored, the board is drawn without the carried
-/// footprints and the tracks that follow their pads, and those are drawn at
-/// its offset; otherwise the whole board. `ratsnest` is the cache and the
-/// board path when the view shows it: during the carry the ratsnest is
-/// drawn with the carried footprints, read off the board as the drop would
-/// leave it, so its lines stay on the carried pads (#2379).
+/// while a carry of objects on the board is anchored, the board is drawn
+/// without them (footprints, vias or one text) and the tracks that follow
+/// them, and those are drawn at its offset; otherwise the whole board.
+/// `ratsnest` is the cache and the board path when the view shows it: during
+/// the carry the ratsnest is drawn with the carried footprints, read off the
+/// board as the drop would leave it, so its lines stay on the carried pads
+/// (#2379). It is computed only when the offset changes.
 fn sync_drag_preview(
     canvas: &mut PcbCanvas,
     board: &PcbBoard,
     view: &PcbLayerView,
+    standard: Option<signex_types::designator::DesignatorStandard>,
     ratsnest: Option<(&PcbRatsnest, &std::path::Path)>,
     carry: Option<&PcbCarry>,
 ) {
-    let live = carry.filter(|c| c.anchor.is_some() && !c.footprints.is_empty());
+    let live = carry.filter(|c| c.anchor.is_some() && c.previews_on_board());
     let Some(carry) = live else {
         canvas.end_drag_preview();
         return;
     };
-    if !canvas.previews_drag_of(&carry.footprints) {
-        // Once per carry: the tracks that follow the carried pads, and the
-        // board without what it carries, with its pour fills.
-        let following = pcb_geom::tracks_on_pads(board, &carry.footprints);
-        let rest = board_without(board, &carry.footprints, &following);
+    if let Some(text) = carry.text {
+        sync_text_drag_preview(canvas, board, view, standard, text, carry.delta);
+        return;
+    }
+    let carried = carry.carried();
+    if !canvas.previews_drag_of(&carried, carry.leaves_tracks) {
+        // Once per carry and per Ctrl switch: the tracks that follow what
+        // is carried (none with Ctrl), and the board without what it
+        // carries, with its pour fills.
+        let following = carry.following(board);
+        let mut rest = board_without(board, &carried, &following);
+        let arcs = carry.following_arcs(board);
+        rest.free
+            .arcs
+            .retain(|arc| !arcs.iter().any(|ends| ends.arc == arc.uuid));
         let fills = pcb_geom::zone_fills(&rest);
-        let base = PcbSnapshot::from_board_with_view(&rest, view).with_zone_fills(&fills);
-        canvas.begin_drag_preview(carry.footprints.clone(), following, base);
+        let mut base = PcbSnapshot::from_board_with_view(&rest, view)
+            .with_designator_standard(standard)
+            .with_zone_fills(&fills);
+        // The board under the carry keeps the nets in focus (#2514).
+        if let Some(shown) = canvas.active_renderer_snapshot() {
+            base.paint = base.paint.with_focus_of(&shown.paint);
+        }
+        canvas.begin_drag_preview(carried.clone(), carry.leaves_tracks, following, base);
     }
     let following = canvas.drag_preview_following().to_vec();
     canvas.move_drag_preview(carry.delta, || {
-        let moved = carried_board(board, &carry.footprints, &following, carry.delta);
-        let snapshot = PcbSnapshot::from_board_with_view(&moved, view);
+        let arcs = followed_arcs(board, &carry.following_arcs(board), carry.delta);
+        // A stretched track bends at its corner as the drop bends it (#2513).
+        let moved = carried_board(board, &carried, &following, carry.delta);
+        let mut moved = with_stretched_tracks(moved, board, carry, &following);
+        moved.free.arcs = arcs.clone();
+        let snapshot = carried_snapshot(&moved, view, standard);
         match ratsnest {
             Some((cache, path)) => {
-                let after = board_after_move(board, &carry.footprints, &following, carry.delta);
+                let after = board_after_move(board, &carried, &following, carry.delta);
+                let after = with_stretched_tracks(after, board, carry, &following);
+                let after = with_arcs_replaced(after, &arcs);
                 let fills = pcb_geom::zone_fills(&after);
                 cache.apply_uncached(path, &after, &fills, snapshot)
             }
             None => snapshot,
         }
     });
+}
+
+/// The preview of one footprint text on the move. A text changes no copper,
+/// so the board drawn keeps its pour fills and ratsnest: only its texts are
+/// read again, once, and no fill or ratsnest is computed.
+fn sync_text_drag_preview(
+    canvas: &mut PcbCanvas,
+    board: &PcbBoard,
+    view: &PcbLayerView,
+    standard: Option<signex_types::designator::DesignatorStandard>,
+    text: (uuid::Uuid, pcb_geom::BoardTextField),
+    delta: signex_types::pcb::Point,
+) {
+    if !canvas.previews_text_drag_of(text) {
+        canvas.end_drag_preview();
+        let without = PcbSnapshot::from_board_with_view(&board_without_text(board, text), view)
+            .with_designator_standard(standard);
+        let base = match canvas.active_renderer_snapshot() {
+            Some(shown) => PcbSnapshot {
+                texts: without.texts,
+                ..shown.clone()
+            },
+            None => without,
+        };
+        canvas.begin_text_drag_preview(text, base);
+    }
+    canvas.move_drag_preview(delta, || {
+        carried_snapshot(&carried_text_board(board, text, delta), view, standard)
+    });
+}
+
+/// What is carried, as `view` shows it: like a ghost, it is never faded by
+/// Show only unrouted, while the board under it stays dimmed.
+fn carried_snapshot(
+    carried: &PcbBoard,
+    view: &PcbLayerView,
+    standard: Option<signex_types::designator::DesignatorStandard>,
+) -> PcbSnapshot {
+    let mut snapshot =
+        PcbSnapshot::from_board_with_view(carried, view).with_designator_standard(standard);
+    snapshot.paint = snapshot.paint.with_board_dimmed(false);
+    snapshot
 }

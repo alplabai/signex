@@ -13,8 +13,8 @@ which `signex-cli` uses through `signex_app::headless::agent_client`.
 
 ## Off by default
 
-Preferences > Editing > "Allow agent connections" (`agent_connections_enabled`
-in `prefs.json`, default `false`). While it is off no socket and no token
+Preferences > System › General > "Allow agent connections"
+(`agent_connections_enabled` in `prefs.json`, default `false`). While it is off no socket and no token
 exist and nothing listens or accepts a connection. The app still lists each
 open project in the registry (below) and holds its lock, so that a headless
 `signex-cli` run does not edit a file open in a window; those entries name no
@@ -81,6 +81,14 @@ Two optional request fields name the client for the agent journals (#2253,
 `allow-path:<dir>`). The app records them, never trusts them: its own checks
 apply on top. The client name is also the `client` of the origin.
 
+One optional field is a precondition (#2495): `"if_revision"`, a whole number.
+The request runs only while the document its `document` argument names is
+still at that revision, the one `read_document` reports. Otherwise it is
+refused (`refused`, with the revision it is at) and nothing runs. A request
+with `if_revision` and no `document` is refused too. The request goes through
+the same path as every other surface's (`docs/EXTENSION_API.md`, "One request
+path").
+
 ## Journals
 
 The app writes the access journal of every open project: a connection
@@ -97,75 +105,128 @@ The session token is never written. See `docs/AGENT_JOURNALS.md`.
 Derived from the command catalog (`allow.rs`), not listed by hand:
 
 - the #2172 queries: `list_documents`, `document_info`, `resolve`, `find_items`,
-  `read_document`, `query_pins`, and the checks `check_erc` and `check_drc`
-  (#2199), each answered once its run lands, like an edit waiting for its
-  reads
-  ([CLI.md](CLI.md), "Checks on demand"), and the Rules manager reads
+  `read_document`, `query_pins`, the checks `check_erc` and `check_drc`
+  (#2199) and `check_requirements` (#2339), each answered once its run lands,
+  like an edit waiting for its reads
+  ([CLI.md](CLI.md), "Checks on demand" and "Requirement checks"), and the Rules manager reads
   `rules_list`, `rules_get`, `rules_effective`, `rules_explain`,
   `rules_conflicts`, `rules_matrix_get` and `rules_preset_diff` (#2398), and
   the board queries `measure_board`,
   `query_board_nets` and `find_similar_items` (#2403), and the board's panel
-  `board_panel` (#2410), and the Project tab's `project_settings`
-  (#1689-#1693);
+  `board_panel` (#2410), the board's layout plan `layout_plan_get` and
+  `layout_plan_status` (#2942), and the Project tab's `project_settings`
+  (#1689-#1693), and the board against the schematic
+  `check_board_against_schematic` (#2462) and the board's counters
+  `board_status` (#2460), each answered once its reads land
+  ([CLI.md](CLI.md), "Board against schematic" and "Board status"), and
+  `query_rail_budget` (#2943), answered once its parts are read
+  ([CLI.md](CLI.md), "Rail budgets");
 - a command that names its document with a required `document` operand and
   takes no file path (the placements' optional `document` does not count; they
   stay reachable through `apply_edits`): today `apply_edits`, `revert`, `color_net`,
   `clear_all_net_colors`, the read-only board reports `board_report_bom`,
   `board_report_netlist`, `board_report_net_length` and
   `board_report_components` (#2404, each answers with its table as JSON),
+  `board_assembly_drawing` (#2486; answers one assembly drawing as SVG text
+  and writes nothing),
   `repour_all` (#2216; fills the named board's pours again and answers with
-  each pour's pieces, copper area and removed islands; no undo step),
+  each pour's pieces, copper area and removed islands; one undo step when
+  it fills unfilled pours (#2506), so it needs `edit` and is journaled),
   `assign_net_class`, `autoplace_fields` (#1667; one undo step on the named
   sheet), `save_document`, `close_active_document`, the board
   view's layer commands `hide_layer`, `highlight_layer`, `hide_layer_group`,
   `show_layer_group`, `show_layer_set` and `save_layer_set` (#2394; view state
   of the named board, no undo step; `save_layer_set` also keeps the set in the
-  person's preferences), the Rules manager edits `rules_add`, `rules_set`,
+  person's preferences), the Layers panel's board view commands
+  `set_layer_visible`, `set_active_layer`, `set_layer_color`,
+  `show_used_layers_only`, `set_object_visible` and `set_object_transparency`
+  (#2363; view state of the named board, no undo step), the Rules manager edits `rules_add`, `rules_set`,
   `rules_remove`, `rules_enable`, `rules_matrix_set`, `rules_set_create`,
   `rules_set_edit`, `rules_set_apply` and `rules_preset_apply` (#2398;
   `document` is the project or any document of it), the board's DRC
   results and net classes
   (#2399, #2400): `show_drc_violation`, `filter_drc_results`,
-  `waive_drc_violation`, `unwaive_drc_violation`, `add_net_class`,
+  `waive_drc_violation`, `unwaive_drc_violation`, the DRC fixes `fix_drc`
+  and `fix_drc_violation` (#2940, one undo step on the board),
+  `add_net_class`,
   `rename_net_class`, `delete_net_class`, `set_net_class_rules` and
   `assign_board_net_class`, each answering with what it did, the board
   edits `set_layer_stack`, `lock_board_items`, `unlock_board_items`,
   `set_via_span` and `set_layer_sizes` (#2401, #2407: each one undo step on
-  the board it names, [PCB_LAYER_STACK.md](PCB_LAYER_STACK.md)), and the board
+  the board it names, [PCB_LAYER_STACK.md](PCB_LAYER_STACK.md)), the pad edit
+  `set_pad_shape` (#2242: a trapezoid with its `delta` or a custom pad with
+  its `corners`, pad-local mm; one undo step), and the board
   Tools edits (#2408, #2409) `stitch_vias`, `add_teardrops`,
   `remove_teardrops`, `gloss_selected_routes`, `board_shape_from_selection`,
   `keepout_from_selection` and `arrange_in_box`, each one board undo step
   answered with the uuids it added, removed and changed
   ([PCB_TOOLS.md](PCB_TOOLS.md), "Board Tools"), and the board drawing edits
   `add_board_graphic` and `set_board_graphic` (#2424; one board undo step
-  each, answered with the drawing as JSON), and the length tuning commands
+  each, answered with the drawing as JSON), the area tools
+  `place_board_fill`, `place_board_region`, `place_board_polygon_pour`,
+  `place_board_keepout` and `place_board_pour_cutout` with their board,
+  layer, corners and net (#2470; one board undo step each, answered with
+  the area as JSON, [CLI.md](CLI.md), "Board areas"), and `set_footprint_text` (#2368;
+  a component's designator or comment placed, turned, sized or justified on
+  its own, one board undo step, answered with the text as JSON), and the
+  length tuning commands
   `tune_net_length` and `tune_diff_pair` (#2389; one undo step on the named
-  board, answered with the tuned nets and their lengths as JSON), and the
+  board, answered with the tuned nets and their lengths as JSON), and
+  `update_pcb_from_schematic` (#2470; for the project of the named sheet or
+  board, `dry_run=true` or `apply=true`, answered with the change list once
+  it is read; an apply is one undo step on the board, [CLI.md](CLI.md),
+  "Update PCB from schematic"; its `document` is optional in the catalog,
+  for a script's call on the active project, but the channel keeps it required, by
+  hand in `DOCUMENT_NAMED_ON_CHANNEL`, since its gate acts only on a named
+  document), and the
+  routing tools `place_board_route`, `place_board_track`,
+  `place_board_quick_route`, `place_board_diff_pair`,
+  `place_board_multi_route` and `place_board_via` (#2470; one undo step on
+  the named board, answered with the tracks and vias made;
+  [CLI.md](CLI.md), "Routing a board"), and the
   panel edits `panelize_board`, `remove_board_panel` and `set_board_panel`
   (#2410; one undo step on the named board each, answered with the panel as
-  JSON), and the board's `swap_pins`, `swap_gates`,
+  JSON), and `layout_plan_set` (#2942; one undo step on the named board,
+  answered with the plan as JSON), and the board's `swap_pins`, `swap_gates`,
   `save_board_reuse_block` and `place_board_reuse_block` (#2410; a swap is
   one undo step across the board and its sheet, a save writes the block's
   file in the project's `reuse-blocks` folder, and a place may wait for the
-  project's blocks to be read like an edit waiting for its reads), and the
-  Project tab edits `project_move_sheet`, `project_add_variant`,
+  project's blocks to be read like an edit waiting for its reads; a swap or
+  a place names its component by `ids`, its uuid, or by `designator`,
+  exactly one), and the drawing order `bring_drawings_forward`,
+  `bring_drawings_to_front`, `send_drawings_backward` and
+  `send_drawings_to_back` and `delete_selection` (#2326; one undo step on
+  the items `ids` names by uuid on the named sheet, or for a delete the named
+  board, answered with `document`, `ids` and `changed`; a uuid that names
+  nothing there refuses the whole command; [CLI.md](CLI.md), "Drawing order
+  and Delete by uuid"), and the Project tab edits `project_move_sheet`, `project_add_variant`,
   `project_rename_variant`, `project_remove_variant`,
   `project_set_active_variant`, `project_move_library`,
   `project_set_annotate_undo` and `project_set_version_control`
-  (#1689-#1693; `document` is the project or any document of it). A test
+  (#1689-#1693; `document` is the project or any document of it), and the
+  Requirements section's `project_add_requirement`,
+  `project_set_requirement`, `project_remove_requirement`,
+  `project_enable_requirement` and `project_run_requirements` (#2339), and
+  `apply_board_schematic_differences` (#2462; the Compare Board with
+  Schematic Apply for the rows named by id, one board undo step and one
+  schematic undo group, answered once its reads land), and
+  `project_set_rail` (#2943; one undo step of the project's history,
+  [CLI.md](CLI.md), "Rail budgets"). A test
   pins this set, so a catalog row that joins or leaves it is a visible
   decision.
   The window-layout commands `tile_windows_horizontally`,
   `tile_windows_vertically` and `untile_documents` (#2249) name no document:
   they are open to agents by the maintainer's rule that everything is
-  AI-controllable, run the Window menu row's handler (refused with its reason
+  AI-controllable, run the View ▸ Window menu row's handler (refused with its reason
   when the row is greyed) and answer with the layout they left:
   `{"tiled", "layout": "stacked" | "side_by_side" | null, "panes"}`, each
   pane `{"focused", "document", "name"}` in pane order (`document` and
   `name` are null for a pane outside an open project). They never change the
   active tab.
-  The CSV and PDF writers `export_board_report` and `export_board_pdf` take a
-  `path`, so they are CLI only.
+  The CSV, PDF, SVG and STEP writers `export_board_report`,
+  `export_board_pdf`, `export_assembly_svg` and `export_board_step`, and
+  `fabrication_outputs` with its operands (#2470), take a `path`, so they
+  are CLI only.
 
 The last three are open to agents by the maintainer's decision (#1924):
 
@@ -184,10 +245,20 @@ The last three are open to agents by the maintainer's decision (#1924):
   when the document is the person's active tab, or is shown in a window of its
   own, since closing it would move their tab or close that window, and when the
   person has a pending title-block or paper-edge draft for that sheet, since
-  closing would drop their unconfirmed typing.
+  closing would drop their unconfirmed typing. The close route itself refuses
+  an agent's close of a sheet with a pending title-block or paper-edge draft,
+  naming the draft, so the person's text is never committed or dropped by an agent (#2546).
+  A close that leaves the tab open, because the board's sketch could not be
+  applied, is refused with that reason, never reported as run, for every
+  caller.
 - `assign_net_class` runs by document as in the headless run: the project's
   class table changes, and the pick is one step on that sheet's undo timeline
-  (#2171), after the person's own steps.
+  (#2171), after the person's own steps. It takes any net of the project
+  netlist stitched from the documents, a net named only by a label and every
+  name of a shared wire included, never the canvas's style cache; a project
+  with closed sheets is read off the UI thread first, as for an edit that
+  reads the disk (#2549), and a person's edit to an open sheet of the project while that read
+  runs refuses the pick with nothing applied, to be retried.
 
 The board net-class commands (`add_net_class`, `rename_net_class`,
 `delete_net_class`, `set_net_class_rules`, `assign_board_net_class`) are
@@ -195,6 +266,27 @@ flagged `mutates_doc,undoable` like `assign_net_class`, but their step is one
 of the project's net-class history, not the board's: Edit ▸ Undo and `revert`
 do not take it back, the board Net Classes panel's Undo and Redo do. An agent
 puts a class back with the inverse command.
+
+A schematic placement an agent makes (through `apply_edits`, as a CLI run with
+operands does) takes what its operands name and the project's schematic
+defaults for the rest: unrotated, the default text size and font, left and
+bottom justified, the default shape width and fill, a wire of the default
+width and the theme's colour. It never reads the person's pre-placement (Tab)
+form, so what the person has set there does not change what an agent places
+(#2326, [DECISIONS.md](DECISIONS.md) 2026-11-24). The person's own clicks
+still place what their form holds. Two inputs still come from the person, as
+declared exceptions: the off-grid check uses their grid size and snap setting
+(the refusal names the grid), and `add_board_graphic` takes their PCB tool
+form for what its operands leave out.
+
+A move or turn an agent makes takes its wire handling as an operand, never
+the person's "keep wires" preference: `set_object_position` and
+`set_object_rotation` take an optional `keep_wires` (default `true`, a part's
+wires follow it; `false`, a plain move or turn), and `set_object_position`
+also takes `wiring` ([CLI.md](CLI.md), "Editing placed objects";
+[DECISIONS.md](DECISIONS.md) 2026-11-19 and 2026-11-25). A `keep_wires` that
+is not `true` or `false` is refused. The person's own Position and Rotation
+rows in Properties still follow their preference.
 
 Refused with a reason: `undo` and `redo` (`PERSON_ONLY`, the one hand-kept
 constant, checked against the catalog by a test; the agent takes back its own

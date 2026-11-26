@@ -3,6 +3,8 @@
 
 use std::fmt;
 
+use crate::{MessageRenderer, Translatable};
+
 /// Identifies a catalog message. Ids are semantic and area-prefixed
 /// (`menu-file`); an id changes when its meaning changes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -17,6 +19,40 @@ impl MessageId {
         self.0
     }
 
+    /// The id of a message an extension ships in its own `.ftl` file:
+    /// `ext-` and then lowercase ASCII letters, digits, `_` and `-`. `None`
+    /// for any other id, so code outside this crate cannot make the id of a
+    /// built-in message; no built-in id starts with `ext-`. Which extension
+    /// owns the id (`ext-<name>-…`) is checked where the extension registers
+    /// its messages. A `const fn`, so an extension's catalog row can name
+    /// its label in a `static`.
+    pub const fn extension(id: &'static str) -> Option<Self> {
+        let bytes = id.as_bytes();
+        let prefix = EXTENSION_MESSAGE_PREFIX.as_bytes();
+        if bytes.len() <= prefix.len() {
+            return None;
+        }
+        let mut i = 0;
+        while i < bytes.len() {
+            let byte = bytes[i];
+            let fits = if i < prefix.len() {
+                byte == prefix[i]
+            } else {
+                byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_' || byte == b'-'
+            };
+            if !fits {
+                return None;
+            }
+            i += 1;
+        }
+        Some(Self(id))
+    }
+
+    /// Is this an extension's message id (`ext-…`)?
+    pub fn is_extension(self) -> bool {
+        self.0.starts_with(EXTENSION_MESSAGE_PREFIX)
+    }
+
     /// An id outside the registry, for `signex-i18n`'s tests of a message
     /// the catalog lacks.
     #[cfg(feature = "test-support")]
@@ -25,6 +61,9 @@ impl MessageId {
         Self(id)
     }
 }
+
+/// The prefix of every message id an extension ships (`ext-<name>-…`).
+pub const EXTENSION_MESSAGE_PREFIX: &str = "ext-";
 
 /// Text the user wrote (net names, part descriptions, parameter values).
 /// Never translated.
@@ -55,10 +94,12 @@ impl fmt::Display for UserText {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LocalNumber(pub f64);
 
-/// A message argument: text, or a number formatted for the locale. The
-/// variants are private: the only ways in are the text and integer `From`
-/// impls and `From<LocalNumber>`, so a bare float cannot reach the locale
-/// number formatter.
+/// A message argument: text, a number formatted for the locale, or another
+/// message (`From<Translatable>`) that [`Translatable::render`] renders with
+/// the same renderer before it fills this one. The variants are private: the
+/// only ways in are the text and integer `From` impls, `From<LocalNumber>`
+/// and `From<Translatable>`, so a bare float cannot reach the locale number
+/// formatter.
 ///
 /// `signex-i18n`'s `t!` carries the same guarantee and its own doctests.
 ///
@@ -84,6 +125,7 @@ pub struct Arg(ArgKind);
 enum ArgKind {
     Text(String),
     Number(f64),
+    Message(Box<Translatable>),
 }
 
 /// A borrowed read of an [`Arg`], for the formatter in `signex-i18n`. It
@@ -96,13 +138,41 @@ pub enum ArgValue<'a> {
 }
 
 impl Arg {
-    /// What the argument holds, for the formatter.
+    /// What the argument holds, for the formatter. A renderer passes every
+    /// argument through [`Arg::rendered_with`] first; a nested message that
+    /// skipped it reads as its id, the way a message missing from the
+    /// catalog does.
     #[doc(hidden)]
     pub fn value(&self) -> ArgValue<'_> {
         match &self.0 {
             ArgKind::Text(text) => ArgValue::Text(text),
             ArgKind::Number(number) => ArgValue::Number(*number),
+            ArgKind::Message(message) => ArgValue::Text(message.unrendered()),
         }
+    }
+
+    /// `self`, with a nested message rendered by `renderer` into text; any
+    /// other argument unchanged. Every render path calls it on its
+    /// arguments, so the ids crate itself never renders.
+    #[doc(hidden)]
+    pub fn rendered_with<R: MessageRenderer + ?Sized>(&self, renderer: &R) -> Self {
+        match &self.0 {
+            ArgKind::Message(message) => Self::from(message.render(renderer)),
+            _ => self.clone(),
+        }
+    }
+
+    /// Whether this argument is a nested message, the only kind
+    /// [`Arg::rendered_with`] changes.
+    #[doc(hidden)]
+    pub fn is_message(&self) -> bool {
+        matches!(self.0, ArgKind::Message(_))
+    }
+}
+
+impl From<Translatable> for Arg {
+    fn from(message: Translatable) -> Self {
+        Self(ArgKind::Message(Box::new(message)))
     }
 }
 

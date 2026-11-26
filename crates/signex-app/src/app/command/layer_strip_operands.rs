@@ -21,7 +21,7 @@ use crate::layer_strip_prefs::LayerNameStyle;
 type Ran = (CommandOutcome, Task<Message>);
 
 /// The text of operand `name`, trimmed; empty when it is not given.
-fn text_operand<'a>(args: &'a CommandArgs, name: &str) -> &'a str {
+pub(super) fn text_operand<'a>(args: &'a CommandArgs, name: &str) -> &'a str {
     match args.operand(name) {
         Some(OperandValue::Text(text)) => text.trim(),
         _ => "",
@@ -57,7 +57,7 @@ fn named_board(app: &Signex, args: &CommandArgs) -> Result<PathBuf, String> {
 }
 
 /// `layer`: a board layer by its name in the board file.
-fn layer_operand(args: &CommandArgs) -> Result<PcbLayer, String> {
+pub(super) fn layer_operand(args: &CommandArgs) -> Result<PcbLayer, String> {
     let token = text_operand(args, "layer");
     parse_pcb_layer(token).ok_or_else(|| {
         format!(
@@ -77,7 +77,11 @@ fn kind_operand(args: &CommandArgs) -> Result<LayerKind, String> {
 }
 
 /// Apply `event` to the view of the board `document` names.
-fn on_named_board(app: &mut Signex, args: &CommandArgs, event: Result<PcbViewMsg, String>) -> Ran {
+pub(super) fn on_named_board(
+    app: &mut Signex,
+    args: &CommandArgs,
+    event: Result<PcbViewMsg, String>,
+) -> Ran {
     let path = match named_board(app, args) {
         Ok(path) => path,
         Err(reason) => return refused(reason),
@@ -171,8 +175,8 @@ pub(super) fn delete_layer_set(app: &mut Signex, args: &CommandArgs) -> Ran {
     ran(task)
 }
 
-/// `set_layer_tab_names style=..`: the tab menu's Short, Medium and Long
-/// tab names rows.
+/// `set_layer_tab_names style=..`: the Short, Medium and Long cells of the
+/// tab menu's Tab names switch.
 pub(super) fn set_layer_tab_names(app: &mut Signex, args: &CommandArgs) -> Ran {
     let token = text_operand(args, "style");
     match LayerNameStyle::from_token(token) {

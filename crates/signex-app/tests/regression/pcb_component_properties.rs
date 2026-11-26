@@ -1,20 +1,24 @@
 //! #2354: the board Component view, driven through `Signex::update` with the
 //! messages its controls send. Editing X moves the component, Rotation turns
-//! it, Layer flips it, the Designator eye hides its text and the lock stops
-//! a drag. Every edit is one board undo step.
+//! it, the Layer segments flip it, the Designator eye hides its text and the
+//! lock stops a drag. Every edit is one board undo step. The illustration is
+//! drawn for one component, and its hover link lives in the panel state.
 
 use pcb_geom::{ClickMode, ItemRef};
-use signex_app::app::{EditMsg, FileMsg, Message, Signex, TabDocument};
+use signex_app::app::{EditMsg, FileMsg, Message, Signex};
 use signex_app::diagnostics;
 use signex_app::dock::DockMessage;
+use signex_app::panels::pcb_component::DESIGNATOR_FIELD;
 use signex_app::panels::{ComponentField, PanelMsg, PcbComponentFacts, PcbComponentMsg, Shared};
 use signex_app::pcb_canvas::PcbCanvasMsg;
+use signex_app::test_adapter::BoardEngines;
 use signex_engine::pcb::component::LocationField;
 use signex_engine::pcb::designators::FootprintTextField;
 use signex_types::format::SnxPcb;
 use signex_types::pcb::{Footprint, Pad, PadShape, PadType, PcbBoard, Point};
 use signex_types::pcb_layer::BoardSide;
 use signex_types::property::PcbProperty;
+use signex_widgets::property_illustration::IllustrationMsg;
 use uuid::Uuid;
 
 /// R2 at (10, 10) and C7 at (20, 10), both on the top side.
@@ -33,6 +37,8 @@ fn pad(n: u128, x: f64) -> Pad {
         layers: vec!["TopCopper".into()],
         net: None,
         roundrect_ratio: 0.25,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 0.0,
         layer_sizes: None,
         net_locked: false,
@@ -82,6 +88,7 @@ fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
@@ -131,10 +138,8 @@ fn send(app: &mut Signex, message: Message) {
 
 fn live(app: &Signex) -> PcbBoard {
     let docs = &app.document_state;
-    docs.tabs[docs.active_tab]
-        .cached_document
-        .as_ref()
-        .and_then(TabDocument::as_pcb)
+    docs.tab_board_engine(docs.active_tab)
+        .map(|engine| engine.board())
         .expect("a board is open")
         .clone()
 }
@@ -508,4 +513,74 @@ fn a_draft_for_another_selection_is_dropped() {
         }),
     );
     assert_eq!(snapshot(&f.app), before, "Enter has nothing to apply");
+}
+
+#[test]
+fn one_component_is_drawn_unturned_and_several_are_not() {
+    let mut f = open_board();
+    select_r2(&mut f.app);
+    let drawing = facts(&f.app).drawing.expect("one component is drawn");
+    assert_eq!(drawing.side, BoardSide::Top);
+    assert_eq!(drawing.pads.len(), 2);
+    assert_eq!(
+        drawing.pin_one,
+        Some(Point::new(-2.0, 0.0)),
+        "pin 1 is the first pad numbered 1, at its place in the footprint"
+    );
+    assert!(drawing.courtyard.is_empty(), "R2 draws no courtyard");
+    send(
+        &mut f.app,
+        panel(PcbComponentMsg::FieldTyped {
+            board: f.path.clone(),
+            footprints: vec![R2],
+            field: ComponentField::Location(LocationField::Rotation),
+            text: "90".into(),
+        }),
+    );
+    send(
+        &mut f.app,
+        panel(PcbComponentMsg::FieldSubmitted {
+            board: f.path.clone(),
+            footprints: vec![R2],
+            field: ComponentField::Location(LocationField::Rotation),
+        }),
+    );
+    assert_eq!(fp(&live(&f.app), R2).rotation, 90.0);
+    assert_eq!(
+        facts(&f.app).drawing.and_then(|d| d.pin_one),
+        Some(Point::new(-2.0, 0.0)),
+        "the drawing shows no rotation"
+    );
+    click(&mut f.app, 20.0, ClickMode::Add);
+    let shown = facts(&f.app);
+    assert_eq!(shown.footprints, [R2, C7]);
+    assert!(shown.drawing.is_none(), "no merged drawing of several");
+}
+
+#[test]
+fn a_hovered_designator_row_is_kept_for_the_illustration_until_left() {
+    let mut f = open_board();
+    select_r2(&mut f.app);
+    send(
+        &mut f.app,
+        panel(PcbComponentMsg::IllustrationHovered(
+            IllustrationMsg::FieldHovered(DESIGNATOR_FIELD),
+        )),
+    );
+    let shown = facts(&f.app);
+    assert!(
+        shown
+            .illustration_hover
+            .is_field_highlighted(&DESIGNATOR_FIELD),
+        "the facts carry the hover to the view"
+    );
+    let before = snapshot(&f.app);
+    send(
+        &mut f.app,
+        panel(PcbComponentMsg::IllustrationHovered(
+            IllustrationMsg::FieldLeft(DESIGNATOR_FIELD),
+        )),
+    );
+    assert_eq!(facts(&f.app).illustration_hover.hovered(), None);
+    assert_eq!(snapshot(&f.app), before, "a hover edits nothing");
 }

@@ -102,9 +102,12 @@ in a hidden filter by file extension.
   must not be the root of a repository that already has commits: `git init`
   would reopen that repo and the parentless first commit fails ("current tip
   is not the first parent"). `vcs_target_guard::library_repo_refusal` checks
-  this when Create Library is pressed (the Library Options modal stays open
-  with the reason) and again before the pending library is written at
-  project save.
+  this when Create Library is pressed and again before the pending library
+  is written at project save. On a refusal the New Library dialog stays
+  open with the reason in an error banner, Create Library is disabled
+  (turning version control off clears the refusal), and the banner's
+  **Choose another location…** closes the dialog and reopens the save-as
+  picker; nothing is written either way.
 - **Enable Version Control.** Library scope stages the block too; project
   scope also gets the managed `.gitattributes` block.
 - **Older library repositories.** Opening a library writes nothing: an

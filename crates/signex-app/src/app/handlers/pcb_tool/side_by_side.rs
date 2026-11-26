@@ -12,17 +12,17 @@ use pcb_geom::{CopperItem, ItemRef, PointNm, Shape, layer_bit, nm_to_mm};
 use signex_drc::DrcRules;
 use signex_engine::pcb::draw::TrackStyle;
 use signex_engine::pcb::route::{
-    BusMember, BusStyle, RouteDraft, RouteRefusal, bus_start, bus_tracks, diff_pair_of, draft_fits,
-    nearest_net_point, pair_width_gap, route_bus_leg,
+    BusMember, BusStyle, RouteDraft, RouteRefusal, bus_draft, bus_start, bus_tracks, copper_under,
+    diff_pair_of, draft_fits, nearest_net_point, pair_width_gap, route_bus_leg,
 };
 use signex_i18n::{ids, t};
 use signex_types::net_class::{NetClass, first_matching_class};
-use signex_types::pcb::{PcbBoard, Point};
+use signex_types::pcb::{PcbBoard, Point, Via};
 use signex_types::pcb_layer::CopperLayer;
 use uuid::Uuid;
 
 use super::BoardToolSession;
-use super::router::{BusRoute, RouterState, rule_width, walk_rules};
+use super::router::{BusRoute, RouterState, rule_via, rule_width, walk_rules};
 use crate::app::Signex;
 use crate::app::pcb_tools::BoardPlaceTool;
 
@@ -45,7 +45,7 @@ impl Signex {
             }
             return;
         };
-        if at == anchor {
+        if self.clicks_run_end(at, anchor) {
             self.end_route_shape();
             return;
         }
@@ -88,10 +88,9 @@ impl Signex {
         let leg = route_bus_leg(board, &bus.members, anchor, at, &bus.style, &route)?;
         let mut centre = session.points.clone();
         centre.extend(leg);
-        let tracks = bus_tracks(&bus.members, &centre, &bus.style, Uuid::now_v7)?;
         let draft = RouteDraft {
-            tracks,
-            ..RouteDraft::default()
+            vias: bus.start_vias.clone(),
+            ..bus_draft(board, &bus.members, &centre, &bus.style, Uuid::now_v7)?
         };
         draft_fits(board, &draft, &clearance, rules.widest_clearance())?;
         Ok((centre, draft))
@@ -124,18 +123,16 @@ impl Signex {
         if nets.len() < 2 {
             return Err(t!(i18n, ids::PCB_ROUTE_BUS_NEEDS_NETS).into_string());
         }
-        let mut members = Vec::with_capacity(nets.len());
-        for &net in &nets {
-            let anchor = nearest_net_point(board, net, layer, at).ok_or_else(|| {
+        let defaults = &self.interaction_state.pcb_tool_defaults;
+        let via_at = |anchor| defaults.via(board, Uuid::now_v7(), anchor);
+        let (members, start_vias) = member_starts(board, &rules, (&nets, layer), at, via_at)
+            .map_err(|net| {
                 let name = net_name(board, net);
                 t!(i18n, ids::PCB_ROUTE_MEMBER_NO_COPPER, "net" => name).into_string()
             })?;
-            members.push(BusMember { net, anchor });
-        }
         let Some(start) = bus_start(&members) else {
             return Ok(());
         };
-        let defaults = &self.interaction_state.pcb_tool_defaults;
         let mut track = defaults.track_style(board, at, layer);
         let ask = BusAsk {
             tool,
@@ -155,7 +152,13 @@ impl Signex {
                 revision,
                 refused: false,
                 preview: None,
-                bus: Some(BusRoute { members, style }),
+                bus: Some(BusRoute {
+                    members,
+                    style,
+                    start_vias,
+                }),
+                joined: Vec::new(),
+                joined_lines: Vec::new(),
             });
         }
         Ok(())
@@ -170,7 +173,11 @@ impl Signex {
         layer: CopperLayer,
     ) -> Result<Vec<u32>, String> {
         let i18n = &self.ui_state.i18n;
-        let net = signex_engine::pcb::draw::net_under(board, at, 1 << layer_bit(layer));
+        let mut net = signex_engine::pcb::draw::net_under(board, at, 1 << layer_bit(layer));
+        if net == 0 {
+            // Copper off the active layer: the pair starts there with vias.
+            net = copper_under(board, at).map_or(0, |(_, net)| net);
+        }
         if net == 0 {
             return Err(t!(i18n, ids::PCB_ROUTE_NO_NET).into_string());
         }
@@ -224,14 +231,56 @@ impl Signex {
         let mut centre = session.points.clone();
         let next = session.cursor.filter(|c| centre.last() != Some(c));
         centre.extend(next);
-        if let Ok(tracks) = bus_tracks(&bus.members, &centre, &bus.style, Uuid::nil) {
+        // Trimmed against the board, as the click lays them (#2492).
+        if let Some(board) = self.document_state.pcb_board(&session.path)
+            && let Ok(tracks) = bus_tracks(board, &bus.members, &centre, &bus.style, Uuid::nil)
+        {
             preview.segments.extend(tracks);
         }
+        preview.vias.extend(bus.start_vias.iter().cloned());
     }
 }
 
+/// Where each of `nets` starts a pair or bus route at `at` on `layer`: its
+/// copper on `layer` nearest `at`, else its copper on another layer with a
+/// via there (maintainer 2026-11-18), the via `via_at` makes with its net
+/// and the rules' size. The one start planner of the click and the operand
+/// form (#2988). `Err` is the net with no copper at all.
+pub(super) fn member_starts(
+    board: &PcbBoard,
+    rules: &DrcRules,
+    (nets, layer): (&[u32], CopperLayer),
+    at: Point,
+    via_at: impl Fn(Point) -> Via,
+) -> Result<(Vec<BusMember>, Vec<Via>), u32> {
+    let mut members = Vec::with_capacity(nets.len());
+    let mut start_vias = Vec::new();
+    for &net in nets {
+        let (anchor, off_layer) = match nearest_net_point(board, net, layer, at) {
+            Some(anchor) => (Some(anchor), false),
+            None => (nearest_on_any_layer(board, net, at), true),
+        };
+        let anchor = anchor.ok_or(net)?;
+        if off_layer {
+            let via = Via {
+                attributes: Default::default(),
+                net,
+                ..via_at(anchor)
+            };
+            start_vias.push(rule_via(via, rules));
+        }
+        members.push(BusMember { net, anchor });
+    }
+    Ok((members, start_vias))
+}
+
+/// `net`'s copper nearest `at` on the topmost copper layer that has any.
+pub(super) fn nearest_on_any_layer(board: &PcbBoard, net: u32, at: Point) -> Option<Point> {
+    CopperLayer::all().find_map(|layer| nearest_net_point(board, net, layer, at))
+}
+
 /// The name of `net` on `board`, else its number.
-fn net_name(board: &PcbBoard, net: u32) -> String {
+pub(super) fn net_name(board: &PcbBoard, net: u32) -> String {
     board
         .nets
         .iter()
@@ -240,19 +289,24 @@ fn net_name(board: &PcbBoard, net: u32) -> String {
 }
 
 /// What a pair or bus is routed with besides the board and its rules.
-struct BusAsk<'a> {
-    tool: BoardPlaceTool,
-    nets: &'a [u32],
-    layer: CopperLayer,
+pub(super) struct BusAsk<'a> {
+    pub tool: BoardPlaceTool,
+    pub nets: &'a [u32],
+    pub layer: CopperLayer,
     /// The width the tool's form or the board gives a track.
-    width_mm: f64,
+    pub width_mm: f64,
 }
 
 /// The width and pitch of the tracks of `ask.nets` on its layer: the first
 /// net's route width (its class, within the rules), and for a pair its
 /// class's coupled width and gap. The gap is never under the clearance the
 /// rules ask between any two of the nets.
-fn bus_style(board: &PcbBoard, classes: &[NetClass], rules: &DrcRules, ask: &BusAsk) -> BusStyle {
+pub(super) fn bus_style(
+    board: &PcbBoard,
+    classes: &[NetClass],
+    rules: &DrcRules,
+    ask: &BusAsk,
+) -> BusStyle {
     let BusAsk {
         tool,
         nets,

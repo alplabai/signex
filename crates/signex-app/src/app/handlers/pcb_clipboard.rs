@@ -18,7 +18,7 @@ use uuid::Uuid;
 use crate::app::handlers::clipboard_workflows::{CopyOutcome, DEFAULT_PASTE_OFFSET_MM};
 use crate::app::handlers::pcb_placement::deletable_items;
 use crate::app::{Message, Signex};
-use crate::pcb_canvas::{CarryKind, PasteLoad, PcbCarry};
+use crate::pcb_canvas::{CarryKind, PasteLoad, PcbCarry, snap_point_on};
 
 impl Signex {
     /// Select All on a board. Whether the active tab is one.
@@ -104,13 +104,13 @@ impl Signex {
         let (Some(board), Some(path)) = (self.active_pcb(), self.active_tab_path()) else {
             return true;
         };
-        let grid = placement::grid_for(board, copy.grid_use());
         let ghost: Vec<pcb_geom::Shape> = BoardIndex::build_selectable(&copy.preview_board(board))
             .items()
-            .map(|indexed| indexed.shape)
+            .map(|indexed| indexed.shape.clone())
             .collect();
         let start = self.board_cursor(&path).unwrap_or(copy.origin());
-        let at = grid.snap(start);
+        let view = self.pcb_snap_view().without_objects();
+        let at = snap_point_on(board, start, copy.grid_use(), view);
         let window = self.interaction_state.acting_window;
         let load = PasteLoad { copy, ghost };
         // A paste on the cursor replaces a placement tool (#2373) and
@@ -162,7 +162,8 @@ impl Signex {
         else {
             return;
         };
-        let to = placement::grid_for(board, load.copy.grid_use()).snap(at);
+        let view = self.pcb_snap_view().without_objects();
+        let to = snap_point_on(board, at, load.copy.grid_use(), view);
         if let Some(carry) = self.interaction_state.pcb_carry.as_mut()
             && carry.delta != to
         {
@@ -182,7 +183,8 @@ impl Signex {
         };
         self.end_pcb_carry();
         if let Some(board) = self.active_pcb() {
-            let to = placement::grid_for(board, load.copy.grid_use()).snap(at);
+            let view = self.pcb_snap_view().without_objects();
+            let to = snap_point_on(board, at, load.copy.grid_use(), view);
             self.place_board_copy("Paste", &load.copy, to);
         }
         true
@@ -247,7 +249,7 @@ impl Signex {
             origin.x + DEFAULT_PASTE_OFFSET_MM,
             origin.y + DEFAULT_PASTE_OFFSET_MM,
         );
-        let at = placement::grid_for(board, copy.grid_use()).snap(shifted);
+        let at = self.board_grid_point(board, copy.grid_use(), shifted);
         self.place_board_copy(what, copy, at);
     }
 

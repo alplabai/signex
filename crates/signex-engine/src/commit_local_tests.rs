@@ -29,7 +29,7 @@ struct Outcome {
     /// The net colours, a new wire's keyed by its place in the wire list.
     colors: Vec<(String, signex_types::theme::Color)>,
     result: Result<crate::CommandResult, String>,
-    warnings: Vec<String>,
+    warnings: Vec<crate::EngineNotice>,
     unkept_pins: Vec<String>,
 }
 
@@ -148,7 +148,11 @@ fn every_command(rng: &mut Lcg, sheet: &SchematicSheet, unit: f64, floors: &mut 
         both_ways(
             sheet,
             "drop",
-            Command::MoveEach { moves, keep_wires },
+            Command::MoveEach {
+                moves,
+                keep_wires,
+                wiring: signex_types::corner::DragWiringMode::Auto,
+            },
             floors,
         );
         let command = Command::MoveSelection {
@@ -156,6 +160,7 @@ fn every_command(rng: &mut Lcg, sheet: &SchematicSheet, unit: f64, floors: &mut 
             dx,
             dy,
             keep_wires,
+            wiring: signex_types::corner::DragWiringMode::Auto,
         };
         both_ways(sheet, "move", command, floors);
         let command = Command::RotateSelection {

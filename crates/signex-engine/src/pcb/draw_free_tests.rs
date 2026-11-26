@@ -7,7 +7,7 @@ use uuid::Uuid;
 use super::BoardEngine;
 use super::draw::{
     ArcMode, FREE_PAD_HOLE_MM, FREE_PAD_SIZE_MM, arc_points, new_arc, new_dimension, new_free_pad,
-    place_item,
+    new_free_pad_on, place_item,
 };
 use super::items::BoardItem;
 
@@ -117,15 +117,62 @@ fn a_free_pad_is_a_through_pad_on_the_net_it_lands_on() {
     assert!(engine.board().free.pads.is_empty());
 }
 
+/// Caner 2026-11-21: a pad placed with an outer copper layer active is a
+/// surface pad of that side; any other layer keeps the through-hole pad.
 #[test]
-fn a_dimension_stands_off_through_its_third_click_on_a_text_layer() {
+fn a_free_pad_on_outer_copper_is_a_surface_pad_of_that_side() {
+    let board = board();
+    let id = Uuid::from_u128(0x31);
+    let top = new_free_pad_on(&board, id, p(5.0, 0.0), "1".into(), CopperLayer::Top.into());
+    assert_eq!(top.pad_type, signex_types::pcb::PadType::Smd);
+    assert!(top.drill.is_none());
+    assert_eq!(top.layers, ["TopCopper", "TopSolderMask", "TopPaste"]);
+    assert_eq!(top.net.as_ref().map(|n| n.number), Some(3));
+    let bottom = new_free_pad_on(
+        &board,
+        id,
+        p(5.0, 0.0),
+        "1".into(),
+        CopperLayer::Bottom.into(),
+    );
+    assert_eq!(
+        bottom.layers,
+        ["BottomCopper", "BottomSolderMask", "BottomPaste"]
+    );
+    assert!(bottom.net.is_none(), "the track is on the top copper only");
+    let silk = PcbLayer::Technical(TechnicalLayer::SilkscreenTop);
+    let through = new_free_pad_on(&board, id, p(5.0, 0.0), "1".into(), silk);
+    assert_eq!(through, new_free_pad(&board, id, p(5.0, 0.0), "1".into()));
+}
+
+#[test]
+fn a_dimension_stands_off_through_its_third_click_on_the_given_layer() {
     let id = Uuid::from_u128(0x40);
     let mech = PcbLayer::Mechanical(signex_types::pcb_layer::MechanicalLayer::new(1).unwrap());
     let d = new_dimension(id, p(0.0, 0.0), p(10.0, 0.0), p(4.0, 3.0), mech).unwrap();
     assert_eq!((d.offset, d.layer.as_str()), (3.0, "Mechanical1"));
+    // Caner 2026-11-21: copper included.
     let top = PcbLayer::Copper(CopperLayer::Top);
     let on_copper = new_dimension(id, p(0.0, 0.0), p(10.0, 0.0), p(4.0, -2.0), top).unwrap();
-    assert_eq!(on_copper.layer, "Dimensions", "copper takes no text");
+    assert_eq!(on_copper.layer, "TopCopper", "the given copper layer");
     assert_eq!(on_copper.offset, -2.0);
     assert!(new_dimension(id, p(1.0, 1.0), p(1.0, 1.0), p(4.0, 3.0), mech).is_none());
+}
+
+/// #2869: the Graphics Arc on copper, about its centre the way of
+/// increasing angle (clockwise on screen), ending on the circle.
+#[test]
+fn an_arc_about_its_centre_runs_clockwise_on_screen_and_ends_on_the_circle() {
+    let about = super::draw::arc_points_about;
+    // Centre (10, 10), start (15, 10), toward (10, 20): down on screen.
+    let (start, mid, end) = about(p(10.0, 10.0), p(15.0, 10.0), p(10.0, 20.0)).unwrap();
+    assert!(close(start, p(15.0, 10.0)));
+    assert!(close(end, p(10.0, 15.0)), "on the circle: {end:?}");
+    let half = std::f64::consts::FRAC_1_SQRT_2 * 5.0;
+    assert!(close(mid, p(10.0 + half, 10.0 + half)), "{mid:?}");
+    assert!(
+        about(p(0.0, 0.0), p(5.0, 0.0), p(9.0, 0.0)).is_none(),
+        "a full turn"
+    );
+    assert!(about(p(0.0, 0.0), p(0.0, 0.0), p(9.0, 0.0)).is_none());
 }

@@ -32,17 +32,16 @@ impl Signex {
             feed(&mut hasher, &colours);
         }
         if let Some(editor) = ds.symbol_editors.get(path) {
-            feed(&mut hasher, &editor.file);
-            editor.history.undo_len().hash(&mut hasher);
+            feed(&mut hasher, &editor.draft.file);
+            editor.draft.history.undo_len().hash(&mut hasher);
         }
         if let Some(editor) = ds.footprint_editors.get(path) {
             feed(&mut hasher, &editor.file);
             editor.history.undo_len().hash(&mut hasher);
         }
-        for tab in ds.tabs.iter().filter(|t| t.path == path) {
-            if let Some(crate::app::TabDocument::Pcb(engine)) = &tab.cached_document {
-                feed(&mut hasher, engine.board());
-            }
+        let at_path = (0..ds.tabs.len()).filter(|&idx| ds.tabs[idx].path == path);
+        for engine in at_path.filter_map(|idx| ds.tab_board_engine(idx)) {
+            feed(&mut hasher, engine.board());
         }
         EditStamp(hasher.finish())
     }

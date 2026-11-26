@@ -39,9 +39,12 @@ fn empty_sheet() -> SchematicSheet {
         drawings: Vec::new(),
         no_erc_directives: Vec::new(),
         directives: Vec::new(),
+        harness: Default::default(),
+        unions: Vec::new(),
         title_block: HashMap::new(),
         text_widths: Default::default(),
         text_extents: Default::default(),
+        variables: Default::default(),
         lib_symbols: Default::default(),
         net_colors: HashMap::new(),
         drawing_placements: Default::default(),
@@ -59,7 +62,6 @@ fn add_tab(app: &mut Signex, path: &Path) {
     app.document_state.tabs.push(TabInfo {
         title: path.to_string_lossy().to_string(),
         path: path.to_path_buf(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

@@ -67,10 +67,12 @@ pub fn pitch_mm_exact(mm: f32) -> f64 {
 }
 
 /// Human-readable labels for GRID_SIZES_MM (same order).
+// raw: grid pitches with their unit symbol (mm, mil), not language.
 pub const GRID_SIZE_LABELS: &[&str] = &["0.635 mm", "1.27 mm", "2.54 mm", "5.08 mm"];
 
 /// Human-readable labels for GRID_SIZES_MM when displaying in mils (1 mm ≈ 39.3701 mils exactly).
 /// 0.635 mm = 25 mil, 1.27 mm = 50 mil, 2.54 mm = 100 mil, 5.08 mm = 200 mil.
+// raw: grid pitches with their unit symbol (mm, mil), not language.
 pub const GRID_SIZE_LABELS_MIL: &[&str] = &["25 mil", "50 mil", "100 mil", "200 mil"];
 
 /// Smallest on-screen distance between two grid lines or dots, in logical px.
@@ -137,8 +139,8 @@ pub(crate) fn fill_grid_dot<R: GeometryRenderer>(
     radius: f32,
     color: Color,
 ) {
-    // At least 1 px, so the square always holds a pixel centre: tiny-skia
-    // fills rectangles without anti-aliasing and would drop a smaller one.
+    // At least 1 px, so the square always holds a pixel centre: a software
+    // fill without anti-aliasing would drop a smaller one.
     let side = (radius * std::f32::consts::PI.sqrt()).max(1.0);
     frame.fill_rectangle(
         Point::new(centre.x - side / 2.0, centre.y - side / 2.0),
@@ -152,8 +154,8 @@ pub(crate) fn fill_grid_dot<R: GeometryRenderer>(
 /// per-glyph stroke tessellation). Every bar edge is a whole device pixel
 /// (`device_scale` device px per logical px) and each bar is at least one
 /// device pixel thick: a bar that covers part of a pixel draws at part
-/// intensity under multisampling, and tiny-skia fills rectangles without
-/// anti-aliasing, so it would drop a sub-pixel bar.
+/// intensity under multisampling, and a software fill without
+/// anti-aliasing would drop a sub-pixel bar.
 pub(crate) fn fill_grid_cross<R: GeometryRenderer>(
     frame: &mut canvas::Frame<R>,
     centre: Point,

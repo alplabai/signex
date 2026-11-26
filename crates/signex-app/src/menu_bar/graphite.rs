@@ -1,7 +1,8 @@
 //! Graphite look of the menu bar: the Signex mark in place of the wordmark,
 //! flat root buttons, and dropdowns with the shared menu card metrics (28 px
-//! rows, a mono shortcut column, a chevron column, soft separators, a width
-//! fitted to the rows). Legacy themes never reach it.
+//! rows, one check column, a right-aligned mono shortcut column, a chevron
+//! column only in a menu with a submenu row, soft separators, a width fitted
+//! to the rows). Legacy themes never reach it.
 
 use std::sync::LazyLock;
 
@@ -15,8 +16,11 @@ use super::{MenuColors, MenuMessage, model};
 
 /// Row metrics of a dropdown: the same card numbers as every context menu.
 const M: MenuMetrics = MenuMetrics::GRAPHITE;
-/// Width of the leading check-mark column of a toggle row: the width
-/// `MenuMetrics::fitted_width` reserves for it, so the card fits its rows.
+/// Type steps; a section header draws at the caption step.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+/// Width of the leading check-mark column every row keeps, so all labels of
+/// a dropdown start on one line: the width `MenuMetrics::fitted_width`
+/// reserves for a checked row, so the card fits its rows.
 const MARK_WIDTH: f32 = M.check_size;
 /// Glyph of the submenu chevron.
 const CHEVRON: &str = "\u{203A}";
@@ -111,22 +115,27 @@ impl RowShape {
 }
 
 /// Width of `menu`'s dropdown: its rows measured as a context-menu card in
-/// `ui_font`, between 200 and 320 px.
+/// `ui_font`, between 200 and 320 px. Every row counts the check column,
+/// which every row keeps.
 pub(super) fn dropdown_width(menu: &model::Menu, ui_font: &str) -> f32 {
     let rows: Vec<DropdownEntry<()>> = menu
         .entries
         .iter()
         .filter_map(|entry| match entry {
+            model::MenuEntry::Item(item) if item.is_header() => {
+                Some(DropdownEntry::Header(item.label.clone()))
+            }
             model::MenuEntry::Item(item) => {
-                let mut row =
-                    DropdownItem::passive(item.label.clone()).checked(item.checked.is_some());
+                let mut row = DropdownItem::passive(item.label.clone()).checked(true);
                 if let Some(s) = &item.shortcut {
                     row = row.shortcut(s.text.clone());
                 }
                 Some(DropdownEntry::Item(row))
             }
             model::MenuEntry::Submenu(sub) => Some(DropdownEntry::Item(
-                DropdownItem::passive(sub.title.clone()).submenu(),
+                DropdownItem::passive(sub.title.clone())
+                    .checked(true)
+                    .submenu(),
             )),
             model::MenuEntry::Separator => None,
         })
@@ -139,13 +148,14 @@ pub(super) fn dropdown_padding() -> iced::Padding {
     iced::Padding::new(M.panel_pad)
 }
 
-/// One dropdown row: the check column of a toggle row, the label, the
+/// One dropdown row: the check column, the label, the
 /// right-aligned mono shortcut and the chevron column, in a button exactly
 /// one 28 px row tall and as wide as the card (the hover fill is the rect
 /// that takes the click).
 pub(super) fn item_btn(
     label: &str,
     checked: Option<bool>,
+    icon: Option<model::MenuIcon>,
     shortcut: Option<String>,
     msg: Option<MenuMessage>,
     mc: MenuColors,
@@ -153,7 +163,7 @@ pub(super) fn item_btn(
 ) -> Element<'static, MenuMessage> {
     let enabled = msg.is_some();
     let ink = if enabled { mc.text } else { mc.text_disabled };
-    let mut cells = cells(label, ink, checked);
+    let mut cells = cells(label, ink, checked, icon);
     if let Some(s) = shortcut {
         cells = cells.push(
             text(raw(s))
@@ -172,10 +182,28 @@ pub(super) fn item_btn(
     row_button(cells, mc, msg)
 }
 
+/// A section header: a small muted caption on the row padding, the shared
+/// card's header height. A plain container, not a button, so it takes no
+/// hover fill and no press, and iced_aw never makes it the active row. The
+/// model already holds the label as catalog text.
+pub(super) fn header_row(label: &str, mc: MenuColors) -> Element<'static, MenuMessage> {
+    container(
+        text(signex_i18n::UserText::new(label))
+            .size(TS.caption)
+            .color(mc.text_muted)
+            .wrapping(text::Wrapping::None),
+    )
+    .padding([0.0, M.row_pad_x])
+    .height(M.header_row_height())
+    .align_y(iced::alignment::Vertical::Center)
+    .width(Length::Fill)
+    .boxed()
+}
+
 /// A row that opens a submenu: label and chevron, no shortcut; iced_aw opens
 /// the submenu on hover.
 pub(super) fn submenu_btn(label: &str, mc: MenuColors) -> Element<'static, MenuMessage> {
-    let cells = cells(label, mc.text, None).push(chevron_cell(CHEVRON, mc));
+    let cells = cells(label, mc.text, None, None).push(chevron_cell(CHEVRON, mc));
     row_button(cells, mc, Some(MenuMessage::NoOp))
 }
 
@@ -196,27 +224,28 @@ pub(super) fn separator(mc: MenuColors) -> Element<'static, MenuMessage> {
     .boxed()
 }
 
-/// The leading cells of a row: the check column of a toggle row, the label
-/// and the gap that pushes the rest to the right edge.
+/// The leading cells of a row: the check column (the mark on a checked
+/// toggle row, else the row's icon), the label and the gap that pushes the
+/// rest to the right edge.
 fn cells(
     label: &str,
     ink: iced::Color,
     checked: Option<bool>,
+    icon: Option<model::MenuIcon>,
 ) -> Row<Element<'static, MenuMessage>> {
-    let mut cells: Row<Element<'static, MenuMessage>> = Row::new()
+    let column = match (checked == Some(true), icon) {
+        (false, Some(icon)) => icon_cell(icon, ink),
+        (is_checked, _) => text(raw(if is_checked { "\u{2713}" } else { "" }))
+            .size(M.label_size)
+            .color(ink)
+            .width(Length::Fixed(MARK_WIDTH))
+            .boxed(),
+    };
+    Row::new()
         .spacing(M.row_spacing)
         .align_y(iced::Alignment::Center)
-        .width(Length::Fill);
-    if let Some(on) = checked {
-        cells = cells.push(
-            text(raw(if on { "\u{2713}" } else { "" }))
-                .size(M.label_size)
-                .color(ink)
-                .width(Length::Fixed(MARK_WIDTH))
-                .boxed(),
-        );
-    }
-    cells
+        .width(Length::Fill)
+        .push(column)
         .push(
             text(raw(label.to_owned()))
                 .size(M.label_size)
@@ -225,6 +254,26 @@ fn cells(
                 .boxed(),
         )
         .push(Space::new().width(Length::Fill).boxed())
+}
+
+/// A row's icon in the check column, in the row's ink. The glyphs are line
+/// art; any theme's handle draws the same strokes and the style colours them.
+/// Sized to the check column (MARK_WIDTH), not M.icon_size, on purpose: a
+/// wider glyph would push labels off the shared start line.
+fn icon_cell(icon: model::MenuIcon, ink: iced::Color) -> Element<'static, MenuMessage> {
+    const GLYPH_THEME: signex_types::theme::ThemeId = signex_types::theme::ThemeId::GraphiteDark;
+    let handle = match icon {
+        model::MenuIcon::Save => crate::icons::icon_menu_save(GLYPH_THEME),
+        model::MenuIcon::Reset => crate::icons::icon_undo(GLYPH_THEME),
+    };
+    svg(handle)
+        .width(Length::Fixed(MARK_WIDTH))
+        .height(Length::Fixed(MARK_WIDTH))
+        .style(move |_: &Theme, _| svg::Style {
+            color: Some(ink),
+            ..svg::Style::default()
+        })
+        .boxed()
 }
 
 fn chevron_cell(glyph: &'static str, mc: MenuColors) -> Element<'static, MenuMessage> {
@@ -290,8 +339,37 @@ mod tests {
     fn the_graphite_row_is_wider_than_the_mark_and_every_root() {
         let w = approx_menu_bar_width(&signex_i18n::I18n::en_us());
         assert!(w > BAR_LEFT_PAD + MARK_SIZE + MARK_GAP);
-        // 52 label chars, 10 roots at 16 px padding.
-        assert_eq!(w, 10.0 + 20.0 + 6.0 + 52.0 * 7.5 + 10.0 * 16.0);
+        // 39 label chars, 8 roots at 16 px padding.
+        assert_eq!(w, 10.0 + 20.0 + 6.0 + 39.0 * 7.5 + 8.0 * 16.0);
+    }
+
+    /// Every row keeps the check column, so a toggle row needs no more width
+    /// than a plain row with the same label.
+    #[test]
+    fn every_dropdown_row_keeps_the_check_column() {
+        // Wide enough to clear the 200 px floor, narrow enough for 320 px.
+        let label = "Assembly Drawings as SVG Files";
+        let menu_of = |checked: Option<bool>| model::Menu {
+            title: "Root".to_owned(),
+            entries: vec![model::MenuEntry::Item(model::MenuItem {
+                label: label.to_owned(),
+                shortcut: None,
+                state: model::ItemState::Unavailable,
+                checked,
+                icon: None,
+            })],
+        };
+        let plain = dropdown_width(&menu_of(None), "");
+        assert_eq!(plain, dropdown_width(&menu_of(Some(true)), ""));
+        // The same row measured without a check column, fitted not clamped.
+        let unchecked: Vec<DropdownEntry<()>> =
+            vec![DropdownEntry::Item(DropdownItem::passive(label.to_owned()))];
+        let bare = M.fitted_width(&unchecked, f32::MAX, "");
+        assert!(
+            bare > M.min_width && plain < M.max_width,
+            "{bare} / {plain}"
+        );
+        assert_eq!(plain, bare + M.row_spacing + MARK_WIDTH);
     }
 
     /// One token per menu text: the bar roots, the dropdown and context-menu

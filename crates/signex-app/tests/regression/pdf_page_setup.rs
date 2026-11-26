@@ -32,9 +32,12 @@ fn app_with_sheet(paper: &str) -> Signex {
         drawings: Vec::new(),
         no_erc_directives: Vec::new(),
         directives: Vec::new(),
+        harness: Default::default(),
+        unions: Vec::new(),
         title_block: HashMap::new(),
         text_widths: Default::default(),
         text_extents: Default::default(),
+        variables: Default::default(),
         lib_symbols: Default::default(),
         net_colors: HashMap::new(),
         drawing_placements: Default::default(),
@@ -50,7 +53,6 @@ fn app_with_sheet(paper: &str) -> Signex {
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "page-setup".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });
@@ -701,7 +703,6 @@ fn closing_another_tab_keeps_the_page_setup() {
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "other".to_string(),
         path: PathBuf::from("other.snxsch"),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });
@@ -762,6 +763,7 @@ fn closing_the_project_forgets_its_documents_page_setup() {
             }],
             variant_definitions: Vec::new(),
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: Vec::new(),
             enable_git: false,
             net_classes: Vec::new(),
@@ -770,6 +772,11 @@ fn closing_the_project_forgets_its_documents_page_setup() {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
+            fab_outputs: None,
+            router_tool_diameter: None,
+            bom_alternates: Vec::new(),
+            requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
         },
@@ -814,7 +821,6 @@ fn closing_one_of_two_tabs_on_a_path_keeps_the_page_setup() {
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "page-setup twin".to_string(),
         path: PathBuf::from("page-setup.snxsch"),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });

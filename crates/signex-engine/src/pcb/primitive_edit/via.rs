@@ -56,19 +56,34 @@ pub fn via_edit_command(
         .map(|id| board.vias.iter().find(|v| v.uuid == *id))
         .collect::<Option<_>>()
         .ok_or(PrimitiveEditRefusal::Gone)?;
+    let mut edited: Vec<Via> = found.iter().map(|v| (*v).clone()).collect();
+    edit_vias(&mut edited, &edit, &copper)?;
+    let changed: Vec<BoardItem> = found
+        .into_iter()
+        .zip(edited)
+        .filter(|(old, new)| new != *old)
+        .map(|(_, new)| BoardItem::Via(new))
+        .collect();
+    Ok((!changed.is_empty()).then_some(BoardCommand::ReplaceItems { items: changed }))
+}
+
+/// `edit` set on each of `vias` in place, as [`via_edit_command`] sets it;
+/// `copper` are the board's copper layers. Refused when a via is locked and
+/// the edit is not the unlock, or when a value is not a number. A new via
+/// not on a board yet is sized and spanned with it too (#2470).
+pub fn edit_vias(
+    vias: &mut [Via],
+    edit: &ViaEdit,
+    copper: &[CopperLayer],
+) -> Result<(), PrimitiveEditRefusal> {
     let unlocking = matches!(edit, ViaEdit::Locked(_));
-    if !unlocking && found.iter().any(|v| v.locked) {
+    if !unlocking && vias.iter().any(|v| v.locked) {
         return Err(PrimitiveEditRefusal::ItemLocked);
     }
-    let mut changed = Vec::new();
-    for old in found {
-        let mut new = old.clone();
-        apply(&mut new, &edit, &copper)?;
-        if new != *old {
-            changed.push(BoardItem::Via(new));
-        }
+    for via in vias {
+        apply(via, edit, copper)?;
     }
-    Ok((!changed.is_empty()).then_some(BoardCommand::ReplaceItems { items: changed }))
+    Ok(())
 }
 
 fn apply(v: &mut Via, edit: &ViaEdit, copper: &[CopperLayer]) -> Result<(), PrimitiveEditRefusal> {

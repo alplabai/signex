@@ -8,6 +8,7 @@ use signex_app::dock::DockMessage;
 use signex_app::keymap::AppCommandId;
 use signex_app::menu_bar::MenuMessage;
 use signex_app::panels::PanelMsg;
+use signex_app::test_adapter::BoardEngines;
 use signex_drc::ViolationKind;
 use signex_types::format::SnxPcb;
 use signex_types::pcb::{PcbBoard, Point, Segment};
@@ -33,6 +34,7 @@ fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
@@ -71,7 +73,7 @@ fn open(board: PcbBoard) -> (Signex, tempfile::TempDir, std::path::PathBuf) {
 /// The open board as the tab holds it, for a before/after comparison.
 fn board_dump(app: &Signex) -> String {
     let docs = &app.document_state;
-    format!("{:?}", docs.tabs[docs.active_tab].cached_document)
+    format!("{:?}", docs.tab_board_engine(docs.active_tab))
 }
 
 static DRC_RUN_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
@@ -257,6 +259,34 @@ fn the_default_clearance_is_said_and_a_set_rule_is_not() {
         .as_ref()
         .expect("panel");
     assert!(panel.ran);
+    assert_eq!(panel.default_clearance_mm, None);
+}
+
+/// Mockup row 87: before a run, a board with its own clearance and no
+/// written rule is said to be checked with that clearance, with no
+/// "no clearance rule set" banner.
+#[test]
+fn the_idle_panel_states_the_boards_own_clearance() {
+    let mut set = board();
+    set.setup = Some(signex_types::pcb::PcbSetup {
+        grid_size: 0.0,
+        trace_width: 0.0,
+        via_diameter: 0.0,
+        via_drill: 0.0,
+        clearance: 0.25,
+        track_min_width: 0.0,
+        via_min_diameter: 0.0,
+        via_min_drill: 0.0,
+    });
+    let (app, _tmp, _path) = open(set);
+    let panel = app
+        .document_state
+        .panel_ctx
+        .pcb_drc
+        .as_ref()
+        .expect("panel");
+    assert!(!panel.ran);
+    assert_eq!(panel.checked_clearance_mm.as_deref(), Some("0.25"));
     assert_eq!(panel.default_clearance_mm, None);
 }
 
@@ -638,6 +668,7 @@ fn add_project(
         sheets: Vec::new(),
         variant_definitions: Vec::new(),
         active_variant: None,
+        variant_settings: Default::default(),
         libraries: Vec::new(),
         enable_git: false,
         net_classes: Vec::new(),
@@ -653,6 +684,11 @@ fn add_project(
         schematic_defaults: Default::default(),
         project_defaults: Default::default(),
         agent_journal: Default::default(),
+        schematic_design: Default::default(),
+        fab_outputs: None,
+        router_tool_diameter: None,
+        bom_alternates: Vec::new(),
+        requirements: Default::default(),
         unknown: Default::default(),
     };
     let id = app.document_state.mint_project_id();

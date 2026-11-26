@@ -1,9 +1,9 @@
 //! #585 — every engine edit must reach `dirty_paths`.
 //!
 //! `DocumentState.dirty_paths` is the single source of truth for "this
-//! file has unsaved edits". It is written only through
-//! `with_active_schematic_session_mut`, which only
-//! `finish_schematic_mutation` calls — so an edit that runs the engine
+//! file has unsaved edits". An edit reaches it through
+//! `mark_active_document_dirty`, which `finish_schematic_mutation`
+//! calls — so an edit that runs the engine
 //! directly applies and repaints, and since #584 undoes correctly, but
 //! leaves the app believing the document is clean.
 //!
@@ -44,10 +44,9 @@ fn sheet_with(symbols: Vec<Symbol>) -> SchematicSheet {
     }
 }
 
-/// A loaded, active schematic. The `TabInfo` matters:
-/// `finish_schematic_mutation` reaches `dirty_paths` through
-/// `with_active_schematic_session_mut`, which needs a tab at
-/// `active_tab` or it silently no-ops.
+/// A loaded, active schematic with a `TabInfo` at `active_tab`, as an open
+/// sheet has; `finish_schematic_mutation` reaches `dirty_paths` through
+/// `mark_active_document_dirty`.
 pub(crate) fn app_with(symbols: Vec<Symbol>) -> (Signex, PathBuf) {
     let path = PathBuf::from("dirty-gateway.snxsch");
     let engine = signex_engine::Engine::new(sheet_with(symbols)).expect("engine");
@@ -57,7 +56,6 @@ pub(crate) fn app_with(symbols: Vec<Symbol>) -> (Signex, PathBuf) {
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "dirty-gateway".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });
@@ -138,6 +136,7 @@ fn a_parameter_manager_edit_marks_the_document_dirty() {
     let (mut app, path) = app_with(vec![symbol(target, "R1", 0.0)]);
 
     let _ = app.update(Message::ParameterManager(ParameterManagerMsg::Edit {
+        sheet: path.clone(),
         symbol_uuid: target,
         key: "Tolerance".to_string(),
         value: "1%".to_string(),
@@ -272,7 +271,6 @@ fn app_with_parked_sheet(
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "root".to_string(),
         path: root_path.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });

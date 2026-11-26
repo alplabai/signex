@@ -1,23 +1,27 @@
 //! Board print and PDF (#2402): the board's layers drawn to scale on paper,
 //! one page per chosen layer set or every set on one composite page, the
 //! bottom side mirrored if asked, 1:1 or fitted, in colour or black, with
-//! the outline, drill holes and a title block. Same embedded fonts and
+//! the outline, drill holes and a title block, and the top and bottom
+//! assembly drawings (#2486) on pages of their own. Same embedded fonts and
 //! content-stream surface as the schematic PDF. Rules:
-//! `docs/BOARD_OUTPUT.md`, "Print".
+//! `docs/BOARD_OUTPUT.md`, "Print" and "Assembly drawings".
 
+mod assembly;
 mod draw;
 mod frame;
 
 use pdf_writer::{Finish, Name, Pdf, Rect, Ref};
 use serde::{Deserialize, Serialize};
+use signex_types::format::parse_pcb_layer;
 use signex_types::pcb::PcbBoard;
-use signex_types::pcb_layer::{BoardSide, PcbLayer};
+use signex_types::pcb_layer::{BoardSide, PcbLayer, TechnicalLayer};
 use signex_types::schematic::SheetOrientation;
 use thiserror::Error;
 
 use super::embed::{FontUsage, write_fonts};
 use super::surface::PdfSurface;
 use super::{MM_TO_PT, PageSize, PdfError};
+use crate::assembly::{assembly_drawing, assembly_ink};
 
 pub(crate) use frame::PageFrame;
 
@@ -34,11 +38,24 @@ pub enum BoardLayerSet {
     Inner,
     /// The outline, mechanical and documentation layers.
     Mechanical,
+    /// The top assembly drawing (#2486): the top Fab, Assembly, Designator
+    /// and Fiducial layers, each part's designator, the outline and the
+    /// Dimensions layer. Always a page of its own.
+    AssemblyTop,
+    /// The bottom assembly drawing, the same from the bottom side.
+    AssemblyBottom,
 }
 
 impl BoardLayerSet {
     /// Every set, in the order the dialog lists them and pages print.
-    pub const ALL: [Self; 4] = [Self::Top, Self::Bottom, Self::Inner, Self::Mechanical];
+    pub const ALL: [Self; 6] = [
+        Self::Top,
+        Self::Bottom,
+        Self::Inner,
+        Self::Mechanical,
+        Self::AssemblyTop,
+        Self::AssemblyBottom,
+    ];
 
     pub const fn id(self) -> &'static str {
         match self {
@@ -46,7 +63,23 @@ impl BoardLayerSet {
             Self::Bottom => "bottom",
             Self::Inner => "inner",
             Self::Mechanical => "mechanical",
+            Self::AssemblyTop => "assembly_top",
+            Self::AssemblyBottom => "assembly_bottom",
         }
+    }
+
+    /// The side of an assembly drawing set; `None` for a layer set.
+    pub const fn assembly_side(self) -> Option<BoardSide> {
+        match self {
+            Self::AssemblyTop => Some(BoardSide::Top),
+            Self::AssemblyBottom => Some(BoardSide::Bottom),
+            Self::Top | Self::Bottom | Self::Inner | Self::Mechanical => None,
+        }
+    }
+
+    /// Whether a page of this set alone is the one the bottom side mirrors.
+    const fn is_bottom(self) -> bool {
+        matches!(self, Self::Bottom | Self::AssemblyBottom)
     }
 
     pub fn from_id(id: &str) -> Option<Self> {
@@ -67,6 +100,8 @@ impl BoardLayerSet {
             },
             Self::Top => layer.side() == Some(BoardSide::Top),
             Self::Bottom => layer.side() == Some(BoardSide::Bottom),
+            Self::AssemblyTop => assembly_ink(BoardSide::Top, layer).is_some(),
+            Self::AssemblyBottom => assembly_ink(BoardSide::Bottom, layer).is_some(),
         }
     }
 }
@@ -133,25 +168,54 @@ impl Default for BoardPrintOptions {
 
 impl BoardPrintOptions {
     /// The pages these options print: their sets, and whether each is
-    /// mirrored. Empty when no set is chosen.
+    /// mirrored. Empty when no set is chosen. An assembly drawing is always
+    /// a page of its own, after a composite page of the layer sets.
     pub fn page_plan(&self) -> Vec<(Vec<BoardLayerSet>, bool)> {
         let sets: Vec<BoardLayerSet> = BoardLayerSet::ALL
             .into_iter()
             .filter(|set| self.sets.contains(set))
             .collect();
-        if sets.is_empty() {
-            return Vec::new();
-        }
+        let alone = |set: BoardLayerSet| (vec![set], self.mirror_bottom && set.is_bottom());
         match self.pages {
-            BoardPrintPages::Composite => vec![(sets, false)],
-            BoardPrintPages::PerSet => sets
-                .into_iter()
-                .map(|set| {
-                    let mirrored = self.mirror_bottom && set == BoardLayerSet::Bottom;
-                    (vec![set], mirrored)
-                })
-                .collect(),
+            BoardPrintPages::Composite => {
+                let (drawings, layers): (Vec<_>, Vec<_>) =
+                    sets.into_iter().partition(|s| s.assembly_side().is_some());
+                let composite = (!layers.is_empty()).then_some((layers, false));
+                composite
+                    .into_iter()
+                    .chain(drawings.into_iter().map(alone))
+                    .collect()
+            }
+            BoardPrintPages::PerSet => sets.into_iter().map(alone).collect(),
         }
+    }
+
+    /// Whether a bottom set (Bottom Side or the bottom assembly drawing) is
+    /// chosen: only then does Mirror the Bottom Side change a page.
+    pub fn has_bottom_set(&self) -> bool {
+        self.sets.iter().any(|set| set.is_bottom())
+    }
+
+    /// The layers of `board` a page of `sets` (one entry of
+    /// [`Self::page_plan`]) prints, in the board's layer order, for a page
+    /// plan that names them. The outline layer comes last when these options
+    /// draw the board outline on every page and no set holds it already.
+    pub fn page_layers(&self, board: &PcbBoard, sets: &[BoardLayerSet]) -> Vec<PcbLayer> {
+        let mut layers: Vec<PcbLayer> = Vec::new();
+        for layer in board
+            .layers
+            .iter()
+            .filter_map(|def| parse_pcb_layer(&def.name))
+        {
+            if sets.iter().any(|set| set.contains(layer)) && !layers.contains(&layer) {
+                layers.push(layer);
+            }
+        }
+        let outline = PcbLayer::Technical(TechnicalLayer::EdgeCuts);
+        if self.outline && !layers.contains(&outline) {
+            layers.push(outline);
+        }
+        layers
     }
 }
 
@@ -212,6 +276,25 @@ pub fn board_pdf(
     options: &BoardPrintOptions,
     text: &BoardPrintText,
 ) -> Result<BoardPdfOutput, BoardPdfError> {
+    let (page_w_mm, page_h_mm) = options.page_size.dimensions_mm(options.orientation);
+    let mut fonts = FontUsage::new();
+    let (contents, pages) = render_pages(board, options, text, &mut fonts)?;
+    let bytes = assemble(&contents, &fonts, page_w_mm, page_h_mm)?;
+    Ok(BoardPdfOutput {
+        bytes,
+        pages,
+        uncovered_chars: fonts.uncovered_chars(),
+    })
+}
+
+/// Each page's content stream and what it holds, the fonts they use
+/// gathered in `fonts`.
+fn render_pages(
+    board: &PcbBoard,
+    options: &BoardPrintOptions,
+    text: &BoardPrintText,
+    fonts: &mut FontUsage,
+) -> Result<(Vec<Vec<u8>>, Vec<BoardPdfPage>), BoardPdfError> {
     let plan = options.page_plan();
     if plan.is_empty() {
         return Err(BoardPdfError::NoLayerSets);
@@ -220,15 +303,31 @@ pub fn board_pdf(
     if plan.len() > (i32::MAX as usize) / 4 {
         return Err(PdfError::TooManyPages(plan.len()).into());
     }
-    let (page_w_mm, page_h_mm) = options.page_size.dimensions_mm(options.orientation);
-    let mut fonts = FontUsage::new();
+    let page_mm = options.page_size.dimensions_mm(options.orientation);
     let mut contents = Vec::with_capacity(plan.len());
     let mut pages = Vec::with_capacity(plan.len());
     let fills = pcb_geom::zone_fills(board);
     for (index, (sets, mirrored)) in plan.iter().enumerate() {
-        let frame = PageFrame::new(board, options, (page_w_mm, page_h_mm), *mirrored);
-        let mut surface = PdfSurface::new(&mut fonts);
-        draw::page(&mut surface, board, &fills, options, &frame, sets);
+        let mut surface = PdfSurface::new(fonts);
+        let drawing = match sets.as_slice() {
+            [set] => set
+                .assembly_side()
+                .map(|side| assembly_drawing(board, side)),
+            _ => None,
+        };
+        let frame = match &drawing {
+            Some(drawing) => {
+                let frame =
+                    PageFrame::for_extent((drawing.min, drawing.max), options, page_mm, *mirrored);
+                assembly::page(&mut surface, drawing, &frame, options.monochrome);
+                frame
+            }
+            None => {
+                let frame = PageFrame::new(board, options, page_mm, *mirrored);
+                draw::page(&mut surface, board, &fills, options, &frame, sets);
+                frame
+            }
+        };
         if options.title_block {
             let label = sets
                 .iter()
@@ -257,12 +356,7 @@ pub fn board_pdf(
             overflows: frame.overflows(),
         });
     }
-    let bytes = assemble(&contents, &fonts, page_w_mm, page_h_mm)?;
-    Ok(BoardPdfOutput {
-        bytes,
-        pages,
-        uncovered_chars: fonts.uncovered_chars(),
-    })
+    Ok((contents, pages))
 }
 
 /// The document: catalog, page tree, one page and content stream per
@@ -303,5 +397,9 @@ fn assemble(
     Ok(pdf.finish())
 }
 
+#[cfg(test)]
+mod assembly_tests;
+#[cfg(test)]
+mod plan_tests;
 #[cfg(test)]
 mod tests;

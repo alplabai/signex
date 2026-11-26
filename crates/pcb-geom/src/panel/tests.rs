@@ -142,6 +142,8 @@ fn board() -> PcbBoard {
         layers: vec!["TopCopper".into()],
         net: Some(gnd()),
         roundrect_ratio: 0.0,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 0.0,
         net_locked: false,
         layer_sizes: None,
@@ -180,6 +182,7 @@ fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         free: Default::default(),
         options: Default::default(),
         uuid: Uuid::from_u128(1),

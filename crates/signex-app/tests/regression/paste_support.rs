@@ -11,6 +11,7 @@ pub(crate) fn request(app: &Signex, intent: PasteIntent) -> PasteRequest {
         epoch: app.interaction_state.placement_epoch,
         path: app.document_state.active_path.clone(),
         dialog: 0,
+        from_agent: false,
     }
 }
 
@@ -55,12 +56,33 @@ pub(crate) fn paste(app: &mut Signex) {
     paste_with_clipboard(app, None);
 }
 
-/// Smart Paste with nothing usable on the system clipboard.
+/// Smart Paste with nothing usable on the system clipboard, as a headless
+/// run makes it: placed at once beside the content (kept for runs without a
+/// window; in a window it opens the Smart Paste dialog, mockup row 155).
 pub(crate) fn smart_paste(app: &mut Signex) {
+    app.ui_state.io = signex_app::io_ports::IoPorts::headless(Default::default());
     let task = app.update(Message::Edit(EditMsg::SmartPaste));
     let reads = reads_numbers(app);
     settle(app, task, reads);
     answer(app, PasteIntent::SmartPaste, None);
+}
+
+/// Smart Paste in a window (mockup row 155): the request opens the dialog once the
+/// numbers and the clipboard have answered; `setup` makes the dialog's
+/// choices, then Paste puts the copies on the cursor.
+pub(crate) fn smart_paste_dialog(app: &mut Signex, setup: impl FnOnce(&mut Signex)) {
+    let task = app.update(Message::Edit(EditMsg::SmartPaste));
+    // The dialog offers Next free, so the numbers are read first.
+    settle(app, task, true);
+    answer(app, PasteIntent::SmartPaste, None);
+    assert!(
+        app.ui_state.smart_paste.is_some(),
+        "Paste Special opens the Smart Paste dialog"
+    );
+    setup(app);
+    let _ = app.update(Message::Edit(EditMsg::SmartPasteDialog(
+        signex_app::smart_paste::SmartPasteMsg::PasteConfirmed,
+    )));
 }
 
 /// The clipboard's answer to a request made now.
@@ -165,7 +187,6 @@ pub(crate) mod sheet {
         app.document_state.tabs.push(TabInfo {
             title: "paste-1263".to_owned(),
             path: path.clone(),
-            cached_document: None,
             project_id: None,
             kind: TabKind::Schematic,
         });

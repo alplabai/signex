@@ -9,35 +9,54 @@ use iced::{Background, Border, Color, Theme};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::button;
 
+pub mod board_palette;
 mod buttons;
+mod dashed_outline;
 mod dialog_buttons;
 mod dialog_kit;
+mod dialog_parts;
+mod dialog_search;
 mod dialog_shell;
+pub mod disabled;
 mod graphite;
 mod graphite_buttons;
 pub mod metrics;
 pub mod radii;
+pub mod scrollbar;
 pub mod tokens;
 pub mod typography;
 
+pub use dashed_outline::dashed_frame;
+pub use disabled::{DISABLED_OPACITY, dimmed, dimmed_button, read_only_field, read_only_row};
 pub use graphite::{
-    PillTone, card, field, floating_shadow, key_cap, pill, pill_colors, resize_handle_edge,
-    section_label,
+    PillTone, card, field, floating_shadow, key_cap, key_cap_of, pill, pill_colors,
+    resize_handle_edge, section_label,
 };
-pub use graphite_buttons::{accent_button_rounded, ghost_button, primary_button};
+pub use graphite_buttons::{ghost_button, primary_button};
 pub use metrics::ChromeMetrics;
 pub use radii::Radii;
+pub use scrollbar::{scrollbar_colors, scrollbar_style, thin_both, thin_scrollbar, thin_vertical};
+
+pub use dialog_kit::{dense_band_footer_height, dialog_band_padding};
 
 pub use buttons::{
     accent_button, danger_button, hover_row, outline_button, subtle_button, subtle_button_with_rest,
 };
 pub use dialog_kit::{
     DialogButtonKind, dense_footer_height, dialog_body, dialog_button, dialog_footer,
-    dialog_footer_height, dialog_footer_split, dialog_hint, dialog_list, dialog_message,
-    dialog_section,
+    dialog_footer_band, dialog_footer_height, dialog_footer_split, dialog_hint, dialog_icon_button,
+    dialog_list, dialog_message, dialog_section, primary_dialog_button,
 };
+pub(crate) use dialog_parts::medium_font;
+pub use dialog_parts::{
+    CalloutTone, dialog_callout, dialog_caption, dialog_field_label, dialog_head_row,
+    dialog_inline_error, dialog_row, dialog_rows, dialog_section_label, dirty_dot, file_kind_icon,
+    violet_pair,
+};
+pub use dialog_search::dialog_search_field;
 pub use dialog_shell::{
-    DIALOG_ICON_TILE, DIALOG_INTRO_EXTRA, DialogIcon, dialog_icon_tile, dialog_intro,
+    DIALOG_ICON_TILE, DIALOG_INTRO_EXTRA, DialogIcon, dialog_glyph, dialog_icon_tile, dialog_intro,
+    dialog_intro_with, tinted_glyph,
 };
 pub use typography::{HAIRLINE, LINE_HEIGHT, Spacing, TypeScale, chrome_px};
 
@@ -46,6 +65,9 @@ pub const RADIUS: f32 = 3.0;
 
 #[cfg(test)]
 mod graphite_tests;
+
+#[cfg(test)]
+mod selected_segment_tests;
 
 #[cfg(test)]
 mod tests;
@@ -329,21 +351,41 @@ fn card_style(
     }
 }
 
-/// Translucent highlight overlay shown on dock regions when a floating panel
-/// is dragged near a window edge.
+/// The dock region a dragged floating panel would dock into if released now
+/// (mockup row 8): `accent-soft` fill, a 2 px accent border, card corners.
 pub fn dock_zone_highlight(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style + 'static {
     let accent = ti(tokens.accent);
+    let soft = tokens::resolve(tokens).accent_soft;
     move |_| container::Style {
-        background: Some(Background::Color(Color::from_rgba(
-            accent.r, accent.g, accent.b, 0.15,
-        ))),
+        background: Some(Background::Color(soft)),
         border: Border {
             width: 2.0,
-            radius: 4.0.into(),
-            color: Color::from_rgba(accent.r, accent.g, accent.b, 0.4),
+            radius: Radii::GRAPHITE.card.into(),
+            color: accent,
             ..Border::default()
         },
         ..container::Style::default()
+    }
+}
+
+/// A dashed outline drawn on a canvas: iced's `Border` has no dash.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DashedOutline {
+    pub color: Color,
+    pub width: f32,
+    pub radius: f32,
+    /// Dash and gap lengths, in px.
+    pub dash: [f32; 2],
+}
+
+/// The faint outline of a dock region a dragged floating panel could dock
+/// into but would not now (mockup row 8): 1.5 px dashed `line-strong`, card corners.
+pub fn dock_zone_outline(tokens: &ThemeTokens) -> DashedOutline {
+    DashedOutline {
+        color: tokens::resolve(tokens).line_strong,
+        width: 1.5,
+        radius: Radii::GRAPHITE.card,
+        dash: [5.0, 4.0],
     }
 }
 

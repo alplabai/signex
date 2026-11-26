@@ -8,11 +8,11 @@ use std::collections::BTreeMap;
 use signex_types::project::DrcRuleSet;
 use signex_types::violation::Severity;
 
-use crate::{UserRule, ViolationKind};
+use crate::{LimitKind, UserRule, ViolationKind};
 
 impl ViolationKind {
     /// Every kind, most severe first (the report order).
-    pub const ALL: [ViolationKind; 7] = [
+    pub const ALL: [ViolationKind; 21] = [
         ViolationKind::Short,
         ViolationKind::Clearance,
         ViolationKind::Unconnected,
@@ -20,6 +20,20 @@ impl ViolationKind {
         ViolationKind::TrackWidth,
         ViolationKind::ViaDiameter,
         ViolationKind::ViaDrill,
+        ViolationKind::HoleSize,
+        ViolationKind::AnnularRing,
+        ViolationKind::HoleToHole,
+        ViolationKind::EdgeClearance,
+        ViolationKind::ViaInPad,
+        ViolationKind::SilkToPad,
+        ViolationKind::SilkToSilk,
+        ViolationKind::MaskSliver,
+        ViolationKind::MaskExpansion,
+        ViolationKind::PasteExpansion,
+        ViolationKind::CourtyardOverlap,
+        ViolationKind::PartOutsideRoom,
+        ViolationKind::ComponentHeight,
+        ViolationKind::BodyClearance,
     ];
 
     /// Stable rule id, stored in profiles and projects; never renamed.
@@ -32,6 +46,20 @@ impl ViolationKind {
             ViolationKind::TrackWidth => "builtin::track_width",
             ViolationKind::ViaDiameter => "builtin::via_diameter",
             ViolationKind::ViaDrill => "builtin::via_drill",
+            ViolationKind::HoleSize => "builtin::hole_size",
+            ViolationKind::AnnularRing => "builtin::annular_ring",
+            ViolationKind::HoleToHole => "builtin::hole_to_hole",
+            ViolationKind::EdgeClearance => "builtin::edge_clearance",
+            ViolationKind::ViaInPad => "builtin::via_in_pad",
+            ViolationKind::SilkToPad => "builtin::silk_to_pad",
+            ViolationKind::SilkToSilk => "builtin::silk_to_silk",
+            ViolationKind::MaskSliver => "builtin::mask_sliver",
+            ViolationKind::MaskExpansion => "builtin::mask_expansion",
+            ViolationKind::PasteExpansion => "builtin::paste_expansion",
+            ViolationKind::CourtyardOverlap => "builtin::courtyard_overlap",
+            ViolationKind::PartOutsideRoom => "builtin::part_outside_room",
+            ViolationKind::ComponentHeight => "builtin::component_height",
+            ViolationKind::BodyClearance => "builtin::body_clearance",
         }
     }
 
@@ -43,13 +71,58 @@ impl ViolationKind {
     /// Severity when no profile or project sets one.
     pub const fn default_severity(self) -> Severity {
         match self {
-            ViolationKind::Unconnected => Severity::Warning,
+            ViolationKind::Unconnected
+            | ViolationKind::SilkToPad
+            | ViolationKind::SilkToSilk
+            | ViolationKind::MaskSliver => Severity::Warning,
             ViolationKind::Short
             | ViolationKind::Clearance
             | ViolationKind::Keepout
             | ViolationKind::TrackWidth
             | ViolationKind::ViaDiameter
-            | ViolationKind::ViaDrill => Severity::Error,
+            | ViolationKind::ViaDrill
+            | ViolationKind::HoleSize
+            | ViolationKind::AnnularRing
+            | ViolationKind::HoleToHole
+            | ViolationKind::EdgeClearance
+            | ViolationKind::ViaInPad
+            | ViolationKind::MaskExpansion
+            | ViolationKind::PasteExpansion
+            | ViolationKind::CourtyardOverlap
+            | ViolationKind::PartOutsideRoom
+            | ViolationKind::ComponentHeight
+            | ViolationKind::BodyClearance => Severity::Error,
+        }
+    }
+
+    /// The limits whose findings are of this kind; empty for a kind no
+    /// written limit sets (a short, an unconnected link, a keepout).
+    pub const fn limits(self) -> &'static [LimitKind] {
+        match self {
+            ViolationKind::Short | ViolationKind::Clearance => &[LimitKind::MinClearance],
+            ViolationKind::Unconnected
+            | ViolationKind::Keepout
+            | ViolationKind::PartOutsideRoom => &[],
+            ViolationKind::TrackWidth => &[LimitKind::MinTrackWidth, LimitKind::MaxTrackWidth],
+            ViolationKind::ViaDiameter => &[LimitKind::MinViaDiameter],
+            ViolationKind::ViaDrill => &[LimitKind::MinViaDrill],
+            ViolationKind::HoleSize => &[LimitKind::MinHoleSize, LimitKind::MaxHoleSize],
+            ViolationKind::AnnularRing => &[LimitKind::MinAnnularRing],
+            ViolationKind::HoleToHole => &[LimitKind::MinHoleToHole],
+            ViolationKind::EdgeClearance => &[LimitKind::MinEdgeClearance],
+            ViolationKind::ViaInPad => &[LimitKind::MinViaPadGap],
+            ViolationKind::SilkToPad => &[LimitKind::MinSilkToPad],
+            ViolationKind::SilkToSilk => &[LimitKind::MinSilkToSilk],
+            ViolationKind::MaskSliver => &[LimitKind::MinMaskSliver],
+            ViolationKind::MaskExpansion => {
+                &[LimitKind::MinMaskExpansion, LimitKind::MaxMaskExpansion]
+            }
+            ViolationKind::PasteExpansion => {
+                &[LimitKind::MinPasteExpansion, LimitKind::MaxPasteExpansion]
+            }
+            ViolationKind::CourtyardOverlap => &[LimitKind::MinCourtyardGap],
+            ViolationKind::ComponentHeight => &[LimitKind::MaxComponentHeight],
+            ViolationKind::BodyClearance => &[LimitKind::MinBodyClearance],
         }
     }
 }

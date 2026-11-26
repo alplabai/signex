@@ -137,6 +137,7 @@ mod tests {
             root: root.to_path_buf(),
             pages: Vec::new(),
             fold: CaseFold::host_default(),
+            project_name: String::new(),
         }
     }
 
@@ -145,6 +146,7 @@ mod tests {
             fingerprint: fingerprint.into(),
             hierarchy: SheetHierarchy::default(),
             unreadable: Vec::new(),
+            numbers: Default::default(),
         }))
     }
 

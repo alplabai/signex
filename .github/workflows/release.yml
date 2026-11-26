@@ -30,6 +30,10 @@ env:
   # Cargo.toml's [profile.release] so local `--release` builds stay fast.
   CARGO_PROFILE_RELEASE_LTO: thin
   CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "1"
+  # The tag's test job builds the workspace in the dev profile. Full debuginfo
+  # filled the hosted runner's disk on v26.11.1 ("No space left on device");
+  # ci.yml's `test · workspace` builds the same tree with line tables only.
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
 
 jobs:
   # Single source of the version string for every job below. A tag push uses
@@ -302,6 +306,7 @@ jobs:
           mkdir staging
           cp "target/${{ matrix.target }}/release/signex" staging/
           bash installer/copy-font-licenses.sh staging/licenses/fonts
+          bash installer/copy-notices.sh staging/licenses
           cd staging
           tar czf "../signex-linux-${{ matrix.arch_suffix }}-${{ steps.version.outputs.version }}.tar.gz" *
 
@@ -326,6 +331,11 @@ jobs:
           tar tzf "signex-linux-${{ matrix.arch_suffix }}-${V}.tar.gz" > tar-contents.txt
           grep -q 'licenses/fonts/OFL-Roboto.md' tar-contents.txt \
             || { echo "::error::the tarball carries no font licenses"; exit 1; }
+          # The NOTICE and third-party notices ship too (Apache-2.0 §4(d), #2487).
+          grep -q 'usr/share/doc/signex/THIRD_PARTY_NOTICES.md' deb-contents.txt \
+            || { echo "::error::the .deb carries no third-party notices"; exit 1; }
+          grep -q 'licenses/THIRD_PARTY_NOTICES.md' tar-contents.txt \
+            || { echo "::error::the tarball carries no third-party notices"; exit 1; }
           rm -f deb-contents.txt tar-contents.txt
           bash scripts/smoke_release_artifact.sh "$V" /usr/bin/signex
           # --appimage-extract-and-run: no FUSE needed on the runner.
@@ -450,6 +460,8 @@ jobs:
           Copy-Item bin/signex.exe staging/
           New-Item -ItemType Directory -Force staging/licenses/fonts | Out-Null
           Copy-Item crates/signex-app/assets/fonts/OFL-*.md staging/licenses/fonts/
+          # Licence, NOTICE and third-party notices (Apache-2.0 §4(d), #2487).
+          Copy-Item LICENSE, LICENSE-APACHE, NOTICE, THIRD_PARTY_NOTICES.md staging/licenses/
           Compress-Archive -Path staging/* -DestinationPath "signex-windows-${{ matrix.arch_suffix }}-$env:VERSION.zip"
 
       # The aarch64 Windows installer cannot execute on the x64 runner,
@@ -614,8 +626,9 @@ jobs:
           # The bundled fonts' licenses ship with every package (#1179).
           licenses=yes
           test -f "$MNT/Signex.app/Contents/Resources/licenses/fonts/OFL-Roboto.md" || licenses=no
+          test -f "$MNT/Signex.app/Contents/Resources/licenses/THIRD_PARTY_NOTICES.md" || licenses=no
           hdiutil detach "$MNT"
-          [[ "$licenses" == yes ]] || { echo "::error::$DMG carries no font licenses"; exit 1; }
+          [[ "$licenses" == yes ]] || { echo "::error::$DMG carries no font licenses or third-party notices"; exit 1; }
           echo "shipped binary archs: $archs"
           for a in x86_64 arm64; do
             [[ " $archs " == *" $a "* ]] || { echo "::error::$DMG is missing $a"; exit 1; }

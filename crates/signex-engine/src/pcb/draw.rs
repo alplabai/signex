@@ -11,6 +11,7 @@ use signex_types::pcb::{
     PcbSetup, Point, Segment, Via, ViaType, Zone,
 };
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
+use signex_types::zone_cutout::POUR_CUTOUT_FILL;
 use signex_types::zone_keepout::{KEEPOUT_FILL, keepout_copper};
 use signex_types::zone_pour::POUR_FILL;
 use uuid::Uuid;
@@ -159,8 +160,8 @@ pub fn rectangle(a: Point, b: Point) -> Vec<Point> {
 }
 
 /// Solid copper over `outline` on `layer` (a Fill or a Solid Region, stored
-/// as a zone), on the net of the copper under its first point. `None` for an
-/// outline with no area or a point the geometry cannot hold.
+/// as a zone), on the net of the copper under its first corner on copper,
+/// or no net. `None` for an outline with no area.
 pub fn new_copper_area(
     board: &PcbBoard,
     id: Uuid,
@@ -170,7 +171,12 @@ pub fn new_copper_area(
     if !has_area(&outline) {
         return None;
     }
-    let net = net_under(board, *outline.first()?, 1 << layer_bit(layer));
+    let on_layer = 1 << layer_bit(layer);
+    let net = outline
+        .iter()
+        .map(|corner| net_under(board, *corner, on_layer))
+        .find(|&net| net != 0)
+        .unwrap_or(0);
     let net_name = board
         .nets
         .iter()
@@ -193,12 +199,15 @@ pub fn new_copper_area(
         min_thickness: 0.0,
         min_island_area: 0.0,
         remove_dead_islands: false,
+        shelved: false,
+        unfilled: false,
         unknown: Default::default(),
     })
 }
 
 /// A polygon pour over `outline` on `layer` (#2216): a zone with the pour
-/// fill, on the net of the copper under its first point, or no net. Its
+/// fill, on the net of the copper under its first corner on copper, or no
+/// net. Its
 /// clearance is left at 0, which follows the board's clearance
 /// (`Zone::pour_clearance_mm`). `None` for an outline with no area or a
 /// point the geometry cannot hold.
@@ -239,7 +248,19 @@ pub fn new_keepout(id: Uuid, outline: Vec<Point>, layer: PcbLayer) -> Option<Zon
         min_thickness: 0.0,
         min_island_area: 0.0,
         remove_dead_islands: false,
+        shelved: false,
+        unfilled: false,
         unknown: Default::default(),
+    })
+}
+
+/// A pour cutout over `outline` on `layer` (#2871): a zone with the cutout
+/// fill and no net, which every pour on `layer` leaves empty. `None` for an
+/// outline with no area.
+pub fn new_pour_cutout(id: Uuid, outline: Vec<Point>, layer: CopperLayer) -> Option<Zone> {
+    new_keepout(id, outline, PcbLayer::Copper(layer)).map(|zone| Zone {
+        fill_type: POUR_CUTOUT_FILL.into(),
+        ..zone
     })
 }
 
@@ -252,8 +273,7 @@ pub fn place_zone(zone: Zone) -> BoardCommand {
 
 /// A board string (#2373) reading `text` at `at` on `layer`, at the PCB
 /// default size and unturned. `None` on a layer that takes no text
-/// (`PcbLayer::takes_text`): copper text would be copper the copper list,
-/// DRC and ratsnest never read.
+/// (`PcbLayer::takes_text`); on copper it is copper of no net (#2883).
 pub fn new_text(
     id: Uuid,
     at: Point,
@@ -284,7 +304,9 @@ pub fn place_item(item: BoardItem) -> BoardCommand {
 }
 
 pub use super::draw_free::{
-    ArcMode, FREE_PAD_HOLE_MM, FREE_PAD_SIZE_MM, arc_points, new_arc, new_dimension, new_free_pad,
+    ArcMode, FREE_PAD_HOLE_MM, FREE_PAD_SIZE_MM, RADIAL_PICK_REACH_MM, arc_points,
+    arc_points_about, new_arc, new_dimension, new_free_pad, new_free_pad_on, new_kind_dimension,
+    new_radial_dimension,
 };
 
 /// Whether the polygon encloses any area, in integer nm (exact): false for

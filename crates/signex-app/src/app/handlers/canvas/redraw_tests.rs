@@ -21,7 +21,6 @@ fn app_on_a_sheet() -> Signex {
     app.document_state.tabs.push(TabInfo {
         title: "redraw".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -34,6 +33,7 @@ fn empty_board() -> signex_types::pcb::PcbBoard {
     signex_types::pcb::PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         free: Default::default(),
         options: Default::default(),
         unknown: Default::default(),

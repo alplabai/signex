@@ -34,7 +34,26 @@ const MAX_DXF_BYTES: u64 = 64 * 1024 * 1024;
 impl Signex {
     pub(crate) fn handle_dxf_import(&mut self, event: DxfImportMsg) -> Task<Message> {
         match event {
+            // In board sketch the outline import goes through the dialog
+            // and into the sketch (mockup row 179c).
+            DxfImportMsg::Requested { outline: true } if self.board_sketch_in_view().is_some() => {
+                self.request_sketch_dxf_file()
+            }
             DxfImportMsg::Requested { outline } => self.request_dxf_file(outline),
+            DxfImportMsg::SketchPicked { path: None, .. } => Task::none(),
+            DxfImportMsg::SketchPicked {
+                board,
+                path: Some(path),
+            } => super::pcb_dxf_sketch::read_sketch_dxf(board, path),
+            DxfImportMsg::SketchRead {
+                board,
+                path,
+                source,
+            } => {
+                self.open_sketch_dxf(&board, &path, source);
+                Task::none()
+            }
+            DxfImportMsg::SketchDialog(event) => self.apply_sketch_dxf(event),
             DxfImportMsg::Picked {
                 board,
                 target,
@@ -188,7 +207,7 @@ impl Signex {
 fn answer(result: Result<DxfImportSummary, String>) -> CommandOutcome {
     match result.and_then(|s| serde_json::to_value(s).map_err(|e| e.to_string())) {
         Ok(summary) => CommandOutcome::Answered(summary),
-        Err(reason) => CommandOutcome::Disabled { reason },
+        Err(reason) => CommandOutcome::disabled(reason),
     }
 }
 
@@ -220,7 +239,7 @@ fn read_dxf(
     )
 }
 
-fn read_text(path: &Path) -> Result<String, String> {
+pub(super) fn read_text(path: &Path) -> Result<String, String> {
     let size = std::fs::metadata(path).map_err(|e| e.to_string())?.len();
     if size > MAX_DXF_BYTES {
         return Err(format!(
@@ -232,7 +251,7 @@ fn read_text(path: &Path) -> Result<String, String> {
         .map_err(|e| e.to_string())
 }
 
-fn file_label(path: &Path) -> String {
+pub(super) fn file_label(path: &Path) -> String {
     path.file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| path.display().to_string())
@@ -260,7 +279,7 @@ pub(crate) fn import_dxf_outline(app: &mut Signex, args: &CommandArgs) -> Ran {
 /// Checked up front, then answered once the file is read
 /// ([`CommandOutcome::Deferred`]): the summary, or why nothing changed.
 fn operand_import(app: &mut Signex, args: &CommandArgs, id: &str, outline: bool) -> Ran {
-    let refused = |reason: String| (CommandOutcome::Disabled { reason }, Task::none());
+    let refused = |reason: String| (CommandOutcome::disabled(reason), Task::none());
     let command = match AppCommandId::new(id) {
         Ok(command) => command,
         Err(reason) => return refused(reason),

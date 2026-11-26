@@ -211,13 +211,16 @@ impl Signex {
 }
 
 /// A footprint stands for its part; a pad for its net (its part when it has
-/// none); a track or via for its net.
+/// none); a track, via or copper zone for its net.
 fn cross_selection_of_board_items(board: &PcbBoard, items: &[ItemRef]) -> CrossSelection {
     let mut footprints = Vec::new();
     let mut nets = std::collections::BTreeSet::new();
     for item in items {
         match *item {
-            ItemRef::Footprint(fp) => footprints.push(fp),
+            // A designator or comment stands for its part (#2368).
+            ItemRef::Footprint(fp) | ItemRef::FootprintText { footprint: fp, .. } => {
+                footprints.push(fp)
+            }
             ItemRef::Pad { footprint, pad } => match cross_probe::pad_net(board, footprint, pad) {
                 Some(net) => {
                     nets.insert(net);
@@ -240,12 +243,17 @@ fn cross_selection_of_board_items(board: &PcbBoard, items: &[ItemRef]) -> CrossS
             ItemRef::Arc(_) | ItemRef::FreePad(_) => {
                 nets.extend(pcb_geom::item_net(board, *item));
             }
-            // A drawn area, a string, a dimension or a drawing stands for
-            // nothing on the schematic.
-            ItemRef::Zone { .. }
-            | ItemRef::Text(_)
+            // A pour, fill or solid region stands for its net; a keepout or
+            // pour cutout for nothing (#2907).
+            ItemRef::Zone { zone, .. } => {
+                nets.extend(cross_probe::zone_net(board, zone));
+            }
+            // A string, a dimension, a drawing or a room stands for nothing
+            // on the schematic.
+            ItemRef::Text(_)
             | ItemRef::Dimension(_)
-            | ItemRef::Graphic { .. } => {}
+            | ItemRef::Graphic { .. }
+            | ItemRef::Room(_) => {}
         }
     }
     CrossSelection {
@@ -255,7 +263,7 @@ fn cross_selection_of_board_items(board: &PcbBoard, items: &[ItemRef]) -> CrossS
 }
 
 /// The items on `board` that `what` names: the footprints of its parts and
-/// the pads, tracks and vias of its nets.
+/// the pads, tracks, vias and copper zones of its nets.
 pub(super) fn board_items_for(board: &PcbBoard, what: &CrossSelection) -> Vec<ItemRef> {
     let mut items: Vec<ItemRef> = cross_probe::footprints_for_parts(board, &what.parts)
         .into_iter()
@@ -271,5 +279,11 @@ pub(super) fn board_items_for(board: &PcbBoard, what: &CrossSelection) -> Vec<It
     );
     items.extend(members.tracks.into_iter().map(ItemRef::Track));
     items.extend(members.vias.into_iter().map(ItemRef::Via));
+    // A zone is selected under the kind the selection index holds it as.
+    items.extend(members.zones.into_iter().filter_map(|id| {
+        let zone = board.zones.iter().find(|z| z.uuid == id)?;
+        let kind = pcb_geom::PickKind::of_zone(zone)?;
+        Some(ItemRef::Zone { zone: id, kind })
+    }));
     items
 }

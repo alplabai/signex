@@ -599,6 +599,20 @@ fn position(kind: ViolationKind) -> usize {
         ViolationKind::TrackWidth => 4,
         ViolationKind::ViaDiameter => 5,
         ViolationKind::ViaDrill => 6,
+        ViolationKind::HoleSize => 7,
+        ViolationKind::AnnularRing => 8,
+        ViolationKind::HoleToHole => 9,
+        ViolationKind::EdgeClearance => 10,
+        ViolationKind::ViaInPad => 11,
+        ViolationKind::SilkToPad => 12,
+        ViolationKind::SilkToSilk => 13,
+        ViolationKind::MaskSliver => 14,
+        ViolationKind::MaskExpansion => 15,
+        ViolationKind::PasteExpansion => 16,
+        ViolationKind::CourtyardOverlap => 17,
+        ViolationKind::PartOutsideRoom => 18,
+        ViolationKind::ComponentHeight => 19,
+        ViolationKind::BodyClearance => 20,
     }
 }
 
@@ -612,6 +626,20 @@ fn all_lists_every_kind_in_declaration_order() {
         ViolationKind::TrackWidth,
         ViolationKind::ViaDiameter,
         ViolationKind::ViaDrill,
+        ViolationKind::HoleSize,
+        ViolationKind::AnnularRing,
+        ViolationKind::HoleToHole,
+        ViolationKind::EdgeClearance,
+        ViolationKind::ViaInPad,
+        ViolationKind::SilkToPad,
+        ViolationKind::SilkToSilk,
+        ViolationKind::MaskSliver,
+        ViolationKind::MaskExpansion,
+        ViolationKind::PasteExpansion,
+        ViolationKind::CourtyardOverlap,
+        ViolationKind::PartOutsideRoom,
+        ViolationKind::ComponentHeight,
+        ViolationKind::BodyClearance,
     ];
     assert_eq!(ViolationKind::ALL.len(), every.len());
     for (i, kind) in every.into_iter().enumerate() {
@@ -663,4 +691,23 @@ fn a_track_width_rule_reports_a_copper_arc_outside_its_limits() {
         .expect("the width finding");
     assert_eq!(v.items, [pcb_geom::ItemRef::Arc(id(4100))]);
     assert_eq!(v.at, pcb_geom::PointNm::new(5_000_000, 5_000_000));
+}
+
+#[test]
+fn wins_over_is_specificity_first_then_strictness_then_written_order() {
+    let class = clearance("hv", NetScope::Class("HV".into()), 300_000);
+    let net = clearance("gnd", NetScope::Net("GND".into()), 100_000);
+    let kind = LimitKind::MinClearance;
+    // Nothing held: any value wins.
+    assert!(class.wins_over(kind, 300_000, None));
+    // A net rule beats a class rule even when looser.
+    assert!(net.wins_over(kind, 100_000, Some((class.rank(), 300_000))));
+    assert!(!class.wins_over(kind, 300_000, Some((net.rank(), 100_000))));
+    // Between equals the stricter wins; an identical value keeps the first.
+    assert!(class.wins_over(kind, 400_000, Some((class.rank(), 300_000))));
+    assert!(!class.wins_over(kind, 300_000, Some((class.rank(), 300_000))));
+    // For a maximum the smaller value is the stricter.
+    let max = LimitKind::MaxTrackWidth;
+    assert!(class.wins_over(max, 1_000_000, Some((class.rank(), 2_000_000))));
+    assert!(!class.wins_over(max, 2_000_000, Some((class.rank(), 1_000_000))));
 }

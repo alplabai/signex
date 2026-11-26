@@ -233,7 +233,8 @@ fn check_text(old: &BoardText, new: &BoardText) -> Result<(), BoardCommandError>
 }
 
 /// A dimension's line width and text height are positive numbers; a
-/// changed layer takes text.
+/// changed layer is any layer the board names, copper included (Caner,
+/// 2026-11-21).
 fn check_dimension(old: &LinearDimension, new: &LinearDimension) -> Result<(), BoardCommandError> {
     if new.line_width != old.line_width {
         check_positive(new.line_width, "dimension line width")?;
@@ -241,7 +242,41 @@ fn check_dimension(old: &LinearDimension, new: &LinearDimension) -> Result<(), B
     if new.text_height != old.text_height {
         check_positive(new.text_height, "dimension text height")?;
     }
-    check_text_layer(&old.layer, &new.layer)
+    if new.layer != old.layer && parse_pcb_layer(&new.layer).is_none() {
+        return Err(BoardCommandError::UnknownLayer(new.layer.clone()));
+    }
+    if new.style != old.style || new.text_at != old.text_at {
+        check_dimension_style(new)?;
+    }
+    Ok(())
+}
+
+/// A changed look (#2868): text width above zero, every other length not
+/// below zero, the Manual point finite.
+fn check_dimension_style(new: &LinearDimension) -> Result<(), BoardCommandError> {
+    let s = &new.style;
+    check_positive(s.text_width, "dimension text width")?;
+    for (value, field) in [
+        (s.arrow_length, "dimension arrow length"),
+        (s.arrow_width, "dimension arrow width"),
+        (s.text_gap, "dimension text gap"),
+        (s.extension_offset, "dimension extension offset"),
+        (s.extension_overshoot, "dimension extension overshoot"),
+        (s.extension_width, "dimension extension width"),
+    ] {
+        if !value.is_finite() {
+            return Err(BoardCommandError::NonFinite { field });
+        }
+        if value < 0.0 {
+            return Err(BoardCommandError::Negative { field });
+        }
+    }
+    if !(new.text_at.x.is_finite() && new.text_at.y.is_finite()) {
+        return Err(BoardCommandError::NonFinite {
+            field: "dimension text position",
+        });
+    }
+    Ok(())
 }
 
 fn check_text_layer(old: &str, new: &str) -> Result<(), BoardCommandError> {

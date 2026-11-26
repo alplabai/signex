@@ -117,17 +117,22 @@ fn render_entry(
 }
 
 /// A row dispatches only when it has a handler and is enabled; otherwise it
-/// renders greyed out with no press handler.
+/// renders greyed out with no press handler. A header is a caption, not a
+/// button, so it takes neither hover nor press.
 fn render_item(
     item: &MenuItem,
     mc: MenuColors,
     shape: graphite::RowShape,
     planned: &signex_i18n::Localized,
 ) -> MenuItemView {
+    if item.is_header() {
+        return Item::new(graphite::header_row(&item.label, mc));
+    }
     let shortcut = item.shortcut.as_ref().map(|s| s.text.clone());
     let row = graphite::item_btn(
         &item.label,
         item.checked,
+        item.icon,
         shortcut,
         item.dispatches().cloned(),
         mc,

@@ -12,6 +12,7 @@ signex-cli run <project> [options] < commands.jsonl
 signex-cli run <project> <command-id> [--arg key=value]... [options]
 signex-cli commands [--json]
 signex-cli agent-log <project> [--access]
+signex-cli notebook export-pdf --project <project> [options]
 ```
 
 `agent-log` prints the project's agent journal as a table: the edits agents
@@ -53,6 +54,20 @@ Blank lines are skipped.
 {"id": "place_junction", "args": {"at": [5.08, 0]}}
 {"id": "save_document", "args": {"document": "main.snxsch"}}
 ```
+
+The project-wide numbering commands (`annotate_schematic_quietly`,
+`force_annotate_all_schematics`) write no file: each sheet they change, opened
+or not, stays unsaved in memory. To keep the result, run with `--save` and send
+one `save_document` naming each changed sheet (`list_documents` lists them). A
+run that ends with changes unsaved names those sheets, and they are lost with
+the run. A save never overwrites a file that changed since it was read.
+`undo document=<sheet>` never steps such a run, saved or not: it moves other
+sheets too, so the command is refused with `the next step belongs to a
+project-wide run (annotate, replace or re-prefix) and moves other sheets too;
+undo it from the sheet it was run on`. Undo the run in the app window, where
+Ctrl+Z restores every sheet until you save. Given `document=<sheet>`, they
+number that sheet's project and answer with each change; see "Numbering and a
+new board".
 
 An argument is a string, a number, a boolean, or `[x, y]` for a point (mm).
 The names, kinds and units of a command's arguments are in
@@ -112,7 +127,11 @@ The placements (`place_net_label` and the other labels, `place_power_symbol`,
 `place_junction`, `place_no_connect`, `place_no_erc`, `place_wire`, `draw_wire`,
 `place_bus`, `draw_bus`, `place_text`, `place_text_string`, `draw_line`,
 `draw_graphic_line`, `draw_rectangle`, and the directives `place_blanket`,
-`place_compile_mask`, `place_diff_pair` and `edit_blanket` (#2420,
+`place_compile_mask`, `place_diff_pair` and `edit_blanket` (#2420) and
+`place_parameter_set` (#1489: `at` on a wire, refused off one; optional
+`class`, `diff_pair_class`, `width`, `clearance`, `via_diameter` and
+`via_hole` in mm, and `current` in A, information only), and
+`edit_no_erc_rules` (#1699, see
 [SCHEMATIC_DIRECTIVES.md](SCHEMATIC_DIRECTIVES.md))) take an optional
 `document`, an id or a path as for `apply_edits`. Given, the command runs on that sheet and never on
 the active tab: pin references, the intent checks and their scratch copies, the
@@ -179,12 +198,13 @@ sheet first and judge the result with the netlist derivation
    included; running along a body edge or ending on one does not count.
 3. **Extra connection** (never allowed): the run pulls another pin, label,
    junction or wire into the net, wherever on its path or bend ("the wire also
-   touches R5.1 at 20.32,5.08"). "Touches" is what the netlist joins: a pin
-   the run only passes over, with no wire end or junction at its tip, is not
-   connected and not named. What an end intends is what is connected there
-   before the run (wire ends, junctions, labels, connected pins, sheet pins) and
-   what the caller named: a pin reference names only that pin (another pin on
-   the same tip is extra), a coordinate names the pins at the point. A start
+   touches R5.1 at 20.32,5.08"). "Touches" is what the netlist joins. A pin
+   end the run passes over gets an automatic junction (2026-11-18), so it is
+   joined and named like a pin the run ends on. What an end intends is what is
+   connected there before the run (wire ends, junctions, labels, connected pins,
+   sheet pins) and what the caller named: a pin reference names only that pin
+   (another pin on the same tip is extra), a coordinate names the pins at the
+   point. A start
    or end on a wire's interior is a T the caller asked for only for a
    coordinate with no pin tip there; for a pin reference, or any end on a pin
    tip, a wire passing under the tip is not intended, so its net is extra.
@@ -510,6 +530,46 @@ menu action, run by a person, keeps its read in place. The answer is
 `{"sheet", "file", "added", "removed", "kept"}`
 (entry names); Messages reports it as the menu action does.
 
+### Bottom-up hierarchy {#bottom-up-hierarchy}
+
+```text
+create_sheet_symbol_from_sheet path=power.snxsch [at=x,y] [allow_merge=..] [document=..]
+sync_sheet_entries symbol=<id or name> direction=to_symbol|to_sheet [document=..]
+```
+
+The operand forms of Design ▸ Create Sheet Symbol From Sheet and Design ▸
+Synchronize Sheet Entries and Ports (#1276); rules in
+[MENU_BAR.md](MENU_BAR.md#bottom-up-hierarchy).
+
+`create_sheet_symbol_from_sheet` places one sheet symbol for the sheet file
+`path` with an auto-generated entry for every port of the file, as one undo
+step. `path` is checked as `place_sheet_symbol`'s `file` is: inside the
+project folder, not through a link out of it, not this sheet, not a sheet
+above it at any depth, not a file whose subtree places this sheet, and the
+frozen name rule (a page of the project, a file placed elsewhere, or names
+that would short or rename a net need `allow_merge=true`). A file this sheet
+already places is refused. `at` is the top-left corner (a grid coordinate,
+never a pin reference); without it the symbol goes under the sheet's content.
+The file is read off the UI thread before the edit runs. The answer is
+`{"id", "name", "file", "at", "size", "entries"}`. It takes a file path, so it
+is not an edit of `apply_edits`, as `place_design_block` is not. Without
+`path` a headless run is refused for the missing operand; the file picker of
+the menu row is never opened.
+
+`sync_sheet_entries` applies what the dialog's preview would show for
+`direction`, at once, on the sheet symbol `symbol` (its id, or its unique
+name): `to_symbol` changes the symbol's entries (a renamed entry keeps its
+place and wires; only auto-generated entries of `symbol` are renamed, and
+only auto-generated entries are removed), `to_sheet`
+changes the child sheet's Hierarchical labels (never a Global label) as one
+undo step of the child, left unsaved; a closed child goes to a tabless
+engine. The closed child file is read off the UI thread first; a sheet that
+changed while it was read is refused with nothing applied, as any edit is.
+`to_sheet` is refused inside `apply_edits` and an agent's one-step run,
+whose undo step covers the edited sheet only. The answer is
+`{"symbol", "name", "file", "direction", "added", "removed", "renamed"}`,
+`renamed` a list of `{"from", "to"}`; empty lists when the two sides agree.
+
 ## Editing placed objects
 
 The Location and Parameters rows of a placed object in Properties run these
@@ -521,20 +581,36 @@ Properties rows read the panel's unit and the page origin instead. The answer
 is `{"id", "kind", "position", "rotation"?, "size"?}` after the edit.
 
 ```text
-set_object_position id=<uuid> at=x,y [document=..]
-set_object_rotation id=<uuid> rotation=0|90|180|270 [document=..]
+set_object_position id=<uuid> at=x,y [keep_wires=true|false] [wiring=auto|horizontal_first|vertical_first|straight] [document=..]
+set_object_rotation id=<uuid> rotation=0|90|180|270 [keep_wires=true|false] [document=..]
 set_sheet_symbol_size id=<uuid> size=w,h [document=..]
 set_symbol_parameter id=<uuid> name=Manufacturer [value=..] [document=..]
 ```
 
 - `set_object_position` moves a part, label, sheet symbol, sheet entry, wire
   or bus (its start), bus entry, junction, no-connect, No-ERC directive or
-  text note so its position is `at`. Wires on a moved part follow it when
-  "keep wires" is on, as a drag does; a sheet entry stays on its symbol's
-  border. A pin reference is refused here.
-- `set_object_rotation` turns a part in place (its wires follow when "keep
-  wires" is on) or sets a label's angle. A power port takes the absolute angle its
-  Rotation row always set. Any other kind is refused.
+  text note so its position is `at`. Its wire handling is in its operands,
+  never the person's settings (#2552): `keep_wires` (default `true`) makes
+  the wires on a moved part follow it, and `wiring` (default `auto`) bends
+  them as the drag wiring mode of that name does. It is the edit a drag of
+  the same distance commits, with the same rubber band and guard. A contact
+  the guard cannot keep is left as a plain move; the answer adds
+  `moved_wires` (ids of wires whose ends changed and of wires the move
+  added), `removed_wires` (ids of wires it removed) and `fallbacks`, one
+  `{"kind", "names", "message"}` per notice (`pins_not_kept` names the pins,
+  `grip_end_left` carries `at` instead of `names`, `message` is the Messages
+  line). An agent reaches it only inside `apply_edits`, where its answer is
+  that edit's entry of `results`; the fallbacks are named there too, while
+  their Messages line waits for the list's commit. A sheet entry stays on
+  its symbol's border. A pin reference is refused here. The Position row in
+  Properties makes the same move with the "keep wires" preference and
+  `auto`.
+- `set_object_rotation` turns a part in place or sets a label's angle. A
+  part's wires follow it when `keep_wires` (default `true`) is set; the
+  operand, never the person's "keep wires" preference, decides (#2326). The
+  answer has no wire fields. A power port takes the absolute angle its
+  Rotation row always set. Any other kind is refused. The Rotation row in
+  Properties makes the same turn with the "keep wires" preference.
 - `set_sheet_symbol_size` keeps the top-left corner; entries on the right and
   bottom edges travel with them. Refused with the reason, nothing changed,
   when an edge is under 5.08 mm, an entry would fall off its shortened edge,
@@ -543,8 +619,52 @@ set_symbol_parameter id=<uuid> name=Manufacturer [value=..] [document=..]
   or empty `value`: the parameter stays, with no value). `reference`, `value`
   and `footprint` have their own rows and commands and are refused here.
 
+`set_sheet_variable name=<NAME> [value=..] [remove=true] [document=..]` sets
+one variable of the sheet (what `${NAME}` and expressions on it resolve), as
+the Sheet Variables rows in Properties do, in one undo step. A left-out or
+empty `value` keeps the variable with no value; `remove=true` deletes it and
+takes no `value`. A name is letters, digits and `_` and does not start with a
+digit. Variables that then do not evaluate (a cycle, an unknown name) are
+reported in Messages. The answer is `{"name", "value", "variables"}`.
+
+`repair_pin_junctions [document=..]` adds a junction dot on every pin end
+of the sheet that lies inside a wire with none, as Tools ▸ Repair Pin
+Junctions does, in one undo step; the answer is `{"added"}`.
+`reset_board_origin document=..` and `reset_layer_colors document=..` are
+the Reset rows of the board menus on the board named: the origin to the
+bottom-left of the outline (answer `{"document", "origin"}`), and every
+layer back to the palette colour. A read-only board is refused.
+
 A locked object is refused with the lock's reason before anything is sent.
 Without operands (the palette, a key) each says which Properties row to use.
+
+### Drawing order and Delete by uuid
+
+The Arrange rows and Delete act on the selection in a window; with operands
+they act on the items `ids` names, by uuid, on the document named (#2326).
+Each is one undo step; the answer is `{"document", "ids", "changed"}`.
+
+```text
+bring_drawings_forward document=<sheet> ids=<drawing uuids>
+bring_drawings_to_front document=<sheet> ids=<drawing uuids>
+send_drawings_backward document=<sheet> ids=<drawing uuids>
+send_drawings_to_back document=<sheet> ids=<drawing uuids>
+delete_selection document=<sheet or board> ids=<uuids>
+```
+
+- The drawing order moves only drawings: a uuid that is no drawing of the
+  sheet refuses the whole command (`sheet-target-unknown`).
+- `delete_selection` deletes objects of an open sheet (a part's uuid is the
+  part, never only its designator or value field) or items of an open board
+  (a footprint, track, via, area, text, arc, free pad, dimension or drawing;
+  a pad's uuid is no board item). A uuid that names nothing there refuses
+  the whole command (`sheet-target-unknown`, `board-target-unknown`); any
+  other document is refused (`delete-document-not-open`). Locked objects on
+  a sheet are skipped and named in Messages, as a key press does; a locked
+  footprint refuses a board delete with the placement's reason.
+- A headless run without operands acts on the session's own selection, as
+  the window's key does. Delete in a footprint editor stays the editor's own
+  route until slice S-L and takes no operands.
 
 ## Placement extras
 
@@ -736,7 +856,7 @@ The answer is a check report (above), `"check": "drc"`:
    "message": "clearance 0.15 mm, needs 0.2 mm, GND / VCC",
    "evidence": {"nets": ["GND", "VCC"], "layers": ["TopCopper"],
      "at": [0.0, 0.2], "measured_nm": 150000, "required_nm": 200000,
-     "rule_source": "board_setup"},
+     "waiver_key": "<32 hex>", "rule_source": "board_setup"},
    "items": ["<track uuid>", "<track uuid>"], "sheet": "/abs/demo.snxpcb",
    "key": "<32 hex>"}],
  "waived": [], "lapsed": [],
@@ -757,9 +877,10 @@ The answer is a check report (above), `"check": "drc"`:
 - `evidence`: `nets` (two names; the same net twice for an unconnected link
   or a keepout, `net <n>` for a net with no name), `layers` (copper layer
   names), `at` (mm, board coordinates), `measured_nm` and `required_nm` (as
-  Run DRC's panel shows them), `keepout` (the keepout's uuid) and
-  `rule_source` (`written`, `net_class`, `board_setup` or `default`; for a
-  clearance or a written limit).
+  Run DRC's panel shows them), `waiver_key` (`signex_drc::waiver_key`, the
+  id `waive_drc_violation` and the DRC panel name the finding by), `keepout`
+  (the keepout's uuid) and `rule_source` (`written`, `net_class`,
+  `board_setup` or `default`; for a clearance or a written limit).
 - `key`: a hash of the board path, the rule id (and, for a written rule,
   the kind of limit broken), the items and the keepout, so moving an item
   keeps it. The board path is the document entry's own: the tab's path when
@@ -778,7 +899,18 @@ The answer is a check report (above), `"check": "drc"`:
 - `rule_set`: `source` (`project` or `machine`), `profile` (as for ERC),
   `sha256` (the hash of the `drc` section the run used), `clearance_nm` and
   `from_default` (no clearance set in Board Setup).
-- `waived` and `lapsed` are empty: DRC has no waivers yet.
+- `waived` and `lapsed` come from the board's own waivers, the ones the DRC
+  panel and Run DRC read (`[board_options] drc_waivers` in the `.snxpcb`,
+  #2307). A waived finding is in `waived` with its waiver, not in
+  `findings`. A waiver whose objects changed since it was waived (moved,
+  resized, on another layer or net) has lapsed: the finding is back in
+  `findings` and the waiver is in `lapsed`. A waiver object is
+  `{"kind": "finding", "rule_id", "key", "fingerprint", "reason"}`; `key` is
+  the finding's `evidence.waiver_key`. A finding of a rule switched `off` is
+  not listed and its waiver is in neither list. To waive a finding, run
+  `waive_drc_violation document=<board> id=<evidence.waiver_key>
+  text=<note> [author=<name>]` after a Run DRC of the board; it is refused when the board
+  changed since that run (`docs/architecture/pcb-drc.md`, "Waivers").
 - The baseline is scoped to the board file: a run of another board, or an
   ERC run, is refused as a baseline.
 
@@ -792,6 +924,370 @@ Known limits:
   closed. A `pcb_file` spelled differently from the tab path (case,
   `sub/../`) can change the keys between an open and a closed check, and a
   baseline made in the other state is then refused.
+
+### Fixing DRC findings
+
+```text
+fix_drc_violation document=<board> violation=<evidence.waiver_key> [dry_run=true]
+fix_drc document=<board> [rule=<kind>] [dry_run=true]
+```
+
+`fix_drc_violation` fixes one finding of the named board, by the
+`evidence.waiver_key` `check_drc` answers for it; `fix_drc` fixes every
+finding of one rule kind, or of every kind when `rule` is left out (or
+`all`). The kinds with a fix are `clearance`, `track_width`,
+`annular_ring`, `hole_to_hole`, `silk_to_pad` and `mask_sliver`, written
+bare or as `builtin::<kind>`; any other `rule` is refused with that list.
+What each fix changes: `docs/DRC_RULES.md`, "Fixing findings" (#2940).
+
+The board must be open (`open_document` first in a headless run). The
+check uses Run DRC's rules for the board and the parts' 3D bodies, as
+`check_drc` does. The fixes are worked out off the UI thread on a copy of
+the board and the answer comes when they land; a board edited meanwhile
+refuses the run with nothing changed (run it again). A fix never
+waives a finding and never changes a locked item; one it cannot make, or
+whose change would make a new finding, is left with the reason. Every fix
+of one run is one undo step on the board, labelled "Fix DRC Violations";
+nothing is written to disk until the board is saved. With
+`dry_run=true` (or `--dry-run`) the answer is the same and the board is not
+changed. Both need the `edit` capability. A key no open finding has is
+refused; run `check_drc` for the current keys (a fixed finding's key is
+gone, not moved).
+
+```bash
+signex-cli run demo.snxprj --save <<'EOF'
+{"id": "open_document", "args": {"path": "demo.snxpcb"}}
+{"id": "fix_drc", "args": {"document": "demo.snxpcb", "rule": "clearance"}}
+{"id": "save_document", "args": {"document": "demo.snxpcb"}}
+EOF
+```
+
+The answer:
+
+```json
+{"board": "/abs/demo.snxpcb", "dry_run": false, "changed": true,
+ "fixed": [{"id": "<32 hex>", "rule": "builtin::clearance",
+   "kind": "builtin::clearance",
+   "message": "clearance 0.1 mm, needs 0.15 mm",
+   "items": ["<track uuid>", "<track uuid>"], "at_mm": [5.0, 0.175],
+   "changed": ["<track uuid>"], "cleared_by": null}],
+ "left": [{"id": "<32 hex>", "rule": "builtin::clearance",
+   "kind": "builtin::clearance", "message": "...", "items": ["..."],
+   "at_mm": [1.0, 2.0], "reason": "locked",
+   "why": "the fix would change track <uuid>, locked"}],
+ "remaining": {"count": 1, "complete": true, "waived": 0,
+   "findings": [{"id": "...", "rule": "...", "kind": "...",
+   "message": "...", "items": ["..."], "at_mm": [1.0, 2.0]}]},
+ "warnings": []}
+```
+
+- `changed`: whether the board changed (an undo step was made); `false`
+  for a dry run and for a run that fixed nothing.
+- `fixed`: each finding fixed (for a dry run, each it would fix), in report
+  order. `id` is its waiver key, `rule` its rule id (`user::<name>` for a
+  written rule), `kind` the built-in kind, `items` what the finding names
+  (a pad as `<footprint uuid>/<pad uuid>`), `changed` the items the fix
+  changed. A finding an earlier fix of the same run cleared has an empty
+  `changed` and that fix's key in `cleared_by`.
+- `left`: each finding left as it is, with `reason` (`no_fix`, `waived`,
+  `locked`, `cannot_change`, `new_violation`, `not_cleared` or
+  `refused`) and `why` in words. `fix_drc` with no `rule` lists the
+  findings of the kinds with no fix here too, as `no_fix`.
+- `remaining`: a check of the board after the fixes (for a dry run, of the
+  board the fixes would leave): the open findings in the same shape, their
+  `count`, and how many are `waived`. A rule switched `off` is not listed.
+  When a part's 3D model could not be read, that part was judged on its
+  stored height: `complete` is `false` and `count` is `null`, never a 0 the
+  check could not vouch for (#2986).
+- `warnings`: what the check behind the fixes could not judge, in Run
+  DRC's words: the rule text's notes, rule text not applied (a syntax
+  error), written rules not applied, and each 3D model it could not read.
+
+Known limits:
+
+- A clearance fix moves a track or via; it does not reroute a track that
+  cannot move. A part's own silkscreen and a pad's mask opening are the
+  footprint's and are left.
+- The fixes are worked out off the UI thread, one check per fix tried, so
+  a large board with many findings answers later; the window stays live.
+
+## Requirement checks
+
+```text
+check_requirements document=<project, or one of its sheets or its board> [baseline=<run>]
+```
+
+A project keeps a list of requirements, its own targets (#2339). Each one is
+a deterministic check that passes or fails with evidence, and
+`check_requirements` runs the whole list on demand and answers with a check
+report in the shape `check_erc` and `check_drc` use (above). It is a Community
+feature, read-only like the other checks: it writes nothing to a panel, the
+ERC or DRC results or Messages, and it is a query on the agent channel and in
+`signex-cli`. The list is edited in the Project tab's Requirements section
+or with the `project_*_requirement` commands ([PROJECT_TAB.md](PROJECT_TAB.md)).
+
+```bash
+signex-cli run demo.snxprj check_requirements --arg document=demo.snxprj
+```
+
+The list is the top-level `requirements` key of the `.snxprj`, beside
+`rules`, not inside it: it is not part of the rule set's hash, a rule profile
+or Update from profile. Each entry is an object with an `id` (unique in the
+list), a `kind`, an optional `severity` (`error`, the default, `warning` or
+`info`; the severity of the findings it raises), an optional `enabled`
+(`true`, the default; a requirement with `false` is kept, not checked, never
+in `passed`, and named in the report's `warnings`) and the kind's fields. A
+project save writes every entry back as it was read: defaults left out stay
+left out and `100` stays `100` (keys come out sorted, as in the rest of the
+file).
+
+| `kind` | Fields | Passes when |
+|---|---|---|
+| `erc_clean` | `allow_warnings` (default `false`) | the project's ERC run (as `check_erc` runs it from the root sheet) has no error finding, and no warning finding unless allowed |
+| `drc_clean` | `allow_warnings` (default `false`) | the DRC run of the project's board (as `check_drc` runs it) has no error finding, and no warning finding unless allowed |
+| `board_size` | `max_width_mm`, `max_height_mm` | the bounding box of the board outline is at most that wide and high |
+| `parts_state` | `states` (default `["released"]`; of `draft`, `in_review`, `released`, `deprecated`, `obsolete`) | every part the BOM buys was placed from a library row, of an open library, in one of the states |
+| `net_class` | `nets` (a `*`/`?` pattern), `class`, `min_trace_width_mm`, `min_clearance_mm` (all but `nets` optional, at least one given) | every board net matching `nets` is in `class`, and the class of each sets at least the given track width and clearance |
+| `bom_cost` | `quantity`, `currency`, `max_unit_cost` | the BOM costs at most `max_unit_cost` per board in `currency` when `quantity` boards are built |
+| `rail_budget` | `net` (a name or a `*`/`?` pattern), `voltage`, `tolerance_percent`, `max_current_a`, `margin_percent` (all but `net` optional) | every rail matching `net` has a voltage, one source and its loads, its voltage matches, and the summed load is within the source's supply less `margin_percent` (and at most `max_current_a`); see [Rail budgets](#rail-budgets) |
+| `layer_count` | `min_layers`, `max_layers` (at least one given) | the board has at least `min_layers` and at most `max_layers` copper layers |
+
+```json
+"requirements": [
+  {"id": "erc", "kind": "erc_clean"},
+  {"id": "size", "kind": "board_size", "max_width_mm": 100, "max_height_mm": 80},
+  {"id": "usb", "kind": "net_class", "nets": "USB_*", "class": "USB",
+   "min_trace_width_mm": 0.2, "severity": "warning"},
+  {"id": "cost", "kind": "bom_cost", "quantity": 100, "currency": "USD",
+   "max_unit_cost": 12.5}
+]
+```
+
+The report:
+
+- `check` is `requirements`; the run is numbered and kept like the other
+  checks, and `baseline=` compares with an earlier run of the same project
+  (any document of the project names it). A run of another check is refused
+  as a baseline.
+- A finding's `rule` is `req::<id>`, its `severity` the requirement's.
+  `evidence` holds the `kind` and what was measured: the board's
+  `width_mm`/`height_mm` and the limits; a part's `designator`, `library_row`
+  and `state`, with `count`, how many parts its BOM line holds, and `parts`,
+  how many parts were checked in all; a net's `net` and `class`, or a
+  class's set and minimum values; the cost's `unit_cost`, `total_cost`, `quantity` and `currency`;
+  for `erc_clean`/`drc_clean` one finding with the counts (`errors`,
+  `warnings`, `info`, `waived`, `run_warnings`) and the run's `rule_set`, not
+  a copy of every ERC or DRC finding; for `rail_budget` the `rail` (its
+  `query_rail_budget` entry without `problems`: `net`, `voltage`,
+  `tolerance_percent`, `source`, `sources`, `loads`, `total_a`, `supply_a`,
+  `headroom_a`), with `total_a`, `limit_a`, `supply_a`, `margin_percent` and
+  `max_current_a` on an overload and the rail's and the wanted `voltage` and
+  `tolerance_percent` on a voltage that does not match; for `layer_count` the
+  board's `count` of copper layers, `min_layers` and `max_layers`.
+- `sheet` is the board file for `board_size`, `net_class`, `layer_count` and
+  `drc_clean`, the project file otherwise.
+- `key` is a hash of the project file, the rule and what the finding is
+  about (a part's designator, a net, a class and its value), so it holds
+  while the measured values change.
+- `passed` lists the requirements met (`req::<id>`), in list order. It is an
+  addition to the shared shape: ERC and DRC leave it out. An id used by more
+  than one entry, readable or not, is never in `passed`: the first entry is
+  checked, every later one is a finding.
+- `warnings`: what the ERC and DRC runs could not do (prefixed `ERC:` and
+  `DRC:`), the sheets the BOM could not read, and `The project lists no
+  requirements` for an empty list.
+- `rule_set`: `source` (`project`), `requirements` (how many) and `sha256`
+  (the hash of the list as stored, keys sorted), so two runs over different
+  lists can be told apart.
+
+A requirement that cannot be evaluated is a finding, never a pass: an entry
+this build cannot read (an unknown kind, a missing or mistyped field, a field
+it does not know; it is kept in the file as written), an id used twice, a
+limit that is no positive length, no board or an unreadable one, a pattern no
+board net matches, a class the project does not have, an ERC or DRC run that
+did not finish, a part with no library row or one in no open library, a
+BOM line with no cached price in the currency, a pattern no rail matches, a
+rail with no voltage, no source, more than one source, no load or a rail
+parameter that is no current, rails the project file holds in a form this
+build cannot read, and a `layer_count` whose `min_layers` is above its
+`max_layers`.
+
+How each kind is measured:
+
+- `board_size` takes the outline's axis-aligned bounding box; a rotated board
+  is not turned to fit.
+- `parts_state` checks the parts the BOM buys (fitted, in the BOM and on the
+  board, the active variant applied), each placement of a child sheet once.
+  The states come from the libraries open in the app.
+- `net_class` reads the nets of the project's board; a class's `0` (unset)
+  value fails a minimum.
+- `bom_cost` prices the BOM as the BOM export groups it, from the prices the
+  open libraries cached; it never fetches a price. Each line buys its fitted
+  quantity times `quantity`, at least the distributor's minimum order, at
+  that quantity's price break (the BOM export's own pricing); the line costs
+  are rounded to cents and the total is divided by `quantity`. A price in another currency is not
+  converted; the cost is then not known and the requirement fails.
+- `rail_budget` reads the project's rails and the parts the BOM buys, as
+  [Rail budgets](#rail-budgets) says.
+- `layer_count` counts the copper layers of the board's layer list, the count
+  the layer tabs and the layer stack show (two when the list names none).
+
+Known limits:
+
+- A project lists one board (`pcb_file`), so `drc_clean`, `board_size`,
+  `net_class` and `layer_count` check that board.
+- Over the agent channel `document=` names one of the project's sheets or its
+  board: the project file itself is refused at the agent gate, as for every
+  command, because it is not a document of a project.
+- The ERC and DRC runs a requirement uses are not numbered or kept; run
+  `check_erc` or `check_drc` for their findings.
+
+## Design notebook generation
+
+`generate_design_notebook` (#2945, mockup row 201) builds the project's
+design report: requirements and how each was met, the architecture, key
+decisions, a BOM summary, the ERC, DRC and requirement results, simulation
+results, outputs produced, open items and the change log. The report is its
+own notebook file, `notebook/generated/design-report.snxnbk`; the
+hand-written `notebook/design.snxnbk` is only read.
+
+```text
+generate_design_notebook document=<project, or one of its documents>
+    [sections=<list>|all] [variant=<name>] [template=design-report-a4]
+    [document_number=<text>] [revision=<text>] [checks=run|last]
+    [fail_on=requirements,checks] [save=true] [update=true]
+```
+
+It answers once its run lands with the summary below. Nothing is written
+without `save=true`, and an existing report is replaced only with
+`update=true`. `checks=run` (the default) runs ERC, DRC and the requirement
+checks; `checks=last` uses the newest runs the session keeps. `fail_on`
+names the conditions that make the summary's status `fail`. Its capability
+is `save`.
+
+The same from a terminal, with no window, is the `notebook generate` verb of
+`signex-cli` ([Design Notebook](#design-notebook)):
+
+```text
+signex-cli notebook generate --project buck-3v3.snxprj --json
+    [--force] [--fail-on requirements,checks] [--sections <list>]
+    [--variant <name>] [--template <name>] [--document <number>]
+    [--revision <rev>] [--checks run|last] [run options]
+```
+
+The result line's `data` is the summary:
+
+```json
+{
+  "command": "notebook.generate",
+  "project": "buck-3v3.snxprj",
+  "revision": "B", "variant": "Base",
+  "output": "notebook/generated/design-report.snxnbk",
+  "pages": 9,
+  "sections": ["summary", "requirements", "architecture", "decisions", "bom",
+               "checks", "simulation", "outputs", "open-items", "changelog"],
+  "requirements": { "total": 6, "pass": 5, "fail": 1, "failed": ["REQ-005"] },
+  "checks": { "erc": { "errors": 0, "warnings": 2, "waived": 0 },
+              "drc": { "errors": 0, "warnings": 0, "waived": 0 } },
+  "open_items": ["ISS-004", "ISS-005"],
+  "stale_references": 0,
+  "written": true,
+  "status": "ok",
+  "sources": [{ "section": "checks", "from": "ERC run for this report" }],
+  "not_read": [{ "section": "simulation", "why": "no simulation run is recorded for the project" }]
+}
+```
+
+- Exit code 0 when the report was made, a failing requirement included.
+  `--fail-on requirements` exits 1 when a requirement fails, `--fail-on
+  checks` when ERC or DRC has an error; the summary then says
+  `"status": "fail"` and names them in `failed_on`. A report that does not
+  compile is `"status": "error"`, exit 1.
+- A report that is already there is never replaced without `--force`: the
+  command is refused (the result line's `"status": "refused"`, exit 1) and
+  changes no file.
+- A bad command line or a project that cannot be opened exits 2.
+- Two runs on the same project write the same file: nothing in it depends
+  on the clock.
+- A block meets a requirement when its title or text names the
+  requirement's id; the measurements that name it are its evidence. See
+  `docs/DESIGN_NOTEBOOK_GENERATE.md`.
+
+## Rail budgets
+
+```text
+project_set_rail document=<project, or one of its documents> net=<name> [voltage=<V>] [tolerance_percent=<%>] [remove=true]
+query_rail_budget document=<project, or one of its documents>
+```
+
+A power rail's budget (#2943) is what its source can supply against what its
+loads draw. The data lives in two places:
+
+- **The rail** — its nominal voltage and tolerance, by net name, in the
+  top-level `rails` object of the `.snxprj`:
+  `"rails": {"+3V3": {"voltage": 3.3, "tolerance_percent": 5}}`. `voltage`
+  is a number of volts other than 0 (negative for a negative rail);
+  `tolerance_percent` is optional, from 0 to below 100. A project that sets no
+  rail writes no `rails` key, a save writes every rail nobody edited as it was
+  written, and an older build keeps the key as one it does not know. A
+  `rails` value this build cannot read (another shape, a key it does not
+  know, a voltage of 0) is kept as written; `project_set_rail` refuses to
+  edit over it and `rail_budget` reports it.
+- **The parts** — a part names the current it draws from a rail with the
+  parameter `Rail Load <net>`, and a source part the current it can supply
+  with `Rail Supply <net>` (`set_symbol_parameter`, or the part's
+  Parameters). The value is in A: a number, optionally followed by `A`, `mA`,
+  `uA` or `µA` (`0.25`, `250mA`). Only the parts the BOM buys count (fitted,
+  in the BOM and on the board, the active variant applied, each placement of
+  a child sheet once), as for `parts_state`.
+
+`project_set_rail` sets the rail `net`: `voltage` and `tolerance_percent` as
+typed (a new rail needs a `voltage`; an empty `tolerance_percent` clears it),
+or `remove=true` takes the rail out. It is one undo step of the project's
+history (the Project tab's Undo takes it back), marks the project unsaved and
+writes nothing until it is saved. It needs the `edit` capability. It answers
+`{"rails": <the rails as stored>, "unreadable": null or why, "changed":
+true|false}`; a refused value changes nothing and says why.
+
+`query_rail_budget` changes nothing and needs only `read`. The parts are read
+off the UI thread (closed sheets from disk, within the folders a headless run
+may read), so the answer comes once that read lands. It answers:
+
+```json
+{"project": "/p/demo.snxprj", "count": 2, "warnings": [],
+ "rails": [
+  {"net": "+3V3", "voltage": 3.3, "tolerance_percent": 5,
+   "source": {"designator": "U1", "current_a": 1.0},
+   "sources": [{"designator": "U1", "current_a": 1.0}],
+   "loads": [{"designator": "U2", "current_a": 0.25}],
+   "total_a": 0.25, "supply_a": 1.0, "headroom_a": 0.75, "problems": []}
+ ]}
+```
+
+- `rails` lists, by name, every rail the project sets and every rail a
+  fitted part's parameter names.
+- `source` is the rail's one source, `null` with none or more than one
+  (`sources` lists them all); `supply_a` and `headroom_a` (`supply_a` less
+  `total_a`, no margin) are `null` then too.
+- `problems` says what keeps the budget from being told: no voltage, no
+  source, more than one source, no load, a rail parameter that is no
+  current. A `rail_budget` requirement reports each one as a finding.
+- `warnings` names the sheets the BOM could not read and a board that could
+  not be read.
+- Refused when the project's rails cannot be read or its BOM cannot be built
+  (no root sheet, the root sheet unreadable).
+
+A `rail_budget` requirement checks each rail matching `net`: `voltage`
+without `tolerance_percent` must equal the rail's voltage; with it, the
+rail's own band (its voltage ± its tolerance) must lie inside `voltage` ±
+`tolerance_percent`. The limit is the source's supply less `margin_percent`,
+and at most `max_current_a`; the summed load must not be over it.
+
+Known limits:
+
+- A rail parameter is trusted: whether the part is connected to that net is
+  not checked.
+- A rail has one source; parallel sources are a finding, not summed.
 
 ## Board queries
 
@@ -823,10 +1319,950 @@ find_similar_items document=<board> id=<uuid> [fields=kind,value,...]
 
 Find by text on a board is `find_items` (designator and value).
 
+## Design Notebook
+
+`notebook <verb>` runs a Design Notebook command by its own name, as `run`
+would run its catalog command (mockup rows 201 and 202). It is the one
+command-line front end of the Design Notebook; its verbs are `generate` and
+`export-pdf`. It takes the project with `--project` (or as the first word
+after the verb), every `run` option, and `--json`, which changes nothing:
+every answer is a JSON line.
+
+```
+signex-cli notebook generate --project buck-3v3.snxprj [--force]
+    [--fail-on requirements,checks] [--sections <list>|all]
+    [--variant <name>] [--template <name>] [--document <number>]
+    [--revision <rev>] [--checks run|last] [--json] [run options]
+```
+
+`generate` is `run <project> generate_design_notebook --arg
+document=<project> --arg save=true --arg ... --allow save`: it writes the
+design report into `notebook/generated/design-report.snxnbk` and answers
+with its summary ([Design notebook generation](#design-notebook-generation)).
+`--force` is `update=true`, `--document` is `document_number`. The exit code
+follows the summary's `status`: anything but `ok` exits 1.
+
+```
+signex-cli notebook export-pdf --project buck-3v3.snxprj [--out <file>] [--overwrite]
+    [--notebook generated/design-report] [--pages all|current|3-7]
+    [--paper document|a4|letter] [--variant <name>] [--annotations <kinds>]
+    [--stale warn|fail] [--no-title-block] [--no-contents] [--no-bookmarks]
+    [--python-source] [--json] [run options]
+```
+
+`export-pdf` is `run <project> export_notebook_pdf --arg document=<project>
+--arg ... --allow export`: it writes the notebook as a PDF file (the default
+name in `Project Outputs/notebook/` without `--out`) and answers with the
+pages, paper, references and stale ones, the bookmarks written and the
+SHA-256 of the file. A notebook named without an extension is a `.snxnbk`
+file. A stale reference under `--stale fail` refuses the export (exit code 1).
+The file is a `.pdf`, never a Signex document, and a file that is there (the
+default one included) is replaced only with `--overwrite`.
+The settings and the answer are in [NOTEBOOK_PDF.md](NOTEBOOK_PDF.md).
+
+### Part heights
+
+```text
+query_part_heights document=<board>
+```
+
+`query_part_heights` (#2939) answers each part of one open board, in board
+order, with the height the component height and 3D body clearance rules
+measure (see [`DRC_RULES.md`](DRC_RULES.md), "Component height and 3D body
+clearance"). The library models of the footprints the parts came from are
+read off the UI thread, as a DRC run reads them, and the answer comes when
+they land. It changes nothing and is on the agent channel. A board that is
+not open is refused ("open the board first"), and so is a document that is
+not a board.
+
+```json
+{
+  "document": "/work/demo/demo.snxpcb",
+  "parts": [
+    { "id": "<uuid>", "designator": "U1", "side": "top", "height_mm": 3.0,
+      "bottom_mm": 0.0, "source": "stored", "problem": null }
+  ],
+  "unread": []
+}
+```
+
+- `side` is `top` or `bottom`; `height_mm` is the tallest point of the body
+  above that face, `bottom_mm` where the body starts (above 0 for a body
+  raised off the board).
+- `source` is where the height came from: `model` (the model file attached
+  to the library footprint, measured as the box of its points), `body` (the
+  library footprint's 3D Body), `stored` (the Height stored on the part, over
+  its courtyard or pads) or `none` (no model and no Height: `height_mm` is
+  `null` and the rules do not check it).
+- `problem` says why a part's body could not be measured (a coordinate that
+  is no length); `null` otherwise.
+- `unread` lists the models that could not be read; those parts fall back
+  to their stored Height.
+
+## Update PCB from schematic
+
+`update_pcb_from_schematic` brings the board of a project in line with its
+schematic without the dialog (#1312, #2470). It reads the same change list
+the Update PCB dialog shows ([UPDATE_PCB.md](UPDATE_PCB.md)) and answers
+with it as JSON.
+
+```text
+update_pcb_from_schematic [document=<project, one of its sheets or its board>] dry_run=true
+update_pcb_from_schematic [document=<project, one of its sheets or its board>] apply=true
+```
+
+- `document` names the project. Left out, the run acts on the active
+  project's board, so `update_pcb_from_schematic apply=true` works as it
+  did before #2470. The active project is the workspace's: the project
+  opened (or opened again) last, headless too, so `signex-cli run` on one
+  project acts on that project; closing it makes a neighbour active. It is
+  never the tab in view. With one project open and none made active, that
+  project is the default.
+- Another project's board is never updated in the active one's place.
+  When the active project has no board, the run is refused and the refusal
+  lists the other open projects' boards to name with `document=`; with
+  several projects open and none active it is refused and lists every open
+  project's board. With no board to list it is refused as having none, and
+  with no project open as not part of a project.
+- Over the agent channel `document` is always required and is one of the
+  project's sheets or its board: the channel's gate needs a named document
+  (an agent never acts on the person's active one), so the active-project
+  default does not apply there.
+- `dry_run=true` lists the changes and changes nothing: no undo step, no
+  dirty flag. When `apply=true` is given too (`--dry-run` on a script), the
+  dry run wins.
+- `apply=true` executes the rows ticked by default, as the dialog's Execute
+  does: one labelled undo step on the board, refused with nothing changed
+  when the board is closed with unsaved edits, read-only or moved on while
+  the list was read. The rules the schematic's Net Parameters directives ask
+  for are applied with it, as Execute does. The person's tab does not move.
+- Without either the command is refused, a bare headless run included (it
+  opens no dialog). It is refused too while the Update
+  PCB dialog is open, or while another run waits for its list; the dialog
+  does not open over a run that waits.
+- The project's board is opened when it is not; a project with no board is
+  refused (make one with `new_pcb_document`).
+- It needs `edit` (`apply=true` changes the board). The answer comes once
+  the list is read, as for a check.
+
+The answer:
+
+```json
+{"dry_run": true, "project": "/p/demo.snxprj", "board": "/p/demo.snxpcb",
+ "revision": 7, "board_revision": 7, "applied": 3,
+ "counts": {"add": 2, "change": 1, "remove": 0, "problems": 1},
+ "changes": [
+   {"kind": "add_footprint", "action": "add", "object": "R1",
+    "footprint": "<uuid>", "value": "10k", "to": "<library footprint>",
+    "ticked": true, "applies": true, "blocked": null},
+   {"kind": "set_value", "action": "change", "object": "R2",
+    "footprint": "<uuid>", "from": "1k", "to": "10k",
+    "ticked": true, "applies": true, "blocked": null},
+   {"kind": "pad_net", "action": "add", "object": "R1.2",
+    "footprint": "<uuid>", "pad": "<uuid>", "from": null, "to": "N$1",
+    "locked": false, "ticked": true, "applies": true, "blocked": null}
+ ],
+ "notes": ["..."]}
+```
+
+- `revision` is the board revision the list was read at; `board_revision`
+  is the board's revision after the run (the same for a dry run, or when
+  nothing was applied).
+- `applied` counts the rows that apply: what a dry run would do, what an
+  apply did. A row applies when it is ticked, not blocked, and every row it
+  needs applies too.
+- `counts` are the dialog's tiles: rows by action, and the blocked rows.
+- Each change has a `kind`: `add_footprint`, `remove_footprint`,
+  `change_footprint` (a footprint swap, with `reason` `footprint` or
+  `other_version`; another library version starts unticked),
+  `set_designator`, `set_value`, `link`, `add_net`, `remove_net`,
+  `rename_net` (with the board `net` number) and `pad_net` (a pad's net,
+  with `locked`). `action` is `add`, `change` or `remove`: a pad that gets
+  its first net is an add and one that loses it a remove. `object` is a
+  designator, a net name, or a pad as `R1.2`. `footprint` is the board
+  footprint's uuid (for an add, the uuid the new footprint gets), `pad` the
+  pad's. `from` and `to` are the old and new designator, value, footprint
+  or net; `null` is a pad with no net.
+- `blocked` says why a row cannot be ticked (a missing footprint, a part to
+  annotate, a designator used twice); the rest still runs.
+- `notes` are the list's notes, as the dialog shows them.
+- A dry run adds `execute_blocked` when an apply would be refused now (the
+  board closed with unsaved edits, or read-only).
+
+## Numbering and a new board
+
+These run what their menu entries run, from operands and without a dialog
+(#2470). None writes a file: what they change stays unsaved in memory, so a run
+needs `edit`, never `save` (see the numbering paragraph under "JSON Lines" for
+keeping the result).
+
+```text
+new_pcb_document [document=<project or a document of it>] [profile=<token>] [name=<file>]
+annotate_schematic_quietly document=<sheet>
+force_annotate_all_schematics document=<sheet>
+reannotate_board document=<board> [order=x_then_y|y_then_x] [bottom=after_top|with_top] [dry_run=true]
+back_annotate_schematics document=<project, its board or a sheet> [dry_run=true]
+```
+
+- `new_pcb_document` makes the project's one board with the profile's rules,
+  as the New PCB dialog's Create does, and opens it unsaved; the project names
+  it and is unsaved too. `document` names the project, else the project in
+  view; `name` is the board's file in the project folder (`.snxpcb` added when
+  missing), else `<project>.snxpcb`. A project that already names a board makes
+  that board, and a `name` other than it is refused. It answers with the new
+  board's `{id, path, kind}`, as `new_document` does.
+- `annotate_schematic_quietly` numbers the parts whose designator ends in `?`,
+  `force_annotate_all_schematics` resets and renumbers every part, across the
+  whole project of the sheet named, whatever tab is active. The run is the
+  menu's: the same undo step (one for the project, or one per sheet when the
+  project's Annotate undo setting asks for that) and the same refusals. It
+  answers `mode` (`incremental` or `reset_and_renumber`), `changes` (each
+  `{sheet, symbol, old, new}`: the sheet file, the symbol's uuid, the
+  designators before and after) and `sheets_changed`. A run that changed
+  nothing because it was refused is refused with the reason; one that changed
+  some sheets and skipped others also carries the skip as `notice`.
+- `reannotate_board` is Positional Re-Annotate on the board named: one labelled
+  board undo step. It answers `board`, `applied`, `renames` (each
+  `{footprint, old, new}` in numbering order), `kept` (each
+  `{footprint, designator, reason}`, `reason` being `locked`, `no_prefix` or
+  `unlinked`) and `unchanged` (the parts already in order). `dry_run=true`, or a
+  board with nothing to rename, answers with `applied: false` and changes
+  nothing. A read-only board is refused.
+- `back_annotate_schematics` reads the project's design against its board and
+  writes the rows the Back Annotate dialog ticks by default, as its Execute
+  does: one undo group across the changed sheets, a closed sheet loaded and
+  left unsaved. The board must be open. It answers `board`, `rows` (each
+  `{kind, footprint, designator, old, new, placement, sheet, applies,
+  blocked}`: `kind` is `designator`, `value` or `footprint`, `placement` the
+  part's place in the hierarchy, `sheet` its sheet file, `blocked` why a row
+  cannot apply, or `null`), `applied` and `sheets_changed`. `dry_run=true`
+  lists the rows and changes nothing. A sheet that changed on disk since the
+  read, or a board or sheet edited meanwhile, refuses the whole write.
+- `reannotate_board` and `back_annotate_schematics` are on the agent channel
+  (over it, `document=` names the board or a sheet: the project file is refused
+  at the gate). The others take an optional `document`, so they run headless
+  only. None of them can be an edit of `apply_edits`: each is its own step.
+
+## Routing a board
+
+The routing tools and the Via tool run from operands on the board
+`document` names (#2470), so a board is routed net by net from the command
+line through the same interactive router a person drives with clicks. There
+is no autorouter: each command routes the nets it names, along the points
+it is given. Each is one undo step and changes the board in memory only
+(capability `edit`); `save_document` writes it.
+
+```text
+place_board_route document=<board> start=<pt> end=<pt> [through=x,y;x,y]
+                  [layer=..] [width=..] [net=..] [corner=..] [mode=..] [dry_run=..]
+place_board_track document=<board> start=<pt> end=<pt> [through=..] [layer=..]
+                  [width=..] [net=..] [corner=..] [dry_run=..]
+place_board_quick_route  (the operands of place_board_track)
+place_board_diff_pair document=<board> net=<either net> start=<pt> end=<pt>
+                  [through=..] [layer=..] [corner=..] [dry_run=..]
+place_board_multi_route document=<board> nets=<a,b,..> start=<pt> end=<pt>
+                  [through=..] [layer=..] [corner=..] [dry_run=..]
+place_board_via document=<board> at=<pt> [net=..] [layers=<from>,<to>]
+                  [via_diameter=..] [via_drill=..] [dry_run=..]
+```
+
+- A point is `x,y` in mm from the board origin with Y up, as the status bar
+  shows it, or a pad as `<designator>.<pad number>` (`U1.3`), its centre.
+  `through` lists the corners between `start` and `end`, in order; each one
+  ends a leg, as a click does.
+- `layer` is a copper layer of the board (`TopCopper`, `Inner1Copper`);
+  left out, the layer of the netted copper under `start`. With no copper
+  under `start` it is needed.
+- `net` and `width` take the place of what the tool's form would set.
+  Left out, the route takes the net of the copper under `start` and the
+  width of its net class (else the board's), held within the rules' track
+  width limits; Track does not hold it there, as its click does not. Copper
+  under `start` off `layer` starts the route with a via.
+- `corner` bends each leg: `90` (the default), `45_start`, `45_end` or
+  `free`. `mode` is Interactive Routing's: `walkaround` (the default) goes
+  around other nets' copper at the rule clearance, `shove` pushes their
+  tracks aside. The person's own corner rule, route mode and tool form are
+  never read.
+- What each tool does at a leg is what its click does: Interactive Routing
+  routes around other nets and refuses a leg it finds no way for; Track and
+  Quick Route lay straight legs and do not avoid other nets (Track refuses a
+  leg that ends on a pad of another net); a pad of no net that a routed leg
+  ends on joins the route's net in the same step; a pad off the leg's layer
+  is reached with a via. A pair takes its net class's coupled width and gap
+  and starts each net at its copper nearest `start`; Multi-Route runs the
+  nets named side by side. See `docs/PCB_TOOLS.md`, "Interactive Routing".
+- `place_board_via` places the board's via (its setup size) at `at`, on the
+  net under it unless `net` names one, through from top to bottom unless
+  `layers` names the two copper layers it joins.
+- `dry_run=true` answers as the command would and changes nothing; the ids
+  in its answer are not on the board. `--dry-run` sets it.
+
+A route answers `{"document", "dry_run", "revision", "layer", "width_mm",
+"nets", "tracks", "vias", "pushed", "joined_pads"}`: the nets by name
+(`null` for no net); each track as `{"id", "start", "end", "width_mm",
+"layer", "net"}` and each via as `{"id", "at", "layers", "via_type",
+"diameter_mm", "drill_mm", "net"}`, points as `[x, y]` from the origin; the
+ids of the other nets' tracks it pushed; and each pad that joined a net as
+`{"pad", "net"}`. A via answers `{"document", "dry_run", "revision",
+"vias"}`. The design rule check is not run by the command; `check_drc`
+reports the board's findings.
+
+Refused with the reason, nothing changed: a pad that is not on the board or
+names more than one pad, a layer the board does not have, a net it does not
+have, a leg with no way that keeps the clearance, a leg that ends on a pad
+of another net, a net in no differential pair, fewer than two nets for
+Multi-Route, a via hole wider than its copper, and a read-only board. A
+headless run without operands is asked for `document`; in a window, the
+same ids with no operands arm the tool, as before.
+
+## Board areas
+
+The area tools take operands in place of their clicks (#2470): the board,
+the layer, the outline and, for copper, the net. Each adds one area to the
+open board `document` names as one board undo step, the same area the
+tool's clicks add for that outline, and is on the agent channel. The
+person's Properties form for the tool is not read: a pour's clearance,
+priority and island rules are the board's defaults, and Properties changes
+them afterwards. A read-only board, or one that is not open, is refused.
+
+```text
+place_board_fill document=<board> layer=<copper> start=x,y end=x,y [net=<name>]
+place_board_region document=<board> layer=<copper> corners=x,y;x,y;x,y.. [net=<name>]
+place_board_polygon_pour document=<board> layer=<copper> corners=.. [net=<name>]
+place_board_keepout document=<board> layer=<copper or keep-out> corners=..
+place_board_pour_cutout document=<board> layer=<copper> corners=..
+```
+
+- Points and corners are mm from the board origin with Y up, as the status
+  bar shows them, and are not moved onto the grid. A Fill is the rectangle
+  between `start` and `end`; the other areas take three or more `corners`.
+- `layer` is a layer name (`TopCopper`, `Inner1Copper`, `TopKeepout`). A
+  copper area or a cutout takes one of the board's copper layers; a keepout
+  takes a copper layer or a keep-out layer, which stands for its copper
+  layer. Any other layer, or a copper layer the board's stack does not have,
+  is refused, as is an outline that encloses no area.
+- `net` names a board net (in any case), or is empty for no net. Left out,
+  the area takes the net of the copper under its corners, as a click does.
+  A net the board does not have is refused. A keepout and a cutout have no
+  net.
+- The answer is `{"document", "id", "kind", "layer", "net", "net_name",
+  "revision", "zone"}`: `kind` is `fill`, `region`, `pour`, `keepout` or
+  `pour_cutout`, and `zone` the area as stored. A pour's answer also has
+  `fill`, its copper as `repour_all` reports each pour (`zone`, `filled`,
+  `pieces`, `area_mm2`, `islands_removed`, ...).
+
+Without operands, in a window, each command arms its tool, as before.
+
+## Placing footprints on a board
+
+These edits put a component of the board `document` names in place, by id
+(#2936). The footprint is named by `id` (its uuid), `designator`, or `ids`
+(a list), exactly one of them. Points count from the board origin with Y up,
+as `measure_board` and Properties read them. Each command is one board undo
+step; a locked footprint refuses the whole edit with the reason (`U2 is
+locked`) and nothing changes.
+
+```text
+set_footprint_position document=<board> id=<uuid> at=x,y
+set_footprint_position document=<board> ids=<uuid>,<uuid> points=x,y;x,y
+set_footprint_rotation document=<board> id=<uuid> rotation=0|90|180|270
+set_footprint_side document=<board> id=<uuid> side=top|bottom
+```
+
+- `set_footprint_position` moves the footprint's origin to `at` as a drag
+  does: the track ends on its pads follow, bent by `corner` (`90`,
+  `45_start`, `45_end` or `free`, as for the route commands; `90` when left
+  out, whatever the window's corner rule is). With `ids`, `points` holds one point per id in the same order, and
+  the whole list is one undo step; a track between two listed footprints
+  follows both.
+- `set_footprint_rotation` turns each footprint about its own origin to the
+  rotation the Component view's Rotation row sets; the tracks on its pads
+  stay, as they do for a rotation in the window.
+- `set_footprint_side` flips each footprint onto that side about its origin,
+  as the Component view's Layer row does.
+
+The answer is the footprint after the edit, with the board and whether
+anything changed; with `ids` the footprints are listed under `footprints`.
+
+```json
+{"id": "<uuid>", "designator": "R1", "position": {"x": 20.0, "y": -15.0},
+ "rotation": 90.0, "side": "bottom", "document": "<board path>", "changed": true}
+```
+
+Without operands (the palette, a key) each says to drag the footprint or to
+use the Component view.
+
+## Footprint assignment
+
+A part's footprint and a board footprint are set from a library footprint
+(#2937), written `footprint=<library>:<footprint>`: the library by its id,
+path or name, the footprint by its id or name in that library. The
+footprint's pads are read from the library first, then the edit runs as its
+window does. Each edit is one undo step.
+
+```text
+assign_footprint document=<sheet> id=<part uuid> footprint=<library>:<footprint>
+change_footprint document=<board> id=<uuid> footprint=<library>:<footprint> [unmatched=refuse|keep]
+query_footprint_assignments document=<project or sheet>
+```
+
+- `assign_footprint` sets the footprint of the part (`id`, `designator` or
+  `ids` on that sheet) through Tools ▸ Assign Footprints' Apply: every unit
+  of the part on the sheet, as one undo step. The part's own library row
+  must offer the footprint, as in the dialog. The answer is
+  `{"document", "footprint", "changed", "parts": [{"id", "designator",
+  "footprint"}]}`.
+- `change_footprint` swaps each named board footprint for the library one
+  as the footprint picker does: the position, rotation, side, designator,
+  value and pad nets (by pad number) stay, and each linked schematic part on
+  an open sheet takes the same footprint in the same undo step. The answer
+  is `{"document", "footprint", "changed", "footprints": [..as above..],
+  "parts_not_updated": [designators], "pads_dropped": ["R1.1", ..]}`.
+  `unmatched` is what an old pad no new pad takes over does: `refuse` (the
+  default) refuses the swap naming those pads; `keep` makes the swap, lists
+  them in `pads_dropped` and says them, and the parts whose sheet could not
+  follow, in Messages. The footprint picker's Swap is this command with
+  `unmatched=keep` and the selection as `ids`. Without operands it opens
+  the footprint picker for the selection, as before.
+- `query_footprint_assignments` answers `{"document", "parts":
+  [{"id", "sheet", "designator", "value", "footprint", "binding",
+  "resolves"}], "sheets_not_open"}` for the open sheets of the project (or
+  the one sheet named). `binding` is the library footprint the part is
+  built with, `null` when its footprint text was typed over; `resolves` says
+  whether an open library has it.
+
+A footprint that is not in the library is refused with the reason. One
+whose pads do not cover the part is refused with the pins it lacks
+(`R1 pins 1, 2`), and a board footprint whose old pads the new one lacks
+with those pads (`R1.1, R1.2`) unless `unmatched=keep`; nothing changes.
+
+## Rooms and placement
+
+The rooms of a board (#2457, `docs/PCB_ROOMS.md`) and Auto Place in Rooms
+(#2941) run from operands on the open board `document` names. Each is one
+board undo step and needs the `edit` capability; none writes a file.
+Coordinates are board mm from the board origin with Y up, as the footprint,
+area and route commands read and answer them (#2985); a point is
+`[x, y]`, and a rectangle's outline is answered by its lower-left corner.
+A refusal names what is wrong (`room` not on the board, `side` not top, bottom
+or both, an outline without area) and changes nothing.
+
+```text
+place_board_room document=<board> (start=x,y end=x,y | corners=x,y;x,y;x,y..) [name=<name>] [sheet=/<uuid>..] [side=top|bottom|both]
+create_rooms_from_sheets document=<board> [margin=<mm>] [shape=around_parts|even_grid] [side=..] [move_parts=true] [keep_parts_inside=true] [replace=false] [rooms=<name>,..]
+arrange_in_room document=<board> room=<name or uuid>
+auto_place document=<board> [rooms=<name or uuid>,..] [weights=connection:3,thermal:1,separation:2,edges:5] [thermal_gap=<mm>] [separation_gap=<mm>] [dry_run=true]
+```
+
+A room in an answer is `id`, `name`, `sheet` (the placement path, or
+`null`), `channel` (or `null`), `side`, `outline` (`{"shape": "rectangle",
+"x", "y", "width", "height"}` or `{"shape": "polygon", "corners": [[x, y],
+..]}`), `area_mm2`, `color`, `keep_parts_inside`, `margin_mm`, `locked` and
+`parts`: each member as `id`, `designator` and `inside` (its body inside the
+outline shrunk by the margin). A moved part is `id`, `designator`, `from`
+and `to`.
+
+- `place_board_room` answers `document` and the `room` it placed. Without
+  `name` it is `Room N`, the lowest free number; a name the board already
+  has is refused. `sheet` links the room to a sheet placement, so the parts
+  of that sheet and the sheets below it are its members.
+- `create_rooms_from_sheets` reads the sheets of the board's project off
+  the UI thread, as the dialog does, and answers once the rooms are made:
+  `document`, `rooms` (each room made), `moved` (the parts packed into
+  their rooms), `kept` (names of rooms already on the board that were
+  kept) and `replaced`. Its options are the dialog's, with the dialog's
+  defaults; `margin` is above zero. `rooms` makes only the rooms it names
+  (a sheet placed N times has rooms `<sheet>_CH1`..`<sheet>_CHN`).
+- `arrange_in_room` packs the room's unlocked parts inside it, as Arrange in
+  Box packs, clear of its locked parts and of other parts inside it. It
+  answers `document`, `room`, `moved` and `outside`: the designators of
+  the parts that did not fit, which go in rows below the room.
+- `auto_place` places the unlocked parts of each room inside it, one at a
+  time, where the weighted score is lowest; it only places parts, it routes
+  nothing, and it neither turns nor flips a part. The priorities are
+  `connection` (parts that share nets close together), `thermal` (parts
+  marked `hot` keep `thermal_gap`, 5 mm by default, from each other and from
+  parts marked `heat_sensitive`), `separation` (parts marked `noisy` keep
+  `separation_gap`, 10 mm by default, from parts marked `sensitive`) and
+  `edges` (connectors near the board edge). A weight left out is 1; 0 turns
+  a priority off. A part's marks are the words of its `Placement` property;
+  a part marked `connector`, or with designator J, P or CN and a number, is a
+  connector. Locked parts and parts of rooms not named stay and are kept
+  clear of, as are keepouts that forbid components; parts keep the 0.5 mm
+  arrange gap. The answer is `document`, `dry_run`, `rooms`, `weights`,
+  `gaps_mm`, `moved` (each with `room`, `rotation` and `side` too),
+  `not_placed` (`id`, `designator`, `room` and `reason`: `no_space` or
+  `unreadable`; such a part stays where it is) and `score`: `before` and
+  `after`, mm per priority, lower is better. The same board and weights give
+  the same placement. With `dry_run=true` nothing changes.
+
+```
+{"id": "auto_place", "args": {"document": "board.snxpcb", "weights": "connection:3,edges:5", "dry_run": true}}
+```
+
+## Board against schematic
+
+```text
+check_board_against_schematic document=<board, or a sheet or the file of its project>
+apply_board_schematic_differences document=<same> [to_board=<id>,<id>] [to_schematic=<id>,<id>] [expect_revision=<n>]
+```
+
+`check_board_against_schematic` (#2462) is Compare Board with Schematic as
+a query: the same reads, the same report and the same default directions as
+the dialog ([UPDATE_PCB.md](UPDATE_PCB.md), "Compare Board with
+Schematic"), answered as JSON once the reads land. It changes nothing and
+opens no dialog. A board names the project that lists it as its `pcb_file`;
+a sheet or the project file names its project, and the board is the one the
+project lists. The board must be open (`open_document path=<board>` first);
+a project with no board or no root sheet is refused with the dialog's
+reason. Capability `read`.
+
+```bash
+signex-cli run demo.snxprj --keep-going < compare.jsonl
+# {"id": "open_document", "args": {"path": "demo.snxpcb"}}
+# {"id": "check_board_against_schematic", "args": {"document": "demo.snxpcb"}}
+```
+
+```json
+{"board": "/abs/demo.snxpcb", "project": "/abs/demo.snxprj",
+ "revision": 12, "matches": false, "summary": "3 differences",
+ "compared": {"parts": 2, "nets": 0, "footprints": 3},
+ "count": 3,
+ "kinds": {"missing_on_board": 0, "extra_on_board": 1, "net_difference": 0,
+   "footprint_mismatch": 0, "value_change": 2},
+ "differences": [
+   {"id": "5f0c2a9e41d7b3c8", "kind": "extra_on_board",
+    "object": {"designator": "TP3"}, "label": "TP3",
+    "schematic": null, "board": {"value": "TestPoint", "footprint": "TP_1mm"},
+    "fixes": [{"direction": "update_pcb", "action": "remove_from_board"}],
+    "blocked": [{"direction": "update_schematic",
+      "reason": "taking this difference into the schematic is not built yet"}],
+    "default": "skip", "waits": false, "removes_from_board": true,
+    "board_item": "<footprint uuid>", "schematic_part": null,
+    "schematic_net": null, "board_net": null},
+   {"id": "...", "kind": "value_change", "object": {"designator": "R1"},
+    "schematic": {"text": "10k"}, "board": {"text": "22k"},
+    "fixes": [{"direction": "update_pcb", "action": "set_value"},
+      {"direction": "update_schematic", "action": "take_board_value"}],
+    "blocked": [], "default": "update_pcb", "...": "..."}],
+ "notes": ["TP7 is not linked to a part"]}
+```
+
+- `matches` is `true` and `summary` is `Board matches schematic` when there
+  is no difference; otherwise `summary` is `N differences`.
+- `id` names the difference in every read of the same board and design: a
+  hash of the change list keys it pairs (footprint, pad, part and net ids,
+  never its place in the list). It is what the apply form takes.
+- `kind`: `missing_on_board`, `extra_on_board`, `net_difference`,
+  `footprint_mismatch`, `value_change` (designators are value changes, as in
+  the dialog). `object` is `{"designator"}`, `{"net"}` or a pin
+  `{"designator", "pad"}`.
+- `schematic` and `board` are the two sides: `null` when the object is not
+  on that side, `{"text"}`, a part `{"value", "footprint"}`, or
+  `{"no_net": true}` for a pad on no net.
+- `fixes` lists the directions the row allows and what each does
+  (`add_to_board`, `link_footprint`, `remove_from_board`, `add_net`,
+  `remove_net`, `rename_net`, `move_pin`, `connect_pin`, `disconnect_pin`,
+  `swap_footprint`, `take_board_footprint`, `set_value`, `take_board_value`,
+  `set_designator`, `take_board_designator`); `blocked` the directions it
+  does not, with the reason in the dialog's words. `default` is the
+  dialog's starting choice; `waits` is true for a row whose change needs a
+  row that starts skipped.
+- `board_item` (a footprint uuid), `schematic_part` (`sheet` as the
+  placement path, `symbol` uuid), `schematic_net` and `board_net` say where
+  the difference is on each side.
+- `notes` are the notes of both change lists, as Export report… words them.
+
+`apply_board_schematic_differences` (#2462) is the dialog's Apply for the
+rows named: each id in `to_board` takes Update PCB, each in `to_schematic`
+Update schematic, and every other row is skipped. The PCB side is one
+labelled board undo step ("Compare Board with Schematic") and the schematic
+side one Back Annotate undo group, as from the dialog; Messages gets the
+dialog's line. Naming a deletion in `to_board` is its confirmation. It is
+refused, with nothing applied, when no id is named, an id is unknown or
+named twice, a direction is one the row does not allow (Update schematic for
+a board-only part or a net row is not built yet, #2691), a row named
+`to_board` needs a row that is not named, the board is not at
+`expect_revision` (the `revision` the check answered), the board or a sheet
+the read used changed since, a closed sheet changed on disk, or the board is
+read-only. Naming a footprint row can change the net rows; a net row named
+with it whose id changed is refused, so apply the footprint rows first, then
+check again. Capability `edit`; it cannot be one of the edits of an
+`apply_edits` list.
+
+```json
+{"board": "/abs/demo.snxpcb", "read_at": 12, "revision": 13,
+ "to_board": ["<id>"], "to_schematic": ["<id>"], "removed_from_board": [],
+ "board_changes": 1, "schematic_changes": 1, "sheets": 1}
+```
+
+`board_changes` and `schematic_changes` count the change list rows applied
+each way (a row of the report can carry more than one), `sheets` the sheets
+the schematic side changed, `revision` the board's revision after it.
+
+## Board status
+
+```text
+board_status document=<board>
+```
+
+`board_status` (#2460) answers the numbers the board's status bar shows,
+read from the same state, with the counters the bar does not show yet. It
+changes nothing. Capability `read`.
+
+```json
+{"board": "/abs/demo.snxpcb", "revision": 12,
+ "parts": {"total": 24, "off_board": {"count": 2, "ids": ["<uuid>", "<uuid>"]}},
+ "connections": {"total": 46, "routed": 38, "unrouted": 8},
+ "unrouted_nets": 3,
+ "drc": {"ran": true, "violations": 4, "waived": 1, "edits_since": 2},
+ "routed_length_mm": 512.4,
+ "schematic": {"matches": false, "differences": 3, "summary": "3 differences",
+   "revision": 12}}
+```
+
+- `connections` are the status bar's Routed and Unrouted counts (a net
+  needs one connection fewer than its pad islands; a connection a pour will
+  make counts as unrouted). `unrouted_nets` is the number of nets with an
+  unrouted connection.
+- `parts.off_board`: the footprints whose origin is not inside the board
+  outline (Update PCB stages a new part beside the board); `null` for a
+  board without an outline. It is not the layout plan's "placed"
+  (`layout_plan_status`, "Layout plan"), which asks that a part's whole
+  body box lie inside the outline, or inside its room for the rooms the
+  plan names: a part can be on the board here and not placed there.
+- `drc` is the last Run DRC of the board, as the DRC counter shows it:
+  `violations` counts the waived ones too, `waived` how many of them are
+  waived (every finding of the report whose rule is on, not only the rows
+  the DRC panel lists, #2986), `edits_since` the board's edits since the
+  run. Before any run
+  `ran` is `false`. It does not run DRC; `check_drc` does.
+- `routed_length_mm` sums the routed length of every named net, as
+  `query_board_nets` gives it per net.
+- `schematic` is the board against its schematic, the count
+  `check_board_against_schematic` answers: the answer comes once that read
+  lands. A board in no open project, or one whose project has no root
+  sheet, answers at once with `"schematic": null`.
+
+Known limits: the status bar does not show the off-board, waived, schematic
+and routed length counters yet; `board_status` reads them now.
+
+## Layout plan
+
+A board keeps a layout plan (#2942): the settings of its layout stages, in
+the order a design runs them, so a script does not pass them on every
+command and a person can read what a script used. It is saved with the
+board and changed only by `layout_plan_set`, one undo step per call (the
+window's Undo takes it back too).
+
+```text
+layout_plan_get document=<board>
+layout_plan_set document=<board> stage=<stage> [<setting>=<list>]... [remove=true]
+layout_plan_status document=<board>
+```
+
+| Stage | Setting | Holds |
+|---|---|---|
+| `placement` | `weights` | the weight of each auto-place priority, `<priority>:<weight>` (`connection`, `thermal`, `separation`, `edges`; a number, 0 or more) |
+| `placement` | `rooms` | the rooms whose parts are placed, by name; none places every part |
+| `placement` | `keep` | the parts left where they are, by designator |
+| `routing` | `nets` | the nets to route, in order; `class:<name>` stands for every net of a net class; none routes every net |
+| `routing` | `skip` | the nets left unrouted |
+| `pours` | `pours` | the pours to fill, by uuid, in fill order; none fills every pour that is not shelved |
+| `checks` | `rules` | the DRC rule ids that must pass (`builtin::clearance`, `user::<name>`); none is every rule |
+| `checks` | `requirements` | the project requirement ids that must pass |
+
+- Each setting is a comma list. A setting given replaces that setting, one
+  left out keeps it, and an empty value clears it; `remove=true` clears the
+  whole stage. A setting of another stage, a stage that is not one of the
+  four, an entry listed twice, a priority or weight that does not read, a
+  pour that is no uuid and a built-in rule this build does not have are
+  refused, and nothing changes. A room, part, net, net class, pour or
+  requirement the board or its project does not have is kept and named in
+  `warnings`: a plan may be written before the board has them.
+- `layout_plan_get` and `layout_plan_set` answer with the plan:
+
+```json
+{"document": "/abs/demo.snxpcb", "revision": 7, "empty": false,
+ "stages": [
+   {"stage": "placement", "set": true,
+    "settings": {"weights": {"connection": 3.0, "edges": 5.0}, "rooms": [], "keep": ["J1"]}},
+   {"stage": "routing", "set": true,
+    "settings": {"nets": ["class:Power", "GND"], "skip": []}},
+   {"stage": "pours", "set": false, "settings": {"pours": []}},
+   {"stage": "checks", "set": false, "settings": {"rules": [], "requirements": []}}],
+ "warnings": ["net class `Power` is not in the project"]}
+```
+
+  `layout_plan_set` adds `stage` (the stage it set) and `changed` (`false`
+  when the values were already those, and then no undo step is made).
+- `layout_plan_status` answers how far each stage is:
+
+```json
+{"document": "/abs/demo.snxpcb", "revision": 7, "drc_current": false,
+ "stages": [
+   {"stage": "placement", "set": true, "state": "done", "reasons": [], "parts": 12, "placed": 12},
+   {"stage": "routing", "set": true, "state": "failing",
+    "reasons": ["net `GND` has 2 connections to route"], "nets": 4, "routed": 3},
+   {"stage": "pours", "set": false, "state": "done", "reasons": [], "pours": 1, "filled": 1},
+   {"stage": "checks", "set": false, "state": "not_started",
+    "reasons": ["the board has no DRC run since its last change; run run_drc"],
+    "findings": 0, "waived": 0}],
+ "next": "routing"}
+```
+
+  `state` is `not_started`, `done` or `failing`; `reasons` says why a stage
+  is not done (at most 20 items named, then `and <n> more`), and `next` is
+  the first stage not done (`null` when all are). A stage with nothing in
+  scope is `not_started`, never `done`. A stage that names something the
+  board or its project does not have is `failing`, and its first reasons say
+  what.
+  - placement: each part in scope (every part, or the parts of the rooms
+    named, less the parts kept) is placed when its body lies inside the
+    board outline, or inside its room shrunk by the room's margin. `failing`
+    when some are placed, `not_started` when none is or the board has no
+    outline.
+  - routing: each net in scope (every net with two pads or more, or the nets
+    and classes named, less the skipped ones) is routed when copper joins
+    all its pads. `not_started` while no net in scope has a track or a via.
+  - pours: each pour in scope is done when it fills (not shelved, not
+    unfilled). `not_started` while none fills.
+  - checks: reads the board's last DRC run, only when it ran on the board as
+    it is now (`drc_current`; Run DRC, `run_drc`, makes one). Each open
+    finding of a rule in scope (a waived finding is not open, a lapsed one
+    is) fails the stage. A requirement named keeps the stage from `done`:
+    the status does not run `check_requirements`; run that for them.
+- Setting the plan, and the window's Undo or Redo of that step, keeps the
+  board's DRC run current: DRC does not check the plan.
+- The board must be open. `layout_plan_get` and `layout_plan_status` are
+  queries (capability `read`); `layout_plan_set` needs `edit`. All three
+  are on the agent channel, and an edit list (`apply_edits`) refuses
+  `layout_plan_set`: run it as its own command.
+- File form: `[board_options.layout_plan]` in the `.snxpcb`, one sub-table
+  per stage that sets anything, each setting under its operand name. A board
+  with a plan writes `snxpcb/1.12`; a board without one keeps its token,
+  byte for byte ([FORMAT_VERSIONS.md](FORMAT_VERSIONS.md)).
+
+```toml
+[board_options.layout_plan.placement]
+keep = [
+    "J1",
+    "H1",
+]
+
+[board_options.layout_plan.placement.weights]
+connection = 3.0
+
+[board_options.layout_plan.routing]
+nets = [
+    "class:Power",
+    "GND",
+]
+```
+
+Known limits:
+
+- The commands that would use the plan when their operands leave a setting
+  out (auto-place, routing, repour) do not read it yet.
+- The plan has no panel in the window; it is read and set by these commands.
+
+## BOM and part search
+
+The priced BOM, the alternate parts of a BOM line, the parametric part
+search and the swap of a placed part (#2938, #1297). Prices, stock and
+lifecycle states come from what the open libraries cached; nothing here
+fetches a price. `query_bom` and `search_parts` are queries (capability
+`read`); the alternate edits and `change_component` change a project or a
+sheet in memory (capability `edit`) and reach the disk only through a save.
+
+```text
+query_bom document=<project, sheet or board> [quantity=<boards>] [currency=<code>] [variant=<name>]
+bom_add_alternate document=<project> line=<key> library=<id or path> part=<row id or part number>
+bom_remove_alternate document=<project> line=<key> library=.. part=..
+bom_set_alternate_order document=<project> line=<key> library=.. part=.. position=<n>
+search_parts [query=<words>] [value=..] [package=..] [tolerance=..] [rating=..]
+             [min_stock=<n>] [quantity=<n>] [refresh=false] [limit=<n>]
+change_component document=<sheet> id=<part uuid> library=<id or path> part=<row id or part number>
+```
+
+### `query_bom`
+
+The project's BOM grouped as the BOM export groups it (every sheet, each
+placement of a child sheet once, closed sheets read off the UI thread, the
+parts the project's board leaves out not listed), priced for a build of
+`quantity` boards (default 1) as `bom_cost` prices it: each line buys its
+fitted quantity times `quantity`, at least the distributor's minimum order,
+at that quantity's price break, rounded to cents. `variant` is a variant of
+the project, or `Base`; without it the project's active variant is used. The
+answer comes when the build lands:
+
+- `project`, `variant` (`null` for the base design), `source` (`cache`),
+  `quantity`, `currency` (upper-cased, `null` when not given) and `warnings`
+  (sheets or a board that could not be read).
+- `lines`, each with `key` (what the alternate edits name the line by: its
+  library row `<library id>/<row id>`, else `mpn:<MPN>`; `null` for a line
+  with neither), `designators`, `quantity` (fitted per board),
+  `build_quantity`, `name`, `value`, `footprint`, `description`,
+  `library_row`, `mpn`, `price` (the line's part priced for the build:
+  `distributor`, `currency`, `unit_price`, `extended_price`, `buy_qty`,
+  `stock`, `age`; `null` without a cached price), `unpriced` (`no_price` or
+  `other_currency` when the line is left out of the total, else `null`),
+  `alternates` (each `row` and its `price` for the build, or `null`) and
+  `served_by`: when the line's part has no price, a price only in another
+  currency, or less stock than the build needs (`reason`: `no_price`,
+  `other_currency`, `no_stock`), the first alternate that has a price and the
+  stock, with its `price`; else `null`.
+- `totals` (the counted lines' cost for the build, per currency), `total` and
+  `unit_cost` (the build's cost and the cost per board, when every line is
+  counted in one currency, else `null`), `known_total` (the counted lines'
+  cost when some line is not, else `null`) and `unpriced` (the designators of
+  each line left out). A line with no price in the currency is reported here,
+  never counted as zero; the total stays the part's own price, not the
+  alternate's.
+
+### Alternates
+
+A BOM line lists alternate parts, library rows in order of preference,
+stored in the project file under `bom_alternates` (no format token change;
+skipped when there are none). Each edit is one step of the project's
+General history (Undo in the Project tab takes it back), marks the project
+unsaved, and answers `{line, alternates, changed}`. `line` is the `key`
+`query_bom` answers; `library` and `part` name the row as `place_component`
+does, or, for a library that is not open, by the library id and the row id.
+`position` is 1 for the most preferred. An alternate already listed, the
+line's own part, an alternate not listed and a position past the list are
+refused with the reason. The BOM export's Alternates column (off by default)
+lists a line's alternates.
+
+### `search_parts`
+
+The rows of every open library that match: `query` is read as the
+Components panel reads its search words (`100n`, `4k7` and `16V` match a
+parameter of that value, other words the part numbers, manufacturer and
+description; case folds by the same rules whatever the window's language,
+so `pic` finds `PIC16F` under Turkish too, #2986), and each parameter
+operand must hold too: `value` (the row's
+value, as a number with a prefix and unit, else as text), `package`
+(the package, case ignored), `tolerance` (at most this, `1%`), `rating`
+(at least this, `16V`, read from `rating`, `voltage_max`, `power` or
+`current_max`) and `min_stock` (a cached offer with that many in stock).
+The answer is `source` (`cache`), `count` (how many matched), `truncated`
+and `matches` (at most `limit`, default 50, up to 500), each with `library`,
+`library_name`, `part` (the row id), `internal_pn`, `mpn`, `manufacturer`,
+`description`, `lifecycle`, `parameters`, `stock` (the largest cached) and
+`offers` (`distributor`, `currency`, `stock`, `breaks`, `unit_price` at
+`quantity`, default 1, and `age`). `refresh=true` is refused: the search
+never fetches; refresh the library's prices in the Library panel first.
+
+### Place or swap
+
+A match is placed with `place_component library=<library> part=<part>`
+(above), or swapped for a placed part with `change_component`: the part
+`id` names on the sheet `document` names gets the row's symbol, footprint
+and parameters, as the Change Component dialog's Change does with every
+Keep now box ticked: one undo step, the row read off the UI thread first. A
+locked part, a part whose units are on other sheets, and a row with no
+drawing for the placed unit are refused. The answer is `{designator, id,
+changed, from: {lib_id, library, part}, to: {lib_id, library, part,
+internal_pn}, pins: {dangling, moved, gained}}`, the pins whose connection
+the swap leaves, moves or makes. Without operands, in a window,
+`change_component` opens the dialog as it always did.
+
+Over the agent channel `document=` names one of the project's sheets or its
+board, as for the requirement checks; the project file itself is refused at
+the agent gate.
+
+## Library rows
+
+```text
+query_library library=<id or path> [part=<row id or part number>] [text=<text>]
+```
+
+`query_library` (#2944) answers the rows of one open library as the app
+holds them: no file is read and no library server is reached. `library`
+names it as `place_component` does (its id, or the path of its `.snxlib`).
+Without `part` or `text` every row is listed, table by table in name order;
+`part` narrows the answer to the row with that id or the one row with that
+part number (internal or manufacturer), and `text` to the rows whose part
+numbers, manufacturer, class or description hold it (case folded). A
+library that is not open, or a part it does not have, is refused with the
+reason. It is a query on the agent channel and needs only `read`.
+
+```json
+{
+  "library": { "id": "<uuid>", "name": "parts", "path": "/work/demo/parts.snxlib" },
+  "count": 1,
+  "rows": [
+    { "id": "<uuid>", "table": "R", "internal_pn": "R-1", "class": "resistor",
+      "description": "", "state": "draft", "version": "0.0.1", "released": false,
+      "manufacturer": "", "mpn": "RC0603-10K", "alternates": [],
+      "symbol": { "library": "<uuid>", "id": "<uuid>", "version": "0.0.1" },
+      "footprint": null, "parameters": {}, "revision": 42 }
+  ]
+}
+```
+
+`state` is one of `draft`, `in_review`, `released`, `deprecated`,
+`obsolete`; `revision` is the base revision a later write of the row is
+checked against (`null` for a row not read from a store). The library row
+and part write commands of #2944 are not in this build.
+
+## Fabrication outputs
+
+`fabrication_outputs` writes what File ▸ Fabrication Outputs' Generate
+writes (#2470): the same files, built the same way from the board as it is in
+memory, into a folder. It needs the `export` capability (`--allow export`)
+and an open board (`open_document` it first). It changes nothing on the
+board and makes no undo step. It takes a `path`, so it is not on the agent
+channel of a running Signex.
+
+```text
+fabrication_outputs document=<board> path=<folder> [kinds=<list>] [name=<stem>] [whole_panel=<bool>]
+```
+
+- `path` is the output folder, made when missing; a relative one is read
+  against the project folder. Files of the same name are replaced; older
+  files of the same stem are listed, never deleted.
+- `kinds` lists what to write, comma separated: `gerber`, `drill` (Excellon,
+  with its drill table), `centroid` (pick and place), `test_netlist`
+  (IPC-D-356), `ipc2581`, `odb` (the ODB++ archive), `odb_folder` (the ODB++
+  job as a folder), `assembly_pdf`, `assembly_svg`, `step`. Left out, the
+  kinds the dialog has ticked for the board (its project's `fab_outputs`).
+  A job file is written whenever a kind other than the drawings and the
+  STEP model is.
+- `name` is the file-name stem (`<name>-centroid.csv`); the board's file
+  name when left out.
+- A board with a panel writes the whole panel unless `whole_panel=false`.
+
+The result line is `answered` once every file is written:
+
+```json
+{"document": "/p/board.snxpcb", "folder": "/p/fab", "name": "board",
+ "kinds": ["gerber", "drill", "centroid"], "whole_panel": false,
+ "files": [{"name": "board-centroid.csv", "path": "/p/fab/board-centroid.csv",
+            "kind": "centroid", "bytes": 214, "sha256": "<64 hex digits>"}],
+ "notes": [{"severity": "warning", "text": "..."}],
+ "stale": []}
+```
+
+- `files` lists every file written, in the job file's order: `kind` is
+  `gerber`, `drill`, `drill_table`, `centroid`, `test_netlist`, `ipc2581`,
+  `odb` (the archive, or each file of the folder form, named with `/`),
+  `job`, `assembly_pdf`, `assembly_svg` or `step`; `sha256` is the SHA-256 of
+  the bytes written, in lowercase hex.
+- `notes` are the dialog's notes: what the files leave out (`warning`) and
+  older files beside them (`error`), worded as in Messages.
+- `stale` names the older files of the same stem in the folder.
+
+A board that is not open, an unknown kind or `kinds` naming none is
+`refused` before anything is written; so is a board with no outline or a bad
+`name`, and a folder or file that cannot be written, once the run is tried.
+`docs/FABRICATION_OUTPUTS.md` describes the files.
+
 ## Working through a running Signex
 
-When a person has the project open in Signex with Preferences > Editing >
-"Allow agent connections" on, `run` sends each command to that process
+When a person has the project open in Signex with Preferences > System ›
+General > "Allow agent connections" on, `run` sends each command to that process
 instead of booting its own (#1924; the app's side, the registry and the
 security rules are in [AGENT_SOCKET.md](AGENT_SOCKET.md)). The command runs
 inside the app's update loop like a click, so the person sees the change at
@@ -1040,9 +2476,18 @@ is enforced before the app sees a command.
   document with unsaved changes closes its tab and parks the edits in memory,
   as in the GUI; the end-of-run log lists the sheet as unsaved.
 - **No code execution, no network.** The run uses a throwaway config root,
-  never the user's. Launching a browser, viewer or file manager is refused by
+  never the user's, with one carve-out (#2495, decided for Caner overnight
+  2026-11-26, to confirm): `keymap_assign` and `keymap_clear` read and write
+  the user's own `keyboard_shortcuts.toml`, the file the app loads its
+  keyboard profiles from, through `atomic_write`. They need the `save`
+  capability, refuse a built-in profile and refuse a file that does not
+  load; nothing else in the run reads the user's config, and the agent
+  socket still refuses both (they name no document). See
+  `docs/KEYBOARD_SHORTCUTS.md`, "Key bindings from the CLI".
+  Launching a browser, viewer or file manager is refused by
   the app's headless ports, and no command that reaches a library server is
-  runnable headless (every `library` command is `gui_only`).
+  runnable headless (every `library` command is `gui_only`; `query_library`
+  reads only the rows the app already holds).
 - **Same enablement as the GUI.** `dispatch_command`'s enablement gate
   applies; a command the GUI would grey out is `refused` with its reason.
 - **`gui_only` commands** (their whole effect is window UI, or they need a

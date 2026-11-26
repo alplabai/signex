@@ -19,11 +19,9 @@ pub(super) fn build_symbol_editor_panel_ctx(
         SymbolFileEntry, SymbolPinDetails, SymbolPinSummary,
     };
 
+    // A Pin table tab shows its symbol's pins, and Properties stays on it.
     let active = app.document_state.tabs.get(app.document_state.active_tab)?;
-    let path = match &active.kind {
-        crate::app::TabKind::SymbolEditor(p) => p.clone(),
-        _ => return None,
-    };
+    let path = active.symbol_document()?.clone();
     let editor = app.document_state.symbol_editors.get(&path)?;
     let sym = editor.primitive();
 
@@ -57,7 +55,11 @@ pub(super) fn build_symbol_editor_panel_ctx(
         })
         .collect();
 
+    // Thumbnail rows of the Library panel draw each symbol's body.
+    let drawings =
+        app.library.library_panel.row_style == crate::library::state::LibraryRowStyle::Thumbnail;
     let symbols_in_file: Vec<SymbolFileEntry> = editor
+        .draft
         .file
         .symbols
         .iter()
@@ -68,6 +70,7 @@ pub(super) fn build_symbol_editor_panel_ctx(
             uuid: s.uuid,
             pin_count: s.pins.len(),
             description: s.description.clone(),
+            drawing: drawings.then(|| std::sync::Arc::new(s.to_lib_symbol(s.uuid.to_string()))),
         })
         .collect();
 
@@ -83,7 +86,7 @@ pub(super) fn build_symbol_editor_panel_ctx(
         })
         .collect();
 
-    let selected = match editor.selected.clone() {
+    let selected = match editor.gui.selected.clone() {
         Some(sym_state::SymbolSelection::Pin(idx)) => pins
             .get(idx)
             .cloned()
@@ -135,6 +138,13 @@ pub(super) fn build_symbol_editor_panel_ctx(
         None => SymbolDisplayOptions::default(),
     };
 
+    let props = app
+        .library
+        .symbol_props
+        .get(&path)
+        .cloned()
+        .unwrap_or_default();
+
     Some(SymbolEditorPanelContext {
         path,
         symbol_name: sym.name.clone(),
@@ -150,8 +160,8 @@ pub(super) fn build_symbol_editor_panel_ctx(
         pins,
         graphics,
         selected,
-        graphic_fill_picker: editor.graphic_fill_picker,
-        local_color_picker: editor.local_color_picker,
+        graphic_fill_picker: editor.gui.graphic_fill_picker,
+        local_color_picker: editor.gui.local_color_picker,
         symbols_in_file,
         delete_warning: app
             .library
@@ -159,10 +169,18 @@ pub(super) fn build_symbol_editor_panel_ctx(
             .as_ref()
             .filter(|p| p.is_current(editor))
             .map(|p| p.warning.clone()),
-        active_idx: editor.active_idx,
-        active_part: editor.active_part,
+        active_idx: editor.draft.active_idx,
+        active_part: editor.draft.active_part,
         active_max_part,
         active_has_part_zero,
+        active_body: editor.draft.active_body,
+        body_scope: sym_state::body_scope_row(sym, &editor.gui.selected, editor.view()),
+        part_drawing: SymbolEditorPanelContext::part_drawing_of(
+            sym,
+            |g| sym_state::graphic_on_part(g, editor.view()),
+            |p| sym_state::pin_on_part(p, editor.view()),
+        ),
+        props,
         display,
     })
 }
@@ -210,6 +228,40 @@ fn graphic_kind_to_summary(
         },
         SymbolGraphicKind::Polygon { vertices } => GraphicKindSummary::Polygon {
             vertex_count: vertices.len(),
+        },
+        SymbolGraphicKind::Bezier { points } => GraphicKindSummary::Bezier { points: *points },
+        SymbolGraphicKind::EllipticalArc {
+            center,
+            radius_x,
+            radius_y,
+            start_deg,
+            end_deg,
+        } => GraphicKindSummary::EllipticalArc {
+            center: *center,
+            radius_x: *radius_x,
+            radius_y: *radius_y,
+            start_deg: *start_deg,
+            end_deg: *end_deg,
+        },
+        SymbolGraphicKind::RoundRectangle {
+            from,
+            to,
+            corner_radius,
+        } => GraphicKindSummary::RoundRectangle {
+            from: *from,
+            to: *to,
+            corner_radius: corner_radius.min(SymbolGraphicKind::max_corner_radius(*from, *to)),
+        },
+        SymbolGraphicKind::Pie {
+            center,
+            radius,
+            start_deg,
+            end_deg,
+        } => GraphicKindSummary::Pie {
+            center: *center,
+            radius: *radius,
+            start_deg: *start_deg,
+            end_deg: *end_deg,
         },
     }
 }

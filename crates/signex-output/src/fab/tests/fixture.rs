@@ -15,6 +15,7 @@ pub(crate) fn p(x: f64, y: f64) -> Point {
 pub(crate) fn empty_board() -> PcbBoard {
     PcbBoard {
         stackup: None,
+        rooms: Vec::new(),
         uuid: Uuid::from_u128(1),
         version: 1,
         generator: String::new(),
@@ -99,6 +100,8 @@ pub(crate) fn pad(
         layers: layers.iter().map(|l| l.to_string()).collect(),
         net: None,
         roundrect_ratio: 0.0,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 0.0,
         net_locked: false,
         layer_sizes: None,

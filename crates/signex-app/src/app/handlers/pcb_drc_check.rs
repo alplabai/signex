@@ -1,14 +1,15 @@
 //! The DRC run behind `check_drc` (#2199, decisions
 //! https://github.com/alplabai/signex/issues/2199#issuecomment-6817821301 and
 //! https://github.com/alplabai/signex/issues/2199#issuecomment-6818011610):
-//! Run DRC's checks and rule-layer choice (`pcb_drc::run_check`,
+//! Run DRC's checks and rule-layer choice (`pcb_drc::run_check_with`,
 //! `drc_layers`) over one board, with the net classes and rules of the
 //! board's own project (else this machine's layer and a loose-board
 //! warning; Run DRC takes the same project, #2332). An open board is read
 //! from memory, in the GUI process, in headless runs and over the agent
 //! channel (#2331). A closed board is read off the UI thread. It changes no
 //! DRC state and says nothing in Messages; what it found comes back as a
-//! `signex_types::check` report. See `docs/CLI.md`, "Checks on demand".
+//! `signex_types::check` report, the board's own waivers applied (#2307).
+//! See `docs/CLI.md`, "Checks on demand".
 
 use std::path::Path;
 
@@ -17,7 +18,7 @@ use signex_types::check::CheckReport;
 use signex_types::pcb::PcbBoard;
 use signex_types::project::ProjectRules;
 
-use super::pcb_drc::{Layers, drc_layers, run_check};
+use super::pcb_drc::{Layers, drc_layers, run_check_with};
 use crate::app::Signex;
 use crate::app::state::LoadedProject;
 
@@ -56,15 +57,16 @@ impl Signex {
             .into_iter()
             .collect();
         let path = board.to_path_buf();
+        let libraries = self.open_library_roots();
         move || {
             let board = match open {
                 Some(board) => board,
                 None => read_board(&path, confine.as_deref())?,
             };
-            let (report, names) = run_check(&board, &classes, &layers)?;
+            let (report, names) = run_check_with(&board, &classes, &layers, &libraries)?;
             let name = path.display().to_string();
             Ok(signex_drc::findings::check_report(
-                &report, &names, &name, warnings, rule_set,
+                &report, &board, &names, &name, warnings, rule_set,
             ))
         }
     }
@@ -94,7 +96,7 @@ impl Signex {
 
 /// The board file at `path`, read and parsed; refused when it lies outside
 /// the project folder `confine` or is no file a headless run reads.
-fn read_board(path: &Path, confine: Option<&Path>) -> Result<PcbBoard, String> {
+pub(super) fn read_board(path: &Path, confine: Option<&Path>) -> Result<PcbBoard, String> {
     if let Some(dir) = confine {
         crate::app::document_ids::confined_read(dir, path)?;
     }

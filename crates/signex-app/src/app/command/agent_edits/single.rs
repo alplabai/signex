@@ -3,25 +3,26 @@
 //! command the agent runs on its own. See `docs/AGENT_EDITS.md`, "Origin".
 
 use iced::Task;
+use signex_engine::DocumentPatch;
 
 use crate::app::command::document_operands::named_sheet;
 use crate::app::command::operand_handlers::OperandHandler;
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
-use crate::schematic_runtime::RenderInvalidation;
 
-use super::wire::edit_refusal;
+use super::wire::step_refusal;
 
 use super::super::{CommandArgs, CommandOutcome};
 
 type Ran = (CommandOutcome, Task<Message>);
 
 /// Is `command` one an agent's run turns into a labelled undo step? Exactly
-/// the commands that may be an edit of `apply_edits` (`edit_refusal`): so not
-/// `apply_edits` itself, which runs a transaction of its own, nor the
-/// project-wide `assign_net_class`, which leaves only a pick marker (no group).
+/// the commands that may be an edit of `apply_edits`, plus those a list does
+/// not carry yet (`step_refusal`): so not `apply_edits` itself, which runs a
+/// transaction of its own, nor the project-wide `assign_net_class`, which
+/// leaves only a pick marker (no group).
 pub(crate) fn runs_as_one_step(command: &AppCommandId) -> bool {
-    edit_refusal(command).is_none()
+    step_refusal(command).is_none()
 }
 
 /// Run `handler` for `command` inside one engine transaction on the sheet its
@@ -50,7 +51,7 @@ pub(crate) fn run_as_one_step(
     }
     let edits = &mut app.document_state.agent_edits;
     let previous = edits.target.replace(path.clone());
-    edits.owed = RenderInvalidation::NONE;
+    edits.owed = DocumentPatch::NONE;
     let ran = handler(app, args);
     let edits = &mut app.document_state.agent_edits;
     let owed = std::mem::take(&mut edits.owed);
@@ -86,15 +87,15 @@ pub(crate) fn run_as_one_step(
             .file_name()
             .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
         let label = format!("Agent: {} on {name}", command.as_str());
-        let invalidation = if owed == RenderInvalidation::NONE {
-            RenderInvalidation::FULL
+        let patch = if owed == DocumentPatch::NONE {
+            DocumentPatch::FULL
         } else {
             owed
         };
         app.document_state
             .agent_edits
             .record_step(group, label.clone(), &app.agent.origin);
-        app.after_sheet_change(&path, invalidation);
+        app.after_sheet_change(&path, patch);
         crate::diagnostics::log_info(format!("{label} (undo group {})", group.get()));
     }
     ran

@@ -16,6 +16,7 @@ fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         uuid: Uuid::nil(),
         version: 1,
         generator: String::new(),
@@ -67,6 +68,8 @@ fn pad(net: u32) -> Pad {
             name: "N".into(),
         }),
         roundrect_ratio: 0.0,
+        trapezoid_delta: Default::default(),
+        custom_outline: Vec::new(),
         rotation: 0.0,
         net_locked: false,
         layer_sizes: None,

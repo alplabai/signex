@@ -229,13 +229,17 @@ The message ids (`MessageId`, `ids::*`, `command_ids::*`, …), `Translatable`,
 (epic #2326, decision of 2026-11-15); `signex-i18n` re-exports them under
 the same paths and renders them. `Translatable::render` takes any
 `MessageRenderer`; `render_en_us` and `localized` come from the
-`signex_i18n::RenderTranslatable` trait.
+`signex_i18n::RenderTranslatable` trait. A `Translatable` can itself be a
+message argument, and every render path (`Translatable::render`, `t!`,
+`I18n::message`, `I18n::message_plain`) renders it first, in the same
+language (#2059).
 
 The app holds the locale in `UiState::i18n`, saves it as `language` in the
 preferences file and restores it at launch. `Signex::set_language` (reached by
-`UiMsg::LanguageChanged`) switches and persists it at runtime. There is no
-Language picker in Preferences yet; it comes with the UI redesign and will call
-that entry.
+`UiMsg::LanguageChanged`) switches and persists it at runtime. The Language page
+in Preferences (mockup row 144a) keeps the choice as a draft
+(`PreferencesPagesState::draft_language`, previewed with a catalog built in
+`update`) and calls that entry on Apply or OK.
 
 It is a UI-layer crate and the only one that imports Fluent or ICU4X; domain
 crates cannot depend on it (`scripts/check_arch_guard.sh`).
@@ -333,9 +337,9 @@ The most likely additions are:
   (`docs/DRC_RULES.md`)
 - `pcb-geom` — *(landed, #2174)* integer-nm board geometry: R-tree, hit-test,
   union-find, spanning tree, pad world transform. Polygon offset, Delaunay and
-  boolean ops are not part of it yet.
-- `pcb-router` — interactive router (walkaround, shove, diff pair,
-  tuning, pour). Added with PCB Routing. See `internal/docs/PCB_ROUTER_PLAN.md`.
+  boolean ops are not part of it yet. The interactive router (walkaround,
+  shove, diff pair, tuning) is its `route` module, not a crate of its own
+  (#2389).
 
 These should be added only when their responsibility is real and clear, not as
 speculative abstraction.

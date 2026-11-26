@@ -22,7 +22,7 @@ use crate::shape::{Shape, segments_intersect};
 use crate::units::PointNm;
 
 /// How many times a push may cause another.
-const ROUNDS: usize = 4;
+pub(super) const ROUNDS: usize = 4;
 
 /// A track's new ends after a push.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,16 +36,41 @@ pub struct Pushed {
 /// round before (with their index, which never pushes itself).
 type Pusher = (Option<usize>, CopperItem);
 
+/// What one shove did: the tracks to move ([`shove`]'s answer) and how
+/// many rounds of pushing it ran, whether it cleared the way or not.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShoveRun {
+    /// `None` when the shove gave up: the way cannot be cleared by pushing.
+    pub pushed: Option<Vec<Pushed>>,
+    /// Rounds run, counting the round it gave up in: 0 when nothing was in
+    /// the way, `ROUNDS + 1` when the pushing never settled.
+    pub rounds: usize,
+    /// Whether the pushing came to an answer within its rounds: the way
+    /// cleared, or a push found that cannot be made. `false` only when it
+    /// ran out of rounds with tracks still in the way.
+    pub settled: bool,
+}
+
 /// The tracks to move so that `legs` keep the clearance, each with its
 /// new ends, sorted by id; empty when nothing is in the way. `None` when
 /// the way cannot be cleared by pushing.
 pub fn shove(world: &RouteWorld, legs: &[NewCopper]) -> Option<Vec<Pushed>> {
+    shove_run(world, legs).pushed
+}
+
+/// [`shove`], with the rounds of pushing it took (#2483).
+pub fn shove_run(world: &RouteWorld, legs: &[NewCopper]) -> ShoveRun {
+    let given_up = |rounds, settled| ShoveRun {
+        pushed: None,
+        rounds,
+        settled,
+    };
     if legs.iter().any(|leg| world.in_keepout(leg)) {
-        return None;
+        return given_up(0, true);
     }
     let mut moved: HashMap<usize, Shape> = HashMap::new();
     let mut pushers: Vec<Pusher> = legs.iter().map(|leg| (None, leg.as_item())).collect();
-    for _ in 0..=ROUNDS {
+    for round in 0..=ROUNDS {
         let mut blockers: Vec<usize> = pushers
             .iter()
             .flat_map(|(own, item)| world.conflicts(item, &moved, *own))
@@ -53,7 +78,11 @@ pub fn shove(world: &RouteWorld, legs: &[NewCopper]) -> Option<Vec<Pushed>> {
         blockers.sort_unstable();
         blockers.dedup();
         if blockers.is_empty() {
-            return finish(world, legs, &moved);
+            return ShoveRun {
+                pushed: finish(world, legs, &moved),
+                rounds: round,
+                settled: true,
+            };
         }
         let mut next = Vec::new();
         for index in blockers {
@@ -62,18 +91,22 @@ pub fn shove(world: &RouteWorld, legs: &[NewCopper]) -> Option<Vec<Pushed>> {
             if next.contains(&index) {
                 continue;
             }
-            next.extend(push_one(world, index, &pushers, &mut moved)?);
+            match push_one(world, index, &pushers, &mut moved) {
+                Some(touched) => next.extend(touched),
+                None => return given_up(round + 1, true),
+            }
         }
         pushers = next
             .into_iter()
-            .map(|index| (Some(index), with_shape(world, index, moved[&index])))
+            .map(|index| (Some(index), with_shape(world, index, moved[&index].clone())))
             .collect();
     }
-    None
+    given_up(ROUNDS + 1, false)
 }
 
 /// Move track `index` clear of `pushers`, stretching the tracks joined at
-/// its ends. The indices it moved.
+/// its ends. The indices it moved. A track of no net (#2515) is not
+/// moved: the route walks round it.
 fn push_one(
     world: &RouteWorld,
     index: usize,
@@ -81,7 +114,8 @@ fn push_one(
     moved: &mut HashMap<usize, Shape>,
 ) -> Option<Vec<usize>> {
     let item = &world.items[index];
-    if moved.contains_key(&index) || !matches!(item.item, ItemRef::Track(_)) {
+    let movable = matches!(item.item, ItemRef::Track(_)) && item.net != 0;
+    if moved.contains_key(&index) || !movable {
         return None;
     }
     let Shape::Capsule { a, b, radius } = item.shape else {
@@ -218,7 +252,7 @@ fn push_offset(world: &RouteWorld, item: &CopperItem, pushers: &[Pusher]) -> Opt
             (side * normal.0 * distance).round() as i64,
             (side * normal.1 * distance).round() as i64,
         );
-        let shape = item.shape.translated(offset);
+        let shape = item.shape.clone().translated(offset);
         let missing = pressing
             .iter()
             .map(|p| shortfall(world, p, item, &shape))
@@ -267,24 +301,24 @@ fn finish(
     moved: &HashMap<usize, Shape>,
 ) -> Option<Vec<Pushed>> {
     let mut pushed = Vec::with_capacity(moved.len());
-    for (&index, &shape) in moved {
-        let track = with_shape(world, index, shape);
+    for (&index, shape) in moved {
+        let track = with_shape(world, index, shape.clone());
         let as_new = NewCopper {
             kind: NewKind::Track,
             net: track.net,
             layers: track.layers,
-            shape,
+            shape: shape.clone(),
         };
         let crowds_a_leg = legs
             .iter()
-            .any(|leg| world.too_close(&leg.as_item(), &track, &shape));
+            .any(|leg| world.too_close(&leg.as_item(), &track, shape));
         if crowds_a_leg
             || world.in_keepout(&as_new)
             || !world.conflicts(&track, moved, Some(index)).is_empty()
         {
             return None;
         }
-        let (ItemRef::Track(id), Shape::Capsule { a, b, .. }) = (track.item, shape) else {
+        let (ItemRef::Track(id), &Shape::Capsule { a, b, .. }) = (track.item, shape) else {
             return None;
         };
         pushed.push(Pushed {
