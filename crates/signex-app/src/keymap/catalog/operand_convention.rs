@@ -104,6 +104,8 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("set", OperandKind::Text),
     ("preset", OperandKind::Text),
     ("pins", OperandKind::Text),
+    // #2954: the user parameters Change Component clears.
+    ("drop", OperandKind::Text),
     ("units", OperandKind::Text),
     ("shape", OperandKind::Text),
     ("delta", OperandKind::Text),
@@ -137,6 +139,8 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     // name it is updated to and the pin (`U3.3`) it or a timeline names.
     ("fix", OperandKind::Text),
     ("to", OperandKind::Text),
+    // #2949: Compare variants' left-hand variant (its right-hand one is `to`).
+    ("from", OperandKind::Text),
     ("pin", OperandKind::Text),
     // #2945, mockup row 201: Generate design notebook's sections (a comma
     // list or `all`), page template, document number, revision, check

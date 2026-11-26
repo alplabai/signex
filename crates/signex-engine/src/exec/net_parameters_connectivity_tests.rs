@@ -73,11 +73,14 @@ fn net_parameters(at: Point, class: Option<&str>, rules: NetRules) -> SchDirecti
     }
 }
 
-/// The netlist with every net's class taken off: what connectivity is.
+/// The netlist with every net's class and dots taken off: what connectivity
+/// is. A placed flag's stem gets an automatic dot on its wire (DECISIONS
+/// 2026-11-21), which joins no other net; the members and names are kept.
 fn connectivity(engine: &Engine) -> Netlist {
     let mut netlist = signex_net::build_netlist(engine.document());
     for net in &mut netlist.nets {
         net.class = None;
+        net.junctions.clear();
     }
     netlist
 }
