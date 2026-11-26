@@ -570,6 +570,11 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "project_set_default_variant",
                     "compare_variants",
                     "variant_bom",
+                    // #3038: the Variant Manager's part edits and Duplicate.
+                    "project_set_variant_fit",
+                    "project_set_variant_alternate",
+                    "project_set_variant_override",
+                    "project_duplicate_variant",
                     "project_move_library",
                     "project_set_annotate_undo",
                     "project_set_annotate_numbering",

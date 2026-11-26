@@ -317,6 +317,12 @@ define_ids! {
     VARIANT_MANAGER_FIT_EVERY_CHANNEL = "variant-manager-fit-every-channel";
     VARIANT_MANAGER_UNFIT_EVERY_CHANNEL = "variant-manager-unfit-every-channel";
     VARIANT_MANAGER_EVERY_CHANNEL_AS_ON_SHEETS = "variant-manager-every-channel-as-on-sheets";
+    // The Variant Manager's part edits as catalog commands (#3038).
+    VARIANT_COMMAND_NO_PART = "variant-command-no-part";
+    VARIANT_COMMAND_BAD_SCOPE = "variant-command-bad-scope";
+    VARIANT_COMMAND_NOT_REPEATED = "variant-command-not-repeated";
+    VARIANT_COMMAND_ALTERNATE_NEEDS_MPN = "variant-command-alternate-needs-mpn";
+    VARIANT_COMMAND_NO_COPY_NAME = "variant-command-no-copy-name";
     // dialog-polish
     PROJECT_PARAMETER_UNRESOLVED = "project-parameter-unresolved";
     PROJECT_READ_ONLY_BANNER = "project-read-only-banner";

@@ -247,6 +247,10 @@ define_ids! {
         CTX_IN_VARIANT_PLANNED = "ctx-in-variant-planned";
         CTX_IN_VARIANT_SHOW_MANAGER = "ctx-in-variant-show-manager";
         CTX_IN_VARIANT_NEW = "ctx-in-variant-new";
+        CTX_IN_VARIANT_THIS_CHANNEL = "ctx-in-variant-this-channel";
+        CTX_IN_VARIANT_ALL_CHANNELS = "ctx-in-variant-all-channels";
+        CTX_IN_VARIANT_COMPILE_FIRST = "ctx-in-variant-compile-first";
+        CTX_IN_VARIANT_IN_BASE = "ctx-in-variant-in-base";
         // project-tree-history-rows
         CTX_TREE_SHOW_HISTORY = "ctx-tree-show-history";
     }

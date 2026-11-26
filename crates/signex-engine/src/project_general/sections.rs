@@ -81,6 +81,16 @@ pub enum ProjectSectionCommand {
         parameter: String,
         value: Option<String>,
     },
+    /// Several parameter values of one part in a variant as one step: an
+    /// alternate part's value, footprint and part number (#3038). `None`
+    /// is the part's own value again.
+    SetVariantPartParameters {
+        variant: String,
+        designator: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        part: Option<SymbolLink>,
+        parameters: Vec<(String, Option<String>)>,
+    },
     /// Move a library one step up or down the list (#1691).
     MoveLibrary {
         path: PathBuf,
@@ -164,6 +174,16 @@ impl ProjectSectionCommand {
                 PlacedPart::new(designator, part.as_ref()),
                 parameter,
                 value.as_deref(),
+            )?,
+            Self::SetVariantPartParameters {
+                variant,
+                designator,
+                part,
+                parameters,
+            } => data.set_variant_part_parameters(
+                variant,
+                PlacedPart::new(designator, part.as_ref()),
+                parameters,
             )?,
             Self::MoveLibrary { path, step } => {
                 data.move_library(path, *step);

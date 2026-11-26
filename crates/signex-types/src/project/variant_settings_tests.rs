@@ -476,3 +476,42 @@ fn an_edit_through_one_unit_keeps_the_entrys_other_units() {
         .part(Some("Lite"), PlacedPart::new("U3", Some(&only_b)));
     assert_eq!(found.and_then(|part| part.fitted), Some(false));
 }
+
+/// #3038: an alternate part's value, footprint and part number are set on
+/// one entry in one edit, cleared together, and refused for Base before any
+/// value changes.
+#[test]
+fn several_parameters_are_set_and_cleared_in_one_edit() {
+    let mut data = project();
+    let r5 = link(Uuid::now_v7());
+    let set = |name: &str, value: &str| (name.to_string(), Some(value.to_string()));
+    let alternate = [
+        set(VALUE_PARAMETER, "47k"),
+        set(FOOTPRINT_PARAMETER, "RES_0402"),
+        set(MPN_PARAMETER, "RC0402FR-0747KL"),
+        set(" ", "skipped"),
+    ];
+    data.set_variant_part_parameters("lite", PlacedPart::new("R5", Some(&r5)), &alternate)
+        .unwrap();
+    let entry = data
+        .variant_settings
+        .part(Some("Lite"), PlacedPart::new("R5", Some(&r5)))
+        .unwrap();
+    assert_eq!(entry.parameters.len(), 3, "{:?}", entry.parameters);
+    assert_eq!(entry.parameters[MPN_PARAMETER], "RC0402FR-0747KL");
+    assert_eq!(entry.parameters[FOOTPRINT_PARAMETER], "RES_0402");
+
+    let before = data.variant_settings.clone();
+    assert_eq!(
+        data.set_variant_part_parameters("Base", "R5", &alternate),
+        Err(VariantProblem::Reserved)
+    );
+    assert_eq!(data.variant_settings, before);
+
+    let names = [VALUE_PARAMETER, FOOTPRINT_PARAMETER, MPN_PARAMETER];
+    let cleared: Vec<(String, Option<String>)> =
+        names.iter().map(|name| (name.to_string(), None)).collect();
+    data.set_variant_part_parameters("Lite", PlacedPart::new("R5", Some(&r5)), &cleared)
+        .unwrap();
+    assert!(data.variant_settings.parts.is_empty(), "the entry goes");
+}

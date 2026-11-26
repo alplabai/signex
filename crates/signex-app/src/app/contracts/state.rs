@@ -37,6 +37,12 @@ pub enum ContextAction {
     /// In variant ▸ New variant… (mockup row 62): the Variant Manager opens
     /// and a variant from Base is added with its name open for typing.
     NewVariant(crate::app::ProjectId),
+    /// In variant ▸ Fitted / Not fitted on a repeated sheet (#2662): `parts`
+    /// fitted or not in the active variant, one General undo step.
+    VariantFit {
+        parts: Vec<signex_types::project::PartRef>,
+        fitted: bool,
+    },
 }
 
 /// Which click-to-open submenu is currently expanded inside the right-

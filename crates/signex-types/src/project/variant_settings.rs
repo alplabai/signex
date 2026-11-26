@@ -21,6 +21,10 @@ pub const VALUE_PARAMETER: &str = "Value";
 /// The parameter name of a part's footprint in [`VariantPart::parameters`].
 pub const FOOTPRINT_PARAMETER: &str = "Footprint";
 
+/// The field an alternate part's part number is set in (#3038): the BOM's
+/// `MPN` field.
+pub const MPN_PARAMETER: &str = "MPN";
+
 /// One placed part as the settings find it: the designator the BOM lists it
 /// under and, when known, the placed part itself, which a re-annotation or a
 /// designator edit does not change.
@@ -236,6 +240,34 @@ impl ProjectData {
             }
             None => {
                 part.parameters.remove(parameter);
+            }
+        })
+    }
+
+    /// [`Self::set_variant_part_parameter`] for each of `parameters` on one
+    /// part, as one edit: an alternate part's value, footprint and part
+    /// number together (#3038). A refusal comes before any value changes;
+    /// an empty parameter name is skipped.
+    pub fn set_variant_part_parameters<'p>(
+        &mut self,
+        variant: &str,
+        placed: impl Into<PlacedPart<'p>>,
+        parameters: &[(String, Option<String>)],
+    ) -> Result<(), VariantProblem> {
+        self.edit_variant_part(variant, placed.into(), |part| {
+            for (parameter, value) in parameters {
+                let parameter = parameter.trim();
+                if parameter.is_empty() {
+                    continue;
+                }
+                match value {
+                    Some(value) => {
+                        part.parameters.insert(parameter.to_string(), value.clone());
+                    }
+                    None => {
+                        part.parameters.remove(parameter);
+                    }
+                }
             }
         })
     }

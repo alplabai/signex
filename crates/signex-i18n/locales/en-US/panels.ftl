@@ -1346,6 +1346,9 @@ panels-compiled-design-msg-no-project = Compile project: open a sheet of a proje
 panels-compiled-design-naming-refused = Channel naming not changed: { $why }
 # A channel card's variant fit click was refused; $why says why.
 panels-compiled-design-fit-refused = Channel fit not changed: { $why }
+# The grey tag of a channel row the active variant leaves out entirely
+# (mockup row 154); $variant is the variant's name.
+panels-compiled-design-not-fitted = Not fitted ({ $variant })
 
 # sch-panels-tidy
 # The Canvas Font field (mockup row 40): $family is the font, $size its size in points.

@@ -270,6 +270,23 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
         "project_set_default_variant",
         crate::app::project_tab::project_set_default_variant,
     ),
+    // #3038: the Variant Manager's part edits and Duplicate.
+    (
+        "project_set_variant_fit",
+        crate::app::project_tab::project_set_variant_fit,
+    ),
+    (
+        "project_set_variant_alternate",
+        crate::app::project_tab::project_set_variant_alternate,
+    ),
+    (
+        "project_set_variant_override",
+        crate::app::project_tab::project_set_variant_override,
+    ),
+    (
+        "project_duplicate_variant",
+        crate::app::project_tab::project_duplicate_variant,
+    ),
     (
         "project_move_library",
         crate::app::project_tab::project_move_library,
@@ -564,6 +581,10 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         | "project_remove_variant"
         | "project_set_active_variant"
         | "project_set_default_variant"
+        | "project_set_variant_fit"
+        | "project_set_variant_alternate"
+        | "project_set_variant_override"
+        | "project_duplicate_variant"
         | "project_move_library"
         | "project_set_annotate_undo"
         | "project_set_annotate_numbering"

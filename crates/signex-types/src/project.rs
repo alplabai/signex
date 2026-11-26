@@ -93,8 +93,8 @@ pub use user_profile::{
     new_profile_id, resolve_profile, save_user_profile, user_profiles_from_value,
 };
 pub use variant_settings::{
-    FOOTPRINT_PARAMETER, PartRef, PlacedPart, SheetFit, VALUE_PARAMETER, VariantPart,
-    VariantSettings,
+    FOOTPRINT_PARAMETER, MPN_PARAMETER, PartRef, PlacedPart, SheetFit, VALUE_PARAMETER,
+    VariantPart, VariantSettings,
 };
 pub use variants::{BASE_VARIANT, MAX_VARIANT_NAME_CHARS, VariantProblem, is_base_variant};
 

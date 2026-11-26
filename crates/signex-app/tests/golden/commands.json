@@ -1420,6 +1420,11 @@
     "category": "design"
   },
   {
+    "id": "project_duplicate_variant",
+    "group": "General",
+    "category": "design"
+  },
+  {
     "id": "project_enable_requirement",
     "group": "General",
     "category": "design"
@@ -1476,6 +1481,21 @@
   },
   {
     "id": "project_set_requirement",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "project_set_variant_alternate",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "project_set_variant_fit",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "project_set_variant_override",
     "group": "General",
     "category": "design"
   },

@@ -9,7 +9,9 @@ use signex_engine::ProjectSectionCommand;
 use signex_i18n::{I18n, ids};
 use signex_output::VariantMatrix;
 use signex_types::pcb::SymbolLink;
-use signex_types::project::{BASE_VARIANT, PlacedPart, ProjectData, SheetFit, is_base_variant};
+use signex_types::project::{
+    BASE_VARIANT, PlacedPart, ProjectData, SheetFit, VariantSettings, is_base_variant,
+};
 
 use super::super::{ProjectTabState, VariantRenameDraft};
 use super::manager::{OverrideDraft, VariantCell, VariantManagerMsg};
@@ -149,25 +151,17 @@ impl Signex {
         let Some(project) = self.document_state.project_by_id(project_id) else {
             return false;
         };
-        let placed = PlacedPart::new(&cell.designator, part);
-        let settings = &project.data.variant_settings;
-        if settings
-            .part(cell.variant.as_deref(), placed)
-            .is_some_and(|own| own.fitted.is_some())
-        {
-            return false;
-        }
         let Some(matrix) = self.variant_read(project_id) else {
             return false;
         };
-        let sheets = matrix.column(cell.variant.as_deref()).and_then(|column| {
-            let row = matrix
-                .rows
-                .iter()
-                .find(|row| row.designator == cell.designator)?;
-            row.fitted.get(column).copied()
-        });
-        sheets == Some(picked)
+        let placed = PlacedPart::new(&cell.designator, part);
+        fit_repeats_sheets(
+            &project.data.variant_settings,
+            matrix,
+            cell.variant.as_deref(),
+            placed,
+            picked,
+        )
     }
 
     /// Typing moved on to another parameter or another cell: what was typed
@@ -269,25 +263,55 @@ fn sheet_fits_of(
     if !super::read_holds(tab, matrix, project, sheet_epoch) {
         return None;
     }
-    let Some(column) = matrix.column(from.as_deref()) else {
-        return Some(Vec::new());
+    Some(sheet_fits_in(matrix, from.as_deref()))
+}
+
+/// The fit `from`'s sheets give each part of `matrix` (a parts read, no
+/// settings over it) where it differs from Base: what Duplicate copies.
+pub(super) fn sheet_fits_in(matrix: &VariantMatrix, from: Option<&str>) -> Vec<SheetFit> {
+    let Some(column) = matrix.column(from) else {
+        return Vec::new();
     };
-    Some(
-        matrix
+    matrix
+        .rows
+        .iter()
+        .filter(|row| {
+            row.fitted
+                .get(column)
+                .is_some_and(|&f| f != row.base_fitted())
+        })
+        .map(|row| SheetFit {
+            designator: row.designator.clone(),
+            part: row.link.clone(),
+            fitted: !row.base_fitted(),
+        })
+        .collect()
+}
+
+/// Whether picking `picked` for `placed` in `variant` repeats what is there:
+/// the settings give the part no fit of its own and its sheets (`matrix`, a
+/// parts read) fit it as `picked` already. Such a pick records nothing.
+pub(super) fn fit_repeats_sheets(
+    settings: &VariantSettings,
+    matrix: &VariantMatrix,
+    variant: Option<&str>,
+    placed: PlacedPart<'_>,
+    picked: bool,
+) -> bool {
+    if settings
+        .part(variant, placed)
+        .is_some_and(|own| own.fitted.is_some())
+    {
+        return false;
+    }
+    let sheets = matrix.column(variant).and_then(|column| {
+        let row = matrix
             .rows
             .iter()
-            .filter(|row| {
-                row.fitted
-                    .get(column)
-                    .is_some_and(|&f| f != row.base_fitted())
-            })
-            .map(|row| SheetFit {
-                designator: row.designator.clone(),
-                part: row.link.clone(),
-                fitted: !row.base_fitted(),
-            })
-            .collect(),
-    )
+            .find(|row| row.designator == placed.designator)?;
+        row.fitted.get(column).copied()
+    });
+    sheets == Some(picked)
 }
 
 /// The first free "<from> copy", then "<from> copy 2", ... in the language

@@ -217,3 +217,34 @@ fn every_channel_copy_set_at_once_is_one_undo_step() {
     assert!(data.variant_settings.is_empty(), "one step takes all three");
     assert!(!history.undo(&mut data));
 }
+
+/// #3038: an alternate part's value, footprint and part number are one
+/// step, which round-trips as plain data and one undo takes back.
+#[test]
+fn an_alternate_parts_values_are_one_step() {
+    use signex_types::project::{FOOTPRINT_PARAMETER, MPN_PARAMETER};
+
+    let command = ProjectSectionCommand::SetVariantPartParameters {
+        variant: "Lite".into(),
+        designator: "R5".into(),
+        part: None,
+        parameters: vec![
+            (VALUE_PARAMETER.into(), Some("47k".into())),
+            (FOOTPRINT_PARAMETER.into(), Some("RES_0402".into())),
+            (MPN_PARAMETER.into(), Some("RC0402FR-0747KL".into())),
+        ],
+    };
+    let json = serde_json::to_value(&command).unwrap();
+    let back: ProjectSectionCommand = serde_json::from_value(json).unwrap();
+    assert_eq!(back, command);
+
+    let mut data = project();
+    let mut history = ProjectGeneralHistory::default();
+    assert_eq!(apply(&mut history, &mut data, command.clone()), Ok(true));
+    let entry = data.variant_settings.part(Some("Lite"), "R5").unwrap();
+    assert_eq!(entry.parameters.len(), 3);
+    assert_eq!(apply(&mut history, &mut data, command), Ok(false));
+    assert!(history.undo(&mut data));
+    assert!(data.variant_settings.is_empty(), "one step takes all three");
+    assert!(!history.can_undo());
+}

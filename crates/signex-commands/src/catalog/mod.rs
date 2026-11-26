@@ -34,6 +34,7 @@ mod search;
 mod selection;
 mod tool;
 mod transform;
+mod variant_operands;
 mod view;
 mod wiring;
 mod workspace;

@@ -283,6 +283,7 @@ previous_sheet	-	f2929686b07ef725
 print	PrintTarget	cd658d4d58e303b6
 project_add_requirement	-	f2929686b07ef725
 project_add_variant	-	f2929686b07ef725
+project_duplicate_variant	-	f2929686b07ef725
 project_enable_requirement	-	f2929686b07ef725
 project_move_library	-	f2929686b07ef725
 project_move_sheet	-	f2929686b07ef725
@@ -295,6 +296,9 @@ project_set_annotate_numbering	-	f2929686b07ef725
 project_set_annotate_undo	-	f2929686b07ef725
 project_set_default_variant	-	f2929686b07ef725
 project_set_requirement	-	f2929686b07ef725
+project_set_variant_alternate	-	f2929686b07ef725
+project_set_variant_fit	-	f2929686b07ef725
+project_set_variant_override	-	f2929686b07ef725
 project_set_version_control	-	f2929686b07ef725
 project_settings	-	f2929686b07ef725
 query_board_nets	-	f2929686b07ef725

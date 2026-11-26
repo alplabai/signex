@@ -207,6 +207,11 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "project_set_annotate_undo",
             "project_set_annotate_numbering",
             "project_set_default_variant",
+            // #3038: the Variant Manager's part edits and Duplicate.
+            "project_set_variant_fit",
+            "project_set_variant_alternate",
+            "project_set_variant_override",
+            "project_duplicate_variant",
             "project_set_version_control",
             "project_set_requirement",
             "project_enable_requirement",

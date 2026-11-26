@@ -1,8 +1,10 @@
 //! Properties while a channel tab of a repeated sheet is shown (#1279): the
-//! channel, its place among the channels, and the designator map (each
-//! part's logical designator, value and designator in this channel). The
-//! view is read-only. Per-channel variant state waits for the Variant
-//! Manager tab and is not shown.
+//! channel, its place among the channels, the designator map (each part's
+//! logical designator, value and designator in this channel) and the
+//! Variant section (#2662, mockup row 151): the active variant, the
+//! channels it leaves out, how this channel fits and the parts the channels
+//! fit differently. The view is read-only; fits are edited in the Variant
+//! Manager tab, on the cards and from the canvas menu.
 
 use iced::widget::{Column, column, container, row, scrollable};
 use iced::{Alignment, Element, Length, Widget as _};
@@ -88,11 +90,18 @@ pub(in crate::panels) fn channel_view_properties<'a>(
         &ctx.collapsed_sections,
         move || column![map.boxed()],
     );
+    let variant = ctx.collapsible(
+        "channel_variant",
+        ids::PROPERTIES_CHANNEL_VARIANT,
+        &ctx.collapsed_sections,
+        move || column![super::channel_variant::section(ctx, strip)],
+    );
     Some(
         scrollable(
             column![
                 container(header).padding([SP.m, SP.m]).width(Length::Fill),
                 section,
+                variant,
             ]
             .width(Length::Fill),
         )

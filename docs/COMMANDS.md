@@ -167,6 +167,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `print` | Print | file | `Mod+P` | `Mod+P` |
 | `project_add_requirement` | Add a requirement to the project | design | — | — |
 | `project_add_variant` | Add a variant to the project | design | — | — |
+| `project_duplicate_variant` | Duplicate a variant of the project | design | — | — |
 | `project_enable_requirement` | Turn a project requirement on or off | design | — | — |
 | `project_move_library` | Move a library in the library order of the project | design | — | — |
 | `project_move_sheet` | Move a sheet in the page order of the project | design | — | — |
@@ -179,6 +180,9 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `project_set_annotate_undo` | Set how many undo steps an annotate run of the project is | design | — | — |
 | `project_set_default_variant` | Choose the default variant of the project | design | — | — |
 | `project_set_requirement` | Set a field of a project requirement | design | — | — |
+| `project_set_variant_alternate` | Set the alternate part a variant uses for a part of the project | design | — | — |
+| `project_set_variant_fit` | Set whether a variant fits a part of the project | design | — | — |
+| `project_set_variant_override` | Set a parameter value a variant gives a part of the project | design | — | — |
 | `project_set_version_control` | Turn commit on save on or off for the project | design | — | — |
 | `project_settings` | Read the settings of the project | design | — | — |
 | `query_net_ties` | Query net ties | file | — | — |

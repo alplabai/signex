@@ -129,6 +129,11 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     // #2552: a move's wire handling, given by the caller, not the settings.
     ("keep_wires", OperandKind::Bool),
     ("wiring", OperandKind::Text),
+    // #3038: a part's fit in a variant, and an alternate part's part number
+    // and footprint.
+    ("fitted", OperandKind::Bool),
+    ("mpn", OperandKind::Text),
+    ("footprint", OperandKind::Text),
 ];
 
 /// The commands whose `ids` is still text, not targets (#2326): a design

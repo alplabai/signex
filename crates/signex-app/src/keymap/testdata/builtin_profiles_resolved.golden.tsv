@@ -148,6 +148,10 @@ signex_standard	hint	-	-	project_set_active_variant
 signex_standard	hint	-	-	project_set_default_variant
 signex_standard	hint	-	-	compare_variants
 signex_standard	hint	-	-	variant_bom
+signex_standard	hint	-	-	project_set_variant_fit
+signex_standard	hint	-	-	project_set_variant_alternate
+signex_standard	hint	-	-	project_set_variant_override
+signex_standard	hint	-	-	project_duplicate_variant
 signex_standard	hint	-	-	project_move_library
 signex_standard	hint	-	-	project_set_annotate_undo
 signex_standard	hint	-	-	project_set_annotate_numbering
@@ -718,6 +722,10 @@ classic	hint	-	-	project_set_active_variant
 classic	hint	-	-	project_set_default_variant
 classic	hint	-	-	compare_variants
 classic	hint	-	-	variant_bom
+classic	hint	-	-	project_set_variant_fit
+classic	hint	-	-	project_set_variant_alternate
+classic	hint	-	-	project_set_variant_override
+classic	hint	-	-	project_duplicate_variant
 classic	hint	-	-	project_move_library
 classic	hint	-	-	project_set_annotate_undo
 classic	hint	-	-	project_set_annotate_numbering

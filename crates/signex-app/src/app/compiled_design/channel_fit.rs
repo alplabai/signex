@@ -92,10 +92,31 @@ impl Signex {
         out
     }
 
+    /// Whether `variant` leaves out every part of the channel at row `index`
+    /// of the last compile, as its card shows it greyed: the Compiled
+    /// Design's "Not fitted (<variant>)" tag (#2662). A sheet row, or a
+    /// channel with no parts, is never left out.
+    pub(super) fn channel_row_left_out(
+        &self,
+        result: &CompiledResult,
+        index: usize,
+        variant: &str,
+    ) -> bool {
+        let Some(sheet) = result.design.sheets.get(index) else {
+            return false;
+        };
+        let (Some(channel), Some(path)) = (&sheet.channel, result.path_of(&sheet.key)) else {
+            return false;
+        };
+        let fits = self.channel_part_fits(result, path, channel.index, Some(variant));
+        !fits.is_empty() && fits.iter().all(|fit| !fit.is_fitted)
+    }
+
     /// A channel card's fit was clicked: leave every part of the channel
     /// out of the active variant, or let the sheets decide for each again
-    /// (`fitted` `None`). One undo step; Base is not set here.
-    pub(super) fn pick_channel_fit(&mut self, parts: Vec<PartRef>, fitted: Option<bool>) {
+    /// (`fitted` `None`). One undo step; Base is not set here. The canvas
+    /// menu's In variant rows set a part's copies through it too.
+    pub(crate) fn pick_channel_fit(&mut self, parts: Vec<PartRef>, fitted: Option<bool>) {
         let (Some(project_id), Some(variant)) =
             (self.compile_target(), self.channel_view_variant())
         else {

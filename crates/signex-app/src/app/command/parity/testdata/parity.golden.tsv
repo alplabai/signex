@@ -1081,6 +1081,9 @@ project_add_requirement	headless_missing_operand	needs `document`	core	none	rout
 project_add_variant	operand_handler	run_operands: named document	core	origin	handler
 project_add_variant	refusal_needs_operands	needs_operands_reason	gui	none	routing
 project_add_variant	headless_missing_operand	needs `document`	core	none	routing
+project_duplicate_variant	operand_handler	run_operands: named document	core	origin	handler
+project_duplicate_variant	refusal_needs_operands	needs_operands_reason	gui	none	routing
+project_duplicate_variant	headless_missing_operand	needs `document`	core	none	routing
 project_enable_requirement	operand_handler	run_operands: named document	core	origin	handler
 project_enable_requirement	refusal_needs_operands	needs_operands_reason	gui	none	routing
 project_enable_requirement	headless_missing_operand	needs `document`	core	none	routing
@@ -1117,6 +1120,15 @@ project_set_default_variant	headless_missing_operand	needs `document`	core	none	
 project_set_requirement	operand_handler	run_operands: named document	core	origin	handler
 project_set_requirement	refusal_needs_operands	needs_operands_reason	gui	none	routing
 project_set_requirement	headless_missing_operand	needs `document`	core	none	routing
+project_set_variant_alternate	operand_handler	run_operands: named document	core	origin	handler
+project_set_variant_alternate	refusal_needs_operands	needs_operands_reason	gui	none	routing
+project_set_variant_alternate	headless_missing_operand	needs `document`	core	none	routing
+project_set_variant_fit	operand_handler	run_operands: named document	core	origin	handler
+project_set_variant_fit	refusal_needs_operands	needs_operands_reason	gui	none	routing
+project_set_variant_fit	headless_missing_operand	needs `document`	core	none	routing
+project_set_variant_override	operand_handler	run_operands: named document	core	origin	handler
+project_set_variant_override	refusal_needs_operands	needs_operands_reason	gui	none	routing
+project_set_variant_override	headless_missing_operand	needs `document`	core	none	routing
 project_set_version_control	operand_handler	run_operands: named document	core	origin	handler
 project_set_version_control	refusal_needs_operands	needs_operands_reason	gui	none	routing
 project_set_version_control	headless_missing_operand	needs `document`	core	none	routing
