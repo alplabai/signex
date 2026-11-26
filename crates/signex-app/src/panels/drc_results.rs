@@ -396,11 +396,16 @@ fn tiles<'a>(ctx: &'a PanelContext, drc: &DrcPanel) -> Element<'a, PanelMsg> {
             TS.body,
             i18n,
         );
+        // Three empty slots with the row's gaps: the tile is exactly as
+        // wide as each of the four above it.
         let gap = StatTileMetrics::from_text_size(TS.body, Density::Compact).gap;
+        let slot = || Space::new().width(Length::FillPortion(1));
         counted = counted.push(
             row![
                 container(other).width(Length::FillPortion(1)),
-                Space::new().width(Length::FillPortion(3)),
+                slot(),
+                slot(),
+                slot(),
             ]
             .spacing(gap),
         );

@@ -144,6 +144,10 @@ fn a_room_finding_is_counted_in_the_other_tile() {
     // Under the four, at the left, one tile wide.
     assert!(other.bounds.y > keepout.bounds.y, "{laid:#?}");
     assert!(other.bounds.x < keepout.bounds.x, "{other:?} {keepout:?}");
+    assert!(
+        (other.bounds.width - keepout.bounds.width).abs() < 1.0,
+        "as wide as a tile above: {other:?} {keepout:?}"
+    );
     let count = others.to_string();
     assert!(
         laid.iter()
