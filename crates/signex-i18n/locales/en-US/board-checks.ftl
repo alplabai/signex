@@ -25,6 +25,7 @@ drc-panel-rule-link = Rule
 # Undo labels.
 drc-panel-waive-undo = Waive DRC Violation
 drc-panel-unwaive-undo = Unwaive DRC Violation
+drc-fix-undo = Fix DRC Violations
 drc-panel-refused = The waiver was not saved: { $why }
 drc-panel-show-refused = The violation could not be shown: { $why }
 

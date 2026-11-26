@@ -260,6 +260,14 @@ mod tests {
         }
     }
 
+    /// #2940: a DRC fix edits the board in memory as an undo step, its dry
+    /// run included: `edit`, never `save`.
+    #[test]
+    fn the_drc_fixes_need_the_edit_capability() {
+        assert_eq!(cap("fix_drc"), Capability::Edit);
+        assert_eq!(cap("fix_drc_violation"), Capability::Edit);
+    }
+
     #[test]
     fn the_catalogs_writers_and_exporters_are_pinned() {
         let non_default: BTreeSet<_> = all_command_ids()

@@ -135,7 +135,9 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   `document` is the project or any document of it), the board's DRC
   results and net classes
   (#2399, #2400): `show_drc_violation`, `filter_drc_results`,
-  `waive_drc_violation`, `unwaive_drc_violation`, `add_net_class`,
+  `waive_drc_violation`, `unwaive_drc_violation`, the DRC fixes `fix_drc`
+  and `fix_drc_violation` (#2940, one undo step on the board),
+  `add_net_class`,
   `rename_net_class`, `delete_net_class`, `set_net_class_rules` and
   `assign_board_net_class`, each answering with what it did, the board
   edits `set_layer_stack`, `lock_board_items`, `unlock_board_items`,

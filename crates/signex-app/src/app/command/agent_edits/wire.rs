@@ -223,6 +223,9 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "unwaive_drc_violation",
         "it edits the board, which no sheet's undo step covers; run it as its own command",
     ),
+    // #2940: the DRC fixes are one step of their own on the board.
+    ("fix_drc_violation", BOARD_EDIT),
+    ("fix_drc", BOARD_EDIT),
     // #2401, #2407: board edits, each its own step on the board it names.
     ("set_layer_stack", BOARD_EDIT),
     ("lock_board_items", BOARD_EDIT),

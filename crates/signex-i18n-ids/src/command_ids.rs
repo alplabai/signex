@@ -440,6 +440,8 @@ define_ids! {
         CMD_SHOW_DRC_VIOLATION = "cmd-show-drc-violation";
         CMD_WAIVE_DRC_VIOLATION = "cmd-waive-drc-violation";
         CMD_UNWAIVE_DRC_VIOLATION = "cmd-unwaive-drc-violation";
+        CMD_FIX_DRC_VIOLATION = "cmd-fix-drc-violation";
+        CMD_FIX_DRC = "cmd-fix-drc";
         CMD_FILTER_DRC_RESULTS = "cmd-filter-drc-results";
         CMD_OPEN_NET_CLASSES_PANEL = "cmd-open-net-classes-panel";
         CMD_MENU_OPEN_NET_CLASSES_PANEL = "cmd-menu-open-net-classes-panel";

@@ -16,6 +16,9 @@ pcb-geom = { path = "../pcb-geom" }
 # on the exact rule the netlist will apply to it, instead of hand-rolling a
 # second, more lenient answer (D5.5, issue #402).
 signex-net = { workspace = true }
+# The DRC fixes (#2940) check each edit with the design rule check; the
+# router's results are checked by it in tests (#2389).
+signex-drc = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 uuid = { workspace = true }
@@ -24,8 +27,6 @@ serde = { workspace = true }
 regex = { workspace = true }
 [dev-dependencies]
 signex-erc = { workspace = true }
-# #2389: the router's results are checked by the design rule check.
-signex-drc = { workspace = true }
 tempfile = "3"
 serde_json = { workspace = true }
 
