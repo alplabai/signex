@@ -223,6 +223,9 @@ human-readable `import-report.md` with the same content. Schema
     Signex refuses (or asks to commit first) when the library's working tree
     has uncommitted changes, and warns when it has local commits that are not
     imports. Users who want to edit parts copy them into their own library;
+  - when a row a user added has the same part number as a row the update
+    would write, the update is refused before anything is written, and the
+    error names both rows; neither row is renamed;
   - a part whose content hash changes gets its patch version bumped and its
     `updated` time set; its lifecycle state and `created` time are kept;
   - unchanged items keep identical bytes.
