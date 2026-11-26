@@ -422,8 +422,8 @@ export_board_step	operand_handler	run_operands: named document	core	origin	handl
 export_board_step	in_window_rewrite	document_window	gui	window	routing
 export_board_step	refusal_needs	Pcb	gui	active document	routing
 export_board_step	headless_missing_operand	needs `document`	core	none	routing
-export_notebook_pdf	bridge	Project(Notebook(ExportPdfRequested { project: None }))	gui	active document,render cache	gate
-export_notebook_pdf	operand_handler	run_operands: named document	core	origin,render cache	handler
+export_notebook_pdf	bridge	Project(Notebook(ExportPdfRequested { project: None }))	gui	active document,render cache	handler
+export_notebook_pdf	operand_handler	run_operands: named document	core	render cache,origin	handler
 export_notebook_pdf	in_window_rewrite	document_window	gui	window	routing
 export_notebook_pdf	refusal_needs	OpenProject	gui	active document	routing
 export_notebook_pdf	headless_missing_operand	needs `document`	core	none	routing
@@ -663,29 +663,24 @@ next_signal_layer	refusal_needs	Pcb	gui	active document	routing
 next_signal_layer	headless_refusal	headless_refusal	gui	none	routing
 notebook_attachments	query	run_query	core	origin	handler
 notebook_attachments	headless_missing_operand	needs `document`	core	none	routing
-notebook_badges	operand_handler	run_operands: named document	core	origin	handler
-notebook_badges	refusal_needs_operands	needs_operands_reason	gui	none	routing
-notebook_badges	headless_missing_operand	needs `document`	core	none	routing
+notebook_badges	operand_handler	run_operands: named document	gui	origin	handler
+notebook_badges	headless_missing_operand	needs `document`	gui	none	routing
 notebook_compile	operand_handler	run_operands: named document	core	origin	handler
 notebook_compile	refusal_needs_operands	needs_operands_reason	gui	none	routing
 notebook_compile	headless_missing_operand	needs `document`	core	none	routing
 notebook_fix_reference	operand_handler	run_operands: named document	core	origin	handler
-notebook_fix_reference	refusal_needs_operands	needs_operands_reason	gui	none	routing
 notebook_fix_reference	headless_missing_operand	needs `document`	core	none	routing
 notebook_insert	operand_handler	run_operands: named document	core	cursor,origin	handler
 notebook_insert	refusal_needs_operands	needs_operands_reason	gui	none	routing
 notebook_insert	headless_missing_operand	needs `document`	core	none	routing
 notebook_measurements	query	run_query	core	origin	handler
 notebook_measurements	headless_missing_operand	needs `document`	core	none	routing
-notebook_reference_card	operand_handler	run_operands: named document	core	origin	handler
-notebook_reference_card	refusal_needs_operands	needs_operands_reason	gui	none	routing
-notebook_reference_card	headless_missing_operand	needs `document`	core	none	routing
-notebook_reference_picker	operand_handler	run_operands: named document	core	origin	handler
-notebook_reference_picker	refusal_needs_operands	needs_operands_reason	gui	none	routing
-notebook_reference_picker	headless_missing_operand	needs `document`	core	none	routing
-notebook_references	operand_handler	run_operands: named document	core	origin	handler
-notebook_references	refusal_needs_operands	needs_operands_reason	gui	none	routing
-notebook_references	headless_missing_operand	needs `document`	core	none	routing
+notebook_reference_card	operand_handler	run_operands: named document	gui	origin	handler
+notebook_reference_card	headless_missing_operand	needs `document`	gui	none	routing
+notebook_reference_picker	operand_handler	run_operands: named document	gui	origin	handler
+notebook_reference_picker	headless_missing_operand	needs `document`	gui	none	routing
+notebook_references	operand_handler	run_operands: named document	gui	origin	handler
+notebook_references	headless_missing_operand	needs `document`	gui	none	routing
 notebook_timeline	query	run_query	core	origin	handler
 notebook_timeline	headless_missing_operand	needs `document`	core	none	routing
 notebook_view	operand_handler	run_operands: named document	gui	origin	handler
@@ -1550,7 +1545,7 @@ toggle_layer_visibility	headless_refusal	headless_refusal	gui	none	routing
 toggle_layers_panel	bridge	Overlay(PanelToggled(Layers))	gui	window	handler
 toggle_layers_panel	in_window_rewrite	document_window	gui	window	routing
 toggle_layers_panel	headless_refusal	headless_refusal	gui	none	routing
-toggle_notebook_badges	bridge	Project(Notebook(BadgesToggled))	gui	active document	gate
+toggle_notebook_badges	bridge	Project(Notebook(BadgesToggled))	gui	active document	handler
 toggle_notebook_badges	in_window_rewrite	document_window	gui	window	routing
 toggle_notebook_badges	refusal_needs	Schematic	gui	active document	routing
 toggle_notebook_badges	headless_refusal	headless_refusal	gui	none	routing

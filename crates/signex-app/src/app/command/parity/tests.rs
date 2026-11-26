@@ -229,6 +229,10 @@ const KILL_LIST: &[(&str, &str)] = &[
     ("close_active_document", "bridge"),
     ("close_active_document", "operand_handler"),
     ("close_all_documents", "bridge"),
+    // Mockup row 202 (#2611): the stale check of a named project's export
+    // reads the designators of the Annotations scan and the cached net
+    // index (`notebook_design_names`), not the project on disk.
+    ("export_notebook_pdf", "operand_handler"),
     ("project_add_requirement", "operand_handler"),
     ("project_remove_requirement", "operand_handler"),
     ("redo", "operand_handler"),

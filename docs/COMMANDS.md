@@ -387,7 +387,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `sheet_navigation_forward` | Sheet navigation forward | navigation | — | `Alt+Right` |
 | `sync_sheet_entries` | Synchronize the selected sheet symbol's entries and its sheet's ports, with a preview | design | — | — |
 | `sync_sheet_pins` | Sync the selected sheet symbol's pins with its child sheet | design | — | — |
-| `toggle_notebook_badges` | Show or hide the Notebook badges on the schematic | view | — | — |
+| `toggle_notebook_badges` | Show or hide the Notebook badges on the schematic | view | `B` | — |
 | `tool_select` | Tool select | select | — | — |
 | `update_pcb_from_schematic` | Update PCB from schematic | pcb_sync | — | — |
 

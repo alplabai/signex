@@ -625,6 +625,14 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "notebook_compile",
                     "notebook_insert",
                     "notebook_view",
+                    // Mockup row 199: the readings, timelines and
+                    // attachments of the named project's notebook.
+                    "notebook_measurements",
+                    "notebook_timeline",
+                    "notebook_attachments",
+                    "export_notebook_timeline",
+                    "mark_notebook_attachment_valid",
+                    "attach_notebook_file",
                 ]
                 .contains(&name),
                 "{name} declares a document operand"

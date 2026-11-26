@@ -448,6 +448,9 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "notebook_measurements",
             "notebook_timeline",
             "notebook_attachments",
+            // Mockup row 198: the review records of the named project's
+            // notebook files, read from disk.
+            "list_annotations",
         ],
         Query,
         &[],
