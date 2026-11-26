@@ -579,7 +579,7 @@ is `{"id", "kind", "position", "rotation"?, "size"?}` after the edit.
 
 ```text
 set_object_position id=<uuid> at=x,y [keep_wires=true|false] [wiring=auto|horizontal_first|vertical_first|straight] [document=..]
-set_object_rotation id=<uuid> rotation=0|90|180|270 [document=..]
+set_object_rotation id=<uuid> rotation=0|90|180|270 [keep_wires=true|false] [document=..]
 set_sheet_symbol_size id=<uuid> size=w,h [document=..]
 set_symbol_parameter id=<uuid> name=Manufacturer [value=..] [document=..]
 ```
@@ -602,9 +602,12 @@ set_symbol_parameter id=<uuid> name=Manufacturer [value=..] [document=..]
   its symbol's border. A pin reference is refused here. The Position row in
   Properties makes the same move with the "keep wires" preference and
   `auto`.
-- `set_object_rotation` turns a part in place (its wires follow when "keep
-  wires" is on) or sets a label's angle. A power port takes the absolute angle its
-  Rotation row always set. Any other kind is refused.
+- `set_object_rotation` turns a part in place or sets a label's angle. A
+  part's wires follow it when `keep_wires` (default `true`) is set; the
+  operand, never the person's "keep wires" preference, decides (#2326). The
+  answer has no wire fields. A power port takes the absolute angle its
+  Rotation row always set. Any other kind is refused. The Rotation row in
+  Properties makes the same turn with the "keep wires" preference.
 - `set_sheet_symbol_size` keeps the top-left corner; entries on the right and
   bottom edges travel with them. Refused with the reason, nothing changed,
   when an edge is under 5.08 mm, an entry would fall off its shortened edge,

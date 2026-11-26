@@ -529,10 +529,13 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Operand,
         &[ToolState],
     ),
-    // Move Keeps Wires. `set_object_position` takes `keep_wires` and
-    // `wiring` as operands instead and reads nothing implicit (#2552).
-    (&["set_object_rotation"], Operand, &[ToolState]),
-    (&["set_object_position"], Operand, &[]),
+    // Move Keeps Wires is not read: both take `keep_wires` as an operand
+    // (#2552; rotation, Hakan 2026-11-25, #2326 comment 7167743982).
+    (
+        &["set_object_position", "set_object_rotation"],
+        Operand,
+        &[],
+    ),
     // The tool defaults, and the active layer when `layer` is not given.
     // Declared 6.P3 exception: still the person's form until #2876 (docs/DECISIONS.md, 2026-11-24).
     (

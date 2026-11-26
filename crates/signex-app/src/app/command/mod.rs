@@ -77,6 +77,8 @@ pub(crate) mod placed_move_tests;
 mod placed_operand_tests;
 mod placed_operands;
 #[cfg(test)]
+mod placed_rotation_tests;
+#[cfg(test)]
 mod placement_defaults_tests;
 #[cfg(test)]
 mod placement_extras_operand_tests;

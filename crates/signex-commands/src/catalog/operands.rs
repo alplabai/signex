@@ -270,10 +270,12 @@ pub const OBJECT_POSITION: &[Operand] = &[
     optional("wiring", OperandKind::Text),
     optional("document", OperandKind::Document),
 ];
-/// An absolute turn of the part or label `id`.
+/// An absolute turn of the part or label `id`. `keep_wires` (default true)
+/// says whether a part's wires follow, as for `OBJECT_POSITION`.
 pub const OBJECT_ROTATION: &[Operand] = &[
     required("id", OperandKind::Text),
     required("rotation", OperandKind::Angle),
+    optional("keep_wires", OperandKind::Bool),
     optional("document", OperandKind::Document),
 ];
 /// The width and height of the sheet symbol `id`, written `w,h` in mm.

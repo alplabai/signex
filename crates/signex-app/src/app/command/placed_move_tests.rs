@@ -23,13 +23,13 @@ type Key = (i64, i64);
 /// The parts, wire segments and dots of a sheet, by position: two sheets
 /// with the same shape compare equal whatever ids new wires got.
 #[derive(Debug, PartialEq)]
-struct Shape {
+pub(super) struct Shape {
     parts: Vec<(String, Key)>,
     wires: Vec<(Key, Key)>,
     junctions: Vec<Key>,
 }
 
-fn shape(sheet: &SchematicSheet) -> Shape {
+pub(super) fn shape(sheet: &SchematicSheet) -> Shape {
     let key = signex_net::pt_key;
     let mut parts: Vec<_> = (sheet.symbols.iter())
         .map(|s| (s.reference.clone(), key(&s.position)))
@@ -62,7 +62,7 @@ fn nets(sheet: &SchematicSheet) -> Vec<Vec<(Uuid, String)>> {
     nets
 }
 
-fn app_with(sheet: SchematicSheet) -> (Signex, tempfile::TempDir) {
+pub(super) fn app_with(sheet: SchematicSheet) -> (Signex, tempfile::TempDir) {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, _task) = Signex::new();
     app.ui_state.snap_enabled = false;
@@ -71,7 +71,7 @@ fn app_with(sheet: SchematicSheet) -> (Signex, tempfile::TempDir) {
     (app, dir)
 }
 
-fn doc(app: &Signex) -> &SchematicSheet {
+pub(super) fn doc(app: &Signex) -> &SchematicSheet {
     app.document_state
         .active_engine()
         .expect("engine")
@@ -305,7 +305,7 @@ fn lib_pin(number: &str, x: f64) -> LibPin {
     }
 }
 
-fn wire(a: (f64, f64), b: (f64, f64)) -> Wire {
+pub(super) fn wire(a: (f64, f64), b: (f64, f64)) -> Wire {
     Wire {
         uuid: Uuid::now_v7(),
         start: Point::new(a.0, a.1),
@@ -326,7 +326,7 @@ pub(crate) fn blocked_resistor() -> (SchematicSheet, Uuid) {
 }
 
 /// R1 at (50, 50), pins at (45, 50) and (55, 50), with `wires`.
-fn resistor_with(wires: Vec<Wire>) -> (SchematicSheet, Uuid) {
+pub(super) fn resistor_with(wires: Vec<Wire>) -> (SchematicSheet, Uuid) {
     let mut sheet = SchematicSheet {
         uuid: Uuid::now_v7(),
         paper_size: "A4".into(),

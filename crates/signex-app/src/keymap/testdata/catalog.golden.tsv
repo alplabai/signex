@@ -109,7 +109,7 @@ mirror_x	modify	Mirror along X-axis	Mirror X	General	-	-	RequiresSelection	mutat
 mirror_y	modify	Mirror along Y-axis	Mirror Y	General	-	-	RequiresSelection	mutates_doc,undoable	-
 flip_selection	modify	Flip selection to the other board side	Flip Selection	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	-
 set_object_position	edit	Set the position of a placed object	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,at:point/mm,keep_wires:bool?,wiring:text?,document:document?
-set_object_rotation	edit	Set the rotation of a placed part or label	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,rotation:angle/deg,document:document?
+set_object_rotation	edit	Set the rotation of a placed part or label	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,rotation:angle/deg,keep_wires:bool?,document:document?
 place_component	place	Place component	Part	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	library:text,part:text,at:point/mm,unit:text?,designator:text?,value:text?,rotation:angle/deg?,mirror:text?,document:document?
 place_symbol	place	Place symbol	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 place_power_symbol	place	Place power symbol	Power Port	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,net_name:text,lib_id:text,allow_merge:bool?,document:document?

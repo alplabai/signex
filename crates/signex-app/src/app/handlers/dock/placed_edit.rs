@@ -47,7 +47,8 @@ impl Signex {
                 }
             }
             PlacedEditMsg::RotationPicked { item, degrees } => {
-                if let Err(refusal) = self.set_placed_rotation(*item, *degrees) {
+                let keeps = self.ui_state.move_keeps_wires;
+                if let Err(refusal) = self.set_placed_rotation(*item, *degrees, keeps) {
                     say_refusal(&refusal);
                 }
             }
