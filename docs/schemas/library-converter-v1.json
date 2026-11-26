@@ -1,5 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "SPDX-License-Identifier: MIT OR Apache-2.0. This schema file alone is licensed permissively (Caner, 2026-11-26) so converters under any licence may copy it; keep this line when copying.",
   "$id": "https://signex.dev/schemas/library-converter-v1.json",
   "title": "Signex library converter contract v1",
   "description": "Outputs of a library converter: describe, progress events, summary and loss report. See docs/LIBRARY_CONVERTER_CONTRACT.md.",

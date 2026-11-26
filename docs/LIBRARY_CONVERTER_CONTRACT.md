@@ -9,6 +9,13 @@ any language and published under any licence.
 This document is the contract. The machine-checkable part is the JSON Schema
 [`schemas/library-converter-v1.json`](schemas/library-converter-v1.json);
 example outputs live in [`fixtures/library-converter/`](fixtures/library-converter/).
+
+**Licence of the schema.** The schema file `schemas/library-converter-v1.json`
+alone is licensed under `MIT OR Apache-2.0` (its `$comment` carries the SPDX
+identifier), so a converter under any licence may keep a copy for its tests;
+keep that line when copying. The rest of this repository, including the
+example outputs and the library-format fixtures, keeps the repository's
+licence; converters read those from a Signex checkout instead of copying them.
 What a converter writes is specified in [`LIBRARY_FORMAT.md`](LIBRARY_FORMAT.md).
 
 The existing single-file project importer keeps its own contract (one input
