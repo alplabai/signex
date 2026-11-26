@@ -9,7 +9,8 @@
 //!   Redo away from it dirty (#1854), and the path then rides in the set
 //!   until the write lands;
 //! - every other document (a schematic sheet, a PCB, a project file, a
-//!   library manifest) is a path in [`DirtyDocuments`], whether or not a
+//!   library manifest) is a path in
+//!   [`DirtyDocuments`](crate::app::core::dirty_documents::DirtyDocuments), whether or not a
 //!   tab shows it, so a parked engine stays marked after its tab closed;
 //! - a Component editor keeps its flag in `LibraryState.editors`, keyed by
 //!   row, and reaches the tab bar through `tab_bar::dirty_tab_paths`. The flag
@@ -28,8 +29,9 @@
 //! [`DocumentState::mark_history_edit_dirty`], [`DocumentState::sync_history_dirty`],
 //! [`DocumentState::mark_document_clean`], [`DocumentState::clear_document_dirty`]
 //! or [`DocumentState::rekey_document_dirty`] (a project also has
-//! `note_project_clean_state` and `sync_project_history_dirty`). The set's
-//! contents are private to this module, so the compiler keeps it that way.
+//! `note_project_clean_state` and `sync_project_history_dirty`). The set
+//! lives in `app/core/dirty_documents.rs`; its fields are visible only inside
+//! `app`, and only this module and `dirty/project_history.rs` touch them.
 //! Rationale and the failures the old three-way mirror caused:
 //! docs/DIRTY_STATE.md.
 
@@ -39,20 +41,6 @@ use std::path::{Path, PathBuf};
 use super::DocumentState;
 
 mod project_history;
-
-/// The paths of documents with unsaved edits that no editor draft holds.
-#[derive(Debug, Default)]
-pub(crate) struct DirtyDocuments {
-    paths: HashSet<PathBuf>,
-    /// The subset of `paths` marked by something other than the engine's
-    /// undo history (a project edit, a net colour, an annotate pass, a
-    /// restore). Undoing back to the engine's save point cannot clear these:
-    /// only a save does.
-    external: HashSet<PathBuf>,
-    /// A `.snxprj`'s saved cursor: the bytes it encodes to when it equals the
-    /// file (`project_history.rs`). Absent means unknown, so it stays dirty.
-    project_saved: project_history::ProjectSavedBytes,
-}
 
 impl DocumentState {
     /// Does the document at `path` hold edits that are not on disk?

@@ -48,7 +48,7 @@ fn project_and_setup(
     let resolved = app
         .resolved_project_setup(project)
         .ok_or_else(|| format!("`{command}`: the project is no longer open"))?;
-    let setup = ProjectSetup::for_command(token, &resolved, &app.ui_state.setup_profiles)?;
+    let setup = ProjectSetup::for_command(token, &resolved, &app.document_state.setup_profiles)?;
     Ok((project, setup))
 }
 
@@ -145,7 +145,8 @@ pub(crate) fn new_schematic_sheet(app: &mut Signex, args: &CommandArgs) -> Ran {
     // sets it only on a project that stores none; `project` and a built-in
     // leave it.
     let names_saved_profile = text(args, "profile").is_some_and(|token| {
-        signex_types::project::find_user_profile(token, &app.ui_state.setup_profiles).is_some()
+        signex_types::project::find_user_profile(token, &app.document_state.setup_profiles)
+            .is_some()
     });
     let template = match sheet_template(args, loaded.dir()) {
         Ok(template) => template,

@@ -8,8 +8,8 @@ use std::path::{Path, PathBuf};
 use signex_engine::{DocumentPatch, UndoGroupId};
 
 use super::DocumentState;
-use crate::app::agent::Origin;
 pub(crate) use crate::app::core::joined_sheet::JoinedSheet;
+use crate::app::core::origin::Origin;
 
 #[derive(Debug, Default)]
 pub struct AgentEdits {
@@ -36,7 +36,7 @@ pub struct AgentEdits {
     pub(crate) tickets: u64,
     /// The outcome of each waiting edit that ran, by ticket, until the caller
     /// that is not the agent socket (a headless run) takes it.
-    pub(crate) finished: HashMap<u64, crate::app::command::CommandOutcome>,
+    pub(crate) finished: HashMap<u64, signex_commands::CommandOutcome>,
     /// What the edits so far changed on the target sheet, refreshed once at
     /// the end.
     pub(crate) owed: DocumentPatch,

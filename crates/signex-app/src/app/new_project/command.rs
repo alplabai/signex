@@ -63,7 +63,7 @@ pub(crate) fn new_project_with_profile(app: &mut Signex, args: &CommandArgs) -> 
         Ok(name) => name.to_string(),
         Err(_) => return refused(format!("`{name}` is not a usable project name")),
     };
-    let setup = match setup_from(args, &app.ui_state.setup_profiles) {
+    let setup = match setup_from(args, &app.document_state.setup_profiles) {
         Ok(setup) => setup,
         Err(reason) => return refused(reason),
     };

@@ -11,7 +11,7 @@ The tab dot and the Component row collector ask `Document` (`app/document`, a `D
 | Document | Stored flag | Why it lives there |
 |---|---|---|
 | Symbol or footprint draft | the editor's own `dirty` (private) | Roughly a hundred editor update sites flip it with `&mut editor` and no workspace state. |
-| Schematic sheet, PCB, `.snxprj`, `library.toml` | a path in `DirtyDocuments` (private) | The mark must outlive the tab: a parked engine stays dirty after its tab closed. |
+| Schematic sheet, PCB, `.snxprj`, `library.toml` | a path in `DirtyDocuments` (`app/core/dirty_documents.rs`; fields visible inside `app`) | The mark must outlive the tab: a parked engine stays dirty after its tab closed. |
 | Component editor row | `LibraryState.editors[..].dirty`, derived from its `RowHistory` | Keyed by row, not file; the tab dot reads it through `tab_bar::dirty_tab_paths`. |
 
 Everything else is derived. `TabInfo` has no dirty flag: the tab dot, the
@@ -23,8 +23,11 @@ History panel and the project tree all read the one query (or
 
 ## The writers
 
-Only `DocumentState` writes the set; the editor flag is private to
-`documents.rs`, with `mark_dirty` for the editor's own edits.
+Only `DocumentState` writes the set. Its fields are visible inside `app`
+since the set moved into the application core (#2326), so this is kept by
+convention: only `state/dirty.rs` and `state/dirty/project_history.rs` touch
+them. The editor flag is private to `documents.rs`, with `mark_dirty` for the
+editor's own edits.
 
 - `mark_document_dirty(path)`: an edit. A draft open at `path` takes the
   flag; any other document goes into the set.

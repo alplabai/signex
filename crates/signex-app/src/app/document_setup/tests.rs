@@ -23,7 +23,7 @@ fn fixture(defaults: ProjectDefaults) -> Fixture {
     let tmp = tempfile::tempdir().expect("tempdir");
     let dir = tmp.path().to_path_buf();
     let (mut app, _boot) = Signex::new();
-    app.ui_state.setup_profiles.clear();
+    app.document_state.setup_profiles.clear();
     let data = ProjectData {
         document_id: None,
         description: None,
@@ -172,7 +172,7 @@ fn headless_new_pcb_with_an_unknown_profile_is_refused() {
 fn headless_new_schematic_with_a_saved_profile_writes_its_sheet() {
     let mut f = fixture(ProjectDefaults::default());
     save_user_profile(
-        &mut f.app.ui_state.setup_profiles,
+        &mut f.app.document_state.setup_profiles,
         "Big sheets",
         SetupProfile::Standard.pcb(8),
         SheetDefaults {
