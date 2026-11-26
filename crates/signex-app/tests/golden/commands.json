@@ -177,7 +177,7 @@
   {
     "id": "bom_lines",
     "group": "General",
-    "category": "reports"
+    "category": "file"
   },
   {
     "id": "break_union",

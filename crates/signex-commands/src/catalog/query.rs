@@ -7,10 +7,11 @@ use signex_i18n_ids::command_ids;
 pub(super) const QUERY: &[CommandMetadata] = &[
     // #1988: the BOM lines of a sheet's project, with a template's columns
     // (computed ones included), as JSON. No menu row: the dialog is File ▸
-    // Export ▸ Export BOM….
+    // Export ▸ Export BOM…. A query that writes no file: the `file` category
+    // of the other queries, so the CLI grants it as a read.
     CommandMetadata {
         id: "bom_lines",
-        category: "reports",
+        category: "file",
         label: command_ids::CMD_BOM_LINES,
         menu_label: None,
         group: CommandGroup::General,

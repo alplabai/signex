@@ -84,7 +84,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `apply_layout_review` | Workspace layout: Review | window | — | — |
 | `apply_layout_schematic` | Workspace layout: Schematic | window | — | — |
 | `autoplace_fields` | Autoplace fields | edit | — | `O` |
-| `bom_lines` | Read the bill of materials | reports | — | — |
+| `bom_lines` | Read the bill of materials | file | — | — |
 | `break_wire` | Break wire | modify | `E W` | — |
 | `bring_drawings_forward` | Bring drawings forward | edit | — | — |
 | `bring_drawings_to_front` | Bring drawings to front | edit | — | — |

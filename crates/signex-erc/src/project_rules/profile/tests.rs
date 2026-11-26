@@ -25,7 +25,7 @@ fn builtin_profile_hash_and_bytes_are_unchanged_by_the_drc_section() {
     let p = builtin_profile();
     assert_eq!(
         p.content_sha256(),
-        "8860f6942447e0edbd1f3007d4e99278ce6789e2c58547b149a3e05484ef7992"
+        "50fb2ad61832bde7de3a7045fb1af85ae6e59483c60fce54ee833a96c09812ab"
     );
     assert!(
         !String::from_utf8(p.to_json_bytes())

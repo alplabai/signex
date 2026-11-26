@@ -570,6 +570,8 @@ mod tests {
             "place_power_symbol",
             "place_sheet_entry",
             "place_sheet_symbol",
+            // #1283: a saved snippet by name, its file read with the list's.
+            "place_snippet",
             "place_text",
             "place_text_string",
             "place_wire",

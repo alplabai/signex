@@ -137,19 +137,24 @@ fn a_list_that_fails_after_the_sync_leaves_the_parent_and_the_child_as_they_were
 }
 
 #[test]
-fn to_sheet_run_on_its_own_by_an_agent_is_one_labelled_step_of_the_child() {
+fn to_sheet_alone_in_a_list_is_one_labelled_step_of_the_child() {
     let dir = tempfile::tempdir().unwrap();
     let mut app = project(dir.path());
     let (b, power) = (dir.path().join("b.snxsch"), dir.path().join("power.snxsch"));
     let revision = app.document_state.engines[&b].revision();
 
     // The fixture's `Power` symbol has no entries: to_sheet takes `VIN` away.
-    let args =
-        json!({"document": b.display().to_string(), "symbol": "Power", "direction": "to_sheet"});
-    let reply = call_settled(&mut app, "sync_sheet_entries", args);
+    // Its `document` is optional, so an agent reaches it only in a list.
+    let edit =
+        json!({"id": "sync_sheet_entries", "args": {"symbol": "Power", "direction": "to_sheet"}});
+    let reply = apply(&mut app, &b, vec![edit]);
 
     assert_eq!(reply["status"], "answered", "{reply}");
-    assert_eq!(reply["data"]["removed"], json!(["VIN"]), "{reply}");
+    assert_eq!(
+        reply["data"]["results"][0]["removed"],
+        json!(["VIN"]),
+        "{reply}"
+    );
     assert_eq!(ports(&app, &power), Some(Vec::new()));
     assert_eq!(app.document_state.engines[&b].revision(), revision);
     let group = (app.document_state.engines[&power].next_undo_group())
@@ -157,7 +162,7 @@ fn to_sheet_run_on_its_own_by_an_agent_is_one_labelled_step_of_the_child() {
     let edits = &app.document_state.agent_edits;
     assert_eq!(
         edits.labels.get(&group).map(String::as_str),
-        Some("Agent: sync_sheet_entries on b.snxsch")
+        Some("Agent: sync_sheet_entries")
     );
     assert!(edits.joined.is_empty(), "the step let go of the child");
 }

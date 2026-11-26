@@ -49,8 +49,9 @@ fn app_with_parts(vcc: Option<&str>) -> (Signex, String) {
     (app, format!("document={}", file.display()))
 }
 
+/// `text` as the `template` operand: its line breaks written `\n`.
 fn template_arg(text: &str) -> String {
-    format!("template={text}")
+    format!("template={}", text.replace('\n', "\\n"))
 }
 
 #[test]

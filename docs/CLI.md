@@ -1208,14 +1208,17 @@ project, rolled up as File ▸ Export ▸ Export BOM… rolls it up: the open
 sheets as they are in memory, the library's current part names, the cached
 prices, the parts the open board leaves out of the BOM. `template` is the text
 of a BOM template (`snxbomt/1`, [BOM_COLUMNS.md](BOM_COLUMNS.md)); without one
-the columns are the export dialog's defaults. `variant` is one of the
+the columns are the export dialog's defaults. A text operand holds no control
+characters, so each line break of the template is written as the two
+characters `\n`; the answer's `template` is written the same way and can be
+passed back as it is. `variant` is one of the
 project's variants or `Base`; without one, the project's active variant.
 `grouping` defaults to `grouped`. It is a query: it changes nothing, writes no
 file, writes nothing to Messages and is on the agent channel.
 
 ```bash
 signex-cli run demo.snxprj bom_lines --arg document=main.snxsch \
-  --arg template="$(cat power.snxbomt)"
+  --arg template="$(awk '{printf "%s\\n", $0}' power.snxbomt)"
 ```
 
 ```json
@@ -1229,7 +1232,7 @@ signex-cli run demo.snxprj bom_lines --arg document=main.snxsch \
  "issues": [{"line": 3, "references": ["C1"], "column": "Power",
    "error": "unknown parameter 'VCC'"}],
  "warnings": [],
- "template": "format = \"snxbomt/1\"\n\n[[columns]]\ncolumn = \"designator\"\n..."}
+ "template": "format = \"snxbomt/1\"\\n\\n[[columns]]\\ncolumn = \"designator\"\\n..."}
 ```
 
 - `cells` are the texts an exported CSV holds, one per column. A computed

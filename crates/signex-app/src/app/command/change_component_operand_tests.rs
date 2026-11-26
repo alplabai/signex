@@ -105,6 +105,7 @@ fn run(app: &mut Signex, id: &str, operands: &[String]) -> CommandOutcome {
     app.run_operands_settled(&id, &args).0
 }
 
+#[track_caller]
 fn answered(outcome: CommandOutcome) -> Value {
     match outcome {
         CommandOutcome::Answered(value) => value,
@@ -156,11 +157,15 @@ fn app_with_u1(lib: &Library) -> (Signex, Uuid) {
         ],
     );
     answered(wired);
-    answered(run(
-        &mut app,
-        "place_net_label",
-        &[format!("at={end}"), "text=SIG".into()],
-    ));
+    // A label placement runs and answers nothing (`placement_operand_tests`).
+    assert_eq!(
+        run(
+            &mut app,
+            "place_net_label",
+            &[format!("at={end}"), "text=SIG".into()],
+        ),
+        CommandOutcome::Ran
+    );
     let id = app
         .document_state
         .active_engine()

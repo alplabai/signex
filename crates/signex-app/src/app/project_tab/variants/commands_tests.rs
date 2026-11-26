@@ -179,6 +179,9 @@ fn variant_bom_refuses_an_unknown_variant_and_no_open_sheet() {
 #[test]
 fn the_queries_change_nothing() {
     let (mut app, id, _dir) = app();
+    // Every query makes the ids unique first (`run_query`); that is no
+    // change of the query's own.
+    let _ = app.reconcile_document_ids();
     let before = serde_json::to_value(data(&app)).expect("the project serialises");
     let _ = answer(&mut app, "compare_variants", &[]);
     let _ = answer(&mut app, "variant_bom", &["name=Lite"]);

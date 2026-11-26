@@ -42,7 +42,7 @@ project_set_requirement	design	Set a field of a project requirement	-	General	-	
 project_remove_requirement	design	Remove a requirement from the project	-	General	-	-	Always	mutates_doc,undoable	document:document,requirement:text
 project_enable_requirement	design	Turn a project requirement on or off	-	General	-	-	Always	mutates_doc,undoable	document:document,requirement:text,on:bool
 project_run_requirements	validation	Run the project's requirement checks in the Project tab	-	General	-	-	Always	-	document:document
-bom_lines	reports	Read the bill of materials	-	General	-	-	Always	-	document:document,template:text?,variant:text?,grouping:text?
+bom_lines	file	Read the bill of materials	-	General	-	-	Always	-	document:document,template:text?,variant:text?,grouping:text?
 document_info	file	Document info	-	General	-	-	Always	-	document:document
 list_documents	file	List documents	-	General	-	-	Always	-	kind:text?,project:text?,name:text?,dirty:bool?
 read_document	file	Read document	-	General	-	-	Always	-	document:document,ids:text?,kinds:text?,region:text?,fields:text?,offset:text?,limit:text?

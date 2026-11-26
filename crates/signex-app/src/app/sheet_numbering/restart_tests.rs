@@ -82,11 +82,14 @@ fn a_stale_read_whose_project_closed_closes_the_dialog_and_says_why() {
     let (mut app, root) = reading(dir.path());
     app.document_state.projects.clear();
     app.document_state.active_project = None;
+    // Counted before the answer, so the logger is installed when it lands.
+    let needle = format!("{} is no longer in an open project", root.display());
+    let before = crate::diagnostics::logged_count(&needle);
     answer_stale(&mut app);
     assert!(app.ui_state.sheet_numbering.is_none());
-    let said = crate::diagnostics::recent_entries().iter().any(|entry| {
-        entry.message.contains("Number Schematic Sheets")
-            && entry.message.contains(&root.display().to_string())
-    });
-    assert!(said, "Messages says the dialog closed");
+    assert_eq!(
+        crate::diagnostics::logged_count(&needle),
+        before + 1,
+        "Messages says the dialog closed"
+    );
 }

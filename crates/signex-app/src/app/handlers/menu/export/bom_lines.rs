@@ -17,12 +17,18 @@ use signex_types::bom_template::{encode_bom_template, parse_bom_template};
 
 use crate::app::Signex;
 
+/// A text operand has no control characters (DECISIONS 2026-11-06), so the
+/// `template` operand writes each line break as `\n`; the answer's
+/// `template` is written the same way, so it can be passed back.
+const OPERAND_LINE_BREAK: &str = "\\n";
+
 /// The columns a request lists.
 fn requested_columns(template: Option<&str>) -> Result<Vec<BomColumn>, String> {
     match template {
         None => Ok(BomOptions::default().columns),
         Some(text) => {
-            let template = parse_bom_template(text).map_err(|e| e.to_string())?;
+            let text = text.replace(OPERAND_LINE_BREAK, "\n");
+            let template = parse_bom_template(&text).map_err(|e| e.to_string())?;
             columns_of_template(&template)
         }
     }
@@ -138,7 +144,9 @@ impl Signex {
                 })
             })
             .collect();
-        let template = encode_bom_template(&template_of_columns(&opts.columns)).ok();
+        let template = encode_bom_template(&template_of_columns(&opts.columns))
+            .ok()
+            .map(|text| text.replace('\n', OPERAND_LINE_BREAK));
         Ok(json!({
             "document": source.display().to_string(),
             "variant": variant.unwrap_or_else(|| signex_types::project::BASE_VARIANT.to_string()),
