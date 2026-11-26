@@ -275,6 +275,11 @@ fn a_non_finite_manifest_stackup_or_zone_number_fails_the_save() {
         remove_dead_islands: false,
         shelved: false,
         unfilled: false,
+        corners: Default::default(),
+        corner_size: 0.0,
+        fill_mode: Default::default(),
+        hatch_width: 0.0,
+        hatch_gap: 0.0,
         unknown: Default::default(),
     };
     for bad in [f64::NAN, f64::INFINITY] {

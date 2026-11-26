@@ -309,6 +309,7 @@ pcb-pour-unfilled-no-layer = it is on no copper layer
 pcb-pour-unfilled-outline = its outline has fewer than three corners the board geometry can hold
 pcb-pour-unfilled-clearance = its clearance is not a length the board geometry can hold
 pcb-pour-unfilled-until-repour = it was unfilled; Repour fills it again
+pcb-pour-unfilled-hatch = its hatch is finer than the board geometry can draw; widen the hatch width or gap
 # The leg on the pointer found no way; the straight leg drawn shows where
 # it was aimed.
 pcb-route-aim-blocked = the preview found no way to the pointer that keeps the clearance the rules ask; a click searches further and says if there is none

@@ -215,6 +215,8 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
     ("remove_length_group", BOARD_EDIT),
     ("set_layer_sizes", BOARD_EDIT),
     ("set_pad_shape", BOARD_EDIT),
+    ("set_pour_corners", BOARD_EDIT),
+    ("set_pour_fill", BOARD_EDIT),
     // #2408, #2409: the board Tools edits are board steps of their own.
     ("stitch_vias", BOARD_EDIT),
     ("add_teardrops", BOARD_EDIT),

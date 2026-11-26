@@ -160,6 +160,8 @@ mod version_tests;
 #[cfg(test)]
 mod wire_color_tests;
 #[cfg(test)]
+mod zone_pour_shape_tests;
+#[cfg(test)]
 mod zone_shelved_tests;
 #[cfg(test)]
 mod zone_unfilled_tests;

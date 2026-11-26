@@ -125,6 +125,10 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("topology", OperandKind::Text),
     ("members", OperandKind::Text),
     ("rename", OperandKind::Text),
+    // #2578, #2579: a pour's corner size, fill mode and hatch gap.
+    ("corner_size", OperandKind::Text),
+    ("fill", OperandKind::Text),
+    ("gap", OperandKind::Text),
 ];
 
 /// The commands whose `ids` is still text, not targets (#2326): a design

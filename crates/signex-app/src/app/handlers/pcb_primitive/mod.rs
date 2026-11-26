@@ -45,6 +45,7 @@ use signex_i18n::{MessageId, ids, t};
 use signex_types::pcb::{MaskExpansion, PadShape, PcbBoard};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_types::pcb_stack::StackMode;
+use signex_types::zone_pour_shape::{PourCorners, PourFillMode};
 use signex_widgets::property_illustration::IllustrationHover;
 
 use crate::app::Signex;
@@ -142,6 +143,9 @@ pub(crate) enum PrimitiveEdit {
     Flag(PrimitiveFlag, bool),
     /// A pour's Remove Dead Copper (#2216).
     DeadIslands(bool),
+    /// A pour's Corners (#2578) and Fill Mode (#2579).
+    PourCorners(PourCorners),
+    PourFill(PourFillMode),
     /// A field of a dimension's look (#2868).
     DimensionStyle(DimensionStyleEdit),
 }
@@ -199,6 +203,20 @@ impl Signex {
                     target,
                     PrimitiveEdit::DeadIslands(*on),
                     ids::PCB_PRIM_REMOVE_DEAD_ISLANDS,
+                );
+            }
+            M::PourCornersPicked { target, corners } => {
+                self.apply_primitive_edit(
+                    target,
+                    PrimitiveEdit::PourCorners(*corners),
+                    ids::PCB_PRIM_POUR_CORNERS,
+                );
+            }
+            M::PourFillPicked { target, fill } => {
+                self.apply_primitive_edit(
+                    target,
+                    PrimitiveEdit::PourFill(*fill),
+                    ids::PCB_PRIM_POUR_FILL_MODE,
                 );
             }
             M::ShapePicked { target, shape } => {
@@ -489,6 +507,9 @@ fn field_name(field: PrimitiveField) -> MessageId {
         F::Precision => ids::PCB_PRIM_PRECISION,
         F::Priority => ids::PCB_PRIM_PRIORITY,
         F::MinIslandArea => ids::PCB_PRIM_MIN_ISLAND_AREA,
+        F::CornerSize => ids::PCB_PRIM_POUR_CORNER_SIZE,
+        F::HatchWidth => ids::PCB_PRIM_POUR_HATCH_WIDTH,
+        F::HatchGap => ids::PCB_PRIM_POUR_HATCH_GAP,
         F::CenterX | F::CenterY => ids::PCB_PRIM_GRAPHIC_CENTER,
         F::ArrowLength => ids::PCB_PRIM_DIM_ARROW_LENGTH,
         F::ArrowWidth => ids::PCB_PRIM_DIM_ARROW_WIDTH,

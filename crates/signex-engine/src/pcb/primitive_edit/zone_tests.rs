@@ -178,3 +178,66 @@ fn a_pour_is_unfilled_in_one_step_and_undone_exactly() {
         "a shelved pour has nothing to unfill"
     );
 }
+
+/// #2578 / #2579: a pour's corners, fill mode and hatch are set together as
+/// one replace, undone exactly; a negative size is refused and nothing
+/// moves; a fill, region or keepout has none.
+#[test]
+fn a_pours_corners_and_hatch_are_one_step_and_undone_exactly() {
+    use signex_types::zone_pour_shape::{PourCorners, PourFillMode};
+    let b = with_fill(POUR_FILL);
+    let edits = [
+        ZoneEdit::Corners(PourCorners::Rounded),
+        ZoneEdit::CornerSize(0.5),
+        ZoneEdit::FillMode(PourFillMode::Hatched),
+        ZoneEdit::HatchWidth(0.3),
+        ZoneEdit::HatchGap(0.6),
+    ];
+    let command = zone_edits_command(&b, &[id(ZONE_1)], &edits)
+        .expect("allowed")
+        .expect("a change");
+    let mut engine = crate::pcb::BoardEngine::new(b.clone(), 1);
+    engine.execute(command).expect("applies");
+    let zone = &engine.board().zones[0];
+    assert_eq!(
+        (zone.corners, zone.corner_size, zone.fill_mode),
+        (PourCorners::Rounded, 0.5, PourFillMode::Hatched)
+    );
+    assert_eq!((zone.hatch_width, zone.hatch_gap), (0.3, 0.6));
+    engine.undo().expect("undo").expect("one step");
+    assert_eq!(
+        engine.board().zones,
+        b.zones,
+        "the inverse restores all five"
+    );
+
+    for bad in [
+        ZoneEdit::CornerSize(-0.1),
+        ZoneEdit::HatchWidth(-1.0),
+        ZoneEdit::HatchGap(-1.0),
+    ] {
+        let refused = zone_edits_command(
+            &b,
+            &[id(ZONE_1)],
+            &[ZoneEdit::Corners(PourCorners::Chamfer), bad],
+        );
+        assert_eq!(refused, Err(PrimitiveEditRefusal::Negative), "{bad:?}");
+    }
+    let mut nan = b.clone();
+    assert_eq!(
+        edit(&mut nan, ZoneEdit::CornerSize(f64::NAN)),
+        Err(PrimitiveEditRefusal::NonFinite)
+    );
+
+    let mut solid = with_fill("solid");
+    assert_eq!(
+        edit(&mut solid, ZoneEdit::Corners(PourCorners::Chamfer)),
+        Ok(false)
+    );
+    assert_eq!(
+        edit(&mut solid, ZoneEdit::FillMode(PourFillMode::Hatched)),
+        Ok(false)
+    );
+    let mut keepout = with_fill(KEEPOUT_FILL);
+    assert_eq!(edit(&mut keepout, ZoneEdit::HatchWidth(0.3)), Ok(false));
+}

@@ -86,6 +86,7 @@ mod placement_extras_operands;
 #[cfg(test)]
 mod placement_operand_tests;
 mod placement_operands;
+mod pour_operands;
 #[cfg(test)]
 mod project_name_tests;
 mod project_names;

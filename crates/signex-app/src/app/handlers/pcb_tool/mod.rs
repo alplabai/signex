@@ -75,6 +75,8 @@ mod pause_tests;
 #[cfg(test)]
 mod pour_cut_tests;
 #[cfg(test)]
+mod pour_shape_tests;
+#[cfg(test)]
 mod pour_tests;
 #[cfg(test)]
 mod route_options_tests;

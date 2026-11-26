@@ -26,6 +26,7 @@ use super::part_operands as part;
 use super::placed_operands as placed;
 use super::placement_extras_operands as extras;
 use super::placement_operands as place;
+use super::pour_operands as pour;
 use super::repair_reset_operands as repair_reset;
 use super::selection_filter_operands as filter;
 use super::selection_operands as selection;
@@ -180,6 +181,8 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("set_via_span", board_edit::set_via_span),
     ("set_layer_sizes", board_edit::set_layer_sizes),
     ("set_pad_shape", board_edit::set_pad_shape),
+    ("set_pour_corners", pour::set_pour_corners),
+    ("set_pour_fill", pour::set_pour_fill),
     ("select_board_net", select_board_net),
     ("highlight_board_net", highlight_board_net),
     // #2408, #2409: the board Tools edits on the board `document` names.
@@ -534,6 +537,14 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
             "`set_pad_shape` needs the operands `document`, `ids` and `shape`, \
              with `delta` for a trapezoid or `corners` for a custom pad — \
              trapezoid and custom pads are drawn in the footprint editor",
+        ),
+        "set_pour_corners" => Some(
+            "`set_pour_corners` needs the operands `document`, `ids` and `corners` — \
+             use the Corners row of a pour's panel in Properties",
+        ),
+        "set_pour_fill" => Some(
+            "`set_pour_fill` needs the operands `document`, `ids` and `fill` — \
+             use the Fill Mode row of a pour's panel in Properties",
         ),
         "edit_blanket" => Some(
             "`edit_blanket` needs the operand `id` and the values to set — \

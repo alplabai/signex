@@ -30,6 +30,7 @@ mod linked;
 mod mask;
 mod net_info;
 mod pad;
+mod pour_shape;
 mod rows;
 mod stack_rows;
 mod track;
@@ -47,6 +48,7 @@ use signex_i18n::{Localized, MessageId, ids, t};
 use signex_types::pcb::PadShape;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_types::pcb_stack::StackMode;
+use signex_types::zone_pour_shape::{PourCorners, PourFillMode};
 use signex_widgets::property_illustration::IllustrationMsg;
 use signex_widgets::{button, text, text_input, tooltip};
 
@@ -120,6 +122,16 @@ pub enum PcbPrimitiveMsg {
     DeadIslandsToggled {
         target: PrimitiveTarget,
         on: bool,
+    },
+    /// A pour's Corners segment was picked (#2578): one undo step.
+    PourCornersPicked {
+        target: PrimitiveTarget,
+        corners: PourCorners,
+    },
+    /// A pour's Fill Mode segment was picked (#2579): one undo step.
+    PourFillPicked {
+        target: PrimitiveTarget,
+        fill: PourFillMode,
     },
     ShapePicked {
         target: PrimitiveTarget,

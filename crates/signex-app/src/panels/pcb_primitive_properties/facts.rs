@@ -17,6 +17,7 @@ use signex_types::pcb_graphic::BoardGraphicKind;
 use signex_types::pcb_layer::{BoardSide, CopperLayer, PcbLayer};
 use signex_types::pcb_stack::StackMode;
 use signex_types::pcb_via_protection::ViaProtection;
+use signex_types::zone_pour_shape::{PourCorners, PourFillMode};
 
 /// The board and the selected items a panel was built for. Every edit
 /// message carries it, so a selection change in between cannot send the
@@ -98,6 +99,11 @@ pub enum PrimitiveField {
     Precision,
     /// A polygon pour's priority, a whole number (#2216).
     Priority,
+    /// A polygon pour's corner radius or chamfer, in mm (#2578).
+    CornerSize,
+    /// A hatched pour's line width and the gap between lines, in mm (#2579).
+    HatchWidth,
+    HatchGap,
     /// The smallest island a polygon pour keeps, in mm² (#2216).
     MinIslandArea,
     /// An arc's or circle's centre on a board drawing (#2424).
@@ -461,6 +467,15 @@ pub struct ZoneFacts {
     /// Whether the selected pours are shelved (#2523); `None` when they
     /// differ or an area is not a pour.
     pub shelved: Option<bool>,
+    /// How the pours shape their corners and the size, in mm (#2578);
+    /// `None` where they differ.
+    pub corners: Option<PourCorners>,
+    pub corner_size: Option<f64>,
+    /// Solid or hatched (#2579), and the hatch line width and gap in mm the
+    /// fill uses (a stored 0 shows the default); `None` where they differ.
+    pub fill_mode: Option<PourFillMode>,
+    pub hatch_width: Option<f64>,
+    pub hatch_gap: Option<f64>,
     /// The thermal relief the pours store: on, spoke width and air gap in
     /// mm; `None` when they differ. The fill does not draw spokes yet.
     pub thermal: Option<(bool, f64, f64)>,

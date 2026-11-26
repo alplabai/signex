@@ -65,8 +65,9 @@ fn snxpcb_1_10_is_readable_and_opens_for_editing() {
 }
 
 /// #2871 / #2868 (DECISIONS 2026-11-24): `snxpcb/1.11` (pour cutouts, a
-/// dimension look) is this build's own token: it opens for editing, and it
-/// ranks above 1.10. #2797 made 1.12 the current token.
+/// dimension look) is one of this build's own tokens: it opens for editing,
+/// and it ranks above 1.10. #2797 and #2578 / #2579 made 1.12 the current
+/// token.
 #[test]
 fn snxpcb_1_11_is_readable_and_opens_for_editing() {
     assert!(SNXPCB_VERSION.readable.contains(&SNXPCB_FORMAT_V1_11));
@@ -78,8 +79,9 @@ fn snxpcb_1_11_is_readable_and_opens_for_editing() {
     assert!(snxpcb_opens_read_only("snxpcb/1.13"));
 }
 
-/// #2797: `snxpcb/1.12` (length-matching groups) is the current token: it
-/// opens for editing and saves, and it ranks above 1.11.
+/// #2797 and #2578 / #2579: `snxpcb/1.12` (length-matching groups, pour
+/// corners, hatched fill) is the current token: it opens for editing and
+/// saves, and it ranks above 1.11.
 #[test]
 fn snxpcb_1_12_is_current_and_opens_for_editing() {
     assert_eq!(SNXPCB_VERSION.current, SNXPCB_FORMAT_V1_12);

@@ -2,10 +2,10 @@
 //! keepouts and pour cutouts. Under the illustration: Net Information and the
 //! net of a copper area, the layer, a keepout's kinds, a pour cutout's
 //! vertices and area (#2871); a pour's Pour section with its
-//! fill rules, the thermal relief and corners it cannot use yet (greyed:
-//! the fill draws no spokes and stores no corners), and the Copper card with
-//! what the fill holds, Repour, Unfill (#2506), Shelve or Unshelve and the
-//! board-wide menu.
+//! fill rules, its fill mode and corners (`pour_shape`, #2578, #2579), the
+//! thermal relief it cannot use yet (greyed: the fill draws no spokes), and
+//! the Copper card with what the fill holds, Repour, Unfill (#2506), Shelve
+//! or Unshelve and the board-wide menu.
 
 use std::path::PathBuf;
 
@@ -19,12 +19,12 @@ use signex_widgets::{Label, button, text};
 
 use super::drawing::zone as dz;
 use super::linked::{
-    Segment, illustration, linked, linked_row, prefixed, read_only, segments, two_fields, unit,
-    with_unit,
+    illustration, linked, linked_row, prefixed, read_only, two_fields, unit, with_unit,
 };
+use super::pour_shape;
 use super::rows::{
     Look, PAD_X, Section, chip, dropdown, field, labelled, live_checkbox, mm_field, net_row, stack,
-    sunken_value, with_tip,
+    with_tip,
 };
 use super::stack_rows::caption;
 use super::{
@@ -206,17 +206,9 @@ fn pour<'a>(look: Look<'a>, f: &'a ZoneFacts) -> Option<Element<'a, PanelMsg>> {
             caption(look, look.t(ids::PCB_PRIM_POUR_SHELVE_NOTE)),
         );
     }
-    s.push(
-        common,
-        ids::PCB_PRIM_POUR_FILL_MODE,
-        linked_row(
-            look,
-            common,
-            dz::FILL_MODE,
-            ids::PCB_PRIM_POUR_FILL_MODE,
-            fill_mode(look),
-        ),
-    );
+    for (label, row) in pour_shape::fill_rows(look, f) {
+        s.push(common, label, row);
+    }
     s.push(
         common,
         ids::PCB_PRIM_CLEARANCE,
@@ -245,7 +237,7 @@ fn pour<'a>(look: Look<'a>, f: &'a ZoneFacts) -> Option<Element<'a, PanelMsg>> {
         ids::PCB_PRIM_POUR_THERMAL,
         linked(look, common, dz::THERMAL, thermal(look, f)),
     );
-    for (label, row) in corners(look, common) {
+    for (label, row) in pour_shape::corner_rows(look, f) {
         s.push(common, label, row);
     }
     let priority = f.priority.map(|p| p.to_string());
@@ -298,24 +290,6 @@ fn pour<'a>(look: Look<'a>, f: &'a ZoneFacts) -> Option<Element<'a, PanelMsg>> {
     s.finish()
 }
 
-/// Fill Mode: Solid, the only fill there is; Hatched greyed. No None
-/// (mockup row 99): the outline-only state is Shelve.
-fn fill_mode<'a>(look: Look<'a>) -> Element<'a, PanelMsg> {
-    let modes = segments(vec![
-        Segment {
-            label: look.t(ids::PCB_PRIM_POUR_FILL_SOLID),
-            is_on: true,
-            msg: None,
-        },
-        Segment {
-            label: look.t(ids::PCB_PRIM_POUR_FILL_HATCHED),
-            is_on: false,
-            msg: None,
-        },
-    ]);
-    with_tip(look, modes, ids::PCB_PRIM_POUR_HATCHED_TIP)
-}
-
 /// The Thermal Relief subsection: the stored switch and Spoke / Gap, read
 /// only and greyed, since the fill joins pads solidly.
 fn thermal<'a>(look: Look<'a>, f: &'a ZoneFacts) -> Element<'a, PanelMsg> {
@@ -346,62 +320,8 @@ fn thermal<'a>(look: Look<'a>, f: &'a ZoneFacts) -> Element<'a, PanelMsg> {
         .view(enable_section_style(look.tokens()), spoke_gap)
 }
 
-/// Corners and Corner Size: Sharp, the only corner the fill makes; the
-/// others and the size are greyed until the board stores them.
-fn corners<'a>(
-    look: Look<'a>,
-    common: &'a PrimitiveCommon,
-) -> [(MessageId, Element<'a, PanelMsg>); 2] {
-    let shapes = segments(
-        [
-            (ids::PCB_PRIM_POUR_CORNER_SHARP, true),
-            (ids::PCB_PRIM_POUR_CORNER_ROUNDED, false),
-            (ids::PCB_PRIM_POUR_CORNER_CHAMFER, false),
-        ]
-        .into_iter()
-        .map(|(id, is_on)| Segment {
-            label: look.t(id),
-            is_on,
-            msg: None,
-        })
-        .collect(),
-    );
-    let shapes = linked_row(
-        look,
-        common,
-        dz::CORNERS,
-        ids::PCB_PRIM_POUR_CORNERS,
-        with_tip(look, shapes, ids::PCB_PRIM_POUR_CORNERS_TIP),
-    );
-    let size = labelled(
-        greyed(look),
-        ids::PCB_PRIM_POUR_CORNER_SIZE,
-        with_unit(
-            with_tip(
-                look,
-                corner_size_value(look),
-                ids::PCB_PRIM_POUR_CORNERS_TIP,
-            ),
-            unit(look, ids::PCB_PRIM_UNIT_MM),
-        ),
-    );
-    [
-        (ids::PCB_PRIM_POUR_CORNERS, shapes),
-        (ids::PCB_PRIM_POUR_CORNER_SIZE, size),
-    ]
-}
-
-/// Corner Size, greyed while Corners is Sharp, the only corner the fill
-/// makes (mockup row 99). It shows the size a sharp corner has: 0.
-fn corner_size_value<'a>(look: Look<'a>) -> Element<'a, PanelMsg> {
-    veiled(
-        look.tokens(),
-        sunken_value(look, UserText::new(format_number(0.0))),
-    )
-}
-
 /// `look` with the label ink of a greyed row.
-fn greyed(look: Look<'_>) -> Look<'_> {
+pub(super) fn greyed(look: Look<'_>) -> Look<'_> {
     Look {
         muted: resolve(look.tokens()).ink4,
         ..look
@@ -409,7 +329,10 @@ fn greyed(look: Look<'_>) -> Look<'_> {
 }
 
 /// `content` greyed under the panel veil and deaf to input.
-fn veiled<'a>(tokens: &ThemeTokens, content: Element<'a, PanelMsg>) -> Element<'a, PanelMsg> {
+pub(super) fn veiled<'a>(
+    tokens: &ThemeTokens,
+    content: Element<'a, PanelMsg>,
+) -> Element<'a, PanelMsg> {
     match dependents_veil(ti(tokens.panel_bg), false) {
         Some(veil) => Inert::new(content, veil).boxed(),
         None => content,
@@ -697,6 +620,7 @@ pub(crate) fn unfilled_reason(why: pcb_geom::Unfilled) -> MessageId {
         pcb_geom::Unfilled::Outline => ids::PCB_POUR_UNFILLED_OUTLINE,
         pcb_geom::Unfilled::Clearance => ids::PCB_POUR_UNFILLED_CLEARANCE,
         pcb_geom::Unfilled::UntilRepour => ids::PCB_POUR_UNFILLED_UNTIL_REPOUR,
+        pcb_geom::Unfilled::Hatch => ids::PCB_POUR_UNFILLED_HATCH,
     }
 }
 
@@ -705,6 +629,8 @@ mod tests {
     use pcb_geom::{ItemRef, PickKind};
     use uuid::Uuid;
 
+    use super::super::pour_shape::{corner_size_value, fill_mode};
+    use super::super::rows::sunken_value;
     use super::*;
     use crate::panels::pcb_primitive_properties::Editability;
     use crate::panels::pcb_primitive_properties::drawing::fixture;
@@ -727,6 +653,11 @@ mod tests {
             remove_dead_islands: Some(false),
             copper: None,
             shelved,
+            corners: Some(signex_types::zone_pour_shape::PourCorners::Sharp),
+            corner_size: Some(0.0),
+            fill_mode: Some(signex_types::zone_pour_shape::PourFillMode::Solid),
+            hatch_width: Some(0.25),
+            hatch_gap: Some(0.5),
             thermal: Some((false, 0.0, 0.0)),
             menu_open: false,
             unfilled: None,
@@ -862,7 +793,7 @@ mod tests {
     fn fill_mode_offers_solid_and_hatched_and_no_none() {
         let ctx = context();
         let shown: Vec<String> = crate::layout_probe::lay_out_texts(
-            fill_mode(Look::of(&ctx)),
+            fill_mode(Look::of(&ctx), &pour(Some(false))),
             iced::Size::new(300.0, 60.0),
         )
         .into_iter()
@@ -924,5 +855,74 @@ mod tests {
             window,
         );
         assert_ne!(shown, unveiled, "the value is greyed");
+    }
+
+    /// #2579: Fill Mode picks Solid or Hatched as one edit, and sends
+    /// nothing on a read-only board; Hatch Width and Hatch Gap show only
+    /// while the pours are hatched.
+    #[test]
+    fn fill_mode_is_live_and_a_hatched_pour_shows_its_hatch() {
+        use super::super::pour_shape::{fill_message, fill_rows};
+        use signex_types::zone_pour_shape::PourFillMode;
+        let ctx = context();
+        let solid = pour(Some(false));
+        assert_eq!(
+            fill_message(&solid, PourFillMode::Hatched),
+            Some(PcbPrimitiveMsg::PourFillPicked {
+                target: solid.common.target.clone(),
+                fill: PourFillMode::Hatched,
+            })
+        );
+        let mut read_only = pour(Some(false));
+        read_only.common.editability = Editability::ReadOnly;
+        assert_eq!(fill_message(&read_only, PourFillMode::Hatched), None);
+        let labels = |f: &ZoneFacts| -> Vec<MessageId> {
+            fill_rows(Look::of(&ctx), f)
+                .into_iter()
+                .map(|(id, _)| id)
+                .collect()
+        };
+        assert_eq!(labels(&solid), vec![ids::PCB_PRIM_POUR_FILL_MODE]);
+        let mut hatched = pour(Some(false));
+        hatched.fill_mode = Some(PourFillMode::Hatched);
+        assert_eq!(
+            labels(&hatched),
+            vec![
+                ids::PCB_PRIM_POUR_FILL_MODE,
+                ids::PCB_PRIM_POUR_HATCH_WIDTH,
+                ids::PCB_PRIM_POUR_HATCH_GAP,
+            ]
+        );
+    }
+
+    /// #2578: Corners picks Sharp, Rounded or Chamfer as one edit; Corner
+    /// Size takes typing while the corners are Rounded or Chamfer and is
+    /// greyed while Sharp (mockup row 99).
+    #[test]
+    fn corners_are_live_and_corner_size_takes_typing_unless_sharp() {
+        use super::super::pour_shape::{corner_rows, corners_message};
+        use crate::layout_probe::lay_out_inputs;
+        use signex_types::zone_pour_shape::PourCorners;
+        let ctx = context();
+        let look = Look::of(&ctx);
+        let mut rounded = pour(Some(false));
+        rounded.corners = Some(PourCorners::Rounded);
+        rounded.corner_size = Some(0.5);
+        assert_eq!(
+            corners_message(&rounded, PourCorners::Chamfer),
+            Some(PcbPrimitiveMsg::PourCornersPicked {
+                target: rounded.common.target.clone(),
+                corners: PourCorners::Chamfer,
+            })
+        );
+        let window = iced::Size::new(300.0, 40.0);
+        let [_, (_, size)] = corner_rows(look, &rounded);
+        assert_eq!(lay_out_inputs(size, window).len(), 1, "a typed size");
+        let sharp = pour(Some(false));
+        let [_, (_, size)] = corner_rows(look, &sharp);
+        assert!(
+            lay_out_inputs(size, window).is_empty(),
+            "greyed while Sharp"
+        );
     }
 }

@@ -167,6 +167,8 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "set_via_span",
             "set_layer_sizes",
             "set_pad_shape",
+            "set_pour_corners",
+            "set_pour_fill",
             "hide_layer",
             "highlight_layer",
             "hide_layer_group",

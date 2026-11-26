@@ -65,6 +65,11 @@ fn zone(n: u128, name: &str) -> Zone {
         remove_dead_islands: false,
         shelved: false,
         unfilled: false,
+        corners: Default::default(),
+        corner_size: 0.0,
+        fill_mode: Default::default(),
+        hatch_width: 0.0,
+        hatch_gap: 0.0,
         unknown: Default::default(),
     }
 }

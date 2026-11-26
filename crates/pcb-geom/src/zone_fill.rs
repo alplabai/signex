@@ -10,11 +10,14 @@
 //! `remove_dead_islands` those touching no copper of its net, are dropped.
 //! A shelved pour (`Zone::is_shelved_pour`) has no fill and clears nothing;
 //! an unfilled one (`Zone::is_unfilled_pour`, #2506) neither, and is listed
-//! as [`Unfilled::UntilRepour`].
+//! as [`Unfilled::UntilRepour`]. A pour's corners (#2578) shape its outline
+//! before the cut-outs, and a hatched pour (#2579) is hatched before its
+//! islands are dropped (`shape`).
 //! Rules and what is not modelled: `docs/PCB_TOOLS.md`, "Polygon Pour".
 
 mod islands;
 mod obstacles;
+mod shape;
 
 use std::cmp::Reverse;
 
@@ -61,6 +64,10 @@ pub enum Unfilled {
     /// It was unfilled (`Zone::unfilled`, #2506) and holds no copper until
     /// the next Repour.
     UntilRepour,
+    /// Its hatch (#2579) is finer than the fill draws: more than
+    /// 2000 lines across (`shape::MAX_HATCH_LINES`), or a width or gap the geometry
+    /// cannot hold.
+    Hatch,
 }
 
 /// The fills of a board's pours, in board order, and why the pours with
@@ -106,10 +113,10 @@ impl ZoneFills {
 }
 
 /// The fill of every pour of `board`. A shelved or unfilled pour, a pour on
-/// no copper layer, or one with an outline or clearance the geometry cannot
-/// hold, has no fill and clears nothing; [`ZoneFills::unfilled`] says which
-/// of the last four it is (a shelved pour is left out on purpose and is not
-/// listed).
+/// no copper layer, or one with an outline, clearance or hatch the geometry
+/// cannot hold, has no fill and clears nothing; [`ZoneFills::unfilled`] says
+/// which of the last five it is (a shelved pour is left out on purpose and is
+/// not listed).
 pub fn zone_fills(board: &PcbBoard) -> ZoneFills {
     let inside = board_area(board);
     let order = pour_fill_order(board);
@@ -192,6 +199,13 @@ fn fill_pour(
     let clearance = mm_to_nm(zone.pour_clearance_mm(board), "zone.clearance")
         .map_err(|_| Unfilled::Clearance)?;
     let reach = area.bounds().ok_or(Unfilled::Outline)?.inflate(clearance);
+    let area = match zone.pour_corner_shape() {
+        Some((corners, size)) => {
+            let size = mm_to_nm(size, "zone.corner_size").map_err(|_| Unfilled::Outline)?;
+            shape::shaped_area(&area, corners, size)
+        }
+        None => vec![area],
+    };
     let obstacles = Obstacles {
         board,
         zone,
@@ -201,7 +215,7 @@ fn fill_pour(
         earlier,
     }
     .collect();
-    let mut pieces = difference(&[area], &obstacles);
+    let mut pieces = difference(&area, &obstacles);
     if let Some(inside) = inside {
         pieces = intersection(&pieces, inside);
     }
@@ -209,6 +223,9 @@ fn fill_pour(
         && min > 1
     {
         pieces = without_thin_parts(&pieces, min);
+    }
+    if let Some(hatch) = zone.pour_hatch() {
+        pieces = shape::hatched(&pieces, hatch).map_err(|_| Unfilled::Hatch)?;
     }
     let (pieces, islands_removed) = islands::drop_islands(board, zone, layers, pieces);
     Ok(ZoneFill {

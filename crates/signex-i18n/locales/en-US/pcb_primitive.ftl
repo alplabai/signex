@@ -396,7 +396,10 @@ pcb-prim-dim-value-mil = { $value } mil
 pcb-prim-pour-fill-mode = Fill Mode
 pcb-prim-pour-fill-solid = Solid
 pcb-prim-pour-fill-hatched = Hatched
-pcb-prim-pour-hatched-tip = Hatched fill is not supported yet.
+pcb-prim-pour-hatched-tip = Hatched: a square grid of copper lines inside a copper border, Hatch Width wide with Hatch Gap between them. There is no None: a pour that keeps only its outline is shelved.
+# #2579: a hatched pour's line width and the gap between its lines.
+pcb-prim-pour-hatch-width = Hatch Width
+pcb-prim-pour-hatch-gap = Hatch Gap
 pcb-prim-pour-thermal = Thermal Relief
 pcb-prim-pour-thermal-tip = Pours join the pads of their net solidly; thermal relief spokes are not drawn yet.
 pcb-prim-pour-spoke-gap = Spoke / Gap
@@ -405,7 +408,7 @@ pcb-prim-pour-corner-sharp = Sharp
 pcb-prim-pour-corner-rounded = Rounded
 pcb-prim-pour-corner-chamfer = Chamfer
 pcb-prim-pour-corner-size = Corner Size
-pcb-prim-pour-corners-tip = Not stored yet: a pour's copper keeps sharp corners.
+pcb-prim-pour-corners-tip = Shapes the convex corners of the pour's outline: a Rounded corner's radius or a Chamfer's cut. Cut-outs around other copper keep the shape the clearance gives them.
 # The label of the island rule; the field says "below" and the unit is mm².
 pcb-prim-pour-remove-islands = Remove Islands
 pcb-prim-pour-below = below

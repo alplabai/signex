@@ -186,6 +186,7 @@ define_ids! {
     PCB_POUR_UNFILLED_OUTLINE = "pcb-pour-unfilled-outline";
     PCB_POUR_UNFILLED_CLEARANCE = "pcb-pour-unfilled-clearance";
     PCB_POUR_UNFILLED_UNTIL_REPOUR = "pcb-pour-unfilled-until-repour";
+    PCB_POUR_UNFILLED_HATCH = "pcb-pour-unfilled-hatch";
     PCB_ROUTE_AIM_BLOCKED = "pcb-route-aim-blocked";
     PCB_TOOL_PAUSED = "pcb-tool-paused";
     PCB_TUNE_NEEDS_TRACKS = "pcb-tune-needs-tracks";

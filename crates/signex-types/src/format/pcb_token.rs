@@ -66,14 +66,17 @@ pub const SNXPCB_FORMAT_V1_10: &str = "snxpcb/1.10";
 pub const SNXPCB_FORMAT_V1_11: &str = "snxpcb/1.11";
 
 /// Written when the board has a length-matching group
-/// (`[[board_options.length_groups]]`, #2797): a build that knows only 1.11
-/// would drop the groups on save, so it opens 1.12 read-only. A board with
-/// none keeps its token, byte for byte.
+/// (`[[board_options.length_groups]]`, #2797) or a pour has corners other
+/// than Sharp (#2578) or a hatched fill (#2579) (`Zone::has_pour_shape`). A
+/// build that knows only 1.11 would drop the groups on save, and would fill
+/// a shaped pour solid with sharp corners, so it opens 1.12 read-only. A
+/// board with none keeps its token, byte for byte.
 pub const SNXPCB_FORMAT_V1_12: &str = "snxpcb/1.12";
 
 /// The token a save of `board` writes, from its content, highest need
-/// first: a length-matching group needs [`SNXPCB_FORMAT_V1_12`], a pour
-/// cutout, a dimension look, drawn copper or an unfilled pour
+/// first: a length-matching group or a shaped pour (corners or hatch) needs
+/// [`SNXPCB_FORMAT_V1_12`], a pour cutout, a dimension look, drawn copper
+/// or an unfilled pour
 /// [`SNXPCB_FORMAT_V1_11`],
 /// stack materials [`SNXPCB_FORMAT_V1_10`], a shelved pour
 /// [`SNXPCB_FORMAT_V1_9`], a stackup name, a
@@ -93,7 +96,8 @@ pub fn snxpcb_token(board: &PcbBoard) -> &'static str {
     let cutout = board.zones.iter().any(|zone| zone.is_pour_cutout());
     let unfilled = board.zones.iter().any(|zone| zone.is_unfilled_pour());
     let look = super::board_uses_dimension_style(board);
-    if !board.options.length_groups.is_empty() {
+    let shaped = board.zones.iter().any(|zone| zone.has_pour_shape());
+    if shaped || !board.options.length_groups.is_empty() {
         SNXPCB_FORMAT_V1_12
     } else if cutout || look || unfilled || super::board_has_drawn_copper(board) {
         SNXPCB_FORMAT_V1_11
