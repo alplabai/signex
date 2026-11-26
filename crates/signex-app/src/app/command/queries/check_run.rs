@@ -112,6 +112,8 @@ impl Signex {
         };
         let run = runs.record(request.check, &request.scope, report.keys());
         let report = CheckReport { run, ..report };
+        // The newest run, for a design report from the last results (#2945).
+        runs.keep_report(&request.scope, report.clone());
         let report = match earlier {
             Some((baseline, keys)) => report.compared_with(baseline, &keys),
             None => report,

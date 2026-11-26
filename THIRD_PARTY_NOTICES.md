@@ -45,3 +45,19 @@ topology, typed ids, error values instead of status codes, explicit kernel
 state instead of a global context). Each ported Rust file names the upstream
 file(s) it derives from in its header.
 ```
+
+## typst-assets 0.15.1 fonts
+
+- Use: the fonts the Design Notebook compiles and exports its pages with,
+  embedded in `signex-notebook` (and so in the app and `signex-cli`).
+- Source: <https://crates.io/crates/typst-assets>
+- Licence: the crate is Apache-2.0; its fonts are licensed on their own terms,
+  each shipped in full in `licenses/fonts/` (from `crates/signex-notebook/fonts/`):
+  - Libertinus Serif: SIL Open Font License 1.1,
+    `OFL-LibertinusSerif.md`. Copyright © 2012-2024 The Libertinus Project
+    Authors, with Reserved Font Name "Linux Libertine", "Biolinum", "STIX Fonts".
+  - New Computer Modern (NewCM10, NewCMMath): GUST Font License 1.0,
+    `GUST-NewComputerModern.md`.
+  - DejaVu Sans Mono: the Bitstream Vera and Arev font licences,
+    `BitstreamVera-DejaVuSansMono.md`. Copyright (c) 2003 by Bitstream, Inc.;
+    Copyright (c) 2006 by Tavmjong Bah; DejaVu changes are in the public domain.

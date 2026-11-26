@@ -55,6 +55,18 @@ mod library_delete;
 mod load_gateway;
 mod mutation_gateway;
 pub(crate) mod new_project;
+// #2945, mockup row 201: Generate design notebook.
+pub(crate) mod notebook_generate;
+pub use notebook_generate::{NotebookGenerateMsg, NotebookGenerateUi};
+pub(crate) mod notebook_measurements;
+// Mockup row 202: Export Design Notebook PDF and `export_notebook_pdf`.
+pub(crate) mod notebook_pdf;
+pub use notebook_pdf::{NotebookPdfMsg, NotebookPdfState};
+pub(crate) mod notebook_project;
+pub mod notebook_references;
+// Mockup row 195: the Design Notebook tab.
+pub mod notebook_tab;
+pub use notebook_tab::NotebookMsg;
 pub(crate) mod page_tab;
 pub(crate) mod parameter_io;
 pub mod parent_reference_disk;
@@ -171,6 +183,9 @@ pub use documents::{
     TabKind, Tool,
 };
 pub use fab_outputs::{BoardNote, FabOutput, FabOutputsMsg, FabOutputsState, FabProblem};
+// The Annotations panel's view model, for the panel's own layout tests.
+#[cfg(test)]
+pub(crate) use handlers::annotations::build_view as build_annotations_view;
 pub(crate) use handlers::document_files::is_pcb_path;
 pub(crate) use handlers::selection_workflow::passes_filter;
 pub use handlers::window_geometry_events::GeometryReadout;

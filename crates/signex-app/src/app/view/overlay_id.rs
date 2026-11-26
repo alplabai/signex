@@ -129,8 +129,12 @@ pub(crate) enum OverlayId {
     FabOutputs,
     /// Design ▸ Differential Pair Classes… (#1282).
     DiffPairClasses,
+    /// Generate design notebook (#2945, mockup row 201).
+    NotebookGenerate,
     /// Board Reports and Board Print / PDF (#2404, #2402).
     BoardOutput,
+    /// Export Design Notebook PDF (mockup row 202).
+    NotebookPdf,
     /// Tools ▸ Annotation ▸ Back Annotate Schematics (#1312).
     BackAnnotate,
     /// Project ▸ Compare Board with Schematic… (#2462).
@@ -184,7 +188,7 @@ const PRE_BLOCKING: usize = 5;
 /// behaviour change to both the paint stack and the Esc precedence, and
 /// `paint_order_is_exhaustive_and_unique` keeps it honest about covering
 /// every [`OverlayId`] exactly once.
-pub(crate) const PAINT_ORDER: [OverlayId; 85] = [
+pub(crate) const PAINT_ORDER: [OverlayId; 87] = [
     OverlayId::ErrorNotice,
     OverlayId::NetlistIncompletePrompt,
     OverlayId::PrintPreview,
@@ -248,7 +252,9 @@ pub(crate) const PAINT_ORDER: [OverlayId; 85] = [
     OverlayId::CreateRooms,
     OverlayId::FabOutputs,
     OverlayId::DiffPairClasses,
+    OverlayId::NotebookGenerate,
     OverlayId::BoardOutput,
+    OverlayId::NotebookPdf,
     OverlayId::BackAnnotate,
     OverlayId::CompareBoard,
     // Above its dialog: Esc closes the confirmation first.
@@ -392,7 +398,9 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::CreateRooms
         | OverlayId::FabOutputs
         | OverlayId::DiffPairClasses
+        | OverlayId::NotebookGenerate
         | OverlayId::BoardOutput
+        | OverlayId::NotebookPdf
         | OverlayId::BackAnnotate
         | OverlayId::CompareBoard
         | OverlayId::CompareBoardConfirm
@@ -635,7 +643,9 @@ impl Signex {
             OverlayId::CreateRooms => layers.extend(self.create_rooms_overlay()),
             OverlayId::FabOutputs => layers.extend(self.fab_outputs_overlay()),
             OverlayId::DiffPairClasses => layers.extend(self.diff_pair_classes_overlay()),
+            OverlayId::NotebookGenerate => layers.extend(self.notebook_generate_overlay()),
             OverlayId::BoardOutput => layers.extend(self.board_output_overlay()),
+            OverlayId::NotebookPdf => layers.extend(self.notebook_pdf_overlay()),
             OverlayId::BackAnnotate => layers.extend(self.back_annotate_overlay()),
             OverlayId::CompareBoard => layers.extend(self.compare_board_overlay()),
             OverlayId::CompareBoardConfirm => {

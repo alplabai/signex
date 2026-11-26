@@ -474,9 +474,10 @@ pub(super) fn sheet_actions_entries(
 
 /// Add New to Project submenu — the "Add New" picker for the right-clicked
 /// project (resolved as `target`), grouped as in the tree menu (mockup row 20): the
-/// design documents (Schematic, PCB), the libraries, then the project files
-/// whose tabs are not built yet (Design Notebook, Export Job) as planned rows.
-/// The live rows' glyphs take their file kind's `inks`.
+/// design documents (Schematic, PCB), the libraries, then the project files:
+/// the Design Notebook (mockup row 195), then Export Job, whose tab is not
+/// built yet, as a planned row. The design documents' and libraries' glyphs
+/// take their file kind's `inks`.
 pub(super) fn add_new_entries(
     i18n: &I18n,
     tid: ThemeId,
@@ -527,6 +528,13 @@ pub(super) fn add_new_entries(
         menu_ids::CTX_ADD_SYMBOL_LIBRARY,
         tree(P::AddProjectSymbolLibrary(target.clone())),
     ));
+    // The project's notebook, written only on Save (mockup row 195).
+    let notebook = dd_msg(
+        Some(ic::icon_menu_notebook(tid)),
+        &text(i18n, menu_ids::CTX_ADD_DESIGN_NOTEBOOK),
+        "",
+        tree(P::AddNewDesignNotebook(target.clone())),
+    );
     // Hidden while the footprint editor is gated off for release.
     if crate::feature_flags::FOOTPRINT_EDITOR_ENABLED {
         v.push(library(
@@ -534,20 +542,17 @@ pub(super) fn add_new_entries(
             tree(P::AddProjectFootprintLibrary(target)),
         ));
     }
+    v.push(DropdownEntry::Separator);
+    v.push(notebook);
     v.extend(add_new_planned_entries(i18n, tid));
     v
 }
 
-/// The planned tail of Add New to Project: Design Notebook and Export Job,
-/// then Constraint File and VHDL File, each greyed with the pill.
-fn add_new_planned_entries(i18n: &I18n, tid: ThemeId) -> [DropdownEntry<Message>; 6] {
+/// The planned tail of Add New to Project: Export Job, then Constraint File
+/// and VHDL File, each greyed with the pill.
+fn add_new_planned_entries(i18n: &I18n, tid: ThemeId) -> [DropdownEntry<Message>; 4] {
     let planned = |icon, label| dd_planned_pill(i18n, Some(icon), &text(i18n, label));
     [
-        DropdownEntry::Separator,
-        planned(
-            ic::icon_menu_notebook(tid),
-            menu_ids::CTX_ADD_DESIGN_NOTEBOOK,
-        ),
         planned(ic::icon_menu_export(tid), menu_ids::CTX_ADD_OUTPUT_JOB),
         DropdownEntry::Separator,
         planned(ic::icon_menu_file(tid), menu_ids::CTX_ADD_CONSTRAINT_FILE),

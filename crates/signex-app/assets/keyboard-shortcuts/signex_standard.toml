@@ -198,10 +198,12 @@ context = "global"
 # 2026-11-19).
 # #2509: `P V K` and `P V N` live here, not in a global section, so the
 # board's `P V` places a via at once instead of waiting for a third key.
+# Mockup row 197: `B` shows or hides the sheet's Notebook badges.
 [[keyboard_shortcuts.sections]]
 context = "schematic"
 
 [keyboard_shortcuts.sections.bindings]
+"B" = "toggle_notebook_badges"
 "Mod+G" = "create_union"
 "P C" = "place_off_sheet_connector"
 "P R" = "place_port"

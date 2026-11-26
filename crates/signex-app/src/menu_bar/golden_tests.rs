@@ -448,6 +448,11 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("toggle_cross_select_mode", "ToggleCrossSelectMode"),
     ("open_parameter_manager", "OpenParameterManager"),
     ("open_rules", "OpenRules"),
+    // The Design Notebook (mockup rows 195, 197, 201, 202): fixture names only.
+    ("open_design_notebook", "OpenDesignNotebook"),
+    ("generate_design_notebook", "GenerateDesignNotebook"),
+    ("export_notebook_pdf", "ExportNotebookPdf"),
+    ("toggle_notebook_badges", "ToggleNotebookBadges"),
     // #2248 / #1269: fixture names only.
     ("assign_footprints", "AssignFootprints"),
     ("repair_pin_junctions", "RepairPinJunctions"),
@@ -715,8 +720,9 @@ fn model_shortcuts_follow_the_active_keymap() {
     // Board Sketch, Tools ▸ Design Rule Check, Edit ▸ Flip Selection, View ▸
     // Toggle Ratsnest and 3D Board (#2390, #2403, #2405) and Place ▸ Compile
     // Mask (#2420) add nine. Edit ▸ Origin ▸ Set adds `E O S` (2026-11-18).
-    // File ▸ Save All adds `Mod+Alt+S` (#2844).
-    assert_eq!(checked, 60, "the default profile labels 60 menu rows");
+    // File ▸ Save All adds `Mod+Alt+S` (#2844). View ▸ Notebook Badges
+    // adds `B` (mockup row 197).
+    assert_eq!(checked, 61, "the default profile labels 61 menu rows");
 }
 
 fn check_shortcuts(menu: &Menu, ctx: &MenuContext, checked: &mut usize) {

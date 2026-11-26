@@ -45,6 +45,7 @@ read_document	file	Read document	-	General	-	-	Always	-	document:document,ids:te
 query_pins	file	Query pins	-	General	-	-	Always	-	document:document,designator:text
 query_library	library	Query a library	-	General	-	-	Always	-	library:text,part:text?,text:text?
 resolve	file	Resolve id	-	General	-	-	Always	-	id:text
+list_annotations	design	List the annotation blocks of the project's Design Notebook	-	General	-	-	Always	-	document:document,id:text?,kind:text?,part:text?
 apply_edits	edit	Apply edits (agent)	-	General	-	-	Always	mutates_doc,undoable	document:document,expect_revision:text,edits:text,summary:text?,expect_revisions:text?
 undo	edit	Undo	-	General	-	-	Always	mutates_doc	document:document
 redo	edit	Redo	-	General	-	-	Always	mutates_doc	document:document
@@ -451,6 +452,24 @@ apply_layout_notebook	window	Workspace layout: Notebook	Notebook	General	-	-	Alw
 save_workspace_layout	window	Save the panel arrangement as a workspace layout	Save Layout…	General	-	-	Always	gui_only	-
 manage_workspace_layouts	window	Manage workspace layouts	Manage Layouts…	General	-	-	Always	gui_only	-
 reset_workspace_layout	window	Reset the edited built-in workspace layout	Reset Layout	General	-	-	Always	gui_only	-
+open_design_notebook	design	Open the Design Notebook of the project (Wiki)	Open Design Notebook	General	-	-	Always	gui_only	-
+generate_design_notebook	design	Generate a design notebook from the project	Generate from Project…	General	-	-	Always	-	document:document,sections:text?,variant:text?,template:text?,document_number:text?,revision:text?,checks:text?,fail_on:text?,save:bool?,update:bool?
+export_notebook_pdf	file	Export the Design Notebook as PDF	Design Notebook PDF…	General	-	-	Always	-	document:document,path:path?,overwrite:bool?,notebook:text?,pages:text?,paper:text?,variant:text?,annotations:text?,stale:text?,title_block:bool?,contents:bool?,bookmarks:bool?,python_source:bool?
+notebook_references	design	List the notebook's references and the stale ones	-	General	-	-	Always	-	document:document,file:text?
+notebook_reference_card	design	Read the hover card of a notebook reference	-	General	-	-	Always	-	document:document,kind:text,name:text,file:text?
+notebook_reference_picker	design	List what the @ reference picker offers	-	General	-	-	Always	-	document:document,text:text?,limit:text?
+notebook_badges	design	List the Notebook badges and their blocks	-	General	-	-	Always	-	document:document,part:text?,net:text?
+notebook_fix_reference	design	Fix a stale notebook reference	-	General	-	-	Always	mutates_doc,undoable	document:document,fix:text,kind:text?,name:text?,to:text?,pin:text?,file:text?
+toggle_notebook_badges	view	Show or hide the Notebook badges on the schematic	Notebook Badges	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
+notebook_compile	reports	Compile the project's Design Notebook and report its pages and problems	-	General	-	-	Always	-	document:document
+notebook_insert	edit	Insert a reference or a block into the open Design Notebook	-	General	-	-	Always	mutates_doc,undoable	document:document,kind:text,name:text?,line:text?
+notebook_view	view	Set the view, the side panel or the next problem of the Design Notebook tab	-	General	-	-	Always	-	document:document,view:text?,panel:text?,next_problem:bool?
+notebook_measurements	design	List the notebook's measurements with their results	-	General	-	-	Always	-	document:document
+notebook_timeline	design	Show the measurement timeline of a net, part or pin	-	General	-	-	Always	-	document:document,net:text?,part:text?,pin:text?,quantity:text?
+notebook_attachments	design	List the notebook's attachments and their stale marks	-	General	-	-	Always	-	document:document
+export_notebook_timeline	reports	Export a measurement timeline as a CSV file	-	General	-	-	Always	-	document:document,net:text?,part:text?,pin:text?,quantity:text?,path:path,overwrite:bool?
+mark_notebook_attachment_valid	design	Mark a stale attachment or reading as still valid	-	General	-	-	Always	-	document:document,file:text?,id:text?
+attach_notebook_file	design	Copy a file into the notebook as an attachment	-	General	-	-	Always	-	document:document,path:path,kind:text?,text:text?,net:text?,part:text?,pin:text?
 bom_add_alternate	design	Add an alternate part to a BOM line	-	General	-	-	Always	mutates_doc,undoable	document:document,line:text,library:text,part:text
 bom_remove_alternate	design	Remove an alternate part from a BOM line	-	General	-	-	Always	mutates_doc,undoable	document:document,line:text,library:text,part:text
 bom_set_alternate_order	design	Move an alternate part in a BOM line's order	-	General	-	-	Always	mutates_doc,undoable	document:document,line:text,library:text,part:text,position:text

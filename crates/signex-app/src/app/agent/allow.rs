@@ -163,6 +163,8 @@ mod tests {
                 // #2940: the DRC fixes, on the named board.
                 "fix_drc",
                 "fix_drc_violation",
+                // #2945: the design report of the named project.
+                "generate_design_notebook",
                 "gloss_selected_routes",
                 // #2394: the board view's layers, on the named board.
                 "hide_layer",
@@ -173,9 +175,27 @@ mod tests {
                 "layout_plan_get",
                 "layout_plan_set",
                 "layout_plan_status",
+                // Mockup row 198: the notebook's review records, by typed id.
+                "list_annotations",
                 "list_documents",
                 "lock_board_items",
+                // Mockup row 199: the notebook's measurements, timelines and
+                // attachments, and Mark still valid, on the named project.
+                "mark_notebook_attachment_valid",
                 "measure_board",
+                // #2795, mockup rows 195-199: the Design Notebook tab, its
+                // references, badges and measurements, on the named project.
+                "notebook_attachments",
+                "notebook_badges",
+                "notebook_compile",
+                "notebook_fix_reference",
+                "notebook_insert",
+                "notebook_measurements",
+                "notebook_reference_card",
+                "notebook_reference_picker",
+                "notebook_references",
+                "notebook_timeline",
+                "notebook_view",
                 "panelize_board",
                 // #2470: the routing tools, the via and the area tools, on
                 // the named board.
