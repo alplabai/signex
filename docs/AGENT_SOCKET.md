@@ -176,7 +176,11 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   `project_enable_requirement` and `project_run_requirements` (#2339), and
   the footprint editor's `footprint_move_pads` and `footprint_align_pads`
   (#3013; one undo step of the named footprint, answered with its named
-  pads as JSON; [CLI.md](CLI.md), "Footprint pads"). A test
+  pads as JSON; [CLI.md](CLI.md), "Footprint pads"), and
+  `apply_library_updates` (#3013; the Library Updates dialog's Update
+  Selected Components for the named sheet; [CLI.md](CLI.md), "Library
+  dialogs"). The other library dialog commands take a file path or name no
+  document, so they stay off the channel. A test
   pins this set, so a catalog row that joins or leaves it is a visible
   decision.
   The window-layout commands `tile_windows_horizontally`,

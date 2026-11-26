@@ -529,6 +529,11 @@ signex_standard	hint	-	3	footprint_mode_view_3d
 signex_standard	hint	-	-	footprint_recompute_courtyard_outline
 signex_standard	hint	-	-	footprint_move_pads
 signex_standard	hint	-	-	footprint_align_pads
+signex_standard	hint	-	-	set_library_document_options
+signex_standard	hint	-	-	apply_library_updates
+signex_standard	hint	-	-	copy_stock_to_library
+signex_standard	hint	-	-	recover_library
+signex_standard	hint	-	-	new_library
 signex_standard	hint	-	⇧⌘P	open_command_palette
 signex_standard	hint	-	⌘,	open_preferences
 signex_standard	hint	-	T P	open_schematic_preferences
@@ -1084,6 +1089,11 @@ classic	hint	-	3	footprint_mode_view_3d
 classic	hint	-	-	footprint_recompute_courtyard_outline
 classic	hint	-	-	footprint_move_pads
 classic	hint	-	-	footprint_align_pads
+classic	hint	-	-	set_library_document_options
+classic	hint	-	-	apply_library_updates
+classic	hint	-	-	copy_stock_to_library
+classic	hint	-	-	recover_library
+classic	hint	-	-	new_library
 classic	hint	-	⇧⌘P	open_command_palette
 classic	hint	-	⌘,	open_preferences
 classic	hint	-	-	open_schematic_preferences

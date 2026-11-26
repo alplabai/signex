@@ -316,3 +316,43 @@ fn without_operands_each_says_what_it_needs() {
         assert!(why.contains("Move Selection By or Align Selection"), "{id}");
     }
 }
+
+/// #3013: a `.snxfpt` opened by `open_document` in a headless run, with no
+/// window and no editor put in by hand, is a document the pad commands name.
+#[test]
+fn a_footprint_opened_headless_takes_the_pad_commands() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("soic.snxfpt");
+    // The stock SOIC-8, copied out of the stock library so it opens as itself.
+    let stock = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../assets/stock-library/footprints/019df45d-af5f-7bb0-914a-26b538180e51.snxfpt");
+    std::fs::copy(stock, &path).expect("copy the footprint");
+    let (mut app, _task) = Signex::new();
+
+    let open = format!("path={}", path.display());
+    let opened = answer(headless(&mut app, "open_document", &[&open]));
+    assert_eq!(opened["kind"], "footprint");
+    assert_eq!(opened["path"], path.display().to_string());
+
+    let doc = document(&path);
+    let before = answer(headless(
+        &mut app,
+        "footprint_move_pads",
+        &[&doc, "pads=1,2", "by=0,0"],
+    ));
+    assert_eq!(before["changed"], false);
+    let after = answer(headless(
+        &mut app,
+        "footprint_move_pads",
+        &[&doc, "pads=1,2", "by=1,0"],
+    ));
+    assert_eq!(after["changed"], true);
+    for pad in 0..2 {
+        let x = |answer: &serde_json::Value| answer["pads"][pad]["x"].as_f64().expect("x");
+        let y = |answer: &serde_json::Value| answer["pads"][pad]["y"].as_f64().expect("y");
+        assert!((x(&after) - x(&before) - 1.0).abs() < 1e-9, "pad {pad}");
+        assert_eq!(y(&after), y(&before), "pad {pad}");
+    }
+    assert_eq!(editor(&app, &path).history.undo_len(), 1);
+    assert!(editor(&app, &path).is_dirty());
+}

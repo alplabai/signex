@@ -95,6 +95,11 @@
     "category": "window"
   },
   {
+    "id": "apply_library_updates",
+    "group": "General",
+    "category": "modify"
+  },
+  {
     "id": "apply_selection_filter_preset",
     "group": "Schematic",
     "category": "select"
@@ -298,6 +303,11 @@
     "id": "copy_board_3d_screenshot",
     "group": "Pcb",
     "category": "view"
+  },
+  {
+    "id": "copy_stock_to_library",
+    "group": "General",
+    "category": "file"
   },
   {
     "id": "create_rooms_from_sheets",
@@ -831,6 +841,11 @@
   },
   {
     "id": "new_document",
+    "group": "General",
+    "category": "file"
+  },
+  {
+    "id": "new_library",
     "group": "General",
     "category": "file"
   },
@@ -1470,6 +1485,11 @@
     "category": "design"
   },
   {
+    "id": "recover_library",
+    "group": "General",
+    "category": "file"
+  },
+  {
     "id": "redo",
     "group": "General",
     "category": "edit"
@@ -1807,6 +1827,11 @@
   {
     "id": "set_layer_visible",
     "group": "Pcb",
+    "category": "view"
+  },
+  {
+    "id": "set_library_document_options",
+    "group": "General",
     "category": "view"
   },
   {

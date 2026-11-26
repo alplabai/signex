@@ -11,16 +11,13 @@ use iced::Task;
 use serde_json::{Value, json};
 
 use super::document_operands::named;
+use super::operand_handlers::refused;
 use super::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::{DocumentKey, FootprintDocument, Message, Signex};
 use crate::library::editor::footprint::{AlignOp, pads_needed};
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 
 type Ran = (CommandOutcome, Task<Message>);
-
-fn refused(reason: impl Into<String>) -> Ran {
-    (CommandOutcome::disabled(reason), Task::none())
-}
 
 /// The path of the open footprint `document` names.
 fn named_footprint(app: &Signex, args: &CommandArgs) -> Result<PathBuf, String> {

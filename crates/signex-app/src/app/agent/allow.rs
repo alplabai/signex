@@ -95,6 +95,8 @@ mod tests {
                 "add_net_class",
                 "add_teardrops",
                 "apply_edits",
+                // #3013: Library Updates' Update Selected on the named sheet.
+                "apply_library_updates",
                 "arrange_in_box",
                 "assign_board_net_class",
                 "assign_net_class",

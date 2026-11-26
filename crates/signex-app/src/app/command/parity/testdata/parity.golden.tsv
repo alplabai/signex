@@ -55,6 +55,9 @@ apply_layout_review	headless_refusal	headless_refusal	gui	none	routing
 apply_layout_schematic	bridge	DockLayout(Workspace(ApplyRequested(Builtin(Schematic))))	gui	window,settings	handler
 apply_layout_schematic	in_window_rewrite	document_window	gui	window	routing
 apply_layout_schematic	headless_refusal	headless_refusal	gui	none	routing
+apply_library_updates	operand_handler	run_operands: named document	core	origin	handler
+apply_library_updates	refusal_needs_operands	needs_operands_reason	gui	none	routing
+apply_library_updates	headless_missing_operand	needs `document`	core	none	routing
 apply_selection_filter_preset	operand_handler	run_operands: active-tab gate unless a document is named	gui	settings	handler
 apply_selection_filter_preset	refusal_needs_operands	needs_operands_reason	gui	none	routing
 apply_selection_filter_preset	headless_missing_operand	needs `name`	gui	none	routing
@@ -207,6 +210,9 @@ copy_board_3d_screenshot	bridge	Pcb(Board3d(ScreenshotCopyRequested))	gui	active
 copy_board_3d_screenshot	in_window_rewrite	document_window	gui	window	routing
 copy_board_3d_screenshot	refusal_needs	Board3dView	gui	active document,window	routing
 copy_board_3d_screenshot	headless_refusal	headless_refusal	gui	none	routing
+copy_stock_to_library	operand_handler	run_operands: active-tab gate unless a document is named	core	none	handler
+copy_stock_to_library	refusal_needs_operands	needs_operands_reason	gui	none	routing
+copy_stock_to_library	headless_missing_operand	needs `name`	core	none	routing
 create_rooms_from_sheets	bridge	Pcb(CreateRooms(Requested))	gui	active document	gate
 create_rooms_from_sheets	in_window_rewrite	document_window	gui	window	routing
 create_rooms_from_sheets	refusal_needs	PcbInProject	gui	active document	routing
@@ -610,6 +616,9 @@ new_document	bridge	Menu(NewProject)	gui	dialog answer	handler
 new_document	operand_handler	run_operands: active-tab gate unless a document is named	core	settings	handler
 new_document	in_window_rewrite	document_window	gui	window	routing
 new_document	headless_new_document	settle_and_answer_new_document	core	dialog answer	handler
+new_library	operand_handler	run_operands: named document	core	origin	handler
+new_library	refusal_needs_operands	needs_operands_reason	gui	none	routing
+new_library	headless_missing_operand	needs `document`	core	none	routing
 new_pcb_document	bridge	UpdatePcb(NewPcbRequested(None))	gui	active document	gate
 new_pcb_document	operand_handler	run_operands: active-tab gate unless a document is named	core	active document	handler
 new_pcb_document	in_window_rewrite	document_window	gui	window	routing
@@ -1110,6 +1119,9 @@ reannotate_board	bridge	Pcb(Reannotate(Requested))	gui	active document	gate
 reannotate_board	in_window_rewrite	document_window	gui	window	routing
 reannotate_board	refusal_needs	Pcb	gui	active document	routing
 reannotate_board	headless_refusal	headless_refusal	gui	none	routing
+recover_library	operand_handler	run_operands: active-tab gate unless a document is named	core	none	handler
+recover_library	refusal_needs_operands	needs_operands_reason	gui	none	routing
+recover_library	headless_missing_operand	needs `action`	core	none	routing
 redo	bridge	Edit(Redo)	core	active document	handler
 redo	operand_handler	run_operands: named document	core	in-progress edit,origin	handler
 redo	undo_router_sheet_window	schematic|symbol|footprint|library_row|project|erc_rules|rules_tab	gui	active document,window	routing
@@ -1360,6 +1372,9 @@ set_layer_visible	operand_handler	run_operands: named document	gui	origin	handle
 set_layer_visible	refusal_needs	Pcb	gui	active document	routing
 set_layer_visible	refusal_needs_operands	needs_operands_reason	gui	none	routing
 set_layer_visible	headless_missing_operand	needs `layer`	gui	none	routing
+set_library_document_options	operand_handler	run_operands: active-tab gate unless a document is named	gui	none	handler
+set_library_document_options	refusal_needs_operands	needs_operands_reason	gui	none	routing
+set_library_document_options	headless_missing_operand	needs `library`	gui	none	routing
 set_net_class_rules	operand_handler	run_operands: named document	core	origin	handler
 set_net_class_rules	refusal_needs_operands	needs_operands_reason	gui	none	routing
 set_net_class_rules	headless_missing_operand	needs `document`	core	none	routing

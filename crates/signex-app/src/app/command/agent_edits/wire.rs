@@ -260,6 +260,12 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
     // #3013: a footprint's pads, on the footprint's own undo stack.
     ("footprint_move_pads", FOOTPRINT_EDIT),
     ("footprint_align_pads", FOOTPRINT_EDIT),
+    // #3013: the update lands when the library symbols are read, one step
+    // per updated symbol.
+    (
+        "apply_library_updates",
+        "it reads the libraries off the UI thread and lands later, one step per symbol; run it as its own command",
+    ),
     // #2389: length tuning lands on the named board's own undo stack.
     (
         "tune_net_length",

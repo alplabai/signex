@@ -123,6 +123,16 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("by", OperandKind::Point),
     ("horizontal", OperandKind::Text),
     ("vertical", OperandKind::Text),
+    // #3013: the library dialogs' fields.
+    ("sheet_color", OperandKind::Text),
+    ("grid", OperandKind::Bool),
+    ("grid_spacing", OperandKind::Length),
+    ("designators", OperandKind::Text),
+    ("use_library", OperandKind::Text),
+    ("action", OperandKind::Text),
+    ("located", OperandKind::Path),
+    ("git", OperandKind::Bool),
+    ("lfs", OperandKind::Bool),
 ];
 
 /// The commands whose `ids` is still text, not targets (#2326): a design

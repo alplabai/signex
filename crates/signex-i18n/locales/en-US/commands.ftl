@@ -692,6 +692,11 @@ cmd-footprint-mode-view-3d = Switch footprint editor to 3D View mode
 cmd-footprint-recompute-courtyard-outline = Recompute footprint courtyard outline from pads
 cmd-footprint-move-pads = Move footprint pads by an offset
 cmd-footprint-align-pads = Align footprint pads
+cmd-set-library-document-options = Set the document options of a library
+cmd-apply-library-updates = Apply the library updates waiting for a sheet
+cmd-copy-stock-to-library = Copy a stock symbol or footprint to a library
+cmd-recover-library = Recover a library that is missing or has lost its history
+cmd-new-library = Create a library for a project
 
 cmd-category-edit = Edit
 cmd-category-modify = Modify
