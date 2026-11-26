@@ -178,3 +178,43 @@ fn a_save_as_into_another_library_embeds_the_origin_step_model() {
             .exists()
     );
 }
+
+/// Review finding: undoing past a save that embedded a model keeps the
+/// model (entries are content-addressed), so a later save still has it.
+#[test]
+fn undo_past_a_migrating_save_keeps_the_model() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let step = b"ISO-10303-21;\nDATA;\nENDSEC;\nEND-ISO-10303-21;\n".to_vec();
+    let hash = step_model_hash(&step);
+    let origin = legacy_library(dir.path(), "A", &step);
+    let mut app = app_editing(dir.path(), &origin);
+    {
+        let editor = app
+            .document_state
+            .footprint_editors
+            .get_mut(&origin)
+            .unwrap();
+        editor.push_history();
+        editor.file.footprints[0].description = "before undo".into();
+        editor.mark_dirty();
+    }
+    app.save_primitive_tab_blocking(&origin).expect("save");
+    let editor = app
+        .document_state
+        .footprint_editors
+        .get_mut(&origin)
+        .unwrap();
+    assert!(editor.undo(), "an undo step past the save");
+    assert!(
+        editor.file.models.get(&hash).is_some(),
+        "undo keeps the model"
+    );
+    editor.mark_dirty();
+
+    // Only the editor's copy can carry the model into the other library.
+    std::fs::remove_file(dir.path().join("A/step").join(format!("{hash}.step"))).unwrap();
+    let _ = legacy_library(dir.path(), "B", b"unrelated");
+    let target = dir.path().join("B/footprints/NEW.snxfpt");
+    let saved = save_as(&mut app, &origin, &target);
+    assert_eq!(saved.step_model(&saved.footprints[0]).unwrap(), Some(step));
+}

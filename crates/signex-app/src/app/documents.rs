@@ -911,8 +911,12 @@ impl FootprintDocument {
         self.state.numeric_buffers.clear();
         // The file's id is the live one, not the snapshot's (#2172).
         let live_id = self.file.file_uuid;
+        let live_models = std::mem::take(&mut self.file.models);
         self.file = snap.file;
         self.file.file_uuid = live_id;
+        // Embedded models are content-addressed: keep the ones a save merged
+        // in after the snapshot (#3107); unused ones drop on save.
+        self.file.models.absorb(&live_models);
         self.active_idx = snap.active_idx;
         self.state.pads = snap.pads;
         self.state.selected_pad = snap.selected_pad;

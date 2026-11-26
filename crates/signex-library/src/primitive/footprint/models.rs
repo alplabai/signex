@@ -154,11 +154,16 @@ fn wrap(base64: &str) -> String {
     out
 }
 
-/// Characters a `data` block may hold: base64 and whitespace. This also
-/// keeps the literal's closing quotes out, so the block is always written
-/// back as a literal.
-fn is_data_char(c: char) -> bool {
-    c.is_ascii_alphanumeric() || matches!(c, '+' | '/' | '=') || c.is_ascii_whitespace()
+/// True when `data` holds only base64 characters, spaces, tabs and line
+/// ends (`\n`, `\r\n`): what a TOML `'''` literal can hold, so the block is
+/// always written back loadable. A form feed or a lone CR is refused.
+fn is_data_text(data: &str) -> bool {
+    let bytes = data.as_bytes();
+    bytes.iter().enumerate().all(|(i, &b)| match b {
+        b'\r' => bytes.get(i + 1) == Some(&b'\n'),
+        b' ' | b'\t' | b'\n' | b'+' | b'/' | b'=' => true,
+        _ => b.is_ascii_alphanumeric(),
+    })
 }
 
 /// On-disk shape of one `[[models]]` entry, keys in written order.
@@ -297,7 +302,7 @@ impl EmbeddedModels {
             if models.contains_key(&entry.hash) {
                 return Err(refuse("the file holds it twice".into()));
             }
-            if !entry.data.chars().all(is_data_char) {
+            if !is_data_text(&entry.data) {
                 return Err(refuse(
                     "its data holds characters base64 does not use".into(),
                 ));

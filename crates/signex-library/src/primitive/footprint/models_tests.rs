@@ -455,3 +455,25 @@ fn data_with_characters_base64_does_not_use_is_refused_on_load() {
         Err(FootprintFileError::InvalidModelEntry { .. })
     ));
 }
+
+#[test]
+fn data_with_a_form_feed_or_a_lone_cr_is_refused_on_load() {
+    let (text, _) = saved_with_model("QFN-16");
+    let open = text.find("data = '''\n").unwrap();
+    let head = &text[..open];
+    for bad in ["AAAA\\fBBBB", "AAAA\\rBBBB", "AAAA\\u000bBBBB"] {
+        let file = format!("{head}data = \"{bad}\"\n");
+        assert!(
+            matches!(
+                FootprintFile::from_toml_str(&file),
+                Err(FootprintFileError::InvalidModelEntry { .. })
+            ),
+            "{bad}"
+        );
+    }
+    // CRLF line ends and tabs are kept, and the re-save loads again.
+    let file = format!("{head}data = \"AAAA\\r\\n\\tBBBB\"\n");
+    let loaded = FootprintFile::from_toml_str(&file).expect("CRLF and tab load");
+    let again = loaded.to_toml_string().unwrap();
+    FootprintFile::from_toml_str(&again).expect("the re-save loads");
+}
