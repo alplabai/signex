@@ -17,16 +17,13 @@ use signex_types::schematic::SchematicSheet;
 
 use super::document_operands::named_sheet;
 use super::placement_operands::run_edit;
-use super::queries::text_operand;
+use super::queries::{refused, text_operand};
 use super::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::design_reuse::{self, ListAnswer, SavedSnippet};
 use crate::app::{Message, Signex};
+use crate::keymap::AppCommandId;
 
 type Ran = (CommandOutcome, Task<Message>);
-
-fn refused(reason: impl Into<String>) -> Ran {
-    (CommandOutcome::disabled(reason), Task::none())
-}
 
 /// The `scope` operand; `project` when left out.
 pub(super) fn scope_operand(args: &CommandArgs) -> Result<ReuseScope, String> {
@@ -155,9 +152,9 @@ fn snippet_text(fragment: SchematicSheet, paper_size: &str) -> Result<String, St
 impl Signex {
     /// `list_snippets`: the snippets of the project in view and of the
     /// user's library, answered when the folders are read.
-    pub(super) fn list_snippets(&mut self, args: &CommandArgs) -> Ran {
+    pub(super) fn list_snippets(&mut self, command: &AppCommandId, args: &CommandArgs) -> Ran {
         self.start_reuse_listing(
-            "list_snippets",
+            command,
             args,
             vec![ReuseKind::Snippet],
             ListAnswer::Snippets,
@@ -167,7 +164,7 @@ impl Signex {
     /// `list_templates [kind=sheet|project]`: the sheet templates of the
     /// project in view and of the library, and the library's project
     /// templates, answered when the folders are read.
-    pub(super) fn list_templates(&mut self, args: &CommandArgs) -> Ran {
+    pub(super) fn list_templates(&mut self, command: &AppCommandId, args: &CommandArgs) -> Ran {
         let kinds = match text_operand(args, "kind").map(str::trim) {
             None => vec![ReuseKind::SheetTemplate, ReuseKind::ProjectTemplate],
             Some("sheet") => vec![ReuseKind::SheetTemplate],
@@ -176,6 +173,6 @@ impl Signex {
                 return refused(format!("`kind` is `sheet` or `project`, not `{other}`"));
             }
         };
-        self.start_reuse_listing("list_templates", args, kinds, ListAnswer::Templates)
+        self.start_reuse_listing(command, args, kinds, ListAnswer::Templates)
     }
 }

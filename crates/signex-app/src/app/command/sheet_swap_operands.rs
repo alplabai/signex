@@ -54,7 +54,8 @@ fn swap(
             if !app.agent.from_view {
                 app.refuse_sheet_swap(command, &reason);
             }
-            (CommandOutcome::disabled(reason), Task::none())
+            let reason = crate::app::sheet_swap::sheet_swap_refusal(command, reason);
+            (CommandOutcome::Disabled { reason }, Task::none())
         }
     }
 }

@@ -83,7 +83,9 @@ impl Engine {
         items: &[SelectedItem],
         ids: &mut dyn IdSource,
     ) -> Result<Option<SchematicSheet>, EngineError> {
-        let Some(copied) = self.copy_selection(items, 0.0)? else {
+        // The id is drawn below, only for a sheet that holds something.
+        let fragment = self.selection_fragment(items, Uuid::nil());
+        let Some(copied) = CopiedSelection::from_fragment(fragment, 0.0)? else {
             return Ok(None);
         };
         let mut sheet = copied.payload.fragment().clone();

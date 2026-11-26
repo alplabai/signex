@@ -129,22 +129,16 @@ impl Signex {
     }
 
     /// List the `kinds` of the folders in view off the update thread; the
-    /// command `id` is answered when the listing lands (`Deferred`).
+    /// `command` is answered when the listing lands (`Deferred`).
     pub(crate) fn start_reuse_listing(
         &mut self,
-        id: &str,
+        command: &AppCommandId,
         args: &CommandArgs,
         kinds: Vec<ReuseKind>,
         answer: ListAnswer,
     ) -> Ran {
-        let Ok(command) = AppCommandId::new(id) else {
-            return (
-                CommandOutcome::disabled("the command id is not valid"),
-                Task::none(),
-            );
-        };
         let roots = self.reuse_roots_in_view();
-        let waiting = self.wait_for_command(&command, args);
+        let waiting = self.wait_for_command(command, args);
         let ticket = waiting.ticket;
         let task = Task::perform(
             async move {

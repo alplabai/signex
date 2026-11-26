@@ -1,6 +1,6 @@
 # UI-free state baseline (scripts/check_uifree_state.sh, ADR-0006). The count may only go down.
 # Regenerate with: bash scripts/check_uifree_state.sh --generate
-count=164
+count=163
 field=crate::app::agent::journal::queue::Gate.lines
 field=crate::app::agent::journal::queue::JournalMark.gate
 field=crate::app::agent::journal::queue::JournalQueue.gate
@@ -133,7 +133,6 @@ field=crate::app::state::rule_profile_ui::ProfileWriteQueue.gate
 field=crate::app::state::rule_profile_ui::ProfileWriteQueue.running
 field=crate::app::state::rule_profile_ui::ProfileWriteQueue.waiting
 field=crate::app::state::rule_profile_ui::QueuedWrite::ProfileEdit.edit
-field=crate::app::state::rules_history::RulesHistory.0
 field=crate::app::state::sheet_refs::SheetRefs.keys
 field=crate::app::state::sheet_refs::SheetRefs.resolved_for
 field=crate::app::state::sheet_refs::SheetRefs.unreadable

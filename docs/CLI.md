@@ -620,7 +620,7 @@ Properties rows read the panel's unit and the page origin instead. The answer
 is `{"id", "kind", "position", "rotation"?, "size"?}` after the edit.
 
 ```text
-set_object_position id=<uuid> at=x,y [keep_wires=true|false] [wiring=auto|horizontal_first|vertical_first|straight] [document=..]
+set_object_position id=<uuid> at=x,y [keep_wires=true|false] [wiring=auto|horizontal_first|vertical_first|straight|angle45_start|angle45_end] [document=..]
 set_object_rotation id=<uuid> rotation=0|90|180|270 [keep_wires=true|false] [document=..]
 set_sheet_symbol_size id=<uuid> size=w,h [document=..]
 set_symbol_parameter id=<uuid> name=Manufacturer [value=..] [document=..]
@@ -631,7 +631,8 @@ set_symbol_parameter id=<uuid> name=Manufacturer [value=..] [document=..]
   text note so its position is `at`. Its wire handling is in its operands,
   never the person's settings (#2552): `keep_wires` (default `true`) makes
   the wires on a moved part follow it, and `wiring` (default `auto`) bends
-  them as the drag wiring mode of that name does. It is the edit a drag of
+  them as the drag wiring mode of that name does (`angle45_start` and
+  `angle45_end` are the 45° modes, #2516). It is the edit a drag of
   the same distance commits, with the same rubber band and guard. A contact
   the guard cannot keep is left as a plain move; the answer adds
   `moved_wires` (ids of wires whose ends changed and of wires the move

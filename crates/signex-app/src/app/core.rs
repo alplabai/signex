@@ -13,6 +13,7 @@ pub(crate) mod drawing_field;
 pub(crate) mod editor_address;
 pub(crate) mod event;
 pub(crate) mod file_stamp;
+pub(crate) mod joined_sheet;
 pub(crate) mod locked_items;
 pub(crate) mod mutation_outcome;
 pub(crate) mod new_library_defaults;

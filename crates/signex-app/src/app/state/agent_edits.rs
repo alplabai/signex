@@ -9,6 +9,7 @@ use signex_engine::{DocumentPatch, UndoGroupId};
 
 use super::DocumentState;
 use crate::app::agent::Origin;
+pub(crate) use crate::app::core::joined_sheet::JoinedSheet;
 
 #[derive(Debug, Default)]
 pub struct AgentEdits {
@@ -46,16 +47,6 @@ pub struct AgentEdits {
     /// The undo group the newest recorded step made; the journal reads it
     /// after a command to name the step.
     pub(crate) last_group: Option<UndoGroupId>,
-}
-
-/// A sheet an edit brought into the running agent step (#2501).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct JoinedSheet {
-    pub(crate) path: PathBuf,
-    /// No engine held it: it was loaded, tabless, for this step.
-    pub(crate) tabless: bool,
-    /// It had no unsaved edits when it joined.
-    pub(crate) clean_before: bool,
 }
 
 impl AgentEdits {

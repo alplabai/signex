@@ -385,13 +385,13 @@ impl Card<'_> {
         self.cell(RequirementField::Severity, picker.boxed())
     }
 
-    fn kind_field<'a>(&self, field: RequirementField, raw: &Value) -> Element<'a, Message> {
+    fn kind_field<'a>(&self, field: RequirementField, stored: &Value) -> Element<'a, Message> {
         match field {
             RequirementField::AllowWarnings | RequirementField::FittedOnly => {
-                self.flag_field(field, raw)
+                self.flag_field(field, stored)
             }
-            RequirementField::Variant => self.variant_field(raw),
-            _ => self.text_field(field, raw),
+            RequirementField::Variant => self.variant_field(stored),
+            _ => self.text_field(field, stored),
         }
     }
 

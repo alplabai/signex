@@ -26,14 +26,14 @@ impl Signex {
         overwrite: bool,
     ) -> Ran {
         if let Err(refusal) = self.refuse_while_project_moves(&saved.file, "save the snippet to") {
-            return (CommandOutcome::disabled(refusal.to_string()), Task::none());
+            return (not_written(&saved, refusal.to_string()), Task::none());
         }
         let waiting = if self.agent.from_view {
             None
         } else {
             match AppCommandId::new("save_snippet") {
                 Ok(command) => Some(self.wait_for_command(&command, args)),
-                Err(reason) => return (CommandOutcome::disabled(reason), Task::none()),
+                Err(reason) => return (not_written(&saved, reason), Task::none()),
             }
         };
         self.begin_project_write(&saved.file);
@@ -77,7 +77,7 @@ impl Signex {
                     "why" => why.as_str()
                 );
                 crate::diagnostics::log_warning(line.into_string());
-                CommandOutcome::disabled(why.clone())
+                not_written(&saved, why.clone())
             }
         };
         match waiting {
@@ -162,6 +162,17 @@ impl Signex {
             "why" => why
         );
         crate::diagnostics::log_warning(line.into_string());
+    }
+}
+
+/// The refusal of a snippet save as its catalog message, the Messages line's
+/// words: "Snippet `name` could not be written to `file`: `why`".
+fn not_written(saved: &SavedSnippet, why: String) -> CommandOutcome {
+    CommandOutcome::Disabled {
+        reason: signex_i18n::Translatable::new(ids::SNIPPET_NOT_WRITTEN)
+            .arg("name", saved.name.as_str())
+            .arg("file", saved.file.display().to_string())
+            .arg("why", why),
     }
 }
 

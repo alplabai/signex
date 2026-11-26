@@ -36,6 +36,7 @@ board_report_net_length
 board_report_netlist
 board_shape_from_selection
 board_sketch
+bom_lines
 break_union
 break_wire
 bring_drawings_forward
@@ -57,6 +58,7 @@ close_active_document
 close_all_documents
 color_net
 compare_board_with_schematic
+compare_variants
 compile_project
 copy
 copy_attributes_or_add_vertex
@@ -155,7 +157,10 @@ import_parameters
 keepout_from_selection
 lasso_select
 leave_sheet
+list_diff_pairs
 list_documents
+list_snippets
+list_templates
 lock_board_items
 manage_workspace_layouts
 measure_board
@@ -261,6 +266,7 @@ place_reuse_block
 place_sheet_entry
 place_sheet_symbol
 place_signal_harness
+place_snippet
 place_symbol
 place_table
 place_text
@@ -287,11 +293,14 @@ project_remove_variant
 project_rename_variant
 project_run_requirements
 project_set_active_variant
+project_set_annotate_numbering
 project_set_annotate_undo
+project_set_default_variant
 project_set_requirement
 project_set_version_control
 project_settings
 query_board_nets
+query_net_ties
 query_pins
 read_document
 reannotate_board
@@ -343,6 +352,7 @@ save_document
 save_document_as
 save_layer_set
 save_project_as
+save_snippet
 save_workspace_layout
 select_all
 select_board_net
@@ -364,8 +374,10 @@ set_layer_stack
 set_layer_tab_names
 set_layer_visible
 set_net_class_rules
+set_net_tie
 set_object_position
 set_object_rotation
+set_object_text
 set_object_transparency
 set_object_visible
 set_pad_shape
@@ -389,6 +401,8 @@ snap_board_origin_to_corner
 stitch_vias
 swap_gates
 swap_pins
+swap_schematic_gates
+swap_schematic_pins
 switch_segment_posture
 sync_sheet_entries
 sync_sheet_pins
@@ -401,6 +415,7 @@ toggle_floating_panels
 toggle_layer_numbers
 toggle_layer_visibility
 toggle_layers_panel
+toggle_live_erc
 toggle_origin_marker
 toggle_properties_panel
 toggle_ratsnest
@@ -421,6 +436,7 @@ unselect_all
 untile_documents
 unwaive_drc_violation
 update_pcb_from_schematic
+variant_bom
 view_board_3d
 view_rotate
 view_rotate_180

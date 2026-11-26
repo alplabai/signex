@@ -233,3 +233,15 @@ impl Signex {
         crate::diagnostics::log_warning(line.into_string());
     }
 }
+
+/// The refusal of the swap `command` as its catalog message, the Messages
+/// line's words: "Swap Pins did nothing: `why`".
+pub(crate) fn sheet_swap_refusal(command: &str, why: String) -> signex_i18n::Translatable {
+    let label = match command {
+        "swap_schematic_pins" => command_ids::CMD_MENU_SWAP_SCHEMATIC_PINS,
+        _ => command_ids::CMD_MENU_SWAP_SCHEMATIC_GATES,
+    };
+    signex_i18n::Translatable::new(ids::PCB_PART_SWAP_REFUSED)
+        .arg("what", signex_i18n::Translatable::new(label))
+        .arg("why", why)
+}

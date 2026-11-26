@@ -159,11 +159,13 @@ impl Signex {
                 };
                 return Some((outcome, Task::none()));
             }
-            // The Project tab's sections (#1689-#1693).
-            "project_settings" | "compare_variants" | "variant_bom" => {
+            // The Project tab's sections (#1689-#1693) and the project's
+            // differential pairs (#2952).
+            "project_settings" | "compare_variants" | "variant_bom" | "list_diff_pairs" => {
                 let answer = match id {
                     "compare_variants" => self.compare_variants(args),
                     "variant_bom" => self.variant_bom(args),
+                    "list_diff_pairs" => self.list_diff_pairs(args),
                     _ => self.project_settings(args),
                 };
                 let outcome = match answer {
@@ -172,18 +174,10 @@ impl Signex {
                 };
                 return Some((outcome, Task::none()));
             }
-            // The project's differential pairs (#2952).
-            "list_diff_pairs" => {
-                let outcome = match self.list_diff_pairs(args) {
-                    Ok(value) => CommandOutcome::Answered(value),
-                    Err(reason) => CommandOutcome::disabled(reason),
-                };
-                return Some((outcome, Task::none()));
-            }
             // A profile preset may need the profile library read first.
             "rules_preset_diff" => return Some(self.rules_preset_diff(args)),
-            "list_snippets" => return Some(self.list_snippets(args)),
-            "list_templates" => return Some(self.list_templates(args)),
+            "list_snippets" => return Some(self.list_snippets(command, args)),
+            "list_templates" => return Some(self.list_templates(command, args)),
             _ => {}
         }
         let answer = match id {
@@ -210,7 +204,7 @@ impl Signex {
     }
 }
 
-fn refused(reason: String) -> (CommandOutcome, Task<Message>) {
+pub(super) fn refused(reason: String) -> (CommandOutcome, Task<Message>) {
     (CommandOutcome::disabled(reason), Task::none())
 }
 

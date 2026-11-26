@@ -674,6 +674,8 @@ const OPERAND_DOCUMENT: &[&str] = &[
     "stitch_vias",
     "swap_gates",
     "swap_pins",
+    "swap_schematic_gates",
+    "swap_schematic_pins",
     "sync_sheet_entries",
     "sync_sheet_pins",
     "tune_diff_pair",
