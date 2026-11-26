@@ -300,7 +300,7 @@ fn reload_control<'a>(
         return crate::styles::dialog_icon_button(
             crate::icons::icon_chrome_refresh(signex_types::theme::ThemeId::GraphiteDark),
             t!(i18n, ids::LIBRARY_EDIT_ROW_RELOAD_SAVED),
-            crate::styles::DialogButtonKind::Ghost,
+            crate::styles::DialogButtonKind::Quiet,
             Some(send(BrowserEditMsg::ReloadRequested)),
             tokens,
         );
