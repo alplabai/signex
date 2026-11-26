@@ -151,16 +151,23 @@ place_harness_connector	place	Place harness connector	Harness Connector	Schemati
 place_harness_entry	place	Place harness entry	Harness Entry	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 place_board_route	place	Route on the active copper layer around other nets, keeping the rule clearance	Interactive Routing	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 cycle_route_mode	pcb	Switch Interactive Routing between walking around and pushing other nets' tracks	-	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+route_options	pcb	Read or set the Interactive Routing options of a board	-	PCB	-	-	RequiresDocument(Pcb)	-	document:document,conflict_mode:text?,corner_mode:text?,width:length/mm?,via_diameter:length/mm?,via_hole:length/mm?
 cycle_arc_mode	pcb	Switch the Arc tool between by centre, by edge and any angle	-	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 place_board_diff_pair	place	Route a differential pair side by side at its coupled width and gap, around other nets	Differential Pair Routing	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 place_board_quick_route	place	Route straight to the clicked point at the rule width, without avoiding other nets	Quick Route	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 place_board_multi_route	place	Route the selected nets side by side as a bus, around other nets	Multi-Route	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 tune_net_length	pcb	Lengthen the selected tracks' nets with meanders to a target length, or to the longest of them	Length Tuning	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,net:text?,value:text?
 tune_diff_pair	pcb	Lengthen the shorter net of a differential pair with meanders to match the longer one	Differential Pair Length Tuning	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,net:text?
+set_diff_pair_width	modify	Set the width of a differential pair's tracks, both nets at once	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,net:text?,width:text
+length_matching	pcb	Open the Length Matching tab of the board: each length-matching group with its members' routed lengths against the target band	Length Matching...	PCB	-	-	RequiresDocument(Pcb)	-	document:document
+set_length_group	pcb	Make or change a length-matching group of a board: its target, tolerance, topology and member nets	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,name:text,rename:text?,target:text?,tolerance:text?,topology:text?,members:text?
+remove_length_group	pcb	Remove a length-matching group of a board; its nets stay	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,name:text
 set_via_span	modify	Set the copper layers vias span	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:targets,layers:text
 stitch_vias	pcb	Fill the selected areas, or every pour, with vias of their net on a grid, clear of other nets	Via Stitching	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,id:text?,start:point/mm?,end:point/mm?,net:text?,pitch:length/mm?
 add_teardrops	pcb	Add teardrops where tracks of the selected nets, or of every net, enter a pad or via	Add Teardrops	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,net:text?
 remove_teardrops	pcb	Remove the teardrops of the selected nets, or of every net	Remove Teardrops	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,net:text?
+set_teardrop_rule	pcb	Set the board's teardrop rule: which pads and vias take teardrops, and how wide and long they are	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,pads:bool?,vias:bool?,width_share:text?,length_share:text?
+set_pad_teardrop	pcb	Set whether pads take teardrops: always, never, or as the board's teardrop rule says	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:targets,teardrop:text
 gloss_selected_routes	pcb	Shorten the selected routes by cutting their corners where the clearance allows	Gloss Selected Routes	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:targets
 draw_arc	place	Draw arc	Arc	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 draw_full_circle	place	Draw full circle	Full Circle	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
@@ -272,6 +279,7 @@ place_board_pour_cutout	place	Place a cutout region the polygon pours on the act
 place_board_slice_pour	place	Slice the polygon pours on the active copper layer along a line	Slice Pour	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 repour_selected	pcb	Fill the selected polygon pours again and report their copper	Repour Selected	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 repour_all	pcb	Fill every polygon pour of the board again and report their copper	Repour All	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document
+set_pour_properties	modify	Set the fill priority and island removal of polygon pours	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:targets,priority:text?,islands_below:text?,dead_copper:bool?
 unfill_selected	pcb	Clear the copper of the selected polygon pours until the next repour	Unfill Selected	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 polygon_manager	pcb	Open the Polygon Manager of the board	Polygon Manager...	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 board_shape_from_selection	design	Make the selected closed lines the board outline	Board Shape from Selection	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:targets
@@ -303,6 +311,10 @@ board_layer_stack	design	Open the layer stack manager of the board	Layer Stack M
 set_layer_stack	design	Replace the layer stack of a board	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,stack:text
 set_layer_sizes	modify	Set the per-layer copper sizes of vias or pads	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:targets,sizes:text
 set_pad_shape	modify	Set the copper shape of pads, with a trapezoid's delta or a custom outline	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:targets,shape:text,delta:text?,corners:text?
+set_pour_corners	modify	Set how polygon pours shape the corners of their outline: sharp, rounded or chamfered, with a size	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:targets,corners:text,corner_size:text?
+set_pour_fill	modify	Set whether polygon pours fill with solid copper or a hatch, with the hatch width and gap	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:targets,fill:text,width:text?,gap:text?
+set_pour_thermal_relief	modify	Set the thermal relief of polygon pours: on or off, spoke width and air gap	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:targets,on:bool?,spoke_width:length/mm?,air_gap:length/mm?
+set_pad_thermal_relief	modify	Set a pad's own thermal relief air gap, spoke width and spokes, or follow the pour	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:targets,air_gap:text?,spoke_width:text?,spokes:text?
 set_layer_visible	view	Show or hide one layer of the board view	Set Layer Visible	PCB	-	-	RequiresDocument(Pcb)	-	layer:text,on:bool,document:document
 set_active_layer	view	Make one layer the active layer	Set Active Layer	PCB	-	-	RequiresDocument(Pcb)	-	layer:text,document:document
 set_layer_color	view	Give one layer its own color, saved with the board, or the palette color again	Set Layer Color	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	layer:text,color:color?,document:document

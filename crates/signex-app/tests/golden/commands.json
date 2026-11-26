@@ -760,6 +760,11 @@
     "category": "navigation"
   },
   {
+    "id": "length_matching",
+    "group": "Pcb",
+    "category": "pcb"
+  },
+  {
     "id": "list_documents",
     "group": "General",
     "category": "file"
@@ -1485,6 +1490,11 @@
     "category": "interactive"
   },
   {
+    "id": "remove_length_group",
+    "group": "Pcb",
+    "category": "pcb"
+  },
+  {
     "id": "remove_teardrops",
     "group": "Pcb",
     "category": "pcb"
@@ -1573,6 +1583,11 @@
     "id": "rotate_selection_cw",
     "group": "Schematic",
     "category": "modify"
+  },
+  {
+    "id": "route_options",
+    "group": "Pcb",
+    "category": "pcb"
   },
   {
     "id": "rubber_stamp_copy",
@@ -1770,6 +1785,11 @@
     "category": "pcb"
   },
   {
+    "id": "set_diff_pair_width",
+    "group": "Pcb",
+    "category": "modify"
+  },
+  {
     "id": "set_footprint_text",
     "group": "Pcb",
     "category": "edit"
@@ -1798,6 +1818,11 @@
     "id": "set_layer_visible",
     "group": "Pcb",
     "category": "view"
+  },
+  {
+    "id": "set_length_group",
+    "group": "Pcb",
+    "category": "pcb"
   },
   {
     "id": "set_net_class_rules",
@@ -1830,6 +1855,36 @@
     "category": "modify"
   },
   {
+    "id": "set_pad_teardrop",
+    "group": "Pcb",
+    "category": "pcb"
+  },
+  {
+    "id": "set_pad_thermal_relief",
+    "group": "Pcb",
+    "category": "modify"
+  },
+  {
+    "id": "set_pour_corners",
+    "group": "Pcb",
+    "category": "modify"
+  },
+  {
+    "id": "set_pour_fill",
+    "group": "Pcb",
+    "category": "modify"
+  },
+  {
+    "id": "set_pour_properties",
+    "group": "Pcb",
+    "category": "modify"
+  },
+  {
+    "id": "set_pour_thermal_relief",
+    "group": "Pcb",
+    "category": "modify"
+  },
+  {
     "id": "set_selection_filters",
     "group": "Schematic",
     "category": "select"
@@ -1848,6 +1903,11 @@
     "id": "set_symbol_parameter",
     "group": "Schematic",
     "category": "edit"
+  },
+  {
+    "id": "set_teardrop_rule",
+    "group": "Pcb",
+    "category": "pcb"
   },
   {
     "id": "set_via_span",
