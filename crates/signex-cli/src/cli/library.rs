@@ -10,13 +10,15 @@ use std::path::PathBuf;
 /// A `library` verb and its operands.
 #[derive(Debug, PartialEq, Eq)]
 pub enum LibraryCommand {
+    /// `library render <library> [--out <dir>] [--symbol <id>]... [--footprint <id>]... [--png]`.
+    Render(super::library_render::LibraryRenderOptions),
     /// `library check <library> [--with <library>]... [--strict] [--json]`.
     Check(super::library_check::LibraryCheckOptions),
     /// `library textconv <file>`.
     Textconv(PathBuf),
 }
 
-const VERBS: &str = "check, textconv";
+const VERBS: &str = "check, render, textconv";
 
 /// `library <verb> ...`.
 pub(super) fn parse(mut args: impl Iterator<Item = String>) -> Result<LibraryCommand, String> {
@@ -25,6 +27,7 @@ pub(super) fn parse(mut args: impl Iterator<Item = String>) -> Result<LibraryCom
         .ok_or_else(|| format!("`library` needs a verb: {VERBS}"))?;
     match verb.as_str() {
         "check" => super::library_check::parse(args).map(LibraryCommand::Check),
+        "render" => super::library_render::parse(args).map(LibraryCommand::Render),
         "textconv" => {
             let mut file = None;
             for arg in args {
@@ -52,6 +55,7 @@ pub fn run(command: &LibraryCommand, out: &mut impl Write) -> Result<bool, Strin
         LibraryCommand::Check(options) => super::library_check::run(options, out)
             .map(|failed| !failed)
             .map_err(|error| format!("writing to standard output: {error}")),
+        LibraryCommand::Render(options) => super::library_render::run(options, out),
         LibraryCommand::Textconv(file) => {
             let bytes = std::fs::read(file)
                 .map_err(|error| format!("reading {}: {error}", file.display()))?;

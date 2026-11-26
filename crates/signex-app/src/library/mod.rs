@@ -60,6 +60,7 @@ mod preview_refresh_tests;
 pub mod pricing;
 pub(crate) mod primitive_label;
 pub mod primitive_picker;
+pub mod primitive_scene;
 pub mod range_filter;
 pub mod recovery;
 pub mod refresh;

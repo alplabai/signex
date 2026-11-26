@@ -9,6 +9,7 @@ use crate::input::Limits;
 
 pub mod library;
 pub mod library_check;
+pub mod library_render;
 mod notebook;
 
 pub const USAGE: &str = "\
@@ -28,6 +29,8 @@ USAGE:
                [--pages all|current|3-7] [--paper document|a4|letter] [--variant <name>]
                [--annotations <kinds>] [--stale warn|fail] [--no-title-block]
                [--no-contents] [--no-bookmarks] [--python-source] [OPTIONS]
+    signex-cli library render <library> [--out <dir>] [--symbol <uuid|name>]...
+               [--footprint <uuid|name>]... [--png]
     signex-cli library textconv <file.snxfpt>
     signex-cli --help | --version
 
@@ -67,6 +70,10 @@ run options.
 
 library check checks a library folder (or its .snxlib) as Signex would load
 and save it; exit 1 on an error (with --strict also on a warning), else 0.
+
+library render writes each symbol and footprint of a library (or the ones named)
+as an SVG, and a PNG with --png, with the editors' drawing, into --out. It
+writes only there.
 
 library textconv prints a footprint file with each embedded 3D model's data
 block as one summary line, for git's textconv diff driver. It only reads.

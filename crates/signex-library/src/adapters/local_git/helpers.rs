@@ -754,7 +754,7 @@ pub(super) fn commit_initial(
 /// Slugify a human-facing name into a safe filename component.
 /// Lowercased, ASCII-only, runs of non-alphanumeric chars collapsed to
 /// `-`. Empty result falls back to `"untitled"`.
-pub(crate) fn slugify(name: &str) -> String {
+pub fn slugify(name: &str) -> String {
     let mut out = String::with_capacity(name.len());
     let mut prev_dash = true;
     for ch in name.chars() {

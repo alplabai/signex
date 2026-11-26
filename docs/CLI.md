@@ -48,8 +48,8 @@ Signex".
 ## Library tools
 
 `library <verb>` runs a library tool. It needs no project and no window,
-only reads, and takes none of the `run` options. The verbs are `check` and
-`textconv`.
+only reads (`render` writes only into its `--out` folder), and takes none of the
+`run` options. The verbs are `check`, `render` and `textconv`.
 
 ### `library check`
 
@@ -126,6 +126,50 @@ footprints carry `snxfpt/1`, which Signex reads but no longer writes, so
 their bytes change only in that line on the next save (the format's open
 point 8). The stock library therefore passes `library check` and fails
 `library check --strict`.
+
+### `library render`
+
+```
+signex-cli library render <library> [--out <dir>] [--symbol <uuid|name>]...
+                          [--footprint <uuid|name>]... [--png]
+```
+
+Renders the symbols and footprints of a library folder (or its `.snxlib`) to
+SVG with no window (#3116), so a converted library can be compared with its
+source by eye or by image diff. With no `--symbol` and no `--footprint` it
+renders every primitive; with either it renders only the ones named, by uuid
+or by name (a name matches without regard to case). A name that matches
+nothing is reported and fails the run (exit `1`). `--out` defaults to
+`./library-render`.
+
+One file per primitive, named `<kind>-<slug>-<uuid8>.svg` (`symbol-r-0194ab12.svg`,
+`footprint-chip-0603-019df45d.svg`): the kind, the name's slug as the library
+files use, and the first eight hex digits of the primitive's uuid. Each written
+path is printed. A symbol that draws nothing is reported as skipped.
+
+The drawing is the editors', not a second renderer:
+
+- a symbol is placed on a sheet and lowered by the schematic scene builder the
+  Symbol Editor and the Components panel preview use, in Graphite Light, unit
+  1, normal body, on that theme's paper;
+- a footprint is built through the Components panel's preview model: pads
+  through the PCB canvas's own lowering, then fab, silk, courtyard and pad
+  numbers, in the board palette on the board backdrop.
+
+Both are world-space scenes. `signex-renderer`'s `scene_svg` replays a scene's
+buckets in the shared draw order (`GPU_SCENE_DRAW_ORDER`) as SVG, one unit per
+millimetre; overlay and marker buckets are editing aids and are left out.
+Numbers print to four decimals, so the same library gives the same bytes.
+The SVG names its font family (Iosevka, then `sans-serif`) and embeds no glyphs,
+so text looks as the viewer's installed fonts draw it; the PNG uses the bundled
+fonts.
+
+Differences from the live editor view: no grid, no selection, and a footprint
+pad the board cannot hold (custom shape, slot, copper offset) is not drawn.
+
+`--png` also writes `<same name>.png`, 1024 px on the longer side, through
+`resvg`, which the UI toolkit already ships; text is set in the bundled
+Iosevka. Without `--png` no rasteriser runs.
 
 ### `library textconv`
 
