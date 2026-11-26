@@ -34,6 +34,13 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Translator,
         &[ActiveDocument],
     ),
+    // #2968: the named document's project and its sheets, read off the UI
+    // thread; a diagram open in a tab refuses a run that writes.
+    (
+        &["generate_block_diagram", "regenerate_block_diagram"],
+        Operand,
+        &[],
+    ),
     // The canvas selection and the union picked in the Unions panel (mockup row 158).
     (
         &["add_to_union", "remove_from_union", "break_union"],

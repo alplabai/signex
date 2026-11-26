@@ -130,6 +130,61 @@
     "category": "pcb_sync"
   },
   {
+    "id": "block_add",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "block_group",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "block_group_set",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "block_link",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "block_link_set",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "block_port_add",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "block_port_remove",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "block_remove",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "block_set",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "block_ungroup",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "block_unlink",
+    "group": "General",
+    "category": "edit"
+  },
+  {
     "id": "board_assembly_drawing",
     "group": "Pcb",
     "category": "pcb"
@@ -560,6 +615,11 @@
     "category": "reports"
   },
   {
+    "id": "export_block_diagram",
+    "group": "General",
+    "category": "reports"
+  },
+  {
     "id": "export_board_pdf",
     "group": "Pcb",
     "category": "reports"
@@ -681,6 +741,11 @@
   },
   {
     "id": "force_annotate_all_schematics",
+    "group": "Schematic",
+    "category": "design"
+  },
+  {
+    "id": "generate_block_diagram",
     "group": "Schematic",
     "category": "design"
   },
@@ -818,6 +883,11 @@
     "id": "navigate_up_hierarchy",
     "group": "Schematic",
     "category": "navigation"
+  },
+  {
+    "id": "new_block_diagram",
+    "group": "General",
+    "category": "file"
   },
   {
     "id": "new_document",
@@ -1440,6 +1510,11 @@
     "category": "design"
   },
   {
+    "id": "query_block_diagram",
+    "group": "General",
+    "category": "search"
+  },
+  {
     "id": "query_board_nets",
     "group": "Pcb",
     "category": "search"
@@ -1448,6 +1523,11 @@
     "id": "query_pins",
     "group": "General",
     "category": "file"
+  },
+  {
+    "id": "query_power_tree",
+    "group": "General",
+    "category": "design"
   },
   {
     "id": "read_document",
@@ -1468,6 +1548,11 @@
     "id": "refresh_view",
     "group": "General",
     "category": "view"
+  },
+  {
+    "id": "regenerate_block_diagram",
+    "group": "Schematic",
+    "category": "design"
   },
   {
     "id": "remove_board_panel",
