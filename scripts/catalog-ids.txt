@@ -133,9 +133,11 @@ flip_board_view
 flip_selected_x
 flip_selected_y
 flip_selection
+footprint_align_pads
 footprint_mode_pads
 footprint_mode_sketch
 footprint_mode_view_3d
+footprint_move_pads
 footprint_recompute_courtyard_outline
 force_annotate_all_schematics
 gloss_selected_routes

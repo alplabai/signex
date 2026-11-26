@@ -41,6 +41,9 @@ pub(crate) mod enablement;
 mod file_operand_tests;
 mod file_operands;
 #[cfg(test)]
+mod footprint_pad_operand_tests;
+mod footprint_pad_operands;
+#[cfg(test)]
 mod footprint_text_operand_tests;
 mod footprint_text_operands;
 #[cfg(test)]

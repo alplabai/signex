@@ -512,7 +512,9 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 
 | command id | label | category | Signex Standard | Classic |
 | --- | --- | --- | --- | --- |
+| `footprint_align_pads` | Align footprint pads | modify | — | — |
 | `footprint_mode_pads` | Switch footprint editor to Pads mode | library | `2` | `2` |
 | `footprint_mode_sketch` | Switch footprint editor to Sketch mode | library | `1` | `1` |
 | `footprint_mode_view_3d` | Switch footprint editor to 3D View mode | library | `3` | `3` |
+| `footprint_move_pads` | Move footprint pads by an offset | modify | — | — |
 | `footprint_recompute_courtyard_outline` | Recompute footprint courtyard outline from pads | library | — | — |

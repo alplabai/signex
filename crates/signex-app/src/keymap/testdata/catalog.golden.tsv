@@ -407,6 +407,8 @@ footprint_mode_pads	library	Switch footprint editor to Pads mode	-	3D	-	-	Requir
 footprint_mode_sketch	library	Switch footprint editor to Sketch mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-
 footprint_mode_view_3d	library	Switch footprint editor to 3D View mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-
 footprint_recompute_courtyard_outline	library	Recompute footprint courtyard outline from pads	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-
+footprint_move_pads	modify	Move footprint pads by an offset	-	3D	-	-	RequiresDocument(Footprint)	mutates_doc,undoable	document:document,pads:text,by:point/mm
+footprint_align_pads	modify	Align footprint pads	-	3D	-	-	RequiresDocument(Footprint)	mutates_doc,undoable	document:document,pads:text,horizontal:text?,vertical:text?
 open_command_palette	commands	Open command palette	-	General	-	-	Always	gui_only	-
 open_preferences	preferences	Open preferences	Preferences...	General	-	-	Always	gui_only	-
 open_schematic_preferences	preferences	Open schematic preferences	-	General	-	-	Always	gui_only	-

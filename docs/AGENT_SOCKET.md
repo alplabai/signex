@@ -173,7 +173,10 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   (#1689-#1693; `document` is the project or any document of it), and the
   Requirements section's `project_add_requirement`,
   `project_set_requirement`, `project_remove_requirement`,
-  `project_enable_requirement` and `project_run_requirements` (#2339). A test
+  `project_enable_requirement` and `project_run_requirements` (#2339), and
+  the footprint editor's `footprint_move_pads` and `footprint_align_pads`
+  (#3013; one undo step of the named footprint, answered with its named
+  pads as JSON; [CLI.md](CLI.md), "Footprint pads"). A test
   pins this set, so a catalog row that joins or leaves it is a visible
   decision.
   The window-layout commands `tile_windows_horizontally`,

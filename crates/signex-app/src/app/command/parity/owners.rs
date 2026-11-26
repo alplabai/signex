@@ -577,6 +577,8 @@ const OPERAND_DOCUMENT: &[&str] = &[
     "export_board_pdf",
     "export_board_report",
     "export_board_step",
+    "footprint_align_pads",
+    "footprint_move_pads",
     "gloss_selected_routes",
     "import_dxf",
     "import_dxf_outline",

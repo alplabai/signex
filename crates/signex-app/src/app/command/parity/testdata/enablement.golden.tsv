@@ -131,9 +131,11 @@ flip_board_view	Pcb	119d310e454dd5e4
 flip_selected_x	Turn	50ba39b5e679cbc7
 flip_selected_y	Turn	50ba39b5e679cbc7
 flip_selection	PcbPlacement	317d1529bafe486d
+footprint_align_pads	-	f2929686b07ef725
 footprint_mode_pads	-	f2929686b07ef725
 footprint_mode_sketch	-	f2929686b07ef725
 footprint_mode_view_3d	-	f2929686b07ef725
+footprint_move_pads	-	f2929686b07ef725
 footprint_recompute_courtyard_outline	-	f2929686b07ef725
 force_annotate_all_schematics	ActiveSheet	cff87b9cc03394bf
 gloss_selected_routes	PcbSelection	b2eee5a7d6ad7c41

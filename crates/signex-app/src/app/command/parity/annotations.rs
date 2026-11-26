@@ -179,6 +179,8 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "set_object_transparency",
             "set_board_graphic",
             "set_footprint_text",
+            "footprint_move_pads",
+            "footprint_align_pads",
             "repour_all",
             "panelize_board",
             "remove_board_panel",

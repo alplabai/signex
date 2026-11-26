@@ -479,6 +479,9 @@ flip_selection	in_window_rewrite	document_window	gui	window	routing
 flip_selection	refusal_needs	PcbPlacement	split	active document,selection,tool state	routing
 flip_selection	disabled_still_runs_refusal	explains_refusal_in	split	active document,selection,tool state	handler
 flip_selection	split_core_command	the core command after the router	core	active document,selection	declared
+footprint_align_pads	operand_handler	run_operands: named document	core	origin	handler
+footprint_align_pads	refusal_needs_operands	needs_operands_reason	gui	none	routing
+footprint_align_pads	headless_missing_operand	needs `document`	core	none	routing
 footprint_mode_pads	bridge	Input(FootprintModeShortcut(Normal))	gui	active document	handler
 footprint_mode_pads	in_window_rewrite	document_window	gui	window	routing
 footprint_mode_pads	headless_refusal	headless_refusal	gui	none	routing
@@ -488,6 +491,9 @@ footprint_mode_sketch	headless_refusal	headless_refusal	gui	none	routing
 footprint_mode_view_3d	bridge	Input(FootprintModeShortcut(View3d))	gui	active document	handler
 footprint_mode_view_3d	in_window_rewrite	document_window	gui	window	routing
 footprint_mode_view_3d	headless_refusal	headless_refusal	gui	none	routing
+footprint_move_pads	operand_handler	run_operands: named document	core	origin	handler
+footprint_move_pads	refusal_needs_operands	needs_operands_reason	gui	none	routing
+footprint_move_pads	headless_missing_operand	needs `document`	core	none	routing
 footprint_recompute_courtyard_outline	bridge	Input(FootprintCourtyardOutlineRequested)	core	active document	handler
 footprint_recompute_courtyard_outline	in_window_rewrite	document_window	gui	window	routing
 footprint_recompute_courtyard_outline	headless_refusal	headless_refusal	core	none	routing

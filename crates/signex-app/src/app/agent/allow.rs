@@ -122,6 +122,10 @@ mod tests {
                 "filter_drc_results",
                 "find_items",
                 "find_similar_items",
+                // #3013: Move Selection By and Align Selection on the named
+                // footprint's pads.
+                "footprint_align_pads",
+                "footprint_move_pads",
                 "gloss_selected_routes",
                 // #2394: the board view's layers, on the named board.
                 "hide_layer",

@@ -663,6 +663,40 @@ delete_selection document=<sheet or board> ids=<uuids>
   the window's key does. Delete in a footprint editor stays the editor's own
   route until slice S-L and takes no operands.
 
+### Footprint pads
+
+Move Selection By and Align Selection in the footprint editor (mockup row
+140) make these edits on the selection; with operands they make them on the
+pads `pads` names on the open footprint `document` names (#3013). Each is
+one undo step of that footprint; nothing is written until the footprint is
+saved, and the selection is not touched.
+
+```text
+footprint_move_pads document=<footprint> pads=<numbers> by=dx,dy
+footprint_align_pads document=<footprint> pads=<numbers> [horizontal=left|center|right|space|none] [vertical=top|center|bottom|space|none]
+```
+
+- `pads` is pad numbers, comma separated. A number no pad has, or that more
+  than one pad has, refuses the command with nothing moved.
+- `by` is the offset in mm, as the dialog's X and Y.
+- `horizontal` and `vertical` are the dialog's two rows; a left-out axis is
+  `none`, and both `none` is refused. `space` keeps the outer pads and
+  makes the gaps between the centres equal. An axis the pads are too few
+  for (2 to align, 3 to space) is skipped and named in `skipped`, as the
+  dialog skips it; with no axis left the command is refused.
+- The answer is `{"document", "pads", "changed"}` (and `skipped` for an
+  align), each pad `{"number", "x", "y"}` after the edit.
+- `undo document=<footprint>` is not available for a footprint yet; Undo in
+  the footprint editor steps the edit back.
+
+These footprint editor actions stay in the window, each for its reason:
+
+- Rectangular Pattern… arms the sketch's pattern tool, which takes its
+  objects and its count from clicks on the canvas.
+- Edit Sketch is `footprint_mode_sketch`, a switch of the editor's mode.
+- Grid Properties… sets how the editor's grid is drawn and snapped, which a
+  run with no window has no use for; the pad commands take exact mm.
+
 ## Placement extras
 
 The operand forms of three placement extras (#1667). Each is one undo step

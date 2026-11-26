@@ -19,12 +19,16 @@ mod context_menu;
 mod geometry;
 #[cfg(test)]
 mod no_edit_tests;
+mod pad_moves;
+#[cfg(test)]
+mod pad_moves_tests;
 mod pad_scope;
 mod selection;
 mod sketch;
 mod view;
 
 pub(crate) use active_bar::{apply_filter_preset, capture_filter_preset};
+pub(crate) use pad_moves::pads_needed;
 pub(crate) use pad_scope::hold_patterned_pad_edit;
 pub(crate) use sketch::solved::settle_pending_inline;
 
@@ -547,41 +551,26 @@ fn route_primitive_edit(editor: &mut crate::app::FootprintDocument, msg: Footpri
         // The board host answers it before this router; a footprint has no
         // such button.
         FootprintEditorMsg::SketchImportDxfRequested => {}
+        FootprintEditorMsg::PadsMoveRequested { pads, dx, dy } => {
+            pad_moves::move_pads(editor, &pads, dx, dy);
+        }
+        FootprintEditorMsg::PadsAlignRequested {
+            pads,
+            horizontal,
+            vertical,
+        } => {
+            pad_moves::align_pads_on_axes(editor, &pads, horizontal, vertical);
+        }
     }
 }
 
-/// Translate the current pad selection by (dx, dy) mm: history
-/// snapshot, tested `nudge_pads`, sketch mirror, primitive re-sync.
-/// No-op on an empty selection. Shared by the one-step
-/// `FootprintActiveBarNudgeSelection` nudge and the typed-delta
-/// Move-By modal (`FootprintMoveByConfirm`) so both paths share the
-/// exact same proven geometry + sketch-mirror + history behaviour.
+/// Translate the current pad selection by (dx, dy) mm, one undo step; a
+/// no-op on an empty selection. The one-step nudge and Move Selection By
+/// share it, and `footprint_move_pads` runs the same edit
+/// ([`pad_moves::move_pads`]).
 fn footprint_nudge_selection(editor: &mut crate::app::FootprintDocument, dx: f64, dy: f64) {
-    use crate::library::editor::footprint::pad_to_sketch;
-    use crate::library::editor::footprint::state::FootprintEditorState;
-
     let indices = editor.state.selected_pad_indices();
-    if indices.is_empty() {
-        return;
-    }
-
-    editor.push_history();
-    editor.with_parts(|state, primitive| {
-        // Translate the selection via the tested state helper, then
-        // mirror exactly the moved pads into the backing sketch and
-        // re-sync the literal `Pad` list.
-        let moved = state.nudge_pads(&indices, dx, dy);
-        let snapshots: Vec<crate::library::editor::footprint::state::EditorPad> = moved
-            .iter()
-            .filter_map(|&i| state.pads.get(i).cloned())
-            .collect();
-        for snapshot in &snapshots {
-            pad_to_sketch::mirror_move_pad_in_sketch(snapshot, primitive);
-        }
-        FootprintEditorState::sync_pads_to_primitive(state, primitive);
-    });
-    editor.canvas_cache.clear();
-    editor.mark_dirty();
+    pad_moves::move_pads(editor, &indices, dx, dy);
 }
 
 /// v0.24 Phase 1 (Track B) — message-kind classifier driving the
@@ -714,6 +703,10 @@ fn mutates_footprint_state(msg: &FootprintEditorMsg) -> bool {
         | AlignSetVertical(_)
         | AlignConfirm
         | AlignCancel
+        // #3013 — the commands' form of the two confirms: `pad_moves`
+        // records the one step itself, only when a pad moves.
+        | PadsMoveRequested { .. }
+        | PadsAlignRequested { .. }
         // v0.14 — 3D Body mint pushes its own snapshot inside the
         // handler (unconditionally, unlike nudge). Keep it out of the
         // blanket pre-push to avoid double-stacking the history.

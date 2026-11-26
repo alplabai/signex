@@ -660,6 +660,11 @@
     "category": "modify"
   },
   {
+    "id": "footprint_align_pads",
+    "group": "ThreeD",
+    "category": "modify"
+  },
+  {
     "id": "footprint_mode_pads",
     "group": "ThreeD",
     "category": "library"
@@ -673,6 +678,11 @@
     "id": "footprint_mode_view_3d",
     "group": "ThreeD",
     "category": "library"
+  },
+  {
+    "id": "footprint_move_pads",
+    "group": "ThreeD",
+    "category": "modify"
   },
   {
     "id": "footprint_recompute_courtyard_outline",

@@ -532,6 +532,9 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "add_board_graphic",
                     "set_board_graphic",
                     "set_footprint_text",
+                    // #3013: the pads of the footprint they name.
+                    "footprint_move_pads",
+                    "footprint_align_pads",
                     "panelize_board",
                     "remove_board_panel",
                     "set_board_panel",

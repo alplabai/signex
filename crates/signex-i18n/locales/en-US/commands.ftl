@@ -690,6 +690,8 @@ cmd-footprint-mode-pads = Switch footprint editor to Pads mode
 cmd-footprint-mode-sketch = Switch footprint editor to Sketch mode
 cmd-footprint-mode-view-3d = Switch footprint editor to 3D View mode
 cmd-footprint-recompute-courtyard-outline = Recompute footprint courtyard outline from pads
+cmd-footprint-move-pads = Move footprint pads by an offset
+cmd-footprint-align-pads = Align footprint pads
 
 cmd-category-edit = Edit
 cmd-category-modify = Modify

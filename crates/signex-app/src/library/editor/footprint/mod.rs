@@ -98,5 +98,9 @@ pub use state::{
 pub use state::{InstanceOverrides, PadAttribute};
 pub(crate) use updates::hold_patterned_pad_edit;
 
+// What `footprint_move_pads` and `footprint_align_pads` (#3013) name.
+pub use state::AlignOp;
+pub(crate) use updates::pads_needed;
+
 #[cfg(test)]
 mod tests;

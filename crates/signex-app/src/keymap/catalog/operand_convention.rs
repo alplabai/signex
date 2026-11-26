@@ -118,6 +118,11 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     // #2552: a move's wire handling, given by the caller, not the settings.
     ("keep_wires", OperandKind::Bool),
     ("wiring", OperandKind::Text),
+    // #3013: footprint pads by number, an offset, and an alignment per axis.
+    ("pads", OperandKind::Text),
+    ("by", OperandKind::Point),
+    ("horizontal", OperandKind::Text),
+    ("vertical", OperandKind::Text),
 ];
 
 /// The commands whose `ids` is still text, not targets (#2326): a design
