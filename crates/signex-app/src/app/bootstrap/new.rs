@@ -635,6 +635,7 @@ impl Signex {
                 profile_drift_noted: Default::default(),
                 read_only_refusal_noted: Default::default(),
                 rules_history: Default::default(),
+                general_history: Default::default(),
                 missing_fonts: Default::default(),
                 tabs: vec![],
                 active_tab: 0,

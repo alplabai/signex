@@ -98,8 +98,8 @@ impl Signex {
         for spec in project.pending_libraries.values() {
             self.refuse_while_path_op(&spec.lib_path, "created")?;
         }
-        if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
-            tab.general_history.close_run();
+        if let Some(history) = self.document_state.general_history.get_mut(&project_id) {
+            history.close_run();
         }
         let project = self
             .document_state

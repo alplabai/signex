@@ -40,9 +40,9 @@ struct crates/signex-app/src/app/state/dirty.rs DirtyDocuments
 struct crates/signex-app/src/persist/disk_baseline.rs ContentHash
 enum crates/signex-app/src/persist/disk_baseline.rs DiskDrift
 struct crates/signex-app/src/app/handlers/document_files/disk_poll.rs DiskPoll
-# Histories: project rules, project General history, undo groups.
+# Histories: project rules and undo groups. The project General history is
+# DocumentState::general_history (#2975); ProjectTabState is GUI-only since.
 struct crates/signex-app/src/app/state/rules_history.rs RulesHistory
-struct crates/signex-app/src/app/project_tab/mod.rs ProjectTabState
 struct crates/signex-app/src/app/undo_groups.rs UndoGroupSheets
 enum crates/signex-app/src/app/undo_groups.rs UndoGroupKind
 # Owed and in-flight work (ADR-0003 D1): the agent's owed refresh, its reads

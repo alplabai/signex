@@ -224,14 +224,32 @@ fn ok_applies_every_edit_as_one_undo_step() {
         .iter_mut()
         .find(|p| p.id == PROJECT)
         .unwrap();
-    let tab = document.project_tabs.get_mut(&PROJECT).expect("a history");
-    assert!(tab.general_history.undo(&mut project.data));
+    let history = document
+        .general_history
+        .get_mut(&PROJECT)
+        .expect("a history");
+    assert!(history.undo(&mut project.data));
     assert_eq!(
         project.data.schematic_design.diff_pair_classes,
         [class("USB")],
         "one undo step puts every edit back"
     );
-    assert!(!tab.general_history.can_undo());
+    assert!(!history.can_undo());
+}
+
+/// #2975 — the General history is the project's, not the tab's: a step
+/// recorded with no Project tab state still undoes through the tab path.
+#[test]
+fn project_undo_steps_an_edit_made_without_a_project_tab() {
+    let mut app = app_with_project(vec![class("USB")]);
+    open(&mut app);
+    send(&mut app, DiffPairClassesMsg::ClassDeleted(0));
+    send(&mut app, DiffPairClassesMsg::OkRequested);
+    assert!(classes_of(&app).is_empty());
+    app.document_state.project_tabs.remove(&PROJECT);
+
+    assert!(app.step_project_tab_history(PROJECT, true));
+    assert_eq!(classes_of(&app), [class("USB")]);
 }
 
 #[test]
@@ -245,9 +263,9 @@ fn cancel_changes_nothing() {
     assert_eq!(classes_of(&app), [class("USB")]);
     assert!(
         app.document_state
-            .project_tabs
+            .general_history
             .get(&PROJECT)
-            .is_none_or(|tab| !tab.general_history.can_undo()),
+            .is_none_or(|history| !history.can_undo()),
         "no step recorded"
     );
 }
