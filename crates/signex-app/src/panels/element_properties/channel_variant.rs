@@ -25,7 +25,7 @@ pub(super) fn section<'a>(
     strip: &'a ChannelStripView,
 ) -> Element<'a, PanelMsg> {
     let Some(summary) = strip.variant_summary() else {
-        return column![].into();
+        return Column::<Element<'a, PanelMsg>>::new().boxed();
     };
     let i18n = &*ctx.i18n;
     let res = resolve(&ctx.tokens);

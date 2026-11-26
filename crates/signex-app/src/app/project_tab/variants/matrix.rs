@@ -126,7 +126,7 @@ pub(super) fn view<'a>(m: &Manager<'_>, matrix: &VariantMatrix) -> Element<'a, M
     });
     // At least as wide as every column needs; wider than its room, the
     // matrix scrolls sideways instead of cutting a column (#3037).
-    let table = scrollable(MinWidth::new(table, columns.least()))
+    let table = scrollable(MinWidth::new(table.boxed(), columns.least()))
         .direction(Direction::Horizontal(
             Scrollbar::new().width(SP.xs).scroller_width(SP.xs),
         ))

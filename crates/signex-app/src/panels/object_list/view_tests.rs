@@ -148,7 +148,7 @@ fn a_long_sheet_name_is_cut_inside_its_column_and_named_in_full_on_hover() {
             .bounds
     };
     let natural = bounds_in(
-        Element::from(text(UserText::new(LONG)).size(TS.caption)),
+        iced::Widget::boxed(text(UserText::new(LONG)).size(TS.caption)),
         iced::Size::new(10_000.0, 80.0),
     );
     assert!(

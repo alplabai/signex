@@ -40,4 +40,42 @@ impl crate::app::Signex {
             None => Ok(()),
         }
     }
+
+    /// How many net classes Execute adds or changes for the open dialog;
+    /// zero before the list is read.
+    pub(crate) fn update_pcb_class_count(&self, state: &super::UpdatePcbState) -> usize {
+        let (Some(snapshot), Some(board)) = (state.snapshot.as_deref(), state.board.as_deref())
+        else {
+            return 0;
+        };
+        self.update_pcb_class_edit(board, snapshot)
+            .map_or(0, |edit| classes_in(&edit))
+    }
+}
+
+/// How many classes `edit` adds or changes: the count the dialog's summary
+/// line and its Execute count show.
+pub(crate) fn classes_in(edit: &NetClassCommand) -> usize {
+    fn walk<'c>(command: &'c NetClassCommand, names: &mut Vec<&'c str>) {
+        let name = match command {
+            NetClassCommand::Batch { commands } => {
+                for command in commands {
+                    walk(command, names);
+                }
+                return;
+            }
+            NetClassCommand::Add { class } => class.name.as_str(),
+            NetClassCommand::AssignNet {
+                class: Some(name), ..
+            }
+            | NetClassCommand::SetBoardRules { name, .. } => name.as_str(),
+            _ => return,
+        };
+        if !names.contains(&name) {
+            names.push(name);
+        }
+    }
+    let mut names: Vec<&str> = Vec::new();
+    walk(edit, &mut names);
+    names.len()
 }

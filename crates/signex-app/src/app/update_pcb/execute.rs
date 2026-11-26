@@ -65,6 +65,15 @@ impl Signex {
         board_moved || sheet_edited
     }
 
+    /// What Execute changes for the open dialog: the ticked board rows, the
+    /// pending rules and the net classes from the schematic. The button is
+    /// on only when this is above zero.
+    pub(crate) fn update_pcb_execute_count(&self, state: &super::UpdatePcbState) -> usize {
+        state.execute_count()
+            + super::rules_from_schematic::pending(&self.update_pcb_rule_rows(state))
+            + self.update_pcb_class_count(state)
+    }
+
     /// Why Execute is off, when the list is ready but cannot run.
     pub fn update_pcb_execute_block(&self) -> Option<String> {
         self.update_pcb_execute_block_in(&self.ui_state.i18n)

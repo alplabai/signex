@@ -271,7 +271,10 @@ table, as one step of the table's history (built in
   directives leave unset keeps the table's value.
 
 A diff-pair class on a directive with no net class makes no board class.
-A later Update PCB with nothing new changes nothing.
+The dialog shows them as one line below the rules, "N net classes from the
+schematic", and they count toward Execute, so a schematic that only adds or
+changes classes can apply them. A later Update PCB with nothing new changes
+nothing.
 
 ## Drawing
 

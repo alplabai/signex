@@ -115,7 +115,7 @@ fn a_channel_tab_shows_its_variant_state_in_both_themes() {
     for theme in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
         let shown = texts(&context(theme, strip(Some("Lite"), Some(2))));
         for words in [
-            "Variant",
+            "VARIANT", // a section heading is drawn in capitals, as DESIGNATOR MAP
             "Active",
             "Lite",
             "In Lite, CH3 is Not fitted. Edit in the Variant Manager tab.",
