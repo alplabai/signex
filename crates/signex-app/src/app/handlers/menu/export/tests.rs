@@ -1013,6 +1013,7 @@ mod bom_hierarchy;
 mod channel_outputs;
 pub(crate) mod current_placement;
 pub(crate) mod exit_fixtures;
+mod exit_fixtures_not_fitted;
 
 mod export_status;
 mod lazy_preview;
