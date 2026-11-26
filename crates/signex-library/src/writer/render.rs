@@ -17,6 +17,7 @@ use crate::tables::{ALTERNATE_SYMBOLS_COLUMN, TABLE_HEADER};
 pub(super) fn render(w: &LibraryWriter) -> Result<BTreeMap<PathBuf, Vec<u8>>, LibraryError> {
     check_file_stem(&w.file_stem)?;
     check_identities(w)?;
+    check_step_models(w)?;
     let mut out = BTreeMap::new();
     let mut file = LibraryFile {
         manifest: w.manifest.clone(),
@@ -113,6 +114,23 @@ fn check_file_stem(stem: &str) -> Result<(), LibraryError> {
     Ok(())
 }
 
+/// Refuse a footprint whose STEP attachment names a model the writer was
+/// not given: the library would ship the reference without the model.
+fn check_step_models(w: &LibraryWriter) -> Result<(), LibraryError> {
+    for fp in w.footprints.values().flat_map(|f| &f.footprints) {
+        let Some(step) = &fp.step_attachment else {
+            continue;
+        };
+        if !w.step_models.contains_key(&step.content_hash) {
+            return Err(LibraryError::InvalidData(format!(
+                "footprint {} ({}) attaches STEP model {} ({}), which was not added with add_step_model",
+                fp.name, fp.uuid, step.content_hash, step.filename
+            )));
+        }
+    }
+    Ok(())
+}
+
 /// Refuse what the library would hold twice: a row id, a part number
 /// (trimmed, non-blank, as `InternalPn::clashes`), a symbol uuid.
 fn check_identities(w: &LibraryWriter) -> Result<(), LibraryError> {
@@ -148,70 +166,4 @@ fn check_identities(w: &LibraryWriter) -> Result<(), LibraryError> {
         }
     }
     Ok(())
-}
-
-/// Write `files` into a fresh sibling of `dir`, then rename it to `dir`.
-/// `dir` must not exist or be an empty folder.
-pub(super) fn write_whole(
-    dir: &Path,
-    files: &BTreeMap<PathBuf, Vec<u8>>,
-) -> Result<(), LibraryError> {
-    let existed = match std::fs::read_dir(dir) {
-        Ok(mut entries) => {
-            if entries.next().is_some() {
-                return Err(LibraryError::Conflict(format!(
-                    "{} is not empty; a new library is written only into a missing or empty folder",
-                    dir.display()
-                )));
-            }
-            true
-        }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => false,
-        Err(e) => return Err(e.into()),
-    };
-    let parent = dir
-        .parent()
-        .filter(|p| !p.as_os_str().is_empty())
-        .unwrap_or(Path::new("."));
-    std::fs::create_dir_all(parent)?;
-    let staging = staging_dir(parent, dir);
-    std::fs::create_dir(&staging)?;
-    let result = fill_and_move(&staging, dir, existed, files);
-    if result.is_err()
-        && staging.exists()
-        && let Err(e) = std::fs::remove_dir_all(&staging)
-    {
-        tracing::warn!(
-            target: "signex::library",
-            "could not remove the staging folder {}: {e}",
-            staging.display()
-        );
-    }
-    result
-}
-
-fn fill_and_move(
-    staging: &Path,
-    dir: &Path,
-    existed: bool,
-    files: &BTreeMap<PathBuf, Vec<u8>>,
-) -> Result<(), LibraryError> {
-    for (rel, bytes) in files {
-        signex_types::atomic_io::atomic_write(&staging.join(rel), bytes)?;
-    }
-    if existed {
-        // Renaming over a folder is not portable; the empty one goes first.
-        std::fs::remove_dir(dir)?;
-    }
-    std::fs::rename(staging, dir)?;
-    Ok(())
-}
-
-fn staging_dir(parent: &Path, dir: &Path) -> PathBuf {
-    let name = dir
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "library".into());
-    let nonce = Uuid::now_v7().simple();
-    parent.join(format!(".{name}.writing-{nonce}"))
 }

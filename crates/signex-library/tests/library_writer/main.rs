@@ -11,14 +11,15 @@ mod write;
 use std::collections::BTreeMap;
 use std::path::Path;
 
-/// Every file under `root`, relative path with `/` -> bytes.
+/// Every file under `root` but the write-lock sidecars, relative path with
+/// `/` -> bytes.
 pub fn read_tree(root: &Path) -> BTreeMap<String, Vec<u8>> {
     fn walk(root: &Path, dir: &Path, out: &mut BTreeMap<String, Vec<u8>>) {
         for entry in std::fs::read_dir(dir).unwrap() {
             let path = entry.unwrap().path();
             if path.is_dir() {
                 walk(root, &path, out);
-            } else {
+            } else if !signex_library::is_write_lock_file(&path) {
                 let rel = path
                     .strip_prefix(root)
                     .unwrap()

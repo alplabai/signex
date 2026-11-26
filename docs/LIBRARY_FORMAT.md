@@ -33,6 +33,15 @@ diff its output for equivalent input against these files.
 **Writer and check.** A Rust converter can write through
 `signex_library::writer::LibraryWriter`, which writes a whole library in one
 pass with these serialisers and reproduces the fixture library byte for byte.
+It refuses a footprint whose STEP attachment it was not given the model
+for, and records the rows and primitive files it wrote in
+`.signex-import-ledger.json` in the library root. Its `write_update` treats
+what that record lists as a snapshot of the source: those rows and files are
+overwritten (user edits included) or, when the source no longer has them,
+deleted. Rows, primitives and files a user added are not in the record and
+are kept byte for byte; a missing or damaged record deletes nothing, and
+STEP files are never deleted. It never commits, so the app refuses an update
+over uncommitted changes (#3114) before running one.
 Any converter can verify its output with `signex-cli library check <dir>`
 (`docs/CLI.md`, "Library check"), which tests the rules below.
 
@@ -47,7 +56,8 @@ The fixture data is synthetic: it exercises the format, not real parts.
 ├── footprints/<uuid>.snxfpt    footprint envelopes (section 4)
 ├── sims/<uuid>.snxsim          simulation models (not specified here)
 ├── step/<sha256>.step          STEP models of footprint attachments (4.3)
-└── assets/datasheets/<sha256>.pdf   pinned datasheets
+├── assets/datasheets/<sha256>.pdf   pinned datasheets
+└── .signex-import-ledger.json  a converter's record of what it wrote (optional)
 ```
 
 - The `.snxlib` file is the library: Signex opens a library by that path,
@@ -76,6 +86,10 @@ The fixture data is synthetic: it exercises the format, not real parts.
   lower-case hex SHA-256. The footprint editor writes the file when a model
   is attached; the board 3D view reads it and reports the footprint's model
   as missing when the file is absent.
+- **Import ledger.** `.signex-import-ledger.json` is written by Signex's
+  library writer and read only by its update: the `row_id`s and primitive
+  file names one import wrote, so the next import deletes only those. Signex
+  ignores it otherwise; a converter need not write one.
 - **Pinned datasheets.** A row's `hash_pinned` document resolves to
   `assets/datasheets/<hash>.pdf`, `<hash>` being the lower-case hex SHA-256
   of the file.

@@ -26,6 +26,10 @@ fn the_library_writer_reproduces_the_fixture_library() {
     }
     let envelope = writer.add_symbol_file(symbol_envelope());
     assert_eq!(format!("symbols/{envelope}"), SYMBOL_ENVELOPE);
+    assert_eq!(
+        writer.add_step_model(STEP_PLACEHOLDER.to_vec()),
+        step_placeholder_hash()
+    );
     for (fp, file) in footprints() {
         writer
             .add_footprint_file(footprint_envelope(fp, file))
@@ -39,6 +43,12 @@ fn the_library_writer_reproduces_the_fixture_library() {
 
     let mut written = BTreeMap::new();
     collect(&root, &root, &mut written);
+    // The writer's own record of what it wrote, not part of the format.
+    assert!(
+        written
+            .remove(signex_library::writer::LEDGER_FILE)
+            .is_some()
+    );
     let committed: BTreeMap<String, String> = committed()
         .into_iter()
         .filter_map(|(rel, text)| Some((rel.strip_prefix("library/")?.to_string(), text)))

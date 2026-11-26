@@ -9,6 +9,8 @@
 //! creates a new library atomically; [`LibraryWriter::write_update`]
 //! overwrites an earlier one per `docs/LIBRARY_CONVERTER_CONTRACT.md` §5.
 
+mod dir_swap;
+pub mod ledger;
 mod render;
 mod update;
 
@@ -24,7 +26,8 @@ use crate::library_file::{ColumnType, SnxlibManifest};
 use crate::pricing::RowPricing;
 use crate::primitive::{FootprintFile, SimFile, SymbolFile};
 
-pub use update::UpdateSummary;
+pub use ledger::LEDGER_FILE;
+pub use update::{LedgerState, UpdateSummary};
 
 /// Folder of the symbol envelopes, relative to the library root.
 pub const SYMBOLS_DIR: &str = "symbols";
@@ -173,19 +176,43 @@ impl LibraryWriter {
     }
 
     /// Write the library into `dir`, which must not exist or be an empty
-    /// folder. The files are written into a temporary sibling folder that is
+    /// folder, with the writer's ledger of what it wrote ([`LEDGER_FILE`]). The files are written into a temporary sibling folder that is
     /// then renamed to `dir`, so `dir` either holds the whole library or is
     /// left as it was. Returns the path of the `.snxlib`.
     pub fn write(&self, dir: &Path) -> Result<PathBuf, LibraryError> {
-        let files = self.render()?;
-        render::write_whole(dir, &files)?;
+        let mut files = self.render()?;
+        let ledger = self.ledger(&files);
+        files.insert(PathBuf::from(LEDGER_FILE), ledger.to_bytes());
+        dir_swap::write_whole(dir, &files)?;
         Ok(dir.join(self.snxlib_file_name()))
     }
 
     /// Overwrite the library this writer's converter wrote into `dir` before
-    /// (contract §5). See [`update`] for what is kept and what is replaced.
+    /// (contract §5). What the previous write recorded in its ledger is
+    /// replaced, or deleted when the writer no longer has it; rows and files
+    /// a user added survive. Nothing is committed: run it only on a library
+    /// whose changes are committed (the app checks, #3114). See [`update`]
+    /// for what is kept, and for the error a failure part way returns.
     pub fn write_update(&self, dir: &Path) -> Result<UpdateSummary, LibraryError> {
         update::write_update(self, dir)
+    }
+
+    /// The ledger of a write that produced `files`: every row and every
+    /// primitive file, not the STEP files (never deleted).
+    fn ledger(&self, files: &BTreeMap<PathBuf, Vec<u8>>) -> ledger::Ledger {
+        let mut out = ledger::Ledger::new(self.manifest.library_id);
+        out.rows = self
+            .tables
+            .values()
+            .flat_map(|t| &t.rows)
+            .map(|r| r.row_id)
+            .collect();
+        out.files = files
+            .keys()
+            .map(|p| p.to_string_lossy().replace('\\', "/"))
+            .filter(|rel| ledger::is_writer_file_name(rel))
+            .collect();
+        out
     }
 
     fn snxlib_file_name(&self) -> String {

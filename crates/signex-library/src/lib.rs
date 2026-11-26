@@ -153,7 +153,7 @@ pub use templates::{
 pub use validate::validate_row_for_write;
 pub use where_used::{UseSite, WhereUsedIndex};
 #[cfg(feature = "local-git")]
-pub use writer::{LibraryWriter, TableDraft, UpdateSummary};
+pub use writer::{LedgerState, LibraryWriter, TableDraft, UpdateSummary};
 
 #[cfg(feature = "local-git")]
 pub use adapters::local_git::{

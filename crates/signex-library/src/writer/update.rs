@@ -1,32 +1,63 @@
 //! [`LibraryWriter::write_update`]: overwrite a library the same converter
 //! wrote before, per `docs/LIBRARY_CONVERTER_CONTRACT.md` §5.
 //!
+//! The library is a **snapshot** of its source, but only for what the
+//! writer wrote itself. The writer records the rows and primitive files it
+//! wrote in its ledger (`ledger.rs`); an update deletes the recorded ones it
+//! no longer has, and overwrites the ones it has again, user edits
+//! included. Rows, primitives and files a user added are not in the ledger
+//! and survive byte for byte. A missing or rejected ledger deletes nothing.
+//! STEP files are never deleted. The writer never commits, so only what was
+//! committed survives in git history; refusing a library with uncommitted
+//! changes is the app's job before it runs an update (#3114).
+//!
 //! - A row whose content is unchanged keeps its stored cells byte for byte.
 //! - A changed row keeps its lifecycle `state` and `created`, gets the old
 //!   version with the patch number bumped, and the writer's update time.
-//! - Rows, envelopes and STEP files no longer in the writer are deleted.
+//! - A surviving row keeps its cached prices unless the writer gives its own.
 //! - The manifest's `[mode]`, `[workflow]` and `[users]` stay as they are
 //!   (library administration, not converter output); the rest comes from the
 //!   writer. Keys this build does not model survive, as with every save.
+//! - A stored row whose `row_id` does not read refuses the update: it could
+//!   be neither matched nor kept.
 //!
-//! Files are replaced one by one with `atomic_write`, not as one directory
-//! swap: primitives first, then the `.snxlib`, then deletions, so the
-//! `.snxlib` never names a file that is not there yet.
+//! The library's write lock is held from reading the `.snxlib` to the new
+//! ledger, so a running Signex cannot write in between. Files are replaced
+//! one by one with `atomic_write`, not as one directory swap: primitives
+//! first, then the `.snxlib`, then deletions, then the ledger, so the
+//! `.snxlib` never names a file that is not there yet and a re-run after a
+//! failure still knows what the previous import wrote. A failure part way leaves old and new files
+//! mixed; the error says so, and running the update again completes it.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use uuid::Uuid;
 
+use super::ledger::{self, LEDGER_FILE, Ledger, LedgerRead};
 use super::render::{hashed, header, render};
-use super::{FOOTPRINTS_DIR, LibraryWriter, SIMS_DIR, STEP_DIR, SYMBOLS_DIR, TableDraft};
+use super::{LibraryWriter, TableDraft};
 use crate::adapter::LibraryError;
 use crate::adapters::local_git::{component_to_library_row, library_row_to_component};
 use crate::library_file::{LibraryFile, LibraryRow, LibraryTable};
+use crate::pricing::RowPricing;
 use crate::tables::ALTERNATE_SYMBOLS_COLUMN;
 
 /// What [`LibraryWriter::write_update`] did.
+/// How an update read the writer's ledger.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum LedgerState {
+    /// Read and valid: what it recorded and the writer no longer has was
+    /// deleted.
+    Trusted,
+    /// There was none: nothing was deleted.
+    #[default]
+    Missing,
+    /// Unusable, with why: nothing was deleted.
+    Rejected(String),
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct UpdateSummary {
     /// The `.snxlib` that was updated.
@@ -34,7 +65,12 @@ pub struct UpdateSummary {
     pub rows_added: usize,
     pub rows_changed: usize,
     pub rows_unchanged: usize,
+    /// Rows the ledger recorded that the writer no longer has: deleted.
     pub rows_removed: usize,
+    /// Rows not in the ledger (a user's) that the writer does not have: kept.
+    pub rows_kept: usize,
+    /// What the ledger allowed: nothing is deleted unless it is trusted.
+    pub ledger: LedgerState,
     /// Primitive and model files written because their bytes changed.
     pub files_written: usize,
     /// Primitive and model files deleted because the writer no longer has them.
@@ -43,6 +79,7 @@ pub struct UpdateSummary {
 
 pub(super) fn write_update(w: &LibraryWriter, dir: &Path) -> Result<UpdateSummary, LibraryError> {
     let snxlib = single_snxlib(dir)?;
+    let _write_lock = crate::adapters::local_git::lock_library_file(&snxlib)?;
     let text = std::fs::read_to_string(&snxlib)?;
     let mut existing = LibraryFile::parse(&text)?;
     if existing.manifest.library_id != w.manifest.library_id {
@@ -60,15 +97,48 @@ pub(super) fn write_update(w: &LibraryWriter, dir: &Path) -> Result<UpdateSummar
         snxlib: snxlib.clone(),
         ..UpdateSummary::default()
     };
-    let mut old_rows = stored_rows(&existing);
+    let (mut old_rows, unreadable_ids) = stored_rows(&existing);
+    if unreadable_ids > 0 {
+        return Err(LibraryError::InvalidData(format!(
+            "{} holds {unreadable_ids} row(s) whose row_id is not a UUID; an update would \
+             drop them, so nothing was changed. Fix or remove those rows first",
+            snxlib.display()
+        )));
+    }
+    let old_pricing = stored_pricing(&existing);
+    let previous = match ledger::read(dir, w.manifest.library_id) {
+        LedgerRead::Trusted(ledger) => {
+            summary.ledger = LedgerState::Trusted;
+            Some(ledger)
+        }
+        LedgerRead::Missing => None,
+        LedgerRead::Rejected(why) => {
+            tracing::warn!(target: "signex::library", "{why}; the update deletes nothing");
+            summary.ledger = LedgerState::Rejected(why);
+            None
+        }
+    };
     let now = w.update_time.unwrap_or_else(chrono::Utc::now);
     let mut tables = BTreeMap::new();
     for (name, draft) in &w.tables {
         let old_table = existing.tables.get(name);
-        let table = merged_table(draft, old_table, &mut old_rows, now, &mut summary)?;
+        let table = merged_table(
+            draft,
+            old_table,
+            &mut old_rows,
+            &old_pricing,
+            now,
+            &mut summary,
+        )?;
         tables.insert(name.clone(), table);
     }
-    summary.rows_removed = old_rows.len();
+    keep_unrecorded_rows(
+        &existing,
+        &old_rows,
+        previous.as_ref(),
+        &mut tables,
+        &mut summary,
+    );
     existing.tables = tables;
     let kept = existing.manifest.clone();
     existing.manifest = w.manifest.clone();
@@ -77,7 +147,37 @@ pub(super) fn write_update(w: &LibraryWriter, dir: &Path) -> Result<UpdateSummar
     existing.manifest.users = kept.users;
     let new_text = existing.write()?;
 
-    for (rel, bytes) in &files {
+    let ledger = w.ledger(&files);
+    let gone: Vec<String> = previous
+        .map(|p| {
+            p.files
+                .into_iter()
+                .filter(|f| !ledger.files.contains(f))
+                .collect()
+        })
+        .unwrap_or_default();
+    let done = (gone.as_slice(), ledger.to_bytes());
+    apply(dir, &snxlib, &files, (&text, &new_text), done, &mut summary).map_err(|e| {
+        LibraryError::Backend(format!(
+            "the update of {} stopped part way ({e}); the library now mixes old and new \
+             files. Run the update again to complete it",
+            dir.display()
+        ))
+    })?;
+    Ok(summary)
+}
+
+/// Write what changed, then the `.snxlib`, then delete what is gone, then
+/// the new ledger.
+fn apply(
+    dir: &Path,
+    snxlib: &Path,
+    files: &BTreeMap<PathBuf, Vec<u8>>,
+    (text, new_text): (&str, &str),
+    (gone, ledger): (&[String], Vec<u8>),
+    summary: &mut UpdateSummary,
+) -> Result<(), LibraryError> {
+    for (rel, bytes) in files {
         let path = dir.join(rel);
         if std::fs::read(&path).ok().as_deref() != Some(bytes.as_slice()) {
             signex_types::atomic_io::atomic_write(&path, bytes)?;
@@ -85,10 +185,15 @@ pub(super) fn write_update(w: &LibraryWriter, dir: &Path) -> Result<UpdateSummar
         }
     }
     if new_text != text {
-        signex_types::atomic_io::atomic_write_existing_dir(&snxlib, new_text.as_bytes())?;
+        signex_types::atomic_io::atomic_write_existing_dir(snxlib, new_text.as_bytes())?;
     }
-    summary.files_deleted = delete_stale(dir, &files)?;
-    Ok(summary)
+    summary.files_deleted = delete_recorded(dir, gone)?;
+    // Last: until it is replaced, a re-run still knows what to delete.
+    let ledger_path = dir.join(LEDGER_FILE);
+    if std::fs::read(&ledger_path).ok().as_deref() != Some(ledger.as_slice()) {
+        signex_types::atomic_io::atomic_write_existing_dir(&ledger_path, &ledger)?;
+    }
+    Ok(())
 }
 
 /// The one `.snxlib` directly in `dir`.
@@ -113,16 +218,28 @@ fn single_snxlib(dir: &Path) -> Result<PathBuf, LibraryError> {
     }
 }
 
-/// Every stored row by its `row_id`; rows whose id does not parse are
-/// dropped with the update (they cannot match a writer row).
-fn stored_rows(file: &LibraryFile) -> HashMap<Uuid, Arc<LibraryRow>> {
+/// Every stored row by its `row_id`, and how many rows have a `row_id`
+/// that does not read as a UUID.
+fn stored_rows(file: &LibraryFile) -> (HashMap<Uuid, Arc<LibraryRow>>, usize) {
+    let mut rows = HashMap::new();
+    let mut unreadable = 0;
+    for r in file.tables.values().flat_map(|t| &t.rows) {
+        match r.cells.get("row_id").and_then(|id| id.parse::<Uuid>().ok()) {
+            Some(id) => {
+                rows.insert(id, Arc::clone(r));
+            }
+            None => unreadable += 1,
+        }
+    }
+    (rows, unreadable)
+}
+
+/// Every stored row's cached prices, by `row_id`, whichever table holds it.
+fn stored_pricing(file: &LibraryFile) -> HashMap<Uuid, RowPricing> {
     file.tables
         .values()
-        .flat_map(|t| &t.rows)
-        .filter_map(|r| {
-            let id = r.cells.get("row_id")?.parse::<Uuid>().ok()?;
-            Some((id, Arc::clone(r)))
-        })
+        .flat_map(|t| &t.pricing)
+        .filter_map(|(id, p)| Some((id.parse::<Uuid>().ok()?, p.clone())))
         .collect()
 }
 
@@ -130,12 +247,25 @@ fn merged_table(
     draft: &TableDraft,
     old_table: Option<&LibraryTable>,
     old_rows: &mut HashMap<Uuid, Arc<LibraryRow>>,
+    old_pricing: &HashMap<Uuid, RowPricing>,
     now: chrono::DateTime<chrono::Utc>,
     summary: &mut UpdateSummary,
 ) -> Result<LibraryTable, LibraryError> {
     let mut rows = Vec::with_capacity(draft.rows.len());
+    let mut pricing = draft.pricing.clone();
     for row in &draft.rows {
         let mut new = hashed(row)?;
+        let key = new.row_id.to_string();
+        if !pricing.contains_key(&key)
+            && let Some(kept) = old_pricing.get(&new.row_id)
+        {
+            let mut kept = kept.clone();
+            crate::pricing::prune_row_pricing(&new, &mut kept);
+            kept.retain(|_, per_sku| !per_sku.is_empty());
+            if !kept.is_empty() {
+                pricing.insert(key, kept);
+            }
+        }
         let Some(old) = old_rows.remove(&new.row_id) else {
             summary.rows_added += 1;
             rows.push(Arc::new(component_to_library_row(&new)?));
@@ -170,7 +300,7 @@ fn merged_table(
         columns: header(with_alternates),
         rows,
         column_types,
-        pricing: draft.pricing.clone(),
+        pricing,
     })
 }
 
@@ -189,39 +319,65 @@ pub(super) fn bump_patch(version: &str) -> Option<String> {
     Some(format!("{major}.{minor}.{}", patch.checked_add(1)?))
 }
 
-/// Delete the envelopes and STEP files in the writer's folders that the
-/// writer no longer has. Only the four folders and their own extensions.
-fn delete_stale(dir: &Path, keep: &BTreeMap<PathBuf, Vec<u8>>) -> Result<usize, LibraryError> {
-    let keep: HashSet<&Path> = keep.keys().map(PathBuf::as_path).collect();
+/// Delete the primitive files the previous ledger recorded that the writer
+/// no longer produces: only regular files inside `dir` under a name the
+/// writer gives (`ledger::deletable`); links and anything else stay.
+fn delete_recorded(dir: &Path, gone: &[String]) -> Result<usize, LibraryError> {
     let mut deleted = 0;
-    for (sub, ext) in [
-        (SYMBOLS_DIR, "snxsym"),
-        (FOOTPRINTS_DIR, "snxfpt"),
-        (SIMS_DIR, "snxsim"),
-        (STEP_DIR, "step"),
-    ] {
-        let folder = dir.join(sub);
-        let entries = match std::fs::read_dir(&folder) {
-            Ok(entries) => entries,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
-            Err(e) => return Err(e.into()),
+    for rel in gone {
+        let Some(path) = ledger::deletable(dir, rel) else {
+            tracing::warn!(target: "signex::library", "not deleting {rel}: not a plain file of the library");
+            continue;
         };
-        for entry in entries {
-            let path = entry?.path();
-            let Some(name) = path.file_name() else {
-                continue;
-            };
-            let rel = Path::new(sub).join(name);
-            if path.is_file()
-                && path.extension().is_some_and(|e| e == ext)
-                && !keep.contains(rel.as_path())
-            {
-                std::fs::remove_file(&path)?;
-                deleted += 1;
-            }
+        match std::fs::remove_file(&path) {
+            Ok(()) => deleted += 1,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e.into()),
         }
     }
     Ok(deleted)
+}
+
+/// Put back the stored rows the writer does not have and its ledger does
+/// not record (a user's), in the table that held them, cells and prices
+/// unchanged. Recorded ones are counted as removed.
+fn keep_unrecorded_rows(
+    existing: &LibraryFile,
+    leftover: &HashMap<Uuid, Arc<LibraryRow>>,
+    previous: Option<&Ledger>,
+    tables: &mut BTreeMap<String, LibraryTable>,
+    summary: &mut UpdateSummary,
+) {
+    for (name, old_table) in &existing.tables {
+        for row in &old_table.rows {
+            let Some(id) = row.cells.get("row_id").and_then(|t| t.parse::<Uuid>().ok()) else {
+                continue;
+            };
+            if !leftover.contains_key(&id) {
+                continue;
+            }
+            if previous.is_some_and(|l| l.rows.contains(&id)) {
+                summary.rows_removed += 1;
+                continue;
+            }
+            let table = tables.entry(name.clone()).or_insert_with(|| LibraryTable {
+                columns: old_table.columns.clone(),
+                rows: Vec::new(),
+                column_types: old_table.column_types.clone(),
+                pricing: BTreeMap::new(),
+            });
+            if row.cells.contains_key(ALTERNATE_SYMBOLS_COLUMN)
+                && !table.columns.iter().any(|c| c == ALTERNATE_SYMBOLS_COLUMN)
+            {
+                table.columns.push(ALTERNATE_SYMBOLS_COLUMN.to_string());
+            }
+            if let Some(prices) = old_table.pricing.get(&id.to_string()) {
+                table.pricing.insert(id.to_string(), prices.clone());
+            }
+            table.rows.push(Arc::clone(row));
+            summary.rows_kept += 1;
+        }
+    }
 }
 
 #[cfg(test)]

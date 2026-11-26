@@ -133,3 +133,45 @@ fn writes_25000_rows_in_under_a_minute() {
     let adapter = LocalGitAdapter::open(snxlib).unwrap();
     assert_eq!(adapter.iter_rows().unwrap().into_iter().count(), 25_000);
 }
+
+#[test]
+fn a_step_attachment_without_its_model_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut w = synthetic::library(10);
+    let mut file = synthetic::footprint(10);
+    file.footprints[0].step_attachment = Some(signex_library::primitive::StepAttachment {
+        content_hash: "0".repeat(64),
+        filename: "part.step".into(),
+        offset_xyz: [0.0; 3],
+        rotation_xyz: [0.0; 3],
+    });
+    w.add_footprint_file(file).unwrap();
+    let err = w.write(&dir.path().join("a")).unwrap_err().to_string();
+    assert!(err.contains("add_step_model"), "{err}");
+    assert!(!dir.path().join("a").exists());
+}
+
+#[test]
+fn stale_staging_folders_of_the_same_target_are_removed() {
+    let dir = tempfile::tempdir().unwrap();
+    let stale = dir.path().join(".Synthetic.writing-0123");
+    let other = dir.path().join(".Other.writing-0123");
+    std::fs::create_dir_all(stale.join("symbols")).unwrap();
+    std::fs::create_dir(&other).unwrap();
+    synthetic::library(10)
+        .write(&dir.path().join("Synthetic"))
+        .unwrap();
+    assert!(
+        !stale.exists(),
+        "a crashed write's staging folder is cleaned up"
+    );
+    assert!(
+        other.exists(),
+        "another target's staging folder is not touched"
+    );
+    let names: Vec<String> = std::fs::read_dir(dir.path())
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(names.len(), 2, "{names:?}");
+}

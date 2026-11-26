@@ -79,7 +79,7 @@ fn queue_path(lock: &Path) -> PathBuf {
 
 /// Held for the duration of one mutation; the lock is released on drop.
 #[must_use = "the lock is released as soon as this is dropped"]
-pub(super) struct WriteLock {
+pub(crate) struct WriteLock {
     _file: File,
 }
 
@@ -143,6 +143,14 @@ pub fn rewrite_file_under_library_lock(
     static WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
     let _write_lock = acquire(library_file, &WARNED)?;
     crate::adapter::rewrite_file_within(library_file.parent(), abs_path, rewrite)
+}
+
+/// Take the write lock of the library at `library_file` for a writer with no
+/// [`LocalGitAdapter`] open on it: the bulk writer's update (#3110). `None`
+/// on a filesystem that cannot lock, as [`LocalGitAdapter::lock_for_write`].
+pub(crate) fn lock_library_file(library_file: &Path) -> Result<Option<WriteLock>, LibraryError> {
+    static WARNED: AtomicBool = AtomicBool::new(false);
+    acquire(library_file, &WARNED)
 }
 
 /// The `.snxlib` of the library whose directory holds `path`, if any: the
