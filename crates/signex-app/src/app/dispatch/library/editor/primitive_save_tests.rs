@@ -272,7 +272,10 @@ fn replace_editor(app: &mut Signex, path: &Path, name: &str) {
 
 fn assert_replaced_editor_untouched(app: &Signex, path: &Path, name: &str) {
     let editor = &app.document_state.symbol_editors[path];
-    assert_eq!(editor.baseline.symbols[0].name, name, "baseline untouched");
+    assert_eq!(
+        editor.draft.baseline.symbols[0].name, name,
+        "baseline untouched"
+    );
     assert!(
         app.document_state.is_document_dirty(path),
         "its dirty marker stays"
@@ -719,6 +722,7 @@ fn owing(dir: &Path, stem: &str) -> (Signex, PathBuf) {
         .symbol_editors
         .get_mut(&path)
         .unwrap()
+        .draft
         .cascade_owed = vec![uuid::Uuid::now_v7()];
     (app, path)
 }

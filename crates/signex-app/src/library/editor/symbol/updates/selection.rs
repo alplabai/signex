@@ -7,7 +7,7 @@ pub(super) fn apply_symbol_selection(editor: &mut SymEditor, msg: SymbolEditorMs
     use crate::library::editor::symbol::state::{FieldKey, SymbolSelection};
     match msg {
         SymbolEditorMsg::Select(sel) => {
-            editor.selected = Some(match sel {
+            editor.gui.selected = Some(match sel {
                 SymbolSelectionMsg::Pin(idx) => SymbolSelection::Pin(idx),
                 SymbolSelectionMsg::FieldReference => SymbolSelection::Field(FieldKey::Reference),
                 SymbolSelectionMsg::FieldValue => SymbolSelection::Field(FieldKey::Value),
@@ -21,11 +21,11 @@ pub(super) fn apply_symbol_selection(editor: &mut SymEditor, msg: SymbolEditorMs
                     graphic_indices,
                 },
             });
-            editor.canvas_cache.clear();
+            editor.gui.canvas_cache.clear();
         }
         SymbolEditorMsg::Deselect => {
-            editor.selected = None;
-            editor.canvas_cache.clear();
+            editor.gui.selected = None;
+            editor.gui.canvas_cache.clear();
         }
         _ => {}
     }

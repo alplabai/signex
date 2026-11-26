@@ -31,7 +31,7 @@ pub fn bar_items(
     i18n: &I18n,
 ) -> Vec<ActiveBarItem<LibraryMessage>> {
     let path = editor.path.clone();
-    let active_tool = editor.tool;
+    let active_tool = editor.gui.tool;
     let tool = |icon: ActiveBarIcon, tooltip: &str, pick: SymbolToolMsg, armed: SymbolTool| {
         ActiveBarItem::Button(ActiveBarButton {
             icon,
@@ -114,12 +114,12 @@ pub fn dropdown_overlay<'a>(
     use iced::Widget as _;
     use iced::widget::{Stack, container, mouse_area};
 
-    let menu = editor.active_bar_menu?;
+    let menu = editor.gui.active_bar_menu?;
     let entries = dropdowns::entries(
         menu,
-        editor.selection_filter,
-        editor.tool,
-        editor.pin_type,
+        editor.gui.selection_filter,
+        editor.gui.tool,
+        editor.gui.pin_type,
         editor.path.clone(),
         theme_id,
         i18n,
@@ -165,7 +165,7 @@ fn dropdown_trigger_items(
     i18n: &I18n,
 ) -> Vec<ActiveBarItem<LibraryMessage>> {
     let path = editor.path.clone();
-    let active = editor.active_bar_menu;
+    let active = editor.gui.active_bar_menu;
 
     let dual = |label: &str,
                 icon: ActiveBarIcon,

@@ -90,7 +90,7 @@ fn new_part_and_remove_part_edit_the_symbols_parts() {
     let _ = click(&mut app, "Tools/New Part");
     assert_eq!(parts(&app), before + 1);
     assert_eq!(
-        app.document_state.symbol_editors[&path].active_part,
+        app.document_state.symbol_editors[&path].draft.active_part,
         before + 1
     );
 
