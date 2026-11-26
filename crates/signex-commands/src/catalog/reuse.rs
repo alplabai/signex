@@ -60,7 +60,8 @@ pub(super) const REUSE: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::General,
         enable: Enablement::Always,
-        flags: CommandFlags::NONE,
+        // A query with no operands: it answers headless too.
+        flags: CommandFlags::RUNS_HEADLESS,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

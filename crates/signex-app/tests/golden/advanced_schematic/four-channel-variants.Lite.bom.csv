@@ -1,0 +1,4 @@
+Designator,Value,Footprint,LibRef,Qty
+"CH1_C1, CH2_C1, CH3_C1, CH4_C1",100n,Fixture:C_0603,Fixture:C2,4
+"CH1_R1, CH2_R1",10k,Fixture:R_0603,Fixture:R2,2
+U1,MCU,Fixture:QFN-16,Fixture:U4,1

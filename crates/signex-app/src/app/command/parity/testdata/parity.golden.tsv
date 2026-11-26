@@ -121,6 +121,8 @@ board_sketch	bridge	Pcb(Sketch(ModeToggled))	undecided	active document	gate
 board_sketch	in_window_rewrite	document_window	gui	window	routing
 board_sketch	refusal_needs	EditablePcb	undecided	active document	routing
 board_sketch	headless_refusal	headless_refusal	undecided	none	routing
+bom_lines	query	run_query	core	origin	handler
+bom_lines	headless_missing_operand	needs `document`	core	none	routing
 break_union	bridge	Edit(Unions(BreakRequested))	core	active document,selection	handler
 break_union	in_window_rewrite	document_window	gui	window	routing
 break_union	refusal_needs	Schematic	core	active document	routing
@@ -152,8 +154,9 @@ center_view_at_cursor	bridge	CanvasEvent(CenterAtCursor)	gui	window,cursor	handl
 center_view_at_cursor	in_window_rewrite	canvas_in_window|document_window	gui	window	routing
 center_view_at_cursor	headless_refusal	headless_refusal	gui	none	routing
 change_component	bridge	Library(PlacedPart(ActionRequested(ChangeComponent)))	gui	selection	handler
+change_component	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,origin	handler
 change_component	in_window_rewrite	document_window	gui	window	routing
-change_component	headless_refusal	headless_refusal	gui	none	routing
+change_component	headless_missing_operand	needs `id`	core	none	routing
 change_footprint	bridge	Pcb(FootprintSwap(Requested))	gui	active document,selection	gate
 change_footprint	in_window_rewrite	document_window	gui	window	routing
 change_footprint	refusal_needs	SwapFootprints	gui	active document,selection	routing
@@ -192,6 +195,8 @@ compare_board_with_schematic	bridge	Pcb(CompareBoard(Requested))	gui	active docu
 compare_board_with_schematic	in_window_rewrite	document_window	gui	window	routing
 compare_board_with_schematic	refusal_needs	PcbSync	gui	active document,window	routing
 compare_board_with_schematic	headless_refusal	headless_refusal	gui	none	routing
+compare_variants	query	run_query	core	origin	handler
+compare_variants	headless_missing_operand	needs `document`	core	none	routing
 compile_project	bridge	Project(CompiledDesign(CompileRequested))	core	active document	handler
 compile_project	in_window_rewrite	document_window	gui	window	routing
 compile_project	refusal_needs	ProjectSheet	core	active document	routing
@@ -564,7 +569,11 @@ leave_sheet	in_window_rewrite	document_window	gui	window	routing
 leave_sheet	refusal_needs	ParentSheet	gui	active document	routing
 leave_sheet	disabled_still_runs	explains_when_unavailable	gui	active document	gate
 leave_sheet	headless_refusal	headless_refusal	gui	none	routing
+list_diff_pairs	query	run_query	core	origin	handler
+list_diff_pairs	headless_missing_operand	needs `document`	core	none	routing
 list_documents	query	run_query	core	origin	handler
+list_snippets	query	run_query	core	active document	handler
+list_templates	query	run_query	core	active document	handler
 lock_board_items	bridge	Pcb(LockRequested { locked: true })	core	active document,selection	handler
 lock_board_items	operand_handler	run_operands: named document	core	origin	handler
 lock_board_items	in_window_rewrite	document_window	gui	window	routing
@@ -997,6 +1006,11 @@ place_signal_harness	active_bar	PlaceSignalHarness	gui	active document	gate
 place_signal_harness	in_window_rewrite	document_window	gui	window	routing
 place_signal_harness	refusal_needs	Schematic	gui	active document	routing
 place_signal_harness	headless_refusal	headless_refusal	gui	none	routing
+place_snippet	bridge	Edit(Extras(SnippetRequested))	gui	active document	gate
+place_snippet	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,tool state,origin	handler
+place_snippet	in_window_rewrite	document_window	gui	window	routing
+place_snippet	refusal_needs	Schematic	gui	active document	routing
+place_snippet	headless_missing_operand	needs `name`	core	none	routing
 place_symbol	bridge	Library(OpenPicker)	gui	active document	gate
 place_symbol	in_window_rewrite	document_window	gui	window	routing
 place_symbol	refusal_needs	Schematic	gui	active document	routing
@@ -1091,9 +1105,15 @@ project_run_requirements	headless_missing_operand	needs `document`	core	none	rou
 project_set_active_variant	operand_handler	run_operands: named document	core	origin	handler
 project_set_active_variant	refusal_needs_operands	needs_operands_reason	gui	none	routing
 project_set_active_variant	headless_missing_operand	needs `document`	core	none	routing
+project_set_annotate_numbering	operand_handler	run_operands: named document	core	origin	handler
+project_set_annotate_numbering	refusal_needs_operands	needs_operands_reason	gui	none	routing
+project_set_annotate_numbering	headless_missing_operand	needs `document`	core	none	routing
 project_set_annotate_undo	operand_handler	run_operands: named document	core	origin	handler
 project_set_annotate_undo	refusal_needs_operands	needs_operands_reason	gui	none	routing
 project_set_annotate_undo	headless_missing_operand	needs `document`	core	none	routing
+project_set_default_variant	operand_handler	run_operands: named document	core	origin	handler
+project_set_default_variant	refusal_needs_operands	needs_operands_reason	gui	none	routing
+project_set_default_variant	headless_missing_operand	needs `document`	core	none	routing
 project_set_requirement	operand_handler	run_operands: named document	core	origin	handler
 project_set_requirement	refusal_needs_operands	needs_operands_reason	gui	none	routing
 project_set_requirement	headless_missing_operand	needs `document`	core	none	routing
@@ -1104,6 +1124,8 @@ project_settings	query	run_query	core	origin,settings	handler
 project_settings	headless_missing_operand	needs `document`	core	none	routing
 query_board_nets	query	run_query	core	origin	handler
 query_board_nets	headless_missing_operand	needs `document`	core	none	routing
+query_net_ties	query	run_query	core	origin	handler
+query_net_ties	headless_missing_operand	needs `document`	core	none	routing
 query_pins	query	run_query	core	origin	handler
 query_pins	headless_missing_operand	needs `document`	core	none	routing
 read_document	query	run_query	core	origin	handler
@@ -1290,6 +1312,11 @@ save_project_as	bridge	Project(SaveAs(Requested { project: None }))	gui	active d
 save_project_as	in_window_rewrite	document_window	gui	window	routing
 save_project_as	refusal_needs	OpenProject	gui	active document	routing
 save_project_as	headless_refusal	headless_refusal	gui	none	routing
+save_snippet	translator	Edit(Extras(SnippetSaveRequested))	gui	active document	gate
+save_snippet	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,selection,origin	handler
+save_snippet	in_window_rewrite	document_window	gui	window	routing
+save_snippet	refusal_needs	Schematic	gui	active document	routing
+save_snippet	headless_missing_operand	needs `name`	core	none	routing
 save_workspace_layout	bridge	DockLayout(Workspace(Save(Requested)))	gui	settings	handler
 save_workspace_layout	in_window_rewrite	document_window	gui	window	routing
 save_workspace_layout	headless_refusal	headless_refusal	gui	none	routing
@@ -1365,12 +1392,18 @@ set_layer_visible	headless_missing_operand	needs `layer`	gui	none	routing
 set_net_class_rules	operand_handler	run_operands: named document	core	origin	handler
 set_net_class_rules	refusal_needs_operands	needs_operands_reason	gui	none	routing
 set_net_class_rules	headless_missing_operand	needs `document`	core	none	routing
+set_net_tie	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,origin	handler
+set_net_tie	refusal_needs_operands	needs_operands_reason	gui	none	routing
+set_net_tie	headless_missing_operand	needs `id`	core	none	routing
 set_object_position	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,origin	handler
 set_object_position	refusal_needs_operands	needs_operands_reason	gui	none	routing
 set_object_position	headless_missing_operand	needs `id`	core	none	routing
 set_object_rotation	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,origin	handler
 set_object_rotation	refusal_needs_operands	needs_operands_reason	gui	none	routing
 set_object_rotation	headless_missing_operand	needs `id`	core	none	routing
+set_object_text	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,origin	handler
+set_object_text	refusal_needs_operands	needs_operands_reason	gui	none	routing
+set_object_text	headless_missing_operand	needs `id`	core	none	routing
 set_object_transparency	operand_handler	run_operands: named document	gui	origin	handler
 set_object_transparency	refusal_needs	Pcb	gui	active document	routing
 set_object_transparency	refusal_needs_operands	needs_operands_reason	gui	none	routing
@@ -1435,6 +1468,7 @@ show_used_layers_only	refusal_needs	Pcb	gui	active document	routing
 show_used_layers_only	refusal_needs_operands	needs_operands_reason	gui	none	routing
 show_used_layers_only	headless_missing_operand	needs `on`	gui	none	routing
 smart_paste	bridge	Edit(SmartPaste)	split	active document,tool state,render cache,clipboard	handler
+smart_paste	operand_handler	run_operands: active-tab gate unless a document is named	split	active document,tool state,clipboard,origin	handler
 smart_paste	in_window_rewrite	document_window	gui	window	routing
 smart_paste	refusal_needs	PasteTarget	split	active document,clipboard	routing
 smart_paste	disabled_still_runs_refusal	explains_refusal_in	split	active document,tool state,render cache,clipboard	handler
@@ -1458,6 +1492,14 @@ swap_pins	operand_handler	run_operands: named document	core	origin	handler
 swap_pins	in_window_rewrite	document_window	gui	window	routing
 swap_pins	refusal_needs	PadPair	gui	active document,selection	routing
 swap_pins	headless_missing_operand	needs `document`	core	none	routing
+swap_schematic_gates	translator	Edit(SheetSwap(GatesRequested))	gui	selection	handler
+swap_schematic_gates	operand_handler	run_operands: named document	core	origin	handler
+swap_schematic_gates	in_window_rewrite	document_window	gui	window	routing
+swap_schematic_gates	headless_missing_operand	needs `document`	core	none	routing
+swap_schematic_pins	translator	Edit(SheetSwap(PinsRequested))	gui	selection	handler
+swap_schematic_pins	operand_handler	run_operands: named document	core	origin	handler
+swap_schematic_pins	in_window_rewrite	document_window	gui	window	routing
+swap_schematic_pins	headless_missing_operand	needs `document`	core	none	routing
 switch_segment_posture	bridge	Tool(CornerFlipRequested)	gui	tool state,in-progress edit	handler
 switch_segment_posture	in_window_rewrite	document_window	gui	window	routing
 switch_segment_posture	headless_refusal	headless_refusal	gui	none	routing
@@ -1503,6 +1545,10 @@ toggle_layer_visibility	headless_refusal	headless_refusal	gui	none	routing
 toggle_layers_panel	bridge	Overlay(PanelToggled(Layers))	gui	window	handler
 toggle_layers_panel	in_window_rewrite	document_window	gui	window	routing
 toggle_layers_panel	headless_refusal	headless_refusal	gui	none	routing
+toggle_live_erc	bridge	Erc(Live(Toggled))	gui	settings	handler
+toggle_live_erc	operand_handler	run_operands: active-tab gate unless a document is named	gui	settings	handler
+toggle_live_erc	in_window_rewrite	document_window	gui	window	routing
+toggle_live_erc	headless_without_operands	run_operands	gui	settings	handler
 toggle_origin_marker	bridge	Pcb(View(OriginMarkerVisibilityToggled))	gui	active document	gate
 toggle_origin_marker	in_window_rewrite	board_view_in_window|document_window	gui	window	routing
 toggle_origin_marker	refusal_needs	Pcb	gui	active document	routing
@@ -1582,6 +1628,8 @@ update_pcb_from_schematic	operand_handler	run_operands: active-tab gate unless a
 update_pcb_from_schematic	in_window_rewrite	document_window	gui	window	routing
 update_pcb_from_schematic	refusal_needs	PcbSync	gui	active document,window	routing
 update_pcb_from_schematic	headless_missing_operand	needs `apply`	core	none	routing
+variant_bom	query	run_query	core	origin	handler
+variant_bom	headless_missing_operand	needs `document`	core	none	routing
 view_board_3d	bridge	Pcb(Board3d(Toggled))	gui	active document	gate
 view_board_3d	in_window_rewrite	document_window	gui	window	routing
 view_board_3d	refusal_needs	Pcb	gui	active document	routing

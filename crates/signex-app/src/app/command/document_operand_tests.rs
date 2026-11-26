@@ -465,6 +465,14 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
         "repair_pin_junctions",
         "place_design_block",
         "import_graphics",
+        // #2665: Smart Paste's array, on the sheet in view or the named one.
+        "smart_paste",
+        // #2954: Change Component of the part `id`, likewise.
+        "change_component",
+        // #1283: a snippet saved from, or placed on, the sheet in view or the
+        // named one.
+        "save_snippet",
+        "place_snippet",
     ];
     for name in all_command_ids() {
         let meta = metadata_for_str(name).expect("row");

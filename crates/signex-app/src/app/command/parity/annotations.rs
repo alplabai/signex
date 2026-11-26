@@ -205,9 +205,13 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "project_set_active_variant",
             "project_move_library",
             "project_set_annotate_undo",
+            "project_set_annotate_numbering",
+            "project_set_default_variant",
             "project_set_version_control",
             "project_set_requirement",
             "project_enable_requirement",
+            // #2954: the named sheet and the open library row it names.
+            "change_component",
             "bring_drawings_forward",
             "bring_drawings_to_front",
             "send_drawings_backward",
@@ -414,6 +418,8 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         &[
             "board_panel",
             "bom_lines",
+            // #2949: the named project's variants and sheets.
+            "compare_variants",
             "find_items",
             "find_similar_items",
             // #2952: the named project's open sheets and classes.
@@ -423,9 +429,17 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "query_net_ties",
             "query_pins",
             "read_document",
+            "variant_bom",
         ],
         Query,
         &[],
+    ),
+    // #1283: the snippet and template folders of the project in view
+    // (`reuse_roots_in_view`) and of the user's library.
+    (
+        &["list_snippets", "list_templates"],
+        Query,
+        &[ActiveDocument],
     ),
     // What the open or the new project dialog answers.
     (
@@ -537,10 +551,14 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "place_sheet_entry",
             "place_design_block",
             "import_graphics",
+            // #1283: a snippet is placed as a design block.
+            "place_snippet",
         ],
         Operand,
         &[ToolState],
     ),
+    // #1283: without `ids`, the selection on the sheet in view is saved.
+    (&["save_snippet"], Operand, &[Selection]),
     // #2665: the in-app copy, and the grid its default offset is measured on.
     (&["smart_paste"], Operand, &[ToolState, Clipboard]),
     // Move Keeps Wires is not read: both take `keep_wires` as an operand

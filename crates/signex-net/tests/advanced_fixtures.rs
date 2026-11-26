@@ -158,7 +158,6 @@ fn the_nested_uart_entries_connect_through_the_debug_harness() {
 }
 
 #[test]
-#[ignore = "needs batch A's harness carry through a sheet with no connector (#2657); the integrator runs it after that merge"]
 fn the_nested_harness_carried_through_a_sheet_matches_the_same_golden_netlist() {
     let stitched = stitch(
         "nested-harness-carry",
