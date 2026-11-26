@@ -1180,6 +1180,27 @@ Diagram lists the changes in Messages without applying them. Grouping and
 layout rules: [architecture/snxblk-format.md](architecture/snxblk-format.md),
 "Generate and regenerate".
 
+## Power tree
+
+`query_power_tree` answers the power tree of the project a document belongs
+to (#1313, mockup row 171): every rail with its voltage, its sources and
+loads, the current each load draws, the total, the limit and the budget
+level; the converters with what they deliver and draw; the rails at the top
+of the tree; and the power budget per sheet, which is the budget of the block
+that stands for the sheet in a block diagram. It is worked out from the
+schematic off the UI thread and answered once the run lands, changes
+nothing, and is on the agent channel.
+
+```text
+query_power_tree document=<project, or one of its documents> [variant=<name>]
+```
+
+`variant` names the variant whose fitted parts count (`Base` is the parts
+without a variant); without it, the project's active variant counts. A name
+the project does not have is refused. Which parts are rails, sources,
+converters and loads, where the numbers come from and the answer's shape:
+[POWER_TREE.md](POWER_TREE.md).
+
 ## Working through a running Signex
 
 When a person has the project open in Signex with Preferences > System ›

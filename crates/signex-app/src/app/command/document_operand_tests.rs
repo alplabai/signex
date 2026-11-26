@@ -555,6 +555,8 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "project_remove_requirement",
                     "project_enable_requirement",
                     "project_run_requirements",
+                    // #1313: the project's power tree.
+                    "query_power_tree",
                     // #2394: the board view's layer commands.
                     "hide_layer",
                     "highlight_layer",

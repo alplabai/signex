@@ -77,6 +77,9 @@ pub enum AgentMsg {
     /// The run a check (`check_erc`, `check_drc`) waited for finished
     /// (#2199): answer its caller (the socket, or a headless run).
     CheckFinished(Box<crate::app::command::queries::CheckFinished>),
+    /// The run a query worked out off the UI thread (`query_power_tree`,
+    /// #1313) finished: answer its caller (the socket, or a headless run).
+    QueryAnswered(Box<crate::app::command::queries::QueryAnswered>),
     /// A client connected and passed the peer check (#2253).
     ConnectionOpened { pid: Option<u32> },
     /// A connection ended: the client left, idled out or was dropped.

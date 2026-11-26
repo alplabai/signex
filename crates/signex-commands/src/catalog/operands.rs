@@ -619,6 +619,13 @@ pub const QUERY_PINS: &[Operand] = &[
     required("document", OperandKind::Document),
     required("designator", OperandKind::Text),
 ];
+/// `query_power_tree` (#1313): the power tree of the project the document
+/// belongs to, with the parts fitted in `variant` (a variant's name, or
+/// Base); without it, in the project's active variant.
+pub const QUERY_POWER_TREE: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("variant", OperandKind::Text),
+];
 /// `check_erc` (#2199): ERC on the project of the named sheet, answered as a
 /// check report; `baseline` is an earlier answer's `run`.
 pub const CHECK_ERC: &[Operand] = &[
