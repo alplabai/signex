@@ -33,9 +33,10 @@ Recording needs, on Linux (Debian/Ubuntu packages):
 | `ffmpeg`, built with libx264, libvpx, libwebp and libass (Debian's is) | the capture, the MP4 and GIF, the WebM hero and its poster, the burnt-in captions |
 | `mesa-vulkan-drivers` | lavapipe, Mesa's software Vulkan driver, for wgpu |
 | `python3-numpy` | `render.py`'s frame comparison |
+| `libxkbcommon-x11-0` (and `libvulkan1`, `libxcursor1`, `libxi6`, `libxrandr2`, usually present) | the libraries the app's X11 windowing loads at start; without `libxkbcommon-x11-0` the app stops before its window opens |
 
 ```bash
-sudo apt install xvfb ffmpeg mesa-vulkan-drivers python3-numpy
+sudo apt install xvfb ffmpeg mesa-vulkan-drivers python3-numpy libxkbcommon-x11-0
 ```
 
 No GPU and no desktop are needed. `record_all.sh` and `record_story.sh`
