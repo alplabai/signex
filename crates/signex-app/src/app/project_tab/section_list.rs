@@ -11,6 +11,7 @@ use signex_widgets::{button, text};
 
 use super::look::{Glyph, ICON, field_label, glyph, mono_font, pill, ui_font};
 use super::table::{SP, TS};
+use super::version_control::Repository;
 use super::{ProjectSection, ProjectTabMsg, requirements};
 use crate::app::state::{LoadedProject, ProjectId};
 use crate::app::{Message, ProjectMsg, Signex};
@@ -60,7 +61,8 @@ pub(super) struct SectionFacts {
     pub variants: usize,
     pub libraries: usize,
     pub library_missing: bool,
-    pub commit_on_save: bool,
+    /// The project folder's repository as last probed.
+    pub repository: Repository,
     pub requirements_failed: usize,
 }
 
@@ -70,7 +72,10 @@ pub(super) enum SectionBadge {
     Count(usize),
     /// A count with the error dot: a listed library is missing.
     CountWithDot(usize),
+    /// The project folder has a repository (green).
     On,
+    /// The project folder has none (neutral).
+    Off,
     Failed(usize),
 }
 
@@ -83,7 +88,13 @@ pub(super) fn section_badge(section: ProjectSection, facts: &SectionFacts) -> Op
             Some(SectionBadge::CountWithDot(facts.libraries))
         }
         ProjectSection::Libraries => Some(SectionBadge::Count(facts.libraries)),
-        ProjectSection::VersionControl if facts.commit_on_save => Some(SectionBadge::On),
+        // Mockup row 35: the repository state, not Commit every save. While
+        // the first probe is out, nothing is claimed.
+        ProjectSection::VersionControl => match facts.repository {
+            Repository::Present => Some(SectionBadge::On),
+            Repository::Absent => Some(SectionBadge::Off),
+            Repository::Unknown => None,
+        },
         ProjectSection::Requirements if facts.requirements_failed > 0 => {
             Some(SectionBadge::Failed(facts.requirements_failed))
         }
@@ -118,7 +129,7 @@ impl Signex {
                 .iter()
                 .any(|row| row.mount == super::libraries::LibraryMount::Missing),
             libraries: libraries.len(),
-            commit_on_save: project.data.enable_git,
+            repository: self.version_control_facts(project).repository,
             requirements_failed: requirements::failed_count(
                 &project.data.requirements,
                 tab.map(|tab| &tab.requirements),
@@ -204,6 +215,12 @@ fn badge_view<'a>(badge: SectionBadge, i18n: &I18n, tokens: &ThemeTokens) -> Ele
                 .boxed()
         }
         SectionBadge::On => pill(t!(i18n, ids::DIALOG_RULES_ON), PillTone::Ok, None, tokens),
+        SectionBadge::Off => pill(
+            t!(i18n, ids::DIALOG_RULES_OFF),
+            PillTone::Neutral,
+            None,
+            tokens,
+        ),
         SectionBadge::Failed(n) => pill(
             t!(i18n, ids::REQUIREMENTS_FAILED_COUNT, "count" => n),
             PillTone::Err,

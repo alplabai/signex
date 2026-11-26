@@ -142,6 +142,13 @@ project. An edit is a project edit like the other sections: it marks the
 `.snxprj` dirty, is written by Save, and Ctrl+Z undoes it. The section's page
 header holds **Save as profile...**, Your profiles is one line under the
 cards, and the PCB rules and Schematic fields sit in two titled cards.
+Under them, the **Board rules preview** (#2997) draws the board rules on the
+board ground: the dialog's tracks and via with each value written on them,
+beside the layer count, thickness and stack-up. It follows the values the
+fields show, so a card pick, a layer step or a typed rule redraws it, and a
+drill at or above the via size is drawn in the error ink with the
+"drill ≥ via size" note. Values are edited in the fields; the drawing takes
+no input and has no larger view here.
 
 - Only the part an edit changes is stored: a board pick stores
   `project_defaults.pcb`, a sheet pick `project_defaults.sheet`, a designator

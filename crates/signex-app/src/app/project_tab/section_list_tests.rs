@@ -2,9 +2,11 @@
 //! General page's Explore button.
 
 use super::section_list::{GROUPS, SectionBadge, SectionFacts, section_badge};
+use super::version_control::Repository;
 use super::{ProjectSection, ProjectTabMsg};
 use crate::app::handlers::menu::export::tests::app_workspace;
 use crate::app::state::ProjectId;
+use crate::app::state::project_fs::git_marker;
 use crate::app::{Message, ProjectMsg, Signex};
 
 const WINDOW: iced::Size = iced::Size::new(1200.0, 800.0);
@@ -36,7 +38,7 @@ const NO_FACTS: SectionFacts = SectionFacts {
     variants: 0,
     libraries: 0,
     library_missing: false,
-    commit_on_save: false,
+    repository: Repository::Unknown,
     requirements_failed: 0,
 };
 
@@ -86,7 +88,7 @@ fn trouble_and_state_change_the_badges() {
     let facts = SectionFacts {
         libraries: 3,
         library_missing: true,
-        commit_on_save: true,
+        repository: Repository::Present,
         requirements_failed: 2,
         ..NO_FACTS
     };
@@ -104,19 +106,94 @@ fn trouble_and_state_change_the_badges() {
     );
 }
 
+/// #2995, mockup row 35: the Version control badge follows the repository,
+/// green On with one and neutral Off without; nothing while the first
+/// probe is out.
+#[test]
+fn the_version_control_badge_follows_the_repository() {
+    let badge = |repository| {
+        let facts = SectionFacts {
+            repository,
+            ..NO_FACTS
+        };
+        section_badge(ProjectSection::VersionControl, &facts)
+    };
+    assert_eq!(badge(Repository::Present), Some(SectionBadge::On));
+    assert_eq!(badge(Repository::Absent), Some(SectionBadge::Off));
+    assert_eq!(badge(Repository::Unknown), None);
+}
+
 #[test]
 fn the_facts_are_read_from_the_project() {
     let (mut app, _) = app();
     app.document_state.projects[0].data.enable_git = true;
     app.document_state.projects[0].data.variant_definitions = vec!["Lite".into()];
+    let folder = app.document_state.projects[0]
+        .path
+        .parent()
+        .expect("the project has a folder")
+        .to_path_buf();
     let project = &app.document_state.projects[0];
     let facts = app.section_facts(project);
     assert_eq!(facts.sheets, 2);
     assert_eq!(facts.variants, 1);
     assert_eq!(facts.libraries, 0);
     assert!(!facts.library_missing);
-    assert!(facts.commit_on_save);
+    assert_eq!(facts.repository, Repository::Unknown, "not probed yet");
     assert_eq!(facts.requirements_failed, 0, "no run yet");
+    app.document_state
+        .project_fs
+        .facts
+        .set_exists(git_marker(&folder), false);
+    let project = &app.document_state.projects[0];
+    assert_eq!(
+        app.section_facts(project).repository,
+        Repository::Absent,
+        "Commit every save on does not make a repository"
+    );
+}
+
+/// #2995: the Off pill shows on the Version control row of the laid-out
+/// list once the probe found no repository, and On once it found one,
+/// whatever Commit every save says.
+#[test]
+fn the_version_control_row_shows_off_then_on() {
+    let (mut app, id) = app();
+    let _ = app.update(Message::Project(ProjectMsg::Tab(
+        ProjectTabMsg::SectionSelected {
+            project_id: id,
+            section: ProjectSection::General,
+        },
+    )));
+    let folder = app.document_state.projects[0]
+        .path
+        .parent()
+        .expect("the project has a folder")
+        .to_path_buf();
+    let row_badge = |app: &Signex| {
+        let texts = crate::layout_probe::lay_out_texts(app.view_project_tab(id), WINDOW);
+        let row = crate::layout_probe::find(&texts, "Version control").bounds;
+        texts
+            .iter()
+            .find(|t| {
+                (t.text == "Off" || t.text == "On")
+                    && t.bounds.x > row.x + row.width
+                    && (t.bounds.center_y() - row.center_y()).abs() < row.height
+            })
+            .map(|t| t.text.clone())
+    };
+    assert_eq!(row_badge(&app), None, "nothing before the first probe");
+    app.document_state
+        .project_fs
+        .facts
+        .set_exists(git_marker(&folder), false);
+    assert_eq!(row_badge(&app).as_deref(), Some("Off"));
+    app.document_state.projects[0].data.enable_git = false;
+    app.document_state
+        .project_fs
+        .facts
+        .set_exists(git_marker(&folder), true);
+    assert_eq!(row_badge(&app).as_deref(), Some("On"));
 }
 
 #[test]

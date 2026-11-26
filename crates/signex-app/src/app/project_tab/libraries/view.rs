@@ -25,6 +25,11 @@ const KIND_W: f32 = TS.body * 9.2;
 const STATE_W: f32 = TS.body * 12.5;
 /// Width of the Move up / Move down column (80 px).
 const ACTIONS_W: f32 = TS.body * 6.7;
+/// Shares of the width the fixed columns leave: Name takes 3 and Location 2,
+/// so a typical library name shows whole at the default tab width while the
+/// location is cut from its start (#2994).
+const NAME_SHARE: u16 = 3;
+const LOCATION_SHARE: u16 = 2;
 /// Most characters a location shows before it is cut from the start.
 pub(super) const LOCATION_CHARS: usize = 48;
 
@@ -72,11 +77,11 @@ fn library_table<'a>(
         grip_column(),
         (
             Some(ids::PROJECT_LIBRARIES_COL_NAME),
-            Length::FillPortion(2),
+            Length::FillPortion(NAME_SHARE),
         ),
         (
             Some(ids::PROJECT_LIBRARIES_COL_LOCATION),
-            Length::FillPortion(3),
+            Length::FillPortion(LOCATION_SHARE),
         ),
         (Some(ids::PROJECT_LIBRARIES_COL_KIND), Length::Fixed(KIND_W)),
         (

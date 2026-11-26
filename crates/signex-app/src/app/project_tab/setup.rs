@@ -4,21 +4,22 @@
 //! step on the project's data and marks the `.snxprj` dirty; the file is
 //! written by the normal Save, like every other section.
 
-use iced::widget::{container, row};
+use iced::widget::{Space, column, container, row};
 use iced::{Alignment, Element, Length, Widget as _};
 use signex_engine::ProjectGeneralCommand;
 use signex_i18n::{I18n, Localized, ids, t};
 use signex_types::theme::ThemeTokens;
 
 use super::ProjectTabMsg;
-use super::look::{ButtonKind, CardHeader, Glyph, card, text_button, warn_line};
+use super::look::{ButtonKind, CardHeader, Glyph, card, text_button, ui_font, warn_line};
 use super::table::{SP, TS, section_with_action};
 use crate::app::new_project::{
     NewProjectMsg, NewProjectState, ProfileStored, import_rule_file, store_profile,
 };
 use crate::app::state::{LoadedProject, ProjectId};
-use crate::app::view::dialogs::new_project::{cards, customize, user_cards};
+use crate::app::view::dialogs::new_project::{cards, customize, preview, user_cards};
 use crate::app::{Message, ProjectMsg, Signex};
+use crate::styles::tokens::resolve;
 use signex_types::project::UserProfile;
 
 fn edited(project_id: ProjectId) -> impl Fn(NewProjectMsg) -> Message + Clone + Send + 'static {
@@ -62,6 +63,7 @@ pub(super) fn view<'a>(
             .boxed(),
     );
     body.push(rule_cards(project.id, state, i18n, tokens));
+    body.push(board_preview(project.id, state, i18n, tokens));
     body.push(super::agent_journals::view(
         project,
         journal_lines_draft,
@@ -130,6 +132,34 @@ fn rule_cards<'a>(
     .spacing(SP.l)
     .align_y(Alignment::Start)
     .boxed()
+}
+
+/// The Board rules preview under the two cards (mockup row 37, #2997): a
+/// bold header with its caption, then the drawing of the shown values.
+fn board_preview<'a>(
+    project_id: ProjectId,
+    state: &NewProjectState,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let r = resolve(tokens);
+    let header = row![
+        signex_widgets::text(t!(i18n, ids::PROJECT_SETUP_PREVIEW))
+            .size(TS.section)
+            .font(ui_font(iced::font::Weight::Semibold))
+            .color(r.ink3),
+        Space::new().width(Length::Fill),
+        signex_widgets::text(t!(i18n, ids::PROJECT_SETUP_PREVIEW_CAPTION))
+            .size(TS.caption)
+            .color(r.ink4),
+    ]
+    .spacing(SP.s)
+    .align_y(Alignment::Center);
+    let drawing = preview::board_rules_preview(state, i18n).map(edited(project_id));
+    column![header, drawing]
+        .spacing(SP.xs)
+        .width(Length::Fill)
+        .boxed()
 }
 
 /// Which stored part an edit of the section touches.

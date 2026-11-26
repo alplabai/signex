@@ -592,3 +592,90 @@ fn the_preview_labels_read_built_in_or_set() {
     assert_eq!(stroke.look, LabelLook::Set);
     assert!(stroke.words.contains('5'), "{}", stroke.words);
 }
+
+/// The Project tab's area in the audit's 1440 × 900 window.
+const AUDIT_TAB: iced::Size = iced::Size::new(888.0, 900.0);
+
+/// Where, on the row of the input showing `value`, a click resets `field`:
+/// the x of the first such point between the input and `card_right`.
+fn reset_click_x(
+    app: &Signex,
+    value: &str,
+    field: SchematicDefaultField,
+    card_right: f32,
+) -> Option<f32> {
+    let project_id = app.document_state.projects[0].id;
+    let inputs = crate::layout_probe::lay_out_inputs(app.view_project_tab(project_id), AUDIT_TAB);
+    let input = crate::layout_probe::find(&inputs, value).bounds;
+    let xs: Vec<f32> = (input.x as u32..card_right as u32)
+        .step_by(2)
+        .map(|x| x as f32)
+        .collect();
+    let points: Vec<iced::Point> = xs
+        .iter()
+        .map(|x| iced::Point::new(*x, input.center_y()))
+        .collect();
+    let probes =
+        crate::layout_probe::probe_points(app.view_project_tab(project_id), AUDIT_TAB, &points);
+    xs.into_iter().zip(probes).find_map(|(x, probe)| {
+        probe
+            .clicked
+            .iter()
+            .any(|m| {
+                matches!(
+                    m,
+                    Message::Project(ProjectMsg::Tab(ProjectTabMsg::SchematicDefaultEdited {
+                        field: f,
+                        text,
+                        ..
+                    })) if *f == field && text.is_empty()
+                )
+            })
+            .then_some(x)
+    })
+}
+
+/// #2996, mockup row 36: at the default tab width the reset button shows
+/// inside its card beside an edited field and beside an invalid one, and a
+/// click on it resets that field.
+#[test]
+fn the_reset_button_fits_beside_an_edited_and_an_invalid_field() {
+    use crate::app::ProjectSection;
+    let (mut app, _sheet, _window) = app();
+    let project_id = app.document_state.projects[0].id;
+    tab(
+        &mut app,
+        ProjectTabMsg::SectionSelected {
+            project_id,
+            section: ProjectSection::SchematicDefaults,
+        },
+    );
+    edit(&mut app, SchematicDefaultField::BusWidth, "0.5");
+    edit(&mut app, SchematicDefaultField::JunctionDiameter, "5");
+    let texts = crate::layout_probe::lay_out_texts(app.view_project_tab(project_id), AUDIT_TAB);
+    // A card's title spans its body's width, padding excluded.
+    let inner_right = |title: &str| {
+        let b = crate::layout_probe::find(&texts, title).bounds;
+        b.x + b.width
+    };
+    let lines_right = inner_right("Lines");
+    let markers_right = inner_right("Text and markers");
+    let bus = reset_click_x(&app, "0.5", SchematicDefaultField::BusWidth, lines_right)
+        .expect("the bus width reset button inside the Lines card");
+    assert!(bus < lines_right);
+    let junction = reset_click_x(
+        &app,
+        "5",
+        SchematicDefaultField::JunctionDiameter,
+        markers_right,
+    )
+    .expect("the junction reset button inside the Text and markers card");
+    assert!(junction < markers_right);
+    // A built-in field keeps the slot empty: no reset on its row. Its box
+    // shows the built-in value as the placeholder.
+    use super::schematic_defaults::{built_in_value, shown_number};
+    let wire = SchematicDefaultField::WireWidth;
+    let overrides = &app.document_state.projects[0].data.schematic_defaults;
+    let placeholder = shown_number(built_in_value(wire, overrides));
+    assert_eq!(reset_click_x(&app, &placeholder, wire, lines_right), None);
+}
