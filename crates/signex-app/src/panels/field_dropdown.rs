@@ -38,21 +38,20 @@ impl<'a, Message> FieldDropdown<'a, Message> {
 
 /// Top-left of a `card` under `field`, in window coordinates: its right edge
 /// on the field's, `gap` below it; above the field when there is no room
-/// below; always inside the window.
+/// below; always inside the window, even for a field the panel has
+/// scrolled down past the window's edge (#3041).
 fn menu_origin(field: Rectangle, card: Size, gap: f32, window: Size) -> Point {
     let x = (field.x + field.width - card.width)
         .min(window.width - card.width)
         .max(0.0);
     let below = field.y + field.height + gap;
     let above = field.y - gap - card.height;
-    let y = if below + card.height <= window.height {
+    let y = if below + card.height <= window.height || above < 0.0 {
         below
-    } else if above >= 0.0 {
-        above
     } else {
-        (window.height - card.height).max(0.0)
+        above
     };
-    Point::new(x, y)
+    Point::new(x, y.min(window.height - card.height).max(0.0))
 }
 
 fn is_pointer_press(event: &Event) -> bool {
@@ -337,8 +336,13 @@ mod tests {
     }
 
     fn clicked(at: Point) -> Vec<Hit> {
+        clicked_in(fixture(), at)
+    }
+
+    /// The messages a left click at `at` publishes from `element`.
+    fn clicked_in(element: Element<'_, Hit>, at: Point) -> Vec<Hit> {
         let mut renderer = headless_renderer();
-        let mut ui = UserInterface::build(fixture(), WINDOW, Cache::default(), &mut renderer);
+        let mut ui = UserInterface::build(element, WINDOW, Cache::default(), &mut renderer);
         let mut bus = Bus::new();
         let events = [
             mouse::Event::CursorMoved { position: at },
@@ -406,6 +410,65 @@ mod tests {
             tiny,
         );
         assert_eq!(at.y, 0.0);
+    }
+
+    /// Where the field sits, scrolled down the panel past the window's
+    /// bottom edge (mockup-audit-5, m151-naming).
+    const FIELD_BELOW: f32 = WINDOW.height + 100.0;
+
+    /// #3041: a field the panel has scrolled below the window opens its
+    /// menu inside the window, its bottom on the window's.
+    #[test]
+    fn a_field_below_the_window_opens_its_menu_inside_it() {
+        let field = Rectangle::new(Point::new(150.0, FIELD_BELOW), Size::new(180.0, FIELD_H));
+        let at = menu_origin(field, CARD, GAP, WINDOW);
+        assert_eq!(at.y + CARD.height, WINDOW.height);
+        let half_out = Rectangle::new(
+            Point::new(150.0, WINDOW.height - FIELD_H / 2.0),
+            Size::new(180.0, FIELD_H),
+        );
+        let at = menu_origin(half_out, CARD, GAP, WINDOW);
+        assert_eq!(at.y + CARD.height + GAP, half_out.y, "above it");
+    }
+
+    /// The panel's scroller with the field at its right end, below the
+    /// window, and the open card.
+    fn scrolled_fixture<'a>() -> Element<'a, Hit> {
+        let field = button(Space::new())
+            .width(Length::Fixed(FIELD_W))
+            .height(Length::Fixed(FIELD_H))
+            .on_press(Hit::Field);
+        let card = container(
+            button(Space::new())
+                .width(Length::Fixed(CARD.width / 2.0))
+                .height(Length::Fixed(CARD.height / 2.0))
+                .on_press(Hit::Card),
+        )
+        .center_x(Length::Fixed(CARD.width))
+        .center_y(Length::Fixed(CARD.height));
+        let dropdown =
+            FieldDropdown::new(field.boxed(), card.boxed(), GAP).on_outside_press(Hit::Closed);
+        let line = row![Space::new().width(Length::Fill), dropdown.boxed()].width(Length::Fill);
+        iced::widget::scrollable(
+            Column::new()
+                .push(Space::new().height(Length::Fixed(FIELD_BELOW)).boxed())
+                .push(line.boxed())
+                .width(Length::Fill),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .boxed()
+    }
+
+    /// #3041 on the laid-out widget: the card's centre is inside the
+    /// window, where a press reaches it.
+    #[test]
+    fn the_card_of_a_field_below_the_window_takes_a_press_inside_it() {
+        let centre = Point::new(
+            WINDOW.width - CARD.width / 2.0,
+            WINDOW.height - CARD.height / 2.0,
+        );
+        assert_eq!(clicked_in(scrolled_fixture(), centre), vec![Hit::Card]);
     }
 
     #[test]

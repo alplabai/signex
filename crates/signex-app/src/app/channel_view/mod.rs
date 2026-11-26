@@ -10,6 +10,7 @@ mod cards;
 mod fit;
 #[cfg(test)]
 mod fit_tests;
+mod labels;
 mod miniature;
 mod strip;
 

@@ -16,6 +16,7 @@ mod channel_edits;
 mod channel_rows;
 #[cfg(test)]
 mod channel_tests;
+mod columns;
 mod commands;
 #[cfg(test)]
 mod commands_tests;
@@ -25,6 +26,8 @@ mod compare_tests;
 mod detail;
 mod edits;
 mod empty;
+#[cfg(test)]
+mod layout_tests;
 mod list;
 mod manager;
 #[cfg(test)]

@@ -174,7 +174,9 @@ designator map (logical designator, value, channel designator).
 Each card draws its channel's sheet at card scale (#2658): wires, buses and
 part bodies, with the designators and net names that channel has, in the
 schematic canvas colours. Names are drawn at a fixed small size so a small
-card stays legible. The drawing is built by the compile, off the UI thread
+card stays legible, each set clear of the part outlines and of the other
+names: inside its part when it fits there, else beside it
+(`app/channel_view/labels.rs`, #3042). The drawing is built by the compile, off the UI thread
 (`signex_net::sheet_miniature`), from the compile's own names, so it shows
 the last compile; before one, a card lists the channel's designators.
 
