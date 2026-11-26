@@ -66,6 +66,7 @@ fn open_project(app: &mut Signex, dir: &Path, sheets: &[&str]) {
             schematic_design: Default::default(),
             fab_outputs: None,
             router_tool_diameter: None,
+            bom_alternates: Vec::new(),
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
@@ -100,6 +101,7 @@ fn rename_sibling(app: &mut Signex, path: &Path, name: &str) {
         .symbol_editors
         .get_mut(path)
         .unwrap()
+        .draft
         .file
         .symbols[1]
         .name = name.into();
@@ -235,7 +237,7 @@ fn a_scan_that_lands_after_the_symbol_file_changed_is_dropped() {
     let task = delete(&mut app, 1);
     let editor = app.document_state.symbol_editors.get_mut(&path).unwrap();
     assert!(editor.record_edit(None, |e| {
-        e.file.symbols[0].name.push('x');
+        e.draft.file.symbols[0].name.push('x');
         true
     }));
     run(&mut app, task);
@@ -333,7 +335,7 @@ fn a_closed_child_sheet_reached_only_by_a_sheet_symbol_is_scanned() {
     let dir = _dir.path();
     // The project declares only root.snxsch; child.snxsch is a hierarchical
     // child that places the unused sibling.
-    let sibling = app.document_state.symbol_editors[&path].file.symbols[1].uuid;
+    let sibling = app.document_state.symbol_editors[&path].draft.file.symbols[1].uuid;
     let id = signex_app::library::place::lib_id_of(&PrimitiveRef::new(library_id, sibling));
     let mut root = SchematicSheet::default();
     root.child_sheets.push(child_ref("child.snxsch"));
@@ -409,7 +411,7 @@ fn a_symbol_placed_on_an_open_sheet_during_the_scan_stops_the_delete() {
     } = setup(&[("clean.snxsch", None)], &[]);
     let task = delete(&mut app, 1);
 
-    let sibling = app.document_state.symbol_editors[&path].file.symbols[1].uuid;
+    let sibling = app.document_state.symbol_editors[&path].draft.file.symbols[1].uuid;
     let id = signex_app::library::place::lib_id_of(&PrimitiveRef::new(library_id, sibling));
     let engine = app.document_state.active_engine_mut().expect("open sheet");
     let mut sheet = engine.document().clone();
@@ -428,7 +430,11 @@ fn a_symbol_placed_on_an_open_sheet_during_the_scan_stops_the_delete() {
 }
 
 fn sibling_lib_id(s: &Setup) -> String {
-    let sibling = s.app.document_state.symbol_editors[&s.path].file.symbols[1].uuid;
+    let sibling = s.app.document_state.symbol_editors[&s.path]
+        .draft
+        .file
+        .symbols[1]
+        .uuid;
     signex_app::library::place::lib_id_of(&PrimitiveRef::new(s.library_id, sibling))
 }
 

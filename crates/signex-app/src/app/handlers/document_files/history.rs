@@ -528,8 +528,8 @@ impl Signex {
                     .document_state
                     .symbol_editors
                     .get(&path)
-                    .map(|old| old.history_generation + 1);
-                state.history_generation =
+                    .map(|old| old.draft.history_generation + 1);
+                state.draft.history_generation =
                     carried.unwrap_or_else(|| self.document_state.next_symbol_history_base());
                 self.warn_if_cascade_owed(&path);
                 self.document_state

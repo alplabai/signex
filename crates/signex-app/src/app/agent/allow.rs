@@ -22,6 +22,15 @@ pub(super) const WINDOW_LAYOUT: &[&str] = &[
     "untile_documents",
 ];
 
+/// Commands whose `document` is optional in the catalog, for a script's old
+/// call, but which the channel takes only with it named: the agent gate
+/// (`check_agent_document`) refuses them without one. `update_pcb_from_schematic`
+/// takes the active project's board elsewhere (Caner, 2026-11-25), never here.
+pub(super) const DOCUMENT_NAMED_ON_CHANNEL: &[&str] = &["update_pcb_from_schematic"];
+/// Why an extension's command is refused on the agent channel.
+pub(super) const EXTENSION_COMMANDS_CLOSED: &str =
+    "extension commands are not open to the agent socket in version 1";
+
 /// Is `command` one of [`WINDOW_LAYOUT`]?
 pub(in crate::app) fn is_window_layout(command: &AppCommandId) -> bool {
     WINDOW_LAYOUT.contains(&command.as_str())
@@ -30,6 +39,10 @@ pub(in crate::app) fn is_window_layout(command: &AppCommandId) -> bool {
 /// Why `command` is not on the agent channel, or `None` when it is.
 pub(super) fn refusal(command: &AppCommandId) -> Option<String> {
     let id = command.as_str();
+    // Installed or not (#2495, `docs/EXTENSION_API.md`, "Catalog commands").
+    if command.is_extension() {
+        return Some(EXTENSION_COMMANDS_CLOSED.to_string());
+    }
     let Some(meta) = metadata_for(command) else {
         return Some(format!(
             "unknown command `{id}`{}",
@@ -53,11 +66,13 @@ pub(super) fn refusal(command: &AppCommandId) -> Option<String> {
         ));
     }
     // A required `document`: a placement's optional one does not open it, so a
-    // placement stays reachable only through `apply_edits` (#2199).
-    let names_document = meta
-        .operands
-        .iter()
-        .any(|op| op.name == "document" && op.kind == OperandKind::Document && op.required);
+    // placement stays reachable only through `apply_edits` (#2199). A
+    // [`DOCUMENT_NAMED_ON_CHANNEL`] command counts as required here.
+    let names_document = meta.operands.iter().any(|op| {
+        op.name == "document"
+            && op.kind == OperandKind::Document
+            && (op.required || DOCUMENT_NAMED_ON_CHANNEL.contains(&id))
+    });
     if !names_document {
         return Some(format!(
             "`{id}` does not name a document, so it is not on the agent channel"
@@ -94,10 +109,17 @@ mod tests {
                 "add_board_graphic",
                 "add_net_class",
                 "add_teardrops",
+                // #2462: Compare Board with Schematic's Apply, by row id.
+                "apply_board_schematic_differences",
                 "apply_edits",
                 "arrange_in_box",
+                // #2457, #2941: the rooms commands, on the named board.
+                "arrange_in_room",
                 "assign_board_net_class",
+                // #2937: a part's footprint on the named sheet.
+                "assign_footprint",
                 "assign_net_class",
+                "auto_place",
                 "autoplace_fields",
                 // #2796: the block diagram edits, on the named diagram.
                 "block_add",
@@ -111,6 +133,9 @@ mod tests {
                 "block_set",
                 "block_ungroup",
                 "block_unlink",
+                // #2470: Back Annotate and Re-Annotate Board on the named
+                // project or board.
+                "back_annotate_schematics",
                 "board_assembly_drawing",
                 "board_panel",
                 "board_report_bom",
@@ -118,34 +143,68 @@ mod tests {
                 "board_report_net_length",
                 "board_report_netlist",
                 "board_shape_from_selection",
+                // #2460: the board status bar's counters, as JSON.
+                "board_status",
+                // #2938: a BOM line's alternates, on the named project.
+                "bom_add_alternate",
+                "bom_remove_alternate",
+                "bom_set_alternate_order",
                 // #2326 slice 6.P2b: the drawing order and Delete, on the
                 // items `ids` names on the named sheet (or board, Delete).
                 "bring_drawings_forward",
                 "bring_drawings_to_front",
+                // #1297: the part `id` names swapped, on the named sheet.
+                "change_component",
+                // #2937: a footprint swap on the named board.
+                "change_footprint",
+                // #2462: Compare Board with Schematic as a query.
+                "check_board_against_schematic",
                 "check_drc",
                 "check_erc",
                 "check_requirements",
                 "clear_all_net_colors",
                 "close_active_document",
                 "color_net",
+                "create_rooms_from_sheets",
                 "delete_net_class",
                 "delete_selection",
                 "document_info",
                 "filter_drc_results",
                 "find_items",
                 "find_similar_items",
+                // #2940: the DRC fixes, on the named board.
+                "fix_drc",
+                "fix_drc_violation",
                 "gloss_selected_routes",
                 // #2394: the board view's layers, on the named board.
                 "hide_layer",
                 "hide_layer_group",
                 "highlight_layer",
                 "keepout_from_selection",
+                // #2942: the named board's layout plan.
+                "layout_plan_get",
+                "layout_plan_set",
+                "layout_plan_status",
                 "list_documents",
                 "lock_board_items",
                 "measure_board",
                 "panelize_board",
+                // #2470: the routing tools, the via and the area tools, on
+                // the named board.
+                "place_board_diff_pair",
+                "place_board_fill",
+                "place_board_keepout",
+                "place_board_multi_route",
+                "place_board_polygon_pour",
+                "place_board_pour_cutout",
+                "place_board_quick_route",
+                "place_board_region",
                 // #2410: pin and gate swap and design reuse, on the named board.
                 "place_board_reuse_block",
+                "place_board_room",
+                "place_board_route",
+                "place_board_track",
+                "place_board_via",
                 // #2339: the Requirements section's edits and run.
                 "project_add_requirement",
                 "project_add_variant",
@@ -158,16 +217,26 @@ mod tests {
                 "project_run_requirements",
                 "project_set_active_variant",
                 "project_set_annotate_undo",
+                // #2943: the project's rails and their budget.
+                "project_set_rail",
                 "project_set_requirement",
                 "project_set_version_control",
                 "project_settings",
                 // #2796: a block diagram as JSON.
                 "query_block_diagram",
                 "query_board_nets",
+                // #2938: the priced BOM of the named project.
+                "query_bom",
+                "query_footprint_assignments",
+                // #2944, #2939: an open library's rows; each part's height.
+                "query_library",
+                "query_part_heights",
                 "query_pins",
                 // #1313: the project's power tree.
                 "query_power_tree",
+                "query_rail_budget",
                 "read_document",
+                "reannotate_board",
                 "remove_board_panel",
                 "remove_teardrops",
                 "rename_net_class",
@@ -197,12 +266,18 @@ mod tests {
                 "save_board_reuse_block",
                 "save_document",
                 "save_layer_set",
+                // #1297: the parametric part search, a query.
+                "search_parts",
                 "send_drawings_backward",
                 "send_drawings_to_back",
                 // #2363: the Layers panel's board view configuration.
                 "set_active_layer",
                 "set_board_graphic",
                 "set_board_panel",
+                // #2936: a footprint placed by id on the named board.
+                "set_footprint_position",
+                "set_footprint_rotation",
+                "set_footprint_side",
                 "set_footprint_text",
                 "set_layer_color",
                 "set_layer_sizes",
@@ -230,9 +305,25 @@ mod tests {
                 "unlock_board_items",
                 "untile_documents",
                 "unwaive_drc_violation",
+                // #2470: Update PCB for the project of the named document,
+                // answered with the change list.
+                "update_pcb_from_schematic",
                 "waive_drc_violation",
             ]
         );
+    }
+
+    /// #2495: no extension command is on the agent channel in version 1,
+    /// with a reason that says so rather than "unknown command".
+    #[test]
+    fn an_extension_command_is_refused_as_closed_to_the_socket() {
+        for name in ["ext.sample.say_hello", "ext.other.read_notes"] {
+            assert_eq!(
+                refusal(&id(name)).as_deref(),
+                Some(EXTENSION_COMMANDS_CLOSED),
+                "{name}"
+            );
+        }
     }
 
     #[test]
@@ -246,6 +337,21 @@ mod tests {
                 "`{name}` names no document, so it needs no entry here"
             );
             assert!(meta.headless_refusal().is_none(), "`{name}` is window-only");
+        }
+    }
+
+    /// Each [`DOCUMENT_NAMED_ON_CHANNEL`] id takes an optional `document`:
+    /// a required one needs no entry.
+    #[test]
+    fn the_named_on_channel_list_names_commands_with_an_optional_document() {
+        for name in DOCUMENT_NAMED_ON_CHANNEL {
+            let meta = metadata_for(&id(name)).expect("in the catalog");
+            assert!(
+                meta.operands.iter().any(|op| op.name == "document"
+                    && op.kind == OperandKind::Document
+                    && !op.required),
+                "`{name}` takes no optional document, so it needs no entry here"
+            );
         }
     }
 

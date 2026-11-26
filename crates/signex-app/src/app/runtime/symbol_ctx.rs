@@ -59,6 +59,7 @@ pub(super) fn build_symbol_editor_panel_ctx(
     let drawings =
         app.library.library_panel.row_style == crate::library::state::LibraryRowStyle::Thumbnail;
     let symbols_in_file: Vec<SymbolFileEntry> = editor
+        .draft
         .file
         .symbols
         .iter()
@@ -85,7 +86,7 @@ pub(super) fn build_symbol_editor_panel_ctx(
         })
         .collect();
 
-    let selected = match editor.selected.clone() {
+    let selected = match editor.gui.selected.clone() {
         Some(sym_state::SymbolSelection::Pin(idx)) => pins
             .get(idx)
             .cloned()
@@ -159,8 +160,8 @@ pub(super) fn build_symbol_editor_panel_ctx(
         pins,
         graphics,
         selected,
-        graphic_fill_picker: editor.graphic_fill_picker,
-        local_color_picker: editor.local_color_picker,
+        graphic_fill_picker: editor.gui.graphic_fill_picker,
+        local_color_picker: editor.gui.local_color_picker,
         symbols_in_file,
         delete_warning: app
             .library
@@ -168,12 +169,12 @@ pub(super) fn build_symbol_editor_panel_ctx(
             .as_ref()
             .filter(|p| p.is_current(editor))
             .map(|p| p.warning.clone()),
-        active_idx: editor.active_idx,
-        active_part: editor.active_part,
+        active_idx: editor.draft.active_idx,
+        active_part: editor.draft.active_part,
         active_max_part,
         active_has_part_zero,
-        active_body: editor.active_body,
-        body_scope: sym_state::body_scope_row(sym, &editor.selected, editor.view()),
+        active_body: editor.draft.active_body,
+        body_scope: sym_state::body_scope_row(sym, &editor.gui.selected, editor.view()),
         part_drawing: SymbolEditorPanelContext::part_drawing_of(
             sym,
             |g| sym_state::graphic_on_part(g, editor.view()),

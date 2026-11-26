@@ -6,10 +6,13 @@
 //! Execute runs the ticked rows as one labelled board step at the list's
 //! revision, so it is one undo step and refused once the board moved on.
 
+// #2470: the change list as the command's JSON answer.
+mod answer;
 mod command;
 pub(crate) mod design;
 mod execute;
 mod fix;
+mod headless;
 mod new_pcb;
 // #1489: the rules the schematic's Net Parameters directives ask for.
 pub(crate) mod rules_from_schematic;
@@ -22,10 +25,12 @@ pub(crate) use command::update_pcb_from_schematic;
 pub(crate) use design::DesignSnapshot;
 pub(crate) use new_pcb::new_board_path;
 pub use state::UpdatePcbState;
-pub(crate) use state::{BoardStatus, Phase, file_name};
+pub(crate) use state::{BoardStatus, Phase, UpdatePcbJob, file_name};
 pub use table::{RowAction, RowFilter, TableGroup};
 pub(crate) use target::PcbSyncLabel;
 
+#[cfg(test)]
+mod operand_tests;
 #[cfg(test)]
 mod tests;
 
@@ -66,8 +71,9 @@ impl std::fmt::Debug for Computed {
 #[derive(Debug, Clone)]
 pub enum UpdatePcbMsg {
     /// `update_pcb_from_schematic` ran for the document in view. `apply`
-    /// (headless `apply=true`) executes the rows ticked by default once the
-    /// list is ready, without a dialog.
+    /// executes the rows ticked by default once the list is ready, without
+    /// a dialog. The form from operands (`document=`, #2470) does not come
+    /// through here: it answers its caller (`command.rs`).
     Requested {
         apply: bool,
     },

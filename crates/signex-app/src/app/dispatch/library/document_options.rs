@@ -78,7 +78,7 @@ impl Signex {
         // Clear every primitive editor's canvas cache so the
         // new sheet color / grid paints immediately. Cheap.
         for editor in self.document_state.symbol_editors.values_mut() {
-            editor.canvas_cache.clear();
+            editor.gui.canvas_cache.clear();
         }
         for editor in self.document_state.footprint_editors.values_mut() {
             editor.canvas_cache.clear();

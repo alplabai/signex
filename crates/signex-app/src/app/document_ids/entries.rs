@@ -218,7 +218,7 @@ impl Signex {
         for (path, editor) in &docs.symbol_editors {
             entries.push(self.entry_of_held(
                 DocumentKey::Symbol(path.clone()),
-                DocumentId::from_uuid(editor.file.file_uuid),
+                DocumentId::from_uuid(editor.draft.file.file_uuid),
                 DocumentKind::Symbol,
                 Some(path.clone()),
                 file_stem(path),

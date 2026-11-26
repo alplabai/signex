@@ -34,6 +34,8 @@ mod filter;
 mod groups;
 
 #[cfg(test)]
+mod extension_row_tests;
+#[cfg(test)]
 mod group_tests;
 #[cfg(test)]
 mod tests;
@@ -101,6 +103,7 @@ impl Signex {
             presets: &self.ui_state.pcb_filter_presets,
             editing: self.ui_state.pcb_filter_preset_editing,
             last: &self.ui_state.pcb_bar_last_tools,
+            extensions: &self.extensions,
         };
         let entries = pcb_bar_menu_entries(menu, &self.ui_state.i18n, tokens, tid, &sources);
         // The Selection Filter's chip grid sizes itself, as on the schematic.
@@ -416,6 +419,8 @@ pub(in crate::app::view) struct MenuSources<'a> {
     pub editing: Option<usize>,
     /// The row each tool group used last, drawn current in its dropdown.
     pub last: &'a PcbBarLastTools,
+    /// The installed extensions, whose rows end a tool group's dropdown.
+    pub extensions: &'a crate::extension::ExtensionHost,
 }
 
 /// The rows of `menu`: each runs its command, labelled and greyed as its
@@ -432,7 +437,12 @@ pub(in crate::app::view) fn pcb_bar_menu_entries(
         PcbBarMenu::Filter => {
             return filter::entries(i18n, tokens, src.filter, src.presets, src.editing);
         }
-        PcbBarMenu::Group(group) => return groups::entries(group, i18n, tid, src.ctx, src.last),
+        PcbBarMenu::Group(group) => {
+            let mut entries = groups::entries(group, i18n, tid, src.ctx, src.last);
+            let extension_rows = src.extensions.active_bar_rows_of(group);
+            entries.extend(groups::extension_entries(extension_rows, i18n, src.ctx));
+            return entries;
+        }
         PcbBarMenu::Align | PcbBarMenu::Move | PcbBarMenu::View => {}
     }
     menu_commands(menu)

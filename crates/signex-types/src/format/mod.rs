@@ -37,6 +37,7 @@ use crate::schematic::SchematicSheet;
 
 mod board_dimension;
 mod board_free;
+mod board_layout_plan;
 mod board_options;
 mod board_panel;
 mod board_sketch;
@@ -74,6 +75,8 @@ mod board_dimension_kind_tests;
 mod board_dimension_tests;
 #[cfg(test)]
 mod board_free_tests;
+#[cfg(test)]
+mod board_layout_plan_tests;
 #[cfg(test)]
 mod board_options_tests;
 #[cfg(test)]
@@ -173,8 +176,8 @@ pub use pcb_rows::{
 pub use pcb_token::{
     SNXPCB_FORMAT_BOARD_SKETCH_TARGETS, SNXPCB_FORMAT_LAYER_COLORS, SNXPCB_FORMAT_ROOMS,
     SNXPCB_FORMAT_V1, SNXPCB_FORMAT_V1_8, SNXPCB_FORMAT_V1_9, SNXPCB_FORMAT_V1_10,
-    SNXPCB_FORMAT_V1_11, SNXPCB_VERSION, snxpcb_opens_read_only, snxpcb_read, snxpcb_refuse_save,
-    snxpcb_token,
+    SNXPCB_FORMAT_V1_11, SNXPCB_FORMAT_V1_12, SNXPCB_VERSION, snxpcb_opens_read_only, snxpcb_read,
+    snxpcb_refuse_save, snxpcb_token,
 };
 pub use sch_rows::{SchComponentRow, SchJunctionRow, SchLabelRow, SchWireRow};
 pub use sch_token::{

@@ -464,6 +464,7 @@ fn save_all_ignores_a_project_with_an_empty_dir() {
             schematic_design: Default::default(),
             fab_outputs: None,
             router_tool_diameter: None,
+            bom_alternates: Vec::new(),
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),

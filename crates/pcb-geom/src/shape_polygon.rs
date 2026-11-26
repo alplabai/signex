@@ -10,7 +10,7 @@ use crate::shape_overlap::inside_convex;
 use crate::units::PointNm;
 
 /// `corners` as a counter-clockwise ring, whichever way they wind.
-pub(crate) fn ccw_ring(mut corners: Vec<PointNm>) -> Arc<[PointNm]> {
+pub fn ccw_ring(mut corners: Vec<PointNm>) -> Arc<[PointNm]> {
     let n = corners.len();
     let twice_area: i128 = (0..n).map(|i| corners[i].cross(corners[(i + 1) % n])).sum();
     if twice_area < 0 {

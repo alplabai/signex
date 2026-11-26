@@ -34,6 +34,12 @@ impl Signex {
         };
         let job = self.power_tree_job(project, variant);
         let target = project.path.clone();
-        self.answer_off_thread(command, args, target, move || job.run())
+        self.answer_off_thread(command, args, target, power_tree_unread, move || job.run())
     }
+}
+
+/// Why the run gave no power tree, as the tab words it.
+fn power_tree_unread(reason: String) -> signex_i18n::Translatable {
+    signex_i18n::Translatable::new(signex_i18n::ids::BLOCK_DIAGRAM_POWER_UNREAD)
+        .arg("reason", reason)
 }

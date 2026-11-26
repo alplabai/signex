@@ -171,6 +171,9 @@ pub enum Message {
     /// The block diagram tabs and their reads and writes (mockup row 171).
     /// Routed to `dispatch_block_diagram_message`.
     BlockDiagram(crate::app::BlockDiagramMsg),
+    /// A message for one installed extension (#2495), routed to it alone by
+    /// `ExtensionHost::route`. Never sent in the Community binary.
+    Extension(crate::extension::ExtensionMsg),
 }
 
 impl Message {

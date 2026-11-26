@@ -11,7 +11,7 @@ fn close(a: [f64; 2], b: [f64; 2]) -> bool {
 
 fn rig(tool: SymbolTool) -> Rig {
     let mut rig = Rig::new(Symbol::empty("C"));
-    rig.editor.tool = tool;
+    rig.editor.gui.tool = tool;
     rig
 }
 
@@ -21,10 +21,10 @@ fn snapshot(rig: &Rig) -> RendererSnapshot {
         editor.primitive(),
         None,
         SymbolTool::Select,
-        &editor.polygon_vertices,
+        &editor.gui.polygon_vertices,
         editor.view(),
         false,
-        &editor.camera,
+        &editor.gui.camera,
         1.27,
         true,
         crate::render_config::GridStyle::default(),
@@ -45,7 +45,7 @@ fn four_presses_place_a_bezier_through_the_canvas() {
         rig.press(at);
         rig.release(at);
     }
-    assert_eq!(rig.editor.polygon_vertices.len(), 3);
+    assert_eq!(rig.editor.gui.polygon_vertices.len(), 3);
     rig.press((7.62, 0.0));
     let graphics = &rig.editor.primitive().graphics;
     assert_eq!(graphics.len(), 1);
@@ -54,7 +54,7 @@ fn four_presses_place_a_bezier_through_the_canvas() {
     };
     assert!(close(points[1], [2.54, 2.54]), "{points:?}");
     assert!(close(points[3], [7.62, 0.0]), "{points:?}");
-    assert_eq!(rig.editor.history.undo_len(), 1);
+    assert_eq!(rig.editor.draft.history.undo_len(), 1);
 }
 
 #[test]
@@ -62,13 +62,13 @@ fn esc_and_right_click_cancel_a_bezier_and_keep_the_tool() {
     let mut rig = rig(SymbolTool::PlaceBezier);
     rig.press((0.0, 0.0));
     assert!(rig.escape(), "the canvas claims Esc mid-gesture");
-    assert!(rig.editor.polygon_vertices.is_empty());
-    assert_eq!(rig.editor.tool, SymbolTool::PlaceBezier);
+    assert!(rig.editor.gui.polygon_vertices.is_empty());
+    assert_eq!(rig.editor.gui.tool, SymbolTool::PlaceBezier);
 
     rig.press((0.0, 0.0));
     rig.right_click((2.54, 2.54));
-    assert!(rig.editor.polygon_vertices.is_empty());
-    assert_eq!(rig.editor.tool, SymbolTool::PlaceBezier);
+    assert!(rig.editor.gui.polygon_vertices.is_empty());
+    assert_eq!(rig.editor.gui.tool, SymbolTool::PlaceBezier);
     assert!(rig.editor.primitive().graphics.is_empty());
 }
 
@@ -93,7 +93,7 @@ fn three_presses_place_a_pie_through_the_canvas() {
     assert!((radius - 2.54).abs() < 1e-3, "{radius}");
     assert!(start_deg.abs() < 1e-3, "{start_deg}");
     assert!((end_deg - 90.0).abs() < 1e-3, "{end_deg}");
-    assert_eq!(rig.editor.history.undo_len(), 1);
+    assert_eq!(rig.editor.draft.history.undo_len(), 1);
 }
 
 #[test]
@@ -134,7 +134,7 @@ fn five_presses_place_an_elliptical_arc_at_the_clicked_angles() {
     assert!((radius_y - 2.54).abs() < 1e-3, "{radius_y}");
     assert!((start_deg - 45.0).abs() < 1e-3, "geometric: {start_deg}");
     assert!((end_deg - 135.0).abs() < 1e-3, "geometric: {end_deg}");
-    assert_eq!(rig.editor.history.undo_len(), 1);
+    assert_eq!(rig.editor.draft.history.undo_len(), 1);
 }
 
 #[test]
@@ -147,7 +147,7 @@ fn esc_and_right_click_cancel_an_elliptical_arc() {
     rig.press((0.0, 0.0));
     rig.right_click((2.54, 2.54));
     assert!(!rig.cstate.ellipse.is_active());
-    assert_eq!(rig.editor.tool, SymbolTool::PlaceEllipticalArc);
+    assert_eq!(rig.editor.gui.tool, SymbolTool::PlaceEllipticalArc);
     assert!(rig.editor.primitive().graphics.is_empty());
 }
 
@@ -169,7 +169,7 @@ fn two_presses_place_a_round_rectangle() {
     assert!(close(from, [0.0, 0.0]), "{from:?}");
     assert!(close(to, [7.62, 5.08]), "{to:?}");
     assert_eq!(corner_radius, 1.27);
-    assert_eq!(rig.editor.history.undo_len(), 1);
+    assert_eq!(rig.editor.draft.history.undo_len(), 1);
 }
 
 #[test]
@@ -296,7 +296,7 @@ fn bezier_clicks_do_not_carry_into_the_polygon_tool() {
     let mut rig = rig(SymbolTool::PlaceBezier);
     press_all(&mut rig, &[(0.0, 0.0), (2.54, 2.54), (5.08, 2.54)]);
     pick(&mut rig, T::PlacePolygon);
-    assert!(rig.editor.polygon_vertices.is_empty());
+    assert!(rig.editor.gui.polygon_vertices.is_empty());
     assert!(rig.editor.primitive().graphics.is_empty());
 }
 
@@ -306,7 +306,7 @@ fn short_polygon_clicks_do_not_carry_into_the_bezier_tool() {
     let mut rig = rig(SymbolTool::PlacePolygon);
     press_all(&mut rig, &[(0.0, 0.0), (2.54, 2.54)]);
     pick(&mut rig, T::PlaceBezier);
-    assert!(rig.editor.polygon_vertices.is_empty());
+    assert!(rig.editor.gui.polygon_vertices.is_empty());
     assert!(rig.editor.primitive().graphics.is_empty());
 }
 

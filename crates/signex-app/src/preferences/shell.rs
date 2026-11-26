@@ -6,7 +6,9 @@
 //! save at once, Cancel reads Close and closes as the X does (mockup row
 //! 148). Restore defaults has no backend yet, so it is not drawn.
 
-use super::graphite_fields::{graphite_label, group_messages, nav_matches, nav_search};
+use super::graphite_fields::{
+    extension_nav_matches, group_messages, nav_matches, nav_search, page_name,
+};
 use super::setting_row::{hairline, medium};
 use super::{PrefMsg, PrefNav, PrefsView, SP, TS, build_content, build_prefs_file_banner};
 use crate::app::view::dialogs::{PREFERENCES_HEADER_H, graphite_header};
@@ -40,7 +42,7 @@ pub(super) fn graphite_dialog<'a>(v: PrefsView<'a>, with_header: bool) -> Elemen
             v.i18n,
             ids::PREFERENCES_SUBTITLE,
             "group" => t!(v.i18n, group_messages(v.nav).0).into_string(),
-            "page" => t!(v.i18n, graphite_label(v.nav)).into_string()
+            "page" => page_name(v.i18n, v.nav, v.extensions).into_string()
         )
         .into_string();
         items.push(graphite_header(
@@ -97,10 +99,20 @@ fn graphite_nav<'a>(v: &PrefsView<'a>) -> Element<'a, PrefMsg> {
             .boxed(),
     );
     let mut last_group = "";
-    for &item in PrefNav::ALL
+    // The built-in pages, then a page per installed extension that added
+    // preferences (#2495), under the Extensions group.
+    let extension_pages = v
+        .extensions
+        .preference_pages()
+        .filter(|page| extension_nav_matches(i18n, page.name, query))
+        .map(|page| PrefNav::Extension(page.index));
+    let items: Vec<PrefNav> = PrefNav::ALL
         .iter()
-        .filter(|&&n| nav_matches(i18n, n, query))
-    {
+        .copied()
+        .filter(|&n| nav_matches(i18n, n, query))
+        .chain(extension_pages)
+        .collect();
+    for item in items {
         let group = item.group();
         if group != last_group {
             last_group = group;
@@ -121,7 +133,8 @@ fn graphite_nav<'a>(v: &PrefsView<'a>) -> Element<'a, PrefMsg> {
             );
         }
         let dirty = v.dirty_pages.contains(&item);
-        col = col.push(nav_row(item, item == v.nav, dirty, t, i18n));
+        let name = page_name(i18n, item, v.extensions);
+        col = col.push(nav_row(item, name, item == v.nav, dirty, t, i18n));
     }
     let bg = ti(t.panel_bg);
     container(
@@ -144,6 +157,7 @@ fn graphite_nav<'a>(v: &PrefsView<'a>) -> Element<'a, PrefMsg> {
 /// the page holds unsaved changes.
 fn nav_row<'a>(
     item: PrefNav,
+    name: signex_i18n::Localized,
     active: bool,
     dirty: bool,
     t: &ThemeTokens,
@@ -160,7 +174,7 @@ fn nav_row<'a>(
         signex_widgets::ui_font::regular()
     };
     let mut line = row![
-        text(t!(i18n, graphite_label(item)))
+        text(name)
             .size(TS.label)
             .font(font)
             .color(ink)
@@ -255,7 +269,8 @@ pub(super) fn footer_note(nav: PrefNav, dirty: bool) -> FooterNote {
 /// discards the drafts and closes.
 pub(super) fn dismiss_button(nav: PrefNav) -> (MessageId, PrefMsg) {
     match nav {
-        PrefNav::RuleProfiles => (ids::DIALOG_BUTTON_CLOSE, PrefMsg::Close),
+        // An extension's page shows its values and holds no draft.
+        PrefNav::RuleProfiles | PrefNav::Extension(_) => (ids::DIALOG_BUTTON_CLOSE, PrefMsg::Close),
         PrefNav::Appearance
         | PrefNav::Language
         | PrefNav::General

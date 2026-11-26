@@ -14,6 +14,13 @@ pub fn config_path() -> Option<PathBuf> {
     crate::config_root::config_root().map(|root| root.join(USER_SHORTCUTS_FILE_NAME))
 }
 
+/// The user's own shortcuts file, past a headless run's override: only for
+/// the `signex-cli` keymap commands (see
+/// [`crate::config_root::user_config_root`]).
+pub fn user_config_path() -> Option<PathBuf> {
+    crate::config_root::user_config_root().map(|root| root.join(USER_SHORTCUTS_FILE_NAME))
+}
+
 pub fn config_path_for_dir(base: &Path) -> PathBuf {
     crate::config_root::config_root_for_dir(base).join(USER_SHORTCUTS_FILE_NAME)
 }
@@ -99,6 +106,20 @@ pub fn export_custom_profile(profile: &ShortcutProfile) -> Result<String, Profil
     }
     let document = TomlShortcutProfile::from_profile(profile)?;
     toml::to_string_pretty(&document).map_err(ProfileLoadError::TomlSerialize)
+}
+
+/// Read one custom profile from a profile file (Import…). Blocking: call it
+/// from a task, never from `update`.
+pub fn read_profile_file(path: &Path) -> Result<ShortcutProfile, ProfileLoadError> {
+    let source = std::fs::read_to_string(path).map_err(ProfileLoadError::Io)?;
+    import_custom_profile(&source)
+}
+
+/// Write one custom profile to a profile file (Export…), crash-safe through
+/// [`signex_types::atomic_io::atomic_write`]. Blocking: call it from a task.
+pub fn write_profile_file(path: &Path, profile: &ShortcutProfile) -> Result<(), ProfileLoadError> {
+    let source = export_custom_profile(profile)?;
+    signex_types::atomic_io::atomic_write(path, source.as_bytes()).map_err(ProfileLoadError::Io)
 }
 
 pub fn export_custom_profiles(set: &ShortcutProfileSet) -> Result<String, ProfileLoadError> {

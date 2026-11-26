@@ -31,12 +31,17 @@ type Ran = (CommandOutcome, Task<Message>);
 /// route test checks [`ran`], so a route that calls the engine itself
 /// fails it. `delete_selection` on a footprint editor tab is the one GUI
 /// half that does not translate: the editor deletes on its own until slice
-/// S-L (a declared exception, `parity/owners.rs`).
+/// S-L (a declared exception, `parity/owners.rs`). `change_footprint`
+/// translates the footprint picker's Swap: the selection as `ids`, the
+/// picked footprint as `footprint`, `unmatched=keep` (#2937).
 #[cfg(test)]
 pub(crate) const TRANSLATED: &[&str] = &[
+    "arrange_in_room",
+    "auto_place",
     "board_shape_from_selection",
     "bring_drawings_forward",
     "bring_drawings_to_front",
+    "change_footprint",
     "delete_selection",
     "generate_block_diagram",
     "gloss_selected_routes",

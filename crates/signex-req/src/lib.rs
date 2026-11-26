@@ -10,11 +10,16 @@
 mod board;
 mod bom;
 mod parts;
+mod rails;
 mod runs;
 
 pub use parts::{LIFECYCLE_STATES, PartMiss, PartProblem, PartsShortfall, parts_shortfall};
+pub use rails::{
+    LOAD_PARAMETER, RailBudget, RailPart, SUPPLY_PARAMETER, UnreadCurrent, parse_current_a,
+    rail_budgets,
+};
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
@@ -22,7 +27,7 @@ use signex_bom::{BomTable, PriceBook};
 use signex_types::check::{CheckReport, Finding, Severity};
 use signex_types::net_class::NetClass;
 use signex_types::pcb::PcbBoard;
-use signex_types::project::{Requirement, RequirementEntry, RequirementKind};
+use signex_types::project::{RailSpec, Requirement, RequirementEntry, RequirementKind};
 
 /// The id a report names its check by.
 pub const REQUIREMENTS_CHECK: &str = "requirements";
@@ -55,10 +60,13 @@ impl Needs {
             match requirement.kind {
                 RequirementKind::ErcClean { .. } => needs.erc = true,
                 RequirementKind::DrcClean { .. } => needs.drc = true,
-                RequirementKind::BoardSize { .. } | RequirementKind::NetClass { .. } => {
-                    needs.board = true
+                RequirementKind::BoardSize { .. }
+                | RequirementKind::NetClass { .. }
+                | RequirementKind::LayerCount { .. } => needs.board = true,
+                // A rail's loads and sources are parameters of the parts.
+                RequirementKind::PartsState { .. } | RequirementKind::RailBudget { .. } => {
+                    needs.parts = true
                 }
-                RequirementKind::PartsState { .. } => needs.parts = true,
                 RequirementKind::BomCost { .. } => needs.bom = true,
             }
         }
@@ -104,6 +112,8 @@ pub struct Facts {
     /// The grouped BOM, unpriced.
     pub bom: Option<Result<BomTable, String>>,
     pub prices: PriceBook,
+    /// The project's rails by net name (#2943), or why they cannot be read.
+    pub rails: Result<BTreeMap<String, RailSpec>, String>,
     /// What the app could not prepare completely, said in the report.
     pub warnings: Vec<String>,
 }
@@ -251,6 +261,15 @@ pub fn board_extent_mm(board: &Board) -> Option<(f64, f64)> {
     }
 }
 
+/// The `query_rail_budget` answer's rails (#2943): every rail the project
+/// lists or a fitted part names, by name, each with its voltage, source,
+/// loads, total and headroom, and what keeps its budget from being told.
+pub fn rail_budget_answer(rails: &BTreeMap<String, RailSpec>, parts: &BomTable) -> Value {
+    let budgets = rail_budgets(rails, parts);
+    let listed: Vec<Value> = budgets.iter().map(RailBudget::to_json).collect();
+    json!({"count": listed.len(), "rails": listed})
+}
+
 /// What `requirement` finds unmet.
 fn evaluate(requirement: &Requirement, facts: &Facts) -> Vec<Miss> {
     match &requirement.kind {
@@ -295,6 +314,27 @@ fn evaluate(requirement: &Requirement, facts: &Facts) -> Vec<Miss> {
                 max_unit_cost: *max_unit_cost,
             },
         ),
+        RequirementKind::RailBudget {
+            net,
+            voltage,
+            tolerance_percent,
+            max_current_a,
+            margin_percent,
+        } => rails::rail_budget(
+            &facts.rails,
+            facts.parts.as_ref(),
+            &rails::RailWanted {
+                net,
+                voltage: *voltage,
+                tolerance_percent: *tolerance_percent,
+                max_current_a: *max_current_a,
+                margin_percent: *margin_percent,
+            },
+        ),
+        RequirementKind::LayerCount {
+            min_layers,
+            max_layers,
+        } => board::layer_count(&facts.board, *min_layers, *max_layers),
     }
 }
 

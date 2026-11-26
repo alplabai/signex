@@ -48,6 +48,7 @@ fn facts(list: serde_json::Value) -> Facts {
         row_states: HashMap::new(),
         bom: None,
         prices: PriceBook::default(),
+        rails: Ok(std::collections::BTreeMap::new()),
         warnings: Vec::new(),
     }
 }
@@ -547,4 +548,80 @@ fn a_turned_off_requirement_is_not_checked_needs_nothing_and_says_so() {
         "{:?}",
         report.warnings
     );
+}
+
+#[test]
+fn a_layer_count_passes_within_its_limits_and_says_the_count_when_not() {
+    let list = json!([
+        {"id": "two_to_four", "kind": "layer_count", "min_layers": 2, "max_layers": 4},
+        {"id": "six_up", "kind": "layer_count", "min_layers": 6},
+        {"id": "upside_down", "kind": "layer_count", "min_layers": 4, "max_layers": 2},
+    ]);
+    let mut facts = facts(list);
+    assert_eq!(
+        Needs::of(&facts.requirements),
+        Needs {
+            board: true,
+            ..Needs::default()
+        }
+    );
+    facts.board = read_board(SetupProfile::Custom.pcb(4).new_board());
+    let report = check_report(&facts);
+    assert_eq!(report.passed, ["req::two_to_four"]);
+    let under = report
+        .findings
+        .iter()
+        .find(|f| f.rule == "req::six_up")
+        .expect("a finding");
+    assert_eq!(under.evidence["count"], json!(4));
+    assert_eq!(under.evidence["min_layers"], json!(6));
+    assert_eq!(under.sheet, BOARD);
+    assert!(rules(&report).contains(&"req::upside_down"));
+
+    let mut no_board = facts.clone();
+    no_board.board = Board::NotListed;
+    assert!(
+        check_report(&no_board).passed.is_empty(),
+        "no board is no pass"
+    );
+}
+
+#[test]
+fn a_rail_budget_passes_on_one_project_and_fails_on_another() {
+    let list = json!([
+        {"id": "core", "kind": "rail_budget", "net": "+1V8", "voltage": 1.8,
+         "margin_percent": 20},
+    ]);
+    let rail = |load: &str| {
+        let mut facts = facts(list.clone());
+        facts.rails = Ok(std::collections::BTreeMap::from([(
+            "+1V8".to_string(),
+            signex_types::project::RailSpec {
+                voltage: 1.8,
+                tolerance_percent: None,
+            },
+        )]));
+        let mut source = row(&["U1"], 1, None, "LDO");
+        source
+            .custom
+            .insert("Rail Supply +1V8".into(), "500mA".into());
+        let mut sink = row(&["U2"], 1, None, "MCU");
+        sink.custom.insert("Rail Load +1V8".into(), load.into());
+        facts.parts = Some(Ok(BomTable {
+            rows: vec![source, sink],
+            ..BomTable::default()
+        }));
+        check_report(&facts)
+    };
+    let met = rail("0.3");
+    assert_eq!(met.passed, ["req::core"]);
+    assert!(met.findings.is_empty(), "{:?}", met.findings);
+    let over = rail("450mA");
+    assert!(over.passed.is_empty());
+    assert_eq!(rules(&over), ["req::core"]);
+    let evidence = &over.findings[0].evidence;
+    assert_eq!(evidence["kind"], "rail_budget");
+    assert_eq!(evidence["rail"]["net"], "+1V8");
+    assert_eq!(evidence["rail"]["loads"][0]["designator"], "U2");
+    assert_eq!(rail("450mA").keys(), rail("480mA").keys(), "the key holds");
 }

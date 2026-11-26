@@ -56,6 +56,7 @@ mod handlers;
 #[cfg(test)]
 pub(crate) mod hierarchy_fixture;
 mod layer_stack_tab;
+pub(crate) mod layout_plan;
 mod library_delete;
 mod load_gateway;
 mod mutation_gateway;
@@ -126,7 +127,10 @@ pub(crate) use state::ModalId;
 #[cfg(test)]
 mod draft_save_point_tests;
 pub(crate) mod stitched_netlist;
+mod symbol_draft;
 mod symbol_history;
+#[cfg(test)]
+mod symbol_split_tests;
 mod undo_depth;
 mod undo_groups;
 pub(crate) mod unread_sheets;
@@ -172,7 +176,8 @@ pub(crate) use document::{Document, DocumentKey};
 pub use document_setup::{DocumentSetupMsg, DocumentSetupState, SetupKind, SheetChoice};
 pub use documents::{
     ComponentEditorTab, FootprintDocument, FootprintHistorySnapshot, GraphicFillPicker,
-    LocalColorPicker, LocalColorSlot, SymbolDocument, SymbolViewRequest, TabInfo, TabKind, Tool,
+    LocalColorPicker, LocalColorSlot, SymbolDocument, SymbolEditorView, SymbolViewRequest, TabInfo,
+    TabKind, Tool,
 };
 pub use fab_outputs::{BoardNote, FabOutput, FabOutputsMsg, FabOutputsState, FabProblem};
 pub(crate) use handlers::document_files::is_pcb_path;
@@ -195,6 +200,7 @@ pub use state::{
     CaseFold, DocumentState, InteractionState, KeymapRecorderState, LoadedProject, PageSetupInputs,
     PreviewState, ProjectId, Signex, UiState,
 };
+pub use symbol_draft::SymbolDraft;
 pub use symbol_history::SymbolHistorySnapshot;
 pub use update_pcb::{RowAction, RowFilter, TableGroup, UpdatePcbMsg, UpdatePcbState};
 

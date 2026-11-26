@@ -465,7 +465,7 @@ fn editors() -> Editors {
     footprint.state.active_bar_menu = Some(FpActiveBarMenu::Filter);
     let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("menu"));
     let mut symbol = crate::app::SymbolDocument::new("menu.snxsym".into(), file);
-    symbol.active_bar_menu = Some(crate::library::editor::symbol::SymActiveBarMenu::Filter);
+    symbol.gui.active_bar_menu = Some(crate::library::editor::symbol::SymActiveBarMenu::Filter);
     let mut sketch = footprint_doc("sketch");
     let id = ConstraintId::new();
     let kind = ConstraintKind::DistancePtPt {

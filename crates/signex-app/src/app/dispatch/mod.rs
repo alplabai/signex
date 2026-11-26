@@ -135,6 +135,7 @@ impl Signex {
             Message::DiffPairClasses(msg) => self.dispatch_diff_pair_classes_message(msg),
             Message::GerberViewer(msg) => self.dispatch_gerber_viewer_message(msg),
             Message::BlockDiagram(msg) => self.dispatch_block_diagram_message(msg),
+            Message::Extension(msg) => self.extensions.route(msg),
         }
     }
 

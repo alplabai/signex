@@ -160,6 +160,7 @@ fn add_project(app: &mut Signex, dir: &Path) {
             agent_journal: Default::default(),
             fab_outputs: None,
             router_tool_diameter: None,
+            bom_alternates: Vec::new(),
             requirements: Default::default(),
             parameters: Default::default(),
             schematic_design: Default::default(),

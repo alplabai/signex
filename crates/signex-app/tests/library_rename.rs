@@ -347,7 +347,7 @@ fn a_symbol_edit_during_a_library_rename_survives_the_rename() {
         "the draft is still dirty at the new path"
     );
     assert_eq!(
-        editor.file.symbols[0].pins.len(),
+        editor.draft.file.symbols[0].pins.len(),
         1,
         "the edit survived the rename"
     );

@@ -72,6 +72,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 
 | command id | label | category | Signex Standard | Classic |
 | --- | --- | --- | --- | --- |
+| `apply_board_schematic_differences` | Apply board and schematic differences by id | pcb_sync | — | — |
 | `apply_edits` | Apply edits (agent) | edit | — | — |
 | `apply_layout_board` | Workspace layout: Layout | window | — | — |
 | `apply_layout_notebook` | Workspace layout: Notebook | window | — | — |
@@ -89,12 +90,17 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `block_set` | Change a block of a block diagram | edit | — | — |
 | `block_ungroup` | Remove a block group | edit | — | — |
 | `block_unlink` | Remove a block connection | edit | — | — |
+| `board_status` | Board status counters | validation | — | — |
+| `bom_add_alternate` | Add an alternate part to a BOM line | design | — | — |
+| `bom_remove_alternate` | Remove an alternate part from a BOM line | design | — | — |
+| `bom_set_alternate_order` | Move an alternate part in a BOM line's order | design | — | — |
 | `break_wire` | Break wire | modify | `E W` | — |
 | `bring_drawings_forward` | Bring drawings forward | edit | — | — |
 | `bring_drawings_to_front` | Bring drawings to front | edit | — | — |
 | `cancel_current_tool` | Cancel current stage / exit placement mode | interactive | `Escape` | `Escape` |
 | `center_on_cursor` | Center on cursor | view | — | `F4` |
 | `center_view_at_cursor` | Center/redraw view around cursor | view | `Home` | — |
+| `check_board_against_schematic` | Check the board against the schematic | pcb_sync | — | — |
 | `check_drc` | Check design rules | validation | — | — |
 | `check_erc` | Check electrical rules | validation | — | — |
 | `check_requirements` | Check project requirements | validation | — | — |
@@ -135,6 +141,8 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `find_text` | Find text | search | — | — |
 | `home_view` | Reset the view rotation and Flip, then fit the board or sheet | view | — | — |
 | `import_graphics` | Import graphics | place | — | `Mod+Shift+F` |
+| `keymap_assign` | Give a command a key in a custom keyboard profile | preferences | — | — |
+| `keymap_clear` | Take a command's keys away in a custom keyboard profile | preferences | — | — |
 | `list_documents` | List documents | file | — | — |
 | `manage_workspace_layouts` | Manage workspace layouts | window | — | — |
 | `measure_distance` | Measure distance | view | `Ctrl+M` | `Ctrl+M` |
@@ -179,12 +187,16 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `project_run_requirements` | Run the project's requirement checks in the Project tab | validation | — | — |
 | `project_set_active_variant` | Choose the active variant of the project | design | — | — |
 | `project_set_annotate_undo` | Set how many undo steps an annotate run of the project is | design | — | — |
+| `project_set_rail` | Set a power rail's voltage and tolerance | design | — | — |
 | `project_set_requirement` | Set a field of a project requirement | design | — | — |
 | `project_set_version_control` | Turn commit on save on or off for the project | design | — | — |
 | `project_settings` | Read the settings of the project | design | — | — |
 | `query_block_diagram` | Query a block diagram | search | — | — |
+| `query_bom` | Query the priced BOM | design | — | — |
+| `query_library` | Query a library | library | — | — |
 | `query_pins` | Query pins | file | — | — |
 | `query_power_tree` | Query the project's power tree | design | — | — |
+| `query_rail_budget` | Query the project's rail budget | validation | — | — |
 | `read_document` | Read document | file | — | — |
 | `redo` | Redo | edit | `Mod+Shift+Z` (macOS), `Ctrl+Shift+Z`, `Ctrl+Y` | `Ctrl+Shift+Z`, `Mod+Shift+Z` (macOS), `Ctrl+Y` |
 | `refresh_view` | Refresh/redraw | view | `End` | `F5` |
@@ -203,6 +215,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `save_document_as` | Save as | file | `Mod+Shift+S` | `Mod+Shift+S` |
 | `save_project_as` | Save the project to a new folder | file | — | — |
 | `save_workspace_layout` | Save the panel arrangement as a workspace layout | window | — | — |
+| `search_parts` | Search parts by parameters | library | — | — |
 | `select_all` | Select all | select | `Mod+A` | `Mod+A` |
 | `send_drawings_backward` | Send drawings backward | edit | — | — |
 | `send_drawings_to_back` | Send drawings to back | edit | — | — |
@@ -249,6 +262,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `annotate_schematic` | Annotate schematic | design | `T A` | — |
 | `annotate_schematic_quietly` | Annotate schematic quietly | design | `Alt+A` | `Alt+A` |
 | `apply_selection_filter_preset` | Apply a selection filter preset | select | — | — |
+| `assign_footprint` | Set the footprint of a placed part | design | — | — |
 | `assign_footprints` | Assign footprints | design | — | — |
 | `assign_net_class` | Assign net to class | design | — | — |
 | `back_annotate_schematics` | Back-annotate the board's designators and values to the schematic | pcb_sync | — | — |
@@ -348,6 +362,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `place_wire_to_bus_entry` | Place wire-to-bus entry | place | — | — |
 | `previous_highlighted_net_item` | Previous item on highlighted net | select | — | `Shift+Tab` |
 | `previous_sheet` | Previous sheet | navigation | — | `PageUp` |
+| `query_footprint_assignments` | List the footprint of every part | design | — | — |
 | `regenerate_block_diagram` | Regenerate the block diagram from the sheet hierarchy | design | — | — |
 | `remove_from_union` | Remove the selection from its union | edit | — | — |
 | `repair_pin_junctions` | Add a junction where a pin end touches a wire | validation | — | — |
@@ -381,7 +396,9 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `add_net_class` | Add a net class | design | — | — |
 | `add_teardrops` | Add teardrops where tracks of the selected nets, or of every net, enter a pad or via | pcb | — | — |
 | `arrange_in_box` | Arrange the selected components inside a box drawn on the board | modify | — | — |
+| `arrange_in_room` | Pack the parts of the selected room inside it again | design | — | — |
 | `assign_board_net_class` | Put a board net in a net class | design | — | — |
+| `auto_place` | Place the parts of each room inside it by connection length, heat, noise and connector edges | design | — | — |
 | `board_assembly_drawing` | Open Board Print / PDF for an assembly drawing | pcb | — | — |
 | `board_layer_stack` | Open the layer stack manager of the board | design | — | — |
 | `board_panel` | Describe the board's panel | pcb | — | — |
@@ -408,6 +425,8 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `fabrication_outputs` | Generate the board's fabrication outputs | file | — | — |
 | `filter_drc_results` | Filter the DRC results by rule, layer and severity | pcb | — | — |
 | `find_similar_items` | Find similar items on a board | search | — | — |
+| `fix_drc` | Fix the DRC violations of one rule, or of every rule with a fix | pcb | — | — |
+| `fix_drc_violation` | Fix one DRC violation without waiving it | pcb | — | — |
 | `flip_board_3d` | Turn the board over in the 3D view | view | `F` | `F` |
 | `flip_board_view` | View the board from below, or from above again | view | — | — |
 | `flip_selection` | Flip selection to the other board side | modify | `L` | `L` |
@@ -419,6 +438,9 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `import_dxf` | Import a DXF drawing onto the active layer of the board | file | — | — |
 | `import_dxf_outline` | Import the largest closed shape of a DXF drawing as the board outline | file | — | — |
 | `keepout_from_selection` | Turn the selected area or closed lines into a keepout on its layer | design | — | — |
+| `layout_plan_get` | Read the board's layout plan | pcb | — | — |
+| `layout_plan_set` | Change a stage of the board's layout plan | pcb | — | — |
+| `layout_plan_status` | Say how far each stage of the board's layout plan is | pcb | — | — |
 | `lock_board_items` | Lock the selected tracks and vias | modify | — | — |
 | `measure_board` | Measure on a board | search | — | — |
 | `new_pcb_document` | New PCB in the project | file | — | — |
@@ -457,6 +479,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `polygon_manager` | Open the Polygon Manager of the board | pcb | — | — |
 | `prev_layer` | Make the previous layer of the board active | view | `-` | `-` |
 | `query_board_nets` | Query board nets | search | — | — |
+| `query_part_heights` | Query part heights | validation | — | — |
 | `reannotate_board` | Re-annotate the board's designators by position | design | — | — |
 | `remove_board_panel` | Remove the board's panel | pcb | — | — |
 | `remove_teardrops` | Remove the teardrops of the selected nets, or of every net | pcb | — | — |
@@ -489,6 +512,9 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `set_board_graphic` | Set one field of a board drawing | edit | — | — |
 | `set_board_origin` | Set the board origin at a clicked point | edit | `E O S` | `Shift+O` |
 | `set_board_panel` | Change a setting of the board's panel | pcb | — | — |
+| `set_footprint_position` | Move a component on the board to a point | edit | — | — |
+| `set_footprint_rotation` | Set the rotation of a component on the board | edit | — | — |
+| `set_footprint_side` | Put a component on the top or bottom side of the board | edit | — | — |
 | `set_footprint_text` | Set the place, angle, height or justification of a component's designator or comment | edit | — | — |
 | `set_layer_color` | Give one layer its own color, saved with the board, or the palette color again | view | — | — |
 | `set_layer_sizes` | Set the per-layer copper sizes of vias or pads | modify | — | — |

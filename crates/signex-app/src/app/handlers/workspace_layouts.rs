@@ -174,6 +174,8 @@ impl Signex {
             region.panels.retain(|kind| !detached.contains(kind));
         }
         let mut dock = crate::fonts::dock_from_snapshot(&wanted);
+        let extensions = &self.extensions;
+        dock.adopt_extension_panels(|key| extensions.panel(key));
         for floating in std::mem::take(&mut self.document_state.dock.floating) {
             if dock.locate(floating.kind).is_none() {
                 dock.floating.push(floating);

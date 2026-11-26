@@ -55,6 +55,7 @@ define_ids! {
     PANELS_LIST_GROUP_VERIFY = "panels-list-group-verify";
     PANELS_LIST_GROUP_LIBRARY = "panels-list-group-library";
     PANELS_LIST_GROUP_PCB = "panels-list-group-pcb";
+    PANELS_LIST_GROUP_EXTENSIONS = "panels-list-group-extensions";
     PANELS_LIST_REGION_LEFT = "panels-list-region-left";
     PANELS_LIST_REGION_RIGHT = "panels-list-region-right";
     PANELS_LIST_REGION_BOTTOM = "panels-list-region-bottom";

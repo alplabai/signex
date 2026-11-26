@@ -14,6 +14,7 @@
 
 mod bundle;
 mod catalog;
+mod extension;
 mod format;
 mod i18n;
 mod locale;
@@ -22,6 +23,7 @@ mod numbers;
 mod render;
 mod text;
 
+pub use extension::{ExtensionMessages, ftl_entry_ids};
 pub use format::{DateLength, ListKind};
 pub use i18n::{I18n, LanguageOption};
 /// The locale type [`I18n::format_locale`] returns, for callers that keep one.
@@ -30,8 +32,8 @@ pub use locale::{LanguagePref, resolved_locale};
 pub use localized::Localized;
 pub use render::RenderTranslatable;
 pub use signex_i18n_ids::{
-    Arg, LocalNumber, MessageId, MessageRenderer, Translatable, UserText, command_ids, ids,
-    key_ids, menu_ids, shortcut_ids,
+    Arg, EXTENSION_MESSAGE_PREFIX, LocalNumber, MessageId, MessageRenderer, Translatable, UserText,
+    command_ids, ids, key_ids, menu_ids, shortcut_ids,
 };
 
 /// Render a message: `t!(i18n, ids::MENU_FILE)` or, with arguments,

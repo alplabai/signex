@@ -7,6 +7,7 @@ pub use signex_commands::DocumentTarget;
 
 use super::entries::DocumentEntry;
 use crate::app::Signex;
+use crate::app::document::DocumentKey;
 use crate::app::state::scope::path_key_with;
 
 impl Signex {
@@ -38,6 +39,22 @@ impl Signex {
                     .or_else(|| self.unopened_block_diagram(given))
                     .ok_or_else(|| format!("not an open or referenced document: {text}"))
             }
+        }
+    }
+
+    /// The revision `read_document` reports for `entry`: a loaded sheet's
+    /// engine revision or an open board's. `None` for every other document,
+    /// which has no revision to compare.
+    pub(crate) fn document_revision(&self, entry: &DocumentEntry) -> Option<u64> {
+        let docs = &self.document_state;
+        match &entry.key {
+            Some(DocumentKey::Schematic(path)) => docs
+                .engines
+                .get(path)
+                .filter(|_| entry.loaded)
+                .map(signex_engine::Engine::revision),
+            Some(DocumentKey::Pcb(path)) => docs.pcb_revisions.get(path).copied(),
+            _ => None,
         }
     }
 }

@@ -587,6 +587,10 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "add_board_graphic" | "set_board_graphic" => Needs::Pcb,
         // #2368: a footprint text on the board `document` names.
         "set_footprint_text" => Needs::Pcb,
+        // #2936: a footprint placed by id on the board `document` names.
+        "set_footprint_position" | "set_footprint_rotation" | "set_footprint_side" => Needs::Pcb,
+        // #2937: a part's footprint on the sheet `document` names.
+        "assign_footprint" => Needs::Schematic,
         // #2389: length tuning of the selected tracks' nets.
         "tune_net_length" | "tune_diff_pair" => Needs::Pcb,
         // #2401, #2407: the layer stack and the track and via edits.
@@ -619,6 +623,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "save_project_as" => Needs::OpenProject,
         // #2457: the dialog reads the sheets of the board's project.
         "create_rooms_from_sheets" => Needs::PcbInProject,
+        // #2457, #2941: they move parts of the board in view.
+        "arrange_in_room" | "auto_place" => Needs::EditablePcb,
         "annotate_schematic_quietly" | "force_annotate_all_schematics" => Needs::ActiveSheet,
         // Home View acts on the main window's sheet or board (mockup row 194).
         "zoom_in_at_cursor" | "zoom_out_at_cursor" | "home_view" => Needs::Canvas,
