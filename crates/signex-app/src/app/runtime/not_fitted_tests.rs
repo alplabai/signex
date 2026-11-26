@@ -53,7 +53,6 @@ fn app_listing(listed: &[&str]) -> (Signex, tempfile::TempDir) {
     app.document_state.tabs.push(TabInfo {
         title: "a".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: Some(id),
         kind: TabKind::Schematic,
     });
@@ -261,7 +260,6 @@ fn app_with_child(symbol_name: &str, child: Vec<Symbol>) -> (Signex, tempfile::T
     app.document_state.tabs.push(TabInfo {
         title: "child".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: Some(id),
         kind: TabKind::Schematic,
     });
