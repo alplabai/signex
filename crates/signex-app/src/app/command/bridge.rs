@@ -436,6 +436,13 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "create_rooms_from_sheets" => Message::Pcb(PcbMsg::CreateRooms(
             crate::app::rooms::CreateRoomsMsg::Requested,
         )),
+        // #2457, #2941: translated to their operand handlers.
+        "arrange_in_room" => Message::Pcb(PcbMsg::RoomTool(
+            crate::app::rooms::RoomToolMsg::ArrangeRequested,
+        )),
+        "auto_place" => Message::Pcb(PcbMsg::RoomTool(
+            crate::app::rooms::RoomToolMsg::AutoPlaceRequested,
+        )),
         "place_board_route" => board_tool(BoardPlaceTool::InteractiveRouting),
         // #2424: the Graphics tools.
         "place_board_line" => board_tool(BoardPlaceTool::Line),

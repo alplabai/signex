@@ -120,6 +120,9 @@ pub enum PcbMsg {
     Room(crate::app::rooms::RoomMsg),
     /// Create Rooms from Sheets and its dialog (#2457).
     CreateRooms(crate::app::rooms::CreateRoomsMsg),
+    /// Arrange in Room or Auto Place in Rooms on the board in view (#2457,
+    /// #2941).
+    RoomTool(crate::app::rooms::RoomToolMsg),
     /// Edit ▸ Origin on the board in view (2026-11-18).
     Origin(BoardOriginMsg),
 }

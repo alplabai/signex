@@ -691,6 +691,11 @@ cmd-place-board-room = Draw a room by two corners: an area for the parts of one 
 cmd-menu-place-board-room = Room
 cmd-create-rooms-from-sheets = Make a room for each sheet of the project and move its parts into it
 cmd-menu-create-rooms-from-sheets = Create Rooms from Sheets...
+cmd-arrange-in-room = Pack the parts of the selected room inside it again
+cmd-menu-arrange-in-room = Arrange in Room
+# #2941: placement only; nothing is routed.
+cmd-auto-place = Place the parts of each room inside it by connection length, heat, noise and connector edges
+cmd-menu-auto-place = Auto Place in Rooms
 cmd-footprint-mode-pads = Switch footprint editor to Pads mode
 cmd-footprint-mode-sketch = Switch footprint editor to Sketch mode
 cmd-footprint-mode-view-3d = Switch footprint editor to 3D View mode

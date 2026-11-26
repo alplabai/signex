@@ -1052,3 +1052,6 @@ pub const SET_PAD_SHAPE: &[Operand] = &[
     optional("delta", OperandKind::Text),
     optional("corners", OperandKind::Text),
 ];
+
+mod rooms;
+pub use rooms::{ARRANGE_ROOM, AUTO_PLACE, CREATE_ROOMS, PLACE_ROOM};

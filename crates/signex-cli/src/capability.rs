@@ -184,6 +184,20 @@ mod tests {
         assert_eq!(cap("query_footprint_assignments"), Capability::Read);
     }
 
+    /// #2457, #2941: the rooms commands change the board in memory, one
+    /// undo step each; none writes a file.
+    #[test]
+    fn the_rooms_commands_need_the_edit_capability() {
+        for id in [
+            "place_board_room",
+            "create_rooms_from_sheets",
+            "arrange_in_room",
+            "auto_place",
+        ] {
+            assert_eq!(cap(id), Capability::Edit, "{id}");
+        }
+    }
+
     /// #2506: Repour All clears `unfilled` on the board's pours as an undo
     /// step, so a read-only grant may not run it.
     #[test]

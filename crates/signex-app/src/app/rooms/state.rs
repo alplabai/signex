@@ -6,13 +6,16 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
-use signex_engine::pcb::rooms::{RoomOptions, RoomPlan, SheetMembers, plan_rooms_from_sheets};
+use signex_engine::pcb::rooms::{
+    PlanShape, RoomOptions, RoomPlan, SheetMembers, plan_rooms_from_sheets,
+};
 use signex_types::object_id::IdSource;
 use signex_types::pcb::PcbBoard;
 use signex_widgets::property_illustration::IllustrationHover;
 use uuid::Uuid;
 
 use super::RoomField;
+use crate::app::command::OperandValue;
 
 /// The rooms slice of the UI state.
 #[derive(Debug, Clone, Default)]
@@ -104,14 +107,37 @@ impl CreateRoomsDialog {
     /// sheets, less the unticked ones and the parts only they move.
     pub(crate) fn plan_with(&self, board: &PcbBoard, ids: &mut dyn IdSource) -> RoomPlan {
         let mut plan = plan_rooms_from_sheets(board, &self.sheets, &self.options, ids);
-        plan.rooms.retain(|p| !self.unticked.contains(&p.room.name));
-        let kept: BTreeSet<Uuid> = plan
-            .rooms
-            .iter()
-            .flat_map(|p| p.members.iter().copied())
-            .collect();
-        plan.moves.retain(|(fp, _)| kept.contains(fp));
+        plan.retain_rooms(|name| !self.unticked.contains(name));
         plan
+    }
+
+    /// Create's operands of `create_rooms_from_sheets` on `board`: the
+    /// options and the ticked rooms by name. `None` when no row is ticked.
+    pub(crate) fn operands(&self, board: &PcbBoard) -> Option<Vec<(&'static str, OperandValue)>> {
+        let ticked: Vec<String> = self
+            .rows(board)
+            .into_iter()
+            .filter(|row| row.ticked)
+            .map(|row| row.name)
+            .collect();
+        if ticked.is_empty() {
+            return None;
+        }
+        let shape = match self.options.shape {
+            PlanShape::AroundParts => "around_parts",
+            PlanShape::EvenGrid => "even_grid",
+        };
+        let text = |s: &str| OperandValue::Text(s.to_string());
+        let o = &self.options;
+        Some(vec![
+            ("margin", OperandValue::Length(o.margin_mm)),
+            ("shape", text(shape)),
+            ("side", text(o.layer.token())),
+            ("move_parts", OperandValue::Bool(o.move_parts)),
+            ("keep_parts_inside", OperandValue::Bool(o.keep_rule)),
+            ("replace", OperandValue::Bool(o.replace_same_name)),
+            ("rooms", text(&ticked.join(","))),
+        ])
     }
 
     /// [`Self::plan_with`] for drawing and counting.

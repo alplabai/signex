@@ -1402,6 +1402,68 @@ whose pads do not cover the part is refused with the pins it lacks
 (`R1 pins 1, 2`), and a board footprint whose old pads the new one lacks
 with those pads (`R1.1, R1.2`); nothing changes.
 
+## Rooms and placement
+
+The rooms of a board (#2457, `docs/PCB_ROOMS.md`) and Auto Place in Rooms
+(#2941) run from operands on the open board `document` names. Each is one
+board undo step and needs the `edit` capability; none writes a file.
+Coordinates are board mm as the file stores them, a point is `[x, y]`. A
+refusal names what is wrong (`room` not on the board, `side` not top, bottom
+or both, an outline without area) and changes nothing.
+
+```text
+place_board_room document=<board> (start=x,y end=x,y | corners=x,y;x,y;x,y..) [name=<name>] [sheet=/<uuid>..] [side=top|bottom|both]
+create_rooms_from_sheets document=<board> [margin=<mm>] [shape=around_parts|even_grid] [side=..] [move_parts=true] [keep_parts_inside=true] [replace=false] [rooms=<name>,..]
+arrange_in_room document=<board> room=<name or uuid>
+auto_place document=<board> [rooms=<name or uuid>,..] [weights=connection:3,thermal:1,separation:2,edges:5] [thermal_gap=<mm>] [separation_gap=<mm>] [dry_run=true]
+```
+
+A room in an answer is `id`, `name`, `sheet` (the placement path, or
+`null`), `channel` (or `null`), `side`, `outline` (`{"shape": "rectangle",
+"x", "y", "width", "height"}` or `{"shape": "polygon", "corners": [[x, y],
+..]}`), `area_mm2`, `color`, `keep_parts_inside`, `margin_mm`, `locked` and
+`parts`: each member as `id`, `designator` and `inside` (its body inside the
+outline shrunk by the margin). A moved part is `id`, `designator`, `from`
+and `to`.
+
+- `place_board_room` answers `document` and the `room` it placed. Without
+  `name` it is `Room N`, the lowest free number; a name the board already
+  has is refused. `sheet` links the room to a sheet placement, so the parts
+  of that sheet and the sheets below it are its members.
+- `create_rooms_from_sheets` reads the sheets of the board's project off
+  the UI thread, as the dialog does, and answers once the rooms are made:
+  `document`, `rooms` (each room made), `moved` (the parts packed into
+  their rooms), `kept` (names of rooms already on the board that were
+  kept) and `replaced`. Its options are the dialog's, with the dialog's
+  defaults; `margin` is above zero. `rooms` makes only the rooms it names
+  (a sheet placed N times has rooms `<sheet>_CH1`..`<sheet>_CHN`).
+- `arrange_in_room` packs the room's unlocked parts inside it, as Arrange in
+  Box packs, clear of its locked parts and of other parts inside it. It
+  answers `document`, `room`, `moved` and `outside`: the designators of
+  the parts that did not fit, which go in rows below the room.
+- `auto_place` places the unlocked parts of each room inside it, one at a
+  time, where the weighted score is lowest; it only places parts, it routes
+  nothing, and it neither turns nor flips a part. The priorities are
+  `connection` (parts that share nets close together), `thermal` (parts
+  marked `hot` keep `thermal_gap`, 5 mm by default, from each other and from
+  parts marked `heat_sensitive`), `separation` (parts marked `noisy` keep
+  `separation_gap`, 10 mm by default, from parts marked `sensitive`) and
+  `edges` (connectors near the board edge). A weight left out is 1; 0 turns
+  a priority off. A part's marks are the words of its `Placement` property;
+  a part marked `connector`, or with designator J, P or CN and a number, is a
+  connector. Locked parts and parts of rooms not named stay and are kept
+  clear of, as are keepouts that forbid components; parts keep the 0.5 mm
+  arrange gap. The answer is `document`, `dry_run`, `rooms`, `weights`,
+  `gaps_mm`, `moved` (each with `room`, `rotation` and `side` too),
+  `not_placed` (`id`, `designator`, `room` and `reason`: `no_space` or
+  `unreadable`; such a part stays where it is) and `score`: `before` and
+  `after`, mm per priority, lower is better. The same board and weights give
+  the same placement. With `dry_run=true` nothing changes.
+
+```
+{"id": "auto_place", "args": {"document": "board.snxpcb", "weights": "connection:3,edges:5", "dry_run": true}}
+```
+
 ## Working through a running Signex
 
 When a person has the project open in Signex with Preferences > System ›

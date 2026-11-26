@@ -34,6 +34,8 @@ type Ran = (CommandOutcome, Task<Message>);
 /// S-L (a declared exception, `parity/owners.rs`).
 #[cfg(test)]
 pub(crate) const TRANSLATED: &[&str] = &[
+    "arrange_in_room",
+    "auto_place",
     "board_shape_from_selection",
     "bring_drawings_forward",
     "bring_drawings_to_front",

@@ -40,6 +40,7 @@ use crate::app::board_reuse as reuse;
 use crate::app::board_tools as tools;
 use crate::app::handlers::pcb_component::part_swap_operands as swap;
 use crate::app::handlers::pcb_tune as tune;
+use crate::app::rooms;
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
 
@@ -227,6 +228,11 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("place_board_diff_pair", route::place_board_diff_pair),
     ("place_board_quick_route", route::place_board_quick_route),
     ("place_board_multi_route", route::place_board_multi_route),
+    // #2457, #2941, #2935: rooms on the board `document` names.
+    ("place_board_room", rooms::place_room_by_operands),
+    ("create_rooms_from_sheets", rooms::create_rooms_by_operands),
+    ("arrange_in_room", rooms::arrange_in_room_by_operands),
+    ("auto_place", rooms::auto_place_by_operands),
     (
         "import_dxf",
         crate::app::handlers::pcb_dxf_import::import_dxf,
