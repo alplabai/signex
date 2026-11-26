@@ -9,6 +9,13 @@ any language and published under any licence.
 This document is the contract. The machine-checkable part is the JSON Schema
 [`schemas/library-converter-v1.json`](schemas/library-converter-v1.json);
 example outputs live in [`fixtures/library-converter/`](fixtures/library-converter/).
+
+**Licence of the schema.** The schema file `schemas/library-converter-v1.json`
+alone is licensed under `MIT OR Apache-2.0` (its `$comment` carries the SPDX
+identifier), so a converter under any licence may keep a copy for its tests;
+keep that line when copying. The rest of this repository, including the
+example outputs and the library-format fixtures, keeps the repository's
+licence; converters read those from a Signex checkout instead of copying them.
 What a converter writes is specified in [`LIBRARY_FORMAT.md`](LIBRARY_FORMAT.md).
 
 The existing single-file project importer keeps its own contract (one input
@@ -206,13 +213,16 @@ human-readable `import-report.md` with the same content. Schema
   (source file path, position in source), so adding an unrelated item never
   shifts a suffix. Each collision is a report item.
 - `--update` over a library this converter wrote from the same source:
-  - an imported library is a **snapshot** of its source: items no longer in
-    the source are deleted, rows a user edited are overwritten, and rows or
-    primitives a user added are deleted. Git history keeps only what was
-    committed, so Signex refuses (or asks to commit first) when the library's
-    working tree has uncommitted changes, and warns when it has local commits
-    that are not imports. Users who want to edit parts copy them into their
-    own library;
+  - an imported library is a **snapshot** of its source: items the
+    converter wrote earlier and that are no longer in the source are
+    deleted, and items it wrote that a user edited are overwritten. A
+    converter deletes **only items it wrote itself** (it records their ids
+    and files, and treats that record as untrusted input: a damaged or
+    foreign record means nothing is deleted). Rows, primitives and files a
+    user added are kept. Git history keeps only what was committed, so
+    Signex refuses (or asks to commit first) when the library's working tree
+    has uncommitted changes, and warns when it has local commits that are not
+    imports. Users who want to edit parts copy them into their own library;
   - a part whose content hash changes gets its patch version bumped and its
     `updated` time set; its lifecycle state and `created` time are kept;
   - unchanged items keep identical bytes.

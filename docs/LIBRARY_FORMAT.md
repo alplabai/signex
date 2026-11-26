@@ -1,8 +1,8 @@
 # Signex library format
 
 Status: normative for `snxlib/2`, `snxsym/v1` to `v4` and `snxfpt/1.1` to
-`1.3` (#3105). Section 8, embedded 3D models, is planned and not yet
-implemented.
+`1.4` (#3105). Section 8 describes the embedded 3D models of `snxfpt/1.4`
+(#3107, #3108).
 
 This is the byte-level specification of a Signex component library, written
 so that an external converter can produce a library Signex opens and that
@@ -571,7 +571,7 @@ The writer chooses the lowest token the whole file needs:
 A reader accepts all four; the token in the file is ignored on save and
 recomputed.
 
-## 4. `.snxfpt` footprint envelope (`snxfpt/1`, `1.1` to `1.3`)
+## 4. `.snxfpt` footprint envelope (`snxfpt/1`, `1.1` to `1.4`)
 
 A TOML document. Coordinates are millimetres, rotations and angles in
 degrees.
@@ -747,11 +747,13 @@ converter that wants byte-stable re-saves writes it too; one that knows no
 body height writes these defaults rather than inventing a height. An optional `outline` (`[footprints.body_3d.outline]` with
 `points`) overrides the fabrication outline the body is extruded from.
 
-Today the STEP bytes live outside the footprint file, in
+The STEP bytes are embedded in the footprint file (section 8, format 1.4);
+a converter that attaches a model embeds it there. Libraries written before
+1.4 keep their models outside the footprint file, in
 `step/<content_hash>.step` under the library root (section 1): the raw file,
-named by the lower-case hex SHA-256 that `content_hash` holds. A converter
-that attaches a model writes that file too. Section 8 (format 1.4) moves the
-bytes into the footprint file.
+named by the lower-case hex SHA-256 that `content_hash` holds. Signex still
+reads that folder as a fallback and embeds such a model the next time the
+footprint is saved; it never deletes the `step/` file.
 
 ### 4.4 Token
 
@@ -891,12 +893,9 @@ a converter must store the right one.
 `sims/<uuid>.snxsim`, token `snxsim/v1`, one model per file as for
 footprints. Its content is not specified here.
 
-## 8. Embedded 3D models (format 1.4, planned by #3107/#3108)
+## 8. Embedded 3D models (format 1.4, #3107, #3108)
 
-**Planned; lands with #3107/#3108. Nothing below is implemented yet**, and
-no Signex build reads or writes `snxfpt/1.4` today.
-
-A footprint's STEP model will be stored inside the `.snxfpt` that uses it,
+A footprint's STEP model is stored inside the `.snxfpt` that uses it,
 so the file is self-contained:
 
 ```toml
@@ -921,13 +920,18 @@ data = '''
   wrapped at 76 columns, in a `'''` literal string. The string starts with
   a line break after the opening `'''` (which TOML drops) and its last line
   ends with `\n` before the closing `'''`. A reader removes every line
-  break before decoding the base64.
+  break before decoding the base64. Inside `data` only base64 characters,
+  spaces, tabs and `\n` / `\r\n` line ends may appear; any other character
+  (a form feed, a lone CR) makes the file refuse to load.
 - One entry per distinct hash per file, entries sorted by `hash`. Footprints
   with the same model share one entry; the same model in two files is
   stored twice.
 - On save, entries no footprint in the file references are dropped.
 - A reader checks `size` and the SHA-256 after inflating; a mismatch is a
-  load error naming the footprint.
+  load error naming the footprint. Inflating stops one byte past `size`. A
+  model may be at most 256 MiB raw. An entry with a malformed hash, an
+  unknown `encoding`, a duplicate hash or an oversize `size` is refused when
+  the file loads, naming the footprints that use it.
 - **Token:** a file holding at least one model writes `snxfpt/1.4`. A file
   without one keeps the token its content selects today (`1.1` to `1.3`),
   byte for byte, so older builds refuse model files by name instead of
@@ -939,8 +943,9 @@ data = '''
 - **Compressed bytes are not part of the contract.** `data` is a raw
   deflate stream (RFC 1951, no zlib or gzip header). Signex writes level 6,
   but any valid raw deflate stream is accepted, and on re-save Signex keeps
-  an unchanged entry's `data` exactly as stored (only re-wrapped at 76
-  columns). Conformance between two writers therefore compares the inflated
+  an unchanged entry's `data` exactly as stored, whatever level or line
+  width wrote it, even when it does not decode; only newly embedded models
+  are compressed by Signex. Conformance between two writers therefore compares the inflated
   bytes (`size` and SHA-256), never the compressed ones.
 
 ## 9. Open points

@@ -43,11 +43,11 @@ fn main() -> ExitCode {
                 Err(error) => fail(&error),
             }
         }
-        Ok(Invocation::LibraryCheck(options)) => {
-            match cli::library_check::run(&options, &mut io::stdout().lock()) {
-                Ok(false) => ExitCode::SUCCESS,
-                Ok(true) => ExitCode::from(EXIT_NOT_OK),
-                Err(error) => fail(&format!("writing to standard output: {error}")),
+        Ok(Invocation::Library(command)) => {
+            match cli::library::run(&command, &mut io::stdout().lock()) {
+                Ok(true) => ExitCode::SUCCESS,
+                Ok(false) => ExitCode::from(EXIT_NOT_OK),
+                Err(error) => fail(&error),
             }
         }
         Err(error) => fail(&format!("{error}\n\n{USAGE}")),

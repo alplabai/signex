@@ -29,7 +29,7 @@ impl LocalGitAdapter {
     }
 
     /// Bytes of the primitive file at `<root>/<subdir>/<uuid>.<ext>`.
-    fn read_primitive_bytes(
+    pub(super) fn read_primitive_bytes(
         &self,
         kind: PrimitiveKind,
         uuid: Uuid,
@@ -42,22 +42,6 @@ impl LocalGitAdapter {
             )));
         }
         Ok(fs::read(&path)?)
-    }
-
-    /// Read the first footprint of the `.snxfpt` TOML+TSV envelope (v0.18.4).
-    ///
-    /// Typed per kind rather than generic over `T: DeserializeOwned`: the
-    /// generic form had to serialise the footprint to JSON and parse it back
-    /// just to hand the caller the value it already had (#534).
-    pub(super) fn read_footprint(&self, uuid: Uuid) -> Result<Footprint, LibraryError> {
-        let bytes = self.read_primitive_bytes(PrimitiveKind::Footprint, uuid)?;
-        let path = self.primitive_path(PrimitiveKind::Footprint, uuid);
-        crate::primitive::FootprintFile::from_bytes(&bytes)
-            .map_err(|e| LibraryError::Backend(format!("read {}: {e}", path.display())))?
-            .footprints
-            .into_iter()
-            .next()
-            .ok_or_else(|| LibraryError::Backend("empty FootprintFile".into()))
     }
 
     /// Read the first model of the `.snxsim` TOML envelope (v0.18.5).
@@ -102,6 +86,7 @@ impl LocalGitAdapter {
             file.footprints.push(fp.clone());
         }
         file.updated = chrono::Utc::now();
+        file.embed_models_from_step_dir(&self.step_dir());
         let bytes = file
             .to_toml_string()
             .map_err(|e| LibraryError::Backend(format!("emit .snxfpt: {e}")))?

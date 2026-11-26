@@ -1,21 +1,20 @@
 //! STEP file attachment helper.
 //!
-//! Handles the file-pick → SHA-256 → copy-into-`step/<hash>.step` flow
-//! for [`signex_library::StepAttachment`]. Also exposes the small
-//! `view()` widget for the Footprint tab's Body 3D pane.
-//!
-//! Per `v0.9-refactor-2-plan.md` §11 step F5: the attachment is
-//! content-hashed so two MPNs sharing identical STEP geometry
-//! de-duplicate to one file in `mylib.snxlib/step/`.
-
-use std::path::Path;
+//! Handles the file-pick → embed-in-the-footprint-file flow for
+//! [`signex_library::StepAttachment`] (#3107): the model lands in the
+//! `.snxfpt`'s `[[models]]` section, keyed by its SHA-256, so footprints of
+//! one file sharing a body store it once. Nothing is written under `step/`.
+//! The editor's attach flow (`EditorMsg::StepAttachResult`) is not wired to
+//! [`attach_step`] yet.
+//! Also exposes the small `view()` widget for the Footprint tab's Body 3D
+//! pane.
 
 use iced::widget::{Space, Widget, column, container, row};
 use iced::{Element, Length};
-use sha2::{Digest, Sha256};
-use signex_library::{Footprint, StepAttachment};
+use signex_library::{Footprint, FootprintFile, StepAttachment};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, raw, text};
+use uuid::Uuid;
 
 use crate::styles::{Spacing, TypeScale};
 use signex_widgets::theme_ext;
@@ -95,7 +94,7 @@ pub fn view<'a>(
             .align_y(iced::Alignment::Center),
             Space::new().height(sp.s),
             text(raw(
-                "Attach a .step / .stp mech-CAD file. Stored content-hashed in step/."
+                "Attach a .step / .stp mech-CAD file. Stored in the footprint file."
             ))
             .size(ts.caption)
             .color(muted),
@@ -111,63 +110,17 @@ pub fn view<'a>(
         .boxed()
 }
 
-/// SHA-256 hex of `bytes` — same routine the 3D upload flow uses, but
-/// kept private here so this module is self-contained.
-fn hash_hex(bytes: &[u8]) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(bytes);
-    let result = hasher.finalize();
-    let mut out = String::with_capacity(64);
-    // `write!` here would hand back a `fmt::Result` that cannot be `Err`
-    // — `String`'s `write_str` is infallible — leaving a discarded
-    // `Result` to explain at every read. Indexing a digit table has no
-    // `Result` to discard in the first place, and is what the output
-    // actually is: two lowercase hex chars per byte. The encoding is
-    // load-bearing (it names `step/<hash>.step` on disk), so it must
-    // stay byte-identical; `hash_hex_is_lowercase` pins it.
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    for byte in result.iter() {
-        out.push(HEX[(byte >> 4) as usize] as char);
-        out.push(HEX[(byte & 0x0f) as usize] as char);
-    }
-    out
-}
-
-/// Stash a freshly-uploaded STEP file under `<lib_root>/step/<hash>.step`
-/// and return the [`StepAttachment`] record to drop on the
-/// `Footprint::step_attachment` field. Returns `None` when the IO
-/// path fails (existing file collisions are NOT errors — content-hash
-/// makes them no-ops by design).
-pub fn stash_step(lib_root: &Path, bytes: &[u8], filename: &str) -> Option<StepAttachment> {
-    let hash = hash_hex(bytes);
-    let step_dir = lib_root.join("step");
-    if let Err(e) = std::fs::create_dir_all(&step_dir) {
-        tracing::warn!(
-            target: "signex::library",
-            error = %e,
-            path = %step_dir.display(),
-            "failed to create step dir; STEP attach will be in-memory only"
-        );
-        return None;
-    }
-    let target = step_dir.join(format!("{hash}.step"));
-    if !target.exists()
-        && let Err(e) = signex_types::atomic_io::atomic_write(&target, bytes)
-    {
-        tracing::warn!(
-            target: "signex::library",
-            error = %e,
-            path = %target.display(),
-            "failed to write STEP file"
-        );
-        return None;
-    }
-    Some(StepAttachment {
-        content_hash: hash,
-        filename: filename.to_string(),
-        offset_xyz: [0.0; 3],
-        rotation_xyz: [0.0; 3],
-    })
+/// Embed a freshly picked STEP file in `file` and attach it to the
+/// footprint `footprint`, at no offset or turn. `None`, with nothing
+/// embedded, when the file holds no such footprint. Pure: the caller saves
+/// the file as for any other edit.
+pub fn attach_step(
+    file: &mut FootprintFile,
+    footprint: Uuid,
+    bytes: &[u8],
+    filename: &str,
+) -> Option<StepAttachment> {
+    file.attach_step_model(footprint, filename, bytes)
 }
 
 #[cfg(test)]
@@ -175,28 +128,29 @@ mod tests {
     use super::*;
 
     #[test]
-    fn hash_hex_is_lowercase() {
-        let h = hash_hex(b"abc");
+    fn the_attachment_hash_is_lowercase_sha256_hex() {
+        let mut file = FootprintFile::from_footprint(Footprint::empty("F"));
+        let uuid = file.footprints[0].uuid;
+        let att = attach_step(&mut file, uuid, b"abc", "X.step").expect("attached");
         assert_eq!(
-            h,
+            att.content_hash,
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
         );
     }
 
     #[test]
-    fn stash_step_writes_file_then_skips_on_dup() {
-        let tmp = tempfile::tempdir().expect("tempdir");
-        let lib_root = tmp.path();
-        let att = stash_step(lib_root, b"hello", "X.step").expect("first stash");
-        let target = lib_root
-            .join("step")
-            .join(format!("{}.step", att.content_hash));
-        assert!(target.exists());
-        // Second call with same bytes should be a no-op (file
-        // already exists; we don't overwrite).
-        let _ = stash_step(lib_root, b"hello", "Y.step").expect("dup stash");
-        // File still has the original content.
-        let bytes = std::fs::read(&target).expect("read");
-        assert_eq!(bytes, b"hello");
+    fn attach_step_embeds_once_and_writes_no_step_file() {
+        let mut file = FootprintFile::from_footprint(Footprint::empty("F"));
+        let uuid = file.footprints[0].uuid;
+        let att = attach_step(&mut file, uuid, b"hello", "X.step").expect("first attach");
+        // The same bytes again keep the one entry and its first name.
+        attach_step(&mut file, uuid, b"hello", "Y.step").expect("dup attach");
+        assert_eq!(file.models.len(), 1);
+        let model = file.models.get(&att.content_hash).expect("embedded");
+        assert_eq!(model.filename, "X.step");
+        let bytes = file.step_model(&file.footprints[0]).expect("decodes");
+        assert_eq!(bytes.as_deref(), Some(&b"hello"[..]));
+        assert!(attach_step(&mut file, Uuid::nil(), b"x", "Z.step").is_none());
+        assert_eq!(file.models.len(), 1);
     }
 }

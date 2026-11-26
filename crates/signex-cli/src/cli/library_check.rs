@@ -2,7 +2,7 @@
 //! (#3111): check a library directory headlessly, for converters and their
 //! CI. Exit 0 when the check finds no error (no problem at all with
 //! `--strict`), 1 when it does, 2 on a usage error. See `docs/CLI.md`,
-//! "Library check".
+//! "Library tools".
 
 use std::io::{self, Write};
 use std::path::PathBuf;
@@ -18,13 +18,8 @@ pub struct LibraryCheckOptions {
     pub json: bool,
 }
 
-/// Parse the words after `library`.
+/// Parse the words after `library check`.
 pub fn parse(mut args: impl Iterator<Item = String>) -> Result<LibraryCheckOptions, String> {
-    match args.next().as_deref() {
-        Some("check") => {}
-        Some(other) => return Err(format!("unknown `library` subcommand `{other}`")),
-        None => return Err("`library` needs a subcommand: check".into()),
-    }
     let mut library = None;
     let mut with = Vec::new();
     let mut json = false;
@@ -109,7 +104,10 @@ mod tests {
     use super::*;
 
     fn parse_args(args: &[&str]) -> Result<LibraryCheckOptions, String> {
-        parse(args.iter().map(ToString::to_string))
+        match crate::cli::parse(["library"].iter().chain(args).map(ToString::to_string))? {
+            crate::cli::Invocation::Library(crate::cli::library::LibraryCommand::Check(o)) => Ok(o),
+            other => panic!("expected library check, got {other:?}"),
+        }
     }
 
     #[test]
@@ -125,8 +123,8 @@ mod tests {
 
     #[test]
     fn usage_errors_are_refused() {
-        assert!(parse_args(&[]).is_err());
-        assert!(parse_args(&["verify", "lib"]).is_err());
+        assert!(crate::cli::parse(["library"].map(String::from)).is_err());
+        assert!(crate::cli::parse(["library", "verify", "lib"].map(String::from)).is_err());
         assert!(parse_args(&["check"]).is_err());
         assert!(parse_args(&["check", "lib", "--with"]).is_err());
         assert!(parse_args(&["check", "lib", "--fast"]).is_err());
