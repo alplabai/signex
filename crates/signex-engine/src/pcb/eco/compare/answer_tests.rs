@@ -13,6 +13,7 @@ fn eco_list(rows: Vec<EcoRow>) -> EcoChangeList {
         revision: REVISION,
         rows,
         notes: Vec::new(),
+        pad_locks: Vec::new(),
     }
 }
 

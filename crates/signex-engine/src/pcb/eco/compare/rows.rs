@@ -34,10 +34,15 @@ pub fn compare(eco: &EcoChangeList, back: &BackChangeList) -> CompareReport {
         }
     }
     rows.sort_by_key(|(row, _)| row.kind);
+    // Apply sets no lock the report does not show (docs/UPDATE_PCB.md).
+    let eco = EcoChangeList {
+        pad_locks: Vec::new(),
+        ..eco.clone()
+    };
     let mut report = CompareReport {
         rows: Vec::with_capacity(rows.len()),
         compared: Compared::default(),
-        eco: eco.clone(),
+        eco,
         back: back.clone(),
     };
     for (mut row, starts_on) in rows {

@@ -122,15 +122,24 @@ pub(super) fn headless_project_with(
     board: signex_types::pcb::PcbBoard,
     symbols: Vec<signex_types::schematic::Symbol>,
 ) -> Signex {
-    let (mut app, _t) = Signex::new();
-    let board_path = dir.join("demo.snxpcb");
-    app.open_pcb_tab(board_path, "demo.snxpcb".to_string(), board);
     let sheet = signex_types::schematic::SchematicSheet {
         uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         symbols,
         ..Default::default()
     };
+    headless_project_with_sheet(dir, board, sheet)
+}
+
+/// [`headless_project`] with `board` and `sheet`.
+pub(super) fn headless_project_with_sheet(
+    dir: &std::path::Path,
+    board: signex_types::pcb::PcbBoard,
+    sheet: signex_types::schematic::SchematicSheet,
+) -> Signex {
+    let (mut app, _t) = Signex::new();
+    let board_path = dir.join("demo.snxpcb");
+    app.open_pcb_tab(board_path, "demo.snxpcb".to_string(), board);
     crate::app::handlers::editing_commands::net_color_driver::add_sheet_with(
         &mut app,
         &dir.join("demo.snxsch"),

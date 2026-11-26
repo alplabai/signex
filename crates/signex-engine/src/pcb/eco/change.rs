@@ -268,9 +268,38 @@ pub struct EcoChangeList {
     /// Footprint rows, then net rows, each in a fixed order.
     pub rows: Vec<EcoRow>,
     pub notes: Vec<EcoNote>,
+    /// Pads that keep their net and only gain their lock; never a row.
+    pub pad_locks: Vec<PadLock>,
+}
+
+/// A pad its symbol has no pin for, holding a net: sync locks it
+/// (ADR-0005 item 10). Board and schematic agree on it, so it is not a row
+/// (a row would read "+3V3 → +3V3", #3060). It is locked whenever some row
+/// applies and every row it needs applies too.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PadLock {
+    pub footprint: Uuid,
+    pub pad: Uuid,
+    /// The net the pad keeps.
+    pub net: Option<PadNet>,
+    /// The rows it only makes sense with (the footprint row that brought
+    /// the pad).
+    pub needs: Vec<EcoKey>,
 }
 
 impl EcoChangeList {
+    /// The pad locks Execute takes with the rows that apply: none when no
+    /// row applies.
+    pub fn applied_pad_locks(&self) -> impl Iterator<Item = &PadLock> {
+        let any = self.rows.iter().any(|r| self.applies(r));
+        self.pad_locks.iter().filter(move |lock| {
+            any && lock
+                .needs
+                .iter()
+                .all(|k| self.row(k).is_some_and(|row| self.applies(row)))
+        })
+    }
+
     pub fn row(&self, key: &EcoKey) -> Option<&EcoRow> {
         self.rows.iter().find(|r| &r.key == key)
     }

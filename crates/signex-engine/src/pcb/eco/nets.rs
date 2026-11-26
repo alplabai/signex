@@ -20,7 +20,7 @@ use signex_types::schematic::InstancePath;
 use uuid::Uuid;
 
 use super::EcoInput;
-use super::change::{EcoChange, EcoChangeList, EcoGroup, EcoKey, EcoNote, EcoRow};
+use super::change::{EcoChange, EcoChangeList, EcoGroup, EcoKey, EcoNote, EcoRow, PadLock};
 use super::lower::footprint_commands;
 
 /// Recompute the net rows of `list` for its current footprint ticks, keeping
@@ -46,7 +46,8 @@ pub fn refresh_nets(list: &mut EcoChangeList, input: &EcoInput) {
 
     let table = TableChanges::of(&projected, &assignment);
     let mut table_rows = table.rows();
-    let pad_rows = pad_rows(list, &projected, &assignment, &table, &mut table_rows);
+    let (pad_rows, pad_locks) = pad_rows(list, &projected, &assignment, &table, &mut table_rows);
+    list.pad_locks = pad_locks;
     removal_needs(list, input.board, &projected, &table, &mut table_rows);
 
     for row in table_rows.into_iter().chain(pad_rows) {
@@ -273,14 +274,15 @@ impl TableChanges {
 }
 
 /// The pad rows, each needing the rows it only makes sense with; the table
-/// rows in `table_rows` get the pad rows they need in turn.
+/// rows in `table_rows` get the pad rows they need in turn. A pad that keeps
+/// its net and only gains its lock is a [`PadLock`], not a row.
 fn pad_rows(
     list: &EcoChangeList,
     projected: &PcbBoard,
     assignment: &BoardNetAssignment,
     table: &TableChanges,
     table_rows: &mut [EcoRow],
-) -> Vec<EcoRow> {
+) -> (Vec<EcoRow>, Vec<PadLock>) {
     // The footprint row that brought a projected footprint's pads.
     let brought: HashMap<Uuid, EcoKey> = list
         .rows
@@ -299,6 +301,7 @@ fn pad_rows(
     };
 
     let mut rows = Vec::new();
+    let mut locks = Vec::new();
     for change in &assignment.edit.pads {
         let Some(fp) = projected
             .footprints
@@ -315,6 +318,15 @@ fn pad_rows(
         // A locked pad is the user's: sync only renames its net in step with
         // the table, and only that is listed for it.
         if (pad.net_locked && from != to) || (pad.net == change.net && !change.locked) {
+            continue;
+        }
+        if pad.net == change.net {
+            locks.push(PadLock {
+                footprint: fp.uuid,
+                pad: pad.uuid,
+                net: pad.net.clone(),
+                needs: brought.get(&fp.uuid).cloned().into_iter().collect(),
+            });
             continue;
         }
         let key = EcoKey::PadNet {
@@ -361,7 +373,7 @@ fn pad_rows(
             .needing(needs),
         );
     }
-    rows
+    (rows, locks)
 }
 
 /// The board with the ticked footprint rows applied. A command the board
