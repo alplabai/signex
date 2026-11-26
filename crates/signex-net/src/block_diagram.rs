@@ -398,7 +398,7 @@ fn group_connections(group: &Group, blocks: &[DerivedBlock]) -> Vec<DerivedConne
 /// of its nets, else a bus entry that carries one of its nets or shares its
 /// prefix.
 fn port_for<'b>(group: &Group, name: &str, block: &'b DerivedBlock) -> Option<&'b DerivedPort> {
-    let named = |p: &&DerivedPort| p.name == name || group.nets.iter().any(|n| *n == p.name);
+    let named = |p: &&DerivedPort| p.name == name || group.nets.contains(&p.name);
     let carries = |p: &&DerivedPort| {
         parse_bus_name(&p.name).is_ok_and(|bus| {
             group.nets.iter().any(|n| bus.contains(n)) || shares_prefix(&bus, name)

@@ -99,6 +99,18 @@ mod tests {
                 "assign_board_net_class",
                 "assign_net_class",
                 "autoplace_fields",
+                // #2796: the block diagram edits, on the named diagram.
+                "block_add",
+                "block_group",
+                "block_group_set",
+                "block_link",
+                "block_link_set",
+                "block_port_add",
+                "block_port_remove",
+                "block_remove",
+                "block_set",
+                "block_ungroup",
+                "block_unlink",
                 "board_assembly_drawing",
                 "board_panel",
                 "board_report_bom",
@@ -149,6 +161,8 @@ mod tests {
                 "project_set_requirement",
                 "project_set_version_control",
                 "project_settings",
+                // #2796: a block diagram as JSON.
+                "query_block_diagram",
                 "query_board_nets",
                 "query_pins",
                 // #1313: the project's power tree.

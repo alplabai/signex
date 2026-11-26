@@ -24,15 +24,13 @@ fn app_in(dir: &tempfile::TempDir) -> Signex {
 /// File ▸ New ▸ Block Diagram, as the menu row's bridge arm sends it.
 fn new_diagram(app: &mut Signex) -> PathBuf {
     let _ = app.update(Message::from(BlockDiagramMsg::NewRequested));
-    let path = app
-        .document_state
+    app.document_state
         .block_diagrams
         .editors
         .keys()
         .next()
         .cloned()
-        .expect("a diagram was made");
-    path
+        .expect("a diagram was made")
 }
 
 fn send(app: &mut Signex, path: &Path, event: TabEvent) -> iced::Task<Message> {

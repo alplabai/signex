@@ -6,8 +6,9 @@
 use std::path::{Path, PathBuf};
 
 use iced::Task;
+use signex_i18n::{Translatable, ids};
 
-use super::job::{SyncJob, SyncMode};
+use super::job::{SyncJob, SyncMode, not_run};
 use super::{BlockDiagramSyncMsg, SyncLanded};
 use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::document_ids::DocumentKind;
@@ -15,6 +16,7 @@ use crate::app::project_sheets;
 use crate::app::runtime::net_class_styles::plan_projects;
 use crate::app::state::LoadedProject;
 use crate::app::state::project_case::fold_of;
+use crate::app::state::scope::path_key_with;
 use crate::app::{Message, ProjectMsg, Signex};
 use crate::keymap::AppCommandId;
 
@@ -44,12 +46,12 @@ pub(crate) fn regenerate_block_diagram(app: &mut Signex, args: &CommandArgs) -> 
 }
 
 fn start(app: &mut Signex, args: &CommandArgs, id: &str, mode: SyncMode) -> Ran {
-    let refused = |reason: String| (CommandOutcome::disabled(reason), Task::none());
+    let refused = |reason: Translatable| (CommandOutcome::Disabled { reason }, Task::none());
     let command = match AppCommandId::new(id) {
         Ok(command) => command,
-        Err(reason) => return refused(reason),
+        Err(reason) => return refused(not_run(reason)),
     };
-    let (job, project) = match app.block_diagram_job(args, id, mode) {
+    let (job, project) = match app.block_diagram_sync_job(args, id, mode) {
         Ok(planned) => planned,
         Err(reason) => return refused(reason),
     };
@@ -63,7 +65,7 @@ fn start(app: &mut Signex, args: &CommandArgs, id: &str, mode: SyncMode) -> Ran 
             let landed = SyncLanded {
                 waiting,
                 project,
-                result: result.and_then(|answer| answer),
+                result: result.map_err(not_run).and_then(|answer| answer),
             };
             Message::Project(ProjectMsg::BlockDiagramSync(BlockDiagramSyncMsg::Synced(
                 Box::new(landed),
@@ -83,16 +85,18 @@ fn start(app: &mut Signex, args: &CommandArgs, id: &str, mode: SyncMode) -> Ran 
 impl Signex {
     /// The run `args` asks for and the project file it reads; `Err` says why
     /// it cannot start.
-    fn block_diagram_job(
+    fn block_diagram_sync_job(
         &self,
         args: &CommandArgs,
         id: &str,
         mode: SyncMode,
-    ) -> Result<(SyncJob, PathBuf), String> {
+    ) -> Result<(SyncJob, PathBuf), Translatable> {
         let Some(OperandValue::Document(named)) = args.operand("document") else {
-            return Err(format!("`{id}` needs the operand `document`"));
+            return Err(
+                Translatable::new(ids::PROJECT_BLOCK_DIAGRAM_NEEDS_DOCUMENT).arg("command", id)
+            );
         };
-        let entry = self.resolve_document_target(named)?;
+        let entry = self.resolve_document_target(named).map_err(not_run)?;
         let project_path = match entry.kind {
             DocumentKind::Project => entry.path.clone(),
             _ => entry.project.as_ref().map(|project| project.path.clone()),
@@ -105,10 +109,9 @@ impl Signex {
                     .find(|project| project.path == path)
             })
             .ok_or_else(|| {
-                format!(
-                    "`{id}` works on a project, and {} is not part of an open one",
-                    entry.name
-                )
+                Translatable::new(ids::PROJECT_BLOCK_DIAGRAM_NOT_IN_PROJECT)
+                    .arg("command", id)
+                    .arg("name", entry.name.clone())
             })?;
         let target = target_path(args, project)?;
         let planned = plan_projects(&self.document_state)
@@ -124,11 +127,26 @@ impl Signex {
             None => (
                 Default::default(),
                 project_sheets::project_pages(Some(project)),
-                project_sheets::project_root_sheet_path(project)
-                    .ok_or_else(|| format!("the project {} has no root sheet", entry.name))?,
+                project_sheets::project_root_sheet_path(project).ok_or_else(|| {
+                    Translatable::new(ids::PROJECT_BLOCK_DIAGRAM_NO_ROOT)
+                        .arg("name", entry.name.clone())
+                })?,
                 fold_of(Some(project)),
             ),
         };
+        // A run that writes never writes under a diagram open in a tab: the
+        // tab's next save would put back what the run wrote over.
+        let writes = matches!(
+            mode,
+            SyncMode::Generate { .. } | SyncMode::Regenerate { apply: true }
+        );
+        let target_key = path_key_with(&target, fold);
+        let open_in_tab = (self.document_state.block_diagrams.editors.keys())
+            .any(|open| path_key_with(open, fold) == target_key);
+        if writes && open_in_tab {
+            return Err(Translatable::new(ids::PROJECT_BLOCK_DIAGRAM_OPEN_IN_TAB)
+                .arg("path", target.display().to_string()));
+        }
         let job = SyncJob {
             mode,
             target,
@@ -145,7 +163,7 @@ impl Signex {
 
 /// The `.snxblk` the `path` operand names, read against the project folder;
 /// the project's `<name>.snxblk` beside its `.snxprj` without one.
-fn target_path(args: &CommandArgs, project: &LoadedProject) -> Result<PathBuf, String> {
+fn target_path(args: &CommandArgs, project: &LoadedProject) -> Result<PathBuf, Translatable> {
     let path = match args.operand("path") {
         Some(OperandValue::Path(text)) => {
             let given = Path::new(text);
@@ -168,10 +186,8 @@ fn target_path(args: &CommandArgs, project: &LoadedProject) -> Result<PathBuf, S
         .extension()
         .is_some_and(|ext| ext.eq_ignore_ascii_case(SNXBLK));
     if !is_snxblk {
-        return Err(format!(
-            "{} is not a block diagram file (.{SNXBLK})",
-            path.display()
-        ));
+        return Err(Translatable::new(ids::PROJECT_BLOCK_DIAGRAM_NOT_SNXBLK)
+            .arg("path", path.display().to_string()));
     }
     Ok(path)
 }

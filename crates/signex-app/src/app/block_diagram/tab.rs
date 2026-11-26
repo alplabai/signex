@@ -36,7 +36,6 @@ impl Signex {
                 self.document_state.tabs.push(TabInfo {
                     title: title_of(path),
                     path: path.to_path_buf(),
-                    cached_document: None,
                     project_id,
                     kind: TabKind::BlockDiagram(path.to_path_buf()),
                 });

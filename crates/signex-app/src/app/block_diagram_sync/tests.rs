@@ -4,6 +4,7 @@
 
 use std::path::{Path, PathBuf};
 
+use signex_i18n::RenderTranslatable;
 use signex_types::block_diagram::{LinkState, read_block_diagram};
 use signex_types::schematic::{ChildSheet, FillType, Point, SchematicSheet};
 
@@ -138,7 +139,7 @@ fn generate_refuses_an_existing_file_without_overwrite() {
     let file = dir.path().join("demo.snxblk");
     std::fs::write(&file, "kept").expect("seed");
     let refused = job(dir.path(), SyncMode::Generate { overwrite: false }).run();
-    assert!(refused.is_err_and(|why| why.contains("overwrite=true")));
+    assert!(refused.is_err_and(|why| why.render_en_us().contains("overwrite=true")));
     assert_eq!(std::fs::read_to_string(&file).expect("kept"), "kept");
     job(dir.path(), SyncMode::Generate { overwrite: true })
         .run()
@@ -217,6 +218,41 @@ fn with_operands_the_run_waits_on_a_ticket() {
             "{id}: {outcome:?}"
         );
     }
+}
+
+/// A run that writes is refused while its diagram is open in a tab, so the
+/// tab's next save cannot put back what the run wrote over; a regenerate
+/// that only lists its changes still runs.
+#[test]
+fn a_write_under_a_diagram_open_in_a_tab_is_refused() {
+    use crate::app::block_diagram::BlockDiagramEditor;
+    use signex_types::block_diagram::BlockDiagram;
+
+    let dir = tempfile::tempdir().expect("dir");
+    let mut app = app_on(dir.path());
+    let file = dir.path().join("ProjectA.snxblk");
+    let editors = &mut app.document_state.block_diagrams.editors;
+    editors.insert(
+        file.clone(),
+        BlockDiagramEditor::created(BlockDiagram::new()),
+    );
+    let project = format!("document={}", dir.path().join("ProjectA.snxprj").display());
+    for (id, extra) in [
+        ("generate_block_diagram", "overwrite=true"),
+        ("regenerate_block_diagram", "apply=true"),
+    ] {
+        let outcome = headless(&mut app, id, &[project.as_str(), extra]);
+        let CommandOutcome::Disabled { reason } = outcome else {
+            panic!("{id}: {outcome:?}");
+        };
+        assert!(reason.render_en_us().contains("open in a tab"), "{id}");
+    }
+    assert!(!file.exists(), "nothing was written");
+    let listed = headless(&mut app, "regenerate_block_diagram", &[project.as_str()]);
+    assert!(
+        matches!(listed, CommandOutcome::Deferred { .. }),
+        "{listed:?}"
+    );
 }
 
 #[test]

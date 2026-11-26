@@ -106,7 +106,7 @@ impl FaceUsage {
 }
 
 /// Per-document record of which glyphs each bundled font must embed.
-pub(super) struct FontUsage {
+pub(crate) struct FontUsage {
     faces: [FaceUsage; 4],
 }
 

@@ -259,7 +259,11 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     ),
     // The new document joins the active document's project.
     (
-        &["new_pcb_document", "new_schematic_sheet"],
+        &[
+            "new_pcb_document",
+            "new_schematic_sheet",
+            "new_block_diagram",
+        ],
         Operand,
         &[ActiveDocument],
     ),
@@ -414,6 +418,8 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "find_items",
             "find_similar_items",
             "measure_board",
+            // #2796: the named diagram, open or saved.
+            "query_block_diagram",
             "query_board_nets",
             "query_pins",
             // #1313: the project's sheets, read off the UI thread.
@@ -474,10 +480,42 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     // The named board only (#2522): nothing implicit.
     (&["reset_board_origin", "reset_layer_colors"], Operand, &[]),
     (
-        &["new_pcb_document", "new_schematic_sheet"],
+        &[
+            "new_pcb_document",
+            "new_schematic_sheet",
+            "new_block_diagram",
+        ],
         HeadlessWithoutOperands,
         &[ActiveDocument],
     ),
+    // #2796: a block diagram edit acts on the named diagram and its
+    // operands only.
+    (
+        &[
+            "block_add",
+            "block_set",
+            "block_remove",
+            "block_port_add",
+            "block_port_remove",
+            "block_link",
+            "block_link_set",
+            "block_unlink",
+            "block_group",
+            "block_group_set",
+            "block_ungroup",
+        ],
+        Operand,
+        &[],
+    ),
+    // #2796: the diagram in view or the one the open dialog picks, then the
+    // file the save dialog answers.
+    (
+        &["export_block_diagram"],
+        Bridge,
+        &[ActiveDocument, DialogAnswer],
+    ),
+    // The PDF title block's labels follow the locale.
+    (&["export_block_diagram"], Operand, &[Settings]),
     // The preset is looked up among the saved filter presets
     // (`interaction_state.custom_filter_presets`, prefs-backed through
     // fonts/presets.rs): configuration.

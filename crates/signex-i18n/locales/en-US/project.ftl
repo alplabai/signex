@@ -407,3 +407,19 @@ project-block-diagram-changes = Block diagram { $path }: { $changes } changes in
 project-block-diagram-applied = Block diagram { $path }: { $changes } changes applied; the layout is kept.
 project-block-diagram-in-sync = Block diagram { $path } matches the sheet hierarchy.
 project-block-diagram-refused = Block diagram: { $reason }
+# Why generate_block_diagram or regenerate_block_diagram did not run or wrote
+# nothing. $command is the command id, $name a document or project name,
+# $path a file, $format a format token such as "snxblk/2", $reason the
+# system's or the reader's own words.
+project-block-diagram-no-project = open a sheet of a project first
+project-block-diagram-needs-document = `{ $command }` needs the operand `document`
+project-block-diagram-not-in-project = `{ $command }` works on a project, and { $name } is not part of an open one
+project-block-diagram-no-root = the project { $name } has no root sheet
+project-block-diagram-not-snxblk = { $path } is not a block diagram file (.snxblk)
+project-block-diagram-open-in-tab = { $path } is open in a tab; close it first, so the run does not write under the open diagram
+project-block-diagram-sheet-unreadable = the sheet { $path } could not be read: { $reason }
+project-block-diagram-exists = { $path } exists; regenerate it to keep its layout, or pass overwrite=true to replace it
+project-block-diagram-unreadable = { $path } could not be read: { $reason }
+project-block-diagram-not-written = { $path } was not written: { $reason }
+project-block-diagram-read-only = { $path } was written by a newer version ({ $format }) and is read-only here
+project-block-diagram-not-run = nothing was written: { $reason }

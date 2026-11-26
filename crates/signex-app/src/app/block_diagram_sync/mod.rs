@@ -20,7 +20,7 @@ use std::path::PathBuf;
 
 use iced::Task;
 use serde_json::Value;
-use signex_i18n::{ids, t};
+use signex_i18n::{Translatable, ids, t};
 
 use crate::app::agent::WaitingCommand;
 use crate::app::command::translator;
@@ -44,7 +44,7 @@ pub struct SyncLanded {
     pub(crate) waiting: Option<WaitingCommand>,
     /// The project file the run read.
     pub(crate) project: PathBuf,
-    pub(crate) result: Result<Value, String>,
+    pub(crate) result: Result<Value, Translatable>,
 }
 
 impl Signex {
@@ -68,7 +68,8 @@ impl Signex {
             .and_then(|id| self.document_state.project_by_id(id))
             .map(|project| project.path.clone());
         let Some(project) = project else {
-            self.say_block_diagram_refused("open a sheet of a project first");
+            let why = Translatable::new(ids::PROJECT_BLOCK_DIAGRAM_NO_PROJECT);
+            self.say_block_diagram_refused(&why.render(&self.ui_state.i18n));
             return Task::none();
         };
         let (id, operands) = if regenerate {
@@ -95,7 +96,7 @@ impl Signex {
             Some(waiting) => {
                 self.finish_waiting_command(waiting, &project, move |_| match result {
                     Ok(answer) => CommandOutcome::Answered(answer),
-                    Err(reason) => CommandOutcome::disabled(reason),
+                    Err(reason) => CommandOutcome::Disabled { reason },
                 })
             }
             None => {
@@ -106,10 +107,12 @@ impl Signex {
     }
 
     /// What a person's run did, in Messages.
-    fn say_block_diagram_result(&self, result: &Result<Value, String>) {
+    fn say_block_diagram_result(&self, result: &Result<Value, Translatable>) {
         let answer = match result {
             Ok(answer) => answer,
-            Err(reason) => return self.say_block_diagram_refused(reason),
+            Err(reason) => {
+                return self.say_block_diagram_refused(&reason.render(&self.ui_state.i18n));
+            }
         };
         let i18n = &self.ui_state.i18n;
         let path = answer["path"].as_str().unwrap_or_default();

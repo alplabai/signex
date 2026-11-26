@@ -1174,7 +1174,9 @@ regenerate_block_diagram document=<project> [path=<file.snxblk>] [apply=true]
   hand-drawn blocks and connections are kept.
 
 A sheet that is in the project but does not read refuses the run, so its
-block is never marked unlinked by mistake. In a window, the palette's
+block is never marked unlinked by mistake. A run that writes (generate, or
+regenerate with `apply=true`) is refused while the diagram is open in a tab;
+close the tab first. In a window, the palette's
 Generate Block Diagram runs on the project in view and Regenerate Block
 Diagram lists the changes in Messages without applying them. Grouping and
 layout rules: [architecture/snxblk-format.md](architecture/snxblk-format.md),

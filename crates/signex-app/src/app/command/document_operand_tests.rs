@@ -598,6 +598,22 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "export_board_step",
                     // #2796: a block diagram as SVG or PDF.
                     "export_block_diagram",
+                    // #2796: the block diagram edits and query.
+                    "block_add",
+                    "block_set",
+                    "block_remove",
+                    "block_port_add",
+                    "block_port_remove",
+                    "block_link",
+                    "block_link_set",
+                    "block_unlink",
+                    "block_group",
+                    "block_group_set",
+                    "block_ungroup",
+                    "query_block_diagram",
+                    // #2968: a block diagram from the project's hierarchy.
+                    "generate_block_diagram",
+                    "regenerate_block_diagram",
                     // #2410: DXF import onto a board.
                     "import_dxf",
                     "import_dxf_outline",

@@ -310,4 +310,16 @@ define_ids! {
     PROJECT_BLOCK_DIAGRAM_APPLIED = "project-block-diagram-applied";
     PROJECT_BLOCK_DIAGRAM_IN_SYNC = "project-block-diagram-in-sync";
     PROJECT_BLOCK_DIAGRAM_REFUSED = "project-block-diagram-refused";
+    PROJECT_BLOCK_DIAGRAM_NO_PROJECT = "project-block-diagram-no-project";
+    PROJECT_BLOCK_DIAGRAM_NEEDS_DOCUMENT = "project-block-diagram-needs-document";
+    PROJECT_BLOCK_DIAGRAM_NOT_IN_PROJECT = "project-block-diagram-not-in-project";
+    PROJECT_BLOCK_DIAGRAM_NO_ROOT = "project-block-diagram-no-root";
+    PROJECT_BLOCK_DIAGRAM_NOT_SNXBLK = "project-block-diagram-not-snxblk";
+    PROJECT_BLOCK_DIAGRAM_OPEN_IN_TAB = "project-block-diagram-open-in-tab";
+    PROJECT_BLOCK_DIAGRAM_SHEET_UNREADABLE = "project-block-diagram-sheet-unreadable";
+    PROJECT_BLOCK_DIAGRAM_EXISTS = "project-block-diagram-exists";
+    PROJECT_BLOCK_DIAGRAM_UNREADABLE = "project-block-diagram-unreadable";
+    PROJECT_BLOCK_DIAGRAM_NOT_WRITTEN = "project-block-diagram-not-written";
+    PROJECT_BLOCK_DIAGRAM_READ_ONLY = "project-block-diagram-read-only";
+    PROJECT_BLOCK_DIAGRAM_NOT_RUN = "project-block-diagram-not-run";
 }

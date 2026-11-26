@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
+use signex_i18n::{Translatable, ids};
 use signex_types::block_diagram::{
     BlockDiagram, DerivedDiagram, LinkState, SNXBLK_FORMAT_V1, generate_block_diagram,
     read_block_diagram, regenerate_block_diagram, write_block_diagram,
@@ -48,7 +49,7 @@ pub(crate) struct SyncJob {
 impl SyncJob {
     /// Read the hierarchy, then generate or regenerate. Blocking. The answer
     /// is the command's JSON result; `Err` says why nothing was written.
-    pub(crate) fn run(self) -> Result<Value, String> {
+    pub(crate) fn run(self) -> Result<Value, Translatable> {
         let derived = self.derive()?;
         match self.mode {
             SyncMode::Generate { overwrite } => self.generate(&derived, overwrite),
@@ -56,7 +57,7 @@ impl SyncJob {
         }
     }
 
-    fn derive(&self) -> Result<DerivedDiagram, String> {
+    fn derive(&self) -> Result<DerivedDiagram, Translatable> {
         let set = project_sheets::assemble_project_sheets_from(
             &self.open,
             &self.pages,
@@ -64,12 +65,13 @@ impl SyncJob {
             self.fold,
         );
         if let Some((path, why)) = set.unreadable.first() {
-            return Err(format!(
-                "the sheet {} could not be read: {why}",
-                path.display()
-            ));
+            return Err(
+                Translatable::new(ids::PROJECT_BLOCK_DIAGRAM_SHEET_UNREADABLE)
+                    .arg("path", path.display().to_string())
+                    .arg("reason", why.to_string()),
+            );
         }
-        let design = DesignGraph::read(&set, &self.project_dir)?;
+        let design = DesignGraph::read(&set, &self.project_dir).map_err(not_run)?;
         let paths: HashMap<_, _> = design
             .graph
             .paths
@@ -83,17 +85,16 @@ impl SyncJob {
         ))
     }
 
-    fn generate(&self, derived: &DerivedDiagram, overwrite: bool) -> Result<Value, String> {
+    fn generate(&self, derived: &DerivedDiagram, overwrite: bool) -> Result<Value, Translatable> {
         if !overwrite && self.target.exists() {
-            return Err(format!(
-                "{} exists; regenerate it to keep its layout, or pass overwrite=true to replace it",
-                self.target.display()
-            ));
+            return Err(self.about(ids::PROJECT_BLOCK_DIAGRAM_EXISTS));
         }
         let diagram = generate_block_diagram(derived, &mut UuidV7Ids, DocumentId::new())
-            .map_err(|e| e.to_string())?;
-        write_block_diagram(&self.target, &diagram, SNXBLK_FORMAT_V1)
-            .map_err(|e| format!("{} was not written: {e}", self.target.display()))?;
+            .map_err(|e| not_run(e.to_string()))?;
+        write_block_diagram(&self.target, &diagram, SNXBLK_FORMAT_V1).map_err(|e| {
+            self.about(ids::PROJECT_BLOCK_DIAGRAM_NOT_WRITTEN)
+                .arg("reason", e.to_string())
+        })?;
         Ok(json!({
             "path": self.target.display().to_string(),
             "written": true,
@@ -102,22 +103,24 @@ impl SyncJob {
         }))
     }
 
-    fn regenerate(&self, derived: &DerivedDiagram, apply: bool) -> Result<Value, String> {
-        let read = read_block_diagram(&self.target)
-            .map_err(|e| format!("{} could not be read: {e}", self.target.display()))?;
+    fn regenerate(&self, derived: &DerivedDiagram, apply: bool) -> Result<Value, Translatable> {
+        let read = read_block_diagram(&self.target).map_err(|e| {
+            self.about(ids::PROJECT_BLOCK_DIAGRAM_UNREADABLE)
+                .arg("reason", e.to_string())
+        })?;
         if apply && read.is_read_only() {
-            return Err(format!(
-                "{} was written by a newer version ({}) and is read-only here",
-                self.target.display(),
-                read.token
-            ));
+            return Err(self
+                .about(ids::PROJECT_BLOCK_DIAGRAM_READ_ONLY)
+                .arg("format", read.token.clone()));
         }
         let regenerated = regenerate_block_diagram(&read.diagram, derived, &mut UuidV7Ids)
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| not_run(e.to_string()))?;
         let write = apply && !regenerated.changes.is_empty();
         if write {
-            write_block_diagram(&self.target, &regenerated.diagram, &read.token)
-                .map_err(|e| format!("{} was not written: {e}", self.target.display()))?;
+            write_block_diagram(&self.target, &regenerated.diagram, &read.token).map_err(|e| {
+                self.about(ids::PROJECT_BLOCK_DIAGRAM_NOT_WRITTEN)
+                    .arg("reason", e.to_string())
+            })?;
         }
         Ok(json!({
             "path": self.target.display().to_string(),
@@ -128,6 +131,18 @@ impl SyncJob {
             "diagram": regenerated.diagram,
         }))
     }
+}
+
+impl SyncJob {
+    /// The message `id` about the diagram file.
+    fn about(&self, id: signex_i18n::MessageId) -> Translatable {
+        Translatable::new(id).arg("path", self.target.display().to_string())
+    }
+}
+
+/// Text from the reader or the model, which has no catalog id of its own.
+pub(super) fn not_run(reason: String) -> Translatable {
+    Translatable::new(ids::PROJECT_BLOCK_DIAGRAM_NOT_RUN).arg("reason", reason)
 }
 
 /// The counts a person reads first.

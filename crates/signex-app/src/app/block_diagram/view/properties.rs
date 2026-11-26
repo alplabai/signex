@@ -27,7 +27,7 @@ use crate::styles::tokens::resolve;
 /// A swatch's side, in body-text ems.
 const SWATCH_EMS: f32 = 1.2;
 
-type Items<'a> = Column<'a, TabEvent>;
+type Items<'a> = Column<Element<'a, TabEvent>>;
 
 pub(super) fn view<'a>(look: Look<'a>, editor: &'a BlockDiagramEditor) -> Element<'a, TabEvent> {
     let diagram = &editor.diagram;
@@ -493,7 +493,7 @@ fn swatches<'a>(look: Look<'a>, editable: bool) -> Element<'a, TabEvent> {
         Some(tokens.warning),
         Some(tokens.error),
     ];
-    let mut line: Row<'a, TabEvent> = Row::new().spacing(SP.xs);
+    let mut line: Row<Element<'a, TabEvent>> = Row::new().spacing(SP.xs);
     for color in colors {
         line = line.push(chip(look, color, editable));
     }
@@ -513,6 +513,7 @@ fn chip<'a>(look: Look<'a>, color: Option<Color>, editable: bool) -> Element<'a,
                 color: line,
                 width: crate::styles::HAIRLINE,
                 radius: (side / 4.0).into(),
+                ..Border::default()
             },
             ..Default::default()
         });
