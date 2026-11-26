@@ -365,6 +365,8 @@ const NOT_YET_IN_LISTS: &[&str] = &[
     // #1261: a schematic swap is its own step until a list is decided.
     "swap_schematic_pins",
     "swap_schematic_gates",
+    // #2954: a part swap in a list is not decided either.
+    "change_component",
 ];
 
 /// Why `command` may not be one of the edits, or `None` when it may: it must

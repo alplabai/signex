@@ -130,8 +130,9 @@ pub use command::{
 pub use error::EngineError;
 pub use exec::change_component::{
     ComponentChangePreview, ComponentReplacement, DataChange, change_component_preview,
-    placed_unit_ids,
+    placed_unit_ids, swapped_sheet,
 };
+pub use exec::change_component_pins::{PinChoice, PinMapRow, pin_choices, pin_table};
 pub use exec::pin_changes::{SwitchBlockers, switch_blockers};
 pub use find::{
     DesignatorScope, FindHit, FindKind, FindQuery, MatchOptions, PatternError, designator_commands,

@@ -329,6 +329,11 @@ define_ids! {
     LIBRARY_CHANGE_COMPONENT_DATASHEET = "library-change-component-datasheet";
     LIBRARY_CHANGE_COMPONENT_KEPT = "library-change-component-kept";
     LIBRARY_CHANGE_COMPONENT_KEPT_SUMMARY = "library-change-component-kept-summary";
+    LIBRARY_CHANGE_COMPONENT_KEPT_SUMMARY_PINS = "library-change-component-kept-summary-pins";
+    LIBRARY_CHANGE_COMPONENT_KEPT_SUMMARY_MAPPED = "library-change-component-kept-summary-mapped";
+    LIBRARY_CHANGE_COMPONENT_KEPT_PIN = "library-change-component-kept-pin";
+    LIBRARY_CHANGE_COMPONENT_KEPT_PIN_UNNAMED = "library-change-component-kept-pin-unnamed";
+    LIBRARY_CHANGE_COMPONENT_KEPT_NO_NETS = "library-change-component-kept-no-nets";
     LIBRARY_CHANGE_COMPONENT_APPLY_TO = "library-change-component-apply-to";
     LIBRARY_CHANGE_COMPONENT_SCOPE_THIS = "library-change-component-scope-this";
     LIBRARY_CHANGE_COMPONENT_APPLY = "library-change-component-apply";
@@ -338,6 +343,8 @@ define_ids! {
     LIBRARY_CHANGE_COMPONENT_WARN_DANGLING = "library-change-component-warn-dangling";
     LIBRARY_CHANGE_COMPONENT_WARN_MOVED = "library-change-component-warn-moved";
     LIBRARY_CHANGE_COMPONENT_WARN_GAINED = "library-change-component-warn-gained";
+    LIBRARY_CHANGE_COMPONENT_WARN_CARRIED = "library-change-component-warn-carried";
+    LIBRARY_CHANGE_COMPONENT_WARN_REFUSED = "library-change-component-warn-refused";
     // range-filter-chip glyph
     LIBRARY_RANGE_FILTER_REMOVE = "library-range-filter-remove";
 }

@@ -12,6 +12,9 @@ mod change_component;
 mod change_session;
 mod datasheet;
 mod edit_symbol;
+mod pin_mapping;
+
+pub(crate) use change_component::replacement_of;
 
 use iced::Task;
 use signex_types::schematic::{SelectedKind, Symbol};
@@ -104,6 +107,7 @@ impl Signex {
             PlacedPartMsg::ChangeFilterToggled(filter) => self.toggle_change_filter(filter),
             PlacedPartMsg::ChangeKeepToggled(name) => self.toggle_change_keep(name),
             PlacedPartMsg::ChangeScopePicked(scope) => self.pick_change_scope(scope),
+            PlacedPartMsg::ChangePinRemapped { old, new } => self.remap_change_pin(old, new),
             PlacedPartMsg::ChangePinCountsRead { target, counts } => {
                 self.store_row_pins(target, counts)
             }

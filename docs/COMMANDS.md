@@ -66,6 +66,12 @@ a file. Without operands, in a window, they open the picker, arm the tool or
 act on the selection as before; rules in [CLI.md](CLI.md), "Placing parts
 and hierarchy".
 
+`change_component id=.. library=.. part=..` swaps a placed part for a row of
+an open library in one undo step, its pins mapped by number or by hand
+(`pins=1:2,3:-`), and answers with the pin table (old pin, new pin, net);
+without operands it opens the Change Component dialog on the selection.
+Rules in [CLI.md](CLI.md), "Changing a part's component".
+
 Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 
 ## General

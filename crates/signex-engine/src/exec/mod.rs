@@ -9,6 +9,7 @@ mod batch;
 mod break_wire;
 mod bus_style;
 pub(crate) mod change_component;
+pub(crate) mod change_component_pins;
 mod child_sheet_size;
 mod designator_in;
 mod directives;
@@ -28,6 +29,8 @@ pub(crate) mod transaction;
 mod unions;
 mod wire_end;
 
+#[cfg(test)]
+mod change_component_pin_map_tests;
 #[cfg(test)]
 mod change_component_tests;
 #[cfg(test)]

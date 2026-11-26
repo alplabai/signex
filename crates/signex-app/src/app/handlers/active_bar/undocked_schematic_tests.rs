@@ -509,6 +509,7 @@ fn change_component_confirmed_for_an_undocked_windows_sheet_changes_that_sheet()
         footprint: String::new(),
         datasheet: String::new(),
         fields: Vec::new(),
+        pin_map: None,
     };
     let preview = signex_engine::change_component_preview(&doc, symbol.uuid, &replacement);
     f.app.library.picker = Some(crate::library::PickerState {

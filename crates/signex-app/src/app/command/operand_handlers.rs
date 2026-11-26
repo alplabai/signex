@@ -16,6 +16,7 @@ use super::board_edit_operands as board_edit;
 use super::board_graphic_operands as graphic;
 use super::board_operands as board;
 use super::board_view_operands as board_view;
+use super::change_component_operands as change;
 use super::directive_operands as directive;
 use super::document_operands as doc;
 use super::file_operands as file;
@@ -114,6 +115,8 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     // #2665: the Smart Paste dialog's choices, placed at once.
     ("smart_paste", smart_paste::smart_paste),
     ("place_component", part::place_component),
+    // #2954: Change Component's swap, the pins mapped by hand if given.
+    ("change_component", change::change_component),
     ("place_sheet_symbol", hierarchy::place_sheet_symbol),
     ("place_sheet_entry", hierarchy::place_sheet_entry),
     ("sync_sheet_pins", hierarchy::sync_sheet_pins),

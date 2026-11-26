@@ -301,8 +301,9 @@ fn check_movable(
 }
 
 /// Whether a moved wire now runs through a pin tip, a wire end, a label or
-/// a junction it does not end on: the netlist would join it there.
-fn joins_nets(sheet: &SchematicSheet, moved: &[Uuid]) -> bool {
+/// a junction it does not end on: the netlist would join it there. Change
+/// Component's pin carry asks the same (`exec::change_component_pins`).
+pub(crate) fn joins_nets(sheet: &SchematicSheet, moved: &[Uuid]) -> bool {
     let mut points: Vec<signex_net::uf::Key> = Vec::new();
     for symbol in &sheet.symbols {
         if let Some(lib) = sheet.resolve_lib_symbol(symbol) {

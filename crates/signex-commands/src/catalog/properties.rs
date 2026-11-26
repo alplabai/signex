@@ -94,7 +94,10 @@ pub(super) const PROPERTIES: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_CHANGE_COMPONENT),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresSelection,
-        flags: CommandFlags::GUI_MUTATES,
+        // Without operands it opens the dialog on the selected part; with
+        // them it swaps the named part (#2954, docs/CLI.md).
+        flags: CommandFlags::MUTATES,
+        operands: operands::CHANGE_COMPONENT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

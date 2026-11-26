@@ -567,6 +567,7 @@ const OPERAND_DOCUMENT: &[&str] = &[
     "board_shape_from_selection",
     "bring_drawings_forward",
     "bring_drawings_to_front",
+    "change_component",
     "clear_all_net_colors",
     "close_active_document",
     "color_net",

@@ -33,6 +33,9 @@ pub enum EngineError {
         parts.join(", ")
     )]
     ChangeComponentUnitMissing { parts: Vec<String> },
+    /// The pin mapping given by hand cannot be followed (#2954).
+    #[error("component change refused, {detail}")]
+    ChangeComponentPins { detail: String },
     #[error("a sheet symbol needs a name")]
     EmptyChildSheetName,
     #[error("sheet file '{0}' must end in .snxsch")]

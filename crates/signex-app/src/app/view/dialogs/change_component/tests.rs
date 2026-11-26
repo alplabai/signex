@@ -142,8 +142,41 @@ fn compared() -> LibraryState {
         ],
         dropped: Vec::new(),
         scope: ChangeScope::ThisPart,
+        pin_map: None,
+        pins: Vec::new(),
+        pin_choices: Vec::new(),
     }));
     state
+}
+
+/// [`compared`] with `edit` applied to its comparison.
+fn compared_with(edit: impl FnOnce(&mut ChangePreview)) -> LibraryState {
+    let mut state = compared();
+    if let Some(picker) = state.picker.as_mut()
+        && let PickerMode::ChangePreview(change) = &mut picker.mode
+    {
+        edit(change);
+    }
+    state
+}
+
+/// R5's two pins mapped by number, on VOUT_3V3 and FB (mockup row 155).
+fn on_two_nets(change: &mut ChangePreview) {
+    use signex_types::schematic::{PinMatchedBy, PinPair};
+    let row = |pin: &str, net: &str| signex_engine::PinMapRow {
+        old: pin.into(),
+        old_name: String::new(),
+        new: Some((pin.into(), String::new())),
+        net: Some(net.into()),
+    };
+    change.pins = vec![row("1", "VOUT_3V3"), row("2", "FB")];
+    change.preview.mapping.pairs = ["1", "2"]
+        .map(|pin| PinPair {
+            old: pin.into(),
+            new: pin.into(),
+            by: PinMatchedBy::Number,
+        })
+        .to_vec();
 }
 
 /// The laid-out texts, without the bidi isolates the catalog puts around
@@ -315,6 +348,56 @@ fn a_user_parameter_box_toggles_its_keep() {
         )),
         "{toggled:?}"
     );
+}
+
+#[test]
+fn kept_names_the_net_each_pin_keeps() {
+    let shown = texts(&compared_with(on_two_nets));
+    let line = "Designator R5 · position and rotation · pin 1 on VOUT_3V3, pin 2 on FB \
+                (pins matched by number, 2 of 2)";
+    assert!(shown.iter().any(|t| t == line), "{line:?} in {shown:#?}");
+}
+
+#[test]
+fn kept_says_the_pins_are_mapped_by_hand() {
+    let shown = texts(&compared_with(|change| {
+        on_two_nets(change);
+        change.pin_map = Some(change.preview.mapping.clone());
+    }));
+    let line = "Designator R5 · position and rotation · pin 1 on VOUT_3V3, pin 2 on FB \
+                (pins as mapped, 2 of 2)";
+    assert!(shown.iter().any(|t| t == line), "{line:?} in {shown:#?}");
+}
+
+#[test]
+fn a_mapping_that_cannot_be_followed_says_why_and_change_does_nothing() {
+    let i18n = I18n::en_us_ref();
+    let label = i18n
+        .message(
+            ids::LIBRARY_CHANGE_COMPONENT_APPLY,
+            &[("count", Arg::from(1_usize))],
+        )
+        .into_string();
+    let why = "the carried wires of R5 would join another net; rewire them by hand";
+    let state = compared_with(|change| {
+        change.pin_map = Some(Default::default());
+        change.preview.carried = vec!["2".into()];
+        change.preview.refused = Some(why.into());
+    });
+    let shown = texts(&state);
+    for line in [
+        format!("The pin mapping cannot be followed: {why}"),
+        "Connected pins whose wires move with them to the new pin: 2".to_string(),
+    ] {
+        assert!(shown.contains(&line), "{line:?} in {shown:#?}");
+    }
+    let confirmed = clicks(&state, &label).into_iter().any(|m| {
+        matches!(
+            m,
+            LibraryMessage::PlacedPart(PlacedPartMsg::ChangeConfirmed)
+        )
+    });
+    assert!(!confirmed, "Change is inert while the mapping is refused");
 }
 
 #[test]
