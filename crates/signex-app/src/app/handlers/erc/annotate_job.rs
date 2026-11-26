@@ -67,6 +67,9 @@ pub(super) struct ReadStage {
     child_sheets: ChildSheetSignature,
     project: Option<ProjectId>,
     root: PathBuf,
+    /// The sheet a `document` operand named (#2470): its project is numbered
+    /// whatever tab is active. `None`: the active sheet's.
+    pub(super) anchor: Option<PathBuf>,
 }
 
 #[derive(Debug)]
@@ -79,6 +82,8 @@ struct AnnotateJob {
     read: ReadStage,
     /// The confirm a Re-prefix run applies once its sheets are read.
     reprefix: Option<ReprefixConfirm>,
+    /// The caller of the operand form, answered when the run ends (#2470).
+    waiting: Option<crate::app::agent::WaitingCommand>,
 }
 
 /// The run in flight (Annotate, Reset Duplicate Designators or Re-prefix). One
@@ -88,7 +93,8 @@ struct AnnotateJob {
 #[derive(Debug, Default)]
 pub struct AnnotateRuns {
     generation: u64,
-    job: Option<AnnotateJob>,
+    /// Boxed: with no run going it costs `UiState` one pointer (#2412).
+    job: Option<Box<AnnotateJob>>,
 }
 
 /// Why a read result was not applied.
@@ -125,38 +131,52 @@ impl Signex {
         kind: PassKind,
         reprefix: Option<ReprefixConfirm>,
     ) -> Task<Message> {
+        self.begin_run_at(kind, reprefix, None, None)
+            .unwrap_or_else(|_| Task::none())
+    }
+
+    /// [`Self::begin_run`] on the project of `anchor` (a sheet a `document`
+    /// operand named, #2470), else of the active sheet, answering `waiting`
+    /// when the run ends. `Err` is why it did not start, already logged.
+    pub(super) fn begin_run_at(
+        &mut self,
+        kind: PassKind,
+        reprefix: Option<ReprefixConfirm>,
+        anchor: Option<PathBuf>,
+        waiting: Option<crate::app::agent::WaitingCommand>,
+    ) -> Result<Task<Message>, String> {
         let label = kind.label();
         if self.ui_state.annotate_runs.job.is_some() {
-            self.refuse_run(
-                label,
-                "another Annotate or Reset Duplicate Designators run is still going. \
-                 Try again once it has finished.",
-            );
-            return Task::none();
+            let why = "another Annotate or Reset Duplicate Designators run is still going. \
+                       Try again once it has finished.";
+            self.refuse_run(label, why);
+            return Err(format!("{label}: {why}"));
         }
-        let Some((read, plan)) = self.capture_sheet_read() else {
-            crate::diagnostics::log_info(format!("{label}: no sheet is open, nothing to do"));
-            return Task::none();
+        let Some((read, plan)) = self.capture_sheet_read_at(anchor) else {
+            let line = format!("{label}: no sheet is open, nothing to do");
+            crate::diagnostics::log_info(line.clone());
+            return Err(line);
         };
         let mut known: Vec<PathBuf> = plan.pages().to_vec();
         known.push(plan.root().to_path_buf());
         if self.refuse_annotate_while_project_moves(known.iter().map(PathBuf::as_path), label)
             || self.refuse_annotate_while_path_op(known.iter().map(PathBuf::as_path), label)
         {
-            return Task::none();
+            return Err(self.notice_line(label));
         }
         let guard = self.guard_run_paths(&known, plan.fold());
         let runs = &mut self.ui_state.annotate_runs;
         runs.generation += 1;
         let generation = runs.generation;
-        runs.job = Some(AnnotateJob {
+        runs.job = Some(Box::new(AnnotateJob {
             generation,
             kind,
             guard,
             read,
             reprefix,
-        });
-        Task::perform(
+            waiting,
+        }));
+        Ok(Task::perform(
             crate::app::path_op_jobs::run_blocking(move || SheetsRead(plan.assemble())),
             move |read| {
                 Message::Annotate(AnnotateMsg::PassSheetsRead {
@@ -164,6 +184,14 @@ impl Signex {
                     result: Arc::new(read),
                 })
             },
+        ))
+    }
+
+    /// The error notice a refusal just raised, as one en-US line.
+    pub(super) fn notice_line(&self, label: &str) -> String {
+        self.document_state.error_notice.as_ref().map_or_else(
+            || format!("{label}: nothing was changed"),
+            crate::app::state::ErrorNotice::detail_line_en_us,
         )
     }
 
@@ -173,13 +201,25 @@ impl Signex {
     pub(super) fn capture_sheet_read(
         &self,
     ) -> Option<(ReadStage, project_sheets::ProjectSheetPlan)> {
-        let active = self.document_state.active_path.clone()?;
-        let plan = project_sheets::plan_project_sheets_for(&self.document_state, &active);
+        self.capture_sheet_read_at(None)
+    }
+
+    /// [`Self::capture_sheet_read`] for the project of `anchor`, else of the
+    /// active sheet.
+    fn capture_sheet_read_at(
+        &self,
+        anchor: Option<PathBuf>,
+    ) -> Option<(ReadStage, project_sheets::ProjectSheetPlan)> {
+        let sheet = anchor
+            .clone()
+            .or_else(|| self.document_state.active_path.clone())?;
+        let plan = project_sheets::plan_project_sheets_for(&self.document_state, &sheet);
         let stage = ReadStage {
             epoch: self.document_state.documents_epoch,
             child_sheets: self.child_sheet_signature(),
-            project: self.document_state.document_project(&active).map(|p| p.id),
+            project: self.document_state.document_project(&sheet).map(|p| p.id),
             root: plan.root().to_path_buf(),
+            anchor,
         };
         Some((stage, plan))
     }
@@ -206,7 +246,7 @@ impl Signex {
     }
 
     /// Take the run's own job when `generation` is the live one.
-    fn take_run(&mut self, generation: u64) -> Option<AnnotateJob> {
+    fn take_run(&mut self, generation: u64) -> Option<Box<AnnotateJob>> {
         let job = self.ui_state.annotate_runs.job.take()?;
         if job.generation == generation {
             return Some(job);
@@ -222,33 +262,92 @@ impl Signex {
         generation: u64,
         result: &Result<SheetsRead, String>,
     ) -> Task<Message> {
-        let Some(mut job) = self.take_run(generation) else {
+        let Some(mut job) = self.take_run(generation).map(|job| *job) else {
             return Task::none();
         };
         // Released first: the checks below ask whether ANOTHER operation holds
         // the sheets, and the run's own registration would answer yes.
         self.document_state.pending_path_ops.finish(job.guard);
+        let Some(waiting) = job.waiting.take() else {
+            return self.number_read_sheets(job, result).1;
+        };
+        // The operand form (#2470): its caller is answered with each change.
+        let target = job.read.anchor.clone().unwrap_or_default();
+        let mut follow = Task::none();
+        let answered = self.finish_waiting_command(waiting, &target, |app| {
+            let (outcome, task) = app.annotate_and_answer(job, result);
+            follow = task;
+            outcome
+        });
+        Task::batch([answered, follow])
+    }
+
+    /// Number the sheets of `result` as `job` asks, or change nothing and
+    /// say why. Also returns the designators the sheets had before, when
+    /// the numbering ran (`None`: it was refused).
+    fn number_read_sheets(
+        &mut self,
+        mut job: AnnotateJob,
+        result: &Result<SheetsRead, String>,
+    ) -> (
+        Option<super::annotate_command::SheetDesignators>,
+        Task<Message>,
+    ) {
         let label = job.kind.label();
         let set = match self.accept_read(job.kind, &job.read, result) {
             Ok(set) => set,
-            Err(Refused::Reported) => return Task::none(),
+            Err(Refused::Reported) => return (None, Task::none()),
             Err(Refused::Because(why)) => {
                 self.refuse_run(label, &format!("{why}. Nothing was changed; run it again."));
-                return Task::none();
+                return (None, Task::none());
             }
         };
+        let before = self.designators_before(&set, job.read.anchor.as_deref());
         let task = match job.kind {
-            PassKind::Annotate(mode) => self.apply_annotate(mode, set),
+            PassKind::Annotate(mode) => self.apply_annotate(mode, set, job.read.anchor.as_deref()),
             PassKind::ResetDuplicates => self.apply_reset_duplicates(set),
             PassKind::Reprefix => {
                 let Some(confirm) = job.reprefix.take() else {
-                    return Task::none();
+                    return (None, Task::none());
                 };
                 self.apply_reprefix(confirm, set)
             }
         };
         let refresh = self.finish_run_view();
-        Task::batch([task, refresh])
+        (Some(before), Task::batch([task, refresh]))
+    }
+
+    /// [`Self::number_read_sheets`] for the operand form (#2470): what its
+    /// caller is answered with, each designator the run changed. A run that
+    /// changed nothing and raised a notice is refused with it.
+    fn annotate_and_answer(
+        &mut self,
+        job: AnnotateJob,
+        result: &Result<SheetsRead, String>,
+    ) -> (crate::app::command::CommandOutcome, Task<Message>) {
+        use crate::app::command::CommandOutcome;
+        let label = job.kind.label();
+        let mode = match job.kind {
+            PassKind::Annotate(mode) => Some(mode),
+            PassKind::ResetDuplicates | PassKind::Reprefix => None,
+        };
+        let notice = self.document_state.error_notice.clone();
+        let (before, task) = self.number_read_sheets(job, result);
+        let raised = self.document_state.error_notice != notice;
+        let refused = |line: String| super::annotate_command::annotate_refused(line);
+        let Some(before) = before else {
+            return (refused(self.notice_line(label)), task);
+        };
+        let after = self.designators_now(&before);
+        let changes = super::annotate_command::designator_changes(&before, &after);
+        if changes.is_empty() && raised {
+            return (refused(self.notice_line(label)), task);
+        }
+        let mut answer = super::annotate_command::answer(mode, &changes);
+        if raised {
+            answer["notice"] = serde_json::json!(self.notice_line(label));
+        }
+        (CommandOutcome::Answered(answer), task)
     }
 
     /// Everything the numbering relies on must still hold when the sheets
@@ -310,8 +409,13 @@ impl Signex {
                 "a sheet symbol was placed, removed or changed while the sheets were being read",
             );
         }
-        let Some(active) = ds.active_path.as_deref() else {
-            return stale("no sheet is open any more");
+        // A run a `document` operand named (#2470) follows that sheet, not
+        // the active tab.
+        let active = match (read.anchor.as_deref(), ds.active_path.as_deref()) {
+            (Some(anchor), _) if ds.engines.contains_key(anchor) => anchor,
+            (Some(_), _) => return stale("the sheet the run was named for is no longer open"),
+            (None, Some(active)) => active,
+            (None, None) => return stale("no sheet is open any more"),
         };
         let project = ds.document_project(active).map(|p| p.id);
         if project != read.project

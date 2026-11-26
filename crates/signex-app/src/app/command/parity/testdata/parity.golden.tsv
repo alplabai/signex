@@ -37,9 +37,13 @@ annotate_schematic	bridge	Annotate(OpenDialog)	gui	none	handler
 annotate_schematic	in_window_rewrite	document_window	gui	window	routing
 annotate_schematic	headless_refusal	headless_refusal	gui	none	routing
 annotate_schematic_quietly	bridge	Annotate(Run(Incremental))	core	active document,dialog answer	handler
+annotate_schematic_quietly	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,origin	handler
 annotate_schematic_quietly	in_window_rewrite	document_window	gui	window	routing
 annotate_schematic_quietly	refusal_needs	ActiveSheet	core	active document	routing
 annotate_schematic_quietly	disabled_still_runs	explains_when_unavailable	core	active document,dialog answer	handler
+apply_board_schematic_differences	operand_handler	run_operands: named document	core	origin	handler
+apply_board_schematic_differences	refusal_needs_operands	needs_operands_reason	gui	none	routing
+apply_board_schematic_differences	headless_missing_operand	needs `document`	core	none	routing
 apply_edits	operand_handler	run_operands: named document	core	active document,tool state,origin	handler
 apply_edits	refusal_needs_operands	needs_operands_reason	gui	none	routing
 apply_edits	headless_missing_operand	needs `document`	core	none	routing
@@ -63,9 +67,18 @@ arrange_in_box	operand_handler	run_operands: named document	core	origin,settings
 arrange_in_box	in_window_rewrite	document_window	gui	window	routing
 arrange_in_box	refusal_needs	SwapFootprints	gui	active document,selection	routing
 arrange_in_box	headless_missing_operand	needs `document`	core	none	routing
+arrange_in_room	translator	Pcb(RoomTool(ArrangeRequested))	gui	active document,selection	handler
+arrange_in_room	operand_handler	run_operands: named document	core	origin	handler
+arrange_in_room	in_window_rewrite	document_window	gui	window	routing
+arrange_in_room	refusal_needs	EditablePcb	gui	active document	routing
+arrange_in_room	headless_missing_operand	needs `document`	core	none	routing
 assign_board_net_class	operand_handler	run_operands: named document	core	origin	handler
 assign_board_net_class	refusal_needs_operands	needs_operands_reason	gui	none	routing
 assign_board_net_class	headless_missing_operand	needs `document`	core	none	routing
+assign_footprint	operand_handler	run_operands: named document	core	origin	handler
+assign_footprint	refusal_needs	Schematic	core	active document	routing
+assign_footprint	refusal_needs_operands	needs_operands_reason	gui	none	routing
+assign_footprint	headless_missing_operand	needs `document`	core	none	routing
 assign_footprints	bridge	Project(AssignFootprints(Requested))	gui	active document	gate
 assign_footprints	in_window_rewrite	document_window	gui	window	routing
 assign_footprints	refusal_needs	Schematic	gui	active document	routing
@@ -73,14 +86,20 @@ assign_footprints	headless_refusal	headless_refusal	gui	none	routing
 assign_net_class	operand_handler	run_operands: named document	core	origin	handler
 assign_net_class	refusal_needs_operands	needs_operands_reason	gui	none	routing
 assign_net_class	headless_missing_operand	needs `document`	core	none	routing
+auto_place	translator	Pcb(RoomTool(AutoPlaceRequested))	gui	active document	gate
+auto_place	operand_handler	run_operands: named document	core	origin	handler
+auto_place	in_window_rewrite	document_window	gui	window	routing
+auto_place	refusal_needs	EditablePcb	gui	active document	routing
+auto_place	headless_missing_operand	needs `document`	core	none	routing
 autoplace_fields	bridge	Edit(Extras(AutoplaceFieldsRequested))	core	active document,selection	handler
 autoplace_fields	operand_handler	run_operands: named document	core	origin	handler
 autoplace_fields	in_window_rewrite	document_window	gui	window	routing
 autoplace_fields	headless_missing_operand	needs `id`	core	none	routing
 back_annotate_schematics	bridge	Pcb(BackAnnotate(Requested))	gui	active document,window	gate
+back_annotate_schematics	operand_handler	run_operands: named document	core	origin	handler
 back_annotate_schematics	in_window_rewrite	document_window	gui	window	routing
 back_annotate_schematics	refusal_needs	PcbSync	gui	active document,window	routing
-back_annotate_schematics	headless_refusal	headless_refusal	gui	none	routing
+back_annotate_schematics	headless_missing_operand	needs `document`	core	none	routing
 board_assembly_drawing	bridge	Pcb(Output(AssemblyPrintRequested(None)))	gui	active document	gate
 board_assembly_drawing	operand_handler	run_operands: named document	core	origin	handler
 board_assembly_drawing	in_window_rewrite	document_window	gui	window	routing
@@ -121,6 +140,17 @@ board_sketch	bridge	Pcb(Sketch(ModeToggled))	undecided	active document	gate
 board_sketch	in_window_rewrite	document_window	gui	window	routing
 board_sketch	refusal_needs	EditablePcb	undecided	active document	routing
 board_sketch	headless_refusal	headless_refusal	undecided	none	routing
+board_status	query	run_query	core	origin	handler
+board_status	headless_missing_operand	needs `document`	core	none	routing
+bom_add_alternate	operand_handler	run_operands: named document	core	origin	handler
+bom_add_alternate	refusal_needs_operands	needs_operands_reason	gui	none	routing
+bom_add_alternate	headless_missing_operand	needs `document`	core	none	routing
+bom_remove_alternate	operand_handler	run_operands: named document	core	origin	handler
+bom_remove_alternate	refusal_needs_operands	needs_operands_reason	gui	none	routing
+bom_remove_alternate	headless_missing_operand	needs `document`	core	none	routing
+bom_set_alternate_order	operand_handler	run_operands: named document	core	origin	handler
+bom_set_alternate_order	refusal_needs_operands	needs_operands_reason	gui	none	routing
+bom_set_alternate_order	headless_missing_operand	needs `document`	core	none	routing
 break_union	bridge	Edit(Unions(BreakRequested))	core	active document,selection	handler
 break_union	in_window_rewrite	document_window	gui	window	routing
 break_union	refusal_needs	Schematic	core	active document	routing
@@ -152,12 +182,16 @@ center_view_at_cursor	bridge	CanvasEvent(CenterAtCursor)	gui	window,cursor	handl
 center_view_at_cursor	in_window_rewrite	canvas_in_window|document_window	gui	window	routing
 center_view_at_cursor	headless_refusal	headless_refusal	gui	none	routing
 change_component	bridge	Library(PlacedPart(ActionRequested(ChangeComponent)))	gui	selection	handler
+change_component	operand_handler	run_operands: named document	core	origin	handler
 change_component	in_window_rewrite	document_window	gui	window	routing
-change_component	headless_refusal	headless_refusal	gui	none	routing
-change_footprint	bridge	Pcb(FootprintSwap(Requested))	gui	active document,selection	gate
+change_component	headless_missing_operand	needs `document`	core	none	routing
+change_footprint	translator	Pcb(FootprintSwap(Requested))	gui	active document,selection	gate
+change_footprint	operand_handler	run_operands: named document	core	origin	handler
 change_footprint	in_window_rewrite	document_window	gui	window	routing
 change_footprint	refusal_needs	SwapFootprints	gui	active document,selection	routing
-change_footprint	headless_refusal	headless_refusal	gui	none	routing
+change_footprint	headless_missing_operand	needs `document`	core	none	routing
+check_board_against_schematic	query	run_query	core	origin	handler
+check_board_against_schematic	headless_missing_operand	needs `document`	core	none	routing
 check_drc	check	run_query: check_run	core	origin,settings	handler
 check_drc	headless_missing_operand	needs `document`	core	none	routing
 check_erc	check	run_query: check_run	core	origin,settings	handler
@@ -208,9 +242,10 @@ copy_board_3d_screenshot	in_window_rewrite	document_window	gui	window	routing
 copy_board_3d_screenshot	refusal_needs	Board3dView	gui	active document,window	routing
 copy_board_3d_screenshot	headless_refusal	headless_refusal	gui	none	routing
 create_rooms_from_sheets	bridge	Pcb(CreateRooms(Requested))	gui	active document	gate
+create_rooms_from_sheets	operand_handler	run_operands: named document	core	origin	handler
 create_rooms_from_sheets	in_window_rewrite	document_window	gui	window	routing
 create_rooms_from_sheets	refusal_needs	PcbInProject	gui	active document	routing
-create_rooms_from_sheets	headless_refusal	headless_refusal	gui	none	routing
+create_rooms_from_sheets	headless_missing_operand	needs `document`	core	none	routing
 create_sheet_from_sheet_symbol	bridge	ContextMenu(Action(CreateChildSheet))	gui	selection	handler
 create_sheet_from_sheet_symbol	in_window_rewrite	document_window	gui	window	routing
 create_sheet_from_sheet_symbol	headless_refusal	headless_refusal	gui	none	routing
@@ -424,9 +459,10 @@ export_parameters	in_window_rewrite	document_window	gui	window	routing
 export_parameters	refusal_needs	Schematic	gui	active document	routing
 export_parameters	headless_refusal	headless_refusal	gui	none	routing
 fabrication_outputs	bridge	Pcb(FabOutputs(Requested))	gui	active document	gate
+fabrication_outputs	operand_handler	run_operands: named document	core	origin	handler
 fabrication_outputs	in_window_rewrite	document_window	gui	window	routing
 fabrication_outputs	refusal_needs	Pcb	gui	active document	routing
-fabrication_outputs	headless_refusal	headless_refusal	gui	none	routing
+fabrication_outputs	headless_missing_operand	needs `document`	core	none	routing
 fast_grid_1	bridge	Ui(FastGridPicked(0))	gui	tool state	handler
 fast_grid_1	in_window_rewrite	document_window	gui	window	routing
 fast_grid_1	headless_refusal	headless_refusal	gui	none	routing
@@ -460,6 +496,12 @@ find_similar_objects	headless_refusal	headless_refusal	gui	none	routing
 find_text	bridge	Overlay(OpenFind)	gui	none	handler
 find_text	in_window_rewrite	document_window	gui	window	routing
 find_text	headless_refusal	headless_refusal	gui	none	routing
+fix_drc	operand_handler	run_operands: named document	core	origin,settings	handler
+fix_drc	refusal_needs_operands	needs_operands_reason	gui	none	routing
+fix_drc	headless_missing_operand	needs `document`	core	none	routing
+fix_drc_violation	operand_handler	run_operands: named document	core	origin,settings	handler
+fix_drc_violation	refusal_needs_operands	needs_operands_reason	gui	none	routing
+fix_drc_violation	headless_missing_operand	needs `document`	core	none	routing
 flip_board_3d	bridge	Pcb(Board3d(FlipRequested))	gui	active document	gate
 flip_board_3d	in_window_rewrite	document_window	gui	window	routing
 flip_board_3d	refusal_needs	Pcb	gui	active document	routing
@@ -496,6 +538,7 @@ footprint_recompute_courtyard_outline	bridge	Input(FootprintCourtyardOutlineRequ
 footprint_recompute_courtyard_outline	in_window_rewrite	document_window	gui	window	routing
 footprint_recompute_courtyard_outline	headless_refusal	headless_refusal	core	none	routing
 force_annotate_all_schematics	bridge	Annotate(Run(ResetAndRenumber))	core	active document,dialog answer	handler
+force_annotate_all_schematics	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,origin	handler
 force_annotate_all_schematics	in_window_rewrite	document_window	gui	window	routing
 force_annotate_all_schematics	refusal_needs	ActiveSheet	core	active document	routing
 force_annotate_all_schematics	disabled_still_runs	explains_when_unavailable	core	active document,dialog answer	handler
@@ -565,6 +608,13 @@ keymap_clear	headless_missing_operand	needs `command`	gui	none	routing
 lasso_select	active_bar	LassoSelect	gui	none	handler
 lasso_select	in_window_rewrite	document_window	gui	window	routing
 lasso_select	headless_refusal	headless_refusal	gui	none	routing
+layout_plan_get	query	run_query	core	origin	handler
+layout_plan_get	headless_missing_operand	needs `document`	core	none	routing
+layout_plan_set	operand_handler	run_operands: named document	core	origin	handler
+layout_plan_set	refusal_needs_operands	needs_operands_reason	gui	none	routing
+layout_plan_set	headless_missing_operand	needs `document`	core	none	routing
+layout_plan_status	query	run_query	core	origin	handler
+layout_plan_status	headless_missing_operand	needs `document`	core	none	routing
 leave_sheet	bridge	Menu(AscendToParentSheet)	gui	active document	gate
 leave_sheet	in_window_rewrite	document_window	gui	window	routing
 leave_sheet	refusal_needs	ParentSheet	gui	active document	routing
@@ -619,10 +669,11 @@ new_document	operand_handler	run_operands: active-tab gate unless a document is 
 new_document	in_window_rewrite	document_window	gui	window	routing
 new_document	headless_new_document	settle_and_answer_new_document	core	dialog answer	handler
 new_pcb_document	bridge	UpdatePcb(NewPcbRequested(None))	gui	active document	gate
-new_pcb_document	operand_handler	run_operands: active-tab gate unless a document is named	core	active document	handler
+new_pcb_document	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,origin	handler
 new_pcb_document	in_window_rewrite	document_window	gui	window	routing
 new_pcb_document	refusal_needs	OpenProject	gui	active document	routing
 new_pcb_document	headless_without_operands	run_operands	core	active document	handler
+new_pcb_document	headless_new_document	settle_and_answer_new_document	core	active document,dialog answer	handler
 new_project_with_profile	bridge	Menu(NewProject)	gui	none	handler
 new_project_with_profile	operand_handler	run_operands: active-tab gate unless a document is named	core	settings	handler
 new_project_with_profile	in_window_rewrite	document_window	gui	window	routing
@@ -782,9 +833,10 @@ place_board_component	in_window_rewrite	document_window	gui	window	routing
 place_board_component	refusal_needs	EditablePcb	gui	active document	routing
 place_board_component	headless_refusal	headless_refusal	gui	none	routing
 place_board_diff_pair	bridge	Pcb(PlaceToolPicked(DiffPairRouting))	gui	active document	gate
+place_board_diff_pair	operand_handler	run_operands: named document	core	origin,settings	handler
 place_board_diff_pair	in_window_rewrite	document_window	gui	window	routing
 place_board_diff_pair	refusal_needs	EditablePcb	gui	active document	routing
-place_board_diff_pair	headless_refusal	headless_refusal	gui	none	routing
+place_board_diff_pair	headless_missing_operand	needs `document`	core	none	routing
 place_board_dimension	bridge	Pcb(PlaceToolPicked(Dimension(Aligned)))	gui	active document	gate
 place_board_dimension	in_window_rewrite	document_window	gui	window	routing
 place_board_dimension	refusal_needs	EditablePcb	gui	active document	routing
@@ -802,61 +854,70 @@ place_board_dimension_vertical	in_window_rewrite	document_window	gui	window	rout
 place_board_dimension_vertical	refusal_needs	EditablePcb	gui	active document	routing
 place_board_dimension_vertical	headless_refusal	headless_refusal	gui	none	routing
 place_board_fill	bridge	Pcb(PlaceToolPicked(Fill))	gui	active document	gate
+place_board_fill	operand_handler	run_operands: named document	core	origin	handler
 place_board_fill	in_window_rewrite	document_window	gui	window	routing
 place_board_fill	refusal_needs	EditablePcb	gui	active document	routing
-place_board_fill	headless_refusal	headless_refusal	gui	none	routing
+place_board_fill	headless_missing_operand	needs `document`	core	none	routing
 place_board_graphic_arc	bridge	Pcb(PlaceToolPicked(GraphicArc))	gui	active document	gate
 place_board_graphic_arc	in_window_rewrite	document_window	gui	window	routing
 place_board_graphic_arc	refusal_needs	EditablePcb	gui	active document	routing
 place_board_graphic_arc	headless_refusal	headless_refusal	gui	none	routing
 place_board_keepout	bridge	Pcb(PlaceToolPicked(Keepout))	gui	active document	gate
+place_board_keepout	operand_handler	run_operands: named document	core	origin	handler
 place_board_keepout	in_window_rewrite	document_window	gui	window	routing
 place_board_keepout	refusal_needs	EditablePcb	gui	active document	routing
-place_board_keepout	headless_refusal	headless_refusal	gui	none	routing
+place_board_keepout	headless_missing_operand	needs `document`	core	none	routing
 place_board_line	bridge	Pcb(PlaceToolPicked(Line))	gui	active document	gate
 place_board_line	in_window_rewrite	document_window	gui	window	routing
 place_board_line	refusal_needs	EditablePcb	gui	active document	routing
 place_board_line	headless_refusal	headless_refusal	gui	none	routing
 place_board_multi_route	bridge	Pcb(PlaceToolPicked(MultiRoute))	gui	active document	gate
+place_board_multi_route	operand_handler	run_operands: named document	core	origin,settings	handler
 place_board_multi_route	in_window_rewrite	document_window	gui	window	routing
 place_board_multi_route	refusal_needs	EditablePcb	gui	active document	routing
-place_board_multi_route	headless_refusal	headless_refusal	gui	none	routing
+place_board_multi_route	headless_missing_operand	needs `document`	core	none	routing
 place_board_pad	bridge	Pcb(PlaceToolPicked(Pad))	gui	active document	gate
 place_board_pad	in_window_rewrite	document_window	gui	window	routing
 place_board_pad	refusal_needs	EditablePcb	gui	active document	routing
 place_board_pad	headless_refusal	headless_refusal	gui	none	routing
 place_board_polygon_pour	bridge	Pcb(PlaceToolPicked(PolygonPour))	gui	active document	gate
+place_board_polygon_pour	operand_handler	run_operands: named document	core	origin	handler
 place_board_polygon_pour	in_window_rewrite	document_window	gui	window	routing
 place_board_polygon_pour	refusal_needs	EditablePcb	gui	active document	routing
-place_board_polygon_pour	headless_refusal	headless_refusal	gui	none	routing
+place_board_polygon_pour	headless_missing_operand	needs `document`	core	none	routing
 place_board_pour_cutout	bridge	Pcb(PlaceToolPicked(PourCutout))	gui	active document	gate
+place_board_pour_cutout	operand_handler	run_operands: named document	core	origin	handler
 place_board_pour_cutout	in_window_rewrite	document_window	gui	window	routing
 place_board_pour_cutout	refusal_needs	EditablePcb	gui	active document	routing
-place_board_pour_cutout	headless_refusal	headless_refusal	gui	none	routing
+place_board_pour_cutout	headless_missing_operand	needs `document`	core	none	routing
 place_board_quick_route	bridge	Pcb(PlaceToolPicked(QuickRoute))	gui	active document	gate
+place_board_quick_route	operand_handler	run_operands: named document	core	origin,settings	handler
 place_board_quick_route	in_window_rewrite	document_window	gui	window	routing
 place_board_quick_route	refusal_needs	EditablePcb	gui	active document	routing
-place_board_quick_route	headless_refusal	headless_refusal	gui	none	routing
+place_board_quick_route	headless_missing_operand	needs `document`	core	none	routing
 place_board_rectangle	bridge	Pcb(PlaceToolPicked(Rectangle))	gui	active document	gate
 place_board_rectangle	in_window_rewrite	document_window	gui	window	routing
 place_board_rectangle	refusal_needs	EditablePcb	gui	active document	routing
 place_board_rectangle	headless_refusal	headless_refusal	gui	none	routing
 place_board_region	bridge	Pcb(PlaceToolPicked(SolidRegion))	gui	active document	gate
+place_board_region	operand_handler	run_operands: named document	core	origin	handler
 place_board_region	in_window_rewrite	document_window	gui	window	routing
 place_board_region	refusal_needs	EditablePcb	gui	active document	routing
-place_board_region	headless_refusal	headless_refusal	gui	none	routing
+place_board_region	headless_missing_operand	needs `document`	core	none	routing
 place_board_reuse_block	operand_handler	run_operands: named document	core	origin	handler
 place_board_reuse_block	refusal_needs	ReuseAnchor	core	active document,selection	routing
 place_board_reuse_block	refusal_needs_operands	needs_operands_reason	gui	none	routing
 place_board_reuse_block	headless_missing_operand	needs `document`	core	none	routing
 place_board_room	bridge	Pcb(PlaceToolPicked(Room))	gui	active document	gate
+place_board_room	operand_handler	run_operands: named document	core	origin	handler
 place_board_room	in_window_rewrite	document_window	gui	window	routing
 place_board_room	refusal_needs	EditablePcb	gui	active document	routing
-place_board_room	headless_refusal	headless_refusal	gui	none	routing
+place_board_room	headless_missing_operand	needs `document`	core	none	routing
 place_board_route	bridge	Pcb(PlaceToolPicked(InteractiveRouting))	gui	active document	gate
+place_board_route	operand_handler	run_operands: named document	core	origin,settings	handler
 place_board_route	in_window_rewrite	document_window	gui	window	routing
 place_board_route	refusal_needs	EditablePcb	gui	active document	routing
-place_board_route	headless_refusal	headless_refusal	gui	none	routing
+place_board_route	headless_missing_operand	needs `document`	core	none	routing
 place_board_slice_pour	bridge	Pcb(PlaceToolPicked(SlicePour))	gui	active document	gate
 place_board_slice_pour	in_window_rewrite	document_window	gui	window	routing
 place_board_slice_pour	refusal_needs	EditablePcb	gui	active document	routing
@@ -870,13 +931,15 @@ place_board_text_frame	in_window_rewrite	document_window	gui	window	routing
 place_board_text_frame	refusal_needs	EditablePcb	gui	active document	routing
 place_board_text_frame	headless_refusal	headless_refusal	gui	none	routing
 place_board_track	bridge	Pcb(PlaceToolPicked(Track))	gui	active document	gate
+place_board_track	operand_handler	run_operands: named document	core	origin,settings	handler
 place_board_track	in_window_rewrite	document_window	gui	window	routing
 place_board_track	refusal_needs	EditablePcb	gui	active document	routing
-place_board_track	headless_refusal	headless_refusal	gui	none	routing
+place_board_track	headless_missing_operand	needs `document`	core	none	routing
 place_board_via	bridge	Pcb(PlaceToolPicked(Via))	gui	active document	gate
+place_board_via	operand_handler	run_operands: named document	core	origin	handler
 place_board_via	in_window_rewrite	document_window	gui	window	routing
 place_board_via	refusal_needs	EditablePcb	gui	active document	routing
-place_board_via	headless_refusal	headless_refusal	gui	none	routing
+place_board_via	headless_missing_operand	needs `document`	core	none	routing
 place_bus	bridge	ActiveBar(Action(DrawBus))	gui	active document	gate
 place_bus	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,tool state,origin	handler
 place_bus	in_window_rewrite	document_window	gui	window	routing
@@ -1100,6 +1163,9 @@ project_set_active_variant	headless_missing_operand	needs `document`	core	none	r
 project_set_annotate_undo	operand_handler	run_operands: named document	core	origin	handler
 project_set_annotate_undo	refusal_needs_operands	needs_operands_reason	gui	none	routing
 project_set_annotate_undo	headless_missing_operand	needs `document`	core	none	routing
+project_set_rail	operand_handler	run_operands: named document	core	origin	handler
+project_set_rail	refusal_needs_operands	needs_operands_reason	gui	none	routing
+project_set_rail	headless_missing_operand	needs `document`	core	none	routing
 project_set_requirement	operand_handler	run_operands: named document	core	origin	handler
 project_set_requirement	refusal_needs_operands	needs_operands_reason	gui	none	routing
 project_set_requirement	headless_missing_operand	needs `document`	core	none	routing
@@ -1110,14 +1176,26 @@ project_settings	query	run_query	core	origin,settings	handler
 project_settings	headless_missing_operand	needs `document`	core	none	routing
 query_board_nets	query	run_query	core	origin	handler
 query_board_nets	headless_missing_operand	needs `document`	core	none	routing
+query_bom	query	run_query	core	origin	handler
+query_bom	headless_missing_operand	needs `document`	core	none	routing
+query_footprint_assignments	query	run_query	core	origin	handler
+query_footprint_assignments	headless_missing_operand	needs `document`	core	none	routing
+query_library	query	run_query	core	active document	handler
+query_library	headless_missing_operand	needs `library`	core	none	routing
+query_part_heights	operand_handler	run_operands: named document	core	origin	handler
+query_part_heights	refusal_needs_operands	needs_operands_reason	gui	none	routing
+query_part_heights	headless_missing_operand	needs `document`	core	none	routing
 query_pins	query	run_query	core	origin	handler
 query_pins	headless_missing_operand	needs `document`	core	none	routing
+query_rail_budget	query	run_query	core	origin	handler
+query_rail_budget	headless_missing_operand	needs `document`	core	none	routing
 read_document	query	run_query	core	origin	handler
 read_document	headless_missing_operand	needs `document`	core	none	routing
 reannotate_board	bridge	Pcb(Reannotate(Requested))	gui	active document	gate
+reannotate_board	operand_handler	run_operands: named document	core	origin	handler
 reannotate_board	in_window_rewrite	document_window	gui	window	routing
 reannotate_board	refusal_needs	Pcb	gui	active document	routing
-reannotate_board	headless_refusal	headless_refusal	gui	none	routing
+reannotate_board	headless_missing_operand	needs `document`	core	none	routing
 redo	bridge	Edit(Redo)	core	active document	handler
 redo	operand_handler	run_operands: named document	core	in-progress edit,origin	handler
 redo	undo_router_sheet_window	schematic|symbol|footprint|library_row|project|erc_rules|rules_tab	gui	active document,window	routing
@@ -1299,6 +1377,7 @@ save_project_as	headless_refusal	headless_refusal	gui	none	routing
 save_workspace_layout	bridge	DockLayout(Workspace(Save(Requested)))	gui	settings	handler
 save_workspace_layout	in_window_rewrite	document_window	gui	window	routing
 save_workspace_layout	headless_refusal	headless_refusal	gui	none	routing
+search_parts	query	run_query	core	none	handler
 select_all	bridge	Selection(SelectAll)	gui	active document,render cache	handler
 select_all	in_window_rewrite	document_window	gui	window	routing
 select_all	refusal_needs	SelectAllTarget	gui	active document	routing
@@ -1344,6 +1423,18 @@ set_board_panel	operand_handler	run_operands: named document	core	origin	handler
 set_board_panel	refusal_needs	Pcb	core	active document	routing
 set_board_panel	refusal_needs_operands	needs_operands_reason	gui	none	routing
 set_board_panel	headless_missing_operand	needs `document`	core	none	routing
+set_footprint_position	operand_handler	run_operands: named document	core	origin	handler
+set_footprint_position	refusal_needs	Pcb	core	active document	routing
+set_footprint_position	refusal_needs_operands	needs_operands_reason	gui	none	routing
+set_footprint_position	headless_missing_operand	needs `document`	core	none	routing
+set_footprint_rotation	operand_handler	run_operands: named document	core	origin	handler
+set_footprint_rotation	refusal_needs	Pcb	core	active document	routing
+set_footprint_rotation	refusal_needs_operands	needs_operands_reason	gui	none	routing
+set_footprint_rotation	headless_missing_operand	needs `document`	core	none	routing
+set_footprint_side	operand_handler	run_operands: named document	core	origin	handler
+set_footprint_side	refusal_needs	Pcb	core	active document	routing
+set_footprint_side	refusal_needs_operands	needs_operands_reason	gui	none	routing
+set_footprint_side	headless_missing_operand	needs `document`	core	none	routing
 set_footprint_text	operand_handler	run_operands: named document	core	origin	handler
 set_footprint_text	refusal_needs	Pcb	core	active document	routing
 set_footprint_text	refusal_needs_operands	needs_operands_reason	gui	none	routing
@@ -1584,10 +1675,10 @@ unwaive_drc_violation	operand_handler	run_operands: named document	core	origin	h
 unwaive_drc_violation	refusal_needs_operands	needs_operands_reason	gui	none	routing
 unwaive_drc_violation	headless_missing_operand	needs `document`	core	none	routing
 update_pcb_from_schematic	bridge	UpdatePcb(Requested { apply: false })	gui	active document,window	gate
-update_pcb_from_schematic	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,window	handler
+update_pcb_from_schematic	operand_handler	run_operands: the active project unless a document is named	core	active document,window,origin	handler
 update_pcb_from_schematic	in_window_rewrite	document_window	gui	window	routing
 update_pcb_from_schematic	refusal_needs	PcbSync	gui	active document,window	routing
-update_pcb_from_schematic	headless_missing_operand	needs `apply`	core	none	routing
+update_pcb_from_schematic	headless_without_operands	run_operands	core	active document	handler
 view_board_3d	bridge	Pcb(Board3d(Toggled))	gui	active document	gate
 view_board_3d	in_window_rewrite	document_window	gui	window	routing
 view_board_3d	refusal_needs	Pcb	gui	active document	routing

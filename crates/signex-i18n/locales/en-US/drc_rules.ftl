@@ -11,6 +11,10 @@ drc-kind-mask-sliver = Mask sliver
 drc-kind-mask-expansion = Mask expansion
 drc-kind-paste-expansion = Paste expansion
 drc-kind-courtyard = Courtyard overlap
+drc-kind-component-height = Component height
+drc-kind-body-clearance = 3D body clearance
+# A part taller than a rule's maximum (#2939).
+drc-detail-height = { $measured } mm tall, needs at most { $required } mm
 
 # A gap under a rule's minimum; at 0 the two touch or overlap.
 drc-detail-gap = { $measured } mm apart, needs { $required } mm

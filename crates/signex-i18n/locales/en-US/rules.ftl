@@ -153,6 +153,7 @@ rules-preview-title-silk = Silkscreen
 rules-preview-title-mask = Solder mask
 rules-preview-title-paste = Paste mask
 rules-preview-title-courtyard = Courtyard spacing
+rules-preview-title-component = Component height and 3D clearance
 rules-preview-note-clearance = Different nets only
 rules-preview-note-track = Solid: the narrowest track. Dashed: the widest.
 rules-preview-note-via = Tented: the mask covers the via
@@ -163,6 +164,7 @@ rules-preview-note-mask = Dashed: the mask opening around each pad
 rules-preview-note-mask-merged = Openings merge: no mask between the pads
 rules-preview-note-paste = A negative expansion shrinks the aperture
 rules-preview-note-courtyard = Dashed: courtyards. Parts are not to scale; the gap is.
+rules-preview-note-component = Side view. The gap is measured between the 3D bodies.
 # Clearance matrix (#2530): the caption, the legend, the object-pair card
 # and the preview row.
 rules-matrix-caption = One clearance per pair of net classes. A grey value is what the pair needs without a cell of its own. Type in a cell to set it; click it to open its object pairs.
@@ -291,6 +293,7 @@ rules-type-room = Room definition
 # Column headers under a group.
 rules-column-min = Min
 rules-column-max = Max
+rules-column-body-3d = 3D body
 rules-column-preferred = Preferred
 rules-column-diameter = Diameter
 rules-column-hole = Hole

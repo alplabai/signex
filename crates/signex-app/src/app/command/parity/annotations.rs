@@ -86,6 +86,22 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Operand,
         &[Settings],
     ),
+    // The routing tools from their operands (#2470): the rules the route
+    // keeps come from `board_design_rules` -> `drc_inputs`; none reads the
+    // person's tool form, corner rule or route mode (handlers/pcb_tool/
+    // route_order.rs). A via reads nothing past its operands and the board.
+    (
+        &[
+            "place_board_track",
+            "place_board_quick_route",
+            "place_board_route",
+            "place_board_diff_pair",
+            "place_board_multi_route",
+        ],
+        Operand,
+        &[Settings],
+    ),
+    (&["place_board_via"], Operand, &[]),
     // The PDF's printed text is in the UI locale (`print_text`).
     (&["export_board_pdf"], Operand, &[Settings]),
     // Save As of a background sheet is refused (`active_path`).
@@ -150,6 +166,7 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "color_net",
             "export_board_report",
             "export_board_step",
+            "fabrication_outputs",
             "export_assembly_svg",
             "board_assembly_drawing",
             "board_report_bom",
@@ -183,6 +200,7 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "panelize_board",
             "remove_board_panel",
             "set_board_panel",
+            "layout_plan_set",
             "swap_pins",
             "swap_gates",
             "save_board_reuse_block",
@@ -201,14 +219,67 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "project_set_version_control",
             "project_set_requirement",
             "project_enable_requirement",
+            "project_set_rail",
             "bring_drawings_forward",
             "bring_drawings_to_front",
             "send_drawings_backward",
             "send_drawings_to_back",
             "delete_selection",
+            // #2470: the area tools take their layer and net as operands,
+            // never the active layer or the tool's form.
+            "place_board_fill",
+            "place_board_region",
+            "place_board_polygon_pour",
+            "place_board_keepout",
+            "place_board_pour_cutout",
+            // #2936, #2937: a footprint placed, turned, flipped, assigned or
+            // swapped by its operands, never the selection.
+            "set_footprint_position",
+            "set_footprint_rotation",
+            "set_footprint_side",
+            "assign_footprint",
+            "change_footprint",
+            // #1297, #2938: the part swap and a BOM line's alternates.
+            "change_component",
+            "bom_add_alternate",
+            "bom_remove_alternate",
+            "bom_set_alternate_order",
+            // #2470, #2462: board numbering, back annotation and the board
+            // against schematic Apply, on the named board or project.
+            "reannotate_board",
+            "back_annotate_schematics",
+            "apply_board_schematic_differences",
+            // #2457, #2941: the rooms commands take the room, the sheets'
+            // parts and the weights from their operands and the board.
+            "place_board_room",
+            "create_rooms_from_sheets",
+            "arrange_in_room",
+            "auto_place",
         ],
         Operand,
         &[],
+    ),
+    // #2457: from the palette, Arrange in Room acts on the room Properties
+    // shows on the board in view.
+    (
+        &["arrange_in_room"],
+        Translator,
+        &[ActiveDocument, Selection],
+    ),
+    // #2470: a headless New PCB with no `document` joins the project in view.
+    (
+        &["new_pcb_document"],
+        HeadlessNewDocument,
+        &[ActiveDocument],
+    ),
+    // #2470: Annotate with no `document` runs on the active sheet's project.
+    (
+        &[
+            "annotate_schematic_quietly",
+            "force_annotate_all_schematics",
+        ],
+        Operand,
+        &[ActiveDocument],
     ),
     // The DRC results act on the board in view only (`drc_results_board`,
     // handlers/pcb_drc_results.rs); Show also centres that window's camera
@@ -218,6 +289,10 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     // category listed in scripts/uifree-state.txt, so it is no implicit input.
     (&["show_drc_violation"], Operand, &[ActiveDocument, Window]),
     (&["filter_drc_results"], Operand, &[ActiveDocument]),
+    // The DRC fixes check the named board with Run DRC's rules: a project
+    // without rules is checked with the machine rules (`fix_drc` ->
+    // `board_design_rules` -> `drc_inputs`), configuration.
+    (&["fix_drc", "fix_drc_violation"], Operand, &[Settings]),
     // A waiver is refused on a stale last run (`set_drc_waiver`): the core
     // session state above, so nothing implicit.
     (
@@ -245,11 +320,14 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     ),
     // A run already going in the Project tab skips this one.
     (&["project_run_requirements"], Operand, &[Window]),
-    // The board update targets the window acting, else the active document.
+    // The board update acts on the project its `document` names (#2470),
+    // else on the active project (the workspace pointer, not the tab in
+    // view); an open Update PCB dialog only refuses it.
+    (&["update_pcb_from_schematic"], Operand, &[ActiveDocument]),
     (
         &["update_pcb_from_schematic"],
-        Operand,
-        &[ActiveDocument, Window],
+        HeadlessWithoutOperands,
+        &[ActiveDocument],
     ),
     // The new document joins the active document's project.
     (
@@ -401,20 +479,38 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Query,
         &[Settings],
     ),
-    // Read: operands only.
+    // Read: operands only. `layout_plan_status` reads the board's last DRC
+    // run, core-bound session state as for `rules_get` above.
     (
         &[
             "board_panel",
             "find_items",
             "find_similar_items",
+            "layout_plan_get",
+            "layout_plan_status",
             "measure_board",
             "query_board_nets",
             "query_pins",
+            // #2943: the project's rails and its parts, read off the UI thread.
+            "query_rail_budget",
+            // #2937, #2462, #2460, #2938, #1297: the footprint list, the board
+            // against the schematic, the board's counters, the priced BOM
+            // and the part search.
+            "query_footprint_assignments",
+            "check_board_against_schematic",
+            "board_status",
+            "query_bom",
+            "search_parts",
             "read_document",
         ],
         Query,
         &[],
     ),
+    // #2944: a relative library path is read from the edited sheet's
+    // project folder (`open_library_named`), as `place_component` reads it.
+    (&["query_library"], Query, &[ActiveDocument]),
+    // #2939: the named board and the open libraries' models.
+    (&["query_part_heights"], Operand, &[]),
     // What the open or the new project dialog answers.
     (
         &["new_document", "open_document", "new_project_with_profile"],

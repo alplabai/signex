@@ -1,10 +1,12 @@
 //! Read-only design-rule check of a board (#2222): clearance, shorts,
 //! unconnected nets and board-sketch keepouts (#2234), in integer nm, plus
 //! the limits of written rules (#2307, #2435): track width, via size,
-//! holes, board edge, via-in-pad, silkscreen, mask, paste and courtyards.
+//! holes, board edge, via-in-pad, silkscreen, mask, paste, courtyards and
+//! the parts' 3D bodies (#2939).
 //! Pure: the board goes in, a report comes out, and nothing here edits it.
 //! Rules and what is not checked yet: `docs/architecture/pcb-drc.md`.
 
+pub mod bodies;
 mod check;
 mod checklist;
 mod courtyard;
@@ -15,6 +17,7 @@ pub mod findings;
 mod flags;
 mod holes;
 mod keepout;
+pub mod layout_plan;
 mod limit_kind;
 mod limits;
 mod mask;
@@ -33,7 +36,8 @@ use uuid::Uuid;
 use pcb_geom::{GeomError, ItemRef, PointNm, Rejected};
 use signex_types::violation::Severity;
 
-pub use check::run;
+pub use bodies::{BodyModel, BodyModels, HeightSource, PartBody, part_bodies, part_body};
+pub use check::{run, run_with_bodies};
 pub use checklist::RuleResult;
 pub use explain::{Candidate, Effective, Explanation, Source, Verdict};
 pub use fab_floor::{FAB_RULE_PREFIX, is_fab_rule};
@@ -100,6 +104,12 @@ pub enum ViolationKind {
     /// outside the room's outline shrunk by its margin (#2457):
     /// `measured_nm` is how far, `required_nm` the margin.
     PartOutsideRoom,
+    /// A part whose 3D body reaches higher above its face than a rule's
+    /// maximum (#2939): `measured_nm` is its height.
+    ComponentHeight,
+    /// The 3D bodies of two parts on one side closer than a rule's
+    /// minimum, measured in 3D (#2939).
+    BodyClearance,
 }
 
 /// One finding, sorted by `(kind, items, ..)` in a report.

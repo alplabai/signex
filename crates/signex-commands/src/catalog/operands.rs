@@ -77,7 +77,7 @@ pub struct Operand {
     pub required: bool,
 }
 
-const fn required(name: &'static str, kind: OperandKind) -> Operand {
+pub(super) const fn required(name: &'static str, kind: OperandKind) -> Operand {
     Operand {
         name,
         kind,
@@ -85,7 +85,7 @@ const fn required(name: &'static str, kind: OperandKind) -> Operand {
     }
 }
 
-const fn optional(name: &'static str, kind: OperandKind) -> Operand {
+pub(super) const fn optional(name: &'static str, kind: OperandKind) -> Operand {
     Operand {
         name,
         kind,
@@ -330,14 +330,6 @@ pub const NEW_PROJECT: &[Operand] = &[
     optional("profile", OperandKind::Text),
     optional("overrides", OperandKind::Text),
 ];
-
-/// Update PCB without the dialog (#1312): `apply=true` executes the rows
-/// ticked by default.
-pub const APPLY: &[Operand] = &[required("apply", OperandKind::Bool)];
-
-/// New PCB without the dialog (#2232): `profile` is `project` (the default,
-/// the project's own setup), a built-in token or a saved user profile.
-pub const NEW_PCB: &[Operand] = &[optional("profile", OperandKind::Text)];
 
 /// New Schematic without the dialog (#2232): `profile` as for `NEW_PCB`;
 /// `name` is the file stem in the project folder (default `Sheet<n>`).
@@ -789,7 +781,7 @@ pub const RULES_ONE: &[Operand] = &[
     required("id", OperandKind::Text),
 ];
 /// `rules_add`: a rule of `kind` (a rule target: clearance, track, via, hole,
-/// edge, silk, mask, paste, courtyard) with its limits.
+/// edge, silk, mask, paste, courtyard, component) with its limits.
 pub const RULES_ADD: &[Operand] = &[
     required("document", OperandKind::Document),
     required("kind", OperandKind::Text),
@@ -890,7 +882,6 @@ pub const SET_BOARD_PANEL: &[Operand] = &[
     required("field", OperandKind::Text),
     required("value", OperandKind::Text),
 ];
-
 // The `project_*` commands (#1689-#1693): `document` is the project or any
 // of its documents.
 
@@ -960,7 +951,6 @@ pub const PROJECT_ENABLE_REQUIREMENT: &[Operand] = &[
     required("requirement", OperandKind::Text),
     required("on", OperandKind::Bool),
 ];
-
 /// `set_layer_stack` (#2401): the named board's whole stack, top to bottom,
 /// as JSON rows (`{"layers": [...]}` or the list); a copper row names the
 /// board layer it was, or none for a new layer.
@@ -1010,3 +1000,12 @@ pub const SET_PAD_SHAPE: &[Operand] = &[
     optional("delta", OperandKind::Text),
     optional("corners", OperandKind::Text),
 ];
+
+mod board;
+mod pcb_sync;
+mod project;
+mod rooms;
+pub use board::*;
+pub use pcb_sync::*;
+pub use project::PROJECT_SET_RAIL;
+pub use rooms::{ARRANGE_ROOM, AUTO_PLACE, CREATE_ROOMS, PLACE_ROOM};

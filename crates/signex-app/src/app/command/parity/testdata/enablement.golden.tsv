@@ -13,6 +13,7 @@ align_top	-	f2929686b07ef725
 align_vertical_centers	-	f2929686b07ef725
 annotate_schematic	-	f2929686b07ef725
 annotate_schematic_quietly	ActiveSheet	cff87b9cc03394bf
+apply_board_schematic_differences	-	f2929686b07ef725
 apply_edits	-	f2929686b07ef725
 apply_layout_board	-	f2929686b07ef725
 apply_layout_notebook	-	f2929686b07ef725
@@ -20,9 +21,12 @@ apply_layout_review	-	f2929686b07ef725
 apply_layout_schematic	-	f2929686b07ef725
 apply_selection_filter_preset	-	f2929686b07ef725
 arrange_in_box	SwapFootprints	839120ff5cdc4bd4
+arrange_in_room	EditablePcb	bd0dadc1f2af5e61
 assign_board_net_class	-	f2929686b07ef725
+assign_footprint	Schematic	f8bd7a5cb84e915b
 assign_footprints	Schematic	f8bd7a5cb84e915b
 assign_net_class	-	f2929686b07ef725
+auto_place	EditablePcb	bd0dadc1f2af5e61
 autoplace_fields	-	f2929686b07ef725
 back_annotate_schematics	PcbSync	a85dffe6af2a0327
 board_assembly_drawing	Pcb	119d310e454dd5e4
@@ -34,6 +38,10 @@ board_report_net_length	Pcb	119d310e454dd5e4
 board_report_netlist	Pcb	119d310e454dd5e4
 board_shape_from_selection	PcbSelection	b2eee5a7d6ad7c41
 board_sketch	EditablePcb	bd0dadc1f2af5e61
+board_status	-	f2929686b07ef725
+bom_add_alternate	-	f2929686b07ef725
+bom_remove_alternate	-	f2929686b07ef725
+bom_set_alternate_order	-	f2929686b07ef725
 break_union	Schematic	f8bd7a5cb84e915b
 break_wire	Schematic	f8bd7a5cb84e915b
 bring_drawings_forward	DrawingSelection	b04af20740589b90
@@ -45,6 +53,7 @@ center_on_cursor	-	f2929686b07ef725
 center_view_at_cursor	-	f2929686b07ef725
 change_component	-	f2929686b07ef725
 change_footprint	SwapFootprints	839120ff5cdc4bd4
+check_board_against_schematic	-	f2929686b07ef725
 check_drc	-	f2929686b07ef725
 check_erc	-	f2929686b07ef725
 check_requirements	-	f2929686b07ef725
@@ -127,6 +136,8 @@ find_previous	-	f2929686b07ef725
 find_similar_items	-	f2929686b07ef725
 find_similar_objects	SimilarSeed	fdead198e2ba86e2
 find_text	-	f2929686b07ef725
+fix_drc	-	f2929686b07ef725
+fix_drc_violation	-	f2929686b07ef725
 flip_board_3d	Pcb	119d310e454dd5e4
 flip_board_view	Pcb	119d310e454dd5e4
 flip_selected_x	Turn	50ba39b5e679cbc7
@@ -154,6 +165,9 @@ keepout_from_selection	PcbSelection	b2eee5a7d6ad7c41
 keymap_assign	-	f2929686b07ef725
 keymap_clear	-	f2929686b07ef725
 lasso_select	-	f2929686b07ef725
+layout_plan_get	-	f2929686b07ef725
+layout_plan_set	-	f2929686b07ef725
+layout_plan_status	-	f2929686b07ef725
 leave_sheet	ParentSheet	1a0f94b7a1b59195
 list_documents	-	f2929686b07ef725
 lock_board_items	Pcb	119d310e454dd5e4
@@ -288,11 +302,17 @@ project_rename_variant	-	f2929686b07ef725
 project_run_requirements	-	f2929686b07ef725
 project_set_active_variant	-	f2929686b07ef725
 project_set_annotate_undo	-	f2929686b07ef725
+project_set_rail	-	f2929686b07ef725
 project_set_requirement	-	f2929686b07ef725
 project_set_version_control	-	f2929686b07ef725
 project_settings	-	f2929686b07ef725
 query_board_nets	-	f2929686b07ef725
+query_bom	-	f2929686b07ef725
+query_footprint_assignments	-	f2929686b07ef725
+query_library	-	f2929686b07ef725
+query_part_heights	-	f2929686b07ef725
 query_pins	-	f2929686b07ef725
+query_rail_budget	-	f2929686b07ef725
 read_document	-	f2929686b07ef725
 reannotate_board	Pcb	119d310e454dd5e4
 redo	Redo	dc8e63570800fd62
@@ -344,6 +364,7 @@ save_document_as	SaveAsTarget	b6cfd6e46a78555f
 save_layer_set	Pcb	119d310e454dd5e4
 save_project_as	OpenProject	ee0317ecaf5bfb5b
 save_workspace_layout	-	f2929686b07ef725
+search_parts	-	f2929686b07ef725
 select_all	SelectAllTarget	ac2868db6f01027f
 select_board_net	Pcb	119d310e454dd5e4
 select_connection	-	f2929686b07ef725
@@ -357,6 +378,9 @@ set_active_layer	Pcb	119d310e454dd5e4
 set_board_graphic	Pcb	119d310e454dd5e4
 set_board_origin	EditablePcb	bd0dadc1f2af5e61
 set_board_panel	Pcb	119d310e454dd5e4
+set_footprint_position	Pcb	119d310e454dd5e4
+set_footprint_rotation	Pcb	119d310e454dd5e4
+set_footprint_side	Pcb	119d310e454dd5e4
 set_footprint_text	Pcb	119d310e454dd5e4
 set_layer_color	EditablePcb	bd0dadc1f2af5e61
 set_layer_sizes	Pcb	119d310e454dd5e4

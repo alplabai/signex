@@ -369,6 +369,7 @@ define_ids! {
     BACK_ANNOTATE_FAILED_LINE = "back-annotate-failed-line";
     BACK_ANNOTATE_SHARED_WARNING = "back-annotate-shared-warning";
     BACK_ANNOTATE_STALE = "back-annotate-stale";
+    BACK_ANNOTATE_COMMAND_REFUSED = "back-annotate-command-refused";
     BACK_ANNOTATE_REFRESH = "back-annotate-refresh";
     BACK_ANNOTATE_VALID = "back-annotate-valid";
     BACK_ANNOTATE_CHECKING = "back-annotate-checking";
@@ -1009,6 +1010,9 @@ define_ids! {
     UPDATE_PCB_EXECUTE = "update-pcb-execute";
     UPDATE_PCB_DONE = "update-pcb-done";
     UPDATE_PCB_REFUSED = "update-pcb-refused";
+    UPDATE_PCB_COMMAND_MODE = "update-pcb-command-mode";
+    UPDATE_PCB_BUSY = "update-pcb-busy";
+    UPDATE_PCB_WHICH_BOARD = "update-pcb-which-board";
     UPDATE_PCB_LIBRARY_NOT_OPENED = "update-pcb-library-not-opened";
     UPDATE_PCB_REPORT_SAVED = "update-pcb-report-saved";
     UPDATE_PCB_REPORT_FAILED = "update-pcb-report-failed";

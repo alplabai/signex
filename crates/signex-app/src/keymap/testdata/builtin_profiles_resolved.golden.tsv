@@ -153,10 +153,12 @@ signex_standard	hint	-	-	project_set_requirement
 signex_standard	hint	-	-	project_remove_requirement
 signex_standard	hint	-	-	project_enable_requirement
 signex_standard	hint	-	-	project_run_requirements
+signex_standard	hint	-	-	project_set_rail
 signex_standard	hint	-	-	document_info
 signex_standard	hint	-	-	list_documents
 signex_standard	hint	-	-	read_document
 signex_standard	hint	-	-	query_pins
+signex_standard	hint	-	-	query_library
 signex_standard	hint	-	-	resolve
 signex_standard	hint	-	-	apply_edits
 signex_standard	hint	-	Ctrl+Z	undo
@@ -227,6 +229,9 @@ signex_standard	hint	-	Y	mirror_y
 signex_standard	hint	-	L	flip_selection
 signex_standard	hint	-	-	set_object_position
 signex_standard	hint	-	-	set_object_rotation
+signex_standard	hint	-	-	set_footprint_position
+signex_standard	hint	-	-	set_footprint_rotation
+signex_standard	hint	-	-	set_footprint_side
 signex_standard	hint	-	-	place_component
 signex_standard	hint	-	-	place_symbol
 signex_standard	hint	-	-	place_power_symbol
@@ -351,11 +356,15 @@ signex_standard	hint	-	-	open_erc_dialog
 signex_standard	hint	-	-	repair_pin_junctions
 signex_standard	hint	-	T D	run_drc
 signex_standard	hint	-	-	check_drc
+signex_standard	hint	-	-	query_part_heights
 signex_standard	hint	-	-	check_requirements
+signex_standard	hint	-	-	query_rail_budget
 signex_standard	hint	-	-	open_drc_panel
 signex_standard	hint	-	-	show_drc_violation
 signex_standard	hint	-	-	waive_drc_violation
 signex_standard	hint	-	-	unwaive_drc_violation
+signex_standard	hint	-	-	fix_drc_violation
+signex_standard	hint	-	-	fix_drc
 signex_standard	hint	-	-	filter_drc_results
 signex_standard	hint	-	-	open_rules
 signex_standard	hint	-	-	rules_list
@@ -376,7 +385,12 @@ signex_standard	hint	-	-	rules_preset_diff
 signex_standard	hint	-	-	rules_preset_apply
 signex_standard	hint	-	-	update_pcb_from_schematic
 signex_standard	hint	-	-	compare_board_with_schematic
+signex_standard	hint	-	-	check_board_against_schematic
+signex_standard	hint	-	-	apply_board_schematic_differences
+signex_standard	hint	-	-	board_status
 signex_standard	hint	-	-	assign_footprints
+signex_standard	hint	-	-	assign_footprint
+signex_standard	hint	-	-	query_footprint_assignments
 signex_standard	hint	-	F	change_footprint
 signex_standard	hint	-	P V	place_board_via
 signex_standard	hint	-	P T	place_board_track
@@ -397,8 +411,13 @@ signex_standard	hint	-	-	panelize_board
 signex_standard	hint	-	-	remove_board_panel
 signex_standard	hint	-	-	set_board_panel
 signex_standard	hint	-	-	board_panel
+signex_standard	hint	-	-	layout_plan_get
+signex_standard	hint	-	-	layout_plan_set
+signex_standard	hint	-	-	layout_plan_status
 signex_standard	hint	-	-	place_board_room
 signex_standard	hint	-	-	create_rooms_from_sheets
+signex_standard	hint	-	-	arrange_in_room
+signex_standard	hint	-	-	auto_place
 signex_standard	hint	-	Shift++	next_layer
 signex_standard	hint	-	"-"	prev_layer
 signex_standard	hint	-	Shift+*	next_signal_layer
@@ -547,6 +566,11 @@ signex_standard	hint	-	-	apply_layout_notebook
 signex_standard	hint	-	-	save_workspace_layout
 signex_standard	hint	-	-	manage_workspace_layouts
 signex_standard	hint	-	-	reset_workspace_layout
+signex_standard	hint	-	-	bom_add_alternate
+signex_standard	hint	-	-	bom_remove_alternate
+signex_standard	hint	-	-	bom_set_alternate_order
+signex_standard	hint	-	-	query_bom
+signex_standard	hint	-	-	search_parts
 classic	bind	Pcb	Q	command:cycle_unit
 classic	bind	Global	/	command:switch_segment_posture
 classic	bind	Global	A	command:place_symbol
@@ -709,10 +733,12 @@ classic	hint	-	-	project_set_requirement
 classic	hint	-	-	project_remove_requirement
 classic	hint	-	-	project_enable_requirement
 classic	hint	-	-	project_run_requirements
+classic	hint	-	-	project_set_rail
 classic	hint	-	-	document_info
 classic	hint	-	-	list_documents
 classic	hint	-	-	read_document
 classic	hint	-	-	query_pins
+classic	hint	-	-	query_library
 classic	hint	-	-	resolve
 classic	hint	-	-	apply_edits
 classic	hint	-	Ctrl+Z	undo
@@ -783,6 +809,9 @@ classic	hint	-	Y	mirror_y
 classic	hint	-	L	flip_selection
 classic	hint	-	-	set_object_position
 classic	hint	-	-	set_object_rotation
+classic	hint	-	-	set_footprint_position
+classic	hint	-	-	set_footprint_rotation
+classic	hint	-	-	set_footprint_side
 classic	hint	-	-	place_component
 classic	hint	-	A	place_symbol
 classic	hint	-	P	place_power_symbol
@@ -907,11 +936,15 @@ classic	hint	-	-	open_erc_dialog
 classic	hint	-	-	repair_pin_junctions
 classic	hint	-	F7	run_drc
 classic	hint	-	-	check_drc
+classic	hint	-	-	query_part_heights
 classic	hint	-	-	check_requirements
+classic	hint	-	-	query_rail_budget
 classic	hint	-	-	open_drc_panel
 classic	hint	-	-	show_drc_violation
 classic	hint	-	-	waive_drc_violation
 classic	hint	-	-	unwaive_drc_violation
+classic	hint	-	-	fix_drc_violation
+classic	hint	-	-	fix_drc
 classic	hint	-	-	filter_drc_results
 classic	hint	-	-	open_rules
 classic	hint	-	-	rules_list
@@ -932,7 +965,12 @@ classic	hint	-	-	rules_preset_diff
 classic	hint	-	-	rules_preset_apply
 classic	hint	-	-	update_pcb_from_schematic
 classic	hint	-	-	compare_board_with_schematic
+classic	hint	-	-	check_board_against_schematic
+classic	hint	-	-	apply_board_schematic_differences
+classic	hint	-	-	board_status
 classic	hint	-	-	assign_footprints
+classic	hint	-	-	assign_footprint
+classic	hint	-	-	query_footprint_assignments
 classic	hint	-	F	change_footprint
 classic	hint	-	Shift+V	place_board_via
 classic	hint	-	Shift+T	place_board_track
@@ -953,8 +991,13 @@ classic	hint	-	-	panelize_board
 classic	hint	-	-	remove_board_panel
 classic	hint	-	-	set_board_panel
 classic	hint	-	-	board_panel
+classic	hint	-	-	layout_plan_get
+classic	hint	-	-	layout_plan_set
+classic	hint	-	-	layout_plan_status
 classic	hint	-	-	place_board_room
 classic	hint	-	-	create_rooms_from_sheets
+classic	hint	-	-	arrange_in_room
+classic	hint	-	-	auto_place
 classic	hint	-	Shift++	next_layer
 classic	hint	-	"-"	prev_layer
 classic	hint	-	Shift+*	next_signal_layer
@@ -1103,3 +1146,8 @@ classic	hint	-	-	apply_layout_notebook
 classic	hint	-	-	save_workspace_layout
 classic	hint	-	-	manage_workspace_layouts
 classic	hint	-	-	reset_workspace_layout
+classic	hint	-	-	bom_add_alternate
+classic	hint	-	-	bom_remove_alternate
+classic	hint	-	-	bom_set_alternate_order
+classic	hint	-	-	query_bom
+classic	hint	-	-	search_parts

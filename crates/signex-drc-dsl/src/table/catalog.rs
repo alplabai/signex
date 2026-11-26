@@ -390,7 +390,11 @@ const CATALOG: &[CatalogGroup] = {
         group!(
             "component_clearance",
             D::Placement,
-            &[col("component_clearance_min", F::MinCourtyardSpacing, Mm)],
+            &[
+                col("component_clearance_min", F::MinCourtyardSpacing, Mm),
+                // #2939: two parts' 3D bodies, measured in 3D.
+                col("component_clearance_body_3d", F::MinBodyClearance, Mm),
+            ],
         ),
         group!(
             "permitted_layers",
@@ -403,7 +407,7 @@ const CATALOG: &[CatalogGroup] = {
             &[
                 unchecked("height_min", Mm),
                 unchecked("height_preferred", Mm),
-                unchecked("height_max", Mm),
+                col("height_max", F::MaxHeight, Mm),
             ],
         ),
         group!(

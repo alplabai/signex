@@ -23,9 +23,15 @@ use crate::keymap::AppCommandId;
 const AWAITS_TARGETS: &[&str] = &[];
 
 /// Translated GUI routes the parity table cannot name `translator`: the
-/// bridge arm only arms the tool, and a later board click runs the operand
-/// handler (`pcb_arrange_box_clicked`).
-const ARMED_THEN_TRANSLATED: &[&str] = &["arrange_in_box"];
+/// bridge arm only arms the tool or opens the dialog, and a later board
+/// click or the dialog's button runs the operand handler
+/// (`pcb_arrange_box_clicked`; `place_drawn_room` and Create Rooms from
+/// Sheets' Create, #2457).
+const ARMED_THEN_TRANSLATED: &[&str] = &[
+    "arrange_in_box",
+    "create_rooms_from_sheets",
+    "place_board_room",
+];
 
 /// The ids of core-owned dispatch routes whose gate reads UI facts. With
 /// `past_named_documents`, an operand handler that names its document runs
