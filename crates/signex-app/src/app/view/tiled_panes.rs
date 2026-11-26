@@ -136,6 +136,7 @@ impl Signex {
                 .map(|id| self.view_variant_manager_tab(id)),
             Some(tab) if tab.kind.is_layer_stack() => Some(self.view_layer_stack_tab()),
             Some(tab) if tab.kind.is_polygon_manager() => Some(self.view_polygon_manager_tab()),
+            Some(tab) if tab.kind.is_length_matching() => Some(self.view_length_matching_tab()),
             Some(tab) if tab.kind.is_pin_table() => Some(self.view_pin_table_tab(&tab.path)),
             Some(tab) => self
                 .view_library_tab(tab, window_id, true)

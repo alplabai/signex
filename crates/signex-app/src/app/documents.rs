@@ -63,6 +63,9 @@ pub enum TabKind {
     /// A board's Polygon Manager as a page tab (mockup row 178), kept like
     /// the Layer Stack tab: the board's path, after the board's tab.
     PolygonManager,
+    /// A board's Length Matching as a page tab (#2797, mockup row 107),
+    /// kept like the Polygon Manager: the board's path, after its tab.
+    LengthMatching,
     /// A board's Layer Stack as a page tab (mockup row 105). `TabInfo.path`
     /// is the board's path, which Save writes; the board stays in its own
     /// PCB tab, and this tab always sits after it (`app/layer_stack_tab`).
@@ -141,10 +144,18 @@ impl TabKind {
         matches!(self, TabKind::PolygonManager)
     }
 
+    /// A board's Length Matching tab (#2797).
+    pub fn is_length_matching(&self) -> bool {
+        matches!(self, TabKind::LengthMatching)
+    }
+
     /// A page of a board, which shares the board's path and holds no
-    /// document: the Layer Stack and Polygon Manager tabs.
+    /// document: the Layer Stack, Polygon Manager and Length Matching tabs.
     pub fn is_board_page(&self) -> bool {
-        matches!(self, TabKind::LayerStack | TabKind::PolygonManager)
+        matches!(
+            self,
+            TabKind::LayerStack | TabKind::PolygonManager | TabKind::LengthMatching
+        )
     }
 
     /// A board's Layer Stack tab.
@@ -177,8 +188,9 @@ impl TabKind {
     /// table and Variant Manager tabs. None is undocked or restored from
     /// History.
     pub fn is_project_page(&self) -> bool {
-        // Mockup row 178: the Polygon Manager is a page of its board.
-        if self.is_polygon_manager() {
+        // Mockup rows 178 and 107: the Polygon Manager and Length Matching
+        // are pages of their board.
+        if self.is_polygon_manager() || self.is_length_matching() {
             return true;
         }
         matches!(

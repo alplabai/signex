@@ -60,7 +60,10 @@ impl Signex {
                 let lock = item_lock(tracks.iter().any(|s| s.locked));
                 let mut common = self.primitive_common(board, target, lock)?;
                 common.locked_count = mixed_lock(tracks.iter().map(|s| s.locked));
-                PcbPrimitiveFacts::Track(track_facts(board, common, &tracks, i18n))
+                let mut facts = track_facts(board, common, &tracks, i18n);
+                // #2585: the pair the tracks belong to, by the board's classes.
+                facts.pair = super::pair::pair_facts(board, self.board_net_classes(path), &tracks);
+                PcbPrimitiveFacts::Track(facts)
             }
             ItemRef::Via(_) => {
                 let vias: Vec<&Via> = target
@@ -364,6 +367,7 @@ pub(super) fn track_facts(
         locked: shared(tracks.iter().map(|s| s.locked)),
         paste_mask: shared(tracks.iter().map(|s| s.attributes.paste_mask)),
         solder_mask: shared(tracks.iter().map(|s| s.attributes.solder_mask)),
+        pair: None,
         common,
     }
 }

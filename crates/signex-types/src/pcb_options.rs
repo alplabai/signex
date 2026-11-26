@@ -67,6 +67,11 @@ pub struct BoardOptions {
     /// Saved as `[board_options.layer_colors]` (`snxpcb/1.5`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub layer_colors: Vec<LayerColor>,
+    /// The length-matching groups (#2797, mockup row 107), in the order
+    /// they were added. Saved as `[[board_options.length_groups]]`
+    /// (`snxpcb/1.12`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub length_groups: Vec<crate::pcb_length::LengthGroup>,
 }
 
 /// A colour the user gave one board layer: the canvas, the layer tabs and

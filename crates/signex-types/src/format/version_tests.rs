@@ -43,10 +43,10 @@ fn snxpcb_older_minor_saves_as_current_newer_minor_is_read_only() {
         "{out}"
     );
 
-    let newer = SnxPcb::parse(&format!("format = \"snxpcb/1.12\"\n{PCB_ID}")).unwrap();
+    let newer = SnxPcb::parse(&format!("format = \"snxpcb/1.13\"\n{PCB_ID}")).unwrap();
     assert!(newer.is_from_newer_minor());
     let err = newer.write_string().unwrap_err();
-    assert!(err.to_string().contains("snxpcb/1.12"), "{err}");
+    assert!(err.to_string().contains("snxpcb/1.13"), "{err}");
     assert!(SnxPcb::new(newer.board.clone()).write_string().is_err());
 
     assert!(SnxPcb::parse(&format!("format = \"snxpcb/2.0\"\n{PCB_ID}")).is_err());
@@ -60,23 +60,36 @@ fn snxpcb_1_10_is_readable_and_opens_for_editing() {
     assert!(SNXPCB_VERSION.readable.contains(&SNXPCB_FORMAT_V1_9));
     let file = SnxPcb::parse(&format!("format = \"{SNXPCB_FORMAT_V1_10}\"\n{PCB_ID}")).unwrap();
     assert!(!file.is_from_newer_minor());
-    assert!(snxpcb_opens_read_only("snxpcb/1.12"));
+    assert!(snxpcb_opens_read_only("snxpcb/1.13"));
     assert!(!snxpcb_opens_read_only(SNXPCB_FORMAT_V1_9));
 }
 
 /// #2871 / #2868 (DECISIONS 2026-11-24): `snxpcb/1.11` (pour cutouts, a
 /// dimension look) is this build's own token: it opens for editing, and it
-/// ranks above 1.10.
+/// ranks above 1.10. #2797 made 1.12 the current token.
 #[test]
-fn snxpcb_1_11_is_current_and_opens_for_editing() {
-    assert_eq!(SNXPCB_VERSION.current, SNXPCB_FORMAT_V1_11);
+fn snxpcb_1_11_is_readable_and_opens_for_editing() {
     assert!(SNXPCB_VERSION.readable.contains(&SNXPCB_FORMAT_V1_11));
     let file = SnxPcb::parse(&format!("format = \"{SNXPCB_FORMAT_V1_11}\"\n{PCB_ID}")).unwrap();
     assert!(!file.is_from_newer_minor());
     assert!(file.write_string().is_ok(), "this build saves 1.11");
     assert!(!snxpcb_opens_read_only(SNXPCB_FORMAT_V1_11));
     assert!(!snxpcb_opens_read_only(SNXPCB_FORMAT_V1_10));
-    assert!(snxpcb_opens_read_only("snxpcb/1.12"));
+    assert!(snxpcb_opens_read_only("snxpcb/1.13"));
+}
+
+/// #2797: `snxpcb/1.12` (length-matching groups) is the current token: it
+/// opens for editing and saves, and it ranks above 1.11.
+#[test]
+fn snxpcb_1_12_is_current_and_opens_for_editing() {
+    assert_eq!(SNXPCB_VERSION.current, SNXPCB_FORMAT_V1_12);
+    assert!(SNXPCB_VERSION.readable.contains(&SNXPCB_FORMAT_V1_12));
+    let file = SnxPcb::parse(&format!("format = \"{SNXPCB_FORMAT_V1_12}\"\n{PCB_ID}")).unwrap();
+    assert!(!file.is_from_newer_minor());
+    assert!(file.write_string().is_ok(), "this build saves 1.12");
+    assert!(!snxpcb_opens_read_only(SNXPCB_FORMAT_V1_12));
+    assert!(!snxpcb_opens_read_only(SNXPCB_FORMAT_V1_11));
+    assert!(snxpcb_opens_read_only("snxpcb/1.13"));
 }
 
 fn pad(uuid: &str, number: &str) -> Pad {

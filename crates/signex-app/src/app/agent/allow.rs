@@ -128,6 +128,8 @@ mod tests {
                 "hide_layer_group",
                 "highlight_layer",
                 "keepout_from_selection",
+                // #2797: the named board's length-matching groups.
+                "length_matching",
                 "list_documents",
                 "lock_board_items",
                 "measure_board",
@@ -153,6 +155,7 @@ mod tests {
                 "query_pins",
                 "read_document",
                 "remove_board_panel",
+                "remove_length_group",
                 "remove_teardrops",
                 "rename_net_class",
                 // #2216: each pour's fill of the named board, as JSON.
@@ -189,11 +192,14 @@ mod tests {
                 "set_active_layer",
                 "set_board_graphic",
                 "set_board_panel",
+                // #2585: a differential pair's track width.
+                "set_diff_pair_width",
                 "set_footprint_text",
                 "set_layer_color",
                 "set_layer_sizes",
                 "set_layer_stack",
                 "set_layer_visible",
+                "set_length_group",
                 "set_net_class_rules",
                 "set_object_transparency",
                 "set_object_visible",

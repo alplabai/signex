@@ -118,6 +118,13 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     // #2552: a move's wire handling, given by the caller, not the settings.
     ("keep_wires", OperandKind::Bool),
     ("wiring", OperandKind::Text),
+    // #2797: a length-matching group's band (mm), topology, member nets
+    // (comma separated) and new name.
+    ("target", OperandKind::Text),
+    ("tolerance", OperandKind::Text),
+    ("topology", OperandKind::Text),
+    ("members", OperandKind::Text),
+    ("rename", OperandKind::Text),
 ];
 
 /// The commands whose `ids` is still text, not targets (#2326): a design

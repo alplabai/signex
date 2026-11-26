@@ -176,6 +176,11 @@ impl Signex {
                 let task = self.handle_layer_stack(msg);
                 return Task::batch([task, self.finish_update()]);
             }
+            // #2797: the Length Matching tab and its dock panel.
+            if let crate::panels::PanelMsg::LengthMatching(msg) = panel_msg {
+                let task = self.handle_length_matching(msg.clone());
+                return Task::batch([task, self.finish_update()]);
+            }
             if let Some(task) = self.handle_dock_harness_message(panel_msg) {
                 return Task::batch([task, self.finish_update()]);
             }

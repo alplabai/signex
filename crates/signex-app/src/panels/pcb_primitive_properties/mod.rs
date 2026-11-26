@@ -51,6 +51,7 @@ use signex_widgets::property_illustration::IllustrationMsg;
 use signex_widgets::{button, text, text_input, tooltip};
 
 pub(crate) use dimension::{is_dimension_length, typed_length_mm};
+pub use facts::PairFacts;
 pub use facts::ViaTypeChoice;
 pub use facts::{
     ArcFacts, AreaLayerChoice, DimensionFacts, DimensionStyleFacts, Editability, GraphicFacts,

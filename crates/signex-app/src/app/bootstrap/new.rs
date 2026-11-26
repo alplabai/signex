@@ -727,6 +727,8 @@ impl Signex {
                     pcb_board: None,
                     layer_stack: None,
                     polygons: None,
+                    length_matching: None,
+                    length_matching_ui: Default::default(),
                     selection_count: 0,
                     selected_uuid: None,
                     selected_kind: None,

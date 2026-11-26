@@ -334,6 +334,28 @@ pub struct TrackFacts {
     pub locked: Option<bool>,
     pub paste_mask: Option<MaskExpansion>,
     pub solder_mask: Option<MaskExpansion>,
+    /// The differential pair the tracks belong to (#2585); `None` for
+    /// tracks of no pair, of two pairs, or while placing.
+    pub pair: Option<PairFacts>,
+}
+
+/// The pair of a track selection (#2585, mockup row 95): its name, the
+/// paired net and the gap, and the tracks a Width edit reaches.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PairFacts {
+    /// What the two net names share (`USB_D`).
+    pub name: String,
+    pub positive: String,
+    pub negative: String,
+    /// The other net of the shown one; `None` when the selection holds
+    /// tracks of both nets (the row then names both).
+    pub paired_net: Option<String>,
+    /// The copper gap every selected track keeps to its partner, in mm;
+    /// `None` when one has no partner or the gaps differ.
+    pub gap_mm: Option<f64>,
+    /// The selected tracks and their partners, in board order: a Width
+    /// edit of a pair reaches both tracks (#2585).
+    pub tracks: Vec<uuid::Uuid>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

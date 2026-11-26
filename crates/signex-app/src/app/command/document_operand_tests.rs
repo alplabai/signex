@@ -604,6 +604,12 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     // #2389: length tuning on the named board.
                     "tune_net_length",
                     "tune_diff_pair",
+                    // #2585, #2797: a pair's width and the length-matching
+                    // groups of the named board.
+                    "set_diff_pair_width",
+                    "length_matching",
+                    "set_length_group",
+                    "remove_length_group",
                     // #2326 slice 6.P2b: the drawing order and Delete by uuid.
                     "bring_drawings_forward",
                     "bring_drawings_to_front",

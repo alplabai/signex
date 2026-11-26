@@ -73,6 +73,24 @@ fn check(options: &BoardOptions) -> Result<(), BoardCommandError> {
     if let Some(panel) = &options.panel {
         panel.check().map_err(BoardCommandError::Panel)?;
     }
+    // Length-matching groups (#2797): the file stores what this lets in.
+    for group in &options.length_groups {
+        finite(group.target_mm, "group target")?;
+        finite(group.tolerance_mm, "group tolerance")?;
+        if group.target_mm <= 0.0 {
+            return Err(BoardCommandError::NotPositive {
+                field: "group target",
+            });
+        }
+        if group.tolerance_mm < 0.0 {
+            return Err(BoardCommandError::Negative {
+                field: "group tolerance",
+            });
+        }
+        if !seen.insert(group.uuid) {
+            return Err(BoardCommandError::DuplicateOption(group.uuid));
+        }
+    }
     Ok(())
 }
 

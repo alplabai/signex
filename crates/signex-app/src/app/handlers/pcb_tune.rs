@@ -279,7 +279,7 @@ fn diff_pair_answer(app: &mut Signex, args: &CommandArgs) -> Result<serde_json::
     Ok(answer(app, &path, &tuned))
 }
 
-fn outcome(ran: Result<serde_json::Value, String>) -> (CommandOutcome, Task<Message>) {
+pub(crate) fn outcome(ran: Result<serde_json::Value, String>) -> (CommandOutcome, Task<Message>) {
     match ran {
         Ok(answer) => (CommandOutcome::Answered(answer), Task::none()),
         Err(reason) => (CommandOutcome::disabled(reason), Task::none()),
@@ -332,7 +332,7 @@ fn selected_nets_on(app: &mut Signex, path: &Path) -> Vec<u32> {
     }
 }
 
-fn text_operand<'a>(args: &'a CommandArgs, name: &str) -> Option<&'a str> {
+pub(crate) fn text_operand<'a>(args: &'a CommandArgs, name: &str) -> Option<&'a str> {
     match args.operand(name) {
         Some(OperandValue::Text(text)) => Some(text.trim()).filter(|t| !t.is_empty()),
         _ => None,
@@ -350,7 +350,7 @@ fn parse_length(text: &str) -> Result<f64, String> {
 }
 
 /// The number of the net called `name` on the board at `path`.
-fn net_named(app: &Signex, path: &Path, name: &str) -> Result<u32, String> {
+pub(crate) fn net_named(app: &Signex, path: &Path, name: &str) -> Result<u32, String> {
     app.document_state
         .pcb_board(path)
         .and_then(|board| board.nets.iter().find(|n| n.name == name && n.number != 0))

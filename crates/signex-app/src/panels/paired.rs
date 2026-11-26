@@ -13,17 +13,17 @@
 //!
 //! This module holds the compact panel's header row: the panel title, a
 //! spacer and the link that opens the tab view. The caller passes the ids
-//! and the message, so each pair keeps its own wording. It also holds the
-//! compact Length Matching dock panel (mockup rows 7 and 107).
+//! and the message, so each pair keeps its own wording. The compact Length
+//! Matching dock panel (mockup rows 7 and 107) is `panels::length_matching`.
 
 use iced::widget::text::Wrapping;
 use iced::widget::{Space, column, container, row};
 use iced::{Alignment, Background, Element, Font, Length, Padding, Theme, Widget as _, font};
-use signex_i18n::{I18n, MessageId, ids, t};
+use signex_i18n::{I18n, MessageId, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, text};
 
-use crate::panels::{PanelContext, PanelMsg, empty_state_card};
+use crate::panels::{PanelContext, PanelMsg};
 use crate::styles::tokens::resolve;
 use crate::styles::{HAIRLINE, Spacing, TypeScale, ti};
 
@@ -96,17 +96,10 @@ impl<M: Clone> PairedHeader<M> {
     }
 }
 
-/// The compact Length Matching panel (mockup row 107). The board model has
-/// no length-matching groups yet (#2797), so the panel shows its empty
-/// state; the group rows and the "Open as tab" action arrive with the tab.
+/// The compact Length Matching panel (mockup row 107): the board's groups
+/// with Open as tab (#2797), drawn by `panels::length_matching`.
 pub fn length_matching_view(ctx: &PanelContext) -> Element<'_, PanelMsg> {
-    let card = empty_state_card(
-        &ctx.tokens,
-        t!(ctx.i18n, ids::PANELS_LENGTH_MATCHING_EMPTY_TITLE),
-        t!(ctx.i18n, ids::PANELS_LENGTH_MATCHING_EMPTY_BODY),
-        None,
-    );
-    container(card).padding(SP.m).width(Length::Fill).boxed()
+    super::length_matching::panel_view(ctx)
 }
 
 #[cfg(test)]
