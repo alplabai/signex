@@ -514,7 +514,7 @@ pub(super) fn check_row_base(stored: &LibraryRow, base: Option<u64>) -> Result<(
     }
 }
 
-pub(super) fn library_row_to_component(row: &LibraryRow) -> Result<ComponentRow, LibraryError> {
+pub(crate) fn library_row_to_component(row: &LibraryRow) -> Result<ComponentRow, LibraryError> {
     let mut record = csv::StringRecord::new();
     for col in TABLE_HEADER.iter() {
         let val = row.cells.get(*col).map(String::as_str).unwrap_or("");
@@ -754,7 +754,7 @@ pub(super) fn commit_initial(
 /// Slugify a human-facing name into a safe filename component.
 /// Lowercased, ASCII-only, runs of non-alphanumeric chars collapsed to
 /// `-`. Empty result falls back to `"untitled"`.
-pub(super) fn slugify(name: &str) -> String {
+pub(crate) fn slugify(name: &str) -> String {
     let mut out = String::with_capacity(name.len());
     let mut prev_dash = true;
     for ch in name.chars() {

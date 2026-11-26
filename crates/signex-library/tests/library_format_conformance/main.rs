@@ -16,6 +16,7 @@
 mod ids;
 mod primitives;
 mod rows;
+mod writer;
 
 use ids::*;
 use primitives::*;

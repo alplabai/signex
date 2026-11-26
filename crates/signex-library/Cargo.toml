@@ -112,6 +112,12 @@ name = "library_format_conformance"
 path = "tests/library_format_conformance/main.rs"
 required-features = ["local-git"]
 
+# Bulk writer (#3110) and library check (#3111).
+[[test]]
+name = "library_writer"
+path = "tests/library_writer/main.rs"
+required-features = ["local-git"]
+
 # GH #548 — inherit [workspace.lints.rust] (unused_must_use = deny).
 [lints]
 workspace = true

@@ -56,6 +56,8 @@ mod vcs_init_files;
 #[cfg(feature = "local-git")]
 pub mod vcs_target_guard;
 pub mod where_used;
+#[cfg(feature = "local-git")]
+pub mod writer;
 
 pub use adapter::{
     CommitOutcome, ComponentSummary, FileRewrite, HeldBackFile, HistoryEntry, LibraryAdapter,
@@ -148,6 +150,8 @@ pub use templates::{
 };
 pub use validate::validate_row_for_write;
 pub use where_used::{UseSite, WhereUsedIndex};
+#[cfg(feature = "local-git")]
+pub use writer::{LibraryWriter, TableDraft, UpdateSummary};
 
 #[cfg(feature = "local-git")]
 pub use adapters::local_git::{
