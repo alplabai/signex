@@ -75,7 +75,7 @@ fn named_part(app: &mut Signex, args: &CommandArgs) -> Result<NamedPart, Ran> {
     };
     let matrix = app
         .read_variant_parts_now(loaded)
-        .map_err(|why| refused(read_failed(I18n::en_us_ref(), &why).to_string()))?;
+        .map_err(|why| refused(read_failed(&I18n::en_us(), &why).to_string()))?;
     let Some(row) = matrix
         .rows
         .iter()
@@ -358,7 +358,7 @@ pub(crate) fn project_duplicate_variant(app: &mut Signex, args: &CommandArgs) ->
     } else {
         match app.read_variant_parts_now(project) {
             Ok(matrix) => (from.to_string(), sheet_fits_in(&matrix, Some(from))),
-            Err(why) => return refused(read_failed(I18n::en_us_ref(), &why).to_string()),
+            Err(why) => return refused(read_failed(&I18n::en_us(), &why).to_string()),
         }
     };
     let name = match text(args, "value") {
