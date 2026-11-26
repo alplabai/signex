@@ -19,7 +19,7 @@ use crate::app::{EditMsg, Message, Signex};
 use crate::keymap::AppCommandId;
 
 /// A PNG header of `w` × `h` pixels: enough to be checked and placed.
-fn png(w: u32, h: u32) -> Vec<u8> {
+pub(super) fn png(w: u32, h: u32) -> Vec<u8> {
     let mut bytes = b"\x89PNG\r\n\x1a\n\0\0\0\x0dIHDR".to_vec();
     bytes.extend_from_slice(&w.to_be_bytes());
     bytes.extend_from_slice(&h.to_be_bytes());
@@ -27,9 +27,9 @@ fn png(w: u32, h: u32) -> Vec<u8> {
     bytes
 }
 
-const SVG: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20"><rect width="4" height="2"/></svg>"#;
+pub(super) const SVG: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20"><rect width="4" height="2"/></svg>"#;
 
-fn empty_sheet() -> SchematicSheet {
+pub(super) fn empty_sheet() -> SchematicSheet {
     SchematicSheet {
         uuid: Uuid::now_v7(),
         paper_size: "A4".to_string(),
@@ -39,7 +39,7 @@ fn empty_sheet() -> SchematicSheet {
 
 /// An app with a loose sheet `main.snxsch` in `dir`: its images are relative
 /// to `dir`.
-fn app_in(dir: &Path, sheet: SchematicSheet) -> (Signex, PathBuf) {
+pub(super) fn app_in(dir: &Path, sheet: SchematicSheet) -> (Signex, PathBuf) {
     let (mut app, _task) = Signex::new();
     app.ui_state.snap_enabled = true;
     app.ui_state.grid_size_mm = 2.54;
@@ -48,40 +48,45 @@ fn app_in(dir: &Path, sheet: SchematicSheet) -> (Signex, PathBuf) {
     (app, path)
 }
 
-fn write(path: &Path, bytes: &[u8]) -> PathBuf {
+pub(super) fn write(path: &Path, bytes: &[u8]) -> PathBuf {
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(path, bytes).unwrap();
     path.to_path_buf()
 }
 
 fn run(app: &mut Signex, operands: &[String]) -> CommandOutcome {
-    let command = AppCommandId::new("place_graphic").expect("a catalog id");
     let refs: Vec<&str> = operands.iter().map(String::as_str).collect();
-    let args = CommandArgs::parse_operands(&command, &refs).expect("operands");
+    run_id(app, "place_graphic", &refs)
+}
+
+/// `id` run from `operands` to its outcome, its reads included.
+pub(super) fn run_id(app: &mut Signex, id: &str, operands: &[&str]) -> CommandOutcome {
+    let command = AppCommandId::new(id).expect("a catalog id");
+    let args = CommandArgs::parse_operands(&command, operands).expect("operands");
     app.run_operands_settled(&command, &args).0
 }
 
-fn place(app: &mut Signex, file: &Path, extra: &[&str]) -> CommandOutcome {
+pub(super) fn place(app: &mut Signex, file: &Path, extra: &[&str]) -> CommandOutcome {
     let mut operands = vec![format!("path={}", file.display()), "at=50.8,50.8".into()];
     operands.extend(extra.iter().map(|s| s.to_string()));
     run(app, &operands)
 }
 
-fn answered(outcome: CommandOutcome) -> Value {
+pub(super) fn answered(outcome: CommandOutcome) -> Value {
     match outcome {
         CommandOutcome::Answered(value) => value,
         other => panic!("not answered: {other:?}"),
     }
 }
 
-fn refusal(outcome: CommandOutcome) -> String {
+pub(super) fn refusal(outcome: CommandOutcome) -> String {
     match outcome {
         CommandOutcome::Disabled { reason } => reason.render_en_us(),
         other => panic!("not refused: {other:?}"),
     }
 }
 
-fn images(app: &Signex) -> Vec<SchImage> {
+pub(super) fn images(app: &Signex) -> Vec<SchImage> {
     app.document_state
         .active_engine()
         .expect("engine")
@@ -95,12 +100,12 @@ fn images(app: &Signex) -> Vec<SchImage> {
         .collect()
 }
 
-fn undo(app: &mut Signex) {
+pub(super) fn undo(app: &mut Signex) {
     let _ = app.update(Message::Edit(EditMsg::Undo));
 }
 
 /// Run `task` and feed back only the image messages it yields.
-fn land_image_messages(app: &mut Signex, task: iced::Task<Message>) {
+pub(super) fn land_image_messages(app: &mut Signex, task: iced::Task<Message>) {
     for message in crate::persist::run_task::outputs(task) {
         if matches!(message, Message::Edit(EditMsg::Images(_))) {
             let _ = app.update(message);

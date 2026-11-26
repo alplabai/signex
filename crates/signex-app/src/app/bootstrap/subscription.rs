@@ -29,6 +29,8 @@ struct OpenOverlays {
     find_replace_open: bool,
     find_similar_open: bool,
     paste_array_open: bool,
+    /// The Place Image dialog (mockup row 204).
+    place_image_open: bool,
     /// The Create Union popover (mockup row 158).
     union_popover_open: bool,
     /// The Smart Paste dialog (mockup row 155).
@@ -338,6 +340,11 @@ impl OpenOverlays {
             OverlayId::PasteArray => self.paste_array_open.then(|| {
                 Message::Edit(crate::app::EditMsg::PasteArray(
                     crate::paste_array::PasteArrayMsg::EscapePressed,
+                ))
+            }),
+            OverlayId::PlaceImage => self.place_image_open.then(|| {
+                Message::from(crate::app::ImagesMsg::Dialog(
+                    crate::app::images::PlaceDialogMsg::Closed,
                 ))
             }),
             OverlayId::UnionPopover => self.union_popover_open.then(|| {
@@ -746,6 +753,7 @@ impl Signex {
                 && !modal_detached(crate::app::state::ModalId::FindReplace),
             find_similar_open: self.ui_state.find_similar.is_some(),
             paste_array_open: self.ui_state.paste_array.is_some(),
+            place_image_open: self.ui_state.image_cache.dialog.is_some(),
             union_popover_open: self.ui_state.unions.popover.is_some(),
             smart_paste_open: self.ui_state.smart_paste.is_some(),
             kbd_shortcuts_open: self.ui_state.keyboard_shortcuts_open
@@ -1370,6 +1378,12 @@ mod tests {
             )))
         ));
         assert!(matches!(
+            only(|o| o.place_image_open = true),
+            Some(Message::Edit(crate::app::EditMsg::Images(
+                crate::app::ImagesMsg::Dialog(crate::app::images::PlaceDialogMsg::Closed)
+            )))
+        ));
+        assert!(matches!(
             only(|o| o.union_popover_open = true),
             Some(Message::Edit(crate::app::EditMsg::Unions(
                 crate::app::unions::UnionsMsg::Popover(
@@ -1981,6 +1995,7 @@ mod tests {
             find_replace_open,
             find_similar_open,
             paste_array_open,
+            place_image_open,
             union_popover_open,
             smart_paste_open,
             kbd_shortcuts_open,
@@ -2056,6 +2071,7 @@ mod tests {
             ("find_replace_open", |o| o.find_replace_open = true),
             ("find_similar_open", |o| o.find_similar_open = true),
             ("paste_array_open", |o| o.paste_array_open = true),
+            ("place_image_open", |o| o.place_image_open = true),
             ("union_popover_open", |o| o.union_popover_open = true),
             ("smart_paste_open", |o| o.smart_paste_open = true),
             ("kbd_shortcuts_open", |o| o.kbd_shortcuts_open = true),

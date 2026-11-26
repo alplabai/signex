@@ -447,6 +447,10 @@ cmd-set-object-rotation = Set the rotation of a placed part or label
 cmd-set-sheet-symbol-size = Set the size of a sheet symbol
 cmd-set-symbol-parameter = Set a parameter of a placed part
 cmd-set-sheet-variable = Set a sheet variable
+cmd-set-image = Set one field of a placed image
+cmd-relink-image = Point images at another image file
+cmd-show-image-in-folder = Show an image's file in its folder
+cmd-list-image-assets = List the project's image assets
 cmd-menu-assign-net-class = Assign Net Class...
 cmd-place-component = Place component
 # Noun: a component placed on the sheet.

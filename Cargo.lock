@@ -6110,6 +6110,8 @@ version = "26.11.1"
 name = "signex-output"
 version = "26.11.1"
 dependencies = [
+ "gif",
+ "miniz_oxide",
  "pcb-geom",
  "pdf-writer",
  "rust_xlsxwriter",
@@ -6120,6 +6122,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tiny-skia 0.11.4",
  "ttf-parser",
+ "usvg",
  "uuid",
 ]
 

@@ -134,6 +134,32 @@ pub(crate) fn read_placed_image(
     Ok((facts.format, bytes.into()))
 }
 
+/// The files directly in `root`'s images folder, project-relative.
+pub(crate) fn list_asset_folder(root: &Path) -> std::collections::BTreeSet<String> {
+    let Ok(entries) = std::fs::read_dir(root.join(IMAGE_ASSET_DIR)) else {
+        return Default::default();
+    };
+    entries
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_file()))
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .filter(|name| !name.starts_with('.'))
+        .map(|name| format!("{IMAGE_ASSET_DIR}/{name}"))
+        .collect()
+}
+
+/// What the file `file` of the project at `root` is, by the checks; `None`
+/// when it is not there, leaves the project or fails a check.
+pub(crate) fn read_asset_facts(root: &Path, file: &str) -> Option<image_asset::ImageFacts> {
+    let relative = image_asset::checked_asset_path(file).ok()?;
+    let path = root.join(relative);
+    if escapes_through_symlink(root, &path) {
+        return None;
+    }
+    let bytes = read_bounded(&path).ok()?;
+    image_asset::check_image(&bytes).ok()
+}
+
 /// Why one copy into the project was not written.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CopyFailure {

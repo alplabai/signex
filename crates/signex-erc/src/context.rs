@@ -352,6 +352,8 @@ pub struct ErcContext {
     pub key: Option<signex_net::SheetKey>,
     /// The sheet's signal harnesses (#1280).
     pub harness: ErcHarness,
+    /// The sheet's images (#1116).
+    pub images: Vec<crate::images::ErcImage>,
 }
 
 impl ErcContext {
@@ -547,6 +549,7 @@ impl ErcContext {
             children,
             key: None,
             harness: ErcHarness::from_sheet(snapshot),
+            images: crate::images::ErcImage::of_sheet(&snapshot.drawings),
         }
     }
 }

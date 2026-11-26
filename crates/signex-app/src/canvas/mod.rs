@@ -30,6 +30,7 @@ mod graphite;
 pub mod grid;
 mod halo_cache;
 mod hit_cache;
+mod image_grip;
 mod input;
 pub(crate) mod middle_zoom;
 mod move_pick;
@@ -121,6 +122,8 @@ pub struct CanvasState {
     wire_grip: Option<wire_grip::WireGrip>,
     /// Set while a drag holds one handle of a selected Bezier.
     bezier_drag: Option<bezier_grip::BezierDrag>,
+    /// Set while a drag holds one handle of a selected image (#1116).
+    image_drag: Option<image_grip::ImageDrag>,
     // ─── Double-click detection ───
     /// Timestamp of last left-click (for double-click detection).
     last_click_time: Option<std::time::Instant>,

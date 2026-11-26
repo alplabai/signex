@@ -925,9 +925,15 @@ pub use sch_table::{
 mod drawing_kinds_tests;
 mod sch_image;
 pub use sch_image::{SchImage, first_size_mm, free_area_mm};
+mod sch_image_edit;
+pub use sch_image_edit::{
+    IMAGE_MAX_EDGE_MM, ImageEdit, ImageEditRefusal, ImageHandle, resized_by_handle,
+};
 mod repeat;
 #[cfg(test)]
 mod repeat_tests;
+#[cfg(test)]
+mod sch_image_edit_tests;
 #[cfg(test)]
 mod sch_image_tests;
 pub use repeat::{

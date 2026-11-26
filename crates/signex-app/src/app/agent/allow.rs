@@ -129,6 +129,8 @@ mod tests {
                 "highlight_layer",
                 "keepout_from_selection",
                 "list_documents",
+                // #1116: a query, the named sheet's project's image assets.
+                "list_image_assets",
                 "lock_board_items",
                 "measure_board",
                 "panelize_board",

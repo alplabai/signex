@@ -52,6 +52,11 @@ impl Signex {
                 board: self.status_board(window_id),
                 no_document: self.status_shows_no_document(window_id),
                 missing_libraries: self.skipped_missing_libraries().len(),
+                missing_assets: if self.status_sheet_tab(window_id).is_some() {
+                    self.missing_asset_count()
+                } else {
+                    0
+                },
             },
             &self.ui_state.i18n,
         );

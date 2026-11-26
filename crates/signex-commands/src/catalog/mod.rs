@@ -21,6 +21,7 @@ mod erc;
 mod grid;
 mod hierarchy;
 mod history;
+mod images;
 mod layers;
 mod library;
 mod nets;
@@ -316,6 +317,7 @@ const TABLES: &[&[CommandMetadata]] = &[
     placement::PLACEMENT,
     wiring::WIRING,
     drawing::DRAWING,
+    images::IMAGES,
     tool::TOOL,
     hierarchy::HIERARCHY,
     annotate::ANNOTATE,

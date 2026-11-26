@@ -70,11 +70,14 @@ pub enum UndoGroupKind {
     SheetEntrySync,
     /// A power port's rename across its rail (mockup row 45).
     RailRename,
+    /// Relink: every image naming one file points at another (#1116).
+    ImageRelink,
 }
 
 impl UndoGroupSheets {
     pub(crate) fn noun(&self) -> &'static str {
         match self.kind {
+            UndoGroupKind::ImageRelink => "image relink",
             UndoGroupKind::Annotate => "annotate",
             UndoGroupKind::Reprefix => "re-prefix",
             UndoGroupKind::Replace => "replace",
@@ -111,6 +114,7 @@ impl UndoGroupSheets {
             UndoGroupKind::PartSwap => "Pin or gate swap",
             UndoGroupKind::SheetEntrySync => "Sheet entry sync",
             UndoGroupKind::RailRename => "Rename power rail",
+            UndoGroupKind::ImageRelink => "Relink image",
         }
     }
 

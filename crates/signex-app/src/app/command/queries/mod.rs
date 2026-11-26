@@ -27,6 +27,7 @@ pub use check_run::CheckFinished;
 mod documents;
 mod elements;
 mod find;
+mod images;
 mod pins;
 pub(in crate::app::command) use pins::pin_id;
 mod read;
@@ -64,6 +65,8 @@ const QUERY_IDS: &[&str] = &[
     "rules_preset_diff",
     "board_panel",
     "project_settings",
+    // #1116: the project's image assets, read off the UI thread.
+    "list_image_assets",
 ];
 
 /// The queries that run a check (`check_run`): each says nothing in
@@ -153,6 +156,13 @@ impl Signex {
             }
             // A profile preset may need the profile library read first.
             "rules_preset_diff" => return Some(self.rules_preset_diff(args)),
+            // #1116: answered once the scan of the folder lands.
+            "list_image_assets" => {
+                return Some(match self.image_assets_sheet(args) {
+                    Ok(sheet) => self.list_image_assets(command, args, sheet),
+                    Err(reason) => refused(reason),
+                });
+            }
             _ => {}
         }
         let answer = match id {

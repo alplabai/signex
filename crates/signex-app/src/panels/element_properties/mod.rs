@@ -24,6 +24,9 @@ mod harness_definitions;
 mod harness_wire;
 pub(in crate::panels) mod header;
 mod illustrations;
+mod image;
+#[cfg(test)]
+mod image_tests;
 mod label;
 mod library_rows;
 #[cfg(test)]
@@ -55,6 +58,7 @@ pub(super) use channel_view::channel_view_properties;
 pub(crate) use child_sheet::sheet_file_missing;
 pub(super) use child_sheet::view_child_sheet_properties;
 pub use directive::BlanketEdit;
+pub use image::{ImagePanelField, ImagePanelState};
 // #1281, #1489: the Net Parameters and Net Blanket surfaces.
 mod blanket;
 #[cfg(test)]

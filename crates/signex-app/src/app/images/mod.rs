@@ -1,18 +1,34 @@
 //! Images placed on a sheet as project assets (#1116, mockup row 204):
-//! Place ▸ Graphic… asks for a PNG, JPEG, GIF or SVG file, reads and checks
-//! it off the UI thread and puts the image on the cursor; one click places
-//! it as one undo step. The sheet stores the project-relative path and the
-//! content hash, never the picture. A file picked from outside the project
-//! is copied into `assets/images/` when the sheet is saved, and nothing is
-//! written before that. The canvas reads the pictures in a `Task` and draws
-//! a placeholder for a missing one. Rules: docs/SCHEMATIC_IMAGES.md.
+//! Place ▸ Graphic… opens the Place Image dialog on the project's
+//! `assets/images/`, reads and checks the files off the UI thread and puts
+//! the chosen image on the cursor; one click places it as one undo step. The
+//! sheet stores the project-relative path and the content hash, never the
+//! picture. A file picked from outside the project is copied into
+//! `assets/images/` when the sheet is saved, and nothing is written before
+//! that. The canvas reads the pictures in a `Task` and draws a placeholder
+//! for a missing one; Properties ▸ Image, the resize handles, Relink, the
+//! Projects tree's assets and the status bar count work on the same state.
+//! Rules: docs/SCHEMATIC_IMAGES.md.
 
+pub(crate) mod assets;
 mod cache;
 mod copy;
+pub(crate) mod dialog;
+pub(crate) mod edit;
+pub(crate) mod export;
+mod folder;
+mod panel;
 mod place;
 pub(crate) mod read;
+pub(crate) mod relink;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_assets;
+#[cfg(test)]
+mod tests_edit;
+#[cfg(test)]
+mod tests_relink;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -20,10 +36,16 @@ use std::sync::Arc;
 use iced::Task;
 use signex_i18n::{I18n, ids, t};
 use signex_types::image_asset::{ImageFormat, ImageReadError, ImageRefusal, PendingImageCopy};
+use signex_types::image_asset_report::AssetReport;
 
+pub(crate) use assets::{pending_image_keys, with_missing_images};
 pub(crate) use cache::{ImageCache, ImageEntry, ImageKey};
+pub use dialog::PlaceDialogMsg;
+pub use panel::ImagePanelMsg;
 pub use read::CopyFailure;
+pub use relink::{RelinkRead, RelinkScope};
 
+use crate::app::agent::WaitingCommand;
 use crate::app::{Message, Signex};
 
 impl From<ImagesMsg> for Message {
@@ -55,12 +77,46 @@ pub enum ImagesMsg {
     },
     /// The copies a save made into the project landed, each with its result.
     CopiesWritten(Vec<(PendingImageCopy, Result<(), CopyFailure>)>),
+    /// Something happened in the Place Image dialog.
+    Dialog(PlaceDialogMsg),
+    /// A scan of the assets of `root` landed, for the key it was started
+    /// for; `waiting` is the `list_image_assets` it answers, and its sheet.
+    AssetsScanned {
+        root: PathBuf,
+        key: u64,
+        report: Result<Arc<AssetReport>, String>,
+        waiting: Option<Box<(WaitingCommand, PathBuf)>>,
+    },
+    /// The file dialog of Relink… or Replace… answered.
+    RelinkPicked {
+        scope: RelinkScope,
+        path: Option<PathBuf>,
+    },
+    /// The picked file and the project's sheets were read for a relink of
+    /// images on `target`, at its engine `revision`.
+    RelinkRead {
+        scope: RelinkScope,
+        target: PathBuf,
+        revision: Option<u64>,
+        read: Box<RelinkRead>,
+    },
+    /// A Show in folder launch finished.
+    FolderShown(Result<(), String>),
+    /// A handle drag dropped the image `id` with this box (top-left, size).
+    HandleDropped {
+        id: uuid::Uuid,
+        position: signex_types::schematic::Point,
+        size: (f64, f64),
+    },
+    /// A row of the Projects tree's `assets/images/` was picked: put that
+    /// project file on the cursor over the active sheet.
+    AssetPicked { file: String },
 }
 
 impl Signex {
     pub(crate) fn dispatch_images(&mut self, msg: ImagesMsg) -> Task<Message> {
         let task = match msg {
-            ImagesMsg::PlaceRequested => self.place_image_dialog(),
+            ImagesMsg::PlaceRequested => self.open_place_dialog(),
             ImagesMsg::FilePicked(path) => self.read_picked_file(path),
             ImagesMsg::FileRead {
                 path,
@@ -79,6 +135,32 @@ impl Signex {
                 self.image_copies_written(results);
                 Task::none()
             }
+            ImagesMsg::Dialog(msg) => self.dispatch_place_dialog(msg),
+            ImagesMsg::AssetsScanned {
+                root,
+                key,
+                report,
+                waiting,
+            } => self.assets_scanned(root, key, report, waiting),
+            ImagesMsg::RelinkPicked { scope, path } => self.relink_picked(scope, path),
+            ImagesMsg::RelinkRead {
+                scope,
+                target,
+                revision,
+                read,
+            } => {
+                self.relink_read(&scope, &target, revision, *read);
+                Task::none()
+            }
+            ImagesMsg::FolderShown(result) => {
+                self.folder_shown(result);
+                Task::none()
+            }
+            ImagesMsg::HandleDropped { id, position, size } => {
+                self.image_handle_dropped(id, position, size);
+                Task::none()
+            }
+            ImagesMsg::AssetPicked { file } => self.asset_picked(&file),
         };
         Task::batch([task, self.finish_update()])
     }

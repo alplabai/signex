@@ -463,6 +463,10 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
         "place_design_block",
         "import_graphics",
         "place_graphic",
+        // #1116: the image commands act on the sheet in view or the named one.
+        "set_image",
+        "relink_image",
+        "show_image_in_folder",
     ];
     for name in all_command_ids() {
         let meta = metadata_for_str(name).expect("row");
@@ -492,6 +496,8 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "check_erc",
                     "check_drc",
                     "check_requirements",
+                    // #1116: the named sheet's project's image assets.
+                    "list_image_assets",
                     "find_items",
                     "apply_edits",
                     "revert",

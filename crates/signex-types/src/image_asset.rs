@@ -58,6 +58,17 @@ impl ImageFormat {
         self == Self::Svg
     }
 
+    /// The format's own name, as a person reads it: the same in every
+    /// language.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Png => "PNG",
+            Self::Jpeg => "JPEG",
+            Self::Gif => "GIF",
+            Self::Svg => "SVG",
+        }
+    }
+
     /// The name in a JSON answer.
     pub fn as_str(self) -> &'static str {
         match self {

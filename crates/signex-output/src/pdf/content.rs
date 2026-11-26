@@ -142,6 +142,22 @@ fn draw_element(
                 (false, false) => {}
             }
         }
+        // #1116: the picture as an image XObject, stretched to its box.
+        SvgElement::Image {
+            x,
+            y,
+            width,
+            height,
+            opacity,
+            picture,
+        } => surface.draw_image(
+            picture,
+            *x,
+            page_h_pt - y - height,
+            *width,
+            *height,
+            *opacity,
+        ),
         SvgElement::Text {
             x,
             y,

@@ -16,12 +16,12 @@ use super::ImagesMsg;
 use crate::app::{Message, Signex};
 
 /// The file kinds the dialog offers.
-const IMAGE_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "gif", "svg"];
+pub(super) const IMAGE_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "gif", "svg"];
 
 impl Signex {
     /// The sheet a picked image lands on: the active schematic, when it
     /// takes an edit. Says why not in the Messages panel.
-    fn image_target(&mut self) -> Option<PathBuf> {
+    pub(super) fn image_target(&mut self) -> Option<PathBuf> {
         if !self.has_active_schematic() {
             crate::diagnostics::log_warning(
                 t!(self.ui_state.i18n, ids::IMAGES_NOT_ON_SHEET).into_string(),
@@ -111,6 +111,14 @@ impl Signex {
         epoch: u64,
         read: Result<Arc<PickedImage>, ImageReadError>,
     ) {
+        // Add image file… of the Place Image dialog: the file joins its list.
+        let picked_name = path.file_name().map_or_else(
+            || path.display().to_string(),
+            |name| name.to_string_lossy().into_owned(),
+        );
+        if self.dialog_took_pick(target, &read, picked_name) {
+            return;
+        }
         let current = epoch == self.interaction_state.placement_epoch
             && self.document_state.active_path.as_deref() == Some(target);
         if !current {

@@ -94,6 +94,8 @@ pub(crate) enum OverlayId {
     FindReplace,
     FindSimilar,
     PasteArray,
+    /// Place ▸ Graphic…'s Place Image dialog (mockup row 204).
+    PlaceImage,
     /// The Create Union popover (mockup row 158).
     UnionPopover,
     /// Edit ▸ Paste Special (mockup row 155).
@@ -184,7 +186,7 @@ const PRE_BLOCKING: usize = 5;
 /// behaviour change to both the paint stack and the Esc precedence, and
 /// `paint_order_is_exhaustive_and_unique` keeps it honest about covering
 /// every [`OverlayId`] exactly once.
-pub(crate) const PAINT_ORDER: [OverlayId; 85] = [
+pub(crate) const PAINT_ORDER: [OverlayId; 86] = [
     OverlayId::ErrorNotice,
     OverlayId::NetlistIncompletePrompt,
     OverlayId::PrintPreview,
@@ -223,6 +225,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 85] = [
     OverlayId::FindReplace,
     OverlayId::FindSimilar,
     OverlayId::PasteArray,
+    OverlayId::PlaceImage,
     OverlayId::UnionPopover,
     OverlayId::SmartPaste,
     OverlayId::KeyboardShortcuts,
@@ -368,6 +371,7 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::FindReplace
         | OverlayId::FindSimilar
         | OverlayId::PasteArray
+        | OverlayId::PlaceImage
         | OverlayId::UnionPopover
         | OverlayId::SmartPaste
         | OverlayId::KeyboardShortcuts
@@ -607,6 +611,7 @@ impl Signex {
             OverlayId::FindReplace => layers.extend(self.find_replace_overlay(window_id)),
             OverlayId::FindSimilar => layers.extend(self.find_similar_overlay()),
             OverlayId::PasteArray => layers.extend(self.paste_array_overlay()),
+            OverlayId::PlaceImage => layers.extend(self.place_image_overlay()),
             OverlayId::UnionPopover => layers.extend(self.union_popover_overlay()),
             OverlayId::SmartPaste => layers.extend(self.smart_paste_overlay()),
             OverlayId::KeyboardShortcuts => layers.extend(self.keyboard_shortcuts_overlay()),

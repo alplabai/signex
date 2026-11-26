@@ -43,12 +43,26 @@ pub enum ImageEntry {
     Missing,
 }
 
-/// The pictures read so far.
+impl ImageEntry {
+    /// The handle for `bytes` of `format`; the renderer decodes it once.
+    pub(crate) fn of(format: ImageFormat, bytes: &Arc<[u8]>) -> Self {
+        if format.is_vector() {
+            Self::Vector(svg::Handle::from_memory(bytes.to_vec()))
+        } else {
+            Self::Raster(image::Handle::from_bytes(bytes.to_vec()))
+        }
+    }
+}
+
+/// The UI state of images: the pictures read so far, the project asset
+/// scans (`assets`) and the Place Image dialog while it is open.
 #[derive(Debug, Default)]
 pub struct ImageCache {
     entries: HashMap<ImageKey, ImageEntry>,
     /// Sheets whose missing images Messages already named.
     warned: HashSet<PathBuf>,
+    pub(crate) assets: super::assets::AssetIndex,
+    pub(crate) dialog: Option<Box<super::dialog::PlaceDialog>>,
 }
 
 impl ImageCache {
@@ -56,14 +70,9 @@ impl ImageCache {
         self.entries.get(key)
     }
 
-    /// The handle for `bytes` of `format`; the renderer decodes it.
+    /// Keep the picture of `bytes` for `key`.
     fn put(&mut self, key: ImageKey, format: ImageFormat, bytes: &Arc<[u8]>) {
-        let entry = if format.is_vector() {
-            ImageEntry::Vector(svg::Handle::from_memory(bytes.to_vec()))
-        } else {
-            ImageEntry::Raster(image::Handle::from_bytes(bytes.to_vec()))
-        };
-        self.entries.insert(key, entry);
+        self.entries.insert(key, ImageEntry::of(format, bytes));
     }
 
     /// Whether Messages already named the missing images of `sheet`.
@@ -78,6 +87,7 @@ impl ImageCache {
         self.entries
             .retain(|_, entry| !matches!(entry, ImageEntry::Missing));
         self.warned.clear();
+        self.assets.invalidate();
     }
 }
 
@@ -91,10 +101,17 @@ impl Signex {
         }
     }
 
+    /// What `finish_update` starts for images: the pictures the canvas lacks
+    /// and, when it is owed, a scan of the active sheet's assets.
+    pub(crate) fn request_image_loads(&mut self) -> Task<Message> {
+        let pictures = self.request_picture_loads();
+        Task::batch([pictures, self.request_asset_scan()])
+    }
+
     /// Start reading the pictures of the active sheet's images the cache does
     /// not have. A picture still waiting to be copied into the project is
     /// taken from the pick, with no read.
-    pub(crate) fn request_image_loads(&mut self) -> Task<Message> {
+    fn request_picture_loads(&mut self) -> Task<Message> {
         let Some(sheet) = self.document_state.active_path.clone() else {
             return Task::none();
         };

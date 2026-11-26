@@ -104,8 +104,14 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("autoplace_fields", extras::autoplace_fields),
     ("place_design_block", extras::place_design_block),
     ("import_graphics", extras::import_graphics),
-    // #1116: an image as a project asset.
+    // #1116: an image as a project asset, its fields, Relink and its folder.
     ("place_graphic", super::image_operands::place_graphic),
+    ("set_image", super::image_operands::set_image),
+    ("relink_image", super::image_operands::relink_image),
+    (
+        "show_image_in_folder",
+        super::image_operands::show_image_in_folder,
+    ),
     ("place_component", part::place_component),
     ("place_sheet_symbol", hierarchy::place_sheet_symbol),
     ("place_sheet_entry", hierarchy::place_sheet_entry),
@@ -454,6 +460,19 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "set_sheet_variable" => Some(
             "`set_sheet_variable` needs the operand `name` — \
              use the Sheet Variables rows in Properties",
+        ),
+        // #1116: a person edits an image in Properties ▸ Image.
+        "set_image" => Some(
+            "`set_image` needs the operands `id`, `field` and `value` — \
+             select the image and use Properties",
+        ),
+        "relink_image" => Some(
+            "`relink_image` needs the operand `path` and `file` or `id` — \
+             use Relink… or Replace… in Properties ▸ Image",
+        ),
+        "show_image_in_folder" => Some(
+            "`show_image_in_folder` needs the operand `id` — \
+             use Show in folder in Properties ▸ Image",
         ),
         // #2424: a person draws with the Graphics tools and edits in
         // Properties.

@@ -18,10 +18,12 @@ use signex_widgets::tree_view::{BadgeTone, TreeKey};
 use super::*;
 use crate::styles::{Spacing, TypeScale};
 
+mod assets;
 mod card;
 mod empty;
 mod filter;
 
+pub use assets::AssetRow;
 pub(crate) use empty::view as empty_view;
 
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -45,6 +47,9 @@ pub struct ProjectsView {
     pub collapsed: BTreeSet<String>,
     /// The Recent projects list of the empty panel is folded.
     pub recent_collapsed: bool,
+    /// The `assets/images/` rows of each project, by project key, from the
+    /// last asset scan (#1116).
+    pub assets: std::collections::BTreeMap<String, Vec<AssetRow>>,
 }
 
 /// Events the Graphite Projects panel emits.
@@ -67,6 +72,8 @@ pub enum ProjectsMsg {
     RecentToggled,
     /// A row of the empty panel's Recent projects was clicked.
     RecentProjectPressed(PathBuf),
+    /// A row of `assets/images/` was pressed: its project-relative file.
+    AssetPressed(String),
 }
 
 impl ProjectsView {
@@ -86,7 +93,8 @@ impl ProjectsView {
             | ProjectsMsg::AddNewPressed
             | ProjectsMsg::NewProjectPressed
             | ProjectsMsg::OpenPressed
-            | ProjectsMsg::RecentProjectPressed(_) => {}
+            | ProjectsMsg::RecentProjectPressed(_)
+            | ProjectsMsg::AssetPressed(_) => {}
         }
     }
 
@@ -243,6 +251,13 @@ fn route(msg: TreeMsg) -> PanelMsg {
     let group_toggle = |key: &[String]| {
         PanelMsg::Projects(ProjectsMsg::GroupToggled(group_path(&key[0], &key[1])))
     };
+    // The `assets/` rows are no documents of the cached tree (#1116).
+    if let TreeMsg::Toggle(key) | TreeMsg::Select(key) | TreeMsg::ContextMenu(key) = &msg
+        && let [project, rest @ ..] = key.as_slice()
+        && let Some(routed) = assets::route(project, rest)
+    {
+        return routed;
+    }
     match msg {
         TreeMsg::Toggle(key) | TreeMsg::Select(key) if is_group_key(&key) => group_toggle(&key),
         TreeMsg::Toggle(key) => PanelMsg::Tree(TreeMsg::Toggle(to_real_key(&key))),
@@ -319,6 +334,7 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let needle = i18n.fold_for_search(ctx.projects_view.filter.trim());
     let mut roots = regroup(&ctx.project_tree, &ctx.projects_view);
     shown_labels(i18n, &mut roots);
+    assets::with_assets(i18n, &mut roots, &ctx.projects_view);
     if !needle.is_empty() {
         roots = filter::filtered(i18n, &roots, &needle);
     }

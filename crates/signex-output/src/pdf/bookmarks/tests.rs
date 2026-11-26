@@ -86,6 +86,7 @@ fn default_opts() -> PdfOptions {
         palette: SchematicPalette::classic(),
         net_class_styles: Default::default(),
         schematic_defaults: Default::default(),
+        images: Default::default(),
     }
 }
 

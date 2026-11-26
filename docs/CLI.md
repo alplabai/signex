@@ -714,8 +714,29 @@ without it the image fills the sheet's free area. It answers
 `{"placed", "id", "file", "hash", "format", "width_px", "height_px", "size",
 "copied_on_save"}`. A file over 32 MiB or 64 Mpx, one that is not an image,
 and an SVG that refers to anything outside itself are refused with the
-reason. Without operands, in a window, it opens a file dialog and puts the
-image on the cursor. Rules in [SCHEMATIC_IMAGES.md](SCHEMATIC_IMAGES.md).
+reason. Without operands, in a window, it opens the Place Image dialog and
+puts the chosen image on the cursor. Rules in
+[SCHEMATIC_IMAGES.md](SCHEMATIC_IMAGES.md).
+
+```text
+set_image id=<image> field=<field> value=<value> [document=..]
+relink_image path=<image file> (file=<project file> | id=<image>) [document=..]
+show_image_in_folder id=<image> [document=..]
+list_image_assets document=<sheet>
+```
+
+`set_image` sets one field of a placed image (`width`, `height`, `scale`,
+`keep_aspect`, `opacity`, `border`, `placement`, `bounds`), as its
+Properties ▸ Image row does, one undo step; it answers with the image.
+`relink_image` points every image naming `file`, on every sheet of the
+project, at the new file (Relink…), or the one image `id` (Replace…), one
+undo step; it answers `{"relinked", "sheets", "file", "hash", …}`.
+`show_image_in_folder` answers the file's `path` and `folder`; a headless
+run launches nothing. `list_image_assets` is a query: it scans the project's
+`assets/images/` and every file its images name off the UI thread and
+answers each file's facts, use count and whether it is missing. Without
+operands, `set_image`, `relink_image` and `show_image_in_folder` say which
+Properties row runs them.
 
 ## Checks on demand
 

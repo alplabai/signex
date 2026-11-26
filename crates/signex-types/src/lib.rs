@@ -11,6 +11,7 @@ pub mod font;
 pub mod format;
 pub mod format_version;
 pub mod image_asset;
+pub mod image_asset_report;
 pub mod managed_block;
 pub mod markup;
 pub mod material_library;

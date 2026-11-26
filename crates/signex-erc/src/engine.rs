@@ -61,6 +61,7 @@ pub fn run_all_with_config(ctx: &ErcContext, config: &ErcConfig) -> Vec<Diagnost
     rules::repeat_entry_needs_bus(ctx, &mut out);
     rules::harness_entry_mismatch(ctx, &config.harness_definitions, &mut out);
     rules::harness_type_conflict(ctx, &mut out);
+    crate::images::image_file_missing(ctx, &config.missing_images, &mut out);
     drop_suppressed(ctx, &mut out);
     out
 }

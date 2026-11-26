@@ -534,9 +534,9 @@ impl Signex {
                     plan.texts.push(path);
                 }
             }
-            // The image file Place ▸ Graphic… places (#1116), checked against
-            // the target's project.
-            "place_graphic" => {
+            // The image file Place ▸ Graphic… places, or a relink points
+            // images at (#1116), checked against the target's project.
+            "place_graphic" | "relink_image" => {
                 if let Ok(path) = super::placement_extras_operands::path_operand(args) {
                     let root = self.image_root(target);
                     let pending = self.pending_image_names(&root);

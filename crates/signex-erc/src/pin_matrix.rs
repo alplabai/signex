@@ -166,6 +166,9 @@ pub struct ErcConfig {
     /// The project's signal harness definitions (#1280); empty skips the
     /// check of connector entries against their type's definition.
     pub harness_definitions: Vec<signex_types::schematic::HarnessDefinition>,
+    /// The project-relative image files the run found missing (#1116): an
+    /// image naming one is an `image_file_missing` finding.
+    pub missing_images: std::collections::BTreeSet<String>,
 }
 
 impl ErcConfig {
@@ -173,8 +176,15 @@ impl ErcConfig {
     pub fn with_pin_matrix_overrides(overrides: &HashMap<(u8, u8), Severity>) -> Self {
         Self {
             pin_matrix: PinMatrix::with_overrides(overrides),
-            harness_definitions: Vec::new(),
+            ..Self::default()
         }
+    }
+
+    /// This config with the image files the run found missing.
+    #[must_use]
+    pub fn with_missing_images(mut self, files: std::collections::BTreeSet<String>) -> Self {
+        self.missing_images = files;
+        self
     }
 
     /// This config with the project's harness definitions.

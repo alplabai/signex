@@ -121,6 +121,7 @@ impl SvgRenderContext {
             &xform,
             palette,
             &opts.schematic_defaults,
+            &opts.images,
         );
         // Body fills sit under the wires but belong to their parts.
         let fills_start = elements.len();
@@ -521,6 +522,7 @@ impl SvgRenderContext {
             &xform,
             palette,
             &opts.schematic_defaults,
+            &opts.images,
         );
 
         (
@@ -607,6 +609,19 @@ impl SvgRenderContext {
                     };
                     draw_text_outline(&mut pixmap, &style, text);
                 }
+                SvgElement::Image {
+                    x,
+                    y,
+                    width,
+                    height,
+                    opacity,
+                    picture,
+                } => super::images::draw_raster(
+                    &mut pixmap,
+                    picture,
+                    (*x, *y, *width, *height),
+                    *opacity,
+                ),
             }
         }
 
@@ -642,6 +657,20 @@ fn encode_svg_document(width: f32, height: f32, elements: &[SvgElement]) -> Stri
                     out,
                     "  <path d=\"{}\" stroke=\"{}\"{} fill=\"{}\" stroke-width=\"{}\" stroke-linejoin=\"miter\" stroke-linecap=\"square\" />",
                     d, stroke, opacity, fill, style.stroke_width
+                );
+            }
+            SvgElement::Image {
+                x,
+                y,
+                width,
+                height,
+                opacity,
+                picture,
+            } => {
+                let _ = writeln!(
+                    out,
+                    "  {}",
+                    super::images::image_tag(picture, (*x, *y, *width, *height), *opacity)
                 );
             }
             SvgElement::Text {

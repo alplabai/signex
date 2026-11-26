@@ -191,6 +191,10 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "sync_sheet_pins",
             "set_sheet_symbol_size",
             "set_symbol_parameter",
+            // #1116: an image's field, Relink and its folder, by `id`.
+            "set_image",
+            "relink_image",
+            "show_image_in_folder",
             "project_move_sheet",
             "project_add_variant",
             "project_rename_variant",
@@ -407,6 +411,8 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "board_panel",
             "find_items",
             "find_similar_items",
+            // #1116: the named sheet's project, scanned off the UI thread.
+            "list_image_assets",
             "measure_board",
             "query_board_nets",
             "query_pins",

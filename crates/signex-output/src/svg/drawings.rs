@@ -17,7 +17,8 @@ use signex_types::schematic::{
     SchematicDefaults, SchematicSheet, StrokeColor, power_net_names,
 };
 
-/// The drawings of `placement`, in file order.
+/// The drawings of `placement`, in file order; an image's picture comes
+/// from `images` (#1116).
 pub(super) fn push_placed_drawings(
     out: &mut Vec<SvgElement>,
     sheet: &SchematicSheet,
@@ -25,10 +26,14 @@ pub(super) fn push_placed_drawings(
     xform: &PageTransform,
     palette: &SchematicPalette,
     defaults: &SchematicDefaults,
+    images: &super::ExportImages,
 ) {
     let power_nets = power_net_names(sheet);
     for drawing in &sheet.drawings {
         if sheet.drawing_placement(drawing.uuid()) == placement {
+            if let SchDrawing::Image(image) = drawing {
+                super::images::push_image_picture(out, image, xform, images);
+            }
             push_sch_drawing_path(out, drawing, xform, palette, defaults, &power_nets);
         }
     }
@@ -50,8 +55,8 @@ pub(super) fn push_sch_drawing_path(
         SchDrawing::Table(t) => {
             super::sch_table::push_table(out, t, xform, palette, defaults, power_nets);
         }
-        // #1116: an image's border line; its pixels are not embedded yet
-        // (docs/SCHEMATIC_IMAGES.md, "Export").
+        // #1116: an image's border line, over the picture
+        // `push_placed_drawings` put down (docs/SCHEMATIC_IMAGES.md, "Export").
         SchDrawing::Image(i) => {
             if !i.border {
                 return;
