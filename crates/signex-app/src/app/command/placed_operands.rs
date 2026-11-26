@@ -170,7 +170,7 @@ fn kind_word(item: &SelectedItem, power: bool) -> &'static str {
 
 impl Signex {
     /// The placed object the `id` operand names on the sheet the edit acts on.
-    fn placed_item_operand(&self, args: &CommandArgs) -> Result<SelectedItem, String> {
+    pub(super) fn placed_item_operand(&self, args: &CommandArgs) -> Result<SelectedItem, String> {
         let id = text(args, "id")?;
         let uuid = uuid::Uuid::parse_str(id.trim())
             .map_err(|_| format!("`id` must be an object id (a uuid), got `{id}`"))?;
@@ -184,7 +184,10 @@ impl Signex {
 
     /// Run `command` on the sheet an edit acts on, unless a lock holds what
     /// it touches: the lock's reason then, with nothing sent.
-    fn apply_placed_edit(&mut self, command: signex_engine::Command) -> Result<(), PlacedRefusal> {
+    pub(crate) fn apply_placed_edit(
+        &mut self,
+        command: signex_engine::Command,
+    ) -> Result<(), PlacedRefusal> {
         let engine = self
             .document_state
             .edit_engine()
@@ -210,7 +213,7 @@ impl Signex {
     }
 
     /// The object's id, kind and geometry after an edit, as the answer.
-    pub(super) fn placed_answer(&self, item: SelectedItem) -> Placed {
+    pub(crate) fn placed_answer(&self, item: SelectedItem) -> Placed {
         let engine = self
             .document_state
             .edit_engine()

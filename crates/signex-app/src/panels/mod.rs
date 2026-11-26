@@ -242,8 +242,8 @@ pub use pcb_layers::{LayersPanelMsg, LayersPanelUi, LayersTab, PcbLayersPanel};
 pub use pcb_nets::{PcbNetsSummary, PcbPanelMode, PcbPanelMsg, PcbPanelUi};
 pub use pcb_primitive_properties::{PcbPrimitiveFacts, PcbPrimitiveMsg};
 pub use placed_edit::{
-    NoteDraft, NoteLayout, PlacedDraft, PlacedEditMsg, PlacedField, PlacedPanel, PortNameDraft,
-    RunNet,
+    NoteDraft, NoteLayout, NoteLength, PlacedDraft, PlacedEditMsg, PlacedField, PlacedPanel,
+    PortNameDraft, RunNet,
 };
 pub use pre_placement::{
     PlacementPosition, PositionField, PrePlacementData, PrePlacementKind, PrePlacementPositionMsg,

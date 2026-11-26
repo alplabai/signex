@@ -24,6 +24,7 @@ mod harness;
 mod labels;
 mod markers;
 mod repeat_stack;
+mod rich_note;
 mod sch_table;
 mod symbols;
 mod text;
@@ -341,6 +342,7 @@ mod tests {
                 justify_v: Default::default(),
                 locked: false,
                 format: Default::default(),
+                rich: Default::default(),
             });
         let opts = PdfOptions::default();
         let (w_mm, h_mm) = opts.page_size.dimensions_mm(opts.orientation);

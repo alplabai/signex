@@ -7,7 +7,9 @@
 use std::path::{Path, PathBuf};
 
 use iced::widget::text_editor;
-use signex_types::schematic::{HAlign, Point, SelectedItem, TextNoteFormat, VAlign};
+use signex_types::schematic::{
+    HAlign, Point, RichNoteLayout, SelectedItem, TextNoteFormat, VAlign,
+};
 
 /// One editable box of a placed object.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -29,6 +31,20 @@ pub enum PlacedField {
     Height,
     /// The value of a placed part's parameter, by name.
     Parameter(String),
+    /// A length of a rich text note's Frame or Size section (#1114).
+    NoteLength(NoteLength),
+}
+
+/// The lengths of a rich note's Frame and Size sections (mockup row 203).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum NoteLength {
+    /// The outline width; empty or `auto` is Auto.
+    Border,
+    Padding,
+    /// The box width of Fixed width and Fixed box.
+    Width,
+    /// The box height of Fixed box.
+    Height,
 }
 
 /// What a placed object's Properties rows send.
@@ -66,6 +82,8 @@ pub enum PlacedEditMsg {
     PortNameTyped { item: SelectedItem, text: String },
     /// Enter in a power port's Name box.
     PortNameSubmitted { item: SelectedItem },
+    /// Edit… beside a rich note's Text: its in-place editor (mockup row 203).
+    RichNoteEditRequested { item: SelectedItem },
 }
 
 /// What a text note's Rotation, Format and Justify rows set.
@@ -77,6 +95,9 @@ pub enum NoteLayout {
     Rotation(f64),
     /// Plain or Rich text (#1114, mockup row 203).
     Format(TextNoteFormat),
+    /// A pick in a rich note's Frame or Size section: the sections as they
+    /// become.
+    Rich(RichNoteLayout),
 }
 
 impl NoteLayout {
@@ -98,6 +119,10 @@ impl NoteLayout {
             },
             Self::Format(format) => signex_engine::TextNoteProps {
                 format: Some(format),
+                ..none
+            },
+            Self::Rich(layout) => signex_engine::TextNoteProps {
+                rich: Some(layout),
                 ..none
             },
         }
@@ -201,6 +226,8 @@ pub struct PlacedPanel {
     pub notes_owed: Vec<NoteDraft>,
     /// The text size of the selected text note, in stored mm.
     pub note_size_mm: Option<f64>,
+    /// The Frame and Size sections of the selected text note (#1114).
+    pub note_rich: Option<RichNoteLayout>,
     /// The selected power port's Name box, while typed.
     pub port_name: Option<PortNameDraft>,
     /// Typed names whose port is no longer selected: owed to their sheets,

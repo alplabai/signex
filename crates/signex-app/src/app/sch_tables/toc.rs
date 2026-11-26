@@ -53,6 +53,7 @@ pub(crate) fn contents_sheet(
         justify_v: VAlign::Bottom,
         locked: false,
         format: Default::default(),
+        rich: Default::default(),
     });
     let mut table = SchTable::new_typed(uuid::Uuid::now_v7(), TABLE_AT);
     table.source = TableSource::ProjectSheets { per_channel: true };

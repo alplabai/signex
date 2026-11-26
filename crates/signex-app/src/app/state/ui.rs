@@ -627,6 +627,10 @@ pub struct UiState {
     /// editor shows for the first few. Not persisted: no preference stores
     /// such counters.
     pub text_edit_opens: u32,
+    /// Rich text notes (#1114, mockup row 203): the compiles by key, the
+    /// drawings the canvas shows and the in-place editor. Boxed: the
+    /// `UiState` size ceiling.
+    pub rich_notes: Box<crate::app::rich_note::RichNotes>,
     /// v0.18.14.1 — Custom Selection Filter modal draft. `Some`
     /// while the dialog is visible; the eight-bool draft mirror
     /// commits on Apply, discards on Cancel. Boxed as `find_similar`.

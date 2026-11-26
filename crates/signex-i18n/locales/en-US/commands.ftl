@@ -449,6 +449,14 @@ cmd-set-sheet-symbol-size = Set the size of a sheet symbol
 cmd-set-symbol-parameter = Set a parameter of a placed part
 cmd-set-sheet-variable = Set a sheet variable
 cmd-set-text-note-format = Set a text note to plain or rich text
+cmd-set-text-note-frame = Set the frame of a rich text note
+cmd-set-text-note-size = Set the size of a rich text note
+cmd-apply-rich-note-edit = Apply the edit of a rich text note
+cmd-edit-rich-note = Edit a rich text note in place
+cmd-cancel-rich-note-edit = Cancel the edit of a rich text note
+cmd-wrap-rich-note-selection = Wrap the selection of a rich text note in Typst markup
+cmd-open-rich-note-link = Open a link of a rich text note
+cmd-compile-rich-note = Compile a rich text note
 cmd-menu-assign-net-class = Assign Net Class...
 cmd-place-component = Place component
 # Noun: a component placed on the sheet.

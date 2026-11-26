@@ -366,6 +366,11 @@ impl Signex {
                 }
             }
             CanvasEvent::CtrlClicked { world_x, world_y } => {
+                // A link of a rich text note opens; elsewhere Ctrl+click
+                // adds to the selection (#1114, mockup row 203).
+                if let Some(open) = self.rich_note_link_at(world_x, world_y) {
+                    return open;
+                }
                 if let Some(snapshot) = self.active_render_snapshot()
                     && let Some(hit) = crate::schematic_runtime::hit_test::hit_test_styled(
                         snapshot,

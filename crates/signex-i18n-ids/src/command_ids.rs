@@ -431,6 +431,14 @@ define_ids! {
         CMD_SET_SYMBOL_PARAMETER = "cmd-set-symbol-parameter";
         CMD_SET_SHEET_VARIABLE = "cmd-set-sheet-variable";
         CMD_SET_TEXT_NOTE_FORMAT = "cmd-set-text-note-format";
+        CMD_SET_TEXT_NOTE_FRAME = "cmd-set-text-note-frame";
+        CMD_SET_TEXT_NOTE_SIZE = "cmd-set-text-note-size";
+        CMD_APPLY_RICH_NOTE_EDIT = "cmd-apply-rich-note-edit";
+        CMD_EDIT_RICH_NOTE = "cmd-edit-rich-note";
+        CMD_CANCEL_RICH_NOTE_EDIT = "cmd-cancel-rich-note-edit";
+        CMD_WRAP_RICH_NOTE_SELECTION = "cmd-wrap-rich-note-selection";
+        CMD_OPEN_RICH_NOTE_LINK = "cmd-open-rich-note-link";
+        CMD_COMPILE_RICH_NOTE = "cmd-compile-rich-note";
         CMD_MENU_PLACE_COMPONENT = "cmd-menu-place-component";
         CMD_RUN_DRC = "cmd-run-drc";
         CMD_MENU_RUN_DRC = "cmd-menu-run-drc";

@@ -81,6 +81,8 @@ mod project_tab;
 pub(crate) mod projector;
 pub(crate) mod rail_rename;
 pub use rail_rename::RailRenameMsg;
+// Mockup row 203 (#1114): rich text notes, their compiles and the editor.
+pub mod rich_note;
 pub(crate) mod rooms;
 mod rules_tab;
 pub(crate) mod sch_tables;
@@ -244,6 +246,9 @@ impl Signex {
         // project in view changes (mockup row 165).
         tasks.push(self.sync_annotations_panel());
         tasks.push(self.sync_compare_board());
+        // Rich text notes show their cached compile; a missing one compiles
+        // in a task (#1114, mockup row 203).
+        tasks.push(self.sync_rich_notes());
         // A board that opened takes its kept view; a changed view is saved
         // soon (#2480).
         tasks.push(self.sync_pcb_layer_views());

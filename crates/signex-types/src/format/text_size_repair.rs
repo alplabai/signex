@@ -100,6 +100,7 @@ mod tests {
             justify_v: VAlign::Top,
             locked: false,
             format: Default::default(),
+            rich: Default::default(),
         }
     }
 

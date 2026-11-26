@@ -420,6 +420,7 @@ fn oversize_note(x: f32, justify_h: HAlign) -> signex_types::schematic::TextNote
         justify_v: VAlign::Bottom,
         locked: false,
         format: Default::default(),
+        rich: Default::default(),
     }
 }
 

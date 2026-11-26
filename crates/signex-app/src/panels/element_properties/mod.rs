@@ -37,6 +37,7 @@ mod placed_rows;
 #[cfg(test)]
 mod placed_rows_tests;
 mod power_port;
+mod rich_note;
 pub(in crate::panels) mod rows;
 mod selected;
 mod symbol;

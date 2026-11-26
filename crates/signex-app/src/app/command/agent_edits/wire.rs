@@ -535,6 +535,8 @@ mod tests {
     #[test]
     fn the_editable_commands_are_the_sheet_placements_and_net_colours() {
         let expected = [
+            // #1114: a rich note's text from `source`.
+            "apply_rich_note_edit",
             "autoplace_fields",
             "clear_all_net_colors",
             "color_net",
@@ -573,6 +575,9 @@ mod tests {
             "set_symbol_parameter",
             // #1114: a text note's Format row.
             "set_text_note_format",
+            // #1114: a rich note's Frame and Size sections.
+            "set_text_note_frame",
+            "set_text_note_size",
             // #1276: `to_sheet` is refused inside a list (it edits the child).
             "sync_sheet_entries",
             "sync_sheet_pins",

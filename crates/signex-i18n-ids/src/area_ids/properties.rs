@@ -531,4 +531,21 @@ define_ids! {
     PROPERTIES_NOTE_FORMAT = "properties-note-format";
     PROPERTIES_NOTE_FORMAT_PLAIN = "properties-note-format-plain";
     PROPERTIES_NOTE_FORMAT_RICH = "properties-note-format-rich";
+    PROPERTIES_NOTE_SOURCE = "properties-note-source";
+    PROPERTIES_NOTE_EDIT = "properties-note-edit";
+    PROPERTIES_NOTE_FRAME_SECTION = "properties-note-frame-section";
+    PROPERTIES_NOTE_FRAME = "properties-note-frame";
+    PROPERTIES_NOTE_FRAME_NONE = "properties-note-frame-none";
+    PROPERTIES_NOTE_FRAME_BORDER = "properties-note-frame-border";
+    PROPERTIES_NOTE_FRAME_FILLED = "properties-note-frame-filled";
+    PROPERTIES_NOTE_BORDER = "properties-note-border";
+    PROPERTIES_NOTE_BORDER_AUTO = "properties-note-border-auto";
+    PROPERTIES_NOTE_PADDING = "properties-note-padding";
+    PROPERTIES_NOTE_SIZE_SECTION = "properties-note-size-section";
+    PROPERTIES_NOTE_SIZE = "properties-note-size";
+    PROPERTIES_NOTE_SIZE_FIT = "properties-note-size-fit";
+    PROPERTIES_NOTE_SIZE_WIDTH = "properties-note-size-width";
+    PROPERTIES_NOTE_SIZE_BOX = "properties-note-size-box";
+    PROPERTIES_NOTE_WIDTH = "properties-note-width";
+    PROPERTIES_NOTE_HEIGHT = "properties-note-height";
 }

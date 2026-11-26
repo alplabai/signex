@@ -615,6 +615,7 @@ mod tests {
             justify_v: Default::default(),
             locked: true,
             format: Default::default(),
+            rich: Default::default(),
         });
         PlacementPayload::new(sheet)
     }

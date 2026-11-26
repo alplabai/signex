@@ -233,6 +233,13 @@ pub(super) const WRITES: &[(&[&str], Surface, Writes)] = &[
             "show_layer_set",
             // #2795: the notebook tab's view, side panel and cursor.
             "notebook_view",
+            // #1114, mockup row 203: the rich note editor's session, the
+            // compile cache and a launched link; the note is untouched.
+            "edit_rich_note",
+            "cancel_rich_note_edit",
+            "wrap_rich_note_selection",
+            "open_rich_note_link",
+            "compile_rich_note",
         ],
         Operand,
         Session,
@@ -567,6 +574,8 @@ const OPERAND_DOCUMENT: &[&str] = &[
     "add_net_class",
     "add_teardrops",
     "apply_edits",
+    // #1114: the note's text, the typed or the given source.
+    "apply_rich_note_edit",
     "arrange_in_box",
     "assign_board_net_class",
     "assign_net_class",
@@ -689,6 +698,8 @@ const OPERAND_DOCUMENT: &[&str] = &[
     "set_sheet_variable",
     "set_symbol_parameter",
     "set_text_note_format",
+    "set_text_note_frame",
+    "set_text_note_size",
     "set_via_span",
     "stitch_vias",
     "swap_gates",

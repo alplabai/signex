@@ -56,6 +56,7 @@ fn markup_ctx(note: &str, label: &str) -> ExportContext {
         font_family: None,
         locked: false,
         format: Default::default(),
+        rich: Default::default(),
     });
     ctx.sheets[0].schematic.labels.push(Label {
         uuid: uuid::Uuid::nil(),
@@ -739,6 +740,7 @@ fn note_ctx(notes: &[(&str, f64, signex_types::schematic::HAlign)]) -> ExportCon
             justify_v: VAlign::Bottom,
             locked: false,
             format: Default::default(),
+            rich: Default::default(),
         });
     }
     ctx

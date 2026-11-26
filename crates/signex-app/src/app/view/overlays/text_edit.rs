@@ -434,6 +434,7 @@ mod tests {
             justify_v: Default::default(),
             locked: false,
             format: Default::default(),
+            rich: Default::default(),
         };
         let selected =
             signex_types::schematic::SelectedItem::new(note.uuid, SelectedKind::TextNote);

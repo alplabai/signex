@@ -491,6 +491,7 @@ impl Signex {
                             font_family: None,
                             locked: false,
                             format: Default::default(),
+                            rich: Default::default(),
                         });
                 }
                 if tool == Tool::BusEntry {

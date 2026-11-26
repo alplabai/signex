@@ -624,6 +624,47 @@ already has that format. The text is never changed, so switching back keeps
 the source as it is. Any other kind, or another word, is refused with the
 reason. The answer is the placed-object answer above plus `format`.
 
+### Rich text notes
+
+A rich note (#1114, mockup row 203) has Frame and Size sections and an
+in-place editor; each has a command. The first three take an optional
+`document` like the placements and can be edits of `apply_edits`; the rest
+act on a note of the sheet in view. Rules:
+`docs/architecture/snxsch-note-format.md`.
+
+```
+set_text_note_frame id=<uuid> frame=none|border|filled [border=<mm>|auto] [padding=<mm>] [document=..]
+set_text_note_size id=<uuid> sizing=fit_text|fixed_width|fixed_box [width=<mm>] [height=<mm>] [document=..]
+apply_rich_note_edit id=<uuid> [source=..] [document=..]
+edit_rich_note id=<uuid> [line=<n>] [column=<n>]
+cancel_rich_note_edit id=<uuid>
+wrap_rich_note_selection id=<uuid> style=bold|italic|heading|list|math|link|table
+open_rich_note_link id=<uuid> target=<link>
+compile_rich_note id=<uuid>
+```
+
+- `set_text_note_frame` and `set_text_note_size` set the sections in one
+  undo step; a length is in mm, a finite number at or above zero. The answer
+  is the placed-object answer plus `frame`, `border_mm` (`null` is Auto),
+  `padding_mm`, `sizing`, `width_mm` and `height_mm`.
+- `apply_rich_note_edit` with `source` makes it the note's text; without, it
+  applies the text typed in the open editor. One undo step; a plain note is
+  refused. The answer adds `text` and `applied`.
+- `edit_rich_note` opens the editor, the cursor at 1-based `line` and
+  `column` (characters); the answer is `{"id", "editing", "source",
+  "edited", "cursor": {"line", "byte"}}`. `wrap_rich_note_selection` is a
+  toolbar button (the selection wrapped, or the empty markup at the cursor)
+  and answers the same plus `style`; `cancel_rich_note_edit` drops the
+  typing and answers `{"id", "cancelled"}`.
+- `open_rich_note_link` opens a link the note's source makes: an `http(s)`
+  address, or a file under the project folder; anything else is refused. It
+  answers `{"id", "target", "opens": "web"|"file"}`. A headless run launches
+  nothing.
+- `compile_rich_note` compiles the note off the UI thread (or answers from
+  the cache) with `{"id", "key", "compiled", "cached", "width_mm",
+  "height_mm", "shapes", "links", "problems", "compile_ms"}`; each problem
+  is `{"severity", "line", "column", "message"}`, lines counted in the note.
+
 `set_sheet_variable name=<NAME> [value=..] [remove=true] [document=..]` sets
 one variable of the sheet (what `${NAME}` and expressions on it resolve), as
 the Sheet Variables rows in Properties do, in one undo step. A left-out or

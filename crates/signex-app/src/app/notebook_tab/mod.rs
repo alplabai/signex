@@ -15,7 +15,7 @@
 mod commands;
 mod compile;
 mod edit;
-mod highlighter;
+pub(crate) mod highlighter;
 mod keys;
 mod lane;
 mod open;

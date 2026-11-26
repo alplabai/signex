@@ -38,6 +38,7 @@ fn capital_height_mm(family: &str) -> f64 {
             justify_v: Default::default(),
             locked: false,
             format: Default::default(),
+            rich: Default::default(),
         });
     let opts = PdfOptions {
         scale: crate::pdf::PdfScale::OneToOne,

@@ -163,6 +163,9 @@ pub struct TextNoteProps {
     pub font_size_mm: Option<f64>,
     /// Plain or rich text (#1114); the text itself is never changed.
     pub format: Option<signex_types::schematic::TextNoteFormat>,
+    /// The Frame and Size sections of a rich note (#1114, mockup row 203);
+    /// ignored whole when a length is not a finite number at or above zero.
+    pub rich: Option<signex_types::schematic::RichNoteLayout>,
 }
 
 #[derive(Debug, Clone)]

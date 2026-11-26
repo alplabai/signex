@@ -821,3 +821,25 @@ properties-fp-pad-scope-paste = Paste
 properties-note-format = Format
 properties-note-format-plain = Plain
 properties-note-format-rich = Rich text
+# A rich note's Typst source: Edit… opens the in-place editor over the sheet.
+properties-note-source = Source
+properties-note-edit = Edit…
+# A rich note's Frame section (mockup row 203): what is drawn around it.
+properties-note-frame-section = Frame
+properties-note-frame = Frame
+properties-note-frame-none = None
+properties-note-frame-border = Border
+properties-note-frame-filled = Filled
+# The outline width; Auto draws at the sheet's line width.
+properties-note-border = Border
+properties-note-border-auto = Auto
+properties-note-padding = Padding
+# A rich note's Size section: sized to the text, a set width (the height
+# grows with the text) or a set box (text that does not fit is clipped).
+properties-note-size-section = Size
+properties-note-size = Auto-size
+properties-note-size-fit = Fit text
+properties-note-size-width = Fixed width
+properties-note-size-box = Fixed box
+properties-note-width = Width
+properties-note-height = Height

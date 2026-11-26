@@ -66,6 +66,7 @@ signex-net -> signex-types
 signex-notebook -> signex-types
 signex-output -> pcb-geom
 signex-output -> signex-bom
+signex-output -> signex-notebook  # rich text notes drawn in the SVG / PDF export (#1114)
 signex-output -> signex-types
 signex-renderer -> pcb-geom
 signex-renderer -> signex-3d-model-importer

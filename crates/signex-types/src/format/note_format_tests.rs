@@ -34,6 +34,7 @@ fn note(n: u128, text: &str, format: TextNoteFormat) -> TextNote {
         justify_v: VAlign::Top,
         locked: false,
         format,
+        rich: Default::default(),
     }
 }
 

@@ -241,8 +241,9 @@ impl CompiledNotebook {
     }
 }
 
-/// `source` placed in its file, line and column.
-fn diagnostic(world: &NotebookWorld, source: &SourceDiagnostic) -> Diagnostic {
+/// `source` placed in its file, line and column (the notebook's compile and
+/// a rich note's, `crate::note`).
+pub(crate) fn diagnostic(world: &NotebookWorld, source: &SourceDiagnostic) -> Diagnostic {
     let severity = match source.severity {
         Severity::Error => DiagnosticSeverity::Error,
         Severity::Warning => DiagnosticSeverity::Warning,

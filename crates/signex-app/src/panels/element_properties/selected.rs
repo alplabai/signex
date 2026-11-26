@@ -444,6 +444,7 @@ mod tests {
             justify_v: VAlign::Top,
             locked: false,
             format: Default::default(),
+            rich: Default::default(),
         };
         let id = note.uuid;
         let engine = signex_engine::Engine::new(SchematicSheet {

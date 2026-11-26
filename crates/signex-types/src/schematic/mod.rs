@@ -846,6 +846,11 @@ mod no_erc;
 pub use no_erc::{NoErcDirective, canonical_no_erc_rules, no_erc_rules_suppress};
 mod note_format;
 pub use note_format::TextNoteFormat;
+mod rich_note_layout;
+pub use rich_note_layout::{
+    DEFAULT_NOTE_HEIGHT_MM, DEFAULT_NOTE_WIDTH_MM, MIN_NOTE_EDGE_MM, NoteFrame, NoteSize,
+    RichNoteLayout,
+};
 mod sheet;
 pub use sheet::*;
 mod sheet_frame;

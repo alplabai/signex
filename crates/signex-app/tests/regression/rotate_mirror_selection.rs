@@ -116,6 +116,7 @@ fn mixed_sheet(r1_mirror: (bool, bool)) -> (SchematicSheet, Ids) {
         font_family: None,
         locked: false,
         format: Default::default(),
+        rich: Default::default(),
     };
     let ids = Ids {
         symbol: SelectedItem::new(r1.uuid, SelectedKind::Symbol),

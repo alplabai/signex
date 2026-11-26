@@ -217,6 +217,12 @@ impl Signex {
         if let Some(open) = self.interaction_state.editing_text.take() {
             self.commit_text_edit(open);
         }
+        // A rich text note opens its own editor (#1114, mockup row 203).
+        if let Some(item) = self.text_edit_item(target)
+            && let Some(task) = self.open_rich_note_editor_on(item)
+        {
+            return task;
+        }
         let opened = self
             .text_edit_item(target)
             .is_some_and(|item| self.begin_text_edit(item));
@@ -261,6 +267,10 @@ impl Signex {
         &mut self,
         item: SelectedItem,
     ) -> Option<Task<Message>> {
+        // A rich text note opens its own editor (#1114, mockup row 203).
+        if let Some(task) = self.open_rich_note_editor_on(item) {
+            return Some(task);
+        }
         let item = if item.kind == SelectedKind::Symbol && self.is_active_power_port(item) {
             SelectedItem::new(item.uuid, SelectedKind::SymbolValField)
         } else {

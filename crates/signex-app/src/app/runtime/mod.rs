@@ -670,6 +670,7 @@ impl Signex {
                     .sheet_path_for_window(window, &self.ui_state)
                     .map(std::path::PathBuf::as_path),
             ),
+            rich_notes: Some(&self.ui_state.rich_notes.renders),
             device_px_per_logical_px: self.ui_state.device_px_per_logical_px(window),
         }
     }
