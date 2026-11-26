@@ -958,10 +958,17 @@ impl Signex {
     }
 
     /// Close every right-click menu (canvas, document tab, project tree,
-    /// dock tab, Components row, Start screen row, board layer tab) and
-    /// their submenu state. Each menu's open handler calls this first, so
-    /// exactly one is ever open.
+    /// dock tab, Components row, Start screen row, board layer tab, the
+    /// Properties part ⋯ menu of every window) and their submenu state.
+    /// Each menu's open handler calls this first, so exactly one is ever
+    /// open.
     pub(crate) fn close_all_context_menus(&mut self) {
+        let document = &mut self.document_state;
+        let panels =
+            std::iter::once(&mut document.panel_ctx).chain(document.window_panel_ctx.values_mut());
+        for ctx in panels {
+            ctx.part_panel.menu_for = None;
+        }
         let interaction = &mut self.interaction_state;
         interaction.context_menu = None;
         interaction.tab_context_menu = None;

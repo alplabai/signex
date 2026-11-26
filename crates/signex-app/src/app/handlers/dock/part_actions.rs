@@ -9,7 +9,71 @@ use crate::library::{LibraryMessage, PlacedPartMsg};
 use crate::panels::net_inspector::NetInspectorTab;
 use crate::panels::{PanelKind, PartPanelEffect, PartPanelMsg};
 
+/// Where the open ⋯ menu is (#3063): the window that paints it, the one
+/// showing the Properties panel that holds it, and the document window
+/// whose panel state holds it (`None` for the main window's).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct PartMenuSite {
+    pub window: iced::window::Id,
+    pub owner: Option<iced::window::Id>,
+}
+
 impl Signex {
+    /// The open ⋯ menu's site, if one is open for the selected part. A
+    /// Properties panel in a window of its own paints the menu there.
+    pub(crate) fn part_menu_site(&self) -> Option<PartMenuSite> {
+        let is_open = |owner: Option<iced::window::Id>| {
+            let ctx = owner.map_or(&self.document_state.panel_ctx, |w| self.panel_ctx_for(w));
+            crate::panels::open_part_menu(ctx).is_some()
+        };
+        let detached = self.ui_state.windows.iter().find_map(|(id, kind)| {
+            matches!(
+                kind,
+                crate::app::state::WindowKind::DetachedPanel(PanelKind::Properties)
+            )
+            .then_some(*id)
+        });
+        if let Some(window) = detached {
+            let owner = self.detached_properties_owner(PanelKind::Properties);
+            return is_open(owner).then_some(PartMenuSite { window, owner });
+        }
+        if is_open(None) {
+            let window = self.ui_state.main_window_id?;
+            return Some(PartMenuSite {
+                window,
+                owner: None,
+            });
+        }
+        // One menu is open at a time: a press outside one closes it.
+        (self.document_state.window_panel_ctx.keys().copied())
+            .find(|w| self.is_document_window(*w) && is_open(Some(*w)))
+            .map(|window| PartMenuSite {
+                window,
+                owner: Some(window),
+            })
+    }
+
+    /// A ⋯ menu message for the panel state of `owner`'s window.
+    pub(crate) fn part_menu_message(
+        &self,
+        owner: Option<iced::window::Id>,
+        msg: PartPanelMsg,
+    ) -> Message {
+        let message = Message::Dock(crate::dock::DockMessage::Panel(
+            crate::panels::PanelMsg::Part(msg),
+        ));
+        match owner {
+            None => message,
+            Some(window) => self.scope_dock_message(window, message),
+        }
+    }
+
+    /// What closes the ⋯ menu held by `owner`'s panel state: a press
+    /// outside it or Esc.
+    pub(crate) fn part_menu_dismissed(&self, owner: Option<iced::window::Id>) -> Message {
+        self.part_menu_message(owner, PartPanelMsg::MenuDismissed)
+    }
+
     pub(super) fn handle_dock_part_message(&mut self, msg: &PartPanelMsg) -> Task<Message> {
         let part_panel = &mut self.document_state.panel_ctx.part_panel;
         let effect = part_panel.update(msg.clone());
