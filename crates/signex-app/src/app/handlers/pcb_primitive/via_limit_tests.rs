@@ -49,6 +49,8 @@ fn app() -> (Signex, std::path::PathBuf, tempfile::TempDir) {
     let mut power = NetClass::named("Power");
     power.nets = vec!["PWR".into()];
     app.document_state.projects[0].data.net_classes = vec![power];
+    // The board is the project's, so the check reads the project's classes.
+    app.document_state.projects[0].data.pcb_file = Some("board.snxpcb".into());
     let path = dir.path().join("board.snxpcb");
     app.open_pcb_tab(path.clone(), "board".into(), board());
     (app, path, dir)

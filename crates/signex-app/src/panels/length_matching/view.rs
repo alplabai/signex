@@ -382,11 +382,13 @@ fn editor<'a>(
     if let Some(remove) = remove {
         actions = actions.push(remove);
     }
-    actions = actions.push(Space::new().width(Length::Fill).boxed()).push(action(
-        ctx,
-        ids::LENGTH_MATCHING_DELETE_GROUP,
-        Some(msg(LengthMatchingMsg::GroupDeleted(uuid))),
-    ));
+    actions = actions
+        .push(Space::new().width(Length::Fill).boxed())
+        .push(action(
+            ctx,
+            ids::LENGTH_MATCHING_DELETE_GROUP,
+            Some(msg(LengthMatchingMsg::GroupDeleted(uuid))),
+        ));
     let title = t!(ctx.i18n, ids::LENGTH_MATCHING_EDIT, "group" => group.name.clone());
     container(
         column![caption(ctx, title.into()), fields, actions]

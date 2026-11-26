@@ -204,15 +204,16 @@ mod tests {
                 "set_object_transparency",
                 "set_object_visible",
                 "set_pad_shape",
+                // #2578, #2579, #2580, #2593: pour shape, fill rules and
+                // thermal relief, and a pad's own teardrop and relief
+                // settings, on the named board.
+                "set_pad_teardrop",
+                "set_pad_thermal_relief",
                 "set_pour_corners",
                 "set_pour_fill",
-                // #2580, #2593: thermal relief on the named board.
-                "set_pad_thermal_relief",
-                "set_pour_thermal_relief",
-                // The board's teardrop rule, a pad's own teardrop setting
-                // and a pour's fill rules, on the named board.
-                "set_pad_teardrop",
                 "set_pour_properties",
+                "set_pour_thermal_relief",
+                // The board's teardrop rule.
                 "set_teardrop_rule",
                 "set_via_span",
                 "show_drc_violation",
