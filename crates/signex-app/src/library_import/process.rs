@@ -47,9 +47,11 @@ pub enum Polled {
 impl Running {
     /// Start `command` with `args`; stdout stops being read after
     /// `stdout_cap` bytes in total.
+    /// `cwd` is a neutral folder, never the app's own working directory.
     pub fn spawn(
         command: &ConverterCommand,
         args: &[OsString],
+        cwd: &std::path::Path,
         stdout_cap: usize,
     ) -> Result<Self, ImportError> {
         #[allow(
@@ -59,6 +61,7 @@ impl Running {
         let mut builder = Command::new(&command.program);
         builder
             .args(args)
+            .current_dir(cwd)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
@@ -147,8 +150,11 @@ impl Running {
         }
     }
 
+    /// Kill whatever is left in the converter's process group. After the
+    /// converter exited and was reaped the group id cannot be reused while
+    /// a member lives, so this only reaches what it started.
     #[cfg(unix)]
-    fn kill_group(&self) {
+    pub fn kill_group(&self) {
         let Ok(group) = libc::pid_t::try_from(self.child.id()) else {
             return;
         };
@@ -163,7 +169,7 @@ impl Running {
     }
 
     #[cfg(not(unix))]
-    fn kill_group(&self) {}
+    pub fn kill_group(&self) {}
 }
 
 /// Read stdout on a thread into a bounded queue that closes at the end of

@@ -888,7 +888,7 @@ library-import-wait-failed = Could not wait for the converter: { $error }
 library-import-uncommitted = { $count ->
         [one] The library has an uncommitted change ({ $paths }). An update would overwrite it: commit or discard it first.
        *[other] The library has { $count } uncommitted changes ({ $paths }). An update would overwrite them: commit or discard them first.
-    }
+    } While an update runs, files added to the library folder from outside Signex are removed if it fails, and replaced by the imported snapshot if it succeeds.
 library-import-git-failed = The library was written, but its version history could not be recorded: { $error }
 library-import-no-library-file = { $path } holds no .snxlib library file.
 library-import-failed-title = Library Import Failed
@@ -899,7 +899,7 @@ library-import-done = Imported { $name } to { $path }: { $parts } parts, { $skip
 library-import-local-commits = { $count ->
         [one] The library has { $count } commit that is not an import. Updating replaces its content with the source; the commit stays in the history.
        *[other] The library has { $count } commits that are not imports. Updating replaces their content with the source; the commits stay in the history.
-    }
+    } Files added to the library folder from outside Signex during the update are removed if it fails, and replaced by the imported snapshot if it succeeds.
 # $path is the library being imported.
 library-import-running = An import of { $path } is still running; wait for it to finish or cancel it.
 library-import-no-project = No project is open to add the library to; it was added for all projects instead.
@@ -909,7 +909,7 @@ library-import-not-a-repository = { $path } has no version history, so it is not
 # $what names an unsaved document or editor.
 library-import-unsaved = The library has unsaved changes in Signex ({ $what }). Save or close them before updating it.
 # $error is why the update failed.
-library-import-update-restored = The update failed, and the library was restored to its last import: { $error }
+library-import-update-restored = The update failed, and the library was restored to its last import: { $error } Files added to the library folder from outside Signex while the update ran were removed too.
 # $error is why the update failed, $reason why the restore did not happen.
 library-import-update-not-restored = The update failed: { $error } The library could not be restored to its last import ({ $reason }); check its folder before using it.
 # $path is the imported library, $other the mounted library with the same id.

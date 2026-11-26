@@ -92,13 +92,15 @@ impl ImportJob {
         let (local_commits, _write_lock) = match self.request.mode {
             RunMode::Update => {
                 let output = &self.request.output;
-                let check = check_update(output).map_err(RunFailure::new)?;
+                // Lock first: an edit landing after the clean check would
+                // otherwise be wiped by a failed update's reset.
                 let file = find_library_file(output).map_err(RunFailure::new)?;
                 let lock = signex_library::hold_library_write_lock(&file).map_err(|e| {
                     RunFailure::new(ImportError::Git {
                         detail: e.to_string(),
                     })
                 })?;
+                let check = check_update(output).map_err(RunFailure::new)?;
                 (check.local_commits, Some(lock))
             }
             RunMode::Import | RunMode::Preview => (0, None),

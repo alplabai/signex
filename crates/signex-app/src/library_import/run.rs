@@ -220,7 +220,8 @@ pub fn run_library(
     let created_output = !request.output.exists();
     let mut args = command.leading_args.clone();
     args.extend(request.args());
-    let streamed = stream_run(command, &args, limits, cancel, on_event);
+    let cwd = neutral_dir(Some(&request.output));
+    let streamed = stream_run(command, &args, &cwd, limits, cancel, on_event);
     let result = streamed.and_then(|finished| finish(request, finished));
     result.map_err(|mut failure| {
         if created_output && request.output.exists() {
@@ -243,14 +244,25 @@ struct Finished {
     stderr_tail: String,
 }
 
+/// The working directory a converter runs in: the output's parent when it
+/// exists, else the system temp folder. Never the app's own cwd.
+pub fn neutral_dir(output: Option<&Path>) -> PathBuf {
+    output
+        .and_then(Path::parent)
+        .filter(|dir| dir.is_absolute() && dir.is_dir())
+        .map_or_else(std::env::temp_dir, Path::to_path_buf)
+}
+
 fn stream_run(
     command: &ConverterCommand,
     args: &[OsString],
+    cwd: &Path,
     limits: RunLimits,
     cancel: &AtomicBool,
     on_event: &mut dyn FnMut(&ProgressEvent),
 ) -> Result<Finished, RunFailure> {
-    let mut running = Running::spawn(command, args, RUN_STDOUT_CAP).map_err(RunFailure::new)?;
+    let mut running =
+        Running::spawn(command, args, cwd, RUN_STDOUT_CAP).map_err(RunFailure::new)?;
     let mut fold = StreamFold::default();
     let mut watch = SilenceWatch::new(limits.silence, Instant::now());
     let mut take = |line: Line, watch: &mut SilenceWatch| {
@@ -423,7 +435,7 @@ pub fn run_describe(
     };
     let mut args = command.leading_args.clone();
     args.extend(["describe".into(), "--json".into()]);
-    let mut running = Running::spawn(command, &args, DESCRIBE_STDOUT_CAP)?;
+    let mut running = Running::spawn(command, &args, &neutral_dir(None), DESCRIBE_STDOUT_CAP)?;
     let deadline = Instant::now() + timeout;
     let mut text = String::new();
     let status = loop {
@@ -450,8 +462,10 @@ pub fn run_describe(
             return Err(failed(format!("no answer after {} s", timeout.as_secs())));
         }
     };
+    running.drain_after_exit(&mut |_| {});
+    // Nothing `describe` started may outlive it.
+    running.kill_group();
     if !status.success() {
-        running.drain_after_exit(&mut |_| {});
         return Err(failed(format!("{status} {}", running.stderr_tail().trim())));
     }
     parse_describe(&text).map_err(|e| match e {

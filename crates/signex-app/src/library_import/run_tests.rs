@@ -409,3 +409,19 @@ fn cancel_kills_what_the_converter_started() {
     }
     assert!(!proc_dir.exists(), "the converter's child was killed");
 }
+
+#[test]
+fn a_library_run_works_in_the_outputs_parent_folder() {
+    let body = format!(
+        "pwd > \"$out.cwd\"\n{}{}\nexit 0\n",
+        write_report_line(),
+        summary("ok", true)
+    );
+    let (dir, out, _e, result) = run(&body, RunMode::Import, FAST);
+    result.unwrap();
+    let cwd = std::fs::read_to_string(out.with_extension("cwd")).unwrap();
+    assert_eq!(
+        PathBuf::from(cwd.trim()).canonicalize().unwrap(),
+        dir.path().canonicalize().unwrap()
+    );
+}

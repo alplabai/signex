@@ -164,22 +164,75 @@ pub fn candidates(env: &DiscoveryEnv) -> (Vec<PathBuf>, Vec<(PathBuf, ImportErro
     (found, bad)
 }
 
-/// Run `describe` on every candidate and keep those that answer with a
-/// supported contract. `command_for` builds how a candidate is run.
+/// How many `describe` calls run at once.
+pub const PARALLEL_DESCRIBES: usize = 4;
+
+/// What a discovery depends on: the environment it read and, for every
+/// candidate, its size and modification time. Equal fingerprints give the
+/// same answer, so a session asks each converter once.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiscoveryFingerprint {
+    path: Option<OsString>,
+    list: Option<OsString>,
+    singles: Vec<(String, OsString)>,
+    candidates: Vec<(PathBuf, Option<(u64, std::time::SystemTime)>)>,
+}
+
+impl DiscoveryFingerprint {
+    fn of(env: &DiscoveryEnv, candidates: &[PathBuf]) -> Self {
+        Self {
+            path: env.path.clone(),
+            list: env.list.clone(),
+            singles: env.singles.clone(),
+            candidates: candidates
+                .iter()
+                .map(|p| {
+                    let stamp = std::fs::metadata(p)
+                        .ok()
+                        .and_then(|m| Some((m.len(), m.modified().ok()?)));
+                    (p.clone(), stamp)
+                })
+                .collect(),
+        }
+    }
+}
+
+/// A discovery and what it was computed from; kept in the app's model for
+/// the session and handed back to the next discovery.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiscoveryCache {
+    pub fingerprint: DiscoveryFingerprint,
+    pub discovery: Discovery,
+}
+
+/// Run `describe` on every candidate, [`PARALLEL_DESCRIBES`] at a time, and
+/// keep those that answer with a supported contract, in candidate order.
+/// `command_for` builds how a candidate is run.
 pub fn discover_with(
     env: &DiscoveryEnv,
     timeout: Duration,
-    command_for: impl Fn(&Path) -> ConverterCommand,
+    command_for: impl Fn(&Path) -> ConverterCommand + Sync,
 ) -> Discovery {
+    discover_cached(None, env, timeout, command_for).discovery
+}
+
+/// [`discover_with`], answered from `cache` when nothing it depends on
+/// changed.
+pub fn discover_cached(
+    cache: Option<&DiscoveryCache>,
+    env: &DiscoveryEnv,
+    timeout: Duration,
+    command_for: impl Fn(&Path) -> ConverterCommand + Sync,
+) -> DiscoveryCache {
     let (paths, mut skipped) = candidates(env);
+    let fingerprint = DiscoveryFingerprint::of(env, &paths);
+    if let Some(cache) = cache.filter(|c| c.fingerprint == fingerprint) {
+        return cache.clone();
+    }
+    let answers = describe_all(&paths, timeout, &command_for);
     let mut converters = Vec::new();
-    for path in paths {
-        let command = command_for(&path);
-        let label = path
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        match run_describe(&command, &label, timeout) {
+    for (path, command, answer) in answers {
+        match answer {
             Ok(description) => converters.push(DiscoveredConverter {
                 path,
                 command,
@@ -194,15 +247,62 @@ pub fn discover_with(
             }
         }
     }
-    Discovery {
-        converters,
-        skipped,
+    DiscoveryCache {
+        fingerprint,
+        discovery: Discovery {
+            converters,
+            skipped,
+        },
     }
 }
 
-/// [`discover_with`] over this process's environment.
-pub fn discover() -> Discovery {
-    discover_with(
+type Answer = (
+    PathBuf,
+    ConverterCommand,
+    Result<ConverterDescription, ImportError>,
+);
+
+/// `describe` every path on [`PARALLEL_DESCRIBES`] scoped threads; the
+/// answers come back in `paths` order.
+fn describe_all(
+    paths: &[PathBuf],
+    timeout: Duration,
+    command_for: &(impl Fn(&Path) -> ConverterCommand + Sync),
+) -> Vec<Answer> {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{Mutex, PoisonError};
+    let next = AtomicUsize::new(0);
+    let answers: Mutex<Vec<Option<Answer>>> = Mutex::new(vec![None; paths.len()]);
+    std::thread::scope(|scope| {
+        for _ in 0..PARALLEL_DESCRIBES.min(paths.len()) {
+            scope.spawn(|| {
+                loop {
+                    let i = next.fetch_add(1, Ordering::Relaxed);
+                    let Some(path) = paths.get(i) else { break };
+                    let command = command_for(path);
+                    let label = path
+                        .file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_default();
+                    let answer = run_describe(&command, &label, timeout);
+                    answers.lock().unwrap_or_else(PoisonError::into_inner)[i] =
+                        Some((path.clone(), command, answer));
+                }
+            });
+        }
+    });
+    answers
+        .into_inner()
+        .unwrap_or_else(PoisonError::into_inner)
+        .into_iter()
+        .flatten()
+        .collect()
+}
+
+/// [`discover_cached`] over this process's environment.
+pub fn discover(cache: Option<&DiscoveryCache>) -> DiscoveryCache {
+    discover_cached(
+        cache,
         &DiscoveryEnv::from_process(),
         DISCOVERY_DESCRIBE_TIMEOUT,
         |path| ConverterCommand::new(path.to_path_buf()),

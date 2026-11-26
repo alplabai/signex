@@ -35,7 +35,7 @@ mod run_tests;
 mod snapshot_tests;
 
 pub use describe::{ConverterDescription, InputKind, InputKindClass, PickerFilter};
-pub use discovery::{DiscoveredConverter, Discovery, DiscoveryEnv};
+pub use discovery::{DiscoveredConverter, Discovery, DiscoveryCache, DiscoveryEnv};
 pub use error::ImportError;
 pub use events::{ExitKind, ProgressEvent, Summary};
 pub use report::ImportReport;

@@ -41,4 +41,7 @@ pub struct ImportState {
     pub running: Option<ImportRun>,
     /// The last finished run, kept for the dialog's report view.
     pub last: Option<Box<ImportFinished>>,
+    /// The session's converter discovery, handed back to the next one so
+    /// an unchanged PATH asks no converter again.
+    pub discovered: Option<super::discovery::DiscoveryCache>,
 }
