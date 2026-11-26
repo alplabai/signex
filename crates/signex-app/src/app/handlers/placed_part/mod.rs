@@ -19,6 +19,7 @@ use signex_types::schematic::{SelectedKind, Symbol};
 use super::super::contracts::Message;
 use super::super::state::Signex;
 use crate::library::messages::{PlacedPartAction, PlacedPartMsg, PlacedPartTarget};
+use crate::library::state::ChangeStep;
 
 /// The selected placed part, copied off the active sheet.
 pub(crate) struct PlacedPart {
@@ -99,6 +100,8 @@ impl Signex {
                 result,
             } => self.show_change_preview(target, row_id, result),
             PlacedPartMsg::ChangePreviewBackedOut => self.back_out_of_change_preview(),
+            PlacedPartMsg::ChangeNextPressed => self.step_change(ChangeStep::Compare),
+            PlacedPartMsg::ChangeBackPressed => self.step_change(ChangeStep::Pick),
             PlacedPartMsg::ChangeConfirmed => self.confirm_change_component(),
             PlacedPartMsg::ChangeRowClicked(row_id) => self.click_change_row(row_id),
             PlacedPartMsg::ChangeFilterToggled(filter) => self.toggle_change_filter(filter),

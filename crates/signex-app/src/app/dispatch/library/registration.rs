@@ -515,7 +515,7 @@ impl Signex {
     /// Read the picker's selected row's symbol and footprint on a worker
     /// for the preview column (mockup row 129); the result lands as
     /// `PickerMsg::PreviewLoaded`. A read that is still current is kept.
-    fn start_picker_preview_load(&mut self) -> Task<Message> {
+    pub(crate) fn start_picker_preview_load(&mut self) -> Task<Message> {
         let Some(key) = self.picker_preview_key() else {
             return Task::none();
         };

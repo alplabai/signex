@@ -103,13 +103,13 @@ pub(crate) fn view<'a>(
     windowed: bool,
     look: PreviewLook,
 ) -> Element<'a, LibraryMessage> {
-    // Change Component (one dialog, mockup row 155) and Open Datasheet reuse
+    // Change Component (two steps, mockup row 129) and Open Datasheet reuse
     // this modal with their own card.
     match &picker.mode {
         PickerMode::ChangeComponent(_) | PickerMode::ChangePreview(_) => {
-            if let Some(card) =
-                crate::app::view::dialogs::change_component::view(picker, tokens, i18n, windowed)
-            {
+            if let Some(card) = crate::app::view::dialogs::change_component::view(
+                picker, tokens, i18n, windowed, look,
+            ) {
                 return card;
             }
         }
@@ -287,8 +287,9 @@ fn tile_source(picker: &PickerState) -> Option<TileSource<'_>> {
 }
 
 /// The preview column: the symbol tile over the footprint tile, drawn as
-/// the Library Browser's preview pane draws them.
-fn preview_column<'a>(
+/// the Library Browser's preview pane draws them. Change Component's pick
+/// step shows the same column.
+pub(crate) fn preview_column<'a>(
     picker: &'a PickerState,
     look: PreviewLook,
     tokens: &'a ThemeTokens,
