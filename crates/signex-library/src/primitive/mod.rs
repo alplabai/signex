@@ -25,9 +25,10 @@ mod tsv_cell;
 pub use container_merge::{ContainerMerge, DuplicatedUuid};
 pub use copy_for_library::unique_copy_name;
 pub use footprint::{
-    Body3D, BodyShape, Drill, Footprint, FootprintFile, FootprintFileError, FpGraphic,
-    FpGraphicKind, LayerId, LoadRepair, MountStyle, Pad, PadKind, PadShape, Polygon,
-    StepAttachment,
+    Body3D, BodyShape, Drill, EmbeddedModel, EmbeddedModels, Footprint, FootprintFile,
+    FootprintFileError, FpGraphic, FpGraphicKind, LayerId, LoadRepair, MODEL_DEFLATE_LEVEL,
+    MODEL_ENCODING, ModelError, ModelFault, MountStyle, Pad, PadKind, PadShape, Polygon,
+    StepAttachment, step_model_hash,
 };
 pub use ref_::PrimitiveRef;
 pub use sim::{SimFile, SimFileError, SimKind, SimModel};

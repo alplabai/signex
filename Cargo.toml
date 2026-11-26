@@ -154,6 +154,9 @@ typst-assets = { version = "0.15.1", features = ["fonts"] }
 # Library subsystem (v0.9 plan, restored at v0.11)
 chrono = { version = "0.4", features = ["serde"] }
 sha2 = "0.10"
+# Embedded STEP models in footprint files (#3107). Both already in Cargo.lock.
+flate2 = "1.1"
+base64 = "0.22"
 
 # Library subsystem — Phase 1 (adapters: local-git, database server, distributor APIs, search, AI-stub)
 git2 = { version = "0.21", default-features = false, features = ["vendored-libgit2"] }

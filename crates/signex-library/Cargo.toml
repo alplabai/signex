@@ -15,6 +15,9 @@ toml_edit = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
 sha2 = { workspace = true }
+# Embedded STEP models in `.snxfpt` (`[[models]]`, #3107): raw deflate + base64.
+flate2 = { workspace = true }
+base64 = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 url = { version = "2", features = ["serde"] }

@@ -6746,9 +6746,11 @@ name = "signex-library"
 version = "26.11.1"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "chrono",
  "csv",
  "dirs",
+ "flate2",
  "git2",
  "keyring",
  "oauth2",

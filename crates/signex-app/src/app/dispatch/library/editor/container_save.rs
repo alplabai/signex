@@ -141,11 +141,26 @@ pub(super) fn save_footprint_container(
         if options.bump_versions {
             versions = super::cascade::bump_footprint_versions(&mut file, &merge.changed);
         }
+        // #3107: a model the library keeps only in `step/` is embedded now;
+        // the `step/` file is left in place.
+        if let Some(step_dir) = legacy_step_dir(library, path) {
+            file.embed_models_from_step_dir(&step_dir);
+        }
         file.to_toml_string()
             .map(|text| Some(text.into_bytes()))
             .map_err(|e| LibraryError::Backend(format!("serialize footprint library: {e}")))
     })?;
     Ok(ContainerSave { merge, versions })
+}
+
+/// The `step/` folder of the library holding `path`, where libraries
+/// written before #3107 keep their STEP models.
+fn legacy_step_dir(library: &SaveLibrary, path: &std::path::Path) -> Option<std::path::PathBuf> {
+    if let SaveLibrary::Mounted(adapter) | SaveLibrary::Opened(adapter) = library {
+        return Some(adapter.step_dir());
+    }
+    let library = signex_library::enclosing_library_file(path)?;
+    Some(library.parent()?.join("step"))
 }
 
 /// An empty file (created before its first save) has nothing to merge

@@ -520,6 +520,7 @@ mod adapter;
 pub(crate) mod branch_switch;
 mod commit_lock;
 mod disk_sync;
+mod footprint_file;
 /// `add_all` callback: stage everything except a write-lock file (#832).
 pub(crate) fn skip_write_lock_files(path: &Path, _spec: &[u8]) -> i32 {
     i32::from(is_write_lock_file(path))
