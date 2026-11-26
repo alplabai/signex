@@ -394,6 +394,10 @@ impl Signex {
                             .active_canvas_mut()
                             .selected
                             .push(hit);
+                        // An added member brings its whole union along; taking
+                        // one off narrows the selection for Remove Selection
+                        // from Union (#2745, docs/SCHEMATIC_UNIONS.md).
+                        self.expand_selection_to_unions();
                     }
                     self.interaction_state
                         .active_canvas_mut()

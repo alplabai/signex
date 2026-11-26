@@ -51,6 +51,16 @@ impl CreateUnionPopover {
     }
 }
 
+/// The panel foot's name field as typed for the union `union` on `sheet`:
+/// a trailing space or an empty field included, which the stored (trimmed)
+/// name cannot hold.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct RenameDraft {
+    pub sheet: PathBuf,
+    pub union: Uuid,
+    pub text: String,
+}
+
 /// What the Unions slice keeps. Lives in `UiState`.
 #[derive(Debug, Clone, Default)]
 pub struct UnionsState {
@@ -64,6 +74,9 @@ pub struct UnionsState {
     /// The union picked in the panel, by sheet.
     pub picked: Option<(PathBuf, Uuid)>,
     pub popover: Option<CreateUnionPopover>,
+    /// The foot's name field while a rename is typed; the foot shows it in
+    /// place of the stored name.
+    pub rename_draft: Option<RenameDraft>,
 }
 
 impl UnionsState {
@@ -236,13 +249,15 @@ fn passes(union: &SchUnion, filter: &str, tags_on: &BTreeSet<String>) -> bool {
 }
 
 /// The panel foot for `union` on `sheet`, with `selected` the selection of
-/// the sheet in view when it is that sheet.
+/// the sheet in view when it is that sheet and `draft` the name field as
+/// typed, if a rename of it is being typed.
 fn foot(
     path: &Path,
     sheet: &SchematicSheet,
     union: &SchUnion,
     hidden: bool,
     selected: Option<&[SelectedItem]>,
+    draft: Option<&str>,
 ) -> UnionFoot {
     let items = signex_engine::unions::member_items(sheet, union);
     let mut pills = Vec::new();
@@ -272,7 +287,7 @@ fn foot(
     UnionFoot {
         sheet: path.to_path_buf(),
         uuid: union.uuid,
-        name: union.name.clone(),
+        name: draft.map_or_else(|| union.name.clone(), str::to_string),
         members: items.len(),
         pills,
         wires,
@@ -349,12 +364,18 @@ pub fn panel_view(
         let s = sheets.iter().find(|s| s.path == path)?;
         let union = s.sheet.unions.iter().find(|u| u.uuid == id)?;
         let selection = (Some(s.path) == active).then_some(selected);
+        let draft = state
+            .rename_draft
+            .as_ref()
+            .filter(|d| d.sheet == path && d.union == id)
+            .map(|d| d.text.as_str());
         Some(foot(
             s.path,
             s.sheet,
             union,
             state.is_hidden(s.path, id),
             selection,
+            draft,
         ))
     });
     UnionsPanelView {
