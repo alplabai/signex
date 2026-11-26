@@ -15,7 +15,8 @@ use super::super::ProjectTabMsg;
 use super::super::general::tab_message;
 use super::super::look::{ButtonKind, field_label, text_button};
 use super::super::table::{SP, TS};
-use super::matrix::{ACTIVE_FILL, CELL_EMS, PART_EMS, ROW_EMS, VALUE_EMS, body_cell, cell_pill};
+use super::columns::Columns;
+use super::matrix::{ACTIVE_FILL, CELL_EMS, ROW_EMS, body_cell, cell_pill};
 use super::{Manager, VariantCell, VariantManagerMsg, medium, mono, tint_over_panel};
 use crate::app::Message;
 use crate::styles::tokens::resolve;
@@ -25,6 +26,7 @@ use crate::styles::{Radii, ti};
 /// listed) gives the value of.
 pub(super) fn part_row<'a>(
     m: &Manager<'_>,
+    columns: &Columns,
     matrix: &VariantMatrix,
     channel: &RowChannel,
     first: &VariantRow,
@@ -56,12 +58,13 @@ pub(super) fn part_row<'a>(
     .spacing(SP.s)
     .align_y(Alignment::Center);
     let mut line = row![
-        body_cell(designator.boxed(), Length::Fixed(TS.body * PART_EMS), None),
-        body_cell(value.boxed(), Length::Fixed(TS.body * VALUE_EMS), None),
+        body_cell(designator.boxed(), Columns::part(), None),
+        body_cell(value.boxed(), Columns::value(), None),
     ];
     let base = matrix.channel_fit(&channel.part, 0);
-    for variant in m.variants() {
-        line = line.push(fit_cell(m, matrix, channel, variant, base));
+    for (index, variant) in m.variants().enumerate() {
+        let width = columns.variant(index);
+        line = line.push(fit_cell(m, matrix, channel, variant, base, width));
     }
     let side = iced::border::Side::default().width(1.0).color(r.line_soft);
     let boxed = container(line.align_y(Alignment::Center))
@@ -91,10 +94,11 @@ fn fit_cell<'a>(
     channel: &RowChannel,
     variant: Option<&str>,
     base: ChannelFit,
+    width: Length,
 ) -> Element<'a, Message> {
     let r = resolve(m.tokens);
     let Some(column) = m.column(variant) else {
-        return body_cell(Space::new().boxed(), Length::Fill, None);
+        return body_cell(Space::new().boxed(), width, None);
     };
     let fit = matrix.channel_fit(&channel.part, column);
     let differs = column > 0 && fit != base;
@@ -106,7 +110,7 @@ fn fit_cell<'a>(
     let fill = m
         .is_active(variant)
         .then(|| tint_over_panel(r.accent_soft, ACTIVE_FILL, m.tokens));
-    body_cell(face, Length::Fill, fill)
+    body_cell(face, width, fill)
 }
 
 /// "mixed · 1 of 3 not fitted" on the warning tint.

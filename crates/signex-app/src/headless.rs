@@ -124,6 +124,8 @@ impl Signex {
         // A headless run never listens, whatever the config root says.
         app.ui_state.agent_connections_enabled = false;
         app.ui_state.preferences_draft_agent_connections_enabled = false;
+        // No window to mark: `check_erc` is a headless run's check (#1288).
+        app.ui_state.live_erc.runs_here = false;
         // And lists no project: the run holds its own (`agent_client::hold`).
         app.agent.lists_projects = false;
         let rules_applied = app.handle_user_default_loaded(&Ok(Some(rules.clone())));

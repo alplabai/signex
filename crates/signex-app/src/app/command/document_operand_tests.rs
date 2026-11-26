@@ -413,6 +413,7 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
         "document_info",
         "read_document",
         "query_pins",
+        "query_net_ties",
         "apply_edits",
         "revert",
     ] {
@@ -456,12 +457,20 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
         "sync_sheet_entries",
         "set_object_position",
         "set_object_rotation",
+        "set_object_text",
         "set_sheet_symbol_size",
         "set_symbol_parameter",
         "set_sheet_variable",
+        "set_net_tie",
         "repair_pin_junctions",
         "place_design_block",
         "import_graphics",
+        // #2665: Smart Paste's array, on the sheet in view or the named one.
+        "smart_paste",
+        // #1283: a snippet saved from, or placed on, the sheet in view or the
+        // named one.
+        "save_snippet",
+        "place_snippet",
     ];
     for name in all_command_ids() {
         let meta = metadata_for_str(name).expect("row");
@@ -488,6 +497,9 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "document_info",
                     "read_document",
                     "query_pins",
+                    "query_net_ties",
+                    // #1988: the BOM lines of the named sheet's project.
+                    "bom_lines",
                     "check_erc",
                     "check_drc",
                     "check_requirements",
@@ -551,19 +563,34 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     // #2410: they act on the board they name.
                     "swap_pins",
                     "swap_gates",
+                    // #1261: they act on the sheet they name.
+                    "swap_schematic_pins",
+                    "swap_schematic_gates",
                     "save_board_reuse_block",
                     "place_board_reuse_block",
                     // Mockup row 198: the review records of the named
                     // project's notebook.
                     "list_annotations",
                     "project_settings",
+                    // #2952: the pairs of the named project.
+                    "list_diff_pairs",
                     "project_move_sheet",
                     "project_add_variant",
                     "project_rename_variant",
                     "project_remove_variant",
                     "project_set_active_variant",
+                    // #2949: the Variant Manager's top bar actions.
+                    "project_set_default_variant",
+                    "compare_variants",
+                    "variant_bom",
+                    // #3038: the Variant Manager's part edits and Duplicate.
+                    "project_set_variant_fit",
+                    "project_set_variant_alternate",
+                    "project_set_variant_override",
+                    "project_duplicate_variant",
                     "project_move_library",
                     "project_set_annotate_undo",
+                    "project_set_annotate_numbering",
                     "project_set_version_control",
                     "project_add_requirement",
                     "project_set_requirement",

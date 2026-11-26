@@ -88,7 +88,8 @@ pub struct BlanketNet {
 }
 
 /// The power net names of `sheet`: the value of each power port and the
-/// text of each power label. A Net Blanket never catches these nets.
+/// text of each power label. A Net Blanket never catches these nets, and
+/// none is a differential pair half by name (`diff_pair_partners.rs`).
 pub(crate) fn power_names(sheet: &SchematicSheet) -> HashSet<&str> {
     crate::build::name_carrying_ports(sheet)
         .into_iter()

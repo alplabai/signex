@@ -48,11 +48,11 @@ fn push_undo(editor: &mut SymEditor) {
 }
 
 /// Record the first event of a drag gesture.
-/// Subsequent events in the same drag are no-ops (mid_drag stays true).
+/// Subsequent events in the same drag are no-ops (the move run stays open).
 fn begin_drag_if_needed(editor: &mut SymEditor) {
-    if !editor.gui.mid_drag {
+    if !editor.draft.is_moving() {
         push_undo(editor);
-        editor.gui.mid_drag = true;
+        editor.draft.begin_move_run();
     }
 }
 
@@ -728,6 +728,8 @@ fn rotate_pivot_msg_to_state(
 
 #[cfg(test)]
 mod curve_tool_tests;
+#[cfg(test)]
+mod move_run_tests;
 
 #[cfg(test)]
 mod tests {

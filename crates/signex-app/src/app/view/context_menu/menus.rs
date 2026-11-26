@@ -135,6 +135,12 @@ impl Signex {
                     crate::app::handlers::placed_part::selected_placed_symbol(engine, canvas)
                         .is_some()
                 }),
+            // #1261: the swap the clicked pin or the selected units ask for.
+            swap: self
+                .document_state
+                .engine_for_window(window_id, &self.ui_state)
+                .map(|engine| self.sheet_swap_ready(engine.document(), canvas))
+                .unwrap_or_default(),
             // Mockup row 158: the selection holds a member of a union.
             union_selected: self
                 .document_state
@@ -146,7 +152,13 @@ impl Signex {
             // The window's own facts, so a row greys exactly when the menu
             // bar's row and the keystroke for the same command would.
             commands: self.command_context(Some(window_id)),
-            hit_object: self.context_menu_hit(window_id),
+            // Worked out when the menu opened on the window's sheet, with
+            // that sheet's widths (#2629); never again here in the view.
+            hit_object: self
+                .interaction_state
+                .context_menu
+                .as_ref()
+                .is_some_and(|menu| menu.hit_object),
             net_highlighted: self.document_state.net_nav.highlight.is_some(),
         };
         // The project row's tree key, the same one the project tree's own
@@ -218,28 +230,6 @@ impl Signex {
             project_id: project.id,
             name: project.data.active_variant_name().to_string(),
         })
-    }
-
-    /// Whether the canvas menu opened in `window_id` was opened over an
-    /// object of that window's sheet.
-    fn context_menu_hit(&self, window_id: iced::window::Id) -> bool {
-        let Some((x, y)) = self
-            .interaction_state
-            .context_menu
-            .as_ref()
-            .and_then(|menu| menu.world)
-        else {
-            return false;
-        };
-        self.interaction_state
-            .canvas_for_window(window_id)
-            .hit_item_at(
-                x,
-                y,
-                self.active_wire_widths(),
-                self.active_class_revision(),
-            )
-            .is_some()
     }
 
     /// What the canvas menu opened in `window_id` stands on: the selection
@@ -417,6 +407,8 @@ pub(super) struct CanvasSelection {
     pub(super) drawing_selected: bool,
     /// One non-power symbol: the placed-part actions apply (#1260).
     pub(super) placed_part_selected: bool,
+    /// Swap Pins and Swap Gates have a swap to make (#1261).
+    pub(super) swap: crate::app::sheet_swap::SwapReady,
     /// The selection holds a member of a union: Add / Remove / Break apply
     /// (mockup row 158).
     pub(super) union_selected: bool,

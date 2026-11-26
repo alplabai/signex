@@ -56,7 +56,8 @@ impl RuleKind {
             | RuleKind::LabelsOnlyNet
             | RuleKind::MissingPowerFlag
             | RuleKind::PowerPortShort
-            | RuleKind::NetClassConflict => RuleGroup::Nets,
+            | RuleKind::NetClassConflict
+            | RuleKind::DiffPairPartnerMissing => RuleGroup::Nets,
             RuleKind::NetLabelConflict
             | RuleKind::OrphanLabel
             | RuleKind::AmbiguousLabelAnchor
@@ -107,7 +108,7 @@ mod tests {
     #[test]
     fn every_group_holds_its_rules() {
         let sizes: Vec<usize> = RuleGroup::ALL.iter().map(|g| g.rules().count()).collect();
-        assert_eq!(sizes, [4, 9, 4, 6, 7, 8]);
+        assert_eq!(sizes, [4, 10, 4, 6, 7, 8]);
     }
 
     #[test]
@@ -152,6 +153,7 @@ mod tests {
             (RuleKind::HarnessEntryMismatch, Hierarchy),
             (RuleKind::HarnessTypeConflict, Hierarchy),
             (RuleKind::NetClassConflict, Nets),
+            (RuleKind::DiffPairPartnerMissing, Nets),
         ];
         assert_eq!(expected.len(), RuleKind::ALL.len());
         for (rule, group) in expected {

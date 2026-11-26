@@ -1,18 +1,19 @@
 //! A channel card's drawing (#2658): the compiled channel's wires, buses
 //! and part bodies scaled to fit the card, with the designators and net
-//! names that channel has, drawn at a readable size whatever the scale.
+//! names that channel has, drawn at a readable size whatever the scale and
+//! set clear of the part outlines and of each other (`labels.rs`, #3042).
 //! The data is built by the compile (`signex_net::sheet_miniature`); this
 //! only draws it.
 
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use iced::alignment::{Horizontal, Vertical};
 use iced::widget::canvas;
 use iced::{Color, Element, Length, Point, Rectangle, Size, Theme, Widget as _, mouse};
-use signex_net::{MiniatureText, SheetMiniature};
+use signex_net::SheetMiniature;
 use signex_types::schematic::Aabb;
 
+use super::labels::{self, Name};
 use crate::panels::PanelContext;
 use crate::styles::{HAIRLINE, Radii, TypeScale, ti, tokens::resolve};
 
@@ -119,28 +120,80 @@ impl<M> canvas::Program<M> for Miniature {
             frame.stroke(&path, line(self.ink.bus, 2.0 * HAIRLINE));
         }
         for body in &self.data.bodies {
-            let corner = fit.at(signex_types::schematic::Point::new(body.min_x, body.min_y));
-            let size = Size::new(
-                (body.max_x - body.min_x) as f32 * fit.scale,
-                (body.max_y - body.min_y) as f32 * fit.scale,
-            );
-            let path = canvas::Path::rectangle(corner, size);
+            let edge = outline(&fit, body);
+            let path = canvas::Path::rectangle(edge.position(), edge.size());
             frame.stroke(&path, line(self.ink.body, HAIRLINE));
         }
-        for t in &self.data.nets {
-            let color = if t.is_power {
+        let names = self.data.designators.iter().chain(&self.data.nets);
+        let spots = label_spots(&self.data, &fit, bounds.size());
+        let designators = self.data.designators.len();
+        for (i, (t, spot)) in names.zip(spots).enumerate() {
+            let color = if i < designators {
+                designator_ink(&self.ink, &self.left_out, &t.text)
+            } else if t.is_power {
                 self.ink.power
             } else {
                 self.ink.net
             };
-            label(&mut frame, &fit, t, color, Vertical::Bottom);
-        }
-        for t in &self.data.designators {
-            let color = designator_ink(&self.ink, &self.left_out, &t.text);
-            label(&mut frame, &fit, t, color, Vertical::Center);
+            label(&mut frame, &t.text, spot.position(), color);
         }
         vec![frame.into_geometry()]
     }
+}
+
+/// A part body's outline on the drawing.
+fn outline(fit: &Fit, body: &Aabb) -> Rectangle {
+    let corner = fit.at(signex_types::schematic::Point::new(body.min_x, body.min_y));
+    let size = Size::new(
+        (body.max_x - body.min_x) as f32 * fit.scale,
+        (body.max_y - body.min_y) as f32 * fit.scale,
+    );
+    Rectangle::new(corner, size)
+}
+
+/// The box each name of `data` is drawn in on a drawing of `size`, the
+/// designators first and then the net names, clear of the part outlines
+/// and of each other where there is room (`labels::place`).
+pub(super) fn label_spots(data: &SheetMiniature, fit: &Fit, size: Size) -> Vec<Rectangle> {
+    let outlines: Vec<Rectangle> = data.bodies.iter().map(|b| outline(fit, b)).collect();
+    // A designator stands at its part's centre (`sheet_miniature`).
+    let part_at = |at: Point| {
+        outlines
+            .iter()
+            .position(|o| o.center().distance(at) < PART_CENTRE_PX)
+    };
+    let designators = data.designators.iter().map(|t| {
+        let at = fit.at(t.at);
+        Name {
+            at,
+            size: label_size(&t.text),
+            part: part_at(at),
+        }
+    });
+    let nets = data.nets.iter().map(|t| Name {
+        at: fit.at(t.at),
+        size: label_size(&t.text),
+        part: None,
+    });
+    let names: Vec<Name> = designators.chain(nets).collect();
+    labels::place(&outlines, &names, Rectangle::with_size(size))
+}
+
+/// How far from a part's centre a designator still names that part, px.
+const PART_CENTRE_PX: f32 = 0.5;
+/// A name's line height, as a share of its size: the canvas text default.
+const LABEL_LINE: f32 = 1.2;
+
+/// The size `text` takes on the drawing.
+fn label_size(text: &str) -> Size {
+    Size::new(
+        crate::dock::measure::text_width_in(text, LABEL, label_font()),
+        LABEL * LABEL_LINE,
+    )
+}
+
+fn label_font() -> iced::Font {
+    crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT)
 }
 
 /// The ink of the designator `text` on the drawing: greyed when its part is
@@ -153,16 +206,15 @@ fn designator_ink(ink: &Ink, left_out: &HashSet<String>, text: &str) -> Color {
     }
 }
 
-/// One name, centred across its point.
-fn label(frame: &mut canvas::Frame, fit: &Fit, t: &MiniatureText, color: Color, y: Vertical) {
+/// One name, its top-left corner at `corner`.
+fn label(frame: &mut canvas::Frame, text: &str, corner: Point, color: Color) {
     frame.fill_text(canvas::Text {
-        content: t.text.clone(),
-        position: fit.at(t.at),
+        content: text.to_string(),
+        position: corner,
         color,
         size: iced::Pixels(LABEL),
-        font: crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT),
-        align_x: Horizontal::Center.into(),
-        align_y: y,
+        line_height: iced::widget::text::LineHeight::Relative(LABEL_LINE),
+        font: label_font(),
         ..canvas::Text::default()
     });
 }
@@ -198,6 +250,7 @@ pub(super) fn view<'a, M: 'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use signex_net::MiniatureText;
 
     fn bounds(w: f64, h: f64) -> Aabb {
         Aabb::new(10.0, 20.0, 10.0 + w, 20.0 + h)
@@ -275,5 +328,92 @@ mod tests {
         assert!((ratio - 5.0).abs() < 1e-3, "{ratio}");
         assert!(((a.x + z.x) / 2.0 - area.width / 2.0).abs() < 1e-3);
         assert!(((a.y + z.y) / 2.0 - area.height / 2.0).abs() < 1e-3);
+    }
+
+    /// The width of a card's drawing in the audit capture (m151-channel).
+    const CARD_W: f32 = 410.0;
+
+    /// The dcdc-buck channel as the audit capture draws it on CH1's card: a
+    /// sheet as large as the drawing's room, so one mm is one px and the
+    /// drawing is the sheet moved by the inset.
+    fn buck_channel() -> SheetMiniature {
+        let mm = |x: f64, y: f64| signex_types::schematic::Point::new(x, y);
+        let body = |x: f64, y: f64, w: f64, h: f64| Aabb::new(x, y, x + w, y + h);
+        let bodies = vec![
+            body(10.0, 10.0, 20.0, 40.0),
+            body(79.0, 30.0, 16.0, 9.0),
+            body(156.0, 10.0, 58.0, 40.0),
+            body(247.0, 30.0, 22.0, 9.0),
+            body(307.0, 26.0, 8.0, 18.0),
+            body(306.0, 74.0, 9.0, 9.0),
+            body(368.0, 10.0, 20.0, 40.0),
+        ];
+        let names = [
+            "CH1_J1", "CH1_C1", "CH1_U1", "CH1_C2", "CH1_R1", "CH1_D1", "CH1_J2",
+        ];
+        let designators = bodies
+            .iter()
+            .zip(names)
+            .map(|(b, text)| MiniatureText {
+                at: mm((b.min_x + b.max_x) / 2.0, (b.min_y + b.max_y) / 2.0),
+                text: text.to_string(),
+                is_power: false,
+            })
+            .collect();
+        let net = |x: f64, y: f64, text: &str, is_power: bool| MiniatureText {
+            at: mm(x, y),
+            text: text.to_string(),
+            is_power,
+        };
+        SheetMiniature {
+            bounds: Aabb::new(0.0, 0.0, f64::from(CARD_W) - 12.0, 108.0),
+            wires: vec![(mm(30.0, 20.0), mm(156.0, 20.0))],
+            buses: Vec::new(),
+            bodies,
+            designators,
+            nets: vec![
+                net(32.0, 19.0, "+5V", true),
+                net(32.0, 35.0, "GND", true),
+                net(214.0, 19.0, "+3V3", true),
+                net(304.0, 42.0, "NET", false),
+            ],
+        }
+    }
+
+    /// #3042, mockup row 151: at the card's size no designator or net name
+    /// crosses a part outline or another name, and each stays on the
+    /// drawing; a name inside a part is wholly inside its own.
+    #[test]
+    fn names_clear_the_outlines_and_each_other_on_a_card() {
+        let data = buck_channel();
+        let size = Size::new(CARD_W, MINIATURE_H);
+        let fit = Fit::of(&data.bounds, size);
+        let spots = label_spots(&data, &fit, size);
+        assert_eq!(spots.len(), data.designators.len() + data.nets.len());
+        let outlines: Vec<Rectangle> = data.bodies.iter().map(|b| outline(&fit, b)).collect();
+        let area = Rectangle::with_size(size);
+        for (i, spot) in spots.iter().enumerate() {
+            let inside = |r: &Rectangle| {
+                spot.x >= r.x
+                    && spot.y >= r.y
+                    && spot.x + spot.width <= r.x + r.width
+                    && spot.y + spot.height <= r.y + r.height
+            };
+            assert!(inside(&area), "name {i} at {spot:?} leaves the drawing");
+            for (j, part) in outlines.iter().enumerate() {
+                let own = i == j && inside(part);
+                assert!(
+                    own || labels::shared(*spot, *part) == 0.0,
+                    "name {i} at {spot:?} crosses outline {j} at {part:?}"
+                );
+            }
+            for (j, other) in spots.iter().enumerate().skip(i + 1) {
+                assert_eq!(
+                    labels::shared(*spot, *other),
+                    0.0,
+                    "name {i} at {spot:?} covers name {j} at {other:?}"
+                );
+            }
+        }
     }
 }

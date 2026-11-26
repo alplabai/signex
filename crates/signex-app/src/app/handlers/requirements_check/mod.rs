@@ -75,6 +75,7 @@ impl Signex {
             board: Board::NotListed,
             classes: data.net_classes.clone(),
             parts: None,
+            variant_parts: HashMap::new(),
             row_states: if needs.parts {
                 row_states(&self.library)
             } else {
@@ -102,9 +103,14 @@ impl Signex {
                     Ok(boms) => {
                         facts.warnings.extend(boms.warnings);
                         facts.parts = needs.parts.then_some(Ok(boms.parts));
+                        facts.variant_parts = boms.variant_parts;
                         facts.bom = needs.bom.then_some(Ok(boms.grouped));
                     }
                     Err(why) => {
+                        facts.variant_parts = signex_req::part_variants(&facts.requirements)
+                            .iter()
+                            .map(|name| (signex_req::variant_key(name), Err(why.clone())))
+                            .collect();
                         facts.parts = needs.parts.then(|| Err(why.clone()));
                         facts.bom = needs.bom.then_some(Err(why));
                     }

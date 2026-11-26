@@ -27,6 +27,12 @@ and Harness Entry, and the Active Bar's Harness group:
   `ENTRY_n`.
 - The **+** in the Entries header of a connector's Properties adds an entry
   after the last, named the same way.
+- **Harness definitions** (the connector's Definition link) lists the
+  project's types with their entry counts and uses: connectors and
+  harness-typed sheet entries of the open sheets. A type the open sheets use
+  that the project does not define (a connector of the fallback `HARNESS`)
+  is listed after them, its entries as its first connector shows them,
+  marked "not defined" and not editable (#3043).
 
 Every placement and every Properties edit is one undo step. Moving, turning,
 mirroring, locking, deleting, copying and pasting work on connectors (with

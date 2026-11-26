@@ -67,6 +67,9 @@ pub(in crate::app) mod interaction_snapshot_tests;
 mod keymap_operand_tests;
 mod keymap_operands;
 mod layer_strip_operands;
+#[cfg(test)]
+mod live_erc_operand_tests;
+mod live_erc_operands;
 mod need_context;
 mod needs;
 #[cfg(test)]
@@ -74,6 +77,8 @@ mod needs_reason_tests;
 /// The enablement gate, for the hostile-operand test's not-reached set.
 #[cfg(test)]
 pub(crate) use needs::needs as enablement_gate;
+#[cfg(test)]
+mod net_tie_operand_tests;
 #[cfg(test)]
 mod no_erc_operand_tests;
 #[cfg(test)]
@@ -117,6 +122,7 @@ mod repair_reset_operand_tests;
 mod repair_reset_operands;
 mod replay;
 pub mod request;
+mod reuse_operands;
 mod routing;
 #[cfg(test)]
 mod selection_filter_operand_tests;
@@ -126,6 +132,7 @@ mod selection_operand_tests;
 mod selection_operands;
 #[cfg(test)]
 mod sheet_entry_ref_tests;
+mod sheet_swap_operands;
 #[cfg(test)]
 mod sheet_symbol_check_tests;
 mod sheet_symbol_checks;
@@ -134,6 +141,9 @@ mod sheet_sync_operand_tests;
 mod sheet_sync_operands;
 #[cfg(test)]
 mod sheet_variable_operand_tests;
+#[cfg(test)]
+mod smart_paste_operand_tests;
+mod smart_paste_operands;
 pub(crate) mod translator;
 #[cfg(test)]
 mod undo_agreement_tests;

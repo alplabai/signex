@@ -143,33 +143,32 @@ fn variant_row<'a>(m: &Manager<'_>, variant: Option<&str>) -> Element<'a, Messag
                 .boxed()
         }
     };
-    let mut lines: Column<Element<'a, Message>> = column![name].width(Length::Fill);
-    if let Some(words) = fit_line(m, variant) {
-        lines = lines.push(
-            text(words)
-                .size(TS.caption)
-                .color(r.ink4)
-                .wrapping(iced::widget::text::Wrapping::None)
-                .boxed(),
-        );
-    }
-    let mut line = row![default_star(m, variant), lines]
-        .spacing(SP.m)
+    // The pills sit on the name's line and the fit line has the row's
+    // width under them, so no pill covers it (#3037, mockup row 32).
+    let mut name_line = row![container(name).width(Length::Fill).clip(true)]
+        .spacing(SP.s)
         .align_y(Alignment::Center);
     if m.is_default(variant) {
-        line = line.push(pill(
+        name_line = name_line.push(pill(
             t!(m.i18n, ids::VARIANT_MANAGER_DEFAULT),
             PillTone::Neutral,
             m.tokens,
         ));
     }
     if m.is_active(variant) {
-        line = line.push(pill(
+        name_line = name_line.push(pill(
             t!(m.i18n, ids::PROJECT_VARIANTS_ACTIVE),
             PillTone::Accent,
             m.tokens,
         ));
     }
+    let mut lines: Column<Element<'a, Message>> = column![name_line].width(Length::Fill);
+    if let Some(words) = fit_line(m, variant) {
+        lines = lines.push(text(words).size(TS.caption).color(r.ink4).boxed());
+    }
+    let line = row![default_star(m, variant), lines]
+        .spacing(SP.m)
+        .align_y(Alignment::Center);
     let fill = is_selected.then_some(r.accent_soft);
     let bar = if is_selected {
         r.accent_text

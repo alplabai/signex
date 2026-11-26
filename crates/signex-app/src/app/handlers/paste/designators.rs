@@ -110,8 +110,24 @@ impl Signex {
             .paste_counters
             .as_ref()
             .filter(|c| c.target == target);
-        let mut counters = read.map(|c| c.counters.clone()).unwrap_or_default();
-        let mut used = read.map(|c| c.used.clone()).unwrap_or_default();
+        let counters = read.map(|c| c.counters.clone()).unwrap_or_default();
+        let used = read.map(|c| c.used.clone()).unwrap_or_default();
+        self.paste_numbering_over(target, mode, counters, used)
+    }
+
+    /// The numbering for a paste onto `target` in `mode`, from the project's
+    /// `counters` and `used` designators as read, with what the target's live
+    /// document holds now folded in.
+    pub(crate) fn paste_numbering_over(
+        &self,
+        target: &Path,
+        mode: PasteDesignators,
+        mut counters: HashMap<String, u32>,
+        mut used: HashSet<String>,
+    ) -> PasteNumbering {
+        if !mode.reads_project() {
+            return PasteNumbering::new(mode, HashMap::new());
+        }
         if let Some(live) = self.document_state.engines.get(target) {
             let references = || {
                 live.document()

@@ -100,6 +100,9 @@ const SAVES: &[&str] = &[
     "new_schematic_sheet",
     // Writes the block's file in the project's `reuse-blocks` folder (#2410).
     "save_board_reuse_block",
+    // Writes the snippet's file in the project's or the library's `snippets`
+    // folder (#1283).
+    "save_snippet",
     // Writes the named layer set into the user's preferences (#2394).
     "save_layer_set",
     // Writes the named workspace layout into the user's preferences (mockup row 166).
@@ -339,6 +342,7 @@ mod tests {
             (Capability::Save, "save_all"),
             (Capability::Save, "save_project_as"),
             (Capability::Save, "save_board_reuse_block"),
+            (Capability::Save, "save_snippet"),
             (Capability::Save, "save_layer_set"),
             (Capability::Save, "save_workspace_layout"),
             (Capability::Save, "mark_notebook_attachment_valid"),

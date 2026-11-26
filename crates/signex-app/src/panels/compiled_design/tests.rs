@@ -27,6 +27,7 @@ fn context() -> PanelContext {
             parts: 9,
             nets: 5,
             is_stale: false,
+            not_fitted_in: None,
             is_selected: false,
             has_children: false,
             is_expanded: false,
@@ -78,4 +79,32 @@ fn a_ctrl_click_on_a_row_opens_its_source_sheet() {
         matches!(sent.as_slice(), [CompiledDesignMsg::RowSourceClicked(CH2)]),
         "{sent:?}"
     );
+}
+
+/// #2662, mockup row 154: a channel row the active variant leaves out
+/// carries the grey "Not fitted (Lite)" tag beside its name, in Light and
+/// Dark; a fitted channel carries none.
+#[test]
+fn a_channel_left_out_of_the_variant_carries_the_not_fitted_tag() {
+    use signex_types::theme::{ThemeId, theme_tokens};
+
+    let tag = "Not fitted (Lite)";
+    for theme in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+        let mut ctx = context();
+        ctx.tokens = theme_tokens(theme);
+        ctx.theme_id = theme;
+        let fitted: Vec<String> = lay_out_texts(super::view(&ctx), WINDOW)
+            .into_iter()
+            .map(|t| t.text)
+            .collect();
+        let tagged = fitted.iter().any(|t| t.contains("Not fitted"));
+        assert!(!tagged, "{fitted:?}");
+
+        ctx.compiled_design.panel.rows[0].not_fitted_in = Some("Lite".to_string());
+        let shown: Vec<String> = lay_out_texts(super::view(&ctx), WINDOW)
+            .into_iter()
+            .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+            .collect();
+        assert!(shown.iter().any(|t| t == tag), "{theme:?}: {shown:?}");
+    }
 }

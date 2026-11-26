@@ -115,18 +115,23 @@ pub(crate) fn create_noclobber(
 
 /// Write a blank schematic at `path`, refusing to overwrite.
 pub(crate) fn write_blank_schematic(path: &Path) -> Result<(), String> {
-    write_blank_schematic_with(path, None)
+    write_blank_schematic_with(path, None, None)
 }
 
 /// [`write_blank_schematic`] for a sheet added to a project: it starts from
-/// the project's sheet defaults when it has them (#2232).
+/// the project's sheet defaults when it has them (#2232), then takes the
+/// frame of the sheet template at `template` when one is named (#1283).
 pub(crate) fn write_blank_schematic_with(
     path: &Path,
     defaults: Option<&signex_types::project::SheetDefaults>,
+    template: Option<&Path>,
 ) -> Result<(), String> {
     let mut sheet = crate::app::handlers::document_files::blank_schematic_sheet_for_new_doc();
     if let Some(defaults) = defaults {
         defaults.apply(&mut sheet);
+    }
+    if let Some(template) = template {
+        sheet = crate::app::design_reuse::sheet_from_template(sheet, template)?;
     }
     let text = signex_types::format::SnxSchematic::new(sheet)
         .write_string()
@@ -147,8 +152,9 @@ pub(crate) fn create_sheet_with_entry(
     entry: &str,
     fold: crate::app::state::scope::CaseFold,
     defaults: Option<&signex_types::project::SheetDefaults>,
+    template: Option<&Path>,
 ) -> Result<EntryPatch, String> {
-    write_blank_schematic_with(path, defaults)?;
+    write_blank_schematic_with(path, defaults, template)?;
     crate::app::project_entry_disk::add_sheet_entry(project_file, entry, fold).map_err(|e| {
         // The Messages panel clips a record, so the reason goes first and
         // only the file name follows.

@@ -527,8 +527,9 @@ impl Signex {
                 .document_state
                 .engine_for_window(window_id, &self.ui_state)
                 .is_some_and(|engine| engine.document().is_read_only());
-            // Always a two-layer stack, so the widget tree keeps its shape
-            // when a tab switch changes the read-only state.
+            // Always a three-layer stack, so the widget tree keeps its shape
+            // when a tab switch changes the read-only state. The top layer
+            // marks the parts the active variant changes (mockup rows 208, 209).
             let badge: Element<'_, Message> = if read_only {
                 overlays::read_only_badge::read_only_badge(
                     &self.document_state.panel_ctx.tokens,
@@ -538,7 +539,8 @@ impl Signex {
                 iced::widget::Space::new().boxed()
             };
             // A repeated sheet gets its channel tabs under the canvas (#1279).
-            self.with_channel_strip(is_main, stack![base, badge].boxed())
+            let marks = self.variant_marks_layer(window_id);
+            self.with_channel_strip(is_main, stack![base, badge, marks].boxed())
         } else if let Some(sketch) = self.board_sketch_view(window_id) {
             // The board in sketch mode: the sketch over the board (#2234).
             sketch

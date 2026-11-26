@@ -102,7 +102,11 @@ impl Exporter for NetlistExporter {
         let netlist = ctx.netlist.as_ref().ok_or(NetlistError::NoNetlist)?;
         let note = opts.incomplete_note.as_deref();
         let bytes = match opts.format {
-            NetlistFormat::Listing => render_listing(netlist, note),
+            NetlistFormat::Listing => {
+                let mut bytes = render_listing(netlist, note);
+                bytes.extend(render_ties(&listing_ties(ctx, netlist)));
+                bytes
+            }
             NetlistFormat::NetText => net_text::emit(ctx, netlist)?,
         };
         Ok(NetlistOutput { bytes })
@@ -188,6 +192,40 @@ fn render_listing(
         for t in &net.terminals {
             let _ = writeln!(out, "  {}.{}", t.reference, t.pin);
         }
+    }
+    out.into_bytes()
+}
+
+/// The net ties (#1277) of every sheet placement the netlist was derived
+/// from, read off `netlist`.
+fn listing_ties(
+    ctx: &ExportContext,
+    netlist: &signex_types::net::Netlist,
+) -> Vec<signex_types::net_tie::NetTie> {
+    let placements: Vec<_> = ctx
+        .sheet_placements()
+        .into_iter()
+        .map(|(sheet, path)| (path, sheet))
+        .collect();
+    signex_types::net_tie::net_ties(netlist, &placements)
+}
+
+/// The listing's net-tie block (#1277; Caner, 2026-11-25), after the nets:
+/// a `# <n> net ties` banner, then one `tie <designator> "<net>" ...` line
+/// per tie, its nets sorted. Nothing when the design has no tie, so a
+/// listing without one stays byte for byte as it was.
+fn render_ties(ties: &[signex_types::net_tie::NetTie]) -> Vec<u8> {
+    if ties.is_empty() {
+        return Vec::new();
+    }
+    let mut out = String::new();
+    let _ = writeln!(out, "# {} net ties", ties.len());
+    for tie in ties {
+        let _ = write!(out, "tie {}", tie.designator);
+        for net in tie.nets() {
+            let _ = write!(out, " \"{}\"", escape_quoted(net));
+        }
+        let _ = writeln!(out);
     }
     out.into_bytes()
 }
@@ -335,6 +373,47 @@ mod tests {
         assert!(
             header_at < banner_at,
             "the INCOMPLETE header must precede the listing banner"
+        );
+    }
+
+    /// #1277: the listing carries each net tie and the two nets it joins,
+    /// after the nets; the nets themselves stay two.
+    #[test]
+    fn the_listing_carries_each_net_tie_after_the_nets() {
+        use signex_types::schematic::{SchematicSheet, Symbol};
+        let tie = Uuid::from_u128(0x1277);
+        let terminal = |pin: &str| Terminal {
+            symbol: tie,
+            reference: "NT1".to_string(),
+            pin: pin.to_string(),
+            occurrence: Default::default(),
+        };
+        let net = |id: u32, name: &str, pin: &str| Net {
+            id: NetId(id),
+            name: name.to_string(),
+            class: None,
+            wires: Vec::new(),
+            junctions: Vec::new(),
+            terminals: vec![terminal(pin)],
+        };
+        let netlist = Netlist {
+            nets: vec![net(1, "GND", "1"), net(2, "AGND", "2")],
+        };
+        let mut ctx = ctx_with(Some(netlist));
+        ctx.netlist_sheets = vec![SchematicSheet {
+            symbols: vec![Symbol {
+                uuid: tie,
+                reference: "NT1".to_string(),
+                net_tie: true,
+                ..Default::default()
+            }],
+            ..Default::default()
+        }];
+        let out = NetlistExporter.export(&ctx, &listing_opts()).unwrap();
+        assert_eq!(
+            String::from_utf8(out.bytes).unwrap(),
+            "# Signex netlist\n# 2 nets\nnet 1 \"GND\"\n  NT1.1\nnet 2 \"AGND\"\n  NT1.2\n\
+             # 1 net ties\ntie NT1 \"AGND\" \"GND\"\n"
         );
     }
 

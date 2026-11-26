@@ -259,7 +259,7 @@ pub enum SymbolEditorMsg {
     /// the redo stack.
     Redo,
 
-    /// Drag committed — clears `mid_drag` so the next drag starts a
+    /// Drag committed — closes the draft's move run so the next drag starts a
     /// fresh undo snapshot group. Emitted on `ButtonReleased(Left)`
     /// when a move drag was in progress.
     DragCommit,

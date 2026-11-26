@@ -7,9 +7,11 @@ use std::path::{Path, PathBuf};
 
 use iced::Task;
 use signex_types::project::{PROJECT_PROFILE_TOKEN, ProjectSetup};
+use signex_types::reuse::{ReuseKind, ReuseScope};
 
 use super::SheetChoice;
 use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
+use crate::app::design_reuse;
 use crate::app::document_ids::NoProjectNamed;
 use crate::app::handlers::dock::project_navigation::add_io::on_blocking_pool;
 use crate::app::state::ProjectId;
@@ -46,7 +48,7 @@ fn project_and_setup(
     let resolved = app
         .resolved_project_setup(project)
         .ok_or_else(|| format!("`{command}`: the project is no longer open"))?;
-    let setup = ProjectSetup::for_command(token, &resolved, &app.ui_state.setup_profiles)?;
+    let setup = ProjectSetup::for_command(token, &resolved, &app.document_state.setup_profiles)?;
     Ok((project, setup))
 }
 
@@ -125,11 +127,12 @@ pub(crate) fn new_pcb_document(app: &mut Signex, args: &CommandArgs) -> Ran {
     (CommandOutcome::Ran, task)
 }
 
-/// `new_schematic_sheet [profile=..] [name=..]`: a blank sheet named
-/// `<name>.snxsch` in the project folder, with the profile's sheet values, as
-/// the New Schematic dialog's Create and file dialog make it. With no `name`
-/// it is the first `Sheet<n>` the project does not list and the folder does
-/// not hold, found off the update thread.
+/// `new_schematic_sheet [profile=..] [name=..] [template=.. [scope=..]]`: a
+/// blank sheet named `<name>.snxsch` in the project folder, with the
+/// profile's sheet values and the frame of a sheet template when one is
+/// named (#1283), as the New Schematic dialog's Create and file dialog make
+/// it. With no `name` it is the first `Sheet<n>` the project does not list
+/// and the folder does not hold, found off the update thread.
 pub(crate) fn new_schematic_sheet(app: &mut Signex, args: &CommandArgs) -> Ran {
     let (project, setup) = match project_and_setup(app, args, "new_schematic_sheet") {
         Ok(found) => found,
@@ -142,12 +145,18 @@ pub(crate) fn new_schematic_sheet(app: &mut Signex, args: &CommandArgs) -> Ran {
     // sets it only on a project that stores none; `project` and a built-in
     // leave it.
     let names_saved_profile = text(args, "profile").is_some_and(|token| {
-        signex_types::project::find_user_profile(token, &app.ui_state.setup_profiles).is_some()
+        signex_types::project::find_user_profile(token, &app.document_state.setup_profiles)
+            .is_some()
     });
+    let template = match sheet_template(args, loaded.dir()) {
+        Ok(template) => template,
+        Err(why) => return refused(format!("`new_schematic_sheet`: {why}")),
+    };
     let choice = SheetChoice {
         sheet: setup.sheet,
         designators: (names_saved_profile && loaded.data.designator_standard().is_none())
             .then_some(setup.designators),
+        template,
     };
     let listed: Vec<String> = loaded
         .data
@@ -199,6 +208,25 @@ pub(crate) fn new_schematic_sheet(app: &mut Signex, args: &CommandArgs) -> Ran {
     }
     let task = app.handle_add_new_schematic_picked(project, Some(dir.join(&file)), Some(choice));
     (CommandOutcome::Ran, task)
+}
+
+/// The file of the sheet template `template` names, kept in `scope` (the
+/// project in `dir`, the default, or the user's library) (#1283); `None`
+/// when no template is named. Reads no disk: the write reads the template.
+fn sheet_template(args: &CommandArgs, dir: &Path) -> Result<Option<PathBuf>, String> {
+    let Some(name) = text(args, "template") else {
+        return match text(args, "scope") {
+            Some(_) => Err("`scope` says where the `template` is kept; name the template".into()),
+            None => Ok(None),
+        };
+    };
+    let name = design_reuse::checked_name(name, "sheet template")?;
+    let root = match design_reuse::scope_of(text(args, "scope"))? {
+        ReuseScope::Project => dir.to_path_buf(),
+        ReuseScope::Library => design_reuse::user_library_root()
+            .ok_or("this machine has no user folder for a library")?,
+    };
+    Ok(Some(ReuseKind::SheetTemplate.entry_path(&root, &name)))
 }
 
 /// `name` without a trailing `.snxsch`, in any case.

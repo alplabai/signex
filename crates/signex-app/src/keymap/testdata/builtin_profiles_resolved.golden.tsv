@@ -146,8 +146,16 @@ signex_standard	hint	-	-	project_add_variant
 signex_standard	hint	-	-	project_rename_variant
 signex_standard	hint	-	-	project_remove_variant
 signex_standard	hint	-	-	project_set_active_variant
+signex_standard	hint	-	-	project_set_default_variant
+signex_standard	hint	-	-	compare_variants
+signex_standard	hint	-	-	variant_bom
+signex_standard	hint	-	-	project_set_variant_fit
+signex_standard	hint	-	-	project_set_variant_alternate
+signex_standard	hint	-	-	project_set_variant_override
+signex_standard	hint	-	-	project_duplicate_variant
 signex_standard	hint	-	-	project_move_library
 signex_standard	hint	-	-	project_set_annotate_undo
+signex_standard	hint	-	-	project_set_annotate_numbering
 signex_standard	hint	-	-	project_set_version_control
 signex_standard	hint	-	-	project_add_requirement
 signex_standard	hint	-	-	project_set_requirement
@@ -155,10 +163,12 @@ signex_standard	hint	-	-	project_remove_requirement
 signex_standard	hint	-	-	project_enable_requirement
 signex_standard	hint	-	-	project_run_requirements
 signex_standard	hint	-	-	project_set_rail
+signex_standard	hint	-	-	bom_lines
 signex_standard	hint	-	-	document_info
 signex_standard	hint	-	-	list_documents
 signex_standard	hint	-	-	read_document
 signex_standard	hint	-	-	query_pins
+signex_standard	hint	-	-	query_net_ties
 signex_standard	hint	-	-	query_library
 signex_standard	hint	-	-	resolve
 signex_standard	hint	-	-	list_annotations
@@ -188,7 +198,9 @@ signex_standard	hint	-	-	open_parameter_manager
 signex_standard	hint	-	-	export_parameters
 signex_standard	hint	-	-	import_parameters
 signex_standard	hint	-	-	set_symbol_parameter
+signex_standard	hint	-	-	set_object_text
 signex_standard	hint	-	-	set_sheet_variable
+signex_standard	hint	-	-	set_net_tie
 signex_standard	hint	-	-	lock_board_items
 signex_standard	hint	-	-	unlock_board_items
 signex_standard	hint	-	Ctrl+G	create_union
@@ -255,8 +267,14 @@ signex_standard	hint	-	-	place_board_component
 signex_standard	hint	-	-	place_board_pad
 signex_standard	hint	-	-	swap_pins
 signex_standard	hint	-	-	swap_gates
+signex_standard	hint	-	-	swap_schematic_pins
+signex_standard	hint	-	-	swap_schematic_gates
 signex_standard	hint	-	-	save_board_reuse_block
 signex_standard	hint	-	-	place_board_reuse_block
+signex_standard	hint	-	-	save_snippet
+signex_standard	hint	-	-	place_snippet
+signex_standard	hint	-	-	list_snippets
+signex_standard	hint	-	-	list_templates
 signex_standard	hint	-	-	draw_wire
 signex_standard	hint	-	P W	place_wire
 signex_standard	hint	-	-	draw_bus
@@ -355,6 +373,7 @@ signex_standard	hint	-	-	back_annotate_schematics
 signex_standard	hint	-	F8	run_erc
 signex_standard	hint	-	-	check_erc
 signex_standard	hint	-	-	open_erc_dialog
+signex_standard	hint	-	-	toggle_live_erc
 signex_standard	hint	-	-	repair_pin_junctions
 signex_standard	hint	-	T D	run_drc
 signex_standard	hint	-	-	check_drc
@@ -466,6 +485,7 @@ signex_standard	hint	-	-	open_net_classes
 signex_standard	hint	-	-	open_net_classes_panel
 signex_standard	hint	-	-	open_harness_definitions
 signex_standard	hint	-	-	open_diff_pair_classes
+signex_standard	hint	-	-	list_diff_pairs
 signex_standard	hint	-	-	add_net_class
 signex_standard	hint	-	-	rename_net_class
 signex_standard	hint	-	-	delete_net_class
@@ -746,8 +766,16 @@ classic	hint	-	-	project_add_variant
 classic	hint	-	-	project_rename_variant
 classic	hint	-	-	project_remove_variant
 classic	hint	-	-	project_set_active_variant
+classic	hint	-	-	project_set_default_variant
+classic	hint	-	-	compare_variants
+classic	hint	-	-	variant_bom
+classic	hint	-	-	project_set_variant_fit
+classic	hint	-	-	project_set_variant_alternate
+classic	hint	-	-	project_set_variant_override
+classic	hint	-	-	project_duplicate_variant
 classic	hint	-	-	project_move_library
 classic	hint	-	-	project_set_annotate_undo
+classic	hint	-	-	project_set_annotate_numbering
 classic	hint	-	-	project_set_version_control
 classic	hint	-	-	project_add_requirement
 classic	hint	-	-	project_set_requirement
@@ -755,10 +783,12 @@ classic	hint	-	-	project_remove_requirement
 classic	hint	-	-	project_enable_requirement
 classic	hint	-	-	project_run_requirements
 classic	hint	-	-	project_set_rail
+classic	hint	-	-	bom_lines
 classic	hint	-	-	document_info
 classic	hint	-	-	list_documents
 classic	hint	-	-	read_document
 classic	hint	-	-	query_pins
+classic	hint	-	-	query_net_ties
 classic	hint	-	-	query_library
 classic	hint	-	-	resolve
 classic	hint	-	-	list_annotations
@@ -788,7 +818,9 @@ classic	hint	-	-	open_parameter_manager
 classic	hint	-	-	export_parameters
 classic	hint	-	-	import_parameters
 classic	hint	-	-	set_symbol_parameter
+classic	hint	-	-	set_object_text
 classic	hint	-	-	set_sheet_variable
+classic	hint	-	-	set_net_tie
 classic	hint	-	-	lock_board_items
 classic	hint	-	-	unlock_board_items
 classic	hint	-	-	create_union
@@ -855,8 +887,14 @@ classic	hint	-	-	place_board_component
 classic	hint	-	-	place_board_pad
 classic	hint	-	-	swap_pins
 classic	hint	-	-	swap_gates
+classic	hint	-	-	swap_schematic_pins
+classic	hint	-	-	swap_schematic_gates
 classic	hint	-	-	save_board_reuse_block
 classic	hint	-	-	place_board_reuse_block
+classic	hint	-	-	save_snippet
+classic	hint	-	-	place_snippet
+classic	hint	-	-	list_snippets
+classic	hint	-	-	list_templates
 classic	hint	-	-	draw_wire
 classic	hint	-	W	place_wire
 classic	hint	-	-	draw_bus
@@ -955,6 +993,7 @@ classic	hint	-	-	back_annotate_schematics
 classic	hint	-	F8	run_erc
 classic	hint	-	-	check_erc
 classic	hint	-	-	open_erc_dialog
+classic	hint	-	-	toggle_live_erc
 classic	hint	-	-	repair_pin_junctions
 classic	hint	-	F7	run_drc
 classic	hint	-	-	check_drc
@@ -1066,6 +1105,7 @@ classic	hint	-	-	open_net_classes
 classic	hint	-	-	open_net_classes_panel
 classic	hint	-	-	open_harness_definitions
 classic	hint	-	-	open_diff_pair_classes
+classic	hint	-	-	list_diff_pairs
 classic	hint	-	-	add_net_class
 classic	hint	-	-	rename_net_class
 classic	hint	-	-	delete_net_class

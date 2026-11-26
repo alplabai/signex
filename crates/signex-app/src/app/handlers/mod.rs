@@ -53,6 +53,7 @@ pub(crate) mod modal_sizing;
 pub mod native_menu;
 pub mod net_nav;
 mod object_list;
+mod object_list_edit;
 mod pan_zoom_bench;
 mod parameter_closed_sheets;
 pub mod parameter_manager;

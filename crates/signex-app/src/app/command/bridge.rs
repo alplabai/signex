@@ -351,6 +351,11 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "rotate_clockwise" => Message::Edit(EditMsg::RotateSelectedClockwise),
         "rotate_counterclockwise" => Message::Edit(EditMsg::RotateSelectedCounterclockwise),
         "open_erc_dialog" => Message::Erc(ErcMsg::OpenDialog),
+        // #1288: the live ERC preference flips; with `enabled`, the operand
+        // handler sets it.
+        "toggle_live_erc" => {
+            Message::Erc(ErcMsg::Live(crate::app::handlers::erc::LiveErcMsg::Toggled))
+        }
         "repair_pin_junctions" => Message::Erc(ErcMsg::PinJunctionRepairRequested),
         // #1300: the contents sheet of the active document's project.
         "add_table_of_contents" => Message::from(crate::app::TablesMsg::TableOfContentsRequested),
@@ -519,6 +524,8 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         // #2410: the two pads selected on the board name the pins or gates.
         "swap_pins" => part_swap(signex_engine::pcb::pad_swap::SwapKind::Pins),
         "swap_gates" => part_swap(signex_engine::pcb::pad_swap::SwapKind::Gates),
+        "swap_schematic_pins" => Message::from(crate::app::SheetSwapMsg::PinsRequested),
+        "swap_schematic_gates" => Message::from(crate::app::SheetSwapMsg::GatesRequested),
         "save_board_reuse_block" => {
             Message::Pcb(PcbMsg::ReuseBlock(crate::app::ReuseBlockMsg::SaveRequested))
         }
@@ -613,6 +620,9 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         }),
         "place_design_block" => extras(PlacementExtrasMsg::DesignBlockRequested),
         "import_graphics" => extras(PlacementExtrasMsg::ImportGraphicsRequested),
+        // #1283: the snippets dialog, and the selection saved as a snippet.
+        "place_snippet" => extras(PlacementExtrasMsg::SnippetRequested),
+        "save_snippet" => extras(PlacementExtrasMsg::SnippetSaveRequested),
         // BRIDGE_ARMS_END — `tests::match_block` scans for command-id
         // literals up to this marker and no further. Everything below is
         // fallthrough machinery whose own string literals must not be
@@ -1490,7 +1500,8 @@ mod tests {
     }
 
     /// #1669 - `cycle_wiring_mode` resolves to its tool message and steps the
-    /// drag wiring mode through all four and back to auto.
+    /// drag wiring mode through all six (the 45° two since #2516) and back
+    /// to auto.
     #[test]
     fn cycle_wiring_mode_resolves_and_cycles_the_drag_wiring_mode() {
         use signex_types::corner::DragWiringMode;
@@ -1502,7 +1513,7 @@ mod tests {
         let (mut app, _task) = Signex::new();
         assert_eq!(app.interaction_state.drag_wiring, DragWiringMode::Auto);
         let mut seen = Vec::new();
-        for _ in 0..4 {
+        for _ in 0..6 {
             let _ = app.dispatch_command(&cmd, CommandArgs::none(), None);
             seen.push(app.interaction_state.drag_wiring);
         }
@@ -1512,6 +1523,8 @@ mod tests {
                 DragWiringMode::HorizontalFirst,
                 DragWiringMode::VerticalFirst,
                 DragWiringMode::Straight,
+                DragWiringMode::Angle45Start,
+                DragWiringMode::Angle45End,
                 DragWiringMode::Auto
             ]
         );

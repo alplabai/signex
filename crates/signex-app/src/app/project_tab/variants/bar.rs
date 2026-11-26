@@ -1,6 +1,7 @@
 //! The Variant Manager's toolbar (active variant, parts filter, Only rows
-//! that differ, the actions not built yet) and its footer (#1293), the
-//! slots of the shared document-tab shell.
+//! that differ, Settings not built yet, Compare variants and Open in BOM
+//! Studio) and its footer (#1293, #2949), the slots of the shared
+//! document-tab shell.
 
 use iced::widget::{container, pick_list};
 use iced::{Element, Length, Widget as _};
@@ -14,7 +15,7 @@ use super::super::ProjectTabMsg;
 use super::super::general::tab_message;
 use super::super::look::{ButtonKind, text_button};
 use super::super::table::{SP, TS};
-use super::Manager;
+use super::{Manager, VariantManagerMsg};
 use crate::app::Message;
 use crate::choice::Choice;
 use crate::styles::ti;
@@ -27,8 +28,8 @@ const FILTER_EMS: f32 = 190.0 / 12.0;
 
 /// Caption, Active variant select, separator, parts filter, Only rows that
 /// differ; at the end Read again while the parts are older than the sheets,
-/// then Settings, Compare variants and Open in BOM Studio, greyed with a
-/// "not built yet" tooltip: none of their surfaces exists yet.
+/// then Settings, greyed with a "not built yet" tooltip (its surface has no
+/// mockup yet), Compare variants and Open in BOM Studio (#2949).
 pub(super) fn toolbar<'a>(m: &Manager<'_>) -> Toolbar<'a, Message> {
     let r = resolve(m.tokens);
     let mut bar = Toolbar::new()
@@ -49,8 +50,39 @@ pub(super) fn toolbar<'a>(m: &Manager<'_>) -> Toolbar<'a, Message> {
         for id in NOT_BUILT {
             bar = bar.push_end(not_built(m, id));
         }
+        for (id, msg) in actions(m) {
+            let press = tab_message(ProjectTabMsg::VariantManager {
+                project_id: m.project_id,
+                msg,
+            });
+            bar = bar.push_end(text_button(
+                None,
+                t!(m.i18n, id),
+                Some(press),
+                ButtonKind::Outline,
+                m.tokens,
+            ));
+        }
     }
     bar
+}
+
+/// The top bar actions that are built (#2949) and what each sends: Compare
+/// variants shows the comparison, Open in BOM Studio opens the BOM with the
+/// variant selected in the list.
+pub(super) fn actions(m: &Manager<'_>) -> [(MessageId, VariantManagerMsg); 2] {
+    [
+        (
+            ids::VARIANT_MANAGER_COMPARE,
+            VariantManagerMsg::CompareOpened,
+        ),
+        (
+            ids::VARIANT_MANAGER_OPEN_BOM,
+            VariantManagerMsg::BomRequested {
+                variant: m.selected.map(str::to_string),
+            },
+        ),
+    ]
 }
 
 /// The Active variant select: Base, then each definition.
@@ -124,12 +156,10 @@ fn only_differ<'a>(m: &Manager<'_>) -> Element<'a, Message> {
     )
 }
 
-/// The top bar actions whose surfaces are not built yet (mockup row 32).
-pub(super) const NOT_BUILT: [MessageId; 3] = [
-    ids::VARIANT_MANAGER_SETTINGS,
-    ids::VARIANT_MANAGER_COMPARE,
-    ids::VARIANT_MANAGER_OPEN_BOM,
-];
+/// The top bar actions whose surfaces are not built yet (mockup row 32):
+/// Settings. Its variant defaults are `project_set_default_variant`; the
+/// surface waits for a mockup (#2949), see `docs/PROJECT_TAB.md`.
+pub(super) const NOT_BUILT: [MessageId; 1] = [ids::VARIANT_MANAGER_SETTINGS];
 
 /// A greyed top bar button with the "not built yet" tooltip.
 fn not_built<'a>(m: &Manager<'_>, id: MessageId) -> Element<'a, Message> {

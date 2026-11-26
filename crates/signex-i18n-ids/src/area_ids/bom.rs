@@ -44,6 +44,7 @@ define_ids! {
     BOM_COLUMN_STOCK = "bom-column-stock";
     BOM_COLUMN_DISTRIBUTOR = "bom-column-distributor";
     BOM_COLUMN_PRICE_AGE = "bom-column-price-age";
+    BOM_COMPUTED_DIFFERS = "bom-computed-differs";
     BOM_COLUMN_ALTERNATES = "bom-column-alternates";
     BOM_NO_ISSUES_FOUND = "bom-no-issues-found";
     BOM_ISSUES_ERRORS = "bom-issues-errors";

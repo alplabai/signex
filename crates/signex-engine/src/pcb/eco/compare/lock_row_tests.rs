@@ -43,6 +43,7 @@ fn report(rows: Vec<EcoRow>) -> CompareReport {
         revision: 1,
         rows,
         notes: Vec::new(),
+        pad_locks: Vec::new(),
     };
     compare(&eco, &BackChangeList::default())
 }

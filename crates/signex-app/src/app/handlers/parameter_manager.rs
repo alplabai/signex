@@ -545,6 +545,10 @@ pub(crate) fn parameter_sheet_names(paths: &[&Path], dir: Option<&Path>) -> Vec<
 mod scope_tests;
 
 #[cfg(test)]
+#[path = "parameter_manager_fixture_tests.rs"]
+mod fixture_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::app::{EditMsg, ParameterManagerMsg as Pm};

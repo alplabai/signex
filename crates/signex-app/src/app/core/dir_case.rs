@@ -10,7 +10,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-use super::project_case::CaseProbeOutcome;
+use crate::app::core::case_probe::CaseProbeOutcome;
 
 /// What the identity probes of loose directories reported, and what waits.
 #[derive(Debug, Default)]

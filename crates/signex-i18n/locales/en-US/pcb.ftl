@@ -623,6 +623,10 @@ pcb-pins-swapped = { $designator }: pins { $a } and { $b } traded nets on the bo
 pcb-gates-swapped = { $designator }: gates { $a } and { $b } traded places on the board and on its schematic
 pcb-part-swap-nothing = { $designator }: pins { $a } and { $b } already share their nets; nothing changed
 pcb-gates-swap-nothing = { $designator }: gates { $a } and { $b } already share their nets; nothing changed
+## Started on the schematic (#1261): only the sheet changes until Update PCB.
+pcb-schematic-pins-swapped = { $designator }: pins { $a } and { $b } traded nets on the schematic; Update PCB carries the swap to the board
+pcb-schematic-gates-swapped = { $designator }: gates { $a } and { $b } traded places on the schematic; Update PCB carries the swap to the board
+pcb-schematic-swap-nothing = { $designator }: nothing ends on pins { $a } and { $b }; nothing changed
 
 ## Design reuse blocks (#2410).
 pcb-reuse-block-saved = Reuse block { $name } saved to { $file }: { $footprints } footprints, { $tracks } tracks, { $vias } vias

@@ -1,7 +1,5 @@
 use std::path::PathBuf;
 
-use signex_types::project::ProjectData;
-
 use crate::dock::DockArea;
 
 use super::TabInfo;
@@ -15,9 +13,7 @@ mod board_sketch_dxf;
 mod bom_preview;
 #[cfg(test)]
 mod case_fold_tests;
-pub(crate) mod check_runs;
 pub(crate) mod cross_select;
-pub(crate) mod dir_case;
 mod dirty;
 #[cfg(test)]
 mod dirty_tests;
@@ -73,6 +69,7 @@ mod window_tab;
 pub use crate::app::core::case_fold::CaseFold;
 pub use crate::app::core::document_times::DocumentTimes;
 pub use agent_edits::AgentEdits;
+pub(crate) use agent_edits::JoinedSheet;
 pub use board_3d::{Board3dSession, BuiltScene, CaptureResult, MatteBackdrop};
 pub use board_net_classes::BoardNetClassPanelState;
 pub use board_sketch::BoardSketchSession;
@@ -333,56 +330,7 @@ pub use signex_types::schematic::AnnotateOrder;
 
 pub use crate::app::core::project_id::ProjectId;
 
-/// One loaded project in the multi-project workspace. `path` is the
-/// canonical identity (`.snxprj` location on disk); `data`
-/// is the parsed project contents. Multiple projects with different
-/// `path`s coexist in `DocumentState.projects`; two identical `path`s
-/// at once is a loader bug (existing `open_project_file` de-dupes).
-#[derive(Debug, Clone)]
-pub struct LoadedProject {
-    pub id: ProjectId,
-    pub path: PathBuf,
-    pub data: ProjectData,
-    /// Libraries the user has authored via the New Library flow but not
-    /// yet committed to disk. The New Library dialog's Create button
-    /// only registers an entry here + flips the project dirty bit;
-    /// `commands::create_pending_library` runs at project-save time
-    /// to actually write the `.snxlib`. Closes
-    /// `feedback_no_disk_writes_without_user_save.md`'s "wait for
-    /// explicit user save" invariant. Keyed by a temporary handle that
-    /// becomes the eventual `library_id` once materialised.
-    pub pending_libraries:
-        std::collections::HashMap<uuid::Uuid, crate::library::commands::PendingLibrarySpec>,
-    /// Path-key rules for this project's volume, probed once off-thread
-    /// after load (#694); the host default until the answer arrives.
-    pub case_fold: scope::CaseFold,
-    /// The volume probe has reported; the first answer wins.
-    pub case_probed: bool,
-    /// The probe DECIDED (not undecided, failed or a stat error): only then is
-    /// `case_fold` a fact about the volume rather than the host default, and
-    /// only then does document identity trust it (#1447).
-    pub case_decided: bool,
-}
-
-impl LoadedProject {
-    /// The project's directory — the *one* convention for "where this
-    /// project's relative sheet filenames resolve from".
-    ///
-    /// Two conventions used to coexist: the parent of the `.snxprj` on disk,
-    /// and the persisted `data.dir` string. The loader patches `data.dir` to
-    /// the opened path's parent, so they agree for a freshly-loaded project —
-    /// but a `LoadedProject` assembled any other way (project creation, a
-    /// `.snxprj` that recorded an absolute `dir` that no longer matches) can
-    /// have them disagree, and then ownership resolution succeeds while the
-    /// sheet paths it produces do not exist. The export skips those pages
-    /// silently. `path.parent()` is the only one that cannot be stale: it is
-    /// derived from the file actually opened.
-    pub fn dir(&self) -> &std::path::Path {
-        self.path
-            .parent()
-            .unwrap_or_else(|| std::path::Path::new(""))
-    }
-}
+pub use crate::app::core::loaded_project::LoadedProject;
 
 /// #431 — pending "Export anyway (incomplete)?" prompt for netlist export.
 ///
@@ -437,7 +385,7 @@ pub struct PdfExportRequest {
 pub struct DocumentState {
     /// Document ids a document cannot say itself: project files not loaded,
     /// and the order documents were first seen in (#2172).
-    pub document_ids: crate::app::document_ids::DocumentIds,
+    pub document_ids: crate::app::core::document_ids::DocumentIds,
     /// Counts the changes that can alter an ERC finding: an edit to a sheet
     /// (through the engine, or Annotate, Replace, library update and the like),
     /// a project-file change, and a sheet written behind the engines. Each calls
@@ -480,7 +428,8 @@ pub struct DocumentState {
     /// were seeded from has changed locally (#1085).
     pub profile_drift_noted: std::collections::HashSet<ProjectId>,
     /// Undo / redo of each project's stored rule set edits (#1085).
-    pub rules_history: std::collections::HashMap<ProjectId, rules_history::RulesHistory>,
+    pub rules_history:
+        std::collections::HashMap<ProjectId, crate::app::core::rules_history::RulesHistory>,
     /// Undo / redo of each project's General settings (engine-owned).
     pub general_history: std::collections::HashMap<ProjectId, signex_engine::ProjectGeneralHistory>,
     /// How many undo steps every history keeps (`undo_depth`); see
@@ -528,7 +477,7 @@ pub struct DocumentState {
     pub active_path: Option<PathBuf>,
     /// Every loaded project in the workspace. Order = load order. First
     /// project becomes active on load; subsequent opens append.
-    pub projects: Vec<LoadedProject>,
+    pub projects: Vec<crate::app::core::loaded_project::LoadedProject>,
     /// Which project is "active" for handlers that operate on the workspace
     /// at large (save-all, the Projects panel). Currently tracks the
     /// most-recently-loaded project plus whichever project contains the
@@ -553,7 +502,7 @@ pub struct DocumentState {
     pub recovery_check_due: Vec<std::path::PathBuf>,
     /// Dirty documents that no editor draft holds; see `dirty.rs`, the only
     /// reader and writer. Ask `is_document_dirty`, never this field.
-    pub(crate) dirty_docs: dirty::DirtyDocuments,
+    pub(crate) dirty_docs: crate::app::core::dirty_documents::DirtyDocuments,
     /// Undo/redo of each project's net-class table (#1042). The table is
     /// project data, so it has its own history beside the per-sheet engines.
     pub net_class_history: std::collections::HashMap<ProjectId, signex_engine::NetClassHistory>,
@@ -586,17 +535,19 @@ pub struct DocumentState {
     /// `state/pcb_board.rs`, the only reader and writer.
     pub(crate) boards: std::collections::HashMap<PathBuf, signex_engine::pcb::BoardEngine>,
     /// The engines of PCB tabs closed while dirty; see `state/pcb_board.rs`.
-    pub(crate) parked_pcb_boards: pcb_board::ParkedBoards,
+    pub(crate) parked_pcb_boards: crate::app::core::parked_boards::ParkedBoards,
     /// The sheets each undo group touched. Undo/redo of a
     /// grouped entry consults this to find the sheets that must move with it.
-    pub undo_groups:
-        std::collections::HashMap<signex_engine::UndoGroupId, crate::app::UndoGroupSheets>,
+    pub undo_groups: std::collections::HashMap<
+        signex_engine::UndoGroupId,
+        crate::app::core::undo_groups::UndoGroupSheets,
+    >,
     /// Power rail renames waiting on their project's sheets (mockup row 45).
     pub(crate) rail_rename: crate::app::core::rail_rename::RailRenames,
     /// An agent's edit list in progress, and the labels of its undo steps (#2178).
     pub agent_edits: AgentEdits,
     /// The last runs of `check_erc`, for a later run's baseline (#2199).
-    pub(crate) check_runs: check_runs::CheckRuns,
+    pub(crate) check_runs: crate::app::core::check_runs::CheckRuns,
     /// Each open project's design reuse blocks, read or saved (#2410).
     pub(crate) reuse_blocks: crate::app::board_reuse::ReuseBlockStore,
     /// The one store of half-typed title-block and paper-edge text (#2027);
@@ -696,7 +647,16 @@ pub struct DocumentState {
     pub pending_opens: crate::app::document_read::InFlightReads,
     /// What the directory case probes of loose documents reported, and the
     /// opens and saves waiting on one (#1447).
-    pub dir_case: dir_case::DirCases,
+    pub dir_case: crate::app::core::dir_case::DirCases,
+    /// The user's saved setup profiles (#2232), loaded from `prefs.json` at
+    /// boot and saved on every Save as profile and Remove.
+    pub setup_profiles: Vec<signex_types::project::UserProfile>,
+    /// Names of the profiles removed this session, by id, so a project that
+    /// still names one can say which.
+    pub removed_profile_names: std::collections::HashMap<String, String>,
+    /// Profile ids a project named and the user did not have, already said
+    /// in Messages this session.
+    pub missing_profiles_warned: std::collections::HashSet<String>,
     /// #859 — History restores running on a worker, keyed by the document
     /// path. A second restore click for the same document is ignored until
     /// the first completes; closing the project or all documents cancels it.

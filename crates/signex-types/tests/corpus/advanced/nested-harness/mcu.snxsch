@@ -1,0 +1,403 @@
+format = "snxsch/1.3"
+schematic_id = "00000000-0000-a5b1-0000-000000000001"
+version = 0
+generator = ""
+generator_version = ""
+paper_size = "A4"
+root_sheet_page = "1"
+
+
+[sheets.components]
+content = """
+uuid                                  ref  library     pos_x     pos_y     rotation  value  mpn
+00000000-0000-a5b1-0000-000000000002  U3   Fixture:P8  10000000  10000000  0         U3     ""
+"""
+
+[sheets.wires]
+content = """
+uuid                                  start_x   start_y   end_x     end_y     stroke_width
+00000000-0000-a5b1-0000-000000000008  10000000  12540000  40000000  12540000  0
+00000000-0000-a5b1-0000-000000000009  10000000  15080000  40000000  15080000  0
+00000000-0000-a5b1-0000-00000000000a  10000000  17620000  40000000  17620000  0
+00000000-0000-a5b1-0000-00000000000b  10000000  20160000  40000000  20160000  0
+00000000-0000-a5b1-0000-000000000012  10000000  27780000  30000000  62540000  0
+00000000-0000-a5b1-0000-000000000013  10000000  30320000  30000000  65080000  0
+00000000-0000-a5b1-0000-000000000018  10000000  22700000  50000000  42540000  0
+00000000-0000-a5b1-0000-000000000019  10000000  25240000  50000000  45080000  0
+"""
+
+[sheets.junctions]
+content = """
+uuid  pos_x  pos_y  diameter
+"""
+
+[sheets.labels]
+content = """
+uuid  text  pos_x  pos_y  rotation  kind  shape  font_size  justify  justify_v
+"""
+
+[extras.symbols.00000000-0000-a5b1-0000-000000000002]
+footprint = "Fixture:Header"
+datasheet = ""
+mirror_x = false
+mirror_y = false
+unit = 1
+is_power = false
+fields_autoplaced = false
+fields_user_placed = false
+dnp = false
+in_bom = true
+on_board = true
+exclude_from_sim = false
+locked = false
+custom_properties = []
+instances = []
+body_ref = "Fixture:P8#e8262385"
+
+[extras.symbols.00000000-0000-a5b1-0000-000000000002.fields]
+
+[extras.symbols.00000000-0000-a5b1-0000-000000000002.pin_uuids]
+
+[extras.sheet]
+no_connects = []
+text_notes = []
+buses = []
+bus_entries = []
+drawings = []
+no_erc_directives = []
+
+[[extras.sheet.child_sheets]]
+uuid = "00000000-0000-a5b1-0000-00000000000e"
+name = "sensor"
+filename = "sensor.snxsch"
+size = [
+    20.0,
+    20.0,
+]
+stroke_width = 0.0
+fill = "none"
+fields_autoplaced = false
+instances = []
+
+[extras.sheet.child_sheets.position]
+x = 80.0
+y = 15.0
+
+[[extras.sheet.child_sheets.pins]]
+uuid = "00000000-0000-a5b1-0000-00000000000d"
+name = "SPI_BUS"
+direction = ""
+rotation = 0.0
+auto_generated = false
+user_moved = false
+
+[extras.sheet.child_sheets.pins.position]
+x = 80.0
+y = 20.0
+
+[[extras.sheet.child_sheets]]
+uuid = "00000000-0000-a5b1-0000-00000000001d"
+name = "connectors"
+filename = "connectors.snxsch"
+size = [
+    20.0,
+    20.0,
+]
+stroke_width = 0.0
+fill = "none"
+fields_autoplaced = false
+instances = []
+
+[extras.sheet.child_sheets.position]
+x = 80.0
+y = 55.0
+
+[[extras.sheet.child_sheets.pins]]
+uuid = "00000000-0000-a5b1-0000-00000000001c"
+name = "DEBUG"
+direction = ""
+rotation = 0.0
+auto_generated = false
+user_moved = false
+
+[extras.sheet.child_sheets.pins.position]
+x = 80.0
+y = 60.0
+
+[extras.sheet.title_block]
+
+[extras.sheet.lib_symbols."Fixture:P8#e8262385"]
+id = "Fixture:P8"
+reference = ""
+value = ""
+footprint = ""
+datasheet = ""
+description = ""
+keywords = ""
+fp_filters = ""
+in_bom = true
+on_board = true
+in_pos_files = true
+duplicate_pin_numbers_are_jumpers = false
+graphics = []
+show_pin_numbers = true
+show_pin_names = true
+pin_name_offset = 0.0
+
+[[extras.sheet.lib_symbols."Fixture:P8#e8262385".pins]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."Fixture:P8#e8262385".pins.pin]
+direction = "passive"
+shape_style = "plain"
+rotation = 0.0
+length = 0.0
+name = ""
+number = "1"
+visible = true
+name_visible = true
+number_visible = true
+
+[extras.sheet.lib_symbols."Fixture:P8#e8262385".pins.pin.position]
+x = 0.0
+y = -2.54
+
+[[extras.sheet.lib_symbols."Fixture:P8#e8262385".pins]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."Fixture:P8#e8262385".pins.pin]
+direction = "passive"
+shape_style = "plain"
+rotation = 0.0
+length = 0.0
+name = ""
+number = "2"
+visible = true
+name_visible = true
+number_visible = true
+
+[extras.sheet.lib_symbols."Fixture:P8#e8262385".pins.pin.position]
+x = 0.0
+y = -5.08
+
+[[extras.sheet.lib_symbols."Fixture:P8#e8262385".pins]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."Fixture:P8#e8262385".pins.pin]
+direction = "passive"
+shape_style = "plain"
+rotation = 0.0
+length = 0.0
+name = ""
+number = "3"
+visible = true
+name_visible = true
+number_visible = true
+
+[extras.sheet.lib_symbols."Fixture:P8#e8262385".pins.pin.position]
+x = 0.0
+y = -7.62
+
+[[extras.sheet.lib_symbols."Fixture:P8#e8262385".pins]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."Fixture:P8#e8262385".pins.pin]
+direction = "passive"
+shape_style = "plain"
+rotation = 0.0
+length = 0.0
+name = ""
+number = "4"
+visible = true
+name_visible = true
+number_visible = true
+
+[extras.sheet.lib_symbols."Fixture:P8#e8262385".pins.pin.position]
+x = 0.0
+y = -10.16
+
+[[extras.sheet.lib_symbols."Fixture:P8#e8262385".pins]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."Fixture:P8#e8262385".pins.pin]
+direction = "passive"
+shape_style = "plain"
+rotation = 0.0
+length = 0.0
+name = ""
+number = "5"
+visible = true
+name_visible = true
+number_visible = true
+
+[extras.sheet.lib_symbols."Fixture:P8#e8262385".pins.pin.position]
+x = 0.0
+y = -12.7
+
+[[extras.sheet.lib_symbols."Fixture:P8#e8262385".pins]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."Fixture:P8#e8262385".pins.pin]
+direction = "passive"
+shape_style = "plain"
+rotation = 0.0
+length = 0.0
+name = ""
+number = "6"
+visible = true
+name_visible = true
+number_visible = true
+
+[extras.sheet.lib_symbols."Fixture:P8#e8262385".pins.pin.position]
+x = 0.0
+y = -15.24
+
+[[extras.sheet.lib_symbols."Fixture:P8#e8262385".pins]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."Fixture:P8#e8262385".pins.pin]
+direction = "passive"
+shape_style = "plain"
+rotation = 0.0
+length = 0.0
+name = ""
+number = "7"
+visible = true
+name_visible = true
+number_visible = true
+
+[extras.sheet.lib_symbols."Fixture:P8#e8262385".pins.pin.position]
+x = 0.0
+y = -17.78
+
+[[extras.sheet.lib_symbols."Fixture:P8#e8262385".pins]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."Fixture:P8#e8262385".pins.pin]
+direction = "passive"
+shape_style = "plain"
+rotation = 0.0
+length = 0.0
+name = ""
+number = "8"
+visible = true
+name_visible = true
+number_visible = true
+
+[extras.sheet.lib_symbols."Fixture:P8#e8262385".pins.pin.position]
+x = 0.0
+y = -20.32
+
+[[extras.sheet.harness_connectors]]
+uuid = "00000000-0000-a5b1-0000-000000000003"
+harness_type = "SPI_BUS"
+width = 10.16
+entry_pitch = 2.54
+rotation = 0.0
+
+[extras.sheet.harness_connectors.position]
+x = 40.0
+y = 10.0
+
+[[extras.sheet.harness_connectors.entries]]
+uuid = "00000000-0000-a5b1-0000-000000000004"
+name = "SCK"
+
+[[extras.sheet.harness_connectors.entries]]
+uuid = "00000000-0000-a5b1-0000-000000000005"
+name = "MOSI"
+
+[[extras.sheet.harness_connectors.entries]]
+uuid = "00000000-0000-a5b1-0000-000000000006"
+name = "MISO"
+
+[[extras.sheet.harness_connectors.entries]]
+uuid = "00000000-0000-a5b1-0000-000000000007"
+name = "CS"
+
+[[extras.sheet.harness_connectors]]
+uuid = "00000000-0000-a5b1-0000-00000000000f"
+harness_type = "UART"
+width = 10.16
+entry_pitch = 2.54
+rotation = 0.0
+
+[extras.sheet.harness_connectors.position]
+x = 30.0
+y = 60.0
+
+[[extras.sheet.harness_connectors.entries]]
+uuid = "00000000-0000-a5b1-0000-000000000010"
+name = "TX"
+
+[[extras.sheet.harness_connectors.entries]]
+uuid = "00000000-0000-a5b1-0000-000000000011"
+name = "RX"
+
+[[extras.sheet.harness_connectors]]
+uuid = "00000000-0000-a5b1-0000-000000000014"
+harness_type = "DEBUG"
+width = 10.16
+entry_pitch = 2.54
+rotation = 0.0
+
+[extras.sheet.harness_connectors.position]
+x = 50.0
+y = 40.0
+
+[[extras.sheet.harness_connectors.entries]]
+uuid = "00000000-0000-a5b1-0000-000000000015"
+name = "SWDIO"
+
+[[extras.sheet.harness_connectors.entries]]
+uuid = "00000000-0000-a5b1-0000-000000000016"
+name = "SWCLK"
+
+[[extras.sheet.harness_connectors.entries]]
+uuid = "00000000-0000-a5b1-0000-000000000017"
+name = "UART"
+
+[[extras.sheet.harness_wires]]
+uuid = "00000000-0000-a5b1-0000-00000000000c"
+
+[extras.sheet.harness_wires.start]
+x = 52.699999999999996
+y = 16.35
+
+[extras.sheet.harness_wires.end]
+x = 80.0
+y = 20.0
+
+[[extras.sheet.harness_wires]]
+uuid = "00000000-0000-a5b1-0000-00000000001a"
+
+[extras.sheet.harness_wires.start]
+x = 42.699999999999996
+y = 63.81
+
+[extras.sheet.harness_wires.end]
+x = 50.0
+y = 47.62
+
+[[extras.sheet.harness_wires]]
+uuid = "00000000-0000-a5b1-0000-00000000001b"
+
+[extras.sheet.harness_wires.start]
+x = 62.699999999999996
+y = 45.08
+
+[extras.sheet.harness_wires.end]
+x = 80.0
+y = 60.0
+
+[extras.sheet.harness_entry_types]
+00000000-0000-a5b1-0000-00000000000d = "SPI_BUS"
+00000000-0000-a5b1-0000-00000000001c = "DEBUG"

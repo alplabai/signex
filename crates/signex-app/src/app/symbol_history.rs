@@ -118,6 +118,7 @@ impl SymbolDraft {
     /// symbol index active before it, or `None` when there is no step.
     fn step(&mut self, back: bool) -> Option<usize> {
         let snap = self.history.begin_step(back)?;
+        self.end_move_run();
         let current = self.snapshot();
         self.history.finish_step(current, back);
         self.history_generation += 1;
@@ -189,15 +190,14 @@ impl SymbolDocument {
         self.apply_history_step(false)
     }
 
-    /// Selection and the drag live on the editor, not in the snapshot: a
-    /// step clears them, and when it lands on a different symbol the unit
-    /// and viewport reset as a symbol switch does, so new pins cannot land
-    /// on a unit the symbol lacks.
+    /// Selection and the drag live outside the snapshot: a step clears
+    /// them (the drag in [`SymbolDraft::step`]), and when it lands on a
+    /// different symbol the unit and viewport reset as a symbol switch
+    /// does, so new pins cannot land on a unit the symbol lacks.
     fn apply_history_step(&mut self, back: bool) -> bool {
         let Some(previous_idx) = self.draft.step(back) else {
             return false;
         };
-        self.gui.mid_drag = false;
         self.gui.selected = None;
         if self.draft.active_idx == previous_idx {
             let max = crate::library::editor::symbol::state::max_part_number(self.primitive());

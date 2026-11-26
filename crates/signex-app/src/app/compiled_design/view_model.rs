@@ -72,6 +72,13 @@ impl Signex {
         };
         let needle = ui.find.trim().to_lowercase();
         view.rows = tree_rows(result, &needle, &ui.folded, &ui.expanded, ui.selected);
+        if let Some(variant) = self.channel_view_variant() {
+            for row in &mut view.rows {
+                if self.channel_row_left_out(result, row.index, &variant) {
+                    row.not_fitted_in = Some(variant.clone());
+                }
+            }
+        }
         view.nets = design
             .nets
             .iter()
@@ -333,6 +340,7 @@ fn tree_rows(
             parts: sheet.parts,
             nets: sheet.nets,
             is_stale,
+            not_fitted_in: None,
             is_selected: selected == Some(index),
             has_children,
             is_expanded,

@@ -1434,6 +1434,7 @@ fn fixture_schematic_with_symbol_and_child_sheet()
             on_board: true,
             exclude_from_sim: false,
             locked: false,
+            net_tie: false,
             fields: HashMap::new(),
             custom_properties: Vec::new(),
             pin_uuids: HashMap::new(),

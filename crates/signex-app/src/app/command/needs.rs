@@ -491,6 +491,9 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         // #1667: the file rows place onto the sheet in view.
         | "place_design_block"
         | "import_graphics"
+        // #1283: a snippet is saved from, or placed onto, the sheet in view.
+        | "save_snippet"
+        | "place_snippet"
         // #1276: a sheet symbol lands on, or is synced from, the sheet in
         // view; with no sheet symbol selected the sync says what to select.
         | "create_sheet_symbol_from_sheet"

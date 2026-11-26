@@ -252,6 +252,9 @@ define_ids! {
     PCB_GATES_SWAPPED = "pcb-gates-swapped";
     PCB_PART_SWAP_NOTHING = "pcb-part-swap-nothing";
     PCB_GATES_SWAP_NOTHING = "pcb-gates-swap-nothing";
+    PCB_SCHEMATIC_PINS_SWAPPED = "pcb-schematic-pins-swapped";
+    PCB_SCHEMATIC_GATES_SWAPPED = "pcb-schematic-gates-swapped";
+    PCB_SCHEMATIC_SWAP_NOTHING = "pcb-schematic-swap-nothing";
     PCB_REUSE_BLOCK_SAVED = "pcb-reuse-block-saved";
     PCB_REUSE_BLOCK_NOT_WRITTEN = "pcb-reuse-block-not-written";
     PCB_REUSE_BLOCK_PLACED = "pcb-reuse-block-placed";

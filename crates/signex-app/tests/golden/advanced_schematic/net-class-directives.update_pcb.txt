@@ -1,0 +1,12 @@
+# nets (name, class, pins)
+CLK	HS	J1.2 U1.2
+SIG	-	J1.5 U1.5
+USB_N	-	J1.4 U1.4
+USB_P	-	J1.3 U1.3
+VIN	POWER	J1.1 U1.1
+# rules Update PCB lists
+rule Width_HS on track when class == "HS" require width >= 0.2mm then error
+rule Clearance_HS on clearance when class == "HS" require clearance >= 0.15mm then error
+# stored DRC rules after Execute
+rule Width_HS on track when class == "HS" require width >= 0.2mm then error
+rule Clearance_HS on clearance when class == "HS" require clearance >= 0.15mm then error

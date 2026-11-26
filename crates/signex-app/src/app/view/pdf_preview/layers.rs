@@ -16,6 +16,7 @@ use crate::app::state::PreviewState;
 pub(super) fn layer_label(layer: PdfLayer) -> MessageId {
     match layer {
         PdfLayer::WiresAndBuses => ids::PDF_LAYER_WIRES,
+        PdfLayer::SignalHarnesses => ids::PDF_LAYER_HARNESSES,
         PdfLayer::Parts => ids::PDF_LAYER_PARTS,
         PdfLayer::NetLabelsAndPorts => ids::PDF_LAYER_NET_LABELS,
         PdfLayer::PowerPorts => ids::PDF_LAYER_POWER_PORTS,

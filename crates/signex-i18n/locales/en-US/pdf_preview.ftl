@@ -138,6 +138,7 @@ pdf-layers-switch = Write PDF layers
 pdf-layers-help = Readers can switch these groups on and off. Checked = visible when the PDF opens.
 pdf-layers-off = Off: the PDF is flat; every group prints as drawn.
 pdf-layer-wires = Wires and buses
+pdf-layer-harnesses = Signal harnesses
 pdf-layer-parts = Parts
 pdf-layer-net-labels = Net labels and ports
 pdf-layer-power-ports = Power ports

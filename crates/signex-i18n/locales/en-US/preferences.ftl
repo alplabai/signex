@@ -361,9 +361,10 @@ preferences-language-footer-note = The language changes when you press Apply or 
 # Footer note on the Rule Profiles page (mockup row 148).
 preferences-rule-profiles-footer-note = Rule profiles save to their files at once.
 
-# Second line of the preferences-file banner. $path is the file; $error says
-# what is wrong with it, in English.
-preferences-file-where = { $path }: { $error }
+# Third line of the preferences-file banner, under the file's path (mockup
+# row 143). $error says what is wrong with the file, in English, starting
+# with a verb: "is not valid JSON: …", "could not be read: …".
+preferences-file-reason = The file { $error }.
 # Banner button: shows the folder that holds the preferences file.
 preferences-file-open-folder = Open folder
 # Messages line when Open folder fails. $path is the folder; $why is the

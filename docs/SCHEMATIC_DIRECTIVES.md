@@ -143,6 +143,14 @@ matched by `_P` / `_N` only. A directive on no wire, or on a net with no
 suffix, pairs nothing; a half whose partner is not on the sheet is an
 incomplete pair.
 
+A net named as a positive half (`_P`, `DP`, `+`) is a pair member by name
+alone, with no directive; a negative name alone (`RESET_N`) is not, since it
+is an active-low signal far more often. The ERC rule
+`diff_pair_partner_missing` reports a half whose partner is missing (#2951,
+`signex_net::lone_pair_members`), and `list_diff_pairs` lists every pair of
+the project, by directive or by name, with its class (#2952,
+`signex_net::listed_pairs`; `docs/CLI.md`, "Differential pairs").
+
 ### Differential Pair Classes {#differential-pair-classes}
 
 Design ▸ Differential Pair Classes… (`open_diff_pair_classes`) edits the
@@ -243,6 +251,30 @@ leaves such a rule out and says so in Messages; a net class carries the
 rule instead. The rule name keeps letters, digits and `_` of the class or
 net name, so two names can give one rule name (`V+BUS` and `V-BUS` both
 give `Width_V_BUS`): the first keeps it and Messages names the other.
+
+## Update PCB classes {#update-pcb-classes}
+
+The board's net classes are the project's net-class table (the board's
+nets are classed by name through it, as DRC reads them). Execute also puts
+each class a Net Blanket or a Net Parameters directive gives into that
+table, as one step of the table's history (built in
+`signex_engine::net_class_table::schematic_class_edit`):
+
+- a class the table lacks is added at its end;
+- each net the netlist puts in the class is assigned to it by name, out of
+  every other class's member list (a pattern of an earlier class still
+  wins, as the table's order decides);
+- the class's board rules are set from its first Net Parameters directive
+  (width, clearance, via diameter and drill), a Net Blanket's track width
+  when no Net Parameters directive sets a width, and the diff-pair width
+  and gap of the project's diff-pair class that directive names. A rule the
+  directives leave unset keeps the table's value.
+
+A diff-pair class on a directive with no net class makes no board class.
+The dialog shows them as one line below the rules, "N net classes from the
+schematic", and they count toward Execute, so a schematic that only adds or
+changes classes can apply them. A later Update PCB with nothing new changes
+nothing.
 
 ## Drawing
 

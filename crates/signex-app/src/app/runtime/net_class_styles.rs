@@ -383,6 +383,7 @@ impl Signex {
                 .active_canvas()
                 .special_strings
                 .as_ref(),
+            variant_values: Some(&self.interaction_state.active_canvas().variant_values),
         }
     }
 

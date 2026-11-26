@@ -17,16 +17,20 @@
 //! (`PasteRequest`).
 
 mod array;
+mod at_once;
 mod designators;
 mod seed;
 mod stamp;
 
+#[cfg(test)]
+pub(crate) mod at_once_tests;
 #[cfg(test)]
 mod origin_tests;
 
 use iced::Task;
 use signex_engine::CopiedSelection;
 
+pub(crate) use at_once::PlacedPaste;
 pub use seed::PasteSeed;
 
 use crate::app::handlers::clipboard_workflows::CopyOutcome;

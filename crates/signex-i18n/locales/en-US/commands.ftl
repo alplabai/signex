@@ -113,6 +113,8 @@ cmd-previous-grid = Previous grid
 cmd-print = Print
 cmd-menu-print = Print...
 cmd-query-pins = Query pins
+cmd-query-net-ties = Query net ties
+cmd-bom-lines = Read the bill of materials
 cmd-read-document = Read document
 cmd-redo = Redo
 cmd-refresh-view = Refresh/redraw
@@ -259,6 +261,8 @@ cmd-run-erc = Run electrical rules check
 cmd-menu-run-erc = Electrical Rules Check
 cmd-open-erc-dialog = Open electrical rules check dialog
 cmd-menu-open-erc-dialog = Electrical Rules Check
+cmd-toggle-live-erc = Turn live electrical rules checking on or off
+cmd-menu-toggle-live-erc = Live ERC
 cmd-repair-pin-junctions = Add a junction where a pin end touches a wire
 cmd-menu-repair-pin-junctions = Repair Pin Junctions
 cmd-open-parameter-manager = Open Parameter Manager
@@ -298,8 +302,16 @@ cmd-project-add-variant = Add a variant to the project
 cmd-project-rename-variant = Rename a variant of the project
 cmd-project-remove-variant = Remove a variant of the project
 cmd-project-set-active-variant = Choose the active variant of the project
+cmd-project-set-default-variant = Choose the default variant of the project
+cmd-compare-variants = Compare two variants of the project
+cmd-variant-bom = Read the BOM of a variant of the project
+cmd-project-set-variant-fit = Set whether a variant fits a part of the project
+cmd-project-set-variant-alternate = Set the alternate part a variant uses for a part of the project
+cmd-project-set-variant-override = Set a parameter value a variant gives a part of the project
+cmd-project-duplicate-variant = Duplicate a variant of the project
 cmd-project-move-library = Move a library in the library order of the project
 cmd-project-set-annotate-undo = Set how many undo steps an annotate run of the project is
+cmd-project-set-annotate-numbering = Set how Annotate numbers the designators of the project
 cmd-project-set-version-control = Turn commit on save on or off for the project
 cmd-project-add-requirement = Add a requirement to the project
 cmd-project-set-requirement = Set a field of a project requirement
@@ -467,7 +479,9 @@ cmd-set-object-position = Set the position of a placed object
 cmd-set-object-rotation = Set the rotation of a placed part or label
 cmd-set-sheet-symbol-size = Set the size of a sheet symbol
 cmd-set-symbol-parameter = Set a parameter of a placed part
+cmd-set-object-text = Set a part's designator or value, a label's name or a text note's text
 cmd-set-sheet-variable = Set a sheet variable
+cmd-set-net-tie = Mark a placed part as a net tie
 cmd-menu-assign-net-class = Assign Net Class...
 cmd-place-component = Place component
 # Noun: a component placed on the sheet.
@@ -705,6 +719,10 @@ cmd-swap-pins = Swap the nets of two equivalent pins of a component, on the boar
 cmd-menu-swap-pins = Swap Pins
 cmd-swap-gates = Swap two equivalent gates of a component, on the board and on its schematic
 cmd-menu-swap-gates = Swap Gates
+cmd-swap-schematic-pins = Swap the nets of two equivalent pins of a part on its schematic; Update PCB carries the swap to the board
+cmd-menu-swap-schematic-pins = Swap Pins
+cmd-swap-schematic-gates = Swap two equivalent gates of a part on its schematic; Update PCB carries the swap to the board
+cmd-menu-swap-schematic-gates = Swap Gates
 cmd-save-board-reuse-block = Save the selected placed and routed parts as a reuse block of the project
 cmd-menu-save-board-reuse-block = Save as Reuse Block
 cmd-place-board-reuse-block = Place a reuse block on the channel of the selected component
@@ -773,6 +791,7 @@ cmd-open-harness-definitions = Open the harness definitions
 ## Differential pair classes (#1282).
 cmd-open-diff-pair-classes = Open the project's differential pair classes
 cmd-menu-open-diff-pair-classes = Differential Pair Classes…
+cmd-list-diff-pairs = List the differential pairs of a project's schematic
 
 ## Named unions (mockup row 158).
 cmd-create-union = Create a union from the selection
@@ -793,6 +812,14 @@ cmd-menu-polygon-manager = Polygon Manager...
 cmd-flip-board-3d = Turn the board over in the 3D view
 cmd-cycle-board-3d-lighting = Next lighting preset in the 3D view
 cmd-copy-board-3d-screenshot = Copy a screenshot of the 3D view
+# Snippets and templates (#1283): a snippet is a saved circuit fragment of
+# the project or of the user's library; a template starts a sheet or project.
+cmd-save-snippet = Save the selected circuit as a snippet
+cmd-menu-save-snippet = Save as Snippet
+cmd-place-snippet = Place a saved snippet
+cmd-menu-place-snippet = Snippet...
+cmd-list-snippets = List the snippets of the project and the library
+cmd-list-templates = List the sheet and project templates
 # design-notebook
 # The project's Design Notebook (mockup rows 195, 197, 201 and 202). "Wiki"
 # stays a search word of the notebook (mockup row 60b).

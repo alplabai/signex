@@ -196,6 +196,8 @@ mod findings_tests;
 #[cfg(test)]
 mod keepout_tests;
 #[cfg(test)]
+mod net_tie_tests;
+#[cfg(test)]
 mod no_net_copper_tests;
 #[cfg(test)]
 mod profile_tests;

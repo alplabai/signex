@@ -8,6 +8,8 @@
 
 // #2470: the change list as the command's JSON answer.
 mod answer;
+// Exit criterion 3: the directive classes into the board's net classes.
+mod classes_from_schematic;
 mod command;
 pub(crate) mod design;
 mod execute;
@@ -29,6 +31,8 @@ pub(crate) use state::{BoardStatus, Phase, UpdatePcbJob, file_name};
 pub use table::{RowAction, RowFilter, TableGroup};
 pub(crate) use target::PcbSyncLabel;
 
+#[cfg(test)]
+mod in_sync_tests;
 #[cfg(test)]
 mod operand_tests;
 #[cfg(test)]

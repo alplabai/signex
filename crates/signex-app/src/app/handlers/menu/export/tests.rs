@@ -1013,6 +1013,9 @@ mod net_text_hierarchy;
 mod bom_hierarchy;
 mod channel_outputs;
 pub(crate) mod current_placement;
+mod exit_fixture_classes;
+pub(crate) mod exit_fixtures;
+mod exit_fixtures_not_fitted;
 
 mod export_status;
 mod lazy_preview;

@@ -158,8 +158,22 @@ pub fn statement(kind: &RequirementKind) -> String {
             max_width_mm,
             max_height_mm,
         } => format!("Board at most {max_width_mm} × {max_height_mm} mm"),
-        RequirementKind::PartsState { states } => {
-            format!("Every bought part is {}", states.join(" or "))
+        RequirementKind::PartsState {
+            states,
+            variant,
+            fitted_only,
+        } => {
+            // The bought parts are the fitted ones (#2686, on by default).
+            let parts = if *fitted_only {
+                "bought part"
+            } else {
+                "part, fitted or not,"
+            };
+            let mut line = format!("Every {parts} is {}", states.join(" or "));
+            if let Some(variant) = variant {
+                line.push_str(&format!(" in {variant}"));
+            }
+            line
         }
         RequirementKind::NetClass {
             nets,

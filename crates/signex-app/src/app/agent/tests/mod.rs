@@ -28,6 +28,7 @@ mod query_surfaces;
 mod refusals;
 mod request_path;
 mod round_trip;
+mod sheet_entry_sync;
 mod update_pcb;
 mod window_layout;
 

@@ -1,7 +1,7 @@
 # id	category	label	menu_label	group	icon	keybind	enablement	flags	operands
 new_document	file	New	New Project	General	-	-	Always	-	path:path,overwrite:bool?
-new_project_with_profile	file	New project from a profile	-	General	-	-	Always	-	name:text,location:path,make_folder:bool?,profile:text?,overrides:text?
-new_schematic_sheet	file	New schematic sheet in the project	Schematic	Schematic	-	-	Always	mutates_doc	profile:text?,name:text?
+new_project_with_profile	file	New project from a profile	-	General	-	-	Always	-	name:text,location:path,make_folder:bool?,profile:text?,overrides:text?,template:text?
+new_schematic_sheet	file	New schematic sheet in the project	Schematic	Schematic	-	-	Always	mutates_doc	profile:text?,name:text?,template:text?,scope:text?
 new_pcb_document	file	New PCB in the project	PCB	PCB	-	-	Always	mutates_doc	profile:text?,document:document?,name:text?
 open_document	file	Open document	Open...	General	-	-	Always	-	path:path
 save_document	file	Save document	Save	General	-	-	Always	-	document:document
@@ -30,8 +30,16 @@ project_add_variant	design	Add a variant to the project	-	General	-	-	Always	mut
 project_rename_variant	design	Rename a variant of the project	-	General	-	-	Always	mutates_doc,undoable	document:document,name:text,value:text
 project_remove_variant	design	Remove a variant of the project	-	General	-	-	Always	mutates_doc,undoable	document:document,name:text
 project_set_active_variant	design	Choose the active variant of the project	-	General	-	-	Always	mutates_doc,undoable	document:document,name:text?
+project_set_default_variant	design	Choose the default variant of the project	-	General	-	-	Always	mutates_doc,undoable	document:document,name:text?
+compare_variants	design	Compare two variants of the project	-	General	-	-	Always	-	document:document,from:text?,to:text?
+variant_bom	design	Read the BOM of a variant of the project	-	General	-	-	Always	-	document:document,name:text?
+project_set_variant_fit	design	Set whether a variant fits a part of the project	-	General	-	-	Always	mutates_doc,undoable	document:document,variant:text,designator:text,fitted:bool?,scope:text?
+project_set_variant_alternate	design	Set the alternate part a variant uses for a part of the project	-	General	-	-	Always	mutates_doc,undoable	document:document,variant:text,designator:text,mpn:text?,value:text?,footprint:text?,scope:text?
+project_set_variant_override	design	Set a parameter value a variant gives a part of the project	-	General	-	-	Always	mutates_doc,undoable	document:document,variant:text,designator:text,field:text,value:text?,scope:text?
+project_duplicate_variant	design	Duplicate a variant of the project	-	General	-	-	Always	mutates_doc,undoable	document:document,name:text,value:text?
 project_move_library	design	Move a library in the library order of the project	-	General	-	-	Always	mutates_doc,undoable	document:document,library:text,direction:text
 project_set_annotate_undo	design	Set how many undo steps an annotate run of the project is	-	General	-	-	Always	mutates_doc,undoable	document:document,value:text?
+project_set_annotate_numbering	design	Set how Annotate numbers the designators of the project	-	General	-	-	Always	mutates_doc,undoable	document:document,value:text?
 project_set_version_control	design	Turn commit on save on or off for the project	-	General	-	-	Always	mutates_doc,undoable	document:document,on:bool
 project_add_requirement	design	Add a requirement to the project	-	General	-	-	Always	mutates_doc,undoable	document:document,kind:text,id:text?
 project_set_requirement	design	Set a field of a project requirement	-	General	-	-	Always	mutates_doc,undoable	document:document,requirement:text,field:text,value:text
@@ -39,10 +47,12 @@ project_remove_requirement	design	Remove a requirement from the project	-	Genera
 project_enable_requirement	design	Turn a project requirement on or off	-	General	-	-	Always	mutates_doc,undoable	document:document,requirement:text,on:bool
 project_run_requirements	validation	Run the project's requirement checks in the Project tab	-	General	-	-	Always	-	document:document
 project_set_rail	design	Set a power rail's voltage and tolerance	-	General	-	-	Always	mutates_doc,undoable	document:document,net:text,voltage:text?,tolerance_percent:text?,remove:bool?
+bom_lines	file	Read the bill of materials	-	General	-	-	Always	-	document:document,template:text?,variant:text?,grouping:text?
 document_info	file	Document info	-	General	-	-	Always	-	document:document
 list_documents	file	List documents	-	General	-	-	Always	-	kind:text?,project:text?,name:text?,dirty:bool?
 read_document	file	Read document	-	General	-	-	Always	-	document:document,ids:text?,kinds:text?,region:text?,fields:text?,offset:text?,limit:text?
 query_pins	file	Query pins	-	General	-	-	Always	-	document:document,designator:text
+query_net_ties	file	Query net ties	-	General	-	-	Always	-	document:document
 query_library	library	Query a library	-	General	-	-	Always	-	library:text,part:text?,text:text?
 resolve	file	Resolve id	-	General	-	-	Always	-	id:text
 list_annotations	design	List the annotation blocks of the project's Design Notebook	-	General	-	-	Always	-	document:document,id:text?,kind:text?,part:text?
@@ -55,7 +65,7 @@ cut	edit	Cut	-	General	-	-	RequiresSelection	mutates_doc,undoable	-
 paste	edit	Paste	-	General	-	-	Always	gui_only,mutates_doc,undoable	-
 paste_array	edit	Paste array	-	General	-	-	Always	gui_only,mutates_doc,undoable	-
 paste_special	edit	Paste special	-	General	-	-	Always	mutates_doc,undoable	-
-smart_paste	edit	Smart Paste	Paste Special	General	-	-	Always	mutates_doc,undoable	-
+smart_paste	edit	Smart Paste	Paste Special	General	-	-	Always	mutates_doc,undoable	at:point/mm?,delta:text?,copies:text?,designators:text?,nets:text?,net_pattern:text?,net_start:text?,document:document?
 duplicate	edit	Duplicate	-	General	-	-	RequiresSelection	mutates_doc,undoable	-
 delete_selection	edit	Delete selection	Delete	General	-	-	RequiresSelection	mutates_doc,undoable	document:document,ids:targets
 rubber_stamp_copy	edit	Rubber-stamp copy / repeated paste	-	General	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-
@@ -67,12 +77,14 @@ edit_footprint_field	edit	Edit footprint field	-	General	-	-	RequiresSelection	g
 edit_text_in_place	edit	In-place edit selected text	-	General	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-
 autoplace_fields	edit	Autoplace fields	Autoplace Fields	General	-	-	RequiresSelection	mutates_doc,undoable	id:text,document:document
 open_datasheet	edit	Open datasheet	Open Datasheet	General	-	-	RequiresSelection	gui_only	-
-change_component	edit	Change the selected part's component	Change Component…	Schematic	-	-	RequiresSelection	mutates_doc,undoable	document:document,id:text,library:text,part:text
+change_component	edit	Change the selected part's component	Change Component…	Schematic	-	-	RequiresSelection	mutates_doc,undoable	document:document,id:text,library:text,part:text,pins:text?,drop:text?,dry_run:bool?
 open_parameter_manager	design	Open Parameter Manager	Parameter Manager...	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 export_parameters	design	Export the active sheet's parameters to a CSV file	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 import_parameters	design	Import parameters from a CSV file, with a preview to apply	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 set_symbol_parameter	edit	Set a parameter of a placed part	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,name:text,value:text?,document:document?
+set_object_text	edit	Set a part's designator or value, a label's name or a text note's text	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,field:text,value:text?,document:document?
 set_sheet_variable	edit	Set a sheet variable	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	name:text,value:text?,remove:bool?,document:document?
+set_net_tie	edit	Mark a placed part as a net tie	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,on:bool,document:document?
 lock_board_items	modify	Lock the selected tracks and vias	Lock	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:targets
 unlock_board_items	modify	Unlock the selected tracks and vias	Unlock	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:targets
 create_union	edit	Create a union from the selection	Create Union…	Schematic	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-
@@ -139,8 +151,14 @@ place_board_component	place	Pick a library part and place its footprint on the b
 place_board_pad	place	Place a free pad on the board	Pad	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 swap_pins	modify	Swap the nets of two equivalent pins of a component, on the board and on its schematic	Swap Pins	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:targets?,designator:text?,pins:text
 swap_gates	modify	Swap two equivalent gates of a component, on the board and on its schematic	Swap Gates	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:targets?,designator:text?,units:text
+swap_schematic_pins	modify	Swap the nets of two equivalent pins of a part on its schematic; Update PCB carries the swap to the board	Swap Pins	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	document:document,ids:targets?,designator:text?,pins:text
+swap_schematic_gates	modify	Swap two equivalent gates of a part on its schematic; Update PCB carries the swap to the board	Swap Gates	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	document:document,ids:targets?,designator:text?,units:text
 save_board_reuse_block	design	Save the selected placed and routed parts as a reuse block of the project	Save as Reuse Block	PCB	-	-	RequiresDocument(Pcb)	-	document:document,name:text,ids:text
 place_board_reuse_block	design	Place a reuse block on the channel of the selected component	Place Reuse Block	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,name:text,ids:targets?,designator:text?,degrees:turn/deg?
+save_snippet	design	Save the selected circuit as a snippet	Save as Snippet	Schematic	-	-	RequiresDocument(Schematic)	-	name:text,scope:text?,ids:targets?,document:document?,overwrite:bool?
+place_snippet	place	Place a saved snippet	Snippet...	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	name:text,scope:text?,at:point/mm,document:document?
+list_snippets	file	List the snippets of the project and the library	-	General	-	-	Always	runs_headless	-
+list_templates	file	List the sheet and project templates	-	General	-	-	Always	-	kind:text?
 draw_wire	place	Draw wire	Wire	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm,allow_merge:bool?,allow_open:bool?,dry_run:bool?,document:document?
 place_wire	place	Place wire	Wire	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm,allow_merge:bool?,allow_open:bool?,dry_run:bool?,document:document?
 draw_bus	place	Draw bus	Bus	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm,allow_merge:bool?,allow_open:bool?,dry_run:bool?,document:document?
@@ -239,6 +257,7 @@ back_annotate_schematics	pcb_sync	Back-annotate the board's designators and valu
 run_erc	validation	Run electrical rules check	Electrical Rules Check	Schematic	-	-	RequiresDocument(Schematic)	runs_headless	-
 check_erc	validation	Check electrical rules	-	General	-	-	Always	-	document:document,baseline:text?
 open_erc_dialog	validation	Open electrical rules check dialog	Electrical Rules Check	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
+toggle_live_erc	validation	Turn live electrical rules checking on or off	Live ERC	General	-	-	Always	-	enabled:bool?
 repair_pin_junctions	validation	Add a junction where a pin end touches a wire	Repair Pin Junctions	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	document:document?
 run_drc	pcb	Run the design rule check on the board	Design Rule Check	PCB	-	-	RequiresDocument(Pcb)	runs_headless	-
 check_drc	validation	Check design rules	-	General	-	-	Always	-	document:document,baseline:text?
@@ -350,6 +369,7 @@ open_net_classes	design	Open the project's Net Classes panel	Net Classes	General
 open_net_classes_panel	design	Open the Net Classes panel of the project	Net Classes	General	-	-	Always	gui_only	-
 open_harness_definitions	design	Open the harness definitions	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 open_diff_pair_classes	design	Open the project's differential pair classes	Differential Pair Classes…	General	-	-	Always	gui_only	-
+list_diff_pairs	design	List the differential pairs of a project's schematic	-	Schematic	-	-	Always	-	document:document
 add_net_class	design	Add a net class	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,name:text?
 rename_net_class	design	Rename a net class	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,class:text,name:text
 delete_net_class	design	Delete a net class	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,class:text

@@ -65,7 +65,7 @@ impl SymEditor {
     /// pans the view (#2872).
     pub(crate) fn edge_pan_armed(&self) -> bool {
         self.gui.tool != crate::library::editor::symbol::canvas::SymbolTool::Select
-            || self.gui.mid_drag
+            || self.draft.is_moving()
     }
 
     /// An edge pan moved the view by `(dx, dy)` canvas pixels under the

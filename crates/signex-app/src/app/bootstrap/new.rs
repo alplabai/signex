@@ -200,6 +200,7 @@ impl Signex {
             ));
         }
         let remember_window_geometry = crate::fonts::read_remember_window_geometry_pref_from(prefs);
+        let live_erc = crate::fonts::read_live_erc_pref_from(prefs);
         let drag_direction_select = crate::fonts::read_drag_direction_select_pref_from(prefs);
         let increment_step = crate::fonts::read_increment_step_pref_from(prefs);
         let paste_designators = crate::fonts::read_paste_designators_pref_from(prefs);
@@ -504,9 +505,6 @@ impl Signex {
                 new_project: None,
                 save_project_as: None,
                 document_setup: None,
-                setup_profiles: crate::fonts::read_setup_profiles_from(prefs),
-                removed_profile_names: Default::default(),
-                missing_profiles_warned: Default::default(),
                 update_pcb: None,
                 sheet_numbering: None,
                 sheet_numbering_reads: 0,
@@ -532,6 +530,7 @@ impl Signex {
                 compiled_design: Default::default(),
                 unions: Default::default(),
                 smart_paste: None,
+                variant_part_edit: None,
                 object_list: Default::default(),
                 annotations: Default::default(),
                 paste_array: None,
@@ -553,6 +552,7 @@ impl Signex {
                 erc_run_rule_set: None,
                 pending_profile_update: None,
                 erc_running: false,
+                live_erc: Box::new(crate::app::handlers::erc::LiveErc::new(live_erc)),
                 // The machine's rules live in the `User Default` profile; the
                 // boot task loads them (`ErcMsg::UserDefaultLoaded`).
                 erc_severity_override: std::collections::HashMap::new(),
@@ -837,6 +837,9 @@ impl Signex {
                 pending_path_ops: crate::app::path_ops::PendingPathOps::default(),
                 new_project_writes: std::collections::HashSet::new(),
                 dir_case: Default::default(),
+                setup_profiles: crate::fonts::read_setup_profiles_from(prefs),
+                removed_profile_names: Default::default(),
+                missing_profiles_warned: Default::default(),
                 altium_import_running: None,
                 project_folder_renames: std::collections::HashSet::new(),
                 project_writes: Vec::new(),

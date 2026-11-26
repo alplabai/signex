@@ -28,6 +28,9 @@ mod sheet_tree;
 pub(crate) mod sheet_tree_tests;
 mod symbol_ctx;
 mod value_evaluation;
+mod variant_values;
+#[cfg(test)]
+mod variant_values_tests;
 mod window_panel_ctx;
 pub(crate) use window_panel_ctx::WindowCtxKey;
 #[cfg(test)]

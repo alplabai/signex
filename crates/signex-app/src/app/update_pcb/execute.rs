@@ -65,6 +65,15 @@ impl Signex {
         board_moved || sheet_edited
     }
 
+    /// What Execute changes for the open dialog: the ticked board rows, the
+    /// pending rules and the net classes from the schematic. The button is
+    /// on only when this is above zero.
+    pub(crate) fn update_pcb_execute_count(&self, state: &super::UpdatePcbState) -> usize {
+        state.execute_count()
+            + super::rules_from_schematic::pending(&self.update_pcb_rule_rows(state))
+            + self.update_pcb_class_count(state)
+    }
+
     /// Why Execute is off, when the list is ready but cannot run.
     pub fn update_pcb_execute_block(&self) -> Option<String> {
         self.update_pcb_execute_block_in(&self.ui_state.i18n)
@@ -143,12 +152,23 @@ impl Signex {
         let from_operands = self.is_update_pcb_run();
         let rule_rows = self.update_pcb_rule_rows(state);
         let rules_pending = super::rules_from_schematic::pending(&rule_rows);
+        // Exit criterion 3: the directive classes go with them.
+        let snapshot = state.snapshot.clone();
+        let classes_pending =
+            (snapshot.as_deref()).is_some_and(|s| self.update_pcb_class_edit(&board, s).is_some());
         // The dialog's Execute is off with nothing ticked; Enter is too.
-        if !state.apply && state.execute_count() == 0 && rules_pending == 0 {
+        if !state.apply && state.execute_count() == 0 && rules_pending == 0 && !classes_pending {
             return Task::none();
         }
         if state.execute_count() == 0 {
-            if let Err(why) = self.apply_update_pcb_rules(project, &rule_rows) {
+            let classes = |app: &mut Self| match snapshot.as_deref() {
+                Some(snapshot) => app.apply_update_pcb_classes(&board, snapshot),
+                None => Ok(()),
+            };
+            let applied = self
+                .apply_update_pcb_rules(project, &rule_rows)
+                .and_then(|()| classes(self));
+            if let Err(why) = applied {
                 self.refuse_execute(why);
                 return Task::none();
             }
@@ -174,11 +194,17 @@ impl Signex {
             }
         };
         let count = list.rows.iter().filter(|r| list.applies(r)).count();
+        let locks = list.applied_pad_locks().count();
         let label = self.update_pcb_text(ids::UPDATE_PCB_TITLE);
         match self.execute_eco_list(&board, &list, &label) {
             Ok(()) => {
                 if let Err(why) = self.commit_update_pcb_rules(project, prepared) {
                     // The board step landed; say why the rules did not.
+                    crate::diagnostics::log_warning(why);
+                }
+                if let Some(snapshot) = snapshot.as_deref()
+                    && let Err(why) = self.apply_update_pcb_classes(&board, snapshot)
+                {
                     crate::diagnostics::log_warning(why);
                 }
                 self.ui_state.update_pcb = None;
@@ -191,6 +217,12 @@ impl Signex {
                     )
                     .into_string(),
                 );
+                if locks > 0 {
+                    crate::diagnostics::log_info(
+                        t!(self.ui_state.i18n, ids::UPDATE_PCB_PADS_LOCKED, "count" => locks)
+                            .into_string(),
+                    );
+                }
                 if !from_operands {
                     self.activate_tab_for_path(&board);
                 }
