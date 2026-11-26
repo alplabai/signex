@@ -342,9 +342,10 @@ impl Signex {
             let Some(editor) = self.document_state.symbol_editors.get(&path) else {
                 return Task::none();
             };
-            let msg = if editor.context_menu.is_some() {
+            let msg = if editor.gui.context_menu.is_some() {
                 crate::library::messages::SymbolEditorMsg::CloseContextMenu
-            } else if editor.tool != crate::library::editor::symbol::canvas::SymbolTool::Select {
+            } else if editor.gui.tool != crate::library::editor::symbol::canvas::SymbolTool::Select
+            {
                 crate::library::messages::SymbolEditorMsg::SetTool(
                     crate::library::messages::SymbolToolMsg::Select,
                 )
@@ -958,7 +959,7 @@ mod tests {
             path.clone(),
             signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("T")),
         );
-        editor.tool = tool;
+        editor.gui.tool = tool;
         app.document_state
             .symbol_editors
             .insert(path.clone(), editor);
@@ -981,6 +982,7 @@ mod tests {
             .symbol_editors
             .get_mut(&path)
             .unwrap()
+            .gui
             .context_menu = Some(SymbolContextMenuState {
             x: 1.0,
             y: 2.0,
@@ -990,12 +992,12 @@ mod tests {
 
         let _task = app.update(Message::Input(InputMsg::EscapePressed { window: None }));
         let editor = &app.document_state.symbol_editors[&path];
-        assert!(editor.context_menu.is_none(), "the menu must close");
-        assert_eq!(editor.tool, SymbolTool::AddPin, "the tool is untouched");
+        assert!(editor.gui.context_menu.is_none(), "the menu must close");
+        assert_eq!(editor.gui.tool, SymbolTool::AddPin, "the tool is untouched");
 
         let _task = app.update(Message::Input(InputMsg::EscapePressed { window: None }));
         assert_eq!(
-            app.document_state.symbol_editors[&path].tool,
+            app.document_state.symbol_editors[&path].gui.tool,
             SymbolTool::Select,
             "the next Esc leaves the tool"
         );
@@ -1011,7 +1013,7 @@ mod tests {
 
         assert!(!app.ui_state.keyboard_shortcuts_open);
         assert_eq!(
-            app.document_state.symbol_editors[&path].tool,
+            app.document_state.symbol_editors[&path].gui.tool,
             SymbolTool::AddPin,
             "the modal rung claims the key; the editor behind it must not change"
         );

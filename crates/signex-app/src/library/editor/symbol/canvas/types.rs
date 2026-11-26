@@ -85,7 +85,7 @@ pub enum CanvasAction {
         to_y: f64,
     },
     /// One click of the four-click Bezier gesture (start, C1, C2, end),
-    /// collected in `SymbolDocument::polygon_vertices`; the fourth places
+    /// collected in `SymbolEditorView::polygon_vertices`; the fourth places
     /// the curve. Esc / right-click cancel through `PolygonCancel`.
     BezierClick {
         x: f64,
@@ -97,7 +97,7 @@ pub enum CanvasAction {
         y: f64,
     },
     /// Append one grid-snapped vertex to the Place Polygon stash
-    /// (`SymbolDocument::polygon_vertices`). Emitted on a plain
+    /// (`SymbolEditorView::polygon_vertices`). Emitted on a plain
     /// click while the `PlacePolygon` tool is active and the click
     /// doesn't match a close gesture.
     PolygonClick {
@@ -223,7 +223,7 @@ pub enum SymbolTool {
     PlaceArc,
     PlaceText,
     /// Click-collect closed polygon (>= 3 vertices) — see
-    /// `SymbolDocument::polygon_vertices` and the close gestures
+    /// `SymbolEditorView::polygon_vertices` and the close gestures
     /// documented on `CanvasAction::PolygonClick` / `PolygonCommit` /
     /// `PolygonCancel`.
     PlacePolygon,
@@ -343,7 +343,7 @@ pub struct CanvasState {
     /// cross 0° / 360° render continuously.
     pub arc_end_deg_unwrapped: Option<f64>,
     /// Live cursor (snapped) updated every `CursorMoved` while the
-    /// Place Polygon stash (`SymbolDocument::polygon_vertices`,
+    /// Place Polygon stash (`SymbolEditorView::polygon_vertices`,
     /// NOT stored here — see that field's doc comment) is non-empty —
     /// the open end of the rubber-band preview polyline. Purely a
     /// view-layer readout, so it's harmless for this to be ephemeral
@@ -373,7 +373,7 @@ pub struct CanvasState {
     /// `AddPin` press seen, release pending: the pin is placed where
     /// the button is released, so press-drag-release positions it.
     pub pin_armed: bool,
-    /// The `SymbolDocument::tool_epoch` these gestures belong to.
+    /// The `SymbolEditorView::tool_epoch` these gestures belong to.
     pub gesture_epoch: u64,
 }
 

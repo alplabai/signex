@@ -44,8 +44,9 @@ pub fn view_context_menu<'a>(
     keymap: &CompiledKeymap,
     i18n: &I18n,
 ) -> Option<iced::Element<'a, LibraryMessage>> {
-    let menu_state = editor.context_menu.as_ref()?;
-    let rows = build_symbol_context_menu_rows(editor.primitive(), editor.view(), &editor.selected);
+    let menu_state = editor.gui.context_menu.as_ref()?;
+    let rows =
+        build_symbol_context_menu_rows(editor.primitive(), editor.view(), &editor.gui.selected);
     let text = RowText { keymap, i18n };
     let entries = flatten(rows, menu_state.open_submenu, path, false, &text);
     Some(signex_widgets::active_bar_dropdown::view(

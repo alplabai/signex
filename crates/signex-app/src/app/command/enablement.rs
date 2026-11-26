@@ -386,7 +386,7 @@ impl Signex {
         };
         document.symbol_editors.get(path).is_some_and(|editor| {
             crate::library::editor::symbol::state::max_part_number(editor.primitive()) > 1
-                && editor.active_part > 1
+                && editor.draft.active_part > 1
         })
     }
 
@@ -1342,6 +1342,7 @@ mod tests {
             .symbol_editors
             .get_mut(&path)
             .unwrap()
+            .draft
             .active_part = 2;
         assert!(remove_part_menu_enabled(&app.command_context(None)));
     }
