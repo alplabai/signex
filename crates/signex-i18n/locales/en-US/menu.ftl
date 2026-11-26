@@ -369,6 +369,14 @@ ctx-in-variant-edit-value = Edit value for this variant…
 ctx-in-variant-planned = Planned: change a part's fit, part or value in one variant. The Variant Manager lists each part's fit today.
 ctx-in-variant-show-manager = Show in Variant Manager
 ctx-in-variant-new = New variant…
+# The In variant fit rows on a repeated sheet (#2662, mockup row 32). $fit
+# is Fitted or Not fitted, $channel the channel shown (CH2).
+ctx-in-variant-this-channel = { $fit } · This channel only ({ $channel })
+ctx-in-variant-all-channels = { $fit } · All channels
+# Tooltip of those rows before the project is compiled.
+ctx-in-variant-compile-first = Compile the project to set this part's fit per channel. The Variant Manager sets it today.
+# Tooltip of those rows while Base is the active variant.
+ctx-in-variant-in-base = Base fits every part as the sheets say. Switch to a variant first.
 # project-tree-history-rows
 # A document leaf's row that opens the History panel filtered to the file.
 ctx-tree-show-history = Show History

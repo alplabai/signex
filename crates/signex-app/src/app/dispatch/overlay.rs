@@ -567,6 +567,10 @@ impl Signex {
                     ContextAction::NewVariant(project_id) => {
                         self.open_variant_manager_of(project_id, true)
                     }
+                    ContextAction::VariantFit { parts, fitted } => {
+                        self.pick_channel_fit(parts, Some(fitted));
+                        Task::none()
+                    }
                 }
             }
         }

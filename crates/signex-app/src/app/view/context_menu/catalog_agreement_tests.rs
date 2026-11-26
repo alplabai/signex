@@ -376,7 +376,10 @@ fn command_rows_read_label_and_shortcut_from_the_catalog() {
                 // Mockup row 158: the Unions flyout.
                 ("unions", unions_entries(i18n, selection, &hint)),
                 // Mockup row 62: the In variant flyout.
-                ("in variant", in_variant_entries(i18n, &variant, Some("R1"))),
+                (
+                    "in variant",
+                    in_variant_entries(i18n, &variant, Some("R1"), None),
+                ),
             ];
             for (name, rows) in flyouts {
                 check_rows(

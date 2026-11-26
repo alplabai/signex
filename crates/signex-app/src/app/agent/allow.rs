@@ -146,6 +146,8 @@ mod tests {
                 // #2339: the Requirements section's edits and run.
                 "project_add_requirement",
                 "project_add_variant",
+                // #3038: the Variant Manager's part edits and Duplicate.
+                "project_duplicate_variant",
                 "project_enable_requirement",
                 "project_move_library",
                 "project_move_sheet",
@@ -158,6 +160,9 @@ mod tests {
                 "project_set_annotate_undo",
                 "project_set_default_variant",
                 "project_set_requirement",
+                "project_set_variant_alternate",
+                "project_set_variant_fit",
+                "project_set_variant_override",
                 "project_set_version_control",
                 "project_settings",
                 "query_board_nets",

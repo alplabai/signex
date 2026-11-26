@@ -391,18 +391,21 @@ pub(super) fn part_actions_entries(
 }
 
 /// In variant submenu (mockup row 62, the rows of mockup row 59 b): headed
-/// "<part> in <variant>" for one selected part. Changing a part's fit, part
-/// or value in one variant is not built, so those rows are greyed with what
-/// they will do; Show in Variant Manager and New variant… open the
-/// project's Variant Manager.
+/// "<part> in <variant>" for one selected part. On a repeated sheet
+/// (`copies`) Fitted and Not fitted set this channel's copy or every
+/// channel's (`variant_fit`, #2662); elsewhere, and for the part and value
+/// rows, changing a part in one variant from the canvas is not built, so
+/// those rows are greyed with what they will do. Show in Variant Manager and
+/// New variant… open the project's Variant Manager.
 pub(super) fn in_variant_entries(
     i18n: &I18n,
     variant: &super::menus::MenuVariant,
     part: Option<&str>,
+    copies: Option<&crate::panels::compiled_design::ChannelCopies>,
 ) -> Vec<DropdownEntry<Message>> {
     let planned =
         |label| dd_planned_because(i18n, None, label, menu_ids::CTX_IN_VARIANT_PLANNED, false);
-    let mut v = Vec::with_capacity(8);
+    let mut v = Vec::with_capacity(10);
     if let Some(part) = part {
         v.push(DropdownEntry::Header(i18n.message_plain(
             menu_ids::CTX_IN_VARIANT_PART,
@@ -412,9 +415,17 @@ pub(super) fn in_variant_entries(
             ],
         )));
     }
+    match copies {
+        Some(copies) => {
+            let is_base = signex_types::project::is_base_variant(&variant.name);
+            v.extend(super::variant_fit::channel_fit_rows(i18n, copies, is_base));
+        }
+        None => v.extend([
+            planned(signex_i18n::ids::PROJECT_VARIANTS_FITTED),
+            planned(signex_i18n::ids::PROJECT_VARIANTS_NOT_FITTED),
+        ]),
+    }
     v.extend([
-        planned(signex_i18n::ids::PROJECT_VARIANTS_FITTED),
-        planned(signex_i18n::ids::PROJECT_VARIANTS_NOT_FITTED),
         planned(menu_ids::CTX_IN_VARIANT_ALTERNATE_PART),
         planned(menu_ids::CTX_IN_VARIANT_EDIT_VALUE),
         DropdownEntry::Separator,
@@ -623,7 +634,8 @@ impl Signex {
                         } => Some(reference),
                         _ => None,
                     };
-                    in_variant_entries(i18n, &variant, part.as_deref())
+                    let copies = self.canvas_menu_channel_copies(window_id);
+                    in_variant_entries(i18n, &variant, part.as_deref(), copies.as_ref())
                 }
                 None => Vec::new(),
             },
@@ -859,7 +871,7 @@ mod tests {
         else {
             panic!("R9 is selected in the undocked window");
         };
-        let rows = in_variant_entries(I18n::en_us_ref(), &variant, Some(&reference));
+        let rows = in_variant_entries(I18n::en_us_ref(), &variant, Some(&reference), None);
         assert_eq!(layout(&rows)[0], "# R9 in Pro");
 
         // New variant… from B's window adds to B, not to the active A.
@@ -964,7 +976,7 @@ mod tests {
         else {
             panic!("one part is selected");
         };
-        let rows = in_variant_entries(I18n::en_us_ref(), &lite(&app), Some(&reference));
+        let rows = in_variant_entries(I18n::en_us_ref(), &lite(&app), Some(&reference), None);
         assert_eq!(
             layout(&rows),
             [
@@ -996,7 +1008,7 @@ mod tests {
             );
         }
         // A multi-selection names no single part.
-        let rows = in_variant_entries(I18n::en_us_ref(), &lite(&app), None);
+        let rows = in_variant_entries(I18n::en_us_ref(), &lite(&app), None, None);
         assert_eq!(layout(&rows)[0], "Fitted");
     }
 
@@ -1010,7 +1022,7 @@ mod tests {
             hit_object: false,
             window: None,
         });
-        let rows = in_variant_entries(I18n::en_us_ref(), &lite(&app), None);
+        let rows = in_variant_entries(I18n::en_us_ref(), &lite(&app), None, None);
         let press = item(&rows, "Show in Variant Manager")
             .on_press
             .clone()
@@ -1039,7 +1051,7 @@ mod tests {
     #[test]
     fn new_variant_adds_one_from_base_in_the_variant_manager() {
         let (mut app, id, _dir) = app_with(&["Lite"], Some("Lite"));
-        let rows = in_variant_entries(I18n::en_us_ref(), &lite(&app), None);
+        let rows = in_variant_entries(I18n::en_us_ref(), &lite(&app), None, None);
         let press = item(&rows, "New variant…")
             .on_press
             .clone()
@@ -1073,7 +1085,7 @@ mod tests {
     #[test]
     fn a_pick_for_a_closed_project_is_dropped() {
         let (mut app, id, _dir) = app_with(&["Lite"], Some("Lite"));
-        let rows = in_variant_entries(I18n::en_us_ref(), &lite(&app), None);
+        let rows = in_variant_entries(I18n::en_us_ref(), &lite(&app), None, None);
         let press = item(&rows, "New variant…")
             .on_press
             .clone()

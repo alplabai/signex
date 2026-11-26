@@ -30,6 +30,9 @@ mod manager;
 #[cfg(test)]
 mod manager_tests;
 mod matrix;
+mod part_commands;
+#[cfg(test)]
+mod part_commands_tests;
 mod read;
 mod summary;
 mod tab;
@@ -38,6 +41,10 @@ mod tests;
 
 use manager::VariantCell;
 pub use manager::VariantManagerMsg;
+pub(crate) use part_commands::{
+    project_duplicate_variant, project_set_variant_alternate, project_set_variant_fit,
+    project_set_variant_override,
+};
 
 use crate::app::core::parts_read_error::PartsReadError;
 

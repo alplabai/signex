@@ -18,9 +18,9 @@ use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::state::ProjectId;
 use crate::app::{Message, Signex};
 
-type Ran = (CommandOutcome, Task<Message>);
+pub(in crate::app::project_tab) type Ran = (CommandOutcome, Task<Message>);
 
-fn refused(reason: impl Into<String>) -> Ran {
+pub(in crate::app::project_tab) fn refused(reason: impl Into<String>) -> Ran {
     (CommandOutcome::disabled(reason), Task::none())
 }
 
@@ -73,6 +73,25 @@ fn edit(
         }
         Err(problem) => refused(problem.to_string()),
     }
+}
+
+/// Apply a Variant Manager part edit (#3038) to the project `args` names
+/// and answer with the Variants section.
+pub(in crate::app::project_tab) fn variants_edit(
+    app: &mut Signex,
+    args: &CommandArgs,
+    command: ProjectSectionCommand,
+) -> Ran {
+    edit(app, args, command, Section::Variants)
+}
+
+/// The Variants section of `id` for an edit that changes nothing.
+pub(in crate::app::project_tab) fn variants_unchanged(app: &Signex, id: ProjectId) -> Ran {
+    let mut answer = app.project_section_json(id, Section::Variants);
+    if let Value::Object(map) = &mut answer {
+        map.insert("changed".into(), json!(false));
+    }
+    (CommandOutcome::Answered(answer), Task::none())
 }
 
 /// `project_move_sheet {document, sheet, direction}`.

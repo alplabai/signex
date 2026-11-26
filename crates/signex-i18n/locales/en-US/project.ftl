@@ -423,6 +423,13 @@ variant-manager-every-channel = Every channel ({ $count })
 variant-manager-fit-every-channel = Fitted in every channel
 variant-manager-unfit-every-channel = Not fitted in every channel
 variant-manager-every-channel-as-on-sheets = Every channel as on the sheets
+# Refusals of the variant part commands (#3038). $designator is a part as
+# the Variant Manager lists it, CH2_R5 for a channel's copy.
+variant-command-no-part = The project has no part { $designator }.
+variant-command-bad-scope = The scope is part or channels.
+variant-command-not-repeated = { $designator } is not on a repeated sheet, so it has no other channels.
+variant-command-alternate-needs-mpn = An alternate part needs its part number (mpn).
+variant-command-no-copy-name = The project has no free name for the copy; name it with value.
 # dialog-polish
 # The result pill of a project variable's `=` expression that does not
 # evaluate (mockup row 30); the reason is in the Error line under the row.

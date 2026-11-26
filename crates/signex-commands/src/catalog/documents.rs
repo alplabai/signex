@@ -1,7 +1,10 @@
 //! Document commands: create, open, save, revert, close and print a
 //! document or project, plus the project options and report dialogs.
 
-use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, operands};
+use super::{
+    CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, operands,
+    variant_operands,
+};
 use signex_i18n_ids::{command_ids, menu_ids};
 
 pub(super) const DOCUMENTS: &[CommandMetadata] = &[
@@ -398,6 +401,52 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         enable: Enablement::Always,
         flags: CommandFlags::NONE,
         operands: operands::VARIANT_BOM,
+        ..CommandMetadata::DEFAULT
+    },
+    // #3038: the Variant Manager's part edits and Duplicate, each a General
+    // step of the project.
+    CommandMetadata {
+        id: "project_set_variant_fit",
+        category: "design",
+        label: command_ids::CMD_PROJECT_SET_VARIANT_FIT,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: variant_operands::PROJECT_VARIANT_FIT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "project_set_variant_alternate",
+        category: "design",
+        label: command_ids::CMD_PROJECT_SET_VARIANT_ALTERNATE,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: variant_operands::PROJECT_VARIANT_ALTERNATE,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "project_set_variant_override",
+        category: "design",
+        label: command_ids::CMD_PROJECT_SET_VARIANT_OVERRIDE,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: variant_operands::PROJECT_VARIANT_OVERRIDE,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "project_duplicate_variant",
+        category: "design",
+        label: command_ids::CMD_PROJECT_DUPLICATE_VARIANT,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: variant_operands::PROJECT_DUPLICATE_VARIANT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

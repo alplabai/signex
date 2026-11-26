@@ -270,13 +270,30 @@ A variant can fit a part in one channel and leave it out in another (#2662).
   (`signex_output::PlacedFits`): a unit on a sheet that is not open is not
   counted. SVG and PDF print one page per channel and cross each channel's
   copies out on its own page.
-
-## Not built yet
-
-- The Compiled Design panel does not show per-channel variant state yet
-  (the grey "Not fitted (Lite)" tag on a channel row, mockup row 154).
-- A channel tab's Properties have no Variant line yet ("In Lite, CH3 and
-  CH4 are Not fitted", mockup row 151).
-- The canvas has no right-click "This channel only / All channels" for a
-  variant fit yet (mockup row 32); it is set in the Variant Manager and on
-  the cards.
+- **Canvas menu.** With one part selected on a repeated sheet, right-click
+  ▸ In variant: <variant> offers Fitted and Not fitted, each as "This
+  channel only (CH2)" on a channel tab and "All channels" (#2662, mockup
+  row 32). Editor shows the sheet once for every channel, so it offers All
+  channels only. A row sets the copies the channel strip lists for the
+  part, the cards' own fit and link, as one undo step of the General
+  history. Before a compile the strip lists no copies and the rows are
+  greyed with "Compile the project…"; in Base they are greyed with "Switch
+  to a variant first". On a plain sheet Fitted and Not fitted stay greyed
+  as planned; the Variant Manager and `project_set_variant_fit` set them.
+- **Compiled Design.** A channel row the active variant leaves out entirely
+  (every part of it, as its card greys it) carries a neutral grey "Not
+  fitted (Lite)" tag beside its name (mockup row 154); grey, so it never
+  reads as the amber out-of-date state. Base shows no tag.
+- **Properties of a channel tab.** A Variant section under the designator
+  map (mockup row 151): the active variant; one line naming the channels it
+  leaves out ("In Lite, CH3 and CH4 are Not fitted. Edit in the Variant
+  Manager tab."), or that every channel is fitted, or before a compile that
+  the project needs one; how this channel fits (Fitted, Not fitted or
+  "mixed · 1 of 9 not fitted"); and each part of this channel whose copies
+  the channels fit differently, with "mixed · 1 of 3 not fitted". The
+  section reads the cards' per-channel fits (`ChannelStripView::
+  variant_summary`), so the two never disagree. It is read-only; Active is
+  shown, not picked here.
+- **Commands.** `project_set_variant_fit` names a channel's copy by its
+  channel designator (`CH2_R5`); `scope=channels` sets every channel's copy
+  at once (`docs/PROJECT_TAB.md`, "Commands").

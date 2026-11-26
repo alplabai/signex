@@ -355,6 +355,31 @@ and `lines` (`designators`, `quantity`, `name`, `value`, `footprint`), the
 lines Open in BOM Studio opens on. A project with no variant besides Base,
 an unknown name or no open sheet is refused with the reason.
 
+The Variant Manager's part edits and Duplicate are commands too (#3038).
+A part is named by `designator` as the Variant Manager lists it (`CH2_R5`
+for a channel's copy of R5); the project's parts are read from its sheets
+as the tab reads them, so the setting lands on the placed part the matrix
+links. Each runs the same section command as the tab's click, one step of
+the General history, and answers with the Variants section, `changed` and
+`parts` (each part set: `designator`, `fitted` as the variant now sets it,
+null for as on the sheets, and its `parameters`):
+
+| Command | Operands |
+|---|---|
+| `project_set_variant_fit` | `variant`, `designator`, `fitted` optional (none is as on the sheets), `scope` `part` (default) or `channels` (every channel's copy of a part on a repeated sheet) |
+| `project_set_variant_alternate` | `variant`, `designator`, `mpn`, `value`, `footprint`, each optional; one left out is the part's own again, none is the part itself again; a value or footprint needs `mpn` |
+| `project_set_variant_override` | `variant`, `designator`, `field` (`Value`, `Footprint` or a field name), `value` optional; none is the Base value again |
+| `project_duplicate_variant` | `name` (the variant to copy, or `Base`), `value` optional (the copy's name; none is the first free "<name> copy") |
+
+Picking the fit the sheets already give a part that sets none records
+nothing (`changed` false), as the Fitting switch does. An alternate part is
+its part number (the `MPN` field), value and footprint set together as one
+step; the part picker that chooses one is not built.
+`project_duplicate_variant` answers `name`, the copy's name. Set as default
+is `project_set_default_variant`. A part the read does not list, a `scope`
+of `channels` on a part that is not on a repeated sheet, Base and an
+unknown variant are refused with the reason.
+
 A refused edit changes nothing and says why. The edits are on the agent
 channel and refused inside `apply_edits`: they write the project file, which
 no sheet's undo step covers. From the palette or a key, without operands,
