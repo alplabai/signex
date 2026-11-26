@@ -1,9 +1,9 @@
 //! The Differential Pair Classes dialog (#1282): the class list on the
 //! left (each row with Rename, Duplicate and Delete), the selected class on
 //! the right (name, impedance, width and gap, the read-only skew and
-//! uncoupled limits that live in the Rules tab, a board-style preview, the
-//! pairs that use it and the suffix pairing), Cancel / OK below. State and
-//! rules: `app/diff_pair_classes/`.
+//! uncoupled limits that live in the Rules tab, a board-style preview whose
+//! values are edited on it too, the pairs that use it and the suffix
+//! pairing), Cancel / OK below. State and rules: `app/diff_pair_classes/`.
 
 mod preview;
 
@@ -371,7 +371,7 @@ fn group<'a>(label: signex_i18n::Localized, tokens: &ThemeTokens) -> Element<'a,
 /// the suffix pairing.
 fn class_form<'a>(
     state: &'a DiffPairClassesState,
-    i18n: &I18n,
+    i18n: &'a I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
     let muted = ti(tokens.text_secondary);
@@ -517,7 +517,7 @@ fn class_form<'a>(
             muted,
         ))
         .push(row![Space::new().width(Length::Fixed(LABEL_W + SP.m)), link].boxed())
-        .push(preview::preview(class, i18n))
+        .push(preview::preview(state, class, i18n, tokens))
         .push(group(t!(i18n, ids::DIALOG_DPC_MEMBERS), tokens))
         .push(members.boxed())
         .push(group(t!(i18n, ids::DIALOG_DPC_PAIRING), tokens))

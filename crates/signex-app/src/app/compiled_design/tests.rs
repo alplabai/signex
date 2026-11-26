@@ -162,6 +162,17 @@ fn off_on_a_sheet_opened_repeated_takes_the_file_stem() {
     assert_eq!(designator(&app), "child");
 }
 
+/// #2790: the file stem another sheet symbol holds would be refused, so
+/// Repeat off would leave the repeat on; it takes the next free name.
+#[test]
+fn off_takes_a_free_name_when_the_file_stem_is_held() {
+    let mut app = app_editing("Repeat(CH, 1, 4)", Some("child"));
+
+    app.toggle_repeat(SYMBOL, false);
+
+    assert_eq!(designator(&app), "child_2");
+}
+
 #[test]
 fn a_clashing_to_is_refused_with_the_text_kept_and_marked() {
     let mut app = app_editing("Repeat(CH, 1, 4)", Some("Repeat(CH, 1, 6)"));
@@ -246,7 +257,8 @@ fn app_with_a_compile(path: &std::path::Path) -> Signex {
         CompiledResult {
             design: Arc::new(signex_net::CompiledDesign::default()),
             paths: std::collections::HashMap::from([(key, path.to_path_buf())]),
-            compiled_at: "12:41".to_string(),
+            compiled_at: chrono::DateTime::<chrono::Utc>::UNIX_EPOCH,
+            miniatures: Default::default(),
             stale: Default::default(),
             has_unread_sheets: false,
             unread_paths: Vec::new(),
@@ -363,4 +375,44 @@ fn a_colour_only_edit_or_another_sheet_leaves_the_compile_fresh() {
     );
     let result = app.document_state.compiled_design.results.values().next();
     assert!(result.is_some_and(|r| r.stale.is_empty()));
+}
+
+/// #2733: the core keeps when the compile finished, not a worded time; the
+/// panel words it in the user's locale.
+#[test]
+fn the_compile_time_is_worded_in_the_users_locale() {
+    let mut app = app_with_a_compile(&PathBuf::from("/p/child.snxsch"));
+    let store = &mut app.document_state.compiled_design;
+    let (&project, result) = store.results.iter_mut().next().expect("the compile");
+    let at = chrono::DateTime::from_timestamp(1_700_000_000, 0).expect("a time");
+    result.compiled_at = at;
+    app.document_state.active_project = Some(project);
+    let panel = app.compiled_design_view().panel;
+    assert_eq!(
+        panel.status,
+        crate::panels::compiled_design::CompiledStatus::Ready
+    );
+    assert_eq!(panel.compiled_at, app.ui_state.i18n.time(at));
+}
+
+/// #2733: a language switch after the compile rewords its time; nothing
+/// worded at compile time is kept. The hour depends on the host's clock,
+/// so the test reads the shape: en-US has a day period, tr-TR has none.
+#[test]
+fn a_language_switch_rewords_the_compile_time() {
+    let mut app = app_with_a_compile(&PathBuf::from("/p/child.snxsch"));
+    let store = &mut app.document_state.compiled_design;
+    let (&project, result) = store.results.iter_mut().next().expect("the compile");
+    result.compiled_at = chrono::DateTime::from_timestamp(1_700_000_000, 0).expect("a time");
+    app.document_state.active_project = Some(project);
+    let worded_in = |app: &mut Signex, tag: &str| {
+        use signex_i18n::{I18n, LanguagePref};
+        app.ui_state.i18n = Arc::new(I18n::new(&LanguagePref::Locale(tag.into())));
+        app.compiled_design_view().panel.compiled_at
+    };
+    let en = worded_in(&mut app, "en-US");
+    let tr = worded_in(&mut app, "tr-TR");
+    assert!(en.contains("AM") || en.contains("PM"), "{en}");
+    assert!(!tr.contains("AM") && !tr.contains("PM"), "{tr}");
+    assert_ne!(en, tr);
 }

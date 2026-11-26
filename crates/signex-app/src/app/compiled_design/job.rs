@@ -5,9 +5,12 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 
-use signex_net::{CompiledDesign, SheetKey};
+use chrono::{DateTime, Utc};
+use signex_net::{CompiledDesign, SheetKey, SheetMiniature};
 use signex_types::project::ChannelNaming;
+use signex_types::schematic::SchematicSheet;
 
 use crate::app::project_sheets::{self, OpenSheets};
 use crate::app::state::ProjectId;
@@ -48,6 +51,10 @@ pub struct Compiled {
     /// With a sheet unread: the bare contents links with no file beside
     /// their table, so they can only be legacy links to another folder.
     pub bare_links_missing: Vec<PathBuf>,
+    /// The card miniature of each channel row, by row index of `design`.
+    pub miniatures: HashMap<usize, Arc<SheetMiniature>>,
+    /// The clock when the compile finished, read here off the UI thread.
+    pub finished_at: DateTime<Utc>,
 }
 
 impl CompileJob {
@@ -99,15 +106,36 @@ impl CompileJob {
         } else {
             crate::app::unread_sheets::bare_links_missing_on_disk(&self.open, self.fold)
         };
+        let miniatures = channel_miniatures(&design, &graph.sheets);
         let compiled = Compiled {
             design,
             paths: graph.paths.clone(),
             has_unread_sheets: !unread_paths.is_empty(),
             unread_paths,
             bare_links_missing,
+            miniatures,
+            finished_at: Utc::now(),
         };
         outcome(Ok(compiled), warnings)
     }
+}
+
+/// The miniature of every channel row of `design` whose sheet draws
+/// something.
+fn channel_miniatures(
+    design: &CompiledDesign,
+    sheets: &HashMap<SheetKey, SchematicSheet>,
+) -> HashMap<usize, Arc<SheetMiniature>> {
+    design
+        .sheets
+        .iter()
+        .enumerate()
+        .filter(|(_, row)| row.channel.is_some())
+        .filter_map(|(index, row)| {
+            let sheet = sheets.get(&row.key)?;
+            signex_net::sheet_miniature(sheet, row).map(|m| (index, Arc::new(m)))
+        })
+        .collect()
 }
 
 fn root_missing(root: &std::path::Path) -> String {

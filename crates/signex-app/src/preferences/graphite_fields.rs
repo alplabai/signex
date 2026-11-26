@@ -149,6 +149,7 @@ pub(crate) fn setting_labels(item: PrefNav) -> &'static [MessageId] {
         PrefNav::SchematicDisplay => &[
             ids::PREFERENCES_SYMBOL_BODY_FILL,
             ids::PREFERENCES_SYMBOL_BODY_FILL_COLOUR,
+            ids::PREFERENCES_CROSS_OUT_NOT_FITTED,
         ],
         PrefNav::PcbDefaults => &[
             ids::PCB_PRIM_LINE_WIDTH,

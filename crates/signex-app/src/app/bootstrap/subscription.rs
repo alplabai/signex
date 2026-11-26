@@ -575,8 +575,8 @@ impl OpenOverlays {
 /// `None` is not an omission: `MoveSelection` and `NetColorPalette` have no
 /// `OverlayId` and no `OpenOverlays` field — they are part of the
 /// `every_modal_claims_escape` gap, and Esc does nothing over their
-/// in-window cards either. `ParameterManager` has no `OverlayId` because it
-/// has no in-window card; its Esc is answered by
+/// in-window cards either. `ParameterManager` and `ParameterImport` have no
+/// `OverlayId` because they have no in-window card; their Esc is answered by
 /// `detached_modal_escape_message` directly.
 pub(crate) fn modal_overlay_id(modal: crate::app::state::ModalId) -> Option<OverlayId> {
     use crate::app::state::ModalId;
@@ -616,7 +616,10 @@ pub(crate) fn modal_overlay_id(modal: crate::app::state::ModalId) -> Option<Over
         ModalId::LibraryDeleteConfirm => Some(OverlayId::DeleteConfirm),
         ModalId::LibraryRecovery => Some(OverlayId::LibraryRecovery),
         ModalId::NetColorCustom => Some(OverlayId::NetColorCustom),
-        ModalId::MoveSelection | ModalId::NetColorPalette | ModalId::ParameterManager => None,
+        ModalId::MoveSelection
+        | ModalId::NetColorPalette
+        | ModalId::ParameterManager
+        | ModalId::ParameterImport => None,
     }
 }
 
@@ -665,6 +668,14 @@ impl Signex {
                 .ui_state
                 .parameter_manager_open
                 .then_some(Message::ParameterManager(ParameterManagerMsg::Close));
+        }
+        // The import preview has no in-window card either; Esc is its Cancel.
+        if modal == crate::app::state::ModalId::ParameterImport {
+            return self
+                .ui_state
+                .parameter_import
+                .is_some()
+                .then(|| crate::app::parameter_io::ParameterIoMsg::PreviewCancelled.into());
         }
         let id = modal_overlay_id(modal)?;
         self.open_overlays(Some(modal)).rung(id)

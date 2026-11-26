@@ -104,6 +104,7 @@ impl Signex {
             | ModalId::MoveSelection
             | ModalId::NetColorPalette
             | ModalId::ParameterManager
+            | ModalId::ParameterImport
             | ModalId::Preferences
             | ModalId::PrintPreview
             | ModalId::BomPreview => return None,

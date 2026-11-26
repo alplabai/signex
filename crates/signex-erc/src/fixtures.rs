@@ -33,6 +33,7 @@ pub(crate) fn empty() -> ErcContext {
         children: HashMap::new(),
         key: None,
         harness: Default::default(),
+        class_conflicts: Vec::new(),
     }
 }
 
@@ -304,8 +305,128 @@ pub(crate) fn context_for(kind: RuleKind) -> ErcContext {
         RuleKind::HarnessEntryMismatch | RuleKind::HarnessTypeConflict => {
             return harness_context(kind);
         }
+        RuleKind::NetClassConflict => return ErcContext::from_snapshot(&class_conflict_sheet()),
     }
     c
+}
+
+/// A Net Parameters directive at `at` setting `class`.
+pub(crate) fn net_parameters(
+    n: u128,
+    at: Point,
+    class: &str,
+) -> signex_types::schematic::SchDirective {
+    signex_types::schematic::SchDirective::NetParameters {
+        uuid: Uuid::from_u128(n),
+        position: at,
+        net_class: Some(class.into()),
+        diff_pair_class: None,
+        rules: Default::default(),
+        show_on_flag: false,
+    }
+}
+
+/// A Net Blanket from `start` to `end` setting `class`.
+pub(crate) fn net_blanket(
+    n: u128,
+    start: Point,
+    end: Point,
+    class: &str,
+) -> signex_types::schematic::SchDirective {
+    signex_types::schematic::SchDirective::Blanket {
+        uuid: Uuid::from_u128(n),
+        start,
+        end,
+        net_class: Some(class.into()),
+        erc_exclusions: Vec::new(),
+        track_width: None,
+        pour: Default::default(),
+        include_edge_nets: false,
+    }
+}
+
+/// One labelled wire `SW` from (0, 0) to (10, 0), with a Net Blanket over it
+/// giving class `SIGNAL` and a Net Parameters directive on it giving
+/// `POWER` (#2656).
+pub(crate) fn class_conflict_sheet() -> signex_types::schematic::SchematicSheet {
+    use signex_types::schematic::{Label, SchematicSheet, Wire};
+    let mut sheet = SchematicSheet {
+        paper_size: "A4".into(),
+        ..Default::default()
+    };
+    sheet.wires.push(Wire {
+        uuid: Uuid::from_u128(1),
+        start: pt(0.0, 0.0),
+        end: pt(10.0, 0.0),
+        ..Default::default()
+    });
+    sheet
+        .labels
+        .push(Label::new("SW", pt(0.0, 0.0), LabelType::Net));
+    sheet
+        .directives
+        .push(net_blanket(11, pt(-1.0, -1.0), pt(11.0, 1.0), "SIGNAL"));
+    sheet
+        .directives
+        .push(net_parameters(12, pt(5.0, 0.0), "POWER"));
+    // A net needs a pin to exist (`signex_net::build_netlist`).
+    class_conflict_pin(&mut sheet, "R1", pt(0.0, 0.0));
+    class_conflict_pin(&mut sheet, "R2", pt(10.0, 0.0));
+    sheet
+}
+
+/// A one-pin part at `at` on a [`class_conflict_sheet`], so the wire under it
+/// forms a net.
+pub(crate) fn class_conflict_pin(
+    sheet: &mut signex_types::schematic::SchematicSheet,
+    reference: &str,
+    at: Point,
+) {
+    use signex_types::schematic::{LibPin, LibSymbol, Pin, PinShapeStyle, Symbol};
+    sheet
+        .lib_symbols
+        .entry("R".into())
+        .or_insert_with(|| LibSymbol {
+            id: "R".into(),
+            reference: String::new(),
+            value: String::new(),
+            footprint: String::new(),
+            datasheet: String::new(),
+            description: String::new(),
+            keywords: String::new(),
+            fp_filters: String::new(),
+            in_bom: true,
+            on_board: true,
+            in_pos_files: true,
+            duplicate_pin_numbers_are_jumpers: false,
+            graphics: Vec::new(),
+            pins: vec![LibPin {
+                unit: 0,
+                body_style: 1,
+                pin: Pin {
+                    direction: PinDirection::Passive,
+                    shape_style: PinShapeStyle::Plain,
+                    position: pt(0.0, 0.0),
+                    rotation: 0.0,
+                    length: 0.0,
+                    name: String::new(),
+                    number: "1".into(),
+                    visible: true,
+                    name_visible: true,
+                    number_visible: true,
+                },
+            }],
+            show_pin_numbers: true,
+            show_pin_names: true,
+            pin_name_offset: 0.0,
+        });
+    sheet.symbols.push(Symbol {
+        uuid: Uuid::from_u128(0x2656_0000 + sheet.symbols.len() as u128),
+        lib_id: "R".into(),
+        reference: reference.into(),
+        position: at,
+        ..Default::default()
+    });
 }
 
 /// A harness connector of type `ty` at `at` with entries `names` (#1280).

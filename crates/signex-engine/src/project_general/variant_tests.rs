@@ -181,3 +181,39 @@ fn a_cell_edit_on_a_placed_part_keeps_the_link() {
     assert!(history.undo(&mut data));
     assert!(data.variant_settings.is_empty());
 }
+
+/// #2662: every channel's copy of a part, set in one command, is one undo
+/// step; the command reads back from its JSON.
+#[test]
+fn every_channel_copy_set_at_once_is_one_undo_step() {
+    use signex_types::pcb::SymbolLink;
+    use signex_types::project::PartRef;
+    use signex_types::schematic::InstancePath;
+
+    let unit = uuid::Uuid::now_v7();
+    let copy = |n: u128| {
+        let path = InstancePath::from_chain(vec![
+            uuid::Uuid::from_u128(0x2662),
+            uuid::Uuid::from_u128(0x2662 + n),
+        ]);
+        PartRef::new(format!("CH{n}_R5"), Some(SymbolLink::new(path, [unit])))
+    };
+    let command = ProjectSectionCommand::SetVariantPartsFit {
+        variant: "Lite".into(),
+        parts: vec![copy(1), copy(2), copy(3)],
+        fitted: Some(false),
+    };
+    let json = serde_json::to_value(&command).unwrap();
+    let back: ProjectSectionCommand = serde_json::from_value(json).unwrap();
+    assert_eq!(back, command);
+
+    let mut data = project();
+    let mut history = ProjectGeneralHistory::default();
+    assert_eq!(apply(&mut history, &mut data, command.clone()), Ok(true));
+    assert_eq!(data.variant_settings.parts.len(), 3);
+    // The same fit again changes nothing and records nothing.
+    assert_eq!(apply(&mut history, &mut data, command), Ok(false));
+    assert!(history.undo(&mut data));
+    assert!(data.variant_settings.is_empty(), "one step takes all three");
+    assert!(!history.undo(&mut data));
+}

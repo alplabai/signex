@@ -667,6 +667,8 @@ pub enum PrintPreviewMsg {
     SetIncludeParameterSets(bool),
     SetIncludeProbes(bool),
     SetIncludeBlankets(bool),
+    SetIncludeCompileMasks(bool),
+    SetIncludeDiffPairs(bool),
     SetIncludeNotes(bool),
     SetIncludeCollapsedNotes(bool),
     SetQuality(crate::app::state::PdfQuality),
@@ -732,6 +734,8 @@ impl PrintPreviewMsg {
             | Self::SetIncludeParameterSets(..)
             | Self::SetIncludeProbes(..)
             | Self::SetIncludeBlankets(..)
+            | Self::SetIncludeCompileMasks(..)
+            | Self::SetIncludeDiffPairs(..)
             | Self::SetIncludeNotes(..)
             | Self::SetIncludeCollapsedNotes(..)
             | Self::SetQuality(..)

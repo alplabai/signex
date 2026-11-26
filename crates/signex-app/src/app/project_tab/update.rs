@@ -346,11 +346,8 @@ impl Signex {
             );
             return Ok(false);
         };
-        let tab = document.project_tabs.entry(project_id).or_default();
-        if !tab
-            .general_history
-            .apply_section(&mut project.data, command)?
-        {
+        let history = document.general_history.entry(project_id).or_default();
+        if !history.apply_section(&mut project.data, command)? {
             return Ok(false);
         }
         document.sync_project_history_dirty(project_id, true);
@@ -366,8 +363,8 @@ impl Signex {
 
     /// End the General history's typing run: the next edit is its own step.
     pub(super) fn close_general_run(&mut self, project_id: ProjectId) {
-        if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
-            tab.general_history.close_run();
+        if let Some(history) = self.document_state.general_history.get_mut(&project_id) {
+            history.close_run();
         }
     }
 
@@ -403,7 +400,9 @@ impl Signex {
             tab.row_drag = None;
             // A section switch ends the typing run: the next edit is its own
             // undo step.
-            tab.general_history.close_run();
+            if let Some(history) = self.document_state.general_history.get_mut(&project_id) {
+                history.close_run();
+            }
             tab.default_drafts.clear();
             tab.setup_draft = None;
             tab.journal_lines_draft = None;
@@ -431,9 +430,9 @@ impl Signex {
             );
             return;
         };
-        let tab = document.project_tabs.entry(project_id).or_default();
+        let history = document.general_history.entry(project_id).or_default();
         let defaults_before = project.data.schematic_defaults.clone();
-        if tab.general_history.apply(&mut project.data, command) {
+        if history.apply(&mut project.data, command) {
             let defaults_moved = project.data.schematic_defaults != defaults_before;
             document.sync_project_history_dirty(project_id, true);
             self.after_project_general_change(defaults_moved);
@@ -452,13 +451,10 @@ impl Signex {
     /// `(can_undo, can_redo)` of a Project tab's history.
     pub(crate) fn project_tab_history_available(&self, project_id: ProjectId) -> (bool, bool) {
         self.document_state
-            .project_tabs
+            .general_history
             .get(&project_id)
-            .map_or((false, false), |tab| {
-                (
-                    tab.general_history.can_undo(),
-                    tab.general_history.can_redo(),
-                )
+            .map_or((false, false), |history| {
+                (history.can_undo(), history.can_redo())
             })
     }
 
@@ -468,34 +464,40 @@ impl Signex {
         let Some(project) = document.projects.iter_mut().find(|p| p.id == project_id) else {
             return false;
         };
-        let Some(tab) = document.project_tabs.get_mut(&project_id) else {
+        let tab = document.project_tabs.get_mut(&project_id);
+        let history = document.general_history.get_mut(&project_id);
+        if tab.is_none() && history.is_none() {
             return false;
-        };
+        }
         let defaults_before = project.data.schematic_defaults.clone();
         let pages_before = project.data.sheet_order();
         let rules_before = project.data.rules.clone();
         let requirements_before = project.data.requirements.clone();
-        let moved = if undo {
-            tab.general_history.undo(&mut project.data)
-        } else {
-            tab.general_history.redo(&mut project.data)
-        };
+        let moved = history.is_some_and(|history| {
+            if undo {
+                history.undo(&mut project.data)
+            } else {
+                history.redo(&mut project.data)
+            }
+        });
         // Redraw the sheets when their defaults or page numbers moved.
         let defaults_moved = project.data.schematic_defaults != defaults_before
             || project.data.sheet_order() != pages_before;
         // A fab tier step (#2311) puts the rules back too.
         let rules_moved = project.data.rules != rules_before;
         // The boxes show the stored values again.
-        tab.default_drafts.clear();
-        tab.setup_draft = None;
-        tab.journal_lines_draft = None;
-        tab.variant_rename = None;
-        tab.variant_problem = None;
-        tab.parameter_rename = None;
-        tab.parameter_rename_refused = false;
-        // Requirement drafts are by id: only a stepped entry's go (#2547).
-        tab.requirements
-            .follow_step(&requirements_before, &project.data.requirements);
+        if let Some(tab) = tab {
+            tab.default_drafts.clear();
+            tab.setup_draft = None;
+            tab.journal_lines_draft = None;
+            tab.variant_rename = None;
+            tab.variant_problem = None;
+            tab.parameter_rename = None;
+            tab.parameter_rename_refused = false;
+            // Requirement drafts are by id: only a stepped entry's go (#2547).
+            tab.requirements
+                .follow_step(&requirements_before, &project.data.requirements);
+        }
         if moved {
             // Dirty unless the step landed back on the saved state.
             document.sync_project_history_dirty(project_id, true);

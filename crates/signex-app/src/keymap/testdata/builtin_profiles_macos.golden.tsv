@@ -186,6 +186,8 @@ signex_standard	hint	-	-	autoplace_fields
 signex_standard	hint	-	-	open_datasheet
 signex_standard	hint	-	-	change_component
 signex_standard	hint	-	-	open_parameter_manager
+signex_standard	hint	-	-	export_parameters
+signex_standard	hint	-	-	import_parameters
 signex_standard	hint	-	-	set_symbol_parameter
 signex_standard	hint	-	-	set_sheet_variable
 signex_standard	hint	-	-	lock_board_items
@@ -741,6 +743,8 @@ classic	hint	-	O	autoplace_fields
 classic	hint	-	D	open_datasheet
 classic	hint	-	-	change_component
 classic	hint	-	-	open_parameter_manager
+classic	hint	-	-	export_parameters
+classic	hint	-	-	import_parameters
 classic	hint	-	-	set_symbol_parameter
 classic	hint	-	-	set_sheet_variable
 classic	hint	-	-	lock_board_items
