@@ -342,6 +342,12 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "project_enable_requirement",
         "it writes the project's settings, which no sheet's undo step covers",
     ),
+    // #2665: the copy it pastes is the person's in this window, not the
+    // agent's.
+    (
+        "smart_paste",
+        "it pastes the person's copy in this window, which an agent did not make",
+    ),
 ];
 
 const BOARD_EDIT: &str =
@@ -622,6 +628,8 @@ mod tests {
             // #1261: a schematic swap runs on its own.
             ("swap_schematic_pins", "does not carry it yet"),
             ("swap_schematic_gates", "does not carry it yet"),
+            // #2665: the copy is the person's.
+            ("smart_paste", "the person's copy"),
         ] {
             let reason = edit_refusal(&id(command)).unwrap_or_else(|| panic!("{command}"));
             assert!(reason.contains(needle), "{command}: {reason}");

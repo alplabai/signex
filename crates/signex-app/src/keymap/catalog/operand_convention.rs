@@ -120,6 +120,12 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("template", OperandKind::Text),
     ("variant", OperandKind::Text),
     ("grouping", OperandKind::Text),
+    // #2665: the Smart Paste dialog's array count, numbering and net names.
+    ("copies", OperandKind::Text),
+    ("designators", OperandKind::Text),
+    ("nets", OperandKind::Text),
+    ("net_pattern", OperandKind::Text),
+    ("net_start", OperandKind::Text),
 ];
 
 /// The commands whose `ids` is still text, not targets (#2326): a design

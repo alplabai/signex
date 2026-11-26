@@ -33,6 +33,7 @@ use super::selection_filter_operands as filter;
 use super::selection_operands as selection;
 use super::sheet_swap_operands as sheet_swap;
 use super::sheet_sync_operands as sheet_sync;
+use super::smart_paste_operands as smart_paste;
 use super::{CommandArgs, CommandOutcome, enablement};
 use crate::app::board_output as output;
 use crate::app::board_reuse as reuse;
@@ -110,6 +111,8 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("save_snippet", snippet::save_snippet),
     ("place_snippet", snippet::place_snippet),
     ("import_graphics", extras::import_graphics),
+    // #2665: the Smart Paste dialog's choices, placed at once.
+    ("smart_paste", smart_paste::smart_paste),
     ("place_component", part::place_component),
     ("place_sheet_symbol", hierarchy::place_sheet_symbol),
     ("place_sheet_entry", hierarchy::place_sheet_entry),

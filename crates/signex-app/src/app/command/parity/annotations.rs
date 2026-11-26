@@ -537,6 +537,8 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Operand,
         &[ToolState],
     ),
+    // #2665: the in-app copy, and the grid its default offset is measured on.
+    (&["smart_paste"], Operand, &[ToolState, Clipboard]),
     // Move Keeps Wires.
     (
         &["set_object_position", "set_object_rotation"],

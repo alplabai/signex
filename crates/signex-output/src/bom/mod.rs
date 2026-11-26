@@ -418,7 +418,6 @@ pub fn is_part_symbol(sym: &Symbol) -> bool {
     !(sym.reference.starts_with("#PWR") || sym.is_power)
 }
 
-<<<<<<< HEAD
 /// One physical part of a placed-symbol list: its units (indices into the
 /// list, in list order, at least one) and the placed part the variant
 /// settings name it by (`variant_fit::part_link`).

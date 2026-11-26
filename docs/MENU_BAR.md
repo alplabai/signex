@@ -975,7 +975,10 @@ missing declared page no symbol places does not stop it, and keeping the net
 names rewrites nothing and is not stopped. Its Paste puts every copy on the cursor and one click places them as one undo
 step; Esc cancels. A headless run of `smart_paste` places the copy at once
 beside the sheet's content, as before; it keeps the copied net names, so an
-unread sheet does not stop it. Duplicate keeps its fixed offset.
+unread sheet does not stop it. With operands (`at`, `delta`, `copies`,
+`designators`, `nets`, `net_pattern`, `net_start`, #2665) it places the
+dialog's choices at once instead, with the dialog's checks; see
+[CLI.md](CLI.md#smart-paste). Duplicate keeps its fixed offset.
 
 ## Bottom-up hierarchy {#bottom-up-hierarchy}
 

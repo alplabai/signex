@@ -506,6 +506,10 @@ dialog-smart-paste-paste = Paste
 dialog-smart-paste-paste-copies = Paste { $count } copies
 dialog-smart-paste-nothing-copied = Smart Paste: nothing to paste yet; copy a selection first.
 dialog-smart-paste-sheet-changed = Smart Paste closed: the active sheet changed.
+# A Smart Paste run from its operands (#2665) whose choices do not read.
+dialog-smart-paste-choices-invalid = Smart Paste stopped: the offset, copies, pattern or Start n at cannot be pasted.
+# $error is why the engine refused the copies.
+dialog-smart-paste-not-placed = Smart Paste: the copies could not be placed ({ $error }); nothing was pasted.
 
 ## ERC dialog (#2413): where the rules come from, and the Profile menu
 # Pill under the title: the dialog edits the rules stored in the project.
