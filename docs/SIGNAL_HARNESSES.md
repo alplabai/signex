@@ -95,10 +95,11 @@ marker; for a paired mismatch it also outlines the entry's tab in the marker's
 colour (heavier, over a faint fill), outlines the connector's body and redraws
 the entry's name bold in that colour, and writes what the far side expects
 (`expects CS_ADC`) under the marker, in the marker's colour, at the caption size
-at every zoom. Every far-side finding names the harness-typed sheet entry the
-harness leaves through as its peer, and the canvas draws a "!" badge in the
-marker's colour just above that entry's tab, one per entry (decided by Caner,
-2026-11-25). Because the sheet entry is now one of the finding's objects, a
+at every zoom. The canvas also draws a "!" badge on the harness-typed sheet
+entry the harness leaves through (the outline, the bold name and the badge
+decided by Caner, 2026-11-25), in the marker's colour just above that entry's
+tab, one per entry. For the badge, every far-side finding names that sheet
+entry as its peer. Because the sheet entry is now one of the finding's objects, a
 waiver made on a far-side finding before this lapses once. The outlines, the
 name, the badge and the caption are editor-only, like the marker: no print or
 export draws them. The Properties drawing of the connector draws the mismatched entry in
