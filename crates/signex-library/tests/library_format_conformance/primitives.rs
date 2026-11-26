@@ -280,7 +280,7 @@ pub(crate) fn r0805() -> Footprint {
     }
     fp.body_3d.height_mm = 0.6;
     fp.step_attachment = Some(StepAttachment {
-        content_hash: hex(&Sha256::digest(STEP_PLACEHOLDER)),
+        content_hash: step_placeholder_hash(),
         filename: "R_0805.step".into(),
         offset_xyz: [0.0, 0.0, 0.0],
         rotation_xyz: [0.0, 0.0, 90.0],
@@ -318,12 +318,67 @@ pub(crate) fn sot23() -> Footprint {
     fp
 }
 
+/// Lower-case hex SHA-256 of [`STEP_PLACEHOLDER`]: the attachment's hash and
+/// the name of `step/<hash>.step`.
+pub(crate) fn step_placeholder_hash() -> String {
+    hex(&Sha256::digest(STEP_PLACEHOLDER))
+}
+
+/// One pad of each remaining layer set of the spec table: through-hole,
+/// bottom-side SMD, top and bottom fiducial.
+pub(crate) fn layer_sets() -> Footprint {
+    let mut fp = Footprint::with_identity("Layer sets", id(LAYER_SETS_FOOTPRINT), created());
+    fp.updated = updated();
+    fp.version = "1.0.0".into();
+    let pad = |number: &str, kind: PadKind, x: f64, layers: &[&str]| Pad {
+        number: number.into(),
+        kind,
+        shape: PadShape::Round,
+        size: [1.6, 1.6],
+        position: [x, 0.0],
+        layers: layers.iter().map(|l| LayerId::new(*l)).collect(),
+        ..Pad::default()
+    };
+    let mut tht = pad(
+        "1",
+        PadKind::Tht,
+        -3.0,
+        &["Top Layer", "Bottom Layer", "Top Solder", "Bottom Solder"],
+    );
+    tht.drill = Some(Drill {
+        diameter: 0.8,
+        slot_length: None,
+    });
+    let mut bottom = pad(
+        "2",
+        PadKind::Smd,
+        -1.0,
+        &["Bottom Layer", "Bottom Solder", "Bottom Paste"],
+    );
+    bottom.shape = PadShape::Rect;
+    fp.pads = vec![
+        tht,
+        bottom,
+        pad("FID1", PadKind::Fiducial, 1.0, &["Top Layer", "Top Solder"]),
+        pad(
+            "FID2",
+            PadKind::Fiducial,
+            3.0,
+            &["Bottom Layer", "Bottom Solder"],
+        ),
+    ];
+    fp.courtyard = rectangle(4.0, 1.0);
+    fp.description = "One pad per layer set of the format spec".into();
+    fp
+}
+
 /// Every fixture footprint with its envelope's file uuid.
 pub(crate) fn footprints() -> impl Iterator<Item = (Footprint, &'static str)> {
     [
         (r0603(), R0603_FILE),
         (r0805(), R0805_FILE),
         (sot23(), SOT23_FILE),
+        (layer_sets(), LAYER_SETS_FILE),
     ]
     .into_iter()
 }

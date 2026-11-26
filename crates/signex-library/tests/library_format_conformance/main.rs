@@ -53,7 +53,7 @@ use signex_library::primitive::symbol::{
     ComponentType, PinSymbolKind, SymbolGraphic, SymbolGraphicKind,
 };
 use signex_library::primitive::{
-    Footprint, FootprintFile, LayerId, Pad, PadKind, PadShape, PinDirection, PinOrientation,
+    Drill, Footprint, FootprintFile, LayerId, Pad, PadKind, PadShape, PinDirection, PinOrientation,
     Polygon, PrimitiveRef, StepAttachment, Symbol, SymbolFile, SymbolPin,
 };
 use signex_library::tables::{ALTERNATE_SYMBOLS_COLUMN, TABLE_HEADER};
@@ -79,6 +79,10 @@ fn generated() -> BTreeMap<String, String> {
             .expect("write .snxfpt");
         out.insert(rel, text);
     }
+    out.insert(
+        lib(&format!("step/{}.step", step_placeholder_hash())),
+        String::from_utf8(STEP_PLACEHOLDER.to_vec()).expect("ASCII placeholder"),
+    );
     for r in rows() {
         let json = String::from_utf8(canonical_json(&r)).expect("utf-8 json");
         out.insert(format!("content-hash/{}.json", r.row_id), json);
@@ -256,6 +260,7 @@ fn signex_opens_the_fixture_and_every_reference_resolves() {
     assert_eq!(adapter.library_id(), id(LIBRARY_ID));
     assert_eq!(adapter.list_tables().unwrap(), ["logic", "resistors"]);
     let mut seen = 0;
+    let mut steps = 0;
     for (_, r) in adapter.iter_rows().unwrap() {
         seen += 1;
         adapter.get_symbol(r.symbol_ref.uuid).unwrap();
@@ -265,9 +270,20 @@ fn signex_opens_the_fixture_and_every_reference_resolves() {
         for binding in r.footprint_bindings() {
             let fp = adapter.get_footprint(binding.footprint.uuid).unwrap();
             assert_eq!(fp.uuid, binding.footprint.uuid);
+            if let Some(step) = &fp.step_attachment {
+                let path = adapter
+                    .root()
+                    .join("step")
+                    .join(format!("{}.step", step.content_hash));
+                let bytes =
+                    std::fs::read(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+                assert_eq!(hex(&Sha256::digest(&bytes)), step.content_hash);
+                steps += 1;
+            }
         }
     }
     assert_eq!(seen, 3);
+    assert!(steps > 0, "no row reaches the footprint with a STEP model");
 }
 
 #[test]
@@ -321,7 +337,6 @@ fn every_fixture_footprint_converts_to_a_board_footprint() {
         return;
     }
     let (_dir, adapter) = open_copy();
-    let expected_layers = ["TopCopper", "TopSolderMask", "TopPaste"];
     for (fp, _) in footprints() {
         let address = lib_ref(&fp.uuid.to_string());
         let resolved = signex_library::part_footprint::resolve_named_footprint(&address, |a, _| {
@@ -331,22 +346,59 @@ fn every_fixture_footprint_converts_to_a_board_footprint() {
         let board = &resolved.footprint;
         assert_eq!(board.pads.len(), fp.pads.len(), "{}", fp.name);
         for (lib_pad, board_pad) in fp.pads.iter().zip(&board.pads) {
+            let what = format!("{} pad {}", fp.name, lib_pad.number);
+            let cell: Vec<&str> = lib_pad.layers.iter().map(LayerId::as_str).collect();
+            let row = LAYER_TABLE
+                .iter()
+                .find(|(kind, named, _)| *kind == lib_pad.kind && *named == cell.as_slice())
+                .unwrap_or_else(|| {
+                    panic!("{what}: layers {cell:?} are not a row of the spec table")
+                });
             assert_eq!(board_pad.number, lib_pad.number);
-            assert_eq!(
-                board_pad.layers, expected_layers,
-                "{} pad {}",
-                fp.name, lib_pad.number
-            );
+            assert_eq!(board_pad.layers, row.2, "{what}");
             assert_eq!(
                 [board_pad.position.x, board_pad.position.y],
                 lib_pad.position,
-                "{} pad {}",
-                fp.name,
-                lib_pad.number
+                "{what}"
             );
         }
     }
 }
+
+/// `docs/LIBRARY_FORMAT.md` §4.2 layer table: pad kind, the named `layers`
+/// cell, and the board layers it converts to.
+const LAYER_TABLE: &[(PadKind, &[&str], &[&str])] = &[
+    (
+        PadKind::Smd,
+        &["Top Layer", "Top Solder", "Top Paste"],
+        &["TopCopper", "TopSolderMask", "TopPaste"],
+    ),
+    (
+        PadKind::Smd,
+        &["Bottom Layer", "Bottom Solder", "Bottom Paste"],
+        &["BottomCopper", "BottomSolderMask", "BottomPaste"],
+    ),
+    (
+        PadKind::Tht,
+        &["Top Layer", "Bottom Layer", "Top Solder", "Bottom Solder"],
+        &[
+            "TopCopper",
+            "BottomCopper",
+            "TopSolderMask",
+            "BottomSolderMask",
+        ],
+    ),
+    (
+        PadKind::Fiducial,
+        &["Top Layer", "Top Solder"],
+        &["TopCopper", "TopSolderMask"],
+    ),
+    (
+        PadKind::Fiducial,
+        &["Bottom Layer", "Bottom Solder"],
+        &["BottomCopper", "BottomSolderMask"],
+    ),
+];
 
 /// The string, number and time forms `docs/LIBRARY_FORMAT.md` §5 lists,
 /// written through a symbol envelope.

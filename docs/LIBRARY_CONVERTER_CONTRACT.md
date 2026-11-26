@@ -50,7 +50,7 @@ Prints one JSON object (schema `#/$defs/describe`) and exits 0:
 
 - `contract` is `<major>.<minor>`. Signex refuses a converter whose major is
   newer than the one it implements and accepts any minor of a known major.
-- `inputs[].extensions` are lower-case, without the dot. Signex builds its
+- `inputs[].extensions` are lower-case, without the leading dot. A source file that always has one fixed name (a library table, say) is listed by its whole lower-case file name, e.g. `"lib-table"`; Signex matches an entry against a picked file's extension first, then against its whole name. Signex builds its
   file-picker filters from them at run time, so no foreign extension is
   compiled into Signex.
 - `kind`: `library` (symbol, footprint or combined library file or folder) or
@@ -84,7 +84,7 @@ Prints one JSON object (schema `#/$defs/describe`) and exits 0:
 | `--json` | Print the summary (§3.2) as the last stdout line. |
 | `--progress` | Print progress events (§3.1) on stdout. Implies `--json`. |
 
-Unknown options are an error (exit 1, summary with `ok: false`).
+Unknown options are an error (exit 1, summary with `ok: false`). A converter must also turn an internal failure (a crash while reading a malformed file) into a `failed` summary rather than exiting without one. `--help` and `--version` print their text and exit 0 with no summary; Signex never passes them.
 
 ## 3. Output streams
 
@@ -142,7 +142,7 @@ One JSON object, on success and on failure (schema `#/$defs/summary`):
 |---|---|---|
 | 0 | `ok` | Library written; report has only `info` / `approximated` items. |
 | 2 | `partial` | Library written; some items were `dropped` or `error` (skipped). |
-| 1 | `failed` | Nothing usable written (bad input, bad options, I/O error). Partial output is removed. |
+| 1 | `failed` | Nothing usable written (bad input, bad options, I/O error, internal error). Library files this run wrote are removed; `import-report.*` stays when the run got far enough to read the source, so the failure can be inspected. A library that existed before an `--update` run is left as it was. |
 
 ## 4. Loss report
 
@@ -206,7 +206,13 @@ human-readable `import-report.md` with the same content. Schema
   (source file path, position in source), so adding an unrelated item never
   shifts a suffix. Each collision is a report item.
 - `--update` over a library this converter wrote from the same source:
-  - items no longer in the source are deleted (git history keeps them);
+  - an imported library is a **snapshot** of its source: items no longer in
+    the source are deleted, rows a user edited are overwritten, and rows or
+    primitives a user added are deleted. Git history keeps only what was
+    committed, so Signex refuses (or asks to commit first) when the library's
+    working tree has uncommitted changes, and warns when it has local commits
+    that are not imports. Users who want to edit parts copy them into their
+    own library;
   - a part whose content hash changes gets its patch version bumped and its
     `updated` time set; its lifecycle state and `created` time are kept;
   - unchanged items keep identical bytes.
