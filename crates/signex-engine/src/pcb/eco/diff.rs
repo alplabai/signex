@@ -31,6 +31,7 @@ pub fn diff_board(input: &EcoInput) -> EcoChangeList {
             .cloned()
             .map(EcoNote::UnreadableSheet)
             .collect(),
+        pad_locks: Vec::new(),
     };
     let duplicates = duplicate_designators(input.parts);
     let matched = match_parts(board, input.parts, input.unreadable, &duplicates);

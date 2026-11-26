@@ -129,6 +129,11 @@ Validate and Execute say why, the dialog stays open and nothing is applied.
 - Another library version of the same footprint is listed, unticked.
 - Remove and change rows of a locked footprint start unticked; pads whose net
   is locked are left alone.
+- A pad its symbol has no pin for keeps its net and is locked, with no row of
+  its own: Execute locks it along with the rows it applies (#3060), and
+  Messages says how many pads it locked. A board that matches its schematic
+  leaves such a pad unlocked. The command's answer lists these pads as
+  `pad_locks` ([CLI.md](CLI.md), "Update PCB from schematic").
 - A footprint with a 3D body or a STEP model converts; the board reaches the
   model through `library_ref`.
 
@@ -180,14 +185,16 @@ the same footprint are one row with two possible directions. A side that is
 blocked keeps its reason, shown as the tooltip of its greyed choice, and is
 never chosen. The notes of both lists are listed under the rows.
 
-A pad row that keeps its net and only gains its lock is not a difference, so
-the report leaves it out and its Apply does not set that lock; Update PCB
-still lists it. A pad row whose two sides read the same net name and that
-other rows need, or that needs other rows, is not drawn either (mockup row
-162): it is applied while a ticked row needs it, or while every row it needs
-is ticked. A blocked one stays drawn with its reason, so the row that needs
-it shows why it waits. A pad moving between two net numbers of one name with
-no row tied to it is a real move and stays listed.
+A pad that keeps its net and only gains its lock is not a difference, so
+the report leaves it out and its Apply does not set that lock. Update PCB
+does not list it either (#3060): Execute locks it along with the rows it
+applies, and a board that matches its schematic lists nothing. A pad row
+whose two sides read the same net name and that other rows need, or that
+needs other rows, is not drawn either (mockup row 162): it is applied while
+a ticked row needs it, or while every row it needs is ticked. A blocked one
+stays drawn with its reason, so the row that needs it shows why it waits. A
+pad moving between two net numbers of one name with no row tied to it is a
+real move and stays listed.
 
 ### Directions
 

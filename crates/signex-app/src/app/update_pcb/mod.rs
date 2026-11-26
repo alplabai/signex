@@ -30,6 +30,8 @@ pub use table::{RowAction, RowFilter, TableGroup};
 pub(crate) use target::PcbSyncLabel;
 
 #[cfg(test)]
+mod in_sync_tests;
+#[cfg(test)]
 mod operand_tests;
 #[cfg(test)]
 mod tests;

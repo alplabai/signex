@@ -174,6 +174,7 @@ impl Signex {
             }
         };
         let count = list.rows.iter().filter(|r| list.applies(r)).count();
+        let locks = list.applied_pad_locks().count();
         let label = self.update_pcb_text(ids::UPDATE_PCB_TITLE);
         match self.execute_eco_list(&board, &list, &label) {
             Ok(()) => {
@@ -191,6 +192,12 @@ impl Signex {
                     )
                     .into_string(),
                 );
+                if locks > 0 {
+                    crate::diagnostics::log_info(
+                        t!(self.ui_state.i18n, ids::UPDATE_PCB_PADS_LOCKED, "count" => locks)
+                            .into_string(),
+                    );
+                }
                 if !from_operands {
                     self.activate_tab_for_path(&board);
                 }
