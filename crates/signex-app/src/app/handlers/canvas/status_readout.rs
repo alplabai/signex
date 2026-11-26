@@ -266,7 +266,6 @@ mod tests {
         app.document_state.tabs.push(crate::app::TabInfo {
             title: "e".into(),
             path: path.clone(),
-            cached_document: None,
             project_id: None,
             kind: kind(path.clone()),
         });
@@ -334,7 +333,6 @@ mod tests {
         app.document_state.tabs.push(crate::app::TabInfo {
             title: "R1".into(),
             path: PathBuf::from("parts.snxlib/Resistors.tsv#1"),
-            cached_document: None,
             project_id: None,
             kind: TabKind::ComponentEditor(crate::app::ComponentEditorTab {
                 library_path: PathBuf::from("parts.snxlib"),

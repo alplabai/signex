@@ -59,7 +59,6 @@ fn open(app: &mut Signex, name: &str, sheet: SchematicSheet) -> PathBuf {
     app.document_state.tabs.push(TabInfo {
         title: name.to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -184,7 +183,6 @@ fn project_with_draft() -> (Signex, PathBuf, crate::app::ProjectId, Arc<Recorder
     app.document_state.tabs.push(TabInfo {
         title: "top".to_string(),
         path: sheet.clone(),
-        cached_document: None,
         project_id: Some(id),
         kind: TabKind::Schematic,
     });
@@ -320,7 +318,6 @@ fn remove_dialog_on_draft_sheet() -> (Signex, PathBuf, tempfile::TempDir, Arc<Re
     app.document_state.tabs.push(TabInfo {
         title: "top".to_string(),
         path: sheet.clone(),
-        cached_document: None,
         project_id: Some(id),
         kind: TabKind::Schematic,
     });
@@ -635,7 +632,6 @@ fn add_project_q(app: &mut Signex) -> (PathBuf, crate::app::ProjectId) {
     app.document_state.tabs.push(TabInfo {
         title: "q".to_string(),
         path: sheet.clone(),
-        cached_document: None,
         project_id: Some(id),
         kind: TabKind::Schematic,
     });
@@ -887,7 +883,6 @@ fn overriding_a_project_title_block_value_is_one_undo_step_and_saved() {
     app.document_state.tabs.push(TabInfo {
         title: "top".to_string(),
         path: sheet.clone(),
-        cached_document: None,
         project_id: Some(id),
         kind: TabKind::Schematic,
     });

@@ -46,7 +46,6 @@ fn app_with_over_cap_sheet(
     app.document_state.tabs.push(TabInfo {
         title: "Merged".into(),
         path: path.to_path_buf(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

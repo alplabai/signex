@@ -28,7 +28,6 @@ pub(crate) fn add_sheet_with(app: &mut Signex, path: &Path, sheet: SchematicShee
     app.document_state.tabs.push(crate::app::TabInfo {
         title: path.display().to_string(),
         path: path.to_path_buf(),
-        cached_document: None,
         project_id: None,
         kind: crate::app::TabKind::Schematic,
     });

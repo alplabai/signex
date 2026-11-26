@@ -66,6 +66,24 @@ impl Engine {
         Ok(())
     }
 
+    /// Where the held notices end now, for [`Self::notices_since`].
+    pub fn notice_mark(&self) -> NoticeMark {
+        NoticeMark {
+            warnings: self.warnings.len(),
+            notices: self.notices.len(),
+        }
+    }
+
+    /// The notices raised since `mark` and still held, in the order the
+    /// `take_*` pair drains them (pin notices first), left in place: inside
+    /// a transaction they reach Messages only after the commit, but a caller
+    /// answering one edit of it needs them now (#2552).
+    pub fn notices_since(&self, mark: NoticeMark) -> Vec<EngineNotice> {
+        let pins = self.warnings.get(mark.warnings..).unwrap_or_default();
+        let typed = self.notices.get(mark.notices..).unwrap_or_default();
+        pins.iter().chain(typed).cloned().collect()
+    }
+
     /// Whether a transaction is open.
     pub fn in_transaction(&self) -> bool {
         self.transaction.is_some()

@@ -1365,10 +1365,10 @@ set_layer_visible	headless_missing_operand	needs `layer`	gui	none	routing
 set_net_class_rules	operand_handler	run_operands: named document	core	origin	handler
 set_net_class_rules	refusal_needs_operands	needs_operands_reason	gui	none	routing
 set_net_class_rules	headless_missing_operand	needs `document`	core	none	routing
-set_object_position	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,tool state,origin	handler
+set_object_position	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,origin	handler
 set_object_position	refusal_needs_operands	needs_operands_reason	gui	none	routing
 set_object_position	headless_missing_operand	needs `id`	core	none	routing
-set_object_rotation	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,tool state,origin	handler
+set_object_rotation	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,origin	handler
 set_object_rotation	refusal_needs_operands	needs_operands_reason	gui	none	routing
 set_object_rotation	headless_missing_operand	needs `id`	core	none	routing
 set_object_transparency	operand_handler	run_operands: named document	gui	origin	handler

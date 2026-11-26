@@ -366,13 +366,7 @@ mod tests {
     }
 
     fn tab(name: &str, kind: TabKind) -> TabInfo {
-        TabInfo {
-            title: name.to_owned(),
-            path: PathBuf::from(name),
-            cached_document: None,
-            project_id: None,
-            kind,
-        }
+        crate::test_adapter::boardless_tab(name, name, kind)
     }
 
     fn marks<'p>(

@@ -70,7 +70,6 @@ fn app_with_a_redundant_constraint() -> (Signex, PathBuf, ConstraintId) {
     app.document_state.tabs.push(TabInfo {
         title: "redundant".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });

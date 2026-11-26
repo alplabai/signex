@@ -90,7 +90,6 @@ fn open_tab(app: &mut Signex, path: &Path, sheet: SchematicSheet, project: Proje
     app.document_state.tabs.push(TabInfo {
         title: path.file_stem().unwrap().to_string_lossy().into_owned(),
         path: path.to_path_buf(),
-        cached_document: None,
         project_id: Some(project),
         kind: TabKind::Schematic,
     });

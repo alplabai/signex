@@ -119,7 +119,6 @@ impl Paused {
         self.app.document_state.tabs.push(TabInfo {
             title: name.to_string(),
             path: path.clone(),
-            cached_document: None,
             project_id: None,
             kind,
         });

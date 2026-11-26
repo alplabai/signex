@@ -23,7 +23,13 @@ impl Signex {
                     // The lock's own words, as a move would be refused with.
                     let locked = geometry
                         .and_then(|g| {
-                            signex_engine::move_to_command(sheet, &item, g.position, false)
+                            signex_engine::move_to_command(
+                                sheet,
+                                &item,
+                                g.position,
+                                false,
+                                Default::default(),
+                            )
                         })
                         .and_then(|command| engine.lock_refusal(&command));
                     let end = Self::run_end(sheet, &item);

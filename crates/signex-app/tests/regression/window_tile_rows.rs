@@ -30,7 +30,6 @@ fn app_with_an_undocked_tab(monitor: (f32, f32)) -> Signex {
         app.document_state.tabs.push(TabInfo {
             title: title.to_string(),
             path: tab_path,
-            cached_document: None,
             project_id: None,
             kind: TabKind::Schematic,
         });

@@ -85,7 +85,6 @@ fn open(stem: &str, sketch: SketchData) -> (Signex, PathBuf) {
     app.document_state.tabs.push(TabInfo {
         title: stem.into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });

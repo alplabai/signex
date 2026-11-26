@@ -317,7 +317,6 @@ fn a_symbol_edit_during_a_library_rename_survives_the_rename() {
     f.app.document_state.tabs.push(TabInfo {
         title: "draft".into(),
         path: sym.clone(),
-        cached_document: None,
         project_id: Some(f.project_id),
         kind: TabKind::SymbolEditor(sym.clone()),
     });
@@ -381,7 +380,6 @@ fn an_open_footprint_editor_saves_and_commits_through_the_renamed_library() {
     f.app.document_state.tabs.push(TabInfo {
         title: "fp".into(),
         path: fpt.clone(),
-        cached_document: None,
         project_id: Some(f.project_id),
         kind: TabKind::FootprintEditor(fpt.clone()),
     });
@@ -442,7 +440,6 @@ fn open_dirty_draft_in(f: &mut Fixture, library: &Path) -> PathBuf {
     f.app.document_state.tabs.push(TabInfo {
         title: "d".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: Some(f.project_id),
         kind: TabKind::SymbolEditor(path.clone()),
     });
@@ -948,7 +945,6 @@ fn an_open_browser_tab_and_its_state_follow_the_rename() {
     f.app.document_state.tabs.push(TabInfo {
         title: "alpha".into(),
         path: f.alpha.clone(),
-        cached_document: None,
         project_id: Some(f.project_id),
         kind: TabKind::LibraryBrowser(f.alpha.clone()),
     });

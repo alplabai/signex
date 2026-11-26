@@ -72,7 +72,6 @@ fn showing(sheet: SchematicSheet) -> Signex {
     app.document_state.tabs.push(TabInfo {
         title: "key-repeat".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

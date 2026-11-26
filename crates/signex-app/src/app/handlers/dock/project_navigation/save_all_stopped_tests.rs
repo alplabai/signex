@@ -53,7 +53,6 @@ fn app_with_open_symbol(dir: &Path) -> (Signex, PathBuf, PathBuf) {
     app.document_state.tabs.push(TabInfo {
         title: "Lib".into(),
         path: symbol.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::SymbolEditor(symbol.clone()),
     });

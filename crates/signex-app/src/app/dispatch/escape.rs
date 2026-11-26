@@ -777,7 +777,6 @@ mod tests {
         app.document_state.tabs.push(crate::app::TabInfo {
             title: "part".to_string(),
             path: footprint.clone(),
-            cached_document: None,
             project_id: None,
             kind: crate::app::TabKind::FootprintEditor(footprint),
         });
@@ -966,7 +965,6 @@ mod tests {
         app.document_state.tabs.push(crate::app::TabInfo {
             title: "part".to_string(),
             path: path.clone(),
-            cached_document: None,
             project_id: None,
             kind: crate::app::TabKind::SymbolEditor(path.clone()),
         });
@@ -1174,7 +1172,6 @@ mod tests {
         app.document_state.tabs.push(crate::app::TabInfo {
             title: "part".to_string(),
             path: path.clone(),
-            cached_document: None,
             project_id: None,
             kind: crate::app::TabKind::FootprintEditor(path.clone()),
         });

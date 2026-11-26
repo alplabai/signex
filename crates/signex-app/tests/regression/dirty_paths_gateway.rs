@@ -56,7 +56,6 @@ pub(crate) fn app_with(symbols: Vec<Symbol>) -> (Signex, PathBuf) {
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "dirty-gateway".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });
@@ -272,7 +271,6 @@ fn app_with_parked_sheet(
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "root".to_string(),
         path: root_path.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });

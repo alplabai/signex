@@ -18,6 +18,7 @@ mod opened;
 mod opened_deferred;
 mod origin;
 mod owed_repaint;
+mod placed_move;
 #[cfg(unix)]
 mod presence;
 mod query_surfaces;
@@ -40,7 +41,7 @@ use crate::app::{Message, Signex};
 pub(super) const SHEET_A: u128 = 100;
 pub(super) const SHEET_B: u128 = 101;
 
-fn sheet_entry(name: &str) -> SheetEntry {
+pub(super) fn sheet_entry(name: &str) -> SheetEntry {
     SheetEntry {
         name: name.into(),
         filename: format!("{name}.snxsch"),

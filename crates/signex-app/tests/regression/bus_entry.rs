@@ -38,7 +38,6 @@ fn app_with_buses(buses: &[BusEnds]) -> (Signex, TempDir) {
     app.document_state.tabs.push(TabInfo {
         title: "root".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

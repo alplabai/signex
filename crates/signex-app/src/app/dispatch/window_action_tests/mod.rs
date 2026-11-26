@@ -16,7 +16,6 @@ fn tab(path: &Path) -> TabInfo {
     TabInfo {
         title: path.file_stem().unwrap().to_string_lossy().into_owned(),
         path: path.to_path_buf(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     }

@@ -11,6 +11,7 @@ use signex_app::app::{
     CommandPaletteMsg, FileMsg, FootprintDocument, Message, Signex, TabInfo, TabKind,
 };
 use signex_app::tab_bar::TabMessage;
+use signex_app::test_adapter::boardless_tab;
 use signex_library::{Footprint, FootprintFile};
 use std::path::PathBuf;
 
@@ -33,7 +34,6 @@ fn open_footprint_tab(app: &mut Signex) {
     app.document_state.tabs.push(TabInfo {
         title: "f".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::FootprintEditor(path),
     });
@@ -179,13 +179,11 @@ fn tab_switch_rebuilds_the_open_palette() {
     let window = iced::window::Id::unique();
     app.ui_state.main_window_id = Some(window);
     // Tab 0 is a PCB, tab 1 the footprint editor.
-    app.document_state.tabs.push(TabInfo {
-        title: "board".into(),
-        path: PathBuf::from("palette-context.snxpcb"),
-        cached_document: None,
-        project_id: None,
-        kind: TabKind::Pcb,
-    });
+    app.document_state.tabs.push(boardless_tab(
+        "board",
+        "palette-context.snxpcb",
+        TabKind::Pcb,
+    ));
     open_footprint_tab(&mut app);
     app.document_state.active_tab = 0;
 

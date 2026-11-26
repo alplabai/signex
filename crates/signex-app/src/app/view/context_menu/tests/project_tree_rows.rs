@@ -365,7 +365,6 @@ fn show_history_opens_the_history_panel_with_this_file_only() {
     app.document_state.tabs.push(TabInfo {
         title: "a".to_string(),
         path: leaf.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
