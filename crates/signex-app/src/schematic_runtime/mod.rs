@@ -28,7 +28,7 @@ mod dimension;
 mod directives;
 mod drawings;
 pub(crate) use drawings::annotation_aabb;
-mod drawn_value;
+pub(crate) mod drawn_value;
 mod harness;
 pub mod hit_index;
 pub mod hit_test;
@@ -324,6 +324,8 @@ pub struct SceneOverrides<'a> {
     /// The project's designator standard: a reference draws as
     /// `signex_types::designator::display_reference` shows it (#1416).
     pub designator_standard: Option<signex_types::designator::DesignatorStandard>,
+    /// Symbols drawn greyed and crossed out, not fitted (#1294).
+    pub not_fitted: Option<&'a HashSet<uuid::Uuid>>,
 }
 
 pub fn render_schematic(
@@ -1117,6 +1119,8 @@ mod drawings_tests;
 mod font_geometry_tests;
 #[cfg(test)]
 mod multiline_note_tests;
+#[cfg(test)]
+mod not_fitted_tests;
 #[cfg(test)]
 mod reference_sign_tests;
 #[cfg(test)]

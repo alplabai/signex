@@ -5,6 +5,9 @@ use signex_app::app::{EditMsg, Message, ParameterManagerMsg, Signex};
 
 use crate::dirty_paths_gateway::{app_with, symbol};
 
+/// The sheet `app_with` opens.
+const SHEET: &str = "dirty-gateway.snxsch";
+
 fn fields(app: &Signex) -> std::collections::HashMap<String, String> {
     app.document_state
         .active_engine()
@@ -17,6 +20,7 @@ fn fields(app: &Signex) -> std::collections::HashMap<String, String> {
 
 fn typed(app: &mut Signex, id: uuid::Uuid, key: &str, text: &str) {
     let _ = app.update(Message::ParameterManager(ParameterManagerMsg::Edit {
+        sheet: SHEET.into(),
         symbol_uuid: id,
         key: key.into(),
         value: text.into(),
@@ -36,6 +40,7 @@ fn seeded() -> (Signex, uuid::Uuid) {
     let id = uuid::Uuid::now_v7();
     let (mut app, _path) = app_with(vec![symbol(id, "R1", 0.0)]);
     let _ = app.update(Message::ParameterManager(ParameterManagerMsg::Edit {
+        sheet: SHEET.into(),
         symbol_uuid: id,
         key: "Tolerance".into(),
         value: "5%".into(),
@@ -52,6 +57,7 @@ fn clearing_a_cell_keeps_the_parameter_with_an_empty_value() {
     let (mut app, id) = seeded();
 
     let _ = app.update(Message::ParameterManager(ParameterManagerMsg::Edit {
+        sheet: SHEET.into(),
         symbol_uuid: id,
         key: "Tolerance".into(),
         value: String::new(),

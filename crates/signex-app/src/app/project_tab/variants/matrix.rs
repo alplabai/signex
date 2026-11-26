@@ -24,17 +24,17 @@ use crate::styles::tokens::resolve;
 use crate::styles::{PillTone, Radii, ti};
 
 /// Width of the Part column, in `body`-size characters.
-const PART_EMS: f32 = 58.0 / 12.0;
+pub(super) const PART_EMS: f32 = 58.0 / 12.0;
 /// Width of the Value · Footprint column, in `body`-size characters.
-const VALUE_EMS: f32 = 150.0 / 12.0;
+pub(super) const VALUE_EMS: f32 = 150.0 / 12.0;
 /// Height of a matrix row, in `body`-size characters.
-const ROW_EMS: f32 = 30.0 / 12.0;
+pub(super) const ROW_EMS: f32 = 30.0 / 12.0;
 /// Height of the heading row, in `body`-size characters.
 const HEAD_EMS: f32 = 28.0 / 12.0;
 /// Height of a cell pill, in `body`-size characters.
-const CELL_EMS: f32 = 20.0 / 12.0;
+pub(super) const CELL_EMS: f32 = 20.0 / 12.0;
 /// Strength of the accent fill of the active column.
-const ACTIVE_FILL: f32 = 0.22;
+pub(super) const ACTIVE_FILL: f32 = 0.22;
 /// Width of the active column's underline, in px.
 const ACTIVE_RULE: f32 = 2.0;
 
@@ -60,8 +60,29 @@ pub(super) fn view<'a>(m: &Manager<'_>, matrix: &VariantMatrix) -> Element<'a, M
     let only_differ = m.tab.is_some_and(|tab| tab.variants_only_differ);
     let shown = shown_rows(matrix, filter, only_differ);
     let mut body: Column<Element<'a, Message>> = Column::new();
+    // A part on a repeated sheet is one row where its first copy is listed,
+    // open into the copies the filters keep (#2662).
+    let mut listed: Vec<&signex_types::pcb::SymbolLink> = Vec::new();
     for part in &shown {
-        body = body.push(part_row(m, part));
+        let Some(channel) = part.channel.as_ref() else {
+            body = body.push(part_row(m, part));
+            continue;
+        };
+        if listed.contains(&&channel.part) {
+            continue;
+        }
+        listed.push(&channel.part);
+        body = body.push(super::channel_rows::part_row(m, matrix, channel, part));
+        if m.is_channel_part_open(&channel.part) {
+            let is_copy = |row: &&&VariantRow| {
+                row.channel
+                    .as_ref()
+                    .is_some_and(|other| other.part == channel.part)
+            };
+            for copy in shown.iter().filter(is_copy) {
+                body = body.push(part_row(m, copy));
+            }
+        }
     }
     if only_differ {
         let differ = matrix.differing_rows();
@@ -366,7 +387,7 @@ fn value_pill<'a>(
 }
 
 /// One body cell, `width` wide, on `fill` when given.
-fn body_cell<'a>(
+pub(super) fn body_cell<'a>(
     face: Element<'a, Message>,
     width: Length,
     fill: Option<Color>,
@@ -386,7 +407,7 @@ fn body_cell<'a>(
 
 /// A cell's state: Fitted or Not fitted, coloured when it `differs` from
 /// Base (or always, in the `legend`).
-fn cell_pill<'a>(
+pub(super) fn cell_pill<'a>(
     m: &Manager<'_>,
     differs: bool,
     not_fitted: bool,

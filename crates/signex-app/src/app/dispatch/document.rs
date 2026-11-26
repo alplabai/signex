@@ -623,10 +623,12 @@ impl Signex {
                 let task = self.handle_print_preview_set_variant(v);
                 Task::batch([task, self.finish_update()])
             }
-            // Visual toggles (No-ERC Markers, No-Connect Markers, Notes) — affect what
-            // the SVG renderer emits, so we mutate `pdf_options`
-            // directly and trigger a rerasterize so the Preview tab
-            // reflects the change immediately.
+            // Visual toggles (No-ERC Markers, No-Connect Markers, Notes,
+            // Net Parameters, Net Blankets, Compile Masks, Differential
+            // Pairs) — affect what the SVG renderer
+            // emits, so we mutate `pdf_options` directly and trigger a
+            // rerasterize so the Preview tab reflects the change
+            // immediately.
             PrintPreviewMsg::SetIncludeNoErcMarkers(v) => {
                 if let Some(p) = self.document_state.preview.as_mut() {
                     p.pdf_options.include_no_erc_markers = v;
@@ -648,10 +650,39 @@ impl Signex {
                 let task = self.handle_print_preview_rerender();
                 Task::batch([task, self.finish_update()])
             }
+            PrintPreviewMsg::SetIncludeParameterSets(v) => {
+                if let Some(p) = self.document_state.preview.as_mut() {
+                    p.pdf_options.include_parameter_sets = v;
+                }
+                let task = self.handle_print_preview_rerender();
+                Task::batch([task, self.finish_update()])
+            }
+            PrintPreviewMsg::SetIncludeBlankets(v) => {
+                if let Some(p) = self.document_state.preview.as_mut() {
+                    p.pdf_options.include_blankets = v;
+                }
+                let task = self.handle_print_preview_rerender();
+                Task::batch([task, self.finish_update()])
+            }
+            PrintPreviewMsg::SetIncludeCompileMasks(v) => {
+                if let Some(p) = self.document_state.preview.as_mut() {
+                    p.pdf_options.include_compile_masks = v;
+                }
+                let task = self.handle_print_preview_rerender();
+                Task::batch([task, self.finish_update()])
+            }
+            PrintPreviewMsg::SetIncludeDiffPairs(v) => {
+                if let Some(p) = self.document_state.preview.as_mut() {
+                    p.pdf_options.include_diff_pairs = v;
+                }
+                let task = self.handle_print_preview_rerender();
+                Task::batch([task, self.finish_update()])
+            }
             // Bookkeeping toggles — stored on `pdf_options` for the
-            // exporter to honour later, but no render hookup yet so
-            // skip the rerasterize. Adding render support is a
-            // one-line move into the visual-toggle group above.
+            // exporter to honour later (Probes and Collapsed Notes have
+            // no drawing yet), so skip the rerasterize. Adding render
+            // support is a one-line move into the visual-toggle group
+            // above.
             PrintPreviewMsg::SetUsePhysicalStructure(v) => {
                 if let Some(p) = self.document_state.preview.as_mut() {
                     p.pdf_options.use_physical_structure = v;
@@ -688,21 +719,9 @@ impl Signex {
                 }
                 self.finish_update()
             }
-            PrintPreviewMsg::SetIncludeParameterSets(v) => {
-                if let Some(p) = self.document_state.preview.as_mut() {
-                    p.pdf_options.include_parameter_sets = v;
-                }
-                self.finish_update()
-            }
             PrintPreviewMsg::SetIncludeProbes(v) => {
                 if let Some(p) = self.document_state.preview.as_mut() {
                     p.pdf_options.include_probes = v;
-                }
-                self.finish_update()
-            }
-            PrintPreviewMsg::SetIncludeBlankets(v) => {
-                if let Some(p) = self.document_state.preview.as_mut() {
-                    p.pdf_options.include_blankets = v;
                 }
                 self.finish_update()
             }

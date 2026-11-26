@@ -532,14 +532,13 @@ fn a_grandchild_gets_its_own_designator_under_each_parent_placement() {
 
 #[test]
 fn printed_pages_are_one_copy_per_placement_with_resolved_designators() {
-    use crate::app::handlers::menu::export::build_page_scope;
     let app = placed_app(
         "/w/pdf",
         &["top.snxsch", "child.snxsch"],
         &["A", "B"],
         vec![entry_for(&[1], "R1"), entry_for(&[2], "R101")],
     );
-    let (ctx, _) = build_page_scope(&app.document_state).expect("scope");
+    let (ctx, _) = build_export_scope(&app.document_state).expect("scope");
     let shape: Vec<(String, String, Vec<String>, usize, usize)> = ctx
         .sheets
         .iter()
@@ -571,14 +570,13 @@ fn printed_pages_are_one_copy_per_placement_with_resolved_designators() {
 
 #[test]
 fn a_printed_child_placed_once_prints_its_placement_designator() {
-    use crate::app::handlers::menu::export::build_page_scope;
     let app = placed_app(
         "/w/pdf1",
         &["top.snxsch", "child.snxsch"],
         &["A"],
         vec![entry_for(&[1], "R101")],
     );
-    let (ctx, _) = build_page_scope(&app.document_state).expect("scope");
+    let (ctx, _) = build_export_scope(&app.document_state).expect("scope");
     assert_eq!(ctx.sheets.len(), 2);
     assert_eq!(ctx.sheets[1].schematic.symbols[0].reference, "R101");
     assert_eq!(ctx.sheets[1].sheet_number, 2, "numbering untouched");
@@ -588,7 +586,6 @@ fn a_printed_child_placed_once_prints_its_placement_designator() {
 /// without descending (no recorded placement): the first page copy is current.
 #[test]
 fn current_page_on_a_declared_child_placed_twice_is_its_first_copy() {
-    use crate::app::handlers::menu::export::build_page_scope;
     let mut app = placed_app(
         "/w/cur",
         &["top.snxsch", "child.snxsch"],
@@ -596,7 +593,7 @@ fn current_page_on_a_declared_child_placed_twice_is_its_first_copy() {
         vec![entry_for(&[1], "R7"), entry_for(&[2], "R101")],
     );
     app.document_state.active_path = Some(PathBuf::from("/w/cur").join("child.snxsch"));
-    let (ctx, _) = build_page_scope(&app.document_state).expect("scope");
+    let (ctx, _) = build_export_scope(&app.document_state).expect("scope");
     let current = &ctx.sheets[ctx.current_sheet_index()];
     assert_eq!(current.sheet_name, "child.snxsch (A)");
     assert_eq!(current.schematic.symbols[0].reference, "R7");
@@ -607,7 +604,7 @@ fn current_page_on_a_declared_child_placed_twice_is_its_first_copy() {
 /// with that placement's designators.
 #[test]
 fn current_page_on_an_undeclared_child_placed_twice_resolves_a_placement() {
-    use crate::app::handlers::menu::export::{build_page_scope, isolate_undeclared_current};
+    use crate::app::handlers::menu::export::isolate_undeclared_current;
     let mut app = placed_app(
         "/w/cur2",
         &["top.snxsch"],
@@ -616,7 +613,7 @@ fn current_page_on_an_undeclared_child_placed_twice_resolves_a_placement() {
     );
     let child = PathBuf::from("/w/cur2").join("child.snxsch");
     app.document_state.active_path = Some(child.clone());
-    let (mut ctx, issues) = build_page_scope(&app.document_state).expect("scope");
+    let (mut ctx, issues) = build_export_scope(&app.document_state).expect("scope");
     assert!(isolate_undeclared_current(
         &mut ctx,
         &issues,
@@ -655,28 +652,26 @@ fn opening_a_schematic_tab_marks_the_designator_note_due() {
 
 #[test]
 fn a_singly_placed_printed_child_keeps_its_page_name() {
-    use crate::app::handlers::menu::export::build_page_scope;
     let app = placed_app(
         "/w/name1",
         &["top.snxsch", "child.snxsch"],
         &["A"],
         vec![entry_for(&[1], "R101")],
     );
-    let (ctx, _) = build_page_scope(&app.document_state).expect("scope");
+    let (ctx, _) = build_export_scope(&app.document_state).expect("scope");
     assert_eq!(ctx.sheets[1].sheet_name, "child.snxsch");
     assert_eq!(ctx.sheets[1].schematic.symbols[0].reference, "R101");
 }
 
 #[test]
 fn two_copies_of_a_child_are_two_independent_picker_rows() {
-    use crate::app::handlers::menu::export::build_page_scope;
     let mut app = placed_app(
         "/w/pick",
         &["top.snxsch", "child.snxsch"],
         &["A", "B"],
         vec![entry_for(&[1], "R1"), entry_for(&[2], "R101")],
     );
-    let _ = build_page_scope(&app.document_state).expect("scope");
+    let _ = build_export_scope(&app.document_state).expect("scope");
     let _ = app.handle_print_preview_requested();
     let preview = app.document_state.preview.as_ref().expect("preview");
     let rows: Vec<_> = preview.sheet_files.iter().map(|(k, _)| k.clone()).collect();

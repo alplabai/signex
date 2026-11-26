@@ -61,10 +61,11 @@ fn the_palette_lists_it_when_a_schematic_is_open() {
 #[test]
 fn the_command_opens_the_manager_and_a_cell_edit_is_undoable() {
     let target = uuid::Uuid::now_v7();
-    let (mut app, _path) = app_with(vec![symbol(target, "R1", 0.0)]);
+    let (mut app, path) = app_with(vec![symbol(target, "R1", 0.0)]);
 
     // Seed a parameter so the table has a column to edit.
     let _ = app.update(Message::ParameterManager(ParameterManagerMsg::Edit {
+        sheet: path.clone(),
         symbol_uuid: target,
         key: "Tolerance".into(),
         value: "5%".into(),
@@ -83,6 +84,7 @@ fn the_command_opens_the_manager_and_a_cell_edit_is_undoable() {
     assert!(app.ui_state.parameter_manager_open);
 
     let _ = app.update(Message::ParameterManager(ParameterManagerMsg::Edit {
+        sheet: path,
         symbol_uuid: target,
         key: "Tolerance".into(),
         value: "1%".into(),

@@ -52,7 +52,12 @@ fn move_symbol(app: &mut Signex, id: uuid::Uuid) {
 }
 
 fn set_field(app: &mut Signex, id: uuid::Uuid, value: &str) {
-    let _task = app.handle_parameter_manager_edit(id, "MPN".to_string(), value.to_string());
+    let cell = crate::app::state::ParameterCell {
+        sheet: Some(path()),
+        symbol: id,
+        key: "MPN".to_string(),
+    };
+    let _task = app.handle_parameter_manager_edit(cell, value.to_string());
 }
 
 fn path() -> std::path::PathBuf {

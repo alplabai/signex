@@ -546,7 +546,8 @@ mod tests {
             crate::app::core::compiled_design::CompiledResult {
                 design: std::sync::Arc::new(signex_net::CompiledDesign::default()),
                 paths: Default::default(),
-                compiled_at: "12:41".to_string(),
+                compiled_at: chrono::DateTime::<chrono::Utc>::UNIX_EPOCH,
+                miniatures: Default::default(),
                 stale: Default::default(),
                 has_unread_sheets: false,
                 unread_paths: Vec::new(),

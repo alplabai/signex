@@ -2,17 +2,24 @@
 //! objects. Pure: [`sheet_rows`] reads one sheet, [`filtered`] and
 //! [`kind_counts`] narrow a list by the panel's filter and kind chips. Net
 //! names come from the caller (the cached project net index), never from a
-//! walk here.
+//! walk here. Names and values are the text the canvas draws (#2630), by the
+//! canvas's own rules ([`SheetLook`]).
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use signex_i18n::I18n;
+use signex_types::designator::DesignatorStandard;
 use signex_types::schematic::{
-    LabelType, Point, SchDirective, SchDrawing, SchematicSheet, SelectedItem, SelectedKind,
+    InstancePath, LabelType, Point, SchDirective, SchDrawing, SchematicSheet, SelectedItem,
+    SelectedKind, Symbol,
 };
 use signex_widgets::chips::FilterSet;
 use uuid::Uuid;
+
+use crate::canvas::SpecialStrings;
+use crate::schematic_runtime::drawn_value::{drawn_designator, drawn_value};
 
 /// How many rows the panel draws before a "more" row; each press of it adds
 /// as many again.
@@ -190,11 +197,61 @@ pub fn sheet_label(path: &Path) -> String {
     )
 }
 
-/// Every listed object of `sheet`, read from the file at `path`. `wire_net`
-/// names the net a wire or bus is on, when the caller's index knows it.
+/// What the canvas draws a sheet's text with, so a row reads as the canvas
+/// does (#2630). The default draws every text as stored.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct SheetLook {
+    /// The placement whose designators the sheet shows (#1151); `None`
+    /// shows each part's `reference`.
+    pub placement: Option<InstancePath>,
+    /// What `${TOKEN}`s resolve to on the sheet; `None` for a sheet with no
+    /// open document, whose expressions are evaluated on the sheet alone.
+    pub special: Option<SpecialStrings>,
+    /// The project's designator standard (#1416).
+    pub standard: Option<DesignatorStandard>,
+}
+
+impl SheetLook {
+    /// A part's designator as the canvas draws it.
+    fn designator<'a>(&self, symbol: &'a Symbol) -> std::borrow::Cow<'a, str> {
+        drawn_designator(symbol, self.placement.as_ref(), self.standard)
+    }
+
+    /// A part's (or a power port's) value as the canvas draws it.
+    fn value(&self, symbols: &[Symbol], symbol: &Symbol) -> String {
+        drawn_value(symbols, symbol, self.special.as_ref(), self.standard)
+    }
+
+    /// A text note as the canvas draws it.
+    fn note(&self, text: &str) -> String {
+        match &self.special {
+            Some(special) => special.resolve_text(text),
+            None => text.to_string(),
+        }
+    }
+}
+
+/// The look of each sheet of a Project read, by path; a sheet not in it
+/// draws with `fallback`.
+#[derive(Debug, Clone, Default)]
+pub struct SheetLooks {
+    pub by_path: HashMap<PathBuf, SheetLook>,
+    pub fallback: SheetLook,
+}
+
+impl SheetLooks {
+    pub fn of(&self, path: &Path) -> &SheetLook {
+        self.by_path.get(path).unwrap_or(&self.fallback)
+    }
+}
+
+/// Every listed object of `sheet`, read from the file at `path`, its names
+/// and values as `look` draws them. `wire_net` names the net a wire or bus
+/// is on, when the caller's index knows it.
 pub fn sheet_rows(
     sheet: &SchematicSheet,
     path: &Path,
+    look: &SheetLook,
     wire_net: &dyn Fn(Uuid) -> Option<String>,
 ) -> Vec<ObjectRow> {
     let label = sheet_label(path);
@@ -215,12 +272,12 @@ pub fn sheet_rows(
     for s in &sheet.symbols {
         let item = SelectedItem::new(s.uuid, SelectedKind::Symbol);
         if s.is_power {
-            let name = RowName::Text(s.value.clone());
+            let name = RowName::Text(look.value(&sheet.symbols, s));
             let value = RowValue::Word(ValueWord::PowerPort);
             push(ObjectKind::PowerPort, name, value, item, s.position);
         } else {
-            let name = RowName::Text(s.reference.clone());
-            let value = RowValue::Text(s.value.clone());
+            let name = RowName::Text(look.designator(s).into_owned());
+            let value = RowValue::Text(look.value(&sheet.symbols, s));
             push(ObjectKind::Part, name, value, item, s.position);
         }
     }
@@ -278,7 +335,7 @@ pub fn sheet_rows(
     for t in &sheet.text_notes {
         let item = SelectedItem::new(t.uuid, SelectedKind::TextNote);
         let name = RowName::Noun(ObjectNoun::Text);
-        let value = RowValue::Text(t.text.clone());
+        let value = RowValue::Text(look.note(&t.text));
         push(ObjectKind::Text, name, value, item, t.position);
     }
     for j in &sheet.junctions {
@@ -391,13 +448,33 @@ pub struct ObjectListState {
     pub more_open: bool,
     /// How many rows are drawn; 0 reads as one page.
     pub shown: usize,
+    /// The main window's rows.
     pub source: ObjectRowsSource,
+    /// Each undocked document window's rows: its panels list the sheet it
+    /// shows (#2630). The picks above are shared.
+    pub windows: HashMap<iced::window::Id, ObjectRowsSource>,
 }
 
 impl ObjectListState {
     /// How many rows to draw.
     pub fn row_limit(&self) -> usize {
         self.shown.max(ROW_PAGE)
+    }
+
+    /// The rows of the main window (`None`) or of an undocked window.
+    pub fn source_of(&self, window: Option<iced::window::Id>) -> Option<&ObjectRowsSource> {
+        match window {
+            None => Some(&self.source),
+            Some(window) => self.windows.get(&window),
+        }
+    }
+
+    /// [`Self::source_of`], made on first use for a window.
+    pub fn source_of_mut(&mut self, window: Option<iced::window::Id>) -> &mut ObjectRowsSource {
+        match window {
+            None => &mut self.source,
+            Some(window) => self.windows.entry(window).or_default(),
+        }
     }
 
     /// A stamp of what the user picked.
@@ -430,6 +507,21 @@ pub struct ObjectRowsSource {
     pub failed: bool,
     /// Stamp of everything the panel view was last built from.
     pub view_stamp: Option<u64>,
+    /// What `${TOKEN}`s resolved to on the sheet in view when the rows were
+    /// read; the canvas resolving them otherwise reads the rows again.
+    pub special: Option<SpecialStrings>,
+}
+
+impl ObjectRowsSource {
+    /// Forget the rows and what they were read from. The generation moves
+    /// on, never back, so a read still on its way is dropped when it lands
+    /// and a later read cannot share its number (#2630).
+    pub fn reset(&mut self) {
+        *self = Self {
+            generation: self.generation.wrapping_add(1),
+            ..Self::default()
+        };
+    }
 }
 
 /// What happened in the Object List panel.
@@ -446,9 +538,11 @@ pub enum ObjectListMsg {
     RowClicked(ObjectRef),
     /// A row was double-clicked: select its object and zoom to it.
     RowDoubleClicked(ObjectRef),
-    /// The project's sheets were read for the Project scope; the error is a
+    /// The project's sheets were read for the Project scope of the main
+    /// window (`window: None`) or of an undocked window; the error is a
     /// worker that died.
     ProjectRowsRead {
+        window: Option<iced::window::Id>,
         generation: u64,
         rows: Result<Arc<Vec<ObjectRow>>, String>,
     },
@@ -489,17 +583,18 @@ pub struct ObjectListView {
 }
 
 impl ObjectListView {
-    /// The view of `state`'s rows: filtered, counted and marked against the
-    /// canvas selection `selected` on `active_sheet`; the filter folds by
-    /// `i18n`'s rules.
+    /// The view of `source`'s rows by `state`'s picks: filtered, counted and
+    /// marked against the canvas selection `selected` on `active_sheet`; the
+    /// filter folds by `i18n`'s rules.
     pub fn build(
         state: &ObjectListState,
+        source: &ObjectRowsSource,
         status: ObjectListStatus,
         active_sheet: Option<PathBuf>,
         selected: &[SelectedItem],
         i18n: &I18n,
     ) -> Self {
-        let all = &state.source.rows;
+        let all = &source.rows;
         let mut view = Self {
             filter: state.filter.clone(),
             scope: state.scope,
@@ -512,7 +607,7 @@ impl ObjectListView {
             active_sheet,
             selected: Arc::new(selected.iter().map(|s| s.uuid).collect()),
             selected_count: 0,
-            reading: state.source.reading,
+            reading: source.reading,
         };
         view.selected_count = view.rows.iter().filter(|r| view.is_selected(r)).count();
         view

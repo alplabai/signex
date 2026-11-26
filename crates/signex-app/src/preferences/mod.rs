@@ -206,6 +206,8 @@ pub enum PrefMsg {
     DraftEdgePanSpeed(crate::app::edge_pan::EdgePanSpeed),
     /// The "Fill symbol bodies" rows changed. Persisted on Save.
     SymbolBodyFill(BodyFillMsg),
+    /// Toggle "Cross out not-fitted parts" (#1294). Persisted on Save.
+    DraftCrossOutNotFitted(bool),
     /// A PCB Defaults row changed (#2868). Persisted on Save.
     PcbDefaults(PcbDefaultsMsg),
     /// Toggle "Two-finger scroll pans". Persisted on Save.
@@ -385,6 +387,7 @@ pub struct PrefsView<'a> {
     /// The fill colour field's preset palette and custom picker are open.
     pub body_fill_palette_open: bool,
     pub body_fill_picker_open: bool,
+    pub draft_cross_out_not_fitted: bool,
     /// The PCB Defaults draft (#2868).
     pub draft_pcb_defaults: &'a crate::pcb_defaults_prefs::PcbDefaultsDraft,
     /// How much other copper dims while a board net is highlighted (#2514).
@@ -545,6 +548,7 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             theme_tint: signex_types::theme::canvas_colors(v.draft_theme).body_tint,
             palette_open: v.body_fill_palette_open,
             picker_open: v.body_fill_picker_open,
+            cross_out_not_fitted: v.draft_cross_out_not_fitted,
             tokens: panel_tokens,
             i18n,
         }),

@@ -263,6 +263,7 @@ fn the_filter_matches_designators_and_values_with_wildcards() {
         fitted: vec![true],
         parameters: Vec::new(),
         overridden: vec![false],
+        channel: None,
     };
     assert!(row.matches(""));
     assert!(row.matches("  , "));
