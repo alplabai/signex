@@ -106,10 +106,13 @@ mod tests {
                 "apply_board_schematic_differences",
                 "apply_edits",
                 "arrange_in_box",
+                // #2457, #2941: the rooms commands, on the named board.
+                "arrange_in_room",
                 "assign_board_net_class",
                 // #2937: a part's footprint on the named sheet.
                 "assign_footprint",
                 "assign_net_class",
+                "auto_place",
                 "autoplace_fields",
                 // #2470: Back Annotate and Re-Annotate Board on the named
                 // project or board.
@@ -143,6 +146,7 @@ mod tests {
                 "clear_all_net_colors",
                 "close_active_document",
                 "color_net",
+                "create_rooms_from_sheets",
                 "delete_net_class",
                 "delete_selection",
                 "document_info",
@@ -178,6 +182,7 @@ mod tests {
                 "place_board_region",
                 // #2410: pin and gate swap and design reuse, on the named board.
                 "place_board_reuse_block",
+                "place_board_room",
                 "place_board_route",
                 "place_board_track",
                 "place_board_via",

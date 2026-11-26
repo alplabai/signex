@@ -280,7 +280,7 @@ impl Signex {
             result,
         } = msg
         {
-            return self.finish_rooms_from_sheets(waiting, board, request, result);
+            return self.finish_rooms_from_sheets(*waiting, board, request, result);
         }
         if matches!(msg, CreateRoomsMsg::Confirmed) {
             self.create_rooms();

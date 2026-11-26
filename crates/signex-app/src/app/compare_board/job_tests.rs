@@ -95,6 +95,7 @@ fn project_data(dir: &Path) -> signex_types::project::ProjectData {
         router_tool_diameter: None,
         requirements: Default::default(),
         parameters: Default::default(),
+        bom_alternates: Vec::new(),
         unknown: Default::default(),
     }
 }
@@ -156,7 +157,6 @@ fn rig_with(open_board: bool) -> Rig {
     app.document_state.tabs.push(TabInfo {
         title: "root".to_string(),
         path: root.clone(),
-        cached_document: None,
         project_id: Some(id),
         kind: TabKind::Schematic,
     });

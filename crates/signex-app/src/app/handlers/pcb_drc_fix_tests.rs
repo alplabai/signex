@@ -212,7 +212,7 @@ fn a_rule_with_no_fix_is_refused_with_the_rules_that_have_one() {
     let CommandOutcome::Disabled { reason } = refused else {
         panic!("not refused: {refused:?}");
     };
-    let reason = reason.render_en_us();
+    let reason = signex_i18n::RenderTranslatable::render_en_us(&reason);
     assert!(
         reason.contains("`short` is not a rule with a fix"),
         "{reason}"

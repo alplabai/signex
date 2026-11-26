@@ -59,4 +59,6 @@ define_ids! {
     BOM_RULE_DUPLICATE_DESIGNATOR = "bom-rule-duplicate-designator";
     BOM_RULE_EMPTY_OR_ZERO_QTY = "bom-rule-empty-or-zero-qty";
     BOM_RULE_UNIT_FIELD_CONFLICT = "bom-rule-unit-field-conflict";
+    BOM_QUERY_REFUSED = "bom-query-refused";
+    BOM_ALTERNATE_REFUSED = "bom-alternate-refused";
 }

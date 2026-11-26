@@ -166,6 +166,7 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "color_net",
             "export_board_report",
             "export_board_step",
+            "fabrication_outputs",
             "export_assembly_svg",
             "board_assembly_drawing",
             "board_report_bom",
@@ -231,9 +232,54 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "place_board_polygon_pour",
             "place_board_keepout",
             "place_board_pour_cutout",
+            // #2936, #2937: a footprint placed, turned, flipped, assigned or
+            // swapped by its operands, never the selection.
+            "set_footprint_position",
+            "set_footprint_rotation",
+            "set_footprint_side",
+            "assign_footprint",
+            "change_footprint",
+            // #1297, #2938: the part swap and a BOM line's alternates.
+            "change_component",
+            "bom_add_alternate",
+            "bom_remove_alternate",
+            "bom_set_alternate_order",
+            // #2470, #2462: board numbering, back annotation and the board
+            // against schematic Apply, on the named board or project.
+            "reannotate_board",
+            "back_annotate_schematics",
+            "apply_board_schematic_differences",
+            // #2457, #2941: the rooms commands take the room, the sheets'
+            // parts and the weights from their operands and the board.
+            "place_board_room",
+            "create_rooms_from_sheets",
+            "arrange_in_room",
+            "auto_place",
         ],
         Operand,
         &[],
+    ),
+    // #2457: from the palette, Arrange in Room acts on the room Properties
+    // shows on the board in view.
+    (
+        &["arrange_in_room"],
+        Translator,
+        &[ActiveDocument, Selection],
+    ),
+    // #2470: a headless New PCB with no `document` joins the project in view.
+    (
+        &["new_pcb_document"],
+        HeadlessNewDocument,
+        &[ActiveDocument],
+    ),
+    // #2470: Annotate with no `document` runs on the active sheet's project.
+    (
+        &[
+            "annotate_schematic_quietly",
+            "force_annotate_all_schematics",
+        ],
+        Operand,
+        &[ActiveDocument],
     ),
     // The DRC results act on the board in view only (`drc_results_board`,
     // handlers/pcb_drc_results.rs); Show also centres that window's camera
@@ -447,6 +493,14 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "query_pins",
             // #2943: the project's rails and its parts, read off the UI thread.
             "query_rail_budget",
+            // #2937, #2462, #2460, #2938, #1297: the footprint list, the board
+            // against the schematic, the board's counters, the priced BOM
+            // and the part search.
+            "query_footprint_assignments",
+            "check_board_against_schematic",
+            "board_status",
+            "query_bom",
+            "search_parts",
             "read_document",
         ],
         Query,

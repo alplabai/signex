@@ -105,7 +105,9 @@ pub(super) const BOM: &[CommandMetadata] = &[
     },
     CommandMetadata {
         id: "search_parts",
-        category: "library",
+        // `search`, not `library`: it reads the open libraries in memory and
+        // reaches no server (`refresh=true` is refused).
+        category: "search",
         label: command_ids::CMD_SEARCH_PARTS,
         menu_label: None,
         group: CommandGroup::General,

@@ -237,4 +237,5 @@ define_ids! {
     DIALOG_NETLIST_OMITTED_REFUSED = "dialog-netlist-omitted-refused";
     DIALOG_NETLIST_OMITTED_SHEET_CYCLE = "dialog-netlist-omitted-sheet-cycle";
     DIALOG_NETLIST_OMITTED_KEY_COLLISION = "dialog-netlist-omitted-key-collision";
+    DIALOG_ANNOTATE_COMMAND_REFUSED = "dialog-annotate-command-refused";
 }

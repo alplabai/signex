@@ -24,7 +24,7 @@ use signex_types::schematic::{SchematicSheet, Symbol};
 use uuid::Uuid;
 
 use super::document_operands::named_sheet;
-use super::footprint_place_operands::{footprint_answer, named_footprints};
+use super::footprint_place_operands::{footprint_answer, footprint_refused, named_footprints};
 use super::queries::pin_id;
 use super::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::assign_footprints::{PinMap, pin_map};
@@ -36,7 +36,7 @@ use crate::library::place::lib_id_of;
 type Ran = (CommandOutcome, Task<Message>);
 
 fn refused(reason: impl Into<String>) -> Ran {
-    (CommandOutcome::disabled(reason), Task::none())
+    (footprint_refused(reason), Task::none())
 }
 
 fn text<'a>(args: &'a CommandArgs, name: &str) -> Option<&'a str> {
@@ -107,13 +107,6 @@ impl Signex {
                 library.display_name
             )),
         }
-    }
-
-    /// Each open library's id and file, for a footprint read.
-    pub(super) fn open_library_roots(&self) -> Vec<(Uuid, PathBuf)> {
-        (self.library.open_libraries.iter())
-            .map(|lib| (lib.library_id, lib.root.clone()))
-            .collect()
     }
 
     /// The parts on `sheet` an assignment names: `ids` (placed parts by

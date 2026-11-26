@@ -25,7 +25,14 @@ const ID: &str = "back_annotate_schematics";
 type Ran = (CommandOutcome, Task<Message>);
 
 fn refused(reason: impl Into<String>) -> Ran {
-    (CommandOutcome::disabled(reason), Task::none())
+    (not_run(reason), Task::none())
+}
+
+/// The refusal of a run, the reason under the catalog's "did not run" line.
+fn not_run(why: impl Into<String>) -> CommandOutcome {
+    let reason =
+        signex_i18n::Translatable::new(ids::BACK_ANNOTATE_COMMAND_REFUSED).arg("why", why.into());
+    CommandOutcome::Disabled { reason }
 }
 
 /// The project `document` names (itself, its board or a sheet of it) and
@@ -221,7 +228,7 @@ impl Signex {
     ) -> CommandOutcome {
         let (read, changed) = match result {
             Ok(found) => found,
-            Err(why) => return CommandOutcome::disabled(format!("`{ID}`: {why}")),
+            Err(why) => return not_run(format!("`{ID}`: {why}")),
         };
         for (library, why) in &read.library_errors {
             crate::diagnostics::log_warning(format!(
@@ -236,7 +243,7 @@ impl Signex {
         super::duplicates::untick_duplicate_renames(&mut list, None);
         if self.back_read_stale(&list, &read, board) {
             let why = t!(self.ui_state.i18n, ids::BACK_ANNOTATE_STALE).into_string();
-            return CommandOutcome::disabled(format!("`{ID}`: nothing was changed: {why}"));
+            return not_run(format!("`{ID}`: nothing was changed: {why}"));
         }
         let mut answer = list_answer(board, &list, &read);
         let applies = list.rows.iter().filter(|row| row.applies()).count();
@@ -246,14 +253,14 @@ impl Signex {
             return CommandOutcome::Answered(answer);
         }
         if let Some(file) = changed.first() {
-            return CommandOutcome::disabled(format!(
+            return not_run(format!(
                 "`{ID}`: nothing was changed: {} changed on disk since it was read",
                 file.display()
             ));
         }
         let edits = match self.back_annotate_edits(project, &list, &read) {
             Ok(edits) => edits,
-            Err(why) => return CommandOutcome::disabled(format!("`{ID}`: {why}")),
+            Err(why) => return not_run(format!("`{ID}`: {why}")),
         };
         // Every closed sheet the read loaded was stated again on the worker.
         let checked: BTreeSet<PathBuf> = read.loaded.keys().cloned().collect();
@@ -272,7 +279,7 @@ impl Signex {
                 answer["sheets_changed"] = json!(sheets);
                 CommandOutcome::Answered(answer)
             }
-            Err(why) => CommandOutcome::disabled(format!("`{ID}`: nothing was changed: {why}")),
+            Err(why) => not_run(format!("`{ID}`: nothing was changed: {why}")),
         }
     }
 }

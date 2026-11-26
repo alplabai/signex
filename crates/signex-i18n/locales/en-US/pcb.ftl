@@ -659,3 +659,11 @@ pcb-3d-tooltip-keyed = { $tip } ({ $key })
 # chrome-copy-help
 # The command the Re-Annotate banner names, in medium weight (mockup row 83).
 pcb-reannotate-back-annotate = Back Annotate
+# A board area command (`place_board_fill` and the like) that placed nothing;
+# $why is the reason in words.
+pcb-area-command-refused = Area not placed: { $why }
+# A footprint command (`set_footprint_position`, `assign_footprint` and the
+# like) that changed nothing; $why is the reason in words.
+pcb-footprint-command-refused = Footprint not changed: { $why }
+# A `reannotate_board` run that changed nothing; $why is the reason in words.
+pcb-reannotate-command-refused = Re-Annotate did not run: { $why }

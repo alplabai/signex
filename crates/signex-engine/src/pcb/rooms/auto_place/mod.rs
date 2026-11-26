@@ -130,8 +130,8 @@ fn owner_of(fp: &Footprint, rooms: &[&Room]) -> Option<usize> {
         .enumerate()
         .filter(|(_, room)| room.holds(fp))
         .fold(None, |best: Option<(usize, usize)>, (k, room)| match best {
-            Some((_, d)) if d >= depth(*room) => best,
-            _ => Some((k, depth(*room))),
+            Some((_, d)) if d >= depth(room) => best,
+            _ => Some((k, depth(room))),
         })
         .map(|(k, _)| k)
 }

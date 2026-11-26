@@ -264,4 +264,7 @@ define_ids! {
     PCB_3D_SHOT_INTERRUPTED = "pcb-3d-shot-interrupted";
     PCB_3D_LIGHTING_NEXT_KEY = "pcb-3d-lighting-next-key";
     PCB_3D_TOOLTIP_KEYED = "pcb-3d-tooltip-keyed";
+    PCB_AREA_COMMAND_REFUSED = "pcb-area-command-refused";
+    PCB_FOOTPRINT_COMMAND_REFUSED = "pcb-footprint-command-refused";
+    PCB_REANNOTATE_COMMAND_REFUSED = "pcb-reannotate-command-refused";
 }

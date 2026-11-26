@@ -85,4 +85,5 @@ define_ids! {
     COMPARE_BOARD_LIBRARY_NOT_OPENED = "compare-board-library-not-opened";
     COMPARE_BOARD_REPORT_SAVED = "compare-board-report-saved";
     COMPARE_BOARD_REPORT_FAILED = "compare-board-report-failed";
+    COMPARE_BOARD_COMMAND_REFUSED = "compare-board-command-refused";
 }

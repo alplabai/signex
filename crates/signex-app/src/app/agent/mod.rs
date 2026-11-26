@@ -78,11 +78,9 @@ pub enum AgentMsg {
     /// The run a check (`check_erc`, `check_drc`) waited for finished
     /// (#2199): answer its caller (the socket, or a headless run).
     CheckFinished(Box<crate::app::command::queries::CheckFinished>),
-    /// The run a `query_rail_budget` waited for finished (#2943): answer
-    /// its caller (the socket, or a headless run).
-    RailBudgetAnswered(Box<crate::app::command::queries::RailBudgetAnswered>),
-    /// The off-thread work a query waited for finished (`query_bom`,
-    /// #2938): answer its caller (the socket, or a headless run).
+    /// The off-thread work a query waited for finished (`query_bom`, #2938;
+    /// `query_rail_budget`, #2943): answer its caller (the socket, or a
+    /// headless run).
     QueryAnswered(Box<QueryAnswered>),
     /// A client connected and passed the peer check (#2253).
     ConnectionOpened { pid: Option<u32> },

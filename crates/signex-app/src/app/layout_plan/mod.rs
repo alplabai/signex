@@ -28,7 +28,10 @@ type Ran = (CommandOutcome, Task<Message>);
 fn answered(result: Result<Value, String>) -> Ran {
     let outcome = match result {
         Ok(answer) => CommandOutcome::Answered(answer),
-        Err(reason) => CommandOutcome::disabled(reason),
+        Err(why) => CommandOutcome::Disabled {
+            reason: signex_i18n::Translatable::new(ids::PCB_BOARD_LAYOUT_PLAN_REFUSED)
+                .arg("why", why),
+        },
     };
     (outcome, Task::none())
 }

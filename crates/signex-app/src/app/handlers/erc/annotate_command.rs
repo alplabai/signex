@@ -24,7 +24,15 @@ use crate::keymap::AppCommandId;
 type Ran = (CommandOutcome, Task<Message>);
 
 fn refused(reason: impl Into<String>) -> Ran {
-    (CommandOutcome::disabled(reason), Task::none())
+    (annotate_refused(reason), Task::none())
+}
+
+/// An annotate run's refusal, the reason under the catalog's "did not run"
+/// line; the run that ends in `annotate_job` shares it.
+pub(super) fn annotate_refused(why: impl Into<String>) -> CommandOutcome {
+    let reason = signex_i18n::Translatable::new(signex_i18n::ids::DIALOG_ANNOTATE_COMMAND_REFUSED)
+        .arg("why", why.into());
+    CommandOutcome::Disabled { reason }
 }
 
 /// `annotate_schematic_quietly` from its operands: number the `?` parts.

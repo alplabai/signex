@@ -16,6 +16,7 @@ use signex_i18n::{ids, t};
 
 use super::CompareBoardMsg;
 use super::apply::AppliedCompare;
+use super::command::command_refused;
 use super::read::{CompareRead, compute};
 use super::state::PendingApply;
 use crate::app::agent::WaitingCommand;
@@ -111,7 +112,7 @@ impl Signex {
         let (project, board) = target;
         let request = match self.compare_request(project, &board) {
             Ok(request) => request,
-            Err(why) => return (CommandOutcome::disabled(why), Task::none()),
+            Err(why) => return (command_refused(why), Task::none()),
         };
         let waiting = self.wait_for_command(command, args);
         let ticket = waiting.ticket;
@@ -293,7 +294,7 @@ impl Signex {
                 Ok(applied) => {
                     CommandOutcome::Answered(app.applied_answer(&board, &report, applied))
                 }
-                Err(why) => CommandOutcome::disabled(why),
+                Err(why) => command_refused(why),
             }
         })
     }
@@ -358,7 +359,7 @@ impl Signex {
     ) -> Task<Message> {
         self.finish_waiting_command(waiting, board, move |_| match answer {
             Ok(value) => CommandOutcome::Answered(value),
-            Err(why) => CommandOutcome::disabled(why),
+            Err(why) => command_refused(why),
         })
     }
 }

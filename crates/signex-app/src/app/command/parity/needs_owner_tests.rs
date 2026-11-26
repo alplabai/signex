@@ -26,9 +26,11 @@ const AWAITS_TARGETS: &[&str] = &[];
 /// bridge arm only arms the tool or opens the dialog, and a later board
 /// click or the dialog's button runs the operand handler
 /// (`pcb_arrange_box_clicked`; `place_drawn_room` and Create Rooms from
-/// Sheets' Create, #2457).
+/// Sheets' Create, #2457). The Change Footprint picker's Swap runs the swap
+/// the operand handler runs (`run_footprint_swap`, #2937), not a second edit.
 const ARMED_THEN_TRANSLATED: &[&str] = &[
     "arrange_in_box",
+    "change_footprint",
     "create_rooms_from_sheets",
     "place_board_room",
 ];

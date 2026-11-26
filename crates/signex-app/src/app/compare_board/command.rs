@@ -26,7 +26,15 @@ type Ran = (CommandOutcome, Task<Message>);
 const APPLY: &str = "apply_board_schematic_differences";
 
 fn refused(reason: impl Into<String>) -> Ran {
-    (CommandOutcome::disabled(reason), Task::none())
+    (command_refused(reason), Task::none())
+}
+
+/// The refusal of a command run, the reason under the catalog's "did not
+/// run" line.
+pub(super) fn command_refused(why: impl Into<String>) -> CommandOutcome {
+    let reason =
+        signex_i18n::Translatable::new(ids::COMPARE_BOARD_COMMAND_REFUSED).arg("why", why.into());
+    CommandOutcome::Disabled { reason }
 }
 
 /// A refusal in the dialog's words; replies stay en-US whatever the UI

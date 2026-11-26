@@ -57,6 +57,11 @@ fn number(args: &CommandArgs, name: &str) -> Result<Option<ValueWord>, String> {
     })
 }
 
+/// A `query_bom` refusal, the reason under the catalog's "not read" line.
+fn bom_not_read(why: String) -> signex_i18n::Translatable {
+    signex_i18n::Translatable::new(signex_i18n::ids::BOM_QUERY_REFUSED).arg("why", why)
+}
+
 impl Signex {
     /// `query_bom document= [quantity=] [currency=] [variant=]`: start the
     /// BOM's build off the UI thread; it is answered when it lands. Refused
@@ -68,7 +73,10 @@ impl Signex {
     ) -> (CommandOutcome, Task<Message>) {
         match self.start_bom_query(command, args) {
             Ok(started) => started,
-            Err(reason) => (CommandOutcome::disabled(reason), Task::none()),
+            Err(why) => {
+                let reason = bom_not_read(why);
+                (CommandOutcome::Disabled { reason }, Task::none())
+            }
         }
     }
 
@@ -149,7 +157,7 @@ impl Signex {
                 Message::Agent(AgentMsg::QueryAnswered(Box::new(QueryAnswered {
                     waiting: waiting.clone(),
                     document: project_path.clone(),
-                    answer,
+                    answer: answer.map_err(bom_not_read),
                 })))
             },
         );

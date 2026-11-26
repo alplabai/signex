@@ -695,6 +695,7 @@ mod tests {
             ("grid.rs", include_str!("grid.rs")),
             ("library.rs", include_str!("library.rs")),
             ("workspace.rs", include_str!("workspace.rs")),
+            ("bom.rs", include_str!("bom.rs")),
         ];
 
         let mut missing: Vec<String> = Vec::new();

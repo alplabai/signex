@@ -643,6 +643,33 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "check_board_against_schematic",
                     "apply_board_schematic_differences",
                     "board_status",
+                    // #2470: a new board and numbering on the named
+                    // project, sheet or board (optional where a run without
+                    // operands keeps working).
+                    "new_pcb_document",
+                    "annotate_schematic_quietly",
+                    "force_annotate_all_schematics",
+                    "reannotate_board",
+                    "back_annotate_schematics",
+                    // #2936, #2937: footprints placed, assigned or swapped.
+                    "set_footprint_position",
+                    "set_footprint_rotation",
+                    "set_footprint_side",
+                    "assign_footprint",
+                    "change_footprint",
+                    "query_footprint_assignments",
+                    // #2457, #2941: rooms on the named board.
+                    "place_board_room",
+                    "create_rooms_from_sheets",
+                    "arrange_in_room",
+                    "auto_place",
+                    // #2938, #1297: a BOM line's alternates, the priced BOM
+                    // and the part swap.
+                    "bom_add_alternate",
+                    "bom_remove_alternate",
+                    "bom_set_alternate_order",
+                    "query_bom",
+                    "change_component",
                 ]
                 .contains(&name),
                 "{name} declares a document operand"

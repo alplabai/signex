@@ -131,3 +131,7 @@ requirements-summary-layer-max = at most { $max } copper layers
 requirements-problem-not-a-voltage = { $text } is not a voltage: a number other than 0.
 requirements-problem-not-a-percent = { $text } is not a percentage from 0 to below 100.
 requirements-problem-layer-count-asks-nothing = Set a minimum or a maximum layer count.
+# A `project_set_rail` run that changed nothing; $why is the reason in words.
+requirements-rail-refused = Rail not changed: { $why }
+# A `query_rail_budget` run that answered nothing; $why is the reason in words.
+requirements-rail-budget-refused = Rail budget not read: { $why }

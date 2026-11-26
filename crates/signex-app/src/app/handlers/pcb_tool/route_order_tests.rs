@@ -239,10 +239,12 @@ fn a_dry_run_answers_with_the_route_and_changes_nothing() {
     assert_eq!(live(&app, &path), before, "and no undo step was made");
 }
 
+/// One case: the command, its clicks and its operand points.
+type ClickCase<'a> = (&'a str, &'a [(f64, f64)], &'a [(&'a str, f64, f64)]);
+
 #[test]
 fn track_quick_route_and_via_from_operands_match_their_clicks() {
-    // (command, clicks, operand points)
-    let cases: [(&str, &[(f64, f64)], &[(&str, f64, f64)]); 3] = [
+    let cases: [ClickCase; 3] = [
         (
             "place_board_track",
             &[(2.0, 0.0), (5.0, 4.0), (5.0, 4.0)],

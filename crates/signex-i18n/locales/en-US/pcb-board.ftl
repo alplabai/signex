@@ -229,3 +229,6 @@ pcb-board-health-findings = { $count ->
     [one] 1 finding
    *[other] { $count } findings
 }
+# A `layout_plan_get`, `layout_plan_set` or `layout_plan_status` run that
+# answered nothing; $why is the reason in words.
+pcb-board-layout-plan-refused = Layout plan not read or changed: { $why }

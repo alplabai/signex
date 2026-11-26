@@ -35,7 +35,7 @@ pub use notes::{BoardNote, NoteSeverity};
 pub(crate) use notes::{outcome_notes, problem_text, written_message, written_text};
 #[cfg(test)]
 pub(crate) use write::write_fab_outputs;
-pub use write::{FabWritten, FileFacts, Listed};
+pub use write::{FabWritten, Listed};
 
 impl From<FabOutputsMsg> for crate::app::Message {
     fn from(msg: FabOutputsMsg) -> Self {

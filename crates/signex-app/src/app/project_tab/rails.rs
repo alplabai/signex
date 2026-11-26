@@ -25,7 +25,11 @@ fn text(args: &CommandArgs, name: &str) -> Option<String> {
 
 /// `project_set_rail {document, net, voltage?, tolerance_percent?, remove?}`.
 pub(crate) fn project_set_rail(app: &mut Signex, args: &CommandArgs) -> Ran {
-    let refused = |reason: String| (CommandOutcome::disabled(reason), Task::none());
+    let refused = |why: String| {
+        let reason = signex_i18n::Translatable::new(signex_i18n::ids::REQUIREMENTS_RAIL_REFUSED)
+            .arg("why", why);
+        (CommandOutcome::Disabled { reason }, Task::none())
+    };
     let id = match app.rules_project_named(args) {
         Ok(id) => id,
         Err(reason) => return refused(reason),

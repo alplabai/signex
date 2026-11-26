@@ -369,6 +369,7 @@ define_ids! {
     BACK_ANNOTATE_FAILED_LINE = "back-annotate-failed-line";
     BACK_ANNOTATE_SHARED_WARNING = "back-annotate-shared-warning";
     BACK_ANNOTATE_STALE = "back-annotate-stale";
+    BACK_ANNOTATE_COMMAND_REFUSED = "back-annotate-command-refused";
     BACK_ANNOTATE_REFRESH = "back-annotate-refresh";
     BACK_ANNOTATE_VALID = "back-annotate-valid";
     BACK_ANNOTATE_CHECKING = "back-annotate-checking";

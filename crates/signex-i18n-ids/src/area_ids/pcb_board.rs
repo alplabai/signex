@@ -173,4 +173,5 @@ define_ids! {
     PCB_BOARD_GUIDE_GLYPH_HORIZONTAL = "pcb-board-guide-glyph-horizontal";
     PCB_BOARD_GUIDE_GLYPH_PLUS45 = "pcb-board-guide-glyph-plus45";
     PCB_BOARD_GUIDE_GLYPH_MINUS45 = "pcb-board-guide-glyph-minus45";
+    PCB_BOARD_LAYOUT_PLAN_REFUSED = "pcb-board-layout-plan-refused";
 }

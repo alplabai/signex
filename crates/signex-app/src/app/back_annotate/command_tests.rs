@@ -96,6 +96,7 @@ fn rig() -> Rig {
         router_tool_diameter: None,
         requirements: Default::default(),
         parameters: Default::default(),
+        bom_alternates: Vec::new(),
         unknown: Default::default(),
     };
     let project = dir.join("Proj.snxprj");
@@ -123,7 +124,6 @@ fn rig() -> Rig {
     app.document_state.tabs.push(TabInfo {
         title: "root".to_string(),
         path: root.clone(),
-        cached_document: None,
         project_id: Some(id),
         kind: TabKind::Schematic,
     });

@@ -333,13 +333,14 @@ impl Signex {
         let notice = self.document_state.error_notice.clone();
         let (before, task) = self.number_read_sheets(job, result);
         let raised = self.document_state.error_notice != notice;
+        let refused = |line: String| super::annotate_command::annotate_refused(line);
         let Some(before) = before else {
-            return (CommandOutcome::disabled(self.notice_line(label)), task);
+            return (refused(self.notice_line(label)), task);
         };
         let after = self.designators_now(&before);
         let changes = super::annotate_command::designator_changes(&before, &after);
         if changes.is_empty() && raised {
-            return (CommandOutcome::disabled(self.notice_line(label)), task);
+            return (refused(self.notice_line(label)), task);
         }
         let mut answer = super::annotate_command::answer(mode, &changes);
         if raised {

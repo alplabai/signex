@@ -34,7 +34,15 @@ use crate::app::{Message, Signex};
 type Ran = (CommandOutcome, Task<Message>);
 
 fn refused(reason: impl Into<String>) -> Ran {
-    (CommandOutcome::disabled(reason), Task::none())
+    (footprint_refused(reason), Task::none())
+}
+
+/// A footprint command's refusal, the reason under the catalog's "not
+/// changed" line; `footprint_assign_operands` shares it.
+pub(super) fn footprint_refused(why: impl Into<String>) -> CommandOutcome {
+    let reason =
+        signex_i18n::Translatable::new(ids::PCB_FOOTPRINT_COMMAND_REFUSED).arg("why", why.into());
+    CommandOutcome::Disabled { reason }
 }
 
 fn text<'a>(args: &'a CommandArgs, name: &str) -> Option<&'a str> {

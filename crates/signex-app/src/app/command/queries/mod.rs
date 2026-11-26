@@ -42,7 +42,6 @@ mod library;
 mod pins;
 pub(in crate::app::command) use pins::pin_id;
 mod rail_budget;
-pub use rail_budget::RailBudgetAnswered;
 mod read;
 mod sheet_view;
 mod transient;
@@ -157,7 +156,7 @@ impl Signex {
             "check_board_against_schematic" => {
                 return Some(self.check_board_against_schematic(command, args));
             }
-            "board_status" => return Some(self.board_status(command, args)),
+            "board_status" => return Some(self.board_status_query(command, args)),
             // The project's rails against its parts, read off the UI thread.
             "query_rail_budget" => return Some(self.query_rail_budget(command, args)),
             // The Rules manager's reads (#2398).

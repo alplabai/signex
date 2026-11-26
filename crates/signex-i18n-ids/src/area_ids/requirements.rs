@@ -116,4 +116,6 @@ define_ids! {
     REQUIREMENTS_PROBLEM_NOT_A_VOLTAGE = "requirements-problem-not-a-voltage";
     REQUIREMENTS_PROBLEM_NOT_A_PERCENT = "requirements-problem-not-a-percent";
     REQUIREMENTS_PROBLEM_LAYER_COUNT_ASKS_NOTHING = "requirements-problem-layer-count-asks-nothing";
+    REQUIREMENTS_RAIL_REFUSED = "requirements-rail-refused";
+    REQUIREMENTS_RAIL_BUDGET_REFUSED = "requirements-rail-budget-refused";
 }

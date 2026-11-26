@@ -6,22 +6,18 @@
 //! changes nothing, is not numbered and says nothing in Messages. See
 //! `docs/CLI.md`, "Rail budgets".
 
-use std::path::PathBuf;
-
 use iced::Task;
-use serde_json::Value;
 
-use crate::app::agent::{AgentMsg, WaitingCommand};
+use crate::app::agent::{AgentMsg, QueryAnswered};
 use crate::app::command::{CommandArgs, CommandOutcome};
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
 
-/// A finished rail budget run: the request it answers and what it found.
-#[derive(Debug, Clone)]
-pub struct RailBudgetAnswered {
-    pub(crate) waiting: WaitingCommand,
-    pub(crate) project: PathBuf,
-    pub(crate) answer: Result<Value, String>,
+/// A `query_rail_budget` refusal, the reason under the catalog's "not read"
+/// line.
+fn rail_budget_not_read(why: String) -> signex_i18n::Translatable {
+    signex_i18n::Translatable::new(signex_i18n::ids::REQUIREMENTS_RAIL_BUDGET_REFUSED)
+        .arg("why", why)
 }
 
 impl Signex {
@@ -32,16 +28,16 @@ impl Signex {
         command: &AppCommandId,
         args: &CommandArgs,
     ) -> (CommandOutcome, Task<Message>) {
+        let refused = |why: String| {
+            let reason = rail_budget_not_read(why);
+            (CommandOutcome::Disabled { reason }, Task::none())
+        };
         let id = match self.rules_project_named(args) {
             Ok(id) => id,
-            Err(reason) => {
-                let reason = format!("`query_rail_budget` {reason}");
-                return (CommandOutcome::disabled(reason), Task::none());
-            }
+            Err(reason) => return refused(format!("`query_rail_budget` {reason}")),
         };
         let Some(project) = self.document_state.project_by_id(id) else {
-            let reason = "`query_rail_budget`: the project is no longer open";
-            return (CommandOutcome::disabled(reason), Task::none());
+            return refused("`query_rail_budget`: the project is no longer open".to_string());
         };
         let job = self.rail_budget_job(project);
         let path = project.path.clone();
@@ -55,31 +51,14 @@ impl Signex {
                     .and_then(|answer| answer)
             },
             move |answer| {
-                let answered = RailBudgetAnswered {
+                let answered = QueryAnswered {
                     waiting: waiting.clone(),
-                    project: path.clone(),
-                    answer,
+                    document: path.clone(),
+                    answer: answer.map_err(rail_budget_not_read),
                 };
-                Message::Agent(AgentMsg::RailBudgetAnswered(Box::new(answered)))
+                Message::Agent(AgentMsg::QueryAnswered(Box::new(answered)))
             },
         );
         (CommandOutcome::Deferred { ticket }, task)
-    }
-
-    /// The run of a rail budget query landed: answer its caller (the socket,
-    /// or a headless run by its ticket). A query writes no edit journal line.
-    pub(crate) fn handle_rail_budget_answered(
-        &mut self,
-        answered: RailBudgetAnswered,
-    ) -> Task<Message> {
-        let RailBudgetAnswered {
-            waiting,
-            project,
-            answer,
-        } = answered;
-        self.finish_waiting_command(waiting, &project, move |_| match answer {
-            Ok(value) => CommandOutcome::Answered(value),
-            Err(reason) => CommandOutcome::disabled(reason),
-        })
     }
 }

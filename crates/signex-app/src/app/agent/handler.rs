@@ -70,7 +70,6 @@ impl Signex {
             AgentMsg::Request(call) => self.handle_agent_request(call),
             AgentMsg::EditReadsLoaded(loaded) => self.handle_edit_reads_loaded(*loaded),
             AgentMsg::CheckFinished(finished) => self.handle_check_finished(&finished),
-            AgentMsg::RailBudgetAnswered(answered) => self.handle_rail_budget_answered(*answered),
             AgentMsg::QueryAnswered(answered) => self.handle_query_answered(*answered),
             AgentMsg::PeerRefused { pid, reason } => {
                 let reason = printable(&reason);

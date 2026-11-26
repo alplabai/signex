@@ -20,7 +20,9 @@ use crate::app::{Message, Signex};
 type Ran = (CommandOutcome, Task<Message>);
 
 fn refused(reason: impl Into<String>) -> Ran {
-    (CommandOutcome::disabled(reason), Task::none())
+    let reason = signex_i18n::Translatable::new(signex_i18n::ids::BOM_ALTERNATE_REFUSED)
+        .arg("why", reason.into());
+    (CommandOutcome::Disabled { reason }, Task::none())
 }
 
 fn text<'a>(args: &'a CommandArgs, name: &str) -> Result<&'a str, String> {

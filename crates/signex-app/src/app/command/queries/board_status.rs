@@ -23,14 +23,19 @@ use crate::keymap::AppCommandId;
 impl Signex {
     /// Answer the counters of the board `args` names; with a schematic to
     /// compare, once the comparison lands.
-    pub(super) fn board_status(
+    pub(super) fn board_status_query(
         &mut self,
         command: &AppCommandId,
         args: &CommandArgs,
     ) -> (CommandOutcome, Task<Message>) {
         let (path, status) = match self.board_status_now(args) {
             Ok(found) => found,
-            Err(reason) => return (CommandOutcome::disabled(reason), Task::none()),
+            Err(why) => {
+                let reason =
+                    signex_i18n::Translatable::new(signex_i18n::ids::BOARD_STATUS_COMMAND_REFUSED)
+                        .arg("why", why);
+                return (CommandOutcome::Disabled { reason }, Task::none());
+            }
         };
         let project = self
             .document_state

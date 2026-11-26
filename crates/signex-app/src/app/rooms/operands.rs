@@ -299,13 +299,13 @@ impl Signex {
     /// and answer its caller.
     pub(super) fn finish_rooms_from_sheets(
         &mut self,
-        waiting: Box<WaitingCommand>,
+        waiting: WaitingCommand,
         board: PathBuf,
         request: Box<RoomsRequest>,
         result: Result<Vec<SheetMembers>, String>,
     ) -> Task<Message> {
         let target = board.clone();
-        self.finish_waiting_command(*waiting, &target, move |app| {
+        self.finish_waiting_command(waiting, &target, move |app| {
             match app.make_rooms_from_sheets(&board, result, &request) {
                 Ok(answer) => CommandOutcome::Answered(answer),
                 Err(reason) => CommandOutcome::Disabled { reason },

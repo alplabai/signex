@@ -69,7 +69,6 @@ fn app_with_resistor(dir: &Path) -> (Signex, PathBuf) {
     app.document_state.tabs.push(TabInfo {
         title: "a".into(),
         path: sheet.clone(),
-        cached_document: None,
         project_id: Some(project),
         kind: TabKind::Schematic,
     });
