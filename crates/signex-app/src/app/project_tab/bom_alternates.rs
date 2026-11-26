@@ -131,11 +131,8 @@ impl Signex {
         let Some(project) = document.projects.iter_mut().find(|p| p.id == project_id) else {
             return Ok(false);
         };
-        let tab = document.project_tabs.entry(project_id).or_default();
-        if !tab
-            .general_history
-            .apply_bom_alternate(&mut project.data, command)?
-        {
+        let history = document.general_history.entry(project_id).or_default();
+        if !history.apply_bom_alternate(&mut project.data, command)? {
             return Ok(false);
         }
         document.sync_project_history_dirty(project_id, false);

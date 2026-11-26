@@ -75,8 +75,8 @@ impl Signex {
             );
             return Ok(false);
         };
-        let tab = document.project_tabs.entry(project_id).or_default();
-        if !tab.general_history.apply_rail(&mut project.data, command)? {
+        let history = document.general_history.entry(project_id).or_default();
+        if !history.apply_rail(&mut project.data, command)? {
             return Ok(false);
         }
         // Rails are not read by ERC: no ERC result goes stale.
