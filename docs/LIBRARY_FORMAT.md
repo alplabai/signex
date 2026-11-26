@@ -709,6 +709,17 @@ converter that wants byte-stable re-saves writes it too; one that knows no
 body height writes these defaults rather than inventing a height. An optional `outline` (`[footprints.body_3d.outline]` with
 `points`) overrides the fabrication outline the body is extruded from.
 
+**Model frame.** A STEP model's coordinates are millimetres in the model's
+own frame: +x right, **+y up the board**, +z up from the face the part stands
+on. Signex places a model point `p` on the footprint by (1) turning it about
+the fixed x axis by `rotation_xyz[0]`, then about y by `rotation_xyz[1]`, then
+about z by `rotation_xyz[2]` (degrees, right-handed, counter-clockwise looking
+down each axis towards the origin), (2) adding `offset_xyz` in that same
+y-up frame, and (3) negating y into the footprint frame (+y down, section 4).
+No scale is applied. A converter whose source uses another rotation order,
+sign or offset frame converts to this one and reports what it cannot carry
+(a scale other than 1, say).
+
 The STEP bytes are embedded in the footprint file (section 8, format 1.4);
 a converter that attaches a model embeds it there. Libraries written before
 1.4 keep their models outside the footprint file, in
