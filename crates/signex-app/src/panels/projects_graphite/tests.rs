@@ -305,6 +305,7 @@ fn add_project(app: &mut crate::app::Signex, name: &str) -> crate::app::ProjectI
             schematic_design: Default::default(),
             fab_outputs: None,
             router_tool_diameter: None,
+            bom_alternates: Vec::new(),
             requirements: Default::default(),
             unknown: Default::default(),
         },

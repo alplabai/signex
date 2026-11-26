@@ -49,6 +49,21 @@ impl Signex {
             .map_err(|error| self.report_refused_open(&error))
     }
 
+    /// Open the board at `path` behind the person's tab (#2984): a run from
+    /// operands that needs a closed board leaves the tab in front and the
+    /// text being typed alone. A refusal is reported as
+    /// [`Self::open_path_reported`] does.
+    pub(crate) fn open_board_behind(
+        &mut self,
+        path: PathBuf,
+    ) -> Result<iced::Task<Message>, String> {
+        let task = self
+            .open_document_path(path.clone())
+            .map_err(|error| self.report_refused_open(&error))?;
+        self.document_state.pending_opens.mark_behind(&path);
+        Ok(task)
+    }
+
     /// Log a refused open and raise it as the Open Failed notice; returns
     /// the reason.
     pub(crate) fn report_refused_open(&mut self, error: &anyhow::Error) -> String {

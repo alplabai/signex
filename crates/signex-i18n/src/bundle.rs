@@ -42,16 +42,23 @@ pub(crate) fn build_from(tag: &str, sources: &[&str]) -> Bundle {
         bundle.set_transform(Some(pseudolocalize));
     }
     for source in sources {
-        let resource =
-            FluentResource::try_new((*source).to_owned()).unwrap_or_else(|(partial, errors)| {
-                log::error!("A {tag} message file does not parse: {errors:?}");
-                partial
-            });
-        if let Err(errors) = bundle.add_resource(resource) {
-            log::error!("A {tag} message file repeats a message id: {errors:?}");
-        }
+        add_source(&mut bundle, tag, source);
     }
     bundle
+}
+
+/// Add one `.ftl` source to `bundle`. A source that does not parse keeps its
+/// good messages and reports the rest; an id already in the bundle keeps its
+/// first message.
+pub(crate) fn add_source(bundle: &mut Bundle, tag: &str, source: &str) {
+    let resource =
+        FluentResource::try_new(source.to_owned()).unwrap_or_else(|(partial, errors)| {
+            log::error!("A {tag} message file does not parse: {errors:?}");
+            partial
+        });
+    if let Err(errors) = bundle.add_resource(resource) {
+        log::error!("A {tag} message file repeats a message id: {errors:?}");
+    }
 }
 
 /// A rendered message and, when Fluent hit errors on the way, what they were.

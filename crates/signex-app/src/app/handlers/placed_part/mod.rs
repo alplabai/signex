@@ -31,7 +31,7 @@ pub(crate) struct PlacedPart {
 
 /// How messages name the part: its designator, or "the part" for one that
 /// has none yet.
-pub(super) fn part_name(symbol: &Symbol) -> String {
+pub(crate) fn part_name(symbol: &Symbol) -> String {
     match symbol.reference.trim() {
         "" => "the part".to_string(),
         reference => reference.to_string(),

@@ -377,10 +377,23 @@ impl Signex {
         target: &PlacedPartTarget,
         symbol: &Symbol,
     ) -> Option<String> {
+        let doc = self.held_document(target)?;
+        self.change_blocker_on(&target.sheet, doc, target.symbol_id, symbol)
+    }
+
+    /// [`Self::change_blocker`] for the part `symbol_id` of `doc`, the sheet
+    /// at `sheet`, whether or not it is the active one (`change_component`
+    /// from operands, #1297).
+    pub(crate) fn change_blocker_on(
+        &self,
+        sheet: &std::path::Path,
+        doc: &signex_types::schematic::SchematicSheet,
+        symbol_id: Uuid,
+        symbol: &Symbol,
+    ) -> Option<String> {
         let name = part_name(symbol);
         let docs = &self.document_state;
-        let doc = self.held_document(target)?;
-        let units = placed_unit_ids(doc, target.symbol_id);
+        let units = placed_unit_ids(doc, symbol_id);
         if units
             .iter()
             .any(|id| doc.symbols.iter().any(|s| s.uuid == *id && s.locked))
@@ -403,7 +416,7 @@ impl Signex {
             .filter(|s| units.contains(&s.uuid))
             .map(|s| s.unit)
             .collect();
-        let project = docs.document_project(&target.sheet);
+        let project = docs.document_project(sheet);
         let fold = crate::app::state::project_case::fold_of(project);
         let key = |p: &std::path::Path| path_key_with(p, fold);
         let engines: std::collections::HashMap<
@@ -411,7 +424,7 @@ impl Signex {
             (&std::path::PathBuf, &signex_engine::Engine),
         > = docs.engines.iter().map(|(p, e)| (key(p), (p, e))).collect();
         let owner = project.map(|p| p.path.clone());
-        let mut reached = vec![target.sheet.clone()];
+        let mut reached = vec![sheet.to_path_buf()];
         reached.extend(project_pages(project));
         reached.extend(
             docs.engines
@@ -451,7 +464,7 @@ impl Signex {
                 .map_or_else(String::new, |n| n.to_string_lossy().into_owned())
         };
         let (mut also_on, mut not_open) = (Vec::new(), Vec::new());
-        for path in reached.iter().filter(|p| key(p) != key(&target.sheet)) {
+        for path in reached.iter().filter(|p| key(p) != key(sheet)) {
             match engines.get(&key(path)) {
                 Some((_, engine)) => {
                     let holds_a_unit = engine.document().symbols.iter().any(|s| {

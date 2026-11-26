@@ -52,10 +52,13 @@ impl Signex {
                 if let Some(arranged) = self.pcb_arrange_box_clicked(at) {
                     return Task::batch([arranged, self.close_context_menu_on_press()]);
                 }
-                if self.pcb_guide_place_clicked(at)
-                    || self.pcb_origin_place_clicked(at)
-                    || self.board_tool_clicked(at)
-                    || self.pcb_place_clicked(at)
+                if self.pcb_guide_place_clicked(at) || self.pcb_origin_place_clicked(at) {
+                    return self.close_context_menu_on_press();
+                }
+                if let Some(placed) = self.board_tool_click(at) {
+                    return Task::batch([placed, self.close_context_menu_on_press()]);
+                }
+                if self.pcb_place_clicked(at)
                     || self.pcb_paste_clicked(at)
                     || self.pcb_move_clicked(at, tolerance_mm)
                     || self.pcb_net_pick_clicked(at, tolerance_mm)

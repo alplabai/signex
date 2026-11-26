@@ -19,8 +19,10 @@ use signex_types::pcb::{PcbBoard, Point};
 use signex_types::pcb_layer::CopperLayer;
 use uuid::Uuid;
 
-use crate::app::Signex;
+use iced::Task;
+
 use crate::app::pcb_tools::BoardPlaceTool;
+use crate::app::{Message, Signex};
 use crate::pcb_canvas::{carried_board, snap_point};
 
 /// With Snap off, how near the run's last point (screen px) a click counts
@@ -28,6 +30,7 @@ use crate::pcb_canvas::{carried_board, snap_point};
 const END_RUN_PX: f64 = 2.0;
 
 mod area;
+mod bus_order;
 mod form;
 mod free;
 mod free_form;
@@ -38,6 +41,7 @@ mod pour_cut;
 mod quick;
 mod route;
 mod route_end;
+mod route_order;
 mod route_rats;
 mod router;
 mod side_by_side;
@@ -46,10 +50,13 @@ mod string;
 pub(crate) use form::has_form;
 pub use form::{BoardToolDefaults, PlacementPause};
 pub(crate) use free_form::precision_of;
+pub(crate) use route_order::{RouteMade, RouteOrder, ViaOrder, tool_refusal};
 pub use router::RouterState;
 
 #[cfg(test)]
 mod area_form_tests;
+#[cfg(test)]
+mod area_operand_tests;
 #[cfg(test)]
 mod area_tests;
 #[cfg(test)]
@@ -74,6 +81,8 @@ mod pause_tests;
 mod pour_cut_tests;
 #[cfg(test)]
 mod pour_tests;
+#[cfg(test)]
+mod route_order_tests;
 #[cfg(test)]
 mod route_rats_tests;
 #[cfg(test)]
@@ -371,24 +380,31 @@ impl Signex {
         }
     }
 
-    /// A click on the board while a tool is armed: add what it places.
-    /// Whether the click belonged to the tool.
+    /// [`Self::board_tool_click`] for a test: whether the click belonged to
+    /// the tool.
+    #[cfg(test)]
     pub(crate) fn board_tool_clicked(&mut self, at: Point) -> bool {
-        let Some(tool) = self.own_board_tool().map(|s| s.tool) else {
-            return false;
-        };
+        self.board_tool_click(at).is_some()
+    }
+
+    /// A click on the board while a tool is armed: add what it places.
+    /// `Some` when the click belonged to the tool, with what the step it ran
+    /// left to do.
+    pub(crate) fn board_tool_click(&mut self, at: Point) -> Option<Task<Message>> {
+        let tool = self.own_board_tool().map(|s| s.tool)?;
         if self.is_board_tool_paused() {
             // A paused tool places nothing; the net pick of its form still
             // takes the click.
-            return self.interaction_state.pcb_primitive.net_pick.is_none();
+            let takes = self.interaction_state.pcb_primitive.net_pick.is_none();
+            return takes.then(Task::none);
         }
         if let Some(session) = self.own_board_tool_mut() {
             session.note = None;
         }
-        let Some(board) = self.active_pcb() else {
-            return false;
-        };
+        let board = self.active_pcb()?;
         let at = self.board_tool_point(board, at);
+        // What a step run through the operand handler left to do.
+        let mut left = Task::none();
         match tool {
             BoardPlaceTool::Via => {
                 let defaults = &self.interaction_state.pcb_tool_defaults;
@@ -434,21 +450,23 @@ impl Signex {
                         }
                     }
                     Some(first) => {
-                        if self.place_drawn_room(first, at) {
+                        let (placed, task) = self.place_drawn_room(first, at);
+                        if placed {
                             self.end_board_tool();
-                            return true;
+                            return Some(task);
                         }
+                        left = task;
                     }
                 }
             }
-            _ => return false,
+            _ => return None,
         }
         if let Some(session) = self.own_board_tool_mut() {
             session.cursor = Some(at);
         }
         self.sync_route_ratsnest();
         self.refresh_pcb_highlight();
-        true
+        Some(left)
     }
 
     /// What the canvas draws on the cursor for the tool armed on the board

@@ -390,6 +390,7 @@ impl Signex {
                 i,
                 self.panel_ctx_for(window_id),
                 &self.library,
+                &self.extensions,
                 self.sheet_grid(),
             ) {
                 let fp = &document.dock.floating[i];

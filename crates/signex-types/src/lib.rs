@@ -33,6 +33,7 @@ pub mod pcb_dimension_style;
 pub mod pcb_free;
 pub mod pcb_graphic;
 pub mod pcb_layer;
+pub mod pcb_layout_plan;
 pub mod pcb_options;
 pub mod pcb_origin;
 pub mod pcb_pad_shape;

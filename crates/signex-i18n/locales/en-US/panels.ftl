@@ -613,6 +613,9 @@ panels-list-group-inspect = Inspect
 panels-list-group-verify = Verify
 panels-list-group-library = Library
 panels-list-group-pcb = PCB
+# The installed extensions' panels, in the panel list and under View; not
+# shown when no extension is installed.
+panels-list-group-extensions = Extensions
 # Where an open panel is, at the right of its row in the panel list.
 panels-list-region-left = left
 panels-list-region-right = right

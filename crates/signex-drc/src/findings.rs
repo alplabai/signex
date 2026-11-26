@@ -85,15 +85,26 @@ fn finding(
 ) -> Option<Finding> {
     let severity = report.severity_of(v)?;
     let (a, b) = (net_name(net_names, v.nets.0), net_name(net_names, v.nets.1));
-    // A part outside its room is named with its room, not by nets (#2457).
-    let message =
-        crate::rooms::describe_on(pcb, v).unwrap_or_else(|| format!("{}, {a} / {b}", describe(v)));
+    // A part outside its room is named with its room, not by nets (#2457);
+    // a height or 3D clearance finding by its parts (#2939).
+    let message = crate::rooms::describe_on(pcb, v)
+        .or_else(|| crate::bodies::describe_on(pcb, v))
+        .unwrap_or_else(|| format!("{}, {a} / {b}", describe(v)));
+    let mut evidence = evidence(&report.rules, v, &a, &b);
+    if matches!(
+        v.kind,
+        ViolationKind::ComponentHeight | ViolationKind::BodyClearance
+    ) && let Value::Object(map) = &mut evidence
+    {
+        let names = crate::bodies::designators(pcb, v);
+        map.insert("designators".into(), json!(names));
+    }
     Some(Finding {
         rule: rule_of(v).to_string(),
         severity,
         key: key(v, board, &message),
         message,
-        evidence: evidence(&report.rules, v, &a, &b),
+        evidence,
         items: v.items.iter().map(item_id).collect(),
         sheet: board.to_string(),
     })
@@ -147,6 +158,10 @@ pub fn describe(v: &Violation) -> String {
         ViolationKind::PartOutsideRoom => {
             format!("part {} mm outside its room", mm(v.measured_nm))
         }
+        // With the board at hand, `bodies::describe_on` names the parts.
+        ViolationKind::ComponentHeight => size_text("component height", v),
+        ViolationKind::BodyClearance if v.measured_nm == 0 => "3D bodies touch".to_string(),
+        ViolationKind::BodyClearance => gap_text("3D body clearance", v),
     }
 }
 
@@ -309,7 +324,7 @@ fn key(v: &Violation, board: &str, message: &str) -> String {
 /// What Run DRC says in Messages about the rules, in its words (numbers in
 /// [`mm`]), in its order: unrecognised entries, the rule text's notes and
 /// remarks, what was not applied, and a clearance taken from the default.
-fn rule_warnings(rules: &DrcRules) -> Vec<String> {
+pub fn rule_warnings(rules: &DrcRules) -> Vec<String> {
     let mut out: Vec<String> = rules
         .severities
         .unrecognised

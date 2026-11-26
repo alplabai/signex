@@ -34,6 +34,7 @@ pub fn cell_text(row: &BomRow, column: &BomColumn) -> String {
             // A failed cell shows empty; Messages names it (#1988).
             Some(ComputedCell::Error { .. }) | None => String::new(),
         },
+        BomColumn::Alternates => row.alternates.join(", "),
     }
 }
 

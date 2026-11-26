@@ -9,7 +9,7 @@ use signex_i18n::{MessageId, UserText, ids, t};
 
 use crate::dock::{PanelPosition, PanelSite};
 use crate::panels::PanelKind;
-use crate::panels::panel_groups::{PanelGroup, grouped_panels};
+use crate::panels::panel_groups::{PanelGroup, grouped_panels, with_extension_panels};
 
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
@@ -81,7 +81,10 @@ impl Signex {
             pcb: document.panel_ctx.has_pcb,
             footprint: self.active_footprint_editor_path().is_some(),
         };
-        let groups = grouped_panels(|kind| open.offers(kind));
+        let groups = with_extension_panels(
+            grouped_panels(|kind| open.offers(kind)),
+            &self.extensions.panels(),
+        );
         let mut list: Column<Element<'_, Message>> = Column::new().spacing(0);
         for (group, kinds) in &groups {
             list = list.push(group_caption(&ui.i18n, group.caption(), tokens));

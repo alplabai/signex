@@ -1,5 +1,5 @@
-//! `open_document` and `new_document` answer with the document they made
-//! (#2172). A headless run goes to completion inside the dispatch: the open or
+//! `open_document`, `new_document` and `new_pcb_document` answer with the
+//! document they made (#2172, #2470). A headless run goes to completion inside the dispatch: the open or
 //! the project creation is a chain of background tasks, run here to their end,
 //! and the answer is the document that appeared: its id, path and kind. A GUI
 //! caller is unchanged: it never reaches this.
@@ -19,7 +19,7 @@ use crate::keymap::AppCommandId;
 pub(crate) fn answers_with_the_new_document(command: &AppCommandId) -> bool {
     matches!(
         command.as_str(),
-        "open_document" | "new_document" | "new_project_with_profile"
+        "open_document" | "new_document" | "new_project_with_profile" | "new_pcb_document"
     )
 }
 
@@ -27,6 +27,9 @@ pub(crate) fn answers_with_the_new_document(command: &AppCommandId) -> bool {
 pub(crate) struct OpenSnapshot {
     asked: Option<PathBuf>,
     before: HashSet<Option<PathBuf>>,
+    /// The documents held then: a project can name a board not made yet,
+    /// which is listed but not held until New PCB makes it (#2470).
+    held_before: HashSet<Option<PathBuf>>,
 }
 
 impl Signex {
@@ -37,15 +40,17 @@ impl Signex {
             Some(OperandValue::Path(path)) => Some(path.clone()),
             _ => None,
         };
+        let entries = self.document_entries();
         OpenSnapshot {
             asked: operand
                 .or_else(|| self.headless_answers().and_then(|a| a.peek("path")))
                 .map(PathBuf::from),
-            before: self
-                .document_entries()
-                .into_iter()
-                .map(|entry| entry.path)
+            held_before: entries
+                .iter()
+                .filter(|entry| entry.loaded)
+                .map(|entry| entry.path.clone())
                 .collect(),
+            before: entries.into_iter().map(|entry| entry.path).collect(),
         }
     }
 
@@ -58,7 +63,11 @@ impl Signex {
         snapshot: OpenSnapshot,
         task: Task<Message>,
     ) -> (CommandOutcome, Task<Message>) {
-        let OpenSnapshot { asked, before } = snapshot;
+        let OpenSnapshot {
+            asked,
+            before,
+            held_before,
+        } = snapshot;
         if let Err(error) = crate::task_driver::TaskDriver::new().settle(self, task) {
             return (
                 CommandOutcome::disabled(format!("`{}` did not finish: {error}", command.as_str())),
@@ -80,10 +89,13 @@ impl Signex {
         let created = |entry: &&DocumentEntry| {
             entry.kind == DocumentKind::Project && !before.contains(&entry.path)
         };
-        let found = if command.as_str() == "open_document" {
-            entries.iter().find(at_asked)
-        } else {
-            entries.iter().find(created)
+        let new_board = |entry: &&DocumentEntry| {
+            entry.kind == DocumentKind::Pcb && entry.loaded && !held_before.contains(&entry.path)
+        };
+        let found = match command.as_str() {
+            "open_document" => entries.iter().find(at_asked),
+            "new_pcb_document" => entries.iter().find(new_board),
+            _ => entries.iter().find(created),
         };
         let outcome = match found.and_then(|entry| Some((entry, entry.id?))) {
             Some((entry, id)) => CommandOutcome::Answered(json!({

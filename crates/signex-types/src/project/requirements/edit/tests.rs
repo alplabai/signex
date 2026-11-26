@@ -37,8 +37,8 @@ fn a_new_requirement_starts_from_its_kind_and_takes_a_free_id() {
         assert!(requirement.enabled);
     }
     assert_eq!(
-        data.add_requirement("rail_budget", None),
-        Err(RequirementProblem::UnknownKind("rail_budget".into()))
+        data.add_requirement("no_such_kind", None),
+        Err(RequirementProblem::UnknownKind("no_such_kind".into()))
     );
     assert_eq!(
         data.add_requirement("erc_clean", Some("board_size")),
@@ -318,4 +318,78 @@ fn a_variant_rename_follows_into_part_lifecycle_requirements() {
     assert_eq!(raw(&data, 0)["variant"], json!("Pilot"));
     assert_eq!(raw(&data, 1)["variant"], json!("Base"));
     assert_eq!(raw(&data, 2), &json!({"id": "c", "kind": "erc_clean"}));
+}
+
+#[test]
+fn a_rail_budget_and_a_layer_count_take_their_fields_as_typed() {
+    let mut data = project(json!([]));
+    let rail = data.add_requirement("rail_budget", None).unwrap();
+    assert_eq!(
+        raw(&data, rail),
+        &json!({"id": "rail_budget", "kind": "rail_budget", "net": "*"})
+    );
+    let set =
+        |data: &mut ProjectData, field, text: &str| data.set_requirement_field(rail, field, text);
+    set(&mut data, RequirementField::Net, "+3V3").unwrap();
+    set(&mut data, RequirementField::Voltage, "-12").unwrap();
+    set(&mut data, RequirementField::TolerancePercent, "5").unwrap();
+    set(&mut data, RequirementField::MaxCurrentA, "1.5").unwrap();
+    set(&mut data, RequirementField::MarginPercent, "0").unwrap();
+    assert_eq!(
+        raw(&data, rail),
+        &json!({"id": "rail_budget", "kind": "rail_budget", "net": "+3V3", "voltage": -12,
+                "tolerance_percent": 5, "max_current_a": 1.5, "margin_percent": 0})
+    );
+    for (field, typed, problem) in [
+        (
+            RequirementField::Voltage,
+            "0",
+            RequirementProblem::NotAVoltage("0".into()),
+        ),
+        (
+            RequirementField::MarginPercent,
+            "100",
+            RequirementProblem::NotAPercent("100".into()),
+        ),
+        (
+            RequirementField::TolerancePercent,
+            "-1",
+            RequirementProblem::NotAPercent("-1".into()),
+        ),
+        (
+            RequirementField::MaxCurrentA,
+            "0",
+            RequirementProblem::NotPositive("0".into()),
+        ),
+        (RequirementField::Net, "", RequirementProblem::Empty("net")),
+    ] {
+        assert_eq!(set(&mut data, field, typed), Err(problem), "{typed}");
+    }
+    set(&mut data, RequirementField::Voltage, "").unwrap();
+    assert!(
+        raw(&data, rail).get("voltage").is_none(),
+        "an optional field clears"
+    );
+
+    let layers = data.add_requirement("layer_count", None).unwrap();
+    assert_eq!(raw(&data, layers)["max_layers"], json!(4));
+    data.set_requirement_field(layers, RequirementField::MinLayers, "2")
+        .unwrap();
+    data.set_requirement_field(layers, RequirementField::MaxLayers, "")
+        .unwrap();
+    assert_eq!(
+        data.set_requirement_field(layers, RequirementField::MinLayers, ""),
+        Err(RequirementProblem::LayerCountAsksNothing)
+    );
+    assert_eq!(
+        data.set_requirement_field(layers, RequirementField::MaxLayers, "0"),
+        Err(RequirementProblem::NotACount("0".into()))
+    );
+    assert_eq!(
+        data.requirements[layers].requirement().unwrap().kind,
+        RequirementKind::LayerCount {
+            min_layers: Some(2),
+            max_layers: None
+        }
+    );
 }

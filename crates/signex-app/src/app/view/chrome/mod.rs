@@ -141,6 +141,8 @@ impl Signex {
             keymap_search: &ui.preferences_keymap_search,
             nav_search: &ui.preferences_nav_search,
             keymap_recorder: ui.preferences_keymap_recorder.as_ref(),
+            extensions: &self.extensions,
+            extension_commands: &ui.extension_commands,
         }
     }
 
@@ -337,6 +339,7 @@ impl Signex {
                 pos,
                 self.panel_ctx_for(window_id),
                 &self.library,
+                &self.extensions,
                 self.sheet_grid(),
             )
             .map(move |msg| self.scope_dock_message(window_id, Message::Dock(msg)));
@@ -371,6 +374,7 @@ impl Signex {
                 pos,
                 self.panel_ctx_for(window_id),
                 &self.library,
+                &self.extensions,
                 self.sheet_grid(),
             )
             .map(move |msg| self.scope_dock_message(window_id, Message::Dock(msg)));

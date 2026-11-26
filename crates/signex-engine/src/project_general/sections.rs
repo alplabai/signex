@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 use signex_types::designator::NumberingScheme;
 use signex_types::pcb::SymbolLink;
 use signex_types::project::{
-    AnnotateUndo, ChannelNaming, ListMove, PartRef, PlacedPart, ProjectData, RequirementEntry,
-    SheetFit, VariantProblem, VariantSettings,
+    AnnotateUndo, BomLineAlternates, ChannelNaming, ListMove, PartRef, PlacedPart, ProjectData,
+    RequirementEntry, SheetFit, VariantProblem, VariantSettings,
 };
 
 /// One edit of a Project tab section. Plain data, so a script can emit it.
@@ -251,6 +251,11 @@ pub(super) struct SectionsSnapshot {
     channel_naming: ChannelNaming,
     /// The harness definitions (#1280); only the definitions view writes them.
     harness_definitions: Vec<signex_types::schematic::HarnessDefinition>,
+    /// The project's rails as stored (#2943); only `project_set_rail`
+    /// writes them.
+    rails: Option<serde_json::Value>,
+    /// The BOM lines' alternates (#2938); only the `bom_*` edits write them.
+    bom_alternates: Vec<BomLineAlternates>,
 }
 
 impl SectionsSnapshot {
@@ -265,6 +270,8 @@ impl SectionsSnapshot {
             requirements: data.requirements.clone(),
             channel_naming: data.schematic_design.channel_naming.clone(),
             harness_definitions: data.schematic_design.harness_definitions.clone(),
+            rails: data.rails_value(),
+            bom_alternates: data.bom_alternates.clone(),
         }
     }
 
@@ -278,5 +285,7 @@ impl SectionsSnapshot {
         data.requirements = self.requirements;
         data.schematic_design.channel_naming = self.channel_naming;
         data.schematic_design.harness_definitions = self.harness_definitions;
+        data.restore_rails_value(self.rails);
+        data.bom_alternates = self.bom_alternates;
     }
 }

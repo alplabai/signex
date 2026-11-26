@@ -44,6 +44,8 @@ fn dock_message_runs_in_window(message: &crate::dock::DockMessage) -> bool {
         | D::TabContextMenuRequested(..)
         | D::TabMenuDismissed
         | D::TabMenuActionPicked(..)
+        // An extension's own message: it acts on no sheet.
+        | D::Extension(..)
         | D::ScopedToWindow(..) => false,
     }
 }

@@ -125,6 +125,8 @@ pub struct Signex {
     /// The pan/zoom frame bench (#2472); `None` unless the process was
     /// started with `SIGNEX_BENCH_PAN_ZOOM` set.
     pub(crate) pan_zoom_bench: Option<crate::pan_zoom_bench::PanZoomBench>,
+    /// The extensions the binary installed (#2495); none in Community.
+    pub(crate) extensions: crate::extension::ExtensionHost,
 }
 
 /// Role of a non-main window opened by Signex. Phase 2 adds detached

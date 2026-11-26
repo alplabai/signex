@@ -8,9 +8,14 @@ pub use computed::{
     ComputedCell, ComputedColumn, ComputedColumnError, ComputedIssue, MemberVariables,
     apply_computed_columns, computed_issues,
 };
+mod priced;
 mod pricing;
+pub use priced::{
+    BuildOrder, PricedAlternate, PricedBom, PricedLine, ServedBy, Shortfall, apply_alternates,
+    line_key, priced_bom,
+};
 pub use pricing::{
-    BomPrice, MPN_FIELDS, PriceBook, PriceQuote, apply_prices, library_row_key, mpn_key,
+    BomPrice, MPN_FIELDS, PriceBook, PriceQuote, apply_prices, library_row_key, mpn_key, price_of,
     price_totals, round_cents,
 };
 
@@ -309,6 +314,10 @@ pub struct BomRow {
     /// [`apply_computed_columns`] has run.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub computed: BTreeMap<String, ComputedCell>,
+    /// The line's alternate parts (library row keys, most preferred first),
+    /// once [`apply_alternates`] has run (#2938).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub alternates: Vec<String>,
 }
 
 /// Generated BOM table.
@@ -446,6 +455,7 @@ fn grouped_row(key: GroupKey, parts: &[&BomComponent]) -> BomRow {
         library_row: shared_library_row(parts),
         price: None,
         computed: BTreeMap::new(),
+        alternates: Vec::new(),
     }
 }
 
@@ -466,6 +476,7 @@ fn single_row(component: &BomComponent) -> BomRow {
         library_row: component.library_row.clone(),
         price: None,
         computed: BTreeMap::new(),
+        alternates: Vec::new(),
     }
 }
 

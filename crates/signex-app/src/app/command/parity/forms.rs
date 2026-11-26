@@ -205,6 +205,8 @@ pub(super) fn routes_of(command: &AppCommandId) -> Vec<(Form, String)> {
     if operand_handlers::operand_handler(command).is_some() {
         let route = if operand_handlers::names_its_document(command) {
             "run_operands: named document"
+        } else if operand_handlers::picks_its_own_project(command) {
+            "run_operands: the active project unless a document is named"
         } else {
             "run_operands: active-tab gate unless a document is named"
         };

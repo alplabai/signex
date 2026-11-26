@@ -467,8 +467,6 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
         "import_graphics",
         // #2665: Smart Paste's array, on the sheet in view or the named one.
         "smart_paste",
-        // #2954: Change Component of the part `id`, likewise.
-        "change_component",
         // #1283: a snippet saved from, or placed on, the sheet in view or the
         // named one.
         "save_snippet",
@@ -527,6 +525,8 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     // The board queries (#2403).
                     "measure_board",
                     "query_board_nets",
+                    // #2939: each part's height on the named board.
+                    "query_part_heights",
                     "find_similar_items",
                     // #2408, #2409: the board Tools edits name their board.
                     "stitch_vias",
@@ -545,11 +545,21 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "rules_preset_apply",
                     "add_board_graphic",
                     "set_board_graphic",
+                    // #2470: the area tools on the named board.
+                    "place_board_fill",
+                    "place_board_region",
+                    "place_board_polygon_pour",
+                    "place_board_keepout",
+                    "place_board_pour_cutout",
                     "set_footprint_text",
                     "panelize_board",
                     "remove_board_panel",
                     "set_board_panel",
                     "board_panel",
+                    // #2942: the layout plan of the board they name.
+                    "layout_plan_get",
+                    "layout_plan_set",
+                    "layout_plan_status",
                     // #2410: they act on the board they name.
                     "swap_pins",
                     "swap_gates",
@@ -584,6 +594,9 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "project_remove_requirement",
                     "project_enable_requirement",
                     "project_run_requirements",
+                    // #2943: the project's rails and their budget.
+                    "project_set_rail",
+                    "query_rail_budget",
                     // #2394: the board view's layer commands.
                     "hide_layer",
                     "highlight_layer",
@@ -606,6 +619,9 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "filter_drc_results",
                     "waive_drc_violation",
                     "unwaive_drc_violation",
+                    // #2940: the DRC fixes.
+                    "fix_drc_violation",
+                    "fix_drc",
                     "add_net_class",
                     "rename_net_class",
                     "delete_net_class",
@@ -623,6 +639,8 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "board_assembly_drawing",
                     // #2488: the board STEP model.
                     "export_board_step",
+                    // #2470: the fabrication outputs into a folder.
+                    "fabrication_outputs",
                     // #2410: DXF import onto a board.
                     "import_dxf",
                     "import_dxf_outline",
@@ -631,12 +649,54 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     // #2389: length tuning on the named board.
                     "tune_net_length",
                     "tune_diff_pair",
+                    // #2470: the routing tools and the via on the named board.
+                    "place_board_via",
+                    "place_board_track",
+                    "place_board_route",
+                    "place_board_diff_pair",
+                    "place_board_quick_route",
+                    "place_board_multi_route",
                     // #2326 slice 6.P2b: the drawing order and Delete by uuid.
                     "bring_drawings_forward",
                     "bring_drawings_to_front",
                     "send_drawings_backward",
                     "send_drawings_to_back",
                     "delete_selection",
+                    // #2470: Update PCB for the named document's project
+                    // (left out: the active project).
+                    "update_pcb_from_schematic",
+                    // #2462, #2460: the board against the schematic, its
+                    // apply form and the board status counters.
+                    "check_board_against_schematic",
+                    "apply_board_schematic_differences",
+                    "board_status",
+                    // #2470: a new board and numbering on the named
+                    // project, sheet or board (optional where a run without
+                    // operands keeps working).
+                    "new_pcb_document",
+                    "annotate_schematic_quietly",
+                    "force_annotate_all_schematics",
+                    "reannotate_board",
+                    "back_annotate_schematics",
+                    // #2936, #2937: footprints placed, assigned or swapped.
+                    "set_footprint_position",
+                    "set_footprint_rotation",
+                    "set_footprint_side",
+                    "assign_footprint",
+                    "change_footprint",
+                    "query_footprint_assignments",
+                    // #2457, #2941: rooms on the named board.
+                    "place_board_room",
+                    "create_rooms_from_sheets",
+                    "arrange_in_room",
+                    "auto_place",
+                    // #2938, #1297: a BOM line's alternates, the priced BOM
+                    // and the part swap.
+                    "bom_add_alternate",
+                    "bom_remove_alternate",
+                    "bom_set_alternate_order",
+                    "query_bom",
+                    "change_component",
                 ]
                 .contains(&name),
                 "{name} declares a document operand"

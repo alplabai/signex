@@ -99,6 +99,14 @@ impl Signex {
     }
 }
 
+impl BomInputs {
+    /// The BOM of `variant` (`None`: the base design) instead of the
+    /// project's active one (`query_bom variant=`, #2938).
+    pub(super) fn for_variant(self, variant: Option<String>) -> Self {
+        Self { variant, ..self }
+    }
+}
+
 /// Build the BOM. Blocking: reads closed sheets, within `confine` when
 /// given. Refused when the project has no root sheet or it could not be read.
 pub(super) fn project_boms(

@@ -285,8 +285,39 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
         });
     }
 
-    // 1b. Commands — panel opens.
-    for &panel in ALL_PANELS {
+    // 1a. The installed extensions' commands (#2495), named with their
+    //     extension, run by id like a built-in row.
+    for command in app.extensions().commands() {
+        let Ok(id) = AppCommandId::new(command.metadata().id) else {
+            continue;
+        };
+        let Some(label) = app
+            .ui_state
+            .extension_commands
+            .label_in(&app.ui_state.i18n, &id)
+        else {
+            continue;
+        };
+        out.push(CommandEntry {
+            source: CommandSource::Command,
+            label,
+            value: String::new(),
+            detail: app
+                .ui_state
+                .active_keymap
+                .shortcut_label(&id)
+                .unwrap_or_default(),
+            action: CommandAction::Command(id),
+        });
+    }
+
+    // 1b. Commands — panel opens, the installed extensions' panels last.
+    let extension_panels = app.extensions().panels();
+    let panels = ALL_PANELS
+        .iter()
+        .copied()
+        .chain(extension_panels.into_iter().map(PanelKind::Extension));
+    for panel in panels {
         out.push(CommandEntry {
             source: CommandSource::Command,
             label: app.ui_state.i18n.message_plain(

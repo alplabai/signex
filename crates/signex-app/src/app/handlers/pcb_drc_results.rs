@@ -407,9 +407,10 @@ impl Signex {
         Some((from, options))
     }
 
-    /// An undo or redo of `board` that changed its waivers and nothing else
-    /// of its options keeps the DRC results current, as the waiver step
-    /// itself does. A waiver step holds that one options command alone.
+    /// An undo or redo of `board` that changed its waivers or its layout
+    /// plan (#2942) and nothing else of its options keeps the DRC results
+    /// current, as the waiver and plan steps themselves do. Each such step
+    /// holds that one options command alone.
     pub(crate) fn carry_drc_over_waiver_step(
         &mut self,
         board: &Path,
@@ -425,13 +426,16 @@ impl Signex {
         else {
             return;
         };
-        let waivers_only = now.drc_waivers != options.drc_waivers
+        let unchecked =
+            now.drc_waivers != options.drc_waivers || now.layout_plan != options.layout_plan;
+        let unchecked_only = unchecked
             && BoardOptions {
                 drc_waivers: now.drc_waivers.clone(),
+                layout_plan: now.layout_plan.clone(),
                 ..options
             } == *now;
         let to = self.document_state.pcb_revisions.get(board).copied();
-        if let (true, Some(to)) = (waivers_only, to) {
+        if let (true, Some(to)) = (unchecked_only, to) {
             self.interaction_state
                 .pcb_drc
                 .carry_revision(board, from, to);

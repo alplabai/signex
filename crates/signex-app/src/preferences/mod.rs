@@ -20,6 +20,11 @@ mod appearance;
 mod component_classes;
 mod distributors;
 mod editing;
+mod extension_page;
+#[cfg(test)]
+pub(crate) use extension_page::{
+    row_texts as extension_row_texts, value_kind as extension_value_kind,
+};
 mod fast_grids;
 mod graphite_fields;
 #[cfg(test)]
@@ -103,6 +108,11 @@ pub enum PrefNav {
     /// by `prefs.json::component_classes`; defaults seed from
     /// `fonts::default_component_classes` on a fresh install.
     ComponentClasses,
+    /// The page of an installed extension that added preferences (#2495):
+    /// the extension's install index. It lists each preference with its
+    /// kind and its value; it holds no draft. Not in [`Self::ALL`]: the nav
+    /// lists these after the built-in pages, only when one is installed.
+    Extension(usize),
 }
 
 impl PrefNav {
@@ -138,6 +148,7 @@ impl PrefNav {
             PrefNav::RuleProfiles => "Rule Profiles",
             PrefNav::LibraryDistributors => "Distributor APIs",
             PrefNav::ComponentClasses => "Component Classes",
+            PrefNav::Extension(_) => "Extension",
         }
     }
 
@@ -155,6 +166,7 @@ impl PrefNav {
             PrefNav::RuleProfiles => "Validation",
             PrefNav::LibraryDistributors => "Library",
             PrefNav::ComponentClasses => "Library",
+            PrefNav::Extension(_) => "Extensions",
         }
     }
 }
@@ -332,13 +344,15 @@ pub enum PrefMsg {
     /// `preferences_keymap_status`, where the serialization failure at
     /// the same call site already reported.
     KeymapExportFinished(Result<std::path::PathBuf, String>),
-    /// Open the chord recorder for a specific binding.
+    /// Open the chord recorder for a specific binding, or for a command
+    /// with no key yet (`unassigned`), whose OK adds a binding.
     KeymapRecorderOpen {
         slot: crate::keymap::BindingSlot,
         command: crate::keymap::AppCommandId,
         label: String,
         context: crate::keymap::ShortcutContext,
         trigger: String,
+        unassigned: bool,
     },
     /// Dismiss the recorder without applying.
     KeymapRecorderCancel,
@@ -352,7 +366,8 @@ pub enum PrefMsg {
     KeymapRecorderModifiersChanged(crate::keymap::Modifiers),
     /// A captured keystroke, routed from the keyboard subscription.
     KeymapRecorderKeyPressed(crate::keymap::KeyStroke),
-    /// Apply the recorded chord to the binding under edit.
+    /// Apply the recorded chord to the binding under edit. With nothing
+    /// recorded (after Clear), the binding's key is taken away.
     KeymapRecorderApply,
 }
 
@@ -471,6 +486,10 @@ pub struct PrefsView<'a> {
     /// Graphite nav search text (filters the nav rows only).
     pub nav_search: &'a str,
     pub keymap_recorder: Option<&'a crate::app::KeymapRecorderState>,
+    /// The installed extensions, for their pages (#2495).
+    pub extensions: &'a crate::extension::ExtensionHost,
+    /// Their commands as the Keyboard shortcuts page names them.
+    pub extension_commands: &'a crate::keymap::ExtensionCommandNames,
 }
 
 // ─── Dialog entry points ──────────────────────────────────────
@@ -571,6 +590,9 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         // `LibraryState.settings`.
         PrefNav::LibraryDistributors => content_library_distributors(v),
         PrefNav::ComponentClasses => content_component_classes(v),
+        PrefNav::Extension(index) => {
+            extension_page::content_extension(v.extensions, index, panel_tokens, i18n)
+        }
     };
 
     container(

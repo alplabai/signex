@@ -33,10 +33,19 @@ pub enum RequirementField {
     Quantity,
     Currency,
     MaxUnitCost,
+    /// `rail_budget` (#2943).
+    Net,
+    Voltage,
+    TolerancePercent,
+    MaxCurrentA,
+    MarginPercent,
+    /// `layer_count` (#2943).
+    MinLayers,
+    MaxLayers,
 }
 
 impl RequirementField {
-    const ALL: [Self; 15] = [
+    const ALL: [Self; 22] = [
         Self::Id,
         Self::Severity,
         Self::AllowWarnings,
@@ -52,6 +61,13 @@ impl RequirementField {
         Self::Quantity,
         Self::Currency,
         Self::MaxUnitCost,
+        Self::Net,
+        Self::Voltage,
+        Self::TolerancePercent,
+        Self::MaxCurrentA,
+        Self::MarginPercent,
+        Self::MinLayers,
+        Self::MaxLayers,
     ];
 
     /// The field's key in the file.
@@ -72,6 +88,13 @@ impl RequirementField {
             Self::Quantity => "quantity",
             Self::Currency => "currency",
             Self::MaxUnitCost => "max_unit_cost",
+            Self::Net => "net",
+            Self::Voltage => "voltage",
+            Self::TolerancePercent => "tolerance_percent",
+            Self::MaxCurrentA => "max_current_a",
+            Self::MarginPercent => "margin_percent",
+            Self::MinLayers => "min_layers",
+            Self::MaxLayers => "max_layers",
         }
     }
 
@@ -94,6 +117,14 @@ impl RequirementField {
                 Self::MinClearanceMm,
             ],
             "bom_cost" => &[Self::Quantity, Self::Currency, Self::MaxUnitCost],
+            "rail_budget" => &[
+                Self::Net,
+                Self::Voltage,
+                Self::TolerancePercent,
+                Self::MaxCurrentA,
+                Self::MarginPercent,
+            ],
+            "layer_count" => &[Self::MinLayers, Self::MaxLayers],
             _ => &[],
         }
     }
@@ -102,7 +133,16 @@ impl RequirementField {
     pub const fn is_optional(self) -> bool {
         matches!(
             self,
-            Self::Class | Self::MinTraceWidthMm | Self::MinClearanceMm | Self::Variant
+            Self::Class
+                | Self::MinTraceWidthMm
+                | Self::MinClearanceMm
+                | Self::Variant
+                | Self::Voltage
+                | Self::TolerancePercent
+                | Self::MaxCurrentA
+                | Self::MarginPercent
+                | Self::MinLayers
+                | Self::MaxLayers
         )
     }
 }
@@ -146,6 +186,12 @@ pub enum RequirementProblem {
     UnknownVariant(String),
     /// A `net_class` requirement sets neither a class nor a minimum.
     NetClassAsksNothing,
+    /// Not a number other than 0.
+    NotAVoltage(String),
+    /// Not a number from 0 to below 100.
+    NotAPercent(String),
+    /// A `layer_count` requirement sets neither a minimum nor a maximum.
+    LayerCountAsksNothing,
 }
 
 impl std::fmt::Display for RequirementProblem {
@@ -194,6 +240,13 @@ impl std::fmt::Display for RequirementProblem {
             Self::NetClassAsksNothing => f.write_str(
                 "a net_class requirement needs a class, a minimum track width or a minimum clearance",
             ),
+            Self::NotAVoltage(text) => write!(f, "`{text}` is not a voltage: a number other than 0"),
+            Self::NotAPercent(text) => {
+                write!(f, "`{text}` is not a percentage from 0 to below 100")
+            }
+            Self::LayerCountAsksNothing => {
+                f.write_str("a layer_count requirement needs a minimum or a maximum layer count")
+            }
         }
     }
 }
@@ -207,6 +260,8 @@ fn starting_fields(kind: &str) -> Option<Map<String, Value>> {
         "board_size" => json!({"max_width_mm": 100, "max_height_mm": 100}),
         "net_class" => json!({"nets": "*", "min_trace_width_mm": 0.15, "min_clearance_mm": 0.15}),
         "bom_cost" => json!({"quantity": 100, "currency": "USD", "max_unit_cost": 10}),
+        "rail_budget" => json!({"net": "*"}),
+        "layer_count" => json!({"max_layers": 4}),
         _ => return None,
     };
     match fields {
@@ -287,6 +342,13 @@ impl ProjectData {
                 .all(|key| raw.get(*key).is_none_or(Value::is_null))
         {
             return Err(RequirementProblem::NetClassAsksNothing);
+        }
+        if kind == "layer_count"
+            && ["min_layers", "max_layers"]
+                .iter()
+                .all(|key| raw.get(*key).is_none_or(Value::is_null))
+        {
+            return Err(RequirementProblem::LayerCountAsksNothing);
         }
         self.requirements[index] = read_known(Value::Object(raw))?;
         Ok(())
@@ -478,15 +540,21 @@ fn field_value(field: RequirementField, text: &str) -> Result<Option<Value>, Req
         | RequirementField::MaxHeightMm
         | RequirementField::MinTraceWidthMm
         | RequirementField::MinClearanceMm
-        | RequirementField::MaxUnitCost => positive_number(typed)?,
-        RequirementField::Quantity => match typed.parse::<u32>() {
-            Ok(count) if count >= 1 => Value::from(count),
-            _ => return Err(RequirementProblem::NotACount(typed.to_string())),
-        },
+        | RequirementField::MaxUnitCost
+        | RequirementField::MaxCurrentA => positive_number(typed)?,
+        RequirementField::Quantity | RequirementField::MinLayers | RequirementField::MaxLayers => {
+            match typed.parse::<u32>() {
+                Ok(count) if count >= 1 => Value::from(count),
+                _ => return Err(RequirementProblem::NotACount(typed.to_string())),
+            }
+        }
+        RequirementField::Voltage => voltage(typed)?,
+        RequirementField::TolerancePercent | RequirementField::MarginPercent => percent(typed)?,
         RequirementField::States => states(typed)?,
         RequirementField::Nets
         | RequirementField::Class
         | RequirementField::Currency
+        | RequirementField::Net
         | RequirementField::Variant => Value::String(typed.to_string()),
     };
     Ok(Some(value))
@@ -504,6 +572,34 @@ fn positive_number(typed: &str) -> Result<Value, RequirementProblem> {
         Err(_) => Number::from_f64(value)
             .map(Value::Number)
             .ok_or_else(refused),
+    }
+}
+
+/// A voltage: a finite number other than 0, in the form it was typed.
+fn voltage(typed: &str) -> Result<Value, RequirementProblem> {
+    let refused = || RequirementProblem::NotAVoltage(typed.to_string());
+    let value: f64 = typed.parse().map_err(|_| refused())?;
+    if !value.is_finite() || value == 0.0 {
+        return Err(refused());
+    }
+    typed_number(typed, value).ok_or_else(refused)
+}
+
+/// A percentage from 0 to below 100, in the form it was typed.
+fn percent(typed: &str) -> Result<Value, RequirementProblem> {
+    let refused = || RequirementProblem::NotAPercent(typed.to_string());
+    let value: f64 = typed.parse().map_err(|_| refused())?;
+    if !crate::project::is_percent(value) {
+        return Err(refused());
+    }
+    typed_number(typed, value).ok_or_else(refused)
+}
+
+/// The JSON number `typed` reads as, else `value`'s.
+fn typed_number(typed: &str, value: f64) -> Option<Value> {
+    match serde_json::from_str::<Number>(typed) {
+        Ok(number) => Some(Value::Number(number)),
+        Err(_) => Number::from_f64(value).map(Value::Number),
     }
 }
 

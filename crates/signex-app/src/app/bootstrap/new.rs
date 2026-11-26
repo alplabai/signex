@@ -373,6 +373,7 @@ impl Signex {
                 preferences_open: false,
                 keyboard_shortcuts_open: false,
                 shortcut_sections: None,
+                extension_commands: Default::default(),
                 shortcut_sheet: Default::default(),
                 about_open: false,
                 recent_projects: crate::recent_projects::RecentProjects::from_paths(
@@ -479,6 +480,7 @@ impl Signex {
                 preferences_keymap_editor: keymap_editor,
                 preferences_keymap_status: String::new(),
                 keymap_load_error,
+                keymap_command_file: None,
                 // #603 — probed independently of `keymap_load_error`,
                 // because the backup outlives the failure that produced
                 // it and must stay reachable after a successful save
@@ -953,6 +955,7 @@ impl Signex {
             native_menu: Default::default(),
             agent: crate::app::agent::AgentState::new(),
             pan_zoom_bench: None,
+            extensions: Default::default(),
         });
         // The PCB canvas starts from the loaded grid state, not its own
         // defaults, so the first frame honours a saved "grid off" (#682).

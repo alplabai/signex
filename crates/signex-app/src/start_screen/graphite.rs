@@ -471,7 +471,8 @@ pub fn view<'a>(
     iced::widget::responsive(move |size| view_sized(tokens, i18n, &data, size.width)).boxed()
 }
 
-/// Home: the hero, the reference design and the project lists.
+/// Home: the hero, the reference design, the project lists and the
+/// extension slot (empty in the Community binary).
 fn home<'a>(
     rows: Rows<'a>,
     data: &StartScreenData<'a>,
@@ -495,6 +496,11 @@ fn home<'a>(
         Space::new().height(SP.m).boxed(),
     ];
     out.extend(home_sections(rows, &sections, data.pinned, listed));
+    out.extend(super::extension_slot::home_end(
+        tokens,
+        i18n,
+        data.extensions,
+    ));
     out
 }
 

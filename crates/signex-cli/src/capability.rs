@@ -107,13 +107,23 @@ const SAVES: &[&str] = &[
     "save_layer_set",
     // Writes the named workspace layout into the user's preferences (mockup row 166).
     "save_workspace_layout",
+    // Write a binding into a custom profile of `keyboard_shortcuts.toml` (#2495).
+    "keymap_assign",
+    "keymap_clear",
+];
+
+/// Commands outside the `reports` category that write an export file.
+const EXPORTS: &[&str] = &[
+    "print",
+    // Writes the board's fabrication files into a folder (#2470).
+    "fabrication_outputs",
 ];
 
 /// The one capability `command` needs, from its catalog flags.
 pub fn capability_of(command: &CommandMetadata) -> Capability {
     if SAVES.contains(&command.id) {
         Capability::Save
-    } else if command.category == "reports" || command.id == "print" {
+    } else if command.category == "reports" || EXPORTS.contains(&command.id) {
         Capability::Export
     } else if command.category == "library" && command.flags.mutates_doc {
         Capability::LibraryWrite
@@ -171,11 +181,131 @@ mod tests {
         assert_eq!(cap("revert"), Capability::Edit);
     }
 
+    /// #2936, #2937: the footprint edits change a document in memory as one
+    /// undo step; the assignment query only reads.
+    #[test]
+    fn the_footprint_edits_need_edit_and_their_query_read() {
+        for id in [
+            "set_footprint_position",
+            "set_footprint_rotation",
+            "set_footprint_side",
+            "assign_footprint",
+            "change_footprint",
+        ] {
+            assert_eq!(cap(id), Capability::Edit, "{id}");
+        }
+        assert_eq!(cap("query_footprint_assignments"), Capability::Read);
+    }
+
+    /// #2457, #2941: the rooms commands change the board in memory, one
+    /// undo step each; none writes a file.
+    #[test]
+    fn the_rooms_commands_need_the_edit_capability() {
+        for id in [
+            "place_board_room",
+            "create_rooms_from_sheets",
+            "arrange_in_room",
+            "auto_place",
+        ] {
+            assert_eq!(cap(id), Capability::Edit, "{id}");
+        }
+    }
+
+    /// #2462, #2460: comparing the board with the schematic and reading the
+    /// board's status change nothing; applying differences edits the board
+    /// and the sheets in memory (a closed sheet is loaded, not written).
+    #[test]
+    fn the_board_against_schematic_reads_and_its_apply_form_edits() {
+        assert_eq!(cap("check_board_against_schematic"), Capability::Read);
+        assert_eq!(cap("board_status"), Capability::Read);
+        assert_eq!(cap("apply_board_schematic_differences"), Capability::Edit);
+    }
+
     /// #2506: Repour All clears `unfilled` on the board's pours as an undo
     /// step, so a read-only grant may not run it.
     #[test]
     fn repour_all_needs_the_edit_capability() {
         assert_eq!(cap("repour_all"), Capability::Edit);
+    }
+
+    /// #2470: New PCB opens the board unsaved and the numbering commands
+    /// change documents in memory: none writes a file, so none needs `save`.
+    #[test]
+    fn a_new_board_and_the_numbering_commands_need_the_edit_capability() {
+        for id in [
+            "new_pcb_document",
+            "annotate_schematic_quietly",
+            "force_annotate_all_schematics",
+            "reannotate_board",
+            "back_annotate_schematics",
+        ] {
+            assert_eq!(cap(id), Capability::Edit, "{id}");
+        }
+    }
+
+    /// #2470: a route or a via from operands is an undo step on the board in
+    /// memory, never a write: `edit`.
+    #[test]
+    fn the_routing_tools_need_the_edit_capability() {
+        for id in [
+            "place_board_route",
+            "place_board_track",
+            "place_board_quick_route",
+            "place_board_diff_pair",
+            "place_board_multi_route",
+            "place_board_via",
+        ] {
+            assert_eq!(cap(id), Capability::Edit, "{id}");
+        }
+    }
+
+    /// #2470: the area tools add an area to the board in memory: `edit`.
+    #[test]
+    fn the_area_tools_need_the_edit_capability() {
+        for id in [
+            "place_board_fill",
+            "place_board_region",
+            "place_board_polygon_pour",
+            "place_board_keepout",
+            "place_board_pour_cutout",
+        ] {
+            assert_eq!(cap(id), Capability::Edit, "{id}");
+        }
+    }
+
+    /// #2940: a DRC fix edits the board in memory as an undo step, its dry
+    /// run included: `edit`, never `save`.
+    #[test]
+    fn the_drc_fixes_need_the_edit_capability() {
+        assert_eq!(cap("fix_drc"), Capability::Edit);
+        assert_eq!(cap("fix_drc_violation"), Capability::Edit);
+    }
+
+    /// #2942: setting the layout plan is a board undo step, so it needs
+    /// `edit`; reading it and its status only read.
+    #[test]
+    fn the_layout_plan_is_set_with_edit_and_read_with_read() {
+        assert_eq!(cap("layout_plan_set"), Capability::Edit);
+        assert_eq!(cap("layout_plan_get"), Capability::Read);
+        assert_eq!(cap("layout_plan_status"), Capability::Read);
+    }
+
+    /// #2938, #1297: the alternates and the swap change a project or a sheet
+    /// in memory (`edit`, written only by a save); the priced BOM and the
+    /// part search read cached data and write nothing (`read`, not the
+    /// `export` of a BOM file).
+    #[test]
+    fn the_bom_and_part_search_commands_need_edit_or_read() {
+        for id in [
+            "bom_add_alternate",
+            "bom_remove_alternate",
+            "bom_set_alternate_order",
+            "change_component",
+        ] {
+            assert_eq!(cap(id), Capability::Edit, "{id}");
+        }
+        assert_eq!(cap("query_bom"), Capability::Read);
+        assert_eq!(cap("search_parts"), Capability::Read);
     }
 
     #[test]
@@ -196,12 +326,15 @@ mod tests {
             (Capability::Save, "save_snippet"),
             (Capability::Save, "save_layer_set"),
             (Capability::Save, "save_workspace_layout"),
+            (Capability::Save, "keymap_assign"),
+            (Capability::Save, "keymap_clear"),
             (Capability::Export, "print"),
             (Capability::Export, "report_manager_bom"),
             (Capability::Export, "export_board_report"),
             (Capability::Export, "export_board_pdf"),
             (Capability::Export, "export_assembly_svg"),
             (Capability::Export, "export_board_step"),
+            (Capability::Export, "fabrication_outputs"),
         ]);
         assert_eq!(non_default, pinned);
     }

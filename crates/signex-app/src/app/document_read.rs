@@ -34,6 +34,9 @@ struct Claim {
     /// Set by the `cancel_*_retaining` methods: the work is abandoned but
     /// its worker still runs, so the claim stays until the worker reports.
     cancelled: bool,
+    /// Opened behind the person's tab (#2984): its tab is added without
+    /// taking the view.
+    behind: bool,
 }
 
 /// How a finished worker relates to the claim it started under.
@@ -82,6 +85,7 @@ impl InFlightReads {
                 generation,
                 tracked,
                 cancelled: false,
+                behind: false,
             },
         );
         Some(generation)
@@ -113,6 +117,18 @@ impl InFlightReads {
     /// [`Self::remove_untracked`].
     pub fn insert(&mut self, path: PathBuf) -> bool {
         self.claim(path, false).is_some()
+    }
+
+    /// Mark the claim on `path` as an open behind the person's tab (#2984).
+    pub fn mark_behind(&mut self, path: &Path) {
+        if let Some(claim) = self.claims.get_mut(path) {
+            claim.behind = true;
+        }
+    }
+
+    /// Is the claim on `path` an open behind the person's tab?
+    pub fn is_behind(&self, path: &Path) -> bool {
+        self.claims.get(path).is_some_and(|c| c.behind)
     }
 
     /// Clear an untracked claim. A tracked claim for the same path belongs to

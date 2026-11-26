@@ -7,12 +7,19 @@
 //! `rules_preset_diff` (#2398, `app::rules_tab`; a profile preset reads the
 //! rule profile library, read off the update loop first), and the board
 //! queries `measure_board`, `query_board_nets` and `find_similar_items`
-//! (#2403), `board_panel` (#2410, `app::board_panel`), the Project tab's
-//! `project_settings` (#1689-#1693, `app::project_tab`) with the Variant
-//! Manager's `compare_variants` and `variant_bom` (#2949), `list_snippets`
-//! and `list_templates` (#1283, `app::design_reuse`), `query_net_ties`
-//! (#1277), the BOM's `bom_lines` (#1988) and the project's differential
-//! pairs `list_diff_pairs` (#2952, `app::diff_pair_classes`). Each
+//! (#2403), `board_panel` (#2410, `app::board_panel`), the layout plan's
+//! `layout_plan_get` and `layout_plan_status` (#2942, `app::layout_plan`),
+//! the Project tab's `project_settings` (#1689-#1693, `app::project_tab`)
+//! with the Variant Manager's `compare_variants` and `variant_bom` (#2949),
+//! `list_snippets` and `list_templates` (#1283, `app::design_reuse`),
+//! `query_net_ties` (#1277), the BOM's `bom_lines` (#1988), the project's
+//! differential pairs `list_diff_pairs` (#2952, `app::diff_pair_classes`),
+//! `query_footprint_assignments` (#2937, `footprint_assign_operands`),
+//! `check_board_against_schematic` (#2462, `app::compare_board`),
+//! `board_status` (#2460), `query_rail_budget` (#2943), the BOM and part
+//! search queries `query_bom` (#2938) and `search_parts` (#1297, `bom`), and
+//! `query_library` (#2944, the rows of an open library), answered once their
+//! reads land. Each
 //! answers with data through [`CommandOutcome::Answered`], never a bare
 //! `Ran`, and reads only the documents (engines, boards, editors, projects,
 //! the library): no active tab, window, selection or panel is looked at, and
@@ -23,7 +30,11 @@
 //! `docs/DOCUMENT_IDS.md`; the answer shapes are in `docs/COMMANDS.md`.
 
 mod board;
+mod board_status;
+mod bom;
 mod bom_lines;
+#[cfg(test)]
+mod bom_tests;
 mod check_drc;
 mod check_erc;
 mod check_requirements;
@@ -32,9 +43,11 @@ pub use check_run::CheckFinished;
 mod documents;
 mod elements;
 mod find;
+mod library;
 mod net_ties;
 mod pins;
 pub(in crate::app::command) use pins::pin_id;
+mod rail_budget;
 mod read;
 mod sheet_view;
 mod transient;
@@ -80,6 +93,17 @@ const QUERY_IDS: &[&str] = &[
     "compare_variants",
     "variant_bom",
     "list_diff_pairs",
+    // #2937: every part's footprint (`footprint_assign_operands`).
+    "query_footprint_assignments",
+    "check_board_against_schematic",
+    "board_status",
+    "layout_plan_get",
+    "layout_plan_status",
+    "query_rail_budget",
+    "query_bom",
+    "search_parts",
+    // #2944: the rows of an open library.
+    "query_library",
 ];
 
 /// The queries that run a check (`check_run`): each says nothing in
@@ -105,12 +129,7 @@ pub fn is_query(command: &AppCommandId) -> bool {
 pub(super) type Answer = Result<Value, String>;
 
 /// The text of operand `name`, if it was given.
-pub(super) fn text_operand<'a>(args: &'a CommandArgs, name: &str) -> Option<&'a str> {
-    match args.operand(name) {
-        Some(OperandValue::Text(text)) => Some(text),
-        _ => None,
-    }
-}
+pub(super) use super::operand_str as text_operand;
 
 /// The `bool` operand `name`, if it was given.
 pub(super) fn bool_operand(args: &CommandArgs, name: &str) -> Option<bool> {
@@ -143,6 +162,14 @@ impl Signex {
             "check_erc" => return Some(self.check_erc(command, args)),
             "check_drc" => return Some(self.check_drc(command, args)),
             "check_requirements" => return Some(self.check_requirements(command, args)),
+            // Compare Board with Schematic as a query (#2462) and the board
+            // counters with it (#2460), answered once the reads land.
+            "check_board_against_schematic" => {
+                return Some(self.check_board_against_schematic(command, args));
+            }
+            "board_status" => return Some(self.board_status_query(command, args)),
+            // The project's rails against its parts, read off the UI thread.
+            "query_rail_budget" => return Some(self.query_rail_budget(command, args)),
             // The Rules manager's reads (#2398).
             "rules_list" | "rules_get" | "rules_effective" | "rules_explain"
             | "rules_conflicts" => {
@@ -178,6 +205,8 @@ impl Signex {
             "rules_preset_diff" => return Some(self.rules_preset_diff(args)),
             "list_snippets" => return Some(self.list_snippets(command, args)),
             "list_templates" => return Some(self.list_templates(command, args)),
+            // #2938: answered once the BOM, built off the UI thread, lands.
+            "query_bom" => return Some(self.query_bom(command, args)),
             _ => {}
         }
         let answer = match id {
@@ -192,6 +221,10 @@ impl Signex {
             "query_board_nets" => self.query_board_nets(args),
             "find_similar_items" => self.find_similar_items(args),
             "board_panel" => self.board_panel_query(args),
+            "query_footprint_assignments" => self.query_footprint_assignments(args),
+            "layout_plan_get" | "layout_plan_status" => self.layout_plan_query(id, args),
+            "search_parts" => self.search_parts_query(args),
+            "query_library" => self.query_library(args),
             _ => self.read_document(args),
         };
         // The heads of referenced files that were never read are read now,
@@ -224,10 +257,18 @@ pub(in crate::app) mod tests;
 pub(in crate::app) mod pins_tests;
 
 #[cfg(test)]
+mod board_status_tests;
+#[cfg(test)]
 mod check_drc_base_rules_tests;
+#[cfg(test)]
+mod check_drc_bodies_tests;
 #[cfg(test)]
 pub(crate) mod check_drc_tests;
 #[cfg(test)]
 mod check_erc_tests;
 #[cfg(test)]
 mod check_requirements_tests;
+#[cfg(test)]
+mod library_tests;
+#[cfg(test)]
+mod rail_budget_tests;

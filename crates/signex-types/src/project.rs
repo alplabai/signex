@@ -13,12 +13,14 @@ use crate::format_version::FormatVersionError;
 
 mod annotate_undo;
 mod annotation;
+mod bom_alternates;
 mod erc_waiver;
 mod fab_outputs;
 mod fab_tier;
 mod min_slot;
 mod order;
 mod profile_override;
+mod rails;
 mod requirements;
 mod router_tool;
 mod rule_file;
@@ -45,6 +47,10 @@ mod variants;
 mod variants_tests;
 pub use annotate_undo::AnnotateUndo;
 pub use annotation::{AnnotationSettings, AnnotationState};
+pub use bom_alternates::{
+    BomAlternateProblem, BomLineAlternates, MAX_BOM_KEY_CHARS, MPN_LINE_PREFIX, bom_line_key,
+    bom_mpn_key, bom_row_key,
+};
 pub use erc_waiver::ErcWaiver;
 pub use fab_outputs::FabOutputKinds;
 pub use fab_tier::FabCapabilities;
@@ -53,6 +59,7 @@ pub use profile_override::{
     ProfileChange, builtin_override, duplicate_profile, override_builtin, rename_user_profile,
     reset_builtin, saved_profiles, unique_profile_name,
 };
+pub use rails::{RAILS_KEY, RailEdit, RailProblem, RailSpec, is_percent};
 pub use requirements::{
     DEFAULT_PART_STATES, LIFECYCLE_STATES, MAX_REQUIREMENT_ID_CHARS, REQUIREMENT_KINDS,
     REQUIREMENTS_KEY, Requirement, RequirementEntry, RequirementField, RequirementKind,
@@ -344,6 +351,11 @@ pub struct ProjectData {
         deserialize_with = "router_tool::lenient_router_tool_diameter"
     )]
     pub router_tool_diameter: Option<f64>,
+    /// Alternate parts per BOM line (#2938), most preferred first. A top
+    /// level key, skipped when empty; an older build keeps it in `unknown`.
+    /// No format token changes.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub bom_alternates: Vec<BomLineAlternates>,
     /// Keys written by a newer build that this one does not know; kept so a
     /// save does not drop them (#788).
     #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
@@ -397,6 +409,8 @@ impl ProjectData {
 
 #[cfg(test)]
 mod agent_journal_tests;
+#[cfg(test)]
+mod bom_alternates_tests;
 #[cfg(test)]
 mod description_tests;
 #[cfg(test)]
@@ -606,6 +620,7 @@ mod tests {
             schematic_design: Default::default(),
             fab_outputs: None,
             router_tool_diameter: None,
+            bom_alternates: Vec::new(),
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
@@ -646,6 +661,7 @@ mod tests {
             schematic_design: Default::default(),
             fab_outputs: None,
             router_tool_diameter: None,
+            bom_alternates: Vec::new(),
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
@@ -819,7 +835,13 @@ pub fn parse_project_bytes(path: &Path, bytes: &[u8]) -> Result<ProjectData, Pro
         let variants = value
             .as_object_mut()
             .and_then(|map| map.remove(variant_settings::VARIANT_SETTINGS_KEY));
+        let alternates = value
+            .as_object_mut()
+            .and_then(|map| map.remove(bom_alternates::BOM_ALTERNATES_KEY));
         let mut data = serde_json::from_value::<ProjectData>(value).map_err(corrupt)?;
+        if let Some(raw) = alternates {
+            bom_alternates::take_bom_alternates(&mut data, raw);
+        }
         if let Some(raw) = requirements {
             requirements::take_requirements(&mut data, raw);
         }
@@ -904,6 +926,7 @@ pub fn parse_project_bytes(path: &Path, bytes: &[u8]) -> Result<ProjectData, Pro
         schematic_design: Default::default(),
         fab_outputs: None,
         router_tool_diameter: None,
+        bom_alternates: Vec::new(),
         requirements: Vec::new(),
         parameters: Default::default(),
         unknown: UnknownJson::default(),

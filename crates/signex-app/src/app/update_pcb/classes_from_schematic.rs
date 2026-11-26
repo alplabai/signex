@@ -44,18 +44,24 @@ impl crate::app::Signex {
     /// How many net classes Execute adds or changes for the open dialog;
     /// zero before the list is read.
     pub(crate) fn update_pcb_class_count(&self, state: &super::UpdatePcbState) -> usize {
+        self.update_pcb_class_names(state).len()
+    }
+
+    /// The net classes Execute adds or changes for the open dialog, in
+    /// edit order: the `net_classes` of a run from operands' answer.
+    pub(crate) fn update_pcb_class_names(&self, state: &super::UpdatePcbState) -> Vec<String> {
         let (Some(snapshot), Some(board)) = (state.snapshot.as_deref(), state.board.as_deref())
         else {
-            return 0;
+            return Vec::new();
         };
         self.update_pcb_class_edit(board, snapshot)
-            .map_or(0, |edit| classes_in(&edit))
+            .map_or_else(Vec::new, |edit| classes_in(&edit))
     }
 }
 
-/// How many classes `edit` adds or changes: the count the dialog's summary
-/// line and its Execute count show.
-pub(crate) fn classes_in(edit: &NetClassCommand) -> usize {
+/// The classes `edit` adds or changes, each once, in edit order: the count
+/// the dialog's summary line and its Execute count show.
+pub(crate) fn classes_in(edit: &NetClassCommand) -> Vec<String> {
     fn walk<'c>(command: &'c NetClassCommand, names: &mut Vec<&'c str>) {
         let name = match command {
             NetClassCommand::Batch { commands } => {
@@ -77,5 +83,5 @@ pub(crate) fn classes_in(edit: &NetClassCommand) -> usize {
     }
     let mut names: Vec<&str> = Vec::new();
     walk(edit, &mut names);
-    names.len()
+    names.into_iter().map(str::to_string).collect()
 }

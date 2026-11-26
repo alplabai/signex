@@ -22,6 +22,8 @@ use crate::variant_fit::{
 };
 use crate::{ExportContext, Exporter};
 
+#[cfg(test)]
+mod alternates_tests;
 mod cells;
 #[cfg(test)]
 mod computed_tests;
@@ -42,8 +44,9 @@ pub use csv::emit as csv_emit;
 pub use html::emit as html_emit;
 pub use signex_bom::{
     BomGrouping, BomIssueSeverity, BomMetadata, BomPrice, BomRow, BomRule, BomRuleOptions,
-    BomTable, BomValidationIssue, BomValidationReport, ComputedCell, ComputedColumn, ComputedIssue,
-    PriceBook, PriceQuote, library_row_key, mpn_key, price_totals,
+    BomTable, BomValidationIssue, BomValidationReport, BuildOrder, ComputedCell, ComputedColumn,
+    ComputedIssue, PriceBook, PriceQuote, PricedBom, Shortfall, library_row_key, line_key, mpn_key,
+    price_of, price_totals, priced_bom,
 };
 pub use template::{columns_of_template, template_of_columns};
 pub use xlsx::emit as xlsx_emit;
@@ -72,6 +75,9 @@ pub struct BomOptions {
     /// project's board (#2365). Such a part is listed only with the
     /// not-fitted parts, like one marked out of the BOM on the schematic.
     pub board_left_out: Vec<signex_types::pcb::SymbolLink>,
+    /// The project's alternates per BOM line (#2938), shown in the
+    /// Alternates column. Empty: the column stays blank.
+    pub alternates: Vec<signex_types::project::BomLineAlternates>,
 }
 
 impl Default for BomOptions {
@@ -93,6 +99,7 @@ impl Default for BomOptions {
             rule_options: BomRuleOptions::default(),
             price_book: signex_bom::PriceBook::default(),
             board_left_out: Vec::new(),
+            alternates: Vec::new(),
         }
     }
 }
@@ -127,6 +134,8 @@ pub enum BomColumn {
     /// An `=` expression over the line's fields and the project variables
     /// (#1988), shown with its derived unit.
     Computed(signex_bom::ComputedColumn),
+    /// The line's alternate parts, most preferred first (#2938).
+    Alternates,
 }
 
 impl BomColumn {
@@ -160,6 +169,7 @@ impl BomColumn {
             Self::Distributor => "Distributor",
             Self::PriceAge => "Price Age",
             Self::Computed(column) => column.name(),
+            Self::Alternates => "Alternates",
         }
     }
 }
@@ -228,6 +238,7 @@ fn rolled_up(ctx: &ExportContext, opts: &BomOptions) -> (BomContext, BomTable) {
     let (bom_ctx, variables) = build_bom_context(ctx, opts);
     let (mut table, members) = build_table_with_members(&bom_ctx, &engine_options_from_opts(opts));
     signex_bom::apply_prices(&mut table, &opts.price_book);
+    signex_bom::apply_alternates(&mut table, &opts.alternates);
     signex_bom::apply_computed_columns(
         &mut table,
         &members,

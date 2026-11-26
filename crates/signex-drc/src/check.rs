@@ -15,8 +15,19 @@ use pcb_geom::{
 
 use super::{DrcReport, DrcRules, Violation, ViolationKind};
 
-/// Check `board` against `rules`.
+/// Check `board` against `rules`, each part's 3D body taken from its stored
+/// height alone (no library model).
 pub fn run(board: &PcbBoard, rules: &DrcRules) -> DrcReport {
+    run_with_bodies(board, rules, &crate::BodyModels::new())
+}
+
+/// Check `board` against `rules`, the parts' 3D bodies read from `models`
+/// (the library models of the footprints they came from, #2939).
+pub fn run_with_bodies(
+    board: &PcbBoard,
+    rules: &DrcRules,
+    models: &crate::BodyModels,
+) -> DrcReport {
     let items = per_layer_sizes(board, collect_copper(board));
     let no_net = per_layer_sizes(board, no_net_copper(board));
     let index = BoardIndex::build(board);
@@ -33,6 +44,8 @@ pub fn run(board: &PcbBoard, rules: &DrcRules) -> DrcReport {
     violations.extend(super::courtyard::violations(board, rules));
     let (outside_rooms, unmeasured) = super::rooms::violations(board);
     violations.extend(outside_rooms);
+    let bodies = super::bodies::violations(board, rules, models);
+    violations.extend(bodies.violations);
     violations.sort_unstable();
     let mut skipped = index.rejected().to_vec();
     skipped.extend(keepouts.bodies);
@@ -42,6 +55,12 @@ pub fn run(board: &PcbBoard, rules: &DrcRules) -> DrcReport {
         .filter(|r| !skipped.iter().any(|s| s.item == r.item))
         .collect();
     skipped.extend(unlisted);
+    // So is a part whose 3D body did not convert (#2939).
+    for rejected in bodies.rejected {
+        if !skipped.iter().any(|s| s.item == rejected.item) {
+            skipped.push(rejected);
+        }
+    }
     DrcReport {
         rules: rules.clone(),
         violations,

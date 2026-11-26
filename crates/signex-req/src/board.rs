@@ -1,10 +1,12 @@
-//! `board_size` and `net_class`: what the project's board must be.
+//! `board_size`, `net_class` and `layer_count`: what the project's board
+//! must be.
 
 use std::collections::BTreeSet;
 
 use serde_json::json;
 use signex_types::net_class::{NetClass, first_matching_class, glob_matches};
 use signex_types::pcb::PcbBoard;
+use signex_types::pcb_stack::board_copper_layers;
 
 use crate::{Board, Miss, mm};
 
@@ -85,6 +87,48 @@ pub(crate) fn outline_extent(board: &PcbBoard) -> Option<(f64, f64)> {
         max_y = max_y.max(p.y);
     }
     Some((max_x - min_x, max_y - min_y))
+}
+
+/// `layer_count` (#2943): the board's copper layers, as the layer tabs and
+/// the stack count them, within `min` and `max`.
+pub(crate) fn layer_count(board: &Board, min: Option<u32>, max: Option<u32>) -> Vec<Miss> {
+    if min.is_none() && max.is_none() {
+        return vec![Miss::new(
+            "The requirement names no minimum and no maximum, so there is nothing to check",
+        )];
+    }
+    if min == Some(0) || max == Some(0) {
+        return vec![Miss::new(
+            "A layer count of 0 is no limit, so the requirement was not checked",
+        )];
+    }
+    if let (Some(low), Some(high)) = (min, max)
+        && low > high
+    {
+        return vec![Miss::new(format!(
+            "`min_layers` {low} is above `max_layers` {high}, so no board could pass"
+        ))];
+    }
+    let (path, board) = match board_of(board) {
+        Ok(found) => found,
+        Err(miss) => return vec![miss],
+    };
+    let count = board_copper_layers(&board.layers).len();
+    let message = match (min, max) {
+        (Some(low), _) if (count as u64) < u64::from(low) => {
+            format!("The board has {count} copper layers, under the minimum of {low}")
+        }
+        (_, Some(high)) if (count as u64) > u64::from(high) => {
+            format!("The board has {count} copper layers, over the maximum of {high}")
+        }
+        _ => return Vec::new(),
+    };
+    let miss = Miss::new(message)
+        .with("count", json!(count))
+        .with("min_layers", json!(min))
+        .with("max_layers", json!(max))
+        .on(path);
+    vec![miss]
 }
 
 /// What a `net_class` requirement asks.

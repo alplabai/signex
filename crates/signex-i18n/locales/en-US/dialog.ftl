@@ -538,3 +538,5 @@ dialog-netlist-omitted-refused = not read (refused)
 dialog-netlist-omitted-sheet-cycle = sheet cycle · re-entered from { $parent }
 # $kept is the whole path of the file this one cannot be told from; only it is in the netlist.
 dialog-netlist-omitted-key-collision = same path as { $kept } on this file system
+# An annotate run from operands that changed nothing; $why is the reason in words.
+dialog-annotate-command-refused = Annotate did not run: { $why }

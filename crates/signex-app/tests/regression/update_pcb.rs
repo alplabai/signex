@@ -199,6 +199,7 @@ fn add_project(
             schematic_design: Default::default(),
             fab_outputs: None,
             router_tool_diameter: None,
+            bom_alternates: Vec::new(),
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
@@ -261,7 +262,7 @@ fn fixture_preparing(
     if let Some((board, newer)) = board {
         let mut text = SnxPcb::new(board).write_string().unwrap();
         if newer {
-            text = text.replacen(signex_types::format::SNXPCB_FORMAT_V1, "snxpcb/1.12", 1);
+            text = text.replacen(signex_types::format::SNXPCB_FORMAT_V1, "snxpcb/1.13", 1);
         }
         std::fs::write(&board_path, text).unwrap();
     }

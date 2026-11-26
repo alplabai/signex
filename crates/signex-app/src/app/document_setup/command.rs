@@ -1,5 +1,6 @@
-//! `new_pcb_document [profile=..]` and `new_schematic_sheet [profile=..]
-//! [name=..]`: make the document with a profile and no dialog (#2232), for
+//! `new_pcb_document [document=..] [profile=..] [name=..]` and
+//! `new_schematic_sheet [profile=..] [name=..]`: make the document with a
+//! profile and no dialog (#2232, #2470), for
 //! headless runs and agents. They run the same paths as the dialogs' Create.
 
 use std::path::{Path, PathBuf};
@@ -11,6 +12,7 @@ use signex_types::reuse::{ReuseKind, ReuseScope};
 use super::SheetChoice;
 use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::design_reuse;
+use crate::app::document_ids::NoProjectNamed;
 use crate::app::handlers::dock::project_navigation::add_io::on_blocking_pool;
 use crate::app::state::ProjectId;
 use crate::app::{Message, ProjectMsg, Signex};
@@ -28,7 +30,8 @@ fn text<'a>(args: &'a CommandArgs, key: &str) -> Option<&'a str> {
     }
 }
 
-/// The project in view and the setup its `profile` operand names.
+/// The project `document` names (the project itself or a document of it),
+/// else the project in view, and the setup its `profile` operand names.
 fn project_and_setup(
     app: &mut Signex,
     args: &CommandArgs,
@@ -36,9 +39,12 @@ fn project_and_setup(
 ) -> Result<(ProjectId, ProjectSetup), String> {
     // No `profile`: the project's own setup, as before the dialog existed.
     let token = text(args, "profile").unwrap_or(PROJECT_PROFILE_TOKEN);
-    let project = app
-        .project_in_view()
-        .ok_or_else(|| format!("`{command}` needs an open project"))?;
+    let project = match args.operand("document") {
+        Some(OperandValue::Document(target)) => named_project(app, target, command)?,
+        _ => app
+            .project_in_view()
+            .ok_or_else(|| format!("`{command}` needs an open project"))?,
+    };
     let resolved = app
         .resolved_project_setup(project)
         .ok_or_else(|| format!("`{command}`: the project is no longer open"))?;
@@ -46,8 +52,43 @@ fn project_and_setup(
     Ok((project, setup))
 }
 
-/// `new_pcb_document profile=..`: the project's board with the profile's
-/// rules, opened unsaved, as the New PCB dialog's Create makes it.
+/// The open project `target` is, or the one its document belongs to.
+fn named_project(
+    app: &Signex,
+    target: &crate::app::document_ids::DocumentTarget,
+    command: &str,
+) -> Result<ProjectId, String> {
+    app.project_named(target)
+        .map(|project| project.id)
+        .map_err(|why| match why {
+            NoProjectNamed::Unresolved(why) => why,
+            NoProjectNamed::NotInProject(name) => {
+                format!("`{command}`: {name} is in no open project")
+            }
+        })
+}
+
+/// The board file `name` names in the project folder `dir`: `name` with
+/// `.snxpcb` added when it has no such extension.
+fn named_board_path(dir: &Path, name: &str) -> Result<PathBuf, String> {
+    const EXT: &str = ".snxpcb";
+    let name = crate::app::new_project::check_name(name)
+        .map_err(|_| format!("`{name}` is not a usable board file name"))?;
+    let has_ext = name.len() > EXT.len()
+        && name.is_char_boundary(name.len() - EXT.len())
+        && name[name.len() - EXT.len()..].eq_ignore_ascii_case(EXT);
+    Ok(if has_ext {
+        dir.join(name)
+    } else {
+        dir.join(format!("{name}{EXT}"))
+    })
+}
+
+/// `new_pcb_document [document=..] [profile=..] [name=..]`: the project's
+/// board with the profile's rules, opened unsaved, as the New PCB dialog's
+/// Create makes it. Nothing is written: the board and the project stay
+/// unsaved, so the run needs no `save` capability (#2470). A headless run
+/// answers with the board's `{id, path, kind}` (`command::opened`).
 pub(crate) fn new_pcb_document(app: &mut Signex, args: &CommandArgs) -> Ran {
     let (project, setup) = match project_and_setup(app, args, "new_pcb_document") {
         Ok(found) => found,
@@ -57,8 +98,24 @@ pub(crate) fn new_pcb_document(app: &mut Signex, args: &CommandArgs) -> Ran {
         return refused("`new_pcb_document`: the project is no longer open");
     };
     let named = Signex::project_board(loaded);
+    let asked = match text(args, "name") {
+        Some(name) => match named_board_path(loaded.dir(), name) {
+            Ok(path) => Some(path),
+            Err(why) => return refused(why),
+        },
+        None => None,
+    };
+    if let (Some(named), Some(asked)) = (&named, &asked)
+        && named != asked
+    {
+        return refused(format!(
+            "`new_pcb_document`: the project already names the board {}; a project holds one board",
+            named.display()
+        ));
+    }
     let path = named
         .clone()
+        .or_else(|| asked.clone())
         .unwrap_or_else(|| crate::app::update_pcb::new_board_path(&loaded.path));
     if app.document_state.holds_pcb(&path) || app.is_board_opening(&path) {
         return refused(format!(
@@ -66,7 +123,7 @@ pub(crate) fn new_pcb_document(app: &mut Signex, args: &CommandArgs) -> Ran {
             path.display()
         ));
     }
-    let task = app.request_new_pcb(Some(project), Some(setup.pcb), setup.fab);
+    let task = app.request_new_pcb_at(Some(project), asked, Some(setup.pcb), setup.fab);
     (CommandOutcome::Ran, task)
 }
 

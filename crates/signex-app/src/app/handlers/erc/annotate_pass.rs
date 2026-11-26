@@ -19,6 +19,9 @@ pub(super) struct AnnotatePass<'a> {
     pub reprefix: Option<&'a std::collections::HashMap<uuid::Uuid, String>>,
     /// The pass's name in the Messages panel.
     pub label: &'static str,
+    /// The sheet a `document` operand named (#2470), which takes the active
+    /// sheet's place in the walk order; `None`: the active sheet.
+    pub anchor: Option<&'a std::path::Path>,
 }
 
 impl Signex {
@@ -30,12 +33,14 @@ impl Signex {
         &mut self,
         mode: signex_engine::AnnotateMode,
         project_set: ProjectSheetSet,
+        anchor: Option<&std::path::Path>,
     ) -> Task<Message> {
         self.number_project(
             AnnotatePass {
                 mode,
                 reprefix: None,
                 label: "Annotate",
+                anchor,
             },
             project_set,
         )
@@ -52,6 +57,7 @@ impl Signex {
             mode,
             reprefix,
             label,
+            anchor,
         } = pass;
         // Designators before the pass, to tell afterwards which symbols it
         // renumbered.
@@ -75,7 +81,7 @@ impl Signex {
         let active_path = self.document_state.active_path.clone();
         let ordered_paths = crate::app::project_sheets::ordered_project_sheet_paths(
             &project_set,
-            active_path.as_deref(),
+            anchor.or(active_path.as_deref()),
         );
         // Sheets the Annotate dialog unticked (#75) stay as they are: their
         // symbols act as locked, so their designators keep their numbers in

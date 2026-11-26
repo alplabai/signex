@@ -46,6 +46,7 @@ fn add_project(app: &mut Signex, libs: &[&std::path::Path]) -> crate::app::Proje
                 schematic_design: Default::default(),
                 fab_outputs: None,
                 router_tool_diameter: None,
+                bom_alternates: Vec::new(),
                 requirements: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),

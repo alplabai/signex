@@ -12,18 +12,22 @@
 use iced::Task;
 
 use super::agent_edits as agent;
+use super::board_area_operands as area;
 use super::board_edit_operands as board_edit;
 use super::board_graphic_operands as graphic;
 use super::board_operands as board;
+use super::board_route_operands as route;
 use super::board_view_operands as board_view;
-use super::change_component_operands as change;
 use super::directive_operands as directive;
 use super::document_operands as doc;
 use super::file_operands as file;
+use super::footprint_assign_operands as fp_assign;
+use super::footprint_place_operands as fp_place;
 use super::footprint_text_operands as fp_text;
 use super::hierarchy_operands as hierarchy;
 use super::layer_strip_operands as strip;
 use super::live_erc_operands as live_erc;
+use super::part_height_operands as part_heights;
 use super::part_operands as part;
 use super::placed_operands as placed;
 use super::placement_extras_operands as extras;
@@ -41,6 +45,7 @@ use crate::app::board_reuse as reuse;
 use crate::app::board_tools as tools;
 use crate::app::handlers::pcb_component::part_swap_operands as swap;
 use crate::app::handlers::pcb_tune as tune;
+use crate::app::rooms;
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
 
@@ -81,6 +86,28 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
         "update_pcb_from_schematic",
         crate::app::update_pcb::update_pcb_from_schematic,
     ),
+    // #2470: numbering on the document named, answered with each change.
+    (
+        "annotate_schematic_quietly",
+        crate::app::handlers::erc::annotate_quietly_by_operands,
+    ),
+    (
+        "force_annotate_all_schematics",
+        crate::app::handlers::erc::force_annotate_by_operands,
+    ),
+    (
+        "reannotate_board",
+        crate::app::board_reannotate::reannotate_board,
+    ),
+    (
+        "back_annotate_schematics",
+        crate::app::back_annotate::back_annotate_schematics,
+    ),
+    // #2462: the Compare Board with Schematic dialog's Apply, by row id.
+    (
+        "apply_board_schematic_differences",
+        crate::app::compare_board::apply_board_schematic_differences,
+    ),
     ("apply_edits", agent::apply_edits),
     ("revert", agent::revert),
     ("place_net_label", place::net_label),
@@ -115,8 +142,6 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     // #2665: the Smart Paste dialog's choices, placed at once.
     ("smart_paste", smart_paste::smart_paste),
     ("place_component", part::place_component),
-    // #2954: Change Component's swap, the pins mapped by hand if given.
-    ("change_component", change::change_component),
     ("place_sheet_symbol", hierarchy::place_sheet_symbol),
     ("place_sheet_entry", hierarchy::place_sheet_entry),
     ("sync_sheet_pins", hierarchy::sync_sheet_pins),
@@ -166,21 +191,45 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("export_assembly_svg", output::export_assembly_svg),
     ("board_assembly_drawing", output::board_assembly_drawing),
     ("export_board_step", output::export_board_step),
+    // #2470: the Fabrication Outputs dialog's Generate from operands.
+    (
+        "fabrication_outputs",
+        crate::app::fab_outputs::fabrication_outputs,
+    ),
     ("add_board_graphic", graphic::add_board_graphic),
     ("set_board_graphic", graphic::set_board_graphic),
+    // #2470: the area tools on the board `document` names.
+    ("place_board_fill", area::place_fill),
+    ("place_board_region", area::place_region),
+    ("place_board_polygon_pour", area::place_polygon_pour),
+    ("place_board_keepout", area::place_keepout),
+    ("place_board_pour_cutout", area::place_pour_cutout),
     ("set_footprint_text", fp_text::set_footprint_text),
+    // #2936, #2937: board footprints by id, and footprint assignment.
+    ("set_footprint_position", fp_place::set_footprint_position),
+    ("set_footprint_rotation", fp_place::set_footprint_rotation),
+    ("set_footprint_side", fp_place::set_footprint_side),
+    ("assign_footprint", fp_assign::assign_footprint),
+    ("change_footprint", fp_assign::change_footprint),
     ("set_selection_filters", filter::set_selection_filters),
     (
         "apply_selection_filter_preset",
         filter::apply_selection_filter_preset,
     ),
+    // #2495: a key binding in a custom keyboard profile.
+    ("keymap_assign", super::keymap_operands::keymap_assign),
+    ("keymap_clear", super::keymap_operands::keymap_clear),
     ("rules_add", crate::app::rules_tab::rules_add),
     ("rules_set", crate::app::rules_tab::rules_set),
     ("rules_remove", crate::app::rules_tab::rules_remove),
     ("rules_enable", crate::app::rules_tab::rules_enable),
     ("show_drc_violation", board::show_drc_violation),
+    // #2939: each part's height and where it came from.
+    ("query_part_heights", part_heights::query_part_heights),
     ("waive_drc_violation", board::waive_drc_violation),
     ("unwaive_drc_violation", board::unwaive_drc_violation),
+    ("fix_drc_violation", board::fix_drc_violation),
+    ("fix_drc", board::fix_drc),
     ("filter_drc_results", board::filter_drc_results),
     ("add_net_class", board::add_net_class),
     ("rename_net_class", board::rename_net_class),
@@ -203,6 +252,18 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("board_shape_from_selection", tools::board_shape_by_operands),
     ("keepout_from_selection", tools::keepout_by_operands),
     ("arrange_in_box", tools::arrange_in_box_by_operands),
+    // #2470: the routing tools and the via, net by net on a named board.
+    ("place_board_via", route::place_board_via),
+    ("place_board_track", route::place_board_track),
+    ("place_board_route", route::place_board_route),
+    ("place_board_diff_pair", route::place_board_diff_pair),
+    ("place_board_quick_route", route::place_board_quick_route),
+    ("place_board_multi_route", route::place_board_multi_route),
+    // #2457, #2941, #2935: rooms on the board `document` names.
+    ("place_board_room", rooms::place_room_by_operands),
+    ("create_rooms_from_sheets", rooms::create_rooms_by_operands),
+    ("arrange_in_room", rooms::arrange_in_room_by_operands),
+    ("auto_place", rooms::auto_place_by_operands),
     (
         "import_dxf",
         crate::app::handlers::pcb_dxf_import::import_dxf,
@@ -229,6 +290,8 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
         crate::app::board_panel::remove_board_panel,
     ),
     ("set_board_panel", crate::app::board_panel::set_board_panel),
+    // #2942: one stage of the named board's layout plan.
+    ("layout_plan_set", crate::app::layout_plan::layout_plan_set),
     ("swap_pins", swap::swap_pins),
     ("swap_gates", swap::swap_gates),
     // #1261: the same swaps started on the named sheet.
@@ -320,9 +383,33 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
         "project_enable_requirement",
         crate::app::project_tab::project_enable_requirement,
     ),
+    // #2943: the project's power rails.
+    (
+        "project_set_rail",
+        crate::app::project_tab::project_set_rail,
+    ),
     (
         "project_run_requirements",
         crate::app::project_tab::project_run_requirements,
+    ),
+    // #2938: a BOM line's alternates, one General step each.
+    (
+        "bom_add_alternate",
+        crate::app::project_tab::bom_add_alternate,
+    ),
+    (
+        "bom_remove_alternate",
+        crate::app::project_tab::bom_remove_alternate,
+    ),
+    (
+        "bom_set_alternate_order",
+        crate::app::project_tab::bom_set_alternate_order,
+    ),
+    // #1297, #2954: the placed part `id` names swapped for a library row,
+    // the pins mapped by hand if given.
+    (
+        "change_component",
+        super::change_component_operands::change_component,
     ),
 ];
 
@@ -403,7 +490,9 @@ pub(crate) fn operand_handler(command: &AppCommandId) -> Option<OperandHandler> 
 /// `repair_pin_junctions` goes there too, so a headless run on the sheet in
 /// view answers how many dots it added (0 when nothing needed one) instead of
 /// a bare `Ran`. `toggle_live_erc` too, so a headless flip answers with the
-/// preference it left.
+/// preference it left. `update_pcb_from_schematic` (#2470) goes there so a
+/// bare headless run is refused for `apply=true` or `dry_run=true` rather
+/// than opening a dialog nobody sees.
 pub(crate) fn runs_headless_without_operands(command: &AppCommandId) -> bool {
     matches!(
         command.as_str(),
@@ -412,6 +501,7 @@ pub(crate) fn runs_headless_without_operands(command: &AppCommandId) -> bool {
             | "create_sheet_symbol_from_sheet"
             | "repair_pin_junctions"
             | "toggle_live_erc"
+            | "update_pcb_from_schematic"
     )
 }
 
@@ -427,6 +517,10 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "apply_edits" => Some(
             "`apply_edits` needs the operands `document`, `expect_revision` and `edits` — \
              it has no surface but an agent's call",
+        ),
+        "apply_board_schematic_differences" => Some(
+            "`apply_board_schematic_differences` needs the operands `document` and \
+             `to_board` or `to_schematic` — use Apply in Compare Board with Schematic",
         ),
         "revert" => Some(
             "`revert` needs the operands `document` and `group` — \
@@ -471,6 +565,11 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
             "`set_board_panel` needs the operands `document`, `field` and `value` — \
              use the Panel section of the board's Properties",
         ),
+        // #2942: the layout plan has no surface but its commands.
+        "layout_plan_set" => Some(
+            "`layout_plan_set` needs the operands `document`, `stage` and a setting \
+             of that stage — it has no surface but its command",
+        ),
         "set_selection_filters" => Some(
             "`set_selection_filters` needs the operand `kinds` — \
              use the Filter panel or the Active Bar's filter",
@@ -478,6 +577,11 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "apply_selection_filter_preset" => Some(
             "`apply_selection_filter_preset` needs the operand `name` — \
              click the preset in the Filter panel",
+        ),
+        // #2495: a person records the key in Preferences.
+        "keymap_assign" | "keymap_clear" => Some(
+            "this command needs the operands `command` and `profile` — \
+             use Preferences ▸ Keyboard shortcuts",
         ),
         "set_object_position" => Some(
             "`set_object_position` needs the operands `id` and `at` — \
@@ -524,6 +628,21 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
             "`set_footprint_text` needs the operands `document`, `designator`, `text`, \
              `field` and `value` — drag the designator or comment on the board",
         ),
+        // #2936: a person drags the footprint, or uses the Location and
+        // Layer rows of the Component view.
+        "set_footprint_position" => Some(
+            "`set_footprint_position` needs the operands `document`, `id` and `at` — \
+             drag the footprint on the board",
+        ),
+        "set_footprint_rotation" | "set_footprint_side" => Some(
+            "this command needs the operands `document`, `id` and its value — \
+             use the Rotation and Layer rows of the Component view in Properties",
+        ),
+        // #2937: a person uses Tools ▸ Assign Footprints.
+        "assign_footprint" => Some(
+            "`assign_footprint` needs the operands `document`, `id` and `footprint` — \
+             use Tools ▸ Assign Footprints",
+        ),
         "rules_add" | "rules_set" | "rules_remove" | "rules_enable" | "rules_matrix_set"
         | "rules_set_create" | "rules_set_edit" | "rules_set_apply" | "rules_preset_apply" => Some(
             "the `rules_*` edits need their operands — \
@@ -532,6 +651,19 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "show_drc_violation" | "waive_drc_violation" | "unwaive_drc_violation" => Some(
             "this command needs the operands `document` and `id` — \
              use the rows of the DRC panel",
+        ),
+        // #2940: the fixes have no window form yet; they run from operands.
+        "fix_drc_violation" => Some(
+            "`fix_drc_violation` needs the operands `document` and `violation` — \
+             the key is a finding's `evidence.waiver_key` in `check_drc`",
+        ),
+        "fix_drc" => Some(
+            "`fix_drc` needs the operand `document`, and `rule` for one kind — \
+             run it from the command line with its operands",
+        ),
+        "query_part_heights" => Some(
+            "`query_part_heights` needs the operand `document` — \
+             a part's height is its Height row in Properties",
         ),
         "filter_drc_results" => Some(
             "`filter_drc_results` needs the operand `document` — \
@@ -597,6 +729,16 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
             "the `project_*` edits need their operands — \
              use the Project tab (Project ▸ Project Options...)",
         ),
+        // #2943: no panel edits the rails yet.
+        "project_set_rail" => Some(
+            "`project_set_rail` needs the operands `document` and `net`, with `voltage`, \
+             `tolerance_percent` or `remove` — run it from the command line",
+        ),
+        // #2938: alternates have no window surface yet.
+        "bom_add_alternate" | "bom_remove_alternate" | "bom_set_alternate_order" => Some(
+            "the `bom_*` alternate edits need their operands, `document` first — \
+             `query_bom` answers each line's `key`",
+        ),
         _ => None,
     }
 }
@@ -617,20 +759,31 @@ pub(crate) fn names_its_document(command: &AppCommandId) -> bool {
     })
 }
 
+/// Does `command`, run from operands without `document`, pick its project
+/// itself rather than through the active tab's gate? The catalog says so
+/// (`CommandMetadata::picks_own_project`): `update_pcb_from_schematic`
+/// (#2470) takes the active project's board, or the one project's when none
+/// is active, and refuses with the boards to name otherwise (Caner,
+/// 2026-11-25).
+pub(crate) fn picks_its_own_project(command: &AppCommandId) -> bool {
+    crate::keymap::metadata_for(command).is_some_and(|meta| meta.picks_own_project)
+}
+
 impl Signex {
     /// Run `command` from the operands in `args`: its handler. A command with
     /// no handler is refused. One that names its document (`document`) is
     /// run on that document, with ids made unique first and without the
-    /// active tab's enablement; any other is behind the same enablement gate
-    /// as a dispatch.
+    /// active tab's enablement; one that [picks its own
+    /// project](picks_its_own_project) runs without that gate too; any other
+    /// is behind the same enablement gate as a dispatch.
     pub(crate) fn run_operands(&mut self, command: &AppCommandId, args: &CommandArgs) -> Ran {
         let Some(handler) = operand_handler(command) else {
             return refused("operands are declared but not run yet (#1934)");
         };
         if names_its_document(command) || args.operand("document").is_some() {
             self.reconcile_document_ids();
-        } else if let Some(reason) =
-            enablement::disabled_reason(command, &self.command_context(None))
+        } else if !picks_its_own_project(command)
+            && let Some(reason) = enablement::disabled_reason(command, &self.command_context(None))
         {
             let outcome = CommandOutcome::Disabled {
                 reason: reason.into(),

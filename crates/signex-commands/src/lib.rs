@@ -15,7 +15,7 @@ mod shortcut;
 #[cfg(test)]
 mod spelling_tests;
 
-pub use command_id::AppCommandId;
+pub use command_id::{AppCommandId, EXTENSION_ID_PREFIX, is_extension_id, is_extension_name};
 pub use document_target::DocumentTarget;
 pub use outcome::CommandOutcome;
 pub use pcb_targets::PcbTargets;

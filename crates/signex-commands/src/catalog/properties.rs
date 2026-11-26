@@ -85,6 +85,8 @@ pub(super) const PROPERTIES: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
         flags: CommandFlags::GUI_ONLY,
+        // It opens the datasheet's address in the system browser.
+        needs_network: true,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -95,9 +97,10 @@ pub(super) const PROPERTIES: &[CommandMetadata] = &[
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresSelection,
         // Without operands it opens the dialog on the selected part; with
-        // them it swaps the named part (#2954, docs/CLI.md).
+        // them it swaps the part `id` names on the sheet `document` names, as
+        // the dialog's Change does (#1297, #2954, docs/CLI.md).
         flags: CommandFlags::MUTATES,
-        operands: operands::CHANGE_COMPONENT,
+        operands: super::bom::CHANGE_COMPONENT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

@@ -268,7 +268,59 @@ The page (`preferences/keymap/`) reads top to bottom:
   current keys, a help line, a warning when a fixed app key would swallow
   the recorded keys, and Clear, Stop (Record once stopped), Cancel and OK.
   OK puts the new keys in the working copy; like every Preferences change
-  they are saved by the dialog's Apply or OK.
+  they are saved by the dialog's Apply or OK. Every keystroke while
+  recording is recorded, Esc included; only Cancel closes the recorder.
+  OK with nothing recorded (after Clear) takes the row's key away.
+- **Commands with no key** (#2495, Caner 2026-11-25): the table also lists
+  every command the active profile gives no key, built-in or from an
+  installed extension, as an Unbound row in the command's own context (the
+  one editor it acts in, else Global). A built-in command is listed when a
+  key can run it, the rule the command palette uses. In a custom profile
+  its Edit opens the same recorder, and OK adds a binding at the end of the
+  profile (`KeymapEditorModel::assign_active_trigger`), saved with the
+  profile in `keyboard_shortcuts.toml`; an extension command is saved under
+  its `ext.` id. On a built-in profile these rows have no Edit: Create
+  copies the profile first.
+
+### Key bindings from the CLI (#2495)
+
+Two catalog commands edit a custom profile without the window, for
+`signex-cli` (which needs `--save` or `--allow save` for them) or a script:
+
+- `keymap_assign command=<id> keys=<keys> profile=<id> [context=<context>]`
+  gives the command the key sequence `keys` (profile spelling, `Ctrl+Alt+Q`,
+  `P W`). `context` is a section name of the file (`global`, `schematic`,
+  `pcb`, `board_3d`, …); without it, the one editor the command acts in, else
+  `global`. The command is a catalog id or an installed extension's.
+- `keymap_clear command=<id> profile=<id> [keys=<keys>]` takes that key, or
+  every key, from the command; an extension id that is not installed is
+  accepted, so a kept binding can be cleared.
+
+Both edit the named profile with `KeymapEditorModel` (the active profile is
+not switched), write `keyboard_shortcuts.toml` through `atomic_write`, make
+the change the running keymap, and answer with JSON: `profile`, `command`,
+`keys`, `unchanged`, `file`, and `context` and `conflicts` (assign) or
+`removed` (clear). `conflicts` lists each clash the new key takes part in,
+as the page's State column marks it: its `keys`, `context`, the two
+`commands` and `reserved_by_os`. A key the command already has in that
+context is not added again and is answered `"unchanged": true`, and a clear
+that finds no key writes nothing. They are refused, with nothing written:
+
+- for a built-in profile, which stays read-only (Create copies it first);
+- while the file failed to load (#595);
+- while Preferences ▸ Keyboard shortcuts holds changes of its own or a
+  typed trigger, since Apply would then write the page's copy over the
+  command's edit ("save or discard the keyboard changes in Preferences
+  first").
+
+On a page with no changes of its own the command's edit shows at once, and
+an open recorder closes, since the rows it pointed at may have moved.
+
+In a headless `signex-cli` run, which otherwise works under a throwaway
+config root, these two commands read and write the user's own
+`keyboard_shortcuts.toml` (the one carve-out, `docs/CLI.md`), read fresh for
+each command. Import… and Export… of a profile file stay Preferences actions
+(`read_profile_file`, `write_profile_file`).
 
 The editor is backed by `KeymapEditorModel`, which exposes rows with:
 

@@ -91,6 +91,30 @@ impl PanelQuery {
     }
 }
 
+impl ValueWord {
+    /// `text` read as a query word reads it (`10k`, `4k7`, `100n`, `16V`,
+    /// `1%`; a bare `100` has no unit), for `search_parts`' parameter
+    /// operands (#1297). `None` for text that is no number.
+    pub(crate) fn parse(text: &str) -> Option<Self> {
+        let compact: String = text.split_whitespace().collect();
+        match word_kind(&compact) {
+            WordKind::Value(value) => Some(value),
+            WordKind::Bare(base) => Some(Self { base, unit: None }),
+            WordKind::Text => None,
+        }
+    }
+
+    /// Whether `q` has this unit (any, when none was typed).
+    pub(crate) fn same_unit(&self, q: &Quantity) -> bool {
+        self.unit.as_ref().is_none_or(|unit| unit == q.unit())
+    }
+
+    /// Whether `q` is this value, within the range filter's tolerance.
+    pub(crate) fn equals(&self, q: &Quantity) -> bool {
+        self.same_unit(q) && near(q.base(), self.base)
+    }
+}
+
 /// What a part offers the search, built once per data change.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct SearchKeys {

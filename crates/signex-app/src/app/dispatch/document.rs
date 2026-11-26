@@ -264,13 +264,16 @@ impl Signex {
                 disk,
             } => {
                 // #478 review — same in-flight guard clear as above.
+                let behind = self.document_state.pending_opens.is_behind(&path);
                 self.document_state.pending_opens.remove_untracked(&path);
                 let reopened_stack = self.ui_state.project_git.take_reopened_stack(&path);
                 if self.is_open_result_superseded(&path, &result) {
                     if result.is_ok() {
                         self.attach_parked_tab_for_superseded_open(&path, title);
                     }
-                    self.activate_tab_for_path(&path);
+                    if !behind {
+                        self.activate_tab_for_path(&path);
+                    }
                     return self.finish_update();
                 }
                 match result {
@@ -281,7 +284,11 @@ impl Signex {
                         {
                             return self.finish_update();
                         }
-                        self.open_pcb_tab(path.clone(), title, *board);
+                        if behind {
+                            self.open_pcb_tab_behind(path.clone(), title, *board);
+                        } else {
+                            self.open_pcb_tab(path.clone(), title, *board);
+                        }
                         if let Some(disk) = disk {
                             self.record_disk_read(&path, disk);
                         }

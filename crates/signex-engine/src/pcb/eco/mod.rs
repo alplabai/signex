@@ -48,14 +48,15 @@ pub use change::{
     ChangeReason, EcoBlock, EcoChange, EcoChangeList, EcoGroup, EcoKey, EcoNote, EcoRow, GroupTicks,
 };
 pub use compare::{
-    CompareAction, CompareCounts, CompareJump, CompareKind, CompareObject, CompareReport,
-    CompareRow, CompareRowId, CompareValue, Compared, Direction, Unavailable, compare,
+    ChooseRefusal, CompareAction, CompareCounts, CompareJump, CompareKind, CompareObject,
+    CompareReport, CompareRow, CompareRowId, CompareValue, Compared, Direction, Unavailable,
+    compare, unavailable_text,
 };
 pub use diff::diff_board;
 pub(crate) use diff::remint_pads;
 pub use lower::{EcoRefusal, check, lower};
 pub use nets::refresh_nets;
-pub use report::report_text;
+pub use report::{blocked_text, note_text, report_text};
 
 #[cfg(test)]
 mod fixture;

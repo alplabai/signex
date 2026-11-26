@@ -75,6 +75,8 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("sides", OperandKind::Text),
     // #2488: the STEP schema of a board export.
     ("schema", OperandKind::Text),
+    // #2470: the fabrication outputs of a board's panel, not the board alone.
+    ("whole_panel", OperandKind::Bool),
     ("field", OperandKind::Text),
     ("requirement", OperandKind::Text),
     ("on", OperandKind::Bool),
@@ -116,24 +118,81 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("via_hole", OperandKind::Text),
     ("current", OperandKind::Text),
     // #1283: the template a new sheet or project starts from; #1988: a BOM
-    // template's text. #1988 also adds a project variant and the BOM grouping.
+    // template's text and the BOM grouping (`variant` is declared with the
+    // priced BOM below).
     ("template", OperandKind::Text),
-    ("variant", OperandKind::Text),
     ("grouping", OperandKind::Text),
-    // #2665: the Smart Paste dialog's array count, numbering and net names.
+    // #2665: the Smart Paste dialog's array count, numbering and net names
+    // (`nets` is declared with the routes below).
     ("copies", OperandKind::Text),
     ("designators", OperandKind::Text),
-    ("nets", OperandKind::Text),
     ("net_pattern", OperandKind::Text),
     ("net_start", OperandKind::Text),
+    // #2495: a key binding: the command id it runs, its key sequence and
+    // the shortcut context it applies in.
+    ("command", OperandKind::Text),
+    ("keys", OperandKind::Text),
+    ("context", OperandKind::Text),
     // #2552: a move's wire handling, given by the caller, not the settings.
     ("keep_wires", OperandKind::Bool),
     ("wiring", OperandKind::Text),
     // #3038: a part's fit in a variant, and an alternate part's part number
-    // and footprint.
+    // (its `footprint` is declared with #2937 below).
     ("fitted", OperandKind::Bool),
     ("mpn", OperandKind::Text),
+    // #2470: Re-Annotate Board's numbering order and bottom side.
+    ("order", OperandKind::Text),
+    ("bottom", OperandKind::Text),
+    // #2470: a board route's corners between its ends (`x,y;x,y`), how each
+    // leg bends, walk around or push, and the nets of a Multi-Route.
+    ("through", OperandKind::Text),
+    ("corner", OperandKind::Text),
+    ("mode", OperandKind::Text),
+    ("nets", OperandKind::Text),
+    // #2936: one board point `x,y` per id of `ids`, `;` separated.
+    ("points", OperandKind::Text),
+    // #2937: a library footprint, `<library>:<footprint>`, and what a swap
+    // does with an old pad no new pad takes over (`refuse` or `keep`).
     ("footprint", OperandKind::Text),
+    ("unmatched", OperandKind::Text),
+    // #2457, #2941: rooms and Auto Place in Rooms.
+    ("margin", OperandKind::Length),
+    ("move_parts", OperandKind::Bool),
+    ("keep_parts_inside", OperandKind::Bool),
+    ("replace", OperandKind::Bool),
+    ("room", OperandKind::Text),
+    ("rooms", OperandKind::Text),
+    ("weights", OperandKind::Text),
+    ("thermal_gap", OperandKind::Length),
+    ("separation_gap", OperandKind::Length),
+    // #2942: a stage of the board's layout plan and its settings, each a
+    // comma list (`weights`, `rooms` and `nets` as above).
+    ("stage", OperandKind::Text),
+    ("keep", OperandKind::Text),
+    ("skip", OperandKind::Text),
+    ("pours", OperandKind::Text),
+    ("requirements", OperandKind::Text),
+    // #2938: a BOM line by its key, an alternate's place in the line's
+    // order, and the build a priced BOM is for.
+    ("line", OperandKind::Text),
+    ("position", OperandKind::Text),
+    ("quantity", OperandKind::Text),
+    ("currency", OperandKind::Text),
+    ("variant", OperandKind::Text),
+    // #1297: the part search's query, parameters and stock, and whether
+    // it asks for fresh supplier data.
+    ("query", OperandKind::Text),
+    ("package", OperandKind::Text),
+    ("tolerance", OperandKind::Text),
+    ("rating", OperandKind::Text),
+    ("min_stock", OperandKind::Text),
+    ("refresh", OperandKind::Bool),
+    // #2943: a rail's voltage and tolerance, as typed.
+    ("voltage", OperandKind::Text),
+    ("tolerance_percent", OperandKind::Text),
+    // #2462: the difference ids taken to the board and to the schematic.
+    ("to_board", OperandKind::Text),
+    ("to_schematic", OperandKind::Text),
 ];
 
 /// The commands whose `ids` is still text, not targets (#2326): a design

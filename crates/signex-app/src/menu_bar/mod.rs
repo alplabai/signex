@@ -120,6 +120,9 @@ pub enum MenuMessage {
     OpenLayersPanel,
     /// View ▸ Unions: show the Unions panel (mockup row 158).
     OpenUnionsPanel,
+    /// View ▸ Extensions ▸ `<panel>`: show an installed extension's panel
+    /// (#2495).
+    OpenExtensionPanel(crate::extension::points::ExtensionPanelKind),
     /// Place ▸ Text — the text-note tool.
     PlaceText,
     // Project ▸ Annotation
@@ -203,6 +206,7 @@ impl MenuMessage {
                 | Self::OpenCommandLogPanel
                 | Self::OpenLayersPanel
                 | Self::OpenUnionsPanel
+                | Self::OpenExtensionPanel(_)
         )
     }
 }
@@ -239,6 +243,12 @@ pub struct MenuContext<'a> {
     /// What View ▸ Window ▸ Layouts lists: the active layout, your layouts
     /// and the Reset row (mockup row 166).
     pub(crate) layouts: crate::workspace_layouts::LayoutsMenu,
+    /// The rows the installed extensions add, each at the end of its root
+    /// menu (#2495). Empty in the Community binary.
+    pub(crate) extension_rows: Vec<crate::extension::points::MenuRow>,
+    /// The installed extensions' panels, under View ▸ Extensions (#2495).
+    /// Empty in the Community binary, where the submenu is not drawn.
+    pub(crate) extension_panels: Vec<crate::extension::points::ExtensionPanelKind>,
 }
 
 impl Default for MenuContext<'_> {
@@ -253,7 +263,30 @@ impl Default for MenuContext<'_> {
             cross_select: true,
             pcb_sync: None,
             layouts: Default::default(),
+            extension_rows: Vec::new(),
+            extension_panels: Vec::new(),
         }
+    }
+}
+
+impl MenuContext<'_> {
+    /// This context with the extension rows `rows`, as the window builds it
+    /// from [`crate::extension::ExtensionHost::menu_rows`].
+    #[must_use]
+    pub fn with_extension_rows(mut self, rows: Vec<crate::extension::points::MenuRow>) -> Self {
+        self.extension_rows = rows;
+        self
+    }
+
+    /// This context with the extension panels `panels`, as the window builds
+    /// it from [`crate::extension::ExtensionHost::panels`].
+    #[must_use]
+    pub fn with_extension_panels(
+        mut self,
+        panels: Vec<crate::extension::points::ExtensionPanelKind>,
+    ) -> Self {
+        self.extension_panels = panels;
+        self
     }
 }
 

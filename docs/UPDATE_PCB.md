@@ -17,12 +17,24 @@ undoable):
 - the command palette and any key a profile binds to it (none by default);
 - the Projects tree's project row, Update PCB Document, for the clicked
   project;
-- headless and CLI: `update_pcb_from_schematic apply=true` executes the rows
-  ticked by default without a dialog and answers `Ran`; without `apply=true`
-  it is refused.
+- headless, CLI and the agent channel (#2470):
+  `update_pcb_from_schematic [document=<project, sheet or board>] apply=true`
+  executes the rows ticked by default without a dialog, and `dry_run=true`
+  lists them and changes nothing; both answer with the change list as JSON
+  ([CLI.md](CLI.md), "Update PCB from schematic"). Without either, or while
+  the dialog is open, it is refused; the dialog does not open over a run
+  that waits for its list.
 
-The project is the one that owns the document in view. When its board is not
-open, it is opened first and the list is read once it is.
+From the menus and the palette the project is the one that owns the
+document in view; from the Projects tree, the clicked one; from operands,
+the one `document` names, else the active project (the one opened last,
+not the tab in view; with one project open and none active, that one).
+When the active project has no board, or several projects are open and
+none is active, the run is refused and lists the boards to name; another
+project's board is never updated in its place (Caner, 2026-11-25). The
+agent channel always
+needs `document`: its gate acts only on a named document. When the board
+is not open, it is opened first and the list is read once it is.
 
 ## The dialog
 
@@ -221,9 +233,19 @@ On success the dialog closes and Messages says how many changes went each
 way. Export report… writes the report, directions included, as plain text
 through the file port.
 
+### From the command line
+
+`check_board_against_schematic` answers the same report as JSON, with an
+id for every row, and changes nothing; `apply_board_schematic_differences`
+takes rows by id to the board or to the schematic and runs this Apply (one
+board undo step, one schematic undo group). `board_status` counts the same
+differences. Operands, answers and limits: [CLI.md](CLI.md), "Board against
+schematic" and "Board status".
+
 ### Not yet
 
 Update schematic is not available for Missing on board, Extra on board and
 net rows: placing a board-only part on a sheet and carrying a board net to
-the schematic need their own design. Taking a footprint mismatch into the
+the schematic need their own design (#2691). The command line refuses
+those directions with the same reason. Taking a footprint mismatch into the
 schematic through Assign Footprints is #2653 (Caner, 2026-11-20).

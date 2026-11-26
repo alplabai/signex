@@ -179,6 +179,8 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
     },
     // #2388: open the Fabrication Outputs dialog on the board in view.
     // Nothing is written until the dialog's Generate. No default key.
+    // #2470: named a board (`document`) and a folder (`path`), it writes what
+    // Generate writes there and answers with the files.
     CommandMetadata {
         id: "fabrication_outputs",
         category: "file",
@@ -186,7 +188,8 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_FABRICATION_OUTPUTS),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
-        flags: CommandFlags::GUI_ONLY,
+        flags: CommandFlags::NONE,
+        operands: super::operands::FABRICATION_OUTPUTS,
         ..CommandMetadata::DEFAULT
     },
     // #2404: the board reports. In a window each opens Board Reports on its
@@ -550,6 +553,18 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         enable: Enablement::Always,
         flags: CommandFlags::NONE,
         operands: operands::DOCUMENT,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2943: a power rail's voltage and tolerance, one General step.
+    CommandMetadata {
+        id: "project_set_rail",
+        category: "design",
+        label: command_ids::CMD_PROJECT_SET_RAIL,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::PROJECT_SET_RAIL,
         ..CommandMetadata::DEFAULT
     },
 ];
