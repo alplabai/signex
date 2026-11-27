@@ -108,6 +108,12 @@ drops unknown keys of a typed `buses` row on save, so it opens a 1.4 sheet
 read-only and refuses its saves. A sheet with no styled bus keeps its lower
 token, byte for byte.
 
+**Images need no token.** Placed images (#1116) are `[[extras.sheet.images]]`
+rows, a key of `[extras.sheet]` written only when the sheet has an image, not
+entries of `drawings`. An older build keeps the key as an unknown key and
+writes it back, so a sheet with images keeps its token
+(`docs/SCHEMATIC_IMAGES.md`, "File format").
+
 **`.snxprj` stays `snxprj/1`.** The Schematic Refinement project settings
 (`schematic_design`: channel naming, harness definitions, differential pair
 classes) are one new top-level key, omitted at the defaults. An older build

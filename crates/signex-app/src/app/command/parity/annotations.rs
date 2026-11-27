@@ -199,6 +199,10 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "set_text_note_format",
             "set_text_note_frame",
             "set_text_note_size",
+            // #1116: an image's field, Relink and its folder, by `id`.
+            "set_image",
+            "relink_image",
+            "show_image_in_folder",
             "project_move_sheet",
             "project_add_variant",
             "project_rename_variant",
@@ -453,6 +457,8 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "board_panel",
             "find_items",
             "find_similar_items",
+            // #1116: the named sheet's project, scanned off the UI thread.
+            "list_image_assets",
             "measure_board",
             "query_board_nets",
             "query_pins",
@@ -578,6 +584,7 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "place_sheet_entry",
             "place_design_block",
             "import_graphics",
+            "place_graphic",
         ],
         Operand,
         &[ToolState],
@@ -916,7 +923,6 @@ const PLANNED: &[&str] = &[
     "draw_elliptical_arc",
     "draw_round_rectangle",
     "place_device_sheet_symbol",
-    "place_graphic",
     "place_reuse_block",
 ];
 

@@ -81,6 +81,9 @@ pub(crate) struct SurfaceReadout {
     /// Skipped libraries still missing (mockup row 138); above zero the bar
     /// shows the Library Missing chip.
     pub missing_libraries: usize,
+    /// Image files the sheet's project names and cannot show (#1116, mockup
+    /// row 204); above zero the bar counts them in a warning pill.
+    pub missing_assets: usize,
 }
 
 /// The board's active layer pill: a caption, the name and the colour the

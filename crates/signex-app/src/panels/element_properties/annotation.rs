@@ -81,6 +81,8 @@ pub enum AnnotationPanelMsg {
     OverrideEscaped,
     CsvImportRequested,
     CsvExportRequested,
+    /// A row or button of Properties ▸ Image (#1116).
+    Image(crate::app::images::ImagePanelMsg),
 }
 
 /// The Properties state of the selected annotation drawing.
@@ -100,6 +102,8 @@ pub struct AnnotationPanelState {
     /// No placement tool is armed: the stored pre-placement form keeps its
     /// values for the next placement and does not take Properties.
     pub is_placement_form_idle: bool,
+    /// The selected image's draft and file facts (#1116).
+    pub image: super::image::ImagePanelState,
 }
 
 impl AnnotationPanelState {
@@ -166,6 +170,7 @@ pub(super) fn view_annotation_properties<'a>(
             Some(super::dimension::view_dimension_properties(ctx, drawing, d))
         }
         SchDrawing::Table(t) => Some(super::table::view_table_properties(ctx, drawing, t)),
+        SchDrawing::Image(i) => Some(super::image::view_image_properties(ctx, i)),
         SchDrawing::Line { .. }
         | SchDrawing::Rect { .. }
         | SchDrawing::Circle { .. }

@@ -67,6 +67,29 @@ pub(super) fn push_drawing(
             let base = focus_color(to_iced(&colors.body), focus_set, t.uuid);
             return super::sch_table::push_table(t, base, colors, defaults, out);
         }
+        // #1116: the scene draws an image's border line; its picture is the
+        // canvas's image layer (`canvas/draw/images.rs`).
+        SchDrawing::Image(i) => {
+            if i.border {
+                let base = focus_color(to_iced(&colors.body), focus_set, i.uuid);
+                let look = Look {
+                    stroke: to_rgba(base),
+                    fill: CLEAR,
+                    width_mm: defaults.shape_stroke_mm(0.0) as f32,
+                };
+                let (lo, hi) = i.bounds();
+                out.push(polygon(
+                    vec![
+                        [lo.x as f32, lo.y as f32],
+                        [hi.x as f32, lo.y as f32],
+                        [hi.x as f32, hi.y as f32],
+                        [lo.x as f32, hi.y as f32],
+                    ],
+                    &look,
+                ));
+            }
+            return;
+        }
         SchDrawing::Line {
             uuid,
             width,
@@ -129,7 +152,10 @@ pub(super) fn push_drawing(
         } => push_arc_items([*start, *mid, *end], &look, scale, out),
         SchDrawing::Polyline { points, .. } => push_polyline(points, &look, fill, out),
         // Returned early above.
-        SchDrawing::Bezier(_) | SchDrawing::Dimension(_) | SchDrawing::Table(_) => {}
+        SchDrawing::Bezier(_)
+        | SchDrawing::Dimension(_)
+        | SchDrawing::Table(_)
+        | SchDrawing::Image(_) => {}
     }
 }
 
@@ -158,7 +184,8 @@ pub(super) fn push_drawing_texts(
         | SchDrawing::Circle { .. }
         | SchDrawing::Arc { .. }
         | SchDrawing::Polyline { .. }
-        | SchDrawing::Bezier(_) => {}
+        | SchDrawing::Bezier(_)
+        | SchDrawing::Image(_) => {}
     }
 }
 
@@ -176,14 +203,18 @@ pub(super) fn power_nets_if_tables(sheet: &SchematicSheet) -> std::collections::
     }
 }
 
-/// The box of a Bezier, dimension or table; empty at the origin for the
-/// classic shapes (their box is `drawing_aabb`'s own arms).
+/// The box of a Bezier, dimension, table or image; empty at the origin for
+/// the classic shapes (their box is `drawing_aabb`'s own arms).
 pub(crate) fn annotation_aabb(drawing: &SchDrawing) -> Aabb {
     let points = match drawing {
         SchDrawing::Bezier(b) => b.flatten(),
         SchDrawing::Dimension(d) => d.outline_points(),
         SchDrawing::Table(t) => {
             let (lo, hi) = t.bounds();
+            vec![lo, hi]
+        }
+        SchDrawing::Image(i) => {
+            let (lo, hi) = i.bounds();
             vec![lo, hi]
         }
         SchDrawing::Line { .. }

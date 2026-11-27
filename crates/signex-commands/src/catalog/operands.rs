@@ -80,7 +80,7 @@ pub struct Operand {
     pub required: bool,
 }
 
-const fn required(name: &'static str, kind: OperandKind) -> Operand {
+pub(super) const fn required(name: &'static str, kind: OperandKind) -> Operand {
     Operand {
         name,
         kind,
@@ -88,7 +88,7 @@ const fn required(name: &'static str, kind: OperandKind) -> Operand {
     }
 }
 
-const fn optional(name: &'static str, kind: OperandKind) -> Operand {
+pub(super) const fn optional(name: &'static str, kind: OperandKind) -> Operand {
     Operand {
         name,
         kind,
@@ -320,6 +320,15 @@ pub const PART_ON_DOCUMENT: &[Operand] = &[
 pub const PLACE_FILE: &[Operand] = &[
     required("path", OperandKind::Path),
     required("at", OperandKind::Point),
+    optional("document", OperandKind::Document),
+];
+/// An image file `path` placed with its centre on `at` (#1116): the
+/// dialog's answer and the click. `width` is in mm (the height follows the
+/// aspect ratio); without it the image fills the sheet's free area.
+pub const PLACE_IMAGE: &[Operand] = &[
+    required("path", OperandKind::Path),
+    required("at", OperandKind::Point),
+    optional("width", OperandKind::Text),
     optional("document", OperandKind::Document),
 ];
 /// An open dialog's answer.

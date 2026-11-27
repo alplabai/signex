@@ -49,6 +49,9 @@ pub use gerber_viewer::{GerberViewerMsg, GerberViewerState};
 mod handlers;
 #[cfg(test)]
 pub(crate) mod hierarchy_fixture;
+// #1116: images placed on a sheet as project assets.
+pub(crate) mod images;
+pub use images::ImagesMsg;
 mod layer_stack_tab;
 mod library_delete;
 mod load_gateway;

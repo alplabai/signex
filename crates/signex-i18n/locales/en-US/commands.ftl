@@ -457,6 +457,10 @@ cmd-cancel-rich-note-edit = Cancel the edit of a rich text note
 cmd-wrap-rich-note-selection = Wrap the selection of a rich text note in Typst markup
 cmd-open-rich-note-link = Open a link of a rich text note
 cmd-compile-rich-note = Compile a rich text note
+cmd-set-image = Set one field of a placed image
+cmd-relink-image = Point images at another image file
+cmd-show-image-in-folder = Show an image's file in its folder
+cmd-list-image-assets = List the project's image assets
 cmd-menu-assign-net-class = Assign Net Class...
 cmd-place-component = Place component
 # Noun: a component placed on the sheet.

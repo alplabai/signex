@@ -908,7 +908,7 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
             "ITEM:Linear|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Aligned|disabled=false|icon=true|checked=false|shortcut=None",
             "SEP",
-            "ITEM:Graphic...|disabled=true|icon=true|checked=false|shortcut=None",
+            "ITEM:Graphic...|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
     (
@@ -932,7 +932,7 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
             "ITEM:Linear|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Aligned|disabled=false|icon=true|checked=false|shortcut=None",
             "SEP",
-            "ITEM:Graphic...|disabled=true|icon=true|checked=false|shortcut=None",
+            "ITEM:Graphic...|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
     (
@@ -956,7 +956,7 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
             "ITEM:Linear|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Aligned|disabled=false|icon=true|checked=false|shortcut=None",
             "SEP",
-            "ITEM:Graphic...|disabled=true|icon=true|checked=false|shortcut=None",
+            "ITEM:Graphic...|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
     (
@@ -980,7 +980,7 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
             "ITEM:Linear|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Aligned|disabled=false|icon=true|checked=false|shortcut=None",
             "SEP",
-            "ITEM:Graphic...|disabled=true|icon=true|checked=false|shortcut=None",
+            "ITEM:Graphic...|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
     (

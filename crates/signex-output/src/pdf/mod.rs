@@ -33,6 +33,7 @@ mod colour;
 mod embed;
 mod font;
 pub(crate) mod frame;
+mod images;
 pub(crate) mod layout;
 pub(crate) mod optional_content;
 mod page;
@@ -178,6 +179,9 @@ pub struct PdfOptions {
     /// The project's resolved defaults for unset widths and sizes (#2026),
     /// the same value the canvas draws with. Built-in by default.
     pub schematic_defaults: signex_types::schematic::SchematicDefaults,
+    /// The checked bytes of the placed images' files (#1116), read by the
+    /// caller. An image whose file is not here prints as an empty box.
+    pub images: crate::svg::ExportImages,
 }
 
 /// How the part bookmarks are grouped.
@@ -296,6 +300,7 @@ impl Default for PdfOptions {
             palette: SchematicPalette::classic(),
             net_class_styles: std::collections::HashMap::new(),
             schematic_defaults: Default::default(),
+            images: Default::default(),
         }
     }
 }
@@ -426,10 +431,19 @@ impl Exporter for PdfExporter {
             })
             .collect::<Result<Vec<_>, _>>()?;
         let embedded = write_fonts(&mut pdf, &fonts, font_base)?;
+        // The placed images' objects (#1116), after the layer groups.
+        let mut image_objects = images::ImageObjects::new(
+            bookmark_id_base + pending_bookmarks.len() as i32 + layer_groups.len() as i32,
+        );
 
         for (idx, content) in contents.iter().enumerate() {
             let content_ref = content_refs[idx];
             pdf.stream(content_ref, &content.bytes);
+            let page_images: Vec<Ref> = content
+                .images
+                .iter()
+                .map(|picture| image_objects.object(&mut pdf, picture))
+                .collect();
 
             // Create the page object referencing the content stream.
             let mut page = pdf.page(page_refs[idx]);
@@ -445,6 +459,13 @@ impl Exporter for PdfExporter {
                 font_dict.pair(Name(f.font.alias().as_bytes()), f.type0);
             }
             font_dict.finish();
+            if !page_images.is_empty() {
+                let mut x_objects = resources.x_objects();
+                for (index, image) in page_images.iter().enumerate() {
+                    x_objects.pair(Name(surface::image_name(index).as_bytes()), *image);
+                }
+                x_objects.finish();
+            }
             write_alpha_states(&mut resources, content);
             optional_content::write_page_properties(&mut resources, &layer_groups);
             resources.finish();

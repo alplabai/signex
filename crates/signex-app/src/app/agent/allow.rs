@@ -133,6 +133,8 @@ mod tests {
                 // Mockup row 198: the notebook's review records, by typed id.
                 "list_annotations",
                 "list_documents",
+                // #1116: a query, the named sheet's project's image assets.
+                "list_image_assets",
                 "lock_board_items",
                 // Mockup row 199: the notebook's measurements, timelines and
                 // attachments, and Mark still valid, on the named project.

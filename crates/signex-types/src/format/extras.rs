@@ -402,6 +402,9 @@ pub(in crate::format) struct SheetExtras {
     pub(in crate::format) harness_entry_types: BTreeMap<String, String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(in crate::format) unions: Vec<crate::schematic::SchUnion>,
+    /// Placed images (#1116), omitted when there are none (`image_rows`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(in crate::format) images: Vec<super::image_rows::ImageRow>,
     /// Keys this build does not recognise (`[extras.sheet]`).
     #[serde(flatten)]
     pub(in crate::format) unknown: UnknownFields,
@@ -434,6 +437,7 @@ impl SheetExtras {
             && self.harness_wires.is_empty()
             && self.harness_entry_types.is_empty()
             && self.unions.is_empty()
+            && self.images.is_empty()
             && self.unknown.is_empty()
     }
 
@@ -458,6 +462,7 @@ impl SheetExtras {
             drawings: s
                 .drawings
                 .iter()
+                .filter(|d| super::image_rows::is_drawing_row(d))
                 .cloned()
                 .map(|mut drawing| {
                     drawing.set_locked(false);
@@ -492,7 +497,11 @@ impl SheetExtras {
                 .drawing_placements
                 .iter()
                 .filter(|(_, placement)| **placement == crate::schematic::DrawingPlacement::Above)
-                .filter(|(id, _)| s.drawings.iter().any(|d| d.uuid() == **id))
+                .filter(|(id, _)| {
+                    s.drawings
+                        .iter()
+                        .any(|d| d.uuid() == **id && super::image_rows::is_drawing_row(d))
+                })
                 .map(|(id, _)| (id.to_string(), "above".to_string()))
                 .collect(),
             locked_objects: s
@@ -503,7 +512,7 @@ impl SheetExtras {
                 .chain(
                     s.drawings
                         .iter()
-                        .filter(|d| d.is_locked())
+                        .filter(|d| d.is_locked() && super::image_rows::is_drawing_row(d))
                         .map(|d| d.uuid()),
                 )
                 .map(|id| id.to_string())
@@ -520,6 +529,7 @@ impl SheetExtras {
             harness_wires: s.harness.wires.clone(),
             harness_entry_types: super::refinement_extras::entry_types_for_write(s),
             unions: s.unions.clone(),
+            images: super::image_rows::rows_of(s),
             unknown: {
                 // A kept non-table `page` gives way to a real page table.
                 let mut extras = s.unknown.extras.clone();

@@ -44,6 +44,7 @@ mod drawn_copper;
 mod extras;
 mod finite_toml;
 mod header_id;
+mod image_rows;
 mod load_repair;
 mod note_format_extras;
 mod note_layout_extras;
@@ -612,7 +613,10 @@ impl SnxSchematic {
         let labels = label_rows.into_iter().map(row_to_label).collect();
 
         let net_colors = sheet_extras.parsed_net_colors();
-        let drawing_placements = sheet_extras.parsed_drawing_placements();
+        let drawing_placements = image_rows::with_placements(
+            sheet_extras.parsed_drawing_placements(),
+            &sheet_extras.images,
+        );
         // Ids naming an object that is gone match nothing and are dropped.
         let locked_objects: std::collections::HashSet<&str> = sheet_extras
             .locked_objects
@@ -681,6 +685,7 @@ impl SnxSchematic {
                         .set_locked(locked_objects.contains(drawing.uuid().to_string().as_str()));
                     drawing
                 })
+                .chain(image_rows::drawings(sheet_extras.images))
                 .collect(),
             no_erc_directives: sheet_extras.no_erc_directives,
             directives: sheet_extras.directives,

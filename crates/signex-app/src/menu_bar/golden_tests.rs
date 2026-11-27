@@ -517,6 +517,8 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     // #1489, #1282: Net Parameters goes live; the diff-pair class dialog.
     ("place_parameter_set", "PlaceParameterSet"),
     ("open_diff_pair_classes", "OpenDiffPairClasses"),
+    // #1116: Graphic... goes live, fixture name only.
+    ("place_graphic", "PlaceGraphic"),
 ];
 
 fn action_name(action: &MenuMessage) -> String {

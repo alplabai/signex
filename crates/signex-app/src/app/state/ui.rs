@@ -844,6 +844,9 @@ pub struct UiState {
     /// Workspace layouts (mockup row 166): the list, its store, and the Save Layout
     /// and Manage Layouts dialogs while open. Boxed: the size budget (#2412).
     pub workspace_layouts: Box<crate::workspace_layouts::WorkspaceLayoutsState>,
+    /// The pictures of placed images the canvas draws (#1116). Boxed: the
+    /// size budget (#2412).
+    pub(crate) image_cache: Box<crate::app::images::ImageCache>,
 }
 
 impl UiState {

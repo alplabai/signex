@@ -747,6 +747,46 @@ read off the UI thread before the edit runs. Without operands, in a window,
 `place_design_block` and `import_graphics` open a file dialog and put the
 content on the cursor; `autoplace_fields` acts on the selected parts.
 
+## Images
+
+```text
+place_graphic path=<PNG, JPEG, GIF or SVG file> at=x,y [width=<mm>] [document=..]
+```
+
+`place_graphic` (#1116) places an image as a project asset: the sheet stores
+the file's project-relative path and its content hash, never the picture. A
+file from outside the project gets a name under `assets/images/` and is
+copied there when the sheet is saved (`copied_on_save` in the answer); a file
+inside the project is placed where it is. `at` is the image's centre, refused
+off the grid; `width` is in mm and the height follows the aspect ratio;
+without it the image fills the sheet's free area. It answers
+`{"placed", "id", "file", "hash", "format", "width_px", "height_px", "size",
+"copied_on_save"}`. A file over 32 MiB or 64 Mpx, one that is not an image,
+and an SVG that refers to anything outside itself are refused with the
+reason. Without operands, in a window, it opens the Place Image dialog and
+puts the chosen image on the cursor. Rules in
+[SCHEMATIC_IMAGES.md](SCHEMATIC_IMAGES.md).
+
+```text
+set_image id=<image> field=<field> value=<value> [document=..]
+relink_image path=<image file> (file=<project file> | id=<image>) [document=..]
+show_image_in_folder id=<image> [document=..]
+list_image_assets document=<sheet>
+```
+
+`set_image` sets one field of a placed image (`width`, `height`, `scale`,
+`keep_aspect`, `opacity`, `border`, `placement`, `bounds`), as its
+Properties ▸ Image row does, one undo step; it answers with the image.
+`relink_image` points every image naming `file`, on every sheet of the
+project, at the new file (Relink…), or the one image `id` (Replace…), one
+undo step; it answers `{"relinked", "sheets", "file", "hash", …}`.
+`show_image_in_folder` answers the file's `path` and `folder`; a headless
+run launches nothing. `list_image_assets` is a query: it scans the project's
+`assets/images/` and every file its images name off the UI thread and
+answers each file's facts, use count and whether it is missing. Without
+operands, `set_image`, `relink_image` and `show_image_in_folder` say which
+Properties row runs them.
+
 ## Checks on demand
 
 ```text

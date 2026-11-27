@@ -12,6 +12,9 @@ mod drag;
 mod drag_points;
 mod ghosts;
 mod hud_tag;
+mod image_handles;
+// #1116: the pictures of placed images and their placeholder.
+mod images;
 mod measure;
 mod overlay;
 mod previews;

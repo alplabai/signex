@@ -1008,9 +1008,10 @@ fn drawing_aabb(drawing: &SchDrawing) -> Aabb {
                 Aabb::new(0.0, 0.0, 0.0, 0.0)
             }
         }
-        SchDrawing::Bezier(_) | SchDrawing::Dimension(_) | SchDrawing::Table(_) => {
-            annotation_aabb(drawing)
-        }
+        SchDrawing::Bezier(_)
+        | SchDrawing::Dimension(_)
+        | SchDrawing::Table(_)
+        | SchDrawing::Image(_) => annotation_aabb(drawing),
     }
 }
 

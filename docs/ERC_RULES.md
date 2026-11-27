@@ -234,3 +234,14 @@ placements of one sheet file share object UUIDs, so a waiver covers both.
 Rule-specific No-ERC markers (an optional item of #1285) are not implemented.
 Per-net waivers keep their existing shape and carry no reason; adding one
 would change the stored format of `erc_net_waivers`.
+
+## Image file missing
+
+Added for #1116 (mockup row 204). `image_file_missing` (Warning, group
+Parts) is one finding per image on the sheet whose file is gone, refused by
+the image checks, or holds other content than the image placed; it points
+at the image's centre and selects it. The rule reads no disk: the run reads
+the files on its own thread and names the missing ones in
+`ErcConfig::missing_images`; an image picked but not saved yet is not
+missing. The shipped profile `Signex Default` went to 1.4 for it. See
+`docs/SCHEMATIC_IMAGES.md`, "Missing files".

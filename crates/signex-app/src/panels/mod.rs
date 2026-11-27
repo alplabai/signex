@@ -139,7 +139,7 @@ mod planned_tests;
 
 pub use element_properties::{
     AnnotationField, AnnotationPanelMsg, AnnotationPanelState, DIMENSION_OVERRIDE_INPUT,
-    DIMENSION_TEXT_SECTION, DimensionToolForm,
+    DIMENSION_TEXT_SECTION, DimensionToolForm, ImagePanelField, ImagePanelState,
 };
 pub(crate) use element_properties::{
     BODY_ALTERNATE, BODY_ALTERNATE_MISSING, BODY_NORMAL, BODY_NORMAL_CAN_SWITCH, sheet_file_missing,
@@ -254,7 +254,7 @@ pub(crate) use projects::NOTEBOOK_ROW_KEY;
 pub(super) use projects::view_projects;
 pub use projects::{LibraryNodeInfo, ProjectPanelInfo, SheetInfo, build_project_tree};
 pub(crate) use projects::{MISSING_MARK, UNREADABLE_MARK};
-pub use projects_graphite::{ProjectsMsg, ProjectsView};
+pub use projects_graphite::{AssetRow, ProjectsMsg, ProjectsView};
 pub use properties::DrawingFieldId;
 pub(super) use properties::{
     PROPERTY_CONTROL_PORTION, PROPERTY_LABEL_COLUMN, PROPERTY_LABEL_WIDTH, PROPERTY_ROW_GAP,

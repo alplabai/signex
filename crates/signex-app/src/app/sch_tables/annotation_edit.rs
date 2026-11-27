@@ -139,7 +139,8 @@ pub(crate) fn apply_annotation_edit(
         | SchDrawing::Rect { .. }
         | SchDrawing::Circle { .. }
         | SchDrawing::Arc { .. }
-        | SchDrawing::Polyline { .. } => false,
+        | SchDrawing::Polyline { .. }
+        | SchDrawing::Image(_) => false,
     };
     (applied && next != *drawing).then_some(next)
 }

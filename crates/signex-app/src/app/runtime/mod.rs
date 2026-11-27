@@ -153,7 +153,9 @@ impl Signex {
                 &mut self.document_state.footprint_editors,
             )
             .map(Message::Library);
+        let images = self.request_image_loads();
         Task::batch([
+            images,
             open_solves,
             history,
             dir_probes,
@@ -672,6 +674,7 @@ impl Signex {
             ),
             rich_notes: Some(&self.ui_state.rich_notes.renders),
             device_px_per_logical_px: self.ui_state.device_px_per_logical_px(window),
+            image_cache: Some(&self.ui_state.image_cache),
         }
     }
 

@@ -127,7 +127,15 @@ impl canvas::Program<Message> for SchematicBackdrop<'_> {
         bounds: Rectangle,
         _cursor: mouse::Cursor,
     ) -> Vec<canvas::Geometry> {
-        vec![self.0.draw_background(renderer, bounds)]
+        let mut layers = vec![self.0.draw_background(renderer, bounds)];
+        // Images behind the circuit sit under the shader (#1116).
+        layers.extend(self.0.draw_images(
+            renderer,
+            bounds,
+            self.0.active_snapshot(),
+            signex_types::schematic::DrawingPlacement::Behind,
+        ));
+        layers
     }
 }
 

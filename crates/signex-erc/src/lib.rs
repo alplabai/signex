@@ -32,6 +32,7 @@ mod fixtures;
 mod group;
 mod harness_snapshot;
 mod hierarchy;
+mod images;
 mod net_finding;
 mod overrides;
 pub mod pin_matrix;
@@ -46,6 +47,7 @@ pub use context::ErcContext;
 pub use diagnostic::{Diagnostic, LocationSpace};
 pub use group::RuleGroup;
 pub use hierarchy::HierarchyMemo;
+pub use images::ErcImage;
 pub use net_finding::{NetFinding, NetFindingPin};
 pub use overrides::apply_overrides;
 pub use pin_matrix::{ErcConfig, PinAxis, PinMatrix};
@@ -160,6 +162,9 @@ pub enum RuleKind {
     /// Connectors or sheet entries of two harness types share one harness
     /// (#1280).
     HarnessTypeConflict,
+    /// An image on the sheet names a file that is gone, refused or holds
+    /// other content than the image placed (#1116).
+    ImageFileMissing,
 }
 
 impl RuleKind {
@@ -203,6 +208,7 @@ impl RuleKind {
             RuleKind::RepeatEntryNeedsBus => "Repeat entry needs a bus",
             RuleKind::HarnessEntryMismatch => "Harness entry mismatch",
             RuleKind::HarnessTypeConflict => "Harness type conflict",
+            RuleKind::ImageFileMissing => "Image file missing",
         }
     }
 
@@ -226,7 +232,7 @@ impl RuleKind {
     }
 
     /// Every built-in rule, in the order the ERC dialog lists them.
-    pub const ALL: [RuleKind; 37] = [
+    pub const ALL: [RuleKind; 38] = [
         RuleKind::UnusedPin,
         RuleKind::DuplicateRefDesignator,
         RuleKind::HierPortDisconnected,
@@ -264,6 +270,7 @@ impl RuleKind {
         RuleKind::RepeatEntryNeedsBus,
         RuleKind::HarnessEntryMismatch,
         RuleKind::HarnessTypeConflict,
+        RuleKind::ImageFileMissing,
     ];
 
     /// The one source of truth for a rule's severity: [`Diagnostic::new`]
@@ -304,7 +311,8 @@ impl RuleKind {
             | RuleKind::SheetPinUnconnected
             | RuleKind::SheetPinDirectionConflict
             | RuleKind::HarnessEntryMismatch
-            | RuleKind::HarnessTypeConflict => Severity::Warning,
+            | RuleKind::HarnessTypeConflict
+            | RuleKind::ImageFileMissing => Severity::Warning,
             RuleKind::NetMultipleNames => Severity::Info,
             RuleKind::MissingPowerFlag | RuleKind::SymbolOutsideSheet => Severity::Info,
             RuleKind::PartWithoutFootprint | RuleKind::PartWithoutValue | RuleKind::OffGrid => {

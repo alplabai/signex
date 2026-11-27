@@ -55,6 +55,7 @@ impl RuleId {
             RuleKind::RepeatEntryNeedsBus => "builtin::repeat_entry_needs_bus",
             RuleKind::HarnessEntryMismatch => "builtin::harness_entry_mismatch",
             RuleKind::HarnessTypeConflict => "builtin::harness_type_conflict",
+            RuleKind::ImageFileMissing => "builtin::image_file_missing",
         };
         RuleId(id.to_string())
     }
@@ -270,6 +271,7 @@ mod tests {
             RuleKind::HarnessTypeConflict,
             "builtin::harness_type_conflict",
         ),
+        (RuleKind::ImageFileMissing, "builtin::image_file_missing"),
     ];
 
     #[test]

@@ -17,7 +17,8 @@ use signex_types::schematic::{
     SchematicDefaults, SchematicSheet, StrokeColor, power_net_names,
 };
 
-/// The drawings of `placement`, in file order.
+/// The drawings of `placement`, in file order; an image's picture comes
+/// from `images` (#1116).
 pub(super) fn push_placed_drawings(
     out: &mut Vec<SvgElement>,
     sheet: &SchematicSheet,
@@ -25,10 +26,14 @@ pub(super) fn push_placed_drawings(
     xform: &PageTransform,
     palette: &SchematicPalette,
     defaults: &SchematicDefaults,
+    images: &super::ExportImages,
 ) {
     let power_nets = power_net_names(sheet);
     for drawing in &sheet.drawings {
         if sheet.drawing_placement(drawing.uuid()) == placement {
+            if let SchDrawing::Image(image) = drawing {
+                super::images::push_image_picture(out, image, xform, images);
+            }
             push_sch_drawing_path(out, drawing, xform, palette, defaults, &power_nets);
         }
     }
@@ -49,6 +54,31 @@ pub(super) fn push_sch_drawing_path(
         SchDrawing::Dimension(d) => push_dimension(out, d, xform, palette, defaults),
         SchDrawing::Table(t) => {
             super::sch_table::push_table(out, t, xform, palette, defaults, power_nets);
+        }
+        // #1116: an image's border line, over the picture
+        // `push_placed_drawings` put down (docs/SCHEMATIC_IMAGES.md, "Export").
+        SchDrawing::Image(i) => {
+            if !i.border {
+                return;
+            }
+            let (lo, hi) = i.bounds();
+            let w_mm = defaults.shape_stroke_mm(0.0);
+            let x1 = xform.x(lo.x).min(xform.x(hi.x));
+            let y1 = xform.px_y(lo.y).min(xform.px_y(hi.y));
+            let x2 = xform.x(lo.x).max(xform.x(hi.x));
+            let y2 = xform.px_y(lo.y).max(xform.px_y(hi.y));
+            out.push(rect_path(
+                x1,
+                y1,
+                x2 - x1,
+                y2 - y1,
+                SvgStyle {
+                    stroke_alpha: 1.0,
+                    stroke_rgb: Some(stroke),
+                    fill_rgb: None,
+                    stroke_width: (w_mm * xform.mm_to_unit) as f32,
+                },
+            ));
         }
         SchDrawing::Line {
             start, end, width, ..
@@ -319,14 +349,18 @@ fn push_dimension(
     });
 }
 
-/// Every point an annotation drawing (Bezier, dimension, table) reaches,
-/// for the page's content box; empty for the classic shapes.
+/// Every point an annotation drawing (Bezier, dimension, table, image)
+/// reaches, for the page's content box; empty for the classic shapes.
 pub(crate) fn annotation_extent(drawing: &SchDrawing) -> Vec<Point> {
     match drawing {
         SchDrawing::Bezier(b) => b.flatten(),
         SchDrawing::Dimension(d) => d.outline_points(),
         SchDrawing::Table(t) => {
             let (lo, hi) = t.bounds();
+            vec![lo, hi]
+        }
+        SchDrawing::Image(i) => {
+            let (lo, hi) = i.bounds();
             vec![lo, hi]
         }
         SchDrawing::Line { .. }

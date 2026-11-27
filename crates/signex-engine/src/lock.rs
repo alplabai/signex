@@ -118,6 +118,7 @@ fn drawing_name(drawing: &signex_types::schematic::SchDrawing) -> String {
         SchDrawing::Bezier(b) => ("bezier", &b.start),
         SchDrawing::Dimension(d) => ("dimension", &d.from),
         SchDrawing::Table(t) => ("table", &t.position),
+        SchDrawing::Image(i) => ("image", &i.position),
     };
     format!("{shape} ({:.2}, {:.2})", p.x, p.y)
 }

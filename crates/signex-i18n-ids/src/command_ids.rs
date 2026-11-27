@@ -439,6 +439,10 @@ define_ids! {
         CMD_WRAP_RICH_NOTE_SELECTION = "cmd-wrap-rich-note-selection";
         CMD_OPEN_RICH_NOTE_LINK = "cmd-open-rich-note-link";
         CMD_COMPILE_RICH_NOTE = "cmd-compile-rich-note";
+        CMD_SET_IMAGE = "cmd-set-image";
+        CMD_RELINK_IMAGE = "cmd-relink-image";
+        CMD_SHOW_IMAGE_IN_FOLDER = "cmd-show-image-in-folder";
+        CMD_LIST_IMAGE_ASSETS = "cmd-list-image-assets";
         CMD_MENU_PLACE_COMPONENT = "cmd-menu-place-component";
         CMD_RUN_DRC = "cmd-run-drc";
         CMD_MENU_RUN_DRC = "cmd-menu-run-drc";

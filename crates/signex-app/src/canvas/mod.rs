@@ -30,6 +30,7 @@ mod graphite;
 pub mod grid;
 mod halo_cache;
 mod hit_cache;
+mod image_grip;
 mod input;
 pub(crate) mod middle_zoom;
 mod move_pick;
@@ -121,6 +122,8 @@ pub struct CanvasState {
     wire_grip: Option<wire_grip::WireGrip>,
     /// Set while a drag holds one handle of a selected Bezier.
     bezier_drag: Option<bezier_grip::BezierDrag>,
+    /// Set while a drag holds one handle of a selected image (#1116).
+    image_drag: Option<image_grip::ImageDrag>,
     // ─── Double-click detection ───
     /// Timestamp of last left-click (for double-click detection).
     last_click_time: Option<std::time::Instant>,
@@ -673,6 +676,9 @@ pub struct CanvasViewPrefs<'a> {
     /// (`UiState::device_px_per_logical_px`): the stroke floor and the
     /// hairline snap work on that grid (#1887).
     pub device_px_per_logical_px: f32,
+    /// The pictures of placed images read so far (#1116); `None` draws
+    /// every image as still loading.
+    pub image_cache: Option<&'a crate::app::images::ImageCache>,
 }
 
 impl CanvasViewPrefs<'_> {
@@ -1158,6 +1164,7 @@ mod tests {
             notebook_badges: Default::default(),
             rich_notes: None,
             device_px_per_logical_px: 1.0,
+            image_cache: None,
         }
     }
 

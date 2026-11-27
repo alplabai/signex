@@ -736,6 +736,9 @@ pub struct DocumentState {
     /// unsaved per project until Save writes it or Discard drops it.
     pub generated_reports:
         std::collections::HashMap<ProjectId, signex_notebook::generate::GeneratedNotebook>,
+    /// Picked image files waiting to be copied into their project, each when
+    /// the sheet that places it is saved (#1116).
+    pub image_copies: Vec<signex_types::image_asset::PendingImageCopy>,
 }
 
 /// A project folder a rename moved from `old` to `new`.

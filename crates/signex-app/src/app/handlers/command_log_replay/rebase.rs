@@ -169,6 +169,8 @@ fn drawing_stores(drawing: &SchDrawing, after: &SchDrawing, live: &SchDrawing, k
                     | "locked"
             ) || (key == "override_text" && d.override_text.is_some())
         }
+        // #1116: every key of an image is typed on its own.
+        SchDrawing::Image(_) => key != "position" && key != "uuid",
         SchDrawing::Table(t) => {
             // A source switched back keeps the other's columns; a CSV import
             // reuses the keys, so the titles must match too.

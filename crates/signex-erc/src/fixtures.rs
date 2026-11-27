@@ -33,6 +33,7 @@ pub(crate) fn empty() -> ErcContext {
         children: HashMap::new(),
         key: None,
         harness: Default::default(),
+        images: Vec::new(),
     }
 }
 
@@ -304,6 +305,12 @@ pub(crate) fn context_for(kind: RuleKind) -> ErcContext {
         RuleKind::HarnessEntryMismatch | RuleKind::HarnessTypeConflict => {
             return harness_context(kind);
         }
+        RuleKind::ImageFileMissing => c.images.push(crate::images::ErcImage {
+            uuid: Uuid::now_v7(),
+            file: "assets/images/gone.png".into(),
+            centre: pt(10.0, 10.0),
+            missing: true,
+        }),
     }
     c
 }
