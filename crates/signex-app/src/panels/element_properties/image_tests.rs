@@ -7,7 +7,7 @@ use signex_types::schematic::{
 };
 use uuid::Uuid;
 
-use crate::app::Signex;
+use crate::app::{Signex, TabInfo, TabKind};
 
 fn app_with(image: SchImage) -> Signex {
     let (mut app, _boot) = Signex::new();
@@ -18,11 +18,15 @@ fn app_with(image: SchImage) -> Signex {
     let id = image.uuid;
     sheet.drawings.push(SchDrawing::Image(image));
     let dir = std::env::temp_dir().join("signex-image-panel-tests");
-    crate::app::handlers::editing_commands::net_color_driver::add_sheet_with(
-        &mut app,
-        &dir.join("power.snxsch"),
-        sheet,
-    );
+    let path = dir.join("power.snxsch");
+    app.document_state.tabs.push(TabInfo {
+        title: path.display().to_string(),
+        path,
+        project_id: None,
+        kind: TabKind::Schematic,
+    });
+    app.document_state.active_tab = app.document_state.tabs.len() - 1;
+    app.apply_loaded_schematic(Some(sheet), false, false, false);
     app.interaction_state.active_canvas_mut().selected =
         vec![SelectedItem::new(id, SelectedKind::Drawing)];
     app.update_selection_info();

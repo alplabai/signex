@@ -246,7 +246,7 @@ fn add_and_remove_selection_change_the_members() {
 
 /// The name the panel foot's field shows for the picked union.
 fn foot_name(app: &Signex) -> String {
-    app.document_state
+    app.document_view
         .panel_ctx
         .unions
         .foot

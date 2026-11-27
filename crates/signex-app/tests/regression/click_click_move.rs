@@ -453,7 +453,9 @@ fn deliver(
                 ),
             },
             notebook_badges: Default::default(),
+            rich_notes: None,
             device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
+            image_cache: None,
         };
         let view = SchematicCanvas::new(app.interaction_state.active_canvas(), prefs);
         view.update(state, &event, BOUNDS, mouse::Cursor::Available(at))
