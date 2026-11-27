@@ -16,6 +16,7 @@ use signex_types::block_diagram::{
 use signex_types::document_id::DocumentId;
 use signex_types::object_id::UuidV7Ids;
 use signex_types::project::ChannelNaming;
+use signex_types::schematic::SchematicSheet;
 
 use crate::app::design_read::DesignGraph;
 use crate::app::project_sheets::{self, OpenSheets};
@@ -100,7 +101,7 @@ impl SyncJob {
     }
 
     fn derive(&self) -> Result<DerivedDiagram, Translatable> {
-        let set = project_sheets::assemble_project_sheets_from(
+        let mut set = project_sheets::assemble_project_sheets_from(
             &self.open,
             &self.pages,
             &self.root,
@@ -113,6 +114,7 @@ impl SyncJob {
                     .arg("reason", why.to_string()),
             );
         }
+        forget_unsaved_ids(&mut set.sheets, &self.open);
         let design = DesignGraph::read(&set, &self.project_dir).map_err(not_run)?;
         let paths: HashMap<_, _> = design
             .graph
@@ -194,6 +196,22 @@ impl SyncJob {
 /// Text from the reader or the model, which has no catalog id of its own.
 pub(super) fn not_run(reason: String) -> Translatable {
     Translatable::new(ids::PROJECT_BLOCK_DIAGRAM_NOT_RUN).arg("reason", reason)
+}
+
+/// An open sheet whose id is not in its file yet (minted when it was opened,
+/// not saved since) is read as having none: the id would change next
+/// session, so a block linked to it would not stay linked. Reads the head of
+/// each open sheet's file; off the UI thread.
+fn forget_unsaved_ids(sheets: &mut HashMap<PathBuf, SchematicSheet>, open: &OpenSheets) {
+    for (path, sheet) in sheets.iter_mut() {
+        if !open.contains_key(path) || sheet.uuid.is_nil() {
+            continue;
+        }
+        let on_disk = crate::app::document_ids::read_header_id(path);
+        if on_disk.map(|id| id.as_uuid()) != Some(sheet.uuid) {
+            sheet.uuid = uuid::Uuid::nil();
+        }
+    }
 }
 
 /// The counts a person reads first.

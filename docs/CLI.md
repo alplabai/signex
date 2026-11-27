@@ -2655,9 +2655,12 @@ regenerate_block_diagram document=<project> [path=<file.snxblk>] [apply=true] [u
 
 A sheet that is in the project but does not read refuses the run, so its
 block is never marked unlinked by mistake. So does a sheet that would be a
-block but holds no document id yet (the nil `schematic_id` of a file no build
-has saved since ids came in): no block can link to it, so the run names it
-instead of leaving it out; open and save it first. A run that writes (generate, or
+block but has no document id in its file yet: the nil `schematic_id` of a
+file no build has saved since ids came in, or an open sheet whose id was
+given when it opened and is not saved. No block can link to it for good, so
+the run names it instead of leaving it out. Opening it is not enough: save
+each such sheet (Ctrl+S on its tab; Save All skips a sheet with no edits),
+then run again. A run that writes (generate, or
 regenerate with `apply=true`) is refused while the diagram is open in a tab;
 close the tab first. In a window, the palette's
 Generate Block Diagram runs on the project in view and Regenerate Block

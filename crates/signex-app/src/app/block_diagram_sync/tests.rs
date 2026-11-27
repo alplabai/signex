@@ -33,7 +33,7 @@ fn symbol(name: &str, file: &str, x: f64) -> ChildSheet {
     }
 }
 
-fn save(sheet: SchematicSheet, path: &Path) {
+pub(super) fn save(sheet: SchematicSheet, path: &Path) {
     signex_engine::Engine::new_with_path(sheet, Some(path.to_path_buf()))
         .expect("engine")
         .save()
@@ -66,7 +66,7 @@ pub(crate) fn write_hierarchy(dir: &Path, children: &[(&str, &str)]) -> PathBuf 
     root
 }
 
-fn job(dir: &Path, mode: SyncMode) -> SyncJob {
+pub(super) fn job(dir: &Path, mode: SyncMode) -> SyncJob {
     let root = dir.join("top.snxsch");
     SyncJob {
         mode,
@@ -193,10 +193,12 @@ fn a_hierarchy_of_sheets_without_ids_refuses_and_with_ids_gives_its_blocks() {
         ..job(dir.path(), SyncMode::Generate { overwrite: true })
     };
     let refused = run(&root).run().expect_err("refused");
-    assert!(
-        refused.render_en_us().contains("no document id"),
-        "{}",
-        refused.render_en_us()
+    // `$count` is one (the `[one]` branch) and `$path` the leaf, relative to
+    // the project folder; the frames are not counted.
+    assert_eq!(
+        plain(&refused),
+        "the sheet hierarchy-child-leaf.snxsch has no document id yet; \
+         open it and save it, then run again"
     );
     assert!(!dir.path().join("demo.snxblk").exists(), "nothing written");
 
@@ -221,6 +223,11 @@ fn a_hierarchy_of_sheets_without_ids_refuses_and_with_ids_gives_its_blocks() {
         .collect();
     assert_eq!(paths, ["hierarchy-child-leaf.snxsch"], "{answer}");
     assert_eq!(answer["summary"]["blocks"], blocks.len(), "{answer}");
+}
+
+/// A refusal in en-US without the isolation marks around its arguments.
+pub(super) fn plain(why: &signex_i18n::Translatable) -> String {
+    why.render_en_us().replace(['\u{2068}', '\u{2069}'], "")
 }
 
 /// An app with the project of `dir` (root `top.snxsch`) active.

@@ -12,6 +12,8 @@
 //! Rules: `docs/architecture/snxblk-format.md`, "Generate and regenerate".
 
 mod job;
+#[cfg(test)]
+mod no_id_tests;
 mod operands;
 #[cfg(test)]
 mod review_tests;

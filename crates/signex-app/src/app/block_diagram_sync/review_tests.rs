@@ -394,3 +394,31 @@ fn hovering_a_row_outlines_its_block() {
     let plain = draw_pixels(app.block_diagram_canvas_in_test(&file, true), canvas);
     assert_ne!(outlined, plain, "the hover outline is drawn");
 }
+
+/// A sheet with no document id in its file refuses the tab's Re-sync: no
+/// undo step, the diagram and its file as they were, and the review stays
+/// closed.
+#[test]
+fn resync_refuses_a_sheet_without_an_id_and_changes_nothing() {
+    let dir = tempfile::tempdir().expect("dir");
+    let (mut app, file) = generated(dir.path());
+    open(&mut app, &file);
+    let bytes = std::fs::read(&file).expect("bytes");
+    let before = app.document_state.block_diagrams.editors[&file]
+        .diagram
+        .clone();
+    let leaf = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../signex-types/tests/corpus/schematic/hierarchy-child-leaf.snxsch");
+    std::fs::copy(leaf, dir.path().join("b.snxsch")).expect("Beta without an id");
+    send(&mut app, &file, TabEvent::ResyncPressed);
+
+    let editor = &app.document_state.block_diagrams.editors[&file];
+    assert!(editor.undo.is_empty(), "no undo step");
+    assert_eq!(editor.diagram, before, "the diagram as it was");
+    assert!(editor.review.is_none());
+    assert_eq!(
+        std::fs::read(&file).expect("bytes"),
+        bytes,
+        "nothing written"
+    );
+}

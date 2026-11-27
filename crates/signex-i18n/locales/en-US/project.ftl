@@ -565,11 +565,12 @@ project-block-diagram-resync-closed = { $path } was closed while Re-sync read th
 # or by unlink=skip. $blocks is how many.
 project-block-diagram-skipped = Block diagram { $path }: { $blocks } blocks would become unlinked; review them before they change.
 project-block-diagram-bad-unlink = `unlink` takes apply or skip, not `{ $value }`
-# A sheet that would be a block has no document id yet (a file no build has
-# saved since ids came in). $path is the first such sheet, $count how many.
+# A sheet that would be a block has no document id in its file yet (no build
+# has saved it since ids came in, or it is open and its new id is not saved).
+# $path is the first such sheet, $count how many.
 project-block-diagram-sheet-no-id = { $count ->
     [one] the sheet { $path } has no document id yet; open it and save it, then run again
-   *[other] { $count } sheets, the first { $path }, have no document id yet; open and save them, then run again
+   *[other] { $count } sheets have no document id yet (the first is { $path }); open and save them, then run again
 }
 # Snippets (#1283), in Messages. $name is the snippet's name, $file its file,
 # $items how many objects it holds.
