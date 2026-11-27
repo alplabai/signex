@@ -74,7 +74,10 @@ fn a_failed_run_removes_its_folder_and_the_parents_it_created() {
     std::fs::create_dir(new.join("symbols")).unwrap();
     std::fs::write(new.join("symbols/R.snxsym"), "x").unwrap();
     assert!(claimed.release_after_failure());
-    assert!(!dir.path().join("a").exists(), "the parents it made are gone");
+    assert!(
+        !dir.path().join("a").exists(),
+        "the parents it made are gone"
+    );
     assert!(dir.path().is_dir(), "the folder that was there stays");
 }
 
@@ -169,7 +172,12 @@ fn a_folder_swapped_for_a_link_deletes_nothing_in_its_target() {
     std::os::unix::fs::symlink(&victim, &out).unwrap();
     assert!(!claimed.release_after_failure());
     assert!(victim.join("precious.txt").exists());
-    assert!(std::fs::symlink_metadata(&out).unwrap().file_type().is_symlink());
+    assert!(
+        std::fs::symlink_metadata(&out)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
     assert!(dir.path().join("moved/half.snxsym").exists());
 }
 

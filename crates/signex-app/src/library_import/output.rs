@@ -130,10 +130,7 @@ impl ClaimedOutput {
         match empty_folder(&self.folder, id) {
             Ok(()) => true,
             Err(e) => {
-                log::error!(
-                    "library import: {} not emptied: {e}",
-                    self.folder.display()
-                );
+                log::error!("library import: {} not emptied: {e}", self.folder.display());
                 false
             }
         }

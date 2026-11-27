@@ -215,7 +215,8 @@ mod walk {
     fn remove_by_path(path: &Path) -> io::Result<()> {
         let meta = std::fs::symlink_metadata(path)?;
         if is_link(&meta) {
-            return std::fs::remove_file(path).or_else(|e| std::fs::remove_dir(path).map_err(|_| e));
+            return std::fs::remove_file(path)
+                .or_else(|e| std::fs::remove_dir(path).map_err(|_| e));
         }
         if !meta.is_dir() {
             return std::fs::remove_file(path);

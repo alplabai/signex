@@ -9,9 +9,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use super::confine::{ConfineError, confine};
-use super::output::claim_output;
 use super::error::ImportError;
 use super::events::{ExitKind, ProgressEvent, StreamFold, Summary};
+use super::output::claim_output;
 use super::process::{Polled, ProcessGroup, Running};
 use super::report::{ImportReport, read_report};
 use super::stream::Line;
