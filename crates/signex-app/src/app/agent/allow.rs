@@ -228,9 +228,9 @@ mod tests {
                 "delete_net_class",
                 "delete_selection",
                 "document_info",
-                "equalize_panes",
                 // #2817: the pins of the named symbol file, one undo step.
                 "edit_symbol_pins",
+                "equalize_panes",
                 // #2470: the board writers, into a path inside the project.
                 "export_board_pdf",
                 "export_board_report",
@@ -275,8 +275,6 @@ mod tests {
                 "mark_notebook_attachment_valid",
                 "measure_board",
                 "move_tab_to_other_pane",
-                // Mockup row 207: the panes, as the window layout.
-                "open_second_view",
                 // #2795, mockup rows 195-199: the Design Notebook tab, its
                 // references, badges and measurements, on the named project.
                 "notebook_attachments",
@@ -290,6 +288,8 @@ mod tests {
                 "notebook_references",
                 "notebook_timeline",
                 "notebook_view",
+                // Mockup row 207: the panes, as the window layout.
+                "open_second_view",
                 "panelize_board",
                 // #2470: the routing tools, the via and the area tools, on
                 // the named board.
@@ -307,9 +307,9 @@ mod tests {
                 "place_board_route",
                 "place_board_track",
                 "place_board_via",
-                // #2339: the Requirements section's edits and run.
                 // #1291: the Design Checklist's read, edits and run.
                 "project_add_checklist_item",
+                // #2339: the Requirements section's edits and run.
                 "project_add_requirement",
                 "project_add_variant",
                 "project_checklist",
@@ -338,9 +338,9 @@ mod tests {
                 "project_set_checklist_item",
                 "project_set_checklist_state",
                 "project_set_default_variant",
+                "project_set_font_license",
                 // #2943: the project's rails and their budget.
                 "project_set_rail",
-                "project_set_font_license",
                 "project_set_requirement",
                 "project_set_variant_alternate",
                 "project_set_variant_fit",
@@ -446,7 +446,6 @@ mod tests {
                 "stitch_vias",
                 "swap_gates",
                 "swap_pins",
-                "sync_pane_zoom",
                 // #1261: the same swaps started on the named sheet.
                 "swap_schematic_gates",
                 "swap_schematic_pins",
@@ -455,6 +454,7 @@ mod tests {
                 "symbol_draw_elliptical_arc",
                 "symbol_draw_pie",
                 "symbol_draw_round_rectangle",
+                "sync_pane_zoom",
                 // #2249: the window layout, by the maintainer's rule that
                 // everything is AI-controllable.
                 "tile_windows_grid",

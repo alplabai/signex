@@ -204,6 +204,21 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("priority", OperandKind::Text),
     ("islands_below", OperandKind::Text),
     ("dead_copper", OperandKind::Bool),
+    // #1298, #2609: the schematic PDF's watermark and its look, and the
+    // link annotations switch.
+    ("watermark", OperandKind::Text),
+    ("watermark_color", OperandKind::Color),
+    ("watermark_opacity", OperandKind::Text),
+    ("watermark_angle", OperandKind::Text),
+    ("watermark_pages", OperandKind::Text),
+    ("watermark_revision", OperandKind::Bool),
+    ("links", OperandKind::Bool),
+    // #1291: a Design Checklist item by id, its owner, a waive reason and
+    // the list filter.
+    ("item", OperandKind::Text),
+    ("owner", OperandKind::Text),
+    ("reason", OperandKind::Text),
+    ("filter", OperandKind::Text),
     // #1299: a PNG export's resolution, whole dots per inch.
     ("dpi", OperandKind::Text),
     // Mockup row 114: an Export Job's outputs, profiles and triggers.
